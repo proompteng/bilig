@@ -1,5 +1,6 @@
 import { isStaleValidGridTileKeyV2, serializeGridTileKeyV2, type GridScenePacketV2, type GridTileKeyV2 } from './scene-packet-v2.js'
 import { validateGridScenePacketV2 } from './scene-packet-validator.js'
+import { noteTypeGpuTileCacheEviction, noteTypeGpuTileCacheStaleLookup, noteTypeGpuTileCacheVisibleMark } from './grid-render-counters.js'
 
 export interface TileGpuCacheEntry {
   readonly key: string
@@ -37,9 +38,18 @@ export class TileGpuCache {
   }
 
   findStaleValid(desiredKey: GridTileKeyV2, options?: { readonly excludeKey?: string | undefined }): TileGpuCacheEntry | null {
-    const match = [...this.entries.values()]
-      .filter((entry) => entry.key !== options?.excludeKey && isStaleValidGridTileKeyV2(entry.packet.key, desiredKey))
-      .toSorted((left, right) => right.lastUsedSeq - left.lastUsedSeq)[0]
+    let match: TileGpuCacheEntry | null = null
+    let scannedEntries = 0
+    for (const entry of this.entries.values()) {
+      scannedEntries += 1
+      if (entry.key === options?.excludeKey || !isStaleValidGridTileKeyV2(entry.packet.key, desiredKey)) {
+        continue
+      }
+      if (!match || entry.lastUsedSeq > match.lastUsedSeq) {
+        match = entry
+      }
+    }
+    noteTypeGpuTileCacheStaleLookup(scannedEntries, match !== null)
     if (!match) {
       return null
     }
@@ -59,9 +69,18 @@ export class TileGpuCache {
   }
 
   markVisible(keys: ReadonlySet<string>): void {
+    let marked = 0
     for (const [key, entry] of this.entries) {
-      this.entries.set(key, { ...entry, visible: keys.has(key), lastUsedSeq: keys.has(key) ? ++this.seq : entry.lastUsedSeq })
+      const visible = keys.has(key)
+      if (visible) {
+        marked += 1
+      }
+      if (entry.visible === visible && !visible) {
+        continue
+      }
+      this.entries.set(key, { ...entry, visible, lastUsedSeq: visible ? ++this.seq : entry.lastUsedSeq })
     }
+    noteTypeGpuTileCacheVisibleMark(marked)
   }
 
   evictTo(maxEntries: number): void {
@@ -69,15 +88,34 @@ export class TileGpuCache {
     if (this.entries.size <= target) {
       return
     }
-    const evictable = [...this.entries.values()]
-      .filter((entry) => !entry.visible)
-      .toSorted((left, right) => left.lastUsedSeq - right.lastUsedSeq)
-    for (const entry of evictable) {
-      if (this.entries.size <= target) {
+    let evicted = 0
+    while (this.entries.size > target) {
+      const entry = this.findOldestEvictable()
+      if (!entry) {
+        if (evicted > 0) {
+          noteTypeGpuTileCacheEviction(evicted)
+        }
         return
       }
       this.entries.delete(entry.key)
+      evicted += 1
     }
+    if (evicted > 0) {
+      noteTypeGpuTileCacheEviction(evicted)
+    }
+  }
+
+  private findOldestEvictable(): TileGpuCacheEntry | null {
+    let oldest: TileGpuCacheEntry | null = null
+    for (const entry of this.entries.values()) {
+      if (entry.visible) {
+        continue
+      }
+      if (!oldest || entry.lastUsedSeq < oldest.lastUsedSeq) {
+        oldest = entry
+      }
+    }
+    return oldest
   }
 }
 

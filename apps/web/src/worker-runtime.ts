@@ -28,7 +28,12 @@ import {
   type WorkbookSnapshot,
   formatCellDisplayValue,
 } from '@bilig/protocol'
-import type { ViewportPatch, ViewportPatchSubscription } from '@bilig/worker-transport'
+import {
+  encodeRenderTileDeltaBatch,
+  type RenderTileDeltaSubscription,
+  type ViewportPatch,
+  type ViewportPatchSubscription,
+} from '@bilig/worker-transport'
 import type { PendingWorkbookMutation, PendingWorkbookMutationInput } from './workbook-sync.js'
 import { WorkerRuntimeMutationJournal } from './worker-runtime-mutation-journal.js'
 import {
@@ -54,6 +59,7 @@ import {
 } from './worker-runtime-state.js'
 import { WorkerRuntimeSnapshotCaches } from './worker-runtime-snapshot-caches.js'
 import { buildResidentPaneSceneCacheKey, buildWorkerResidentPaneScenes } from './worker-runtime-render-scene.js'
+import { buildWorkerRenderTileDeltaBatch } from './worker-runtime-render-tile-delta.js'
 import { WorkerRuntimeSceneCache } from './worker-runtime-scene-cache.js'
 import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
 import {
@@ -142,6 +148,7 @@ export class WorkbookWorkerRuntime {
   private projectionMatchesLocalStore = false
   private projectionOverlayScope: ProjectionOverlayScope | null = null
   private localPersistenceMode: 'persistent' | 'ephemeral' | 'follower' = 'ephemeral'
+  private nextRenderTileDeltaGeneration = 0
   private readonly snapshotCaches = new WorkerRuntimeSnapshotCaches()
   private readonly viewportTileStore = new WorkerViewportTileStore()
   private readonly viewportPatchPublisher = new WorkerViewportPatchPublisher({
@@ -629,6 +636,63 @@ export class WorkbookWorkerRuntime {
     return this.viewportPatchPublisher.subscribe(subscription, listener)
   }
 
+  subscribeRenderTileDeltas(subscription: RenderTileDeltaSubscription, listener: (delta: Uint8Array) => void): () => void {
+    let disposed = false
+    let unsubscribeEngine: (() => void) | null = null
+    let publishPromise: Promise<void> | null = null
+    let publishQueued = false
+    const publish = (engine: SpreadsheetEngine & WorkerEngine): void => {
+      if (publishPromise) {
+        publishQueued = true
+        return
+      }
+      publishPromise = (async () => {
+        try {
+          if (disposed) {
+            return
+          }
+          const batch = buildWorkerRenderTileDeltaBatch({
+            engine,
+            generation: ++this.nextRenderTileDeltaGeneration,
+            subscription,
+          })
+          listener(encodeRenderTileDeltaBatch(batch))
+        } catch {
+          return
+        } finally {
+          publishPromise = null
+          if (publishQueued && !disposed) {
+            publishQueued = false
+            publish(engine)
+          }
+        }
+      })()
+    }
+
+    void (async () => {
+      try {
+        const engine = await this.getProjectionEngine()
+        if (disposed) {
+          return
+        }
+        if (subscription.initialDelta !== 'none') {
+          publish(engine)
+        }
+        unsubscribeEngine = engine.subscribe(() => {
+          publish(engine)
+        })
+      } catch {
+        return
+      }
+    })()
+
+    return () => {
+      disposed = true
+      unsubscribeEngine?.()
+      unsubscribeEngine = null
+    }
+  }
+
   async getResidentPaneScenes(request: WorkbookPaneSceneRequest): Promise<readonly WorkbookPaneScenePacket[]> {
     const engine = await this.getProjectionEngine()
     const batchId = engine.getLastMetrics().batchId
@@ -650,6 +714,7 @@ export class WorkbookWorkerRuntime {
     this.viewportPatchPublisher.reset()
     this.runtimeStateCache = null
     this.snapshotCaches.reset()
+    this.nextRenderTileDeltaGeneration = 0
     this.authoritativeStateSource = 'none'
     this.authoritativeRevision = 0
     this.projectionMatchesLocalStore = false

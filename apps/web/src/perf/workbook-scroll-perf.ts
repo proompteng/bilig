@@ -10,6 +10,10 @@ interface WorkbookScrollPerfCounters {
   fullPatchBroadcasts: Record<string, number>
   damagePatches: number
   damageCells: number
+  rendererDeltaBatches: number
+  rendererDeltaMutations: number
+  rendererDeltaApplyMs: number
+  dirtyTilesMarked: number
   scenePacketRefreshes: number
   scenePacketPanes: number
   scenePacketRejected: number
@@ -31,6 +35,12 @@ interface WorkbookScrollPerfCounters {
   typeGpuAtlasUploadBytes: number
   typeGpuSurfaceResizes: number
   typeGpuTileMisses: number
+  typeGpuTileCacheEvictions: number
+  typeGpuTileCacheEntriesScanned: number
+  typeGpuTileCacheSorts: number
+  typeGpuTileCacheStaleHits: number
+  typeGpuTileCacheStaleLookups: number
+  typeGpuTileCacheVisibleMarks: number
   typeGpuScenePacketsApplied: number
 }
 
@@ -73,6 +83,10 @@ class WorkbookScrollPerfCollector {
     fullPatchBroadcasts: {},
     damagePatches: 0,
     damageCells: 0,
+    dirtyTilesMarked: 0,
+    rendererDeltaApplyMs: 0,
+    rendererDeltaBatches: 0,
+    rendererDeltaMutations: 0,
     scenePacketRefreshes: 0,
     scenePacketPanes: 0,
     scenePacketRejected: 0,
@@ -93,6 +107,12 @@ class WorkbookScrollPerfCollector {
     typeGpuSubmits: 0,
     typeGpuSurfaceResizes: 0,
     typeGpuTileMisses: 0,
+    typeGpuTileCacheEvictions: 0,
+    typeGpuTileCacheEntriesScanned: 0,
+    typeGpuTileCacheSorts: 0,
+    typeGpuTileCacheStaleHits: 0,
+    typeGpuTileCacheStaleLookups: 0,
+    typeGpuTileCacheVisibleMarks: 0,
     typeGpuUniformWriteBytes: 0,
     typeGpuVertexUploadBytes: 0,
   }
@@ -145,6 +165,13 @@ class WorkbookScrollPerfCollector {
 
   noteViewportPatchBroadcast(reason: string): void {
     this.totalCounters.fullPatchBroadcasts[reason] = (this.totalCounters.fullPatchBroadcasts[reason] ?? 0) + 1
+  }
+
+  noteRendererDeltaApply(input: { mutationCount: number; dirtyTileCount: number; durationMs: number }): void {
+    this.totalCounters.rendererDeltaBatches += 1
+    this.totalCounters.rendererDeltaMutations += input.mutationCount
+    this.totalCounters.dirtyTilesMarked += input.dirtyTileCount
+    this.totalCounters.rendererDeltaApplyMs += input.durationMs
   }
 
   noteScenePacketRefresh(paneCount: number): void {
@@ -221,6 +248,26 @@ class WorkbookScrollPerfCollector {
 
   noteTypeGpuTileMiss(): void {
     this.totalCounters.typeGpuTileMisses += 1
+  }
+
+  noteTypeGpuTileCacheEviction(count: number): void {
+    this.totalCounters.typeGpuTileCacheEvictions += count
+  }
+
+  noteTypeGpuTileCacheSort(count: number): void {
+    this.totalCounters.typeGpuTileCacheSorts += count
+  }
+
+  noteTypeGpuTileCacheStaleLookup(scannedEntries: number, hit: boolean): void {
+    this.totalCounters.typeGpuTileCacheStaleLookups += 1
+    this.totalCounters.typeGpuTileCacheEntriesScanned += scannedEntries
+    if (hit) {
+      this.totalCounters.typeGpuTileCacheStaleHits += 1
+    }
+  }
+
+  noteTypeGpuTileCacheVisibleMark(count: number): void {
+    this.totalCounters.typeGpuTileCacheVisibleMarks += count
   }
 
   noteTypeGpuScenePacketApplied(): void {
@@ -352,6 +399,10 @@ function subtractCounters(counters: WorkbookScrollPerfCounters, baseline: Workbo
     fullPatchBroadcasts: subtractRecordCounters(counters.fullPatchBroadcasts, baseline.fullPatchBroadcasts),
     damagePatches: counters.damagePatches - baseline.damagePatches,
     damageCells: counters.damageCells - baseline.damageCells,
+    dirtyTilesMarked: counters.dirtyTilesMarked - baseline.dirtyTilesMarked,
+    rendererDeltaApplyMs: counters.rendererDeltaApplyMs - baseline.rendererDeltaApplyMs,
+    rendererDeltaBatches: counters.rendererDeltaBatches - baseline.rendererDeltaBatches,
+    rendererDeltaMutations: counters.rendererDeltaMutations - baseline.rendererDeltaMutations,
     scenePacketRefreshes: counters.scenePacketRefreshes - baseline.scenePacketRefreshes,
     scenePacketPanes: counters.scenePacketPanes - baseline.scenePacketPanes,
     scenePacketRejected: counters.scenePacketRejected - baseline.scenePacketRejected,
@@ -372,6 +423,12 @@ function subtractCounters(counters: WorkbookScrollPerfCounters, baseline: Workbo
     typeGpuSubmits: counters.typeGpuSubmits - baseline.typeGpuSubmits,
     typeGpuSurfaceResizes: counters.typeGpuSurfaceResizes - baseline.typeGpuSurfaceResizes,
     typeGpuTileMisses: counters.typeGpuTileMisses - baseline.typeGpuTileMisses,
+    typeGpuTileCacheEvictions: counters.typeGpuTileCacheEvictions - baseline.typeGpuTileCacheEvictions,
+    typeGpuTileCacheEntriesScanned: counters.typeGpuTileCacheEntriesScanned - baseline.typeGpuTileCacheEntriesScanned,
+    typeGpuTileCacheSorts: counters.typeGpuTileCacheSorts - baseline.typeGpuTileCacheSorts,
+    typeGpuTileCacheStaleHits: counters.typeGpuTileCacheStaleHits - baseline.typeGpuTileCacheStaleHits,
+    typeGpuTileCacheStaleLookups: counters.typeGpuTileCacheStaleLookups - baseline.typeGpuTileCacheStaleLookups,
+    typeGpuTileCacheVisibleMarks: counters.typeGpuTileCacheVisibleMarks - baseline.typeGpuTileCacheVisibleMarks,
     typeGpuUniformWriteBytes: counters.typeGpuUniformWriteBytes - baseline.typeGpuUniformWriteBytes,
     typeGpuVertexUploadBytes: counters.typeGpuVertexUploadBytes - baseline.typeGpuVertexUploadBytes,
   }

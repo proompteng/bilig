@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import {
   GRID_SCENE_PACKET_V2_MAGIC,
   GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT,
@@ -59,6 +59,28 @@ describe('TileGpuCache', () => {
     expect(cache.get(first.key)).toBeNull()
     expect(cache.get(second.key)).not.toBeNull()
     expect(cache.get(third.key)).not.toBeNull()
+  })
+
+  test('does not rely on array sorting for stale lookup or eviction', () => {
+    const toSortedSpy = vi.spyOn(Array.prototype, 'toSorted')
+    try {
+      const cache = new TileGpuCache()
+      const first = cache.upsert(createPacket(1, 0))
+      const second = cache.upsert(createPacket(1, 128))
+      const third = cache.upsert(createPacket(1, 256))
+      cache.markVisible(new Set([second.key]))
+
+      expect(cache.findStaleValid({ ...first.packet.key, colStart: 32, colEnd: 64 })?.packet).toBe(first.packet)
+
+      cache.get(third.key)
+      cache.evictTo(2)
+      expect(cache.get(first.key)).toBeNull()
+      expect(cache.get(second.key)).not.toBeNull()
+      expect(cache.get(third.key)).not.toBeNull()
+      expect(toSortedSpy).not.toHaveBeenCalled()
+    } finally {
+      toSortedSpy.mockRestore()
+    }
   })
 
   test('rejects invalid packets', () => {

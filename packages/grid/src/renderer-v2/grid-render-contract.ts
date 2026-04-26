@@ -39,6 +39,12 @@ export interface GridGpuCounters {
   readonly atlasUploadBytes: number
   readonly surfaceResizes: number
   readonly tileMisses: number
+  readonly tileCacheEvictions: number
+  readonly tileCacheEntriesScanned: number
+  readonly tileCacheSorts: number
+  readonly tileCacheStaleHits: number
+  readonly tileCacheStaleLookups: number
+  readonly tileCacheVisibleMarks: number
   readonly scenePacketsApplied: number
 }
 

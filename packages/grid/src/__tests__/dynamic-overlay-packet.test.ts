@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import { createGridAxisWorldIndex } from '../gridAxisWorldIndex.js'
 import { createGridGeometrySnapshotFromAxes } from '../gridGeometry.js'
 import { getGridMetrics } from '../gridMetrics.js'
@@ -99,6 +99,36 @@ describe('dynamic overlay packet', () => {
         expect.objectContaining({ x: 395, y: 0, width: 1, height: 220 }),
       ]),
     )
+  })
+
+  test('builds visible header indexes without array sorting', () => {
+    const metrics = getGridMetrics()
+    const geometry = createGridGeometrySnapshotFromAxes({
+      columns: createGridAxisWorldIndex({ axisLength: 200, defaultSize: 100 }),
+      dpr: 2,
+      freezeCols: 2,
+      freezeRows: 2,
+      gridMetrics: metrics,
+      hostHeight: 220,
+      hostWidth: 520,
+      rows: createGridAxisWorldIndex({ axisLength: 200, defaultSize: 20 }),
+      scrollLeft: 150,
+      scrollTop: 30,
+      sheetName: 'Sheet1',
+      updatedAt: 100,
+    })
+    const toSortedSpy = vi.spyOn(Array.prototype, 'toSorted')
+
+    buildDynamicGridOverlayPacket({
+      geometry,
+      gridSelection: createColumnSliceSelection(1, 4, 2),
+      selectedCell: [1, 2],
+      selectionRange: { x: 1, y: 2, width: 3, height: 1 },
+      showFillHandle: false,
+    })
+
+    expect(toSortedSpy).not.toHaveBeenCalled()
+    toSortedSpy.mockRestore()
   })
 })
 

@@ -5,7 +5,7 @@ import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import { buildGridGpuScene, type GridGpuScene } from './gridGpuScene.js'
 import { buildGridTextScene, type GridTextScene } from './gridTextScene.js'
 import { createGridCameraSnapshot } from './gridCamera.js'
-import { resolveGridTileResidencyV2, type GridTileKey } from './gridTileResidencyV2.js'
+import { resolveGridTileResidencyV2 } from './gridTileResidencyV2.js'
 import {
   EMPTY_COLUMN_WIDTHS,
   EMPTY_ROW_HEIGHTS,
@@ -26,6 +26,12 @@ import { createGridAxisWorldIndexFromRecords } from './gridAxisWorldIndex.js'
 import { createGridGeometrySnapshotFromAxes } from './gridGeometry.js'
 import { applyHiddenAxisSizes, resolveGridScrollSpacerSize } from './gridScrollSurface.js'
 import type { HeaderSelection, VisibleRegionState } from './gridPointer.js'
+import {
+  resolveGridRenderScrollTransform,
+  sameViewportBounds,
+  sameVisibleRegionWindow,
+  tileKeyToViewport,
+} from './gridViewportController.js'
 import type { GridHoverState } from './gridHover.js'
 import { getResolvedCellFontFamily, snapshotToRenderCell } from './gridCells.js'
 import { getEditorPresentation, getEditorTextAlign, getGridTheme, getOverlayStyle } from './gridPresentation.js'
@@ -71,32 +77,6 @@ function noteHeaderPaneBuild(): void {
     return
   }
   ;(window as Window & { __biligScrollPerf?: { noteHeaderPaneBuild?: () => void } }).__biligScrollPerf?.noteHeaderPaneBuild?.()
-}
-
-function sameVisibleRegionWindow(left: VisibleRegionState, right: VisibleRegionState): boolean {
-  return (
-    (left.freezeCols ?? 0) === (right.freezeCols ?? 0) &&
-    (left.freezeRows ?? 0) === (right.freezeRows ?? 0) &&
-    left.range.x === right.range.x &&
-    left.range.y === right.range.y &&
-    left.range.width === right.range.width &&
-    left.range.height === right.range.height
-  )
-}
-
-function sameViewportBounds(left: Viewport, right: Viewport): boolean {
-  return (
-    left.rowStart === right.rowStart && left.rowEnd === right.rowEnd && left.colStart === right.colStart && left.colEnd === right.colEnd
-  )
-}
-
-function tileKeyToViewport(tile: GridTileKey): Viewport {
-  return {
-    colEnd: tile.colEnd,
-    colStart: tile.colStart,
-    rowEnd: tile.rowEnd,
-    rowStart: tile.rowStart,
-  }
 }
 
 interface ResidentPaneSceneEngine extends GridEngineLike {
@@ -529,14 +509,14 @@ export function useWorkbookGridRenderState(input: {
       }),
     )
     const next = visibleRegionFromCamera({ camera, freezeCols, freezeRows })
-    const renderTx =
-      resolveColumnOffset(next.range.x, sortedColumnWidthOverrides, gridMetrics.columnWidth) -
-      resolveColumnOffset(viewport.colStart, sortedColumnWidthOverrides, gridMetrics.columnWidth) +
-      next.tx
-    const renderTy =
-      resolveRowOffset(next.range.y, sortedRowHeightOverrides, gridMetrics.rowHeight) -
-      resolveRowOffset(viewport.rowStart, sortedRowHeightOverrides, gridMetrics.rowHeight) +
-      next.ty
+    const { renderTx, renderTy } = resolveGridRenderScrollTransform({
+      nextVisibleRegion: next,
+      renderViewport: viewport,
+      sortedColumnWidthOverrides,
+      sortedRowHeightOverrides,
+      defaultColumnWidth: gridMetrics.columnWidth,
+      defaultRowHeight: gridMetrics.rowHeight,
+    })
     scrollTransformRef.current = {
       renderTx,
       renderTy,
@@ -585,8 +565,7 @@ export function useWorkbookGridRenderState(input: {
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
-    viewport.colStart,
-    viewport.rowStart,
+    viewport,
   ])
 
   useEffect(() => {

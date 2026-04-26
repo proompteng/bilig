@@ -80,6 +80,7 @@ async function expectTypeGpuSteadyScroll(page: Page, report: ScrollPerfReport) {
   expect(readCounter(report.counters, 'typeGpuSurfaceResizes')).toBe(0)
   expect(report.counters.fullPatches).toBe(0)
   expect(sumRecordCounters(report.counters.fullPatchBroadcasts)).toBe(0)
+  expect(readCounter(report.counters, 'typeGpuTileCacheSorts')).toBe(0)
   const hasSceneChurn = report.counters.headerPaneBuilds > 0 || readCounter(report.counters, 'typeGpuScenePacketsApplied') > 0
   if (!hasSceneChurn) {
     expect(readCounter(report.counters, 'typeGpuBufferAllocations')).toBe(0)

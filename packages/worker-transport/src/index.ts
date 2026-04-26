@@ -1,8 +1,9 @@
 import type { EngineEvent } from '@bilig/protocol'
 import type { EngineOpBatch } from '@bilig/workbook-domain'
+import type { RenderTileDeltaSubscription } from './render-tile-delta.js'
 import type { ViewportPatchSubscription } from './viewport-patch.js'
 
-export type WorkerTransportChannel = 'events' | 'batches' | 'viewportPatches'
+export type WorkerTransportChannel = 'events' | 'batches' | 'viewportPatches' | 'renderTileDeltas'
 
 interface RequestMessage {
   kind: 'request'
@@ -28,6 +29,12 @@ type SubscribeMessage =
       channel: 'viewportPatches'
       args: [ViewportPatchSubscription]
     }
+  | {
+      kind: 'subscribe'
+      id: number
+      channel: 'renderTileDeltas'
+      args: [RenderTileDeltaSubscription]
+    }
 
 interface UnsubscribeMessage {
   kind: 'unsubscribe'
@@ -38,6 +45,7 @@ type EventMessage =
   | { kind: 'event'; subscriptionId: number; channel: 'events'; payload: EngineEvent }
   | { kind: 'event'; subscriptionId: number; channel: 'batches'; payload: EngineOpBatch }
   | { kind: 'event'; subscriptionId: number; channel: 'viewportPatches'; payload: Uint8Array }
+  | { kind: 'event'; subscriptionId: number; channel: 'renderTileDeltas'; payload: Uint8Array }
 
 type TransportMessage = RequestMessage | ResponseMessage | SubscribeMessage | UnsubscribeMessage | EventMessage
 
@@ -55,6 +63,7 @@ export interface WorkerTransportEngine {
   subscribe?: (listener: (event: EngineEvent) => void) => () => void
   subscribeBatches?: (listener: (batch: EngineOpBatch) => void) => () => void
   subscribeViewportPatches?: (subscription: ViewportPatchSubscription, listener: (patch: Uint8Array) => void) => () => void
+  subscribeRenderTileDeltas?: (subscription: RenderTileDeltaSubscription, listener: (delta: Uint8Array) => void) => () => void
   [method: string]: unknown
 }
 
@@ -64,6 +73,7 @@ export interface WorkerEngineClient {
   subscribe(listener: (event: EngineEvent) => void): () => void
   subscribeBatches(listener: (batch: EngineOpBatch) => void): () => void
   subscribeViewportPatches(subscription: ViewportPatchSubscription, listener: (patch: Uint8Array) => void): () => void
+  subscribeRenderTileDeltas(subscription: RenderTileDeltaSubscription, listener: (delta: Uint8Array) => void): () => void
   dispose(): void
 }
 
@@ -160,6 +170,17 @@ function subscribeViewportPatchChannel(
   return engine.subscribeViewportPatches(subscription, listener)
 }
 
+function subscribeRenderTileDeltaChannel(
+  engine: WorkerTransportEngine,
+  subscription: RenderTileDeltaSubscription,
+  listener: (payload: Uint8Array) => void,
+): () => void {
+  if (!engine.subscribeRenderTileDeltas) {
+    throw new Error('Engine does not expose subscribeRenderTileDeltas()')
+  }
+  return engine.subscribeRenderTileDeltas(subscription, listener)
+}
+
 function createChannelSubscription(engine: WorkerTransportEngine, port: MessagePortLike, message: SubscribeMessage): () => void {
   switch (message.channel) {
     case 'events':
@@ -187,6 +208,18 @@ function createChannelSubscription(engine: WorkerTransportEngine, port: MessageP
             kind: 'event',
             subscriptionId: message.id,
             channel: 'viewportPatches',
+            payload,
+          },
+          [payload.buffer],
+        )
+      })
+    case 'renderTileDeltas':
+      return subscribeRenderTileDeltaChannel(engine, message.args[0], (payload: Uint8Array) => {
+        port.postMessage(
+          {
+            kind: 'event',
+            subscriptionId: message.id,
+            channel: 'renderTileDeltas',
             payload,
           },
           [payload.buffer],
@@ -232,6 +265,7 @@ export function createWorkerEngineClient(options: { port: MessagePortLike }): Wo
     | { channel: 'events'; callback: (payload: EngineEvent) => void }
     | { channel: 'batches'; callback: (payload: EngineOpBatch) => void }
     | { channel: 'viewportPatches'; callback: (payload: Uint8Array) => void }
+    | { channel: 'renderTileDeltas'; callback: (payload: Uint8Array) => void }
   >()
 
   const onMessage = (message: TransportMessage) => {
@@ -263,6 +297,10 @@ export function createWorkerEngineClient(options: { port: MessagePortLike }): Wo
         return
       }
       if (message.channel === 'viewportPatches' && listener.channel === 'viewportPatches') {
+        listener.callback(message.payload)
+        return
+      }
+      if (message.channel === 'renderTileDeltas' && listener.channel === 'renderTileDeltas') {
         listener.callback(message.payload)
       }
     }
@@ -317,6 +355,16 @@ export function createWorkerEngineClient(options: { port: MessagePortLike }): Wo
     }
   }
 
+  function subscribeRenderTileDeltas(subscription: RenderTileDeltaSubscription, callback: (payload: Uint8Array) => void): () => void {
+    const id = nextId++
+    listeners.set(id, { channel: 'renderTileDeltas', callback })
+    port.postMessage({ kind: 'subscribe', id, channel: 'renderTileDeltas', args: [subscription] })
+    return () => {
+      listeners.delete(id)
+      port.postMessage({ kind: 'unsubscribe', subscriptionId: id })
+    }
+  }
+
   return {
     invoke,
     ready() {
@@ -325,6 +373,7 @@ export function createWorkerEngineClient(options: { port: MessagePortLike }): Wo
     subscribe: subscribeEvents,
     subscribeBatches,
     subscribeViewportPatches,
+    subscribeRenderTileDeltas,
     dispose() {
       pending.forEach((entry) => entry.reject(new Error('Worker engine client disposed')))
       pending.clear()
@@ -352,3 +401,4 @@ function attachMessageListener(port: MessagePortLike, listener: (message: Transp
 }
 
 export * from './viewport-patch.js'
+export * from './render-tile-delta.js'

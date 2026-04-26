@@ -379,31 +379,37 @@ function resolveSelectedAxisRanges(input: {
 }
 
 function visibleColumnIndexes(geometry: GridGeometrySnapshot): readonly number[] {
-  const indexes = new Set<number>()
+  const indexes: number[] = []
   for (let index = 0; index < geometry.camera.frozenColumnCount; index += 1) {
-    indexes.add(index)
+    indexes.push(index)
   }
   const bodyRange = geometry.columns.visibleRangeForWorldRect(geometry.camera.bodyWorldX, geometry.camera.bodyViewportWidth)
   for (let index = bodyRange.startIndex; index < bodyRange.endIndexExclusive; index += 1) {
+    if (index < geometry.camera.frozenColumnCount) {
+      continue
+    }
     if (!geometry.columns.isHidden(index) && geometry.columns.sizeOf(index) > 0) {
-      indexes.add(index)
+      indexes.push(index)
     }
   }
-  return [...indexes].toSorted((left, right) => left - right)
+  return indexes
 }
 
 function visibleRowIndexes(geometry: GridGeometrySnapshot): readonly number[] {
-  const indexes = new Set<number>()
+  const indexes: number[] = []
   for (let index = 0; index < geometry.camera.frozenRowCount; index += 1) {
-    indexes.add(index)
+    indexes.push(index)
   }
   const bodyRange = geometry.rows.visibleRangeForWorldRect(geometry.camera.bodyWorldY, geometry.camera.bodyViewportHeight)
   for (let index = bodyRange.startIndex; index < bodyRange.endIndexExclusive; index += 1) {
+    if (index < geometry.camera.frozenRowCount) {
+      continue
+    }
     if (!geometry.rows.isHidden(index) && geometry.rows.sizeOf(index) > 0) {
-      indexes.add(index)
+      indexes.push(index)
     }
   }
-  return [...indexes].toSorted((left, right) => left - right)
+  return indexes
 }
 
 function appendRangeFills(

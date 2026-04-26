@@ -1,11 +1,12 @@
 import type { GridEngineLike } from '@bilig/grid'
 import { parseCellAddress } from '@bilig/formula'
 import type { CellSnapshot, CellStyleRecord, Viewport, WorkbookAxisEntrySnapshot } from '@bilig/protocol'
-import type { ViewportPatch, WorkerEngineClient } from '@bilig/worker-transport'
+import type { RenderTileDeltaSubscription, ViewportPatch, WorkerEngineClient } from '@bilig/worker-transport'
 import { ProjectedViewportAxisStore } from './projected-viewport-axis-store.js'
 import { ProjectedViewportCellCache } from './projected-viewport-cell-cache.js'
 import { ProjectedViewportPatchCoordinator, type ProjectedViewportPatchApplied } from './projected-viewport-patch-coordinator.js'
 import { ProjectedSceneStore } from './projected-scene-store.js'
+import { ProjectedTileSceneStore, type ProjectedRenderTile, type ProjectedTileSceneChange } from './projected-tile-scene-store.js'
 import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
 import { buildWorkerResidentPaneScenes } from './worker-runtime-render-scene.js'
 
@@ -23,6 +24,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   private readonly axisStore: ProjectedViewportAxisStore
   private readonly patchCoordinator: ProjectedViewportPatchCoordinator
   private readonly sceneStore: ProjectedSceneStore
+  private readonly tileSceneStore: ProjectedTileSceneStore
   private readonly sheetChannelListeners = new Map<string, Map<SheetViewportChannel, Set<() => void>>>()
   private lastBatchId = 0
 
@@ -43,6 +45,7 @@ export class ProjectedViewportStore implements GridEngineLike {
           generation,
         }),
     })
+    this.tileSceneStore = new ProjectedTileSceneStore(client)
     this.patchCoordinator = new ProjectedViewportPatchCoordinator({
       cellCache: this.cellCache,
       axisStore: this.axisStore,
@@ -197,6 +200,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     const removedSheets = this.cellCache.setKnownSheets(sheetNames)
     this.axisStore.dropSheets(removedSheets)
     this.sceneStore.dropSheets(removedSheets)
+    this.tileSceneStore.dropSheets(removedSheets)
     removedSheets.forEach((sheetName) => this.sheetChannelListeners.delete(sheetName))
   }
 
@@ -237,6 +241,14 @@ export class ProjectedViewportStore implements GridEngineLike {
 
   peekResidentPaneScenes(request: WorkbookPaneSceneRequest): readonly WorkbookPaneScenePacket[] | null {
     return this.sceneStore.peekResidentPaneScenes(request)
+  }
+
+  subscribeRenderTileDeltas(subscription: RenderTileDeltaSubscription, listener: (change: ProjectedTileSceneChange) => void): () => void {
+    return this.tileSceneStore.subscribe(subscription, listener)
+  }
+
+  peekRenderTile(tileId: number): ProjectedRenderTile | null {
+    return this.tileSceneStore.peekTile(tileId)
   }
 
   applyViewportPatch(patch: ViewportPatch): readonly { cell: CellItem }[] {

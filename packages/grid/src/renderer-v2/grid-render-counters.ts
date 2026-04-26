@@ -11,6 +11,10 @@ type ScrollPerfCounterSink = Partial<{
   noteTypeGpuAtlasUpload: (bytes: number) => void
   noteTypeGpuSurfaceResize: (width: number, height: number, dpr: number) => void
   noteTypeGpuTileMiss: (tileKey: GridResidentTileKey | string) => void
+  noteTypeGpuTileCacheEviction: (count: number) => void
+  noteTypeGpuTileCacheSort: (count: number) => void
+  noteTypeGpuTileCacheStaleLookup: (scannedEntries: number, hit: boolean) => void
+  noteTypeGpuTileCacheVisibleMark: (count: number) => void
   noteTypeGpuScenePacketApplied: (packetKey: GridResidentTileKey | string) => void
   noteGridScrollInput: (timestamp: number) => void
   noteGridDrawFrame: (timestamp: number) => void
@@ -27,6 +31,12 @@ export const EMPTY_GRID_GPU_COUNTERS: GridGpuCounters = Object.freeze({
   submitCount: 0,
   surfaceResizes: 0,
   tileMisses: 0,
+  tileCacheEvictions: 0,
+  tileCacheEntriesScanned: 0,
+  tileCacheSorts: 0,
+  tileCacheStaleHits: 0,
+  tileCacheStaleLookups: 0,
+  tileCacheVisibleMarks: 0,
   uniformWriteBytes: 0,
   vertexUploadBytes: 0,
 })
@@ -76,6 +86,22 @@ export function noteTypeGpuSurfaceResize(width: number, height: number, dpr: num
 
 export function noteTypeGpuTileMiss(tileKey: GridResidentTileKey | string): void {
   getCounterSink()?.noteTypeGpuTileMiss?.(tileKey)
+}
+
+export function noteTypeGpuTileCacheEviction(count = 1): void {
+  getCounterSink()?.noteTypeGpuTileCacheEviction?.(count)
+}
+
+export function noteTypeGpuTileCacheSort(count = 1): void {
+  getCounterSink()?.noteTypeGpuTileCacheSort?.(count)
+}
+
+export function noteTypeGpuTileCacheStaleLookup(scannedEntries: number, hit: boolean): void {
+  getCounterSink()?.noteTypeGpuTileCacheStaleLookup?.(scannedEntries, hit)
+}
+
+export function noteTypeGpuTileCacheVisibleMark(count: number): void {
+  getCounterSink()?.noteTypeGpuTileCacheVisibleMark?.(count)
 }
 
 export function noteTypeGpuScenePacketApplied(packetKey: GridResidentTileKey | string): void {

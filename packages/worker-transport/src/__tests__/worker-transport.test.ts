@@ -4,7 +4,14 @@ import { describe, expect, it } from 'vitest'
 
 import type { EngineEvent } from '@bilig/protocol'
 
-import { createWorkerEngineClient, createWorkerEngineHost, decodeViewportPatch, encodeViewportPatch } from '../index.js'
+import {
+  createWorkerEngineClient,
+  createWorkerEngineHost,
+  decodeRenderTileDeltaBatch,
+  decodeViewportPatch,
+  encodeRenderTileDeltaBatch,
+  encodeViewportPatch,
+} from '../index.js'
 
 async function waitFor(predicate: () => boolean, attempts = 20): Promise<void> {
   const poll = async (remainingAttempts: number): Promise<void> => {
@@ -178,6 +185,84 @@ describe('worker transport', () => {
         colStart: 0,
         colEnd: 5,
       },
+    })
+
+    unsubscribe()
+    client.dispose()
+    host.dispose()
+  })
+
+  it('relays render tile delta subscriptions with subscription args', async () => {
+    const channel = new MessageChannel()
+    const host = createWorkerEngineHost(
+      {
+        subscribeRenderTileDeltas(subscription, listener) {
+          listener(
+            encodeRenderTileDeltaBatch({
+              magic: 'bilig.render.tile.delta',
+              version: 1,
+              sheetId: subscription.sheetId,
+              batchId: 4,
+              cameraSeq: 8,
+              mutations: [
+                {
+                  kind: 'overlay',
+                  overlayRevision: 12,
+                  dirtyBounds: {
+                    rowStart: subscription.rowStart,
+                    rowEnd: subscription.rowEnd,
+                    colStart: subscription.colStart,
+                    colEnd: subscription.colEnd,
+                  },
+                },
+              ],
+            }),
+          )
+          return () => undefined
+        },
+      },
+      channel.port1,
+    )
+
+    const client = createWorkerEngineClient({ port: channel.port2 })
+    const received: Uint8Array[] = []
+    const unsubscribe = client.subscribeRenderTileDeltas(
+      {
+        sheetId: 2,
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 31,
+        colStart: 0,
+        colEnd: 127,
+      },
+      (delta) => {
+        received.push(delta)
+      },
+    )
+
+    await waitFor(() => received.length === 1)
+
+    const firstDelta = received[0]
+    expect(firstDelta).toBeDefined()
+    if (!firstDelta) {
+      throw new Error('Expected a render tile delta')
+    }
+    expect(decodeRenderTileDeltaBatch(firstDelta)).toMatchObject({
+      sheetId: 2,
+      batchId: 4,
+      cameraSeq: 8,
+      mutations: [
+        {
+          kind: 'overlay',
+          overlayRevision: 12,
+          dirtyBounds: {
+            rowStart: 0,
+            rowEnd: 31,
+            colStart: 0,
+            colEnd: 127,
+          },
+        },
+      ],
     })
 
     unsubscribe()
