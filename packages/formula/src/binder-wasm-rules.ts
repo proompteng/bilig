@@ -50,6 +50,42 @@ interface WasmSafeBuiltinArgsDeps {
   isWasmSafe: (node: FormulaNode, allowRange?: boolean) => boolean
 }
 
+function isTextLiteralLike(node: FormulaNode): boolean {
+  switch (node.kind) {
+    case 'StringLiteral':
+      return true
+    case 'BinaryExpr':
+      return node.operator === '&' && isTextLiteralLike(node.left) && isTextLiteralLike(node.right)
+    case 'CallExpr':
+      return node.callee.toUpperCase() === 'CONCAT' && node.args.every(isTextLiteralLike)
+    case 'BooleanLiteral':
+    case 'CellRef':
+    case 'ColumnRef':
+    case 'ErrorLiteral':
+    case 'InvokeExpr':
+    case 'NameRef':
+    case 'NumberLiteral':
+    case 'RangeRef':
+    case 'RowRef':
+    case 'SpillRef':
+    case 'StructuredRef':
+    case 'UnaryExpr':
+      return false
+    default:
+      return false
+  }
+}
+
+function hasMixedConditionalResultKinds(args: readonly FormulaNode[], resultIndexes: readonly number[]): boolean {
+  const resultNodes = resultIndexes.map((index) => args[index]).filter((node): node is FormulaNode => node !== undefined)
+  if (resultNodes.length === 0) {
+    return false
+  }
+  const hasTextLiteralResult = resultNodes.some(isTextLiteralLike)
+  const hasNonTextLiteralResult = resultNodes.some((node) => node.kind !== 'ErrorLiteral' && !isTextLiteralLike(node))
+  return hasTextLiteralResult && hasNonTextLiteralResult
+}
+
 export function isCellRangeNode(node: FormulaNode): boolean {
   if (node.kind !== 'RangeRef') {
     return false
@@ -767,6 +803,26 @@ export function isWasmSafeBuiltinArgs(callee: string, args: readonly FormulaNode
       return args.every((arg) => deps.isWasmSafe(arg, true) || isNativeSequenceArg(arg))
     case 'CHOOSE':
       return argc >= 2 && isScalarArg(args[0]!) && args.slice(1).every((arg) => deps.isWasmSafe(arg, true) || isNativeSequenceArg(arg))
+    case 'IF':
+      return (
+        argc === 3 &&
+        !hasMixedConditionalResultKinds(args, [1, 2]) &&
+        isScalarArg(args[0]!) &&
+        args.slice(1).every((arg) => deps.isWasmSafe(arg, true))
+      )
+    case 'IFS': {
+      if (
+        argc < 2 ||
+        argc % 2 !== 0 ||
+        hasMixedConditionalResultKinds(
+          args,
+          Array.from({ length: argc / 2 }, (_, index) => index * 2 + 1),
+        )
+      ) {
+        return false
+      }
+      return args.every((arg, index) => (index % 2 === 0 ? isScalarArg(arg) : deps.isWasmSafe(arg, true)))
+    }
     case 'COUNTIF':
     case 'USE.THE.COUNTIF':
       return args.length === 2 && isCellRangeArg(args[0]!) && isScalarArg(args[1]!)

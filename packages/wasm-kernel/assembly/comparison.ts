@@ -76,8 +76,29 @@ export function compareScalarValues(
     return normalizedLeft < normalizedRight ? -1 : 1
   }
 
-  const leftNumeric = toNumberOrNaN(leftTag, leftValue)
-  const rightNumeric = toNumberOrNaN(rightTag, rightValue)
+  const leftNumeric = valueNumber(
+    leftTag,
+    leftValue,
+    stringOffsets,
+    stringLengths,
+    stringData,
+    outputStringOffsets,
+    outputStringLengths,
+    outputStringData,
+  )
+  const rightNumeric =
+    rightText != null
+      ? parseNumericText(rightText)
+      : valueNumber(
+          rightTag,
+          rightValue,
+          stringOffsets,
+          stringLengths,
+          stringData,
+          outputStringOffsets,
+          outputStringLengths,
+          outputStringData,
+        )
   if (isNaN(leftNumeric) || isNaN(rightNumeric)) {
     return i32.MIN_VALUE
   }

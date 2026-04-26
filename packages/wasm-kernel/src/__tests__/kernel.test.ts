@@ -875,6 +875,36 @@ describe('wasm kernel', () => {
     expect(kernel.readOutputStrings()).toEqual(['helloA'])
   })
 
+  it('treats numeric comparisons against empty strings as false on the wasm path', async () => {
+    const kernel = await createKernel()
+    const width = 4
+    kernel.init(8, 4, 1, 1, 1)
+    kernel.uploadStrings(Uint32Array.from([0, 0, 0]), Uint32Array.from([0, 0, 0]), new Uint16Array())
+    kernel.writeCells(
+      new Uint8Array([ValueTag.Number, ValueTag.Number, 0, 0, 0, 0, 0, 0]),
+      new Float64Array([46023, 12, 0, 0, 0, 0, 0, 0]),
+      new Uint32Array(8),
+      new Uint16Array(8),
+    )
+    const packed = packPrograms([
+      [encodePushCell(0), encodePushString(0), encodeBinary(Opcode.Eq), encodeRet()],
+      [encodePushCell(1), encodePushString(0), encodeBinary(Opcode.Eq), encodeRet()],
+    ])
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([cellIndex(1, 0, width), cellIndex(1, 1, width)]),
+    )
+    kernel.uploadConstants(new Float64Array(), new Uint32Array([0]), new Uint32Array([0]))
+    kernel.evalBatch(Uint32Array.from([cellIndex(1, 0, width), cellIndex(1, 1, width)]))
+
+    expect(kernel.readTags()[cellIndex(1, 0, width)]).toBe(ValueTag.Boolean)
+    expect(kernel.readNumbers()[cellIndex(1, 0, width)]).toBe(0)
+    expect(kernel.readTags()[cellIndex(1, 1, width)]).toBe(ValueTag.Boolean)
+    expect(kernel.readNumbers()[cellIndex(1, 1, width)]).toBe(0)
+  })
+
   it('evaluates text slicing, casing, and search builtins on the wasm path', async () => {
     const kernel = await createKernel()
     const width = 10

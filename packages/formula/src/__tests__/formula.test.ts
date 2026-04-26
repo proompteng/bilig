@@ -536,9 +536,11 @@ describe('formula', () => {
 
   it('keeps contextual metadata functions on the JS path without constant-folding them to errors', () => {
     const rowCompiled = compileFormula('ROW()')
+    const rowOffsetCompiled = compileFormula('ROW()-18')
     const sheetCompiled = compileFormula('SHEET("Sheet2")')
 
     expect(rowCompiled.mode).toBe(0)
+    expect(rowOffsetCompiled.mode).toBe(0)
     expect(sheetCompiled.mode).toBe(0)
     expect(
       evaluatePlan(rowCompiled.jsPlan, {
@@ -548,6 +550,14 @@ describe('formula', () => {
         resolveRange: (): CellValue[] => [],
       }),
     ).toEqual({ tag: ValueTag.Number, value: 7 })
+    expect(
+      evaluatePlan(rowOffsetCompiled.jsPlan, {
+        sheetName: 'Sheet1',
+        currentAddress: 'A19',
+        resolveCell: (): CellValue => ({ tag: ValueTag.Empty }),
+        resolveRange: (): CellValue[] => [],
+      }),
+    ).toEqual({ tag: ValueTag.Number, value: 1 })
     expect(
       evaluatePlan(sheetCompiled.jsPlan, {
         sheetName: 'Sheet1',
@@ -561,6 +571,8 @@ describe('formula', () => {
   it('compiles IF, IFERROR, IFNA, and NA onto the wasm-safe path alongside exact-parity logical formulas', () => {
     const compiled = compileFormula('IF(A1>0,A1*2,A2-1)')
     expect(compiled.mode).toBe(1)
+    expect(compileFormula('IF(A1>0,"yes","no")').mode).toBe(1)
+    expect(compileFormula('IF(A1>0,B1,"")').mode).toBe(0)
     expect(compileFormula('IFERROR(A1,"missing")').mode).toBe(1)
     expect(compileFormula('IFNA(NA(),"missing")').mode).toBe(1)
     expect(compileFormula('NA()').mode).toBe(1)
@@ -584,6 +596,50 @@ describe('formula', () => {
     expect(compileFormula('ROUND(A1,-1)').mode).toBe(1)
     expect(compileFormula('FLOOR(A1,2)').mode).toBe(1)
     expect(compileFormula('CEILING(A1,2)').mode).toBe(1)
+  })
+
+  it('evaluates mixed-output IF formulas through the JS path without raising value errors', () => {
+    const compiled = compileFormula('IF(A1<=B1,C1,"")')
+    expect(compiled.mode).toBe(0)
+    expect(
+      evaluatePlan(compiled.jsPlan, {
+        sheetName: 'Sheet1',
+        resolveCell: (_sheet: string, address: string): CellValue => {
+          switch (address) {
+            case 'A1':
+              return { tag: ValueTag.Number, value: 1 }
+            case 'B1':
+              return { tag: ValueTag.Number, value: 12 }
+            case 'C1':
+              return { tag: ValueTag.Number, value: 12000 }
+            default:
+              return { tag: ValueTag.Empty }
+          }
+        },
+        resolveRange: (): CellValue[] => [],
+      }),
+    ).toEqual({ tag: ValueTag.Number, value: 12000 })
+  })
+
+  it('treats numeric-vs-empty-string comparisons as false instead of value errors', () => {
+    const compiled = compileFormula('OR(A1="",B1="")')
+    expect(compiled.mode).toBe(1)
+    expect(
+      evaluatePlan(compiled.jsPlan, {
+        sheetName: 'Sheet1',
+        resolveCell: (_sheet: string, address: string): CellValue => {
+          switch (address) {
+            case 'A1':
+              return { tag: ValueTag.Number, value: 46023 }
+            case 'B1':
+              return { tag: ValueTag.Number, value: 12 }
+            default:
+              return { tag: ValueTag.Empty }
+          }
+        },
+        resolveRange: (): CellValue[] => [],
+      }),
+    ).toEqual({ tag: ValueTag.Boolean, value: false })
   })
 
   it('keeps unsupported candidate builtin arities on the JS path', () => {

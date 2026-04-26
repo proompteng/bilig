@@ -221,84 +221,87 @@ function normalizeRangeRecords<TRecord extends { range: ComparableRangeRef } & R
   records: readonly TRecord[],
   idKey: TKey,
 ): TRecord[] {
-  const sorted = [...records].toSorted((left, right) => {
-    const idComparison = left[idKey].localeCompare(right[idKey])
-    if (idComparison !== 0) {
-      return idComparison
+  const groups = new Map<
+    string,
+    {
+      prototype: TRecord
+      readonly id: string
+      readonly sheetName: string
+      readonly colsByRow: Map<number, Set<number>>
     }
-    return compareRangeRefs(left.range, right.range)
-  })
-  const grouped = new Map<string, TRecord[]>()
-  for (const record of sorted) {
-    const groupKey = record[idKey]
-    const group = grouped.get(groupKey) ?? []
-    grouped.set(groupKey, insertOrMergeRangeRecord(group, record))
-  }
-  return [...grouped.entries()]
-    .toSorted(([left], [right]) => left.localeCompare(right))
-    .flatMap(([_groupKey, group]) => group.toSorted((left, right) => compareRangeRefs(left.range, right.range)))
-}
-
-function insertOrMergeRangeRecord<TRecord extends { range: ComparableRangeRef }>(group: readonly TRecord[], record: TRecord): TRecord[] {
-  const nextGroup = [...group]
-  nextGroup.push(record)
-  let changed = true
-  while (changed) {
-    changed = false
-    for (let leftIndex = 0; leftIndex < nextGroup.length; leftIndex += 1) {
-      for (let rightIndex = leftIndex + 1; rightIndex < nextGroup.length; rightIndex += 1) {
-        const left = nextGroup[leftIndex]
-        const right = nextGroup[rightIndex]
-        if (!left || !right) {
-          continue
-        }
-        const merged = mergeRanges(left.range, right.range)
-        if (!merged) {
-          continue
-        }
-        nextGroup[leftIndex] = { ...left, range: merged }
-        nextGroup.splice(rightIndex, 1)
-        changed = true
-        break
+  >()
+  for (const record of records) {
+    const id = record[idKey]
+    const sheetName = record.range.sheetName
+    const groupKey = `${id}\u0000${sheetName}`
+    let group = groups.get(groupKey)
+    if (!group) {
+      group = {
+        prototype: record,
+        id,
+        sheetName,
+        colsByRow: new Map(),
       }
-      if (changed) {
-        break
+      groups.set(groupKey, group)
+    }
+    const start = parseCellAddress(record.range.startAddress, sheetName)
+    const end = parseCellAddress(record.range.endAddress, sheetName)
+    const rowStart = Math.min(start.row, end.row)
+    const rowEnd = Math.max(start.row, end.row)
+    const colStart = Math.min(start.col, end.col)
+    const colEnd = Math.max(start.col, end.col)
+    for (let row = rowStart; row <= rowEnd; row += 1) {
+      let cols = group.colsByRow.get(row)
+      if (!cols) {
+        cols = new Set()
+        group.colsByRow.set(row, cols)
+      }
+      for (let col = colStart; col <= colEnd; col += 1) {
+        cols.add(col)
       }
     }
   }
-  return nextGroup
-}
 
-function mergeRanges(left: ComparableRangeRef, right: ComparableRangeRef): ComparableRangeRef | null {
-  if (left.sheetName !== right.sheetName) {
-    return null
-  }
-  const leftStart = parseCellAddress(left.startAddress, left.sheetName)
-  const leftEnd = parseCellAddress(left.endAddress, left.sheetName)
-  const rightStart = parseCellAddress(right.startAddress, right.sheetName)
-  const rightEnd = parseCellAddress(right.endAddress, right.sheetName)
-
-  const sameRows = leftStart.row === rightStart.row && leftEnd.row === rightEnd.row
-  const horizontallyAdjacent = sameRows && Math.max(leftStart.col, rightStart.col) <= Math.min(leftEnd.col, rightEnd.col) + 1
-  if (horizontallyAdjacent) {
-    return {
-      sheetName: left.sheetName,
-      startAddress: formatAddress(leftStart.row, Math.min(leftStart.col, rightStart.col)),
-      endAddress: formatAddress(leftEnd.row, Math.max(leftEnd.col, rightEnd.col)),
-    }
-  }
-
-  const sameCols = leftStart.col === rightStart.col && leftEnd.col === rightEnd.col
-  const verticallyAdjacent = sameCols && Math.max(leftStart.row, rightStart.row) <= Math.min(leftEnd.row, rightEnd.row) + 1
-  if (verticallyAdjacent) {
-    return {
-      sheetName: left.sheetName,
-      startAddress: formatAddress(Math.min(leftStart.row, rightStart.row), leftStart.col),
-      endAddress: formatAddress(Math.max(leftEnd.row, rightEnd.row), leftEnd.col),
-    }
-  }
-
-  return null
+  return [...groups.values()]
+    .toSorted((left, right) => left.id.localeCompare(right.id) || left.sheetName.localeCompare(right.sheetName))
+    .flatMap((group) => {
+      const normalized: TRecord[] = []
+      const rows = [...group.colsByRow.entries()].toSorted(([left], [right]) => left - right)
+      for (const [row, cols] of rows) {
+        const sortedCols = [...cols].toSorted((left, right) => left - right)
+        let runStart: number | undefined
+        let runEnd: number | undefined
+        const pushRun = () => {
+          if (runStart === undefined || runEnd === undefined) {
+            return
+          }
+          normalized.push({
+            ...group.prototype,
+            range: {
+              sheetName: group.sheetName,
+              startAddress: formatAddress(row, runStart),
+              endAddress: formatAddress(row, runEnd),
+            },
+          })
+        }
+        for (const col of sortedCols) {
+          if (runStart === undefined || runEnd === undefined) {
+            runStart = col
+            runEnd = col
+            continue
+          }
+          if (col === runEnd + 1) {
+            runEnd = col
+            continue
+          }
+          pushRun()
+          runStart = col
+          runEnd = col
+        }
+        pushRun()
+      }
+      return normalized
+    })
 }
 
 const literalInputArbitrary = fc.oneof<LiteralInput>(

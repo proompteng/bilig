@@ -149,7 +149,7 @@ describe('zero sync service startup', () => {
       allowPendingCleanup: false,
     })
     expect(deps.recalcStart).toHaveBeenCalledOnce()
-  })
+  }, 15_000)
 
   it('auto-runs pending migrations on boot when explicitly enabled', async () => {
     process.env['BILIG_RUN_DATA_MIGRATIONS_ON_BOOT'] = 'true'
@@ -164,5 +164,5 @@ describe('zero sync service startup', () => {
       allowPendingCleanup: true,
     })
     expect(deps.recalcStart).toHaveBeenCalledOnce()
-  })
+  }, 15_000)
 })

@@ -8,6 +8,7 @@ import {
   performHorizontalGridBrowse,
   performVerticalGridBrowse,
   remoteSyncEnabled,
+  resetGridScroll,
   settleWorkbookScrollPerf,
   stopWorkbookScrollPerf,
   warmStartWorkbookScrollPerf,
@@ -139,6 +140,9 @@ test.describe('@browser-perf web app scroll performance', () => {
 
     expect(benchmarkState.fixture?.id).toBe('wide-mixed-frozen-250k')
 
+    await settleWorkbookScrollPerf(page, 40)
+    await performHorizontalGridBrowse(page, { distancePx: 3_072, steps: 80 })
+    await resetGridScroll(page)
     await settleWorkbookScrollPerf(page, 40)
     await warmStartWorkbookScrollPerf(page, 'wide-250k-frozen-panes')
     await performHorizontalGridBrowse(page, { distancePx: 3_072, steps: 160 })

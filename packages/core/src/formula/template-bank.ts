@@ -47,6 +47,11 @@ interface AnchoredPrefixAggregateTemplateMatch {
   readonly templateKey: string
 }
 
+interface FormulaTemplateSourceKey {
+  readonly compiled: CompiledFormula | undefined
+  readonly templateKey: string
+}
+
 function translateTemplate(compiled: CompiledFormula, rowDelta: number, colDelta: number, source: string): CompiledFormula {
   return (
     canTranslateCompiledFormulaWithoutAst(compiled)
@@ -80,6 +85,14 @@ function resolveTemplateCompiled(template: MutableTemplateRecord, source: string
     return translateTemplate(template.compiled, rowDelta, colDelta, source)
   } catch {
     return compileSourceFormula(source)
+  }
+}
+
+function resolveTemplateSourceKey(source: string, ownerRow: number, ownerCol: number): FormulaTemplateSourceKey {
+  const anchoredPrefixAggregate = tryMatchAnchoredPrefixAggregateTemplate(source, ownerRow, ownerCol)
+  return {
+    compiled: anchoredPrefixAggregate?.compiled,
+    templateKey: anchoredPrefixAggregate?.templateKey ?? buildRelativeFormulaTemplateTokenKey(source, ownerRow, ownerCol),
   }
 }
 
@@ -153,13 +166,12 @@ export function createTemplateBank(args?: { readonly counters?: EngineCounters }
       nextTemplateId = 1
     },
     resolve(source, ownerRow, ownerCol) {
-      const anchoredPrefixAggregate = tryMatchAnchoredPrefixAggregateTemplate(source, ownerRow, ownerCol)
-      const templateKey = anchoredPrefixAggregate?.templateKey ?? buildRelativeFormulaTemplateTokenKey(source, ownerRow, ownerCol)
+      const { compiled: compiledOverride, templateKey } = resolveTemplateSourceKey(source, ownerRow, ownerCol)
       const recent = recentByColumn.get(ownerCol)
       const template =
         recent && recent.templateKey === templateKey
           ? recent
-          : (templatesByKey.get(templateKey) ?? internTemplate(source, ownerRow, ownerCol, templateKey, anchoredPrefixAggregate?.compiled))
+          : (templatesByKey.get(templateKey) ?? internTemplate(source, ownerRow, ownerCol, templateKey, compiledOverride))
       const rowDelta = ownerRow - template.baseRow
       const colDelta = ownerCol - template.baseCol
       const translated = rowDelta !== 0 || colDelta !== 0
@@ -178,6 +190,10 @@ export function createTemplateBank(args?: { readonly counters?: EngineCounters }
     resolveById(templateId, source, ownerRow, ownerCol) {
       const template = templatesById.get(templateId)
       if (!template) {
+        return undefined
+      }
+      const { templateKey } = resolveTemplateSourceKey(source, ownerRow, ownerCol)
+      if (templateKey !== template.templateKey) {
         return undefined
       }
       const rowDelta = ownerRow - template.baseRow
