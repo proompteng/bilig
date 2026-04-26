@@ -15,6 +15,8 @@ interface CompletedTask {
 }
 
 const startedAt = performance.now()
+const ciProfile = process.env['BILIG_CI_PROFILE'] === 'full' ? 'full' : 'default'
+const runDeepGates = ciProfile === 'full'
 
 function formatSeconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`
@@ -140,22 +142,24 @@ const browserWebBundleBuild = withEnv(pnpm('browser web bundle build', '--filter
   VITE_BILIG_REMOTE_SYNC: '0',
 })
 const browserLane: CiTask = {
-  label: 'browser fuzz + browser tests',
+  label: runDeepGates ? 'browser tests + perf + fuzz' : 'browser tests',
   steps: [
-    withEnv(bun('browser fuzz', 'scripts/run-browser-tests.ts', '--grep', '@fuzz-browser'), {
-      BILIG_DEV_WEB_PREVIEW_BUILD: '0',
-      BILIG_FUZZ_BROWSER: '1',
-      BILIG_FUZZ_PROFILE: 'main',
-      BILIG_FUZZ_CAPTURE: '1',
-    }),
     withEnv(pnpm('browser tests', 'test:browser'), {
       BILIG_DEV_WEB_PREVIEW_BUILD: '0',
+      BILIG_BROWSER_INCLUDE_PERF: runDeepGates ? '1' : '0',
+      BILIG_BROWSER_INCLUDE_FUZZ: runDeepGates ? '1' : '0',
+      BILIG_FUZZ_PROFILE: 'main',
+      BILIG_FUZZ_CAPTURE: '1',
     }),
   ],
 }
 
 try {
   const allCompleted: CompletedTask[] = []
+  log(`profile ${ciProfile}`)
+  if (!runDeepGates) {
+    log('default profile skips browser perf, browser fuzz, and statistical benchmark contracts; run pnpm run ci:full for the deep gate')
+  }
 
   allCompleted.push(
     ...(await runStage('generated-source checks', [
@@ -190,7 +194,7 @@ try {
   allCompleted.push(
     ...(await runSequential('performance and clean-diff gates', [
       pnpm('perf smoke', 'bench:smoke'),
-      withEnv(pnpm('benchmark contracts', 'bench:contracts'), { CI: '1' }),
+      ...(runDeepGates ? [withEnv(pnpm('benchmark contracts', 'bench:contracts'), { CI: '1' })] : []),
       git('working tree clean', 'diff', '--exit-code'),
       git('index clean', 'diff', '--cached', '--exit-code'),
     ])),
