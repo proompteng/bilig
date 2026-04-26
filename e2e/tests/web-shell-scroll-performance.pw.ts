@@ -36,6 +36,10 @@ function summarizeSamples(samples: readonly number[]): {
   }
 }
 
+function sumRecordCounters(counters: Readonly<Record<string, number>>): number {
+  return Object.values(counters).reduce((sum, value) => sum + value, 0)
+}
+
 function expectQuietShell(
   report: ScrollPerfReport,
   options: {
@@ -74,10 +78,9 @@ async function expectTypeGpuSteadyScroll(page: Page, report: ScrollPerfReport) {
   }
   expect(readCounter(report.counters, 'typeGpuConfigures')).toBe(0)
   expect(readCounter(report.counters, 'typeGpuSurfaceResizes')).toBe(0)
-  const hasSceneChurn =
-    report.counters.fullPatches > 0 ||
-    report.counters.headerPaneBuilds > 0 ||
-    readCounter(report.counters, 'typeGpuScenePacketsApplied') > 0
+  expect(report.counters.fullPatches).toBe(0)
+  expect(sumRecordCounters(report.counters.fullPatchBroadcasts)).toBe(0)
+  const hasSceneChurn = report.counters.headerPaneBuilds > 0 || readCounter(report.counters, 'typeGpuScenePacketsApplied') > 0
   if (!hasSceneChurn) {
     expect(readCounter(report.counters, 'typeGpuBufferAllocations')).toBe(0)
     expect(readCounter(report.counters, 'typeGpuVertexUploadBytes')).toBe(0)

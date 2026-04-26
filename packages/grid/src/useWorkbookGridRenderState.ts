@@ -174,6 +174,8 @@ export function useWorkbookGridRenderState(input: {
   const scrollTransformRef = useRef(scrollTransformStoreRef.current.getSnapshot())
   const gridCameraStoreRef = useRef<GridCameraStore>(new GridCameraStore())
   const gridCameraRef = useRef<GridCameraSnapshot | null>(null)
+  const canUseWorkerResidentPaneScenesRef = useRef(false)
+  const invalidateSceneRef = useRef<() => void>(() => undefined)
   const [sceneRevision, setSceneRevision] = useState(0)
   const [fillPreviewRange, setFillPreviewRange] = useState<Rectangle | null>(null)
   const [isFillHandleDragging, setIsFillHandleDragging] = useState(false)
@@ -470,6 +472,9 @@ export function useWorkbookGridRenderState(input: {
   const invalidateScene = useCallback(() => {
     setSceneRevision((current) => current + 1)
   }, [])
+  useEffect(() => {
+    invalidateSceneRef.current = invalidateScene
+  }, [invalidateScene])
 
   const requiresLiveViewportState = resolveRequiresLiveViewportState({
     fillPreviewActive: fillPreviewRange !== null,
@@ -695,6 +700,7 @@ export function useWorkbookGridRenderState(input: {
       }))
   }, [freezeCols, freezeRows, dprBucket, gridCameraStore, residentViewport, sheetName, warmResidentViewports])
   const residentSceneEngine = supportsResidentPaneScenes(engine) ? engine : null
+  const shouldUseDamageOnlyViewportSubscription = residentSceneEngine !== null
   const [warmSceneRevision, setWarmSceneRevision] = useState(0)
   useEffect(() => {
     if (!residentSceneEngine || warmResidentPaneSceneRequests.length === 0) {
@@ -729,6 +735,9 @@ export function useWorkbookGridRenderState(input: {
     workerResidentPaneScenes,
   })
   useEffect(() => {
+    canUseWorkerResidentPaneScenesRef.current = canUseWorkerResidentPaneScenesResult
+  }, [canUseWorkerResidentPaneScenesResult])
+  useEffect(() => {
     if (!canUseWorkerResidentPaneScenesResult) {
       return
     }
@@ -739,12 +748,20 @@ export function useWorkbookGridRenderState(input: {
       return
     }
     noteViewportSubscription()
-    const listener = canUseWorkerResidentPaneScenesResult ? () => undefined : invalidateScene
-    const cleanups = residentViewports.map((nextViewport) => subscribeViewport(sheetName, nextViewport, listener))
+    const listener = () => {
+      if (!canUseWorkerResidentPaneScenesRef.current) {
+        invalidateSceneRef.current()
+      }
+    }
+    const cleanups = residentViewports.map((nextViewport) =>
+      shouldUseDamageOnlyViewportSubscription
+        ? subscribeViewport(sheetName, nextViewport, listener, { initialPatch: 'none' })
+        : subscribeViewport(sheetName, nextViewport, listener),
+    )
     return () => {
       cleanups.forEach((cleanup) => cleanup())
     }
-  }, [canUseWorkerResidentPaneScenesResult, invalidateScene, residentViewports, sheetName, subscribeViewport])
+  }, [residentViewports, sheetName, shouldUseDamageOnlyViewportSubscription, subscribeViewport])
   const residentDataPaneScenes = useMemo(() => {
     if (!hostElement) {
       return []

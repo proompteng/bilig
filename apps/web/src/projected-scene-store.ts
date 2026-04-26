@@ -23,6 +23,12 @@ interface SceneEntry {
   sceneRevision: number
 }
 
+interface RetainedSceneEntry {
+  readonly request: WorkbookPaneSceneRequest
+  readonly scenes: readonly WorkbookPaneScenePacket[]
+  readonly lastUsedSeq: number
+}
+
 interface ProjectedSceneStoreOptions {
   readonly buildImmediateResidentPaneScenes?: (
     request: WorkbookPaneSceneRequest,
@@ -31,6 +37,7 @@ interface ProjectedSceneStoreOptions {
 }
 
 const BACKGROUND_WORKER_SCENE_REFRESH_DELAY_MS = 64
+const MAX_RETAINED_RESIDENT_SCENE_REQUESTS = 32
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -204,9 +211,40 @@ function withRequestMetadata(request: WorkbookPaneSceneRequest, requestSeq: numb
   }
 }
 
+function resolveViewportPatchBatchId(patch: ViewportPatch): number | null {
+  const batchId = patch.metrics?.batchId
+  return Number.isInteger(batchId) && batchId !== undefined && batchId > 0 ? batchId : null
+}
+
+function viewportPatchHasStructuralDamage(patch: ViewportPatch, applied?: ResidentScenePatchDamage): boolean {
+  if (applied?.axisChanged || applied?.freezeChanged) {
+    return true
+  }
+  return patch.freezeRows !== undefined || patch.freezeCols !== undefined || patch.columns.length > 0 || patch.rows.length > 0
+}
+
+function residentScenesCoverViewportPatch(
+  scenes: readonly WorkbookPaneScenePacket[] | null,
+  patch: ViewportPatch,
+  applied?: ResidentScenePatchDamage,
+): boolean {
+  if (!patch.full || viewportPatchHasStructuralDamage(patch, applied)) {
+    return false
+  }
+  const batchId = resolveViewportPatchBatchId(patch)
+  if (batchId === null || !scenes || scenes.length === 0) {
+    return false
+  }
+  return scenes.every((scene) => {
+    const key = scene.packedScene.key
+    return key.valueVersion >= batchId && key.styleVersion >= batchId && key.selectionIndependentVersion >= batchId
+  })
+}
+
 export class ProjectedSceneStore {
   private readonly entries = new Map<string, SceneEntry>()
-  private readonly retainedScenes = new Map<string, readonly WorkbookPaneScenePacket[]>()
+  private readonly retainedScenes = new Map<string, RetainedSceneEntry>()
+  private retainedSceneSeq = 0
   private nextRequestSeq = 0
   private nextImmediateSceneGeneration = 0
   private lastRejectedPacketReason: string | null = null
@@ -225,7 +263,7 @@ export class ProjectedSceneStore {
     if (entry) {
       return entry.scenes
     }
-    return this.retainedScenes.get(buildRetainedRequestKey(request)) ?? null
+    return this.peekRetainedScenes(request)
   }
 
   subscribeResidentPaneScenes(request: WorkbookPaneSceneRequest, listener: () => void): () => void {
@@ -240,7 +278,7 @@ export class ProjectedSceneStore {
         key,
         request,
         listeners: new Set<() => void>(),
-        scenes: null,
+        scenes: this.peekRetainedScenes(request),
         inFlight: null,
         refreshQueued: false,
         refreshDelayMs: 0,
@@ -258,6 +296,7 @@ export class ProjectedSceneStore {
     }
     return () => {
       entry.listeners.delete(listener)
+      this.releaseEntryIfInactive(entry)
     }
   }
 
@@ -266,20 +305,23 @@ export class ProjectedSceneStore {
       return
     }
     const removed = new Set(sheetNames)
-    for (const [key, entry] of this.entries) {
+    for (const entry of this.entries.values()) {
       if (removed.has(entry.request.sheetName)) {
-        this.entries.delete(key)
+        this.dropEntry(entry)
       }
     }
     for (const [key, scenes] of this.retainedScenes) {
-      if (scenes.some((scene) => removed.has(scene.packedScene.sheetName))) {
+      if (removed.has(scenes.request.sheetName)) {
         this.retainedScenes.delete(key)
       }
     }
   }
 
   noteViewportPatch(patch: ViewportPatch, applied?: ResidentScenePatchDamage): void {
-    this.refreshMatchingEntries((request) => residentPaneSceneRequestNeedsRefresh(request, patch, applied))
+    this.refreshMatchingSceneEntries(
+      (request) => residentPaneSceneRequestNeedsRefresh(request, patch, applied),
+      (scenes) => !residentScenesCoverViewportPatch(scenes, patch, applied),
+    )
   }
 
   noteCellDamage(sheetName: string, row: number, col: number): void {
@@ -294,12 +336,22 @@ export class ProjectedSceneStore {
   }
 
   private refreshMatchingEntries(matches: (request: WorkbookPaneSceneRequest) => boolean): void {
+    this.refreshMatchingSceneEntries(matches, () => true)
+  }
+
+  private refreshMatchingSceneEntries(
+    matches: (request: WorkbookPaneSceneRequest) => boolean,
+    shouldRefresh: (scenes: readonly WorkbookPaneScenePacket[] | null) => boolean,
+  ): void {
+    this.deleteMatchingRetainedScenes((retained) => matches(retained.request) && shouldRefresh(retained.scenes))
     for (const entry of this.entries.values()) {
       if (!matches(entry.request)) {
         continue
       }
+      if (!shouldRefresh(entry.scenes)) {
+        continue
+      }
       entry.sceneRevision += 1
-      this.retainedScenes.delete(buildRetainedRequestKey(entry.request))
       const publishedImmediateScenes = this.publishImmediateScenes(entry)
       if (!publishedImmediateScenes) {
         this.queueRefresh(entry, BACKGROUND_WORKER_SCENE_REFRESH_DELAY_MS)
@@ -334,7 +386,7 @@ export class ProjectedSceneStore {
     }
 
     entry.scenes = next
-    this.retainedScenes.set(buildRetainedRequestKey(entry.request), next)
+    this.retainScenes(entry.request, next)
     getWorkbookScrollPerfCollector()?.noteScenePacketRefresh(next.length)
     entry.listeners.forEach((listener) => listener())
     return true
@@ -363,7 +415,7 @@ export class ProjectedSceneStore {
     const delayMs = entry.refreshDelayMs
     const flush = () => {
       entry.refreshTimer = null
-      if (!entry.refreshQueued || entry.inFlight || entry.listeners.size === 0) {
+      if (!this.isEntryCurrent(entry) || !entry.refreshQueued || entry.inFlight || entry.listeners.size === 0) {
         return
       }
       entry.refreshQueued = false
@@ -392,11 +444,14 @@ export class ProjectedSceneStore {
         const request = withRequestMetadata(entry.request, requestSeq, entry.sceneRevision)
         const isIncrementalRefresh = entry.scenes !== null
         const next = await client.invoke('getResidentPaneScenes', request)
+        if (!this.isRefreshCurrent(entry, requestSeq)) {
+          return
+        }
         if (!isResidentPaneScenePacketArray(next)) {
           this.noteScenePacketRejected('invalid-scene-payload')
           return
         }
-        if (entry.activeRequestSeq !== requestSeq || entry.refreshQueued || entry.listeners.size === 0) {
+        if (!this.isRefreshCurrent(entry, requestSeq)) {
           return
         }
         const packetRejectionReason = validateScenePacketResponseForRequest(next, request)
@@ -405,7 +460,7 @@ export class ProjectedSceneStore {
           return
         }
         entry.scenes = next
-        this.retainedScenes.set(buildRetainedRequestKey(entry.request), next)
+        this.retainScenes(entry.request, next)
         if (isIncrementalRefresh) {
           getWorkbookScrollPerfCollector()?.noteScenePacketRefresh(next.length)
         }
@@ -423,6 +478,87 @@ export class ProjectedSceneStore {
       if (entry.refreshQueued && entry.listeners.size > 0) {
         this.scheduleRefresh(entry)
       }
+      this.releaseEntryIfInactive(entry)
+    }
+  }
+
+  private peekRetainedScenes(request: WorkbookPaneSceneRequest): readonly WorkbookPaneScenePacket[] | null {
+    const key = buildRetainedRequestKey(request)
+    const retained = this.retainedScenes.get(key)
+    if (!retained) {
+      return null
+    }
+    this.retainedScenes.set(key, {
+      ...retained,
+      lastUsedSeq: ++this.retainedSceneSeq,
+    })
+    return retained.scenes
+  }
+
+  private retainScenes(request: WorkbookPaneSceneRequest, scenes: readonly WorkbookPaneScenePacket[]): void {
+    this.retainedScenes.set(buildRetainedRequestKey(request), {
+      lastUsedSeq: ++this.retainedSceneSeq,
+      request,
+      scenes,
+    })
+    this.evictRetainedScenes()
+  }
+
+  private evictRetainedScenes(): void {
+    if (this.retainedScenes.size <= MAX_RETAINED_RESIDENT_SCENE_REQUESTS) {
+      return
+    }
+    const retained = [...this.retainedScenes.entries()].toSorted((left, right) => left[1].lastUsedSeq - right[1].lastUsedSeq)
+    for (const [key] of retained) {
+      if (this.retainedScenes.size <= MAX_RETAINED_RESIDENT_SCENE_REQUESTS) {
+        return
+      }
+      this.retainedScenes.delete(key)
+    }
+  }
+
+  private deleteMatchingRetainedScenes(matches: (retained: RetainedSceneEntry) => boolean): void {
+    for (const [key, retained] of this.retainedScenes) {
+      if (matches(retained)) {
+        this.retainedScenes.delete(key)
+      }
+    }
+  }
+
+  private isEntryCurrent(entry: SceneEntry): boolean {
+    return this.entries.get(entry.key) === entry
+  }
+
+  private isRefreshCurrent(entry: SceneEntry, requestSeq: number): boolean {
+    return this.isEntryCurrent(entry) && entry.activeRequestSeq === requestSeq && !entry.refreshQueued && entry.listeners.size > 0
+  }
+
+  private clearEntryScheduledWork(entry: SceneEntry): void {
+    if (entry.refreshTimer) {
+      clearTimeout(entry.refreshTimer)
+      entry.refreshTimer = null
+    }
+    entry.refreshQueued = false
+    entry.refreshDelayMs = 0
+    entry.activeRequestSeq += 1
+  }
+
+  private dropEntry(entry: SceneEntry): void {
+    this.clearEntryScheduledWork(entry)
+    entry.listeners.clear()
+    entry.scenes = null
+    if (this.entries.get(entry.key) === entry) {
+      this.entries.delete(entry.key)
+    }
+  }
+
+  private releaseEntryIfInactive(entry: SceneEntry): void {
+    if (entry.listeners.size > 0) {
+      return
+    }
+    this.clearEntryScheduledWork(entry)
+    if (this.entries.get(entry.key) === entry) {
+      this.entries.delete(entry.key)
     }
   }
 

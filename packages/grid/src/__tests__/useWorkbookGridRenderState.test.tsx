@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ValueTag, type CellSnapshot } from '@bilig/protocol'
+import { packGridScenePacketV2 } from '../renderer-v2/scene-packet-v2.js'
 import { useWorkbookGridRenderState } from '../useWorkbookGridRenderState.js'
 
 function createEmptySnapshot(sheetName: string, address: string): CellSnapshot {
@@ -261,6 +262,102 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     )
     expect(subscribeResidentPaneScenes.mock.calls[0]?.[0]).not.toHaveProperty('selectedCell')
     expect(peekResidentPaneScenes).toHaveBeenCalled()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('keeps viewport subscriptions mounted when worker resident scenes become usable', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    let residentPaneScenes: ReturnType<typeof useWorkbookGridRenderState>['renderPanes'] = []
+    const residentListeners = new Set<() => void>()
+    const subscribeResidentPaneScenes = vi.fn((_request, listener: () => void) => {
+      residentListeners.add(listener)
+      return () => {
+        residentListeners.delete(listener)
+      }
+    })
+    const peekResidentPaneScenes = vi.fn(() => residentPaneScenes)
+    const subscribeViewport = vi.fn(() => () => undefined)
+    let hostElement: HTMLDivElement | null = null
+
+    function Harness() {
+      const renderState = useWorkbookGridRenderState({
+        engine: {
+          ...engine,
+          subscribeResidentPaneScenes,
+          peekResidentPaneScenes,
+        },
+        sheetName: 'Sheet1',
+        selectedAddr: 'A1',
+        selectedCellSnapshot: createEmptySnapshot('Sheet1', 'A1'),
+        editorValue: '',
+        isEditingCell: false,
+        subscribeViewport,
+      })
+
+      return (
+        <div
+          ref={(node) => {
+            renderState.handleHostRef(node)
+            hostElement = node
+          }}
+        />
+      )
+    }
+
+    const rootHost = document.createElement('div')
+    document.body.appendChild(rootHost)
+    const root = createRoot(rootHost)
+
+    await act(async () => {
+      root.render(<Harness />)
+    })
+
+    Object.defineProperty(hostElement!, 'clientWidth', { configurable: true, value: 480 })
+    Object.defineProperty(hostElement!, 'clientHeight', { configurable: true, value: 180 })
+
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'))
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    const initialSubscriptionCount = subscribeViewport.mock.calls.length
+    expect(initialSubscriptionCount).toBeGreaterThan(0)
+    expect(subscribeViewport).toHaveBeenCalledWith('Sheet1', expect.any(Object), expect.any(Function), { initialPatch: 'none' })
+
+    const viewport = { rowStart: 0, rowEnd: 95, colStart: 0, colEnd: 255 }
+    residentPaneScenes = [
+      {
+        contentOffset: { x: 0, y: 0 },
+        frame: { x: 0, y: 0, width: 480, height: 180 },
+        generation: 1,
+        gpuScene: { fillRects: [], borderRects: [] },
+        packedScene: packGridScenePacketV2({
+          generation: 1,
+          paneId: 'body',
+          sheetName: 'Sheet1',
+          surfaceSize: { width: 480, height: 180 },
+          gpuScene: { fillRects: [], borderRects: [] },
+          textScene: { items: [] },
+          viewport,
+        }),
+        paneId: 'body',
+        scrollAxes: { x: true, y: true },
+        surfaceSize: { width: 480, height: 180 },
+        textScene: { items: [] },
+        viewport,
+      },
+    ]
+
+    await act(async () => {
+      residentListeners.forEach((listener) => listener())
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(subscribeViewport).toHaveBeenCalledTimes(initialSubscriptionCount)
 
     await act(async () => {
       root.unmount()

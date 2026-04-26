@@ -557,7 +557,7 @@ describe('WorkbookWorkerRuntime', () => {
     })
   })
 
-  it('builds the initial full viewport patch from the local projection store when it matches the worker projection', async () => {
+  it('builds the initial full viewport patch from local projection without replaying it after materialization', async () => {
     const seedEngine = new SpreadsheetEngine({ workbookName: 'base-doc', replicaId: 'seed' })
     seedEngine.createSheet('Sheet1')
     let viewportReadCount = 0
@@ -643,6 +643,11 @@ describe('WorkbookWorkerRuntime', () => {
 
     expect(viewportReadCount).toBe(1)
     expect(received[0]?.cells[0]?.displayText).toBe('42')
+    await runtime.materializeProjectionEngine()
+    await Promise.resolve()
+
+    expect(viewportReadCount).toBeGreaterThanOrEqual(2)
+    expect(received).toHaveLength(1)
   })
 
   it('prefers installed engine calculations over stale persisted local projection on first viewport patch', async () => {
@@ -985,7 +990,7 @@ describe('WorkbookWorkerRuntime', () => {
     })
   })
 
-  it('rebroadcasts corrected inferred dates after deferred projection engine materialization', async () => {
+  it('formats inferred dates directly from deferred local projection', async () => {
     vi.useFakeTimers()
     const seedEngine = new SpreadsheetEngine({ workbookName: 'lazy-date-doc', replicaId: 'seed' })
     seedEngine.createSheet('Sheet1')
@@ -1110,14 +1115,15 @@ describe('WorkbookWorkerRuntime', () => {
       },
     )
 
-    expect(received[0]?.cells.find((cell) => cell.snapshot.address === 'A2')?.displayText).toBe('46357')
+    expect(received).toHaveLength(1)
+    expect(received[0]?.cells.find((cell) => cell.snapshot.address === 'A2')?.displayText).toBe('12/01/2026')
+    expect(received[0]?.cells.find((cell) => cell.snapshot.address === 'B2')?.displayText).toBe('01/01/2026')
     expect(loadStateCount).toBe(0)
 
     await vi.runAllTimersAsync()
 
     expect(loadStateCount).toBe(1)
-    expect(received.at(-1)?.cells.find((cell) => cell.snapshot.address === 'A2')?.displayText).toBe('12/01/2026')
-    expect(received.at(-1)?.cells.find((cell) => cell.snapshot.address === 'B2')?.displayText).toBe('01/01/2026')
+    expect(received).toHaveLength(1)
   })
 
   it('does not rewrite normalized sqlite state on a clean persisted restore', async () => {

@@ -208,8 +208,16 @@ export class ProjectedViewportStore implements GridEngineLike {
     sheetName: string,
     viewport: Viewport,
     listener: (damage?: readonly { cell: readonly [number, number] }[]) => void,
+    options: { readonly initialPatch?: 'full' | 'none' } = {},
   ): () => void {
-    return this.patchCoordinator.subscribeViewport(sheetName, viewport, listener)
+    return this.patchCoordinator.subscribeViewport(
+      sheetName,
+      viewport,
+      listener,
+      options.initialPatch === undefined
+        ? { invalidateResidentScenes: true }
+        : { initialPatch: options.initialPatch, invalidateResidentScenes: true },
+    )
   }
 
   subscribeAuxiliaryViewport(
@@ -217,7 +225,10 @@ export class ProjectedViewportStore implements GridEngineLike {
     viewport: Viewport,
     listener: (damage?: readonly { cell: readonly [number, number] }[]) => void,
   ): () => void {
-    return this.patchCoordinator.subscribeViewport(sheetName, viewport, listener, { invalidateResidentScenes: false })
+    return this.patchCoordinator.subscribeViewport(sheetName, viewport, listener, {
+      initialPatch: 'full',
+      invalidateResidentScenes: false,
+    })
   }
 
   subscribeResidentPaneScenes(request: WorkbookPaneSceneRequest, listener: () => void): () => void {

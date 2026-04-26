@@ -61,6 +61,7 @@ export interface WorkerRuntimeSessionController {
     sheetName: string,
     viewport: Viewport,
     listener: (damage?: readonly { cell: readonly [number, number] }[]) => void,
+    options?: { readonly initialPatch?: 'full' | 'none' },
     sheetViewId?: string,
   ) => () => void
   readonly dispose: () => void
@@ -304,8 +305,9 @@ export async function createWorkerRuntimeSessionController(
     sheetName: string,
     viewport: Viewport,
     listener: (damage?: readonly { cell: readonly [number, number] }[]) => void,
+    options?: { readonly initialPatch?: 'full' | 'none' },
   ): (() => void) => {
-    return viewportStore.subscribeViewport(sheetName, viewport, listener)
+    return viewportStore.subscribeViewport(sheetName, viewport, listener, options)
   }
 
   const updateSelectionViewport = (selection: WorkerRuntimeSelection): void => {
@@ -522,8 +524,8 @@ export async function createWorkerRuntimeSessionController(
         throw error
       }
     },
-    subscribeViewport(sheetName, viewport, listener) {
-      return subscribeProjectedViewport(sheetName, viewport, listener)
+    subscribeViewport(sheetName, viewport, listener, options) {
+      return subscribeProjectedViewport(sheetName, viewport, listener, options)
     },
     dispose() {
       if (disposed) {

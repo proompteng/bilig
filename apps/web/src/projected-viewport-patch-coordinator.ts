@@ -11,6 +11,7 @@ export type ProjectedViewportPatchApplied = Pick<
   'damage' | 'axisChanged' | 'columnsChanged' | 'rowsChanged' | 'freezeChanged'
 >
 interface ProjectedViewportSubscriptionOptions {
+  readonly initialPatch?: 'full' | 'none'
   readonly invalidateResidentScenes: boolean
 }
 
@@ -70,7 +71,9 @@ export class ProjectedViewportPatchCoordinator {
       }
       pendingStructuralChange = pendingStructuralChange || result.axisChanged || result.freezeChanged
     }
-    const unsubscribe = this.options.client.subscribeViewportPatches({ sheetName, ...viewport }, (bytes: Uint8Array) => {
+    const subscription =
+      options.initialPatch === 'none' ? ({ sheetName, ...viewport, initialPatch: 'none' } as const) : ({ sheetName, ...viewport } as const)
+    const unsubscribe = this.options.client.subscribeViewportPatches(subscription, (bytes: Uint8Array) => {
       applyPatchBytes(bytes)
       scheduleFlush()
     })

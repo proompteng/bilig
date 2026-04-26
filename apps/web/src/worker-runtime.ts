@@ -63,7 +63,11 @@ import {
   type WorkerEngine,
 } from './worker-runtime-support.js'
 import { AUTOFIT_CHAR_WIDTH, AUTOFIT_PADDING, MAX_COLUMN_WIDTH, MIN_COLUMN_WIDTH } from './worker-runtime-viewport.js'
-import { WorkerViewportPatchPublisher, createEmptyCellSnapshot } from './worker-runtime-viewport-publisher.js'
+import {
+  WorkerViewportPatchPublisher,
+  createEmptyCellSnapshot,
+  type ViewportPatchBroadcastReason,
+} from './worker-runtime-viewport-publisher.js'
 import { buildWorkbookLocalAuthoritativeDelta } from './worker-local-authoritative-delta.js'
 import {
   collectProjectionOverlayScopeFromEngineEvents,
@@ -361,7 +365,7 @@ export class WorkbookWorkerRuntime {
     this.viewportTileStore.reset()
     this.snapshotCaches.invalidateProjectionSnapshot()
     await this.persistCoordinator.queuePersist()
-    this.broadcastViewportPatches(null, engine.getLastMetrics())
+    this.broadcastViewportPatches(null, engine.getLastMetrics(), 'authoritative-snapshot')
     return this.getRuntimeState()
   }
 
@@ -443,7 +447,7 @@ export class WorkbookWorkerRuntime {
       this.projectionMatchesLocalStore = false
       this.viewportTileStore.reset()
     }
-    this.broadcastViewportPatches(null, engine.getLastMetrics())
+    this.broadcastViewportPatches(null, engine.getLastMetrics(), 'authoritative-events')
     return this.getRuntimeState()
   }
 
@@ -479,7 +483,7 @@ export class WorkbookWorkerRuntime {
     const hadInstalledEngine = this.engine !== null
     await this.getProjectionEngine()
     if (!hadInstalledEngine && this.engine) {
-      this.broadcastViewportPatches(null, this.getCurrentMetrics())
+      this.broadcastViewportPatches(null, this.getCurrentMetrics(), 'projection-materialized')
     }
   }
 
@@ -493,7 +497,7 @@ export class WorkbookWorkerRuntime {
 
   async enqueuePendingMutation(input: PendingWorkbookMutationInput): Promise<PendingWorkbookMutation> {
     const mutation = await this.mutationJournal.enqueuePendingMutation(input)
-    this.broadcastViewportPatches(null, this.getCurrentMetrics())
+    this.broadcastViewportPatches(null, this.getCurrentMetrics(), 'pending-mutation')
     return mutation
   }
 
@@ -810,7 +814,7 @@ export class WorkbookWorkerRuntime {
       getProjectionEngine: () => this.getProjectionEngine(),
       onProjectionEngineMaterialized: () => {
         if (this.engine) {
-          this.broadcastViewportPatches(null, this.getCurrentMetrics())
+          this.broadcastViewportPatches(null, this.getCurrentMetrics(), 'projection-materialized')
         }
       },
       schedule: (callback) => {
@@ -840,10 +844,15 @@ export class WorkbookWorkerRuntime {
     })
   }
 
-  private broadcastViewportPatches(event: EngineEvent | null, metrics: RecalcMetrics = this.getCurrentMetrics()): void {
+  private broadcastViewportPatches(
+    event: EngineEvent | null,
+    metrics: RecalcMetrics = this.getCurrentMetrics(),
+    reason: ViewportPatchBroadcastReason = 'state-change',
+  ): void {
     this.viewportPatchPublisher.broadcast({
       event,
       metrics,
+      reason,
       impactsBySheet: event === null ? null : collectSheetViewportImpacts(this.requireEngine(), event),
     })
   }

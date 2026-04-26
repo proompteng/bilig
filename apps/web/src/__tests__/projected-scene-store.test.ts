@@ -61,6 +61,20 @@ function createResidentScene(
   }
 }
 
+function createVersionedResidentScene(request: TestSceneRequest, generation: number, requestSeq: number, batchId: number) {
+  const viewport = request.residentViewport
+  return createResidentScene(request, generation, requestSeq, {
+    key: createGridTileKeyV2({
+      paneId: 'body',
+      selectionIndependentVersion: batchId,
+      sheetName: request.sheetName,
+      styleVersion: batchId,
+      valueVersion: batchId,
+      viewport,
+    }),
+  })
+}
+
 describe('ProjectedSceneStore', () => {
   it('fetches resident pane scenes on first subscription and exposes them via peek', async () => {
     const request = {
@@ -253,8 +267,8 @@ describe('ProjectedSceneStore', () => {
     const client = {
       invoke: vi
         .fn()
-        .mockResolvedValueOnce([createResidentScene(request, 1, 1)])
-        .mockResolvedValueOnce([createResidentScene(request, 2, 2)]),
+        .mockResolvedValueOnce([createVersionedResidentScene(request, 1, 1, 1)])
+        .mockResolvedValueOnce([createVersionedResidentScene(request, 2, 2, 2)]),
     }
     const store = new ProjectedSceneStore(client)
 
@@ -266,7 +280,7 @@ describe('ProjectedSceneStore', () => {
       full: true,
       viewport: { sheetName: 'Sheet1', rowStart: 5, rowEnd: 6, colStart: 5, colEnd: 6 },
       metrics: {
-        batchId: 0,
+        batchId: 2,
         changedInputCount: 0,
         dirtyFormulaCount: 0,
         wasmFormulaCount: 0,
@@ -303,6 +317,189 @@ describe('ProjectedSceneStore', () => {
     await new Promise((resolve) => window.setTimeout(resolve, 80))
 
     expect(client.invoke).toHaveBeenCalledTimes(2)
+
+    unsubscribe()
+  })
+
+  it('releases inactive resident scene entries and invalidates retained packets on later damage', async () => {
+    const request = {
+      sheetName: 'Sheet1',
+      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
+      freezeRows: 1,
+      freezeCols: 1,
+    } as const
+    const client = {
+      invoke: vi
+        .fn()
+        .mockResolvedValueOnce([createResidentScene(request, 1, 1)])
+        .mockResolvedValueOnce([createResidentScene(request, 2, 2)]),
+    }
+    const store = new ProjectedSceneStore(client)
+
+    const unsubscribe = store.subscribeResidentPaneScenes(request, () => undefined)
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+    expect(store.peekResidentPaneScenes(request)?.[0]?.generation).toBe(1)
+
+    unsubscribe()
+    store.noteViewportPatch({
+      version: 2,
+      full: true,
+      viewport: { sheetName: 'Sheet1', rowStart: 5, rowEnd: 5, colStart: 5, colEnd: 5 },
+      metrics: {
+        batchId: 0,
+        changedInputCount: 0,
+        dirtyFormulaCount: 0,
+        wasmFormulaCount: 0,
+        jsFormulaCount: 0,
+        rangeNodeVisits: 0,
+        recalcMs: 0,
+        compileMs: 0,
+      },
+      styles: [],
+      cells: [],
+      columns: [],
+      rows: [],
+    })
+    await new Promise((resolve) => window.setTimeout(resolve, 80))
+    expect(client.invoke).toHaveBeenCalledTimes(1)
+
+    const listener = vi.fn()
+    const resubscribe = store.subscribeResidentPaneScenes(request, listener)
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+
+    expect(client.invoke).toHaveBeenCalledTimes(2)
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(store.peekResidentPaneScenes(request)?.[0]?.generation).toBe(2)
+
+    resubscribe()
+  })
+
+  it('drops removed sheet resident scene work before an in-flight response can retain packets', async () => {
+    const request = {
+      sheetName: 'Sheet1',
+      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
+      freezeRows: 1,
+      freezeCols: 1,
+    } as const
+    let resolveScene: ((value: readonly unknown[]) => void) | null = null
+    const pendingScene = new Promise<readonly unknown[]>((resolve) => {
+      resolveScene = resolve
+    })
+    const client = {
+      invoke: vi.fn(() => pendingScene),
+    }
+    const store = new ProjectedSceneStore(client)
+    const listener = vi.fn()
+
+    const unsubscribe = store.subscribeResidentPaneScenes(request, listener)
+    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    expect(client.invoke).toHaveBeenCalledTimes(1)
+
+    store.dropSheets(['Sheet1'])
+    resolveScene?.([createResidentScene(request, 1, 1)])
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+
+    expect(listener).not.toHaveBeenCalled()
+    expect(store.peekResidentPaneScenes(request)).toBeNull()
+
+    unsubscribe()
+  })
+
+  it('clears queued resident scene refresh timers when a sheet is dropped', async () => {
+    const request = {
+      sheetName: 'Sheet1',
+      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
+      freezeRows: 1,
+      freezeCols: 1,
+    } as const
+    const client = {
+      invoke: vi
+        .fn()
+        .mockResolvedValueOnce([createResidentScene(request, 1, 1)])
+        .mockResolvedValueOnce([createResidentScene(request, 2, 2)]),
+    }
+    const store = new ProjectedSceneStore(client)
+    const listener = vi.fn()
+
+    const unsubscribe = store.subscribeResidentPaneScenes(request, listener)
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+    expect(store.peekResidentPaneScenes(request)?.[0]?.generation).toBe(1)
+    listener.mockClear()
+
+    store.noteViewportPatch({
+      version: 2,
+      full: true,
+      viewport: { sheetName: 'Sheet1', rowStart: 5, rowEnd: 5, colStart: 5, colEnd: 5 },
+      metrics: {
+        batchId: 0,
+        changedInputCount: 0,
+        dirtyFormulaCount: 0,
+        wasmFormulaCount: 0,
+        jsFormulaCount: 0,
+        rangeNodeVisits: 0,
+        recalcMs: 0,
+        compileMs: 0,
+      },
+      styles: [],
+      cells: [],
+      columns: [],
+      rows: [],
+    })
+    store.dropSheets(['Sheet1'])
+    await new Promise((resolve) => window.setTimeout(resolve, 80))
+
+    expect(client.invoke).toHaveBeenCalledTimes(1)
+    expect(listener).not.toHaveBeenCalled()
+    expect(store.peekResidentPaneScenes(request)).toBeNull()
+
+    unsubscribe()
+  })
+
+  it('does not rebuild resident scenes for full viewport patches already covered by the scene batch', async () => {
+    const request = {
+      sheetName: 'Sheet1',
+      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
+      freezeRows: 0,
+      freezeCols: 0,
+    } as const
+    const client = {
+      invoke: vi.fn().mockResolvedValue([createVersionedResidentScene(request, 1, 1, 3)]),
+    }
+    const store = new ProjectedSceneStore(client)
+
+    const unsubscribe = store.subscribeResidentPaneScenes(request, () => undefined)
+    await new Promise((resolve) => window.setTimeout(resolve, 10))
+
+    store.noteViewportPatch(
+      {
+        version: 3,
+        full: true,
+        viewport: { sheetName: 'Sheet1', rowStart: 4, rowEnd: 4, colStart: 3, colEnd: 3 },
+        metrics: {
+          batchId: 3,
+          changedInputCount: 0,
+          dirtyFormulaCount: 0,
+          wasmFormulaCount: 0,
+          jsFormulaCount: 0,
+          rangeNodeVisits: 0,
+          recalcMs: 0,
+          compileMs: 0,
+        },
+        styles: [],
+        cells: [],
+        columns: [],
+        rows: [],
+      },
+      {
+        axisChanged: false,
+        damage: [{ cell: [3, 4] as const }],
+        freezeChanged: false,
+      },
+    )
+
+    await new Promise((resolve) => window.setTimeout(resolve, 80))
+
+    expect(client.invoke).toHaveBeenCalledTimes(1)
 
     unsubscribe()
   })

@@ -1,14 +1,5 @@
 import type { WorkbookLocalViewportBase } from '@bilig/storage-browser'
-import {
-  ValueTag,
-  formulaLooksDateLike,
-  isDateLikeHeaderValue,
-  isLikelyExcelDateSerialValue,
-  type CellSnapshot,
-  type CellStyleRecord,
-  type EngineEvent,
-  type RecalcMetrics,
-} from '@bilig/protocol'
+import { ValueTag, type CellSnapshot, type CellStyleRecord, type EngineEvent, type RecalcMetrics } from '@bilig/protocol'
 import { encodeViewportPatch, type ViewportPatch, type ViewportPatchSubscription } from '@bilig/worker-transport'
 import {
   normalizeViewport,
@@ -17,24 +8,18 @@ import {
   type ViewportSubscriptionState,
   type WorkerEngine,
 } from './worker-runtime-support.js'
+import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
 import { DEFAULT_STYLE_ID, buildViewportPatchFromEngine, buildViewportPatchFromLocalBase } from './worker-runtime-viewport.js'
+
+export type ViewportPatchBroadcastReason =
+  | 'authoritative-events'
+  | 'authoritative-snapshot'
+  | 'pending-mutation'
+  | 'projection-materialized'
+  | 'state-change'
 
 function hasFormulaErrorCells(base: WorkbookLocalViewportBase): boolean {
   return base.cells.some((cell) => cell.snapshot.formula !== undefined && cell.snapshot.value.tag === ValueTag.Error)
-}
-
-function hasUnformattedDateSerialCells(base: WorkbookLocalViewportBase): boolean {
-  const cellsByPosition = new Map(base.cells.map((cell) => [`${cell.row}:${cell.col}`, cell.snapshot]))
-  return base.cells.some((cell) => {
-    if (cell.snapshot.format !== undefined || !isLikelyExcelDateSerialValue(cell.snapshot.value)) {
-      return false
-    }
-    if (formulaLooksDateLike(cell.snapshot.formula)) {
-      return true
-    }
-    const header = cellsByPosition.get(`${cell.row - 1}:${cell.col}`)
-    return header !== undefined && isDateLikeHeaderValue(header.value)
-  })
 }
 
 export function createEmptyCellSnapshot(sheetName: string, address: string): CellSnapshot {
@@ -92,7 +77,9 @@ export class WorkerViewportPatchPublisher {
       lastColumnSignatures: new Map<number, string>(),
       lastRowSignatures: new Map<number, string>(),
     }
-    listener(encodeViewportPatch(this.options.buildPatch(state, null, this.options.getCurrentMetrics(), null)))
+    if (subscription.initialPatch !== 'none') {
+      listener(encodeViewportPatch(this.options.buildPatch(state, null, this.options.getCurrentMetrics(), null)))
+    }
     if (!this.options.hasProjectionEngine() && this.options.canReadLocalProjectionForViewport()) {
       this.options.scheduleProjectionEngineMaterialization()
     }
@@ -112,10 +99,7 @@ export class WorkerViewportPatchPublisher {
   ): ViewportPatch {
     if ((event === null || event.invalidation === 'full') && this.options.canReadLocalProjectionForViewport()) {
       const localBase = this.options.readLocalViewport(state.subscription.sheetName, state.subscription)
-      if (
-        localBase &&
-        (!this.options.hasProjectionEngine() || (!hasFormulaErrorCells(localBase) && !hasUnformattedDateSerialCells(localBase)))
-      ) {
+      if (localBase && (!this.options.hasProjectionEngine() || !hasFormulaErrorCells(localBase))) {
         return buildViewportPatchFromLocalBase({
           state,
           metrics,
@@ -141,10 +125,14 @@ export class WorkerViewportPatchPublisher {
     event: EngineEvent | null
     impactsBySheet: ReadonlyMap<string, SheetViewportImpact> | null
     metrics?: RecalcMetrics
+    reason?: ViewportPatchBroadcastReason
   }): void {
     const metrics = input.metrics ?? this.options.getCurrentMetrics()
     const impactedSheets = input.impactsBySheet === null ? null : new Set(input.impactsBySheet.keys())
     for (const subscription of this.getViewportSubscriptionsForEvent(input.event, impactedSheets)) {
+      if (input.event === null && input.reason === 'projection-materialized' && this.canSkipProjectionMaterializedPatch(subscription)) {
+        continue
+      }
       const sheetImpact = input.impactsBySheet?.get(subscription.subscription.sheetName) ?? null
       if (input.event !== null && !viewportPatchMayBeImpacted(subscription.subscription, input.event, sheetImpact, impactedSheets)) {
         continue
@@ -153,8 +141,25 @@ export class WorkerViewportPatchPublisher {
       if (patch.cells.length === 0 && patch.columns.length === 0 && patch.rows.length === 0) {
         continue
       }
+      if (patch.full) {
+        getWorkbookScrollPerfCollector()?.noteViewportPatchBroadcast(input.reason ?? 'state-change')
+      }
       subscription.listener(encodeViewportPatch(patch))
     }
+  }
+
+  private canSkipProjectionMaterializedPatch(state: ViewportSubscriptionState): boolean {
+    if (state.subscription.initialPatch === 'none') {
+      return true
+    }
+    if (state.nextVersion <= 1 || !this.options.hasProjectionEngine() || !this.options.canReadLocalProjectionForViewport()) {
+      return false
+    }
+    const localBase = this.options.readLocalViewport(state.subscription.sheetName, state.subscription)
+    if (!localBase) {
+      return false
+    }
+    return !hasFormulaErrorCells(localBase)
   }
 
   private addViewportSubscription(state: ViewportSubscriptionState): void {

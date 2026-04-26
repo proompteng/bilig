@@ -15,6 +15,7 @@ import {
 
 export interface ViewportPatchSubscription extends Viewport {
   sheetName: string
+  initialPatch?: 'full' | 'none'
 }
 
 export interface ViewportPatchedCell {

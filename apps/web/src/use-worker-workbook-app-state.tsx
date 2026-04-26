@@ -913,11 +913,12 @@ export function useWorkerWorkbookAppState(input: {
       sheetName: string,
       viewport: Parameters<ProjectedViewportStore['subscribeViewport']>[1],
       listener: Parameters<ProjectedViewportStore['subscribeViewport']>[2],
+      options?: Parameters<ProjectedViewportStore['subscribeViewport']>[3],
     ) => {
       if (!runtimeController) {
         return () => {}
       }
-      return runtimeController.subscribeViewport(sheetName, viewport, listener)
+      return runtimeController.subscribeViewport(sheetName, viewport, listener, options)
     },
     [runtimeController],
   )

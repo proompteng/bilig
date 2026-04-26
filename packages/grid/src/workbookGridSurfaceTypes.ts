@@ -10,10 +10,14 @@ export interface EditTargetSelection {
   readonly sheetName: string
   readonly address: string
 }
+export interface SheetGridViewportSubscriptionOptions {
+  readonly initialPatch?: 'full' | 'none'
+}
 export type SheetGridViewportSubscription = (
   sheetName: string,
   viewport: Viewport,
   listener: (damage?: readonly { cell: readonly [number, number] }[]) => void,
+  options?: SheetGridViewportSubscriptionOptions,
 ) => () => void
 
 export interface WorkbookGridPreviewRange {

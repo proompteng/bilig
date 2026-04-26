@@ -7,6 +7,7 @@ export interface WorkbookScrollPerfFixture {
 interface WorkbookScrollPerfCounters {
   viewportSubscriptions: number
   fullPatches: number
+  fullPatchBroadcasts: Record<string, number>
   damagePatches: number
   damageCells: number
   scenePacketRefreshes: number
@@ -69,6 +70,7 @@ class WorkbookScrollPerfCollector {
   private readonly totalCounters: WorkbookScrollPerfCounters = {
     viewportSubscriptions: 0,
     fullPatches: 0,
+    fullPatchBroadcasts: {},
     damagePatches: 0,
     damageCells: 0,
     scenePacketRefreshes: 0,
@@ -139,6 +141,10 @@ class WorkbookScrollPerfCollector {
     }
     this.totalCounters.damagePatches += 1
     this.totalCounters.damageCells += input.damageCount
+  }
+
+  noteViewportPatchBroadcast(reason: string): void {
+    this.totalCounters.fullPatchBroadcasts[reason] = (this.totalCounters.fullPatchBroadcasts[reason] ?? 0) + 1
   }
 
   noteScenePacketRefresh(paneCount: number): void {
@@ -334,6 +340,7 @@ function cloneCounters(counters: WorkbookScrollPerfCounters): WorkbookScrollPerf
   return {
     ...counters,
     canvasPaints: { ...counters.canvasPaints },
+    fullPatchBroadcasts: { ...counters.fullPatchBroadcasts },
     surfaceCommits: { ...counters.surfaceCommits },
   }
 }
@@ -342,6 +349,7 @@ function subtractCounters(counters: WorkbookScrollPerfCounters, baseline: Workbo
   return {
     viewportSubscriptions: counters.viewportSubscriptions - baseline.viewportSubscriptions,
     fullPatches: counters.fullPatches - baseline.fullPatches,
+    fullPatchBroadcasts: subtractRecordCounters(counters.fullPatchBroadcasts, baseline.fullPatchBroadcasts),
     damagePatches: counters.damagePatches - baseline.damagePatches,
     damageCells: counters.damageCells - baseline.damageCells,
     scenePacketRefreshes: counters.scenePacketRefreshes - baseline.scenePacketRefreshes,

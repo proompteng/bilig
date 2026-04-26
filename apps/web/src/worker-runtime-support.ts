@@ -263,6 +263,7 @@ export function normalizeViewport(subscription: ViewportPatchSubscription): View
     rowEnd,
     colStart,
     colEnd,
+    ...(subscription.initialPatch === 'none' ? { initialPatch: 'none' as const } : {}),
   }
 }
 
