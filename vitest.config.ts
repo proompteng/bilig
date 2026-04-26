@@ -4,6 +4,25 @@ import { createVitestAliasEntries, workspaceRootDir } from './scripts/workspace-
 
 const workspacePackageAliases = createVitestAliasEntries()
 
+function parsePositiveInteger(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined
+  }
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+}
+
+function resolveTestTimeoutMs(): number | undefined {
+  const explicitTimeout = parsePositiveInteger(process.env['BILIG_VITEST_TEST_TIMEOUT_MS'])
+  if (explicitTimeout !== undefined) {
+    return explicitTimeout
+  }
+  if (!process.env['BILIG_FUZZ_PROFILE'] && !process.env['BILIG_FUZZ_REPLAY']) {
+    return undefined
+  }
+  return 120_000
+}
+
 export default defineConfig({
   resolve: {
     alias: workspacePackageAliases,
@@ -11,6 +30,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     globalSetup: join(workspaceRootDir, 'scripts/vitest-global-setup.ts'),
+    testTimeout: resolveTestTimeoutMs(),
     include: [
       'packages/*/src/**/*.test.ts',
       'packages/*/src/**/*.test.tsx',

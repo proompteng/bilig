@@ -239,7 +239,7 @@ test('@browser-serial main workbook shell grid renders and updates through typeg
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-readback.png', 'main-workbook-grid-readback')
 })
 
-test('main workbook shell keeps resident typegpu content visible while selection moves', async ({ page }, testInfo) => {
+test('@browser-perf main workbook shell keeps resident typegpu content visible while selection moves', async ({ page }, testInfo) => {
   test.slow()
   await page.setViewportSize({ width: 960, height: 720 })
   await installTypeGpuReadbackHarness(page)
@@ -316,7 +316,9 @@ test('main workbook shell keeps resident typegpu content visible while selection
   )
 })
 
-test('main workbook shell keeps header labels and body text visible while scrolling through typegpu', async ({ page }, testInfo) => {
+test('@browser-perf main workbook shell keeps header labels and body text visible while scrolling through typegpu', async ({
+  page,
+}, testInfo) => {
   test.slow()
   await page.setViewportSize({ width: 960, height: 720 })
   await installTypeGpuReadbackHarness(page)
@@ -703,7 +705,7 @@ test('main workbook shell refreshes typegpu resident packets after style-only ch
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-style-refresh-readback.png', 'main-workbook-grid-style-refresh-readback')
 })
 
-test('main workbook shell keeps typegpu content visible after hover-driven scroll', async ({ page }, testInfo) => {
+test('@browser-perf main workbook shell keeps typegpu content visible after hover-driven scroll', async ({ page }, testInfo) => {
   test.slow()
   await page.setViewportSize({ width: 960, height: 720 })
   await installTypeGpuReadbackHarness(page)
@@ -765,7 +767,7 @@ test('main workbook shell keeps typegpu content visible after hover-driven scrol
   await saveReadbackArtifact(page, testInfo, 'main-workbook-grid-hover-scroll-readback.png', 'main-workbook-grid-hover-scroll-readback')
 })
 
-test('main workbook shell keeps typegpu text visible across tile boundary scroll and resize', async ({ page }, testInfo) => {
+test('@browser-perf main workbook shell keeps typegpu text visible across tile boundary scroll and resize', async ({ page }, testInfo) => {
   test.slow()
   await page.setViewportSize({ width: 900, height: 680 })
   await installTypeGpuReadbackHarness(page)

@@ -81,6 +81,9 @@
     "release:check": "bun scripts/release-check.ts",
     "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
     "ci": "bun scripts/run-ci.ts",
+    "ci:core": "BILIG_CI_SKIP_BROWSER=1 bun scripts/run-ci.ts",
+    "ci:browser": "VITE_BILIG_REMOTE_SYNC=0 pnpm --filter @bilig/web build:bundle && BILIG_DEV_WEB_PREVIEW_BUILD=0 pnpm test:browser",
+    "ci:browser:full": "VITE_BILIG_REMOTE_SYNC=0 pnpm --filter @bilig/web build:bundle && BILIG_DEV_WEB_PREVIEW_BUILD=0 pnpm test:browser:full",
     "ci:full": "BILIG_CI_PROFILE=full bun scripts/run-ci.ts"
   },
   "devDependencies": {

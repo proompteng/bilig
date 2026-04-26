@@ -17,6 +17,7 @@ interface CompletedTask {
 const startedAt = performance.now()
 const ciProfile = process.env['BILIG_CI_PROFILE'] === 'full' ? 'full' : 'default'
 const runDeepGates = ciProfile === 'full'
+const skipBrowserGates = process.env['BILIG_CI_SKIP_BROWSER'] === '1'
 
 function formatSeconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`
@@ -135,7 +136,8 @@ const coverageLane: CiTask = {
   label: 'coverage + contracts',
   steps: [pnpm('coverage', 'coverage'), bun('coverage contracts', 'scripts/coverage-contracts.ts')],
 }
-const vitestFuzzLane = withEnv(pnpm('vitest fuzz main', 'test:fuzz:main'), {
+const fuzzScript = runDeepGates ? 'test:fuzz:main' : 'test:fuzz'
+const vitestFuzzLane = withEnv(pnpm(runDeepGates ? 'vitest fuzz main' : 'vitest fuzz default', fuzzScript), {
   BILIG_FUZZ_SKIP_BROWSER: '1',
 })
 const browserWebBundleBuild = withEnv(pnpm('browser web bundle build', '--filter', '@bilig/web', 'build:bundle'), {
@@ -158,7 +160,12 @@ try {
   const allCompleted: CompletedTask[] = []
   log(`profile ${ciProfile}`)
   if (!runDeepGates) {
-    log('default profile skips browser perf, browser fuzz, and statistical benchmark contracts; run pnpm run ci:full for the deep gate')
+    log(
+      'default profile uses the fast fuzz budget and skips browser perf, browser fuzz, and statistical benchmark contracts; run pnpm run ci:full for the deep gate',
+    )
+  }
+  if (skipBrowserGates) {
+    log('browser gates disabled by BILIG_CI_SKIP_BROWSER=1')
   }
 
   allCompleted.push(
@@ -176,13 +183,17 @@ try {
       pnpm('lint', 'lint'),
       pnpm('wasm build', 'wasm:build'),
       pnpm('typecheck', 'typecheck'),
-      pnpm('playwright chromium install', 'exec', 'playwright', 'install', 'chromium'),
+      ...(skipBrowserGates ? [] : [pnpm('playwright chromium install', 'exec', 'playwright', 'install', 'chromium')]),
     ])),
   )
 
-  allCompleted.push(...(await runStage('functional heavy checks', [coverageLane, vitestFuzzLane, browserWebBundleBuild])))
+  allCompleted.push(
+    ...(await runStage('functional heavy checks', [coverageLane, vitestFuzzLane, ...(skipBrowserGates ? [] : [browserWebBundleBuild])])),
+  )
 
-  allCompleted.push(...(await runSequential('browser gates', [browserLane])))
+  if (!skipBrowserGates) {
+    allCompleted.push(...(await runSequential('browser gates', [browserLane])))
+  }
 
   allCompleted.push(
     ...(await runSequential('release bundle gate', [

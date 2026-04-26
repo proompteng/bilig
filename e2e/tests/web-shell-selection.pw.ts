@@ -154,7 +154,7 @@ test('web app keeps the active focus inside the sheet grid when clicking a cell'
   expect(activeElementState.testId).not.toBe('sheet-grid')
 })
 
-test('web app keeps normal cell selection out of resident scene invalidation', async ({ page }) => {
+test('@browser-perf web app keeps normal cell selection out of resident scene invalidation', async ({ page }) => {
   await page.goto(`/?document=normal-selection-no-resident-refresh-${Date.now()}`)
   await waitForWorkbookReady(page)
   await settleWorkbookScrollPerf(page, 80)
@@ -187,7 +187,7 @@ test('web app keeps normal cell selection out of resident scene invalidation', a
   expect(report?.counters.typeGpuTileMisses).toBe(0)
 })
 
-test('web app keeps range-move preview out of resident scene invalidation', async ({ page }) => {
+test('@browser-perf web app keeps range-move preview out of resident scene invalidation', async ({ page }) => {
   await page.goto(`/?document=range-move-no-resident-refresh-${Date.now()}`)
   await waitForWorkbookReady(page)
 

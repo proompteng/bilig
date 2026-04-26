@@ -12,24 +12,25 @@ env:
 
 jobs:
   correctness-deep:
-    name: deep-correctness
+    name: manual-deep-correctness
     runs-on: docker
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
+    if: github.event_name == 'workflow_dispatch'
     timeout-minutes: 60
     env:
-      CI: "true"
-      BILIG_BENCH_TOLERANCE: "1.5"
-      BILIG_BROWSER_STACK: "local"
-      BILIG_DEV_DISABLE_COMPOSE: "1"
-      BILIG_E2E_REMOTE_SYNC: "0"
-      BILIG_E2E_STARTUP_TIMEOUT_MS: "600000"
-      BILIG_FUZZ_PROFILE: "main"
-      BILIG_FUZZ_CAPTURE: "1"
-      BILIG_FUZZ_BROWSER: "1"
-      BILIG_FUZZ_MAX_MS: "120000"
-      BILIG_FUZZ_NUM_RUNS: "1"
-      BILIG_FUZZ_SEED: "2128392860"
+      CI: 'true'
+      BILIG_BENCH_TOLERANCE: '1.5'
+      BILIG_BROWSER_STACK: 'local'
+      BILIG_DEV_DISABLE_COMPOSE: '1'
+      BILIG_E2E_REMOTE_SYNC: '0'
+      BILIG_E2E_STARTUP_TIMEOUT_MS: '600000'
+      BILIG_FUZZ_PROFILE: 'main'
+      BILIG_FUZZ_CAPTURE: '1'
+      BILIG_FUZZ_BROWSER: '1'
+      BILIG_FUZZ_MAX_MS: '120000'
+      BILIG_FUZZ_NUM_RUNS: '1'
+      BILIG_FUZZ_SEED: '2128392860'
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v6.0.2
@@ -61,7 +62,7 @@ jobs:
         run: |
           set -eu
           export PATH="$HOME/.bun/bin:$PATH"
-          pnpm test:correctness:deep
+          pnpm run ci:full
 
       - name: Upload deep correctness artifacts on failure
         if: failure()
