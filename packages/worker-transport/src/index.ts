@@ -402,3 +402,5 @@ function attachMessageListener(port: MessagePortLike, listener: (message: Transp
 
 export * from './viewport-patch.js'
 export * from './render-tile-delta.js'
+export * from './tile-interest-v3.js'
+export * from './workbook-delta-v3.js'

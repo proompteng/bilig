@@ -158,6 +158,8 @@ Files:
 - new `packages/grid/src/renderer-v3/tile-damage-index.ts`
 - `apps/web/src/worker-runtime-render-tile-delta.ts`
 - `apps/web/src/worker-viewport-tile-store.ts`
+- new `packages/worker-transport/src/workbook-delta-v3.ts`
+- new `packages/worker-transport/src/tile-interest-v3.ts`
 
 Implement:
 
@@ -168,6 +170,7 @@ Implement:
 - render-delta transport preserving the full safe-integer tile-key range;
 - render-delta subscriptions materializing fixed 32x128 content tiles instead of resident pane windows.
 - worker local viewport tile cache using numeric tile residency instead of serialized string keys and scan-based eviction.
+- binary V3 contracts for sheet-level dirty range deltas and renderer tile interest batches.
 
 ### Phase 7: text atlas service
 
@@ -237,6 +240,8 @@ Completed in the first implementation tranche:
 - `packages/worker-transport/src/render-tile-delta.ts` now round-trips 53-bit tile keys instead of truncating tile IDs to `u32`.
 - `worker-runtime-render-tile-delta.ts` now splits render subscriptions into protocol-sized fixed content tile replacements, avoiding frozen/body pane duplicate materialization in the render-delta path.
 - `worker-viewport-tile-store.ts` now keys cached projection tiles with `packTileKey53()` and evicts through `TileResidencyV3` rather than scanning serialized string-key maps.
+- `packages/worker-transport/src/workbook-delta-v3.ts` defines and round-trips the first sheet-level dirty-range delta batch.
+- `packages/worker-transport/src/tile-interest-v3.ts` defines and round-trips visible/warm/pinned tile interest batches using safe-integer tile keys.
 
 Remaining work from this design:
 
