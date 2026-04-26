@@ -207,6 +207,8 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         className="sheet-grid-host min-h-0 flex-1 overflow-hidden bg-[var(--wb-surface)] pr-2 pb-2"
         data-column-width-overrides={renderState.columnWidthOverridesAttr}
         data-default-column-width={renderState.gridMetrics.columnWidth}
+        data-default-row-height={renderState.gridMetrics.rowHeight}
+        data-row-height-overrides={renderState.rowHeightOverridesAttr}
         data-testid="sheet-grid"
         role="grid"
         style={{ cursor: renderState.hoverState.cursor }}

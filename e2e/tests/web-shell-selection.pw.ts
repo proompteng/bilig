@@ -13,6 +13,8 @@ import {
   doubleClickProductColumnResizeHandle,
   getProductColumnLeft,
   getProductColumnWidth,
+  getProductRowHeight,
+  getProductRowTop,
   settleWorkbookScrollPerf,
   startWorkbookScrollPerf,
   stopWorkbookScrollPerf,
@@ -314,15 +316,18 @@ test('web app hit-tests typegpu geometry after hiding rows and columns', async (
     },
   })
   await page.getByTestId('grid-context-action-hide-row').click()
+  await expect.poll(() => getProductRowHeight(page, 1)).toBe(0)
   const grid = await gridLocator.boundingBox()
   if (!grid) {
     throw new Error('sheet grid is not visible')
   }
   const columnLeft = await getProductColumnLeft(page, 2)
   const columnWidth = await getProductColumnWidth(page, 2)
+  const rowTop = await getProductRowTop(page, 2)
+  const rowHeight = await getProductRowHeight(page, 2)
   await page.mouse.click(
     grid.x + columnLeft + Math.floor(columnWidth / 2),
-    grid.y + PRODUCT_HEADER_HEIGHT + PRODUCT_ROW_HEIGHT + Math.floor(PRODUCT_ROW_HEIGHT / 2),
+    grid.y + PRODUCT_HEADER_HEIGHT + rowTop + Math.floor(rowHeight / 2),
   )
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C3')
 })

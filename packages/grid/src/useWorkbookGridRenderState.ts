@@ -292,6 +292,10 @@ export function useWorkbookGridRenderState(input: {
     const entries = Object.entries(columnWidths).toSorted(([left], [right]) => Number(left) - Number(right))
     return entries.length === 0 ? '{}' : JSON.stringify(Object.fromEntries(entries))
   }, [columnWidths])
+  const rowHeightOverridesAttr = useMemo(() => {
+    const entries = Object.entries(rowHeights).toSorted(([left], [right]) => Number(left) - Number(right))
+    return entries.length === 0 ? '{}' : JSON.stringify(Object.fromEntries(entries))
+  }, [rowHeights])
   const columnAxis = useMemo(
     () =>
       createGridAxisWorldIndexFromRecords({
@@ -1412,6 +1416,7 @@ export function useWorkbookGridRenderState(input: {
     renderPanes,
     residentDataPanes,
     rowHeights,
+    rowHeightOverridesAttr,
     scrollTransformStore,
     scrollViewportRef,
     selectedCell,

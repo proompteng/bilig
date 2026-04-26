@@ -18,7 +18,7 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function parseColumnWidthOverrides(raw: string | null): Record<string, number> {
+function parseDimensionOverrides(raw: string | null): Record<string, number> {
   if (!raw) {
     return {}
   }
@@ -37,8 +37,24 @@ export async function getProductColumnWidth(page: Page, columnIndex: number) {
     grid.getAttribute('data-column-width-overrides'),
   ])
   const defaultWidth = Number(defaultWidthRaw ?? String(PRODUCT_COLUMN_WIDTH))
-  const overrides = parseColumnWidthOverrides(overridesRaw)
+  const overrides = parseDimensionOverrides(overridesRaw)
   return overrides[String(columnIndex)] ?? defaultWidth
+}
+
+export async function getProductRowHeight(page: Page, rowIndex: number) {
+  const grid = page.getByTestId('sheet-grid')
+  const [defaultHeightRaw, overridesRaw] = await Promise.all([
+    grid.getAttribute('data-default-row-height'),
+    grid.getAttribute('data-row-height-overrides'),
+  ])
+  const defaultHeight = Number(defaultHeightRaw ?? String(PRODUCT_ROW_HEIGHT))
+  const overrides = parseDimensionOverrides(overridesRaw)
+  return overrides[String(rowIndex)] ?? defaultHeight
+}
+
+export async function getProductRowTop(page: Page, rowIndex: number) {
+  const heights = await Promise.all(Array.from({ length: rowIndex }, (_, index) => getProductRowHeight(page, index)))
+  return heights.reduce((total, height) => total + height, 0)
 }
 
 export async function getProductColumnLeft(page: Page, columnIndex: number) {
