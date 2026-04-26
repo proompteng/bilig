@@ -130,10 +130,25 @@ describe('gridResidentDataLayer', () => {
 
     const body = rendered.find((pane) => pane.paneId === 'body')
     expect(body).toBeDefined()
-    expect(body?.gpuScene.fillRects).toEqual([])
-    expect(body?.gpuScene.borderRects.some((rect) => rect.x >= body.frame.width || rect.y >= body.frame.height)).toBe(true)
+    expect(body?.packedScene.fillRectCount).toBe(0)
+    expect(readPackedRects(body).some((rect) => rect.x >= body!.frame.width || rect.y >= body!.frame.height)).toBe(true)
   })
 })
+
+function readPackedRects(pane: { readonly packedScene: { readonly rectCount: number; readonly rects: Float32Array } } | undefined) {
+  if (!pane) {
+    return []
+  }
+  const rects = []
+  for (let index = 0; index < pane.packedScene.rectCount; index += 1) {
+    const offset = index * 8
+    rects.push({
+      x: pane.packedScene.rects[offset + 0] ?? Number.NaN,
+      y: pane.packedScene.rects[offset + 1] ?? Number.NaN,
+    })
+  }
+  return rects
+}
 
 function renderedFrame(pane: { paneId: string } | undefined) {
   if (!pane) {

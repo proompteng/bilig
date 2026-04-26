@@ -130,8 +130,6 @@ export function buildHeaderPaneStates(input: {
       },
       contentOffset: { x: 0, y: 0 },
       scrollAxes: { x: false, y: false },
-      gpuScene: clipGpuScene(gpuScene, clip),
-      textScene: clipTextScene(textScene, clip),
       packedScene: packHeaderScenePacket({
         clip,
         generation: 0,
@@ -166,8 +164,6 @@ export function buildHeaderPaneStates(input: {
       },
       contentOffset: { x: 0, y: 0 },
       scrollAxes: { x: true, y: false },
-      gpuScene: clipGpuScene(gpuScene, clip),
-      textScene: clipTextScene(textScene, clip),
       packedScene: packHeaderScenePacket({
         clip,
         generation: 0,
@@ -202,8 +198,6 @@ export function buildHeaderPaneStates(input: {
       },
       contentOffset: { x: 0, y: 0 },
       scrollAxes: { x: false, y: false },
-      gpuScene: clipGpuScene(gpuScene, clip),
-      textScene: clipTextScene(textScene, clip),
       packedScene: packHeaderScenePacket({
         clip,
         generation: 0,
@@ -238,8 +232,6 @@ export function buildHeaderPaneStates(input: {
       },
       contentOffset: { x: 0, y: 0 },
       scrollAxes: { x: false, y: true },
-      gpuScene: clipGpuScene(gpuScene, clip),
-      textScene: clipTextScene(textScene, clip),
       packedScene: packHeaderScenePacket({
         clip,
         generation: 0,

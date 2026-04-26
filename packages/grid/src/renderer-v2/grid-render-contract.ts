@@ -1,7 +1,4 @@
 import type { Viewport } from '@bilig/protocol'
-import type { GridGpuScene } from '../gridGpuScene.js'
-import type { GridTextScene } from '../gridTextScene.js'
-import type { Rectangle } from '../gridTypes.js'
 
 export interface GridAxisSnapshot {
   readonly index: number
@@ -57,32 +54,4 @@ export interface GridResidentTileKey {
   readonly rowEnd: number
   readonly colStart: number
   readonly colEnd: number
-}
-
-export interface GridTextLayoutPacket {
-  readonly version: number
-  readonly floats: Float32Array
-  readonly quadCount: number
-}
-
-export interface GridPaneRenderPacket {
-  readonly key: GridResidentTileKey
-  readonly generation: number
-  readonly frame: Rectangle
-  readonly surfaceSize: {
-    readonly width: number
-    readonly height: number
-  }
-  readonly contentOffset: {
-    readonly x: number
-    readonly y: number
-  }
-  readonly gpuScene: GridGpuScene
-  readonly textScene: GridTextScene
-}
-
-export interface GridResidentScenePacket {
-  readonly key: GridResidentTileKey
-  readonly generation: number
-  readonly panes: readonly GridPaneRenderPacket[]
 }

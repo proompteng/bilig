@@ -83,8 +83,14 @@ export function validateGridScenePacketV2(packet: GridScenePacketV2): GridSceneP
   if (packet.fillRectCount + packet.borderRectCount !== packet.rectCount) {
     return invalid('rect count mismatch')
   }
+  if (packet.rectSignature.length === 0) {
+    return invalid('missing rect signature')
+  }
   if (!Number.isInteger(packet.textCount) || packet.textCount < 0) {
     return invalid('bad text count')
+  }
+  if (packet.textSignature.length === 0) {
+    return invalid('missing text signature')
   }
   if (packet.rects.length < Math.max(1, packet.rectCount) * GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT) {
     return invalid('rect buffer too small')
@@ -94,6 +100,9 @@ export function validateGridScenePacketV2(packet: GridScenePacketV2): GridSceneP
   }
   if (packet.textMetrics.length < Math.max(1, packet.textCount) * GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT) {
     return invalid('text buffer too small')
+  }
+  if (packet.textRuns.length !== packet.textCount) {
+    return invalid('text run count mismatch')
   }
   for (let index = 0; index < packet.rectCount; index += 1) {
     const offset = index * GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT
@@ -150,6 +159,24 @@ export function validateGridScenePacketV2(packet: GridScenePacketV2): GridSceneP
       if (!isFiniteNonNegative(readFloat(packet.textMetrics, offset + clipOffset))) {
         return invalid('bad text clip')
       }
+    }
+    const run = packet.textRuns[index]
+    if (!run || run.text.length === 0) {
+      return invalid('bad text run')
+    }
+    if (!isFiniteNumber(run.x) || !isFiniteNumber(run.y)) {
+      return invalid('bad text run position')
+    }
+    if (!isFiniteNonNegative(run.width) || !isFiniteNonNegative(run.height)) {
+      return invalid('bad text run size')
+    }
+    if (
+      !isFiniteNumber(run.clipX) ||
+      !isFiniteNumber(run.clipY) ||
+      !isFiniteNonNegative(run.clipWidth) ||
+      !isFiniteNonNegative(run.clipHeight)
+    ) {
+      return invalid('bad text run clip')
     }
   }
   return { ok: true }

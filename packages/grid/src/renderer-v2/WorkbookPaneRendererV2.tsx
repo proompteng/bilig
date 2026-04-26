@@ -260,12 +260,10 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
               contentOffset: { x: 0, y: 0 },
               frame: { x: 0, y: 0, width: surface.width, height: surface.height },
               generation: -1,
-              gpuScene: overlayPacket.gpuScene,
               packedScene: overlayPacket.packedScene,
               paneId: 'overlay',
               scrollAxes: { x: false, y: false },
               surfaceSize: { width: surface.width, height: surface.height },
-              textScene: overlayPacket.textScene,
               viewport: overlayPacket.packedScene.viewport,
             },
           ]

@@ -334,7 +334,6 @@ describe('useWorkbookGridRenderState viewport residency', () => {
         contentOffset: { x: 0, y: 0 },
         frame: { x: 0, y: 0, width: 480, height: 180 },
         generation: 1,
-        gpuScene: { fillRects: [], borderRects: [] },
         packedScene: packGridScenePacketV2({
           generation: 1,
           paneId: 'body',
@@ -347,7 +346,6 @@ describe('useWorkbookGridRenderState viewport residency', () => {
         paneId: 'body',
         scrollAxes: { x: true, y: true },
         surfaceSize: { width: 480, height: 180 },
-        textScene: { items: [] },
         viewport,
       },
     ]

@@ -158,7 +158,7 @@ describe('worker-runtime-render-scene', () => {
       },
     })
 
-    expect(scenes.find((scene) => scene.paneId === 'body')?.textScene.items.some((item) => item.text === '123')).toBe(true)
+    expect(scenes.find((scene) => scene.paneId === 'body')?.packedScene.textRuns.some((item) => item.text === '123')).toBe(true)
   })
 
   it('keeps live selection geometry out of resident pane scenes', () => {
@@ -174,6 +174,6 @@ describe('worker-runtime-render-scene', () => {
     })
 
     const body = scenes.find((scene) => scene.paneId === 'body')
-    expect(body?.gpuScene.fillRects).toEqual([])
+    expect(body?.packedScene.fillRectCount).toBe(0)
   })
 })

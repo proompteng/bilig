@@ -1,5 +1,3 @@
-import type { GridGpuScene } from '../gridGpuScene.js'
-import type { GridTextScene } from '../gridTextScene.js'
 import type { TextDecorationRect } from './line-text-quad-buffer.js'
 import type { RectInstanceVertexBuffer, SurfaceUniformBuffer, TextInstanceVertexBuffer } from './typegpu-backend.js'
 import type { TgpuBindGroup } from 'typegpu'
@@ -8,14 +6,12 @@ export interface WorkbookPaneBufferEntry {
   rectBuffer: RectInstanceVertexBuffer | null
   rectCapacity: number
   rectCount: number
-  rectScene: GridGpuScene | null
   rectSignature: string | null
   surfaceUniform: SurfaceUniformBuffer | null
   surfaceBindGroup: TgpuBindGroup | null
   textBuffer: TextInstanceVertexBuffer | null
   textCapacity: number
   textCount: number
-  textScene: GridTextScene | null
   textSignature: string | null
   textBindGroup: TgpuBindGroup | null
   textBindGroupAtlasVersion: number
@@ -27,14 +23,12 @@ function createEmptyEntry(): WorkbookPaneBufferEntry {
     rectBuffer: null,
     rectCapacity: 0,
     rectCount: 0,
-    rectScene: null,
     rectSignature: null,
     surfaceUniform: null,
     surfaceBindGroup: null,
     textBuffer: null,
     textCapacity: 0,
     textCount: 0,
-    textScene: null,
     textSignature: null,
     textBindGroup: null,
     textBindGroupAtlasVersion: -1,

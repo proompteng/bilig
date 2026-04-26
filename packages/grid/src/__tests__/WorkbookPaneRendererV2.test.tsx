@@ -71,7 +71,6 @@ describe('WorkbookPaneRendererV2', () => {
               contentOffset: { x: 0, y: 0 },
               frame: { x: 46, y: 24, width: 594, height: 336 },
               generation: 1,
-              gpuScene: emptyGpuScene,
               packedScene: packGridScenePacketV2({
                 generation: 1,
                 gpuScene: emptyGpuScene,
@@ -84,7 +83,6 @@ describe('WorkbookPaneRendererV2', () => {
               paneId: 'body',
               scrollAxes: { x: true, y: true },
               surfaceSize: { width: 640, height: 360 },
-              textScene: emptyTextScene,
               viewport,
             },
           ]}
@@ -118,7 +116,6 @@ describe('WorkbookPaneRendererV2', () => {
       contentOffset: { x: 0, y: 0 },
       frame: { x: metrics.rowMarkerWidth, y: metrics.headerHeight, width: 1234, height: 696 },
       generation: 1,
-      gpuScene: { borderRects: [], fillRects: [] },
       paneId: 'body',
       packedScene: packGridScenePacketV2({
         generation: 1,
@@ -131,7 +128,6 @@ describe('WorkbookPaneRendererV2', () => {
       }),
       scrollAxes: { x: true, y: true },
       surfaceSize: { width: 1234, height: 696 },
-      textScene: { items: [] },
       viewport: { colStart: 0, colEnd: 127, rowStart, rowEnd: rowStart + 31 },
     })
 

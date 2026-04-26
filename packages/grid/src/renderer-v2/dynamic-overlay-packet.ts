@@ -1,14 +1,12 @@
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import type { GridGeometrySnapshot, GridPaneKind } from '../gridGeometry.js'
-import { parseGpuColor, type GridGpuRect, type GridGpuScene } from '../gridGpuScene.js'
+import { parseGpuColor, type GridGpuRect } from '../gridGpuScene.js'
 import type { HeaderSelection } from '../gridPointer.js'
 import type { CompactSelectionState, GridSelection, Item, Rectangle } from '../gridTypes.js'
 import { workbookThemeColors } from '../workbookTheme.js'
 import { packGridScenePacketV2, type GridScenePacketV2 } from './scene-packet-v2.js'
 
 export interface DynamicGridOverlayPacket {
-  readonly gpuScene: GridGpuScene
-  readonly textScene: { readonly items: readonly [] }
   readonly packedScene: GridScenePacketV2
 }
 
@@ -65,10 +63,8 @@ export function buildDynamicGridOverlayPacket(input: {
     borderRects,
     fillRects,
   }
-  const textScene = { items: [] } as const
   const surfaceSize = resolveOverlaySurfaceSize(input.geometry)
   return {
-    gpuScene,
     packedScene: packGridScenePacketV2({
       cameraSeq: input.geometry.camera.seq,
       generatedAt: input.geometry.camera.updatedAt,
@@ -78,10 +74,9 @@ export function buildDynamicGridOverlayPacket(input: {
       requestSeq: input.geometry.camera.seq,
       sheetName: input.geometry.camera.sheetName,
       surfaceSize,
-      textScene,
+      textScene: { items: [] },
       viewport: { colStart: 0, colEnd: 0, rowStart: 0, rowEnd: 0 },
     }),
-    textScene,
   }
 }
 

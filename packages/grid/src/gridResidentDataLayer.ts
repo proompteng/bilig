@@ -9,7 +9,7 @@ import { CompactSelection } from './gridTypes.js'
 import { resolveColumnOffset } from './workbookGridViewport.js'
 import type { WorkbookPaneId, WorkbookPaneRenderState, WorkbookPaneScenePacket } from './renderer-v2/pane-scene-types.js'
 import { getPaneFrame, resolvePaneLayout } from './renderer-v2/pane-layout.js'
-import { packGridScenePacketV2 } from './renderer-v2/scene-packet-v2.js'
+import { packGridScenePacketV2, type GridTileKeyV2 } from './renderer-v2/scene-packet-v2.js'
 
 const STATIC_RESIDENT_SELECTED_CELL: Item = Object.freeze([-1, -1] as const)
 const STATIC_RESIDENT_GRID_SELECTION: GridSelection = Object.freeze({
@@ -74,9 +74,20 @@ function buildPaneScene(input: {
   gridMetrics: GridMetrics
   sortedColumnWidthOverrides: readonly (readonly [number, number])[]
   sortedRowHeightOverrides: readonly (readonly [number, number])[]
+  packet?: ResidentDataPanePacketOptions | undefined
 }): WorkbookPaneScenePacket {
-  const { id, viewport, engine, sheetName, columnWidths, rowHeights, gridMetrics, sortedColumnWidthOverrides, sortedRowHeightOverrides } =
-    input
+  const {
+    id,
+    viewport,
+    engine,
+    sheetName,
+    columnWidths,
+    rowHeights,
+    gridMetrics,
+    sortedColumnWidthOverrides,
+    sortedRowHeightOverrides,
+    packet,
+  } = input
   const getCellBounds = createPaneCellBoundsResolver({
     viewport,
     columnWidths,
@@ -156,23 +167,34 @@ function buildPaneScene(input: {
     },
     getCellBounds,
   })
+  const generation = packet?.generation ?? 0
   return {
-    generation: 0,
+    generation,
     paneId: id,
     viewport,
     surfaceSize,
-    gpuScene,
     packedScene: packGridScenePacketV2({
-      generation: 0,
+      cameraSeq: packet?.cameraSeq,
+      generatedAt: packet?.generatedAt,
+      generation,
       gpuScene,
+      key: packet?.createKey?.(id, viewport),
       paneId: id,
+      requestSeq: packet?.requestSeq,
       sheetName,
       surfaceSize,
       textScene,
       viewport,
     }),
-    textScene,
   }
+}
+
+export interface ResidentDataPanePacketOptions {
+  readonly generation?: number | undefined
+  readonly requestSeq?: number | undefined
+  readonly cameraSeq?: number | undefined
+  readonly generatedAt?: number | undefined
+  readonly createKey?: ((paneId: WorkbookPaneId, viewport: Viewport) => GridTileKeyV2) | undefined
 }
 
 export function buildResidentDataPaneScenes(input: {
@@ -188,6 +210,7 @@ export function buildResidentDataPaneScenes(input: {
   gridMetrics: GridMetrics
   sortedColumnWidthOverrides: readonly (readonly [number, number])[]
   sortedRowHeightOverrides: readonly (readonly [number, number])[]
+  packet?: ResidentDataPanePacketOptions | undefined
 }): WorkbookPaneScenePacket[] {
   const {
     residentViewport,
@@ -202,6 +225,7 @@ export function buildResidentDataPaneScenes(input: {
     gridMetrics,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
+    packet,
   } = input
 
   const bodyViewportWidth = resolveViewportWidth(residentViewport, gridMetrics, sortedColumnWidthOverrides)
@@ -220,6 +244,7 @@ export function buildResidentDataPaneScenes(input: {
         gridMetrics,
         sortedColumnWidthOverrides,
         sortedRowHeightOverrides,
+        packet,
       }),
     )
   }
@@ -241,6 +266,7 @@ export function buildResidentDataPaneScenes(input: {
         gridMetrics,
         sortedColumnWidthOverrides,
         sortedRowHeightOverrides,
+        packet,
       }),
     )
   }
@@ -262,6 +288,7 @@ export function buildResidentDataPaneScenes(input: {
         gridMetrics,
         sortedColumnWidthOverrides,
         sortedRowHeightOverrides,
+        packet,
       }),
     )
   }
@@ -283,6 +310,7 @@ export function buildResidentDataPaneScenes(input: {
         gridMetrics,
         sortedColumnWidthOverrides,
         sortedRowHeightOverrides,
+        packet,
       }),
     )
   }
@@ -324,8 +352,6 @@ export function resolveResidentDataPaneRenderState(input: {
       viewport: pane.viewport,
       frame,
       surfaceSize: pane.surfaceSize,
-      gpuScene: pane.gpuScene,
-      textScene: pane.textScene,
       contentOffset: { x: 0, y: 0 },
       packedScene: pane.packedScene,
     }

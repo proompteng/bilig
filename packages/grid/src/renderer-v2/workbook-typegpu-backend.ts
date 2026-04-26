@@ -13,6 +13,7 @@ import { drawTypeGpuPanes, type TypeGpuDrawSurface } from './typegpu-render-pass
 import { syncTypeGpuPaneResources } from './typegpu-buffer-pool.js'
 import { createTypeGpuSurfaceState, syncTypeGpuCanvasSurface, type TypeGpuSurfaceState } from './typegpu-surface.js'
 import { buildTileGpuCacheKey, TileGpuCache, syncTileGpuCacheFromPanes } from './tile-gpu-cache.js'
+import type { GridScenePacketV2 } from './scene-packet-v2.js'
 
 export interface WorkbookTypeGpuBackend {
   readonly artifacts: TypeGpuRendererArtifacts
@@ -116,7 +117,7 @@ export function resolveTypeGpuDrawPanes(input: {
       return pane
     }
     const stale = input.tileCache.findStaleValid(packedScene.key, { excludeKey: exactKey })
-    if (stale) {
+    if (stale && hasCompatiblePaneOrigin(stale.packet, packedScene)) {
       const staleEntry = input.paneBuffers.peek(stale.key)
       if (staleEntry && isPaneDrawReady(staleEntry, { ...pane, packedScene: stale.packet })) {
         return { ...pane, packedScene: stale.packet }
@@ -125,6 +126,10 @@ export function resolveTypeGpuDrawPanes(input: {
     input.onTileMiss?.(exactKey)
     return pane
   })
+}
+
+function hasCompatiblePaneOrigin(candidate: GridScenePacketV2, desired: GridScenePacketV2): boolean {
+  return candidate.viewport.rowStart === desired.viewport.rowStart && candidate.viewport.colStart === desired.viewport.colStart
 }
 
 function isPaneDrawReady(entry: WorkbookPaneBufferEntry, pane: WorkbookRenderPaneState): boolean {

@@ -6,7 +6,6 @@ import { resolveFrozenColumnWidth, resolveFrozenRowHeight } from '../../../packa
 import { createGridTileKeyV2 } from '../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
 import { validateGridScenePacketV2 } from '../../../packages/grid/src/renderer-v2/scene-packet-validator.js'
 import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
-import { packWorkerGridScenePacket } from './worker-runtime-render-packet.js'
 
 interface ResidentPaneSceneEngineLike extends GridEngineLike {
   getColumnAxisEntries(sheetName: string): readonly WorkbookAxisEntrySnapshot[]
@@ -83,7 +82,7 @@ export function buildWorkerResidentPaneScenes(input: {
   const freezeVersion = buildFreezeVersion(freezeRows, freezeCols)
   const sceneVersion = batchVersion + resolveRevision(request.sceneRevision)
 
-  return buildResidentDataPaneScenes({
+  const scenes = buildResidentDataPaneScenes({
     residentViewport: request.residentViewport,
     engine,
     sheetName: request.sheetName,
@@ -104,45 +103,33 @@ export function buildWorkerResidentPaneScenes(input: {
     gridMetrics,
     sortedColumnWidthOverrides: columnAxis.sortedOverrides,
     sortedRowHeightOverrides: rowAxis.sortedOverrides,
-  }).map((scene): WorkbookPaneScenePacket => {
-    const packedScene = packWorkerGridScenePacket({
+    packet: {
       generation,
       cameraSeq: request.cameraSeq ?? request.requestSeq ?? 0,
       generatedAt,
-      gpuScene: scene.gpuScene,
-      paneId: scene.paneId,
       requestSeq: request.requestSeq ?? 0,
-      key: createGridTileKeyV2({
-        axisVersionX: columnAxisVersion,
-        axisVersionY: rowAxisVersion,
-        dprBucket: request.dprBucket ?? 1,
-        freezeVersion,
-        paneId: scene.paneId,
-        selectionIndependentVersion: sceneVersion,
-        sheetName: request.sheetName,
-        styleVersion: sceneVersion,
-        valueVersion: sceneVersion,
-        viewport: scene.viewport,
-      }),
-      sheetName: request.sheetName,
-      surfaceSize: scene.surfaceSize,
-      textScene: scene.textScene,
-      viewport: scene.viewport,
-    })
-    const validation = validateGridScenePacketV2(packedScene)
+      createKey: (paneId, viewport) =>
+        createGridTileKeyV2({
+          axisVersionX: columnAxisVersion,
+          axisVersionY: rowAxisVersion,
+          dprBucket: request.dprBucket ?? 1,
+          freezeVersion,
+          paneId,
+          selectionIndependentVersion: sceneVersion,
+          sheetName: request.sheetName,
+          styleVersion: sceneVersion,
+          valueVersion: sceneVersion,
+          viewport,
+        }),
+    },
+  })
+  for (const scene of scenes) {
+    const validation = validateGridScenePacketV2(scene.packedScene)
     if (!validation.ok) {
       throw new Error(`Invalid worker grid scene packet: ${validation.reason}`)
     }
-    return {
-      generation,
-      paneId: scene.paneId,
-      packedScene,
-      viewport: scene.viewport,
-      surfaceSize: scene.surfaceSize,
-      gpuScene: scene.gpuScene,
-      textScene: scene.textScene,
-    }
-  })
+  }
+  return scenes
 }
 
 export function buildResidentPaneSceneCacheKey(request: WorkbookPaneSceneRequest): string {

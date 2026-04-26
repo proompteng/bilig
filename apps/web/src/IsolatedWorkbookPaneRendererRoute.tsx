@@ -19,9 +19,9 @@ const TEXT_ACCENT = '#163f29'
 
 type RendererPane = ComponentProps<typeof WorkbookPaneRendererV2>['panes'][number]
 type RendererPanes = ComponentProps<typeof WorkbookPaneRendererV2>['panes']
-type RendererGpuScene = RendererPane['gpuScene']
+type RendererGpuScene = Parameters<typeof packGridScenePacketV2>[0]['gpuScene']
 type RendererGpuRect = RendererGpuScene['fillRects'][number]
-type RendererTextScene = RendererPane['textScene']
+type RendererTextScene = Parameters<typeof packGridScenePacketV2>[0]['textScene']
 type RendererTextItem = RendererTextScene['items'][number]
 type RendererPaneId = 'corner' | 'top-body' | 'left-body' | 'body'
 
@@ -137,16 +137,23 @@ function buildIsolatedRendererPanes(hostSize: HostSize): RendererPanes {
   ]
 }
 
-function createRendererPane(input: Omit<RendererPane, 'packedScene'> & { readonly paneId: RendererPaneId }): RendererPane {
+function createRendererPane(
+  input: Omit<RendererPane, 'packedScene'> & {
+    readonly paneId: RendererPaneId
+    readonly gpuScene: RendererGpuScene
+    readonly textScene: RendererTextScene
+  },
+): RendererPane {
+  const { gpuScene, textScene, ...pane } = input
   return {
-    ...input,
+    ...pane,
     packedScene: packGridScenePacketV2({
       generation: input.generation,
-      gpuScene: input.gpuScene,
+      gpuScene,
       paneId: input.paneId,
       sheetName: 'Sheet1',
       surfaceSize: input.surfaceSize,
-      textScene: input.textScene,
+      textScene,
       viewport: input.viewport ?? { colStart: 0, colEnd: 0, rowStart: 0, rowEnd: 0 },
     }),
   }

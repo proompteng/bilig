@@ -165,6 +165,14 @@ export function buildTextQuadsFromScene(
   return packTextQuads(quads, targetBuffer)
 }
 
+export function buildTextQuadsFromRuns(
+  runs: readonly TextQuadRun[],
+  atlas: GlyphAtlasLike,
+  targetBuffer?: Float32Array,
+): { floats: Float32Array; quadCount: number } {
+  return packTextQuads(buildTextQuads(runs, atlas), targetBuffer)
+}
+
 export function buildTextDecorationRects(runs: readonly TextQuadRun[], atlas: GlyphAtlasLike): TextDecorationRect[] {
   const rects: TextDecorationRect[] = []
   for (const run of runs) {
@@ -217,6 +225,10 @@ export function buildTextDecorationRectsFromScene(items: readonly GridTextItem[]
     })),
     atlas,
   )
+}
+
+export function buildTextDecorationRectsFromRuns(runs: readonly TextQuadRun[], atlas: GlyphAtlasLike): TextDecorationRect[] {
+  return buildTextDecorationRects(runs, atlas)
 }
 
 function resolveRunTextLayout(run: TextQuadRun, atlas: GlyphAtlasLike, fontKey: FontKey): ResolvedCellTextLayout {

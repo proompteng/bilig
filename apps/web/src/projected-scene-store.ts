@@ -102,7 +102,10 @@ function isGridScenePacketV2(value: unknown): value is GridScenePacketV2 {
     typeof value['rectCount'] === 'number' &&
     typeof value['fillRectCount'] === 'number' &&
     typeof value['borderRectCount'] === 'number' &&
+    typeof value['rectSignature'] === 'string' &&
     value['textMetrics'] instanceof Float32Array &&
+    Array.isArray(value['textRuns']) &&
+    typeof value['textSignature'] === 'string' &&
     typeof value['textCount'] === 'number'
   )
 }
@@ -121,8 +124,6 @@ function isResidentPaneScenePacketArray(value: unknown): value is readonly Workb
         typeof entry['paneId'] === 'string' &&
         isRecord(entry['viewport']) &&
         isRecord(entry['surfaceSize']) &&
-        isRecord(entry['gpuScene']) &&
-        isRecord(entry['textScene']) &&
         isPackedScene(entry['packedScene']),
     )
   )

@@ -156,8 +156,6 @@ function createResidentScene(
     paneId: 'body' as const,
     viewport,
     surfaceSize,
-    gpuScene: { fillRects: [], borderRects: [] },
-    textScene: { items: [] },
     packedScene: {
       borderRectCount: 0,
       cameraSeq: requestSeq,
@@ -170,11 +168,14 @@ function createResidentScene(
       rectCount: 0,
       rectInstances: new Float32Array(GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT),
       rects: new Float32Array(GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT),
+      rectSignature: 'rect-empty',
       requestSeq,
       sheetName: request.sheetName,
       surfaceSize,
       textMetrics: new Float32Array(GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT),
       textCount: 0,
+      textRuns: [],
+      textSignature: 'text-empty',
       version: GRID_SCENE_PACKET_V2_VERSION,
       viewport,
       ...packetOverrides,
@@ -689,7 +690,7 @@ describe('ProjectedViewportStore', () => {
     expect(cache.getCell('Sheet1', 'D5').version).toBe(1)
     const immediateScene = cache.peekResidentPaneScenes(request)
     expect(immediateScene?.[0]?.generation).toBe(2)
-    expect(immediateScene?.[0]?.textScene.items.some((item) => item.text === 'typed value')).toBe(true)
+    expect(immediateScene?.[0]?.packedScene.textRuns.some((item) => item.text === 'typed value')).toBe(true)
     expect(invoke).toHaveBeenCalledTimes(1)
     expect(sceneListener).toHaveBeenCalledTimes(1)
 
@@ -812,7 +813,7 @@ describe('ProjectedViewportStore', () => {
 
     const immediateScene = cache.peekResidentPaneScenes(request)
     expect(immediateScene?.[0]?.generation).toBe(2)
-    expect(immediateScene?.[0]?.textScene.items.some((item) => item.text === 'local typed')).toBe(true)
+    expect(immediateScene?.[0]?.packedScene.textRuns.some((item) => item.text === 'local typed')).toBe(true)
     expect(invoke).toHaveBeenCalledTimes(1)
     expect(sceneListener).toHaveBeenCalledTimes(1)
 

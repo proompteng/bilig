@@ -31,8 +31,6 @@ describe('grid hook boundary helpers', () => {
         paneId: 'body' as const,
         viewport: { rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 127 },
         surfaceSize: { width: 100, height: 100 },
-        gpuScene: { fillRects: [], borderRects: [] },
-        textScene: { items: [] },
       },
     ]
 
@@ -72,8 +70,6 @@ describe('grid hook boundary helpers', () => {
         paneId: 'body',
         viewport: { rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 127 },
         surfaceSize: { width: 100, height: 100 },
-        gpuScene: { fillRects: [], borderRects: [] },
-        textScene: { items: [] },
       },
     ])
 

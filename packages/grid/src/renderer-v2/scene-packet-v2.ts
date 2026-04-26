@@ -58,8 +58,30 @@ export interface GridScenePacketV2 {
   readonly rectCount: number
   readonly fillRectCount: number
   readonly borderRectCount: number
+  readonly rectSignature: string
   readonly textMetrics: Float32Array
+  readonly textRuns: readonly GridSceneTextRun[]
   readonly textCount: number
+  readonly textSignature: string
+}
+
+export interface GridSceneTextRun {
+  readonly text: string
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+  readonly clipX: number
+  readonly clipY: number
+  readonly clipWidth: number
+  readonly clipHeight: number
+  readonly align: 'left' | 'center' | 'right'
+  readonly wrap: boolean
+  readonly font: string
+  readonly fontSize: number
+  readonly color: string
+  readonly underline: boolean
+  readonly strike: boolean
 }
 
 export function packGridScenePacketV2(input: {
@@ -82,6 +104,10 @@ export function packGridScenePacketV2(input: {
       sheetName: input.sheetName,
       viewport: input.viewport,
     })
+  const rectInstances = packRectInstances(input.gpuScene, input.surfaceSize)
+  const rects = packRects(input.gpuScene)
+  const textMetrics = packTextMetrics(input.textScene)
+  const textRuns = packTextRuns(input.textScene)
   return {
     generation: input.generation,
     cameraSeq: input.cameraSeq ?? input.requestSeq ?? 0,
@@ -92,13 +118,16 @@ export function packGridScenePacketV2(input: {
     magic: GRID_SCENE_PACKET_V2_MAGIC,
     paneId: input.paneId,
     rectCount: input.gpuScene.fillRects.length + input.gpuScene.borderRects.length,
-    rectInstances: packRectInstances(input.gpuScene, input.surfaceSize),
-    rects: packRects(input.gpuScene),
+    rectInstances,
+    rects,
+    rectSignature: resolveRectSignature(input.gpuScene, input.surfaceSize),
     requestSeq: input.requestSeq ?? 0,
     sheetName: input.sheetName,
     surfaceSize: input.surfaceSize,
     textCount: input.textScene.items.length,
-    textMetrics: packTextMetrics(input.textScene),
+    textMetrics,
+    textRuns,
+    textSignature: resolveTextSignature(textRuns),
     version: GRID_SCENE_PACKET_V2_VERSION,
     viewport: input.viewport,
   }
@@ -303,4 +332,97 @@ function packTextMetrics(scene: GridTextScene): Float32Array {
     floats[offset + 7] = item.clipInsetLeft
   })
   return floats
+}
+
+function packTextRuns(scene: GridTextScene): readonly GridSceneTextRun[] {
+  return scene.items.map((item) => ({
+    align: item.align,
+    clipHeight: Math.max(0, item.height - item.clipInsetTop - item.clipInsetBottom),
+    clipWidth: Math.max(0, item.width - item.clipInsetLeft - item.clipInsetRight),
+    clipX: item.x + item.clipInsetLeft,
+    clipY: item.y + item.clipInsetTop,
+    color: item.color,
+    font: item.font,
+    fontSize: item.fontSize,
+    height: item.height,
+    strike: item.strike,
+    text: item.text,
+    underline: item.underline,
+    width: item.width,
+    wrap: item.wrap,
+    x: item.x,
+    y: item.y,
+  }))
+}
+
+function resolveRectSignature(scene: GridGpuScene, surfaceSize: { readonly width: number; readonly height: number }): string {
+  let hash = createHash()
+  hash = mixNumber(hash, surfaceSize.width)
+  hash = mixNumber(hash, surfaceSize.height)
+  hash = mixNumber(hash, scene.fillRects.length)
+  hash = mixNumber(hash, scene.borderRects.length)
+  for (const rect of scene.fillRects) {
+    hash = mixRect(hash, rect)
+  }
+  for (const rect of scene.borderRects) {
+    hash = mixRect(hash, rect)
+  }
+  return hash.toString(36)
+}
+
+function mixRect(hash: number, rect: GridGpuScene['fillRects'][number]): number {
+  let next = hash
+  next = mixNumber(next, rect.x)
+  next = mixNumber(next, rect.y)
+  next = mixNumber(next, rect.width)
+  next = mixNumber(next, rect.height)
+  next = mixNumber(next, rect.color.r)
+  next = mixNumber(next, rect.color.g)
+  next = mixNumber(next, rect.color.b)
+  next = mixNumber(next, rect.color.a)
+  return next
+}
+
+function resolveTextSignature(textRuns: readonly GridSceneTextRun[]): string {
+  let hash = createHash()
+  hash = mixNumber(hash, textRuns.length)
+  for (const run of textRuns) {
+    hash = mixString(hash, run.text)
+    hash = mixNumber(hash, run.x)
+    hash = mixNumber(hash, run.y)
+    hash = mixNumber(hash, run.width)
+    hash = mixNumber(hash, run.height)
+    hash = mixNumber(hash, run.clipX)
+    hash = mixNumber(hash, run.clipY)
+    hash = mixNumber(hash, run.clipWidth)
+    hash = mixNumber(hash, run.clipHeight)
+    hash = mixString(hash, run.align)
+    hash = mixNumber(hash, run.wrap ? 1 : 0)
+    hash = mixString(hash, run.font)
+    hash = mixNumber(hash, run.fontSize)
+    hash = mixString(hash, run.color)
+    hash = mixNumber(hash, run.underline ? 1 : 0)
+    hash = mixNumber(hash, run.strike ? 1 : 0)
+  }
+  return hash.toString(36)
+}
+
+function createHash(): number {
+  return 2_166_136_261
+}
+
+function mixString(hash: number, value: string): number {
+  let next = hash
+  for (let index = 0; index < value.length; index += 1) {
+    next = mixInteger(next, value.charCodeAt(index))
+  }
+  return next
+}
+
+function mixNumber(hash: number, value: number): number {
+  return mixInteger(hash, Math.round(value * 1_000))
+}
+
+function mixInteger(hash: number, value: number): number {
+  return Math.imul((hash ^ value) >>> 0, 16_777_619) >>> 0
 }

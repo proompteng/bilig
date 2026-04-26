@@ -70,5 +70,14 @@ describe('worker-runtime-render-packet', () => {
     expect(Array.from(packet.rectInstances.slice(20, 40))).toEqual([5, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 400, 200])
     expect(Array.from(packet.rects.slice(0, 8))).toEqual([1, 2, 3, 4, 1, 0.5, 0.25, 1])
     expect(Array.from(packet.textMetrics.slice(0, 8))).toEqual([10, 11, 100, 20, 3, 2, 0, 1])
+    expect(packet.textRuns).toEqual([
+      expect.objectContaining({
+        clipHeight: 17,
+        clipWidth: 97,
+        clipX: 11,
+        clipY: 14,
+        text: 'A',
+      }),
+    ])
   })
 })
