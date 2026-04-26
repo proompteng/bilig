@@ -160,6 +160,7 @@ Files:
 - `apps/web/src/worker-viewport-tile-store.ts`
 - new `packages/worker-transport/src/workbook-delta-v3.ts`
 - new `packages/worker-transport/src/tile-interest-v3.ts`
+- new `packages/grid/src/runtime/gridAxisRuntime.ts`
 
 Implement:
 
@@ -171,6 +172,7 @@ Implement:
 - render-delta subscriptions materializing fixed 32x128 content tiles instead of resident pane windows.
 - worker local viewport tile cache using numeric tile residency instead of serialized string keys and scan-based eviction.
 - binary V3 contracts for sheet-level dirty range deltas and renderer tile interest batches.
+- runtime-owned axis query primitive for offsets, spans, tile origins, visible ranges, and monotonic axis revisions.
 
 ### Phase 7: text atlas service
 
@@ -242,6 +244,7 @@ Completed in the first implementation tranche:
 - `worker-viewport-tile-store.ts` now keys cached projection tiles with `packTileKey53()` and evicts through `TileResidencyV3` rather than scanning serialized string-key maps.
 - `packages/worker-transport/src/workbook-delta-v3.ts` defines and round-trips the first sheet-level dirty-range delta batch.
 - `packages/worker-transport/src/tile-interest-v3.ts` defines and round-trips visible/warm/pinned tile interest batches using safe-integer tile keys.
+- `packages/grid/src/runtime/gridAxisRuntime.ts` starts the axis runtime split with update-owned prefix indexes and tile-origin queries outside React render state.
 
 Remaining work from this design:
 
