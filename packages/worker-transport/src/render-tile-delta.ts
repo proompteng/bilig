@@ -216,7 +216,7 @@ function encodeMutation(writer: BinaryWriter, mutation: RenderTileMutation): voi
   writer.u8(MUTATION_TAGS[mutation.kind])
   switch (mutation.kind) {
     case 'tileReplace':
-      writer.u32(mutation.tileId)
+      encodeTileKey(writer, mutation.tileId)
       encodeTileCoord(writer, mutation.coord)
       encodeTileVersion(writer, mutation.version)
       encodeViewport(writer, mutation.bounds)
@@ -229,7 +229,7 @@ function encodeMutation(writer: BinaryWriter, mutation: RenderTileMutation): voi
       encodeDirtySpans(writer, mutation.dirty)
       return
     case 'cellRuns':
-      writer.u32(mutation.tileId)
+      encodeTileKey(writer, mutation.tileId)
       encodeTileVersion(writer, mutation.version)
       encodeArray(writer, mutation.runs, encodeCellRun)
       return
@@ -245,7 +245,7 @@ function encodeMutation(writer: BinaryWriter, mutation: RenderTileMutation): voi
       writer.u32(mutation.freezeVersion)
       return
     case 'invalidate':
-      writer.u32(mutation.tileId)
+      encodeTileKey(writer, mutation.tileId)
       writer.string(mutation.reason)
       return
     case 'overlay':
@@ -260,7 +260,7 @@ function decodeMutation(reader: BinaryReader): RenderTileMutation {
     case 1:
       return {
         kind: 'tileReplace',
-        tileId: reader.u32(),
+        tileId: decodeTileKey(reader),
         coord: decodeTileCoord(reader),
         version: decodeTileVersion(reader),
         bounds: decodeViewport(reader),
@@ -275,7 +275,7 @@ function decodeMutation(reader: BinaryReader): RenderTileMutation {
     case 2:
       return {
         kind: 'cellRuns',
-        tileId: reader.u32(),
+        tileId: decodeTileKey(reader),
         version: decodeTileVersion(reader),
         runs: decodeArray(reader, () => decodeCellRun(reader)),
       }
@@ -302,7 +302,7 @@ function decodeMutation(reader: BinaryReader): RenderTileMutation {
     case 5:
       return {
         kind: 'invalidate',
-        tileId: reader.u32(),
+        tileId: decodeTileKey(reader),
         reason: reader.string(),
       }
     case 6:
@@ -314,6 +314,21 @@ function decodeMutation(reader: BinaryReader): RenderTileMutation {
     default:
       throw new BinaryProtocolError('Unknown render tile mutation tag')
   }
+}
+
+function encodeTileKey(writer: BinaryWriter, key: number): void {
+  if (!Number.isSafeInteger(key) || key < 0) {
+    throw new BinaryProtocolError('Render tile key must be a non-negative safe integer')
+  }
+  writer.f64(key)
+}
+
+function decodeTileKey(reader: BinaryReader): number {
+  const key = reader.f64()
+  if (!Number.isSafeInteger(key) || key < 0) {
+    throw new BinaryProtocolError('Invalid render tile key')
+  }
+  return key
 }
 
 function encodeTileCoord(writer: BinaryWriter, coord: RenderTileCoord): void {

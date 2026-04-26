@@ -152,4 +152,53 @@ describe('WorkerViewportTileStore', () => {
 
     expect(reads).toEqual(['Sheet1:0:0', 'Sheet2:0:0', 'Sheet1:0:0'])
   })
+
+  it('evicts least-recently-used tiles through numeric residency keys', () => {
+    const tileStore = new WorkerViewportTileStore(2)
+    const reads: string[] = []
+    const localStore = {
+      readViewportProjection(sheetName: string, viewport: Record<string, number>) {
+        reads.push(`${sheetName}:${viewport.rowStart}:${viewport.colStart}`)
+        return createViewportValue(7, sheetName, {
+          rowStart: viewport.rowStart,
+          rowEnd: viewport.rowEnd,
+          colStart: viewport.colStart,
+          colEnd: viewport.colEnd,
+        })
+      },
+    }
+
+    tileStore.readViewport({
+      localStore,
+      sheetName: 'Sheet1',
+      viewport: { rowStart: 0, rowEnd: 0, colStart: 0, colEnd: 0 },
+    })
+    tileStore.readViewport({
+      localStore,
+      sheetName: 'Sheet1',
+      viewport: { rowStart: 32, rowEnd: 32, colStart: 0, colEnd: 0 },
+    })
+    tileStore.readViewport({
+      localStore,
+      sheetName: 'Sheet1',
+      viewport: { rowStart: 0, rowEnd: 0, colStart: 0, colEnd: 0 },
+    })
+    tileStore.readViewport({
+      localStore,
+      sheetName: 'Sheet1',
+      viewport: { rowStart: 64, rowEnd: 64, colStart: 0, colEnd: 0 },
+    })
+    tileStore.readViewport({
+      localStore,
+      sheetName: 'Sheet1',
+      viewport: { rowStart: 32, rowEnd: 32, colStart: 0, colEnd: 0 },
+    })
+    tileStore.readViewport({
+      localStore,
+      sheetName: 'Sheet1',
+      viewport: { rowStart: 0, rowEnd: 0, colStart: 0, colEnd: 0 },
+    })
+
+    expect(reads).toEqual(['Sheet1:0:0', 'Sheet1:32:0', 'Sheet1:64:0', 'Sheet1:32:0', 'Sheet1:0:0'])
+  })
 })

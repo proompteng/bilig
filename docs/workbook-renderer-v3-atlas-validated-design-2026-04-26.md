@@ -149,6 +149,26 @@ Implement:
 - selection drag and resize preview with zero data tile uploads.
 - in the interim V2 packet path, visible header-index generation must avoid sort allocation while it is still packet-based.
 
+### Phase 6.5: establish renderer-v3 tile primitives
+
+Files:
+
+- new `packages/grid/src/renderer-v3/tile-key.ts`
+- new `packages/grid/src/renderer-v3/tile-residency.ts`
+- new `packages/grid/src/renderer-v3/tile-damage-index.ts`
+- `apps/web/src/worker-runtime-render-tile-delta.ts`
+- `apps/web/src/worker-viewport-tile-store.ts`
+
+Implement:
+
+- reversible numeric `TileKey53` content tile keys using protocol tile dimensions;
+- renderer-v3 dirty tile marking by fixed tile, not viewport subscription;
+- residency exact lookup, compatibility buckets, LRU touch/eviction, and generation-based visible marking;
+- bootstrap render-delta tile IDs generated from shared numeric content tile keys instead of ad hoc hashes;
+- render-delta transport preserving the full safe-integer tile-key range;
+- render-delta subscriptions materializing fixed 32x128 content tiles instead of resident pane windows.
+- worker local viewport tile cache using numeric tile residency instead of serialized string keys and scan-based eviction.
+
 ### Phase 7: text atlas service
 
 Files:
@@ -185,10 +205,12 @@ Definition of done for this tranche:
 - `packages/worker-transport/src/render-tile-delta.ts` exists as the renderer-native binary delta contract;
 - worker transport can relay `renderTileDeltas` independently from `viewportPatches`;
 - app-side projection can subscribe to, decode, store, and invalidate render tile deltas;
-- the worker runtime can publish full tile-replace render deltas from the existing resident-scene builder while tile-payload v3 is developed;
+- the worker runtime can publish full tile-replace render deltas from fixed content tile viewports while tile-payload v3 is developed;
 - scroll perf reports include renderer delta batch, mutation, apply-time, and dirty-tile counters;
 - viewport-window and render-scroll math is split out of `useWorkbookGridRenderState.ts` under focused tests;
 - dynamic overlay visible header-index generation avoids the old `Set` plus `toSorted()` allocation path;
+- renderer-v3 numeric tile keys, dirty tile index, and tile residency primitives exist under focused tests;
+- bootstrap render-delta tile IDs are shared content tile keys, not ad hoc per-pane hashes;
 - existing tile cache and typegpu backend tests pass;
 - render tile delta codec and worker relay tests pass;
 - focused browser scroll performance still passes;
@@ -208,6 +230,13 @@ Completed in the first implementation tranche:
 - `gridViewportController.ts` owns resident-window comparison, tile-key conversion, and render-scroll transform math outside the large React hook.
 - `ProjectedTileSceneStore` reports renderer delta batches, mutations, apply duration, and dirty tile counts into the scroll perf collector.
 - `dynamic-overlay-packet.ts` no longer sorts visible row/column header indexes while building overlay packets.
+- `renderer-v3/tile-key.ts` packs/unpacks fixed content tile coordinates into safe numeric keys.
+- `renderer-v3/tile-damage-index.ts` maps cell-range damage to touched fixed content tiles.
+- `renderer-v3/tile-residency.ts` provides exact lookup, compatibility-bucket stale lookup, generation-based visible marking, pinning, and byte-budget eviction primitives.
+- `worker-runtime-render-tile-delta.ts` now emits tile IDs from `packTileKey53()` so body/frozen pane bootstrap deltas share content tile identity.
+- `packages/worker-transport/src/render-tile-delta.ts` now round-trips 53-bit tile keys instead of truncating tile IDs to `u32`.
+- `worker-runtime-render-tile-delta.ts` now splits render subscriptions into protocol-sized fixed content tile replacements, avoiding frozen/body pane duplicate materialization in the render-delta path.
+- `worker-viewport-tile-store.ts` now keys cached projection tiles with `packTileKey53()` and evicts through `TileResidencyV3` rather than scanning serialized string-key maps.
 
 Remaining work from this design:
 

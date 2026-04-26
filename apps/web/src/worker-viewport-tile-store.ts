@@ -1,21 +1,28 @@
 import type { WorkbookLocalStore, WorkbookLocalViewportBase } from '@bilig/storage-browser'
 import { MAX_COLS, MAX_ROWS, VIEWPORT_TILE_COLUMN_COUNT, VIEWPORT_TILE_ROW_COUNT } from '@bilig/protocol'
 import type { ViewportPatchSubscription } from '@bilig/worker-transport'
+import { MAX_TILE_SHEET_ORDINAL, packTileKey53 } from '../../../packages/grid/src/renderer-v3/tile-key.js'
+import { TileResidencyV3, type TileEntryV3 } from '../../../packages/grid/src/renderer-v3/tile-residency.js'
 const DEFAULT_MAX_CACHED_TILES = 96
+const DEFAULT_MAX_CACHED_TILE_BYTES = 128 * 1024 * 1024
 
 type ViewportBounds = Pick<ViewportPatchSubscription, 'rowStart' | 'rowEnd' | 'colStart' | 'colEnd'>
 
 interface CachedViewportTile {
-  readonly key: string
+  readonly key: number
   readonly sheetId: number
   readonly sheetName: string
   readonly bounds: ViewportBounds
   readonly viewport: WorkbookLocalViewportBase
-  accessTick: number
 }
 
-function buildTileKey(sheetId: number, bounds: ViewportBounds): string {
-  return `${sheetId}:${bounds.rowStart}:${bounds.colStart}`
+function buildTileKey(sheetId: number, bounds: ViewportBounds): number {
+  return packTileKey53({
+    sheetOrdinal: sheetId,
+    rowTile: Math.floor(bounds.rowStart / VIEWPORT_TILE_ROW_COUNT),
+    colTile: Math.floor(bounds.colStart / VIEWPORT_TILE_COLUMN_COUNT),
+    dprBucket: 0,
+  })
 }
 
 function sortViewportCells(left: WorkbookLocalViewportBase['cells'][number], right: WorkbookLocalViewportBase['cells'][number]): number {
@@ -107,25 +114,26 @@ function mergeViewportTiles(viewport: ViewportBounds, tiles: readonly WorkbookLo
 }
 
 export class WorkerViewportTileStore {
-  private readonly tiles = new Map<string, CachedViewportTile>()
-  private readonly tileKeysBySheetId = new Map<number, Set<string>>()
+  private readonly residency = new TileResidencyV3<CachedViewportTile>()
+  private readonly tileKeysBySheetId = new Map<number, Set<number>>()
   private readonly sheetIdsByName = new Map<string, number>()
-  private nextAccessTick = 1
 
-  constructor(private readonly maxCachedTiles = DEFAULT_MAX_CACHED_TILES) {}
+  constructor(
+    private readonly maxCachedTiles = DEFAULT_MAX_CACHED_TILES,
+    private readonly maxCachedTileBytes = DEFAULT_MAX_CACHED_TILE_BYTES,
+  ) {}
 
   reset(): void {
-    this.tiles.clear()
+    this.residency.clear()
     this.tileKeysBySheetId.clear()
     this.sheetIdsByName.clear()
-    this.nextAccessTick = 1
   }
 
   invalidateSheet(sheetId: number): void {
     const keys = this.tileKeysBySheetId.get(sheetId)
     if (keys) {
       keys.forEach((key) => {
-        this.tiles.delete(key)
+        this.residency.delete(key)
       })
     }
     this.tileKeysBySheetId.delete(sheetId)
@@ -137,7 +145,7 @@ export class WorkerViewportTileStore {
   }
 
   hasTile(sheetId: number, bounds: ViewportBounds): boolean {
-    return this.tiles.has(buildTileKey(sheetId, bounds))
+    return this.residency.getExact(buildTileKey(sheetId, bounds)) !== null
   }
 
   readViewport(input: {
@@ -152,7 +160,7 @@ export class WorkerViewportTileStore {
       let cachedTile: CachedViewportTile | undefined
       const knownSheetId = this.sheetIdsByName.get(input.sheetName)
       if (knownSheetId !== undefined) {
-        cachedTile = this.tiles.get(buildTileKey(knownSheetId, bounds))
+        cachedTile = this.residency.getExact(buildTileKey(knownSheetId, bounds))?.packet ?? undefined
       }
 
       if (!cachedTile) {
@@ -160,10 +168,19 @@ export class WorkerViewportTileStore {
         if (!viewport) {
           return null
         }
-        this.updateSheetNameMapping(input.sheetName, viewport.sheetName, viewport.sheetId)
-        cachedTile = this.storeTile(bounds, viewport)
-      } else {
-        this.touch(cachedTile)
+        const sheetId = this.resolveViewportSheetId(input.sheetName, viewport)
+        if (sheetId === null) {
+          cachedTile = {
+            bounds,
+            key: -1,
+            sheetId: viewport.sheetId,
+            sheetName: viewport.sheetName,
+            viewport,
+          }
+        } else {
+          this.updateSheetNameMapping(input.sheetName, viewport.sheetName, sheetId)
+          cachedTile = this.storeTile(bounds, viewport, sheetId)
+        }
       }
 
       resolvedTiles.push(cachedTile.viewport)
@@ -175,26 +192,50 @@ export class WorkerViewportTileStore {
     return mergeViewportTiles(normalizeViewportBounds(input.viewport), resolvedTiles)
   }
 
-  private touch(tile: CachedViewportTile): void {
-    tile.accessTick = this.nextAccessTick++
-  }
-
-  private storeTile(bounds: ViewportBounds, viewport: WorkbookLocalViewportBase): CachedViewportTile {
-    const key = buildTileKey(viewport.sheetId, bounds)
+  private storeTile(bounds: ViewportBounds, viewport: WorkbookLocalViewportBase, sheetId: number): CachedViewportTile {
+    const key = buildTileKey(sheetId, bounds)
     const cached: CachedViewportTile = {
       key,
-      sheetId: viewport.sheetId,
+      sheetId,
       sheetName: viewport.sheetName,
       bounds,
       viewport,
-      accessTick: this.nextAccessTick++,
     }
-    this.tiles.set(key, cached)
-    const sheetTileKeys = this.tileKeysBySheetId.get(viewport.sheetId) ?? new Set<string>()
+    this.residency.upsert({
+      axisSeqX: 0,
+      axisSeqY: 0,
+      byteSizeCpu: estimateViewportBytes(viewport),
+      byteSizeGpu: 0,
+      colTile: Math.floor(bounds.colStart / VIEWPORT_TILE_COLUMN_COUNT),
+      dprBucket: 0,
+      freezeSeq: 0,
+      key,
+      packet: cached,
+      rectSeq: 0,
+      rowTile: Math.floor(bounds.rowStart / VIEWPORT_TILE_ROW_COUNT),
+      sheetOrdinal: sheetId,
+      state: 'ready',
+      styleSeq: 0,
+      textSeq: 0,
+      valueSeq: 0,
+    })
+    const sheetTileKeys = this.tileKeysBySheetId.get(sheetId) ?? new Set<number>()
     sheetTileKeys.add(key)
-    this.tileKeysBySheetId.set(viewport.sheetId, sheetTileKeys)
+    this.tileKeysBySheetId.set(sheetId, sheetTileKeys)
     this.evictLeastRecentlyUsedTiles()
     return cached
+  }
+
+  private resolveViewportSheetId(requestedSheetName: string, viewport: WorkbookLocalViewportBase): number | null {
+    const sheetId = Number(viewport.sheetId)
+    if (Number.isSafeInteger(sheetId) && sheetId >= 0 && sheetId <= MAX_TILE_SHEET_ORDINAL) {
+      return sheetId
+    }
+    const knownSheetId = this.sheetIdsByName.get(viewport.sheetName) ?? this.sheetIdsByName.get(requestedSheetName)
+    if (knownSheetId !== undefined) {
+      return knownSheetId
+    }
+    return null
   }
 
   private updateSheetNameMapping(requestedSheetName: string, actualSheetName: string, sheetId: number): void {
@@ -211,22 +252,38 @@ export class WorkerViewportTileStore {
   }
 
   private evictLeastRecentlyUsedTiles(): void {
-    while (this.tiles.size > this.maxCachedTiles) {
-      let oldestTile: CachedViewportTile | undefined
-      for (const tile of this.tiles.values()) {
-        if (!oldestTile || tile.accessTick < oldestTile.accessTick) {
-          oldestTile = tile
-        }
-      }
-      if (!oldestTile) {
-        return
-      }
-      this.tiles.delete(oldestTile.key)
-      const sheetKeys = this.tileKeysBySheetId.get(oldestTile.sheetId)
-      sheetKeys?.delete(oldestTile.key)
-      if (!sheetKeys || sheetKeys.size === 0) {
-        this.tileKeysBySheetId.delete(oldestTile.sheetId)
+    const removeTileIndex = (entry: TileEntryV3<CachedViewportTile>) => {
+      const tile = entry.packet
+      if (tile) {
+        this.removeTileKeyFromSheet(tile.sheetId, entry.key)
       }
     }
+    this.residency.evictToBudgets({
+      maxCpuBytes: this.maxCachedTileBytes,
+      maxGpuBytes: Number.POSITIVE_INFINITY,
+      onEvict: removeTileIndex,
+    })
+    this.residency.evictToSize(this.maxCachedTiles, removeTileIndex)
   }
+
+  private removeTileKeyFromSheet(sheetId: number, key: number): void {
+    const sheetKeys = this.tileKeysBySheetId.get(sheetId)
+    sheetKeys?.delete(key)
+    if (!sheetKeys || sheetKeys.size === 0) {
+      this.tileKeysBySheetId.delete(sheetId)
+    }
+  }
+}
+
+function estimateViewportBytes(viewport: WorkbookLocalViewportBase): number {
+  let bytes = viewport.cells.length * 64
+  bytes += (viewport.rowAxisEntries.length + viewport.columnAxisEntries.length) * 32
+  bytes += viewport.styles.length * 128
+  for (const cell of viewport.cells) {
+    bytes += cell.snapshot.address.length * 2
+    if (typeof cell.snapshot.input === 'string') {
+      bytes += cell.snapshot.input.length * 2
+    }
+  }
+  return bytes
 }

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { decodeRenderTileDeltaBatch, encodeRenderTileDeltaBatch, type RenderTileDeltaBatch } from '../index.js'
 
 function createBatch(): RenderTileDeltaBatch {
+  const tileId = 2 ** 40 + 17
   const version = {
     axisX: 1,
     axisY: 2,
@@ -20,7 +21,7 @@ function createBatch(): RenderTileDeltaBatch {
     mutations: [
       {
         kind: 'tileReplace',
-        tileId: 17,
+        tileId,
         coord: {
           sheetId: 7,
           paneKind: 'body',
@@ -66,7 +67,7 @@ function createBatch(): RenderTileDeltaBatch {
       },
       {
         kind: 'cellRuns',
-        tileId: 17,
+        tileId,
         version: { ...version, values: 4 },
         runs: [
           {
@@ -94,7 +95,7 @@ function createBatch(): RenderTileDeltaBatch {
       },
       {
         kind: 'invalidate',
-        tileId: 17,
+        tileId,
         reason: 'axis-version-mismatch',
       },
       {

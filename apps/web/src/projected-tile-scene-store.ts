@@ -10,6 +10,8 @@ import {
   type WorkerEngineClient,
 } from '@bilig/worker-transport'
 import type { Viewport } from '@bilig/protocol'
+import { DirtyMaskV3, DirtyTileIndexV3 } from '../../../packages/grid/src/renderer-v3/tile-damage-index.js'
+import { TileResidencyV3 } from '../../../packages/grid/src/renderer-v3/tile-residency.js'
 import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
 
 export interface ProjectedRenderTile {
@@ -38,7 +40,8 @@ export interface ProjectedTileSceneChange {
 }
 
 export class ProjectedTileSceneStore {
-  private readonly tiles = new Map<number, ProjectedRenderTile>()
+  private readonly residency = new TileResidencyV3<ProjectedRenderTile>()
+  private readonly dirtyTiles = new DirtyTileIndexV3()
   private readonly sheetIdsByName = new Map<string, number>()
   private lastBatchId = 0
   private lastCameraSeq = 0
@@ -74,18 +77,19 @@ export class ProjectedTileSceneStore {
     const invalidatedTileIds = new Set<number>()
     const structural = batch.mutations.some((mutation) => mutation.kind === 'axis' || mutation.kind === 'freeze')
     if (structural) {
-      for (const [tileId, tile] of this.tiles) {
-        if (tile.coord.sheetId === batch.sheetId) {
-          this.tiles.delete(tileId)
-          invalidatedTileIds.add(tileId)
+      for (const entry of this.residency.entries()) {
+        const tile = entry.packet
+        if (tile?.coord.sheetId === batch.sheetId) {
+          this.residency.delete(entry.key)
+          invalidatedTileIds.add(entry.key)
         }
       }
     }
 
     for (const mutation of batch.mutations) {
       switch (mutation.kind) {
-        case 'tileReplace':
-          this.tiles.set(mutation.tileId, {
+        case 'tileReplace': {
+          const tile = {
             tileId: mutation.tileId,
             coord: mutation.coord,
             version: mutation.version,
@@ -100,27 +104,30 @@ export class ProjectedTileSceneStore {
             lastCellRuns: [],
             lastBatchId: batch.batchId,
             lastCameraSeq: batch.cameraSeq,
-          })
+          }
+          this.upsertTile(tile)
           changedTileIds.add(mutation.tileId)
           invalidatedTileIds.delete(mutation.tileId)
           break
+        }
         case 'cellRuns': {
-          const current = this.tiles.get(mutation.tileId)
+          const current = this.residency.getExact(mutation.tileId)?.packet
           if (!current) {
             break
           }
-          this.tiles.set(mutation.tileId, {
+          this.upsertTile({
             ...current,
             version: mutation.version,
             lastCellRuns: mutation.runs,
             lastBatchId: batch.batchId,
             lastCameraSeq: batch.cameraSeq,
           })
+          this.dirtyTiles.markTile(mutation.tileId, DirtyMaskV3.Value | DirtyMaskV3.Text | DirtyMaskV3.Rect)
           changedTileIds.add(mutation.tileId)
           break
         }
         case 'invalidate':
-          this.tiles.delete(mutation.tileId)
+          this.residency.delete(mutation.tileId)
           changedTileIds.delete(mutation.tileId)
           invalidatedTileIds.add(mutation.tileId)
           break
@@ -147,7 +154,7 @@ export class ProjectedTileSceneStore {
   }
 
   peekTile(tileId: number): ProjectedRenderTile | null {
-    return this.tiles.get(tileId) ?? null
+    return this.residency.getExact(tileId)?.packet ?? null
   }
 
   getLastBatchId(): number {
@@ -174,15 +181,17 @@ export class ProjectedTileSceneStore {
     if (sheetIds.size === 0) {
       return
     }
-    for (const [tileId, tile] of this.tiles) {
-      if (sheetIds.has(tile.coord.sheetId)) {
-        this.tiles.delete(tileId)
+    for (const entry of this.residency.entries()) {
+      const tile = entry.packet
+      if (tile && sheetIds.has(tile.coord.sheetId)) {
+        this.residency.delete(entry.key)
       }
     }
   }
 
   reset(): void {
-    this.tiles.clear()
+    this.residency.clear()
+    this.dirtyTiles.clear()
     this.sheetIdsByName.clear()
     this.lastBatchId = 0
     this.lastCameraSeq = 0
@@ -200,8 +209,39 @@ export class ProjectedTileSceneStore {
       mutationCount: batch.mutations.length,
     })
   }
+
+  private upsertTile(tile: ProjectedRenderTile): void {
+    this.residency.upsert({
+      axisSeqX: tile.version.axisX,
+      axisSeqY: tile.version.axisY,
+      byteSizeCpu: estimateTileBytes(tile),
+      byteSizeGpu: tile.rectInstances.byteLength + tile.textMetrics.byteLength + tile.glyphRefs.byteLength,
+      colTile: tile.coord.colTile,
+      dprBucket: tile.coord.dprBucket,
+      freezeSeq: tile.version.freeze,
+      key: tile.tileId,
+      packet: tile,
+      rectSeq: tile.version.styles,
+      rowTile: tile.coord.rowTile,
+      sheetOrdinal: tile.coord.sheetId,
+      state: 'ready',
+      styleSeq: tile.version.styles,
+      textSeq: tile.version.text,
+      valueSeq: tile.version.values,
+    })
+  }
 }
 
 function nowMs(): number {
   return typeof performance === 'undefined' ? Date.now() : performance.now()
+}
+
+function estimateTileBytes(tile: ProjectedRenderTile): number {
+  let stringBytes = 0
+  for (const run of tile.textRuns) {
+    stringBytes += run.text.length * 2
+    stringBytes += run.font.length * 2
+    stringBytes += run.color.length * 2
+  }
+  return tile.rectInstances.byteLength + tile.textMetrics.byteLength + tile.glyphRefs.byteLength + stringBytes
 }
