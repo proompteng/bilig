@@ -173,6 +173,39 @@ describe('engine fuzz regressions', () => {
     expect(engine.exportSnapshot()).toEqual(styledSnapshot)
   })
 
+  it('restores explicit formats on formula cells deleted by structural undo replay', async () => {
+    const seedSnapshot = await createEngineSeedSnapshot('sparse-format', 'sparse-formula-format-delete-undo-regression')
+    const engine = new SpreadsheetEngine({
+      workbookName: seedSnapshot.workbook.name,
+      replicaId: 'sparse-formula-format-delete-undo-regression',
+    })
+    await engine.ready()
+    engine.importSnapshot(structuredClone(seedSnapshot))
+
+    const moveAction = {
+      kind: 'move',
+      source: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+      target: { sheetName: 'Sheet1', startAddress: 'C5', endAddress: 'C5' },
+    } satisfies CoreAction
+    const formulaAction = {
+      kind: 'formula',
+      address: 'C5',
+      formula: 'A1+A1',
+    } satisfies CoreAction
+
+    engine.moveRange(moveAction.source, moveAction.target)
+    engine.setCellFormula('Sheet1', formulaAction.address, formulaAction.formula)
+    expect(engine.getCell('Sheet1', 'C5').format).toBe('0.00')
+
+    engine.deleteRows('Sheet1', 3, 2)
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getCell('Sheet1', 'C5').format).toBe('0.00')
+    expect(normalizeSnapshotForSemanticComparison(engine.exportSnapshot())).toEqual(
+      normalizeSnapshotForSemanticComparison(await exportReplaySnapshot(seedSnapshot, [moveAction, formulaAction])),
+    )
+  })
+
   it('rebinds structurally rewritten formulas when dependency addresses shift after prior ref errors', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'structural-ref-error-rebind-regression' })
     await engine.ready()
