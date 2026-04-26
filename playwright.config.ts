@@ -25,9 +25,8 @@ const browserLocalStackCommand = buildBrowserLocalStackCommand({
   remoteSyncEnabled,
   webMode: resolveBrowserLocalWebMode(process.env),
 })
-const chromiumLaunchArgs = ciContainerMode
-  ? ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
-  : ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist']
+const webGpuLaunchArgs = ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist']
+const chromiumLaunchArgs = ciContainerMode ? ['--no-sandbox', '--disable-dev-shm-usage', ...webGpuLaunchArgs] : webGpuLaunchArgs
 
 export default defineConfig({
   testDir: './e2e/tests',
