@@ -361,4 +361,81 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       root.unmount()
     })
   })
+
+  it('uses fixed render tile deltas instead of resident scene and viewport subscriptions when available', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const subscribeResidentPaneScenes = vi.fn(() => () => undefined)
+    const peekResidentPaneScenes = vi.fn(() => [])
+    const subscribeViewport = vi.fn(() => () => undefined)
+    const subscribeRenderTileDeltas = vi.fn(() => () => undefined)
+    const peekRenderTile = vi.fn(() => null)
+    let hostElement: HTMLDivElement | null = null
+
+    function Harness() {
+      const renderState = useWorkbookGridRenderState({
+        engine: {
+          ...engine,
+          subscribeResidentPaneScenes,
+          peekResidentPaneScenes,
+        },
+        sheetId: 7,
+        renderTileSource: {
+          subscribeRenderTileDeltas,
+          peekRenderTile,
+        },
+        sheetName: 'Sheet1',
+        selectedAddr: 'A1',
+        selectedCellSnapshot: createEmptySnapshot('Sheet1', 'A1'),
+        editorValue: '',
+        isEditingCell: false,
+        subscribeViewport,
+      })
+
+      return (
+        <div
+          ref={(node) => {
+            renderState.handleHostRef(node)
+            hostElement = node
+          }}
+        />
+      )
+    }
+
+    const rootHost = document.createElement('div')
+    document.body.appendChild(rootHost)
+    const root = createRoot(rootHost)
+
+    await act(async () => {
+      root.render(<Harness />)
+    })
+
+    Object.defineProperty(hostElement!, 'clientWidth', { configurable: true, value: 480 })
+    Object.defineProperty(hostElement!, 'clientHeight', { configurable: true, value: 180 })
+
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'))
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(subscribeRenderTileDeltas).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sheetId: 7,
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 95,
+        colStart: 0,
+        colEnd: 255,
+        initialDelta: 'full',
+      }),
+      expect.any(Function),
+    )
+    expect(subscribeResidentPaneScenes).not.toHaveBeenCalled()
+    expect(peekResidentPaneScenes).not.toHaveBeenCalled()
+    expect(subscribeViewport).not.toHaveBeenCalled()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
 })

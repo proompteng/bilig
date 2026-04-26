@@ -13,6 +13,7 @@ Latest implementation note:
 - Runtime state now carries sheet IDs alongside sheet names so renderer tile subscriptions can use stable numeric content-tile identity.
 - `packages/grid` now owns a grid-facing render-tile source contract and a V2 compatibility adapter that maps fixed content tile payloads into mounted TypeGPU pane states.
 - `useWorkbookGridRenderState.ts` subscribes to projected render-tile deltas when a `renderTileSource` and `sheetId` are available, then prefers fixed content tiles once all required tiles for the resident viewport are ready.
+- With a fixed render-tile source present, the hook no longer mounts renderer-owned resident scene subscriptions or renderer-owned viewport patch subscriptions.
 - Frozen pane placements can reuse the same fixed content packet under separate body/top/left/corner clip placements, but the retained TypeGPU backend is still V2 and scene-packet-shaped.
 - The old resident scene path remains as fallback while the fixed-tile path is incomplete; the Oracle deletion gates are therefore not yet satisfied.
 

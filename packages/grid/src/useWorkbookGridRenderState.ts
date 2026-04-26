@@ -698,7 +698,8 @@ export function useWorkbookGridRenderState(input: {
         reason: 'prefetch',
       }))
   }, [freezeCols, freezeRows, dprBucket, gridCameraStore, residentViewport, sheetName, warmResidentViewports])
-  const residentSceneEngine = supportsResidentPaneScenes(engine) ? engine : null
+  const shouldUseRenderTileSource = renderTileSource !== undefined && sheetId !== undefined
+  const residentSceneEngine = shouldUseRenderTileSource ? null : supportsResidentPaneScenes(engine) ? engine : null
   const shouldUseDamageOnlyViewportSubscription = residentSceneEngine !== null
   const [warmSceneRevision, setWarmSceneRevision] = useState(0)
   const [renderTileRevision, setRenderTileRevision] = useState(0)
@@ -762,7 +763,7 @@ export function useWorkbookGridRenderState(input: {
     noteWorkerResidentPaneScenesApplied(workerResidentPaneScenes)
   }, [canUseWorkerResidentPaneScenesResult, workerResidentPaneScenes])
   useEffect(() => {
-    if (!subscribeViewport) {
+    if (!subscribeViewport || shouldUseRenderTileSource) {
       return
     }
     noteViewportSubscription()
@@ -779,7 +780,7 @@ export function useWorkbookGridRenderState(input: {
     return () => {
       cleanups.forEach((cleanup) => cleanup())
     }
-  }, [residentViewports, sheetName, shouldUseDamageOnlyViewportSubscription, subscribeViewport])
+  }, [residentViewports, sheetName, shouldUseDamageOnlyViewportSubscription, shouldUseRenderTileSource, subscribeViewport])
   const fixedRenderTileDataPanes = useMemo<readonly WorkbookRenderPaneState[] | null>(() => {
     if (!hostElement || !renderTileSource || sheetId === undefined) {
       return null
