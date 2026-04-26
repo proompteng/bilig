@@ -37,6 +37,7 @@ export function syncTypeGpuPaneResources(input: {
         artifacts: input.artifacts,
         atlas: input.atlas,
         pane,
+        paneBuffers: input.paneBuffers,
         paneCache,
         textSignature,
       })
@@ -51,6 +52,7 @@ export function syncTypeGpuPaneResources(input: {
       syncRectResource({
         artifacts: input.artifacts,
         pane,
+        paneBuffers: input.paneBuffers,
         paneCache,
         rectSignature,
       })
@@ -86,6 +88,7 @@ function syncTextResource(input: {
   readonly artifacts: TypeGpuRendererArtifacts
   readonly atlas: ReturnType<typeof createGlyphAtlas>
   readonly pane: WorkbookRenderPaneState
+  readonly paneBuffers: WorkbookPaneBufferCache
   readonly paneCache: WorkbookPaneBufferEntry
   readonly textSignature: string
 }): void {
@@ -95,15 +98,17 @@ function syncTextResource(input: {
     packet: input.pane.packedScene,
   })
   if (textPayload.quadCount === 0) {
+    releaseTextBuffer(input.paneBuffers, input.paneCache)
     input.paneCache.textCount = 0
     input.paneCache.textSignature = input.textSignature
     return
   }
+  const reusable = prepareTextBuffer(input.paneBuffers, input.paneCache, textPayload.quadCount)
   const textBuffer = ensureTypeGpuVertexBuffer(
     input.artifacts.root,
     WORKBOOK_TEXT_INSTANCE_LAYOUT,
-    input.paneCache.textBuffer,
-    input.paneCache.textCapacity,
+    reusable.buffer,
+    reusable.capacity,
     textPayload.quadCount,
   )
   input.paneCache.textBuffer = textBuffer.buffer
@@ -116,6 +121,7 @@ function syncTextResource(input: {
 function syncRectResource(input: {
   readonly artifacts: TypeGpuRendererArtifacts
   readonly pane: WorkbookRenderPaneState
+  readonly paneBuffers: WorkbookPaneBufferCache
   readonly paneCache: WorkbookPaneBufferEntry
   readonly rectSignature: string
 }): void {
@@ -126,15 +132,17 @@ function syncRectResource(input: {
     packet: input.pane.packedScene,
   })
   if (rectPayload.count === 0) {
+    releaseRectBuffer(input.paneBuffers, input.paneCache)
     input.paneCache.rectCount = 0
     input.paneCache.rectSignature = input.rectSignature
     return
   }
+  const reusable = prepareRectBuffer(input.paneBuffers, input.paneCache, rectPayload.count)
   const rectBuffer = ensureTypeGpuVertexBuffer(
     input.artifacts.root,
     WORKBOOK_RECT_INSTANCE_LAYOUT,
-    input.paneCache.rectBuffer,
-    input.paneCache.rectCapacity,
+    reusable.buffer,
+    reusable.capacity,
     rectPayload.count,
   )
   input.paneCache.rectBuffer = rectBuffer.buffer
@@ -142,6 +150,62 @@ function syncRectResource(input: {
   input.paneCache.rectCount = rectPayload.count
   writeTypeGpuVertexBuffer(input.paneCache.rectBuffer, rectPayload.floats, `rect:${resolveWorkbookPaneBufferKey(input.pane)}`)
   input.paneCache.rectSignature = input.rectSignature
+}
+
+function prepareRectBuffer(
+  paneBuffers: WorkbookPaneBufferCache,
+  paneCache: WorkbookPaneBufferEntry,
+  requiredCount: number,
+): {
+  readonly buffer: WorkbookPaneBufferEntry['rectBuffer']
+  readonly capacity: number
+} {
+  if (paneCache.rectBuffer && paneCache.rectCapacity >= requiredCount) {
+    return { buffer: paneCache.rectBuffer, capacity: paneCache.rectCapacity }
+  }
+  releaseRectBuffer(paneBuffers, paneCache)
+  const reused = paneBuffers.acquireRectBuffer(requiredCount)
+  return {
+    buffer: reused?.buffer ?? null,
+    capacity: reused?.capacity ?? 0,
+  }
+}
+
+function prepareTextBuffer(
+  paneBuffers: WorkbookPaneBufferCache,
+  paneCache: WorkbookPaneBufferEntry,
+  requiredCount: number,
+): {
+  readonly buffer: WorkbookPaneBufferEntry['textBuffer']
+  readonly capacity: number
+} {
+  if (paneCache.textBuffer && paneCache.textCapacity >= requiredCount) {
+    return { buffer: paneCache.textBuffer, capacity: paneCache.textCapacity }
+  }
+  releaseTextBuffer(paneBuffers, paneCache)
+  const reused = paneBuffers.acquireTextBuffer(requiredCount)
+  return {
+    buffer: reused?.buffer ?? null,
+    capacity: reused?.capacity ?? 0,
+  }
+}
+
+function releaseRectBuffer(paneBuffers: WorkbookPaneBufferCache, paneCache: WorkbookPaneBufferEntry): void {
+  if (!paneCache.rectBuffer) {
+    return
+  }
+  paneBuffers.releaseRectBuffer(paneCache.rectBuffer, paneCache.rectCapacity)
+  paneCache.rectBuffer = null
+  paneCache.rectCapacity = 0
+}
+
+function releaseTextBuffer(paneBuffers: WorkbookPaneBufferCache, paneCache: WorkbookPaneBufferEntry): void {
+  if (!paneCache.textBuffer) {
+    return
+  }
+  paneBuffers.releaseTextBuffer(paneCache.textBuffer, paneCache.textCapacity)
+  paneCache.textBuffer = null
+  paneCache.textCapacity = 0
 }
 
 export function resolveGridTextPacketSignature(packet: GridScenePacketV2): string {

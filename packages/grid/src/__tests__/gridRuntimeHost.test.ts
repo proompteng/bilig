@@ -91,4 +91,42 @@ describe('GridRuntimeHost', () => {
     expect(host.snapshot().freezeSeq).toBe(2)
     expect(host.snapshot().camera.visibleRegion.freezeCols).toBe(2)
   })
+
+  it('updates axis revisions and tile origins independently from camera ownership', () => {
+    const host = new GridRuntimeHost({
+      columnCount: 1000,
+      defaultColumnWidth: 100,
+      defaultRowHeight: 10,
+      gridMetrics,
+      rowCount: 1000,
+      viewportHeight: 80,
+      viewportWidth: 300,
+    })
+
+    host.updateAxes({
+      columnSeq: 41,
+      columns: [{ index: 0, size: 160 }],
+      rowSeq: 42,
+      rows: [{ index: 1, size: 30 }],
+    })
+    host.updateCamera({
+      dpr: 1,
+      gridMetrics,
+      scrollLeft: 0,
+      scrollTop: 0,
+      viewportHeight: 80,
+      viewportWidth: 300,
+    })
+
+    expect(host.snapshot()).toMatchObject({
+      axisSeqX: 41,
+      axisSeqY: 42,
+    })
+    expect(host.columns.tileOrigin(1)).toBe(160)
+    expect(host.rows.tileOrigin(2)).toBe(40)
+    expect(host.buildTileInterest({ dprBucket: 1, reason: 'scroll', sheetId: 4, sheetOrdinal: 9 })).toMatchObject({
+      axisSeqX: 41,
+      axisSeqY: 42,
+    })
+  })
 })

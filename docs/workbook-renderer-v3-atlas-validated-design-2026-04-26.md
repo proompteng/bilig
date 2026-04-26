@@ -264,6 +264,9 @@ Completed in the first implementation tranche:
 - `gridViewportController.ts` owns resident-window comparison, tile-key conversion, and render-scroll transform math outside the large React hook.
 - `ProjectedTileSceneStore` reports renderer delta batches, mutations, apply duration, and dirty tile counts into the scroll perf collector.
 - `dynamic-overlay-packet.ts` no longer sorts visible row/column header indexes while building overlay packets.
+- the mounted TypeGPU V2 tile cache now uses compatibility buckets, O(visible) visible marking, and LRU-tail eviction instead of scanning every cached tile for common operations.
+- the mounted TypeGPU V2 pane buffer cache now releases pruned rect/text buffers to reusable free lists instead of destroying them during normal pane churn.
+- the web build now isolates TypeGPU and grid renderer internals into a `grid-renderer-vendor` chunk so renderer migration work does not consume the whole workbook-vendor release budget.
 - `renderer-v3/tile-key.ts` packs/unpacks fixed content tile coordinates into safe numeric keys.
 - `renderer-v3/tile-damage-index.ts` maps cell-range damage to touched fixed content tiles.
 - `renderer-v3/tile-residency.ts` provides exact lookup, compatibility-bucket stale lookup, generation-based visible marking, pinning, and byte-budget eviction primitives.

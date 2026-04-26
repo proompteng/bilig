@@ -9,8 +9,17 @@ export interface TileGpuCacheEntry {
   readonly lastUsedSeq: number
 }
 
+interface MutableTileGpuCacheEntry extends TileGpuCacheEntry {
+  packet: GridScenePacketV2
+  visible: boolean
+  lastUsedSeq: number
+  compatibilityKey: string
+}
+
 export class TileGpuCache {
-  private readonly entries = new Map<string, TileGpuCacheEntry>()
+  private readonly entries = new Map<string, MutableTileGpuCacheEntry>()
+  private readonly compatibilityBuckets = new Map<string, Set<MutableTileGpuCacheEntry>>()
+  private readonly visibleKeys = new Set<string>()
   private seq = 0
 
   get size(): number {
@@ -27,20 +36,34 @@ export class TileGpuCache {
     if (existing && existing.packet.generation > packet.generation) {
       return existing
     }
-    const entry = {
+    if (existing) {
+      const compatibilityKey = buildTileGpuCompatibilityKey(packet.key)
+      if (existing.compatibilityKey !== compatibilityKey) {
+        this.removeFromCompatibilityBucket(existing)
+        existing.compatibilityKey = compatibilityKey
+        this.addToCompatibilityBucket(existing)
+      }
+      existing.packet = packet
+      this.touch(existing)
+      return existing
+    }
+    const entry: MutableTileGpuCacheEntry = {
+      compatibilityKey: buildTileGpuCompatibilityKey(packet.key),
       key,
-      packet,
-      visible: existing?.visible ?? false,
       lastUsedSeq: ++this.seq,
+      packet,
+      visible: false,
     }
     this.entries.set(key, entry)
+    this.addToCompatibilityBucket(entry)
     return entry
   }
 
   findStaleValid(desiredKey: GridTileKeyV2, options?: { readonly excludeKey?: string | undefined }): TileGpuCacheEntry | null {
+    const bucket = this.compatibilityBuckets.get(buildTileGpuCompatibilityKey(desiredKey))
     let match: TileGpuCacheEntry | null = null
     let scannedEntries = 0
-    for (const entry of this.entries.values()) {
+    for (const entry of bucket ?? []) {
       scannedEntries += 1
       if (entry.key === options?.excludeKey || !isStaleValidGridTileKeyV2(entry.packet.key, desiredKey)) {
         continue
@@ -53,9 +76,12 @@ export class TileGpuCache {
     if (!match) {
       return null
     }
-    const next = { ...match, lastUsedSeq: ++this.seq }
-    this.entries.set(match.key, next)
-    return next
+    const mutableMatch = this.entries.get(match.key)
+    if (!mutableMatch) {
+      return match
+    }
+    this.touch(mutableMatch)
+    return mutableMatch
   }
 
   get(key: string): TileGpuCacheEntry | null {
@@ -63,22 +89,32 @@ export class TileGpuCache {
     if (!entry) {
       return null
     }
-    const next = { ...entry, lastUsedSeq: ++this.seq }
-    this.entries.set(key, next)
-    return next
+    this.touch(entry)
+    return entry
   }
 
   markVisible(keys: ReadonlySet<string>): void {
-    let marked = 0
-    for (const [key, entry] of this.entries) {
-      const visible = keys.has(key)
-      if (visible) {
-        marked += 1
-      }
-      if (entry.visible === visible && !visible) {
+    for (const key of this.visibleKeys) {
+      if (keys.has(key)) {
         continue
       }
-      this.entries.set(key, { ...entry, visible, lastUsedSeq: visible ? ++this.seq : entry.lastUsedSeq })
+      const entry = this.entries.get(key)
+      if (entry) {
+        entry.visible = false
+      }
+      this.visibleKeys.delete(key)
+    }
+
+    let marked = 0
+    for (const key of keys) {
+      const entry = this.entries.get(key)
+      if (!entry) {
+        continue
+      }
+      marked += 1
+      entry.visible = true
+      this.touch(entry)
+      this.visibleKeys.add(key)
     }
     noteTypeGpuTileCacheVisibleMark(marked)
   }
@@ -97,7 +133,7 @@ export class TileGpuCache {
         }
         return
       }
-      this.entries.delete(entry.key)
+      this.deleteEntry(entry)
       evicted += 1
     }
     if (evicted > 0) {
@@ -105,17 +141,43 @@ export class TileGpuCache {
     }
   }
 
-  private findOldestEvictable(): TileGpuCacheEntry | null {
-    let oldest: TileGpuCacheEntry | null = null
+  private findOldestEvictable(): MutableTileGpuCacheEntry | null {
     for (const entry of this.entries.values()) {
       if (entry.visible) {
         continue
       }
-      if (!oldest || entry.lastUsedSeq < oldest.lastUsedSeq) {
-        oldest = entry
-      }
+      return entry
     }
-    return oldest
+    return null
+  }
+
+  private addToCompatibilityBucket(entry: MutableTileGpuCacheEntry): void {
+    const bucket = this.compatibilityBuckets.get(entry.compatibilityKey) ?? new Set<MutableTileGpuCacheEntry>()
+    bucket.add(entry)
+    this.compatibilityBuckets.set(entry.compatibilityKey, bucket)
+  }
+
+  private removeFromCompatibilityBucket(entry: MutableTileGpuCacheEntry): void {
+    const bucket = this.compatibilityBuckets.get(entry.compatibilityKey)
+    if (!bucket) {
+      return
+    }
+    bucket.delete(entry)
+    if (bucket.size === 0) {
+      this.compatibilityBuckets.delete(entry.compatibilityKey)
+    }
+  }
+
+  private touch(entry: MutableTileGpuCacheEntry): void {
+    entry.lastUsedSeq = ++this.seq
+    this.entries.delete(entry.key)
+    this.entries.set(entry.key, entry)
+  }
+
+  private deleteEntry(entry: MutableTileGpuCacheEntry): void {
+    this.entries.delete(entry.key)
+    this.visibleKeys.delete(entry.key)
+    this.removeFromCompatibilityBucket(entry)
   }
 }
 
@@ -134,4 +196,19 @@ export function syncTileGpuCacheFromPanes(input: {
 
 export function buildTileGpuCacheKey(packet: GridScenePacketV2): string {
   return serializeGridTileKeyV2(packet.key)
+}
+
+function buildTileGpuCompatibilityKey(key: GridTileKeyV2): string {
+  return [
+    key.sheetName,
+    key.paneKind,
+    key.axisVersionX,
+    key.axisVersionY,
+    key.valueVersion,
+    key.styleVersion,
+    key.selectionIndependentVersion,
+    key.freezeVersion,
+    key.textEpoch,
+    key.dprBucket,
+  ].join(':')
 }

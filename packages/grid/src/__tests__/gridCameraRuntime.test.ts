@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { unpackTileKey53 } from '../renderer-v3/tile-key.js'
 import { GridAxisRuntime } from '../runtime/gridAxisRuntime.js'
 import { GridCameraRuntime } from '../runtime/gridCameraRuntime.js'
 
@@ -56,23 +55,5 @@ describe('GridCameraRuntime', () => {
     expect(updated.visibleRegion.range.y).toBe(4)
     expect(updated.visibleRegion.tx).toBe(50)
     expect(updated.visibleRegion.ty).toBe(5)
-  })
-
-  it('returns fixed content tile keys for the current visible viewport', () => {
-    const columns = new GridAxisRuntime({ axisLength: 1000, defaultSize: 100 })
-    const rows = new GridAxisRuntime({ axisLength: 1000, defaultSize: 10 })
-    const camera = new GridCameraRuntime({
-      columns,
-      gridMetrics,
-      rows,
-      scrollLeft: 250,
-      scrollTop: 350,
-      viewportHeight: 60,
-      viewportWidth: 250,
-    })
-
-    expect(camera.visibleTileKeys({ dprBucket: 2, sheetOrdinal: 5 }).map(unpackTileKey53)).toEqual([
-      { colTile: 0, dprBucket: 2, rowTile: 1, sheetOrdinal: 5 },
-    ])
   })
 })

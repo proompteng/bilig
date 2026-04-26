@@ -1,7 +1,9 @@
 import type { GridMetrics } from '../gridMetrics.js'
 import type { OverlayBatchV3, OverlayInstanceV3 } from '../renderer-v3/overlay-layer.js'
-import type { TileKey53 } from '../renderer-v3/tile-key.js'
+import { tileKeysForViewport, type TileKey53 } from '../renderer-v3/tile-key.js'
+import { viewportFromVisibleRegion } from '../useGridCameraState.js'
 import { GridAxisRuntime } from './gridAxisRuntime.js'
+import type { AxisEntryOverride } from '../gridAxisIndex.js'
 import { GridCameraRuntime, type GridCameraRuntimeSnapshot } from './gridCameraRuntime.js'
 import { GridOverlayRuntime } from './gridOverlayRuntime.js'
 import { GridTileCoordinator, type GridTileInterestBatchV3, type GridTileInterestReasonV3 } from './gridTileCoordinator.js'
@@ -64,6 +66,20 @@ export class GridRuntimeHost {
     }
   }
 
+  updateAxes(input: {
+    readonly columns?: readonly AxisEntryOverride[] | undefined
+    readonly rows?: readonly AxisEntryOverride[] | undefined
+    readonly columnSeq?: number | undefined
+    readonly rowSeq?: number | undefined
+  }): void {
+    if (input.columns) {
+      this.columns.update({ overrides: input.columns, seq: input.columnSeq })
+    }
+    if (input.rows) {
+      this.rows.update({ overrides: input.rows, seq: input.rowSeq })
+    }
+  }
+
   updateCamera(input: {
     readonly gridMetrics: GridMetrics
     readonly viewportWidth: number
@@ -90,7 +106,11 @@ export class GridRuntimeHost {
   }
 
   visibleTileKeys(input: { readonly sheetOrdinal: number; readonly dprBucket: number }): TileKey53[] {
-    return this.camera.visibleTileKeys(input)
+    return tileKeysForViewport({
+      dprBucket: input.dprBucket,
+      sheetOrdinal: input.sheetOrdinal,
+      viewport: viewportFromVisibleRegion(this.camera.snapshot().visibleRegion),
+    })
   }
 
   buildTileInterest(input: {

@@ -1,7 +1,5 @@
 import { MAX_COLUMN_WIDTH, MAX_ROW_HEIGHT, type GridMetrics } from '../gridMetrics.js'
 import type { VisibleRegionState } from '../gridPointer.js'
-import { viewportFromVisibleRegion } from '../useGridCameraState.js'
-import { tileKeysForViewport, type TileKey53 } from '../renderer-v3/tile-key.js'
 import type { GridAxisRuntime } from './gridAxisRuntime.js'
 
 export interface GridCameraRuntimeSnapshot {
@@ -53,14 +51,6 @@ export class GridCameraRuntime {
       previousSeq: this.snapshotValue.seq,
     })
     return this.snapshotValue
-  }
-
-  visibleTileKeys(input: { readonly sheetOrdinal: number; readonly dprBucket: number }): TileKey53[] {
-    return tileKeysForViewport({
-      dprBucket: input.dprBucket,
-      sheetOrdinal: input.sheetOrdinal,
-      viewport: viewportFromVisibleRegion(this.snapshotValue.visibleRegion),
-    })
   }
 
   private createSnapshot(input: {
