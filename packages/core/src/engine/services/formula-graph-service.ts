@@ -278,6 +278,9 @@ export function createEngineFormulaGraphService(args: {
   }
 
   const scheduleWasmProgramSyncNow = (): void => {
+    if (args.getWasmProgramSyncPending()) {
+      return
+    }
     if (args.getBatchMutationDepth() > 0) {
       args.setWasmProgramSyncPending(true)
       return

@@ -51,8 +51,9 @@ describe('initial mixed sheet load', () => {
         tag: ValueTag.Number,
         value: 18,
       })
-      expect(compileSpy).toHaveBeenCalledTimes(2)
-      expect(parseSpy).toHaveBeenCalledTimes(2)
+      expect(workbook.getPerformanceCounters().formulasParsed).toBe(2)
+      expect(compileSpy).not.toHaveBeenCalled()
+      expect(parseSpy).not.toHaveBeenCalled()
     } finally {
       compileSpy.mockRestore()
       parseSpy.mockRestore()

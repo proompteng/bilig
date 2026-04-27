@@ -3,6 +3,8 @@ import type { SpreadsheetEngine } from '@bilig/core'
 import { ValueTag, type CellValue } from '@bilig/protocol'
 import type { WorkPaperCellChange } from './work-paper-types.js'
 
+const COLUMN_LABEL_CACHE: string[] = []
+
 export interface MaterializedTrackedIndexChanges {
   readonly changes: readonly WorkPaperCellChange[]
   readonly ordered: boolean
@@ -18,12 +20,11 @@ export function materializeTrackedIndexChangesWithMetadata(
   }
   const workbook = engine.workbook
   const cellStore = workbook.cellStore
-  const columnLabels: string[] = []
   const formatAddressCached = (row: number, col: number): string => {
-    let label = columnLabels[col]
+    let label = COLUMN_LABEL_CACHE[col]
     if (label === undefined) {
       label = indexToColumn(col)
-      columnLabels[col] = label
+      COLUMN_LABEL_CACHE[col] = label
     }
     return `${label}${row + 1}`
   }

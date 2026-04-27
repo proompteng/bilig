@@ -384,6 +384,28 @@ function directCriteriaStructureEqual(
   return true
 }
 
+function collectDirectScalarCellOperands(directScalar: RuntimeDirectScalarDescriptor | undefined): number[] | undefined {
+  if (!directScalar) {
+    return undefined
+  }
+  const cellIndices: number[] = []
+  const appendOperand = (operand: RuntimeDirectScalarOperand): boolean => {
+    switch (operand.kind) {
+      case 'cell':
+        cellIndices.push(operand.cellIndex)
+        return true
+      case 'literal-number':
+        return true
+      case 'error':
+        return false
+    }
+  }
+  if (directScalar.kind === 'abs') {
+    return appendOperand(directScalar.operand) ? cellIndices : undefined
+  }
+  return appendOperand(directScalar.left) && appendOperand(directScalar.right) ? cellIndices : undefined
+}
+
 function directAggregateStructureEqual(
   left: RuntimeDirectAggregateDescriptor | undefined,
   right: RuntimeDirectAggregateDescriptor | undefined,
@@ -2186,6 +2208,55 @@ export function createEngineFormulaBindingService(args: {
     }
   }
 
+  const materializeDirectScalarDependencies = (
+    compiled: ParsedCompiledFormula,
+    directScalarCellOperands: readonly number[] | undefined,
+  ): MaterializedDependencies | undefined => {
+    if (
+      directScalarCellOperands === undefined ||
+      directScalarCellOperands.length !== compiled.symbolicRefs.length ||
+      compiled.symbolicRanges.length !== 0 ||
+      compiled.symbolicNames.length !== 0 ||
+      compiled.symbolicTables.length !== 0 ||
+      compiled.symbolicSpills.length !== 0 ||
+      compiled.parsedSymbolicRefs?.some((ref) => ref.sheetName !== undefined || ref.explicitSheet === true) === true
+    ) {
+      return undefined
+    }
+    ensureDependencyBuildCapacity(
+      args.state.workbook.cellStore.size + 1,
+      directScalarCellOperands.length + 1,
+      compiled.symbolicRefs.length + 1,
+      1,
+    )
+    let dependencyIndexCount = 0
+    for (let index = 0; index < directScalarCellOperands.length; index += 1) {
+      const cellIndex = directScalarCellOperands[index]!
+      let seen = false
+      for (let existingIndex = 0; existingIndex < dependencyIndexCount; existingIndex += 1) {
+        if (args.getDependencyBuildCells()[existingIndex] === cellIndex) {
+          seen = true
+          break
+        }
+      }
+      if (!seen) {
+        args.getDependencyBuildCells()[dependencyIndexCount] = cellIndex
+        dependencyIndexCount += 1
+      }
+      args.getDependencyBuildEntities()[index] = makeCellEntity(cellIndex)
+      args.getSymbolicRefBindings()[index] = cellIndex
+    }
+    return {
+      dependencyIndices: args.getDependencyBuildCells().slice(0, dependencyIndexCount),
+      dependencyEntities: args.getDependencyBuildEntities().slice(0, directScalarCellOperands.length),
+      rangeDependencies: args.getDependencyBuildRanges().slice(0, 0),
+      symbolicRangeIndices: args.getSymbolicRangeBindings(),
+      symbolicRangeCount: 0,
+      newRangeIndices: args.getDependencyBuildNewRanges(),
+      newRangeCount: 0,
+    }
+  }
+
   const clearFormulaNow = (cellIndex: number): boolean => {
     const existing = args.state.formulas.get(cellIndex)
     const needsWasmProgramSync = existing !== undefined && existing.directAggregate === undefined
@@ -2554,6 +2625,7 @@ export function createEngineFormulaBindingService(args: {
       ensureCellTracked: args.ensureCellTracked,
       ensureCellTrackedByCoords: args.ensureCellTrackedByCoords,
     })
+    const directScalarCellOperands = collectDirectScalarCellOperands(directScalar)
     const directCriteria = buildDirectCriteriaDescriptor({
       compiled,
       ownerSheetName,
@@ -2564,7 +2636,8 @@ export function createEngineFormulaBindingService(args: {
     const indexedExactLookupCandidates =
       hasLookupInstruction && args.state.getUseColumnIndex() ? collectIndexedExactLookupCandidates(compiled.optimizedAst) : []
     const directApproximateLookupCandidates = hasLookupInstruction ? collectDirectApproximateLookupCandidates(compiled.optimizedAst) : []
-    const dependencies = materializeDependencies(ownerSheetName, compiled, directAggregate, directLookupBinding)
+    const directScalarDependencies = materializeDirectScalarDependencies(compiled, directScalarCellOperands)
+    const dependencies = directScalarDependencies ?? materializeDependencies(ownerSheetName, compiled, directAggregate, directLookupBinding)
     const directLookup = directLookupBinding
       ? buildDirectLookupDescriptor({
           compiled,
@@ -2582,31 +2655,33 @@ export function createEngineFormulaBindingService(args: {
       compiled.symbolicRefs.length + 1,
       compiled.symbolicRanges.length + 1,
     )
-    for (let index = 0; index < compiled.symbolicRefs.length; index += 1) {
-      const parsedRef = compiled.parsedSymbolicRefs?.[index]
-      if (parsedRef && parsedRef.sheetName === undefined) {
-        args.getSymbolicRefBindings()[index] =
-          parsedRef.row !== undefined && parsedRef.col !== undefined && ownerSheetId !== undefined
-            ? args.ensureCellTrackedByCoords(ownerSheetId, parsedRef.row, parsedRef.col)
-            : args.ensureCellTracked(ownerSheetName, parsedRef.address)
-        continue
+    if (directScalarDependencies === undefined) {
+      for (let index = 0; index < compiled.symbolicRefs.length; index += 1) {
+        const parsedRef = compiled.parsedSymbolicRefs?.[index]
+        if (parsedRef && parsedRef.sheetName === undefined) {
+          args.getSymbolicRefBindings()[index] =
+            parsedRef.row !== undefined && parsedRef.col !== undefined && ownerSheetId !== undefined
+              ? args.ensureCellTrackedByCoords(ownerSheetId, parsedRef.row, parsedRef.col)
+              : args.ensureCellTracked(ownerSheetName, parsedRef.address)
+          continue
+        }
+        const ref = compiled.symbolicRefs[index]!
+        const [qualifiedSheetName, qualifiedAddress] = ref.includes('!') ? ref.split('!') : [undefined, ref]
+        const fallbackAddress = tryParseDependencyCellAddress(qualifiedAddress, qualifiedSheetName)?.text
+        if (fallbackAddress === undefined) {
+          args.getSymbolicRefBindings()[index] = UNRESOLVED_WASM_OPERAND
+          continue
+        }
+        const sheetName =
+          parsedRef?.sheetName ??
+          qualifiedSheetName ??
+          args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
+        if ((parsedRef?.sheetName ?? qualifiedSheetName) && !args.state.workbook.getSheet(sheetName)) {
+          args.getSymbolicRefBindings()[index] = UNRESOLVED_WASM_OPERAND
+          continue
+        }
+        args.getSymbolicRefBindings()[index] = args.ensureCellTracked(sheetName, parsedRef?.address ?? fallbackAddress)
       }
-      const ref = compiled.symbolicRefs[index]!
-      const [qualifiedSheetName, qualifiedAddress] = ref.includes('!') ? ref.split('!') : [undefined, ref]
-      const fallbackAddress = tryParseDependencyCellAddress(qualifiedAddress, qualifiedSheetName)?.text
-      if (fallbackAddress === undefined) {
-        args.getSymbolicRefBindings()[index] = UNRESOLVED_WASM_OPERAND
-        continue
-      }
-      const sheetName =
-        parsedRef?.sheetName ??
-        qualifiedSheetName ??
-        args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
-      if ((parsedRef?.sheetName ?? qualifiedSheetName) && !args.state.workbook.getSheet(sheetName)) {
-        args.getSymbolicRefBindings()[index] = UNRESOLVED_WASM_OPERAND
-        continue
-      }
-      args.getSymbolicRefBindings()[index] = args.ensureCellTracked(sheetName, parsedRef?.address ?? fallbackAddress)
     }
 
     const literalStringIds = compiled.symbolicStrings.map((value) => args.state.strings.intern(value))

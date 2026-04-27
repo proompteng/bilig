@@ -1036,6 +1036,43 @@ export function createEngineOperationService(args: {
     oldValue: CellValue,
     newValue: CellValue,
   ): number | undefined => {
+    const oldChangedNumber = directScalarNumericValue(oldValue)
+    const newChangedNumber = directScalarNumericValue(newValue)
+    if (oldChangedNumber !== undefined && newChangedNumber !== undefined) {
+      if (directScalar.kind === 'abs') {
+        return directScalar.operand.kind === 'cell' && directScalar.operand.cellIndex === changedCellIndex
+          ? Math.abs(newChangedNumber) - Math.abs(oldChangedNumber)
+          : undefined
+      }
+      const changedDelta = newChangedNumber - oldChangedNumber
+      if (directScalar.left.kind === 'cell' && directScalar.left.cellIndex === changedCellIndex) {
+        switch (directScalar.operator) {
+          case '+':
+          case '-':
+            return changedDelta
+          case '*':
+            return directScalar.right.kind === 'literal-number' ? changedDelta * directScalar.right.value : undefined
+          case '/':
+            return directScalar.right.kind === 'literal-number' && directScalar.right.value !== 0
+              ? changedDelta / directScalar.right.value
+              : undefined
+        }
+      }
+      if (directScalar.right.kind === 'cell' && directScalar.right.cellIndex === changedCellIndex) {
+        switch (directScalar.operator) {
+          case '+':
+            return changedDelta
+          case '-':
+            return -changedDelta
+          case '*':
+            return directScalar.left.kind === 'literal-number' ? directScalar.left.value * changedDelta : undefined
+          case '/':
+            return directScalar.left.kind === 'literal-number' && oldChangedNumber !== 0 && newChangedNumber !== 0
+              ? directScalar.left.value / newChangedNumber - directScalar.left.value / oldChangedNumber
+              : undefined
+        }
+      }
+    }
     const oldTouched = { value: false }
     const oldResult = evaluateDirectScalarNumber(directScalar, changedCellIndex, oldValue, oldTouched)
     if (!oldTouched.value || oldResult === undefined) {
@@ -1053,6 +1090,7 @@ export function createEngineOperationService(args: {
     const formula = args.state.formulas.get(formulaCellIndex)
     return (
       formula !== undefined &&
+      (formula.directScalar === undefined || !formula.compiled.deps.some((dependency) => dependency.includes('!'))) &&
       (formula.directLookup !== undefined ||
         formula.directAggregate !== undefined ||
         formula.directScalar !== undefined ||

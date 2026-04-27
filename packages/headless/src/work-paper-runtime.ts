@@ -35,7 +35,7 @@ import {
   type NameRefNode,
   type CallExprNode,
 } from '@bilig/formula'
-import { loadInitialMixedSheet, tryLoadInitialLiteralSheet } from './initial-sheet-load.js'
+import { loadInitialLiteralSheet, loadInitialMixedSheet, tryLoadInitialLiteralSheet } from './initial-sheet-load.js'
 import { orderWorkPaperCellChanges } from './change-order.js'
 import {
   WorkPaperConfigValueTooBigError,
@@ -507,10 +507,6 @@ function isDeferredBatchLiteralContent(content: RawCellContent): boolean {
   return content === null || typeof content === 'boolean' || typeof content === 'number' || typeof content === 'string'
 }
 
-function canUseInitialMixedSheetFastPath(content: WorkPaperSheet): boolean {
-  return content.some((row) => row.some((value) => typeof value === 'string' && value.trim().startsWith('=')))
-}
-
 function stripLeadingEquals(formula: string): string {
   return formula.trim().startsWith('=') ? formula.trim().slice(1) : formula.trim()
 }
@@ -750,17 +746,38 @@ function validateWorkPaperConfig(config: WorkPaperConfig): void {
   }
 }
 
-function validateSheetWithinLimits(sheetName: string, sheet: WorkPaperSheet, config: WorkPaperConfig): void {
+interface SheetInspection {
+  readonly hasFormula: boolean
+}
+
+function inspectSheetWithinLimits(sheetName: string, sheet: WorkPaperSheet, config: WorkPaperConfig): SheetInspection {
   const height = sheet.length
-  const width = Math.max(0, ...sheet.map((row) => row.length))
-  if (height > (config.maxRows ?? MAX_ROWS) || width > (config.maxColumns ?? MAX_COLS)) {
-    throw new WorkPaperSheetSizeLimitExceededError()
-  }
-  sheet.forEach((row) => {
+  let width = 0
+  let hasFormula = false
+  for (let rowIndex = 0; rowIndex < sheet.length; rowIndex += 1) {
+    const row = sheet[rowIndex]
     if (!Array.isArray(row)) {
       throw new WorkPaperUnableToParseError({ sheetName, reason: 'Rows must be arrays' })
     }
-  })
+    width = Math.max(width, row.length)
+    if (!hasFormula) {
+      for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+        const cell = row[colIndex]
+        if (typeof cell === 'string' && cell.trim().startsWith('=')) {
+          hasFormula = true
+          break
+        }
+      }
+    }
+  }
+  if (height > (config.maxRows ?? MAX_ROWS) || width > (config.maxColumns ?? MAX_COLS)) {
+    throw new WorkPaperSheetSizeLimitExceededError()
+  }
+  return { hasFormula }
+}
+
+function validateSheetWithinLimits(sheetName: string, sheet: WorkPaperSheet, config: WorkPaperConfig): void {
+  inspectSheetWithinLimits(sheetName, sheet, config)
 }
 
 function functionPluginIds(config: WorkPaperConfig): string[] {
@@ -1088,8 +1105,9 @@ export class WorkPaper {
       runtimeSnapshot !== undefined &&
       runtimeSnapshot.sheets.length === Object.keys(sheets).length &&
       runtimeSnapshot.sheets.every((sheet: { name: string }) => Object.prototype.hasOwnProperty.call(sheets, sheet.name))
+    const inspectedSheets = new Map<string, SheetInspection>()
     Object.entries(sheets).forEach(([sheetName, sheet]) => {
-      validateSheetWithinLimits(sheetName, sheet, workbook.config)
+      inspectedSheets.set(sheetName, inspectSheetWithinLimits(sheetName, sheet, workbook.config))
     })
     workbook.withEngineEventCaptureDisabled(() => {
       if (runtimeSnapshot && runtimeSnapshotMatchesSheets) {
@@ -1104,19 +1122,17 @@ export class WorkPaper {
       })
       Object.entries(sheets).forEach(([sheetName, sheet]) => {
         const sheetId = workbook.requireSheetId(sheetName)
-        if (tryLoadInitialLiteralSheet(workbook.engine, sheetId, sheet)) {
+        const inspected = inspectedSheets.get(sheetName)
+        if (!inspected?.hasFormula) {
+          loadInitialLiteralSheet(workbook.engine, sheetId, sheet)
           return
         }
-        if (canUseInitialMixedSheetFastPath(sheet)) {
-          loadInitialMixedSheet({
-            engine: workbook.engine,
-            sheetId,
-            content: sheet,
-            rewriteFormula: (formula, destination) => workbook.rewriteFormulaForStorage(formula, destination.sheet),
-          })
-          return
-        }
-        workbook.replaceSheetContentInternal(sheetId, sheet, { duringInitialization: true })
+        loadInitialMixedSheet({
+          engine: workbook.engine,
+          sheetId,
+          content: sheet,
+          rewriteFormula: (formula, destination) => workbook.rewriteFormulaForStorage(formula, destination.sheet),
+        })
       })
     })
     workbook.clearHistoryStacks()

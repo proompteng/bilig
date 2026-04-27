@@ -2,11 +2,15 @@ import { CellFlags, loadLiteralSheetIntoEmptySheet, type SpreadsheetEngine, type
 import { ErrorCode, ValueTag } from '@bilig/protocol'
 import type { WorkPaperCellAddress, WorkPaperSheet } from './work-paper-types.js'
 
+export function loadInitialLiteralSheet(engine: SpreadsheetEngine, sheetId: number, content: WorkPaperSheet): void {
+  loadLiteralSheetIntoEmptySheet(engine.workbook, engine.strings, sheetId, content)
+}
+
 export function tryLoadInitialLiteralSheet(engine: SpreadsheetEngine, sheetId: number, content: WorkPaperSheet): boolean {
   if (sheetContainsFormulaContent(content)) {
     return false
   }
-  loadLiteralSheetIntoEmptySheet(engine.workbook, engine.strings, sheetId, content)
+  loadInitialLiteralSheet(engine, sheetId, content)
   return true
 }
 

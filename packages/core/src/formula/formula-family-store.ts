@@ -110,6 +110,7 @@ function keyForFormulaFamily(args: FormulaFamilyKey): string {
 export function createFormulaFamilyStore(): FormulaFamilyStore {
   const familiesById = new Map<FormulaFamilyId, MutableFormulaFamily>()
   const familyIdByKey = new Map<string, FormulaFamilyId>()
+  const recentFamilyByTemplateId = new Map<number, MutableFormulaFamily>()
   const cellRecords = new Map<number, FormulaFamilyCellRecord>()
   const memberships = new Map<number, FormulaFamilyMembership>()
   const sheetMemberCounts = new Map<number, number>()
@@ -118,10 +119,16 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
   let nextRunId = 1
 
   const getOrCreateFamily = (args: FormulaFamilyKey): MutableFormulaFamily => {
+    const recent = recentFamilyByTemplateId.get(args.templateId)
+    if (recent && recent.sheetId === args.sheetId && recent.shapeKey === args.shapeKey && familiesById.get(recent.id) === recent) {
+      return recent
+    }
     const key = keyForFormulaFamily(args)
     const existingId = familyIdByKey.get(key)
     if (existingId !== undefined) {
-      return familiesById.get(existingId)!
+      const existing = familiesById.get(existingId)!
+      recentFamilyByTemplateId.set(args.templateId, existing)
+      return existing
     }
     const family: MutableFormulaFamily = {
       id: nextFamilyId,
@@ -137,6 +144,7 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
     nextFamilyId += 1
     familiesById.set(family.id, family)
     familyIdByKey.set(key, family.id)
+    recentFamilyByTemplateId.set(args.templateId, family)
     return family
   }
 
@@ -252,6 +260,9 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
     if (family.runs.length === 0) {
       familiesById.delete(family.id)
       familyIdByKey.delete(family.key)
+      if (recentFamilyByTemplateId.get(record.templateId) === family) {
+        recentFamilyByTemplateId.delete(record.templateId)
+      }
       structuralSourceTransforms.delete(family.id)
     }
     return true
@@ -259,11 +270,21 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
 
   return {
     upsertFormula(args) {
-      unregisterFormula(args.cellIndex)
+      if (memberships.has(args.cellIndex)) {
+        unregisterFormula(args.cellIndex)
+      }
       const family = getOrCreateFamily(args)
       const member: FormulaFamilyMember = { cellIndex: args.cellIndex, row: args.row, col: args.col }
       cellRecords.set(args.cellIndex, { ...args })
       sheetMemberCounts.set(args.sheetId, (sheetMemberCounts.get(args.sheetId) ?? 0) + 1)
+
+      const rowRuns = family.rowRunsByFixedIndex.get(member.col)
+      if (rowRuns?.length === 1) {
+        const run = rowRuns[0]!
+        if (canAppendStridedRunMember(run, member.row)) {
+          return appendMemberToRun(family, run, member)
+        }
+      }
 
       for (const run of candidateRunsForMember(family, member)) {
         const runIndex = family.runs.indexOf(run)
@@ -377,6 +398,7 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
     clear() {
       familiesById.clear()
       familyIdByKey.clear()
+      recentFamilyByTemplateId.clear()
       cellRecords.clear()
       memberships.clear()
       sheetMemberCounts.clear()

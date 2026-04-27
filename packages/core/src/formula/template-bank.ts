@@ -11,6 +11,7 @@ import {
 } from '@bilig/formula'
 import { addEngineCounter, type EngineCounters } from '../perf/engine-counters.js'
 import { tryCompileSimpleDirectAggregateFormula } from './simple-direct-aggregate-compile.js'
+import { tryCompileSimpleDirectScalarFormula } from './simple-direct-scalar-compile.js'
 
 export interface FormulaTemplateSnapshot {
   readonly id: number
@@ -111,7 +112,11 @@ function translateTemplate(compiled: CompiledFormula, rowDelta: number, colDelta
 }
 
 function compileSourceFormula(source: string): CompiledFormula {
-  return tryCompileSimpleDirectAggregateFormula(source) ?? compileFormulaAst(source, parseFormula(source))
+  return (
+    tryCompileSimpleDirectAggregateFormula(source) ??
+    tryCompileSimpleDirectScalarFormula(source) ??
+    compileFormulaAst(source, parseFormula(source))
+  )
 }
 
 function resolveTemplateCompiled(
@@ -120,9 +125,13 @@ function resolveTemplateCompiled(
   ownerRow: number,
   ownerCol: number,
   sourceTemplateKey = buildRelativeFormulaTemplateTokenKey(source, ownerRow, ownerCol),
+  compiledOverride?: CompiledFormula,
 ): CompiledFormula {
   if (source === template.baseSource) {
     return template.compiled
+  }
+  if (compiledOverride && sourceTemplateKey === template.templateKey) {
+    return compiledOverride
   }
   if (template.templateKey.startsWith('anchored-prefix-aggregate:')) {
     const anchoredPrefixAggregate = tryMatchAnchoredPrefixAggregateTemplate(source, ownerRow, ownerCol)
@@ -154,6 +163,10 @@ function resolveTrustedTemplateCompiled(
   if (source === template.baseSource) {
     return template.compiled
   }
+  const directScalar = tryCompileSimpleDirectScalarFormula(source)
+  if (directScalar && tryBuildSimpleRowRelativeBinaryTemplateKey(source, ownerRow, ownerCol) === template.templateKey) {
+    return directScalar
+  }
   if (template.templateKey.startsWith('anchored-prefix-aggregate:')) {
     const anchoredPrefixAggregate = tryMatchAnchoredPrefixAggregateTemplate(source, ownerRow, ownerCol)
     if (anchoredPrefixAggregate && anchoredPrefixAggregate.templateKey === template.templateKey) {
@@ -174,8 +187,9 @@ function resolveTrustedTemplateCompiled(
 
 function resolveTemplateSourceKey(source: string, ownerRow: number, ownerCol: number): FormulaTemplateSourceKey {
   const anchoredPrefixAggregate = tryMatchAnchoredPrefixAggregateTemplate(source, ownerRow, ownerCol)
+  const directScalar = anchoredPrefixAggregate ? undefined : tryCompileSimpleDirectScalarFormula(source)
   return {
-    compiled: anchoredPrefixAggregate?.compiled,
+    compiled: anchoredPrefixAggregate?.compiled ?? directScalar,
     templateKey:
       anchoredPrefixAggregate?.templateKey ??
       tryBuildSimpleRowRelativeBinaryTemplateKey(source, ownerRow, ownerCol) ??
@@ -262,7 +276,7 @@ export function createTemplateBank(args?: { readonly counters?: EngineCounters }
       const rowDelta = ownerRow - template.baseRow
       const colDelta = ownerCol - template.baseCol
       const translated = rowDelta !== 0 || colDelta !== 0
-      const compiled = resolveTemplateCompiled(template, source, ownerRow, ownerCol, templateKey)
+      const compiled = resolveTemplateCompiled(template, source, ownerRow, ownerCol, templateKey, compiledOverride)
       recentByColumn.set(ownerCol, template)
       return {
         templateId: template.id,
@@ -279,14 +293,14 @@ export function createTemplateBank(args?: { readonly counters?: EngineCounters }
       if (!template) {
         return undefined
       }
-      const { templateKey } = resolveTemplateSourceKey(source, ownerRow, ownerCol)
+      const { compiled: compiledOverride, templateKey } = resolveTemplateSourceKey(source, ownerRow, ownerCol)
       if (templateKey !== template.templateKey) {
         return undefined
       }
       const rowDelta = ownerRow - template.baseRow
       const colDelta = ownerCol - template.baseCol
       const translated = rowDelta !== 0 || colDelta !== 0
-      const compiled = resolveTemplateCompiled(template, source, ownerRow, ownerCol, templateKey)
+      const compiled = resolveTemplateCompiled(template, source, ownerRow, ownerCol, templateKey, compiledOverride)
       recentByColumn.set(ownerCol, template)
       return {
         templateId: template.id,

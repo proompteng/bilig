@@ -62,10 +62,12 @@ Validated source facts:
 
 ## Implemented Design
 
-This document scopes the end-to-end implementation to the validated sliding
-aggregate patch. The broader oracle queue remains useful background, but it is
-not treated as implementation truth until each tranche is revalidated against
-the current checkout and current benchmark rows.
+This document first scoped the end-to-end implementation to the validated
+sliding aggregate patch. The current checkout has since advanced into the next
+validated tranches from the broader oracle queue: formula-template build
+materialization, runtime-restore warmness, and direct scalar mutation
+constant-factor work. Benchmark definitions, sample counts, workload sizes, and
+scoring logic remain unchanged.
 
 ### 1. Add Direct Aggregate Counters
 
@@ -160,46 +162,103 @@ before falling back to a `Set`.
 
 ## Broader Oracle Queue
 
-These remain design leads, not implemented requirements in this document:
+Current status of the broader oracle queue:
 
-1. Batch mutation owner coalescing for `batch-edit-*` and `batch-suspended-*`.
+1. Batch mutation owner coalescing for `batch-edit-*` and `batch-suspended-*`
+   is partially implemented through direct scalar delta skips and algebraic
+   delta evaluation, but the public change-materialization cost still keeps the
+   family red.
 2. Formula-family build materialization for parser-template and mixed-content
-   build rows.
-3. Runtime snapshot warmness v2 for `rebuild-runtime-from-snapshot`.
-4. Lookup direct-eval and after-write constant-factor trimming after counters
-   prove the hot branch.
-5. Dirty-chain frontier counters before changing scheduler behavior.
+   build rows is partially implemented through simple direct scalar compilation,
+   direct-scalar dependency binding, formula-family recent-family caching, and
+   monotonic run append.
+3. Runtime snapshot warmness v2 for `rebuild-runtime-from-snapshot` is partially
+   implemented through trusted template fast compilation and prior runtime image
+   allocation work, but the workload remains red.
+4. Lookup direct-eval and after-write constant-factor trimming remains
+   incomplete. The measured lookup rows are already using
+   `directFormulaKernelSyncOnlyRecalcSkips` or `kernelSyncOnlyRecalcSkips`, so
+   the remaining gap is public mutation overhead and lookup direct-eval
+   constant factors.
+5. Dirty-chain frontier counters are present, and direct scalar closure handles
+   simple chains, but dirty-execution is not yet a clean win across all rows.
 
 Each item needs a fresh source and benchmark validation pass before becoming an
 implementation document.
+
+## Additional Implemented Tranche: Build And Scalar Mutation
+
+The following changes were validated against the current checkout after the
+initial sliding-aggregate work:
+
+- Added `tryCompileSimpleDirectScalarFormula` for common row-local formulas such
+  as `A1+B1`, `C1*2`, and translated row-template variants. This avoids parser
+  and generic AST translation work for simple scalar families.
+- Threaded direct scalar operands into formula binding so dependency entities
+  and symbolic cell bindings are materialized from one already-resolved operand
+  list for same-sheet direct scalar formulas.
+- Kept qualified cross-sheet scalar dependencies on the existing recalc path so
+  cross-sheet rebind behavior and metrics stay compatible.
+- Avoided repeated pending-WASM-sync writes while a formula initialization batch
+  is already open.
+- Added formula-family recent-template caching and a monotonic row-run append
+  fast path for repeated template families down a column.
+- Collapsed initial `buildFromSheets` validation and formula-presence scanning
+  into a single inspection pass, then routed known literal sheets directly into
+  the literal loader and known mixed sheets directly into the mixed loader.
+- Added algebraic direct scalar delta calculation for simple scalar descriptors
+  before falling back to generic old/new formula evaluation.
+- Reused a process-level column-label cache when materializing tracked public
+  changes, reducing repeated A1-label construction for wide fanout events.
 
 ## Verification Commands
 
 Targeted test command:
 
 ```sh
-bun scripts/run-vitest.ts --run packages/core/src/__tests__/formula-evaluation-service.test.ts packages/core/src/__tests__/engine-counters.test.ts
+bun scripts/run-vitest.ts --run packages/core/src/__tests__/operation-service.test.ts packages/core/src/__tests__/formula-binding-service.test.ts packages/core/src/__tests__/formula-evaluation-service.test.ts packages/core/src/__tests__/engine.test.ts packages/core/src/__tests__/formula-family-store.test.ts packages/headless/src/__tests__/initial-sheet-load.test.ts packages/headless/src/__tests__/work-paper-runtime.test.ts
 ```
 
 Competitive benchmark command:
 
 ```sh
-pnpm --silent bench:workpaper:competitive -- --sample-count 8 --warmup-count 2 > /tmp/workpaper-competitive-after-merge-fastpath.json
+pnpm --silent bench:workpaper:competitive > /tmp/workpaper-competitive-after-delta-and-tracking.json
 ```
 
 ## Observed Result
 
-The latest local sample after this implementation produced a `38` comparable
-workload scorecard with `20` WorkPaper wins and `18` HyperFormula wins. The
-sliding aggregate row remained red, but its WorkPaper mean improved materially
-from the earlier local samples:
+The latest local sample after the additional tranche produced a `38`
+comparable workload scorecard with `17` WorkPaper wins and `21` HyperFormula
+wins. This is not complete and does not satisfy the SOTA target. It is still a
+real structural improvement over the post-commit baseline in several rows:
+
+- `build-parser-cache-row-templates`: `47.616 ms` WorkPaper mean in the latest
+  sample, still red at `1.795x` slower than HyperFormula.
+- `build-mixed-content`: `11.520 ms` WorkPaper mean, still red at `1.415x`
+  slower.
+- `batch-edit-single-column`: `0.898 ms` WorkPaper mean, still red at `1.713x`
+  slower.
+- `single-edit-fanout`: `1.373 ms` WorkPaper mean, nearly closed but still red
+  at `1.117x` slower.
+- `rebuild-runtime-from-snapshot`: `44.431 ms` WorkPaper mean, still red at
+  `1.403x` slower.
+
+The sliding aggregate row remains red, but its WorkPaper mean improved
+materially from the earlier local samples:
 
 - pre-change local sample: about `0.226 ms`
 - after direct delta recalc skip: about `0.194 ms`
 - after dependent collection and prefix eviction work: best observed sample
   about `0.124 ms`
 - latest `8` sample run after the tiny merge fast path: about `0.141 ms`
+- latest unchanged competitive harness sample after the build/scalar tranche:
+  about `0.124 ms`
 
 The row is now counter-gated: `directAggregateDeltaApplications = 1` and
 `directAggregateDeltaOnlyRecalcSkips = 1` for the sliding mutation sample, with
 no direct aggregate scan/prefix evaluation during the measured mutation.
+
+The next required implementation work is still structural, not benchmark
+tuning: reduce public change-materialization overhead for batch/fanout rows,
+make runtime restore avoid remaining per-formula binding churn, and continue
+collapsing formula-family/template build cost.
