@@ -350,6 +350,10 @@ Completed in the resident-scene deletion tranche:
   V3 tile-generation paths.
 - `packages/grid/src/renderer-v3/typegpu-layer-buffer-pool.ts` replaces the V2 pane buffer cache for mounted V3 header and overlay resources,
   so `WorkbookPaneRendererV3` no longer depends on `renderer-v2/pane-buffer-cache.ts` or V2 header/overlay resource sync helpers.
+- `packages/grid/src/renderer-v3/typegpu-primitives.ts`, `typegpu-surface.ts`, `typegpu-atlas-manager.ts`, `line-text-layout.ts`,
+  `line-text-quad-buffer.ts`, `pane-layout.ts`, and `gridRenderLoop.ts` now give the mounted V3 renderer its own TypeGPU/layout/text/draw-loop
+  primitives instead of importing them from `renderer-v2`. Shared render counters and camera-store state moved to non-V2 ownership, and
+  `renderer-v3-import-boundary.test.ts` locks the mounted V3 import boundary.
 
 Remaining work from this design:
 

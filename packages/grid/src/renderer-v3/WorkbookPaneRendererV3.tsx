@@ -1,8 +1,8 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { GridGeometrySnapshot } from '../gridGeometry.js'
 import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
-import type { GridCameraStore } from '../renderer-v2/gridCameraStore.js'
-import { GridRenderLoop } from '../renderer-v2/gridRenderLoop.js'
+import type { GridCameraStore } from '../runtime/gridCameraStore.js'
+import { GridRenderLoop } from './gridRenderLoop.js'
 import {
   createWorkbookTypeGpuBackendV3,
   destroyWorkbookTypeGpuBackendV3,

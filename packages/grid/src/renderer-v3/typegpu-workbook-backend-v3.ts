@@ -1,14 +1,14 @@
 import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { WorkbookGridScrollSnapshot } from '../workbookGridScrollStore.js'
-import { noteTypeGpuTileMiss } from '../renderer-v2/grid-render-counters.js'
-import { createGlyphAtlas } from '../renderer-v2/typegpu-atlas-manager.js'
+import { noteTypeGpuTileMiss } from '../grid-render-counters.js'
+import { createGlyphAtlas } from './typegpu-atlas-manager.js'
 import {
   createTypeGpuRenderer,
   destroyTypeGpuRenderer,
   syncTypeGpuAtlasResources,
   type TypeGpuRendererArtifacts,
-} from '../renderer-v2/typegpu-backend.js'
-import { createTypeGpuSurfaceState, syncTypeGpuCanvasSurface, type TypeGpuSurfaceState } from '../renderer-v2/typegpu-surface.js'
+} from './typegpu-primitives.js'
+import { createTypeGpuSurfaceState, syncTypeGpuCanvasSurface, type TypeGpuSurfaceState } from './typegpu-surface.js'
 import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
 import type { GridRenderTile } from './render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'

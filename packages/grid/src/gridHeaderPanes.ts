@@ -2,7 +2,7 @@ import type { Viewport } from '@bilig/protocol'
 import type { GridGpuRect, GridGpuScene } from './gridGpuScene.js'
 import type { GridTextItem, GridTextScene } from './gridTextScene.js'
 import type { GridMetrics } from './gridMetrics.js'
-import type { TextQuadRun } from './renderer-v2/line-text-quad-buffer.js'
+import type { TextQuadRun } from './renderer-v3/line-text-quad-buffer.js'
 import { packGridRectBufferV3 } from './renderer-v3/rect-instance-buffer.js'
 
 export interface GridHeaderPaneState {

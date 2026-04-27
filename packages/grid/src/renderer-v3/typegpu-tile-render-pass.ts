@@ -7,8 +7,8 @@ import {
   WORKBOOK_UNIT_QUAD_LAYOUT,
   type TypeGpuRendererArtifacts,
   updateTypeGpuSurfaceUniform,
-} from '../renderer-v2/typegpu-backend.js'
-import { noteGridDrawFrame, noteTypeGpuDrawCall, noteTypeGpuPaneDraw, noteTypeGpuSubmit } from '../renderer-v2/grid-render-counters.js'
+} from './typegpu-primitives.js'
+import { noteGridDrawFrame, noteTypeGpuDrawCall, noteTypeGpuPaneDraw, noteTypeGpuSubmit } from '../grid-render-counters.js'
 import {
   WORKBOOK_DYNAMIC_OVERLAY_LAYER_KEY_V3,
   ensureLayerSurfaceBindingsV3,

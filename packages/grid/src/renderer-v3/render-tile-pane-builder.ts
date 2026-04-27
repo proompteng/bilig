@@ -1,7 +1,7 @@
 import type { Viewport } from '@bilig/protocol'
 import { resolveRowOffset, type GridMetrics } from '../gridMetrics.js'
 import { resolveColumnOffset } from '../workbookGridViewport.js'
-import { getPaneFrame, resolvePaneLayout } from '../renderer-v2/pane-layout.js'
+import { getPaneFrame, resolvePaneLayout } from './pane-layout.js'
 import type { GridRenderTile } from './render-tile-source.js'
 import type { WorkbookRenderTilePaneState, WorkbookTilePaneScrollAxes, WorkbookTilePaneSurfaceSize } from './render-tile-pane-state.js'
 

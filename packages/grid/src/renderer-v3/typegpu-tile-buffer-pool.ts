@@ -1,8 +1,8 @@
 import type { TgpuBindGroup } from 'typegpu'
 import { parseGpuColor } from '../gridGpuScene.js'
-import { noteTypeGpuBufferAllocation } from '../renderer-v2/grid-render-counters.js'
-import { buildTextDecorationRectsFromRuns, buildTextQuadsFromRuns, type TextDecorationRect } from '../renderer-v2/line-text-quad-buffer.js'
-import type { createGlyphAtlas } from '../renderer-v2/typegpu-atlas-manager.js'
+import { noteTypeGpuBufferAllocation } from '../grid-render-counters.js'
+import { buildTextDecorationRectsFromRuns, buildTextQuadsFromRuns, type TextDecorationRect } from './line-text-quad-buffer.js'
+import type { createGlyphAtlas } from './typegpu-atlas-manager.js'
 import {
   WORKBOOK_RECT_INSTANCE_LAYOUT,
   WORKBOOK_TEXT_INSTANCE_LAYOUT,
@@ -14,7 +14,7 @@ import {
   type TextInstanceVertexBuffer,
   type TypeGpuRendererArtifacts,
   writeTypeGpuVertexBuffer,
-} from '../renderer-v2/typegpu-backend.js'
+} from './typegpu-primitives.js'
 import { GpuBufferArenaV3, type GpuBufferHandleV3 } from './gpu-buffer-arena.js'
 import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from './rect-instance-buffer.js'
 import type { GridRenderTile } from './render-tile-source.js'
