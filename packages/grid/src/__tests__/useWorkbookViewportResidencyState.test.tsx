@@ -6,6 +6,7 @@ import { ValueTag, type CellSnapshot } from '@bilig/protocol'
 import type { GridEngineLike } from '../grid-engine.js'
 import type { VisibleRegionState } from '../gridPointer.js'
 import { useWorkbookViewportResidencyState, type WorkbookViewportResidencyState } from '../useWorkbookViewportResidencyState.js'
+import { WorkbookViewportResidencyRuntime } from '../workbookViewportResidencyRuntime.js'
 
 function createEmptySnapshot(sheetName: string, address: string): CellSnapshot {
   return {
@@ -30,20 +31,20 @@ function createEngine(subscribeCells: GridEngineLike['subscribeCells']): GridEng
   }
 }
 
-describe('useWorkbookViewportResidencyState', () => {
-  const visibleRegion: VisibleRegionState = {
-    freezeCols: 2,
-    freezeRows: 1,
-    range: {
-      height: 8,
-      width: 10,
-      x: 260,
-      y: 110,
-    },
-    tx: 0,
-    ty: 0,
-  }
+const visibleRegion: VisibleRegionState = {
+  freezeCols: 2,
+  freezeRows: 1,
+  range: {
+    height: 8,
+    width: 10,
+    x: 260,
+    y: 110,
+  },
+  tx: 0,
+  ty: 0,
+}
 
+describe('useWorkbookViewportResidencyState', () => {
   it('keeps resident windows and frozen-pane tile interest out of the main render hook', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -151,5 +152,51 @@ describe('useWorkbookViewportResidencyState', () => {
     })
 
     expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('WorkbookViewportResidencyRuntime', () => {
+  it('retains the resident viewport until the visible range crosses a resident boundary', () => {
+    const runtime = new WorkbookViewportResidencyRuntime()
+    const first = runtime.resolve({
+      freezeCols: 2,
+      freezeRows: 1,
+      sceneRevision: 0,
+      visibleRegion,
+    })
+    const sameResident = runtime.resolve({
+      freezeCols: 2,
+      freezeRows: 1,
+      sceneRevision: 1,
+      visibleRegion: {
+        ...visibleRegion,
+        range: {
+          ...visibleRegion.range,
+          x: visibleRegion.range.x + 1,
+          y: visibleRegion.range.y + 1,
+        },
+      },
+    })
+    const nextResident = runtime.resolve({
+      freezeCols: 2,
+      freezeRows: 1,
+      sceneRevision: 2,
+      visibleRegion: {
+        ...visibleRegion,
+        range: {
+          ...visibleRegion.range,
+          x: visibleRegion.range.x + 260,
+          y: visibleRegion.range.y,
+        },
+      },
+    })
+
+    expect(sameResident.residentViewport).toBe(first.residentViewport)
+    expect(sameResident.visibleAddresses).toBe(first.visibleAddresses)
+    expect(sameResident.renderTileViewport).toBe(first.renderTileViewport)
+    expect(sameResident.sceneRevision).toBe(1)
+    expect(nextResident.residentViewport).not.toBe(first.residentViewport)
+    expect(nextResident.renderTileViewport.colStart).toBe(0)
+    expect(nextResident.renderTileViewport.rowStart).toBe(0)
   })
 })
