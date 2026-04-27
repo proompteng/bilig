@@ -41,6 +41,7 @@ describe('worker runtime state helpers', () => {
     expect(cachedState.syncState).toBe('local')
     expect(publicState.localPersistenceMode).toBe('persistent')
     expect(publicState.sheets).toEqual([{ id: 1, name: 'Sheet1', order: 0 }])
+    expect(publicState.sheets).not.toBe(cachedState.sheets)
     expect(publicState.metrics).not.toBe(cachedState.metrics)
     expect(publicState.definedNames).not.toBe(cachedState.definedNames)
     expect(publicState.definedNames).toEqual(cachedState.definedNames)

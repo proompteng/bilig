@@ -775,6 +775,67 @@ describe('ProjectedViewportStore', () => {
     vi.useRealTimers()
   })
 
+  it('allows auxiliary selection viewports to skip duplicate initial hydration', () => {
+    const typedPatch: ViewportPatch = {
+      ...createPatch(),
+      full: true,
+      cells: [
+        {
+          row: 4,
+          col: 3,
+          snapshot: {
+            sheetName: 'Sheet1',
+            address: 'D5',
+            value: { tag: ValueTag.String, value: 'future selection update', stringId: 1 },
+            input: 'future selection update',
+            flags: 0,
+            version: 2,
+          },
+          displayText: 'future selection update',
+          copyText: 'future selection update',
+          editorText: 'future selection update',
+          formatId: 0,
+          styleId: 'style-0',
+        },
+      ],
+    }
+    const encodedPatch = new TextEncoder().encode(JSON.stringify(typedPatch))
+    let publishPatch: ((bytes: Uint8Array) => void) | null = null
+    const subscribeViewportPatches = vi.fn((subscription, listener: (bytes: Uint8Array) => void) => {
+      expect(subscription).toMatchObject({ initialPatch: 'none' })
+      publishPatch = listener
+      return () => undefined
+    })
+    const cache = new ProjectedViewportStore({
+      invoke: vi.fn(),
+      ready: async () => undefined,
+      subscribe: () => () => undefined,
+      subscribeBatches: () => () => undefined,
+      subscribeViewportPatches,
+      dispose: () => undefined,
+    })
+    const cellListener = vi.fn()
+
+    const unsubscribeCell = cache.subscribeCell('Sheet1', 'D5', cellListener)
+    const unsubscribeViewport = cache.subscribeAuxiliaryViewport(
+      'Sheet1',
+      { rowStart: 4, rowEnd: 4, colStart: 3, colEnd: 3 },
+      () => undefined,
+      { initialPatch: 'none' },
+    )
+
+    expect(cache.peekCell('Sheet1', 'D5')).toBeUndefined()
+    expect(cellListener).not.toHaveBeenCalled()
+
+    publishPatch?.(encodedPatch)
+
+    expect(cache.getCell('Sheet1', 'D5').input).toBe('future selection update')
+    expect(cellListener).toHaveBeenCalledTimes(1)
+
+    unsubscribeViewport()
+    unsubscribeCell()
+  })
+
   it('publishes immediate resident scenes for local cell snapshots', async () => {
     vi.useFakeTimers()
     const request = {

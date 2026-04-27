@@ -26,6 +26,7 @@ const configuredZeroProxyUpstream = process.env['BILIG_ZERO_PROXY_UPSTREAM']
 const disableCompose = process.env['BILIG_DEV_DISABLE_COMPOSE'] === '1'
 const webServerMode = process.env['BILIG_DEV_WEB_SERVER_MODE'] === 'preview' ? 'preview' : 'dev'
 const appServerMode = process.env['BILIG_DEV_APP_SERVER_MODE'] === 'run' ? 'run' : 'watch'
+const skipPreviewBuild = process.env['BILIG_DEV_WEB_PREVIEW_BUILD'] === '0'
 const preferredZeroPort = resolvePreferredZeroPort(process.env['BILIG_DEV_ZERO_PORT'], configuredZeroProxyUpstream, 4848)
 const composePublishedHost = resolveComposePublishedHost()
 const cleanupCompose = process.env['BILIG_DEV_CLEANUP_COMPOSE'] === 'true'
@@ -620,8 +621,12 @@ try {
     await waitForHttp(zeroHealthUrl)
   }
   if (webServerMode === 'preview') {
-    console.log(`Building preview web bundle for browser stack (web=${webAppBaseUrl})...`)
-    buildWebPreview(publicServerUrl)
+    if (skipPreviewBuild) {
+      console.log(`Reusing existing preview web bundle for browser stack (web=${webAppBaseUrl})...`)
+    } else {
+      console.log(`Building preview web bundle for browser stack (web=${webAppBaseUrl})...`)
+      buildWebPreview(publicServerUrl)
+    }
     console.log(`Starting local web preview server (web=${webAppBaseUrl})...`)
     webChild = spawnWebPreview(webPort, publicServerUrl)
   } else {

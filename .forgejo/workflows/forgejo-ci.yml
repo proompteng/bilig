@@ -8,97 +8,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  checks:
-    name: Fast Correctness + Repository Checks
+  core-ci:
+    name: Core Repository CI
     runs-on: docker
-    timeout-minutes: 50
-    env:
-      CI: "true"
-      BILIG_BENCH_TOLERANCE: "1.5"
-    steps:
-      - name: Checkout
-        uses: https://data.forgejo.org/actions/checkout@v6.0.2
-
-      - name: Log runner environment
-        run: |
-          set -eu
-          uname -a
-          pwd
-          env | sort | grep -E '^(CI|FORGEJO|GITEA|RUNNER|HOME|SHELL|PATH|BILIG_)=' || true
-
-      - name: Verify Node baseline
-        run: |
-          set -eu
-          node --version
-          node -e "const [major] = process.versions.node.split('.').map(Number); if (major < 24) { console.error(\`Node \${process.versions.node} is below the required 24.x baseline\`); process.exit(1); }"
-
-      - name: Enable pnpm via Corepack
-        run: |
-          set -eu
-          corepack enable
-          pnpm --version
-          test "$(pnpm --version)" = "10.32.1"
-
-      - name: Install latest Bun
-        run: |
-          set -eu
-          npm install -g bun
-          bun --version
-
-      - name: Install dependencies
-        run: |
-          set -eu
-          pnpm install --frozen-lockfile
-
-      - name: Run static repository CI
-        run: |
-          set -eu
-          export PATH="$HOME/.bun/bin:$PATH"
-          pnpm protocol:check
-          pnpm formula-inventory:check
-          pnpm workspace-resolution:check
-          pnpm naming:check
-          pnpm lint
-          pnpm wasm:build
-          pnpm typecheck
-          git diff --exit-code
-          git diff --cached --exit-code
-
-      - name: Run fast correctness gate
-        run: |
-          set -eu
-          export PATH="$HOME/.bun/bin:$PATH"
-          pnpm test:correctness:fast
-
-      - name: Run unit, coverage, and perf CI
-        run: |
-          set -eu
-          pnpm coverage
-          bun scripts/coverage-contracts.ts
-          pnpm bench:smoke
-          CI=1 pnpm bench:contracts
-          git diff --exit-code
-          git diff --cached --exit-code
-
-      - name: Upload checks artifacts on failure
-        if: failure()
-        uses: https://data.forgejo.org/actions/upload-artifact@v3
-        with:
-          name: bilig-checks-artifacts
-          path: |
-            artifacts/fuzz
-            test-results
-          if-no-files-found: ignore
-
-  medium-correctness:
-    name: Medium Correctness
-    runs-on: docker
-    needs:
-      - checks
     timeout-minutes: 35
     env:
-      CI: "true"
-      BILIG_BENCH_TOLERANCE: "1.5"
+      CI: 'true'
+      BILIG_BENCH_TOLERANCE: '1.5'
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v6.0.2
@@ -123,7 +39,7 @@ jobs:
           pnpm --version
           test "$(pnpm --version)" = "10.32.1"
 
-      - name: Install latest Bun
+      - name: Install Bun
         run: |
           set -eu
           npm install -g bun
@@ -134,20 +50,20 @@ jobs:
           set -eu
           pnpm install --frozen-lockfile
 
-      - name: Run medium correctness gate
+      - name: Run core repository CI
         run: |
           set -eu
           export PATH="$HOME/.bun/bin:$PATH"
-          pnpm test:correctness:medium
+          pnpm run ci:core
 
-      - name: Upload medium correctness artifacts on failure
+      - name: Upload core artifacts on failure
         if: failure()
         uses: https://data.forgejo.org/actions/upload-artifact@v3
         with:
-          name: bilig-medium-correctness-artifacts
+          name: bilig-core-ci-artifacts
           path: |
             artifacts/fuzz
-            playwright-report
+            coverage
             test-results
           if-no-files-found: ignore
 
@@ -156,23 +72,16 @@ jobs:
     runs-on: docker
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
-    needs:
-      - checks
-      - medium-correctness
-    timeout-minutes: 45
+    timeout-minutes: 35
     env:
-      CI: "true"
-      BILIG_BENCH_TOLERANCE: "1.5"
-      BILIG_BROWSER_STACK: "local"
-      BILIG_DEV_DISABLE_COMPOSE: "1"
-      BILIG_E2E_REMOTE_SYNC: "0"
-      BILIG_E2E_STARTUP_TIMEOUT_MS: "600000"
-      BILIG_FUZZ_PROFILE: "main"
-      BILIG_FUZZ_CAPTURE: "1"
-      BILIG_FUZZ_BROWSER: "1"
-      BILIG_FUZZ_MAX_MS: "120000"
-      BILIG_FUZZ_NUM_RUNS: "1"
-      BILIG_FUZZ_SEED: "2128392860"
+      CI: 'true'
+      BILIG_BENCH_TOLERANCE: '1.5'
+      BILIG_BROWSER_INCLUDE_PERF: '0'
+      BILIG_BROWSER_INCLUDE_FUZZ: '0'
+      BILIG_BROWSER_STACK: 'local'
+      BILIG_DEV_DISABLE_COMPOSE: '1'
+      BILIG_E2E_REMOTE_SYNC: '0'
+      BILIG_E2E_STARTUP_TIMEOUT_MS: '600000'
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v6.0.2
@@ -197,7 +106,7 @@ jobs:
           pnpm --version
           test "$(pnpm --version)" = "10.32.1"
 
-      - name: Install latest Bun
+      - name: Install Bun
         run: |
           set -eu
           npm install -g bun
@@ -208,21 +117,11 @@ jobs:
           set -eu
           pnpm install --frozen-lockfile
 
-      - name: Build local browser stack packages
-        run: |
-          set -eu
-          pnpm --filter @bilig/app... --filter @bilig/web... build
-
-      - name: Check release asset budgets
-        run: |
-          set -eu
-          export PATH="$HOME/.bun/bin:$PATH"
-          pnpm release:check
-
       - name: Run browser CI
         run: |
           set -eu
-          pnpm test:browser
+          export PATH="$HOME/.bun/bin:$PATH"
+          pnpm run ci:browser
 
       - name: Upload browser artifacts on failure
         if: failure()

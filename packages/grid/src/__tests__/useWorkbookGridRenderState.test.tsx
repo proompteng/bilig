@@ -270,6 +270,10 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       return (
         <div
           ref={(node) => {
+            if (node) {
+              Object.defineProperty(node, 'clientWidth', { configurable: true, value: 480 })
+              Object.defineProperty(node, 'clientHeight', { configurable: true, value: 180 })
+            }
             renderState.handleHostRef(node)
             hostElement = node
           }}
@@ -345,6 +349,10 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       return (
         <div
           ref={(node) => {
+            if (node) {
+              Object.defineProperty(node, 'clientWidth', { configurable: true, value: 480 })
+              Object.defineProperty(node, 'clientHeight', { configurable: true, value: 180 })
+            }
             renderState.handleHostRef(node)
             hostElement = node
           }}
@@ -563,5 +571,81 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     await act(async () => {
       root.unmount()
     })
+  })
+
+  it('keeps resident header panes stable across single-cell selection moves', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const scrollPerf = {
+      noteHeaderPaneBuild: vi.fn(),
+    }
+    Reflect.set(window, '__biligScrollPerf', scrollPerf)
+
+    let scrollViewport: HTMLDivElement | null = null
+
+    function Harness({ selectedAddr }: { readonly selectedAddr: string }) {
+      const renderState = useWorkbookGridRenderState({
+        engine,
+        sheetName: 'Sheet1',
+        selectedAddr,
+        selectedCellSnapshot: createEmptySnapshot('Sheet1', selectedAddr),
+        editorValue: '',
+        isEditingCell: false,
+      })
+
+      return (
+        <div
+          ref={(node) => {
+            if (node) {
+              Object.defineProperty(node, 'clientWidth', { configurable: true, value: 640 })
+              Object.defineProperty(node, 'clientHeight', { configurable: true, value: 360 })
+            }
+            renderState.handleHostRef(node)
+          }}
+        >
+          <div
+            ref={(node) => {
+              if (node) {
+                Object.defineProperty(node, 'clientWidth', { configurable: true, value: 640 })
+                Object.defineProperty(node, 'clientHeight', { configurable: true, value: 360 })
+              }
+              renderState.scrollViewportRef.current = node
+              scrollViewport = node
+            }}
+          />
+        </div>
+      )
+    }
+
+    const rootHost = document.createElement('div')
+    document.body.appendChild(rootHost)
+    const root = createRoot(rootHost)
+
+    await act(async () => {
+      root.render(<Harness selectedAddr="A1" />)
+    })
+
+    await act(async () => {
+      scrollViewport!.dispatchEvent(new Event('scroll'))
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    const headerBuildsAfterMount = scrollPerf.noteHeaderPaneBuild.mock.calls.length
+
+    await act(async () => {
+      root.render(<Harness selectedAddr="C4" />)
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    await act(async () => {
+      root.render(<Harness selectedAddr="F7" />)
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(scrollPerf.noteHeaderPaneBuild).toHaveBeenCalledTimes(headerBuildsAfterMount)
+
+    await act(async () => {
+      root.unmount()
+    })
+    Reflect.deleteProperty(window, '__biligScrollPerf')
   })
 })

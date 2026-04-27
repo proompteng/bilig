@@ -13,6 +13,8 @@ import { formatRangeAddress, parseRangeAddress } from './addressing.js'
 import { hasBuiltin } from './builtins.js'
 import { rewriteSpecialCall } from './special-call-rewrites.js'
 
+const CONTEXTUAL_BUILTINS = new Set(['CELL', 'COLUMN', 'FORMULATEXT', 'ROW', 'SHEET', 'SHEETS'])
+
 function assertNever(value: never): never {
   throw new Error(`Unexpected formula node: ${JSON.stringify(value)}`)
 }
@@ -212,6 +214,9 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
           callee === 'BYROW' ||
           callee === 'BYCOL'
         ) {
+          return false
+        }
+        if (CONTEXTUAL_BUILTINS.has(callee)) {
           return false
         }
         if (!hasBuiltin(callee) || !builtinWasmEnabledNames.has(callee)) {

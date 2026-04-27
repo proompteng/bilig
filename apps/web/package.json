@@ -7,6 +7,7 @@
     "dev": "node ../../node_modules/vite/bin/vite.js",
     "prebuild": "bun ../../scripts/gen-workspace-resolution.ts",
     "build": "tsc -b tsconfig.json && node ../../node_modules/vite/bin/vite.js build",
+    "build:bundle": "node ../../node_modules/vite/bin/vite.js build",
     "preview": "node ../../node_modules/vite/bin/vite.js preview",
     "preview:ci": "pnpm -w build && bun ../../scripts/run-vite-preview.ts 4180"
   },

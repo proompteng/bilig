@@ -6122,6 +6122,42 @@ describe('SpreadsheetEngine', () => {
     unsubscribe()
   })
 
+  it('emits tracked full invalidation when importing a raw snapshot directly', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'spec-tracked-import' })
+    await engine.ready()
+    const tracked = vi.fn()
+    const unsubscribe = engine.events.subscribeTracked(tracked)
+
+    engine.importSnapshot({
+      version: 1,
+      workbook: { name: 'spec-tracked-import' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Sheet1',
+          order: 0,
+          cells: [{ address: 'A1', value: 12 }],
+        },
+      ],
+    })
+
+    expect(tracked).toHaveBeenCalledTimes(1)
+    expect(tracked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'batch',
+        invalidation: 'full',
+        changedCellIndices: new Uint32Array(),
+        invalidatedRanges: [],
+        invalidatedRows: [],
+        invalidatedColumns: [],
+        explicitChangedCount: 0,
+      }),
+    )
+    expect(tracked.mock.calls[0]?.[0].patches ?? []).toEqual([])
+    expect(tracked.mock.calls[0]?.[0].metrics.batchId).toBe(1)
+    unsubscribe()
+  })
+
   it('emits targeted range invalidation for style-only edits', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'spec' })
     await engine.ready()

@@ -33,7 +33,7 @@ export interface WorkbookRuntimeSheetSnapshot {
 }
 
 interface WorkbookSheetLike {
-  id: number
+  id?: number
   name: string
   order: number
 }
@@ -49,8 +49,8 @@ export function listOrderedSheetNames(workbook: WorkbookLike): string[] {
 export function listOrderedSheets(workbook: WorkbookLike): WorkbookRuntimeSheetSnapshot[] {
   return [...workbook.sheetsByName.values()]
     .toSorted((left, right) => left.order - right.order)
-    .map((sheet) => ({
-      id: sheet.id,
+    .map((sheet, index) => ({
+      id: typeof sheet.id === 'number' ? sheet.id : index + 1,
       name: sheet.name,
       order: sheet.order,
     }))
@@ -195,8 +195,8 @@ function cloneRuntimeSheets(
 ): WorkbookRuntimeSheetSnapshot[] {
   if (sheets && sheets.length > 0) {
     return sheets
-      .map((sheet) => ({
-        id: sheet.id,
+      .map((sheet, index) => ({
+        id: typeof sheet.id === 'number' ? sheet.id : index + 1,
         name: sheet.name,
         order: sheet.order,
       }))

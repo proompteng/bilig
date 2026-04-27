@@ -85,11 +85,12 @@ const env = {
   BILIG_FUZZ_CAPTURE: '1',
   ...(resolvedReplayFixture ? { BILIG_FUZZ_REPLAY: resolvedReplayFixture } : {}),
 }
+const skipBrowserFuzz = process.env['BILIG_FUZZ_SKIP_BROWSER'] === '1'
 
 const vitestFuzzFiles = selectVitestFuzzFiles(mode, listVitestFuzzFiles())
 runCommand(buildVitestFuzzCommand(vitestFuzzFiles, availableParallelism()), env)
 
-if (shouldRunBrowserFuzz(mode, replayKind, resolvedReplayFixture !== null)) {
+if (!skipBrowserFuzz && shouldRunBrowserFuzz(mode, replayKind, resolvedReplayFixture !== null)) {
   runCommand(['bun', 'scripts/run-browser-tests.ts', '--grep', '@fuzz-browser'], {
     ...env,
     BILIG_FUZZ_BROWSER: '1',

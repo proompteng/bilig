@@ -237,8 +237,8 @@ function compareScalars(left: CellValue, right: CellValue): number | undefined {
     return compareText(toStringValue(left), toStringValue(right))
   }
 
-  const leftNum = toNumber(left)
-  const rightNum = toNumber(right)
+  const leftNum = comparableNumber(left)
+  const rightNum = comparableNumber(right)
   if (leftNum === undefined || rightNum === undefined) {
     return undefined
   }
@@ -246,6 +246,28 @@ function compareScalars(left: CellValue, right: CellValue): number | undefined {
     return 0
   }
   return leftNum < rightNum ? -1 : 1
+}
+
+function comparableNumber(value: CellValue): number | undefined {
+  switch (value.tag) {
+    case ValueTag.Number:
+      return value.value
+    case ValueTag.Boolean:
+      return value.value ? 1 : 0
+    case ValueTag.Empty:
+      return 0
+    case ValueTag.String: {
+      const trimmed = value.value.trim()
+      if (trimmed === '') {
+        return 0
+      }
+      const parsed = Number(trimmed)
+      return Number.isFinite(parsed) ? parsed : undefined
+    }
+    case ValueTag.Error:
+    default:
+      return undefined
+  }
 }
 
 function truthy(value: CellValue): boolean {

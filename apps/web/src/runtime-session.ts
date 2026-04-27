@@ -324,7 +324,9 @@ export async function createWorkerRuntimeSessionController(
 
   const updateSelectionViewport = (selection: WorkerRuntimeSelection): void => {
     selectionViewportCleanup()
-    selectionViewportCleanup = viewportStore.subscribeAuxiliaryViewport(selection.sheetName, selectionViewport(selection), () => {})
+    selectionViewportCleanup = viewportStore.subscribeAuxiliaryViewport(selection.sheetName, selectionViewport(selection), () => {}, {
+      initialPatch: 'none',
+    })
   }
 
   const applySelection = async (selection: WorkerRuntimeSelection): Promise<CellSnapshot> => {

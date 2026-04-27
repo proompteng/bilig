@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { ErrorCode, ValueTag, type WorkbookConditionalFormatSnapshot } from '@bilig/protocol'
 import { SpreadsheetEngine } from '../engine.js'
-import { createEngineSeedSnapshot } from './engine-fuzz-helpers.js'
+import {
+  applyActionAndCaptureResult,
+  createEngineSeedSnapshot,
+  exportReplaySnapshot,
+  normalizeSnapshotForSemanticComparison,
+  type CoreAction,
+} from './engine-fuzz-helpers.js'
 
 describe('engine fuzz regressions', () => {
   it('does not mutate source cells when moveRange is blocked by protection', async () => {
@@ -165,6 +171,39 @@ describe('engine fuzz regressions', () => {
 
     expect(engine.undo()).toBe(true)
     expect(engine.exportSnapshot()).toEqual(styledSnapshot)
+  })
+
+  it('restores explicit formats on formula cells deleted by structural undo replay', async () => {
+    const seedSnapshot = await createEngineSeedSnapshot('sparse-format', 'sparse-formula-format-delete-undo-regression')
+    const engine = new SpreadsheetEngine({
+      workbookName: seedSnapshot.workbook.name,
+      replicaId: 'sparse-formula-format-delete-undo-regression',
+    })
+    await engine.ready()
+    engine.importSnapshot(structuredClone(seedSnapshot))
+
+    const moveAction = {
+      kind: 'move',
+      source: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+      target: { sheetName: 'Sheet1', startAddress: 'C5', endAddress: 'C5' },
+    } satisfies CoreAction
+    const formulaAction = {
+      kind: 'formula',
+      address: 'C5',
+      formula: 'A1+A1',
+    } satisfies CoreAction
+
+    engine.moveRange(moveAction.source, moveAction.target)
+    engine.setCellFormula('Sheet1', formulaAction.address, formulaAction.formula)
+    expect(engine.getCell('Sheet1', 'C5').format).toBe('0.00')
+
+    engine.deleteRows('Sheet1', 3, 2)
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getCell('Sheet1', 'C5').format).toBe('0.00')
+    expect(normalizeSnapshotForSemanticComparison(engine.exportSnapshot())).toEqual(
+      normalizeSnapshotForSemanticComparison(await exportReplaySnapshot(seedSnapshot, [moveAction, formulaAction])),
+    )
   })
 
   it('rebinds structurally rewritten formulas when dependency addresses shift after prior ref errors', async () => {
@@ -483,5 +522,110 @@ describe('engine fuzz regressions', () => {
       tag: ValueTag.Number,
       value: 1429783918,
     })
+  })
+
+  it('preserves narrow SUM range precision after CSV roundtrip import', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'csv-sum-prefix-precision-regression' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    engine.setCellFormula('Sheet1', 'A1', 'SUM(A5:A5)')
+    engine.setCellFormula('Sheet1', 'A2', 'A5+A5')
+    engine.setCellFormula('Sheet1', 'A3', 'A5+A5')
+    engine.setCellFormula('Sheet1', 'A4', 'A5*A5')
+    engine.setRangeValues({ sheetName: 'Sheet1', startAddress: 'A5', endAddress: 'A5' }, [[663897248]])
+
+    const restored = new SpreadsheetEngine({ workbookName: 'csv-sum-prefix-precision-regression-restored' })
+    await restored.ready()
+    restored.createSheet('Sheet1')
+    restored.importSheetCsv('Sheet1', engine.exportSheetCsv('Sheet1'))
+
+    expect(restored.getCell('Sheet1', 'A1').value).toEqual({
+      tag: ValueTag.Number,
+      value: 663897248,
+    })
+  })
+
+  it('restores snapshots when a formula runtime image contains a stale template id', async () => {
+    const seedSnapshot = await createEngineSeedSnapshot('formula-graph', 'stale-template-runtime-image-regression')
+    const engine = new SpreadsheetEngine({
+      workbookName: seedSnapshot.workbook.name,
+      replicaId: 'stale-template-runtime-image-primary',
+    })
+    await engine.ready()
+    engine.importSnapshot(structuredClone(seedSnapshot))
+
+    const actions: CoreAction[] = [
+      { kind: 'deleteColumns', start: 0, count: 1 },
+      { kind: 'formula', address: 'A1', formula: 'A1+A1' },
+      { kind: 'deleteRows', start: 0, count: 1 },
+      {
+        kind: 'format',
+        range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+        format: '0.00',
+      },
+      {
+        kind: 'clear',
+        range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+      },
+      {
+        kind: 'style',
+        range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+        patch: { fill: { backgroundColor: '#dbeafe' } },
+      },
+    ]
+    actions.forEach((action) => applyActionAndCaptureResult(engine, action))
+
+    const snapshot = engine.exportSnapshot()
+    const restored = new SpreadsheetEngine({
+      workbookName: seedSnapshot.workbook.name,
+      replicaId: 'stale-template-runtime-image-restored',
+    })
+    await restored.ready()
+
+    expect(() => restored.importSnapshot(structuredClone(snapshot))).not.toThrow()
+    expect(normalizeSnapshotForSemanticComparison(restored.exportSnapshot())).toEqual(normalizeSnapshotForSemanticComparison(snapshot))
+  })
+
+  it('normalizes sparse style metadata by covered cells after undo replay', async () => {
+    const seedSnapshot = await createEngineSeedSnapshot('sparse-format', 'history-style-run-normalization-regression')
+    const engine = new SpreadsheetEngine({
+      workbookName: seedSnapshot.workbook.name,
+      replicaId: 'history-style-run-normalization',
+    })
+    await engine.ready()
+    engine.importSnapshot(structuredClone(seedSnapshot))
+
+    const applied: CoreAction[] = []
+    const applyAccepted = (action: CoreAction) => {
+      const result = applyActionAndCaptureResult(engine, action)
+      if (result.accepted) {
+        applied.push(action)
+      }
+    }
+
+    applyAccepted({ kind: 'insertRows', start: 0, count: 1 })
+    applyAccepted({
+      kind: 'style',
+      range: { sheetName: 'Sheet1', startAddress: 'D2', endAddress: 'E3' },
+      patch: { alignment: { horizontal: 'right', wrap: true } },
+    })
+    applyAccepted({ kind: 'insertRows', start: 0, count: 1 })
+    applyAccepted({ kind: 'deleteColumns', start: 0, count: 1 })
+
+    expect(engine.undo()).toBe(true)
+    expect(applied.pop()?.kind).toBe('deleteColumns')
+
+    applyAccepted({
+      kind: 'style',
+      range: { sheetName: 'Sheet1', startAddress: 'F3', endAddress: 'F3' },
+      patch: { alignment: { horizontal: 'right', wrap: true } },
+    })
+
+    const expectedSnapshot = await exportReplaySnapshot(seedSnapshot, applied)
+
+    expect(normalizeSnapshotForSemanticComparison(engine.exportSnapshot())).toEqual(
+      normalizeSnapshotForSemanticComparison(expectedSnapshot),
+    )
   })
 })

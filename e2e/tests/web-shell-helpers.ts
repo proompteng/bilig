@@ -706,9 +706,12 @@ export async function warmStartWorkbookScrollPerf(page: Page, workload: string, 
       warmupReport.counters.typeGpuSurfaceResizes > 0 ||
       warmupReport.counters.typeGpuVertexUploadBytes > 0
     const hasRenderNoise =
+      warmupReport.counters.viewportSubscriptions > 0 ||
       warmupReport.counters.fullPatches > 0 ||
       warmupReport.counters.headerPaneBuilds > 0 ||
       warmupReport.counters.reactCommits > 0 ||
+      warmupReport.counters.canvasSurfaceMounts > 0 ||
+      warmupReport.counters.domSurfaceMounts > 0 ||
       hasSurfaceCommitNoise ||
       hasTypeGpuWarmupNoise
     if (!hasRenderNoise) {
@@ -721,6 +724,18 @@ export async function warmStartWorkbookScrollPerf(page: Page, workload: string, 
   }
   await runWarmup(1)
   await startWorkbookScrollPerf(page, workload, { primeRenderer: false })
+}
+
+export async function resetGridScroll(page: Page, input: { left?: number; top?: number } = {}) {
+  await page.getByTestId('grid-scroll-viewport').evaluate(async (element, position) => {
+    if (!(element instanceof HTMLDivElement)) {
+      throw new Error('grid scroll viewport is not an HTMLDivElement')
+    }
+    element.scrollLeft = position.left ?? 0
+    element.scrollTop = position.top ?? 0
+    element.dispatchEvent(new Event('scroll'))
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()))
+  }, input)
 }
 
 export async function settleWorkbookScrollPerf(page: Page, frames = 4) {

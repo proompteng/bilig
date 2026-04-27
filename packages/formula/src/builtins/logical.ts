@@ -36,26 +36,8 @@ function compareScalars(left: CellValue, right: CellValue): number | undefined {
   if (leftTextLike && rightTextLike) {
     return compareText(left.tag === ValueTag.String ? left.value : '', right.tag === ValueTag.String ? right.value : '')
   }
-  const leftNumeric =
-    left.tag === ValueTag.Boolean
-      ? left.value
-        ? 1
-        : 0
-      : left.tag === ValueTag.Empty
-        ? 0
-        : left.tag === ValueTag.Number
-          ? left.value
-          : undefined
-  const rightNumeric =
-    right.tag === ValueTag.Boolean
-      ? right.value
-        ? 1
-        : 0
-      : right.tag === ValueTag.Empty
-        ? 0
-        : right.tag === ValueTag.Number
-          ? right.value
-          : undefined
+  const leftNumeric = coerceNumberLike(left)
+  const rightNumeric = coerceNumberLike(right)
   if (leftNumeric === undefined || rightNumeric === undefined) {
     return undefined
   }

@@ -294,6 +294,7 @@ export function createAggregateStateStore(args: {
         existing &&
         existing.columnVersion === currentVersions.columnVersion &&
         existing.structureVersion === currentVersions.structureVersion &&
+        existing.rowStart <= region.rowStart &&
         (aggregateKind !== 'min' && aggregateKind !== 'max' ? true : existing.extremaValid)
       ) {
         return existing.rowEnd >= region.rowEnd ? existing : extendEntry(existing, region.rowEnd)
@@ -301,6 +302,7 @@ export function createAggregateStateStore(args: {
       if (existing) {
         deleteEntry(existing)
       }
+      const capacity = Math.max(region.rowEnd - rowStart + 1, 16)
       const next: AggregateStateEntry = {
         regionId,
         sheetName: region.sheetName,
@@ -310,13 +312,13 @@ export function createAggregateStateStore(args: {
         columnVersion: currentVersions.columnVersion,
         structureVersion: currentVersions.structureVersion,
         extremaValid: true,
-        prefixSums: new Float64Array(Math.max(region.rowEnd - rowStart + 1, 16)),
-        prefixCount: new Uint32Array(Math.max(region.rowEnd - rowStart + 1, 16)),
-        prefixAverageCount: new Uint32Array(Math.max(region.rowEnd - rowStart + 1, 16)),
-        prefixErrorCodes: new Uint16Array(Math.max(region.rowEnd - rowStart + 1, 16)),
-        prefixErrorCounts: new Uint32Array(Math.max(region.rowEnd - rowStart + 1, 16)),
-        prefixMinimums: new Float64Array(Math.max(region.rowEnd - rowStart + 1, 16)),
-        prefixMaximums: new Float64Array(Math.max(region.rowEnd - rowStart + 1, 16)),
+        prefixSums: new Float64Array(capacity),
+        prefixCount: new Uint32Array(capacity),
+        prefixAverageCount: new Uint32Array(capacity),
+        prefixErrorCodes: new Uint16Array(capacity),
+        prefixErrorCounts: new Uint32Array(capacity),
+        prefixMinimums: new Float64Array(capacity),
+        prefixMaximums: new Float64Array(capacity),
       }
       cache.set(key, next)
       registerEntry(next)

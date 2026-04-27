@@ -42,8 +42,9 @@
     "build": "pnpm workspace-resolution:generate && pnpm --filter @bilig/protocol build && pnpm --filter @bilig/workbook-domain build && pnpm --filter @bilig/binary-protocol build && pnpm --filter @bilig/agent-api build && pnpm --filter @bilig/contracts build && pnpm --filter @bilig/runtime-kernel build && pnpm --filter @bilig/actors build && pnpm --filter @bilig/formula build && pnpm --filter @bilig/storage-browser build && pnpm --filter @bilig/storage-server build && pnpm --filter @bilig/excel-fixtures build && pnpm --filter @bilig/excel-import build && pnpm --filter @bilig/wasm-kernel build && pnpm --filter @bilig/core build && pnpm --filter @bilig/headless build && pnpm --filter @bilig/worker-transport build && pnpm --filter @bilig/renderer build && pnpm --filter @bilig/grid build && pnpm --filter @bilig/benchmarks build && pnpm --filter @bilig/zero-sync build && pnpm --filter @bilig/app build && pnpm --filter @bilig/web build",
     "typecheck": "tsc -b --pretty false",
     "test": "bun scripts/run-vitest.ts --run",
-    "coverage": "bun scripts/run-vitest.ts --run --coverage",
+    "coverage": "bun scripts/run-vitest.ts --run --coverage --exclude '**/*.fuzz.test.ts'",
     "test:browser": "bun scripts/run-browser-tests.ts",
+    "test:browser:full": "BILIG_BROWSER_INCLUDE_PERF=1 BILIG_BROWSER_INCLUDE_DEEP=1 BILIG_BROWSER_INCLUDE_FUZZ=1 BILIG_FUZZ_PROFILE=main BILIG_FUZZ_CAPTURE=1 bun scripts/run-browser-tests.ts",
     "test:browser:prod": "pnpm exec playwright test -c playwright.prod.config.ts e2e/tests/prod-smoke.pw.ts",
     "test:fuzz": "bun scripts/run-fuzz.ts default",
     "test:fuzz:main": "bun scripts/run-fuzz.ts main",
@@ -79,7 +80,11 @@
     "publish:runtime": "bun scripts/publish-runtime-package-set.ts",
     "release:check": "bun scripts/release-check.ts",
     "wasm:build": "pnpm --filter @bilig/wasm-kernel build",
-    "ci": "pnpm protocol:check && pnpm formula-inventory:check && pnpm formula:dominance:check && pnpm workspace-resolution:check && pnpm naming:check && pnpm lint && pnpm wasm:build && pnpm typecheck && pnpm exec playwright install chromium && pnpm test:fuzz:main && pnpm coverage && bun scripts/coverage-contracts.ts && pnpm bench:smoke && CI=1 pnpm bench:contracts && pnpm test:browser && pnpm --filter @bilig/web build && pnpm release:check && git diff --exit-code && git diff --cached --exit-code"
+    "ci": "bun scripts/run-ci.ts",
+    "ci:core": "BILIG_CI_SKIP_BROWSER=1 bun scripts/run-ci.ts",
+    "ci:browser": "VITE_BILIG_REMOTE_SYNC=0 pnpm --filter @bilig/web build:bundle && BILIG_DEV_WEB_PREVIEW_BUILD=0 pnpm test:browser",
+    "ci:browser:full": "VITE_BILIG_REMOTE_SYNC=0 pnpm --filter @bilig/web build:bundle && BILIG_DEV_WEB_PREVIEW_BUILD=0 pnpm test:browser:full",
+    "ci:full": "BILIG_CI_PROFILE=full bun scripts/run-ci.ts"
   },
   "devDependencies": {
     "@bilig/protocol": "workspace:*",

@@ -1,6 +1,7 @@
 import { applyBuiltin, registerTrackedArrayShape } from './builtins'
 import { ErrorCode, Opcode, ValueTag } from './protocol'
 import { STACK_KIND_ARRAY, STACK_KIND_RANGE, STACK_KIND_SCALAR } from './result-io'
+import { parseNumericText } from './text-special'
 
 export let tags = new Uint8Array(64)
 export let numbers = new Float64Array(64)
@@ -307,8 +308,8 @@ function compareScalars(leftTag: u8, leftValue: f64, rightTag: u8, rightValue: f
     return compareText(leftText, rightText)
   }
 
-  const leftNumeric = toNumeric(STACK_KIND_SCALAR, leftTag, leftValue)
-  const rightNumeric = toNumeric(STACK_KIND_SCALAR, rightTag, rightValue)
+  const leftNumeric = comparableNumber(leftTag, leftValue)
+  const rightNumeric = comparableNumber(rightTag, rightValue)
   if (isNaN(leftNumeric) || isNaN(rightNumeric)) {
     return i32.MIN_VALUE
   }
@@ -316,6 +317,20 @@ function compareScalars(leftTag: u8, leftValue: f64, rightTag: u8, rightValue: f
     return 0
   }
   return leftNumeric < rightNumeric ? -1 : 1
+}
+
+function comparableNumber(tag: u8, value: f64): f64 {
+  if (tag == ValueTag.Number || tag == ValueTag.Boolean) {
+    return value
+  }
+  if (tag == ValueTag.Empty) {
+    return 0
+  }
+  if (tag != ValueTag.String) {
+    return NaN
+  }
+  const text = scalarText(tag, value)
+  return text == null ? NaN : parseNumericText(text)
 }
 
 function slotRows(slot: i32): i32 {

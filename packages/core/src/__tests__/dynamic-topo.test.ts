@@ -4,6 +4,65 @@ import { makeCellEntity } from '../entity-ids.js'
 import { DynamicTopo } from '../scheduler/dynamic-topo.js'
 
 describe('DynamicTopo', () => {
+  it('handles empty affected slices and epoch rollover', () => {
+    const store = new CellStore()
+    store.allocate(1, 0, 0)
+    const topo = new DynamicTopo()
+    Object.defineProperty(topo, 'affectedEpoch', {
+      configurable: true,
+      value: 0xffff_fffe,
+      writable: true,
+    })
+
+    const result = topo.repair(
+      Uint32Array.of(0),
+      {
+        collectFormulaDependents: () => new Uint32Array(),
+        forEachFormulaDependencyCell: () => {},
+      },
+      store,
+      () => false,
+    )
+
+    expect(result.repaired).toBe(true)
+    expect(result.orderedFormulaCount).toBe(0)
+  })
+
+  it('grows repair buffers for large dependent chains', () => {
+    const store = new CellStore()
+    for (let index = 0; index <= 140; index += 1) {
+      store.allocate(1, 0, index)
+    }
+
+    const graph = new Map<number, Uint32Array>()
+    const dependencies = new Map<number, number[]>()
+    for (let index = 1; index < 140; index += 1) {
+      graph.set(makeCellEntity(index), index === 139 ? Uint32Array.of(999) : Uint32Array.of(index + 1, 999))
+      if (index > 1) {
+        dependencies.set(index, [index - 1])
+      }
+    }
+
+    const topo = new DynamicTopo()
+    const result = topo.repair(
+      Uint32Array.of(1),
+      {
+        collectFormulaDependents: (entityId) => graph.get(entityId) ?? new Uint32Array(),
+        forEachFormulaDependencyCell: (cellIndex, fn) => {
+          ;(dependencies.get(cellIndex) ?? []).forEach((dependencyCellIndex) => fn(dependencyCellIndex))
+        },
+      },
+      store,
+      (cellIndex) => cellIndex >= 1 && cellIndex < 140,
+    )
+
+    expect(result.repaired).toBe(true)
+    expect(result.orderedFormulaCount).toBe(139)
+    expect(result.orderedFormulaCellIndices[0]).toBe(1)
+    expect(result.orderedFormulaCellIndices[138]).toBe(139)
+    expect(store.topoRanks[1]).toBeLessThan(store.topoRanks[139])
+  })
+
   it('repairs topo ranks for the affected formula slice while preserving external predecessors', () => {
     const store = new CellStore()
     for (let index = 0; index < 4; index += 1) {

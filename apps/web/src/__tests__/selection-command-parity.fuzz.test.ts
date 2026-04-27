@@ -52,34 +52,35 @@ afterEach(() => {
 
 describe('selection command parity fuzz', () => {
   it('dispatches formatting mutations against the current live range without rerendering', async () => {
-    await runProperty({
-      suite: 'web/selection-command/live-range-parity',
-      arbitrary: fc.array(selectionRangeArbitrary, { minLength: 2, maxLength: 12 }),
-      predicate: async (ranges) => {
-        ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-        const invokeMutation = vi.fn(async () => {})
-        const selectionRangeRef: MutableRefObject<CellRangeRef> = {
-          current: {
-            sheetName: 'Sheet1',
-            startAddress: 'A1',
-            endAddress: 'A1',
-          },
-        }
-        const host = document.createElement('div')
-        document.body.appendChild(host)
-        const root = createRoot(host)
+    const invokeMutation = vi.fn(async () => {})
+    const selectionRangeRef: MutableRefObject<CellRangeRef> = {
+      current: {
+        sheetName: 'Sheet1',
+        startAddress: 'A1',
+        endAddress: 'A1',
+      },
+    }
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
 
-        try {
-          await act(async () => {
-            root.render(
-              createElement(ToolbarHarness, {
-                invokeMutation,
-                selectionRangeRef,
-              }),
-            )
-          })
+    await act(async () => {
+      root.render(
+        createElement(ToolbarHarness, {
+          invokeMutation,
+          selectionRangeRef,
+        }),
+      )
+    })
 
+    try {
+      await runProperty({
+        suite: 'web/selection-command/live-range-parity',
+        arbitrary: fc.array(selectionRangeArbitrary, { minLength: 2, maxLength: 12 }),
+        predicate: async (ranges) => {
+          invokeMutation.mockClear()
           await ranges.reduce<Promise<void>>(async (previous, range) => {
             await previous
             selectionRangeRef.current = range
@@ -90,13 +91,13 @@ describe('selection command parity fuzz', () => {
 
           const dispatchedRanges = invokeMutation.mock.calls.map((call) => call[1])
           expect(dispatchedRanges).toEqual(ranges)
-        } finally {
-          await act(async () => {
-            root.unmount()
-          })
-        }
-      },
-    })
+        },
+      })
+    } finally {
+      await act(async () => {
+        root.unmount()
+      })
+    }
   })
 })
 

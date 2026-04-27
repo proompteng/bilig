@@ -23,7 +23,9 @@ describe('WorkPaper HyperFormula snapshot parity', () => {
     expect(currentSurface.staticMembers).toEqual(snapshot.classSurface.staticMembers)
     expect(currentSurface.staticMethods).toEqual(snapshot.classSurface.staticMethods)
     expect(currentSurface.instanceAccessors).toEqual(snapshot.classSurface.instanceAccessors)
-    expect(currentSurface.instanceMethods).toEqual([...snapshot.classSurface.instanceMethods, ...ALLOWED_BILIG_INSTANCE_METHODS].toSorted())
+    expect(currentSurface.instanceMethods).toEqual(
+      [...new Set([...snapshot.classSurface.instanceMethods, ...ALLOWED_BILIG_INSTANCE_METHODS])].toSorted(),
+    )
   })
 
   it('matches the checked-in HyperFormula config-key snapshot', () => {

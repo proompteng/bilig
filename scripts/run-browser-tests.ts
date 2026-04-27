@@ -3,13 +3,11 @@
 import { existsSync, readFileSync, readlinkSync } from 'node:fs'
 import net from 'node:net'
 import { resolveBrowserLocalWebMode } from './browser-stack-config.js'
+import { resolveBrowserTestPhases, type BrowserTestPhase } from './browser-test-phases.js'
 
 const textDecoder = new TextDecoder()
 const repoRoot = process.cwd()
 const playwrightArgs = process.argv.slice(2)
-const CLIPBOARD_GLOBAL_GREP = '@clipboard-global'
-const BROWSER_PERF_GREP = '@browser-perf'
-const BROWSER_SERIAL_GREP = '@browser-serial'
 const requestedBrowserStack = process.env['BILIG_BROWSER_STACK'] ?? 'auto'
 const normalizedBrowserStack =
   requestedBrowserStack === 'compose' || requestedBrowserStack === 'local' || requestedBrowserStack === 'auto'
@@ -469,14 +467,16 @@ function terminatePreviewServers(): void {
   }
 }
 
-async function runPlaywright(args: string[]): Promise<void> {
+async function runPlaywright(phase: BrowserTestPhase): Promise<void> {
   const activePorts = e2ePorts
-  const result = Bun.spawnSync(['pnpm', 'exec', 'playwright', 'test', ...args], {
+  console.log(`Running ${phase.label}: playwright test ${phase.args.join(' ')}`)
+  const result = Bun.spawnSync(['pnpm', 'exec', 'playwright', 'test', ...phase.args], {
     stdin: 'inherit',
     stdout: 'inherit',
     stderr: 'inherit',
     env: {
       ...process.env,
+      ...phase.env,
       BILIG_BROWSER_STACK: browserStack,
       BILIG_DEV_DISABLE_COMPOSE: browserStack === 'local' ? '1' : (process.env['BILIG_DEV_DISABLE_COMPOSE'] ?? '0'),
       BILIG_E2E_REMOTE_SYNC: browserStack === 'local' ? '0' : (process.env['BILIG_E2E_REMOTE_SYNC'] ?? '1'),
@@ -492,27 +492,21 @@ async function runPlaywright(args: string[]): Promise<void> {
     },
   })
   if (result.exitCode !== 0) {
-    throw new Error(`playwright test ${args.join(' ')} failed with exit code ${result.exitCode ?? 1}`)
+    throw new Error(`playwright test ${phase.args.join(' ')} failed with exit code ${result.exitCode ?? 1}`)
   }
 }
 
-function configuredPlaywrightArgSets(): string[][] {
-  if (playwrightArgs.length > 0) {
-    return [playwrightArgs]
-  }
-
-  return [
-    ['--grep-invert', `${CLIPBOARD_GLOBAL_GREP}|${BROWSER_PERF_GREP}|${BROWSER_SERIAL_GREP}`],
-    ['--workers=1', '--grep', BROWSER_PERF_GREP],
-    ['--workers=1', '--grep', BROWSER_SERIAL_GREP],
-    ['--workers=1', '--grep', CLIPBOARD_GLOBAL_GREP],
-  ]
+function configuredPlaywrightPhases(): BrowserTestPhase[] {
+  return resolveBrowserTestPhases({
+    playwrightArgs,
+    env: process.env,
+  })
 }
 
 async function runConfiguredPlaywrightSuites(): Promise<void> {
-  for (const args of configuredPlaywrightArgSets()) {
+  for (const phase of configuredPlaywrightPhases()) {
     // oxlint-disable-next-line eslint(no-await-in-loop)
-    await runPlaywright(args)
+    await runPlaywright(phase)
   }
 }
 
@@ -794,36 +788,37 @@ async function ensureLocalPlaywrightStack(child: BrowserStackProcess | null): Pr
   return startLocalPlaywrightStack()
 }
 
-async function runLocalPlaywrightPhase(args: string[], child: BrowserStackProcess | null, attempt = 1): Promise<BrowserStackProcess> {
+async function runLocalPlaywrightPhase(
+  phase: BrowserTestPhase,
+  child: BrowserStackProcess | null,
+  attempt = 1,
+): Promise<BrowserStackProcess> {
   const currentChild = await ensureLocalPlaywrightStack(child)
   try {
-    await runPlaywright(args)
+    await runPlaywright(phase)
     return currentChild
   } catch (error) {
     if ((await isLocalPlaywrightStackReady(currentChild)) || attempt >= LOCAL_PLAYWRIGHT_PHASE_ATTEMPTS) {
       throw error
     }
     console.warn(
-      `local browser stack exited during Playwright phase "${args.join(' ')}"; restarting (${String(attempt + 1)}/${String(LOCAL_PLAYWRIGHT_PHASE_ATTEMPTS)})`,
+      `local browser stack exited during Playwright phase "${phase.label}"; restarting (${String(attempt + 1)}/${String(LOCAL_PLAYWRIGHT_PHASE_ATTEMPTS)})`,
     )
     await stopAndReapLocalPlaywrightStack(currentChild)
     e2ePorts = await resolveE2ePortAllocation(true)
-    return runLocalPlaywrightPhase(args, null, attempt + 1)
+    return runLocalPlaywrightPhase(phase, null, attempt + 1)
   }
 }
 
 async function runLocalPlaywright(): Promise<void> {
-  for (const args of configuredPlaywrightArgSets()) {
-    // oxlint-disable-next-line eslint(no-await-in-loop)
-    e2ePorts = await resolveE2ePortAllocation(true)
-    let child: BrowserStackProcess | null = null
-    try {
+  let child: BrowserStackProcess | null = null
+  try {
+    for (const phase of configuredPlaywrightPhases()) {
       // oxlint-disable-next-line eslint(no-await-in-loop)
-      child = await runLocalPlaywrightPhase(args, null)
-    } finally {
-      // oxlint-disable-next-line eslint(no-await-in-loop)
-      await stopAndReapLocalPlaywrightStack(child)
+      child = await runLocalPlaywrightPhase(phase, child)
     }
+  } finally {
+    await stopAndReapLocalPlaywrightStack(child)
   }
 }
 

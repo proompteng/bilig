@@ -50,6 +50,9 @@ function isStaticNode(node: FormulaNode): boolean {
     case 'BinaryExpr':
       return isStaticNode(node.left) && isStaticNode(node.right)
     case 'CallExpr':
+      if (VOLATILE_BUILTINS.has(node.callee.toUpperCase()) || CONTEXTUAL_BUILTINS.has(node.callee.toUpperCase())) {
+        return false
+      }
       return node.args.every(isStaticNode)
     case 'InvokeExpr':
       return isStaticNode(node.callee) && node.args.every(isStaticNode)

@@ -227,9 +227,10 @@ export class ProjectedViewportStore implements GridEngineLike {
     sheetName: string,
     viewport: Viewport,
     listener: (damage?: readonly { cell: readonly [number, number] }[]) => void,
+    options: { readonly initialPatch?: 'full' | 'none' } = {},
   ): () => void {
     return this.patchCoordinator.subscribeViewport(sheetName, viewport, listener, {
-      initialPatch: 'full',
+      initialPatch: options.initialPatch ?? 'full',
       invalidateResidentScenes: false,
     })
   }

@@ -2,7 +2,7 @@ name: forgejo-nightly-correctness
 
 on:
   schedule:
-    - cron: "0 9 * * *"
+    - cron: '0 9 * * *'
   workflow_dispatch:
 
 jobs:
@@ -13,7 +13,8 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
     env:
-      CI: "true"
+      CI: 'true'
+      BILIG_BENCH_TOLERANCE: '1.5'
     steps:
       - name: Checkout
         uses: https://data.forgejo.org/actions/checkout@v6.0.2
@@ -45,7 +46,7 @@ jobs:
         run: |
           set -eu
           export PATH="$HOME/.bun/bin:$PATH"
-          pnpm test:correctness:deep
+          pnpm run ci:full
 
       - name: Upload nightly correctness artifacts
         if: failure()
