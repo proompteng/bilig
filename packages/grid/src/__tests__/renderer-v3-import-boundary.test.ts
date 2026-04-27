@@ -18,10 +18,12 @@ describe('renderer v3 import boundary', () => {
     expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/WorkbookPaneRendererV2.tsx'))).toBe(false)
   })
 
-  test('renderer-v2 barrel does not export the mounted pane renderer', () => {
-    const source = readFileSync(join(GRID_SRC_ROOT, 'renderer-v2/index.ts'), 'utf8')
+  test('legacy V2 workbook backend surface is deleted', () => {
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/workbook-typegpu-backend.ts'))).toBe(false)
+  })
 
-    expect(source).not.toContain('WorkbookPaneRendererV2')
+  test('legacy renderer-v2 barrel is deleted', () => {
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/index.ts'))).toBe(false)
   })
 
   test('product grid paths do not import renderer-v2 modules', () => {

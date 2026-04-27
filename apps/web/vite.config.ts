@@ -91,7 +91,7 @@ const codeSplittingGroups = [
     name: 'grid-renderer-vendor',
     priority: 15,
     test(id: string) {
-      return includesAny(id, ['/node_modules/typegpu/', '/packages/grid/src/renderer-v2/', '/packages/grid/src/renderer-v3/'])
+      return includesAny(id, ['/node_modules/typegpu/', '/packages/grid/src/renderer-v3/'])
     },
   },
   {
