@@ -38,6 +38,8 @@ export interface GridGpuCounters {
   readonly bufferAllocations: number
   readonly bufferAllocationBytes: number
   readonly atlasUploadBytes: number
+  readonly atlasDirtyPages: number
+  readonly atlasDirtyPageUploadBytes: number
   readonly surfaceResizes: number
   readonly tileMisses: number
   readonly tileCacheEvictions: number

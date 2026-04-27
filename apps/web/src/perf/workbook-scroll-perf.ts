@@ -34,6 +34,8 @@ interface WorkbookScrollPerfCounters {
   typeGpuBufferAllocations: number
   typeGpuBufferAllocationBytes: number
   typeGpuAtlasUploadBytes: number
+  typeGpuAtlasDirtyPages: number
+  typeGpuAtlasDirtyPageUploadBytes: number
   typeGpuSurfaceResizes: number
   typeGpuTileMisses: number
   typeGpuTileCacheEvictions: number
@@ -99,6 +101,8 @@ class WorkbookScrollPerfCollector {
     canvasPaints: {},
     surfaceCommits: {},
     typeGpuAtlasUploadBytes: 0,
+    typeGpuAtlasDirtyPages: 0,
+    typeGpuAtlasDirtyPageUploadBytes: 0,
     typeGpuBufferAllocationBytes: 0,
     typeGpuBufferAllocations: 0,
     typeGpuConfigures: 0,
@@ -246,6 +250,11 @@ class WorkbookScrollPerfCollector {
 
   noteTypeGpuAtlasUpload(bytes: number): void {
     this.totalCounters.typeGpuAtlasUploadBytes += bytes
+  }
+
+  noteTypeGpuAtlasDirtyPageUpload(bytes: number, pageCount: number): void {
+    this.totalCounters.typeGpuAtlasDirtyPageUploadBytes += bytes
+    this.totalCounters.typeGpuAtlasDirtyPages += pageCount
   }
 
   noteTypeGpuSurfaceResize(): void {
@@ -420,6 +429,8 @@ function subtractCounters(counters: WorkbookScrollPerfCounters, baseline: Workbo
     canvasPaints: subtractRecordCounters(counters.canvasPaints, baseline.canvasPaints),
     surfaceCommits: subtractRecordCounters(counters.surfaceCommits, baseline.surfaceCommits),
     typeGpuAtlasUploadBytes: counters.typeGpuAtlasUploadBytes - baseline.typeGpuAtlasUploadBytes,
+    typeGpuAtlasDirtyPages: counters.typeGpuAtlasDirtyPages - baseline.typeGpuAtlasDirtyPages,
+    typeGpuAtlasDirtyPageUploadBytes: counters.typeGpuAtlasDirtyPageUploadBytes - baseline.typeGpuAtlasDirtyPageUploadBytes,
     typeGpuBufferAllocationBytes: counters.typeGpuBufferAllocationBytes - baseline.typeGpuBufferAllocationBytes,
     typeGpuBufferAllocations: counters.typeGpuBufferAllocations - baseline.typeGpuBufferAllocations,
     typeGpuConfigures: counters.typeGpuConfigures - baseline.typeGpuConfigures,

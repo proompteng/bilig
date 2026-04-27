@@ -32,10 +32,28 @@ interface MutableGlyphAtlasEntry {
   v1: number
 }
 
+export interface GlyphAtlasDirtyPageUpload {
+  readonly pageId: number
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+  readonly byteSize: number
+}
+
+export interface GlyphAtlasDirtyPageStats {
+  readonly atlasSeq: number
+  readonly pageCount: number
+  readonly dirtyPageCount: number
+  readonly dirtyUploadBytes: number
+}
+
 type AtlasCanvasLike = HTMLCanvasElement | OffscreenCanvas
 type AtlasContextLike = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
 const ATLAS_SCALE = 3
+const ATLAS_DIRTY_PAGE_SIZE = 512
+const ATLAS_PAGE_ID_STRIDE = 65536
 
 function configureTextContext(context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D): void {
   context.textBaseline = 'alphabetic'
@@ -152,6 +170,8 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
   let cursorY = padding
   let rowHeight = 0
   let version = 0
+  let atlasSeq = 0
+  const dirtyPages = new Map<number, GlyphAtlasDirtyPageUpload>()
 
   const redrawAll = () => {
     if (!context) return
@@ -189,6 +209,8 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
 
     redrawAll()
     version += 1
+    atlasSeq += 1
+    markAllPagesDirty()
   }
 
   const intern = (font: string, glyph: string): GlyphAtlasEntry => {
@@ -229,6 +251,7 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
       context.font = font
       context.fillText(glyph, entry.x + entry.originOffsetX, entry.y + metrics.baseline)
     }
+    markGlyphPageDirty(entry)
 
     entries.set(key, entry)
     cursorX += metrics.width + padding
@@ -236,9 +259,80 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
     return entry
   }
 
+  const markGlyphPageDirty = (entry: Pick<MutableGlyphAtlasEntry, 'x' | 'y' | 'width' | 'height'>) => {
+    const x = Math.max(0, Math.floor(entry.x * scale))
+    const y = Math.max(0, Math.floor(entry.y * scale))
+    const xEnd = Math.min(width, Math.ceil((entry.x + entry.width) * scale))
+    const yEnd = Math.min(height, Math.ceil((entry.y + entry.height) * scale))
+    markPhysicalRectDirty(x, y, xEnd - x, yEnd - y)
+  }
+
+  const markAllPagesDirty = () => {
+    markPhysicalRectDirty(0, 0, width, height)
+  }
+
+  const markPhysicalRectDirty = (x: number, y: number, dirtyWidth: number, dirtyHeight: number) => {
+    const x0 = Math.max(0, Math.floor(x))
+    const y0 = Math.max(0, Math.floor(y))
+    const x1 = Math.min(width, Math.ceil(x + dirtyWidth))
+    const y1 = Math.min(height, Math.ceil(y + dirtyHeight))
+    if (x1 <= x0 || y1 <= y0) {
+      return
+    }
+
+    const pageX0 = Math.floor(x0 / ATLAS_DIRTY_PAGE_SIZE)
+    const pageY0 = Math.floor(y0 / ATLAS_DIRTY_PAGE_SIZE)
+    const pageX1 = Math.floor((x1 - 1) / ATLAS_DIRTY_PAGE_SIZE)
+    const pageY1 = Math.floor((y1 - 1) / ATLAS_DIRTY_PAGE_SIZE)
+    for (let pageY = pageY0; pageY <= pageY1; pageY += 1) {
+      for (let pageX = pageX0; pageX <= pageX1; pageX += 1) {
+        markPageDirty(pageX, pageY)
+      }
+    }
+  }
+
+  const markPageDirty = (pageX: number, pageY: number) => {
+    const pageId = pageY * ATLAS_PAGE_ID_STRIDE + pageX
+    const x = pageX * ATLAS_DIRTY_PAGE_SIZE
+    const y = pageY * ATLAS_DIRTY_PAGE_SIZE
+    const pageWidth = Math.max(0, Math.min(ATLAS_DIRTY_PAGE_SIZE, width - x))
+    const pageHeight = Math.max(0, Math.min(ATLAS_DIRTY_PAGE_SIZE, height - y))
+    if (pageWidth <= 0 || pageHeight <= 0) {
+      return
+    }
+    if (!dirtyPages.has(pageId)) {
+      dirtyPages.set(pageId, {
+        byteSize: pageWidth * pageHeight * 4,
+        height: pageHeight,
+        pageId,
+        width: pageWidth,
+        x,
+        y,
+      })
+    }
+    atlasSeq += 1
+  }
+
   return {
+    drainDirtyPages(): readonly GlyphAtlasDirtyPageUpload[] {
+      const pages = [...dirtyPages.values()].toSorted((left, right) => left.pageId - right.pageId)
+      dirtyPages.clear()
+      return pages
+    },
     getCanvas(): AtlasCanvasLike | null {
       return canvas
+    },
+    getDirtyPageStats(): GlyphAtlasDirtyPageStats {
+      let dirtyUploadBytes = 0
+      for (const page of dirtyPages.values()) {
+        dirtyUploadBytes += page.byteSize
+      }
+      return {
+        atlasSeq,
+        dirtyPageCount: dirtyPages.size,
+        dirtyUploadBytes,
+        pageCount: resolveAtlasPageCount(width, height),
+      }
     },
     getVersion(): number {
       return version
@@ -248,4 +342,8 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
     },
     intern,
   }
+}
+
+function resolveAtlasPageCount(width: number, height: number): number {
+  return Math.ceil(width / ATLAS_DIRTY_PAGE_SIZE) * Math.ceil(height / ATLAS_DIRTY_PAGE_SIZE)
 }

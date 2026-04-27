@@ -778,6 +778,8 @@ export async function stopWorkbookScrollPerf(page: Page) {
                 canvasPaints: Record<string, number>
                 surfaceCommits: Record<string, number>
                 typeGpuAtlasUploadBytes: number
+                typeGpuAtlasDirtyPages: number
+                typeGpuAtlasDirtyPageUploadBytes: number
                 typeGpuBufferAllocationBytes: number
                 typeGpuBufferAllocations: number
                 typeGpuConfigures: number

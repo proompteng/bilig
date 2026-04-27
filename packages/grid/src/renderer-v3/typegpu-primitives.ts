@@ -13,11 +13,13 @@ import typegpuCore, {
 import type { WgslArray } from 'typegpu/data'
 import {
   noteTypeGpuAtlasUpload,
+  noteTypeGpuAtlasDirtyPageUpload,
   noteTypeGpuBufferAllocation,
   noteTypeGpuBufferWrite,
   noteTypeGpuConfigure,
   noteTypeGpuUniformWrite,
 } from '../grid-render-counters.js'
+import type { GlyphAtlasDirtyPageUpload } from './typegpu-atlas-manager.js'
 
 const UNIT_QUAD = new Float32Array([0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1])
 const UNIT_QUAD_VERTEX_COUNT = 6
@@ -479,7 +481,12 @@ export function updateTypeGpuSurfaceUniform(
 
 export function syncTypeGpuAtlasResources(
   artifacts: TypeGpuRendererArtifacts,
-  atlas: { getCanvas(): HTMLCanvasElement | OffscreenCanvas | null; getVersion(): number; getSize(): { width: number; height: number } },
+  atlas: {
+    drainDirtyPages?: (() => readonly GlyphAtlasDirtyPageUpload[]) | undefined
+    getCanvas(): HTMLCanvasElement | OffscreenCanvas | null
+    getVersion(): number
+    getSize(): { width: number; height: number }
+  },
 ): void {
   const atlasCanvas = atlas.getCanvas()
   if (!atlasCanvas) {
@@ -499,10 +506,24 @@ export function syncTypeGpuAtlasResources(
     artifacts.atlasTexture = createAtlasTexture(artifacts.root, nextSize.width, nextSize.height)
     artifacts.atlasWidth = nextSize.width
     artifacts.atlasHeight = nextSize.height
+    atlas.drainDirtyPages?.()
+    artifacts.atlasTexture?.write(atlasCanvas)
+    noteTypeGpuAtlasUpload(nextSize.width * nextSize.height * 4)
+    artifacts.atlasVersion = nextVersion
+    return
   }
 
-  artifacts.atlasTexture?.write(atlasCanvas)
-  noteTypeGpuAtlasUpload(nextSize.width * nextSize.height * 4)
+  const dirtyPages = atlas.drainDirtyPages?.()
+  if (!dirtyPages) {
+    artifacts.atlasTexture?.write(atlasCanvas)
+    noteTypeGpuAtlasUpload(nextSize.width * nextSize.height * 4)
+    artifacts.atlasVersion = nextVersion
+    return
+  }
+
+  if (dirtyPages.length > 0 && artifacts.atlasTexture) {
+    uploadAtlasDirtyPages(artifacts, atlasCanvas, dirtyPages)
+  }
   artifacts.atlasVersion = nextVersion
 }
 
@@ -513,4 +534,35 @@ function createAtlasTexture(root: TgpuRoot, width: number, height: number): Atla
       size: [width, height],
     })
     .$usage('sampled', 'render') as AtlasTexture
+}
+
+function uploadAtlasDirtyPages(
+  artifacts: TypeGpuRendererArtifacts,
+  atlasCanvas: HTMLCanvasElement | OffscreenCanvas,
+  dirtyPages: readonly GlyphAtlasDirtyPageUpload[],
+): void {
+  if (!artifacts.atlasTexture) {
+    return
+  }
+  const texture = artifacts.root.unwrap(artifacts.atlasTexture)
+  let uploadBytes = 0
+  for (const page of dirtyPages) {
+    artifacts.device.queue.copyExternalImageToTexture(
+      {
+        origin: { x: page.x, y: page.y },
+        source: atlasCanvas,
+      },
+      {
+        origin: { x: page.x, y: page.y },
+        texture,
+      },
+      {
+        height: page.height,
+        width: page.width,
+      },
+    )
+    uploadBytes += page.byteSize
+  }
+  noteTypeGpuAtlasDirtyPageUpload(uploadBytes, dirtyPages.length)
+  noteTypeGpuAtlasUpload(uploadBytes)
 }

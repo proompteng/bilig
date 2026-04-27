@@ -10,6 +10,7 @@ type ScrollPerfCounterSink = Partial<{
   noteTypeGpuOverlayWrite: (bytes: number) => void
   noteTypeGpuBufferAllocation: (bytes: number, label: string) => void
   noteTypeGpuAtlasUpload: (bytes: number) => void
+  noteTypeGpuAtlasDirtyPageUpload: (bytes: number, pageCount: number) => void
   noteTypeGpuSurfaceResize: (width: number, height: number, dpr: number) => void
   noteTypeGpuTileMiss: (tileKey: GridResidentTileKey | string) => void
   noteTypeGpuTileCacheEviction: (count: number) => void
@@ -41,6 +42,8 @@ export const EMPTY_GRID_GPU_COUNTERS: GridGpuCounters = Object.freeze({
   uniformWriteBytes: 0,
   vertexUploadBytes: 0,
   overlayUploadBytes: 0,
+  atlasDirtyPages: 0,
+  atlasDirtyPageUploadBytes: 0,
 })
 
 function getCounterSink(): ScrollPerfCounterSink | null {
@@ -83,6 +86,10 @@ export function noteTypeGpuBufferAllocation(bytes: number, label: string): void 
 
 export function noteTypeGpuAtlasUpload(bytes: number): void {
   getCounterSink()?.noteTypeGpuAtlasUpload?.(bytes)
+}
+
+export function noteTypeGpuAtlasDirtyPageUpload(bytes: number, pageCount: number): void {
+  getCounterSink()?.noteTypeGpuAtlasDirtyPageUpload?.(bytes, pageCount)
 }
 
 export function noteTypeGpuSurfaceResize(width: number, height: number, dpr: number): void {

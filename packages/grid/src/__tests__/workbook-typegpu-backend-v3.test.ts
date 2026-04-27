@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, test, vi } from 'vitest'
 import {
   GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT,
@@ -11,6 +12,7 @@ import {
   WORKBOOK_DYNAMIC_OVERLAY_LAYER_KEY_V3,
   resolveWorkbookHeaderLayerKeyV3,
 } from '../renderer-v3/typegpu-layer-buffer-pool.js'
+import { syncTypeGpuAtlasResources, type TypeGpuRendererArtifacts } from '../renderer-v3/typegpu-primitives.js'
 import {
   TypeGpuTileResourceCacheV3,
   resolveWorkbookTileContentBufferKeyV3,
@@ -190,5 +192,66 @@ describe('workbook typegpu backend v3 tile path', () => {
       })[0]?.tile,
     ).toBe(tile)
     expect(onTileMiss).toHaveBeenCalledWith(tile.tileId)
+  })
+
+  test('uploads V3 atlas dirty pages without rewriting the whole atlas texture', () => {
+    const copyExternalImageToTexture = vi.fn()
+    const atlasTexture = {
+      createView: vi.fn(),
+      destroy: vi.fn(),
+      write: vi.fn(),
+    }
+    const rawTexture = {}
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+    const artifacts = {
+      atlasHeight: 1024,
+      atlasTexture,
+      atlasVersion: 1,
+      atlasWidth: 1024,
+      device: {
+        queue: {
+          copyExternalImageToTexture,
+        },
+      },
+      root: {
+        unwrap: vi.fn(() => rawTexture),
+      },
+    } as unknown as TypeGpuRendererArtifacts
+    const atlasCanvas = document.createElement('canvas')
+    const atlas = {
+      drainDirtyPages: vi.fn(() => [
+        {
+          byteSize: 128 * 256 * 4,
+          height: 256,
+          pageId: 1,
+          width: 128,
+          x: 512,
+          y: 0,
+        },
+      ]),
+      getCanvas: () => atlasCanvas,
+      getSize: () => ({ height: 1024, width: 1024 }),
+      getVersion: () => 2,
+    }
+
+    syncTypeGpuAtlasResources(artifacts, atlas)
+
+    expect(atlas.drainDirtyPages).toHaveBeenCalled()
+    expect(atlasTexture.write).not.toHaveBeenCalled()
+    expect(copyExternalImageToTexture).toHaveBeenCalledWith(
+      {
+        origin: { x: 512, y: 0 },
+        source: atlasCanvas,
+      },
+      {
+        origin: { x: 512, y: 0 },
+        texture: rawTexture,
+      },
+      {
+        height: 256,
+        width: 128,
+      },
+    )
+    expect(artifacts.atlasVersion).toBe(2)
   })
 })
