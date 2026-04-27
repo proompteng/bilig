@@ -60,6 +60,7 @@ describe('grid hook boundary helpers', () => {
   test('keeps workbook render hook behind the runtime camera boundary', () => {
     const hookSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridRenderState.ts', import.meta.url)), 'utf8')
     const geometryRuntimeSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridGeometryRuntime.ts', import.meta.url)), 'utf8')
+    const headerHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookHeaderPanes.ts', import.meta.url)), 'utf8')
     const surfaceSource = readFileSync(fileURLToPath(new URL('../WorkbookGridSurface.tsx', import.meta.url)), 'utf8')
 
     expect(hookSource).toContain("from './useWorkbookGridGeometryRuntime.js'")
@@ -69,6 +70,8 @@ describe('grid hook boundary helpers', () => {
     expect(hookSource).not.toContain('visibleRegionFromCamera')
     expect(hookSource).not.toContain('scrollCellIntoView')
     expect(hookSource).not.toContain('resolveViewportScrollPosition')
+    expect(headerHookSource).not.toContain('buildGridGpuScene')
+    expect(headerHookSource).not.toContain('buildGridTextScene')
     expect(surfaceSource).not.toContain('createGridGeometrySnapshot')
   })
 })

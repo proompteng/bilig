@@ -1,19 +1,10 @@
 import { useMemo } from 'react'
 import type { Viewport } from '@bilig/protocol'
-import { buildGridGpuScene, type GridGpuScene } from './gridGpuScene.js'
-import { buildGridTextScene, type GridTextScene } from './gridTextScene.js'
-import { buildHeaderPaneStates, type GridHeaderPaneState } from './gridHeaderPanes.js'
-import type { GridEngineLike } from './grid-engine.js'
+import type { GridHeaderPaneState } from './gridHeaderPanes.js'
 import type { GridMetrics } from './gridMetrics.js'
-import { CompactSelection, type GridSelection, type Item, type Rectangle } from './gridTypes.js'
+import type { Item, Rectangle } from './gridTypes.js'
 import type { WorkbookRenderTilePaneState } from './renderer-v3/render-tile-pane-state.js'
-
-const STATIC_SCENE_SELECTED_CELL: Item = Object.freeze([-1, -1] as const)
-const STATIC_SCENE_GRID_SELECTION: GridSelection = Object.freeze({
-  columns: CompactSelection.empty(),
-  current: undefined,
-  rows: CompactSelection.empty(),
-})
+import { buildWorkbookHeaderPaneStatesV3 } from './renderer-v3/header-pane-builder.js'
 
 function noteHeaderPaneBuild(): void {
   if (typeof window === 'undefined') {
@@ -24,7 +15,6 @@ function noteHeaderPaneBuild(): void {
 
 export function useWorkbookHeaderPanes(input: {
   readonly columnWidths: Readonly<Record<number, number>>
-  readonly engine: GridEngineLike
   readonly freezeCols: number
   readonly freezeRows: number
   readonly frozenColumnWidth: number
@@ -49,7 +39,6 @@ export function useWorkbookHeaderPanes(input: {
 }): readonly GridHeaderPaneState[] {
   const {
     columnWidths,
-    engine,
     freezeCols,
     freezeRows,
     frozenColumnWidth,
@@ -66,115 +55,42 @@ export function useWorkbookHeaderPanes(input: {
     rowHeights,
     sheetName,
   } = input
-  const emptyGpuScene = useMemo<GridGpuScene>(() => ({ borderRects: [], fillRects: [] }), [])
-  const emptyTextScene = useMemo<GridTextScene>(() => ({ items: [] }), [])
-
-  const headerGpuScene = useMemo<GridGpuScene>(() => {
-    if (!hostElement) {
-      return emptyGpuScene
-    }
-    return buildGridGpuScene({
-      contentMode: 'headers',
-      engine,
-      columnWidths,
-      rowHeights,
-      gridMetrics,
-      gridSelection: STATIC_SCENE_GRID_SELECTION,
-      activeHeaderDrag: null,
-      hoveredCell: null,
-      hoveredHeader: null,
-      resizeGuideColumn: null,
-      resizeGuideRow: null,
-      selectedCell: STATIC_SCENE_SELECTED_CELL,
-      selectionRange: null,
-      sheetName,
-      visibleItems: residentHeaderItems,
-      visibleRegion: residentHeaderRegion,
-      hostBounds: {
-        left: 0,
-        top: 0,
-      },
-      getCellBounds: getHeaderCellLocalBounds,
-    })
-  }, [
-    columnWidths,
-    emptyGpuScene,
-    engine,
-    getHeaderCellLocalBounds,
-    gridMetrics,
-    hostElement,
-    rowHeights,
-    sheetName,
-    residentHeaderItems,
-    residentHeaderRegion,
-  ])
-
-  const headerTextScene = useMemo<GridTextScene>(() => {
-    if (!hostElement) {
-      return emptyTextScene
-    }
-    return buildGridTextScene({
-      contentMode: 'headers',
-      engine,
-      columnWidths,
-      rowHeights,
-      editingCell: null,
-      gridMetrics,
-      activeHeaderDrag: null,
-      hoveredHeader: null,
-      resizeGuideColumn: null,
-      selectedCell: STATIC_SCENE_SELECTED_CELL,
-      selectedCellSnapshot: null,
-      selectionRange: null,
-      sheetName,
-      visibleItems: residentHeaderItems,
-      visibleRegion: residentHeaderRegion,
-      hostBounds: {
-        left: 0,
-        top: 0,
-        width: 0,
-        height: 0,
-      },
-      getCellBounds: getHeaderCellLocalBounds,
-    })
-  }, [
-    columnWidths,
-    emptyTextScene,
-    engine,
-    getHeaderCellLocalBounds,
-    gridMetrics,
-    hostElement,
-    rowHeights,
-    sheetName,
-    residentHeaderItems,
-    residentHeaderRegion,
-  ])
 
   const headerPanes = useMemo(() => {
     noteHeaderPaneBuild()
-    return buildHeaderPaneStates({
-      gpuScene: headerGpuScene,
-      textScene: headerTextScene,
+    if (!hostElement) {
+      return []
+    }
+    return buildWorkbookHeaderPaneStatesV3({
+      columnWidths,
       sheetName,
       residentViewport,
       freezeCols,
       freezeRows,
-      hostWidth: hostClientWidth,
-      hostHeight: hostClientHeight,
       gridMetrics,
       frozenColumnWidth,
       frozenRowHeight,
-      residentBodyWidth: residentBodyPane?.surfaceSize.width ?? 0,
+      getHeaderCellLocalBounds,
+      hostClientHeight,
+      hostClientWidth,
       residentBodyHeight: residentBodyPane?.surfaceSize.height ?? 0,
+      residentBodyWidth: residentBodyPane?.surfaceSize.width ?? 0,
+      residentHeaderItems,
+      residentHeaderRegion,
+      rowHeights,
     })
   }, [
+    columnWidths,
     frozenColumnWidth,
     frozenRowHeight,
+    getHeaderCellLocalBounds,
     gridMetrics,
-    headerGpuScene,
-    headerTextScene,
     hostClientHeight,
     hostClientWidth,
+    hostElement,
+    residentHeaderItems,
+    residentHeaderRegion,
+    rowHeights,
     sheetName,
     residentViewport,
     freezeCols,

@@ -253,7 +253,6 @@ export function useWorkbookGridRenderState(input: {
 
   const renderHeaderPanes = useWorkbookHeaderPanes({
     columnWidths,
-    engine,
     freezeCols,
     freezeRows,
     frozenColumnWidth,
