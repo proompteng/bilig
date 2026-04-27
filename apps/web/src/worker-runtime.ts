@@ -641,34 +641,33 @@ export class WorkbookWorkerRuntime {
   subscribeRenderTileDeltas(subscription: RenderTileDeltaSubscription, listener: (delta: Uint8Array) => void): () => void {
     let disposed = false
     let unsubscribeEngine: (() => void) | null = null
-    let publishPromise: Promise<void> | null = null
+    let publishInFlight = false
     let publishQueued = false
     const publish = (engine: SpreadsheetEngine & WorkerEngine): void => {
-      if (publishPromise) {
+      if (publishInFlight) {
         publishQueued = true
         return
       }
-      publishPromise = (async () => {
-        try {
-          if (disposed) {
-            return
-          }
-          const batch = buildWorkerRenderTileDeltaBatch({
-            engine,
-            generation: ++this.nextRenderTileDeltaGeneration,
-            subscription,
-          })
-          listener(encodeRenderTileDeltaBatch(batch))
-        } catch {
+      publishInFlight = true
+      try {
+        if (disposed) {
           return
-        } finally {
-          publishPromise = null
-          if (publishQueued && !disposed) {
-            publishQueued = false
-            publish(engine)
-          }
         }
-      })()
+        const batch = buildWorkerRenderTileDeltaBatch({
+          engine,
+          generation: ++this.nextRenderTileDeltaGeneration,
+          subscription,
+        })
+        listener(encodeRenderTileDeltaBatch(batch))
+      } catch {
+        return
+      } finally {
+        publishInFlight = false
+        if (publishQueued && !disposed) {
+          publishQueued = false
+          publish(engine)
+        }
+      }
     }
 
     void (async () => {

@@ -4,7 +4,12 @@ import { formatAddress } from '@bilig/formula'
 import type { WorkbookLocalMutationRecord, WorkbookLocalStoreFactory } from '@bilig/storage-browser'
 import { WorkbookLocalStoreLockedError, createMemoryWorkbookLocalStoreFactory } from '@bilig/storage-browser'
 import { ErrorCode, createCellNumberFormatRecord, formatCellDisplayValue, isWorkbookSnapshot, ValueTag } from '@bilig/protocol'
-import { decodeViewportPatch } from '@bilig/worker-transport'
+import {
+  decodeRenderTileDeltaBatch,
+  decodeViewportPatch,
+  type RenderTileDeltaBatch,
+  type RenderTileReplaceMutation,
+} from '@bilig/worker-transport'
 import { buildWorkbookLocalAuthoritativeBase } from '../worker-local-base.js'
 import { collectChangedCellsBySheet, collectViewportCells } from '../worker-runtime-support.js'
 import { WorkbookWorkerRuntime } from '../worker-runtime'
@@ -26,6 +31,16 @@ function cloneMutationRecord(mutation: WorkbookLocalMutationRecord): WorkbookLoc
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function findRenderTileReplace(batch: RenderTileDeltaBatch, rowTile: number, colTile: number): RenderTileReplaceMutation {
+  const mutation = batch.mutations.find(
+    (entry) => entry.kind === 'tileReplace' && entry.coord.rowTile === rowTile && entry.coord.colTile === colTile,
+  )
+  if (!mutation || mutation.kind !== 'tileReplace') {
+    throw new Error(`Missing render tile replacement r${rowTile}:c${colTile}`)
+  }
+  return mutation
 }
 
 function buildViewportFromAuthoritativeBase(input: {
@@ -518,6 +533,52 @@ describe('WorkbookWorkerRuntime', () => {
       font: { family: 'Fira Sans' },
     })
     expect(patch?.cells[0]?.styleId).toBe(patch?.styles[0]?.id)
+  })
+
+  it('publishes render tile replacements after style-only changes', async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    })
+    await runtime.bootstrap({
+      documentId: 'render-tile-style-doc',
+      replicaId: 'browser:test',
+      persistState: false,
+    })
+
+    const batches: RenderTileDeltaBatch[] = []
+    const resolvers: Array<() => void> = []
+    const waitForNextBatch = () =>
+      new Promise<void>((resolve) => {
+        resolvers.push(resolve)
+      })
+    const firstBatch = waitForNextBatch()
+    const unsubscribe = runtime.subscribeRenderTileDeltas(
+      {
+        sheetId: 1,
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 95,
+        colStart: 0,
+        colEnd: 255,
+        dprBucket: 1,
+        initialDelta: 'full',
+      },
+      (bytes) => {
+        batches.push(decodeRenderTileDeltaBatch(bytes))
+        resolvers.shift()?.()
+      },
+    )
+
+    await firstBatch
+    const secondBatch = waitForNextBatch()
+    await runtime.setRangeStyle({ sheetName: 'Sheet1', startAddress: 'B2', endAddress: 'B2' }, { fill: { backgroundColor: '#cfe2f3' } })
+    await secondBatch
+    unsubscribe()
+
+    const initialTile = findRenderTileReplace(batches[0], 0, 0)
+    const styledTile = findRenderTileReplace(batches[1], 0, 0)
+    expect(styledTile.version.styles).toBeGreaterThan(initialTile.version.styles)
+    expect(styledTile.rectCount).toBeGreaterThan(initialTile.rectCount)
   })
 
   it('publishes numeric cell font-size style updates through viewport patches', async () => {
