@@ -361,6 +361,9 @@ Completed in the resident-scene deletion tranche:
   test were deleted. Remaining `renderer-v2` modules are legacy low-level primitives and tests only.
 - `packages/grid/src/renderer-v2/workbook-typegpu-backend.ts` and its direct stale-pane draw-selection test were deleted. The web
   `grid-renderer-vendor` chunk no longer has an explicit `renderer-v2` match, so renderer bundling is scoped to TypeGPU plus V3 paths.
+- `packages/grid/src/renderer-v2/typegpu-render-pass.ts` and `packages/grid/src/renderer-v2/typegpu-surface.ts` were deleted after the V2
+  workbook backend stopped importing them. V3 owns its draw pass and canvas surface state through `renderer-v3/typegpu-tile-render-pass.ts`
+  and `renderer-v3/typegpu-surface.ts`.
 
 Remaining work from this design:
 

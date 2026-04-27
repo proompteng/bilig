@@ -22,6 +22,11 @@ describe('renderer v3 import boundary', () => {
     expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/workbook-typegpu-backend.ts'))).toBe(false)
   })
 
+  test('legacy V2 draw and surface runtime surfaces are deleted', () => {
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/typegpu-render-pass.ts'))).toBe(false)
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/typegpu-surface.ts'))).toBe(false)
+  })
+
   test('legacy renderer-v2 barrel is deleted', () => {
     expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/index.ts'))).toBe(false)
   })
