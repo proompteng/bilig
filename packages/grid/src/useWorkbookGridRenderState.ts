@@ -4,7 +4,6 @@ import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import { buildGridGpuScene, type GridGpuScene } from './gridGpuScene.js'
 import { buildGridTextScene, type GridTextScene } from './gridTextScene.js'
-import { createGridCameraSnapshot } from './gridCamera.js'
 import {
   EMPTY_COLUMN_WIDTHS,
   EMPTY_ROW_HEIGHTS,
@@ -34,25 +33,23 @@ import { CompactSelection, type GridSelection, type Item, type Rectangle } from 
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 import { collectViewportItems } from './gridViewportItems.js'
 import type { WorkbookRenderPaneState } from './renderer-v2/pane-scene-types.js'
-import type { GridCameraSnapshot } from './renderer-v2/grid-render-contract.js'
 import { buildLocalFixedRenderTiles } from './renderer-v3/local-render-tile-materializer.js'
-import { tileKeysForViewport } from './renderer-v3/tile-key.js'
 import { buildFixedRenderTileDataPaneStates } from './renderer-v3/render-tile-v2-adapter.js'
 import type { GridRenderTile, GridRenderTileSource } from './renderer-v3/render-tile-source.js'
-import {
-  hasSelectionTargetChanged,
-  resolveColumnOffset,
-  resolveResidentViewport,
-  resolveViewportScrollPosition,
-  scrollCellIntoView,
-} from './workbookGridViewport.js'
+import { hasSelectionTargetChanged, resolveColumnOffset, resolveResidentViewport } from './workbookGridViewport.js'
 import { WorkbookGridScrollStore } from './workbookGridScrollStore.js'
 import { noteGridScrollInput } from './renderer-v2/grid-render-counters.js'
 import { GridCameraStore } from './renderer-v2/gridCameraStore.js'
-import { visibleRegionFromCamera, viewportFromVisibleRegion } from './useGridCameraState.js'
+import { viewportFromVisibleRegion } from './useGridCameraState.js'
 import { useGridElementSize } from './useGridElementSize.js'
 import { sameBounds } from './useGridOverlayState.js'
 import { resolveRequiresLiveViewportState } from './useGridSelectionState.js'
+import { GridRuntimeHost } from './runtime/gridRuntimeHost.js'
+import {
+  axisOverridesFromSortedSizes,
+  createGridRuntimeAxisOverrideCache,
+  syncGridRuntimeAxisOverrides,
+} from './runtime/gridRuntimeAxisAdapters.js'
 
 function noteVisibleWindowChange(): void {
   if (typeof window === 'undefined') {
@@ -135,7 +132,8 @@ export function useWorkbookGridRenderState(input: {
   const scrollTransformStoreRef = useRef<WorkbookGridScrollStore>(new WorkbookGridScrollStore())
   const scrollTransformRef = useRef(scrollTransformStoreRef.current.getSnapshot())
   const gridCameraStoreRef = useRef<GridCameraStore>(new GridCameraStore())
-  const gridCameraRef = useRef<GridCameraSnapshot | null>(null)
+  const gridRuntimeHostRef = useRef<GridRuntimeHost | null>(null)
+  const gridRuntimeAxisCacheRef = useRef(createGridRuntimeAxisOverrideCache())
   const invalidateSceneRef = useRef<() => void>(() => undefined)
   const retainedFixedRenderTileDataPanesRef = useRef<{
     readonly sheetId: number
@@ -210,6 +208,25 @@ export function useWorkbookGridRenderState(input: {
   const hostElementSize = useGridElementSize(hostElement)
   const hostClientWidth = hostElementSize.width
   const hostClientHeight = hostElementSize.height
+  const gridRuntimeHost = useMemo(() => {
+    const existing = gridRuntimeHostRef.current
+    if (existing) {
+      return existing
+    }
+    const host = new GridRuntimeHost({
+      columnCount: MAX_COLS,
+      defaultColumnWidth: gridMetrics.columnWidth,
+      defaultRowHeight: gridMetrics.rowHeight,
+      freezeCols,
+      freezeRows,
+      gridMetrics,
+      rowCount: MAX_ROWS,
+      viewportHeight: hostClientHeight,
+      viewportWidth: hostClientWidth,
+    })
+    gridRuntimeHostRef.current = host
+    return host
+  }, [freezeCols, freezeRows, gridMetrics, hostClientHeight, hostClientWidth])
   const baseColumnWidths = controlledColumnWidths ?? columnWidthsBySheet[sheetName] ?? EMPTY_COLUMN_WIDTHS
   const baseRowHeights = controlledRowHeights ?? rowHeightsBySheet[sheetName] ?? EMPTY_ROW_HEIGHTS
   const sizedColumnWidths = useMemo(() => {
@@ -255,6 +272,8 @@ export function useWorkbookGridRenderState(input: {
         .toSorted((left, right) => left[0] - right[0]),
     [rowHeights],
   )
+  const runtimeColumnAxisOverrides = useMemo(() => axisOverridesFromSortedSizes(sortedColumnWidthOverrides), [sortedColumnWidthOverrides])
+  const runtimeRowAxisOverrides = useMemo(() => axisOverridesFromSortedSizes(sortedRowHeightOverrides), [sortedRowHeightOverrides])
   const columnWidthOverridesAttr = useMemo(() => {
     const entries = Object.entries(columnWidths).toSorted(([left], [right]) => Number(left) - Number(right))
     return entries.length === 0 ? '{}' : JSON.stringify(Object.fromEntries(entries))
@@ -285,6 +304,14 @@ export function useWorkbookGridRenderState(input: {
   )
   const frozenColumnWidth = useMemo(() => columnAxis.span(0, freezeCols), [columnAxis, freezeCols])
   const frozenRowHeight = useMemo(() => rowAxis.span(0, freezeRows), [freezeRows, rowAxis])
+  const syncRuntimeAxes = useCallback(() => {
+    syncGridRuntimeAxisOverrides(gridRuntimeHost, gridRuntimeAxisCacheRef.current, {
+      columnOverrides: runtimeColumnAxisOverrides,
+      columnSeq: columnAxis.version,
+      rowOverrides: runtimeRowAxisOverrides,
+      rowSeq: rowAxis.version,
+    })
+  }, [columnAxis.version, gridRuntimeHost, rowAxis.version, runtimeColumnAxisOverrides, runtimeRowAxisOverrides])
   const scrollSpacerSize = useMemo(
     () =>
       resolveGridScrollSpacerSize({
@@ -473,7 +500,8 @@ export function useWorkbookGridRenderState(input: {
     if (!scrollViewport) {
       return
     }
-    const camera = createGridCameraSnapshot({
+    syncRuntimeAxes()
+    const camera = gridRuntimeHost.updateCamera({
       scrollLeft: scrollViewport.scrollLeft,
       scrollTop: scrollViewport.scrollTop,
       viewportWidth: scrollViewport.clientWidth,
@@ -481,14 +509,8 @@ export function useWorkbookGridRenderState(input: {
       dpr: window.devicePixelRatio || 1,
       freezeRows,
       freezeCols,
-      columnWidths,
-      rowHeights,
-      hiddenColumns: controlledHiddenColumns,
-      hiddenRows: controlledHiddenRows,
       gridMetrics,
-      previous: gridCameraRef.current,
     })
-    gridCameraRef.current = camera
     gridCameraStore.setSnapshot(
       createGridGeometrySnapshotFromAxes({
         columns: columnAxis,
@@ -502,10 +524,11 @@ export function useWorkbookGridRenderState(input: {
         rows: rowAxis,
         scrollLeft: scrollViewport.scrollLeft,
         scrollTop: scrollViewport.scrollTop,
+        seq: camera.seq,
         sheetName,
       }),
     )
-    const next = visibleRegionFromCamera({ camera, freezeCols, freezeRows })
+    const next = camera.visibleRegion
     const { renderTx, renderTy } = resolveGridRenderScrollTransform({
       nextVisibleRegion: next,
       renderViewport: viewport,
@@ -546,22 +569,20 @@ export function useWorkbookGridRenderState(input: {
       return next
     })
   }, [
-    columnWidths,
     columnAxis,
     freezeCols,
     freezeRows,
+    gridRuntimeHost,
     gridCameraStore,
     gridMetrics,
     onVisibleViewportChange,
-    controlledHiddenColumns,
-    controlledHiddenRows,
     requiresLiveViewportState,
-    rowHeights,
     rowAxis,
     scrollTransformStore,
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
+    syncRuntimeAxes,
     viewport,
   ])
 
@@ -657,10 +678,17 @@ export function useWorkbookGridRenderState(input: {
     if (!renderTileSource || sheetId === undefined) {
       return
     }
+    const tileInterest = gridRuntimeHost.buildViewportTileInterest({
+      dprBucket,
+      reason: 'scroll',
+      sheetId,
+      sheetOrdinal: sheetId,
+      viewport: renderTileViewport,
+    })
     return renderTileSource.subscribeRenderTileDeltas(
       {
         ...renderTileViewport,
-        cameraSeq: gridCameraStore.getSnapshot()?.camera.seq ?? 0,
+        cameraSeq: tileInterest.cameraSeq,
         dprBucket,
         initialDelta: 'full',
         sheetId,
@@ -670,7 +698,7 @@ export function useWorkbookGridRenderState(input: {
         setRenderTileRevision((current) => current + 1)
       },
     )
-  }, [dprBucket, gridCameraStore, renderTileSource, renderTileViewport, sheetId, sheetName])
+  }, [dprBucket, gridRuntimeHost, renderTileSource, renderTileViewport, sheetId, sheetName])
   const fixedRenderTileDataPanes = useMemo<readonly WorkbookRenderPaneState[] | null>(() => {
     if (!hostElement) {
       return null
@@ -679,7 +707,7 @@ export function useWorkbookGridRenderState(input: {
     const tileSheetId = sheetId ?? 0
     if (renderTileSource && sheetId !== undefined) {
       void renderTileRevision
-      const tileKeys = tileKeysForViewport({
+      const tileKeys = gridRuntimeHost.viewportTileKeys({
         dprBucket,
         sheetOrdinal: sheetId,
         viewport: renderTileViewport,
@@ -695,7 +723,7 @@ export function useWorkbookGridRenderState(input: {
       void sceneRevision
       tiles.push(
         ...buildLocalFixedRenderTiles({
-          cameraSeq: gridCameraStore.getSnapshot()?.camera.seq ?? sceneRevision,
+          cameraSeq: gridRuntimeHost.snapshot().camera.seq,
           columnWidths,
           dprBucket,
           engine,
@@ -737,7 +765,7 @@ export function useWorkbookGridRenderState(input: {
     frozenColumnWidth,
     frozenRowHeight,
     gridMetrics,
-    gridCameraStore,
+    gridRuntimeHost,
     hostClientHeight,
     hostClientWidth,
     hostElement,
@@ -933,29 +961,20 @@ export function useWorkbookGridRenderState(input: {
       return
     }
     autoScrollSelectionRef.current = nextAutoScrollSelection
-    scrollCellIntoView({
+    syncRuntimeAxes()
+    const nextScrollPosition = gridRuntimeHost.resolveScrollForCellIntoView({
       cell: [selectedCell.col, selectedCell.row],
       freezeRows,
       freezeCols,
-      columnWidths,
-      rowHeights,
       gridMetrics,
-      scrollViewport,
-      sortedColumnWidthOverrides,
-      sortedRowHeightOverrides,
+      scrollLeft: scrollViewport.scrollLeft,
+      scrollTop: scrollViewport.scrollTop,
+      viewportHeight: scrollViewport.clientHeight,
+      viewportWidth: scrollViewport.clientWidth,
     })
-  }, [
-    columnWidths,
-    freezeCols,
-    freezeRows,
-    gridMetrics,
-    rowHeights,
-    selectedCell.col,
-    selectedCell.row,
-    sheetName,
-    sortedColumnWidthOverrides,
-    sortedRowHeightOverrides,
-  ])
+    scrollViewport.scrollLeft = nextScrollPosition.scrollLeft
+    scrollViewport.scrollTop = nextScrollPosition.scrollTop
+  }, [freezeCols, freezeRows, gridRuntimeHost, gridMetrics, selectedCell.col, selectedCell.row, sheetName, syncRuntimeAxes])
 
   useLayoutEffect(() => {
     const scrollViewport = scrollViewportRef.current
@@ -966,17 +985,15 @@ export function useWorkbookGridRenderState(input: {
       return
     }
     restoredViewportTokenRef.current = restoreViewportTarget.token
-    const { scrollLeft: nextScrollLeft, scrollTop: nextScrollTop } = resolveViewportScrollPosition({
+    syncRuntimeAxes()
+    const { scrollLeft: nextScrollLeft, scrollTop: nextScrollTop } = gridRuntimeHost.resolveScrollPositionForViewport({
       viewport: restoreViewportTarget.viewport,
       freezeRows,
       freezeCols,
-      sortedColumnWidthOverrides,
-      sortedRowHeightOverrides,
-      gridMetrics,
     })
     scrollViewport.scrollLeft = nextScrollLeft
     scrollViewport.scrollTop = nextScrollTop
-  }, [freezeCols, freezeRows, gridMetrics, restoreViewportTarget, sortedColumnWidthOverrides, sortedRowHeightOverrides])
+  }, [freezeCols, freezeRows, gridRuntimeHost, restoreViewportTarget, syncRuntimeAxes])
 
   const refreshOverlayBounds = useCallback(
     (options?: { readonly commitReactState?: boolean }) => {

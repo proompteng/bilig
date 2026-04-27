@@ -129,4 +129,51 @@ describe('GridRuntimeHost', () => {
       axisSeqY: 42,
     })
   })
+
+  it('resolves selection and restore scroll positions from runtime axes', () => {
+    const host = new GridRuntimeHost({
+      columnCount: 1000,
+      defaultColumnWidth: 100,
+      defaultRowHeight: 10,
+      freezeCols: 1,
+      freezeRows: 1,
+      gridMetrics,
+      rowCount: 1000,
+      viewportHeight: 80,
+      viewportWidth: 300,
+    })
+    host.updateAxes({
+      columns: [
+        { index: 0, size: 160 },
+        { index: 2, size: 200 },
+      ],
+      rows: [{ index: 1, size: 30 }],
+    })
+
+    expect(
+      host.resolveScrollForCellIntoView({
+        cell: [3, 4],
+        freezeCols: 1,
+        freezeRows: 1,
+        gridMetrics,
+        scrollLeft: 0,
+        scrollTop: 0,
+        viewportHeight: 80,
+        viewportWidth: 300,
+      }),
+    ).toEqual({
+      scrollLeft: 310,
+      scrollTop: 10,
+    })
+    expect(
+      host.resolveScrollPositionForViewport({
+        freezeCols: 1,
+        freezeRows: 1,
+        viewport: { colStart: 3, rowStart: 4 },
+      }),
+    ).toEqual({
+      scrollLeft: 300,
+      scrollTop: 50,
+    })
+  })
 })

@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { resolveRequiresLiveViewportState } from '../useGridSelectionState.js'
 import { resolveResizeGuideColumn, resolveResizeGuideRow } from '../useGridResizeState.js'
 import { sameBounds } from '../useGridOverlayState.js'
@@ -53,5 +55,15 @@ describe('grid hook boundary helpers', () => {
         freezeRows: 2,
       }),
     ).toMatchObject({ range: { x: 3, y: 2, width: 6, height: 4 }, tx: 7, ty: 9, freezeRows: 2, freezeCols: 1 })
+  })
+
+  test('keeps workbook render hook behind the runtime camera boundary', () => {
+    const hookSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridRenderState.ts', import.meta.url)), 'utf8')
+
+    expect(hookSource).toContain("from './runtime/gridRuntimeHost.js'")
+    expect(hookSource).not.toContain("from './gridCamera.js'")
+    expect(hookSource).not.toContain('visibleRegionFromCamera')
+    expect(hookSource).not.toContain('scrollCellIntoView')
+    expect(hookSource).not.toContain('resolveViewportScrollPosition')
   })
 })

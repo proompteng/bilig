@@ -29,6 +29,9 @@ Latest implementation note:
 - Dynamic interaction overlays no longer build `GridScenePacketV2` values. They are emitted as `DynamicGridOverlayBatchV3` rect-instance buffers and drawn through a dedicated TypeGPU overlay resource outside tile cache and stale-tile lookup.
 - Render tile deltas no longer carry overlay mutations or a `dynamicOverlay` pane kind. Overlays are now a visual runtime layer, not renderer tile data.
 - Header panes no longer build or carry `GridScenePacketV2` values. They are emitted as fixed V3 header batches with packed rect instances plus text runs, and the TypeGPU backend draws them through dedicated header buffers outside tile cache and stale-tile lookup.
+- `useWorkbookGridRenderState.ts` no longer imports the legacy `createGridCameraSnapshot()` camera builder, `visibleRegionFromCamera()`, `scrollCellIntoView()`, or `resolveViewportScrollPosition()`.
+- The hook now owns a `GridRuntimeHost` instance, synchronizes axis overrides into it, and uses the host for camera visible-region transactions, render-tile interest sequencing, fixed tile key lookup, selection auto-scroll, and viewport restoration.
+- `GridRuntimeHost` now exposes runtime-owned resident viewport tile-interest batches plus runtime-axis scroll-position helpers, so more scroll/viewport math has moved out of the React hook without changing the mounted pane adapter yet.
 - The old resident scene path has been deleted from product runtime. The remaining Oracle deletion gates are now V2 scene-packet compatibility for data tiles inside the backend and full V3 TypeGPU resource ownership.
 
 ## 1. Validation Verdict
@@ -37,7 +40,7 @@ The Atlas response is directionally correct: the mounted grid path is no longer 
 
 The current hot path still has these validated properties:
 
-- `packages/grid/src/useWorkbookGridRenderState.ts` is too large and owns render residency, subscriptions, pane construction, headers, overlay geometry, scroll restoration, and React-facing state in one 1400+ line hook.
+- `packages/grid/src/useWorkbookGridRenderState.ts` is still too large and owns pane construction, header scene building, overlay geometry bridge state, and React-facing state in one hook, but camera visible-region transactions, tile-interest stamping, selection auto-scroll math, and viewport restoration now run through `GridRuntimeHost`.
 - The app-side resident scene store has been deleted; retained render data now lives in `apps/web/src/projected-tile-scene-store.ts`.
 - Product data rendering no longer imports `packages/grid/src/gridResidentDataLayer.ts`; it now uses fixed render tiles and the V2 compatibility adapter.
 - `packages/grid/src/renderer-v2/tile-gpu-cache.ts` no longer uses array materialization plus `toSorted()` for stale lookup and eviction after this implementation tranche, but it is still not a true byte-budgeted tile residency system with numeric keys, compatibility buckets, and O(1) visible marking.
@@ -317,6 +320,9 @@ Completed in the resident-scene deletion tranche:
 - `packages/grid/src/renderer-v3/draw-command-buffer.ts` introduces pane placement commands so body and frozen panes can draw the same content tile under different clips/transforms.
 - `packages/grid/src/runtime/gridRuntimeHost.ts` composes the first V3 runtimes behind an imperative host API that React can eventually mount and dispose instead of coordinating renderer internals.
 - `packages/grid/src/runtime/gridTileCoordinator.ts` gives the host a concrete tile-interest and readiness coordinator over `TileResidencyV3` and `DirtyTileIndexV3`.
+- `useWorkbookGridRenderState.ts` now sources visible-region snapshots from `GridRuntimeHost.updateCamera()` instead of `createGridCameraSnapshot()` and stamps render tile subscriptions from host-owned tile-interest batches.
+- selection auto-scroll and viewport restoration now use `GridRuntimeHost` axis runtimes instead of rebuilding sorted axis indexes through `scrollCellIntoView()` / `resolveViewportScrollPosition()`.
+- `packages/grid/src/runtime/gridRuntimeAxisAdapters.ts` bridges the current hook-owned size records into runtime axis overrides with tests, giving the next split a concrete seam for deleting more axis sorting from React-owned code.
 - `packages/grid/src/renderer-v3/tile-damage-index.ts` now applies sheet-level V3 dirty range batches to fixed tile damage and keeps axis dirty ranges bounded by tile rows/columns instead of expanding them over the full sheet.
 - `apps/web/src/projected-damage-bus.ts` is the first app-side replacement seam for per-subscription viewport patch damage: it dedupes workbook delta sequence application per sheet ordinal and feeds the renderer dirty tile index.
 - `apps/web/src/worker-runtime-delta-publisher.ts` provides the tested V3 damage-stream publisher primitive. The product worker runtime should expose it through transport only when the V3 renderer host owns the subscription, so the current V2 startup worker bundle stays under release size budgets.
@@ -324,7 +330,7 @@ Completed in the resident-scene deletion tranche:
 
 Remaining work from this design:
 
-- continue splitting camera/render scheduling out of `useWorkbookGridRenderState.ts`;
+- continue splitting pane construction, header generation, editor overlay anchoring, and draw scheduling out of `useWorkbookGridRenderState.ts`;
 - replace routine resident scene packet regeneration with dirty-span tile payload updates;
 - wire the V3 atlas/text-run primitives into the TypeGPU backend and add tile glyph dependency preservation;
 - remove scene-packet runtime use after parity and perf gates are green.
