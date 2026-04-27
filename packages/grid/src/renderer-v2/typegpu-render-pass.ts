@@ -10,7 +10,8 @@ import {
   updateTypeGpuSurfaceUniform,
 } from './typegpu-backend.js'
 import { noteGridDrawFrame, noteTypeGpuDrawCall, noteTypeGpuPaneDraw, noteTypeGpuSubmit } from './grid-render-counters.js'
-import { ensurePaneSurfaceBindings, resolveWorkbookPaneBufferKey } from './typegpu-buffer-pool.js'
+import { WORKBOOK_DYNAMIC_OVERLAY_BUFFER_KEY, ensurePaneSurfaceBindings, resolveWorkbookPaneBufferKey } from './typegpu-buffer-pool.js'
+import type { DynamicGridOverlayBatchV3 } from '../renderer-v3/dynamic-overlay-batch.js'
 
 export interface TypeGpuDrawSurface {
   readonly width: number
@@ -24,6 +25,7 @@ export function drawTypeGpuPanes(input: {
   readonly artifacts: TypeGpuRendererArtifacts
   readonly paneBuffers: WorkbookPaneBufferCache
   readonly panes: readonly WorkbookRenderPaneState[]
+  readonly overlay?: DynamicGridOverlayBatchV3 | null | undefined
   readonly surface: TypeGpuDrawSurface
   readonly scrollSnapshot: WorkbookGridScrollSnapshot
 }): void {
@@ -75,10 +77,48 @@ export function drawTypeGpuPanes(input: {
     noteTypeGpuPaneDraw(1)
   })
 
+  drawTypeGpuOverlay({
+    artifacts: input.artifacts,
+    overlay: input.overlay ?? null,
+    paneBuffers: input.paneBuffers,
+    pass,
+    surface: input.surface,
+  })
+
   pass.end()
   input.artifacts.device.queue.submit([commandEncoder.finish()])
   noteTypeGpuSubmit()
   noteGridDrawFrame(performance.now())
+}
+
+function drawTypeGpuOverlay(input: {
+  readonly artifacts: TypeGpuRendererArtifacts
+  readonly paneBuffers: WorkbookPaneBufferCache
+  readonly pass: GPURenderPassEncoder
+  readonly overlay: DynamicGridOverlayBatchV3 | null
+  readonly surface: TypeGpuDrawSurface
+}): void {
+  if (!input.overlay || input.overlay.rectCount === 0) {
+    return
+  }
+  const overlayCache = input.paneBuffers.peek(WORKBOOK_DYNAMIC_OVERLAY_BUFFER_KEY)
+  if (!overlayCache?.rectBuffer || overlayCache.rectCount <= 0) {
+    return
+  }
+
+  input.pass.setScissorRect(0, 0, input.surface.pixelWidth, input.surface.pixelHeight)
+  ensurePaneSurfaceBindings(input.artifacts, overlayCache)
+  updateTypeGpuSurfaceUniform(overlayCache.surfaceUniform!, input.surface, { x: 0, y: 0 }, { x: 0, y: 0 })
+  if (!overlayCache.surfaceBindGroup) {
+    return
+  }
+  const rectRenderer = input.artifacts.rectPipeline.with(input.pass).with(overlayCache.surfaceBindGroup)
+  rectRenderer
+    .with(WORKBOOK_UNIT_QUAD_LAYOUT, input.artifacts.quadBuffer)
+    .with(WORKBOOK_RECT_INSTANCE_LAYOUT, overlayCache.rectBuffer)
+    .draw(6, overlayCache.rectCount)
+  noteTypeGpuDrawCall(1)
+  noteTypeGpuPaneDraw(1)
 }
 
 function resolveClampedScissorRect(

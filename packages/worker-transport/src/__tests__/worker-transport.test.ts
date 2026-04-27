@@ -206,14 +206,9 @@ describe('worker transport', () => {
               cameraSeq: 8,
               mutations: [
                 {
-                  kind: 'overlay',
-                  overlayRevision: 12,
-                  dirtyBounds: {
-                    rowStart: subscription.rowStart,
-                    rowEnd: subscription.rowEnd,
-                    colStart: subscription.colStart,
-                    colEnd: subscription.colEnd,
-                  },
+                  kind: 'invalidate',
+                  tileId: subscription.sheetId * 100,
+                  reason: 'subscription-relay-check',
                 },
               ],
             }),
@@ -253,14 +248,9 @@ describe('worker transport', () => {
       cameraSeq: 8,
       mutations: [
         {
-          kind: 'overlay',
-          overlayRevision: 12,
-          dirtyBounds: {
-            rowStart: 0,
-            rowEnd: 31,
-            colStart: 0,
-            colEnd: 127,
-          },
+          kind: 'invalidate',
+          tileId: 200,
+          reason: 'subscription-relay-check',
         },
       ],
     })

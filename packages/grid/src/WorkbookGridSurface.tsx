@@ -5,7 +5,8 @@ import { GridFillHandleOverlay } from './GridFillHandleOverlay.js'
 import { WorkbookGridContextMenu } from './WorkbookGridContextMenu.js'
 import { createGridGeometrySnapshot } from './gridGeometry.js'
 import { createGridSelection } from './gridSelection.js'
-import { WorkbookPaneRendererV2, buildDynamicGridOverlayPacket } from './renderer-v2/index.js'
+import { WorkbookPaneRendererV2 } from './renderer-v2/index.js'
+import { buildDynamicGridOverlayBatchV3 } from './renderer-v3/dynamic-overlay-batch.js'
 import { resolveResizeGuideColumn, resolveResizeGuideRow } from './useGridResizeState.js'
 import { useWorkbookGridInteractions } from './useWorkbookGridInteractions.js'
 import { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
@@ -131,7 +132,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
   )
   const dynamicOverlayBuilder = useCallback(
     (geometry: NonNullable<typeof v2Geometry>) =>
-      buildDynamicGridOverlayPacket({
+      buildDynamicGridOverlayBatchV3({
         geometry,
         activeHeaderDrag: renderState.activeHeaderDrag,
         gridSelection: displayGridSelection,

@@ -7,6 +7,7 @@ type ScrollPerfCounterSink = Partial<{
   noteTypeGpuPaneDraw: (count: number) => void
   noteTypeGpuUniformWrite: (bytes: number, label: string) => void
   noteTypeGpuBufferWrite: (bytes: number, label: string) => void
+  noteTypeGpuOverlayWrite: (bytes: number) => void
   noteTypeGpuBufferAllocation: (bytes: number, label: string) => void
   noteTypeGpuAtlasUpload: (bytes: number) => void
   noteTypeGpuSurfaceResize: (width: number, height: number, dpr: number) => void
@@ -39,6 +40,7 @@ export const EMPTY_GRID_GPU_COUNTERS: GridGpuCounters = Object.freeze({
   tileCacheVisibleMarks: 0,
   uniformWriteBytes: 0,
   vertexUploadBytes: 0,
+  overlayUploadBytes: 0,
 })
 
 function getCounterSink(): ScrollPerfCounterSink | null {
@@ -70,6 +72,9 @@ export function noteTypeGpuUniformWrite(bytes: number, label: string): void {
 
 export function noteTypeGpuBufferWrite(bytes: number, label: string): void {
   getCounterSink()?.noteTypeGpuBufferWrite?.(bytes, label)
+  if (label.startsWith('overlay:')) {
+    getCounterSink()?.noteTypeGpuOverlayWrite?.(bytes)
+  }
 }
 
 export function noteTypeGpuBufferAllocation(bytes: number, label: string): void {

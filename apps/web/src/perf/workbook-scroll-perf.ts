@@ -30,6 +30,7 @@ interface WorkbookScrollPerfCounters {
   typeGpuPaneDraws: number
   typeGpuUniformWriteBytes: number
   typeGpuVertexUploadBytes: number
+  typeGpuOverlayUploadBytes: number
   typeGpuBufferAllocations: number
   typeGpuBufferAllocationBytes: number
   typeGpuAtlasUploadBytes: number
@@ -115,6 +116,7 @@ class WorkbookScrollPerfCollector {
     typeGpuTileCacheVisibleMarks: 0,
     typeGpuUniformWriteBytes: 0,
     typeGpuVertexUploadBytes: 0,
+    typeGpuOverlayUploadBytes: 0,
   }
   private baselineCounters: WorkbookScrollPerfCounters | null = null
   private frameSamples: number[] = []
@@ -231,6 +233,10 @@ class WorkbookScrollPerfCollector {
 
   noteTypeGpuBufferWrite(bytes: number): void {
     this.totalCounters.typeGpuVertexUploadBytes += bytes
+  }
+
+  noteTypeGpuOverlayWrite(bytes: number): void {
+    this.totalCounters.typeGpuOverlayUploadBytes += bytes
   }
 
   noteTypeGpuBufferAllocation(bytes: number): void {
@@ -431,6 +437,7 @@ function subtractCounters(counters: WorkbookScrollPerfCounters, baseline: Workbo
     typeGpuTileCacheVisibleMarks: counters.typeGpuTileCacheVisibleMarks - baseline.typeGpuTileCacheVisibleMarks,
     typeGpuUniformWriteBytes: counters.typeGpuUniformWriteBytes - baseline.typeGpuUniformWriteBytes,
     typeGpuVertexUploadBytes: counters.typeGpuVertexUploadBytes - baseline.typeGpuVertexUploadBytes,
+    typeGpuOverlayUploadBytes: counters.typeGpuOverlayUploadBytes - baseline.typeGpuOverlayUploadBytes,
   }
 }
 

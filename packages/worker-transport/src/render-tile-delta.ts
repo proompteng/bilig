@@ -10,7 +10,6 @@ export type RenderTilePaneKind =
   | 'columnHeaderFrozen'
   | 'rowHeaderBody'
   | 'rowHeaderFrozen'
-  | 'dynamicOverlay'
 
 export interface RenderTileDeltaSubscription extends Viewport {
   readonly sheetId: number
@@ -117,19 +116,12 @@ export interface RenderTileInvalidateMutation {
   readonly reason: string
 }
 
-export interface RenderTileOverlayMutation {
-  readonly kind: 'overlay'
-  readonly overlayRevision: number
-  readonly dirtyBounds: Viewport
-}
-
 export type RenderTileMutation =
   | RenderTileReplaceMutation
   | RenderTileCellRunMutation
   | RenderTileAxisMutation
   | RenderTileFreezeMutation
   | RenderTileInvalidateMutation
-  | RenderTileOverlayMutation
 
 export interface RenderTileDeltaBatch {
   readonly magic: 'bilig.render.tile.delta'
@@ -152,7 +144,6 @@ const PANE_KIND_TAGS: Record<RenderTilePaneKind, number> = {
   columnHeaderFrozen: 5,
   rowHeaderBody: 6,
   rowHeaderFrozen: 7,
-  dynamicOverlay: 8,
 }
 
 const PANE_KIND_BY_TAG = new Map<number, RenderTilePaneKind>([
@@ -164,7 +155,6 @@ const PANE_KIND_BY_TAG = new Map<number, RenderTilePaneKind>([
   [5, 'columnHeaderFrozen'],
   [6, 'rowHeaderBody'],
   [7, 'rowHeaderFrozen'],
-  [8, 'dynamicOverlay'],
 ])
 
 const MUTATION_TAGS: Record<RenderTileMutation['kind'], number> = {
@@ -173,7 +163,6 @@ const MUTATION_TAGS: Record<RenderTileMutation['kind'], number> = {
   axis: 3,
   freeze: 4,
   invalidate: 5,
-  overlay: 6,
 }
 
 export function encodeRenderTileDeltaBatch(batch: RenderTileDeltaBatch): Uint8Array {
@@ -248,10 +237,6 @@ function encodeMutation(writer: BinaryWriter, mutation: RenderTileMutation): voi
       encodeTileKey(writer, mutation.tileId)
       writer.string(mutation.reason)
       return
-    case 'overlay':
-      writer.u32(mutation.overlayRevision)
-      encodeViewport(writer, mutation.dirtyBounds)
-      return
   }
 }
 
@@ -304,12 +289,6 @@ function decodeMutation(reader: BinaryReader): RenderTileMutation {
         kind: 'invalidate',
         tileId: decodeTileKey(reader),
         reason: reader.string(),
-      }
-    case 6:
-      return {
-        kind: 'overlay',
-        overlayRevision: reader.u32(),
-        dirtyBounds: decodeViewport(reader),
       }
     default:
       throw new BinaryProtocolError('Unknown render tile mutation tag')

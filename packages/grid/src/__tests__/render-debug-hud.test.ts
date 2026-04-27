@@ -7,10 +7,17 @@ describe('render-debug-hud', () => {
     expect(
       formatRenderDebugHud({
         frameMs: 8.333,
-        gpu: { ...EMPTY_GRID_GPU_COUNTERS, drawCalls: 4, submitCount: 1, vertexUploadBytes: 2048 },
+        gpu: { ...EMPTY_GRID_GPU_COUNTERS, drawCalls: 4, overlayUploadBytes: 1024, submitCount: 1, vertexUploadBytes: 2048 },
         inputToDrawMs: 6.25,
       }),
     ).toContain('uploads 2.0KB')
+    expect(
+      formatRenderDebugHud({
+        frameMs: 8.333,
+        gpu: { ...EMPTY_GRID_GPU_COUNTERS, drawCalls: 4, overlayUploadBytes: 1024, submitCount: 1, vertexUploadBytes: 2048 },
+        inputToDrawMs: 6.25,
+      }),
+    ).toContain('overlay 1.0KB')
   })
 
   test('checks render budgets', () => {

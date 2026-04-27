@@ -9,7 +9,6 @@ export type GridRenderTilePaneKind =
   | 'columnHeaderFrozen'
   | 'rowHeaderBody'
   | 'rowHeaderFrozen'
-  | 'dynamicOverlay'
 
 export interface GridRenderTileDeltaSubscription extends Viewport {
   readonly sheetId: number

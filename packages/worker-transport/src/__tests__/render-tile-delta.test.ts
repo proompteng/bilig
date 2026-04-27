@@ -98,16 +98,6 @@ function createBatch(): RenderTileDeltaBatch {
         tileId,
         reason: 'axis-version-mismatch',
       },
-      {
-        kind: 'overlay',
-        overlayRevision: 19,
-        dirtyBounds: {
-          rowStart: 1,
-          rowEnd: 5,
-          colStart: 2,
-          colEnd: 8,
-        },
-      },
     ],
   }
 }

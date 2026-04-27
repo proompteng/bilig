@@ -16,8 +16,10 @@ import type { createGlyphAtlas } from './typegpu-atlas-manager.js'
 import type { WorkbookRenderPaneState } from './pane-scene-types.js'
 import { GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT, type GridScenePacketV2 } from './scene-packet-v2.js'
 import { buildTileGpuCacheKey } from './tile-gpu-cache.js'
+import type { DynamicGridOverlayBatchV3 } from '../renderer-v3/dynamic-overlay-batch.js'
 
 const RECT_INSTANCE_FLOAT_COUNT = GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT
+export const WORKBOOK_DYNAMIC_OVERLAY_BUFFER_KEY = 'dynamic-overlay:v3'
 
 export function syncTypeGpuPaneResources(input: {
   readonly artifacts: TypeGpuRendererArtifacts
@@ -25,8 +27,12 @@ export function syncTypeGpuPaneResources(input: {
   readonly paneBuffers: WorkbookPaneBufferCache
   readonly panes: readonly WorkbookRenderPaneState[]
   readonly retainPanes?: readonly WorkbookRenderPaneState[] | undefined
+  readonly retainBufferKeys?: readonly string[] | undefined
 }): void {
   const paneIds = new Set((input.retainPanes ?? input.panes).map(resolveWorkbookPaneBufferKey))
+  for (const key of input.retainBufferKeys ?? []) {
+    paneIds.add(key)
+  }
   input.paneBuffers.pruneExcept(paneIds)
 
   input.panes.forEach((pane) => {
@@ -58,6 +64,42 @@ export function syncTypeGpuPaneResources(input: {
       })
     }
   })
+}
+
+export function syncTypeGpuOverlayResources(input: {
+  readonly artifacts: TypeGpuRendererArtifacts
+  readonly paneBuffers: WorkbookPaneBufferCache
+  readonly overlay: DynamicGridOverlayBatchV3 | null | undefined
+}): void {
+  if (!input.overlay) {
+    return
+  }
+  const paneCache = input.paneBuffers.get(WORKBOOK_DYNAMIC_OVERLAY_BUFFER_KEY)
+  paneCache.textCount = 0
+  paneCache.textSignature = null
+  if (input.overlay.rectCount === 0) {
+    releaseRectBuffer(input.paneBuffers, paneCache)
+    paneCache.rectCount = 0
+    paneCache.rectSignature = input.overlay.rectSignature
+    return
+  }
+  const rectSignature = resolveOverlayRectSignature(input.overlay)
+  if (paneCache.rectSignature === rectSignature) {
+    return
+  }
+  const reusable = prepareRectBuffer(input.paneBuffers, paneCache, input.overlay.rectCount)
+  const rectBuffer = ensureTypeGpuVertexBuffer(
+    input.artifacts.root,
+    WORKBOOK_RECT_INSTANCE_LAYOUT,
+    reusable.buffer,
+    reusable.capacity,
+    input.overlay.rectCount,
+  )
+  paneCache.rectBuffer = rectBuffer.buffer
+  paneCache.rectCapacity = rectBuffer.capacity
+  paneCache.rectCount = input.overlay.rectCount
+  writeTypeGpuVertexBuffer(paneCache.rectBuffer, input.overlay.rectInstances, `overlay:${input.overlay.seq}`)
+  paneCache.rectSignature = rectSignature
 }
 
 export function resolveWorkbookPaneBufferKey(pane: WorkbookRenderPaneState): string {
@@ -229,6 +271,19 @@ export function resolveGridRectPacketSignature(input: {
     input.frameWidth,
     input.frameHeight,
     decorationRects.length,
+  ].join(':')
+}
+
+function resolveOverlayRectSignature(overlay: DynamicGridOverlayBatchV3): string {
+  return [
+    'overlay-v3',
+    overlay.sheetName,
+    overlay.rectCount,
+    overlay.fillRectCount,
+    overlay.borderRectCount,
+    overlay.surfaceSize.width,
+    overlay.surfaceSize.height,
+    overlay.rectSignature,
   ].join(':')
 }
 

@@ -26,7 +26,9 @@ Latest implementation note:
 - With that source present, the hook also bypasses V2 warm resident-viewport planning; tile prefetch needs to move to V3 tile interest batches next.
 - Transient fixed-tile misses retain the last fixed-tile pane set instead of immediately falling back to a full resident data-scene rebuild.
 - Frozen pane placements reuse the same fixed content packet under separate body/top/left/corner clip placements, but the retained TypeGPU backend is still V2 and scene-packet-shaped.
-- The old resident scene path has been deleted from product runtime. The remaining Oracle deletion gates are now overlay packetization, V2 scene-packet compatibility inside the backend, and full V3 TypeGPU resource ownership.
+- Dynamic interaction overlays no longer build `GridScenePacketV2` values. They are emitted as `DynamicGridOverlayBatchV3` rect-instance buffers and drawn through a dedicated TypeGPU overlay resource outside tile cache and stale-tile lookup.
+- Render tile deltas no longer carry overlay mutations or a `dynamicOverlay` pane kind. Overlays are now a visual runtime layer, not renderer tile data.
+- The old resident scene path has been deleted from product runtime. The remaining Oracle deletion gates are now V2 scene-packet compatibility inside the backend, header packetization, and full V3 TypeGPU resource ownership.
 
 ## 1. Validation Verdict
 
@@ -40,7 +42,7 @@ The current hot path still has these validated properties:
 - `packages/grid/src/renderer-v2/tile-gpu-cache.ts` no longer uses array materialization plus `toSorted()` for stale lookup and eviction after this implementation tranche, but it is still not a true byte-budgeted tile residency system with numeric keys, compatibility buckets, and O(1) visible marking.
 - `packages/grid/src/renderer-v2/workbook-typegpu-backend.ts` still resolves draw panes by consulting that cache each frame.
 - `packages/grid/src/renderer-v2/typegpu-atlas-manager.ts` still uses one growing atlas canvas and redraws all glyphs on growth.
-- `packages/grid/src/renderer-v2/dynamic-overlay-packet.ts` still packs interaction overlays as `GridScenePacketV2`; the visible header-index helper no longer sorts arrays after this tranche, but overlays are still data-scene-shaped packets rather than a dedicated overlay instance layer.
+- `packages/grid/src/renderer-v3/dynamic-overlay-batch.ts` now builds interaction overlays without `GridScenePacketV2`; `WorkbookPaneRendererV2` passes those batches to a dedicated TypeGPU overlay buffer path instead of appending a fake overlay pane.
 - Browser perf tests now need to be tightened around the fixed-tile path, since resident-scene refreshes are no longer a normal product runtime behavior.
 
 Important corrections to the Atlas text:
@@ -132,7 +134,7 @@ Files:
 Implement:
 
 - binary `RenderTileDeltaBatch` with tile identity, version, mutation kind, and dirty spans;
-- cell-run, axis, freeze, invalidate, and overlay mutation types;
+- cell-run, axis, freeze, and invalidate mutation types; overlays are intentionally excluded from render tile deltas;
 - validation tests for version mismatches and bounded payloads;
 - keep `ViewportPatch` as app-state transport, not renderer transport.
 
@@ -157,9 +159,8 @@ Implement:
 
 Files:
 
-- `packages/grid/src/renderer-v2/dynamic-overlay-packet.ts`
+- `packages/grid/src/renderer-v3/dynamic-overlay-batch.ts`
 - `packages/grid/src/renderer-v2/WorkbookPaneRendererV2.tsx`
-- new `packages/grid/src/renderer-v2/interaction-overlay-layer.ts`
 - new `packages/grid/src/renderer-v2/header-tile-layer.ts`
 
 Implement:
@@ -167,7 +168,7 @@ Implement:
 - headers as their own tile family;
 - selection/fill/resize/collaboration overlay buffer independent from data tiles;
 - selection drag and resize preview with zero data tile uploads.
-- in the interim V2 packet path, visible header-index generation must avoid sort allocation while it is still packet-based.
+- visible header-index generation avoids sort allocation while the overlay geometry builder remains geometry-driven.
 
 ### Phase 6.5: establish renderer-v3 tile primitives
 
@@ -246,7 +247,7 @@ Completed for resident data-scene runtime:
 - `apps/web/src/worker-runtime-render-scene.ts`
 - `packages/grid/src/gridResidentDataLayer.ts` as renderer data runtime
 
-Remaining scene-packet runtime use is V2 backend compatibility and dynamic overlays, not resident data-scene ownership.
+Remaining scene-packet runtime use is V2 backend compatibility and header packetization, not resident data-scene ownership or interaction overlays.
 
 ## 4. Current Execution Tranche
 
@@ -262,7 +263,7 @@ Definition of done for this tranche:
 - the worker runtime can publish full tile-replace render deltas from fixed content tile viewports while tile-payload v3 is developed;
 - scroll perf reports include renderer delta batch, mutation, apply-time, and dirty-tile counters;
 - viewport-window and render-scroll math is split out of `useWorkbookGridRenderState.ts` under focused tests;
-- dynamic overlay visible header-index generation avoids the old `Set` plus `toSorted()` allocation path;
+- dynamic overlays are built and drawn as V3 overlay batches, not V2 scene packets;
 - renderer-v3 numeric tile keys, dirty tile index, and tile residency primitives exist under focused tests;
 - bootstrap render-delta tile IDs are shared content tile keys, not ad hoc per-pane hashes;
 - existing tile cache and typegpu backend tests pass;
@@ -292,7 +293,7 @@ Completed in the resident-scene deletion tranche:
 - `WorkbookWorkerRuntime.subscribeRenderTileDeltas()` publishes binary tile deltas using the current resident-scene builder as the bootstrap oracle.
 - `gridViewportController.ts` owns resident-window comparison, tile-key conversion, and render-scroll transform math outside the large React hook.
 - `ProjectedTileSceneStore` reports renderer delta batches, mutations, apply duration, and dirty tile counts into the scroll perf collector.
-- `dynamic-overlay-packet.ts` no longer sorts visible row/column header indexes while building overlay packets.
+- `renderer-v3/dynamic-overlay-batch.ts` replaces `dynamic-overlay-packet.ts`; mounted selection/hover/fill/resize/frozen-separator overlays are V3 rect-instance batches, not scene packets or render-tile deltas.
 - the mounted TypeGPU V2 tile cache now uses compatibility buckets, O(visible) visible marking, and LRU-tail eviction instead of scanning every cached tile for common operations.
 - the mounted TypeGPU V2 pane buffer cache now releases pruned rect/text buffers to reusable free lists instead of destroying them during normal pane churn.
 - the web build now isolates TypeGPU and grid renderer internals into a `grid-renderer-vendor` chunk so renderer migration work does not consume the whole workbook-vendor release budget.
@@ -322,6 +323,6 @@ Remaining work from this design:
 
 - continue splitting camera/render scheduling out of `useWorkbookGridRenderState.ts`;
 - replace routine resident scene packet regeneration with dirty-span tile payload updates;
-- split headers/overlays into independent GPU layers;
+- split headers into an independent GPU layer;
 - wire the V3 atlas/text-run primitives into the TypeGPU backend and add tile glyph dependency preservation;
 - remove scene-packet runtime use after parity and perf gates are green.

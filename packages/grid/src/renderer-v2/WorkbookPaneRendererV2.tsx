@@ -2,9 +2,9 @@ import { memo, useEffect, useRef, useState } from 'react'
 import type { GridGeometrySnapshot } from '../gridGeometry.js'
 import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 import type { WorkbookRenderPaneState } from './pane-scene-types.js'
-import type { DynamicGridOverlayPacket } from './dynamic-overlay-packet.js'
 import type { GridCameraStore } from './gridCameraStore.js'
 import { GridRenderLoop } from './gridRenderLoop.js'
+import type { DynamicGridOverlayBatchV3 } from '../renderer-v3/dynamic-overlay-batch.js'
 import {
   createWorkbookTypeGpuBackend,
   destroyWorkbookTypeGpuBackend,
@@ -23,8 +23,8 @@ export interface WorkbookPaneRendererV2Props {
   readonly cameraStore?: GridCameraStore | null
   readonly panes: readonly WorkbookRenderPaneState[]
   readonly preloadPanes?: readonly WorkbookRenderPaneState[] | undefined
-  readonly overlayBuilder?: ((geometry: GridGeometrySnapshot) => DynamicGridOverlayPacket | null | undefined) | undefined
-  readonly overlay?: DynamicGridOverlayPacket | undefined
+  readonly overlayBuilder?: ((geometry: GridGeometrySnapshot) => DynamicGridOverlayBatchV3 | null | undefined) | undefined
+  readonly overlay?: DynamicGridOverlayBatchV3 | undefined
   readonly scrollTransformStore?: WorkbookGridScrollStore | null
 }
 
@@ -252,32 +252,18 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
           renderLoopRef.current.requestDraw(drawFrameRef.current)
         }, TYPEGPU_IDLE_PRELOAD_RETRY_MS)
       }
-      const overlayPacket = overlayBuilderRef.current && latestGeometry ? overlayBuilderRef.current(latestGeometry) : overlayRef.current
-      const resolvedPanePayloads = overlayPacket
-        ? [
-            ...basePanePayloads,
-            {
-              contentOffset: { x: 0, y: 0 },
-              frame: { x: 0, y: 0, width: surface.width, height: surface.height },
-              generation: -1,
-              packedScene: overlayPacket.packedScene,
-              paneId: 'overlay',
-              scrollAxes: { x: false, y: false },
-              surfaceSize: { width: surface.width, height: surface.height },
-              viewport: overlayPacket.packedScene.viewport,
-            },
-          ]
-        : basePanePayloads
+      const overlayBatch = overlayBuilderRef.current && latestGeometry ? overlayBuilderRef.current(latestGeometry) : overlayRef.current
 
       drawWorkbookTypeGpuFrame({
         backend,
-        panes: resolvedPanePayloads,
+        overlay: overlayBatch ?? null,
+        panes: basePanePayloads,
         preloadPanes: preloadPanePayloads,
         syncPreloadPanes: !deferPreloadSync,
         scrollSnapshot: resolveTypeGpuV2DrawScrollSnapshot({
           fallback: scrollTransformStoreRef.current?.getSnapshot() ?? { tx: 0, ty: 0 },
           geometry: latestGeometry,
-          panes: resolvedPanePayloads,
+          panes: basePanePayloads,
         }),
         surface,
       })

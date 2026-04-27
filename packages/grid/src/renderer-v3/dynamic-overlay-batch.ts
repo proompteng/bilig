@@ -1,16 +1,31 @@
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import type { GridGeometrySnapshot, GridPaneKind } from '../gridGeometry.js'
-import { parseGpuColor, type GridGpuRect } from '../gridGpuScene.js'
+import { parseGpuColor, type GridGpuColor, type GridGpuRect } from '../gridGpuScene.js'
 import type { HeaderSelection } from '../gridPointer.js'
 import type { CompactSelectionState, GridSelection, Item, Rectangle } from '../gridTypes.js'
 import { workbookThemeColors } from '../workbookTheme.js'
-import { packGridScenePacketV2, type GridScenePacketV2 } from './scene-packet-v2.js'
 
-export interface DynamicGridOverlayPacket {
-  readonly packedScene: GridScenePacketV2
+export const DYNAMIC_OVERLAY_RECT_FLOAT_COUNT_V3 = 8
+export const DYNAMIC_OVERLAY_RECT_INSTANCE_FLOAT_COUNT_V3 = 20
+
+export interface DynamicGridOverlayBatchV3 {
+  readonly seq: number
+  readonly cameraSeq: number
+  readonly generatedAt: number
+  readonly sheetName: string
+  readonly surfaceSize: {
+    readonly width: number
+    readonly height: number
+  }
+  readonly rects: Float32Array
+  readonly rectInstances: Float32Array
+  readonly rectCount: number
+  readonly fillRectCount: number
+  readonly borderRectCount: number
+  readonly rectSignature: string
 }
 
-export function buildDynamicGridOverlayPacket(input: {
+export function buildDynamicGridOverlayBatchV3(input: {
   readonly geometry: GridGeometrySnapshot
   readonly selectionRange: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'> | null
   readonly gridSelection?: GridSelection | null | undefined
@@ -20,7 +35,7 @@ export function buildDynamicGridOverlayPacket(input: {
   readonly activeHeaderDrag?: HeaderSelection | null | undefined
   readonly resizeGuideColumn?: number | null | undefined
   readonly resizeGuideRow?: number | null | undefined
-}): DynamicGridOverlayPacket {
+}): DynamicGridOverlayBatchV3 {
   const fillRects: GridGpuRect[] = []
   const borderRects: GridGpuRect[] = []
   appendAxisSelectionOverlay({
@@ -59,24 +74,20 @@ export function buildDynamicGridOverlayPacket(input: {
     gridSelection: input.gridSelection ?? null,
   })
   appendFrozenSeparators({ borderRects, geometry: input.geometry })
-  const gpuScene = {
-    borderRects,
-    fillRects,
-  }
+
   const surfaceSize = resolveOverlaySurfaceSize(input.geometry)
   return {
-    packedScene: packGridScenePacketV2({
-      cameraSeq: input.geometry.camera.seq,
-      generatedAt: input.geometry.camera.updatedAt,
-      generation: input.geometry.camera.seq,
-      gpuScene,
-      paneId: 'overlay',
-      requestSeq: input.geometry.camera.seq,
-      sheetName: input.geometry.camera.sheetName,
-      surfaceSize,
-      textScene: { items: [] },
-      viewport: { colStart: 0, colEnd: 0, rowStart: 0, rowEnd: 0 },
-    }),
+    borderRectCount: borderRects.length,
+    cameraSeq: input.geometry.camera.seq,
+    fillRectCount: fillRects.length,
+    generatedAt: input.geometry.camera.updatedAt,
+    rectCount: fillRects.length + borderRects.length,
+    rectInstances: packOverlayRectInstances({ borderRects, fillRects, surfaceSize }),
+    rects: packOverlayRects({ borderRects, fillRects }),
+    rectSignature: resolveOverlayRectSignature({ borderRects, fillRects, surfaceSize }),
+    seq: input.geometry.camera.seq,
+    sheetName: input.geometry.camera.sheetName,
+    surfaceSize,
   }
 }
 
@@ -88,6 +99,169 @@ function resolveOverlaySurfaceSize(geometry: GridGeometrySnapshot): { readonly w
     }),
     { height: 0, width: 0 },
   )
+}
+
+function packOverlayRectInstances(input: {
+  readonly fillRects: readonly GridGpuRect[]
+  readonly borderRects: readonly GridGpuRect[]
+  readonly surfaceSize: { readonly width: number; readonly height: number }
+}): Float32Array {
+  const rectCount = input.fillRects.length + input.borderRects.length
+  const floats = new Float32Array(Math.max(1, rectCount) * DYNAMIC_OVERLAY_RECT_INSTANCE_FLOAT_COUNT_V3)
+  const clipX = 0
+  const clipY = 0
+  const clipX1 = input.surfaceSize.width
+  const clipY1 = input.surfaceSize.height
+  let offset = 0
+  for (const rect of input.fillRects) {
+    offset = writeFillRectInstance(floats, offset, rect, clipX, clipY, clipX1, clipY1)
+  }
+  for (const rect of input.borderRects) {
+    offset = writeBorderRectInstance(floats, offset, rect, clipX, clipY, clipX1, clipY1)
+  }
+  return floats
+}
+
+function writeFillRectInstance(
+  floats: Float32Array,
+  offset: number,
+  rect: GridGpuRect,
+  clipX: number,
+  clipY: number,
+  clipX1: number,
+  clipY1: number,
+): number {
+  floats[offset + 0] = rect.x
+  floats[offset + 1] = rect.y
+  floats[offset + 2] = rect.width
+  floats[offset + 3] = rect.height
+  floats[offset + 4] = rect.color.r
+  floats[offset + 5] = rect.color.g
+  floats[offset + 6] = rect.color.b
+  floats[offset + 7] = rect.color.a
+  floats[offset + 8] = 0
+  floats[offset + 9] = 0
+  floats[offset + 10] = 0
+  floats[offset + 11] = 0
+  floats[offset + 12] = rect.color.a < 0.2 ? 2 : 0
+  floats[offset + 13] = 0
+  floats[offset + 14] = 0
+  floats[offset + 15] = 0
+  floats[offset + 16] = clipX
+  floats[offset + 17] = clipY
+  floats[offset + 18] = clipX1
+  floats[offset + 19] = clipY1
+  return offset + DYNAMIC_OVERLAY_RECT_INSTANCE_FLOAT_COUNT_V3
+}
+
+function writeBorderRectInstance(
+  floats: Float32Array,
+  offset: number,
+  rect: GridGpuRect,
+  clipX: number,
+  clipY: number,
+  clipX1: number,
+  clipY1: number,
+): number {
+  floats[offset + 0] = rect.x
+  floats[offset + 1] = rect.y
+  floats[offset + 2] = rect.width
+  floats[offset + 3] = rect.height
+  floats[offset + 4] = 0
+  floats[offset + 5] = 0
+  floats[offset + 6] = 0
+  floats[offset + 7] = 0
+  floats[offset + 8] = rect.color.r
+  floats[offset + 9] = rect.color.g
+  floats[offset + 10] = rect.color.b
+  floats[offset + 11] = rect.color.a
+  floats[offset + 12] = 0
+  floats[offset + 13] = 1
+  floats[offset + 14] = 0
+  floats[offset + 15] = 0
+  floats[offset + 16] = clipX
+  floats[offset + 17] = clipY
+  floats[offset + 18] = clipX1
+  floats[offset + 19] = clipY1
+  return offset + DYNAMIC_OVERLAY_RECT_INSTANCE_FLOAT_COUNT_V3
+}
+
+function packOverlayRects(input: {
+  readonly fillRects: readonly GridGpuRect[]
+  readonly borderRects: readonly GridGpuRect[]
+}): Float32Array {
+  const rectCount = input.fillRects.length + input.borderRects.length
+  const floats = new Float32Array(Math.max(1, rectCount) * DYNAMIC_OVERLAY_RECT_FLOAT_COUNT_V3)
+  let offset = 0
+  for (const rect of input.fillRects) {
+    offset = writeOverlayRect(floats, offset, rect)
+  }
+  for (const rect of input.borderRects) {
+    offset = writeOverlayRect(floats, offset, rect)
+  }
+  return floats
+}
+
+function writeOverlayRect(floats: Float32Array, offset: number, rect: GridGpuRect): number {
+  floats[offset + 0] = rect.x
+  floats[offset + 1] = rect.y
+  floats[offset + 2] = rect.width
+  floats[offset + 3] = rect.height
+  floats[offset + 4] = rect.color.r
+  floats[offset + 5] = rect.color.g
+  floats[offset + 6] = rect.color.b
+  floats[offset + 7] = rect.color.a
+  return offset + DYNAMIC_OVERLAY_RECT_FLOAT_COUNT_V3
+}
+
+function resolveOverlayRectSignature(input: {
+  readonly fillRects: readonly GridGpuRect[]
+  readonly borderRects: readonly GridGpuRect[]
+  readonly surfaceSize: { readonly width: number; readonly height: number }
+}): string {
+  let hash = createHash()
+  hash = mixNumber(hash, input.surfaceSize.width)
+  hash = mixNumber(hash, input.surfaceSize.height)
+  hash = mixNumber(hash, input.fillRects.length)
+  hash = mixNumber(hash, input.borderRects.length)
+  for (const rect of input.fillRects) {
+    hash = mixRect(hash, rect)
+  }
+  for (const rect of input.borderRects) {
+    hash = mixRect(hash, rect)
+  }
+  return hash.toString(36)
+}
+
+function mixRect(hash: number, rect: GridGpuRect): number {
+  let next = hash
+  next = mixNumber(next, rect.x)
+  next = mixNumber(next, rect.y)
+  next = mixNumber(next, rect.width)
+  next = mixNumber(next, rect.height)
+  next = mixColor(next, rect.color)
+  return next
+}
+
+function mixColor(hash: number, color: GridGpuColor): number {
+  let next = hash
+  next = mixNumber(next, color.r)
+  next = mixNumber(next, color.g)
+  next = mixNumber(next, color.b)
+  next = mixNumber(next, color.a)
+  return next
+}
+
+function createHash(): number {
+  return 2_166_136_261
+}
+
+function mixNumber(hash: number, value: number): number {
+  return mixInteger(hash, Math.round(value * 1_000))
+}
+
+function mixInteger(hash: number, value: number): number {
+  return Math.imul((hash ^ value) >>> 0, 16_777_619) >>> 0
 }
 
 function appendHoverOverlay(input: {

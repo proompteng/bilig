@@ -34,6 +34,7 @@ export interface GridGpuCounters {
   readonly paneDraws: number
   readonly uniformWriteBytes: number
   readonly vertexUploadBytes: number
+  readonly overlayUploadBytes: number
   readonly bufferAllocations: number
   readonly bufferAllocationBytes: number
   readonly atlasUploadBytes: number

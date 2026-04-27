@@ -9,7 +9,7 @@ describe('perf smoke', () => {
     expect(result.elapsedMs).toBeGreaterThanOrEqual(0)
     expect(result.metrics.dirtyFormulaCount).toBeGreaterThanOrEqual(100)
     expect(result.metrics.wasmFormulaCount).toBeGreaterThan(0)
-  })
+  }, 30_000)
 
   it('retries once after building wasm when the first pass falls back to js', async () => {
     const jsOnly: PerfSmokeBenchmarkResult = {

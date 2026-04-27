@@ -3,10 +3,14 @@ import { createGridAxisWorldIndex } from '../gridAxisWorldIndex.js'
 import { createGridGeometrySnapshotFromAxes } from '../gridGeometry.js'
 import { getGridMetrics } from '../gridMetrics.js'
 import { createColumnSliceSelection } from '../gridSelection.js'
-import { buildDynamicGridOverlayPacket } from '../renderer-v2/dynamic-overlay-packet.js'
+import {
+  DYNAMIC_OVERLAY_RECT_FLOAT_COUNT_V3,
+  DYNAMIC_OVERLAY_RECT_INSTANCE_FLOAT_COUNT_V3,
+  buildDynamicGridOverlayBatchV3,
+} from '../renderer-v3/dynamic-overlay-batch.js'
 
-describe('dynamic overlay packet', () => {
-  test('builds selection, fill-handle, resize, and frozen separator rects from geometry', () => {
+describe('dynamic overlay batch v3', () => {
+  test('builds selection, fill-handle, resize, and frozen separator rects from geometry without scene packets', () => {
     const metrics = getGridMetrics()
     const geometry = createGridGeometrySnapshotFromAxes({
       columns: createGridAxisWorldIndex({ axisLength: 20, defaultSize: 100 }),
@@ -23,7 +27,7 @@ describe('dynamic overlay packet', () => {
       updatedAt: 100,
     })
 
-    const overlay = buildDynamicGridOverlayPacket({
+    const overlay = buildDynamicGridOverlayBatchV3({
       geometry,
       hoveredCell: [3, 3],
       resizeGuideColumn: 2,
@@ -32,19 +36,19 @@ describe('dynamic overlay packet', () => {
       showFillHandle: true,
     })
 
-    expect(overlay.packedScene.textRuns).toEqual([])
-    expect(overlay.packedScene.paneId).toBe('overlay')
-    expect(overlay.packedScene.key.paneKind).toBe('dynamicOverlay')
-    expect(overlay.packedScene.rectCount).toBe(overlay.packedScene.fillRectCount + overlay.packedScene.borderRectCount)
-    expect(overlay.packedScene.surfaceSize).toEqual({ height: 220, width: 520 })
-    expect(readPackedRects(overlay)).toEqual(
+    expect('packedScene' in overlay).toBe(false)
+    expect(overlay.rectCount).toBe(overlay.fillRectCount + overlay.borderRectCount)
+    expect(overlay.rects).toHaveLength(overlay.rectCount * DYNAMIC_OVERLAY_RECT_FLOAT_COUNT_V3)
+    expect(overlay.rectInstances).toHaveLength(overlay.rectCount * DYNAMIC_OVERLAY_RECT_INSTANCE_FLOAT_COUNT_V3)
+    expect(overlay.surfaceSize).toEqual({ height: 220, width: 520 })
+    expect(readOverlayRects(overlay)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ x: 146, y: 44, width: 150, height: 30 }),
         expect.objectContaining({ x: 290, y: 68, width: 12, height: 12 }),
         expect.objectContaining({ x: 297, y: 75, width: 98, height: 18 }),
       ]),
     )
-    expect(readPackedRects(overlay)).toEqual(
+    expect(readOverlayRects(overlay)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ x: 295, y: 0, width: 1, height: 220 }),
         expect.objectContaining({ x: 0, y: 73, width: 520, height: 1 }),
@@ -72,7 +76,7 @@ describe('dynamic overlay packet', () => {
       updatedAt: 100,
     })
 
-    const overlay = buildDynamicGridOverlayPacket({
+    const overlay = buildDynamicGridOverlayBatchV3({
       activeHeaderDrag: { kind: 'column', index: 2 },
       geometry,
       gridSelection: createColumnSliceSelection(1, 3, 2),
@@ -81,7 +85,7 @@ describe('dynamic overlay packet', () => {
       showFillHandle: false,
     })
 
-    expect(readPackedRects(overlay)).toEqual(
+    expect(readOverlayRects(overlay)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ x: 147, y: 1, width: 48, height: 22 }),
         expect.objectContaining({ x: 197, y: 1, width: 98, height: 22 }),
@@ -92,7 +96,7 @@ describe('dynamic overlay packet', () => {
         expect.objectContaining({ x: 196, y: 21, width: 100, height: 3 }),
       ]),
     )
-    expect(readPackedRects(overlay)).toEqual(
+    expect(readOverlayRects(overlay)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ x: 146, y: 54, width: 50, height: 1 }),
         expect.objectContaining({ x: 96, y: 0, width: 1, height: 220 }),
@@ -119,7 +123,7 @@ describe('dynamic overlay packet', () => {
     })
     const toSortedSpy = vi.spyOn(Array.prototype, 'toSorted')
 
-    buildDynamicGridOverlayPacket({
+    buildDynamicGridOverlayBatchV3({
       geometry,
       gridSelection: createColumnSliceSelection(1, 4, 2),
       selectedCell: [1, 2],
@@ -132,20 +136,20 @@ describe('dynamic overlay packet', () => {
   })
 })
 
-function readPackedRects(packet: ReturnType<typeof buildDynamicGridOverlayPacket>): Array<{
+function readOverlayRects(batch: ReturnType<typeof buildDynamicGridOverlayBatchV3>): Array<{
   readonly x: number
   readonly y: number
   readonly width: number
   readonly height: number
 }> {
   const rects = []
-  for (let index = 0; index < packet.packedScene.rectCount; index += 1) {
-    const offset = index * 8
+  for (let index = 0; index < batch.rectCount; index += 1) {
+    const offset = index * DYNAMIC_OVERLAY_RECT_FLOAT_COUNT_V3
     rects.push({
-      x: packet.packedScene.rects[offset + 0] ?? Number.NaN,
-      y: packet.packedScene.rects[offset + 1] ?? Number.NaN,
-      width: packet.packedScene.rects[offset + 2] ?? Number.NaN,
-      height: packet.packedScene.rects[offset + 3] ?? Number.NaN,
+      x: batch.rects[offset + 0] ?? Number.NaN,
+      y: batch.rects[offset + 1] ?? Number.NaN,
+      width: batch.rects[offset + 2] ?? Number.NaN,
+      height: batch.rects[offset + 3] ?? Number.NaN,
     })
   }
   return rects

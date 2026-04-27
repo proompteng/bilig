@@ -45,7 +45,6 @@ export class ProjectedTileSceneStore {
   private readonly sheetIdsByName = new Map<string, number>()
   private lastBatchId = 0
   private lastCameraSeq = 0
-  private overlayRevision = 0
 
   constructor(private readonly client?: Pick<WorkerEngineClient, 'subscribeRenderTileDeltas'>) {}
 
@@ -131,9 +130,6 @@ export class ProjectedTileSceneStore {
           changedTileIds.delete(mutation.tileId)
           invalidatedTileIds.add(mutation.tileId)
           break
-        case 'overlay':
-          this.overlayRevision = Math.max(this.overlayRevision, mutation.overlayRevision)
-          break
         case 'axis':
         case 'freeze':
           break
@@ -165,10 +161,6 @@ export class ProjectedTileSceneStore {
     return this.lastCameraSeq
   }
 
-  getOverlayRevision(): number {
-    return this.overlayRevision
-  }
-
   dropSheets(sheetNames: readonly string[]): void {
     const sheetIds = new Set<number>()
     sheetNames.forEach((sheetName) => {
@@ -195,7 +187,6 @@ export class ProjectedTileSceneStore {
     this.sheetIdsByName.clear()
     this.lastBatchId = 0
     this.lastCameraSeq = 0
-    this.overlayRevision = 0
   }
 
   private noteRendererDeltaApply(

@@ -13,6 +13,7 @@ export function formatRenderDebugHud(snapshot: GridRenderDebugSnapshot): readonl
     `submits ${snapshot.gpu.submitCount}`,
     `draws ${snapshot.gpu.drawCalls}`,
     `uploads ${(snapshot.gpu.vertexUploadBytes / 1024).toFixed(1)}KB`,
+    `overlay ${(snapshot.gpu.overlayUploadBytes / 1024).toFixed(1)}KB`,
     `allocs ${snapshot.gpu.bufferAllocations}`,
     `atlas ${(snapshot.gpu.atlasUploadBytes / 1024).toFixed(1)}KB`,
     `tiles miss ${snapshot.gpu.tileMisses}`,

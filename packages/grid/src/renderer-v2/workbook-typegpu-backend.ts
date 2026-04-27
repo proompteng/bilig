@@ -10,10 +10,16 @@ import {
   type TypeGpuRendererArtifacts,
 } from './typegpu-backend.js'
 import { drawTypeGpuPanes, type TypeGpuDrawSurface } from './typegpu-render-pass.js'
-import { resolveWorkbookPaneBufferKey, syncTypeGpuPaneResources } from './typegpu-buffer-pool.js'
+import {
+  WORKBOOK_DYNAMIC_OVERLAY_BUFFER_KEY,
+  resolveWorkbookPaneBufferKey,
+  syncTypeGpuOverlayResources,
+  syncTypeGpuPaneResources,
+} from './typegpu-buffer-pool.js'
 import { createTypeGpuSurfaceState, syncTypeGpuCanvasSurface, type TypeGpuSurfaceState } from './typegpu-surface.js'
 import { buildTileGpuCacheKey, TileGpuCache, syncTileGpuCacheFromPanes } from './tile-gpu-cache.js'
 import type { GridScenePacketV2 } from './scene-packet-v2.js'
+import type { DynamicGridOverlayBatchV3 } from '../renderer-v3/dynamic-overlay-batch.js'
 
 export interface WorkbookTypeGpuBackend {
   readonly artifacts: TypeGpuRendererArtifacts
@@ -59,6 +65,7 @@ export function drawWorkbookTypeGpuFrame(input: {
   readonly backend: WorkbookTypeGpuBackend
   readonly panes: readonly WorkbookRenderPaneState[]
   readonly preloadPanes?: readonly WorkbookRenderPaneState[] | undefined
+  readonly overlay?: DynamicGridOverlayBatchV3 | null | undefined
   readonly syncPreloadPanes?: boolean | undefined
   readonly scrollSnapshot: WorkbookGridScrollSnapshot
   readonly surface: TypeGpuDrawSurface
@@ -81,6 +88,12 @@ export function drawWorkbookTypeGpuFrame(input: {
     paneBuffers: input.backend.paneBuffers,
     panes: resourcePanes,
     retainPanes: resourceRetainPanes,
+    retainBufferKeys: input.overlay ? [WORKBOOK_DYNAMIC_OVERLAY_BUFFER_KEY] : [],
+  })
+  syncTypeGpuOverlayResources({
+    artifacts: input.backend.artifacts,
+    overlay: input.overlay ?? null,
+    paneBuffers: input.backend.paneBuffers,
   })
   syncTypeGpuAtlasResources(input.backend.artifacts, input.backend.atlas)
   const drawPanes = resolveTypeGpuDrawPanes({
@@ -92,6 +105,7 @@ export function drawWorkbookTypeGpuFrame(input: {
   markVisibleTilePanes(input.backend.tileCache, drawPanes)
   drawTypeGpuPanes({
     artifacts: input.backend.artifacts,
+    overlay: input.overlay ?? null,
     paneBuffers: input.backend.paneBuffers,
     panes: drawPanes,
     scrollSnapshot: input.scrollSnapshot,
