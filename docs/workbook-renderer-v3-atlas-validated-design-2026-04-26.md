@@ -47,8 +47,8 @@ Latest implementation note:
   V3 content tiles through the V2 scene-packet validator.
 - `renderer-v3/text-run-buffer.ts` now owns V3 text-run metric packing for fixed content tiles. Together with
   `renderer-v3/rect-instance-buffer.ts`, V3 tile materialization can build rect/text payloads without going through `scene-packet-v2.ts`.
-- The grid package top-level public export no longer re-exports `renderer-v2/index.js`; V2 renderer modules remain internal legacy code and tests
-  while the public renderer surface points at V3.
+- The grid package top-level public export no longer re-exports `renderer-v2/index.js`; the old mounted V2 pane renderer has been deleted,
+  and remaining `renderer-v2` modules are internal legacy primitives/tests while the public renderer surface points at V3.
 
 ## 1. Validation Verdict
 
@@ -132,7 +132,7 @@ Files:
 
 - `packages/grid/src/useWorkbookGridRenderState.ts`
 - `packages/grid/src/WorkbookGridSurface.tsx`
-- `packages/grid/src/renderer-v2/WorkbookPaneRendererV2.tsx`
+- deleted `packages/grid/src/renderer-v2/WorkbookPaneRendererV2.tsx`
 - new `packages/grid/src/gridViewportController.ts`
 - new `packages/grid/src/renderer-v2/render-scheduler.ts`
 
@@ -182,7 +182,7 @@ Implement:
 Files:
 
 - `packages/grid/src/renderer-v3/dynamic-overlay-batch.ts`
-- `packages/grid/src/renderer-v2/WorkbookPaneRendererV2.tsx`
+- deleted `packages/grid/src/renderer-v2/WorkbookPaneRendererV2.tsx`
 - new `packages/grid/src/renderer-v2/header-tile-layer.ts`
 
 Implement:
@@ -317,8 +317,8 @@ Completed in the resident-scene deletion tranche:
 - `ProjectedTileSceneStore` reports renderer delta batches, mutations, apply duration, and dirty tile counts into the scroll perf collector.
 - `renderer-v3/dynamic-overlay-batch.ts` replaces `dynamic-overlay-packet.ts`; mounted selection/hover/fill/resize/frozen-separator overlays are V3 rect-instance batches, not scene packets or render-tile deltas.
 - `gridHeaderPanes.ts` now emits V3 header batches with packed rect instances and text runs; mounted column/row headers are drawn through dedicated TypeGPU header buffers rather than V2 scene packets.
-- the mounted TypeGPU V2 tile cache now uses compatibility buckets, O(visible) visible marking, and LRU-tail eviction instead of scanning every cached tile for common operations.
-- the mounted TypeGPU V2 pane buffer cache now releases pruned rect/text buffers to reusable free lists instead of destroying them during normal pane churn.
+- the legacy TypeGPU V2 tile cache now uses compatibility buckets, O(visible) visible marking, and LRU-tail eviction instead of scanning every cached tile for common operations.
+- the legacy TypeGPU V2 pane buffer cache now releases pruned rect/text buffers to reusable free lists instead of destroying them during normal pane churn.
 - the web build now isolates TypeGPU and grid renderer internals into a `grid-renderer-vendor` chunk so renderer migration work does not consume the whole workbook-vendor release budget.
 - `renderer-v3/tile-key.ts` packs/unpacks fixed content tile coordinates into safe numeric keys.
 - `renderer-v3/tile-damage-index.ts` maps cell-range damage to touched fixed content tiles.
@@ -356,6 +356,8 @@ Completed in the resident-scene deletion tranche:
   `renderer-v3-import-boundary.test.ts` locks the mounted V3 import boundary.
 - `packages/grid/src/renderer-v3/draw-scheduler.ts` now owns the mounted V3 requestAnimationFrame and idle warm-preload retry decision,
   moving the first scheduling lane out of `WorkbookPaneRendererV3.tsx`.
+- `packages/grid/src/renderer-v2/WorkbookPaneRendererV2.tsx` and its direct mounted-component test were deleted. The `renderer-v2`
+  barrel no longer exports a mounted React renderer; remaining `renderer-v2` modules are legacy low-level primitives and tests only.
 
 Remaining work from this design:
 

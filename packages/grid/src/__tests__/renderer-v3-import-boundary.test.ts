@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
@@ -14,6 +14,16 @@ function collectSourceFiles(path: string): string[] {
 }
 
 describe('renderer v3 import boundary', () => {
+  test('legacy mounted V2 pane renderer surface is deleted', () => {
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/WorkbookPaneRendererV2.tsx'))).toBe(false)
+  })
+
+  test('renderer-v2 barrel does not export the mounted pane renderer', () => {
+    const source = readFileSync(join(GRID_SRC_ROOT, 'renderer-v2/index.ts'), 'utf8')
+
+    expect(source).not.toContain('WorkbookPaneRendererV2')
+  })
+
   test('product grid paths do not import renderer-v2 modules', () => {
     const files = collectSourceFiles(GRID_SRC_ROOT).filter((file) => {
       const local = relative(GRID_SRC_ROOT, file)

@@ -1,4 +1,3 @@
-export * from './WorkbookPaneRendererV2.js'
 export * from './grid-render-contract.js'
 export * from './grid-render-counters.js'
 export * from './grid-render-layers.js'
