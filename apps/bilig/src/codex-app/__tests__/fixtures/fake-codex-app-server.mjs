@@ -27,6 +27,9 @@ reader.on('line', (line) => {
       id: message.id,
       result: {
         userAgent: 'fake-codex-app-server',
+        codexHome: '/tmp/fake-codex-home',
+        platformFamily: 'unix',
+        platformOs: 'macos',
       },
     })
     return
@@ -106,7 +109,7 @@ reader.on('line', (line) => {
   if (message.method === 'turn/start') {
     if (process.env.BILIG_TEST_EMIT_REASONING_DELTA === '1') {
       write({
-        method: 'item/reasoning/delta',
+        method: 'item/reasoning/textDelta',
         params: {
           threadId: message.params?.threadId ?? 'thr-fixture',
           turnId: 'turn-fixture',

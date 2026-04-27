@@ -81,7 +81,7 @@ import {
 } from './workbook-agent-service-shared.js'
 import { WorkbookAgentWorkflowRuntime } from './workbook-agent-workflow-runtime.js'
 
-const DEFAULT_MODEL = process.env['BILIG_CODEX_MODEL']?.trim() || 'gpt-5.4'
+const DEFAULT_MODEL = process.env['BILIG_CODEX_MODEL']?.trim() || 'gpt-5.5'
 const CODEX_APP_SERVER_ARGS = [
   'app-server',
   '-c',
@@ -101,11 +101,6 @@ const WORKBOOK_AGENT_CODEX_THREAD_CONFIG = {
   network_access: true,
   web_search: 'live',
   tools: {
-    web_search: {
-      context_size: 'high',
-      allowed_domains: null,
-      location: null,
-    },
     view_image: true,
   },
 } as const satisfies CodexAppServerThreadConfig

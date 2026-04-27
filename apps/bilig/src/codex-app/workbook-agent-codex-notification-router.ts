@@ -125,13 +125,17 @@ export async function routeWorkbookAgentCodexNotification(input: {
       })
       return
     }
-    case 'item/reasoning/delta': {
+    case 'item/reasoning/delta':
+    case 'item/reasoning/textDelta':
+    case 'item/reasoning/summaryTextDelta': {
       await appendTextDelta({
         ...input.notification.params,
         entryKind: 'reasoning',
       })
       return
     }
+    case 'item/reasoning/summaryPartAdded':
+      return
     case 'error': {
       const message = normalizeCodexNotificationErrorMessage(input.notification)
       await Promise.all(

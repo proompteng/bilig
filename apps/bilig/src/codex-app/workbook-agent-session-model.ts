@@ -214,7 +214,9 @@ function isUserTextContentItem(value: unknown): value is { type: 'text'; text: s
   return isRecord(value) && value['type'] === 'text' && typeof value['text'] === 'string'
 }
 
-function isUserMessageItem(item: CodexThreadItem): item is Extract<CodexThreadItem, { type: 'userMessage' }> {
+function isUserMessageItem(
+  item: CodexThreadItem,
+): item is Extract<CodexThreadItem, { type: 'userMessage' }> & { content: Array<{ type: 'text'; text: string }> } {
   return item.type === 'userMessage' && Array.isArray(item.content) && item.content.every((entry) => isUserTextContentItem(entry))
 }
 
@@ -345,7 +347,7 @@ export function mapThreadItemToEntry(item: CodexThreadItem, turnId: string | nul
       kind: 'assistant',
       turnId,
       text: item.text,
-      phase: item.phase,
+      phase: item.phase ?? null,
     })
   }
 
@@ -378,7 +380,7 @@ export function mapThreadItemToEntry(item: CodexThreadItem, turnId: string | nul
       toolStatus: item.status,
       argumentsText: stringifyJson(item.arguments),
       outputText: formatToolContentItems(item.contentItems),
-      success: item.success,
+      success: item.success ?? null,
       citations: [],
     }
   }

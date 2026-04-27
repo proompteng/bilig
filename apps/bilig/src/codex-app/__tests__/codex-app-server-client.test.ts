@@ -26,6 +26,9 @@ describe('Codex app-server client', () => {
     const initialized = await client.ensureReady()
     expect(initialized).toEqual({
       userAgent: 'fake-codex-app-server',
+      codexHome: '/tmp/fake-codex-home',
+      platformFamily: 'unix',
+      platformOs: 'macos',
     })
 
     const thread = await client.threadStart({
@@ -68,11 +71,6 @@ describe('Codex app-server client', () => {
       network_access: true,
       web_search: 'live',
       tools: {
-        web_search: {
-          context_size: 'high',
-          allowed_domains: null,
-          location: null,
-        },
         view_image: true,
       },
     } as const
@@ -165,7 +163,7 @@ describe('Codex app-server client', () => {
 
     expect(turn.id).toBe('turn-fixture')
     expect(notifications).toContainEqual({
-      method: 'item/reasoning/delta',
+      method: 'item/reasoning/textDelta',
       params: {
         threadId: 'thr-fixture',
         turnId: 'turn-fixture',

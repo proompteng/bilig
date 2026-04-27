@@ -11,6 +11,7 @@ import type {
   CodexRequestId,
   CodexServerNotification,
   CodexThread,
+  CodexThreadItem,
   CodexThreadStartResponse,
   CodexTurn,
   CodexTurnStartResponse,
@@ -34,9 +35,32 @@ export type CodexAppServerJsonValue =
   | CodexAppServerJsonValue[]
   | { [key: string]: CodexAppServerJsonValue }
 
-export type CodexAppServerApprovalPolicy = 'never'
+export type CodexAppServerApprovalPolicy =
+  | 'untrusted'
+  | 'on-failure'
+  | 'on-request'
+  | 'never'
+  | {
+      granular: {
+        mcp_elicitations: boolean
+        request_permissions?: boolean
+        rules: boolean
+        sandbox_approval: boolean
+        skill_approval?: boolean
+      }
+    }
 export type CodexAppServerSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
-export type CodexAppServerThreadConfig = { readonly [key: string]: CodexAppServerJsonValue }
+export type CodexAppServerWebSearchMode = 'live' | 'disabled' | 'off' | boolean
+export interface CodexAppServerToolsConfig {
+  readonly view_image?: boolean
+}
+export type CodexAppServerThreadConfig = {
+  readonly approval_policy?: CodexAppServerApprovalPolicy
+  readonly sandbox_mode?: CodexAppServerSandboxMode
+  readonly network_access?: boolean
+  readonly web_search?: CodexAppServerWebSearchMode
+  readonly tools?: CodexAppServerToolsConfig
+} & { readonly [key: string]: CodexAppServerJsonValue | CodexAppServerToolsConfig | undefined }
 
 export interface CodexAppServerTransport {
   ensureReady(): Promise<CodexInitializeResponse>
@@ -63,48 +87,7 @@ interface PendingResponse {
 
 type ParsedJsonValue = CodexAppServerJsonValue
 
-type ParsedThreadItem =
-  | {
-      type: 'userMessage'
-      id: string
-      content: CodexUserInput[]
-    }
-  | {
-      type: 'agentMessage'
-      id: string
-      text: string
-      phase: string | null
-      memoryCitation: unknown
-    }
-  | {
-      type: 'plan'
-      id: string
-      text: string
-    }
-  | {
-      type: 'dynamicToolCall'
-      id: string
-      tool: string
-      arguments: ParsedJsonValue
-      status: 'inProgress' | 'completed' | 'failed'
-      contentItems: Array<
-        | {
-            type: 'inputText'
-            text: string
-          }
-        | {
-            type: 'inputImage'
-            imageUrl: string
-          }
-      > | null
-      success: boolean | null
-      durationMs: number | null
-    }
-  | {
-      type: string
-      id: string
-      [key: string]: ParsedJsonValue | undefined
-    }
+type ParsedThreadItem = CodexThreadItem
 
 type ParsedServerRequest =
   | {
@@ -149,6 +132,10 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
+function isRequestId(value: unknown): value is CodexRequestId {
+  return isString(value) || isFiniteNumber(value)
+}
+
 function isJsonValue(value: unknown): value is ParsedJsonValue {
   if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     return true
@@ -187,28 +174,29 @@ function parseInitializeResponse(value: unknown): CodexInitializeResponse | null
     return null
   }
   const { codexHome, platformFamily, platformOs, userAgent } = value
-  if (!isString(userAgent)) {
+  if (!isString(userAgent) || !isString(codexHome) || !isString(platformFamily) || !isString(platformOs)) {
     return null
   }
   return {
     userAgent,
-    ...(isString(codexHome) ? { codexHome } : {}),
-    ...(isString(platformFamily) ? { platformFamily } : {}),
-    ...(isString(platformOs) ? { platformOs } : {}),
+    codexHome,
+    platformFamily,
+    platformOs,
   }
 }
 
-function parseTurnError(value: unknown): CodexTurn['error'] | null {
+function parseTurnError(value: unknown): NonNullable<CodexTurn['error']> | null {
   if (value === null) {
     return null
   }
-  if (!isRecord(value)) {
+  if (!isRecord(value) || !isString(value['message'])) {
     return null
   }
-  if (value['message'] !== undefined && !isString(value['message'])) {
-    return null
+  return {
+    message: value['message'],
+    ...(isString(value['additionalDetails']) ? { additionalDetails: value['additionalDetails'] } : {}),
+    ...(isJsonValue(value['codexErrorInfo']) ? { codexErrorInfo: value['codexErrorInfo'] } : {}),
   }
-  return isString(value['message']) ? { message: value['message'] } : {}
 }
 
 function parseToolContentItem(value: unknown): CodexDynamicToolCallResult['contentItems'][number] | null {
@@ -230,6 +218,60 @@ function parseToolContentItem(value: unknown): CodexDynamicToolCallResult['conte
   return null
 }
 
+function parseUserInput(value: unknown): CodexUserInput | null {
+  if (!isRecord(value) || !isString(value['type'])) {
+    return null
+  }
+  switch (value['type']) {
+    case 'text': {
+      if (!isString(value['text'])) {
+        return null
+      }
+      const textElements = value['text_elements']
+      if (textElements !== undefined && (!Array.isArray(textElements) || !textElements.every((entry) => isJsonValue(entry)))) {
+        return null
+      }
+      return {
+        type: 'text',
+        text: value['text'],
+        ...(textElements === undefined ? {} : { text_elements: textElements }),
+      }
+    }
+    case 'image':
+      return isString(value['url'])
+        ? {
+            type: 'image',
+            url: value['url'],
+          }
+        : null
+    case 'localImage':
+      return isString(value['path'])
+        ? {
+            type: 'localImage',
+            path: value['path'],
+          }
+        : null
+    case 'skill':
+      return isString(value['name']) && isString(value['path'])
+        ? {
+            type: 'skill',
+            name: value['name'],
+            path: value['path'],
+          }
+        : null
+    case 'mention':
+      return isString(value['name']) && isString(value['path'])
+        ? {
+            type: 'mention',
+            name: value['name'],
+            path: value['path'],
+          }
+        : null
+    default:
+      return null
+  }
+}
+
 function parseThreadItem(value: unknown): ParsedThreadItem | null {
   if (!isRecord(value) || !isString(value['type']) || !isString(value['id'])) {
     return null
@@ -243,13 +285,11 @@ function parseThreadItem(value: unknown): ParsedThreadItem | null {
       }
       const content: CodexUserInput[] = []
       for (const entry of value['content']) {
-        if (!isRecord(entry) || entry['type'] !== 'text' || !isString(entry['text'])) {
+        const item = parseUserInput(entry)
+        if (!item) {
           return null
         }
-        content.push({
-          type: 'text',
-          text: entry['text'],
-        })
+        content.push(item)
       }
       return {
         type,
@@ -262,15 +302,15 @@ function parseThreadItem(value: unknown): ParsedThreadItem | null {
         return null
       }
       const phase = value['phase']
-      if (phase !== null && !isString(phase)) {
+      if (phase !== undefined && phase !== null && !isString(phase)) {
         return null
       }
       return {
         type,
         id,
         text: value['text'],
-        phase,
-        memoryCitation: value['memoryCitation'],
+        phase: phase ?? null,
+        memoryCitation: isJsonValue(value['memoryCitation']) ? value['memoryCitation'] : null,
       }
     }
     case 'plan': {
@@ -284,20 +324,25 @@ function parseThreadItem(value: unknown): ParsedThreadItem | null {
       }
     }
     case 'dynamicToolCall': {
+      const namespace = value['namespace']
+      const success = value['success']
+      const durationMs = value['durationMs']
       if (
         !isString(value['tool']) ||
         !isJsonValue(value['arguments']) ||
         (value['status'] !== 'inProgress' && value['status'] !== 'completed' && value['status'] !== 'failed') ||
-        (value['success'] !== null && typeof value['success'] !== 'boolean') ||
-        (value['durationMs'] !== null && !isFiniteNumber(value['durationMs']))
+        (namespace !== undefined && namespace !== null && !isString(namespace)) ||
+        (success !== undefined && success !== null && typeof success !== 'boolean') ||
+        (durationMs !== undefined && durationMs !== null && !isFiniteNumber(durationMs))
       ) {
         return null
       }
       const contentItemsValue = value['contentItems']
-      if (contentItemsValue !== null && !Array.isArray(contentItemsValue)) {
+      if (contentItemsValue !== undefined && contentItemsValue !== null && !Array.isArray(contentItemsValue)) {
         return null
       }
-      const contentItems = contentItemsValue === null ? null : contentItemsValue.map((entry) => parseToolContentItem(entry))
+      const contentItems =
+        contentItemsValue === undefined || contentItemsValue === null ? null : contentItemsValue.map((entry) => parseToolContentItem(entry))
       if (contentItems && contentItems.some((entry) => entry === null)) {
         return null
       }
@@ -306,10 +351,11 @@ function parseThreadItem(value: unknown): ParsedThreadItem | null {
         id,
         tool: value['tool'],
         arguments: value['arguments'],
+        namespace: namespace ?? null,
         status: value['status'],
         contentItems,
-        success: value['success'],
-        durationMs: value['durationMs'],
+        success: success ?? null,
+        durationMs: durationMs ?? null,
       }
     }
     default: {
@@ -349,7 +395,7 @@ function parseTurn(value: unknown): CodexTurn | null {
     items.push(item)
   }
   const error = parseTurnError(value['error'])
-  if (error === null && value['error'] !== null) {
+  if (error === null && value['error'] !== undefined && value['error'] !== null) {
     return null
   }
   return {
@@ -413,7 +459,7 @@ function parseJsonRpcError(value: unknown): CodexJsonRpcError | null {
 }
 
 function parseJsonRpcResponse(value: unknown): CodexJsonRpcResponse<unknown> | null {
-  if (!isRecord(value) || !isFiniteNumber(value['id'])) {
+  if (!isRecord(value) || !isRequestId(value['id'])) {
     return null
   }
   const hasResult = Object.hasOwn(value, 'result')
@@ -438,13 +484,15 @@ function parseJsonRpcResponse(value: unknown): CodexJsonRpcResponse<unknown> | n
 }
 
 function parseDynamicToolCallRequest(value: unknown): CodexDynamicToolCallRequest | null {
+  const namespace = isRecord(value) ? value['namespace'] : undefined
   if (
     !isRecord(value) ||
     !isString(value['threadId']) ||
     !isString(value['turnId']) ||
     !isString(value['callId']) ||
     !isString(value['tool']) ||
-    !isJsonValue(value['arguments'])
+    !isJsonValue(value['arguments']) ||
+    (namespace !== undefined && namespace !== null && !isString(namespace))
   ) {
     return null
   }
@@ -454,11 +502,12 @@ function parseDynamicToolCallRequest(value: unknown): CodexDynamicToolCallReques
     callId: value['callId'],
     tool: value['tool'],
     arguments: value['arguments'],
+    namespace: namespace ?? null,
   }
 }
 
 function parseServerRequest(value: unknown): ParsedServerRequest | null {
-  if (!isRecord(value) || !isFiniteNumber(value['id']) || !isString(value['method'])) {
+  if (!isRecord(value) || !isRequestId(value['id']) || !isString(value['method'])) {
     return null
   }
   if (value['method'] === 'item/tool/call') {
@@ -528,6 +577,8 @@ function parseServerNotification(value: unknown): CodexServerNotification | null
     case 'item/agentMessage/delta':
     case 'item/plan/delta':
     case 'item/reasoning/delta':
+    case 'item/reasoning/textDelta':
+    case 'item/reasoning/summaryTextDelta':
       return isString(params['threadId']) && isString(params['turnId']) && isString(params['itemId']) && isString(params['delta'])
         ? {
             method,

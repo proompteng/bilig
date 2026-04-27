@@ -263,6 +263,7 @@ describe('workbook agent service', () => {
         'web_search="live"',
       ])
       expect(fakeCodex.lastThreadStartInput).toMatchObject({
+        model: 'gpt-5.5',
         approvalPolicy: 'never',
         sandbox: 'danger-full-access',
         config: {
@@ -271,11 +272,6 @@ describe('workbook agent service', () => {
           network_access: true,
           web_search: 'live',
           tools: {
-            web_search: {
-              context_size: 'high',
-              allowed_domains: null,
-              location: null,
-            },
             view_image: true,
           },
         },
@@ -468,7 +464,7 @@ describe('workbook agent service', () => {
       })
 
       fakeCodex.emit({
-        method: 'item/reasoning/delta',
+        method: 'item/reasoning/textDelta',
         params: {
           threadId: 'thr-test',
           turnId: 'turn-1',
