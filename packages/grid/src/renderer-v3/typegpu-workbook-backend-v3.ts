@@ -1,7 +1,7 @@
 import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { WorkbookGridScrollSnapshot } from '../workbookGridScrollStore.js'
 import { noteTypeGpuTileMiss } from '../renderer-v2/grid-render-counters.js'
-import { WorkbookPaneBufferCache, type WorkbookPaneBufferEntry } from '../renderer-v2/pane-buffer-cache.js'
+import { WorkbookPaneBufferCache } from '../renderer-v2/pane-buffer-cache.js'
 import { createGlyphAtlas } from '../renderer-v2/typegpu-atlas-manager.js'
 import {
   createTypeGpuRenderer,
@@ -10,17 +10,17 @@ import {
   type TypeGpuRendererArtifacts,
 } from '../renderer-v2/typegpu-backend.js'
 import { createTypeGpuSurfaceState, syncTypeGpuCanvasSurface, type TypeGpuSurfaceState } from '../renderer-v2/typegpu-surface.js'
-import {
-  WORKBOOK_DYNAMIC_OVERLAY_BUFFER_KEY,
-  resolveWorkbookHeaderBufferKey,
-  syncTypeGpuHeaderResources,
-  syncTypeGpuOverlayResources,
-} from '../renderer-v2/typegpu-buffer-pool.js'
+import { syncTypeGpuHeaderResources, syncTypeGpuOverlayResources } from '../renderer-v2/typegpu-buffer-pool.js'
 import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
 import type { GridRenderTile } from './render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
 import { TileResidencyV3 } from './tile-residency.js'
-import { resolveWorkbookTilePaneBufferKeyV3, syncTypeGpuTilePaneResourcesV3 } from './typegpu-tile-buffer-pool.js'
+import {
+  TypeGpuTileResourceCacheV3,
+  resolveWorkbookTileContentBufferKeyV3,
+  syncTypeGpuTilePaneResourcesV3,
+  type TypeGpuTileContentResourceEntryV3,
+} from './typegpu-tile-buffer-pool.js'
 import { drawTypeGpuTilePanesV3, type TypeGpuTileDrawSurface } from './typegpu-tile-render-pass.js'
 
 export interface WorkbookTypeGpuBackendV3 {
@@ -28,6 +28,7 @@ export interface WorkbookTypeGpuBackendV3 {
   readonly atlas: ReturnType<typeof createGlyphAtlas>
   readonly paneBuffers: WorkbookPaneBufferCache
   readonly surfaceState: TypeGpuSurfaceState
+  readonly tileResources: TypeGpuTileResourceCacheV3
   readonly tileResidency: TileResidencyV3<GridRenderTile, null>
 }
 
@@ -41,11 +42,13 @@ export async function createWorkbookTypeGpuBackendV3(canvas: HTMLCanvasElement):
     atlas: createGlyphAtlas(),
     paneBuffers: new WorkbookPaneBufferCache(),
     surfaceState: createTypeGpuSurfaceState(),
+    tileResources: new TypeGpuTileResourceCacheV3(artifacts),
     tileResidency: new TileResidencyV3<GridRenderTile, null>(),
   }
 }
 
 export function destroyWorkbookTypeGpuBackendV3(backend: WorkbookTypeGpuBackendV3): void {
+  backend.tileResources.dispose()
   backend.paneBuffers.dispose()
   destroyTypeGpuRenderer(backend.artifacts)
 }
@@ -83,10 +86,9 @@ export function drawWorkbookTypeGpuTileFrameV3(input: {
   syncTypeGpuTilePaneResourcesV3({
     artifacts: input.backend.artifacts,
     atlas: input.backend.atlas,
-    paneBuffers: input.backend.paneBuffers,
     panes: resourcePanes,
     retainPanes,
-    retainBufferKeys: [...headerPanes.map(resolveWorkbookHeaderBufferKey), ...(input.overlay ? [WORKBOOK_DYNAMIC_OVERLAY_BUFFER_KEY] : [])],
+    tileResources: input.backend.tileResources,
   })
   syncTypeGpuHeaderResources({
     artifacts: input.backend.artifacts,
@@ -102,9 +104,9 @@ export function drawWorkbookTypeGpuTileFrameV3(input: {
   syncTypeGpuAtlasResources(input.backend.artifacts, input.backend.atlas)
   const drawPanes = resolveTypeGpuDrawTilePanesV3({
     onTileMiss: (tileKey) => noteTypeGpuTileMiss(String(tileKey)),
-    paneBuffers: input.backend.paneBuffers,
     panes: input.tilePanes,
     residency: input.backend.tileResidency,
+    tileResources: input.backend.tileResources,
   })
   input.backend.tileResidency.markVisible(drawPanes.map((pane) => pane.tile.tileId))
   drawTypeGpuTilePanesV3({
@@ -114,6 +116,7 @@ export function drawWorkbookTypeGpuTileFrameV3(input: {
     paneBuffers: input.backend.paneBuffers,
     scrollSnapshot: input.scrollSnapshot,
     surface: input.surface,
+    tileResources: input.backend.tileResources,
     tilePanes: drawPanes,
   })
 }
@@ -150,14 +153,14 @@ function syncRenderTileResidencyFromPanesV3(input: {
 
 export function resolveTypeGpuDrawTilePanesV3(input: {
   readonly panes: readonly WorkbookRenderTilePaneState[]
-  readonly paneBuffers: WorkbookPaneBufferCache
   readonly residency: TileResidencyV3<GridRenderTile, null>
+  readonly tileResources: Pick<TypeGpuTileResourceCacheV3, 'peekContent'>
   readonly onTileMiss?: ((tileKey: number) => void) | undefined
 }): readonly WorkbookRenderTilePaneState[] {
   return input.panes.map((pane) => {
     const entry = input.residency.getExact(pane.tile.tileId)
-    const exact = input.paneBuffers.peek(resolveWorkbookTilePaneBufferKeyV3(pane))
-    if (entry?.packet && exact && isTilePaneDrawReady(exact, pane)) {
+    const exact = input.tileResources.peekContent(resolveWorkbookTileContentBufferKeyV3(pane))
+    if (entry?.packet && exact && isTileContentDrawReady(exact, pane)) {
       return { ...pane, tile: entry.packet }
     }
     input.onTileMiss?.(pane.tile.tileId)
@@ -165,11 +168,11 @@ export function resolveTypeGpuDrawTilePanesV3(input: {
   })
 }
 
-function isTilePaneDrawReady(entry: WorkbookPaneBufferEntry, pane: WorkbookRenderTilePaneState): boolean {
+function isTileContentDrawReady(entry: TypeGpuTileContentResourceEntryV3, pane: WorkbookRenderTilePaneState): boolean {
   const tile = pane.tile
-  const rectReady = tile.rectCount === 0 ? entry.rectSignature !== null : entry.rectBuffer !== null && entry.rectCount >= tile.rectCount
+  const rectReady = tile.rectCount === 0 ? entry.rectSignature !== null : entry.rectHandle !== null && entry.rectCount >= tile.rectCount
   const textReady =
-    tile.textCount === 0 ? entry.textSignature !== null : entry.textBuffer !== null && entry.textSignature !== null && entry.textCount > 0
+    tile.textCount === 0 ? entry.textSignature !== null : entry.textHandle !== null && entry.textSignature !== null && entry.textCount > 0
   return rectReady && textReady
 }
 

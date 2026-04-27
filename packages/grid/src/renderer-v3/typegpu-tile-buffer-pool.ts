@@ -1,65 +1,279 @@
+import type { TgpuBindGroup } from 'typegpu'
 import { parseGpuColor } from '../gridGpuScene.js'
-import type { WorkbookPaneBufferCache, WorkbookPaneBufferEntry } from '../renderer-v2/pane-buffer-cache.js'
+import { noteTypeGpuBufferAllocation } from '../renderer-v2/grid-render-counters.js'
+import { buildTextDecorationRectsFromRuns, buildTextQuadsFromRuns, type TextDecorationRect } from '../renderer-v2/line-text-quad-buffer.js'
 import { GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT } from '../renderer-v2/scene-packet-v2.js'
 import type { createGlyphAtlas } from '../renderer-v2/typegpu-atlas-manager.js'
 import {
   WORKBOOK_RECT_INSTANCE_LAYOUT,
   WORKBOOK_TEXT_INSTANCE_LAYOUT,
-  ensureTypeGpuVertexBuffer,
+  createTypeGpuSurfaceBindGroup,
+  createTypeGpuSurfaceUniform,
+  createTypeGpuTextBindGroup,
+  type RectInstanceVertexBuffer,
+  type SurfaceUniformBuffer,
+  type TextInstanceVertexBuffer,
   type TypeGpuRendererArtifacts,
   writeTypeGpuVertexBuffer,
 } from '../renderer-v2/typegpu-backend.js'
-import { buildTextDecorationRectsFromRuns, buildTextQuadsFromRuns, type TextDecorationRect } from '../renderer-v2/line-text-quad-buffer.js'
+import { GpuBufferArenaV3, type GpuBufferHandleV3 } from './gpu-buffer-arena.js'
 import type { GridRenderTile } from './render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
 
 const RECT_INSTANCE_FLOAT_COUNT = GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT
+const TEXT_INSTANCE_FLOAT_COUNT = 16
+const RECT_INSTANCE_BYTE_COUNT = RECT_INSTANCE_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT
+const TEXT_INSTANCE_BYTE_COUNT = TEXT_INSTANCE_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT
+
+export interface TypeGpuTileContentResourceEntryV3 {
+  rectHandle: GpuBufferHandleV3<RectInstanceVertexBuffer> | null
+  rectCount: number
+  rectSignature: string | null
+  textHandle: GpuBufferHandleV3<TextInstanceVertexBuffer> | null
+  textCount: number
+  textSignature: string | null
+  decorationRects: readonly TextDecorationRect[] | null
+}
+
+export interface TypeGpuTilePlacementResourceEntryV3 {
+  surfaceUniform: SurfaceUniformBuffer | null
+  surfaceBindGroup: TgpuBindGroup | null
+  textBindGroup: TgpuBindGroup | null
+  textBindGroupAtlasVersion: number
+}
+
+function createEmptyContentEntry(): TypeGpuTileContentResourceEntryV3 {
+  return {
+    decorationRects: null,
+    rectCount: 0,
+    rectHandle: null,
+    rectSignature: null,
+    textCount: 0,
+    textHandle: null,
+    textSignature: null,
+  }
+}
+
+function createEmptyPlacementEntry(): TypeGpuTilePlacementResourceEntryV3 {
+  return {
+    surfaceBindGroup: null,
+    surfaceUniform: null,
+    textBindGroup: null,
+    textBindGroupAtlasVersion: -1,
+  }
+}
+
+export class TypeGpuTileResourceCacheV3 {
+  private readonly contentEntries = new Map<number, TypeGpuTileContentResourceEntryV3>()
+  private readonly placementEntries = new Map<string, TypeGpuTilePlacementResourceEntryV3>()
+  private readonly rectArena: GpuBufferArenaV3<RectInstanceVertexBuffer>
+  private readonly textArena: GpuBufferArenaV3<TextInstanceVertexBuffer>
+
+  constructor(private readonly artifacts: TypeGpuRendererArtifacts | null = null) {
+    this.rectArena = new GpuBufferArenaV3<RectInstanceVertexBuffer>(
+      ({ capacityBytes }) => createRectBuffer(this.requireArtifacts(), capacityBytes),
+      (buffer) => buffer.destroy(),
+    )
+    this.textArena = new GpuBufferArenaV3<TextInstanceVertexBuffer>(
+      ({ capacityBytes }) => createTextBuffer(this.requireArtifacts(), capacityBytes),
+      (buffer) => buffer.destroy(),
+    )
+  }
+
+  getContent(tileId: number): TypeGpuTileContentResourceEntryV3 {
+    const existing = this.contentEntries.get(tileId)
+    if (existing) {
+      return existing
+    }
+    const next = createEmptyContentEntry()
+    this.contentEntries.set(tileId, next)
+    return next
+  }
+
+  peekContent(tileId: number): TypeGpuTileContentResourceEntryV3 | null {
+    return this.contentEntries.get(tileId) ?? null
+  }
+
+  getPlacement(key: string): TypeGpuTilePlacementResourceEntryV3 {
+    const existing = this.placementEntries.get(key)
+    if (existing) {
+      return existing
+    }
+    const next = createEmptyPlacementEntry()
+    this.placementEntries.set(key, next)
+    return next
+  }
+
+  peekPlacement(key: string): TypeGpuTilePlacementResourceEntryV3 | null {
+    return this.placementEntries.get(key) ?? null
+  }
+
+  pruneExcept(input: { readonly contentKeys: ReadonlySet<number>; readonly placementKeys: ReadonlySet<string> }): void {
+    for (const tileId of this.contentEntries.keys()) {
+      if (!input.contentKeys.has(tileId)) {
+        const entry = this.contentEntries.get(tileId)
+        if (entry) {
+          this.releaseContent(entry)
+        }
+        this.contentEntries.delete(tileId)
+      }
+    }
+    for (const key of this.placementEntries.keys()) {
+      if (!input.placementKeys.has(key)) {
+        const entry = this.placementEntries.get(key)
+        if (entry) {
+          this.destroyPlacement(entry)
+        }
+        this.placementEntries.delete(key)
+      }
+    }
+  }
+
+  acquireRectHandle(requiredCount: number): GpuBufferHandleV3<RectInstanceVertexBuffer> {
+    return this.rectArena.acquire('rectInstances', Math.max(1, requiredCount) * RECT_INSTANCE_BYTE_COUNT)
+  }
+
+  releaseRectHandle(handle: GpuBufferHandleV3<RectInstanceVertexBuffer>): void {
+    this.rectArena.release(handle)
+  }
+
+  acquireTextHandle(requiredCount: number): GpuBufferHandleV3<TextInstanceVertexBuffer> {
+    return this.textArena.acquire('textRuns', Math.max(1, requiredCount) * TEXT_INSTANCE_BYTE_COUNT)
+  }
+
+  releaseTextHandle(handle: GpuBufferHandleV3<TextInstanceVertexBuffer>): void {
+    this.textArena.release(handle)
+  }
+
+  trimFreeBuffers(bytesToFree: number): number {
+    const rectFreed = this.rectArena.trim(bytesToFree)
+    return rectFreed + this.textArena.trim(Math.max(0, bytesToFree - rectFreed))
+  }
+
+  dispose(): void {
+    for (const entry of this.contentEntries.values()) {
+      this.destroyContent(entry)
+    }
+    this.contentEntries.clear()
+    for (const entry of this.placementEntries.values()) {
+      this.destroyPlacement(entry)
+    }
+    this.placementEntries.clear()
+    this.rectArena.trim(Number.MAX_SAFE_INTEGER)
+    this.textArena.trim(Number.MAX_SAFE_INTEGER)
+  }
+
+  private releaseContent(entry: TypeGpuTileContentResourceEntryV3): void {
+    if (entry.rectHandle) {
+      this.rectArena.release(entry.rectHandle)
+      entry.rectHandle = null
+    }
+    if (entry.textHandle) {
+      this.textArena.release(entry.textHandle)
+      entry.textHandle = null
+    }
+    entry.rectCount = 0
+    entry.rectSignature = null
+    entry.textCount = 0
+    entry.textSignature = null
+    entry.decorationRects = null
+  }
+
+  private destroyContent(entry: TypeGpuTileContentResourceEntryV3): void {
+    entry.rectHandle?.buffer.destroy()
+    entry.textHandle?.buffer.destroy()
+    entry.rectHandle = null
+    entry.textHandle = null
+    entry.rectCount = 0
+    entry.textCount = 0
+  }
+
+  private destroyPlacement(entry: TypeGpuTilePlacementResourceEntryV3): void {
+    entry.surfaceUniform?.buffer.destroy()
+    entry.surfaceUniform = null
+    entry.surfaceBindGroup = null
+    entry.textBindGroup = null
+    entry.textBindGroupAtlasVersion = -1
+  }
+
+  private requireArtifacts(): TypeGpuRendererArtifacts {
+    if (!this.artifacts) {
+      throw new Error('TypeGpuTileResourceCacheV3 requires TypeGPU artifacts to allocate buffers')
+    }
+    return this.artifacts
+  }
+}
 
 export function syncTypeGpuTilePaneResourcesV3(input: {
   readonly artifacts: TypeGpuRendererArtifacts
   readonly atlas: ReturnType<typeof createGlyphAtlas>
-  readonly paneBuffers: WorkbookPaneBufferCache
+  readonly tileResources: TypeGpuTileResourceCacheV3
   readonly panes: readonly WorkbookRenderTilePaneState[]
   readonly retainPanes?: readonly WorkbookRenderTilePaneState[] | undefined
-  readonly retainBufferKeys?: readonly string[] | undefined
 }): void {
-  const paneIds = new Set((input.retainPanes ?? input.panes).map(resolveWorkbookTilePaneBufferKeyV3))
-  for (const key of input.retainBufferKeys ?? []) {
-    paneIds.add(key)
-  }
-  input.paneBuffers.pruneExcept(paneIds)
+  const retainPanes = input.retainPanes ?? input.panes
+  input.tileResources.pruneExcept({
+    contentKeys: new Set(retainPanes.map(resolveWorkbookTileContentBufferKeyV3)),
+    placementKeys: new Set(retainPanes.map(resolveWorkbookTilePlacementBufferKeyV3)),
+  })
 
   input.panes.forEach((pane) => {
-    const paneCache = input.paneBuffers.get(resolveWorkbookTilePaneBufferKeyV3(pane))
+    const content = input.tileResources.getContent(resolveWorkbookTileContentBufferKeyV3(pane))
     const textSignature = resolveGridTextTileSignatureV3(pane.tile)
-    if (paneCache.textSignature !== textSignature) {
+    if (content.textSignature !== textSignature) {
       syncTileTextResource({
-        artifacts: input.artifacts,
         atlas: input.atlas,
+        content,
         pane,
-        paneBuffers: input.paneBuffers,
-        paneCache,
         textSignature,
+        tileResources: input.tileResources,
       })
     }
     const rectSignature = resolveGridRectTileSignatureV3({
-      decorationRects: paneCache.decorationRects ?? [],
+      decorationRects: content.decorationRects ?? [],
       tile: pane.tile,
     })
-    if (paneCache.rectSignature !== rectSignature) {
+    if (content.rectSignature !== rectSignature) {
       syncTileRectResource({
-        artifacts: input.artifacts,
+        content,
         pane,
-        paneBuffers: input.paneBuffers,
-        paneCache,
         rectSignature,
+        tileResources: input.tileResources,
       })
     }
+    input.tileResources.getPlacement(resolveWorkbookTilePlacementBufferKeyV3(pane))
   })
 }
 
-export function resolveWorkbookTilePaneBufferKeyV3(pane: Pick<WorkbookRenderTilePaneState, 'tile'>): string {
-  return `tile:v3:${pane.tile.tileId}`
+export function ensureTilePlacementSurfaceBindingsV3(
+  artifacts: TypeGpuRendererArtifacts,
+  placement: TypeGpuTilePlacementResourceEntryV3,
+): void {
+  if (!placement.surfaceUniform) {
+    placement.surfaceUniform = createTypeGpuSurfaceUniform(artifacts.root)
+  }
+  if (!placement.surfaceBindGroup) {
+    placement.surfaceBindGroup = createTypeGpuSurfaceBindGroup(artifacts.root, placement.surfaceUniform)
+  }
+
+  if (!artifacts.atlasTexture) {
+    placement.textBindGroup = null
+    placement.textBindGroupAtlasVersion = -1
+    return
+  }
+
+  if (!placement.textBindGroup || placement.textBindGroupAtlasVersion !== artifacts.atlasVersion) {
+    placement.textBindGroup = createTypeGpuTextBindGroup(artifacts, placement.surfaceUniform)
+    placement.textBindGroupAtlasVersion = artifacts.atlasVersion
+  }
+}
+
+export function resolveWorkbookTileContentBufferKeyV3(pane: Pick<WorkbookRenderTilePaneState, 'tile'>): number {
+  return pane.tile.tileId
+}
+
+export function resolveWorkbookTilePlacementBufferKeyV3(pane: Pick<WorkbookRenderTilePaneState, 'paneId' | 'tile'>): string {
+  return `tile-placement:v3:${pane.paneId}:${pane.tile.tileId}`
 }
 
 export function resolveGridTextTileSignatureV3(tile: GridRenderTile): string {
@@ -95,123 +309,107 @@ export function resolveGridRectTileSignatureV3(input: {
 }
 
 function syncTileTextResource(input: {
-  readonly artifacts: TypeGpuRendererArtifacts
   readonly atlas: ReturnType<typeof createGlyphAtlas>
   readonly pane: WorkbookRenderTilePaneState
-  readonly paneBuffers: WorkbookPaneBufferCache
-  readonly paneCache: WorkbookPaneBufferEntry
+  readonly tileResources: TypeGpuTileResourceCacheV3
+  readonly content: TypeGpuTileContentResourceEntryV3
   readonly textSignature: string
 }): void {
-  input.paneCache.decorationRects = buildTextDecorationRectsFromRuns(input.pane.tile.textRuns, input.atlas)
+  input.content.decorationRects = buildTextDecorationRectsFromRuns(input.pane.tile.textRuns, input.atlas)
   const textPayload = buildTextQuadsFromRuns(input.pane.tile.textRuns, input.atlas)
   if (textPayload.quadCount === 0) {
-    releaseTextBuffer(input.paneBuffers, input.paneCache)
-    input.paneCache.textCount = 0
-    input.paneCache.textSignature = input.textSignature
+    releaseTextBuffer(input.tileResources, input.content)
+    input.content.textCount = 0
+    input.content.textSignature = input.textSignature
     return
   }
-  const reusable = prepareTextBuffer(input.paneBuffers, input.paneCache, textPayload.quadCount)
-  const textBuffer = ensureTypeGpuVertexBuffer(
-    input.artifacts.root,
-    WORKBOOK_TEXT_INSTANCE_LAYOUT,
-    reusable.buffer,
-    reusable.capacity,
-    textPayload.quadCount,
-  )
-  input.paneCache.textBuffer = textBuffer.buffer
-  input.paneCache.textCapacity = textBuffer.capacity
-  input.paneCache.textCount = textPayload.quadCount
-  writeTypeGpuVertexBuffer(input.paneCache.textBuffer, textPayload.floats, `tile-text:${resolveWorkbookTilePaneBufferKeyV3(input.pane)}`)
-  input.paneCache.textSignature = input.textSignature
+  const handle = prepareTextBuffer(input.tileResources, input.content, textPayload.quadCount)
+  input.content.textHandle = handle
+  input.content.textCount = textPayload.quadCount
+  writeTypeGpuVertexBuffer(handle.buffer, textPayload.floats, `tile-text:${resolveWorkbookTileContentBufferKeyV3(input.pane)}`)
+  input.content.textSignature = input.textSignature
 }
 
 function syncTileRectResource(input: {
-  readonly artifacts: TypeGpuRendererArtifacts
   readonly pane: WorkbookRenderTilePaneState
-  readonly paneBuffers: WorkbookPaneBufferCache
-  readonly paneCache: WorkbookPaneBufferEntry
+  readonly tileResources: TypeGpuTileResourceCacheV3
+  readonly content: TypeGpuTileContentResourceEntryV3
   readonly rectSignature: string
 }): void {
-  const decorationRects = input.paneCache.decorationRects ?? []
+  const decorationRects = input.content.decorationRects ?? []
   const rectPayload = buildRectInstanceDataFromTile({
     decorationRects,
     tile: input.pane.tile,
   })
   if (rectPayload.count === 0) {
-    releaseRectBuffer(input.paneBuffers, input.paneCache)
-    input.paneCache.rectCount = 0
-    input.paneCache.rectSignature = input.rectSignature
+    releaseRectBuffer(input.tileResources, input.content)
+    input.content.rectCount = 0
+    input.content.rectSignature = input.rectSignature
     return
   }
-  const reusable = prepareRectBuffer(input.paneBuffers, input.paneCache, rectPayload.count)
-  const rectBuffer = ensureTypeGpuVertexBuffer(
-    input.artifacts.root,
-    WORKBOOK_RECT_INSTANCE_LAYOUT,
-    reusable.buffer,
-    reusable.capacity,
-    rectPayload.count,
-  )
-  input.paneCache.rectBuffer = rectBuffer.buffer
-  input.paneCache.rectCapacity = rectBuffer.capacity
-  input.paneCache.rectCount = rectPayload.count
-  writeTypeGpuVertexBuffer(input.paneCache.rectBuffer, rectPayload.floats, `tile-rect:${resolveWorkbookTilePaneBufferKeyV3(input.pane)}`)
-  input.paneCache.rectSignature = input.rectSignature
+  const handle = prepareRectBuffer(input.tileResources, input.content, rectPayload.count)
+  input.content.rectHandle = handle
+  input.content.rectCount = rectPayload.count
+  writeTypeGpuVertexBuffer(handle.buffer, rectPayload.floats, `tile-rect:${resolveWorkbookTileContentBufferKeyV3(input.pane)}`)
+  input.content.rectSignature = input.rectSignature
 }
 
 function prepareRectBuffer(
-  paneBuffers: WorkbookPaneBufferCache,
-  paneCache: WorkbookPaneBufferEntry,
+  tileResources: TypeGpuTileResourceCacheV3,
+  content: TypeGpuTileContentResourceEntryV3,
   requiredCount: number,
-): {
-  readonly buffer: WorkbookPaneBufferEntry['rectBuffer']
-  readonly capacity: number
-} {
-  if (paneCache.rectBuffer && paneCache.rectCapacity >= requiredCount) {
-    return { buffer: paneCache.rectBuffer, capacity: paneCache.rectCapacity }
+): GpuBufferHandleV3<RectInstanceVertexBuffer> {
+  const requiredBytes = Math.max(1, requiredCount) * RECT_INSTANCE_BYTE_COUNT
+  if (content.rectHandle && content.rectHandle.capacityBytes >= requiredBytes) {
+    content.rectHandle.usedBytes = requiredBytes
+    return content.rectHandle
   }
-  releaseRectBuffer(paneBuffers, paneCache)
-  const reused = paneBuffers.acquireRectBuffer(requiredCount)
-  return {
-    buffer: reused?.buffer ?? null,
-    capacity: reused?.capacity ?? 0,
-  }
+  releaseRectBuffer(tileResources, content)
+  return tileResources.acquireRectHandle(requiredCount)
 }
 
 function prepareTextBuffer(
-  paneBuffers: WorkbookPaneBufferCache,
-  paneCache: WorkbookPaneBufferEntry,
+  tileResources: TypeGpuTileResourceCacheV3,
+  content: TypeGpuTileContentResourceEntryV3,
   requiredCount: number,
-): {
-  readonly buffer: WorkbookPaneBufferEntry['textBuffer']
-  readonly capacity: number
-} {
-  if (paneCache.textBuffer && paneCache.textCapacity >= requiredCount) {
-    return { buffer: paneCache.textBuffer, capacity: paneCache.textCapacity }
+): GpuBufferHandleV3<TextInstanceVertexBuffer> {
+  const requiredBytes = Math.max(1, requiredCount) * TEXT_INSTANCE_BYTE_COUNT
+  if (content.textHandle && content.textHandle.capacityBytes >= requiredBytes) {
+    content.textHandle.usedBytes = requiredBytes
+    return content.textHandle
   }
-  releaseTextBuffer(paneBuffers, paneCache)
-  const reused = paneBuffers.acquireTextBuffer(requiredCount)
-  return {
-    buffer: reused?.buffer ?? null,
-    capacity: reused?.capacity ?? 0,
-  }
+  releaseTextBuffer(tileResources, content)
+  return tileResources.acquireTextHandle(requiredCount)
 }
 
-function releaseRectBuffer(paneBuffers: WorkbookPaneBufferCache, paneCache: WorkbookPaneBufferEntry): void {
-  if (!paneCache.rectBuffer) {
+function releaseRectBuffer(tileResources: TypeGpuTileResourceCacheV3, content: TypeGpuTileContentResourceEntryV3): void {
+  if (!content.rectHandle) {
     return
   }
-  paneBuffers.releaseRectBuffer(paneCache.rectBuffer, paneCache.rectCapacity)
-  paneCache.rectBuffer = null
-  paneCache.rectCapacity = 0
+  tileResources.releaseRectHandle(content.rectHandle)
+  content.rectHandle = null
 }
 
-function releaseTextBuffer(paneBuffers: WorkbookPaneBufferCache, paneCache: WorkbookPaneBufferEntry): void {
-  if (!paneCache.textBuffer) {
+function releaseTextBuffer(tileResources: TypeGpuTileResourceCacheV3, content: TypeGpuTileContentResourceEntryV3): void {
+  if (!content.textHandle) {
     return
   }
-  paneBuffers.releaseTextBuffer(paneCache.textBuffer, paneCache.textCapacity)
-  paneCache.textBuffer = null
-  paneCache.textCapacity = 0
+  tileResources.releaseTextHandle(content.textHandle)
+  content.textHandle = null
+}
+
+function createRectBuffer(artifacts: TypeGpuRendererArtifacts, capacityBytes: number): RectInstanceVertexBuffer {
+  const count = Math.max(1, Math.ceil(capacityBytes / RECT_INSTANCE_BYTE_COUNT))
+  const byteLength = count * RECT_INSTANCE_BYTE_COUNT
+  noteTypeGpuBufferAllocation(byteLength, 'tile-v3-rect-instances')
+  return artifacts.root.createBuffer(WORKBOOK_RECT_INSTANCE_LAYOUT.schemaForCount(count)).$usage('vertex') as RectInstanceVertexBuffer
+}
+
+function createTextBuffer(artifacts: TypeGpuRendererArtifacts, capacityBytes: number): TextInstanceVertexBuffer {
+  const count = Math.max(1, Math.ceil(capacityBytes / TEXT_INSTANCE_BYTE_COUNT))
+  const byteLength = count * TEXT_INSTANCE_BYTE_COUNT
+  noteTypeGpuBufferAllocation(byteLength, 'tile-v3-text-instances')
+  return artifacts.root.createBuffer(WORKBOOK_TEXT_INSTANCE_LAYOUT.schemaForCount(count)).$usage('vertex') as TextInstanceVertexBuffer
 }
 
 function buildRectInstanceDataFromTile(input: {

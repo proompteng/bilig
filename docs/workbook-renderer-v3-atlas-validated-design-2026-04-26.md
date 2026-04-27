@@ -37,6 +37,9 @@ Latest implementation note:
 - V3 tile-pane TypeGPU ownership now lives under `packages/grid/src/renderer-v3/typegpu-workbook-backend-v3.ts`,
   `typegpu-tile-buffer-pool.ts`, and `typegpu-tile-render-pass.ts`. These modules still reuse low-level TypeGPU surface, atlas,
   header, and overlay helpers from `renderer-v2`, but V3 data-tile resource sync/draw/residency no longer lives in the V2 workbook backend.
+- V3 tile content buffers are now separated from tile placement uniforms: body and frozen placements share rect/text buffers by numeric tile ID,
+  but each placement gets its own surface uniform and bind groups. This preserves content reuse without drawing frozen/body placements with a
+  shared mutable uniform.
 - The grid package top-level public export no longer re-exports `renderer-v2/index.js`; V2 renderer modules remain internal legacy code and tests
   while the public renderer surface points at V3.
 

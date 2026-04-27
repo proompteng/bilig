@@ -17,7 +17,12 @@ import {
 } from '../renderer-v2/typegpu-buffer-pool.js'
 import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
-import { resolveWorkbookTilePaneBufferKeyV3 } from './typegpu-tile-buffer-pool.js'
+import {
+  ensureTilePlacementSurfaceBindingsV3,
+  resolveWorkbookTileContentBufferKeyV3,
+  resolveWorkbookTilePlacementBufferKeyV3,
+  type TypeGpuTileResourceCacheV3,
+} from './typegpu-tile-buffer-pool.js'
 
 export interface TypeGpuTileDrawSurface {
   readonly width: number
@@ -30,6 +35,7 @@ export interface TypeGpuTileDrawSurface {
 export function drawTypeGpuTilePanesV3(input: {
   readonly artifacts: TypeGpuRendererArtifacts
   readonly paneBuffers: WorkbookPaneBufferCache
+  readonly tileResources: TypeGpuTileResourceCacheV3
   readonly headerPanes?: readonly GridHeaderPaneState[] | undefined
   readonly tilePanes: readonly WorkbookRenderTilePaneState[]
   readonly overlay?: DynamicGridOverlayBatchV3 | null | undefined
@@ -49,9 +55,10 @@ export function drawTypeGpuTilePanesV3(input: {
   })
 
   input.tilePanes.forEach((pane) => {
-    const paneCache = input.paneBuffers.get(resolveWorkbookTilePaneBufferKeyV3(pane))
+    const content = input.tileResources.peekContent(resolveWorkbookTileContentBufferKeyV3(pane))
+    const placement = input.tileResources.getPlacement(resolveWorkbookTilePlacementBufferKeyV3(pane))
     const scissorRect = resolveClampedScissorRect(pane.frame, input.surface)
-    if (!scissorRect) {
+    if (!content || !scissorRect) {
       return
     }
 
@@ -59,26 +66,26 @@ export function drawTypeGpuTilePanesV3(input: {
     const paneOrigin = resolvePaneOrigin(pane)
     const paneRenderOffset = resolvePaneRenderOffset(pane, input.scrollSnapshot)
 
-    if (paneCache.rectCount > 0 || paneCache.textCount > 0) {
-      ensurePaneSurfaceBindings(input.artifacts, paneCache)
-      updateTypeGpuSurfaceUniform(paneCache.surfaceUniform!, input.surface, paneOrigin, paneRenderOffset)
+    if (content.rectCount > 0 || content.textCount > 0) {
+      ensureTilePlacementSurfaceBindingsV3(input.artifacts, placement)
+      updateTypeGpuSurfaceUniform(placement.surfaceUniform!, input.surface, paneOrigin, paneRenderOffset)
     }
 
-    if (paneCache.rectCount > 0 && paneCache.rectBuffer && paneCache.surfaceBindGroup) {
-      const rectRenderer = input.artifacts.rectPipeline.with(pass).with(paneCache.surfaceBindGroup)
+    if (content.rectCount > 0 && content.rectHandle && placement.surfaceBindGroup) {
+      const rectRenderer = input.artifacts.rectPipeline.with(pass).with(placement.surfaceBindGroup)
       rectRenderer
         .with(WORKBOOK_UNIT_QUAD_LAYOUT, input.artifacts.quadBuffer)
-        .with(WORKBOOK_RECT_INSTANCE_LAYOUT, paneCache.rectBuffer)
-        .draw(6, paneCache.rectCount)
+        .with(WORKBOOK_RECT_INSTANCE_LAYOUT, content.rectHandle.buffer)
+        .draw(6, content.rectCount)
       noteTypeGpuDrawCall(1)
     }
 
-    if (paneCache.textCount > 0 && paneCache.textBuffer && paneCache.textBindGroup) {
-      const textRenderer = input.artifacts.textPipeline.with(pass).with(paneCache.textBindGroup)
+    if (content.textCount > 0 && content.textHandle && placement.textBindGroup) {
+      const textRenderer = input.artifacts.textPipeline.with(pass).with(placement.textBindGroup)
       textRenderer
         .with(WORKBOOK_UNIT_QUAD_LAYOUT, input.artifacts.quadBuffer)
-        .with(WORKBOOK_TEXT_INSTANCE_LAYOUT, paneCache.textBuffer)
-        .draw(6, paneCache.textCount)
+        .with(WORKBOOK_TEXT_INSTANCE_LAYOUT, content.textHandle.buffer)
+        .draw(6, content.textCount)
       noteTypeGpuDrawCall(1)
     }
     noteTypeGpuPaneDraw(1)
