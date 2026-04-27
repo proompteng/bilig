@@ -115,7 +115,11 @@ export function resolveTypeGpuV3DrawScrollSnapshot(input: {
 }
 
 export class WorkbookPaneRendererRuntimeV3 {
+  private cameraStoreUnsubscribe: (() => void) | null = null
+  private scrollStoreUnsubscribe: (() => void) | null = null
   private state: WorkbookPaneRendererRuntimeStateV3 = EMPTY_RUNTIME_STATE
+  private subscribedCameraStore: GridCameraStore | null = null
+  private subscribedScrollStore: WorkbookGridScrollStore | null = null
 
   constructor(
     private readonly drawFrame: WorkbookPaneFrameDrawerV3 = drawWorkbookPaneFrameV3,
@@ -127,6 +131,7 @@ export class WorkbookPaneRendererRuntimeV3 {
       ...this.state,
       ...state,
     }
+    this.syncStoreSubscriptions()
   }
 
   requestDraw(): void {
@@ -175,7 +180,39 @@ export class WorkbookPaneRendererRuntimeV3 {
   }
 
   dispose(): void {
+    this.clearStoreSubscriptions()
     this.scheduler.cancel()
     this.state = EMPTY_RUNTIME_STATE
+  }
+
+  private syncStoreSubscriptions(): void {
+    const nextCameraStore = this.state.active ? this.state.cameraStore : null
+    if (this.subscribedCameraStore !== nextCameraStore) {
+      this.cameraStoreUnsubscribe?.()
+      this.cameraStoreUnsubscribe = null
+      this.subscribedCameraStore = nextCameraStore
+      if (nextCameraStore) {
+        this.cameraStoreUnsubscribe = nextCameraStore.subscribe(() => this.noteInputSignalAndRequestDraw())
+      }
+    }
+
+    const nextScrollStore = this.state.active ? this.state.scrollTransformStore : null
+    if (this.subscribedScrollStore !== nextScrollStore) {
+      this.scrollStoreUnsubscribe?.()
+      this.scrollStoreUnsubscribe = null
+      this.subscribedScrollStore = nextScrollStore
+      if (nextScrollStore) {
+        this.scrollStoreUnsubscribe = nextScrollStore.subscribe(() => this.noteInputSignalAndRequestDraw())
+      }
+    }
+  }
+
+  private clearStoreSubscriptions(): void {
+    this.cameraStoreUnsubscribe?.()
+    this.scrollStoreUnsubscribe?.()
+    this.cameraStoreUnsubscribe = null
+    this.scrollStoreUnsubscribe = null
+    this.subscribedCameraStore = null
+    this.subscribedScrollStore = null
   }
 }

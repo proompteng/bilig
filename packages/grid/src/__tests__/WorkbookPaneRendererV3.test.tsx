@@ -12,6 +12,8 @@ import {
   resolveTypeGpuV3DrawScrollSnapshot,
   shouldDeferTypeGpuV3PreloadSync,
 } from '../renderer-v3/WorkbookPaneRendererV3.js'
+import { GridDrawSchedulerV3 } from '../renderer-v3/draw-scheduler.js'
+import { GridRenderLoop } from '../renderer-v3/gridRenderLoop.js'
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from '../renderer-v3/render-tile-pane-state.js'
 import { WorkbookPaneRendererRuntimeV3, type WorkbookPaneFrameDrawerV3 } from '../renderer-v3/workbook-pane-renderer-runtime.js'
@@ -209,6 +211,73 @@ describe('WorkbookPaneRendererV3', () => {
       renderTy: 0,
     })
 
+    runtime.dispose()
+  })
+
+  test('draw runtime owns camera and scroll store subscriptions', () => {
+    const metrics = getGridMetrics()
+    const geometry = createGridGeometrySnapshotFromAxes({
+      columns: createGridAxisWorldIndex({ axisLength: 1024, defaultSize: metrics.columnWidth }),
+      dpr: 1,
+      gridMetrics: metrics,
+      hostHeight: 720,
+      hostWidth: 1280,
+      rows: createGridAxisWorldIndex({ axisLength: 1024, defaultSize: metrics.rowHeight }),
+      scrollLeft: 0,
+      scrollTop: 0,
+      sheetName: 'Sheet1',
+    })
+    const cameraStore = new GridCameraStore()
+    cameraStore.setSnapshot(geometry)
+    const scrollStore = new WorkbookGridScrollStore()
+    const frameCallbacks: FrameRequestCallback[] = []
+    const requestFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    const scheduler = new GridDrawSchedulerV3(
+      () => 1,
+      () => undefined,
+      () => 1_000,
+      new GridRenderLoop(requestFrame, () => undefined),
+    )
+    const drawFrame = vi.fn<WorkbookPaneFrameDrawerV3>()
+    const runtime = new WorkbookPaneRendererRuntimeV3(drawFrame, scheduler)
+
+    runtime.updateState({
+      active: true,
+      backend: {},
+      cameraStore,
+      geometry: null,
+      scrollTransformStore: scrollStore,
+      surface: { dpr: 1, height: 720, pixelHeight: 720, pixelWidth: 1280, width: 1280 },
+      tilePanes: [createTilePane(32)],
+      webGpuReady: true,
+    })
+
+    scrollStore.setSnapshot({
+      scrollLeft: 64 * metrics.columnWidth,
+      scrollTop: 32 * metrics.rowHeight,
+      tx: 0,
+      ty: 0,
+    })
+    expect(requestFrame).toHaveBeenCalledTimes(1)
+    frameCallbacks.shift()?.(1_000)
+    expect(drawFrame).toHaveBeenCalledTimes(1)
+    expect(drawFrame.mock.calls[0]?.[0].scrollSnapshot).toMatchObject({
+      renderTx: 64 * metrics.columnWidth,
+      renderTy: 0,
+    })
+
+    runtime.updateState({ active: false })
+    scrollStore.setSnapshot({
+      scrollLeft: 65 * metrics.columnWidth,
+      scrollTop: 32 * metrics.rowHeight,
+      tx: 0,
+      ty: 0,
+    })
+
+    expect(requestFrame).toHaveBeenCalledTimes(1)
     runtime.dispose()
   })
 })

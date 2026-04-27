@@ -99,26 +99,6 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   ])
 
   useEffect(() => {
-    if (!active || !scrollTransformStore) {
-      return
-    }
-    const scheduleDraw = () => {
-      rendererRuntime.noteInputSignalAndRequestDraw()
-    }
-    return scrollTransformStore.subscribe(scheduleDraw)
-  }, [active, rendererRuntime, scrollTransformStore])
-
-  useEffect(() => {
-    if (!active || !cameraStore) {
-      return
-    }
-    const scheduleDraw = () => {
-      rendererRuntime.noteInputSignalAndRequestDraw()
-    }
-    return cameraStore.subscribe(scheduleDraw)
-  }, [active, cameraStore, rendererRuntime])
-
-  useEffect(() => {
     const canvas = canvasRef.current
     return () => {
       surfaceRuntime.dispose()
