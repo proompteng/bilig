@@ -16,10 +16,12 @@ import type { createGlyphAtlas } from './typegpu-atlas-manager.js'
 import type { WorkbookRenderPaneState } from './pane-scene-types.js'
 import { GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT, type GridScenePacketV2 } from './scene-packet-v2.js'
 import { buildTileGpuCacheKey } from './tile-gpu-cache.js'
+import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { DynamicGridOverlayBatchV3 } from '../renderer-v3/dynamic-overlay-batch.js'
 
 const RECT_INSTANCE_FLOAT_COUNT = GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT
 export const WORKBOOK_DYNAMIC_OVERLAY_BUFFER_KEY = 'dynamic-overlay:v3'
+const WORKBOOK_HEADER_BUFFER_PREFIX = 'header:v3'
 
 export function syncTypeGpuPaneResources(input: {
   readonly artifacts: TypeGpuRendererArtifacts
@@ -56,6 +58,41 @@ export function syncTypeGpuPaneResources(input: {
     })
     if (paneCache.rectSignature !== rectSignature) {
       syncRectResource({
+        artifacts: input.artifacts,
+        pane,
+        paneBuffers: input.paneBuffers,
+        paneCache,
+        rectSignature,
+      })
+    }
+  })
+}
+
+export function syncTypeGpuHeaderResources(input: {
+  readonly artifacts: TypeGpuRendererArtifacts
+  readonly atlas: ReturnType<typeof createGlyphAtlas>
+  readonly paneBuffers: WorkbookPaneBufferCache
+  readonly headerPanes: readonly GridHeaderPaneState[]
+}): void {
+  input.headerPanes.forEach((pane) => {
+    const paneCache = input.paneBuffers.get(resolveWorkbookHeaderBufferKey(pane))
+    const textSignature = resolveHeaderTextSignature(pane)
+    if (paneCache.textSignature !== textSignature) {
+      syncHeaderTextResource({
+        artifacts: input.artifacts,
+        atlas: input.atlas,
+        pane,
+        paneBuffers: input.paneBuffers,
+        paneCache,
+        textSignature,
+      })
+    }
+    const rectSignature = resolveHeaderRectSignature({
+      decorationRects: paneCache.decorationRects ?? [],
+      pane,
+    })
+    if (paneCache.rectSignature !== rectSignature) {
+      syncHeaderRectResource({
         artifacts: input.artifacts,
         pane,
         paneBuffers: input.paneBuffers,
@@ -104,6 +141,10 @@ export function syncTypeGpuOverlayResources(input: {
 
 export function resolveWorkbookPaneBufferKey(pane: WorkbookRenderPaneState): string {
   return `${pane.paneId}:${buildTileGpuCacheKey(pane.packedScene)}`
+}
+
+export function resolveWorkbookHeaderBufferKey(pane: Pick<GridHeaderPaneState, 'paneId'>): string {
+  return `${WORKBOOK_HEADER_BUFFER_PREFIX}:${pane.paneId}`
 }
 
 export function ensurePaneSurfaceBindings(artifacts: TypeGpuRendererArtifacts, paneCache: WorkbookPaneBufferEntry): void {
@@ -160,6 +201,37 @@ function syncTextResource(input: {
   input.paneCache.textSignature = input.textSignature
 }
 
+function syncHeaderTextResource(input: {
+  readonly artifacts: TypeGpuRendererArtifacts
+  readonly atlas: ReturnType<typeof createGlyphAtlas>
+  readonly pane: GridHeaderPaneState
+  readonly paneBuffers: WorkbookPaneBufferCache
+  readonly paneCache: WorkbookPaneBufferEntry
+  readonly textSignature: string
+}): void {
+  input.paneCache.decorationRects = buildTextDecorationRectsFromRuns(input.pane.textRuns, input.atlas)
+  const textPayload = buildTextQuadsFromRuns(input.pane.textRuns, input.atlas)
+  if (textPayload.quadCount === 0) {
+    releaseTextBuffer(input.paneBuffers, input.paneCache)
+    input.paneCache.textCount = 0
+    input.paneCache.textSignature = input.textSignature
+    return
+  }
+  const reusable = prepareTextBuffer(input.paneBuffers, input.paneCache, textPayload.quadCount)
+  const textBuffer = ensureTypeGpuVertexBuffer(
+    input.artifacts.root,
+    WORKBOOK_TEXT_INSTANCE_LAYOUT,
+    reusable.buffer,
+    reusable.capacity,
+    textPayload.quadCount,
+  )
+  input.paneCache.textBuffer = textBuffer.buffer
+  input.paneCache.textCapacity = textBuffer.capacity
+  input.paneCache.textCount = textPayload.quadCount
+  writeTypeGpuVertexBuffer(input.paneCache.textBuffer, textPayload.floats, `header-text:${input.pane.paneId}`)
+  input.paneCache.textSignature = input.textSignature
+}
+
 function syncRectResource(input: {
   readonly artifacts: TypeGpuRendererArtifacts
   readonly pane: WorkbookRenderPaneState
@@ -191,6 +263,39 @@ function syncRectResource(input: {
   input.paneCache.rectCapacity = rectBuffer.capacity
   input.paneCache.rectCount = rectPayload.count
   writeTypeGpuVertexBuffer(input.paneCache.rectBuffer, rectPayload.floats, `rect:${resolveWorkbookPaneBufferKey(input.pane)}`)
+  input.paneCache.rectSignature = input.rectSignature
+}
+
+function syncHeaderRectResource(input: {
+  readonly artifacts: TypeGpuRendererArtifacts
+  readonly pane: GridHeaderPaneState
+  readonly paneBuffers: WorkbookPaneBufferCache
+  readonly paneCache: WorkbookPaneBufferEntry
+  readonly rectSignature: string
+}): void {
+  const decorationRects = input.paneCache.decorationRects ?? []
+  const rectPayload = buildRectInstanceDataFromHeader({
+    decorationRects,
+    pane: input.pane,
+  })
+  if (rectPayload.count === 0) {
+    releaseRectBuffer(input.paneBuffers, input.paneCache)
+    input.paneCache.rectCount = 0
+    input.paneCache.rectSignature = input.rectSignature
+    return
+  }
+  const reusable = prepareRectBuffer(input.paneBuffers, input.paneCache, rectPayload.count)
+  const rectBuffer = ensureTypeGpuVertexBuffer(
+    input.artifacts.root,
+    WORKBOOK_RECT_INSTANCE_LAYOUT,
+    reusable.buffer,
+    reusable.capacity,
+    rectPayload.count,
+  )
+  input.paneCache.rectBuffer = rectBuffer.buffer
+  input.paneCache.rectCapacity = rectBuffer.capacity
+  input.paneCache.rectCount = rectPayload.count
+  writeTypeGpuVertexBuffer(input.paneCache.rectBuffer, rectPayload.floats, `header-rect:${input.pane.paneId}`)
   input.paneCache.rectSignature = input.rectSignature
 }
 
@@ -274,6 +379,29 @@ export function resolveGridRectPacketSignature(input: {
   ].join(':')
 }
 
+function resolveHeaderTextSignature(pane: GridHeaderPaneState): string {
+  return ['header-text-v3', pane.paneId, pane.textCount, pane.textSignature].join(':')
+}
+
+function resolveHeaderRectSignature(input: {
+  readonly pane: GridHeaderPaneState
+  readonly decorationRects?: readonly TextDecorationRect[] | undefined
+}): string {
+  const decorationRects = input.decorationRects ?? []
+  return [
+    'header-rect-v3',
+    input.pane.paneId,
+    input.pane.rectCount,
+    input.pane.fillRectCount,
+    input.pane.borderRectCount,
+    input.pane.rectSignature,
+    input.pane.textSignature,
+    input.pane.frame.width,
+    input.pane.frame.height,
+    decorationRects.length,
+  ].join(':')
+}
+
 function resolveOverlayRectSignature(overlay: DynamicGridOverlayBatchV3): string {
   return [
     'overlay-v3',
@@ -311,6 +439,27 @@ function buildRectInstanceDataFromPacket(input: {
   const clipY1 = input.frame.height
   const packedFloatCount = input.packet.rectCount * RECT_INSTANCE_FLOAT_COUNT
   floats.set(input.packet.rectInstances.subarray(0, packedFloatCount), 0)
+  const offset = packedFloatCount
+  writeDecorationRects(floats, offset, decorationRects, clipX, clipY, clipX1, clipY1)
+  return { count: total, floats }
+}
+
+function buildRectInstanceDataFromHeader(input: {
+  readonly pane: GridHeaderPaneState
+  readonly decorationRects?: readonly TextDecorationRect[]
+}): { readonly floats: Float32Array; readonly count: number } {
+  const decorationRects = input.decorationRects ?? []
+  const total = input.pane.rectCount + decorationRects.length
+  if (decorationRects.length === 0) {
+    return { count: total, floats: input.pane.rectInstances }
+  }
+  const floats = new Float32Array(Math.max(1, total) * RECT_INSTANCE_FLOAT_COUNT)
+  const clipX = 0
+  const clipY = 0
+  const clipX1 = input.pane.surfaceSize.width
+  const clipY1 = input.pane.surfaceSize.height
+  const packedFloatCount = input.pane.rectCount * RECT_INSTANCE_FLOAT_COUNT
+  floats.set(input.pane.rectInstances.subarray(0, packedFloatCount), 0)
   const offset = packedFloatCount
   writeDecorationRects(floats, offset, decorationRects, clipX, clipY, clipX1, clipY1)
   return { count: total, floats }

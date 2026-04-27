@@ -12,6 +12,7 @@ const EMPTY_STATE: ProjectedViewportLocalAxisState = {
   sizes: {},
   renderedSizes: {},
   pendingSizes: {},
+  pendingHiddenAxes: {},
   hiddenAxes: {},
 }
 
@@ -91,6 +92,7 @@ describe('projected viewport local axis state', () => {
     expect(repeated).toMatchObject({
       sizes: { 4: 72 },
       renderedSizes: { 4: 0 },
+      pendingHiddenAxes: { 4: true },
       hiddenAxes: { 4: true },
     })
   })
@@ -112,6 +114,7 @@ describe('projected viewport local axis state', () => {
     expect(rolledBack).toMatchObject({
       sizes: { 1: 44 },
       renderedSizes: { 1: 44 },
+      pendingHiddenAxes: {},
       hiddenAxes: {},
       changed: true,
     })

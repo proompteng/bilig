@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ComponentProps } from 'react'
-import { WorkbookPaneRendererV2, packGridScenePacketV2 } from '@bilig/grid'
+import { WorkbookPaneRendererV2, buildHeaderPaneStates, getGridMetrics, packGridScenePacketV2 } from '@bilig/grid'
 
 const ROW_MARKER_WIDTH = 46
 const HEADER_HEIGHT = 24
@@ -19,11 +19,12 @@ const TEXT_ACCENT = '#163f29'
 
 type RendererPane = ComponentProps<typeof WorkbookPaneRendererV2>['panes'][number]
 type RendererPanes = ComponentProps<typeof WorkbookPaneRendererV2>['panes']
+type RendererHeaderPanes = NonNullable<ComponentProps<typeof WorkbookPaneRendererV2>['headerPanes']>
 type RendererGpuScene = Parameters<typeof packGridScenePacketV2>[0]['gpuScene']
 type RendererGpuRect = RendererGpuScene['fillRects'][number]
 type RendererTextScene = Parameters<typeof packGridScenePacketV2>[0]['textScene']
 type RendererTextItem = RendererTextScene['items'][number]
-type RendererPaneId = 'corner' | 'top-body' | 'left-body' | 'body'
+type RendererPaneId = 'body'
 
 interface HostSize {
   readonly width: number
@@ -63,78 +64,63 @@ export function IsolatedWorkbookPaneRendererRoute() {
     }
   }, [host])
 
-  const panes = useMemo(() => buildIsolatedRendererPanes(hostSize), [hostSize])
+  const rendererState = useMemo(() => buildIsolatedRendererState(hostSize), [hostSize])
 
   return (
     <div className="h-dvh w-screen overflow-hidden bg-(--wb-surface)">
       <div className="relative h-full w-full" data-testid="isolated-pane-renderer-route" ref={setHost}>
-        {host ? <WorkbookPaneRendererV2 active geometry={null} host={host} panes={panes} /> : null}
+        {host ? (
+          <WorkbookPaneRendererV2 active geometry={null} headerPanes={rendererState.headerPanes} host={host} panes={rendererState.panes} />
+        ) : null}
       </div>
     </div>
   )
 }
 
-function buildIsolatedRendererPanes(hostSize: HostSize): RendererPanes {
+function buildIsolatedRendererState(hostSize: HostSize): { readonly panes: RendererPanes; readonly headerPanes: RendererHeaderPanes } {
   const bodyWidth = Math.max(0, hostSize.width - ROW_MARKER_WIDTH)
   const bodyHeight = Math.max(0, hostSize.height - HEADER_HEIGHT)
+  const gridMetrics = getGridMetrics()
+  const headerPanes = buildHeaderPaneStates({
+    frozenColumnWidth: 0,
+    frozenRowHeight: 0,
+    gpuScene: mergeGpuScenes(
+      buildCornerHeaderGpuScene(),
+      offsetGpuScene(buildColumnHeaderGpuScene(bodyWidth), ROW_MARKER_WIDTH, 0),
+      offsetGpuScene(buildRowHeaderGpuScene(bodyHeight), 0, HEADER_HEIGHT),
+    ),
+    gridMetrics,
+    hostHeight: hostSize.height,
+    hostWidth: hostSize.width,
+    residentBodyHeight: bodyHeight,
+    residentBodyWidth: bodyWidth,
+    textScene: mergeTextScenes(
+      offsetTextScene(buildColumnHeaderTextScene(bodyWidth), ROW_MARKER_WIDTH, 0),
+      offsetTextScene(buildRowHeaderTextScene(bodyHeight), 0, HEADER_HEIGHT),
+    ),
+  })
 
-  return [
-    createRendererPane({
-      generation: 1,
-      paneId: 'corner',
-      frame: { x: 0, y: 0, width: ROW_MARKER_WIDTH, height: HEADER_HEIGHT },
-      surfaceSize: { width: ROW_MARKER_WIDTH, height: HEADER_HEIGHT },
-      contentOffset: { x: 0, y: 0 },
-      scrollAxes: { x: false, y: false },
-      viewport: { colStart: 0, colEnd: 0, rowStart: 0, rowEnd: 0 },
-      gpuScene: {
-        fillRects: [{ x: 0, y: 0, width: ROW_MARKER_WIDTH, height: HEADER_HEIGHT, color: HEADER_FILL }],
-        borderRects: [
-          { x: ROW_MARKER_WIDTH - 1, y: 0, width: 1, height: HEADER_HEIGHT, color: GRID_LINE },
-          { x: 0, y: HEADER_HEIGHT - 1, width: ROW_MARKER_WIDTH, height: 1, color: GRID_LINE },
-        ],
-      },
-      textScene: { items: [] },
-    }),
-    createRendererPane({
-      generation: 1,
-      paneId: 'top-body',
-      frame: { x: ROW_MARKER_WIDTH, y: 0, width: bodyWidth, height: HEADER_HEIGHT },
-      surfaceSize: { width: bodyWidth, height: HEADER_HEIGHT },
-      contentOffset: { x: 0, y: 0 },
-      scrollAxes: { x: true, y: false },
-      viewport: { colStart: 0, colEnd: Math.max(0, Math.ceil(bodyWidth / COLUMN_WIDTH) - 1), rowStart: 0, rowEnd: 0 },
-      gpuScene: buildColumnHeaderGpuScene(bodyWidth),
-      textScene: buildColumnHeaderTextScene(bodyWidth),
-    }),
-    createRendererPane({
-      generation: 1,
-      paneId: 'left-body',
-      frame: { x: 0, y: HEADER_HEIGHT, width: ROW_MARKER_WIDTH, height: bodyHeight },
-      surfaceSize: { width: ROW_MARKER_WIDTH, height: bodyHeight },
-      contentOffset: { x: 0, y: 0 },
-      scrollAxes: { x: false, y: true },
-      viewport: { colStart: 0, colEnd: 0, rowStart: 0, rowEnd: Math.max(0, Math.ceil(bodyHeight / ROW_HEIGHT) - 1) },
-      gpuScene: buildRowHeaderGpuScene(bodyHeight),
-      textScene: buildRowHeaderTextScene(bodyHeight),
-    }),
-    createRendererPane({
-      generation: 1,
-      paneId: 'body',
-      frame: { x: ROW_MARKER_WIDTH, y: HEADER_HEIGHT, width: bodyWidth, height: bodyHeight },
-      surfaceSize: { width: bodyWidth, height: bodyHeight },
-      contentOffset: { x: 0, y: 0 },
-      scrollAxes: { x: true, y: true },
-      viewport: {
-        colStart: 0,
-        colEnd: Math.max(0, Math.ceil(bodyWidth / COLUMN_WIDTH) - 1),
-        rowStart: 0,
-        rowEnd: Math.max(0, Math.ceil(bodyHeight / ROW_HEIGHT) - 1),
-      },
-      gpuScene: buildBodyGpuScene(bodyWidth, bodyHeight),
-      textScene: buildBodyTextScene(bodyWidth, bodyHeight),
-    }),
-  ]
+  return {
+    headerPanes,
+    panes: [
+      createRendererPane({
+        generation: 1,
+        paneId: 'body',
+        frame: { x: ROW_MARKER_WIDTH, y: HEADER_HEIGHT, width: bodyWidth, height: bodyHeight },
+        surfaceSize: { width: bodyWidth, height: bodyHeight },
+        contentOffset: { x: 0, y: 0 },
+        scrollAxes: { x: true, y: true },
+        viewport: {
+          colStart: 0,
+          colEnd: Math.max(0, Math.ceil(bodyWidth / COLUMN_WIDTH) - 1),
+          rowStart: 0,
+          rowEnd: Math.max(0, Math.ceil(bodyHeight / ROW_HEIGHT) - 1),
+        },
+        gpuScene: buildBodyGpuScene(bodyWidth, bodyHeight),
+        textScene: buildBodyTextScene(bodyWidth, bodyHeight),
+      }),
+    ],
+  }
 }
 
 function createRendererPane(
@@ -156,6 +142,16 @@ function createRendererPane(
       textScene,
       viewport: input.viewport ?? { colStart: 0, colEnd: 0, rowStart: 0, rowEnd: 0 },
     }),
+  }
+}
+
+function buildCornerHeaderGpuScene(): RendererGpuScene {
+  return {
+    fillRects: [{ x: 0, y: 0, width: ROW_MARKER_WIDTH, height: HEADER_HEIGHT, color: HEADER_FILL }],
+    borderRects: [
+      { x: ROW_MARKER_WIDTH - 1, y: 0, width: 1, height: HEADER_HEIGHT, color: GRID_LINE },
+      { x: 0, y: HEADER_HEIGHT - 1, width: ROW_MARKER_WIDTH, height: 1, color: GRID_LINE },
+    ],
   }
 }
 
@@ -361,6 +357,32 @@ function buildBodyTextScene(width: number, height: number): RendererTextScene {
   appendBodyTextVariants(items, width, height)
 
   return { items }
+}
+
+function mergeGpuScenes(...scenes: readonly RendererGpuScene[]): RendererGpuScene {
+  return {
+    borderRects: scenes.flatMap((scene) => scene.borderRects),
+    fillRects: scenes.flatMap((scene) => scene.fillRects),
+  }
+}
+
+function offsetGpuScene(scene: RendererGpuScene, dx: number, dy: number): RendererGpuScene {
+  return {
+    borderRects: scene.borderRects.map((rect) => ({ ...rect, x: rect.x + dx, y: rect.y + dy })),
+    fillRects: scene.fillRects.map((rect) => ({ ...rect, x: rect.x + dx, y: rect.y + dy })),
+  }
+}
+
+function mergeTextScenes(...scenes: readonly RendererTextScene[]): RendererTextScene {
+  return {
+    items: scenes.flatMap((scene) => scene.items),
+  }
+}
+
+function offsetTextScene(scene: RendererTextScene, dx: number, dy: number): RendererTextScene {
+  return {
+    items: scene.items.map((item) => ({ ...item, x: item.x + dx, y: item.y + dy })),
+  }
 }
 
 function appendBodyTextVariants(items: RendererTextItem[], width: number, height: number): void {

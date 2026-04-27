@@ -1,15 +1,7 @@
 import { BinaryProtocolError, BinaryReader, BinaryWriter } from '@bilig/binary-protocol'
 import type { Viewport } from '@bilig/protocol'
 
-export type RenderTilePaneKind =
-  | 'body'
-  | 'frozenTop'
-  | 'frozenLeft'
-  | 'frozenCorner'
-  | 'columnHeaderBody'
-  | 'columnHeaderFrozen'
-  | 'rowHeaderBody'
-  | 'rowHeaderFrozen'
+export type RenderTilePaneKind = 'body' | 'frozenTop' | 'frozenLeft' | 'frozenCorner'
 
 export interface RenderTileDeltaSubscription extends Viewport {
   readonly sheetId: number
@@ -140,10 +132,6 @@ const PANE_KIND_TAGS: Record<RenderTilePaneKind, number> = {
   frozenTop: 1,
   frozenLeft: 2,
   frozenCorner: 3,
-  columnHeaderBody: 4,
-  columnHeaderFrozen: 5,
-  rowHeaderBody: 6,
-  rowHeaderFrozen: 7,
 }
 
 const PANE_KIND_BY_TAG = new Map<number, RenderTilePaneKind>([
@@ -151,10 +139,6 @@ const PANE_KIND_BY_TAG = new Map<number, RenderTilePaneKind>([
   [1, 'frozenTop'],
   [2, 'frozenLeft'],
   [3, 'frozenCorner'],
-  [4, 'columnHeaderBody'],
-  [5, 'columnHeaderFrozen'],
-  [6, 'rowHeaderBody'],
-  [7, 'rowHeaderFrozen'],
 ])
 
 const MUTATION_TAGS: Record<RenderTileMutation['kind'], number> = {

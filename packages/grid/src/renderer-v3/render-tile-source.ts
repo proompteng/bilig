@@ -1,14 +1,6 @@
 import type { Viewport } from '@bilig/protocol'
 
-export type GridRenderTilePaneKind =
-  | 'body'
-  | 'frozenTop'
-  | 'frozenLeft'
-  | 'frozenCorner'
-  | 'columnHeaderBody'
-  | 'columnHeaderFrozen'
-  | 'rowHeaderBody'
-  | 'rowHeaderFrozen'
+export type GridRenderTilePaneKind = 'body' | 'frozenTop' | 'frozenLeft' | 'frozenCorner'
 
 export interface GridRenderTileDeltaSubscription extends Viewport {
   readonly sheetId: number

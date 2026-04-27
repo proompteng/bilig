@@ -7,16 +7,8 @@ export const GRID_SCENE_PACKET_V2_VERSION = 1
 export const GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT = 8
 export const GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT = 20
 export const GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT = 8
-export type GridScenePacketPaneId = 'body' | 'top' | 'left' | 'corner' | 'top-frozen' | 'top-body' | 'left-frozen' | 'left-body'
-export type GridTilePaneKind =
-  | 'body'
-  | 'frozenTop'
-  | 'frozenLeft'
-  | 'frozenCorner'
-  | 'columnHeaderBody'
-  | 'columnHeaderFrozen'
-  | 'rowHeaderBody'
-  | 'rowHeaderFrozen'
+export type GridScenePacketPaneId = 'body' | 'top' | 'left' | 'corner'
+export type GridTilePaneKind = 'body' | 'frozenTop' | 'frozenLeft' | 'frozenCorner'
 
 export interface GridTileKeyV2 {
   readonly sheetName: string
@@ -177,14 +169,6 @@ export function resolveGridTilePaneKind(paneId: GridScenePacketPaneId): GridTile
       return 'frozenLeft'
     case 'corner':
       return 'frozenCorner'
-    case 'top-body':
-      return 'columnHeaderBody'
-    case 'top-frozen':
-      return 'columnHeaderFrozen'
-    case 'left-body':
-      return 'rowHeaderBody'
-    case 'left-frozen':
-      return 'rowHeaderFrozen'
   }
 }
 

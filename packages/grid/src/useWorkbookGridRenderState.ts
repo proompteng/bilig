@@ -896,17 +896,15 @@ export function useWorkbookGridRenderState(input: {
     [headerPanes, residentBodyPane?.contentOffset.x, residentBodyPane?.contentOffset.y],
   )
   const renderPanes = useMemo<readonly WorkbookRenderPaneState[]>(
-    () => [
-      ...renderHeaderPanes,
-      ...residentDataPanes.map((pane) => ({
+    () =>
+      residentDataPanes.map((pane) => ({
         ...pane,
         scrollAxes: {
           x: pane.paneId === 'body' || pane.paneId === 'top',
           y: pane.paneId === 'body' || pane.paneId === 'left',
         },
       })),
-    ],
-    [renderHeaderPanes, residentDataPanes],
+    [residentDataPanes],
   )
   const fillPreviewBounds = useMemo<Rectangle | undefined>(() => {
     if (!fillPreviewRange) {

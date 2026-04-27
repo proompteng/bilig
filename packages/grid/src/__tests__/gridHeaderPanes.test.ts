@@ -64,19 +64,27 @@ describe('buildHeaderPaneStates', () => {
       residentBodyHeight: 120,
     })
 
-    expect(panes.map((pane) => pane.paneId)).toEqual(['top-frozen', 'top-body', 'left-frozen', 'left-body'])
+    expect(panes.map((pane) => pane.paneId)).toEqual(['corner-header', 'top-frozen', 'top-body', 'left-frozen', 'left-body'])
     expect(panes.map((pane) => pane.scrollAxes)).toEqual([
+      { x: false, y: false },
       { x: false, y: false },
       { x: true, y: false },
       { x: false, y: false },
       { x: false, y: true },
     ])
+    expect(panes.find((pane) => pane.paneId === 'corner-header')?.surfaceSize).toEqual({
+      width: gridMetrics.rowMarkerWidth,
+      height: gridMetrics.headerHeight,
+    })
     expect(panes.find((pane) => pane.paneId === 'top-frozen')?.surfaceSize.width).toBe(80)
     expect(panes.find((pane) => pane.paneId === 'top-body')?.surfaceSize.width).toBe(200)
     expect(panes.find((pane) => pane.paneId === 'left-frozen')?.surfaceSize.height).toBe(44)
     expect(panes.find((pane) => pane.paneId === 'left-body')?.surfaceSize.height).toBe(120)
     expect(panes.find((pane) => pane.paneId === 'top-body')?.contentOffset).toEqual({ x: 0, y: 0 })
     expect(panes.find((pane) => pane.paneId === 'left-body')?.contentOffset).toEqual({ x: 0, y: 0 })
-    expect(panes.every((pane) => pane.packedScene.paneId === pane.paneId)).toBe(true)
+    expect(panes.every((pane) => !('packedScene' in pane))).toBe(true)
+    expect(panes.find((pane) => pane.paneId === 'top-frozen')?.textRuns).toEqual([expect.objectContaining({ text: 'A', x: 16 })])
+    expect(panes.find((pane) => pane.paneId === 'left-body')?.textRuns).toEqual([expect.objectContaining({ text: '9', y: 16 })])
+    expect(panes.find((pane) => pane.paneId === 'top-body')?.rectCount).toBeGreaterThan(0)
   })
 })

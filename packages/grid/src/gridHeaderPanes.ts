@@ -2,11 +2,33 @@ import type { Viewport } from '@bilig/protocol'
 import type { GridGpuRect, GridGpuScene } from './gridGpuScene.js'
 import type { GridTextItem, GridTextScene } from './gridTextScene.js'
 import type { GridMetrics } from './gridMetrics.js'
-import type { WorkbookRenderPaneState } from './renderer-v2/pane-scene-types.js'
-import { packGridScenePacketV2, type GridScenePacketPaneId } from './renderer-v2/scene-packet-v2.js'
+import type { TextQuadRun } from './renderer-v2/line-text-quad-buffer.js'
+import { packGridRectBufferV3 } from './renderer-v3/rect-instance-buffer.js'
 
-export interface GridHeaderPaneState extends WorkbookRenderPaneState {
-  readonly paneId: 'top-frozen' | 'top-body' | 'left-frozen' | 'left-body'
+export interface GridHeaderPaneState {
+  readonly paneId: 'corner-header' | 'top-frozen' | 'top-body' | 'left-frozen' | 'left-body'
+  readonly frame: ClipRect
+  readonly surfaceSize: {
+    readonly width: number
+    readonly height: number
+  }
+  readonly contentOffset: {
+    readonly x: number
+    readonly y: number
+  }
+  readonly scrollAxes: {
+    readonly x: boolean
+    readonly y: boolean
+  }
+  readonly rects: Float32Array
+  readonly rectInstances: Float32Array
+  readonly rectCount: number
+  readonly fillRectCount: number
+  readonly borderRectCount: number
+  readonly rectSignature: string
+  readonly textRuns: readonly TextQuadRun[]
+  readonly textCount: number
+  readonly textSignature: string
 }
 
 interface ClipRect {
@@ -101,12 +123,40 @@ export function buildHeaderPaneStates(input: {
     residentBodyHeight,
   } = input
   const sheetName = input.sheetName ?? 'Sheet1'
-  const residentViewport = input.residentViewport ?? { colEnd: 0, colStart: 0, rowEnd: 0, rowStart: 0 }
-  const freezeRows = Math.max(0, input.freezeRows ?? 0)
-  const freezeCols = Math.max(0, input.freezeCols ?? 0)
   const bodyFrameWidth = Math.max(0, hostWidth - gridMetrics.rowMarkerWidth - frozenColumnWidth)
   const bodyFrameHeight = Math.max(0, hostHeight - gridMetrics.headerHeight - frozenRowHeight)
   const panes: GridHeaderPaneState[] = []
+
+  if (gridMetrics.rowMarkerWidth > 0 && gridMetrics.headerHeight > 0) {
+    const clip: ClipRect = {
+      x: 0,
+      y: 0,
+      width: gridMetrics.rowMarkerWidth,
+      height: gridMetrics.headerHeight,
+    }
+    panes.push({
+      paneId: 'corner-header',
+      frame: {
+        x: clip.x,
+        y: clip.y,
+        width: clip.width,
+        height: clip.height,
+      },
+      surfaceSize: {
+        width: clip.width,
+        height: clip.height,
+      },
+      contentOffset: { x: 0, y: 0 },
+      scrollAxes: { x: false, y: false },
+      ...packHeaderPaneBatch({
+        clip,
+        gpuScene,
+        paneId: 'corner-header',
+        sheetName,
+        textScene,
+      }),
+    })
+  }
 
   if (frozenColumnWidth > 0) {
     const clip: ClipRect = {
@@ -116,7 +166,6 @@ export function buildHeaderPaneStates(input: {
       height: gridMetrics.headerHeight,
     }
     panes.push({
-      generation: 0,
       paneId: 'top-frozen',
       frame: {
         x: clip.x,
@@ -130,14 +179,12 @@ export function buildHeaderPaneStates(input: {
       },
       contentOffset: { x: 0, y: 0 },
       scrollAxes: { x: false, y: false },
-      packedScene: packHeaderScenePacket({
+      ...packHeaderPaneBatch({
         clip,
-        generation: 0,
         gpuScene,
         paneId: 'top-frozen',
         sheetName,
         textScene,
-        viewport: { colEnd: Math.max(0, freezeCols - 1), colStart: 0, rowEnd: 0, rowStart: 0 },
       }),
     })
   }
@@ -150,7 +197,6 @@ export function buildHeaderPaneStates(input: {
       height: gridMetrics.headerHeight,
     }
     panes.push({
-      generation: 0,
       paneId: 'top-body',
       frame: {
         x: clip.x,
@@ -164,14 +210,12 @@ export function buildHeaderPaneStates(input: {
       },
       contentOffset: { x: 0, y: 0 },
       scrollAxes: { x: true, y: false },
-      packedScene: packHeaderScenePacket({
+      ...packHeaderPaneBatch({
         clip,
-        generation: 0,
         gpuScene,
         paneId: 'top-body',
         sheetName,
         textScene,
-        viewport: { ...residentViewport, rowEnd: 0, rowStart: 0 },
       }),
     })
   }
@@ -184,7 +228,6 @@ export function buildHeaderPaneStates(input: {
       height: frozenRowHeight,
     }
     panes.push({
-      generation: 0,
       paneId: 'left-frozen',
       frame: {
         x: clip.x,
@@ -198,14 +241,12 @@ export function buildHeaderPaneStates(input: {
       },
       contentOffset: { x: 0, y: 0 },
       scrollAxes: { x: false, y: false },
-      packedScene: packHeaderScenePacket({
+      ...packHeaderPaneBatch({
         clip,
-        generation: 0,
         gpuScene,
         paneId: 'left-frozen',
         sheetName,
         textScene,
-        viewport: { colEnd: 0, colStart: 0, rowEnd: Math.max(0, freezeRows - 1), rowStart: 0 },
       }),
     })
   }
@@ -218,7 +259,6 @@ export function buildHeaderPaneStates(input: {
       height: residentBodyHeight,
     }
     panes.push({
-      generation: 0,
       paneId: 'left-body',
       frame: {
         x: clip.x,
@@ -232,14 +272,12 @@ export function buildHeaderPaneStates(input: {
       },
       contentOffset: { x: 0, y: 0 },
       scrollAxes: { x: false, y: true },
-      packedScene: packHeaderScenePacket({
+      ...packHeaderPaneBatch({
         clip,
-        generation: 0,
         gpuScene,
         paneId: 'left-body',
         sheetName,
         textScene,
-        viewport: { ...residentViewport, colEnd: 0, colStart: 0 },
       }),
     })
   }
@@ -247,35 +285,83 @@ export function buildHeaderPaneStates(input: {
   return panes
 }
 
-function packHeaderScenePacket(input: {
-  readonly generation: number
+function packHeaderPaneBatch(input: {
   readonly sheetName: string
-  readonly paneId: GridScenePacketPaneId
-  readonly viewport: Viewport
+  readonly paneId: GridHeaderPaneState['paneId']
   readonly clip: ClipRect
   readonly gpuScene: GridGpuScene
   readonly textScene: GridTextScene
 }) {
   const gpuScene = clipGpuScene(input.gpuScene, input.clip)
   const textScene = clipTextScene(input.textScene, input.clip)
-  return packGridScenePacketV2({
-    generation: input.generation,
-    gpuScene,
-    paneId: input.paneId,
+  const surfaceSize = { height: input.clip.height, width: input.clip.width }
+  const textRuns = textScene.items.map(mapHeaderTextRun)
+  return {
+    ...packGridRectBufferV3(gpuScene, surfaceSize),
     sheetName: input.sheetName,
-    surfaceSize: { height: input.clip.height, width: input.clip.width },
-    textScene,
-    viewport: normalizeViewport(input.viewport),
-  })
+    textCount: textRuns.length,
+    textRuns,
+    textSignature: resolveHeaderTextSignature(textRuns),
+  }
 }
 
-function normalizeViewport(viewport: Viewport): Viewport {
-  const rowStart = Math.max(0, Math.min(viewport.rowStart, viewport.rowEnd))
-  const colStart = Math.max(0, Math.min(viewport.colStart, viewport.colEnd))
+function mapHeaderTextRun(item: GridTextItem): TextQuadRun {
   return {
-    colEnd: Math.max(colStart, viewport.colEnd),
-    colStart,
-    rowEnd: Math.max(rowStart, viewport.rowEnd),
-    rowStart,
+    align: item.align,
+    clipHeight: Math.max(0, item.height - item.clipInsetTop - item.clipInsetBottom),
+    clipWidth: Math.max(0, item.width - item.clipInsetLeft - item.clipInsetRight),
+    clipX: item.x + item.clipInsetLeft,
+    clipY: item.y + item.clipInsetTop,
+    color: item.color,
+    font: item.font,
+    fontSize: item.fontSize,
+    height: item.height,
+    strike: item.strike,
+    text: item.text,
+    underline: item.underline,
+    width: item.width,
+    wrap: item.wrap,
+    x: item.x,
+    y: item.y,
   }
+}
+
+function resolveHeaderTextSignature(textRuns: readonly TextQuadRun[]): string {
+  let hash = 2_166_136_261
+  hash = mixNumber(hash, textRuns.length)
+  for (const run of textRuns) {
+    hash = mixString(hash, run.text)
+    hash = mixNumber(hash, run.x)
+    hash = mixNumber(hash, run.y)
+    hash = mixNumber(hash, run.width ?? 0)
+    hash = mixNumber(hash, run.height ?? 0)
+    hash = mixNumber(hash, run.clipX ?? 0)
+    hash = mixNumber(hash, run.clipY ?? 0)
+    hash = mixNumber(hash, run.clipWidth ?? 0)
+    hash = mixNumber(hash, run.clipHeight ?? 0)
+    hash = mixString(hash, run.align ?? '')
+    hash = mixNumber(hash, run.wrap ? 1 : 0)
+    hash = mixString(hash, run.font ?? '')
+    hash = mixNumber(hash, run.fontSize ?? 0)
+    hash = mixString(hash, run.color ?? '')
+    hash = mixNumber(hash, run.underline ? 1 : 0)
+    hash = mixNumber(hash, run.strike ? 1 : 0)
+  }
+  return hash.toString(36)
+}
+
+function mixString(hash: number, value: string): number {
+  let next = hash
+  for (let index = 0; index < value.length; index += 1) {
+    next = mixInteger(next, value.charCodeAt(index))
+  }
+  return next
+}
+
+function mixNumber(hash: number, value: number): number {
+  return mixInteger(hash, Math.round(value * 1_000))
+}
+
+function mixInteger(hash: number, value: number): number {
+  return Math.imul((hash ^ value) >>> 0, 16_777_619) >>> 0
 }

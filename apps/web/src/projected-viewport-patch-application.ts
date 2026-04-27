@@ -12,9 +12,11 @@ export interface ProjectedViewportPatchState {
   readonly columnSizesBySheet: Map<string, Record<number, number>>
   readonly columnWidthsBySheet: Map<string, Record<number, number>>
   readonly pendingColumnWidthsBySheet: Map<string, Record<number, number>>
+  readonly pendingHiddenColumnsBySheet: Map<string, Record<number, boolean>>
   readonly rowSizesBySheet: Map<string, Record<number, number>>
   readonly rowHeightsBySheet: Map<string, Record<number, number>>
   readonly pendingRowHeightsBySheet: Map<string, Record<number, number>>
+  readonly pendingHiddenRowsBySheet: Map<string, Record<number, boolean>>
   readonly hiddenColumnsBySheet: Map<string, Record<number, true>>
   readonly hiddenRowsBySheet: Map<string, Record<number, true>>
   readonly freezeRowsBySheet: Map<string, number>
@@ -243,11 +245,17 @@ export function applyProjectedViewportPatch(input: {
       sizes: state.columnSizesBySheet.get(patch.viewport.sheetName) ?? {},
       renderedSizes: state.columnWidthsBySheet.get(patch.viewport.sheetName) ?? {},
       pendingSizes: state.pendingColumnWidthsBySheet.get(patch.viewport.sheetName) ?? {},
+      pendingHiddenAxes: state.pendingHiddenColumnsBySheet.get(patch.viewport.sheetName) ?? {},
       hiddenAxes: state.hiddenColumnsBySheet.get(patch.viewport.sheetName) ?? {},
     })
     state.columnSizesBySheet.set(patch.viewport.sheetName, nextColumns.sizes)
     state.columnWidthsBySheet.set(patch.viewport.sheetName, nextColumns.renderedSizes)
     state.pendingColumnWidthsBySheet.set(patch.viewport.sheetName, nextColumns.pendingSizes)
+    if (Object.keys(nextColumns.pendingHiddenAxes).length === 0) {
+      state.pendingHiddenColumnsBySheet.delete(patch.viewport.sheetName)
+    } else {
+      state.pendingHiddenColumnsBySheet.set(patch.viewport.sheetName, nextColumns.pendingHiddenAxes)
+    }
     if (Object.keys(nextColumns.hiddenAxes).length === 0) {
       state.hiddenColumnsBySheet.delete(patch.viewport.sheetName)
     } else {
@@ -264,11 +272,17 @@ export function applyProjectedViewportPatch(input: {
       sizes: state.rowSizesBySheet.get(patch.viewport.sheetName) ?? {},
       renderedSizes: state.rowHeightsBySheet.get(patch.viewport.sheetName) ?? {},
       pendingSizes: state.pendingRowHeightsBySheet.get(patch.viewport.sheetName) ?? {},
+      pendingHiddenAxes: state.pendingHiddenRowsBySheet.get(patch.viewport.sheetName) ?? {},
       hiddenAxes: state.hiddenRowsBySheet.get(patch.viewport.sheetName) ?? {},
     })
     state.rowSizesBySheet.set(patch.viewport.sheetName, nextRows.sizes)
     state.rowHeightsBySheet.set(patch.viewport.sheetName, nextRows.renderedSizes)
     state.pendingRowHeightsBySheet.set(patch.viewport.sheetName, nextRows.pendingSizes)
+    if (Object.keys(nextRows.pendingHiddenAxes).length === 0) {
+      state.pendingHiddenRowsBySheet.delete(patch.viewport.sheetName)
+    } else {
+      state.pendingHiddenRowsBySheet.set(patch.viewport.sheetName, nextRows.pendingHiddenAxes)
+    }
     if (Object.keys(nextRows.hiddenAxes).length === 0) {
       state.hiddenRowsBySheet.delete(patch.viewport.sheetName)
     } else {

@@ -2,6 +2,7 @@ export interface ProjectedViewportLocalAxisState {
   readonly sizes: Record<number, number>
   readonly renderedSizes: Record<number, number>
   readonly pendingSizes: Record<number, number>
+  readonly pendingHiddenAxes: Record<number, boolean>
   readonly hiddenAxes: Record<number, true>
 }
 
@@ -9,6 +10,7 @@ export interface ProjectedViewportLocalAxisResult {
   readonly sizes: Record<number, number>
   readonly renderedSizes: Record<number, number>
   readonly pendingSizes: Record<number, number>
+  readonly pendingHiddenAxes: Record<number, boolean>
   readonly hiddenAxes: Record<number, true>
   readonly changed: boolean
 }
@@ -38,6 +40,7 @@ export function setProjectedViewportLocalAxisSize(args: {
     sizes: { ...state.sizes, [index]: size },
     renderedSizes: { ...state.renderedSizes, [index]: nextRenderedSize },
     pendingSizes: { ...state.pendingSizes, [index]: size },
+    pendingHiddenAxes: { ...state.pendingHiddenAxes },
     hiddenAxes: { ...state.hiddenAxes },
     changed: true,
   }
@@ -56,6 +59,7 @@ export function ackProjectedViewportLocalAxisSize(args: {
     sizes: { ...state.sizes },
     renderedSizes: { ...state.renderedSizes },
     pendingSizes: cloneWithoutIndex(state.pendingSizes, index),
+    pendingHiddenAxes: { ...state.pendingHiddenAxes },
     hiddenAxes: { ...state.hiddenAxes },
     changed: true,
   }
@@ -87,6 +91,7 @@ export function rollbackProjectedViewportLocalAxisSize(args: {
     sizes: nextSizes,
     renderedSizes: nextRenderedSizes,
     pendingSizes: nextPendingSizes,
+    pendingHiddenAxes: { ...state.pendingHiddenAxes },
     hiddenAxes: { ...state.hiddenAxes },
     changed: true,
   }
@@ -101,7 +106,12 @@ export function setProjectedViewportLocalAxisHidden(args: {
   const { state, index, hidden, size } = args
   const currentlyHidden = Boolean(state.hiddenAxes[index])
   const nextRenderedSize = hidden ? 0 : size
-  const changed = currentlyHidden !== hidden || state.sizes[index] !== size || state.renderedSizes[index] !== nextRenderedSize
+  const changed =
+    currentlyHidden !== hidden ||
+    state.sizes[index] !== size ||
+    state.renderedSizes[index] !== nextRenderedSize ||
+    state.pendingHiddenAxes[index] !== hidden ||
+    !hasOwnValue(state.pendingHiddenAxes, index)
   if (!changed) {
     return { ...state, changed: false }
   }
@@ -113,6 +123,7 @@ export function setProjectedViewportLocalAxisHidden(args: {
     sizes: { ...state.sizes, [index]: size },
     renderedSizes: { ...state.renderedSizes, [index]: nextRenderedSize },
     pendingSizes: { ...state.pendingSizes },
+    pendingHiddenAxes: { ...state.pendingHiddenAxes, [index]: hidden },
     hiddenAxes: nextHiddenAxes,
     changed: true,
   }
@@ -131,6 +142,7 @@ export function rollbackProjectedViewportLocalAxisHidden(args: {
   const nextHiddenAxes: Record<number, true> = previous.hidden
     ? { ...state.hiddenAxes, [index]: true as const }
     : cloneWithoutIndex(state.hiddenAxes, index)
+  const nextPendingHiddenAxes = cloneWithoutIndex(state.pendingHiddenAxes, index)
   const nextRenderedSizes =
     previous.size === undefined
       ? cloneWithoutIndex(state.renderedSizes, index)
@@ -141,7 +153,8 @@ export function rollbackProjectedViewportLocalAxisHidden(args: {
   const changed =
     state.sizes[index] !== nextSizes[index] ||
     Boolean(state.hiddenAxes[index]) !== previous.hidden ||
-    state.renderedSizes[index] !== nextRenderedSizes[index]
+    state.renderedSizes[index] !== nextRenderedSizes[index] ||
+    hasOwnValue(state.pendingHiddenAxes, index)
   if (!changed) {
     return { ...state, changed: false }
   }
@@ -150,6 +163,7 @@ export function rollbackProjectedViewportLocalAxisHidden(args: {
     sizes: nextSizes,
     renderedSizes: nextRenderedSizes,
     pendingSizes: { ...state.pendingSizes },
+    pendingHiddenAxes: nextPendingHiddenAxes,
     hiddenAxes: nextHiddenAxes,
     changed: true,
   }

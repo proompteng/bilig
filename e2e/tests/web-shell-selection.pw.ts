@@ -304,6 +304,7 @@ test('web app hit-tests typegpu geometry after hiding rows and columns', async (
   })
   await page.getByTestId('grid-context-action-hide-column').click()
   await expect.poll(() => getProductColumnWidth(page, 1)).toBe(0)
+  await settleWorkbookScrollPerf(page, 4)
 
   await clickProductCell(page, 2, 1)
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C2')
@@ -317,6 +318,7 @@ test('web app hit-tests typegpu geometry after hiding rows and columns', async (
   })
   await page.getByTestId('grid-context-action-hide-row').click()
   await expect.poll(() => getProductRowHeight(page, 1)).toBe(0)
+  await settleWorkbookScrollPerf(page, 4)
   const grid = await gridLocator.boundingBox()
   if (!grid) {
     throw new Error('sheet grid is not visible')

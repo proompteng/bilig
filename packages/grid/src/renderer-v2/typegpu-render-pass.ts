@@ -1,4 +1,5 @@
 import type { Rectangle } from '../gridTypes.js'
+import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { WorkbookGridScrollSnapshot } from '../workbookGridScrollStore.js'
 import type { WorkbookPaneBufferCache } from './pane-buffer-cache.js'
 import type { WorkbookRenderPaneState } from './pane-scene-types.js'
@@ -10,7 +11,12 @@ import {
   updateTypeGpuSurfaceUniform,
 } from './typegpu-backend.js'
 import { noteGridDrawFrame, noteTypeGpuDrawCall, noteTypeGpuPaneDraw, noteTypeGpuSubmit } from './grid-render-counters.js'
-import { WORKBOOK_DYNAMIC_OVERLAY_BUFFER_KEY, ensurePaneSurfaceBindings, resolveWorkbookPaneBufferKey } from './typegpu-buffer-pool.js'
+import {
+  WORKBOOK_DYNAMIC_OVERLAY_BUFFER_KEY,
+  ensurePaneSurfaceBindings,
+  resolveWorkbookHeaderBufferKey,
+  resolveWorkbookPaneBufferKey,
+} from './typegpu-buffer-pool.js'
 import type { DynamicGridOverlayBatchV3 } from '../renderer-v3/dynamic-overlay-batch.js'
 
 export interface TypeGpuDrawSurface {
@@ -24,6 +30,7 @@ export interface TypeGpuDrawSurface {
 export function drawTypeGpuPanes(input: {
   readonly artifacts: TypeGpuRendererArtifacts
   readonly paneBuffers: WorkbookPaneBufferCache
+  readonly headerPanes?: readonly GridHeaderPaneState[] | undefined
   readonly panes: readonly WorkbookRenderPaneState[]
   readonly overlay?: DynamicGridOverlayBatchV3 | null | undefined
   readonly surface: TypeGpuDrawSurface
@@ -77,6 +84,15 @@ export function drawTypeGpuPanes(input: {
     noteTypeGpuPaneDraw(1)
   })
 
+  drawTypeGpuHeaderPanes({
+    artifacts: input.artifacts,
+    headerPanes: input.headerPanes ?? [],
+    paneBuffers: input.paneBuffers,
+    pass,
+    scrollSnapshot: input.scrollSnapshot,
+    surface: input.surface,
+  })
+
   drawTypeGpuOverlay({
     artifacts: input.artifacts,
     overlay: input.overlay ?? null,
@@ -121,6 +137,54 @@ function drawTypeGpuOverlay(input: {
   noteTypeGpuPaneDraw(1)
 }
 
+function drawTypeGpuHeaderPanes(input: {
+  readonly artifacts: TypeGpuRendererArtifacts
+  readonly headerPanes: readonly GridHeaderPaneState[]
+  readonly paneBuffers: WorkbookPaneBufferCache
+  readonly pass: GPURenderPassEncoder
+  readonly scrollSnapshot: WorkbookGridScrollSnapshot
+  readonly surface: TypeGpuDrawSurface
+}): void {
+  input.headerPanes.forEach((pane) => {
+    const paneCache = input.paneBuffers.peek(resolveWorkbookHeaderBufferKey(pane))
+    if (!paneCache) {
+      return
+    }
+    const scissorRect = resolveClampedScissorRect(pane.frame, input.surface)
+    if (!scissorRect) {
+      return
+    }
+
+    input.pass.setScissorRect(scissorRect.x, scissorRect.y, scissorRect.width, scissorRect.height)
+    const paneOrigin = resolvePaneOrigin(pane)
+    const paneRenderOffset = resolvePaneRenderOffset(pane, input.scrollSnapshot)
+
+    if (paneCache.rectCount > 0 || paneCache.textCount > 0) {
+      ensurePaneSurfaceBindings(input.artifacts, paneCache)
+      updateTypeGpuSurfaceUniform(paneCache.surfaceUniform!, input.surface, paneOrigin, paneRenderOffset)
+    }
+
+    if (paneCache.rectCount > 0 && paneCache.rectBuffer && paneCache.surfaceBindGroup) {
+      const rectRenderer = input.artifacts.rectPipeline.with(input.pass).with(paneCache.surfaceBindGroup)
+      rectRenderer
+        .with(WORKBOOK_UNIT_QUAD_LAYOUT, input.artifacts.quadBuffer)
+        .with(WORKBOOK_RECT_INSTANCE_LAYOUT, paneCache.rectBuffer)
+        .draw(6, paneCache.rectCount)
+      noteTypeGpuDrawCall(1)
+    }
+
+    if (paneCache.textCount > 0 && paneCache.textBuffer && paneCache.textBindGroup) {
+      const textRenderer = input.artifacts.textPipeline.with(input.pass).with(paneCache.textBindGroup)
+      textRenderer
+        .with(WORKBOOK_UNIT_QUAD_LAYOUT, input.artifacts.quadBuffer)
+        .with(WORKBOOK_TEXT_INSTANCE_LAYOUT, paneCache.textBuffer)
+        .draw(6, paneCache.textCount)
+      noteTypeGpuDrawCall(1)
+    }
+    noteTypeGpuPaneDraw(1)
+  })
+}
+
 function resolveClampedScissorRect(
   frame: Rectangle,
   surface: TypeGpuDrawSurface,
@@ -134,7 +198,7 @@ function resolveClampedScissorRect(
   return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
 }
 
-function resolvePaneOrigin(pane: WorkbookRenderPaneState): { x: number; y: number } {
+function resolvePaneOrigin(pane: { readonly frame: Rectangle }): { x: number; y: number } {
   return {
     x: pane.frame.x,
     y: pane.frame.y,
@@ -142,7 +206,10 @@ function resolvePaneOrigin(pane: WorkbookRenderPaneState): { x: number; y: numbe
 }
 
 function resolvePaneRenderOffset(
-  pane: WorkbookRenderPaneState,
+  pane: {
+    readonly contentOffset: { readonly x: number; readonly y: number }
+    readonly scrollAxes: { readonly x: boolean; readonly y: boolean }
+  },
   scrollSnapshot: {
     readonly tx: number
     readonly ty: number

@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { GridGeometrySnapshot } from '../gridGeometry.js'
+import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 import type { WorkbookRenderPaneState } from './pane-scene-types.js'
 import type { GridCameraStore } from './gridCameraStore.js'
@@ -21,6 +22,7 @@ export interface WorkbookPaneRendererV2Props {
   readonly host: HTMLDivElement | null
   readonly geometry: GridGeometrySnapshot | null
   readonly cameraStore?: GridCameraStore | null
+  readonly headerPanes?: readonly GridHeaderPaneState[] | undefined
   readonly panes: readonly WorkbookRenderPaneState[]
   readonly preloadPanes?: readonly WorkbookRenderPaneState[] | undefined
   readonly overlayBuilder?: ((geometry: GridGeometrySnapshot) => DynamicGridOverlayBatchV3 | null | undefined) | undefined
@@ -88,6 +90,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   active,
   cameraStore = null,
   geometry,
+  headerPanes = [],
   host,
   overlay,
   overlayBuilder,
@@ -104,6 +107,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   const activeRef = useRef(active)
   const webGpuReadyRef = useRef(false)
   const surfaceSizeRef = useRef<TypeGpuSurfaceSize>({ dpr: 1, height: 0, pixelHeight: 0, pixelWidth: 0, width: 0 })
+  const headerPanePayloadsRef = useRef<readonly GridHeaderPaneState[]>([])
   const panePayloadsRef = useRef<readonly WorkbookRenderPaneState[]>([])
   const preloadPanePayloadsRef = useRef<readonly WorkbookRenderPaneState[]>([])
   const overlayBuilderRef = useRef<typeof overlayBuilder>(overlayBuilder)
@@ -186,6 +190,10 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   }, [cameraStore])
 
   useEffect(() => {
+    headerPanePayloadsRef.current = headerPanes
+  }, [headerPanes])
+
+  useEffect(() => {
     panePayloadsRef.current = panes
   }, [panes])
 
@@ -229,6 +237,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
 
       const backend = backendRef.current
       const surface = surfaceSizeRef.current
+      const headerPanePayloads = headerPanePayloadsRef.current
       const basePanePayloads = panePayloadsRef.current
       const preloadPanePayloads = preloadPanePayloadsRef.current
       if (!backend || surface.width <= 0 || surface.height <= 0) {
@@ -256,6 +265,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
 
       drawWorkbookTypeGpuFrame({
         backend,
+        headerPanes: headerPanePayloads,
         overlay: overlayBatch ?? null,
         panes: basePanePayloads,
         preloadPanes: preloadPanePayloads,
@@ -272,7 +282,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
     drawFrameRef.current()
     renderLoopRef.current ??= new GridRenderLoop()
     renderLoopRef.current.requestDraw(drawFrameRef.current)
-  }, [active, overlay, overlayBuilder, panes, preloadPanes, surfaceSize, webGpuReady])
+  }, [active, headerPanes, overlay, overlayBuilder, panes, preloadPanes, surfaceSize, webGpuReady])
 
   useEffect(() => {
     if (!active || !scrollTransformStore) {

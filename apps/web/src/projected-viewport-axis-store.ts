@@ -17,9 +17,11 @@ export class ProjectedViewportAxisStore {
   private readonly columnSizesBySheet = new Map<string, Record<number, number>>()
   private readonly columnWidthsBySheet = new Map<string, Record<number, number>>()
   private readonly pendingColumnWidthsBySheet = new Map<string, Record<number, number>>()
+  private readonly pendingHiddenColumnsBySheet = new Map<string, Record<number, boolean>>()
   private readonly rowSizesBySheet = new Map<string, Record<number, number>>()
   private readonly rowHeightsBySheet = new Map<string, Record<number, number>>()
   private readonly pendingRowHeightsBySheet = new Map<string, Record<number, number>>()
+  private readonly pendingHiddenRowsBySheet = new Map<string, Record<number, boolean>>()
   private readonly hiddenColumnsBySheet = new Map<string, Record<number, true>>()
   private readonly hiddenRowsBySheet = new Map<string, Record<number, true>>()
   private readonly freezeRowsBySheet = new Map<string, number>()
@@ -68,9 +70,11 @@ export class ProjectedViewportAxisStore {
     columnSizesBySheet: Map<string, Record<number, number>>
     columnWidthsBySheet: Map<string, Record<number, number>>
     pendingColumnWidthsBySheet: Map<string, Record<number, number>>
+    pendingHiddenColumnsBySheet: Map<string, Record<number, boolean>>
     rowSizesBySheet: Map<string, Record<number, number>>
     rowHeightsBySheet: Map<string, Record<number, number>>
     pendingRowHeightsBySheet: Map<string, Record<number, number>>
+    pendingHiddenRowsBySheet: Map<string, Record<number, boolean>>
     hiddenColumnsBySheet: Map<string, Record<number, true>>
     hiddenRowsBySheet: Map<string, Record<number, true>>
     freezeRowsBySheet: Map<string, number>
@@ -80,9 +84,11 @@ export class ProjectedViewportAxisStore {
       columnSizesBySheet: this.columnSizesBySheet,
       columnWidthsBySheet: this.columnWidthsBySheet,
       pendingColumnWidthsBySheet: this.pendingColumnWidthsBySheet,
+      pendingHiddenColumnsBySheet: this.pendingHiddenColumnsBySheet,
       rowSizesBySheet: this.rowSizesBySheet,
       rowHeightsBySheet: this.rowHeightsBySheet,
       pendingRowHeightsBySheet: this.pendingRowHeightsBySheet,
+      pendingHiddenRowsBySheet: this.pendingHiddenRowsBySheet,
       hiddenColumnsBySheet: this.hiddenColumnsBySheet,
       hiddenRowsBySheet: this.hiddenRowsBySheet,
       freezeRowsBySheet: this.freezeRowsBySheet,
@@ -101,6 +107,7 @@ export class ProjectedViewportAxisStore {
         sizesBySheet: this.columnSizesBySheet,
         renderedSizesBySheet: this.columnWidthsBySheet,
         pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+        pendingHiddenAxesBySheet: this.pendingHiddenColumnsBySheet,
         hiddenAxesBySheet: this.hiddenColumnsBySheet,
       }),
       index: columnIndex,
@@ -111,6 +118,7 @@ export class ProjectedViewportAxisStore {
       sizesBySheet: this.columnSizesBySheet,
       renderedSizesBySheet: this.columnWidthsBySheet,
       pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+      pendingHiddenAxesBySheet: this.pendingHiddenColumnsBySheet,
       hiddenAxesBySheet: this.hiddenColumnsBySheet,
       nextState,
       markSheetKnown: true,
@@ -125,6 +133,7 @@ export class ProjectedViewportAxisStore {
         sizesBySheet: this.columnSizesBySheet,
         renderedSizesBySheet: this.columnWidthsBySheet,
         pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+        pendingHiddenAxesBySheet: this.pendingHiddenColumnsBySheet,
         hiddenAxesBySheet: this.hiddenColumnsBySheet,
       }),
       index: columnIndex,
@@ -135,6 +144,7 @@ export class ProjectedViewportAxisStore {
       sizesBySheet: this.columnSizesBySheet,
       renderedSizesBySheet: this.columnWidthsBySheet,
       pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+      pendingHiddenAxesBySheet: this.pendingHiddenColumnsBySheet,
       hiddenAxesBySheet: this.hiddenColumnsBySheet,
       nextState,
     })
@@ -147,6 +157,7 @@ export class ProjectedViewportAxisStore {
         sizesBySheet: this.columnSizesBySheet,
         renderedSizesBySheet: this.columnWidthsBySheet,
         pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+        pendingHiddenAxesBySheet: this.pendingHiddenColumnsBySheet,
         hiddenAxesBySheet: this.hiddenColumnsBySheet,
       }),
       index: columnIndex,
@@ -157,6 +168,7 @@ export class ProjectedViewportAxisStore {
       sizesBySheet: this.columnSizesBySheet,
       renderedSizesBySheet: this.columnWidthsBySheet,
       pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+      pendingHiddenAxesBySheet: this.pendingHiddenColumnsBySheet,
       hiddenAxesBySheet: this.hiddenColumnsBySheet,
       nextState,
       notifyListeners: true,
@@ -170,6 +182,7 @@ export class ProjectedViewportAxisStore {
         sizesBySheet: this.columnSizesBySheet,
         renderedSizesBySheet: this.columnWidthsBySheet,
         pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+        pendingHiddenAxesBySheet: this.pendingHiddenColumnsBySheet,
         hiddenAxesBySheet: this.hiddenColumnsBySheet,
       }),
       index: columnIndex,
@@ -181,6 +194,7 @@ export class ProjectedViewportAxisStore {
       sizesBySheet: this.columnSizesBySheet,
       renderedSizesBySheet: this.columnWidthsBySheet,
       pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+      pendingHiddenAxesBySheet: this.pendingHiddenColumnsBySheet,
       hiddenAxesBySheet: this.hiddenColumnsBySheet,
       nextState,
       markSheetKnown: true,
@@ -195,6 +209,7 @@ export class ProjectedViewportAxisStore {
         sizesBySheet: this.columnSizesBySheet,
         renderedSizesBySheet: this.columnWidthsBySheet,
         pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+        pendingHiddenAxesBySheet: this.pendingHiddenColumnsBySheet,
         hiddenAxesBySheet: this.hiddenColumnsBySheet,
       }),
       index: columnIndex,
@@ -205,6 +220,7 @@ export class ProjectedViewportAxisStore {
       sizesBySheet: this.columnSizesBySheet,
       renderedSizesBySheet: this.columnWidthsBySheet,
       pendingSizesBySheet: this.pendingColumnWidthsBySheet,
+      pendingHiddenAxesBySheet: this.pendingHiddenColumnsBySheet,
       hiddenAxesBySheet: this.hiddenColumnsBySheet,
       nextState,
       notifyListeners: true,
@@ -218,6 +234,7 @@ export class ProjectedViewportAxisStore {
         sizesBySheet: this.rowSizesBySheet,
         renderedSizesBySheet: this.rowHeightsBySheet,
         pendingSizesBySheet: this.pendingRowHeightsBySheet,
+        pendingHiddenAxesBySheet: this.pendingHiddenRowsBySheet,
         hiddenAxesBySheet: this.hiddenRowsBySheet,
       }),
       index: rowIndex,
@@ -228,6 +245,7 @@ export class ProjectedViewportAxisStore {
       sizesBySheet: this.rowSizesBySheet,
       renderedSizesBySheet: this.rowHeightsBySheet,
       pendingSizesBySheet: this.pendingRowHeightsBySheet,
+      pendingHiddenAxesBySheet: this.pendingHiddenRowsBySheet,
       hiddenAxesBySheet: this.hiddenRowsBySheet,
       nextState,
       markSheetKnown: true,
@@ -242,6 +260,7 @@ export class ProjectedViewportAxisStore {
         sizesBySheet: this.rowSizesBySheet,
         renderedSizesBySheet: this.rowHeightsBySheet,
         pendingSizesBySheet: this.pendingRowHeightsBySheet,
+        pendingHiddenAxesBySheet: this.pendingHiddenRowsBySheet,
         hiddenAxesBySheet: this.hiddenRowsBySheet,
       }),
       index: rowIndex,
@@ -252,6 +271,7 @@ export class ProjectedViewportAxisStore {
       sizesBySheet: this.rowSizesBySheet,
       renderedSizesBySheet: this.rowHeightsBySheet,
       pendingSizesBySheet: this.pendingRowHeightsBySheet,
+      pendingHiddenAxesBySheet: this.pendingHiddenRowsBySheet,
       hiddenAxesBySheet: this.hiddenRowsBySheet,
       nextState,
     })
@@ -264,6 +284,7 @@ export class ProjectedViewportAxisStore {
         sizesBySheet: this.rowSizesBySheet,
         renderedSizesBySheet: this.rowHeightsBySheet,
         pendingSizesBySheet: this.pendingRowHeightsBySheet,
+        pendingHiddenAxesBySheet: this.pendingHiddenRowsBySheet,
         hiddenAxesBySheet: this.hiddenRowsBySheet,
       }),
       index: rowIndex,
@@ -274,6 +295,7 @@ export class ProjectedViewportAxisStore {
       sizesBySheet: this.rowSizesBySheet,
       renderedSizesBySheet: this.rowHeightsBySheet,
       pendingSizesBySheet: this.pendingRowHeightsBySheet,
+      pendingHiddenAxesBySheet: this.pendingHiddenRowsBySheet,
       hiddenAxesBySheet: this.hiddenRowsBySheet,
       nextState,
       notifyListeners: true,
@@ -287,6 +309,7 @@ export class ProjectedViewportAxisStore {
         sizesBySheet: this.rowSizesBySheet,
         renderedSizesBySheet: this.rowHeightsBySheet,
         pendingSizesBySheet: this.pendingRowHeightsBySheet,
+        pendingHiddenAxesBySheet: this.pendingHiddenRowsBySheet,
         hiddenAxesBySheet: this.hiddenRowsBySheet,
       }),
       index: rowIndex,
@@ -298,6 +321,7 @@ export class ProjectedViewportAxisStore {
       sizesBySheet: this.rowSizesBySheet,
       renderedSizesBySheet: this.rowHeightsBySheet,
       pendingSizesBySheet: this.pendingRowHeightsBySheet,
+      pendingHiddenAxesBySheet: this.pendingHiddenRowsBySheet,
       hiddenAxesBySheet: this.hiddenRowsBySheet,
       nextState,
       markSheetKnown: true,
@@ -312,6 +336,7 @@ export class ProjectedViewportAxisStore {
         sizesBySheet: this.rowSizesBySheet,
         renderedSizesBySheet: this.rowHeightsBySheet,
         pendingSizesBySheet: this.pendingRowHeightsBySheet,
+        pendingHiddenAxesBySheet: this.pendingHiddenRowsBySheet,
         hiddenAxesBySheet: this.hiddenRowsBySheet,
       }),
       index: rowIndex,
@@ -322,6 +347,7 @@ export class ProjectedViewportAxisStore {
       sizesBySheet: this.rowSizesBySheet,
       renderedSizesBySheet: this.rowHeightsBySheet,
       pendingSizesBySheet: this.pendingRowHeightsBySheet,
+      pendingHiddenAxesBySheet: this.pendingHiddenRowsBySheet,
       hiddenAxesBySheet: this.hiddenRowsBySheet,
       nextState,
       notifyListeners: true,
@@ -333,6 +359,7 @@ export class ProjectedViewportAxisStore {
     sizesBySheet: Map<string, Record<number, number>>
     renderedSizesBySheet: Map<string, Record<number, number>>
     pendingSizesBySheet: Map<string, Record<number, number>>
+    pendingHiddenAxesBySheet: Map<string, Record<number, boolean>>
     hiddenAxesBySheet: Map<string, Record<number, true>>
     nextState: ProjectedViewportLocalAxisResult
     markSheetKnown?: boolean
@@ -349,6 +376,7 @@ export class ProjectedViewportAxisStore {
       sizesBySheet: args.sizesBySheet,
       renderedSizesBySheet: args.renderedSizesBySheet,
       pendingSizesBySheet: args.pendingSizesBySheet,
+      pendingHiddenAxesBySheet: args.pendingHiddenAxesBySheet,
       hiddenAxesBySheet: args.hiddenAxesBySheet,
       nextState: args.nextState,
     })
@@ -362,12 +390,14 @@ export class ProjectedViewportAxisStore {
     sizesBySheet: Map<string, Record<number, number>>
     renderedSizesBySheet: Map<string, Record<number, number>>
     pendingSizesBySheet: Map<string, Record<number, number>>
+    pendingHiddenAxesBySheet: Map<string, Record<number, boolean>>
     hiddenAxesBySheet: Map<string, Record<number, true>>
   }): ProjectedViewportLocalAxisState {
     return {
       sizes: args.sizesBySheet.get(args.sheetName) ?? {},
       renderedSizes: args.renderedSizesBySheet.get(args.sheetName) ?? {},
       pendingSizes: args.pendingSizesBySheet.get(args.sheetName) ?? {},
+      pendingHiddenAxes: args.pendingHiddenAxesBySheet.get(args.sheetName) ?? {},
       hiddenAxes: args.hiddenAxesBySheet.get(args.sheetName) ?? {},
     }
   }
@@ -377,6 +407,7 @@ export class ProjectedViewportAxisStore {
     sizesBySheet: Map<string, Record<number, number>>
     renderedSizesBySheet: Map<string, Record<number, number>>
     pendingSizesBySheet: Map<string, Record<number, number>>
+    pendingHiddenAxesBySheet: Map<string, Record<number, boolean>>
     hiddenAxesBySheet: Map<string, Record<number, true>>
     nextState: ProjectedViewportLocalAxisResult
   }): void {
@@ -386,6 +417,11 @@ export class ProjectedViewportAxisStore {
       args.pendingSizesBySheet.delete(args.sheetName)
     } else {
       args.pendingSizesBySheet.set(args.sheetName, args.nextState.pendingSizes)
+    }
+    if (Object.keys(args.nextState.pendingHiddenAxes).length === 0) {
+      args.pendingHiddenAxesBySheet.delete(args.sheetName)
+    } else {
+      args.pendingHiddenAxesBySheet.set(args.sheetName, args.nextState.pendingHiddenAxes)
     }
     if (Object.keys(args.nextState.hiddenAxes).length === 0) {
       args.hiddenAxesBySheet.delete(args.sheetName)
@@ -398,9 +434,11 @@ export class ProjectedViewportAxisStore {
     this.columnSizesBySheet.delete(sheetName)
     this.columnWidthsBySheet.delete(sheetName)
     this.pendingColumnWidthsBySheet.delete(sheetName)
+    this.pendingHiddenColumnsBySheet.delete(sheetName)
     this.rowSizesBySheet.delete(sheetName)
     this.rowHeightsBySheet.delete(sheetName)
     this.pendingRowHeightsBySheet.delete(sheetName)
+    this.pendingHiddenRowsBySheet.delete(sheetName)
     this.hiddenColumnsBySheet.delete(sheetName)
     this.hiddenRowsBySheet.delete(sheetName)
     this.freezeRowsBySheet.delete(sheetName)

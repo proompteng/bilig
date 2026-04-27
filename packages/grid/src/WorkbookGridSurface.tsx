@@ -250,6 +250,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
           active={renderState.hostElement !== null}
           cameraStore={renderState.gridCameraStore}
           geometry={v2Geometry}
+          headerPanes={renderState.headerPanes}
           host={renderState.hostElement}
           overlayBuilder={dynamicOverlayBuilder}
           panes={renderState.renderPanes}

@@ -1,4 +1,5 @@
 import type { WorkbookGridScrollSnapshot } from '../workbookGridScrollStore.js'
+import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { WorkbookRenderPaneState } from './pane-scene-types.js'
 import { noteTypeGpuTileMiss } from './grid-render-counters.js'
 import { createGlyphAtlas } from './typegpu-atlas-manager.js'
@@ -12,7 +13,9 @@ import {
 import { drawTypeGpuPanes, type TypeGpuDrawSurface } from './typegpu-render-pass.js'
 import {
   WORKBOOK_DYNAMIC_OVERLAY_BUFFER_KEY,
+  resolveWorkbookHeaderBufferKey,
   resolveWorkbookPaneBufferKey,
+  syncTypeGpuHeaderResources,
   syncTypeGpuOverlayResources,
   syncTypeGpuPaneResources,
 } from './typegpu-buffer-pool.js'
@@ -63,6 +66,7 @@ export function syncWorkbookTypeGpuSurface(input: {
 
 export function drawWorkbookTypeGpuFrame(input: {
   readonly backend: WorkbookTypeGpuBackend
+  readonly headerPanes?: readonly GridHeaderPaneState[] | undefined
   readonly panes: readonly WorkbookRenderPaneState[]
   readonly preloadPanes?: readonly WorkbookRenderPaneState[] | undefined
   readonly overlay?: DynamicGridOverlayBatchV3 | null | undefined
@@ -72,6 +76,7 @@ export function drawWorkbookTypeGpuFrame(input: {
 }): void {
   const retainPanes = input.preloadPanes?.length ? [...input.preloadPanes, ...input.panes] : input.panes
   const resourcePanes = input.syncPreloadPanes === false ? input.panes : retainPanes
+  const headerPanes = input.headerPanes ?? []
   syncTileGpuCacheFromPanes({
     cache: input.backend.tileCache,
     panes: resourcePanes,
@@ -88,7 +93,13 @@ export function drawWorkbookTypeGpuFrame(input: {
     paneBuffers: input.backend.paneBuffers,
     panes: resourcePanes,
     retainPanes: resourceRetainPanes,
-    retainBufferKeys: input.overlay ? [WORKBOOK_DYNAMIC_OVERLAY_BUFFER_KEY] : [],
+    retainBufferKeys: [...headerPanes.map(resolveWorkbookHeaderBufferKey), ...(input.overlay ? [WORKBOOK_DYNAMIC_OVERLAY_BUFFER_KEY] : [])],
+  })
+  syncTypeGpuHeaderResources({
+    artifacts: input.backend.artifacts,
+    atlas: input.backend.atlas,
+    headerPanes,
+    paneBuffers: input.backend.paneBuffers,
   })
   syncTypeGpuOverlayResources({
     artifacts: input.backend.artifacts,
@@ -105,6 +116,7 @@ export function drawWorkbookTypeGpuFrame(input: {
   markVisibleTilePanes(input.backend.tileCache, drawPanes)
   drawTypeGpuPanes({
     artifacts: input.backend.artifacts,
+    headerPanes,
     overlay: input.overlay ?? null,
     paneBuffers: input.backend.paneBuffers,
     panes: drawPanes,
