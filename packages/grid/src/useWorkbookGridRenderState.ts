@@ -2,8 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { formatAddress, indexToColumn, parseCellAddress } from '@bilig/formula'
 import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
-import { buildGridGpuScene, type GridGpuScene } from './gridGpuScene.js'
-import { buildGridTextScene, type GridTextScene } from './gridTextScene.js'
 import {
   EMPTY_COLUMN_WIDTHS,
   EMPTY_ROW_HEIGHTS,
@@ -18,7 +16,6 @@ import {
 } from './gridMetrics.js'
 import { createGridSelection, isSheetSelection } from './gridSelection.js'
 import { resolveFillHandlePreviewBounds } from './gridFillHandle.js'
-import { buildHeaderPaneStates } from './gridHeaderPanes.js'
 import { applyEditorOverlayBounds, resolveEditorOverlayScreenBounds } from './gridEditorOverlayGeometry.js'
 import { createGridAxisWorldIndexFromRecords } from './gridAxisWorldIndex.js'
 import { createGridGeometrySnapshotFromAxes } from './gridGeometry.js'
@@ -29,7 +26,7 @@ import type { GridHoverState } from './gridHover.js'
 import { getResolvedCellFontFamily, snapshotToRenderCell } from './gridCells.js'
 import { getEditorPresentation, getEditorTextAlign, getGridTheme, getOverlayStyle } from './gridPresentation.js'
 import type { GridEngineLike } from './grid-engine.js'
-import { CompactSelection, type GridSelection, type Item, type Rectangle } from './gridTypes.js'
+import type { GridSelection, Rectangle } from './gridTypes.js'
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 import { collectViewportItems } from './gridViewportItems.js'
 import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
@@ -47,6 +44,7 @@ import {
   createGridRuntimeAxisOverrideCache,
   syncGridRuntimeAxisOverrides,
 } from './runtime/gridRuntimeAxisAdapters.js'
+import { useWorkbookHeaderPanes } from './useWorkbookHeaderPanes.js'
 import { useWorkbookRenderTilePanes } from './useWorkbookRenderTilePanes.js'
 
 function noteVisibleWindowChange(): void {
@@ -55,20 +53,6 @@ function noteVisibleWindowChange(): void {
   }
   ;(window as Window & { __biligScrollPerf?: { noteVisibleWindowChange?: () => void } }).__biligScrollPerf?.noteVisibleWindowChange?.()
 }
-
-function noteHeaderPaneBuild(): void {
-  if (typeof window === 'undefined') {
-    return
-  }
-  ;(window as Window & { __biligScrollPerf?: { noteHeaderPaneBuild?: () => void } }).__biligScrollPerf?.noteHeaderPaneBuild?.()
-}
-
-const STATIC_SCENE_SELECTED_CELL: Item = Object.freeze([-1, -1] as const)
-const STATIC_SCENE_GRID_SELECTION: GridSelection = Object.freeze({
-  columns: CompactSelection.empty(),
-  current: undefined,
-  rows: CompactSelection.empty(),
-})
 
 export function useWorkbookGridRenderState(input: {
   engine: GridEngineLike
@@ -118,8 +102,6 @@ export function useWorkbookGridRenderState(input: {
   } = input
   const freezeRows = Math.max(0, Math.min(MAX_ROWS, requestedFreezeRows))
   const freezeCols = Math.max(0, Math.min(MAX_COLS, requestedFreezeCols))
-  const emptyGpuScene = useMemo<GridGpuScene>(() => ({ fillRects: [], borderRects: [] }), [])
-  const emptyTextScene = useMemo<GridTextScene>(() => ({ items: [] }), [])
   const hostRef = useRef<HTMLDivElement | null>(null)
   const focusTargetRef = useRef<HTMLDivElement | null>(null)
   const scrollViewportRef = useRef<HTMLDivElement | null>(null)
@@ -692,130 +674,25 @@ export function useWorkbookGridRenderState(input: {
     visibleViewport: viewport,
   })
 
-  const headerGpuScene = useMemo<GridGpuScene>(() => {
-    if (!hostElement) {
-      return emptyGpuScene
-    }
-    return buildGridGpuScene({
-      contentMode: 'headers',
-      engine,
-      columnWidths,
-      rowHeights,
-      gridMetrics,
-      gridSelection: STATIC_SCENE_GRID_SELECTION,
-      activeHeaderDrag: null,
-      hoveredCell: null,
-      hoveredHeader: null,
-      resizeGuideColumn: null,
-      resizeGuideRow: null,
-      selectedCell: STATIC_SCENE_SELECTED_CELL,
-      selectionRange: null,
-      sheetName,
-      visibleItems: residentHeaderItems,
-      visibleRegion: residentHeaderRegion,
-      hostBounds: {
-        left: 0,
-        top: 0,
-      },
-      getCellBounds: getHeaderCellLocalBounds,
-    })
-  }, [
+  const renderHeaderPanes = useWorkbookHeaderPanes({
     columnWidths,
-    emptyGpuScene,
     engine,
-    getHeaderCellLocalBounds,
-    gridMetrics,
-    hostElement,
-    rowHeights,
-    sheetName,
-    residentHeaderItems,
-    residentHeaderRegion,
-  ])
-
-  const headerTextScene = useMemo<GridTextScene>(() => {
-    if (!hostElement) {
-      return emptyTextScene
-    }
-    return buildGridTextScene({
-      contentMode: 'headers',
-      engine,
-      columnWidths,
-      rowHeights,
-      editingCell: null,
-      gridMetrics,
-      activeHeaderDrag: null,
-      hoveredHeader: null,
-      resizeGuideColumn: null,
-      selectedCell: STATIC_SCENE_SELECTED_CELL,
-      selectedCellSnapshot: null,
-      selectionRange: null,
-      sheetName,
-      visibleItems: residentHeaderItems,
-      visibleRegion: residentHeaderRegion,
-      hostBounds: {
-        left: 0,
-        top: 0,
-        width: 0,
-        height: 0,
-      },
-      getCellBounds: getHeaderCellLocalBounds,
-    })
-  }, [
-    columnWidths,
-    emptyTextScene,
-    engine,
-    getHeaderCellLocalBounds,
-    gridMetrics,
-    hostElement,
-    rowHeights,
-    sheetName,
-    residentHeaderItems,
-    residentHeaderRegion,
-  ])
-
-  const headerPanes = useMemo(() => {
-    noteHeaderPaneBuild()
-    return buildHeaderPaneStates({
-      gpuScene: headerGpuScene,
-      textScene: headerTextScene,
-      sheetName,
-      residentViewport,
-      freezeCols,
-      freezeRows,
-      hostWidth: hostClientWidth,
-      hostHeight: hostClientHeight,
-      gridMetrics,
-      frozenColumnWidth,
-      frozenRowHeight,
-      residentBodyWidth: residentBodyPane?.surfaceSize.width ?? 0,
-      residentBodyHeight: residentBodyPane?.surfaceSize.height ?? 0,
-    })
-  }, [
-    frozenColumnWidth,
-    frozenRowHeight,
-    gridMetrics,
-    headerGpuScene,
-    headerTextScene,
-    hostClientHeight,
-    hostClientWidth,
-    sheetName,
-    residentViewport,
     freezeCols,
     freezeRows,
-    residentBodyPane?.surfaceSize.height,
-    residentBodyPane?.surfaceSize.width,
-  ])
-  const renderHeaderPanes = useMemo(
-    () =>
-      headerPanes.map((pane) =>
-        pane.paneId === 'top-body'
-          ? { ...pane, contentOffset: { x: residentBodyPane?.contentOffset.x ?? 0, y: 0 } }
-          : pane.paneId === 'left-body'
-            ? { ...pane, contentOffset: { x: 0, y: residentBodyPane?.contentOffset.y ?? 0 } }
-            : pane,
-      ),
-    [headerPanes, residentBodyPane?.contentOffset.x, residentBodyPane?.contentOffset.y],
-  )
+    frozenColumnWidth,
+    frozenRowHeight,
+    getHeaderCellLocalBounds,
+    gridMetrics,
+    hostClientHeight,
+    hostClientWidth,
+    hostElement,
+    residentBodyPane,
+    residentHeaderItems,
+    residentHeaderRegion,
+    residentViewport,
+    rowHeights,
+    sheetName,
+  })
   const fillPreviewBounds = useMemo<Rectangle | undefined>(() => {
     if (!fillPreviewRange) {
       return undefined
