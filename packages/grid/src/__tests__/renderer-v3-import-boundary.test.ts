@@ -14,12 +14,11 @@ function collectSourceFiles(path: string): string[] {
 }
 
 describe('renderer v3 import boundary', () => {
-  test('mounted V3 renderer paths do not import renderer-v2 modules', () => {
-    const files = [
-      ...collectSourceFiles(join(GRID_SRC_ROOT, 'renderer-v3')),
-      join(GRID_SRC_ROOT, 'gridHeaderPanes.ts'),
-      join(GRID_SRC_ROOT, 'useWorkbookGridRenderState.ts'),
-    ]
+  test('product grid paths do not import renderer-v2 modules', () => {
+    const files = collectSourceFiles(GRID_SRC_ROOT).filter((file) => {
+      const local = relative(GRID_SRC_ROOT, file)
+      return !local.startsWith('__tests__/') && !local.startsWith('renderer-v2/')
+    })
     const offenders = files.flatMap((file) => {
       const source = readFileSync(file, 'utf8')
       return source.includes('renderer-v2') ? [relative(GRID_SRC_ROOT, file)] : []

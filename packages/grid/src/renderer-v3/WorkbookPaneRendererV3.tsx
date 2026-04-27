@@ -2,7 +2,6 @@ import { memo, useEffect, useRef, useState } from 'react'
 import type { GridGeometrySnapshot } from '../gridGeometry.js'
 import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { GridCameraStore } from '../runtime/gridCameraStore.js'
-import { GridRenderLoop } from './gridRenderLoop.js'
 import {
   createWorkbookTypeGpuBackendV3,
   destroyWorkbookTypeGpuBackendV3,
@@ -11,11 +10,10 @@ import {
   type WorkbookTypeGpuBackendV3,
 } from './typegpu-workbook-backend-v3.js'
 import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
+export { TYPEGPU_V3_ACTIVE_RESOURCE_DEFER_MS, GridDrawSchedulerV3, shouldDeferTypeGpuV3PreloadSync } from './draw-scheduler.js'
+import { GridDrawSchedulerV3 } from './draw-scheduler.js'
 import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
-
-export const TYPEGPU_V3_ACTIVE_RESOURCE_DEFER_MS = 48
-const TYPEGPU_V3_IDLE_PRELOAD_RETRY_MS = 64
 
 export interface WorkbookPaneRendererV3Props {
   readonly active: boolean
@@ -70,22 +68,6 @@ export function resolveTypeGpuV3DrawScrollSnapshot(input: {
   }
 }
 
-export function shouldDeferTypeGpuV3PreloadSync(input: {
-  readonly now: number
-  readonly lastScrollSignalAt: number
-  readonly camera: {
-    readonly updatedAt: number
-    readonly velocityX: number
-    readonly velocityY: number
-  } | null
-}): boolean {
-  const hasMovingCamera =
-    input.camera !== null &&
-    Math.abs(input.camera.velocityX) + Math.abs(input.camera.velocityY) > 0.01 &&
-    input.now - input.camera.updatedAt < TYPEGPU_V3_ACTIVE_RESOURCE_DEFER_MS
-  return hasMovingCamera || input.now - input.lastScrollSignalAt < TYPEGPU_V3_ACTIVE_RESOURCE_DEFER_MS
-}
-
 export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   active,
   cameraStore = null,
@@ -100,9 +82,7 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
 }: WorkbookPaneRendererV3Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const backendRef = useRef<WorkbookTypeGpuBackendV3 | null>(null)
-  const renderLoopRef = useRef<GridRenderLoop | null>(null)
-  const idlePreloadRetryRef = useRef<number | null>(null)
-  const lastScrollSignalAtRef = useRef(0)
+  const drawSchedulerRef = useRef<GridDrawSchedulerV3 | null>(null)
   const drawFrameRef = useRef<() => void>(() => {})
   const activeRef = useRef(active)
   const webGpuReadyRef = useRef(false)
@@ -245,22 +225,11 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
       }
       const latestGeometry = cameraStoreRef.current?.getSnapshot() ?? geometryRef.current
       const camera = latestGeometry?.camera ?? null
-      const now = performance.now()
-      const deferPreloadSync = shouldDeferTypeGpuV3PreloadSync({
+      const scheduler = (drawSchedulerRef.current ??= new GridDrawSchedulerV3())
+      const frameDecision = scheduler.resolveFrame({
         camera,
-        lastScrollSignalAt: lastScrollSignalAtRef.current,
-        now,
+        requestIdlePreloadDraw: () => scheduler.requestDraw(drawFrameRef.current),
       })
-      if (deferPreloadSync) {
-        if (idlePreloadRetryRef.current !== null) {
-          window.clearTimeout(idlePreloadRetryRef.current)
-        }
-        idlePreloadRetryRef.current = window.setTimeout(() => {
-          idlePreloadRetryRef.current = null
-          renderLoopRef.current ??= new GridRenderLoop()
-          renderLoopRef.current.requestDraw(drawFrameRef.current)
-        }, TYPEGPU_V3_IDLE_PRELOAD_RETRY_MS)
-      }
       const overlayBatch = overlayBuilderRef.current && latestGeometry ? overlayBuilderRef.current(latestGeometry) : overlayRef.current
 
       drawWorkbookTypeGpuTileFrameV3({
@@ -268,7 +237,7 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
         headerPanes: headerPanePayloads,
         overlay: overlayBatch ?? null,
         preloadTilePanes: preloadTilePanePayloads,
-        syncPreloadPanes: !deferPreloadSync,
+        syncPreloadPanes: frameDecision.syncPreloadPanes,
         tilePanes: baseTilePanePayloads,
         scrollSnapshot: resolveTypeGpuV3DrawScrollSnapshot({
           fallback: scrollTransformStoreRef.current?.getSnapshot() ?? { tx: 0, ty: 0 },
@@ -280,8 +249,8 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
     }
 
     drawFrameRef.current()
-    renderLoopRef.current ??= new GridRenderLoop()
-    renderLoopRef.current.requestDraw(drawFrameRef.current)
+    const scheduler = (drawSchedulerRef.current ??= new GridDrawSchedulerV3())
+    scheduler.requestDraw(drawFrameRef.current)
   }, [active, headerPanes, overlay, overlayBuilder, preloadTilePanes, surfaceSize, tilePanes, webGpuReady])
 
   useEffect(() => {
@@ -289,9 +258,9 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
       return
     }
     const scheduleDraw = () => {
-      lastScrollSignalAtRef.current = performance.now()
-      renderLoopRef.current ??= new GridRenderLoop()
-      renderLoopRef.current.requestDraw(drawFrameRef.current)
+      const scheduler = (drawSchedulerRef.current ??= new GridDrawSchedulerV3())
+      scheduler.noteInputSignal()
+      scheduler.requestDraw(drawFrameRef.current)
     }
     return scrollTransformStore.subscribe(scheduleDraw)
   }, [active, scrollTransformStore])
@@ -301,9 +270,9 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
       return
     }
     const scheduleDraw = () => {
-      lastScrollSignalAtRef.current = performance.now()
-      renderLoopRef.current ??= new GridRenderLoop()
-      renderLoopRef.current.requestDraw(drawFrameRef.current)
+      const scheduler = (drawSchedulerRef.current ??= new GridDrawSchedulerV3())
+      scheduler.noteInputSignal()
+      scheduler.requestDraw(drawFrameRef.current)
     }
     return cameraStore.subscribe(scheduleDraw)
   }, [active, cameraStore])
@@ -311,12 +280,8 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   useEffect(() => {
     const canvas = canvasRef.current
     return () => {
-      renderLoopRef.current?.cancel()
-      renderLoopRef.current = null
-      if (idlePreloadRetryRef.current !== null) {
-        window.clearTimeout(idlePreloadRetryRef.current)
-        idlePreloadRetryRef.current = null
-      }
+      drawSchedulerRef.current?.cancel()
+      drawSchedulerRef.current = null
       if (canvas) {
         canvas.width = 0
         canvas.height = 0

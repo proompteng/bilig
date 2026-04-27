@@ -354,6 +354,8 @@ Completed in the resident-scene deletion tranche:
   `line-text-quad-buffer.ts`, `pane-layout.ts`, and `gridRenderLoop.ts` now give the mounted V3 renderer its own TypeGPU/layout/text/draw-loop
   primitives instead of importing them from `renderer-v2`. Shared render counters and camera-store state moved to non-V2 ownership, and
   `renderer-v3-import-boundary.test.ts` locks the mounted V3 import boundary.
+- `packages/grid/src/renderer-v3/draw-scheduler.ts` now owns the mounted V3 requestAnimationFrame and idle warm-preload retry decision,
+  moving the first scheduling lane out of `WorkbookPaneRendererV3.tsx`.
 
 Remaining work from this design:
 

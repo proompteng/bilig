@@ -1,6 +1,6 @@
 import type { Viewport } from '@bilig/protocol'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
-import type { GridCameraSnapshot } from './renderer-v2/grid-render-contract.js'
+import type { GridCameraSnapshot } from './grid-render-contract.js'
 import type { getGridMetrics } from './gridMetrics.js'
 import { resolveResidentViewport, resolveVisibleRegionFromScroll } from './workbookGridViewport.js'
 
