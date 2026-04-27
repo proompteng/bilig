@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { parseCellAddress } from '@bilig/formula'
 import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
@@ -7,17 +7,14 @@ import { createGridAxisWorldIndexFromRecords } from './gridAxisWorldIndex.js'
 import { createGridGeometrySnapshotFromAxes } from './gridGeometry.js'
 import { resolveGridScrollSpacerSize } from './gridScrollSurface.js'
 import type { VisibleRegionState } from './gridPointer.js'
-import { resolveGridRenderScrollTransform, sameViewportBounds, sameVisibleRegionWindow } from './gridViewportController.js'
 import { getGridTheme } from './gridPresentation.js'
 import type { GridEngineLike } from './grid-engine.js'
 import type { Rectangle } from './gridTypes.js'
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
-import { hasSelectionTargetChanged, resolveColumnOffset, resolveResidentViewport } from './workbookGridViewport.js'
+import { resolveColumnOffset } from './workbookGridViewport.js'
 import { WorkbookGridScrollStore } from './workbookGridScrollStore.js'
-import { noteGridScrollInput } from './grid-render-counters.js'
 import { GridCameraStore } from './runtime/gridCameraStore.js'
-import { viewportFromVisibleRegion } from './useGridCameraState.js'
 import { useGridElementSize } from './useGridElementSize.js'
 import { GridRuntimeHost } from './runtime/gridRuntimeHost.js'
 import {
@@ -32,13 +29,7 @@ import { useWorkbookAxisResizeState } from './useWorkbookAxisResizeState.js'
 import { useWorkbookInteractionOverlayState } from './useWorkbookInteractionOverlayState.js'
 import { useWorkbookColumnAutofit } from './useWorkbookColumnAutofit.js'
 import { useWorkbookViewportResidencyState } from './useWorkbookViewportResidencyState.js'
-
-function noteVisibleWindowChange(): void {
-  if (typeof window === 'undefined') {
-    return
-  }
-  ;(window as Window & { __biligScrollPerf?: { noteVisibleWindowChange?: () => void } }).__biligScrollPerf?.noteVisibleWindowChange?.()
-}
+import { useWorkbookViewportScrollRuntime } from './useWorkbookViewportScrollRuntime.js'
 
 export function useWorkbookGridRenderState(input: {
   engine: GridEngineLike
@@ -93,9 +84,6 @@ export function useWorkbookGridRenderState(input: {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const focusTargetRef = useRef<HTMLDivElement | null>(null)
   const scrollViewportRef = useRef<HTMLDivElement | null>(null)
-  const autoScrollSelectionRef = useRef<{ sheetName: string; col: number; row: number } | null>(null)
-  const restoredViewportTokenRef = useRef<number | null>(null)
-  const scrollSyncFrameRef = useRef<number | null>(null)
   const scrollTransformStoreRef = useRef<WorkbookGridScrollStore>(new WorkbookGridScrollStore())
   const scrollTransformRef = useRef(scrollTransformStoreRef.current.getSnapshot())
   const gridCameraStoreRef = useRef<GridCameraStore>(new GridCameraStore())
@@ -110,6 +98,7 @@ export function useWorkbookGridRenderState(input: {
     freezeCols,
   })
   const selectedCell = useMemo(() => parseCellAddress(selectedAddr, sheetName), [selectedAddr, sheetName])
+  const selectedItem = useMemo(() => [selectedCell.col, selectedCell.row] as const, [selectedCell.col, selectedCell.row])
   const gridMetrics = useMemo(() => getGridMetrics(), [])
   const dprBucket = typeof window === 'undefined' ? 1 : Math.max(1, Math.ceil(window.devicePixelRatio || 1))
   const shouldUseRemoteRenderTileSource = renderTileSource !== undefined && sheetId !== undefined
@@ -380,144 +369,30 @@ export function useWorkbookGridRenderState(input: {
       sortedRowHeightOverrides,
     ],
   )
-  const syncVisibleRegion = useCallback(() => {
-    const scrollViewport = scrollViewportRef.current
-    if (!scrollViewport) {
-      return
-    }
-    syncRuntimeAxes()
-    const camera = gridRuntimeHost.updateCamera({
-      scrollLeft: scrollViewport.scrollLeft,
-      scrollTop: scrollViewport.scrollTop,
-      viewportWidth: scrollViewport.clientWidth,
-      viewportHeight: scrollViewport.clientHeight,
-      dpr: window.devicePixelRatio || 1,
-      freezeRows,
-      freezeCols,
-      gridMetrics,
-    })
-    gridCameraStore.setSnapshot(
-      createGridGeometrySnapshotFromAxes({
-        columns: columnAxis,
-        dpr: window.devicePixelRatio || 1,
-        freezeCols,
-        freezeRows,
-        gridMetrics,
-        hostHeight: scrollViewport.clientHeight,
-        hostWidth: scrollViewport.clientWidth,
-        previousCamera: gridCameraStore.getSnapshot()?.camera ?? null,
-        rows: rowAxis,
-        scrollLeft: scrollViewport.scrollLeft,
-        scrollTop: scrollViewport.scrollTop,
-        seq: camera.seq,
-        sheetName,
-      }),
-    )
-    const next = camera.visibleRegion
-    const { renderTx, renderTy } = resolveGridRenderScrollTransform({
-      nextVisibleRegion: next,
-      renderViewport: viewport,
-      sortedColumnWidthOverrides,
-      sortedRowHeightOverrides,
-      defaultColumnWidth: gridMetrics.columnWidth,
-      defaultRowHeight: gridMetrics.rowHeight,
-    })
-    scrollTransformRef.current = {
-      renderTx,
-      renderTy,
-      scrollLeft: scrollViewport.scrollLeft,
-      scrollTop: scrollViewport.scrollTop,
-      tx: next.tx,
-      ty: next.ty,
-    }
-    liveVisibleRegionRef.current = next
-    scrollTransformStore.setSnapshot(scrollTransformRef.current)
-    onVisibleViewportChange?.(viewportFromVisibleRegion(next))
-    setVisibleRegion((current) => {
-      if (requiresLiveViewportState) {
-        if (sameVisibleRegionWindow(current, next)) {
-          return current
-        }
-        noteVisibleWindowChange()
-        return next
-      }
-      const currentResidentViewport = resolveResidentViewport(viewportFromVisibleRegion(current))
-      const targetResidentViewport = resolveResidentViewport(viewportFromVisibleRegion(next))
-      if (
-        current.freezeCols === next.freezeCols &&
-        current.freezeRows === next.freezeRows &&
-        sameViewportBounds(currentResidentViewport, targetResidentViewport)
-      ) {
-        return current
-      }
-      noteVisibleWindowChange()
-      return next
-    })
-  }, [
+  useWorkbookViewportScrollRuntime({
     columnAxis,
     freezeCols,
     freezeRows,
-    gridRuntimeHost,
     gridCameraStore,
+    gridRuntimeHost,
     gridMetrics,
+    hostElement,
+    liveVisibleRegionRef,
     onVisibleViewportChange,
     requiresLiveViewportState,
     rowAxis,
+    scrollTransformRef,
     scrollTransformStore,
+    scrollViewportRef,
+    selectedCell: selectedItem,
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
     syncRuntimeAxes,
     viewport,
-  ])
-
-  useEffect(() => {
-    if (!requiresLiveViewportState) {
-      return
-    }
-    setVisibleRegion((current) => {
-      const next = liveVisibleRegionRef.current
-      if (sameVisibleRegionWindow(current, next)) {
-        return current
-      }
-      return next
-    })
-  }, [requiresLiveViewportState])
-
-  useLayoutEffect(() => {
-    const scrollViewport = scrollViewportRef.current
-    if (!scrollViewport) {
-      return
-    }
-
-    syncVisibleRegion()
-    const scheduleVisibleRegionSync = () => {
-      if (scrollSyncFrameRef.current !== null) {
-        return
-      }
-      scrollSyncFrameRef.current = window.requestAnimationFrame(() => {
-        scrollSyncFrameRef.current = null
-        syncVisibleRegion()
-      })
-    }
-    const handleScroll = () => {
-      noteGridScrollInput()
-      syncVisibleRegion()
-    }
-    scrollViewport.addEventListener('scroll', handleScroll, { passive: true })
-    const observer = new ResizeObserver(() => {
-      scheduleVisibleRegionSync()
-    })
-    observer.observe(scrollViewport)
-    return () => {
-      if (scrollSyncFrameRef.current !== null) {
-        window.cancelAnimationFrame(scrollSyncFrameRef.current)
-        scrollSyncFrameRef.current = null
-      }
-      observer.disconnect()
-      scrollViewport.removeEventListener('scroll', handleScroll)
-    }
-  }, [hostElement, syncVisibleRegion])
+    restoreViewportTarget,
+    setVisibleRegion,
+  })
 
   const { preloadDataPanes, renderTilePanes, residentBodyPane, residentDataPanes } = useWorkbookRenderTilePanes({
     columnWidths,
@@ -563,55 +438,6 @@ export function useWorkbookGridRenderState(input: {
     rowHeights,
     sheetName,
   })
-
-  useLayoutEffect(() => {
-    const scrollViewport = scrollViewportRef.current
-    if (!scrollViewport) {
-      return
-    }
-    const previousAutoScrollSelection = autoScrollSelectionRef.current
-    const nextAutoScrollSelection = {
-      sheetName,
-      col: selectedCell.col,
-      row: selectedCell.row,
-    }
-    if (!hasSelectionTargetChanged(previousAutoScrollSelection, nextAutoScrollSelection)) {
-      return
-    }
-    autoScrollSelectionRef.current = nextAutoScrollSelection
-    syncRuntimeAxes()
-    const nextScrollPosition = gridRuntimeHost.resolveScrollForCellIntoView({
-      cell: [selectedCell.col, selectedCell.row],
-      freezeRows,
-      freezeCols,
-      gridMetrics,
-      scrollLeft: scrollViewport.scrollLeft,
-      scrollTop: scrollViewport.scrollTop,
-      viewportHeight: scrollViewport.clientHeight,
-      viewportWidth: scrollViewport.clientWidth,
-    })
-    scrollViewport.scrollLeft = nextScrollPosition.scrollLeft
-    scrollViewport.scrollTop = nextScrollPosition.scrollTop
-  }, [freezeCols, freezeRows, gridRuntimeHost, gridMetrics, selectedCell.col, selectedCell.row, sheetName, syncRuntimeAxes])
-
-  useLayoutEffect(() => {
-    const scrollViewport = scrollViewportRef.current
-    if (!scrollViewport || !restoreViewportTarget) {
-      return
-    }
-    if (restoredViewportTokenRef.current === restoreViewportTarget.token) {
-      return
-    }
-    restoredViewportTokenRef.current = restoreViewportTarget.token
-    syncRuntimeAxes()
-    const { scrollLeft: nextScrollLeft, scrollTop: nextScrollTop } = gridRuntimeHost.resolveScrollPositionForViewport({
-      viewport: restoreViewportTarget.viewport,
-      freezeRows,
-      freezeCols,
-    })
-    scrollViewport.scrollLeft = nextScrollLeft
-    scrollViewport.scrollTop = nextScrollTop
-  }, [freezeCols, freezeRows, gridRuntimeHost, restoreViewportTarget, syncRuntimeAxes])
 
   const { editorPresentation, editorTextAlign, overlayStyle } = useWorkbookEditorOverlayAnchor({
     editorValue,
