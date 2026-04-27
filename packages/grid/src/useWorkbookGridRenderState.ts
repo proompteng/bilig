@@ -637,7 +637,7 @@ export function useWorkbookGridRenderState(input: {
     })
   }, [requiresLiveViewportState])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const scrollViewport = scrollViewportRef.current
     if (!scrollViewport) {
       return
