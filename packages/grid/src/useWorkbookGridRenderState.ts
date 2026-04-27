@@ -2,14 +2,12 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { parseCellAddress } from '@bilig/formula'
 import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
-import { getGridMetrics, getResolvedColumnWidth, getResolvedRowHeight, resolveRowOffset } from './gridMetrics.js'
+import { getGridMetrics } from './gridMetrics.js'
 import type { VisibleRegionState } from './gridPointer.js'
 import { getGridTheme } from './gridPresentation.js'
 import type { GridEngineLike } from './grid-engine.js'
-import type { Rectangle } from './gridTypes.js'
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
-import { resolveColumnOffset } from './workbookGridViewport.js'
 import { useGridElementSize } from './useGridElementSize.js'
 import { useWorkbookHeaderPanes } from './useWorkbookHeaderPanes.js'
 import { useWorkbookRenderTilePanes } from './useWorkbookRenderTilePanes.js'
@@ -20,6 +18,7 @@ import { useWorkbookColumnAutofit } from './useWorkbookColumnAutofit.js'
 import { useWorkbookViewportResidencyState } from './useWorkbookViewportResidencyState.js'
 import { useWorkbookViewportScrollRuntime } from './useWorkbookViewportScrollRuntime.js'
 import { useWorkbookGridGeometryRuntime } from './useWorkbookGridGeometryRuntime.js'
+import { useWorkbookHeaderCellBounds } from './useWorkbookHeaderCellBounds.js'
 
 export function useWorkbookGridRenderState(input: {
   engine: GridEngineLike
@@ -190,47 +189,18 @@ export function useWorkbookGridRenderState(input: {
       shouldUseRemoteRenderTileSource,
       visibleRegion,
     })
-  const getHeaderCellLocalBounds = useCallback(
-    (col: number, row: number): Rectangle | undefined => {
-      if (col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
-        return undefined
-      }
-      return {
-        x:
-          col < freezeCols
-            ? gridMetrics.rowMarkerWidth + resolveColumnOffset(col, sortedColumnWidthOverrides, gridMetrics.columnWidth)
-            : gridMetrics.rowMarkerWidth +
-              frozenColumnWidth +
-              resolveColumnOffset(col, sortedColumnWidthOverrides, gridMetrics.columnWidth) -
-              resolveColumnOffset(residentViewport.colStart, sortedColumnWidthOverrides, gridMetrics.columnWidth),
-        y:
-          row < freezeRows
-            ? gridMetrics.headerHeight + resolveRowOffset(row, sortedRowHeightOverrides, gridMetrics.rowHeight)
-            : gridMetrics.headerHeight +
-              frozenRowHeight +
-              resolveRowOffset(row, sortedRowHeightOverrides, gridMetrics.rowHeight) -
-              resolveRowOffset(residentViewport.rowStart, sortedRowHeightOverrides, gridMetrics.rowHeight),
-        width: getResolvedColumnWidth(columnWidths, col, gridMetrics.columnWidth),
-        height: getResolvedRowHeight(rowHeights, row, gridMetrics.rowHeight),
-      }
-    },
-    [
-      columnWidths,
-      freezeCols,
-      freezeRows,
-      frozenColumnWidth,
-      frozenRowHeight,
-      gridMetrics.columnWidth,
-      gridMetrics.headerHeight,
-      gridMetrics.rowHeight,
-      gridMetrics.rowMarkerWidth,
-      residentViewport.colStart,
-      residentViewport.rowStart,
-      rowHeights,
-      sortedColumnWidthOverrides,
-      sortedRowHeightOverrides,
-    ],
-  )
+  const getHeaderCellLocalBounds = useWorkbookHeaderCellBounds({
+    columnWidths,
+    freezeCols,
+    freezeRows,
+    frozenColumnWidth,
+    frozenRowHeight,
+    gridMetrics,
+    residentViewport,
+    rowHeights,
+    sortedColumnWidthOverrides,
+    sortedRowHeightOverrides,
+  })
   useWorkbookViewportScrollRuntime({
     columnAxis,
     freezeCols,
