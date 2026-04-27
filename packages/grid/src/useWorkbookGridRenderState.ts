@@ -32,10 +32,7 @@ import type { GridEngineLike } from './grid-engine.js'
 import { CompactSelection, type GridSelection, type Item, type Rectangle } from './gridTypes.js'
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 import { collectViewportItems } from './gridViewportItems.js'
-import { buildLocalFixedRenderTiles } from './renderer-v3/local-render-tile-materializer.js'
-import { buildFixedRenderTilePaneStates } from './renderer-v3/render-tile-pane-builder.js'
-import type { GridRenderTile, GridRenderTileSource } from './renderer-v3/render-tile-source.js'
-import type { WorkbookRenderTilePaneState } from './renderer-v3/render-tile-pane-state.js'
+import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
 import { hasSelectionTargetChanged, resolveColumnOffset, resolveResidentViewport } from './workbookGridViewport.js'
 import { WorkbookGridScrollStore } from './workbookGridScrollStore.js'
 import { noteGridScrollInput } from './grid-render-counters.js'
@@ -50,6 +47,7 @@ import {
   createGridRuntimeAxisOverrideCache,
   syncGridRuntimeAxisOverrides,
 } from './runtime/gridRuntimeAxisAdapters.js'
+import { useWorkbookRenderTilePanes } from './useWorkbookRenderTilePanes.js'
 
 function noteVisibleWindowChange(): void {
   if (typeof window === 'undefined') {
@@ -135,10 +133,6 @@ export function useWorkbookGridRenderState(input: {
   const gridRuntimeHostRef = useRef<GridRuntimeHost | null>(null)
   const gridRuntimeAxisCacheRef = useRef(createGridRuntimeAxisOverrideCache())
   const invalidateSceneRef = useRef<() => void>(() => undefined)
-  const retainedFixedRenderTileDataPanesRef = useRef<{
-    readonly sheetId: number
-    readonly panes: readonly WorkbookRenderTilePaneState[]
-  } | null>(null)
   const [sceneRevision, setSceneRevision] = useState(0)
   const [fillPreviewRange, setFillPreviewRange] = useState<Rectangle | null>(null)
   const [isFillHandleDragging, setIsFillHandleDragging] = useState(false)
@@ -673,87 +667,7 @@ export function useWorkbookGridRenderState(input: {
     return engine.subscribeCells(sheetName, visibleAddresses, invalidateScene)
   }, [engine, invalidateScene, sheetName, shouldUseRemoteRenderTileSource, visibleAddresses])
 
-  const [renderTileRevision, setRenderTileRevision] = useState(0)
-  useEffect(() => {
-    if (!renderTileSource || sheetId === undefined) {
-      return
-    }
-    const tileInterest = gridRuntimeHost.buildViewportTileInterest({
-      dprBucket,
-      reason: 'scroll',
-      sheetId,
-      sheetOrdinal: sheetId,
-      viewport: renderTileViewport,
-    })
-    return renderTileSource.subscribeRenderTileDeltas(
-      {
-        ...renderTileViewport,
-        cameraSeq: tileInterest.cameraSeq,
-        dprBucket,
-        initialDelta: 'full',
-        sheetId,
-        sheetName,
-      },
-      () => {
-        setRenderTileRevision((current) => current + 1)
-      },
-    )
-  }, [dprBucket, gridRuntimeHost, renderTileSource, renderTileViewport, sheetId, sheetName])
-  const fixedRenderTileDataPanes = useMemo<readonly WorkbookRenderTilePaneState[] | null>(() => {
-    if (!hostElement) {
-      return null
-    }
-    const tiles: GridRenderTile[] = []
-    const tileSheetId = sheetId ?? 0
-    if (renderTileSource && sheetId !== undefined) {
-      void renderTileRevision
-      const tileKeys = gridRuntimeHost.viewportTileKeys({
-        dprBucket,
-        sheetOrdinal: sheetId,
-        viewport: renderTileViewport,
-      })
-      for (const tileKey of tileKeys) {
-        const tile = renderTileSource.peekRenderTile(tileKey)
-        if (!tile || tile.coord.sheetId !== sheetId) {
-          return null
-        }
-        tiles.push(tile)
-      }
-    } else {
-      void sceneRevision
-      tiles.push(
-        ...buildLocalFixedRenderTiles({
-          cameraSeq: gridRuntimeHost.snapshot().camera.seq,
-          columnWidths,
-          dprBucket,
-          engine,
-          generation: sceneRevision,
-          gridMetrics,
-          rowHeights,
-          sheetId: tileSheetId,
-          sheetName,
-          sortedColumnWidthOverrides,
-          sortedRowHeightOverrides,
-          viewport: renderTileViewport,
-        }),
-      )
-    }
-    const panes = buildFixedRenderTilePaneStates({
-      freezeCols,
-      freezeRows,
-      frozenColumnWidth,
-      frozenRowHeight,
-      gridMetrics,
-      hostHeight: hostClientHeight,
-      hostWidth: hostClientWidth,
-      residentViewport,
-      sortedColumnWidthOverrides,
-      sortedRowHeightOverrides,
-      tiles,
-      visibleViewport: viewport,
-    })
-    return panes.length > 0 ? panes : null
-  }, [
+  const { preloadDataPanes, renderTilePanes, residentBodyPane, residentDataPanes } = useWorkbookRenderTilePanes({
     columnWidths,
     dprBucket,
     engine,
@@ -766,7 +680,6 @@ export function useWorkbookGridRenderState(input: {
     hostClientHeight,
     hostClientWidth,
     hostElement,
-    renderTileRevision,
     renderTileSource,
     renderTileViewport,
     residentViewport,
@@ -776,25 +689,8 @@ export function useWorkbookGridRenderState(input: {
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
-    viewport,
-  ])
-  useEffect(() => {
-    if (sheetId === undefined || !fixedRenderTileDataPanes) {
-      return
-    }
-    retainedFixedRenderTileDataPanesRef.current = {
-      panes: fixedRenderTileDataPanes,
-      sheetId,
-    }
-  }, [fixedRenderTileDataPanes, sheetId])
-  const retainedFixedRenderTileDataPanes =
-    fixedRenderTileDataPanes ??
-    (shouldUseRemoteRenderTileSource && sheetId !== undefined && retainedFixedRenderTileDataPanesRef.current?.sheetId === sheetId
-      ? retainedFixedRenderTileDataPanesRef.current.panes
-      : null)
-  const residentDataPanes = useMemo(() => retainedFixedRenderTileDataPanes ?? [], [retainedFixedRenderTileDataPanes])
-  const residentBodyPane = residentDataPanes.find((pane) => pane.paneId === 'body') ?? null
-  const preloadDataPanes = useMemo<readonly WorkbookRenderTilePaneState[]>(() => [], [])
+    visibleViewport: viewport,
+  })
 
   const headerGpuScene = useMemo<GridGpuScene>(() => {
     if (!hostElement) {
@@ -920,7 +816,6 @@ export function useWorkbookGridRenderState(input: {
       ),
     [headerPanes, residentBodyPane?.contentOffset.x, residentBodyPane?.contentOffset.y],
   )
-  const renderTilePanes = residentDataPanes
   const fillPreviewBounds = useMemo<Rectangle | undefined>(() => {
     if (!fillPreviewRange) {
       return undefined
