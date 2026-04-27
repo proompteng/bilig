@@ -10,6 +10,7 @@ import {
 } from '../renderer-v2/scene-packet-v2.js'
 import { WorkbookPaneBufferCache, type WorkbookPaneBufferEntry } from '../renderer-v2/pane-buffer-cache.js'
 import { TileGpuCache, buildTileGpuCacheKey } from '../renderer-v2/tile-gpu-cache.js'
+import { resolveWorkbookPaneBufferKey } from '../renderer-v2/typegpu-buffer-pool.js'
 import { resolveTypeGpuDrawPanes } from '../renderer-v2/workbook-typegpu-backend.js'
 import type { WorkbookRenderPaneState } from '../renderer-v2/pane-scene-types.js'
 
@@ -59,8 +60,9 @@ function createPane(packet: GridScenePacketV2): WorkbookRenderPaneState {
   }
 }
 
-function markReady(cache: WorkbookPaneBufferCache, packet: GridScenePacketV2): WorkbookPaneBufferEntry {
-  const entry = cache.get(buildTileGpuCacheKey(packet))
+function markReady(cache: WorkbookPaneBufferCache, pane: WorkbookRenderPaneState): WorkbookPaneBufferEntry {
+  const entry = cache.get(resolveWorkbookPaneBufferKey(pane))
+  const packet = pane.packedScene
   entry.rectSignature = `rect:${packet.generation}`
   entry.textSignature = `text:${packet.generation}`
   return entry
@@ -73,7 +75,7 @@ describe('workbook typegpu backend tile fallback', () => {
     const paneBuffers = new WorkbookPaneBufferCache()
     const tileCache = new TileGpuCache()
     tileCache.upsert(packet)
-    markReady(paneBuffers, packet)
+    markReady(paneBuffers, pane)
 
     expect(resolveTypeGpuDrawPanes({ paneBuffers, panes: [pane], tileCache })[0]?.packedScene).toBe(packet)
   })
@@ -87,7 +89,7 @@ describe('workbook typegpu backend tile fallback', () => {
     const onTileMiss = vi.fn()
     tileCache.upsert(stalePacket)
     tileCache.upsert(exactPacket)
-    markReady(paneBuffers, stalePacket)
+    markReady(paneBuffers, createPane(stalePacket))
 
     expect(resolveTypeGpuDrawPanes({ onTileMiss, paneBuffers, panes: [pane], tileCache })[0]?.packedScene).toBe(exactPacket)
     expect(onTileMiss).toHaveBeenCalledWith(buildTileGpuCacheKey(exactPacket))
@@ -117,9 +119,23 @@ describe('workbook typegpu backend tile fallback', () => {
     const tileCache = new TileGpuCache()
     const onTileMiss = vi.fn()
     tileCache.upsert(stalePacket)
-    markReady(paneBuffers, stalePacket)
+    markReady(paneBuffers, createPane(stalePacket))
 
     expect(resolveTypeGpuDrawPanes({ onTileMiss, paneBuffers, panes: [pane], tileCache })[0]?.packedScene).toBe(exactPacket)
     expect(onTileMiss).toHaveBeenCalledWith(buildTileGpuCacheKey(exactPacket))
+  })
+
+  test('keeps resource keys distinct for separate placements of the same content tile', () => {
+    const packet = createPacket(2)
+    const bodyPane = createPane(packet)
+    const frozenPane: WorkbookRenderPaneState = {
+      ...bodyPane,
+      frame: { height: 48, width: 480, x: 46, y: 24 },
+      paneId: 'top:0:0',
+      scrollAxes: { x: true, y: false },
+    }
+
+    expect(buildTileGpuCacheKey(bodyPane.packedScene)).toBe(buildTileGpuCacheKey(frozenPane.packedScene))
+    expect(resolveWorkbookPaneBufferKey(bodyPane)).not.toBe(resolveWorkbookPaneBufferKey(frozenPane))
   })
 })

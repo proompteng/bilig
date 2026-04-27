@@ -61,7 +61,7 @@ export function syncTypeGpuPaneResources(input: {
 }
 
 export function resolveWorkbookPaneBufferKey(pane: WorkbookRenderPaneState): string {
-  return buildTileGpuCacheKey(pane.packedScene)
+  return `${pane.paneId}:${buildTileGpuCacheKey(pane.packedScene)}`
 }
 
 export function ensurePaneSurfaceBindings(artifacts: TypeGpuRendererArtifacts, paneCache: WorkbookPaneBufferEntry): void {

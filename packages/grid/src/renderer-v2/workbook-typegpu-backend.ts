@@ -10,7 +10,7 @@ import {
   type TypeGpuRendererArtifacts,
 } from './typegpu-backend.js'
 import { drawTypeGpuPanes, type TypeGpuDrawSurface } from './typegpu-render-pass.js'
-import { syncTypeGpuPaneResources } from './typegpu-buffer-pool.js'
+import { resolveWorkbookPaneBufferKey, syncTypeGpuPaneResources } from './typegpu-buffer-pool.js'
 import { createTypeGpuSurfaceState, syncTypeGpuCanvasSurface, type TypeGpuSurfaceState } from './typegpu-surface.js'
 import { buildTileGpuCacheKey, TileGpuCache, syncTileGpuCacheFromPanes } from './tile-gpu-cache.js'
 import type { GridScenePacketV2 } from './scene-packet-v2.js'
@@ -111,19 +111,20 @@ export function resolveTypeGpuDrawPanes(input: {
 }): readonly WorkbookRenderPaneState[] {
   return input.panes.map((pane) => {
     const packedScene = pane.packedScene
-    const exactKey = buildTileGpuCacheKey(packedScene)
-    const exact = input.paneBuffers.peek(exactKey)
+    const exactTileKey = buildTileGpuCacheKey(packedScene)
+    const exact = input.paneBuffers.peek(resolveWorkbookPaneBufferKey(pane))
     if (exact && isPaneDrawReady(exact, pane)) {
       return pane
     }
-    const stale = input.tileCache.findStaleValid(packedScene.key, { excludeKey: exactKey })
+    const stale = input.tileCache.findStaleValid(packedScene.key, { excludeKey: exactTileKey })
     if (stale && hasCompatiblePaneOrigin(stale.packet, packedScene)) {
-      const staleEntry = input.paneBuffers.peek(stale.key)
-      if (staleEntry && isPaneDrawReady(staleEntry, { ...pane, packedScene: stale.packet })) {
-        return { ...pane, packedScene: stale.packet }
+      const stalePane = { ...pane, packedScene: stale.packet }
+      const staleEntry = input.paneBuffers.peek(resolveWorkbookPaneBufferKey(stalePane))
+      if (staleEntry && isPaneDrawReady(staleEntry, stalePane)) {
+        return stalePane
       }
     }
-    input.onTileMiss?.(exactKey)
+    input.onTileMiss?.(exactTileKey)
     return pane
   })
 }
@@ -150,7 +151,7 @@ function mergePaneLists(
   const result: WorkbookRenderPaneState[] = []
   const seen = new Set<string>()
   for (const pane of [...primary, ...secondary]) {
-    const key = buildTileGpuCacheKey(pane.packedScene)
+    const key = resolveWorkbookPaneBufferKey(pane)
     if (seen.has(key)) {
       continue
     }
