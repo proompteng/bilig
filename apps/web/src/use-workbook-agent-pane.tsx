@@ -150,11 +150,12 @@ export function useWorkbookAgentPane(input: {
   readonly documentId: string
   readonly enabled: boolean
   readonly getContext: () => WorkbookAgentUiContext
+  readonly applyContext?: (context: WorkbookAgentUiContext) => void
   readonly previewCommandBundle: (bundle: WorkbookAgentCommandBundle) => Promise<WorkbookAgentPreviewSummary>
   readonly zero?: ZeroWorkbookAgentSource
   readonly zeroEnabled?: boolean
 }) {
-  const { currentUserId, documentId, enabled, getContext, previewCommandBundle, zero, zeroEnabled = false } = input
+  const { currentUserId, documentId, enabled, getContext, applyContext, previewCommandBundle, zero, zeroEnabled = false } = input
   const [snapshot, setSnapshot] = useState<WorkbookAgentThreadSnapshot | null>(null)
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -171,6 +172,7 @@ export function useWorkbookAgentPane(input: {
   const eventSourceRef = useRef<EventSource | null>(null)
   const recoveringStreamRef = useRef(false)
   const lastContextKeyRef = useRef<string>('')
+  const lastAppliedSnapshotContextKeyRef = useRef<string>('')
   const lastDraftKeyRef = useRef<string | null>(null)
   const getContextRef = useRef(getContext)
   const activeDraftKey = draftKey(snapshot?.threadId ?? null, threadScope)
@@ -376,6 +378,13 @@ export function useWorkbookAgentPane(input: {
     (nextSnapshot: WorkbookAgentThreadSnapshot) => {
       setSnapshot(nextSnapshot)
       setThreadScope(nextSnapshot.scope)
+      if (nextSnapshot.context && applyContext) {
+        const nextContextKey = JSON.stringify(nextSnapshot.context)
+        if (lastAppliedSnapshotContextKeyRef.current !== nextContextKey) {
+          lastAppliedSnapshotContextKeyRef.current = nextContextKey
+          applyContext(nextSnapshot.context)
+        }
+      }
       persistStoredSession(documentId, {
         threadId: nextSnapshot.threadId,
       })
@@ -383,7 +392,7 @@ export function useWorkbookAgentPane(input: {
         threadId: nextSnapshot.threadId,
       }
     },
-    [documentId],
+    [applyContext, documentId],
   )
 
   const connectStream = useCallback(

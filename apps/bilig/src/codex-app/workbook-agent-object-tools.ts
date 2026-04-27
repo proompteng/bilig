@@ -28,6 +28,7 @@ import {
 } from './workbook-agent-selector-tooling.js'
 import { resolveWorkbookSelector, workbookSemanticSelectorSchema, type WorkbookSemanticSelector } from './workbook-selector-resolver.js'
 import type { WorkbookRuntime } from '../workbook-runtime/runtime-manager.js'
+import { normalizeWorkbookAgentUiContext } from './workbook-agent-inspection.js'
 
 const literalInputSchema = z.union([z.string(), z.number(), z.boolean(), z.null()])
 
@@ -678,7 +679,9 @@ export async function handleWorkbookAgentObjectToolCall(
     case WORKBOOK_AGENT_TOOL_NAMES.updateNamedRange: {
       const args = namedRangeMutationArgsSchema.parse(request.arguments)
       const value = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) =>
-        args.selector ? definedNameValueFromSelector(args.selector, runtime, context.uiContext) : args.value!,
+        args.selector
+          ? definedNameValueFromSelector(args.selector, runtime, normalizeWorkbookAgentUiContext(runtime, context.uiContext))
+          : args.value!,
       )
       return await stageCommandResult(context, {
         kind: 'upsertDefinedName',
@@ -702,12 +705,13 @@ export async function handleWorkbookAgentObjectToolCall(
     case WORKBOOK_AGENT_TOOL_NAMES.resizeTable: {
       const args = tableMutationArgsSchema.parse(request.arguments)
       const table = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
+        const uiContext = normalizeWorkbookAgentUiContext(runtime, context.uiContext)
         const existingTable =
           args.selector?.kind === 'table'
             ? resolveWorkbookSelector({
                 runtime,
                 selector: args.selector,
-                uiContext: context.uiContext,
+                uiContext,
               }).table
             : null
         const resolved = resolveRangeOrSelectorRequest({
@@ -716,7 +720,7 @@ export async function handleWorkbookAgentObjectToolCall(
             ...(args.range ? { range: args.range } : {}),
             ...(args.selector ? { selector: args.selector } : {}),
           },
-          uiContext: context.uiContext,
+          uiContext,
         })
         return normalizeTableCommand({
           name: args.name,
@@ -744,13 +748,14 @@ export async function handleWorkbookAgentObjectToolCall(
     case WORKBOOK_AGENT_TOOL_NAMES.updatePivotTable: {
       const args = pivotMutationArgsSchema.parse(request.arguments)
       const pivot = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
+        const uiContext = normalizeWorkbookAgentUiContext(runtime, context.uiContext)
         const resolved = resolveRangeOrSelectorRequest({
           runtime,
           args: {
             ...(args.range ? { range: args.range } : {}),
             ...(args.selector ? { selector: args.selector } : {}),
           },
-          uiContext: context.uiContext,
+          uiContext,
         })
         const normalizedRange = resolved.range
         return {
@@ -786,13 +791,14 @@ export async function handleWorkbookAgentObjectToolCall(
     case WORKBOOK_AGENT_TOOL_NAMES.updateChart: {
       const args = chartMutationArgsSchema.parse(request.arguments)
       const chart = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
+        const uiContext = normalizeWorkbookAgentUiContext(runtime, context.uiContext)
         const resolved = resolveRangeOrSelectorRequest({
           runtime,
           args: {
             ...(args.range ? { range: args.range } : {}),
             ...(args.selector ? { selector: args.selector } : {}),
           },
-          uiContext: context.uiContext,
+          uiContext,
         })
         return {
           id: args.id,

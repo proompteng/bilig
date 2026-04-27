@@ -18,6 +18,7 @@ export function createSingleCellSelectionSnapshot(selection: WorkerRuntimeSelect
 export function buildWorkbookAgentContext(input: {
   readonly selection: GridSelectionSnapshot
   readonly viewport: Viewport
+  readonly rendered?: WorkbookAgentUiContext['rendered']
 }): WorkbookAgentUiContext {
   return {
     selection: {
@@ -29,5 +30,6 @@ export function buildWorkbookAgentContext(input: {
       },
     },
     viewport: input.viewport,
+    ...(input.rendered !== undefined ? { rendered: input.rendered } : {}),
   }
 }

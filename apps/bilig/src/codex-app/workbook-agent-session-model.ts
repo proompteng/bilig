@@ -1,11 +1,48 @@
 import { normalizeWorkbookAgentToolName, type CodexThread, type CodexThreadItem } from '@bilig/agent-api'
-import type { WorkbookAgentTextEntryKind, WorkbookAgentTimelineCitation, WorkbookAgentTimelineEntry } from '@bilig/contracts'
+import type {
+  WorkbookAgentTextEntryKind,
+  WorkbookAgentTimelineCitation,
+  WorkbookAgentTimelineEntry,
+  WorkbookAgentUiContext,
+} from '@bilig/contracts'
 import { z } from 'zod'
 
-const workbookAgentUiContextSchema = z.object({
+const workbookAgentRenderedRangeSchema = z.object({
+  range: z.object({
+    sheetName: z.string().min(1),
+    startAddress: z.string().min(1),
+    endAddress: z.string().min(1),
+  }),
+  rowCount: z.number().int().nonnegative(),
+  columnCount: z.number().int().nonnegative(),
+  cellCount: z.number().int().nonnegative(),
+  truncated: z.boolean(),
+  rows: z.array(
+    z.array(
+      z.object({
+        address: z.string().min(1),
+        input: z.unknown(),
+        value: z.unknown(),
+        formula: z.string().nullable(),
+        displayFormat: z.string().nullable(),
+        styleId: z.string().nullable(),
+        numberFormatId: z.string().nullable(),
+        style: z.unknown(),
+      }),
+    ),
+  ),
+})
+
+const workbookAgentUiContextSchema: z.ZodType<WorkbookAgentUiContext> = z.object({
   selection: z.object({
     sheetName: z.string().min(1),
     address: z.string().min(1),
+    range: z
+      .object({
+        startAddress: z.string().min(1),
+        endAddress: z.string().min(1),
+      })
+      .optional(),
   }),
   viewport: z.object({
     rowStart: z.number().int().nonnegative(),
@@ -13,6 +50,14 @@ const workbookAgentUiContextSchema = z.object({
     colStart: z.number().int().nonnegative(),
     colEnd: z.number().int().nonnegative(),
   }),
+  rendered: z
+    .object({
+      capturedAtUnixMs: z.number(),
+      batchId: z.number().nullable(),
+      selection: workbookAgentRenderedRangeSchema.nullable(),
+      visibleRange: workbookAgentRenderedRangeSchema.nullable(),
+    })
+    .optional(),
 })
 
 export const createSessionBodySchema = z.object({

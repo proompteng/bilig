@@ -135,6 +135,7 @@ export function useWorkbookAppPanels(input: {
   changesPanel: ReactNode
   selectAddress: (sheetName: string, address: string) => void
   getAgentContext: WorkbookAgentContextGetter
+  applyAgentContext?: (context: ReturnType<WorkbookAgentContextGetter>) => void
   previewAgentCommandBundle: WorkbookAgentPreviewCommandBundle
 }) {
   const {
@@ -142,6 +143,7 @@ export function useWorkbookAppPanels(input: {
     changesPanel,
     currentUserId,
     documentId,
+    applyAgentContext,
     getAgentContext,
     presenceClientId,
     previewAgentCommandBundle,
@@ -181,6 +183,7 @@ export function useWorkbookAppPanels(input: {
     documentId,
     enabled: runtimeReady,
     getContext: getAgentContext,
+    ...(applyAgentContext ? { applyContext: applyAgentContext } : {}),
     previewCommandBundle: previewAgentCommandBundle,
     zero,
     zeroEnabled: runtimeReady && zeroConfigured && remoteSyncAvailable,

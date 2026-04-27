@@ -41,8 +41,16 @@ const writeCellInputSchema = z.union([
   z.number(),
   z.boolean(),
   z.null(),
-  z.object({ value: z.union([z.string(), z.number(), z.boolean(), z.null()]) }),
-  z.object({ formula: z.string().min(1) }),
+  z.discriminatedUnion('type', [
+    z.object({ type: z.literal('text'), value: z.string() }).strict(),
+    z.object({ type: z.literal('number'), value: z.union([z.string(), z.number()]) }).strict(),
+    z.object({ type: z.literal('date'), value: z.union([z.string(), z.number()]) }).strict(),
+    z.object({ type: z.literal('boolean'), value: z.union([z.string(), z.boolean()]) }).strict(),
+    z.object({ type: z.literal('blank') }).strict(),
+    z.object({ type: z.literal('formula'), formula: z.string().min(1) }).strict(),
+  ]),
+  z.object({ value: z.union([z.string(), z.number(), z.boolean(), z.null()]) }).strict(),
+  z.object({ formula: z.string().min(1) }).strict(),
 ])
 
 export const writeRangeToolArgsSchema = z.union([

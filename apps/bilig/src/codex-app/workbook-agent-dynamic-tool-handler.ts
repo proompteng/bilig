@@ -10,7 +10,8 @@ import type { SessionIdentity } from '../http/session.js'
 import type { ZeroSyncService } from '../zero/service.js'
 import { handleWorkbookAgentToolCall, type WorkbookAgentStartWorkflowRequest } from './workbook-agent-tools.js'
 import { createWorkbookAgentServiceError } from '../workbook-agent-errors.js'
-import { type WorkbookAgentThreadState, toContextRef } from './workbook-agent-service-shared.js'
+import { cloneUiContext, type WorkbookAgentThreadState, toContextRef } from './workbook-agent-service-shared.js'
+import { normalizeWorkbookAgentUiContext } from './workbook-agent-inspection.js'
 
 export function createWorkbookAgentDynamicToolHandler(input: {
   zeroSyncService: ZeroSyncService
@@ -19,11 +20,6 @@ export function createWorkbookAgentDynamicToolHandler(input: {
   resolveTurnActorUserId: (sessionState: WorkbookAgentThreadState, turnId: string) => string
   resolveTurnContext: (sessionState: WorkbookAgentThreadState, turnId: string) => WorkbookAgentThreadState['durable']['context']
   stageReviewBundle: (
-    sessionState: WorkbookAgentThreadState,
-    turnId: string,
-    bundle: ReturnType<typeof appendWorkbookAgentCommandToBundle>,
-  ) => void
-  queuePrivateTurnBundle: (
     sessionState: WorkbookAgentThreadState,
     turnId: string,
     bundle: ReturnType<typeof appendWorkbookAgentCommandToBundle>,
@@ -51,7 +47,16 @@ export function createWorkbookAgentDynamicToolHandler(input: {
   return async (request: CodexDynamicToolCallRequest) => {
     const sessionState = input.getSessionByThreadId(request.threadId)
     const requestActorUserId = input.resolveTurnActorUserId(sessionState, request.turnId)
-    const requestContext = input.resolveTurnContext(sessionState, request.turnId)
+    const rawRequestContext = input.resolveTurnContext(sessionState, request.turnId)
+    const requestContext = await input.zeroSyncService.inspectWorkbook(sessionState.documentId, (runtime) =>
+      normalizeWorkbookAgentUiContext(runtime, rawRequestContext),
+    )
+    if (JSON.stringify(rawRequestContext) !== JSON.stringify(requestContext)) {
+      sessionState.durable.context = cloneUiContext(requestContext)
+      sessionState.live.turnContextByTurn.set(request.turnId, cloneUiContext(requestContext))
+      await input.persistSessionState(sessionState)
+      input.emitSnapshot(sessionState.threadId)
+    }
     return handleWorkbookAgentToolCall(
       {
         documentId: sessionState.documentId,
@@ -61,14 +66,17 @@ export function createWorkbookAgentDynamicToolHandler(input: {
         },
         uiContext: requestContext,
         zeroSyncService: input.zeroSyncService,
+        updateUiContext: async (nextContext) => {
+          sessionState.durable.context = cloneUiContext(nextContext)
+          sessionState.live.turnContextByTurn.set(request.turnId, cloneUiContext(nextContext))
+          await input.persistSessionState(sessionState)
+          input.emitSnapshot(sessionState.threadId)
+        },
         stageCommand: async (command) => {
           const currentReviewBundle = sessionState.durable.reviewQueueItems[0]
             ? toWorkbookAgentCommandBundle(sessionState.durable.reviewQueueItems[0])
             : null
-          const previousBundle =
-            sessionState.scope === 'private'
-              ? (sessionState.live.stagedPrivateBundleByTurn.get(request.turnId) ?? currentReviewBundle)
-              : currentReviewBundle
+          const previousBundle = sessionState.scope === 'private' ? null : currentReviewBundle
           const baseRevision = await input.zeroSyncService.getWorkbookHeadRevision(sessionState.documentId)
           const bundle = appendWorkbookAgentCommandToBundle({
             previousBundle,
@@ -81,14 +89,6 @@ export function createWorkbookAgentDynamicToolHandler(input: {
             command,
             now: input.now(),
           })
-          if (sessionState.scope === 'private' && input.shouldApplyToolBundleImmediately(sessionState, bundle)) {
-            input.queuePrivateTurnBundle(sessionState, request.turnId, bundle)
-            return {
-              bundle,
-              executionRecord: null,
-              disposition: 'queuedForTurnApply',
-            }
-          }
           if (input.shouldApplyToolBundleImmediately(sessionState, bundle)) {
             const executionRecord = await input.applyToolBundleAutomatically({
               sessionState,

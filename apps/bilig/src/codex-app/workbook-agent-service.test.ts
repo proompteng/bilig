@@ -2281,10 +2281,17 @@ describe('workbook agent service', () => {
     })
     await engine.ready()
     engine.createSheet('Revenue')
-    const applyAgentCommandBundle = vi.fn(async (_documentId, _bundle, preview) => ({
-      revision: 9,
-      preview,
-    }))
+    const applyAgentCommandBundle = vi.fn(async (_documentId, bundle: WorkbookAgentCommandBundle, preview) => {
+      for (const command of bundle.commands) {
+        if (command.kind === 'renameSheet') {
+          engine.renameSheet(command.currentName, command.nextName)
+        }
+      }
+      return {
+        revision: 9,
+        preview,
+      }
+    })
     const appendWorkbookAgentRun = vi.fn(async () => undefined)
     const service = createWorkbookAgentService(
       createZeroSyncStub({
@@ -2387,6 +2394,8 @@ describe('workbook agent service', () => {
           appliedBy: 'auto',
         }),
       ])
+      expect(snapshot.context?.selection.sheetName).toBe('Forecast')
+      expect(JSON.stringify(snapshot.context)).not.toContain('Revenue')
     } finally {
       await service.close()
     }
@@ -2710,45 +2719,11 @@ describe('workbook agent service', () => {
       const output = result?.contentItems.find((item) => item.type === 'inputText')
       expect(output?.type).toBe('inputText')
       const text = output && 'text' in output ? output.text : ''
-      expect(text).toContain('"queuedForTurnApply": true')
+      expect(text).toContain('"applied": true')
+      expect(text).toContain('"staged": false')
       expect(text).toContain('"reviewQueued": false')
-
-      const queuedSnapshot = service.getSnapshot({
-        documentId: 'doc-1',
-        threadId: 'thr-test',
-        session: {
-          userID: 'alex@example.com',
-          roles: ['editor'],
-        },
-      })
-      expect(queuedSnapshot.reviewQueueItems).toEqual([])
-      expect(queuedSnapshot.executionRecords).toEqual([])
-
-      fakeCodex.emit({
-        method: 'turn/completed',
-        params: {
-          threadId: 'thr-test',
-          turn: {
-            id: 'turn-1',
-            status: 'completed',
-            items: [],
-            error: null,
-          },
-        },
-      })
-
-      await vi.waitFor(() => {
-        expect(
-          service.getSnapshot({
-            documentId: 'doc-1',
-            threadId: 'thr-test',
-            session: {
-              userID: 'alex@example.com',
-              roles: ['editor'],
-            },
-          }).executionRecords,
-        ).toHaveLength(1)
-      })
+      expect(text).toContain('"revision": 7')
+      expect(text).not.toContain('queuedForTurnApply')
 
       const snapshot = service.getSnapshot({
         documentId: 'doc-1',

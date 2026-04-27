@@ -15,6 +15,7 @@ export interface WorkbookFormulaIssue {
   readonly address: string
   readonly formula: string
   readonly valueText: string
+  readonly status: 'actionable' | 'compatibilityWarning'
   readonly issueKinds: readonly ('error' | 'cycle' | 'unsupported')[]
   readonly errorText: string | null
   readonly mode: 'literal' | 'wasm' | 'js'
@@ -29,9 +30,13 @@ export interface WorkbookFormulaIssueReport {
     readonly errorCount: number
     readonly cycleCount: number
     readonly unsupportedCount: number
+    readonly actionableIssueCount: number
+    readonly compatibilityWarningCount: number
     readonly truncated: boolean
   }
   readonly issues: readonly WorkbookFormulaIssue[]
+  readonly actionableIssues: readonly WorkbookFormulaIssue[]
+  readonly compatibilityWarnings: readonly WorkbookFormulaIssue[]
 }
 
 export interface WorkbookSearchMatch {
@@ -456,11 +461,13 @@ function getFormulaIssueReport(runtime: WorkbookRuntime): WorkbookFormulaIssueRe
       if (issueKinds.length === 0) {
         continue
       }
+      const status = issueKinds.includes('error') || issueKinds.includes('cycle') ? 'actionable' : 'compatibilityWarning'
       issues.push({
         sheetName: sheet.name,
         address: cell.address,
         formula: `=${cell.formula}`,
         valueText: valueToText(explanation.value),
+        status,
         issueKinds,
         errorText:
           explanation.value.tag === ValueTag.Error && typeof explanation.value.code === 'number'
@@ -491,6 +498,8 @@ function getFormulaIssueReport(runtime: WorkbookRuntime): WorkbookFormulaIssueRe
     return left.address.localeCompare(right.address, undefined, { numeric: true })
   })
 
+  const actionableIssues = issues.filter((issue) => issue.status === 'actionable')
+  const compatibilityWarnings = issues.filter((issue) => issue.status === 'compatibilityWarning')
   const report: WorkbookFormulaIssueReport = {
     summary: {
       scannedFormulaCells,
@@ -498,9 +507,13 @@ function getFormulaIssueReport(runtime: WorkbookRuntime): WorkbookFormulaIssueRe
       errorCount,
       cycleCount,
       unsupportedCount,
+      actionableIssueCount: actionableIssues.length,
+      compatibilityWarningCount: compatibilityWarnings.length,
       truncated: false,
     },
     issues,
+    actionableIssues,
+    compatibilityWarnings,
   }
   formulaIssueCache.set(runtime.engine, {
     headRevision: runtime.headRevision,
@@ -628,6 +641,9 @@ export function findWorkbookFormulaIssues(
   const cached = getFormulaIssueReport(runtime)
   const filteredIssues =
     typeof input.sheetName === 'string' ? cached.issues.filter((issue) => issue.sheetName === input.sheetName) : cached.issues
+  const limitedIssues = filteredIssues.slice(0, limit)
+  const actionableIssues = limitedIssues.filter((issue) => issue.status === 'actionable')
+  const compatibilityWarnings = limitedIssues.filter((issue) => issue.status === 'compatibilityWarning')
   return {
     summary: {
       ...cached.summary,
@@ -635,9 +651,13 @@ export function findWorkbookFormulaIssues(
       errorCount: filteredIssues.filter((issue) => issue.issueKinds.includes('error')).length,
       cycleCount: filteredIssues.filter((issue) => issue.issueKinds.includes('cycle')).length,
       unsupportedCount: filteredIssues.filter((issue) => issue.issueKinds.includes('unsupported')).length,
+      actionableIssueCount: filteredIssues.filter((issue) => issue.status === 'actionable').length,
+      compatibilityWarningCount: filteredIssues.filter((issue) => issue.status === 'compatibilityWarning').length,
       truncated: filteredIssues.length > limit,
     },
-    issues: filteredIssues.slice(0, limit),
+    issues: limitedIssues,
+    actionableIssues,
+    compatibilityWarnings,
   }
 }
 

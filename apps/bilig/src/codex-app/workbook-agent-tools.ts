@@ -13,6 +13,7 @@ import type {
   WorkbookAgentCommand,
   WorkbookAgentCommandBundle,
   WorkbookAgentExecutionRecord,
+  WorkbookAgentWriteCellInput,
 } from '@bilig/agent-api'
 import { setRangeNumberFormatArgsSchema } from '@bilig/zero-sync'
 import type { WorkbookAgentUiContext, WorkbookAgentWorkflowRun, WorkbookViewport } from '@bilig/contracts'
@@ -25,7 +26,13 @@ import {
   summarizeWorkbookStructure,
   traceWorkbookDependencies,
 } from './workbook-agent-comprehension.js'
-import { inspectWorkbookCell, inspectWorkbookContext, inspectWorkbookRange } from './workbook-agent-inspection.js'
+import {
+  inspectWorkbookCell,
+  inspectWorkbookContext,
+  inspectWorkbookRange,
+  normalizeWorkbookAgentUiContext,
+} from './workbook-agent-inspection.js'
+import { verifyWorkbookInvariants } from './workbook-agent-audit.js'
 import { handleWorkbookAgentAnnotationToolCall, workbookAgentAnnotationToolSpecs } from './workbook-agent-annotation-tools.js'
 import { handleWorkbookAgentAuditToolCall, workbookAgentAuditToolSpecs } from './workbook-agent-audit-tools.js'
 import {
@@ -188,6 +195,25 @@ const traceDependenciesToolArgsSchema = z.object({
   direction: z.enum(['precedents', 'dependents', 'both']).optional(),
   depth: z.number().int().positive().max(4).optional(),
 })
+const setActiveSheetToolArgsSchema = z.object({
+  sheetName: z.string().trim().min(1),
+  address: z.string().trim().min(1).optional(),
+})
+const setSelectionToolArgsSchema = z.object({
+  sheetName: z.string().trim().min(1).optional(),
+  address: z.string().trim().min(1),
+  endAddress: z.string().trim().min(1).optional(),
+})
+const readRenderedRangeToolArgsSchema = z.object({
+  sheetName: z.string().trim().min(1),
+  startAddress: z.string().trim().min(1),
+  endAddress: z.string().trim().min(1),
+})
+const applyAndVerifyToolArgsSchema = z.object({
+  range: cellRangeRefSchema.optional(),
+  includeFormulaIssues: z.boolean().optional(),
+  includeInvariants: z.boolean().optional(),
+})
 
 const clearRangeToolArgsSchema = rangeOrSelectorSchema
 const formatRangeToolArgsSchema = z
@@ -285,6 +311,141 @@ function normalizeNumberFormatInput(input: FormatRangeNumberFormatInput): CellNu
   return normalizeCellNumberFormatPreset(preset)
 }
 
+function isNumericText(value: string): boolean {
+  const trimmed = value.trim()
+  if (trimmed.length === 0 || trimmed !== value) {
+    return false
+  }
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(trimmed)) {
+    return false
+  }
+  const unsigned = trimmed.replace(/^[+-]/, '')
+  if (/^0\d/.test(unsigned)) {
+    return false
+  }
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed)
+}
+
+function coerceNumericText(value: string): number | string {
+  return isNumericText(value) ? Number(value) : value
+}
+
+function excelDateSerialFromIsoDate(value: string): number {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) {
+    throw new Error(`Date value must use YYYY-MM-DD format, received ${value}`)
+  }
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const timestamp = Date.UTC(year, month - 1, day)
+  const date = new Date(timestamp)
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    throw new Error(`Invalid date value ${value}`)
+  }
+  const excelEpoch = Date.UTC(1899, 11, 30)
+  return Math.trunc((timestamp - excelEpoch) / 86_400_000)
+}
+
+function normalizeBooleanInput(value: string | boolean): boolean {
+  if (typeof value === 'boolean') {
+    return value
+  }
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'true') {
+    return true
+  }
+  if (normalized === 'false') {
+    return false
+  }
+  throw new Error(`Boolean value must be true or false, received ${value}`)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function normalizeWriteCellInput(cellInput: unknown): WorkbookAgentWriteCellInput {
+  if (cellInput === null || typeof cellInput === 'number' || typeof cellInput === 'boolean') {
+    return cellInput
+  }
+  if (typeof cellInput === 'string') {
+    return cellInput.startsWith('=')
+      ? {
+          formula: `=${normalizeFormula(cellInput)}`,
+        }
+      : coerceNumericText(cellInput)
+  }
+  if (!isRecord(cellInput)) {
+    throw new Error('Unsupported write_range cell input')
+  }
+  const record = cellInput
+  if (record['type'] === 'blank') {
+    return null
+  }
+  if (record['type'] === 'formula') {
+    if (typeof record['formula'] !== 'string') {
+      throw new Error('Typed formula cell requires a formula string')
+    }
+    return {
+      formula: `=${normalizeFormula(record['formula'])}`,
+    }
+  }
+  if (record['type'] === 'text') {
+    if (typeof record['value'] !== 'string') {
+      throw new Error('Typed text cell requires a string value')
+    }
+    return record['value']
+  }
+  if (record['type'] === 'number') {
+    const value = record['value']
+    if (typeof value === 'number') {
+      return value
+    }
+    if (typeof value === 'string' && isNumericText(value)) {
+      return Number(value)
+    }
+    throw new Error(`Typed number cell requires a finite number or numeric string, received ${String(value)}`)
+  }
+  if (record['type'] === 'date') {
+    const value = record['value']
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value
+    }
+    if (typeof value === 'string') {
+      return excelDateSerialFromIsoDate(value)
+    }
+    throw new Error('Typed date cell requires an Excel serial number or YYYY-MM-DD string')
+  }
+  if (record['type'] === 'boolean') {
+    const value = record['value']
+    if (typeof value === 'string' || typeof value === 'boolean') {
+      return normalizeBooleanInput(value)
+    }
+    throw new Error('Typed boolean cell requires a boolean or true/false string')
+  }
+  if (typeof record['formula'] === 'string') {
+    return {
+      formula: `=${normalizeFormula(record['formula'])}`,
+    }
+  }
+  if ('value' in record) {
+    const value = record['value']
+    if (value === null || typeof value === 'number' || typeof value === 'boolean') {
+      return value
+    }
+    if (typeof value === 'string') {
+      return value.startsWith('=')
+        ? {
+            formula: `=${normalizeFormula(value)}`,
+          }
+        : coerceNumericText(value)
+    }
+  }
+  throw new Error('Unsupported write_range cell input')
+}
+
 function normalizeRange(range: CellRangeRef): CellRangeRef & {
   startRow: number
   endRow: number
@@ -344,6 +505,96 @@ function resolveVisibleRange(context: WorkbookAgentUiContext | null): CellRangeR
   return viewportToRange(context.selection.sheetName, context.viewport)
 }
 
+function rangesEqual(left: CellRangeRef, right: CellRangeRef): boolean {
+  const normalizedLeft = normalizeRange(left)
+  const normalizedRight = normalizeRange(right)
+  return (
+    normalizedLeft.sheetName === normalizedRight.sheetName &&
+    normalizedLeft.startAddress === normalizedRight.startAddress &&
+    normalizedLeft.endAddress === normalizedRight.endAddress
+  )
+}
+
+function selectRenderedRange(
+  context: WorkbookAgentUiContext | null,
+  range: CellRangeRef,
+): {
+  readonly available: boolean
+  readonly stale: boolean
+  readonly capturedAtUnixMs: number | null
+  readonly batchId: number | null
+  readonly range: unknown
+} {
+  const rendered = context?.rendered
+  if (!rendered) {
+    return {
+      available: false,
+      stale: true,
+      capturedAtUnixMs: null,
+      batchId: null,
+      range: null,
+    }
+  }
+  const candidates = [rendered.selection, rendered.visibleRange].filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+  const match = candidates.find((entry) => rangesEqual(entry.range, range)) ?? null
+  return {
+    available: match !== null,
+    stale: match === null,
+    capturedAtUnixMs: rendered.capturedAtUnixMs,
+    batchId: rendered.batchId,
+    range: match,
+  }
+}
+
+async function buildVerificationReport(input: {
+  readonly context: WorkbookAgentToolContext
+  readonly revision: number | null
+  readonly ranges: readonly CellRangeRef[]
+  readonly includeFormulaIssues?: boolean
+  readonly includeInvariants?: boolean
+}) {
+  return await input.context.zeroSyncService.inspectWorkbook(input.context.documentId, async (runtime) => {
+    const uiContext = normalizeWorkbookAgentUiContext(runtime, input.context.uiContext)
+    const normalizedRanges = input.ranges.map((range) => ({
+      sheetName: range.sheetName,
+      startAddress: normalizeRange(range).startAddress,
+      endAddress: normalizeRange(range).endAddress,
+    }))
+    const authoritativeReadback = normalizedRanges.map((range) => inspectWorkbookRange(runtime, range))
+    const renderedReadback = normalizedRanges.map((range) => {
+      const renderedRange = selectRenderedRange(uiContext, range)
+      return {
+        requestedRange: range,
+        available: renderedRange.available,
+        stale: renderedRange.stale,
+        capturedAtUnixMs: renderedRange.capturedAtUnixMs,
+        batchId: renderedRange.batchId,
+        range: renderedRange.range,
+      }
+    })
+    const formulaIssues =
+      input.includeFormulaIssues === false
+        ? null
+        : findWorkbookFormulaIssues(runtime, {
+            limit: 100,
+          })
+    const invariants = input.includeInvariants === false ? null : await verifyWorkbookInvariants(runtime, { roundTrip: true })
+    return {
+      appliedRevision: input.revision,
+      recalculationStatus: {
+        headRevision: runtime.headRevision,
+        calculatedRevision: runtime.calculatedRevision,
+        upToDate: runtime.calculatedRevision >= runtime.headRevision,
+        lastMetrics: runtime.engine.getLastMetrics(),
+      },
+      authoritativeReadback,
+      renderedReadback,
+      formulaIssues,
+      invariants,
+    }
+  })
+}
+
 function resolveInspectionTarget(
   context: WorkbookAgentUiContext | null,
   args: z.infer<typeof inspectCellToolArgsSchema>,
@@ -371,12 +622,33 @@ function viewportToRange(sheetName: string, viewport: WorkbookViewport): CellRan
   }
 }
 
+function viewportAroundAddress(sheetName: string, address: string, base?: WorkbookViewport): WorkbookViewport {
+  const parsed = parseCellAddress(address, sheetName)
+  if (base) {
+    const rowCount = Math.max(1, base.rowEnd - base.rowStart + 1)
+    const colCount = Math.max(1, base.colEnd - base.colStart + 1)
+    return {
+      rowStart: Math.max(0, parsed.row),
+      rowEnd: Math.max(0, parsed.row + rowCount - 1),
+      colStart: Math.max(0, parsed.col),
+      colEnd: Math.max(0, parsed.col + colCount - 1),
+    }
+  }
+  return {
+    rowStart: parsed.row,
+    rowEnd: parsed.row + 20,
+    colStart: parsed.col,
+    colEnd: parsed.col + 10,
+  }
+}
+
 export interface WorkbookAgentToolContext {
   readonly documentId: string
   readonly session: SessionIdentity
   readonly uiContext: WorkbookAgentUiContext | null
   readonly zeroSyncService: ZeroSyncService
   readonly stageCommand: (command: WorkbookAgentCommand) => Promise<WorkbookAgentCommandBundle | WorkbookAgentStageCommandResult>
+  readonly updateUiContext?: (context: WorkbookAgentUiContext | null) => Promise<void>
   readonly startWorkflow?: (input: WorkbookAgentStartWorkflowRequest) => Promise<WorkbookAgentWorkflowRun>
 }
 
@@ -409,6 +681,71 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
         type: 'object',
         additionalProperties: false,
         properties: {},
+      },
+    },
+    {
+      name: WORKBOOK_AGENT_TOOL_NAMES.setActiveSheet,
+      description: 'Make a sheet the active browser sheet for the attached workbook view, optionally moving selection to one cell.',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['sheetName'],
+        properties: {
+          sheetName: { type: 'string' },
+          address: { type: 'string' },
+        },
+      },
+    },
+    {
+      name: WORKBOOK_AGENT_TOOL_NAMES.setSelection,
+      description: 'Move the attached browser workbook selection to a cell or rectangular range.',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['address'],
+        properties: {
+          sheetName: { type: 'string' },
+          address: { type: 'string' },
+          endAddress: { type: 'string' },
+        },
+      },
+    },
+    {
+      name: WORKBOOK_AGENT_TOOL_NAMES.readRenderedSelection,
+      description: 'Read the latest browser-rendered snapshot for the selected cells and compare it with authoritative workbook state.',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {},
+      },
+    },
+    {
+      name: WORKBOOK_AGENT_TOOL_NAMES.readRenderedRange,
+      description:
+        'Read the latest browser-rendered snapshot for a range when it is cached by the attached view and compare it with authoritative workbook state.',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['sheetName', 'startAddress', 'endAddress'],
+        properties: {
+          sheetName: { type: 'string' },
+          startAddress: { type: 'string' },
+          endAddress: { type: 'string' },
+        },
+      },
+    },
+    {
+      name: WORKBOOK_AGENT_TOOL_NAMES.applyAndVerify,
+      description:
+        'Verify the latest applied workbook state by recalculating, reading authoritative cells, reading rendered browser cells when cached, scanning formula issues, and checking invariants.',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          range: cellRangeRefJsonSchema,
+          includeFormulaIssues: { type: 'boolean' },
+          includeInvariants: { type: 'boolean' },
+        },
       },
     },
     {
@@ -607,6 +944,63 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
                   { type: 'boolean' },
                   { type: 'null' },
                   {
+                    oneOf: [
+                      {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['type', 'value'],
+                        properties: {
+                          type: { type: 'string', const: 'text' },
+                          value: { type: 'string' },
+                        },
+                      },
+                      {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['type', 'value'],
+                        properties: {
+                          type: { type: 'string', const: 'number' },
+                          value: { oneOf: [{ type: 'string' }, { type: 'number' }] },
+                        },
+                      },
+                      {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['type', 'value'],
+                        properties: {
+                          type: { type: 'string', const: 'date' },
+                          value: { oneOf: [{ type: 'string' }, { type: 'number' }] },
+                        },
+                      },
+                      {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['type', 'value'],
+                        properties: {
+                          type: { type: 'string', const: 'boolean' },
+                          value: { oneOf: [{ type: 'string' }, { type: 'boolean' }] },
+                        },
+                      },
+                      {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['type'],
+                        properties: {
+                          type: { type: 'string', const: 'blank' },
+                        },
+                      },
+                      {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['type', 'formula'],
+                        properties: {
+                          type: { type: 'string', const: 'formula' },
+                          formula: { type: 'string' },
+                        },
+                      },
+                    ],
+                  },
+                  {
                     type: 'object',
                     additionalProperties: false,
                     required: ['value'],
@@ -726,6 +1120,19 @@ async function stageCommandResult(context: WorkbookAgentToolContext, command: Wo
     'bundle' in result ? result : { bundle: result, executionRecord: null, disposition: 'reviewQueued' }
   const bundle = normalized.bundle
   if (normalized.executionRecord) {
+    const verificationRanges = bundle.affectedRanges
+      .filter((range) => range.role === 'target')
+      .slice(0, 3)
+      .map((range) => ({
+        sheetName: range.sheetName,
+        startAddress: range.startAddress,
+        endAddress: range.endAddress,
+      }))
+    const verification = await buildVerificationReport({
+      context,
+      revision: normalized.executionRecord.appliedRevision,
+      ranges: verificationRanges,
+    })
     return textToolResult(
       stringifyJson({
         applied: true,
@@ -738,6 +1145,7 @@ async function stageCommandResult(context: WorkbookAgentToolContext, command: Wo
         riskClass: normalized.executionRecord.riskClass,
         estimatedAffectedCells: bundle.estimatedAffectedCells,
         affectedRanges: bundle.affectedRanges,
+        verification,
       }),
     )
   }
@@ -841,10 +1249,128 @@ export async function handleWorkbookAgentToolCall(
       case WORKBOOK_AGENT_TOOL_NAMES.readWorkbook: {
         const summary = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => ({
           documentId: context.documentId,
-          context: context.uiContext,
+          context: normalizeWorkbookAgentUiContext(runtime, context.uiContext),
           ...summarizeWorkbookStructure(runtime),
         }))
         return textToolResult(stringifyJson(summary))
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.setActiveSheet: {
+        const args = setActiveSheetToolArgsSchema.parse(request.arguments)
+        const nextContext = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
+          const sheets = runtime.engine.exportSnapshot().sheets.map((sheet) => sheet.name)
+          if (!sheets.includes(args.sheetName)) {
+            throw new Error(`Sheet ${args.sheetName} does not exist`)
+          }
+          const currentContext = normalizeWorkbookAgentUiContext(runtime, context.uiContext)
+          const address = args.address ?? currentContext?.selection.address ?? 'A1'
+          return normalizeWorkbookAgentUiContext(runtime, {
+            selection: {
+              sheetName: args.sheetName,
+              address,
+              range: {
+                startAddress: address,
+                endAddress: address,
+              },
+            },
+            viewport: viewportAroundAddress(args.sheetName, address, currentContext?.viewport),
+          })
+        })
+        if (!context.updateUiContext) {
+          throw new Error('Active sheet control is not available in this workbook assistant session')
+        }
+        await context.updateUiContext(nextContext)
+        return textToolResult(
+          stringifyJson({
+            updated: true,
+            context: nextContext,
+          }),
+        )
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.setSelection: {
+        const args = setSelectionToolArgsSchema.parse(request.arguments)
+        const nextContext = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
+          const currentContext = normalizeWorkbookAgentUiContext(runtime, context.uiContext)
+          const sheetName = args.sheetName ?? currentContext?.selection.sheetName
+          if (!sheetName) {
+            throw new Error('sheetName is required when no browser workbook context exists')
+          }
+          const sheets = runtime.engine.exportSnapshot().sheets.map((sheet) => sheet.name)
+          if (!sheets.includes(sheetName)) {
+            throw new Error(`Sheet ${sheetName} does not exist`)
+          }
+          const start = parseCellAddress(args.address, sheetName)
+          const end = parseCellAddress(args.endAddress ?? args.address, sheetName)
+          const startAddress = formatAddress(Math.min(start.row, end.row), Math.min(start.col, end.col))
+          const endAddress = formatAddress(Math.max(start.row, end.row), Math.max(start.col, end.col))
+          return normalizeWorkbookAgentUiContext(runtime, {
+            selection: {
+              sheetName,
+              address: args.address,
+              range: {
+                startAddress,
+                endAddress,
+              },
+            },
+            viewport: viewportAroundAddress(sheetName, args.address, currentContext?.viewport),
+          })
+        })
+        if (!context.updateUiContext) {
+          throw new Error('Selection control is not available in this workbook assistant session')
+        }
+        await context.updateUiContext(nextContext)
+        return textToolResult(
+          stringifyJson({
+            updated: true,
+            context: nextContext,
+          }),
+        )
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.readRenderedSelection: {
+        const result = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
+          const uiContext = normalizeWorkbookAgentUiContext(runtime, context.uiContext)
+          const range = resolveSelectionRange(uiContext)
+          ensureRangeLimit(range, MAX_READ_RANGE_CELLS)
+          return {
+            authoritativeReadback: inspectWorkbookRange(runtime, range),
+            renderedReadback: selectRenderedRange(uiContext, range),
+          }
+        })
+        return textToolResult(stringifyJson(result))
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.readRenderedRange: {
+        const args = readRenderedRangeToolArgsSchema.parse(request.arguments)
+        const range = normalizeRange({
+          sheetName: args.sheetName,
+          startAddress: args.startAddress,
+          endAddress: args.endAddress,
+        })
+        ensureRangeLimit(range, MAX_READ_RANGE_CELLS)
+        const result = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
+          const normalizedContext = normalizeWorkbookAgentUiContext(runtime, context.uiContext)
+          return {
+            authoritativeReadback: inspectWorkbookRange(runtime, range),
+            renderedReadback: selectRenderedRange(normalizedContext, range),
+          }
+        })
+        return textToolResult(stringifyJson(result))
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.applyAndVerify: {
+        const args = applyAndVerifyToolArgsSchema.parse(request.arguments)
+        const ranges = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
+          if (args.range) {
+            return [normalizeRange(args.range)]
+          }
+          const uiContext = normalizeWorkbookAgentUiContext(runtime, context.uiContext)
+          return uiContext ? [resolveSelectionRange(uiContext)] : []
+        })
+        const report = await buildVerificationReport({
+          context,
+          revision: null,
+          ranges,
+          ...(args.includeFormulaIssues !== undefined ? { includeFormulaIssues: args.includeFormulaIssues } : {}),
+          ...(args.includeInvariants !== undefined ? { includeInvariants: args.includeInvariants } : {}),
+        })
+        return textToolResult(stringifyJson(report))
       }
       case WORKBOOK_AGENT_TOOL_NAMES.listNamedRanges: {
         const namedRanges = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => ({
@@ -865,10 +1391,11 @@ export async function handleWorkbookAgentToolCall(
       case WORKBOOK_AGENT_TOOL_NAMES.readRange: {
         const args = readRangeToolArgsSchema.parse(request.arguments)
         const result = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
+          const uiContext = normalizeWorkbookAgentUiContext(runtime, context.uiContext)
           const resolved = resolveReadRangeRequest({
             runtime,
             args,
-            uiContext: context.uiContext,
+            uiContext,
           })
           const totalCells = countTotalRangeCells(resolved.ranges)
           if (totalCells > MAX_READ_RANGE_CELLS) {
@@ -892,15 +1419,19 @@ export async function handleWorkbookAgentToolCall(
         return textToolResult(stringifyJson(result))
       }
       case WORKBOOK_AGENT_TOOL_NAMES.readSelection: {
-        const range = resolveSelectionRange(context.uiContext)
-        ensureRangeLimit(range, MAX_READ_RANGE_CELLS)
-        const result = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => inspectWorkbookRange(runtime, range))
+        const result = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
+          const range = resolveSelectionRange(normalizeWorkbookAgentUiContext(runtime, context.uiContext))
+          ensureRangeLimit(range, MAX_READ_RANGE_CELLS)
+          return inspectWorkbookRange(runtime, range)
+        })
         return textToolResult(stringifyJson(result))
       }
       case WORKBOOK_AGENT_TOOL_NAMES.readVisibleRange: {
-        const range = resolveVisibleRange(context.uiContext)
-        ensureRangeLimit(range, MAX_READ_RANGE_CELLS)
-        const result = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => inspectWorkbookRange(runtime, range))
+        const result = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
+          const range = resolveVisibleRange(normalizeWorkbookAgentUiContext(runtime, context.uiContext))
+          ensureRangeLimit(range, MAX_READ_RANGE_CELLS)
+          return inspectWorkbookRange(runtime, range)
+        })
         return textToolResult(stringifyJson(result))
       }
       case WORKBOOK_AGENT_TOOL_NAMES.readRecentChanges: {
@@ -924,7 +1455,7 @@ export async function handleWorkbookAgentToolCall(
       case WORKBOOK_AGENT_TOOL_NAMES.inspectCell: {
         const args = inspectCellToolArgsSchema.parse(request.arguments)
         const result = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) =>
-          inspectWorkbookCell(runtime, resolveInspectionTarget(context.uiContext, args)),
+          inspectWorkbookCell(runtime, resolveInspectionTarget(normalizeWorkbookAgentUiContext(runtime, context.uiContext), args)),
         )
         return textToolResult(stringifyJson(result))
       }
@@ -951,15 +1482,15 @@ export async function handleWorkbookAgentToolCall(
       }
       case WORKBOOK_AGENT_TOOL_NAMES.traceDependencies: {
         const args = traceDependenciesToolArgsSchema.parse(request.arguments)
-        const target = resolveInspectionTarget(context.uiContext, args)
-        const report = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) =>
-          traceWorkbookDependencies(runtime, {
+        const report = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
+          const target = resolveInspectionTarget(normalizeWorkbookAgentUiContext(runtime, context.uiContext), args)
+          return traceWorkbookDependencies(runtime, {
             sheetName: target.sheetName,
             address: target.address,
             ...(args.direction ? { direction: args.direction } : {}),
             ...(args.depth !== undefined ? { depth: args.depth } : {}),
-          }),
-        )
+          })
+        })
         return textToolResult(stringifyJson(report))
       }
       case WORKBOOK_AGENT_TOOL_NAMES.writeRange: {
@@ -968,7 +1499,7 @@ export async function handleWorkbookAgentToolCall(
           resolveWriteRangeRequest({
             runtime,
             args,
-            uiContext: context.uiContext,
+            uiContext: normalizeWorkbookAgentUiContext(runtime, context.uiContext),
           }),
         )
         const values = args.values
@@ -987,21 +1518,7 @@ export async function handleWorkbookAgentToolCall(
           kind: 'writeRange',
           sheetName: resolved.sheetName,
           startAddress: resolved.startAddress,
-          values: values.map((rowValues) =>
-            rowValues.map((cellInput) => {
-              if (cellInput === null || typeof cellInput === 'string' || typeof cellInput === 'number' || typeof cellInput === 'boolean') {
-                return cellInput
-              }
-              if ('formula' in cellInput) {
-                return {
-                  formula: `=${normalizeFormula(cellInput.formula)}`,
-                }
-              }
-              return {
-                value: cellInput.value,
-              }
-            }),
-          ),
+          values: values.map((rowValues) => rowValues.map((cellInput) => normalizeWriteCellInput(cellInput))),
         })
       }
       case WORKBOOK_AGENT_TOOL_NAMES.setFormula: {
@@ -1010,7 +1527,7 @@ export async function handleWorkbookAgentToolCall(
           resolveFormulaRangeRequest({
             runtime,
             args,
-            uiContext: context.uiContext,
+            uiContext: normalizeWorkbookAgentUiContext(runtime, context.uiContext),
           }),
         )
         ensureRangeLimit(resolved.range, MAX_MUTATION_RANGE_CELLS)
@@ -1026,7 +1543,7 @@ export async function handleWorkbookAgentToolCall(
           resolveRangeOrSelectorRequest({
             runtime,
             args,
-            uiContext: context.uiContext,
+            uiContext: normalizeWorkbookAgentUiContext(runtime, context.uiContext),
           }),
         )
         ensureRangeLimit(resolved.range, MAX_MUTATION_RANGE_CELLS)
@@ -1044,7 +1561,7 @@ export async function handleWorkbookAgentToolCall(
               ...(args.range ? { range: args.range } : {}),
               ...(args.selector ? { selector: args.selector } : {}),
             },
-            uiContext: context.uiContext,
+            uiContext: normalizeWorkbookAgentUiContext(runtime, context.uiContext),
           }),
         )
         ensureRangeLimit(resolved.range, MAX_MUTATION_RANGE_CELLS)
@@ -1070,7 +1587,7 @@ export async function handleWorkbookAgentToolCall(
           resolveTransferRangeRequest({
             runtime,
             args,
-            uiContext: context.uiContext,
+            uiContext: normalizeWorkbookAgentUiContext(runtime, context.uiContext),
           }),
         )
         ensureRangeLimit(resolved.source, MAX_MUTATION_RANGE_CELLS)
@@ -1087,7 +1604,7 @@ export async function handleWorkbookAgentToolCall(
           resolveTransferRangeRequest({
             runtime,
             args,
-            uiContext: context.uiContext,
+            uiContext: normalizeWorkbookAgentUiContext(runtime, context.uiContext),
           }),
         )
         ensureRangeLimit(resolved.source, MAX_MUTATION_RANGE_CELLS)
@@ -1104,7 +1621,7 @@ export async function handleWorkbookAgentToolCall(
           resolveTransferRangeRequest({
             runtime,
             args,
-            uiContext: context.uiContext,
+            uiContext: normalizeWorkbookAgentUiContext(runtime, context.uiContext),
           }),
         )
         ensureRangeLimit(resolved.source, MAX_MUTATION_RANGE_CELLS)
@@ -1121,7 +1638,7 @@ export async function handleWorkbookAgentToolCall(
           resolveRangeOrSelectorRequest({
             runtime,
             args,
-            uiContext: context.uiContext,
+            uiContext: normalizeWorkbookAgentUiContext(runtime, context.uiContext),
           }),
         )
         ensureRangeLimit(resolved.range, MAX_MUTATION_RANGE_CELLS)
@@ -1136,7 +1653,7 @@ export async function handleWorkbookAgentToolCall(
           resolveRangeOrSelectorRequest({
             runtime,
             args,
-            uiContext: context.uiContext,
+            uiContext: normalizeWorkbookAgentUiContext(runtime, context.uiContext),
           }),
         )
         ensureRangeLimit(resolved.range, MAX_MUTATION_RANGE_CELLS)
@@ -1154,7 +1671,7 @@ export async function handleWorkbookAgentToolCall(
               ...(args.range ? { range: args.range } : {}),
               ...(args.selector ? { selector: args.selector } : {}),
             },
-            uiContext: context.uiContext,
+            uiContext: normalizeWorkbookAgentUiContext(runtime, context.uiContext),
           }),
         )
         ensureRangeLimit(resolved.range, MAX_MUTATION_RANGE_CELLS)
@@ -1173,7 +1690,7 @@ export async function handleWorkbookAgentToolCall(
           resolveRangeOrSelectorRequest({
             runtime,
             args,
-            uiContext: context.uiContext,
+            uiContext: normalizeWorkbookAgentUiContext(runtime, context.uiContext),
           }),
         )
         ensureRangeLimit(resolved.range, MAX_MUTATION_RANGE_CELLS)

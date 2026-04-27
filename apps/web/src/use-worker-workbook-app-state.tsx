@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useActorRef, useSelector } from '@xstate/react'
 import { isWorkbookAgentCommandBundle, isWorkbookAgentPreviewSummary, type WorkbookAgentCommandBundle } from '@bilig/agent-api'
 import type { EditMovement, EditSelectionBehavior, GridSelectionSnapshot } from '@bilig/grid'
-import { parseCellAddress } from '@bilig/formula'
+import { formatAddress, parseCellAddress } from '@bilig/formula'
+import type { WorkbookAgentRenderedRange, WorkbookAgentUiContext } from '@bilig/contracts'
 import type { CellRangeRef, CellSnapshot, Viewport } from '@bilig/protocol'
 import { createWorkerRuntimeMachine } from './runtime-machine.js'
 import type { resolveRuntimeConfig } from './runtime-config.js'
@@ -78,6 +79,77 @@ function selectionSnapshotToRangeRef(selection: GridSelectionSnapshot): CellRang
     sheetName: selection.sheetName,
     startAddress: selection.range.startAddress,
     endAddress: selection.range.endAddress,
+  }
+}
+
+const MAX_AGENT_RENDERED_CONTEXT_CELLS = 200
+
+function normalizeCellRangeRef(range: CellRangeRef): CellRangeRef & {
+  readonly startRow: number
+  readonly endRow: number
+  readonly startCol: number
+  readonly endCol: number
+} {
+  const start = parseCellAddress(range.startAddress, range.sheetName)
+  const end = parseCellAddress(range.endAddress, range.sheetName)
+  const startRow = Math.min(start.row, end.row)
+  const endRow = Math.max(start.row, end.row)
+  const startCol = Math.min(start.col, end.col)
+  const endCol = Math.max(start.col, end.col)
+  return {
+    sheetName: range.sheetName,
+    startAddress: formatAddress(startRow, startCol),
+    endAddress: formatAddress(endRow, endCol),
+    startRow,
+    endRow,
+    startCol,
+    endCol,
+  }
+}
+
+function buildRenderedRangeSnapshot(
+  viewportStore: ProjectedViewportStore | null | undefined,
+  range: CellRangeRef,
+): WorkbookAgentRenderedRange | null {
+  if (!viewportStore) {
+    return null
+  }
+  const normalized = normalizeCellRangeRef(range)
+  const rowCount = normalized.endRow - normalized.startRow + 1
+  const columnCount = normalized.endCol - normalized.startCol + 1
+  const cellCount = rowCount * columnCount
+  const rows: Array<Array<WorkbookAgentRenderedRange['rows'][number][number]>> = []
+  let emittedCells = 0
+  for (let row = normalized.startRow; row <= normalized.endRow && emittedCells < MAX_AGENT_RENDERED_CONTEXT_CELLS; row += 1) {
+    const rowEntries: Array<WorkbookAgentRenderedRange['rows'][number][number]> = []
+    for (let col = normalized.startCol; col <= normalized.endCol && emittedCells < MAX_AGENT_RENDERED_CONTEXT_CELLS; col += 1) {
+      const address = formatAddress(row, col)
+      const snapshot = viewportStore.peekCell(normalized.sheetName, address) ?? viewportStore.getCell(normalized.sheetName, address)
+      rowEntries.push({
+        address,
+        input: snapshot.input ?? null,
+        value: snapshot.value,
+        formula: snapshot.formula ? `=${snapshot.formula.replace(/^=/u, '')}` : null,
+        displayFormat: snapshot.format ?? null,
+        styleId: snapshot.styleId ?? null,
+        numberFormatId: snapshot.numberFormatId ?? null,
+        style: viewportStore.getCellStyle(snapshot.styleId) ?? null,
+      })
+      emittedCells += 1
+    }
+    rows.push(rowEntries)
+  }
+  return {
+    range: {
+      sheetName: normalized.sheetName,
+      startAddress: normalized.startAddress,
+      endAddress: normalized.endAddress,
+    },
+    rowCount,
+    columnCount,
+    cellCount,
+    truncated: emittedCells < cellCount,
+    rows,
   }
 }
 
@@ -758,13 +830,39 @@ export function useWorkerWorkbookAppState(input: {
     return Object.fromEntries(entries)
   }, [runtimeState?.sheets])
   const definedNames = useMemo(() => [...(runtimeState?.definedNames ?? [])], [runtimeState])
-  const getAgentContext = useCallback(
-    () =>
-      buildWorkbookAgentContext({
-        selection: selectionSnapshotRef.current,
-        viewport: visibleViewportRef.current,
-      }),
-    [],
+  const getAgentContext = useCallback((): WorkbookAgentUiContext => {
+    const activeSelection = selectionSnapshotRef.current
+    const activeViewport = visibleViewportRef.current
+    const viewportRange = {
+      sheetName: activeSelection.sheetName,
+      startAddress: formatAddress(activeViewport.rowStart, activeViewport.colStart),
+      endAddress: formatAddress(activeViewport.rowEnd, activeViewport.colEnd),
+    }
+    return buildWorkbookAgentContext({
+      selection: activeSelection,
+      viewport: activeViewport,
+      rendered: {
+        capturedAtUnixMs: Date.now(),
+        batchId: workerHandleRef.current?.viewportStore.getLastMetrics().batchId ?? null,
+        selection: buildRenderedRangeSnapshot(workerHandleRef.current?.viewportStore, selectionSnapshotToRangeRef(activeSelection)),
+        visibleRange: buildRenderedRangeSnapshot(workerHandleRef.current?.viewportStore, viewportRange),
+      },
+    })
+  }, [])
+  const applyAgentContext = useCallback(
+    (context: WorkbookAgentUiContext) => {
+      const range = context.selection.range ?? {
+        startAddress: context.selection.address,
+        endAddress: context.selection.address,
+      }
+      selectSelectionSnapshot({
+        sheetName: context.selection.sheetName,
+        address: context.selection.address,
+        kind: range.startAddress === range.endAddress ? 'cell' : 'range',
+        range,
+      })
+    },
+    [selectSelectionSnapshot],
   )
   const handleSelectionChange = useCallback(
     (nextSelectionSnapshot: GridSelectionSnapshot) => {
@@ -843,6 +941,7 @@ export function useWorkerWorkbookAppState(input: {
     changesPanel,
     selectAddress,
     getAgentContext,
+    applyAgentContext,
     previewAgentCommandBundle,
   })
 

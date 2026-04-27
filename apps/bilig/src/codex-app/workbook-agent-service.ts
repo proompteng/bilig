@@ -2,11 +2,13 @@ import type {
   WorkbookAgentThreadSnapshot,
   WorkbookAgentStreamEvent,
   WorkbookAgentThreadSummary,
+  WorkbookAgentUiContext,
   WorkbookAgentWorkflowRun,
 } from '@bilig/contracts'
 import type {
   WorkbookAgentAppliedBy,
   WorkbookAgentCommandBundle,
+  WorkbookAgentCommand,
   WorkbookAgentExecutionRecord,
   WorkbookAgentPreviewSummary,
   WorkbookAgentReviewQueueItem,
@@ -80,6 +82,7 @@ import {
   upsertEntry,
 } from './workbook-agent-service-shared.js'
 import { WorkbookAgentWorkflowRuntime } from './workbook-agent-workflow-runtime.js'
+import { normalizeWorkbookAgentUiContext } from './workbook-agent-inspection.js'
 
 const DEFAULT_MODEL = process.env['BILIG_CODEX_MODEL']?.trim() || 'gpt-5.5'
 const CODEX_APP_SERVER_ARGS = [
@@ -118,6 +121,73 @@ const DEFAULT_MAX_CODEX_CONCURRENT_TURNS_PER_CLIENT = parsePositiveIntegerEnv(pr
 const DEFAULT_MAX_CODEX_QUEUED_TURNS_PER_CLIENT = parsePositiveIntegerEnv(process.env['BILIG_CODEX_MAX_QUEUED_TURNS_PER_CLIENT'], 8)
 const DEFAULT_MAX_ACTIVE_TURNS_PER_USER = parsePositiveIntegerEnv(process.env['BILIG_CODEX_MAX_ACTIVE_TURNS_PER_USER'], 4)
 const DEFAULT_MAX_ACTIVE_TURNS_PER_DOCUMENT = parsePositiveIntegerEnv(process.env['BILIG_CODEX_MAX_ACTIVE_TURNS_PER_DOCUMENT'], 16)
+
+function dropRenderedContext(context: WorkbookAgentUiContext): WorkbookAgentUiContext {
+  return {
+    selection: {
+      sheetName: context.selection.sheetName,
+      address: context.selection.address,
+      ...(context.selection.range
+        ? {
+            range: {
+              startAddress: context.selection.range.startAddress,
+              endAddress: context.selection.range.endAddress,
+            },
+          }
+        : {}),
+    },
+    viewport: { ...context.viewport },
+  }
+}
+
+function applyStructuralContextHints(
+  context: WorkbookAgentUiContext | null,
+  commands: readonly WorkbookAgentCommand[],
+): WorkbookAgentUiContext | null {
+  let nextContext = cloneUiContext(context)
+  let structuralContextChanged = false
+  for (const command of commands) {
+    if (command.kind === 'createSheet') {
+      nextContext = {
+        selection: {
+          sheetName: command.name,
+          address: 'A1',
+          range: {
+            startAddress: 'A1',
+            endAddress: 'A1',
+          },
+        },
+        viewport: {
+          rowStart: 0,
+          rowEnd: 20,
+          colStart: 0,
+          colEnd: 10,
+        },
+      }
+      structuralContextChanged = true
+      continue
+    }
+    if (!nextContext) {
+      continue
+    }
+    if (command.kind === 'renameSheet' && nextContext.selection.sheetName === command.currentName) {
+      nextContext = {
+        ...dropRenderedContext(nextContext),
+        selection: {
+          ...nextContext.selection,
+          sheetName: command.nextName,
+        },
+      }
+      structuralContextChanged = true
+      continue
+    }
+    if (command.kind === 'deleteSheet' && nextContext.selection.sheetName === command.name) {
+      nextContext = dropRenderedContext(nextContext)
+      structuralContextChanged = true
+    }
+  }
+  return structuralContextChanged && nextContext ? dropRenderedContext(nextContext) : nextContext
+}
 
 export interface WorkbookAgentService {
   readonly enabled: boolean
@@ -432,10 +502,6 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     )
   }
 
-  private queuePrivateTurnBundle(sessionState: WorkbookAgentThreadState, turnId: string, bundle: WorkbookAgentCommandBundle): void {
-    sessionState.live.stagedPrivateBundleByTurn.set(turnId, bundle)
-  }
-
   private shouldApplyToolBundleImmediately(sessionState: WorkbookAgentThreadState, bundle: WorkbookAgentCommandBundle): boolean {
     if (sessionState.executionPolicy === 'autoApplySafe' && !this.featureFlags.autoApplyLowRiskEnabled) {
       return false
@@ -460,6 +526,19 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         bundle,
       }),
     )
+  }
+
+  private async refreshAppliedWorkbookContext(input: {
+    sessionState: WorkbookAgentThreadState
+    turnId: string
+    commands: readonly WorkbookAgentCommand[]
+  }): Promise<void> {
+    const hintedContext = applyStructuralContextHints(this.resolveTurnContext(input.sessionState, input.turnId), input.commands)
+    const normalizedContext = await this.zeroSyncService.inspectWorkbook(input.sessionState.documentId, (runtime) =>
+      normalizeWorkbookAgentUiContext(runtime, hintedContext),
+    )
+    input.sessionState.durable.context = cloneUiContext(normalizedContext)
+    input.sessionState.live.turnContextByTurn.set(input.turnId, cloneUiContext(normalizedContext))
   }
 
   private async applyCommandBundleForSessionState(input: {
@@ -575,6 +654,11 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       executionRecord,
       ...input.sessionState.durable.executionRecords.filter((record) => record.id !== executionRecord.id),
     ]
+    await this.refreshAppliedWorkbookContext({
+      sessionState: input.sessionState,
+      turnId: input.commandBundle.turnId,
+      commands: selection.acceptedBundle.commands,
+    })
     this.replaceCurrentReviewItem(
       input.sessionState,
       selection.remainingBundle === null
@@ -979,7 +1063,7 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
     if (parsed.context) {
       sessionState.durable.context = parsed.context
     }
-    const turnContext = cloneUiContext(parsed.context ?? sessionState.durable.context)
+    const turnContext = cloneUiContext(sessionState.durable.context)
     const codexClient = await this.getCodexClient()
     let turn
     try {
@@ -1424,7 +1508,6 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
             resolveTurnContext: (sessionState, turnId) => this.resolveTurnContext(sessionState, turnId),
             stageReviewBundle: (sessionState, turnId, bundle) =>
               this.stageReviewBundle(sessionState, turnId, attachSharedReviewState(bundle, sessionState)),
-            queuePrivateTurnBundle: (sessionState, turnId, bundle) => this.queuePrivateTurnBundle(sessionState, turnId, bundle),
             shouldApplyToolBundleImmediately: (sessionState, bundle) => this.shouldApplyToolBundleImmediately(sessionState, bundle),
             applyToolBundleAutomatically: (args) => this.applyToolBundleAutomatically(args),
             persistSessionState: (sessionState) => this.persistSessionState(sessionState),

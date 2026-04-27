@@ -12,6 +12,7 @@ import type { SessionIdentity } from '../http/session.js'
 import type { ZeroSyncService } from '../zero/service.js'
 import { resolveWorkbookSelector } from './workbook-selector-resolver.js'
 import type { WorkbookRuntime } from '../workbook-runtime/runtime-manager.js'
+import { normalizeWorkbookAgentUiContext } from './workbook-agent-inspection.js'
 
 const sheetNameArgsSchema = z.object({
   sheetName: z.string().trim().min(1).optional(),
@@ -125,12 +126,13 @@ function stringifyJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
 }
 
-function resolveSheetName(sheetName: string | undefined, uiContext: WorkbookAgentUiContext | null): string {
+function resolveSheetName(runtime: WorkbookRuntime, sheetName: string | undefined, uiContext: WorkbookAgentUiContext | null): string {
   if (sheetName) {
     return sheetName
   }
-  if (uiContext) {
-    return uiContext.selection.sheetName
+  const normalizedContext = normalizeWorkbookAgentUiContext(runtime, uiContext)
+  if (normalizedContext) {
+    return normalizedContext.selection.sheetName
   }
   throw new Error('sheetName is required when no browser workbook context exists')
 }
@@ -208,7 +210,7 @@ export async function handleWorkbookAgentSheetReadToolCall(
     case WORKBOOK_AGENT_TOOL_NAMES.getSheetView: {
       const args = sheetNameArgsSchema.parse(request.arguments)
       const payload = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
-        const sheetName = resolveSheetName(args.sheetName, context.uiContext)
+        const sheetName = resolveSheetName(runtime, args.sheetName, context.uiContext)
         return {
           documentId: context.documentId,
           sheetName,
@@ -223,7 +225,7 @@ export async function handleWorkbookAgentSheetReadToolCall(
     case WORKBOOK_AGENT_TOOL_NAMES.getUsedRange: {
       const args = sheetNameArgsSchema.parse(request.arguments)
       const payload = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
-        const sheetName = resolveSheetName(args.sheetName, context.uiContext)
+        const sheetName = resolveSheetName(runtime, args.sheetName, context.uiContext)
         return {
           documentId: context.documentId,
           sheetName,
@@ -248,7 +250,7 @@ export async function handleWorkbookAgentSheetReadToolCall(
                 }
               : {}),
           },
-          uiContext: context.uiContext,
+          uiContext: normalizeWorkbookAgentUiContext(runtime, context.uiContext),
         })
         return {
           documentId: context.documentId,

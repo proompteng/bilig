@@ -174,6 +174,7 @@ export function cloneUiContext(context: WorkbookAgentUiContext | null): Workbook
         viewport: {
           ...context.viewport,
         },
+        ...(context.rendered !== undefined ? { rendered: structuredClone(context.rendered) } : {}),
       }
     : null
 }

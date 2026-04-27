@@ -45,6 +45,59 @@ function viewportToRange(sheetName: string, viewport: WorkbookViewport): CellRan
   }
 }
 
+function orderedSheetNames(runtime: WorkbookRuntime): readonly string[] {
+  return runtime.engine
+    .exportSnapshot()
+    .sheets.toSorted((left, right) => left.order - right.order)
+    .map((sheet) => sheet.name)
+}
+
+function normalizeAddressOrFallback(sheetName: string, address: string): string {
+  try {
+    const parsed = parseCellAddress(address, sheetName)
+    return formatAddress(Math.max(0, parsed.row), Math.max(0, parsed.col))
+  } catch {
+    return 'A1'
+  }
+}
+
+export function normalizeWorkbookAgentUiContext(
+  runtime: WorkbookRuntime,
+  context: WorkbookAgentUiContext | null,
+): WorkbookAgentUiContext | null {
+  if (!context) {
+    return null
+  }
+  const sheetNames = orderedSheetNames(runtime)
+  if (sheetNames.length === 0) {
+    return context
+  }
+  const selectionSheetExists = sheetNames.includes(context.selection.sheetName)
+  const sheetName = selectionSheetExists ? context.selection.sheetName : sheetNames[0]!
+  const address = normalizeAddressOrFallback(sheetName, context.selection.address)
+  const range =
+    context.selection.range === undefined
+      ? undefined
+      : {
+          startAddress: normalizeAddressOrFallback(sheetName, context.selection.range.startAddress),
+          endAddress: normalizeAddressOrFallback(sheetName, context.selection.range.endAddress),
+        }
+  return {
+    selection: {
+      sheetName,
+      address,
+      ...(range ? { range } : {}),
+    },
+    viewport: {
+      rowStart: Math.max(0, Math.trunc(context.viewport.rowStart)),
+      rowEnd: Math.max(0, Math.trunc(context.viewport.rowEnd)),
+      colStart: Math.max(0, Math.trunc(context.viewport.colStart)),
+      colEnd: Math.max(0, Math.trunc(context.viewport.colEnd)),
+    },
+    ...(selectionSheetExists && context.rendered !== undefined ? { rendered: structuredClone(context.rendered) } : {}),
+  }
+}
+
 function normalizeRange(range: CellRangeRef): CellRangeRef & {
   startRow: number
   endRow: number
@@ -247,11 +300,12 @@ function collectRangeFormattingCatalog(input: {
 }
 
 export function inspectWorkbookContext(runtime: WorkbookRuntime, context: WorkbookAgentUiContext | null): string {
-  if (!context) {
+  const normalizedContext = normalizeWorkbookAgentUiContext(runtime, context)
+  if (!normalizedContext) {
     return 'No browser view context is attached to this chat session yet.'
   }
-  const selection = summarizeSelection(context)
-  const visibleRange = normalizeRange(viewportToRange(context.selection.sheetName, context.viewport))
+  const selection = summarizeSelection(normalizedContext)
+  const visibleRange = normalizeRange(viewportToRange(normalizedContext.selection.sheetName, normalizedContext.viewport))
   return JSON.stringify(
     {
       selection,

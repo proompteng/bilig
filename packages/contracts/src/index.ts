@@ -55,9 +55,44 @@ export const WorkbookViewportSchema = Schema.Struct({
 })
 export type WorkbookViewport = Schema.Schema.Type<typeof WorkbookViewportSchema>
 
+export const WorkbookAgentRenderedCellSchema = Schema.Struct({
+  address: Schema.String,
+  input: Schema.Unknown,
+  value: Schema.Unknown,
+  formula: Schema.Union(Schema.String, Schema.Null),
+  displayFormat: Schema.Union(Schema.String, Schema.Null),
+  styleId: Schema.Union(Schema.String, Schema.Null),
+  numberFormatId: Schema.Union(Schema.String, Schema.Null),
+  style: Schema.Unknown,
+})
+export type WorkbookAgentRenderedCell = Schema.Schema.Type<typeof WorkbookAgentRenderedCellSchema>
+
+export const WorkbookAgentRenderedRangeSchema = Schema.Struct({
+  range: Schema.Struct({
+    sheetName: Schema.String,
+    startAddress: Schema.String,
+    endAddress: Schema.String,
+  }),
+  rowCount: Schema.Number,
+  columnCount: Schema.Number,
+  cellCount: Schema.Number,
+  truncated: Schema.Boolean,
+  rows: Schema.Array(Schema.Array(WorkbookAgentRenderedCellSchema)),
+})
+export type WorkbookAgentRenderedRange = Schema.Schema.Type<typeof WorkbookAgentRenderedRangeSchema>
+
+export const WorkbookAgentRenderedContextSchema = Schema.Struct({
+  capturedAtUnixMs: Schema.Number,
+  batchId: Schema.Union(Schema.Number, Schema.Null),
+  selection: Schema.Union(WorkbookAgentRenderedRangeSchema, Schema.Null),
+  visibleRange: Schema.Union(WorkbookAgentRenderedRangeSchema, Schema.Null),
+})
+export type WorkbookAgentRenderedContext = Schema.Schema.Type<typeof WorkbookAgentRenderedContextSchema>
+
 export const WorkbookAgentUiContextSchema = Schema.Struct({
   selection: WorkbookAgentUiSelectionSchema,
   viewport: WorkbookViewportSchema,
+  rendered: Schema.optionalWith(WorkbookAgentRenderedContextSchema, {}),
 })
 export type WorkbookAgentUiContext = Schema.Schema.Type<typeof WorkbookAgentUiContextSchema>
 

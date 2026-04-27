@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { SpreadsheetEngine } from '@bilig/core'
-import type { WorkbookAgentCommandBundle } from '@bilig/agent-api'
+import type { JsonValue, WorkbookAgentCommandBundle } from '@bilig/agent-api'
 import { buildWorkbookSourceProjectionFromEngine } from '../zero/projection.js'
 import type { ZeroSyncService } from '../zero/service.js'
 import type { WorkbookRuntime } from '../workbook-runtime/runtime-manager.js'
 import { handleWorkbookAgentToolCall } from './workbook-agent-tools.js'
 import { z } from 'zod'
+import { applyWorkbookAgentCommandBundleWithUndoCapture } from '../zero/workbook-agent-apply.js'
 
 async function createEngine(): Promise<SpreadsheetEngine> {
   const engine = new SpreadsheetEngine({
@@ -147,6 +148,43 @@ function createBundle(command: WorkbookAgentCommandBundle['commands'][number]): 
     estimatedAffectedCells: 2,
   }
 }
+
+function readToolJson(response: Awaited<ReturnType<typeof handleWorkbookAgentToolCall>>): unknown {
+  const text = response.contentItems[0]
+  expect(text?.type).toBe('inputText')
+  return JSON.parse(text && 'text' in text ? text.text : '')
+}
+
+const tableListPayloadSchema = z.object({
+  tables: z.array(
+    z.object({
+      sheetName: z.string(),
+    }),
+  ),
+})
+
+const invariantPayloadSchema = z.object({
+  summary: z.object({
+    ok: z.boolean(),
+  }),
+  problems: z.array(
+    z.object({
+      message: z.string(),
+    }),
+  ),
+})
+
+const renderedSelectionPayloadSchema = z.object({
+  authoritativeReadback: z.object({
+    rows: z.array(z.array(z.object({ value: z.unknown() }))),
+  }),
+  renderedReadback: z.object({
+    available: z.boolean(),
+    range: z.object({
+      rows: z.array(z.array(z.object({ style: z.unknown(), input: z.unknown() }))),
+    }),
+  }),
+})
 
 const workbookSummarySchema = z.object({
   summary: z.object({
@@ -2330,6 +2368,93 @@ describe('workbook agent tools', () => {
     )
   })
 
+  it('coerces write_range numeric text and typed blanks/formulas before apply verification', async () => {
+    const engine = await createEngine()
+    const { zeroSyncService } = createZeroSyncHarness(engine)
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle['commands'][number]) => {
+      const bundle = createBundle(command)
+      applyWorkbookAgentCommandBundleWithUndoCapture(engine, bundle)
+      return {
+        bundle,
+        executionRecord: {
+          id: 'run-1',
+          bundleId: bundle.id,
+          documentId: bundle.documentId,
+          threadId: bundle.threadId,
+          turnId: bundle.turnId,
+          actorUserId: 'alex@example.com',
+          goalText: bundle.goalText,
+          planText: null,
+          summary: bundle.summary,
+          scope: bundle.scope,
+          riskClass: bundle.riskClass,
+          acceptedScope: 'full' as const,
+          appliedRevision: 2,
+          appliedBy: 'auto' as const,
+          baseRevision: bundle.baseRevision,
+          context: bundle.context,
+          commands: bundle.commands,
+          preview: {
+            ranges: [],
+            structuralChanges: [],
+            cellDiffs: [],
+            effectSummary: {
+              displayedCellDiffCount: 0,
+              truncatedCellDiffs: false,
+              inputChangeCount: 0,
+              formulaChangeCount: 0,
+              styleChangeCount: 0,
+              numberFormatChangeCount: 0,
+              structuralChangeCount: 0,
+            },
+          },
+          createdAtUnixMs: 2,
+          appliedAtUnixMs: 2,
+        },
+      }
+    })
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: 'thr-1',
+        turnId: 'turn-1',
+        callId: 'call-write-typed-values',
+        tool: 'write_range',
+        arguments: {
+          sheetName: 'Sheet1',
+          startAddress: 'A10',
+          values: [
+            ['Cost', 'Months', 'Monthly', 'Blank'],
+            ['1200', { type: 'number', value: '12' }, { formula: '=A11/B11' }, { type: 'blank' }],
+          ],
+        },
+      },
+    )
+
+    expect(response.success).toBe(true)
+    expect(stageCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'writeRange',
+        values: [
+          ['Cost', 'Months', 'Monthly', 'Blank'],
+          [1200, 12, { formula: '=A11/B11' }, null],
+        ],
+      }),
+    )
+    expect(engine.getCell('Sheet1', 'C11').value).toMatchObject({ value: 100 })
+    expect(engine.getCell('Sheet1', 'C11').value).not.toHaveProperty('code')
+  })
+
   it('stages selector-aware formula writes through set_formula', async () => {
     const engine = await createEngine()
     engine.setTable({
@@ -2382,6 +2507,259 @@ describe('workbook agent tools', () => {
       },
       formulas: [['=A2*0.2'], ['=A3*0.25']],
     })
+  })
+
+  it('normalizes stale sheet context after a Sheet3 rename before read tools answer', async () => {
+    const engine = await createEngine()
+    engine.createSheet('Sheet3')
+    engine.setCellValue('Sheet3', 'A1', 'Prepaid')
+    engine.renameSheet('Sheet3', 'Prepaid Template')
+    const { zeroSyncService } = createZeroSyncHarness(engine)
+    const staleContext = {
+      selection: {
+        sheetName: 'Sheet3',
+        address: 'A1',
+      },
+      viewport: {
+        rowStart: 0,
+        rowEnd: 10,
+        colStart: 0,
+        colEnd: 5,
+      },
+    }
+
+    const callTool = (tool: string, args: JsonValue = {}) =>
+      handleWorkbookAgentToolCall(
+        {
+          documentId: 'doc-1',
+          session: {
+            userID: 'alex@example.com',
+            roles: ['editor'],
+          },
+          uiContext: staleContext,
+          zeroSyncService,
+          stageCommand: vi.fn(async () => createBundle({ kind: 'createSheet', name: 'unused' })),
+        },
+        {
+          threadId: 'thr-1',
+          turnId: 'turn-1',
+          callId: `call-${tool}`,
+          tool,
+          arguments: args,
+        },
+      )
+
+    const contextResponse = await callTool('get_context')
+    const workbookResponse = await callTool('read_workbook')
+    const sheetsResponse = await callTool('list_sheets')
+    const viewResponse = await callTool('get_sheet_view', { sheetName: 'Prepaid Template' })
+
+    for (const response of [contextResponse, workbookResponse, sheetsResponse, viewResponse]) {
+      expect(response.success).toBe(true)
+      const text = response.contentItems[0]
+      expect(text && 'text' in text ? text.text : '').not.toContain('Sheet3')
+    }
+    for (const response of [workbookResponse, sheetsResponse, viewResponse]) {
+      const text = response.contentItems[0]
+      expect(text && 'text' in text ? text.text : '').toContain('Prepaid Template')
+    }
+  })
+
+  it('keeps table metadata on existing sheets after rename and table creation', async () => {
+    const engine = await createEngine()
+    engine.createSheet('Sheet3')
+    engine.setCellValue('Sheet3', 'A1', 'Vendor')
+    engine.setCellValue('Sheet3', 'B1', 'Amount')
+    engine.setCellValue('Sheet3', 'A2', 'Insurance')
+    engine.setCellValue('Sheet3', 'B2', 1200)
+    engine.renameSheet('Sheet3', 'Prepaid Template')
+    const { zeroSyncService } = createZeroSyncHarness(engine)
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle['commands'][number]) => {
+      const bundle = createBundle(command)
+      applyWorkbookAgentCommandBundleWithUndoCapture(engine, bundle)
+      return {
+        bundle,
+        executionRecord: {
+          id: 'run-table',
+          bundleId: bundle.id,
+          documentId: bundle.documentId,
+          threadId: bundle.threadId,
+          turnId: bundle.turnId,
+          actorUserId: 'alex@example.com',
+          goalText: bundle.goalText,
+          planText: null,
+          summary: bundle.summary,
+          scope: bundle.scope,
+          riskClass: bundle.riskClass,
+          acceptedScope: 'full' as const,
+          appliedBy: 'auto' as const,
+          baseRevision: bundle.baseRevision,
+          appliedRevision: 3,
+          context: bundle.context,
+          commands: bundle.commands,
+          preview: null,
+          createdAtUnixMs: 3,
+          appliedAtUnixMs: 3,
+        },
+      }
+    })
+
+    const createResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: 'thr-1',
+        turnId: 'turn-1',
+        callId: 'call-create-prepaid-table',
+        tool: 'create_table',
+        arguments: {
+          name: 'Prepaids',
+          range: {
+            sheetName: 'Prepaid Template',
+            startAddress: 'A1',
+            endAddress: 'B2',
+          },
+          headerRow: true,
+        },
+      },
+    )
+    expect(createResponse.success).toBe(true)
+
+    const tablesResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: 'thr-1',
+        turnId: 'turn-1',
+        callId: 'call-list-prepaid-tables',
+        tool: 'list_tables',
+        arguments: {},
+      },
+    )
+    const tables = tableListPayloadSchema.parse(readToolJson(tablesResponse))
+    expect(tables.tables).toEqual([expect.objectContaining({ sheetName: 'Prepaid Template' })])
+
+    const invariantResponse = await handleWorkbookAgentToolCall(
+      {
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: 'thr-1',
+        turnId: 'turn-1',
+        callId: 'call-table-invariants',
+        tool: 'verify_invariants',
+        arguments: {},
+      },
+    )
+    const invariants = invariantPayloadSchema.parse(readToolJson(invariantResponse))
+    expect(invariants.summary.ok).toBe(true)
+    expect(JSON.stringify(invariants.problems)).not.toContain('missing sheet')
+  })
+
+  it('reads cached rendered selection state alongside authoritative state', async () => {
+    const engine = await createEngine()
+    engine.setCellValue('Sheet1', 'E5', 'changed')
+    engine.setRangeStyle(
+      { sheetName: 'Sheet1', startAddress: 'E5', endAddress: 'E5' },
+      {
+        fill: { backgroundColor: '#93c47d' },
+      },
+    )
+    const { zeroSyncService } = createZeroSyncHarness(engine)
+    const context = {
+      selection: {
+        sheetName: 'Sheet1',
+        address: 'E5',
+        range: {
+          startAddress: 'E5',
+          endAddress: 'E5',
+        },
+      },
+      viewport: {
+        rowStart: 4,
+        rowEnd: 4,
+        colStart: 4,
+        colEnd: 4,
+      },
+      rendered: {
+        capturedAtUnixMs: 10,
+        batchId: 11,
+        selection: {
+          range: {
+            sheetName: 'Sheet1',
+            startAddress: 'E5',
+            endAddress: 'E5',
+          },
+          rowCount: 1,
+          columnCount: 1,
+          cellCount: 1,
+          truncated: false,
+          rows: [
+            [
+              {
+                address: 'E5',
+                input: 'changed',
+                value: { tag: 2, value: 'changed' },
+                formula: null,
+                displayFormat: 'changed',
+                styleId: 'style-rendered',
+                numberFormatId: null,
+                style: { fill: { backgroundColor: '#93c47d' } },
+              },
+            ],
+          ],
+        },
+        visibleRange: null,
+      },
+    }
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        uiContext: context,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: 'createSheet', name: 'unused' })),
+      },
+      {
+        threadId: 'thr-1',
+        turnId: 'turn-1',
+        callId: 'call-rendered-selection',
+        tool: 'read_rendered_selection',
+        arguments: {},
+      },
+    )
+
+    const payload = renderedSelectionPayloadSchema.parse(readToolJson(response))
+    expect(payload.authoritativeReadback.rows[0]?.[0]?.value).toBe('changed')
+    expect(payload.renderedReadback.available).toBe(true)
+    expect(JSON.stringify(payload.renderedReadback.range.rows[0]?.[0]?.style)).toContain('#93c47d')
   })
 
   it('stages format commands with normalized number format presets', async () => {
