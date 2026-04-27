@@ -63,7 +63,19 @@ export function useWorkbookGridPointerResolvers(input: {
     (clientX: number, clientY: number, region: VisibleRegionState = getVisibleRegion(), geometry?: PointerGeometry | null): Item | null => {
       const geometrySnapshot = getGeometrySnapshot?.()
       const hostBounds = hostRef.current?.getBoundingClientRect()
-      const selectedCellBounds = getCellScreenBounds(selectedCell.col, selectedCell.row) ?? null
+      const geometrySelectedCellBounds =
+        geometrySnapshot && hostBounds ? geometrySnapshot.cellScreenRect(selectedCell.col, selectedCell.row) : null
+      const selectedCellBounds =
+        geometrySelectedCellBounds && hostBounds
+          ? {
+              x: hostBounds.left + geometrySelectedCellBounds.x,
+              y: hostBounds.top + geometrySelectedCellBounds.y,
+              width: geometrySelectedCellBounds.width,
+              height: geometrySelectedCellBounds.height,
+            }
+          : geometrySnapshot
+            ? null
+            : (getCellScreenBounds(selectedCell.col, selectedCell.row) ?? null)
       const selectionRange = gridSelection.current?.range ?? null
       if (
         selectedCellBounds &&

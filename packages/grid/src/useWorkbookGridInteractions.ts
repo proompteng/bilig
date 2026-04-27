@@ -221,7 +221,7 @@ export function useWorkbookGridInteractions(
     selectedCell: { col: activeSelectionCell[0], row: activeSelectionCell[1] },
     gridSelection,
     getCellScreenBounds,
-    getGeometrySnapshot: () => renderState.gridCameraStore.getSnapshot(),
+    getGeometrySnapshot: renderState.getLiveGeometrySnapshot,
   })
   useEffect(() => {
     fillPreviewRangeRef.current = fillPreviewRange

@@ -374,6 +374,26 @@ export function useWorkbookGridRenderState(input: {
     },
     [getCellLocalBounds],
   )
+  const getLiveGeometrySnapshot = useCallback(() => {
+    const scrollViewport = scrollViewportRef.current
+    if (!scrollViewport) {
+      return gridCameraStore.getSnapshot()
+    }
+    return createGridGeometrySnapshotFromAxes({
+      columns: columnAxis,
+      dpr: window.devicePixelRatio || 1,
+      freezeCols,
+      freezeRows,
+      gridMetrics,
+      hostHeight: scrollViewport.clientHeight,
+      hostWidth: scrollViewport.clientWidth,
+      previousCamera: gridCameraStore.getSnapshot()?.camera ?? null,
+      rows: rowAxis,
+      scrollLeft: scrollViewport.scrollLeft,
+      scrollTop: scrollViewport.scrollTop,
+      sheetName,
+    })
+  }, [columnAxis, freezeCols, freezeRows, gridCameraStore, gridMetrics, rowAxis, sheetName])
 
   const viewport = useMemo<Viewport>(() => viewportFromVisibleRegion(visibleRegion), [visibleRegion])
   const residentViewportRef = useRef<Viewport>(resolveResidentViewport(viewport))
@@ -1494,6 +1514,7 @@ export function useWorkbookGridRenderState(input: {
     focusTargetRef,
     getCellLocalBounds,
     getCellScreenBounds,
+    getLiveGeometrySnapshot,
     getVisibleRegion,
     getPreviewColumnWidth,
     getPreviewRowHeight,
