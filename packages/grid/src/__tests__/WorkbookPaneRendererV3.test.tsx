@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createGridAxisWorldIndex } from '../gridAxisWorldIndex.js'
 import { createGridGeometrySnapshotFromAxes } from '../gridGeometry.js'
 import { getGridMetrics } from '../gridMetrics.js'
+import { GridCameraStore } from '../runtime/gridCameraStore.js'
 import {
   TYPEGPU_V3_ACTIVE_RESOURCE_DEFER_MS,
   WorkbookPaneRendererV3,
@@ -13,6 +14,8 @@ import {
 } from '../renderer-v3/WorkbookPaneRendererV3.js'
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from '../renderer-v3/render-tile-pane-state.js'
+import { WorkbookPaneRendererRuntimeV3, type WorkbookPaneFrameDrawerV3 } from '../renderer-v3/workbook-pane-renderer-runtime.js'
+import { WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 
 function createTilePane(rowStart = 0): WorkbookRenderTilePaneState {
   const tile: GridRenderTile = {
@@ -161,5 +164,51 @@ describe('WorkbookPaneRendererV3', () => {
         now: 2_000 + TYPEGPU_V3_ACTIVE_RESOURCE_DEFER_MS + 1,
       }),
     ).toBe(false)
+  })
+
+  test('draw runtime uses live camera and scroll stores outside React render state', () => {
+    const metrics = getGridMetrics()
+    const geometry = createGridGeometrySnapshotFromAxes({
+      columns: createGridAxisWorldIndex({ axisLength: 1024, defaultSize: metrics.columnWidth }),
+      dpr: 1,
+      gridMetrics: metrics,
+      hostHeight: 720,
+      hostWidth: 1280,
+      rows: createGridAxisWorldIndex({ axisLength: 1024, defaultSize: metrics.rowHeight }),
+      scrollLeft: 0,
+      scrollTop: 0,
+      sheetName: 'Sheet1',
+    })
+    const cameraStore = new GridCameraStore()
+    cameraStore.setSnapshot(geometry)
+    const scrollStore = new WorkbookGridScrollStore()
+    scrollStore.setSnapshot({
+      scrollLeft: 64 * metrics.columnWidth,
+      scrollTop: 32 * metrics.rowHeight,
+      tx: 0,
+      ty: 0,
+    })
+    const drawFrame = vi.fn<WorkbookPaneFrameDrawerV3>()
+    const runtime = new WorkbookPaneRendererRuntimeV3(drawFrame)
+
+    runtime.updateState({
+      active: true,
+      backend: {},
+      cameraStore,
+      geometry: null,
+      scrollTransformStore: scrollStore,
+      surface: { dpr: 1, height: 720, pixelHeight: 720, pixelWidth: 1280, width: 1280 },
+      tilePanes: [createTilePane(32)],
+      webGpuReady: true,
+    })
+    runtime.drawNow()
+
+    expect(drawFrame).toHaveBeenCalledTimes(1)
+    expect(drawFrame.mock.calls[0]?.[0].scrollSnapshot).toMatchObject({
+      renderTx: 64 * metrics.columnWidth,
+      renderTy: 0,
+    })
+
+    runtime.dispose()
   })
 })

@@ -5,15 +5,15 @@ import type { GridCameraStore } from '../runtime/gridCameraStore.js'
 import {
   createWorkbookTypeGpuBackendV3,
   destroyWorkbookTypeGpuBackendV3,
-  drawWorkbookTypeGpuTileFrameV3,
   syncWorkbookTypeGpuSurfaceV3,
   type WorkbookTypeGpuBackendV3,
 } from './typegpu-workbook-backend-v3.js'
-import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
+import type { WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 export { TYPEGPU_V3_ACTIVE_RESOURCE_DEFER_MS, GridDrawSchedulerV3, shouldDeferTypeGpuV3PreloadSync } from './draw-scheduler.js'
-import { GridDrawSchedulerV3 } from './draw-scheduler.js'
+export { resolveTypeGpuV3DrawScrollSnapshot } from './workbook-pane-renderer-runtime.js'
 import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
+import { WorkbookPaneRendererRuntimeV3, type TypeGpuSurfaceSizeV3 } from './workbook-pane-renderer-runtime.js'
 
 export interface WorkbookPaneRendererV3Props {
   readonly active: boolean
@@ -28,15 +28,7 @@ export interface WorkbookPaneRendererV3Props {
   readonly scrollTransformStore?: WorkbookGridScrollStore | null
 }
 
-interface TypeGpuSurfaceSize {
-  readonly width: number
-  readonly height: number
-  readonly pixelWidth: number
-  readonly pixelHeight: number
-  readonly dpr: number
-}
-
-function resolveSurfaceSize(host: HTMLElement): TypeGpuSurfaceSize {
+function resolveSurfaceSize(host: HTMLElement): TypeGpuSurfaceSizeV3 {
   const width = Math.max(0, Math.floor(host.clientWidth))
   const height = Math.max(0, Math.floor(host.clientHeight))
   const dpr = Math.max(1, window.devicePixelRatio || 1)
@@ -46,25 +38,6 @@ function resolveSurfaceSize(host: HTMLElement): TypeGpuSurfaceSize {
     pixelHeight: Math.max(1, Math.floor(height * dpr)),
     pixelWidth: Math.max(1, Math.floor(width * dpr)),
     width,
-  }
-}
-
-export function resolveTypeGpuV3DrawScrollSnapshot(input: {
-  readonly fallback: WorkbookGridScrollSnapshot
-  readonly geometry: GridGeometrySnapshot | null
-  readonly panes: readonly WorkbookRenderTilePaneState[]
-}): WorkbookGridScrollSnapshot {
-  const bodyPane = input.panes.find((pane) => pane.paneId === 'body')
-  if (!input.geometry || !bodyPane) {
-    return input.fallback
-  }
-
-  const bodyWorldX = input.geometry.camera.frozenWidth + (input.fallback.scrollLeft ?? input.geometry.camera.bodyScrollX)
-  const bodyWorldY = input.geometry.camera.frozenHeight + (input.fallback.scrollTop ?? input.geometry.camera.bodyScrollY)
-  return {
-    ...input.fallback,
-    renderTx: bodyWorldX - input.geometry.columns.offsetOf(bodyPane.viewport.colStart),
-    renderTy: bodyWorldY - input.geometry.rows.offsetOf(bodyPane.viewport.rowStart),
   }
 }
 
@@ -82,21 +55,13 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
 }: WorkbookPaneRendererV3Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const backendRef = useRef<WorkbookTypeGpuBackendV3 | null>(null)
-  const drawSchedulerRef = useRef<GridDrawSchedulerV3 | null>(null)
-  const drawFrameRef = useRef<() => void>(() => {})
-  const activeRef = useRef(active)
-  const webGpuReadyRef = useRef(false)
-  const surfaceSizeRef = useRef<TypeGpuSurfaceSize>({ dpr: 1, height: 0, pixelHeight: 0, pixelWidth: 0, width: 0 })
-  const headerPanePayloadsRef = useRef<readonly GridHeaderPaneState[]>([])
-  const tilePanePayloadsRef = useRef<readonly WorkbookRenderTilePaneState[]>([])
-  const preloadTilePanePayloadsRef = useRef<readonly WorkbookRenderTilePaneState[]>([])
-  const overlayBuilderRef = useRef<typeof overlayBuilder>(overlayBuilder)
-  const overlayRef = useRef<typeof overlay>(overlay)
-  const geometryRef = useRef<GridGeometrySnapshot | null>(geometry)
-  const cameraStoreRef = useRef<GridCameraStore | null>(cameraStore)
-  const scrollTransformStoreRef = useRef<WorkbookGridScrollStore | null>(scrollTransformStore)
+  const rendererRuntimeRef = useRef<WorkbookPaneRendererRuntimeV3 | null>(null)
   const [webGpuReady, setWebGpuReady] = useState(false)
-  const [surfaceSize, setSurfaceSize] = useState<TypeGpuSurfaceSize>({ dpr: 1, height: 0, pixelHeight: 0, pixelWidth: 0, width: 0 })
+  const [surfaceSize, setSurfaceSize] = useState<TypeGpuSurfaceSizeV3>({ dpr: 1, height: 0, pixelHeight: 0, pixelWidth: 0, width: 0 })
+  if (!rendererRuntimeRef.current) {
+    rendererRuntimeRef.current = new WorkbookPaneRendererRuntimeV3()
+  }
+  const rendererRuntime = rendererRuntimeRef.current
 
   useEffect(() => {
     if (!host) {
@@ -104,7 +69,6 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
     }
     const update = () => {
       const size = resolveSurfaceSize(host)
-      surfaceSizeRef.current = size
       setSurfaceSize(size)
     }
     update()
@@ -150,50 +114,6 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   }, [active])
 
   useEffect(() => {
-    activeRef.current = active
-  }, [active])
-
-  useEffect(() => {
-    webGpuReadyRef.current = webGpuReady
-  }, [webGpuReady])
-
-  useEffect(() => {
-    surfaceSizeRef.current = surfaceSize
-  }, [surfaceSize])
-
-  useEffect(() => {
-    geometryRef.current = geometry
-  }, [geometry])
-
-  useEffect(() => {
-    cameraStoreRef.current = cameraStore
-  }, [cameraStore])
-
-  useEffect(() => {
-    headerPanePayloadsRef.current = headerPanes
-  }, [headerPanes])
-
-  useEffect(() => {
-    tilePanePayloadsRef.current = tilePanes
-  }, [tilePanes])
-
-  useEffect(() => {
-    preloadTilePanePayloadsRef.current = preloadTilePanes
-  }, [preloadTilePanes])
-
-  useEffect(() => {
-    overlayBuilderRef.current = overlayBuilder
-  }, [overlayBuilder])
-
-  useEffect(() => {
-    overlayRef.current = overlay
-  }, [overlay])
-
-  useEffect(() => {
-    scrollTransformStoreRef.current = scrollTransformStore
-  }, [scrollTransformStore])
-
-  useEffect(() => {
     if (!active || !webGpuReady) {
       return
     }
@@ -210,84 +130,67 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   }, [active, surfaceSize, webGpuReady])
 
   useEffect(() => {
-    drawFrameRef.current = () => {
-      if (!activeRef.current || !webGpuReadyRef.current) {
-        return
-      }
-
-      const backend = backendRef.current
-      const surface = surfaceSizeRef.current
-      const headerPanePayloads = headerPanePayloadsRef.current
-      const baseTilePanePayloads = tilePanePayloadsRef.current
-      const preloadTilePanePayloads = preloadTilePanePayloadsRef.current
-      if (!backend || surface.width <= 0 || surface.height <= 0) {
-        return
-      }
-      const latestGeometry = cameraStoreRef.current?.getSnapshot() ?? geometryRef.current
-      const camera = latestGeometry?.camera ?? null
-      const scheduler = (drawSchedulerRef.current ??= new GridDrawSchedulerV3())
-      const frameDecision = scheduler.resolveFrame({
-        camera,
-        requestIdlePreloadDraw: () => scheduler.requestDraw(drawFrameRef.current),
-      })
-      const overlayBatch = overlayBuilderRef.current && latestGeometry ? overlayBuilderRef.current(latestGeometry) : overlayRef.current
-
-      drawWorkbookTypeGpuTileFrameV3({
-        backend,
-        headerPanes: headerPanePayloads,
-        overlay: overlayBatch ?? null,
-        preloadTilePanes: preloadTilePanePayloads,
-        syncPreloadPanes: frameDecision.syncPreloadPanes,
-        tilePanes: baseTilePanePayloads,
-        scrollSnapshot: resolveTypeGpuV3DrawScrollSnapshot({
-          fallback: scrollTransformStoreRef.current?.getSnapshot() ?? { tx: 0, ty: 0 },
-          geometry: latestGeometry,
-          panes: baseTilePanePayloads,
-        }),
-        surface,
-      })
-    }
-
-    drawFrameRef.current()
-    const scheduler = (drawSchedulerRef.current ??= new GridDrawSchedulerV3())
-    scheduler.requestDraw(drawFrameRef.current)
-  }, [active, headerPanes, overlay, overlayBuilder, preloadTilePanes, surfaceSize, tilePanes, webGpuReady])
+    rendererRuntime.updateState({
+      active,
+      backend: backendRef.current,
+      cameraStore,
+      geometry,
+      headerPanes,
+      overlay: overlay ?? null,
+      overlayBuilder: overlayBuilder ?? null,
+      preloadTilePanes,
+      scrollTransformStore,
+      surface: surfaceSize,
+      tilePanes,
+      webGpuReady,
+    })
+    rendererRuntime.drawNow()
+    rendererRuntime.requestDraw()
+  }, [
+    active,
+    cameraStore,
+    geometry,
+    headerPanes,
+    overlay,
+    overlayBuilder,
+    preloadTilePanes,
+    rendererRuntime,
+    scrollTransformStore,
+    surfaceSize,
+    tilePanes,
+    webGpuReady,
+  ])
 
   useEffect(() => {
     if (!active || !scrollTransformStore) {
       return
     }
     const scheduleDraw = () => {
-      const scheduler = (drawSchedulerRef.current ??= new GridDrawSchedulerV3())
-      scheduler.noteInputSignal()
-      scheduler.requestDraw(drawFrameRef.current)
+      rendererRuntime.noteInputSignalAndRequestDraw()
     }
     return scrollTransformStore.subscribe(scheduleDraw)
-  }, [active, scrollTransformStore])
+  }, [active, rendererRuntime, scrollTransformStore])
 
   useEffect(() => {
     if (!active || !cameraStore) {
       return
     }
     const scheduleDraw = () => {
-      const scheduler = (drawSchedulerRef.current ??= new GridDrawSchedulerV3())
-      scheduler.noteInputSignal()
-      scheduler.requestDraw(drawFrameRef.current)
+      rendererRuntime.noteInputSignalAndRequestDraw()
     }
     return cameraStore.subscribe(scheduleDraw)
-  }, [active, cameraStore])
+  }, [active, cameraStore, rendererRuntime])
 
   useEffect(() => {
     const canvas = canvasRef.current
     return () => {
-      drawSchedulerRef.current?.cancel()
-      drawSchedulerRef.current = null
+      rendererRuntime.dispose()
       if (canvas) {
         canvas.width = 0
         canvas.height = 0
       }
     }
-  }, [])
+  }, [rendererRuntime])
 
   if (!active || !host) {
     return null
