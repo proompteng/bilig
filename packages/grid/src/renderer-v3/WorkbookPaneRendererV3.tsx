@@ -4,12 +4,12 @@ import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { GridCameraStore } from '../renderer-v2/gridCameraStore.js'
 import { GridRenderLoop } from '../renderer-v2/gridRenderLoop.js'
 import {
-  createWorkbookTypeGpuBackend,
-  destroyWorkbookTypeGpuBackend,
-  drawWorkbookTypeGpuFrame,
-  syncWorkbookTypeGpuSurface,
-  type WorkbookTypeGpuBackend,
-} from '../renderer-v2/workbook-typegpu-backend.js'
+  createWorkbookTypeGpuBackendV3,
+  destroyWorkbookTypeGpuBackendV3,
+  drawWorkbookTypeGpuTileFrameV3,
+  syncWorkbookTypeGpuSurfaceV3,
+  type WorkbookTypeGpuBackendV3,
+} from './typegpu-workbook-backend-v3.js'
 import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
@@ -99,7 +99,7 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   tilePanes,
 }: WorkbookPaneRendererV3Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const backendRef = useRef<WorkbookTypeGpuBackend | null>(null)
+  const backendRef = useRef<WorkbookTypeGpuBackendV3 | null>(null)
   const renderLoopRef = useRef<GridRenderLoop | null>(null)
   const idlePreloadRetryRef = useRef<number | null>(null)
   const lastScrollSignalAtRef = useRef(0)
@@ -135,17 +135,17 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
 
   useEffect(() => {
     let cancelled = false
-    let effectBackend: WorkbookTypeGpuBackend | null = null
+    let effectBackend: WorkbookTypeGpuBackendV3 | null = null
 
     async function init() {
       if (!active || !canvasRef.current) {
         setWebGpuReady(false)
         return
       }
-      const backend = await createWorkbookTypeGpuBackend(canvasRef.current)
+      const backend = await createWorkbookTypeGpuBackendV3(canvasRef.current)
       if (cancelled) {
         if (backend) {
-          destroyWorkbookTypeGpuBackend(backend)
+          destroyWorkbookTypeGpuBackendV3(backend)
         }
         return
       }
@@ -163,7 +163,7 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
       cancelled = true
       setWebGpuReady(false)
       if (effectBackend) {
-        destroyWorkbookTypeGpuBackend(effectBackend)
+        destroyWorkbookTypeGpuBackendV3(effectBackend)
       }
       backendRef.current = null
     }
@@ -222,7 +222,7 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
     if (!backend || !canvas) {
       return
     }
-    syncWorkbookTypeGpuSurface({
+    syncWorkbookTypeGpuSurfaceV3({
       backend,
       canvas,
       size: surfaceSize,
@@ -263,11 +263,10 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
       }
       const overlayBatch = overlayBuilderRef.current && latestGeometry ? overlayBuilderRef.current(latestGeometry) : overlayRef.current
 
-      drawWorkbookTypeGpuFrame({
+      drawWorkbookTypeGpuTileFrameV3({
         backend,
         headerPanes: headerPanePayloads,
         overlay: overlayBatch ?? null,
-        panes: [],
         preloadTilePanes: preloadTilePanePayloads,
         syncPreloadPanes: !deferPreloadSync,
         tilePanes: baseTilePanePayloads,

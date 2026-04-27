@@ -1,25 +1,25 @@
-import type { Rectangle } from '../gridTypes.js'
 import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
+import type { Rectangle } from '../gridTypes.js'
 import type { WorkbookGridScrollSnapshot } from '../workbookGridScrollStore.js'
-import type { WorkbookPaneBufferCache } from './pane-buffer-cache.js'
-import type { WorkbookRenderPaneState } from './pane-scene-types.js'
+import type { WorkbookPaneBufferCache } from '../renderer-v2/pane-buffer-cache.js'
 import {
   WORKBOOK_RECT_INSTANCE_LAYOUT,
   WORKBOOK_TEXT_INSTANCE_LAYOUT,
   WORKBOOK_UNIT_QUAD_LAYOUT,
   type TypeGpuRendererArtifacts,
   updateTypeGpuSurfaceUniform,
-} from './typegpu-backend.js'
-import { noteGridDrawFrame, noteTypeGpuDrawCall, noteTypeGpuPaneDraw, noteTypeGpuSubmit } from './grid-render-counters.js'
+} from '../renderer-v2/typegpu-backend.js'
+import { noteGridDrawFrame, noteTypeGpuDrawCall, noteTypeGpuPaneDraw, noteTypeGpuSubmit } from '../renderer-v2/grid-render-counters.js'
 import {
   WORKBOOK_DYNAMIC_OVERLAY_BUFFER_KEY,
   ensurePaneSurfaceBindings,
   resolveWorkbookHeaderBufferKey,
-  resolveWorkbookPaneBufferKey,
-} from './typegpu-buffer-pool.js'
-import type { DynamicGridOverlayBatchV3 } from '../renderer-v3/dynamic-overlay-batch.js'
+} from '../renderer-v2/typegpu-buffer-pool.js'
+import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
+import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
+import { resolveWorkbookTilePaneBufferKeyV3 } from './typegpu-tile-buffer-pool.js'
 
-export interface TypeGpuDrawSurface {
+export interface TypeGpuTileDrawSurface {
   readonly width: number
   readonly height: number
   readonly pixelWidth: number
@@ -27,30 +27,13 @@ export interface TypeGpuDrawSurface {
   readonly dpr: number
 }
 
-export function drawTypeGpuPanes(input: {
+export function drawTypeGpuTilePanesV3(input: {
   readonly artifacts: TypeGpuRendererArtifacts
   readonly paneBuffers: WorkbookPaneBufferCache
   readonly headerPanes?: readonly GridHeaderPaneState[] | undefined
-  readonly panes: readonly WorkbookRenderPaneState[]
+  readonly tilePanes: readonly WorkbookRenderTilePaneState[]
   readonly overlay?: DynamicGridOverlayBatchV3 | null | undefined
-  readonly surface: TypeGpuDrawSurface
-  readonly scrollSnapshot: WorkbookGridScrollSnapshot
-}): void {
-  drawTypeGpuFrameWithDataPanes({
-    ...input,
-    dataPanes: input.panes,
-    resolveDataPaneBufferKey: resolveWorkbookPaneBufferKey,
-  })
-}
-
-function drawTypeGpuFrameWithDataPanes<TPane extends TypeGpuDataPaneState>(input: {
-  readonly artifacts: TypeGpuRendererArtifacts
-  readonly paneBuffers: WorkbookPaneBufferCache
-  readonly headerPanes?: readonly GridHeaderPaneState[] | undefined
-  readonly dataPanes: readonly TPane[]
-  readonly resolveDataPaneBufferKey: (pane: TPane) => string
-  readonly overlay?: DynamicGridOverlayBatchV3 | null | undefined
-  readonly surface: TypeGpuDrawSurface
+  readonly surface: TypeGpuTileDrawSurface
   readonly scrollSnapshot: WorkbookGridScrollSnapshot
 }): void {
   const commandEncoder = input.artifacts.device.createCommandEncoder()
@@ -65,8 +48,8 @@ function drawTypeGpuFrameWithDataPanes<TPane extends TypeGpuDataPaneState>(input
     ],
   })
 
-  input.dataPanes.forEach((pane) => {
-    const paneCache = input.paneBuffers.get(input.resolveDataPaneBufferKey(pane))
+  input.tilePanes.forEach((pane) => {
+    const paneCache = input.paneBuffers.get(resolveWorkbookTilePaneBufferKeyV3(pane))
     const scissorRect = resolveClampedScissorRect(pane.frame, input.surface)
     if (!scissorRect) {
       return
@@ -124,24 +107,12 @@ function drawTypeGpuFrameWithDataPanes<TPane extends TypeGpuDataPaneState>(input
   noteGridDrawFrame(performance.now())
 }
 
-type TypeGpuDataPaneState = {
-  readonly frame: Rectangle
-  readonly contentOffset: {
-    readonly x: number
-    readonly y: number
-  }
-  readonly scrollAxes: {
-    readonly x: boolean
-    readonly y: boolean
-  }
-}
-
 function drawTypeGpuOverlay(input: {
   readonly artifacts: TypeGpuRendererArtifacts
   readonly paneBuffers: WorkbookPaneBufferCache
   readonly pass: GPURenderPassEncoder
   readonly overlay: DynamicGridOverlayBatchV3 | null
-  readonly surface: TypeGpuDrawSurface
+  readonly surface: TypeGpuTileDrawSurface
 }): void {
   if (!input.overlay || input.overlay.rectCount === 0) {
     return
@@ -172,7 +143,7 @@ function drawTypeGpuHeaderPanes(input: {
   readonly paneBuffers: WorkbookPaneBufferCache
   readonly pass: GPURenderPassEncoder
   readonly scrollSnapshot: WorkbookGridScrollSnapshot
-  readonly surface: TypeGpuDrawSurface
+  readonly surface: TypeGpuTileDrawSurface
 }): void {
   input.headerPanes.forEach((pane) => {
     const paneCache = input.paneBuffers.peek(resolveWorkbookHeaderBufferKey(pane))
@@ -216,7 +187,7 @@ function drawTypeGpuHeaderPanes(input: {
 
 function resolveClampedScissorRect(
   frame: Rectangle,
-  surface: TypeGpuDrawSurface,
+  surface: TypeGpuTileDrawSurface,
 ): { x: number; y: number; width: number; height: number } | null {
   const dpr = surface.dpr
   const x0 = Math.max(0, Math.min(surface.pixelWidth, Math.floor(frame.x * dpr)))

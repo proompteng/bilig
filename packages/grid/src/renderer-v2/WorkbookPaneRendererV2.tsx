@@ -6,7 +6,6 @@ import type { WorkbookRenderPaneState } from './pane-scene-types.js'
 import type { GridCameraStore } from './gridCameraStore.js'
 import { GridRenderLoop } from './gridRenderLoop.js'
 import type { DynamicGridOverlayBatchV3 } from '../renderer-v3/dynamic-overlay-batch.js'
-import type { WorkbookRenderTilePaneState } from '../renderer-v3/render-tile-pane-state.js'
 import {
   createWorkbookTypeGpuBackend,
   destroyWorkbookTypeGpuBackend,
@@ -26,8 +25,6 @@ export interface WorkbookPaneRendererV2Props {
   readonly headerPanes?: readonly GridHeaderPaneState[] | undefined
   readonly panes: readonly WorkbookRenderPaneState[]
   readonly preloadPanes?: readonly WorkbookRenderPaneState[] | undefined
-  readonly tilePanes?: readonly WorkbookRenderTilePaneState[] | undefined
-  readonly preloadTilePanes?: readonly WorkbookRenderTilePaneState[] | undefined
   readonly overlayBuilder?: ((geometry: GridGeometrySnapshot) => DynamicGridOverlayBatchV3 | null | undefined) | undefined
   readonly overlay?: DynamicGridOverlayBatchV3 | undefined
   readonly scrollTransformStore?: WorkbookGridScrollStore | null
@@ -99,8 +96,6 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   overlayBuilder,
   panes,
   preloadPanes = [],
-  tilePanes = [],
-  preloadTilePanes = [],
   scrollTransformStore = null,
 }: WorkbookPaneRendererV2Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -115,8 +110,6 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   const headerPanePayloadsRef = useRef<readonly GridHeaderPaneState[]>([])
   const panePayloadsRef = useRef<readonly WorkbookRenderPaneState[]>([])
   const preloadPanePayloadsRef = useRef<readonly WorkbookRenderPaneState[]>([])
-  const tilePanePayloadsRef = useRef<readonly WorkbookRenderTilePaneState[]>([])
-  const preloadTilePanePayloadsRef = useRef<readonly WorkbookRenderTilePaneState[]>([])
   const overlayBuilderRef = useRef<typeof overlayBuilder>(overlayBuilder)
   const overlayRef = useRef<typeof overlay>(overlay)
   const geometryRef = useRef<GridGeometrySnapshot | null>(geometry)
@@ -209,14 +202,6 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   }, [preloadPanes])
 
   useEffect(() => {
-    tilePanePayloadsRef.current = tilePanes
-  }, [tilePanes])
-
-  useEffect(() => {
-    preloadTilePanePayloadsRef.current = preloadTilePanes
-  }, [preloadTilePanes])
-
-  useEffect(() => {
     overlayBuilderRef.current = overlayBuilder
   }, [overlayBuilder])
 
@@ -255,8 +240,6 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
       const headerPanePayloads = headerPanePayloadsRef.current
       const basePanePayloads = panePayloadsRef.current
       const preloadPanePayloads = preloadPanePayloadsRef.current
-      const baseTilePanePayloads = tilePanePayloadsRef.current
-      const preloadTilePanePayloads = preloadTilePanePayloadsRef.current
       if (!backend || surface.width <= 0 || surface.height <= 0) {
         return
       }
@@ -286,13 +269,11 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
         overlay: overlayBatch ?? null,
         panes: basePanePayloads,
         preloadPanes: preloadPanePayloads,
-        preloadTilePanes: preloadTilePanePayloads,
         syncPreloadPanes: !deferPreloadSync,
-        tilePanes: baseTilePanePayloads.length > 0 ? baseTilePanePayloads : undefined,
         scrollSnapshot: resolveTypeGpuV2DrawScrollSnapshot({
           fallback: scrollTransformStoreRef.current?.getSnapshot() ?? { tx: 0, ty: 0 },
           geometry: latestGeometry,
-          panes: baseTilePanePayloads.length > 0 ? baseTilePanePayloads : basePanePayloads,
+          panes: basePanePayloads,
         }),
         surface,
       })
@@ -301,7 +282,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
     drawFrameRef.current()
     renderLoopRef.current ??= new GridRenderLoop()
     renderLoopRef.current.requestDraw(drawFrameRef.current)
-  }, [active, headerPanes, overlay, overlayBuilder, panes, preloadPanes, preloadTilePanes, surfaceSize, tilePanes, webGpuReady])
+  }, [active, headerPanes, overlay, overlayBuilder, panes, preloadPanes, surfaceSize, webGpuReady])
 
   useEffect(() => {
     if (!active || !scrollTransformStore) {
@@ -352,7 +333,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 z-10"
       data-pane-renderer="workbook-pane-renderer-v2"
-      data-renderer-mode={tilePanes.length > 0 ? 'typegpu-v3' : 'typegpu-v2'}
+      data-renderer-mode="typegpu-v2"
       data-testid="grid-pane-renderer"
       data-v2-body-world-x={geometry?.camera.bodyWorldX ?? 0}
       data-v2-body-world-y={geometry?.camera.bodyWorldY ?? 0}
