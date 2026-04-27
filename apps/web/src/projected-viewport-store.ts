@@ -1,29 +1,20 @@
 import type { GridEngineLike } from '@bilig/grid'
-import { parseCellAddress } from '@bilig/formula'
 import type { CellSnapshot, CellStyleRecord, Viewport, WorkbookAxisEntrySnapshot } from '@bilig/protocol'
 import type { RenderTileDeltaSubscription, ViewportPatch, WorkerEngineClient } from '@bilig/worker-transport'
 import { ProjectedViewportAxisStore } from './projected-viewport-axis-store.js'
 import { ProjectedViewportCellCache } from './projected-viewport-cell-cache.js'
 import { ProjectedViewportPatchCoordinator, type ProjectedViewportPatchApplied } from './projected-viewport-patch-coordinator.js'
-import { ProjectedSceneStore } from './projected-scene-store.js'
 import type { ProjectedRenderTile, ProjectedTileSceneChange, ProjectedTileSceneStore } from './projected-tile-scene-store.js'
-import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
-import { buildWorkerResidentPaneScenes } from './worker-runtime-render-scene.js'
 
 const MAX_CACHED_CELLS_PER_SHEET = 6000
 type CellItem = readonly [number, number]
 type SheetViewportChannel = 'columnWidths' | 'rowHeights' | 'hiddenColumns' | 'hiddenRows' | 'freeze'
-interface SetCellSnapshotOptions {
-  readonly invalidateResidentScenes?: boolean
-}
-
 export class ProjectedViewportStore implements GridEngineLike {
   private readonly cellCache = new ProjectedViewportCellCache({
     maxCachedCellsPerSheet: MAX_CACHED_CELLS_PER_SHEET,
   })
   private readonly axisStore: ProjectedViewportAxisStore
   private readonly patchCoordinator: ProjectedViewportPatchCoordinator
-  private readonly sceneStore: ProjectedSceneStore
   private tileSceneStore: ProjectedTileSceneStore | null = null
   private readonly sheetChannelListeners = new Map<string, Map<SheetViewportChannel, Set<() => void>>>()
   private lastBatchId = 0
@@ -37,19 +28,11 @@ export class ProjectedViewportStore implements GridEngineLike {
       markSheetKnown: (sheetName) => this.cellCache.markSheetKnown(sheetName),
       notifyListeners: () => this.cellCache.notifyListeners(),
     })
-    this.sceneStore = new ProjectedSceneStore(client, {
-      buildImmediateResidentPaneScenes: (request, generation) =>
-        buildWorkerResidentPaneScenes({
-          engine: this,
-          request,
-          generation,
-        }),
-    })
     this.patchCoordinator = new ProjectedViewportPatchCoordinator({
       cellCache: this.cellCache,
       axisStore: this.axisStore,
       ...(client ? { client } : {}),
-      onViewportPatchApplied: (patch, result, options) => this.handleViewportPatchApplied(patch, result, options),
+      onViewportPatchApplied: (patch, result) => this.handleViewportPatchApplied(patch, result),
     })
   }
 
@@ -134,15 +117,8 @@ export class ProjectedViewportStore implements GridEngineLike {
     return { batchId: this.lastBatchId }
   }
 
-  setCellSnapshot(snapshot: CellSnapshot, options: SetCellSnapshotOptions = {}): void {
-    if (!this.cellCache.setCellSnapshot(snapshot)) {
-      return
-    }
-    if (options.invalidateResidentScenes === false) {
-      return
-    }
-    const cell = parseCellAddress(snapshot.address, snapshot.sheetName)
-    this.sceneStore.noteCellDamage(snapshot.sheetName, cell.row, cell.col)
+  setCellSnapshot(snapshot: CellSnapshot): void {
+    this.cellCache.setCellSnapshot(snapshot)
   }
 
   setColumnWidth(sheetName: string, columnIndex: number, width: number): void {
@@ -198,7 +174,6 @@ export class ProjectedViewportStore implements GridEngineLike {
   setKnownSheets(sheetNames: readonly string[]): void {
     const removedSheets = this.cellCache.setKnownSheets(sheetNames)
     this.axisStore.dropSheets(removedSheets)
-    this.sceneStore.dropSheets(removedSheets)
     this.tileSceneStore?.dropSheets(removedSheets)
     removedSheets.forEach((sheetName) => this.sheetChannelListeners.delete(sheetName))
   }
@@ -217,9 +192,7 @@ export class ProjectedViewportStore implements GridEngineLike {
       sheetName,
       viewport,
       listener,
-      options.initialPatch === undefined
-        ? { invalidateResidentScenes: true }
-        : { initialPatch: options.initialPatch, invalidateResidentScenes: true },
+      options.initialPatch === undefined ? {} : { initialPatch: options.initialPatch },
     )
   }
 
@@ -231,16 +204,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   ): () => void {
     return this.patchCoordinator.subscribeViewport(sheetName, viewport, listener, {
       initialPatch: options.initialPatch ?? 'full',
-      invalidateResidentScenes: false,
     })
-  }
-
-  subscribeResidentPaneScenes(request: WorkbookPaneSceneRequest, listener: () => void): () => void {
-    return this.sceneStore.subscribeResidentPaneScenes(request, listener)
-  }
-
-  peekResidentPaneScenes(request: WorkbookPaneSceneRequest): readonly WorkbookPaneScenePacket[] | null {
-    return this.sceneStore.peekResidentPaneScenes(request)
   }
 
   subscribeRenderTileDeltas(subscription: RenderTileDeltaSubscription, listener: (change: ProjectedTileSceneChange) => void): () => void {
@@ -266,21 +230,14 @@ export class ProjectedViewportStore implements GridEngineLike {
 
   applyViewportPatch(patch: ViewportPatch): readonly { cell: CellItem }[] {
     const result = this.patchCoordinator.applyViewportPatchDetailed(patch)
-    this.handleViewportPatchApplied(patch, result, { invalidateResidentScenes: true })
+    this.handleViewportPatchApplied(patch, result)
     return result.damage
   }
 
-  private handleViewportPatchApplied(
-    patch: ViewportPatch,
-    result: ProjectedViewportPatchApplied,
-    options: { readonly invalidateResidentScenes: boolean },
-  ): void {
+  private handleViewportPatchApplied(patch: ViewportPatch, result: ProjectedViewportPatchApplied): void {
     const batchId = patch.metrics?.batchId
     if (Number.isInteger(batchId) && batchId >= 0) {
       this.lastBatchId = batchId
-    }
-    if (options.invalidateResidentScenes) {
-      this.sceneStore.noteViewportPatch(patch, result)
     }
     const channels: SheetViewportChannel[] = []
     if (result.columnsChanged) {

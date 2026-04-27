@@ -27,7 +27,6 @@ import {
 import { validateGridScenePacketV2 } from '../../../packages/grid/src/renderer-v2/scene-packet-validator.js'
 import { packTileKey53 } from '../../../packages/grid/src/renderer-v3/tile-key.js'
 import { resolveColumnOffset } from '../../../packages/grid/src/workbookGridViewport.js'
-import type { WorkbookPaneScenePacket } from './resident-pane-scene-types.js'
 import { buildFreezeVersion, buildRenderedAxisState } from './worker-runtime-render-axis.js'
 import { listViewportTileBounds } from './worker-viewport-tile-store.js'
 
@@ -195,22 +194,6 @@ function buildContentTileScenePacket(input: {
     throw new Error(`Invalid worker render tile packet: ${validation.reason}`)
   }
   return packet
-}
-
-export function buildRenderTileDeltaBatchFromResidentPaneScenes(input: {
-  sheetId: number
-  batchId: number
-  cameraSeq: number
-  scenes: readonly WorkbookPaneScenePacket[]
-}): RenderTileDeltaBatch {
-  return {
-    magic: 'bilig.render.tile.delta',
-    version: 1,
-    sheetId: input.sheetId,
-    batchId: input.batchId,
-    cameraSeq: input.cameraSeq,
-    mutations: input.scenes.map((scene) => buildRenderTileReplaceMutation(input.sheetId, scene.packedScene)),
-  }
 }
 
 export function buildRenderTileReplaceMutation(sheetId: number, packet: GridScenePacketV2): RenderTileReplaceMutation {

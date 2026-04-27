@@ -1,15 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ValueTag, type RecalcMetrics } from '@bilig/protocol'
 import type { ViewportPatch } from '@bilig/worker-transport'
-import {
-  GRID_SCENE_PACKET_V2_MAGIC,
-  GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
-  GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT,
-  GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT,
-  GRID_SCENE_PACKET_V2_VERSION,
-  createGridTileKeyV2,
-  type GridScenePacketV2,
-} from '../../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
 import { ProjectedViewportStore } from '../projected-viewport-store.js'
 
 const TEST_METRICS: RecalcMetrics = {
@@ -133,54 +124,6 @@ function countSheetCells(cache: ProjectedViewportStore, sheetName: string): numb
     count += 1
   })
   return count
-}
-
-function createResidentScene(
-  request: {
-    readonly sheetName: string
-    readonly residentViewport: {
-      readonly rowStart: number
-      readonly rowEnd: number
-      readonly colStart: number
-      readonly colEnd: number
-    }
-  },
-  generation: number,
-  requestSeq = generation,
-  packetOverrides: Partial<GridScenePacketV2> = {},
-) {
-  const viewport = request.residentViewport
-  const surfaceSize = { width: 400, height: 200 }
-  return {
-    generation,
-    paneId: 'body' as const,
-    viewport,
-    surfaceSize,
-    packedScene: {
-      borderRectCount: 0,
-      cameraSeq: requestSeq,
-      fillRectCount: 0,
-      generatedAt: 1_000 + requestSeq,
-      generation,
-      key: createGridTileKeyV2({ paneId: 'body', sheetName: request.sheetName, viewport }),
-      magic: GRID_SCENE_PACKET_V2_MAGIC,
-      paneId: 'body' as const,
-      rectCount: 0,
-      rectInstances: new Float32Array(GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT),
-      rects: new Float32Array(GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT),
-      rectSignature: 'rect-empty',
-      requestSeq,
-      sheetName: request.sheetName,
-      surfaceSize,
-      textMetrics: new Float32Array(GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT),
-      textCount: 0,
-      textRuns: [],
-      textSignature: 'text-empty',
-      version: GRID_SCENE_PACKET_V2_VERSION,
-      viewport,
-      ...packetOverrides,
-    },
-  }
 }
 
 describe('ProjectedViewportStore', () => {
@@ -629,152 +572,6 @@ describe('ProjectedViewportStore', () => {
     unsubscribeCell()
   })
 
-  it('publishes patched resident scenes immediately when subscribed viewport patches arrive', async () => {
-    vi.useFakeTimers()
-    const typedPatch: ViewportPatch = {
-      ...createPatch(),
-      cells: [
-        {
-          row: 4,
-          col: 3,
-          snapshot: {
-            sheetName: 'Sheet1',
-            address: 'D5',
-            value: { tag: ValueTag.String, value: 'typed value', stringId: 1 },
-            input: 'typed value',
-            flags: 0,
-            version: 1,
-          },
-          displayText: 'typed value',
-          copyText: 'typed value',
-          editorText: 'typed value',
-          formatId: 0,
-          styleId: 'style-0',
-        },
-      ],
-    }
-    const encodedPatch = new TextEncoder().encode(JSON.stringify(typedPatch))
-    const subscribeViewportPatches = vi.fn((_viewport, listener: (bytes: Uint8Array) => void) => {
-      setTimeout(() => listener(encodedPatch), 0)
-      return () => undefined
-    })
-    const request = {
-      sheetName: 'Sheet1',
-      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
-      freezeRows: 0,
-      freezeCols: 0,
-    } as const
-    const pendingRefresh = new Promise<never>(() => undefined)
-    const invoke = vi
-      .fn()
-      .mockResolvedValueOnce([createResidentScene(request, 1, 1)])
-      .mockReturnValueOnce(pendingRefresh)
-    const cache = new ProjectedViewportStore({
-      invoke,
-      ready: async () => undefined,
-      subscribe: () => () => undefined,
-      subscribeBatches: () => () => undefined,
-      subscribeViewportPatches,
-      dispose: () => undefined,
-    })
-    const sceneListener = vi.fn()
-
-    const unsubscribeScene = cache.subscribeResidentPaneScenes(request, sceneListener)
-    await vi.runAllTimersAsync()
-    expect(cache.peekResidentPaneScenes(request)?.[0]?.generation).toBe(1)
-    sceneListener.mockClear()
-
-    const unsubscribeViewport = cache.subscribeViewport('Sheet1', { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 }, () => undefined)
-    await vi.runOnlyPendingTimersAsync()
-
-    expect(cache.getCell('Sheet1', 'D5').version).toBe(1)
-    const immediateScene = cache.peekResidentPaneScenes(request)
-    expect(immediateScene?.[0]?.generation).toBe(2)
-    expect(immediateScene?.[0]?.packedScene.textRuns.some((item) => item.text === 'typed value')).toBe(true)
-    expect(invoke).toHaveBeenCalledTimes(1)
-    expect(sceneListener).toHaveBeenCalledTimes(1)
-
-    unsubscribeViewport()
-    unsubscribeScene()
-    vi.useRealTimers()
-  })
-
-  it('keeps auxiliary selection viewport patches out of resident scene invalidation', async () => {
-    vi.useFakeTimers()
-    const typedPatch: ViewportPatch = {
-      ...createPatch(),
-      full: true,
-      cells: [
-        {
-          row: 4,
-          col: 3,
-          snapshot: {
-            sheetName: 'Sheet1',
-            address: 'D5',
-            value: { tag: ValueTag.String, value: 'selection hydration', stringId: 1 },
-            input: 'selection hydration',
-            flags: 0,
-            version: 1,
-          },
-          displayText: 'selection hydration',
-          copyText: 'selection hydration',
-          editorText: 'selection hydration',
-          formatId: 0,
-          styleId: 'style-0',
-        },
-      ],
-    }
-    const encodedPatch = new TextEncoder().encode(JSON.stringify(typedPatch))
-    const subscribeViewportPatches = vi.fn((_viewport, listener: (bytes: Uint8Array) => void) => {
-      setTimeout(() => listener(encodedPatch), 0)
-      return () => undefined
-    })
-    const request = {
-      sheetName: 'Sheet1',
-      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
-      freezeRows: 0,
-      freezeCols: 0,
-    } as const
-    const pendingRefresh = new Promise<never>(() => undefined)
-    const invoke = vi
-      .fn()
-      .mockResolvedValueOnce([createResidentScene(request, 1, 1)])
-      .mockReturnValueOnce(pendingRefresh)
-    const cache = new ProjectedViewportStore({
-      invoke,
-      ready: async () => undefined,
-      subscribe: () => () => undefined,
-      subscribeBatches: () => () => undefined,
-      subscribeViewportPatches,
-      dispose: () => undefined,
-    })
-    const sceneListener = vi.fn()
-    const cellListener = vi.fn()
-
-    const unsubscribeScene = cache.subscribeResidentPaneScenes(request, sceneListener)
-    const unsubscribeCell = cache.subscribeCell('Sheet1', 'D5', cellListener)
-    await vi.runAllTimersAsync()
-    sceneListener.mockClear()
-
-    const unsubscribeViewport = cache.subscribeAuxiliaryViewport(
-      'Sheet1',
-      { rowStart: 4, rowEnd: 4, colStart: 3, colEnd: 3 },
-      () => undefined,
-    )
-    await vi.runOnlyPendingTimersAsync()
-
-    expect(cache.getCell('Sheet1', 'D5').input).toBe('selection hydration')
-    expect(cellListener).toHaveBeenCalledTimes(1)
-    expect(cache.peekResidentPaneScenes(request)?.[0]?.generation).toBe(1)
-    expect(invoke).toHaveBeenCalledTimes(1)
-    expect(sceneListener).not.toHaveBeenCalled()
-
-    unsubscribeViewport()
-    unsubscribeCell()
-    unsubscribeScene()
-    vi.useRealTimers()
-  })
-
   it('allows auxiliary selection viewports to skip duplicate initial hydration', () => {
     const typedPatch: ViewportPatch = {
       ...createPatch(),
@@ -834,52 +631,6 @@ describe('ProjectedViewportStore', () => {
 
     unsubscribeViewport()
     unsubscribeCell()
-  })
-
-  it('publishes immediate resident scenes for local cell snapshots', async () => {
-    vi.useFakeTimers()
-    const request = {
-      sheetName: 'Sheet1',
-      residentViewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 10 },
-      freezeRows: 0,
-      freezeCols: 0,
-    } as const
-    const pendingRefresh = new Promise<never>(() => undefined)
-    const invoke = vi
-      .fn()
-      .mockResolvedValueOnce([createResidentScene(request, 1, 1)])
-      .mockReturnValueOnce(pendingRefresh)
-    const cache = new ProjectedViewportStore({
-      invoke,
-      ready: async () => undefined,
-      subscribe: () => () => undefined,
-      subscribeBatches: () => () => undefined,
-      subscribeViewportPatches: () => () => undefined,
-      dispose: () => undefined,
-    })
-    const sceneListener = vi.fn()
-
-    const unsubscribeScene = cache.subscribeResidentPaneScenes(request, sceneListener)
-    await vi.runAllTimersAsync()
-    sceneListener.mockClear()
-
-    cache.setCellSnapshot({
-      sheetName: 'Sheet1',
-      address: 'D5',
-      value: { tag: ValueTag.String, value: 'local typed', stringId: 1 },
-      input: 'local typed',
-      flags: 0,
-      version: 1,
-    })
-
-    const immediateScene = cache.peekResidentPaneScenes(request)
-    expect(immediateScene?.[0]?.generation).toBe(2)
-    expect(immediateScene?.[0]?.packedScene.textRuns.some((item) => item.text === 'local typed')).toBe(true)
-    expect(invoke).toHaveBeenCalledTimes(1)
-    expect(sceneListener).toHaveBeenCalledTimes(1)
-
-    unsubscribeScene()
-    vi.useRealTimers()
   })
 
   it('notifies selected-cell listeners only for the addressed cell', () => {

@@ -333,7 +333,7 @@ export async function createWorkerRuntimeSessionController(
     currentSelection = selection
     callbacks.onSelection(selection)
     const snapshot = await loadSelectionCellSnapshot(selection)
-    viewportStore.setCellSnapshot(snapshot ?? emptyCellSnapshot(selection), { invalidateResidentScenes: false })
+    viewportStore.setCellSnapshot(snapshot ?? emptyCellSnapshot(selection))
     updateSelectionViewport(selection)
     return snapshot ?? emptyCellSnapshot(selection)
   }

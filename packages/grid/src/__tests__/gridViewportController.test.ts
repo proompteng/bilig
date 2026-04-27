@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  resolveGridRenderScrollTransform,
-  sameViewportBounds,
-  sameVisibleRegionWindow,
-  tileKeyToViewport,
-} from '../gridViewportController.js'
+import { resolveGridRenderScrollTransform, sameViewportBounds, sameVisibleRegionWindow } from '../gridViewportController.js'
 
 describe('gridViewportController', () => {
   it('compares only the resident visible window fields that trigger React state', () => {
@@ -31,12 +26,11 @@ describe('gridViewportController', () => {
     ).toBe(false)
   })
 
-  it('compares viewport bounds and converts tile keys without changing shape', () => {
+  it('compares viewport bounds without depending on V2 tile keys', () => {
     const viewport = { rowStart: 10, rowEnd: 20, colStart: 30, colEnd: 40 }
 
     expect(sameViewportBounds(viewport, { ...viewport })).toBe(true)
     expect(sameViewportBounds(viewport, { ...viewport, colEnd: 41 })).toBe(false)
-    expect(tileKeyToViewport(viewport)).toEqual(viewport)
   })
 
   it('resolves render transforms against the resident render viewport', () => {

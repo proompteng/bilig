@@ -1,5 +1,4 @@
 import type { Viewport } from '@bilig/protocol'
-import type { GridTileKey } from './gridTileResidencyV2.js'
 import type { VisibleRegionState } from './gridPointer.js'
 import { resolveRowOffset } from './gridMetrics.js'
 import { resolveColumnOffset } from './workbookGridViewport.js'
@@ -21,15 +20,6 @@ export function sameViewportBounds(left: Viewport, right: Viewport): boolean {
   return (
     left.rowStart === right.rowStart && left.rowEnd === right.rowEnd && left.colStart === right.colStart && left.colEnd === right.colEnd
   )
-}
-
-export function tileKeyToViewport(tile: GridTileKey): Viewport {
-  return {
-    colEnd: tile.colEnd,
-    colStart: tile.colStart,
-    rowEnd: tile.rowEnd,
-    rowStart: tile.rowStart,
-  }
 }
 
 export function resolveGridRenderScrollTransform(options: {

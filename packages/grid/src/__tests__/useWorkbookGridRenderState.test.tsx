@@ -3,7 +3,6 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ValueTag, VIEWPORT_TILE_COLUMN_COUNT, VIEWPORT_TILE_ROW_COUNT, type CellSnapshot } from '@bilig/protocol'
-import { packGridScenePacketV2 } from '../renderer-v2/scene-packet-v2.js'
 import { packTileKey53 } from '../renderer-v3/tile-key.js'
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
 import { useWorkbookGridRenderState } from '../useWorkbookGridRenderState.js'
@@ -117,17 +116,21 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     document.body.innerHTML = ''
   })
 
-  it('keeps the viewport subscription stable while horizontal scroll stays inside one resident window', async () => {
+  it('builds local fixed render tiles without renderer viewport subscriptions', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     const subscribeViewport = vi.fn(() => () => undefined)
-    let latestScrollTransformStore: ReturnType<typeof useWorkbookGridRenderState>['scrollTransformStore'] | null = null
+    const subscribeCells = vi.fn(() => () => undefined)
+    let latestRenderState: ReturnType<typeof useWorkbookGridRenderState> | null = null
     let hostElement: HTMLDivElement | null = null
     let scrollViewport: HTMLDivElement | null = null
 
     function Harness() {
       const renderState = useWorkbookGridRenderState({
-        engine,
+        engine: {
+          ...engine,
+          subscribeCells,
+        },
         sheetName: 'Sheet1',
         selectedAddr: 'A1',
         selectedCellSnapshot: createEmptySnapshot('Sheet1', 'A1'),
@@ -135,17 +138,25 @@ describe('useWorkbookGridRenderState viewport residency', () => {
         isEditingCell: false,
         subscribeViewport,
       })
-      latestScrollTransformStore = renderState.scrollTransformStore
+      latestRenderState = renderState
 
       return (
         <div
           ref={(node) => {
+            if (node) {
+              Object.defineProperty(node, 'clientWidth', { configurable: true, value: 480 })
+              Object.defineProperty(node, 'clientHeight', { configurable: true, value: 180 })
+            }
             renderState.handleHostRef(node)
             hostElement = node
           }}
         >
           <div
             ref={(node) => {
+              if (node) {
+                Object.defineProperty(node, 'clientWidth', { configurable: true, value: 480 })
+                Object.defineProperty(node, 'clientHeight', { configurable: true, value: 180 })
+              }
               renderState.scrollViewportRef.current = node
               scrollViewport = node
             }}
@@ -172,18 +183,9 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 
-    const initialSubscriptionCount = subscribeViewport.mock.calls.length
-    expect(initialSubscriptionCount).toBeGreaterThan(0)
-    expect(subscribeViewport).toHaveBeenLastCalledWith(
-      'Sheet1',
-      expect.objectContaining({
-        rowStart: 0,
-        rowEnd: 95,
-        colStart: 0,
-        colEnd: 255,
-      }),
-      expect.any(Function),
-    )
+    expect(subscribeViewport).not.toHaveBeenCalled()
+    expect(subscribeCells).toHaveBeenCalled()
+    expect(latestRenderState?.renderPanes.some((pane) => pane.paneId === 'body')).toBe(true)
 
     await act(async () => {
       scrollViewport!.scrollLeft = 64 * 104
@@ -191,8 +193,8 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 
-    expect(subscribeViewport).toHaveBeenCalledTimes(initialSubscriptionCount)
-    expect(latestScrollTransformStore?.getSnapshot()).toMatchObject({
+    expect(subscribeViewport).not.toHaveBeenCalled()
+    expect(latestRenderState?.scrollTransformStore.getSnapshot()).toMatchObject({
       renderTx: 64 * 104,
       scrollLeft: 64 * 104,
       tx: 0,
@@ -204,211 +206,12 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 
-    expect(subscribeViewport).toHaveBeenCalledTimes(initialSubscriptionCount)
-    expect(latestScrollTransformStore?.getSnapshot()).toMatchObject({
+    expect(subscribeViewport).not.toHaveBeenCalled()
+    expect(latestRenderState?.scrollTransformStore.getSnapshot()).toMatchObject({
       renderTy: 8 * 22,
       scrollTop: 8 * 22,
       ty: 0,
     })
-
-    await act(async () => {
-      scrollViewport!.scrollLeft = 256 * 104
-      scrollViewport!.dispatchEvent(new Event('scroll'))
-      await new Promise((resolve) => window.setTimeout(resolve, 0))
-    })
-
-    expect(subscribeViewport.mock.calls.length).toBeGreaterThan(initialSubscriptionCount)
-    expect(latestScrollTransformStore?.getSnapshot()).toMatchObject({ tx: 0 })
-    expect(subscribeViewport).toHaveBeenCalledWith(
-      'Sheet1',
-      expect.objectContaining({
-        rowStart: 0,
-        rowEnd: 95,
-        colStart: 512,
-        colEnd: 767,
-      }),
-      expect.any(Function),
-    )
-    expect(subscribeViewport).toHaveBeenLastCalledWith(
-      'Sheet1',
-      expect.objectContaining({
-        rowStart: 0,
-        rowEnd: 95,
-        colStart: 256,
-        colEnd: 511,
-      }),
-      expect.any(Function),
-    )
-
-    await act(async () => {
-      root.unmount()
-    })
-  })
-
-  it('subscribes to worker resident pane scenes when the engine exposes them', async () => {
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-
-    const subscribeResidentPaneScenes = vi.fn(() => () => undefined)
-    const residentPaneScenes: readonly [] = []
-    const peekResidentPaneScenes = vi.fn(() => residentPaneScenes)
-    let hostElement: HTMLDivElement | null = null
-
-    function Harness() {
-      const renderState = useWorkbookGridRenderState({
-        engine: {
-          ...engine,
-          subscribeResidentPaneScenes,
-          peekResidentPaneScenes,
-        },
-        sheetName: 'Sheet1',
-        selectedAddr: 'A1',
-        selectedCellSnapshot: createEmptySnapshot('Sheet1', 'A1'),
-        editorValue: '',
-        isEditingCell: false,
-      })
-
-      return (
-        <div
-          ref={(node) => {
-            if (node) {
-              Object.defineProperty(node, 'clientWidth', { configurable: true, value: 480 })
-              Object.defineProperty(node, 'clientHeight', { configurable: true, value: 180 })
-            }
-            renderState.handleHostRef(node)
-            hostElement = node
-          }}
-        />
-      )
-    }
-
-    const rootHost = document.createElement('div')
-    document.body.appendChild(rootHost)
-    const root = createRoot(rootHost)
-
-    await act(async () => {
-      root.render(<Harness />)
-    })
-
-    Object.defineProperty(hostElement!, 'clientWidth', { configurable: true, value: 480 })
-    Object.defineProperty(hostElement!, 'clientHeight', { configurable: true, value: 180 })
-
-    await act(async () => {
-      root.render(<Harness />)
-      window.dispatchEvent(new Event('resize'))
-      await new Promise((resolve) => window.setTimeout(resolve, 0))
-    })
-
-    expect(subscribeResidentPaneScenes).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sheetName: 'Sheet1',
-        residentViewport: expect.objectContaining({
-          rowStart: 0,
-          colStart: 0,
-        }),
-      }),
-      expect.any(Function),
-    )
-    expect(subscribeResidentPaneScenes.mock.calls[0]?.[0]).not.toHaveProperty('selectedCell')
-    expect(peekResidentPaneScenes).toHaveBeenCalled()
-
-    await act(async () => {
-      root.unmount()
-    })
-  })
-
-  it('keeps viewport subscriptions mounted when worker resident scenes become usable', async () => {
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-
-    let residentPaneScenes: ReturnType<typeof useWorkbookGridRenderState>['renderPanes'] = []
-    const residentListeners = new Set<() => void>()
-    const subscribeResidentPaneScenes = vi.fn((_request, listener: () => void) => {
-      residentListeners.add(listener)
-      return () => {
-        residentListeners.delete(listener)
-      }
-    })
-    const peekResidentPaneScenes = vi.fn(() => residentPaneScenes)
-    const subscribeViewport = vi.fn(() => () => undefined)
-    let hostElement: HTMLDivElement | null = null
-
-    function Harness() {
-      const renderState = useWorkbookGridRenderState({
-        engine: {
-          ...engine,
-          subscribeResidentPaneScenes,
-          peekResidentPaneScenes,
-        },
-        sheetName: 'Sheet1',
-        selectedAddr: 'A1',
-        selectedCellSnapshot: createEmptySnapshot('Sheet1', 'A1'),
-        editorValue: '',
-        isEditingCell: false,
-        subscribeViewport,
-      })
-
-      return (
-        <div
-          ref={(node) => {
-            if (node) {
-              Object.defineProperty(node, 'clientWidth', { configurable: true, value: 480 })
-              Object.defineProperty(node, 'clientHeight', { configurable: true, value: 180 })
-            }
-            renderState.handleHostRef(node)
-            hostElement = node
-          }}
-        />
-      )
-    }
-
-    const rootHost = document.createElement('div')
-    document.body.appendChild(rootHost)
-    const root = createRoot(rootHost)
-
-    await act(async () => {
-      root.render(<Harness />)
-    })
-
-    Object.defineProperty(hostElement!, 'clientWidth', { configurable: true, value: 480 })
-    Object.defineProperty(hostElement!, 'clientHeight', { configurable: true, value: 180 })
-
-    await act(async () => {
-      root.render(<Harness />)
-      window.dispatchEvent(new Event('resize'))
-      await new Promise((resolve) => window.setTimeout(resolve, 0))
-    })
-
-    const initialSubscriptionCount = subscribeViewport.mock.calls.length
-    expect(initialSubscriptionCount).toBeGreaterThan(0)
-    expect(subscribeViewport).toHaveBeenCalledWith('Sheet1', expect.any(Object), expect.any(Function), { initialPatch: 'none' })
-
-    const viewport = { rowStart: 0, rowEnd: 95, colStart: 0, colEnd: 255 }
-    residentPaneScenes = [
-      {
-        contentOffset: { x: 0, y: 0 },
-        frame: { x: 0, y: 0, width: 480, height: 180 },
-        generation: 1,
-        packedScene: packGridScenePacketV2({
-          generation: 1,
-          paneId: 'body',
-          sheetName: 'Sheet1',
-          surfaceSize: { width: 480, height: 180 },
-          gpuScene: { fillRects: [], borderRects: [] },
-          textScene: { items: [] },
-          viewport,
-        }),
-        paneId: 'body',
-        scrollAxes: { x: true, y: true },
-        surfaceSize: { width: 480, height: 180 },
-        viewport,
-      },
-    ]
-
-    await act(async () => {
-      residentListeners.forEach((listener) => listener())
-      await new Promise((resolve) => window.setTimeout(resolve, 0))
-    })
-
-    expect(subscribeViewport).toHaveBeenCalledTimes(initialSubscriptionCount)
 
     await act(async () => {
       root.unmount()
@@ -418,8 +221,6 @@ describe('useWorkbookGridRenderState viewport residency', () => {
   it('uses fixed render tile deltas instead of resident scene and viewport subscriptions when available', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-    const subscribeResidentPaneScenes = vi.fn(() => () => undefined)
-    const peekResidentPaneScenes = vi.fn(() => [])
     const subscribeViewport = vi.fn(() => () => undefined)
     const subscribeRenderTileDeltas = vi.fn(() => () => undefined)
     const peekRenderTile = vi.fn(() => null)
@@ -427,11 +228,7 @@ describe('useWorkbookGridRenderState viewport residency', () => {
 
     function Harness() {
       const renderState = useWorkbookGridRenderState({
-        engine: {
-          ...engine,
-          subscribeResidentPaneScenes,
-          peekResidentPaneScenes,
-        },
+        engine,
         sheetId: 7,
         renderTileSource: {
           subscribeRenderTileDeltas,
@@ -483,8 +280,6 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       }),
       expect.any(Function),
     )
-    expect(subscribeResidentPaneScenes).not.toHaveBeenCalled()
-    expect(peekResidentPaneScenes).not.toHaveBeenCalled()
     expect(subscribeViewport).not.toHaveBeenCalled()
 
     await act(async () => {

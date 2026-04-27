@@ -12,7 +12,6 @@ export type ProjectedViewportPatchApplied = Pick<
 >
 interface ProjectedViewportSubscriptionOptions {
   readonly initialPatch?: 'full' | 'none'
-  readonly invalidateResidentScenes: boolean
 }
 
 export class ProjectedViewportPatchCoordinator {
@@ -31,7 +30,7 @@ export class ProjectedViewportPatchCoordinator {
     sheetName: string,
     viewport: Viewport,
     listener: (damage?: readonly { cell: CellItem }[]) => void,
-    options: ProjectedViewportSubscriptionOptions = { invalidateResidentScenes: true },
+    options: ProjectedViewportSubscriptionOptions = {},
   ): () => void {
     if (!this.options.client) {
       throw new Error('Worker viewport subscriptions require a worker engine client')

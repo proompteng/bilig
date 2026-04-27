@@ -10,35 +10,44 @@ Status: validated against the current `main` checkout plus the local renderer-v3
 
 Latest implementation note:
 
+- Product runtime no longer includes the resident scene store / worker resident scene RPC path. `apps/web/src/projected-scene-store.ts`,
+  `apps/web/src/worker-runtime-render-scene.ts`, the resident scene cache, and resident scene packet bridge types were deleted.
+- `ProjectedViewportStore` now owns projected cells/axis plus V3 render-tile deltas only; viewport patches no longer invalidate or rebuild
+  resident scene packets.
+- `useWorkbookGridRenderState.ts` no longer subscribes to renderer viewport patches, worker resident pane scenes, or V2 warm resident scene
+  requests. Data panes are always built from fixed render tiles: worker-provided tile deltas in product and a local fixed-tile materializer
+  for non-worker fallback/tests.
+- `packages/grid/src/gridResidentDataLayer.ts`, `packages/grid/src/gridTileResidencyV2.ts`, `packages/grid/src/useGridViewportSubscriptions.ts`,
+  and `packages/grid/src/useGridSceneResidency.ts` were deleted from the grid package product surface.
 - Runtime state now carries sheet IDs alongside sheet names so renderer tile subscriptions can use stable numeric content-tile identity.
 - `packages/grid` now owns a grid-facing render-tile source contract and a V2 compatibility adapter that maps fixed content tile payloads into mounted TypeGPU pane states.
 - `useWorkbookGridRenderState.ts` subscribes to projected render-tile deltas when a `renderTileSource` and `sheetId` are available, then prefers fixed content tiles once all required tiles for the resident viewport are ready.
 - With a fixed render-tile source present, the hook no longer mounts renderer-owned resident scene subscriptions or renderer-owned viewport patch subscriptions.
 - With that source present, the hook also bypasses V2 warm resident-viewport planning; tile prefetch needs to move to V3 tile interest batches next.
 - Transient fixed-tile misses retain the last fixed-tile pane set instead of immediately falling back to a full resident data-scene rebuild.
-- Frozen pane placements can reuse the same fixed content packet under separate body/top/left/corner clip placements, but the retained TypeGPU backend is still V2 and scene-packet-shaped.
-- The old resident scene path remains as fallback while the fixed-tile path is incomplete; the Oracle deletion gates are therefore not yet satisfied.
+- Frozen pane placements reuse the same fixed content packet under separate body/top/left/corner clip placements, but the retained TypeGPU backend is still V2 and scene-packet-shaped.
+- The old resident scene path has been deleted from product runtime. The remaining Oracle deletion gates are now overlay packetization, V2 scene-packet compatibility inside the backend, and full V3 TypeGPU resource ownership.
 
 ## 1. Validation Verdict
 
-The Atlas response is directionally correct: the mounted grid path is no longer a legacy DOM/canvas renderer, but it is still a resident scene-packet TypeGPU renderer rather than a renderer-native tile runtime.
+The Atlas response is directionally correct: the mounted grid path is no longer a legacy DOM/canvas renderer, and data rendering now enters through fixed render tiles. The backend still consumes V2-shaped scene packets through a compatibility adapter rather than a renderer-native V3 TypeGPU resource graph.
 
 The current hot path still has these validated properties:
 
 - `packages/grid/src/useWorkbookGridRenderState.ts` is too large and owns render residency, subscriptions, pane construction, headers, overlay geometry, scroll restoration, and React-facing state in one 1400+ line hook.
-- `apps/web/src/projected-scene-store.ts` retains resident scene packets keyed by viewport/pane request, not durable tile handles.
-- `packages/grid/src/gridResidentDataLayer.ts` still builds pane scenes through `buildGridGpuScene()` and `buildGridTextScene()`.
+- The app-side resident scene store has been deleted; retained render data now lives in `apps/web/src/projected-tile-scene-store.ts`.
+- Product data rendering no longer imports `packages/grid/src/gridResidentDataLayer.ts`; it now uses fixed render tiles and the V2 compatibility adapter.
 - `packages/grid/src/renderer-v2/tile-gpu-cache.ts` no longer uses array materialization plus `toSorted()` for stale lookup and eviction after this implementation tranche, but it is still not a true byte-budgeted tile residency system with numeric keys, compatibility buckets, and O(1) visible marking.
 - `packages/grid/src/renderer-v2/workbook-typegpu-backend.ts` still resolves draw panes by consulting that cache each frame.
 - `packages/grid/src/renderer-v2/typegpu-atlas-manager.ts` still uses one growing atlas canvas and redraws all glyphs on growth.
 - `packages/grid/src/renderer-v2/dynamic-overlay-packet.ts` still packs interaction overlays as `GridScenePacketV2`; the visible header-index helper no longer sorts arrays after this tranche, but overlays are still data-scene-shaped packets rather than a dedicated overlay instance layer.
-- Browser perf tests now prove several resident-scene wins, but they still allow bounded scene refreshes at tile-boundary/collaboration cases rather than enforcing a pure tile-delta runtime.
+- Browser perf tests now need to be tightened around the fixed-tile path, since resident-scene refreshes are no longer a normal product runtime behavior.
 
 Important corrections to the Atlas text:
 
 - `packages/grid/src/renderer-v2/typegpu-buffer-pool.ts` no longer hashes every text and rect item directly during resource sync. It now compares packet-level signatures.
 - The hashing work still exists during packet packing in `packages/grid/src/renderer-v2/scene-packet-v2.ts`, where `resolveRectSignature()` and `resolveTextSignature()` walk the full rect/text payload.
-- `scene-packet-v2.ts` already has a tile-shaped key, but it is still serialized to a string for the cache and still wraps viewport-sized resident pane packets. It is not yet a true binary tile delta contract.
+- `scene-packet-v2.ts` already has a tile-shaped key, but it is still serialized to a string for the cache and still wraps V3 fixed-tile payloads in a V2 compatibility packet. It is not yet a true backend-native tile packet.
 - The practical next step is not to delete the whole path immediately. The correct migration is measured replacement: add counters, remove hot-path allocation/sort work, then introduce renderer-native deltas behind tested contracts.
 - The follow-up Oracle response is correct that `useWorkbookGridRenderState.ts` must stop being the renderer owner, `ViewportPatch` must not remain the renderer contract, content tile identity must split from pane placement, and overlays need their own runtime. It is stale where it says the current `tile-gpu-cache.ts` still uses `filter().toSorted()` and where it implies `typegpu-buffer-pool.ts` hashes every item during resource sync.
 
@@ -231,13 +240,13 @@ Implement:
 
 ### Phase 8: delete scene-packet runtime use
 
-Delete from normal runtime path:
+Completed for resident data-scene runtime:
 
 - `apps/web/src/projected-scene-store.ts`
 - `apps/web/src/worker-runtime-render-scene.ts`
 - `packages/grid/src/gridResidentDataLayer.ts` as renderer data runtime
 
-Keep only test-oracle builders until tile payload v3 reaches parity.
+Remaining scene-packet runtime use is V2 backend compatibility and dynamic overlays, not resident data-scene ownership.
 
 ## 4. Current Execution Tranche
 
@@ -270,7 +279,16 @@ Completed in the first implementation tranche:
 - `RenderTileDeltaBatch` is encoded/decoded as binary and exported through `@bilig/worker-transport`.
 - `createWorkerEngineHost()` and `createWorkerEngineClient()` relay `renderTileDeltas` with subscription args.
 - `ProjectedTileSceneStore` applies decoded render tile deltas, ignores stale batches, and invalidates sheet tiles on structural axis/freeze batches.
-- `ProjectedViewportStore` exposes projected render tile subscriptions alongside existing viewport and resident-scene subscriptions.
+- `ProjectedViewportStore` exposes projected render tile subscriptions alongside app-state viewport subscriptions.
+
+Completed in the resident-scene deletion tranche:
+
+- `ProjectedSceneStore`, worker resident scene RPCs, worker resident scene cache, and resident pane scene bridge types were deleted.
+- `ProjectedViewportStore` no longer exposes `subscribeResidentPaneScenes()` / `peekResidentPaneScenes()`.
+- `WorkbookWorkerRuntime` no longer exposes `getResidentPaneScenes()`.
+- `useWorkbookGridRenderState.ts` no longer imports or subscribes to resident pane scenes, renderer viewport subscriptions, V2 warm resident planning, or `gridResidentDataLayer`.
+- `gridResidentDataLayer.ts`, `gridTileResidencyV2.ts`, `useGridViewportSubscriptions.ts`, and `useGridSceneResidency.ts` were deleted from `packages/grid/src`.
+- A local fixed render tile materializer now gives non-worker fallback/tests the same fixed-tile data path used by worker render tile deltas.
 - `WorkbookWorkerRuntime.subscribeRenderTileDeltas()` publishes binary tile deltas using the current resident-scene builder as the bootstrap oracle.
 - `gridViewportController.ts` owns resident-window comparison, tile-key conversion, and render-scroll transform math outside the large React hook.
 - `ProjectedTileSceneStore` reports renderer delta batches, mutations, apply duration, and dirty tile counts into the scroll perf collector.

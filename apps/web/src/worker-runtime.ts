@@ -59,10 +59,7 @@ import {
   type WorkbookRuntimeSheetSnapshot,
 } from './worker-runtime-state.js'
 import { WorkerRuntimeSnapshotCaches } from './worker-runtime-snapshot-caches.js'
-import { buildResidentPaneSceneCacheKey, buildWorkerResidentPaneScenes } from './worker-runtime-render-scene.js'
 import { buildWorkerRenderTileDeltaBatch } from './worker-runtime-render-tile-delta.js'
-import { WorkerRuntimeSceneCache } from './worker-runtime-scene-cache.js'
-import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
 import {
   collectSheetViewportImpacts,
   type SheetViewportImpact,
@@ -218,7 +215,6 @@ export class WorkbookWorkerRuntime {
     markProjectionDivergedFromLocalStore: () => this.markProjectionDivergedFromLocalStore(),
     queuePersist: (): Promise<void> => this.persistCoordinator.queuePersist(),
   })
-  private readonly sceneCache = new WorkerRuntimeSceneCache()
 
   constructor(
     options: {
@@ -694,17 +690,6 @@ export class WorkbookWorkerRuntime {
     }
   }
 
-  async getResidentPaneScenes(request: WorkbookPaneSceneRequest): Promise<readonly WorkbookPaneScenePacket[]> {
-    const engine = await this.getProjectionEngine()
-    const batchId = engine.getLastMetrics().batchId
-    const key = buildResidentPaneSceneCacheKey(request)
-    const cached = this.sceneCache.read(key, batchId)
-    if (cached) {
-      return cached.scenes
-    }
-    return this.sceneCache.write(key, batchId, (generation) => buildWorkerResidentPaneScenes({ engine, request, generation })).scenes
-  }
-
   private cleanup(): void {
     this.projectionBuildVersion += 1
     this.engineSubscription?.()
@@ -721,7 +706,6 @@ export class WorkbookWorkerRuntime {
     this.projectionMatchesLocalStore = false
     this.projectionOverlayScope = null
     this.viewportTileStore.reset()
-    this.sceneCache.reset()
     this.localStore?.close()
     this.localStore = null
     this.authoritativeEngine = null
