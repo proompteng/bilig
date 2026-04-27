@@ -2,7 +2,6 @@ import type { TgpuBindGroup } from 'typegpu'
 import { parseGpuColor } from '../gridGpuScene.js'
 import { noteTypeGpuBufferAllocation } from '../renderer-v2/grid-render-counters.js'
 import { buildTextDecorationRectsFromRuns, buildTextQuadsFromRuns, type TextDecorationRect } from '../renderer-v2/line-text-quad-buffer.js'
-import { GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT } from '../renderer-v2/scene-packet-v2.js'
 import type { createGlyphAtlas } from '../renderer-v2/typegpu-atlas-manager.js'
 import {
   WORKBOOK_RECT_INSTANCE_LAYOUT,
@@ -17,10 +16,11 @@ import {
   writeTypeGpuVertexBuffer,
 } from '../renderer-v2/typegpu-backend.js'
 import { GpuBufferArenaV3, type GpuBufferHandleV3 } from './gpu-buffer-arena.js'
+import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from './rect-instance-buffer.js'
 import type { GridRenderTile } from './render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
 
-const RECT_INSTANCE_FLOAT_COUNT = GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT
+const RECT_INSTANCE_FLOAT_COUNT = GRID_RECT_INSTANCE_FLOAT_COUNT_V3
 const TEXT_INSTANCE_FLOAT_COUNT = 16
 const RECT_INSTANCE_BYTE_COUNT = RECT_INSTANCE_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT
 const TEXT_INSTANCE_BYTE_COUNT = TEXT_INSTANCE_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT

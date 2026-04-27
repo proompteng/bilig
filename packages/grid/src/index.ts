@@ -29,6 +29,8 @@ export type {
 export * from './renderer-v3/WorkbookPaneRendererV3.js'
 export * from './renderer-v3/render-tile-source.js'
 export * from './renderer-v3/render-tile-pane-state.js'
+export * from './renderer-v3/grid-tile-materializer.js'
+export * from './renderer-v3/tile-packet-v3.js'
 export * from './renderer-v3/typegpu-workbook-backend-v3.js'
 export * from './useCell.js'
 export * from './useMetrics.js'

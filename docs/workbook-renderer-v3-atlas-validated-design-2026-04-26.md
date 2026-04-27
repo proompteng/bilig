@@ -40,6 +40,11 @@ Latest implementation note:
 - V3 tile content buffers are now separated from tile placement uniforms: body and frozen placements share rect/text buffers by numeric tile ID,
   but each placement gets its own surface uniform and bind groups. This preserves content reuse without drawing frozen/body placements with a
   shared mutable uniform.
+- Local fallback tile generation and worker render-tile delta generation now materialize `GridRenderTile` values through
+  `renderer-v3/grid-tile-materializer.ts`. They no longer build `GridScenePacketV2`, no longer create `GridTileKeyV2`, and no longer validate
+  V3 content tiles through the V2 scene-packet validator.
+- `renderer-v3/text-run-buffer.ts` now owns V3 text-run metric packing for fixed content tiles. Together with
+  `renderer-v3/rect-instance-buffer.ts`, V3 tile materialization can build rect/text payloads without going through `scene-packet-v2.ts`.
 - The grid package top-level public export no longer re-exports `renderer-v2/index.js`; V2 renderer modules remain internal legacy code and tests
   while the public renderer surface points at V3.
 
@@ -63,7 +68,8 @@ Important corrections to the Atlas text:
 
 - `packages/grid/src/renderer-v2/typegpu-buffer-pool.ts` no longer hashes every text and rect item directly during resource sync. It now compares packet-level signatures.
 - The hashing work still exists during packet packing in `packages/grid/src/renderer-v2/scene-packet-v2.ts`, where `resolveRectSignature()` and `resolveTextSignature()` walk the full rect/text payload.
-- `scene-packet-v2.ts` still exists for legacy V2 tests and fallback helpers, but it no longer wraps mounted product V3 fixed-tile payloads.
+- `scene-packet-v2.ts` still exists for legacy V2 tests and backend compatibility helpers, but it no longer wraps mounted product V3 fixed-tile
+  payloads, local fallback V3 tiles, or worker render-tile delta replacements.
 - The practical next step is not to delete the whole path immediately. The correct migration is measured replacement: add counters, remove hot-path allocation/sort work, then introduce renderer-native deltas behind tested contracts.
 - The follow-up Oracle response is correct that `useWorkbookGridRenderState.ts` must stop being the renderer owner, `ViewportPatch` must not remain the renderer contract, content tile identity must split from pane placement, and overlays need their own runtime. It is stale where it says the current `tile-gpu-cache.ts` still uses `filter().toSorted()` and where it implies `typegpu-buffer-pool.ts` hashes every item during resource sync.
 
@@ -337,6 +343,9 @@ Completed in the resident-scene deletion tranche:
 - `apps/web/src/projected-damage-bus.ts` is the first app-side replacement seam for per-subscription viewport patch damage: it dedupes workbook delta sequence application per sheet ordinal and feeds the renderer dirty tile index.
 - `apps/web/src/worker-runtime-delta-publisher.ts` provides the tested V3 damage-stream publisher primitive. The product worker runtime should expose it through transport only when the V3 renderer host owns the subscription, so the current V2 startup worker bundle stays under release size budgets.
 - `packages/grid/src/renderer-v3/glyph-key.ts`, `text-atlas-pages.ts`, and `text-run-cache.ts` start the V3 text residency layer with stable glyph IDs, page-level dirty upload accounting, and interned text-run reuse keyed by clip/DPR inputs.
+- `packages/grid/src/renderer-v3/grid-tile-materializer.ts` is now the shared fixed content-tile materializer for local fallback and worker
+  render-tile deltas. It produces `GridTilePacketV3` metadata plus V3 rect/text buffers directly, eliminating `GridScenePacketV2` from those
+  V3 tile-generation paths.
 
 Remaining work from this design:
 

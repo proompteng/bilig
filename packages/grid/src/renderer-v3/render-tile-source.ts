@@ -1,4 +1,5 @@
 import type { Viewport } from '@bilig/protocol'
+import type { GridTilePacketV3 } from './tile-packet-v3.js'
 
 export type GridRenderTilePaneKind = 'body' | 'frozenTop' | 'frozenLeft' | 'frozenCorner'
 
@@ -48,6 +49,7 @@ export interface GridRenderTileTextRun {
 
 export interface GridRenderTile {
   readonly tileId: number
+  readonly packet?: GridTilePacketV3 | undefined
   readonly coord: GridRenderTileCoord
   readonly version: GridRenderTileVersion
   readonly bounds: Viewport
