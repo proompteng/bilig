@@ -16,7 +16,6 @@ import {
 } from './gridMetrics.js'
 import { createGridSelection, isSheetSelection } from './gridSelection.js'
 import { resolveFillHandlePreviewBounds } from './gridFillHandle.js'
-import { applyEditorOverlayBounds, resolveEditorOverlayScreenBounds } from './gridEditorOverlayGeometry.js'
 import { createGridAxisWorldIndexFromRecords } from './gridAxisWorldIndex.js'
 import { createGridGeometrySnapshotFromAxes } from './gridGeometry.js'
 import { applyHiddenAxisSizes, resolveGridScrollSpacerSize } from './gridScrollSurface.js'
@@ -24,7 +23,7 @@ import type { HeaderSelection, VisibleRegionState } from './gridPointer.js'
 import { resolveGridRenderScrollTransform, sameViewportBounds, sameVisibleRegionWindow } from './gridViewportController.js'
 import type { GridHoverState } from './gridHover.js'
 import { getResolvedCellFontFamily, snapshotToRenderCell } from './gridCells.js'
-import { getEditorPresentation, getEditorTextAlign, getGridTheme, getOverlayStyle } from './gridPresentation.js'
+import { getGridTheme } from './gridPresentation.js'
 import type { GridEngineLike } from './grid-engine.js'
 import type { GridSelection, Rectangle } from './gridTypes.js'
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
@@ -36,7 +35,6 @@ import { noteGridScrollInput } from './grid-render-counters.js'
 import { GridCameraStore } from './runtime/gridCameraStore.js'
 import { viewportFromVisibleRegion } from './useGridCameraState.js'
 import { useGridElementSize } from './useGridElementSize.js'
-import { sameBounds } from './useGridOverlayState.js'
 import { resolveRequiresLiveViewportState } from './useGridSelectionState.js'
 import { GridRuntimeHost } from './runtime/gridRuntimeHost.js'
 import {
@@ -46,6 +44,7 @@ import {
 } from './runtime/gridRuntimeAxisAdapters.js'
 import { useWorkbookHeaderPanes } from './useWorkbookHeaderPanes.js'
 import { useWorkbookRenderTilePanes } from './useWorkbookRenderTilePanes.js'
+import { useWorkbookEditorOverlayAnchor } from './useWorkbookEditorOverlayAnchor.js'
 
 function noteVisibleWindowChange(): void {
   if (typeof window === 'undefined') {
@@ -135,7 +134,6 @@ export function useWorkbookGridRenderState(input: {
     freezeRows,
     freezeCols,
   })
-  const [overlayBounds, setOverlayBounds] = useState<Rectangle | undefined>(undefined)
   const [columnWidthsBySheet, setColumnWidthsBySheet] = useState<Record<string, Record<number, number>>>({})
   const [rowHeightsBySheet, setRowHeightsBySheet] = useState<Record<string, Record<number, number>>>({})
   const [columnResizePreview, setColumnResizePreview] = useState<{
@@ -754,54 +752,18 @@ export function useWorkbookGridRenderState(input: {
     scrollViewport.scrollTop = nextScrollTop
   }, [freezeCols, freezeRows, gridRuntimeHost, restoreViewportTarget, syncRuntimeAxes])
 
-  const refreshOverlayBounds = useCallback(
-    (options?: { readonly commitReactState?: boolean }) => {
-      const next = resolveEditorOverlayScreenBounds({
-        col: selectedCell.col,
-        row: selectedCell.row,
-        geometry: gridCameraStore.getSnapshot(),
-        getCellLocalBounds,
-        hostElement: hostRef.current,
-      })
-      if (!next) {
-        return
-      }
-      applyEditorOverlayBounds(next)
-      if (options?.commitReactState === false) {
-        return
-      }
-      setOverlayBounds((current) => {
-        return sameBounds(current, next) ? current : next
-      })
-    },
-    [getCellLocalBounds, gridCameraStore, selectedCell.col, selectedCell.row],
-  )
-
-  useLayoutEffect(() => {
-    if (!isEditingCell) {
-      setOverlayBounds(undefined)
-      return
-    }
-
-    refreshOverlayBounds({ commitReactState: true })
-    const frame = window.requestAnimationFrame(() => refreshOverlayBounds({ commitReactState: true }))
-    const unsubscribeScrollTransform = scrollTransformStore.subscribe(() => refreshOverlayBounds({ commitReactState: false }))
-    return () => {
-      window.cancelAnimationFrame(frame)
-      unsubscribeScrollTransform()
-    }
-  }, [isEditingCell, refreshOverlayBounds, scrollTransformStore])
-
-  useEffect(() => {
-    if (!isEditingCell) {
-      return
-    }
-    const handleWindowResize = () => refreshOverlayBounds()
-    window.addEventListener('resize', handleWindowResize)
-    return () => {
-      window.removeEventListener('resize', handleWindowResize)
-    }
-  }, [isEditingCell, refreshOverlayBounds])
+  const { editorPresentation, editorTextAlign, overlayStyle } = useWorkbookEditorOverlayAnchor({
+    editorValue,
+    engine,
+    getCellLocalBounds,
+    gridCameraStore,
+    hostElement,
+    isEditingCell,
+    scrollTransformStore,
+    selectedCellSnapshot,
+    selectedCol: selectedCell.col,
+    selectedRow: selectedCell.row,
+  })
 
   const focusGrid = useCallback(() => {
     const activeElement = typeof document === 'undefined' ? null : document.activeElement
@@ -1016,17 +978,6 @@ export function useWorkbookGridRenderState(input: {
       sheetName,
     ],
   )
-
-  const overlayStyle = useMemo(() => getOverlayStyle(isEditingCell, overlayBounds), [isEditingCell, overlayBounds])
-  const editorPresentation = useMemo(() => {
-    const selectedCellStyle = engine.getCellStyle(selectedCellSnapshot.styleId)
-    const renderCell = snapshotToRenderCell(selectedCellSnapshot, selectedCellStyle)
-    return getEditorPresentation({
-      renderCell,
-      fillColor: selectedCellStyle?.fill?.backgroundColor,
-    })
-  }, [engine, selectedCellSnapshot])
-  const editorTextAlign = useMemo<'left' | 'right'>(() => getEditorTextAlign(editorValue), [editorValue])
 
   return {
     activeHeaderDrag,
