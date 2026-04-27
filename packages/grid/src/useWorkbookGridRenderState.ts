@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { formatAddress, parseCellAddress } from '@bilig/formula'
+import { parseCellAddress } from '@bilig/formula'
 import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import { getGridMetrics, getResolvedColumnWidth, getResolvedRowHeight, resolveRowOffset } from './gridMetrics.js'
@@ -12,7 +12,6 @@ import { getGridTheme } from './gridPresentation.js'
 import type { GridEngineLike } from './grid-engine.js'
 import type { Rectangle } from './gridTypes.js'
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
-import { collectViewportItems } from './gridViewportItems.js'
 import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
 import { hasSelectionTargetChanged, resolveColumnOffset, resolveResidentViewport } from './workbookGridViewport.js'
 import { WorkbookGridScrollStore } from './workbookGridScrollStore.js'
@@ -32,6 +31,7 @@ import { useWorkbookEditorOverlayAnchor } from './useWorkbookEditorOverlayAnchor
 import { useWorkbookAxisResizeState } from './useWorkbookAxisResizeState.js'
 import { useWorkbookInteractionOverlayState } from './useWorkbookInteractionOverlayState.js'
 import { useWorkbookColumnAutofit } from './useWorkbookColumnAutofit.js'
+import { useWorkbookViewportResidencyState } from './useWorkbookViewportResidencyState.js'
 
 function noteVisibleWindowChange(): void {
   if (typeof window === 'undefined') {
@@ -101,8 +101,6 @@ export function useWorkbookGridRenderState(input: {
   const gridCameraStoreRef = useRef<GridCameraStore>(new GridCameraStore())
   const gridRuntimeHostRef = useRef<GridRuntimeHost | null>(null)
   const gridRuntimeAxisCacheRef = useRef(createGridRuntimeAxisOverrideCache())
-  const invalidateSceneRef = useRef<() => void>(() => undefined)
-  const [sceneRevision, setSceneRevision] = useState(0)
   const [hostElement, setHostElement] = useState<HTMLDivElement | null>(null)
   const [visibleRegion, setVisibleRegion] = useState<VisibleRegionState>({
     range: { x: 0, y: 0, width: 12, height: 24 },
@@ -332,22 +330,15 @@ export function useWorkbookGridRenderState(input: {
     visibleRange: visibleRegion.range,
   })
 
-  const viewport = useMemo<Viewport>(() => viewportFromVisibleRegion(visibleRegion), [visibleRegion])
-  const residentViewportRef = useRef<Viewport>(resolveResidentViewport(viewport))
-  const nextResidentViewport = resolveResidentViewport(viewport)
-  if (!sameViewportBounds(residentViewportRef.current, nextResidentViewport)) {
-    residentViewportRef.current = nextResidentViewport
-  }
-  const residentViewport = residentViewportRef.current
-  const renderTileViewport = useMemo<Viewport>(
-    () => ({
-      rowStart: freezeRows > 0 ? 0 : residentViewport.rowStart,
-      rowEnd: residentViewport.rowEnd,
-      colStart: freezeCols > 0 ? 0 : residentViewport.colStart,
-      colEnd: residentViewport.colEnd,
-    }),
-    [freezeCols, freezeRows, residentViewport.colEnd, residentViewport.colStart, residentViewport.rowEnd, residentViewport.rowStart],
-  )
+  const { viewport, residentViewport, renderTileViewport, residentHeaderItems, residentHeaderRegion, sceneRevision } =
+    useWorkbookViewportResidencyState({
+      engine,
+      freezeCols,
+      freezeRows,
+      sheetName,
+      shouldUseRemoteRenderTileSource,
+      visibleRegion,
+    })
   const getHeaderCellLocalBounds = useCallback(
     (col: number, row: number): Rectangle | undefined => {
       if (col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
@@ -389,36 +380,6 @@ export function useWorkbookGridRenderState(input: {
       sortedRowHeightOverrides,
     ],
   )
-  const visibleItems = useMemo(() => {
-    return collectViewportItems(residentViewport, { freezeRows, freezeCols })
-  }, [freezeCols, freezeRows, residentViewport])
-  const residentHeaderItems = useMemo(() => {
-    return collectViewportItems(residentViewport, { freezeRows, freezeCols })
-  }, [freezeCols, freezeRows, residentViewport])
-  const visibleAddresses = useMemo(() => visibleItems.map(([col, row]) => formatAddress(row, col)), [visibleItems])
-  const residentHeaderRegion = useMemo(
-    () => ({
-      range: {
-        x: residentViewport.colStart,
-        y: residentViewport.rowStart,
-        width: residentViewport.colEnd - residentViewport.colStart + 1,
-        height: residentViewport.rowEnd - residentViewport.rowStart + 1,
-      },
-      tx: 0,
-      ty: 0,
-      freezeRows,
-      freezeCols,
-    }),
-    [freezeCols, freezeRows, residentViewport.colEnd, residentViewport.colStart, residentViewport.rowEnd, residentViewport.rowStart],
-  )
-
-  const invalidateScene = useCallback(() => {
-    setSceneRevision((current) => current + 1)
-  }, [])
-  useEffect(() => {
-    invalidateSceneRef.current = invalidateScene
-  }, [invalidateScene])
-
   const syncVisibleRegion = useCallback(() => {
     const scrollViewport = scrollViewportRef.current
     if (!scrollViewport) {
@@ -557,13 +518,6 @@ export function useWorkbookGridRenderState(input: {
       scrollViewport.removeEventListener('scroll', handleScroll)
     }
   }, [hostElement, syncVisibleRegion])
-
-  useEffect(() => {
-    if (shouldUseRemoteRenderTileSource) {
-      return
-    }
-    return engine.subscribeCells(sheetName, visibleAddresses, invalidateScene)
-  }, [engine, invalidateScene, sheetName, shouldUseRemoteRenderTileSource, visibleAddresses])
 
   const { preloadDataPanes, renderTilePanes, residentBodyPane, residentDataPanes } = useWorkbookRenderTilePanes({
     columnWidths,
