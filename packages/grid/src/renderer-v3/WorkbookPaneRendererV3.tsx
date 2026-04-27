@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import type { GridGeometrySnapshot } from '../gridGeometry.js'
 import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { GridCameraStore } from '../runtime/gridCameraStore.js'
@@ -8,7 +8,7 @@ export { resolveTypeGpuV3DrawScrollSnapshot } from './workbook-pane-renderer-run
 import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
 import { WorkbookPaneRendererRuntimeV3 } from './workbook-pane-renderer-runtime.js'
-import { EMPTY_WORKBOOK_PANE_SURFACE_SNAPSHOT_V3, WorkbookPaneSurfaceRuntimeV3 } from './workbook-pane-surface-runtime.js'
+import { WorkbookPaneSurfaceRuntimeV3 } from './workbook-pane-surface-runtime.js'
 
 export interface WorkbookPaneRendererV3Props {
   readonly active: boolean
@@ -38,7 +38,6 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const rendererRuntimeRef = useRef<WorkbookPaneRendererRuntimeV3 | null>(null)
   const surfaceRuntimeRef = useRef<WorkbookPaneSurfaceRuntimeV3 | null>(null)
-  const [surfaceSnapshot, setSurfaceSnapshot] = useState(EMPTY_WORKBOOK_PANE_SURFACE_SNAPSHOT_V3)
   if (!rendererRuntimeRef.current) {
     rendererRuntimeRef.current = new WorkbookPaneRendererRuntimeV3()
   }
@@ -49,8 +48,16 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   const surfaceRuntime = surfaceRuntimeRef.current
 
   useEffect(() => {
-    return surfaceRuntime.subscribe(setSurfaceSnapshot)
-  }, [surfaceRuntime])
+    return surfaceRuntime.subscribe((surfaceSnapshot) => {
+      rendererRuntime.updateState({
+        backend: surfaceSnapshot.backend,
+        surface: surfaceSnapshot.surface,
+        webGpuReady: surfaceSnapshot.webGpuReady,
+      })
+      rendererRuntime.drawNow()
+      rendererRuntime.requestDraw()
+    })
+  }, [rendererRuntime, surfaceRuntime])
 
   useEffect(() => {
     surfaceRuntime.setHost(host)
@@ -68,6 +75,7 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   }, [active, host, surfaceRuntime])
 
   useEffect(() => {
+    const surfaceSnapshot = surfaceRuntime.getSnapshot()
     rendererRuntime.updateState({
       active,
       backend: surfaceSnapshot.backend,
@@ -94,7 +102,7 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
     preloadTilePanes,
     rendererRuntime,
     scrollTransformStore,
-    surfaceSnapshot,
+    surfaceRuntime,
     tilePanes,
   ])
 

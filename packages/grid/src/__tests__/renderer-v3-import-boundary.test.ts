@@ -26,4 +26,10 @@ describe('renderer v3 import boundary', () => {
 
     expect(offenders).toEqual([])
   })
+
+  test('V3 pane renderer shell does not own renderer readiness in React state', () => {
+    const source = readFileSync(join(GRID_SRC_ROOT, 'renderer-v3/WorkbookPaneRendererV3.tsx'), 'utf8')
+
+    expect(source).not.toContain('useState')
+  })
 })

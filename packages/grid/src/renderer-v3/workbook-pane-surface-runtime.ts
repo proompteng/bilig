@@ -214,7 +214,6 @@ export class WorkbookPaneSurfaceRuntimeV3 {
       surface,
       webGpuReady: this.backend !== null,
     })
-    this.syncCurrentSurface()
   }
 
   private async ensureBackend(): Promise<void> {
@@ -236,7 +235,6 @@ export class WorkbookPaneSurfaceRuntimeV3 {
       surface: this.snapshot.surface,
       webGpuReady: backend !== null,
     })
-    this.syncCurrentSurface()
   }
 
   private destroyCurrentBackend(): void {
@@ -266,6 +264,7 @@ export class WorkbookPaneSurfaceRuntimeV3 {
 
   private updateSnapshot(snapshot: WorkbookPaneSurfaceSnapshotV3): void {
     this.snapshot = snapshot
+    this.syncCurrentSurface()
     this.listener?.(snapshot)
   }
 }
