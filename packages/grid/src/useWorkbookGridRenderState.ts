@@ -32,10 +32,10 @@ import type { GridEngineLike } from './grid-engine.js'
 import { CompactSelection, type GridSelection, type Item, type Rectangle } from './gridTypes.js'
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 import { collectViewportItems } from './gridViewportItems.js'
-import type { WorkbookRenderPaneState } from './renderer-v2/pane-scene-types.js'
 import { buildLocalFixedRenderTiles } from './renderer-v3/local-render-tile-materializer.js'
-import { buildFixedRenderTileDataPaneStates } from './renderer-v3/render-tile-v2-adapter.js'
+import { buildFixedRenderTilePaneStates } from './renderer-v3/render-tile-pane-builder.js'
 import type { GridRenderTile, GridRenderTileSource } from './renderer-v3/render-tile-source.js'
+import type { WorkbookRenderTilePaneState } from './renderer-v3/render-tile-pane-state.js'
 import { hasSelectionTargetChanged, resolveColumnOffset, resolveResidentViewport } from './workbookGridViewport.js'
 import { WorkbookGridScrollStore } from './workbookGridScrollStore.js'
 import { noteGridScrollInput } from './renderer-v2/grid-render-counters.js'
@@ -137,7 +137,7 @@ export function useWorkbookGridRenderState(input: {
   const invalidateSceneRef = useRef<() => void>(() => undefined)
   const retainedFixedRenderTileDataPanesRef = useRef<{
     readonly sheetId: number
-    readonly panes: readonly WorkbookRenderPaneState[]
+    readonly panes: readonly WorkbookRenderTilePaneState[]
   } | null>(null)
   const [sceneRevision, setSceneRevision] = useState(0)
   const [fillPreviewRange, setFillPreviewRange] = useState<Rectangle | null>(null)
@@ -699,7 +699,7 @@ export function useWorkbookGridRenderState(input: {
       },
     )
   }, [dprBucket, gridRuntimeHost, renderTileSource, renderTileViewport, sheetId, sheetName])
-  const fixedRenderTileDataPanes = useMemo<readonly WorkbookRenderPaneState[] | null>(() => {
+  const fixedRenderTileDataPanes = useMemo<readonly WorkbookRenderTilePaneState[] | null>(() => {
     if (!hostElement) {
       return null
     }
@@ -738,8 +738,7 @@ export function useWorkbookGridRenderState(input: {
         }),
       )
     }
-    const panes = buildFixedRenderTileDataPaneStates({
-      columnWidths,
+    const panes = buildFixedRenderTilePaneStates({
       freezeCols,
       freezeRows,
       frozenColumnWidth,
@@ -748,8 +747,6 @@ export function useWorkbookGridRenderState(input: {
       hostHeight: hostClientHeight,
       hostWidth: hostClientWidth,
       residentViewport,
-      rowHeights,
-      sheetName,
       sortedColumnWidthOverrides,
       sortedRowHeightOverrides,
       tiles,
@@ -797,7 +794,7 @@ export function useWorkbookGridRenderState(input: {
       : null)
   const residentDataPanes = useMemo(() => retainedFixedRenderTileDataPanes ?? [], [retainedFixedRenderTileDataPanes])
   const residentBodyPane = residentDataPanes.find((pane) => pane.paneId === 'body') ?? null
-  const preloadDataPanes = useMemo<readonly WorkbookRenderPaneState[]>(() => [], [])
+  const preloadDataPanes = useMemo<readonly WorkbookRenderTilePaneState[]>(() => [], [])
 
   const headerGpuScene = useMemo<GridGpuScene>(() => {
     if (!hostElement) {
@@ -923,17 +920,7 @@ export function useWorkbookGridRenderState(input: {
       ),
     [headerPanes, residentBodyPane?.contentOffset.x, residentBodyPane?.contentOffset.y],
   )
-  const renderPanes = useMemo<readonly WorkbookRenderPaneState[]>(
-    () =>
-      residentDataPanes.map((pane) => ({
-        ...pane,
-        scrollAxes: {
-          x: pane.paneId === 'body' || pane.paneId === 'top',
-          y: pane.paneId === 'body' || pane.paneId === 'left',
-        },
-      })),
-    [residentDataPanes],
-  )
+  const renderTilePanes = residentDataPanes
   const fillPreviewBounds = useMemo<Rectangle | undefined>(() => {
     if (!fillPreviewRange) {
       return undefined
@@ -1306,7 +1293,7 @@ export function useWorkbookGridRenderState(input: {
     previewColumnWidth,
     previewRowHeight,
     preloadDataPanes,
-    renderPanes,
+    renderTilePanes,
     residentDataPanes,
     rowHeights,
     rowHeightOverridesAttr,

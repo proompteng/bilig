@@ -37,6 +37,8 @@ export interface GridRenderTileTextRun {
   readonly clipY: number
   readonly clipWidth: number
   readonly clipHeight: number
+  readonly align?: 'left' | 'center' | 'right'
+  readonly wrap?: boolean
   readonly font: string
   readonly fontSize: number
   readonly color: string

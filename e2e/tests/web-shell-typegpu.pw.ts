@@ -114,12 +114,13 @@ test('@browser-webgpu isolated workbook pane renderer draws grid content through
   await saveReadbackArtifact(page, testInfo, 'isolated-pane-renderer-readback.png', 'isolated-pane-renderer-readback')
 })
 
-test('main workbook shell mounts typegpu-v2 as the only grid renderer', async ({ page }) => {
+test('main workbook shell mounts typegpu-v3 as the only grid renderer', async ({ page }) => {
   await page.setViewportSize({ width: 960, height: 720 })
   await gotoWorkbookShell(page)
   await waitForWorkbookReady(page)
 
-  await expect(page.getByTestId('grid-pane-renderer')).toHaveAttribute('data-renderer-mode', 'typegpu-v2')
+  await expect(page.getByTestId('grid-pane-renderer')).toHaveAttribute('data-renderer-mode', 'typegpu-v3')
+  await expect(page.getByTestId('grid-pane-renderer')).toHaveAttribute('data-pane-renderer', 'workbook-pane-renderer-v3')
   await expect(page.locator('[data-pane-renderer="workbook-pane-renderer"]')).toHaveCount(0)
 })
 

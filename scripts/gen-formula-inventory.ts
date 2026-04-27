@@ -73,7 +73,7 @@ interface SourceDerivedRuntimeData {
 let cachedRuntimeData: Promise<SourceDerivedRuntimeData> | undefined
 
 function escapeTsString(value: string): string {
-  return JSON.stringify(value)
+  return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'").replaceAll('\r', '\\r').replaceAll('\n', '\\n')}'`
 }
 
 function escapeTsPropertyName(value: string): string {
@@ -325,11 +325,11 @@ async function renderInventoryReport(source: FormulaInventorySource): Promise<st
 
 export const formulaInventorySummary = {
 ${summaryLines.join('\n')}
-} as const;
+} as const
 
 export const formulaInventory = [
 ${lines.length === 0 ? '' : `${lines.join(',\n')},`}
-] as const;
+] as const
 `
 }
 

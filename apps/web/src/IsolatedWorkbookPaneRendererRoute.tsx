@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useState, type ComponentProps } from 'react'
-import { WorkbookPaneRendererV2, buildHeaderPaneStates, getGridMetrics, packGridScenePacketV2 } from '@bilig/grid'
+import {
+  WorkbookPaneRendererV3,
+  buildHeaderPaneStates,
+  getGridMetrics,
+  type GridRenderTile,
+  type WorkbookRenderTilePaneState,
+} from '@bilig/grid'
+import { useEffect, useMemo, useState } from 'react'
 
 const ROW_MARKER_WIDTH = 46
 const HEADER_HEIGHT = 24
@@ -17,14 +23,51 @@ const TEXT_PRIMARY = '#1f2933'
 const TEXT_MUTED = '#52606d'
 const TEXT_ACCENT = '#163f29'
 
-type RendererPane = ComponentProps<typeof WorkbookPaneRendererV2>['panes'][number]
-type RendererPanes = ComponentProps<typeof WorkbookPaneRendererV2>['panes']
-type RendererHeaderPanes = NonNullable<ComponentProps<typeof WorkbookPaneRendererV2>['headerPanes']>
-type RendererGpuScene = Parameters<typeof packGridScenePacketV2>[0]['gpuScene']
-type RendererGpuRect = RendererGpuScene['fillRects'][number]
-type RendererTextScene = Parameters<typeof packGridScenePacketV2>[0]['textScene']
-type RendererTextItem = RendererTextScene['items'][number]
+type RendererPane = WorkbookRenderTilePaneState
+type RendererPanes = readonly WorkbookRenderTilePaneState[]
+type RendererHeaderPanes = ReturnType<typeof buildHeaderPaneStates>
 type RendererPaneId = 'body'
+
+interface RendererGpuRect {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+  readonly color: {
+    readonly r: number
+    readonly g: number
+    readonly b: number
+    readonly a: number
+  }
+}
+
+interface RendererGpuScene {
+  readonly fillRects: readonly RendererGpuRect[]
+  readonly borderRects: readonly RendererGpuRect[]
+}
+
+interface RendererTextItem {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+  readonly text: string
+  readonly color: string
+  readonly align: 'left' | 'center' | 'right'
+  readonly clipInsetTop: number
+  readonly clipInsetRight: number
+  readonly clipInsetBottom: number
+  readonly clipInsetLeft: number
+  readonly wrap: boolean
+  readonly font: string
+  readonly fontSize: number
+  readonly underline: boolean
+  readonly strike: boolean
+}
+
+interface RendererTextScene {
+  readonly items: readonly RendererTextItem[]
+}
 
 interface HostSize {
   readonly width: number
@@ -70,7 +113,13 @@ export function IsolatedWorkbookPaneRendererRoute() {
     <div className="h-dvh w-screen overflow-hidden bg-(--wb-surface)">
       <div className="relative h-full w-full" data-testid="isolated-pane-renderer-route" ref={setHost}>
         {host ? (
-          <WorkbookPaneRendererV2 active geometry={null} headerPanes={rendererState.headerPanes} host={host} panes={rendererState.panes} />
+          <WorkbookPaneRendererV3
+            active
+            geometry={null}
+            headerPanes={rendererState.headerPanes}
+            host={host}
+            tilePanes={rendererState.panes}
+          />
         ) : null}
       </div>
     </div>
@@ -124,7 +173,7 @@ function buildIsolatedRendererState(hostSize: HostSize): { readonly panes: Rende
 }
 
 function createRendererPane(
-  input: Omit<RendererPane, 'packedScene'> & {
+  input: Omit<RendererPane, 'tile'> & {
     readonly paneId: RendererPaneId
     readonly gpuScene: RendererGpuScene
     readonly textScene: RendererTextScene
@@ -133,16 +182,111 @@ function createRendererPane(
   const { gpuScene, textScene, ...pane } = input
   return {
     ...pane,
-    packedScene: packGridScenePacketV2({
+    tile: createRenderTile({
       generation: input.generation,
       gpuScene,
-      paneId: input.paneId,
-      sheetName: 'Sheet1',
       surfaceSize: input.surfaceSize,
       textScene,
       viewport: input.viewport ?? { colStart: 0, colEnd: 0, rowStart: 0, rowEnd: 0 },
     }),
   }
+}
+
+function createRenderTile(input: {
+  readonly generation: number
+  readonly viewport: RendererPane['viewport']
+  readonly surfaceSize: RendererPane['surfaceSize']
+  readonly gpuScene: RendererGpuScene
+  readonly textScene: RendererTextScene
+}): GridRenderTile {
+  const rowTile = Math.floor(input.viewport.rowStart / 32)
+  const colTile = Math.floor(input.viewport.colStart / 128)
+  return {
+    bounds: input.viewport,
+    coord: {
+      colTile,
+      dprBucket: 1,
+      paneKind: 'body',
+      rowTile,
+      sheetId: 1,
+    },
+    lastBatchId: input.generation,
+    lastCameraSeq: input.generation,
+    rectCount: input.gpuScene.fillRects.length + input.gpuScene.borderRects.length,
+    rectInstances: packRectInstances(input.gpuScene, input.surfaceSize),
+    textCount: input.textScene.items.length,
+    textMetrics: new Float32Array(Math.max(1, input.textScene.items.length) * 8),
+    textRuns: input.textScene.items.map((item) => ({
+      align: item.align,
+      clipHeight: Math.max(0, item.height - item.clipInsetTop - item.clipInsetBottom),
+      clipWidth: Math.max(0, item.width - item.clipInsetLeft - item.clipInsetRight),
+      clipX: item.x + item.clipInsetLeft,
+      clipY: item.y + item.clipInsetTop,
+      color: item.color,
+      font: item.font,
+      fontSize: item.fontSize,
+      height: item.height,
+      strike: item.strike,
+      text: item.text,
+      underline: item.underline,
+      width: item.width,
+      wrap: item.wrap,
+      x: item.x,
+      y: item.y,
+    })),
+    tileId: rowTile * 128 + colTile + 1,
+    version: {
+      axisX: 1,
+      axisY: 1,
+      freeze: 0,
+      styles: input.generation,
+      text: input.generation,
+      values: input.generation,
+    },
+  }
+}
+
+function packRectInstances(scene: RendererGpuScene, surfaceSize: { readonly width: number; readonly height: number }): Float32Array {
+  const rectCount = scene.fillRects.length + scene.borderRects.length
+  const floats = new Float32Array(Math.max(1, rectCount) * 20)
+  const clipX = 0
+  const clipY = 0
+  const clipX1 = surfaceSize.width
+  const clipY1 = surfaceSize.height
+  let offset = 0
+  for (const rect of scene.fillRects) {
+    floats[offset + 0] = rect.x
+    floats[offset + 1] = rect.y
+    floats[offset + 2] = rect.width
+    floats[offset + 3] = rect.height
+    floats[offset + 4] = rect.color.r
+    floats[offset + 5] = rect.color.g
+    floats[offset + 6] = rect.color.b
+    floats[offset + 7] = rect.color.a
+    floats[offset + 12] = rect.color.a < 0.2 ? 2 : 0
+    floats[offset + 16] = clipX
+    floats[offset + 17] = clipY
+    floats[offset + 18] = clipX1
+    floats[offset + 19] = clipY1
+    offset += 20
+  }
+  for (const rect of scene.borderRects) {
+    floats[offset + 0] = rect.x
+    floats[offset + 1] = rect.y
+    floats[offset + 2] = rect.width
+    floats[offset + 3] = rect.height
+    floats[offset + 8] = rect.color.r
+    floats[offset + 9] = rect.color.g
+    floats[offset + 10] = rect.color.b
+    floats[offset + 11] = rect.color.a
+    floats[offset + 13] = 1
+    floats[offset + 16] = clipX
+    floats[offset + 17] = clipY
+    floats[offset + 18] = clipX1
+    floats[offset + 19] = clipY1
+    offset += 20
+  }
+  return floats
 }
 
 function buildCornerHeaderGpuScene(): RendererGpuScene {

@@ -27,7 +27,9 @@ export type {
   TextVerticalAlign,
 } from './text/gridTextPacket.js'
 export * from './renderer-v2/index.js'
+export * from './renderer-v3/WorkbookPaneRendererV3.js'
 export * from './renderer-v3/render-tile-source.js'
+export * from './renderer-v3/render-tile-pane-state.js'
 export * from './useCell.js'
 export * from './useMetrics.js'
 export * from './useSelection.js'

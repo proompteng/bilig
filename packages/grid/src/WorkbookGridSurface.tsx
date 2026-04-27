@@ -4,7 +4,7 @@ import { CellEditorOverlay } from './CellEditorOverlay.js'
 import { GridFillHandleOverlay } from './GridFillHandleOverlay.js'
 import { WorkbookGridContextMenu } from './WorkbookGridContextMenu.js'
 import { createGridSelection } from './gridSelection.js'
-import { WorkbookPaneRendererV2 } from './renderer-v2/index.js'
+import { WorkbookPaneRendererV3 } from './renderer-v3/WorkbookPaneRendererV3.js'
 import { buildDynamicGridOverlayBatchV3 } from './renderer-v3/dynamic-overlay-batch.js'
 import { resolveResizeGuideColumn, resolveResizeGuideRow } from './useGridResizeState.js'
 import { useWorkbookGridInteractions } from './useWorkbookGridInteractions.js'
@@ -216,16 +216,16 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         >
           <div style={{ height: renderState.totalGridHeight, width: renderState.totalGridWidth }} />
         </div>
-        <WorkbookPaneRendererV2
+        <WorkbookPaneRendererV3
           active={renderState.hostElement !== null}
           cameraStore={renderState.gridCameraStore}
           geometry={v2Geometry}
           headerPanes={renderState.headerPanes}
           host={renderState.hostElement}
           overlayBuilder={dynamicOverlayBuilder}
-          panes={renderState.renderPanes}
-          preloadPanes={renderState.preloadDataPanes}
           scrollTransformStore={renderState.scrollTransformStore}
+          tilePanes={renderState.renderTilePanes}
+          preloadTilePanes={renderState.preloadDataPanes}
         />
         <button
           aria-label="Select entire sheet"

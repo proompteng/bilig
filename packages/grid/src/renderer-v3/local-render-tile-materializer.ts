@@ -213,10 +213,12 @@ function mapTextRun(run: GridSceneTextRun): GridRenderTileTextRun {
     font: run.font,
     fontSize: run.fontSize,
     height: run.height,
+    align: run.align,
     strike: run.strike,
     text: run.text,
     underline: run.underline,
     width: run.width,
+    wrap: run.wrap,
     x: run.x,
     y: run.y,
   }

@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getGridMetrics } from '../gridMetrics.js'
-import { buildFixedRenderTileDataPaneStates } from '../renderer-v3/render-tile-v2-adapter.js'
+import { buildFixedRenderTilePaneStates } from '../renderer-v3/render-tile-pane-builder.js'
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
-import { validateGridScenePacketV2 } from '../renderer-v2/scene-packet-validator.js'
 
 function createTile(input: {
   readonly tileId: number
@@ -47,11 +46,11 @@ function createTile(input: {
   }
 }
 
-describe('render tile v2 adapter', () => {
-  it('adapts fixed content tiles into valid mounted body panes', () => {
+describe('render tile pane builder', () => {
+  it('places fixed content tiles as mounted body panes without V2 scene packets', () => {
     const gridMetrics = getGridMetrics()
-    const panes = buildFixedRenderTileDataPaneStates({
-      columnWidths: {},
+    const tile = createTile({ tileId: 101, rowTile: 0, colTile: 0, rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 127 })
+    const panes = buildFixedRenderTilePaneStates({
       freezeCols: 0,
       freezeRows: 0,
       frozenColumnWidth: 0,
@@ -60,11 +59,9 @@ describe('render tile v2 adapter', () => {
       hostHeight: 400,
       hostWidth: 600,
       residentViewport: { rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 127 },
-      rowHeights: {},
-      sheetName: 'Sheet1',
       sortedColumnWidthOverrides: [],
       sortedRowHeightOverrides: [],
-      tiles: [createTile({ tileId: 101, rowTile: 0, colTile: 0, rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 127 })],
+      tiles: [tile],
       visibleViewport: { rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 127 },
     })
 
@@ -74,14 +71,15 @@ describe('render tile v2 adapter', () => {
       throw new Error('expected one render tile pane')
     }
     expect(pane.paneId).toBe('body')
-    expect(validateGridScenePacketV2(pane.packedScene)).toEqual({ ok: true })
-    expect(pane.packedScene.key.valueVersion).toBe(16)
+    expect(pane.tile).toBe(tile)
+    expect('packedScene' in pane).toBe(false)
+    expect(pane.tile.version.values).toBe(16)
   })
 
-  it('reuses the same content packet for frozen placements', () => {
+  it('reuses the same content tile for frozen placements', () => {
     const gridMetrics = getGridMetrics()
-    const panes = buildFixedRenderTileDataPaneStates({
-      columnWidths: {},
+    const tile = createTile({ tileId: 101, rowTile: 0, colTile: 0, rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 127 })
+    const panes = buildFixedRenderTilePaneStates({
       freezeCols: 1,
       freezeRows: 1,
       frozenColumnWidth: gridMetrics.columnWidth,
@@ -90,11 +88,9 @@ describe('render tile v2 adapter', () => {
       hostHeight: 400,
       hostWidth: 600,
       residentViewport: { rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 127 },
-      rowHeights: {},
-      sheetName: 'Sheet1',
       sortedColumnWidthOverrides: [],
       sortedRowHeightOverrides: [],
-      tiles: [createTile({ tileId: 101, rowTile: 0, colTile: 0, rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 127 })],
+      tiles: [tile],
       visibleViewport: { rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 127 },
     })
 
@@ -104,15 +100,14 @@ describe('render tile v2 adapter', () => {
     const corner = panes.find((pane) => pane.paneId.startsWith('corner:'))
 
     expect(body).toBeDefined()
-    expect(top?.packedScene).toBe(body?.packedScene)
-    expect(left?.packedScene).toBe(body?.packedScene)
-    expect(corner?.packedScene).toBe(body?.packedScene)
+    expect(top?.tile).toBe(body?.tile)
+    expect(left?.tile).toBe(body?.tile)
+    expect(corner?.tile).toBe(body?.tile)
   })
 
   it('keeps frozen placements anchored when the body reference tile is scrolled down and right', () => {
     const gridMetrics = getGridMetrics()
-    const panes = buildFixedRenderTileDataPaneStates({
-      columnWidths: {},
+    const panes = buildFixedRenderTilePaneStates({
       freezeCols: 1,
       freezeRows: 1,
       frozenColumnWidth: gridMetrics.columnWidth,
@@ -121,8 +116,6 @@ describe('render tile v2 adapter', () => {
       hostHeight: 400,
       hostWidth: 600,
       residentViewport: { rowStart: 32, rowEnd: 63, colStart: 128, colEnd: 255 },
-      rowHeights: {},
-      sheetName: 'Sheet1',
       sortedColumnWidthOverrides: [],
       sortedRowHeightOverrides: [],
       tiles: [

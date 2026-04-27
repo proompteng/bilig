@@ -1,32 +1,29 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import type { GridGeometrySnapshot } from '../gridGeometry.js'
 import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
-import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
-import type { WorkbookRenderPaneState } from './pane-scene-types.js'
-import type { GridCameraStore } from './gridCameraStore.js'
-import { GridRenderLoop } from './gridRenderLoop.js'
-import type { DynamicGridOverlayBatchV3 } from '../renderer-v3/dynamic-overlay-batch.js'
-import type { WorkbookRenderTilePaneState } from '../renderer-v3/render-tile-pane-state.js'
+import type { GridCameraStore } from '../renderer-v2/gridCameraStore.js'
+import { GridRenderLoop } from '../renderer-v2/gridRenderLoop.js'
 import {
   createWorkbookTypeGpuBackend,
   destroyWorkbookTypeGpuBackend,
   drawWorkbookTypeGpuFrame,
   syncWorkbookTypeGpuSurface,
   type WorkbookTypeGpuBackend,
-} from './workbook-typegpu-backend.js'
+} from '../renderer-v2/workbook-typegpu-backend.js'
+import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
+import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
+import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
 
-export const TYPEGPU_ACTIVE_RESOURCE_DEFER_MS = 48
-const TYPEGPU_IDLE_PRELOAD_RETRY_MS = 64
+export const TYPEGPU_V3_ACTIVE_RESOURCE_DEFER_MS = 48
+const TYPEGPU_V3_IDLE_PRELOAD_RETRY_MS = 64
 
-export interface WorkbookPaneRendererV2Props {
+export interface WorkbookPaneRendererV3Props {
   readonly active: boolean
   readonly host: HTMLDivElement | null
   readonly geometry: GridGeometrySnapshot | null
   readonly cameraStore?: GridCameraStore | null
   readonly headerPanes?: readonly GridHeaderPaneState[] | undefined
-  readonly panes: readonly WorkbookRenderPaneState[]
-  readonly preloadPanes?: readonly WorkbookRenderPaneState[] | undefined
-  readonly tilePanes?: readonly WorkbookRenderTilePaneState[] | undefined
+  readonly tilePanes: readonly WorkbookRenderTilePaneState[]
   readonly preloadTilePanes?: readonly WorkbookRenderTilePaneState[] | undefined
   readonly overlayBuilder?: ((geometry: GridGeometrySnapshot) => DynamicGridOverlayBatchV3 | null | undefined) | undefined
   readonly overlay?: DynamicGridOverlayBatchV3 | undefined
@@ -54,13 +51,13 @@ function resolveSurfaceSize(host: HTMLElement): TypeGpuSurfaceSize {
   }
 }
 
-export function resolveTypeGpuV2DrawScrollSnapshot(input: {
+export function resolveTypeGpuV3DrawScrollSnapshot(input: {
   readonly fallback: WorkbookGridScrollSnapshot
   readonly geometry: GridGeometrySnapshot | null
-  readonly panes: readonly { readonly paneId: string; readonly viewport?: WorkbookRenderPaneState['viewport'] | undefined }[]
+  readonly panes: readonly WorkbookRenderTilePaneState[]
 }): WorkbookGridScrollSnapshot {
-  const bodyPane = input.panes.find((pane) => pane.paneId === 'body' && pane.viewport)
-  if (!input.geometry || !bodyPane?.viewport) {
+  const bodyPane = input.panes.find((pane) => pane.paneId === 'body')
+  if (!input.geometry || !bodyPane) {
     return input.fallback
   }
 
@@ -73,7 +70,7 @@ export function resolveTypeGpuV2DrawScrollSnapshot(input: {
   }
 }
 
-export function shouldDeferTypeGpuPreloadSync(input: {
+export function shouldDeferTypeGpuV3PreloadSync(input: {
   readonly now: number
   readonly lastScrollSignalAt: number
   readonly camera: {
@@ -85,11 +82,11 @@ export function shouldDeferTypeGpuPreloadSync(input: {
   const hasMovingCamera =
     input.camera !== null &&
     Math.abs(input.camera.velocityX) + Math.abs(input.camera.velocityY) > 0.01 &&
-    input.now - input.camera.updatedAt < TYPEGPU_ACTIVE_RESOURCE_DEFER_MS
-  return hasMovingCamera || input.now - input.lastScrollSignalAt < TYPEGPU_ACTIVE_RESOURCE_DEFER_MS
+    input.now - input.camera.updatedAt < TYPEGPU_V3_ACTIVE_RESOURCE_DEFER_MS
+  return hasMovingCamera || input.now - input.lastScrollSignalAt < TYPEGPU_V3_ACTIVE_RESOURCE_DEFER_MS
 }
 
-export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
+export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   active,
   cameraStore = null,
   geometry,
@@ -97,12 +94,10 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   host,
   overlay,
   overlayBuilder,
-  panes,
-  preloadPanes = [],
-  tilePanes = [],
   preloadTilePanes = [],
   scrollTransformStore = null,
-}: WorkbookPaneRendererV2Props) {
+  tilePanes,
+}: WorkbookPaneRendererV3Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const backendRef = useRef<WorkbookTypeGpuBackend | null>(null)
   const renderLoopRef = useRef<GridRenderLoop | null>(null)
@@ -113,8 +108,6 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   const webGpuReadyRef = useRef(false)
   const surfaceSizeRef = useRef<TypeGpuSurfaceSize>({ dpr: 1, height: 0, pixelHeight: 0, pixelWidth: 0, width: 0 })
   const headerPanePayloadsRef = useRef<readonly GridHeaderPaneState[]>([])
-  const panePayloadsRef = useRef<readonly WorkbookRenderPaneState[]>([])
-  const preloadPanePayloadsRef = useRef<readonly WorkbookRenderPaneState[]>([])
   const tilePanePayloadsRef = useRef<readonly WorkbookRenderTilePaneState[]>([])
   const preloadTilePanePayloadsRef = useRef<readonly WorkbookRenderTilePaneState[]>([])
   const overlayBuilderRef = useRef<typeof overlayBuilder>(overlayBuilder)
@@ -201,14 +194,6 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
   }, [headerPanes])
 
   useEffect(() => {
-    panePayloadsRef.current = panes
-  }, [panes])
-
-  useEffect(() => {
-    preloadPanePayloadsRef.current = preloadPanes
-  }, [preloadPanes])
-
-  useEffect(() => {
     tilePanePayloadsRef.current = tilePanes
   }, [tilePanes])
 
@@ -253,8 +238,6 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
       const backend = backendRef.current
       const surface = surfaceSizeRef.current
       const headerPanePayloads = headerPanePayloadsRef.current
-      const basePanePayloads = panePayloadsRef.current
-      const preloadPanePayloads = preloadPanePayloadsRef.current
       const baseTilePanePayloads = tilePanePayloadsRef.current
       const preloadTilePanePayloads = preloadTilePanePayloadsRef.current
       if (!backend || surface.width <= 0 || surface.height <= 0) {
@@ -263,7 +246,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
       const latestGeometry = cameraStoreRef.current?.getSnapshot() ?? geometryRef.current
       const camera = latestGeometry?.camera ?? null
       const now = performance.now()
-      const deferPreloadSync = shouldDeferTypeGpuPreloadSync({
+      const deferPreloadSync = shouldDeferTypeGpuV3PreloadSync({
         camera,
         lastScrollSignalAt: lastScrollSignalAtRef.current,
         now,
@@ -276,7 +259,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
           idlePreloadRetryRef.current = null
           renderLoopRef.current ??= new GridRenderLoop()
           renderLoopRef.current.requestDraw(drawFrameRef.current)
-        }, TYPEGPU_IDLE_PRELOAD_RETRY_MS)
+        }, TYPEGPU_V3_IDLE_PRELOAD_RETRY_MS)
       }
       const overlayBatch = overlayBuilderRef.current && latestGeometry ? overlayBuilderRef.current(latestGeometry) : overlayRef.current
 
@@ -284,15 +267,14 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
         backend,
         headerPanes: headerPanePayloads,
         overlay: overlayBatch ?? null,
-        panes: basePanePayloads,
-        preloadPanes: preloadPanePayloads,
+        panes: [],
         preloadTilePanes: preloadTilePanePayloads,
         syncPreloadPanes: !deferPreloadSync,
-        tilePanes: baseTilePanePayloads.length > 0 ? baseTilePanePayloads : undefined,
-        scrollSnapshot: resolveTypeGpuV2DrawScrollSnapshot({
+        tilePanes: baseTilePanePayloads,
+        scrollSnapshot: resolveTypeGpuV3DrawScrollSnapshot({
           fallback: scrollTransformStoreRef.current?.getSnapshot() ?? { tx: 0, ty: 0 },
           geometry: latestGeometry,
-          panes: baseTilePanePayloads.length > 0 ? baseTilePanePayloads : basePanePayloads,
+          panes: baseTilePanePayloads,
         }),
         surface,
       })
@@ -301,7 +283,7 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
     drawFrameRef.current()
     renderLoopRef.current ??= new GridRenderLoop()
     renderLoopRef.current.requestDraw(drawFrameRef.current)
-  }, [active, headerPanes, overlay, overlayBuilder, panes, preloadPanes, preloadTilePanes, surfaceSize, tilePanes, webGpuReady])
+  }, [active, headerPanes, overlay, overlayBuilder, preloadTilePanes, surfaceSize, tilePanes, webGpuReady])
 
   useEffect(() => {
     if (!active || !scrollTransformStore) {
@@ -351,11 +333,11 @@ export const WorkbookPaneRendererV2 = memo(function WorkbookPaneRendererV2({
     <canvas
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 z-10"
-      data-pane-renderer="workbook-pane-renderer-v2"
-      data-renderer-mode={tilePanes.length > 0 ? 'typegpu-v3' : 'typegpu-v2'}
+      data-pane-renderer="workbook-pane-renderer-v3"
+      data-renderer-mode="typegpu-v3"
       data-testid="grid-pane-renderer"
-      data-v2-body-world-x={geometry?.camera.bodyWorldX ?? 0}
-      data-v2-body-world-y={geometry?.camera.bodyWorldY ?? 0}
+      data-v3-body-world-x={geometry?.camera.bodyWorldX ?? 0}
+      data-v3-body-world-y={geometry?.camera.bodyWorldY ?? 0}
       ref={canvasRef}
       style={{ contain: 'strict' }}
     />

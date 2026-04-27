@@ -185,7 +185,7 @@ describe('useWorkbookGridRenderState viewport residency', () => {
 
     expect(subscribeViewport).not.toHaveBeenCalled()
     expect(subscribeCells).toHaveBeenCalled()
-    expect(latestRenderState?.renderPanes.some((pane) => pane.paneId === 'body')).toBe(true)
+    expect(latestRenderState?.renderTilePanes.some((pane) => pane.paneId === 'body')).toBe(true)
 
     await act(async () => {
       scrollViewport!.scrollLeft = 64 * 104
@@ -352,8 +352,8 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 
-    const bodyPane = latestRenderState?.renderPanes.find((pane) => pane.paneId === 'body')
-    expect(bodyPane?.packedScene.key.valueVersion).toBe(16)
+    const bodyPane = latestRenderState?.renderTilePanes.find((pane) => pane.paneId === 'body')
+    expect(bodyPane?.tile.version.values).toBe(16)
 
     tileMiss = true
     await act(async () => {
@@ -361,7 +361,7 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 
-    expect(latestRenderState?.renderPanes.find((pane) => pane.paneId === 'body')?.packedScene.key.valueVersion).toBe(16)
+    expect(latestRenderState?.renderTilePanes.find((pane) => pane.paneId === 'body')?.tile.version.values).toBe(16)
 
     await act(async () => {
       root.unmount()

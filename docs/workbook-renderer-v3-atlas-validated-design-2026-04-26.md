@@ -20,42 +20,42 @@ Latest implementation note:
 - `packages/grid/src/gridResidentDataLayer.ts`, `packages/grid/src/gridTileResidencyV2.ts`, `packages/grid/src/useGridViewportSubscriptions.ts`,
   and `packages/grid/src/useGridSceneResidency.ts` were deleted from the grid package product surface.
 - Runtime state now carries sheet IDs alongside sheet names so renderer tile subscriptions can use stable numeric content-tile identity.
-- `packages/grid` now owns a grid-facing render-tile source contract and a V2 compatibility adapter that maps fixed content tile payloads into mounted TypeGPU pane states.
+- `packages/grid` now owns a grid-facing render-tile source contract and V3 tile-pane state. The old `render-tile-v2-adapter.ts` bridge was deleted, so fixed content tiles are no longer repacked into `GridScenePacketV2` before mounting.
 - `useWorkbookGridRenderState.ts` subscribes to projected render-tile deltas when a `renderTileSource` and `sheetId` are available, then prefers fixed content tiles once all required tiles for the resident viewport are ready.
 - With a fixed render-tile source present, the hook no longer mounts renderer-owned resident scene subscriptions or renderer-owned viewport patch subscriptions.
 - With that source present, the hook also bypasses V2 warm resident-viewport planning; tile prefetch needs to move to V3 tile interest batches next.
 - Transient fixed-tile misses retain the last fixed-tile pane set instead of immediately falling back to a full resident data-scene rebuild.
-- Frozen pane placements reuse the same fixed content packet under separate body/top/left/corner clip placements, but the retained TypeGPU backend is still V2 and scene-packet-shaped.
+- Frozen pane placements reuse the same fixed content tile under separate body/top/left/corner clip placements. V3 tile-pane buffers are keyed by numeric `tileId`, so body and frozen placements share the content resource.
 - Dynamic interaction overlays no longer build `GridScenePacketV2` values. They are emitted as `DynamicGridOverlayBatchV3` rect-instance buffers and drawn through a dedicated TypeGPU overlay resource outside tile cache and stale-tile lookup.
 - Render tile deltas no longer carry overlay mutations or a `dynamicOverlay` pane kind. Overlays are now a visual runtime layer, not renderer tile data.
 - Header panes no longer build or carry `GridScenePacketV2` values. They are emitted as fixed V3 header batches with packed rect instances plus text runs, and the TypeGPU backend draws them through dedicated header buffers outside tile cache and stale-tile lookup.
 - `useWorkbookGridRenderState.ts` no longer imports the legacy `createGridCameraSnapshot()` camera builder, `visibleRegionFromCamera()`, `scrollCellIntoView()`, or `resolveViewportScrollPosition()`.
 - The hook now owns a `GridRuntimeHost` instance, synchronizes axis overrides into it, and uses the host for camera visible-region transactions, render-tile interest sequencing, fixed tile key lookup, selection auto-scroll, and viewport restoration.
 - `GridRuntimeHost` now exposes runtime-owned resident viewport tile-interest batches plus runtime-axis scroll-position helpers, so more scroll/viewport math has moved out of the React hook without changing the mounted pane adapter yet.
-- `WorkbookGridSurface.tsx` no longer rebuilds V2 geometry snapshots from raw width/hidden records. Its TypeGPU fallback geometry now comes from `useWorkbookGridRenderState().getLiveGeometrySnapshot()`, which reuses the hook/runtime axis indexes instead of constructing a second React-owned geometry path.
-- The old resident scene path has been deleted from product runtime. The remaining Oracle deletion gates are now V2 scene-packet compatibility for data tiles inside the backend and full V3 TypeGPU resource ownership.
+- `WorkbookGridSurface.tsx` no longer rebuilds V2 geometry snapshots from raw width/hidden records. Its TypeGPU geometry now comes from `useWorkbookGridRenderState().getLiveGeometrySnapshot()`, which reuses the hook/runtime axis indexes instead of constructing a second React-owned geometry path.
+- `WorkbookGridSurface.tsx` now mounts `WorkbookPaneRendererV3`, and the isolated renderer route uses the V3 tile-pane API too. The remaining migration debt is low-level TypeGPU helper placement/resource ownership under `renderer-v2/*`, not a mounted V2 scene-packet data path.
 
 ## 1. Validation Verdict
 
-The Atlas response is directionally correct: the mounted grid path is no longer a legacy DOM/canvas renderer, and data rendering now enters through fixed render tiles. The backend still consumes V2-shaped scene packets through a compatibility adapter rather than a renderer-native V3 TypeGPU resource graph.
+The Atlas response is directionally correct: the mounted grid path is no longer a legacy DOM/canvas renderer, and data rendering now enters through fixed render tiles. The mounted product path now uses `WorkbookPaneRendererV3` and V3 tile panes instead of a V2 scene-packet adapter. The backend still shares low-level TypeGPU helper modules that live under `renderer-v2`, so the resource graph is not yet a fully renamed/deleted V3-only backend.
 
 The current hot path still has these validated properties:
 
 - `packages/grid/src/useWorkbookGridRenderState.ts` is still too large and owns pane construction, header scene building, overlay geometry bridge state, and React-facing state in one hook, but camera visible-region transactions, tile-interest stamping, selection auto-scroll math, and viewport restoration now run through `GridRuntimeHost`.
 - The app-side resident scene store has been deleted; retained render data now lives in `apps/web/src/projected-tile-scene-store.ts`.
-- Product data rendering no longer imports `packages/grid/src/gridResidentDataLayer.ts`; it now uses fixed render tiles and the V2 compatibility adapter.
+- Product data rendering no longer imports `packages/grid/src/gridResidentDataLayer.ts`; it now uses fixed render tiles and V3 tile-pane placement.
 - `packages/grid/src/renderer-v2/tile-gpu-cache.ts` no longer uses array materialization plus `toSorted()` for stale lookup and eviction after this implementation tranche, but it is still not a true byte-budgeted tile residency system with numeric keys, compatibility buckets, and O(1) visible marking.
-- `packages/grid/src/renderer-v2/workbook-typegpu-backend.ts` still resolves draw panes by consulting that cache each frame.
+- `packages/grid/src/renderer-v2/workbook-typegpu-backend.ts` still contains the shared TypeGPU backend, but V3 tile-pane drawing uses `TileResidencyV3<GridRenderTile>` plus numeric tile IDs instead of `TileGpuCache` and serialized V2 scene packet keys.
 - `packages/grid/src/renderer-v2/typegpu-atlas-manager.ts` still uses one growing atlas canvas and redraws all glyphs on growth.
-- `packages/grid/src/renderer-v3/dynamic-overlay-batch.ts` now builds interaction overlays without `GridScenePacketV2`; `WorkbookPaneRendererV2` passes those batches to a dedicated TypeGPU overlay buffer path instead of appending a fake overlay pane.
-- `packages/grid/src/gridHeaderPanes.ts` now builds header batches without `GridScenePacketV2`; `WorkbookPaneRendererV2` passes those batches to a dedicated TypeGPU header buffer path instead of appending header scene packets to data panes.
+- `packages/grid/src/renderer-v3/dynamic-overlay-batch.ts` now builds interaction overlays without `GridScenePacketV2`; `WorkbookPaneRendererV3` passes those batches to a dedicated TypeGPU overlay buffer path instead of appending a fake overlay pane.
+- `packages/grid/src/gridHeaderPanes.ts` now builds header batches without `GridScenePacketV2`; `WorkbookPaneRendererV3` passes those batches to a dedicated TypeGPU header buffer path instead of appending header scene packets to data panes.
 - Browser perf tests now need to be tightened around the fixed-tile path, since resident-scene refreshes are no longer a normal product runtime behavior.
 
 Important corrections to the Atlas text:
 
 - `packages/grid/src/renderer-v2/typegpu-buffer-pool.ts` no longer hashes every text and rect item directly during resource sync. It now compares packet-level signatures.
 - The hashing work still exists during packet packing in `packages/grid/src/renderer-v2/scene-packet-v2.ts`, where `resolveRectSignature()` and `resolveTextSignature()` walk the full rect/text payload.
-- `scene-packet-v2.ts` already has a tile-shaped key, but it is still serialized to a string for the cache and still wraps V3 fixed-tile payloads in a V2 compatibility packet. It is not yet a true backend-native tile packet.
+- `scene-packet-v2.ts` still exists for legacy V2 tests and fallback helpers, but it no longer wraps mounted product V3 fixed-tile payloads.
 - The practical next step is not to delete the whole path immediately. The correct migration is measured replacement: add counters, remove hot-path allocation/sort work, then introduce renderer-native deltas behind tested contracts.
 - The follow-up Oracle response is correct that `useWorkbookGridRenderState.ts` must stop being the renderer owner, `ViewportPatch` must not remain the renderer contract, content tile identity must split from pane placement, and overlays need their own runtime. It is stale where it says the current `tile-gpu-cache.ts` still uses `filter().toSorted()` and where it implies `typegpu-buffer-pool.ts` hashes every item during resource sync.
 
