@@ -3,7 +3,6 @@ import { parseCellAddress } from '@bilig/formula'
 import { CellEditorOverlay } from './CellEditorOverlay.js'
 import { GridFillHandleOverlay } from './GridFillHandleOverlay.js'
 import { WorkbookGridContextMenu } from './WorkbookGridContextMenu.js'
-import { createGridGeometrySnapshot } from './gridGeometry.js'
 import { createGridSelection } from './gridSelection.js'
 import { WorkbookPaneRendererV2 } from './renderer-v2/index.js'
 import { buildDynamicGridOverlayBatchV3 } from './renderer-v3/dynamic-overlay-batch.js'
@@ -98,38 +97,9 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         ? committedCellSelection
         : renderState.gridSelection
   const displaySelectionRange = displayGridSelection.current?.range ?? null
-  const v2Geometry = useMemo(
-    () =>
-      renderState.hostElement
-        ? createGridGeometrySnapshot({
-            columnWidths: renderState.columnWidths,
-            dpr: typeof window === 'undefined' ? 1 : Math.max(1, window.devicePixelRatio || 1),
-            freezeCols: props.freezeCols,
-            freezeRows: props.freezeRows,
-            gridMetrics: renderState.gridMetrics,
-            hiddenColumns: props.hiddenColumns,
-            hiddenRows: props.hiddenRows,
-            hostHeight: renderState.hostElement.clientHeight,
-            hostWidth: renderState.hostElement.clientWidth,
-            rowHeights: renderState.rowHeights,
-            scrollLeft: renderState.scrollViewportRef.current?.scrollLeft ?? 0,
-            scrollTop: renderState.scrollViewportRef.current?.scrollTop ?? 0,
-            sheetName: props.sheetName,
-          })
-        : null,
-    [
-      props.freezeCols,
-      props.freezeRows,
-      props.hiddenColumns,
-      props.hiddenRows,
-      props.sheetName,
-      renderState.columnWidths,
-      renderState.gridMetrics,
-      renderState.hostElement,
-      renderState.rowHeights,
-      renderState.scrollViewportRef,
-    ],
-  )
+  const renderHostElement = renderState.hostElement
+  const getLiveGeometrySnapshot = renderState.getLiveGeometrySnapshot
+  const v2Geometry = useMemo(() => (renderHostElement ? getLiveGeometrySnapshot() : null), [getLiveGeometrySnapshot, renderHostElement])
   const dynamicOverlayBuilder = useCallback(
     (geometry: NonNullable<typeof v2Geometry>) =>
       buildDynamicGridOverlayBatchV3({

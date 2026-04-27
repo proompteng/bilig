@@ -32,6 +32,7 @@ Latest implementation note:
 - `useWorkbookGridRenderState.ts` no longer imports the legacy `createGridCameraSnapshot()` camera builder, `visibleRegionFromCamera()`, `scrollCellIntoView()`, or `resolveViewportScrollPosition()`.
 - The hook now owns a `GridRuntimeHost` instance, synchronizes axis overrides into it, and uses the host for camera visible-region transactions, render-tile interest sequencing, fixed tile key lookup, selection auto-scroll, and viewport restoration.
 - `GridRuntimeHost` now exposes runtime-owned resident viewport tile-interest batches plus runtime-axis scroll-position helpers, so more scroll/viewport math has moved out of the React hook without changing the mounted pane adapter yet.
+- `WorkbookGridSurface.tsx` no longer rebuilds V2 geometry snapshots from raw width/hidden records. Its TypeGPU fallback geometry now comes from `useWorkbookGridRenderState().getLiveGeometrySnapshot()`, which reuses the hook/runtime axis indexes instead of constructing a second React-owned geometry path.
 - The old resident scene path has been deleted from product runtime. The remaining Oracle deletion gates are now V2 scene-packet compatibility for data tiles inside the backend and full V3 TypeGPU resource ownership.
 
 ## 1. Validation Verdict
@@ -323,6 +324,7 @@ Completed in the resident-scene deletion tranche:
 - `useWorkbookGridRenderState.ts` now sources visible-region snapshots from `GridRuntimeHost.updateCamera()` instead of `createGridCameraSnapshot()` and stamps render tile subscriptions from host-owned tile-interest batches.
 - selection auto-scroll and viewport restoration now use `GridRuntimeHost` axis runtimes instead of rebuilding sorted axis indexes through `scrollCellIntoView()` / `resolveViewportScrollPosition()`.
 - `packages/grid/src/runtime/gridRuntimeAxisAdapters.ts` bridges the current hook-owned size records into runtime axis overrides with tests, giving the next split a concrete seam for deleting more axis sorting from React-owned code.
+- `WorkbookGridSurface.tsx` now consumes the hook's live geometry snapshot for the mounted TypeGPU fallback instead of rebuilding geometry from records in the surface component.
 - `packages/grid/src/renderer-v3/tile-damage-index.ts` now applies sheet-level V3 dirty range batches to fixed tile damage and keeps axis dirty ranges bounded by tile rows/columns instead of expanding them over the full sheet.
 - `apps/web/src/projected-damage-bus.ts` is the first app-side replacement seam for per-subscription viewport patch damage: it dedupes workbook delta sequence application per sheet ordinal and feeds the renderer dirty tile index.
 - `apps/web/src/worker-runtime-delta-publisher.ts` provides the tested V3 damage-stream publisher primitive. The product worker runtime should expose it through transport only when the V3 renderer host owns the subscription, so the current V2 startup worker bundle stays under release size budgets.
