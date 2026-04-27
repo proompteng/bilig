@@ -185,7 +185,10 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
     run: MutableFormulaFamilyMemberRun,
     member: FormulaFamilyMember,
   ): FormulaFamilyMembership => {
-    unindexRun(family, run)
+    const wasSingleton = run.cellIndices.length === 1
+    if (wasSingleton) {
+      removeMapArrayValue(family.singletonRunsByRow, runRowStart(run), run)
+    }
     const memberIndex = run.axis === 'row' ? member.row : member.col
     if (memberIndex < run.start) {
       run.start = memberIndex
@@ -194,7 +197,6 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
       run.end = Math.max(run.end, memberIndex)
       run.cellIndices.push(member.cellIndex)
     }
-    indexRun(family, run)
     const membership = { familyId: family.id, runId: run.id }
     memberships.set(member.cellIndex, membership)
     return membership

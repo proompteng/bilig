@@ -1,6 +1,6 @@
 import { ValueTag, type CellValue } from '@bilig/protocol'
 import type { EngineRuntimeState } from '../runtime-state.js'
-import { BLOCK_ROWS } from '../../sheet-grid.js'
+import { BLOCK_COLS, BLOCK_ROWS } from '../../sheet-grid.js'
 import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
 
 export interface RuntimeColumnSlice {
@@ -424,12 +424,38 @@ export function createEngineRuntimeColumnStoreService(args: {
       const area = width * height
       const sheet = area <= 16_384 ? args.state.workbook.getSheet(sheetName) : undefined
       if (sheet?.structureVersion === 1) {
-        const rows: CellValue[][] = Array.from({ length: height }, () => [])
+        const rows: CellValue[][] = Array.from({ length: height }, () => Array.from<CellValue>({ length: width }))
         let filledCells = 0
-        sheet.grid.forEachPhysicalRangeEntry(rowStart, colStart, rowEnd, colEnd, (cellIndex, row, col) => {
-          rows[row - rowStart]![col - colStart] = materializeCellValueFromCellIndex(cellIndex)
-          filledCells += 1
-        })
+        const blockRowStart = Math.floor(rowStart / BLOCK_ROWS)
+        const blockRowEnd = Math.floor(rowEnd / BLOCK_ROWS)
+        const blockColStart = Math.floor(colStart / BLOCK_COLS)
+        const blockColEnd = Math.floor(colEnd / BLOCK_COLS)
+        for (let blockRow = blockRowStart; blockRow <= blockRowEnd; blockRow += 1) {
+          const absoluteBlockRow = blockRow * BLOCK_ROWS
+          const localRowStart = Math.max(rowStart - absoluteBlockRow, 0)
+          const localRowEnd = Math.min(rowEnd - absoluteBlockRow, BLOCK_ROWS - 1)
+          for (let blockCol = blockColStart; blockCol <= blockColEnd; blockCol += 1) {
+            const block = sheet.grid.blocks.get(blockRow * 1_000_000 + blockCol)
+            if (!block) {
+              continue
+            }
+            const absoluteBlockCol = blockCol * BLOCK_COLS
+            const localColStart = Math.max(colStart - absoluteBlockCol, 0)
+            const localColEnd = Math.min(colEnd - absoluteBlockCol, BLOCK_COLS - 1)
+            for (let localRow = localRowStart; localRow <= localRowEnd; localRow += 1) {
+              const row = rows[absoluteBlockRow + localRow - rowStart]!
+              const blockRowOffset = localRow * BLOCK_COLS
+              for (let localCol = localColStart; localCol <= localColEnd; localCol += 1) {
+                const encodedCellIndex = block[blockRowOffset + localCol]!
+                if (encodedCellIndex === 0) {
+                  continue
+                }
+                row[absoluteBlockCol + localCol - colStart] = materializeCellValueFromCellIndex(encodedCellIndex - 1)
+                filledCells += 1
+              }
+            }
+          }
+        }
         if (filledCells < area) {
           for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
             const row = rows[rowOffset]!

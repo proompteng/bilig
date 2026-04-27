@@ -765,11 +765,11 @@ describe('EngineFormulaEvaluationService', () => {
     engine.createSheet('Sheet1')
 
     let expected = 0
-    for (let row = 1; row <= 32; row += 1) {
+    for (let row = 1; row <= 16; row += 1) {
       engine.setCellValue('Sheet1', `A${row}`, row)
       expected += row
     }
-    engine.setCellFormula('Sheet1', 'B1', 'SUM(A1:A32)')
+    engine.setCellFormula('Sheet1', 'B1', 'SUM(A1:A16)')
 
     const evaluation = getEvaluationService(engine)
     const b1Index = engine.workbook.getCellIndex('Sheet1', 'B1')
@@ -779,6 +779,44 @@ describe('EngineFormulaEvaluationService', () => {
     Effect.runSync(evaluation.evaluateDirectLookupFormula(b1Index!))
 
     expect(engine.getPerformanceCounters().columnOwnerBuilds).toBe(0)
+    expect(engine.getPerformanceCounters().directAggregateScanEvaluations).toBe(1)
+    expect(engine.getPerformanceCounters().directAggregateScanCells).toBe(16)
+    expect(engine.getPerformanceCounters().directAggregatePrefixEvaluations).toBe(0)
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: expected })
+  })
+
+  it('promotes sliding aggregate windows to shared prefix evaluation', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'evaluation-direct-aggregate-prefix-window' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    for (let row = 1; row <= 64; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, 1)
+      engine.setCellValue('Sheet1', `C${row}`, 'ignored')
+    }
+    engine.setCellFormula('Sheet1', 'B1', 'SUM(A1:A32)')
+    engine.setCellFormula('Sheet1', 'B2', 'SUM(A2:A33)')
+    engine.setCellFormula('Sheet1', 'B3', 'COUNT(A1:A32)')
+    engine.setCellFormula('Sheet1', 'B4', 'AVERAGE(A1:A32)')
+    engine.setCellFormula('Sheet1', 'B5', 'AVERAGE(C1:C32)')
+
+    const evaluation = getEvaluationService(engine)
+    const formulaIndices = ['B1', 'B2', 'B3', 'B4', 'B5'].map((address) => engine.workbook.getCellIndex('Sheet1', address))
+    expect(formulaIndices.every((index) => index !== undefined)).toBe(true)
+
+    engine.resetPerformanceCounters()
+    for (const formulaIndex of formulaIndices) {
+      Effect.runSync(evaluation.evaluateDirectLookupFormula(formulaIndex!))
+    }
+
+    const counters = engine.getPerformanceCounters()
+    expect(counters.directAggregateScanEvaluations).toBe(0)
+    expect(counters.directAggregateScanCells).toBe(0)
+    expect(counters.directAggregatePrefixEvaluations).toBe(5)
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 32 })
+    expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 32 })
+    expect(engine.getCellValue('Sheet1', 'B3')).toEqual({ tag: ValueTag.Number, value: 32 })
+    expect(engine.getCellValue('Sheet1', 'B4')).toEqual({ tag: ValueTag.Number, value: 1 })
+    expect(engine.getCellValue('Sheet1', 'B5')).toEqual({ tag: ValueTag.Error, code: ErrorCode.Div0 })
   })
 })

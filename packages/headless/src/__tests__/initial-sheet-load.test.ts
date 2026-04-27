@@ -82,6 +82,7 @@ describe('initial mixed sheet load', () => {
     })
     expect(rebuilt.getPerformanceCounters().snapshotOpsReplayed).toBe(0)
     expect(rebuilt.getPerformanceCounters().topoRebuilds).toBe(0)
+    expect(rebuilt.getPerformanceCounters().wasmFullUploads).toBe(0)
 
     rebuilt.setCellContents({ sheet: sheetId, row: 0, col: 0 }, 3)
 

@@ -380,6 +380,7 @@ describe('EngineOperationService', () => {
 
     expect(engine.getCellValue('Sheet1', 'E1')).toEqual({ tag: ValueTag.Number, value: 3 })
     expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 0 })
+    expect(engine.getPerformanceCounters().directFormulaKernelSyncOnlyRecalcSkips).toBe(1)
   })
 
   it('keeps aggregate formulas current through generic batch clears', async () => {
@@ -406,9 +407,35 @@ describe('EngineOperationService', () => {
     }
     engine.setCellFormula('Sheet1', 'B1', 'SUM(A1:A32)')
 
+    engine.resetPerformanceCounters()
     engine.setCellValue('Sheet1', 'A1', 10)
 
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 537 })
+    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 0 })
+    expect(engine.getPerformanceCounters().directAggregateDeltaApplications).toBe(1)
+    expect(engine.getPerformanceCounters().directAggregateDeltaOnlyRecalcSkips).toBe(1)
+  })
+
+  it('updates large overlapping aggregate fanout with direct deltas', async () => {
+    const rowCount = 256
+    const engine = new SpreadsheetEngine({ workbookName: 'operation-large-direct-aggregate-fanout' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    for (let row = 1; row <= rowCount; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellFormula('Sheet1', `B${row}`, `SUM(A1:A${row})`)
+    }
+
+    engine.resetPerformanceCounters()
+    engine.setCellValue('Sheet1', 'A1', 10)
+
+    expect(engine.getCellValue('Sheet1', `B${rowCount}`)).toEqual({
+      tag: ValueTag.Number,
+      value: (rowCount * (rowCount + 1)) / 2 + 9,
+    })
+    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 0 })
+    expect(engine.getPerformanceCounters().directAggregateDeltaApplications).toBe(rowCount)
+    expect(engine.getPerformanceCounters().directAggregateDeltaOnlyRecalcSkips).toBe(1)
   })
 
   it('accumulates direct aggregate deltas across generic batch literal writes', async () => {
@@ -425,10 +452,13 @@ describe('EngineOperationService', () => {
       { kind: 'setCellValue', sheetName: 'Sheet1', address: 'A2', value: 20 },
     ])
 
+    engine.resetPerformanceCounters()
     Effect.runSync(getOperationService(engine).applyBatch(batch, 'local'))
 
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 555 })
     expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 0 })
+    expect(engine.getPerformanceCounters().directAggregateDeltaApplications).toBe(1)
+    expect(engine.getPerformanceCounters().directAggregateDeltaOnlyRecalcSkips).toBe(1)
   })
 
   it('counts direct scalar generic batch updates without dirty traversal', async () => {
@@ -443,7 +473,27 @@ describe('EngineOperationService', () => {
     Effect.runSync(getOperationService(engine).applyBatch(batch, 'local'))
 
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 15 })
-    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 1, jsFormulaCount: 0 })
+    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 0 })
+    expect(engine.getPerformanceCounters().directScalarDeltaApplications).toBe(1)
+    expect(engine.getPerformanceCounters().directScalarDeltaOnlyRecalcSkips).toBe(1)
+  })
+
+  it('propagates simple direct scalar chains with numeric deltas', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'operation-direct-scalar-chain-deltas' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellFormula('Sheet1', 'B1', 'A1+1')
+    engine.setCellFormula('Sheet1', 'C1', 'B1+1')
+    engine.setCellFormula('Sheet1', 'D1', 'C1+1')
+
+    engine.resetPerformanceCounters()
+    engine.setCellValue('Sheet1', 'A1', 5)
+
+    expect(engine.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 8 })
+    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 0 })
+    expect(engine.getPerformanceCounters().directScalarDeltaApplications).toBe(3)
+    expect(engine.getPerformanceCounters().directScalarDeltaOnlyRecalcSkips).toBe(1)
   })
 
   it('replaces existing formulas with generic batch literal writes', async () => {

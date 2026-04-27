@@ -98,4 +98,27 @@ describe('RegionGraph', () => {
     expect([...regionGraph.collectFormulaDependentsForCell(sheet.id, 1, 0)]).toEqual([20])
     expect([...regionGraph.collectFormulaDependentsForCell(sheet.id, 4, 0)]).toEqual([10])
   })
+
+  it('deduplicates dependents when one formula subscribes to multiple matching regions', () => {
+    const workbook = new WorkbookStore('region-graph-dedupe')
+    const sheet = workbook.createSheet('Sheet1')
+    const regionGraph = createRegionGraph({ workbook })
+
+    const first = regionGraph.internSingleColumnRegion({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 5,
+      col: 0,
+    })
+    const second = regionGraph.internSingleColumnRegion({
+      sheetName: 'Sheet1',
+      rowStart: 2,
+      rowEnd: 7,
+      col: 0,
+    })
+
+    regionGraph.replaceFormulaSubscriptions(10, [first, second])
+
+    expect([...regionGraph.collectFormulaDependentsForCell(sheet.id, 3, 0)]).toEqual([10])
+  })
 })

@@ -239,8 +239,13 @@ describe('EngineFormulaBindingService', () => {
     expect(engine.getCellValue('Sheet1', 'B64')).toEqual({ tag: ValueTag.Number, value: 378 })
     expect(engine.getLastMetrics()).toMatchObject({
       dirtyFormulaCount: 0,
-      wasmFormulaCount: 64,
+      wasmFormulaCount: 0,
       jsFormulaCount: 0,
+    })
+    expect(engine.getPerformanceCounters()).toMatchObject({
+      directScalarDeltaApplications: 64,
+      directScalarDeltaOnlyRecalcSkips: 1,
+      wasmFullUploads: 0,
     })
   })
 

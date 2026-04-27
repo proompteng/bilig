@@ -161,6 +161,7 @@ type EngineRecalcRuntimeConfig = Omit<
   | 'getDeferredKernelSyncSeen'
   | 'getWasmBatch'
   | 'getChangedInputBuffer'
+  | 'flushWasmProgramSync'
   | 'dirtyScheduler'
   | 'materializeSpill'
   | 'clearOwnedSpill'
@@ -232,7 +233,6 @@ type EngineOperationRuntimeConfig = Omit<
   | 'recalculate'
   | 'evaluateDirectFormula'
   | 'reconcilePivotOutputs'
-  | 'flushWasmProgramSync'
 >
 
 type EngineTraversalRuntimeConfig = Omit<Parameters<typeof createEngineTraversalService>[0], 'regionGraph'>
@@ -292,6 +292,37 @@ export function createEngineServiceRuntime(args: {
   })
   const exactLookup = createExactColumnIndexService({ state: args.state, runtimeColumnStore, columnIndexStore })
   const sortedLookup = createSortedColumnSearchService({ state: args.state, runtimeColumnStore, columnIndexStore })
+  const deferKernelSyncNow = (cellIndices: readonly number[] | Uint32Array): void => {
+    if (cellIndices.length === 0) {
+      return
+    }
+    scratch.ensureRecalcCapacityNow(args.state.workbook.cellStore.size + 1)
+    const pendingKernelSync = scratch.getPendingKernelSyncNow()
+    let deferredCount = scratch.getDeferredKernelSyncCountNow()
+    let deferredEpoch = scratch.getDeferredKernelSyncEpochNow() + 1
+    const deferredSeen = scratch.getDeferredKernelSyncSeenNow()
+    if (deferredEpoch === 0xffff_ffff) {
+      deferredEpoch = 1
+      deferredSeen.fill(0)
+    }
+    scratch.setDeferredKernelSyncEpochNow(deferredEpoch)
+    for (let index = 0; index < deferredCount; index += 1) {
+      const cellIndex = pendingKernelSync[index]
+      if (cellIndex !== undefined) {
+        deferredSeen[cellIndex] = deferredEpoch
+      }
+    }
+    for (let index = 0; index < cellIndices.length; index += 1) {
+      const cellIndex = cellIndices[index]!
+      if (deferredSeen[cellIndex] === deferredEpoch) {
+        continue
+      }
+      deferredSeen[cellIndex] = deferredEpoch
+      pendingKernelSync[deferredCount] = cellIndex
+      deferredCount += 1
+    }
+    scratch.setDeferredKernelSyncCountNow(deferredCount)
+  }
   const graph = createEngineFormulaGraphService({
     ...args.formulaGraph,
     rebuildCalcChain: () => args.state.scheduler.rebuildChain(args.state.formulas.keys(), args.state.workbook.cellStore),
@@ -556,6 +587,7 @@ export function createEngineServiceRuntime(args: {
     getDeferredKernelSyncSeen: () => scratch.getDeferredKernelSyncSeenNow(),
     getWasmBatch: () => scratch.getWasmBatchNow(),
     getChangedInputBuffer: () => support.getChangedInputBufferNow(),
+    flushWasmProgramSync: () => graph.flushWasmProgramSyncNow(),
     dirtyScheduler,
     materializeSpill: (cellIndex, arrayValue) => support.materializeSpillNow(cellIndex, arrayValue),
     clearOwnedSpill: (cellIndex) => support.clearOwnedSpillNow(cellIndex),
@@ -588,6 +620,8 @@ export function createEngineServiceRuntime(args: {
     repairTopoRanks: (changedFormulaCells) => graph.repairTopoRanksNow(changedFormulaCells),
     detectCycles: () => graph.detectCyclesNow(),
     recalculate: (changedRoots, kernelSyncRoots) => requireService(recalc, 'recalc').recalculateNowSync(changedRoots, kernelSyncRoots),
+    deferKernelSync: deferKernelSyncNow,
+    evaluateDirectFormula: (cellIndex) => evaluation.evaluateDirectLookupFormulaNow(cellIndex),
     recalculatePreordered: (changedRoots, orderedFormulaCellIndices, orderedFormulaCount, kernelSyncRoots) =>
       requireService(recalc, 'recalc').recalculatePreorderedNowSync(
         changedRoots,
@@ -601,7 +635,6 @@ export function createEngineServiceRuntime(args: {
     setBatchMutationDepth: (next) => {
       args.operation.setBatchMutationDepth(next)
     },
-    flushWasmProgramSync: () => graph.flushWasmProgramSyncNow(),
     prepareRegionQueryIndices: () => regionGraph.prepareQueryIndices(),
     writeHydratedFormulaValue: (cellIndex, value) => {
       args.state.workbook.cellStore.flags[cellIndex] =
@@ -666,11 +699,11 @@ export function createEngineServiceRuntime(args: {
     repairTopoRanks: (changedFormulaCells) => graph.repairTopoRanksNow(changedFormulaCells),
     detectCycles: () => graph.detectCyclesNow(),
     recalculate: (changedRoots, kernelSyncRoots) => requireService(recalc, 'recalc').recalculateNowSync(changedRoots, kernelSyncRoots),
+    deferKernelSync: deferKernelSyncNow,
     evaluateDirectFormula: (cellIndex: number) => evaluation.evaluateDirectLookupFormulaNow(cellIndex),
     reconcilePivotOutputs: (baseChanged, forceAllPivots) =>
       requireService(recalc, 'recalc').reconcilePivotOutputsNow(baseChanged, forceAllPivots),
     prepareRegionQueryIndices: () => regionGraph.prepareQueryIndices(),
-    flushWasmProgramSync: () => graph.flushWasmProgramSyncNow(),
     getEntityDependents: (entityId) => traversal.getEntityDependentsNow(entityId),
     collectFormulaDependents: (entityId) => traversal.collectFormulaDependentsNow(entityId),
     noteExactLookupLiteralWrite: (request) => exactLookup.recordLiteralWrite(request),
@@ -817,7 +850,7 @@ export function createEngineServiceRuntime(args: {
         ]
       }),
     hydrateTemplateBank: (templates) => formulaTemplates.hydrateTemplates(templates),
-    resolveTemplateById: (templateId, source, row, col) => formulaTemplates.resolveByTemplateId(templateId, source, row, col),
+    resolveTemplateById: (templateId, source, row, col) => formulaTemplates.resolveTrustedByTemplateId(templateId, source, row, col),
     initializeCellFormulasAt: (refs, potentialNewCells) =>
       requireService(formulaInitialization, 'formulaInitialization').initializeCellFormulasAtNow(refs, potentialNewCells),
     initializePreparedCellFormulasAt: (refs, potentialNewCells) =>

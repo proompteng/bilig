@@ -91,8 +91,19 @@ interface RestoredFormulaInstance {
   readonly value?: CellValue
 }
 
-function toFormulaInstanceKey(sheetName: string, row: number, col: number): string {
-  return `${sheetName}\t${row}\t${col}`
+const RUNTIME_IMAGE_COORD_STRIDE = 1_048_576
+
+function toFormulaInstanceKey(row: number, col: number): number {
+  return row * RUNTIME_IMAGE_COORD_STRIDE + col
+}
+
+function getOrCreateSheetFormulaMap<T>(maps: Map<string, Map<number, T>>, sheetName: string): Map<number, T> {
+  let sheetMap = maps.get(sheetName)
+  if (!sheetMap) {
+    sheetMap = new Map()
+    maps.set(sheetName, sheetMap)
+  }
+  return sheetMap
 }
 
 function formulaValueMatchesInstance(
@@ -355,26 +366,30 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
 
   args.hydrateTemplateBank(args.runtimeImage.templateBank)
 
-  let formulaValuesByAddress: Map<string, CellValue> | undefined
-  const formulaInstancesByAddress = new Map<string, RestoredFormulaInstance>()
+  let formulaValuesByAddress: Map<string, Map<number, CellValue>> | undefined
+  const formulaInstancesByAddress = new Map<string, Map<number, RestoredFormulaInstance>>()
   args.runtimeImage.formulaInstances.forEach((record, index) => {
     const valueRecord = args.runtimeImage.formulaValues[index]
     if (!formulaValueMatchesInstance(record, valueRecord)) {
-      formulaValuesByAddress ??= new Map<string, CellValue>()
+      formulaValuesByAddress ??= new Map<string, Map<number, CellValue>>()
     }
-    formulaInstancesByAddress.set(toFormulaInstanceKey(record.sheetName, record.row, record.col), {
+    getOrCreateSheetFormulaMap(formulaInstancesByAddress, record.sheetName).set(toFormulaInstanceKey(record.row, record.col), {
       record,
       ...(formulaValueMatchesInstance(record, valueRecord) ? { value: valueRecord.value } : {}),
     })
   })
   if (formulaValuesByAddress) {
     args.runtimeImage.formulaValues.forEach((record) => {
-      formulaValuesByAddress!.set(toFormulaInstanceKey(record.sheetName, record.row, record.col), record.value)
+      getOrCreateSheetFormulaMap(formulaValuesByAddress!, record.sheetName).set(toFormulaInstanceKey(record.row, record.col), record.value)
     })
   }
   const sheetCellsByName = new Map<string, readonly RuntimeImageCellCoordinateSnapshot[]>(
     (args.runtimeImage.sheetCells ?? []).map((record) => [record.sheetName, record.coords]),
   )
+  const totalCellCount = orderedSheets.reduce((sum, sheet) => sum + sheet.cells.length, 0)
+  if (totalCellCount > 0) {
+    args.workbook.cellStore.ensureCapacity(args.workbook.cellStore.size + totalCellCount)
+  }
 
   const formulaRefs: EngineCellMutationRef[] = []
   const preparedFormulaRefs: PreparedRuntimeFormulaRef[] = []
@@ -392,21 +407,22 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
         cellAddress: cell.address,
         indexedCoordinate: sheetCoords?.[index],
       })
-      const restoredFormula = formulaInstancesByAddress.get(toFormulaInstanceKey(sheet.name, coords.row, coords.col))
+      const coordKey = toFormulaInstanceKey(coords.row, coords.col)
+      const restoredFormula = formulaInstancesByAddress.get(sheet.name)?.get(coordKey)
       const formulaInstance = restoredFormula?.record
-      const ensured = args.workbook.ensureCellAt(sheetId, coords.row, coords.col)
+      const cellIndex = args.workbook.cellStore.allocateReserved(sheetId, coords.row, coords.col)
+      args.workbook.attachAllocatedCell(sheetId, coords.row, coords.col, cellIndex)
       if (cell.formula === undefined && formulaInstance === undefined) {
-        writeLiteralToCellStore(args.workbook.cellStore, ensured.cellIndex, cell.value ?? null, args.strings)
+        writeLiteralToCellStore(args.workbook.cellStore, cellIndex, cell.value ?? null, args.strings)
         if (cell.value === null) {
-          args.workbook.cellStore.flags[ensured.cellIndex] =
-            (args.workbook.cellStore.flags[ensured.cellIndex] ?? 0) | CellFlags.AuthoredBlank
+          args.workbook.cellStore.flags[cellIndex] = (args.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.AuthoredBlank
         }
       }
       if (cell.format !== undefined) {
-        args.workbook.setCellFormat(ensured.cellIndex, cell.format)
+        args.workbook.setCellFormat(cellIndex, cell.format)
       }
       if (formulaInstance) {
-        const cachedValue = restoredFormula.value ?? formulaValuesByAddress?.get(toFormulaInstanceKey(sheet.name, coords.row, coords.col))
+        const cachedValue = restoredFormula.value ?? formulaValuesByAddress?.get(sheet.name)?.get(coordKey)
         if (
           formulaInstance.templateId !== undefined &&
           args.resolveTemplateById &&

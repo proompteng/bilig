@@ -16,6 +16,7 @@ import {
 import { CellFlags } from '../../cell-store.js'
 import { definedNameValueToCellValue } from '../../engine-metadata-utils.js'
 import { emptyValue, errorValue } from '../../engine-value-utils.js'
+import { addEngineCounter } from '../../perf/engine-counters.js'
 import type {
   EngineRuntimeState,
   PreparedApproximateVectorLookup,
@@ -36,6 +37,7 @@ function decodeErrorCode(rawCode: number | undefined): ErrorCode {
 }
 
 const DIRECT_AGGREGATE_SCAN_MAX_LENGTH = 64
+const DIRECT_AGGREGATE_PREFIX_MIN_LENGTH = 16
 
 export interface EngineFormulaEvaluationService {
   readonly evaluateDirectLookupFormula: (cellIndex: number) => Effect.Effect<number[] | undefined, EngineFormulaEvaluationError>
@@ -110,7 +112,7 @@ function cellValuesEqual(left: CellValue, right: CellValue): boolean {
 }
 
 export function createEngineFormulaEvaluationService(args: {
-  readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings' | 'formulas' | 'getUseColumnIndex'>
+  readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings' | 'formulas' | 'counters' | 'getUseColumnIndex'>
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService
   readonly criterionCache: CriterionRangeCacheService
   readonly aggregateCache: RangeAggregateCacheService
@@ -621,7 +623,16 @@ export function createEngineFormulaEvaluationService(args: {
     if (!directAggregate) {
       return undefined
     }
-    if (formula.dependencyIndices.length > 0 || directAggregate.length <= DIRECT_AGGREGATE_SCAN_MAX_LENGTH) {
+    const canUseSlidingPrefix =
+      formula.dependencyIndices.length === 0 &&
+      (directAggregate.aggregateKind === 'sum' ||
+        directAggregate.aggregateKind === 'average' ||
+        directAggregate.aggregateKind === 'count') &&
+      directAggregate.length > DIRECT_AGGREGATE_PREFIX_MIN_LENGTH
+    const canUseExistingLargePrefix = formula.dependencyIndices.length === 0 && directAggregate.length > DIRECT_AGGREGATE_SCAN_MAX_LENGTH
+    if (!canUseSlidingPrefix && !canUseExistingLargePrefix) {
+      addEngineCounter(args.state.counters, 'directAggregateScanEvaluations')
+      addEngineCounter(args.state.counters, 'directAggregateScanCells', directAggregate.length)
       const aggregateSheet = args.state.workbook.getSheet(directAggregate.sheetName)
       if (!aggregateSheet) {
         return undefined
@@ -682,6 +693,7 @@ export function createEngineFormulaEvaluationService(args: {
       }
       return directNumberResult(maximum === Number.NEGATIVE_INFINITY ? 0 : maximum)
     }
+    addEngineCounter(args.state.counters, 'directAggregatePrefixEvaluations')
     // SUM/AVERAGE ranges should reuse any compatible lower-start prefix to
     // avoid rescanning shifted windows, while still allowing narrower anchors
     // when no compatible reusable prefix exists.
@@ -731,7 +743,7 @@ export function createEngineFormulaEvaluationService(args: {
       return directNumberResult(maximum === Number.NEGATIVE_INFINITY ? 0 : maximum)
     }
     const denominator = averageCount
-    return denominator === 0 ? directNumberResult(0) : directNumberResult(sum / denominator)
+    return denominator === 0 ? directErrorResult(ErrorCode.Div0) : directNumberResult(sum / denominator)
   }
 
   const resolveStructuredReferenceNow = (tableName: string, columnName: string): FormulaNode | undefined => {
@@ -919,11 +931,22 @@ export function createEngineFormulaEvaluationService(args: {
   }
 
   const storeDirectScalarResult = (cellIndex: number, result: CellValue): number[] => {
-    const beforeValue = args.state.workbook.cellStore.getValue(cellIndex, (id) => (id === 0 ? '' : args.state.strings.get(id)))
+    const cellStore = args.state.workbook.cellStore
+    const beforeTag = cellStore.tags[cellIndex]
+    const beforeNumber = cellStore.numbers[cellIndex] ?? 0
+    const beforeStringId = cellStore.stringIds[cellIndex] ?? 0
+    const beforeError = cellStore.errors[cellIndex] ?? ErrorCode.None
+    const nextStringId = result.tag === ValueTag.String ? args.state.strings.intern(result.value) : 0
+    const changed =
+      beforeTag !== result.tag ||
+      (result.tag === ValueTag.Number && !Object.is(beforeNumber, result.value)) ||
+      (result.tag === ValueTag.Boolean && beforeNumber !== (result.value ? 1 : 0)) ||
+      (result.tag === ValueTag.String && beforeStringId !== nextStringId) ||
+      (result.tag === ValueTag.Error && (beforeError as ErrorCode) !== result.code)
     args.state.workbook.cellStore.flags[cellIndex] =
       (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)
-    args.state.workbook.cellStore.setValue(cellIndex, result, result.tag === ValueTag.String ? args.state.strings.intern(result.value) : 0)
-    if (!cellValuesEqual(beforeValue, result)) {
+    args.state.workbook.cellStore.setValue(cellIndex, result, nextStringId)
+    if (changed) {
       args.state.workbook.notifyCellValueWritten(cellIndex)
     }
     return emptyChangedCellIndices

@@ -4,6 +4,8 @@ import type { EngineRuntimeColumnStoreService, RuntimeColumnView } from '../engi
 import type { RegionGraph } from './region-graph.js'
 import type { RegionId } from './region-node-store.js'
 
+const PREFIX_LITERAL_DELTA_MAX_SUFFIX_LENGTH = 16_384
+
 export interface AggregateStateEntry {
   readonly regionId: RegionId
   readonly sheetName: string
@@ -358,6 +360,11 @@ export function createAggregateStateStore(args: {
         }
         const offset = row - entry.rowStart
         const length = entry.rowEnd - entry.rowStart + 1
+        if (length - offset > PREFIX_LITERAL_DELTA_MAX_SUFFIX_LENGTH) {
+          deleteEntry(entry)
+          entryIndex -= 1
+          continue
+        }
         for (let index = offset; index < length; index += 1) {
           entry.prefixSums[index] = (entry.prefixSums[index] ?? 0) + sumDelta
           entry.prefixCount[index] = (entry.prefixCount[index] ?? 0) + countDelta

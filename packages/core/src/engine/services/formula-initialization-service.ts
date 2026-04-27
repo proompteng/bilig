@@ -1,12 +1,24 @@
 import { Effect } from 'effect'
 import type { CompiledFormula } from '@bilig/formula'
-import type { CellValue } from '@bilig/protocol'
+import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import type { EngineCellMutationRef } from '../../cell-mutations-at.js'
 import { CellFlags } from '../../cell-store.js'
 import type { FormulaTemplateResolution } from '../../formula/template-bank.js'
 import { addEngineCounter } from '../../perf/engine-counters.js'
-import type { EngineRuntimeState, U32 } from '../runtime-state.js'
+import type { EngineRuntimeState, RuntimeDirectScalarDescriptor, RuntimeDirectScalarOperand, U32 } from '../runtime-state.js'
 import { EngineMutationError } from '../errors.js'
+
+const INITIAL_DIRECT_FORMULA_EVALUATION_LIMIT = 16_384
+
+type InitialPrefixAggregateKind = 'sum' | 'count'
+
+interface InitialPrefixAggregateGroup {
+  readonly sheetName: string
+  readonly col: number
+  readonly aggregateKind: InitialPrefixAggregateKind
+  maxRowEnd: number
+  readonly formulas: Array<{ cellIndex: number; rowEnd: number }>
+}
 
 function mutationErrorMessage(message: string, cause: unknown): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : message
@@ -75,6 +87,8 @@ export function createEngineFormulaInitializationService(args: {
   readonly repairTopoRanks: (changedFormulaCells: readonly number[] | U32) => boolean
   readonly detectCycles: () => void
   readonly recalculate: (changedRoots: readonly number[] | U32, kernelSyncRoots?: readonly number[] | U32) => U32
+  readonly deferKernelSync: (cellIndices: readonly number[] | U32) => void
+  readonly evaluateDirectFormula: (cellIndex: number) => readonly number[] | undefined
   readonly recalculatePreordered: (
     changedRoots: readonly number[] | U32,
     orderedFormulaCellIndices: readonly number[] | U32,
@@ -84,7 +98,6 @@ export function createEngineFormulaInitializationService(args: {
   readonly reconcilePivotOutputs: (baseChanged: U32, forceAllPivots?: boolean) => U32
   readonly getBatchMutationDepth: () => number
   readonly setBatchMutationDepth: (next: number) => void
-  readonly flushWasmProgramSync: () => void
   readonly prepareRegionQueryIndices: () => void
   readonly writeHydratedFormulaValue: (cellIndex: number, value: CellValue) => void
 }): EngineFormulaInitializationService {
@@ -110,6 +123,218 @@ export function createEngineFormulaInitializationService(args: {
     }
     sheetNameById.set(sheetId, sheet.name)
     return sheet.name
+  }
+
+  const canEvaluateInitialDirectFormula = (cellIndex: number): boolean => {
+    const formula = args.state.formulas.get(cellIndex)
+    return (
+      formula !== undefined &&
+      !formula.compiled.volatile &&
+      !formula.compiled.producesSpill &&
+      (formula.directAggregate !== undefined ||
+        formula.directCriteria !== undefined ||
+        formula.directLookup !== undefined ||
+        formula.directScalar !== undefined)
+    )
+  }
+
+  const evaluateInitialPrefixAggregateGroups = (
+    orderedCellIndices: readonly number[],
+    changedCellIndices: number[],
+  ): Set<number> | undefined => {
+    const groups = new Map<string, InitialPrefixAggregateGroup>()
+    for (let index = 0; index < orderedCellIndices.length; index += 1) {
+      const cellIndex = orderedCellIndices[index]!
+      const formula = args.state.formulas.get(cellIndex)
+      const aggregate = formula?.directAggregate
+      if (
+        !formula ||
+        !aggregate ||
+        aggregate.rowStart !== 0 ||
+        formula.dependencyIndices.length !== 0 ||
+        (aggregate.aggregateKind !== 'sum' && aggregate.aggregateKind !== 'count')
+      ) {
+        continue
+      }
+      const key = `${aggregate.sheetName}\t${aggregate.col}\t${aggregate.aggregateKind}`
+      let group = groups.get(key)
+      if (!group) {
+        group = {
+          sheetName: aggregate.sheetName,
+          col: aggregate.col,
+          aggregateKind: aggregate.aggregateKind,
+          maxRowEnd: aggregate.rowEnd,
+          formulas: [],
+        }
+        groups.set(key, group)
+      } else {
+        group.maxRowEnd = Math.max(group.maxRowEnd, aggregate.rowEnd)
+      }
+      group.formulas.push({ cellIndex, rowEnd: aggregate.rowEnd })
+    }
+    if (groups.size === 0) {
+      return undefined
+    }
+
+    const handled = new Set<number>()
+    groups.forEach((group) => {
+      const sheet = args.state.workbook.getSheet(group.sheetName)
+      if (!sheet) {
+        return
+      }
+      const formulas = group.formulas.toSorted((left, right) => left.rowEnd - right.rowEnd)
+      const assignments: Array<{ cellIndex: number; value: number }> = []
+      let sum = 0
+      let count = 0
+      let formulaIndex = 0
+      let canMaterializeGroup = true
+      for (let row = 0; row <= group.maxRowEnd; row += 1) {
+        const memberCellIndex = sheet.structureVersion === 1 ? sheet.grid.getPhysical(row, group.col) : sheet.grid.get(row, group.col)
+        if (memberCellIndex !== -1) {
+          if (((args.state.workbook.cellStore.flags[memberCellIndex] ?? 0) & CellFlags.HasFormula) !== 0) {
+            canMaterializeGroup = false
+            break
+          }
+          const tag = (args.state.workbook.cellStore.tags[memberCellIndex] as ValueTag | undefined) ?? ValueTag.Empty
+          if (tag === ValueTag.Number) {
+            sum += args.state.workbook.cellStore.numbers[memberCellIndex] ?? 0
+            count += 1
+          } else if (tag === ValueTag.Boolean) {
+            sum += (args.state.workbook.cellStore.numbers[memberCellIndex] ?? 0) !== 0 ? 1 : 0
+            count += 1
+          } else if (tag === ValueTag.Error && group.aggregateKind === 'sum') {
+            canMaterializeGroup = false
+            break
+          }
+        }
+        while (formulaIndex < formulas.length && formulas[formulaIndex]!.rowEnd <= row) {
+          assignments.push({
+            cellIndex: formulas[formulaIndex]!.cellIndex,
+            value: group.aggregateKind === 'sum' ? sum : count,
+          })
+          formulaIndex += 1
+        }
+      }
+      if (!canMaterializeGroup || assignments.length !== formulas.length) {
+        return
+      }
+      for (let index = 0; index < assignments.length; index += 1) {
+        const assignment = assignments[index]!
+        args.writeHydratedFormulaValue(assignment.cellIndex, {
+          tag: ValueTag.Number,
+          value: assignment.value,
+        })
+        handled.add(assignment.cellIndex)
+        changedCellIndices.push(assignment.cellIndex)
+      }
+    })
+    return handled.size === 0 ? undefined : handled
+  }
+
+  const coerceInitialDirectScalarCell = (
+    cellIndex: number,
+  ): { kind: 'number'; value: number } | { kind: 'error'; code: ErrorCode } | undefined => {
+    const cellStore = args.state.workbook.cellStore
+    const tag = (cellStore.tags[cellIndex] as ValueTag | undefined) ?? ValueTag.Empty
+    switch (tag) {
+      case ValueTag.Number:
+        return { kind: 'number', value: cellStore.numbers[cellIndex] ?? 0 }
+      case ValueTag.Boolean:
+        return { kind: 'number', value: (cellStore.numbers[cellIndex] ?? 0) !== 0 ? 1 : 0 }
+      case ValueTag.Empty:
+        return { kind: 'number', value: 0 }
+      case ValueTag.Error:
+        return { kind: 'error', code: (cellStore.errors[cellIndex] as ErrorCode | undefined) ?? ErrorCode.None }
+      case ValueTag.String:
+        return { kind: 'error', code: ErrorCode.Value }
+      default:
+        return undefined
+    }
+  }
+
+  const readInitialDirectScalarOperand = (
+    operand: RuntimeDirectScalarOperand,
+  ): { kind: 'number'; value: number } | { kind: 'error'; code: ErrorCode } | undefined => {
+    switch (operand.kind) {
+      case 'literal-number':
+        return { kind: 'number', value: operand.value }
+      case 'error':
+        return { kind: 'error', code: operand.code }
+      case 'cell':
+        return coerceInitialDirectScalarCell(operand.cellIndex)
+    }
+  }
+
+  const evaluateInitialDirectScalar = (directScalar: RuntimeDirectScalarDescriptor): CellValue | undefined => {
+    if (directScalar.kind === 'abs') {
+      const operand = readInitialDirectScalarOperand(directScalar.operand)
+      if (!operand) {
+        return undefined
+      }
+      return operand.kind === 'error'
+        ? { tag: ValueTag.Error, code: operand.code }
+        : { tag: ValueTag.Number, value: Math.abs(operand.value) }
+    }
+    const left = readInitialDirectScalarOperand(directScalar.left)
+    const right = readInitialDirectScalarOperand(directScalar.right)
+    if (!left || !right) {
+      return undefined
+    }
+    if (left.kind === 'error') {
+      return { tag: ValueTag.Error, code: left.code }
+    }
+    if (right.kind === 'error') {
+      return { tag: ValueTag.Error, code: right.code }
+    }
+    switch (directScalar.operator) {
+      case '+':
+        return { tag: ValueTag.Number, value: left.value + right.value }
+      case '-':
+        return { tag: ValueTag.Number, value: left.value - right.value }
+      case '*':
+        return { tag: ValueTag.Number, value: left.value * right.value }
+      case '/':
+        return right.value === 0 ? { tag: ValueTag.Error, code: ErrorCode.Div0 } : { tag: ValueTag.Number, value: left.value / right.value }
+    }
+  }
+
+  const evaluateInitialDirectFormulas = (orderedCellIndices: readonly number[]): U32 | undefined => {
+    if (
+      orderedCellIndices.length === 0 ||
+      orderedCellIndices.length > INITIAL_DIRECT_FORMULA_EVALUATION_LIMIT ||
+      !orderedCellIndices.every(canEvaluateInitialDirectFormula)
+    ) {
+      return undefined
+    }
+    const changedCellIndices: number[] = []
+    args.state.workbook.withBatchedColumnVersionUpdates(() => {
+      const prefixAggregateHandled = evaluateInitialPrefixAggregateGroups(orderedCellIndices, changedCellIndices)
+      for (let index = 0; index < orderedCellIndices.length; index += 1) {
+        const cellIndex = orderedCellIndices[index]!
+        if (prefixAggregateHandled?.has(cellIndex)) {
+          continue
+        }
+        const formula = args.state.formulas.get(cellIndex)
+        if (formula?.directScalar !== undefined) {
+          const value = evaluateInitialDirectScalar(formula.directScalar)
+          if (value !== undefined) {
+            args.writeHydratedFormulaValue(cellIndex, value)
+            changedCellIndices.push(cellIndex)
+            continue
+          }
+        }
+        const changedSpillIndices = args.evaluateDirectFormula(cellIndex)
+        changedCellIndices.push(cellIndex)
+        if (changedSpillIndices) {
+          for (let spillIndex = 0; spillIndex < changedSpillIndices.length; spillIndex += 1) {
+            changedCellIndices.push(changedSpillIndices[spillIndex]!)
+          }
+        }
+      }
+    })
+    args.deferKernelSync(Uint32Array.from(changedCellIndices))
+    addEngineCounter(args.state.counters, 'directFormulaInitialEvaluations', orderedCellIndices.length)
+    return Uint32Array.from(changedCellIndices)
   }
 
   const initializeFormulaEntriesNow = <Entry>(
@@ -148,6 +373,7 @@ export function createEngineFormulaInitializationService(args: {
     let canAssignTopoInBatch = !hadExistingFormulas
     let nextTopoRank = 0
     const orderedPreparedCellIndices: number[] = []
+    let canUseInitialDirectEvaluation = false
 
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1)
     try {
@@ -186,10 +412,16 @@ export function createEngineFormulaInitializationService(args: {
         formulaChangedCount = args.syncDynamicRanges(formulaChangedCount)
         topologyChanged = topologyChanged || formulaChangedCount !== reboundCount
       })
+      canUseInitialDirectEvaluation =
+        canAssignTopoInBatch &&
+        !hadExistingFormulas &&
+        changedInputCount === 0 &&
+        orderedPreparedCellIndices.length <= INITIAL_DIRECT_FORMULA_EVALUATION_LIMIT &&
+        orderedPreparedCellIndices.length === refs.length &&
+        orderedPreparedCellIndices.every(canEvaluateInitialDirectFormula)
       compileMs += performance.now() - compileStarted
     } finally {
       args.setBatchMutationDepth(args.getBatchMutationDepth() - 1)
-      args.flushWasmProgramSync()
     }
 
     if (topologyChanged && !(canAssignTopoInBatch && !hadExistingFormulas)) {
@@ -212,9 +444,11 @@ export function createEngineFormulaInitializationService(args: {
     const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount)
     const changedRoots = args.composeMutationRoots(changedInputCount, formulaChangedCount)
     let recalculated =
-      canAssignTopoInBatch && !hadExistingFormulas && orderedPreparedCellIndices.length > 0
-        ? args.recalculatePreordered(changedRoots, orderedPreparedCellIndices, orderedPreparedCellIndices.length, changedInputArray)
-        : args.recalculate(changedRoots, changedInputArray)
+      canUseInitialDirectEvaluation && formulaChangedCount === orderedPreparedCellIndices.length
+        ? (evaluateInitialDirectFormulas(orderedPreparedCellIndices) ?? args.recalculate(changedRoots, changedInputArray))
+        : canAssignTopoInBatch && !hadExistingFormulas && orderedPreparedCellIndices.length > 0
+          ? args.recalculatePreordered(changedRoots, orderedPreparedCellIndices, orderedPreparedCellIndices.length, changedInputArray)
+          : args.recalculate(changedRoots, changedInputArray)
     recalculated = args.reconcilePivotOutputs(recalculated, false)
     void recalculated
     const lastMetrics = args.state.getLastMetrics()

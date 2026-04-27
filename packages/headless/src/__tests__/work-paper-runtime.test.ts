@@ -443,6 +443,35 @@ describe('WorkPaper', () => {
     })
   })
 
+  it('defers kernel sync for lookup-column writes with no dirty formula dependents', () => {
+    const rowCount = 64
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: [
+        ['Key', 'Value', '', Math.floor(rowCount / 2), `=MATCH(D1,A2:A${rowCount + 1},1)`],
+        ...Array.from({ length: rowCount }, (_, index) => [index + 1, (index + 1) * 10]),
+      ],
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+    workbook.resetPerformanceCounters()
+
+    const changes = workbook.setCellContents(cell(sheetId, rowCount, 0), rowCount + 1)
+
+    expect(changes.map((change) => (change.kind === 'cell' ? change.a1 : change.kind))).toEqual([`A${rowCount + 1}`])
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({
+      tag: ValueTag.Number,
+      value: Math.floor(rowCount / 2),
+    })
+    expect(workbook.getPerformanceCounters()).toMatchObject({
+      kernelSyncOnlyRecalcSkips: 1,
+      wasmFullUploads: 0,
+    })
+    expect(workbook.getStats().lastMetrics).toMatchObject({
+      dirtyFormulaCount: 0,
+      wasmFormulaCount: 0,
+      jsFormulaCount: 0,
+    })
+  })
+
   it('replaces literal sheet content in one undoable batch, including clears', () => {
     const workbook = WorkPaper.buildFromArray([
       [1, 2],

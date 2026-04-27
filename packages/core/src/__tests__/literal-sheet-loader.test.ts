@@ -31,8 +31,8 @@ describe('loadLiteralSheetIntoEmptySheet', () => {
     expect(engine.getCellValue('Sheet1', 'A2')).toEqual({ tag: ValueTag.Empty })
     expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 4 })
     expect(engine.workbook.getSheet('Sheet1')!.columnVersions[0]).toBe(1)
-    expect(engine.workbook.getSheet('Sheet1')!.columnVersions[1]).toBe(2)
-    expect(engine.workbook.getSheet('Sheet1')!.columnVersions[2]).toBe(2)
+    expect(engine.workbook.getSheet('Sheet1')!.columnVersions[1]).toBe(1)
+    expect(engine.workbook.getSheet('Sheet1')!.columnVersions[2]).toBe(1)
   })
 
   it('keeps loaded literals usable as formula inputs', () => {

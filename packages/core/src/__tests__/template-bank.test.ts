@@ -26,6 +26,20 @@ describe('TemplateBank', () => {
     expect(bank.get(first.templateId)?.compiled).toBe(first.compiled)
   })
 
+  it('reuses simple row-relative binary template families without changing semantics', () => {
+    const bank = createTemplateBank()
+
+    const first = bank.resolve('A1+B1', 0, 2)
+    const second = bank.resolve('A2+B2', 1, 2)
+    const multiplied = bank.resolve('E2*2', 1, 5)
+    const translatedMultiply = bank.resolve('E3*2', 2, 5)
+
+    expect(second.templateId).toBe(first.templateId)
+    expect(translatedMultiply.templateId).toBe(multiplied.templateId)
+    expect(second.compiled.symbolicRefs).toEqual(['A2', 'B2'])
+    expect(translatedMultiply.compiled.symbolicRefs).toEqual(['E3'])
+  })
+
   it('rejects stale template ids when the current source belongs to a different template family', () => {
     const bank = createTemplateBank()
 

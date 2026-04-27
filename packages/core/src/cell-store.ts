@@ -69,6 +69,10 @@ export class CellStore {
 
   allocate(sheetId: number, row: number, col: number): number {
     this.ensureCapacity(this.size + 1)
+    return this.allocateReserved(sheetId, row, col)
+  }
+
+  allocateReserved(sheetId: number, row: number, col: number): number {
     const index = this.size
     this.size += 1
     this.sheetIds[index] = sheetId

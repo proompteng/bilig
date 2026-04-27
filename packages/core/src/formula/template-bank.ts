@@ -1,6 +1,7 @@
 import {
   buildRelativeFormulaTemplateTokenKey,
   canTranslateCompiledFormulaWithoutAst,
+  columnToIndex,
   compileFormulaAst,
   parseFormula,
   type ParsedRangeReferenceInfo,
@@ -35,6 +36,12 @@ export interface TemplateBank {
   readonly reset: () => void
   readonly resolve: (source: string, ownerRow: number, ownerCol: number) => FormulaTemplateResolution
   readonly resolveById: (templateId: number, source: string, ownerRow: number, ownerCol: number) => FormulaTemplateResolution | undefined
+  readonly resolveTrustedById: (
+    templateId: number,
+    source: string,
+    ownerRow: number,
+    ownerCol: number,
+  ) => FormulaTemplateResolution | undefined
   readonly get: (templateId: number) => FormulaTemplateSnapshot | undefined
   readonly list: () => FormulaTemplateSnapshot[]
   readonly hydrate: (snapshots: readonly FormulaTemplateSnapshot[]) => void
@@ -52,6 +59,49 @@ interface FormulaTemplateSourceKey {
   readonly templateKey: string
 }
 
+const SIMPLE_ROW_RELATIVE_BINARY_RE = /^([A-Z]+)([1-9]\d*)([+\-*/])(?:([A-Z]+)([1-9]\d*)|(\d+(?:\.\d+)?))$/
+
+function relativeCellToken(columnText: string, rowText: string, ownerRow: number, ownerCol: number): string | undefined {
+  const row = Number(rowText) - 1
+  if (row !== ownerRow) {
+    return undefined
+  }
+  const col = columnToIndex(columnText)
+  if (col < 0) {
+    return undefined
+  }
+  return `cell:.:rc${col - ownerCol}:rr0`
+}
+
+function binaryOperatorToken(operator: string): string | undefined {
+  switch (operator) {
+    case '+':
+      return 'tok:plus:"+"'
+    case '-':
+      return 'tok:minus:"-"'
+    case '*':
+      return 'tok:star:"*"'
+    case '/':
+      return 'tok:slash:"/"'
+    default:
+      return undefined
+  }
+}
+
+function tryBuildSimpleRowRelativeBinaryTemplateKey(source: string, ownerRow: number, ownerCol: number): string | undefined {
+  const match = SIMPLE_ROW_RELATIVE_BINARY_RE.exec(source)
+  if (!match) {
+    return undefined
+  }
+  const left = relativeCellToken(match[1]!, match[2]!, ownerRow, ownerCol)
+  const operator = binaryOperatorToken(match[3]!)
+  if (!left || !operator) {
+    return undefined
+  }
+  const right = match[4] !== undefined ? relativeCellToken(match[4], match[5]!, ownerRow, ownerCol) : `tok:number:"${match[6]!}"`
+  return right ? `${left}|${operator}|${right}|eof` : undefined
+}
+
 function translateTemplate(compiled: CompiledFormula, rowDelta: number, colDelta: number, source: string): CompiledFormula {
   return (
     canTranslateCompiledFormulaWithoutAst(compiled)
@@ -64,17 +114,51 @@ function compileSourceFormula(source: string): CompiledFormula {
   return tryCompileSimpleDirectAggregateFormula(source) ?? compileFormulaAst(source, parseFormula(source))
 }
 
-function resolveTemplateCompiled(template: MutableTemplateRecord, source: string, ownerRow: number, ownerCol: number): CompiledFormula {
+function resolveTemplateCompiled(
+  template: MutableTemplateRecord,
+  source: string,
+  ownerRow: number,
+  ownerCol: number,
+  sourceTemplateKey = buildRelativeFormulaTemplateTokenKey(source, ownerRow, ownerCol),
+): CompiledFormula {
   if (source === template.baseSource) {
     return template.compiled
   }
-  const anchoredPrefixAggregate = tryMatchAnchoredPrefixAggregateTemplate(source, ownerRow, ownerCol)
-  if (anchoredPrefixAggregate && anchoredPrefixAggregate.templateKey === template.templateKey) {
-    return anchoredPrefixAggregate.compiled
+  if (template.templateKey.startsWith('anchored-prefix-aggregate:')) {
+    const anchoredPrefixAggregate = tryMatchAnchoredPrefixAggregateTemplate(source, ownerRow, ownerCol)
+    if (anchoredPrefixAggregate && anchoredPrefixAggregate.templateKey === template.templateKey) {
+      return anchoredPrefixAggregate.compiled
+    }
   }
-  const sourceTemplateKey = buildRelativeFormulaTemplateTokenKey(source, ownerRow, ownerCol)
   if (sourceTemplateKey !== template.templateKey) {
     return compileSourceFormula(source)
+  }
+  const rowDelta = ownerRow - template.baseRow
+  const colDelta = ownerCol - template.baseCol
+  if (rowDelta === 0 && colDelta === 0) {
+    return compileSourceFormula(source)
+  }
+  try {
+    return translateTemplate(template.compiled, rowDelta, colDelta, source)
+  } catch {
+    return compileSourceFormula(source)
+  }
+}
+
+function resolveTrustedTemplateCompiled(
+  template: MutableTemplateRecord,
+  source: string,
+  ownerRow: number,
+  ownerCol: number,
+): CompiledFormula {
+  if (source === template.baseSource) {
+    return template.compiled
+  }
+  if (template.templateKey.startsWith('anchored-prefix-aggregate:')) {
+    const anchoredPrefixAggregate = tryMatchAnchoredPrefixAggregateTemplate(source, ownerRow, ownerCol)
+    if (anchoredPrefixAggregate && anchoredPrefixAggregate.templateKey === template.templateKey) {
+      return anchoredPrefixAggregate.compiled
+    }
   }
   const rowDelta = ownerRow - template.baseRow
   const colDelta = ownerCol - template.baseCol
@@ -92,7 +176,10 @@ function resolveTemplateSourceKey(source: string, ownerRow: number, ownerCol: nu
   const anchoredPrefixAggregate = tryMatchAnchoredPrefixAggregateTemplate(source, ownerRow, ownerCol)
   return {
     compiled: anchoredPrefixAggregate?.compiled,
-    templateKey: anchoredPrefixAggregate?.templateKey ?? buildRelativeFormulaTemplateTokenKey(source, ownerRow, ownerCol),
+    templateKey:
+      anchoredPrefixAggregate?.templateKey ??
+      tryBuildSimpleRowRelativeBinaryTemplateKey(source, ownerRow, ownerCol) ??
+      buildRelativeFormulaTemplateTokenKey(source, ownerRow, ownerCol),
   }
 }
 
@@ -175,7 +262,7 @@ export function createTemplateBank(args?: { readonly counters?: EngineCounters }
       const rowDelta = ownerRow - template.baseRow
       const colDelta = ownerCol - template.baseCol
       const translated = rowDelta !== 0 || colDelta !== 0
-      const compiled = resolveTemplateCompiled(template, source, ownerRow, ownerCol)
+      const compiled = resolveTemplateCompiled(template, source, ownerRow, ownerCol, templateKey)
       recentByColumn.set(ownerCol, template)
       return {
         templateId: template.id,
@@ -199,7 +286,27 @@ export function createTemplateBank(args?: { readonly counters?: EngineCounters }
       const rowDelta = ownerRow - template.baseRow
       const colDelta = ownerCol - template.baseCol
       const translated = rowDelta !== 0 || colDelta !== 0
-      const compiled = resolveTemplateCompiled(template, source, ownerRow, ownerCol)
+      const compiled = resolveTemplateCompiled(template, source, ownerRow, ownerCol, templateKey)
+      recentByColumn.set(ownerCol, template)
+      return {
+        templateId: template.id,
+        templateKey: template.templateKey,
+        baseSource: template.baseSource,
+        compiled,
+        translated,
+        rowDelta,
+        colDelta,
+      }
+    },
+    resolveTrustedById(templateId, source, ownerRow, ownerCol) {
+      const template = templatesById.get(templateId)
+      if (!template) {
+        return undefined
+      }
+      const rowDelta = ownerRow - template.baseRow
+      const colDelta = ownerCol - template.baseCol
+      const translated = rowDelta !== 0 || colDelta !== 0
+      const compiled = resolveTrustedTemplateCompiled(template, source, ownerRow, ownerCol)
       recentByColumn.set(ownerCol, template)
       return {
         templateId: template.id,

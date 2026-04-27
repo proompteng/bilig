@@ -1,140 +1,205 @@
 # WorkPaper Oracle Performance Design, Validated Against Current Code
 
 Date: `2026-04-26`
-Oracle thread: `https://chatgpt.com/c/69ee60bf-bb6c-83e8-9422-e258032e0df0`
-Attached artifacts observed in the thread:
-
-- `bilig2-codebase-current(2).zip`
-- `workpaper-competitive-latest(1).json`
-- `repo-state(1).txt`
-
-Local copies used for validation:
-
-- `/tmp/bilig2-atlas-oracle/bilig2-codebase-current.zip`
-- `/tmp/bilig2-atlas-oracle/workpaper-competitive-latest.json`
-- `/tmp/bilig2-atlas-oracle/repo-state.txt`
+Oracle thread: `https://chatgpt.com/c/69ed8169-1d94-83e8-bfc2-a34c22558617`
+Local validation commit before implementation: `d7cbd690c3710e15e1735c0971d4f97eda9fbf72`
 
 ## Oracle Capture
 
-The Oracle thread was readable, and the attachments were visible in ChatGPT. As of the capture, the assistant response had not produced the requested design. The only visible answer text was:
+The oracle response was complete and usable. It analyzed the attached
+`bilig2-codebase-current(1).zip`, `workpaper-competitive-latest.json`,
+`repo-state.txt`, and `oracle-cleanroom-prompt.md`.
 
-> I will verify the required files, derive priorities from the benchmark JSON, and tie each proposed patch to concrete source inspections rather than speculation.
+The oracle's key conclusion was that lookup splitting should not be the next
+first patch. Current source already has exact/approximate lookup fast paths and
+the missing evidence is constant-factor counters. Its proposed small patch was
+sliding aggregate prefix promotion: the 32-row sliding aggregate formulas should
+not repeatedly scan cell ranges when reusable direct aggregate machinery exists.
 
-The page still showed `Pro thinking` / `Stop streaming`. There was no completed benchmark ranking, source-backed root-cause list, patch queue, or first-PR spec to transcribe. This document therefore records the incomplete Oracle capture and replaces it with a local design validated directly against the attached benchmark JSON and the current repository source.
+## Current Checkout Validation
 
-## Current Benchmark Truth
+The current checkout is newer than the oracle attachment. A pre-change local
+sample showed the expanded benchmark now has `38` comparable workloads, not the
+oracle's `34`, with a `19` WorkPaper / `19` HyperFormula split. The same high
+priority red families remain: build, runtime restore, batch edit, lookup,
+after-write lookup, and sliding-window aggregate.
 
-The attached benchmark scorecard has `34` comparable workloads: WorkPaper wins `18`, HyperFormula wins `16`.
+Validated source facts:
 
-HyperFormula wins, sorted by reported mean speedup:
+- `packages/core/src/engine/services/formula-evaluation-service.ts` still had
+  `DIRECT_AGGREGATE_SCAN_MAX_LENGTH = 64`, so `SUM(A1:A32)` and shifted
+  `SUM(A2:A33)` windows scanned 32 cells per formula.
+- `packages/core/src/deps/aggregate-state-store.ts` already provides reusable
+  prefix buffers with incremental extension and literal-write updates.
+- `packages/benchmarks/src/benchmark-workpaper-vs-hyperformula-expanded.ts`
+  still defines `aggregate-overlapping-sliding-window` with `window: 32`.
+- The actual sliding benchmark measures a literal mutation after build:
+  `packages/benchmarks/src/benchmark-workpaper-vs-hyperformula-expanded-additional-workloads.ts`
+  calls `workbook.setCellContents(address(sheetId, 0, 0), 99)`. After adding
+  direct-evaluation counters, the benchmark showed zero direct scan/prefix
+  evaluations for this row. That means the measured hot path is operation-time
+  direct aggregate delta handling, not formula-evaluation scans.
+- `packages/core/src/engine/services/operation-service.ts` already computes
+  numeric deltas for pure direct `SUM` aggregate dependents, but still calls the
+  kernel-sync recalc path before applying those deltas.
+- `packages/core/src/deps/region-graph.ts` materialized point-query matches
+  through `Set` allocations even when only one region and one dependent match.
+- `operation-service.ts` converted the returned `Uint32Array` to a JavaScript
+  array before filtering direct range dependents, adding avoidable allocation in
+  the single-dependent sliding case.
+- `operation-service.ts` merged post-recalc direct formula changes through a
+  `Set` even when the base changed set was empty and the direct aggregate delta
+  produced a single changed formula cell.
+- Lowering 32-row formulas into the prefix cache made build-time evaluation
+  cheaper, but it also exposed a mutation cost: `aggregate-state-store.ts`
+  updated every suffix prefix value after an early-row write. For the benchmark's
+  `A1` edit, that turns one literal mutation into a 1,500-entry prefix update
+  even though the direct aggregate formula value is already handled by a numeric
+  delta.
+- The previous local implementation had already worked on owner-backed uniform
+  approximate lookup, so repeating the oracle's lookup discussion would not be
+  the right next design target.
 
-| Rank | Workload                                       |    Ratio | WorkPaper median ms | HyperFormula median ms | Source-backed cause                                                                                                              |
-| ---- | ---------------------------------------------- | -------: | ------------------: | ---------------------: | -------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | `lookup-approximate-sorted`                    | `3.635x` |             `0.089` |                `0.037` | Owner-backed approximate lookup carries uniform metadata but still binary-searches numeric owner arrays.                         |
-| 2    | `aggregate-overlapping-sliding-window`         | `2.386x` |             `0.129` |                `0.054` | Source inspection shows shared-prefix and direct-delta paths already exist; remaining loss needs counters before a design claim. |
-| 3    | `build-parser-cache-row-templates`             | `2.329x` |            `64.288` |               `27.294` | Parse templates are reused, but formula install still allocates/binds per formula family member and uploads full WASM state.     |
-| 4    | `lookup-approximate-sorted-after-column-write` | `2.044x` |             `0.100` |                `0.048` | Same owner-backed approximate binary-search path, with refreshed owner summaries after writes.                                   |
-| 5    | `build-mixed-content`                          | `2.017x` |            `17.308` |                `8.237` | Build path still pays formula installation and full WASM upload overhead.                                                        |
-| 6    | `batch-edit-single-column`                     | `1.871x` |             `1.055` |                `0.708` | Mutation observers are still invoked at cell/edit granularity for hot batch paths.                                               |
-| 7    | `lookup-with-column-index-after-column-write`  | `1.868x` |             `0.103` |                `0.059` | Exact lookup impact checks are narrow, but the remaining after-write overhead still needs counters before changing owner logic.  |
-| 8    | `rebuild-runtime-from-snapshot`                | `1.639x` |            `54.908` |               `33.748` | Runtime image is not a full warm semantic runtime; rebuild still performs broad initialization and full WASM upload.             |
-| 9    | `batch-suspended-multi-column`                 | `1.633x` |             `0.867` |                `0.632` | Batch edits need owner-scoped coalescing and cheaper changed payload construction.                                               |
-| 10   | `batch-edit-multi-column`                      | `1.511x` |             `0.889` |                `0.608` | Same batch mutation coalescing issue across columns.                                                                             |
-| 11   | `build-many-sheets`                            | `1.510x` |             `9.538` |                `6.365` | Sheet/runtime initialization still has per-sheet fixed overhead.                                                                 |
-| 12   | `batch-edit-single-column-with-undo`           | `1.463x` |             `1.439` |                `1.014` | Undo capture and mutation fanout need coalesced owner deltas.                                                                    |
-| 13   | `partial-recompute-mixed-frontier`             | `1.160x` |             `3.289` |                `3.439` | Column-owner rebuild still appears once in the mixed frontier path.                                                              |
-| 14   | `lookup-with-column-index`                     | `1.152x` |             `0.077` |                `0.064` | Exact lookup is close; remaining loss is likely call overhead and owner refresh checks.                                          |
-| 15   | `single-edit-chain`                            | `1.083x` |             `1.131` |                `1.135` | Near tie; do not prioritize until higher-ratio lanes move.                                                                       |
-| 16   | `build-parser-cache-mixed-templates`           | `1.022x` |            `73.728` |               `71.230` | Near tie; same build-family overhead, but low priority.                                                                          |
+## Implemented Design
 
-## Validated Source Findings
+This document scopes the end-to-end implementation to the validated sliding
+aggregate patch. The broader oracle queue remains useful background, but it is
+not treated as implementation truth until each tranche is revalidated against
+the current checkout and current benchmark rows.
 
-### 1. First patch: uniform owner-backed approximate lookup
+### 1. Add Direct Aggregate Counters
 
-`packages/core/src/engine/services/lookup-column-owner.ts` computes uniform approximate summaries:
+Add direct evaluation counters:
 
-- `summarizeApproximateRange(...)`
-- `detectUniformNumericStepInOwner(...)`
-- `supportsNumericApproximateRange(...)`
+- `directAggregateScanEvaluations`
+- `directAggregateScanCells`
+- `directAggregatePrefixEvaluations`
 
-`packages/core/src/engine/services/sorted-column-search-service.ts` preserves that summary in `prepareVectorLookup(...)` as `uniformStart` and `uniformStep`.
+Add operation-time delta counters:
 
-The non-owner fallback branch in `findPreparedVectorMatch(...)` already uses uniform arithmetic to return a 1-based approximate match position without binary search. The owner-backed branch does not; it always binary-searches `owner.numericValues` for numeric and empty lookup values. That is the cleanest validated gap in the top red workload.
+- `directAggregateDeltaApplications`
+- `directAggregateDeltaOnlyRecalcSkips`
 
-Invariant: only use the arithmetic shortcut when the existing summary proves a supported numeric approximate range and the uniform step direction matches `matchMode`. Otherwise retain the existing binary search.
+Purpose: make the aggregate paths counter-gated. Evaluation tests must prove
+32-row formulas move from scans to prefix evaluation. The sliding mutation
+benchmark must prove it used direct aggregate delta application and skipped the
+unnecessary recalc path.
 
-Expected movement: primary improvement in `lookup-approximate-sorted` and `lookup-approximate-sorted-after-column-write`, with minimal semantic risk.
+### 2. Preserve Tiny Window Scan Behavior
 
-### 2. Sliding aggregate state is the next measured hot path
+Keep direct scans for:
 
-`packages/core/src/deps/aggregate-state-store.ts` owns prefix aggregate entries and update propagation. `packages/core/src/engine/services/formula-evaluation-service.ts` already routes longer `SUM`/`AVERAGE`/`COUNT` ranges through a shared prefix start, and `packages/core/src/engine/services/operation-service.ts` already has direct numeric-delta handling for small direct-aggregate fanout. The current red workload has no nonzero engine counters, so the next change should add focused counters around region-graph dependent collection, direct-delta application, changed payload construction, and verification reads before changing the data structure.
+- formulas with scalar dependencies
+- aggregate ranges with length `16` or below
+- existing unsupported or semantics-sensitive fallback cases
 
-Expected movement: `aggregate-overlapping-sliding-window`.
+This preserves the no-column-owner behavior for genuinely tiny aggregate
+windows and keeps the simple path cheap.
 
-### 3. Build lanes are install/runtime-owner problems, not parser-only problems
+### 3. Promote SUM, COUNT, and AVERAGE Windows Above 16 Rows
 
-The benchmark counters for row-template and mixed-template build lanes show very low `formulasParsed` counts, which means parser caching is already active. The remaining work is formula install, family ownership, dependency graph registration, runtime image warmness, and full WASM upload reduction.
+For direct aggregate formulas with no scalar dependencies:
 
-Expected movement: `build-parser-cache-row-templates`, `build-mixed-content`, `rebuild-runtime-from-snapshot`, and the near-tie mixed-template lane.
+- route `SUM`, `COUNT`, and `AVERAGE` ranges longer than `16` rows through the
+  shared prefix path
+- continue to share a lower prefix start for shifted windows so `SUM(A1:A32)`,
+  `SUM(A2:A33)`, and later windows reuse one prefix buffer
+- preserve the existing large-range prefix path for other aggregate kinds
 
-### 4. Batch edit lanes need owner-scoped coalescing
+Correctness invariants:
 
-The batch edit losses have no nonzero engine counters in the benchmark artifact, so they should not be guessed from counters alone. The correct next step is to inspect mutation fanout around write batching, changed-cell payload construction, lookup owner write updates, and undo capture, then add counters that prove which observer dominates.
+- numeric, boolean, blank, string, and error behavior must match the old scan or
+  generic formula behavior
+- shifted windows must return the same results as unshifted windows of the same
+  values
+- small windows must still scan and avoid building column owners
+- benchmark verification for `aggregate-overlapping-sliding-window` must remain
+  unchanged
 
-Expected movement: `batch-edit-*` and `batch-suspended-*`.
+### 4. Tests
 
-## Patch Queue
+Required tests:
 
-1. Owner-backed uniform approximate lookup arithmetic.
-   - Files: `sorted-column-search-service.ts`, `sorted-column-search-service.test.ts`.
-   - Tests: owner-backed ascending and descending uniform prepared lookups; fallback branch still covered.
-   - Benchmarks: `pnpm bench:workpaper:competitive`.
-   - First result: implemented. Targeted tests pass. A post-change competitive run produced `21` WorkPaper wins and `13` HyperFormula wins. The base approximate lookup lane improved versus the attached baseline but still remained red in that sample, so lookup work is directionally valid but not complete.
+- engine counters initialize, clone, merge, and reset the new aggregate counters
+- a 16-row aggregate still scans, records scan counters, and avoids column-owner
+  construction
+- 32-row `SUM`, shifted `SUM`, `COUNT`, and `AVERAGE` formulas use prefix
+  evaluation counters and produce correct values
+- single-cell and generic-batch mutations against a 32-row direct `SUM`
+  aggregate apply a numeric delta, skip dirty traversal, and skip recalc when
+  every post-recalc direct formula is covered by a numeric delta
+- region-graph point lookups preserve dependent deduplication when one formula
+  subscribes to multiple matching regions
+- aggregate prefix state evicts early-row large-suffix writes instead of doing a
+  long in-place prefix update
 
-2. Aggregate sliding-window instrumentation before structural changes.
-   - Files: `aggregate-state-store.ts`, aggregate tests, benchmark fixture if needed.
-   - Tests: overlapping SUM/AVERAGE/COUNT windows and literal write invalidation.
-   - Benchmarks: `aggregate-overlapping-sliding-window`.
+### 5. Remove Avoidable Hot-Path Allocation
 
-3. Batch mutation owner coalescing.
-   - Files: mutation/write services and owner index stores after source inspection.
-   - Tests: single-column, multi-column, suspended batch, undo capture.
-   - Benchmarks: all `batch-edit-*` lanes.
+For the sliding benchmark's single matching range, region graph collection should
+avoid building two `Set` objects. The implementation collects matching region
+IDs into a small array, returns the single subscriber set directly when only one
+region matches, and only performs explicit dependent deduplication when multiple
+regions match.
 
-4. Exact lookup after-write refresh trimming.
-   - Files: `lookup-column-owner.ts`, `exact-column-index-service.ts`, `column-index-store.ts`.
-   - Tests: exact duplicate-key update, type transitions, after-write prepared lookup reuse.
-   - Benchmarks: exact lookup and exact after-write lanes.
+The operation service also loops over the returned typed dependent list directly
+instead of spreading it into an array and then filtering.
 
-5. Build family install compaction.
-   - Files: formula binding, family store, dependency graph registration.
-   - Tests: row-template families, mixed-template families, formula correctness.
-   - Benchmarks: build parser-template and mixed-content lanes.
+### 6. Evict Expensive Prefix Suffix Updates
 
-6. Runtime image warm semantic sections.
-   - Files: snapshot/runtime image and formula initialization.
-   - Tests: restore parity and benchmark restore.
-   - Benchmarks: `rebuild-runtime-from-snapshot`.
+When a literal write would require updating more than `128` prefix entries, the
+aggregate state store evicts that prefix entry rather than applying an O(n)
+suffix delta. The direct mutation path still applies the formula-value delta for
+currently affected formulas, so correctness is preserved; future formula
+evaluation rebuilds the prefix lazily from current column state.
 
-## Do Not Do
+### 7. Fast-Path Tiny Changed-Set Merges
 
-- Do not special-case benchmark names or fixture dimensions.
-- Do not move semantics into WASM before JS parity and differential tests prove the closed numeric family.
-- Do not restart a broad structural-row rewrite; the current red lanes are lookup, aggregate, build, batch, and restore.
-- Do not optimize parser caching first: the counters already show parser reuse is working in the main build-template losses.
-- Do not accept the Oracle response as authoritative until it finishes and provides source-backed content.
+The direct delta path commonly merges an empty recalculated set with one formula
+cell. `mergeChangedCellIndices` handles empty and one-plus-one cases directly
+before falling back to a `Set`.
 
-## Execution Notes
+## Broader Oracle Queue
 
-Implemented and validated so far:
+These remain design leads, not implemented requirements in this document:
 
-- `sorted-column-search-service.ts` now shares uniform numeric approximate-position arithmetic across fallback and owner-backed prepared lookup paths.
-- Owner-backed prepared matching now uses the already-refreshed prepared range kind/sort certificates instead of recomputing `supports...Range` checks during every match.
-- `sorted-column-search-service.test.ts` now includes a regression test that prepares owner-backed ascending and descending uniform ranges, poisons the owner numeric arrays, and confirms the uniform metadata path still returns correct approximate positions.
+1. Batch mutation owner coalescing for `batch-edit-*` and `batch-suspended-*`.
+2. Formula-family build materialization for parser-template and mixed-content
+   build rows.
+3. Runtime snapshot warmness v2 for `rebuild-runtime-from-snapshot`.
+4. Lookup direct-eval and after-write constant-factor trimming after counters
+   prove the hot branch.
+5. Dirty-chain frontier counters before changing scheduler behavior.
 
-Observed benchmark movement:
+Each item needs a fresh source and benchmark validation pass before becoming an
+implementation document.
 
-- Targeted test command: `bun scripts/run-vitest.ts --run packages/core/src/__tests__/sorted-column-search-service.test.ts`.
-- Competitive benchmark command: `pnpm bench:workpaper:competitive`.
-- Best post-change scorecard sample so far: `21` WorkPaper wins, `13` HyperFormula wins.
-- Remaining high-priority red lanes after that sample: approximate lookup after write, batch suspended multi-column, row-template build, base approximate lookup, exact lookup after write, sliding aggregate, mixed build, runtime restore, build-many-sheets, and a few near-tie batch/build lanes.
+## Verification Commands
+
+Targeted test command:
+
+```sh
+bun scripts/run-vitest.ts --run packages/core/src/__tests__/formula-evaluation-service.test.ts packages/core/src/__tests__/engine-counters.test.ts
+```
+
+Competitive benchmark command:
+
+```sh
+pnpm --silent bench:workpaper:competitive -- --sample-count 8 --warmup-count 2 > /tmp/workpaper-competitive-after-merge-fastpath.json
+```
+
+## Observed Result
+
+The latest local sample after this implementation produced a `38` comparable
+workload scorecard with `20` WorkPaper wins and `18` HyperFormula wins. The
+sliding aggregate row remained red, but its WorkPaper mean improved materially
+from the earlier local samples:
+
+- pre-change local sample: about `0.226 ms`
+- after direct delta recalc skip: about `0.194 ms`
+- after dependent collection and prefix eviction work: best observed sample
+  about `0.124 ms`
+- latest `8` sample run after the tiny merge fast path: about `0.141 ms`
+
+The row is now counter-gated: `directAggregateDeltaApplications = 1` and
+`directAggregateDeltaOnlyRecalcSkips = 1` for the sliding mutation sample, with
+no direct aggregate scan/prefix evaluation during the measured mutation.

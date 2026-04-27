@@ -130,6 +130,7 @@ export function createEngineRecalcService(args: {
   readonly getDeferredKernelSyncSeen: () => U32
   readonly getWasmBatch: () => U32
   readonly getChangedInputBuffer: () => U32
+  readonly flushWasmProgramSync: () => void
   readonly now: () => Date
   readonly random: () => number
   readonly performanceNow: () => number
@@ -243,6 +244,14 @@ export function createEngineRecalcService(args: {
     let jsCount = 0
     let pendingKernelSyncCount = deferredKernelSyncCount
     const volatileState = createRecalcVolatileState(args.now)
+    let wasmProgramFlushed = false
+    const ensureWasmProgramFlushed = (): void => {
+      if (wasmProgramFlushed) {
+        return
+      }
+      args.flushWasmProgramSync()
+      wasmProgramFlushed = true
+    }
 
     if (changedRoots.length === 0 && kernelSyncRoots.length > 0) {
       for (let index = 0; index < kernelSyncRoots.length; index += 1) {
@@ -269,6 +278,7 @@ export function createEngineRecalcService(args: {
       if (batchCount === 0) {
         return 0
       }
+      ensureWasmProgramFlushed()
       args.state.wasm.syncFromStore(args.state.workbook.cellStore, pendingKernelSync.subarray(0, pendingKernelSyncCount))
       pendingKernelSyncCount = 0
       deferredKernelSyncCount = 0
@@ -378,6 +388,7 @@ export function createEngineRecalcService(args: {
         }
       }
       const evaluateWasmSpillFormula = (cellIndex: number, formula: RuntimeFormula): number => {
+        ensureWasmProgramFlushed()
         args.state.wasm.syncFromStore(args.state.workbook.cellStore, pendingKernelSync.subarray(0, pendingKernelSyncCount))
         pendingKernelSyncCount = 0
         deferredKernelSyncCount = 0

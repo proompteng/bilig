@@ -73,7 +73,7 @@ function buildIntervalTree(intervals: readonly IntervalRegionRef[]): IntervalTre
   }
 }
 
-function collectIntervalsContainingRow(node: IntervalTreeNode | undefined, row: number, target: Set<RegionId>): void {
+function collectIntervalsContainingRow(node: IntervalTreeNode | undefined, row: number, target: RegionId[]): void {
   if (!node) {
     return
   }
@@ -83,7 +83,7 @@ function collectIntervalsContainingRow(node: IntervalTreeNode | undefined, row: 
       if (interval.rowStart > row) {
         break
       }
-      target.add(interval.regionId)
+      target.push(interval.regionId)
     }
     collectIntervalsContainingRow(node.left, row, target)
     return
@@ -94,14 +94,23 @@ function collectIntervalsContainingRow(node: IntervalTreeNode | undefined, row: 
       if (interval.rowEnd < row) {
         break
       }
-      target.add(interval.regionId)
+      target.push(interval.regionId)
     }
     collectIntervalsContainingRow(node.right, row, target)
     return
   }
   for (let index = 0; index < node.overlappingByStart.length; index += 1) {
-    target.add(node.overlappingByStart[index]!.regionId)
+    target.push(node.overlappingByStart[index]!.regionId)
   }
+}
+
+function pushUniqueDependent(dependents: number[], formulaCellIndex: number): void {
+  for (let index = 0; index < dependents.length; index += 1) {
+    if (dependents[index] === formulaCellIndex) {
+      return
+    }
+  }
+  dependents.push(formulaCellIndex)
 }
 
 export function createRegionGraph(args: {
@@ -289,14 +298,25 @@ export function createRegionGraph(args: {
       })
     },
     collectFormulaDependentsForCell(sheetId, row, col) {
-      const matchingRegions = new Set<RegionId>()
+      const matchingRegions: RegionId[] = []
       collectIntervalsContainingRow(ensureIntervalTree(sheetId, col), row, matchingRegions)
-      const dependents = new Set<number>()
-      matchingRegions.forEach((regionId) => {
-        regionSubscribers.get(regionId)?.forEach((formulaCellIndex) => {
-          dependents.add(formulaCellIndex)
+      if (matchingRegions.length === 0) {
+        return new Uint32Array()
+      }
+      if (matchingRegions.length === 1) {
+        const subscribers = regionSubscribers.get(matchingRegions[0]!)
+        return subscribers ? Uint32Array.from(subscribers) : new Uint32Array()
+      }
+      const dependents: number[] = []
+      for (let regionIndex = 0; regionIndex < matchingRegions.length; regionIndex += 1) {
+        const subscribers = regionSubscribers.get(matchingRegions[regionIndex]!)
+        if (!subscribers) {
+          continue
+        }
+        subscribers.forEach((formulaCellIndex) => {
+          pushUniqueDependent(dependents, formulaCellIndex)
         })
-      })
+      }
       return Uint32Array.from(dependents)
     },
     hasFormulaSubscriptionsForColumn(sheetId, col) {

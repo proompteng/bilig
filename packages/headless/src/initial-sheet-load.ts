@@ -29,81 +29,71 @@ export function prepareInitialMixedSheetLoad(args: {
     throw new Error(`Unknown sheet id: ${args.sheetId}`)
   }
 
-  let literalCount = 0
-  let formulaCount = 0
+  let potentialCellCount = 0
   for (let rowIndex = 0; rowIndex < args.content.length; rowIndex += 1) {
-    const row = args.content[rowIndex]!
-    for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
-      const raw = row[colIndex]!
-      if (typeof raw === 'string' && raw.trim().startsWith('=')) {
-        formulaCount += 1
-        continue
-      }
-      if (raw !== null) {
-        literalCount += 1
-      }
-    }
+    potentialCellCount += args.content[rowIndex]?.length ?? 0
   }
 
   const cellStore = args.engine.workbook.cellStore
-  if (literalCount > 0) {
-    cellStore.ensureCapacity(cellStore.size + literalCount)
+  if (potentialCellCount > 0) {
+    cellStore.ensureCapacity(cellStore.size + potentialCellCount)
   }
-  const formulaRefs = formulaCount === 0 ? [] : Array<EngineCellMutationRef>(formulaCount)
-  let formulaIndex = 0
+  const formulaRefs: EngineCellMutationRef[] = []
   const previousOnSetValue = cellStore.onSetValue
   cellStore.onSetValue = null
   try {
-    for (let rowIndex = 0; rowIndex < args.content.length; rowIndex += 1) {
-      const row = args.content[rowIndex]!
-      for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
-        const raw = row[colIndex]!
-        if (typeof raw === 'string') {
-          const trimmed = raw.trim()
-          if (trimmed.startsWith('=')) {
-            formulaRefs[formulaIndex] = {
-              sheetId: args.sheetId,
-              mutation: {
-                kind: 'setCellFormula',
-                row: rowIndex,
-                col: colIndex,
-                formula: args.rewriteFormula(trimmed.slice(1), {
-                  sheet: args.sheetId,
+    args.engine.workbook.withBatchedColumnVersionUpdates(() => {
+      for (let rowIndex = 0; rowIndex < args.content.length; rowIndex += 1) {
+        const row = args.content[rowIndex]!
+        for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+          const raw = row[colIndex]!
+          if (typeof raw === 'string') {
+            const trimmed = raw.trim()
+            if (trimmed.startsWith('=')) {
+              formulaRefs.push({
+                sheetId: args.sheetId,
+                mutation: {
+                  kind: 'setCellFormula',
                   row: rowIndex,
                   col: colIndex,
-                }),
-              },
+                  formula: args.rewriteFormula(trimmed.slice(1), {
+                    sheet: args.sheetId,
+                    row: rowIndex,
+                    col: colIndex,
+                  }),
+                },
+              })
+              continue
             }
-            formulaIndex += 1
+          }
+          if (raw === null) {
             continue
           }
+          const cellIndex = cellStore.allocateReserved(args.sheetId, rowIndex, colIndex)
+          args.engine.workbook.attachAllocatedCell(args.sheetId, rowIndex, colIndex, cellIndex)
+          cellStore.flags[cellIndex] = CellFlags.Materialized
+          cellStore.formulaIds[cellIndex] = 0
+          cellStore.errors[cellIndex] = ErrorCode.None
+          cellStore.versions[cellIndex] = 1
+          cellStore.topoRanks[cellIndex] = 0
+          cellStore.cycleGroupIds[cellIndex] = -1
+          if (typeof raw === 'number') {
+            cellStore.tags[cellIndex] = ValueTag.Number
+            cellStore.numbers[cellIndex] = raw
+            cellStore.stringIds[cellIndex] = 0
+          } else if (typeof raw === 'boolean') {
+            cellStore.tags[cellIndex] = ValueTag.Boolean
+            cellStore.numbers[cellIndex] = raw ? 1 : 0
+            cellStore.stringIds[cellIndex] = 0
+          } else {
+            cellStore.tags[cellIndex] = ValueTag.String
+            cellStore.numbers[cellIndex] = 0
+            cellStore.stringIds[cellIndex] = args.engine.strings.intern(raw)
+          }
+          args.engine.workbook.notifyCellValueWritten(cellIndex)
         }
-        if (raw === null) {
-          continue
-        }
-        const { cellIndex } = args.engine.workbook.ensureCellAt(args.sheetId, rowIndex, colIndex)
-        cellStore.flags[cellIndex] = CellFlags.Materialized
-        cellStore.formulaIds[cellIndex] = 0
-        cellStore.errors[cellIndex] = ErrorCode.None
-        cellStore.versions[cellIndex] = 1
-        cellStore.topoRanks[cellIndex] = 0
-        cellStore.cycleGroupIds[cellIndex] = -1
-        if (typeof raw === 'number') {
-          cellStore.tags[cellIndex] = ValueTag.Number
-          cellStore.numbers[cellIndex] = raw
-          cellStore.stringIds[cellIndex] = 0
-        } else if (typeof raw === 'boolean') {
-          cellStore.tags[cellIndex] = ValueTag.Boolean
-          cellStore.numbers[cellIndex] = raw ? 1 : 0
-          cellStore.stringIds[cellIndex] = 0
-        } else {
-          cellStore.tags[cellIndex] = ValueTag.String
-          cellStore.numbers[cellIndex] = 0
-          cellStore.stringIds[cellIndex] = args.engine.strings.intern(raw)
-        }
-        args.engine.workbook.notifyCellValueWritten(cellIndex)
       }
-    }
+    })
   } finally {
     cellStore.onSetValue = previousOnSetValue
   }

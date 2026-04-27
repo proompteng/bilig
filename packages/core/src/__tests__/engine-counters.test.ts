@@ -31,6 +31,19 @@ const oracleStructuralCounterKeys = [
   'topoRepairAffectedFormulas',
 ] as const satisfies readonly EngineCounterKey[]
 
+const oracleAggregateCounterKeys = [
+  'directAggregateScanEvaluations',
+  'directAggregateScanCells',
+  'directAggregatePrefixEvaluations',
+  'directAggregateDeltaApplications',
+  'directAggregateDeltaOnlyRecalcSkips',
+  'directScalarDeltaApplications',
+  'directScalarDeltaOnlyRecalcSkips',
+  'kernelSyncOnlyRecalcSkips',
+  'directFormulaKernelSyncOnlyRecalcSkips',
+  'directFormulaInitialEvaluations',
+] as const satisfies readonly EngineCounterKey[]
+
 describe('engine counters', () => {
   it('initializes every planned performance counter to zero', () => {
     const counters = createEngineCounters()
@@ -38,6 +51,7 @@ describe('engine counters', () => {
 
     expect(Object.keys(counters).toSorted()).toEqual([...ENGINE_COUNTER_KEYS].toSorted())
     expect(ENGINE_COUNTER_KEYS).toEqual(expect.arrayContaining([...oracleStructuralCounterKeys]))
+    expect(ENGINE_COUNTER_KEYS).toEqual(expect.arrayContaining([...oracleAggregateCounterKeys]))
     expect(Object.values(counters)).toEqual(zeroValues)
   })
 

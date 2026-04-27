@@ -123,10 +123,46 @@ describe('SpreadsheetEngine formula initialization', () => {
     expect(engine.getPerformanceCounters().topoRebuilds).toBe(0)
     expect(engine.getPerformanceCounters().cycleFormulaScans).toBe(0)
     expect(engine.getLastMetrics()).toMatchObject({
-      dirtyFormulaCount: 4,
-      wasmFormulaCount: 4,
+      dirtyFormulaCount: 0,
+      wasmFormulaCount: 0,
       jsFormulaCount: 0,
       rangeNodeVisits: 0,
     })
+    expect(engine.getPerformanceCounters().wasmFullUploads).toBe(0)
+    expect(engine.getPerformanceCounters().directFormulaInitialEvaluations).toBe(4)
+  })
+
+  it('materializes anchored prefix aggregate families during initial direct evaluation', async () => {
+    const rowCount = 128
+    const engine = new SpreadsheetEngine({ workbookName: 'engine-formula-initialize-prefix-aggregate-family' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+    for (let row = 1; row <= rowCount; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+    }
+
+    engine.resetPerformanceCounters()
+    engine.initializeCellFormulasAt(
+      Array.from({ length: rowCount }, (_entry, row) => ({
+        sheetId,
+        mutation: {
+          kind: 'setCellFormula' as const,
+          row,
+          col: 1,
+          formula: `SUM(A1:A${row + 1})`,
+        },
+      })),
+      rowCount,
+    )
+
+    expect(engine.getCellValue('Sheet1', `B${rowCount}`)).toEqual({
+      tag: ValueTag.Number,
+      value: (rowCount * (rowCount + 1)) / 2,
+    })
+    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 0 })
+    expect(engine.getPerformanceCounters().directFormulaInitialEvaluations).toBe(rowCount)
+    expect(engine.getPerformanceCounters().directAggregatePrefixEvaluations).toBe(0)
+    expect(engine.getPerformanceCounters().directAggregateScanEvaluations).toBe(0)
   })
 })

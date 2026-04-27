@@ -21,7 +21,7 @@ import {
 } from '../../entity-ids.js'
 import { batchOpOrder, compareOpOrder, createBatch, markBatchApplied, type OpOrder } from '../../replica-state.js'
 import { CellFlags } from '../../cell-store.js'
-import { areCellValuesEqual, emptyValue, literalToValue, writeLiteralToCellStore } from '../../engine-value-utils.js'
+import { emptyValue, literalToValue, writeLiteralToCellStore } from '../../engine-value-utils.js'
 import { spillDependencyKey, tableDependencyKey } from '../../engine-metadata-utils.js'
 import { makeCellKey, normalizeDefinedName, pivotKey, type WorkbookPivotRecord } from '../../workbook-store.js'
 import type { StructuralTransaction } from '../structural-transaction.js'
@@ -30,6 +30,8 @@ import type {
   PreparedCellAddress,
   RuntimeDirectCriteriaDescriptor,
   RuntimeDirectLookupDescriptor,
+  RuntimeDirectScalarDescriptor,
+  RuntimeDirectScalarOperand,
   U32,
 } from '../runtime-state.js'
 import { EngineMutationError } from '../errors.js'
@@ -38,7 +40,8 @@ import { addEngineCounter } from '../../perf/engine-counters.js'
 
 type MutationSource = 'local' | 'remote' | 'restore' | 'undo' | 'redo'
 const GENERAL_CHANGED_CELL_PAYLOAD_LIMIT = 512
-const DIRECT_RANGE_POST_RECALC_LIMIT = 64
+const DIRECT_RANGE_POST_RECALC_LIMIT = 16_384
+const DIRECT_SCALAR_DELTA_CLOSURE_LIMIT = 4_096
 
 interface DirectFormulaMetricCounts {
   wasmFormulaCount: number
@@ -68,6 +71,53 @@ interface ExactLookupImpactCache {
 
 type ExactLookupImpactCaches = Map<string, ExactLookupImpactCache>
 type DirectFormulaDeltaMap = Map<number, number>
+
+class DirectFormulaIndexCollection {
+  private readonly cellIndices: number[] = []
+  private seen: Set<number> | undefined
+
+  get size(): number {
+    return this.cellIndices.length
+  }
+
+  add(cellIndex: number): void {
+    if (this.seen) {
+      if (this.seen.has(cellIndex)) {
+        return
+      }
+      this.seen.add(cellIndex)
+      this.cellIndices.push(cellIndex)
+      return
+    }
+    for (let index = 0; index < this.cellIndices.length; index += 1) {
+      if (this.cellIndices[index] === cellIndex) {
+        return
+      }
+    }
+    this.cellIndices.push(cellIndex)
+    if (this.cellIndices.length > 16) {
+      this.seen = new Set(this.cellIndices)
+    }
+  }
+
+  has(cellIndex: number): boolean {
+    if (this.seen) {
+      return this.seen.has(cellIndex)
+    }
+    for (let index = 0; index < this.cellIndices.length; index += 1) {
+      if (this.cellIndices[index] === cellIndex) {
+        return true
+      }
+    }
+    return false
+  }
+
+  forEach(fn: (cellIndex: number) => void): void {
+    for (let index = 0; index < this.cellIndices.length; index += 1) {
+      fn(this.cellIndices[index]!)
+    }
+  }
+}
 
 export interface EngineOperationService {
   readonly applyBatch: (
@@ -270,8 +320,16 @@ function directCriteriaTouchesPoint(
 }
 
 function mergeChangedCellIndices(base: readonly number[] | U32, extras: readonly number[] | U32): U32 {
+  if (base.length === 0) {
+    return extras instanceof Uint32Array ? extras : Uint32Array.from(extras)
+  }
   if (extras.length === 0) {
     return base instanceof Uint32Array ? base : Uint32Array.from(base)
+  }
+  if (base.length === 1 && extras.length === 1) {
+    const baseCellIndex = base[0]!
+    const extraCellIndex = extras[0]!
+    return baseCellIndex === extraCellIndex ? Uint32Array.of(baseCellIndex) : Uint32Array.of(baseCellIndex, extraCellIndex)
   }
   const merged = new Set<number>()
   for (let index = 0; index < base.length; index += 1) {
@@ -281,6 +339,73 @@ function mergeChangedCellIndices(base: readonly number[] | U32, extras: readonly
     merged.add(extras[index]!)
   }
   return Uint32Array.from(merged)
+}
+
+function hasCompleteDirectFormulaDeltas(
+  postRecalcDirectFormulaIndices: DirectFormulaIndexCollection,
+  directFormulaDeltas: ReadonlyMap<number, number>,
+): boolean {
+  if (postRecalcDirectFormulaIndices.size === 0 || postRecalcDirectFormulaIndices.size !== directFormulaDeltas.size) {
+    return false
+  }
+  let complete = true
+  postRecalcDirectFormulaIndices.forEach((cellIndex) => {
+    if (!directFormulaDeltas.has(cellIndex)) {
+      complete = false
+    }
+  })
+  return complete
+}
+
+function countDirectFormulaDeltaSkip(
+  formulas: { get(cellIndex: number): { readonly directAggregate?: unknown; readonly directScalar?: unknown } | undefined },
+  postRecalcDirectFormulaIndices: DirectFormulaIndexCollection,
+  counters: EngineRuntimeState['counters'],
+): void {
+  let sawAggregate = false
+  let sawScalar = false
+  postRecalcDirectFormulaIndices.forEach((cellIndex) => {
+    const formula = formulas.get(cellIndex)
+    sawAggregate ||= formula?.directAggregate !== undefined
+    sawScalar ||= formula?.directScalar !== undefined
+  })
+  if (sawAggregate) {
+    addEngineCounter(counters, 'directAggregateDeltaOnlyRecalcSkips')
+  }
+  if (sawScalar) {
+    addEngineCounter(counters, 'directScalarDeltaOnlyRecalcSkips')
+  }
+}
+
+function canEvaluatePostRecalcDirectFormulasWithoutKernel(
+  formulas: {
+    get(cellIndex: number):
+      | {
+          readonly directAggregate?: unknown
+          readonly directCriteria?: unknown
+          readonly directLookup?: unknown
+          readonly directScalar?: unknown
+        }
+      | undefined
+  },
+  postRecalcDirectFormulaIndices: DirectFormulaIndexCollection,
+): boolean {
+  if (postRecalcDirectFormulaIndices.size === 0) {
+    return false
+  }
+  let canEvaluate = true
+  postRecalcDirectFormulaIndices.forEach((cellIndex) => {
+    const formula = formulas.get(cellIndex)
+    if (
+      formula?.directAggregate === undefined &&
+      formula?.directCriteria === undefined &&
+      formula?.directLookup === undefined &&
+      formula?.directScalar === undefined
+    ) {
+      canEvaluate = false
+    }
+  })
+  return canEvaluate
 }
 
 function lookupImpactCacheKey(sheetId: number, col: number): string {
@@ -371,10 +496,10 @@ export function createEngineOperationService(args: {
   readonly repairTopoRanks: (changedFormulaCells: readonly number[] | U32) => boolean
   readonly detectCycles: () => void
   readonly recalculate: (changedRoots: readonly number[] | U32, kernelSyncRoots?: readonly number[] | U32) => U32
+  readonly deferKernelSync: (cellIndices: readonly number[] | U32) => void
   readonly evaluateDirectFormula: (cellIndex: number) => readonly number[] | undefined
   readonly reconcilePivotOutputs: (baseChanged: U32, forceAllPivots?: boolean) => U32
   readonly prepareRegionQueryIndices: () => void
-  readonly flushWasmProgramSync: () => void
   readonly getBatchMutationDepth: () => number
   readonly setBatchMutationDepth: (next: number) => void
   readonly getEntityDependents: (entityId: number) => Uint32Array
@@ -844,6 +969,86 @@ export function createEngineOperationService(args: {
     return found
   }
 
+  const directScalarNumericValue = (value: CellValue): number | undefined => {
+    switch (value.tag) {
+      case ValueTag.Number:
+        return Object.is(value.value, -0) ? 0 : value.value
+      case ValueTag.Boolean:
+        return value.value ? 1 : 0
+      case ValueTag.Empty:
+        return 0
+      case ValueTag.Error:
+      case ValueTag.String:
+        return undefined
+    }
+  }
+
+  const readDirectScalarOperandNumber = (
+    operand: RuntimeDirectScalarOperand,
+    changedCellIndex: number,
+    replacementValue: CellValue,
+    touched: { value: boolean },
+  ): number | undefined => {
+    switch (operand.kind) {
+      case 'literal-number':
+        return operand.value
+      case 'error':
+        return undefined
+      case 'cell':
+        if (operand.cellIndex === changedCellIndex) {
+          touched.value = true
+          return directScalarNumericValue(replacementValue)
+        }
+        return directScalarNumericValue(args.state.workbook.cellStore.getValue(operand.cellIndex, (id) => args.state.strings.get(id)))
+    }
+  }
+
+  const evaluateDirectScalarNumber = (
+    directScalar: RuntimeDirectScalarDescriptor,
+    changedCellIndex: number,
+    replacementValue: CellValue,
+    touched: { value: boolean },
+  ): number | undefined => {
+    if (directScalar.kind === 'abs') {
+      const operand = readDirectScalarOperandNumber(directScalar.operand, changedCellIndex, replacementValue, touched)
+      return operand === undefined ? undefined : Math.abs(operand)
+    }
+    const left = readDirectScalarOperandNumber(directScalar.left, changedCellIndex, replacementValue, touched)
+    const right = readDirectScalarOperandNumber(directScalar.right, changedCellIndex, replacementValue, touched)
+    if (left === undefined || right === undefined) {
+      return undefined
+    }
+    switch (directScalar.operator) {
+      case '+':
+        return left + right
+      case '-':
+        return left - right
+      case '*':
+        return left * right
+      case '/':
+        return right === 0 ? undefined : left / right
+    }
+  }
+
+  const tryDirectScalarNumericDelta = (
+    directScalar: RuntimeDirectScalarDescriptor,
+    changedCellIndex: number,
+    oldValue: CellValue,
+    newValue: CellValue,
+  ): number | undefined => {
+    const oldTouched = { value: false }
+    const oldResult = evaluateDirectScalarNumber(directScalar, changedCellIndex, oldValue, oldTouched)
+    if (!oldTouched.value || oldResult === undefined) {
+      return undefined
+    }
+    const newTouched = { value: false }
+    const newResult = evaluateDirectScalarNumber(directScalar, changedCellIndex, newValue, newTouched)
+    if (!newTouched.value || newResult === undefined) {
+      return undefined
+    }
+    return newResult - oldResult
+  }
+
   const canUseDirectFormulaPostRecalc = (formulaCellIndex: number): boolean => {
     const formula = args.state.formulas.get(formulaCellIndex)
     return (
@@ -856,25 +1061,105 @@ export function createEngineOperationService(args: {
     )
   }
 
-  const markPostRecalcDirectFormulaDependents = (cellIndex: number, postRecalcDirectFormulaIndices: Set<number>): void => {
+  const markPostRecalcDirectFormulaDependents = (
+    cellIndex: number,
+    postRecalcDirectFormulaIndices: DirectFormulaIndexCollection,
+    directFormulaDeltas?: DirectFormulaDeltaMap,
+    oldValue?: CellValue,
+    newValue?: CellValue,
+  ): boolean => {
     const dependents = args.getEntityDependents(makeCellEntity(cellIndex))
     if (dependents.length === 0) {
-      return
+      return true
     }
     for (let index = 0; index < dependents.length; index += 1) {
       if (!canUseDirectFormulaPostRecalc(dependents[index]!)) {
-        return
+        return false
       }
     }
     for (let index = 0; index < dependents.length; index += 1) {
-      postRecalcDirectFormulaIndices.add(dependents[index]!)
+      const formulaCellIndex = dependents[index]!
+      postRecalcDirectFormulaIndices.add(formulaCellIndex)
+      const directScalar = args.state.formulas.get(formulaCellIndex)?.directScalar
+      if (directFormulaDeltas === undefined || oldValue === undefined || newValue === undefined || directScalar === undefined) {
+        continue
+      }
+      const delta = tryDirectScalarNumericDelta(directScalar, cellIndex, oldValue, newValue)
+      if (delta !== undefined) {
+        directFormulaDeltas.set(formulaCellIndex, (directFormulaDeltas.get(formulaCellIndex) ?? 0) + delta)
+      }
     }
+    return true
+  }
+
+  const markDirectScalarDeltaClosure = (
+    rootCellIndex: number,
+    oldValue: CellValue,
+    newValue: CellValue,
+    postRecalcDirectFormulaIndices: DirectFormulaIndexCollection,
+    directFormulaDeltas: DirectFormulaDeltaMap,
+  ): void => {
+    const rootDependents = args.getEntityDependents(makeCellEntity(rootCellIndex))
+    if (rootDependents.length !== 1 || directFormulaDeltas.has(rootDependents[0]!)) {
+      return
+    }
+    if (args.getEntityDependents(makeCellEntity(rootDependents[0]!)).length === 0) {
+      return
+    }
+    const pending: Array<{ cellIndex: number; oldValue: CellValue; newValue: CellValue }> = [
+      { cellIndex: rootCellIndex, oldValue, newValue },
+    ]
+    const closureDeltas = new Map<number, number>()
+    const visited = new Set<number>([rootCellIndex])
+    for (let cursor = 0; cursor < pending.length; cursor += 1) {
+      if (closureDeltas.size > DIRECT_SCALAR_DELTA_CLOSURE_LIMIT) {
+        return
+      }
+      const current = pending[cursor]!
+      const dependents = args.getEntityDependents(makeCellEntity(current.cellIndex))
+      for (let index = 0; index < dependents.length; index += 1) {
+        const formulaCellIndex = dependents[index]!
+        if (visited.has(formulaCellIndex)) {
+          return
+        }
+        const formula = args.state.formulas.get(formulaCellIndex)
+        if (
+          !formula ||
+          formula.directScalar === undefined ||
+          formula.compiled.volatile ||
+          formula.compiled.producesSpill ||
+          ((args.state.workbook.cellStore.flags[formulaCellIndex] ?? 0) & CellFlags.InCycle) !== 0
+        ) {
+          return
+        }
+        const formulaDelta = tryDirectScalarNumericDelta(formula.directScalar, current.cellIndex, current.oldValue, current.newValue)
+        if (formulaDelta === undefined) {
+          return
+        }
+        const formulaOldValue = args.state.workbook.cellStore.getValue(formulaCellIndex, (id) => args.state.strings.get(id))
+        if (formulaOldValue.tag !== ValueTag.Number) {
+          return
+        }
+        const accumulatedDelta = (closureDeltas.get(formulaCellIndex) ?? 0) + formulaDelta
+        closureDeltas.set(formulaCellIndex, accumulatedDelta)
+        visited.add(formulaCellIndex)
+        pending.push({
+          cellIndex: formulaCellIndex,
+          oldValue: formulaOldValue,
+          newValue: { tag: ValueTag.Number, value: formulaOldValue.value + accumulatedDelta },
+        })
+      }
+    }
+    closureDeltas.forEach((delta, formulaCellIndex) => {
+      postRecalcDirectFormulaIndices.add(formulaCellIndex)
+      directFormulaDeltas.set(formulaCellIndex, delta)
+    })
   }
 
   const canSkipDirtyTraversalForChangedInputs = (
     changedInputCellIndices: U32,
     changedInputCount: number,
-    postRecalcDirectFormulaIndices?: ReadonlySet<number>,
+    postRecalcDirectFormulaIndices?: DirectFormulaIndexCollection,
   ): boolean => {
     const dependentsArePostRecalcDirect = (dependents: U32): boolean => {
       if (postRecalcDirectFormulaIndices === undefined) {
@@ -1086,7 +1371,9 @@ export function createEngineOperationService(args: {
     if (dependents.length === 0) {
       return []
     }
-    return [...dependents].filter((formulaCellIndex) => {
+    const affected: number[] = []
+    for (let dependentIndex = 0; dependentIndex < dependents.length; dependentIndex += 1) {
+      const formulaCellIndex = dependents[dependentIndex]!
       const formula = args.state.formulas.get(formulaCellIndex)
       const directAggregate = formula?.directAggregate
       if (
@@ -1096,11 +1383,15 @@ export function createEngineOperationService(args: {
         request.row >= directAggregate.rowStart &&
         request.row <= directAggregate.rowEnd
       ) {
-        return true
+        affected.push(formulaCellIndex)
+        continue
       }
       const directCriteria = formula?.directCriteria
-      return directCriteria ? directCriteriaTouchesPoint(directCriteria, request) : false
-    })
+      if (directCriteria && directCriteriaTouchesPoint(directCriteria, request)) {
+        affected.push(formulaCellIndex)
+      }
+    }
+    return affected
   }
 
   const markAffectedDirectRangeDependents = (
@@ -1112,7 +1403,7 @@ export function createEngineOperationService(args: {
       newValue?: CellValue
     },
     formulaChangedCount: number,
-    postRecalcDirectFormulaIndices?: Set<number>,
+    postRecalcDirectFormulaIndices?: DirectFormulaIndexCollection,
     directFormulaDeltas?: DirectFormulaDeltaMap,
   ): number => {
     const dependents = collectAffectedDirectRangeDependents(request)
@@ -1156,15 +1447,19 @@ export function createEngineOperationService(args: {
   }
 
   const applyDirectFormulaNumericDelta = (cellIndex: number, delta: number): boolean => {
-    const beforeValue = args.state.workbook.cellStore.getValue(cellIndex, (id) => (id === 0 ? '' : args.state.strings.get(id)))
-    if (beforeValue.tag !== ValueTag.Number) {
+    const cellStore = args.state.workbook.cellStore
+    if (cellStore.tags[cellIndex] !== ValueTag.Number) {
       return false
     }
-    const nextValue: CellValue = { tag: ValueTag.Number, value: beforeValue.value + delta }
-    args.state.workbook.cellStore.flags[cellIndex] =
-      (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)
-    args.state.workbook.cellStore.setValue(cellIndex, nextValue)
-    if (!areCellValuesEqual(beforeValue, nextValue)) {
+    const beforeNumber = cellStore.numbers[cellIndex] ?? 0
+    const nextNumber = beforeNumber + delta
+    cellStore.flags[cellIndex] = (cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)
+    cellStore.numbers[cellIndex] = nextNumber
+    cellStore.stringIds[cellIndex] = 0
+    cellStore.errors[cellIndex] = 0
+    cellStore.versions[cellIndex] = (cellStore.versions[cellIndex] ?? 0) + 1
+    cellStore.onSetValue?.(cellIndex)
+    if (!Object.is(beforeNumber, nextNumber)) {
       args.state.workbook.notifyCellValueWritten(cellIndex)
     }
     return true
@@ -1501,7 +1796,7 @@ export function createEngineOperationService(args: {
     const invalidatedRanges: CellRangeRef[] = []
     const invalidatedRows: { sheetName: string; startIndex: number; endIndex: number }[] = []
     const invalidatedColumns: { sheetName: string; startIndex: number; endIndex: number }[] = []
-    const postRecalcDirectFormulaIndices = new Set<number>()
+    const postRecalcDirectFormulaIndices = new DirectFormulaIndexCollection()
     const directFormulaDeltas: DirectFormulaDeltaMap = new Map()
     const precomputedKernelSyncCellIndices: number[] = []
     let refreshAllPivots = false
@@ -1832,7 +2127,7 @@ export function createEngineOperationService(args: {
               refreshAllPivots = true
             }
             const needsLookupValueRead = hasExactLookupDependents || hasSortedLookupDependents || hasAggregateDependents
-            const prior = needsLookupValueRead ? readCellValueForLookup(existingIndex) : { value: emptyValue(), stringId: undefined }
+            const prior = readCellValueForLookup(existingIndex)
             if (!isRestore) {
               if (op.value === null && (existingIndex === undefined || isNullLiteralWriteNoOp(existingIndex))) {
                 break
@@ -1860,12 +2155,21 @@ export function createEngineOperationService(args: {
                 (args.state.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.AuthoredBlank
             }
             args.state.workbook.notifyCellValueWritten(cellIndex)
-            if (!isRestore) {
-              markPostRecalcDirectFormulaDependents(cellIndex, postRecalcDirectFormulaIndices)
-            }
             if (needsLookupValueRead) {
               const newValue = literalToValue(op.value, args.state.strings)
               const newStringId = typeof op.value === 'string' ? args.state.workbook.cellStore.stringIds[cellIndex] : undefined
+              if (!isRestore) {
+                const directDependentsHandled = markPostRecalcDirectFormulaDependents(
+                  cellIndex,
+                  postRecalcDirectFormulaIndices,
+                  directFormulaDeltas,
+                  prior.value,
+                  newValue,
+                )
+                if (!directDependentsHandled) {
+                  markDirectScalarDeltaClosure(cellIndex, prior.value, newValue, postRecalcDirectFormulaIndices, directFormulaDeltas)
+                }
+              }
               if (hasExactLookupDependents || hasAggregateDependents) {
                 const exactLookupRequest = withOptionalLookupStringIds({
                   sheetName: op.sheetName,
@@ -1910,6 +2214,18 @@ export function createEngineOperationService(args: {
                   newStringId,
                 })
                 formulaChangedCount = noteSortedLookupLiteralWriteWhenDirty(sortedLookupRequest, formulaChangedCount)
+              }
+            } else if (!isRestore) {
+              const newValue = literalToValue(op.value, args.state.strings)
+              const directDependentsHandled = markPostRecalcDirectFormulaDependents(
+                cellIndex,
+                postRecalcDirectFormulaIndices,
+                directFormulaDeltas,
+                prior.value,
+                newValue,
+              )
+              if (!directDependentsHandled) {
+                markDirectScalarDeltaClosure(cellIndex, prior.value, newValue, postRecalcDirectFormulaIndices, directFormulaDeltas)
               }
             }
             args.state.workbook.cellStore.flags[cellIndex] =
@@ -2031,7 +2347,7 @@ export function createEngineOperationService(args: {
             if (!isRestore && cellTouchesPivotSource(op.sheetName, parsedAddress.row, parsedAddress.col)) {
               refreshAllPivots = true
             }
-            const prior = needsLookupValueRead ? readCellValueForLookup(cellIndex) : { value: emptyValue(), stringId: undefined }
+            const prior = readCellValueForLookup(cellIndex)
             if (cellIndex === undefined) {
               setEntityVersionForOp(op, order)
               break
@@ -2052,6 +2368,19 @@ export function createEngineOperationService(args: {
             topologyChanged = removedFormula || topologyChanged
             args.state.workbook.cellStore.setValue(cellIndex, emptyValue())
             args.state.workbook.notifyCellValueWritten(cellIndex)
+            if (!isRestore) {
+              const nextValue = emptyValue()
+              const directDependentsHandled = markPostRecalcDirectFormulaDependents(
+                cellIndex,
+                postRecalcDirectFormulaIndices,
+                directFormulaDeltas,
+                prior.value,
+                nextValue,
+              )
+              if (!directDependentsHandled) {
+                markDirectScalarDeltaClosure(cellIndex, prior.value, nextValue, postRecalcDirectFormulaIndices, directFormulaDeltas)
+              }
+            }
             if (needsLookupValueRead) {
               if (hasExactLookupDependents || hasAggregateDependents) {
                 const exactLookupRequest = withOptionalLookupStringIds({
@@ -2193,7 +2522,6 @@ export function createEngineOperationService(args: {
       topologyChanged = topologyChanged || formulaChangedCount !== reboundCount
     } finally {
       args.setBatchMutationDepth(args.getBatchMutationDepth() - 1)
-      args.flushWasmProgramSync()
     }
 
     markBatchApplied(args.state.replicaState, batch)
@@ -2217,7 +2545,6 @@ export function createEngineOperationService(args: {
         changedInputCount = markCycleMemberInputsChanged(changedInputCount)
       }
     }
-    args.prepareRegionQueryIndices()
     const hasActiveFormulas = args.state.formulas.size > 0
     const hasActivePivots = args.state.workbook.listPivots().length > 0
     const hasRecalcWork =
@@ -2229,7 +2556,29 @@ export function createEngineOperationService(args: {
     const shouldRefreshPivots = refreshAllPivots && hasActivePivots
     let recalculated: U32 = new Uint32Array()
     let didRunRecalc = false
-    if ((hasActiveFormulas && (hasRecalcWork || hasVolatileFormulaWork)) || (hasActivePivots && hasRecalcWork) || shouldRefreshPivots) {
+    let didFastDeferKernelSyncOnly = false
+    if (
+      hasActiveFormulas &&
+      changedInputCount > 0 &&
+      formulaChangedCount === 0 &&
+      precomputedKernelSyncCellIndices.length === 0 &&
+      postRecalcDirectFormulaIndices.size === 0 &&
+      !refreshAllPivots &&
+      !hasActivePivots &&
+      !hasVolatileFormulaWork
+    ) {
+      const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount)
+      if (canSkipDirtyTraversalForChangedInputs(changedInputArray, changedInputCount, postRecalcDirectFormulaIndices)) {
+        addEngineCounter(args.state.counters, 'kernelSyncOnlyRecalcSkips')
+        args.deferKernelSync(changedInputArray)
+        didFastDeferKernelSyncOnly = true
+      }
+    }
+    if (
+      !didFastDeferKernelSyncOnly &&
+      ((hasActiveFormulas && (hasRecalcWork || hasVolatileFormulaWork)) || (hasActivePivots && hasRecalcWork) || shouldRefreshPivots)
+    ) {
+      args.prepareRegionQueryIndices()
       formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount)
       const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount)
       const canUseKernelSyncOnlyRecalc =
@@ -2238,8 +2587,16 @@ export function createEngineOperationService(args: {
         precomputedKernelSyncCellIndices.length === 0 &&
         !refreshAllPivots &&
         canSkipDirtyTraversalForChangedInputs(changedInputArray, changedInputCount, postRecalcDirectFormulaIndices)
+      const canDeferKernelSyncOnlyRecalc = canUseKernelSyncOnlyRecalc && postRecalcDirectFormulaIndices.size === 0
       const canSkipKernelSyncOnlyRecalc = canUseKernelSyncOnlyRecalc && postRecalcDirectFormulaIndices.size > 0
-      if (!canSkipKernelSyncOnlyRecalc) {
+      const canSkipRecalcForDirectDeltas =
+        canSkipKernelSyncOnlyRecalc && hasCompleteDirectFormulaDeltas(postRecalcDirectFormulaIndices, directFormulaDeltas)
+      const canSkipRecalcForDirectEvaluation =
+        canSkipKernelSyncOnlyRecalc && canEvaluatePostRecalcDirectFormulasWithoutKernel(args.state.formulas, postRecalcDirectFormulaIndices)
+      if (canDeferKernelSyncOnlyRecalc) {
+        addEngineCounter(args.state.counters, 'kernelSyncOnlyRecalcSkips')
+        args.deferKernelSync(changedInputArray)
+      } else if (!canSkipKernelSyncOnlyRecalc) {
         const changedRoots = canUseKernelSyncOnlyRecalc
           ? new Uint32Array()
           : args.composeMutationRoots(changedInputCount, formulaChangedCount)
@@ -2249,6 +2606,12 @@ export function createEngineOperationService(args: {
             : Uint32Array.from([...changedInputArray, ...precomputedKernelSyncCellIndices])
         recalculated = args.recalculate(changedRoots, kernelSyncRoots)
         didRunRecalc = true
+      } else if (canSkipRecalcForDirectDeltas) {
+        countDirectFormulaDeltaSkip(args.state.formulas, postRecalcDirectFormulaIndices, args.state.counters)
+        args.deferKernelSync(changedInputArray)
+      } else if (canSkipRecalcForDirectEvaluation) {
+        addEngineCounter(args.state.counters, 'directFormulaKernelSyncOnlyRecalcSkips')
+        args.deferKernelSync(changedInputArray)
       } else {
         args.recalculate(new Uint32Array(), changedInputArray)
       }
@@ -2259,7 +2622,14 @@ export function createEngineOperationService(args: {
             return
           }
           const delta = directFormulaDeltas.get(cellIndex)
-          if (delta !== undefined && applyDirectFormulaNumericDelta(cellIndex, delta)) {
+          if (!didRunRecalc && delta !== undefined && applyDirectFormulaNumericDelta(cellIndex, delta)) {
+            const formula = args.state.formulas.get(cellIndex)
+            if (formula?.directAggregate !== undefined) {
+              addEngineCounter(args.state.counters, 'directAggregateDeltaApplications')
+            }
+            if (formula?.directScalar !== undefined) {
+              addEngineCounter(args.state.counters, 'directScalarDeltaApplications')
+            }
             postRecalcChanged.push(cellIndex)
             return
           }
@@ -2378,7 +2748,7 @@ export function createEngineOperationService(args: {
     let explicitChangedCount = 0
     let topologyChanged = false
     let compileMs = 0
-    const postRecalcDirectFormulaIndices = new Set<number>()
+    const postRecalcDirectFormulaIndices = new DirectFormulaIndexCollection()
     const directFormulaDeltas: DirectFormulaDeltaMap = new Map()
     const postRecalcDirectFormulaMetrics: DirectFormulaMetricCounts = {
       wasmFormulaCount: 0,
@@ -2470,18 +2840,27 @@ export function createEngineOperationService(args: {
               const sheetName = resolveSheetName(sheetId)
               const { hasExactLookupDependents, hasSortedLookupDependents, hasAggregateDependents, needsLookupValueRead } =
                 resolveTrackedColumnDependencyFlags(sheetId, mutation.col)
-              const prior = needsLookupValueRead ? readCellValueForLookup(existingIndex) : { value: emptyValue(), stringId: undefined }
+              const prior = readCellValueForLookup(existingIndex)
               if (mutation.value === null && !isRestore && (existingIndex === undefined || isNullLiteralWriteNoOp(existingIndex))) {
                 break
               }
               if (existingIndex !== undefined && canFastPathLiteralOverwrite(existingIndex)) {
                 writeLiteralToCellStore(args.state.workbook.cellStore, existingIndex, mutation.value, args.state.strings)
                 args.state.workbook.notifyCellValueWritten(existingIndex)
+                const newValue = literalToValue(mutation.value, args.state.strings)
                 if (!isRestore) {
-                  markPostRecalcDirectFormulaDependents(existingIndex, postRecalcDirectFormulaIndices)
+                  const directDependentsHandled = markPostRecalcDirectFormulaDependents(
+                    existingIndex,
+                    postRecalcDirectFormulaIndices,
+                    directFormulaDeltas,
+                    prior.value,
+                    newValue,
+                  )
+                  if (!directDependentsHandled) {
+                    markDirectScalarDeltaClosure(existingIndex, prior.value, newValue, postRecalcDirectFormulaIndices, directFormulaDeltas)
+                  }
                 }
                 if (needsLookupValueRead) {
-                  const newValue = literalToValue(mutation.value, args.state.strings)
                   const newStringId =
                     typeof mutation.value === 'string' ? args.state.workbook.cellStore.stringIds[existingIndex] : undefined
                   if (hasExactLookupDependents || hasAggregateDependents) {
@@ -2556,11 +2935,20 @@ export function createEngineOperationService(args: {
               }
               writeLiteralToCellStore(args.state.workbook.cellStore, cellIndex, mutation.value, args.state.strings)
               args.state.workbook.notifyCellValueWritten(cellIndex)
+              const newValue = literalToValue(mutation.value, args.state.strings)
               if (!isRestore) {
-                markPostRecalcDirectFormulaDependents(cellIndex, postRecalcDirectFormulaIndices)
+                const directDependentsHandled = markPostRecalcDirectFormulaDependents(
+                  cellIndex,
+                  postRecalcDirectFormulaIndices,
+                  directFormulaDeltas,
+                  prior.value,
+                  newValue,
+                )
+                if (!directDependentsHandled) {
+                  markDirectScalarDeltaClosure(cellIndex, prior.value, newValue, postRecalcDirectFormulaIndices, directFormulaDeltas)
+                }
               }
               if (needsLookupValueRead) {
-                const newValue = literalToValue(mutation.value, args.state.strings)
                 const newStringId = typeof mutation.value === 'string' ? args.state.workbook.cellStore.stringIds[cellIndex] : undefined
                 if (hasExactLookupDependents || hasAggregateDependents) {
                   const exactLookupRequest = withOptionalLookupStringIds({
@@ -2685,13 +3073,26 @@ export function createEngineOperationService(args: {
             case 'clearCell': {
               const { hasExactLookupDependents, hasSortedLookupDependents, hasAggregateDependents, needsLookupValueRead } =
                 resolveTrackedColumnDependencyFlags(sheetId, mutation.col)
-              const prior = needsLookupValueRead ? readCellValueForLookup(existingIndex) : { value: emptyValue(), stringId: undefined }
+              const prior = readCellValueForLookup(existingIndex)
               if (existingIndex !== undefined && isClearCellNoOp(existingIndex)) {
                 break
               }
               if (existingIndex !== undefined && canFastPathLiteralOverwrite(existingIndex)) {
                 args.state.workbook.cellStore.setValue(existingIndex, emptyValue())
                 args.state.workbook.notifyCellValueWritten(existingIndex)
+                if (!isRestore) {
+                  const nextValue = emptyValue()
+                  const directDependentsHandled = markPostRecalcDirectFormulaDependents(
+                    existingIndex,
+                    postRecalcDirectFormulaIndices,
+                    directFormulaDeltas,
+                    prior.value,
+                    nextValue,
+                  )
+                  if (!directDependentsHandled) {
+                    markDirectScalarDeltaClosure(existingIndex, prior.value, nextValue, postRecalcDirectFormulaIndices, directFormulaDeltas)
+                  }
+                }
                 if (needsLookupValueRead) {
                   const sheetName = resolveSheetName(sheetId)
                   if (hasExactLookupDependents || hasAggregateDependents) {
@@ -2767,6 +3168,19 @@ export function createEngineOperationService(args: {
               }
               args.state.workbook.cellStore.setValue(existingIndex, emptyValue())
               args.state.workbook.notifyCellValueWritten(existingIndex)
+              if (!isRestore) {
+                const nextValue = emptyValue()
+                const directDependentsHandled = markPostRecalcDirectFormulaDependents(
+                  existingIndex,
+                  postRecalcDirectFormulaIndices,
+                  directFormulaDeltas,
+                  prior.value,
+                  nextValue,
+                )
+                if (!directDependentsHandled) {
+                  markDirectScalarDeltaClosure(existingIndex, prior.value, nextValue, postRecalcDirectFormulaIndices, directFormulaDeltas)
+                }
+              }
               if (needsLookupValueRead) {
                 const sheetName = resolveSheetName(sheetId)
                 if (hasExactLookupDependents || hasAggregateDependents) {
@@ -2849,7 +3263,6 @@ export function createEngineOperationService(args: {
       topologyChanged = topologyChanged || formulaChangedCount !== reboundCount
     } finally {
       args.setBatchMutationDepth(args.getBatchMutationDepth() - 1)
-      args.flushWasmProgramSync()
     }
 
     if (batch) {
@@ -2873,27 +3286,60 @@ export function createEngineOperationService(args: {
         changedInputCount = markCycleMemberInputsChanged(changedInputCount)
       }
     }
-    args.prepareRegionQueryIndices()
     const hasActiveFormulas = args.state.formulas.size > 0
     const hasActivePivots = args.state.workbook.listPivots().length > 0
     const hasRecalcWork = changedInputCount > 0 || formulaChangedCount > 0 || postRecalcDirectFormulaIndices.size > 0
     const hasVolatileFormulaWork = hasActiveFormulas && (args.hasVolatileFormulas ? args.hasVolatileFormulas() : true)
     let recalculated: U32 = new Uint32Array()
     let didRunRecalc = false
-    if ((hasActiveFormulas && (hasRecalcWork || hasVolatileFormulaWork)) || (hasActivePivots && hasRecalcWork)) {
+    let didFastDeferKernelSyncOnly = false
+    if (
+      hasActiveFormulas &&
+      changedInputCount > 0 &&
+      formulaChangedCount === 0 &&
+      postRecalcDirectFormulaIndices.size === 0 &&
+      !hasActivePivots &&
+      !hasVolatileFormulaWork
+    ) {
+      const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount)
+      if (canSkipDirtyTraversalForChangedInputs(changedInputArray, changedInputCount, postRecalcDirectFormulaIndices)) {
+        addEngineCounter(args.state.counters, 'kernelSyncOnlyRecalcSkips')
+        args.deferKernelSync(changedInputArray)
+        didFastDeferKernelSyncOnly = true
+      }
+    }
+    if (
+      !didFastDeferKernelSyncOnly &&
+      ((hasActiveFormulas && (hasRecalcWork || hasVolatileFormulaWork)) || (hasActivePivots && hasRecalcWork))
+    ) {
+      args.prepareRegionQueryIndices()
       formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount)
       const changedInputArray = args.getChangedInputBuffer().subarray(0, changedInputCount)
       const canUseKernelSyncOnlyRecalc =
         formulaChangedCount === 0 &&
         changedInputCount > 0 &&
         canSkipDirtyTraversalForChangedInputs(changedInputArray, changedInputCount, postRecalcDirectFormulaIndices)
+      const canDeferKernelSyncOnlyRecalc = canUseKernelSyncOnlyRecalc && postRecalcDirectFormulaIndices.size === 0
       const canSkipKernelSyncOnlyRecalc = canUseKernelSyncOnlyRecalc && postRecalcDirectFormulaIndices.size > 0
-      if (!canSkipKernelSyncOnlyRecalc) {
+      const canSkipRecalcForDirectDeltas =
+        canSkipKernelSyncOnlyRecalc && hasCompleteDirectFormulaDeltas(postRecalcDirectFormulaIndices, directFormulaDeltas)
+      const canSkipRecalcForDirectEvaluation =
+        canSkipKernelSyncOnlyRecalc && canEvaluatePostRecalcDirectFormulasWithoutKernel(args.state.formulas, postRecalcDirectFormulaIndices)
+      if (canDeferKernelSyncOnlyRecalc) {
+        addEngineCounter(args.state.counters, 'kernelSyncOnlyRecalcSkips')
+        args.deferKernelSync(changedInputArray)
+      } else if (!canSkipKernelSyncOnlyRecalc) {
         const changedRoots = canUseKernelSyncOnlyRecalc
           ? new Uint32Array()
           : args.composeMutationRoots(changedInputCount, formulaChangedCount)
         recalculated = args.recalculate(changedRoots, changedInputArray)
         didRunRecalc = true
+      } else if (canSkipRecalcForDirectDeltas) {
+        countDirectFormulaDeltaSkip(args.state.formulas, postRecalcDirectFormulaIndices, args.state.counters)
+        args.deferKernelSync(changedInputArray)
+      } else if (canSkipRecalcForDirectEvaluation) {
+        addEngineCounter(args.state.counters, 'directFormulaKernelSyncOnlyRecalcSkips')
+        args.deferKernelSync(changedInputArray)
       } else {
         args.recalculate(new Uint32Array(), changedInputArray)
       }
@@ -2904,7 +3350,14 @@ export function createEngineOperationService(args: {
             return
           }
           const delta = directFormulaDeltas.get(cellIndex)
-          if (delta !== undefined && applyDirectFormulaNumericDelta(cellIndex, delta)) {
+          if (!didRunRecalc && delta !== undefined && applyDirectFormulaNumericDelta(cellIndex, delta)) {
+            const formula = args.state.formulas.get(cellIndex)
+            if (formula?.directAggregate !== undefined) {
+              addEngineCounter(args.state.counters, 'directAggregateDeltaApplications')
+            }
+            if (formula?.directScalar !== undefined) {
+              addEngineCounter(args.state.counters, 'directScalarDeltaApplications')
+            }
             postRecalcChanged.push(cellIndex)
             return
           }

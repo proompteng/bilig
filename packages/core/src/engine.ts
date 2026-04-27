@@ -412,6 +412,9 @@ export class SpreadsheetEngine {
         noteSortedLookupLiteralWrite: () => {
           return
         },
+        deferKernelSync: () => {
+          return
+        },
         invalidateExactLookupColumn: () => {
           return
         },

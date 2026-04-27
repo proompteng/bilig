@@ -108,7 +108,6 @@ export function createEngineMaintenanceService(args: {
     args.setWasmProgramSyncPending(false)
     args.setMaterializedCellCount(0)
     args.resetWasmState()
-    args.scheduleWasmProgramSync()
   }
 
   return {

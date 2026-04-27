@@ -1027,7 +1027,15 @@ function buildDirectScalarOperand(args: {
   readonly ownerSheetName: string
   readonly workbook: Pick<EngineRuntimeState, 'workbook'>['workbook']
   readonly ensureCellTracked: (sheetName: string, address: string) => number
-  readonly nextTranslatedCellRef?: () => { readonly sheetName: string | undefined; readonly address: string } | undefined
+  readonly ensureCellTrackedByCoords: (sheetId: number, row: number, col: number) => number
+  readonly nextTranslatedCellRef?: () =>
+    | {
+        readonly sheetName: string | undefined
+        readonly address: string
+        readonly row: number | undefined
+        readonly col: number | undefined
+      }
+    | undefined
 }): RuntimeDirectScalarOperand | undefined {
   if (args.node.kind === 'NumberLiteral') {
     return { kind: 'literal-number', value: args.node.value }
@@ -1039,6 +1047,19 @@ function buildDirectScalarOperand(args: {
       return {
         kind: 'error',
         code: ErrorCode.Ref,
+      }
+    }
+    if (translated?.row !== undefined && translated.col !== undefined) {
+      const sheet = args.workbook.getSheet(sheetName)
+      if (!sheet) {
+        return {
+          kind: 'error',
+          code: ErrorCode.Ref,
+        }
+      }
+      return {
+        kind: 'cell',
+        cellIndex: args.ensureCellTrackedByCoords(sheet.id, translated.row, translated.col),
       }
     }
     let parsed: ReturnType<typeof parseCellAddress>
@@ -1079,6 +1100,7 @@ function buildDirectScalarDescriptor(args: {
   readonly ownerSheetName: string
   readonly workbook: Pick<EngineRuntimeState, 'workbook'>['workbook']
   readonly ensureCellTracked: (sheetName: string, address: string) => number
+  readonly ensureCellTrackedByCoords: (sheetId: number, row: number, col: number) => number
 }): RuntimeDirectScalarDescriptor | undefined {
   if (args.compiled.symbolicNames.length > 0 || args.compiled.symbolicTables.length > 0 || args.compiled.symbolicSpills.length > 0) {
     return undefined
@@ -1086,11 +1108,18 @@ function buildDirectScalarDescriptor(args: {
   let translatedCellRefIndex = 0
   const nextTranslatedCellRef =
     args.compiled.astMatchesSource === false
-      ? (): { readonly sheetName: string | undefined; readonly address: string } | undefined => {
+      ? ():
+          | {
+              readonly sheetName: string | undefined
+              readonly address: string
+              readonly row: number | undefined
+              readonly col: number | undefined
+            }
+          | undefined => {
           const parsed = args.compiled.parsedSymbolicRefs?.[translatedCellRefIndex]
           const address = parsed?.address ?? args.compiled.symbolicRefs[translatedCellRefIndex]
           translatedCellRefIndex += 1
-          return address ? { sheetName: parsed?.sheetName, address } : undefined
+          return address ? { sheetName: parsed?.sheetName, address, row: parsed?.row, col: parsed?.col } : undefined
         }
       : undefined
   const node = args.compiled.optimizedAst
@@ -1100,6 +1129,7 @@ function buildDirectScalarDescriptor(args: {
       ownerSheetName: args.ownerSheetName,
       workbook: args.workbook,
       ensureCellTracked: args.ensureCellTracked,
+      ensureCellTrackedByCoords: args.ensureCellTrackedByCoords,
       ...(nextTranslatedCellRef ? { nextTranslatedCellRef } : {}),
     })
     const right = buildDirectScalarOperand({
@@ -1107,6 +1137,7 @@ function buildDirectScalarDescriptor(args: {
       ownerSheetName: args.ownerSheetName,
       workbook: args.workbook,
       ensureCellTracked: args.ensureCellTracked,
+      ensureCellTrackedByCoords: args.ensureCellTrackedByCoords,
       ...(nextTranslatedCellRef ? { nextTranslatedCellRef } : {}),
     })
     if (left && right) {
@@ -1124,6 +1155,7 @@ function buildDirectScalarDescriptor(args: {
       ownerSheetName: args.ownerSheetName,
       workbook: args.workbook,
       ensureCellTracked: args.ensureCellTracked,
+      ensureCellTrackedByCoords: args.ensureCellTrackedByCoords,
       ...(nextTranslatedCellRef ? { nextTranslatedCellRef } : {}),
     })
     if (operand) {
@@ -1604,6 +1636,7 @@ export function createEngineFormulaBindingService(args: {
               ownerSheetName,
               workbook: args.state.workbook,
               ensureCellTracked: args.ensureCellTracked,
+              ensureCellTrackedByCoords: args.ensureCellTrackedByCoords,
             })
       if (existing.directScalar !== undefined && !nextDirectScalar) {
         return false
@@ -1891,9 +1924,9 @@ export function createEngineFormulaBindingService(args: {
     })
   }
 
-  const registerFormulaFamilyNow = (cellIndex: number, formula: RuntimeFormula): void => {
+  const registerFormulaFamilyNow = (cellIndex: number, formula: RuntimeFormula, ownerPosition?: FormulaOwnerPosition): void => {
     const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
-    const position = args.state.workbook.getCellPosition(cellIndex)
+    const position = ownerPosition ?? args.state.workbook.getCellPosition(cellIndex)
     if (sheetId === undefined || !position || formula.templateId === undefined) {
       args.formulaFamilies.unregisterFormula(cellIndex)
       return
@@ -2352,6 +2385,17 @@ export function createEngineFormulaBindingService(args: {
     source: string,
     prepared: ReturnType<typeof prepareFormulaBindingNow>,
   ): void => {
+    const cellStore = args.state.workbook.cellStore
+    const sheetId = cellStore.sheetIds[cellIndex]
+    const sheet = sheetId === undefined ? undefined : args.state.workbook.getSheetById(sheetId)
+    const physicalOwnerPosition =
+      sheet && sheet.structureVersion === 1
+        ? {
+            sheetName: ownerSheetName,
+            row: cellStore.rows[cellIndex] ?? 0,
+            col: cellStore.cols[cellIndex] ?? 0,
+          }
+        : undefined
     const dependencyEntities = args.edgeArena.replace(args.edgeArena.empty(), prepared.dependencies.dependencyEntities)
     const runtimeFormula: RuntimeFormula = {
       cellIndex,
@@ -2381,8 +2425,7 @@ export function createEngineFormulaBindingService(args: {
     const formulaSlotId = args.state.formulas.set(cellIndex, runtimeFormula)
     runtimeFormula.formulaSlotId = formulaSlotId
     updateVolatileFormulaIndex(cellIndex, runtimeFormula)
-    const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
-    const col = args.state.workbook.getCellPosition(cellIndex)?.col
+    const col = physicalOwnerPosition?.col ?? args.state.workbook.getCellPosition(cellIndex)?.col
     if (sheetId !== undefined && col !== undefined) {
       const columnKey = formulaColumnCountKey(sheetId, col)
       formulaColumnCounts.set(columnKey, (formulaColumnCounts.get(columnKey) ?? 0) + 1)
@@ -2394,8 +2437,8 @@ export function createEngineFormulaBindingService(args: {
     } else {
       args.state.workbook.cellStore.flags[cellIndex] = (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly
     }
-    recordFormulaInstanceNow(cellIndex, source, prepared.templateId)
-    registerFormulaFamilyNow(cellIndex, runtimeFormula)
+    recordFormulaInstanceNow(cellIndex, source, prepared.templateId, physicalOwnerPosition)
+    registerFormulaFamilyNow(cellIndex, runtimeFormula, physicalOwnerPosition)
 
     for (let rangeCursor = 0; rangeCursor < prepared.dependencies.newRangeCount; rangeCursor += 1) {
       const rangeIndex = prepared.dependencies.newRangeIndices[rangeCursor]!
@@ -2509,6 +2552,7 @@ export function createEngineFormulaBindingService(args: {
       ownerSheetName,
       workbook: args.state.workbook,
       ensureCellTracked: args.ensureCellTracked,
+      ensureCellTrackedByCoords: args.ensureCellTrackedByCoords,
     })
     const directCriteria = buildDirectCriteriaDescriptor({
       compiled,
