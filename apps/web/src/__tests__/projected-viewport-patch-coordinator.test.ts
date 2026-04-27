@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ValueTag, type RecalcMetrics } from '@bilig/protocol'
-import type { ViewportPatch } from '@bilig/worker-transport'
+import { encodeViewportPatch, type ViewportPatch } from '@bilig/worker-transport'
 import { ProjectedViewportAxisStore } from '../projected-viewport-axis-store.js'
 import { ProjectedViewportCellCache } from '../projected-viewport-cell-cache.js'
 import { ProjectedViewportPatchCoordinator } from '../projected-viewport-patch-coordinator.js'
@@ -79,7 +79,7 @@ describe('ProjectedViewportPatchCoordinator', () => {
 
   it('tracks viewport subscriptions through the worker client', async () => {
     vi.useFakeTimers()
-    const encodedPatch = new TextEncoder().encode(JSON.stringify(createPatch()))
+    const encodedPatch = encodeViewportPatch(createPatch())
     const subscribeViewportPatches = vi.fn((_viewport, listener: (bytes: Uint8Array) => void) => {
       listener(encodedPatch)
       return () => undefined
@@ -113,6 +113,59 @@ describe('ProjectedViewportPatchCoordinator', () => {
     vi.useRealTimers()
   })
 
+  it('ignores stale out-of-order viewport patches for a subscription', async () => {
+    vi.useFakeTimers()
+    const hiddenRowPatch: ViewportPatch = {
+      ...createPatch(),
+      version: 2,
+      cells: [],
+      columns: [],
+      rows: [{ index: 1, size: 22, hidden: true }],
+    }
+    const staleVisibleRowPatch: ViewportPatch = {
+      ...createPatch(),
+      version: 1,
+      cells: [],
+      columns: [],
+      rows: [{ index: 1, size: 22, hidden: false }],
+    }
+    const patches: ((bytes: Uint8Array) => void)[] = []
+    const subscribeViewportPatches = vi.fn((_viewport, listener: (bytes: Uint8Array) => void) => {
+      patches.push(listener)
+      return () => undefined
+    })
+    const cellCache = new ProjectedViewportCellCache()
+    const axisStore = new ProjectedViewportAxisStore()
+    const coordinator = new ProjectedViewportPatchCoordinator({
+      client: {
+        invoke: async () => undefined,
+        ready: async () => undefined,
+        subscribe: () => () => undefined,
+        subscribeBatches: () => () => undefined,
+        subscribeViewportPatches,
+        dispose: () => undefined,
+      },
+      cellCache,
+      axisStore,
+    })
+    const listener = vi.fn()
+
+    const unsubscribe = coordinator.subscribeViewport('Sheet1', { rowStart: 0, rowEnd: 2, colStart: 0, colEnd: 2 }, listener, {
+      initialPatch: 'none',
+    })
+
+    patches[0]?.(encodeViewportPatch(hiddenRowPatch))
+    patches[0]?.(encodeViewportPatch(staleVisibleRowPatch))
+    await vi.runAllTimersAsync()
+
+    expect(axisStore.getRowHeights('Sheet1')[1]).toBe(0)
+    expect(axisStore.getHiddenRows('Sheet1')[1]).toBe(true)
+    expect(listener).toHaveBeenCalledTimes(1)
+
+    unsubscribe()
+    vi.useRealTimers()
+  })
+
   it('coalesces repeated patch notifications into a single frame callback', async () => {
     vi.useFakeTimers()
     const patches: ((bytes: Uint8Array) => void)[] = []
@@ -140,27 +193,26 @@ describe('ProjectedViewportPatchCoordinator', () => {
       throw new Error('expected viewport patch listener')
     }
 
-    const secondPatch = createPatch('style-2')
-    emit(new TextEncoder().encode(JSON.stringify(createPatch('style-1'))))
+    const firstPatch = createPatch('style-1')
+    const secondPatch = { ...createPatch('style-2'), version: firstPatch.version + 1 }
+    emit(encodeViewportPatch(firstPatch))
     emit(
-      new TextEncoder().encode(
-        JSON.stringify({
-          ...secondPatch,
-          cells: [
-            {
-              ...secondPatch.cells[0],
-              col: 1,
-              snapshot: {
-                ...secondPatch.cells[0].snapshot,
-                address: 'B1',
-              },
-              displayText: '43',
-              copyText: '43',
-              editorText: '43',
+      encodeViewportPatch({
+        ...secondPatch,
+        cells: [
+          {
+            ...secondPatch.cells[0],
+            col: 1,
+            snapshot: {
+              ...secondPatch.cells[0].snapshot,
+              address: 'B1',
             },
-          ],
-        }),
-      ),
+            displayText: '43',
+            copyText: '43',
+            editorText: '43',
+          },
+        ],
+      }),
     )
 
     expect(listener).not.toHaveBeenCalled()

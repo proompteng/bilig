@@ -159,6 +159,51 @@ describe('applyProjectedViewportPatch', () => {
     expect(state.rowHeightsBySheet.get('Sheet1')?.[0]).toBe(44)
   })
 
+  it('does not let stale viewport patches override an optimistic hidden row', () => {
+    const state = createPatchState()
+    state.rowSizesBySheet.set('Sheet1', { 1: 22 })
+    state.rowHeightsBySheet.set('Sheet1', { 1: 0 })
+    state.hiddenRowsBySheet.set('Sheet1', { 1: true })
+    state.pendingHiddenRowsBySheet.set('Sheet1', { 1: true })
+
+    const result = applyProjectedViewportPatch({
+      state,
+      patch: {
+        ...createPatch(),
+        cells: [],
+        rows: [{ index: 1, size: 22, hidden: false }],
+      },
+    })
+
+    expect(result.rowsChanged).toBe(false)
+    expect(state.rowSizesBySheet.get('Sheet1')?.[1]).toBe(22)
+    expect(state.rowHeightsBySheet.get('Sheet1')?.[1]).toBe(0)
+    expect(state.hiddenRowsBySheet.get('Sheet1')?.[1]).toBe(true)
+    expect(state.pendingHiddenRowsBySheet.get('Sheet1')?.[1]).toBe(true)
+  })
+
+  it('clears pending hidden row state when the authoritative patch catches up', () => {
+    const state = createPatchState()
+    state.rowSizesBySheet.set('Sheet1', { 1: 22 })
+    state.rowHeightsBySheet.set('Sheet1', { 1: 0 })
+    state.hiddenRowsBySheet.set('Sheet1', { 1: true })
+    state.pendingHiddenRowsBySheet.set('Sheet1', { 1: true })
+
+    const result = applyProjectedViewportPatch({
+      state,
+      patch: {
+        ...createPatch(),
+        cells: [],
+        rows: [{ index: 1, size: 22, hidden: true }],
+      },
+    })
+
+    expect(result.rowsChanged).toBe(false)
+    expect(state.rowHeightsBySheet.get('Sheet1')?.[1]).toBe(0)
+    expect(state.hiddenRowsBySheet.get('Sheet1')?.[1]).toBe(true)
+    expect(state.pendingHiddenRowsBySheet.get('Sheet1')).toBeUndefined()
+  })
+
   it('does not report a freeze change when a patch confirms the default unfrozen state', () => {
     const state = createPatchState()
 

@@ -125,4 +125,37 @@ describe('projected viewport axis patches', () => {
     expect(result.hiddenAxes[9]).toBe(true)
     expect(result.axisChanged).toBe(false)
   })
+
+  it('preserves an optimistic visible state while a hidden authoritative patch still lags', () => {
+    const result = applyProjectedViewportAxisPatches({
+      patches: [{ index: 10, size: 22, hidden: true }],
+      sizes: { 10: 22 },
+      renderedSizes: { 10: 22 },
+      pendingSizes: {},
+      pendingHiddenAxes: { 10: false },
+      hiddenAxes: {},
+    })
+
+    expect(result.sizes[10]).toBe(22)
+    expect(result.renderedSizes[10]).toBe(22)
+    expect(result.pendingHiddenAxes[10]).toBe(false)
+    expect(result.hiddenAxes[10]).toBeUndefined()
+    expect(result.axisChanged).toBe(false)
+  })
+
+  it('clears a matching pending optimistic visible state once the authoritative patch catches up', () => {
+    const result = applyProjectedViewportAxisPatches({
+      patches: [{ index: 11, size: 22, hidden: false }],
+      sizes: { 11: 22 },
+      renderedSizes: { 11: 22 },
+      pendingSizes: {},
+      pendingHiddenAxes: { 11: false },
+      hiddenAxes: {},
+    })
+
+    expect(result.renderedSizes[11]).toBe(22)
+    expect(result.pendingHiddenAxes[11]).toBeUndefined()
+    expect(result.hiddenAxes[11]).toBeUndefined()
+    expect(result.axisChanged).toBe(false)
+  })
 })

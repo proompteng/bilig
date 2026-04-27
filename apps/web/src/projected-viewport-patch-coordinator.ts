@@ -40,6 +40,7 @@ export class ProjectedViewportPatchCoordinator {
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null
     const pendingDamage = new Map<string, { cell: CellItem }>()
     let pendingStructuralChange = false
+    let lastAppliedPatchVersion = 0
     const scheduleFlush = () => {
       if (frameHandle !== null || timeoutHandle !== null) {
         return
@@ -63,6 +64,10 @@ export class ProjectedViewportPatchCoordinator {
     }
     const applyPatchBytes = (bytes: Uint8Array) => {
       const patch = decodeViewportPatch(bytes)
+      if (patch.version <= lastAppliedPatchVersion) {
+        return
+      }
+      lastAppliedPatchVersion = patch.version
       const result = this.applyViewportPatchDetailed(patch)
       this.options.onViewportPatchApplied?.(patch, result, options)
       for (const entry of result.damage) {
