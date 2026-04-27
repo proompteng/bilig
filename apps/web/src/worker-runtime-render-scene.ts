@@ -6,60 +6,12 @@ import { resolveFrozenColumnWidth, resolveFrozenRowHeight } from '../../../packa
 import { createGridTileKeyV2 } from '../../../packages/grid/src/renderer-v2/scene-packet-v2.js'
 import { validateGridScenePacketV2 } from '../../../packages/grid/src/renderer-v2/scene-packet-validator.js'
 import type { WorkbookPaneScenePacket, WorkbookPaneSceneRequest } from './resident-pane-scene-types.js'
+import { buildFreezeVersion, buildRenderedAxisState, resolveRevision } from './worker-runtime-render-axis.js'
 
 interface ResidentPaneSceneEngineLike extends GridEngineLike {
   getColumnAxisEntries(sheetName: string): readonly WorkbookAxisEntrySnapshot[]
   getRowAxisEntries(sheetName: string): readonly WorkbookAxisEntrySnapshot[]
   getLastMetrics(): Pick<RecalcMetrics, 'batchId'>
-}
-
-function buildRenderedAxisState(
-  entries: readonly WorkbookAxisEntrySnapshot[],
-  defaultSize: number,
-): {
-  sizes: Record<number, number>
-  sortedOverrides: Array<readonly [number, number]>
-} {
-  const sizes: Record<number, number> = {}
-  const sortedOverrides: Array<readonly [number, number]> = []
-  for (const entry of entries) {
-    const renderedSize = entry.hidden ? 0 : (entry.size ?? defaultSize)
-    if (renderedSize === defaultSize) {
-      continue
-    }
-    sizes[entry.index] = renderedSize
-    sortedOverrides.push([entry.index, renderedSize] as const)
-  }
-  sortedOverrides.sort((left, right) => left[0] - right[0])
-  return {
-    sizes,
-    sortedOverrides,
-  }
-}
-
-function resolveRevision(value: number | undefined): number {
-  return Number.isInteger(value) && value !== undefined && value >= 0 ? value : 0
-}
-
-function hashAxisEntries(entries: readonly WorkbookAxisEntrySnapshot[]): number {
-  if (entries.length === 0) {
-    return 0
-  }
-  let hash = 2_166_136_261
-  for (const entry of [...entries].toSorted((left, right) => left.index - right.index)) {
-    hash = mixRevisionInteger(hash, entry.index)
-    hash = mixRevisionInteger(hash, Math.round((entry.size ?? -1) * 1_000))
-    hash = mixRevisionInteger(hash, entry.hidden ? 1 : 0)
-  }
-  return hash >>> 0
-}
-
-function mixRevisionInteger(hash: number, value: number): number {
-  return Math.imul((hash ^ value) >>> 0, 16_777_619) >>> 0
-}
-
-function buildFreezeVersion(freezeRows: number, freezeCols: number): number {
-  return mixRevisionInteger(mixRevisionInteger(2_166_136_261, freezeRows), freezeCols)
 }
 
 export function buildWorkerResidentPaneScenes(input: {
@@ -74,8 +26,6 @@ export function buildWorkerResidentPaneScenes(input: {
   const rowAxisEntries = engine.getRowAxisEntries(request.sheetName)
   const columnAxis = buildRenderedAxisState(columnAxisEntries, gridMetrics.columnWidth)
   const rowAxis = buildRenderedAxisState(rowAxisEntries, gridMetrics.rowHeight)
-  const columnAxisVersion = hashAxisEntries(columnAxisEntries)
-  const rowAxisVersion = hashAxisEntries(rowAxisEntries)
   const batchVersion = resolveRevision(engine.getLastMetrics().batchId)
   const freezeRows = request.freezeRows
   const freezeCols = request.freezeCols
@@ -110,8 +60,8 @@ export function buildWorkerResidentPaneScenes(input: {
       requestSeq: request.requestSeq ?? 0,
       createKey: (paneId, viewport) =>
         createGridTileKeyV2({
-          axisVersionX: columnAxisVersion,
-          axisVersionY: rowAxisVersion,
+          axisVersionX: columnAxis.version,
+          axisVersionY: rowAxis.version,
           dprBucket: request.dprBucket ?? 1,
           freezeVersion,
           paneId,
