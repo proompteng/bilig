@@ -10,18 +10,15 @@ import {
   getResolvedRowHeight,
   resolveRowOffset,
 } from './gridMetrics.js'
-import { createGridSelection, isSheetSelection } from './gridSelection.js'
-import { resolveFillHandlePreviewBounds } from './gridFillHandle.js'
 import { createGridAxisWorldIndexFromRecords } from './gridAxisWorldIndex.js'
 import { createGridGeometrySnapshotFromAxes } from './gridGeometry.js'
 import { resolveGridScrollSpacerSize } from './gridScrollSurface.js'
-import type { HeaderSelection, VisibleRegionState } from './gridPointer.js'
+import type { VisibleRegionState } from './gridPointer.js'
 import { resolveGridRenderScrollTransform, sameViewportBounds, sameVisibleRegionWindow } from './gridViewportController.js'
-import type { GridHoverState } from './gridHover.js'
 import { getResolvedCellFontFamily, snapshotToRenderCell } from './gridCells.js'
 import { getGridTheme } from './gridPresentation.js'
 import type { GridEngineLike } from './grid-engine.js'
-import type { GridSelection, Rectangle } from './gridTypes.js'
+import type { Rectangle } from './gridTypes.js'
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 import { collectViewportItems } from './gridViewportItems.js'
 import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
@@ -31,7 +28,6 @@ import { noteGridScrollInput } from './grid-render-counters.js'
 import { GridCameraStore } from './runtime/gridCameraStore.js'
 import { viewportFromVisibleRegion } from './useGridCameraState.js'
 import { useGridElementSize } from './useGridElementSize.js'
-import { resolveRequiresLiveViewportState } from './useGridSelectionState.js'
 import { GridRuntimeHost } from './runtime/gridRuntimeHost.js'
 import {
   axisOverridesFromSortedSizes,
@@ -42,6 +38,7 @@ import { useWorkbookHeaderPanes } from './useWorkbookHeaderPanes.js'
 import { useWorkbookRenderTilePanes } from './useWorkbookRenderTilePanes.js'
 import { useWorkbookEditorOverlayAnchor } from './useWorkbookEditorOverlayAnchor.js'
 import { useWorkbookAxisResizeState } from './useWorkbookAxisResizeState.js'
+import { useWorkbookInteractionOverlayState } from './useWorkbookInteractionOverlayState.js'
 
 function noteVisibleWindowChange(): void {
   if (typeof window === 'undefined') {
@@ -114,15 +111,6 @@ export function useWorkbookGridRenderState(input: {
   const gridRuntimeAxisCacheRef = useRef(createGridRuntimeAxisOverrideCache())
   const invalidateSceneRef = useRef<() => void>(() => undefined)
   const [sceneRevision, setSceneRevision] = useState(0)
-  const [fillPreviewRange, setFillPreviewRange] = useState<Rectangle | null>(null)
-  const [isFillHandleDragging, setIsFillHandleDragging] = useState(false)
-  const [isRangeMoveDragging, setIsRangeMoveDragging] = useState(false)
-  const [hoverState, setHoverState] = useState<GridHoverState>({
-    cell: null,
-    header: null,
-    cursor: 'default',
-  })
-  const [activeHeaderDrag, setActiveHeaderDrag] = useState<HeaderSelection | null>(null)
   const [hostElement, setHostElement] = useState<HTMLDivElement | null>(null)
   const [visibleRegion, setVisibleRegion] = useState<VisibleRegionState>({
     range: { x: 0, y: 0, width: 12, height: 24 },
@@ -132,23 +120,6 @@ export function useWorkbookGridRenderState(input: {
     freezeCols,
   })
   const selectedCell = useMemo(() => parseCellAddress(selectedAddr, sheetName), [selectedAddr, sheetName])
-  const [gridSelection, setGridSelection] = useState<GridSelection>(() => createGridSelection(selectedCell.col, selectedCell.row))
-  useLayoutEffect(() => {
-    setGridSelection((current) => {
-      if (
-        current.columns.length > 0 ||
-        current.rows.length > 0 ||
-        current.current?.range.width !== 1 ||
-        current.current.range.height !== 1
-      ) {
-        return current
-      }
-      if (current.current.cell[0] === selectedCell.col && current.current.cell[1] === selectedCell.row) {
-        return current
-      }
-      return createGridSelection(selectedCell.col, selectedCell.row)
-    })
-  }, [selectedCell.col, selectedCell.row])
   const gridMetrics = useMemo(() => getGridMetrics(), [])
   const dprBucket = typeof window === 'undefined' ? 1 : Math.max(1, Math.ceil(window.devicePixelRatio || 1))
   const shouldUseRemoteRenderTileSource = renderTileSource !== undefined && sheetId !== undefined
@@ -271,7 +242,6 @@ export function useWorkbookGridRenderState(input: {
   )
   const totalGridWidth = scrollSpacerSize.width
   const totalGridHeight = scrollSpacerSize.height
-  const selectionRange = gridSelection.current?.range ?? null
   const scrollTransformStore = scrollTransformStoreRef.current
   const gridCameraStore = gridCameraStoreRef.current
 
@@ -340,6 +310,35 @@ export function useWorkbookGridRenderState(input: {
       sheetName,
     })
   }, [columnAxis, freezeCols, freezeRows, gridCameraStore, gridMetrics, rowAxis, sheetName])
+
+  const {
+    activeHeaderDrag,
+    fillPreviewBounds,
+    fillPreviewRange,
+    gridSelection,
+    hoverState,
+    isEntireSheetSelected,
+    isFillHandleDragging,
+    isRangeMoveDragging,
+    requiresLiveViewportState,
+    selectionRange,
+    setActiveHeaderDrag,
+    setFillPreviewRange,
+    setGridSelection,
+    setHoverState,
+    setIsFillHandleDragging,
+    setIsRangeMoveDragging,
+  } = useWorkbookInteractionOverlayState({
+    activeResizeColumn,
+    activeResizeRow,
+    getCellLocalBounds,
+    hasColumnResizePreview,
+    hasRowResizePreview,
+    isEditingCell,
+    selectedCol: selectedCell.col,
+    selectedRow: selectedCell.row,
+    visibleRange: visibleRegion.range,
+  })
 
   const viewport = useMemo<Viewport>(() => viewportFromVisibleRegion(visibleRegion), [visibleRegion])
   const residentViewportRef = useRef<Viewport>(resolveResidentViewport(viewport))
@@ -427,17 +426,6 @@ export function useWorkbookGridRenderState(input: {
   useEffect(() => {
     invalidateSceneRef.current = invalidateScene
   }, [invalidateScene])
-
-  const requiresLiveViewportState = resolveRequiresLiveViewportState({
-    fillPreviewActive: fillPreviewRange !== null,
-    hasActiveHeaderDrag: activeHeaderDrag !== null,
-    hasActiveResizeColumn: activeResizeColumn !== null,
-    hasActiveResizeRow: activeResizeRow !== null,
-    hasColumnResizePreview,
-    hasRowResizePreview,
-    isEditingCell,
-    isFillHandleDragging,
-  })
 
   const syncVisibleRegion = useCallback(() => {
     const scrollViewport = scrollViewportRef.current
@@ -629,17 +617,6 @@ export function useWorkbookGridRenderState(input: {
     rowHeights,
     sheetName,
   })
-  const fillPreviewBounds = useMemo<Rectangle | undefined>(() => {
-    if (!fillPreviewRange) {
-      return undefined
-    }
-    return resolveFillHandlePreviewBounds({
-      previewRange: fillPreviewRange,
-      visibleRange: visibleRegion.range,
-      hostBounds: { left: 0, top: 0 },
-      getCellBounds: getCellLocalBounds,
-    })
-  }, [fillPreviewRange, getCellLocalBounds, visibleRegion.range])
 
   useLayoutEffect(() => {
     const scrollViewport = scrollViewportRef.current
@@ -829,7 +806,7 @@ export function useWorkbookGridRenderState(input: {
     hostElement,
     hostRef,
     hoverState,
-    isEntireSheetSelected: isSheetSelection(gridSelection),
+    isEntireSheetSelected,
     isFillHandleDragging,
     isRangeMoveDragging,
     overlayStyle,
