@@ -1,54 +1,46 @@
 import { describe, expect, test } from 'vitest'
-import {
-  GRID_SCENE_PACKET_V2_MAGIC,
-  GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT,
-  GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT,
-  GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT,
-  GRID_SCENE_PACKET_V2_VERSION,
-  createGridTileKeyV2,
-  type GridScenePacketV2,
-} from '../renderer-v2/scene-packet-v2.js'
-import { resolveGridRectPacketSignature, resolveGridTextPacketSignature } from '../renderer-v2/typegpu-buffer-pool.js'
+import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
+import { resolveGridRectTileSignatureV3, resolveGridTextTileSignatureV3 } from '../renderer-v3/typegpu-tile-buffer-pool.js'
 
-function createPacket(overrides: Partial<GridScenePacketV2> = {}): GridScenePacketV2 {
-  const viewport = { colEnd: 1, colStart: 0, rowEnd: 1, rowStart: 0 }
+function createTile(overrides: Partial<GridRenderTile> = {}): GridRenderTile {
+  const version = {
+    axisX: 1,
+    axisY: 1,
+    freeze: 0,
+    styles: 1,
+    text: 1,
+    values: 1,
+    ...overrides.version,
+  }
   return {
-    borderRectCount: 0,
-    cameraSeq: 1,
-    fillRectCount: 1,
-    generatedAt: 1,
-    generation: 1,
-    key: createGridTileKeyV2({ paneId: 'body', sheetName: 'Sheet1', viewport }),
-    magic: GRID_SCENE_PACKET_V2_MAGIC,
-    paneId: 'body',
+    bounds: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
+    coord: {
+      colTile: 0,
+      dprBucket: 1,
+      paneKind: 'body',
+      rowTile: 0,
+      sheetId: 7,
+    },
+    lastBatchId: 1,
+    lastCameraSeq: 1,
     rectCount: 1,
     rectInstances: new Float32Array([0, 0, 104, 22, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 200, 100]),
-    rects: new Float32Array([0, 0, 104, 22, 1, 0, 0, 1]),
-    rectSignature: 'rect-one',
-    requestSeq: 1,
-    sheetName: 'Sheet1',
-    surfaceSize: { height: 100, width: 200 },
     textCount: 0,
-    textMetrics: new Float32Array(GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT),
+    textMetrics: new Float32Array(),
     textRuns: [],
-    textSignature: 'text-empty',
-    version: GRID_SCENE_PACKET_V2_VERSION,
-    viewport,
+    tileId: 101,
+    version,
     ...overrides,
   }
 }
 
-function rectSignature(packet: GridScenePacketV2): string {
-  return resolveGridRectPacketSignature({
-    frameHeight: 100,
-    frameWidth: 200,
-    packedScene: packet,
-  })
+function rectSignature(tile: GridRenderTile): string {
+  return resolveGridRectTileSignatureV3({ tile })
 }
 
-describe('typegpu resource cache signatures', () => {
-  test('keeps equivalent packed text packets stable without relying on object identity', () => {
-    const first = createPacket({
+describe('typegpu v3 resource cache signatures', () => {
+  test('keeps equivalent V3 text tiles stable without relying on object identity', () => {
+    const first = createTile({
       textCount: 1,
       textRuns: [
         {
@@ -70,52 +62,45 @@ describe('typegpu resource cache signatures', () => {
           y: 0,
         },
       ],
-      textSignature: 'text-a1',
     })
-    const second = createPacket({
+    const second = createTile({
       textCount: first.textCount,
       textRuns: first.textRuns.map((run) => ({ ...run })),
-      textSignature: first.textSignature,
+      version: { ...first.version },
     })
-    const changed = createPacket({
+    const changed = createTile({
       textCount: first.textCount,
       textRuns: first.textRuns.map((run) => ({ ...run, text: 'A2' })),
-      textSignature: 'text-a2',
+      version: { ...first.version, text: 2 },
     })
 
-    expect(resolveGridTextPacketSignature(first)).toBe(resolveGridTextPacketSignature(second))
-    expect(resolveGridTextPacketSignature(changed)).not.toBe(resolveGridTextPacketSignature(first))
+    expect(resolveGridTextTileSignatureV3(first)).toBe(resolveGridTextTileSignatureV3(second))
+    expect(resolveGridTextTileSignatureV3(changed)).not.toBe(resolveGridTextTileSignatureV3(first))
   })
 
-  test('keeps resource signatures stable across packet sequence churn', () => {
-    const base = createPacket()
-    const newerPacketWithSameContent = createPacket({
-      cameraSeq: 22,
-      generatedAt: 22,
-      generation: 22,
-      requestSeq: 22,
+  test('keeps V3 resource signatures stable across camera sequence churn', () => {
+    const base = createTile()
+    const newerCameraWithSameContent = createTile({
+      lastCameraSeq: 22,
+      version: { ...base.version },
     })
 
-    expect(rectSignature(newerPacketWithSameContent)).toBe(rectSignature(base))
-    expect(resolveGridTextPacketSignature(newerPacketWithSameContent)).toBe(resolveGridTextPacketSignature(base))
+    expect(rectSignature(newerCameraWithSameContent)).toBe(rectSignature(base))
+    expect(resolveGridTextTileSignatureV3(newerCameraWithSameContent)).toBe(resolveGridTextTileSignatureV3(base))
   })
 
-  test('includes packed rect and decoration content in rect signatures', () => {
-    const base = createPacket()
-    const changedRects = createPacket({ rectSignature: 'rect-two' })
-    const changedDecorations = createPacket({ textSignature: 'text-underlined' })
+  test('tracks V3 tile revisions and decoration counts in resource signatures', () => {
+    const base = createTile()
+    const changedValues = createTile({ version: { ...base.version, values: 2 } })
+    const changedBatch = createTile({ lastBatchId: 2, version: { ...base.version } })
 
-    expect(rectSignature(changedRects)).not.toBe(rectSignature(base))
-    expect(rectSignature(changedDecorations)).not.toBe(rectSignature(base))
+    expect(rectSignature(changedValues)).not.toBe(rectSignature(base))
+    expect(resolveGridTextTileSignatureV3(changedBatch)).not.toBe(resolveGridTextTileSignatureV3(base))
     expect(
-      resolveGridRectPacketSignature({
+      resolveGridRectTileSignatureV3({
         decorationRects: [{ color: '#111111', height: 1, width: 20, x: 4, y: 18 }],
-        frameHeight: 100,
-        frameWidth: 200,
-        packedScene: base,
+        tile: base,
       }),
     ).not.toBe(rectSignature(base))
-    expect(base.rects.length).toBe(GRID_SCENE_PACKET_V2_RECT_FLOAT_COUNT)
-    expect(base.rectInstances.length).toBe(GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT)
   })
 })

@@ -27,6 +27,14 @@ describe('renderer v3 import boundary', () => {
     expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/typegpu-surface.ts'))).toBe(false)
   })
 
+  test('legacy V2 pane resource stack is deleted', () => {
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/pane-layout.ts'))).toBe(false)
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/pane-scene-types.ts'))).toBe(false)
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/pane-buffer-cache.ts'))).toBe(false)
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/typegpu-buffer-pool.ts'))).toBe(false)
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/typegpu-backend.ts'))).toBe(false)
+  })
+
   test('legacy renderer-v2 barrel is deleted', () => {
     expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/index.ts'))).toBe(false)
   })

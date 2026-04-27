@@ -3,7 +3,7 @@ import {
   MIN_TYPEGPU_RECT_VERTEX_CAPACITY,
   MIN_TYPEGPU_TEXT_VERTEX_CAPACITY,
   resolveTypeGpuVertexBufferCapacity,
-} from '../renderer-v2/typegpu-backend.js'
+} from '../renderer-v3/typegpu-primitives.js'
 
 describe('typegpu backend buffer capacity policy', () => {
   test('uses fixed minimum buckets for new rect and text buffers', () => {
