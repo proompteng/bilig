@@ -1,21 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { formatAddress, indexToColumn, parseCellAddress } from '@bilig/formula'
+import { formatAddress, parseCellAddress } from '@bilig/formula'
 import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
-import {
-  MAX_COLUMN_WIDTH,
-  MIN_COLUMN_WIDTH,
-  getGridMetrics,
-  getResolvedColumnWidth,
-  getResolvedRowHeight,
-  resolveRowOffset,
-} from './gridMetrics.js'
+import { getGridMetrics, getResolvedColumnWidth, getResolvedRowHeight, resolveRowOffset } from './gridMetrics.js'
 import { createGridAxisWorldIndexFromRecords } from './gridAxisWorldIndex.js'
 import { createGridGeometrySnapshotFromAxes } from './gridGeometry.js'
 import { resolveGridScrollSpacerSize } from './gridScrollSurface.js'
 import type { VisibleRegionState } from './gridPointer.js'
 import { resolveGridRenderScrollTransform, sameViewportBounds, sameVisibleRegionWindow } from './gridViewportController.js'
-import { getResolvedCellFontFamily, snapshotToRenderCell } from './gridCells.js'
 import { getGridTheme } from './gridPresentation.js'
 import type { GridEngineLike } from './grid-engine.js'
 import type { Rectangle } from './gridTypes.js'
@@ -39,6 +31,7 @@ import { useWorkbookRenderTilePanes } from './useWorkbookRenderTilePanes.js'
 import { useWorkbookEditorOverlayAnchor } from './useWorkbookEditorOverlayAnchor.js'
 import { useWorkbookAxisResizeState } from './useWorkbookAxisResizeState.js'
 import { useWorkbookInteractionOverlayState } from './useWorkbookInteractionOverlayState.js'
+import { useWorkbookColumnAutofit } from './useWorkbookColumnAutofit.js'
 
 function noteVisibleWindowChange(): void {
   if (typeof window === 'undefined') {
@@ -102,7 +95,6 @@ export function useWorkbookGridRenderState(input: {
   const scrollViewportRef = useRef<HTMLDivElement | null>(null)
   const autoScrollSelectionRef = useRef<{ sheetName: string; col: number; row: number } | null>(null)
   const restoredViewportTokenRef = useRef<number | null>(null)
-  const textMeasureCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const scrollSyncFrameRef = useRef<number | null>(null)
   const scrollTransformStoreRef = useRef<WorkbookGridScrollStore>(new WorkbookGridScrollStore())
   const scrollTransformRef = useRef(scrollTransformStoreRef.current.getSnapshot())
@@ -701,80 +693,18 @@ export function useWorkbookGridRenderState(input: {
     setHostElement(node)
   }, [])
   const getVisibleRegion = useCallback(() => liveVisibleRegionRef.current, [])
-
-  const computeAutofitColumnWidth = useCallback(
-    (columnIndex: number): number => {
-      const canvas = textMeasureCanvasRef.current ?? document.createElement('canvas')
-      textMeasureCanvasRef.current = canvas
-      const context = canvas.getContext('2d')
-      if (!context) {
-        return gridMetrics.columnWidth
-      }
-
-      let measuredWidth = 0
-
-      context.font = gridTheme.headerFontStyle
-      measuredWidth = Math.max(measuredWidth, context.measureText(indexToColumn(columnIndex)).width)
-
-      const sheet = engine.workbook.getSheet(sheetName)
-      const measureCell = (row: number, col: number) => {
-        const address = formatAddress(row, col)
-        const optimisticSeed = getCellEditorSeed?.(sheetName, address)
-        if (optimisticSeed !== undefined) {
-          context.font = `400 ${gridTheme.editorFontSize} ${getResolvedCellFontFamily()}`
-          measuredWidth = Math.max(measuredWidth, context.measureText(optimisticSeed).width)
-          return
-        }
-        const snapshot =
-          col === selectedCell.col &&
-          row === selectedCell.row &&
-          selectedCellSnapshot.sheetName === sheetName &&
-          selectedCellSnapshot.address === address
-            ? selectedCellSnapshot
-            : engine.getCell(sheetName, address)
-        const renderCell = snapshotToRenderCell(snapshot, engine.getCellStyle(snapshot.styleId))
-        const displayText = renderCell.displayText || renderCell.copyText
-        context.font = `400 ${gridTheme.editorFontSize} ${getResolvedCellFontFamily()}`
-        measuredWidth = Math.max(measuredWidth, context.measureText(displayText).width)
-      }
-
-      if (sheet) {
-        sheet.grid.forEachCellEntry((_cellIndex, row, col) => {
-          if (col !== columnIndex) {
-            return
-          }
-          measureCell(row, col)
-        })
-      } else {
-        const liveVisibleRegion = liveVisibleRegionRef.current
-        const visibleStartRow = liveVisibleRegion.range.y
-        const visibleEndRow = Math.min(MAX_ROWS - 1, liveVisibleRegion.range.y + liveVisibleRegion.range.height - 1)
-        for (let row = 0; row < Math.max(0, freezeRows); row += 1) {
-          measureCell(row, columnIndex)
-        }
-        for (let row = visibleStartRow; row <= visibleEndRow; row += 1) {
-          if (row < freezeRows) {
-            continue
-          }
-          measureCell(row, columnIndex)
-        }
-      }
-
-      return Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.ceil(measuredWidth + 28)))
-    },
-    [
-      engine,
-      freezeRows,
-      getCellEditorSeed,
-      gridMetrics.columnWidth,
-      gridTheme.editorFontSize,
-      gridTheme.headerFontStyle,
-      selectedCell.col,
-      selectedCell.row,
-      selectedCellSnapshot,
-      sheetName,
-    ],
-  )
+  const computeAutofitColumnWidth = useWorkbookColumnAutofit({
+    editorFontSize: gridTheme.editorFontSize,
+    engine,
+    freezeRows,
+    getCellEditorSeed,
+    getVisibleRegion,
+    gridMetrics,
+    headerFontStyle: gridTheme.headerFontStyle,
+    selectedCell,
+    selectedCellSnapshot,
+    sheetName,
+  })
 
   return {
     activeHeaderDrag,
