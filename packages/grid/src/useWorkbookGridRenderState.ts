@@ -3,11 +3,7 @@ import { formatAddress, indexToColumn, parseCellAddress } from '@bilig/formula'
 import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import {
-  EMPTY_COLUMN_WIDTHS,
-  EMPTY_ROW_HEIGHTS,
-  MAX_ROW_HEIGHT,
   MAX_COLUMN_WIDTH,
-  MIN_ROW_HEIGHT,
   MIN_COLUMN_WIDTH,
   getGridMetrics,
   getResolvedColumnWidth,
@@ -18,7 +14,7 @@ import { createGridSelection, isSheetSelection } from './gridSelection.js'
 import { resolveFillHandlePreviewBounds } from './gridFillHandle.js'
 import { createGridAxisWorldIndexFromRecords } from './gridAxisWorldIndex.js'
 import { createGridGeometrySnapshotFromAxes } from './gridGeometry.js'
-import { applyHiddenAxisSizes, resolveGridScrollSpacerSize } from './gridScrollSurface.js'
+import { resolveGridScrollSpacerSize } from './gridScrollSurface.js'
 import type { HeaderSelection, VisibleRegionState } from './gridPointer.js'
 import { resolveGridRenderScrollTransform, sameViewportBounds, sameVisibleRegionWindow } from './gridViewportController.js'
 import type { GridHoverState } from './gridHover.js'
@@ -45,6 +41,7 @@ import {
 import { useWorkbookHeaderPanes } from './useWorkbookHeaderPanes.js'
 import { useWorkbookRenderTilePanes } from './useWorkbookRenderTilePanes.js'
 import { useWorkbookEditorOverlayAnchor } from './useWorkbookEditorOverlayAnchor.js'
+import { useWorkbookAxisResizeState } from './useWorkbookAxisResizeState.js'
 
 function noteVisibleWindowChange(): void {
   if (typeof window === 'undefined') {
@@ -97,6 +94,8 @@ export function useWorkbookGridRenderState(input: {
     freezeRows: requestedFreezeRows = 0,
     freezeCols: requestedFreezeCols = 0,
     onVisibleViewportChange,
+    onColumnWidthChange,
+    onRowHeightChange,
     restoreViewportTarget,
   } = input
   const freezeRows = Math.max(0, Math.min(MAX_ROWS, requestedFreezeRows))
@@ -123,8 +122,6 @@ export function useWorkbookGridRenderState(input: {
     header: null,
     cursor: 'default',
   })
-  const [activeResizeColumn, setActiveResizeColumn] = useState<number | null>(null)
-  const [activeResizeRow, setActiveResizeRow] = useState<number | null>(null)
   const [activeHeaderDrag, setActiveHeaderDrag] = useState<HeaderSelection | null>(null)
   const [hostElement, setHostElement] = useState<HTMLDivElement | null>(null)
   const [visibleRegion, setVisibleRegion] = useState<VisibleRegionState>({
@@ -134,18 +131,6 @@ export function useWorkbookGridRenderState(input: {
     freezeRows,
     freezeCols,
   })
-  const [columnWidthsBySheet, setColumnWidthsBySheet] = useState<Record<string, Record<number, number>>>({})
-  const [rowHeightsBySheet, setRowHeightsBySheet] = useState<Record<string, Record<number, number>>>({})
-  const [columnResizePreview, setColumnResizePreview] = useState<{
-    sheetName: string
-    columnIndex: number
-    width: number
-  } | null>(null)
-  const [rowResizePreview, setRowResizePreview] = useState<{
-    sheetName: string
-    rowIndex: number
-    height: number
-  } | null>(null)
   const selectedCell = useMemo(() => parseCellAddress(selectedAddr, sheetName), [selectedAddr, sheetName])
   const [gridSelection, setGridSelection] = useState<GridSelection>(() => createGridSelection(selectedCell.col, selectedCell.row))
   useLayoutEffect(() => {
@@ -168,16 +153,6 @@ export function useWorkbookGridRenderState(input: {
   const dprBucket = typeof window === 'undefined' ? 1 : Math.max(1, Math.ceil(window.devicePixelRatio || 1))
   const shouldUseRemoteRenderTileSource = renderTileSource !== undefined && sheetId !== undefined
   const gridTheme = useMemo(() => getGridTheme(), [])
-  const columnResizePreviewRef = useRef<{
-    sheetName: string
-    columnIndex: number
-    width: number
-  } | null>(null)
-  const rowResizePreviewRef = useRef<{
-    sheetName: string
-    rowIndex: number
-    height: number
-  } | null>(null)
   const liveVisibleRegionRef = useRef<VisibleRegionState>(visibleRegion)
   const hostElementSize = useGridElementSize(hostElement)
   const hostClientWidth = hostElementSize.width
@@ -201,37 +176,32 @@ export function useWorkbookGridRenderState(input: {
     gridRuntimeHostRef.current = host
     return host
   }, [freezeCols, freezeRows, gridMetrics, hostClientHeight, hostClientWidth])
-  const baseColumnWidths = controlledColumnWidths ?? columnWidthsBySheet[sheetName] ?? EMPTY_COLUMN_WIDTHS
-  const baseRowHeights = controlledRowHeights ?? rowHeightsBySheet[sheetName] ?? EMPTY_ROW_HEIGHTS
-  const sizedColumnWidths = useMemo(() => {
-    if (!columnResizePreview || columnResizePreview.sheetName !== sheetName) {
-      return baseColumnWidths
-    }
-    if (baseColumnWidths[columnResizePreview.columnIndex] === columnResizePreview.width) {
-      return baseColumnWidths
-    }
-    return {
-      ...baseColumnWidths,
-      [columnResizePreview.columnIndex]: columnResizePreview.width,
-    }
-  }, [baseColumnWidths, columnResizePreview, sheetName])
-  const sizedRowHeights = useMemo(() => {
-    if (!rowResizePreview || rowResizePreview.sheetName !== sheetName) {
-      return baseRowHeights
-    }
-    if (baseRowHeights[rowResizePreview.rowIndex] === rowResizePreview.height) {
-      return baseRowHeights
-    }
-    return {
-      ...baseRowHeights,
-      [rowResizePreview.rowIndex]: rowResizePreview.height,
-    }
-  }, [baseRowHeights, rowResizePreview, sheetName])
-  const columnWidths = useMemo(
-    () => applyHiddenAxisSizes(sizedColumnWidths, controlledHiddenColumns),
-    [controlledHiddenColumns, sizedColumnWidths],
-  )
-  const rowHeights = useMemo(() => applyHiddenAxisSizes(sizedRowHeights, controlledHiddenRows), [controlledHiddenRows, sizedRowHeights])
+  const {
+    activeResizeColumn,
+    activeResizeRow,
+    clearColumnResizePreview,
+    clearRowResizePreview,
+    columnWidths,
+    commitColumnWidth,
+    commitRowHeight,
+    getPreviewColumnWidth,
+    getPreviewRowHeight,
+    hasColumnResizePreview,
+    hasRowResizePreview,
+    previewColumnWidth,
+    previewRowHeight,
+    rowHeights,
+    setActiveResizeColumn,
+    setActiveResizeRow,
+  } = useWorkbookAxisResizeState({
+    controlledColumnWidths,
+    controlledHiddenColumns,
+    controlledHiddenRows,
+    controlledRowHeights,
+    onColumnWidthChange,
+    onRowHeightChange,
+    sheetName,
+  })
   const sortedColumnWidthOverrides = useMemo(
     () =>
       Object.entries(columnWidths)
@@ -463,8 +433,8 @@ export function useWorkbookGridRenderState(input: {
     hasActiveHeaderDrag: activeHeaderDrag !== null,
     hasActiveResizeColumn: activeResizeColumn !== null,
     hasActiveResizeRow: activeResizeRow !== null,
-    hasColumnResizePreview: columnResizePreview !== null,
-    hasRowResizePreview: rowResizePreview !== null,
+    hasColumnResizePreview,
+    hasRowResizePreview,
     isEditingCell,
     isFillHandleDragging,
   })
@@ -559,38 +529,6 @@ export function useWorkbookGridRenderState(input: {
     syncRuntimeAxes,
     viewport,
   ])
-
-  useEffect(() => {
-    const preview = columnResizePreviewRef.current
-    if (!preview || preview.sheetName !== sheetName) {
-      return
-    }
-    if (baseColumnWidths[preview.columnIndex] !== preview.width) {
-      return
-    }
-    columnResizePreviewRef.current = null
-    setColumnResizePreview((current) =>
-      current?.sheetName === preview.sheetName && current.columnIndex === preview.columnIndex && current.width === preview.width
-        ? null
-        : current,
-    )
-  }, [baseColumnWidths, sheetName])
-
-  useEffect(() => {
-    const preview = rowResizePreviewRef.current
-    if (!preview || preview.sheetName !== sheetName) {
-      return
-    }
-    if (baseRowHeights[preview.rowIndex] !== preview.height) {
-      return
-    }
-    rowResizePreviewRef.current = null
-    setRowResizePreview((current) =>
-      current?.sheetName === preview.sheetName && current.rowIndex === preview.rowIndex && current.height === preview.height
-        ? null
-        : current,
-    )
-  }, [baseRowHeights, sheetName])
 
   useEffect(() => {
     if (!requiresLiveViewportState) {
@@ -786,124 +724,6 @@ export function useWorkbookGridRenderState(input: {
     setHostElement(node)
   }, [])
   const getVisibleRegion = useCallback(() => liveVisibleRegionRef.current, [])
-
-  const commitColumnWidth = useCallback(
-    (columnIndex: number, newSize: number) => {
-      const clampedSize = Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.round(newSize)))
-      if (input.onColumnWidthChange) {
-        input.onColumnWidthChange(columnIndex, clampedSize)
-        return
-      }
-      setColumnWidthsBySheet((current) => {
-        const nextSheetWidths = current[sheetName] ?? EMPTY_COLUMN_WIDTHS
-        if (nextSheetWidths[columnIndex] === clampedSize) {
-          return current
-        }
-        return {
-          ...current,
-          [sheetName]: {
-            ...nextSheetWidths,
-            [columnIndex]: clampedSize,
-          },
-        }
-      })
-    },
-    [input, sheetName],
-  )
-
-  const commitRowHeight = useCallback(
-    (rowIndex: number, newSize: number) => {
-      const clampedSize = Math.max(MIN_ROW_HEIGHT, Math.min(MAX_ROW_HEIGHT, Math.round(newSize)))
-      if (input.onRowHeightChange) {
-        input.onRowHeightChange(rowIndex, clampedSize)
-        return
-      }
-      setRowHeightsBySheet((current) => {
-        const nextSheetHeights = current[sheetName] ?? EMPTY_ROW_HEIGHTS
-        if (nextSheetHeights[rowIndex] === clampedSize) {
-          return current
-        }
-        return {
-          ...current,
-          [sheetName]: {
-            ...nextSheetHeights,
-            [rowIndex]: clampedSize,
-          },
-        }
-      })
-    },
-    [input, sheetName],
-  )
-
-  const previewColumnWidth = useCallback(
-    (columnIndex: number, newSize: number): number => {
-      const clampedSize = Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.round(newSize)))
-      const nextPreview = { sheetName, columnIndex, width: clampedSize }
-      columnResizePreviewRef.current = nextPreview
-      setColumnResizePreview((current) =>
-        current?.sheetName === nextPreview.sheetName &&
-        current.columnIndex === nextPreview.columnIndex &&
-        current.width === nextPreview.width
-          ? current
-          : nextPreview,
-      )
-      return clampedSize
-    },
-    [sheetName],
-  )
-
-  const previewRowHeight = useCallback(
-    (rowIndex: number, newSize: number): number => {
-      const clampedSize = Math.max(MIN_ROW_HEIGHT, Math.min(MAX_ROW_HEIGHT, Math.round(newSize)))
-      const nextPreview = { sheetName, rowIndex, height: clampedSize }
-      rowResizePreviewRef.current = nextPreview
-      setRowResizePreview((current) =>
-        current?.sheetName === nextPreview.sheetName && current.rowIndex === nextPreview.rowIndex && current.height === nextPreview.height
-          ? current
-          : nextPreview,
-      )
-      return clampedSize
-    },
-    [sheetName],
-  )
-
-  const getPreviewColumnWidth = useCallback(
-    (columnIndex: number): number | null => {
-      const preview = columnResizePreviewRef.current
-      return preview?.sheetName === sheetName && preview.columnIndex === columnIndex ? preview.width : null
-    },
-    [sheetName],
-  )
-
-  const getPreviewRowHeight = useCallback(
-    (rowIndex: number): number | null => {
-      const preview = rowResizePreviewRef.current
-      return preview?.sheetName === sheetName && preview.rowIndex === rowIndex ? preview.height : null
-    },
-    [sheetName],
-  )
-
-  const clearColumnResizePreview = useCallback(
-    (columnIndex: number) => {
-      const preview = columnResizePreviewRef.current
-      if (preview?.sheetName === sheetName && preview.columnIndex === columnIndex) {
-        columnResizePreviewRef.current = null
-      }
-      setColumnResizePreview((current) => (current?.sheetName === sheetName && current.columnIndex === columnIndex ? null : current))
-    },
-    [sheetName],
-  )
-
-  const clearRowResizePreview = useCallback(
-    (rowIndex: number) => {
-      const preview = rowResizePreviewRef.current
-      if (preview?.sheetName === sheetName && preview.rowIndex === rowIndex) {
-        rowResizePreviewRef.current = null
-      }
-      setRowResizePreview((current) => (current?.sheetName === sheetName && current.rowIndex === rowIndex ? null : current))
-    },
-    [sheetName],
-  )
 
   const computeAutofitColumnWidth = useCallback(
     (columnIndex: number): number => {
