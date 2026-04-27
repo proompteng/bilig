@@ -178,7 +178,7 @@ interface ClipboardPayload {
 }
 
 interface MaterializedTrackedEventChanges {
-  readonly changes: readonly WorkPaperCellChange[]
+  readonly changes: WorkPaperCellChange[]
   readonly canReusePublicChanges: boolean
   readonly ordered: boolean
 }
@@ -3219,37 +3219,72 @@ export class WorkPaper {
       nextVisibility.set(sheetId, created)
       return created
     }
+    const tryReadSmallTrackedEventChanges = (event: TrackedEngineEvent): WorkPaperChange[] | null => {
+      if (
+        event.invalidation === 'full' ||
+        event.patches !== undefined ||
+        event.changedCellIndices.length > 4 ||
+        event.hasInvalidatedRanges ||
+        event.hasInvalidatedRows ||
+        event.hasInvalidatedColumns
+      ) {
+        return null
+      }
+      if (event.changedCellIndices.length === 0) {
+        return []
+      }
+      const changes: WorkPaperCellChange[] = []
+      const cellKeys: number[] = []
+      let alreadySorted = true
+      let previousSheetOrder = -1
+      let previousRow = -1
+      let previousCol = -1
+      for (let index = 0; index < event.changedCellIndices.length; index += 1) {
+        const change = this.readSingleTrackedCellChange(event.changedCellIndices[index]!)
+        if (!change) {
+          continue
+        }
+        const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
+        for (let priorIndex = 0; priorIndex < cellKeys.length; priorIndex += 1) {
+          if (cellKeys[priorIndex] === cellKey) {
+            return null
+          }
+        }
+        cellKeys.push(cellKey)
+        const sheet = updateVisibility ? ensureMutableSheet(change.address.sheet, change.sheetName) : undefined
+        const sheetOrder = sheet?.order ?? sheetOrderFor(change.address.sheet)
+        if (
+          sheetOrder < previousSheetOrder ||
+          (sheetOrder === previousSheetOrder &&
+            (change.address.row < previousRow || (change.address.row === previousRow && change.address.col < previousCol)))
+        ) {
+          alreadySorted = false
+        }
+        if (sheet) {
+          if (change.newValue.tag === ValueTag.Empty) {
+            sheet.cells.delete(cellKey)
+          } else {
+            sheet.cells.set(cellKey, change.newValue)
+          }
+        }
+        changes.push(change)
+        previousSheetOrder = sheetOrder
+        previousRow = change.address.row
+        previousCol = change.address.col
+      }
+      return alreadySorted ? changes : orderWorkPaperCellChanges(changes, this.listSheetRecords(), event.explicitChangedCount)
+    }
     if (events.length === 1) {
       const event = events[0]!
-      if (
-        event.invalidation !== 'full' &&
-        event.patches === undefined &&
-        event.changedCellIndices.length === 1 &&
-        event.explicitChangedCount === 1 &&
-        event.changedInputCount === 1 &&
-        !event.hasInvalidatedRanges &&
-        !event.hasInvalidatedRows &&
-        !event.hasInvalidatedColumns
-      ) {
-        const change = this.readSingleTrackedCellChange(event.changedCellIndices[0]!)
-        if (change) {
-          if (updateVisibility) {
-            const sheet = ensureMutableSheet(change.address.sheet, change.sheetName)
-            const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
-            if (change.newValue.tag === ValueTag.Empty) {
-              sheet.cells.delete(cellKey)
-            } else {
-              sheet.cells.set(cellKey, change.newValue)
-            }
-          }
-          return { changes: [change], nextVisibility }
-        }
+      const smallChanges = tryReadSmallTrackedEventChanges(event)
+      if (smallChanges) {
+        return { changes: smallChanges, nextVisibility }
       }
       const materializedEventChanges = this.materializeTrackedEventChanges(event)
       const eventChanges = materializedEventChanges.changes
       if (!updateVisibility && materializedEventChanges.canReusePublicChanges && materializedEventChanges.ordered) {
         return {
-          changes: [...eventChanges],
+          changes: eventChanges,
           nextVisibility,
         }
       }

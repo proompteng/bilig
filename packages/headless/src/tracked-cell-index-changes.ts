@@ -6,7 +6,7 @@ import type { WorkPaperCellChange } from './work-paper-types.js'
 const COLUMN_LABEL_CACHE: string[] = []
 
 export interface MaterializedTrackedIndexChanges {
-  readonly changes: readonly WorkPaperCellChange[]
+  readonly changes: WorkPaperCellChange[]
   readonly ordered: boolean
 }
 

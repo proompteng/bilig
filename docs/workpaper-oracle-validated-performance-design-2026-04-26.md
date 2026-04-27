@@ -211,6 +211,24 @@ initial sliding-aggregate work:
 - Reused a process-level column-label cache when materializing tracked public
   changes, reducing repeated A1-label construction for wide fanout events.
 
+## Additional Implemented Tranche: Current Scalar And Small Events
+
+The `2026-04-27` heartbeat pass added two production-only changes and rejected
+two measured dead ends:
+
+- Direct scalar formulas in the post-recalc direct-formula loop can now be
+  reapplied from current cell-store operands without routing through the generic
+  direct formula evaluator when no numeric delta is available.
+- The no-visibility tracked-event path now materializes tiny one-to-four-cell
+  events directly from cell indices instead of first building a generic tracked
+  event change payload. This targets lookup and sliding aggregate edits without
+  changing event semantics.
+- A broader exact/approximate lookup evaluator bypass was tried and removed
+  because the approximate rows became slower in focused probes and the full
+  suite did not hold the improvement.
+- An initial-load numeric write/index deferral was tried and removed because it
+  moved cost into the measured sliding aggregate mutation path.
+
 ## Verification Commands
 
 Targeted test command:
@@ -223,25 +241,29 @@ Competitive benchmark command:
 
 ```sh
 pnpm --silent bench:workpaper:competitive > /tmp/workpaper-competitive-after-delta-and-tracking.json
+pnpm --silent bench:workpaper:competitive > /tmp/workpaper-competitive-after-scalar-small-event-reduced.json
 ```
 
 ## Observed Result
 
-The latest local sample after the additional tranche produced a `38`
-comparable workload scorecard with `17` WorkPaper wins and `21` HyperFormula
-wins. This is not complete and does not satisfy the SOTA target. It is still a
-real structural improvement over the post-commit baseline in several rows:
+The latest local sample on the reduced current tree produced a `38` comparable
+workload scorecard with `21` WorkPaper wins and `17` HyperFormula wins. This is
+not complete and does not satisfy the SOTA target, but it is a real improvement
+over the prior committed `17` / `21` scorecard. Latest red rows include:
 
-- `build-parser-cache-row-templates`: `47.616 ms` WorkPaper mean in the latest
-  sample, still red at `1.795x` slower than HyperFormula.
-- `build-mixed-content`: `11.520 ms` WorkPaper mean, still red at `1.415x`
+- `aggregate-overlapping-sliding-window`: `0.120 ms` WorkPaper mean, still red
+  at `3.368x` slower than HyperFormula.
+- `lookup-with-column-index`: `0.136 ms` WorkPaper mean, still red at `3.071x`
   slower.
-- `batch-edit-single-column`: `0.898 ms` WorkPaper mean, still red at `1.713x`
+- `lookup-with-column-index-after-column-write`: `0.066 ms` WorkPaper mean,
+  still red at `2.208x` slower.
+- `lookup-approximate-sorted`: `0.060 ms` WorkPaper mean, still red at `2.186x`
   slower.
-- `single-edit-fanout`: `1.373 ms` WorkPaper mean, nearly closed but still red
-  at `1.117x` slower.
-- `rebuild-runtime-from-snapshot`: `44.431 ms` WorkPaper mean, still red at
-  `1.403x` slower.
+- `batch-edit-recalc`: `1.144 ms` WorkPaper mean, still red at `1.912x` slower.
+- `build-parser-cache-row-templates`: `45.845 ms` WorkPaper mean, still red at
+  `1.828x` slower.
+- `rebuild-runtime-from-snapshot`: `41.769 ms` WorkPaper mean, still red at
+  `1.386x` slower.
 
 The sliding aggregate row remains red, but its WorkPaper mean improved
 materially from the earlier local samples:
@@ -253,6 +275,8 @@ materially from the earlier local samples:
 - latest `8` sample run after the tiny merge fast path: about `0.141 ms`
 - latest unchanged competitive harness sample after the build/scalar tranche:
   about `0.124 ms`
+- latest reduced current-tree sample after direct scalar current-value and
+  small-event materialization: about `0.120 ms`
 
 The row is now counter-gated: `directAggregateDeltaApplications = 1` and
 `directAggregateDeltaOnlyRecalcSkips = 1` for the sliding mutation sample, with

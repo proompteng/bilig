@@ -2,6 +2,7 @@ import { Effect } from 'effect'
 import { formatAddress, parseCellAddress } from '@bilig/formula'
 import type { EngineOp, EngineOpBatch } from '@bilig/workbook-domain'
 import {
+  ErrorCode,
   FormulaMode,
   ValueTag,
   type CellRangeRef,
@@ -56,6 +57,7 @@ type StructuralAxisOp = Extract<
 >
 
 type DerivedOp = Extract<EngineOp, { kind: 'upsertSpillRange' | 'deleteSpillRange' | 'upsertPivotTable' | 'deletePivotTable' }>
+type DirectScalarCurrentOperand = { kind: 'number'; value: number } | { kind: 'error'; code: ErrorCode }
 
 interface ExactLookupImpactEntry {
   readonly formulaCellIndex: number
@@ -1503,6 +1505,97 @@ export function createEngineOperationService(args: {
     return true
   }
 
+  const applyDirectFormulaCurrentResult = (cellIndex: number, result: DirectScalarCurrentOperand): boolean => {
+    const cellStore = args.state.workbook.cellStore
+    const beforeTag = (cellStore.tags[cellIndex] as ValueTag | undefined) ?? ValueTag.Empty
+    const beforeNumber = cellStore.numbers[cellIndex] ?? 0
+    const beforeError = (cellStore.errors[cellIndex] as ErrorCode | undefined) ?? ErrorCode.None
+    cellStore.flags[cellIndex] = (cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)
+    cellStore.versions[cellIndex] = (cellStore.versions[cellIndex] ?? 0) + 1
+    cellStore.stringIds[cellIndex] = 0
+    if (result.kind === 'number') {
+      cellStore.tags[cellIndex] = ValueTag.Number
+      cellStore.numbers[cellIndex] = result.value
+      cellStore.errors[cellIndex] = ErrorCode.None
+      cellStore.onSetValue?.(cellIndex)
+      if (beforeTag !== ValueTag.Number || !Object.is(beforeNumber, result.value)) {
+        args.state.workbook.notifyCellValueWritten(cellIndex)
+      }
+      return true
+    }
+    cellStore.tags[cellIndex] = ValueTag.Error
+    cellStore.numbers[cellIndex] = 0
+    cellStore.errors[cellIndex] = result.code
+    cellStore.onSetValue?.(cellIndex)
+    if (beforeTag !== ValueTag.Error || beforeError !== result.code) {
+      args.state.workbook.notifyCellValueWritten(cellIndex)
+    }
+    return true
+  }
+
+  const readDirectScalarCurrentOperand = (operand: RuntimeDirectScalarOperand): DirectScalarCurrentOperand | undefined => {
+    switch (operand.kind) {
+      case 'literal-number':
+        return { kind: 'number', value: operand.value }
+      case 'error':
+        return { kind: 'error', code: operand.code }
+      case 'cell': {
+        const cellStore = args.state.workbook.cellStore
+        const tag = (cellStore.tags[operand.cellIndex] as ValueTag | undefined) ?? ValueTag.Empty
+        switch (tag) {
+          case ValueTag.Number:
+            return { kind: 'number', value: cellStore.numbers[operand.cellIndex] ?? 0 }
+          case ValueTag.Boolean:
+            return { kind: 'number', value: (cellStore.numbers[operand.cellIndex] ?? 0) !== 0 ? 1 : 0 }
+          case ValueTag.Empty:
+            return { kind: 'number', value: 0 }
+          case ValueTag.Error:
+            return { kind: 'error', code: (cellStore.errors[operand.cellIndex] as ErrorCode | undefined) ?? ErrorCode.None }
+          case ValueTag.String:
+            return { kind: 'error', code: ErrorCode.Value }
+        }
+      }
+    }
+  }
+
+  const applyDirectScalarCurrentValue = (cellIndex: number, directScalar: RuntimeDirectScalarDescriptor): boolean => {
+    let result: DirectScalarCurrentOperand | undefined
+    if (directScalar.kind === 'abs') {
+      const operand = readDirectScalarCurrentOperand(directScalar.operand)
+      result = operand?.kind === 'number' ? { kind: 'number', value: Math.abs(operand.value) } : operand
+    } else {
+      const left = readDirectScalarCurrentOperand(directScalar.left)
+      const right = readDirectScalarCurrentOperand(directScalar.right)
+      if (!left || !right) {
+        return false
+      }
+      if (left.kind === 'error') {
+        result = left
+      } else if (right.kind === 'error') {
+        result = right
+      } else {
+        switch (directScalar.operator) {
+          case '+':
+            result = { kind: 'number', value: left.value + right.value }
+            break
+          case '-':
+            result = { kind: 'number', value: left.value - right.value }
+            break
+          case '*':
+            result = { kind: 'number', value: left.value * right.value }
+            break
+          case '/':
+            result = right.value === 0 ? { kind: 'error', code: ErrorCode.Div0 } : { kind: 'number', value: left.value / right.value }
+            break
+        }
+      }
+    }
+    if (!result) {
+      return false
+    }
+    return applyDirectFormulaCurrentResult(cellIndex, result)
+  }
+
   const countPostRecalcDirectFormulaMetric = (cellIndex: number, counts: DirectFormulaMetricCounts): void => {
     const formula = args.state.formulas.get(cellIndex)
     if (!formula || (formula.directScalar === undefined && formula.directAggregate === undefined)) {
@@ -2671,6 +2764,17 @@ export function createEngineOperationService(args: {
             postRecalcChanged.push(cellIndex)
             return
           }
+          const formula = args.state.formulas.get(cellIndex)
+          if (
+            !didRunRecalc &&
+            formula?.directScalar !== undefined &&
+            !formula.compiled.producesSpill &&
+            applyDirectScalarCurrentValue(cellIndex, formula.directScalar)
+          ) {
+            countPostRecalcDirectFormulaMetric(cellIndex, postRecalcDirectFormulaMetrics)
+            postRecalcChanged.push(cellIndex)
+            return
+          }
           countPostRecalcDirectFormulaMetric(cellIndex, postRecalcDirectFormulaMetrics)
           const changedCellIndices = args.evaluateDirectFormula(cellIndex)
           postRecalcChanged.push(cellIndex)
@@ -3396,6 +3500,17 @@ export function createEngineOperationService(args: {
             if (formula?.directScalar !== undefined) {
               addEngineCounter(args.state.counters, 'directScalarDeltaApplications')
             }
+            postRecalcChanged.push(cellIndex)
+            return
+          }
+          const formula = args.state.formulas.get(cellIndex)
+          if (
+            !didRunRecalc &&
+            formula?.directScalar !== undefined &&
+            !formula.compiled.producesSpill &&
+            applyDirectScalarCurrentValue(cellIndex, formula.directScalar)
+          ) {
+            countPostRecalcDirectFormulaMetric(cellIndex, postRecalcDirectFormulaMetrics)
             postRecalcChanged.push(cellIndex)
             return
           }
