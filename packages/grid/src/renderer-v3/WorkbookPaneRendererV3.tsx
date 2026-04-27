@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from 'react'
+import { memo, useCallback, useEffect, useRef } from 'react'
 import type { GridGeometrySnapshot } from '../gridGeometry.js'
 import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { GridCameraStore } from '../runtime/gridCameraStore.js'
@@ -7,8 +7,7 @@ export { TYPEGPU_V3_ACTIVE_RESOURCE_DEFER_MS, GridDrawSchedulerV3, shouldDeferTy
 export { resolveTypeGpuV3DrawScrollSnapshot } from './workbook-pane-renderer-runtime.js'
 import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
-import { WorkbookPaneRendererRuntimeV3 } from './workbook-pane-renderer-runtime.js'
-import { WorkbookPaneSurfaceRuntimeV3 } from './workbook-pane-surface-runtime.js'
+import { WorkbookPaneRendererHostRuntimeV3 } from './workbook-pane-renderer-host-runtime.js'
 
 export interface WorkbookPaneRendererV3Props {
   readonly active: boolean
@@ -35,88 +34,51 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   scrollTransformStore = null,
   tilePanes,
 }: WorkbookPaneRendererV3Props) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const rendererRuntimeRef = useRef<WorkbookPaneRendererRuntimeV3 | null>(null)
-  const surfaceRuntimeRef = useRef<WorkbookPaneSurfaceRuntimeV3 | null>(null)
-  if (!rendererRuntimeRef.current) {
-    rendererRuntimeRef.current = new WorkbookPaneRendererRuntimeV3()
+  const hostRuntimeRef = useRef<WorkbookPaneRendererHostRuntimeV3 | null>(null)
+  if (!hostRuntimeRef.current) {
+    hostRuntimeRef.current = new WorkbookPaneRendererHostRuntimeV3()
   }
-  if (!surfaceRuntimeRef.current) {
-    surfaceRuntimeRef.current = new WorkbookPaneSurfaceRuntimeV3()
-  }
-  const rendererRuntime = rendererRuntimeRef.current
-  const surfaceRuntime = surfaceRuntimeRef.current
+  const hostRuntime = hostRuntimeRef.current
+
+  const setCanvasRef = useCallback(
+    (canvas: HTMLCanvasElement | null) => {
+      hostRuntime.setCanvas(canvas)
+    },
+    [hostRuntime],
+  )
 
   useEffect(() => {
-    return surfaceRuntime.subscribe((surfaceSnapshot) => {
-      rendererRuntime.updateState({
-        backend: surfaceSnapshot.backend,
-        surface: surfaceSnapshot.surface,
-        webGpuReady: surfaceSnapshot.webGpuReady,
-      })
-      rendererRuntime.drawNow()
-      rendererRuntime.requestDraw()
-    })
-  }, [rendererRuntime, surfaceRuntime])
-
-  useEffect(() => {
-    surfaceRuntime.setHost(host)
-    return () => surfaceRuntime.setHost(null)
-  }, [host, surfaceRuntime])
-
-  useEffect(() => {
-    surfaceRuntime.setActive(active)
-    return () => surfaceRuntime.setActive(false)
-  }, [active, surfaceRuntime])
-
-  useEffect(() => {
-    surfaceRuntime.setCanvas(active && host ? canvasRef.current : null)
-    return () => surfaceRuntime.setCanvas(null)
-  }, [active, host, surfaceRuntime])
-
-  useEffect(() => {
-    const surfaceSnapshot = surfaceRuntime.getSnapshot()
-    rendererRuntime.updateState({
+    hostRuntime.updateProps({
       active,
-      backend: surfaceSnapshot.backend,
       cameraStore,
       geometry,
       headerPanes,
+      host,
       overlay: overlay ?? null,
       overlayBuilder: overlayBuilder ?? null,
       preloadTilePanes,
       scrollTransformStore,
-      surface: surfaceSnapshot.surface,
       tilePanes,
-      webGpuReady: surfaceSnapshot.webGpuReady,
     })
-    rendererRuntime.drawNow()
-    rendererRuntime.requestDraw()
   }, [
     active,
     cameraStore,
     geometry,
     headerPanes,
+    host,
+    hostRuntime,
     overlay,
     overlayBuilder,
     preloadTilePanes,
-    rendererRuntime,
     scrollTransformStore,
-    surfaceRuntime,
     tilePanes,
   ])
 
   useEffect(() => {
-    const canvas = canvasRef.current
     return () => {
-      surfaceRuntime.dispose()
-      rendererRuntime.dispose()
-      if (canvas) {
-        canvas.width = 0
-        canvas.height = 0
-      }
+      hostRuntime.dispose()
     }
-  }, [rendererRuntime, surfaceRuntime])
+  }, [hostRuntime])
 
   if (!active || !host) {
     return null
@@ -131,7 +93,7 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
       data-testid="grid-pane-renderer"
       data-v3-body-world-x={geometry?.camera.bodyWorldX ?? 0}
       data-v3-body-world-y={geometry?.camera.bodyWorldY ?? 0}
-      ref={canvasRef}
+      ref={setCanvasRef}
       style={{ contain: 'strict' }}
     />
   )

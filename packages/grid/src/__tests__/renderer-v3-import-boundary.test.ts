@@ -31,5 +31,7 @@ describe('renderer v3 import boundary', () => {
     const source = readFileSync(join(GRID_SRC_ROOT, 'renderer-v3/WorkbookPaneRendererV3.tsx'), 'utf8')
 
     expect(source).not.toContain('useState')
+    expect(source).not.toContain('WorkbookPaneRendererRuntimeV3')
+    expect(source).not.toContain('WorkbookPaneSurfaceRuntimeV3')
   })
 })
