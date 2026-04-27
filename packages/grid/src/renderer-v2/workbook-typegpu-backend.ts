@@ -126,7 +126,14 @@ export function drawWorkbookTypeGpuFrame(input: {
 }
 
 function markVisibleTilePanes(cache: TileGpuCache, panes: readonly WorkbookRenderPaneState[]): void {
-  cache.markVisible(new Set(panes.map((pane) => buildTileGpuCacheKey(pane.packedScene))))
+  cache.beginVisibilityPass()
+  let marked = 0
+  for (const pane of panes) {
+    if (cache.markVisibleKey(buildTileGpuCacheKey(pane.packedScene))) {
+      marked += 1
+    }
+  }
+  cache.finishVisibilityPass(marked)
 }
 
 export function resolveTypeGpuDrawPanes(input: {

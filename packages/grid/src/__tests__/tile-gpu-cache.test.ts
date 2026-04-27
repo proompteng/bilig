@@ -47,6 +47,16 @@ describe('TileGpuCache', () => {
     expect(cache.get(buildTileGpuCacheKey(newer))?.packet.generation).toBe(2)
   })
 
+  test('updates tile entries in place when newer packets arrive', () => {
+    const cache = new TileGpuCache()
+    const first = cache.upsert(createPacket(1))
+    const updated = cache.upsert(createPacket(2))
+
+    expect(updated).toBe(first)
+    expect(updated.packet.generation).toBe(2)
+    expect(cache.get(updated.key)).toBe(updated)
+  })
+
   test('evicts least-recent non-visible tiles first', () => {
     const cache = new TileGpuCache()
     const first = cache.upsert(createPacket(1, 0))
@@ -83,6 +93,22 @@ describe('TileGpuCache', () => {
     }
   })
 
+  test('marks visible tiles from any iterable without replacing entries', () => {
+    const cache = new TileGpuCache()
+    const first = cache.upsert(createPacket(1, 0))
+    const second = cache.upsert(createPacket(1, 128))
+
+    cache.markVisible(
+      (function* visibleKeys() {
+        yield second.key
+      })(),
+    )
+
+    expect(cache.get(first.key)?.visible).toBe(false)
+    expect(cache.get(second.key)).toBe(second)
+    expect(second.visible).toBe(true)
+  })
+
   test('rejects invalid packets', () => {
     const cache = new TileGpuCache()
     expect(() => cache.upsert({ ...createPacket(1), rects: new Float32Array(1) })).toThrow(/rect buffer too small/u)
@@ -111,6 +137,18 @@ describe('TileGpuCache', () => {
     }
 
     expect(cache.findStaleValid(desired)).toBeNull()
+  })
+
+  test('finds the most recently used stale-valid overlapping tile without changing cache identity', () => {
+    const cache = new TileGpuCache()
+    const older = cache.upsert(createPacket(1, 0))
+    const newer = cache.upsert(createPacket(1, 64))
+    cache.get(older.key)
+    cache.get(newer.key)
+
+    const match = cache.findStaleValid({ ...newer.packet.key, colStart: 96, colEnd: 223 })
+
+    expect(match).toBe(newer)
   })
 
   test('does not use stale tiles across axis or freeze revisions', () => {

@@ -4,15 +4,12 @@ import { noteTypeGpuTileCacheEviction, noteTypeGpuTileCacheStaleLookup, noteType
 
 export interface TileGpuCacheEntry {
   readonly key: string
-  readonly packet: GridScenePacketV2
-  readonly visible: boolean
-  readonly lastUsedSeq: number
-}
-
-interface MutableTileGpuCacheEntry extends TileGpuCacheEntry {
   packet: GridScenePacketV2
   visible: boolean
   lastUsedSeq: number
+}
+
+interface MutableTileGpuCacheEntry extends TileGpuCacheEntry {
   compatibilityKey: string
 }
 
@@ -61,7 +58,7 @@ export class TileGpuCache {
 
   findStaleValid(desiredKey: GridTileKeyV2, options?: { readonly excludeKey?: string | undefined }): TileGpuCacheEntry | null {
     const bucket = this.compatibilityBuckets.get(buildTileGpuCompatibilityKey(desiredKey))
-    let match: TileGpuCacheEntry | null = null
+    let match: MutableTileGpuCacheEntry | null = null
     let scannedEntries = 0
     for (const entry of bucket ?? []) {
       scannedEntries += 1
@@ -76,12 +73,8 @@ export class TileGpuCache {
     if (!match) {
       return null
     }
-    const mutableMatch = this.entries.get(match.key)
-    if (!mutableMatch) {
-      return match
-    }
-    this.touch(mutableMatch)
-    return mutableMatch
+    this.touch(match)
+    return match
   }
 
   get(key: string): TileGpuCacheEntry | null {
@@ -93,30 +86,40 @@ export class TileGpuCache {
     return entry
   }
 
-  markVisible(keys: ReadonlySet<string>): void {
+  beginVisibilityPass(): void {
     for (const key of this.visibleKeys) {
-      if (keys.has(key)) {
-        continue
-      }
       const entry = this.entries.get(key)
       if (entry) {
         entry.visible = false
       }
-      this.visibleKeys.delete(key)
     }
+    this.visibleKeys.clear()
+  }
 
+  markVisibleKey(key: string): boolean {
+    const entry = this.entries.get(key)
+    if (!entry) {
+      return false
+    }
+    entry.visible = true
+    this.visibleKeys.add(key)
+    this.touch(entry)
+    return true
+  }
+
+  finishVisibilityPass(marked: number): void {
+    noteTypeGpuTileCacheVisibleMark(marked)
+  }
+
+  markVisible(keys: Iterable<string>): void {
+    this.beginVisibilityPass()
     let marked = 0
     for (const key of keys) {
-      const entry = this.entries.get(key)
-      if (!entry) {
-        continue
+      if (this.markVisibleKey(key)) {
+        marked += 1
       }
-      marked += 1
-      entry.visible = true
-      this.touch(entry)
-      this.visibleKeys.add(key)
     }
-    noteTypeGpuTileCacheVisibleMark(marked)
+    this.finishVisibilityPass(marked)
   }
 
   evictTo(maxEntries: number): void {
@@ -186,11 +189,14 @@ export function syncTileGpuCacheFromPanes(input: {
   readonly panes: readonly { readonly packedScene: GridScenePacketV2 }[]
   readonly maxEntries?: number | undefined
 }): void {
-  const visibleKeys = new Set<string>()
+  input.cache.beginVisibilityPass()
+  let marked = 0
   for (const pane of input.panes) {
-    visibleKeys.add(input.cache.upsert(pane.packedScene).key)
+    if (input.cache.markVisibleKey(input.cache.upsert(pane.packedScene).key)) {
+      marked += 1
+    }
   }
-  input.cache.markVisible(visibleKeys)
+  input.cache.finishVisibilityPass(marked)
   input.cache.evictTo(input.maxEntries ?? 128)
 }
 

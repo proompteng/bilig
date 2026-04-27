@@ -156,7 +156,7 @@ test.describe('@browser-perf web app scroll performance', () => {
     await writeFile(testInfo.outputPath('scroll-perf-wide-250k-frozen.json'), JSON.stringify(report, null, 2), 'utf8')
 
     expect(report.fixture?.id).toBe('wide-mixed-frozen-250k')
-    expectSmoothBrowse(report, { ignoreInitialSamples: 10, p99Max: 35, longTaskMax: 600, maxViewportSubscriptions: 2 })
+    expectSmoothBrowse(report, { ignoreInitialSamples: 10, p99Max: 35, longTaskMax: 60, maxViewportSubscriptions: 2 })
     expectQuietShell(report, { maxSurfaceCommits: 4 })
     expect(report.counters.damagePatches).toBe(0)
     expect(report.counters.scenePacketRefreshes).toBe(0)
