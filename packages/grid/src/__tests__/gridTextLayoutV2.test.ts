@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'vitest'
+import { GlyphKeyRegistryV3 } from '../renderer-v3/glyph-key.js'
+import { TextAtlasPagesV3 } from '../renderer-v3/text-atlas-pages.js'
 import { resolveCellTextLayoutV2 } from '../text/gridTextLayoutV2.js'
 import { createFallbackTextMetricsProvider } from '../text/gridTextMetrics.js'
 import type { FontKey } from '../text/gridTextPacket.js'
-import { GlyphAtlasV2 } from '../renderer-v2/glyphAtlasV2.js'
-import { buildTextGlyphInstanceBuffer } from '../renderer-v2/text-glyph-buffer.js'
 
 const fontKey: FontKey = {
   dprBucket: 2,
@@ -49,28 +49,31 @@ describe('gridTextLayoutV2', () => {
     expect(layout.decorations.length).toBe(layout.lines.length)
   })
 
-  test('packs glyph instances and queues missing atlas glyphs', () => {
+  test('emits glyph placements that can be registered in V3 atlas pages', () => {
     const layout = resolveCellTextLayoutV2({
       cell: { col: 0, row: 0 },
       cellWorldRect: { x: 0, y: 0, width: 104, height: 22 },
       fontKey,
       text: 'A',
     })
-    const atlas = new GlyphAtlasV2()
-    const first = buildTextGlyphInstanceBuffer({ atlas, layouts: [layout] })
-
-    expect(first.glyphCount).toBe(1)
-    expect(first.missingGlyphCount).toBe(1)
-    expect(atlas.drainMissing()).toHaveLength(1)
-
     const firstGlyph = layout.lines[0]?.glyphs[0]
     if (!firstGlyph) {
       throw new Error('expected first glyph')
     }
-    atlas.registerGlyph(firstGlyph.atlasGlyphKey, { height: 14, pageId: 0, width: 8, x: 10, y: 12 })
-    const second = buildTextGlyphInstanceBuffer({ atlas, layouts: [layout] })
 
-    expect(second.missingGlyphCount).toBe(0)
-    expect(Array.from(second.floats.slice(4, 10))).toEqual([0, 1, 10, 12, 8, 14])
+    const registry = new GlyphKeyRegistryV3()
+    const glyphId = registry.intern({
+      dprBucket: fontKey.dprBucket,
+      fontInternId: 1,
+      glyph: firstGlyph.glyph,
+    })
+    const atlas = new TextAtlasPagesV3()
+    atlas.upsertPage({ height: 64, pageId: 1, width: 64 })
+    const record = atlas.registerGlyph({ glyphId, pageId: 1, u0: 0.1, u1: 0.2, v0: 0.3, v1: 0.4 })
+
+    expect(firstGlyph.atlasGlyphKey).toContain(':A')
+    expect(record.glyphId).toBe(glyphId)
+    expect(atlas.resolveGlyph(glyphId)).toBe(record)
+    expect(atlas.stats().dirtyPageCount).toBe(1)
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTextDecorationRectsFromScene, buildTextQuads, buildTextQuadsFromScene } from '../renderer-v2/line-text-quad-buffer.js'
+import { buildTextDecorationRectsFromScene, buildTextQuads, buildTextQuadsFromScene } from '../renderer-v3/line-text-quad-buffer.js'
 
 const atlas = {
   intern(font: string, glyph: string) {

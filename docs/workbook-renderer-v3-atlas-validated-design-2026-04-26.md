@@ -35,8 +35,8 @@ Latest implementation note:
 - `WorkbookGridSurface.tsx` no longer rebuilds V2 geometry snapshots from raw width/hidden records. Its TypeGPU geometry now comes from `useWorkbookGridRenderState().getLiveGeometrySnapshot()`, which reuses the hook/runtime axis indexes instead of constructing a second React-owned geometry path.
 - `WorkbookGridSurface.tsx` now mounts `WorkbookPaneRendererV3`, and the isolated renderer route uses the V3 tile-pane API too.
 - V3 tile-pane TypeGPU ownership now lives under `packages/grid/src/renderer-v3/typegpu-workbook-backend-v3.ts`,
-  `typegpu-tile-buffer-pool.ts`, and `typegpu-tile-render-pass.ts`. These modules still reuse low-level TypeGPU surface, atlas,
-  header, and overlay helpers from `renderer-v2`, but V3 data-tile resource sync/draw/residency no longer lives in the V2 workbook backend.
+  `typegpu-tile-buffer-pool.ts`, and `typegpu-tile-render-pass.ts`. V3 now owns its low-level TypeGPU surface, atlas, header, text,
+  and overlay helpers, so data-tile resource sync/draw/residency no longer lives in the V2 workbook backend.
 - V3 tile content buffers are now separated from tile placement uniforms: body and frozen placements share rect/text buffers by numeric tile ID,
   but each placement gets its own surface uniform and bind groups. This preserves content reuse without drawing frozen/body placements with a
   shared mutable uniform.
@@ -53,7 +53,7 @@ Latest implementation note:
 
 ## 1. Validation Verdict
 
-The Atlas response is directionally correct: the mounted grid path is no longer a legacy DOM/canvas renderer, and data rendering now enters through fixed render tiles. The mounted product path now uses `WorkbookPaneRendererV3` and V3 tile panes instead of a V2 scene-packet adapter. The V3 data-tile backend, TypeGPU primitives, pane layout, header/overlay resource helpers, and atlas manager are now V3-owned. Remaining `renderer-v2` modules are legacy scene-packet, text-layout, cache, camera/debug helper, and test-oracle code.
+The Atlas response is directionally correct: the mounted grid path is no longer a legacy DOM/canvas renderer, and data rendering now enters through fixed render tiles. The mounted product path now uses `WorkbookPaneRendererV3` and V3 tile panes instead of a V2 scene-packet adapter. The V3 data-tile backend, TypeGPU primitives, pane layout, text/atlas helpers, draw loop, camera store, and header/overlay resource helpers are now V3-owned. Remaining `renderer-v2` modules are legacy scene-packet, cache, debug-helper, and test-oracle code.
 
 The current hot path still has these validated properties:
 
@@ -62,7 +62,7 @@ The current hot path still has these validated properties:
 - Product data rendering no longer imports `packages/grid/src/gridResidentDataLayer.ts`; it now uses fixed render tiles and V3 tile-pane placement.
 - `packages/grid/src/renderer-v2/tile-gpu-cache.ts` remains only as a legacy primitive/test helper and no longer uses array materialization plus `toSorted()` for stale lookup and eviction after this implementation tranche.
 - `packages/grid/src/renderer-v3/typegpu-workbook-backend-v3.ts` owns V3 tile-pane drawing and uses `TileResidencyV3<GridRenderTile>` plus numeric tile IDs instead of `TileGpuCache` and serialized V2 scene packet keys.
-- `packages/grid/src/renderer-v2/typegpu-atlas-manager.ts` still exists for legacy text-layout tests; the mounted V3 renderer uses `packages/grid/src/renderer-v3/typegpu-atlas-manager.ts` with dirty-page upload support.
+- legacy V2 text-layout and atlas helpers were deleted; text layout, quad packing, and atlas dirty-page tests now target `packages/grid/src/renderer-v3`.
 - `packages/grid/src/renderer-v3/dynamic-overlay-batch.ts` now builds interaction overlays without `GridScenePacketV2`; `WorkbookPaneRendererV3` passes those batches to a dedicated TypeGPU overlay buffer path instead of appending a fake overlay pane.
 - `packages/grid/src/gridHeaderPanes.ts` now builds header batches without `GridScenePacketV2`; `WorkbookPaneRendererV3` passes those batches to a dedicated TypeGPU header buffer path instead of appending header scene packets to data panes.
 - Browser perf tests now need to be tightened around the fixed-tile path, since resident-scene refreshes are no longer a normal product runtime behavior.
@@ -70,6 +70,8 @@ The current hot path still has these validated properties:
 Important corrections to the Atlas text:
 
 - `packages/grid/src/renderer-v2/typegpu-buffer-pool.ts` has been deleted; the equivalent resource-signature coverage now targets V3 fixed tiles and V3 TypeGPU primitives.
+- `packages/grid/src/renderer-v2/typegpu-atlas-manager.ts`, `line-text-layout.ts`, `line-text-quad-buffer.ts`, `glyphAtlasV2.ts`, and
+  `text-glyph-buffer.ts` have been deleted; remaining text/atlas coverage targets the V3 text path directly.
 - The hashing work still exists during packet packing in `packages/grid/src/renderer-v2/scene-packet-v2.ts`, where `resolveRectSignature()` and `resolveTextSignature()` walk the full rect/text payload.
 - `scene-packet-v2.ts` still exists for legacy V2 tests and backend compatibility helpers, but it no longer wraps mounted product V3 fixed-tile
   payloads, local fallback V3 tiles, or worker render-tile delta replacements.
@@ -246,8 +248,8 @@ Implement:
 
 Files:
 
-- `packages/grid/src/renderer-v2/typegpu-atlas-manager.ts`
-- `packages/grid/src/renderer-v2/line-text-quad-buffer.ts`
+- deleted `packages/grid/src/renderer-v2/typegpu-atlas-manager.ts`
+- deleted `packages/grid/src/renderer-v2/line-text-quad-buffer.ts`
 - new `packages/grid/src/renderer-v3/glyph-key.ts`
 - new `packages/grid/src/renderer-v3/text-atlas-pages.ts`
 - new `packages/grid/src/renderer-v3/text-run-cache.ts`
@@ -367,6 +369,11 @@ Completed in the resident-scene deletion tranche:
 - `packages/grid/src/renderer-v2/typegpu-backend.ts`, `typegpu-buffer-pool.ts`, `pane-buffer-cache.ts`, `pane-layout.ts`, and
   `pane-scene-types.ts` were deleted after V3 primitives, tile/layer buffer pools, and pane layout owned the mounted path. Remaining
   resource-signature and capacity tests now target the V3 APIs directly.
+- `packages/grid/src/renderer-v2/typegpu-atlas-manager.ts`, `line-text-layout.ts`, `line-text-quad-buffer.ts`, `glyphAtlasV2.ts`, and
+  `text-glyph-buffer.ts` were deleted after byte-identical line layout and quad tests were moved to V3 and the V3 atlas/page registry
+  covered the remaining glyph residency behavior.
+- `packages/grid/src/renderer-v2/gridRenderLoop.ts` and `gridCameraStore.ts` were deleted after their tests were moved to the V3 draw loop
+  and runtime camera store owners.
 
 Remaining work from this design:
 

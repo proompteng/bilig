@@ -35,6 +35,19 @@ describe('renderer v3 import boundary', () => {
     expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/typegpu-backend.ts'))).toBe(false)
   })
 
+  test('legacy V2 text and atlas resource stack is deleted', () => {
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/glyphAtlasV2.ts'))).toBe(false)
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/text-glyph-buffer.ts'))).toBe(false)
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/line-text-layout.ts'))).toBe(false)
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/line-text-quad-buffer.ts'))).toBe(false)
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/typegpu-atlas-manager.ts'))).toBe(false)
+  })
+
+  test('legacy V2 loop and camera store shims are deleted', () => {
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/gridRenderLoop.ts'))).toBe(false)
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/gridCameraStore.ts'))).toBe(false)
+  })
+
   test('legacy renderer-v2 barrel is deleted', () => {
     expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/index.ts'))).toBe(false)
   })

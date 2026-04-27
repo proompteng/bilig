@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'vitest'
 import { createGridAxisWorldIndex } from '../gridAxisWorldIndex.js'
 import { createGridGeometrySnapshotFromAxes } from '../gridGeometry.js'
 import { getGridMetrics } from '../gridMetrics.js'
-import { GridCameraStore } from '../renderer-v2/gridCameraStore.js'
+import { GridCameraStore } from '../runtime/gridCameraStore.js'
 
 function createGeometry(seq: number) {
   const metrics = getGridMetrics()

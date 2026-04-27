@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { GridRenderLoop } from '../renderer-v2/gridRenderLoop.js'
+import { GridRenderLoop } from '../renderer-v3/gridRenderLoop.js'
 
 describe('GridRenderLoop', () => {
   test('coalesces requests and draws the latest callback', () => {

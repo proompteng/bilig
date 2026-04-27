@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { createGlyphAtlas } from '../renderer-v2/typegpu-atlas-manager.js'
-import { createGlyphAtlas as createGlyphAtlasV3 } from '../renderer-v3/typegpu-atlas-manager.js'
+import { createGlyphAtlas } from '../renderer-v3/typegpu-atlas-manager.js'
 
 describe('glyph-atlas', () => {
   it('returns stable glyph keys for repeated runs', () => {
@@ -22,7 +21,7 @@ describe('glyph-atlas', () => {
   })
 
   it('tracks dirty atlas pages for V3 glyph inserts', () => {
-    const atlas = createGlyphAtlasV3()
+    const atlas = createGlyphAtlas()
 
     atlas.intern('400 11px Geist', 'A')
 
