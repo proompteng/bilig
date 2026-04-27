@@ -30,6 +30,7 @@ import {
 } from '@bilig/protocol'
 import {
   encodeRenderTileDeltaBatch,
+  encodeWorkbookDeltaBatchV3,
   type RenderTileDeltaSubscription,
   type ViewportPatch,
   type ViewportPatchSubscription,
@@ -60,6 +61,7 @@ import {
 } from './worker-runtime-state.js'
 import { WorkerRuntimeSnapshotCaches } from './worker-runtime-snapshot-caches.js'
 import { buildWorkerRenderTileDeltaBatch } from './worker-runtime-render-tile-delta.js'
+import { WorkerRuntimeDeltaPublisher } from './worker-runtime-delta-publisher.js'
 import {
   collectSheetViewportImpacts,
   type SheetViewportImpact,
@@ -148,6 +150,7 @@ export class WorkbookWorkerRuntime {
   private projectionOverlayScope: ProjectionOverlayScope | null = null
   private localPersistenceMode: 'persistent' | 'ephemeral' | 'follower' = 'ephemeral'
   private nextRenderTileDeltaGeneration = 0
+  private readonly workbookDeltaPublisher = new WorkerRuntimeDeltaPublisher()
   private readonly snapshotCaches = new WorkerRuntimeSnapshotCaches()
   private readonly viewportTileStore = new WorkerViewportTileStore()
   private readonly viewportPatchPublisher = new WorkerViewportPatchPublisher({
@@ -634,14 +637,37 @@ export class WorkbookWorkerRuntime {
     return this.viewportPatchPublisher.subscribe(subscription, listener)
   }
 
+  subscribeWorkbookDeltas(listener: (delta: Uint8Array) => void): () => void {
+    const engine = this.requireEngine()
+    return engine.subscribe((event) => {
+      const batches = this.workbookDeltaPublisher.buildFromEngineEvent({
+        engine,
+        event,
+        resolveSheetIdentity: (sheetName) => {
+          const sheet = engine.workbook.getSheet(sheetName)
+          const sheetId = typeof sheet?.id === 'number' && Number.isInteger(sheet.id) && sheet.id >= 0 ? sheet.id : (sheet?.order ?? null)
+          return sheetId === null
+            ? null
+            : {
+                sheetId,
+                sheetOrdinal: sheetId,
+              }
+        },
+      })
+      batches.forEach((batch) => listener(encodeWorkbookDeltaBatchV3(batch)))
+    })
+  }
+
   subscribeRenderTileDeltas(subscription: RenderTileDeltaSubscription, listener: (delta: Uint8Array) => void): () => void {
     let disposed = false
     let unsubscribeEngine: (() => void) | null = null
     let publishInFlight = false
     let publishQueued = false
-    const publish = (engine: SpreadsheetEngine & WorkerEngine): void => {
+    let queuedEvent: EngineEvent | undefined
+    const publish = (engine: SpreadsheetEngine & WorkerEngine, event?: EngineEvent): void => {
       if (publishInFlight) {
         publishQueued = true
+        queuedEvent = event
         return
       }
       publishInFlight = true
@@ -651,17 +677,23 @@ export class WorkbookWorkerRuntime {
         }
         const batch = buildWorkerRenderTileDeltaBatch({
           engine,
+          event,
           generation: ++this.nextRenderTileDeltaGeneration,
           subscription,
         })
+        if (event && batch.mutations.length === 0) {
+          return
+        }
         listener(encodeRenderTileDeltaBatch(batch))
       } catch {
         return
       } finally {
         publishInFlight = false
         if (publishQueued && !disposed) {
+          const nextEvent = queuedEvent
           publishQueued = false
-          publish(engine)
+          queuedEvent = undefined
+          publish(engine, nextEvent)
         }
       }
     }
@@ -675,8 +707,8 @@ export class WorkbookWorkerRuntime {
         if (subscription.initialDelta !== 'none') {
           publish(engine)
         }
-        unsubscribeEngine = engine.subscribe(() => {
-          publish(engine)
+        unsubscribeEngine = engine.subscribe((event) => {
+          publish(engine, event)
         })
       } catch {
         return
@@ -701,6 +733,7 @@ export class WorkbookWorkerRuntime {
     this.runtimeStateCache = null
     this.snapshotCaches.reset()
     this.nextRenderTileDeltaGeneration = 0
+    this.workbookDeltaPublisher.reset()
     this.authoritativeStateSource = 'none'
     this.authoritativeRevision = 0
     this.projectionMatchesLocalStore = false

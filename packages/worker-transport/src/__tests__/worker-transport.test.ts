@@ -9,8 +9,10 @@ import {
   createWorkerEngineHost,
   decodeRenderTileDeltaBatch,
   decodeViewportPatch,
+  decodeWorkbookDeltaBatchV3,
   encodeRenderTileDeltaBatch,
   encodeViewportPatch,
+  encodeWorkbookDeltaBatchV3,
 } from '../index.js'
 
 async function waitFor(predicate: () => boolean, attempts = 20): Promise<void> {
@@ -253,6 +255,65 @@ describe('worker transport', () => {
           reason: 'subscription-relay-check',
         },
       ],
+    })
+
+    unsubscribe()
+    client.dispose()
+    host.dispose()
+  })
+
+  it('relays workbook delta subscriptions', async () => {
+    const channel = new MessageChannel()
+    const host = createWorkerEngineHost(
+      {
+        subscribeWorkbookDeltas(listener) {
+          listener(
+            encodeWorkbookDeltaBatchV3({
+              magic: 'bilig.workbook.delta.v3',
+              version: 1,
+              seq: 9,
+              source: 'workerAuthoritative',
+              sheetId: 7,
+              sheetOrdinal: 7,
+              valueSeq: 11,
+              styleSeq: 11,
+              axisSeqX: 1,
+              axisSeqY: 1,
+              freezeSeq: 1,
+              calcSeq: 11,
+              dirty: {
+                cellRanges: Uint32Array.from([1, 1, 1, 1, 7]),
+                axisX: new Uint32Array(),
+                axisY: new Uint32Array(),
+              },
+            }),
+          )
+          return () => undefined
+        },
+      },
+      channel.port1,
+    )
+
+    const client = createWorkerEngineClient({ port: channel.port2 })
+    const received: Uint8Array[] = []
+    const unsubscribe = client.subscribeWorkbookDeltas((delta) => {
+      received.push(delta)
+    })
+
+    await waitFor(() => received.length === 1)
+
+    const firstDelta = received[0]
+    expect(firstDelta).toBeDefined()
+    if (!firstDelta) {
+      throw new Error('Expected a workbook delta')
+    }
+    expect(decodeWorkbookDeltaBatchV3(firstDelta)).toMatchObject({
+      seq: 9,
+      sheetId: 7,
+      sheetOrdinal: 7,
+      dirty: {
+        cellRanges: Uint32Array.from([1, 1, 1, 1, 7]),
+      },
     })
 
     unsubscribe()

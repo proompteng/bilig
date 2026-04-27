@@ -7,6 +7,7 @@ import { ErrorCode, createCellNumberFormatRecord, formatCellDisplayValue, isWork
 import {
   decodeRenderTileDeltaBatch,
   decodeViewportPatch,
+  decodeWorkbookDeltaBatchV3,
   type RenderTileDeltaBatch,
   type RenderTileReplaceMutation,
 } from '@bilig/worker-transport'
@@ -579,6 +580,42 @@ describe('WorkbookWorkerRuntime', () => {
     const styledTile = findRenderTileReplace(batches[1], 0, 0)
     expect(styledTile.version.styles).toBeGreaterThan(initialTile.version.styles)
     expect(styledTile.rectCount).toBeGreaterThan(initialTile.rectCount)
+  })
+
+  it('publishes sheet-level workbook deltas for renderer damage consumers', async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    })
+    await runtime.bootstrap({
+      documentId: 'workbook-delta-doc',
+      replicaId: 'browser:test',
+      persistState: false,
+    })
+
+    const deltas: ReturnType<typeof decodeWorkbookDeltaBatchV3>[] = []
+    const resolvers: Array<() => void> = []
+    const waitForNextDelta = () =>
+      new Promise<void>((resolve) => {
+        resolvers.push(resolve)
+      })
+    const nextDelta = waitForNextDelta()
+    const unsubscribe = runtime.subscribeWorkbookDeltas((bytes) => {
+      deltas.push(decodeWorkbookDeltaBatchV3(bytes))
+      resolvers.shift()?.()
+    })
+
+    await runtime.setCellValue('Sheet1', 'B2', 'visible')
+    await nextDelta
+    unsubscribe()
+
+    const delta = deltas.at(-1)
+    expect(delta).toMatchObject({
+      source: 'workerAuthoritative',
+      sheetId: 1,
+      sheetOrdinal: 1,
+    })
+    const ranges = Array.from(delta?.dirty.cellRanges ?? [])
+    expect(ranges.some((value, index) => index % 5 === 0 && value === 1 && ranges[index + 2] === 1)).toBe(true)
   })
 
   it('publishes numeric cell font-size style updates through viewport patches', async () => {

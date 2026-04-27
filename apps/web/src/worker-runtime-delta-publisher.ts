@@ -12,11 +12,11 @@ export interface WorkerRuntimeDeltaPublisherBuildInput {
   readonly engine: WorkerEngine
   readonly event: EngineEvent
   readonly source?: WorkbookDeltaSourceV3 | undefined
+  readonly resolveSheetIdentity?: ((sheetName: string) => WorkbookDeltaSheetIdentityV3 | null) | undefined
 }
 
 export interface WorkbookDeltaBatchBuildInput extends WorkerRuntimeDeltaPublisherBuildInput {
   readonly allocateSeq: () => number
-  readonly resolveSheetIdentity?: ((sheetName: string) => WorkbookDeltaSheetIdentityV3 | null) | undefined
 }
 
 const CHANGED_CELL_DIRTY_MASK = DirtyMaskV3.Value | DirtyMaskV3.Text | DirtyMaskV3.Rect
