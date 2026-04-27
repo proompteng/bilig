@@ -5,6 +5,12 @@ import {
 } from '../renderer-v2/scene-packet-v2.js'
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from '../renderer-v3/render-tile-pane-state.js'
+import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
+import {
+  TypeGpuLayerResourceCacheV3,
+  WORKBOOK_DYNAMIC_OVERLAY_LAYER_KEY_V3,
+  resolveWorkbookHeaderLayerKeyV3,
+} from '../renderer-v3/typegpu-layer-buffer-pool.js'
 import {
   TypeGpuTileResourceCacheV3,
   resolveWorkbookTileContentBufferKeyV3,
@@ -52,6 +58,25 @@ function createTilePane(tile: GridRenderTile): WorkbookRenderTilePaneState {
     surfaceSize: { height: 220, width: 480 },
     tile,
     viewport: tile.bounds,
+  }
+}
+
+function createHeaderPane(paneId: GridHeaderPaneState['paneId']): GridHeaderPaneState {
+  return {
+    borderRectCount: 0,
+    contentOffset: { x: 0, y: 0 },
+    fillRectCount: 0,
+    frame: { height: 24, width: 128, x: 0, y: 0 },
+    paneId,
+    rectCount: 0,
+    rectInstances: new Float32Array(20),
+    rectSignature: 'rect',
+    rects: new Float32Array(8),
+    scrollAxes: { x: false, y: false },
+    surfaceSize: { height: 24, width: 128 },
+    textCount: 0,
+    textRuns: [],
+    textSignature: 'text',
   }
 }
 
@@ -133,6 +158,22 @@ describe('workbook typegpu backend v3 tile path', () => {
     cache.pruneExcept({ contentKeys: new Set(), placementKeys: new Set() })
     expect(cache.peekContent(contentKey)).toBeNull()
     expect(cache.peekPlacement(bodyPlacementKey)).toBeNull()
+  })
+
+  test('keeps V3 header and overlay layer resources out of the V2 pane buffer cache', () => {
+    const cache = new TypeGpuLayerResourceCacheV3()
+    const headerKey = resolveWorkbookHeaderLayerKeyV3(createHeaderPane('top-body'))
+    const headerEntry = cache.get(headerKey)
+    const overlayEntry = cache.get(WORKBOOK_DYNAMIC_OVERLAY_LAYER_KEY_V3)
+
+    cache.pruneExcept(new Set([headerKey]))
+
+    expect(cache.peek(headerKey)).toBe(headerEntry)
+    expect(cache.peek(WORKBOOK_DYNAMIC_OVERLAY_LAYER_KEY_V3)).toBeNull()
+    expect(overlayEntry.rectHandle).toBeNull()
+
+    cache.pruneExcept(new Set())
+    expect(cache.peek(headerKey)).toBeNull()
   })
 
   test('reports a V3 tile miss when tile resources are not draw-ready', () => {

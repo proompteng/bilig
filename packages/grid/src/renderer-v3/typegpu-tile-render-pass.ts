@@ -1,7 +1,6 @@
 import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { Rectangle } from '../gridTypes.js'
 import type { WorkbookGridScrollSnapshot } from '../workbookGridScrollStore.js'
-import type { WorkbookPaneBufferCache } from '../renderer-v2/pane-buffer-cache.js'
 import {
   WORKBOOK_RECT_INSTANCE_LAYOUT,
   WORKBOOK_TEXT_INSTANCE_LAYOUT,
@@ -11,10 +10,11 @@ import {
 } from '../renderer-v2/typegpu-backend.js'
 import { noteGridDrawFrame, noteTypeGpuDrawCall, noteTypeGpuPaneDraw, noteTypeGpuSubmit } from '../renderer-v2/grid-render-counters.js'
 import {
-  WORKBOOK_DYNAMIC_OVERLAY_BUFFER_KEY,
-  ensurePaneSurfaceBindings,
-  resolveWorkbookHeaderBufferKey,
-} from '../renderer-v2/typegpu-buffer-pool.js'
+  WORKBOOK_DYNAMIC_OVERLAY_LAYER_KEY_V3,
+  ensureLayerSurfaceBindingsV3,
+  resolveWorkbookHeaderLayerKeyV3,
+  type TypeGpuLayerResourceCacheV3,
+} from './typegpu-layer-buffer-pool.js'
 import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
 import {
@@ -34,7 +34,7 @@ export interface TypeGpuTileDrawSurface {
 
 export function drawTypeGpuTilePanesV3(input: {
   readonly artifacts: TypeGpuRendererArtifacts
-  readonly paneBuffers: WorkbookPaneBufferCache
+  readonly layerResources: TypeGpuLayerResourceCacheV3
   readonly tileResources: TypeGpuTileResourceCacheV3
   readonly headerPanes?: readonly GridHeaderPaneState[] | undefined
   readonly tilePanes: readonly WorkbookRenderTilePaneState[]
@@ -94,7 +94,7 @@ export function drawTypeGpuTilePanesV3(input: {
   drawTypeGpuHeaderPanes({
     artifacts: input.artifacts,
     headerPanes: input.headerPanes ?? [],
-    paneBuffers: input.paneBuffers,
+    layerResources: input.layerResources,
     pass,
     scrollSnapshot: input.scrollSnapshot,
     surface: input.surface,
@@ -102,8 +102,8 @@ export function drawTypeGpuTilePanesV3(input: {
 
   drawTypeGpuOverlay({
     artifacts: input.artifacts,
+    layerResources: input.layerResources,
     overlay: input.overlay ?? null,
-    paneBuffers: input.paneBuffers,
     pass,
     surface: input.surface,
   })
@@ -116,7 +116,7 @@ export function drawTypeGpuTilePanesV3(input: {
 
 function drawTypeGpuOverlay(input: {
   readonly artifacts: TypeGpuRendererArtifacts
-  readonly paneBuffers: WorkbookPaneBufferCache
+  readonly layerResources: TypeGpuLayerResourceCacheV3
   readonly pass: GPURenderPassEncoder
   readonly overlay: DynamicGridOverlayBatchV3 | null
   readonly surface: TypeGpuTileDrawSurface
@@ -124,13 +124,13 @@ function drawTypeGpuOverlay(input: {
   if (!input.overlay || input.overlay.rectCount === 0) {
     return
   }
-  const overlayCache = input.paneBuffers.peek(WORKBOOK_DYNAMIC_OVERLAY_BUFFER_KEY)
-  if (!overlayCache?.rectBuffer || overlayCache.rectCount <= 0) {
+  const overlayCache = input.layerResources.peek(WORKBOOK_DYNAMIC_OVERLAY_LAYER_KEY_V3)
+  if (!overlayCache?.rectHandle || overlayCache.rectCount <= 0) {
     return
   }
 
   input.pass.setScissorRect(0, 0, input.surface.pixelWidth, input.surface.pixelHeight)
-  ensurePaneSurfaceBindings(input.artifacts, overlayCache)
+  ensureLayerSurfaceBindingsV3(input.artifacts, overlayCache)
   updateTypeGpuSurfaceUniform(overlayCache.surfaceUniform!, input.surface, { x: 0, y: 0 }, { x: 0, y: 0 })
   if (!overlayCache.surfaceBindGroup) {
     return
@@ -138,7 +138,7 @@ function drawTypeGpuOverlay(input: {
   const rectRenderer = input.artifacts.rectPipeline.with(input.pass).with(overlayCache.surfaceBindGroup)
   rectRenderer
     .with(WORKBOOK_UNIT_QUAD_LAYOUT, input.artifacts.quadBuffer)
-    .with(WORKBOOK_RECT_INSTANCE_LAYOUT, overlayCache.rectBuffer)
+    .with(WORKBOOK_RECT_INSTANCE_LAYOUT, overlayCache.rectHandle.buffer)
     .draw(6, overlayCache.rectCount)
   noteTypeGpuDrawCall(1)
   noteTypeGpuPaneDraw(1)
@@ -147,13 +147,13 @@ function drawTypeGpuOverlay(input: {
 function drawTypeGpuHeaderPanes(input: {
   readonly artifacts: TypeGpuRendererArtifacts
   readonly headerPanes: readonly GridHeaderPaneState[]
-  readonly paneBuffers: WorkbookPaneBufferCache
+  readonly layerResources: TypeGpuLayerResourceCacheV3
   readonly pass: GPURenderPassEncoder
   readonly scrollSnapshot: WorkbookGridScrollSnapshot
   readonly surface: TypeGpuTileDrawSurface
 }): void {
   input.headerPanes.forEach((pane) => {
-    const paneCache = input.paneBuffers.peek(resolveWorkbookHeaderBufferKey(pane))
+    const paneCache = input.layerResources.peek(resolveWorkbookHeaderLayerKeyV3(pane))
     if (!paneCache) {
       return
     }
@@ -167,24 +167,24 @@ function drawTypeGpuHeaderPanes(input: {
     const paneRenderOffset = resolvePaneRenderOffset(pane, input.scrollSnapshot)
 
     if (paneCache.rectCount > 0 || paneCache.textCount > 0) {
-      ensurePaneSurfaceBindings(input.artifacts, paneCache)
+      ensureLayerSurfaceBindingsV3(input.artifacts, paneCache)
       updateTypeGpuSurfaceUniform(paneCache.surfaceUniform!, input.surface, paneOrigin, paneRenderOffset)
     }
 
-    if (paneCache.rectCount > 0 && paneCache.rectBuffer && paneCache.surfaceBindGroup) {
+    if (paneCache.rectCount > 0 && paneCache.rectHandle && paneCache.surfaceBindGroup) {
       const rectRenderer = input.artifacts.rectPipeline.with(input.pass).with(paneCache.surfaceBindGroup)
       rectRenderer
         .with(WORKBOOK_UNIT_QUAD_LAYOUT, input.artifacts.quadBuffer)
-        .with(WORKBOOK_RECT_INSTANCE_LAYOUT, paneCache.rectBuffer)
+        .with(WORKBOOK_RECT_INSTANCE_LAYOUT, paneCache.rectHandle.buffer)
         .draw(6, paneCache.rectCount)
       noteTypeGpuDrawCall(1)
     }
 
-    if (paneCache.textCount > 0 && paneCache.textBuffer && paneCache.textBindGroup) {
+    if (paneCache.textCount > 0 && paneCache.textHandle && paneCache.textBindGroup) {
       const textRenderer = input.artifacts.textPipeline.with(input.pass).with(paneCache.textBindGroup)
       textRenderer
         .with(WORKBOOK_UNIT_QUAD_LAYOUT, input.artifacts.quadBuffer)
-        .with(WORKBOOK_TEXT_INSTANCE_LAYOUT, paneCache.textBuffer)
+        .with(WORKBOOK_TEXT_INSTANCE_LAYOUT, paneCache.textHandle.buffer)
         .draw(6, paneCache.textCount)
       noteTypeGpuDrawCall(1)
     }

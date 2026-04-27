@@ -1,7 +1,6 @@
 import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { WorkbookGridScrollSnapshot } from '../workbookGridScrollStore.js'
 import { noteTypeGpuTileMiss } from '../renderer-v2/grid-render-counters.js'
-import { WorkbookPaneBufferCache } from '../renderer-v2/pane-buffer-cache.js'
 import { createGlyphAtlas } from '../renderer-v2/typegpu-atlas-manager.js'
 import {
   createTypeGpuRenderer,
@@ -10,11 +9,16 @@ import {
   type TypeGpuRendererArtifacts,
 } from '../renderer-v2/typegpu-backend.js'
 import { createTypeGpuSurfaceState, syncTypeGpuCanvasSurface, type TypeGpuSurfaceState } from '../renderer-v2/typegpu-surface.js'
-import { syncTypeGpuHeaderResources, syncTypeGpuOverlayResources } from '../renderer-v2/typegpu-buffer-pool.js'
 import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
 import type { GridRenderTile } from './render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
 import { TileResidencyV3 } from './tile-residency.js'
+import {
+  TypeGpuLayerResourceCacheV3,
+  pruneTypeGpuLayerResourcesV3,
+  syncTypeGpuHeaderResourcesV3,
+  syncTypeGpuOverlayResourcesV3,
+} from './typegpu-layer-buffer-pool.js'
 import {
   TypeGpuTileResourceCacheV3,
   resolveWorkbookTileContentBufferKeyV3,
@@ -26,7 +30,7 @@ import { drawTypeGpuTilePanesV3, type TypeGpuTileDrawSurface } from './typegpu-t
 export interface WorkbookTypeGpuBackendV3 {
   readonly artifacts: TypeGpuRendererArtifacts
   readonly atlas: ReturnType<typeof createGlyphAtlas>
-  readonly paneBuffers: WorkbookPaneBufferCache
+  readonly layerResources: TypeGpuLayerResourceCacheV3
   readonly surfaceState: TypeGpuSurfaceState
   readonly tileResources: TypeGpuTileResourceCacheV3
   readonly tileResidency: TileResidencyV3<GridRenderTile, null>
@@ -40,7 +44,7 @@ export async function createWorkbookTypeGpuBackendV3(canvas: HTMLCanvasElement):
   return {
     artifacts,
     atlas: createGlyphAtlas(),
-    paneBuffers: new WorkbookPaneBufferCache(),
+    layerResources: new TypeGpuLayerResourceCacheV3(artifacts),
     surfaceState: createTypeGpuSurfaceState(),
     tileResources: new TypeGpuTileResourceCacheV3(artifacts),
     tileResidency: new TileResidencyV3<GridRenderTile, null>(),
@@ -49,7 +53,7 @@ export async function createWorkbookTypeGpuBackendV3(canvas: HTMLCanvasElement):
 
 export function destroyWorkbookTypeGpuBackendV3(backend: WorkbookTypeGpuBackendV3): void {
   backend.tileResources.dispose()
-  backend.paneBuffers.dispose()
+  backend.layerResources.dispose()
   destroyTypeGpuRenderer(backend.artifacts)
 }
 
@@ -90,16 +94,20 @@ export function drawWorkbookTypeGpuTileFrameV3(input: {
     retainPanes,
     tileResources: input.backend.tileResources,
   })
-  syncTypeGpuHeaderResources({
+  pruneTypeGpuLayerResourcesV3({
+    headerPanes,
+    layerResources: input.backend.layerResources,
+    overlay: input.overlay ?? null,
+  })
+  syncTypeGpuHeaderResourcesV3({
     artifacts: input.backend.artifacts,
     atlas: input.backend.atlas,
     headerPanes,
-    paneBuffers: input.backend.paneBuffers,
+    layerResources: input.backend.layerResources,
   })
-  syncTypeGpuOverlayResources({
-    artifacts: input.backend.artifacts,
+  syncTypeGpuOverlayResourcesV3({
+    layerResources: input.backend.layerResources,
     overlay: input.overlay ?? null,
-    paneBuffers: input.backend.paneBuffers,
   })
   syncTypeGpuAtlasResources(input.backend.artifacts, input.backend.atlas)
   const drawPanes = resolveTypeGpuDrawTilePanesV3({
@@ -112,8 +120,8 @@ export function drawWorkbookTypeGpuTileFrameV3(input: {
   drawTypeGpuTilePanesV3({
     artifacts: input.backend.artifacts,
     headerPanes,
+    layerResources: input.backend.layerResources,
     overlay: input.overlay ?? null,
-    paneBuffers: input.backend.paneBuffers,
     scrollSnapshot: input.scrollSnapshot,
     surface: input.surface,
     tileResources: input.backend.tileResources,

@@ -40,6 +40,8 @@ Latest implementation note:
 - V3 tile content buffers are now separated from tile placement uniforms: body and frozen placements share rect/text buffers by numeric tile ID,
   but each placement gets its own surface uniform and bind groups. This preserves content reuse without drawing frozen/body placements with a
   shared mutable uniform.
+- Header and overlay TypeGPU resources now live in `renderer-v3/typegpu-layer-buffer-pool.ts`, not in the legacy V2
+  `WorkbookPaneBufferCache`. The V3 backend owns separate resource caches for fixed content tiles and non-data visual layers.
 - Local fallback tile generation and worker render-tile delta generation now materialize `GridRenderTile` values through
   `renderer-v3/grid-tile-materializer.ts`. They no longer build `GridScenePacketV2`, no longer create `GridTileKeyV2`, and no longer validate
   V3 content tiles through the V2 scene-packet validator.
@@ -346,6 +348,8 @@ Completed in the resident-scene deletion tranche:
 - `packages/grid/src/renderer-v3/grid-tile-materializer.ts` is now the shared fixed content-tile materializer for local fallback and worker
   render-tile deltas. It produces `GridTilePacketV3` metadata plus V3 rect/text buffers directly, eliminating `GridScenePacketV2` from those
   V3 tile-generation paths.
+- `packages/grid/src/renderer-v3/typegpu-layer-buffer-pool.ts` replaces the V2 pane buffer cache for mounted V3 header and overlay resources,
+  so `WorkbookPaneRendererV3` no longer depends on `renderer-v2/pane-buffer-cache.ts` or V2 header/overlay resource sync helpers.
 
 Remaining work from this design:
 
