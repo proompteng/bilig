@@ -44,6 +44,7 @@ export interface TypeGpuTileContentResourceEntryV3 {
   rectCount: number
   rectSignature: string | null
   textHandle: GpuBufferHandleV3<TextInstanceVertexBuffer> | null
+  textAtlasGeometryVersion: number
   textCount: number
   textGlyphIds: readonly number[] | null
   textGlyphPageIds: readonly number[] | null
@@ -69,6 +70,7 @@ function createEmptyContentEntry(): TypeGpuTileContentResourceEntryV3 {
     rectHandle: null,
     rectSignature: null,
     textCount: 0,
+    textAtlasGeometryVersion: -1,
     textGlyphIds: null,
     textGlyphPageIds: null,
     textHandle: null,
@@ -201,6 +203,7 @@ export class TypeGpuTileResourceCacheV3 {
     entry.rectCount = 0
     entry.rectSignature = null
     entry.textCount = 0
+    entry.textAtlasGeometryVersion = -1
     entry.textGlyphIds = null
     entry.textGlyphPageIds = null
     entry.textRunCount = 0
@@ -218,6 +221,7 @@ export class TypeGpuTileResourceCacheV3 {
     entry.textHandle = null
     entry.rectCount = 0
     entry.textCount = 0
+    entry.textAtlasGeometryVersion = -1
     entry.textGlyphIds = null
     entry.textGlyphPageIds = null
     entry.textRunCount = 0
@@ -258,7 +262,14 @@ export function syncTypeGpuTilePaneResourcesV3(input: {
   input.panes.forEach((pane) => {
     const content = input.tileResources.getContent(resolveWorkbookTileContentBufferKeyV3(pane))
     const textSignature = resolveGridTextTileSignatureV3(pane.tile)
-    if (shouldSyncGridTextTileResourceV3({ content, textSignature, tile: pane.tile })) {
+    if (
+      shouldSyncGridTextTileResourceV3({
+        atlasGeometryVersion: input.atlas.getGlyphGeometryVersion(),
+        content,
+        textSignature,
+        tile: pane.tile,
+      })
+    ) {
       syncTileTextResource({
         atlas: input.atlas,
         content,
@@ -363,12 +374,16 @@ export function resolveGridTileDirtyContentMaskV3(tile: Pick<GridRenderTile, 'di
 }
 
 export function shouldSyncGridTextTileResourceV3(input: {
-  readonly content: Pick<TypeGpuTileContentResourceEntryV3, 'textCount' | 'textHandle' | 'textRunCount' | 'textSignature'>
+  readonly atlasGeometryVersion?: number | undefined
+  readonly content: Pick<
+    TypeGpuTileContentResourceEntryV3,
+    'textAtlasGeometryVersion' | 'textCount' | 'textHandle' | 'textRunCount' | 'textSignature'
+  >
   readonly textSignature: string
   readonly tile: GridRenderTile
 }): boolean {
   if (input.content.textSignature === input.textSignature) {
-    return false
+    return input.atlasGeometryVersion !== undefined && input.content.textAtlasGeometryVersion !== input.atlasGeometryVersion
   }
   if (!input.content.textSignature) {
     return true
@@ -428,6 +443,7 @@ function syncTileTextResource(input: {
   if (textPayload.quadCount === 0) {
     releaseTextBuffer(input.tileResources, input.content)
     input.content.textCount = 0
+    input.content.textAtlasGeometryVersion = input.atlas.getGlyphGeometryVersion()
     input.content.textGlyphIds = textPayload.glyphIds
     input.content.textGlyphPageIds = textPayload.pageIds
     input.content.textRunCount = input.pane.tile.textCount
@@ -446,6 +462,7 @@ function syncTileTextResource(input: {
   const handle = prepareTextBuffer(input.tileResources, input.content, textPayload.quadCount)
   input.content.textHandle = handle
   input.content.textCount = textPayload.quadCount
+  input.content.textAtlasGeometryVersion = input.atlas.getGlyphGeometryVersion()
   input.content.textGlyphIds = textPayload.glyphIds
   input.content.textGlyphPageIds = textPayload.pageIds
   input.content.textRunCount = input.pane.tile.textCount

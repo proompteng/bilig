@@ -41,6 +41,7 @@ export interface ResolvedTextDecorationRect {
 export interface GlyphAtlasLike {
   intern(font: string, glyph: string): GlyphAtlasEntry
   getVersion?(): number
+  getGlyphGeometryVersion?(): number
 }
 
 export const DEFAULT_TEXT_FONT = '400 11px sans-serif'

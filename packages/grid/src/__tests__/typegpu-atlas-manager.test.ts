@@ -16,8 +16,45 @@ describe('glyph-atlas', () => {
   it('tracks atlas version after adding glyphs', () => {
     const atlas = createGlyphAtlas()
     expect(atlas.getVersion()).toBe(0)
+    expect(atlas.getGlyphGeometryVersion()).toBe(0)
     atlas.intern('400 11px Geist', 'A')
     expect(atlas.getVersion()).toBeGreaterThan(0)
+    expect(atlas.getGlyphGeometryVersion()).toBe(0)
+  })
+
+  it('bumps glyph geometry version only when atlas texture growth remaps UVs', () => {
+    const originalOffscreenCanvas = globalThis.OffscreenCanvas
+    Object.defineProperty(globalThis, 'OffscreenCanvas', {
+      configurable: true,
+      value: class {
+        height: number
+        width: number
+        constructor(width: number, height: number) {
+          this.width = width
+          this.height = height
+        }
+        getContext() {
+          return null
+        }
+      },
+    })
+    try {
+      const atlas = createGlyphAtlas({ initialHeight: 512, initialWidth: 512 })
+      let glyph = 0
+      const firstGeometryVersion = atlas.getGlyphGeometryVersion()
+
+      while (atlas.getGlyphGeometryVersion() === firstGeometryVersion && glyph < 4000) {
+        atlas.intern('400 48px Geist', `glyph-${glyph}`)
+        glyph += 1
+      }
+
+      expect(atlas.getGlyphGeometryVersion()).toBeGreaterThan(firstGeometryVersion)
+    } finally {
+      Object.defineProperty(globalThis, 'OffscreenCanvas', {
+        configurable: true,
+        value: originalOffscreenCanvas,
+      })
+    }
   })
 
   it('tracks dirty atlas pages for V3 glyph inserts', () => {

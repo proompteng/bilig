@@ -180,6 +180,7 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
   let cursorY = padding
   let rowHeight = 0
   let version = 0
+  let glyphGeometryVersion = 0
   let atlasSeq = 0
   const dirtyPages = new Map<number, GlyphAtlasDirtyPageUpload>()
 
@@ -205,9 +206,12 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
     width = nextWidth
     height = nextHeight
     const nextContext = getAtlasContext(canvas)
-    if (!nextContext) return
-    context = nextContext
-    configureAtlasContext(nextContext, scale, width / scale, height / scale)
+    if (nextContext) {
+      context = nextContext
+      configureAtlasContext(nextContext, scale, width / scale, height / scale)
+    } else {
+      context = null
+    }
 
     // UVs need update
     for (const entry of entries.values()) {
@@ -227,6 +231,7 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
 
     redrawAll()
     version += 1
+    glyphGeometryVersion += 1
     atlasSeq += 1
     markAllPagesDirty()
   }
@@ -380,6 +385,9 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
     },
     getVersion(): number {
       return version
+    },
+    getGlyphGeometryVersion(): number {
+      return glyphGeometryVersion
     },
     getSize(): { width: number; height: number } {
       return { width, height }

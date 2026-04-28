@@ -432,9 +432,11 @@ Completed in the resident-scene deletion tranche:
 - V3 tile text resources now preserve per-run quad payloads alongside run-to-quad spans. Dirty text updates reuse clean run payloads and rebuild
   only dirty or signature-changed runs before issuing bounded text-buffer subrange writes. Reuse is guarded by the mounted atlas version so cached
   run payloads are not reused across atlas texture growth or UV remaps.
+- The V3 atlas now separates texture upload version from glyph-geometry version. New glyph uploads no longer force unrelated text-run payload
+  rebuilds, while atlas texture growth bumps glyph geometry so dependent tile text resources resync before reusing stale UV payloads.
 
 Remaining work from this design:
 
 - continue splitting remaining draw/dirty-tile coordination out of `useWorkbookGridRenderState.ts`;
-- continue extending glyph dependency preservation into missing-glyph retry/update behavior and atlas-driven dependent tile refresh;
+- continue extending glyph dependency preservation into missing-glyph retry/update behavior and more explicit atlas dependency diagnostics;
 - tighten browser perf gates around the now V3-only renderer path.

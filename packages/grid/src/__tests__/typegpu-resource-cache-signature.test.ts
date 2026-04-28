@@ -53,6 +53,7 @@ function contentEntry(overrides: Partial<TypeGpuTileContentResourceEntryV3> = {}
     rectHandle: null,
     rectSignature: 'previous-rect',
     textCount: 1,
+    textAtlasGeometryVersion: 1,
     textGlyphIds: null,
     textGlyphPageIds: null,
     textHandle: null,
@@ -152,6 +153,38 @@ describe('typegpu v3 resource cache signatures', () => {
         tile,
       }),
     ).toBe(false)
+  })
+
+  test('resyncs V3 text resources only when atlas glyph geometry changes', () => {
+    const tile = createTile({ textCount: 1, textRuns: [createTextRun({ text: 'A' })] })
+    const signature = resolveGridTextTileSignatureV3(tile)
+
+    expect(
+      shouldSyncGridTextTileResourceV3({
+        atlasGeometryVersion: 1,
+        content: contentEntry({
+          textAtlasGeometryVersion: 1,
+          textCount: 1,
+          textRunCount: 1,
+          textSignature: signature,
+        }),
+        textSignature: signature,
+        tile,
+      }),
+    ).toBe(false)
+    expect(
+      shouldSyncGridTextTileResourceV3({
+        atlasGeometryVersion: 2,
+        content: contentEntry({
+          textAtlasGeometryVersion: 1,
+          textCount: 1,
+          textRunCount: 1,
+          textSignature: signature,
+        }),
+        textSignature: signature,
+        tile,
+      }),
+    ).toBe(true)
   })
 
   test('resyncs V3 text resources when logical text run count changes', () => {

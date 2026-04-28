@@ -66,6 +66,7 @@ export interface TextQuadRunSpan {
 
 export interface TextQuadRunPayloadV3 {
   readonly signature: string
+  readonly atlasGeometryVersion: number
   readonly atlasVersion: number
   readonly floats: Float32Array
   readonly glyphIds: readonly number[]
@@ -237,7 +238,7 @@ function buildTextQuadsFromRunsWithSpansInternal(
 } {
   const previousRunPayloads = options.previousRunPayloads ?? []
   const runPayloads: TextQuadRunPayloadV3[] = []
-  const initialAtlasVersion = resolveAtlasVersion(atlas)
+  const initialAtlasVersion = resolveAtlasPayloadVersion(atlas)
   let reusedPreviousPayload = false
   let quadCount = 0
   for (let index = 0; index < runs.length; index += 1) {
@@ -247,7 +248,7 @@ function buildTextQuadsFromRunsWithSpansInternal(
     if (
       previousPayload &&
       previousPayload.signature === signature &&
-      previousPayload.atlasVersion === initialAtlasVersion &&
+      previousPayload.atlasGeometryVersion === initialAtlasVersion &&
       !isTextRunDirty(index, options.dirtyRunSpans)
     ) {
       runPayloads.push(previousPayload)
@@ -257,8 +258,10 @@ function buildTextQuadsFromRunsWithSpansInternal(
     }
     const runQuads = buildTextQuads([run], atlas)
     const packed = packTextQuads(runQuads)
+    const atlasGeometryVersion = resolveAtlasPayloadVersion(atlas)
     const payload: TextQuadRunPayloadV3 = {
-      atlasVersion: resolveAtlasVersion(atlas),
+      atlasGeometryVersion,
+      atlasVersion: atlasGeometryVersion,
       floats: packed.floats,
       glyphIds: packed.glyphIds,
       pageIds: packed.pageIds,
@@ -269,7 +272,7 @@ function buildTextQuadsFromRunsWithSpansInternal(
     quadCount += payload.quadCount
   }
 
-  const finalAtlasVersion = resolveAtlasVersion(atlas)
+  const finalAtlasVersion = resolveAtlasPayloadVersion(atlas)
   if (retryOnAtlasVersionChange && finalAtlasVersion !== initialAtlasVersion) {
     return buildTextQuadsFromRunsWithSpansInternal(
       runs,
@@ -343,8 +346,8 @@ function isTextRunDirty(index: number, dirtyRunSpans: readonly TextQuadRunSpan[]
   return dirtyRunSpans.some((span) => index >= span.offset && index < span.offset + span.length)
 }
 
-function resolveAtlasVersion(atlas: GlyphAtlasLike): number {
-  return atlas.getVersion?.() ?? 0
+function resolveAtlasPayloadVersion(atlas: GlyphAtlasLike): number {
+  return atlas.getGlyphGeometryVersion?.() ?? atlas.getVersion?.() ?? 0
 }
 
 export function buildTextDecorationRects(runs: readonly TextQuadRun[], atlas: GlyphAtlasLike): TextDecorationRect[] {

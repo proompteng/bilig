@@ -192,9 +192,38 @@ describe('text-quad-buffer', () => {
   })
 
   it('does not reuse text-run payloads across atlas version changes', () => {
+    let atlasGeometryVersion = 1
+    const internedGlyphs: string[] = []
+    const recordingAtlas = {
+      getGlyphGeometryVersion: () => atlasGeometryVersion,
+      getVersion: () => 100 + atlasGeometryVersion,
+      intern(font: string, glyph: string) {
+        internedGlyphs.push(glyph)
+        return atlas.intern(font, glyph)
+      },
+    }
+    const first = buildTextQuadsFromRunsWithSpans([{ text: 'AB', x: 0, y: 0, font: '400 10px Geist', fontSize: 10 }], recordingAtlas)
+
+    atlasGeometryVersion = 2
+    internedGlyphs.length = 0
+    const second = buildTextQuadsFromRunsWithSpans(
+      [{ text: 'AB', x: 0, y: 0, font: '400 10px Geist', fontSize: 10 }],
+      recordingAtlas,
+      undefined,
+      { previousRunPayloads: first.runPayloads },
+    )
+
+    expect(second.runPayloads[0]?.atlasVersion).toBe(2)
+    expect(second.runPayloads[0]?.atlasGeometryVersion).toBe(2)
+    expect(internedGlyphs).toContain('A')
+    expect(internedGlyphs).toContain('B')
+  })
+
+  it('reuses clean text-run payloads across atlas texture uploads that keep glyph geometry stable', () => {
     let atlasVersion = 1
     const internedGlyphs: string[] = []
     const recordingAtlas = {
+      getGlyphGeometryVersion: () => 0,
       getVersion: () => atlasVersion,
       intern(font: string, glyph: string) {
         internedGlyphs.push(glyph)
@@ -212,9 +241,8 @@ describe('text-quad-buffer', () => {
       { previousRunPayloads: first.runPayloads },
     )
 
-    expect(second.runPayloads[0]?.atlasVersion).toBe(2)
-    expect(internedGlyphs).toContain('A')
-    expect(internedGlyphs).toContain('B')
+    expect(second.runPayloads[0]).toBe(first.runPayloads[0])
+    expect(internedGlyphs).toEqual([])
   })
 
   it('builds underline and strike rects from clipped scene items', () => {
