@@ -1,6 +1,12 @@
 import type { GridEngineLike } from '@bilig/grid'
 import type { CellSnapshot, CellStyleRecord, Viewport, WorkbookAxisEntrySnapshot } from '@bilig/protocol'
-import type { RenderTileDeltaSubscription, ViewportPatch, WorkerEngineClient } from '@bilig/worker-transport'
+import {
+  decodeWorkbookDeltaBatchV3,
+  type RenderTileDeltaSubscription,
+  type ViewportPatch,
+  type WorkbookDeltaBatchV3,
+  type WorkerEngineClient,
+} from '@bilig/worker-transport'
 import { ProjectedViewportAxisStore } from './projected-viewport-axis-store.js'
 import { ProjectedViewportCellCache } from './projected-viewport-cell-cache.js'
 import { ProjectedViewportPatchCoordinator, type ProjectedViewportPatchApplied } from './projected-viewport-patch-coordinator.js'
@@ -222,6 +228,15 @@ export class ProjectedViewportStore implements GridEngineLike {
       unsubscribe?.()
       unsubscribe = null
     }
+  }
+
+  subscribeWorkbookDeltas(listener: (batch: WorkbookDeltaBatchV3) => void): () => void {
+    if (!this.client) {
+      throw new Error('Workbook delta subscriptions require a worker engine client')
+    }
+    return this.client.subscribeWorkbookDeltas((bytes) => {
+      listener(decodeWorkbookDeltaBatchV3(bytes))
+    })
   }
 
   peekRenderTile(tileId: number): ProjectedRenderTile | null {

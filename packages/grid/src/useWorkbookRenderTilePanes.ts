@@ -92,6 +92,20 @@ export function useWorkbookRenderTilePanes(input: {
     )
   }, [dprBucket, gridRuntimeHost, renderTileSource, renderTileViewport, sheetId, sheetName])
 
+  useEffect(() => {
+    return tilePaneRuntimeRef.current!.connectWorkbookDeltaDamage(
+      {
+        dprBucket,
+        gridRuntimeHost,
+        renderTileSource,
+        sheetId,
+      },
+      () => {
+        setRenderTileRevision((current) => current + 1)
+      },
+    )
+  }, [dprBucket, gridRuntimeHost, renderTileSource, sheetId])
+
   const state = useMemo<WorkbookRenderTilePanesState & { readonly needsLocalCellInvalidation: boolean }>(() => {
     void renderTileRevision
     void localFallbackRevision

@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { encodeRenderTileDeltaBatch, type RenderTileDeltaBatch, type RenderTileReplaceMutation } from '@bilig/worker-transport'
+import {
+  encodeRenderTileDeltaBatch,
+  encodeWorkbookDeltaBatchV3,
+  type RenderTileDeltaBatch,
+  type RenderTileReplaceMutation,
+} from '@bilig/worker-transport'
 import { ProjectedTileSceneStore } from '../projected-tile-scene-store.js'
+import { ProjectedViewportStore } from '../projected-viewport-store.js'
 
 function createTileReplace(tileId: number, valuesVersion: number): RenderTileReplaceMutation {
   return {
@@ -109,6 +115,57 @@ describe('ProjectedTileSceneStore', () => {
 
     expect(listener).toHaveBeenCalledWith(expect.objectContaining({ changedTileIds: [101] }))
     expect(store.peekTile(101)).toMatchObject({ tileId: 101 })
+
+    unsubscribe()
+    expect(unsubscribeWorker).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('ProjectedViewportStore render delta source bridge', () => {
+  it('decodes workbook deltas for the grid runtime dirty-tile coordinator', () => {
+    let emit: ((bytes: Uint8Array) => void) | null = null
+    const unsubscribeWorker = vi.fn()
+    const store = new ProjectedViewportStore({
+      subscribeRenderTileDeltas: () => () => undefined,
+      subscribeViewportPatches: () => () => undefined,
+      subscribeWorkbookDeltas: vi.fn((listener: (bytes: Uint8Array) => void) => {
+        emit = listener
+        return unsubscribeWorker
+      }),
+    })
+    const listener = vi.fn()
+
+    const unsubscribe = store.subscribeWorkbookDeltas(listener)
+    emit?.(
+      encodeWorkbookDeltaBatchV3({
+        calcSeq: 3,
+        dirty: {
+          axisX: new Uint32Array(),
+          axisY: new Uint32Array(),
+          cellRanges: new Uint32Array([0, 0, 0, 0, 1]),
+        },
+        freezeSeq: 1,
+        magic: 'bilig.workbook.delta.v3',
+        seq: 11,
+        sheetId: 7,
+        sheetOrdinal: 7,
+        source: 'workerAuthoritative',
+        styleSeq: 2,
+        valueSeq: 3,
+        version: 1,
+        axisSeqX: 4,
+        axisSeqY: 5,
+      }),
+    )
+
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dirty: expect.objectContaining({ cellRanges: new Uint32Array([0, 0, 0, 0, 1]) }),
+        seq: 11,
+        sheetId: 7,
+        sheetOrdinal: 7,
+      }),
+    )
 
     unsubscribe()
     expect(unsubscribeWorker).toHaveBeenCalledTimes(1)

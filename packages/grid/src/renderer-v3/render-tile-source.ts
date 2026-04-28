@@ -1,4 +1,5 @@
 import type { Viewport } from '@bilig/protocol'
+import type { WorkbookDeltaBatchLikeV3 } from './tile-damage-index.js'
 import type { GridTilePacketV3 } from './tile-packet-v3.js'
 
 export type GridRenderTilePaneKind = 'body' | 'frozenTop' | 'frozenLeft' | 'frozenCorner'
@@ -76,5 +77,6 @@ export interface GridRenderTileSource {
     subscription: GridRenderTileDeltaSubscription,
     listener: (change: GridRenderTileSceneChange) => void,
   ): () => void
+  subscribeWorkbookDeltas?: ((listener: (batch: WorkbookDeltaBatchLikeV3) => void) => () => void) | undefined
   peekRenderTile(tileId: number): GridRenderTile | null
 }

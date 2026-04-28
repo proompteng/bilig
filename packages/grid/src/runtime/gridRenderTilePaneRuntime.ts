@@ -5,6 +5,7 @@ import { buildLocalFixedRenderTiles } from '../renderer-v3/local-render-tile-mat
 import { buildFixedRenderTilePaneStates } from '../renderer-v3/render-tile-pane-builder.js'
 import type { GridRenderTile, GridRenderTileSceneChange, GridRenderTileSource } from '../renderer-v3/render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from '../renderer-v3/render-tile-pane-state.js'
+import type { WorkbookDeltaBatchLikeV3 } from '../renderer-v3/tile-damage-index.js'
 import { MAX_TILE_COLUMN_INDEX, MAX_TILE_ROW_INDEX, packTileKey53, unpackTileKey53, type TileKey53 } from '../renderer-v3/tile-key.js'
 import type { GridTileInterestBatchV3, GridTileReadinessSnapshotV3 } from './gridTileCoordinator.js'
 import type { GridRuntimeHost } from './gridRuntimeHost.js'
@@ -55,6 +56,13 @@ export interface GridRenderTileDeltaRuntimeInput {
   readonly sheetName: string
 }
 
+export interface GridRenderTileDamageRuntimeInput {
+  readonly dprBucket: number
+  readonly gridRuntimeHost: GridRuntimeHost
+  readonly renderTileSource?: GridRenderTileSource | undefined
+  readonly sheetId?: number | undefined
+}
+
 interface GridRenderTileInterestRuntimeInput {
   readonly dprBucket: number
   readonly gridRuntimeHost: GridRuntimeHost
@@ -94,6 +102,7 @@ export class GridRenderTilePaneRuntime {
     readonly sheetId: number
     readonly panes: readonly WorkbookRenderTilePaneState[]
   } | null = null
+  private readonly lastWorkbookDeltaSeqBySheetOrdinal = new Map<number, number>()
 
   resolve(input: GridRenderTilePaneRuntimeInput): GridRenderTilePaneRuntimeState {
     if (!input.hostReady) {
@@ -130,6 +139,25 @@ export class GridRenderTilePaneRuntime {
     this.retainedFixedRenderTileDataPanes = null
   }
 
+  connectWorkbookDeltaDamage(
+    input: GridRenderTileDamageRuntimeInput,
+    listener: (batch: WorkbookDeltaBatchLikeV3) => void,
+  ): (() => void) | undefined {
+    const renderTileSource = input.renderTileSource
+    if (!renderTileSource?.subscribeWorkbookDeltas || input.sheetId === undefined) {
+      return undefined
+    }
+    return renderTileSource.subscribeWorkbookDeltas((batch) => {
+      if (batch.sheetId !== input.sheetId && batch.sheetOrdinal !== input.sheetId) {
+        return
+      }
+      if (!this.applyWorkbookDeltaDamage(input, batch)) {
+        return
+      }
+      listener(batch)
+    })
+  }
+
   connectRenderTileDeltas(
     input: GridRenderTileDeltaRuntimeInput,
     listener: (change: GridRenderTileSceneChange) => void,
@@ -153,6 +181,18 @@ export class GridRenderTilePaneRuntime {
       },
       listener,
     )
+  }
+
+  private applyWorkbookDeltaDamage(input: GridRenderTileDamageRuntimeInput, batch: WorkbookDeltaBatchLikeV3): boolean {
+    if (batch.seq !== undefined) {
+      const lastSeq = this.lastWorkbookDeltaSeqBySheetOrdinal.get(batch.sheetOrdinal) ?? -1
+      if (batch.seq <= lastSeq) {
+        return false
+      }
+      this.lastWorkbookDeltaSeqBySheetOrdinal.set(batch.sheetOrdinal, batch.seq)
+    }
+    input.gridRuntimeHost.tiles.applyWorkbookDelta(batch, { dprBucket: input.dprBucket })
+    return true
   }
 
   private buildFixedRenderTileDataPanes(

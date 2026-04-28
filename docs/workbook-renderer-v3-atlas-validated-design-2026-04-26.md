@@ -400,6 +400,9 @@ Completed in the resident-scene deletion tranche:
 - Render-tile delta subscriptions now carry host-computed V3 warm tile keys. `GridRenderTilePaneRuntime` builds visible plus one-ring warm
   interest from the host-owned tile coordinator, and `worker-runtime-render-tile-delta.ts` materializes dirty visible/warm tiles from that
   interest instead of treating the subscription as a viewport-only contract.
+- The mounted V3 render-tile source now exposes decoded workbook-delta V3 batches to `GridRenderTilePaneRuntime`. The runtime dedupes those
+  batches by sheet ordinal/sequence and applies their sheet-level dirty ranges directly to `GridRuntimeHost.tiles`, so visible/warm dirty-tile
+  readiness no longer has to wait for replacement tile payloads before the host knows which fixed content tiles are dirty.
 
 Remaining work from this design:
 

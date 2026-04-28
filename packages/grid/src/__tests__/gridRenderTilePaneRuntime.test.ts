@@ -5,6 +5,7 @@ import { getGridMetrics } from '../gridMetrics.js'
 import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from '../renderer-v3/rect-instance-buffer.js'
 import type { GridRenderTile, GridRenderTileDeltaSubscription, GridRenderTileSource } from '../renderer-v3/render-tile-source.js'
 import { GRID_TEXT_METRIC_FLOAT_COUNT_V3 } from '../renderer-v3/text-run-buffer.js'
+import { DirtyMaskV3, type WorkbookDeltaBatchLikeV3 } from '../renderer-v3/tile-damage-index.js'
 import { packTileKey53 } from '../renderer-v3/tile-key.js'
 import { GridRenderTilePaneRuntime, getGridRenderTilePaneRuntime } from '../runtime/gridRenderTilePaneRuntime.js'
 import { GridRuntimeHost } from '../runtime/gridRuntimeHost.js'
@@ -108,6 +109,44 @@ function createCapturingRenderTileSource(): {
       },
     },
     unsubscribed: () => unsubscribed,
+  }
+}
+
+function createWorkbookDeltaSource(): {
+  readonly source: GridRenderTileSource
+  readonly emit: (batch: WorkbookDeltaBatchLikeV3) => void
+  readonly unsubscribed: () => boolean
+} {
+  let listener: ((batch: WorkbookDeltaBatchLikeV3) => void) | null = null
+  let unsubscribed = false
+  return {
+    emit: (batch) => listener?.(batch),
+    source: {
+      peekRenderTile: () => null,
+      subscribeRenderTileDeltas: () => () => {},
+      subscribeWorkbookDeltas: (nextListener) => {
+        listener = nextListener
+        return () => {
+          listener = null
+          unsubscribed = true
+        }
+      },
+    },
+    unsubscribed: () => unsubscribed,
+  }
+}
+
+function createWorkbookDeltaBatch(overrides: Partial<WorkbookDeltaBatchLikeV3> = {}): WorkbookDeltaBatchLikeV3 {
+  return {
+    dirty: {
+      axisX: new Uint32Array(),
+      axisY: new Uint32Array(),
+      cellRanges: new Uint32Array([0, 0, 0, 0, DirtyMaskV3.Value | DirtyMaskV3.Text | DirtyMaskV3.Rect]),
+    },
+    seq: 1,
+    sheetId: 7,
+    sheetOrdinal: 7,
+    ...overrides,
   }
 }
 
@@ -346,6 +385,53 @@ describe('GridRenderTilePaneRuntime', () => {
       ),
     ).toBeUndefined()
     expect(renderTileSource.captured()).toBeNull()
+  })
+
+  it('applies workbook delta damage to the host-owned tile coordinator', () => {
+    const runtime = new GridRenderTilePaneRuntime()
+    const host = createHost()
+    const renderTileSource = createWorkbookDeltaSource()
+    const listenerBatches: WorkbookDeltaBatchLikeV3[] = []
+    const tileId = packTileKey53({
+      colTile: 0,
+      dprBucket: 1,
+      rowTile: 0,
+      sheetOrdinal: 7,
+    })
+
+    const unsubscribe = runtime.connectWorkbookDeltaDamage(
+      {
+        dprBucket: 1,
+        gridRuntimeHost: host,
+        renderTileSource: renderTileSource.source,
+        sheetId: 7,
+      },
+      (batch) => listenerBatches.push(batch),
+    )
+
+    renderTileSource.emit(createWorkbookDeltaBatch())
+    renderTileSource.emit(createWorkbookDeltaBatch({ seq: 1 }))
+    renderTileSource.emit(createWorkbookDeltaBatch({ seq: 2, sheetId: 8, sheetOrdinal: 8 }))
+
+    expect(listenerBatches.map((batch) => batch.seq)).toEqual([1])
+    expect(
+      host.tiles.reconcileInterest({
+        axisSeqX: 1,
+        axisSeqY: 1,
+        cameraSeq: 1,
+        freezeSeq: 1,
+        pinnedTileKeys: [],
+        reason: 'mutation',
+        seq: 1,
+        sheetId: 7,
+        sheetOrdinal: 7,
+        visibleTileKeys: [tileId],
+        warmTileKeys: [],
+      }).visibleDirtyTileKeys,
+    ).toEqual([tileId])
+
+    unsubscribe?.()
+    expect(renderTileSource.unsubscribed()).toBe(true)
   })
 
   it('does not retain remote panes across sheet switches or before the host is ready', () => {
