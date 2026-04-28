@@ -414,10 +414,14 @@ Completed in the resident-scene deletion tranche:
 - `GridRuntimeHost` now owns the V3 render-tile pane runtime instance. The React tile-pane hook no longer imports or allocates
   `GridRenderTilePaneRuntime`; it only memoizes live React inputs and calls host methods for pane resolution, render-tile delta subscriptions,
   workbook-delta damage application, and retained-pane cleanup.
+- V3 changed-cell damage now distinguishes text/value updates from rect/style/border updates. `worker-runtime-delta-publisher.ts` and
+  `worker-runtime-render-tile-delta.ts` no longer mark ordinary changed cells as rect-dirty, and `typegpu-tile-buffer-pool.ts` uses tile-local
+  dirty masks to skip unrelated rect buffer sync while still forcing rect sync for styled text decorations, decoration removal, border/style
+  changes, axis movement, and full/unknown dirty packets.
 
 Remaining work from this design:
 
 - continue splitting remaining draw/dirty-tile coordination out of `useWorkbookGridRenderState.ts`;
-- use the new tile-local dirty row/column/mask metadata to replace routine full rect/text buffer uploads with dirty-span tile payload updates;
+- continue using tile-local dirty row/column/mask metadata to replace remaining full text/rect buffer writes with dirty-span payload updates;
 - wire the V3 atlas/text-run primitives into the TypeGPU backend and add tile glyph dependency preservation;
 - tighten browser perf gates around the now V3-only renderer path.

@@ -135,7 +135,7 @@ describe('WorkerRuntimeDeltaPublisher', () => {
       3,
       4,
       4,
-      DirtyMaskV3.Value | DirtyMaskV3.Text | DirtyMaskV3.Rect,
+      DirtyMaskV3.Value | DirtyMaskV3.Text,
       1,
       2,
       1,

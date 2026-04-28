@@ -19,11 +19,17 @@ import { GpuBufferArenaV3, type GpuBufferHandleV3 } from './gpu-buffer-arena.js'
 import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from './rect-instance-buffer.js'
 import type { GridRenderTile } from './render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
+import { DirtyMaskV3 } from './tile-damage-index.js'
 
 const RECT_INSTANCE_FLOAT_COUNT = GRID_RECT_INSTANCE_FLOAT_COUNT_V3
 const TEXT_INSTANCE_FLOAT_COUNT = 16
 const RECT_INSTANCE_BYTE_COUNT = RECT_INSTANCE_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT
 const TEXT_INSTANCE_BYTE_COUNT = TEXT_INSTANCE_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT
+const RECT_DIRTY_MASK_V3 =
+  DirtyMaskV3.Style | DirtyMaskV3.Rect | DirtyMaskV3.Border | DirtyMaskV3.AxisX | DirtyMaskV3.AxisY | DirtyMaskV3.Freeze
+const TEXT_DIRTY_MASK_V3 =
+  DirtyMaskV3.Value | DirtyMaskV3.Style | DirtyMaskV3.Text | DirtyMaskV3.AxisX | DirtyMaskV3.AxisY | DirtyMaskV3.Freeze
+const TEXT_DECORATION_DIRTY_MASK_V3 = DirtyMaskV3.Value | DirtyMaskV3.Text
 
 export interface TypeGpuTileContentResourceEntryV3 {
   rectHandle: GpuBufferHandleV3<RectInstanceVertexBuffer> | null
@@ -220,7 +226,7 @@ export function syncTypeGpuTilePaneResourcesV3(input: {
   input.panes.forEach((pane) => {
     const content = input.tileResources.getContent(resolveWorkbookTileContentBufferKeyV3(pane))
     const textSignature = resolveGridTextTileSignatureV3(pane.tile)
-    if (content.textSignature !== textSignature) {
+    if (shouldSyncGridTextTileResourceV3({ content, textSignature, tile: pane.tile })) {
       syncTileTextResource({
         atlas: input.atlas,
         content,
@@ -228,18 +234,22 @@ export function syncTypeGpuTilePaneResourcesV3(input: {
         textSignature,
         tileResources: input.tileResources,
       })
+    } else {
+      content.textSignature = textSignature
     }
     const rectSignature = resolveGridRectTileSignatureV3({
       decorationRects: content.decorationRects ?? [],
       tile: pane.tile,
     })
-    if (content.rectSignature !== rectSignature) {
+    if (shouldSyncGridRectTileResourceV3({ content, rectSignature, tile: pane.tile })) {
       syncTileRectResource({
         content,
         pane,
         rectSignature,
         tileResources: input.tileResources,
       })
+    } else {
+      content.rectSignature = rectSignature
     }
     input.tileResources.getPlacement(resolveWorkbookTilePlacementBufferKeyV3(pane))
   })
@@ -306,6 +316,69 @@ export function resolveGridRectTileSignatureV3(input: {
     input.tile.lastBatchId,
     decorationRects.length,
   ].join(':')
+}
+
+export function resolveGridTileDirtyContentMaskV3(tile: Pick<GridRenderTile, 'dirtyMasks'>): number | null {
+  const masks = tile.dirtyMasks
+  if (!masks || masks.length === 0) {
+    return null
+  }
+  let mask = 0
+  for (const value of masks) {
+    mask |= value
+  }
+  return mask
+}
+
+export function shouldSyncGridTextTileResourceV3(input: {
+  readonly content: Pick<TypeGpuTileContentResourceEntryV3, 'textCount' | 'textHandle' | 'textSignature'>
+  readonly textSignature: string
+  readonly tile: GridRenderTile
+}): boolean {
+  if (input.content.textSignature === input.textSignature) {
+    return false
+  }
+  if (!input.content.textSignature) {
+    return true
+  }
+  if (input.content.textCount !== input.tile.textCount) {
+    return true
+  }
+  if (input.tile.textCount > 0 && !input.content.textHandle) {
+    return true
+  }
+  const dirtyMask = resolveGridTileDirtyContentMaskV3(input.tile)
+  return dirtyMask === null || (dirtyMask & TEXT_DIRTY_MASK_V3) !== 0
+}
+
+export function shouldSyncGridRectTileResourceV3(input: {
+  readonly content: Pick<TypeGpuTileContentResourceEntryV3, 'decorationRects' | 'rectCount' | 'rectHandle' | 'rectSignature'>
+  readonly rectSignature: string
+  readonly tile: GridRenderTile
+}): boolean {
+  if (input.content.rectSignature === input.rectSignature) {
+    return false
+  }
+  if (!input.content.rectSignature) {
+    return true
+  }
+  if (input.content.rectCount !== input.tile.rectCount) {
+    return true
+  }
+  if (input.tile.rectCount > 0 && !input.content.rectHandle) {
+    return true
+  }
+  const dirtyMask = resolveGridTileDirtyContentMaskV3(input.tile)
+  if (dirtyMask === null) {
+    return true
+  }
+  if ((dirtyMask & RECT_DIRTY_MASK_V3) !== 0) {
+    return true
+  }
+  if ((dirtyMask & TEXT_DECORATION_DIRTY_MASK_V3) === 0) {
+    return false
+  }
+  return input.tile.textRuns.some((run) => run.underline || run.strike) || (input.content.decorationRects?.length ?? 0) > 0
 }
 
 function syncTileTextResource(input: {

@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'vitest'
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
-import { resolveGridRectTileSignatureV3, resolveGridTextTileSignatureV3 } from '../renderer-v3/typegpu-tile-buffer-pool.js'
+import { DirtyMaskV3 } from '../renderer-v3/tile-damage-index.js'
+import {
+  resolveGridRectTileSignatureV3,
+  resolveGridTextTileSignatureV3,
+  shouldSyncGridRectTileResourceV3,
+  shouldSyncGridTextTileResourceV3,
+  type TypeGpuTileContentResourceEntryV3,
+} from '../renderer-v3/typegpu-tile-buffer-pool.js'
 
 function createTile(overrides: Partial<GridRenderTile> = {}): GridRenderTile {
   const version = {
@@ -36,6 +43,19 @@ function createTile(overrides: Partial<GridRenderTile> = {}): GridRenderTile {
 
 function rectSignature(tile: GridRenderTile): string {
   return resolveGridRectTileSignatureV3({ tile })
+}
+
+function contentEntry(overrides: Partial<TypeGpuTileContentResourceEntryV3> = {}): TypeGpuTileContentResourceEntryV3 {
+  return {
+    decorationRects: null,
+    rectCount: 1,
+    rectHandle: null,
+    rectSignature: 'previous-rect',
+    textCount: 1,
+    textHandle: null,
+    textSignature: 'previous-text',
+    ...overrides,
+  }
 }
 
 describe('typegpu v3 resource cache signatures', () => {
@@ -102,5 +122,85 @@ describe('typegpu v3 resource cache signatures', () => {
         tile: base,
       }),
     ).not.toBe(rectSignature(base))
+  })
+
+  test('uses dirty masks to skip unrelated rect uploads for plain text updates', () => {
+    const base = createTile({ rectCount: 0, rectInstances: new Float32Array() })
+    const textOnlyUpdate = createTile({
+      dirtyMasks: new Uint32Array([DirtyMaskV3.Value | DirtyMaskV3.Text]),
+      rectCount: 0,
+      rectInstances: new Float32Array(),
+      version: { ...base.version, text: 2, values: 2 },
+    })
+
+    expect(
+      shouldSyncGridTextTileResourceV3({
+        content: contentEntry({ textSignature: resolveGridTextTileSignatureV3(base) }),
+        textSignature: resolveGridTextTileSignatureV3(textOnlyUpdate),
+        tile: textOnlyUpdate,
+      }),
+    ).toBe(true)
+    expect(
+      shouldSyncGridRectTileResourceV3({
+        content: contentEntry({ rectCount: 0, rectSignature: rectSignature(base) }),
+        rectSignature: rectSignature(textOnlyUpdate),
+        tile: textOnlyUpdate,
+      }),
+    ).toBe(false)
+  })
+
+  test('keeps rect uploads for decorated text updates and decoration removal', () => {
+    const decorated = createTile({
+      dirtyMasks: new Uint32Array([DirtyMaskV3.Value | DirtyMaskV3.Text]),
+      rectCount: 0,
+      rectInstances: new Float32Array(),
+      textCount: 1,
+      textRuns: [
+        {
+          align: 'left',
+          clipHeight: 22,
+          clipWidth: 104,
+          clipX: 0,
+          clipY: 0,
+          color: '#111111',
+          font: '400 11px sans-serif',
+          fontSize: 11,
+          height: 22,
+          strike: false,
+          text: 'A1',
+          underline: true,
+          width: 104,
+          wrap: false,
+          x: 0,
+          y: 0,
+        },
+      ],
+      version: { ...createTile().version, text: 2, values: 2 },
+    })
+    const plainAfterDecoration = createTile({
+      dirtyMasks: new Uint32Array([DirtyMaskV3.Value | DirtyMaskV3.Text]),
+      rectCount: 0,
+      rectInstances: new Float32Array(),
+      version: { ...decorated.version, text: 3, values: 3 },
+    })
+
+    expect(
+      shouldSyncGridRectTileResourceV3({
+        content: contentEntry({ rectCount: 0, rectSignature: 'old-rect' }),
+        rectSignature: 'new-rect',
+        tile: decorated,
+      }),
+    ).toBe(true)
+    expect(
+      shouldSyncGridRectTileResourceV3({
+        content: contentEntry({
+          decorationRects: [{ color: '#111111', height: 1, width: 20, x: 4, y: 18 }],
+          rectCount: 0,
+          rectSignature: 'old-rect',
+        }),
+        rectSignature: 'new-rect',
+        tile: plainAfterDecoration,
+      }),
+    ).toBe(true)
   })
 })
