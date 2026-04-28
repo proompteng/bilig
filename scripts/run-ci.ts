@@ -189,7 +189,13 @@ try {
   )
 
   allCompleted.push(
-    ...(await runStage('functional heavy checks', [coverageLane, vitestFuzzLane, ...(skipBrowserGates ? [] : [browserWebBundleBuild])])),
+    ...(await runStage('functional heavy checks', [
+      {
+        label: 'vitest heavy checks',
+        steps: [coverageLane, vitestFuzzLane],
+      },
+      ...(skipBrowserGates ? [] : [browserWebBundleBuild]),
+    ])),
   )
 
   if (!skipBrowserGates) {

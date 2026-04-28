@@ -12,6 +12,7 @@ describe('browser test phases', () => {
       'clipboard global tests',
     ])
     expect(phases[0]?.args).toEqual([
+      '--workers=2',
       '--grep-invert',
       '@clipboard-global|@browser-serial|@fuzz-browser|@browser-perf|@browser-deep|@browser-webgpu',
     ])
@@ -74,6 +75,21 @@ describe('browser test phases', () => {
       BILIG_FUZZ_PROFILE: 'nightly',
       BILIG_FUZZ_CAPTURE: '1',
     })
+  })
+
+  it('allows the default parallel browser worker cap to be configured', () => {
+    const phases = resolveBrowserTestPhases({
+      playwrightArgs: [],
+      env: {
+        BILIG_BROWSER_PARALLEL_WORKERS: '4',
+      },
+    })
+
+    expect(phases[0]?.args).toEqual([
+      '--workers=4',
+      '--grep-invert',
+      '@clipboard-global|@browser-serial|@fuzz-browser|@browser-perf|@browser-deep|@browser-webgpu',
+    ])
   })
 
   it('passes explicit Playwright arguments through unchanged', () => {

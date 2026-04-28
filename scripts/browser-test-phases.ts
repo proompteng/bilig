@@ -7,6 +7,7 @@ export const BROWSER_WEBGPU_GREP = '@browser-webgpu'
 const WEBGPU_BROWSER_ENV = { BILIG_BROWSER_WEBGPU: '1' } as const
 const WEBGPU_PERF_GREP = `${BROWSER_WEBGPU_GREP}.*${BROWSER_PERF_GREP}|${BROWSER_PERF_GREP}.*${BROWSER_WEBGPU_GREP}`
 const WEBGPU_DEEP_GREP = `${BROWSER_WEBGPU_GREP}.*${BROWSER_DEEP_GREP}|${BROWSER_DEEP_GREP}.*${BROWSER_WEBGPU_GREP}`
+const DEFAULT_PARALLEL_BROWSER_WORKERS = 2
 
 export interface BrowserTestPhase {
   readonly label: string
@@ -18,12 +19,21 @@ export interface BrowserTestPhaseEnv {
   readonly BILIG_BROWSER_INCLUDE_PERF?: string | undefined
   readonly BILIG_BROWSER_INCLUDE_DEEP?: string | undefined
   readonly BILIG_BROWSER_INCLUDE_FUZZ?: string | undefined
+  readonly BILIG_BROWSER_PARALLEL_WORKERS?: string | undefined
   readonly BILIG_FUZZ_PROFILE?: string | undefined
   readonly BILIG_FUZZ_CAPTURE?: string | undefined
 }
 
 function envFlagEnabled(value: string | undefined): boolean {
   return value === '1' || value === 'true'
+}
+
+function resolveParallelBrowserWorkers(value: string | undefined): number {
+  if (!value) {
+    return DEFAULT_PARALLEL_BROWSER_WORKERS
+  }
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_PARALLEL_BROWSER_WORKERS
 }
 
 export function resolveBrowserTestPhases(input: {
@@ -53,7 +63,11 @@ export function resolveBrowserTestPhases(input: {
   const phases: BrowserTestPhase[] = [
     {
       label: 'parallel browser tests',
-      args: ['--grep-invert', defaultExcludedGreps.join('|')],
+      args: [
+        '--workers=' + String(resolveParallelBrowserWorkers(input.env.BILIG_BROWSER_PARALLEL_WORKERS)),
+        '--grep-invert',
+        defaultExcludedGreps.join('|'),
+      ],
     },
     {
       label: 'browser webgpu tests',
