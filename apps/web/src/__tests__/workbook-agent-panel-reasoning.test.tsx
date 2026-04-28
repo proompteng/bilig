@@ -40,6 +40,7 @@ function renderPanel(entry: {
         root.render(
           <WorkbookAgentPanel
             activeThreadId="thr-1"
+            activeContextLabel="Sheet1!A1"
             canFinalizeSharedBundle={false}
             canRecommendSharedBundle={false}
             cancellingWorkflowRunId={null}

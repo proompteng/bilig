@@ -1,7 +1,7 @@
 import { Fragment, type CSSProperties, useEffect, useLayoutEffect, useRef } from 'react'
 import { Button } from '@base-ui/react/button'
 import { ScrollArea } from '@base-ui/react/scroll-area'
-import { ArrowUp, Square } from 'lucide-react'
+import { ArrowUp, MessageSquareMore, Square } from 'lucide-react'
 import { describeWorkbookAgentCommand } from '@bilig/agent-api'
 import { cva } from 'class-variance-authority'
 import type {
@@ -146,6 +146,23 @@ function ThreadSummaryStrip(props: {
           </Button>
         )
       })}
+    </div>
+  )
+}
+
+function WorkbookAgentEmptyState(props: { readonly activeContextLabel: string | null }) {
+  return (
+    <div className="flex min-h-[360px] w-full items-center justify-center px-5 py-10" data-testid="workbook-agent-empty-state">
+      <div className="flex max-w-52 flex-col items-center text-center">
+        <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)]">
+          <MessageSquareMore className="h-4 w-4" aria-hidden="true" />
+        </div>
+        <div className={agentPanelLabelTextClass()}>No messages yet</div>
+        <div className={cn(agentPanelMetaTextClass(), 'mt-1')}>
+          {props.activeContextLabel ? `Active context: ${props.activeContextLabel}` : 'Active context ready'}
+        </div>
+        <div className={cn(agentPanelEyebrowTextClass(), 'mt-3')}>Private thread</div>
+      </div>
     </div>
   )
 }
@@ -631,6 +648,7 @@ function ReviewItemCard(props: {
 
 export function WorkbookAgentPanel(props: {
   readonly activeThreadId: string | null
+  readonly activeContextLabel: string | null
   readonly optimisticEntries?: readonly WorkbookAgentTimelineEntry[]
   readonly snapshot: WorkbookAgentThreadSnapshot | null
   readonly activeResponseTurnId: string | null
@@ -749,7 +767,9 @@ export function WorkbookAgentPanel(props: {
                     </div>
                   ) : null}
                 </div>
-              ) : null}
+              ) : (
+                <WorkbookAgentEmptyState activeContextLabel={props.activeContextLabel} />
+              )}
             </div>
           </ScrollArea.Content>
         </ScrollArea.Viewport>

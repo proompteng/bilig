@@ -936,6 +936,7 @@ export function useWorkerWorkbookAppState(input: {
     zero: zeroSource,
     runtimeReady,
     zeroConfigured,
+    workbookAgentEnabled: runtimeConfig.workbookAgentEnabled,
     remoteSyncAvailable,
     changeCount,
     changesPanel,

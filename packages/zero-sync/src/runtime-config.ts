@@ -3,6 +3,7 @@ export interface BiligRuntimeConfig {
   defaultDocumentId: string
   persistState: boolean
   currentUserId: string
+  workbookAgentEnabled?: boolean
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -27,12 +28,14 @@ export function parseRuntimeConfig(value: unknown): BiligRuntimeConfig {
   if (!isRecord(value)) {
     throw new Error('Runtime config payload must be an object')
   }
+  const workbookAgentEnabled = value['workbookAgentEnabled']
 
   return {
     zeroCacheUrl: requireNonEmptyString(value['zeroCacheUrl'], 'zeroCacheUrl'),
     defaultDocumentId: requireNonEmptyString(value['defaultDocumentId'], 'defaultDocumentId'),
     persistState: requireBoolean(value['persistState'], 'persistState'),
     currentUserId: requireNonEmptyString(value['currentUserId'], 'currentUserId'),
+    ...(typeof workbookAgentEnabled === 'boolean' ? { workbookAgentEnabled } : {}),
   }
 }
 

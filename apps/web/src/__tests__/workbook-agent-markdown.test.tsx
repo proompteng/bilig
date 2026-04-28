@@ -40,6 +40,7 @@ function renderPanel(overrides: Record<string, unknown> = {}) {
   const root = createRoot(host)
   const props = {
     activeThreadId: 'thr-1',
+    activeContextLabel: 'Sheet1!A1',
     activeResponseTurnId: null,
     optimisticEntries: [],
     snapshot: createSnapshot(),

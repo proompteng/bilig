@@ -70,6 +70,58 @@ afterEach(() => {
 })
 
 describe('WorkbookToolbar', () => {
+  it('shows shortcut formatting state optimistically while the mutation is still pending', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    let resolveMutation: (() => void) | undefined
+    const invokeMutation = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveMutation = resolve
+        }),
+    )
+    const selectionRangeRef: MutableRefObject<CellRangeRef> = {
+      current: {
+        sheetName: 'Sheet1',
+        startAddress: 'A1',
+        endAddress: 'A1',
+      },
+    }
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<ToolbarHookHarness invokeMutation={invokeMutation} selectionRangeRef={selectionRangeRef} />)
+    })
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'u', metaKey: true }))
+    })
+
+    const underline = host.querySelector("[aria-label='Underline']")
+    expect(invokeMutation).toHaveBeenCalledWith(
+      'setRangeStyle',
+      {
+        sheetName: 'Sheet1',
+        startAddress: 'A1',
+        endAddress: 'A1',
+      },
+      {
+        font: { underline: true },
+      },
+    )
+    expect(underline?.getAttribute('aria-pressed')).toBe('true')
+    expect(underline?.className).toContain('bg-[var(--wb-accent-soft)]')
+
+    await act(async () => {
+      resolveMutation?.()
+    })
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
   it('derives clear visible save states for saved, saving, local-only, offline, and sync issues', () => {
     expect(
       deriveWorkbookStatusPresentation({

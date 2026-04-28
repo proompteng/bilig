@@ -91,6 +91,15 @@ function threadSnapshotUrl(documentId: string, threadId: string): string {
   return `/v2/documents/${encodeURIComponent(documentId)}/chat/threads/${encodeURIComponent(threadId)}`
 }
 
+function formatWorkbookAgentContextLabel(context: WorkbookAgentUiContext): string {
+  const selectionRange = context.selection.range
+  const address =
+    selectionRange && selectionRange.startAddress !== selectionRange.endAddress
+      ? `${selectionRange.startAddress}:${selectionRange.endAddress}`
+      : context.selection.address
+  return `${context.selection.sheetName}!${address}`
+}
+
 function createTextEntryFromDelta(event: Extract<WorkbookAgentStreamEvent, { type: 'entryTextDelta' }>) {
   return {
     id: event.itemId,
@@ -149,13 +158,26 @@ export function useWorkbookAgentPane(input: {
   readonly currentUserId: string
   readonly documentId: string
   readonly enabled: boolean
+  readonly apiEnabled?: boolean
   readonly getContext: () => WorkbookAgentUiContext
   readonly applyContext?: (context: WorkbookAgentUiContext) => void
   readonly previewCommandBundle: (bundle: WorkbookAgentCommandBundle) => Promise<WorkbookAgentPreviewSummary>
+  readonly activeContextLabel?: string
   readonly zero?: ZeroWorkbookAgentSource
   readonly zeroEnabled?: boolean
 }) {
-  const { currentUserId, documentId, enabled, getContext, applyContext, previewCommandBundle, zero, zeroEnabled = false } = input
+  const {
+    currentUserId,
+    documentId,
+    enabled,
+    apiEnabled = true,
+    getContext,
+    applyContext,
+    previewCommandBundle,
+    activeContextLabel = formatWorkbookAgentContextLabel(getContext()),
+    zero,
+    zeroEnabled = false,
+  } = input
   const [snapshot, setSnapshot] = useState<WorkbookAgentThreadSnapshot | null>(null)
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -490,6 +512,9 @@ export function useWorkbookAgentPane(input: {
   )
 
   const ensureSession = useCallback(async (): Promise<WorkbookAgentLiveSession> => {
+    if (!apiEnabled) {
+      throw new Error('Workbook assistant service is not configured for this app session.')
+    }
     const activeSession = sessionRef.current
     if (activeSession) {
       return activeSession
@@ -508,7 +533,7 @@ export function useWorkbookAgentPane(input: {
     } finally {
       setIsLoading(false)
     }
-  }, [connectStream, createSession, persistSessionSnapshot, threadScope])
+  }, [apiEnabled, connectStream, createSession, persistSessionSnapshot, threadScope])
 
   useEffect(() => {
     setSelectedCommandIndexes((current) => (current === null ? current : null))
@@ -638,7 +663,7 @@ export function useWorkbookAgentPane(input: {
   }, [activeReviewBundle])
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !apiEnabled) {
       closeStream()
       sessionRef.current = null
       recoveringStreamRef.current = false
@@ -711,6 +736,7 @@ export function useWorkbookAgentPane(input: {
     loadThreadSnapshot,
     loadThreadSummaries,
     persistSessionSnapshot,
+    apiEnabled,
     usesLiveThreadSummaries,
   ])
 
@@ -936,6 +962,7 @@ export function useWorkbookAgentPane(input: {
     () => (
       <WorkbookAgentPanel
         activeThreadId={snapshot?.threadId ?? sessionRef.current?.threadId ?? null}
+        activeContextLabel={activeContextLabel}
         activeResponseTurnId={activeResponseTurnId}
         draft={draft}
         cancellingWorkflowRunId={cancellingWorkflowRunId}
@@ -995,6 +1022,7 @@ export function useWorkbookAgentPane(input: {
       normalizedCommandIndexes,
       optimisticEntries,
       activeReviewBundle,
+      activeContextLabel,
       preview,
       activeThreadSummary?.ownerUserId,
       activeResponseTurnId,

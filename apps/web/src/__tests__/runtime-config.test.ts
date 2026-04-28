@@ -23,6 +23,13 @@ describe('resolveRuntimeConfig', () => {
       documentId: 'multiplayer-debug',
       currentUserId: 'guest:test',
       persistState: true,
+      workbookAgentEnabled: false,
+    })
+  })
+
+  it('passes through the assistant availability flag from the app runtime config', () => {
+    expect(resolveRuntimeConfig({ ...BASE_CONFIG, workbookAgentEnabled: true })).toMatchObject({
+      workbookAgentEnabled: true,
     })
   })
 

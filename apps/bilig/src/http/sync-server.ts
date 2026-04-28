@@ -243,6 +243,7 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     return {
       ...webRuntimeConfig,
       currentUserId: session.userID,
+      workbookAgentEnabled: workbookAgentService?.enabled ?? false,
     } satisfies BiligRuntimeConfig
   })
 

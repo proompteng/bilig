@@ -234,6 +234,7 @@ function AgentHarness(props: {
   readonly previewCommandBundle?: Parameters<typeof useWorkbookAgentPane>[0]['previewCommandBundle']
   readonly zero?: Parameters<typeof useWorkbookAgentPane>[0]['zero']
   readonly zeroEnabled?: boolean
+  readonly apiEnabled?: boolean
 }) {
   const { agentError, agentPanel, clearAgentError } = useWorkbookAgentPane({
     currentUserId: props.currentUserId ?? 'alex@example.com',
@@ -252,6 +253,7 @@ function AgentHarness(props: {
       },
     }),
     previewCommandBundle: props.previewCommandBundle ?? vi.fn(async () => createPreviewSummary()),
+    ...(props.apiEnabled !== undefined ? { apiEnabled: props.apiEnabled } : {}),
     ...(props.zero ? { zero: props.zero } : {}),
     ...(props.zeroEnabled !== undefined ? { zeroEnabled: props.zeroEnabled } : {}),
   })
@@ -373,7 +375,9 @@ describe('workbook agent pane', () => {
     expect(host.textContent).not.toContain('Local Skills')
     expect(host.textContent).not.toContain('Inspect Selection')
     expect(host.textContent).not.toContain('Ask the assistant to inspect, edit, or restructure this workbook.')
-    expect(host.textContent).not.toContain('Sheet1!A1')
+    expect(host.querySelector("[data-testid='workbook-agent-empty-state']")).not.toBeNull()
+    expect(host.textContent).toContain('No messages yet')
+    expect(host.textContent).toContain('Active context: Sheet1!A1')
     expect(input instanceof HTMLTextAreaElement ? input.getAttribute('placeholder') : null).toBe('Ask the workbook assistant')
 
     await act(async () => {
@@ -1516,6 +1520,27 @@ describe('workbook agent pane', () => {
     expect(host.textContent).toContain('Get Context')
     expect(host.textContent).toContain('Sheet1!C11:F20')
     expect(host.textContent).not.toContain('Sheet1!E20')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('does not poll assistant thread APIs when the runtime reports the assistant service disabled', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify([]), { status: 200 }))
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<AgentHarness apiEnabled={false} />)
+    })
+
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(host.textContent).toContain('No messages yet')
 
     await act(async () => {
       root.unmount()

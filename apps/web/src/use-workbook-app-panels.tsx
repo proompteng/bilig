@@ -46,6 +46,10 @@ function formatThreadEntryCount(entryCount: number): string {
   return `${entryCount} ${entryCount === 1 ? 'item' : 'items'}`
 }
 
+function formatWorkbookSelectionLabel(selection: WorkerRuntimeSelection): string {
+  return `${selection.sheetName}!${selection.address}`
+}
+
 function WorkbookAgentHistoryMenu(props: {
   readonly activeThreadId: string | null
   readonly threadSummaries: readonly WorkbookAgentThreadSummary[]
@@ -131,6 +135,7 @@ export function useWorkbookAppPanels(input: {
   zero: WorkbookPanelsZeroSource
   runtimeReady: boolean
   zeroConfigured: boolean
+  workbookAgentEnabled?: boolean
   remoteSyncAvailable: boolean
   changeCount: number
   changesPanel: ReactNode
@@ -154,6 +159,7 @@ export function useWorkbookAppPanels(input: {
     selection,
     selectAddress,
     sheetNames,
+    workbookAgentEnabled = true,
     zero,
     zeroConfigured,
   } = input
@@ -183,7 +189,9 @@ export function useWorkbookAppPanels(input: {
     currentUserId,
     documentId,
     enabled: runtimeReady,
+    apiEnabled: runtimeReady && workbookAgentEnabled,
     getContext: getAgentContext,
+    activeContextLabel: formatWorkbookSelectionLabel(selection),
     ...(applyAgentContext ? { applyContext: applyAgentContext } : {}),
     previewCommandBundle: previewAgentCommandBundle,
     zero,

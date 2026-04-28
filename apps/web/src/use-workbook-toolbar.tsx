@@ -27,6 +27,8 @@ const DEFAULT_BORDER_SIDE = {
   color: '#111827',
 } as const
 
+const PENDING_STYLE_ID = '__bilig_pending_toolbar_style__'
+
 type WorkbookHeaderStatusTone = 'positive' | 'progress' | 'warning' | 'danger' | 'neutral'
 
 export interface WorkbookStatusPresentation {
@@ -83,6 +85,79 @@ export function deriveWorkbookStatusPresentation(input: {
     return { modeLabel, syncLabel: 'Local saved', tone: 'warning' }
   }
   return { modeLabel, syncLabel: 'Saved', tone: 'positive' }
+}
+
+function cellRangeKey(range: CellRangeRef): string {
+  return `${range.sheetName}:${range.startAddress}:${range.endAddress ?? range.startAddress}`
+}
+
+function cloneStyleForToolbar(style: CellStyleRecord | undefined): CellStyleRecord {
+  return {
+    id: style?.id ?? PENDING_STYLE_ID,
+    ...(style?.fill ? { fill: { ...style.fill } } : {}),
+    ...(style?.font ? { font: { ...style.font } } : {}),
+    ...(style?.alignment ? { alignment: { ...style.alignment } } : {}),
+    ...(style?.borders
+      ? {
+          borders: {
+            ...(style.borders.top ? { top: { ...style.borders.top } } : {}),
+            ...(style.borders.right ? { right: { ...style.borders.right } } : {}),
+            ...(style.borders.bottom ? { bottom: { ...style.borders.bottom } } : {}),
+            ...(style.borders.left ? { left: { ...style.borders.left } } : {}),
+          },
+        }
+      : {}),
+  }
+}
+
+function applyOptionalStyleField<T extends object, K extends keyof T>(target: T, key: K, value: T[K] | null | undefined): void {
+  if (value === undefined) {
+    return
+  }
+  if (value === null) {
+    delete target[key]
+    return
+  }
+  target[key] = value
+}
+
+function applyToolbarStylePatch(style: CellStyleRecord | undefined, patch: CellStylePatch): CellStyleRecord {
+  const next = cloneStyleForToolbar(style)
+  const backgroundColor = patch.fill?.backgroundColor
+  if (backgroundColor !== undefined) {
+    if (backgroundColor === null) {
+      delete next.fill
+    } else {
+      next.fill = { backgroundColor }
+    }
+  }
+  if (patch.font) {
+    const font = { ...next.font }
+    applyOptionalStyleField(font, 'family', patch.font.family)
+    applyOptionalStyleField(font, 'size', patch.font.size)
+    applyOptionalStyleField(font, 'bold', patch.font.bold)
+    applyOptionalStyleField(font, 'italic', patch.font.italic)
+    applyOptionalStyleField(font, 'underline', patch.font.underline)
+    applyOptionalStyleField(font, 'color', patch.font.color)
+    if (Object.keys(font).length > 0) {
+      next.font = font
+    } else {
+      delete next.font
+    }
+  }
+  if (patch.alignment) {
+    const alignment = { ...next.alignment }
+    applyOptionalStyleField(alignment, 'horizontal', patch.alignment.horizontal)
+    applyOptionalStyleField(alignment, 'vertical', patch.alignment.vertical)
+    applyOptionalStyleField(alignment, 'wrap', patch.alignment.wrap)
+    applyOptionalStyleField(alignment, 'indent', patch.alignment.indent)
+    if (Object.keys(alignment).length > 0) {
+      next.alignment = alignment
+    } else {
+      delete next.alignment
+    }
+  }
+  return next
 }
 
 export function useWorkbookToolbar(input: {
@@ -148,15 +223,24 @@ export function useWorkbookToolbar(input: {
   } = input
   const [recentFillColors, setRecentFillColors] = useState<readonly string[]>([])
   const [recentTextColors, setRecentTextColors] = useState<readonly string[]>([])
+  const selectedRangeKey = cellRangeKey(selectionRangeRef.current)
+  const [optimisticStyle, setOptimisticStyle] = useState<{
+    readonly rangeKey: string
+    readonly style: CellStyleRecord
+  } | null>(null)
+  useEffect(() => {
+    setOptimisticStyle(null)
+  }, [selectedStyle])
+  const activeSelectedStyle = optimisticStyle?.rangeKey === selectedRangeKey ? optimisticStyle.style : selectedStyle
   const currentNumberFormat = parseCellNumberFormatCode(selectedCell.format)
-  const selectedFontSize = String(selectedStyle?.font?.size ?? 11)
-  const isBoldActive = selectedStyle?.font?.bold === true
-  const isItalicActive = selectedStyle?.font?.italic === true
-  const isUnderlineActive = selectedStyle?.font?.underline === true
-  const horizontalAlignment = selectedStyle?.alignment?.horizontal ?? null
-  const isWrapActive = selectedStyle?.alignment?.wrap === true
-  const currentFillColor = normalizeHexColor(selectedStyle?.fill?.backgroundColor ?? '#ffffff')
-  const currentTextColor = normalizeHexColor(selectedStyle?.font?.color ?? '#111827')
+  const selectedFontSize = String(activeSelectedStyle?.font?.size ?? 11)
+  const isBoldActive = activeSelectedStyle?.font?.bold === true
+  const isItalicActive = activeSelectedStyle?.font?.italic === true
+  const isUnderlineActive = activeSelectedStyle?.font?.underline === true
+  const horizontalAlignment = activeSelectedStyle?.alignment?.horizontal ?? null
+  const isWrapActive = activeSelectedStyle?.alignment?.wrap === true
+  const currentFillColor = normalizeHexColor(activeSelectedStyle?.fill?.backgroundColor ?? '#ffffff')
+  const currentTextColor = normalizeHexColor(activeSelectedStyle?.font?.color ?? '#111827')
   const visibleRecentFillColors = useMemo(
     () => (isPresetColor(currentFillColor) ? recentFillColors : mergeRecentCustomColors(recentFillColors, currentFillColor)),
     [currentFillColor, recentFillColors],
@@ -179,9 +263,20 @@ export function useWorkbookToolbar(input: {
   const statusModeLabel = statusPresentation.modeLabel
   const applyRangeStyle = useCallback(
     async (patch: CellStylePatch) => {
-      await invokeMutation('setRangeStyle', selectionRangeRef.current, patch)
+      const range = selectionRangeRef.current
+      const rangeKey = cellRangeKey(range)
+      setOptimisticStyle((current) => ({
+        rangeKey,
+        style: applyToolbarStylePatch(current?.rangeKey === rangeKey ? current.style : selectedStyle, patch),
+      }))
+      try {
+        await invokeMutation('setRangeStyle', range, patch)
+      } catch (error) {
+        setOptimisticStyle((current) => (current?.rangeKey === rangeKey ? null : current))
+        throw error
+      }
     },
-    [invokeMutation, selectionRangeRef],
+    [invokeMutation, selectedStyle, selectionRangeRef],
   )
 
   const clearRangeStyleFields = useCallback(

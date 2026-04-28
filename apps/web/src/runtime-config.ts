@@ -4,6 +4,7 @@ export interface RuntimeConfig {
   documentId: string
   persistState: boolean
   currentUserId: string
+  workbookAgentEnabled: boolean
 }
 
 export function normalizeRuntimeConfigUserId<T extends { currentUserId: string }>(
@@ -42,6 +43,7 @@ export function resolveRuntimeConfig(config: BiligRuntimeConfig): RuntimeConfig 
       documentId: explicitDocumentId,
       persistState: true,
       currentUserId: config.currentUserId,
+      workbookAgentEnabled: config.workbookAgentEnabled === true,
     }
   }
 
@@ -49,5 +51,6 @@ export function resolveRuntimeConfig(config: BiligRuntimeConfig): RuntimeConfig 
     documentId: ephemeralDocument ? createSessionDocumentId(config.defaultDocumentId) : config.defaultDocumentId,
     persistState: ephemeralDocument ? false : config.persistState,
     currentUserId: config.currentUserId,
+    workbookAgentEnabled: config.workbookAgentEnabled === true,
   }
 }
