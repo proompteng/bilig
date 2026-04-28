@@ -345,4 +345,35 @@ describe('FormulaBar', () => {
       root.unmount()
     })
   })
+
+  it('keeps the name box compact on phone-width formula bars', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<FormulaBarHarness initialEditing={false} initialValue="" selectionLabel="D4" />)
+    })
+
+    const nameBox = host.querySelector<HTMLInputElement>("[data-testid='name-box']")
+    const formulaFrame = host.querySelector<HTMLDivElement>("[data-testid='formula-input-frame']")
+    expect(nameBox).not.toBeNull()
+    expect(formulaFrame).not.toBeNull()
+
+    if (!nameBox || !formulaFrame) {
+      throw new Error('Expected formula bar controls')
+    }
+
+    expect(nameBox.parentElement?.className).toContain('w-28')
+    expect(nameBox.parentElement?.className).toContain('sm:w-[168px]')
+    expect(formulaFrame.textContent).toContain('fx')
+    expect(formulaFrame.querySelector('span')?.className).toContain('w-8')
+    expect(formulaFrame.querySelector('span')?.className).toContain('sm:w-10')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
 })

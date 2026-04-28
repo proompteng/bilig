@@ -119,6 +119,38 @@ test('web app keeps formula bar controls aligned and consistently sized', async 
   expect(Math.abs(nameBoxBox.y + nameBoxBox.height - (formulaFrameBox.y + formulaFrameBox.height))).toBeLessThanOrEqual(1)
 })
 
+test('web app keeps the formula input usable on phone-width screens', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/?sheet=Sheet1&cell=B10')
+  await waitForWorkbookReady(page)
+
+  const nameBox = page.getByTestId('name-box')
+  const formulaInput = page.getByTestId('formula-input')
+  const formulaFrame = page.getByTestId('formula-input-frame')
+
+  const [nameBoxBox, formulaInputBox, formulaFrameBox] = await Promise.all([getBox(nameBox), getBox(formulaInput), getBox(formulaFrame)])
+  const placeholderMetrics = await formulaInput.evaluate((element) => {
+    if (!(element instanceof HTMLInputElement)) {
+      throw new Error('Expected formula input')
+    }
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('2d')
+    if (!context) {
+      throw new Error('Expected canvas text measurement context')
+    }
+    const style = getComputedStyle(element)
+    context.font = style.font
+    const textWidth = context.measureText(element.placeholder).width
+    const usableWidth = element.getBoundingClientRect().width - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight)
+    return { textWidth, usableWidth }
+  })
+
+  expect(nameBoxBox.width).toBeLessThanOrEqual(120)
+  expect(formulaFrameBox.width).toBeGreaterThan(nameBoxBox.width)
+  expect(formulaInputBox.width).toBeGreaterThan(200)
+  expect(placeholderMetrics.usableWidth).toBeGreaterThan(placeholderMetrics.textWidth)
+})
+
 test('web app keeps shell controls on one height and radius system', async ({ page }) => {
   await page.goto('/')
   await waitForWorkbookReady(page)

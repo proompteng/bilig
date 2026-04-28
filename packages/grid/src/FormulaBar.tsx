@@ -154,7 +154,7 @@ export function FormulaBar({
         </label>
         <div className="relative">
           <div className={formulaFieldShellClass({ focused: isFormulaFocused })} data-testid="formula-input-frame">
-            <span aria-hidden="true" className={`${formulaFieldAddonClass()} w-10`}>
+            <span aria-hidden="true" className={`${formulaFieldAddonClass()} w-8 sm:w-10`}>
               fx
             </span>
             <input
