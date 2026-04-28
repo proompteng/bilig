@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type MutableRefObject, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import {
   parseCellNumberFormatCode,
   type CellRangeRef,
@@ -432,89 +432,7 @@ export function useWorkbookToolbar(input: {
     [invokeMutation, selectionRangeRef],
   )
 
-  useEffect(() => {
-    const handleWindowShortcut = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isTextEntryTarget(event.target) || event.altKey) {
-        return
-      }
-
-      const hasPrimaryModifier = event.metaKey || event.ctrlKey
-      if (!hasPrimaryModifier || !writesAllowed) {
-        return
-      }
-
-      const normalizedKey = event.key.toLowerCase()
-      if (!event.shiftKey && normalizedKey === 'z') {
-        event.preventDefault()
-        onUndo()
-        return
-      }
-      if ((event.shiftKey && normalizedKey === 'z') || (!event.metaKey && event.ctrlKey && !event.shiftKey && normalizedKey === 'y')) {
-        event.preventDefault()
-        onRedo()
-        return
-      }
-      if (!event.shiftKey && normalizedKey === 'b') {
-        event.preventDefault()
-        void applyRangeStyle({ font: { bold: !isBoldActive } })
-        return
-      }
-      if (!event.shiftKey && normalizedKey === 'i') {
-        event.preventDefault()
-        void applyRangeStyle({ font: { italic: !isItalicActive } })
-        return
-      }
-      if (!event.shiftKey && normalizedKey === 'u') {
-        event.preventDefault()
-        void applyRangeStyle({ font: { underline: !isUnderlineActive } })
-        return
-      }
-      if (event.shiftKey && event.code === 'Digit1') {
-        event.preventDefault()
-        void setNumberFormatPreset('number')
-        return
-      }
-      if (event.shiftKey && event.code === 'Digit4') {
-        event.preventDefault()
-        void setNumberFormatPreset('currency')
-        return
-      }
-      if (event.shiftKey && event.code === 'Digit5') {
-        event.preventDefault()
-        void setNumberFormatPreset('percent')
-        return
-      }
-      if (event.shiftKey && event.code === 'Digit7') {
-        event.preventDefault()
-        void applyBorderPreset('outer')
-        return
-      }
-      if (event.shiftKey && normalizedKey === 'l') {
-        event.preventDefault()
-        void applyRangeStyle({ alignment: { horizontal: 'left' } })
-        return
-      }
-      if (event.shiftKey && normalizedKey === 'e') {
-        event.preventDefault()
-        void applyRangeStyle({ alignment: { horizontal: 'center' } })
-        return
-      }
-      if (event.shiftKey && normalizedKey === 'r') {
-        event.preventDefault()
-        void applyRangeStyle({ alignment: { horizontal: 'right' } })
-        return
-      }
-      if (!event.shiftKey && event.code === 'Backslash') {
-        event.preventDefault()
-        void clearRangeStyleFields()
-      }
-    }
-
-    window.addEventListener('keydown', handleWindowShortcut, true)
-    return () => {
-      window.removeEventListener('keydown', handleWindowShortcut, true)
-    }
-  }, [
+  const shortcutStateRef = useRef({
     applyBorderPreset,
     applyRangeStyle,
     clearRangeStyleFields,
@@ -525,7 +443,104 @@ export function useWorkbookToolbar(input: {
     onUndo,
     setNumberFormatPreset,
     writesAllowed,
-  ])
+  })
+  shortcutStateRef.current = {
+    applyBorderPreset,
+    applyRangeStyle,
+    clearRangeStyleFields,
+    isBoldActive,
+    isItalicActive,
+    isUnderlineActive,
+    onRedo,
+    onUndo,
+    setNumberFormatPreset,
+    writesAllowed,
+  }
+
+  useEffect(() => {
+    const handleWindowShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || isTextEntryTarget(event.target) || event.altKey) {
+        return
+      }
+
+      const hasPrimaryModifier = event.metaKey || event.ctrlKey
+      const shortcutState = shortcutStateRef.current
+      if (!hasPrimaryModifier || !shortcutState.writesAllowed) {
+        return
+      }
+
+      const normalizedKey = event.key.toLowerCase()
+      if (!event.shiftKey && normalizedKey === 'z') {
+        event.preventDefault()
+        shortcutState.onUndo()
+        return
+      }
+      if ((event.shiftKey && normalizedKey === 'z') || (!event.metaKey && event.ctrlKey && !event.shiftKey && normalizedKey === 'y')) {
+        event.preventDefault()
+        shortcutState.onRedo()
+        return
+      }
+      if (!event.shiftKey && normalizedKey === 'b') {
+        event.preventDefault()
+        void shortcutState.applyRangeStyle({ font: { bold: !shortcutState.isBoldActive } })
+        return
+      }
+      if (!event.shiftKey && normalizedKey === 'i') {
+        event.preventDefault()
+        void shortcutState.applyRangeStyle({ font: { italic: !shortcutState.isItalicActive } })
+        return
+      }
+      if (!event.shiftKey && normalizedKey === 'u') {
+        event.preventDefault()
+        void shortcutState.applyRangeStyle({ font: { underline: !shortcutState.isUnderlineActive } })
+        return
+      }
+      if (event.shiftKey && event.code === 'Digit1') {
+        event.preventDefault()
+        void shortcutState.setNumberFormatPreset('number')
+        return
+      }
+      if (event.shiftKey && event.code === 'Digit4') {
+        event.preventDefault()
+        void shortcutState.setNumberFormatPreset('currency')
+        return
+      }
+      if (event.shiftKey && event.code === 'Digit5') {
+        event.preventDefault()
+        void shortcutState.setNumberFormatPreset('percent')
+        return
+      }
+      if (event.shiftKey && event.code === 'Digit7') {
+        event.preventDefault()
+        void shortcutState.applyBorderPreset('outer')
+        return
+      }
+      if (event.shiftKey && normalizedKey === 'l') {
+        event.preventDefault()
+        void shortcutState.applyRangeStyle({ alignment: { horizontal: 'left' } })
+        return
+      }
+      if (event.shiftKey && normalizedKey === 'e') {
+        event.preventDefault()
+        void shortcutState.applyRangeStyle({ alignment: { horizontal: 'center' } })
+        return
+      }
+      if (event.shiftKey && normalizedKey === 'r') {
+        event.preventDefault()
+        void shortcutState.applyRangeStyle({ alignment: { horizontal: 'right' } })
+        return
+      }
+      if (!event.shiftKey && event.code === 'Backslash') {
+        event.preventDefault()
+        void shortcutState.clearRangeStyleFields()
+      }
+    }
+
+    window.addEventListener('keydown', handleWindowShortcut, true)
+    return () => {
+      window.removeEventListener('keydown', handleWindowShortcut, true)
+    }
+  }, [])
 
   const ribbon = useMemo(
     () => (

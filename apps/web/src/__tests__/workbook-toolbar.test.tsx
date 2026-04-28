@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, type MutableRefObject } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ValueTag, type CellRangeRef } from '@bilig/protocol'
+import { ValueTag, type CellRangeRef, type CellStyleRecord } from '@bilig/protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getWorkbookShortcutLabel } from '../shortcut-registry.js'
 import { WorkbookToolbar } from '../workbook-toolbar.js'
@@ -10,6 +10,8 @@ import { deriveWorkbookStatusPresentation, useWorkbookToolbar } from '../use-wor
 function ToolbarHookHarness(props: {
   readonly invokeMutation: (method: string, ...args: unknown[]) => Promise<void>
   readonly selectionRangeRef: MutableRefObject<CellRangeRef>
+  readonly selectedStyle?: CellStyleRecord | undefined
+  readonly writesAllowed?: boolean | undefined
 }) {
   const { ribbon } = useWorkbookToolbar({
     canHideCurrentColumn: false,
@@ -53,11 +55,11 @@ function ToolbarHookHarness(props: {
       value: { tag: ValueTag.Empty },
       version: 0,
     },
-    selectedStyle: undefined,
+    selectedStyle: props.selectedStyle,
     selection: { sheetName: 'Sheet1' },
     selectionRangeRef: props.selectionRangeRef,
     trailingContent: null,
-    writesAllowed: true,
+    writesAllowed: props.writesAllowed ?? true,
     zeroConfigured: true,
     zeroHealthReady: true,
   })
@@ -66,6 +68,7 @@ function ToolbarHookHarness(props: {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks()
   document.body.innerHTML = ''
 })
 
@@ -562,6 +565,78 @@ describe('WorkbookToolbar', () => {
     await act(async () => {
       root.unmount()
     })
+  })
+
+  it('keeps global formatting shortcut capture mounted across active style rerenders', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const invokeMutation = vi.fn(async () => {})
+    const selectionRangeRef: MutableRefObject<CellRangeRef> = {
+      current: {
+        sheetName: 'Sheet1',
+        startAddress: 'A1',
+        endAddress: 'A1',
+      },
+    }
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const addSpy = vi.spyOn(window, 'addEventListener')
+    const removeSpy = vi.spyOn(window, 'removeEventListener')
+    const keydownAdds = () => addSpy.mock.calls.filter(([type]) => type === 'keydown').length
+    const keydownRemoves = () => removeSpy.mock.calls.filter(([type]) => type === 'keydown').length
+
+    await act(async () => {
+      root.render(<ToolbarHookHarness invokeMutation={invokeMutation} selectionRangeRef={selectionRangeRef} />)
+    })
+
+    expect(keydownAdds()).toBe(1)
+    expect(keydownRemoves()).toBe(0)
+
+    await act(async () => {
+      root.render(
+        <ToolbarHookHarness
+          invokeMutation={invokeMutation}
+          selectedStyle={{ id: 'style-bold', font: { bold: true } }}
+          selectionRangeRef={selectionRangeRef}
+        />,
+      )
+    })
+    await act(async () => {
+      root.render(
+        <ToolbarHookHarness
+          invokeMutation={invokeMutation}
+          selectedStyle={{ id: 'style-bold-italic', font: { bold: true, italic: true } }}
+          selectionRangeRef={selectionRangeRef}
+        />,
+      )
+    })
+
+    expect(keydownAdds()).toBe(1)
+    expect(keydownRemoves()).toBe(0)
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'u', metaKey: true }))
+    })
+
+    expect(invokeMutation).toHaveBeenLastCalledWith(
+      'setRangeStyle',
+      {
+        sheetName: 'Sheet1',
+        startAddress: 'A1',
+        endAddress: 'A1',
+      },
+      {
+        font: { underline: true },
+      },
+    )
+
+    await act(async () => {
+      root.unmount()
+    })
+
+    expect(keydownAdds()).toBe(1)
+    expect(keydownRemoves()).toBe(1)
   })
 
   it('applies bottom border presets to the live selection range', async () => {
