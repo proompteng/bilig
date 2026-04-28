@@ -23,15 +23,39 @@ describe('glyph-atlas', () => {
   it('tracks dirty atlas pages for V3 glyph inserts', () => {
     const atlas = createGlyphAtlas()
 
-    atlas.intern('400 11px Geist', 'A')
+    const entry = atlas.intern('400 11px Geist', 'A')
 
     const stats = atlas.getDirtyPageStats()
     expect(stats.dirtyPageCount).toBeGreaterThan(0)
     expect(stats.dirtyUploadBytes).toBeGreaterThan(0)
+    expect(atlas.getTextAtlasPagesStats()).toMatchObject({
+      dirtyPageCount: stats.dirtyPageCount,
+      glyphCount: 1,
+    })
+    expect(atlas.resolveGlyphRecord(entry.glyphId)).toMatchObject({
+      glyphId: entry.glyphId,
+      pageId: entry.pageId,
+    })
 
     const pages = atlas.drainDirtyPages()
     expect(pages.length).toBe(stats.dirtyPageCount)
     expect(pages.every((page) => page.byteSize === page.width * page.height * 4)).toBe(true)
     expect(atlas.getDirtyPageStats().dirtyPageCount).toBe(0)
+    expect(atlas.getTextAtlasPagesStats().dirtyPageCount).toBe(0)
+  })
+
+  it('assigns stable glyph identities without ref-counting repeated reads as new glyph registrations', () => {
+    const atlas = createGlyphAtlas()
+
+    const first = atlas.intern('400 11px Geist', 'A')
+    atlas.drainDirtyPages()
+    const second = atlas.intern('400 11px Geist', 'A')
+
+    expect(second.glyphId).toBe(first.glyphId)
+    expect(second.pageId).toBe(first.pageId)
+    expect(atlas.getTextAtlasPagesStats()).toMatchObject({
+      dirtyPageCount: 0,
+      glyphCount: 1,
+    })
   })
 })

@@ -44,7 +44,10 @@ export interface TypeGpuTileContentResourceEntryV3 {
   rectSignature: string | null
   textHandle: GpuBufferHandleV3<TextInstanceVertexBuffer> | null
   textCount: number
+  textGlyphIds: readonly number[] | null
+  textGlyphPageIds: readonly number[] | null
   textRunCount: number
+  textRunGlyphIds: readonly (readonly number[])[] | null
   textRunQuadSpans: readonly TextQuadRunSpan[] | null
   textSignature: string | null
   decorationRects: readonly TextDecorationRect[] | null
@@ -64,7 +67,10 @@ function createEmptyContentEntry(): TypeGpuTileContentResourceEntryV3 {
     rectHandle: null,
     rectSignature: null,
     textCount: 0,
+    textGlyphIds: null,
+    textGlyphPageIds: null,
     textHandle: null,
+    textRunGlyphIds: null,
     textRunCount: 0,
     textRunQuadSpans: null,
     textSignature: null,
@@ -192,7 +198,10 @@ export class TypeGpuTileResourceCacheV3 {
     entry.rectCount = 0
     entry.rectSignature = null
     entry.textCount = 0
+    entry.textGlyphIds = null
+    entry.textGlyphPageIds = null
     entry.textRunCount = 0
+    entry.textRunGlyphIds = null
     entry.textRunQuadSpans = null
     entry.textSignature = null
     entry.decorationRects = null
@@ -205,7 +214,10 @@ export class TypeGpuTileResourceCacheV3 {
     entry.textHandle = null
     entry.rectCount = 0
     entry.textCount = 0
+    entry.textGlyphIds = null
+    entry.textGlyphPageIds = null
     entry.textRunCount = 0
+    entry.textRunGlyphIds = null
     entry.textRunQuadSpans = null
   }
 
@@ -408,7 +420,10 @@ function syncTileTextResource(input: {
   if (textPayload.quadCount === 0) {
     releaseTextBuffer(input.tileResources, input.content)
     input.content.textCount = 0
+    input.content.textGlyphIds = textPayload.glyphIds
+    input.content.textGlyphPageIds = textPayload.pageIds
     input.content.textRunCount = input.pane.tile.textCount
+    input.content.textRunGlyphIds = textPayload.runGlyphIds
     input.content.textRunQuadSpans = textPayload.runSpans
     input.content.textSignature = input.textSignature
     return
@@ -422,7 +437,10 @@ function syncTileTextResource(input: {
   const handle = prepareTextBuffer(input.tileResources, input.content, textPayload.quadCount)
   input.content.textHandle = handle
   input.content.textCount = textPayload.quadCount
+  input.content.textGlyphIds = textPayload.glyphIds
+  input.content.textGlyphPageIds = textPayload.pageIds
   input.content.textRunCount = input.pane.tile.textCount
+  input.content.textRunGlyphIds = textPayload.runGlyphIds
   writeTileTextPayload({
     canWritePartialPayload,
     content: input.content,

@@ -14,10 +14,10 @@ export interface AtlasPageV3 {
 export interface GlyphRecordV3 {
   readonly glyphId: GlyphIdV3
   readonly pageId: number
-  readonly u0: number
-  readonly v0: number
-  readonly u1: number
-  readonly v1: number
+  u0: number
+  v0: number
+  u1: number
+  v1: number
   refCount: number
 }
 
@@ -159,6 +159,39 @@ export class TextAtlasPagesV3 {
       this.touchPage(page)
     }
     return glyph
+  }
+
+  updateGlyphLocation(input: {
+    readonly glyphId: GlyphIdV3
+    readonly pageId: number
+    readonly u0: number
+    readonly v0: number
+    readonly u1: number
+    readonly v1: number
+  }): GlyphRecordV3 {
+    const page = this.pages.get(input.pageId)
+    if (!page) {
+      throw new Error(`Atlas page ${input.pageId} has not been registered`)
+    }
+    const existing = this.glyphs.get(input.glyphId)
+    if (!existing) {
+      return this.registerGlyph(input)
+    }
+    if (existing.pageId !== input.pageId) {
+      throw new Error(`Glyph ${input.glyphId} atlas page is immutable`)
+    }
+    // Atlas texture growth can change normalized UVs while the physical page and
+    // glyph identity remain stable. Update the record and mark only that page
+    // dirty so existing tile dependencies can be redrawn without full-atlas
+    // invalidation.
+    existing.u0 = input.u0
+    existing.u1 = input.u1
+    existing.v0 = input.v0
+    existing.v1 = input.v1
+    page.dirty = true
+    this.bumpPageSeq(page)
+    this.touchPage(page)
+    return existing
   }
 
   releaseGlyph(glyphId: GlyphIdV3): boolean {

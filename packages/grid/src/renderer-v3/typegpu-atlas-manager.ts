@@ -1,5 +1,10 @@
+import { GlyphKeyRegistryV3, type GlyphIdV3 } from './glyph-key.js'
+import { TextAtlasPagesV3, type GlyphRecordV3, type TextAtlasPagesStatsV3 } from './text-atlas-pages.js'
+
 export interface GlyphAtlasEntry {
   readonly key: string
+  readonly glyphId: GlyphIdV3
+  readonly pageId: number
   readonly font: string
   readonly glyph: string
   readonly x: number
@@ -17,6 +22,8 @@ export interface GlyphAtlasEntry {
 
 interface MutableGlyphAtlasEntry {
   key: string
+  glyphId: GlyphIdV3
+  pageId: number
   font: string
   glyph: string
   x: number
@@ -166,6 +173,9 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
   }
 
   const entries = new Map<string, MutableGlyphAtlasEntry>()
+  const fontInternIds = new Map<string, number>()
+  const glyphKeys = new GlyphKeyRegistryV3()
+  const atlasPages = new TextAtlasPagesV3()
   let cursorX = padding
   let cursorY = padding
   let rowHeight = 0
@@ -205,6 +215,14 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
       entry.v0 = (entry.y * scale) / height
       entry.u1 = ((entry.x + entry.width) * scale) / width
       entry.v1 = ((entry.y + entry.height) * scale) / height
+      atlasPages.updateGlyphLocation({
+        glyphId: entry.glyphId,
+        pageId: entry.pageId,
+        u0: entry.u0,
+        u1: entry.u1,
+        v0: entry.v0,
+        v1: entry.v1,
+      })
     }
 
     redrawAll()
@@ -216,7 +234,10 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
   const intern = (font: string, glyph: string): GlyphAtlasEntry => {
     const key = `${font}:${glyph}`
     const existing = entries.get(key)
-    if (existing) return existing
+    if (existing) {
+      atlasPages.resolveGlyph(existing.glyphId)
+      return existing
+    }
 
     const metrics = measureGlyph(font, glyph)
     if (cursorX + metrics.width + padding > width / scale) {
@@ -229,8 +250,18 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
       growAtlas(width, (cursorY + metrics.height + padding) * scale)
     }
 
+    const page = resolveDirtyPageForPhysicalPoint(cursorX * scale, cursorY * scale, width, height)
+    atlasPages.upsertPage({ dirty: true, height: page.height, pageId: page.pageId, width: page.width, x: page.x, y: page.y })
+    const glyphId = glyphKeys.intern({
+      dprBucket: scale,
+      fontInternId: internFont(fontInternIds, font),
+      glyph,
+    })
+
     const entry: MutableGlyphAtlasEntry = {
       key,
+      glyphId,
+      pageId: page.pageId,
       font,
       glyph,
       x: cursorX,
@@ -251,6 +282,14 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
       context.font = font
       context.fillText(glyph, entry.x + entry.originOffsetX, entry.y + metrics.baseline)
     }
+    atlasPages.registerGlyph({
+      glyphId,
+      pageId: page.pageId,
+      u0: entry.u0,
+      u1: entry.u1,
+      v0: entry.v0,
+      v1: entry.v1,
+    })
     markGlyphPageDirty(entry)
 
     entries.set(key, entry)
@@ -310,13 +349,15 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
         y,
       })
     }
+    atlasPages.upsertPage({ dirty: true, height: pageHeight, pageId, width: pageWidth, x, y })
     atlasSeq += 1
   }
 
   return {
     drainDirtyPages(): readonly GlyphAtlasDirtyPageUpload[] {
-      const pages = [...dirtyPages.values()].toSorted((left, right) => left.pageId - right.pageId)
+      const pages = Array.from(dirtyPages.values())
       dirtyPages.clear()
+      atlasPages.drainDirtyPages()
       return pages
     },
     getCanvas(): AtlasCanvasLike | null {
@@ -334,11 +375,17 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
         pageCount: resolveAtlasPageCount(width, height),
       }
     },
+    getTextAtlasPagesStats(): TextAtlasPagesStatsV3 {
+      return atlasPages.stats()
+    },
     getVersion(): number {
       return version
     },
     getSize(): { width: number; height: number } {
       return { width, height }
+    },
+    resolveGlyphRecord(glyphId: GlyphIdV3): GlyphRecordV3 | null {
+      return atlasPages.resolveGlyph(glyphId)
     },
     intern,
   }
@@ -346,4 +393,33 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
 
 function resolveAtlasPageCount(width: number, height: number): number {
   return Math.ceil(width / ATLAS_DIRTY_PAGE_SIZE) * Math.ceil(height / ATLAS_DIRTY_PAGE_SIZE)
+}
+
+function internFont(fontInternIds: Map<string, number>, font: string): number {
+  const existing = fontInternIds.get(font)
+  if (existing !== undefined) {
+    return existing
+  }
+  const next = fontInternIds.size + 1
+  fontInternIds.set(font, next)
+  return next
+}
+
+function resolveDirtyPageForPhysicalPoint(
+  x: number,
+  y: number,
+  atlasWidth: number,
+  atlasHeight: number,
+): { readonly pageId: number; readonly x: number; readonly y: number; readonly width: number; readonly height: number } {
+  const pageX = Math.max(0, Math.floor(x / ATLAS_DIRTY_PAGE_SIZE))
+  const pageY = Math.max(0, Math.floor(y / ATLAS_DIRTY_PAGE_SIZE))
+  const pageOriginX = pageX * ATLAS_DIRTY_PAGE_SIZE
+  const pageOriginY = pageY * ATLAS_DIRTY_PAGE_SIZE
+  return {
+    height: Math.max(1, Math.min(ATLAS_DIRTY_PAGE_SIZE, atlasHeight - pageOriginY)),
+    pageId: pageY * ATLAS_PAGE_ID_STRIDE + pageX,
+    width: Math.max(1, Math.min(ATLAS_DIRTY_PAGE_SIZE, atlasWidth - pageOriginX)),
+    x: pageOriginX,
+    y: pageOriginY,
+  }
 }

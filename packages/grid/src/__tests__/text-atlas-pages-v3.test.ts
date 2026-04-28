@@ -57,6 +57,20 @@ describe('renderer-v3 text atlas pages', () => {
     expect(atlas.resolveGlyph(8)).toBeNull()
   })
 
+  it('allows atlas growth to update glyph UVs without changing glyph identity', () => {
+    const atlas = new TextAtlasPagesV3()
+    atlas.upsertPage({ height: 64, pageId: 1, width: 64 })
+    const glyph = atlas.registerGlyph({ glyphId: 8, pageId: 1, u0: 0, u1: 1, v0: 0, v1: 1 })
+    atlas.drainDirtyPages()
+
+    const updated = atlas.updateGlyphLocation({ glyphId: 8, pageId: 1, u0: 0, u1: 0.5, v0: 0, v1: 0.5 })
+
+    expect(updated).toBe(glyph)
+    expect(updated.refCount).toBe(1)
+    expect(updated.u1).toBe(0.5)
+    expect(atlas.stats().dirtyPageCount).toBe(1)
+  })
+
   it('respects dirty page upload budgets without blanking all pages', () => {
     const atlas = new TextAtlasPagesV3()
     atlas.upsertPage({ height: 64, pageId: 1, width: 64, dirty: true })

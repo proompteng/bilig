@@ -12,6 +12,8 @@ const atlas = {
     const advance = Math.max(0, glyph.length * 8)
     return {
       key: `atlas:${glyph}`,
+      glyphId: glyph.codePointAt(0) ?? 0,
+      pageId: 1,
       font,
       glyph,
       x: 0,
@@ -144,6 +146,8 @@ describe('text-quad-buffer', () => {
       { offset: 0, length: 2 },
       { offset: 2, length: 1 },
     ])
+    expect(payload.glyphIds).toEqual(['A', 'B', 'C'].map((glyph) => glyph.codePointAt(0)))
+    expect(payload.runGlyphIds).toEqual([['A', 'B'].map((glyph) => glyph.codePointAt(0)), ['C'].map((glyph) => glyph.codePointAt(0))])
   })
 
   it('builds underline and strike rects from clipped scene items', () => {

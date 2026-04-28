@@ -33,6 +33,8 @@ export interface TextQuadRun {
 
 export interface TextQuad {
   readonly atlasKey: string
+  readonly glyphId: number
+  readonly pageId: number
   readonly glyph: string
   readonly x: number
   readonly y: number
@@ -89,6 +91,8 @@ export function buildTextQuads(runs: readonly TextQuadRun[], atlas: GlyphAtlasLi
         quads.push({
           atlasKey: entry.key,
           glyph: glyph.glyph,
+          glyphId: entry.glyphId,
+          pageId: entry.pageId,
           x: glyph.worldX - entry.originOffsetX,
           y: line.baselineWorldY - entry.baseline,
           width: entry.width,
@@ -110,12 +114,17 @@ export function buildTextQuads(runs: readonly TextQuadRun[], atlas: GlyphAtlasLi
   return quads
 }
 
-function packTextQuads(quads: readonly TextQuad[], targetBuffer?: Float32Array): { floats: Float32Array; quadCount: number } {
+function packTextQuads(
+  quads: readonly TextQuad[],
+  targetBuffer?: Float32Array,
+): { floats: Float32Array; glyphIds: readonly number[]; pageIds: readonly number[]; quadCount: number } {
   const floats =
     targetBuffer && targetBuffer.length >= quads.length * TEXT_INSTANCE_FLOAT_COUNT
       ? targetBuffer
       : new Float32Array(Math.max(1, quads.length) * TEXT_INSTANCE_FLOAT_COUNT)
 
+  const glyphIds: number[] = []
+  const pageIds: number[] = []
   quads.forEach((quad, index) => {
     const base = index * TEXT_INSTANCE_FLOAT_COUNT
     const [r, g, b, a] = parseTextCssColor(quad.color)
@@ -135,16 +144,18 @@ function packTextQuads(quads: readonly TextQuad[], targetBuffer?: Float32Array):
     floats[base + 13] = quad.clipY
     floats[base + 14] = quad.clipX + quad.clipWidth
     floats[base + 15] = quad.clipY + quad.clipHeight
+    glyphIds.push(quad.glyphId)
+    pageIds.push(quad.pageId)
   })
 
-  return { floats, quadCount: quads.length }
+  return { floats, glyphIds, pageIds, quadCount: quads.length }
 }
 
 export function buildTextQuadsFromScene(
   items: readonly GridTextItem[],
   atlas: GlyphAtlasLike,
   targetBuffer?: Float32Array,
-): { floats: Float32Array; quadCount: number } {
+): { floats: Float32Array; glyphIds: readonly number[]; pageIds: readonly number[]; quadCount: number } {
   const quads = buildTextQuads(
     items.map((item) => ({
       text: item.text,
@@ -174,7 +185,7 @@ export function buildTextQuadsFromRuns(
   runs: readonly TextQuadRun[],
   atlas: GlyphAtlasLike,
   targetBuffer?: Float32Array,
-): { floats: Float32Array; quadCount: number } {
+): { floats: Float32Array; glyphIds: readonly number[]; pageIds: readonly number[]; quadCount: number } {
   return packTextQuads(buildTextQuads(runs, atlas), targetBuffer)
 }
 
@@ -182,16 +193,27 @@ export function buildTextQuadsFromRunsWithSpans(
   runs: readonly TextQuadRun[],
   atlas: GlyphAtlasLike,
   targetBuffer?: Float32Array,
-): { floats: Float32Array; quadCount: number; runSpans: readonly TextQuadRunSpan[] } {
+): {
+  floats: Float32Array
+  glyphIds: readonly number[]
+  pageIds: readonly number[]
+  quadCount: number
+  runGlyphIds: readonly (readonly number[])[]
+  runSpans: readonly TextQuadRunSpan[]
+} {
   const quads: TextQuad[] = []
+  const runGlyphIds: number[][] = []
   const runSpans: TextQuadRunSpan[] = []
   for (const run of runs) {
     const offset = quads.length
-    quads.push(...buildTextQuads([run], atlas))
+    const runQuads = buildTextQuads([run], atlas)
+    quads.push(...runQuads)
+    runGlyphIds.push(runQuads.map((quad) => quad.glyphId))
     runSpans.push({ offset, length: quads.length - offset })
   }
   return {
     ...packTextQuads(quads, targetBuffer),
+    runGlyphIds,
     runSpans,
   }
 }
