@@ -48,19 +48,18 @@ Latest implementation note:
 - `renderer-v3/text-run-buffer.ts` now owns V3 text-run metric packing for fixed content tiles. Together with
   `renderer-v3/rect-instance-buffer.ts`, V3 tile materialization can build rect/text payloads without going through `scene-packet-v2.ts`.
 - The grid package top-level public export no longer re-exports `renderer-v2/index.js`; `renderer-v2/index.ts` itself has been deleted.
-  The old mounted V2 pane renderer has been deleted, and remaining `renderer-v2` modules are internal legacy primitives/tests while the public
-  renderer surface points at V3.
+  The old mounted V2 pane renderer, backend, text/atlas helpers, cache, debug helpers, and scene-packet primitives have been deleted, so
+  `packages/grid/src/renderer-v2` no longer exists in the current source tree.
 
 ## 1. Validation Verdict
 
-The Atlas response is directionally correct: the mounted grid path is no longer a legacy DOM/canvas renderer, and data rendering now enters through fixed render tiles. The mounted product path now uses `WorkbookPaneRendererV3` and V3 tile panes instead of a V2 scene-packet adapter. The V3 data-tile backend, TypeGPU primitives, pane layout, text/atlas helpers, draw loop, camera store, and header/overlay resource helpers are now V3-owned. Remaining `renderer-v2` modules are legacy scene-packet, cache, debug-helper, and test-oracle code.
+The Atlas response is directionally correct: the mounted grid path is no longer a legacy DOM/canvas renderer, and data rendering now enters through fixed render tiles. The mounted product path now uses `WorkbookPaneRendererV3` and V3 tile panes instead of a V2 scene-packet adapter. The V3 data-tile backend, TypeGPU primitives, pane layout, text/atlas helpers, draw loop, camera store, and header/overlay resource helpers are now V3-owned. There are no remaining `packages/grid/src/renderer-v2` source files; the remaining renderer work is now V3 runtime ownership and dirty-tile correctness, not V2 file deletion.
 
 The current hot path still has these validated properties:
 
 - `packages/grid/src/useWorkbookGridRenderState.ts` is still too large and owns pane construction, header scene building, overlay geometry bridge state, and React-facing state in one hook, but camera visible-region transactions, tile-interest stamping, selection auto-scroll math, and viewport restoration now run through `GridRuntimeHost`.
 - The app-side resident scene store has been deleted; retained render data now lives in `apps/web/src/projected-tile-scene-store.ts`.
 - Product data rendering no longer imports `packages/grid/src/gridResidentDataLayer.ts`; it now uses fixed render tiles and V3 tile-pane placement.
-- `packages/grid/src/renderer-v2/tile-gpu-cache.ts` remains only as a legacy primitive/test helper and no longer uses array materialization plus `toSorted()` for stale lookup and eviction after this implementation tranche.
 - `packages/grid/src/renderer-v3/typegpu-workbook-backend-v3.ts` owns V3 tile-pane drawing and uses `TileResidencyV3<GridRenderTile>` plus numeric tile IDs instead of `TileGpuCache` and serialized V2 scene packet keys.
 - legacy V2 text-layout and atlas helpers were deleted; text layout, quad packing, and atlas dirty-page tests now target `packages/grid/src/renderer-v3`.
 - `packages/grid/src/renderer-v3/dynamic-overlay-batch.ts` now builds interaction overlays without `GridScenePacketV2`; `WorkbookPaneRendererV3` passes those batches to a dedicated TypeGPU overlay buffer path instead of appending a fake overlay pane.
@@ -72,10 +71,12 @@ Important corrections to the Atlas text:
 - `packages/grid/src/renderer-v2/typegpu-buffer-pool.ts` has been deleted; the equivalent resource-signature coverage now targets V3 fixed tiles and V3 TypeGPU primitives.
 - `packages/grid/src/renderer-v2/typegpu-atlas-manager.ts`, `line-text-layout.ts`, `line-text-quad-buffer.ts`, `glyphAtlasV2.ts`, and
   `text-glyph-buffer.ts` have been deleted; remaining text/atlas coverage targets the V3 text path directly.
-- The hashing work still exists during packet packing in `packages/grid/src/renderer-v2/scene-packet-v2.ts`, where `resolveRectSignature()` and `resolveTextSignature()` walk the full rect/text payload.
-- `scene-packet-v2.ts` still exists for legacy V2 tests and backend compatibility helpers, but it no longer wraps mounted product V3 fixed-tile
-  payloads, local fallback V3 tiles, or worker render-tile delta replacements.
-- The practical next step is not to delete the whole path immediately. The correct migration is measured replacement: add counters, remove hot-path allocation/sort work, then introduce renderer-native deltas behind tested contracts.
+- `packages/grid/src/renderer-v2/scene-packet-v2.ts`, `scene-packet-validator.ts`, `tile-gpu-cache.ts`, `grid-render-layers.ts`,
+  `render-debug-hud.ts`, and the V2 re-export shims have been deleted. V3 tile-packet, tile-residency, draw-command, and TypeGPU backend tests
+  now carry the active coverage for fixed-tile rendering contracts.
+- The practical next step is no longer V2 file deletion. The correct migration is measured replacement inside the V3-owned runtime: tighten
+  counters and browser perf gates, replace remaining React-owned pane/header/editor coordination, and move routine dirty-tile updates onto
+  renderer-native deltas.
 - The follow-up Oracle response is correct that `useWorkbookGridRenderState.ts` must stop being the renderer owner, `ViewportPatch` must not remain the renderer contract, content tile identity must split from pane placement, and overlays need their own runtime. It is stale where it says the current `tile-gpu-cache.ts` still uses `filter().toSorted()` and where it describes `typegpu-buffer-pool.ts` as an active runtime file.
 
 ## 2. Target Architecture
@@ -374,10 +375,12 @@ Completed in the resident-scene deletion tranche:
   covered the remaining glyph residency behavior.
 - `packages/grid/src/renderer-v2/gridRenderLoop.ts` and `gridCameraStore.ts` were deleted after their tests were moved to the V3 draw loop
   and runtime camera store owners.
+- The final legacy `packages/grid/src/renderer-v2` files were deleted after remaining tests were either retired as obsolete V2-only coverage or
+  retargeted to V3 constants. The import-boundary test now asserts the whole `renderer-v2` directory stays absent.
 
 Remaining work from this design:
 
 - continue splitting pane construction, header generation, editor overlay anchoring, and draw scheduling out of `useWorkbookGridRenderState.ts`;
 - replace routine resident scene packet regeneration with dirty-span tile payload updates;
 - wire the V3 atlas/text-run primitives into the TypeGPU backend and add tile glyph dependency preservation;
-- remove remaining legacy scene-packet primitive/test use after parity and perf gates are green.
+- tighten browser perf gates around the now V3-only renderer path.

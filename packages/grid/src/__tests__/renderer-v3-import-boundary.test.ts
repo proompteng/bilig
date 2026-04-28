@@ -14,6 +14,10 @@ function collectSourceFiles(path: string): string[] {
 }
 
 describe('renderer v3 import boundary', () => {
+  test('legacy renderer-v2 directory is deleted', () => {
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2'))).toBe(false)
+  })
+
   test('legacy mounted V2 pane renderer surface is deleted', () => {
     expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/WorkbookPaneRendererV2.tsx'))).toBe(false)
   })
@@ -48,8 +52,15 @@ describe('renderer v3 import boundary', () => {
     expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/gridCameraStore.ts'))).toBe(false)
   })
 
-  test('legacy renderer-v2 barrel is deleted', () => {
+  test('legacy V2 scene-packet, cache, debug, and barrel files are deleted', () => {
     expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/index.ts'))).toBe(false)
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/scene-packet-v2.ts'))).toBe(false)
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/scene-packet-validator.ts'))).toBe(false)
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/tile-gpu-cache.ts'))).toBe(false)
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/grid-render-contract.ts'))).toBe(false)
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/grid-render-counters.ts'))).toBe(false)
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/grid-render-layers.ts'))).toBe(false)
+    expect(existsSync(join(GRID_SRC_ROOT, 'renderer-v2/render-debug-hud.ts'))).toBe(false)
   })
 
   test('product grid paths do not import renderer-v2 modules', () => {

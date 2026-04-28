@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
 import { describe, expect, test, vi } from 'vitest'
-import {
-  GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT,
-  GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT,
-} from '../renderer-v2/scene-packet-v2.js'
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from '../renderer-v3/render-tile-pane-state.js'
 import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
+import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from '../renderer-v3/rect-instance-buffer.js'
+import { GRID_TEXT_METRIC_FLOAT_COUNT_V3 } from '../renderer-v3/text-run-buffer.js'
 import {
   TypeGpuLayerResourceCacheV3,
   WORKBOOK_DYNAMIC_OVERLAY_LAYER_KEY_V3,
@@ -34,9 +32,9 @@ function createRenderTile(valueVersion: number, tileId = 101): GridRenderTile {
     lastBatchId: valueVersion,
     lastCameraSeq: valueVersion,
     rectCount: 0,
-    rectInstances: new Float32Array(GRID_SCENE_PACKET_V2_RECT_INSTANCE_FLOAT_COUNT),
+    rectInstances: new Float32Array(GRID_RECT_INSTANCE_FLOAT_COUNT_V3),
     textCount: 0,
-    textMetrics: new Float32Array(GRID_SCENE_PACKET_V2_TEXT_METRIC_FLOAT_COUNT),
+    textMetrics: new Float32Array(GRID_TEXT_METRIC_FLOAT_COUNT_V3),
     textRuns: [],
     tileId,
     version: {
