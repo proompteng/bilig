@@ -165,7 +165,7 @@ export function FormulaBar({
               className={formulaInputClass()}
               data-testid="formula-input"
               id="formula-input"
-              placeholder="Type a literal or =formula"
+              placeholder="Value or =formula"
               ref={inputRef}
               role="combobox"
               type="text"

@@ -151,6 +151,33 @@ test('web app keeps the formula input usable on phone-width screens', async ({ p
   expect(placeholderMetrics.usableWidth).toBeGreaterThan(placeholderMetrics.textWidth)
 })
 
+test('web app keeps the formula placeholder readable on tiny screens', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 })
+  await page.goto('/?sheet=Sheet1&cell=B10')
+  await waitForWorkbookReady(page)
+
+  const formulaInput = page.getByTestId('formula-input')
+  await expect(formulaInput).toHaveAttribute('placeholder', 'Value or =formula')
+
+  const placeholderMetrics = await formulaInput.evaluate((element) => {
+    if (!(element instanceof HTMLInputElement)) {
+      throw new Error('Expected formula input')
+    }
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('2d')
+    if (!context) {
+      throw new Error('Expected canvas text measurement context')
+    }
+    const style = getComputedStyle(element)
+    context.font = style.font
+    const textWidth = context.measureText(element.placeholder).width
+    const usableWidth = element.getBoundingClientRect().width - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight)
+    return { textWidth, usableWidth }
+  })
+
+  expect(placeholderMetrics.usableWidth).toBeGreaterThan(placeholderMetrics.textWidth)
+})
+
 test('web app keeps the workbook visible when the assistant rail becomes a phone overlay', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 844 })
   await page.goto('/?sheet=Sheet1&cell=B10')
