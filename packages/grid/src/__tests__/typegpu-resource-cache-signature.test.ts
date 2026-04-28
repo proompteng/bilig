@@ -8,6 +8,7 @@ import {
   shouldSyncGridTextTileResourceV3,
   type TypeGpuTileContentResourceEntryV3,
 } from '../renderer-v3/typegpu-tile-buffer-pool.js'
+import { writeTypeGpuVertexBufferSubrange } from '../renderer-v3/typegpu-primitives.js'
 
 function createTile(overrides: Partial<GridRenderTile> = {}): GridRenderTile {
   const version = {
@@ -202,5 +203,35 @@ describe('typegpu v3 resource cache signatures', () => {
         tile: plainAfterDecoration,
       }),
     ).toBe(true)
+  })
+
+  test('writes V3 vertex buffer subranges with byte offsets instead of full payload bytes', () => {
+    const writes: { readonly bytes: number; readonly startOffset?: number; readonly endOffset?: number }[] = []
+    const buffer = {
+      write(source: ArrayBuffer, options?: { readonly startOffset?: number; readonly endOffset?: number }) {
+        writes.push({
+          bytes: source.byteLength,
+          endOffset: options?.endOffset,
+          startOffset: options?.startOffset,
+        })
+      },
+    }
+    const floats = new Float32Array(80)
+
+    writeTypeGpuVertexBufferSubrange({
+      buffer,
+      floatCount: 20,
+      floats,
+      label: 'test-subrange',
+      startFloat: 40,
+    })
+
+    expect(writes).toEqual([
+      {
+        bytes: 20 * Float32Array.BYTES_PER_ELEMENT,
+        endOffset: 60 * Float32Array.BYTES_PER_ELEMENT,
+        startOffset: 40 * Float32Array.BYTES_PER_ELEMENT,
+      },
+    ])
   })
 })

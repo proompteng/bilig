@@ -418,10 +418,14 @@ Completed in the resident-scene deletion tranche:
   `worker-runtime-render-tile-delta.ts` no longer mark ordinary changed cells as rect-dirty, and `typegpu-tile-buffer-pool.ts` uses tile-local
   dirty masks to skip unrelated rect buffer sync while still forcing rect sync for styled text decorations, decoration removal, border/style
   changes, axis movement, and full/unknown dirty packets.
+- V3 render-tile replacement mutations now derive typed dirty spans from tile-local row/column/mask metadata. Exact one-rect-per-cell dirty
+  ranges are emitted as row-major rect subspans, text-only updates emit no rect spans, and the TypeGPU tile buffer pool writes bounded rect
+  subranges into existing buffers when counts and decoration state prove that a partial write is safe. Text glyph buffers still full-sync until
+  per-run glyph-span metadata exists.
 
 Remaining work from this design:
 
 - continue splitting remaining draw/dirty-tile coordination out of `useWorkbookGridRenderState.ts`;
-- continue using tile-local dirty row/column/mask metadata to replace remaining full text/rect buffer writes with dirty-span payload updates;
+- continue extending tile-local dirty row/column/mask metadata from rect subrange writes into text/glyph dirty-span payload updates;
 - wire the V3 atlas/text-run primitives into the TypeGPU backend and add tile glyph dependency preservation;
 - tighten browser perf gates around the now V3-only renderer path.

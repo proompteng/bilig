@@ -49,6 +49,17 @@ export interface GridRenderTileTextRun {
   readonly strike: boolean
 }
 
+export interface GridRenderTileDirtySpan {
+  readonly offset: number
+  readonly length: number
+}
+
+export interface GridRenderTileDirtySpans {
+  readonly rectSpans: readonly GridRenderTileDirtySpan[]
+  readonly textSpans: readonly GridRenderTileDirtySpan[]
+  readonly glyphSpans: readonly GridRenderTileDirtySpan[]
+}
+
 export interface GridRenderTile {
   readonly tileId: number
   readonly packet?: GridTilePacketV3 | undefined
@@ -60,6 +71,7 @@ export interface GridRenderTile {
   readonly textMetrics: Float32Array
   readonly textRuns: readonly GridRenderTileTextRun[]
   readonly textCount: number
+  readonly dirty?: GridRenderTileDirtySpans | undefined
   readonly dirtyLocalRows?: Uint32Array | undefined
   readonly dirtyLocalCols?: Uint32Array | undefined
   readonly dirtyMasks?: Uint32Array | undefined

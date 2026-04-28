@@ -432,6 +432,28 @@ export function writeTypeGpuVertexBuffer<TData extends WgslArray>(
   noteTypeGpuBufferWrite(floats.byteLength, label)
 }
 
+export function writeTypeGpuVertexBufferSubrange<TData extends WgslArray>(input: {
+  readonly buffer: Pick<TypeGpuVertexBuffer<TData>, 'write'>
+  readonly floats: Float32Array
+  readonly startFloat: number
+  readonly floatCount: number
+  readonly label?: string | undefined
+}): void {
+  const startFloat = Math.max(0, Math.floor(input.startFloat))
+  const endFloat = Math.max(startFloat, Math.min(input.floats.length, startFloat + Math.max(0, Math.floor(input.floatCount))))
+  if (endFloat <= startFloat) {
+    return
+  }
+  const source = input.floats.subarray(startFloat, endFloat).slice().buffer
+  const startOffset = startFloat * Float32Array.BYTES_PER_ELEMENT
+  const endOffset = endFloat * Float32Array.BYTES_PER_ELEMENT
+  input.buffer.write(source, {
+    endOffset,
+    startOffset,
+  })
+  noteTypeGpuBufferWrite(source.byteLength, input.label ?? 'vertex-subrange')
+}
+
 export function createTypeGpuSurfaceUniform(root: TgpuRoot): SurfaceUniformBuffer {
   return root.createUniform(surfaceUniformSchema, {
     origin: d.vec2f(0, 0),

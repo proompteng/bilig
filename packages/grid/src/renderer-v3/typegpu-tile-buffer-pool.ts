@@ -14,10 +14,12 @@ import {
   type TextInstanceVertexBuffer,
   type TypeGpuRendererArtifacts,
   writeTypeGpuVertexBuffer,
+  writeTypeGpuVertexBufferSubrange,
 } from './typegpu-primitives.js'
 import { GpuBufferArenaV3, type GpuBufferHandleV3 } from './gpu-buffer-arena.js'
 import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from './rect-instance-buffer.js'
 import type { GridRenderTile } from './render-tile-source.js'
+import { isFullGridRenderTileDirtySpanV3 } from './render-tile-dirty-spans.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
 import { DirtyMaskV3 } from './tile-damage-index.js'
 
@@ -420,11 +422,50 @@ function syncTileRectResource(input: {
     input.content.rectSignature = input.rectSignature
     return
   }
+  const canWritePartialPayload =
+    input.content.rectSignature !== null && input.content.rectHandle !== null && input.content.rectCount === rectPayload.count
   const handle = prepareRectBuffer(input.tileResources, input.content, rectPayload.count)
   input.content.rectHandle = handle
   input.content.rectCount = rectPayload.count
-  writeTypeGpuVertexBuffer(handle.buffer, rectPayload.floats, `tile-rect:${resolveWorkbookTileContentBufferKeyV3(input.pane)}`)
+  writeTileRectPayload({
+    canWritePartialPayload,
+    content: input.content,
+    handle,
+    label: `tile-rect:${resolveWorkbookTileContentBufferKeyV3(input.pane)}`,
+    rectPayload,
+    tile: input.pane.tile,
+  })
   input.content.rectSignature = input.rectSignature
+}
+
+function writeTileRectPayload(input: {
+  readonly canWritePartialPayload: boolean
+  readonly content: TypeGpuTileContentResourceEntryV3
+  readonly handle: GpuBufferHandleV3<RectInstanceVertexBuffer>
+  readonly label: string
+  readonly rectPayload: { readonly floats: Float32Array; readonly count: number }
+  readonly tile: GridRenderTile
+}): void {
+  const dirtySpans = input.tile.dirty?.rectSpans ?? []
+  if (
+    !input.canWritePartialPayload ||
+    dirtySpans.length === 0 ||
+    input.content.rectCount !== input.rectPayload.count ||
+    (input.content.decorationRects?.length ?? 0) > 0 ||
+    dirtySpans.some((span) => isFullGridRenderTileDirtySpanV3(span, input.rectPayload.count))
+  ) {
+    writeTypeGpuVertexBuffer(input.handle.buffer, input.rectPayload.floats, input.label)
+    return
+  }
+  dirtySpans.forEach((span) => {
+    writeTypeGpuVertexBufferSubrange({
+      buffer: input.handle.buffer,
+      floatCount: span.length * RECT_INSTANCE_FLOAT_COUNT,
+      floats: input.rectPayload.floats,
+      label: `${input.label}:span`,
+      startFloat: span.offset * RECT_INSTANCE_FLOAT_COUNT,
+    })
+  })
 }
 
 function prepareRectBuffer(

@@ -13,6 +13,7 @@ import { parseCellAddress } from '@bilig/formula'
 import type { RenderTileDeltaBatch, RenderTileDeltaSubscription, RenderTileReplaceMutation } from '@bilig/worker-transport'
 import { getGridMetrics } from '../../../packages/grid/src/gridMetrics.js'
 import { materializeGridRenderTileV3 } from '../../../packages/grid/src/renderer-v3/grid-tile-materializer.js'
+import { resolveGridRenderTileDirtySpansV3 } from '../../../packages/grid/src/renderer-v3/render-tile-dirty-spans.js'
 import type { GridRenderTile } from '../../../packages/grid/src/renderer-v3/render-tile-source.js'
 import { DirtyMaskV3 } from '../../../packages/grid/src/renderer-v3/tile-damage-index.js'
 import { packTileKey53, tileKeysForViewport, unpackTileKey53, type TileKey53 } from '../../../packages/grid/src/renderer-v3/tile-key.js'
@@ -35,7 +36,6 @@ interface RenderTileDeltaEngineLike extends GridEngineLike {
   getLastMetrics(): Pick<RecalcMetrics, 'batchId'>
 }
 
-const FULL_SPAN_START = 0
 const CHANGED_CELL_DIRTY_MASK = DirtyMaskV3.Value | DirtyMaskV3.Text
 const INVALIDATED_RANGE_DIRTY_MASK = DirtyMaskV3.Value | DirtyMaskV3.Style | DirtyMaskV3.Text | DirtyMaskV3.Rect | DirtyMaskV3.Border
 const AXIS_X_DIRTY_MASK = DirtyMaskV3.AxisX | DirtyMaskV3.Text | DirtyMaskV3.Rect
@@ -455,11 +455,7 @@ export function buildRenderTileReplaceMutation(tile: GridRenderTile): RenderTile
       y: run.y,
     })),
     textCount: tile.textCount,
-    dirty: {
-      rectSpans: tile.rectCount > 0 ? [{ offset: FULL_SPAN_START, length: tile.rectCount }] : [],
-      textSpans: tile.textCount > 0 ? [{ offset: FULL_SPAN_START, length: tile.textCount }] : [],
-      glyphSpans: [],
-    },
+    dirty: resolveGridRenderTileDirtySpansV3(tile),
     dirtyLocalCols: tile.dirtyLocalCols,
     dirtyLocalRows: tile.dirtyLocalRows,
     dirtyMasks: tile.dirtyMasks,
