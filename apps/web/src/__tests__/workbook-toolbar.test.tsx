@@ -72,6 +72,31 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
+function setScrollGeometry(
+  element: Element,
+  geometry: {
+    readonly clientWidth: number
+    readonly scrollLeft?: number | undefined
+    readonly scrollWidth: number
+  },
+) {
+  Object.defineProperties(element, {
+    clientWidth: {
+      configurable: true,
+      value: geometry.clientWidth,
+    },
+    scrollLeft: {
+      configurable: true,
+      value: geometry.scrollLeft ?? 0,
+      writable: true,
+    },
+    scrollWidth: {
+      configurable: true,
+      value: geometry.scrollWidth,
+    },
+  })
+}
+
 describe('WorkbookToolbar', () => {
   it('shows shortcut formatting state optimistically while the mutation is still pending', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -858,6 +883,105 @@ describe('WorkbookToolbar', () => {
     expect(formattingScroll?.className).toContain('overflow-x-auto')
     expect(formattingScroll?.className).toContain('overflow-y-hidden')
     expect(formattingScroll?.className).toContain('wb-scrollbar-none')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('signals hidden formatting actions on narrow toolbar scroll regions', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <WorkbookToolbar
+          canHideCurrentColumn={false}
+          canHideCurrentRow={false}
+          canRedo={false}
+          canUndo={false}
+          canUnhideCurrentColumn={false}
+          canUnhideCurrentRow={false}
+          currentFillColor="#ffffff"
+          currentNumberFormatKind="general"
+          currentTextColor="#111827"
+          horizontalAlignment={null}
+          isBoldActive={false}
+          isItalicActive={false}
+          isUnderlineActive={false}
+          isWrapActive={false}
+          onApplyBorderPreset={() => {}}
+          onClearStyle={() => {}}
+          onFillColorReset={() => {}}
+          onFillColorSelect={() => {}}
+          onFontSizeChange={() => {}}
+          onHideCurrentColumn={() => {}}
+          onHideCurrentRow={() => {}}
+          onHorizontalAlignmentChange={() => {}}
+          onNumberFormatChange={() => {}}
+          onRedo={() => {}}
+          onTextColorReset={() => {}}
+          onTextColorSelect={() => {}}
+          onToggleBold={() => {}}
+          onToggleItalic={() => {}}
+          onToggleUnderline={() => {}}
+          onToggleWrap={() => {}}
+          onUndo={() => {}}
+          onUnhideCurrentColumn={() => {}}
+          onUnhideCurrentRow={() => {}}
+          recentFillColors={[]}
+          recentTextColors={[]}
+          selectedFontSize="11"
+          trailingContent={<div>Trailing</div>}
+          writesAllowed
+        />,
+      )
+    })
+
+    const formattingScroll = host.querySelector("[data-testid='toolbar-formatting-scroll']")
+    if (!formattingScroll) {
+      throw new Error('Expected formatting toolbar scroll region to render')
+    }
+
+    setScrollGeometry(formattingScroll, { clientWidth: 220, scrollWidth: 870 })
+    const scrollBy = vi.fn()
+    Object.defineProperty(formattingScroll, 'scrollBy', {
+      configurable: true,
+      value: scrollBy,
+    })
+
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'))
+    })
+
+    const cue = host.querySelector("[data-testid='toolbar-overflow-cue']")
+    expect(cue).not.toBeNull()
+    expect(cue?.getAttribute('aria-label')).toBe('Show more toolbar actions')
+    expect(cue?.className).toContain('text-[var(--wb-accent)]')
+
+    await act(async () => {
+      cue?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(scrollBy).toHaveBeenCalledWith({
+      behavior: 'smooth',
+      left: 187,
+    })
+
+    setScrollGeometry(formattingScroll, {
+      clientWidth: 220,
+      scrollLeft: 650,
+      scrollWidth: 870,
+    })
+
+    await act(async () => {
+      formattingScroll?.dispatchEvent(new Event('scroll'))
+    })
+
+    expect(host.querySelector("[data-testid='toolbar-overflow-cue']")).toBeNull()
 
     await act(async () => {
       root.unmount()
