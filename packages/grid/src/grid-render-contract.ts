@@ -48,6 +48,12 @@ export interface GridGpuCounters {
   readonly tileCacheStaleHits: number
   readonly tileCacheStaleLookups: number
   readonly tileCacheVisibleMarks: number
+  readonly textAtlasGeometryResyncs: number
+  readonly textAtlasGeometryRetries: number
+  readonly textGlyphDependencies: number
+  readonly textPageDependencies: number
+  readonly textRunPayloadRebuilds: number
+  readonly textRunPayloadReuses: number
 }
 
 export interface GridRenderStats {

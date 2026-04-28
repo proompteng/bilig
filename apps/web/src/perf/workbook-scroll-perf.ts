@@ -47,6 +47,12 @@ interface WorkbookScrollPerfCounters {
   typeGpuTileCacheStaleHits: number
   typeGpuTileCacheStaleLookups: number
   typeGpuTileCacheVisibleMarks: number
+  typeGpuTextAtlasGeometryResyncs: number
+  typeGpuTextAtlasGeometryRetries: number
+  typeGpuTextGlyphDependencies: number
+  typeGpuTextPageDependencies: number
+  typeGpuTextRunPayloadRebuilds: number
+  typeGpuTextRunPayloadReuses: number
 }
 
 interface WorkbookScrollPerfSamples {
@@ -119,6 +125,12 @@ class WorkbookScrollPerfCollector {
     typeGpuTileCacheStaleHits: 0,
     typeGpuTileCacheStaleLookups: 0,
     typeGpuTileCacheVisibleMarks: 0,
+    typeGpuTextAtlasGeometryResyncs: 0,
+    typeGpuTextAtlasGeometryRetries: 0,
+    typeGpuTextGlyphDependencies: 0,
+    typeGpuTextPageDependencies: 0,
+    typeGpuTextRunPayloadRebuilds: 0,
+    typeGpuTextRunPayloadReuses: 0,
     typeGpuUniformWriteBytes: 0,
     typeGpuVertexUploadBytes: 0,
     typeGpuOverlayUploadBytes: 0,
@@ -290,6 +302,22 @@ class WorkbookScrollPerfCollector {
     this.totalCounters.typeGpuTileCacheVisibleMarks += count
   }
 
+  noteTypeGpuTextPayload(input: {
+    readonly reusedRunPayloads: number
+    readonly rebuiltRunPayloads: number
+    readonly atlasGeometryRetries: number
+    readonly atlasGeometryResyncs?: number | undefined
+    readonly glyphDependencies: number
+    readonly pageDependencies: number
+  }): void {
+    this.totalCounters.typeGpuTextRunPayloadReuses += input.reusedRunPayloads
+    this.totalCounters.typeGpuTextRunPayloadRebuilds += input.rebuiltRunPayloads
+    this.totalCounters.typeGpuTextAtlasGeometryRetries += input.atlasGeometryRetries
+    this.totalCounters.typeGpuTextAtlasGeometryResyncs += input.atlasGeometryResyncs ?? 0
+    this.totalCounters.typeGpuTextGlyphDependencies += input.glyphDependencies
+    this.totalCounters.typeGpuTextPageDependencies += input.pageDependencies
+  }
+
   noteGridScrollInput(timestamp: number): void {
     if (this.warmupFramesRemaining > 0) {
       return
@@ -445,6 +473,12 @@ function subtractCounters(counters: WorkbookScrollPerfCounters, baseline: Workbo
     typeGpuTileCacheStaleHits: counters.typeGpuTileCacheStaleHits - baseline.typeGpuTileCacheStaleHits,
     typeGpuTileCacheStaleLookups: counters.typeGpuTileCacheStaleLookups - baseline.typeGpuTileCacheStaleLookups,
     typeGpuTileCacheVisibleMarks: counters.typeGpuTileCacheVisibleMarks - baseline.typeGpuTileCacheVisibleMarks,
+    typeGpuTextAtlasGeometryResyncs: counters.typeGpuTextAtlasGeometryResyncs - baseline.typeGpuTextAtlasGeometryResyncs,
+    typeGpuTextAtlasGeometryRetries: counters.typeGpuTextAtlasGeometryRetries - baseline.typeGpuTextAtlasGeometryRetries,
+    typeGpuTextGlyphDependencies: counters.typeGpuTextGlyphDependencies - baseline.typeGpuTextGlyphDependencies,
+    typeGpuTextPageDependencies: counters.typeGpuTextPageDependencies - baseline.typeGpuTextPageDependencies,
+    typeGpuTextRunPayloadRebuilds: counters.typeGpuTextRunPayloadRebuilds - baseline.typeGpuTextRunPayloadRebuilds,
+    typeGpuTextRunPayloadReuses: counters.typeGpuTextRunPayloadReuses - baseline.typeGpuTextRunPayloadReuses,
     typeGpuUniformWriteBytes: counters.typeGpuUniformWriteBytes - baseline.typeGpuUniformWriteBytes,
     typeGpuVertexUploadBytes: counters.typeGpuVertexUploadBytes - baseline.typeGpuVertexUploadBytes,
     typeGpuOverlayUploadBytes: counters.typeGpuOverlayUploadBytes - baseline.typeGpuOverlayUploadBytes,

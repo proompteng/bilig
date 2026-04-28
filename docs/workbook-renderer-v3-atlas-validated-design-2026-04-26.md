@@ -434,9 +434,12 @@ Completed in the resident-scene deletion tranche:
   run payloads are not reused across atlas texture growth or UV remaps.
 - The V3 atlas now separates texture upload version from glyph-geometry version. New glyph uploads no longer force unrelated text-run payload
   rebuilds, while atlas texture growth bumps glyph geometry so dependent tile text resources resync before reusing stale UV payloads.
+- V3 text quad construction now reports text-run payload reuse, rebuild, atlas-geometry retry, glyph-dependency, page-dependency, and geometry
+  resync counters through the scroll perf collector. This gives browser perf reports direct visibility into whether active scroll/edit paths are
+  reusing stable text payloads or rebuilding because atlas geometry changed.
 
 Remaining work from this design:
 
 - continue splitting remaining draw/dirty-tile coordination out of `useWorkbookGridRenderState.ts`;
-- continue extending glyph dependency preservation into missing-glyph retry/update behavior and more explicit atlas dependency diagnostics;
+- continue extending glyph dependency preservation into missing-glyph retry/update behavior;
 - tighten browser perf gates around the now V3-only renderer path.

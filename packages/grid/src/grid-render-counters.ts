@@ -8,6 +8,15 @@ export interface RendererTileReadinessCounterInput {
   readonly warmDirtyTiles: number
 }
 
+export interface TypeGpuTextPayloadCounterInput {
+  readonly reusedRunPayloads: number
+  readonly rebuiltRunPayloads: number
+  readonly atlasGeometryRetries: number
+  readonly atlasGeometryResyncs?: number | undefined
+  readonly glyphDependencies: number
+  readonly pageDependencies: number
+}
+
 type ScrollPerfCounterSink = Partial<{
   noteTypeGpuConfigure: () => void
   noteTypeGpuSubmit: () => void
@@ -25,6 +34,7 @@ type ScrollPerfCounterSink = Partial<{
   noteTypeGpuTileCacheSort: (count: number) => void
   noteTypeGpuTileCacheStaleLookup: (scannedEntries: number, hit: boolean) => void
   noteTypeGpuTileCacheVisibleMark: (count: number) => void
+  noteTypeGpuTextPayload: (input: TypeGpuTextPayloadCounterInput) => void
   noteRendererTileReadiness: (input: RendererTileReadinessCounterInput) => void
   noteGridScrollInput: (timestamp: number) => void
   noteGridDrawFrame: (timestamp: number) => void
@@ -46,6 +56,12 @@ export const EMPTY_GRID_GPU_COUNTERS: GridGpuCounters = Object.freeze({
   tileCacheStaleHits: 0,
   tileCacheStaleLookups: 0,
   tileCacheVisibleMarks: 0,
+  textAtlasGeometryResyncs: 0,
+  textAtlasGeometryRetries: 0,
+  textGlyphDependencies: 0,
+  textPageDependencies: 0,
+  textRunPayloadRebuilds: 0,
+  textRunPayloadReuses: 0,
   uniformWriteBytes: 0,
   vertexUploadBytes: 0,
   overlayUploadBytes: 0,
@@ -121,6 +137,10 @@ export function noteTypeGpuTileCacheStaleLookup(scannedEntries: number, hit: boo
 
 export function noteTypeGpuTileCacheVisibleMark(count: number): void {
   getCounterSink()?.noteTypeGpuTileCacheVisibleMark?.(count)
+}
+
+export function noteTypeGpuTextPayload(input: TypeGpuTextPayloadCounterInput): void {
+  getCounterSink()?.noteTypeGpuTextPayload?.(input)
 }
 
 export function noteRendererTileReadiness(input: RendererTileReadinessCounterInput): void {

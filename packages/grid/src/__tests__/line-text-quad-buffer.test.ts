@@ -146,6 +146,11 @@ describe('text-quad-buffer', () => {
       { offset: 0, length: 2 },
       { offset: 2, length: 1 },
     ])
+    expect(payload.diagnostics).toEqual({
+      atlasGeometryRetries: 0,
+      rebuiltRunPayloads: 2,
+      reusedRunPayloads: 0,
+    })
     expect(payload.glyphIds).toEqual(['A', 'B', 'C'].map((glyph) => glyph.codePointAt(0)))
     expect(payload.runGlyphIds).toEqual([['A', 'B'].map((glyph) => glyph.codePointAt(0)), ['C'].map((glyph) => glyph.codePointAt(0))])
   })
@@ -186,6 +191,11 @@ describe('text-quad-buffer', () => {
       { offset: 0, length: 2 },
       { offset: 2, length: 1 },
     ])
+    expect(second.diagnostics).toEqual({
+      atlasGeometryRetries: 0,
+      rebuiltRunPayloads: 1,
+      reusedRunPayloads: 1,
+    })
     expect(internedGlyphs).not.toContain('A')
     expect(internedGlyphs).not.toContain('B')
     expect(internedGlyphs).toContain('D')
@@ -242,7 +252,36 @@ describe('text-quad-buffer', () => {
     )
 
     expect(second.runPayloads[0]).toBe(first.runPayloads[0])
+    expect(second.diagnostics).toEqual({
+      atlasGeometryRetries: 0,
+      rebuiltRunPayloads: 0,
+      reusedRunPayloads: 1,
+    })
     expect(internedGlyphs).toEqual([])
+  })
+
+  it('reports atlas geometry retries when glyph allocation changes UV geometry during build', () => {
+    let atlasGeometryVersion = 0
+    let firstIntern = true
+    const recordingAtlas = {
+      getGlyphGeometryVersion: () => atlasGeometryVersion,
+      intern(font: string, glyph: string) {
+        if (firstIntern) {
+          firstIntern = false
+          atlasGeometryVersion = 1
+        }
+        return atlas.intern(font, glyph)
+      },
+    }
+
+    const payload = buildTextQuadsFromRunsWithSpans([{ text: 'A', x: 0, y: 0, font: '400 10px Geist', fontSize: 10 }], recordingAtlas)
+
+    expect(payload.diagnostics).toEqual({
+      atlasGeometryRetries: 1,
+      rebuiltRunPayloads: 1,
+      reusedRunPayloads: 1,
+    })
+    expect(payload.runPayloads[0]?.atlasGeometryVersion).toBe(1)
   })
 
   it('builds underline and strike rects from clipped scene items', () => {

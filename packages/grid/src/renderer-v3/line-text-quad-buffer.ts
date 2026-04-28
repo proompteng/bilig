@@ -79,6 +79,12 @@ export interface BuildTextQuadsFromRunsWithSpansOptionsV3 {
   readonly dirtyRunSpans?: readonly TextQuadRunSpan[] | undefined
 }
 
+export interface TextQuadBuildDiagnosticsV3 {
+  readonly reusedRunPayloads: number
+  readonly rebuiltRunPayloads: number
+  readonly atlasGeometryRetries: number
+}
+
 const TEXT_INSTANCE_FLOAT_COUNT = 16
 
 export function buildTextQuads(runs: readonly TextQuadRun[], atlas: GlyphAtlasLike): TextQuad[] {
@@ -217,8 +223,9 @@ export function buildTextQuadsFromRunsWithSpans(
   runGlyphIds: readonly (readonly number[])[]
   runPayloads: readonly TextQuadRunPayloadV3[]
   runSpans: readonly TextQuadRunSpan[]
+  diagnostics: TextQuadBuildDiagnosticsV3
 } {
-  return buildTextQuadsFromRunsWithSpansInternal(runs, atlas, targetBuffer, options, true)
+  return buildTextQuadsFromRunsWithSpansInternal(runs, atlas, targetBuffer, options, true, 0)
 }
 
 function buildTextQuadsFromRunsWithSpansInternal(
@@ -227,6 +234,7 @@ function buildTextQuadsFromRunsWithSpansInternal(
   targetBuffer: Float32Array | undefined,
   options: BuildTextQuadsFromRunsWithSpansOptionsV3,
   retryOnAtlasVersionChange: boolean,
+  atlasGeometryRetries: number,
 ): {
   floats: Float32Array
   glyphIds: readonly number[]
@@ -235,11 +243,14 @@ function buildTextQuadsFromRunsWithSpansInternal(
   runGlyphIds: readonly (readonly number[])[]
   runPayloads: readonly TextQuadRunPayloadV3[]
   runSpans: readonly TextQuadRunSpan[]
+  diagnostics: TextQuadBuildDiagnosticsV3
 } {
   const previousRunPayloads = options.previousRunPayloads ?? []
   const runPayloads: TextQuadRunPayloadV3[] = []
   const initialAtlasVersion = resolveAtlasPayloadVersion(atlas)
   let reusedPreviousPayload = false
+  let reusedRunPayloads = 0
+  let rebuiltRunPayloads = 0
   let quadCount = 0
   for (let index = 0; index < runs.length; index += 1) {
     const run = runs[index]!
@@ -253,6 +264,7 @@ function buildTextQuadsFromRunsWithSpansInternal(
     ) {
       runPayloads.push(previousPayload)
       reusedPreviousPayload = true
+      reusedRunPayloads += 1
       quadCount += previousPayload.quadCount
       continue
     }
@@ -269,12 +281,13 @@ function buildTextQuadsFromRunsWithSpansInternal(
       signature,
     }
     runPayloads.push(payload)
+    rebuiltRunPayloads += 1
     quadCount += payload.quadCount
   }
 
   const finalAtlasVersion = resolveAtlasPayloadVersion(atlas)
   if (retryOnAtlasVersionChange && finalAtlasVersion !== initialAtlasVersion) {
-    return buildTextQuadsFromRunsWithSpansInternal(
+    const retryResult = buildTextQuadsFromRunsWithSpansInternal(
       runs,
       atlas,
       targetBuffer,
@@ -283,7 +296,16 @@ function buildTextQuadsFromRunsWithSpansInternal(
         previousRunPayloads: reusedPreviousPayload ? [] : runPayloads,
       },
       false,
+      atlasGeometryRetries + 1,
     )
+    return {
+      ...retryResult,
+      diagnostics: {
+        atlasGeometryRetries: retryResult.diagnostics.atlasGeometryRetries,
+        rebuiltRunPayloads: rebuiltRunPayloads + retryResult.diagnostics.rebuiltRunPayloads,
+        reusedRunPayloads: reusedRunPayloads + retryResult.diagnostics.reusedRunPayloads,
+      },
+    }
   }
 
   const floats =
@@ -311,6 +333,11 @@ function buildTextQuadsFromRunsWithSpansInternal(
     glyphIds,
     pageIds,
     quadCount,
+    diagnostics: {
+      atlasGeometryRetries,
+      rebuiltRunPayloads,
+      reusedRunPayloads,
+    },
     runGlyphIds,
     runPayloads,
     runSpans,

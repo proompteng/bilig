@@ -1,6 +1,6 @@
 import type { TgpuBindGroup } from 'typegpu'
 import { parseGpuColor } from '../gridGpuScene.js'
-import { noteTypeGpuBufferAllocation } from '../grid-render-counters.js'
+import { noteTypeGpuBufferAllocation, noteTypeGpuTextPayload } from '../grid-render-counters.js'
 import {
   buildTextDecorationRectsFromRuns,
   buildTextQuadsFromRunsWithSpans,
@@ -262,9 +262,14 @@ export function syncTypeGpuTilePaneResourcesV3(input: {
   input.panes.forEach((pane) => {
     const content = input.tileResources.getContent(resolveWorkbookTileContentBufferKeyV3(pane))
     const textSignature = resolveGridTextTileSignatureV3(pane.tile)
+    const atlasGeometryVersion = input.atlas.getGlyphGeometryVersion()
+    const atlasGeometryResync =
+      content.textSignature === textSignature &&
+      content.textAtlasGeometryVersion >= 0 &&
+      content.textAtlasGeometryVersion !== atlasGeometryVersion
     if (
       shouldSyncGridTextTileResourceV3({
-        atlasGeometryVersion: input.atlas.getGlyphGeometryVersion(),
+        atlasGeometryVersion,
         content,
         textSignature,
         tile: pane.tile,
@@ -272,6 +277,7 @@ export function syncTypeGpuTilePaneResourcesV3(input: {
     ) {
       syncTileTextResource({
         atlas: input.atlas,
+        atlasGeometryResync,
         content,
         pane,
         textSignature,
@@ -430,6 +436,7 @@ export function shouldSyncGridRectTileResourceV3(input: {
 
 function syncTileTextResource(input: {
   readonly atlas: ReturnType<typeof createGlyphAtlas>
+  readonly atlasGeometryResync: boolean
   readonly pane: WorkbookRenderTilePaneState
   readonly tileResources: TypeGpuTileResourceCacheV3
   readonly content: TypeGpuTileContentResourceEntryV3
@@ -439,6 +446,14 @@ function syncTileTextResource(input: {
   const textPayload = buildTextQuadsFromRunsWithSpans(input.pane.tile.textRuns, input.atlas, undefined, {
     dirtyRunSpans: input.pane.tile.dirty?.textSpans,
     previousRunPayloads: input.content.textRunPayloads,
+  })
+  noteTypeGpuTextPayload({
+    atlasGeometryResyncs: input.atlasGeometryResync ? 1 : 0,
+    atlasGeometryRetries: textPayload.diagnostics.atlasGeometryRetries,
+    glyphDependencies: textPayload.glyphIds.length,
+    pageDependencies: textPayload.pageIds.length,
+    rebuiltRunPayloads: textPayload.diagnostics.rebuiltRunPayloads,
+    reusedRunPayloads: textPayload.diagnostics.reusedRunPayloads,
   })
   if (textPayload.quadCount === 0) {
     releaseTextBuffer(input.tileResources, input.content)
