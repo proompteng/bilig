@@ -39,6 +39,9 @@ function createTileReplace(tileId: number, valuesVersion: number): RenderTileRep
       textSpans: [],
       glyphSpans: [{ offset: 0, length: 1 }],
     },
+    dirtyLocalRows: new Uint32Array([0, 0]),
+    dirtyLocalCols: new Uint32Array([1, 1]),
+    dirtyMasks: new Uint32Array([5]),
   }
 }
 
@@ -66,6 +69,9 @@ describe('ProjectedTileSceneStore', () => {
       structural: false,
     })
     expect(store.peekTile(101)).toMatchObject({ tileId: 101, rectCount: 1, lastBatchId: 2 })
+    expect(store.peekTile(101)?.dirtyLocalRows).toEqual(new Uint32Array([0, 0]))
+    expect(store.peekTile(101)?.dirtyLocalCols).toEqual(new Uint32Array([1, 1]))
+    expect(store.peekTile(101)?.dirtyMasks).toEqual(new Uint32Array([5]))
 
     const staleChange = store.applyDelta(createBatch(1, [createTileReplace(101, 99)]))
 

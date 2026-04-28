@@ -37,6 +37,9 @@ export interface MaterializeGridRenderTileInputV3 extends GridTileMaterializerAx
   readonly axisSeqY: number
   readonly freezeSeq: number
   readonly glyphAtlasSeq?: number | undefined
+  readonly dirtyLocalRows?: Uint32Array | undefined
+  readonly dirtyLocalCols?: Uint32Array | undefined
+  readonly dirtyMasks?: Uint32Array | undefined
 }
 
 const STATIC_TILE_SELECTED_CELL: Item = Object.freeze([-1, -1] as const)
@@ -120,6 +123,9 @@ export function materializeGridRenderTileV3(input: MaterializeGridRenderTileInpu
     axisSeqX: input.axisSeqX,
     axisSeqY: input.axisSeqY,
     cellCount: visibleItems.length,
+    dirtyLocalCols: input.dirtyLocalCols,
+    dirtyLocalRows: input.dirtyLocalRows,
+    dirtyMasks: input.dirtyMasks,
     freezeSeq: input.freezeSeq,
     glyphAtlasSeq: input.glyphAtlasSeq ?? 0,
     materializedAtSeq: input.materializedAtSeq,
@@ -157,6 +163,9 @@ export function materializeGridRenderTileV3(input: MaterializeGridRenderTileInpu
     textCount: textBuffer.textCount,
     textMetrics: textBuffer.textMetrics,
     textRuns: textBuffer.textRuns,
+    dirtyLocalCols: packet.dirtyLocalCols,
+    dirtyLocalRows: packet.dirtyLocalRows,
+    dirtyMasks: packet.dirtyMasks,
     tileId,
     version: {
       axisX: packet.axisSeqX,

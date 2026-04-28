@@ -406,10 +406,15 @@ Completed in the resident-scene deletion tranche:
 - Render-tile delta callbacks now update the host-owned tile coordinator before the React pane bridge recomputes state. Changed fixed tiles are
   upserted into `GridRuntimeHost.tiles` from the V3 render-tile source, and invalidated fixed tiles are deleted from host residency immediately,
   so readiness snapshots no longer depend on a later hook memo pass to learn replacement payload revisions or tile misses.
+- `GridRuntimeHost` now owns the V3 header-pane runtime instance. The React header hook only memoizes live inputs and calls
+  `gridRuntimeHost.resolveHeaderPanes()`, so header draw coordination no longer allocates a separate React-owned runtime.
+- Event-driven render-tile replacements now preserve tile-local dirty row/column/mask metadata from worker materialization through
+  `RenderTileReplaceMutation`, `ProjectedTileSceneStore`, and `GridRenderTile`. This gives the V3 backend concrete dirty-span inputs for the
+  next partial-upload cut instead of only full-tile replacement payloads.
 
 Remaining work from this design:
 
 - continue splitting remaining draw/dirty-tile coordination out of `useWorkbookGridRenderState.ts`;
-- replace routine resident scene packet regeneration with dirty-span tile payload updates;
+- use the new tile-local dirty row/column/mask metadata to replace routine full rect/text buffer uploads with dirty-span tile payload updates;
 - wire the V3 atlas/text-run primitives into the TypeGPU backend and add tile glyph dependency preservation;
 - tighten browser perf gates around the now V3-only renderer path.

@@ -26,6 +26,9 @@ export interface ProjectedRenderTile {
   readonly textRuns: readonly RenderTileTextRun[]
   readonly textCount: number
   readonly dirty: RenderTileDirtySpans
+  readonly dirtyLocalRows?: Uint32Array | undefined
+  readonly dirtyLocalCols?: Uint32Array | undefined
+  readonly dirtyMasks?: Uint32Array | undefined
   readonly lastCellRuns: readonly RenderTileCellRun[]
   readonly lastBatchId: number
   readonly lastCameraSeq: number
@@ -100,6 +103,9 @@ export class ProjectedTileSceneStore {
             textRuns: mutation.textRuns,
             textCount: mutation.textCount,
             dirty: mutation.dirty,
+            dirtyLocalCols: mutation.dirtyLocalCols,
+            dirtyLocalRows: mutation.dirtyLocalRows,
+            dirtyMasks: mutation.dirtyMasks,
             lastCellRuns: [],
             lastBatchId: batch.batchId,
             lastCameraSeq: batch.cameraSeq,

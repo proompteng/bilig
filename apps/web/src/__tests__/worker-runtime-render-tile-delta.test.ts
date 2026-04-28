@@ -53,6 +53,19 @@ function createRangeInvalidationEvent(startAddress: string, endAddress = startAd
   }
 }
 
+function createColumnInvalidationEvent(startIndex: number, endIndex = startIndex): EngineEvent {
+  return {
+    kind: 'batch',
+    invalidation: 'cells',
+    changedCellIndices: new Uint32Array(),
+    changedCells: [],
+    invalidatedRanges: [],
+    invalidatedRows: [],
+    invalidatedColumns: [{ sheetName: 'Sheet1', startIndex, endIndex }],
+    metrics,
+  }
+}
+
 describe('worker-runtime-render-tile-delta', () => {
   it('materializes fixed content tiles instead of frozen pane scene duplicates', () => {
     const batch = buildWorkerRenderTileDeltaBatch({
@@ -119,6 +132,9 @@ describe('worker-runtime-render-tile-delta', () => {
         colEnd: 127,
       },
     })
+    expect(replacements[0]?.dirtyLocalRows).toEqual(new Uint32Array([1, 1]))
+    expect(replacements[0]?.dirtyLocalCols).toEqual(new Uint32Array([1, 1]))
+    expect(replacements[0]?.dirtyMasks).toEqual(new Uint32Array([31]))
   })
 
   it('materializes warm tile interest on initial and dirty event-driven batches', () => {
@@ -161,6 +177,8 @@ describe('worker-runtime-render-tile-delta', () => {
       bounds: { rowStart: 32, rowEnd: 63, colStart: 0, colEnd: 127 },
       coord: { rowTile: 1, colTile: 0 },
     })
+    expect(dirtyBatch.mutations[0]?.kind === 'tileReplace' ? dirtyBatch.mutations[0].dirtyLocalRows : null).toEqual(new Uint32Array([7, 7]))
+    expect(dirtyBatch.mutations[0]?.kind === 'tileReplace' ? dirtyBatch.mutations[0].dirtyLocalCols : null).toEqual(new Uint32Array([0, 0]))
   })
 
   it('skips event-driven tile materialization when dirty ranges miss the subscription', () => {
@@ -181,5 +199,32 @@ describe('worker-runtime-render-tile-delta', () => {
     })
 
     expect(batch.mutations).toEqual([])
+  })
+
+  it('clips axis dirty spans to interested render tiles without expanding to the whole sheet', () => {
+    const batch = buildWorkerRenderTileDeltaBatch({
+      engine,
+      event: createColumnInvalidationEvent(130),
+      generation: 9,
+      subscription: {
+        sheetId: 7,
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 31,
+        colStart: 0,
+        colEnd: 255,
+        dprBucket: 1,
+        cameraSeq: 21,
+      },
+    })
+
+    expect(batch.mutations).toHaveLength(1)
+    expect(batch.mutations[0]).toMatchObject({
+      kind: 'tileReplace',
+      bounds: { rowStart: 0, rowEnd: 31, colStart: 128, colEnd: 255 },
+      coord: { rowTile: 0, colTile: 1 },
+    })
+    expect(batch.mutations[0]?.kind === 'tileReplace' ? batch.mutations[0].dirtyLocalRows : null).toEqual(new Uint32Array([0, 31]))
+    expect(batch.mutations[0]?.kind === 'tileReplace' ? batch.mutations[0].dirtyLocalCols : null).toEqual(new Uint32Array([2, 2]))
   })
 })

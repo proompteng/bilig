@@ -14,7 +14,7 @@ import type { RenderTileDeltaBatch, RenderTileDeltaSubscription, RenderTileRepla
 import { getGridMetrics } from '../../../packages/grid/src/gridMetrics.js'
 import { materializeGridRenderTileV3 } from '../../../packages/grid/src/renderer-v3/grid-tile-materializer.js'
 import type { GridRenderTile } from '../../../packages/grid/src/renderer-v3/render-tile-source.js'
-import { DirtyMaskV3, DirtyTileIndexV3 } from '../../../packages/grid/src/renderer-v3/tile-damage-index.js'
+import { DirtyMaskV3 } from '../../../packages/grid/src/renderer-v3/tile-damage-index.js'
 import { packTileKey53, tileKeysForViewport, unpackTileKey53, type TileKey53 } from '../../../packages/grid/src/renderer-v3/tile-key.js'
 import { buildFreezeVersion, buildRenderedAxisState } from './worker-runtime-render-axis.js'
 import { listViewportTileBounds } from './worker-viewport-tile-store.js'
@@ -40,6 +40,21 @@ const CHANGED_CELL_DIRTY_MASK = DirtyMaskV3.Value | DirtyMaskV3.Text | DirtyMask
 const INVALIDATED_RANGE_DIRTY_MASK = DirtyMaskV3.Value | DirtyMaskV3.Style | DirtyMaskV3.Text | DirtyMaskV3.Rect | DirtyMaskV3.Border
 const AXIS_X_DIRTY_MASK = DirtyMaskV3.AxisX | DirtyMaskV3.Text | DirtyMaskV3.Rect
 const AXIS_Y_DIRTY_MASK = DirtyMaskV3.AxisY | DirtyMaskV3.Text | DirtyMaskV3.Rect
+
+interface MaterializedTileViewport {
+  readonly viewport: Viewport
+  readonly dirtyLocalRows?: Uint32Array | undefined
+  readonly dirtyLocalCols?: Uint32Array | undefined
+  readonly dirtyMasks?: Uint32Array | undefined
+}
+
+interface DirtyLocalSpan {
+  readonly rowStart: number
+  readonly rowEnd: number
+  readonly colStart: number
+  readonly colEnd: number
+  readonly mask: number
+}
 
 export function buildWorkerRenderTileDeltaBatch(input: {
   engine: RenderTileDeltaEngineLike
@@ -76,6 +91,9 @@ export function buildWorkerRenderTileDeltaBatch(input: {
           columnWidths: columnAxis.sizes,
           dprBucket: subscription.dprBucket ?? 1,
           engine,
+          dirtyLocalCols: viewport.dirtyLocalCols,
+          dirtyLocalRows: viewport.dirtyLocalRows,
+          dirtyMasks: viewport.dirtyMasks,
           freezeSeq: freezeVersion,
           glyphAtlasSeq: 0,
           gridMetrics,
@@ -90,7 +108,7 @@ export function buildWorkerRenderTileDeltaBatch(input: {
           styleSeq: batchId,
           textSeq: batchId,
           valueSeq: batchId,
-          viewport,
+          viewport: viewport.viewport,
         }),
       ),
     ),
@@ -102,32 +120,43 @@ function resolveMaterializedTileViewports(input: {
   readonly subscription: RenderTileDeltaSubscription
   readonly event: EngineEvent | undefined
   readonly batchId: number
-}): readonly Viewport[] {
+}): readonly MaterializedTileViewport[] {
   const { engine, event, subscription } = input
   if (!event || event.invalidation === 'full') {
-    return resolveInterestedTileViewports(subscription)
+    return resolveInterestedTileViewports(subscription).map((viewport) => ({ viewport }))
   }
 
   const dprBucket = subscription.dprBucket ?? 1
-  const dirtyIndex = new DirtyTileIndexV3()
-  markEventDirtyTiles({
-    dirtyIndex,
+  const dirtySpansByTile = collectEventDirtyTileSpans({
     engine,
     event,
+    subscription,
     dprBucket,
     sheetOrdinal: subscription.sheetId,
     sheetName: subscription.sheetName,
   })
 
-  const interestedTileKeys = resolveInterestedTileKeys(subscription)
-  const dirtyTileKeys = new Set(dirtyIndex.consumeVisible(interestedTileKeys))
-  if (dirtyTileKeys.size === 0) {
+  if (dirtySpansByTile.size === 0) {
     return []
   }
 
-  return resolveInterestedTileViewports(subscription).filter((viewport) =>
-    dirtyTileKeys.has(tileKeyFromTileViewport(subscription, viewport)),
-  )
+  const interestedTileKeys = new Set(resolveInterestedTileKeys(subscription))
+  return resolveInterestedTileViewports(subscription).flatMap((viewport) => {
+    const tileKey = tileKeyFromTileViewport(subscription, viewport)
+    if (!interestedTileKeys.has(tileKey)) {
+      return []
+    }
+    const dirtySpans = dirtySpansByTile.get(tileKey)
+    if (!dirtySpans) {
+      return []
+    }
+    return [
+      {
+        viewport,
+        ...packDirtyLocalSpans(dirtySpans),
+      },
+    ]
+  })
 }
 
 function resolveInterestedTileKeys(subscription: RenderTileDeltaSubscription): readonly TileKey53[] {
@@ -190,15 +219,16 @@ function tileKeyFromTileViewport(subscription: RenderTileDeltaSubscription, view
   })
 }
 
-function markEventDirtyTiles(input: {
-  readonly dirtyIndex: DirtyTileIndexV3
+function collectEventDirtyTileSpans(input: {
   readonly engine: RenderTileDeltaEngineLike
   readonly event: EngineEvent
+  readonly subscription: RenderTileDeltaSubscription
   readonly sheetName: string
   readonly sheetOrdinal: number
   readonly dprBucket: number
-}): void {
-  const { dirtyIndex, dprBucket, engine, event, sheetName, sheetOrdinal } = input
+}): Map<TileKey53, DirtyLocalSpan[]> {
+  const { dprBucket, engine, event, sheetName, sheetOrdinal, subscription } = input
+  const spansByTile = new Map<TileKey53, DirtyLocalSpan[]>()
   const cellStore = engine.workbook.cellStore
   const getSheetNameById = engine.workbook.getSheetNameById
   if (cellStore && getSheetNameById) {
@@ -210,7 +240,7 @@ function markEventDirtyTiles(input: {
       }
       const row = cellStore.rows[cellIndex] ?? 0
       const col = cellStore.cols[cellIndex] ?? 0
-      dirtyIndex.markCellRange({
+      markDirtyRangeSpans(spansByTile, {
         colEnd: col,
         colStart: col,
         dprBucket,
@@ -228,7 +258,7 @@ function markEventDirtyTiles(input: {
     }
     const start = parseCellAddress(range.startAddress, range.sheetName)
     const end = parseCellAddress(range.endAddress, range.sheetName)
-    dirtyIndex.markCellRange({
+    markDirtyRangeSpans(spansByTile, {
       colEnd: Math.max(start.col, end.col),
       colStart: Math.min(start.col, end.col),
       dprBucket,
@@ -243,12 +273,13 @@ function markEventDirtyTiles(input: {
     if (column.sheetName !== sheetName) {
       return
     }
-    dirtyIndex.markAxisX({
+    markDirtyAxisXSpans(spansByTile, {
       colEnd: column.endIndex,
       colStart: column.startIndex,
       dprBucket,
       mask: AXIS_X_DIRTY_MASK,
       sheetOrdinal,
+      subscription,
     })
   })
 
@@ -256,14 +287,144 @@ function markEventDirtyTiles(input: {
     if (row.sheetName !== sheetName) {
       return
     }
-    dirtyIndex.markAxisY({
+    markDirtyAxisYSpans(spansByTile, {
       dprBucket,
       mask: AXIS_Y_DIRTY_MASK,
       rowEnd: row.endIndex,
       rowStart: row.startIndex,
       sheetOrdinal,
+      subscription,
     })
   })
+  return spansByTile
+}
+
+function markDirtyAxisXSpans(
+  spansByTile: Map<TileKey53, DirtyLocalSpan[]>,
+  input: {
+    readonly subscription: RenderTileDeltaSubscription
+    readonly sheetOrdinal: number
+    readonly dprBucket: number
+    readonly colStart: number
+    readonly colEnd: number
+    readonly mask: number
+  },
+): void {
+  const colStart = Math.max(0, Math.min(MAX_COLS - 1, input.colStart))
+  const colEnd = Math.max(colStart, Math.min(MAX_COLS - 1, input.colEnd))
+  resolveInterestedTileKeys(input.subscription).forEach((tileKey) => {
+    const fields = unpackTileKey53(tileKey)
+    const tileColStart = fields.colTile * VIEWPORT_TILE_COLUMN_COUNT
+    const tileColEnd = Math.min(MAX_COLS - 1, tileColStart + VIEWPORT_TILE_COLUMN_COUNT - 1)
+    if (tileColEnd < colStart || tileColStart > colEnd) {
+      return
+    }
+    const spans = spansByTile.get(tileKey) ?? []
+    spans.push({
+      colEnd: Math.min(colEnd, tileColEnd) - tileColStart,
+      colStart: Math.max(colStart, tileColStart) - tileColStart,
+      mask: input.mask,
+      rowEnd: VIEWPORT_TILE_ROW_COUNT - 1,
+      rowStart: 0,
+    })
+    spansByTile.set(tileKey, spans)
+  })
+}
+
+function markDirtyAxisYSpans(
+  spansByTile: Map<TileKey53, DirtyLocalSpan[]>,
+  input: {
+    readonly subscription: RenderTileDeltaSubscription
+    readonly sheetOrdinal: number
+    readonly dprBucket: number
+    readonly rowStart: number
+    readonly rowEnd: number
+    readonly mask: number
+  },
+): void {
+  const rowStart = Math.max(0, Math.min(MAX_ROWS - 1, input.rowStart))
+  const rowEnd = Math.max(rowStart, Math.min(MAX_ROWS - 1, input.rowEnd))
+  resolveInterestedTileKeys(input.subscription).forEach((tileKey) => {
+    const fields = unpackTileKey53(tileKey)
+    const tileRowStart = fields.rowTile * VIEWPORT_TILE_ROW_COUNT
+    const tileRowEnd = Math.min(MAX_ROWS - 1, tileRowStart + VIEWPORT_TILE_ROW_COUNT - 1)
+    if (tileRowEnd < rowStart || tileRowStart > rowEnd) {
+      return
+    }
+    const spans = spansByTile.get(tileKey) ?? []
+    spans.push({
+      colEnd: VIEWPORT_TILE_COLUMN_COUNT - 1,
+      colStart: 0,
+      mask: input.mask,
+      rowEnd: Math.min(rowEnd, tileRowEnd) - tileRowStart,
+      rowStart: Math.max(rowStart, tileRowStart) - tileRowStart,
+    })
+    spansByTile.set(tileKey, spans)
+  })
+}
+
+function markDirtyRangeSpans(
+  spansByTile: Map<TileKey53, DirtyLocalSpan[]>,
+  input: {
+    readonly sheetOrdinal: number
+    readonly dprBucket: number
+    readonly rowStart: number
+    readonly rowEnd: number
+    readonly colStart: number
+    readonly colEnd: number
+    readonly mask: number
+  },
+): void {
+  const rowStart = Math.max(0, Math.min(MAX_ROWS - 1, input.rowStart))
+  const rowEnd = Math.max(rowStart, Math.min(MAX_ROWS - 1, input.rowEnd))
+  const colStart = Math.max(0, Math.min(MAX_COLS - 1, input.colStart))
+  const colEnd = Math.max(colStart, Math.min(MAX_COLS - 1, input.colEnd))
+  const rowTileStart = Math.floor(rowStart / VIEWPORT_TILE_ROW_COUNT)
+  const rowTileEnd = Math.floor(rowEnd / VIEWPORT_TILE_ROW_COUNT)
+  const colTileStart = Math.floor(colStart / VIEWPORT_TILE_COLUMN_COUNT)
+  const colTileEnd = Math.floor(colEnd / VIEWPORT_TILE_COLUMN_COUNT)
+  for (let rowTile = rowTileStart; rowTile <= rowTileEnd; rowTile += 1) {
+    const tileRowStart = rowTile * VIEWPORT_TILE_ROW_COUNT
+    const tileRowEnd = Math.min(MAX_ROWS - 1, tileRowStart + VIEWPORT_TILE_ROW_COUNT - 1)
+    for (let colTile = colTileStart; colTile <= colTileEnd; colTile += 1) {
+      const tileColStart = colTile * VIEWPORT_TILE_COLUMN_COUNT
+      const tileColEnd = Math.min(MAX_COLS - 1, tileColStart + VIEWPORT_TILE_COLUMN_COUNT - 1)
+      const tileKey = packTileKey53({
+        colTile,
+        dprBucket: input.dprBucket,
+        rowTile,
+        sheetOrdinal: input.sheetOrdinal,
+      })
+      const spans = spansByTile.get(tileKey) ?? []
+      spans.push({
+        colEnd: Math.min(colEnd, tileColEnd) - tileColStart,
+        colStart: Math.max(colStart, tileColStart) - tileColStart,
+        mask: input.mask,
+        rowEnd: Math.min(rowEnd, tileRowEnd) - tileRowStart,
+        rowStart: Math.max(rowStart, tileRowStart) - tileRowStart,
+      })
+      spansByTile.set(tileKey, spans)
+    }
+  }
+}
+
+function packDirtyLocalSpans(spans: readonly DirtyLocalSpan[]): {
+  readonly dirtyLocalRows: Uint32Array
+  readonly dirtyLocalCols: Uint32Array
+  readonly dirtyMasks: Uint32Array
+} {
+  const dirtyLocalRows = new Uint32Array(spans.length * 2)
+  const dirtyLocalCols = new Uint32Array(spans.length * 2)
+  const dirtyMasks = new Uint32Array(spans.length)
+  spans.forEach((span, index) => {
+    const rowOffset = index * 2
+    dirtyLocalRows[rowOffset] = span.rowStart
+    dirtyLocalRows[rowOffset + 1] = span.rowEnd
+    dirtyLocalCols[rowOffset] = span.colStart
+    dirtyLocalCols[rowOffset + 1] = span.colEnd
+    dirtyMasks[index] = span.mask
+  })
+  return { dirtyLocalCols, dirtyLocalRows, dirtyMasks }
 }
 
 export function buildRenderTileReplaceMutation(tile: GridRenderTile): RenderTileReplaceMutation {
@@ -299,5 +460,8 @@ export function buildRenderTileReplaceMutation(tile: GridRenderTile): RenderTile
       textSpans: tile.textCount > 0 ? [{ offset: FULL_SPAN_START, length: tile.textCount }] : [],
       glyphSpans: [],
     },
+    dirtyLocalCols: tile.dirtyLocalCols,
+    dirtyLocalRows: tile.dirtyLocalRows,
+    dirtyMasks: tile.dirtyMasks,
   }
 }

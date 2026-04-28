@@ -1,10 +1,10 @@
-import { useMemo, useRef } from 'react'
+import { useMemo } from 'react'
 import type { Viewport } from '@bilig/protocol'
 import type { GridHeaderPaneState } from './gridHeaderPanes.js'
 import type { GridMetrics } from './gridMetrics.js'
 import type { Item, Rectangle } from './gridTypes.js'
 import type { WorkbookRenderTilePaneState } from './renderer-v3/render-tile-pane-state.js'
-import { getGridHeaderPaneRuntime, type GridHeaderPaneRuntime } from './runtime/gridHeaderPaneRuntime.js'
+import type { GridRuntimeHost } from './runtime/gridRuntimeHost.js'
 
 export function useWorkbookHeaderPanes(input: {
   readonly columnWidths: Readonly<Record<number, number>>
@@ -14,6 +14,7 @@ export function useWorkbookHeaderPanes(input: {
   readonly frozenRowHeight: number
   readonly getHeaderCellLocalBounds: (col: number, row: number) => Rectangle | undefined
   readonly gridMetrics: GridMetrics
+  readonly gridRuntimeHost: GridRuntimeHost
   readonly hostClientHeight: number
   readonly hostClientWidth: number
   readonly hostElement: HTMLDivElement | null
@@ -38,6 +39,7 @@ export function useWorkbookHeaderPanes(input: {
     frozenRowHeight,
     getHeaderCellLocalBounds,
     gridMetrics,
+    gridRuntimeHost,
     hostClientHeight,
     hostClientWidth,
     hostElement,
@@ -48,15 +50,13 @@ export function useWorkbookHeaderPanes(input: {
     rowHeights,
     sheetName,
   } = input
-  const headerPaneRuntimeRef = useRef<GridHeaderPaneRuntime | null>(null)
-  headerPaneRuntimeRef.current = getGridHeaderPaneRuntime(headerPaneRuntimeRef.current)
   const residentBodyOffsetX = residentBodyPane?.contentOffset.x ?? 0
   const residentBodyOffsetY = residentBodyPane?.contentOffset.y ?? 0
   const residentBodyHeight = residentBodyPane?.surfaceSize.height ?? 0
   const residentBodyWidth = residentBodyPane?.surfaceSize.width ?? 0
 
   return useMemo<readonly GridHeaderPaneState[]>(() => {
-    return headerPaneRuntimeRef.current!.resolve({
+    return gridRuntimeHost.resolveHeaderPanes({
       columnWidths,
       freezeCols,
       freezeRows,
@@ -88,6 +88,7 @@ export function useWorkbookHeaderPanes(input: {
     frozenRowHeight,
     getHeaderCellLocalBounds,
     gridMetrics,
+    gridRuntimeHost,
     hostClientHeight,
     hostClientWidth,
     hostElement,

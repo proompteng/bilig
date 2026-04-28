@@ -32,6 +32,9 @@ function makeEngine(cells: Record<string, CellSnapshot>, styles: Record<string, 
 describe('renderer-v3 grid tile materializer', () => {
   test('materializes fixed content tiles with native v3 packets instead of v2 scene packets', () => {
     const gridMetrics = getGridMetrics()
+    const dirtyLocalRows = new Uint32Array([0, 0])
+    const dirtyLocalCols = new Uint32Array([0, 0])
+    const dirtyMasks = new Uint32Array([5])
     const tile = materializeGridRenderTileV3({
       axisSeqX: 5,
       axisSeqY: 6,
@@ -62,6 +65,9 @@ describe('renderer-v3 grid tile materializer', () => {
       styleSeq: 13,
       textSeq: 14,
       valueSeq: 15,
+      dirtyLocalCols,
+      dirtyLocalRows,
+      dirtyMasks,
       viewport: {
         colEnd: VIEWPORT_TILE_COLUMN_COUNT - 1,
         colStart: 0,
@@ -76,6 +82,10 @@ describe('renderer-v3 grid tile materializer', () => {
     expect(tile.version).toEqual({ axisX: 5, axisY: 6, freeze: 8, styles: 13, text: 14, values: 15 })
     expect(tile.bounds).toEqual({ colEnd: VIEWPORT_TILE_COLUMN_COUNT - 1, colStart: 0, rowEnd: VIEWPORT_TILE_ROW_COUNT - 1, rowStart: 0 })
     expect(tile.textRuns).toContainEqual(expect.objectContaining({ text: 'alpha', x: 0, y: 0 }))
+    expect(tile.packet?.dirtyLocalRows).toBe(dirtyLocalRows)
+    expect(tile.packet?.dirtyLocalCols).toBe(dirtyLocalCols)
+    expect(tile.packet?.dirtyMasks).toBe(dirtyMasks)
+    expect(tile.dirtyLocalRows).toBe(dirtyLocalRows)
     expect(tile.rectCount).toBeGreaterThan(0)
     expect(tile.rectInstances.length).toBeGreaterThanOrEqual(tile.rectCount * 20)
     expect(tile.packet && 'key' in tile.packet).toBe(false)

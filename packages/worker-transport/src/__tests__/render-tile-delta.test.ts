@@ -64,6 +64,9 @@ function createBatch(): RenderTileDeltaBatch {
           textSpans: [{ offset: 0, length: 4 }],
           glyphSpans: [{ offset: 0, length: 3 }],
         },
+        dirtyLocalRows: Uint32Array.from([2, 2]),
+        dirtyLocalCols: Uint32Array.from([4, 8]),
+        dirtyMasks: Uint32Array.from([13]),
       },
       {
         kind: 'cellRuns',

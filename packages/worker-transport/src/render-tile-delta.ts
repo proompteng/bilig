@@ -70,6 +70,9 @@ export interface RenderTileReplaceMutation {
   readonly textRuns: readonly RenderTileTextRun[]
   readonly textCount: number
   readonly dirty: RenderTileDirtySpans
+  readonly dirtyLocalRows?: Uint32Array | undefined
+  readonly dirtyLocalCols?: Uint32Array | undefined
+  readonly dirtyMasks?: Uint32Array | undefined
 }
 
 export interface RenderTileCellRun {
@@ -201,6 +204,9 @@ function encodeMutation(writer: BinaryWriter, mutation: RenderTileMutation): voi
       encodeArray(writer, mutation.textRuns, encodeTextRun)
       writer.u32(mutation.textCount)
       encodeDirtySpans(writer, mutation.dirty)
+      encodeUint32Array(writer, mutation.dirtyLocalRows ?? new Uint32Array())
+      encodeUint32Array(writer, mutation.dirtyLocalCols ?? new Uint32Array())
+      encodeUint32Array(writer, mutation.dirtyMasks ?? new Uint32Array())
       return
     case 'cellRuns':
       encodeTileKey(writer, mutation.tileId)
@@ -228,7 +234,7 @@ function encodeMutation(writer: BinaryWriter, mutation: RenderTileMutation): voi
 function decodeMutation(reader: BinaryReader): RenderTileMutation {
   switch (reader.u8()) {
     case 1:
-      return {
+      return withOptionalDirtyLocalArrays({
         kind: 'tileReplace',
         tileId: decodeTileKey(reader),
         coord: decodeTileCoord(reader),
@@ -241,7 +247,10 @@ function decodeMutation(reader: BinaryReader): RenderTileMutation {
         textRuns: decodeArray(reader, () => decodeTextRun(reader)),
         textCount: reader.u32(),
         dirty: decodeDirtySpans(reader),
-      }
+        dirtyLocalRows: decodeUint32Array(reader),
+        dirtyLocalCols: decodeUint32Array(reader),
+        dirtyMasks: decodeUint32Array(reader),
+      })
     case 2:
       return {
         kind: 'cellRuns',
@@ -277,6 +286,21 @@ function decodeMutation(reader: BinaryReader): RenderTileMutation {
       }
     default:
       throw new BinaryProtocolError('Unknown render tile mutation tag')
+  }
+}
+
+function withOptionalDirtyLocalArrays(
+  mutation: RenderTileReplaceMutation & {
+    readonly dirtyLocalRows: Uint32Array
+    readonly dirtyLocalCols: Uint32Array
+    readonly dirtyMasks: Uint32Array
+  },
+): RenderTileReplaceMutation {
+  return {
+    ...mutation,
+    ...(mutation.dirtyLocalRows.length > 0 ? { dirtyLocalRows: mutation.dirtyLocalRows } : {}),
+    ...(mutation.dirtyLocalCols.length > 0 ? { dirtyLocalCols: mutation.dirtyLocalCols } : {}),
+    ...(mutation.dirtyMasks.length > 0 ? { dirtyMasks: mutation.dirtyMasks } : {}),
   }
 }
 

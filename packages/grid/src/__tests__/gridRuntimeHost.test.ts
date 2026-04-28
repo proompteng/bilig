@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { Rectangle } from '../gridTypes.js'
 import { unpackTileKey53 } from '../renderer-v3/tile-key.js'
 import { GridRuntimeHost } from '../runtime/gridRuntimeHost.js'
 
@@ -189,6 +190,61 @@ describe('GridRuntimeHost', () => {
     expect(sameWindow.residentViewport).toBe(first.residentViewport)
     expect(sameWindow.visibleAddresses).toBe(first.visibleAddresses)
     expect(sameWindow.sceneRevision).toBe(1)
+  })
+
+  it('owns V3 header pane runtime state instead of letting the React hook allocate it', () => {
+    const host = new GridRuntimeHost({
+      columnCount: 1000,
+      defaultColumnWidth: 100,
+      defaultRowHeight: 10,
+      freezeCols: 1,
+      freezeRows: 1,
+      gridMetrics,
+      rowCount: 1000,
+      viewportHeight: 80,
+      viewportWidth: 300,
+    })
+    const panes = host.resolveHeaderPanes({
+      columnWidths: { 0: 80, 1: 120 },
+      freezeCols: 1,
+      freezeRows: 1,
+      frozenColumnWidth: 80,
+      frozenRowHeight: 30,
+      getHeaderCellLocalBounds: (col: number, row: number): Rectangle => ({
+        height: row === 0 ? 30 : 26,
+        width: col === 0 ? 80 : 120,
+        x: gridMetrics.rowMarkerWidth + (col === 0 ? 0 : 80),
+        y: gridMetrics.headerHeight + (row === 0 ? 0 : 30),
+      }),
+      gridMetrics,
+      hostClientHeight: 320,
+      hostClientWidth: 520,
+      hostReady: true,
+      residentBodyPane: {
+        contentOffset: { x: 33, y: 44 },
+        surfaceSize: { width: 200, height: 56 },
+      },
+      residentHeaderItems: [
+        [0, 0],
+        [1, 0],
+        [0, 1],
+        [1, 1],
+      ],
+      residentHeaderRegion: {
+        freezeCols: 1,
+        freezeRows: 1,
+        range: { height: 2, width: 2, x: 0, y: 0 },
+        tx: 0,
+        ty: 0,
+      },
+      residentViewport: { colEnd: 1, colStart: 0, rowEnd: 1, rowStart: 0 },
+      rowHeights: { 0: 30, 1: 26 },
+      sheetName: 'Sheet1',
+    })
+
+    expect(panes.map((pane) => pane.paneId)).toEqual(['corner-header', 'top-frozen', 'top-body', 'left-frozen', 'left-body'])
+    expect(panes.find((pane) => pane.paneId === 'top-body')?.contentOffset).toEqual({ x: 33, y: 0 })
+    expect(panes.find((pane) => pane.paneId === 'left-body')?.contentOffset).toEqual({ x: 0, y: 44 })
   })
 
   it('resolves selection and restore scroll positions from runtime axes', () => {

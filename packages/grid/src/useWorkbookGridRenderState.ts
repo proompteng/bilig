@@ -261,6 +261,7 @@ export function useWorkbookGridRenderState(input: {
     frozenRowHeight,
     getHeaderCellLocalBounds,
     gridMetrics,
+    gridRuntimeHost,
     hostClientHeight,
     hostClientWidth,
     hostElement,

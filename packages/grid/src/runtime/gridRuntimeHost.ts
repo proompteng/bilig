@@ -9,6 +9,7 @@ import type { AxisEntryOverride } from '../gridAxisIndex.js'
 import { GridCameraRuntime, type GridCameraRuntimeSnapshot } from './gridCameraRuntime.js'
 import { GridOverlayRuntime } from './gridOverlayRuntime.js'
 import { GridTileCoordinator, type GridTileInterestBatchV3, type GridTileInterestReasonV3 } from './gridTileCoordinator.js'
+import { GridHeaderPaneRuntime, type GridHeaderPaneRuntimeInput } from './gridHeaderPaneRuntime.js'
 import {
   GridViewportResidencyRuntime,
   type GridViewportResidencyRuntimeInput,
@@ -28,6 +29,7 @@ export class GridRuntimeHost {
   readonly camera: GridCameraRuntime
   readonly overlays = new GridOverlayRuntime()
   readonly tiles = new GridTileCoordinator()
+  readonly headers = new GridHeaderPaneRuntime()
   readonly viewportResidency = new GridViewportResidencyRuntime()
   private freezeRows: number
   private freezeCols: number
@@ -185,6 +187,10 @@ export class GridRuntimeHost {
 
   resolveViewportResidency(input: GridViewportResidencyRuntimeInput): GridViewportResidencyState {
     return this.viewportResidency.resolve(input)
+  }
+
+  resolveHeaderPanes(input: GridHeaderPaneRuntimeInput): ReturnType<GridHeaderPaneRuntime['resolve']> {
+    return this.headers.resolve(input)
   }
 
   resolveScrollForCellIntoView(input: {

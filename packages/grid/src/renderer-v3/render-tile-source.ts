@@ -60,6 +60,9 @@ export interface GridRenderTile {
   readonly textMetrics: Float32Array
   readonly textRuns: readonly GridRenderTileTextRun[]
   readonly textCount: number
+  readonly dirtyLocalRows?: Uint32Array | undefined
+  readonly dirtyLocalCols?: Uint32Array | undefined
+  readonly dirtyMasks?: Uint32Array | undefined
   readonly lastBatchId: number
   readonly lastCameraSeq: number
 }
