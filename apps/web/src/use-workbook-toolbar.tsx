@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import {
   parseCellNumberFormatCode,
+  type CellStyleAlignmentPatch,
   type CellRangeRef,
+  type CellStyleFillPatch,
   type CellSnapshot,
   type CellStyleField,
+  type CellStyleFontPatch,
   type CellStylePatch,
   type CellStyleRecord,
 } from '@bilig/protocol'
@@ -30,6 +33,76 @@ const DEFAULT_BORDER_SIDE = {
 const PENDING_STYLE_ID = '__bilig_pending_toolbar_style__'
 
 type WorkbookHeaderStatusTone = 'positive' | 'progress' | 'warning' | 'danger' | 'neutral'
+
+interface OptimisticToolbarStyle {
+  readonly rangeKey: string
+  readonly patch: CellStylePatch
+  readonly style: CellStyleRecord
+}
+
+function mergeToolbarStylePatch(previous: CellStylePatch, next: CellStylePatch): CellStylePatch {
+  const merged: CellStylePatch = {
+    ...previous,
+    ...next,
+  }
+  if (next.alignment !== undefined) {
+    merged.alignment = next.alignment ? { ...previous.alignment, ...next.alignment } : null
+  }
+  if (next.borders !== undefined) {
+    merged.borders = next.borders ? { ...previous.borders, ...next.borders } : null
+  }
+  if (next.fill !== undefined) {
+    merged.fill = next.fill ? { ...previous.fill, ...next.fill } : null
+  }
+  if (next.font !== undefined) {
+    merged.font = next.font ? { ...previous.font, ...next.font } : null
+  }
+  return merged
+}
+
+function patchValueMatches<T extends string | number | boolean>(actual: T | undefined, expected: T | null | undefined): boolean {
+  if (expected === undefined) {
+    return true
+  }
+  if (expected === null || expected === false) {
+    return actual === undefined || actual === false
+  }
+  return actual === expected
+}
+
+function fillPatchMatches(selectedStyle: CellStyleRecord | undefined, patch: CellStyleFillPatch | null | undefined): boolean {
+  return !patch || patchValueMatches(selectedStyle?.fill?.backgroundColor, patch.backgroundColor)
+}
+
+function fontPatchMatches(selectedStyle: CellStyleRecord | undefined, patch: CellStyleFontPatch | null | undefined): boolean {
+  return (
+    !patch ||
+    (patchValueMatches(selectedStyle?.font?.family, patch.family) &&
+      patchValueMatches(selectedStyle?.font?.size, patch.size) &&
+      patchValueMatches(selectedStyle?.font?.bold, patch.bold) &&
+      patchValueMatches(selectedStyle?.font?.italic, patch.italic) &&
+      patchValueMatches(selectedStyle?.font?.underline, patch.underline) &&
+      patchValueMatches(selectedStyle?.font?.color, patch.color))
+  )
+}
+
+function alignmentPatchMatches(selectedStyle: CellStyleRecord | undefined, patch: CellStyleAlignmentPatch | null | undefined): boolean {
+  return (
+    !patch ||
+    (patchValueMatches(selectedStyle?.alignment?.horizontal, patch.horizontal) &&
+      patchValueMatches(selectedStyle?.alignment?.vertical, patch.vertical) &&
+      patchValueMatches(selectedStyle?.alignment?.wrap, patch.wrap) &&
+      patchValueMatches(selectedStyle?.alignment?.indent, patch.indent))
+  )
+}
+
+function selectedStyleMatchesPatch(selectedStyle: CellStyleRecord | undefined, patch: CellStylePatch): boolean {
+  return (
+    alignmentPatchMatches(selectedStyle, patch.alignment) &&
+    fillPatchMatches(selectedStyle, patch.fill) &&
+    fontPatchMatches(selectedStyle, patch.font)
+  )
+}
 
 export interface WorkbookStatusPresentation {
   readonly modeLabel: string
@@ -224,13 +297,7 @@ export function useWorkbookToolbar(input: {
   const [recentFillColors, setRecentFillColors] = useState<readonly string[]>([])
   const [recentTextColors, setRecentTextColors] = useState<readonly string[]>([])
   const selectedRangeKey = cellRangeKey(selectionRangeRef.current)
-  const [optimisticStyle, setOptimisticStyle] = useState<{
-    readonly rangeKey: string
-    readonly style: CellStyleRecord
-  } | null>(null)
-  useEffect(() => {
-    setOptimisticStyle(null)
-  }, [selectedStyle])
+  const [optimisticStyle, setOptimisticStyle] = useState<OptimisticToolbarStyle | null>(null)
   const activeSelectedStyle = optimisticStyle?.rangeKey === selectedRangeKey ? optimisticStyle.style : selectedStyle
   const currentNumberFormat = parseCellNumberFormatCode(selectedCell.format)
   const selectedFontSize = String(activeSelectedStyle?.font?.size ?? 11)
@@ -261,12 +328,26 @@ export function useWorkbookToolbar(input: {
     writesAllowed,
   })
   const statusModeLabel = statusPresentation.modeLabel
+
+  useEffect(() => {
+    if (optimisticStyle && optimisticStyle.rangeKey !== selectedRangeKey) {
+      setOptimisticStyle(null)
+    }
+  }, [optimisticStyle, selectedRangeKey])
+
+  useEffect(() => {
+    if (optimisticStyle && selectedStyleMatchesPatch(selectedStyle, optimisticStyle.patch)) {
+      setOptimisticStyle(null)
+    }
+  }, [optimisticStyle, selectedStyle])
+
   const applyRangeStyle = useCallback(
     async (patch: CellStylePatch) => {
       const range = selectionRangeRef.current
       const rangeKey = cellRangeKey(range)
       setOptimisticStyle((current) => ({
         rangeKey,
+        patch: current?.rangeKey === rangeKey ? mergeToolbarStylePatch(current.patch, patch) : patch,
         style: applyToolbarStylePatch(current?.rangeKey === rangeKey ? current.style : selectedStyle, patch),
       }))
       try {

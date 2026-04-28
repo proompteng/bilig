@@ -639,6 +639,100 @@ describe('WorkbookToolbar', () => {
     expect(keydownRemoves()).toBe(1)
   })
 
+  it('optimistically marks formatting shortcut buttons while mutations are pending', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const pendingMutationResolvers: Array<() => void> = []
+    const pendingMutations: Array<Promise<void>> = []
+    const invokeMutation = vi.fn(() => {
+      const pendingMutation = new Promise<void>((resolve) => {
+        pendingMutationResolvers.push(resolve)
+      })
+      pendingMutations.push(pendingMutation)
+      return pendingMutation
+    })
+    const selectionRangeRef: MutableRefObject<CellRangeRef> = {
+      current: {
+        sheetName: 'Sheet1',
+        startAddress: 'A1',
+        endAddress: 'A1',
+      },
+    }
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<ToolbarHookHarness invokeMutation={invokeMutation} selectionRangeRef={selectionRangeRef} />)
+    })
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'b', metaKey: true }))
+    })
+    expect(host.querySelector("[aria-label='Bold']")?.className).toContain('bg-[var(--wb-accent-soft)]')
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'i', metaKey: true }))
+    })
+    expect(host.querySelector("[aria-label='Bold']")?.className).toContain('bg-[var(--wb-accent-soft)]')
+    expect(host.querySelector("[aria-label='Italic']")?.className).toContain('bg-[var(--wb-accent-soft)]')
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'u', metaKey: true }))
+    })
+    expect(host.querySelector("[aria-label='Bold']")?.className).toContain('bg-[var(--wb-accent-soft)]')
+    expect(host.querySelector("[aria-label='Italic']")?.className).toContain('bg-[var(--wb-accent-soft)]')
+    expect(host.querySelector("[aria-label='Underline']")?.className).toContain('bg-[var(--wb-accent-soft)]')
+
+    expect(invokeMutation).toHaveBeenNthCalledWith(
+      1,
+      'setRangeStyle',
+      {
+        sheetName: 'Sheet1',
+        startAddress: 'A1',
+        endAddress: 'A1',
+      },
+      {
+        font: { bold: true },
+      },
+    )
+    expect(invokeMutation).toHaveBeenNthCalledWith(
+      2,
+      'setRangeStyle',
+      {
+        sheetName: 'Sheet1',
+        startAddress: 'A1',
+        endAddress: 'A1',
+      },
+      {
+        font: { italic: true },
+      },
+    )
+    expect(invokeMutation).toHaveBeenNthCalledWith(
+      3,
+      'setRangeStyle',
+      {
+        sheetName: 'Sheet1',
+        startAddress: 'A1',
+        endAddress: 'A1',
+      },
+      {
+        font: { underline: true },
+      },
+    )
+
+    for (const resolveMutation of pendingMutationResolvers) {
+      resolveMutation()
+    }
+    await act(async () => {
+      await Promise.all(pendingMutations)
+    })
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
   it('applies bottom border presets to the live selection range', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
