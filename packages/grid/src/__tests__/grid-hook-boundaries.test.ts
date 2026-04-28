@@ -76,6 +76,7 @@ describe('grid hook boundary helpers', () => {
     expect(headerHookSource).not.toContain('buildWorkbookHeaderPaneStatesV3')
     expect(headerHookSource).toContain("from './runtime/gridHeaderPaneRuntime.js'")
     expect(editorHookSource).toContain("from './runtime/gridEditorAnchorRuntime.js'")
+    expect(editorHookSource).not.toContain('useRef<GridEditorAnchorRuntime')
     expect(editorHookSource).not.toContain('resolveEditorOverlayScreenBounds')
     expect(editorHookSource).not.toContain('applyEditorOverlayBounds')
     expect(editorHookSource).not.toContain('snapshotToRenderCell')

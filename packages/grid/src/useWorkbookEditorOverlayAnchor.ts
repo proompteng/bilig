@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import type { CellSnapshot } from '@bilig/protocol'
 import type { GridEngineLike } from './grid-engine.js'
 import type { GridEditorPresentation } from './gridPresentation.js'
@@ -6,6 +6,8 @@ import type { Rectangle } from './gridTypes.js'
 import { GridEditorAnchorRuntime, type GridEditorAnchorOverlayStyle } from './runtime/gridEditorAnchorRuntime.js'
 import type { GridCameraStore } from './runtime/gridCameraStore.js'
 import type { WorkbookGridScrollStore } from './workbookGridScrollStore.js'
+
+const EDITOR_ANCHOR_RUNTIME = new GridEditorAnchorRuntime()
 
 export interface WorkbookEditorOverlayAnchorState {
   readonly editorPresentation: GridEditorPresentation
@@ -37,13 +39,11 @@ export function useWorkbookEditorOverlayAnchor(input: {
     selectedCol,
     selectedRow,
   } = input
-  const editorAnchorRuntimeRef = useRef<GridEditorAnchorRuntime | null>(null)
-  editorAnchorRuntimeRef.current ??= new GridEditorAnchorRuntime()
   const [overlayBounds, setOverlayBounds] = useState<Rectangle | undefined>(undefined)
 
   const refreshOverlayBounds = useCallback(
     (options?: { readonly commitReactState?: boolean }) => {
-      const next = editorAnchorRuntimeRef.current!.refreshOverlayBounds({
+      const next = EDITOR_ANCHOR_RUNTIME.refreshOverlayBounds({
         col: selectedCol,
         row: selectedRow,
         getCellLocalBounds,
@@ -57,7 +57,7 @@ export function useWorkbookEditorOverlayAnchor(input: {
         return
       }
       setOverlayBounds((current) => {
-        return editorAnchorRuntimeRef.current!.resolveCommittedBounds(current, next)
+        return EDITOR_ANCHOR_RUNTIME.resolveCommittedBounds(current, next)
       })
     },
     [getCellLocalBounds, gridCameraStore, hostElement, selectedCol, selectedRow],
@@ -90,18 +90,18 @@ export function useWorkbookEditorOverlayAnchor(input: {
   }, [isEditingCell, refreshOverlayBounds])
 
   const overlayStyle = useMemo(
-    () => editorAnchorRuntimeRef.current!.resolveOverlayStyle(isEditingCell, overlayBounds),
+    () => EDITOR_ANCHOR_RUNTIME.resolveOverlayStyle(isEditingCell, overlayBounds),
     [isEditingCell, overlayBounds],
   )
   const editorPresentation = useMemo(
     () =>
-      editorAnchorRuntimeRef.current!.resolvePresentation({
+      EDITOR_ANCHOR_RUNTIME.resolvePresentation({
         engine,
         selectedCellSnapshot,
       }),
     [engine, selectedCellSnapshot],
   )
-  const editorTextAlign = useMemo<'left' | 'right'>(() => editorAnchorRuntimeRef.current!.resolveTextAlign(editorValue), [editorValue])
+  const editorTextAlign = useMemo<'left' | 'right'>(() => EDITOR_ANCHOR_RUNTIME.resolveTextAlign(editorValue), [editorValue])
 
   return {
     editorPresentation,
