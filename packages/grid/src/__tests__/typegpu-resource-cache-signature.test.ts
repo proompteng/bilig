@@ -54,6 +54,8 @@ function contentEntry(overrides: Partial<TypeGpuTileContentResourceEntryV3> = {}
     rectSignature: 'previous-rect',
     textCount: 1,
     textHandle: null,
+    textRunCount: 1,
+    textRunQuadSpans: null,
     textSignature: 'previous-text',
     ...overrides,
   }
@@ -108,6 +110,63 @@ describe('typegpu v3 resource cache signatures', () => {
 
     expect(rectSignature(newerCameraWithSameContent)).toBe(rectSignature(base))
     expect(resolveGridTextTileSignatureV3(newerCameraWithSameContent)).toBe(resolveGridTextTileSignatureV3(base))
+  })
+
+  test('compares V3 text run counts separately from GPU quad counts', () => {
+    const tile = createTile({
+      textCount: 1,
+      textRuns: [
+        {
+          align: 'left',
+          clipHeight: 22,
+          clipWidth: 104,
+          clipX: 0,
+          clipY: 0,
+          color: '#111111',
+          font: '400 11px sans-serif',
+          fontSize: 11,
+          height: 22,
+          strike: false,
+          text: 'AB',
+          underline: false,
+          width: 104,
+          wrap: false,
+          x: 0,
+          y: 0,
+        },
+      ],
+    })
+
+    expect(
+      shouldSyncGridTextTileResourceV3({
+        content: contentEntry({
+          textCount: 2,
+          textRunCount: 1,
+          textSignature: resolveGridTextTileSignatureV3(tile),
+        }),
+        textSignature: resolveGridTextTileSignatureV3(tile),
+        tile,
+      }),
+    ).toBe(false)
+  })
+
+  test('resyncs V3 text resources when logical text run count changes', () => {
+    const tile = createTile({
+      textCount: 2,
+      textRuns: [createTextRun({ text: 'A' }), createTextRun({ text: 'B' })],
+    })
+
+    expect(
+      shouldSyncGridTextTileResourceV3({
+        content: contentEntry({
+          textCount: 2,
+          textRunCount: 1,
+          textSignature: 'previous-text',
+        }),
+        textSignature: resolveGridTextTileSignatureV3(tile),
+        tile,
+      }),
+    ).toBe(true)
   })
 
   test('tracks V3 tile revisions and decoration counts in resource signatures', () => {
@@ -235,3 +294,25 @@ describe('typegpu v3 resource cache signatures', () => {
     ])
   })
 })
+
+function createTextRun(overrides: Partial<GridRenderTile['textRuns'][number]> = {}): GridRenderTile['textRuns'][number] {
+  return {
+    align: 'left',
+    clipHeight: 22,
+    clipWidth: 104,
+    clipX: 0,
+    clipY: 0,
+    color: '#111111',
+    font: '400 11px sans-serif',
+    fontSize: 11,
+    height: 22,
+    strike: false,
+    text: 'A1',
+    underline: false,
+    width: 104,
+    wrap: false,
+    x: 0,
+    y: 0,
+    ...overrides,
+  }
+}

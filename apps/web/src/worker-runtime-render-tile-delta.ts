@@ -78,7 +78,7 @@ export function buildWorkerRenderTileDeltaBatch(input: {
 
   return {
     magic: 'bilig.render.tile.delta',
-    version: 1,
+    version: 2,
     sheetId: subscription.sheetId,
     batchId,
     cameraSeq: subscription.cameraSeq ?? 0,
@@ -439,6 +439,8 @@ export function buildRenderTileReplaceMutation(tile: GridRenderTile): RenderTile
     textMetrics: tile.textMetrics,
     glyphRefs: new Uint32Array(0),
     textRuns: tile.textRuns.map((run) => ({
+      align: run.align,
+      col: run.col,
       clipHeight: run.clipHeight,
       clipWidth: run.clipWidth,
       clipX: run.clipX,
@@ -447,10 +449,12 @@ export function buildRenderTileReplaceMutation(tile: GridRenderTile): RenderTile
       font: run.font,
       fontSize: run.fontSize,
       height: run.height,
+      row: run.row,
       strike: run.strike,
       text: run.text,
       underline: run.underline,
       width: run.width,
+      wrap: run.wrap,
       x: run.x,
       y: run.y,
     })),

@@ -41,7 +41,10 @@ export function resolveGridRenderTileDirtySpansV3(tile: GridRenderTile): GridRen
       tile.rectCount > 0 && (contentMask & RECT_DIRTY_MASK_V3) !== 0
         ? resolveGridRenderTileRectDirtySpansV3(tile, dirtyLocalRows, dirtyLocalCols, dirtyMasks)
         : [],
-    textSpans: tile.textCount > 0 && (contentMask & TEXT_DIRTY_MASK_V3) !== 0 ? [{ offset: 0, length: tile.textCount }] : [],
+    textSpans:
+      tile.textCount > 0 && (contentMask & TEXT_DIRTY_MASK_V3) !== 0
+        ? resolveGridRenderTileTextDirtySpansV3(tile, dirtyLocalRows, dirtyLocalCols, dirtyMasks)
+        : [],
   }
 }
 
@@ -92,6 +95,56 @@ function resolveGridRenderTileRectDirtySpansV3(
   }
 
   return mergeDirtySpans(spans)
+}
+
+function resolveGridRenderTileTextDirtySpansV3(
+  tile: GridRenderTile,
+  dirtyLocalRows: Uint32Array,
+  dirtyLocalCols: Uint32Array,
+  dirtyMasks: Uint32Array,
+): readonly GridRenderTileDirtySpan[] {
+  if (tile.textRuns.length !== tile.textCount) {
+    return [{ offset: 0, length: tile.textCount }]
+  }
+  if (tile.textRuns.some((run) => run.row === undefined || run.col === undefined)) {
+    return [{ offset: 0, length: tile.textCount }]
+  }
+
+  const spans: GridRenderTileDirtySpan[] = []
+  for (let runIndex = 0; runIndex < tile.textRuns.length; runIndex += 1) {
+    const run = tile.textRuns[runIndex]
+    const localRow = (run?.row ?? tile.bounds.rowStart) - tile.bounds.rowStart
+    const localCol = (run?.col ?? tile.bounds.colStart) - tile.bounds.colStart
+    if (isTextRunDirty(localRow, localCol, dirtyLocalRows, dirtyLocalCols, dirtyMasks)) {
+      spans.push({ offset: runIndex, length: 1 })
+    }
+  }
+
+  return spans.length > 0 ? mergeDirtySpans(spans) : [{ offset: 0, length: tile.textCount }]
+}
+
+function isTextRunDirty(
+  localRow: number,
+  localCol: number,
+  dirtyLocalRows: Uint32Array,
+  dirtyLocalCols: Uint32Array,
+  dirtyMasks: Uint32Array,
+): boolean {
+  for (let index = 0; index < dirtyMasks.length; index += 1) {
+    const mask = dirtyMasks[index] ?? 0
+    if ((mask & TEXT_DIRTY_MASK_V3) === 0) {
+      continue
+    }
+    const offset = index * 2
+    const rowStart = dirtyLocalRows[offset] ?? 0
+    const rowEnd = dirtyLocalRows[offset + 1] ?? rowStart
+    const colStart = dirtyLocalCols[offset] ?? 0
+    const colEnd = dirtyLocalCols[offset + 1] ?? colStart
+    if (localRow >= rowStart && localRow <= rowEnd && localCol >= colStart && localCol <= colEnd) {
+      return true
+    }
+  }
+  return false
 }
 
 function clampLocalIndex(value: number, length: number): number {

@@ -41,6 +41,8 @@ export interface RenderTileDirtySpans {
 }
 
 export interface RenderTileTextRun {
+  readonly col?: number | undefined
+  readonly row?: number | undefined
   readonly text: string
   readonly x: number
   readonly y: number
@@ -50,6 +52,8 @@ export interface RenderTileTextRun {
   readonly clipY: number
   readonly clipWidth: number
   readonly clipHeight: number
+  readonly align?: 'left' | 'center' | 'right' | undefined
+  readonly wrap?: boolean | undefined
   readonly font: string
   readonly fontSize: number
   readonly color: string
@@ -121,7 +125,7 @@ export type RenderTileMutation =
 
 export interface RenderTileDeltaBatch {
   readonly magic: 'bilig.render.tile.delta'
-  readonly version: 1
+  readonly version: 2
   readonly sheetId: number
   readonly batchId: number
   readonly cameraSeq: number
@@ -129,7 +133,7 @@ export interface RenderTileDeltaBatch {
 }
 
 const RENDER_TILE_DELTA_MAGIC = 0x52544431
-const RENDER_TILE_DELTA_VERSION = 1
+const RENDER_TILE_DELTA_VERSION = 2
 
 const PANE_KIND_TAGS: Record<RenderTilePaneKind, number> = {
   body: 0,
@@ -177,7 +181,7 @@ export function decodeRenderTileDeltaBatch(bytes: Uint8Array): RenderTileDeltaBa
   }
   const batch: RenderTileDeltaBatch = {
     magic: 'bilig.render.tile.delta',
-    version: 1,
+    version: 2,
     sheetId: reader.u32(),
     batchId: reader.u32(),
     cameraSeq: reader.u32(),
@@ -426,6 +430,8 @@ function decodeCellRun(reader: BinaryReader): RenderTileCellRun {
 }
 
 function encodeTextRun(writer: BinaryWriter, run: RenderTileTextRun): void {
+  writer.u32(run.col ?? 0xffffffff)
+  writer.u32(run.row ?? 0xffffffff)
   writer.string(run.text)
   writer.f64(run.x)
   writer.f64(run.y)
@@ -435,6 +441,8 @@ function encodeTextRun(writer: BinaryWriter, run: RenderTileTextRun): void {
   writer.f64(run.clipY)
   writer.f64(run.clipWidth)
   writer.f64(run.clipHeight)
+  writer.u8(run.align === 'center' ? 1 : run.align === 'right' ? 2 : 0)
+  writer.bool(run.wrap ?? false)
   writer.string(run.font)
   writer.f64(run.fontSize)
   writer.string(run.color)
@@ -443,7 +451,11 @@ function encodeTextRun(writer: BinaryWriter, run: RenderTileTextRun): void {
 }
 
 function decodeTextRun(reader: BinaryReader): RenderTileTextRun {
-  return {
+  const col = reader.u32()
+  const row = reader.u32()
+  const run = {
+    ...(col === 0xffffffff ? {} : { col }),
+    ...(row === 0xffffffff ? {} : { row }),
     text: reader.string(),
     x: reader.f64(),
     y: reader.f64(),
@@ -453,6 +465,12 @@ function decodeTextRun(reader: BinaryReader): RenderTileTextRun {
     clipY: reader.f64(),
     clipWidth: reader.f64(),
     clipHeight: reader.f64(),
+  }
+  const alignTag = reader.u8()
+  return {
+    ...run,
+    align: alignTag === 1 ? 'center' : alignTag === 2 ? 'right' : 'left',
+    wrap: reader.bool(),
     font: reader.string(),
     fontSize: reader.f64(),
     color: reader.string(),

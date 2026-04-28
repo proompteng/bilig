@@ -39,6 +39,7 @@ export function packTextMetricsV3(items: readonly GridTextItem[]): Float32Array 
 export function mapTextRunV3(item: GridTextItem): GridRenderTileTextRun {
   return {
     align: item.align,
+    col: item.col,
     clipHeight: Math.max(0, item.height - item.clipInsetTop - item.clipInsetBottom),
     clipWidth: Math.max(0, item.width - item.clipInsetLeft - item.clipInsetRight),
     clipX: item.x + item.clipInsetLeft,
@@ -47,6 +48,7 @@ export function mapTextRunV3(item: GridTextItem): GridRenderTileTextRun {
     font: item.font,
     fontSize: item.fontSize,
     height: item.height,
+    row: item.row,
     strike: item.strike,
     text: item.text,
     underline: item.underline,

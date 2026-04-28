@@ -9,6 +9,8 @@ import { collectVisibleColumnBounds, collectVisibleRowBounds } from './visibleGr
 import { workbookThemeColors } from './workbookTheme.js'
 
 export interface GridTextItem {
+  readonly col?: number | undefined
+  readonly row?: number | undefined
   readonly x: number
   readonly y: number
   readonly width: number
@@ -224,6 +226,8 @@ function buildCellTextItem({
   }
 
   return {
+    col,
+    row,
     ...localBounds,
     ...resolveClipInsets({ bounds: localBounds, clipRect }),
     text: renderCell.displayText,

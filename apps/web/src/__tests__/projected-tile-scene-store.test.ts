@@ -48,7 +48,7 @@ function createTileReplace(tileId: number, valuesVersion: number): RenderTileRep
 function createBatch(batchId: number, mutations: RenderTileDeltaBatch['mutations']): RenderTileDeltaBatch {
   return {
     magic: 'bilig.render.tile.delta',
-    version: 1,
+    version: 2,
     sheetId: 7,
     batchId,
     cameraSeq: batchId + 10,

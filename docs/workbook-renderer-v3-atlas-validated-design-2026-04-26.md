@@ -422,10 +422,15 @@ Completed in the resident-scene deletion tranche:
   ranges are emitted as row-major rect subspans, text-only updates emit no rect spans, and the TypeGPU tile buffer pool writes bounded rect
   subranges into existing buffers when counts and decoration state prove that a partial write is safe. Text glyph buffers still full-sync until
   per-run glyph-span metadata exists.
+- V3 text runs now preserve source row/column identity through `GridTextItem`, `GridRenderTileTextRun`, and the render-tile delta transport.
+  Dirty text ranges can map to text-run spans, and the TypeGPU tile cache now tracks logical text-run count separately from GPU quad count so
+  multi-glyph cells do not force repeated full text syncs. Text quad run spans are recorded for stable subrange writes when dirty runs keep the
+  same glyph quad footprint; unsafe run-span changes fall back to a full text upload.
 
 Remaining work from this design:
 
 - continue splitting remaining draw/dirty-tile coordination out of `useWorkbookGridRenderState.ts`;
-- continue extending tile-local dirty row/column/mask metadata from rect subrange writes into text/glyph dirty-span payload updates;
+- continue extending tile-local dirty row/column/mask metadata from text-run subrange writes into glyph dependency preservation and missing-glyph
+  updates;
 - wire the V3 atlas/text-run primitives into the TypeGPU backend and add tile glyph dependency preservation;
 - tighten browser perf gates around the now V3-only renderer path.

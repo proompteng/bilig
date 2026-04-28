@@ -31,6 +31,8 @@ export interface GridRenderTileVersion {
 }
 
 export interface GridRenderTileTextRun {
+  readonly col?: number | undefined
+  readonly row?: number | undefined
   readonly text: string
   readonly x: number
   readonly y: number
@@ -40,8 +42,8 @@ export interface GridRenderTileTextRun {
   readonly clipY: number
   readonly clipWidth: number
   readonly clipHeight: number
-  readonly align?: 'left' | 'center' | 'right'
-  readonly wrap?: boolean
+  readonly align?: 'left' | 'center' | 'right' | undefined
+  readonly wrap?: boolean | undefined
   readonly font: string
   readonly fontSize: number
   readonly color: string

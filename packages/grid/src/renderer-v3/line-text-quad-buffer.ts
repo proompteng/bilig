@@ -22,8 +22,8 @@ export interface TextQuadRun {
   readonly clipY?: number
   readonly clipWidth?: number
   readonly clipHeight?: number
-  readonly align?: 'left' | 'center' | 'right'
-  readonly wrap?: boolean
+  readonly align?: 'left' | 'center' | 'right' | undefined
+  readonly wrap?: boolean | undefined
   readonly font?: string
   readonly fontSize?: number
   readonly color?: string
@@ -55,6 +55,11 @@ export interface TextDecorationRect {
   readonly width: number
   readonly height: number
   readonly color: string
+}
+
+export interface TextQuadRunSpan {
+  readonly offset: number
+  readonly length: number
 }
 
 const TEXT_INSTANCE_FLOAT_COUNT = 16
@@ -171,6 +176,24 @@ export function buildTextQuadsFromRuns(
   targetBuffer?: Float32Array,
 ): { floats: Float32Array; quadCount: number } {
   return packTextQuads(buildTextQuads(runs, atlas), targetBuffer)
+}
+
+export function buildTextQuadsFromRunsWithSpans(
+  runs: readonly TextQuadRun[],
+  atlas: GlyphAtlasLike,
+  targetBuffer?: Float32Array,
+): { floats: Float32Array; quadCount: number; runSpans: readonly TextQuadRunSpan[] } {
+  const quads: TextQuad[] = []
+  const runSpans: TextQuadRunSpan[] = []
+  for (const run of runs) {
+    const offset = quads.length
+    quads.push(...buildTextQuads([run], atlas))
+    runSpans.push({ offset, length: quads.length - offset })
+  }
+  return {
+    ...packTextQuads(quads, targetBuffer),
+    runSpans,
+  }
 }
 
 export function buildTextDecorationRects(runs: readonly TextQuadRun[], atlas: GlyphAtlasLike): TextDecorationRect[] {

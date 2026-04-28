@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildTextDecorationRectsFromScene, buildTextQuads, buildTextQuadsFromScene } from '../renderer-v3/line-text-quad-buffer.js'
+import {
+  buildTextDecorationRectsFromScene,
+  buildTextQuads,
+  buildTextQuadsFromRunsWithSpans,
+  buildTextQuadsFromScene,
+} from '../renderer-v3/line-text-quad-buffer.js'
 
 const atlas = {
   intern(font: string, glyph: string) {
@@ -123,6 +128,22 @@ describe('text-quad-buffer', () => {
     expect(floats[9]).toBeCloseTo(0x22 / 255)
     expect(floats[10]).toBeCloseTo(0x33 / 255)
     expect(floats[11]).toBe(1)
+  })
+
+  it('records text-run to gpu-quad spans for partial text uploads', () => {
+    const payload = buildTextQuadsFromRunsWithSpans(
+      [
+        { text: 'AB', x: 0, y: 0, font: '400 10px Geist', fontSize: 10 },
+        { text: 'C', x: 40, y: 0, font: '400 10px Geist', fontSize: 10 },
+      ],
+      atlas,
+    )
+
+    expect(payload.quadCount).toBe(3)
+    expect(payload.runSpans).toEqual([
+      { offset: 0, length: 2 },
+      { offset: 2, length: 1 },
+    ])
   })
 
   it('builds underline and strike rects from clipped scene items', () => {

@@ -51,6 +51,21 @@ describe('render tile dirty spans v3', () => {
     expect(spans.textSpans).toEqual([{ offset: 0, length: 2 }])
   })
 
+  test('maps text damage to tile-local text-run spans when runs carry cell coordinates', () => {
+    const spans = resolveGridRenderTileDirtySpansV3(
+      createTile({
+        dirtyLocalCols: new Uint32Array([1, 1]),
+        dirtyLocalRows: new Uint32Array([2, 2]),
+        dirtyMasks: new Uint32Array([DirtyMaskV3.Value | DirtyMaskV3.Text]),
+        textCount: 3,
+        textRuns: [createTextRun({ col: 0, row: 2 }), createTextRun({ col: 1, row: 2 }), createTextRun({ col: 1, row: 3 })],
+      }),
+    )
+
+    expect(spans.rectSpans).toEqual([])
+    expect(spans.textSpans).toEqual([{ offset: 1, length: 1 }])
+  })
+
   test('maps exact cell-local rect damage to row-major rect instance spans', () => {
     const spans = resolveGridRenderTileDirtySpansV3(
       createTile({
@@ -77,3 +92,25 @@ describe('render tile dirty spans v3', () => {
     expect(spans.rectSpans).toEqual([{ offset: 0, length: 20 }])
   })
 })
+
+function createTextRun(overrides: Partial<GridRenderTile['textRuns'][number]> = {}): GridRenderTile['textRuns'][number] {
+  return {
+    align: 'left',
+    clipHeight: 22,
+    clipWidth: 104,
+    clipX: 0,
+    clipY: 0,
+    color: '#111111',
+    font: '400 11px sans-serif',
+    fontSize: 11,
+    height: 22,
+    strike: false,
+    text: 'A1',
+    underline: false,
+    width: 104,
+    wrap: false,
+    x: 0,
+    y: 0,
+    ...overrides,
+  }
+}

@@ -1,7 +1,12 @@
 import type { TgpuBindGroup } from 'typegpu'
 import { parseGpuColor } from '../gridGpuScene.js'
 import { noteTypeGpuBufferAllocation } from '../grid-render-counters.js'
-import { buildTextDecorationRectsFromRuns, buildTextQuadsFromRuns, type TextDecorationRect } from './line-text-quad-buffer.js'
+import {
+  buildTextDecorationRectsFromRuns,
+  buildTextQuadsFromRunsWithSpans,
+  type TextDecorationRect,
+  type TextQuadRunSpan,
+} from './line-text-quad-buffer.js'
 import type { createGlyphAtlas } from './typegpu-atlas-manager.js'
 import {
   WORKBOOK_RECT_INSTANCE_LAYOUT,
@@ -39,6 +44,8 @@ export interface TypeGpuTileContentResourceEntryV3 {
   rectSignature: string | null
   textHandle: GpuBufferHandleV3<TextInstanceVertexBuffer> | null
   textCount: number
+  textRunCount: number
+  textRunQuadSpans: readonly TextQuadRunSpan[] | null
   textSignature: string | null
   decorationRects: readonly TextDecorationRect[] | null
 }
@@ -58,6 +65,8 @@ function createEmptyContentEntry(): TypeGpuTileContentResourceEntryV3 {
     rectSignature: null,
     textCount: 0,
     textHandle: null,
+    textRunCount: 0,
+    textRunQuadSpans: null,
     textSignature: null,
   }
 }
@@ -183,6 +192,8 @@ export class TypeGpuTileResourceCacheV3 {
     entry.rectCount = 0
     entry.rectSignature = null
     entry.textCount = 0
+    entry.textRunCount = 0
+    entry.textRunQuadSpans = null
     entry.textSignature = null
     entry.decorationRects = null
   }
@@ -194,6 +205,8 @@ export class TypeGpuTileResourceCacheV3 {
     entry.textHandle = null
     entry.rectCount = 0
     entry.textCount = 0
+    entry.textRunCount = 0
+    entry.textRunQuadSpans = null
   }
 
   private destroyPlacement(entry: TypeGpuTilePlacementResourceEntryV3): void {
@@ -333,7 +346,7 @@ export function resolveGridTileDirtyContentMaskV3(tile: Pick<GridRenderTile, 'di
 }
 
 export function shouldSyncGridTextTileResourceV3(input: {
-  readonly content: Pick<TypeGpuTileContentResourceEntryV3, 'textCount' | 'textHandle' | 'textSignature'>
+  readonly content: Pick<TypeGpuTileContentResourceEntryV3, 'textCount' | 'textHandle' | 'textRunCount' | 'textSignature'>
   readonly textSignature: string
   readonly tile: GridRenderTile
 }): boolean {
@@ -343,7 +356,7 @@ export function shouldSyncGridTextTileResourceV3(input: {
   if (!input.content.textSignature) {
     return true
   }
-  if (input.content.textCount !== input.tile.textCount) {
+  if (input.content.textRunCount !== input.tile.textCount) {
     return true
   }
   if (input.tile.textCount > 0 && !input.content.textHandle) {
@@ -391,18 +404,106 @@ function syncTileTextResource(input: {
   readonly textSignature: string
 }): void {
   input.content.decorationRects = buildTextDecorationRectsFromRuns(input.pane.tile.textRuns, input.atlas)
-  const textPayload = buildTextQuadsFromRuns(input.pane.tile.textRuns, input.atlas)
+  const textPayload = buildTextQuadsFromRunsWithSpans(input.pane.tile.textRuns, input.atlas)
   if (textPayload.quadCount === 0) {
     releaseTextBuffer(input.tileResources, input.content)
     input.content.textCount = 0
+    input.content.textRunCount = input.pane.tile.textCount
+    input.content.textRunQuadSpans = textPayload.runSpans
     input.content.textSignature = input.textSignature
     return
   }
+  const canWritePartialPayload =
+    input.content.textSignature !== null &&
+    input.content.textHandle !== null &&
+    input.content.textCount === textPayload.quadCount &&
+    input.content.textRunCount === input.pane.tile.textCount &&
+    input.content.textRunQuadSpans !== null
   const handle = prepareTextBuffer(input.tileResources, input.content, textPayload.quadCount)
   input.content.textHandle = handle
   input.content.textCount = textPayload.quadCount
-  writeTypeGpuVertexBuffer(handle.buffer, textPayload.floats, `tile-text:${resolveWorkbookTileContentBufferKeyV3(input.pane)}`)
+  input.content.textRunCount = input.pane.tile.textCount
+  writeTileTextPayload({
+    canWritePartialPayload,
+    content: input.content,
+    handle,
+    label: `tile-text:${resolveWorkbookTileContentBufferKeyV3(input.pane)}`,
+    textPayload,
+    tile: input.pane.tile,
+  })
+  input.content.textRunQuadSpans = textPayload.runSpans
   input.content.textSignature = input.textSignature
+}
+
+function writeTileTextPayload(input: {
+  readonly canWritePartialPayload: boolean
+  readonly content: TypeGpuTileContentResourceEntryV3
+  readonly handle: GpuBufferHandleV3<TextInstanceVertexBuffer>
+  readonly label: string
+  readonly textPayload: { readonly floats: Float32Array; readonly quadCount: number; readonly runSpans: readonly TextQuadRunSpan[] }
+  readonly tile: GridRenderTile
+}): void {
+  const dirtySpans = input.tile.dirty?.textSpans ?? []
+  if (
+    !input.canWritePartialPayload ||
+    dirtySpans.length === 0 ||
+    input.content.textCount !== input.textPayload.quadCount ||
+    input.content.textRunCount !== input.tile.textCount ||
+    dirtySpans.some((span) => isFullGridRenderTileDirtySpanV3(span, input.tile.textCount))
+  ) {
+    writeTypeGpuVertexBuffer(input.handle.buffer, input.textPayload.floats, input.label)
+    return
+  }
+
+  const previousRunSpans = input.content.textRunQuadSpans
+  if (!previousRunSpans || previousRunSpans.length !== input.textPayload.runSpans.length) {
+    writeTypeGpuVertexBuffer(input.handle.buffer, input.textPayload.floats, input.label)
+    return
+  }
+
+  for (const dirtySpan of dirtySpans) {
+    const quadSpan = resolveStableTextQuadSpan({
+      dirtySpan,
+      nextRunSpans: input.textPayload.runSpans,
+      previousRunSpans,
+    })
+    if (!quadSpan || quadSpan.length === 0) {
+      writeTypeGpuVertexBuffer(input.handle.buffer, input.textPayload.floats, input.label)
+      return
+    }
+    writeTypeGpuVertexBufferSubrange({
+      buffer: input.handle.buffer,
+      floatCount: quadSpan.length * TEXT_INSTANCE_FLOAT_COUNT,
+      floats: input.textPayload.floats,
+      label: `${input.label}:span`,
+      startFloat: quadSpan.offset * TEXT_INSTANCE_FLOAT_COUNT,
+    })
+  }
+}
+
+function resolveStableTextQuadSpan(input: {
+  readonly dirtySpan: { readonly offset: number; readonly length: number }
+  readonly nextRunSpans: readonly TextQuadRunSpan[]
+  readonly previousRunSpans: readonly TextQuadRunSpan[]
+}): TextQuadRunSpan | null {
+  const start = input.dirtySpan.offset
+  const endExclusive = start + input.dirtySpan.length
+  if (start < 0 || endExclusive > input.nextRunSpans.length || input.dirtySpan.length <= 0) {
+    return null
+  }
+
+  let offset = Number.MAX_SAFE_INTEGER
+  let end = 0
+  for (let index = start; index < endExclusive; index += 1) {
+    const next = input.nextRunSpans[index]
+    const previous = input.previousRunSpans[index]
+    if (!next || !previous || next.offset !== previous.offset || next.length !== previous.length) {
+      return null
+    }
+    offset = Math.min(offset, next.offset)
+    end = Math.max(end, next.offset + next.length)
+  }
+  return offset === Number.MAX_SAFE_INTEGER ? null : { offset, length: end - offset }
 }
 
 function syncTileRectResource(input: {

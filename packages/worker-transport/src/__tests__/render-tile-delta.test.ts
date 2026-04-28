@@ -14,7 +14,7 @@ function createBatch(): RenderTileDeltaBatch {
   }
   return {
     magic: 'bilig.render.tile.delta',
-    version: 1,
+    version: 2,
     sheetId: 7,
     batchId: 11,
     cameraSeq: 13,
@@ -42,6 +42,8 @@ function createBatch(): RenderTileDeltaBatch {
         glyphRefs: Uint32Array.from([10, 11, 12]),
         textRuns: [
           {
+            align: 'left',
+            col: 386,
             text: 'Revenue',
             x: 12,
             y: 18,
@@ -54,7 +56,9 @@ function createBatch(): RenderTileDeltaBatch {
             font: '400 11px sans-serif',
             fontSize: 11,
             color: '#202124',
+            row: 66,
             underline: true,
+            wrap: false,
             strike: false,
           },
         ],
