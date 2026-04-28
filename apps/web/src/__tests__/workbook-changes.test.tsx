@@ -184,6 +184,9 @@ describe('workbook changes', () => {
     })
 
     expect(host.querySelector("[data-testid='workbook-changes-count']")?.textContent).toBe('0')
+    expect(host.querySelector("[data-testid='workbook-changes-empty-state']")).not.toBeNull()
+    expect(host.textContent).toContain('No changes yet')
+    expect(host.textContent).toContain('Workbook is up to date.')
 
     await act(async () => {
       changes.emit([
@@ -209,6 +212,7 @@ describe('workbook changes', () => {
     })
 
     expect(host.querySelector("[data-testid='workbook-changes-count']")?.textContent).toBe('1')
+    expect(host.querySelector("[data-testid='workbook-changes-empty-state']")).toBeNull()
 
     await act(async () => {
       root.unmount()

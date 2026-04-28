@@ -317,20 +317,21 @@ export function useWorkbookAppPanels(input: {
             {activeSidePanelTab === 'assistant' ? (
               <WorkbookAgentHistoryMenu activeThreadId={activeThreadId} threadSummaries={threadSummaries} onSelectThread={selectThread} />
             ) : null}
-            <Button
-              aria-label="New thread"
-              className={cn(
-                workbookHeaderActionButtonClass({ active: false, iconOnly: true }),
-                'ml-auto shrink-0 self-center border-transparent bg-[var(--color-mauve-50)] shadow-none hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)]',
-              )}
-              data-testid="workbook-agent-new-thread"
-              title="New thread"
-              type="button"
-              disabled={activeSidePanelTab !== 'assistant'}
-              onClick={startNewThread}
-            >
-              <Plus aria-hidden="true" className="size-4" strokeWidth={1.9} />
-            </Button>
+            {activeSidePanelTab === 'assistant' ? (
+              <Button
+                aria-label="New thread"
+                className={cn(
+                  workbookHeaderActionButtonClass({ active: false, iconOnly: true }),
+                  'ml-auto shrink-0 self-center border-transparent bg-[var(--color-mauve-50)] shadow-none hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)]',
+                )}
+                data-testid="workbook-agent-new-thread"
+                title="New thread"
+                type="button"
+                onClick={startNewThread}
+              >
+                <Plus aria-hidden="true" className="size-4" strokeWidth={1.9} />
+              </Button>
+            ) : null}
             <Button
               aria-label="Close workbook side panel"
               className={cn(

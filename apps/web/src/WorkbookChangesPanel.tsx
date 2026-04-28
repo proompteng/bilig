@@ -1,5 +1,7 @@
 import { Button } from '@base-ui/react/button'
+import { ListChecks } from 'lucide-react'
 import { cn } from './cn.js'
+import { agentPanelLabelTextClass, agentPanelMetaTextClass } from './workbook-agent-panel-primitives.js'
 import { formatWorkbookChangeDay, formatWorkbookChangeTime, type WorkbookChangeEntry } from './workbook-changes-model.js'
 
 interface WorkbookChangeDaySection {
@@ -88,6 +90,7 @@ export function WorkbookChangesPanel(props: {
   readonly onJump: (sheetName: string, address: string) => void
 }) {
   const sections = groupChangesByDay(props.changes)
+  const isEmpty = sections.length === 0
 
   return (
     <div
@@ -96,20 +99,32 @@ export function WorkbookChangesPanel(props: {
       data-testid="workbook-changes-panel"
       id="workbook-changes-panel"
     >
-      <div className="min-h-0 flex-1 overflow-y-auto px-0 py-2">
-        {sections.map((section) => (
-          <section key={section.dayLabel} aria-label={section.dayLabel}>
-            <div className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--wb-text-subtle)]">
-              {section.dayLabel}
+      {isEmpty ? (
+        <div className="flex min-h-[360px] flex-1 items-center justify-center px-5 py-10" data-testid="workbook-changes-empty-state">
+          <div className="flex max-w-52 flex-col items-center text-center">
+            <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)]">
+              <ListChecks aria-hidden="true" className="h-4 w-4" />
             </div>
-            <ol className="m-0 list-none p-0">
-              {section.changes.map((change) => (
-                <WorkbookChangeRow key={`${change.revision}:${change.summary}`} change={change} onJump={props.onJump} />
-              ))}
-            </ol>
-          </section>
-        ))}
-      </div>
+            <div className={agentPanelLabelTextClass()}>No changes yet</div>
+            <div className={cn(agentPanelMetaTextClass(), 'mt-1')}>Workbook is up to date.</div>
+          </div>
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto px-0 py-2">
+          {sections.map((section) => (
+            <section key={section.dayLabel} aria-label={section.dayLabel}>
+              <div className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--wb-text-subtle)]">
+                {section.dayLabel}
+              </div>
+              <ol className="m-0 list-none p-0">
+                {section.changes.map((change) => (
+                  <WorkbookChangeRow key={`${change.revision}:${change.summary}`} change={change} onJump={props.onJump} />
+                ))}
+              </ol>
+            </section>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

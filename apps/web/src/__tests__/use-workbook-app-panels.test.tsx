@@ -218,6 +218,40 @@ describe('useWorkbookAppPanels', () => {
     await harness.unmount()
   })
 
+  it('hides assistant-only actions while the changes tab is active', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const startNewThread = vi.fn()
+    useWorkbookAgentPane.mockReturnValue({
+      agentPanel: <div data-testid="assistant-panel">Assistant panel</div>,
+      activeThreadId: 'thr-1',
+      agentError: null,
+      clearAgentError: vi.fn(),
+      pendingCommandCount: 0,
+      previewRanges: [],
+      selectThread: vi.fn(),
+      startNewThread,
+      threadSummaries: [],
+    })
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const harness = renderHarness(host)
+
+    await harness.render()
+    expect(host.querySelector("[data-testid='workbook-agent-new-thread']")).not.toBeNull()
+
+    await act(async () => {
+      host.querySelector("[data-testid='workbook-side-panel-tab-changes']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(host.querySelector("[data-testid='workbook-agent-new-thread']")).toBeNull()
+    expect(host.querySelector("[data-testid='workbook-side-panel-close']")).not.toBeNull()
+    expect(startNewThread).not.toHaveBeenCalled()
+
+    await harness.unmount()
+  })
+
   it('lets users close and reopen the side panel without losing the active tab', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
