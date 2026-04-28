@@ -69,22 +69,12 @@ export function useWorkbookRenderTilePanes(input: {
   const [renderTileRevision, setRenderTileRevision] = useState(0)
 
   useEffect(() => {
-    if (!renderTileSource || sheetId === undefined) {
-      return
-    }
-    const tileInterest = gridRuntimeHost.buildViewportTileInterest({
-      dprBucket,
-      reason: 'scroll',
-      sheetId,
-      sheetOrdinal: sheetId,
-      viewport: renderTileViewport,
-    })
-    return renderTileSource.subscribeRenderTileDeltas(
+    return tilePaneRuntimeRef.current!.connectRenderTileDeltas(
       {
-        ...renderTileViewport,
-        cameraSeq: tileInterest.cameraSeq,
         dprBucket,
-        initialDelta: 'full',
+        gridRuntimeHost,
+        renderTileSource,
+        renderTileViewport,
         sheetId,
         sheetName,
       },

@@ -3,7 +3,7 @@ import type { GridEngineLike } from '../grid-engine.js'
 import type { GridMetrics } from '../gridMetrics.js'
 import { buildLocalFixedRenderTiles } from '../renderer-v3/local-render-tile-materializer.js'
 import { buildFixedRenderTilePaneStates } from '../renderer-v3/render-tile-pane-builder.js'
-import type { GridRenderTile, GridRenderTileSource } from '../renderer-v3/render-tile-source.js'
+import type { GridRenderTile, GridRenderTileSceneChange, GridRenderTileSource } from '../renderer-v3/render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from '../renderer-v3/render-tile-pane-state.js'
 import type { GridRuntimeHost } from './gridRuntimeHost.js'
 
@@ -39,6 +39,15 @@ export interface GridRenderTilePaneRuntimeInput {
   readonly sortedColumnWidthOverrides: SortedAxisOverrides
   readonly sortedRowHeightOverrides: SortedAxisOverrides
   readonly visibleViewport: Viewport
+}
+
+export interface GridRenderTileDeltaRuntimeInput {
+  readonly dprBucket: number
+  readonly gridRuntimeHost: GridRuntimeHost
+  readonly renderTileSource?: GridRenderTileSource | undefined
+  readonly renderTileViewport: Viewport
+  readonly sheetId?: number | undefined
+  readonly sheetName: string
 }
 
 const EMPTY_TILE_PANE_RUNTIME_STATE: GridRenderTilePaneRuntimeState = Object.freeze({
@@ -83,6 +92,33 @@ export class GridRenderTilePaneRuntime {
 
   clearRetainedPanes(): void {
     this.retainedFixedRenderTileDataPanes = null
+  }
+
+  connectRenderTileDeltas(
+    input: GridRenderTileDeltaRuntimeInput,
+    listener: (change: GridRenderTileSceneChange) => void,
+  ): (() => void) | undefined {
+    if (!input.renderTileSource || input.sheetId === undefined) {
+      return undefined
+    }
+    const tileInterest = input.gridRuntimeHost.buildViewportTileInterest({
+      dprBucket: input.dprBucket,
+      reason: 'scroll',
+      sheetId: input.sheetId,
+      sheetOrdinal: input.sheetId,
+      viewport: input.renderTileViewport,
+    })
+    return input.renderTileSource.subscribeRenderTileDeltas(
+      {
+        ...input.renderTileViewport,
+        cameraSeq: tileInterest.cameraSeq,
+        dprBucket: input.dprBucket,
+        initialDelta: 'full',
+        sheetId: input.sheetId,
+        sheetName: input.sheetName,
+      },
+      listener,
+    )
   }
 
   private resolveFixedRenderTileDataPanes(input: GridRenderTilePaneRuntimeInput): readonly WorkbookRenderTilePaneState[] | null {

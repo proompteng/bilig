@@ -378,8 +378,9 @@ Completed in the resident-scene deletion tranche:
 - The final legacy `packages/grid/src/renderer-v2` files were deleted after remaining tests were either retired as obsolete V2-only coverage or
   retargeted to V3 constants. The import-boundary test now asserts the whole `renderer-v2` directory stays absent.
 - `packages/grid/src/runtime/gridRenderTilePaneRuntime.ts` now owns remote/local fixed-tile pane resolution and same-sheet retained-pane fallback.
-  `useWorkbookRenderTilePanes.ts` is reduced to React subscription/revision bridging, with runtime tests covering remote tile readiness,
-  temporary tile-miss retention, sheet-switch invalidation, and host-readiness behavior.
+  It also owns render-tile delta subscription stamping, so `useWorkbookRenderTilePanes.ts` no longer builds viewport tile-interest batches or
+  calls the render-tile source subscription API directly. Runtime and hook-boundary tests cover remote tile readiness, temporary tile-miss
+  retention, sheet-switch invalidation, host-readiness behavior, and the subscription-stamping boundary.
 - `packages/grid/src/runtime/gridHeaderPaneRuntime.ts` now owns V3 header pane generation, host-readiness gating, and body-tile content-offset
   projection. `useWorkbookHeaderPanes.ts` is reduced to a React memo/ref adapter, and hook-boundary tests lock out direct header pane builder use.
 - `packages/grid/src/runtime/gridEditorAnchorRuntime.ts` now owns editor overlay screen-bound resolution, direct DOM bounds application,

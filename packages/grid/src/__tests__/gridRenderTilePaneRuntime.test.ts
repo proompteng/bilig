@@ -3,7 +3,7 @@ import { ValueTag, type CellSnapshot } from '@bilig/protocol'
 import type { GridEngineLike } from '../grid-engine.js'
 import { getGridMetrics } from '../gridMetrics.js'
 import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from '../renderer-v3/rect-instance-buffer.js'
-import type { GridRenderTile, GridRenderTileSource } from '../renderer-v3/render-tile-source.js'
+import type { GridRenderTile, GridRenderTileDeltaSubscription, GridRenderTileSource } from '../renderer-v3/render-tile-source.js'
 import { GRID_TEXT_METRIC_FLOAT_COUNT_V3 } from '../renderer-v3/text-run-buffer.js'
 import { GridRenderTilePaneRuntime, getGridRenderTilePaneRuntime } from '../runtime/gridRenderTilePaneRuntime.js'
 import { GridRuntimeHost } from '../runtime/gridRuntimeHost.js'
@@ -85,6 +85,28 @@ function createRenderTileSource(tiles: readonly GridRenderTile[]): GridRenderTil
   return {
     peekRenderTile: (tileId) => byId.get(tileId) ?? null,
     subscribeRenderTileDeltas: () => () => {},
+  }
+}
+
+function createCapturingRenderTileSource(): {
+  readonly source: GridRenderTileSource
+  readonly captured: () => GridRenderTileDeltaSubscription | null
+  readonly unsubscribed: () => boolean
+} {
+  let captured: GridRenderTileDeltaSubscription | null = null
+  let unsubscribed = false
+  return {
+    captured: () => captured,
+    source: {
+      peekRenderTile: () => null,
+      subscribeRenderTileDeltas: (subscription) => {
+        captured = subscription
+        return () => {
+          unsubscribed = true
+        }
+      },
+    },
+    unsubscribed: () => unsubscribed,
   }
 }
 
@@ -183,6 +205,71 @@ describe('GridRenderTilePaneRuntime', () => {
 
     expect(state.residentBodyPane?.tile.coord.sheetId).toBe(7)
     expect(state.residentDataPanes).toHaveLength(1)
+  })
+
+  it('owns render tile delta subscription stamping in the runtime', () => {
+    const runtime = new GridRenderTilePaneRuntime()
+    const gridRuntimeHost = createHost()
+    const renderTileSource = createCapturingRenderTileSource()
+
+    const unsubscribe = runtime.connectRenderTileDeltas(
+      {
+        dprBucket: 2,
+        gridRuntimeHost,
+        renderTileSource: renderTileSource.source,
+        renderTileViewport: { colEnd: 255, colStart: 0, rowEnd: 63, rowStart: 0 },
+        sheetId: 7,
+        sheetName: 'Sheet1',
+      },
+      () => {},
+    )
+
+    expect(renderTileSource.captured()).toMatchObject({
+      cameraSeq: gridRuntimeHost.snapshot().camera.seq,
+      colEnd: 255,
+      colStart: 0,
+      dprBucket: 2,
+      initialDelta: 'full',
+      rowEnd: 63,
+      rowStart: 0,
+      sheetId: 7,
+      sheetName: 'Sheet1',
+    })
+    unsubscribe?.()
+    expect(renderTileSource.unsubscribed()).toBe(true)
+  })
+
+  it('skips render tile delta subscription until a remote source and sheet id exist', () => {
+    const runtime = new GridRenderTilePaneRuntime()
+    const renderTileSource = createCapturingRenderTileSource()
+    const input = {
+      dprBucket: 1,
+      gridRuntimeHost: createHost(),
+      renderTileViewport: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
+      sheetName: 'Sheet1',
+    }
+
+    expect(
+      runtime.connectRenderTileDeltas(
+        {
+          ...input,
+          renderTileSource: undefined,
+          sheetId: 7,
+        },
+        () => {},
+      ),
+    ).toBeUndefined()
+    expect(
+      runtime.connectRenderTileDeltas(
+        {
+          ...input,
+          renderTileSource: renderTileSource.source,
+          sheetId: undefined,
+        },
+        () => {},
+      ),
+    ).toBeUndefined()
+    expect(renderTileSource.captured()).toBeNull()
   })
 
   it('does not retain remote panes across sheet switches or before the host is ready', () => {

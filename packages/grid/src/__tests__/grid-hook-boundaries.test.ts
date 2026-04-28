@@ -62,6 +62,7 @@ describe('grid hook boundary helpers', () => {
     const editorHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookEditorOverlayAnchor.ts', import.meta.url)), 'utf8')
     const geometryRuntimeSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridGeometryRuntime.ts', import.meta.url)), 'utf8')
     const headerHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookHeaderPanes.ts', import.meta.url)), 'utf8')
+    const tilePaneHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookRenderTilePanes.ts', import.meta.url)), 'utf8')
     const surfaceSource = readFileSync(fileURLToPath(new URL('../WorkbookGridSurface.tsx', import.meta.url)), 'utf8')
 
     expect(hookSource).toContain("from './useWorkbookGridGeometryRuntime.js'")
@@ -75,6 +76,9 @@ describe('grid hook boundary helpers', () => {
     expect(headerHookSource).not.toContain('buildGridTextScene')
     expect(headerHookSource).not.toContain('buildWorkbookHeaderPaneStatesV3')
     expect(headerHookSource).toContain("from './runtime/gridHeaderPaneRuntime.js'")
+    expect(tilePaneHookSource).toContain("from './runtime/gridRenderTilePaneRuntime.js'")
+    expect(tilePaneHookSource).not.toContain('buildViewportTileInterest')
+    expect(tilePaneHookSource).not.toContain('.subscribeRenderTileDeltas(')
     expect(editorHookSource).toContain("from './runtime/gridEditorAnchorRuntime.js'")
     expect(editorHookSource).not.toContain('useRef<GridEditorAnchorRuntime')
     expect(editorHookSource).not.toContain('resolveEditorOverlayScreenBounds')
