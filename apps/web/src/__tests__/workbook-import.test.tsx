@@ -138,6 +138,10 @@ describe('workbook import', () => {
       host.querySelector("[data-testid='workbook-import-toggle']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
+    const importDialog = host.querySelector<HTMLElement>("[data-testid='workbook-import-dialog']")
+    expect(importDialog?.getAttribute('class')).toContain('max-w-[28rem]')
+    expect(host.querySelector("[data-testid='workbook-import-preview-list']")).toBeNull()
+
     const input = host.querySelector<HTMLInputElement>("[data-testid='workbook-import-file']")
     const file = new File(['Name,Value\nalpha,12'], 'metrics.csv', { type: CSV_CONTENT_TYPE })
     setInputFiles(input!, [file])
@@ -150,6 +154,8 @@ describe('workbook import', () => {
       file,
       contentType: CSV_CONTENT_TYPE,
     })
+    expect(host.querySelector<HTMLElement>("[data-testid='workbook-import-dialog']")?.getAttribute('class')).toContain('max-w-[72rem]')
+    expect(host.querySelector("[data-testid='workbook-import-preview-list']")).not.toBeNull()
     expect(host.textContent).toContain('metrics')
 
     await act(async () => {

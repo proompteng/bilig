@@ -118,7 +118,11 @@ export function WorkbookImportPanel(props: {
       <div
         aria-label="Workbook import staging"
         aria-modal="true"
-        className="relative flex max-h-[calc(100vh-3rem)] w-full max-w-[72rem] flex-col overflow-hidden rounded-[var(--wb-radius-panel)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[0_12px_32px_rgba(28,25,38,0.1)]"
+        className={cn(
+          'relative flex max-h-[calc(100vh-3rem)] w-full flex-col overflow-hidden rounded-[var(--wb-radius-panel)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[0_12px_32px_rgba(28,25,38,0.1)]',
+          props.stagedPreview ? 'max-w-[72rem]' : 'max-w-[28rem]',
+        )}
+        data-testid="workbook-import-dialog"
         role="dialog"
       >
         <button
@@ -129,8 +133,13 @@ export function WorkbookImportPanel(props: {
         >
           ×
         </button>
-        <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[18rem,minmax(0,1fr)]">
-          <div className="flex flex-col gap-3 border-b border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] p-4 pr-12 lg:border-b-0 lg:border-r">
+        <div className={cn('grid min-h-0 flex-1 gap-0', props.stagedPreview ? 'lg:grid-cols-[18rem,minmax(0,1fr)]' : '')}>
+          <div
+            className={cn(
+              'flex flex-col gap-3 bg-[var(--wb-surface-subtle)] p-4 pr-12',
+              props.stagedPreview ? 'border-b border-[var(--wb-border)] lg:border-b-0 lg:border-r' : '',
+            )}
+          >
             <label className="flex flex-col gap-3">
               <span className="sr-only">Select file</span>
               <div
@@ -230,17 +239,15 @@ export function WorkbookImportPanel(props: {
             ) : null}
           </div>
 
-          <div className="min-h-0 overflow-y-auto p-5">
-            {props.stagedPreview ? (
+          {props.stagedPreview ? (
+            <div className="min-h-0 overflow-y-auto p-5" data-testid="workbook-import-preview-list">
               <div className="flex flex-col gap-4">
                 {props.stagedPreview.sheets.map((sheet) => (
                   <WorkbookImportSheetPreview key={sheet.name} preview={sheet} />
                 ))}
               </div>
-            ) : (
-              <div />
-            )}
-          </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
