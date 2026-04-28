@@ -392,6 +392,8 @@ describe('WorkbookToolbar', () => {
     expect(numberFormatTrigger?.className).toContain('h-8')
     expect(fontSizeTrigger?.className).toContain('h-8')
     expect(structureTrigger?.className).toContain('h-8')
+    expect(structureTrigger?.textContent).not.toContain('Structure')
+    expect(structureTrigger?.querySelector('svg')).not.toBeNull()
 
     await act(async () => {
       root.unmount()

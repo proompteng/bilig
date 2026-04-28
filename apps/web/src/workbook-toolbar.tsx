@@ -11,6 +11,7 @@ import {
   PaintBucket,
   Redo2,
   RemoveFormatting,
+  TableProperties,
   Undo2,
   Underline,
   WrapText,
@@ -433,12 +434,12 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               <Popover.Trigger
                 aria-label="Structure"
                 aria-haspopup="menu"
-                className={cn(toolbarButtonClass(), 'gap-1 px-2')}
+                className={cn(toolbarButtonClass(), 'gap-1 px-1.5')}
                 disabled={!writesAllowed || STRUCTURE_ACTIONS.every((action) => !structureActionAvailability[action.template])}
                 title="Structure"
                 type="button"
               >
-                <span className="text-[11px] font-semibold">Structure</span>
+                <TableProperties className={toolbarIconClass()} />
                 <ChevronDown className="h-3 w-3 shrink-0 stroke-[1.75] text-[var(--wb-text-muted)]" />
               </Popover.Trigger>
               <Popover.Portal>
