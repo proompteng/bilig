@@ -48,19 +48,9 @@ export interface GridGpuCounters {
   readonly tileCacheStaleHits: number
   readonly tileCacheStaleLookups: number
   readonly tileCacheVisibleMarks: number
-  readonly scenePacketsApplied: number
 }
 
 export interface GridRenderStats {
   readonly inputToDrawMs: readonly number[]
   readonly gpu: GridGpuCounters
-}
-
-export interface GridResidentTileKey {
-  readonly sheetName: string
-  readonly paneId: string
-  readonly rowStart: number
-  readonly rowEnd: number
-  readonly colStart: number
-  readonly colEnd: number
 }

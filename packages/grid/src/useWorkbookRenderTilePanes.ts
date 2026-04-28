@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Viewport } from '@bilig/protocol'
 import type { GridEngineLike } from './grid-engine.js'
 import type { GridMetrics } from './gridMetrics.js'
+import { noteRendererTileReadiness } from './grid-render-counters.js'
 import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from './renderer-v3/render-tile-pane-state.js'
 import { getGridRenderTilePaneRuntime, type GridRenderTilePaneRuntime } from './runtime/gridRenderTilePaneRuntime.js'
+import type { GridTileReadinessSnapshotV3 } from './runtime/gridTileCoordinator.js'
 import type { GridRuntimeHost } from './runtime/gridRuntimeHost.js'
 
 type SortedAxisOverrides = readonly (readonly [number, number])[]
@@ -14,6 +16,7 @@ export interface WorkbookRenderTilePanesState {
   readonly renderTilePanes: readonly WorkbookRenderTilePaneState[]
   readonly residentBodyPane: WorkbookRenderTilePaneState | null
   readonly residentDataPanes: readonly WorkbookRenderTilePaneState[]
+  readonly tileReadiness: GridTileReadinessSnapshotV3
 }
 
 export function useWorkbookRenderTilePanes(input: {
@@ -84,7 +87,7 @@ export function useWorkbookRenderTilePanes(input: {
     )
   }, [dprBucket, gridRuntimeHost, renderTileSource, renderTileViewport, sheetId, sheetName])
 
-  return useMemo<WorkbookRenderTilePanesState>(() => {
+  const state = useMemo<WorkbookRenderTilePanesState>(() => {
     void renderTileRevision
     return tilePaneRuntimeRef.current!.resolve({
       columnWidths,
@@ -135,4 +138,24 @@ export function useWorkbookRenderTilePanes(input: {
     sortedRowHeightOverrides,
     visibleViewport,
   ])
+
+  useEffect(() => {
+    const exactHits = state.tileReadiness.exactHits.length
+    const staleHits = state.tileReadiness.staleHits.length
+    const misses = state.tileReadiness.misses.length
+    const visibleDirtyTiles = state.tileReadiness.visibleDirtyTileKeys.length
+    const warmDirtyTiles = state.tileReadiness.warmDirtyTileKeys.length
+    if (exactHits + staleHits + misses + visibleDirtyTiles + warmDirtyTiles === 0) {
+      return
+    }
+    noteRendererTileReadiness({
+      exactHits,
+      misses,
+      staleHits,
+      visibleDirtyTiles,
+      warmDirtyTiles,
+    })
+  }, [state.tileReadiness])
+
+  return state
 }

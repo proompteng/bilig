@@ -181,8 +181,7 @@ test('@browser-perf web app keeps normal cell selection out of resident scene in
   const report = await stopWorkbookScrollPerf(page)
 
   expect(report).not.toBeNull()
-  expect(report?.counters.scenePacketRefreshes).toBe(0)
-  expect(report?.counters.typeGpuScenePacketsApplied).toBe(0)
+  expect(report?.counters.rendererTileMisses).toBe(0)
   expect(report?.counters.typeGpuBufferAllocations).toBe(0)
   expect(report?.counters.typeGpuTileMisses).toBe(0)
 })
@@ -222,8 +221,7 @@ test('@browser-perf web app keeps range-move preview out of resident scene inval
   }
 
   expect(report).not.toBeNull()
-  expect(report?.counters.scenePacketRefreshes).toBe(0)
-  expect(report?.counters.typeGpuScenePacketsApplied).toBe(0)
+  expect(report?.counters.rendererTileMisses).toBe(0)
   expect(report?.counters.typeGpuBufferAllocations).toBe(0)
   expect(report?.counters.typeGpuTileMisses).toBe(0)
 })

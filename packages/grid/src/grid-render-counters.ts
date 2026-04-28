@@ -1,4 +1,12 @@
-import type { GridGpuCounters, GridResidentTileKey } from './grid-render-contract.js'
+import type { GridGpuCounters } from './grid-render-contract.js'
+
+export interface RendererTileReadinessCounterInput {
+  readonly exactHits: number
+  readonly staleHits: number
+  readonly misses: number
+  readonly visibleDirtyTiles: number
+  readonly warmDirtyTiles: number
+}
 
 type ScrollPerfCounterSink = Partial<{
   noteTypeGpuConfigure: () => void
@@ -12,12 +20,12 @@ type ScrollPerfCounterSink = Partial<{
   noteTypeGpuAtlasUpload: (bytes: number) => void
   noteTypeGpuAtlasDirtyPageUpload: (bytes: number, pageCount: number) => void
   noteTypeGpuSurfaceResize: (width: number, height: number, dpr: number) => void
-  noteTypeGpuTileMiss: (tileKey: GridResidentTileKey | string) => void
+  noteTypeGpuTileMiss: (tileKey: number | string) => void
   noteTypeGpuTileCacheEviction: (count: number) => void
   noteTypeGpuTileCacheSort: (count: number) => void
   noteTypeGpuTileCacheStaleLookup: (scannedEntries: number, hit: boolean) => void
   noteTypeGpuTileCacheVisibleMark: (count: number) => void
-  noteTypeGpuScenePacketApplied: (packetKey: GridResidentTileKey | string) => void
+  noteRendererTileReadiness: (input: RendererTileReadinessCounterInput) => void
   noteGridScrollInput: (timestamp: number) => void
   noteGridDrawFrame: (timestamp: number) => void
 }>
@@ -29,7 +37,6 @@ export const EMPTY_GRID_GPU_COUNTERS: GridGpuCounters = Object.freeze({
   configureCount: 0,
   drawCalls: 0,
   paneDraws: 0,
-  scenePacketsApplied: 0,
   submitCount: 0,
   surfaceResizes: 0,
   tileMisses: 0,
@@ -96,7 +103,7 @@ export function noteTypeGpuSurfaceResize(width: number, height: number, dpr: num
   getCounterSink()?.noteTypeGpuSurfaceResize?.(width, height, dpr)
 }
 
-export function noteTypeGpuTileMiss(tileKey: GridResidentTileKey | string): void {
+export function noteTypeGpuTileMiss(tileKey: number | string): void {
   getCounterSink()?.noteTypeGpuTileMiss?.(tileKey)
 }
 
@@ -116,8 +123,8 @@ export function noteTypeGpuTileCacheVisibleMark(count: number): void {
   getCounterSink()?.noteTypeGpuTileCacheVisibleMark?.(count)
 }
 
-export function noteTypeGpuScenePacketApplied(packetKey: GridResidentTileKey | string): void {
-  getCounterSink()?.noteTypeGpuScenePacketApplied?.(packetKey)
+export function noteRendererTileReadiness(input: RendererTileReadinessCounterInput): void {
+  getCounterSink()?.noteRendererTileReadiness?.(input)
 }
 
 export function noteGridScrollInput(timestamp = performance.now()): void {

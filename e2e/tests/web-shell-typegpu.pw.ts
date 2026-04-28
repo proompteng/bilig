@@ -306,10 +306,10 @@ test('@browser-webgpu @browser-perf main workbook shell keeps resident typegpu c
     expect(frame.darkPixelCounts.bodyText).toBeGreaterThan(20)
   }
   expect(perfReport).not.toBeNull()
-  expect(perfReport?.counters.scenePacketRefreshes).toBe(0)
   expect(perfReport?.counters.headerPaneBuilds).toBeLessThanOrEqual(1)
   expect(perfReport?.counters.typeGpuBufferAllocations).toBe(0)
   expect(perfReport?.counters.typeGpuTileMisses).toBe(0)
+  expect(perfReport?.counters.rendererTileMisses).toBe(0)
 
   await saveReadbackArtifact(
     page,

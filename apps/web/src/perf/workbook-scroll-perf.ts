@@ -14,9 +14,12 @@ interface WorkbookScrollPerfCounters {
   rendererDeltaMutations: number
   rendererDeltaApplyMs: number
   dirtyTilesMarked: number
-  scenePacketRefreshes: number
-  scenePacketPanes: number
-  scenePacketRejected: number
+  rendererTileInterestBatches: number
+  rendererTileExactHits: number
+  rendererTileStaleHits: number
+  rendererTileMisses: number
+  rendererVisibleDirtyTiles: number
+  rendererWarmDirtyTiles: number
   visibleWindowChanges: number
   headerPaneBuilds: number
   reactCommits: number
@@ -44,7 +47,6 @@ interface WorkbookScrollPerfCounters {
   typeGpuTileCacheStaleHits: number
   typeGpuTileCacheStaleLookups: number
   typeGpuTileCacheVisibleMarks: number
-  typeGpuScenePacketsApplied: number
 }
 
 interface WorkbookScrollPerfSamples {
@@ -71,9 +73,6 @@ export interface WorkbookScrollPerfReport {
     readonly longTasksMs: WorkbookScrollPerfSummary
   }
   readonly counters: WorkbookScrollPerfCounters
-  readonly diagnostics: {
-    readonly lastScenePacketRejectReason: string | null
-  }
 }
 
 type BenchmarkState = 'idle' | 'loading' | 'ready' | 'error'
@@ -90,9 +89,12 @@ class WorkbookScrollPerfCollector {
     rendererDeltaApplyMs: 0,
     rendererDeltaBatches: 0,
     rendererDeltaMutations: 0,
-    scenePacketRefreshes: 0,
-    scenePacketPanes: 0,
-    scenePacketRejected: 0,
+    rendererTileExactHits: 0,
+    rendererTileInterestBatches: 0,
+    rendererTileMisses: 0,
+    rendererTileStaleHits: 0,
+    rendererVisibleDirtyTiles: 0,
+    rendererWarmDirtyTiles: 0,
     visibleWindowChanges: 0,
     headerPaneBuilds: 0,
     reactCommits: 0,
@@ -108,7 +110,6 @@ class WorkbookScrollPerfCollector {
     typeGpuConfigures: 0,
     typeGpuDrawCalls: 0,
     typeGpuPaneDraws: 0,
-    typeGpuScenePacketsApplied: 0,
     typeGpuSubmits: 0,
     typeGpuSurfaceResizes: 0,
     typeGpuTileMisses: 0,
@@ -133,7 +134,6 @@ class WorkbookScrollPerfCollector {
   private rafHandle: number | null = null
   private lastFrameAt: number | null = null
   private lastScrollInputAt: number | null = null
-  private lastScenePacketRejectReason: string | null = null
   private observer: PerformanceObserver | null = null
   private warmupFramesRemaining = 0
 
@@ -180,14 +180,19 @@ class WorkbookScrollPerfCollector {
     this.totalCounters.rendererDeltaApplyMs += input.durationMs
   }
 
-  noteScenePacketRefresh(paneCount: number): void {
-    this.totalCounters.scenePacketRefreshes += 1
-    this.totalCounters.scenePacketPanes += paneCount
-  }
-
-  noteScenePacketRejected(reason: string): void {
-    this.totalCounters.scenePacketRejected += 1
-    this.lastScenePacketRejectReason = reason
+  noteRendererTileReadiness(input: {
+    readonly exactHits: number
+    readonly staleHits: number
+    readonly misses: number
+    readonly visibleDirtyTiles: number
+    readonly warmDirtyTiles: number
+  }): void {
+    this.totalCounters.rendererTileInterestBatches += 1
+    this.totalCounters.rendererTileExactHits += input.exactHits
+    this.totalCounters.rendererTileStaleHits += input.staleHits
+    this.totalCounters.rendererTileMisses += input.misses
+    this.totalCounters.rendererVisibleDirtyTiles += input.visibleDirtyTiles
+    this.totalCounters.rendererWarmDirtyTiles += input.warmDirtyTiles
   }
 
   noteVisibleWindowChange(): void {
@@ -285,10 +290,6 @@ class WorkbookScrollPerfCollector {
     this.totalCounters.typeGpuTileCacheVisibleMarks += count
   }
 
-  noteTypeGpuScenePacketApplied(): void {
-    this.totalCounters.typeGpuScenePacketsApplied += 1
-  }
-
   noteGridScrollInput(timestamp: number): void {
     if (this.warmupFramesRemaining > 0) {
       return
@@ -313,7 +314,6 @@ class WorkbookScrollPerfCollector {
     this.baselineCounters = null
     this.lastFrameAt = null
     this.lastScrollInputAt = null
-    this.lastScenePacketRejectReason = null
     this.warmupFramesRemaining = WARMUP_FRAME_COUNT
     this.installLongTaskObserver()
     this.scheduleFrame()
@@ -343,9 +343,6 @@ class WorkbookScrollPerfCollector {
         longTasksMs: summarizeNumbers(this.longTaskSamples),
       },
       counters: subtractCounters(this.totalCounters, this.baselineCounters),
-      diagnostics: {
-        lastScenePacketRejectReason: this.lastScenePacketRejectReason,
-      },
     }
     this.baselineCounters = null
     this.frameSamples = []
@@ -418,9 +415,12 @@ function subtractCounters(counters: WorkbookScrollPerfCounters, baseline: Workbo
     rendererDeltaApplyMs: counters.rendererDeltaApplyMs - baseline.rendererDeltaApplyMs,
     rendererDeltaBatches: counters.rendererDeltaBatches - baseline.rendererDeltaBatches,
     rendererDeltaMutations: counters.rendererDeltaMutations - baseline.rendererDeltaMutations,
-    scenePacketRefreshes: counters.scenePacketRefreshes - baseline.scenePacketRefreshes,
-    scenePacketPanes: counters.scenePacketPanes - baseline.scenePacketPanes,
-    scenePacketRejected: counters.scenePacketRejected - baseline.scenePacketRejected,
+    rendererTileExactHits: counters.rendererTileExactHits - baseline.rendererTileExactHits,
+    rendererTileInterestBatches: counters.rendererTileInterestBatches - baseline.rendererTileInterestBatches,
+    rendererTileMisses: counters.rendererTileMisses - baseline.rendererTileMisses,
+    rendererTileStaleHits: counters.rendererTileStaleHits - baseline.rendererTileStaleHits,
+    rendererVisibleDirtyTiles: counters.rendererVisibleDirtyTiles - baseline.rendererVisibleDirtyTiles,
+    rendererWarmDirtyTiles: counters.rendererWarmDirtyTiles - baseline.rendererWarmDirtyTiles,
     visibleWindowChanges: counters.visibleWindowChanges - baseline.visibleWindowChanges,
     headerPaneBuilds: counters.headerPaneBuilds - baseline.headerPaneBuilds,
     reactCommits: counters.reactCommits - baseline.reactCommits,
@@ -436,7 +436,6 @@ function subtractCounters(counters: WorkbookScrollPerfCounters, baseline: Workbo
     typeGpuConfigures: counters.typeGpuConfigures - baseline.typeGpuConfigures,
     typeGpuDrawCalls: counters.typeGpuDrawCalls - baseline.typeGpuDrawCalls,
     typeGpuPaneDraws: counters.typeGpuPaneDraws - baseline.typeGpuPaneDraws,
-    typeGpuScenePacketsApplied: counters.typeGpuScenePacketsApplied - baseline.typeGpuScenePacketsApplied,
     typeGpuSubmits: counters.typeGpuSubmits - baseline.typeGpuSubmits,
     typeGpuSurfaceResizes: counters.typeGpuSurfaceResizes - baseline.typeGpuSurfaceResizes,
     typeGpuTileMisses: counters.typeGpuTileMisses - baseline.typeGpuTileMisses,

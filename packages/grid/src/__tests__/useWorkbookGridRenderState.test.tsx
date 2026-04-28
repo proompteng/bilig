@@ -113,6 +113,7 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     })
     window.requestAnimationFrame = originalRequestAnimationFrame
     window.cancelAnimationFrame = originalCancelAnimationFrame
+    Reflect.deleteProperty(window, '__biligScrollPerf')
     document.body.innerHTML = ''
   })
 
@@ -224,6 +225,10 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     const subscribeViewport = vi.fn(() => () => undefined)
     const subscribeRenderTileDeltas = vi.fn(() => () => undefined)
     const peekRenderTile = vi.fn(() => null)
+    const scrollPerf = {
+      noteRendererTileReadiness: vi.fn(),
+    }
+    Reflect.set(window, '__biligScrollPerf', scrollPerf)
     let hostElement: HTMLDivElement | null = null
     let latestRenderState: ReturnType<typeof useWorkbookGridRenderState> | null = null
 
@@ -289,6 +294,14 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     expect(subscribeViewport).not.toHaveBeenCalled()
     expect(latestRenderState?.renderTilePanes.some((pane) => pane.paneId === 'body')).toBe(true)
     expect(latestRenderState?.renderTilePanes.find((pane) => pane.paneId === 'body')?.tile.coord.sheetId).toBe(7)
+    expect(scrollPerf.noteRendererTileReadiness).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exactHits: expect.any(Number),
+        misses: 0,
+        staleHits: 0,
+      }),
+    )
+    expect(scrollPerf.noteRendererTileReadiness.mock.calls.at(-1)?.[0].exactHits).toBeGreaterThan(0)
 
     await act(async () => {
       root.unmount()

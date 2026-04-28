@@ -82,8 +82,12 @@ async function expectTypeGpuSteadyScroll(page: Page, report: ScrollPerfReport) {
   expect(report.counters.fullPatches).toBe(0)
   expect(sumRecordCounters(report.counters.fullPatchBroadcasts)).toBe(0)
   expect(readCounter(report.counters, 'typeGpuTileCacheSorts')).toBe(0)
-  const hasSceneChurn = report.counters.headerPaneBuilds > 0 || readCounter(report.counters, 'typeGpuScenePacketsApplied') > 0
-  if (!hasSceneChurn) {
+  expect(readCounter(report.counters, 'rendererTileMisses')).toBe(0)
+  const hasTileChurn =
+    report.counters.headerPaneBuilds > 0 ||
+    readCounter(report.counters, 'rendererTileInterestBatches') > 0 ||
+    readCounter(report.counters, 'rendererVisibleDirtyTiles') > 0
+  if (!hasTileChurn) {
     expect(readCounter(report.counters, 'typeGpuBufferAllocations')).toBe(0)
     expect(readCounter(report.counters, 'typeGpuVertexUploadBytes')).toBe(0)
   }
@@ -117,7 +121,6 @@ test.describe('@browser-perf web app scroll performance', () => {
     expectSmoothBrowse(report, { longTaskMax: 60 })
     expectQuietShell(report, { maxSurfaceCommits: 1 })
     expect(report.counters.damagePatches).toBe(0)
-    expect(report.counters.scenePacketRefreshes).toBe(0)
     expect(report.counters.canvasPaints['text:body'] ?? 0).toBeLessThanOrEqual(1)
     expect(report.counters.canvasPaints['gpu:body'] ?? 0).toBeLessThanOrEqual(1)
     await expectTypeGpuSteadyScroll(page, report)
@@ -159,7 +162,6 @@ test.describe('@browser-perf web app scroll performance', () => {
     expectSmoothBrowse(report, { ignoreInitialSamples: 10, p99Max: 35, longTaskMax: 60, maxViewportSubscriptions: 2 })
     expectQuietShell(report, { maxSurfaceCommits: 4 })
     expect(report.counters.damagePatches).toBe(0)
-    expect(report.counters.scenePacketRefreshes).toBe(0)
     expect(report.counters.canvasPaints['text:body'] ?? 0).toBeLessThanOrEqual(2)
     expect(report.counters.canvasPaints['text:top'] ?? 0).toBeLessThanOrEqual(2)
     expect(report.counters.canvasPaints['text:left'] ?? 0).toBeLessThanOrEqual(2)
@@ -191,7 +193,6 @@ test.describe('@browser-perf web app scroll performance', () => {
     expectSmoothBrowse(report, { longTaskMax: 60 })
     expectQuietShell(report, { maxSurfaceCommits: 1 })
     expect(report.counters.damagePatches).toBe(0)
-    expect(report.counters.scenePacketRefreshes).toBe(0)
     await expectTypeGpuSteadyScroll(page, report)
   })
 
@@ -217,7 +218,6 @@ test.describe('@browser-perf web app scroll performance', () => {
     expectSmoothBrowse(report, { longTaskMax: 60 })
     expectQuietShell(report, { maxSurfaceCommits: 1 })
     expect(report.counters.damagePatches).toBe(0)
-    expect(report.counters.scenePacketRefreshes).toBe(0)
     await expectTypeGpuSteadyScroll(page, report)
   })
 
@@ -243,7 +243,6 @@ test.describe('@browser-perf web app scroll performance', () => {
     expectSmoothBrowse(report)
     expectQuietShell(report)
     expect(report.counters.damagePatches).toBe(0)
-    expect(report.counters.scenePacketRefreshes).toBe(0)
     expect(report.counters.canvasSurfaceMounts).toBe(0)
     expect(report.counters.canvasPaints['text:body'] ?? 0).toBe(0)
     expect(report.counters.canvasPaints['gpu:body'] ?? 0).toBe(0)
@@ -273,7 +272,7 @@ test.describe('@browser-perf web app scroll performance', () => {
     expect(report.summary.frameMs.p95).toBeLessThan(24)
     expect(report.summary.longTasksMs.max).toBeLessThan(60)
     expect(readCounter(report.counters, 'typeGpuTileMisses')).toBe(0)
-    expect(report.counters.scenePacketRefreshes).toBeLessThanOrEqual(8)
+    expect(readCounter(report.counters, 'rendererTileMisses')).toBe(0)
     expect(report.counters.viewportSubscriptions).toBeLessThanOrEqual(12)
   })
 
@@ -366,7 +365,7 @@ test.describe('@browser-perf web app scroll performance', () => {
 
       expect(report.fixture?.id).toBe('wide-mixed-250k')
       test.skip(
-        report.counters.damagePatches === 0 && report.counters.scenePacketRefreshes === 0,
+        report.counters.damagePatches === 0 && report.counters.rendererDeltaBatches === 0,
         'remote edits did not arrive during the sampling window',
       )
       expect(report.summary.frameMs.p95).toBeLessThan(20)
@@ -376,8 +375,9 @@ test.describe('@browser-perf web app scroll performance', () => {
       expect(report.counters.fullPatches).toBe(0)
       expect(report.counters.damagePatches).toBeGreaterThan(0)
       expect(report.counters.damagePatches).toBeLessThanOrEqual(6)
-      expect(report.counters.scenePacketRefreshes).toBeGreaterThan(0)
-      expect(report.counters.scenePacketRefreshes).toBeLessThanOrEqual(6)
+      expect(report.counters.rendererDeltaBatches).toBeGreaterThan(0)
+      expect(report.counters.rendererDeltaBatches).toBeLessThanOrEqual(6)
+      expect(report.counters.dirtyTilesMarked).toBeGreaterThan(0)
       expect(report.counters.canvasPaints['text:body'] ?? 0).toBeLessThanOrEqual(6)
       expect(report.counters.canvasPaints['gpu:body'] ?? 0).toBeLessThanOrEqual(6)
       expectQuietShell(report)

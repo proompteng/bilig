@@ -30,6 +30,8 @@ Latest implementation note:
   host-owned V3 tile coordinator, and exposes exact/stale/miss dirty-readiness diagnostics for the mounted tile-pane path.
 - `TileResidencyV3` refreshes revision tuples in place when a fixed content tile is updated, so stale-compatible lookup and future dirty-tile
   decisions use the current axis/value/style/text/freeze revisions without replacing the stable residency entry.
+- Scroll perf diagnostics no longer expose stale V2 scene-packet counters. The mounted tile-pane adapter reports renderer tile-interest batches,
+  exact/stale/miss readiness, and visible/warm dirty tile counts from the host-owned V3 tile coordinator.
 - Dynamic interaction overlays no longer build `GridScenePacketV2` values. They are emitted as `DynamicGridOverlayBatchV3` rect-instance buffers and drawn through a dedicated TypeGPU overlay resource outside tile cache and stale-tile lookup.
 - Render tile deltas no longer carry overlay mutations or a `dynamicOverlay` pane kind. Overlays are now a visual runtime layer, not renderer tile data.
 - Header panes no longer build or carry `GridScenePacketV2` values. They are emitted as fixed V3 header batches with packed rect instances plus text runs, and the TypeGPU backend draws them through dedicated header buffers outside tile cache and stale-tile lookup.

@@ -767,9 +767,12 @@ export async function stopWorkbookScrollPerf(page: Page) {
                 fullPatches: number
                 damagePatches: number
                 damageCells: number
-                scenePacketRefreshes: number
-                scenePacketPanes: number
-                scenePacketRejected: number
+                rendererTileInterestBatches: number
+                rendererTileExactHits: number
+                rendererTileStaleHits: number
+                rendererTileMisses: number
+                rendererVisibleDirtyTiles: number
+                rendererWarmDirtyTiles: number
                 visibleWindowChanges: number
                 headerPaneBuilds: number
                 reactCommits: number
@@ -785,7 +788,6 @@ export async function stopWorkbookScrollPerf(page: Page) {
                 typeGpuConfigures: number
                 typeGpuDrawCalls: number
                 typeGpuPaneDraws: number
-                typeGpuScenePacketsApplied: number
                 typeGpuSubmits: number
                 typeGpuSurfaceResizes: number
                 typeGpuTileMisses: number
