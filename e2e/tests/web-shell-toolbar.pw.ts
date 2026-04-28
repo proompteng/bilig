@@ -151,6 +151,25 @@ test('web app keeps the formula input usable on phone-width screens', async ({ p
   expect(placeholderMetrics.usableWidth).toBeGreaterThan(placeholderMetrics.textWidth)
 })
 
+test('web app keeps the workbook visible when the assistant rail becomes a phone overlay', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 844 })
+  await page.goto('/?sheet=Sheet1&cell=B10')
+  await waitForWorkbookReady(page)
+
+  await expect(page.getByTestId('workbook-side-panel')).toBeVisible()
+
+  await page.setViewportSize({ width: 390, height: 844 })
+
+  await expect(page.getByTestId('workbook-side-panel')).toHaveCount(0)
+  await expect(page.getByTestId('workbook-side-panel-open')).toBeVisible()
+  await expect(page.getByTestId('sheet-grid')).toBeVisible()
+
+  const gridBox = await getBox(page.getByTestId('sheet-grid'))
+  const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  expect(gridBox.width).toBeGreaterThan(320)
+  expect(horizontalOverflow).toBeLessThanOrEqual(1)
+})
+
 test('web app keeps shell controls on one height and radius system', async ({ page }) => {
   await page.goto('/')
   await waitForWorkbookReady(page)

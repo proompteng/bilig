@@ -212,6 +212,67 @@ describe('workbook shell layout', () => {
     })
   })
 
+  it('closes an open docked side panel when the viewport becomes an overlay', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const previousInnerWidth = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 1024,
+    })
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<ShellLayoutHarness defaultOpen defaultTab="assistant" documentId="doc-responsive-overlay" />)
+    })
+
+    const state = host.querySelector("[data-testid='shell-layout-state']")
+    expect(state?.getAttribute('data-open')).toBe('true')
+    expect(state?.getAttribute('data-tab')).toBe('assistant')
+
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 390,
+    })
+
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'))
+    })
+
+    expect(state?.getAttribute('data-open')).toBe('false')
+    expect(state?.getAttribute('data-tab')).toBe('assistant')
+    expect(state?.getAttribute('data-width')).toBe('280')
+
+    await act(async () => {
+      host.querySelector("[data-testid='toggle-assistant']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(state?.getAttribute('data-open')).toBe('true')
+
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 420,
+    })
+
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'))
+    })
+
+    expect(state?.getAttribute('data-open')).toBe('true')
+
+    await act(async () => {
+      root.unmount()
+    })
+
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: previousInnerWidth,
+    })
+  })
+
   it('closes the rail when the active tab toggle is pressed again', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

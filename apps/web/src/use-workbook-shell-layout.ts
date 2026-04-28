@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const STORAGE_KEY_PREFIX = 'bilig:workbook-shell-layout:'
 
@@ -129,6 +129,7 @@ export function useWorkbookShellLayout(input: {
         }
       : loadPersistedWorkbookShellLayout(resolvedPersistenceKey, availableTabs, resolvedDefaultTab, defaultOpen),
   )
+  const wasDockedViewportRef = useRef(shouldStartWithDockedSidePanel())
 
   useEffect(() => {
     setLayout((current) => {
@@ -156,6 +157,37 @@ export function useWorkbookShellLayout(input: {
     }
     persistWorkbookShellLayout(resolvedPersistenceKey, layout)
   }, [layout, resolvedPersistenceKey])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const handleResize = () => {
+      const wasDockedViewport = wasDockedViewportRef.current
+      const isDockedViewport = shouldStartWithDockedSidePanel()
+      wasDockedViewportRef.current = isDockedViewport
+
+      setLayout((current) => {
+        const sidePanelWidth = clampWorkbookSidePanelWidth(current.sidePanelWidth)
+        const shouldCloseForOverlay = wasDockedViewport && !isDockedViewport && current.isSidePanelOpen
+        const isSidePanelOpen = shouldCloseForOverlay ? false : current.isSidePanelOpen
+        if (current.isSidePanelOpen === isSidePanelOpen && current.sidePanelWidth === sidePanelWidth) {
+          return current
+        }
+        return {
+          ...current,
+          isSidePanelOpen,
+          sidePanelWidth,
+        }
+      })
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
 
   const setActiveSidePanelTab = useCallback(
     (nextTab: string) => {
