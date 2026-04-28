@@ -33,7 +33,7 @@ describe('WorkbookHeaderStatusChip', () => {
     })
   })
 
-  it('keeps visible text for non-saved states', async () => {
+  it('keeps non-saved status text available while collapsing its visual width on tiny screens', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     const host = document.createElement('div')
@@ -44,7 +44,12 @@ describe('WorkbookHeaderStatusChip', () => {
       root.render(<WorkbookHeaderStatusChip modeLabel="Live" syncLabel="Saving…" tone="progress" />)
     })
 
-    expect(host.querySelector("[data-testid='status-label']")?.textContent).toBe('Saving…')
+    const status = host.querySelector("[data-testid='status-mode']")
+    const label = host.querySelector("[data-testid='status-label']")
+
+    expect(status?.getAttribute('class')).toContain('max-[360px]:gap-0')
+    expect(label?.textContent).toBe('Saving…')
+    expect(label?.getAttribute('class')).toContain('max-[360px]:sr-only')
     expect(host.querySelector("[data-testid='status-sync']")?.textContent).toBe('Saving…')
 
     await act(async () => {

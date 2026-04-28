@@ -190,6 +190,39 @@ test('web app keeps the toolbar compact on narrow viewports', async ({ page }) =
   expect(lastControlBox.y + lastControlBox.height).toBeLessThanOrEqual(toolbarBox.y + toolbarBox.height + 1)
 })
 
+test('web app keeps tiny toolbar overflow controls from covering formatting actions', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 })
+  await page.goto('/?sheet=Sheet1&cell=B10')
+  await waitForWorkbookReady(page)
+
+  const toolbar = page.getByRole('toolbar', { name: 'Formatting toolbar' })
+  const formattingScroll = page.getByTestId('toolbar-formatting-scroll')
+  const overflowCue = page.getByTestId('toolbar-overflow-cue')
+  const numberFormat = page.getByLabel('Number format')
+
+  await expect(toolbar).toBeVisible()
+  await expect(overflowCue).toBeVisible()
+  await expect(page.getByTestId('workbook-shortcut-button')).toBeHidden()
+  await expect(page.getByTestId('workbook-import-toggle')).toBeHidden()
+
+  const cuePosition = await overflowCue.evaluate((element) => getComputedStyle(element).position)
+  const [toolbarBox, scrollBox, cueBox, numberFormatBox] = await Promise.all([
+    getBox(toolbar),
+    getBox(formattingScroll),
+    getBox(overflowCue),
+    getBox(numberFormat),
+  ])
+  const visibleNumberFormatWidth =
+    Math.min(numberFormatBox.x + numberFormatBox.width, scrollBox.x + scrollBox.width) - Math.max(numberFormatBox.x, scrollBox.x)
+  const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+
+  expect(cuePosition).toBe('static')
+  expect(cueBox.x).toBeGreaterThanOrEqual(scrollBox.x + scrollBox.width - 1)
+  expect(cueBox.x + cueBox.width).toBeLessThanOrEqual(toolbarBox.x + toolbarBox.width + 1)
+  expect(visibleNumberFormatWidth).toBeGreaterThanOrEqual(80)
+  expect(horizontalOverflow).toBeLessThanOrEqual(1)
+})
+
 test('web app shows preset color swatches first and only reveals the custom picker on demand', async ({ page }) => {
   await page.goto('/')
   await waitForWorkbookReady(page)

@@ -238,11 +238,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
     <div className={toolbarRootClass()}>
       <Toolbar.Root aria-label="Formatting toolbar" className={toolbarRowClass()}>
         <div className={toolbarFormattingRegionClass()}>
-          <div
-            ref={scrollContainerRef}
-            className={cn(toolbarFormattingScrollClass(), showForwardCue ? 'pr-7' : null)}
-            data-testid="toolbar-formatting-scroll"
-          >
+          <div ref={scrollContainerRef} className={toolbarFormattingScrollClass()} data-testid="toolbar-formatting-scroll">
             <Toolbar.Group className={toolbarGroupClass()}>
               <div className={toolbarSegmentedClass()} role="group" aria-label="History">
                 <Toolbar.Button
@@ -280,7 +276,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               >
                 <Select.Trigger
                   aria-label="Number format"
-                  className={cn(toolbarSelectTriggerClass(), 'w-32')}
+                  className={cn(toolbarSelectTriggerClass(), 'w-32 max-[360px]:w-24')}
                   data-current-value={currentNumberFormatKind}
                 >
                   <span className="min-w-0 flex-1 truncate whitespace-nowrap text-left">

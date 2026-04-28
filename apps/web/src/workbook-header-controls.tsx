@@ -90,13 +90,17 @@ export function WorkbookHeaderStatusChip({ modeLabel, syncLabel, tone = 'neutral
     <>
       <span
         aria-label={`Workbook status: ${modeLabel}, ${syncLabel}`}
-        className={`inline-flex h-8 items-center px-0 text-[12px] font-medium ${isDotOnlySavedState ? 'gap-0' : 'gap-2'} ${surfaceClass}`}
+        className={`inline-flex h-8 items-center px-0 text-[12px] font-medium ${isDotOnlySavedState ? 'gap-0' : 'gap-2 max-[360px]:gap-0'} ${surfaceClass}`}
         data-testid="status-mode"
         role="status"
         title={`${modeLabel} • ${syncLabel}`}
       >
         <span aria-hidden="true" className={cn('size-2 rounded-full', toneClass)} />
-        {isDotOnlySavedState ? null : <span data-testid="status-label">{syncLabel}</span>}
+        {isDotOnlySavedState ? null : (
+          <span className="max-[360px]:sr-only" data-testid="status-label">
+            {syncLabel}
+          </span>
+        )}
       </span>
       <span className="sr-only" data-testid="status-sync">
         {syncLabel}

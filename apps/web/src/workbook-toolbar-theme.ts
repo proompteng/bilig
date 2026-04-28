@@ -28,13 +28,13 @@ export const toolbarFormattingScrollClass = cva(
   'wb-scrollbar-none flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden',
 )
 
-export const toolbarFormattingRegionClass = cva('relative flex min-w-0 flex-1 items-center')
+export const toolbarFormattingRegionClass = cva('flex min-w-0 flex-1 items-center')
 
 export const toolbarOverflowCueClass = cva(
-  'absolute inset-y-0 right-0 z-10 inline-flex w-7 items-center justify-center border-l border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-accent)] outline-none transition-colors hover:bg-[var(--wb-muted)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--wb-surface-subtle)]',
+  'inline-flex h-8 w-7 flex-none items-center justify-center border-l border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] text-[var(--wb-accent)] outline-none transition-colors hover:bg-[var(--wb-muted)] focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--wb-surface-subtle)]',
 )
 
-export const toolbarTrailingRegionClass = cva('ml-auto flex flex-none items-center gap-1.5 pl-2')
+export const toolbarTrailingRegionClass = cva('ml-auto flex flex-none items-center gap-1.5 pl-2 max-[360px]:gap-1 max-[360px]:pl-1')
 
 export const toolbarGroupClass = cva('flex flex-none items-center gap-1')
 

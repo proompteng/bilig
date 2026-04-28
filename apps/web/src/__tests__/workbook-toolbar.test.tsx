@@ -960,6 +960,9 @@ describe('WorkbookToolbar', () => {
     const cue = host.querySelector("[data-testid='toolbar-overflow-cue']")
     expect(cue).not.toBeNull()
     expect(cue?.getAttribute('aria-label')).toBe('Show more toolbar actions')
+    expect(formattingScroll.className).not.toContain('pr-7')
+    expect(cue?.className).not.toContain('absolute')
+    expect(cue?.className).toContain('flex-none')
     expect(cue?.className).toContain('text-[var(--wb-accent)]')
 
     await act(async () => {

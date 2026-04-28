@@ -133,6 +133,7 @@ describe('workbook import', () => {
     expect(importToggle?.textContent?.trim()).toBe('')
     expect(importToggle?.getAttribute('class')).toContain('border-transparent')
     expect(importToggle?.getAttribute('class')).toContain('shadow-none')
+    expect(importToggle?.getAttribute('class')).toContain('max-[360px]:hidden')
 
     await act(async () => {
       host.querySelector("[data-testid='workbook-import-toggle']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
