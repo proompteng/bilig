@@ -72,6 +72,8 @@ describe('grid hook boundary helpers', () => {
     expect(hookSource).not.toContain('resolveViewportScrollPosition')
     expect(headerHookSource).not.toContain('buildGridGpuScene')
     expect(headerHookSource).not.toContain('buildGridTextScene')
+    expect(headerHookSource).not.toContain('buildWorkbookHeaderPaneStatesV3')
+    expect(headerHookSource).toContain("from './runtime/gridHeaderPaneRuntime.js'")
     expect(surfaceSource).not.toContain('createGridGeometrySnapshot')
   })
 })

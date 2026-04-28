@@ -1,17 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import type { Viewport } from '@bilig/protocol'
 import type { GridHeaderPaneState } from './gridHeaderPanes.js'
 import type { GridMetrics } from './gridMetrics.js'
 import type { Item, Rectangle } from './gridTypes.js'
 import type { WorkbookRenderTilePaneState } from './renderer-v3/render-tile-pane-state.js'
-import { buildWorkbookHeaderPaneStatesV3 } from './renderer-v3/header-pane-builder.js'
-
-function noteHeaderPaneBuild(): void {
-  if (typeof window === 'undefined') {
-    return
-  }
-  ;(window as Window & { __biligScrollPerf?: { noteHeaderPaneBuild?: () => void } }).__biligScrollPerf?.noteHeaderPaneBuild?.()
-}
+import { GridHeaderPaneRuntime } from './runtime/gridHeaderPaneRuntime.js'
 
 export function useWorkbookHeaderPanes(input: {
   readonly columnWidths: Readonly<Record<number, number>>
@@ -55,32 +48,42 @@ export function useWorkbookHeaderPanes(input: {
     rowHeights,
     sheetName,
   } = input
+  const headerPaneRuntimeRef = useRef<GridHeaderPaneRuntime | null>(null)
+  headerPaneRuntimeRef.current ??= new GridHeaderPaneRuntime()
+  const residentBodyOffsetX = residentBodyPane?.contentOffset.x ?? 0
+  const residentBodyOffsetY = residentBodyPane?.contentOffset.y ?? 0
+  const residentBodyHeight = residentBodyPane?.surfaceSize.height ?? 0
+  const residentBodyWidth = residentBodyPane?.surfaceSize.width ?? 0
 
-  const headerPanes = useMemo(() => {
-    noteHeaderPaneBuild()
-    if (!hostElement) {
-      return []
-    }
-    return buildWorkbookHeaderPaneStatesV3({
+  return useMemo<readonly GridHeaderPaneState[]>(() => {
+    return headerPaneRuntimeRef.current!.resolve({
       columnWidths,
-      sheetName,
-      residentViewport,
       freezeCols,
       freezeRows,
-      gridMetrics,
       frozenColumnWidth,
       frozenRowHeight,
       getHeaderCellLocalBounds,
+      gridMetrics,
       hostClientHeight,
       hostClientWidth,
-      residentBodyHeight: residentBodyPane?.surfaceSize.height ?? 0,
-      residentBodyWidth: residentBodyPane?.surfaceSize.width ?? 0,
+      hostReady: hostElement !== null,
+      residentBodyPane:
+        residentBodyHeight > 0 || residentBodyWidth > 0
+          ? {
+              contentOffset: { x: residentBodyOffsetX, y: residentBodyOffsetY },
+              surfaceSize: { width: residentBodyWidth, height: residentBodyHeight },
+            }
+          : null,
       residentHeaderItems,
       residentHeaderRegion,
+      residentViewport,
       rowHeights,
+      sheetName,
     })
   }, [
     columnWidths,
+    freezeCols,
+    freezeRows,
     frozenColumnWidth,
     frozenRowHeight,
     getHeaderCellLocalBounds,
@@ -88,26 +91,14 @@ export function useWorkbookHeaderPanes(input: {
     hostClientHeight,
     hostClientWidth,
     hostElement,
+    residentBodyHeight,
+    residentBodyOffsetX,
+    residentBodyOffsetY,
+    residentBodyWidth,
     residentHeaderItems,
     residentHeaderRegion,
+    residentViewport,
     rowHeights,
     sheetName,
-    residentViewport,
-    freezeCols,
-    freezeRows,
-    residentBodyPane?.surfaceSize.height,
-    residentBodyPane?.surfaceSize.width,
   ])
-
-  return useMemo(
-    () =>
-      headerPanes.map((pane) =>
-        pane.paneId === 'top-body'
-          ? { ...pane, contentOffset: { x: residentBodyPane?.contentOffset.x ?? 0, y: 0 } }
-          : pane.paneId === 'left-body'
-            ? { ...pane, contentOffset: { x: 0, y: residentBodyPane?.contentOffset.y ?? 0 } }
-            : pane,
-      ),
-    [headerPanes, residentBodyPane?.contentOffset.x, residentBodyPane?.contentOffset.y],
-  )
 }

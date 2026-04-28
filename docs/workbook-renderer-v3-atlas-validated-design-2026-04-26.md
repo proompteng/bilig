@@ -380,10 +380,12 @@ Completed in the resident-scene deletion tranche:
 - `packages/grid/src/runtime/gridRenderTilePaneRuntime.ts` now owns remote/local fixed-tile pane resolution and same-sheet retained-pane fallback.
   `useWorkbookRenderTilePanes.ts` is reduced to React subscription/revision bridging, with runtime tests covering remote tile readiness,
   temporary tile-miss retention, sheet-switch invalidation, and host-readiness behavior.
+- `packages/grid/src/runtime/gridHeaderPaneRuntime.ts` now owns V3 header pane generation, host-readiness gating, and body-tile content-offset
+  projection. `useWorkbookHeaderPanes.ts` is reduced to a React memo/ref adapter, and hook-boundary tests lock out direct header pane builder use.
 
 Remaining work from this design:
 
-- continue splitting pane construction, header generation, editor overlay anchoring, and draw scheduling out of `useWorkbookGridRenderState.ts`;
+- continue splitting editor overlay anchoring and remaining draw/dirty-tile coordination out of `useWorkbookGridRenderState.ts`;
 - replace routine resident scene packet regeneration with dirty-span tile payload updates;
 - wire the V3 atlas/text-run primitives into the TypeGPU backend and add tile glyph dependency preservation;
 - tighten browser perf gates around the now V3-only renderer path.
