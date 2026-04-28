@@ -395,6 +395,8 @@ Completed in the resident-scene deletion tranche:
 - `packages/grid/src/runtime/gridRuntimeAxisAdapters.ts` now owns the geometry-axis sort/serialization bridge, hidden-axis index construction,
   frozen-span computation, and scroll-spacer sizing for the grid runtime. `useWorkbookGridGeometryRuntime.ts` no longer performs raw
   `Object.entries().toSorted()` axis work or constructs world-axis indexes directly; boundary and adapter tests lock this ownership split.
+- `packages/grid/src/runtime/gridViewportResidencyRuntime.ts` is now owned by `GridRuntimeHost`, so resident viewport retention, fixed render-tile
+  viewport expansion, visible-address collection, and header-interest ranges are no longer carried by a standalone React-hook runtime.
 
 Remaining work from this design:
 

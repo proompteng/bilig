@@ -6,7 +6,15 @@ import { ValueTag, type CellSnapshot } from '@bilig/protocol'
 import type { GridEngineLike } from '../grid-engine.js'
 import type { VisibleRegionState } from '../gridPointer.js'
 import { useWorkbookViewportResidencyState, type WorkbookViewportResidencyState } from '../useWorkbookViewportResidencyState.js'
-import { WorkbookViewportResidencyRuntime } from '../workbookViewportResidencyRuntime.js'
+import { GridRuntimeHost } from '../runtime/gridRuntimeHost.js'
+import { GridViewportResidencyRuntime } from '../runtime/gridViewportResidencyRuntime.js'
+
+const gridMetrics = {
+  columnWidth: 104,
+  headerHeight: 24,
+  rowHeight: 22,
+  rowMarkerWidth: 44,
+}
 
 function createEmptySnapshot(sheetName: string, address: string): CellSnapshot {
   return {
@@ -31,6 +39,18 @@ function createEngine(subscribeCells: GridEngineLike['subscribeCells']): GridEng
   }
 }
 
+function createRuntimeHost(): GridRuntimeHost {
+  return new GridRuntimeHost({
+    columnCount: 1000,
+    defaultColumnWidth: gridMetrics.columnWidth,
+    defaultRowHeight: gridMetrics.rowHeight,
+    gridMetrics,
+    rowCount: 1000,
+    viewportHeight: 240,
+    viewportWidth: 640,
+  })
+}
+
 const visibleRegion: VisibleRegionState = {
   freezeCols: 2,
   freezeRows: 1,
@@ -51,12 +71,14 @@ describe('useWorkbookViewportResidencyState', () => {
     let latestState: WorkbookViewportResidencyState | null = null
     const subscribeCells = vi.fn(() => () => undefined)
     const engine = createEngine(subscribeCells)
+    const gridRuntimeHost = createRuntimeHost()
 
     function Harness() {
       latestState = useWorkbookViewportResidencyState({
         engine,
         freezeCols: 2,
         freezeRows: 1,
+        gridRuntimeHost,
         sheetName: 'Sheet1',
         shouldUseRemoteRenderTileSource: true,
         visibleRegion,
@@ -114,12 +136,14 @@ describe('useWorkbookViewportResidencyState', () => {
       return unsubscribe
     })
     const engine = createEngine(subscribeCells)
+    const gridRuntimeHost = createRuntimeHost()
 
     function Harness() {
       latestState = useWorkbookViewportResidencyState({
         engine,
         freezeCols: 2,
         freezeRows: 1,
+        gridRuntimeHost,
         sheetName: 'Sheet1',
         shouldUseRemoteRenderTileSource: false,
         visibleRegion,
@@ -155,9 +179,9 @@ describe('useWorkbookViewportResidencyState', () => {
   })
 })
 
-describe('WorkbookViewportResidencyRuntime', () => {
+describe('GridViewportResidencyRuntime', () => {
   it('retains the resident viewport until the visible range crosses a resident boundary', () => {
-    const runtime = new WorkbookViewportResidencyRuntime()
+    const runtime = new GridViewportResidencyRuntime()
     const first = runtime.resolve({
       freezeCols: 2,
       freezeRows: 1,

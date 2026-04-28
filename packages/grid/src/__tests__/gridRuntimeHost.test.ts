@@ -130,6 +130,67 @@ describe('GridRuntimeHost', () => {
     })
   })
 
+  it('owns resident viewport and header interest computation outside the render hook', () => {
+    const host = new GridRuntimeHost({
+      columnCount: 1000,
+      defaultColumnWidth: 100,
+      defaultRowHeight: 10,
+      freezeCols: 2,
+      freezeRows: 1,
+      gridMetrics,
+      rowCount: 1000,
+      viewportHeight: 80,
+      viewportWidth: 300,
+    })
+
+    const first = host.resolveViewportResidency({
+      freezeCols: 2,
+      freezeRows: 1,
+      sceneRevision: 0,
+      visibleRegion: {
+        freezeCols: 2,
+        freezeRows: 1,
+        range: { height: 8, width: 10, x: 260, y: 110 },
+        tx: 0,
+        ty: 0,
+      },
+    })
+    const sameWindow = host.resolveViewportResidency({
+      freezeCols: 2,
+      freezeRows: 1,
+      sceneRevision: 1,
+      visibleRegion: {
+        freezeCols: 2,
+        freezeRows: 1,
+        range: { height: 8, width: 10, x: 261, y: 111 },
+        tx: 0,
+        ty: 0,
+      },
+    })
+
+    expect(first.residentViewport).toEqual({
+      colEnd: 511,
+      colStart: 256,
+      rowEnd: 191,
+      rowStart: 96,
+    })
+    expect(first.renderTileViewport).toEqual({
+      colEnd: 511,
+      colStart: 0,
+      rowEnd: 191,
+      rowStart: 0,
+    })
+    expect(first.residentHeaderRegion.range).toEqual({
+      height: 96,
+      width: 256,
+      x: 256,
+      y: 96,
+    })
+    expect(sameWindow.residentViewport).toBe(first.residentViewport)
+    expect(sameWindow.visibleAddresses).toBe(first.visibleAddresses)
+    expect(sameWindow.sceneRevision).toBe(1)
+  })
+
   it('resolves selection and restore scroll positions from runtime axes', () => {
     const host = new GridRuntimeHost({
       columnCount: 1000,

@@ -1,13 +1,13 @@
 import { formatAddress } from '@bilig/formula'
 import type { Viewport } from '@bilig/protocol'
-import type { VisibleRegionState } from './gridPointer.js'
-import type { Item, Rectangle } from './gridTypes.js'
-import { collectViewportItems } from './gridViewportItems.js'
-import { sameViewportBounds } from './gridViewportController.js'
-import { viewportFromVisibleRegion } from './useGridCameraState.js'
-import { resolveResidentViewport } from './workbookGridViewport.js'
+import type { VisibleRegionState } from '../gridPointer.js'
+import type { Item, Rectangle } from '../gridTypes.js'
+import { collectViewportItems } from '../gridViewportItems.js'
+import { sameViewportBounds } from '../gridViewportController.js'
+import { viewportFromVisibleRegion } from '../useGridCameraState.js'
+import { resolveResidentViewport } from '../workbookGridViewport.js'
 
-export interface WorkbookResidentHeaderRegion {
+export interface GridResidentHeaderRegion {
   readonly range: Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>
   readonly tx: number
   readonly ty: number
@@ -15,40 +15,40 @@ export interface WorkbookResidentHeaderRegion {
   readonly freezeCols: number
 }
 
-export interface WorkbookViewportResidencyState {
+export interface GridViewportResidencyState {
   readonly viewport: Viewport
   readonly residentViewport: Viewport
   readonly renderTileViewport: Viewport
   readonly residentHeaderItems: readonly Item[]
-  readonly residentHeaderRegion: WorkbookResidentHeaderRegion
+  readonly residentHeaderRegion: GridResidentHeaderRegion
   readonly sceneRevision: number
   readonly visibleAddresses: readonly string[]
   readonly visibleItems: readonly Item[]
 }
 
-export interface WorkbookViewportResidencyRuntimeInput {
+export interface GridViewportResidencyRuntimeInput {
   readonly freezeCols: number
   readonly freezeRows: number
   readonly sceneRevision: number
   readonly visibleRegion: VisibleRegionState
 }
 
-interface WorkbookViewportResidentCache {
+interface GridViewportResidentCache {
   readonly freezeCols: number
   readonly freezeRows: number
   readonly renderTileViewport: Viewport
   readonly residentHeaderItems: readonly Item[]
-  readonly residentHeaderRegion: WorkbookResidentHeaderRegion
+  readonly residentHeaderRegion: GridResidentHeaderRegion
   readonly residentViewport: Viewport
   readonly visibleAddresses: readonly string[]
   readonly visibleItems: readonly Item[]
 }
 
-export class WorkbookViewportResidencyRuntime {
-  private residentCache: WorkbookViewportResidentCache | null = null
+export class GridViewportResidencyRuntime {
+  private residentCache: GridViewportResidentCache | null = null
   private residentViewport: Viewport | null = null
 
-  resolve(input: WorkbookViewportResidencyRuntimeInput): WorkbookViewportResidencyState {
+  resolve(input: GridViewportResidencyRuntimeInput): GridViewportResidencyState {
     const viewport = viewportFromVisibleRegion(input.visibleRegion)
     const nextResidentViewport = resolveResidentViewport(viewport)
     if (!this.residentViewport || !sameViewportBounds(this.residentViewport, nextResidentViewport)) {
@@ -69,7 +69,7 @@ export class WorkbookViewportResidencyRuntime {
     }
   }
 
-  private resolveResidentCache(input: WorkbookViewportResidencyRuntimeInput, residentViewport: Viewport): WorkbookViewportResidentCache {
+  private resolveResidentCache(input: GridViewportResidencyRuntimeInput, residentViewport: Viewport): GridViewportResidentCache {
     const current = this.residentCache
     if (
       current?.residentViewport === residentViewport &&
@@ -83,7 +83,7 @@ export class WorkbookViewportResidencyRuntime {
       freezeCols: input.freezeCols,
       freezeRows: input.freezeRows,
     })
-    const next: WorkbookViewportResidentCache = {
+    const next: GridViewportResidentCache = {
       freezeCols: input.freezeCols,
       freezeRows: input.freezeRows,
       renderTileViewport: {

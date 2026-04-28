@@ -185,6 +185,7 @@ export function useWorkbookGridRenderState(input: {
       engine,
       freezeCols,
       freezeRows,
+      gridRuntimeHost,
       sheetName,
       shouldUseRemoteRenderTileSource,
       visibleRegion,

@@ -1,34 +1,32 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { GridEngineLike } from './grid-engine.js'
 import type { VisibleRegionState } from './gridPointer.js'
-import { WorkbookViewportResidencyRuntime, type WorkbookViewportResidencyState } from './workbookViewportResidencyRuntime.js'
+import type { GridRuntimeHost } from './runtime/gridRuntimeHost.js'
+import type { GridResidentHeaderRegion, GridViewportResidencyState } from './runtime/gridViewportResidencyRuntime.js'
 
-export type { WorkbookResidentHeaderRegion, WorkbookViewportResidencyState } from './workbookViewportResidencyRuntime.js'
+export type WorkbookResidentHeaderRegion = GridResidentHeaderRegion
+export type WorkbookViewportResidencyState = GridViewportResidencyState
 
 export function useWorkbookViewportResidencyState(input: {
   readonly engine: GridEngineLike
   readonly freezeCols: number
   readonly freezeRows: number
+  readonly gridRuntimeHost: GridRuntimeHost
   readonly sheetName: string
   readonly shouldUseRemoteRenderTileSource: boolean
   readonly visibleRegion: VisibleRegionState
-}): WorkbookViewportResidencyState {
-  const { engine, freezeCols, freezeRows, sheetName, shouldUseRemoteRenderTileSource, visibleRegion } = input
+}): GridViewportResidencyState {
+  const { engine, freezeCols, freezeRows, gridRuntimeHost, sheetName, shouldUseRemoteRenderTileSource, visibleRegion } = input
   const [sceneRevision, setSceneRevision] = useState(0)
-  const runtimeRef = useRef<WorkbookViewportResidencyRuntime | null>(null)
-  if (!runtimeRef.current) {
-    runtimeRef.current = new WorkbookViewportResidencyRuntime()
-  }
-  const runtime = runtimeRef.current
   const state = useMemo(
     () =>
-      runtime.resolve({
+      gridRuntimeHost.resolveViewportResidency({
         freezeCols,
         freezeRows,
         sceneRevision,
         visibleRegion,
       }),
-    [freezeCols, freezeRows, runtime, sceneRevision, visibleRegion],
+    [freezeCols, freezeRows, gridRuntimeHost, sceneRevision, visibleRegion],
   )
   const { visibleAddresses } = state
   const invalidateScene = useCallback(() => {

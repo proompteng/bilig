@@ -9,6 +9,11 @@ import type { AxisEntryOverride } from '../gridAxisIndex.js'
 import { GridCameraRuntime, type GridCameraRuntimeSnapshot } from './gridCameraRuntime.js'
 import { GridOverlayRuntime } from './gridOverlayRuntime.js'
 import { GridTileCoordinator, type GridTileInterestBatchV3, type GridTileInterestReasonV3 } from './gridTileCoordinator.js'
+import {
+  GridViewportResidencyRuntime,
+  type GridViewportResidencyRuntimeInput,
+  type GridViewportResidencyState,
+} from './gridViewportResidencyRuntime.js'
 
 export interface GridRuntimeHostSnapshot {
   readonly camera: GridCameraRuntimeSnapshot
@@ -23,6 +28,7 @@ export class GridRuntimeHost {
   readonly camera: GridCameraRuntime
   readonly overlays = new GridOverlayRuntime()
   readonly tiles = new GridTileCoordinator()
+  readonly viewportResidency = new GridViewportResidencyRuntime()
   private freezeRows: number
   private freezeCols: number
   private freezeSeq = 1
@@ -175,6 +181,10 @@ export class GridRuntimeHost {
       }),
       warmTileKeys: input.warmTileKeys,
     })
+  }
+
+  resolveViewportResidency(input: GridViewportResidencyRuntimeInput): GridViewportResidencyState {
+    return this.viewportResidency.resolve(input)
   }
 
   resolveScrollForCellIntoView(input: {
