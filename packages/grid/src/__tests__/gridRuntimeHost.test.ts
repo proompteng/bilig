@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { ValueTag, type CellSnapshot } from '@bilig/protocol'
+import type { GridEngineLike } from '../grid-engine.js'
 import type { Rectangle } from '../gridTypes.js'
 import { unpackTileKey53 } from '../renderer-v3/tile-key.js'
 import { GridRuntimeHost } from '../runtime/gridRuntimeHost.js'
@@ -8,6 +10,26 @@ const gridMetrics = {
   headerHeight: 20,
   rowHeight: 10,
   rowMarkerWidth: 50,
+}
+
+function createEmptyCellSnapshot(address: string): CellSnapshot {
+  return {
+    address,
+    flags: 0,
+    input: '',
+    sheetName: 'Sheet1',
+    value: { tag: ValueTag.Empty },
+    version: 0,
+  }
+}
+
+const LOCAL_EMPTY_ENGINE: GridEngineLike = {
+  getCell: (_sheetName, address) => createEmptyCellSnapshot(address),
+  getCellStyle: () => undefined,
+  subscribeCells: () => () => {},
+  workbook: {
+    getSheet: () => undefined,
+  },
 }
 
 describe('GridRuntimeHost', () => {
@@ -245,6 +267,61 @@ describe('GridRuntimeHost', () => {
     expect(panes.map((pane) => pane.paneId)).toEqual(['corner-header', 'top-frozen', 'top-body', 'left-frozen', 'left-body'])
     expect(panes.find((pane) => pane.paneId === 'top-body')?.contentOffset).toEqual({ x: 33, y: 0 })
     expect(panes.find((pane) => pane.paneId === 'left-body')?.contentOffset).toEqual({ x: 0, y: 44 })
+  })
+
+  it('owns V3 render-tile pane runtime state instead of letting the React hook allocate it', () => {
+    const host = new GridRuntimeHost({
+      columnCount: 1000,
+      defaultColumnWidth: 100,
+      defaultRowHeight: 10,
+      gridMetrics,
+      rowCount: 1000,
+      viewportHeight: 80,
+      viewportWidth: 300,
+    })
+    const tileId = host.viewportTileKeys({
+      dprBucket: 1,
+      sheetOrdinal: 7,
+      viewport: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
+    })[0]
+
+    const state = host.resolveRenderTilePanes({
+      columnWidths: {},
+      dprBucket: 1,
+      engine: LOCAL_EMPTY_ENGINE,
+      freezeCols: 0,
+      freezeRows: 0,
+      frozenColumnWidth: 0,
+      frozenRowHeight: 0,
+      gridMetrics,
+      hostClientHeight: 400,
+      hostClientWidth: 800,
+      hostReady: true,
+      renderTileSource: undefined,
+      renderTileViewport: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
+      residentViewport: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
+      rowHeights: {},
+      sceneRevision: 1,
+      sheetId: 7,
+      sheetName: 'Sheet1',
+      sortedColumnWidthOverrides: [],
+      sortedRowHeightOverrides: [],
+      visibleViewport: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
+    })
+
+    expect(state.renderTilePanes).toHaveLength(1)
+    expect(state.residentBodyPane?.tile.tileId).toBe(tileId)
+    expect(state.tileReadiness).toMatchObject({
+      exactHits: [tileId],
+      misses: [],
+      staleHits: [],
+    })
+    expect(host.tiles.residency.getExact(tileId)?.packet).toMatchObject({
+      tileId,
+      coord: {
+        sheetId: 7,
+      },
+    })
   })
 
   it('resolves selection and restore scroll positions from runtime axes', () => {

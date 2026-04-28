@@ -411,6 +411,9 @@ Completed in the resident-scene deletion tranche:
 - Event-driven render-tile replacements now preserve tile-local dirty row/column/mask metadata from worker materialization through
   `RenderTileReplaceMutation`, `ProjectedTileSceneStore`, and `GridRenderTile`. This gives the V3 backend concrete dirty-span inputs for the
   next partial-upload cut instead of only full-tile replacement payloads.
+- `GridRuntimeHost` now owns the V3 render-tile pane runtime instance. The React tile-pane hook no longer imports or allocates
+  `GridRenderTilePaneRuntime`; it only memoizes live React inputs and calls host methods for pane resolution, render-tile delta subscriptions,
+  workbook-delta damage application, and retained-pane cleanup.
 
 Remaining work from this design:
 

@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Viewport } from '@bilig/protocol'
 import type { GridEngineLike } from './grid-engine.js'
 import type { GridMetrics } from './gridMetrics.js'
 import { noteRendererTileReadiness } from './grid-render-counters.js'
 import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from './renderer-v3/render-tile-pane-state.js'
-import { getGridRenderTilePaneRuntime, type GridRenderTilePaneRuntime } from './runtime/gridRenderTilePaneRuntime.js'
 import type { GridTileReadinessSnapshotV3 } from './runtime/gridTileCoordinator.js'
 import type { GridRuntimeHost } from './runtime/gridRuntimeHost.js'
 
@@ -69,17 +68,14 @@ export function useWorkbookRenderTilePanes(input: {
     visibleAddresses,
     visibleViewport,
   } = input
-  const tilePaneRuntimeRef = useRef<GridRenderTilePaneRuntime | null>(null)
-  tilePaneRuntimeRef.current = getGridRenderTilePaneRuntime(tilePaneRuntimeRef.current)
   const [forceLocalTiles, setForceLocalTiles] = useState(false)
   const [renderTileRevision, setRenderTileRevision] = useState(0)
   const [localFallbackRevision, setLocalFallbackRevision] = useState(0)
 
   useEffect(() => {
-    return tilePaneRuntimeRef.current!.connectRenderTileDeltas(
+    return gridRuntimeHost.connectRenderTileDeltas(
       {
         dprBucket,
-        gridRuntimeHost,
         renderTileSource,
         renderTileViewport,
         sheetId,
@@ -93,10 +89,9 @@ export function useWorkbookRenderTilePanes(input: {
   }, [dprBucket, gridRuntimeHost, renderTileSource, renderTileViewport, sheetId, sheetName])
 
   useEffect(() => {
-    return tilePaneRuntimeRef.current!.connectWorkbookDeltaDamage(
+    return gridRuntimeHost.connectWorkbookDeltaDamage(
       {
         dprBucket,
-        gridRuntimeHost,
         renderTileSource,
         sheetId,
       },
@@ -109,7 +104,7 @@ export function useWorkbookRenderTilePanes(input: {
   const state = useMemo<WorkbookRenderTilePanesState & { readonly needsLocalCellInvalidation: boolean }>(() => {
     void renderTileRevision
     void localFallbackRevision
-    return tilePaneRuntimeRef.current!.resolve({
+    return gridRuntimeHost.resolveRenderTilePanes({
       columnWidths,
       dprBucket,
       engine,
@@ -119,7 +114,6 @@ export function useWorkbookRenderTilePanes(input: {
       frozenColumnWidth,
       frozenRowHeight,
       gridMetrics,
-      gridRuntimeHost,
       hostClientHeight,
       hostClientWidth,
       hostReady: hostElement !== null,
@@ -185,11 +179,11 @@ export function useWorkbookRenderTilePanes(input: {
       return
     }
     return engine.subscribeCells(sheetName, visibleAddresses, () => {
-      tilePaneRuntimeRef.current?.clearRetainedPanes()
+      gridRuntimeHost.clearRetainedRenderTilePanes()
       setForceLocalTiles(true)
       setLocalFallbackRevision((current) => current + 1)
     })
-  }, [engine, sheetName, state.needsLocalCellInvalidation, visibleAddresses])
+  }, [engine, gridRuntimeHost, sheetName, state.needsLocalCellInvalidation, visibleAddresses])
 
   return state
 }

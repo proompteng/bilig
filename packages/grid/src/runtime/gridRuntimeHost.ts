@@ -8,6 +8,13 @@ import { GridAxisRuntime } from './gridAxisRuntime.js'
 import type { AxisEntryOverride } from '../gridAxisIndex.js'
 import { GridCameraRuntime, type GridCameraRuntimeSnapshot } from './gridCameraRuntime.js'
 import { GridOverlayRuntime } from './gridOverlayRuntime.js'
+import {
+  GridRenderTilePaneRuntime,
+  type GridRenderTileDamageRuntimeInput,
+  type GridRenderTileDeltaRuntimeInput,
+  type GridRenderTilePaneRuntimeInput,
+  type GridRenderTilePaneRuntimeState,
+} from './gridRenderTilePaneRuntime.js'
 import { GridTileCoordinator, type GridTileInterestBatchV3, type GridTileInterestReasonV3 } from './gridTileCoordinator.js'
 import { GridHeaderPaneRuntime, type GridHeaderPaneRuntimeInput } from './gridHeaderPaneRuntime.js'
 import {
@@ -30,6 +37,7 @@ export class GridRuntimeHost {
   readonly overlays = new GridOverlayRuntime()
   readonly tiles = new GridTileCoordinator()
   readonly headers = new GridHeaderPaneRuntime()
+  readonly renderTiles = new GridRenderTilePaneRuntime()
   readonly viewportResidency = new GridViewportResidencyRuntime()
   private freezeRows: number
   private freezeCols: number
@@ -191,6 +199,43 @@ export class GridRuntimeHost {
 
   resolveHeaderPanes(input: GridHeaderPaneRuntimeInput): ReturnType<GridHeaderPaneRuntime['resolve']> {
     return this.headers.resolve(input)
+  }
+
+  resolveRenderTilePanes(input: Omit<GridRenderTilePaneRuntimeInput, 'gridRuntimeHost'>): GridRenderTilePaneRuntimeState {
+    return this.renderTiles.resolve({
+      ...input,
+      gridRuntimeHost: this,
+    })
+  }
+
+  connectRenderTileDeltas(
+    input: Omit<GridRenderTileDeltaRuntimeInput, 'gridRuntimeHost'>,
+    listener: Parameters<GridRenderTilePaneRuntime['connectRenderTileDeltas']>[1],
+  ): ReturnType<GridRenderTilePaneRuntime['connectRenderTileDeltas']> {
+    return this.renderTiles.connectRenderTileDeltas(
+      {
+        ...input,
+        gridRuntimeHost: this,
+      },
+      listener,
+    )
+  }
+
+  connectWorkbookDeltaDamage(
+    input: Omit<GridRenderTileDamageRuntimeInput, 'gridRuntimeHost'>,
+    listener: Parameters<GridRenderTilePaneRuntime['connectWorkbookDeltaDamage']>[1],
+  ): ReturnType<GridRenderTilePaneRuntime['connectWorkbookDeltaDamage']> {
+    return this.renderTiles.connectWorkbookDeltaDamage(
+      {
+        ...input,
+        gridRuntimeHost: this,
+      },
+      listener,
+    )
+  }
+
+  clearRetainedRenderTilePanes(): void {
+    this.renderTiles.clearRetainedPanes()
   }
 
   resolveScrollForCellIntoView(input: {
