@@ -3,6 +3,8 @@ import {
   VIEWPORT_TILE_COLUMN_COUNT,
   VIEWPORT_TILE_ROW_COUNT,
   type EngineEvent,
+  MAX_COLS,
+  MAX_ROWS,
   type RecalcMetrics,
   type Viewport,
   type WorkbookAxisEntrySnapshot,
@@ -13,7 +15,7 @@ import { getGridMetrics } from '../../../packages/grid/src/gridMetrics.js'
 import { materializeGridRenderTileV3 } from '../../../packages/grid/src/renderer-v3/grid-tile-materializer.js'
 import type { GridRenderTile } from '../../../packages/grid/src/renderer-v3/render-tile-source.js'
 import { DirtyMaskV3, DirtyTileIndexV3 } from '../../../packages/grid/src/renderer-v3/tile-damage-index.js'
-import { packTileKey53, tileKeysForViewport } from '../../../packages/grid/src/renderer-v3/tile-key.js'
+import { packTileKey53, tileKeysForViewport, unpackTileKey53, type TileKey53 } from '../../../packages/grid/src/renderer-v3/tile-key.js'
 import { buildFreezeVersion, buildRenderedAxisState } from './worker-runtime-render-axis.js'
 import { listViewportTileBounds } from './worker-viewport-tile-store.js'
 
@@ -100,10 +102,10 @@ function resolveMaterializedTileViewports(input: {
   readonly subscription: RenderTileDeltaSubscription
   readonly event: EngineEvent | undefined
   readonly batchId: number
-}): Viewport[] {
+}): readonly Viewport[] {
   const { engine, event, subscription } = input
   if (!event || event.invalidation === 'full') {
-    return listViewportTileBounds(subscription)
+    return resolveInterestedTileViewports(subscription)
   }
 
   const dprBucket = subscription.dprBucket ?? 1
@@ -117,29 +119,75 @@ function resolveMaterializedTileViewports(input: {
     sheetName: subscription.sheetName,
   })
 
-  const dirtyTileKeys = new Set(
-    dirtyIndex.consumeVisible(
-      tileKeysForViewport({
-        dprBucket,
-        sheetOrdinal: subscription.sheetId,
-        viewport: subscription,
-      }),
-    ),
-  )
+  const interestedTileKeys = resolveInterestedTileKeys(subscription)
+  const dirtyTileKeys = new Set(dirtyIndex.consumeVisible(interestedTileKeys))
   if (dirtyTileKeys.size === 0) {
     return []
   }
 
-  return listViewportTileBounds(subscription).filter((viewport) =>
-    dirtyTileKeys.has(
-      packTileKey53({
-        colTile: Math.floor(viewport.colStart / VIEWPORT_TILE_COLUMN_COUNT),
-        dprBucket,
-        rowTile: Math.floor(viewport.rowStart / VIEWPORT_TILE_ROW_COUNT),
-        sheetOrdinal: subscription.sheetId,
-      }),
-    ),
+  return resolveInterestedTileViewports(subscription).filter((viewport) =>
+    dirtyTileKeys.has(tileKeyFromTileViewport(subscription, viewport)),
   )
+}
+
+function resolveInterestedTileKeys(subscription: RenderTileDeltaSubscription): readonly TileKey53[] {
+  const dprBucket = subscription.dprBucket ?? 1
+  const visibleKeys = tileKeysForViewport({
+    dprBucket,
+    sheetOrdinal: subscription.sheetId,
+    viewport: subscription,
+  })
+  const keys = new Set<number>(visibleKeys)
+  subscription.warmTileKeys?.forEach((key) => {
+    if (!isSubscriptionTileKey(subscription, key)) {
+      return
+    }
+    keys.add(key)
+  })
+  return [...keys]
+}
+
+function resolveInterestedTileViewports(subscription: RenderTileDeltaSubscription): readonly Viewport[] {
+  const viewportsByKey = new Map<number, Viewport>()
+  for (const viewport of listViewportTileBounds(subscription)) {
+    viewportsByKey.set(tileKeyFromTileViewport(subscription, viewport), viewport)
+  }
+  subscription.warmTileKeys?.forEach((key) => {
+    const viewport = tileViewportFromKey(subscription, key)
+    if (viewport) {
+      viewportsByKey.set(key, viewport)
+    }
+  })
+  return [...viewportsByKey.values()].toSorted((a, b) => a.rowStart - b.rowStart || a.colStart - b.colStart)
+}
+
+function tileViewportFromKey(subscription: RenderTileDeltaSubscription, key: TileKey53): Viewport | null {
+  if (!isSubscriptionTileKey(subscription, key)) {
+    return null
+  }
+  const fields = unpackTileKey53(key)
+  const rowStart = fields.rowTile * VIEWPORT_TILE_ROW_COUNT
+  const colStart = fields.colTile * VIEWPORT_TILE_COLUMN_COUNT
+  return {
+    colEnd: Math.min(colStart + VIEWPORT_TILE_COLUMN_COUNT - 1, MAX_COLS - 1),
+    colStart,
+    rowEnd: Math.min(rowStart + VIEWPORT_TILE_ROW_COUNT - 1, MAX_ROWS - 1),
+    rowStart,
+  }
+}
+
+function isSubscriptionTileKey(subscription: RenderTileDeltaSubscription, key: TileKey53): boolean {
+  const fields = unpackTileKey53(key)
+  return fields.sheetOrdinal === subscription.sheetId && fields.dprBucket === (subscription.dprBucket ?? 1)
+}
+
+function tileKeyFromTileViewport(subscription: RenderTileDeltaSubscription, viewport: Viewport): TileKey53 {
+  return packTileKey53({
+    colTile: Math.floor(viewport.colStart / VIEWPORT_TILE_COLUMN_COUNT),
+    dprBucket: subscription.dprBucket ?? 1,
+    rowTile: Math.floor(viewport.rowStart / VIEWPORT_TILE_ROW_COUNT),
+    sheetOrdinal: subscription.sheetId,
+  })
 }
 
 function markEventDirtyTiles(input: {

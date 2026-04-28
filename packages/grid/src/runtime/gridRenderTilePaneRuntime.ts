@@ -5,7 +5,8 @@ import { buildLocalFixedRenderTiles } from '../renderer-v3/local-render-tile-mat
 import { buildFixedRenderTilePaneStates } from '../renderer-v3/render-tile-pane-builder.js'
 import type { GridRenderTile, GridRenderTileSceneChange, GridRenderTileSource } from '../renderer-v3/render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from '../renderer-v3/render-tile-pane-state.js'
-import type { GridTileReadinessSnapshotV3 } from './gridTileCoordinator.js'
+import { MAX_TILE_COLUMN_INDEX, MAX_TILE_ROW_INDEX, packTileKey53, unpackTileKey53, type TileKey53 } from '../renderer-v3/tile-key.js'
+import type { GridTileInterestBatchV3, GridTileReadinessSnapshotV3 } from './gridTileCoordinator.js'
 import type { GridRuntimeHost } from './gridRuntimeHost.js'
 
 type SortedAxisOverrides = readonly (readonly [number, number])[]
@@ -52,6 +53,13 @@ export interface GridRenderTileDeltaRuntimeInput {
   readonly renderTileViewport: Viewport
   readonly sheetId?: number | undefined
   readonly sheetName: string
+}
+
+interface GridRenderTileInterestRuntimeInput {
+  readonly dprBucket: number
+  readonly gridRuntimeHost: GridRuntimeHost
+  readonly renderTileViewport: Viewport
+  readonly sheetId?: number | undefined
 }
 
 const EMPTY_TILE_PANE_RUNTIME_STATE: GridRenderTilePaneRuntimeState = Object.freeze({
@@ -129,12 +137,9 @@ export class GridRenderTilePaneRuntime {
     if (!input.renderTileSource || input.sheetId === undefined) {
       return undefined
     }
-    const tileInterest = input.gridRuntimeHost.buildViewportTileInterest({
-      dprBucket: input.dprBucket,
-      reason: 'scroll',
+    const tileInterest = this.buildViewportTileInterest({
+      ...input,
       sheetId: input.sheetId,
-      sheetOrdinal: input.sheetId,
-      viewport: input.renderTileViewport,
     })
     return input.renderTileSource.subscribeRenderTileDeltas(
       {
@@ -144,6 +149,7 @@ export class GridRenderTilePaneRuntime {
         initialDelta: 'full',
         sheetId: input.sheetId,
         sheetName: input.sheetName,
+        warmTileKeys: tileInterest.warmTileKeys,
       },
       listener,
     )
@@ -174,17 +180,64 @@ export class GridRenderTilePaneRuntime {
     if (input.sheetId === undefined) {
       return EMPTY_TILE_PANE_RUNTIME_STATE.tileReadiness
     }
+    const sheetId = input.sheetId
     for (const tile of tiles) {
       this.upsertHostTile(input, tile)
     }
-    const interest = input.gridRuntimeHost.buildViewportTileInterest({
+    const interest = this.buildViewportTileInterest({
+      ...input,
+      sheetId,
+    })
+    return input.gridRuntimeHost.tiles.reconcileInterest(interest)
+  }
+
+  private buildViewportTileInterest(input: GridRenderTileInterestRuntimeInput & { readonly sheetId: number }): GridTileInterestBatchV3 {
+    return input.gridRuntimeHost.buildViewportTileInterest({
       dprBucket: input.dprBucket,
       reason: 'scroll',
       sheetId: input.sheetId,
       sheetOrdinal: input.sheetId,
       viewport: input.renderTileViewport,
+      warmTileKeys: this.resolveWarmTileKeys(input),
     })
-    return input.gridRuntimeHost.tiles.reconcileInterest(interest)
+  }
+
+  private resolveWarmTileKeys(input: GridRenderTileInterestRuntimeInput & { readonly sheetId: number }): readonly TileKey53[] {
+    const visibleTileKeys = input.gridRuntimeHost.viewportTileKeys({
+      dprBucket: input.dprBucket,
+      sheetOrdinal: input.sheetId,
+      viewport: input.renderTileViewport,
+    })
+    if (visibleTileKeys.length === 0) {
+      return []
+    }
+    const visibleSet = new Set(visibleTileKeys)
+    let minRowTile = Number.POSITIVE_INFINITY
+    let maxRowTile = Number.NEGATIVE_INFINITY
+    let minColTile = Number.POSITIVE_INFINITY
+    let maxColTile = Number.NEGATIVE_INFINITY
+    for (const key of visibleTileKeys) {
+      const fields = unpackTileKey53(key)
+      minRowTile = Math.min(minRowTile, fields.rowTile)
+      maxRowTile = Math.max(maxRowTile, fields.rowTile)
+      minColTile = Math.min(minColTile, fields.colTile)
+      maxColTile = Math.max(maxColTile, fields.colTile)
+    }
+    const warmTileKeys: number[] = []
+    for (let rowTile = Math.max(0, minRowTile - 1); rowTile <= Math.min(MAX_TILE_ROW_INDEX, maxRowTile + 1); rowTile += 1) {
+      for (let colTile = Math.max(0, minColTile - 1); colTile <= Math.min(MAX_TILE_COLUMN_INDEX, maxColTile + 1); colTile += 1) {
+        const key = packTileKey53({
+          colTile,
+          dprBucket: input.dprBucket,
+          rowTile,
+          sheetOrdinal: input.sheetId,
+        })
+        if (!visibleSet.has(key)) {
+          warmTileKeys.push(key)
+        }
+      }
+    }
+    return warmTileKeys
   }
 
   private upsertHostTile(input: GridRenderTilePaneRuntimeInput, tile: GridRenderTile): void {

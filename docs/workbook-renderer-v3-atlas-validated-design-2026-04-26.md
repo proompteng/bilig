@@ -397,6 +397,9 @@ Completed in the resident-scene deletion tranche:
   `Object.entries().toSorted()` axis work or constructs world-axis indexes directly; boundary and adapter tests lock this ownership split.
 - `packages/grid/src/runtime/gridViewportResidencyRuntime.ts` is now owned by `GridRuntimeHost`, so resident viewport retention, fixed render-tile
   viewport expansion, visible-address collection, and header-interest ranges are no longer carried by a standalone React-hook runtime.
+- Render-tile delta subscriptions now carry host-computed V3 warm tile keys. `GridRenderTilePaneRuntime` builds visible plus one-ring warm
+  interest from the host-owned tile coordinator, and `worker-runtime-render-tile-delta.ts` materializes dirty visible/warm tiles from that
+  interest instead of treating the subscription as a viewport-only contract.
 
 Remaining work from this design:
 

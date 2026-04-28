@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ValueTag, type CellSnapshot, type EngineEvent, type RecalcMetrics } from '@bilig/protocol'
+import { packTileKey53 } from '../../../../packages/grid/src/renderer-v3/tile-key.js'
 import { buildWorkerRenderTileDeltaBatch } from '../worker-runtime-render-tile-delta.js'
 
 const emptyCell: CellSnapshot = {
@@ -117,6 +118,48 @@ describe('worker-runtime-render-tile-delta', () => {
         colStart: 0,
         colEnd: 127,
       },
+    })
+  })
+
+  it('materializes warm tile interest on initial and dirty event-driven batches', () => {
+    const warmTileKey = packTileKey53({
+      colTile: 0,
+      dprBucket: 1,
+      rowTile: 1,
+      sheetOrdinal: 7,
+    })
+    const subscription = {
+      sheetId: 7,
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 31,
+      colStart: 0,
+      colEnd: 127,
+      dprBucket: 1,
+      cameraSeq: 20,
+      warmTileKeys: [warmTileKey],
+    }
+
+    const initialBatch = buildWorkerRenderTileDeltaBatch({
+      engine,
+      generation: 7,
+      subscription,
+    })
+    const dirtyBatch = buildWorkerRenderTileDeltaBatch({
+      engine,
+      event: createRangeInvalidationEvent('A40'),
+      generation: 8,
+      subscription,
+    })
+
+    expect(initialBatch.mutations.filter((mutation) => mutation.kind === 'tileReplace').map((mutation) => mutation.bounds)).toEqual([
+      { rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 127 },
+      { rowStart: 32, rowEnd: 63, colStart: 0, colEnd: 127 },
+    ])
+    expect(dirtyBatch.mutations.filter((mutation) => mutation.kind === 'tileReplace')).toHaveLength(1)
+    expect(dirtyBatch.mutations[0]).toMatchObject({
+      bounds: { rowStart: 32, rowEnd: 63, colStart: 0, colEnd: 127 },
+      coord: { rowTile: 1, colTile: 0 },
     })
   })
 

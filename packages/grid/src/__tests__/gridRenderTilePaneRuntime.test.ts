@@ -5,6 +5,7 @@ import { getGridMetrics } from '../gridMetrics.js'
 import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from '../renderer-v3/rect-instance-buffer.js'
 import type { GridRenderTile, GridRenderTileDeltaSubscription, GridRenderTileSource } from '../renderer-v3/render-tile-source.js'
 import { GRID_TEXT_METRIC_FLOAT_COUNT_V3 } from '../renderer-v3/text-run-buffer.js'
+import { packTileKey53 } from '../renderer-v3/tile-key.js'
 import { GridRenderTilePaneRuntime, getGridRenderTilePaneRuntime } from '../runtime/gridRenderTilePaneRuntime.js'
 import { GridRuntimeHost } from '../runtime/gridRuntimeHost.js'
 
@@ -294,6 +295,22 @@ describe('GridRenderTilePaneRuntime', () => {
       sheetId: 7,
       sheetName: 'Sheet1',
     })
+    expect(renderTileSource.captured()?.warmTileKeys).toContain(
+      packTileKey53({
+        colTile: 2,
+        dprBucket: 2,
+        rowTile: 0,
+        sheetOrdinal: 7,
+      }),
+    )
+    expect(renderTileSource.captured()?.warmTileKeys).not.toContain(
+      packTileKey53({
+        colTile: 0,
+        dprBucket: 2,
+        rowTile: 0,
+        sheetOrdinal: 7,
+      }),
+    )
     unsubscribe?.()
     expect(renderTileSource.unsubscribed()).toBe(true)
   })

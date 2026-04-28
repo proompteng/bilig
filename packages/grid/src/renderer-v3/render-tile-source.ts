@@ -9,6 +9,7 @@ export interface GridRenderTileDeltaSubscription extends Viewport {
   readonly cameraSeq?: number | undefined
   readonly dprBucket?: number | undefined
   readonly initialDelta?: 'full' | 'none' | undefined
+  readonly warmTileKeys?: readonly number[] | undefined
 }
 
 export interface GridRenderTileCoord {
