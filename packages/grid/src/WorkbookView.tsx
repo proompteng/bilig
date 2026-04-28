@@ -83,6 +83,9 @@ interface WorkbookViewProps {
 const MIN_SIDE_PANEL_WIDTH = 280
 const MAX_SIDE_PANEL_WIDTH = 420
 const SIDE_PANEL_VIEWPORT_FRACTION = 0.42
+const SIDE_PANEL_OVERLAY_TARGET_WIDTH = 400
+const SIDE_PANEL_OVERLAY_VIEWPORT_GUTTER = 56
+const SIDE_PANEL_DOCKED_MIN_VIEWPORT_WIDTH = 900
 
 function noteSurfaceCommit(surface: string): void {
   if (typeof window === 'undefined') {
@@ -93,13 +96,36 @@ function noteSurfaceCommit(surface: string): void {
   )
 }
 
-function clampSidePanelWidth(width: number): number {
-  const viewportWidth = typeof window === 'undefined' ? null : window.innerWidth
+function getViewportWidth(): number | null {
+  return typeof window === 'undefined' ? null : window.innerWidth
+}
+
+function clampSidePanelWidth(width: number, viewportWidth = getViewportWidth()): number {
   const viewportAwareMax =
     viewportWidth && Number.isFinite(viewportWidth)
       ? Math.min(MAX_SIDE_PANEL_WIDTH, Math.max(MIN_SIDE_PANEL_WIDTH, Math.round(viewportWidth * SIDE_PANEL_VIEWPORT_FRACTION)))
       : MAX_SIDE_PANEL_WIDTH
   return Math.min(viewportAwareMax, Math.max(MIN_SIDE_PANEL_WIDTH, Math.round(width)))
+}
+
+function clampOverlaySidePanelWidth(width: number, viewportWidth = getViewportWidth()): number {
+  if (!viewportWidth || !Number.isFinite(viewportWidth)) {
+    return clampSidePanelWidth(width, viewportWidth)
+  }
+  const viewportAwareMax = Math.min(MAX_SIDE_PANEL_WIDTH, Math.max(0, viewportWidth - SIDE_PANEL_OVERLAY_VIEWPORT_GUTTER))
+  const viewportAwareMin = Math.min(MIN_SIDE_PANEL_WIDTH, viewportAwareMax)
+  const preferredWidth = Math.max(width, SIDE_PANEL_OVERLAY_TARGET_WIDTH)
+  return Math.min(viewportAwareMax, Math.max(viewportAwareMin, Math.round(preferredWidth)))
+}
+
+function isSidePanelOverlayViewport(viewportWidth: number | null): boolean {
+  return viewportWidth !== null && Number.isFinite(viewportWidth) && viewportWidth < SIDE_PANEL_DOCKED_MIN_VIEWPORT_WIDTH
+}
+
+function resolveSidePanelWidth(width: number, viewportWidth: number | null): number {
+  return isSidePanelOverlayViewport(viewportWidth)
+    ? clampOverlaySidePanelWidth(width, viewportWidth)
+    : clampSidePanelWidth(width, viewportWidth)
 }
 
 function sameFormulaBarProps(left: React.ComponentProps<typeof FormulaBar>, right: React.ComponentProps<typeof FormulaBar>): boolean {
@@ -220,7 +246,18 @@ export function WorkbookView({
   } | null>(null)
   const [isResizingSidePanel, setIsResizingSidePanel] = useState(false)
   const [selectionLabel, setSelectionLabel] = useState(formatSelectionSnapshotSummary(selectionSnapshot))
-  const resolvedSidePanelWidth = clampSidePanelWidth(sidePanelWidth ?? 344)
+  const [viewportWidth, setViewportWidth] = useState(getViewportWidth)
+  const resolvedSidePanelWidth = resolveSidePanelWidth(sidePanelWidth ?? 344, viewportWidth)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const handleResize = () => setViewportWidth(getViewportWidth())
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   useEffect(() => {
     const nextSelectionLabel = formatSelectionSnapshotSummary(selectionSnapshot)
@@ -242,9 +279,9 @@ export function WorkbookView({
         return
       }
       const nextWidth = resizeState.startWidth + (resizeState.startX - event.clientX)
-      onSidePanelWidthChange(clampSidePanelWidth(nextWidth))
+      onSidePanelWidthChange(clampSidePanelWidth(nextWidth, viewportWidth))
     },
-    [onSidePanelWidthChange],
+    [onSidePanelWidthChange, viewportWidth],
   )
 
   const finishSidePanelResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
@@ -361,6 +398,7 @@ export function WorkbookView({
                 aria-orientation="vertical"
                 className={[
                   'absolute inset-y-0 left-0 z-10 w-4 -translate-x-2 cursor-ew-resize touch-none',
+                  'max-[900px]:hidden',
                   'after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-[var(--wb-border)] after:transition-colors',
                   isResizingSidePanel ? 'after:bg-[var(--wb-accent)]' : 'hover:after:bg-[var(--wb-border-strong)]',
                 ].join(' ')}

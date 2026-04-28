@@ -511,9 +511,8 @@ export function useWorkerWorkbookAppState(input: {
     [runtimeActorRef],
   )
 
-  const finishEditingWithAuthoritative = useCallback(
-    (targetSelection: WorkerRuntimeSelection, movement?: EditMovement) => {
-      const nextSelection = completeEditNavigation(targetSelection, movement)
+  const finishEditingAtSelection = useCallback(
+    (nextSelection: WorkerRuntimeSelection) => {
       const nextEditorValue = toEditorValue(cloneLiveSelectedCell(nextSelection))
       editorValueRef.current = nextEditorValue
       setEditorValue(nextEditorValue)
@@ -522,7 +521,14 @@ export function useWorkerWorkbookAppState(input: {
       setEditingMode('idle')
       resetEditorConflictTracking(nextSelection)
     },
-    [cloneLiveSelectedCell, completeEditNavigation, resetEditorConflictTracking],
+    [cloneLiveSelectedCell, resetEditorConflictTracking],
+  )
+
+  const finishEditingWithAuthoritative = useCallback(
+    (targetSelection: WorkerRuntimeSelection, movement?: EditMovement) => {
+      finishEditingAtSelection(completeEditNavigation(targetSelection, movement))
+    },
+    [completeEditNavigation, finishEditingAtSelection],
   )
 
   const beginEditing = useCallback(
@@ -631,6 +637,7 @@ export function useWorkerWorkbookAppState(input: {
       const nextSelection = completeEditNavigation(targetSelection, movement)
       optimisticCellSeedsRef.current.set(optimisticCellKey(targetSelection.sheetName, targetSelection.address), nextValue)
       const rollbackOptimisticCell = applyOptimisticParsedInput(targetSelection, parsed)
+      finishEditingAtSelection(nextSelection)
       void (async () => {
         try {
           await applyParsedInput(targetSelection.sheetName, targetSelection.address, parsed)
@@ -638,10 +645,6 @@ export function useWorkerWorkbookAppState(input: {
           if (editSessionRef.current !== commitSessionId) {
             return
           }
-          setEditorSelectionBehavior('select-all')
-          editingModeRef.current = 'idle'
-          setEditingMode('idle')
-          resetEditorConflictTracking(nextSelection)
         } catch (error) {
           clearOptimisticCellSeed(targetSelection.sheetName, targetSelection.address, nextValue)
           rollbackOptimisticCell?.()
@@ -662,12 +665,12 @@ export function useWorkerWorkbookAppState(input: {
       applyParsedInput,
       cloneLiveSelectedCell,
       completeEditNavigation,
+      finishEditingAtSelection,
       finishEditingWithAuthoritative,
       getLiveSelectedCell,
       clearOptimisticCellSeed,
       applyOptimisticParsedInput,
       reportRuntimeError,
-      resetEditorConflictTracking,
       writesAllowed,
     ],
   )

@@ -25,6 +25,10 @@ vi.mock('../../../../packages/grid/src/WorkbookSheetTabs.js', () => ({
 
 afterEach(() => {
   document.body.innerHTML = ''
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    value: 1024,
+  })
 })
 
 function createEngineWithCells(
@@ -163,12 +167,98 @@ describe('workbook layout', () => {
     expect(resizeHandle?.className).toContain('w-4')
     expect(resizeHandle?.className).toContain('cursor-ew-resize')
     expect(resizeHandle?.className).toContain('-translate-x-2')
+    expect(resizeHandle?.className).toContain('max-[900px]:hidden')
     expect(resizeHandle?.className).toContain('after:bg-[var(--wb-border)]')
     expect(gridSurface instanceof Node).toBe(true)
     expect(sidePanel instanceof Node).toBe(true)
     expect(gridSurface instanceof Node && sidePanel instanceof Node ? gridSurface.compareDocumentPosition(sidePanel) : 0).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     )
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('expands the assistant overlay to a usable width on phone-sized screens', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 430,
+    })
+
+    const engine: GridEngineLike = {
+      getCell: () => ({
+        sheetName: 'Sheet1',
+        address: 'A1',
+        value: { tag: ValueTag.Empty },
+        flags: 0,
+        version: 0,
+      }),
+      getCellStyle: () => undefined,
+      subscribeCells: () => () => {},
+      workbook: {
+        getSheet: () => undefined,
+      },
+    }
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <WorkbookView
+          engine={engine}
+          sheetNames={['Sheet1']}
+          sheetName="Sheet1"
+          selectedAddr="A1"
+          selectedCellSnapshot={{
+            sheetName: 'Sheet1',
+            address: 'A1',
+            value: { tag: ValueTag.Empty },
+            flags: 0,
+            version: 0,
+          }}
+          selectionSnapshot={{
+            sheetName: 'Sheet1',
+            address: 'A1',
+            kind: 'cell',
+            range: {
+              startAddress: 'A1',
+              endAddress: 'A1',
+            },
+          }}
+          editorValue=""
+          editorSelectionBehavior="select-all"
+          resolvedValue=""
+          isEditing={false}
+          isEditingCell={false}
+          onSelectSheet={() => {}}
+          onSelectionChange={() => {}}
+          onAddressCommit={() => true}
+          onBeginEdit={() => {}}
+          onBeginFormulaEdit={() => {}}
+          onEditorChange={() => {}}
+          onCommitEdit={() => {}}
+          onCancelEdit={() => {}}
+          onClearCell={() => {}}
+          onFillRange={() => {}}
+          onCopyRange={() => {}}
+          onMoveRange={() => {}}
+          onPaste={() => {}}
+          onSidePanelWidthChange={() => {}}
+          sidePanel={<div data-testid="assistant-panel">Assistant panel</div>}
+          sidePanelWidth={280}
+        />,
+      )
+    })
+
+    const sidePanel = host.querySelector("[data-testid='workbook-side-panel']")
+    const resizeHandle = host.querySelector("[data-testid='workbook-side-panel-resize-handle']")
+    expect(sidePanel instanceof HTMLElement ? sidePanel.style.width : null).toBe('374px')
+    expect(sidePanel instanceof HTMLElement ? sidePanel.style.flexBasis : null).toBe('374px')
+    expect(resizeHandle?.className).toContain('max-[900px]:hidden')
 
     await act(async () => {
       root.unmount()
