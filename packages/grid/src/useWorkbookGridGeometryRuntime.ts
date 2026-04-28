@@ -1,14 +1,13 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
-import { createGridAxisWorldIndexFromRecords, type GridAxisWorldIndex } from './gridAxisWorldIndex.js'
+import type { GridAxisWorldIndex } from './gridAxisWorldIndex.js'
 import { createGridGeometrySnapshotFromAxes, type GridGeometrySnapshot } from './gridGeometry.js'
 import type { GridMetrics } from './gridMetrics.js'
-import { resolveGridScrollSpacerSize } from './gridScrollSurface.js'
 import type { Rectangle } from './gridTypes.js'
 import { GridCameraStore } from './runtime/gridCameraStore.js'
 import {
-  axisOverridesFromSortedSizes,
   createGridRuntimeAxisOverrideCache,
+  resolveGridRuntimeGeometryAxes,
   syncGridRuntimeAxisOverrides,
 } from './runtime/gridRuntimeAxisAdapters.js'
 import { GridRuntimeHost } from './runtime/gridRuntimeHost.js'
@@ -91,52 +90,44 @@ export function useWorkbookGridGeometryRuntime(input: {
     gridRuntimeHostRef.current = host
     return host
   }, [freezeCols, freezeRows, gridMetrics, hostClientHeight, hostClientWidth])
-  const sortedColumnWidthOverrides = useMemo(
+  const axisState = useMemo(
     () =>
-      Object.entries(columnWidths)
-        .map(([index, width]) => [Number(index), width] as const)
-        .toSorted((left, right) => left[0] - right[0]),
-    [columnWidths],
-  )
-  const sortedRowHeightOverrides = useMemo(
-    () =>
-      Object.entries(rowHeights)
-        .map(([index, height]) => [Number(index), height] as const)
-        .toSorted((left, right) => left[0] - right[0]),
-    [rowHeights],
-  )
-  const runtimeColumnAxisOverrides = useMemo(() => axisOverridesFromSortedSizes(sortedColumnWidthOverrides), [sortedColumnWidthOverrides])
-  const runtimeRowAxisOverrides = useMemo(() => axisOverridesFromSortedSizes(sortedRowHeightOverrides), [sortedRowHeightOverrides])
-  const columnWidthOverridesAttr = useMemo(() => {
-    const entries = Object.entries(columnWidths).toSorted(([left], [right]) => Number(left) - Number(right))
-    return entries.length === 0 ? '{}' : JSON.stringify(Object.fromEntries(entries))
-  }, [columnWidths])
-  const rowHeightOverridesAttr = useMemo(() => {
-    const entries = Object.entries(rowHeights).toSorted(([left], [right]) => Number(left) - Number(right))
-    return entries.length === 0 ? '{}' : JSON.stringify(Object.fromEntries(entries))
-  }, [rowHeights])
-  const columnAxis = useMemo(
-    () =>
-      createGridAxisWorldIndexFromRecords({
-        axisLength: MAX_COLS,
-        defaultSize: gridMetrics.columnWidth,
-        hidden: controlledHiddenColumns,
-        sizes: columnWidths,
+      resolveGridRuntimeGeometryAxes({
+        columnWidths,
+        controlledHiddenColumns,
+        controlledHiddenRows,
+        freezeCols,
+        freezeRows,
+        gridMetrics,
+        hostHeight: hostClientHeight,
+        hostWidth: hostClientWidth,
+        rowHeights,
       }),
-    [columnWidths, controlledHiddenColumns, gridMetrics.columnWidth],
+    [
+      columnWidths,
+      controlledHiddenColumns,
+      controlledHiddenRows,
+      freezeCols,
+      freezeRows,
+      gridMetrics,
+      hostClientHeight,
+      hostClientWidth,
+      rowHeights,
+    ],
   )
-  const rowAxis = useMemo(
-    () =>
-      createGridAxisWorldIndexFromRecords({
-        axisLength: MAX_ROWS,
-        defaultSize: gridMetrics.rowHeight,
-        hidden: controlledHiddenRows,
-        sizes: rowHeights,
-      }),
-    [controlledHiddenRows, gridMetrics.rowHeight, rowHeights],
-  )
-  const frozenColumnWidth = useMemo(() => columnAxis.span(0, freezeCols), [columnAxis, freezeCols])
-  const frozenRowHeight = useMemo(() => rowAxis.span(0, freezeRows), [freezeRows, rowAxis])
+  const {
+    columnAxis,
+    columnWidthOverridesAttr,
+    frozenColumnWidth,
+    frozenRowHeight,
+    rowAxis,
+    rowHeightOverridesAttr,
+    runtimeColumnAxisOverrides,
+    runtimeRowAxisOverrides,
+    scrollSpacerSize,
+    sortedColumnWidthOverrides,
+    sortedRowHeightOverrides,
+  } = axisState
   const syncRuntimeAxes = useCallback(() => {
     syncGridRuntimeAxisOverrides(gridRuntimeHost, gridRuntimeAxisCacheRef.current, {
       columnOverrides: runtimeColumnAxisOverrides,
@@ -145,19 +136,6 @@ export function useWorkbookGridGeometryRuntime(input: {
       rowSeq: rowAxis.version,
     })
   }, [columnAxis.version, gridRuntimeHost, rowAxis.version, runtimeColumnAxisOverrides, runtimeRowAxisOverrides])
-  const scrollSpacerSize = useMemo(
-    () =>
-      resolveGridScrollSpacerSize({
-        columnAxis,
-        rowAxis,
-        frozenColumnWidth,
-        frozenRowHeight,
-        hostWidth: hostClientWidth,
-        hostHeight: hostClientHeight,
-        gridMetrics,
-      }),
-    [columnAxis, frozenColumnWidth, frozenRowHeight, gridMetrics, hostClientHeight, hostClientWidth, rowAxis],
-  )
   const scrollTransformStore = scrollTransformStoreRef.current
   const gridCameraStore = gridCameraStoreRef.current
 

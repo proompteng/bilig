@@ -386,6 +386,9 @@ Completed in the resident-scene deletion tranche:
 - `packages/grid/src/runtime/gridEditorAnchorRuntime.ts` now owns editor overlay screen-bound resolution, direct DOM bounds application,
   committed-bound equality, presentation resolution, and editor text alignment. `useWorkbookEditorOverlayAnchor.ts` remains the React
   effect/state bridge, preserving scroll-time DOM updates without React commits.
+- `packages/grid/src/runtime/gridRuntimeAxisAdapters.ts` now owns the geometry-axis sort/serialization bridge, hidden-axis index construction,
+  frozen-span computation, and scroll-spacer sizing for the grid runtime. `useWorkbookGridGeometryRuntime.ts` no longer performs raw
+  `Object.entries().toSorted()` axis work or constructs world-axis indexes directly; boundary and adapter tests lock this ownership split.
 
 Remaining work from this design:
 
