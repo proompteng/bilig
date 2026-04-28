@@ -5,6 +5,7 @@ import {
   buildTextDecorationRectsFromRuns,
   buildTextQuadsFromRunsWithSpans,
   type TextDecorationRect,
+  type TextQuadRunPayloadV3,
   type TextQuadRunSpan,
 } from './line-text-quad-buffer.js'
 import type { createGlyphAtlas } from './typegpu-atlas-manager.js'
@@ -48,6 +49,7 @@ export interface TypeGpuTileContentResourceEntryV3 {
   textGlyphPageIds: readonly number[] | null
   textRunCount: number
   textRunGlyphIds: readonly (readonly number[])[] | null
+  textRunPayloads: readonly TextQuadRunPayloadV3[] | null
   textRunQuadSpans: readonly TextQuadRunSpan[] | null
   textSignature: string | null
   decorationRects: readonly TextDecorationRect[] | null
@@ -72,6 +74,7 @@ function createEmptyContentEntry(): TypeGpuTileContentResourceEntryV3 {
     textHandle: null,
     textRunGlyphIds: null,
     textRunCount: 0,
+    textRunPayloads: null,
     textRunQuadSpans: null,
     textSignature: null,
   }
@@ -202,6 +205,7 @@ export class TypeGpuTileResourceCacheV3 {
     entry.textGlyphPageIds = null
     entry.textRunCount = 0
     entry.textRunGlyphIds = null
+    entry.textRunPayloads = null
     entry.textRunQuadSpans = null
     entry.textSignature = null
     entry.decorationRects = null
@@ -218,6 +222,7 @@ export class TypeGpuTileResourceCacheV3 {
     entry.textGlyphPageIds = null
     entry.textRunCount = 0
     entry.textRunGlyphIds = null
+    entry.textRunPayloads = null
     entry.textRunQuadSpans = null
   }
 
@@ -416,7 +421,10 @@ function syncTileTextResource(input: {
   readonly textSignature: string
 }): void {
   input.content.decorationRects = buildTextDecorationRectsFromRuns(input.pane.tile.textRuns, input.atlas)
-  const textPayload = buildTextQuadsFromRunsWithSpans(input.pane.tile.textRuns, input.atlas)
+  const textPayload = buildTextQuadsFromRunsWithSpans(input.pane.tile.textRuns, input.atlas, undefined, {
+    dirtyRunSpans: input.pane.tile.dirty?.textSpans,
+    previousRunPayloads: input.content.textRunPayloads,
+  })
   if (textPayload.quadCount === 0) {
     releaseTextBuffer(input.tileResources, input.content)
     input.content.textCount = 0
@@ -424,6 +432,7 @@ function syncTileTextResource(input: {
     input.content.textGlyphPageIds = textPayload.pageIds
     input.content.textRunCount = input.pane.tile.textCount
     input.content.textRunGlyphIds = textPayload.runGlyphIds
+    input.content.textRunPayloads = textPayload.runPayloads
     input.content.textRunQuadSpans = textPayload.runSpans
     input.content.textSignature = input.textSignature
     return
@@ -441,6 +450,7 @@ function syncTileTextResource(input: {
   input.content.textGlyphPageIds = textPayload.pageIds
   input.content.textRunCount = input.pane.tile.textCount
   input.content.textRunGlyphIds = textPayload.runGlyphIds
+  input.content.textRunPayloads = textPayload.runPayloads
   writeTileTextPayload({
     canWritePartialPayload,
     content: input.content,

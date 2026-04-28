@@ -429,9 +429,12 @@ Completed in the resident-scene deletion tranche:
 - The mounted V3 glyph atlas now assigns stable numeric glyph IDs and atlas page IDs through the V3 glyph registry/page tracker. Text quad
   packing carries glyph/page dependencies into tile content resources, dirty page drains avoid sort allocation, repeated glyph reads do not
   inflate glyph registrations, and atlas texture growth updates glyph UV records without changing glyph identity.
+- V3 tile text resources now preserve per-run quad payloads alongside run-to-quad spans. Dirty text updates reuse clean run payloads and rebuild
+  only dirty or signature-changed runs before issuing bounded text-buffer subrange writes. Reuse is guarded by the mounted atlas version so cached
+  run payloads are not reused across atlas texture growth or UV remaps.
 
 Remaining work from this design:
 
 - continue splitting remaining draw/dirty-tile coordination out of `useWorkbookGridRenderState.ts`;
-- continue extending glyph dependency preservation into missing-glyph retry/update behavior and text-run payload reuse;
+- continue extending glyph dependency preservation into missing-glyph retry/update behavior and atlas-driven dependent tile refresh;
 - tighten browser perf gates around the now V3-only renderer path.

@@ -58,6 +58,7 @@ function contentEntry(overrides: Partial<TypeGpuTileContentResourceEntryV3> = {}
     textHandle: null,
     textRunGlyphIds: null,
     textRunCount: 1,
+    textRunPayloads: null,
     textRunQuadSpans: null,
     textSignature: 'previous-text',
     ...overrides,

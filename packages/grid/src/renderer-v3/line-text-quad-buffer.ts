@@ -64,6 +64,20 @@ export interface TextQuadRunSpan {
   readonly length: number
 }
 
+export interface TextQuadRunPayloadV3 {
+  readonly signature: string
+  readonly atlasVersion: number
+  readonly floats: Float32Array
+  readonly glyphIds: readonly number[]
+  readonly pageIds: readonly number[]
+  readonly quadCount: number
+}
+
+export interface BuildTextQuadsFromRunsWithSpansOptionsV3 {
+  readonly previousRunPayloads?: readonly TextQuadRunPayloadV3[] | null | undefined
+  readonly dirtyRunSpans?: readonly TextQuadRunSpan[] | undefined
+}
+
 const TEXT_INSTANCE_FLOAT_COUNT = 16
 
 export function buildTextQuads(runs: readonly TextQuadRun[], atlas: GlyphAtlasLike): TextQuad[] {
@@ -193,29 +207,144 @@ export function buildTextQuadsFromRunsWithSpans(
   runs: readonly TextQuadRun[],
   atlas: GlyphAtlasLike,
   targetBuffer?: Float32Array,
+  options: BuildTextQuadsFromRunsWithSpansOptionsV3 = {},
 ): {
   floats: Float32Array
   glyphIds: readonly number[]
   pageIds: readonly number[]
   quadCount: number
   runGlyphIds: readonly (readonly number[])[]
+  runPayloads: readonly TextQuadRunPayloadV3[]
   runSpans: readonly TextQuadRunSpan[]
 } {
-  const quads: TextQuad[] = []
+  return buildTextQuadsFromRunsWithSpansInternal(runs, atlas, targetBuffer, options, true)
+}
+
+function buildTextQuadsFromRunsWithSpansInternal(
+  runs: readonly TextQuadRun[],
+  atlas: GlyphAtlasLike,
+  targetBuffer: Float32Array | undefined,
+  options: BuildTextQuadsFromRunsWithSpansOptionsV3,
+  retryOnAtlasVersionChange: boolean,
+): {
+  floats: Float32Array
+  glyphIds: readonly number[]
+  pageIds: readonly number[]
+  quadCount: number
+  runGlyphIds: readonly (readonly number[])[]
+  runPayloads: readonly TextQuadRunPayloadV3[]
+  runSpans: readonly TextQuadRunSpan[]
+} {
+  const previousRunPayloads = options.previousRunPayloads ?? []
+  const runPayloads: TextQuadRunPayloadV3[] = []
+  const initialAtlasVersion = resolveAtlasVersion(atlas)
+  let reusedPreviousPayload = false
+  let quadCount = 0
+  for (let index = 0; index < runs.length; index += 1) {
+    const run = runs[index]!
+    const signature = resolveTextQuadRunSignatureV3(run)
+    const previousPayload = previousRunPayloads[index]
+    if (
+      previousPayload &&
+      previousPayload.signature === signature &&
+      previousPayload.atlasVersion === initialAtlasVersion &&
+      !isTextRunDirty(index, options.dirtyRunSpans)
+    ) {
+      runPayloads.push(previousPayload)
+      reusedPreviousPayload = true
+      quadCount += previousPayload.quadCount
+      continue
+    }
+    const runQuads = buildTextQuads([run], atlas)
+    const packed = packTextQuads(runQuads)
+    const payload: TextQuadRunPayloadV3 = {
+      atlasVersion: resolveAtlasVersion(atlas),
+      floats: packed.floats,
+      glyphIds: packed.glyphIds,
+      pageIds: packed.pageIds,
+      quadCount: packed.quadCount,
+      signature,
+    }
+    runPayloads.push(payload)
+    quadCount += payload.quadCount
+  }
+
+  const finalAtlasVersion = resolveAtlasVersion(atlas)
+  if (retryOnAtlasVersionChange && finalAtlasVersion !== initialAtlasVersion) {
+    return buildTextQuadsFromRunsWithSpansInternal(
+      runs,
+      atlas,
+      targetBuffer,
+      {
+        dirtyRunSpans: options.dirtyRunSpans,
+        previousRunPayloads: reusedPreviousPayload ? [] : runPayloads,
+      },
+      false,
+    )
+  }
+
+  const floats =
+    targetBuffer && targetBuffer.length >= quadCount * TEXT_INSTANCE_FLOAT_COUNT
+      ? targetBuffer
+      : new Float32Array(Math.max(1, quadCount) * TEXT_INSTANCE_FLOAT_COUNT)
+  const glyphIds: number[] = []
+  const pageIds: number[] = []
   const runGlyphIds: number[][] = []
   const runSpans: TextQuadRunSpan[] = []
-  for (const run of runs) {
-    const offset = quads.length
-    const runQuads = buildTextQuads([run], atlas)
-    quads.push(...runQuads)
-    runGlyphIds.push(runQuads.map((quad) => quad.glyphId))
-    runSpans.push({ offset, length: quads.length - offset })
+
+  let offset = 0
+  for (const payload of runPayloads) {
+    const floatCount = payload.quadCount * TEXT_INSTANCE_FLOAT_COUNT
+    floats.set(payload.floats.subarray(0, floatCount), offset * TEXT_INSTANCE_FLOAT_COUNT)
+    glyphIds.push(...payload.glyphIds)
+    pageIds.push(...payload.pageIds)
+    runGlyphIds.push([...payload.glyphIds])
+    runSpans.push({ offset, length: payload.quadCount })
+    offset += payload.quadCount
   }
+
   return {
-    ...packTextQuads(quads, targetBuffer),
+    floats,
+    glyphIds,
+    pageIds,
+    quadCount,
     runGlyphIds,
+    runPayloads,
     runSpans,
   }
+}
+
+export function resolveTextQuadRunSignatureV3(run: TextQuadRun): string {
+  return [
+    'text-run-v3',
+    run.text,
+    run.x,
+    run.y,
+    run.width ?? '',
+    run.height ?? '',
+    run.clipX ?? '',
+    run.clipY ?? '',
+    run.clipWidth ?? '',
+    run.clipHeight ?? '',
+    run.align ?? '',
+    run.wrap === true ? 1 : 0,
+    run.font ?? '',
+    run.fontSize ?? '',
+    run.color ?? '',
+    run.underline === true ? 1 : 0,
+    run.strike === true ? 1 : 0,
+  ].join('\u0001')
+}
+
+function isTextRunDirty(index: number, dirtyRunSpans: readonly TextQuadRunSpan[] | undefined): boolean {
+  if (!dirtyRunSpans || dirtyRunSpans.length === 0) {
+    return false
+  }
+  return dirtyRunSpans.some((span) => index >= span.offset && index < span.offset + span.length)
+}
+
+function resolveAtlasVersion(atlas: GlyphAtlasLike): number {
+  return atlas.getVersion?.() ?? 0
 }
 
 export function buildTextDecorationRects(runs: readonly TextQuadRun[], atlas: GlyphAtlasLike): TextDecorationRect[] {

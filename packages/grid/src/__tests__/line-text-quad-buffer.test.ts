@@ -150,6 +150,73 @@ describe('text-quad-buffer', () => {
     expect(payload.runGlyphIds).toEqual([['A', 'B'].map((glyph) => glyph.codePointAt(0)), ['C'].map((glyph) => glyph.codePointAt(0))])
   })
 
+  it('reuses clean text-run payloads while rebuilding dirty runs', () => {
+    const internedGlyphs: string[] = []
+    const recordingAtlas = {
+      getVersion: () => 0,
+      intern(font: string, glyph: string) {
+        internedGlyphs.push(glyph)
+        return atlas.intern(font, glyph)
+      },
+    }
+    const first = buildTextQuadsFromRunsWithSpans(
+      [
+        { text: 'AB', x: 0, y: 0, font: '400 10px Geist', fontSize: 10 },
+        { text: 'C', x: 40, y: 0, font: '400 10px Geist', fontSize: 10 },
+      ],
+      recordingAtlas,
+    )
+
+    internedGlyphs.length = 0
+    const second = buildTextQuadsFromRunsWithSpans(
+      [
+        { text: 'AB', x: 0, y: 0, font: '400 10px Geist', fontSize: 10 },
+        { text: 'D', x: 40, y: 0, font: '400 10px Geist', fontSize: 10 },
+      ],
+      recordingAtlas,
+      undefined,
+      {
+        dirtyRunSpans: [{ offset: 1, length: 1 }],
+        previousRunPayloads: first.runPayloads,
+      },
+    )
+
+    expect(second.quadCount).toBe(3)
+    expect(second.runSpans).toEqual([
+      { offset: 0, length: 2 },
+      { offset: 2, length: 1 },
+    ])
+    expect(internedGlyphs).not.toContain('A')
+    expect(internedGlyphs).not.toContain('B')
+    expect(internedGlyphs).toContain('D')
+  })
+
+  it('does not reuse text-run payloads across atlas version changes', () => {
+    let atlasVersion = 1
+    const internedGlyphs: string[] = []
+    const recordingAtlas = {
+      getVersion: () => atlasVersion,
+      intern(font: string, glyph: string) {
+        internedGlyphs.push(glyph)
+        return atlas.intern(font, glyph)
+      },
+    }
+    const first = buildTextQuadsFromRunsWithSpans([{ text: 'AB', x: 0, y: 0, font: '400 10px Geist', fontSize: 10 }], recordingAtlas)
+
+    atlasVersion = 2
+    internedGlyphs.length = 0
+    const second = buildTextQuadsFromRunsWithSpans(
+      [{ text: 'AB', x: 0, y: 0, font: '400 10px Geist', fontSize: 10 }],
+      recordingAtlas,
+      undefined,
+      { previousRunPayloads: first.runPayloads },
+    )
+
+    expect(second.runPayloads[0]?.atlasVersion).toBe(2)
+    expect(internedGlyphs).toContain('A')
+    expect(internedGlyphs).toContain('B')
+  })
+
   it('builds underline and strike rects from clipped scene items', () => {
     const rects = buildTextDecorationRectsFromScene(
       [
