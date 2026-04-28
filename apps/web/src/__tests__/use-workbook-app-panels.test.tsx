@@ -218,6 +218,34 @@ describe('useWorkbookAppPanels', () => {
     await harness.unmount()
   })
 
+  it('lets users close and reopen the side panel without losing the active tab', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    mockAgentPane(0)
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const harness = renderHarness(host)
+
+    await harness.render()
+
+    expect(host.querySelector("[data-testid='workbook-side-panel-panel-assistant']")).not.toBeNull()
+
+    await act(async () => {
+      host.querySelector("[data-testid='workbook-side-panel-close']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(host.querySelector("[data-testid='workbook-side-panel-panel-assistant']")).toBeNull()
+    expect(host.querySelector("[data-testid='workbook-side-panel-open']")).not.toBeNull()
+
+    await act(async () => {
+      host.querySelector("[data-testid='workbook-side-panel-open']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(host.querySelector("[data-testid='workbook-side-panel-panel-assistant']")).not.toBeNull()
+
+    await harness.unmount()
+  })
+
   it('renders a previous conversations menu in the assistant rail header', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

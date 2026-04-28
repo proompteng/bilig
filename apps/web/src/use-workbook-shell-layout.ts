@@ -6,6 +6,7 @@ export const DEFAULT_WORKBOOK_SIDE_PANEL_WIDTH = 320
 const MIN_WORKBOOK_SIDE_PANEL_WIDTH = 280
 const MAX_WORKBOOK_SIDE_PANEL_WIDTH = 420
 const WORKBOOK_SIDE_PANEL_VIEWPORT_FRACTION = 0.42
+const WORKBOOK_SIDE_PANEL_DOCKED_MIN_VIEWPORT_WIDTH = 900
 
 interface StoredWorkbookShellLayout {
   sidePanelOpen?: boolean
@@ -39,6 +40,10 @@ function clampWorkbookSidePanelWidth(width: number): number {
   return Math.min(viewportAwareMax, Math.max(MIN_WORKBOOK_SIDE_PANEL_WIDTH, Math.round(width)))
 }
 
+function shouldStartWithDockedSidePanel(): boolean {
+  return typeof window === 'undefined' || window.innerWidth >= WORKBOOK_SIDE_PANEL_DOCKED_MIN_VIEWPORT_WIDTH
+}
+
 function normalizeStoredWorkbookShellLayout(
   value: unknown,
   availableTabs: readonly string[],
@@ -52,10 +57,11 @@ function normalizeStoredWorkbookShellLayout(
       : DEFAULT_WORKBOOK_SIDE_PANEL_WIDTH
   const resolvedActiveTab = activeSidePanelTab && availableTabs.includes(activeSidePanelTab) ? activeSidePanelTab : defaultTab
   const hasStoredOpenPreference = isRecord(value) && 'sidePanelOpen' in value
+  const canStartOpen = shouldStartWithDockedSidePanel()
   const isSidePanelOpen =
     hasStoredOpenPreference && isRecord(value)
-      ? value['sidePanelOpen'] === true && activeSidePanelTab !== null
-      : defaultOpen && resolvedActiveTab !== null
+      ? canStartOpen && value['sidePanelOpen'] === true && activeSidePanelTab !== null
+      : canStartOpen && defaultOpen && resolvedActiveTab !== null
   return {
     isSidePanelOpen: isSidePanelOpen && resolvedActiveTab !== null,
     activeSidePanelTab: resolvedActiveTab,

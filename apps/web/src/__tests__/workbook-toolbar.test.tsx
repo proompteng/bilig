@@ -106,6 +106,38 @@ describe('WorkbookToolbar', () => {
 
     expect(
       deriveWorkbookStatusPresentation({
+        connectionStateName: 'connecting',
+        runtimeReady: true,
+        localPersistenceMode: 'persistent',
+        pendingMutationSummary: { activeCount: 2, failedCount: 0 },
+        remoteSyncAvailable: false,
+        zeroConfigured: true,
+        zeroHealthReady: false,
+        writesAllowed: true,
+      }),
+    ).toMatchObject({
+      syncLabel: 'Sync pending',
+      tone: 'warning',
+    })
+
+    expect(
+      deriveWorkbookStatusPresentation({
+        connectionStateName: 'connecting',
+        runtimeReady: true,
+        localPersistenceMode: 'persistent',
+        pendingMutationSummary: { activeCount: 0, failedCount: 0 },
+        remoteSyncAvailable: false,
+        zeroConfigured: true,
+        zeroHealthReady: false,
+        writesAllowed: true,
+      }),
+    ).toMatchObject({
+      syncLabel: 'Local saved',
+      tone: 'warning',
+    })
+
+    expect(
+      deriveWorkbookStatusPresentation({
         connectionStateName: 'connected',
         runtimeReady: true,
         localPersistenceMode: 'persistent',
@@ -216,6 +248,12 @@ describe('WorkbookToolbar', () => {
     const hideRowButton = document.querySelector("[aria-label='Hide row']")
     expect(hideRowButton).not.toBeNull()
     expect(hideRowButton?.getAttribute('disabled')).toBeNull()
+    expect(hideRowButton?.getAttribute('class')).toContain('text-[var(--color-mauve-900)]')
+
+    const unhideRowButton = document.querySelector("[aria-label='Unhide row']")
+    expect(unhideRowButton).not.toBeNull()
+    expect(unhideRowButton?.getAttribute('class')).toContain('text-[var(--wb-text-muted)]')
+    expect(unhideRowButton?.getAttribute('class')).toContain('opacity-45')
 
     await act(async () => {
       hideRowButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -413,8 +451,12 @@ describe('WorkbookToolbar', () => {
     })
 
     const trailingSlot = host.querySelector("[data-testid='toolbar-trailing-content']")
+    const formattingScroll = host.querySelector("[data-testid='toolbar-formatting-scroll']")
     expect(trailingSlot).not.toBeNull()
     expect(trailingSlot?.className).toContain('ml-auto')
+    expect(trailingSlot?.className).toContain('flex-none')
+    expect(formattingScroll?.className).toContain('flex-1')
+    expect(formattingScroll?.className).toContain('min-w-0')
     expect(trailingSlot?.textContent).toContain('Tail')
 
     await act(async () => {
@@ -588,9 +630,11 @@ describe('WorkbookToolbar', () => {
     })
 
     const toolbar = host.querySelector("[aria-label='Formatting toolbar']")
-    expect(toolbar?.className).toContain('overflow-x-auto')
-    expect(toolbar?.className).toContain('overflow-y-hidden')
-    expect(toolbar?.className).toContain('wb-scrollbar-none')
+    const formattingScroll = host.querySelector("[data-testid='toolbar-formatting-scroll']")
+    expect(toolbar?.className).toContain('overflow-hidden')
+    expect(formattingScroll?.className).toContain('overflow-x-auto')
+    expect(formattingScroll?.className).toContain('overflow-y-hidden')
+    expect(formattingScroll?.className).toContain('wb-scrollbar-none')
 
     await act(async () => {
       root.unmount()

@@ -158,6 +158,8 @@ describe('workbook layout', () => {
     expect(sidePanel instanceof HTMLElement ? sidePanel.style.width : null).toBe('384px')
     const resizeHandle = host.querySelector("[data-testid='workbook-side-panel-resize-handle']")
     expect(resizeHandle).not.toBeNull()
+    expect(sidePanel?.className).toContain('max-[900px]:absolute')
+    expect(sidePanel?.className).toContain('max-[900px]:right-0')
     expect(resizeHandle?.className).toContain('w-4')
     expect(resizeHandle?.className).toContain('cursor-ew-resize')
     expect(resizeHandle?.className).toContain('-translate-x-2')

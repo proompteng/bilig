@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createActor } from 'xstate'
-import { createWorkerRuntimeMachine } from '../runtime-machine.js'
+import { createWorkerRuntimeMachine, getWorkerRuntimeHandle } from '../runtime-machine.js'
 import { ProjectedViewportStore } from '../projected-viewport-store.js'
 import type {
   CreateWorkerRuntimeSessionInput,
@@ -13,6 +13,18 @@ function createWorkerHandle(): WorkerHandle {
   return {
     viewportStore: new ProjectedViewportStore(),
   }
+}
+
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function recordProperty(value: unknown, key: string): Record<string, unknown> | undefined {
+  if (!isUnknownRecord(value)) {
+    return undefined
+  }
+  const nestedValue = value[key]
+  return isUnknownRecord(nestedValue) ? nestedValue : undefined
 }
 
 function createController(selection = { sheetName: 'Sheet1', address: 'A1' }): WorkerRuntimeSessionController {
@@ -257,6 +269,53 @@ describe('worker runtime machine', () => {
     expect(initialController.dispose).toHaveBeenCalledTimes(1)
     expect(createSession.mock.calls[1]?.[0].persistState).toBe(false)
     expect(actor.getSnapshot().context.persistState).toBe(false)
+
+    actor.stop()
+  })
+
+  it('keeps cyclic runtime resources out of persisted xstate snapshots', async () => {
+    const controller = createController()
+    const cyclicHandle = createWorkerHandle() as WorkerHandle & { self?: unknown }
+    cyclicHandle.self = cyclicHandle
+    const cyclicZero = {
+      materialize: () => ({ data: null, addListener: () => () => {}, destroy() {} }),
+    } as NonNullable<CreateWorkerRuntimeSessionInput['zero']> & { self?: unknown }
+    cyclicZero.self = cyclicZero
+    const cyclicController: WorkerRuntimeSessionController = {
+      ...controller,
+      handle: cyclicHandle,
+    }
+    const createSession = vi.fn(async (): Promise<WorkerRuntimeSessionController> => {
+      return cyclicController
+    })
+
+    const actor = createActor(createWorkerRuntimeMachine(), {
+      input: {
+        documentId: 'book-1',
+        replicaId: 'browser:test',
+        persistState: true,
+        connectionStateName: 'connected',
+        initialSelection: { sheetName: 'Sheet1', address: 'A1' },
+        zero: cyclicZero,
+        createSession,
+      },
+    })
+
+    actor.start()
+
+    await vi.waitFor(() => {
+      expect(actor.getSnapshot().matches({ active: 'live' })).toBe(true)
+    })
+
+    expect(getWorkerRuntimeHandle(actor.getSnapshot().context)).toBe(cyclicHandle)
+    expect(() => JSON.stringify(actor.getPersistedSnapshot())).not.toThrow()
+    const persistedSnapshot: unknown = actor.getPersistedSnapshot()
+    const persistedContext = recordProperty(persistedSnapshot, 'context')
+    const persistedSessionInput = recordProperty(persistedContext, 'sessionInput')
+    expect(Object.keys(persistedContext ?? {})).not.toContain('controller')
+    expect(Object.keys(persistedContext ?? {})).not.toContain('handle')
+    expect(Object.keys(persistedSessionInput ?? {})).not.toContain('zero')
+    expect(Object.keys(persistedSessionInput ?? {})).not.toContain('createSession')
 
     actor.stop()
   })

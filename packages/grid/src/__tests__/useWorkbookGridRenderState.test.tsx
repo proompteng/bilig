@@ -225,6 +225,7 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     const subscribeRenderTileDeltas = vi.fn(() => () => undefined)
     const peekRenderTile = vi.fn(() => null)
     let hostElement: HTMLDivElement | null = null
+    let latestRenderState: ReturnType<typeof useWorkbookGridRenderState> | null = null
 
     function Harness() {
       const renderState = useWorkbookGridRenderState({
@@ -241,10 +242,15 @@ describe('useWorkbookGridRenderState viewport residency', () => {
         isEditingCell: false,
         subscribeViewport,
       })
+      latestRenderState = renderState
 
       return (
         <div
           ref={(node) => {
+            if (node) {
+              Object.defineProperty(node, 'clientWidth', { configurable: true, value: 480 })
+              Object.defineProperty(node, 'clientHeight', { configurable: true, value: 180 })
+            }
             renderState.handleHostRef(node)
             hostElement = node
           }}
@@ -281,6 +287,8 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       expect.any(Function),
     )
     expect(subscribeViewport).not.toHaveBeenCalled()
+    expect(latestRenderState?.renderTilePanes.some((pane) => pane.paneId === 'body')).toBe(true)
+    expect(latestRenderState?.renderTilePanes.find((pane) => pane.paneId === 'body')?.tile.coord.sheetId).toBe(7)
 
     await act(async () => {
       root.unmount()

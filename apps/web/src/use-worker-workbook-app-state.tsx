@@ -5,7 +5,7 @@ import type { EditMovement, EditSelectionBehavior, GridSelectionSnapshot } from 
 import { formatAddress, parseCellAddress } from '@bilig/formula'
 import type { WorkbookAgentRenderedRange, WorkbookAgentUiContext } from '@bilig/contracts'
 import type { CellRangeRef, CellSnapshot, Viewport } from '@bilig/protocol'
-import { createWorkerRuntimeMachine } from './runtime-machine.js'
+import { createWorkerRuntimeMachine, getWorkerRuntimeController, getWorkerRuntimeHandle } from './runtime-machine.js'
 import type { resolveRuntimeConfig } from './runtime-config.js'
 import type { WorkerRuntimeSelection, ZeroClient } from './runtime-session.js'
 import { loadPersistedSelection, persistSelection } from './selection-persistence.js'
@@ -224,8 +224,8 @@ export function useWorkerWorkbookAppState(input: {
       initialSelection,
     },
   })
-  const runtimeController = useSelector(runtimeActorRef, (snapshot) => snapshot.context.controller)
-  const workerHandle = useSelector(runtimeActorRef, (snapshot) => snapshot.context.handle)
+  const runtimeController = useSelector(runtimeActorRef, (snapshot) => getWorkerRuntimeController(snapshot.context))
+  const workerHandle = useSelector(runtimeActorRef, (snapshot) => getWorkerRuntimeHandle(snapshot.context))
   const runtimeState = useSelector(runtimeActorRef, (snapshot) => snapshot.context.runtimeState)
   const selection = useSelector(runtimeActorRef, (snapshot) => snapshot.context.selection)
   const runtimeError = useSelector(runtimeActorRef, (snapshot) => snapshot.context.error)

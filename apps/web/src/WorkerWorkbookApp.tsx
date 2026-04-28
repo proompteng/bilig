@@ -164,11 +164,6 @@ function WorkerWorkbookAppInner({
 
   return (
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-[var(--wb-app-bg)] text-[var(--wb-text)]">
-      {app.runtimeReady && app.zeroConfigured && !app.remoteSyncAvailable ? (
-        <div className="border-b border-[var(--wb-accent-ring)] bg-[var(--wb-accent-soft)] px-3 py-2 text-sm text-[var(--wb-accent)]">
-          Zero is {app.statusModeLabel.toLowerCase()}. Local edits remain available while sync is degraded.
-        </div>
-      ) : null}
       {showFollowerPersistenceBanner ? (
         <div className="border-b border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 text-sm text-[var(--wb-text-subtle)]">
           <div className="flex flex-wrap items-center justify-between gap-3">

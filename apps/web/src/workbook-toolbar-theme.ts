@@ -22,9 +22,13 @@ export const FONT_SIZE_OPTIONS: readonly ToolbarSelectOption[] = [10, 11, 12, 13
 
 export const toolbarRootClass = cva('border-b border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] font-sans')
 
-export const toolbarRowClass = cva(
-  'wb-scrollbar-none mx-0 flex h-10 items-center gap-1 overflow-x-auto overflow-y-hidden px-2.5 py-0 text-[12px] text-[var(--wb-text)]',
+export const toolbarRowClass = cva('mx-0 flex h-10 items-center gap-1 overflow-hidden px-2.5 py-0 text-[12px] text-[var(--wb-text)]')
+
+export const toolbarFormattingScrollClass = cva(
+  'wb-scrollbar-none flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden',
 )
+
+export const toolbarTrailingRegionClass = cva('ml-auto flex flex-none items-center gap-1.5 pl-2')
 
 export const toolbarGroupClass = cva('flex flex-none items-center gap-1')
 

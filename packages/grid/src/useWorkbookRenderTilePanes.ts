@@ -17,6 +17,59 @@ export interface WorkbookRenderTilePanesState {
   readonly residentDataPanes: readonly WorkbookRenderTilePaneState[]
 }
 
+function buildLocalFixedRenderTilePaneStates(input: {
+  readonly columnWidths: Readonly<Record<number, number>>
+  readonly dprBucket: number
+  readonly engine: GridEngineLike
+  readonly freezeCols: number
+  readonly freezeRows: number
+  readonly frozenColumnWidth: number
+  readonly frozenRowHeight: number
+  readonly gridMetrics: GridMetrics
+  readonly gridRuntimeHost: GridRuntimeHost
+  readonly hostClientHeight: number
+  readonly hostClientWidth: number
+  readonly renderTileViewport: Viewport
+  readonly residentViewport: Viewport
+  readonly rowHeights: Readonly<Record<number, number>>
+  readonly sceneRevision: number
+  readonly sheetId: number
+  readonly sheetName: string
+  readonly sortedColumnWidthOverrides: SortedAxisOverrides
+  readonly sortedRowHeightOverrides: SortedAxisOverrides
+  readonly visibleViewport: Viewport
+}): readonly WorkbookRenderTilePaneState[] | null {
+  const tiles = buildLocalFixedRenderTiles({
+    cameraSeq: input.gridRuntimeHost.snapshot().camera.seq,
+    columnWidths: input.columnWidths,
+    dprBucket: input.dprBucket,
+    engine: input.engine,
+    generation: input.sceneRevision,
+    gridMetrics: input.gridMetrics,
+    rowHeights: input.rowHeights,
+    sheetId: input.sheetId,
+    sheetName: input.sheetName,
+    sortedColumnWidthOverrides: input.sortedColumnWidthOverrides,
+    sortedRowHeightOverrides: input.sortedRowHeightOverrides,
+    viewport: input.renderTileViewport,
+  })
+  const panes = buildFixedRenderTilePaneStates({
+    freezeCols: input.freezeCols,
+    freezeRows: input.freezeRows,
+    frozenColumnWidth: input.frozenColumnWidth,
+    frozenRowHeight: input.frozenRowHeight,
+    gridMetrics: input.gridMetrics,
+    hostHeight: input.hostClientHeight,
+    hostWidth: input.hostClientWidth,
+    residentViewport: input.residentViewport,
+    sortedColumnWidthOverrides: input.sortedColumnWidthOverrides,
+    sortedRowHeightOverrides: input.sortedRowHeightOverrides,
+    tiles,
+    visibleViewport: input.visibleViewport,
+  })
+  return panes.length > 0 ? panes : null
+}
+
 export function useWorkbookRenderTilePanes(input: {
   readonly columnWidths: Readonly<Record<number, number>>
   readonly dprBucket: number
@@ -104,6 +157,29 @@ export function useWorkbookRenderTilePanes(input: {
     }
     const tiles: GridRenderTile[] = []
     const tileSheetId = sheetId ?? 0
+    const buildLocalPanes = () =>
+      buildLocalFixedRenderTilePaneStates({
+        columnWidths,
+        dprBucket,
+        engine,
+        freezeCols,
+        freezeRows,
+        frozenColumnWidth,
+        frozenRowHeight,
+        gridMetrics,
+        gridRuntimeHost,
+        hostClientHeight,
+        hostClientWidth,
+        renderTileViewport,
+        residentViewport,
+        rowHeights,
+        sceneRevision,
+        sheetId: tileSheetId,
+        sheetName,
+        sortedColumnWidthOverrides,
+        sortedRowHeightOverrides,
+        visibleViewport,
+      })
     if (renderTileSource && sheetId !== undefined) {
       void renderTileRevision
       const tileKeys = gridRuntimeHost.viewportTileKeys({
@@ -114,27 +190,12 @@ export function useWorkbookRenderTilePanes(input: {
       for (const tileKey of tileKeys) {
         const tile = renderTileSource.peekRenderTile(tileKey)
         if (!tile || tile.coord.sheetId !== sheetId) {
-          return null
+          return retainedFixedRenderTileDataPanesRef.current?.sheetId === sheetId ? null : buildLocalPanes()
         }
         tiles.push(tile)
       }
     } else {
-      tiles.push(
-        ...buildLocalFixedRenderTiles({
-          cameraSeq: gridRuntimeHost.snapshot().camera.seq,
-          columnWidths,
-          dprBucket,
-          engine,
-          generation: sceneRevision,
-          gridMetrics,
-          rowHeights,
-          sheetId: tileSheetId,
-          sheetName,
-          sortedColumnWidthOverrides,
-          sortedRowHeightOverrides,
-          viewport: renderTileViewport,
-        }),
-      )
+      return buildLocalPanes()
     }
     const panes = buildFixedRenderTilePaneStates({
       freezeCols,

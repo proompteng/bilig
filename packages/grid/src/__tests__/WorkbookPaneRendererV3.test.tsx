@@ -109,6 +109,8 @@ describe('WorkbookPaneRendererV3', () => {
     expect(canvas).toBeInstanceOf(HTMLCanvasElement)
     expect(canvas?.getAttribute('data-pane-renderer')).toBe('workbook-pane-renderer-v3')
     expect(canvas?.getAttribute('data-renderer-mode')).toBe('typegpu-v3')
+    expect(canvas?.getAttribute('data-v3-tile-pane-count')).toBe('1')
+    expect(canvas?.getAttribute('data-v3-header-pane-count')).toBe('0')
 
     await act(async () => {
       root.unmount()

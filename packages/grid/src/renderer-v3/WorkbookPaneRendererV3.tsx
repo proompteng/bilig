@@ -93,6 +93,9 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
       data-testid="grid-pane-renderer"
       data-v3-body-world-x={geometry?.camera.bodyWorldX ?? 0}
       data-v3-body-world-y={geometry?.camera.bodyWorldY ?? 0}
+      data-v3-header-pane-count={headerPanes.length}
+      data-v3-preload-pane-count={preloadTilePanes.length}
+      data-v3-tile-pane-count={tilePanes.length}
       ref={setCanvasRef}
       style={{ contain: 'strict' }}
     />

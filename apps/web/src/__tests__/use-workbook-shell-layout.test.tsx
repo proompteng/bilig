@@ -165,7 +165,7 @@ describe('workbook shell layout', () => {
     })
   })
 
-  it('uses a viewport-aware width clamp on narrow windows', async () => {
+  it('uses a viewport-aware width clamp and starts closed on narrow windows', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     const previousInnerWidth = window.innerWidth
@@ -192,9 +192,15 @@ describe('workbook shell layout', () => {
     })
 
     const state = host.querySelector("[data-testid='shell-layout-state']")
-    expect(state?.getAttribute('data-open')).toBe('true')
+    expect(state?.getAttribute('data-open')).toBe('false')
     expect(state?.getAttribute('data-tab')).toBe('assistant')
     expect(state?.getAttribute('data-width')).toBe('302')
+
+    await act(async () => {
+      host.querySelector("[data-testid='toggle-assistant']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(state?.getAttribute('data-open')).toBe('true')
 
     await act(async () => {
       root.unmount()

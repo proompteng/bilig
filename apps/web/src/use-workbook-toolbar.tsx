@@ -62,7 +62,10 @@ export function deriveWorkbookStatusPresentation(input: {
     return { modeLabel, syncLabel: 'Sync issue', tone: 'danger' }
   }
   if ((input.pendingMutationSummary?.activeCount ?? 0) > 0) {
-    return { modeLabel, syncLabel: 'Saving…', tone: 'progress' }
+    if (input.connectionStateName === 'connected' && input.remoteSyncAvailable && input.zeroHealthReady) {
+      return { modeLabel, syncLabel: 'Saving…', tone: 'progress' }
+    }
+    return { modeLabel, syncLabel: 'Sync pending', tone: 'warning' }
   }
   if (input.localPersistenceMode === 'follower' && !input.remoteSyncAvailable) {
     return { modeLabel, syncLabel: 'Read only', tone: 'warning' }
@@ -77,7 +80,7 @@ export function deriveWorkbookStatusPresentation(input: {
     return { modeLabel, syncLabel: 'Offline', tone: 'warning' }
   }
   if (input.connectionStateName === 'connecting' || !input.remoteSyncAvailable || !input.zeroHealthReady) {
-    return { modeLabel, syncLabel: 'Saving…', tone: 'progress' }
+    return { modeLabel, syncLabel: 'Local saved', tone: 'warning' }
   }
   return { modeLabel, syncLabel: 'Saved', tone: 'positive' }
 }

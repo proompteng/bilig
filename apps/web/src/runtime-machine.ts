@@ -13,16 +13,25 @@ import {
 
 type ConnectionStateName = ZeroConnectionState['name']
 
-interface WorkerRuntimeMachineContext {
+export interface WorkerRuntimeMachineContext {
   readonly sessionInput: WorkerRuntimeMachineInput
   readonly persistState: boolean
-  readonly controller: WorkerRuntimeSessionController | null
-  readonly handle: WorkerHandle | null
+  readonly runtimeResourceId: string
+  readonly runtimeResourceVersion: number
   readonly runtimeState: WorkbookWorkerStateSnapshot | null
   readonly selection: WorkerRuntimeSelection
   readonly connectionStateName: ConnectionStateName
   readonly error: string | null
 }
+
+const NON_PERSISTED_SESSION_INPUT_KEYS = ['createSession', 'createWorker', 'fetchImpl', 'perfSession', 'zero'] as const
+
+interface WorkerRuntimeMachineResources {
+  readonly controller: WorkerRuntimeSessionController
+  readonly handle: WorkerHandle
+}
+
+const workerRuntimeResourcesById = new Map<string, WorkerRuntimeMachineResources>()
 
 type WorkerRuntimeMachineEvent =
   | { type: 'retry'; persistState?: boolean }
@@ -115,6 +124,86 @@ function buildSessionCreateInput(input: WorkerRuntimeMachineInput): CreateWorker
     ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {}),
     ...(input.createWorker ? { createWorker: input.createWorker } : {}),
   }
+}
+
+function createPersistableSessionInput(input: WorkerRuntimeMachineInput): WorkerRuntimeMachineInput {
+  const sessionInput = { ...input }
+  NON_PERSISTED_SESSION_INPUT_KEYS.forEach((key) => {
+    if (key in input) {
+      Object.defineProperty(sessionInput, key, {
+        configurable: true,
+        enumerable: false,
+        value: input[key],
+        writable: false,
+      })
+    }
+  })
+  return sessionInput
+}
+
+function runtimeResourceIdForInput(input: WorkerRuntimeMachineInput): string {
+  return `${input.documentId}:${input.replicaId}`
+}
+
+export function getWorkerRuntimeController(context: WorkerRuntimeMachineContext): WorkerRuntimeSessionController | null {
+  return workerRuntimeResourcesById.get(context.runtimeResourceId)?.controller ?? null
+}
+
+export function getWorkerRuntimeHandle(context: WorkerRuntimeMachineContext): WorkerHandle | null {
+  return workerRuntimeResourcesById.get(context.runtimeResourceId)?.handle ?? null
+}
+
+function hasWorkerRuntimeController(context: WorkerRuntimeMachineContext): boolean {
+  return getWorkerRuntimeController(context) !== null
+}
+
+function buildRuntimeSessionActorInput(context: WorkerRuntimeMachineContext): WorkerRuntimeMachineInput {
+  const sessionInput = context.sessionInput
+  return createPersistableSessionInput({
+    documentId: sessionInput.documentId,
+    replicaId: sessionInput.replicaId,
+    persistState: context.persistState,
+    initialSelection: context.selection,
+    connectionStateName: context.connectionStateName,
+    ...(sessionInput.createSession ? { createSession: sessionInput.createSession } : {}),
+    ...(sessionInput.createWorker ? { createWorker: sessionInput.createWorker } : {}),
+    ...(sessionInput.fetchImpl ? { fetchImpl: sessionInput.fetchImpl } : {}),
+    ...(sessionInput.perfSession ? { perfSession: sessionInput.perfSession } : {}),
+    ...(sessionInput.zero ? { zero: sessionInput.zero } : {}),
+  })
+}
+
+function createInitialContext(input: WorkerRuntimeMachineInput): WorkerRuntimeMachineContext {
+  return {
+    sessionInput: createPersistableSessionInput(input),
+    persistState: input.persistState,
+    runtimeResourceId: runtimeResourceIdForInput(input),
+    runtimeResourceVersion: 0,
+    runtimeState: null,
+    selection: input.initialSelection,
+    connectionStateName: initialConnectionStateName(input),
+    error: null,
+  }
+}
+
+const storeRuntimeResourcesAction = ({
+  context,
+  event,
+}: {
+  context: WorkerRuntimeMachineContext
+  event: WorkerRuntimeMachineEvent
+}): void => {
+  if (event.type !== 'session.ready') {
+    return
+  }
+  workerRuntimeResourcesById.set(context.runtimeResourceId, {
+    controller: event.controller,
+    handle: event.controller.handle,
+  })
+}
+
+const clearRuntimeResourcesAction = ({ context }: { context: WorkerRuntimeMachineContext }): void => {
+  workerRuntimeResourcesById.delete(context.runtimeResourceId)
 }
 
 export function createWorkerRuntimeMachine() {
@@ -280,39 +369,27 @@ export function createWorkerRuntimeMachine() {
   }).createMachine({
     id: 'workerRuntime',
     initial: 'active',
-    context: ({ input }) => ({
-      sessionInput: input,
-      persistState: input.persistState,
-      controller: null,
-      handle: null,
-      runtimeState: null,
-      selection: input.initialSelection,
-      connectionStateName: initialConnectionStateName(input),
-      error: null,
-    }),
+    context: ({ input }) => createInitialContext(input),
     states: {
       active: {
         invoke: {
           id: 'runtimeSession',
           src: 'runtimeSession',
-          input: ({ context }) => ({
-            ...context.sessionInput,
-            persistState: context.persistState,
-            initialSelection: context.selection,
-            connectionStateName: context.connectionStateName,
-          }),
+          input: ({ context }) => buildRuntimeSessionActorInput(context),
         },
         on: {
           retry: {
             target: '#workerRuntime.active',
             reenter: true,
-            actions: assign({
-              persistState: ({ context, event }) => event['persistState'] ?? context.persistState,
-              handle: () => null,
-              controller: () => null,
-              runtimeState: () => null,
-              error: () => null,
-            }),
+            actions: [
+              clearRuntimeResourcesAction,
+              assign({
+                persistState: ({ context, event }) => event['persistState'] ?? context.persistState,
+                runtimeResourceVersion: ({ context }) => context.runtimeResourceVersion + 1,
+                runtimeState: () => null,
+                error: () => null,
+              }),
+            ],
           },
           'error.clear': {
             actions: assign({
@@ -352,12 +429,14 @@ export function createWorkerRuntimeMachine() {
           },
           'session.failed': {
             target: 'failed',
-            actions: assign({
-              error: ({ event }) => event['message'],
-              controller: () => null,
-              handle: () => null,
-              runtimeState: () => null,
-            }),
+            actions: [
+              clearRuntimeResourcesAction,
+              assign({
+                error: ({ event }) => event['message'],
+                runtimeResourceVersion: ({ context }) => context.runtimeResourceVersion + 1,
+                runtimeState: () => null,
+              }),
+            ],
           },
           'session.ready': [
             {
@@ -367,13 +446,15 @@ export function createWorkerRuntimeMachine() {
                   connectionStateName: context.connectionStateName,
                 }) === 'live',
               target: '.live',
-              actions: assign({
-                handle: ({ event }) => event['controller'].handle,
-                controller: ({ event }) => event['controller'],
-                runtimeState: ({ event }) => event['controller'].runtimeState,
-                selection: ({ event }) => event['controller'].selection,
-                error: () => null,
-              }),
+              actions: [
+                storeRuntimeResourcesAction,
+                assign({
+                  runtimeResourceVersion: ({ context }) => context.runtimeResourceVersion + 1,
+                  runtimeState: ({ event }) => event['controller'].runtimeState,
+                  selection: ({ event }) => event['controller'].selection,
+                  error: () => null,
+                }),
+              ],
             },
             {
               guard: ({ context }) =>
@@ -382,13 +463,15 @@ export function createWorkerRuntimeMachine() {
                   connectionStateName: context.connectionStateName,
                 }) === 'syncing',
               target: '.syncing',
-              actions: assign({
-                handle: ({ event }) => event['controller'].handle,
-                controller: ({ event }) => event['controller'],
-                runtimeState: ({ event }) => event['controller'].runtimeState,
-                selection: ({ event }) => event['controller'].selection,
-                error: () => null,
-              }),
+              actions: [
+                storeRuntimeResourcesAction,
+                assign({
+                  runtimeResourceVersion: ({ context }) => context.runtimeResourceVersion + 1,
+                  runtimeState: ({ event }) => event['controller'].runtimeState,
+                  selection: ({ event }) => event['controller'].selection,
+                  error: () => null,
+                }),
+              ],
             },
             {
               guard: ({ context }) =>
@@ -397,23 +480,27 @@ export function createWorkerRuntimeMachine() {
                   connectionStateName: context.connectionStateName,
                 }) === 'offline',
               target: '.offline',
-              actions: assign({
-                handle: ({ event }) => event['controller'].handle,
-                controller: ({ event }) => event['controller'],
-                runtimeState: ({ event }) => event['controller'].runtimeState,
-                selection: ({ event }) => event['controller'].selection,
-                error: () => null,
-              }),
+              actions: [
+                storeRuntimeResourcesAction,
+                assign({
+                  runtimeResourceVersion: ({ context }) => context.runtimeResourceVersion + 1,
+                  runtimeState: ({ event }) => event['controller'].runtimeState,
+                  selection: ({ event }) => event['controller'].selection,
+                  error: () => null,
+                }),
+              ],
             },
             {
               target: '.localReady',
-              actions: assign({
-                handle: ({ event }) => event['controller'].handle,
-                controller: ({ event }) => event['controller'],
-                runtimeState: ({ event }) => event['controller'].runtimeState,
-                selection: ({ event }) => event['controller'].selection,
-                error: () => null,
-              }),
+              actions: [
+                storeRuntimeResourcesAction,
+                assign({
+                  runtimeResourceVersion: ({ context }) => context.runtimeResourceVersion + 1,
+                  runtimeState: ({ event }) => event['controller'].runtimeState,
+                  selection: ({ event }) => event['controller'].selection,
+                  error: () => null,
+                }),
+              ],
             },
           ],
           'session.phase': [
@@ -475,7 +562,7 @@ export function createWorkerRuntimeMachine() {
               'connection.changed': [
                 {
                   guard: ({ context, event }) =>
-                    context.controller !== null &&
+                    hasWorkerRuntimeController(context) &&
                     resolveSteadySubstate({
                       hasZero: Boolean(context.sessionInput.zero),
                       connectionStateName: event['connectionStateName'],
@@ -490,7 +577,7 @@ export function createWorkerRuntimeMachine() {
                 },
                 {
                   guard: ({ context, event }) =>
-                    context.controller !== null &&
+                    hasWorkerRuntimeController(context) &&
                     resolveSteadySubstate({
                       hasZero: Boolean(context.sessionInput.zero),
                       connectionStateName: event['connectionStateName'],
@@ -505,7 +592,7 @@ export function createWorkerRuntimeMachine() {
                 },
                 {
                   guard: ({ context, event }) =>
-                    context.controller !== null &&
+                    hasWorkerRuntimeController(context) &&
                     resolveSteadySubstate({
                       hasZero: Boolean(context.sessionInput.zero),
                       connectionStateName: event['connectionStateName'],
@@ -634,13 +721,15 @@ export function createWorkerRuntimeMachine() {
           },
           retry: {
             target: 'active',
-            actions: assign({
-              persistState: ({ context, event }) => event['persistState'] ?? context.persistState,
-              handle: () => null,
-              controller: () => null,
-              runtimeState: () => null,
-              error: () => null,
-            }),
+            actions: [
+              clearRuntimeResourcesAction,
+              assign({
+                persistState: ({ context, event }) => event['persistState'] ?? context.persistState,
+                runtimeResourceVersion: ({ context }) => context.runtimeResourceVersion + 1,
+                runtimeState: () => null,
+                error: () => null,
+              }),
+            ],
           },
         },
       },

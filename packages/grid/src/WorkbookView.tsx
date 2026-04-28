@@ -271,7 +271,7 @@ export function WorkbookView({
           <div className="shrink-0 bg-[var(--wb-surface)]">{ribbon}</div>
         </Profiler>
       ) : null}
-      <div className="flex min-h-0 flex-1 bg-[var(--wb-surface)]">
+      <div className="relative flex min-h-0 flex-1 bg-[var(--wb-surface)]">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <MemoFormulaBarSurface
             address={selectedAddr}
@@ -347,7 +347,7 @@ export function WorkbookView({
         </div>
         {sidePanel ? (
           <aside
-            className="relative flex h-full shrink-0 bg-[var(--wb-app-bg)]"
+            className="relative flex h-full shrink-0 bg-[var(--wb-app-bg)] max-[900px]:absolute max-[900px]:inset-y-0 max-[900px]:right-0 max-[900px]:z-30 max-[900px]:max-w-[calc(100vw-56px)] max-[900px]:shadow-[var(--wb-shadow-lg)]"
             data-testid="workbook-side-panel"
             id={sidePanelId}
             style={{

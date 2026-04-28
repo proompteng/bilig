@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { Button } from '@base-ui/react/button'
 import { Popover } from '@base-ui/react/popover'
 import { Tabs } from '@base-ui/react/tabs'
-import { History, Plus } from 'lucide-react'
+import { History, PanelRightClose, PanelRightOpen, Plus } from 'lucide-react'
 import type { WorkbookAgentCommandBundle } from '@bilig/agent-api'
 import type { WorkbookAgentThreadSummary } from '@bilig/contracts'
 import type { WorkerRuntimeSelection } from './runtime-session.js'
 import { workbookHeaderActionButtonClass } from './workbook-header-controls.js'
 import { WorkbookPresenceBar } from './WorkbookPresenceBar.js'
 import {
+  formatPanelCount,
   panelCountClass,
   panelIndicatorClass,
   panelListClass,
@@ -207,13 +208,14 @@ export function useWorkbookAppPanels(input: {
     [agentPanel, changeCount, changesPanel, pendingCommandCount],
   )
   const visibleSidePanelTabs = useMemo(() => sidePanelTabs.filter((tab) => tab.panel != null), [sidePanelTabs])
-  const { activeSidePanelTab, setActiveSidePanelTab, setSidePanelWidth, sidePanelWidth } = useWorkbookShellLayout({
-    documentId,
-    persistenceKey: `${documentId}:${currentUserId}`,
-    availableTabs: visibleSidePanelTabs.map((tab) => tab.value),
-    defaultOpen: true,
-    defaultTab: 'assistant',
-  })
+  const { activeSidePanelTab, closeSidePanel, isSidePanelOpen, openSidePanel, setActiveSidePanelTab, setSidePanelWidth, sidePanelWidth } =
+    useWorkbookShellLayout({
+      documentId,
+      persistenceKey: `${documentId}:${currentUserId}`,
+      availableTabs: visibleSidePanelTabs.map((tab) => tab.value),
+      defaultOpen: true,
+      defaultTab: 'assistant',
+    })
   const sidePanelId = `workbook-side-panel-${documentId}`
   const previousPendingCommandCountRef = useRef(pendingCommandCount)
 
@@ -231,7 +233,28 @@ export function useWorkbookAppPanels(input: {
   }, [pendingCommandCount, setActiveSidePanelTab, visibleSidePanelTabs])
 
   const toolbarTrailingContent = useMemo(() => {
-    if (collaborators.length === 0) {
+    const sidePanelTabToOpen =
+      activeSidePanelTab && visibleSidePanelTabs.some((tab) => tab.value === activeSidePanelTab)
+        ? activeSidePanelTab
+        : visibleSidePanelTabs[0]?.value
+    const sidePanelOpenButton =
+      !isSidePanelOpen && sidePanelTabToOpen ? (
+        <Button
+          aria-label="Open workbook side panel"
+          className={cn(
+            workbookHeaderActionButtonClass({ active: false, iconOnly: true }),
+            'shrink-0 border-transparent bg-transparent shadow-none hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)]',
+          )}
+          data-testid="workbook-side-panel-open"
+          title="Open side panel"
+          type="button"
+          onClick={() => openSidePanel(sidePanelTabToOpen)}
+        >
+          <PanelRightOpen aria-hidden="true" className="size-4" strokeWidth={1.9} />
+        </Button>
+      ) : null
+
+    if (collaborators.length === 0 && !sidePanelOpenButton) {
       return null
     }
     return (
@@ -244,13 +267,14 @@ export function useWorkbookAppPanels(input: {
             }}
           />
         ) : null}
+        {sidePanelOpenButton}
       </>
     )
-  }, [collaborators, selectAddress])
+  }, [activeSidePanelTab, collaborators, isSidePanelOpen, openSidePanel, selectAddress, visibleSidePanelTabs])
 
   const sidePanel = useMemo(
     () =>
-      activeSidePanelTab && visibleSidePanelTabs.some((tab) => tab.value === activeSidePanelTab) ? (
+      isSidePanelOpen && activeSidePanelTab && visibleSidePanelTabs.some((tab) => tab.value === activeSidePanelTab) ? (
         <Tabs.Root
           className={panelRootClass()}
           value={activeSidePanelTab}
@@ -276,7 +300,7 @@ export function useWorkbookAppPanels(input: {
                         }),
                       )}
                     >
-                      {String(Math.min(tab.count, 99))}
+                      {formatPanelCount(tab.count)}
                     </span>
                   ) : null}
                 </Tabs.Tab>
@@ -299,6 +323,19 @@ export function useWorkbookAppPanels(input: {
             >
               <Plus aria-hidden="true" className="size-4" strokeWidth={1.9} />
             </Button>
+            <Button
+              aria-label="Close workbook side panel"
+              className={cn(
+                workbookHeaderActionButtonClass({ active: false, iconOnly: true }),
+                'shrink-0 border-transparent bg-transparent shadow-none hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)]',
+              )}
+              data-testid="workbook-side-panel-close"
+              title="Close side panel"
+              type="button"
+              onClick={closeSidePanel}
+            >
+              <PanelRightClose aria-hidden="true" className="size-4" strokeWidth={1.9} />
+            </Button>
             <Tabs.Indicator className={panelIndicatorClass()} renderBeforeHydration />
           </Tabs.List>
           {visibleSidePanelTabs.map((tab) => (
@@ -314,7 +351,17 @@ export function useWorkbookAppPanels(input: {
           ))}
         </Tabs.Root>
       ) : null,
-    [activeSidePanelTab, activeThreadId, selectThread, setActiveSidePanelTab, startNewThread, threadSummaries, visibleSidePanelTabs],
+    [
+      activeSidePanelTab,
+      activeThreadId,
+      closeSidePanel,
+      isSidePanelOpen,
+      selectThread,
+      setActiveSidePanelTab,
+      startNewThread,
+      threadSummaries,
+      visibleSidePanelTabs,
+    ],
   )
 
   return {

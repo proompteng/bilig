@@ -5,6 +5,7 @@ import { Tabs } from '@base-ui/react/tabs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cn } from '../cn.js'
 import {
+  formatPanelCount,
   panelCountClass,
   panelIndicatorClass,
   panelListClass,
@@ -61,7 +62,7 @@ function SidePanelHarness(props: {
                   }),
                 )}
               >
-                {String(Math.min(tab.count, 99))}
+                {formatPanelCount(tab.count)}
               </span>
             ) : null}
           </Tabs.Tab>
@@ -132,6 +133,12 @@ describe('workbook side panel tabs', () => {
     await act(async () => {
       root.unmount()
     })
+  })
+
+  it('caps large tab counts with an overflow marker', () => {
+    expect(formatPanelCount(1)).toBe('1')
+    expect(formatPanelCount(99)).toBe('99')
+    expect(formatPanelCount(100)).toBe('99+')
   })
 
   it('supports a controlled active tab', async () => {

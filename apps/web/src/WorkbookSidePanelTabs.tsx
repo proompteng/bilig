@@ -8,6 +8,10 @@ export interface WorkbookSidePanelTabDefinition {
   readonly count?: number | undefined
 }
 
+export function formatPanelCount(count: number): string {
+  return count > 99 ? '99+' : String(count)
+}
+
 export const panelRootClass = cva('flex h-full min-h-0 w-full flex-col overflow-hidden bg-[var(--color-mauve-50)]')
 
 export const panelListClass = cva(
