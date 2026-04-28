@@ -85,6 +85,7 @@ const MAX_SIDE_PANEL_WIDTH = 420
 const SIDE_PANEL_VIEWPORT_FRACTION = 0.42
 const SIDE_PANEL_OVERLAY_TARGET_WIDTH = 400
 const SIDE_PANEL_OVERLAY_VIEWPORT_GUTTER = 56
+const SIDE_PANEL_OVERLAY_FULL_WIDTH_BREAKPOINT = 480
 const SIDE_PANEL_DOCKED_MIN_VIEWPORT_WIDTH = 900
 
 function noteSurfaceCommit(surface: string): void {
@@ -112,7 +113,8 @@ function clampOverlaySidePanelWidth(width: number, viewportWidth = getViewportWi
   if (!viewportWidth || !Number.isFinite(viewportWidth)) {
     return clampSidePanelWidth(width, viewportWidth)
   }
-  const viewportAwareMax = Math.min(MAX_SIDE_PANEL_WIDTH, Math.max(0, viewportWidth - SIDE_PANEL_OVERLAY_VIEWPORT_GUTTER))
+  const viewportGutter = viewportWidth <= SIDE_PANEL_OVERLAY_FULL_WIDTH_BREAKPOINT ? 0 : SIDE_PANEL_OVERLAY_VIEWPORT_GUTTER
+  const viewportAwareMax = Math.min(MAX_SIDE_PANEL_WIDTH, Math.max(0, viewportWidth - viewportGutter))
   const viewportAwareMin = Math.min(MIN_SIDE_PANEL_WIDTH, viewportAwareMax)
   const preferredWidth = Math.max(width, SIDE_PANEL_OVERLAY_TARGET_WIDTH)
   return Math.min(viewportAwareMax, Math.max(viewportAwareMin, Math.round(preferredWidth)))
@@ -384,7 +386,7 @@ export function WorkbookView({
         </div>
         {sidePanel ? (
           <aside
-            className="relative flex h-full shrink-0 bg-[var(--wb-app-bg)] max-[900px]:absolute max-[900px]:inset-y-0 max-[900px]:right-0 max-[900px]:z-30 max-[900px]:max-w-[calc(100vw-56px)] max-[900px]:shadow-[var(--wb-shadow-lg)]"
+            className="relative flex h-full shrink-0 bg-[var(--wb-app-bg)] max-[900px]:absolute max-[900px]:inset-y-0 max-[900px]:right-0 max-[900px]:z-30 max-[900px]:max-w-[100vw] max-[900px]:shadow-[var(--wb-shadow-lg)]"
             data-testid="workbook-side-panel"
             id={sidePanelId}
             style={{

@@ -180,11 +180,11 @@ describe('workbook layout', () => {
     })
   })
 
-  it('expands the assistant overlay to a usable width on phone-sized screens', async () => {
+  it('expands the assistant overlay to the full viewport width on phone-sized screens', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
-      value: 430,
+      value: 390,
     })
 
     const engine: GridEngineLike = {
@@ -256,8 +256,10 @@ describe('workbook layout', () => {
 
     const sidePanel = host.querySelector("[data-testid='workbook-side-panel']")
     const resizeHandle = host.querySelector("[data-testid='workbook-side-panel-resize-handle']")
-    expect(sidePanel instanceof HTMLElement ? sidePanel.style.width : null).toBe('374px')
-    expect(sidePanel instanceof HTMLElement ? sidePanel.style.flexBasis : null).toBe('374px')
+    expect(sidePanel instanceof HTMLElement ? sidePanel.style.width : null).toBe('390px')
+    expect(sidePanel instanceof HTMLElement ? sidePanel.style.flexBasis : null).toBe('390px')
+    expect(sidePanel?.className).toContain('max-[900px]:max-w-[100vw]')
+    expect(sidePanel?.className).not.toContain('calc(100vw-56px)')
     expect(resizeHandle?.className).toContain('max-[900px]:hidden')
 
     await act(async () => {
