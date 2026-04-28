@@ -377,6 +377,9 @@ Completed in the resident-scene deletion tranche:
   and runtime camera store owners.
 - The final legacy `packages/grid/src/renderer-v2` files were deleted after remaining tests were either retired as obsolete V2-only coverage or
   retargeted to V3 constants. The import-boundary test now asserts the whole `renderer-v2` directory stays absent.
+- `packages/grid/src/runtime/gridRenderTilePaneRuntime.ts` now owns remote/local fixed-tile pane resolution and same-sheet retained-pane fallback.
+  `useWorkbookRenderTilePanes.ts` is reduced to React subscription/revision bridging, with runtime tests covering remote tile readiness,
+  temporary tile-miss retention, sheet-switch invalidation, and host-readiness behavior.
 
 Remaining work from this design:
 
