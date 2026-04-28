@@ -152,7 +152,7 @@ function ThreadSummaryStrip(props: {
 
 function WorkbookAgentEmptyState(props: { readonly activeContextLabel: string | null }) {
   return (
-    <div className="flex min-h-[360px] w-full items-center justify-center px-5 py-10" data-testid="workbook-agent-empty-state">
+    <div className="flex min-h-0 w-full flex-1 items-center justify-center px-5 py-6" data-testid="workbook-agent-empty-state">
       <div className="flex max-w-52 flex-col items-center text-center">
         <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)]">
           <MessageSquareMore className="h-4 w-4" aria-hidden="true" />
@@ -730,7 +730,7 @@ export function WorkbookAgentPanel(props: {
           data-testid="workbook-agent-panel-scroll-viewport"
         >
           <ScrollArea.Content className={agentPanelScrollAreaContentClass()}>
-            <div className="bg-[var(--wb-app-bg)] px-2.5 py-2.5">
+            <div className="box-border flex min-h-full flex-col bg-[var(--wb-app-bg)] px-2.5 py-2.5">
               <ThreadSummaryStrip
                 activeThreadId={props.activeThreadId}
                 threadSummaries={props.threadSummaries}

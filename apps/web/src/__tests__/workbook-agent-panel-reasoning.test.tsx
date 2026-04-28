@@ -16,6 +16,7 @@ function renderPanel(entry: {
   id: string
   kind: 'reasoning' | 'plan' | 'system'
   text: string | null
+  empty?: boolean
   citations?: Array<
     | { kind: 'revision'; revision: number }
     | {
@@ -84,21 +85,23 @@ function renderPanel(entry: {
                 selection: { sheetName: 'Sheet1', address: 'A1' },
                 viewport: { rowStart: 0, rowEnd: 10, colStart: 0, colEnd: 5 },
               },
-              entries: [
-                {
-                  id: entry.id,
-                  kind: entry.kind,
-                  turnId: 'turn-1',
-                  text: entry.text,
-                  phase: null,
-                  toolName: null,
-                  toolStatus: null,
-                  argumentsText: null,
-                  outputText: null,
-                  success: null,
-                  citations: entry.citations ?? [],
-                },
-              ],
+              entries: entry.empty
+                ? []
+                : [
+                    {
+                      id: entry.id,
+                      kind: entry.kind,
+                      turnId: 'turn-1',
+                      text: entry.text,
+                      phase: null,
+                      toolName: null,
+                      toolStatus: null,
+                      argumentsText: null,
+                      outputText: null,
+                      success: null,
+                      citations: entry.citations ?? [],
+                    },
+                  ],
               reviewQueueItems: [],
               executionRecords: entry.executionRecords ?? [],
               workflowRuns: [],
@@ -214,6 +217,29 @@ describe('WorkbookAgentPanel reasoning', () => {
 
     expect(viewport instanceof HTMLDivElement).toBe(true)
     expect(scrollRoot?.querySelector("[data-orientation='vertical']")).toBeNull()
+
+    await act(async () => {
+      panel.root.unmount()
+    })
+  })
+
+  it('lets the empty state shrink to short assistant panels', async () => {
+    const panel = renderPanel({
+      id: 'system-empty-1',
+      kind: 'system',
+      text: null,
+      empty: true,
+    })
+
+    await panel.render()
+
+    const emptyState = panel.host.querySelector("[data-testid='workbook-agent-empty-state']")
+
+    expect(emptyState?.className).toContain('flex-1')
+    expect(emptyState?.className).toContain('min-h-0')
+    expect(emptyState?.className).not.toContain('min-h-[360px]')
+    expect(emptyState?.parentElement?.className).toContain('box-border')
+    expect(emptyState?.parentElement?.className).toContain('min-h-full')
 
     await act(async () => {
       panel.root.unmount()
