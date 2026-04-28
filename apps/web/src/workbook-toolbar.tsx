@@ -7,6 +7,7 @@ import {
   Baseline,
   Bold,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Italic,
   PaintBucket,
@@ -83,6 +84,7 @@ const STRUCTURE_ACTIONS = [
 
 interface ToolbarScrollCueState {
   readonly hasOverflow: boolean
+  readonly isAtStart: boolean
   readonly isAtEnd: boolean
 }
 
@@ -90,6 +92,7 @@ function useToolbarScrollCue() {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const [state, setState] = useState<ToolbarScrollCueState>({
     hasOverflow: false,
+    isAtStart: true,
     isAtEnd: true,
   })
 
@@ -103,11 +106,16 @@ function useToolbarScrollCue() {
       const maxScrollLeft = Math.max(0, scrollContainer.scrollWidth - scrollContainer.clientWidth)
       const nextState: ToolbarScrollCueState = {
         hasOverflow: maxScrollLeft > 1,
+        isAtStart: scrollContainer.scrollLeft <= 1,
         isAtEnd: scrollContainer.scrollLeft >= maxScrollLeft - 1,
       }
 
       setState((currentState) =>
-        currentState.hasOverflow === nextState.hasOverflow && currentState.isAtEnd === nextState.isAtEnd ? currentState : nextState,
+        currentState.hasOverflow === nextState.hasOverflow &&
+        currentState.isAtStart === nextState.isAtStart &&
+        currentState.isAtEnd === nextState.isAtEnd
+          ? currentState
+          : nextState,
       )
     }
 
@@ -130,6 +138,7 @@ function useToolbarScrollCue() {
 
   return {
     scrollContainerRef,
+    showBackwardCue: state.hasOverflow && !state.isAtStart,
     showForwardCue: state.hasOverflow && !state.isAtEnd,
   } as const
 }
@@ -215,7 +224,31 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
   onRedo,
   trailingContent,
 }: WorkbookToolbarProps) {
-  const { scrollContainerRef, showForwardCue } = useToolbarScrollCue()
+  const { scrollContainerRef, showBackwardCue, showForwardCue } = useToolbarScrollCue()
+  const getToolbarScrollStep = () => {
+    const scrollContainer = scrollContainerRef.current
+    return scrollContainer ? Math.max(96, Math.floor(scrollContainer.clientWidth)) : 96
+  }
+  const getToolbarBackwardScrollStep = () => {
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) {
+      return 96
+    }
+
+    const comfortableBackStep = Math.max(getToolbarScrollStep(), Math.floor(scrollContainer.clientWidth * 1.25))
+    return Math.min(scrollContainer.scrollLeft, comfortableBackStep)
+  }
+  const scrollFormattingToolbarBackward = () => {
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) {
+      return
+    }
+
+    scrollContainer.scrollBy({
+      behavior: 'smooth',
+      left: -getToolbarBackwardScrollStep(),
+    })
+  }
   const scrollFormattingToolbarForward = () => {
     const scrollContainer = scrollContainerRef.current
     if (!scrollContainer) {
@@ -224,7 +257,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
 
     scrollContainer.scrollBy({
       behavior: 'smooth',
-      left: Math.max(96, Math.floor(scrollContainer.clientWidth * 0.85)),
+      left: getToolbarScrollStep(),
     })
   }
   const structureActionAvailability = {
@@ -238,6 +271,18 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
     <div className={toolbarRootClass()}>
       <Toolbar.Root aria-label="Formatting toolbar" className={toolbarRowClass()}>
         <div className={toolbarFormattingRegionClass()}>
+          {showBackwardCue ? (
+            <button
+              aria-label="Show previous toolbar actions"
+              className={cn(toolbarOverflowCueClass(), 'border-l-0 border-r')}
+              data-testid="toolbar-overflow-back-cue"
+              title="Show previous toolbar actions"
+              type="button"
+              onClick={scrollFormattingToolbarBackward}
+            >
+              <ChevronLeft className="h-3.5 w-3.5 stroke-[2]" />
+            </button>
+          ) : null}
           <div ref={scrollContainerRef} className={toolbarFormattingScrollClass()} data-testid="toolbar-formatting-scroll">
             <Toolbar.Group className={toolbarGroupClass()}>
               <div className={toolbarSegmentedClass()} role="group" aria-label="History">

@@ -267,6 +267,37 @@ test('web app keeps tiny toolbar overflow controls from covering formatting acti
   expect(cueBox.x + cueBox.width).toBeLessThanOrEqual(toolbarBox.x + toolbarBox.width + 1)
   expect(visibleNumberFormatWidth).toBeGreaterThanOrEqual(80)
   expect(horizontalOverflow).toBeLessThanOrEqual(1)
+
+  await overflowCue.click()
+  await expect
+    .poll(async () =>
+      formattingScroll.evaluate((element) => {
+        if (!(element instanceof HTMLElement)) {
+          throw new Error('Expected toolbar formatting scroll region')
+        }
+        return Math.round(element.scrollLeft)
+      }),
+    )
+    .toBeGreaterThan(0)
+
+  const backCue = page.getByTestId('toolbar-overflow-back-cue')
+  await expect(backCue).toBeVisible()
+  const [backCueBox, scrolledToolbarBox] = await Promise.all([getBox(backCue), getBox(toolbar)])
+  expect(backCueBox.x).toBeGreaterThanOrEqual(scrolledToolbarBox.x - 1)
+  expect(backCueBox.x + backCueBox.width).toBeLessThanOrEqual(scrolledToolbarBox.x + scrolledToolbarBox.width + 1)
+
+  await backCue.click()
+  await expect
+    .poll(async () =>
+      formattingScroll.evaluate((element) => {
+        if (!(element instanceof HTMLElement)) {
+          throw new Error('Expected toolbar formatting scroll region')
+        }
+        return Math.round(element.scrollLeft)
+      }),
+    )
+    .toBe(0)
+  await expect(backCue).toBeHidden()
 })
 
 test('web app shows preset color swatches first and only reveals the custom picker on demand', async ({ page }) => {

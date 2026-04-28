@@ -958,6 +958,7 @@ describe('WorkbookToolbar', () => {
     })
 
     const cue = host.querySelector("[data-testid='toolbar-overflow-cue']")
+    expect(host.querySelector("[data-testid='toolbar-overflow-back-cue']")).toBeNull()
     expect(cue).not.toBeNull()
     expect(cue?.getAttribute('aria-label')).toBe('Show more toolbar actions')
     expect(formattingScroll.className).not.toContain('pr-7')
@@ -971,7 +972,7 @@ describe('WorkbookToolbar', () => {
 
     expect(scrollBy).toHaveBeenCalledWith({
       behavior: 'smooth',
-      left: 187,
+      left: 220,
     })
 
     setScrollGeometry(formattingScroll, {
@@ -985,6 +986,20 @@ describe('WorkbookToolbar', () => {
     })
 
     expect(host.querySelector("[data-testid='toolbar-overflow-cue']")).toBeNull()
+    const backCue = host.querySelector("[data-testid='toolbar-overflow-back-cue']")
+    expect(backCue).not.toBeNull()
+    expect(backCue?.getAttribute('aria-label')).toBe('Show previous toolbar actions')
+    expect(backCue?.className).toContain('flex-none')
+    expect(backCue?.className).toContain('border-r')
+
+    await act(async () => {
+      backCue?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(scrollBy).toHaveBeenLastCalledWith({
+      behavior: 'smooth',
+      left: -275,
+    })
 
     await act(async () => {
       root.unmount()
