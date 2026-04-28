@@ -41,6 +41,7 @@ export function useWorkbookRenderTilePanes(input: {
   readonly sheetName: string
   readonly sortedColumnWidthOverrides: SortedAxisOverrides
   readonly sortedRowHeightOverrides: SortedAxisOverrides
+  readonly visibleAddresses: readonly string[]
   readonly visibleViewport: Viewport
 }): WorkbookRenderTilePanesState {
   const {
@@ -65,11 +66,14 @@ export function useWorkbookRenderTilePanes(input: {
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
+    visibleAddresses,
     visibleViewport,
   } = input
   const tilePaneRuntimeRef = useRef<GridRenderTilePaneRuntime | null>(null)
   tilePaneRuntimeRef.current = getGridRenderTilePaneRuntime(tilePaneRuntimeRef.current)
+  const [forceLocalTiles, setForceLocalTiles] = useState(false)
   const [renderTileRevision, setRenderTileRevision] = useState(0)
+  const [localFallbackRevision, setLocalFallbackRevision] = useState(0)
 
   useEffect(() => {
     return tilePaneRuntimeRef.current!.connectRenderTileDeltas(
@@ -82,19 +86,22 @@ export function useWorkbookRenderTilePanes(input: {
         sheetName,
       },
       () => {
+        setForceLocalTiles(false)
         setRenderTileRevision((current) => current + 1)
       },
     )
   }, [dprBucket, gridRuntimeHost, renderTileSource, renderTileViewport, sheetId, sheetName])
 
-  const state = useMemo<WorkbookRenderTilePanesState>(() => {
+  const state = useMemo<WorkbookRenderTilePanesState & { readonly needsLocalCellInvalidation: boolean }>(() => {
     void renderTileRevision
+    void localFallbackRevision
     return tilePaneRuntimeRef.current!.resolve({
       columnWidths,
       dprBucket,
       engine,
       freezeCols,
       freezeRows,
+      forceLocalTiles,
       frozenColumnWidth,
       frozenRowHeight,
       gridMetrics,
@@ -119,6 +126,7 @@ export function useWorkbookRenderTilePanes(input: {
     engine,
     freezeCols,
     freezeRows,
+    forceLocalTiles,
     frozenColumnWidth,
     frozenRowHeight,
     gridMetrics,
@@ -126,6 +134,7 @@ export function useWorkbookRenderTilePanes(input: {
     hostClientHeight,
     hostClientWidth,
     hostElement,
+    localFallbackRevision,
     renderTileRevision,
     renderTileSource,
     renderTileViewport,
@@ -156,6 +165,17 @@ export function useWorkbookRenderTilePanes(input: {
       warmDirtyTiles,
     })
   }, [state.tileReadiness])
+
+  useEffect(() => {
+    if (!state.needsLocalCellInvalidation || visibleAddresses.length === 0) {
+      return
+    }
+    return engine.subscribeCells(sheetName, visibleAddresses, () => {
+      tilePaneRuntimeRef.current?.clearRetainedPanes()
+      setForceLocalTiles(true)
+      setLocalFallbackRevision((current) => current + 1)
+    })
+  }, [engine, sheetName, state.needsLocalCellInvalidation, visibleAddresses])
 
   return state
 }

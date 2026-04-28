@@ -308,6 +308,115 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     })
   })
 
+  it('keeps local fallback render tiles fresh when remote tiles are stale', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    let cellText = ''
+    let cellInvalidationListener: (() => void) | null = null
+    let subscribedAddresses: readonly string[] = []
+    const subscribeCells = vi.fn((_sheetName: string, addresses: readonly string[], listener: () => void) => {
+      subscribedAddresses = addresses
+      cellInvalidationListener = listener
+      return () => {
+        cellInvalidationListener = null
+      }
+    })
+    const fallbackEngine = {
+      workbook: {
+        getSheet: () => undefined,
+      },
+      getCell(sheetName: string, address: string): CellSnapshot {
+        if (address === 'B10' && cellText.length > 0) {
+          return {
+            sheetName,
+            address,
+            value: { tag: ValueTag.String, value: cellText, stringId: 1 },
+            flags: 0,
+            version: 1,
+          }
+        }
+        return createEmptySnapshot(sheetName, address)
+      },
+      getCellStyle() {
+        return undefined
+      },
+      subscribeCells,
+    }
+    const tiles = new Map<number, GridRenderTile>()
+    for (let rowTile = 0; rowTile <= 2; rowTile += 1) {
+      for (let colTile = 0; colTile <= 1; colTile += 1) {
+        const tile = createRenderTile({ sheetId: 7, rowTile, colTile })
+        tiles.set(tile.tileId, tile)
+      }
+    }
+    const subscribeRenderTileDeltas = vi.fn(() => () => undefined)
+    const peekRenderTile = vi.fn((tileId: number) => tiles.get(tileId) ?? null)
+    let hostElement: HTMLDivElement | null = null
+    let latestRenderState: ReturnType<typeof useWorkbookGridRenderState> | null = null
+
+    function Harness() {
+      const renderState = useWorkbookGridRenderState({
+        engine: fallbackEngine,
+        sheetId: 7,
+        renderTileSource: {
+          subscribeRenderTileDeltas,
+          peekRenderTile,
+        },
+        sheetName: 'Sheet1',
+        selectedAddr: 'B10',
+        selectedCellSnapshot: fallbackEngine.getCell('Sheet1', 'B10'),
+        editorValue: '',
+        isEditingCell: false,
+      })
+      latestRenderState = renderState
+
+      return (
+        <div
+          ref={(node) => {
+            if (node) {
+              Object.defineProperty(node, 'clientWidth', { configurable: true, value: 480 })
+              Object.defineProperty(node, 'clientHeight', { configurable: true, value: 180 })
+            }
+            renderState.handleHostRef(node)
+            hostElement = node
+          }}
+        />
+      )
+    }
+
+    const rootHost = document.createElement('div')
+    document.body.appendChild(rootHost)
+    const root = createRoot(rootHost)
+
+    await act(async () => {
+      root.render(<Harness />)
+    })
+
+    Object.defineProperty(hostElement!, 'clientWidth', { configurable: true, value: 480 })
+    Object.defineProperty(hostElement!, 'clientHeight', { configurable: true, value: 180 })
+
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'))
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(subscribeCells).toHaveBeenCalled()
+    expect(subscribedAddresses).toContain('B10')
+    expect(latestRenderState?.renderTilePanes.some((pane) => pane.tile.textRuns.some((run) => run.text === cellText))).toBe(false)
+
+    cellText = 'ghost content fixed'
+    await act(async () => {
+      cellInvalidationListener?.()
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(latestRenderState?.renderTilePanes.some((pane) => pane.tile.textRuns.some((run) => run.text === cellText))).toBe(true)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
   it('retains fixed render tile panes across a transient tile miss', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

@@ -180,6 +180,85 @@ export function applyOptimisticCopyRange(
   }
 }
 
+export function applyOptimisticFillRange(
+  viewportStore: OptimisticViewportStore | null,
+  source: CellRangeRef,
+  target: CellRangeRef,
+): (() => void) | null {
+  if (!viewportStore) {
+    return null
+  }
+
+  const sourceBounds = normalizeCellRange(source)
+  const targetBounds = normalizeCellRange(target)
+  const sourceHeight = sourceBounds.endRow - sourceBounds.startRow + 1
+  const sourceWidth = sourceBounds.endCol - sourceBounds.startCol + 1
+  if (sourceHeight <= 0 || sourceWidth <= 0) {
+    return null
+  }
+
+  const sourceCells: CellSnapshot[][] = []
+  for (let rowOffset = 0; rowOffset < sourceHeight; rowOffset += 1) {
+    const rowCells: CellSnapshot[] = []
+    for (let colOffset = 0; colOffset < sourceWidth; colOffset += 1) {
+      const sourceAddress = formatAddress(sourceBounds.startRow + rowOffset, sourceBounds.startCol + colOffset)
+      rowCells.push(viewportStore.getCell(source.sheetName, sourceAddress))
+    }
+    sourceCells.push(rowCells)
+  }
+
+  const previousSnapshots: CellSnapshot[] = []
+  const stagedSnapshots = new Map<string, CellSnapshot>()
+  const nextSnapshots: CellSnapshot[] = []
+  let rollbackVersion = 0
+
+  for (let row = targetBounds.startRow; row <= targetBounds.endRow; row += 1) {
+    for (let col = targetBounds.startCol; col <= targetBounds.endCol; col += 1) {
+      const sourceRowOffset = (row - targetBounds.startRow) % sourceHeight
+      const sourceColOffset = (col - targetBounds.startCol) % sourceWidth
+      const sourceAddress = formatAddress(sourceBounds.startRow + sourceRowOffset, sourceBounds.startCol + sourceColOffset)
+      const targetAddress = formatAddress(row, col)
+      const sourceSnapshot = sourceCells[sourceRowOffset]?.[sourceColOffset]
+      if (!sourceSnapshot) {
+        continue
+      }
+      const targetSnapshot = viewportStore.getCell(target.sheetName, targetAddress)
+      const parsed = parsedInputForCopiedSnapshot(sourceSnapshot, sourceAddress, target.sheetName, targetAddress)
+      const next = createOptimisticCellSnapshot({
+        sheetName: target.sheetName,
+        address: targetAddress,
+        current: targetSnapshot,
+        parsed,
+        evaluateFormula: (formula) =>
+          evaluateOptimisticFormula({
+            sheetName: target.sheetName,
+            address: targetAddress,
+            formula,
+            getCell: (sheetName, address) =>
+              stagedSnapshots.get(optimisticSnapshotKey(sheetName, address)) ?? viewportStore.getCell(sheetName, address),
+          }),
+      })
+      previousSnapshots.push(targetSnapshot)
+      stagedSnapshots.set(optimisticSnapshotKey(target.sheetName, targetAddress), next)
+      nextSnapshots.push(next)
+      rollbackVersion = Math.max(rollbackVersion, next.version)
+    }
+  }
+
+  if (nextSnapshots.length === 0) {
+    return null
+  }
+
+  nextSnapshots.forEach((snapshot) => viewportStore.setCellSnapshot(snapshot))
+
+  return () => {
+    previousSnapshots.forEach((snapshot) => {
+      rollbackVersion += 1
+      viewportStore.setCellSnapshot(createSupersedingCellSnapshot(snapshot, rollbackVersion))
+    })
+  }
+}
+
 export function applyOptimisticClearRange(viewportStore: OptimisticViewportStore | null, range: CellRangeRef): (() => void) | null {
   if (!viewportStore) {
     return null
@@ -386,7 +465,7 @@ export function useWorkbookSelectionActions(input: {
           ? applyOptimisticMoveRange(viewportStore ?? null, source, target)
           : method === 'copyRange'
             ? applyOptimisticCopyRange(viewportStore ?? null, source, target)
-            : null
+            : applyOptimisticFillRange(viewportStore ?? null, source, target)
       void (async () => {
         try {
           await invokeMutation(method, source, target)

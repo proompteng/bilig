@@ -108,7 +108,7 @@ export function WorkbookShortcutDialog(props: {
         <Dialog.Popup
           aria-label="Keyboard shortcuts"
           aria-modal="true"
-          className="fixed left-1/2 top-1/2 z-[1201] flex w-[min(56rem,calc(100vw-3rem))] max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[var(--wb-border)] bg-[var(--color-mauve-50)] shadow-[var(--wb-shadow-md)]"
+          className="fixed left-1/2 top-1/2 z-[1201] flex max-h-[min(44rem,calc(100dvh-3rem))] w-[min(56rem,calc(100vw-3rem))] max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[var(--wb-border)] bg-[var(--color-mauve-50)] shadow-[var(--wb-shadow-md)]"
           data-testid="workbook-shortcut-dialog"
           initialFocus={searchInputRef}
           style={shortcutDialogThemeStyle}
@@ -150,7 +150,7 @@ export function WorkbookShortcutDialog(props: {
             </div>
           </div>
 
-          <div className="max-h-[34rem] overflow-y-auto bg-[var(--color-mauve-50)] px-5 py-4">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--color-mauve-50)] px-5 py-4" data-testid="workbook-shortcut-list">
             {groupedEntries.length === 0 ? (
               <div
                 className="rounded-md border border-dashed border-[var(--wb-border)] bg-white px-4 py-8 text-center text-[12px] text-[var(--wb-text-subtle)]"

@@ -11,6 +11,7 @@ import type { GridRuntimeHost } from './gridRuntimeHost.js'
 type SortedAxisOverrides = readonly (readonly [number, number])[]
 
 export interface GridRenderTilePaneRuntimeState {
+  readonly needsLocalCellInvalidation: boolean
   readonly preloadDataPanes: readonly WorkbookRenderTilePaneState[]
   readonly renderTilePanes: readonly WorkbookRenderTilePaneState[]
   readonly residentBodyPane: WorkbookRenderTilePaneState | null
@@ -24,6 +25,7 @@ export interface GridRenderTilePaneRuntimeInput {
   readonly engine: GridEngineLike
   readonly freezeCols: number
   readonly freezeRows: number
+  readonly forceLocalTiles?: boolean | undefined
   readonly frozenColumnWidth: number
   readonly frozenRowHeight: number
   readonly gridMetrics: GridMetrics
@@ -53,6 +55,7 @@ export interface GridRenderTileDeltaRuntimeInput {
 }
 
 const EMPTY_TILE_PANE_RUNTIME_STATE: GridRenderTilePaneRuntimeState = Object.freeze({
+  needsLocalCellInvalidation: false,
   preloadDataPanes: [],
   renderTilePanes: [],
   residentBodyPane: null,
@@ -66,6 +69,18 @@ const EMPTY_TILE_PANE_RUNTIME_STATE: GridRenderTilePaneRuntimeState = Object.fre
   },
 })
 
+type TileResolutionSource = 'local' | 'remote'
+
+interface FixedRenderTileDataPanesResolution {
+  readonly panes: readonly WorkbookRenderTilePaneState[]
+  readonly source: TileResolutionSource
+}
+
+interface GridRenderTileResolution {
+  readonly tiles: readonly GridRenderTile[]
+  readonly source: TileResolutionSource
+}
+
 export class GridRenderTilePaneRuntime {
   private retainedFixedRenderTileDataPanes: {
     readonly sheetId: number
@@ -76,24 +91,25 @@ export class GridRenderTilePaneRuntime {
     if (!input.hostReady) {
       return EMPTY_TILE_PANE_RUNTIME_STATE
     }
-    const tiles = this.resolveTiles(input)
-    const tileReadiness = this.resolveTileReadiness(input, tiles ?? [])
-    const fixedRenderTileDataPanes = tiles ? this.buildFixedRenderTileDataPanes(input, tiles) : null
+    const resolution = this.resolveTiles(input)
+    const tileReadiness = this.resolveTileReadiness(input, resolution?.tiles ?? [])
+    const fixedRenderTileDataPanes = resolution ? this.buildFixedRenderTileDataPanes(input, resolution) : null
     if (input.sheetId !== undefined && fixedRenderTileDataPanes) {
       this.retainedFixedRenderTileDataPanes = {
-        panes: fixedRenderTileDataPanes,
+        panes: fixedRenderTileDataPanes.panes,
         sheetId: input.sheetId,
       }
     }
 
     const shouldUseRemoteRenderTileSource = input.renderTileSource !== undefined && input.sheetId !== undefined
     const retainedFixedRenderTileDataPanes =
-      fixedRenderTileDataPanes ??
+      fixedRenderTileDataPanes?.panes ??
       (shouldUseRemoteRenderTileSource && input.sheetId !== undefined && this.retainedFixedRenderTileDataPanes?.sheetId === input.sheetId
         ? this.retainedFixedRenderTileDataPanes.panes
         : null)
     const residentDataPanes = retainedFixedRenderTileDataPanes ?? []
     return {
+      needsLocalCellInvalidation: shouldUseRemoteRenderTileSource,
       preloadDataPanes: EMPTY_TILE_PANE_RUNTIME_STATE.preloadDataPanes,
       renderTilePanes: residentDataPanes,
       residentBodyPane: residentDataPanes.find((pane) => pane.paneId === 'body') ?? null,
@@ -135,8 +151,8 @@ export class GridRenderTilePaneRuntime {
 
   private buildFixedRenderTileDataPanes(
     input: GridRenderTilePaneRuntimeInput,
-    tiles: readonly GridRenderTile[],
-  ): readonly WorkbookRenderTilePaneState[] | null {
+    resolution: GridRenderTileResolution,
+  ): FixedRenderTileDataPanesResolution | null {
     const panes = buildFixedRenderTilePaneStates({
       freezeCols: input.freezeCols,
       freezeRows: input.freezeRows,
@@ -148,10 +164,10 @@ export class GridRenderTilePaneRuntime {
       residentViewport: input.residentViewport,
       sortedColumnWidthOverrides: input.sortedColumnWidthOverrides,
       sortedRowHeightOverrides: input.sortedRowHeightOverrides,
-      tiles,
+      tiles: resolution.tiles,
       visibleViewport: input.visibleViewport,
     })
-    return panes.length > 0 ? panes : null
+    return panes.length > 0 ? { panes, source: resolution.source } : null
   }
 
   private resolveTileReadiness(input: GridRenderTilePaneRuntimeInput, tiles: readonly GridRenderTile[]): GridTileReadinessSnapshotV3 {
@@ -192,7 +208,11 @@ export class GridRenderTilePaneRuntime {
     })
   }
 
-  private resolveTiles(input: GridRenderTilePaneRuntimeInput): readonly GridRenderTile[] | null {
+  private resolveTiles(input: GridRenderTilePaneRuntimeInput): GridRenderTileResolution | null {
+    if (input.forceLocalTiles) {
+      return this.buildLocalTiles(input)
+    }
+
     if (input.renderTileSource && input.sheetId !== undefined) {
       const tiles: GridRenderTile[] = []
       const tileKeys = input.gridRuntimeHost.viewportTileKeys({
@@ -207,27 +227,30 @@ export class GridRenderTilePaneRuntime {
         }
         tiles.push(tile)
       }
-      return tiles
+      return { source: 'remote', tiles }
     }
 
     return this.buildLocalTiles(input)
   }
 
-  private buildLocalTiles(input: GridRenderTilePaneRuntimeInput): readonly GridRenderTile[] {
-    return buildLocalFixedRenderTiles({
-      cameraSeq: input.gridRuntimeHost.snapshot().camera.seq,
-      columnWidths: input.columnWidths,
-      dprBucket: input.dprBucket,
-      engine: input.engine,
-      generation: input.sceneRevision,
-      gridMetrics: input.gridMetrics,
-      rowHeights: input.rowHeights,
-      sheetId: input.sheetId ?? 0,
-      sheetName: input.sheetName,
-      sortedColumnWidthOverrides: input.sortedColumnWidthOverrides,
-      sortedRowHeightOverrides: input.sortedRowHeightOverrides,
-      viewport: input.renderTileViewport,
-    })
+  private buildLocalTiles(input: GridRenderTilePaneRuntimeInput): GridRenderTileResolution {
+    return {
+      source: 'local',
+      tiles: buildLocalFixedRenderTiles({
+        cameraSeq: input.gridRuntimeHost.snapshot().camera.seq,
+        columnWidths: input.columnWidths,
+        dprBucket: input.dprBucket,
+        engine: input.engine,
+        generation: input.sceneRevision,
+        gridMetrics: input.gridMetrics,
+        rowHeights: input.rowHeights,
+        sheetId: input.sheetId ?? 0,
+        sheetName: input.sheetName,
+        sortedColumnWidthOverrides: input.sortedColumnWidthOverrides,
+        sortedRowHeightOverrides: input.sortedRowHeightOverrides,
+        viewport: input.renderTileViewport,
+      }),
+    }
   }
 }
 

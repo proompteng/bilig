@@ -180,7 +180,7 @@ export function useWorkbookGridRenderState(input: {
     visibleRange: visibleRegion.range,
   })
 
-  const { viewport, residentViewport, renderTileViewport, residentHeaderItems, residentHeaderRegion, sceneRevision } =
+  const { viewport, residentViewport, renderTileViewport, residentHeaderItems, residentHeaderRegion, sceneRevision, visibleAddresses } =
     useWorkbookViewportResidencyState({
       engine,
       freezeCols,
@@ -249,6 +249,7 @@ export function useWorkbookGridRenderState(input: {
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
+    visibleAddresses,
     visibleViewport: viewport,
   })
 

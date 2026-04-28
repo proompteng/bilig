@@ -165,6 +165,7 @@ describe('GridRenderTilePaneRuntime', () => {
     )
 
     expect(state.residentBodyPane?.tile.tileId).toBe(tileId)
+    expect(state.needsLocalCellInvalidation).toBe(true)
     expect(state.renderTilePanes).toHaveLength(1)
     expect(state.preloadDataPanes).toHaveLength(0)
     expect(state.tileReadiness).toMatchObject({
@@ -248,6 +249,7 @@ describe('GridRenderTilePaneRuntime', () => {
 
     expect(missing.residentDataPanes).toBe(ready.residentDataPanes)
     expect(missing.residentBodyPane).toBe(ready.residentBodyPane)
+    expect(missing.needsLocalCellInvalidation).toBe(true)
   })
 
   it('falls back to local fixed tiles when remote tiles are unavailable before same-sheet retention exists', () => {
@@ -260,6 +262,7 @@ describe('GridRenderTilePaneRuntime', () => {
     )
 
     expect(state.residentBodyPane?.tile.coord.sheetId).toBe(7)
+    expect(state.needsLocalCellInvalidation).toBe(true)
     expect(state.residentDataPanes).toHaveLength(1)
   })
 

@@ -102,7 +102,13 @@ describe('workbook shortcut dialog', () => {
     const dialog = document.querySelector<HTMLElement>("[data-testid='workbook-shortcut-dialog']")
     expect(dialog?.getAttribute('aria-modal')).toBe('true')
     expect(dialog?.getAttribute('class')).toContain('w-[min(56rem,calc(100vw-3rem))]')
+    expect(dialog?.getAttribute('class')).toContain('max-h-[min(44rem,calc(100dvh-3rem))]')
     expect(dialog?.getAttribute('class')).toContain('bg-[var(--color-mauve-50)]')
+
+    const scrollBody = document.querySelector<HTMLElement>("[data-testid='workbook-shortcut-list']")
+    expect(scrollBody?.getAttribute('class')).toContain('min-h-0')
+    expect(scrollBody?.getAttribute('class')).toContain('flex-1')
+    expect(scrollBody?.getAttribute('class')).toContain('overflow-y-auto')
 
     const firstEntry = document.querySelector<HTMLElement>("[data-testid='workbook-shortcut-entry']")
     expect(firstEntry?.getAttribute('class')).toContain('border-b')

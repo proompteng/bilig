@@ -4,6 +4,7 @@ import {
   applyOptimisticClearRange,
   applyOptimisticCommitOps,
   applyOptimisticCopyRange,
+  applyOptimisticFillRange,
   buildPasteCommitOps,
   createSheetScopedRangePair,
 } from '../use-workbook-selection-actions.js'
@@ -168,6 +169,38 @@ describe('use workbook selection action helpers', () => {
     expect(cells.get('Sheet1:E2')).toMatchObject({
       formula: 'D2*2',
       value: { tag: ValueTag.Number, value: 6 },
+      version: 1,
+    })
+  })
+
+  it('fills projected ranges before worker patches arrive', () => {
+    const cells = new Map<string, CellSnapshot>([
+      ['Sheet1:F6', { ...emptyCell('Sheet1', 'F6'), input: 7, value: { tag: ValueTag.Number, value: 7 }, version: 3 }],
+    ])
+    const viewportStore = {
+      getCell(sheetName: string, address: string) {
+        return cells.get(`${sheetName}:${address}`) ?? emptyCell(sheetName, address)
+      },
+      setCellSnapshot(snapshot: CellSnapshot) {
+        cells.set(`${snapshot.sheetName}:${snapshot.address}`, snapshot)
+      },
+    }
+
+    const rollback = applyOptimisticFillRange(
+      viewportStore,
+      { sheetName: 'Sheet1', startAddress: 'F6', endAddress: 'F6' },
+      { sheetName: 'Sheet1', startAddress: 'F7', endAddress: 'F8' },
+    )
+
+    expect(rollback).toEqual(expect.any(Function))
+    expect(cells.get('Sheet1:F7')).toMatchObject({
+      input: 7,
+      value: { tag: ValueTag.Number, value: 7 },
+      version: 1,
+    })
+    expect(cells.get('Sheet1:F8')).toMatchObject({
+      input: 7,
+      value: { tag: ValueTag.Number, value: 7 },
       version: 1,
     })
   })
