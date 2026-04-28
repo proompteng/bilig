@@ -200,6 +200,26 @@ describe('WorkbookAgentPanel reasoning', () => {
     })
   })
 
+  it('does not keep the main timeline scrollbar mounted when content does not overflow', async () => {
+    const panel = renderPanel({
+      id: 'system-scrollbar-1',
+      kind: 'system',
+      text: 'Ready',
+    })
+
+    await panel.render()
+
+    const viewport = panel.host.querySelector("[data-testid='workbook-agent-panel-scroll-viewport']")
+    const scrollRoot = viewport?.parentElement
+
+    expect(viewport instanceof HTMLDivElement).toBe(true)
+    expect(scrollRoot?.querySelector("[data-orientation='vertical']")).toBeNull()
+
+    await act(async () => {
+      panel.root.unmount()
+    })
+  })
+
   it('renders citations as inline metadata instead of pills', async () => {
     const panel = renderPanel({
       id: 'system-apply-1',

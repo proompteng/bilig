@@ -773,7 +773,7 @@ export function WorkbookAgentPanel(props: {
             </div>
           </ScrollArea.Content>
         </ScrollArea.Viewport>
-        <ScrollArea.Scrollbar className={agentPanelScrollAreaScrollbarClass()} keepMounted orientation="vertical">
+        <ScrollArea.Scrollbar className={agentPanelScrollAreaScrollbarClass()} orientation="vertical">
           <ScrollArea.Thumb className={agentPanelScrollAreaThumbClass()} />
         </ScrollArea.Scrollbar>
       </ScrollArea.Root>
