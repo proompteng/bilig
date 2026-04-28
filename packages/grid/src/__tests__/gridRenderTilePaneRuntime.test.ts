@@ -3,7 +3,12 @@ import { ValueTag, type CellSnapshot } from '@bilig/protocol'
 import type { GridEngineLike } from '../grid-engine.js'
 import { getGridMetrics } from '../gridMetrics.js'
 import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from '../renderer-v3/rect-instance-buffer.js'
-import type { GridRenderTile, GridRenderTileDeltaSubscription, GridRenderTileSource } from '../renderer-v3/render-tile-source.js'
+import type {
+  GridRenderTile,
+  GridRenderTileDeltaSubscription,
+  GridRenderTileSceneChange,
+  GridRenderTileSource,
+} from '../renderer-v3/render-tile-source.js'
 import { GRID_TEXT_METRIC_FLOAT_COUNT_V3 } from '../renderer-v3/text-run-buffer.js'
 import { DirtyMaskV3, type WorkbookDeltaBatchLikeV3 } from '../renderer-v3/tile-damage-index.js'
 import { packTileKey53 } from '../renderer-v3/tile-key.js'
@@ -104,6 +109,42 @@ function createCapturingRenderTileSource(): {
       subscribeRenderTileDeltas: (subscription) => {
         captured = subscription
         return () => {
+          unsubscribed = true
+        }
+      },
+    },
+    unsubscribed: () => unsubscribed,
+  }
+}
+
+function createMutableRenderTileSource(tiles: readonly GridRenderTile[] = []): {
+  readonly source: GridRenderTileSource
+  readonly emit: (change: {
+    readonly changedTileIds?: readonly number[] | undefined
+    readonly invalidatedTileIds?: readonly number[] | undefined
+  }) => void
+  readonly setTile: (tile: GridRenderTile) => void
+  readonly unsubscribed: () => boolean
+} {
+  const byId = new Map(tiles.map((tile) => [tile.tileId, tile]))
+  let listener: ((change: GridRenderTileSceneChange) => void) | null = null
+  let unsubscribed = false
+  return {
+    emit: (change) =>
+      listener?.({
+        batchId: 2,
+        cameraSeq: 3,
+        changedTileIds: change.changedTileIds ?? [],
+        invalidatedTileIds: change.invalidatedTileIds ?? [],
+        structural: false,
+      }),
+    setTile: (tile) => byId.set(tile.tileId, tile),
+    source: {
+      peekRenderTile: (tileId) => byId.get(tileId) ?? null,
+      subscribeRenderTileDeltas: (_subscription, nextListener) => {
+        listener = nextListener
+        return () => {
+          listener = null
           unsubscribed = true
         }
       },
@@ -350,6 +391,77 @@ describe('GridRenderTilePaneRuntime', () => {
         sheetOrdinal: 7,
       }),
     )
+    unsubscribe?.()
+    expect(renderTileSource.unsubscribed()).toBe(true)
+  })
+
+  it('applies render tile delta changes to the host-owned coordinator before React recomputes panes', () => {
+    const runtime = new GridRenderTilePaneRuntime()
+    const host = createHost()
+    const tileId = host.viewportTileKeys({
+      dprBucket: 1,
+      sheetOrdinal: 7,
+      viewport: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
+    })[0]
+    const renderTileSource = createMutableRenderTileSource([
+      {
+        ...createRenderTile(tileId),
+        version: {
+          axisX: 1,
+          axisY: 1,
+          freeze: 0,
+          styles: 1,
+          text: 1,
+          values: 1,
+        },
+      },
+    ])
+
+    runtime.resolve(
+      createInput({
+        gridRuntimeHost: host,
+        renderTileSource: renderTileSource.source,
+      }),
+    )
+    renderTileSource.setTile({
+      ...createRenderTile(tileId),
+      version: {
+        axisX: 2,
+        axisY: 3,
+        freeze: 4,
+        styles: 5,
+        text: 6,
+        values: 7,
+      },
+    })
+    const listenerChanges: unknown[] = []
+    const unsubscribe = runtime.connectRenderTileDeltas(
+      {
+        dprBucket: 1,
+        gridRuntimeHost: host,
+        renderTileSource: renderTileSource.source,
+        renderTileViewport: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
+        sheetId: 7,
+        sheetName: 'Sheet1',
+      },
+      (change) => listenerChanges.push(change),
+    )
+
+    renderTileSource.emit({ changedTileIds: [tileId] })
+
+    expect(host.tiles.residency.getExact(tileId)).toMatchObject({
+      axisSeqX: 2,
+      axisSeqY: 3,
+      freezeSeq: 4,
+      styleSeq: 5,
+      textSeq: 6,
+      valueSeq: 7,
+    })
+    expect(listenerChanges).toHaveLength(1)
+
+    renderTileSource.emit({ invalidatedTileIds: [tileId] })
+    expect(host.tiles.residency.getExact(tileId)).toBeNull()
+
     unsubscribe?.()
     expect(renderTileSource.unsubscribed()).toBe(true)
   })

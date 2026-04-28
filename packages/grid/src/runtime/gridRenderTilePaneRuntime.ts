@@ -179,7 +179,12 @@ export class GridRenderTilePaneRuntime {
         sheetName: input.sheetName,
         warmTileKeys: tileInterest.warmTileKeys,
       },
-      listener,
+      (change) => {
+        if (change) {
+          this.applyRenderTileSceneChange(input, change)
+        }
+        listener(change)
+      },
     )
   }
 
@@ -281,23 +286,23 @@ export class GridRenderTilePaneRuntime {
   }
 
   private upsertHostTile(input: GridRenderTilePaneRuntimeInput, tile: GridRenderTile): void {
-    input.gridRuntimeHost.tiles.upsertTile({
-      axisSeqX: tile.version.axisX,
-      axisSeqY: tile.version.axisY,
-      byteSizeCpu: estimateTileCpuBytes(tile),
-      byteSizeGpu: tile.rectInstances.byteLength + tile.textMetrics.byteLength,
-      colTile: tile.coord.colTile,
-      dprBucket: tile.coord.dprBucket,
-      freezeSeq: tile.version.freeze,
-      key: tile.tileId,
-      packet: tile,
-      rectSeq: tile.version.styles,
-      rowTile: tile.coord.rowTile,
-      sheetOrdinal: tile.coord.sheetId,
-      state: 'ready',
-      styleSeq: tile.version.styles,
-      textSeq: tile.version.text,
-      valueSeq: tile.version.values,
+    upsertRenderTileIntoHost(input.gridRuntimeHost, tile)
+  }
+
+  private applyRenderTileSceneChange(input: GridRenderTileDeltaRuntimeInput, change: GridRenderTileSceneChange): void {
+    change.invalidatedTileIds.forEach((tileId) => {
+      input.gridRuntimeHost.tiles.deleteTile(tileId)
+    })
+    const renderTileSource = input.renderTileSource
+    if (!renderTileSource) {
+      return
+    }
+    change.changedTileIds.forEach((tileId) => {
+      const tile = renderTileSource.peekRenderTile(tileId)
+      if (!tile || tile.coord.sheetId !== input.sheetId) {
+        return
+      }
+      upsertRenderTileIntoHost(input.gridRuntimeHost, tile)
     })
   }
 
@@ -349,6 +354,27 @@ export class GridRenderTilePaneRuntime {
 
 export function getGridRenderTilePaneRuntime(current: unknown): GridRenderTilePaneRuntime {
   return current instanceof GridRenderTilePaneRuntime ? current : new GridRenderTilePaneRuntime()
+}
+
+function upsertRenderTileIntoHost(gridRuntimeHost: GridRuntimeHost, tile: GridRenderTile): void {
+  gridRuntimeHost.tiles.upsertTile({
+    axisSeqX: tile.version.axisX,
+    axisSeqY: tile.version.axisY,
+    byteSizeCpu: estimateTileCpuBytes(tile),
+    byteSizeGpu: tile.rectInstances.byteLength + tile.textMetrics.byteLength,
+    colTile: tile.coord.colTile,
+    dprBucket: tile.coord.dprBucket,
+    freezeSeq: tile.version.freeze,
+    key: tile.tileId,
+    packet: tile,
+    rectSeq: tile.version.styles,
+    rowTile: tile.coord.rowTile,
+    sheetOrdinal: tile.coord.sheetId,
+    state: 'ready',
+    styleSeq: tile.version.styles,
+    textSeq: tile.version.text,
+    valueSeq: tile.version.values,
+  })
 }
 
 function estimateTileCpuBytes(tile: GridRenderTile): number {

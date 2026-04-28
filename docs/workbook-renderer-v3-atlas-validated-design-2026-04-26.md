@@ -403,6 +403,9 @@ Completed in the resident-scene deletion tranche:
 - The mounted V3 render-tile source now exposes decoded workbook-delta V3 batches to `GridRenderTilePaneRuntime`. The runtime dedupes those
   batches by sheet ordinal/sequence and applies their sheet-level dirty ranges directly to `GridRuntimeHost.tiles`, so visible/warm dirty-tile
   readiness no longer has to wait for replacement tile payloads before the host knows which fixed content tiles are dirty.
+- Render-tile delta callbacks now update the host-owned tile coordinator before the React pane bridge recomputes state. Changed fixed tiles are
+  upserted into `GridRuntimeHost.tiles` from the V3 render-tile source, and invalidated fixed tiles are deleted from host residency immediately,
+  so readiness snapshots no longer depend on a later hook memo pass to learn replacement payload revisions or tile misses.
 
 Remaining work from this design:
 

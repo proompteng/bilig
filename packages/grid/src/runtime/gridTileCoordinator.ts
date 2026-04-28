@@ -66,6 +66,10 @@ export class GridTileCoordinator<Packet = unknown, Resources = unknown> {
     return this.residency.upsert(input)
   }
 
+  deleteTile(key: TileKey53): boolean {
+    return this.residency.delete(key)
+  }
+
   reconcileInterest(input: GridTileInterestBatchV3): GridTileReadinessSnapshotV3 {
     this.residency.markVisible(input.visibleTileKeys)
     input.pinnedTileKeys.forEach((key) => {
