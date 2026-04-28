@@ -4,7 +4,7 @@ import type { GridEngineLike } from './grid-engine.js'
 import type { GridMetrics } from './gridMetrics.js'
 import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from './renderer-v3/render-tile-pane-state.js'
-import { GridRenderTilePaneRuntime } from './runtime/gridRenderTilePaneRuntime.js'
+import { getGridRenderTilePaneRuntime, type GridRenderTilePaneRuntime } from './runtime/gridRenderTilePaneRuntime.js'
 import type { GridRuntimeHost } from './runtime/gridRuntimeHost.js'
 
 type SortedAxisOverrides = readonly (readonly [number, number])[]
@@ -65,7 +65,7 @@ export function useWorkbookRenderTilePanes(input: {
     visibleViewport,
   } = input
   const tilePaneRuntimeRef = useRef<GridRenderTilePaneRuntime | null>(null)
-  tilePaneRuntimeRef.current ??= new GridRenderTilePaneRuntime()
+  tilePaneRuntimeRef.current = getGridRenderTilePaneRuntime(tilePaneRuntimeRef.current)
   const [renderTileRevision, setRenderTileRevision] = useState(0)
 
   useEffect(() => {

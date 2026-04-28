@@ -5,7 +5,7 @@ import { getGridMetrics } from '../gridMetrics.js'
 import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from '../renderer-v3/rect-instance-buffer.js'
 import type { GridRenderTile, GridRenderTileSource } from '../renderer-v3/render-tile-source.js'
 import { GRID_TEXT_METRIC_FLOAT_COUNT_V3 } from '../renderer-v3/text-run-buffer.js'
-import { GridRenderTilePaneRuntime } from '../runtime/gridRenderTilePaneRuntime.js'
+import { GridRenderTilePaneRuntime, getGridRenderTilePaneRuntime } from '../runtime/gridRenderTilePaneRuntime.js'
 import { GridRuntimeHost } from '../runtime/gridRuntimeHost.js'
 
 const TEST_ENGINE: GridEngineLike = {
@@ -119,6 +119,14 @@ function createInput(
 }
 
 describe('GridRenderTilePaneRuntime', () => {
+  it('replaces stale runtime refs from live reloads', () => {
+    const runtime = new GridRenderTilePaneRuntime()
+
+    expect(getGridRenderTilePaneRuntime(runtime)).toBe(runtime)
+    expect(getGridRenderTilePaneRuntime({})).toBeInstanceOf(GridRenderTilePaneRuntime)
+    expect(getGridRenderTilePaneRuntime(null)).toBeInstanceOf(GridRenderTilePaneRuntime)
+  })
+
   it('resolves remote render tiles into V3 pane placements', () => {
     const runtime = new GridRenderTilePaneRuntime()
     const host = createHost()

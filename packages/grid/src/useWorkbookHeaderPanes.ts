@@ -4,7 +4,7 @@ import type { GridHeaderPaneState } from './gridHeaderPanes.js'
 import type { GridMetrics } from './gridMetrics.js'
 import type { Item, Rectangle } from './gridTypes.js'
 import type { WorkbookRenderTilePaneState } from './renderer-v3/render-tile-pane-state.js'
-import { GridHeaderPaneRuntime } from './runtime/gridHeaderPaneRuntime.js'
+import { getGridHeaderPaneRuntime, type GridHeaderPaneRuntime } from './runtime/gridHeaderPaneRuntime.js'
 
 export function useWorkbookHeaderPanes(input: {
   readonly columnWidths: Readonly<Record<number, number>>
@@ -49,7 +49,7 @@ export function useWorkbookHeaderPanes(input: {
     sheetName,
   } = input
   const headerPaneRuntimeRef = useRef<GridHeaderPaneRuntime | null>(null)
-  headerPaneRuntimeRef.current ??= new GridHeaderPaneRuntime()
+  headerPaneRuntimeRef.current = getGridHeaderPaneRuntime(headerPaneRuntimeRef.current)
   const residentBodyOffsetX = residentBodyPane?.contentOffset.x ?? 0
   const residentBodyOffsetY = residentBodyPane?.contentOffset.y ?? 0
   const residentBodyHeight = residentBodyPane?.surfaceSize.height ?? 0

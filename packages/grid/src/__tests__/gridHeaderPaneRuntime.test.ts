@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getGridMetrics } from '../gridMetrics.js'
 import type { Rectangle } from '../gridTypes.js'
-import { GridHeaderPaneRuntime, type GridHeaderPaneRuntimeInput } from '../runtime/gridHeaderPaneRuntime.js'
+import { GridHeaderPaneRuntime, getGridHeaderPaneRuntime, type GridHeaderPaneRuntimeInput } from '../runtime/gridHeaderPaneRuntime.js'
 
 function createInput(overrides: Partial<GridHeaderPaneRuntimeInput> = {}): GridHeaderPaneRuntimeInput {
   const gridMetrics = getGridMetrics()
@@ -46,6 +46,14 @@ function createInput(overrides: Partial<GridHeaderPaneRuntimeInput> = {}): GridH
 }
 
 describe('GridHeaderPaneRuntime', () => {
+  it('replaces stale runtime refs from live reloads', () => {
+    const runtime = new GridHeaderPaneRuntime()
+
+    expect(getGridHeaderPaneRuntime(runtime)).toBe(runtime)
+    expect(getGridHeaderPaneRuntime({})).toBeInstanceOf(GridHeaderPaneRuntime)
+    expect(getGridHeaderPaneRuntime(null)).toBeInstanceOf(GridHeaderPaneRuntime)
+  })
+
   it('builds V3 header panes and applies body tile content offsets in runtime', () => {
     const panes = new GridHeaderPaneRuntime().resolve(createInput())
 

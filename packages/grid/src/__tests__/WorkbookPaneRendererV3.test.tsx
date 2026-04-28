@@ -106,11 +106,20 @@ describe('WorkbookPaneRendererV3', () => {
     })
 
     const canvas = host.querySelector('[data-testid="grid-pane-renderer"]')
+    const fallbackCanvas = host.querySelector('[data-testid="grid-pane-renderer-fallback"]')
     expect(canvas).toBeInstanceOf(HTMLCanvasElement)
+    expect(fallbackCanvas).toBeInstanceOf(HTMLCanvasElement)
+    expect(fallbackCanvas?.getAttribute('data-renderer-mode')).toBe('canvas2d-v3-fallback')
     expect(canvas?.getAttribute('data-pane-renderer')).toBe('workbook-pane-renderer-v3')
     expect(canvas?.getAttribute('data-renderer-mode')).toBe('typegpu-v3')
     expect(canvas?.getAttribute('data-v3-tile-pane-count')).toBe('1')
     expect(canvas?.getAttribute('data-v3-header-pane-count')).toBe('0')
+    if (!(canvas instanceof HTMLCanvasElement)) {
+      throw new Error('expected V3 renderer canvas to mount')
+    }
+    expect(canvas.style.width).toBe('100%')
+    expect(canvas.style.height).toBe('100%')
+    expect(canvas.style.contain).toBe('strict')
 
     await act(async () => {
       root.unmount()

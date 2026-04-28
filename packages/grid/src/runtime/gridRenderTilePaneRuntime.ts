@@ -148,3 +148,7 @@ export class GridRenderTilePaneRuntime {
     })
   }
 }
+
+export function getGridRenderTilePaneRuntime(current: unknown): GridRenderTilePaneRuntime {
+  return current instanceof GridRenderTilePaneRuntime ? current : new GridRenderTilePaneRuntime()
+}

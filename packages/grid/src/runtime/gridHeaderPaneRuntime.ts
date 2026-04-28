@@ -75,6 +75,10 @@ export class GridHeaderPaneRuntime {
   }
 }
 
+export function getGridHeaderPaneRuntime(current: unknown): GridHeaderPaneRuntime {
+  return current instanceof GridHeaderPaneRuntime ? current : new GridHeaderPaneRuntime()
+}
+
 function applyResidentBodyOffsets(
   headerPanes: readonly GridHeaderPaneState[],
   residentBodyPane: ResidentBodyPanePlacement | null,
