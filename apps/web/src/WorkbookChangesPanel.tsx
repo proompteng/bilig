@@ -100,7 +100,7 @@ export function WorkbookChangesPanel(props: {
       id="workbook-changes-panel"
     >
       {isEmpty ? (
-        <div className="flex min-h-[360px] flex-1 items-center justify-center px-5 py-10" data-testid="workbook-changes-empty-state">
+        <div className="flex min-h-0 flex-1 items-center justify-center px-5 py-6" data-testid="workbook-changes-empty-state">
           <div className="flex max-w-52 flex-col items-center text-center">
             <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)]">
               <ListChecks aria-hidden="true" className="h-4 w-4" />

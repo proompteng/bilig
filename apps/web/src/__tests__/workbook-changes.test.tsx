@@ -184,7 +184,10 @@ describe('workbook changes', () => {
     })
 
     expect(host.querySelector("[data-testid='workbook-changes-count']")?.textContent).toBe('0')
-    expect(host.querySelector("[data-testid='workbook-changes-empty-state']")).not.toBeNull()
+    const emptyState = host.querySelector("[data-testid='workbook-changes-empty-state']")
+    expect(emptyState).not.toBeNull()
+    expect(emptyState?.getAttribute('class')).toContain('min-h-0')
+    expect(emptyState?.getAttribute('class')).not.toContain('min-h-[360px]')
     expect(host.textContent).toContain('No changes yet')
     expect(host.textContent).toContain('Workbook is up to date.')
 
