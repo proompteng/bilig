@@ -26,6 +26,10 @@ Latest implementation note:
 - With that source present, the hook also bypasses V2 warm resident-viewport planning; tile prefetch needs to move to V3 tile interest batches next.
 - Transient fixed-tile misses retain the last fixed-tile pane set instead of immediately falling back to a full resident data-scene rebuild.
 - Frozen pane placements reuse the same fixed content tile under separate body/top/left/corner clip placements. V3 tile-pane buffers are keyed by numeric `tileId`, so body and frozen placements share the content resource.
+- `GridRenderTilePaneRuntime` now upserts mounted fixed content tiles into `GridRuntimeHost.tiles`, reconciles viewport tile interest through the
+  host-owned V3 tile coordinator, and exposes exact/stale/miss dirty-readiness diagnostics for the mounted tile-pane path.
+- `TileResidencyV3` refreshes revision tuples in place when a fixed content tile is updated, so stale-compatible lookup and future dirty-tile
+  decisions use the current axis/value/style/text/freeze revisions without replacing the stable residency entry.
 - Dynamic interaction overlays no longer build `GridScenePacketV2` values. They are emitted as `DynamicGridOverlayBatchV3` rect-instance buffers and drawn through a dedicated TypeGPU overlay resource outside tile cache and stale-tile lookup.
 - Render tile deltas no longer carry overlay mutations or a `dynamicOverlay` pane kind. Overlays are now a visual runtime layer, not renderer tile data.
 - Header panes no longer build or carry `GridScenePacketV2` values. They are emitted as fixed V3 header batches with packed rect instances plus text runs, and the TypeGPU backend draws them through dedicated header buffers outside tile cache and stale-tile lookup.

@@ -167,6 +167,62 @@ describe('GridRenderTilePaneRuntime', () => {
     expect(state.residentBodyPane?.tile.tileId).toBe(tileId)
     expect(state.renderTilePanes).toHaveLength(1)
     expect(state.preloadDataPanes).toHaveLength(0)
+    expect(state.tileReadiness).toMatchObject({
+      exactHits: [tileId],
+      misses: [],
+      staleHits: [],
+      visibleDirtyTileKeys: [],
+    })
+    expect(host.tiles.residency.getExact(tileId)?.packet).toMatchObject({
+      tileId,
+      version: {
+        values: 1,
+      },
+    })
+  })
+
+  it('refreshes host-owned tile revisions when remote tile contents update', () => {
+    const runtime = new GridRenderTilePaneRuntime()
+    const host = createHost()
+    const tileId = host.viewportTileKeys({
+      dprBucket: 1,
+      sheetOrdinal: 7,
+      viewport: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
+    })[0]
+
+    runtime.resolve(
+      createInput({
+        gridRuntimeHost: host,
+        renderTileSource: createRenderTileSource([createRenderTile(tileId)]),
+      }),
+    )
+    runtime.resolve(
+      createInput({
+        gridRuntimeHost: host,
+        renderTileSource: createRenderTileSource([
+          {
+            ...createRenderTile(tileId),
+            version: {
+              axisX: 5,
+              axisY: 6,
+              freeze: 7,
+              styles: 8,
+              text: 9,
+              values: 10,
+            },
+          },
+        ]),
+      }),
+    )
+
+    expect(host.tiles.residency.getExact(tileId)).toMatchObject({
+      axisSeqX: 5,
+      axisSeqY: 6,
+      freezeSeq: 7,
+      styleSeq: 8,
+      textSeq: 9,
+      valueSeq: 10,
+    })
   })
 
   it('retains the previous same-sheet panes while a remote tile is temporarily unavailable', () => {

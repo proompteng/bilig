@@ -90,6 +90,19 @@ export class TileResidencyV3<Packet = unknown, Resources = unknown> {
         existing.compatibilityKey = compatibilityKey
         this.addToCompatibilityBucket(existing)
       }
+      Object.assign(existing, {
+        axisSeqX: input.axisSeqX,
+        axisSeqY: input.axisSeqY,
+        colTile: input.colTile,
+        dprBucket: input.dprBucket,
+        freezeSeq: input.freezeSeq,
+        rectSeq: input.rectSeq,
+        rowTile: input.rowTile,
+        sheetOrdinal: input.sheetOrdinal,
+        styleSeq: input.styleSeq,
+        textSeq: input.textSeq,
+        valueSeq: input.valueSeq,
+      })
       existing.packet = input.packet ?? existing.packet
       existing.resources = input.resources ?? existing.resources
       existing.dirtyMask = input.dirtyMask ?? existing.dirtyMask

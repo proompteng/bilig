@@ -78,4 +78,23 @@ describe('TileResidencyV3', () => {
     expect(residency.getExact(second.key)).toBeNull()
     expect(residency.getExact(third.key)).toBe(third)
   })
+
+  it('updates revision fields in place when an existing tile is refreshed', () => {
+    const residency = new TileResidencyV3()
+    const original = residency.upsert(entry(0, 0, { axisSeqX: 1, valueSeq: 1 }))
+    const refreshed = residency.upsert(entry(0, 0, { axisSeqX: 3, valueSeq: 7, textSeq: 8 }))
+
+    expect(refreshed).toBe(original)
+    expect(refreshed).toMatchObject({
+      axisSeqX: 3,
+      axisSeqY: 1,
+      freezeSeq: 1,
+      valueSeq: 7,
+      styleSeq: 1,
+      textSeq: 8,
+      rectSeq: 1,
+    })
+    expect(residency.findStaleCompatible({ ...entry(0, 1), axisSeqX: 1 })).toBeNull()
+    expect(residency.findStaleCompatible({ ...entry(0, 1), axisSeqX: 3 })).toBe(refreshed)
+  })
 })

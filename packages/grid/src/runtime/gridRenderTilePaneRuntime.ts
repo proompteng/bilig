@@ -5,6 +5,7 @@ import { buildLocalFixedRenderTiles } from '../renderer-v3/local-render-tile-mat
 import { buildFixedRenderTilePaneStates } from '../renderer-v3/render-tile-pane-builder.js'
 import type { GridRenderTile, GridRenderTileSceneChange, GridRenderTileSource } from '../renderer-v3/render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from '../renderer-v3/render-tile-pane-state.js'
+import type { GridTileReadinessSnapshotV3 } from './gridTileCoordinator.js'
 import type { GridRuntimeHost } from './gridRuntimeHost.js'
 
 type SortedAxisOverrides = readonly (readonly [number, number])[]
@@ -14,6 +15,7 @@ export interface GridRenderTilePaneRuntimeState {
   readonly renderTilePanes: readonly WorkbookRenderTilePaneState[]
   readonly residentBodyPane: WorkbookRenderTilePaneState | null
   readonly residentDataPanes: readonly WorkbookRenderTilePaneState[]
+  readonly tileReadiness: GridTileReadinessSnapshotV3
 }
 
 export interface GridRenderTilePaneRuntimeInput {
@@ -55,6 +57,13 @@ const EMPTY_TILE_PANE_RUNTIME_STATE: GridRenderTilePaneRuntimeState = Object.fre
   renderTilePanes: [],
   residentBodyPane: null,
   residentDataPanes: [],
+  tileReadiness: {
+    exactHits: [],
+    misses: [],
+    staleHits: [],
+    visibleDirtyTileKeys: [],
+    warmDirtyTileKeys: [],
+  },
 })
 
 export class GridRenderTilePaneRuntime {
@@ -67,7 +76,9 @@ export class GridRenderTilePaneRuntime {
     if (!input.hostReady) {
       return EMPTY_TILE_PANE_RUNTIME_STATE
     }
-    const fixedRenderTileDataPanes = this.resolveFixedRenderTileDataPanes(input)
+    const tiles = this.resolveTiles(input)
+    const tileReadiness = this.resolveTileReadiness(input, tiles ?? [])
+    const fixedRenderTileDataPanes = tiles ? this.buildFixedRenderTileDataPanes(input, tiles) : null
     if (input.sheetId !== undefined && fixedRenderTileDataPanes) {
       this.retainedFixedRenderTileDataPanes = {
         panes: fixedRenderTileDataPanes,
@@ -87,6 +98,7 @@ export class GridRenderTilePaneRuntime {
       renderTilePanes: residentDataPanes,
       residentBodyPane: residentDataPanes.find((pane) => pane.paneId === 'body') ?? null,
       residentDataPanes,
+      tileReadiness,
     }
   }
 
@@ -121,14 +133,10 @@ export class GridRenderTilePaneRuntime {
     )
   }
 
-  private resolveFixedRenderTileDataPanes(input: GridRenderTilePaneRuntimeInput): readonly WorkbookRenderTilePaneState[] | null {
-    if (!input.hostReady) {
-      return null
-    }
-    const tiles = this.resolveTiles(input)
-    if (!tiles) {
-      return null
-    }
+  private buildFixedRenderTileDataPanes(
+    input: GridRenderTilePaneRuntimeInput,
+    tiles: readonly GridRenderTile[],
+  ): readonly WorkbookRenderTilePaneState[] | null {
     const panes = buildFixedRenderTilePaneStates({
       freezeCols: input.freezeCols,
       freezeRows: input.freezeRows,
@@ -144,6 +152,44 @@ export class GridRenderTilePaneRuntime {
       visibleViewport: input.visibleViewport,
     })
     return panes.length > 0 ? panes : null
+  }
+
+  private resolveTileReadiness(input: GridRenderTilePaneRuntimeInput, tiles: readonly GridRenderTile[]): GridTileReadinessSnapshotV3 {
+    if (input.sheetId === undefined) {
+      return EMPTY_TILE_PANE_RUNTIME_STATE.tileReadiness
+    }
+    for (const tile of tiles) {
+      this.upsertHostTile(input, tile)
+    }
+    const interest = input.gridRuntimeHost.buildViewportTileInterest({
+      dprBucket: input.dprBucket,
+      reason: 'scroll',
+      sheetId: input.sheetId,
+      sheetOrdinal: input.sheetId,
+      viewport: input.renderTileViewport,
+    })
+    return input.gridRuntimeHost.tiles.reconcileInterest(interest)
+  }
+
+  private upsertHostTile(input: GridRenderTilePaneRuntimeInput, tile: GridRenderTile): void {
+    input.gridRuntimeHost.tiles.upsertTile({
+      axisSeqX: tile.version.axisX,
+      axisSeqY: tile.version.axisY,
+      byteSizeCpu: estimateTileCpuBytes(tile),
+      byteSizeGpu: tile.rectInstances.byteLength + tile.textMetrics.byteLength,
+      colTile: tile.coord.colTile,
+      dprBucket: tile.coord.dprBucket,
+      freezeSeq: tile.version.freeze,
+      key: tile.tileId,
+      packet: tile,
+      rectSeq: tile.version.styles,
+      rowTile: tile.coord.rowTile,
+      sheetOrdinal: tile.coord.sheetId,
+      state: 'ready',
+      styleSeq: tile.version.styles,
+      textSeq: tile.version.text,
+      valueSeq: tile.version.values,
+    })
   }
 
   private resolveTiles(input: GridRenderTilePaneRuntimeInput): readonly GridRenderTile[] | null {
@@ -187,4 +233,14 @@ export class GridRenderTilePaneRuntime {
 
 export function getGridRenderTilePaneRuntime(current: unknown): GridRenderTilePaneRuntime {
   return current instanceof GridRenderTilePaneRuntime ? current : new GridRenderTilePaneRuntime()
+}
+
+function estimateTileCpuBytes(tile: GridRenderTile): number {
+  let textBytes = 0
+  for (const run of tile.textRuns) {
+    textBytes += run.text.length * 2
+    textBytes += run.font.length * 2
+    textBytes += run.color.length * 2
+  }
+  return tile.rectInstances.byteLength + tile.textMetrics.byteLength + textBytes
 }
