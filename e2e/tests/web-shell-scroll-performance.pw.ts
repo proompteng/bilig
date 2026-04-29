@@ -394,6 +394,8 @@ test.describe('@browser-perf web app scroll performance', () => {
       expect(report.counters.rendererDeltaBatches).toBeGreaterThan(0)
       expect(report.counters.rendererDeltaBatches).toBeLessThanOrEqual(6)
       expect(report.counters.dirtyTilesMarked).toBeGreaterThan(0)
+      expect(report.samples.mutationToVisibleMs.length).toBeGreaterThan(0)
+      expect(report.summary.mutationToVisibleMs.p95).toBeLessThan(100)
       expect(report.counters.canvasPaints['text:body'] ?? 0).toBeLessThanOrEqual(6)
       expect(report.counters.canvasPaints['gpu:body'] ?? 0).toBeLessThanOrEqual(6)
       expectQuietShell(report)

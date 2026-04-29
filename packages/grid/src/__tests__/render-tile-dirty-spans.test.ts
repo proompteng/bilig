@@ -79,6 +79,18 @@ describe('render tile dirty spans v3', () => {
     expect(spans.textSpans).toEqual([{ offset: 0, length: 2 }])
   })
 
+  test('merges unsorted overlapping rect dirty spans without a sorted copy', () => {
+    const spans = resolveGridRenderTileDirtySpansV3(
+      createTile({
+        dirtyLocalCols: new Uint32Array([1, 3, 0, 1]),
+        dirtyLocalRows: new Uint32Array([2, 2, 2, 2]),
+        dirtyMasks: new Uint32Array([DirtyMaskV3.Style | DirtyMaskV3.Rect, DirtyMaskV3.Style | DirtyMaskV3.Rect]),
+      }),
+    )
+
+    expect(spans.rectSpans).toEqual([{ offset: 8, length: 4 }])
+  })
+
   test('falls back to full rect damage when rect instances are not one-per-cell', () => {
     const spans = resolveGridRenderTileDirtySpansV3(
       createTile({

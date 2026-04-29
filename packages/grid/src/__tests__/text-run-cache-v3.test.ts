@@ -50,6 +50,7 @@ describe('TextRunCacheV3', () => {
 
     expect(updated.runId).toBe(first.runId)
     expect(updated.byteSize).toBe(12)
+    expect(updated.glyphIds).toEqual([1, 2])
     expect(cache.stats()).toMatchObject({ byteSize: 12, runCount: 1 })
   })
 
@@ -67,5 +68,21 @@ describe('TextRunCacheV3', () => {
     expect(cache.getById(first.runId)).toBe(first)
     expect(cache.getById(second.runId)).toBeNull()
     expect(cache.getById(third.runId)).toBe(third)
+  })
+
+  it('evicts repeatedly from the LRU head without disturbing recently touched runs', () => {
+    const cache = new TextRunCacheV3()
+    const first = cache.put({ glyphIds: [1], key: key({ textInternId: 1 }), payload: Uint32Array.from([1, 2]) })
+    const second = cache.put({ glyphIds: [2], key: key({ textInternId: 2 }), payload: Uint32Array.from([3, 4]) })
+    const third = cache.put({ glyphIds: [3], key: key({ textInternId: 3 }), payload: Uint32Array.from([5, 6]) })
+    const fourth = cache.put({ glyphIds: [4], key: key({ textInternId: 4 }), payload: Uint32Array.from([7, 8]) })
+
+    expect(cache.getById(second.runId)).toBe(second)
+    expect(cache.evictToBudget(8)).toBe(3)
+
+    expect(cache.getById(first.runId)).toBeNull()
+    expect(cache.getById(third.runId)).toBeNull()
+    expect(cache.getById(fourth.runId)).toBeNull()
+    expect(cache.getById(second.runId)).toBe(second)
   })
 })

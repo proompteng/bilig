@@ -483,7 +483,6 @@ export function createEngineServiceRuntime(args: {
     retargetRangeDependencies: (transaction, rangeIndices) => binding.retargetRangeDependenciesNow(transaction, rangeIndices),
     collectFormulaCellsOwnedBySheet: (sheetName) => binding.collectFormulaCellsOwnedBySheetNow(sheetName),
     forEachFormulaCellOwnedBySheet: (sheetName, fn) => binding.forEachFormulaCellOwnedBySheetNow(sheetName, fn),
-    countFormulaFamilySheetMembers: (sheetId) => binding.countFormulaFamilySheetMembersNow(sheetId),
     forEachFormulaFamily: (fn) => binding.forEachFormulaFamilyNow(fn),
     setFormulaFamilyStructuralSourceTransform: (familyId, transform) =>
       binding.setFormulaFamilyStructuralSourceTransformNow(familyId, transform),

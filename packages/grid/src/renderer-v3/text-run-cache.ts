@@ -22,6 +22,12 @@ export interface TextRunRecordV3<Payload extends ArrayBufferView = Uint32Array |
   lastUsedGeneration: number
 }
 
+interface TextRunCacheRecordV3<Payload extends ArrayBufferView = Uint32Array | Float32Array> extends TextRunRecordV3<Payload> {
+  glyphIds: GlyphIdV3[]
+  lruPrev: TextRunCacheRecordV3<Payload> | null
+  lruNext: TextRunCacheRecordV3<Payload> | null
+}
+
 export interface TextRunCacheStatsV3 {
   readonly runCount: number
   readonly byteSize: number
@@ -29,11 +35,13 @@ export interface TextRunCacheStatsV3 {
 }
 
 export class TextRunCacheV3<Payload extends ArrayBufferView = Uint32Array | Float32Array> {
-  private readonly recordsByKey = new Map<string, TextRunRecordV3<Payload>>()
-  private readonly recordsById = new Map<number, TextRunRecordV3<Payload>>()
+  private readonly recordsByKey = new Map<string, TextRunCacheRecordV3<Payload>>()
+  private readonly recordsById = new Map<number, TextRunCacheRecordV3<Payload>>()
   private nextRunId = 1
   private generation = 0
   private bytes = 0
+  private lruHead: TextRunCacheRecordV3<Payload> | null = null
+  private lruTail: TextRunCacheRecordV3<Payload> | null = null
 
   stats(): TextRunCacheStatsV3 {
     return {
@@ -67,17 +75,20 @@ export class TextRunCacheV3<Payload extends ArrayBufferView = Uint32Array | Floa
     const byteSize = input.payload.byteLength
     if (existing) {
       this.bytes += byteSize - existing.byteSize
+      existing.glyphIds = [...input.glyphIds]
       existing.payload = input.payload
       existing.byteSize = byteSize
       this.touch(existing)
       return existing
     }
 
-    const record: TextRunRecordV3<Payload> = {
+    const record: TextRunCacheRecordV3<Payload> = {
       byteSize,
       glyphIds: [...input.glyphIds],
       key: { ...input.key },
       lastUsedGeneration: 0,
+      lruNext: null,
+      lruPrev: null,
       payload: input.payload,
       runId: this.nextRunId++,
     }
@@ -108,6 +119,7 @@ export class TextRunCacheV3<Payload extends ArrayBufferView = Uint32Array | Floa
     this.recordsById.delete(record.runId)
     this.recordsByKey.delete(encodeTextRunKeyV3(record.key))
     this.bytes -= record.byteSize
+    this.detach(record)
     return record
   }
 
@@ -115,7 +127,7 @@ export class TextRunCacheV3<Payload extends ArrayBufferView = Uint32Array | Floa
     const budget = Math.max(0, maxBytes)
     let evicted = 0
     while (this.bytes > budget && this.recordsById.size > 0) {
-      const victim = this.findLeastRecentlyUsed()
+      const victim = this.lruHead
       if (!victim) {
         break
       }
@@ -129,19 +141,36 @@ export class TextRunCacheV3<Payload extends ArrayBufferView = Uint32Array | Floa
     return evicted
   }
 
-  private touch(record: TextRunRecordV3<Payload>): void {
+  private touch(record: TextRunCacheRecordV3<Payload>): void {
     this.generation += 1
     record.lastUsedGeneration = this.generation
+    this.detach(record)
+    if (this.lruTail) {
+      this.lruTail.lruNext = record
+      record.lruPrev = this.lruTail
+      record.lruNext = null
+      this.lruTail = record
+      return
+    }
+    record.lruPrev = null
+    record.lruNext = null
+    this.lruHead = record
+    this.lruTail = record
   }
 
-  private findLeastRecentlyUsed(): TextRunRecordV3<Payload> | null {
-    let victim: TextRunRecordV3<Payload> | null = null
-    for (const record of this.recordsById.values()) {
-      if (!victim || record.lastUsedGeneration < victim.lastUsedGeneration) {
-        victim = record
-      }
+  private detach(record: TextRunCacheRecordV3<Payload>): void {
+    if (record.lruPrev) {
+      record.lruPrev.lruNext = record.lruNext
+    } else if (this.lruHead === record) {
+      this.lruHead = record.lruNext
     }
-    return victim
+    if (record.lruNext) {
+      record.lruNext.lruPrev = record.lruPrev
+    } else if (this.lruTail === record) {
+      this.lruTail = record.lruPrev
+    }
+    record.lruPrev = null
+    record.lruNext = null
   }
 }
 

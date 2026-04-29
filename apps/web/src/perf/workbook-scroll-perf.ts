@@ -59,6 +59,7 @@ interface WorkbookScrollPerfSamples {
   readonly frameMs: number[]
   readonly longTasksMs: number[]
   readonly inputToDrawMs: number[]
+  readonly mutationToVisibleMs: number[]
 }
 
 interface WorkbookScrollPerfSummary {
@@ -77,6 +78,7 @@ export interface WorkbookScrollPerfReport {
     readonly frameMs: WorkbookScrollPerfSummary
     readonly inputToDrawMs: WorkbookScrollPerfSummary
     readonly longTasksMs: WorkbookScrollPerfSummary
+    readonly mutationToVisibleMs: WorkbookScrollPerfSummary
   }
   readonly counters: WorkbookScrollPerfCounters
 }
@@ -139,6 +141,7 @@ class WorkbookScrollPerfCollector {
   private frameSamples: number[] = []
   private longTaskSamples: number[] = []
   private inputToDrawSamples: number[] = []
+  private mutationToVisibleSamples: number[] = []
   private workload = 'idle'
   private fixture: WorkbookScrollPerfFixture | null = null
   private benchmarkState: BenchmarkState = 'idle'
@@ -146,6 +149,7 @@ class WorkbookScrollPerfCollector {
   private rafHandle: number | null = null
   private lastFrameAt: number | null = null
   private lastScrollInputAt: number | null = null
+  private pendingMutationApplyAt: number | null = null
   private observer: PerformanceObserver | null = null
   private warmupFramesRemaining = 0
 
@@ -190,6 +194,9 @@ class WorkbookScrollPerfCollector {
     this.totalCounters.rendererDeltaMutations += input.mutationCount
     this.totalCounters.dirtyTilesMarked += input.dirtyTileCount
     this.totalCounters.rendererDeltaApplyMs += input.durationMs
+    if (input.dirtyTileCount > 0 && this.warmupFramesRemaining === 0 && this.pendingMutationApplyAt === null) {
+      this.pendingMutationApplyAt = nowMs()
+    }
   }
 
   noteRendererTileReadiness(input: {
@@ -326,11 +333,17 @@ class WorkbookScrollPerfCollector {
   }
 
   noteGridDrawFrame(timestamp: number): void {
-    if (this.warmupFramesRemaining > 0 || this.lastScrollInputAt === null) {
+    if (this.warmupFramesRemaining > 0) {
       return
     }
-    this.inputToDrawSamples.push(Math.max(0, timestamp - this.lastScrollInputAt))
-    this.lastScrollInputAt = null
+    if (this.lastScrollInputAt !== null) {
+      this.inputToDrawSamples.push(Math.max(0, timestamp - this.lastScrollInputAt))
+      this.lastScrollInputAt = null
+    }
+    if (this.pendingMutationApplyAt !== null) {
+      this.mutationToVisibleSamples.push(Math.max(0, timestamp - this.pendingMutationApplyAt))
+      this.pendingMutationApplyAt = null
+    }
   }
 
   startSampling(workload: string): void {
@@ -339,9 +352,11 @@ class WorkbookScrollPerfCollector {
     this.frameSamples = []
     this.longTaskSamples = []
     this.inputToDrawSamples = []
+    this.mutationToVisibleSamples = []
     this.baselineCounters = null
     this.lastFrameAt = null
     this.lastScrollInputAt = null
+    this.pendingMutationApplyAt = null
     this.warmupFramesRemaining = WARMUP_FRAME_COUNT
     this.installLongTaskObserver()
     this.scheduleFrame()
@@ -364,11 +379,13 @@ class WorkbookScrollPerfCollector {
         frameMs: [...this.frameSamples],
         inputToDrawMs: [...this.inputToDrawSamples],
         longTasksMs: [...this.longTaskSamples],
+        mutationToVisibleMs: [...this.mutationToVisibleSamples],
       },
       summary: {
         frameMs: summarizeNumbers(this.frameSamples),
         inputToDrawMs: summarizeNumbers(this.inputToDrawSamples),
         longTasksMs: summarizeNumbers(this.longTaskSamples),
+        mutationToVisibleMs: summarizeNumbers(this.mutationToVisibleSamples),
       },
       counters: subtractCounters(this.totalCounters, this.baselineCounters),
     }
@@ -376,8 +393,10 @@ class WorkbookScrollPerfCollector {
     this.frameSamples = []
     this.longTaskSamples = []
     this.inputToDrawSamples = []
+    this.mutationToVisibleSamples = []
     this.lastFrameAt = null
     this.lastScrollInputAt = null
+    this.pendingMutationApplyAt = null
     this.warmupFramesRemaining = 0
     return report
   }
@@ -392,7 +411,9 @@ class WorkbookScrollPerfCollector {
             this.frameSamples = []
             this.longTaskSamples = []
             this.inputToDrawSamples = []
+            this.mutationToVisibleSamples = []
             this.lastScrollInputAt = null
+            this.pendingMutationApplyAt = null
           }
         } else {
           this.frameSamples.push(timestamp - this.lastFrameAt)
@@ -421,6 +442,10 @@ class WorkbookScrollPerfCollector {
       this.observer = null
     }
   }
+}
+
+function nowMs(): number {
+  return performance.now()
 }
 
 function cloneCounters(counters: WorkbookScrollPerfCounters): WorkbookScrollPerfCounters {

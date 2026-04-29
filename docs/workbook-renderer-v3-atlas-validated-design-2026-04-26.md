@@ -452,9 +452,14 @@ Completed in the resident-scene deletion tranche:
   React tile-pane bridge no longer imports the readiness counter, calls `engine.subscribeCells()` directly, or clears retained panes itself.
 - `GridViewportResidencyRuntime` now owns local fallback scene-revision increments and resident-cell invalidation subscriptions. The viewport
   residency hook no longer carries a React-owned scene revision counter or subscribes to cells directly.
+- Browser scroll perf reports now include `mutationToVisibleMs`, sampled from a dirty renderer-delta apply to the next V3 draw frame. The
+  collaborator-patch perf gate asserts that visible renderer mutations produce at least one measured visible frame under the remote-edit SLA.
+- V3 dirty-span merging no longer allocates a sorted copy on the dirty tile upload path. Unsorted overlapping spans are merged incrementally,
+  preserving bounded partial rect/text upload metadata without `toSorted()` churn.
+- `TextRunCacheV3` now uses an intrusive LRU list for touch and byte-budget eviction instead of scanning all cached runs for each eviction, and
+  updating an existing cached run refreshes its glyph dependency list without changing its stable run ID.
 
 Remaining work from this design:
 
 - continue splitting remaining draw/dirty-tile coordination out of `useWorkbookGridRenderState.ts`;
-- continue extending glyph dependency preservation into missing-glyph retry/update behavior;
 - continue tightening browser perf gates for V3 mutation, resize, and collaboration paths beyond the steady-scroll samples.

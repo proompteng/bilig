@@ -155,23 +155,33 @@ function mergeDirtySpans(spans: readonly GridRenderTileDirtySpan[]): readonly Gr
   if (spans.length <= 1) {
     return spans
   }
-  const sorted = [...spans].toSorted((left, right) => left.offset - right.offset || left.length - right.length)
   const merged: GridRenderTileDirtySpan[] = []
-  for (const span of sorted) {
-    const last = merged[merged.length - 1]
-    if (!last) {
-      merged.push(span)
-      continue
-    }
-    const lastEnd = last.offset + last.length
-    if (span.offset <= lastEnd) {
-      merged[merged.length - 1] = {
-        offset: last.offset,
-        length: Math.max(lastEnd, span.offset + span.length) - last.offset,
-      }
-      continue
-    }
-    merged.push(span)
+  for (const span of spans) {
+    insertMergedDirtySpan(merged, span)
   }
   return merged
+}
+
+function insertMergedDirtySpan(merged: GridRenderTileDirtySpan[], span: GridRenderTileDirtySpan): void {
+  if (span.length <= 0) {
+    return
+  }
+  let nextOffset = span.offset
+  let nextEnd = span.offset + span.length
+  let index = 0
+  while (index < merged.length) {
+    const current = merged[index]!
+    const currentEnd = current.offset + current.length
+    if (nextEnd < current.offset) {
+      break
+    }
+    if (nextOffset > currentEnd) {
+      index += 1
+      continue
+    }
+    nextOffset = Math.min(nextOffset, current.offset)
+    nextEnd = Math.max(nextEnd, currentEnd)
+    merged.splice(index, 1)
+  }
+  merged.splice(index, 0, { offset: nextOffset, length: nextEnd - nextOffset })
 }

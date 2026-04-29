@@ -321,6 +321,26 @@ describe('engine fuzz regressions', () => {
     expect(engine.exportSnapshot()).toEqual(seedSnapshot)
   })
 
+  it('rewrites non-family symbolic formulas after consecutive family-deferred column inserts', async () => {
+    const seedSnapshot = await createEngineSeedSnapshot('cross-sheet-graph', 'mixed-family-symbolic-column-insert-regression')
+    const engine = new SpreadsheetEngine({
+      workbookName: seedSnapshot.workbook.name,
+      replicaId: 'mixed-family-symbolic-column-insert-regression',
+    })
+    await engine.ready()
+    engine.importSnapshot(structuredClone(seedSnapshot))
+
+    engine.insertColumns('Sheet1', 0, 1)
+    engine.insertColumns('Sheet1', 0, 1)
+    expect(engine.getCell('Sheet1', 'E3').formula).toBe('D3*(1+TaxCell)')
+    engine.insertRows('Sheet1', 0, 1)
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.undo()).toBe(true)
+    expect(engine.undo()).toBe(true)
+    expect(engine.exportSnapshot()).toEqual(seedSnapshot)
+  })
+
   it('imports snapshots with structurally invalidated formula dependencies as ref errors', async () => {
     const seedSnapshot = await createEngineSeedSnapshot('formula-graph', 'invalid-range-dependency-import-regression')
     const engine = new SpreadsheetEngine({

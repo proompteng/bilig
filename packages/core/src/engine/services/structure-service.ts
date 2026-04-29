@@ -282,7 +282,6 @@ export function createEngineStructureService(args: {
   readonly rewriteFormulaCompiledPreservingBinding: (input: StructuralFormulaRebindInput) => boolean
   readonly collectFormulaCellsOwnedBySheet: (sheetName: string) => readonly number[]
   readonly forEachFormulaCellOwnedBySheet: (sheetName: string, fn: (cellIndex: number) => void) => void
-  readonly countFormulaFamilySheetMembers: (sheetId: number) => number
   readonly forEachFormulaFamily: (fn: (family: FormulaFamily) => void) => void
   readonly setFormulaFamilyStructuralSourceTransform: (
     familyId: number,
@@ -1254,7 +1253,12 @@ export function createEngineStructureService(args: {
       ) {
         return false
       }
-      const ownedFormulaCount = args.countFormulaFamilySheetMembers(argsForImpact.targetSheetId)
+      const ownedFormulaCount = args.collectFormulaCellsOwnedBySheet(argsForImpact.sheetName).filter((cellIndex) => {
+        if (!args.state.formulas.has(cellIndex)) {
+          return false
+        }
+        return args.state.workbook.cellStore.sheetIds[cellIndex] === argsForImpact.targetSheetId
+      }).length
       if (ownedFormulaCount === 0) {
         return false
       }
