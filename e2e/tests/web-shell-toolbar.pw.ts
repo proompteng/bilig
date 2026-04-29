@@ -85,6 +85,24 @@ test('web app keeps toolbar controls aligned and consistently sized', async ({ p
   expect(toolbarBox.height).toBeLessThanOrEqual(48)
 })
 
+test('web app shows readable sync status when the toolbar has room', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 760 })
+  await page.goto('/')
+  await waitForWorkbookReady(page)
+
+  const syncText = await page.getByTestId('status-sync').textContent()
+  expect(syncText).toMatch(/^(Saved|Saving…|Sync pending|Local saved|Local only|Read only|Offline|Sync issue)$/)
+  await expect(page.getByTestId('status-label')).toHaveText(syncText ?? '')
+  await expect(page.getByTestId('status-label')).toBeVisible()
+
+  await page.setViewportSize({ width: 390, height: 760 })
+  const labelBox = await getBox(page.getByTestId('status-label'))
+  const statusBox = await getBox(page.getByTestId('status-mode'))
+
+  expect(labelBox.width).toBeLessThanOrEqual(2)
+  expect(statusBox.width).toBeLessThanOrEqual(12)
+})
+
 test('web app keeps toolbar, formula bar, grid, and footer tightly stacked', async ({ page }) => {
   await page.goto('/')
   await waitForWorkbookReady(page)

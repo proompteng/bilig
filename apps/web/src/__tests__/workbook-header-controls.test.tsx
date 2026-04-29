@@ -9,7 +9,7 @@ afterEach(() => {
 })
 
 describe('WorkbookHeaderStatusChip', () => {
-  it('renders the saved state as a dot-only indicator without visible label text', async () => {
+  it('renders the saved state as a readable compact indicator', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     const host = document.createElement('div')
@@ -25,7 +25,8 @@ describe('WorkbookHeaderStatusChip', () => {
     expect(status?.getAttribute('class')).not.toContain('border')
     expect(status?.getAttribute('class')).not.toContain('bg-[')
     expect(status?.getAttribute('class')).not.toContain('rounded-')
-    expect(host.querySelector("[data-testid='status-label']")).toBeNull()
+    expect(status?.getAttribute('class')).toContain('max-[420px]:gap-0')
+    expect(host.querySelector("[data-testid='status-label']")?.textContent).toBe('Saved')
     expect(host.querySelector("[data-testid='status-sync']")?.textContent).toBe('Saved')
 
     await act(async () => {
@@ -33,7 +34,7 @@ describe('WorkbookHeaderStatusChip', () => {
     })
   })
 
-  it('keeps non-saved status text available while collapsing its visual width on tiny screens', async () => {
+  it('keeps status text available while collapsing its visual width on tiny screens', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     const host = document.createElement('div')
@@ -47,9 +48,9 @@ describe('WorkbookHeaderStatusChip', () => {
     const status = host.querySelector("[data-testid='status-mode']")
     const label = host.querySelector("[data-testid='status-label']")
 
-    expect(status?.getAttribute('class')).toContain('max-[360px]:gap-0')
+    expect(status?.getAttribute('class')).toContain('max-[420px]:gap-0')
     expect(label?.textContent).toBe('Saving…')
-    expect(label?.getAttribute('class')).toContain('max-[360px]:sr-only')
+    expect(label?.getAttribute('class')).toContain('max-[420px]:sr-only')
     expect(host.querySelector("[data-testid='status-sync']")?.textContent).toBe('Saving…')
 
     await act(async () => {
