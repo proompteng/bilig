@@ -27,13 +27,13 @@ test('web app keeps sheet tabs and status bar visible in a short viewport', asyn
   await waitForWorkbookReady(page)
 
   const sheetTab = page.getByRole('tab', { name: 'Sheet1' })
-  const statusSync = page.getByTestId('status-sync')
+  const statusSummary = page.getByTestId('workbook-selection-summary')
 
   await expect(sheetTab).toBeVisible()
-  await expect(statusSync).toBeVisible()
+  await expect(statusSummary).toBeVisible()
 
   const tabBox = await sheetTab.boundingBox()
-  const statusBox = await statusSync.boundingBox()
+  const statusBox = await statusSummary.boundingBox()
   if (!tabBox || !statusBox) {
     throw new Error('footer controls are not visible')
   }

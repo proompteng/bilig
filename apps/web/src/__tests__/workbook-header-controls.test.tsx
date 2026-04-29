@@ -27,7 +27,10 @@ describe('WorkbookHeaderStatusChip', () => {
     expect(status?.getAttribute('class')).not.toContain('rounded-')
     expect(status?.getAttribute('class')).toContain('max-[420px]:gap-0')
     expect(host.querySelector("[data-testid='status-label']")?.textContent).toBe('Saved')
-    expect(host.querySelector("[data-testid='status-sync']")?.textContent).toBe('Saved')
+    const sync = host.querySelector<HTMLElement>("[data-testid='status-sync']")
+    expect(sync?.textContent).toBe('Saved')
+    expect(sync?.hidden).toBe(true)
+    expect(sync?.getAttribute('aria-hidden')).toBe('true')
 
     await act(async () => {
       root.unmount()
@@ -51,7 +54,9 @@ describe('WorkbookHeaderStatusChip', () => {
     expect(status?.getAttribute('class')).toContain('max-[420px]:gap-0')
     expect(label?.textContent).toBe('Saving…')
     expect(label?.getAttribute('class')).toContain('max-[420px]:sr-only')
-    expect(host.querySelector("[data-testid='status-sync']")?.textContent).toBe('Saving…')
+    const sync = host.querySelector<HTMLElement>("[data-testid='status-sync']")
+    expect(sync?.textContent).toBe('Saving…')
+    expect(sync?.hidden).toBe(true)
 
     await act(async () => {
       root.unmount()

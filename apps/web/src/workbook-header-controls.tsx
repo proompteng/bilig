@@ -99,7 +99,7 @@ export function WorkbookHeaderStatusChip({ modeLabel, syncLabel, tone = 'neutral
           {syncLabel}
         </span>
       </span>
-      <span className="sr-only" data-testid="status-sync">
+      <span aria-hidden="true" data-testid="status-sync" hidden>
         {syncLabel}
       </span>
     </>

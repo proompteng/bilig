@@ -94,6 +94,11 @@ test('web app shows readable sync status when the toolbar has room', async ({ pa
   expect(syncText).toMatch(/^(Saved|Saving…|Sync pending|Local saved|Local only|Read only|Offline|Sync issue)$/)
   await expect(page.getByTestId('status-label')).toHaveText(syncText ?? '')
   await expect(page.getByTestId('status-label')).toBeVisible()
+  await expect(page.getByTestId('status-sync')).toBeHidden()
+  const visibleTrailingText = await page
+    .getByTestId('toolbar-trailing-content')
+    .evaluate((element) => (element instanceof HTMLElement ? element.innerText.trim() : ''))
+  expect(visibleTrailingText).toBe(syncText)
 
   await page.setViewportSize({ width: 390, height: 760 })
   const labelBox = await getBox(page.getByTestId('status-label'))
