@@ -642,7 +642,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
         </div>
         {trailingContent ? (
           <>
-            <Toolbar.Separator className={toolbarSeparatorClass()} />
+            <Toolbar.Separator className={cn(toolbarSeparatorClass(), 'max-[420px]:mx-0.5')} />
             <div className={toolbarTrailingRegionClass()} data-testid="toolbar-trailing-content">
               {trailingContent}
             </div>

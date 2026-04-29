@@ -292,6 +292,7 @@ test('web app prioritizes editing controls over secondary actions on phone toolb
 
   expect(visibleNumberFormatWidth).toBeGreaterThanOrEqual(104)
   expect(visibleFontSizeWidth).toBeGreaterThanOrEqual(44)
+  expect(fontSizeBox.x + fontSizeBox.width).toBeLessThanOrEqual(overflowCueBox.x + 1)
   expect(overflowCueBox.x).toBeGreaterThanOrEqual(scrollBox.x + scrollBox.width - 1)
   expect(horizontalOverflow).toBeLessThanOrEqual(1)
 })
