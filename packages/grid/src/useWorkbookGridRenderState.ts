@@ -9,8 +9,6 @@ import type { GridEngineLike } from './grid-engine.js'
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
 import { useGridElementSize } from './useGridElementSize.js'
-import { useWorkbookHeaderPanes } from './useWorkbookHeaderPanes.js'
-import { useWorkbookRenderTilePanes } from './useWorkbookRenderTilePanes.js'
 import { useWorkbookEditorOverlayAnchor } from './useWorkbookEditorOverlayAnchor.js'
 import { useWorkbookAxisResizeState } from './useWorkbookAxisResizeState.js'
 import { useWorkbookInteractionOverlayState } from './useWorkbookInteractionOverlayState.js'
@@ -18,7 +16,7 @@ import { useWorkbookColumnAutofit } from './useWorkbookColumnAutofit.js'
 import { useWorkbookViewportResidencyState } from './useWorkbookViewportResidencyState.js'
 import { useWorkbookViewportScrollRuntime } from './useWorkbookViewportScrollRuntime.js'
 import { useWorkbookGridGeometryRuntime } from './useWorkbookGridGeometryRuntime.js'
-import { useWorkbookHeaderCellBounds } from './useWorkbookHeaderCellBounds.js'
+import { useWorkbookGridRenderPanes } from './useWorkbookGridRenderPanes.js'
 
 export function useWorkbookGridRenderState(input: {
   engine: GridEngineLike
@@ -181,28 +179,16 @@ export function useWorkbookGridRenderState(input: {
     visibleRange: visibleRegion.range,
   })
 
-  const { viewport, residentViewport, renderTileViewport, residentHeaderItems, residentHeaderRegion, sceneRevision, visibleAddresses } =
-    useWorkbookViewportResidencyState({
-      engine,
-      freezeCols,
-      freezeRows,
-      gridRuntimeHost,
-      sheetName,
-      shouldUseRemoteRenderTileSource,
-      visibleRegion,
-    })
-  const getHeaderCellLocalBounds = useWorkbookHeaderCellBounds({
-    columnWidths,
+  const viewportResidency = useWorkbookViewportResidencyState({
+    engine,
     freezeCols,
     freezeRows,
-    frozenColumnWidth,
-    frozenRowHeight,
-    gridMetrics,
-    residentViewport,
-    rowHeights,
-    sortedColumnWidthOverrides,
-    sortedRowHeightOverrides,
+    gridRuntimeHost,
+    sheetName,
+    shouldUseRemoteRenderTileSource,
+    visibleRegion,
   })
+  const { viewport } = viewportResidency
   useWorkbookViewportScrollRuntime({
     columnAxis,
     freezeCols,
@@ -228,7 +214,7 @@ export function useWorkbookGridRenderState(input: {
     setVisibleRegion,
   })
 
-  const { preloadDataPanes, renderTilePanes, residentBodyPane, residentDataPanes } = useWorkbookRenderTilePanes({
+  const { headerPanes, preloadDataPanes, renderTilePanes, residentDataPanes } = useWorkbookGridRenderPanes({
     columnWidths,
     dprBucket,
     engine,
@@ -242,37 +228,13 @@ export function useWorkbookGridRenderState(input: {
     hostClientWidth,
     hostElement,
     renderTileSource,
-    renderTileViewport,
-    residentViewport,
     rowHeights,
-    sceneRevision,
     sheetId,
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
     subscribeViewport,
-    visibleAddresses,
-    visibleViewport: viewport,
-  })
-
-  const renderHeaderPanes = useWorkbookHeaderPanes({
-    columnWidths,
-    freezeCols,
-    freezeRows,
-    frozenColumnWidth,
-    frozenRowHeight,
-    getHeaderCellLocalBounds,
-    gridMetrics,
-    gridRuntimeHost,
-    hostClientHeight,
-    hostClientWidth,
-    hostElement,
-    residentBodyPane,
-    residentHeaderItems,
-    residentHeaderRegion,
-    residentViewport,
-    rowHeights,
-    sheetName,
+    viewportResidency,
   })
 
   const { editorPresentation, editorTextAlign, overlayStyle } = useWorkbookEditorOverlayAnchor({
@@ -348,7 +310,7 @@ export function useWorkbookGridRenderState(input: {
     gridCameraStore,
     gridTheme,
     handleHostRef,
-    headerPanes: renderHeaderPanes,
+    headerPanes,
     hostElement,
     hostRef,
     hoverState,
