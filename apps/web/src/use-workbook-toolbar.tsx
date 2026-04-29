@@ -137,9 +137,6 @@ export function deriveWorkbookStatusPresentation(input: {
     return { modeLabel, syncLabel: 'Sync issue', tone: 'danger' }
   }
   if ((input.pendingMutationSummary?.activeCount ?? 0) > 0) {
-    if (input.connectionStateName === 'connected' && input.remoteSyncAvailable && input.zeroHealthReady) {
-      return { modeLabel, syncLabel: 'Saving…', tone: 'progress' }
-    }
     return { modeLabel, syncLabel: 'Sync pending', tone: 'warning' }
   }
   if (input.localPersistenceMode === 'follower' && !input.remoteSyncAvailable) {

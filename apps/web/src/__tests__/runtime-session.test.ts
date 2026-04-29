@@ -949,11 +949,6 @@ describe('createWorkerRuntimeSessionController', () => {
     )
     await controller.invoke('markPendingMutationSubmitted', pendingMutationId)
 
-    workbookView.emit({
-      headRevision: 1,
-      calculatedRevision: 1,
-    })
-
     await vi.waitFor(() => {
       expect(errors).toContain('Failed to load authoritative events (500)')
     })
@@ -982,6 +977,90 @@ describe('createWorkerRuntimeSessionController', () => {
       })
     })
     expect(phases.filter((phase) => phase === 'reconciling')).toHaveLength(2)
+
+    controller.dispose()
+  })
+
+  it('refreshes authoritative events after submission when the Zero revision view is stale', async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    })
+    const workbookView = createMockZeroView<unknown>({
+      headRevision: 0,
+      calculatedRevision: 0,
+    })
+    const zero = createSequencedZeroViews(workbookView)
+    let pendingMutationId = ''
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      if (url.includes('/snapshot/latest')) {
+        return new Response(null, { status: 404 })
+      }
+      if (url.includes('/events?afterRevision=0')) {
+        return new Response(
+          JSON.stringify({
+            afterRevision: 0,
+            headRevision: 1,
+            calculatedRevision: 1,
+            events: [
+              {
+                revision: 1,
+                clientMutationId: pendingMutationId,
+                payload: {
+                  kind: 'setCellValue',
+                  sheetName: 'Sheet1',
+                  address: 'B10',
+                  value: 'submitted',
+                },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+            },
+          },
+        )
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: 'phase0-doc',
+        replicaId: 'browser:test',
+        persistState: true,
+        initialSelection: { sheetName: 'Sheet1', address: 'B10' },
+        createWorker: () => createMockWorkerPort(runtime),
+        zero: zero.zero,
+        fetchImpl,
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message)
+        },
+      },
+    )
+
+    pendingMutationId = expectPendingMutationId(
+      await controller.invoke('enqueuePendingMutation', {
+        method: 'setCellValue',
+        args: ['Sheet1', 'B10', 'submitted'],
+      }),
+    )
+    await controller.invoke('markPendingMutationSubmitted', pendingMutationId)
+
+    await vi.waitFor(async () => {
+      expect(expectPendingMutationSummaries(await controller.invoke('listPendingMutations'))).toEqual([])
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'B10').value).toMatchObject({
+        tag: ValueTag.String,
+        value: 'submitted',
+      })
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
 
     controller.dispose()
   })

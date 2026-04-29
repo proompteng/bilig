@@ -26,6 +26,7 @@ function createPendingMutation(): PendingWorkbookMutation {
 
 describe('useWorkbookSync', () => {
   afterEach(() => {
+    vi.useRealTimers()
     document.body.innerHTML = ''
   })
 
@@ -48,6 +49,8 @@ describe('useWorkbookSync', () => {
               attemptCount: 1,
               lastAttemptedAtUnixMs: 2,
             }
+            return undefined
+          case 'refreshAuthoritativeEvents':
             return undefined
           case 'markPendingMutationFailed':
             pendingMutation = {
@@ -109,6 +112,87 @@ describe('useWorkbookSync', () => {
     await vi.waitFor(() => {
       expect(runtimeController.invoke).toHaveBeenCalledWith('markPendingMutationFailed', 'pending-1', 'mutation rejected by server')
     })
+    expect(reportRuntimeError).not.toHaveBeenCalled()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('probes authoritative events when a Zero server observer does not settle', async () => {
+    vi.useFakeTimers()
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    let pendingMutation = createPendingMutation()
+    let sync: ReturnType<typeof useWorkbookSync> | null = null
+    const reportRuntimeError = vi.fn()
+    const runtimeController = {
+      invoke: vi.fn(async (method: string) => {
+        switch (method) {
+          case 'enqueuePendingMutation':
+            return pendingMutation
+          case 'listPendingMutations':
+            return [pendingMutation]
+          case 'recordPendingMutationAttempt':
+            pendingMutation = {
+              ...pendingMutation,
+              attemptCount: 1,
+              lastAttemptedAtUnixMs: 2,
+            }
+            return undefined
+          case 'refreshAuthoritativeEvents':
+            return undefined
+          default:
+            throw new Error(`Unexpected runtime invoke: ${method}`)
+        }
+      }),
+    }
+
+    function Harness() {
+      sync = useWorkbookSync({
+        documentId: 'doc-1',
+        connectionStateName: 'connected',
+        connectionStateRef: { current: 'connected' },
+        runtimeController,
+        workerHandleRef: { current: null },
+        zeroRef: {
+          current: {
+            mutate() {
+              return {
+                server: new Promise(() => {}),
+              }
+            },
+          },
+        },
+        reportRuntimeError,
+      })
+      return null
+    }
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<Harness />)
+    })
+
+    if (!sync) {
+      throw new Error('Expected useWorkbookSync harness to initialize')
+    }
+
+    await act(async () => {
+      await sync!.invokeMutation('setCellValue', 'Sheet1', 'A1', 17)
+    })
+    await vi.waitFor(() => {
+      expect(runtimeController.invoke).toHaveBeenCalledWith('recordPendingMutationAttempt', 'pending-1')
+    })
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400)
+    })
+
+    expect(runtimeController.invoke).toHaveBeenCalledWith('refreshAuthoritativeEvents')
     expect(reportRuntimeError).not.toHaveBeenCalled()
 
     await act(async () => {

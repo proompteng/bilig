@@ -24,7 +24,9 @@ test('web app renders the minimal product shell without legacy demo chrome', asy
 
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!A1')
   await expect(page.getByTestId('status-sync')).toHaveText(
-    remoteSyncEnabled ? /^(Saved|Saving…|Sync issue)$/ : /^(Saved|Saving…|Local saved|Local only|Read only|Offline|Sync issue)$/,
+    remoteSyncEnabled
+      ? /^(Saved|Saving…|Sync pending|Sync issue)$/
+      : /^(Saved|Saving…|Sync pending|Local saved|Local only|Read only|Offline|Sync issue)$/,
     { timeout: 15_000 },
   )
   await expect(page.locator('.formula-result-shell')).toHaveCount(0)

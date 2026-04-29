@@ -378,6 +378,64 @@ export async function createWorkerRuntimeSessionController(
     updateSelectionViewport(reconciledSelection)
   }
 
+  const applyAuthoritativeEventBatch = async (eventBatch: AuthoritativeWorkbookEventBatch): Promise<boolean> => {
+    if (
+      eventBatch.events.length === 0 ||
+      eventBatch.headRevision <= currentAuthoritativeRevision ||
+      eventBatch.calculatedRevision < eventBatch.headRevision
+    ) {
+      return false
+    }
+
+    const runtimeState = await invokeWorkerMethod(
+      client,
+      'applyAuthoritativeEvents',
+      isWorkbookWorkerStateSnapshot,
+      eventBatch.events,
+      eventBatch.headRevision,
+    )
+    currentAuthoritativeRevision = eventBatch.headRevision
+    requestedAuthoritativeRevision = Math.max(requestedAuthoritativeRevision, currentAuthoritativeRevision)
+    publishRuntimeState(runtimeState)
+    input.perfSession?.markFirstAuthoritativePatchVisible()
+    await syncSelectionAfterRuntimeState(runtimeState)
+    return true
+  }
+
+  const runAuthoritativeRefresh = async (): Promise<void> => {
+    if (disposed) {
+      return
+    }
+    const eventBatch = await loadAuthoritativeEventBatch(input.documentId, currentAuthoritativeRevision, fetchImpl)
+    if (await applyAuthoritativeEventBatch(eventBatch)) {
+      await runAuthoritativeRebase()
+    }
+  }
+
+  const queueAuthoritativeRefresh = (): void => {
+    if (!liveSync) {
+      return
+    }
+    const previousRebaseQueue = rebaseQueue
+    rebaseQueue = (async () => {
+      await previousRebaseQueue.catch(() => undefined)
+      input.perfSession?.markFirstReconcileStarted()
+      publishPhase('reconciling')
+      try {
+        await runAuthoritativeRefresh()
+      } catch (error) {
+        if (!disposed) {
+          callbacks.onError(toErrorMessage(error))
+        }
+      } finally {
+        if (!disposed) {
+          publishPhase('steady')
+          input.perfSession?.markFirstReconcileSettled()
+        }
+      }
+    })()
+  }
+
   const runAuthoritativeRebase = async (): Promise<void> => {
     if (disposed) {
       return
@@ -392,18 +450,9 @@ export async function createWorkerRuntimeSessionController(
       eventBatch.headRevision >= targetRevision &&
       eventBatch.headRevision > currentAuthoritativeRevision
     ) {
-      const runtimeState = await invokeWorkerMethod(
-        client,
-        'applyAuthoritativeEvents',
-        isWorkbookWorkerStateSnapshot,
-        eventBatch.events,
-        eventBatch.headRevision,
-      )
-      currentAuthoritativeRevision = eventBatch.headRevision
-      publishRuntimeState(runtimeState)
-      input.perfSession?.markFirstAuthoritativePatchVisible()
-      await syncSelectionAfterRuntimeState(runtimeState)
-      return runAuthoritativeRebase()
+      if (await applyAuthoritativeEventBatch(eventBatch)) {
+        return runAuthoritativeRebase()
+      }
     }
     publishPhase('recovering')
     const snapshot = await loadLatestWorkbookSnapshot(input.documentId, fetchImpl)
@@ -504,6 +553,10 @@ export async function createWorkerRuntimeSessionController(
       return currentSelection
     },
     async invoke(method, ...args) {
+      if (method === 'refreshAuthoritativeEvents') {
+        queueAuthoritativeRefresh()
+        return undefined
+      }
       try {
         if (method === 'installAuthoritativeSnapshot' && !isInstallAuthoritativeSnapshotInput(args[0])) {
           throw new Error('installAuthoritativeSnapshot requires a valid authoritative snapshot input')
@@ -511,6 +564,9 @@ export async function createWorkerRuntimeSessionController(
         const result = await client.invoke(method, ...args)
         if (method === 'enqueuePendingMutation') {
           queueRuntimeStateRefresh()
+        } else if (method === 'markPendingMutationSubmitted') {
+          queueRuntimeStateRefresh()
+          queueAuthoritativeRefresh()
         } else if (method === 'markPendingMutationFailed' || method === 'retryPendingMutation') {
           await refreshRuntimeState()
         }

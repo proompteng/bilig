@@ -172,7 +172,7 @@ describe('WorkbookToolbar', () => {
       deriveWorkbookStatusPresentation({
         connectionStateName: 'connected',
         runtimeReady: true,
-        localPersistenceMode: 'persistent',
+        localPersistenceMode: 'ephemeral',
         pendingMutationSummary: { activeCount: 2, failedCount: 0 },
         remoteSyncAvailable: true,
         zeroConfigured: true,
@@ -180,8 +180,8 @@ describe('WorkbookToolbar', () => {
         writesAllowed: true,
       }),
     ).toMatchObject({
-      syncLabel: 'Saving…',
-      tone: 'progress',
+      syncLabel: 'Sync pending',
+      tone: 'warning',
     })
 
     expect(

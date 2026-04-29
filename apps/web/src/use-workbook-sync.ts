@@ -31,6 +31,8 @@ interface ZeroMutationSource {
 
 type WorkbookSyncRuntimeController = Pick<WorkerRuntimeSessionController, 'invoke'>
 
+const AUTHORITATIVE_REFRESH_PROBE_DELAYS_MS = [400, 1_200, 3_000] as const
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -55,6 +57,14 @@ export function useWorkbookSync(input: {
   const { documentId, connectionStateName, connectionStateRef, runtimeController, workerHandleRef, zeroRef, reportRuntimeError } = input
   const localMutationQueueRef = useRef<Promise<void>>(Promise.resolve())
   const syncQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const authoritativeRefreshTimerRefs = useRef<Array<ReturnType<typeof setTimeout>>>([])
+
+  useEffect(() => {
+    return () => {
+      authoritativeRefreshTimerRefs.current.forEach((timer) => clearTimeout(timer))
+      authoritativeRefreshTimerRefs.current = []
+    }
+  }, [])
 
   const runSerializedSyncTask = useCallback(async (task: () => Promise<unknown>): Promise<unknown> => {
     const previousTask = syncQueueRef.current
@@ -83,6 +93,25 @@ export function useWorkbookSync(input: {
       releaseQueue()
     }
   }, [])
+
+  const scheduleAuthoritativeRefreshProbes = useCallback(() => {
+    if (!runtimeController) {
+      return
+    }
+    AUTHORITATIVE_REFRESH_PROBE_DELAYS_MS.forEach((delayMs) => {
+      const timer = setTimeout(() => {
+        authoritativeRefreshTimerRefs.current = authoritativeRefreshTimerRefs.current.filter((entry) => entry !== timer)
+        void (async () => {
+          try {
+            await runtimeController.invoke('refreshAuthoritativeEvents')
+          } catch (error) {
+            reportRuntimeError(error)
+          }
+        })()
+      }, delayMs)
+      authoritativeRefreshTimerRefs.current.push(timer)
+    })
+  }, [reportRuntimeError, runtimeController])
 
   const listPendingMutations = useCallback(async (): Promise<readonly PendingWorkbookMutation[]> => {
     if (!runtimeController) {
@@ -154,6 +183,7 @@ export function useWorkbookSync(input: {
       }
 
       await runtimeController.invoke('recordPendingMutationAttempt', mutation.id)
+      scheduleAuthoritativeRefreshProbes()
       const remoteResult = await runZeroMutation(mutation)
       if (!remoteResult.ok) {
         if (!remoteResult.retryable) {
@@ -168,7 +198,7 @@ export function useWorkbookSync(input: {
     }
 
     await drainBatch(await listPendingMutations())
-  }, [connectionStateRef, listPendingMutations, runZeroMutation, runtimeController])
+  }, [connectionStateRef, listPendingMutations, runZeroMutation, runtimeController, scheduleAuthoritativeRefreshProbes])
 
   const drainPendingMutations = useCallback(async (): Promise<void> => {
     try {
@@ -295,6 +325,7 @@ export function useWorkbookSync(input: {
 
       await runSerializedLocalMutationTask(async () => {
         await enqueuePendingMutation(mutation)
+        scheduleAuthoritativeRefreshProbes()
       })
       void (async () => {
         try {
@@ -316,6 +347,7 @@ export function useWorkbookSync(input: {
       runSerializedLocalMutationTask,
       runSerializedSyncTask,
       runtimeController,
+      scheduleAuthoritativeRefreshProbes,
     ],
   )
 
