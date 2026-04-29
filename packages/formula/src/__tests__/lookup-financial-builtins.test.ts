@@ -74,6 +74,9 @@ describe('lookup financial builtins', () => {
     expect(XNPV(num(0.09), cellRange([err(ErrorCode.Ref), num(2)], 2, 1), cellRange([num(39448), num(39508)], 2, 1))).toEqual(
       err(ErrorCode.Ref),
     )
+    expect(XNPV(text('bad'), xValues, xDates)).toEqual(err(ErrorCode.Value))
+    expect(XNPV(num(-1), xValues, xDates)).toEqual(err(ErrorCode.Value))
+    expect(XNPV(num(0.09), cellRange([num(1), num(2)], 2, 1), cellRange([num(39448), num(39508)], 2, 1))).toEqual(err(ErrorCode.Value))
     expect(
       XNPV(
         num(0.09),
@@ -81,11 +84,60 @@ describe('lookup financial builtins', () => {
         cellRange([num(39448), { tag: ValueTag.Number, value: Number.POSITIVE_INFINITY }], 2, 1),
       ),
     ).toEqual(err(ErrorCode.Value))
+    expect(XIRR(cellRange([num(1), num(2)], 2, 1), cellRange([num(39448), num(39508)], 2, 1))).toEqual(err(ErrorCode.Value))
+    expect(XIRR(xValues, cellRange([num(39448), num(39400), num(39508), num(39859), num(39904)], 5, 1))).toEqual(err(ErrorCode.Value))
     expect(XIRR(xValues, xDates, cellRange([num(0.1)], 1, 1))).toEqual(err(ErrorCode.Value))
+
+    expect(IRR(xValues, err(ErrorCode.Ref))).toEqual(err(ErrorCode.Ref))
+    expect(IRR(xValues, cellRange([num(0.1)], 1, 1))).toEqual(err(ErrorCode.Value))
+    expect(MIRR(mirrValues, err(ErrorCode.Ref), num(0.12))).toEqual(err(ErrorCode.Ref))
+    expect(MIRR(mirrValues, num(0.1), err(ErrorCode.NA))).toEqual(err(ErrorCode.NA))
+    expect(MIRR(mirrValues, text('bad'), num(0.12))).toEqual(err(ErrorCode.Value))
+    expect(MIRR(mirrValues, num(0.1), text('bad'))).toEqual(err(ErrorCode.Value))
+    expect(MIRR(mirrValues, num(0.1), num(-1))).toEqual(err(ErrorCode.Div0))
 
     expect(Reflect.apply(IRR, undefined, [])).toEqual(err(ErrorCode.Value))
     expect(Reflect.apply(MIRR, undefined, [mirrValues, num(0.1)])).toEqual(err(ErrorCode.Value))
     expect(Reflect.apply(XNPV, undefined, [num(0.09), xValues])).toEqual(err(ErrorCode.Value))
     expect(Reflect.apply(XIRR, undefined, [xValues])).toEqual(err(ErrorCode.Value))
+  })
+
+  it('covers zero-rate roots, solver fallback guesses, and date serial validation', () => {
+    const IRR = getLookupBuiltin('IRR')!
+    const MIRR = getLookupBuiltin('MIRR')!
+    const XNPV = getLookupBuiltin('XNPV')!
+    const XIRR = getLookupBuiltin('XIRR')!
+
+    const zeroRateValues = cellRange([num(-100), num(100)], 2, 1)
+    const zeroRateDates = cellRange([num(45_000), num(45_365)], 2, 1)
+
+    expect(IRR(zeroRateValues)).toEqual(num(0))
+    expect(IRR(zeroRateValues, num(Number.NaN))).toEqual(num(0))
+    expect(IRR(cellRange([num(-100), num(20), num(30)], 3, 1), num(-5))).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.any(Number),
+    })
+
+    expect(MIRR(cellRange([num(-100)], 1, 1), num(0.1), num(0.1))).toEqual(err(ErrorCode.Div0))
+    expect(MIRR(cellRange([num(-100), num(0), num(100)], 3, 1), num(0.1), num(0.1))).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.any(Number),
+    })
+    expect(MIRR(cellRange([num(-100), num(100)], 2, 1), num(Number.POSITIVE_INFINITY), num(0.1))).toEqual(err(ErrorCode.Div0))
+    expect(MIRR(cellRange([num(-100), num(100)], 2, 1), num(0.1), num(Number.NaN))).toEqual(err(ErrorCode.Div0))
+
+    expect(XNPV(num(0), zeroRateValues, zeroRateDates)).toEqual(num(0))
+    expect(XNPV(num(Number.NaN), zeroRateValues, zeroRateDates)).toEqual(err(ErrorCode.Value))
+    expect(XNPV(num(0.1), zeroRateValues, cellRange([num(45_000), num(Number.NaN)], 2, 1))).toEqual(err(ErrorCode.Value))
+    expect(XNPV(num(0.1), zeroRateValues, cellRange([num(45_000), num(0)], 2, 1))).toEqual(err(ErrorCode.Value))
+    expect(XNPV(num(0.1), cellRange([], 0, 0), cellRange([], 0, 0))).toEqual(err(ErrorCode.Value))
+
+    expect(XIRR(zeroRateValues, zeroRateDates)).toEqual(num(0))
+    expect(XIRR(zeroRateValues, zeroRateDates, num(-5))).toEqual(num(0))
+    expect(XIRR(zeroRateValues, zeroRateDates, num(Number.POSITIVE_INFINITY))).toEqual(num(0))
+    expect(XIRR(cellRange([num(-100), num(20), num(30)], 3, 1), cellRange([num(45_000), num(45_365), num(45_730)], 3, 1))).toMatchObject({
+      tag: ValueTag.Number,
+      value: expect.any(Number),
+    })
   })
 })

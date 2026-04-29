@@ -498,6 +498,16 @@ function staticIntegerValue(node: FormulaNode | undefined): number | undefined {
   return undefined
 }
 
+export const formulaBindingServiceTestHooks = {
+  directAggregateStructureEqual,
+  directCriteriaOperandEqual,
+  directCriteriaStructureEqual,
+  directLookupColumnInfo,
+  directLookupStructureEqual,
+  rewriteDirectAggregateDescriptorForStructuralTransform,
+  staticIntegerValue,
+}
+
 function hasIndexedExactLookupCandidate(node: FormulaNode): boolean {
   return collectIndexedExactLookupCandidates(node).length > 0
 }

@@ -6,6 +6,7 @@ import { basename, resolve } from 'node:path'
 
 const budgets = {
   mainJsGzipBytes: 350 * 1024,
+  workerJsGzipBytes: 420 * 1024,
   runtimeWasmGzipBytes: 250 * 1024,
   sqliteWasmGzipBytes: 400 * 1024,
   cssGzipBytes: 32 * 1024,
@@ -101,11 +102,28 @@ function isSqliteWasmAsset(file) {
   return basename(file).startsWith('sqlite3-')
 }
 
+function isWorkerJsAsset(file) {
+  const name = basename(file)
+  return name.includes('.worker-') || name.startsWith('sqlite3-worker')
+}
+
 const { cssAssets, distDir, indexHtml, jsAssets, wasmAssets } = await findAssets()
 const jsMeasurements = await Promise.all(jsAssets.map((file) => measureAsset(file)))
 const cssMeasurements = await Promise.all(cssAssets.map((file) => measureAsset(file)))
 const wasmMeasurements = await Promise.all(wasmAssets.map((file) => measureAsset(file)))
-const largestJs = jsMeasurements.reduce((largest, entry) => (entry.gzipBytes > largest.gzipBytes ? entry : largest))
+const mainJsMeasurements = jsMeasurements.filter((entry) => !isWorkerJsAsset(entry.file))
+const workerJsMeasurements = jsMeasurements.filter((entry) => isWorkerJsAsset(entry.file))
+
+if (mainJsMeasurements.length === 0) {
+  throw new Error('No main JavaScript assets were found in apps/web/dist/assets')
+}
+
+if (workerJsMeasurements.length === 0) {
+  throw new Error('No worker JavaScript assets were found in apps/web/dist/assets')
+}
+
+const largestJs = mainJsMeasurements.reduce((largest, entry) => (entry.gzipBytes > largest.gzipBytes ? entry : largest))
+const largestWorkerJs = workerJsMeasurements.reduce((largest, entry) => (entry.gzipBytes > largest.gzipBytes ? entry : largest))
 const largestCss = cssMeasurements.reduce((largest, entry) => (entry.gzipBytes > largest.gzipBytes ? entry : largest))
 const runtimeWasmMeasurements = wasmMeasurements.filter((entry) => !isSqliteWasmAsset(entry.file))
 const sqliteWasmMeasurements = wasmMeasurements.filter((entry) => isSqliteWasmAsset(entry.file))
@@ -175,6 +193,7 @@ const startupShellGzipBytes =
   startupFontGzipBytes
 
 assertBudget('Main JavaScript gzip size', largestJs.gzipBytes, budgets.mainJsGzipBytes)
+assertBudget('Worker JavaScript gzip size', largestWorkerJs.gzipBytes, budgets.workerJsGzipBytes)
 assertBudget('Runtime WASM gzip size', largestRuntimeWasm.gzipBytes, budgets.runtimeWasmGzipBytes)
 assertBudget('SQLite WASM gzip size', largestSqliteWasm.gzipBytes, budgets.sqliteWasmGzipBytes)
 assertBudget('Largest CSS gzip size', largestCss.gzipBytes, budgets.cssGzipBytes)
@@ -188,6 +207,7 @@ console.log(
       budgets,
       indexHtmlMeasurement,
       largestJs,
+      largestWorkerJs,
       largestCss,
       largestRuntimeWasm,
       largestSqliteWasm,

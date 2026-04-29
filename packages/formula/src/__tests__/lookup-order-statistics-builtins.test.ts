@@ -142,15 +142,77 @@ describe('lookup order-statistics builtins', () => {
   })
 
   it('returns value errors for missing required order-statistic arguments instead of throwing', () => {
+    const LARGE = getLookupBuiltin('LARGE')!
+    const MODE_MULT = getLookupBuiltin('MODE.MULT')!
     const PERCENTILE = getLookupBuiltin('PERCENTILE')!
+    const PERCENTILE_EXC = getLookupBuiltin('PERCENTILE.EXC')!
+    const PERCENTRANK = getLookupBuiltin('PERCENTRANK')!
+    const PERCENTRANK_EXC = getLookupBuiltin('PERCENTRANK.EXC')!
     const PROB = getLookupBuiltin('PROB')!
+    const QUARTILE = getLookupBuiltin('QUARTILE')!
+    const QUARTILE_EXC = getLookupBuiltin('QUARTILE.EXC')!
     const RANK = getLookupBuiltin('RANK')!
+    const RANKAVG = getLookupBuiltin('RANK.AVG')!
+    const SMALL = getLookupBuiltin('SMALL')!
+    const TRIMMEAN = getLookupBuiltin('TRIMMEAN')!
+    const FREQUENCY = getLookupBuiltin('FREQUENCY')!
 
     const ordered = cellRange([num(1), num(2), num(4), num(7)], 4, 1)
     const probabilities = cellRange([num(0.1), num(0.2), num(0.3), num(0.4)], 4, 1)
 
+    expect(Reflect.apply(SMALL, undefined, [ordered])).toEqual(err(ErrorCode.Value))
+    expect(Reflect.apply(LARGE, undefined, [])).toEqual(err(ErrorCode.Value))
+    expect(SMALL(ordered, cellRange([num(1)], 1, 1))).toEqual(err(ErrorCode.Value))
+    expect(LARGE(ordered, err(ErrorCode.Ref))).toEqual(err(ErrorCode.Ref))
+    expect(SMALL(cellRange([], 0, 0), num(1))).toEqual(err(ErrorCode.Value))
     expect(Reflect.apply(PERCENTILE, undefined, [ordered])).toEqual(err(ErrorCode.Value))
+    expect(Reflect.apply(PERCENTILE_EXC, undefined, [])).toEqual(err(ErrorCode.Value))
+    expect(PERCENTILE(err(ErrorCode.Ref), num(0.5))).toEqual(err(ErrorCode.Ref))
+    expect(PERCENTILE(ordered, err(ErrorCode.NA))).toEqual(err(ErrorCode.NA))
+    expect(PERCENTILE(ordered, text('bad'))).toEqual(err(ErrorCode.Value))
+    expect(PERCENTILE(ordered, num(-0.01))).toEqual(err(ErrorCode.Value))
+    expect(PERCENTILE(ordered, num(1.01))).toEqual(err(ErrorCode.Value))
+    expect(PERCENTILE_EXC(ordered, num(0.01))).toEqual(err(ErrorCode.Value))
+    expect(PERCENTILE_EXC(ordered, num(0.99))).toEqual(err(ErrorCode.Value))
+    expect(Reflect.apply(PERCENTRANK, undefined, [ordered])).toEqual(err(ErrorCode.Value))
+    expect(PERCENTRANK(err(ErrorCode.Ref), num(1))).toEqual(err(ErrorCode.Ref))
+    expect(PERCENTRANK(ordered, err(ErrorCode.NA))).toEqual(err(ErrorCode.NA))
+    expect(PERCENTRANK(ordered, num(1), err(ErrorCode.Div0))).toEqual(err(ErrorCode.Div0))
+    expect(PERCENTRANK(ordered, cellRange([num(1)], 1, 1))).toEqual(err(ErrorCode.Value))
+    expect(PERCENTRANK(ordered, num(1), cellRange([num(3)], 1, 1))).toEqual(err(ErrorCode.Value))
+    expect(PERCENTRANK(ordered, text('bad'))).toEqual(err(ErrorCode.Value))
+    expect(PERCENTRANK_EXC(ordered, num(0))).toEqual(err(ErrorCode.NA))
+    expect(PERCENTRANK_EXC(ordered, num(1.5))).toEqual(num(0.3))
+    expect(Reflect.apply(QUARTILE, undefined, [ordered])).toEqual(err(ErrorCode.Value))
+    expect(QUARTILE(err(ErrorCode.Ref), num(1))).toEqual(err(ErrorCode.Ref))
+    expect(QUARTILE(ordered, err(ErrorCode.NA))).toEqual(err(ErrorCode.NA))
+    expect(QUARTILE(ordered, cellRange([num(1)], 1, 1))).toEqual(err(ErrorCode.Value))
+    expect(QUARTILE(ordered, text('bad'))).toEqual(err(ErrorCode.Value))
+    expect(QUARTILE(ordered, num(-1))).toEqual(err(ErrorCode.Value))
+    expect(QUARTILE(ordered, num(5))).toEqual(err(ErrorCode.Value))
+    expect(QUARTILE(cellRange([], 0, 0), num(1))).toEqual(err(ErrorCode.Value))
+    expect(QUARTILE_EXC(ordered, num(2))).toEqual(num(3))
     expect(Reflect.apply(PROB, undefined, [ordered, probabilities])).toEqual(err(ErrorCode.Value))
+    expect(PROB(err(ErrorCode.Ref), probabilities, num(1))).toEqual(err(ErrorCode.Value))
+    expect(PROB(ordered, err(ErrorCode.NA), num(1))).toEqual(err(ErrorCode.Value))
+    expect(PROB(ordered, cellRange([num(0.2), num(0.2), num(-0.1), num(0.7)], 4, 1), num(1))).toEqual(err(ErrorCode.Value))
+    expect(PROB(ordered, cellRange([num(0.2), num(0.2), num(1.1), num(-0.5)], 4, 1), num(1))).toEqual(err(ErrorCode.Value))
+    expect(PROB(ordered, probabilities, err(ErrorCode.Ref))).toEqual(err(ErrorCode.Ref))
     expect(Reflect.apply(RANK, undefined, [num(1)])).toEqual(err(ErrorCode.Value))
+    expect(RANK(cellRange([num(1)], 1, 1), ordered)).toEqual(err(ErrorCode.Value))
+    expect(RANK(num(1), err(ErrorCode.Ref))).toEqual(err(ErrorCode.Ref))
+    expect(RANK(num(1), ordered, err(ErrorCode.NA))).toEqual(err(ErrorCode.NA))
+    expect(RANK(text('bad'), ordered)).toEqual(err(ErrorCode.Value))
+    expect(RANK(num(1), ordered, text('bad'))).toEqual(err(ErrorCode.Value))
+    expect(RANK(num(1), ordered, num(2))).toEqual(err(ErrorCode.Value))
+    expect(RANK(num(1), cellRange([], 0, 0))).toEqual(err(ErrorCode.NA))
+    expect(RANKAVG(num(2), cellRange([num(2), num(2), num(3), num(4)], 4, 1))).toEqual(num(3.5))
+    expect(Reflect.apply(TRIMMEAN, undefined, [ordered])).toEqual(err(ErrorCode.Value))
+    expect(TRIMMEAN(ordered, cellRange([num(0.2)], 1, 1))).toEqual(err(ErrorCode.Value))
+    expect(TRIMMEAN(ordered, num(-0.1))).toEqual(err(ErrorCode.Value))
+    expect(Reflect.apply(MODE_MULT, undefined, [])).toEqual(err(ErrorCode.NA))
+    expect(MODE_MULT(err(ErrorCode.Ref))).toEqual(err(ErrorCode.Ref))
+    expect(FREQUENCY(err(ErrorCode.Ref), ordered)).toEqual(err(ErrorCode.Ref))
+    expect(FREQUENCY(ordered, err(ErrorCode.NA))).toEqual(err(ErrorCode.NA))
   })
 })

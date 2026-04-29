@@ -1246,6 +1246,10 @@ describe('lookup builtins', () => {
     const ROWS = getLookupBuiltin('ROWS')!
     const COLUMNS = getLookupBuiltin('COLUMNS')!
     const DCOUNT = getLookupBuiltin('DCOUNT')!
+    const MATCH = getLookupBuiltin('MATCH')!
+    const LOOKUP = getLookupBuiltin('LOOKUP')!
+    const VLOOKUP = getLookupBuiltin('VLOOKUP')!
+    const HLOOKUP = getLookupBuiltin('HLOOKUP')!
     const XLOOKUP = getLookupBuiltin('XLOOKUP')!
     const XMATCH = getLookupBuiltin('XMATCH')!
 
@@ -1270,9 +1274,51 @@ describe('lookup builtins', () => {
     const duplicateLookup = cellRange([text('pear'), text('apple'), text('pear')], 3, 1)
     const duplicateReturn = cellRange([num(10), num(20), num(30)], 3, 1)
 
+    expect(MATCH(cellRange([text('pear')], 1, 1), duplicateLookup, num(0))).toEqual(err(ErrorCode.Value))
+    expect(MATCH(err(ErrorCode.Ref), duplicateLookup, num(0))).toEqual(err(ErrorCode.Ref))
+    expect(MATCH(text('pear'), duplicateLookup, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name))
+    expect(MATCH(text('pear'), duplicateLookup, num(2))).toEqual(err(ErrorCode.Value))
+    expect(MATCH(num(2), cellRange([text('x'), num(3)], 2, 1), num(1))).toEqual(err(ErrorCode.NA))
+
+    expect(LOOKUP(cellRange([num(1)], 1, 1), duplicateLookup)).toEqual(err(ErrorCode.Value))
+    expect(Reflect.apply(LOOKUP, undefined, [])).toEqual(err(ErrorCode.Value))
+    expect(LOOKUP(err(ErrorCode.Ref), duplicateLookup)).toEqual(err(ErrorCode.Ref))
+    expect(LOOKUP(text('pear'), err(ErrorCode.Name))).toEqual(err(ErrorCode.Name))
+    expect(LOOKUP(text('pear'), cellRange([text('pear')], 1, 1), err(ErrorCode.NA))).toEqual(err(ErrorCode.NA))
+    expect(LOOKUP(text('pear'), cellRange([text('pear'), text('apple'), text('plum'), text('berry')], 2, 2))).toEqual(err(ErrorCode.Value))
+    expect(LOOKUP(text('pear'), duplicateLookup, cellRange([num(1), num(2)], 2, 1))).toEqual(err(ErrorCode.Value))
+
+    const verticalTable = cellRange([text('apple'), num(10), text('pear'), num(20), text('plum'), num(30)], 3, 2)
+    const horizontalTable = cellRange([text('apple'), text('pear'), text('plum'), num(10), num(20), num(30)], 2, 3)
+    expect(VLOOKUP(cellRange([text('pear')], 1, 1), verticalTable, num(2))).toEqual(err(ErrorCode.Value))
+    expect(VLOOKUP(err(ErrorCode.Ref), verticalTable, num(2))).toEqual(err(ErrorCode.Ref))
+    expect(VLOOKUP(text('pear'), verticalTable, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name))
+    expect(VLOOKUP(text('pear'), verticalTable, num(2), err(ErrorCode.NA))).toEqual(err(ErrorCode.NA))
+    expect(VLOOKUP(text('pear'), verticalTable, num(0))).toEqual(err(ErrorCode.Value))
+    expect(VLOOKUP(text('pear'), verticalTable, num(2), text('bad'))).toEqual(err(ErrorCode.Value))
+    expect(VLOOKUP(num(2), cellRange([text('x'), num(1), num(10), num(20)], 2, 2), num(2))).toEqual(err(ErrorCode.Value))
+
+    expect(HLOOKUP(cellRange([text('pear')], 1, 1), horizontalTable, num(2))).toEqual(err(ErrorCode.Value))
+    expect(HLOOKUP(err(ErrorCode.Ref), horizontalTable, num(2))).toEqual(err(ErrorCode.Ref))
+    expect(HLOOKUP(text('pear'), horizontalTable, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name))
+    expect(HLOOKUP(text('pear'), horizontalTable, num(2), err(ErrorCode.NA))).toEqual(err(ErrorCode.NA))
+    expect(HLOOKUP(text('pear'), horizontalTable, num(0))).toEqual(err(ErrorCode.Value))
+    expect(HLOOKUP(text('pear'), horizontalTable, num(2), text('bad'))).toEqual(err(ErrorCode.Value))
+    expect(HLOOKUP(num(2), cellRange([text('x'), num(1), num(10), num(20)], 2, 2), num(2))).toEqual(err(ErrorCode.Value))
+
     expect(XLOOKUP(text('pear'), duplicateLookup, duplicateReturn, text('fallback'), num(0), num(-1))).toEqual(num(30))
     expect(XLOOKUP(text('pear'), duplicateLookup, duplicateReturn, text('fallback'), num(1), num(1))).toEqual(err(ErrorCode.Value))
+    expect(XLOOKUP(cellRange([text('pear')], 1, 1), duplicateLookup, duplicateReturn)).toEqual(err(ErrorCode.Value))
+    expect(XLOOKUP(text('pear'), duplicateLookup, cellRange([num(1), num(2)], 2, 1))).toEqual(err(ErrorCode.Value))
+    expect(XLOOKUP(err(ErrorCode.Ref), duplicateLookup, duplicateReturn)).toEqual(err(ErrorCode.Ref))
+    expect(XLOOKUP(text('pear'), duplicateLookup, duplicateReturn, text('fallback'), err(ErrorCode.Name))).toEqual(err(ErrorCode.Name))
+    expect(XLOOKUP(text('pear'), duplicateLookup, duplicateReturn, text('fallback'), num(0), err(ErrorCode.NA))).toEqual(err(ErrorCode.NA))
     expect(XMATCH(text('pear'), duplicateLookup, num(0), num(-1))).toEqual(num(3))
     expect(XMATCH(text('pear'), duplicateLookup, num(2), num(1))).toEqual(err(ErrorCode.Value))
+    expect(XMATCH(cellRange([text('pear')], 1, 1), duplicateLookup)).toEqual(err(ErrorCode.Value))
+    expect(XMATCH(err(ErrorCode.Ref), duplicateLookup)).toEqual(err(ErrorCode.Ref))
+    expect(XMATCH(text('pear'), duplicateLookup, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name))
+    expect(XMATCH(text('pear'), duplicateLookup, num(0), err(ErrorCode.NA))).toEqual(err(ErrorCode.NA))
+    expect(XMATCH(text('missing'), duplicateLookup)).toEqual(err(ErrorCode.NA))
   })
 })

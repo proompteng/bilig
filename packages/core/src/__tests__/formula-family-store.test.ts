@@ -412,4 +412,76 @@ describe('FormulaFamilyStore', () => {
     expect(store.consumeStructuralSourceTransforms()).toEqual([{ cellIndices: [1, 2], transform }])
     expect(store.getStructuralSourceTransform(1)).toBeUndefined()
   })
+
+  it('invalidates whole sheets and clears all indexed family state', () => {
+    const store = createFormulaFamilyStore()
+    store.upsertFormulaRun({
+      sheetId: 1,
+      templateId: 20,
+      shapeKey: 'sheet-one',
+      members: Array.from({ length: 4 }, (_, row) => ({ cellIndex: row + 10, row, col: 1 })),
+    })
+    store.upsertFormulaRun({
+      sheetId: 2,
+      templateId: 20,
+      shapeKey: 'sheet-two',
+      members: Array.from({ length: 3 }, (_, row) => ({ cellIndex: row + 30, row, col: 1 })),
+    })
+
+    const seen: number[] = []
+    store.forEachFamily((family) => {
+      seen.push(family.sheetId)
+    })
+    expect(seen.toSorted((left, right) => left - right)).toEqual([1, 2])
+
+    store.invalidateSheet(1)
+
+    expect(store.unregisterFormula(999)).toBe(false)
+    expect(store.countSheetMembers(1)).toBe(0)
+    expect(store.countSheetMembers(2)).toBe(3)
+    expect(store.getMembership(10)).toBeUndefined()
+    expect(store.getMembership(30)).toBeDefined()
+    expect(store.listFamilies()).toEqual([
+      expect.objectContaining({
+        sheetId: 2,
+        runs: [expect.objectContaining({ cellIndices: [30, 31, 32] })],
+      }),
+    ])
+
+    store.clear()
+
+    expect(store.getStats()).toEqual({ familyCount: 0, runCount: 0, memberCount: 0 })
+    expect(store.countSheetMembers(2)).toBe(0)
+    expect(store.listFamilies()).toEqual([])
+    expect(store.consumeStructuralSourceTransforms()).toEqual([])
+  })
+
+  it('falls back for duplicate and non-uniform bulk members while preserving current memberships', () => {
+    const store = createFormulaFamilyStore()
+
+    const duplicateMemberships = store.upsertFormulaRun({
+      sheetId: 1,
+      templateId: 21,
+      shapeKey: 'duplicates',
+      members: [
+        { cellIndex: 100, row: 0, col: 1 },
+        { cellIndex: 100, row: 1, col: 1 },
+      ],
+    })
+    const jaggedMemberships = store.upsertFormulaRun({
+      sheetId: 1,
+      templateId: 22,
+      shapeKey: 'jagged',
+      members: [
+        { cellIndex: 110, row: 0, col: 1 },
+        { cellIndex: 112, row: 2, col: 2 },
+        { cellIndex: 113, row: 5, col: 3 },
+      ],
+    })
+
+    expect(duplicateMemberships).toHaveLength(2)
+    expect(store.getMembership(100)).toEqual(duplicateMemberships.at(-1))
+    expect(new Set(jaggedMemberships.map((membership) => membership.runId)).size).toBe(3)
+    expect(store.getStats()).toEqual({ familyCount: 2, runCount: 4, memberCount: 4 })
+  })
 })

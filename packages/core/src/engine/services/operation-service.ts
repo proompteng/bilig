@@ -52,6 +52,7 @@ const DIRECT_SCALAR_DELTA_CLOSURE_LIMIT = 4_096
 const EMPTY_CHANGED_CELLS = new Uint32Array(0)
 const TRUSTED_TRACKED_PHYSICAL_SHEET_ID_PROPERTY = '__biligTrackedPhysicalSheetId'
 const TRUSTED_TRACKED_PHYSICAL_SORTED_SPLIT_PROPERTY = '__biligTrackedPhysicalSortedSliceSplit'
+const ENGINE_OPERATION_TEST_HOOKS_ENABLED = process.env['NODE_ENV'] === 'test'
 const ROW_PAIR_LEFT_PLUS_RIGHT = 1
 const ROW_PAIR_LEFT_MINUS_RIGHT = 2
 const ROW_PAIR_RIGHT_MINUS_LEFT = 3
@@ -583,6 +584,7 @@ class DirectFormulaIndexCollection {
 }
 
 export interface EngineOperationService {
+  readonly __testHooks: Record<string, unknown>
   readonly applyBatch: (
     batch: EngineOpBatch,
     source: MutationSource,
@@ -1288,6 +1290,65 @@ function evaluateRowPairDirectScalarCode(code: number, leftValue: number, rightV
     default:
       return undefined
   }
+}
+
+export const operationServiceTestHooks = {
+  PendingNumericCellValues,
+  DirectFormulaIndexCollection,
+  aggregateColumnDependencyKey,
+  approximateUniformLookupCurrentResult,
+  approximateUniformLookupNumericResult,
+  canEvaluatePostRecalcDirectFormulasWithoutKernel,
+  canSkipUniformApproximateNumericTailWrite,
+  canSkipUniformApproximateNumericTailWriteFromCurrentResult,
+  canSkipUniformExactNumericTailWriteFromCurrentResult,
+  cellRange,
+  collectTrackedDependents,
+  composeSingleDisjointExplicitEventChanges,
+  countDirectFormulaDeltaSkip,
+  directAggregateNumericContribution,
+  directCriteriaTouchesPoint,
+  directFormulaChangesAreDisjointFromInputs,
+  directLookupRowBounds,
+  directScalarLiteralNumericValue,
+  evaluateRowPairDirectScalarCode,
+  exactLookupLiteralNumericValue,
+  exactUniformLookupCurrentResult,
+  exactUniformLookupNumericResult,
+  get ROW_PAIR_LEFT_DIV_RIGHT() {
+    return ROW_PAIR_LEFT_DIV_RIGHT
+  },
+  get ROW_PAIR_LEFT_MINUS_RIGHT() {
+    return ROW_PAIR_LEFT_MINUS_RIGHT
+  },
+  get ROW_PAIR_LEFT_PLUS_RIGHT() {
+    return ROW_PAIR_LEFT_PLUS_RIGHT
+  },
+  get ROW_PAIR_LEFT_TIMES_RIGHT() {
+    return ROW_PAIR_LEFT_TIMES_RIGHT
+  },
+  get ROW_PAIR_RIGHT_DIV_LEFT() {
+    return ROW_PAIR_RIGHT_DIV_LEFT
+  },
+  get ROW_PAIR_RIGHT_MINUS_LEFT() {
+    return ROW_PAIR_RIGHT_MINUS_LEFT
+  },
+  getConstantDirectFormulaDeltas: hasCompleteDirectFormulaDeltas,
+  lookupImpactCacheKey,
+  makeCompactExistingNumericMutationResult,
+  makeExistingNumericMutationResult,
+  mergeChangedCellIndices,
+  normalizeApproximateNumericValue,
+  normalizeApproximateTextValue,
+  normalizeExactLookupKey,
+  normalizeExactNumericValue,
+  rangesIntersect,
+  rowPairDirectScalarCode,
+  sameExactNumericValue,
+  singleInputAffineDirectScalar,
+  tagTrustedPhysicalTrackedChanges,
+  throwProtectionBlocked,
+  withOptionalLookupStringIds,
 }
 
 export function createEngineOperationService(args: {
@@ -9344,7 +9405,51 @@ export function createEngineOperationService(args: {
     }
   }
 
+  const __testHooks: Record<string, unknown> = ENGINE_OPERATION_TEST_HOOKS_ENABLED
+    ? {
+        assertProtectionAllowsOp,
+        canPatchUniformLookupTailWrite,
+        canSkipApproximateLookupDirtyMark,
+        canSkipApproximateLookupNewNumericColumnWrite,
+        canSkipApproximateLookupNumericColumnWrite,
+        canSkipExactLookupNumericColumnWrite,
+        collectAffectedDirectRangeDependents,
+        collectSingleAffectedDirectRangeDependent,
+        directCriteriaMatchesChangedAggregateRow,
+        entityKeyForOp,
+        isLocallySortedNumericWrite,
+        isLocallySortedTextWrite,
+        markAffectedApproximateLookupDependents,
+        markAffectedDirectRangeDependents,
+        patchUniformLookupTailWrites,
+        planApproximateLookupNumericColumnWrite,
+        planExactLookupNumericColumnWrite,
+        planSingleApproximateLookupNumericColumnWrite,
+        planSingleExactLookupNumericColumnWrite,
+        rangeIsProtected,
+        readApproximateNumericValueAtForLookup,
+        readApproximateNumericValueForLookup,
+        readCellValueAtForLookup,
+        readCellValueForLookup,
+        readDirectCriteriaOperandValue,
+        readExactNumericValueForLookup,
+        sheetDeleteBarrierForOp,
+        sheetHasProtection,
+        shouldApplyOp,
+        tryApplyDenseRowPairDirectScalarLiteralBatch,
+        tryApplyLookupOnlyNumericColumnLiteralBatch,
+        tryApplySingleExistingDirectLiteralMutation,
+        tryApplySingleDirectAggregateLiteralMutationFastPath,
+        tryApplySingleDirectFormulaLiteralMutationWithoutEvents,
+        tryApplySingleDirectLookupOperandMutationFastPath,
+        tryApplySingleDirectScalarLiteralMutationWithoutEvents,
+        tryApplySingleKernelSyncOnlyLiteralMutationFastPath,
+        tryDirectCriteriaSumDelta,
+      }
+    : {}
+
   return {
+    __testHooks,
     applyBatch(batch, source, potentialNewCells, preparedCellAddressesByOpIndex) {
       return Effect.try({
         try: () => {

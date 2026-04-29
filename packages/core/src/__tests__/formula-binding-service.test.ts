@@ -4,8 +4,17 @@ import { ValueTag } from '@bilig/protocol'
 import { SpreadsheetEngine } from '../engine.js'
 import { EngineFormulaBindingError } from '../engine/errors.js'
 import type { EngineCellMutationRef } from '../cell-mutations-at.js'
-import type { EngineFormulaBindingService } from '../engine/services/formula-binding-service.js'
+import { formulaBindingServiceTestHooks, type EngineFormulaBindingService } from '../engine/services/formula-binding-service.js'
 import type { FormulaFamilyStore } from '../formula/formula-family-store.js'
+
+type DirectLookupTestDescriptor = NonNullable<Parameters<typeof formulaBindingServiceTestHooks.directLookupStructureEqual>[0]>
+type DirectCriteriaOperandTest = Parameters<typeof formulaBindingServiceTestHooks.directCriteriaOperandEqual>[0]
+type DirectCriteriaTestDescriptor = NonNullable<Parameters<typeof formulaBindingServiceTestHooks.directCriteriaStructureEqual>[0]>
+type DirectAggregateTestDescriptor = NonNullable<Parameters<typeof formulaBindingServiceTestHooks.directAggregateStructureEqual>[0]>
+type DirectAggregateRewriteRegionGraph = Parameters<
+  typeof formulaBindingServiceTestHooks.rewriteDirectAggregateDescriptorForStructuralTransform
+>[0]['regionGraph']
+type FormulaNodeTestValue = NonNullable<Parameters<typeof formulaBindingServiceTestHooks.staticIntegerValue>[0]>
 
 function isEngineFormulaBindingService(value: unknown): value is EngineFormulaBindingService {
   if (typeof value !== 'object' || value === null) {
@@ -96,6 +105,174 @@ function isRuntimeFormulaWithDirectCriteria(value: unknown): value is {
 }
 
 describe('EngineFormulaBindingService', () => {
+  it('covers direct descriptor helper equality and structural rewrite branches', () => {
+    const exactLookup = {
+      kind: 'exact',
+      operandCellIndex: 1,
+      prepared: {
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 4,
+        col: 0,
+      },
+      searchMode: 1,
+    } satisfies DirectLookupTestDescriptor
+    const exactUniformLookup = {
+      kind: 'exact-uniform-numeric',
+      operandCellIndex: 1,
+      sheetName: 'Sheet1',
+      sheetId: 7,
+      rowStart: 0,
+      rowEnd: 4,
+      col: 0,
+      length: 5,
+      columnVersion: 1,
+      structureVersion: 1,
+      sheetColumnVersions: new Uint32Array([1]),
+      start: 1,
+      step: 1,
+      searchMode: 1,
+    } satisfies DirectLookupTestDescriptor
+    const approximateLookup = {
+      kind: 'approximate',
+      operandCellIndex: 1,
+      prepared: {
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 4,
+        col: 0,
+      },
+      matchMode: 1,
+    } satisfies DirectLookupTestDescriptor
+    const approximateUniformLookup = {
+      kind: 'approximate-uniform-numeric',
+      operandCellIndex: 1,
+      sheetName: 'Sheet1',
+      sheetId: 7,
+      rowStart: 0,
+      rowEnd: 4,
+      col: 0,
+      length: 5,
+      columnVersion: 1,
+      structureVersion: 1,
+      sheetColumnVersions: new Uint32Array([1]),
+      start: 1,
+      step: 1,
+      matchMode: 1,
+    } satisfies DirectLookupTestDescriptor
+
+    expect(formulaBindingServiceTestHooks.directLookupColumnInfo(exactLookup)).toEqual({
+      sheetName: 'Sheet1',
+      col: 0,
+      isExact: true,
+    })
+    expect(formulaBindingServiceTestHooks.directLookupColumnInfo(exactUniformLookup)).toEqual({
+      sheetName: 'Sheet1',
+      col: 0,
+      isExact: true,
+    })
+    expect(formulaBindingServiceTestHooks.directLookupColumnInfo(approximateLookup)).toEqual({
+      sheetName: 'Sheet1',
+      col: 0,
+      isExact: false,
+    })
+    expect(formulaBindingServiceTestHooks.directLookupColumnInfo(approximateUniformLookup)).toEqual({
+      sheetName: 'Sheet1',
+      col: 0,
+      isExact: false,
+    })
+    expect(formulaBindingServiceTestHooks.directLookupStructureEqual(exactLookup, { ...exactLookup })).toBe(true)
+    expect(formulaBindingServiceTestHooks.directLookupStructureEqual(exactLookup, { ...exactLookup, searchMode: -1 })).toBe(false)
+    expect(formulaBindingServiceTestHooks.directLookupStructureEqual(exactUniformLookup, { ...exactUniformLookup })).toBe(true)
+    expect(formulaBindingServiceTestHooks.directLookupStructureEqual(exactUniformLookup, { ...exactUniformLookup, rowEnd: 5 })).toBe(false)
+    expect(formulaBindingServiceTestHooks.directLookupStructureEqual(approximateLookup, { ...approximateLookup })).toBe(true)
+    expect(formulaBindingServiceTestHooks.directLookupStructureEqual(approximateLookup, { ...approximateLookup, matchMode: -1 })).toBe(
+      false,
+    )
+    expect(formulaBindingServiceTestHooks.directLookupStructureEqual(approximateUniformLookup, { ...approximateUniformLookup })).toBe(true)
+    expect(
+      formulaBindingServiceTestHooks.directLookupStructureEqual(approximateUniformLookup, { ...approximateUniformLookup, col: 1 }),
+    ).toBe(false)
+    expect(formulaBindingServiceTestHooks.directLookupStructureEqual(undefined, exactLookup)).toBe(false)
+
+    const literalCriterion = { kind: 'literal', value: { tag: ValueTag.Number, value: 2 } } satisfies DirectCriteriaOperandTest
+    const cellCriterion = { kind: 'cell', cellIndex: 44 } satisfies DirectCriteriaOperandTest
+    expect(formulaBindingServiceTestHooks.directCriteriaOperandEqual(literalCriterion, { ...literalCriterion })).toBe(true)
+    expect(
+      formulaBindingServiceTestHooks.directCriteriaOperandEqual(literalCriterion, {
+        kind: 'literal',
+        value: { tag: ValueTag.Number, value: 3 },
+      } satisfies DirectCriteriaOperandTest),
+    ).toBe(false)
+    expect(formulaBindingServiceTestHooks.directCriteriaOperandEqual(cellCriterion, { ...cellCriterion })).toBe(true)
+    expect(
+      formulaBindingServiceTestHooks.directCriteriaOperandEqual(cellCriterion, {
+        kind: 'cell',
+        cellIndex: 45,
+      } satisfies DirectCriteriaOperandTest),
+    ).toBe(false)
+
+    const directCriteria = {
+      aggregateKind: 'sum',
+      aggregateRange: { regionId: 1, sheetName: 'Sheet1', rowStart: 0, rowEnd: 4, col: 2, length: 5 },
+      criteriaPairs: [
+        {
+          range: { regionId: 2, sheetName: 'Sheet1', rowStart: 0, rowEnd: 4, col: 0, length: 5 },
+          criterion: literalCriterion,
+        },
+      ],
+    } satisfies DirectCriteriaTestDescriptor
+    expect(formulaBindingServiceTestHooks.directCriteriaStructureEqual(directCriteria, structuredClone(directCriteria))).toBe(true)
+    expect(
+      formulaBindingServiceTestHooks.directCriteriaStructureEqual(directCriteria, {
+        ...directCriteria,
+        criteriaPairs: [],
+      } satisfies DirectCriteriaTestDescriptor),
+    ).toBe(false)
+
+    const directAggregate = {
+      aggregateKind: 'sum',
+      regionId: 1,
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 4,
+      col: 2,
+      length: 5,
+    } satisfies DirectAggregateTestDescriptor
+    expect(formulaBindingServiceTestHooks.directAggregateStructureEqual(directAggregate, { ...directAggregate })).toBe(true)
+    expect(formulaBindingServiceTestHooks.directAggregateStructureEqual(directAggregate, { ...directAggregate, col: 3 })).toBe(false)
+
+    expect(
+      formulaBindingServiceTestHooks.rewriteDirectAggregateDescriptorForStructuralTransform({
+        descriptor: directAggregate,
+        targetSheetName: 'Other',
+        transform: { kind: 'insert', axis: 'row', start: 1, count: 1 },
+        regionGraph: { internSingleColumnRegion: vi.fn() } satisfies DirectAggregateRewriteRegionGraph,
+      }),
+    ).toBeUndefined()
+    const regionGraph = {
+      internSingleColumnRegion: vi.fn(() => 99),
+    } satisfies DirectAggregateRewriteRegionGraph
+    expect(
+      formulaBindingServiceTestHooks.rewriteDirectAggregateDescriptorForStructuralTransform({
+        descriptor: directAggregate,
+        targetSheetName: 'Sheet1',
+        transform: { kind: 'insert', axis: 'row', start: 1, count: 2 },
+        regionGraph,
+      }),
+    ).toEqual(expect.objectContaining({ regionId: 99, rowStart: 0, rowEnd: 6, length: 7 }))
+
+    const numberNode = { kind: 'NumberLiteral', value: 4 } satisfies FormulaNodeTestValue
+    const negativeNode = {
+      kind: 'UnaryExpr',
+      operator: '-',
+      argument: numberNode,
+    } satisfies FormulaNodeTestValue
+    expect(formulaBindingServiceTestHooks.staticIntegerValue(numberNode)).toBe(4)
+    expect(formulaBindingServiceTestHooks.staticIntegerValue(negativeNode)).toBe(-4)
+    expect(formulaBindingServiceTestHooks.staticIntegerValue(undefined)).toBeUndefined()
+  })
+
   it('indexes formula owners and qualified sheet references for structural candidate collection', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'binding-sheet-indexes' })
     await engine.ready()
@@ -130,6 +307,62 @@ describe('EngineFormulaBindingService', () => {
 
     expect(engine.getCell('Sheet1', 'B1').formula).toBeUndefined()
     expect(engine.getDependencies('Sheet1', 'A1').directDependents).toEqual([])
+  })
+
+  it('clears direct lookup and criteria formula indexes through the service', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'binding-clear-direct-descriptors', useColumnIndex: true })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellValue('Sheet1', 'A2', 2)
+    engine.setCellValue('Sheet1', 'A3', 3)
+    engine.setCellValue('Sheet1', 'B1', 10)
+    engine.setCellValue('Sheet1', 'B2', 20)
+    engine.setCellValue('Sheet1', 'B3', 30)
+    engine.setCellValue('Sheet1', 'C1', 2)
+    engine.setCellFormula('Sheet1', 'D1', 'MATCH(C1,A1:A3,0)')
+    engine.setCellFormula('Sheet1', 'D2', 'SUMIF(A1:A3,">1",B1:B3)')
+    engine.setCellFormula('Sheet1', 'D3', 'MATCH(C1,A1:A3,1)')
+
+    const lookupIndex = engine.workbook.getCellIndex('Sheet1', 'D1')
+    const criteriaIndex = engine.workbook.getCellIndex('Sheet1', 'D2')
+    const approximateLookupIndex = engine.workbook.getCellIndex('Sheet1', 'D3')
+    expect(lookupIndex).toBeDefined()
+    expect(criteriaIndex).toBeDefined()
+    expect(approximateLookupIndex).toBeDefined()
+    expect(Reflect.get(readRuntimeFormula(engine, lookupIndex!), 'directLookup')).toBeDefined()
+    expect(Reflect.get(readRuntimeFormula(engine, criteriaIndex!), 'directCriteria')).toBeDefined()
+    expect(Reflect.get(readRuntimeFormula(engine, approximateLookupIndex!), 'directLookup')).toBeDefined()
+
+    const binding = getBindingService(engine)
+    Effect.runSync(binding.clearFormula(lookupIndex!))
+    Effect.runSync(binding.clearFormula(criteriaIndex!))
+    Effect.runSync(binding.clearFormula(approximateLookupIndex!))
+
+    expect(engine.getCell('Sheet1', 'D1').formula).toBeUndefined()
+    expect(engine.getCell('Sheet1', 'D2').formula).toBeUndefined()
+    expect(engine.getCell('Sheet1', 'D3').formula).toBeUndefined()
+    expect(engine.getDependencies('Sheet1', 'A2').directDependents).toEqual([])
+  })
+
+  it('binds and invalidates formulas through the public Effect service wrappers', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'binding-effect-wrappers' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 2)
+    engine.setCellValue('Sheet1', 'B1', 3)
+    engine.setCellValue('Sheet1', 'C1', 0)
+
+    const formulaIndex = engine.workbook.getCellIndex('Sheet1', 'C1')
+    expect(formulaIndex).toBeDefined()
+
+    const binding = getBindingService(engine)
+    Effect.runSync(binding.bindFormula(formulaIndex!, 'Sheet1', 'A1+B1'))
+    expect(engine.getCell('Sheet1', 'C1').formula).toBe('A1+B1')
+    expect(readRuntimeDirectScalar(engine, formulaIndex!)).toBeDefined()
+
+    Effect.runSync(binding.invalidateFormula(formulaIndex!))
+    expect(readRuntimeFormula(engine, formulaIndex!)).toBeUndefined()
   })
 
   it('rewrites quoted sheet references on rename through the binding service', async () => {

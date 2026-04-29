@@ -163,4 +163,60 @@ describe('lookup regression builtins', () => {
     expect(Reflect.apply(FORECAST, undefined, [num(4), knownY])).toEqual(err(ErrorCode.Value))
     expect(Reflect.apply(LINEST, undefined, [])).toEqual(err(ErrorCode.Value))
   })
+
+  it('covers covariance, scalar matrix coercion, and regression validation branches', () => {
+    const COVAR = getLookupBuiltin('COVAR')!
+    const COVARIANCE_P = getLookupBuiltin('COVARIANCE.P')!
+    const COVARIANCE_S = getLookupBuiltin('COVARIANCE.S')!
+    const CORREL = getLookupBuiltin('CORREL')!
+    const FORECAST = getLookupBuiltin('FORECAST')!
+    const TREND = getLookupBuiltin('TREND')!
+    const GROWTH = getLookupBuiltin('GROWTH')!
+    const LINEST = getLookupBuiltin('LINEST')!
+    const LOGEST = getLookupBuiltin('LOGEST')!
+
+    const y = cellRange([num(2), num(4), num(6), num(8)], 4, 1)
+    const x = cellRange([num(1), num(2), num(3), num(4)], 4, 1)
+
+    expect(COVAR(y, x)).toEqual(num(2.5))
+    expect(COVARIANCE_P(y, x)).toEqual(num(2.5))
+    expect(COVARIANCE_S(y, x)).toEqual(num(10 / 3))
+    expect(COVARIANCE_S(cellRange([num(1)], 1, 1), cellRange([num(2)], 1, 1))).toEqual(err(ErrorCode.Div0))
+    expect(CORREL(cellRange([num(1)], 1, 1), cellRange([num(2)], 1, 1))).toEqual(err(ErrorCode.Div0))
+    expect(CORREL(cellRange([num(1), num(1)], 2, 1), cellRange([num(2), num(3)], 2, 1))).toEqual(err(ErrorCode.Div0))
+    expect(CORREL(cellRange([err(ErrorCode.Ref), num(1)], 2, 1), cellRange([num(2), num(3)], 2, 1))).toEqual(err(ErrorCode.Value))
+    expect(CORREL({ kind: 'range', refKind: 'rows', rows: 1, cols: 2, values: [num(1), num(2)] }, x)).toEqual(err(ErrorCode.Value))
+
+    expect(FORECAST(err(ErrorCode.NA), y, x)).toEqual(err(ErrorCode.NA))
+    expect(FORECAST(cellRange([num(4)], 1, 1), y, x)).toEqual(err(ErrorCode.Value))
+    expect(FORECAST(num(4), y, cellRange([num(1), num(1), num(1), num(1)], 4, 1))).toEqual(err(ErrorCode.Div0))
+
+    expect(TREND(y)).toEqual({
+      kind: 'array',
+      rows: 4,
+      cols: 1,
+      values: [num(2), num(4), num(6), num(8)],
+    })
+    expect(TREND(y, x, cellRange([num(5), num(6)], 1, 2), bool(false))).toEqual({
+      kind: 'array',
+      rows: 1,
+      cols: 2,
+      values: [num(10), num(12)],
+    })
+    expect(TREND(y, x, { kind: 'range', refKind: 'columns', rows: 1, cols: 1, values: [num(5)] })).toEqual(err(ErrorCode.Value))
+    expect(TREND(y, x, num(Number.POSITIVE_INFINITY))).toEqual(err(ErrorCode.Value))
+    expect(TREND(y, x, num(5), cellRange([bool(true)], 1, 1))).toEqual(err(ErrorCode.Value))
+
+    expect(GROWTH(cellRange([num(2), num(4), num(8), num(16)], 4, 1))).toMatchObject({
+      kind: 'array',
+      rows: 4,
+      cols: 1,
+    })
+    expect(GROWTH(cellRange([num(2), num(4), num(8), num(16)], 4, 1), x, num(Number.POSITIVE_INFINITY))).toEqual(err(ErrorCode.Value))
+
+    expect(LINEST(y, x, cellRange([bool(true)], 1, 1))).toEqual(err(ErrorCode.Value))
+    expect(LINEST(cellRange([], 0, 0), x)).toEqual(err(ErrorCode.Value))
+    expect(LOGEST(cellRange([err(ErrorCode.Ref)], 1, 1), x)).toEqual(err(ErrorCode.Ref))
+    expect(LOGEST(y, cellRange([num(Number.NaN), num(2), num(3), num(4)], 4, 1))).toEqual(err(ErrorCode.Value))
+  })
 })
