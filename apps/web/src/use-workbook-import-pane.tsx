@@ -109,7 +109,7 @@ export function useWorkbookImportPane(input: {
           isOpen
             ? 'border-transparent bg-[var(--color-mauve-100)] text-[var(--color-mauve-900)] shadow-none'
             : 'border-transparent bg-transparent text-[var(--color-mauve-700)] shadow-none hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)]',
-          'max-[360px]:hidden',
+          'max-[420px]:hidden',
         )}
         data-testid="workbook-import-toggle"
         disabled={!enabled}

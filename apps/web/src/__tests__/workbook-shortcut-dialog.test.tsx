@@ -45,7 +45,7 @@ describe('workbook shortcut dialog', () => {
 
     const openButton = document.querySelector("[data-testid='workbook-shortcut-button']")
     expect(openButton?.textContent?.trim()).toBe('')
-    expect(openButton?.getAttribute('class')).toContain('max-[360px]:hidden')
+    expect(openButton?.getAttribute('class')).toContain('max-[420px]:hidden')
     await act(async () => {
       openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })

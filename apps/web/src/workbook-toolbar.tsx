@@ -321,7 +321,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               >
                 <Select.Trigger
                   aria-label="Number format"
-                  className={cn(toolbarSelectTriggerClass(), 'w-32 max-[360px]:w-24')}
+                  className={cn(toolbarSelectTriggerClass(), 'w-32 max-[420px]:w-28 max-[360px]:w-24')}
                   data-current-value={currentNumberFormatKind}
                 >
                   <span className="min-w-0 flex-1 truncate whitespace-nowrap text-left">
@@ -370,7 +370,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
               >
                 <Select.Trigger
                   aria-label="Font size"
-                  className={cn(toolbarSelectTriggerClass(), 'w-[5rem]')}
+                  className={cn(toolbarSelectTriggerClass(), 'w-[5rem] max-[420px]:w-14')}
                   data-current-value={selectedFontSize}
                 >
                   <span className="flex-none w-[2ch] overflow-visible text-center font-medium tabular-nums">
