@@ -64,6 +64,7 @@ describe('grid hook boundary helpers', () => {
     const axisRuntimeHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridAxisRuntime.ts', import.meta.url)), 'utf8')
     const geometryRuntimeSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridGeometryRuntime.ts', import.meta.url)), 'utf8')
     const headerHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookHeaderPanes.ts', import.meta.url)), 'utf8')
+    const hostRuntimeHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridHostRuntime.ts', import.meta.url)), 'utf8')
     const interactionRuntimeHookSource = readFileSync(
       fileURLToPath(new URL('../useWorkbookGridInteractionRuntime.ts', import.meta.url)),
       'utf8',
@@ -101,6 +102,9 @@ describe('grid hook boundary helpers', () => {
     expect(hookSource).not.toContain('useWorkbookColumnAutofit')
     expect(hookSource).not.toContain('useWorkbookAxisResizeState')
     expect(hookSource).not.toContain('useWorkbookInteractionOverlayState')
+    expect(hookSource).not.toContain('useGridElementSize')
+    expect(hookSource).not.toContain('useRef<HTMLDivElement')
+    expect(hookSource).not.toContain('useState<VisibleRegionState>')
     expect(paneHookSource).toContain('useWorkbookHeaderPanes')
     expect(paneHookSource).toContain('useWorkbookRenderTilePanes')
     expect(paneHookSource).toContain('useWorkbookHeaderCellBounds')
@@ -134,6 +138,9 @@ describe('grid hook boundary helpers', () => {
     expect(editorRuntimeHookSource).toContain('useWorkbookColumnAutofit')
     expect(axisRuntimeHookSource).toContain('useWorkbookAxisResizeState')
     expect(interactionRuntimeHookSource).toContain('useWorkbookInteractionOverlayState')
+    expect(hostRuntimeHookSource).toContain('useGridElementSize')
+    expect(hostRuntimeHookSource).toContain('useRef<HTMLDivElement')
+    expect(hostRuntimeHookSource).toContain('useState<VisibleRegionState>')
     expect(surfaceSource).not.toContain('createGridGeometrySnapshot')
   })
 })

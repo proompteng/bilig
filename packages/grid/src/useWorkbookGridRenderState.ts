@@ -1,17 +1,16 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { parseCellAddress } from '@bilig/formula'
 import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import { getGridMetrics } from './gridMetrics.js'
-import type { VisibleRegionState } from './gridPointer.js'
 import { getGridTheme } from './gridPresentation.js'
 import type { GridEngineLike } from './grid-engine.js'
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
-import { useGridElementSize } from './useGridElementSize.js'
 import { useWorkbookGridAxisRuntime } from './useWorkbookGridAxisRuntime.js'
 import { useWorkbookGridEditorRuntime } from './useWorkbookGridEditorRuntime.js'
 import { useWorkbookGridGeometryRuntime } from './useWorkbookGridGeometryRuntime.js'
+import { useWorkbookGridHostRuntime } from './useWorkbookGridHostRuntime.js'
 import { useWorkbookGridInteractionRuntime } from './useWorkbookGridInteractionRuntime.js'
 import { useWorkbookGridRenderPanes } from './useWorkbookGridRenderPanes.js'
 import { useWorkbookGridViewportRuntime } from './useWorkbookGridViewportRuntime.js'
@@ -67,28 +66,25 @@ export function useWorkbookGridRenderState(input: {
   } = input
   const freezeRows = Math.max(0, Math.min(MAX_ROWS, requestedFreezeRows))
   const freezeCols = Math.max(0, Math.min(MAX_COLS, requestedFreezeCols))
-  const hostRef = useRef<HTMLDivElement | null>(null)
-  const focusTargetRef = useRef<HTMLDivElement | null>(null)
-  const scrollViewportRef = useRef<HTMLDivElement | null>(null)
-  const [hostElement, setHostElement] = useState<HTMLDivElement | null>(null)
-  const [visibleRegion, setVisibleRegion] = useState<VisibleRegionState>({
-    range: { x: 0, y: 0, width: 12, height: 24 },
-    tx: 0,
-    ty: 0,
-    freezeRows,
-    freezeCols,
-  })
   const selectedCell = useMemo(() => parseCellAddress(selectedAddr, sheetName), [selectedAddr, sheetName])
   const selectedItem = useMemo(() => [selectedCell.col, selectedCell.row] as const, [selectedCell.col, selectedCell.row])
   const gridMetrics = useMemo(() => getGridMetrics(), [])
   const dprBucket = typeof window === 'undefined' ? 1 : Math.max(1, Math.ceil(window.devicePixelRatio || 1))
   const shouldUseRemoteRenderTileSource = renderTileSource !== undefined && sheetId !== undefined
   const gridTheme = useMemo(() => getGridTheme(), [])
-  const liveVisibleRegionRef = useRef<VisibleRegionState>(visibleRegion)
-  const hostElementSize = useGridElementSize(hostElement)
-  const hostClientWidth = hostElementSize.width
-  const hostClientHeight = hostElementSize.height
-  const getVisibleRegion = useCallback(() => liveVisibleRegionRef.current, [])
+  const {
+    focusTargetRef,
+    getVisibleRegion,
+    handleHostRef,
+    hostClientHeight,
+    hostClientWidth,
+    hostElement,
+    hostRef,
+    liveVisibleRegionRef,
+    scrollViewportRef,
+    setVisibleRegion,
+    visibleRegion,
+  } = useWorkbookGridHostRuntime({ freezeCols, freezeRows })
   const {
     activeResizeColumn,
     activeResizeRow,
@@ -227,10 +223,6 @@ export function useWorkbookGridRenderState(input: {
     viewportResidency,
   })
 
-  const handleHostRef = useCallback((node: HTMLDivElement | null) => {
-    hostRef.current = node
-    setHostElement(node)
-  }, [])
   const { computeAutofitColumnWidth, editorPresentation, editorTextAlign, focusGrid, overlayStyle } = useWorkbookGridEditorRuntime({
     editorFontSize: gridTheme.editorFontSize,
     editorValue,
