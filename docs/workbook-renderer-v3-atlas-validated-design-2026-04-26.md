@@ -428,6 +428,9 @@ Completed in the resident-scene deletion tranche:
   Dirty text ranges can map to text-run spans, and the TypeGPU tile cache now tracks logical text-run count separately from GPU quad count so
   multi-glyph cells do not force repeated full text syncs. Text quad run spans are recorded for stable subrange writes when dirty runs keep the
   same glyph quad footprint; unsafe run-span changes fall back to a full text upload.
+- V3 tile content resource validation no longer stores or compares per-sync string signatures for mounted data tiles. `typegpu-tile-buffer-pool.ts`
+  now records explicit numeric text/rect revision keys derived from tile id, revision tuple, batch sequence, and decoration count, then uses
+  tile-local dirty masks/spans to decide partial or full buffer writes.
 - The mounted V3 glyph atlas now assigns stable numeric glyph IDs and atlas page IDs through the V3 glyph registry/page tracker. Text quad
   packing carries glyph/page dependencies into tile content resources, dirty page drains avoid sort allocation, repeated glyph reads do not
   inflate glyph registrations, and atlas texture growth updates glyph UV records without changing glyph identity.

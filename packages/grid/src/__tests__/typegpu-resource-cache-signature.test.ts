@@ -2,8 +2,10 @@ import { describe, expect, test } from 'vitest'
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
 import { DirtyMaskV3 } from '../renderer-v3/tile-damage-index.js'
 import {
-  resolveGridRectTileSignatureV3,
-  resolveGridTextTileSignatureV3,
+  areGridRectTileRevisionKeysEqualV3,
+  areGridTextTileRevisionKeysEqualV3,
+  resolveGridRectTileRevisionKeyV3,
+  resolveGridTextTileRevisionKeyV3,
   shouldSyncGridRectTileResourceV3,
   shouldSyncGridTextTileResourceV3,
   type TypeGpuTileContentResourceEntryV3,
@@ -42,8 +44,8 @@ function createTile(overrides: Partial<GridRenderTile> = {}): GridRenderTile {
   }
 }
 
-function rectSignature(tile: GridRenderTile): string {
-  return resolveGridRectTileSignatureV3({ tile })
+function rectRevisionKey(tile: GridRenderTile): ReturnType<typeof resolveGridRectTileRevisionKeyV3> {
+  return resolveGridRectTileRevisionKeyV3({ tile })
 }
 
 function contentEntry(overrides: Partial<TypeGpuTileContentResourceEntryV3> = {}): TypeGpuTileContentResourceEntryV3 {
@@ -51,7 +53,7 @@ function contentEntry(overrides: Partial<TypeGpuTileContentResourceEntryV3> = {}
     decorationRects: null,
     rectCount: 1,
     rectHandle: null,
-    rectSignature: 'previous-rect',
+    rectRevisionKey: null,
     textCount: 1,
     textAtlasGeometryVersion: 1,
     textGlyphIds: null,
@@ -61,13 +63,13 @@ function contentEntry(overrides: Partial<TypeGpuTileContentResourceEntryV3> = {}
     textRunCount: 1,
     textRunPayloads: null,
     textRunQuadSpans: null,
-    textSignature: 'previous-text',
+    textRevisionKey: null,
     ...overrides,
   }
 }
 
-describe('typegpu v3 resource cache signatures', () => {
-  test('keeps equivalent V3 text tiles stable without relying on object identity', () => {
+describe('typegpu v3 resource cache revision keys', () => {
+  test('keeps equivalent V3 text tile revision keys stable without relying on object identity', () => {
     const first = createTile({
       textCount: 1,
       textRuns: [
@@ -102,19 +104,26 @@ describe('typegpu v3 resource cache signatures', () => {
       version: { ...first.version, text: 2 },
     })
 
-    expect(resolveGridTextTileSignatureV3(first)).toBe(resolveGridTextTileSignatureV3(second))
-    expect(resolveGridTextTileSignatureV3(changed)).not.toBe(resolveGridTextTileSignatureV3(first))
+    expect(areGridTextTileRevisionKeysEqualV3(resolveGridTextTileRevisionKeyV3(first), resolveGridTextTileRevisionKeyV3(second))).toBe(true)
+    expect(areGridTextTileRevisionKeysEqualV3(resolveGridTextTileRevisionKeyV3(changed), resolveGridTextTileRevisionKeyV3(first))).toBe(
+      false,
+    )
   })
 
-  test('keeps V3 resource signatures stable across camera sequence churn', () => {
+  test('keeps V3 resource revision keys stable across camera sequence churn', () => {
     const base = createTile()
     const newerCameraWithSameContent = createTile({
       lastCameraSeq: 22,
       version: { ...base.version },
     })
 
-    expect(rectSignature(newerCameraWithSameContent)).toBe(rectSignature(base))
-    expect(resolveGridTextTileSignatureV3(newerCameraWithSameContent)).toBe(resolveGridTextTileSignatureV3(base))
+    expect(areGridRectTileRevisionKeysEqualV3(rectRevisionKey(newerCameraWithSameContent), rectRevisionKey(base))).toBe(true)
+    expect(
+      areGridTextTileRevisionKeysEqualV3(
+        resolveGridTextTileRevisionKeyV3(newerCameraWithSameContent),
+        resolveGridTextTileRevisionKeyV3(base),
+      ),
+    ).toBe(true)
   })
 
   test('compares V3 text run counts separately from GPU quad counts', () => {
@@ -147,9 +156,9 @@ describe('typegpu v3 resource cache signatures', () => {
         content: contentEntry({
           textCount: 2,
           textRunCount: 1,
-          textSignature: resolveGridTextTileSignatureV3(tile),
+          textRevisionKey: resolveGridTextTileRevisionKeyV3(tile),
         }),
-        textSignature: resolveGridTextTileSignatureV3(tile),
+        textRevisionKey: resolveGridTextTileRevisionKeyV3(tile),
         tile,
       }),
     ).toBe(false)
@@ -157,7 +166,7 @@ describe('typegpu v3 resource cache signatures', () => {
 
   test('resyncs V3 text resources only when atlas glyph geometry changes', () => {
     const tile = createTile({ textCount: 1, textRuns: [createTextRun({ text: 'A' })] })
-    const signature = resolveGridTextTileSignatureV3(tile)
+    const revisionKey = resolveGridTextTileRevisionKeyV3(tile)
 
     expect(
       shouldSyncGridTextTileResourceV3({
@@ -166,9 +175,9 @@ describe('typegpu v3 resource cache signatures', () => {
           textAtlasGeometryVersion: 1,
           textCount: 1,
           textRunCount: 1,
-          textSignature: signature,
+          textRevisionKey: revisionKey,
         }),
-        textSignature: signature,
+        textRevisionKey: revisionKey,
         tile,
       }),
     ).toBe(false)
@@ -179,9 +188,9 @@ describe('typegpu v3 resource cache signatures', () => {
           textAtlasGeometryVersion: 1,
           textCount: 1,
           textRunCount: 1,
-          textSignature: signature,
+          textRevisionKey: revisionKey,
         }),
-        textSignature: signature,
+        textRevisionKey: revisionKey,
         tile,
       }),
     ).toBe(true)
@@ -198,27 +207,32 @@ describe('typegpu v3 resource cache signatures', () => {
         content: contentEntry({
           textCount: 2,
           textRunCount: 1,
-          textSignature: 'previous-text',
+          textRevisionKey: resolveGridTextTileRevisionKeyV3(createTile()),
         }),
-        textSignature: resolveGridTextTileSignatureV3(tile),
+        textRevisionKey: resolveGridTextTileRevisionKeyV3(tile),
         tile,
       }),
     ).toBe(true)
   })
 
-  test('tracks V3 tile revisions and decoration counts in resource signatures', () => {
+  test('tracks V3 tile revisions and decoration counts in resource revision keys', () => {
     const base = createTile()
     const changedValues = createTile({ version: { ...base.version, values: 2 } })
     const changedBatch = createTile({ lastBatchId: 2, version: { ...base.version } })
 
-    expect(rectSignature(changedValues)).not.toBe(rectSignature(base))
-    expect(resolveGridTextTileSignatureV3(changedBatch)).not.toBe(resolveGridTextTileSignatureV3(base))
+    expect(areGridRectTileRevisionKeysEqualV3(rectRevisionKey(changedValues), rectRevisionKey(base))).toBe(false)
+    expect(areGridTextTileRevisionKeysEqualV3(resolveGridTextTileRevisionKeyV3(changedBatch), resolveGridTextTileRevisionKeyV3(base))).toBe(
+      false,
+    )
     expect(
-      resolveGridRectTileSignatureV3({
-        decorationRects: [{ color: '#111111', height: 1, width: 20, x: 4, y: 18 }],
-        tile: base,
-      }),
-    ).not.toBe(rectSignature(base))
+      areGridRectTileRevisionKeysEqualV3(
+        resolveGridRectTileRevisionKeyV3({
+          decorationRects: [{ color: '#111111', height: 1, width: 20, x: 4, y: 18 }],
+          tile: base,
+        }),
+        rectRevisionKey(base),
+      ),
+    ).toBe(false)
   })
 
   test('uses dirty masks to skip unrelated rect uploads for plain text updates', () => {
@@ -232,15 +246,15 @@ describe('typegpu v3 resource cache signatures', () => {
 
     expect(
       shouldSyncGridTextTileResourceV3({
-        content: contentEntry({ textSignature: resolveGridTextTileSignatureV3(base) }),
-        textSignature: resolveGridTextTileSignatureV3(textOnlyUpdate),
+        content: contentEntry({ textRevisionKey: resolveGridTextTileRevisionKeyV3(base) }),
+        textRevisionKey: resolveGridTextTileRevisionKeyV3(textOnlyUpdate),
         tile: textOnlyUpdate,
       }),
     ).toBe(true)
     expect(
       shouldSyncGridRectTileResourceV3({
-        content: contentEntry({ rectCount: 0, rectSignature: rectSignature(base) }),
-        rectSignature: rectSignature(textOnlyUpdate),
+        content: contentEntry({ rectCount: 0, rectRevisionKey: rectRevisionKey(base) }),
+        rectRevisionKey: rectRevisionKey(textOnlyUpdate),
         tile: textOnlyUpdate,
       }),
     ).toBe(false)
@@ -283,8 +297,8 @@ describe('typegpu v3 resource cache signatures', () => {
 
     expect(
       shouldSyncGridRectTileResourceV3({
-        content: contentEntry({ rectCount: 0, rectSignature: 'old-rect' }),
-        rectSignature: 'new-rect',
+        content: contentEntry({ rectCount: 0, rectRevisionKey: rectRevisionKey(createTile()) }),
+        rectRevisionKey: rectRevisionKey(decorated),
         tile: decorated,
       }),
     ).toBe(true)
@@ -293,9 +307,9 @@ describe('typegpu v3 resource cache signatures', () => {
         content: contentEntry({
           decorationRects: [{ color: '#111111', height: 1, width: 20, x: 4, y: 18 }],
           rectCount: 0,
-          rectSignature: 'old-rect',
+          rectRevisionKey: rectRevisionKey(createTile()),
         }),
-        rectSignature: 'new-rect',
+        rectRevisionKey: rectRevisionKey(plainAfterDecoration),
         tile: plainAfterDecoration,
       }),
     ).toBe(true)

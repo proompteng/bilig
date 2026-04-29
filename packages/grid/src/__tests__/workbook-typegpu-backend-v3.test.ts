@@ -13,6 +13,8 @@ import {
 import { syncTypeGpuAtlasResources, type TypeGpuRendererArtifacts } from '../renderer-v3/typegpu-primitives.js'
 import {
   TypeGpuTileResourceCacheV3,
+  resolveGridRectTileRevisionKeyV3,
+  resolveGridTextTileRevisionKeyV3,
   resolveWorkbookTileContentBufferKeyV3,
   resolveWorkbookTilePlacementBufferKeyV3,
 } from '../renderer-v3/typegpu-tile-buffer-pool.js'
@@ -110,8 +112,8 @@ describe('workbook typegpu backend v3 tile path', () => {
     const residency = new TileResidencyV3<GridRenderTile, null>()
     upsertRenderTile(residency, tile)
     const entry = tileResources.getContent(resolveWorkbookTileContentBufferKeyV3(pane))
-    entry.rectSignature = 'rect:2'
-    entry.textSignature = 'text:2'
+    entry.rectRevisionKey = resolveGridRectTileRevisionKeyV3({ tile })
+    entry.textRevisionKey = resolveGridTextTileRevisionKeyV3(tile)
 
     expect(resolveTypeGpuDrawTilePanesV3({ panes: [pane], residency, tileResources })[0]?.tile).toBe(tile)
   })

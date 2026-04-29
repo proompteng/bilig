@@ -178,9 +178,11 @@ export function resolveTypeGpuDrawTilePanesV3(input: {
 
 function isTileContentDrawReady(entry: TypeGpuTileContentResourceEntryV3, pane: WorkbookRenderTilePaneState): boolean {
   const tile = pane.tile
-  const rectReady = tile.rectCount === 0 ? entry.rectSignature !== null : entry.rectHandle !== null && entry.rectCount >= tile.rectCount
+  const rectReady = tile.rectCount === 0 ? entry.rectRevisionKey !== null : entry.rectHandle !== null && entry.rectCount >= tile.rectCount
   const textReady =
-    tile.textCount === 0 ? entry.textSignature !== null : entry.textHandle !== null && entry.textSignature !== null && entry.textCount > 0
+    tile.textCount === 0
+      ? entry.textRevisionKey !== null
+      : entry.textHandle !== null && entry.textRevisionKey !== null && entry.textCount > 0
   return rectReady && textReady
 }
 

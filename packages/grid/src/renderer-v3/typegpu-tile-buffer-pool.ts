@@ -42,7 +42,7 @@ const TEXT_DECORATION_DIRTY_MASK_V3 = DirtyMaskV3.Value | DirtyMaskV3.Text
 export interface TypeGpuTileContentResourceEntryV3 {
   rectHandle: GpuBufferHandleV3<RectInstanceVertexBuffer> | null
   rectCount: number
-  rectSignature: string | null
+  rectRevisionKey: TypeGpuTileRectRevisionKeyV3 | null
   textHandle: GpuBufferHandleV3<TextInstanceVertexBuffer> | null
   textAtlasGeometryVersion: number
   textCount: number
@@ -52,7 +52,7 @@ export interface TypeGpuTileContentResourceEntryV3 {
   textRunGlyphIds: readonly (readonly number[])[] | null
   textRunPayloads: readonly TextQuadRunPayloadV3[] | null
   textRunQuadSpans: readonly TextQuadRunSpan[] | null
-  textSignature: string | null
+  textRevisionKey: TypeGpuTileTextRevisionKeyV3 | null
   decorationRects: readonly TextDecorationRect[] | null
 }
 
@@ -68,7 +68,7 @@ function createEmptyContentEntry(): TypeGpuTileContentResourceEntryV3 {
     decorationRects: null,
     rectCount: 0,
     rectHandle: null,
-    rectSignature: null,
+    rectRevisionKey: null,
     textCount: 0,
     textAtlasGeometryVersion: -1,
     textGlyphIds: null,
@@ -78,7 +78,7 @@ function createEmptyContentEntry(): TypeGpuTileContentResourceEntryV3 {
     textRunCount: 0,
     textRunPayloads: null,
     textRunQuadSpans: null,
-    textSignature: null,
+    textRevisionKey: null,
   }
 }
 
@@ -201,7 +201,7 @@ export class TypeGpuTileResourceCacheV3 {
       entry.textHandle = null
     }
     entry.rectCount = 0
-    entry.rectSignature = null
+    entry.rectRevisionKey = null
     entry.textCount = 0
     entry.textAtlasGeometryVersion = -1
     entry.textGlyphIds = null
@@ -210,7 +210,7 @@ export class TypeGpuTileResourceCacheV3 {
     entry.textRunGlyphIds = null
     entry.textRunPayloads = null
     entry.textRunQuadSpans = null
-    entry.textSignature = null
+    entry.textRevisionKey = null
     entry.decorationRects = null
   }
 
@@ -261,17 +261,17 @@ export function syncTypeGpuTilePaneResourcesV3(input: {
 
   input.panes.forEach((pane) => {
     const content = input.tileResources.getContent(resolveWorkbookTileContentBufferKeyV3(pane))
-    const textSignature = resolveGridTextTileSignatureV3(pane.tile)
+    const textRevisionKey = resolveGridTextTileRevisionKeyV3(pane.tile)
     const atlasGeometryVersion = input.atlas.getGlyphGeometryVersion()
     const atlasGeometryResync =
-      content.textSignature === textSignature &&
+      areGridTextTileRevisionKeysEqualV3(content.textRevisionKey, textRevisionKey) &&
       content.textAtlasGeometryVersion >= 0 &&
       content.textAtlasGeometryVersion !== atlasGeometryVersion
     if (
       shouldSyncGridTextTileResourceV3({
         atlasGeometryVersion,
         content,
-        textSignature,
+        textRevisionKey,
         tile: pane.tile,
       })
     ) {
@@ -280,25 +280,25 @@ export function syncTypeGpuTilePaneResourcesV3(input: {
         atlasGeometryResync,
         content,
         pane,
-        textSignature,
+        textRevisionKey,
         tileResources: input.tileResources,
       })
     } else {
-      content.textSignature = textSignature
+      content.textRevisionKey = textRevisionKey
     }
-    const rectSignature = resolveGridRectTileSignatureV3({
+    const rectRevisionKey = resolveGridRectTileRevisionKeyV3({
       decorationRects: content.decorationRects ?? [],
       tile: pane.tile,
     })
-    if (shouldSyncGridRectTileResourceV3({ content, rectSignature, tile: pane.tile })) {
+    if (shouldSyncGridRectTileResourceV3({ content, rectRevisionKey, tile: pane.tile })) {
       syncTileRectResource({
         content,
         pane,
-        rectSignature,
+        rectRevisionKey,
         tileResources: input.tileResources,
       })
     } else {
-      content.rectSignature = rectSignature
+      content.rectRevisionKey = rectRevisionKey
     }
     input.tileResources.getPlacement(resolveWorkbookTilePlacementBufferKeyV3(pane))
   })
@@ -335,36 +335,102 @@ export function resolveWorkbookTilePlacementBufferKeyV3(pane: Pick<WorkbookRende
   return `tile-placement:v3:${pane.paneId}:${pane.tile.tileId}`
 }
 
-export function resolveGridTextTileSignatureV3(tile: GridRenderTile): string {
-  return [
-    'render-tile-v3:text',
-    tile.tileId,
-    tile.textCount,
-    tile.version.values,
-    tile.version.styles,
-    tile.version.text,
-    tile.version.axisX,
-    tile.version.axisY,
-    tile.lastBatchId,
-  ].join(':')
+export interface TypeGpuTileTextRevisionKeyV3 {
+  readonly tileId: number
+  readonly textRunCount: number
+  readonly valueSeq: number
+  readonly styleSeq: number
+  readonly textSeq: number
+  readonly axisSeqX: number
+  readonly axisSeqY: number
+  readonly freezeSeq: number
+  readonly batchSeq: number
 }
 
-export function resolveGridRectTileSignatureV3(input: {
+export interface TypeGpuTileRectRevisionKeyV3 {
+  readonly tileId: number
+  readonly rectCount: number
+  readonly valueSeq: number
+  readonly styleSeq: number
+  readonly axisSeqX: number
+  readonly axisSeqY: number
+  readonly freezeSeq: number
+  readonly batchSeq: number
+  readonly decorationRectCount: number
+}
+
+export function resolveGridTextTileRevisionKeyV3(tile: GridRenderTile): TypeGpuTileTextRevisionKeyV3 {
+  return {
+    axisSeqX: tile.version.axisX,
+    axisSeqY: tile.version.axisY,
+    batchSeq: tile.lastBatchId,
+    freezeSeq: tile.version.freeze,
+    styleSeq: tile.version.styles,
+    textRunCount: tile.textCount,
+    textSeq: tile.version.text,
+    tileId: tile.tileId,
+    valueSeq: tile.version.values,
+  }
+}
+
+export function resolveGridRectTileRevisionKeyV3(input: {
   readonly tile: GridRenderTile
   readonly decorationRects?: readonly TextDecorationRect[] | undefined
-}): string {
+}): TypeGpuTileRectRevisionKeyV3 {
   const decorationRects = input.decorationRects ?? []
-  return [
-    'render-tile-v3:rect',
-    input.tile.tileId,
-    input.tile.rectCount,
-    input.tile.version.values,
-    input.tile.version.styles,
-    input.tile.version.axisX,
-    input.tile.version.axisY,
-    input.tile.lastBatchId,
-    decorationRects.length,
-  ].join(':')
+  return {
+    axisSeqX: input.tile.version.axisX,
+    axisSeqY: input.tile.version.axisY,
+    batchSeq: input.tile.lastBatchId,
+    decorationRectCount: decorationRects.length,
+    freezeSeq: input.tile.version.freeze,
+    rectCount: input.tile.rectCount,
+    styleSeq: input.tile.version.styles,
+    tileId: input.tile.tileId,
+    valueSeq: input.tile.version.values,
+  }
+}
+
+export function areGridTextTileRevisionKeysEqualV3(
+  left: TypeGpuTileTextRevisionKeyV3 | null | undefined,
+  right: TypeGpuTileTextRevisionKeyV3 | null | undefined,
+): boolean {
+  return (
+    left !== null &&
+    left !== undefined &&
+    right !== null &&
+    right !== undefined &&
+    left.tileId === right.tileId &&
+    left.textRunCount === right.textRunCount &&
+    left.valueSeq === right.valueSeq &&
+    left.styleSeq === right.styleSeq &&
+    left.textSeq === right.textSeq &&
+    left.axisSeqX === right.axisSeqX &&
+    left.axisSeqY === right.axisSeqY &&
+    left.freezeSeq === right.freezeSeq &&
+    left.batchSeq === right.batchSeq
+  )
+}
+
+export function areGridRectTileRevisionKeysEqualV3(
+  left: TypeGpuTileRectRevisionKeyV3 | null | undefined,
+  right: TypeGpuTileRectRevisionKeyV3 | null | undefined,
+): boolean {
+  return (
+    left !== null &&
+    left !== undefined &&
+    right !== null &&
+    right !== undefined &&
+    left.tileId === right.tileId &&
+    left.rectCount === right.rectCount &&
+    left.valueSeq === right.valueSeq &&
+    left.styleSeq === right.styleSeq &&
+    left.axisSeqX === right.axisSeqX &&
+    left.axisSeqY === right.axisSeqY &&
+    left.freezeSeq === right.freezeSeq &&
+    left.batchSeq === right.batchSeq &&
+    left.decorationRectCount === right.decorationRectCount
+  )
 }
 
 export function resolveGridTileDirtyContentMaskV3(tile: Pick<GridRenderTile, 'dirtyMasks'>): number | null {
@@ -383,15 +449,15 @@ export function shouldSyncGridTextTileResourceV3(input: {
   readonly atlasGeometryVersion?: number | undefined
   readonly content: Pick<
     TypeGpuTileContentResourceEntryV3,
-    'textAtlasGeometryVersion' | 'textCount' | 'textHandle' | 'textRunCount' | 'textSignature'
+    'textAtlasGeometryVersion' | 'textCount' | 'textHandle' | 'textRunCount' | 'textRevisionKey'
   >
-  readonly textSignature: string
+  readonly textRevisionKey: TypeGpuTileTextRevisionKeyV3
   readonly tile: GridRenderTile
 }): boolean {
-  if (input.content.textSignature === input.textSignature) {
+  if (areGridTextTileRevisionKeysEqualV3(input.content.textRevisionKey, input.textRevisionKey)) {
     return input.atlasGeometryVersion !== undefined && input.content.textAtlasGeometryVersion !== input.atlasGeometryVersion
   }
-  if (!input.content.textSignature) {
+  if (!input.content.textRevisionKey) {
     return true
   }
   if (input.content.textRunCount !== input.tile.textCount) {
@@ -405,14 +471,14 @@ export function shouldSyncGridTextTileResourceV3(input: {
 }
 
 export function shouldSyncGridRectTileResourceV3(input: {
-  readonly content: Pick<TypeGpuTileContentResourceEntryV3, 'decorationRects' | 'rectCount' | 'rectHandle' | 'rectSignature'>
-  readonly rectSignature: string
+  readonly content: Pick<TypeGpuTileContentResourceEntryV3, 'decorationRects' | 'rectCount' | 'rectHandle' | 'rectRevisionKey'>
+  readonly rectRevisionKey: TypeGpuTileRectRevisionKeyV3
   readonly tile: GridRenderTile
 }): boolean {
-  if (input.content.rectSignature === input.rectSignature) {
+  if (areGridRectTileRevisionKeysEqualV3(input.content.rectRevisionKey, input.rectRevisionKey)) {
     return false
   }
-  if (!input.content.rectSignature) {
+  if (!input.content.rectRevisionKey) {
     return true
   }
   if (input.content.rectCount !== input.tile.rectCount) {
@@ -440,7 +506,7 @@ function syncTileTextResource(input: {
   readonly pane: WorkbookRenderTilePaneState
   readonly tileResources: TypeGpuTileResourceCacheV3
   readonly content: TypeGpuTileContentResourceEntryV3
-  readonly textSignature: string
+  readonly textRevisionKey: TypeGpuTileTextRevisionKeyV3
 }): void {
   input.content.decorationRects = buildTextDecorationRectsFromRuns(input.pane.tile.textRuns, input.atlas)
   const textPayload = buildTextQuadsFromRunsWithSpans(input.pane.tile.textRuns, input.atlas, undefined, {
@@ -465,11 +531,11 @@ function syncTileTextResource(input: {
     input.content.textRunGlyphIds = textPayload.runGlyphIds
     input.content.textRunPayloads = textPayload.runPayloads
     input.content.textRunQuadSpans = textPayload.runSpans
-    input.content.textSignature = input.textSignature
+    input.content.textRevisionKey = input.textRevisionKey
     return
   }
   const canWritePartialPayload =
-    input.content.textSignature !== null &&
+    input.content.textRevisionKey !== null &&
     input.content.textHandle !== null &&
     input.content.textCount === textPayload.quadCount &&
     input.content.textRunCount === input.pane.tile.textCount &&
@@ -492,7 +558,7 @@ function syncTileTextResource(input: {
     tile: input.pane.tile,
   })
   input.content.textRunQuadSpans = textPayload.runSpans
-  input.content.textSignature = input.textSignature
+  input.content.textRevisionKey = input.textRevisionKey
 }
 
 function writeTileTextPayload(input: {
@@ -570,7 +636,7 @@ function syncTileRectResource(input: {
   readonly pane: WorkbookRenderTilePaneState
   readonly tileResources: TypeGpuTileResourceCacheV3
   readonly content: TypeGpuTileContentResourceEntryV3
-  readonly rectSignature: string
+  readonly rectRevisionKey: TypeGpuTileRectRevisionKeyV3
 }): void {
   const decorationRects = input.content.decorationRects ?? []
   const rectPayload = buildRectInstanceDataFromTile({
@@ -580,11 +646,11 @@ function syncTileRectResource(input: {
   if (rectPayload.count === 0) {
     releaseRectBuffer(input.tileResources, input.content)
     input.content.rectCount = 0
-    input.content.rectSignature = input.rectSignature
+    input.content.rectRevisionKey = input.rectRevisionKey
     return
   }
   const canWritePartialPayload =
-    input.content.rectSignature !== null && input.content.rectHandle !== null && input.content.rectCount === rectPayload.count
+    input.content.rectRevisionKey !== null && input.content.rectHandle !== null && input.content.rectCount === rectPayload.count
   const handle = prepareRectBuffer(input.tileResources, input.content, rectPayload.count)
   input.content.rectHandle = handle
   input.content.rectCount = rectPayload.count
@@ -596,7 +662,7 @@ function syncTileRectResource(input: {
     rectPayload,
     tile: input.pane.tile,
   })
-  input.content.rectSignature = input.rectSignature
+  input.content.rectRevisionKey = input.rectRevisionKey
 }
 
 function writeTileRectPayload(input: {
