@@ -9,10 +9,9 @@ import type { GridEngineLike } from './grid-engine.js'
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
 import { useGridElementSize } from './useGridElementSize.js'
-import { useWorkbookEditorOverlayAnchor } from './useWorkbookEditorOverlayAnchor.js'
 import { useWorkbookAxisResizeState } from './useWorkbookAxisResizeState.js'
 import { useWorkbookInteractionOverlayState } from './useWorkbookInteractionOverlayState.js'
-import { useWorkbookColumnAutofit } from './useWorkbookColumnAutofit.js'
+import { useWorkbookGridEditorRuntime } from './useWorkbookGridEditorRuntime.js'
 import { useWorkbookGridGeometryRuntime } from './useWorkbookGridGeometryRuntime.js'
 import { useWorkbookGridRenderPanes } from './useWorkbookGridRenderPanes.js'
 import { useWorkbookGridViewportRuntime } from './useWorkbookGridViewportRuntime.js'
@@ -227,48 +226,27 @@ export function useWorkbookGridRenderState(input: {
     viewportResidency,
   })
 
-  const { editorPresentation, editorTextAlign, overlayStyle } = useWorkbookEditorOverlayAnchor({
-    editorValue,
-    engine,
-    getCellLocalBounds,
-    gridCameraStore,
-    hostElement,
-    isEditingCell,
-    scrollTransformStore,
-    selectedCellSnapshot,
-    selectedCol: selectedCell.col,
-    selectedRow: selectedCell.row,
-  })
-
-  const focusGrid = useCallback(() => {
-    const activeElement = typeof document === 'undefined' ? null : document.activeElement
-    if (
-      (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) &&
-      activeElement.dataset['testid'] === 'cell-editor-input'
-    ) {
-      return
-    }
-    const focusTarget = focusTargetRef.current
-    if (focusTarget) {
-      focusTarget.focus({ preventScroll: true })
-      return
-    }
-    hostRef.current?.focus({ preventScroll: true })
-  }, [])
-
   const handleHostRef = useCallback((node: HTMLDivElement | null) => {
     hostRef.current = node
     setHostElement(node)
   }, [])
   const getVisibleRegion = useCallback(() => liveVisibleRegionRef.current, [])
-  const computeAutofitColumnWidth = useWorkbookColumnAutofit({
+  const { computeAutofitColumnWidth, editorPresentation, editorTextAlign, focusGrid, overlayStyle } = useWorkbookGridEditorRuntime({
     editorFontSize: gridTheme.editorFontSize,
+    editorValue,
     engine,
+    focusTargetRef,
     freezeRows,
     getCellEditorSeed,
+    getCellLocalBounds,
     getVisibleRegion,
+    gridCameraStore,
     gridMetrics,
     headerFontStyle: gridTheme.headerFontStyle,
+    hostElement,
+    hostRef,
+    isEditingCell,
+    scrollTransformStore,
     selectedCell,
     selectedCellSnapshot,
     sheetName,
