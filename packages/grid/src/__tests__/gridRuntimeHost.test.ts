@@ -169,7 +169,6 @@ describe('GridRuntimeHost', () => {
     const first = host.resolveViewportResidency({
       freezeCols: 2,
       freezeRows: 1,
-      sceneRevision: 0,
       visibleRegion: {
         freezeCols: 2,
         freezeRows: 1,
@@ -178,10 +177,10 @@ describe('GridRuntimeHost', () => {
         ty: 0,
       },
     })
+    host.viewportResidency.invalidateScene()
     const sameWindow = host.resolveViewportResidency({
       freezeCols: 2,
       freezeRows: 1,
-      sceneRevision: 1,
       visibleRegion: {
         freezeCols: 2,
         freezeRows: 1,

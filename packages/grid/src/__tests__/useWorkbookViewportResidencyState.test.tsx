@@ -185,13 +185,12 @@ describe('GridViewportResidencyRuntime', () => {
     const first = runtime.resolve({
       freezeCols: 2,
       freezeRows: 1,
-      sceneRevision: 0,
       visibleRegion,
     })
+    runtime.invalidateScene()
     const sameResident = runtime.resolve({
       freezeCols: 2,
       freezeRows: 1,
-      sceneRevision: 1,
       visibleRegion: {
         ...visibleRegion,
         range: {
@@ -201,10 +200,10 @@ describe('GridViewportResidencyRuntime', () => {
         },
       },
     })
+    runtime.invalidateScene()
     const nextResident = runtime.resolve({
       freezeCols: 2,
       freezeRows: 1,
-      sceneRevision: 2,
       visibleRegion: {
         ...visibleRegion,
         range: {
@@ -222,5 +221,47 @@ describe('GridViewportResidencyRuntime', () => {
     expect(nextResident.residentViewport).not.toBe(first.residentViewport)
     expect(nextResident.renderTileViewport.colStart).toBe(0)
     expect(nextResident.renderTileViewport.rowStart).toBe(0)
+  })
+
+  it('owns local scene invalidation subscriptions', () => {
+    const runtime = new GridViewportResidencyRuntime()
+    let invalidateScene: (() => void) | null = null
+    const unsubscribe = vi.fn()
+    const subscribeCells = vi.fn((_sheetName: string, _addresses: readonly string[], listener: () => void) => {
+      invalidateScene = listener
+      return unsubscribe
+    })
+    const invalidations: string[] = []
+
+    const remoteUnsubscribe = runtime.connectLocalSceneInvalidation(
+      {
+        engine: createEngine(subscribeCells),
+        sheetName: 'Sheet1',
+        shouldUseRemoteRenderTileSource: true,
+        visibleAddresses: ['A1'],
+      },
+      () => invalidations.push('remote'),
+    )
+    const localUnsubscribe = runtime.connectLocalSceneInvalidation(
+      {
+        engine: createEngine(subscribeCells),
+        sheetName: 'Sheet1',
+        shouldUseRemoteRenderTileSource: false,
+        visibleAddresses: ['A1', 'B2'],
+      },
+      () => invalidations.push('local'),
+    )
+
+    expect(remoteUnsubscribe).toBeUndefined()
+    expect(subscribeCells).toHaveBeenCalledTimes(1)
+    expect(subscribeCells.mock.calls[0]?.[0]).toBe('Sheet1')
+    expect(subscribeCells.mock.calls[0]?.[1]).toEqual(['A1', 'B2'])
+
+    invalidateScene?.()
+
+    expect(invalidations).toEqual(['local'])
+    expect(runtime.resolve({ freezeCols: 0, freezeRows: 0, visibleRegion }).sceneRevision).toBe(1)
+    localUnsubscribe?.()
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
   })
 })

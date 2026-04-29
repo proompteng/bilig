@@ -442,6 +442,8 @@ Completed in the resident-scene deletion tranche:
   cannot slip through a visually smooth scroll sample.
 - `GridRuntimeHost` and `GridRenderTilePaneRuntime` now own V3 tile-readiness counter shaping and local visible-cell invalidation policy. The
   React tile-pane bridge no longer imports the readiness counter, calls `engine.subscribeCells()` directly, or clears retained panes itself.
+- `GridViewportResidencyRuntime` now owns local fallback scene-revision increments and resident-cell invalidation subscriptions. The viewport
+  residency hook no longer carries a React-owned scene revision counter or subscribes to cells directly.
 
 Remaining work from this design:
 

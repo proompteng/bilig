@@ -20,6 +20,7 @@ import { GridTileCoordinator, type GridTileInterestBatchV3, type GridTileInteres
 import { GridHeaderPaneRuntime, type GridHeaderPaneRuntimeInput } from './gridHeaderPaneRuntime.js'
 import {
   GridViewportResidencyRuntime,
+  type GridViewportResidencyInvalidationInput,
   type GridViewportResidencyRuntimeInput,
   type GridViewportResidencyState,
 } from './gridViewportResidencyRuntime.js'
@@ -196,6 +197,13 @@ export class GridRuntimeHost {
 
   resolveViewportResidency(input: GridViewportResidencyRuntimeInput): GridViewportResidencyState {
     return this.viewportResidency.resolve(input)
+  }
+
+  connectViewportResidencyInvalidation(
+    input: GridViewportResidencyInvalidationInput,
+    listener: Parameters<GridViewportResidencyRuntime['connectLocalSceneInvalidation']>[1],
+  ): ReturnType<GridViewportResidencyRuntime['connectLocalSceneInvalidation']> {
+    return this.viewportResidency.connectLocalSceneInvalidation(input, listener)
   }
 
   resolveHeaderPanes(input: GridHeaderPaneRuntimeInput): ReturnType<GridHeaderPaneRuntime['resolve']> {

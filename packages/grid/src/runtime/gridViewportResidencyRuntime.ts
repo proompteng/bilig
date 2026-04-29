@@ -1,5 +1,6 @@
 import { formatAddress } from '@bilig/formula'
 import type { Viewport } from '@bilig/protocol'
+import type { GridEngineLike } from '../grid-engine.js'
 import type { VisibleRegionState } from '../gridPointer.js'
 import type { Item, Rectangle } from '../gridTypes.js'
 import { collectViewportItems } from '../gridViewportItems.js'
@@ -29,8 +30,14 @@ export interface GridViewportResidencyState {
 export interface GridViewportResidencyRuntimeInput {
   readonly freezeCols: number
   readonly freezeRows: number
-  readonly sceneRevision: number
   readonly visibleRegion: VisibleRegionState
+}
+
+export interface GridViewportResidencyInvalidationInput {
+  readonly engine: GridEngineLike
+  readonly sheetName: string
+  readonly shouldUseRemoteRenderTileSource: boolean
+  readonly visibleAddresses: readonly string[]
 }
 
 interface GridViewportResidentCache {
@@ -47,6 +54,7 @@ interface GridViewportResidentCache {
 export class GridViewportResidencyRuntime {
   private residentCache: GridViewportResidentCache | null = null
   private residentViewport: Viewport | null = null
+  private sceneRevision = 0
 
   resolve(input: GridViewportResidencyRuntimeInput): GridViewportResidencyState {
     const viewport = viewportFromVisibleRegion(input.visibleRegion)
@@ -62,11 +70,26 @@ export class GridViewportResidencyRuntime {
       residentHeaderItems: residentCache.residentHeaderItems,
       residentHeaderRegion: residentCache.residentHeaderRegion,
       residentViewport,
-      sceneRevision: input.sceneRevision,
+      sceneRevision: this.sceneRevision,
       viewport,
       visibleAddresses: residentCache.visibleAddresses,
       visibleItems: residentCache.visibleItems,
     }
+  }
+
+  invalidateScene(): number {
+    this.sceneRevision += 1
+    return this.sceneRevision
+  }
+
+  connectLocalSceneInvalidation(input: GridViewportResidencyInvalidationInput, listener: () => void): (() => void) | undefined {
+    if (input.shouldUseRemoteRenderTileSource || input.visibleAddresses.length === 0) {
+      return undefined
+    }
+    return input.engine.subscribeCells(input.sheetName, input.visibleAddresses, () => {
+      this.invalidateScene()
+      listener()
+    })
   }
 
   private resolveResidentCache(input: GridViewportResidencyRuntimeInput, residentViewport: Viewport): GridViewportResidentCache {
