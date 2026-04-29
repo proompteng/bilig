@@ -323,6 +323,45 @@ describe('GridRuntimeHost', () => {
     })
   })
 
+  it('owns render-tile revision bridge state outside the React hook', () => {
+    const host = new GridRuntimeHost({
+      columnCount: 1000,
+      defaultColumnWidth: 100,
+      defaultRowHeight: 10,
+      gridMetrics,
+      rowCount: 1000,
+      viewportHeight: 80,
+      viewportWidth: 300,
+    })
+
+    expect(host.snapshotRenderTileBridgeState()).toEqual({
+      forceLocalTiles: false,
+      localFallbackRevision: 0,
+      renderTileRevision: 0,
+    })
+
+    expect(host.noteLocalRenderTileFallbackInvalidation()).toEqual({
+      forceLocalTiles: true,
+      localFallbackRevision: 1,
+      renderTileRevision: 0,
+    })
+    expect(host.noteWorkbookDeltaDamage()).toEqual({
+      forceLocalTiles: true,
+      localFallbackRevision: 1,
+      renderTileRevision: 1,
+    })
+    expect(host.noteRenderTileDelta()).toEqual({
+      forceLocalTiles: false,
+      localFallbackRevision: 1,
+      renderTileRevision: 2,
+    })
+    expect(host.snapshotRenderTileBridgeState()).toEqual({
+      forceLocalTiles: false,
+      localFallbackRevision: 1,
+      renderTileRevision: 2,
+    })
+  })
+
   it('resolves selection and restore scroll positions from runtime axes', () => {
     const host = new GridRuntimeHost({
       columnCount: 1000,

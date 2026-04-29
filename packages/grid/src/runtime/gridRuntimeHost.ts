@@ -10,6 +10,7 @@ import { GridCameraRuntime, type GridCameraRuntimeSnapshot } from './gridCameraR
 import { GridOverlayRuntime } from './gridOverlayRuntime.js'
 import {
   GridRenderTilePaneRuntime,
+  type GridRenderTilePaneBridgeState,
   type GridRenderTileDamageRuntimeInput,
   type GridRenderTileDeltaRuntimeInput,
   type GridRenderTileLocalInvalidationRuntimeInput,
@@ -215,6 +216,22 @@ export class GridRuntimeHost {
       ...input,
       gridRuntimeHost: this,
     })
+  }
+
+  snapshotRenderTileBridgeState(): GridRenderTilePaneBridgeState {
+    return this.renderTiles.snapshotBridgeState()
+  }
+
+  noteRenderTileDelta(): GridRenderTilePaneBridgeState {
+    return this.renderTiles.noteRenderTileDelta()
+  }
+
+  noteWorkbookDeltaDamage(): GridRenderTilePaneBridgeState {
+    return this.renderTiles.noteWorkbookDeltaDamage()
+  }
+
+  noteLocalRenderTileFallbackInvalidation(): GridRenderTilePaneBridgeState {
+    return this.renderTiles.noteLocalFallbackInvalidation()
   }
 
   connectRenderTileDeltas(

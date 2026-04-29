@@ -67,9 +67,11 @@ export function useWorkbookRenderTilePanes(input: {
     visibleAddresses,
     visibleViewport,
   } = input
-  const [forceLocalTiles, setForceLocalTiles] = useState(false)
-  const [renderTileRevision, setRenderTileRevision] = useState(0)
-  const [localFallbackRevision, setLocalFallbackRevision] = useState(0)
+  const [renderTileBridgeState, setRenderTileBridgeState] = useState(() => gridRuntimeHost.snapshotRenderTileBridgeState())
+
+  useEffect(() => {
+    setRenderTileBridgeState(gridRuntimeHost.snapshotRenderTileBridgeState())
+  }, [gridRuntimeHost])
 
   useEffect(() => {
     return gridRuntimeHost.connectRenderTileDeltas(
@@ -81,8 +83,7 @@ export function useWorkbookRenderTilePanes(input: {
         sheetName,
       },
       () => {
-        setForceLocalTiles(false)
-        setRenderTileRevision((current) => current + 1)
+        setRenderTileBridgeState(gridRuntimeHost.noteRenderTileDelta())
       },
     )
   }, [dprBucket, gridRuntimeHost, renderTileSource, renderTileViewport, sheetId, sheetName])
@@ -95,21 +96,21 @@ export function useWorkbookRenderTilePanes(input: {
         sheetId,
       },
       () => {
-        setRenderTileRevision((current) => current + 1)
+        setRenderTileBridgeState(gridRuntimeHost.noteWorkbookDeltaDamage())
       },
     )
   }, [dprBucket, gridRuntimeHost, renderTileSource, sheetId])
 
   const state = useMemo<WorkbookRenderTilePanesState & { readonly needsLocalCellInvalidation: boolean }>(() => {
-    void renderTileRevision
-    void localFallbackRevision
+    void renderTileBridgeState.renderTileRevision
+    void renderTileBridgeState.localFallbackRevision
     return gridRuntimeHost.resolveRenderTilePanes({
       columnWidths,
       dprBucket,
       engine,
       freezeCols,
       freezeRows,
-      forceLocalTiles,
+      forceLocalTiles: renderTileBridgeState.forceLocalTiles,
       frozenColumnWidth,
       frozenRowHeight,
       gridMetrics,
@@ -133,7 +134,6 @@ export function useWorkbookRenderTilePanes(input: {
     engine,
     freezeCols,
     freezeRows,
-    forceLocalTiles,
     frozenColumnWidth,
     frozenRowHeight,
     gridMetrics,
@@ -141,8 +141,7 @@ export function useWorkbookRenderTilePanes(input: {
     hostClientHeight,
     hostClientWidth,
     hostElement,
-    localFallbackRevision,
-    renderTileRevision,
+    renderTileBridgeState,
     renderTileSource,
     renderTileViewport,
     residentViewport,
@@ -168,8 +167,7 @@ export function useWorkbookRenderTilePanes(input: {
         visibleAddresses,
       },
       () => {
-        setForceLocalTiles(true)
-        setLocalFallbackRevision((current) => current + 1)
+        setRenderTileBridgeState(gridRuntimeHost.noteLocalRenderTileFallbackInvalidation())
       },
     )
   }, [engine, gridRuntimeHost, sheetName, state.needsLocalCellInvalidation, visibleAddresses])

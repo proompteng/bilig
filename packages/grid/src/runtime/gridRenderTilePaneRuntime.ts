@@ -22,6 +22,12 @@ export interface GridRenderTilePaneRuntimeState {
   readonly tileReadiness: GridTileReadinessSnapshotV3
 }
 
+export interface GridRenderTilePaneBridgeState {
+  readonly forceLocalTiles: boolean
+  readonly localFallbackRevision: number
+  readonly renderTileRevision: number
+}
+
 export interface GridRenderTilePaneRuntimeInput {
   readonly columnWidths: Readonly<Record<number, number>>
   readonly dprBucket: number
@@ -93,6 +99,12 @@ const EMPTY_TILE_PANE_RUNTIME_STATE: GridRenderTilePaneRuntimeState = Object.fre
   },
 })
 
+const INITIAL_RENDER_TILE_PANE_BRIDGE_STATE: GridRenderTilePaneBridgeState = Object.freeze({
+  forceLocalTiles: false,
+  localFallbackRevision: 0,
+  renderTileRevision: 0,
+})
+
 type TileResolutionSource = 'local' | 'remote'
 
 interface FixedRenderTileDataPanesResolution {
@@ -110,6 +122,7 @@ export class GridRenderTilePaneRuntime {
     readonly sheetId: number
     readonly panes: readonly WorkbookRenderTilePaneState[]
   } | null = null
+  private bridgeState = INITIAL_RENDER_TILE_PANE_BRIDGE_STATE
   private readonly lastWorkbookDeltaSeqBySheetOrdinal = new Map<number, number>()
 
   resolve(input: GridRenderTilePaneRuntimeInput): GridRenderTilePaneRuntimeState {
@@ -145,6 +158,40 @@ export class GridRenderTilePaneRuntime {
 
   clearRetainedPanes(): void {
     this.retainedFixedRenderTileDataPanes = null
+  }
+
+  snapshotBridgeState(): GridRenderTilePaneBridgeState {
+    return this.bridgeState
+  }
+
+  noteRenderTileDelta(): GridRenderTilePaneBridgeState {
+    const previous = this.bridgeState
+    this.bridgeState = {
+      forceLocalTiles: false,
+      localFallbackRevision: previous.localFallbackRevision,
+      renderTileRevision: previous.renderTileRevision + 1,
+    }
+    return this.bridgeState
+  }
+
+  noteWorkbookDeltaDamage(): GridRenderTilePaneBridgeState {
+    const previous = this.bridgeState
+    this.bridgeState = {
+      forceLocalTiles: previous.forceLocalTiles,
+      localFallbackRevision: previous.localFallbackRevision,
+      renderTileRevision: previous.renderTileRevision + 1,
+    }
+    return this.bridgeState
+  }
+
+  noteLocalFallbackInvalidation(): GridRenderTilePaneBridgeState {
+    const previous = this.bridgeState
+    this.bridgeState = {
+      forceLocalTiles: true,
+      localFallbackRevision: previous.localFallbackRevision + 1,
+      renderTileRevision: previous.renderTileRevision,
+    }
+    return this.bridgeState
   }
 
   noteTileReadiness(readiness: GridTileReadinessSnapshotV3): void {
