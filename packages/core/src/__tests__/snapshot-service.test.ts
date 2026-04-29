@@ -256,12 +256,14 @@ describe('EngineSnapshotService', () => {
     expect(runtimeImage?.sheetCells).toEqual([
       {
         sheetName: 'Sheet1',
+        cellCount: 4,
         coords: [
           { row: 0, col: 0 },
           { row: 0, col: 1 },
           { row: 0, col: 2 },
           { row: 0, col: 3 },
         ],
+        dimensions: { width: 4, height: 1 },
       },
     ])
 

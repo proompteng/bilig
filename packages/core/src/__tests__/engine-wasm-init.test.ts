@@ -11,10 +11,14 @@ describe('SpreadsheetEngine wasm initialization', () => {
     engine.createSheet('Sheet1')
     engine.setCellValue('Sheet1', 'A1', 10)
     engine.setCellFormula('Sheet1', 'B1', 'A1+1')
+
+    expect(engine.explainCell('Sheet1', 'B1').mode).toBe(FormulaMode.WasmFastPath)
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 11 })
+    expect(engine.getLastMetrics().wasmFormulaCount).toBeGreaterThan(0)
+
     engine.setCellValue('Sheet1', 'A1', 12)
 
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 13 })
-    expect(engine.getLastMetrics().wasmFormulaCount).toBeGreaterThan(0)
   })
 
   it('keeps exact vector MATCH bindings on the JS lookup path', () => {
