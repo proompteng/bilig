@@ -437,9 +437,12 @@ Completed in the resident-scene deletion tranche:
 - V3 text quad construction now reports text-run payload reuse, rebuild, atlas-geometry retry, glyph-dependency, page-dependency, and geometry
   resync counters through the scroll perf collector. This gives browser perf reports direct visibility into whether active scroll/edit paths are
   reusing stable text payloads or rebuilding because atlas geometry changed.
+- Browser scroll perf gates now assert that warmed TypeGPU scroll does not retry/resync text atlas geometry. When no fixed-tile/header/dirty
+  churn occurs, the gates also assert zero text-run payload rebuilds/reuses and zero glyph/page dependency reads, so hidden text resource syncs
+  cannot slip through a visually smooth scroll sample.
 
 Remaining work from this design:
 
 - continue splitting remaining draw/dirty-tile coordination out of `useWorkbookGridRenderState.ts`;
 - continue extending glyph dependency preservation into missing-glyph retry/update behavior;
-- tighten browser perf gates around the now V3-only renderer path.
+- continue tightening browser perf gates for V3 mutation, resize, and collaboration paths beyond the steady-scroll samples.

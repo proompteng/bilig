@@ -582,7 +582,7 @@ export async function expectMatchingGridRangeScreenshots(
 export async function waitForWorkbookReady(page: Page) {
   await expect(page.getByTestId('formula-bar')).toBeVisible({ timeout: 15_000 })
   await expect(page.getByTestId('sheet-grid')).toBeVisible({ timeout: 15_000 })
-  await expect(page.getByTestId('status-sync')).toHaveText(/^(Saved|Saving…|Local only|Offline|Sync issue|Read only)$/, {
+  await expect(page.getByTestId('status-sync')).toHaveText(/^(Saved|Saving…|Local saved|Local only|Offline|Sync issue|Read only)$/, {
     timeout: 15_000,
   })
 }

@@ -83,6 +83,7 @@ async function expectTypeGpuSteadyScroll(page: Page, report: ScrollPerfReport) {
   expect(sumRecordCounters(report.counters.fullPatchBroadcasts)).toBe(0)
   expect(readCounter(report.counters, 'typeGpuTileCacheSorts')).toBe(0)
   expect(readCounter(report.counters, 'rendererTileMisses')).toBe(0)
+  expectNoTypeGpuTextAtlasGeometryChurn(report)
   const hasTileChurn =
     report.counters.headerPaneBuilds > 0 ||
     readCounter(report.counters, 'rendererTileInterestBatches') > 0 ||
@@ -90,10 +91,23 @@ async function expectTypeGpuSteadyScroll(page: Page, report: ScrollPerfReport) {
   if (!hasTileChurn) {
     expect(readCounter(report.counters, 'typeGpuBufferAllocations')).toBe(0)
     expect(readCounter(report.counters, 'typeGpuVertexUploadBytes')).toBe(0)
+    expectNoTypeGpuTextPayloadChurn(report)
   }
   if ('typeGpuSubmits' in report.counters) {
     expect(readCounter(report.counters, 'typeGpuSubmits')).toBeGreaterThan(0)
   }
+}
+
+function expectNoTypeGpuTextAtlasGeometryChurn(report: ScrollPerfReport) {
+  expect(readCounter(report.counters, 'typeGpuTextAtlasGeometryRetries')).toBe(0)
+  expect(readCounter(report.counters, 'typeGpuTextAtlasGeometryResyncs')).toBe(0)
+}
+
+function expectNoTypeGpuTextPayloadChurn(report: ScrollPerfReport) {
+  expect(readCounter(report.counters, 'typeGpuTextRunPayloadRebuilds')).toBe(0)
+  expect(readCounter(report.counters, 'typeGpuTextRunPayloadReuses')).toBe(0)
+  expect(readCounter(report.counters, 'typeGpuTextGlyphDependencies')).toBe(0)
+  expect(readCounter(report.counters, 'typeGpuTextPageDependencies')).toBe(0)
 }
 
 test.describe('@browser-perf web app scroll performance', () => {
@@ -273,6 +287,7 @@ test.describe('@browser-perf web app scroll performance', () => {
     expect(report.summary.longTasksMs.max).toBeLessThan(60)
     expect(readCounter(report.counters, 'typeGpuTileMisses')).toBe(0)
     expect(readCounter(report.counters, 'rendererTileMisses')).toBe(0)
+    expectNoTypeGpuTextAtlasGeometryChurn(report)
     expect(report.counters.viewportSubscriptions).toBeLessThanOrEqual(12)
   })
 
@@ -304,6 +319,7 @@ test.describe('@browser-perf web app scroll performance', () => {
     expect(report.summary.frameMs.p95).toBeLessThan(24)
     expect(report.summary.longTasksMs.max).toBeLessThan(60)
     expect(readCounter(report.counters, 'typeGpuConfigures')).toBe(0)
+    expectNoTypeGpuTextAtlasGeometryChurn(report)
     if ('typeGpuSubmits' in report.counters) {
       expect(readCounter(report.counters, 'typeGpuSubmits')).toBeGreaterThan(0)
     }
