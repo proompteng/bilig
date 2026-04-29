@@ -209,6 +209,7 @@ export interface WorkbookMetadataService {
   readonly getPivot: (sheetName: string, address: string) => Effect.Effect<WorkbookPivotRecord | undefined, WorkbookMetadataError>
   readonly getPivotByKey: (key: string) => Effect.Effect<WorkbookPivotRecord | undefined, WorkbookMetadataError>
   readonly deletePivot: (sheetName: string, address: string) => Effect.Effect<boolean, WorkbookMetadataError>
+  readonly hasPivots: () => Effect.Effect<boolean, WorkbookMetadataError>
   readonly listPivots: () => Effect.Effect<WorkbookPivotRecord[], WorkbookMetadataError>
   readonly setChart: (record: WorkbookChartSnapshot) => Effect.Effect<WorkbookChartRecord, WorkbookMetadataError>
   readonly getChart: (id: string) => Effect.Effect<WorkbookChartRecord | undefined, WorkbookMetadataError>
@@ -1231,6 +1232,16 @@ export function createWorkbookMetadataService(metadata: WorkbookMetadataRecord):
         catch: (cause) =>
           new WorkbookMetadataError({
             message: metadataErrorMessage('Failed to delete pivot metadata', cause),
+            cause,
+          }),
+      })
+    },
+    hasPivots() {
+      return Effect.try({
+        try: () => metadata.pivots.size > 0,
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage('Failed to read pivot metadata state', cause),
             cause,
           }),
       })

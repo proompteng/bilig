@@ -196,6 +196,7 @@ type EngineOperationRuntimeConfig = Omit<
   | 'setSelection'
   | 'hasRegionFormulaSubscriptionsForColumn'
   | 'collectRegionFormulaDependentsForCell'
+  | 'collectSingleRegionFormulaDependentForCell'
   | 'prepareRegionQueryIndices'
   | 'rewriteDefinedNamesForSheetRename'
   | 'rewriteCellFormulasForSheetRename'
@@ -221,6 +222,7 @@ type EngineOperationRuntimeConfig = Omit<
   | 'markExplicitChanged'
   | 'composeMutationRoots'
   | 'composeEventChanges'
+  | 'composeDisjointEventChanges'
   | 'captureChangedCells'
   | 'captureChangedPatches'
   | 'getChangedInputBuffer'
@@ -602,8 +604,11 @@ export function createEngineServiceRuntime(args: {
     ensureCellTrackedByCoords: (sheetId, row, col) => support.ensureCellTrackedByCoordsNow(sheetId, row, col),
     resetMaterializedCellScratch: (expectedSize) => support.resetMaterializedCellScratchNow(expectedSize),
     bindFormula: (cellIndex, ownerSheetName, source) => binding.bindInitialFormulaNow(cellIndex, ownerSheetName, source),
-    bindPreparedFormula: (cellIndex, ownerSheetName, source, compiled, templateId) =>
-      binding.bindPreparedFormulaNow(cellIndex, ownerSheetName, source, compiled, templateId),
+    bindPreparedFormula: (cellIndex, ownerSheetName, source, compiled, templateId, options) =>
+      binding.bindPreparedFormulaNow(cellIndex, ownerSheetName, source, compiled, templateId, options),
+    upsertFormulaFamilyRun: (run) => {
+      formulaFamilies.registerFormulaRun(run)
+    },
     compileTemplateFormula: (source, row, col) => formulaTemplates.resolveForCell(source, row, col),
     clearTemplateFormulaCache: () => formulaTemplates.clear(),
     removeFormula: (cellIndex) => binding.clearFormulaNow(cellIndex),
@@ -658,10 +663,17 @@ export function createEngineServiceRuntime(args: {
       const sheet = args.state.workbook.getSheet(sheetName)
       return sheet ? regionGraph.hasFormulaSubscriptionsForColumn(sheet.id, col) : false
     },
+    hasRegionFormulaSubscriptionsForColumnAt: (sheetId, col) => regionGraph.hasFormulaSubscriptionsForColumn(sheetId, col),
     collectRegionFormulaDependentsForCell: (sheetName, row, col) => {
       const sheet = args.state.workbook.getSheet(sheetName)
       return sheet ? regionGraph.collectFormulaDependentsForCell(sheet.id, row, col) : new Uint32Array()
     },
+    collectSingleRegionFormulaDependentForCell: (sheetName, row, col) => {
+      const sheet = args.state.workbook.getSheet(sheetName)
+      return sheet ? regionGraph.collectSingleFormulaDependentForCell(sheet.id, row, col) : -1
+    },
+    collectSingleRegionFormulaDependentForCellAt: (sheetId, row, col) =>
+      regionGraph.collectSingleFormulaDependentForCell(sheetId, row, col),
     refreshRangeDependencies: (rangeIndices) => binding.refreshRangeDependenciesNow(rangeIndices),
     rebindFormulasForSheet: (sheetName, formulaChangedCount, candidates) =>
       binding.rebindFormulasForSheetNow(sheetName, formulaChangedCount, candidates),
@@ -686,6 +698,8 @@ export function createEngineServiceRuntime(args: {
     composeMutationRoots: (changedInputCount, formulaChangedCount) =>
       support.composeMutationRootsNow(changedInputCount, formulaChangedCount),
     composeEventChanges: (recalculated, explicitChangedCount) => support.composeEventChangesNow(recalculated, explicitChangedCount),
+    composeDisjointEventChanges: (recalculated, explicitChangedCount) =>
+      support.composeDisjointEventChangesNow(recalculated, explicitChangedCount),
     captureChangedCells: (changedCellIndices) => changeSetEmitter.captureChangedCells(changedCellIndices),
     captureChangedPatches: (changedCellIndices, request) => patchEmitter.captureChangedPatches(changedCellIndices, request),
     getChangedInputBuffer: () => support.getChangedInputBufferNow(),
@@ -705,6 +719,7 @@ export function createEngineServiceRuntime(args: {
       requireService(recalc, 'recalc').reconcilePivotOutputsNow(baseChanged, forceAllPivots),
     prepareRegionQueryIndices: () => regionGraph.prepareQueryIndices(),
     getEntityDependents: (entityId) => traversal.getEntityDependentsNow(entityId),
+    getSingleEntityDependent: (entityId) => traversal.getSingleEntityDependentNow(entityId),
     collectFormulaDependents: (entityId) => traversal.collectFormulaDependentsNow(entityId),
     noteExactLookupLiteralWrite: (request) => exactLookup.recordLiteralWrite(request),
     noteAggregateLiteralWrite: (request) => aggregateStateStore.noteLiteralWrite(request),
@@ -729,7 +744,8 @@ export function createEngineServiceRuntime(args: {
     applyBatchNow: (batch, source, potentialNewCells, preparedCellAddressesByOpIndex) =>
       runEngineEffect(operations.applyBatch(batch, source, potentialNewCells, preparedCellAddressesByOpIndex)),
     applyCellMutationsAtBatchNow: (refs, batch, source, potentialNewCells) =>
-      runEngineEffect(operations.applyCellMutationsAt(refs, batch, source, potentialNewCells)),
+      operations.applyCellMutationsAtNow(refs, batch, source, potentialNewCells),
+    applyExistingNumericCellMutationAtNow: (request) => operations.applyExistingNumericCellMutationAtNow(request),
     hasExternallyVisibleLocalMutationObservers: () =>
       args.state.events.hasListeners() ||
       args.state.events.hasTrackedListeners() ||

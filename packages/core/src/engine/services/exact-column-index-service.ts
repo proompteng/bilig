@@ -116,6 +116,20 @@ function detectUniformNumericStep(values: Float64Array): { start: number; step: 
   return { start, step }
 }
 
+function lowerBound(rows: readonly number[], target: number): number {
+  let low = 0
+  let high = rows.length
+  while (low < high) {
+    const mid = (low + high) >> 1
+    if (rows[mid]! < target) {
+      low = mid + 1
+    } else {
+      high = mid
+    }
+  }
+  return low
+}
+
 function decodeValueTag(rawTag: number | undefined): ValueTag {
   if (rawTag === undefined) {
     return ValueTag.Empty
@@ -402,8 +416,8 @@ export function createExactColumnIndexService(args: {
       if (!rows) {
         return false
       }
-      const rowIndex = rows.indexOf(row)
-      if (rowIndex === -1) {
+      const rowIndex = lowerBound(rows, row)
+      if (rows[rowIndex] !== row) {
         return false
       }
       rows.splice(rowIndex, 1)
@@ -412,10 +426,7 @@ export function createExactColumnIndexService(args: {
     if (newKey !== undefined) {
       const rows = entry.rowLists.get(newKey)
       if (rows) {
-        let insertIndex = rows.length
-        while (insertIndex > 0 && rows[insertIndex - 1]! > row) {
-          insertIndex -= 1
-        }
+        const insertIndex = lowerBound(rows, row)
         rows.splice(insertIndex, 0, row)
       } else {
         entry.rowLists.set(newKey, [row])
@@ -529,6 +540,20 @@ export function createExactColumnIndexService(args: {
     const prepared = refreshPreparedVectorLookup(request.prepared)
     const owner = readPreparedOwner(prepared)
     if (owner) {
+      if (
+        prepared.comparableKind === 'numeric' &&
+        prepared.uniformStart !== undefined &&
+        prepared.uniformStep !== undefined &&
+        request.lookupValue.tag === ValueTag.Number
+      ) {
+        const numericValue = Object.is(request.lookupValue.value, -0) ? 0 : request.lookupValue.value
+        const relative = (numericValue - prepared.uniformStart) / prepared.uniformStep
+        const position = Number.isInteger(relative) ? relative + 1 : undefined
+        return {
+          handled: true,
+          position: position !== undefined && position >= 1 && position <= prepared.length ? position : undefined,
+        }
+      }
       const normalizedLookupKey = normalizeExactLookupKey(
         request.lookupValue,
         (id) => args.state.strings.get(id),

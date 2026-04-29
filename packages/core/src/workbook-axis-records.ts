@@ -90,11 +90,11 @@ export function spliceAxisEntries(
     }
     providedEntries.set(offset, entry)
   })
+  if (insertCount === 0 && axisEntries.length <= start) {
+    return []
+  }
   if (axisEntries.length < start) {
     axisEntries.length = start
-  }
-  if (deleteCount > 0) {
-    materializeAxisEntryRecords(axisEntries, start, deleteCount, createEntry)
   }
   const removed = axisEntries.splice(
     start,

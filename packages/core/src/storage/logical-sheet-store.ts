@@ -1,4 +1,4 @@
-import type { AxisKind } from './axis-map.js'
+import type { AxisEntrySnapshot, AxisKind } from './axis-map.js'
 import type { AxisResidentCellIndex } from './axis-resident-cell-index.js'
 import type { CellPageStore, LogicalCellLocation } from './cell-page-store.js'
 import type { CellAxisIdentity, CellAxisIdentityStore } from './cell-axis-identity-store.js'
@@ -89,6 +89,46 @@ export class LogicalSheetStore {
   }
 
   setVisibleCell(row: number, col: number, cellIndex: number, factories: LogicalAxisIdFactories): LogicalVisibleCellRef {
+    return this.setVisibleCellInternal(row, col, cellIndex, factories, false)
+  }
+
+  setNewVisibleCell(row: number, col: number, cellIndex: number, factories: LogicalAxisIdFactories): LogicalVisibleCellRef {
+    return this.setVisibleCellInternal(row, col, cellIndex, factories, true)
+  }
+
+  setNewVisibleCellWithAxisIds(row: number, col: number, cellIndex: number, rowId: string, colId: string): LogicalVisibleCellRef {
+    const resolved: LogicalVisibleCellRef = {
+      sheetId: this.sheetId,
+      row,
+      col,
+      rowRef: { index: row, id: rowId },
+      colRef: { index: col, id: colId },
+    }
+    this.cellPages.set(
+      {
+        sheetId: this.sheetId,
+        rowId,
+        colId,
+      },
+      cellIndex,
+    )
+    const identity: CellAxisIdentity = {
+      sheetId: this.sheetId,
+      rowId,
+      colId,
+    }
+    this.cellIdentities.set(cellIndex, identity)
+    this.residentCells.add(cellIndex, identity)
+    return resolved
+  }
+
+  private setVisibleCellInternal(
+    row: number,
+    col: number,
+    cellIndex: number,
+    factories: LogicalAxisIdFactories,
+    knownNewCell: boolean,
+  ): LogicalVisibleCellRef {
     const resolved: LogicalVisibleCellRef = {
       sheetId: this.sheetId,
       row,
@@ -110,7 +150,11 @@ export class LogicalSheetStore {
       colId: resolved.colRef.id!,
     }
     this.cellIdentities.set(cellIndex, identity)
-    this.residentCells.set(cellIndex, identity)
+    if (knownNewCell) {
+      this.residentCells.add(cellIndex, identity)
+    } else {
+      this.residentCells.set(cellIndex, identity)
+    }
     return resolved
   }
 
@@ -168,6 +212,15 @@ export class LogicalSheetStore {
     return { row, col }
   }
 
+  getCellVisibleAxisIndex(cellIndex: number, axis: AxisKind): number | undefined {
+    const identity = this.cellIdentities.get(cellIndex)
+    if (!identity || identity.sheetId !== this.sheetId) {
+      return undefined
+    }
+    const index = axis === 'row' ? this.axisMap.indexOf('row', identity.rowId) : this.axisMap.indexOf('column', identity.colId)
+    return index < 0 ? undefined : index
+  }
+
   getCellIdentity(cellIndex: number): CellAxisIdentity | undefined {
     const identity = this.cellIdentities.get(cellIndex)
     return identity?.sheetId === this.sheetId ? identity : undefined
@@ -179,6 +232,70 @@ export class LogicalSheetStore {
 
   listResidentCellIndicesUnordered(axis: AxisKind, axisIds: readonly string[]): number[] {
     return axis === 'row' ? this.residentCells.cellsInRowsUnordered(axisIds) : this.residentCells.cellsInColumnsUnordered(axisIds)
+  }
+
+  forEachResidentCellInAxisEntries(
+    axis: AxisKind,
+    entries: readonly AxisEntrySnapshot[],
+    callback: (cellIndex: number, identity: CellAxisIdentity, axisIndex: number) => void,
+  ): void {
+    const visitCell = (cellIndex: number, axisIndex: number): void => {
+      const identity = this.cellIdentities.get(cellIndex)
+      if (identity?.sheetId === this.sheetId) {
+        callback(cellIndex, identity, axisIndex)
+      }
+    }
+    entries.forEach((entry) => {
+      if (axis === 'row') {
+        this.residentCells.forEachCellInRow(entry.id, (cellIndex) => {
+          visitCell(cellIndex, entry.index)
+        })
+        return
+      }
+      this.residentCells.forEachCellInColumn(entry.id, (cellIndex) => {
+        visitCell(cellIndex, entry.index)
+      })
+    })
+  }
+
+  someResidentCellInAxisScope(
+    axis: AxisKind,
+    scope: { readonly start: number; readonly end?: number },
+    predicate: (cellIndex: number, row: number, col: number) => boolean,
+  ): boolean {
+    const entries = this.axisMap.list(axis)
+    for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+      const entry = entries[entryIndex]!
+      if (entry.index < scope.start || (scope.end !== undefined && entry.index >= scope.end)) {
+        continue
+      }
+      let found = false
+      const visitCell = (cellIndex: number): void => {
+        if (found) {
+          return
+        }
+        const identity = this.cellIdentities.get(cellIndex)
+        if (identity?.sheetId !== this.sheetId) {
+          return
+        }
+        const otherAxisIndex = axis === 'row' ? this.axisMap.indexOf('column', identity.colId) : this.axisMap.indexOf('row', identity.rowId)
+        if (otherAxisIndex < 0) {
+          return
+        }
+        const row = axis === 'row' ? entry.index : otherAxisIndex
+        const col = axis === 'row' ? otherAxisIndex : entry.index
+        found = predicate(cellIndex, row, col)
+      }
+      if (axis === 'row') {
+        this.residentCells.forEachCellInRow(entry.id, visitCell)
+      } else {
+        this.residentCells.forEachCellInColumn(entry.id, visitCell)
+      }
+      if (found) {
+        return true
+      }
+    }
+    return false
   }
 
   forEachVisibleCellEntry(callback: (cellIndex: number, row: number, col: number) => void): void {

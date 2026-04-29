@@ -66,6 +66,19 @@ describe('EngineFormulaTemplateNormalizationService', () => {
     expect(translated.deps).toEqual(['A2', 'B2'])
   })
 
+  it('shares simple scalar template owners across columns with the same relative shape', () => {
+    const service = createEngineFormulaTemplateNormalizationService()
+
+    const first = service.resolveForCell('A1+B1', 0, 2)
+    const sameShape = service.resolveForCell('D1+E1', 0, 5)
+
+    expect(sameShape.templateId).toBe(first.templateId)
+    expect(sameShape.compiled.ast).toBe(first.compiled.ast)
+    expect(sameShape.compiled.astMatchesSource).toBe(false)
+    expect(sameShape.compiled.deps).toEqual(['D1', 'E1'])
+    expect(sameShape.compiled.symbolicRefs).toEqual(['D1', 'E1'])
+  })
+
   it('tracks parse work only when a new template family is compiled', () => {
     const counters = createEngineCounters()
     const service = createEngineFormulaTemplateNormalizationService({ counters })

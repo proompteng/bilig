@@ -19,6 +19,7 @@ interface MutableCompiledPlanRecord extends Omit<CompiledPlanRecord, 'source' | 
 export function createEngineCompiledPlanService(): EngineCompiledPlanService {
   const records = new Map<number, MutableCompiledPlanRecord>()
   let planByCompiled = new WeakMap<CompiledFormula, MutableCompiledPlanRecord>()
+  const planByTemplateId = new Map<number, MutableCompiledPlanRecord>()
   let nextPlanId = 1
   const releasePlanReference = (record: MutableCompiledPlanRecord): void => {
     record.refCount -= 1
@@ -27,18 +28,38 @@ export function createEngineCompiledPlanService(): EngineCompiledPlanService {
     }
     records.delete(record.id)
     planByCompiled.delete(record.compiled)
+    if (record.templateId !== undefined && planByTemplateId.get(record.templateId) === record) {
+      planByTemplateId.delete(record.templateId)
+    }
+  }
+
+  const setRecordTemplateId = (record: MutableCompiledPlanRecord, templateId: number | undefined): void => {
+    if (record.templateId !== undefined && record.templateId !== templateId && planByTemplateId.get(record.templateId) === record) {
+      planByTemplateId.delete(record.templateId)
+    }
+    if (templateId !== undefined) {
+      record.templateId = templateId
+      planByTemplateId.set(templateId, record)
+    } else {
+      delete record.templateId
+    }
   }
 
   return {
     intern(source, compiled, templateId) {
+      if (templateId !== undefined) {
+        const templatePlan = planByTemplateId.get(templateId)
+        if (templatePlan?.compiled === compiled) {
+          templatePlan.refCount += 1
+          templatePlan.source = source
+          return templatePlan
+        }
+      }
       const existing = planByCompiled.get(compiled)
       if (existing !== undefined) {
         existing.refCount += 1
-        if (templateId !== undefined) {
-          existing.templateId = templateId
-        } else {
-          delete existing.templateId
-        }
+        existing.source = source
+        setRecordTemplateId(existing, templateId)
         return existing
       }
       const record: MutableCompiledPlanRecord = {
@@ -51,6 +72,9 @@ export function createEngineCompiledPlanService(): EngineCompiledPlanService {
       nextPlanId += 1
       records.set(record.id, record)
       planByCompiled.set(compiled, record)
+      if (templateId !== undefined) {
+        planByTemplateId.set(templateId, record)
+      }
       return record
     },
     replace(planId, source, compiled, templateId) {
@@ -60,33 +84,25 @@ export function createEngineCompiledPlanService(): EngineCompiledPlanService {
       }
       if (existing.compiled === compiled) {
         existing.source = source
-        if (templateId !== undefined) {
-          existing.templateId = templateId
-        } else {
-          delete existing.templateId
-        }
+        setRecordTemplateId(existing, templateId)
         return existing
       }
       const alreadyInterned = planByCompiled.get(compiled)
       if (alreadyInterned && alreadyInterned !== existing) {
         releasePlanReference(existing)
         alreadyInterned.refCount += 1
-        if (templateId !== undefined) {
-          alreadyInterned.templateId = templateId
-        } else {
-          delete alreadyInterned.templateId
-        }
+        alreadyInterned.source = source
+        setRecordTemplateId(alreadyInterned, templateId)
         return alreadyInterned
       }
       if (existing.refCount === 1) {
+        if (existing.templateId !== undefined && planByTemplateId.get(existing.templateId) === existing) {
+          planByTemplateId.delete(existing.templateId)
+        }
         planByCompiled.delete(existing.compiled)
         existing.source = source
         existing.compiled = compiled
-        if (templateId !== undefined) {
-          existing.templateId = templateId
-        } else {
-          delete existing.templateId
-        }
+        setRecordTemplateId(existing, templateId)
         planByCompiled.set(compiled, existing)
         return existing
       }
@@ -106,6 +122,7 @@ export function createEngineCompiledPlanService(): EngineCompiledPlanService {
     clear() {
       records.clear()
       planByCompiled = new WeakMap<CompiledFormula, MutableCompiledPlanRecord>()
+      planByTemplateId.clear()
       nextPlanId = 1
     },
   }

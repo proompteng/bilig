@@ -102,4 +102,17 @@ describe('AxisMap', () => {
       { id: 'row-b', index: 1 },
     ])
   })
+
+  it('keeps empty sparse splices as no-ops and updates shifted suffix ids incrementally', () => {
+    const axisMap = new AxisMap()
+
+    expect(axisMap.splice(50, 1, 0, [])).toEqual([])
+    expect(axisMap.length).toBe(0)
+
+    axisMap.replaceRange(2, [{ id: 'row-c', index: 2 }])
+
+    expect(axisMap.splice(1, 1, 0, [])).toEqual([])
+    expect(axisMap.list()).toEqual([{ id: 'row-c', index: 1 }])
+    expect(axisMap.indexOf('row-c')).toBe(1)
+  })
 })

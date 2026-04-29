@@ -73,6 +73,13 @@ export class EdgeArena {
     return this.buffer.subarray(slice.ptr, slice.ptr + slice.len)
   }
 
+  valueAt(slice: EdgeSlice, index: number): number {
+    if (slice.ptr < 0 || index < 0 || index >= slice.len) {
+      return -1
+    }
+    return this.buffer[slice.ptr + index] ?? -1
+  }
+
   view(): Uint32Array {
     return this.buffer.subarray(0, this.nextPtr)
   }

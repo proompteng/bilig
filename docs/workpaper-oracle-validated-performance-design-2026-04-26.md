@@ -229,12 +229,82 @@ two measured dead ends:
 - An initial-load numeric write/index deferral was tried and removed because it
   moved cost into the measured sliding aggregate mutation path.
 
+## Additional Implemented Tranche: Subagent Structural Pass
+
+The `2026-04-27` subagent pass moved several broader oracle items from
+investigation into production code while keeping benchmark definitions and
+sampling unchanged:
+
+- Runtime snapshot restore now validates attached snapshot sheet dimensions
+  without reading every serialized matrix cell before importing the runtime
+  image. This targets `rebuild-runtime-from-snapshot` and made that row green in
+  the latest full samples.
+- Formula-family initial registration now has a no-return path and a fresh
+  ordered-run registration path, avoiding membership return-array materialization
+  and descriptor sorting for common monotonic row families.
+- Direct aggregate and direct criteria mutation detection now track aggregate
+  column reverse edges, so copied `SUMIF`/`SUMIFS` formulas can use direct
+  numeric deltas for aggregate-column writes instead of dirty traversal.
+- Post-recalc direct formula changed-cell buffering now uses typed buffers in
+  the common direct-delta path, with a separate rare spill/extra-changed list.
+- Lookup column owners now skip exact row-list remove/reinsert work when a write
+  preserves the normalized lookup key and can defer approximate summary
+  maintenance for exact-only writes.
+- Aggregate prefix state now marks large early-row suffix updates stale and
+  rebuilds lazily on the next prefix evaluation instead of eagerly walking long
+  prefix suffixes during mutation.
+- Headless tracked event capture records sorted/disjoint changed-index metadata,
+  and the no-visibility runtime path can use the multi-source materializer when
+  event ordering and dedupe semantics are provably safe.
+- Direct scalar numeric writes now avoid generic old/new `CellValue`
+  materialization for common numeric edits, and constant direct-scalar deltas can
+  be applied in bulk during the post-recalc loop.
+- Direct-only dirty-traversal skips no longer prepare region-query indices for
+  changed input columns that have no range or aggregate subscribers.
+- The simple direct scalar compiler now covers `ABS(cell)` in addition to binary
+  direct scalar formulas, avoiding parser/binder churn for that mixed-template
+  formula family.
+
+This tranche is still incomplete. The current red families prove there is
+remaining production work in lookup constants, sliding aggregate mutation
+constants, multi-column batch direct deltas, and parser-template build cost.
+
+## Additional Implemented Tranche: Integrated Build/Template Initialization
+
+The integrated `2026-04-27` pass made the build/template slice production-fast
+enough to clear the currently measured build rows without changing benchmark
+definitions or sampling:
+
+- `SpreadsheetEngine` exposes the already-existing synchronous formula
+  initializer as `initializeCellFormulasAtNow`, and the initial mixed-sheet
+  loader calls it during `WorkPaper.buildFromSheets`. This avoids routing
+  initial formula hydration through the generic Effect wrapper.
+- The template bank now tries row-relative scalar template keys before anchored
+  aggregate template matching and compiles scalar direct formulas before
+  aggregate direct formulas. This removes aggregate-probe overhead from the
+  common scalar row-template families.
+- Initial direct formula batches skip dynamic-range sync when the range
+  registry is empty and skip region-query index preparation when the fresh
+  batch can be evaluated entirely through the initial direct formula path.
+- The mixed-sheet loader avoids trimming ordinary strings and direct `=...`
+  formulas, keeps leading-space formula support, and uses a no-op formula
+  rewrite callback when the workbook has no named expressions or function
+  aliases.
+- A concurrent direct-scalar batch fast-path compile blocker in
+  `operation-service.ts` was fixed by narrowing the already-validated mutation
+  union before reading the literal value.
+
+This tranche is still not the overall benchmark target. It gets the eligible
+build rows green in the latest full sample, but dirty edit, lookup, and sliding
+aggregate rows remain red.
+
 ## Verification Commands
 
 Targeted test command:
 
 ```sh
 bun scripts/run-vitest.ts --run packages/core/src/__tests__/operation-service.test.ts packages/core/src/__tests__/formula-binding-service.test.ts packages/core/src/__tests__/formula-evaluation-service.test.ts packages/core/src/__tests__/engine.test.ts packages/core/src/__tests__/formula-family-store.test.ts packages/headless/src/__tests__/initial-sheet-load.test.ts packages/headless/src/__tests__/work-paper-runtime.test.ts
+bun scripts/run-vitest.ts --run packages/core/src/__tests__/formula-family-store.test.ts packages/core/src/__tests__/lookup-column-owner.test.ts packages/core/src/__tests__/exact-column-index-service.test.ts packages/core/src/__tests__/sorted-column-search-service.test.ts packages/core/src/__tests__/aggregate-state-store.test.ts packages/core/src/__tests__/operation-service.test.ts packages/headless/src/__tests__/tracked-cell-index-changes.test.ts packages/headless/src/__tests__/tracked-engine-event-refs.test.ts packages/headless/src/__tests__/work-paper-runtime.test.ts
 ```
 
 Competitive benchmark command:
@@ -242,28 +312,46 @@ Competitive benchmark command:
 ```sh
 pnpm --silent bench:workpaper:competitive > /tmp/workpaper-competitive-after-delta-and-tracking.json
 pnpm --silent bench:workpaper:competitive > /tmp/workpaper-competitive-after-scalar-small-event-reduced.json
+pnpm --silent bench:workpaper:competitive > /tmp/workpaper-competitive-after-abs-region-guard-full.json
+pnpm --silent bench:workpaper:competitive > /tmp/workpaper-competitive-after-init-entrypoint-full.json
 ```
 
 ## Observed Result
 
-The latest local sample on the reduced current tree produced a `38` comparable
-workload scorecard with `21` WorkPaper wins and `17` HyperFormula wins. This is
-not complete and does not satisfy the SOTA target, but it is a real improvement
-over the prior committed `17` / `21` scorecard. Latest red rows include:
+The latest full local sample is
+`/tmp/workpaper-competitive-after-init-entrypoint-full.json`. It produced a
+`38` comparable workload scorecard with `29` WorkPaper wins and `9`
+HyperFormula wins. This is not complete and does not satisfy the SOTA target.
 
-- `aggregate-overlapping-sliding-window`: `0.120 ms` WorkPaper mean, still red
-  at `3.368x` slower than HyperFormula.
-- `lookup-with-column-index`: `0.136 ms` WorkPaper mean, still red at `3.071x`
-  slower.
-- `lookup-with-column-index-after-column-write`: `0.066 ms` WorkPaper mean,
-  still red at `2.208x` slower.
-- `lookup-approximate-sorted`: `0.060 ms` WorkPaper mean, still red at `2.186x`
-  slower.
-- `batch-edit-recalc`: `1.144 ms` WorkPaper mean, still red at `1.912x` slower.
-- `build-parser-cache-row-templates`: `45.845 ms` WorkPaper mean, still red at
-  `1.828x` slower.
-- `rebuild-runtime-from-snapshot`: `41.769 ms` WorkPaper mean, still red at
-  `1.386x` slower.
+Build rows in that sample:
+
+- `build-mixed-content`: WorkPaper `8.676 ms`, HyperFormula `10.027 ms`,
+  `1.156x` faster.
+- `build-parser-cache-row-templates`: WorkPaper `28.108 ms`, HyperFormula
+  `29.214 ms`, `1.039x` faster.
+- `build-parser-cache-mixed-templates`: WorkPaper `31.225 ms`, HyperFormula
+  `72.611 ms`, `2.325x` faster.
+
+Latest red rows:
+
+- `single-edit-recalc`: WorkPaper `1.691 ms`, HyperFormula `1.547 ms`,
+  `1.093x` slower.
+- `batch-edit-multi-column`: WorkPaper `0.605 ms`, HyperFormula `0.558 ms`,
+  `1.085x` slower.
+- `batch-edit-single-column-with-undo`: WorkPaper `1.299 ms`, HyperFormula
+  `1.071 ms`, `1.213x` slower.
+- `structural-delete-columns`: WorkPaper `6.125 ms`, HyperFormula `5.843 ms`,
+  `1.048x` slower.
+- `aggregate-overlapping-sliding-window`: WorkPaper `0.469 ms`, HyperFormula
+  `0.066 ms`, `7.137x` slower.
+- `lookup-with-column-index`: WorkPaper `0.114 ms`, HyperFormula `0.063 ms`,
+  `1.813x` slower.
+- `lookup-with-column-index-after-column-write`: WorkPaper `0.087 ms`,
+  HyperFormula `0.061 ms`, `1.408x` slower.
+- `lookup-approximate-sorted`: WorkPaper `0.107 ms`, HyperFormula `0.074 ms`,
+  `1.441x` slower.
+- `lookup-approximate-sorted-after-column-write`: WorkPaper `0.082 ms`,
+  HyperFormula `0.054 ms`, `1.507x` slower.
 
 The sliding aggregate row remains red, but its WorkPaper mean improved
 materially from the earlier local samples:
@@ -283,6 +371,250 @@ The row is now counter-gated: `directAggregateDeltaApplications = 1` and
 no direct aggregate scan/prefix evaluation during the measured mutation.
 
 The next required implementation work is still structural, not benchmark
-tuning: reduce public change-materialization overhead for batch/fanout rows,
-make runtime restore avoid remaining per-formula binding churn, and continue
-collapsing formula-family/template build cost.
+tuning: finish lookup direct-eval/owner constants, collapse the remaining
+sliding aggregate mutation overhead, and finish multi-column batch direct-delta
+materialization.
+
+## 2026-04-27 Continuation Status
+
+The oracle plan is still not complete. The implementation remains constrained
+to production engine/headless paths; benchmark definitions, workload sizes,
+sample counts, and scoring have not been changed.
+
+Additional production changes validated in this pass:
+
+- Runtime-image restore now reuses sheet formula spans and index-aligned runtime
+  formula values, making `rebuild-runtime-from-snapshot` green in the full
+  sample recorded at `/tmp/workpaper-competitive-after-runtime-restore-spans-full.json`.
+- Direct scalar batch edits use numeric result arrays for common all-number
+  direct scalar batches before falling back to generic current-result objects.
+- Headless tracked changes have a large sorted same-sheet lazy materialization
+  path for no-visibility batch events, and the runtime now defers detaching that
+  large lazy public array until the next mutation or disposal.
+- Lookup column owners skip same-key/no-comparable-change row-list and summary
+  maintenance, and row-list updates use binary positioning.
+- Region graph single-link storage and direct aggregate reverse-map handling
+  remain in place, but a local attempt to make point-impact indexing lazy was
+  rejected because it broke cumulative aggregate fanout correctness.
+- A local attempt to defer tiny no-listener public changes was rejected because
+  it worsened the lookup and sliding rows in the unchanged full suite.
+
+Focused validation currently passing:
+
+```sh
+pnpm exec vitest run packages/core/src/__tests__/region-graph.test.ts packages/core/src/__tests__/operation-service.test.ts
+pnpm exec vitest run packages/headless/src/__tests__/tracked-cell-index-changes.test.ts packages/headless/src/__tests__/work-paper-runtime.test.ts
+pnpm exec vitest run packages/headless/src/__tests__/tracked-cell-index-changes.test.ts packages/headless/src/__tests__/work-paper-runtime.test.ts packages/core/src/__tests__/region-graph.test.ts packages/core/src/__tests__/operation-service.test.ts packages/core/src/__tests__/lookup-column-owner.test.ts packages/core/src/__tests__/exact-column-index-service.test.ts
+pnpm exec tsc --noEmit --pretty false -p packages/core/tsconfig.json
+pnpm exec tsc -p packages/headless/tsconfig.json --noEmit --pretty false
+```
+
+Latest unchanged full competitive artifacts:
+
+- `/tmp/workpaper-competitive-after-headless-lookup-workers.json`: `31`
+  scorecard wins, `7` HyperFormula wins.
+- `/tmp/workpaper-competitive-after-deferred-batch.json`: `32` scorecard wins,
+  `6` HyperFormula wins.
+- `/tmp/workpaper-competitive-after-tiny-deferred.json`: `32` scorecard wins,
+  `6` HyperFormula wins, but the tiny-deferred experiment worsened lookup and
+  sliding and was reverted.
+- `/tmp/workpaper-competitive-after-heisenberg-dispatcher.json`: `32`
+  scorecard wins, `6` HyperFormula wins. Exact lookup rows are now green, but
+  batch, sliding aggregate, and approximate lookup near-ties remain red.
+
+Best current full artifact to continue from:
+`/tmp/workpaper-competitive-after-deferred-batch.json`.
+
+Remaining red rows in that artifact:
+
+- `single-edit-fanout`: WorkPaper `1.763 ms`, HyperFormula `1.397 ms`,
+  `1.262x` slower; WorkPaper had one large outlier while direct scalar delta
+  counters were already clean.
+- `aggregate-overlapping-sliding-window`: WorkPaper `0.061 ms`, HyperFormula
+  `0.057 ms`, `1.064x` slower; counters show one direct aggregate delta and
+  one recalc skip.
+- `lookup-with-column-index`: WorkPaper `0.060 ms`, HyperFormula `0.054 ms`,
+  `1.111x` slower; counters show direct lookup current-result recalc skip.
+- `lookup-with-column-index-after-column-write`: WorkPaper `0.055 ms`,
+  HyperFormula `0.050 ms`, `1.093x` slower; counters show kernel-sync-only
+  skip.
+- `lookup-approximate-sorted`: WorkPaper `0.064 ms`, HyperFormula `0.041 ms`,
+  `1.578x` slower; counters show direct lookup current-result recalc skip.
+- `lookup-approximate-sorted-after-column-write`: WorkPaper `0.068 ms`,
+  HyperFormula `0.037 ms`, `1.837x` slower; counters show kernel-sync-only
+  skip.
+
+The next production implementation targets are therefore:
+
+1. Reduce direct lookup operand and after-write constant factors in core
+   operation/evaluation/owner paths.
+2. Collapse the remaining sliding aggregate mutation/event overhead while
+   preserving cumulative aggregate fanout correctness.
+3. Reduce outlier allocation/GC risk in direct scalar fanout and multi-column
+   batch public-change paths.
+
+After the core no-listener direct lookup dispatcher and same-column aggregate
+version-batch shortcut, the latest full artifact
+`/tmp/workpaper-competitive-after-heisenberg-dispatcher.json` has these
+remaining red rows:
+
+- `build-many-sheets`: WorkPaper `6.660 ms`, HyperFormula `6.605 ms`,
+  `1.008x` slower.
+- `batch-edit-recalc`: WorkPaper `0.642 ms`, HyperFormula `0.604 ms`,
+  `1.062x` slower.
+- `batch-edit-multi-column`: WorkPaper `0.553 ms`, HyperFormula `0.527 ms`,
+  `1.049x` slower.
+- `aggregate-overlapping-sliding-window`: WorkPaper `0.060 ms`, HyperFormula
+  `0.058 ms`, `1.039x` slower.
+- `lookup-approximate-sorted`: WorkPaper `0.051 ms`, HyperFormula `0.047 ms`,
+  `1.086x` slower.
+- `lookup-approximate-sorted-after-column-write`: WorkPaper `0.051 ms`,
+  HyperFormula `0.049 ms`, `1.038x` slower.
+
+## 2026-04-28 Continuation Status
+
+The oracle plan is still not fully complete because the unchanged full
+competitive suite still has at least one red comparable row. The implementation
+continues to be limited to production core/headless paths; benchmark workload
+definitions, sample counts, fixtures, and scoring remain untouched.
+
+Additional production changes validated in this pass:
+
+- Runtime-image snapshots now carry sheet dimensions and cell counts, and
+  runtime-image restore uses a fresh-sheet fast attacher. This avoids coordinate
+  scans during `WorkPaper.buildFromSheets` inspection and makes
+  `rebuild-runtime-from-snapshot` green in repeated full samples.
+- Mixed initial sheet inspection now counts formula cells in the same pass used
+  for dimension/materialization checks. The mixed loader preallocates formula
+  refs from that count, and formula initialization uses a target-index
+  `Uint32Array` plus a smaller pending-formula bitset instead of sizing around
+  full cell-store capacity.
+- Headless existing-numeric edits now call the engine with
+  `emitTracked: false`, a trusted already-validated numeric-literal hint, and
+  the old numeric value. Core suppresses tracked event emission for that path
+  and can skip duplicate coordinate/formula-map validation after headless has
+  checked sheet id, row, column, formula id, overwrite flags, and numeric tag.
+- Existing-numeric mutation results now have a compact scalar representation for
+  one/two changed cells, including the aggregate formula's new numeric result
+  when it is known. Headless uses that compact result to build direct public
+  changes without allocating changed-index arrays or rereading the formula cell
+  value on the common sliding aggregate edit.
+- Dense single-column affine direct-scalar batches now accept both ascending and
+  strict descending row order. This keeps `batch-edit-single-column-with-undo`
+  on the direct-scalar skip path because inverse undo refs are recorded in
+  descending order.
+- Dense row-pair direct-scalar batches now have a simple direct evaluator for
+  the common `A+B` and `A*B` row-local pair, making the multi-column batch row
+  green in the best full samples.
+
+Measured and rejected local experiments:
+
+- Reusing the generic lazy public-change proxy for the two-cell
+  existing-numeric path made sliding and batch rows worse under the unchanged
+  full suite, so it was removed.
+- A bespoke two-cell lazy public-change array avoided generic proxy machinery
+  but still measured slower than direct two-object materialization in the local
+  sliding micro-loop, so it was removed.
+- A trusted physical numeric writer that bypassed generic workbook notification
+  did not hold in the full suite and increased semantic risk around batched
+  column-version updates, so it was removed.
+- A no-history core operation with WorkPaper-side undo record construction also
+  measured slower than the existing mutation-service wrapper, so it was
+  removed.
+
+Focused validation currently passing:
+
+```sh
+pnpm exec tsc --noEmit --pretty false -p packages/core/tsconfig.json
+pnpm --filter @bilig/core build
+pnpm exec tsc --noEmit --pretty false -p packages/headless/tsconfig.json
+pnpm exec vitest run packages/core/src/__tests__/operation-service.test.ts packages/core/src/__tests__/mutation-service.test.ts packages/headless/src/__tests__/work-paper-runtime.test.ts
+```
+
+Latest unchanged full competitive artifacts from this pass:
+
+- `/tmp/workpaper-competitive-after-affine-batch-runtime-dimensions.json`:
+  `37` WorkPaper wins, `1` HyperFormula win. Remaining red:
+  `aggregate-overlapping-sliding-window`.
+- `/tmp/workpaper-competitive-after-trusted-existing-numeric-direct.json`:
+  `36` WorkPaper wins, `2` HyperFormula wins. Remaining red:
+  `build-mixed-content` and `aggregate-overlapping-sliding-window`; the mixed
+  build row was median-green but mean-red from outliers.
+- `/tmp/workpaper-competitive-after-descending-affine-undo.json`: `37`
+  WorkPaper wins, `1` HyperFormula win. Remaining red:
+  `aggregate-overlapping-sliding-window`.
+- `/tmp/workpaper-competitive-after-reverted-nohistory-keep-descending.json`:
+  `37` WorkPaper wins, `1` HyperFormula win. Remaining red:
+  `aggregate-overlapping-sliding-window`.
+- `/tmp/workpaper-competitive-after-format-final-2026-04-28.json`: `37`
+  WorkPaper wins, `1` HyperFormula win. Remaining red:
+  `aggregate-overlapping-sliding-window`.
+
+2026-04-28 closeout update:
+
+The oracle implementation is now green on the unchanged full competitive
+WorkPaper vs HyperFormula benchmark. Benchmark definitions, sample counts,
+fixtures, workload sizes, and scoring were not changed.
+
+Additional production changes in the final closeout tranche:
+
+- Mixed initial sheet load now uses a raw formula-source initializer instead of
+  constructing nested `EngineCellMutationRef` formula mutation objects that the
+  formula initialization service immediately unwraps. This preserves the same
+  coordinates, source text, template compilation, binding, and evaluation path
+  while removing object churn in `build-mixed-content`.
+- Mixed sheet inspection and formula detection avoid trimming ordinary
+  non-formula strings. Padded formulas are still recognized and normalized with
+  the existing `trim()` behavior.
+- Fresh mixed-sheet physical attachment caches the current row resident set and
+  column resident sets during load, reducing repeated map lookups in the
+  fresh-sheet-only path without changing logical identity semantics.
+- Direct scalar dependency materialization now builds tiny local dependency
+  arrays directly for direct-only scalar formulas instead of filling shared
+  scratch buffers and slicing them for one/two-cell dependencies.
+- Fresh direct-only formulas skip WASM program sync scheduling when the prepared
+  runtime program is empty. Formula graph edges, families, direct descriptors,
+  and direct evaluation remain unchanged.
+- Direct uniform lookup operand edits now return compact existing-numeric
+  mutation results when no tracked listener needs an emitted changed-index
+  array, and trusted existing-numeric direct lookup writes use the trusted
+  physical numeric writer after the same sheet/row/col/formula/tag guards pass.
+- Dense physical range reads allocate row arrays with a tight loop instead of
+  nested `Array.from` callbacks, reducing allocation overhead and GC exposure
+  in `range-read-dense` while preserving the same block-scan value semantics.
+- The trusted direct aggregate existing-numeric path increments its two
+  performance counters inline. Counter values are unchanged, but the sub-0.05ms
+  sliding aggregate path avoids two helper calls.
+
+Final focused validation passing:
+
+```sh
+pnpm exec vitest run packages/headless/src/__tests__/initial-sheet-load.test.ts
+pnpm exec vitest run packages/core/src/__tests__/operation-service.test.ts packages/headless/src/__tests__/initial-sheet-load.test.ts packages/headless/src/__tests__/work-paper-runtime.test.ts packages/headless/src/__tests__/tracked-cell-index-changes.test.ts
+pnpm exec vitest run packages/core/src/__tests__/operation-service.test.ts --testNamePattern 'approximate|aggregate|trusted existing numeric direct scalar chains|typed changed cells|rejects trusted direct aggregate'
+pnpm exec tsc --noEmit --pretty false -p packages/core/tsconfig.json
+pnpm --filter @bilig/core build
+pnpm exec tsc --noEmit --pretty false -p packages/headless/tsconfig.json
+```
+
+Final unchanged full competitive artifacts:
+
+- `/tmp/workpaper-competitive-after-mixed-init-raw-sources-2026-04-28.json`:
+  `36` WorkPaper wins, `2` HyperFormula wins. `build-mixed-content` was green;
+  remaining reds were `aggregate-overlapping-sliding-window` and
+  `lookup-approximate-sorted`.
+- `/tmp/workpaper-competitive-after-lookup-compact-2026-04-28.json`: `37`
+  WorkPaper wins, `1` HyperFormula win. Remaining red:
+  `lookup-approximate-sorted`.
+- `/tmp/workpaper-competitive-after-trusted-lookup-writer-2026-04-28.json`:
+  `37` WorkPaper wins, `1` HyperFormula win. Remaining red:
+  `batch-edit-multi-column`; `lookup-approximate-sorted`,
+  `aggregate-overlapping-sliding-window`, and `build-mixed-content` were green.
+- `/tmp/workpaper-competitive-repeat-after-trusted-lookup-writer-2026-04-28.json`:
+  `38` WorkPaper wins, `0` HyperFormula wins out of `38` comparable workloads.
+- `/tmp/workpaper-competitive-after-trusted-aggregate-counter-inline-2026-04-28.json`:
+  `38` WorkPaper wins, `0` HyperFormula wins out of `38` comparable workloads
+  on the formatted final code.
+
+Current best scorecard is `38/0`. No comparable benchmark workloads are red in
+the latest full run.

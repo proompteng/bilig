@@ -146,7 +146,12 @@ export function createEngineSnapshotService(args: {
             }
           }
 
-          const runtimeImageSheetCells: Array<{ sheetName: string; coords: Array<{ row: number; col: number }> }> = []
+          const runtimeImageSheetCells: Array<{
+            sheetName: string
+            coords: Array<{ row: number; col: number }>
+            dimensions: { width: number; height: number }
+            cellCount: number
+          }> = []
           const workbookSnapshot: WorkbookSnapshot = {
             version: 1,
             workbook,
@@ -156,6 +161,8 @@ export function createEngineSnapshotService(args: {
                 const metadata = exportSheetMetadata(args.state.workbook, sheet.name)
                 const cells: WorkbookSnapshot['sheets'][number]['cells'] = []
                 const sheetCellCoords: Array<{ row: number; col: number }> = []
+                let materializedWidth = 0
+                let materializedHeight = 0
                 sheet.grid.forEachCellEntry((cellIndex, row, col) => {
                   const cellSnapshot = args.getCellByIndex(cellIndex)
                   const explicitFormat = args.state.workbook.getCellFormat(cellIndex)
@@ -189,8 +196,15 @@ export function createEngineSnapshotService(args: {
                   }
                   cells.push(cell)
                   sheetCellCoords.push({ row, col })
+                  materializedHeight = Math.max(materializedHeight, row + 1)
+                  materializedWidth = Math.max(materializedWidth, col + 1)
                 })
-                runtimeImageSheetCells.push({ sheetName: sheet.name, coords: sheetCellCoords })
+                runtimeImageSheetCells.push({
+                  sheetName: sheet.name,
+                  coords: sheetCellCoords,
+                  dimensions: { width: materializedWidth, height: materializedHeight },
+                  cellCount: sheetCellCoords.length,
+                })
                 return metadata
                   ? { id: sheet.id, name: sheet.name, order: sheet.order, metadata, cells }
                   : { id: sheet.id, name: sheet.name, order: sheet.order, cells }

@@ -1,10 +1,12 @@
 import { Effect } from 'effect'
 import { describe, expect, it } from 'vitest'
 import { ValueTag, type CellSnapshot } from '@bilig/protocol'
+import type { EngineOpBatch } from '@bilig/workbook-domain'
 import { createReplicaState } from '../replica-state.js'
 import { SpreadsheetEngine } from '../engine.js'
 import { createEngineMutationService } from '../engine/services/mutation-service.js'
 import type { EngineMutationService } from '../engine/services/mutation-service.js'
+import type { TransactionLogEntry } from '../engine/runtime-state.js'
 import { WorkbookStore } from '../workbook-store.js'
 
 function isEngineMutationService(value: unknown): value is EngineMutationService {
@@ -30,6 +32,14 @@ function getMutationService(engine: SpreadsheetEngine): EngineMutationService {
     throw new TypeError('Expected engine mutation service')
   }
   return mutation
+}
+
+function getUndoStack(engine: SpreadsheetEngine): TransactionLogEntry[] {
+  const undoStack: unknown = Reflect.get(engine, 'undoStack')
+  if (!Array.isArray(undoStack)) {
+    throw new Error('Expected engine undo stack')
+  }
+  return undoStack
 }
 
 interface StructuralInsertHistoryEntry {
@@ -107,14 +117,8 @@ describe('EngineMutationService', () => {
     const state = {
       workbook,
       replicaState,
-      undoStack: [] as Array<{
-        forward: { kind: 'ops'; ops: unknown[] } | { kind: 'single-op'; op: unknown }
-        inverse: { kind: 'ops'; ops: unknown[] } | { kind: 'single-op'; op: unknown }
-      }>,
-      redoStack: [] as Array<{
-        forward: { kind: 'ops'; ops: unknown[] } | { kind: 'single-op'; op: unknown }
-        inverse: { kind: 'ops'; ops: unknown[] } | { kind: 'single-op'; op: unknown }
-      }>,
+      undoStack: [] as TransactionLogEntry[],
+      redoStack: [] as TransactionLogEntry[],
       getTransactionReplayDepth: () => replayDepth,
       setTransactionReplayDepth: (next: number) => {
         replayDepth = next
@@ -680,15 +684,13 @@ describe('EngineMutationService', () => {
       restoreCellOps: () => {
         throw new Error('restoreCellOps should not be used for simple cell history')
       },
-      getCellByIndex: () => ({
-        sheetName: 'Sheet1',
-        address: 'A1',
-        value: { tag: ValueTag.Number, value: 7 },
-        flags: 0,
-        version: 0,
-      }),
+      getCellByIndex: () => {
+        throw new Error('getCellByIndex should not be used for numeric mutation-ref undo capture')
+      },
       applyCellMutationsAtBatchNow: () => {},
-      applyBatchNow: () => {},
+      applyBatchNow: () => {
+        throw new Error('applyBatchNow should not be used for local mutation refs without replica observers')
+      },
     })
 
     const inverseOps = Effect.runSync(service.executeLocal([{ kind: 'setCellValue', sheetName: 'Sheet1', address: 'A1', value: 9 }]))
@@ -706,14 +708,8 @@ describe('EngineMutationService', () => {
     const state = {
       workbook,
       replicaState,
-      undoStack: [] as Array<{
-        forward: { kind: 'ops'; ops: unknown[] } | { kind: 'single-op'; op: unknown }
-        inverse: { kind: 'ops'; ops: unknown[] } | { kind: 'single-op'; op: unknown }
-      }>,
-      redoStack: [] as Array<{
-        forward: { kind: 'ops'; ops: unknown[] } | { kind: 'single-op'; op: unknown }
-        inverse: { kind: 'ops'; ops: unknown[] } | { kind: 'single-op'; op: unknown }
-      }>,
+      undoStack: [] as TransactionLogEntry[],
+      redoStack: [] as TransactionLogEntry[],
       getTransactionReplayDepth: () => replayDepth,
       setTransactionReplayDepth: (next: number) => {
         replayDepth = next
@@ -727,15 +723,13 @@ describe('EngineMutationService', () => {
       restoreCellOps: () => {
         throw new Error('restoreCellOps should not be used for simple cell history')
       },
-      getCellByIndex: () => ({
-        sheetName: 'Sheet1',
-        address: 'A1',
-        value: { tag: ValueTag.Number, value: 7 },
-        flags: 0,
-        version: 0,
-      }),
+      getCellByIndex: () => {
+        throw new Error('getCellByIndex should not be used for numeric mutation-ref undo capture')
+      },
       applyCellMutationsAtBatchNow: () => {},
-      applyBatchNow: () => {},
+      applyBatchNow: () => {
+        throw new Error('applyBatchNow should not be used for local mutation refs without replica observers')
+      },
     })
 
     const inverseOps = service.applyCellMutationsAtNow(
@@ -750,28 +744,31 @@ describe('EngineMutationService', () => {
 
     expect(inverseOps).toBeNull()
     expect(state.undoStack).toHaveLength(1)
-    expect(state.undoStack[0]?.inverse).toEqual({
-      kind: 'single-op',
-      op: { kind: 'setCellValue', sheetName: 'Sheet1', address: 'A1', value: 7 },
-      potentialNewCells: 1,
-    })
+    expect(state.undoStack[0]?.inverse.kind).toBe('cell-mutations')
+    const inverse = state.undoStack[0]?.inverse
+    if (inverse?.kind !== 'cell-mutations') {
+      throw new Error('Expected cell mutation inverse history')
+    }
+    const refsDescriptor = Object.getOwnPropertyDescriptor(inverse, 'refs')
+    expect(Object.hasOwn(refsDescriptor ?? {}, 'get')).toBe(false)
+    expect(refsDescriptor?.value).toEqual([
+      { sheetId: sheet.id, cellIndex: cell.cellIndex, mutation: { kind: 'setCellValue', row: 0, col: 0, value: 7 } },
+    ])
+    expect(inverse.potentialNewCells).toBe(1)
+    expect(inverse.refs).toEqual([
+      { sheetId: sheet.id, cellIndex: cell.cellIndex, mutation: { kind: 'setCellValue', row: 0, col: 0, value: 7 } },
+    ])
   })
 
-  it('lazily materializes forward ops for multi-cell local history when no replica batch is needed', () => {
+  it('lazily materializes typed history for multi-cell local history when no replica batch is needed', () => {
     const workbook = new WorkbookStore('lazy-forward')
     const sheet = workbook.getOrCreateSheet('Sheet1')
     let replayDepth = 0
     const state = {
       workbook,
       replicaState: createReplicaState('local'),
-      undoStack: [] as Array<{
-        forward: { kind: 'ops'; ops: unknown[] } | { kind: 'single-op'; op: unknown }
-        inverse: { kind: 'ops'; ops: unknown[] } | { kind: 'single-op'; op: unknown }
-      }>,
-      redoStack: [] as Array<{
-        forward: { kind: 'ops'; ops: unknown[] } | { kind: 'single-op'; op: unknown }
-        inverse: { kind: 'ops'; ops: unknown[] } | { kind: 'single-op'; op: unknown }
-      }>,
+      undoStack: [] as TransactionLogEntry[],
+      redoStack: [] as TransactionLogEntry[],
       trackReplicaVersions: false,
       getSyncClientConnection: () => null,
       batchListeners: new Set<() => void>(),
@@ -787,15 +784,13 @@ describe('EngineMutationService', () => {
       captureRowRangeCellState: () => [],
       captureColumnRangeCellState: () => [],
       restoreCellOps: () => [],
-      getCellByIndex: (cellIndex) => ({
-        sheetName: 'Sheet1',
-        address: cellIndex === 0 ? 'A1' : 'A2',
-        value: { tag: ValueTag.Empty },
-        flags: 0,
-        version: 0,
-      }),
+      getCellByIndex: () => {
+        throw new Error('getCellByIndex should not be used for empty mutation-ref undo capture')
+      },
       applyCellMutationsAtBatchNow: () => {},
-      applyBatchNow: () => {},
+      applyBatchNow: () => {
+        throw new Error('applyBatchNow should not be used for local mutation refs without replica observers')
+      },
     })
 
     const inverseOps = service.applyCellMutationsAtNow(
@@ -820,12 +815,172 @@ describe('EngineMutationService', () => {
       { sheetId: sheet.id, mutation: { kind: 'setCellValue', row: 1, col: 0, value: 2 } },
     ])
     expect(state.undoStack[0]?.inverse.kind).toBe('cell-mutations')
-    expect(state.undoStack[0]?.inverse.kind === 'cell-mutations' ? state.undoStack[0]?.inverse.refs : []).toEqual([
+    const inverse = state.undoStack[0]?.inverse
+    if (inverse?.kind !== 'cell-mutations') {
+      throw new Error('Expected cell mutation inverse history')
+    }
+    expect(Object.hasOwn(Object.getOwnPropertyDescriptor(inverse, 'refs') ?? {}, 'get')).toBe(true)
+    expect(inverse.refs).toEqual([
       { sheetId: sheet.id, mutation: { kind: 'clearCell', row: 1, col: 0 } },
       { sheetId: sheet.id, mutation: { kind: 'clearCell', row: 0, col: 0 } },
     ])
     expect(state.undoStack[0]?.forward.kind === 'cell-mutations' ? state.undoStack[0]?.forward.potentialNewCells : undefined).toBe(2)
     expect(state.undoStack[0]?.inverse.kind === 'cell-mutations' ? state.undoStack[0]?.inverse.potentialNewCells : undefined).toBe(0)
+  })
+
+  it('preserves single numeric mutation-ref undo without captured inverse arrays', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'single-numeric-mutation-ref-undo' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 3)
+    engine.setCellFormula('Sheet1', 'B1', 'A1*2')
+    const sheet = engine.workbook.getSheet('Sheet1')
+    const a1 = engine.workbook.getCellIndex('Sheet1', 'A1')
+    if (!sheet || a1 === undefined) {
+      throw new Error('Expected initialized A1')
+    }
+
+    engine.applyCellMutationsAtWithOptions(
+      [{ sheetId: sheet.id, cellIndex: a1, mutation: { kind: 'setCellValue', row: 0, col: 0, value: 11 } }],
+      {
+        captureUndo: true,
+        potentialNewCells: 0,
+        source: 'local',
+        returnUndoOps: false,
+        reuseRefs: true,
+      },
+    )
+
+    const undoStack = getUndoStack(engine)
+    const latest = undoStack.at(-1)
+    expect(latest?.inverse.kind).toBe('cell-mutations')
+    if (latest?.inverse.kind !== 'cell-mutations') {
+      throw new Error('Expected direct cell mutation inverse')
+    }
+    const refsDescriptor = Object.getOwnPropertyDescriptor(latest.inverse, 'refs')
+    expect(Object.hasOwn(refsDescriptor ?? {}, 'get')).toBe(false)
+    expect(latest.inverse.refs).toEqual([
+      { sheetId: sheet.id, cellIndex: a1, mutation: { kind: 'setCellValue', row: 0, col: 0, value: 3 } },
+    ])
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 22 })
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Number, value: 3 })
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 6 })
+
+    expect(engine.redo()).toBe(true)
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Number, value: 11 })
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 22 })
+  })
+
+  it('stores existing numeric fast-path undo as typed single-cell records', async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: 'typed-existing-numeric-fast-path-undo',
+      trackReplicaVersions: false,
+    })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 3)
+    engine.setCellFormula('Sheet1', 'B1', 'SUM(A1:A1)')
+    const sheet = engine.workbook.getSheet('Sheet1')
+    const a1 = engine.workbook.getCellIndex('Sheet1', 'A1')
+    if (!sheet || a1 === undefined) {
+      throw new Error('Expected initialized A1')
+    }
+
+    const result = engine.tryApplyExistingNumericCellMutationAt({
+      sheetId: sheet.id,
+      row: 0,
+      col: 0,
+      cellIndex: a1,
+      value: 11,
+    })
+
+    expect(result).not.toBeNull()
+    const latest = getUndoStack(engine).at(-1)
+    expect(latest?.forward).toMatchObject({
+      kind: 'single-existing-numeric-cell-mutation',
+      sheetId: sheet.id,
+      row: 0,
+      col: 0,
+      cellIndex: a1,
+      value: 11,
+      potentialNewCells: 0,
+    })
+    expect(latest?.inverse).toMatchObject({
+      kind: 'single-existing-numeric-cell-mutation',
+      sheetId: sheet.id,
+      row: 0,
+      col: 0,
+      cellIndex: a1,
+      value: 3,
+      potentialNewCells: 1,
+    })
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 11 })
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Number, value: 3 })
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 3 })
+
+    expect(engine.redo()).toBe(true)
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Number, value: 11 })
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 11 })
+  })
+
+  it('preserves direct scalar batch undo with lazy inverse mutation refs', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'lazy-direct-scalar-batch-undo' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellValue('Sheet1', 'A2', 2)
+    engine.setCellFormula('Sheet1', 'B1', 'A1*2')
+    engine.setCellFormula('Sheet1', 'B2', 'A2*2')
+    const sheet = engine.workbook.getSheet('Sheet1')
+    const a1 = engine.workbook.getCellIndex('Sheet1', 'A1')
+    const a2 = engine.workbook.getCellIndex('Sheet1', 'A2')
+    if (!sheet || a1 === undefined || a2 === undefined) {
+      throw new Error('Expected initialized sheet cells')
+    }
+
+    engine.applyCellMutationsAtWithOptions(
+      [
+        { sheetId: sheet.id, cellIndex: a1, mutation: { kind: 'setCellValue', row: 0, col: 0, value: 10 } },
+        { sheetId: sheet.id, cellIndex: a2, mutation: { kind: 'setCellValue', row: 1, col: 0, value: 20 } },
+      ],
+      {
+        captureUndo: true,
+        potentialNewCells: 0,
+        source: 'local',
+        returnUndoOps: false,
+        reuseRefs: true,
+      },
+    )
+
+    const undoStack = getUndoStack(engine)
+    const latest = undoStack.at(-1)
+    expect(latest?.inverse.kind).toBe('cell-mutations')
+    if (latest?.inverse.kind !== 'cell-mutations') {
+      throw new Error('Expected lazy cell mutation inverse')
+    }
+    expect(Object.hasOwn(Object.getOwnPropertyDescriptor(latest.inverse, 'refs') ?? {}, 'get')).toBe(true)
+    expect(latest.inverse.refs).toEqual([
+      { sheetId: sheet.id, cellIndex: a2, mutation: { kind: 'setCellValue', row: 1, col: 0, value: 2 } },
+      { sheetId: sheet.id, cellIndex: a1, mutation: { kind: 'setCellValue', row: 0, col: 0, value: 1 } },
+    ])
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 20 })
+    expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 40 })
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Number, value: 1 })
+    expect(engine.getCellValue('Sheet1', 'A2')).toEqual({ tag: ValueTag.Number, value: 2 })
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 2 })
+    expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 4 })
+
+    expect(engine.redo()).toBe(true)
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Number, value: 10 })
+    expect(engine.getCellValue('Sheet1', 'A2')).toEqual({ tag: ValueTag.Number, value: 20 })
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 20 })
+    expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 40 })
   })
 
   it('fast-paths structural insert history while preserving undo and redo', async () => {

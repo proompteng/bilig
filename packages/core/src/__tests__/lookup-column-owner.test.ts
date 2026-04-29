@@ -194,6 +194,64 @@ describe('lookup column owner helpers', () => {
     ).toBe(false)
   })
 
+  it('preserves duplicate row-list identity for same-key text writes', () => {
+    const workbook = new WorkbookStore('lookup-owner-text-same-key')
+    const strings = new StringPool()
+    workbook.createSheet('Sheet1')
+    ;['apple', 'pear', 'PEAR', 'zulu'].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, 'Sheet1', `A${index + 1}`, { tag: ValueTag.String, value })
+    })
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
+    })
+    const owner = buildLookupColumnOwner({
+      owner: runtimeColumnStore.getColumnOwner({ sheetName: 'Sheet1', col: 0 }),
+      normalizeStringId: runtimeColumnStore.normalizeStringId,
+    })
+
+    expect(owner).toBeDefined()
+    expect(findExactMatchInRange(owner!, 's:PEAR', 0, 3, 1)).toBe(1)
+    expect(findExactMatchInRange(owner!, 's:PEAR', 0, 3, -1)).toBe(2)
+    const pearRows = owner!.rowLists.get('s:PEAR')
+    expect(pearRows).toEqual([1, 2])
+    const ascendingBreaks = owner!.sortedTextAscendingBreaks
+    const descendingBreaks = owner!.sortedTextDescendingBreaks
+    const oldStringId = strings.intern('PEAR')
+    const newStringId = strings.intern('pear')
+
+    expect(
+      applyLookupColumnOwnerLiteralWrite({
+        owner: owner!,
+        write: {
+          row: 2,
+          oldValue: { tag: ValueTag.String, value: 'PEAR' },
+          newValue: { tag: ValueTag.String, value: 'pear' },
+          oldStringId,
+          newStringId,
+        },
+        normalizeStringId: runtimeColumnStore.normalizeStringId,
+      }),
+    ).toBe(true)
+
+    expect(owner!.rowLists.get('s:PEAR')).toBe(pearRows)
+    expect(owner!.rowLists.get('s:PEAR')).toEqual([1, 2])
+    expect(owner!.firstPositions.get('s:PEAR')).toBe(1)
+    expect(owner!.lastPositions.get('s:PEAR')).toBe(2)
+    expect(findExactMatchInRange(owner!, 's:PEAR', 0, 3, 1)).toBe(1)
+    expect(findExactMatchInRange(owner!, 's:PEAR', 0, 3, -1)).toBe(2)
+    expect(owner!.sortedTextAscendingBreaks).toBe(ascendingBreaks)
+    expect(owner!.sortedTextDescendingBreaks).toBe(descendingBreaks)
+    expect(owner!.summariesDirty).toBe(false)
+    expect(summarizeApproximateRange(owner!, 0, 3)).toEqual({
+      comparableKind: 'text',
+      uniformStart: undefined,
+      uniformStep: undefined,
+      sortedAscending: true,
+      sortedDescending: false,
+    })
+  })
+
   it('patches numeric approximate summaries incrementally after monotonic writes', () => {
     const workbook = new WorkbookStore('lookup-owner-numeric-incremental')
     const strings = new StringPool()
@@ -241,6 +299,73 @@ describe('lookup column owner helpers', () => {
     })
   })
 
+  it('keeps same-key exact-only numeric writes on exact summary maintenance', () => {
+    const workbook = new WorkbookStore('lookup-owner-exact-same-key-write')
+    const strings = new StringPool()
+    workbook.createSheet('Sheet1')
+    ;[1, 3, 3, 5].forEach((value, index) => {
+      setStoredCellValue(workbook, strings, 'Sheet1', `A${index + 1}`, { tag: ValueTag.Number, value })
+    })
+
+    const runtimeColumnStore = createEngineRuntimeColumnStoreService({
+      state: { workbook, strings },
+    })
+    const owner = buildLookupColumnOwner({
+      owner: runtimeColumnStore.getColumnOwner({ sheetName: 'Sheet1', col: 0 }),
+      normalizeStringId: runtimeColumnStore.normalizeStringId,
+    })
+
+    expect(owner).toBeDefined()
+    const duplicateRows = owner!.rowLists.get('n:3')
+    const ascendingBreaks = owner!.sortedNumericAscendingBreaks
+    const descendingBreaks = owner!.sortedNumericDescendingBreaks
+    const uniformBreaks = owner!.numericUniformBreakOffsets
+    expect(duplicateRows).toEqual([1, 2])
+    expect(summarizeApproximateRange(owner!, 0, 3)).toEqual({
+      comparableKind: 'numeric',
+      uniformStart: undefined,
+      uniformStep: undefined,
+      sortedAscending: true,
+      sortedDescending: false,
+    })
+
+    expect(
+      applyLookupColumnOwnerLiteralWrite({
+        owner: owner!,
+        write: {
+          row: 2,
+          oldValue: { tag: ValueTag.Number, value: 3 },
+          newValue: { tag: ValueTag.Number, value: 3 },
+        },
+        normalizeStringId: runtimeColumnStore.normalizeStringId,
+        updateApproximateSummaries: false,
+      }),
+    ).toBe(true)
+
+    expect(owner!.rowLists.get('n:3')).toBe(duplicateRows)
+    expect(owner!.rowLists.get('n:3')).toEqual([1, 2])
+    expect(findExactMatchInRange(owner!, 'n:3', 0, 3, 1)).toBe(1)
+    expect(findExactMatchInRange(owner!, 'n:3', 0, 3, -1)).toBe(2)
+    expect(owner!.sortedNumericAscendingBreaks).toBe(ascendingBreaks)
+    expect(owner!.sortedNumericDescendingBreaks).toBe(descendingBreaks)
+    expect(owner!.numericUniformBreakOffsets).toBe(uniformBreaks)
+    expect(owner!.summariesDirty).toBe(false)
+    expect(summarizeExactRange(owner!, 0, 3)).toEqual({
+      comparableKind: 'numeric',
+      uniformStart: undefined,
+      uniformStep: undefined,
+    })
+    expect(owner!.summariesDirty).toBe(false)
+    expect(summarizeApproximateRange(owner!, 0, 3)).toEqual({
+      comparableKind: 'numeric',
+      uniformStart: undefined,
+      uniformStep: undefined,
+      sortedAscending: true,
+      sortedDescending: false,
+    })
+    expect(owner!.summariesDirty).toBe(false)
+  })
+
   it('defers approximate summary maintenance for exact-only literal writes', () => {
     const workbook = new WorkbookStore('lookup-owner-exact-write')
     const strings = new StringPool()
@@ -272,6 +397,12 @@ describe('lookup column owner helpers', () => {
     ).toBe(true)
     expect(findExactMatchInRange(owner!, 'n:7', 0, 3, 1)).toBeUndefined()
     expect(findExactMatchInRange(owner!, 'n:9', 0, 3, 1)).toBe(3)
+    expect(owner!.summariesDirty).toBe(true)
+    expect(summarizeExactRange(owner!, 0, 3)).toEqual({
+      comparableKind: 'numeric',
+      uniformStart: undefined,
+      uniformStep: undefined,
+    })
     expect(owner!.summariesDirty).toBe(true)
 
     expect(

@@ -15,6 +15,7 @@ import type { RegionGraph } from '../../deps/region-graph.js'
 
 export interface EngineTraversalService {
   readonly getEntityDependents: (entityId: number) => Effect.Effect<Uint32Array, EngineTraversalError>
+  readonly getSingleEntityDependent: (entityId: number) => Effect.Effect<number, EngineTraversalError>
   readonly collectFormulaDependents: (entityId: number) => Effect.Effect<Uint32Array, EngineTraversalError>
   readonly forEachFormulaDependencyCell: (
     cellIndex: number,
@@ -25,6 +26,7 @@ export interface EngineTraversalService {
     fn: (cellIndex: number, row: number, col: number) => void,
   ) => Effect.Effect<void, EngineTraversalError>
   readonly getEntityDependentsNow: (entityId: number) => Uint32Array
+  readonly getSingleEntityDependentNow: (entityId: number) => number
   readonly collectFormulaDependentsNow: (entityId: number) => Uint32Array
   readonly forEachFormulaDependencyCellNow: (cellIndex: number, fn: (dependencyCellIndex: number) => void) => void
   readonly forEachSheetCellNow: (sheetId: number, fn: (cellIndex: number, row: number, col: number) => void) => void
@@ -45,6 +47,8 @@ export function createEngineTraversalService(args: {
     reverseSortedLookupColumnEdges: Map<number, EdgeSlice>
   }
 }): EngineTraversalService {
+  const NO_ENTITY_DEPENDENT = -1
+  const MULTIPLE_ENTITY_DEPENDENTS = -2
   let topoFormulaBuffer: U32 = new Uint32Array(128)
   let topoEntityQueue: U32 = new Uint32Array(128)
   let topoFormulaSeenEpoch = 1
@@ -108,6 +112,17 @@ export function createEngineTraversalService(args: {
 
   const getEntityDependentsNow = (entityId: number): Uint32Array =>
     args.edgeArena.readView(getReverseEdgeSlice(entityId) ?? args.edgeArena.empty())
+
+  const getSingleEntityDependentNow = (entityId: number): number => {
+    const slice = getReverseEdgeSlice(entityId)
+    if (!slice || slice.len === 0 || slice.ptr < 0) {
+      return NO_ENTITY_DEPENDENT
+    }
+    if (slice.len !== 1) {
+      return MULTIPLE_ENTITY_DEPENDENTS
+    }
+    return args.edgeArena.valueAt(slice, 0)
+  }
 
   const forEachFormulaDependencyCellNow = (cellIndex: number, fn: (dependencyCellIndex: number) => void): void => {
     const formula = args.state.formulas.get(cellIndex)
@@ -322,6 +337,16 @@ export function createEngineTraversalService(args: {
           }),
       })
     },
+    getSingleEntityDependent(entityId) {
+      return Effect.try({
+        try: () => getSingleEntityDependentNow(entityId),
+        catch: (cause) =>
+          new EngineTraversalError({
+            message: traversalErrorMessage('Failed to read single entity dependent', cause),
+            cause,
+          }),
+      })
+    },
     collectFormulaDependents(entityId) {
       return Effect.try({
         try: () => Uint32Array.from(collectFormulaDependentsNow(entityId)),
@@ -357,6 +382,7 @@ export function createEngineTraversalService(args: {
       })
     },
     getEntityDependentsNow,
+    getSingleEntityDependentNow,
     collectFormulaDependentsNow,
     forEachFormulaDependencyCellNow,
     forEachSheetCellNow,

@@ -15,6 +15,11 @@ export interface SheetGridAxisRemapScope {
 export interface SheetGridLogicalLookup {
   get(row: number, col: number): number | undefined
   forEachCellEntry(fn: (cellIndex: number, row: number, col: number) => void): void
+  someCellInAxisScope?(
+    axis: 'row' | 'column',
+    scope: SheetGridAxisRemapScope,
+    predicate: (cellIndex: number, row: number, col: number) => boolean,
+  ): boolean
 }
 
 function blockIntersectsScope(axis: 'row' | 'column', key: number, scope: SheetGridAxisRemapScope | undefined): boolean {
@@ -299,6 +304,10 @@ export class SheetGrid {
     predicate: (cellIndex: number, row: number, col: number) => boolean,
   ): boolean {
     if (this.logicalLookup) {
+      const logicalFound = this.logicalLookup.someCellInAxisScope?.(axis, scope, predicate)
+      if (logicalFound !== undefined) {
+        return logicalFound
+      }
       let found = false
       this.logicalLookup.forEachCellEntry((cellIndex, row, col) => {
         if (found) {

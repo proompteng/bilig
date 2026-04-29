@@ -112,6 +112,9 @@ export class AxisMap {
   ): AxisEntrySnapshot[] {
     const entries = typeof insertCountOrEntries === 'number' ? (maybeEntries ?? []) : insertCountOrEntries
     const explicitInsertCount = typeof insertCountOrEntries === 'number' ? insertCountOrEntries : entries.length
+    if (entries.length === 0 && this.entries.length <= start) {
+      return []
+    }
     if (this.entries.length < start) {
       this.entries.length = start
     }
@@ -128,7 +131,12 @@ export class AxisMap {
       inserted[offset] = entry.id
     }
     const removed = this.entries.splice(start, deleteCount, ...inserted)
-    this.rebuildIndex()
+    removed.forEach((id) => {
+      if (id !== undefined) {
+        this.idToIndex.delete(id)
+      }
+    })
+    this.rebuildIndexFrom(start)
     return removed.flatMap((id, index) => (id === undefined ? [] : [createAxisEntrySnapshot(id, start + index)]))
   }
 
@@ -143,7 +151,11 @@ export class AxisMap {
 
   private rebuildIndex(): void {
     this.idToIndex.clear()
-    for (let index = 0; index < this.entries.length; index += 1) {
+    this.rebuildIndexFrom(0)
+  }
+
+  private rebuildIndexFrom(start: number): void {
+    for (let index = start; index < this.entries.length; index += 1) {
       const id = this.entries[index]
       if (id !== undefined) {
         this.idToIndex.set(id, index)

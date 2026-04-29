@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import * as formula from '@bilig/formula'
-import { SpreadsheetEngine } from '@bilig/core'
+import { readRuntimeImage, readRuntimeSnapshot, SpreadsheetEngine, WorkbookStore } from '@bilig/core'
 import { ValueTag } from '@bilig/protocol'
 import { WorkPaper } from '../index.js'
+import { WorkPaperSheetSizeLimitExceededError } from '../work-paper-errors.js'
 
 describe('initial mixed sheet load', () => {
   it('builds mixed sheets without routing formulas through restore cell mutations', () => {
@@ -60,6 +61,50 @@ describe('initial mixed sheet load', () => {
     }
   })
 
+  it('reserves mixed-sheet formula refs and attaches fresh cells without public per-cell attach calls', () => {
+    const attachSpy = vi.spyOn(WorkbookStore.prototype, 'attachAllocatedCellWithLogicalAxisIds')
+    const initSpy = vi.spyOn(SpreadsheetEngine.prototype, 'initializeFormulaSourcesAtNow')
+    try {
+      const workbook = WorkPaper.buildFromSheets({
+        Bench: [
+          [1, 10, '=A1+B1', '=C1*2'],
+          [2, 20, '=A2+B2', '=C2*2'],
+        ],
+      })
+      const sheetId = workbook.getSheetId('Bench')!
+      const refs = initSpy.mock.calls[0]?.[0] ?? []
+
+      expect(refs).toHaveLength(4)
+      expect(refs.every((ref) => typeof ref.cellIndex === 'number')).toBe(true)
+      expect(refs.map((ref) => ref.source)).toEqual(['A1+B1', 'C1*2', 'A2+B2', 'C2*2'])
+      expect(attachSpy).not.toHaveBeenCalled()
+      expect(workbook.getCellValue({ sheet: sheetId, row: 1, col: 3 })).toEqual({
+        tag: ValueTag.Number,
+        value: 44,
+      })
+    } finally {
+      attachSpy.mockRestore()
+      initSpy.mockRestore()
+    }
+  })
+
+  it('recognizes padded formulas without treating ordinary strings as formulas during mixed-sheet initialization', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: [[2, '  =A1*2  ', ' label ']],
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+
+    expect(workbook.getCellFormula({ sheet: sheetId, row: 0, col: 1 })).toBe('=A1*2')
+    expect(workbook.getCellValue({ sheet: sheetId, row: 0, col: 1 })).toEqual({
+      tag: ValueTag.Number,
+      value: 4,
+    })
+    expect(workbook.getCellValue({ sheet: sheetId, row: 0, col: 2 })).toMatchObject({
+      tag: ValueTag.String,
+      value: ' label ',
+    })
+  })
+
   it('rebuilds from serialized sheets through the runtime-image fast path when available', () => {
     const source = WorkPaper.buildFromSheets({
       Bench: [
@@ -68,6 +113,9 @@ describe('initial mixed sheet load', () => {
       ],
     })
     const serialized = source.getAllSheetsSerialized()
+    const runtimeImage = readRuntimeImage(readRuntimeSnapshot(serialized))
+    expect(runtimeImage?.sheetCells?.[0]?.dimensions).toEqual({ width: 4, height: 2 })
+    expect(runtimeImage?.sheetCells?.[0]?.cellCount).toBe(8)
     source.dispose()
 
     const rebuilt = WorkPaper.buildFromSheets(serialized)
@@ -95,5 +143,80 @@ describe('initial mixed sheet load', () => {
       tag: ValueTag.Number,
       value: 10,
     })
+  })
+
+  it('imports compatible runtime snapshots without reading serialized sheet matrix entries', () => {
+    const source = WorkPaper.buildFromSheets({
+      Bench: [
+        [1, 2, '=A1+B1'],
+        [2, 4, '=A2+B2'],
+      ],
+    })
+    const serialized = source.getAllSheetsSerialized()
+    source.dispose()
+    serialized.Bench = serialized.Bench.map(
+      (row) =>
+        new Proxy(row, {
+          get(target, property, receiver) {
+            if (typeof property === 'string' && /^\d+$/.test(property)) {
+              throw new Error('snapshot fast path should not read serialized cell values')
+            }
+            return Reflect.get(target, property, receiver)
+          },
+        }),
+    )
+
+    const rebuilt = WorkPaper.buildFromSheets(serialized)
+    const sheetId = rebuilt.getSheetId('Bench')!
+
+    expect(rebuilt.getSheetDimensions(sheetId)).toEqual({ width: 3, height: 2 })
+    expect(rebuilt.getCellValue({ sheet: sheetId, row: 1, col: 2 })).toEqual({
+      tag: ValueTag.Number,
+      value: 6,
+    })
+  })
+
+  it('imports compatible runtime snapshots without reading serialized sheet rows', () => {
+    const source = WorkPaper.buildFromSheets({
+      Bench: [
+        [1, 2, '=A1+B1'],
+        [2, 4, '=A2+B2'],
+      ],
+    })
+    const serialized = source.getAllSheetsSerialized()
+    source.dispose()
+    const sheet = serialized.Bench
+    expect(sheet).toBeDefined()
+    serialized.Bench = new Proxy(sheet, {
+      get(target, property, receiver) {
+        if (property === 'length' || (typeof property === 'string' && /^\d+$/.test(property))) {
+          throw new Error('snapshot fast path should not read serialized sheet rows')
+        }
+        return Reflect.get(target, property, receiver)
+      },
+    })
+
+    const rebuilt = WorkPaper.buildFromSheets(serialized)
+    const sheetId = rebuilt.getSheetId('Bench')!
+
+    expect(rebuilt.getSheetDimensions(sheetId)).toEqual({ width: 3, height: 2 })
+    expect(rebuilt.getCellValue({ sheet: sheetId, row: 1, col: 2 })).toEqual({
+      tag: ValueTag.Number,
+      value: 6,
+    })
+  })
+
+  it('rejects oversized sheets before importing compatible runtime snapshots', () => {
+    const source = WorkPaper.buildFromSheets({
+      Bench: [
+        [1, 2],
+        [3, 4],
+      ],
+    })
+    const serialized = source.getAllSheetsSerialized()
+    source.dispose()
+
+    expect(() => WorkPaper.buildFromSheets(serialized, { maxRows: 1 })).toThrow(WorkPaperSheetSizeLimitExceededError)
+    expect(() => WorkPaper.buildFromSheets(serialized, { maxColumns: 1 })).toThrow(WorkPaperSheetSizeLimitExceededError)
   })
 })

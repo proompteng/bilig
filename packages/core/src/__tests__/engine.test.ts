@@ -46,6 +46,7 @@ type RuntimeFormulaWithDirectLookup = {
         kind: 'exact-uniform-numeric'
         operandCellIndex: number
         sheetName: string
+        sheetId: number
         rowStart: number
         rowEnd: number
         col: number
@@ -62,6 +63,7 @@ type RuntimeFormulaWithDirectLookup = {
         kind: 'approximate-uniform-numeric'
         operandCellIndex: number
         sheetName: string
+        sheetId: number
         rowStart: number
         rowEnd: number
         col: number
@@ -201,6 +203,7 @@ function isRuntimeFormulaWithDirectLookup(value: unknown): value is RuntimeFormu
   if (directLookup.kind === 'exact-uniform-numeric') {
     return (
       typeof directLookup.sheetName === 'string' &&
+      typeof directLookup.sheetId === 'number' &&
       typeof directLookup.rowStart === 'number' &&
       typeof directLookup.rowEnd === 'number' &&
       typeof directLookup.col === 'number' &&
@@ -221,6 +224,7 @@ function isRuntimeFormulaWithDirectLookup(value: unknown): value is RuntimeFormu
   if (directLookup.kind === 'approximate-uniform-numeric') {
     return (
       typeof directLookup.sheetName === 'string' &&
+      typeof directLookup.sheetId === 'number' &&
       typeof directLookup.rowStart === 'number' &&
       typeof directLookup.rowEnd === 'number' &&
       typeof directLookup.col === 'number' &&
@@ -6524,7 +6528,9 @@ describe('SpreadsheetEngine', () => {
     expect(runtimeFormula?.planId).toBe(runtimeFormula?.plan.id)
     expect(runtimeFormula?.compiled).toBe(runtimeFormula?.plan.compiled)
     expect(runtimeFormula?.dependencyEntities.ptr).toBeGreaterThanOrEqual(0)
-    expect(runtimeFormula?.runtimeProgram.length).toBeGreaterThan(0)
+    expect(runtimeFormula?.compiled.program.length).toBeGreaterThan(0)
+    expect(runtimeFormula?.runtimeProgram.length).toBe(0)
+    expect(runtimeFormula?.directScalar).toBeDefined()
   })
 
   it('reuses one compiled plan for identical formula sources while keeping distinct slots', async () => {

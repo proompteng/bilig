@@ -64,4 +64,23 @@ describe('EngineCompiledPlanService', () => {
 
     expect(service.get(record.id)).toBeUndefined()
   })
+
+  it('reuses repeated template plans and drops stale template aliases on replace', () => {
+    const service = createEngineCompiledPlanService()
+    const firstCompiled = compileFormula('A1+B1')
+    const secondCompiled = compileFormula('A1*B1')
+
+    const first = service.intern('A1+B1', firstCompiled, 11)
+    const reused = service.intern('A2+B2', firstCompiled, 11)
+
+    expect(reused.id).toBe(first.id)
+    expect(reused.source).toBe('A2+B2')
+
+    service.release(reused.id)
+    const replaced = service.replace(first.id, 'A1*B1', secondCompiled, 12)
+    const oldTemplate = service.intern('A3+B3', firstCompiled, 11)
+
+    expect(replaced.id).toBe(first.id)
+    expect(oldTemplate.id).not.toBe(first.id)
+  })
 })

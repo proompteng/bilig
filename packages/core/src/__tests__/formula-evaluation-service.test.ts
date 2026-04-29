@@ -65,7 +65,7 @@ function getInternalFormulaStore(engine: SpreadsheetEngine): { get(cellIndex: nu
   return formulas
 }
 
-function readRuntimeDirectLookupKind(engine: SpreadsheetEngine, sheetName: string, address: string): string | undefined {
+function readRuntimeDirectLookup(engine: SpreadsheetEngine, sheetName: string, address: string): object | undefined {
   const formulas = getInternalFormulaStore(engine)
   const cellIndex = engine.workbook.getCellIndex(sheetName, address)
   if (cellIndex === undefined) {
@@ -79,8 +79,37 @@ function readRuntimeDirectLookupKind(engine: SpreadsheetEngine, sheetName: strin
   if (typeof directLookup !== 'object' || directLookup === null) {
     return undefined
   }
+  return directLookup
+}
+
+function readRuntimeDirectLookupKind(engine: SpreadsheetEngine, sheetName: string, address: string): string | undefined {
+  const directLookup = readRuntimeDirectLookup(engine, sheetName, address)
+  if (directLookup === undefined) {
+    return undefined
+  }
   const kind = Reflect.get(directLookup, 'kind')
   return typeof kind === 'string' ? kind : undefined
+}
+
+function readRuntimeDirectLookupTailPatch(engine: SpreadsheetEngine, sheetName: string, address: string): unknown {
+  const directLookup = readRuntimeDirectLookup(engine, sheetName, address)
+  if (directLookup === undefined) {
+    return undefined
+  }
+  return Reflect.get(directLookup, 'tailPatch')
+}
+
+function overwriteRuntimeNumber(engine: SpreadsheetEngine, sheetName: string, address: string, value: number): number {
+  const cellIndex = engine.workbook.getCellIndex(sheetName, address)
+  if (cellIndex === undefined) {
+    throw new Error(`expected cell at ${sheetName}!${address}`)
+  }
+  const { cellStore } = engine.workbook
+  cellStore.tags[cellIndex] = ValueTag.Number
+  cellStore.errors[cellIndex] = ErrorCode.None
+  cellStore.stringIds[cellIndex] = 0
+  cellStore.numbers[cellIndex] = value
+  return cellIndex
 }
 
 describe('EngineFormulaEvaluationService', () => {
@@ -653,6 +682,113 @@ describe('EngineFormulaEvaluationService', () => {
       tag: ValueTag.Number,
       value: 4,
     })
+  })
+
+  it('evaluates direct exact uniform lookup tail patches without rebuilding owners', async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: 'evaluation-direct-exact-uniform-tail-patch',
+      useColumnIndex: true,
+    })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setRangeValues({ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A4' }, [[1], [2], [3], [4]])
+    engine.setCellValue('Sheet1', 'B1', 2)
+    engine.setCellFormula('Sheet1', 'C1', 'MATCH(B1,A1:A4,0)')
+
+    const evaluation = getEvaluationService(engine)
+    const formulaIndex = engine.workbook.getCellIndex('Sheet1', 'C1')
+    expect(formulaIndex).toBeDefined()
+    expect(readRuntimeDirectLookupKind(engine, 'Sheet1', 'C1')).toBe('exact-uniform-numeric')
+    const directLookup = readRuntimeDirectLookup(engine, 'Sheet1', 'C1')
+    expect(directLookup).toBeDefined()
+    const tailIndex = overwriteRuntimeNumber(engine, 'Sheet1', 'A4', 10)
+    engine.workbook.notifyCellValueWritten(tailIndex)
+    Reflect.set(directLookup!, 'tailPatch', {
+      row: 3,
+      oldNumeric: 4,
+      newNumeric: 10,
+      columnVersion: engine.workbook.getSheet('Sheet1')!.columnVersions[0],
+    })
+    expect(readRuntimeDirectLookupTailPatch(engine, 'Sheet1', 'C1')).toEqual(
+      expect.objectContaining({ row: 3, oldNumeric: 4, newNumeric: 10 }),
+    )
+
+    overwriteRuntimeNumber(engine, 'Sheet1', 'B1', 4)
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(formulaIndex!))
+    expect(engine.getCellValue('Sheet1', 'C1')).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.NA,
+    })
+
+    overwriteRuntimeNumber(engine, 'Sheet1', 'B1', 10)
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(formulaIndex!))
+    expect(engine.getCellValue('Sheet1', 'C1')).toEqual({ tag: ValueTag.Number, value: 4 })
+    expect(readRuntimeDirectLookupKind(engine, 'Sheet1', 'C1')).toBe('exact-uniform-numeric')
+  })
+
+  it('evaluates direct approximate uniform lookup tail patches in both sort directions', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'evaluation-direct-approx-uniform-tail-patch' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setRangeValues({ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B4' }, [
+      [1, 4],
+      [2, 3],
+      [3, 2],
+      [4, 1],
+    ])
+    engine.setCellValue('Sheet1', 'D1', 2.5)
+    engine.setCellValue('Sheet1', 'D2', 2.5)
+    engine.setCellFormula('Sheet1', 'E1', 'MATCH(D1,A1:A4,1)')
+    engine.setCellFormula('Sheet1', 'E2', 'MATCH(D2,B1:B4,-1)')
+
+    const evaluation = getEvaluationService(engine)
+    const ascendingIndex = engine.workbook.getCellIndex('Sheet1', 'E1')
+    const descendingIndex = engine.workbook.getCellIndex('Sheet1', 'E2')
+    expect(ascendingIndex).toBeDefined()
+    expect(descendingIndex).toBeDefined()
+    const ascendingLookup = readRuntimeDirectLookup(engine, 'Sheet1', 'E1')
+    const descendingLookup = readRuntimeDirectLookup(engine, 'Sheet1', 'E2')
+    expect(ascendingLookup).toBeDefined()
+    expect(descendingLookup).toBeDefined()
+    const ascendingTailIndex = overwriteRuntimeNumber(engine, 'Sheet1', 'A4', 10)
+    const descendingTailIndex = overwriteRuntimeNumber(engine, 'Sheet1', 'B4', -5)
+    engine.workbook.notifyCellValueWritten(ascendingTailIndex)
+    engine.workbook.notifyCellValueWritten(descendingTailIndex)
+    const sheet = engine.workbook.getSheet('Sheet1')!
+    Reflect.set(ascendingLookup!, 'tailPatch', {
+      row: 3,
+      oldNumeric: 4,
+      newNumeric: 10,
+      columnVersion: sheet.columnVersions[0],
+    })
+    Reflect.set(descendingLookup!, 'tailPatch', {
+      row: 3,
+      oldNumeric: 1,
+      newNumeric: -5,
+      columnVersion: sheet.columnVersions[1],
+    })
+    expect(readRuntimeDirectLookupTailPatch(engine, 'Sheet1', 'E1')).toEqual(
+      expect.objectContaining({ row: 3, oldNumeric: 4, newNumeric: 10 }),
+    )
+    expect(readRuntimeDirectLookupTailPatch(engine, 'Sheet1', 'E2')).toEqual(
+      expect.objectContaining({ row: 3, oldNumeric: 1, newNumeric: -5 }),
+    )
+
+    overwriteRuntimeNumber(engine, 'Sheet1', 'D1', 6)
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(ascendingIndex!))
+    expect(engine.getCellValue('Sheet1', 'E1')).toEqual({ tag: ValueTag.Number, value: 3 })
+
+    overwriteRuntimeNumber(engine, 'Sheet1', 'D1', 10)
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(ascendingIndex!))
+    expect(engine.getCellValue('Sheet1', 'E1')).toEqual({ tag: ValueTag.Number, value: 4 })
+
+    overwriteRuntimeNumber(engine, 'Sheet1', 'D2', 0)
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(descendingIndex!))
+    expect(engine.getCellValue('Sheet1', 'E2')).toEqual({ tag: ValueTag.Number, value: 3 })
+
+    overwriteRuntimeNumber(engine, 'Sheet1', 'D2', -5)
+    Effect.runSync(evaluation.evaluateDirectLookupFormula(descendingIndex!))
+    expect(engine.getCellValue('Sheet1', 'E2')).toEqual({ tag: ValueTag.Number, value: 4 })
   })
 
   it('evaluates direct aggregate formulas with progressive prefixes and coercion rules', async () => {

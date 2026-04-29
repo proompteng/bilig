@@ -34,7 +34,12 @@ import type {
 import { ValueTag } from '@bilig/protocol'
 import { Float64Arena, Uint32Arena, formatAddress, parseCellAddress, rewriteFormulaForStructuralTransform } from '@bilig/formula'
 import type { EngineOp, EngineOpBatch } from '@bilig/workbook-domain'
-import type { EngineCellMutationRef } from './cell-mutations-at.js'
+import type {
+  EngineCellMutationRef,
+  EngineExistingNumericCellMutationRef,
+  EngineExistingNumericCellMutationResult,
+  EngineFormulaSourceRef,
+} from './cell-mutations-at.js'
 import { createReplicaState, type OpOrder, type ReplicaState } from './replica-state.js'
 import { CycleDetector } from './cycle-detection.js'
 import { EdgeArena, type EdgeSlice } from './edge-arena.js'
@@ -383,6 +388,7 @@ export class SpreadsheetEngine {
       operation: {
         state: this.state,
         reverseState: {
+          reverseCellEdges: this.reverseCellEdges,
           reverseSpillEdges: this.reverseSpillEdges,
           reverseAggregateColumnEdges: this.reverseAggregateColumnEdges,
           reverseExactLookupColumnEdges: this.reverseExactLookupColumnEdges,
@@ -402,6 +408,7 @@ export class SpreadsheetEngine {
         getChangedFormulaBuffer: () => new Uint32Array(),
         repairTopoRanks: () => false,
         getEntityDependents: () => new Uint32Array(),
+        getSingleEntityDependent: () => -1,
         collectFormulaDependents: () => new Uint32Array(),
         noteExactLookupLiteralWrite: () => {
           return
@@ -588,8 +595,20 @@ export class SpreadsheetEngine {
     return this.runtime.mutation.applyCellMutationsAtNow(refs, options)
   }
 
+  tryApplyExistingNumericCellMutationAt(request: EngineExistingNumericCellMutationRef): EngineExistingNumericCellMutationResult | null {
+    return this.runtime.mutation.executeLocalExistingNumericCellMutationAtNow(request, { returnUndoOps: false })
+  }
+
   initializeCellFormulasAt(refs: readonly EngineCellMutationRef[], potentialNewCells?: number): void {
     runEngineEffect(this.runtime.formulaInitialization.initializeCellFormulasAt(refs, potentialNewCells))
+  }
+
+  initializeCellFormulasAtNow(refs: readonly EngineCellMutationRef[], potentialNewCells?: number): void {
+    this.runtime.formulaInitialization.initializeCellFormulasAtNow(refs, potentialNewCells)
+  }
+
+  initializeFormulaSourcesAtNow(refs: readonly EngineFormulaSourceRef[], potentialNewCells?: number): void {
+    this.runtime.formulaInitialization.initializeFormulaSourcesAtNow(refs, potentialNewCells)
   }
 
   setRangeNumberFormat(range: CellRangeRef, format: CellNumberFormatInput): void {

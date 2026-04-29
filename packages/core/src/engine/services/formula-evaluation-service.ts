@@ -111,6 +111,10 @@ function cellValuesEqual(left: CellValue, right: CellValue): boolean {
   }
 }
 
+function sameExactNumericValue(left: number, right: number): boolean {
+  return left === right || Object.is(left, right)
+}
+
 export function createEngineFormulaEvaluationService(args: {
   readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings' | 'formulas' | 'counters' | 'getUseColumnIndex'>
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService
@@ -252,10 +256,13 @@ export function createEngineFormulaEvaluationService(args: {
   ):
     | Extract<NonNullable<RuntimeFormula['directLookup']>, { kind: 'exact-uniform-numeric' }>
     | Extract<NonNullable<RuntimeFormula['directLookup']>, { kind: 'exact' }> => {
-    const lookupSheet = args.state.workbook.getSheet(directLookup.sheetName)
+    const lookupSheet = args.state.workbook.getSheetById(directLookup.sheetId)
     const currentColumnVersion = lookupSheet?.columnVersions[directLookup.col] ?? 0
     const currentStructureVersion = lookupSheet?.structureVersion ?? 0
-    if (currentColumnVersion === directLookup.columnVersion && currentStructureVersion === directLookup.structureVersion) {
+    if (
+      currentStructureVersion === directLookup.structureVersion &&
+      (currentColumnVersion === directLookup.columnVersion || currentColumnVersion === directLookup.tailPatch?.columnVersion)
+    ) {
       return directLookup
     }
     const refreshed = args.exactLookup.prepareVectorLookup({
@@ -271,6 +278,7 @@ export function createEngineFormulaEvaluationService(args: {
       directLookup.sheetColumnVersions = refreshed.sheetColumnVersions
       directLookup.start = refreshed.uniformStart
       directLookup.step = refreshed.uniformStep
+      delete directLookup.tailPatch
       return directLookup
     }
     const fallback = {
@@ -289,10 +297,13 @@ export function createEngineFormulaEvaluationService(args: {
   ):
     | Extract<NonNullable<RuntimeFormula['directLookup']>, { kind: 'approximate-uniform-numeric' }>
     | Extract<NonNullable<RuntimeFormula['directLookup']>, { kind: 'approximate' }> => {
-    const lookupSheet = args.state.workbook.getSheet(directLookup.sheetName)
+    const lookupSheet = args.state.workbook.getSheetById(directLookup.sheetId)
     const currentColumnVersion = lookupSheet?.columnVersions[directLookup.col] ?? 0
     const currentStructureVersion = lookupSheet?.structureVersion ?? 0
-    if (currentColumnVersion === directLookup.columnVersion && currentStructureVersion === directLookup.structureVersion) {
+    if (
+      currentStructureVersion === directLookup.structureVersion &&
+      (currentColumnVersion === directLookup.columnVersion || currentColumnVersion === directLookup.tailPatch?.columnVersion)
+    ) {
       return directLookup
     }
     const refreshed = args.sortedLookup.prepareVectorLookup({
@@ -308,6 +319,7 @@ export function createEngineFormulaEvaluationService(args: {
       directLookup.sheetColumnVersions = refreshed.sheetColumnVersions
       directLookup.start = refreshed.uniformStart
       directLookup.step = refreshed.uniformStep
+      delete directLookup.tailPatch
       return directLookup
     }
     const fallback = {
@@ -432,6 +444,15 @@ export function createEngineFormulaEvaluationService(args: {
       const numericValue = Object.is(cellStore.numbers[refreshed.operandCellIndex] ?? 0, -0)
         ? 0
         : (cellStore.numbers[refreshed.operandCellIndex] ?? 0)
+      const tailPatch = refreshed.tailPatch
+      if (tailPatch !== undefined) {
+        if (sameExactNumericValue(numericValue, tailPatch.newNumeric)) {
+          return directNumberResult(tailPatch.row - refreshed.rowStart + 1)
+        }
+        if (sameExactNumericValue(numericValue, tailPatch.oldNumeric)) {
+          return directErrorResult(ErrorCode.NA)
+        }
+      }
       if (refreshed.step === 1) {
         if (!Number.isInteger(numericValue)) {
           return directErrorResult(ErrorCode.NA)
@@ -489,9 +510,18 @@ export function createEngineFormulaEvaluationService(args: {
           return undefined
       }
       const lastValue = refreshed.start + refreshed.step * (refreshed.length - 1)
+      const tailPatch = refreshed.tailPatch
       if (refreshed.matchMode === 1 && refreshed.step > 0) {
         if (lookupValue < refreshed.start) {
           return directErrorResult(ErrorCode.NA)
+        }
+        if (tailPatch !== undefined && tailPatch.row === refreshed.rowEnd && tailPatch.newNumeric > tailPatch.oldNumeric) {
+          if (lookupValue >= tailPatch.newNumeric) {
+            return directNumberResult(refreshed.length)
+          }
+          if (lookupValue >= tailPatch.oldNumeric) {
+            return directNumberResult(refreshed.length - 1)
+          }
         }
         if (lookupValue >= lastValue) {
           return directNumberResult(refreshed.length)
@@ -502,6 +532,14 @@ export function createEngineFormulaEvaluationService(args: {
       if (refreshed.matchMode === -1 && refreshed.step < 0) {
         if (lookupValue > refreshed.start) {
           return directErrorResult(ErrorCode.NA)
+        }
+        if (tailPatch !== undefined && tailPatch.row === refreshed.rowEnd && tailPatch.newNumeric < tailPatch.oldNumeric) {
+          if (lookupValue <= tailPatch.newNumeric) {
+            return directNumberResult(refreshed.length)
+          }
+          if (lookupValue <= tailPatch.oldNumeric) {
+            return directNumberResult(refreshed.length - 1)
+          }
         }
         if (lookupValue <= lastValue) {
           return directNumberResult(refreshed.length)

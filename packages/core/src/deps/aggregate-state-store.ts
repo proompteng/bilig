@@ -4,7 +4,8 @@ import type { EngineRuntimeColumnStoreService, RuntimeColumnView } from '../engi
 import type { RegionGraph } from './region-graph.js'
 import type { RegionId } from './region-node-store.js'
 
-const PREFIX_LITERAL_DELTA_MAX_SUFFIX_LENGTH = 16_384
+const PREFIX_LITERAL_DELTA_MAX_SUFFIX_LENGTH = 128
+const STALE_PREFIX_VERSION = -1
 
 export interface AggregateStateEntry {
   readonly regionId: RegionId
@@ -97,6 +98,23 @@ function ensureCapacity(entry: AggregateStateEntry, totalLength: number): void {
   entry.prefixErrorCounts = nextPrefixErrorCounts
   entry.prefixMinimums = nextPrefixMinimums
   entry.prefixMaximums = nextPrefixMaximums
+}
+
+function isStaleEntry(entry: AggregateStateEntry): boolean {
+  return entry.columnVersion === STALE_PREFIX_VERSION && entry.structureVersion === STALE_PREFIX_VERSION
+}
+
+function markEntryStale(entry: AggregateStateEntry): void {
+  entry.columnVersion = STALE_PREFIX_VERSION
+  entry.structureVersion = STALE_PREFIX_VERSION
+  entry.extremaValid = false
+}
+
+function resetEntry(entry: AggregateStateEntry, currentVersions: { columnVersion: number; structureVersion: number }): void {
+  entry.rowEnd = entry.rowStart - 1
+  entry.columnVersion = currentVersions.columnVersion
+  entry.structureVersion = currentVersions.structureVersion
+  entry.extremaValid = true
 }
 
 function isErrorTag(value: CellValue): boolean {
@@ -292,6 +310,10 @@ export function createAggregateStateStore(args: {
       const key = cacheKey(region.sheetName, region.col, rowStart)
       const currentVersions = getCurrentVersions(region.sheetName, region.col)
       const existing = cache.get(key)
+      if (existing && isStaleEntry(existing)) {
+        resetEntry(existing, currentVersions)
+        return extendEntry(existing, region.rowEnd)
+      }
       if (
         existing &&
         existing.columnVersion === currentVersions.columnVersion &&
@@ -337,6 +359,9 @@ export function createAggregateStateStore(args: {
         if (entry.rowStart > row) {
           break
         }
+        if (isStaleEntry(entry)) {
+          continue
+        }
         if (entry.structureVersion !== currentVersions.structureVersion) {
           deleteEntry(entry)
           entryIndex -= 1
@@ -361,8 +386,7 @@ export function createAggregateStateStore(args: {
         const offset = row - entry.rowStart
         const length = entry.rowEnd - entry.rowStart + 1
         if (length - offset > PREFIX_LITERAL_DELTA_MAX_SUFFIX_LENGTH) {
-          deleteEntry(entry)
-          entryIndex -= 1
+          markEntryStale(entry)
           continue
         }
         for (let index = offset; index < length; index += 1) {

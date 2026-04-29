@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ValueTag } from '@bilig/protocol'
 import { SpreadsheetEngine } from '../engine.js'
 import { EngineFormulaBindingError } from '../engine/errors.js'
+import type { EngineCellMutationRef } from '../cell-mutations-at.js'
 import type { EngineFormulaBindingService } from '../engine/services/formula-binding-service.js'
 import type { FormulaFamilyStore } from '../formula/formula-family-store.js'
 
@@ -198,6 +199,42 @@ describe('EngineFormulaBindingService', () => {
         .listFamilies()
         .flatMap((family) => family.runs.map((run) => run.cellIndices.length)),
     ).toEqual([100, 100])
+  })
+
+  it('bulk-registers fresh initial-load translated template runs into one family', async () => {
+    const rowCount = 8
+    const engine = new SpreadsheetEngine({ workbookName: 'binding-initial-load-template-runs' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    const sheetId = engine.workbook.getSheet('Sheet1')?.id
+    if (sheetId === undefined) {
+      throw new Error('expected Sheet1 to exist')
+    }
+    const refs: EngineCellMutationRef[] = []
+    for (let row = 0; row < rowCount; row += 1) {
+      const rowNumber = row + 1
+      engine.setCellValue('Sheet1', `A${rowNumber}`, rowNumber)
+      engine.setCellValue('Sheet1', `B${rowNumber}`, rowNumber * 10)
+      refs.push({ sheetId, mutation: { kind: 'setCellFormula', row, col: 2, formula: `A${rowNumber}+B${rowNumber}` } })
+      refs.push({ sheetId, mutation: { kind: 'setCellFormula', row, col: 3, formula: `B${rowNumber}+C${rowNumber}` } })
+    }
+
+    engine.initializeCellFormulasAt(refs, refs.length)
+
+    expect(engine.getCellValue('Sheet1', `D${rowCount}`)).toEqual({ tag: ValueTag.Number, value: rowCount * 10 + rowCount * 11 })
+    expect(getBindingService(engine).getFormulaFamilyStatsNow()).toEqual({
+      familyCount: 1,
+      runCount: 2,
+      memberCount: rowCount * 2,
+    })
+    expect(
+      getFormulaFamilyStore(engine)
+        .listFamilies()
+        .flatMap((family) => family.runs.map((run) => ({ fixedIndex: run.fixedIndex, length: run.cellIndices.length }))),
+    ).toEqual([
+      { fixedIndex: 2, length: rowCount },
+      { fixedIndex: 3, length: rowCount },
+    ])
   })
 
   it('preserves direct scalar descriptors on translated template family members', async () => {

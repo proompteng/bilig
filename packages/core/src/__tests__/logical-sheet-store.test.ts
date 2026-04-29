@@ -43,6 +43,12 @@ describe('LogicalSheetStore', () => {
     expect(logical.listResidentCellIndices('row', ['row-b'])).toEqual([42])
     expect(logical.getVisibleCell(1, 1)).toBeUndefined()
 
+    const rowMatches: Array<{ cellIndex: number; axisIndex: number; rowId: string; colId: string }> = []
+    logical.forEachResidentCellInAxisEntries('row', [{ id: 'row-b', index: 0 }], (cellIndex, identity, axisIndex) => {
+      rowMatches.push({ cellIndex, axisIndex, rowId: identity.rowId, colId: identity.colId })
+    })
+    expect(rowMatches).toEqual([{ cellIndex: 42, axisIndex: 0, rowId: 'row-b', colId: 'column-b' }])
+
     logical.setSheetId(9)
     expect(logical.resolveVisibleCell(0, 0).sheetId).toBe(9)
   })

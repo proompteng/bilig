@@ -20,7 +20,24 @@ interface ColumnSubscriptionState {
   regionIds: Set<RegionId>
   tree: IntervalTreeNode | undefined
   dirty: boolean
+  dirtyPointQueries: number
+  orderedByRowStart: boolean
+  lastRowStart: number
+  pointImpactIndex: Array<number | undefined> | undefined
+  pointImpactCellCount: number
+  pointImpactDirty: boolean
+  pointImpactDisabled: boolean
 }
+
+type FormulaRegionSubscription = RegionId | Set<RegionId>
+type RegionSubscriberSubscription = number | Set<number>
+
+const DIRTY_LINEAR_POINT_QUERY_LIMIT = 2
+const DIRTY_LINEAR_REGION_LIMIT = 2_048
+const MULTIPLE_POINT_DEPENDENTS = -2
+const POINT_IMPACT_MAX_REGION_LENGTH = 256
+const POINT_IMPACT_MAX_CELLS = 65_536
+const POINT_IMPACT_MAX_ROW_INDEX = 131_072
 
 export interface RegionGraph {
   readonly internSingleColumnRegion: (args: {
@@ -36,6 +53,7 @@ export interface RegionGraph {
   readonly getFormulaSubscriptions: (formulaCellIndex: number) => readonly RegionId[]
   readonly prepareQueryIndices: () => void
   readonly collectFormulaDependentsForCell: (sheetId: number, row: number, col: number) => Uint32Array
+  readonly collectSingleFormulaDependentForCell: (sheetId: number, row: number, col: number) => number
   readonly hasFormulaSubscriptionsForColumn: (sheetId: number, col: number) => boolean
   readonly reset: () => void
 }
@@ -104,6 +122,27 @@ function collectIntervalsContainingRow(node: IntervalTreeNode | undefined, row: 
   }
 }
 
+function collectRegionIdsContainingRow(
+  regionIds: ReadonlySet<RegionId>,
+  row: number,
+  nodeStore: RegionNodeStore,
+  target: RegionId[],
+  orderedByRowStart: boolean,
+): void {
+  for (const regionId of regionIds) {
+    const region = nodeStore.get(regionId)
+    if (!region) {
+      continue
+    }
+    if (orderedByRowStart && region.rowStart > row) {
+      break
+    }
+    if (region.rowStart <= row && row <= region.rowEnd) {
+      target.push(regionId)
+    }
+  }
+}
+
 function pushUniqueDependent(dependents: number[], formulaCellIndex: number): void {
   for (let index = 0; index < dependents.length; index += 1) {
     if (dependents[index] === formulaCellIndex) {
@@ -113,14 +152,212 @@ function pushUniqueDependent(dependents: number[], formulaCellIndex: number): vo
   dependents.push(formulaCellIndex)
 }
 
+function mergeSingleDependent(current: number, next: number): number {
+  if (current === MULTIPLE_POINT_DEPENDENTS || next === MULTIPLE_POINT_DEPENDENTS) {
+    return MULTIPLE_POINT_DEPENDENTS
+  }
+  if (current === -1) {
+    return next
+  }
+  return current === next ? current : MULTIPLE_POINT_DEPENDENTS
+}
+
+function mergePointImpactDependent(current: number | undefined, next: number): number {
+  if (current === undefined || current === next) {
+    return next
+  }
+  return MULTIPLE_POINT_DEPENDENTS
+}
+
+function forEachFormulaRegionSubscription(subscription: FormulaRegionSubscription, fn: (regionId: RegionId) => void): void {
+  if (typeof subscription === 'number') {
+    fn(subscription)
+    return
+  }
+  subscription.forEach(fn)
+}
+
+function forEachRegionSubscriber(subscription: RegionSubscriberSubscription, fn: (formulaCellIndex: number) => void): void {
+  if (typeof subscription === 'number') {
+    fn(subscription)
+    return
+  }
+  subscription.forEach(fn)
+}
+
+function regionSubscriberSize(subscription: RegionSubscriberSubscription): number {
+  return typeof subscription === 'number' ? 1 : subscription.size
+}
+
+function regionSubscribersToUint32(subscription: RegionSubscriberSubscription | undefined): Uint32Array {
+  if (subscription === undefined) {
+    return new Uint32Array()
+  }
+  return typeof subscription === 'number' ? Uint32Array.of(subscription) : Uint32Array.from(subscription)
+}
+
+function formulaRegionSubscriptionToArray(subscription: FormulaRegionSubscription | undefined): readonly RegionId[] {
+  if (subscription === undefined) {
+    return []
+  }
+  return typeof subscription === 'number' ? [subscription] : [...subscription]
+}
+
+function collectSingleDependentForRegionIds(
+  regionIds: ReadonlySet<RegionId>,
+  row: number,
+  nodeStore: RegionNodeStore,
+  regionSubscribers: ReadonlyMap<RegionId, RegionSubscriberSubscription>,
+  orderedByRowStart: boolean,
+): number {
+  let singleDependent = -1
+  const mergeRegion = (regionId: RegionId): void => {
+    const region = nodeStore.get(regionId)
+    if (!region || region.rowStart > row || region.rowEnd < row) {
+      return
+    }
+    const subscribers = regionSubscribers.get(regionId)
+    if (subscribers === undefined || regionSubscriberSize(subscribers) === 0) {
+      return
+    }
+    if (regionSubscriberSize(subscribers) !== 1) {
+      singleDependent = -2
+      return
+    }
+    forEachRegionSubscriber(subscribers, (formulaCellIndex) => {
+      singleDependent = mergeSingleDependent(singleDependent, formulaCellIndex)
+    })
+  }
+  for (const regionId of regionIds) {
+    if (orderedByRowStart) {
+      const region = nodeStore.get(regionId)
+      if (region && region.rowStart > row) {
+        break
+      }
+    }
+    mergeRegion(regionId)
+    if (singleDependent === -2) {
+      return singleDependent
+    }
+  }
+  return singleDependent
+}
+
+function disablePointImpactIndex(subscriptions: ColumnSubscriptionState): void {
+  subscriptions.pointImpactIndex = undefined
+  subscriptions.pointImpactCellCount = 0
+  subscriptions.pointImpactDirty = false
+  subscriptions.pointImpactDisabled = true
+}
+
+function markPointImpactIndexDirty(subscriptions: ColumnSubscriptionState): void {
+  if (subscriptions.pointImpactIndex !== undefined) {
+    subscriptions.pointImpactDirty = true
+  }
+}
+
+function addSingleSubscriberPointImpacts(
+  subscriptions: ColumnSubscriptionState,
+  region: SingleColumnRegionNode,
+  formulaCellIndex: number,
+): void {
+  if (subscriptions.pointImpactDisabled || subscriptions.pointImpactDirty) {
+    return
+  }
+  const regionLength = region.rowEnd - region.rowStart + 1
+  if (
+    regionLength <= 0 ||
+    region.rowEnd > POINT_IMPACT_MAX_ROW_INDEX ||
+    regionLength > POINT_IMPACT_MAX_REGION_LENGTH ||
+    subscriptions.pointImpactCellCount + regionLength > POINT_IMPACT_MAX_CELLS
+  ) {
+    disablePointImpactIndex(subscriptions)
+    return
+  }
+  const index = (subscriptions.pointImpactIndex ??= [])
+  for (let row = region.rowStart; row <= region.rowEnd; row += 1) {
+    index[row] = mergePointImpactDependent(index[row], formulaCellIndex)
+  }
+  subscriptions.pointImpactCellCount += regionLength
+}
+
+function collectSingleDependentFromPointImpactIndex(subscriptions: ColumnSubscriptionState, row: number): number | undefined {
+  if (subscriptions.pointImpactDirty || subscriptions.pointImpactDisabled || subscriptions.pointImpactIndex === undefined) {
+    return undefined
+  }
+  return subscriptions.pointImpactIndex[row] ?? -1
+}
+
+function collectSingleDependentForRow(
+  node: IntervalTreeNode | undefined,
+  row: number,
+  regionSubscribers: ReadonlyMap<RegionId, RegionSubscriberSubscription>,
+): number {
+  let singleDependent = -1
+  const mergeRegion = (regionId: RegionId): void => {
+    const subscribers = regionSubscribers.get(regionId)
+    if (subscribers === undefined || regionSubscriberSize(subscribers) === 0) {
+      return
+    }
+    if (regionSubscriberSize(subscribers) !== 1) {
+      singleDependent = -2
+      return
+    }
+    forEachRegionSubscriber(subscribers, (formulaCellIndex) => {
+      singleDependent = mergeSingleDependent(singleDependent, formulaCellIndex)
+    })
+  }
+  const visit = (current: IntervalTreeNode | undefined): void => {
+    if (!current || singleDependent === -2) {
+      return
+    }
+    if (row < current.center) {
+      for (let index = 0; index < current.overlappingByStart.length; index += 1) {
+        const interval = current.overlappingByStart[index]!
+        if (interval.rowStart > row) {
+          break
+        }
+        mergeRegion(interval.regionId)
+        if (singleDependent === -2) {
+          return
+        }
+      }
+      visit(current.left)
+      return
+    }
+    if (row > current.center) {
+      for (let index = 0; index < current.overlappingByEnd.length; index += 1) {
+        const interval = current.overlappingByEnd[index]!
+        if (interval.rowEnd < row) {
+          break
+        }
+        mergeRegion(interval.regionId)
+        if (singleDependent === -2) {
+          return
+        }
+      }
+      visit(current.right)
+      return
+    }
+    for (let index = 0; index < current.overlappingByStart.length; index += 1) {
+      mergeRegion(current.overlappingByStart[index]!.regionId)
+      if (singleDependent === -2) {
+        return
+      }
+    }
+  }
+  visit(node)
+  return singleDependent
+}
+
 export function createRegionGraph(args: {
   readonly workbook: Pick<WorkbookStore, 'getSheet'>
   readonly counters?: EngineCounters
   readonly nodeStore?: RegionNodeStore
 }): RegionGraph {
   const nodeStore = args.nodeStore ?? createRegionNodeStore()
-  const regionSubscribers = new Map<RegionId, Set<number>>()
-  const formulaRegions = new Map<number, Set<RegionId>>()
+  const regionSubscribers = new Map<RegionId, RegionSubscriberSubscription>()
+  const formulaRegions = new Map<number, FormulaRegionSubscription>()
   const columnSubscriptions = new Map<string, ColumnSubscriptionState>()
   const dirtyColumns = new Set<string>()
 
@@ -134,6 +371,13 @@ export function createRegionGraph(args: {
       regionIds: new Set(),
       tree: undefined,
       dirty: false,
+      dirtyPointQueries: 0,
+      orderedByRowStart: true,
+      lastRowStart: Number.NEGATIVE_INFINITY,
+      pointImpactIndex: undefined,
+      pointImpactCellCount: 0,
+      pointImpactDirty: false,
+      pointImpactDisabled: false,
     }
     columnSubscriptions.set(key, created)
     return created
@@ -145,22 +389,45 @@ export function createRegionGraph(args: {
       return
     }
     const key = columnKey(region.sheetId, region.col)
-    getColumnSubscriptions(region.sheetId, region.col).dirty = true
+    const subscriptions = getColumnSubscriptions(region.sheetId, region.col)
+    subscriptions.dirty = true
+    subscriptions.dirtyPointQueries = 0
     dirtyColumns.add(key)
   }
 
   const addRegionSubscription = (formulaCellIndex: number, regionId: RegionId): void => {
-    let subscribers = regionSubscribers.get(regionId)
-    const wasEmpty = subscribers === undefined || subscribers.size === 0
-    if (!subscribers) {
-      subscribers = new Set()
-      regionSubscribers.set(regionId, subscribers)
+    const subscribers = regionSubscribers.get(regionId)
+    const wasEmpty = subscribers === undefined
+    if (subscribers === undefined) {
+      regionSubscribers.set(regionId, formulaCellIndex)
+    } else if (typeof subscribers === 'number') {
+      if (subscribers !== formulaCellIndex) {
+        regionSubscribers.set(regionId, new Set([subscribers, formulaCellIndex]))
+        const region = nodeStore.get(regionId)
+        if (region) {
+          markPointImpactIndexDirty(getColumnSubscriptions(region.sheetId, region.col))
+        }
+      }
+    } else {
+      const previousSize = subscribers.size
+      subscribers.add(formulaCellIndex)
+      if (subscribers.size !== previousSize) {
+        const region = nodeStore.get(regionId)
+        if (region) {
+          markPointImpactIndexDirty(getColumnSubscriptions(region.sheetId, region.col))
+        }
+      }
     }
-    subscribers.add(formulaCellIndex)
     if (wasEmpty) {
       const region = nodeStore.get(regionId)
       if (region) {
-        getColumnSubscriptions(region.sheetId, region.col).regionIds.add(regionId)
+        const subscriptions = getColumnSubscriptions(region.sheetId, region.col)
+        if (region.rowStart < subscriptions.lastRowStart) {
+          subscriptions.orderedByRowStart = false
+        }
+        subscriptions.lastRowStart = Math.max(subscriptions.lastRowStart, region.rowStart)
+        subscriptions.regionIds.add(regionId)
+        addSingleSubscriberPointImpacts(subscriptions, region, formulaCellIndex)
         markColumnDirty(regionId)
       }
     }
@@ -168,20 +435,57 @@ export function createRegionGraph(args: {
 
   const removeRegionSubscription = (formulaCellIndex: number, regionId: RegionId): void => {
     const subscribers = regionSubscribers.get(regionId)
-    if (!subscribers) {
+    if (subscribers === undefined) {
       return
     }
-    subscribers.delete(formulaCellIndex)
-    if (subscribers.size > 0) {
-      return
+    let removedSubscriber = false
+    let shouldRemoveRegion = false
+    if (typeof subscribers === 'number') {
+      if (subscribers !== formulaCellIndex) {
+        return
+      }
+      removedSubscriber = true
+      shouldRemoveRegion = true
+      regionSubscribers.delete(regionId)
+    } else {
+      const previousSize = subscribers.size
+      subscribers.delete(formulaCellIndex)
+      if (subscribers.size === previousSize) {
+        return
+      }
+      removedSubscriber = true
+      if (subscribers.size > 1) {
+        shouldRemoveRegion = false
+      } else if (subscribers.size === 1) {
+        for (const remaining of subscribers) {
+          regionSubscribers.set(regionId, remaining)
+        }
+        shouldRemoveRegion = false
+      } else {
+        shouldRemoveRegion = true
+        regionSubscribers.delete(regionId)
+      }
     }
-    regionSubscribers.delete(regionId)
     const region = nodeStore.get(regionId)
     if (!region) {
       return
     }
     const subscriptions = getColumnSubscriptions(region.sheetId, region.col)
+    if (removedSubscriber) {
+      markPointImpactIndexDirty(subscriptions)
+    }
+    if (!shouldRemoveRegion) {
+      return
+    }
     subscriptions.regionIds.delete(regionId)
+    if (subscriptions.regionIds.size === 0) {
+      subscriptions.orderedByRowStart = true
+      subscriptions.lastRowStart = Number.NEGATIVE_INFINITY
+      subscriptions.pointImpactIndex = undefined
+      subscriptions.pointImpactCellCount = 0
+      subscriptions.pointImpactDirty = false
+      subscriptions.pointImpactDisabled = false
+    }
     markColumnDirty(regionId)
   }
 
@@ -231,13 +535,19 @@ export function createRegionGraph(args: {
     },
     replaceFormulaSubscriptions(formulaCellIndex, regionIds) {
       const previous = formulaRegions.get(formulaCellIndex)
-      if (previous) {
-        previous.forEach((regionId) => {
+      if (previous !== undefined) {
+        forEachFormulaRegionSubscription(previous, (regionId) => {
           removeRegionSubscription(formulaCellIndex, regionId)
         })
       }
       if (regionIds.length === 0) {
         formulaRegions.delete(formulaCellIndex)
+        return
+      }
+      if (regionIds.length === 1) {
+        const regionId = regionIds[0]!
+        addRegionSubscription(formulaCellIndex, regionId)
+        formulaRegions.set(formulaCellIndex, regionId)
         return
       }
       const next = new Set<RegionId>()
@@ -255,15 +565,20 @@ export function createRegionGraph(args: {
         return
       }
       const previous = formulaRegions.get(formulaCellIndex)
-      if (!previous || previous.size !== 1 || !previous.has(previousRegionId)) {
-        if (previous) {
-          previous.forEach((regionId) => {
+      if (previous === previousRegionId) {
+        removeRegionSubscription(formulaCellIndex, previousRegionId)
+        addRegionSubscription(formulaCellIndex, nextRegionId)
+        formulaRegions.set(formulaCellIndex, nextRegionId)
+        return
+      }
+      if (previous === undefined || typeof previous === 'number' || previous.size !== 1 || !previous.has(previousRegionId)) {
+        if (previous !== undefined) {
+          forEachFormulaRegionSubscription(previous, (regionId) => {
             removeRegionSubscription(formulaCellIndex, regionId)
           })
         }
-        const next = new Set<RegionId>([nextRegionId])
         addRegionSubscription(formulaCellIndex, nextRegionId)
-        formulaRegions.set(formulaCellIndex, next)
+        formulaRegions.set(formulaCellIndex, nextRegionId)
         return
       }
       removeRegionSubscription(formulaCellIndex, previousRegionId)
@@ -273,16 +588,16 @@ export function createRegionGraph(args: {
     },
     clearFormulaSubscriptions(formulaCellIndex) {
       const previous = formulaRegions.get(formulaCellIndex)
-      if (!previous) {
+      if (previous === undefined) {
         return
       }
-      previous.forEach((regionId) => {
+      forEachFormulaRegionSubscription(previous, (regionId) => {
         removeRegionSubscription(formulaCellIndex, regionId)
       })
       formulaRegions.delete(formulaCellIndex)
     },
     getFormulaSubscriptions(formulaCellIndex) {
-      return [...(formulaRegions.get(formulaCellIndex) ?? [])]
+      return formulaRegionSubscriptionToArray(formulaRegions.get(formulaCellIndex))
     },
     prepareQueryIndices() {
       dirtyColumns.forEach((key) => {
@@ -299,28 +614,60 @@ export function createRegionGraph(args: {
     },
     collectFormulaDependentsForCell(sheetId, row, col) {
       const matchingRegions: RegionId[] = []
-      collectIntervalsContainingRow(ensureIntervalTree(sheetId, col), row, matchingRegions)
+      const subscriptions = getColumnSubscriptions(sheetId, col)
+      if (
+        subscriptions.dirty &&
+        subscriptions.dirtyPointQueries < DIRTY_LINEAR_POINT_QUERY_LIMIT &&
+        subscriptions.regionIds.size <= DIRTY_LINEAR_REGION_LIMIT
+      ) {
+        subscriptions.dirtyPointQueries += 1
+        collectRegionIdsContainingRow(subscriptions.regionIds, row, nodeStore, matchingRegions, subscriptions.orderedByRowStart)
+      } else {
+        collectIntervalsContainingRow(ensureIntervalTree(sheetId, col), row, matchingRegions)
+      }
       if (matchingRegions.length === 0) {
         return new Uint32Array()
       }
       if (matchingRegions.length === 1) {
         const subscribers = regionSubscribers.get(matchingRegions[0]!)
-        return subscribers ? Uint32Array.from(subscribers) : new Uint32Array()
+        return regionSubscribersToUint32(subscribers)
       }
       const dependents: number[] = []
       for (let regionIndex = 0; regionIndex < matchingRegions.length; regionIndex += 1) {
         const subscribers = regionSubscribers.get(matchingRegions[regionIndex]!)
-        if (!subscribers) {
+        if (subscribers === undefined) {
           continue
         }
-        subscribers.forEach((formulaCellIndex) => {
+        forEachRegionSubscriber(subscribers, (formulaCellIndex) => {
           pushUniqueDependent(dependents, formulaCellIndex)
         })
       }
       return Uint32Array.from(dependents)
     },
+    collectSingleFormulaDependentForCell(sheetId, row, col) {
+      const subscriptions = getColumnSubscriptions(sheetId, col)
+      const indexedDependent = collectSingleDependentFromPointImpactIndex(subscriptions, row)
+      if (indexedDependent !== undefined) {
+        return indexedDependent
+      }
+      if (
+        subscriptions.dirty &&
+        subscriptions.dirtyPointQueries < DIRTY_LINEAR_POINT_QUERY_LIMIT &&
+        subscriptions.regionIds.size <= DIRTY_LINEAR_REGION_LIMIT
+      ) {
+        subscriptions.dirtyPointQueries += 1
+        return collectSingleDependentForRegionIds(
+          subscriptions.regionIds,
+          row,
+          nodeStore,
+          regionSubscribers,
+          subscriptions.orderedByRowStart,
+        )
+      }
+      return collectSingleDependentForRow(ensureIntervalTree(sheetId, col), row, regionSubscribers)
+    },
     hasFormulaSubscriptionsForColumn(sheetId, col) {
-      return getColumnSubscriptions(sheetId, col).regionIds.size > 0
+      return (columnSubscriptions.get(columnKey(sheetId, col))?.regionIds.size ?? 0) > 0
     },
     reset() {
       regionSubscribers.clear()

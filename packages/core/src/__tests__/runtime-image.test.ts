@@ -144,9 +144,11 @@ describe('restoreWorkbookFromRuntimeImage', () => {
     expect(sheet).toBeDefined()
     expect(sheet!.grid.get(0, 0)).toBeGreaterThanOrEqual(0)
     expect(sheet!.grid.get(0, 1)).toBeGreaterThanOrEqual(0)
+    const formulaCellIndex = sheet!.grid.get(0, 1)
     expect(plainCalls).toEqual([
       {
         sheetId: 1,
+        cellIndex: formulaCellIndex,
         mutation: {
           kind: 'setCellFormula',
           row: 0,
@@ -154,6 +156,90 @@ describe('restoreWorkbookFromRuntimeImage', () => {
           formula: 'A1+1',
         },
       },
+    ])
+  })
+
+  it('falls back to address-matched runtime formula values when value order is not aligned', () => {
+    const workbook = new WorkbookStore('runtime-image-misaligned-values')
+    const hydratedCalls: Array<{ col: number; row: number; sheetId: number; source: string; value: unknown }> = []
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'runtime-image-misaligned-values' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Sheet1',
+          order: 0,
+          cells: [
+            { address: 'A1', value: 1 },
+            { address: 'B1', formula: 'A1+1' },
+            { address: 'A2', value: 2 },
+            { address: 'B2', formula: 'A2+1' },
+          ],
+        },
+      ],
+    }
+
+    restoreWorkbookFromRuntimeImage({
+      snapshot,
+      runtimeImage: {
+        version: 1,
+        templateBank: [],
+        formulaInstances: [
+          {
+            cellIndex: 2,
+            sheetName: 'Sheet1',
+            row: 0,
+            col: 1,
+            source: 'A1+1',
+            templateId: 7,
+          },
+          {
+            cellIndex: 4,
+            sheetName: 'Sheet1',
+            row: 1,
+            col: 1,
+            source: 'A2+1',
+            templateId: 7,
+          },
+        ],
+        formulaValues: [
+          {
+            sheetName: 'Sheet1',
+            row: 1,
+            col: 1,
+            value: { tag: ValueTag.Number, value: 3 },
+          },
+          {
+            sheetName: 'Sheet1',
+            row: 0,
+            col: 1,
+            value: { tag: ValueTag.Number, value: 2 },
+          },
+        ],
+      },
+      workbook,
+      strings: new StringPool(),
+      resetWorkbook: () => {},
+      hydrateTemplateBank: () => {},
+      resolveTemplateById: (templateId, source, row, col) => ({
+        templateId,
+        templateKey: 'template:A1+1',
+        baseSource: source,
+        compiled: compileFormulaAst(source, parseFormula(source)),
+        translated: false,
+        rowDelta: row,
+        colDelta: col,
+      }),
+      initializeHydratedPreparedCellFormulasAt: (refs) => {
+        hydratedCalls.push(...refs)
+      },
+      initializeCellFormulasAt: () => {},
+    })
+
+    expect(hydratedCalls.map((call) => [call.row, call.col, call.value])).toEqual([
+      [0, 1, { tag: ValueTag.Number, value: 2 }],
+      [1, 1, { tag: ValueTag.Number, value: 3 }],
     ])
   })
 })

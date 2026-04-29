@@ -11,6 +11,37 @@ export type EngineCellMutationAt =
 export interface EngineCellMutationRef {
   sheetId: number
   mutation: EngineCellMutationAt
+  cellIndex?: number
+}
+
+export interface EngineFormulaSourceRef {
+  sheetId: number
+  row: number
+  col: number
+  source: string
+  cellIndex?: number
+}
+
+export interface EngineExistingNumericCellMutationRef {
+  sheetId: number
+  row: number
+  col: number
+  cellIndex: number
+  value: number
+  emitTracked?: boolean
+  trustedExistingNumericLiteral?: boolean
+  oldNumericValue?: number
+}
+
+export interface EngineExistingNumericCellMutationResult {
+  readonly changedCellIndices?: Uint32Array
+  readonly changedCellCount?: number
+  readonly firstChangedCellIndex?: number
+  readonly secondChangedCellIndex?: number
+  readonly secondChangedRow?: number
+  readonly secondChangedCol?: number
+  readonly secondChangedNumericValue?: number
+  readonly explicitChangedCount: number
 }
 
 export function cloneCellMutationAt(mutation: EngineCellMutationAt): EngineCellMutationAt {
@@ -42,6 +73,7 @@ export function cloneCellMutationRef(ref: EngineCellMutationRef): EngineCellMuta
   return {
     sheetId: ref.sheetId,
     mutation: cloneCellMutationAt(ref.mutation),
+    ...(ref.cellIndex !== undefined ? { cellIndex: ref.cellIndex } : {}),
   }
 }
 

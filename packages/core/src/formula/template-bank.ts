@@ -11,7 +11,7 @@ import {
 } from '@bilig/formula'
 import { addEngineCounter, type EngineCounters } from '../perf/engine-counters.js'
 import { tryCompileSimpleDirectAggregateFormula } from './simple-direct-aggregate-compile.js'
-import { tryCompileSimpleDirectScalarFormula } from './simple-direct-scalar-compile.js'
+import { translateSimpleDirectScalarFormula, tryCompileSimpleDirectScalarFormula } from './simple-direct-scalar-compile.js'
 
 export interface FormulaTemplateSnapshot {
   readonly id: number
@@ -60,7 +60,7 @@ interface FormulaTemplateSourceKey {
   readonly templateKey: string
 }
 
-const SIMPLE_ROW_RELATIVE_BINARY_RE = /^([A-Z]+)([1-9]\d*)([+\-*/])(?:([A-Z]+)([1-9]\d*)|(\d+(?:\.\d+)?))$/
+const SIMPLE_ROW_RELATIVE_BINARY_RE = /^=?([A-Z]+)([1-9]\d*)([+\-*/])(?:([A-Z]+)([1-9]\d*)|(\d+(?:\.\d+)?))$/
 
 function relativeCellToken(columnText: string, rowText: string, ownerRow: number, ownerCol: number): string | undefined {
   const row = Number(rowText) - 1
@@ -104,6 +104,10 @@ function tryBuildSimpleRowRelativeBinaryTemplateKey(source: string, ownerRow: nu
 }
 
 function translateTemplate(compiled: CompiledFormula, rowDelta: number, colDelta: number, source: string): CompiledFormula {
+  const translatedSimpleScalar = translateSimpleDirectScalarFormula(compiled, rowDelta, colDelta, source)
+  if (translatedSimpleScalar) {
+    return translatedSimpleScalar
+  }
   return (
     canTranslateCompiledFormulaWithoutAst(compiled)
       ? translateCompiledFormulaWithoutAst(compiled, rowDelta, colDelta, source)
@@ -113,8 +117,8 @@ function translateTemplate(compiled: CompiledFormula, rowDelta: number, colDelta
 
 function compileSourceFormula(source: string): CompiledFormula {
   return (
-    tryCompileSimpleDirectAggregateFormula(source) ??
     tryCompileSimpleDirectScalarFormula(source) ??
+    tryCompileSimpleDirectAggregateFormula(source) ??
     compileFormulaAst(source, parseFormula(source))
   )
 }
@@ -131,7 +135,7 @@ function resolveTemplateCompiled(
     return template.compiled
   }
   if (compiledOverride && sourceTemplateKey === template.templateKey) {
-    return compiledOverride
+    return sourceTemplateKey.startsWith('relative-aggregate:') ? { ...compiledOverride, astMatchesSource: false } : compiledOverride
   }
   if (template.templateKey.startsWith('anchored-prefix-aggregate:')) {
     const anchoredPrefixAggregate = tryMatchAnchoredPrefixAggregateTemplate(source, ownerRow, ownerCol)
@@ -186,14 +190,20 @@ function resolveTrustedTemplateCompiled(
 }
 
 function resolveTemplateSourceKey(source: string, ownerRow: number, ownerCol: number): FormulaTemplateSourceKey {
-  const anchoredPrefixAggregate = tryMatchAnchoredPrefixAggregateTemplate(source, ownerRow, ownerCol)
-  const directScalar = anchoredPrefixAggregate ? undefined : tryCompileSimpleDirectScalarFormula(source)
+  const simpleRowRelativeBinaryKey = tryBuildSimpleRowRelativeBinaryTemplateKey(source, ownerRow, ownerCol)
+  if (simpleRowRelativeBinaryKey !== undefined) {
+    return {
+      compiled: undefined,
+      templateKey: simpleRowRelativeBinaryKey,
+    }
+  }
+  const aggregateTemplate = tryMatchAggregateTemplate(source, ownerRow, ownerCol)
+  if (aggregateTemplate) {
+    return aggregateTemplate
+  }
   return {
-    compiled: anchoredPrefixAggregate?.compiled ?? directScalar,
-    templateKey:
-      anchoredPrefixAggregate?.templateKey ??
-      tryBuildSimpleRowRelativeBinaryTemplateKey(source, ownerRow, ownerCol) ??
-      buildRelativeFormulaTemplateTokenKey(source, ownerRow, ownerCol),
+    compiled: undefined,
+    templateKey: buildRelativeFormulaTemplateTokenKey(source, ownerRow, ownerCol),
   }
 }
 
@@ -217,6 +227,34 @@ function tryMatchAnchoredPrefixAggregateTemplate(
   return {
     compiled,
     templateKey: `anchored-prefix-aggregate:${aggregateKind}:c${range.startCol - ownerCol}`,
+  }
+}
+
+function tryMatchAggregateTemplate(source: string, ownerRow: number, ownerCol: number): AnchoredPrefixAggregateTemplateMatch | undefined {
+  const compiled = tryCompileSimpleDirectAggregateFormula(source)
+  if (!compiled) {
+    return undefined
+  }
+  const aggregateKind = compiled.directAggregateCandidate?.aggregateKind
+  const range: ParsedRangeReferenceInfo | undefined = compiled.parsedSymbolicRanges?.[0]
+  if (!aggregateKind || !range || range.startCol !== range.endCol) {
+    return undefined
+  }
+  if (range.startRow === 0 && range.endRow === ownerRow) {
+    return {
+      compiled,
+      templateKey: `anchored-prefix-aggregate:${aggregateKind}:c${range.startCol - ownerCol}`,
+    }
+  }
+  return {
+    compiled,
+    templateKey: [
+      'relative-aggregate',
+      aggregateKind,
+      `c${range.startCol - ownerCol}`,
+      `s${range.startRow - ownerRow}`,
+      `e${range.endRow - ownerRow}`,
+    ].join(':'),
   }
 }
 

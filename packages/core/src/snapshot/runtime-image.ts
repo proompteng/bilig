@@ -18,7 +18,7 @@ import { writeLiteralToCellStore } from '../engine-value-utils.js'
 import type { FormulaInstanceSnapshot } from '../formula/formula-instance-table.js'
 import type { FormulaTemplateResolution, FormulaTemplateSnapshot } from '../formula/template-bank.js'
 import type { StringPool } from '../string-pool.js'
-import type { WorkbookStore } from '../workbook-store.js'
+import { makeCellKey, makeLogicalCellKey, type SheetRecord, type WorkbookStore } from '../workbook-store.js'
 
 export interface RuntimeImage {
   readonly version: 1
@@ -38,11 +38,18 @@ export interface RuntimeImageFormulaValueSnapshot {
 export interface RuntimeImageSheetCellsSnapshot {
   readonly sheetName: string
   readonly coords: readonly RuntimeImageCellCoordinateSnapshot[]
+  readonly dimensions?: RuntimeImageSheetDimensionsSnapshot
+  readonly cellCount?: number
 }
 
 export interface RuntimeImageCellCoordinateSnapshot {
   readonly row: number
   readonly col: number
+}
+
+export interface RuntimeImageSheetDimensionsSnapshot {
+  readonly width: number
+  readonly height: number
 }
 
 export interface RuntimeImageRestoreArgs {
@@ -80,15 +87,11 @@ export interface PreparedRuntimeFormulaRef {
   readonly source: string
   readonly compiled: CompiledFormula
   readonly templateId?: number
+  readonly cellIndex?: number
 }
 
 export interface HydratedPreparedRuntimeFormulaRef extends PreparedRuntimeFormulaRef {
   readonly value: CellValue
-}
-
-interface RestoredFormulaInstance {
-  readonly record: FormulaInstanceSnapshot
-  readonly value?: CellValue
 }
 
 const RUNTIME_IMAGE_COORD_STRIDE = 1_048_576
@@ -113,18 +116,160 @@ function formulaValueMatchesInstance(
   return value !== undefined && value.sheetName === record.sheetName && value.row === record.row && value.col === record.col
 }
 
-function resolveRestoredCellCoordinates(args: {
-  readonly sheetName: string
-  readonly cellAddress: string
-  readonly indexedCoordinate: RuntimeImageCellCoordinateSnapshot | undefined
-}): RuntimeImageCellCoordinateSnapshot {
-  if (args.indexedCoordinate) {
-    return args.indexedCoordinate
+function formulaValuesAreAligned(
+  instances: readonly FormulaInstanceSnapshot[],
+  values: readonly RuntimeImageFormulaValueSnapshot[],
+): boolean {
+  if (instances.length !== values.length) {
+    return false
   }
-  const parsed = parseCellAddress(args.cellAddress, args.sheetName)
+  for (let index = 0; index < instances.length; index += 1) {
+    if (!formulaValueMatchesInstance(instances[index]!, values[index])) {
+      return false
+    }
+  }
+  return true
+}
+
+function compareFormulaInstanceToCoordinate(record: FormulaInstanceSnapshot, coords: RuntimeImageCellCoordinateSnapshot): number {
+  return record.row - coords.row || record.col - coords.col
+}
+
+interface RuntimeFormulaSheetSpan {
+  readonly start: number
+  readonly end: number
+}
+
+function buildRuntimeFormulaSheetSpans(records: readonly FormulaInstanceSnapshot[]): Map<string, RuntimeFormulaSheetSpan> {
+  const spans = new Map<string, RuntimeFormulaSheetSpan>()
+  let index = 0
+  while (index < records.length) {
+    const first = records[index]!
+    const sheetName = first.sheetName
+    const start = index
+    index += 1
+    while (index < records.length && records[index]!.sheetName === sheetName) {
+      index += 1
+    }
+    spans.set(sheetName, { start, end: index })
+  }
+  return spans
+}
+
+function parseRestoredCellCoordinates(sheetName: string, cellAddress: string): RuntimeImageCellCoordinateSnapshot {
+  const parsed = parseCellAddress(cellAddress, sheetName)
   return {
     row: parsed.row,
     col: parsed.col,
+  }
+}
+
+interface WrittenColumnTracker {
+  columns: Uint8Array
+  count: number
+}
+
+interface FreshRuntimeCellPageInternals {
+  readonly cells?: Map<string, number>
+}
+
+interface FreshRuntimeCellIdentityInternals {
+  readonly identities?: Map<number, { readonly sheetId: number; readonly rowId: string; readonly colId: string }>
+}
+
+interface FreshRuntimeResidentCellInternals {
+  readonly byCell?: Map<number, { readonly rowId: string; readonly colId: string }>
+  readonly byRow?: Map<string, Set<number>>
+  readonly byColumn?: Map<string, Set<number>>
+}
+
+interface FreshRuntimeLogicalSheetInternals {
+  readonly cellPages?: FreshRuntimeCellPageInternals
+  readonly cellIdentities?: FreshRuntimeCellIdentityInternals
+  readonly residentCells?: FreshRuntimeResidentCellInternals
+}
+
+type FreshRuntimeCellAttacher = (row: number, col: number, cellIndex: number, rowId: string, colId: string) => void
+
+function isFreshRuntimeLogicalSheetInternals(value: unknown): value is FreshRuntimeLogicalSheetInternals {
+  return typeof value === 'object' && value !== null
+}
+
+function ensureFreshRuntimeResidentSet(sets: Map<string, Set<number>>, storedSets: Map<string, Set<number>>, id: string): Set<number> {
+  const cached = sets.get(id)
+  if (cached) {
+    return cached
+  }
+  let stored = storedSets.get(id)
+  if (!stored) {
+    stored = new Set<number>()
+    storedSets.set(id, stored)
+  }
+  sets.set(id, stored)
+  return stored
+}
+
+function createWrittenColumnTracker(): WrittenColumnTracker {
+  return {
+    columns: new Uint8Array(8),
+    count: 0,
+  }
+}
+
+function markWrittenColumn(tracker: WrittenColumnTracker, col: number): void {
+  if (col >= tracker.columns.length) {
+    let nextLength = tracker.columns.length
+    while (nextLength <= col) {
+      nextLength *= 2
+    }
+    const nextColumns = new Uint8Array(nextLength)
+    nextColumns.set(tracker.columns)
+    tracker.columns = nextColumns
+  }
+  if (tracker.columns[col] !== 0) {
+    return
+  }
+  tracker.columns[col] = 1
+  tracker.count += 1
+}
+
+function materializeWrittenColumns(tracker: WrittenColumnTracker): Uint32Array {
+  const columns = new Uint32Array(tracker.count)
+  let writeIndex = 0
+  for (let col = 0; col < tracker.columns.length; col += 1) {
+    if (tracker.columns[col] !== 0) {
+      columns[writeIndex] = col
+      writeIndex += 1
+    }
+  }
+  return columns
+}
+
+function createFreshRuntimeCellAttacher(workbook: WorkbookStore, sheet: SheetRecord): FreshRuntimeCellAttacher {
+  const logicalCandidate: unknown = sheet.logical
+  const logical = isFreshRuntimeLogicalSheetInternals(logicalCandidate) ? logicalCandidate : undefined
+  const cells = logical?.cellPages?.cells
+  const identities = logical?.cellIdentities?.identities
+  const residentByCell = logical?.residentCells?.byCell
+  const residentByRow = logical?.residentCells?.byRow
+  const residentByColumn = logical?.residentCells?.byColumn
+  if (!cells || !identities || !residentByCell || !residentByRow || !residentByColumn) {
+    return (row, col, cellIndex, rowId, colId) => {
+      workbook.attachAllocatedCellWithLogicalAxisIds(sheet.id, row, col, cellIndex, rowId, colId)
+    }
+  }
+
+  const rowSets = new Map<string, Set<number>>()
+  const columnSets = new Map<string, Set<number>>()
+
+  return (row, col, cellIndex, rowId, colId) => {
+    cells.set(makeLogicalCellKey(sheet.id, rowId, colId), cellIndex)
+    identities.set(cellIndex, { sheetId: sheet.id, rowId, colId })
+    residentByCell.set(cellIndex, { rowId, colId })
+    ensureFreshRuntimeResidentSet(rowSets, residentByRow, rowId).add(cellIndex)
+    ensureFreshRuntimeResidentSet(columnSets, residentByColumn, colId).add(cellIndex)
+    workbook.cellKeyToIndex.set(makeCellKey(sheet.id, row, col), cellIndex)
+    sheet.grid.set(row, col, cellIndex)
   }
 }
 
@@ -366,23 +511,14 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
 
   args.hydrateTemplateBank(args.runtimeImage.templateBank)
 
-  let formulaValuesByAddress: Map<string, Map<number, CellValue>> | undefined
-  const formulaInstancesByAddress = new Map<string, Map<number, RestoredFormulaInstance>>()
-  args.runtimeImage.formulaInstances.forEach((record, index) => {
-    const valueRecord = args.runtimeImage.formulaValues[index]
-    if (!formulaValueMatchesInstance(record, valueRecord)) {
-      formulaValuesByAddress ??= new Map<string, Map<number, CellValue>>()
-    }
-    getOrCreateSheetFormulaMap(formulaInstancesByAddress, record.sheetName).set(toFormulaInstanceKey(record.row, record.col), {
-      record,
-      ...(formulaValueMatchesInstance(record, valueRecord) ? { value: valueRecord.value } : {}),
-    })
-  })
+  const formulaValueIndexAligned = formulaValuesAreAligned(args.runtimeImage.formulaInstances, args.runtimeImage.formulaValues)
+  const formulaValuesByAddress = formulaValueIndexAligned ? undefined : new Map<string, Map<number, CellValue>>()
   if (formulaValuesByAddress) {
     args.runtimeImage.formulaValues.forEach((record) => {
-      getOrCreateSheetFormulaMap(formulaValuesByAddress!, record.sheetName).set(toFormulaInstanceKey(record.row, record.col), record.value)
+      getOrCreateSheetFormulaMap(formulaValuesByAddress, record.sheetName).set(toFormulaInstanceKey(record.row, record.col), record.value)
     })
   }
+  const formulaSpansBySheet = buildRuntimeFormulaSheetSpans(args.runtimeImage.formulaInstances)
   const sheetCellsByName = new Map<string, readonly RuntimeImageCellCoordinateSnapshot[]>(
     (args.runtimeImage.sheetCells ?? []).map((record) => [record.sheetName, record.coords]),
   )
@@ -394,91 +530,116 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
   const formulaRefs: EngineCellMutationRef[] = []
   const preparedFormulaRefs: PreparedRuntimeFormulaRef[] = []
   const hydratedPreparedFormulaRefs: HydratedPreparedRuntimeFormulaRef[] = []
-  orderedSheets.forEach((sheet) => {
-    const sheetId = args.workbook.getSheet(sheet.name)?.id
-    if (sheetId === undefined) {
-      throw new Error(`Missing sheet during runtime image restore: ${sheet.name}`)
-    }
-    const sheetCoords = sheetCellsByName.get(sheet.name)
-    for (let index = 0; index < sheet.cells.length; index += 1) {
-      const cell = sheet.cells[index]!
-      const coords = resolveRestoredCellCoordinates({
-        sheetName: sheet.name,
-        cellAddress: cell.address,
-        indexedCoordinate: sheetCoords?.[index],
-      })
-      const coordKey = toFormulaInstanceKey(coords.row, coords.col)
-      const restoredFormula = formulaInstancesByAddress.get(sheet.name)?.get(coordKey)
-      const formulaInstance = restoredFormula?.record
-      const cellIndex = args.workbook.cellStore.allocateReserved(sheetId, coords.row, coords.col)
-      args.workbook.attachAllocatedCell(sheetId, coords.row, coords.col, cellIndex)
-      if (cell.formula === undefined && formulaInstance === undefined) {
-        writeLiteralToCellStore(args.workbook.cellStore, cellIndex, cell.value ?? null, args.strings)
-        if (cell.value === null) {
-          args.workbook.cellStore.flags[cellIndex] = (args.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.AuthoredBlank
-        }
+  const previousOnSetValue = args.workbook.cellStore.onSetValue
+  args.workbook.cellStore.onSetValue = null
+  try {
+    orderedSheets.forEach((sheet) => {
+      const sheetRecord = args.workbook.getSheet(sheet.name)
+      if (!sheetRecord) {
+        throw new Error(`Missing sheet during runtime image restore: ${sheet.name}`)
       }
-      if (cell.format !== undefined) {
-        args.workbook.setCellFormat(cellIndex, cell.format)
-      }
-      if (formulaInstance) {
-        const cachedValue = restoredFormula.value ?? formulaValuesByAddress?.get(sheet.name)?.get(coordKey)
-        if (
-          formulaInstance.templateId !== undefined &&
-          args.resolveTemplateById &&
-          args.initializeHydratedPreparedCellFormulasAt &&
-          cachedValue !== undefined
+      const sheetId = sheetRecord.id
+      const sheetCoords = sheetCellsByName.get(sheet.name)
+      const rowIds: string[] = []
+      const colIds: string[] = []
+      const attachFreshCell = createFreshRuntimeCellAttacher(args.workbook, sheetRecord)
+      const formulaSpan = formulaSpansBySheet.get(sheet.name)
+      let formulaInstanceIndex = formulaSpan?.start ?? 0
+      const formulaInstanceEnd = formulaSpan?.end ?? formulaInstanceIndex
+      let literalColumns: WrittenColumnTracker | undefined
+      for (let index = 0; index < sheet.cells.length; index += 1) {
+        const cell = sheet.cells[index]!
+        const coords = sheetCoords?.[index] ?? parseRestoredCellCoordinates(sheet.name, cell.address)
+        while (
+          formulaInstanceIndex < formulaInstanceEnd &&
+          compareFormulaInstanceToCoordinate(args.runtimeImage.formulaInstances[formulaInstanceIndex]!, coords) < 0
         ) {
-          const template = args.resolveTemplateById(formulaInstance.templateId, formulaInstance.source, coords.row, coords.col)
-          if (template && !template.compiled.volatile && !template.compiled.producesSpill) {
-            hydratedPreparedFormulaRefs.push({
-              sheetId,
-              row: coords.row,
-              col: coords.col,
-              source: formulaInstance.source,
-              compiled: template.compiled,
-              templateId: template.templateId,
-              value: cachedValue,
-            })
-            continue
+          formulaInstanceIndex += 1
+        }
+        const candidateFormula =
+          formulaInstanceIndex < formulaInstanceEnd ? args.runtimeImage.formulaInstances[formulaInstanceIndex] : undefined
+        const restoredFormula =
+          candidateFormula && compareFormulaInstanceToCoordinate(candidateFormula, coords) === 0 ? candidateFormula : undefined
+        const cellIndex = args.workbook.cellStore.allocateReserved(sheetId, coords.row, coords.col)
+        const rowId = (rowIds[coords.row] ??= args.workbook.ensureLogicalAxisId(sheetId, 'row', coords.row))
+        const colId = (colIds[coords.col] ??= args.workbook.ensureLogicalAxisId(sheetId, 'column', coords.col))
+        attachFreshCell(coords.row, coords.col, cellIndex, rowId, colId)
+        if (cell.formula === undefined && restoredFormula === undefined) {
+          writeLiteralToCellStore(args.workbook.cellStore, cellIndex, cell.value ?? null, args.strings)
+          literalColumns ??= createWrittenColumnTracker()
+          markWrittenColumn(literalColumns, coords.col)
+          if (cell.value === null) {
+            args.workbook.cellStore.flags[cellIndex] = (args.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.AuthoredBlank
           }
         }
-        if (formulaInstance.templateId !== undefined && args.resolveTemplateById && args.initializePreparedCellFormulasAt) {
-          const template = args.resolveTemplateById(formulaInstance.templateId, formulaInstance.source, coords.row, coords.col)
-          if (template) {
+        if (cell.format !== undefined) {
+          args.workbook.setCellFormat(cellIndex, cell.format)
+        }
+        if (restoredFormula) {
+          const cachedValue = formulaValueIndexAligned
+            ? args.runtimeImage.formulaValues[formulaInstanceIndex]?.value
+            : formulaValuesByAddress?.get(sheet.name)?.get(toFormulaInstanceKey(coords.row, coords.col))
+          const template =
+            restoredFormula.templateId !== undefined && args.resolveTemplateById
+              ? args.resolveTemplateById(restoredFormula.templateId, restoredFormula.source, coords.row, coords.col)
+              : undefined
+          if (args.initializeHydratedPreparedCellFormulasAt && cachedValue !== undefined) {
+            if (template && !template.compiled.volatile && !template.compiled.producesSpill) {
+              hydratedPreparedFormulaRefs.push({
+                sheetId,
+                row: coords.row,
+                col: coords.col,
+                cellIndex,
+                source: restoredFormula.source,
+                compiled: template.compiled,
+                templateId: template.templateId,
+                value: cachedValue,
+              })
+              continue
+            }
+          }
+          if (template && args.initializePreparedCellFormulasAt) {
             preparedFormulaRefs.push({
               sheetId,
               row: coords.row,
               col: coords.col,
-              source: formulaInstance.source,
+              cellIndex,
+              source: restoredFormula.source,
               compiled: template.compiled,
               templateId: template.templateId,
             })
             continue
           }
+          formulaRefs.push({
+            sheetId,
+            cellIndex,
+            mutation: {
+              kind: 'setCellFormula',
+              row: coords.row,
+              col: coords.col,
+              formula: restoredFormula.source,
+            },
+          })
+        } else if (cell.formula !== undefined) {
+          formulaRefs.push({
+            sheetId,
+            cellIndex,
+            mutation: {
+              kind: 'setCellFormula',
+              row: coords.row,
+              col: coords.col,
+              formula: cell.formula,
+            },
+          })
         }
-        formulaRefs.push({
-          sheetId,
-          mutation: {
-            kind: 'setCellFormula',
-            row: coords.row,
-            col: coords.col,
-            formula: formulaInstance.source,
-          },
-        })
-      } else if (cell.formula !== undefined) {
-        formulaRefs.push({
-          sheetId,
-          mutation: {
-            kind: 'setCellFormula',
-            row: coords.row,
-            col: coords.col,
-            formula: cell.formula,
-          },
-        })
       }
-    }
-  })
+      if (literalColumns && literalColumns.count > 0) {
+        args.workbook.notifyColumnsWritten(sheetId, materializeWrittenColumns(literalColumns))
+      }
+    })
+  } finally {
+    args.workbook.cellStore.onSetValue = previousOnSetValue
+  }
 
   if (hydratedPreparedFormulaRefs.length > 0 && args.initializeHydratedPreparedCellFormulasAt) {
     args.initializeHydratedPreparedCellFormulasAt(hydratedPreparedFormulaRefs, hydratedPreparedFormulaRefs.length)

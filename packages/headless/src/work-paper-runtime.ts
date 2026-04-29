@@ -1,9 +1,12 @@
 import {
+  CellFlags,
   SpreadsheetEngine,
   attachRuntimeSnapshot,
   makeCellKey,
+  readRuntimeImage,
   readRuntimeSnapshot,
   type EngineCellMutationRef,
+  type EngineExistingNumericCellMutationResult,
   type SheetRecord,
 } from '@bilig/core'
 import {
@@ -17,11 +20,13 @@ import {
   type LiteralInput,
   type RecalcMetrics,
   type WorkbookDefinedNameValueSnapshot,
+  type WorkbookSnapshot,
 } from '@bilig/protocol'
 import {
   excelSerialToDateParts,
   formatAddress,
   formatRangeAddress,
+  indexToColumn,
   installExternalFunctionAdapter,
   isArrayValue,
   isCellReferenceText,
@@ -107,8 +112,14 @@ import type {
   RawCellContent,
   SerializedWorkPaperNamedExpression,
 } from './work-paper-types.js'
+import { readFastPhysicalRangeValues } from './fast-range-read.js'
 import { captureTrackedEngineEvent, type TrackedEngineEvent, type TrackedPatch } from './tracked-engine-event-refs.js'
-import { materializeTrackedIndexChangesWithMetadata } from './tracked-cell-index-changes.js'
+import {
+  detachTrackedIndexChanges,
+  hasDeferredTrackedIndexChanges,
+  materializeTrackedIndexChangeSourcesWithMetadata,
+  materializeTrackedIndexChangesWithMetadata,
+} from './tracked-cell-index-changes.js'
 import { calculateWorkPaperFormulaInScratchWorkbook } from './work-paper-scratch-evaluator.js'
 import { replaceWorkPaperSheetContent } from './work-paper-sheet-replacement.js'
 
@@ -126,6 +137,22 @@ type DetailedEvent = {
     payload: WorkPaperDetailedEventMap[EventName]
   }
 }[WorkPaperEventName]
+
+const TRUSTED_TRACKED_PHYSICAL_SHEET_ID_PROPERTY = '__biligTrackedPhysicalSheetId'
+const TRUSTED_TRACKED_PHYSICAL_SORTED_SPLIT_PROPERTY = '__biligTrackedPhysicalSortedSliceSplit'
+
+function readTrustedPhysicalTrackedChangeMetadata(
+  changedCellIndices: Uint32Array,
+): { readonly trustedPhysicalSheetId: number; readonly trustedSortedSliceSplit?: number } | undefined {
+  const trustedPhysicalSheetId = Reflect.get(changedCellIndices, TRUSTED_TRACKED_PHYSICAL_SHEET_ID_PROPERTY)
+  if (typeof trustedPhysicalSheetId !== 'number' || !Number.isInteger(trustedPhysicalSheetId) || trustedPhysicalSheetId < 0) {
+    return undefined
+  }
+  const trustedSortedSliceSplit = Reflect.get(changedCellIndices, TRUSTED_TRACKED_PHYSICAL_SORTED_SPLIT_PROPERTY)
+  return typeof trustedSortedSliceSplit === 'number' && Number.isInteger(trustedSortedSliceSplit) && trustedSortedSliceSplit > 0
+    ? { trustedPhysicalSheetId, trustedSortedSliceSplit }
+    : { trustedPhysicalSheetId }
+}
 
 interface EngineTrackedEventSubscription {
   subscribeTracked(
@@ -169,7 +196,14 @@ interface SheetStateSnapshot {
 type VisibilitySnapshot = Map<number, SheetStateSnapshot>
 type NamedExpressionValueSnapshot = Map<string, CellValue | CellValue[][]>
 const EMPTY_NAMED_EXPRESSION_VALUES: NamedExpressionValueSnapshot = new Map()
+const FAST_EXISTING_NUMERIC_LITERAL_FLAGS =
+  CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle | CellFlags.SpillChild | CellFlags.PivotOutput
 const VISIBILITY_SHEET_STRIDE = MAX_ROWS * MAX_COLS
+const TINY_TRACKED_CHANGE_LIMIT = 4
+const RUNTIME_COLUMN_LABEL_CACHE: string[] = []
+const RUNTIME_A1_CACHE_COLUMN_LIMIT = 64
+const RUNTIME_A1_CACHE_ROW_LIMIT = 4096
+const RUNTIME_A1_CACHE: string[] = []
 
 interface ClipboardPayload {
   sourceAnchor: WorkPaperCellAddress
@@ -194,6 +228,15 @@ type HistoryTransactionRecord =
   | { kind: 'ops'; ops: unknown[]; potentialNewCells?: number }
   | { kind: 'single-op'; op: unknown; potentialNewCells?: number }
   | {
+      kind: 'single-existing-numeric-cell-mutation'
+      sheetId: number
+      row: number
+      col: number
+      cellIndex: number
+      value: number
+      potentialNewCells?: number
+    }
+  | {
       kind: 'cell-mutations'
       refs: Array<{
         sheetId: number
@@ -208,6 +251,49 @@ type HistoryTransactionRecord =
 interface HistoryRecord {
   forward: HistoryTransactionRecord
   inverse: HistoryTransactionRecord
+}
+
+function countPotentialNewTrackedCellMutations(refs: readonly EngineCellMutationRef[]): number {
+  let count = 0
+  for (let index = 0; index < refs.length; index += 1) {
+    const ref = refs[index]
+    if (ref && ref.cellIndex === undefined && ref.mutation.kind !== 'clearCell') {
+      count += 1
+    }
+  }
+  return count
+}
+
+function canSkipDimensionUpdateAfterLiteralMutation(
+  refs: readonly EngineCellMutationRef[],
+  potentialNewCells: number | undefined,
+): boolean {
+  if (potentialNewCells !== 0 || refs.length !== 1) {
+    return false
+  }
+  const ref = refs[0]
+  return ref?.cellIndex !== undefined && ref.mutation.kind === 'setCellValue' && ref.mutation.value !== null
+}
+
+function readTrackedRuntimeCellValue(
+  cellStore: SpreadsheetEngine['workbook']['cellStore'],
+  cellIndex: number,
+  strings: SpreadsheetEngine['strings'],
+): CellValue {
+  const tag = (cellStore.tags[cellIndex] as ValueTag | undefined) ?? ValueTag.Empty
+  switch (tag) {
+    case ValueTag.Number:
+      return { tag: ValueTag.Number, value: cellStore.numbers[cellIndex] ?? 0 }
+    case ValueTag.Boolean:
+      return { tag: ValueTag.Boolean, value: (cellStore.numbers[cellIndex] ?? 0) !== 0 }
+    case ValueTag.String:
+      return cellStore.getValue(cellIndex, (stringId) => strings.get(stringId))
+    case ValueTag.Error:
+      return { tag: ValueTag.Error, code: cellStore.errors[cellIndex]! }
+    case ValueTag.Empty:
+    default:
+      return { tag: ValueTag.Empty }
+  }
 }
 
 const DEFAULT_CONFIG: Readonly<WorkPaperConfig> = Object.freeze({
@@ -748,11 +834,83 @@ function validateWorkPaperConfig(config: WorkPaperConfig): void {
 
 interface SheetInspection {
   readonly hasFormula: boolean
+  readonly dimensions: WorkPaperSheetDimensions
+  readonly materializedCellCount: number
+  readonly maxColumnCount: number
+  readonly formulaCellCount: number
+}
+
+function inspectSheetDimensionsWithinLimits(sheetName: string, sheet: WorkPaperSheet, config: WorkPaperConfig): WorkPaperSheetDimensions {
+  const height = sheet.length
+  let width = 0
+  let materializedHeight = 0
+  let materializedWidth = 0
+  for (let rowIndex = 0; rowIndex < sheet.length; rowIndex += 1) {
+    const row = sheet[rowIndex]
+    if (!Array.isArray(row)) {
+      throw new WorkPaperUnableToParseError({ sheetName, reason: 'Rows must be arrays' })
+    }
+    width = Math.max(width, row.length)
+    for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+      if (row[colIndex] !== null) {
+        materializedHeight = Math.max(materializedHeight, rowIndex + 1)
+        materializedWidth = Math.max(materializedWidth, colIndex + 1)
+      }
+    }
+  }
+  if (height > (config.maxRows ?? MAX_ROWS) || width > (config.maxColumns ?? MAX_COLS)) {
+    throw new WorkPaperSheetSizeLimitExceededError()
+  }
+  return { width: materializedWidth, height: materializedHeight }
+}
+
+function inspectRuntimeSnapshotSheetDimensionsWithinLimits(args: {
+  readonly sheetName: string
+  readonly snapshotSheet: WorkbookSnapshot['sheets'][number]
+  readonly runtimeSheetCells?: {
+    readonly coords?: readonly { readonly row: number; readonly col: number }[]
+    readonly dimensions?: { readonly width: number; readonly height: number }
+    readonly cellCount?: number
+  }
+  readonly config: WorkPaperConfig
+}): WorkPaperSheetDimensions {
+  let materializedHeight = 0
+  let materializedWidth = 0
+  const dimensions = args.runtimeSheetCells?.dimensions
+  if (
+    dimensions &&
+    Number.isInteger(dimensions.width) &&
+    Number.isInteger(dimensions.height) &&
+    dimensions.width >= 0 &&
+    dimensions.height >= 0
+  ) {
+    materializedWidth = dimensions.width
+    materializedHeight = dimensions.height
+  } else if (args.runtimeSheetCells?.coords) {
+    for (const coords of args.runtimeSheetCells.coords) {
+      materializedHeight = Math.max(materializedHeight, coords.row + 1)
+      materializedWidth = Math.max(materializedWidth, coords.col + 1)
+    }
+  } else {
+    for (const cell of args.snapshotSheet.cells) {
+      const parsed = parseCellAddress(cell.address, args.sheetName)
+      materializedHeight = Math.max(materializedHeight, parsed.row + 1)
+      materializedWidth = Math.max(materializedWidth, parsed.col + 1)
+    }
+  }
+  if (materializedHeight > (args.config.maxRows ?? MAX_ROWS) || materializedWidth > (args.config.maxColumns ?? MAX_COLS)) {
+    throw new WorkPaperSheetSizeLimitExceededError()
+  }
+  return { width: materializedWidth, height: materializedHeight }
 }
 
 function inspectSheetWithinLimits(sheetName: string, sheet: WorkPaperSheet, config: WorkPaperConfig): SheetInspection {
   const height = sheet.length
   let width = 0
+  let materializedHeight = 0
+  let materializedWidth = 0
+  let materializedCellCount = 0
+  let formulaCellCount = 0
   let hasFormula = false
   for (let rowIndex = 0; rowIndex < sheet.length; rowIndex += 1) {
     const row = sheet[rowIndex]
@@ -760,20 +918,58 @@ function inspectSheetWithinLimits(sheetName: string, sheet: WorkPaperSheet, conf
       throw new WorkPaperUnableToParseError({ sheetName, reason: 'Rows must be arrays' })
     }
     width = Math.max(width, row.length)
-    if (!hasFormula) {
-      for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
-        const cell = row[colIndex]
-        if (typeof cell === 'string' && cell.trim().startsWith('=')) {
-          hasFormula = true
-          break
-        }
+    for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+      const cell = row[colIndex]
+      if (cell !== null) {
+        materializedCellCount += 1
+        materializedHeight = Math.max(materializedHeight, rowIndex + 1)
+        materializedWidth = Math.max(materializedWidth, colIndex + 1)
+      }
+      if (typeof cell === 'string' && cellHasFormulaPrefix(cell)) {
+        formulaCellCount += 1
+        hasFormula = true
       }
     }
   }
   if (height > (config.maxRows ?? MAX_ROWS) || width > (config.maxColumns ?? MAX_COLS)) {
     throw new WorkPaperSheetSizeLimitExceededError()
   }
-  return { hasFormula }
+  return {
+    hasFormula,
+    dimensions: { width: materializedWidth, height: materializedHeight },
+    materializedCellCount,
+    maxColumnCount: width,
+    formulaCellCount,
+  }
+}
+
+function cellHasFormulaPrefix(value: string): boolean {
+  const first = value.charCodeAt(0)
+  if (first === 61) {
+    return true
+  }
+  if (first !== 32 && first !== 9 && first !== 10 && first !== 13) {
+    return false
+  }
+  return value.trimStart().charCodeAt(0) === 61
+}
+
+function runtimeSnapshotMatchesSheetNames(
+  sheets: WorkPaperSheets,
+  runtimeSnapshot: NonNullable<ReturnType<typeof readRuntimeSnapshot>>,
+): boolean {
+  const sheetNames = Object.keys(sheets)
+  if (runtimeSnapshot.sheets.length !== sheetNames.length) {
+    return false
+  }
+  const matchedNames = new Set<string>()
+  for (const snapshotSheet of runtimeSnapshot.sheets) {
+    if (!Object.prototype.hasOwnProperty.call(sheets, snapshotSheet.name) || matchedNames.has(snapshotSheet.name)) {
+      return false
+    }
+    matchedNames.add(snapshotSheet.name)
+  }
+  return true
 }
 
 function validateSheetWithinLimits(sheetName: string, sheet: WorkPaperSheet, config: WorkPaperConfig): void {
@@ -885,6 +1081,10 @@ class WorkPaperEmitter {
     this.onDetailed(eventName, wrapper)
   }
 
+  hasListeners(eventName: WorkPaperEventName): boolean {
+    return this.listeners[eventName].size > 0 || this.detailedListeners[eventName].size > 0
+  }
+
   emitDetailed(event: DetailedEvent): void {
     this.dispatchDetailed(event)
   }
@@ -986,6 +1186,8 @@ export class WorkPaper {
   private visibilityCache: VisibilitySnapshot | null = null
   private namedExpressionValueCache: NamedExpressionValueSnapshot | null = null
   private sheetRecordsCache: readonly SheetRecord[] | null = null
+  private readonly sheetDimensionsCache = new Map<number, WorkPaperSheetDimensions>()
+  private spillSheetIdsCache: Set<number> | null = null
   private batchDepth = 0
   private batchStartVisibility: VisibilitySnapshot | null = null
   private batchStartNamedValues: NamedExpressionValueSnapshot | null = null
@@ -1001,9 +1203,137 @@ export class WorkPaper {
   private suspendedCellMutationPotentialNewCells = 0
   private queuedEvents: QueuedEvent[] = []
   private trackedEngineEvents: TrackedEngineEvent[] = []
+  private pendingLazyTrackedChanges: WorkPaperCellChange[][] = []
   private engineEventCaptureEnabled = true
+  private retainedTrackedEngineEventIndicesDepth = 0
   private unsubscribeEngineEvents: (() => void) | null = null
   private disposed = false
+
+  private getVisibleCellIndex(sheetId: number, row: number, col: number): number | undefined {
+    const sheet = this.engine.workbook.getSheetById(sheetId)
+    if (!sheet) {
+      return undefined
+    }
+    return this.getVisibleCellIndexInSheet(sheet, row, col)
+  }
+
+  private getVisibleCellIndexInSheet(sheet: SheetRecord, row: number, col: number): number | undefined {
+    if (sheet.structureVersion === 1) {
+      const cellIndex = sheet.grid.getPhysical(row, col)
+      return cellIndex === -1 ? undefined : cellIndex
+    }
+    return sheet.logical.getVisibleCell(row, col)
+  }
+
+  private cacheSheetDimensions(sheetId: number, dimensions: WorkPaperSheetDimensions): void {
+    this.sheetDimensionsCache.set(sheetId, { width: dimensions.width, height: dimensions.height })
+  }
+
+  private cacheInitializedSheetDimensions(sheetId: number, dimensions: WorkPaperSheetDimensions): void {
+    if (this.sheetHasSpills(sheetId)) {
+      this.sheetDimensionsCache.delete(sheetId)
+      return
+    }
+    this.cacheSheetDimensions(sheetId, dimensions)
+  }
+
+  private sheetHasSpills(sheetId: number): boolean {
+    if (this.spillSheetIdsCache === null) {
+      const spillSheetIds = new Set<number>()
+      this.engine.workbook.listSpills().forEach((spill) => {
+        const spillSheet = this.engine.workbook.getSheet(spill.sheetName)
+        if (spillSheet) {
+          spillSheetIds.add(spillSheet.id)
+        }
+      })
+      this.spillSheetIdsCache = spillSheetIds
+    }
+    return this.spillSheetIdsCache.has(sheetId)
+  }
+
+  private scanSheetDimensions(sheet: SheetRecord): WorkPaperSheetDimensions {
+    let width = 0
+    let height = 0
+    sheet.grid.forEachCellEntry((_cellIndex: number, row: number, col: number) => {
+      height = Math.max(height, row + 1)
+      width = Math.max(width, col + 1)
+    })
+    return { width, height }
+  }
+
+  private invalidateSheetDimensions(sheetId: number): void {
+    this.sheetDimensionsCache.delete(sheetId)
+  }
+
+  private invalidateAllSheetDimensions(): void {
+    this.sheetDimensionsCache.clear()
+    this.spillSheetIdsCache = null
+  }
+
+  private expandCachedSheetDimensions(sheetId: number, row: number, col: number): void {
+    const cached = this.sheetDimensionsCache.get(sheetId)
+    if (!cached) {
+      return
+    }
+    cached.height = Math.max(cached.height, row + 1)
+    cached.width = Math.max(cached.width, col + 1)
+  }
+
+  private invalidateCachedSheetDimensionsIfEdge(sheetId: number, row: number, col: number): void {
+    const cached = this.sheetDimensionsCache.get(sheetId)
+    if (!cached) {
+      return
+    }
+    if (row + 1 >= cached.height || col + 1 >= cached.width) {
+      this.invalidateSheetDimensions(sheetId)
+    }
+  }
+
+  private updateSheetDimensionsAfterCellMutationRefs(refs: readonly EngineCellMutationRef[]): void {
+    if (this.sheetDimensionsCache.size === 0) {
+      return
+    }
+    if (refs.length === 1) {
+      const ref = refs[0]
+      const mutation = ref?.mutation
+      if (ref && mutation && mutation.kind !== 'setCellFormula') {
+        const cached = this.sheetDimensionsCache.get(ref.sheetId)
+        if (!cached) {
+          return
+        }
+        const noKnownSpills = this.spillSheetIdsCache !== null && !this.spillSheetIdsCache.has(ref.sheetId)
+        if (
+          noKnownSpills &&
+          (mutation.kind === 'setCellValue'
+            ? mutation.row + 1 <= cached.height && mutation.col + 1 <= cached.width
+            : mutation.row + 1 < cached.height && mutation.col + 1 < cached.width)
+        ) {
+          return
+        }
+      }
+    }
+    for (let index = 0; index < refs.length; index += 1) {
+      const ref = refs[index]
+      if (!ref) {
+        continue
+      }
+      const mutation = ref.mutation
+      if (mutation.kind === 'setCellFormula') {
+        this.spillSheetIdsCache = null
+        this.invalidateSheetDimensions(ref.sheetId)
+        continue
+      }
+      if (this.sheetHasSpills(ref.sheetId)) {
+        this.invalidateSheetDimensions(ref.sheetId)
+        continue
+      }
+      if (mutation.kind === 'clearCell') {
+        this.invalidateCachedSheetDimensionsIfEdge(ref.sheetId, mutation.row, mutation.col)
+        continue
+      }
+      this.expandCachedSheetDimensions(ref.sheetId, mutation.row, mutation.col)
+    }
+  }
 
   private constructor(configInput: WorkPaperConfig = {}) {
     ensureCustomAdapterInstalled()
@@ -1017,6 +1347,7 @@ export class WorkPaper {
       useColumnIndex: this.config.useColumnIndex,
       trackReplicaVersions: false,
     })
+    this.invalidateAllSheetDimensions()
     this.attachEngineEventTracking()
     this.captureFunctionRegistry()
     this.internals = Object.freeze({
@@ -1101,38 +1432,73 @@ export class WorkPaper {
   ): WorkPaper {
     const workbook = new WorkPaper(configInput)
     const runtimeSnapshot = namedExpressions.length === 0 ? readRuntimeSnapshot(sheets) : undefined
-    const runtimeSnapshotMatchesSheets =
-      runtimeSnapshot !== undefined &&
-      runtimeSnapshot.sheets.length === Object.keys(sheets).length &&
-      runtimeSnapshot.sheets.every((sheet: { name: string }) => Object.prototype.hasOwnProperty.call(sheets, sheet.name))
+    const runtimeSnapshotMatchesSheets = runtimeSnapshot !== undefined && runtimeSnapshotMatchesSheetNames(sheets, runtimeSnapshot)
+    const runtimeSnapshotSheetsByName = runtimeSnapshotMatchesSheets
+      ? new Map(runtimeSnapshot.sheets.map((sheet) => [sheet.name, sheet] as const))
+      : undefined
+    const runtimeImageSheetCellsByName =
+      runtimeSnapshotMatchesSheets && runtimeSnapshot
+        ? new Map((readRuntimeImage(runtimeSnapshot)?.sheetCells ?? []).map((sheet) => [sheet.sheetName, sheet] as const))
+        : undefined
     const inspectedSheets = new Map<string, SheetInspection>()
     Object.entries(sheets).forEach(([sheetName, sheet]) => {
-      inspectedSheets.set(sheetName, inspectSheetWithinLimits(sheetName, sheet, workbook.config))
+      const snapshotSheet = runtimeSnapshotSheetsByName?.get(sheetName)
+      inspectedSheets.set(
+        sheetName,
+        snapshotSheet
+          ? (() => {
+              const dimensions = inspectRuntimeSnapshotSheetDimensionsWithinLimits({
+                sheetName,
+                snapshotSheet,
+                runtimeSheetCells: runtimeImageSheetCellsByName?.get(sheetName),
+                config: workbook.config,
+              })
+              return {
+                hasFormula: false,
+                dimensions,
+                materializedCellCount: runtimeImageSheetCellsByName?.get(sheetName)?.cellCount ?? 0,
+                maxColumnCount: dimensions.width,
+                formulaCellCount: 0,
+              }
+            })()
+          : inspectSheetWithinLimits(sheetName, sheet, workbook.config),
+      )
     })
     workbook.withEngineEventCaptureDisabled(() => {
       if (runtimeSnapshot && runtimeSnapshotMatchesSheets) {
         workbook.engine.importSnapshot(runtimeSnapshot)
-        return
+      } else {
+        Object.keys(sheets).forEach((sheetName) => {
+          workbook.engine.createSheet(sheetName)
+        })
+        namedExpressions.forEach((expression) => {
+          workbook.upsertNamedExpressionInternal(expression, { duringInitialization: true })
+        })
+        Object.entries(sheets).forEach(([sheetName, sheet]) => {
+          const sheetId = workbook.requireSheetId(sheetName)
+          const inspected = inspectedSheets.get(sheetName)
+          if (!inspected?.hasFormula) {
+            loadInitialLiteralSheet(workbook.engine, sheetId, sheet, inspected)
+            return
+          }
+          const rewriteInitialFormula =
+            workbook.namedExpressions.size === 0 && workbook.functionAliasLookup.size === 0
+              ? (formula: string) => formula
+              : (formula: string) => workbook.rewriteFormulaForStorage(formula, sheetId)
+          loadInitialMixedSheet({
+            engine: workbook.engine,
+            sheetId,
+            content: sheet,
+            rewriteFormula: rewriteInitialFormula,
+            inspection: inspected,
+          })
+        })
       }
       Object.keys(sheets).forEach((sheetName) => {
-        workbook.engine.createSheet(sheetName)
-      })
-      namedExpressions.forEach((expression) => {
-        workbook.upsertNamedExpressionInternal(expression, { duringInitialization: true })
-      })
-      Object.entries(sheets).forEach(([sheetName, sheet]) => {
-        const sheetId = workbook.requireSheetId(sheetName)
         const inspected = inspectedSheets.get(sheetName)
-        if (!inspected?.hasFormula) {
-          loadInitialLiteralSheet(workbook.engine, sheetId, sheet)
-          return
+        if (inspected) {
+          workbook.cacheInitializedSheetDimensions(workbook.requireSheetId(sheetName), inspected.dimensions)
         }
-        loadInitialMixedSheet({
-          engine: workbook.engine,
-          sheetId,
-          content: sheet,
-          rewriteFormula: (formula, destination) => workbook.rewriteFormulaForStorage(formula, destination.sheet),
-        })
       })
     })
     workbook.clearHistoryStacks()
@@ -1335,6 +1701,7 @@ export class WorkPaper {
 
   updateConfig(next: WorkPaperConfig): void {
     this.assertNotDisposed()
+    this.materializePendingLazyTrackedChanges()
     const merged = {
       ...this.config,
       ...cloneConfig(next),
@@ -1378,9 +1745,11 @@ export class WorkPaper {
 
   rebuildAndRecalculate(): WorkPaperChange[] {
     this.assertNotDisposed()
+    this.materializePendingLazyTrackedChanges()
     if (this.shouldSuppressEvents()) {
       try {
         this.engine.recalculateNow()
+        this.invalidateAllSheetDimensions()
       } catch (error) {
         throw new WorkPaperOperationError(this.messageOf(error, 'Recalculation failed'))
       }
@@ -1391,6 +1760,7 @@ export class WorkPaper {
     this.drainTrackedEngineEvents()
     try {
       this.engine.recalculateNow()
+      this.invalidateAllSheetDimensions()
     } catch (error) {
       throw new WorkPaperOperationError(this.messageOf(error, 'Recalculation failed'))
     }
@@ -1402,7 +1772,7 @@ export class WorkPaper {
       ...this.computeCellChanges(beforeVisibility, afterVisibility),
       ...this.computeNamedExpressionChanges(beforeNames, afterNames),
     ]
-    if (changes.length > 0) {
+    if (changes.length > 0 && this.emitter.hasListeners('valuesUpdated')) {
       this.emitter.emitDetailed({ eventName: 'valuesUpdated', payload: { changes } })
     }
     return changes
@@ -1410,6 +1780,7 @@ export class WorkPaper {
 
   batch(batchOperations: () => void): WorkPaperChange[] {
     this.assertNotDisposed()
+    this.materializePendingLazyTrackedChanges()
     const isOutermost = this.batchDepth === 0
     if (isOutermost) {
       this.batchUsesTrackedFastPath = this.canUseTrackedMutationFastPath()
@@ -1429,22 +1800,31 @@ export class WorkPaper {
     } finally {
       this.batchDepth -= 1
       if (isOutermost) {
-        this.flushPendingBatchOps()
+        if (this.batchUsesTrackedFastPath) {
+          this.withRetainedTrackedEngineEventIndices(() => {
+            this.flushPendingBatchOps()
+          })
+        } else {
+          this.flushPendingBatchOps()
+        }
         this.mergeUndoHistory(this.batchUndoStackLength)
       }
     }
     if (!isOutermost) {
       return []
     }
+    const shouldEmitValuesUpdated = this.emitter.hasListeners('valuesUpdated')
     const changes = this.batchUsesTrackedFastPath
-      ? this.computeTrackedChangesWithoutVisibilityCache(this.drainTrackedEngineEvents())
+      ? this.computeTrackedChangesWithoutVisibilityCache(this.drainTrackedEngineEvents(), {
+          preferLazyPublicChanges: !shouldEmitValuesUpdated,
+        })
       : this.computeChangesAfterMutation(this.batchStartVisibility ?? new Map(), this.batchStartNamedValues ?? new Map())
     this.batchUsesTrackedFastPath = false
     this.batchStartVisibility = null
     this.batchStartNamedValues = null
     if (!this.evaluationSuspended) {
       this.flushQueuedEvents()
-      if (changes.length > 0) {
+      if (changes.length > 0 && shouldEmitValuesUpdated) {
         this.emitter.emitDetailed({ eventName: 'valuesUpdated', payload: { changes } })
       }
     }
@@ -1453,6 +1833,7 @@ export class WorkPaper {
 
   suspendEvaluation(): void {
     this.assertNotDisposed()
+    this.materializePendingLazyTrackedChanges()
     if (this.evaluationSuspended) {
       return
     }
@@ -1473,12 +1854,22 @@ export class WorkPaper {
 
   resumeEvaluation(): WorkPaperChange[] {
     this.assertNotDisposed()
+    this.materializePendingLazyTrackedChanges()
     if (!this.evaluationSuspended) {
       return []
     }
-    this.flushSuspendedCellMutations()
+    if (this.suspendedUsesTrackedFastPath) {
+      this.withRetainedTrackedEngineEventIndices(() => {
+        this.flushSuspendedCellMutations()
+      })
+    } else {
+      this.flushSuspendedCellMutations()
+    }
+    const shouldEmitValuesUpdated = this.emitter.hasListeners('valuesUpdated')
     const changes = this.suspendedUsesTrackedFastPath
-      ? this.computeTrackedChangesWithoutVisibilityCache(this.drainTrackedEngineEvents())
+      ? this.computeTrackedChangesWithoutVisibilityCache(this.drainTrackedEngineEvents(), {
+          preferLazyPublicChanges: !shouldEmitValuesUpdated,
+        })
       : this.computeChangesAfterMutation(this.suspendedVisibility ?? new Map(), this.suspendedNamedValues ?? new Map())
     this.evaluationSuspended = false
     this.suspendedVisibility = null
@@ -1486,7 +1877,7 @@ export class WorkPaper {
     this.suspendedUsesTrackedFastPath = false
     this.flushQueuedEvents()
     this.emitter.emitDetailed({ eventName: 'evaluationResumed', payload: { changes } })
-    if (changes.length > 0) {
+    if (changes.length > 0 && shouldEmitValuesUpdated) {
       this.emitter.emitDetailed({ eventName: 'valuesUpdated', payload: { changes } })
     }
     return changes
@@ -1498,20 +1889,54 @@ export class WorkPaper {
 
   undo(): WorkPaperChange[] {
     this.assertNotDisposed()
-    return this.captureChanges(undefined, () => {
-      if (!this.engine.undo()) {
-        throw new WorkPaperNoOperationToUndoError()
-      }
-    })
+    const preservesPositions = !this.historyTopIsCellMutations(this.getUndoStack())
+    if (this.canUseTrackedMutationFastPath()) {
+      return this.captureTrackedChangesWithoutVisibilityCache(
+        () => {
+          if (!this.engine.undo()) {
+            throw new WorkPaperNoOperationToUndoError()
+          }
+          this.invalidateAllSheetDimensions()
+        },
+        { preservePendingTrackedPositions: preservesPositions },
+      )
+    }
+    return this.captureChanges(
+      undefined,
+      () => {
+        if (!this.engine.undo()) {
+          throw new WorkPaperNoOperationToUndoError()
+        }
+        this.invalidateAllSheetDimensions()
+      },
+      { preservePendingTrackedPositions: preservesPositions },
+    )
   }
 
   redo(): WorkPaperChange[] {
     this.assertNotDisposed()
-    return this.captureChanges(undefined, () => {
-      if (!this.engine.redo()) {
-        throw new WorkPaperNoOperationToRedoError()
-      }
-    })
+    const preservesPositions = !this.historyTopIsCellMutations(this.getRedoStack())
+    if (this.canUseTrackedMutationFastPath()) {
+      return this.captureTrackedChangesWithoutVisibilityCache(
+        () => {
+          if (!this.engine.redo()) {
+            throw new WorkPaperNoOperationToRedoError()
+          }
+          this.invalidateAllSheetDimensions()
+        },
+        { preservePendingTrackedPositions: preservesPositions },
+      )
+    }
+    return this.captureChanges(
+      undefined,
+      () => {
+        if (!this.engine.redo()) {
+          throw new WorkPaperNoOperationToRedoError()
+        }
+        this.invalidateAllSheetDimensions()
+      },
+      { preservePendingTrackedPositions: preservesPositions },
+    )
   }
 
   isThereSomethingToUndo(): boolean {
@@ -1608,7 +2033,11 @@ export class WorkPaper {
 
   getCellValue(address: WorkPaperCellAddress): CellValue {
     this.assertReadable()
-    return cloneCellValue(this.engine.getCellValue(this.sheetName(address.sheet), this.a1(address)))
+    const sheet = this.sheetRecord(address.sheet)
+    const cellIndex = this.getVisibleCellIndexInSheet(sheet, address.row, address.col)
+    return cellIndex === undefined
+      ? emptyValue()
+      : readTrackedRuntimeCellValue(this.engine.workbook.cellStore, cellIndex, this.engine.strings)
   }
 
   getCellFormula(address: WorkPaperCellAddress): string | undefined {
@@ -1640,6 +2069,11 @@ export class WorkPaper {
 
   getRangeValues(range: WorkPaperCellRange): CellValue[][] {
     this.assertReadable()
+    assertRange(range)
+    const fastValues = readFastPhysicalRangeValues(this.engine, range)
+    if (fastValues !== undefined) {
+      return fastValues
+    }
     const ref = this.rangeRef(range)
     return this.engine.getRangeValues(ref)
   }
@@ -1708,13 +2142,13 @@ export class WorkPaper {
   getSheetDimensions(sheetId: number): WorkPaperSheetDimensions {
     this.prepareReadableState()
     const sheet = this.sheetRecord(sheetId)
-    let width = 0
-    let height = 0
-    sheet.grid.forEachCellEntry((_cellIndex: number, row: number, col: number) => {
-      height = Math.max(height, row + 1)
-      width = Math.max(width, col + 1)
-    })
-    return { width, height }
+    const cached = this.sheetDimensionsCache.get(sheetId)
+    if (cached) {
+      return { width: cached.width, height: cached.height }
+    }
+    const dimensions = this.scanSheetDimensions(sheet)
+    this.cacheSheetDimensions(sheetId, dimensions)
+    return dimensions
   }
 
   simpleCellAddressFromString(value: string, defaultSheetId?: number): WorkPaperCellAddress | undefined {
@@ -2169,6 +2603,107 @@ export class WorkPaper {
     return { hours, minutes, seconds }
   }
 
+  private trySetExistingNumericCellContentsWithTrackedFastPath(args: {
+    readonly sheet: SheetRecord
+    readonly address: WorkPaperCellAddress
+    readonly cellIndex: number
+    readonly value: number
+  }): WorkPaperChange[] | null {
+    if (!this.canUseTrackedMutationFastPath() || args.sheet.structureVersion !== 1) {
+      return null
+    }
+    const cellStore = this.engine.workbook.cellStore
+    if (
+      cellStore.sheetIds[args.cellIndex] !== args.address.sheet ||
+      cellStore.rows[args.cellIndex] !== args.address.row ||
+      cellStore.cols[args.cellIndex] !== args.address.col ||
+      (cellStore.formulaIds[args.cellIndex] ?? 0) !== 0 ||
+      ((cellStore.flags[args.cellIndex] ?? 0) & FAST_EXISTING_NUMERIC_LITERAL_FLAGS) !== 0 ||
+      cellStore.tags[args.cellIndex] !== ValueTag.Number
+    ) {
+      return null
+    }
+    const existingNumericMutationEngine = this.engine as SpreadsheetEngine & {
+      tryApplyExistingNumericCellMutationAt?: (request: {
+        sheetId: number
+        row: number
+        col: number
+        cellIndex: number
+        value: number
+        emitTracked?: boolean
+        trustedExistingNumericLiteral?: boolean
+        oldNumericValue?: number
+      }) => EngineExistingNumericCellMutationResult | null
+    }
+    if (typeof existingNumericMutationEngine.tryApplyExistingNumericCellMutationAt !== 'function') {
+      return null
+    }
+
+    if (this.pendingLazyTrackedChanges.length > 0) {
+      this.materializePendingLazyTrackedChanges()
+    }
+    if (this.trackedEngineEvents.length > 0) {
+      this.drainTrackedEngineEvents()
+    }
+    let result: EngineExistingNumericCellMutationResult | null = null
+    const oldNumericValue = cellStore.numbers[args.cellIndex] ?? 0
+    const previousCaptureEnabled = this.engineEventCaptureEnabled
+    this.engineEventCaptureEnabled = false
+    try {
+      if (this.pendingBatchOps.length > 0) {
+        this.flushPendingBatchOps()
+      }
+      const request = {
+        sheetId: args.address.sheet,
+        row: args.address.row,
+        col: args.address.col,
+        cellIndex: args.cellIndex,
+        value: args.value,
+        emitTracked: false,
+        trustedExistingNumericLiteral: true,
+        oldNumericValue,
+      }
+      result = existingNumericMutationEngine.tryApplyExistingNumericCellMutationAt(request)
+    } catch (error) {
+      if (error instanceof Error && WORKPAPER_PUBLIC_ERROR_NAMES.has(error.name)) {
+        throw error
+      }
+      throw new WorkPaperOperationError(this.messageOf(error, 'Mutation failed'))
+    } finally {
+      this.engineEventCaptureEnabled = previousCaptureEnabled
+    }
+    if (!result) {
+      return null
+    }
+
+    if (this.trackedEngineEvents.length > 0) {
+      this.trackedEngineEvents = []
+    }
+    let changes: WorkPaperChange[] | null = this.tryBuildDirectExistingNumericTrackedChanges(
+      result,
+      args.address,
+      args.cellIndex,
+      true,
+      args.sheet.name,
+      args.value,
+    )
+    if (changes === null) {
+      const shouldEmitValuesUpdated = this.emitter.hasListeners('valuesUpdated')
+      const events = [this.trackedEventFromExistingNumericMutationResult(result)]
+      changes = this.computeTrackedChangesWithoutVisibilityCache(events, {
+        preferLazyPublicChanges: !shouldEmitValuesUpdated,
+      })
+      if (changes.length > 0 && shouldEmitValuesUpdated) {
+        this.emitter.emitDetailed({ eventName: 'valuesUpdated', payload: { changes } })
+      }
+      return changes
+    }
+    if (changes.length > 0 && this.emitter.hasListeners('valuesUpdated')) {
+      this.emitter.emitDetailed({ eventName: 'valuesUpdated', payload: { changes } })
+    }
+    return changes
+  }
+
   setCellContents(address: WorkPaperCellAddress, content: RawCellContent | WorkPaperSheet): WorkPaperChange[] {
     this.assertNotDisposed()
     const sheet = this.sheetRecord(address.sheet)
@@ -2178,15 +2713,52 @@ export class WorkPaper {
       if (address.row >= (this.config.maxRows ?? MAX_ROWS) || address.col >= (this.config.maxColumns ?? MAX_COLS)) {
         throw new WorkPaperOperationError('Cell contents cannot be set')
       }
-      const existingCellIndex = sheet.grid.get(address.row, address.col)
-      if (this.enqueueSuspendedLiteralMutation(address.sheet, address.row, address.col, content, existingCellIndex)) {
+      const visibleCellIndex = this.getVisibleCellIndexInSheet(sheet, address.row, address.col)
+      if (
+        this.evaluationSuspended &&
+        this.enqueueSuspendedLiteralMutation(address.sheet, address.row, address.col, content, visibleCellIndex)
+      ) {
         return []
       }
-      if (this.enqueueDeferredBatchLiteral(address.sheet, address.row, address.col, content, existingCellIndex)) {
+      if (this.batchDepth !== 0 && this.enqueueDeferredBatchLiteral(address.sheet, address.row, address.col, content, visibleCellIndex)) {
         return []
+      }
+      if (typeof content === 'number' && visibleCellIndex !== undefined) {
+        const fastPathChanges = this.trySetExistingNumericCellContentsWithTrackedFastPath({
+          sheet,
+          address,
+          cellIndex: visibleCellIndex,
+          value: content,
+        })
+        if (fastPathChanges !== null) {
+          return fastPathChanges
+        }
       }
       const mutate = () => {
         this.flushPendingBatchOps()
+        const existingNumericMutationEngine = this.engine as SpreadsheetEngine & {
+          tryApplyExistingNumericCellMutationAt?: (request: {
+            sheetId: number
+            row: number
+            col: number
+            cellIndex: number
+            value: number
+          }) => EngineExistingNumericCellMutationResult | null
+        }
+        if (
+          typeof content === 'number' &&
+          visibleCellIndex !== undefined &&
+          sheet.structureVersion === 1 &&
+          existingNumericMutationEngine.tryApplyExistingNumericCellMutationAt?.({
+            sheetId: address.sheet,
+            row: address.row,
+            col: address.col,
+            cellIndex: visibleCellIndex,
+            value: content,
+          })
+        ) {
+          return
+        }
         const mutation: EngineCellMutationRef['mutation'] =
           content === null
             ? { kind: 'clearCell', row: address.row, col: address.col }
@@ -2203,16 +2775,29 @@ export class WorkPaper {
                   col: address.col,
                   value: content,
                 }
-        this.applyCellMutationRefs([{ sheetId: address.sheet, mutation }], {
-          captureUndo: true,
-          potentialNewCells: content === null || existingCellIndex !== -1 ? 0 : 1,
-          source: 'local',
-          returnUndoOps: false,
-          reuseRefs: true,
-        })
+        this.applyCellMutationRefs(
+          [{ sheetId: address.sheet, mutation, ...(visibleCellIndex !== undefined ? { cellIndex: visibleCellIndex } : {}) }],
+          {
+            captureUndo: true,
+            potentialNewCells: content === null || visibleCellIndex !== undefined ? 0 : 1,
+            source: 'local',
+            returnUndoOps: false,
+            reuseRefs: true,
+          },
+        )
       }
       if (this.canUseTrackedMutationFastPath()) {
-        return this.captureTrackedChangesWithoutVisibilityCache(mutate)
+        return this.captureTrackedChangesWithoutVisibilityCache(mutate, {
+          singleLiteralChange: isFormulaContent(content)
+            ? undefined
+            : {
+                address: { sheet: address.sheet, row: address.row, col: address.col },
+                ...(visibleCellIndex === undefined ? {} : { cellIndex: visibleCellIndex }),
+                isPhysicalSheet: sheet.structureVersion === 1,
+                sheetName: sheet.name,
+                value: content,
+              },
+        })
       }
       return this.captureChanges(undefined, () => {
         mutate()
@@ -2328,11 +2913,13 @@ export class WorkPaper {
       const [start, amount] = indexes[0]!
       return this.captureTrackedChangesWithoutVisibilityCache(() => {
         this.engine.insertRows(this.sheetName(sheetId), start, amount)
+        this.invalidateSheetDimensions(sheetId)
       })
     }
     return this.batchStructuralChanges(() => {
       indexes.forEach(([start, amount]) => {
         this.engine.insertRows(this.sheetName(sheetId), start, amount)
+        this.invalidateSheetDimensions(sheetId)
       })
     })
   }
@@ -2353,6 +2940,7 @@ export class WorkPaper {
       const [start, amount] = indexes[0]!
       return this.captureTrackedChangesWithoutVisibilityCache(() => {
         this.engine.deleteRows(this.sheetName(sheetId), start, amount)
+        this.invalidateSheetDimensions(sheetId)
       })
     }
     return this.batchStructuralChanges(() => {
@@ -2360,6 +2948,7 @@ export class WorkPaper {
         .toSorted((left, right) => right[0] - left[0])
         .forEach(([start, amount]) => {
           this.engine.deleteRows(this.sheetName(sheetId), start, amount)
+          this.invalidateSheetDimensions(sheetId)
         })
     })
   }
@@ -2380,11 +2969,13 @@ export class WorkPaper {
       const [start, amount] = indexes[0]!
       return this.captureTrackedChangesWithoutVisibilityCache(() => {
         this.engine.insertColumns(this.sheetName(sheetId), start, amount)
+        this.invalidateSheetDimensions(sheetId)
       })
     }
     return this.batchStructuralChanges(() => {
       indexes.forEach(([start, amount]) => {
         this.engine.insertColumns(this.sheetName(sheetId), start, amount)
+        this.invalidateSheetDimensions(sheetId)
       })
     })
   }
@@ -2405,6 +2996,7 @@ export class WorkPaper {
       const [start, amount] = indexes[0]!
       return this.captureTrackedChangesWithoutVisibilityCache(() => {
         this.engine.deleteColumns(this.sheetName(sheetId), start, amount)
+        this.invalidateSheetDimensions(sheetId)
       })
     }
     return this.batchStructuralChanges(() => {
@@ -2412,6 +3004,7 @@ export class WorkPaper {
         .toSorted((left, right) => right[0] - left[0])
         .forEach(([start, amount]) => {
           this.engine.deleteColumns(this.sheetName(sheetId), start, amount)
+          this.invalidateSheetDimensions(sheetId)
         })
     })
   }
@@ -2428,6 +3021,8 @@ export class WorkPaper {
         startAddress: formatAddress(target.row, target.col),
         endAddress: formatAddress(target.row + sourceHeight, target.col + sourceWidth),
       })
+      this.invalidateSheetDimensions(source.start.sheet)
+      this.invalidateSheetDimensions(target.sheet)
     })
   }
 
@@ -2438,9 +3033,11 @@ export class WorkPaper {
     return this.canUseTrackedStructuralFastPath()
       ? this.captureTrackedChangesWithoutVisibilityCache(() => {
           this.engine.moveRows(this.sheetName(sheetId), start, count, target)
+          this.invalidateSheetDimensions(sheetId)
         })
       : this.captureChanges(undefined, () => {
           this.engine.moveRows(this.sheetName(sheetId), start, count, target)
+          this.invalidateSheetDimensions(sheetId)
         })
   }
 
@@ -2451,14 +3048,17 @@ export class WorkPaper {
     return this.canUseTrackedStructuralFastPath()
       ? this.captureTrackedChangesWithoutVisibilityCache(() => {
           this.engine.moveColumns(this.sheetName(sheetId), start, count, target)
+          this.invalidateSheetDimensions(sheetId)
         })
       : this.captureChanges(undefined, () => {
           this.engine.moveColumns(this.sheetName(sheetId), start, count, target)
+          this.invalidateSheetDimensions(sheetId)
         })
   }
 
   addSheet(sheetName?: string): string {
     this.assertNotDisposed()
+    this.materializePendingLazyTrackedChanges()
     const name = sheetName?.trim() || this.nextSheetName()
     if (!this.isItPossibleToAddSheet(name)) {
       throw new WorkPaperSheetNameAlreadyTakenError(name)
@@ -2469,6 +3069,7 @@ export class WorkPaper {
     this.engine.createSheet(name)
     this.sheetRecordsCache = null
     const sheetId = this.requireSheetId(name)
+    this.cacheSheetDimensions(sheetId, { width: 0, height: 0 })
     const payload: WorkPaperDetailedEventMap['sheetAdded'] = { sheetId, sheetName: name }
     if (this.shouldSuppressEvents()) {
       this.queuedEvents.push({ eventName: 'sheetAdded', payload })
@@ -2476,7 +3077,7 @@ export class WorkPaper {
       this.emitter.emitDetailed({ eventName: 'sheetAdded', payload })
     }
     const changes = this.computeChangesAfterMutation(beforeVisibility, beforeNames)
-    if (!this.shouldSuppressEvents() && changes.length > 0) {
+    if (!this.shouldSuppressEvents() && changes.length > 0 && this.emitter.hasListeners('valuesUpdated')) {
       this.emitter.emitDetailed({ eventName: 'valuesUpdated', payload: { changes } })
     }
     return name
@@ -2499,6 +3100,7 @@ export class WorkPaper {
       () => {
         this.engine.deleteSheet(sheetName)
         this.sheetRecordsCache = null
+        this.invalidateSheetDimensions(sheetId)
       },
     )
   }
@@ -2517,6 +3119,7 @@ export class WorkPaper {
         startAddress: 'A1',
         endAddress: formatAddress(dimensions.height - 1, dimensions.width - 1),
       })
+      this.cacheSheetDimensions(sheetId, { width: 0, height: 0 })
     })
   }
 
@@ -2770,6 +3373,7 @@ export class WorkPaper {
     if (this.disposed) {
       return
     }
+    this.materializePendingLazyTrackedChanges()
     this.disposed = true
     this.unsubscribeEngineEvents?.()
     this.unsubscribeEngineEvents = null
@@ -2778,8 +3382,11 @@ export class WorkPaper {
     this.clipboard = null
     this.visibilityCache = null
     this.namedExpressionValueCache = null
+    this.sheetDimensionsCache.clear()
+    this.spillSheetIdsCache = null
     this.queuedEvents = []
     this.trackedEngineEvents = []
+    this.pendingLazyTrackedChanges = []
     this.namedExpressions.clear()
   }
 
@@ -2793,8 +3400,22 @@ export class WorkPaper {
       if (!this.engineEventCaptureEnabled) {
         return
       }
-      this.trackedEngineEvents.push(captureTrackedEngineEvent(event))
+      this.trackedEngineEvents.push(
+        captureTrackedEngineEvent(event, {
+          borrowChangedCellIndexViews: this.retainedTrackedEngineEventIndicesDepth > 0,
+          cloneChangedCellIndices: this.retainedTrackedEngineEventIndicesDepth === 0,
+        }),
+      )
     })
+  }
+
+  private withRetainedTrackedEngineEventIndices<T>(callback: () => T): T {
+    this.retainedTrackedEngineEventIndicesDepth += 1
+    try {
+      return callback()
+    } finally {
+      this.retainedTrackedEngineEventIndicesDepth -= 1
+    }
   }
 
   private withEngineEventCaptureDisabled<T>(callback: () => T): T {
@@ -2813,6 +3434,83 @@ export class WorkPaper {
     const events = this.trackedEngineEvents
     this.trackedEngineEvents = []
     return events
+  }
+
+  private existingNumericMutationChangedCellCount(result: EngineExistingNumericCellMutationResult): number {
+    return result.changedCellIndices?.length ?? result.changedCellCount ?? 0
+  }
+
+  private existingNumericMutationChangedCellAt(result: EngineExistingNumericCellMutationResult, index: number): number | undefined {
+    if (result.changedCellIndices) {
+      return result.changedCellIndices[index]
+    }
+    if (index === 0) {
+      return result.firstChangedCellIndex
+    }
+    if (index === 1) {
+      return result.secondChangedCellIndex
+    }
+    return undefined
+  }
+
+  private materializeExistingNumericMutationChangedCellIndices(result: EngineExistingNumericCellMutationResult): Uint32Array {
+    if (result.changedCellIndices) {
+      return result.changedCellIndices
+    }
+    const count = this.existingNumericMutationChangedCellCount(result)
+    const changed = new Uint32Array(count)
+    for (let index = 0; index < count; index += 1) {
+      changed[index] = this.existingNumericMutationChangedCellAt(result, index) ?? 0
+    }
+    return changed
+  }
+
+  private trackedEventFromExistingNumericMutationResult(result: EngineExistingNumericCellMutationResult): TrackedEngineEvent {
+    let sortedDisjoint = true
+    let previous = -1
+    let firstChangedCellIndex: number | undefined
+    let lastChangedCellIndex: number | undefined
+    const changedCellCount = this.existingNumericMutationChangedCellCount(result)
+    for (let index = 0; index < changedCellCount; index += 1) {
+      const cellIndex = this.existingNumericMutationChangedCellAt(result, index) ?? -1
+      if (index === 0) {
+        firstChangedCellIndex = cellIndex
+      }
+      if (!Number.isInteger(cellIndex) || cellIndex < 0 || cellIndex <= previous) {
+        sortedDisjoint = false
+      }
+      previous = cellIndex
+      lastChangedCellIndex = cellIndex
+    }
+    return {
+      invalidation: 'cells',
+      changedCellIndices: this.materializeExistingNumericMutationChangedCellIndices(result),
+      changedInputCount: 1,
+      explicitChangedCount: result.explicitChangedCount,
+      changedCellIndicesSortedDisjoint: sortedDisjoint,
+      ...(firstChangedCellIndex === undefined ? {} : { firstChangedCellIndex }),
+      ...(lastChangedCellIndex === undefined ? {} : { lastChangedCellIndex }),
+      hasInvalidatedRanges: false,
+      hasInvalidatedRows: false,
+      hasInvalidatedColumns: false,
+    }
+  }
+
+  private trackLazyTrackedChanges(changes: WorkPaperCellChange[]): void {
+    if (hasDeferredTrackedIndexChanges(changes)) {
+      this.pendingLazyTrackedChanges.push(changes)
+    }
+  }
+
+  private materializePendingLazyTrackedChanges(options: { readonly preservePositions?: boolean } = {}): void {
+    if (this.pendingLazyTrackedChanges.length === 0) {
+      return
+    }
+    const pending = this.pendingLazyTrackedChanges
+    this.pendingLazyTrackedChanges = []
+    for (let index = 0; index < pending.length; index += 1) {
+      detachTrackedIndexChanges(pending[index]!, { preservePositions: options.preservePositions })
+    }
   }
 
   private resetChangeTrackingCaches(): void {
@@ -2847,11 +3545,12 @@ export class WorkPaper {
     this.pendingBatchPotentialNewCells = 0
     this.engine.applyCellMutationsAtWithOptions(ops, {
       captureUndo: true,
-      potentialNewCells: potentialNewCells > 0 ? potentialNewCells : undefined,
+      potentialNewCells,
       source: 'local',
       returnUndoOps: false,
       reuseRefs: true,
     })
+    this.updateSheetDimensionsAfterCellMutationRefs(ops)
   }
 
   private applyCellMutationRefs(
@@ -2873,6 +3572,7 @@ export class WorkPaper {
         const mutation = ref.mutation
         this.suspendedCellMutationRefs.push({
           sheetId: ref.sheetId,
+          ...(ref.cellIndex !== undefined ? { cellIndex: ref.cellIndex } : {}),
           mutation:
             mutation.kind === 'setCellValue'
               ? {
@@ -2895,11 +3595,13 @@ export class WorkPaper {
                   },
         })
       }
-      this.suspendedCellMutationPotentialNewCells +=
-        options.potentialNewCells ?? refs.reduce((count, ref) => (ref?.mutation.kind === 'clearCell' ? count : count + 1), 0)
+      this.suspendedCellMutationPotentialNewCells += options.potentialNewCells ?? countPotentialNewTrackedCellMutations(refs)
       return
     }
     this.engine.applyCellMutationsAtWithOptions(refs, options)
+    if (!canSkipDimensionUpdateAfterLiteralMutation(refs, options.potentialNewCells)) {
+      this.updateSheetDimensionsAfterCellMutationRefs(refs)
+    }
   }
 
   private flushSuspendedCellMutations(): void {
@@ -2912,11 +3614,12 @@ export class WorkPaper {
     this.suspendedCellMutationPotentialNewCells = 0
     this.engine.applyCellMutationsAtWithOptions(refs, {
       captureUndo: true,
-      potentialNewCells: potentialNewCells > 0 ? potentialNewCells : undefined,
+      potentialNewCells,
       source: 'local',
       returnUndoOps: false,
       reuseRefs: true,
     })
+    this.updateSheetDimensionsAfterCellMutationRefs(refs)
   }
 
   private enqueueSuspendedLiteralMutation(
@@ -2924,20 +3627,25 @@ export class WorkPaper {
     row: number,
     col: number,
     content: RawCellContent,
-    existingCellIndex = this.engine.workbook.getSheetById(sheetId)?.grid.get(row, col) ?? -1,
+    cellIndex: number | undefined,
   ): boolean {
     if (!this.evaluationSuspended || !isDeferredBatchLiteralContent(content) || isFormulaContent(content)) {
       return false
     }
     if (content === null) {
-      this.suspendedCellMutationRefs.push({ sheetId, mutation: { kind: 'clearCell', row, col } })
+      this.suspendedCellMutationRefs.push({
+        sheetId,
+        mutation: { kind: 'clearCell', row, col },
+        ...(cellIndex !== undefined ? { cellIndex } : {}),
+      })
       return true
     }
     this.suspendedCellMutationRefs.push({
       sheetId,
       mutation: { kind: 'setCellValue', row, col, value: content },
+      ...(cellIndex !== undefined ? { cellIndex } : {}),
     })
-    if (existingCellIndex === -1) {
+    if (cellIndex === undefined) {
       this.suspendedCellMutationPotentialNewCells += 1
     }
     return true
@@ -2948,20 +3656,25 @@ export class WorkPaper {
     row: number,
     col: number,
     content: RawCellContent,
-    existingCellIndex = this.engine.workbook.getSheetById(sheetId)?.grid.get(row, col) ?? -1,
+    cellIndex: number | undefined,
   ): boolean {
     if (this.batchDepth === 0 || this.evaluationSuspended || !isDeferredBatchLiteralContent(content) || isFormulaContent(content)) {
       return false
     }
     if (content === null) {
-      this.pendingBatchOps.push({ sheetId, mutation: { kind: 'clearCell', row, col } })
+      this.pendingBatchOps.push({
+        sheetId,
+        mutation: { kind: 'clearCell', row, col },
+        ...(cellIndex !== undefined ? { cellIndex } : {}),
+      })
       return true
     }
     this.pendingBatchOps.push({
       sheetId,
       mutation: { kind: 'setCellValue', row, col, value: content },
+      ...(cellIndex !== undefined ? { cellIndex } : {}),
     })
-    if (existingCellIndex === -1) {
+    if (cellIndex === undefined) {
       this.pendingBatchPotentialNewCells += 1
     }
     return true
@@ -3007,6 +3720,29 @@ export class WorkPaper {
 
   private a1(address: Pick<WorkPaperCellAddress, 'row' | 'col'>): string {
     return formatAddress(address.row, address.col)
+  }
+
+  private trackedA1(row: number, col: number): string {
+    if (row >= 0 && row < RUNTIME_A1_CACHE_ROW_LIMIT && col >= 0 && col < RUNTIME_A1_CACHE_COLUMN_LIMIT) {
+      const cacheKey = row * RUNTIME_A1_CACHE_COLUMN_LIMIT + col
+      let cached = RUNTIME_A1_CACHE[cacheKey]
+      if (cached === undefined) {
+        let column = RUNTIME_COLUMN_LABEL_CACHE[col]
+        if (column === undefined) {
+          column = indexToColumn(col)
+          RUNTIME_COLUMN_LABEL_CACHE[col] = column
+        }
+        cached = `${column}${row + 1}`
+        RUNTIME_A1_CACHE[cacheKey] = cached
+      }
+      return cached
+    }
+    let column = RUNTIME_COLUMN_LABEL_CACHE[col]
+    if (column === undefined) {
+      column = indexToColumn(col)
+      RUNTIME_COLUMN_LABEL_CACHE[col] = column
+    }
+    return `${column}${row + 1}`
   }
 
   private rangeRef(range: WorkPaperCellRange): CellRangeRef {
@@ -3120,14 +3856,23 @@ export class WorkPaper {
     return orderWorkPaperCellChanges(cellChanges, this.listSheetRecords())
   }
 
-  private materializeTrackedEventChanges(event: TrackedEngineEvent): MaterializedTrackedEventChanges {
+  private materializeTrackedEventChanges(event: TrackedEngineEvent, lazy = false): MaterializedTrackedEventChanges {
     if (event.patches && event.patches.length > 0) {
       const cellPatches = event.patches.filter((patch): patch is Extract<TrackedPatch, { kind: 'cell' }> => patch.kind === 'cell')
       return { changes: cellPatches, canReusePublicChanges: false, ordered: false }
     }
+    const trustedPhysicalMetadata =
+      lazy && event.changedCellIndices instanceof Uint32Array
+        ? readTrustedPhysicalTrackedChangeMetadata(event.changedCellIndices)
+        : undefined
     const materialized = materializeTrackedIndexChangesWithMetadata(this.engine, event.changedCellIndices, {
       explicitChangedCount: event.explicitChangedCount,
+      lazy,
+      ...trustedPhysicalMetadata,
     })
+    if (lazy) {
+      this.trackLazyTrackedChanges(materialized.changes)
+    }
     return {
       changes: materialized.changes,
       canReusePublicChanges: true,
@@ -3180,15 +3925,197 @@ export class WorkPaper {
       kind: 'cell',
       address: { sheet: sheetId, row, col },
       sheetName,
-      a1: formatAddress(row, col),
+      a1: this.trackedA1(row, col),
       newValue,
     }
+  }
+
+  private readTinySortedPhysicalTrackedEventChanges(event: TrackedEngineEvent): WorkPaperCellChange[] | null {
+    if (!event.changedCellIndicesSortedDisjoint) {
+      return null
+    }
+    const cellStore = this.engine.workbook.cellStore
+    const firstCellIndex = event.changedCellIndices[0]
+    if (firstCellIndex === undefined) {
+      return []
+    }
+    const sheetId = cellStore.sheetIds[firstCellIndex]
+    if (sheetId === undefined) {
+      return []
+    }
+    const sheet = this.engine.workbook.getSheetById(sheetId)
+    if (sheet && sheet.structureVersion !== 1) {
+      return null
+    }
+    const sheetName = sheet?.name ?? this.engine.workbook.getSheetNameById(sheetId)
+    if (event.changedCellIndices.length === 1) {
+      const row = cellStore.rows[firstCellIndex]!
+      const col = cellStore.cols[firstCellIndex]!
+      return [
+        {
+          kind: 'cell',
+          address: { sheet: sheetId, row, col },
+          sheetName,
+          a1: this.trackedA1(row, col),
+          newValue: readTrackedRuntimeCellValue(cellStore, firstCellIndex, this.engine.strings),
+        },
+      ]
+    }
+    if (event.changedCellIndices.length === 2) {
+      const secondCellIndex = event.changedCellIndices[1]!
+      if (cellStore.sheetIds[secondCellIndex] !== sheetId) {
+        return null
+      }
+      const firstRow = cellStore.rows[firstCellIndex]!
+      const firstCol = cellStore.cols[firstCellIndex]!
+      const secondRow = cellStore.rows[secondCellIndex]!
+      const secondCol = cellStore.cols[secondCellIndex]!
+      if (secondRow < firstRow || (secondRow === firstRow && secondCol < firstCol)) {
+        return null
+      }
+      return [
+        {
+          kind: 'cell',
+          address: { sheet: sheetId, row: firstRow, col: firstCol },
+          sheetName,
+          a1: this.trackedA1(firstRow, firstCol),
+          newValue: readTrackedRuntimeCellValue(cellStore, firstCellIndex, this.engine.strings),
+        },
+        {
+          kind: 'cell',
+          address: { sheet: sheetId, row: secondRow, col: secondCol },
+          sheetName,
+          a1: this.trackedA1(secondRow, secondCol),
+          newValue: readTrackedRuntimeCellValue(cellStore, secondCellIndex, this.engine.strings),
+        },
+      ]
+    }
+    const changes: WorkPaperCellChange[] = []
+    let previousRow = -1
+    let previousCol = -1
+    for (let index = 0; index < event.changedCellIndices.length; index += 1) {
+      const cellIndex = event.changedCellIndices[index]!
+      if (cellStore.sheetIds[cellIndex] !== sheetId) {
+        return null
+      }
+      const row = cellStore.rows[cellIndex]!
+      const col = cellStore.cols[cellIndex]!
+      if (row < previousRow || (row === previousRow && col < previousCol)) {
+        return null
+      }
+      changes.push({
+        kind: 'cell',
+        address: { sheet: sheetId, row, col },
+        sheetName,
+        a1: this.trackedA1(row, col),
+        newValue: readTrackedRuntimeCellValue(cellStore, cellIndex, this.engine.strings),
+      })
+      previousRow = row
+      previousCol = col
+    }
+    return changes
+  }
+
+  private tryReadTinyTrackedEventChangesWithoutVisibility(event: TrackedEngineEvent): WorkPaperChange[] | null {
+    if (
+      event.patches !== undefined &&
+      event.invalidation !== 'full' &&
+      event.patches.length <= TINY_TRACKED_CHANGE_LIMIT &&
+      !event.hasInvalidatedRanges &&
+      !event.hasInvalidatedRows &&
+      !event.hasInvalidatedColumns
+    ) {
+      const changes: WorkPaperCellChange[] = []
+      let alreadySorted = true
+      let previousSheetId = -1
+      let previousSheetOrder = -1
+      let previousRow = -1
+      let previousCol = -1
+      for (let index = 0; index < event.patches.length; index += 1) {
+        const patch = event.patches[index]
+        if (!patch || patch.kind !== 'cell') {
+          return null
+        }
+        const sheetOrder = patch.address.sheet === previousSheetId ? previousSheetOrder : this.sheetRecord(patch.address.sheet).order
+        if (
+          sheetOrder < previousSheetOrder ||
+          (sheetOrder === previousSheetOrder &&
+            (patch.address.row < previousRow || (patch.address.row === previousRow && patch.address.col < previousCol)))
+        ) {
+          alreadySorted = false
+        }
+        changes.push({
+          kind: 'cell',
+          address: patch.address,
+          sheetName: patch.sheetName,
+          a1: patch.a1,
+          newValue: patch.newValue,
+        })
+        previousSheetId = patch.address.sheet
+        previousSheetOrder = sheetOrder
+        previousRow = patch.address.row
+        previousCol = patch.address.col
+      }
+      return alreadySorted ? changes : orderWorkPaperCellChanges(changes, this.listSheetRecords(), event.explicitChangedCount)
+    }
+    if (
+      event.invalidation === 'full' ||
+      event.patches !== undefined ||
+      event.changedCellIndices.length > TINY_TRACKED_CHANGE_LIMIT ||
+      event.hasInvalidatedRanges ||
+      event.hasInvalidatedRows ||
+      event.hasInvalidatedColumns
+    ) {
+      return null
+    }
+    if (event.changedCellIndices.length === 0) {
+      return []
+    }
+    const sortedPhysicalChanges = this.readTinySortedPhysicalTrackedEventChanges(event)
+    if (sortedPhysicalChanges) {
+      return sortedPhysicalChanges
+    }
+    const changes: WorkPaperCellChange[] = []
+    const cellKeys: number[] = []
+    let alreadySorted = true
+    let previousSheetId = -1
+    let previousSheetOrder = -1
+    let previousRow = -1
+    let previousCol = -1
+    for (let index = 0; index < event.changedCellIndices.length; index += 1) {
+      const change = this.readSingleTrackedCellChange(event.changedCellIndices[index]!)
+      if (!change) {
+        continue
+      }
+      const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
+      for (let priorIndex = 0; priorIndex < cellKeys.length; priorIndex += 1) {
+        if (cellKeys[priorIndex] === cellKey) {
+          return null
+        }
+      }
+      cellKeys.push(cellKey)
+      const sheetOrder = change.address.sheet === previousSheetId ? previousSheetOrder : this.sheetRecord(change.address.sheet).order
+      if (
+        sheetOrder < previousSheetOrder ||
+        (sheetOrder === previousSheetOrder &&
+          (change.address.row < previousRow || (change.address.row === previousRow && change.address.col < previousCol)))
+      ) {
+        alreadySorted = false
+      }
+      changes.push(change)
+      previousSheetId = change.address.sheet
+      previousSheetOrder = sheetOrder
+      previousRow = change.address.row
+      previousCol = change.address.col
+    }
+    return alreadySorted ? changes : orderWorkPaperCellChanges(changes, this.listSheetRecords(), event.explicitChangedCount)
   }
 
   private computeCellChangesFromTrackedEvents(
     beforeVisibility: VisibilitySnapshot,
     events: readonly TrackedEngineEvent[],
     updateVisibility = true,
+    options: { readonly preferLazyPublicChanges?: boolean } = {},
   ): { changes: WorkPaperChange[]; nextVisibility: VisibilitySnapshot } | null {
     if (events.some((event) => event.invalidation === 'full')) {
       return null
@@ -3276,11 +4203,13 @@ export class WorkPaper {
     }
     if (events.length === 1) {
       const event = events[0]!
-      const smallChanges = tryReadSmallTrackedEventChanges(event)
-      if (smallChanges) {
-        return { changes: smallChanges, nextVisibility }
+      if (!options.preferLazyPublicChanges) {
+        const smallChanges = tryReadSmallTrackedEventChanges(event)
+        if (smallChanges) {
+          return { changes: smallChanges, nextVisibility }
+        }
       }
-      const materializedEventChanges = this.materializeTrackedEventChanges(event)
+      const materializedEventChanges = this.materializeTrackedEventChanges(event, !updateVisibility)
       const eventChanges = materializedEventChanges.changes
       if (!updateVisibility && materializedEventChanges.canReusePublicChanges && materializedEventChanges.ordered) {
         return {
@@ -3353,6 +4282,32 @@ export class WorkPaper {
             : orderWorkPaperCellChanges(directChanges, this.listSheetRecords(), event.explicitChangedCount),
           nextVisibility,
         }
+      }
+    }
+    const materializedSources = updateVisibility
+      ? null
+      : materializeTrackedIndexChangeSourcesWithMetadata(this.engine, events, {
+          deferLazyDetach: true,
+          lazy: options.preferLazyPublicChanges,
+        })
+    if (materializedSources) {
+      this.trackLazyTrackedChanges(materializedSources.changes)
+      if (updateVisibility) {
+        for (const change of materializedSources.changes) {
+          const cellKey = makeCellKey(change.address.sheet, change.address.row, change.address.col)
+          const sheet = ensureMutableSheet(change.address.sheet, change.sheetName)
+          if (change.newValue.tag === ValueTag.Empty) {
+            sheet.cells.delete(cellKey)
+          } else {
+            sheet.cells.set(cellKey, change.newValue)
+          }
+        }
+      }
+      return {
+        changes: materializedSources.ordered
+          ? materializedSources.changes
+          : orderWorkPaperCellChanges(materializedSources.changes, this.listSheetRecords()),
+        nextVisibility,
       }
     }
     const latestChangesByKey = new Map<number, WorkPaperCellChange>()
@@ -3430,17 +4385,47 @@ export class WorkPaper {
     this.batchUsesTrackedFastPath = false
   }
 
-  private computeTrackedChangesWithoutVisibilityCache(events: readonly TrackedEngineEvent[]): WorkPaperChange[] {
-    const fastPath = this.computeCellChangesFromTrackedEvents(new Map(), events, false)
+  private computeTrackedChangesWithoutVisibilityCache(
+    events: readonly TrackedEngineEvent[],
+    options: { readonly preferLazyPublicChanges?: boolean } = {},
+  ): WorkPaperChange[] {
+    if (events.length === 1) {
+      const event = events[0]!
+      if (!options.preferLazyPublicChanges || event.changedCellIndices.length <= TINY_TRACKED_CHANGE_LIMIT) {
+        const tinyChanges = this.tryReadTinyTrackedEventChangesWithoutVisibility(event)
+        if (tinyChanges) {
+          return tinyChanges
+        }
+      }
+    }
+    const fastPath = this.computeCellChangesFromTrackedEvents(new Map(), events, false, options)
     if (!fastPath) {
       throw new WorkPaperOperationError('Mutation emitted an unsupported invalidation pattern for tracked changes')
     }
     return fastPath.changes
   }
 
-  private captureTrackedChangesWithoutVisibilityCache(mutate: () => void): WorkPaperChange[] {
+  private captureTrackedChangesWithoutVisibilityCache(
+    mutate: () => void,
+    options: {
+      readonly preservePendingTrackedPositions?: boolean
+      readonly singleLiteralChange?: {
+        readonly address: WorkPaperCellAddress
+        readonly cellIndex?: number
+        readonly isPhysicalSheet: boolean
+        readonly sheetName: string
+        readonly value: LiteralInput
+      }
+    } = {},
+  ): WorkPaperChange[] {
     this.assertNotDisposed()
-    this.drainTrackedEngineEvents()
+    if (this.pendingLazyTrackedChanges.length > 0) {
+      this.materializePendingLazyTrackedChanges({ preservePositions: options.preservePendingTrackedPositions })
+    }
+    if (this.trackedEngineEvents.length > 0) {
+      this.drainTrackedEngineEvents()
+    }
+    this.retainedTrackedEngineEventIndicesDepth += 1
     try {
       mutate()
     } catch (error) {
@@ -3448,15 +4433,183 @@ export class WorkPaper {
         throw error
       }
       throw new WorkPaperOperationError(this.messageOf(error, 'Mutation failed'))
+    } finally {
+      this.retainedTrackedEngineEventIndicesDepth -= 1
     }
-    const changes = this.computeTrackedChangesWithoutVisibilityCache(this.drainTrackedEngineEvents())
-    if (changes.length > 0) {
+    const events = this.drainTrackedEngineEvents()
+    const directSingleLiteralChanges = this.tryBuildDirectSingleLiteralTrackedChange(events, options.singleLiteralChange)
+    if (directSingleLiteralChanges) {
+      if (directSingleLiteralChanges.length > 0 && this.emitter.hasListeners('valuesUpdated')) {
+        this.emitter.emitDetailed({ eventName: 'valuesUpdated', payload: { changes: directSingleLiteralChanges } })
+      }
+      return directSingleLiteralChanges
+    }
+    const shouldEmitValuesUpdated = this.emitter.hasListeners('valuesUpdated')
+    const changes = this.computeTrackedChangesWithoutVisibilityCache(events, {
+      preferLazyPublicChanges: !shouldEmitValuesUpdated,
+    })
+    if (changes.length > 0 && shouldEmitValuesUpdated) {
       this.emitter.emitDetailed({ eventName: 'valuesUpdated', payload: { changes } })
     }
     return changes
   }
 
+  private tryBuildDirectSingleLiteralTrackedChange(
+    events: readonly TrackedEngineEvent[],
+    expected:
+      | {
+          readonly address: WorkPaperCellAddress
+          readonly cellIndex?: number
+          readonly isPhysicalSheet: boolean
+          readonly sheetName: string
+          readonly value: LiteralInput
+        }
+      | undefined,
+  ): WorkPaperChange[] | null {
+    if (expected === undefined || expected.cellIndex === undefined || events.length !== 1) {
+      return null
+    }
+    const event = events[0]!
+    if (
+      event.invalidation === 'full' ||
+      event.patches !== undefined ||
+      event.changedCellIndices.length < 1 ||
+      event.changedCellIndices.length > 2 ||
+      event.changedCellIndices[0] !== expected.cellIndex ||
+      event.hasInvalidatedRanges ||
+      event.hasInvalidatedRows ||
+      event.hasInvalidatedColumns
+    ) {
+      return null
+    }
+    const literalChange: WorkPaperCellChange = {
+      kind: 'cell',
+      address: { sheet: expected.address.sheet, row: expected.address.row, col: expected.address.col },
+      sheetName: expected.sheetName,
+      a1: this.trackedA1(expected.address.row, expected.address.col),
+      newValue: scalarValueFromLiteral(expected.value),
+    }
+    if (event.changedCellIndices.length === 1) {
+      return [literalChange]
+    }
+    const formulaCellIndex = event.changedCellIndices[1]!
+    const cellStore = this.engine.workbook.cellStore
+    if (cellStore.sheetIds[formulaCellIndex] !== expected.address.sheet) {
+      return null
+    }
+    if (!expected.isPhysicalSheet) {
+      return null
+    }
+    const formulaRow = cellStore.rows[formulaCellIndex]!
+    const formulaCol = cellStore.cols[formulaCellIndex]!
+    if (formulaRow < expected.address.row || (formulaRow === expected.address.row && formulaCol < expected.address.col)) {
+      return null
+    }
+    return [
+      literalChange,
+      {
+        kind: 'cell',
+        address: { sheet: expected.address.sheet, row: formulaRow, col: formulaCol },
+        sheetName: expected.sheetName,
+        a1: this.trackedA1(formulaRow, formulaCol),
+        newValue: readTrackedRuntimeCellValue(cellStore, formulaCellIndex, this.engine.strings),
+      },
+    ]
+  }
+
+  private tryBuildDirectExistingNumericTrackedChanges(
+    result: EngineExistingNumericCellMutationResult,
+    address: WorkPaperCellAddress,
+    cellIndex: number,
+    isPhysicalSheet: boolean,
+    sheetName: string,
+    value: number,
+  ): WorkPaperChange[] | null {
+    const changedCellCount = result.changedCellIndices?.length ?? result.changedCellCount ?? 0
+    const firstChangedCellIndex = result.changedCellIndices?.[0] ?? result.firstChangedCellIndex
+    if (changedCellCount < 1 || firstChangedCellIndex !== cellIndex) {
+      return null
+    }
+    const literalChange: WorkPaperCellChange = {
+      kind: 'cell',
+      address: { sheet: address.sheet, row: address.row, col: address.col },
+      sheetName,
+      a1: this.trackedA1(address.row, address.col),
+      newValue: { tag: ValueTag.Number, value },
+    }
+    if (changedCellCount === 1) {
+      return [literalChange]
+    }
+    if (!isPhysicalSheet) {
+      return null
+    }
+    if (changedCellCount > 2) {
+      const changedCellIndices = result.changedCellIndices
+      if (changedCellIndices === undefined) {
+        return null
+      }
+      const cellStore = this.engine.workbook.cellStore
+      const changes: WorkPaperCellChange[] = []
+      changes.length = changedCellCount
+      changes[0] = literalChange
+      let alreadySorted = true
+      let previousRow = address.row
+      let previousCol = address.col
+      for (let index = 1; index < changedCellCount; index += 1) {
+        const changedCellIndex = changedCellIndices[index]!
+        if (cellStore.sheetIds[changedCellIndex] !== address.sheet) {
+          return null
+        }
+        const row = cellStore.rows[changedCellIndex]
+        const col = cellStore.cols[changedCellIndex]
+        if (row === undefined || col === undefined) {
+          return null
+        }
+        if (row < previousRow || (row === previousRow && col < previousCol)) {
+          alreadySorted = false
+        }
+        changes[index] = {
+          kind: 'cell',
+          address: { sheet: address.sheet, row, col },
+          sheetName,
+          a1: this.trackedA1(row, col),
+          newValue: readTrackedRuntimeCellValue(cellStore, changedCellIndex, this.engine.strings),
+        }
+        previousRow = row
+        previousCol = col
+      }
+      return alreadySorted ? changes : orderWorkPaperCellChanges(changes, this.listSheetRecords(), result.explicitChangedCount)
+    }
+    const formulaCellIndex = result.changedCellIndices?.[1] ?? result.secondChangedCellIndex
+    if (formulaCellIndex === undefined) {
+      return null
+    }
+    const cellStore = this.engine.workbook.cellStore
+    if (cellStore.sheetIds[formulaCellIndex] !== address.sheet) {
+      return null
+    }
+    const formulaRow = result.secondChangedRow ?? cellStore.rows[formulaCellIndex]!
+    const formulaCol = result.secondChangedCol ?? cellStore.cols[formulaCellIndex]!
+    if (formulaRow < address.row || (formulaRow === address.row && formulaCol < address.col)) {
+      return null
+    }
+    return [
+      literalChange,
+      {
+        kind: 'cell',
+        address: { sheet: address.sheet, row: formulaRow, col: formulaCol },
+        sheetName,
+        a1: this.trackedA1(formulaRow, formulaCol),
+        newValue:
+          result.secondChangedNumericValue === undefined
+            ? readTrackedRuntimeCellValue(cellStore, formulaCellIndex, this.engine.strings)
+            : { tag: ValueTag.Number, value: result.secondChangedNumericValue },
+      },
+    ]
+  }
+
   private batchStructuralChanges(batchOperations: () => void): WorkPaperChange[] {
+    this.materializePendingLazyTrackedChanges()
     if (!this.canUseTrackedStructuralFastPath()) {
       this.downgradeTrackedBatchFastPath()
       return this.batch(batchOperations)
@@ -3466,15 +4619,18 @@ export class WorkPaper {
     this.drainTrackedEngineEvents()
     this.batchDepth += 1
     try {
-      batchOperations()
+      this.withRetainedTrackedEngineEventIndices(batchOperations)
     } finally {
       this.batchDepth -= 1
       this.flushPendingBatchOps()
       this.mergeUndoHistory(undoStackStart)
     }
-    const changes = this.computeTrackedChangesWithoutVisibilityCache(this.drainTrackedEngineEvents())
+    const shouldEmitValuesUpdated = this.emitter.hasListeners('valuesUpdated')
+    const changes = this.computeTrackedChangesWithoutVisibilityCache(this.drainTrackedEngineEvents(), {
+      preferLazyPublicChanges: !shouldEmitValuesUpdated,
+    })
     this.flushQueuedEvents()
-    if (changes.length > 0) {
+    if (changes.length > 0 && shouldEmitValuesUpdated) {
       this.emitter.emitDetailed({ eventName: 'valuesUpdated', payload: { changes } })
     }
     return changes
@@ -3497,8 +4653,13 @@ export class WorkPaper {
     return hasNamedExpressions ? [...cellChanges, ...this.computeNamedExpressionChanges(beforeNames, afterNames)] : cellChanges
   }
 
-  private captureChanges(semanticEvent: QueuedEvent | undefined, mutate: () => void): WorkPaperChange[] {
+  private captureChanges(
+    semanticEvent: QueuedEvent | undefined,
+    mutate: () => void,
+    options: { readonly preservePendingTrackedPositions?: boolean } = {},
+  ): WorkPaperChange[] {
     this.assertNotDisposed()
+    this.materializePendingLazyTrackedChanges({ preservePositions: options.preservePendingTrackedPositions })
     this.downgradeTrackedBatchFastPath()
     if (semanticEvent !== undefined) {
       this.flushPendingBatchOps()
@@ -3549,7 +4710,7 @@ export class WorkPaper {
         this.emitter.emitDetailed(event)
       }
     }
-    if (!this.shouldSuppressEvents() && changes.length > 0) {
+    if (!this.shouldSuppressEvents() && changes.length > 0 && this.emitter.hasListeners('valuesUpdated')) {
       this.emitter.emitDetailed({ eventName: 'valuesUpdated', payload: { changes } })
     }
     return changes
@@ -3583,6 +4744,11 @@ export class WorkPaper {
     return stack
   }
 
+  private historyTopIsCellMutations(stack: readonly HistoryRecord[]): boolean {
+    const kind = stack.at(-1)?.forward.kind
+    return kind === 'cell-mutations' || kind === 'single-existing-numeric-cell-mutation'
+  }
+
   private clearHistoryStacks(): void {
     this.getUndoStack().length = 0
     this.getRedoStack().length = 0
@@ -3594,6 +4760,19 @@ export class WorkPaper {
         return record.ops
       case 'single-op':
         return [record.op]
+      case 'single-existing-numeric-cell-mutation': {
+        const sheetName = this.getSheetName(record.sheetId)
+        return sheetName
+          ? [
+              {
+                kind: 'setCellValue',
+                sheetName,
+                address: formatAddress(record.row, record.col),
+                value: record.value,
+              },
+            ]
+          : []
+      }
       case 'cell-mutations':
         return record.refs.flatMap((ref) => {
           const sheetName = this.getSheetName(ref.sheetId)
@@ -3814,6 +4993,7 @@ export class WorkPaper {
   }
 
   private replaceSheetContentInternal(sheetId: number, content: WorkPaperSheet, options: { duringInitialization: boolean }): void {
+    const dimensions = inspectSheetDimensionsWithinLimits(this.sheetName(sheetId), content, this.config)
     replaceWorkPaperSheetContent({
       sheetId,
       sheetName: this.sheetName(sheetId),
@@ -3827,10 +5007,11 @@ export class WorkPaper {
       getUndoStackLength: () => this.getUndoStack().length,
       mergeUndoHistory: (undoStackStart) => this.mergeUndoHistory(undoStackStart),
     })
+    this.cacheInitializedSheetDimensions(sheetId, dimensions)
   }
 
   private applyRawContent(address: WorkPaperCellAddress, content: RawCellContent): void {
-    const existingCellIndex = this.engine.workbook.getSheetById(address.sheet)?.grid.get(address.row, address.col) ?? -1
+    const cellIndex = this.getVisibleCellIndex(address.sheet, address.row, address.col)
     const mutation: EngineCellMutationRef['mutation'] =
       content === null
         ? { kind: 'clearCell', row: address.row, col: address.col }
@@ -3847,9 +5028,9 @@ export class WorkPaper {
               col: address.col,
               value: content,
             }
-    this.applyCellMutationRefs([{ sheetId: address.sheet, mutation }], {
+    this.applyCellMutationRefs([{ sheetId: address.sheet, mutation, ...(cellIndex !== undefined ? { cellIndex } : {}) }], {
       captureUndo: true,
-      potentialNewCells: content === null || existingCellIndex !== -1 ? 0 : 1,
+      potentialNewCells: content === null || cellIndex !== undefined ? 0 : 1,
       source: 'local',
       returnUndoOps: false,
       reuseRefs: true,

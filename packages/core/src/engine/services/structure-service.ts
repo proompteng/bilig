@@ -389,8 +389,8 @@ export function createEngineStructureService(args: {
       if (args.state.workbook.cellStore.sheetIds[dependencyCellIndex] !== targetSheetId) {
         return true
       }
-      const dependencyPosition = args.state.workbook.getCellPosition(dependencyCellIndex)
-      return dependencyPosition !== undefined && mapStructuralAxisIndex(dependencyPosition.col, transform) !== undefined
+      const dependencyColumn = args.state.workbook.getCellAxisIndex(dependencyCellIndex, 'column')
+      return dependencyColumn !== undefined && mapStructuralAxisIndex(dependencyColumn, transform) !== undefined
     })
   }
 
@@ -411,8 +411,8 @@ export function createEngineStructureService(args: {
       if (args.state.workbook.cellStore.sheetIds[dependencyCellIndex] !== targetSheetId) {
         return false
       }
-      const dependencyPosition = args.state.workbook.getCellPosition(dependencyCellIndex)
-      return dependencyPosition !== undefined && mapStructuralAxisIndex(dependencyPosition.col, transform) === undefined
+      const dependencyColumn = args.state.workbook.getCellAxisIndex(dependencyCellIndex, 'column')
+      return dependencyColumn !== undefined && mapStructuralAxisIndex(dependencyColumn, transform) === undefined
     })
   }
 
@@ -1427,12 +1427,8 @@ export function createEngineStructureService(args: {
         preservedCellIndices.add(cellIndex)
         return true
       }
-      const ownerPosition = args.state.workbook.getCellPosition(cellIndex)
-      if (
-        !ownerPosition ||
-        mapStructuralAxisIndex(argsForImpact.transform.axis === 'row' ? ownerPosition.row : ownerPosition.col, argsForImpact.transform) ===
-          undefined
-      ) {
+      const ownerAxisIndex = args.state.workbook.getCellAxisIndex(cellIndex, argsForImpact.transform.axis)
+      if (ownerAxisIndex === undefined || mapStructuralAxisIndex(ownerAxisIndex, argsForImpact.transform) === undefined) {
         return false
       }
       const preservesValue = canDeferSimpleStructuralFormulaSource(formula, argsForImpact.transform)

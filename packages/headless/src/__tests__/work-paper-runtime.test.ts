@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ErrorCode, ValueTag } from '@bilig/protocol'
 
-import type { WorkPaperCellAddress } from '../index.js'
+import type { WorkPaperCellAddress, WorkPaperCellChange, WorkPaperChange } from '../index.js'
 import { WorkPaperEvaluationSuspendedError, WorkPaper } from '../index.js'
+import { forceMaterializeTrackedIndexChanges, hasDeferredTrackedIndexChanges } from '../tracked-cell-index-changes.js'
 
 const TEST_LANGUAGE_CODE = 'xHF'
 
@@ -12,6 +13,112 @@ function cell(sheet: number, row: number, col: number): WorkPaperCellAddress {
 
 function hasCaptureVisibilitySnapshot(value: unknown): value is WorkPaper & { captureVisibilitySnapshot: () => unknown } {
   return typeof Reflect.get(value, 'captureVisibilitySnapshot') === 'function'
+}
+
+function expectOnlyCellChanges(changes: WorkPaperChange[]): asserts changes is WorkPaperCellChange[] {
+  expect(changes.every((change) => change.kind === 'cell')).toBe(true)
+}
+
+function trackComputeCellChangesFromTrackedEvents(workbook: WorkPaper): { readonly count: number; restore: () => void } {
+  const original = Reflect.get(workbook, 'computeCellChangesFromTrackedEvents')
+  if (typeof original !== 'function') {
+    throw new Error('Expected WorkPaper to expose computeCellChangesFromTrackedEvents in tests')
+  }
+  let count = 0
+  Reflect.set(workbook, 'computeCellChangesFromTrackedEvents', (...args: unknown[]) => {
+    count += 1
+    return Reflect.apply(original, workbook, args)
+  })
+  return {
+    get count() {
+      return count
+    },
+    restore: () => {
+      Reflect.set(workbook, 'computeCellChangesFromTrackedEvents', original)
+    },
+  }
+}
+
+function rejectSingleTrackedCellReader(workbook: WorkPaper): { restore: () => void } {
+  const original = Reflect.get(workbook, 'readSingleTrackedCellChange')
+  if (typeof original !== 'function') {
+    throw new Error('Expected WorkPaper to expose readSingleTrackedCellChange in tests')
+  }
+  Reflect.set(workbook, 'readSingleTrackedCellChange', () => {
+    throw new Error('Expected tiny sorted physical changes to avoid generic single-cell reading')
+  })
+  return {
+    restore: () => {
+      Reflect.set(workbook, 'readSingleTrackedCellChange', original)
+    },
+  }
+}
+
+function trackCaptureTrackedChangesWithoutVisibilityCache(workbook: WorkPaper): { readonly count: number; restore: () => void } {
+  const original = Reflect.get(workbook, 'captureTrackedChangesWithoutVisibilityCache')
+  if (typeof original !== 'function') {
+    throw new Error('Expected WorkPaper to expose captureTrackedChangesWithoutVisibilityCache in tests')
+  }
+  let count = 0
+  Reflect.set(workbook, 'captureTrackedChangesWithoutVisibilityCache', (...args: unknown[]) => {
+    count += 1
+    return Reflect.apply(original, workbook, args)
+  })
+  return {
+    get count() {
+      return count
+    },
+    restore: () => {
+      Reflect.set(workbook, 'captureTrackedChangesWithoutVisibilityCache', original)
+    },
+  }
+}
+
+interface EngineApplyCellMutationsTarget {
+  applyCellMutationsAtWithOptions: (...args: unknown[]) => unknown
+}
+
+interface SheetGridEntryTarget {
+  forEachCellEntry: (fn: (cellIndex: number, row: number, col: number) => void) => void
+}
+
+interface SheetRecordTarget {
+  grid: SheetGridEntryTarget
+}
+
+interface EngineWorkbookTarget {
+  workbook: {
+    getSheetById(sheetId: number): SheetRecordTarget | undefined
+  }
+}
+
+function isEngineApplyCellMutationsTarget(value: unknown): value is EngineApplyCellMutationsTarget {
+  return typeof value === 'object' && value !== null && typeof Reflect.get(value, 'applyCellMutationsAtWithOptions') === 'function'
+}
+
+function isEngineWorkbookTarget(value: unknown): value is EngineWorkbookTarget {
+  const workbook = typeof value === 'object' && value !== null ? Reflect.get(value, 'workbook') : undefined
+  return typeof workbook === 'object' && workbook !== null && typeof Reflect.get(workbook, 'getSheetById') === 'function'
+}
+
+function engineApplyCellMutationsTarget(workbook: WorkPaper): EngineApplyCellMutationsTarget {
+  const engine = Reflect.get(workbook, 'engine')
+  if (!isEngineApplyCellMutationsTarget(engine)) {
+    throw new Error('Expected WorkPaper to expose applyCellMutationsAtWithOptions in tests')
+  }
+  return engine
+}
+
+function sheetGridEntryTarget(workbook: WorkPaper, sheetId: number): SheetGridEntryTarget {
+  const engine = Reflect.get(workbook, 'engine')
+  if (!isEngineWorkbookTarget(engine)) {
+    throw new Error('Expected WorkPaper to expose workbook in tests')
+  }
+  const sheet = engine?.workbook?.getSheetById(sheetId)
+  if (!sheet) {
+    throw new Error('Expected WorkPaper to expose sheet grid in tests')
+  }
+  return sheet.grid
 }
 
 function readUndoStack(value: unknown): unknown[] | null {
@@ -180,6 +287,50 @@ describe('WorkPaper', () => {
     expect(workbook.getPerformanceCounters().changedCellPayloadsBuilt).toBe(0)
   })
 
+  it('materializes no-listener tiny tracked changes eagerly without stale later writes', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: [[1, '=A1*2']],
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+
+    const changes = workbook.setCellContents(cell(sheetId, 0, 0), 9)
+
+    expect(changes).toHaveLength(2)
+    expectOnlyCellChanges(changes)
+    expect(hasDeferredTrackedIndexChanges(changes)).toBe(false)
+
+    workbook.setCellContents(cell(sheetId, 0, 0), 10)
+
+    expect(changes[0]).toMatchObject({
+      a1: 'A1',
+      newValue: { tag: ValueTag.Number, value: 9 },
+    })
+    expect(changes[1]).toMatchObject({
+      a1: 'B1',
+      newValue: { tag: ValueTag.Number, value: 18 },
+    })
+    expect(forceMaterializeTrackedIndexChanges(changes)).toBe(false)
+  })
+
+  it('keeps valuesUpdated listener payloads eager for tiny tracked changes', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: [[1, '=A1*2']],
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+    const events: WorkPaperChange[][] = []
+    workbook.on('valuesUpdated', (changes) => {
+      events.push(changes)
+    })
+
+    const changes = workbook.setCellContents(cell(sheetId, 0, 0), 9)
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toBe(changes)
+    expectOnlyCellChanges(changes)
+    expect(hasDeferredTrackedIndexChanges(changes)).toBe(false)
+    expect(changes.map((change) => (change.kind === 'cell' ? `${change.sheetName}!${change.a1}` : ''))).toEqual(['Bench!A1', 'Bench!B1'])
+  })
+
   it('updates small sliding aggregate fanout without dirty traversal', () => {
     const workbook = WorkPaper.buildFromSheets({
       Bench: Array.from({ length: 64 }, (_, row) => {
@@ -198,6 +349,64 @@ describe('WorkPaper', () => {
       value: 537,
     })
     expect(workbook.getStats().lastMetrics).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 0 })
+  })
+
+  it('captures tiny sliding aggregate listener payloads without the general tracked reducer', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: Array.from({ length: 64 }, (_, row) => {
+        const rowNumber = row + 1
+        const endRow = Math.min(64, rowNumber + 31)
+        return [rowNumber, `=SUM(A${rowNumber}:A${endRow})`]
+      }),
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+    const reducerTracker = trackComputeCellChangesFromTrackedEvents(workbook)
+    const captureTracker = trackCaptureTrackedChangesWithoutVisibilityCache(workbook)
+    const genericReader = rejectSingleTrackedCellReader(workbook)
+    workbook.on('valuesUpdated', () => {})
+
+    try {
+      const changes = workbook.setCellContents(cell(sheetId, 0, 0), 10)
+
+      expect(changes.map((change) => (change.kind === 'cell' ? `${change.sheetName}!${change.a1}` : ''))).toEqual(['Bench!A1', 'Bench!B1'])
+      expect(captureTracker.count).toBe(0)
+      expect(reducerTracker.count).toBe(0)
+    } finally {
+      genericReader.restore()
+      captureTracker.restore()
+      reducerTracker.restore()
+    }
+  })
+
+  it('captures tiny indexed lookup listener payloads without the general tracked reducer', () => {
+    const rowCount = 64
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Bench: [
+          ['Key', 'Value', '', 32, `=MATCH(D1,A2:A${rowCount + 1},0)`],
+          ...Array.from({ length: rowCount }, (_, row) => [row + 1, (row + 1) * 10]),
+        ],
+      },
+      { useColumnIndex: true },
+    )
+    const sheetId = workbook.getSheetId('Bench')!
+    const reducerTracker = trackComputeCellChangesFromTrackedEvents(workbook)
+    workbook.on('valuesUpdated', () => {})
+
+    try {
+      const changes = workbook.setCellContents(cell(sheetId, rowCount, 0), rowCount + 1_000)
+
+      expect(changes.map((change) => (change.kind === 'cell' ? `${change.sheetName}!${change.a1}` : ''))).toEqual([
+        `Bench!A${rowCount + 1}`,
+      ])
+      expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({
+        tag: ValueTag.Number,
+        value: 32,
+      })
+      expect(reducerTracker.count).toBe(0)
+    } finally {
+      reducerTracker.restore()
+    }
   })
 
   it('uses bulk tracked indices for large literal batches without core patch payloads', () => {
@@ -221,6 +430,109 @@ describe('WorkPaper', () => {
       value: (rowCount - 1) * 6,
     })
     expect(workbook.getPerformanceCounters().changedCellPayloadsBuilt).toBe(0)
+  })
+
+  it('keeps large multi-column batches on the deferred physical tracked path without visibility snapshots', () => {
+    const rowCount = 128
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: Array.from({ length: rowCount }, (_, row) => {
+        const rowNumber = row + 1
+        return [rowNumber, rowNumber * 2, `=A${rowNumber}+B${rowNumber}`, `=A${rowNumber}*B${rowNumber}`]
+      }),
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+    const captureVisibilitySnapshot = vi.spyOn(workbook, 'captureVisibilitySnapshot').mockImplementation(() => {
+      throw new Error('large no-listener physical batches should not rebuild visibility snapshots')
+    })
+    const genericReader = rejectSingleTrackedCellReader(workbook)
+
+    try {
+      const changes = workbook.batch(() => {
+        for (let row = 0; row < rowCount; row += 1) {
+          workbook.setCellContents(cell(sheetId, row, 0), row * 3)
+          workbook.setCellContents(cell(sheetId, row, 1), row * 5)
+        }
+      })
+
+      expect(changes).toHaveLength(rowCount * 4)
+      expectOnlyCellChanges(changes)
+      expect(hasDeferredTrackedIndexChanges(changes)).toBe(true)
+      expect(workbook.getCellValue(cell(sheetId, rowCount - 1, 2))).toEqual({
+        tag: ValueTag.Number,
+        value: (rowCount - 1) * 8,
+      })
+      expect(workbook.getCellValue(cell(sheetId, rowCount - 1, 3))).toEqual({
+        tag: ValueTag.Number,
+        value: (rowCount - 1) * 3 * ((rowCount - 1) * 5),
+      })
+    } finally {
+      genericReader.restore()
+      captureVisibilitySnapshot.mockRestore()
+    }
+  })
+
+  it('reads physical dense ranges without entering the core read service', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: [
+        [1, 2],
+        ['x', true],
+      ],
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+    const engine = Reflect.get(workbook, 'engine')
+    const getRangeValues = vi.spyOn(engine, 'getRangeValues').mockImplementation(() => {
+      throw new Error('physical range reads should use the headless fast path')
+    })
+
+    const values = workbook.getRangeValues({
+      start: cell(sheetId, 0, 0),
+      end: cell(sheetId, 1, 1),
+    })
+
+    expect(values).toEqual([
+      [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 2 },
+      ],
+      [
+        { tag: ValueTag.String, value: 'x', stringId: expect.any(Number) },
+        { tag: ValueTag.Boolean, value: true },
+      ],
+    ])
+    expect(getRangeValues).not.toHaveBeenCalled()
+    getRangeValues.mockRestore()
+  })
+
+  it('uses initialized sheet dimensions without scanning existing-cell batch grids', () => {
+    const workbook = WorkPaper.buildFromArray([
+      [1, 2],
+      [3, 4],
+    ])
+    const sheetId = workbook.getSheetId('Sheet1')!
+    const forEachCellEntry = vi.spyOn(sheetGridEntryTarget(workbook, sheetId), 'forEachCellEntry')
+
+    try {
+      expect(workbook.getSheetDimensions(sheetId)).toEqual({ width: 2, height: 2 })
+      expect(forEachCellEntry).not.toHaveBeenCalled()
+
+      workbook.batch(() => {
+        workbook.setCellContents(cell(sheetId, 0, 0), 10)
+        workbook.setCellContents(cell(sheetId, 1, 1), 40)
+      })
+
+      expect(workbook.getSheetDimensions(sheetId)).toEqual({ width: 2, height: 2 })
+      expect(forEachCellEntry).not.toHaveBeenCalled()
+
+      workbook.setCellContents(cell(sheetId, 3, 4), 99)
+      expect(workbook.getSheetDimensions(sheetId)).toEqual({ width: 5, height: 4 })
+      expect(forEachCellEntry).not.toHaveBeenCalled()
+
+      workbook.setCellContents(cell(sheetId, 3, 4), null)
+      expect(workbook.getSheetDimensions(sheetId)).toEqual({ width: 5, height: 4 })
+      expect(forEachCellEntry).toHaveBeenCalledTimes(1)
+    } finally {
+      forEachCellEntry.mockRestore()
+    }
   })
 
   it('supports sheet-scoped named expressions and restores public formulas', () => {
@@ -358,6 +670,55 @@ describe('WorkPaper', () => {
     )
   })
 
+  it('passes known zero potential-new-cell count for existing-cell batch flushes', () => {
+    const workbook = WorkPaper.buildFromArray([[1], [2]])
+    const sheetId = workbook.getSheetId('Sheet1')!
+    const applyCellMutationsAt = vi.spyOn(engineApplyCellMutationsTarget(workbook), 'applyCellMutationsAtWithOptions')
+
+    try {
+      workbook.batch(() => {
+        workbook.setCellContents(cell(sheetId, 0, 0), 10)
+        workbook.setCellContents(cell(sheetId, 1, 0), 20)
+      })
+
+      expect(applyCellMutationsAt).toHaveBeenCalledTimes(1)
+      expect(applyCellMutationsAt.mock.calls[0]?.[1]).toMatchObject({
+        captureUndo: true,
+        potentialNewCells: 0,
+        reuseRefs: true,
+        source: 'local',
+      })
+    } finally {
+      applyCellMutationsAt.mockRestore()
+    }
+  })
+
+  it('passes known zero potential-new-cell count for existing-cell suspended flushes', () => {
+    const workbook = WorkPaper.buildFromArray([[1], [2]])
+    const sheetId = workbook.getSheetId('Sheet1')!
+
+    workbook.suspendEvaluation()
+    const applyCellMutationsAt = vi.spyOn(engineApplyCellMutationsTarget(workbook), 'applyCellMutationsAtWithOptions')
+
+    try {
+      workbook.setCellContents(cell(sheetId, 0, 0), 10)
+      workbook.setCellContents(cell(sheetId, 1, 0), 20)
+      expect(applyCellMutationsAt).not.toHaveBeenCalled()
+
+      workbook.resumeEvaluation()
+
+      expect(applyCellMutationsAt).toHaveBeenCalledTimes(1)
+      expect(applyCellMutationsAt.mock.calls[0]?.[1]).toMatchObject({
+        captureUndo: true,
+        potentialNewCells: 0,
+        reuseRefs: true,
+        source: 'local',
+      })
+    } finally {
+      applyCellMutationsAt.mockRestore()
+    }
+  })
+
   it('flushes deferred literal edits before formula writes inside a batch', () => {
     const workbook = WorkPaper.buildFromArray([[1]])
     const sheetId = workbook.getSheetId('Sheet1')!
@@ -411,6 +772,91 @@ describe('WorkPaper', () => {
     expect(workbook.getCellValue(cell(sheetId, 1, 0))).toMatchObject({
       tag: ValueTag.Number,
       value: 20,
+    })
+  })
+
+  it('returns stable array-compatible tracked changes for large direct batches', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: Array.from({ length: 32 }, (_, index) => [index + 1, `=A${index + 1}*2`]),
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+    const emittedChanges: WorkPaperChange[][] = []
+
+    workbook.on('valuesUpdated', (changes) => {
+      emittedChanges.push(changes)
+    })
+
+    const changes = workbook.batch(() => {
+      for (let row = 0; row < 32; row += 1) {
+        workbook.setCellContents(cell(sheetId, row, 0), row * 3)
+      }
+    })
+
+    expect(Array.isArray(changes)).toBe(true)
+    expect(changes).toHaveLength(64)
+    expect(emittedChanges).toHaveLength(1)
+    expect(emittedChanges[0]).toBe(changes)
+    expect(changes.slice(0, 4).map((change) => (change.kind === 'cell' ? change.a1 : change.kind))).toEqual(['A1', 'B1', 'A2', 'B2'])
+    const firstChange = changes[0]
+    expect(firstChange).toMatchObject({
+      kind: 'cell',
+      a1: 'A1',
+      newValue: { tag: ValueTag.Number, value: 0 },
+    })
+
+    workbook.setCellContents(cell(sheetId, 0, 0), 999)
+
+    expect(changes[0]).toBe(firstChange)
+    expect(firstChange).toMatchObject({
+      kind: 'cell',
+      a1: 'A1',
+      newValue: { tag: ValueTag.Number, value: 0 },
+    })
+    expect(changes[1]).toMatchObject({
+      kind: 'cell',
+      a1: 'B1',
+      newValue: { tag: ValueTag.Number, value: 0 },
+    })
+    expect(changes[63]).toMatchObject({
+      kind: 'cell',
+      a1: 'B32',
+      newValue: { tag: ValueTag.Number, value: 186 },
+    })
+  })
+
+  it('returns stable array-compatible tracked changes for large suspended batches', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: Array.from({ length: 32 }, (_, index) => [index + 1, `=A${index + 1}*2`]),
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+
+    workbook.suspendEvaluation()
+    for (let row = 0; row < 32; row += 1) {
+      workbook.setCellContents(cell(sheetId, row, 0), row * 7)
+    }
+    const changes = workbook.resumeEvaluation()
+
+    expect(Array.isArray(changes)).toBe(true)
+    expect(changes).toHaveLength(64)
+    const firstChange = changes[0]
+    expect(firstChange).toMatchObject({
+      kind: 'cell',
+      a1: 'A1',
+      newValue: { tag: ValueTag.Number, value: 0 },
+    })
+
+    workbook.setCellContents(cell(sheetId, 0, 0), 999)
+
+    expect(changes[0]).toBe(firstChange)
+    expect(changes[1]).toMatchObject({
+      kind: 'cell',
+      a1: 'B1',
+      newValue: { tag: ValueTag.Number, value: 0 },
+    })
+    expect(changes[63]).toMatchObject({
+      kind: 'cell',
+      a1: 'B32',
+      newValue: { tag: ValueTag.Number, value: 434 },
     })
   })
 
@@ -469,6 +915,54 @@ describe('WorkPaper', () => {
       dirtyFormulaCount: 0,
       wasmFormulaCount: 0,
       jsFormulaCount: 0,
+    })
+  })
+
+  it('applies suspended exact lookup-column writes as a tracked input-only batch', () => {
+    const rowCount = 96
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Bench: [
+          ['Key', 'Value', '', Math.floor(rowCount / 2), `=MATCH(D1,A2:A${rowCount + 1},0)`],
+          ...Array.from({ length: rowCount }, (_, index) => [index + 1, (index + 1) * 10]),
+        ],
+      },
+      { useColumnIndex: true },
+    )
+    const sheetId = workbook.getSheetId('Bench')!
+    workbook.resetPerformanceCounters()
+
+    workbook.suspendEvaluation()
+    for (let index = 0; index < 32; index += 1) {
+      const row = rowCount - index
+      workbook.setCellContents(cell(sheetId, row, 0), row + 1_000)
+    }
+    const changes = workbook.resumeEvaluation()
+
+    expect(changes).toHaveLength(32)
+    expect(changes[0]).toMatchObject({ kind: 'cell', a1: `A${rowCount - 30}` })
+    expect(changes.at(-1)).toMatchObject({ kind: 'cell', a1: `A${rowCount + 1}` })
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({
+      tag: ValueTag.Number,
+      value: Math.floor(rowCount / 2),
+    })
+    expect(workbook.getPerformanceCounters()).toMatchObject({
+      kernelSyncOnlyRecalcSkips: 1,
+      formulasParsed: 0,
+      formulasBound: 0,
+      lookupOwnerBuilds: 0,
+    })
+    expect(workbook.getStats().lastMetrics).toMatchObject({
+      changedInputCount: 32,
+      dirtyFormulaCount: 0,
+      wasmFormulaCount: 0,
+      jsFormulaCount: 0,
+    })
+
+    workbook.setCellContents(cell(sheetId, 0, 3), rowCount + 1_000)
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({
+      tag: ValueTag.Number,
+      value: rowCount,
     })
   })
 

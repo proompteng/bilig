@@ -28,6 +28,7 @@ function hasPlannedStructuralAxisTransform(value: unknown): value is {
     sheetName: string,
     transform: StructuralAxisTransform,
   ) => {
+    removedCellIndices: number[]
     remappedCells: Array<{ fromRowId?: string; fromColId?: string }>
   }
   applyPlannedStructuralTransaction: (transaction: { remappedCells: Array<{ cellIndex: number }> }) => unknown
@@ -74,6 +75,15 @@ describe('WorkbookStore', () => {
     expect(workbook.getCellIndex('Sheet1', 'B2')).toBe(cellIndex)
     expect(workbook.listRowAxisEntries('Sheet1')).toEqual([{ id: 'row-1', index: 1, size: 30, hidden: false }])
     expect(workbook.listColumnAxisEntries('Sheet1')).toEqual([{ id: 'column-1', index: 1, size: 120, hidden: true }])
+  })
+
+  it('does not materialize default row-axis records for structural deletes without row metadata', () => {
+    const workbook = new WorkbookStore('delete-unmaterialized-row-axis')
+    workbook.createSheet('Sheet1')
+    workbook.ensureCell('Sheet1', 'A10')
+
+    expect(workbook.deleteRows('Sheet1', 9, 1)).toEqual([])
+    expect(workbook.listRowAxisEntries('Sheet1')).toEqual([])
   })
 
   it('does not mutate existing style ranges when bulk style restoration includes an unknown style', () => {
@@ -724,5 +734,39 @@ describe('WorkbookStore', () => {
     expect(workbook.getCellIndex('Sheet1', 'B2')).toBe(shiftedCellIndex)
     expect(workbook.getCellPosition(shiftedCellIndex)).toEqual({ sheetId: 1, row: 1, col: 1 })
     expect(workbook.getCellIndex('Sheet1', 'C2')).toBeUndefined()
+  })
+
+  it('leaves delete-column survivors on stable identities without physical remaps', () => {
+    const counters = createEngineCounters()
+    const workbook = new WorkbookStore('planned-delete-column-logical-survivors', counters)
+    workbook.createSheet('Sheet1')
+
+    const deletedCellIndex = workbook.ensureCell('Sheet1', 'B2')
+    const shiftedCellIndex = workbook.ensureCell('Sheet1', 'C2')
+
+    const transaction = hasPlannedStructuralAxisTransform(workbook)
+      ? workbook.planStructuralAxisTransform('Sheet1', {
+          axis: 'column',
+          kind: 'delete',
+          start: 1,
+          count: 1,
+        })
+      : undefined
+
+    expect(transaction?.removedCellIndices).toEqual([deletedCellIndex])
+    expect(transaction?.remappedCells).toHaveLength(1)
+
+    if (transaction && hasPlannedStructuralAxisTransform(workbook)) {
+      workbook.deleteColumns('Sheet1', 1, 1)
+      workbook.applyPlannedStructuralTransaction(transaction)
+    }
+
+    expect(workbook.getCellIndex('Sheet1', 'B2')).toBe(shiftedCellIndex)
+    expect(workbook.getCellIndex('Sheet1', 'C2')).toBeUndefined()
+    expect(workbook.getCellPosition(shiftedCellIndex)).toEqual({ sheetId: 1, row: 1, col: 1 })
+    expect(workbook.getCellPosition(deletedCellIndex)).toBeUndefined()
+    expect(workbook.cellStore.cols[shiftedCellIndex]).toBe(2)
+    expect(counters.cellsRemapped).toBe(0)
+    expect(counters.structuralSurvivorCellsRemapped).toBe(0)
   })
 })

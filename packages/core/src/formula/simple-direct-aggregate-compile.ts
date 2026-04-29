@@ -10,6 +10,9 @@ import {
 
 const SIMPLE_DIRECT_AGGREGATE_RE = /^(?<callee>SUM|AVERAGE|AVG|COUNT|MIN|MAX)\s*\(\s*(?<range>[^(),]+:[^(),]+)\s*\)$/i
 const SIMPLE_COLUMN_RANGE_RE = /^([A-Za-z]+)([1-9][0-9]*):([A-Za-z]+)([1-9][0-9]*)$/
+const EMPTY_STRINGS: string[] = []
+const EMPTY_PROGRAM = new Uint32Array()
+const EMPTY_CONSTANTS = new Float64Array()
 
 type DirectAggregateKind = DirectAggregateCandidate['aggregateKind']
 
@@ -71,7 +74,9 @@ function tryParseSimpleColumnRange(rawRange: string): SimpleColumnRangeInfo | un
 }
 
 export function tryCompileSimpleDirectAggregateFormula(source: string): CompiledFormula | undefined {
-  const match = SIMPLE_DIRECT_AGGREGATE_RE.exec(source.trim())
+  const trimmedSource = source.trim()
+  const normalizedSource = trimmedSource.startsWith('=') ? trimmedSource.slice(1).trim() : trimmedSource
+  const match = SIMPLE_DIRECT_AGGREGATE_RE.exec(normalizedSource)
   if (!match?.groups) {
     return undefined
   }
@@ -132,7 +137,7 @@ export function tryCompileSimpleDirectAggregateFormula(source: string): Compiled
 
   const baseRecord: FormulaRecord = {
     id: 0,
-    source,
+    source: normalizedSource,
     mode: aggregateKind === 'average' ? FormulaMode.JsOnly : FormulaMode.WasmFastPath,
     depsPtr: 0,
     depsLen: 1,
@@ -160,12 +165,12 @@ export function tryCompileSimpleDirectAggregateFormula(source: string): Compiled
     randCallCount: 0,
     producesSpill: false,
     jsPlan: [],
-    program: new Uint32Array(),
-    constants: new Float64Array(),
-    symbolicRefs: [],
+    program: EMPTY_PROGRAM,
+    constants: EMPTY_CONSTANTS,
+    symbolicRefs: EMPTY_STRINGS,
     parsedSymbolicRefs: [],
     symbolicRanges: [rangeInfo.address],
     parsedSymbolicRanges: [parsedRangeInfo],
-    symbolicStrings: [],
+    symbolicStrings: EMPTY_STRINGS,
   }
 }

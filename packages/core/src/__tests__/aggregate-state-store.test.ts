@@ -312,8 +312,8 @@ describe('AggregateStateStore', () => {
 
   it('applies bounded prefix suffix deltas in place on early-row writes', () => {
     const { workbook, sheet } = createWorkbookVersions(1, 1)
-    const rawTags = Array.from({ length: 256 }, () => ValueTag.Number)
-    const numbers = Array.from({ length: 256 }, () => 1)
+    const rawTags = Array.from({ length: 128 }, () => ValueTag.Number)
+    const numbers = Array.from({ length: 128 }, () => 1)
     const getColumnView = vi.fn((request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) =>
       makeRuntimeColumnView({
         rawTags,
@@ -325,7 +325,7 @@ describe('AggregateStateStore', () => {
     )
     const store = createStore({
       workbook,
-      rowEnd: 255,
+      rowEnd: 127,
       runtimeColumnStore: {
         getColumnOwner: () => {
           throw new Error('unexpected column owner request')
@@ -353,8 +353,139 @@ describe('AggregateStateStore', () => {
     const rebuilt = store.getOrBuildPrefixForRegion(0)
     expect(rebuilt).toBe(entry)
     expect(rebuilt.prefixSums[0]).toBe(2)
-    expect(rebuilt.prefixSums[255]).toBe(257)
+    expect(rebuilt.prefixSums[127]).toBe(129)
     expect(getColumnView).toHaveBeenCalledTimes(1)
+  })
+
+  it('marks large suffix prefixes stale without writing suffix buffers at mutation time', () => {
+    const { workbook, sheet } = createWorkbookVersions(1, 1)
+    const rawTags = Array.from({ length: 512 }, () => ValueTag.Number)
+    const numbers = Array.from({ length: 512 }, () => 1)
+    const getColumnView = vi.fn((request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) =>
+      makeRuntimeColumnView({
+        rawTags,
+        numbers,
+        request,
+        columnVersion: sheet.columnVersions[0] ?? 0,
+        structureVersion: sheet.structureVersion,
+      }),
+    )
+    const store = createStore({
+      workbook,
+      rowEnd: 511,
+      runtimeColumnStore: {
+        getColumnOwner: () => {
+          throw new Error('unexpected column owner request')
+        },
+        getColumnView,
+        getColumnSlice: vi.fn(),
+        readCellValue: () => ({ tag: ValueTag.Empty }),
+        readRangeValues: () => [],
+        normalizeStringId: () => '',
+        normalizeLookupText: () => '',
+      },
+    })
+
+    const entry = store.getOrBuildPrefixForRegion(0)
+    const prefixWrites: string[] = []
+    const prefixSums = entry.prefixSums
+    const prefixCount = entry.prefixCount
+    const prefixAverageCount = entry.prefixAverageCount
+    entry.prefixSums = new Proxy(prefixSums, {
+      set(target, property, value) {
+        if (typeof property === 'string' && /^\d+$/.test(property)) {
+          prefixWrites.push(`sum:${property}`)
+        }
+        return Reflect.set(target, property, value)
+      },
+    })
+    entry.prefixCount = new Proxy(prefixCount, {
+      set(target, property, value) {
+        if (typeof property === 'string' && /^\d+$/.test(property)) {
+          prefixWrites.push(`count:${property}`)
+        }
+        return Reflect.set(target, property, value)
+      },
+    })
+    entry.prefixAverageCount = new Proxy(prefixAverageCount, {
+      set(target, property, value) {
+        if (typeof property === 'string' && /^\d+$/.test(property)) {
+          prefixWrites.push(`average:${property}`)
+        }
+        return Reflect.set(target, property, value)
+      },
+    })
+
+    sheet.columnVersions[0] = 2
+    numbers[0] = 2
+    store.noteLiteralWrite({
+      sheetName: 'Sheet1',
+      row: 0,
+      col: 0,
+      oldValue: { tag: ValueTag.Number, value: 1 },
+      newValue: { tag: ValueTag.Number, value: 2 },
+    })
+
+    expect(prefixWrites).toEqual([])
+    expect(entry.columnVersion).toBeLessThan(0)
+    expect(entry.structureVersion).toBeLessThan(0)
+    expect(entry.extremaValid).toBe(false)
+
+    entry.prefixSums = prefixSums
+    entry.prefixCount = prefixCount
+    entry.prefixAverageCount = prefixAverageCount
+    const rebuilt = store.getOrBuildPrefixForRegion(0)
+    expect(rebuilt).toBe(entry)
+    expect(rebuilt.prefixSums[0]).toBe(2)
+    expect(rebuilt.prefixSums[511]).toBe(513)
+    expect(getColumnView).toHaveBeenCalledTimes(2)
+  })
+
+  it('rebuilds stale aggregate prefixes in place instead of walking large suffixes on early-row writes', () => {
+    const { workbook, sheet } = createWorkbookVersions(1, 1)
+    const rawTags = Array.from({ length: 1_500 }, () => ValueTag.Number)
+    const numbers = Array.from({ length: 1_500 }, () => 1)
+    const getColumnView = vi.fn((request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) =>
+      makeRuntimeColumnView({
+        rawTags,
+        numbers,
+        request,
+        columnVersion: sheet.columnVersions[0] ?? 0,
+        structureVersion: sheet.structureVersion,
+      }),
+    )
+    const store = createStore({
+      workbook,
+      rowEnd: 1_499,
+      runtimeColumnStore: {
+        getColumnOwner: () => {
+          throw new Error('unexpected column owner request')
+        },
+        getColumnView,
+        getColumnSlice: vi.fn(),
+        readCellValue: () => ({ tag: ValueTag.Empty }),
+        readRangeValues: () => [],
+        normalizeStringId: () => '',
+        normalizeLookupText: () => '',
+      },
+    })
+
+    const entry = store.getOrBuildPrefixForRegion(0)
+    sheet.columnVersions[0] = 2
+    numbers[0] = 2
+    store.noteLiteralWrite({
+      sheetName: 'Sheet1',
+      row: 0,
+      col: 0,
+      oldValue: { tag: ValueTag.Number, value: 1 },
+      newValue: { tag: ValueTag.Number, value: 2 },
+    })
+
+    const rebuilt = store.getOrBuildPrefixForRegion(0)
+    expect(rebuilt).toBe(entry)
+    expect(rebuilt.prefixSums[0]).toBe(2)
+    expect(rebuilt.prefixSums[1_499]).toBe(1_501)
+    expect(getColumnView).toHaveBeenCalledTimes(2)
   })
 
   it('anchors prefixes at the requested row start to avoid cancellation from earlier rows', () => {

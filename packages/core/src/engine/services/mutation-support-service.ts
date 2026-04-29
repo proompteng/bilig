@@ -37,6 +37,7 @@ export interface EngineMutationSupportService {
   readonly markExplicitChanged: (cellIndex: number, count: number) => Effect.Effect<number, EngineMutationError>
   readonly composeMutationRoots: (changedInputCount: number, formulaChangedCount: number) => Effect.Effect<U32, EngineMutationError>
   readonly composeEventChanges: (recalculated: U32, explicitChangedCount: number) => Effect.Effect<U32, EngineMutationError>
+  readonly composeDisjointEventChanges: (recalculated: U32, explicitChangedCount: number) => Effect.Effect<U32, EngineMutationError>
   readonly unionChangedSets: (...sets: Array<readonly number[] | U32>) => Effect.Effect<U32, EngineMutationError>
   readonly composeChangedRootsAndOrdered: (
     changedRoots: readonly number[] | U32,
@@ -66,6 +67,7 @@ export interface EngineMutationSupportService {
   readonly markExplicitChangedNow: (cellIndex: number, count: number) => number
   readonly composeMutationRootsNow: (changedInputCount: number, formulaChangedCount: number) => U32
   readonly composeEventChangesNow: (recalculated: U32, explicitChangedCount: number) => U32
+  readonly composeDisjointEventChangesNow: (recalculated: U32, explicitChangedCount: number) => U32
   readonly unionChangedSetsNow: (...sets: Array<readonly number[] | U32>) => U32
   readonly composeChangedRootsAndOrderedNow: (changedRoots: readonly number[] | U32, ordered: U32, orderedCount: number) => U32
   readonly getChangedInputBufferNow: () => U32
@@ -449,6 +451,20 @@ export function createEngineMutationSupportService(args: {
     return args.getMutationRoots().subarray(0, total)
   }
 
+  const composeDisjointEventChangesNow = (recalculated: U32, explicitChangedCount: number): U32 => {
+    if (explicitChangedCount === 0) {
+      return recalculated
+    }
+    const total = explicitChangedCount + recalculated.length
+    args.ensureRecalcScratchCapacity(total + 1)
+    const changed = args.getChangedUnion()
+    for (let index = 0; index < explicitChangedCount; index += 1) {
+      changed[index] = args.getExplicitChangedBuffer()[index]!
+    }
+    changed.set(recalculated, explicitChangedCount)
+    return changed.subarray(0, total)
+  }
+
   const markVolatileFormulasChangedNow = (count: number): number => {
     const volatileFormulaCellIndices = args.getVolatileFormulaCellIndices?.()
     if (volatileFormulaCellIndices) {
@@ -589,6 +605,16 @@ export function createEngineMutationSupportService(args: {
         catch: (cause) =>
           new EngineMutationError({
             message: mutationErrorMessage('Failed to compose event changes', cause),
+            cause,
+          }),
+      })
+    },
+    composeDisjointEventChanges(recalculated, explicitChangedCount) {
+      return Effect.try({
+        try: () => composeDisjointEventChangesNow(recalculated, explicitChangedCount),
+        catch: (cause) =>
+          new EngineMutationError({
+            message: mutationErrorMessage('Failed to compose disjoint event changes', cause),
             cause,
           }),
       })
@@ -754,6 +780,7 @@ export function createEngineMutationSupportService(args: {
     },
     markExplicitChangedNow,
     composeMutationRootsNow,
+    composeDisjointEventChangesNow,
     composeEventChangesNow(recalculated, explicitChangedCount) {
       advanceEpoch(args.getChangedUnionEpoch(), args.setChangedUnionEpoch, args.getChangedUnionSeen())
       if (explicitChangedCount === 0) {

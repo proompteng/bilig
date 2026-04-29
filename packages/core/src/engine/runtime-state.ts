@@ -74,6 +74,15 @@ export type TransactionRecord =
       potentialNewCells?: number
       preparedCellAddress?: PreparedCellAddress | null
     }
+  | {
+      kind: 'single-existing-numeric-cell-mutation'
+      sheetId: number
+      row: number
+      col: number
+      cellIndex: number
+      value: number
+      potentialNewCells?: number
+    }
   | CellMutationTransactionRecord
 
 export interface TransactionLogEntry {
@@ -126,6 +135,13 @@ export interface PreparedApproximateVectorLookup {
   internalOwner?: unknown
 }
 
+export interface RuntimeUniformLookupTailPatch {
+  readonly row: number
+  readonly oldNumeric: number
+  readonly newNumeric: number
+  readonly columnVersion: number
+}
+
 export type RuntimeDirectLookupDescriptor =
   | {
       kind: 'exact'
@@ -137,6 +153,7 @@ export type RuntimeDirectLookupDescriptor =
       kind: 'exact-uniform-numeric'
       operandCellIndex: number
       sheetName: string
+      sheetId: number
       rowStart: number
       rowEnd: number
       col: number
@@ -147,6 +164,7 @@ export type RuntimeDirectLookupDescriptor =
       start: number
       step: number
       searchMode: 1 | -1
+      tailPatch?: RuntimeUniformLookupTailPatch
     }
   | {
       kind: 'approximate'
@@ -158,6 +176,7 @@ export type RuntimeDirectLookupDescriptor =
       kind: 'approximate-uniform-numeric'
       operandCellIndex: number
       sheetName: string
+      sheetId: number
       rowStart: number
       rowEnd: number
       col: number
@@ -168,6 +187,7 @@ export type RuntimeDirectLookupDescriptor =
       start: number
       step: number
       matchMode: 1 | -1
+      tailPatch?: RuntimeUniformLookupTailPatch
     }
 
 export interface RuntimeDirectCriteriaRange {

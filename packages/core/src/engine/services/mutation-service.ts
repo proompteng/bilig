@@ -25,6 +25,8 @@ import {
   countPotentialNewCellsForMutationRefs,
   type EngineCellMutationAt,
   type EngineCellMutationRef,
+  type EngineExistingNumericCellMutationRef,
+  type EngineExistingNumericCellMutationResult,
 } from '../../cell-mutations-at.js'
 import type {
   CommitOp,
@@ -62,6 +64,54 @@ function createLazyCellMutationTransactionRecord(refs: readonly EngineCellMutati
   return potentialNewCells === undefined ? { kind: 'cell-mutations', refs } : { kind: 'cell-mutations', refs, potentialNewCells }
 }
 
+function createSingleExistingNumericCellMutationTransactionRecord(
+  request: EngineExistingNumericCellMutationRef,
+  potentialNewCells: number,
+): TransactionRecord {
+  return {
+    kind: 'single-existing-numeric-cell-mutation',
+    sheetId: request.sheetId,
+    row: request.row,
+    col: request.col,
+    cellIndex: request.cellIndex,
+    value: request.value,
+    potentialNewCells,
+  }
+}
+
+function singleExistingNumericCellMutationRecordToRef(
+  record: Extract<TransactionRecord, { kind: 'single-existing-numeric-cell-mutation' }>,
+): EngineCellMutationRef {
+  return {
+    sheetId: record.sheetId,
+    cellIndex: record.cellIndex,
+    mutation: {
+      kind: 'setCellValue',
+      row: record.row,
+      col: record.col,
+      value: record.value,
+    },
+  }
+}
+
+function createLazyMaterializedCellMutationTransactionRecord(
+  materializeRefs: () => EngineCellMutationRef[],
+  potentialNewCells?: number,
+): TransactionRecord {
+  let cachedRefs: EngineCellMutationRef[] | undefined
+  const record: { kind: 'cell-mutations'; refs: readonly EngineCellMutationRef[]; potentialNewCells?: number } = {
+    kind: 'cell-mutations',
+    get refs() {
+      cachedRefs ??= materializeRefs()
+      return cachedRefs
+    },
+  }
+  if (potentialNewCells !== undefined) {
+    record.potentialNewCells = potentialNewCells
+  }
+  return record
+}
+
 function isStructuralInsertOp(op: EngineOp): op is Extract<EngineOp, { kind: 'insertRows' | 'insertColumns' }> {
   return op.kind === 'insertRows' || op.kind === 'insertColumns'
 }
@@ -77,6 +127,83 @@ function inverseStructuralInsertOp(
 interface RenderCommitCellMutation {
   readonly sheetName: string
   readonly mutation: EngineCellMutationAt
+}
+
+const CapturedCellMutationKind = {
+  Clear: 0,
+  NumberValue: 1,
+  BooleanValue: 2,
+  LiteralValue: 3,
+  NullValue: 4,
+  Formula: 5,
+} as const
+
+interface CapturedCellMutationRestores {
+  readonly sheetIds: Uint32Array
+  readonly cellIndexPlusOnes: Uint32Array
+  readonly rows: Uint32Array
+  readonly cols: Uint32Array
+  readonly kinds: Uint8Array
+  readonly numbers: Float64Array
+  readonly values?: Array<LiteralInput | undefined>
+  readonly formulas?: Array<string | undefined>
+  readonly potentialNewCells: number
+}
+
+function materializeCapturedCellMutationRestores(captured: CapturedCellMutationRestores): EngineCellMutationRef[] {
+  const refs = Array<EngineCellMutationRef>(captured.sheetIds.length)
+  for (let index = 0; index < refs.length; index += 1) {
+    const sheetId = captured.sheetIds[index]!
+    const cellIndexPlusOne = captured.cellIndexPlusOnes[index]!
+    const cellIndex = cellIndexPlusOne === 0 ? undefined : cellIndexPlusOne - 1
+    const row = captured.rows[index]!
+    const col = captured.cols[index]!
+    switch (captured.kinds[index]!) {
+      case CapturedCellMutationKind.NumberValue:
+        refs[index] = {
+          sheetId,
+          ...(cellIndex === undefined ? {} : { cellIndex }),
+          mutation: { kind: 'setCellValue', row, col, value: captured.numbers[index] ?? 0 },
+        }
+        break
+      case CapturedCellMutationKind.BooleanValue:
+        refs[index] = {
+          sheetId,
+          ...(cellIndex === undefined ? {} : { cellIndex }),
+          mutation: { kind: 'setCellValue', row, col, value: (captured.numbers[index] ?? 0) !== 0 },
+        }
+        break
+      case CapturedCellMutationKind.NullValue:
+        refs[index] = {
+          sheetId,
+          ...(cellIndex === undefined ? {} : { cellIndex }),
+          mutation: { kind: 'setCellValue', row, col, value: null },
+        }
+        break
+      case CapturedCellMutationKind.LiteralValue:
+        refs[index] = {
+          sheetId,
+          ...(cellIndex === undefined ? {} : { cellIndex }),
+          mutation: { kind: 'setCellValue', row, col, value: captured.values?.[index] ?? null },
+        }
+        break
+      case CapturedCellMutationKind.Formula:
+        refs[index] = {
+          sheetId,
+          ...(cellIndex === undefined ? {} : { cellIndex }),
+          mutation: { kind: 'setCellFormula', row, col, formula: captured.formulas?.[index] ?? '' },
+        }
+        break
+      default:
+        refs[index] = {
+          sheetId,
+          ...(cellIndex === undefined ? {} : { cellIndex }),
+          mutation: { kind: 'clearCell', row, col },
+        }
+        break
+    }
+  }
+  return refs
 }
 
 function renderCommitCellMutationToEngineOp(entry: RenderCommitCellMutation): EngineOp {
@@ -177,6 +304,9 @@ function transactionRecordOps(workbook: WorkbookStore, record: TransactionRecord
   if (record.kind === 'single-op') {
     return [record.op]
   }
+  if (record.kind === 'single-existing-numeric-cell-mutation') {
+    return [cellMutationRefToEngineOp(workbook, singleExistingNumericCellMutationRecordToRef(record))]
+  }
   if (record.kind === 'cell-mutations') {
     return record.refs.map((ref) => cellMutationRefToEngineOp(workbook, ref))
   }
@@ -186,6 +316,9 @@ function transactionRecordOps(workbook: WorkbookStore, record: TransactionRecord
 function cloneTransactionRecordOps(workbook: WorkbookStore, record: TransactionRecord): EngineOp[] {
   if (record.kind === 'single-op') {
     return [structuredClone(record.op)]
+  }
+  if (record.kind === 'single-existing-numeric-cell-mutation') {
+    return [cellMutationRefToEngineOp(workbook, singleExistingNumericCellMutationRecordToRef(record))]
   }
   if (record.kind === 'cell-mutations') {
     return record.refs.map((ref) => cellMutationRefToEngineOp(workbook, ref))
@@ -312,6 +445,12 @@ export interface EngineMutationService {
       reuseRefs?: boolean
     },
   ) => readonly EngineOp[] | null
+  readonly executeLocalExistingNumericCellMutationAtNow: (
+    request: EngineExistingNumericCellMutationRef,
+    options?: {
+      returnUndoOps?: boolean
+    },
+  ) => EngineExistingNumericCellMutationResult | null
   readonly applyCellMutationsAtNow: (
     refs: readonly EngineCellMutationRef[],
     options?: {
@@ -417,14 +556,19 @@ export function createEngineMutationService(args: {
     source: 'local' | 'restore' | 'undo' | 'redo',
     potentialNewCells?: number,
   ) => void
+  readonly applyExistingNumericCellMutationAtNow?: (
+    request: EngineExistingNumericCellMutationRef,
+  ) => EngineExistingNumericCellMutationResult | null
   readonly hasExternallyVisibleLocalMutationObservers?: () => boolean
 }): EngineMutationService {
   const emptyBatchOps: EngineOp[] = []
   const shouldCreateLocalBatch = (): boolean =>
-    args.state.trackReplicaVersions || (args.state.batchListeners?.size ?? 0) > 0 || args.state.getSyncClientConnection?.() !== null
+    args.state.trackReplicaVersions ||
+    (args.state.batchListeners?.size ?? 0) > 0 ||
+    (args.state.getSyncClientConnection?.() ?? null) !== null
   const hasExternallyVisibleBatchRequirement = (): boolean =>
     args.hasExternallyVisibleLocalMutationObservers?.() ??
-    ((args.state.batchListeners?.size ?? 0) > 0 || args.state.getSyncClientConnection?.() !== null)
+    ((args.state.batchListeners?.size ?? 0) > 0 || (args.state.getSyncClientConnection?.() ?? null) !== null)
   const captureRuntimeFormulaSource = (cellIndex: number, formula: RuntimeFormula): string =>
     getRuntimeFormulaSource(formula, args.getFormulaFamilyStructuralSourceTransform?.(cellIndex))
 
@@ -504,41 +648,258 @@ export function createEngineMutationService(args: {
     }
   }
 
-  const restoreCellMutationRefFromRef = (ref: EngineCellMutationRef): EngineCellMutationRef => {
-    const cellOp = restoreCellOpFromRef(ref)
-    if (cellOp.kind === 'setCellValue') {
-      return {
-        sheetId: ref.sheetId,
-        mutation: {
-          kind: 'setCellValue',
-          row: ref.mutation.row,
-          col: ref.mutation.col,
-          value: cellOp.value,
+  const tryRestoreSimpleCellOpFromStore = (
+    sheetName: string,
+    address: string,
+  ): Extract<EngineOp, { kind: 'setCellValue' | 'setCellFormula' | 'clearCell' }> | null => {
+    const cellIndex = args.state.workbook.getCellIndex(sheetName, address)
+    if (cellIndex === undefined) {
+      return { kind: 'clearCell', sheetName, address }
+    }
+    const cellStore = args.state.workbook.cellStore
+    const formulaId = cellStore.formulaIds[cellIndex] ?? 0
+    if (formulaId === 0) {
+      const tag = cellStore.tags[cellIndex]
+      if (tag === ValueTag.Number) {
+        return { kind: 'setCellValue', sheetName, address, value: cellStore.numbers[cellIndex] ?? 0 }
+      }
+      if (tag === ValueTag.Boolean) {
+        return { kind: 'setCellValue', sheetName, address, value: (cellStore.numbers[cellIndex] ?? 0) !== 0 }
+      }
+      if (tag === ValueTag.Empty || tag === ValueTag.Error || tag === undefined) {
+        return { kind: 'clearCell', sheetName, address }
+      }
+      return null
+    }
+    const runtimeFormula = args.state.formulas.get(cellIndex)
+    if (runtimeFormula?.source === undefined) {
+      return null
+    }
+    return {
+      kind: 'setCellFormula',
+      sheetName,
+      address,
+      formula: captureRuntimeFormulaSource(cellIndex, runtimeFormula),
+    }
+  }
+
+  const tryBuildSingleCellOpHistoryWithoutSnapshot = (
+    ops: readonly EngineOp[],
+    potentialNewCells: number | undefined,
+    includeUndoOps: boolean,
+    cloneForwardOp: boolean,
+  ): FastMutationHistoryResult | null => {
+    if (ops.length !== 1) {
+      return null
+    }
+    const op = ops[0]!
+    if (op.kind !== 'setCellValue' && op.kind !== 'setCellFormula' && op.kind !== 'clearCell') {
+      return null
+    }
+    const inverseOp = tryRestoreSimpleCellOpFromStore(op.sheetName, op.address)
+    if (inverseOp === null) {
+      return null
+    }
+    const forwardOp = cloneForwardOp ? structuredClone(op) : op
+    return {
+      forward: createLazySingleOpTransactionRecord(forwardOp, potentialNewCells),
+      inverse: createLazySingleOpTransactionRecord(inverseOp, 1),
+      undoOps: includeUndoOps ? [structuredClone(inverseOp)] : null,
+    }
+  }
+
+  const captureInverseCellMutationRestores = (refs: readonly EngineCellMutationRef[]): CapturedCellMutationRestores => {
+    const count = refs.length
+    const sheetIds = new Uint32Array(count)
+    const cellIndexPlusOnes = new Uint32Array(count)
+    const rows = new Uint32Array(count)
+    const cols = new Uint32Array(count)
+    const kinds = new Uint8Array(count)
+    const numbers = new Float64Array(count)
+    let values: Array<LiteralInput | undefined> | undefined
+    let formulas: Array<string | undefined> | undefined
+    const cellStore = args.state.workbook.cellStore
+    let potentialNewCells = 0
+    let cachedSheetId = -1
+    let cachedSheet: ReturnType<WorkbookStore['getSheetById']> | undefined
+
+    for (let index = 0; index < count; index += 1) {
+      const ref = refs[index]!
+      const targetIndex = count - 1 - index
+      const { sheetId, mutation } = ref
+      sheetIds[targetIndex] = sheetId
+      rows[targetIndex] = mutation.row
+      cols[targetIndex] = mutation.col
+      if (sheetId !== cachedSheetId) {
+        cachedSheet = args.state.workbook.getSheetById(sheetId)
+        cachedSheetId = sheetId
+      }
+      if (!cachedSheet) {
+        throw new Error(`Unknown sheet id: ${sheetId}`)
+      }
+      const candidate = ref.cellIndex
+      const existingCellIndex =
+        candidate !== undefined &&
+        cellStore.sheetIds[candidate] === sheetId &&
+        cellStore.rows[candidate] === mutation.row &&
+        cellStore.cols[candidate] === mutation.col
+          ? candidate
+          : cachedSheet.grid.get(mutation.row, mutation.col)
+      const cellIndex = existingCellIndex === -1 ? undefined : existingCellIndex
+      if (cellIndex === undefined) {
+        kinds[targetIndex] = CapturedCellMutationKind.Clear
+        continue
+      }
+      cellIndexPlusOnes[targetIndex] = cellIndex + 1
+      if ((cellStore.formulaIds[cellIndex] ?? 0) === 0) {
+        const tag = cellStore.tags[cellIndex]
+        if (tag === ValueTag.Number) {
+          kinds[targetIndex] = CapturedCellMutationKind.NumberValue
+          numbers[targetIndex] = cellStore.numbers[cellIndex] ?? 0
+          potentialNewCells += 1
+          continue
+        }
+        if (tag === ValueTag.Boolean) {
+          kinds[targetIndex] = CapturedCellMutationKind.BooleanValue
+          numbers[targetIndex] = cellStore.numbers[cellIndex] ?? 0
+          potentialNewCells += 1
+          continue
+        }
+        if (tag === ValueTag.String) {
+          const snapshot = args.getCellByIndex(cellIndex)
+          kinds[targetIndex] = CapturedCellMutationKind.LiteralValue
+          values ??= Array<LiteralInput | undefined>(count)
+          values[targetIndex] = snapshot.value.tag === ValueTag.String ? snapshot.value.value : null
+          potentialNewCells += 1
+          continue
+        }
+        kinds[targetIndex] = CapturedCellMutationKind.Clear
+        continue
+      }
+      const runtimeFormula = args.state.formulas?.get(cellIndex)
+      const formula =
+        runtimeFormula?.source !== undefined
+          ? captureRuntimeFormulaSource(cellIndex, runtimeFormula)
+          : args.getCellByIndex(cellIndex).formula
+      if (formula !== undefined) {
+        kinds[targetIndex] = CapturedCellMutationKind.Formula
+        formulas ??= Array<string | undefined>(count)
+        formulas[targetIndex] = formula
+        potentialNewCells += 1
+        continue
+      }
+      const snapshot = args.getCellByIndex(cellIndex)
+      if (
+        (snapshot.flags & CellFlags.AuthoredBlank) !== 0 &&
+        (snapshot.value.tag === ValueTag.Empty || snapshot.value.tag === ValueTag.Error)
+      ) {
+        kinds[targetIndex] = CapturedCellMutationKind.NullValue
+        potentialNewCells += 1
+        continue
+      }
+      kinds[targetIndex] = CapturedCellMutationKind.Clear
+    }
+
+    return {
+      sheetIds,
+      cellIndexPlusOnes,
+      rows,
+      cols,
+      kinds,
+      numbers,
+      ...(values === undefined ? {} : { values }),
+      ...(formulas === undefined ? {} : { formulas }),
+      potentialNewCells,
+    }
+  }
+
+  const createLazyInverseCellMutationRecord = (refs: readonly EngineCellMutationRef[]): TransactionRecord => {
+    const captured = captureInverseCellMutationRestores(refs)
+    return createLazyMaterializedCellMutationTransactionRecord(
+      () => materializeCapturedCellMutationRestores(captured),
+      captured.potentialNewCells,
+    )
+  }
+
+  const tryCreateSingleExistingNumericInverseCellMutationRecord = (refs: readonly EngineCellMutationRef[]): TransactionRecord | null => {
+    if (refs.length !== 1) {
+      return null
+    }
+    const ref = refs[0]!
+    const { mutation, sheetId } = ref
+    if (mutation.kind !== 'setCellValue' || typeof mutation.value !== 'number') {
+      return null
+    }
+
+    const cellStore = args.state.workbook.cellStore
+    const candidate = ref.cellIndex
+    let existingCellIndex: number | undefined
+    if (
+      candidate !== undefined &&
+      cellStore.sheetIds[candidate] === sheetId &&
+      cellStore.rows[candidate] === mutation.row &&
+      cellStore.cols[candidate] === mutation.col
+    ) {
+      existingCellIndex = candidate
+    } else {
+      const sheet = args.state.workbook.getSheetById(sheetId)
+      if (!sheet) {
+        return null
+      }
+      existingCellIndex = sheet.grid.get(mutation.row, mutation.col)
+    }
+    if (existingCellIndex === -1 || existingCellIndex === undefined) {
+      return null
+    }
+    if ((cellStore.formulaIds[existingCellIndex] ?? 0) !== 0 || cellStore.tags[existingCellIndex] !== ValueTag.Number) {
+      return null
+    }
+
+    return createLazyCellMutationTransactionRecord(
+      [
+        {
+          sheetId,
+          cellIndex: existingCellIndex,
+          mutation: {
+            kind: 'setCellValue',
+            row: mutation.row,
+            col: mutation.col,
+            value: cellStore.numbers[existingCellIndex] ?? 0,
+          },
         },
+      ],
+      1,
+    )
+  }
+
+  const tryCellMutationRefsFromOps = (ops: readonly EngineOp[]): EngineCellMutationRef[] | null => {
+    if (ops.length === 0) {
+      return []
+    }
+    const refs = Array<EngineCellMutationRef>(ops.length)
+    for (let index = 0; index < ops.length; index += 1) {
+      const op = ops[index]!
+      if (op.kind !== 'setCellValue' && op.kind !== 'setCellFormula' && op.kind !== 'clearCell') {
+        return null
+      }
+      const sheet = args.state.workbook.getSheet(op.sheetName)
+      if (!sheet) {
+        return null
+      }
+      const parsed = parseCellAddress(op.address, op.sheetName)
+      const cellIndex = args.state.workbook.getCellIndex(op.sheetName, op.address)
+      refs[index] = {
+        sheetId: sheet.id,
+        ...(cellIndex === undefined ? {} : { cellIndex }),
+        mutation:
+          op.kind === 'setCellValue'
+            ? { kind: 'setCellValue', row: parsed.row, col: parsed.col, value: op.value }
+            : op.kind === 'setCellFormula'
+              ? { kind: 'setCellFormula', row: parsed.row, col: parsed.col, formula: op.formula }
+              : { kind: 'clearCell', row: parsed.row, col: parsed.col },
       }
     }
-    if (cellOp.kind === 'setCellFormula') {
-      return {
-        sheetId: ref.sheetId,
-        mutation: {
-          kind: 'setCellFormula',
-          row: ref.mutation.row,
-          col: ref.mutation.col,
-          formula: cellOp.formula,
-        },
-      }
-    }
-    if (cellOp.kind === 'clearCell') {
-      return {
-        sheetId: ref.sheetId,
-        mutation: {
-          kind: 'clearCell',
-          row: ref.mutation.row,
-          col: ref.mutation.col,
-        },
-      }
-    }
-    throw new Error(`Unsupported restore cell op for mutation refs: ${cellOp.kind}`)
+    return refs
   }
 
   const readStoredCellState = (sheetName: string, address: string): ComparableCellState => {
@@ -1689,6 +2050,15 @@ export function createEngineMutationService(args: {
     if ((record.kind === 'ops' && record.ops.length === 0) || (record.kind === 'cell-mutations' && record.refs.length === 0)) {
       return
     }
+    if (record.kind === 'single-existing-numeric-cell-mutation') {
+      const ref = singleExistingNumericCellMutationRecordToRef(record)
+      const refs = [ref]
+      const batch = shouldCreateLocalBatch()
+        ? createBatch(args.state.replicaState, [cellMutationRefToEngineOp(args.state.workbook, ref)])
+        : null
+      args.applyCellMutationsAtBatchNow(refs, batch, source, record.potentialNewCells)
+      return
+    }
     if (record.kind === 'cell-mutations') {
       const batch = shouldCreateLocalBatch()
         ? createBatch(
@@ -1772,7 +2142,13 @@ export function createEngineMutationService(args: {
           preparedCellAddressesByOpIndex: options.preparedCellAddressesByOpIndex,
         }
       : baseFastHistoryArgs
-    const fastHistory = tryBuildFastMutationHistory(fastHistoryArgs)
+    const fastHistory =
+      tryBuildSingleCellOpHistoryWithoutSnapshot(
+        ops,
+        potentialNewCells,
+        options.returnUndoOps !== false,
+        options.reuseForwardOps !== true,
+      ) ?? tryBuildFastMutationHistory(fastHistoryArgs)
     const inverse: TransactionRecord = fastHistory?.inverse ?? buildInverseRecord(ops)
     applyForward(forward)
     if (args.state.getTransactionReplayDepth() === 0) {
@@ -1818,37 +2194,10 @@ export function createEngineMutationService(args: {
     }
     const nextRefs = options.reuseRefs ? refs : refs.map((ref) => cloneCellMutationRef(ref))
     const nextPotentialNewCells = potentialNewCells ?? countPotentialNewCellsForMutationRefs(nextRefs)
-    if (nextRefs.length === 1 && options.returnUndoOps === false) {
-      const ref = nextRefs[0]!
-      const forwardOp = cellMutationRefToEngineOp(args.state.workbook, ref)
-      const inverseOp = restoreCellOpFromRef(ref)
-      const batch = shouldCreateLocalBatch() ? createBatch(args.state.replicaState, [forwardOp]) : null
-      args.applyCellMutationsAtBatchNow(nextRefs, batch, 'local', nextPotentialNewCells)
-      if (args.state.getTransactionReplayDepth() === 0) {
-        args.state.undoStack.push({
-          forward: createLazySingleOpTransactionRecord(forwardOp, nextPotentialNewCells),
-          inverse: createLazySingleOpTransactionRecord(inverseOp, 1),
-        })
-        args.state.redoStack.length = 0
-      }
-      return null
-    }
-    if (!shouldCreateLocalBatch() && nextRefs.length > 1 && options.returnUndoOps === false) {
-      const inverseRefs = nextRefs.toReversed().map((ref) => restoreCellMutationRefFromRef(ref))
-      const inverse = createLazyCellMutationTransactionRecord(inverseRefs, countPotentialNewCellsForMutationRefs(inverseRefs))
-      args.applyCellMutationsAtBatchNow(nextRefs, null, 'local', nextPotentialNewCells)
-      if (args.state.getTransactionReplayDepth() === 0) {
-        args.state.undoStack.push({
-          forward: createLazyCellMutationTransactionRecord(nextRefs, nextPotentialNewCells),
-          inverse,
-        })
-        args.state.redoStack.length = 0
-      }
-      return null
-    }
-    if (nextRefs.length > 1 && options.returnUndoOps === false) {
-      const inverseRefs = nextRefs.toReversed().map((ref) => restoreCellMutationRefFromRef(ref))
-      const batch = shouldCreateLocalBatch()
+    const shouldCreateBatch = shouldCreateLocalBatch()
+    if (options.returnUndoOps === false) {
+      const inverse = tryCreateSingleExistingNumericInverseCellMutationRecord(nextRefs) ?? createLazyInverseCellMutationRecord(nextRefs)
+      const batch = shouldCreateBatch
         ? createBatch(
             args.state.replicaState,
             nextRefs.map((ref) => cellMutationRefToEngineOp(args.state.workbook, ref)),
@@ -1858,21 +2207,19 @@ export function createEngineMutationService(args: {
       if (args.state.getTransactionReplayDepth() === 0) {
         args.state.undoStack.push({
           forward: createLazyCellMutationTransactionRecord(nextRefs, nextPotentialNewCells),
-          inverse: createLazyCellMutationTransactionRecord(inverseRefs, countPotentialNewCellsForMutationRefs(inverseRefs)),
+          inverse,
         })
         args.state.redoStack.length = 0
       }
       return null
     }
-    const fastHistory = buildFastMutationHistoryFromRefs(nextRefs, nextPotentialNewCells, {
-      includeUndoOps: options.returnUndoOps !== false,
-    })
+    const fastHistory = buildFastMutationHistoryFromRefs(nextRefs, nextPotentialNewCells)
     const inverse: TransactionRecord = fastHistory?.inverse ?? {
       kind: 'ops',
       ops: buildInverseOps(transactionRecordOps(args.state.workbook, fastHistory.forward)),
       potentialNewCells: transactionRecordOps(args.state.workbook, fastHistory.forward).length,
     }
-    const batch = shouldCreateLocalBatch()
+    const batch = shouldCreateBatch
       ? createBatch(args.state.replicaState, [...transactionRecordOps(args.state.workbook, fastHistory.forward)])
       : null
     args.applyCellMutationsAtBatchNow(nextRefs, batch, 'local', nextPotentialNewCells)
@@ -1887,10 +2234,45 @@ export function createEngineMutationService(args: {
       })
       args.state.redoStack.length = 0
     }
-    if (options.returnUndoOps === false) {
+    return fastHistory?.undoOps ?? cloneTransactionRecordOps(args.state.workbook, inverse)
+  }
+
+  const executeLocalExistingNumericCellMutationAtNow = (
+    request: EngineExistingNumericCellMutationRef,
+    options: {
+      returnUndoOps?: boolean
+    } = {},
+  ): EngineExistingNumericCellMutationResult | null => {
+    if (options.returnUndoOps !== false || shouldCreateLocalBatch()) {
       return null
     }
-    return fastHistory?.undoOps ?? cloneTransactionRecordOps(args.state.workbook, inverse)
+    const cellStore = args.state.workbook.cellStore
+    const cellIndex = request.cellIndex
+    const oldNumericValue =
+      request.trustedExistingNumericLiteral && request.oldNumericValue !== undefined
+        ? request.oldNumericValue
+        : (cellStore.numbers[cellIndex] ?? 0)
+    const result = args.applyExistingNumericCellMutationAtNow?.(request)
+    if (!result) {
+      return null
+    }
+    if (args.state.getTransactionReplayDepth() === 0) {
+      args.state.undoStack.push({
+        forward: createSingleExistingNumericCellMutationTransactionRecord(request, 0),
+        inverse: createSingleExistingNumericCellMutationTransactionRecord(
+          {
+            sheetId: request.sheetId,
+            cellIndex,
+            row: request.row,
+            col: request.col,
+            value: oldNumericValue,
+          },
+          1,
+        ),
+      })
+      args.state.redoStack.length = 0
+    }
+    return result
   }
 
   const tryExecuteRenderCommitCellMutationFastPath = (ops: readonly CommitOp[]): boolean => {
@@ -2119,6 +2501,15 @@ export function createEngineMutationService(args: {
       })
     },
     executeLocalNow(ops, potentialNewCells, options = {}) {
+      if (!shouldCreateLocalBatch()) {
+        const refs = tryCellMutationRefsFromOps(ops)
+        if (refs !== null) {
+          return executeLocalCellMutationsAtNow(refs, potentialNewCells, {
+            returnUndoOps: options.returnUndoOps ?? true,
+            reuseRefs: true,
+          })
+        }
+      }
       return executeLocalNowWithCustomApply(
         ops,
         potentialNewCells,
@@ -2130,6 +2521,9 @@ export function createEngineMutationService(args: {
     },
     executeLocalCellMutationsAtNow(refs, potentialNewCells) {
       return executeLocalCellMutationsAtNow(refs, potentialNewCells)
+    },
+    executeLocalExistingNumericCellMutationAtNow(request, options = {}) {
+      return executeLocalExistingNumericCellMutationAtNow(request, options)
     },
     applyCellMutationsAtNow(refs, options = {}) {
       return applyCellMutationsAtNow(refs, options)

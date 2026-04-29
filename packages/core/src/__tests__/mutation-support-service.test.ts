@@ -276,6 +276,9 @@ describe('EngineMutationSupportService', () => {
     const explicitDistinct = support.composeEventChangesNow(Uint32Array.of(2, 3), 1)
     expect(Array.from(explicitDistinct)).toEqual([1, 2, 3])
 
+    const disjoint = support.composeDisjointEventChangesNow(Uint32Array.of(4, 5), 1)
+    expect(Array.from(disjoint)).toEqual([1, 4, 5])
+
     const duplicateRecalculated = support.composeEventChangesNow(Uint32Array.of(2, 2), 1)
     expect(Array.from(duplicateRecalculated)).toEqual([1, 2])
 

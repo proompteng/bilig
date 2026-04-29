@@ -27,6 +27,12 @@ describe('CellAxisIdentityStore', () => {
     expect(index.cellsInRows(['row-b', 'row-a'])).toEqual([1, 2, 3])
     expect(index.cellsInRowsUnordered(['row-b', 'row-a'])).toEqual([2, 3, 1])
     expect(index.cellsInColumnsUnordered(['column-b', 'column-a'])).toEqual([1, 2, 3])
+    const rowCells: number[] = []
+    const columnCells: number[] = []
+    index.forEachCellInRow('row-a', (cellIndex) => rowCells.push(cellIndex))
+    index.forEachCellInColumn('column-b', (cellIndex) => columnCells.push(cellIndex))
+    expect(rowCells).toEqual([3, 1])
+    expect(columnCells).toEqual([1, 2])
 
     index.set(1, { rowId: 'row-c', colId: 'column-c' })
 

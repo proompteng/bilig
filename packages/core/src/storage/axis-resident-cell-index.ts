@@ -10,6 +10,10 @@ export class AxisResidentCellIndex {
 
   set(cellIndex: number, identity: AxisResidentCellIdentity): void {
     this.delete(cellIndex)
+    this.add(cellIndex, identity)
+  }
+
+  add(cellIndex: number, identity: AxisResidentCellIdentity): void {
     this.byCell.set(cellIndex, identity)
     addToSetMap(this.byRow, identity.rowId, cellIndex)
     addToSetMap(this.byColumn, identity.colId, cellIndex)
@@ -42,6 +46,14 @@ export class AxisResidentCellIndex {
 
   cellsInColumn(colId: string): number[] {
     return sortedCells(this.byColumn.get(colId))
+  }
+
+  forEachCellInRow(rowId: string, callback: (cellIndex: number) => void): void {
+    this.byRow.get(rowId)?.forEach(callback)
+  }
+
+  forEachCellInColumn(colId: string, callback: (cellIndex: number) => void): void {
+    this.byColumn.get(colId)?.forEach(callback)
   }
 
   cellsInRows(rowIds: readonly string[]): number[] {
