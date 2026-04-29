@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { resolveRequiresLiveViewportState } from '../useGridSelectionState.js'
 import { resolveResizeGuideColumn, resolveResizeGuideRow } from '../useGridResizeState.js'
@@ -77,7 +77,7 @@ describe('grid hook boundary helpers', () => {
       'utf8',
     )
     const drawRuntimeHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridDrawRuntime.ts', import.meta.url)), 'utf8')
-    const paneHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridRenderPanes.ts', import.meta.url)), 'utf8')
+    const paneHookPath = fileURLToPath(new URL('../useWorkbookGridRenderPanes.ts', import.meta.url))
     const tilePaneHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookRenderTilePanes.ts', import.meta.url)), 'utf8')
     const viewportRuntimeHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridViewportRuntime.ts', import.meta.url)), 'utf8')
     const viewportResidencyHookSource = readFileSync(
@@ -118,12 +118,13 @@ describe('grid hook boundary helpers', () => {
     expect(hookSource).not.toContain('devicePixelRatio')
     expect(hookSource).not.toContain('shouldUseRemoteRenderTileSource')
     expect(drawRuntimeHookSource).toContain('useWorkbookGridViewportRuntime')
-    expect(drawRuntimeHookSource).toContain('useWorkbookGridRenderPanes')
+    expect(drawRuntimeHookSource).not.toContain('useWorkbookGridRenderPanes')
     expect(drawRuntimeHookSource).toContain('devicePixelRatio')
     expect(drawRuntimeHookSource).toContain('shouldUseRemoteRenderTileSource')
-    expect(paneHookSource).toContain('useWorkbookHeaderPanes')
-    expect(paneHookSource).toContain('useWorkbookRenderTilePanes')
-    expect(paneHookSource).toContain('useWorkbookHeaderCellBounds')
+    expect(drawRuntimeHookSource).toContain('useWorkbookHeaderPanes')
+    expect(drawRuntimeHookSource).toContain('useWorkbookRenderTilePanes')
+    expect(drawRuntimeHookSource).toContain('useWorkbookHeaderCellBounds')
+    expect(existsSync(paneHookPath)).toBe(false)
     expect(viewportRuntimeHookSource).toContain('useWorkbookViewportResidencyState')
     expect(viewportRuntimeHookSource).toContain('useWorkbookViewportScrollRuntime')
     expect(headerHookSource).toContain("from './runtime/gridRuntimeHost.js'")

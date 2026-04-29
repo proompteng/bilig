@@ -10,8 +10,10 @@ import type { GridRuntimeHost } from './runtime/gridRuntimeHost.js'
 import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from './workbookGridScrollStore.js'
 import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
-import { useWorkbookGridRenderPanes } from './useWorkbookGridRenderPanes.js'
 import { useWorkbookGridViewportRuntime } from './useWorkbookGridViewportRuntime.js'
+import { useWorkbookHeaderCellBounds } from './useWorkbookHeaderCellBounds.js'
+import { useWorkbookHeaderPanes } from './useWorkbookHeaderPanes.js'
+import { useWorkbookRenderTilePanes } from './useWorkbookRenderTilePanes.js'
 
 type MutableRef<T> = {
   current: T
@@ -133,7 +135,21 @@ export function useWorkbookGridDrawRuntime(input: {
     restoreViewportTarget,
   })
 
-  return useWorkbookGridRenderPanes({
+  const { viewport, residentViewport, renderTileViewport, residentHeaderItems, residentHeaderRegion, sceneRevision, visibleAddresses } =
+    viewportResidency
+  const getHeaderCellLocalBounds = useWorkbookHeaderCellBounds({
+    columnWidths,
+    freezeCols,
+    freezeRows,
+    frozenColumnWidth,
+    frozenRowHeight,
+    gridMetrics,
+    residentViewport,
+    rowHeights,
+    sortedColumnWidthOverrides,
+    sortedRowHeightOverrides,
+  })
+  const renderTileState = useWorkbookRenderTilePanes({
     columnWidths,
     dprBucket,
     engine,
@@ -147,12 +163,43 @@ export function useWorkbookGridDrawRuntime(input: {
     hostClientWidth,
     hostElement,
     renderTileSource,
+    renderTileViewport,
+    residentViewport,
     rowHeights,
+    sceneRevision,
     sheetId,
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
     subscribeViewport,
-    viewportResidency,
+    visibleAddresses,
+    visibleViewport: viewport,
   })
+  const headerPanes = useWorkbookHeaderPanes({
+    columnWidths,
+    freezeCols,
+    freezeRows,
+    frozenColumnWidth,
+    frozenRowHeight,
+    getHeaderCellLocalBounds,
+    gridMetrics,
+    gridRuntimeHost,
+    hostClientHeight,
+    hostClientWidth,
+    hostElement,
+    residentBodyPane: renderTileState.residentBodyPane,
+    residentHeaderItems,
+    residentHeaderRegion,
+    residentViewport,
+    rowHeights,
+    sheetName,
+  })
+
+  return {
+    headerPanes,
+    preloadDataPanes: renderTileState.preloadDataPanes,
+    renderTilePanes: renderTileState.renderTilePanes,
+    residentDataPanes: renderTileState.residentDataPanes,
+    viewport,
+  }
 }
