@@ -535,25 +535,35 @@ export async function createWorkerRuntimeSessionController(
     currentAuthoritativeRevision = await invokeWorkerMethod(client, 'getAuthoritativeRevision', isNumber)
     requestedAuthoritativeRevision = currentAuthoritativeRevision
 
-    const shouldHydrateFromAuthoritativeState =
-      !bootstrap.restoredFromPersistence ||
-      bootstrap.requiresAuthoritativeHydrate ||
-      (liveSync !== null && (bootstrap.runtimeState.pendingMutationSummary?.activeCount ?? 0) === 0)
+    const activePendingMutationCount = bootstrap.runtimeState.pendingMutationSummary?.activeCount ?? 0
+    const requiresAuthoritativeSnapshot = !bootstrap.restoredFromPersistence || bootstrap.requiresAuthoritativeHydrate
+    const shouldRefreshCleanAuthoritativeState = activePendingMutationCount === 0
 
-    if (shouldHydrateFromAuthoritativeState) {
+    if (requiresAuthoritativeSnapshot || shouldRefreshCleanAuthoritativeState) {
       publishPhase('syncing')
-      const latestSnapshot = await loadLatestWorkbookSnapshot(input.documentId, fetchImpl)
+      let latestSnapshot: LatestWorkbookSnapshot | null = null
+      try {
+        latestSnapshot = await loadLatestWorkbookSnapshot(input.documentId, fetchImpl)
+      } catch (error) {
+        if (requiresAuthoritativeSnapshot) {
+          throw error
+        }
+        callbacks.onError(toErrorMessage(error))
+      }
       if (latestSnapshot) {
         const snapshotRevision = latestSnapshot.revision ?? currentAuthoritativeRevision
-        const hydratedState = await invokeWorkerMethod(client, 'installAuthoritativeSnapshot', isWorkbookWorkerStateSnapshot, {
-          snapshot: latestSnapshot.snapshot,
-          authoritativeRevision: snapshotRevision,
-          mode: 'bootstrap',
-        } satisfies InstallAuthoritativeSnapshotInput)
-        currentAuthoritativeRevision = Math.max(currentAuthoritativeRevision, snapshotRevision)
-        requestedAuthoritativeRevision = Math.max(requestedAuthoritativeRevision, currentAuthoritativeRevision)
-        publishRuntimeState(hydratedState)
-        input.perfSession?.markFirstAuthoritativePatchVisible()
+        const shouldInstallSnapshot = latestSnapshot.revision === null || snapshotRevision >= currentAuthoritativeRevision
+        if (shouldInstallSnapshot) {
+          const hydratedState = await invokeWorkerMethod(client, 'installAuthoritativeSnapshot', isWorkbookWorkerStateSnapshot, {
+            snapshot: latestSnapshot.snapshot,
+            authoritativeRevision: snapshotRevision,
+            mode: 'bootstrap',
+          } satisfies InstallAuthoritativeSnapshotInput)
+          currentAuthoritativeRevision = Math.max(currentAuthoritativeRevision, snapshotRevision)
+          requestedAuthoritativeRevision = Math.max(requestedAuthoritativeRevision, currentAuthoritativeRevision)
+          publishRuntimeState(hydratedState)
+          input.perfSession?.markFirstAuthoritativePatchVisible()
+        }
       }
     }
 

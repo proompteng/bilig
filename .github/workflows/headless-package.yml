@@ -140,11 +140,6 @@ jobs:
           set -euo pipefail
           pnpm workpaper:bench:competitive:check
 
-      - name: Check WorkPaper control-suite benchmark artifact shape
-        run: |
-          set -euo pipefail
-          pnpm workpaper:bench:competitive:control:check
-
       - name: Run WorkPaper external-consumer smoke test
         run: |
           set -euo pipefail

@@ -424,7 +424,7 @@ describe('createWorkerRuntimeSessionController', () => {
     controller.dispose()
   })
 
-  it('keeps persisted local state instead of rehydrating over it', async () => {
+  it('repairs a clean persisted local projection from the latest authoritative snapshot without zero sync', async () => {
     const seedEngine = new SpreadsheetEngine({ workbookName: 'phase0-doc', replicaId: 'seed' })
     seedEngine.createSheet('Sheet1')
     seedEngine.setCellValue('Sheet1', 'A1', 99)
@@ -434,16 +434,33 @@ describe('createWorkerRuntimeSessionController', () => {
         state: {
           snapshot: seedEngine.exportSnapshot(),
           replica: seedEngine.exportReplicaSnapshot(),
-          authoritativeRevision: 0,
+          authoritativeRevision: 451,
           appliedPendingLocalSeq: 0,
         },
       }),
     })
+    const authoritativeSnapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'phase0-doc' },
+      sheets: [
+        {
+          name: 'Prepaid Template',
+          order: 0,
+          cells: [
+            {
+              address: 'C6',
+              value: 88,
+            },
+          ],
+        },
+      ],
+    }
     const fetchImpl = vi.fn(async () => {
-      return new Response(JSON.stringify(createSnapshot([{ address: 'A1', value: 1 }])), {
+      return new Response(JSON.stringify(authoritativeSnapshot), {
         status: 200,
         headers: {
           'content-type': 'application/vnd.bilig.workbook+json',
+          'x-bilig-snapshot-cursor': '451',
         },
       })
     })
@@ -453,7 +470,7 @@ describe('createWorkerRuntimeSessionController', () => {
         documentId: 'phase0-doc',
         replicaId: 'browser:test',
         persistState: true,
-        initialSelection: { sheetName: 'Sheet1', address: 'A1' },
+        initialSelection: { sheetName: 'Prepaid Template', address: 'C6' },
         createWorker: () => createMockWorkerPort(runtime),
         fetchImpl,
       },
@@ -466,10 +483,11 @@ describe('createWorkerRuntimeSessionController', () => {
       },
     )
 
-    expect(fetchImpl).not.toHaveBeenCalled()
-    expect(controller.handle.viewportStore.getCell('Sheet1', 'A1').value).toEqual({
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(controller.runtimeState.sheetNames).toEqual(['Prepaid Template'])
+    expect(controller.handle.viewportStore.getCell('Prepaid Template', 'C6').value).toEqual({
       tag: ValueTag.Number,
-      value: 99,
+      value: 88,
     })
 
     controller.dispose()
@@ -583,9 +601,12 @@ describe('createWorkerRuntimeSessionController', () => {
         persistState: true,
         initialSelection: { sheetName: 'Sheet1', address: 'A1' },
         createWorker: () => createMockWorkerPort(runtime),
-        fetchImpl: vi.fn(async () => {
-          throw new Error('persisted local-ready bootstrap should not fetch')
-        }),
+        fetchImpl: vi.fn(
+          async () =>
+            new Response(null, {
+              status: 204,
+            }),
+        ),
         perfSession,
       },
       {

@@ -119,7 +119,7 @@ export class GridRenderTilePaneRuntime {
     const resolution = this.resolveTiles(input)
     const tileReadiness = this.resolveTileReadiness(input, resolution?.tiles ?? [])
     const fixedRenderTileDataPanes = resolution ? this.buildFixedRenderTileDataPanes(input, resolution) : null
-    if (input.sheetId !== undefined && fixedRenderTileDataPanes) {
+    if (input.sheetId !== undefined && fixedRenderTileDataPanes?.source === 'remote') {
       this.retainedFixedRenderTileDataPanes = {
         panes: fixedRenderTileDataPanes.panes,
         sheetId: input.sheetId,
@@ -134,7 +134,7 @@ export class GridRenderTilePaneRuntime {
         : null)
     const residentDataPanes = retainedFixedRenderTileDataPanes ?? []
     return {
-      needsLocalCellInvalidation: shouldUseRemoteRenderTileSource,
+      needsLocalCellInvalidation: !shouldUseRemoteRenderTileSource,
       preloadDataPanes: EMPTY_TILE_PANE_RUNTIME_STATE.preloadDataPanes,
       renderTilePanes: residentDataPanes,
       residentBodyPane: residentDataPanes.find((pane) => pane.paneId === 'body') ?? null,

@@ -10,6 +10,25 @@ import { resolveTypeGpuV3DrawScrollSnapshot } from './workbook-pane-renderer-run
 
 type FallbackPane = GridHeaderPaneState | WorkbookRenderTilePaneState
 
+export interface CanvasTextRunContext {
+  fillStyle: string | CanvasGradient | CanvasPattern
+  font: string
+  lineWidth: number
+  strokeStyle: string | CanvasGradient | CanvasPattern
+  textAlign: CanvasTextAlign
+  textBaseline: CanvasTextBaseline
+  beginPath(): void
+  clip(): void
+  fillText(text: string, x: number, y: number): void
+  lineTo(x: number, y: number): void
+  measureText(text: string): { readonly width: number }
+  moveTo(x: number, y: number): void
+  rect(x: number, y: number, w: number, h: number): void
+  restore(): void
+  save(): void
+  stroke(): void
+}
+
 export interface WorkbookPaneCanvasFallbackV3Props {
   readonly active: boolean
   readonly geometry: GridGeometrySnapshot | null
@@ -64,7 +83,7 @@ function drawRectInstances(context: CanvasRenderingContext2D, rectInstances: Flo
   }
 }
 
-function drawTextRuns(context: CanvasRenderingContext2D, textRuns: readonly TextQuadRun[]): void {
+export function drawTextRuns(context: CanvasTextRunContext, textRuns: readonly TextQuadRun[]): void {
   for (const run of textRuns) {
     const width = run.width ?? 0
     const height = run.height ?? 0
@@ -85,10 +104,10 @@ function drawTextRuns(context: CanvasRenderingContext2D, textRuns: readonly Text
     context.textAlign = run.align ?? 'left'
     const textX = run.align === 'right' ? run.x + width - 6 : run.align === 'center' ? run.x + width / 2 : run.x + 6
     const textY = run.y + height / 2
-    context.fillText(run.text, textX, textY, width)
+    context.fillText(run.text, textX, textY)
     if (run.underline || run.strike) {
       const metrics = context.measureText(run.text)
-      const lineWidth = Math.min(metrics.width, width)
+      const lineWidth = Math.min(metrics.width, Math.max(0, clipWidth))
       const startX = run.align === 'right' ? textX - lineWidth : run.align === 'center' ? textX - lineWidth / 2 : textX
       const lineY = run.strike ? textY : run.y + height - 4
       context.strokeStyle = run.color ?? '#111827'

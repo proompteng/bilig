@@ -219,7 +219,7 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     })
   })
 
-  it('uses fixed render tile deltas instead of resident scene and viewport subscriptions when available', async () => {
+  it('uses fixed render tile deltas and keeps a full viewport projection hydrated when available', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     const subscribeViewport = vi.fn(() => () => undefined)
@@ -291,7 +291,17 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       }),
       expect.any(Function),
     )
-    expect(subscribeViewport).not.toHaveBeenCalled()
+    expect(subscribeViewport).toHaveBeenCalledWith(
+      'Sheet1',
+      {
+        rowStart: 0,
+        rowEnd: 23,
+        colStart: 0,
+        colEnd: 11,
+      },
+      expect.any(Function),
+      { initialPatch: 'full' },
+    )
     expect(latestRenderState?.renderTilePanes.some((pane) => pane.paneId === 'body')).toBe(true)
     expect(latestRenderState?.renderTilePanes.find((pane) => pane.paneId === 'body')?.tile.coord.sheetId).toBe(7)
     expect(scrollPerf.noteRendererTileReadiness).toHaveBeenCalledWith(
@@ -308,17 +318,16 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     })
   })
 
-  it('keeps local fallback render tiles fresh when remote tiles are stale', async () => {
+  it('keeps local fallback render tiles fresh from viewport patches while remote tiles are unavailable', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     let cellText = ''
-    let cellInvalidationListener: (() => void) | null = null
-    let subscribedAddresses: readonly string[] = []
-    const subscribeCells = vi.fn((_sheetName: string, addresses: readonly string[], listener: () => void) => {
-      subscribedAddresses = addresses
-      cellInvalidationListener = listener
+    const subscribeCells = vi.fn(() => () => undefined)
+    let viewportListener: (() => void) | null = null
+    const subscribeViewport = vi.fn((_sheetName: string, _viewport: unknown, listener: () => void) => {
+      viewportListener = listener
       return () => {
-        cellInvalidationListener = null
+        viewportListener = null
       }
     })
     const fallbackEngine = {
@@ -342,15 +351,8 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       },
       subscribeCells,
     }
-    const tiles = new Map<number, GridRenderTile>()
-    for (let rowTile = 0; rowTile <= 2; rowTile += 1) {
-      for (let colTile = 0; colTile <= 1; colTile += 1) {
-        const tile = createRenderTile({ sheetId: 7, rowTile, colTile })
-        tiles.set(tile.tileId, tile)
-      }
-    }
     const subscribeRenderTileDeltas = vi.fn(() => () => undefined)
-    const peekRenderTile = vi.fn((tileId: number) => tiles.get(tileId) ?? null)
+    const peekRenderTile = vi.fn(() => null)
     let hostElement: HTMLDivElement | null = null
     let latestRenderState: ReturnType<typeof useWorkbookGridRenderState> | null = null
 
@@ -367,6 +369,7 @@ describe('useWorkbookGridRenderState viewport residency', () => {
         selectedCellSnapshot: fallbackEngine.getCell('Sheet1', 'B10'),
         editorValue: '',
         isEditingCell: false,
+        subscribeViewport,
       })
       latestRenderState = renderState
 
@@ -400,13 +403,13 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 
-    expect(subscribeCells).toHaveBeenCalled()
-    expect(subscribedAddresses).toContain('B10')
+    expect(subscribeCells).not.toHaveBeenCalled()
+    expect(subscribeViewport).toHaveBeenCalled()
     expect(latestRenderState?.renderTilePanes.some((pane) => pane.tile.textRuns.some((run) => run.text === cellText))).toBe(false)
 
     cellText = 'ghost content fixed'
     await act(async () => {
-      cellInvalidationListener?.()
+      viewportListener?.()
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 

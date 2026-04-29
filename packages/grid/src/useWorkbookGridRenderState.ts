@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { parseCellAddress } from '@bilig/formula'
 import type { CellSnapshot, Viewport } from '@bilig/protocol'
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
@@ -56,6 +56,7 @@ export function useWorkbookGridRenderState(input: {
     isEditingCell,
     sheetId,
     renderTileSource,
+    subscribeViewport,
     controlledColumnWidths,
     controlledRowHeights,
     controlledHiddenColumns,
@@ -190,6 +191,13 @@ export function useWorkbookGridRenderState(input: {
       shouldUseRemoteRenderTileSource,
       visibleRegion,
     })
+  const [projectionViewportRevision, setProjectionViewportRevision] = useState(0)
+  useEffect(() => {
+    if (!shouldUseRemoteRenderTileSource || !subscribeViewport) {
+      return undefined
+    }
+    return subscribeViewport(sheetName, viewport, () => setProjectionViewportRevision((current) => current + 1), { initialPatch: 'full' })
+  }, [sheetName, shouldUseRemoteRenderTileSource, subscribeViewport, viewport])
   const getHeaderCellLocalBounds = useWorkbookHeaderCellBounds({
     columnWidths,
     freezeCols,
@@ -244,7 +252,7 @@ export function useWorkbookGridRenderState(input: {
     renderTileViewport,
     residentViewport,
     rowHeights,
-    sceneRevision,
+    sceneRevision: sceneRevision + projectionViewportRevision,
     sheetId,
     sheetName,
     sortedColumnWidthOverrides,

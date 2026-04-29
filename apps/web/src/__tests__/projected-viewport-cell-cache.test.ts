@@ -20,6 +20,16 @@ function snapshot(address: string, value: number | string): CellSnapshot {
   }
 }
 
+function resetEmptySnapshot(address: string): CellSnapshot {
+  return {
+    sheetName: 'Sheet1',
+    address,
+    value: { tag: ValueTag.Empty },
+    flags: 0,
+    version: 0,
+  }
+}
+
 function columnLabel(columnIndex: number): string {
   let index = columnIndex + 1
   let label = ''
@@ -32,6 +42,35 @@ function columnLabel(columnIndex: number): string {
 }
 
 describe('ProjectedViewportCellCache', () => {
+  it('does not publish absent version-zero empty selection snapshots', () => {
+    const cache = new ProjectedViewportCellCache()
+    const listener = vi.fn()
+    const globalListener = vi.fn()
+    cache.subscribeCells('Sheet1', ['C21'], listener)
+    cache.subscribe(globalListener)
+
+    expect(cache.setCellSnapshot(resetEmptySnapshot('C21'))).toBe(false)
+
+    expect(cache.peekCell('Sheet1', 'C21')).toBeUndefined()
+    expect(cache.getCell('Sheet1', 'C21')).toEqual(resetEmptySnapshot('C21'))
+    expect(listener).not.toHaveBeenCalled()
+    expect(globalListener).not.toHaveBeenCalled()
+  })
+
+  it('keeps existing cached values when a reset-empty selection snapshot is older', () => {
+    const cache = new ProjectedViewportCellCache()
+    const listener = vi.fn()
+    cache.subscribeCells('Sheet1', ['C21'], listener)
+    cache.setCellSnapshot(snapshot('C21', 'stale'))
+    listener.mockClear()
+
+    expect(cache.setCellSnapshot(resetEmptySnapshot('C21'))).toBe(false)
+
+    expect(cache.peekCell('Sheet1', 'C21')?.input).toBeUndefined()
+    expect(cache.peekCell('Sheet1', 'C21')?.value).toEqual({ tag: ValueTag.String, value: 'stale', stringId: 1 })
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it('tracks cell subscriptions and exposes sheet grid entries', () => {
     const cache = new ProjectedViewportCellCache()
     const listener = vi.fn()

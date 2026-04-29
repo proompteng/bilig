@@ -15,6 +15,19 @@ interface CellSubscription {
   listener: () => void
 }
 
+function isResetEmptySnapshot(snapshot: CellSnapshot): boolean {
+  return (
+    snapshot.value.tag === ValueTag.Empty &&
+    snapshot.version === 0 &&
+    snapshot.flags === 0 &&
+    snapshot.formula === undefined &&
+    snapshot.input === undefined &&
+    snapshot.format === undefined &&
+    snapshot.styleId === undefined &&
+    snapshot.numberFormatId === undefined
+  )
+}
+
 export class ProjectedViewportCellCache {
   private readonly cellSnapshots = new Map<string, CellSnapshot>()
   private readonly cellKeysBySheet = new Map<string, Set<string>>()
@@ -111,6 +124,10 @@ export class ProjectedViewportCellCache {
   setCellSnapshot(snapshot: CellSnapshot): boolean {
     const key = `${snapshot.sheetName}!${snapshot.address}`
     const current = this.cellSnapshots.get(key)
+    if (!current && isResetEmptySnapshot(snapshot)) {
+      this.knownSheets.add(snapshot.sheetName)
+      return false
+    }
     if (current) {
       if (shouldKeepCurrentSnapshot(current, snapshot, { allowResetEmptyOverride: false })) {
         return false
