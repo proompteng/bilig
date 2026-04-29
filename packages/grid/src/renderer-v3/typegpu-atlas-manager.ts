@@ -383,6 +383,9 @@ export function createGlyphAtlas(input: { initialWidth?: number; initialHeight?:
     getTextAtlasPagesStats(): TextAtlasPagesStatsV3 {
       return atlasPages.stats()
     },
+    getTextAtlasPagesSeq(): number {
+      return atlasPages.seq
+    },
     getVersion(): number {
       return version
     },

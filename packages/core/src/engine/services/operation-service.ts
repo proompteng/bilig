@@ -52,17 +52,6 @@ type StructuralAxisOp = Extract<
   }
 >
 
-function isStructuralAxisOp(op: EngineOp): op is StructuralAxisOp {
-  return (
-    op.kind === 'insertRows' ||
-    op.kind === 'deleteRows' ||
-    op.kind === 'moveRows' ||
-    op.kind === 'insertColumns' ||
-    op.kind === 'deleteColumns' ||
-    op.kind === 'moveColumns'
-  )
-}
-
 type DerivedOp = Extract<EngineOp, { kind: 'upsertSpillRange' | 'deleteSpillRange' | 'upsertPivotTable' | 'deletePivotTable' }>
 
 interface ExactLookupImpactEntry {
@@ -1588,9 +1577,7 @@ export function createEngineOperationService(args: {
         if (!canSkipOrderChecks && !shouldApplyOp(op, order)) {
           return
         }
-        if (!isStructuralAxisOp(op)) {
-          args.materializeDeferredStructuralFormulaSources()
-        }
+        args.materializeDeferredStructuralFormulaSources()
 
         switch (op.kind) {
           case 'upsertWorkbook':

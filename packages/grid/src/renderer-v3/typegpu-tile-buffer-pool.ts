@@ -44,6 +44,7 @@ export interface TypeGpuTileContentResourceEntryV3 {
   rectCount: number
   rectRevisionKey: TypeGpuTileRectRevisionKeyV3 | null
   textHandle: GpuBufferHandleV3<TextInstanceVertexBuffer> | null
+  textAtlasDependencyVersion: number
   textAtlasGeometryVersion: number
   textCount: number
   textGlyphIds: readonly number[] | null
@@ -70,6 +71,7 @@ function createEmptyContentEntry(): TypeGpuTileContentResourceEntryV3 {
     rectHandle: null,
     rectRevisionKey: null,
     textCount: 0,
+    textAtlasDependencyVersion: -1,
     textAtlasGeometryVersion: -1,
     textGlyphIds: null,
     textGlyphPageIds: null,
@@ -203,6 +205,7 @@ export class TypeGpuTileResourceCacheV3 {
     entry.rectCount = 0
     entry.rectRevisionKey = null
     entry.textCount = 0
+    entry.textAtlasDependencyVersion = -1
     entry.textAtlasGeometryVersion = -1
     entry.textGlyphIds = null
     entry.textGlyphPageIds = null
@@ -221,6 +224,7 @@ export class TypeGpuTileResourceCacheV3 {
     entry.textHandle = null
     entry.rectCount = 0
     entry.textCount = 0
+    entry.textAtlasDependencyVersion = -1
     entry.textAtlasGeometryVersion = -1
     entry.textGlyphIds = null
     entry.textGlyphPageIds = null
@@ -263,6 +267,15 @@ export function syncTypeGpuTilePaneResourcesV3(input: {
     const content = input.tileResources.getContent(resolveWorkbookTileContentBufferKeyV3(pane))
     const textRevisionKey = resolveGridTextTileRevisionKeyV3(pane.tile)
     const atlasGeometryVersion = input.atlas.getGlyphGeometryVersion()
+    const atlasDependencyVersion = input.atlas.getTextAtlasPagesSeq()
+    const shouldValidateGlyphDependencies =
+      content.textAtlasDependencyVersion >= 0 && content.textAtlasDependencyVersion !== atlasDependencyVersion
+    const missingGlyphRunSpans = shouldValidateGlyphDependencies
+      ? resolveMissingTextGlyphRunSpansV3({
+          atlas: input.atlas,
+          content,
+        })
+      : []
     const atlasGeometryResync =
       areGridTextTileRevisionKeysEqualV3(content.textRevisionKey, textRevisionKey) &&
       content.textAtlasGeometryVersion >= 0 &&
@@ -271,14 +284,17 @@ export function syncTypeGpuTilePaneResourcesV3(input: {
       shouldSyncGridTextTileResourceV3({
         atlasGeometryVersion,
         content,
+        missingGlyphDependencies: missingGlyphRunSpans.length > 0,
         textRevisionKey,
         tile: pane.tile,
       })
     ) {
       syncTileTextResource({
         atlas: input.atlas,
+        atlasDependencyVersion,
         atlasGeometryResync,
         content,
+        missingGlyphRunSpans,
         pane,
         textRevisionKey,
         tileResources: input.tileResources,
@@ -451,9 +467,13 @@ export function shouldSyncGridTextTileResourceV3(input: {
     TypeGpuTileContentResourceEntryV3,
     'textAtlasGeometryVersion' | 'textCount' | 'textHandle' | 'textRunCount' | 'textRevisionKey'
   >
+  readonly missingGlyphDependencies?: boolean | undefined
   readonly textRevisionKey: TypeGpuTileTextRevisionKeyV3
   readonly tile: GridRenderTile
 }): boolean {
+  if (input.missingGlyphDependencies) {
+    return true
+  }
   if (areGridTextTileRevisionKeysEqualV3(input.content.textRevisionKey, input.textRevisionKey)) {
     return input.atlasGeometryVersion !== undefined && input.content.textAtlasGeometryVersion !== input.atlasGeometryVersion
   }
@@ -468,6 +488,54 @@ export function shouldSyncGridTextTileResourceV3(input: {
   }
   const dirtyMask = resolveGridTileDirtyContentMaskV3(input.tile)
   return dirtyMask === null || (dirtyMask & TEXT_DIRTY_MASK_V3) !== 0
+}
+
+export function resolveMissingTextGlyphRunSpansV3(input: {
+  readonly atlas: Pick<ReturnType<typeof createGlyphAtlas>, 'resolveGlyphRecord'>
+  readonly content: Pick<TypeGpuTileContentResourceEntryV3, 'textGlyphIds' | 'textGlyphPageIds' | 'textRunCount' | 'textRunGlyphIds'>
+}): readonly TextQuadRunSpan[] {
+  const runCount = input.content.textRunCount
+  if (runCount <= 0) {
+    return []
+  }
+
+  const glyphIds = input.content.textGlyphIds
+  const pageIds = input.content.textGlyphPageIds
+  const runGlyphIds = input.content.textRunGlyphIds
+  if (!glyphIds || glyphIds.length === 0) {
+    return []
+  }
+  if (!pageIds || pageIds.length !== glyphIds.length || !runGlyphIds || runGlyphIds.length !== runCount) {
+    return [{ length: runCount, offset: 0 }]
+  }
+
+  const expectedPageByGlyph = new Map<number, number>()
+  for (let index = 0; index < glyphIds.length; index += 1) {
+    const glyphId = glyphIds[index]
+    const pageId = pageIds[index]
+    if (glyphId === undefined || pageId === undefined) {
+      return [{ length: runCount, offset: 0 }]
+    }
+    expectedPageByGlyph.set(glyphId, pageId)
+  }
+
+  const missing: TextQuadRunSpan[] = []
+  for (let runIndex = 0; runIndex < runCount; runIndex += 1) {
+    const runGlyphs = runGlyphIds[runIndex] ?? []
+    let runMissing = false
+    for (const glyphId of runGlyphs) {
+      const expectedPageId = expectedPageByGlyph.get(glyphId)
+      const glyphRecord = input.atlas.resolveGlyphRecord(glyphId)
+      if (expectedPageId === undefined || !glyphRecord || glyphRecord.pageId !== expectedPageId) {
+        runMissing = true
+        break
+      }
+    }
+    if (runMissing) {
+      missing.push({ length: 1, offset: runIndex })
+    }
+  }
+  return missing
 }
 
 export function shouldSyncGridRectTileResourceV3(input: {
@@ -502,15 +570,18 @@ export function shouldSyncGridRectTileResourceV3(input: {
 
 function syncTileTextResource(input: {
   readonly atlas: ReturnType<typeof createGlyphAtlas>
+  readonly atlasDependencyVersion: number
   readonly atlasGeometryResync: boolean
   readonly pane: WorkbookRenderTilePaneState
   readonly tileResources: TypeGpuTileResourceCacheV3
   readonly content: TypeGpuTileContentResourceEntryV3
+  readonly missingGlyphRunSpans: readonly TextQuadRunSpan[]
   readonly textRevisionKey: TypeGpuTileTextRevisionKeyV3
 }): void {
   input.content.decorationRects = buildTextDecorationRectsFromRuns(input.pane.tile.textRuns, input.atlas)
+  const dirtyTextRunSpans = mergeTextRunDirtySpans(input.pane.tile.dirty?.textSpans, input.missingGlyphRunSpans)
   const textPayload = buildTextQuadsFromRunsWithSpans(input.pane.tile.textRuns, input.atlas, undefined, {
-    dirtyRunSpans: input.pane.tile.dirty?.textSpans,
+    dirtyRunSpans: dirtyTextRunSpans,
     previousRunPayloads: input.content.textRunPayloads,
   })
   noteTypeGpuTextPayload({
@@ -524,6 +595,7 @@ function syncTileTextResource(input: {
   if (textPayload.quadCount === 0) {
     releaseTextBuffer(input.tileResources, input.content)
     input.content.textCount = 0
+    input.content.textAtlasDependencyVersion = input.atlasDependencyVersion
     input.content.textAtlasGeometryVersion = input.atlas.getGlyphGeometryVersion()
     input.content.textGlyphIds = textPayload.glyphIds
     input.content.textGlyphPageIds = textPayload.pageIds
@@ -543,6 +615,7 @@ function syncTileTextResource(input: {
   const handle = prepareTextBuffer(input.tileResources, input.content, textPayload.quadCount)
   input.content.textHandle = handle
   input.content.textCount = textPayload.quadCount
+  input.content.textAtlasDependencyVersion = input.atlasDependencyVersion
   input.content.textAtlasGeometryVersion = input.atlas.getGlyphGeometryVersion()
   input.content.textGlyphIds = textPayload.glyphIds
   input.content.textGlyphPageIds = textPayload.pageIds
@@ -556,6 +629,7 @@ function syncTileTextResource(input: {
     label: `tile-text:${resolveWorkbookTileContentBufferKeyV3(input.pane)}`,
     textPayload,
     tile: input.pane.tile,
+    textDirtySpans: dirtyTextRunSpans,
   })
   input.content.textRunQuadSpans = textPayload.runSpans
   input.content.textRevisionKey = input.textRevisionKey
@@ -568,8 +642,9 @@ function writeTileTextPayload(input: {
   readonly label: string
   readonly textPayload: { readonly floats: Float32Array; readonly quadCount: number; readonly runSpans: readonly TextQuadRunSpan[] }
   readonly tile: GridRenderTile
+  readonly textDirtySpans?: readonly TextQuadRunSpan[] | undefined
 }): void {
-  const dirtySpans = input.tile.dirty?.textSpans ?? []
+  const dirtySpans = input.textDirtySpans ?? input.tile.dirty?.textSpans ?? []
   if (
     !input.canWritePartialPayload ||
     dirtySpans.length === 0 ||
@@ -630,6 +705,19 @@ function resolveStableTextQuadSpan(input: {
     end = Math.max(end, next.offset + next.length)
   }
   return offset === Number.MAX_SAFE_INTEGER ? null : { offset, length: end - offset }
+}
+
+function mergeTextRunDirtySpans(
+  tileDirtySpans: readonly TextQuadRunSpan[] | undefined,
+  missingGlyphRunSpans: readonly TextQuadRunSpan[],
+): readonly TextQuadRunSpan[] | undefined {
+  if (!tileDirtySpans || tileDirtySpans.length === 0) {
+    return missingGlyphRunSpans.length === 0 ? undefined : missingGlyphRunSpans
+  }
+  if (missingGlyphRunSpans.length === 0) {
+    return tileDirtySpans
+  }
+  return [...tileDirtySpans, ...missingGlyphRunSpans]
 }
 
 function syncTileRectResource(input: {

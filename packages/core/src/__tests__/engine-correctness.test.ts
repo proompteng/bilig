@@ -561,6 +561,26 @@ describe('engine correctness', () => {
     expect(engine.getCell(sheetName, 'E3').formula).toBe('SUM(A1:B2)')
   })
 
+  it('materializes deferred structural formula sources before consecutive axis edits', async () => {
+    const initialSnapshot = await createEngineSeedSnapshot('formula-graph', 'correctness-consecutive-structural-formula-source')
+    const engine = new SpreadsheetEngine({
+      workbookName: 'correctness-consecutive-structural-formula-source',
+      replicaId: 'correctness-consecutive-structural-formula-source',
+    })
+    await engine.ready()
+    engine.importSnapshot(initialSnapshot)
+
+    engine.fillRange({ sheetName, startAddress: 'C1', endAddress: 'C1' }, { sheetName, startAddress: 'D1', endAddress: 'D1' })
+    engine.insertColumns(sheetName, 1, 1)
+    expect(engine.getCell(sheetName, 'E1').formula).toBe('C1+D2')
+
+    engine.insertRows(sheetName, 0, 1)
+    expect(engine.getCell(sheetName, 'E2').formula).toBe('C2+D3')
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getCell(sheetName, 'E1').formula).toBe('C1+D2')
+  })
+
   it('restores named-range structures after delete-row undo', async () => {
     const engine = new SpreadsheetEngine({
       workbookName: 'correctness-structural-named-range-delete-row-undo',

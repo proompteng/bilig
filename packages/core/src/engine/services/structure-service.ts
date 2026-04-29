@@ -866,7 +866,7 @@ export function createEngineStructureService(args: {
         ownerCol,
         source: rewritten.source,
         compiled: rewritten.compiled,
-        ...(formula.templateId === undefined ? {} : { templateId: formula.templateId }),
+        ...(formula.templateId === undefined || rewritten.source !== formula.source ? {} : { templateId: formula.templateId }),
         preservesBinding: preservesBinding && !rewrittenPlaceholderDependencyNeedsRebind,
         preservesValue,
       })
@@ -1674,7 +1674,6 @@ export function createEngineStructureService(args: {
         ...(compiled
           ? {
               compiled,
-              ...(formula.templateId === undefined ? {} : { templateId: formula.templateId }),
               preservesBinding: true,
               preservesValue,
             }

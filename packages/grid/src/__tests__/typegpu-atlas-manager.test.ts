@@ -63,6 +63,7 @@ describe('glyph-atlas', () => {
     const entry = atlas.intern('400 11px Geist', 'A')
 
     const stats = atlas.getDirtyPageStats()
+    expect(atlas.getTextAtlasPagesSeq()).toBeGreaterThan(0)
     expect(stats.dirtyPageCount).toBeGreaterThan(0)
     expect(stats.dirtyUploadBytes).toBeGreaterThan(0)
     expect(atlas.getTextAtlasPagesStats()).toMatchObject({

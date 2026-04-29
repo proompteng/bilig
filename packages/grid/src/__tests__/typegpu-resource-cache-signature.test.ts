@@ -6,6 +6,7 @@ import {
   areGridTextTileRevisionKeysEqualV3,
   resolveGridRectTileRevisionKeyV3,
   resolveGridTextTileRevisionKeyV3,
+  resolveMissingTextGlyphRunSpansV3,
   shouldSyncGridRectTileResourceV3,
   shouldSyncGridTextTileResourceV3,
   type TypeGpuTileContentResourceEntryV3,
@@ -55,6 +56,7 @@ function contentEntry(overrides: Partial<TypeGpuTileContentResourceEntryV3> = {}
     rectHandle: null,
     rectRevisionKey: null,
     textCount: 1,
+    textAtlasDependencyVersion: 1,
     textAtlasGeometryVersion: 1,
     textGlyphIds: null,
     textGlyphPageIds: null,
@@ -194,6 +196,68 @@ describe('typegpu v3 resource cache revision keys', () => {
         tile,
       }),
     ).toBe(true)
+  })
+
+  test('resyncs V3 text resources when a glyph dependency is missing', () => {
+    const tile = createTile({ textCount: 1, textRuns: [createTextRun({ text: 'A' })] })
+    const revisionKey = resolveGridTextTileRevisionKeyV3(tile)
+
+    expect(
+      shouldSyncGridTextTileResourceV3({
+        atlasGeometryVersion: 1,
+        content: contentEntry({
+          textAtlasGeometryVersion: 1,
+          textCount: 1,
+          textRunCount: 1,
+          textRevisionKey: revisionKey,
+        }),
+        missingGlyphDependencies: true,
+        textRevisionKey: revisionKey,
+        tile,
+      }),
+    ).toBe(true)
+  })
+
+  test('maps missing glyph dependencies to dirty text runs', () => {
+    const atlas = {
+      resolveGlyphRecord(glyphId: number) {
+        if (glyphId === 2) {
+          return null
+        }
+        return {
+          glyphId,
+          pageId: glyphId * 10,
+          refCount: 1,
+          u0: 0,
+          u1: 1,
+          v0: 0,
+          v1: 1,
+        }
+      },
+    }
+
+    expect(
+      resolveMissingTextGlyphRunSpansV3({
+        atlas,
+        content: contentEntry({
+          textGlyphIds: [1, 2],
+          textGlyphPageIds: [10, 20],
+          textRunCount: 2,
+          textRunGlyphIds: [[1], [2]],
+        }),
+      }),
+    ).toEqual([{ length: 1, offset: 1 }])
+    expect(
+      resolveMissingTextGlyphRunSpansV3({
+        atlas,
+        content: contentEntry({
+          textGlyphIds: [1],
+          textGlyphPageIds: [20],
+          textRunCount: 1,
+          textRunGlyphIds: [[1]],
+        }),
+      }),
+    ).toEqual([{ length: 1, offset: 0 }])
   })
 
   test('resyncs V3 text resources when logical text run count changes', () => {
