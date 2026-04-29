@@ -25,6 +25,7 @@ export interface GridRenderTilePaneRuntimeState {
 export interface GridRenderTilePaneBridgeState {
   readonly forceLocalTiles: boolean
   readonly localFallbackRevision: number
+  readonly projectedViewportRevision: number
   readonly renderTileRevision: number
 }
 
@@ -102,6 +103,7 @@ const EMPTY_TILE_PANE_RUNTIME_STATE: GridRenderTilePaneRuntimeState = Object.fre
 const INITIAL_RENDER_TILE_PANE_BRIDGE_STATE: GridRenderTilePaneBridgeState = Object.freeze({
   forceLocalTiles: false,
   localFallbackRevision: 0,
+  projectedViewportRevision: 0,
   renderTileRevision: 0,
 })
 
@@ -169,6 +171,7 @@ export class GridRenderTilePaneRuntime {
     this.bridgeState = {
       forceLocalTiles: false,
       localFallbackRevision: previous.localFallbackRevision,
+      projectedViewportRevision: previous.projectedViewportRevision,
       renderTileRevision: previous.renderTileRevision + 1,
     }
     return this.bridgeState
@@ -179,6 +182,7 @@ export class GridRenderTilePaneRuntime {
     this.bridgeState = {
       forceLocalTiles: previous.forceLocalTiles,
       localFallbackRevision: previous.localFallbackRevision,
+      projectedViewportRevision: previous.projectedViewportRevision,
       renderTileRevision: previous.renderTileRevision + 1,
     }
     return this.bridgeState
@@ -189,6 +193,18 @@ export class GridRenderTilePaneRuntime {
     this.bridgeState = {
       forceLocalTiles: true,
       localFallbackRevision: previous.localFallbackRevision + 1,
+      projectedViewportRevision: previous.projectedViewportRevision,
+      renderTileRevision: previous.renderTileRevision,
+    }
+    return this.bridgeState
+  }
+
+  noteProjectedViewportPatch(): GridRenderTilePaneBridgeState {
+    const previous = this.bridgeState
+    this.bridgeState = {
+      forceLocalTiles: previous.forceLocalTiles,
+      localFallbackRevision: previous.localFallbackRevision,
+      projectedViewportRevision: previous.projectedViewportRevision + 1,
       renderTileRevision: previous.renderTileRevision,
     }
     return this.bridgeState

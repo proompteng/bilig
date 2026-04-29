@@ -337,27 +337,38 @@ describe('GridRuntimeHost', () => {
     expect(host.snapshotRenderTileBridgeState()).toEqual({
       forceLocalTiles: false,
       localFallbackRevision: 0,
+      projectedViewportRevision: 0,
       renderTileRevision: 0,
     })
 
     expect(host.noteLocalRenderTileFallbackInvalidation()).toEqual({
       forceLocalTiles: true,
       localFallbackRevision: 1,
+      projectedViewportRevision: 0,
       renderTileRevision: 0,
     })
     expect(host.noteWorkbookDeltaDamage()).toEqual({
       forceLocalTiles: true,
       localFallbackRevision: 1,
+      projectedViewportRevision: 0,
+      renderTileRevision: 1,
+    })
+    expect(host.noteProjectedViewportPatch()).toEqual({
+      forceLocalTiles: true,
+      localFallbackRevision: 1,
+      projectedViewportRevision: 1,
       renderTileRevision: 1,
     })
     expect(host.noteRenderTileDelta()).toEqual({
       forceLocalTiles: false,
       localFallbackRevision: 1,
+      projectedViewportRevision: 1,
       renderTileRevision: 2,
     })
     expect(host.snapshotRenderTileBridgeState()).toEqual({
       forceLocalTiles: false,
       localFallbackRevision: 1,
+      projectedViewportRevision: 1,
       renderTileRevision: 2,
     })
   })

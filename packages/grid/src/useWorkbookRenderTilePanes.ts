@@ -6,6 +6,7 @@ import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from './renderer-v3/render-tile-pane-state.js'
 import type { GridTileReadinessSnapshotV3 } from './runtime/gridTileCoordinator.js'
 import type { GridRuntimeHost } from './runtime/gridRuntimeHost.js'
+import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 
 type SortedAxisOverrides = readonly (readonly [number, number])[]
 
@@ -39,6 +40,7 @@ export function useWorkbookRenderTilePanes(input: {
   readonly sheetName: string
   readonly sortedColumnWidthOverrides: SortedAxisOverrides
   readonly sortedRowHeightOverrides: SortedAxisOverrides
+  readonly subscribeViewport?: SheetGridViewportSubscription | undefined
   readonly visibleAddresses: readonly string[]
   readonly visibleViewport: Viewport
 }): WorkbookRenderTilePanesState {
@@ -64,6 +66,7 @@ export function useWorkbookRenderTilePanes(input: {
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
+    subscribeViewport,
     visibleAddresses,
     visibleViewport,
   } = input
@@ -101,9 +104,24 @@ export function useWorkbookRenderTilePanes(input: {
     )
   }, [dprBucket, gridRuntimeHost, renderTileSource, sheetId])
 
+  useEffect(() => {
+    if (renderTileSource === undefined || sheetId === undefined || !subscribeViewport) {
+      return undefined
+    }
+    return subscribeViewport(
+      sheetName,
+      visibleViewport,
+      () => {
+        setRenderTileBridgeState(gridRuntimeHost.noteProjectedViewportPatch())
+      },
+      { initialPatch: 'full' },
+    )
+  }, [gridRuntimeHost, renderTileSource, sheetId, sheetName, subscribeViewport, visibleViewport])
+
   const state = useMemo<WorkbookRenderTilePanesState & { readonly needsLocalCellInvalidation: boolean }>(() => {
     void renderTileBridgeState.renderTileRevision
     void renderTileBridgeState.localFallbackRevision
+    void renderTileBridgeState.projectedViewportRevision
     return gridRuntimeHost.resolveRenderTilePanes({
       columnWidths,
       dprBucket,
@@ -121,7 +139,7 @@ export function useWorkbookRenderTilePanes(input: {
       renderTileViewport,
       residentViewport,
       rowHeights,
-      sceneRevision,
+      sceneRevision: sceneRevision + renderTileBridgeState.projectedViewportRevision,
       sheetId,
       sheetName,
       sortedColumnWidthOverrides,
