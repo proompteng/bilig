@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Viewport } from '@bilig/protocol'
 import type { GridEngineLike } from './grid-engine.js'
 import type { GridMetrics } from './gridMetrics.js'
-import { noteRendererTileReadiness } from './grid-render-counters.js'
 import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from './renderer-v3/render-tile-pane-state.js'
 import type { GridTileReadinessSnapshotV3 } from './runtime/gridTileCoordinator.js'
@@ -157,32 +156,22 @@ export function useWorkbookRenderTilePanes(input: {
   ])
 
   useEffect(() => {
-    const exactHits = state.tileReadiness.exactHits.length
-    const staleHits = state.tileReadiness.staleHits.length
-    const misses = state.tileReadiness.misses.length
-    const visibleDirtyTiles = state.tileReadiness.visibleDirtyTileKeys.length
-    const warmDirtyTiles = state.tileReadiness.warmDirtyTileKeys.length
-    if (exactHits + staleHits + misses + visibleDirtyTiles + warmDirtyTiles === 0) {
-      return
-    }
-    noteRendererTileReadiness({
-      exactHits,
-      misses,
-      staleHits,
-      visibleDirtyTiles,
-      warmDirtyTiles,
-    })
-  }, [state.tileReadiness])
+    gridRuntimeHost.noteRenderTileReadiness(state.tileReadiness)
+  }, [gridRuntimeHost, state.tileReadiness])
 
   useEffect(() => {
-    if (!state.needsLocalCellInvalidation || visibleAddresses.length === 0) {
-      return
-    }
-    return engine.subscribeCells(sheetName, visibleAddresses, () => {
-      gridRuntimeHost.clearRetainedRenderTilePanes()
-      setForceLocalTiles(true)
-      setLocalFallbackRevision((current) => current + 1)
-    })
+    return gridRuntimeHost.connectLocalRenderTileCellInvalidation(
+      {
+        engine,
+        needsLocalCellInvalidation: state.needsLocalCellInvalidation,
+        sheetName,
+        visibleAddresses,
+      },
+      () => {
+        setForceLocalTiles(true)
+        setLocalFallbackRevision((current) => current + 1)
+      },
+    )
   }, [engine, gridRuntimeHost, sheetName, state.needsLocalCellInvalidation, visibleAddresses])
 
   return state

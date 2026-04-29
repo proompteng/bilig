@@ -1,4 +1,5 @@
 import type { Viewport } from '@bilig/protocol'
+import { noteRendererTileReadiness } from '../grid-render-counters.js'
 import type { GridEngineLike } from '../grid-engine.js'
 import type { GridMetrics } from '../gridMetrics.js'
 import { buildLocalFixedRenderTiles } from '../renderer-v3/local-render-tile-materializer.js'
@@ -61,6 +62,13 @@ export interface GridRenderTileDamageRuntimeInput {
   readonly gridRuntimeHost: GridRuntimeHost
   readonly renderTileSource?: GridRenderTileSource | undefined
   readonly sheetId?: number | undefined
+}
+
+export interface GridRenderTileLocalInvalidationRuntimeInput {
+  readonly engine: GridEngineLike
+  readonly needsLocalCellInvalidation: boolean
+  readonly sheetName: string
+  readonly visibleAddresses: readonly string[]
 }
 
 interface GridRenderTileInterestRuntimeInput {
@@ -137,6 +145,34 @@ export class GridRenderTilePaneRuntime {
 
   clearRetainedPanes(): void {
     this.retainedFixedRenderTileDataPanes = null
+  }
+
+  noteTileReadiness(readiness: GridTileReadinessSnapshotV3): void {
+    const exactHits = readiness.exactHits.length
+    const staleHits = readiness.staleHits.length
+    const misses = readiness.misses.length
+    const visibleDirtyTiles = readiness.visibleDirtyTileKeys.length
+    const warmDirtyTiles = readiness.warmDirtyTileKeys.length
+    if (exactHits + staleHits + misses + visibleDirtyTiles + warmDirtyTiles === 0) {
+      return
+    }
+    noteRendererTileReadiness({
+      exactHits,
+      misses,
+      staleHits,
+      visibleDirtyTiles,
+      warmDirtyTiles,
+    })
+  }
+
+  connectLocalCellInvalidation(input: GridRenderTileLocalInvalidationRuntimeInput, listener: () => void): (() => void) | undefined {
+    if (!input.needsLocalCellInvalidation || input.visibleAddresses.length === 0) {
+      return undefined
+    }
+    return input.engine.subscribeCells(input.sheetName, input.visibleAddresses, () => {
+      this.clearRetainedPanes()
+      listener()
+    })
   }
 
   connectWorkbookDeltaDamage(

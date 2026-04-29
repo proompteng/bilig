@@ -347,6 +347,73 @@ describe('GridRenderTilePaneRuntime', () => {
     expect(state.residentDataPanes).toHaveLength(1)
   })
 
+  it('owns local cell invalidation and clears retained remote panes', () => {
+    const runtime = new GridRenderTilePaneRuntime()
+    const host = createHost()
+    const tileId = host.viewportTileKeys({
+      dprBucket: 1,
+      sheetOrdinal: 7,
+      viewport: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
+    })[0]
+    let invalidationListener: (() => void) | null = null
+    let subscribedSheetName = ''
+    let subscribedAddresses: readonly string[] = []
+    let unsubscribed = false
+    const engine: GridEngineLike = {
+      ...LOCAL_EMPTY_ENGINE,
+      subscribeCells: (sheetName, addresses, listener) => {
+        subscribedSheetName = sheetName
+        subscribedAddresses = addresses
+        invalidationListener = listener
+        return () => {
+          unsubscribed = true
+        }
+      },
+    }
+    const ready = runtime.resolve(
+      createInput({
+        gridRuntimeHost: host,
+        renderTileSource: createRenderTileSource([createRenderTile(tileId)]),
+      }),
+    )
+    const invalidations: string[] = []
+    const unsubscribe = runtime.connectLocalCellInvalidation(
+      {
+        engine,
+        needsLocalCellInvalidation: true,
+        sheetName: 'Sheet1',
+        visibleAddresses: ['A1', 'B2'],
+      },
+      () => invalidations.push('invalidated'),
+    )
+
+    expect(subscribedSheetName).toBe('Sheet1')
+    expect(subscribedAddresses).toEqual(['A1', 'B2'])
+    expect(
+      runtime.resolve(
+        createInput({
+          gridRuntimeHost: host,
+          renderTileSource: createRenderTileSource([]),
+        }),
+      ).residentDataPanes,
+    ).toBe(ready.residentDataPanes)
+
+    invalidationListener?.()
+
+    expect(invalidations).toEqual(['invalidated'])
+    expect(
+      runtime.resolve(
+        createInput({
+          engine: LOCAL_EMPTY_ENGINE,
+          gridRuntimeHost: host,
+          renderTileSource: createRenderTileSource([]),
+        }),
+      ).residentDataPanes,
+    ).not.toBe(ready.residentDataPanes)
+    unsubscribe?.()
+    expect(unsubscribed).toBe(true)
+  })
+
   it('owns render tile delta subscription stamping in the runtime', () => {
     const runtime = new GridRenderTilePaneRuntime()
     const gridRuntimeHost = createHost()

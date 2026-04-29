@@ -440,6 +440,8 @@ Completed in the resident-scene deletion tranche:
 - Browser scroll perf gates now assert that warmed TypeGPU scroll does not retry/resync text atlas geometry. When no fixed-tile/header/dirty
   churn occurs, the gates also assert zero text-run payload rebuilds/reuses and zero glyph/page dependency reads, so hidden text resource syncs
   cannot slip through a visually smooth scroll sample.
+- `GridRuntimeHost` and `GridRenderTilePaneRuntime` now own V3 tile-readiness counter shaping and local visible-cell invalidation policy. The
+  React tile-pane bridge no longer imports the readiness counter, calls `engine.subscribeCells()` directly, or clears retained panes itself.
 
 Remaining work from this design:
 

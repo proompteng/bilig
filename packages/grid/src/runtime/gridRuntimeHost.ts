@@ -12,6 +12,7 @@ import {
   GridRenderTilePaneRuntime,
   type GridRenderTileDamageRuntimeInput,
   type GridRenderTileDeltaRuntimeInput,
+  type GridRenderTileLocalInvalidationRuntimeInput,
   type GridRenderTilePaneRuntimeInput,
   type GridRenderTilePaneRuntimeState,
 } from './gridRenderTilePaneRuntime.js'
@@ -234,8 +235,15 @@ export class GridRuntimeHost {
     )
   }
 
-  clearRetainedRenderTilePanes(): void {
-    this.renderTiles.clearRetainedPanes()
+  noteRenderTileReadiness(readiness: GridRenderTilePaneRuntimeState['tileReadiness']): void {
+    this.renderTiles.noteTileReadiness(readiness)
+  }
+
+  connectLocalRenderTileCellInvalidation(
+    input: GridRenderTileLocalInvalidationRuntimeInput,
+    listener: Parameters<GridRenderTilePaneRuntime['connectLocalCellInvalidation']>[1],
+  ): ReturnType<GridRenderTilePaneRuntime['connectLocalCellInvalidation']> {
+    return this.renderTiles.connectLocalCellInvalidation(input, listener)
   }
 
   resolveScrollForCellIntoView(input: {
