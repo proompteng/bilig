@@ -475,6 +475,84 @@ describe('createWorkerRuntimeSessionController', () => {
     controller.dispose()
   })
 
+  it('repairs restored stale local sheets from the authoritative snapshot when zero sync is available', async () => {
+    const seedEngine = new SpreadsheetEngine({ workbookName: 'phase0-doc', replicaId: 'seed' })
+    seedEngine.createSheet('Sheet1')
+
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory({
+        state: {
+          snapshot: seedEngine.exportSnapshot(),
+          replica: seedEngine.exportReplicaSnapshot(),
+          authoritativeRevision: 451,
+          appliedPendingLocalSeq: 0,
+        },
+      }),
+    })
+    const workbookView = createMockZeroView<unknown>({
+      headRevision: 451,
+      calculatedRevision: 451,
+    })
+    const zero = createSequencedZeroViews(workbookView)
+    const authoritativeSnapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'phase0-doc' },
+      sheets: [
+        {
+          name: 'Prepaid Template',
+          order: 0,
+          cells: [
+            {
+              address: 'C6',
+              value: 88,
+            },
+          ],
+        },
+      ],
+    }
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      if (url.includes('/snapshot/latest')) {
+        return new Response(JSON.stringify(authoritativeSnapshot), {
+          status: 200,
+          headers: {
+            'content-type': 'application/vnd.bilig.workbook+json',
+            'x-bilig-snapshot-cursor': '451',
+          },
+        })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: 'phase0-doc',
+        replicaId: 'browser:test',
+        persistState: true,
+        initialSelection: { sheetName: 'Prepaid Template', address: 'C6' },
+        createWorker: () => createMockWorkerPort(runtime),
+        zero: zero.zero,
+        fetchImpl,
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message)
+        },
+      },
+    )
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(controller.runtimeState.sheetNames).toEqual(['Prepaid Template'])
+    expect(controller.handle.viewportStore.getCell('Prepaid Template', 'C6').value).toEqual({
+      tag: ValueTag.Number,
+      value: 88,
+    })
+
+    controller.dispose()
+  })
+
   it('reports startup perf milestones for a persisted local-ready bootstrap', async () => {
     const seedEngine = new SpreadsheetEngine({ workbookName: 'phase0-doc', replicaId: 'seed' })
     seedEngine.createSheet('Sheet1')
@@ -577,6 +655,94 @@ describe('createWorkerRuntimeSessionController', () => {
     expect(controller.runtimeState.localPersistenceMode).toBe('persistent')
     expect(perfSession.markFirstAuthoritativePatchVisible).toHaveBeenCalledTimes(1)
     expect(controller.runtimeState.sheetNames).toEqual(['Sheet1'])
+
+    controller.dispose()
+  })
+
+  it('uses the latest snapshot cursor as the authoritative revision before rebasing events', async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    })
+    const workbookView = createMockZeroView<unknown>({
+      headRevision: 0,
+      calculatedRevision: 0,
+    })
+    const zero = createSequencedZeroViews(workbookView)
+    const fetchedUrls: string[] = []
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      fetchedUrls.push(url)
+      if (url.includes('/snapshot/latest')) {
+        return new Response(JSON.stringify(createSnapshot([{ address: 'A1', value: 37 }])), {
+          status: 200,
+          headers: {
+            'content-type': 'application/vnd.bilig.workbook+json',
+            'x-bilig-snapshot-cursor': '37',
+          },
+        })
+      }
+      if (url.includes('/events?afterRevision=37')) {
+        return new Response(
+          JSON.stringify({
+            afterRevision: 37,
+            headRevision: 38,
+            calculatedRevision: 38,
+            events: [
+              {
+                revision: 38,
+                clientMutationId: null,
+                payload: {
+                  kind: 'setCellValue',
+                  sheetName: 'Sheet1',
+                  address: 'A1',
+                  value: 38,
+                },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+            },
+          },
+        )
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: 'phase0-doc',
+        replicaId: 'browser:test',
+        persistState: true,
+        initialSelection: { sheetName: 'Sheet1', address: 'A1' },
+        createWorker: () => createMockWorkerPort(runtime),
+        zero: zero.zero,
+        fetchImpl,
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message)
+        },
+      },
+    )
+
+    workbookView.emit({
+      headRevision: 38,
+      calculatedRevision: 38,
+    })
+
+    await vi.waitFor(() => {
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'A1').value).toEqual({
+        tag: ValueTag.Number,
+        value: 38,
+      })
+    })
+    expect(fetchedUrls).toContain('/v2/documents/phase0-doc/events?afterRevision=37')
+    expect(fetchedUrls).not.toContain('/v2/documents/phase0-doc/events?afterRevision=0')
 
     controller.dispose()
   })

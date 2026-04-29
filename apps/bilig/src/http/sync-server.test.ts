@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorkbookAgentThreadSnapshot } from '@bilig/contracts'
 import { toWorkbookAgentReviewQueueItem, type WorkbookAgentCommandBundle } from '@bilig/agent-api'
+import type { WorkbookSnapshot } from '@bilig/protocol'
 import { Effect } from 'effect'
 import type { DocumentControlService } from '@bilig/runtime-kernel'
 import type { ZeroSyncService } from '../zero/service.js'
@@ -380,6 +381,60 @@ describe('sync-server snapshots', () => {
       expect(response.statusCode).toBe(204)
       expect(response.body).toBe('')
       expect(response.headers['content-type']).toBeUndefined()
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('falls back to the authoritative zero workbook snapshot when the live session has no snapshot', async () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: {
+        name: 'doc-1',
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'Prepaid Template',
+          order: 0,
+          cells: [
+            {
+              address: 'C6',
+              value: 42,
+            },
+          ],
+        },
+      ],
+    }
+    const { app } = createSyncServer({
+      logger: false,
+      documentService: createDocumentServiceStub({
+        getLatestSnapshot(documentId: string) {
+          expect(documentId).toBe('doc-1')
+          return Effect.succeed(null)
+        },
+      }),
+      zeroSyncService: createZeroSyncStub({
+        async loadLatestWorkbookSnapshot(documentId) {
+          expect(documentId).toBe('doc-1')
+          return {
+            revision: 451,
+            snapshot,
+          }
+        },
+      }),
+    })
+
+    try {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/v2/documents/doc-1/snapshot/latest',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.headers['x-bilig-snapshot-cursor']).toBe('451')
+      expect(response.headers['content-type']).toContain('application/vnd.bilig.workbook+json')
+      expect(JSON.parse(response.body)).toEqual(snapshot)
     } finally {
       await app.close()
     }

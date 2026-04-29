@@ -116,6 +116,19 @@ vi.mock('../workbook-runtime-store.js', () => ({
     calculatedRevision: 0,
     ownerUserId: 'system',
   })),
+  loadWorkbookState: vi.fn(async () => ({
+    snapshot: {
+      version: 1,
+      workbook: {
+        name: 'book-1',
+      },
+      sheets: [],
+    },
+    replicaSnapshot: null,
+    headRevision: 0,
+    calculatedRevision: 0,
+    ownerUserId: 'system',
+  })),
 }))
 
 describe('zero sync service startup', () => {

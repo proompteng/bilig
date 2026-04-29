@@ -255,14 +255,22 @@ export function createSyncServer(options: SyncServerOptions = {}) {
     '/v2/documents/:documentId/snapshot/latest',
     async (request: FastifyRequest<{ Params: { documentId: string } }>, reply: FastifyReply) => {
       const snapshot = await runPromise(documentService.getLatestSnapshot(request.params.documentId))
-      if (!snapshot) {
+      if (snapshot) {
+        reply.header('x-bilig-snapshot-cursor', String(snapshot.cursor))
+        reply.header('content-type', snapshot.contentType)
+        return Buffer.from(snapshot.bytes)
+      }
+
+      const zeroSnapshot = zeroSyncService?.enabled ? await zeroSyncService.loadLatestWorkbookSnapshot?.(request.params.documentId) : null
+      if (!zeroSnapshot) {
         reply.code(204)
         return reply.send()
       }
 
-      reply.header('x-bilig-snapshot-cursor', String(snapshot.cursor))
-      reply.header('content-type', snapshot.contentType)
-      return Buffer.from(snapshot.bytes)
+      reply.header('cache-control', 'no-store')
+      reply.header('x-bilig-snapshot-cursor', String(zeroSnapshot.revision))
+      reply.header('content-type', 'application/vnd.bilig.workbook+json')
+      return JSON.stringify(zeroSnapshot.snapshot)
     },
   )
 

@@ -1,4 +1,5 @@
 import { handleMutateRequest, handleQueryRequest } from '@rocicorp/zero/server'
+import type { WorkbookSnapshot } from '@bilig/protocol'
 import {
   type AuthoritativeWorkbookEventBatch,
   queries,
@@ -33,7 +34,7 @@ import {
   runPendingZeroDataMigrations,
 } from './data-migration-runner.js'
 import { persistWorkbookMutation } from './workbook-mutation-store.js'
-import { acquireWorkbookMutationLock, loadWorkbookRuntimeMetadata } from './workbook-runtime-store.js'
+import { acquireWorkbookMutationLock, loadWorkbookRuntimeMetadata, loadWorkbookState } from './workbook-runtime-store.js'
 import { ensureWorkbookPresenceSchema } from './presence-store.js'
 import { ensureZeroPublication } from './publication-store.js'
 import { ensureWorkbookChangeSchema, listWorkbookChanges, type WorkbookChangeRecord } from './workbook-change-store.js'
@@ -93,6 +94,7 @@ export interface ZeroSyncService {
   ): Promise<WorkbookAgentWorkflowRun[]>
   upsertWorkbookWorkflowRun(documentId: string, run: WorkbookAgentWorkflowRun): Promise<void>
   getWorkbookHeadRevision(documentId: string): Promise<number>
+  loadLatestWorkbookSnapshot?(documentId: string): Promise<{ revision: number; snapshot: WorkbookSnapshot } | null>
   loadAuthoritativeEvents(documentId: string, afterRevision: number): Promise<AuthoritativeWorkbookEventBatch>
 }
 
@@ -508,6 +510,18 @@ class EnabledZeroSyncService implements ZeroSyncService {
   async getWorkbookHeadRevision(documentId: string): Promise<number> {
     const metadata = await loadWorkbookRuntimeMetadata(this.pool, documentId)
     return metadata.headRevision
+  }
+
+  async loadLatestWorkbookSnapshot(documentId: string): Promise<{ revision: number; snapshot: WorkbookSnapshot } | null> {
+    const metadata = await loadWorkbookRuntimeMetadata(this.pool, documentId)
+    if (metadata.headRevision === 0) {
+      return null
+    }
+    const state = await loadWorkbookState(this.pool, documentId)
+    return {
+      revision: state.headRevision,
+      snapshot: state.snapshot,
+    }
   }
 
   async loadAuthoritativeEvents(documentId: string, afterRevision: number): Promise<AuthoritativeWorkbookEventBatch> {

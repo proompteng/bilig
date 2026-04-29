@@ -33,13 +33,13 @@ describe('resolveRuntimeConfig', () => {
     })
   })
 
-  it('uses an ephemeral document under webdriver when no explicit document is present', () => {
+  it('uses the configured default document under webdriver when no explicit document is present', () => {
     vi.stubGlobal('navigator', { webdriver: true })
 
     expect(resolveRuntimeConfig(BASE_CONFIG)).toMatchObject({
-      persistState: false,
+      documentId: 'bilig-demo',
+      persistState: true,
     })
-    expect(resolveRuntimeConfig(BASE_CONFIG).documentId).toMatch(/^bilig-demo:/)
   })
 
   it('resolves relative zero cache URLs against the current origin', () => {
