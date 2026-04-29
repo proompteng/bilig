@@ -19,10 +19,21 @@ type MutableRef<T> = {
 
 type SortedAxisOverrides = readonly (readonly [number, number])[]
 
+export function resolveGridDrawDprBucket(source: { readonly devicePixelRatio?: number | undefined } | null | undefined): number {
+  const ratio = source?.devicePixelRatio ?? 1
+  return Number.isFinite(ratio) ? Math.max(1, Math.ceil(ratio || 1)) : 1
+}
+
+export function resolveShouldUseRemoteRenderTileSource(input: {
+  readonly renderTileSource?: unknown
+  readonly sheetId?: number | undefined
+}): boolean {
+  return input.renderTileSource !== undefined && input.sheetId !== undefined
+}
+
 export function useWorkbookGridDrawRuntime(input: {
   readonly columnAxis: GridAxisWorldIndex
   readonly columnWidths: Readonly<Record<number, number>>
-  readonly dprBucket: number
   readonly engine: GridEngineLike
   readonly freezeCols: number
   readonly freezeRows: number
@@ -53,7 +64,6 @@ export function useWorkbookGridDrawRuntime(input: {
   readonly setVisibleRegion: Dispatch<SetStateAction<VisibleRegionState>>
   readonly sheetId?: number | undefined
   readonly sheetName: string
-  readonly shouldUseRemoteRenderTileSource: boolean
   readonly sortedColumnWidthOverrides: SortedAxisOverrides
   readonly sortedRowHeightOverrides: SortedAxisOverrides
   readonly subscribeViewport?: SheetGridViewportSubscription | undefined
@@ -63,7 +73,6 @@ export function useWorkbookGridDrawRuntime(input: {
   const {
     columnAxis,
     columnWidths,
-    dprBucket,
     engine,
     freezeCols,
     freezeRows,
@@ -89,13 +98,14 @@ export function useWorkbookGridDrawRuntime(input: {
     setVisibleRegion,
     sheetId,
     sheetName,
-    shouldUseRemoteRenderTileSource,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
     subscribeViewport,
     syncRuntimeAxes,
     visibleRegion,
   } = input
+  const dprBucket = resolveGridDrawDprBucket(typeof window === 'undefined' ? null : window)
+  const shouldUseRemoteRenderTileSource = resolveShouldUseRemoteRenderTileSource({ renderTileSource, sheetId })
   const viewportResidency = useWorkbookGridViewportRuntime({
     columnAxis,
     engine,

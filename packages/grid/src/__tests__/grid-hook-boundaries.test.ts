@@ -5,6 +5,7 @@ import { resolveRequiresLiveViewportState } from '../useGridSelectionState.js'
 import { resolveResizeGuideColumn, resolveResizeGuideRow } from '../useGridResizeState.js'
 import { sameBounds } from '../useGridOverlayState.js'
 import { visibleRegionFromCamera } from '../useGridCameraState.js'
+import { resolveGridDrawDprBucket, resolveShouldUseRemoteRenderTileSource } from '../useWorkbookGridDrawRuntime.js'
 
 describe('grid hook boundary helpers', () => {
   test('resolves live viewport, resize, overlay, and camera helpers', () => {
@@ -55,6 +56,12 @@ describe('grid hook boundary helpers', () => {
         freezeRows: 2,
       }),
     ).toMatchObject({ range: { x: 3, y: 2, width: 6, height: 4 }, tx: 7, ty: 9, freezeRows: 2, freezeCols: 1 })
+    expect(resolveGridDrawDprBucket({ devicePixelRatio: 1.25 })).toBe(2)
+    expect(resolveGridDrawDprBucket({ devicePixelRatio: 0 })).toBe(1)
+    expect(resolveGridDrawDprBucket(null)).toBe(1)
+    expect(resolveShouldUseRemoteRenderTileSource({ renderTileSource: undefined, sheetId: 1 })).toBe(false)
+    expect(resolveShouldUseRemoteRenderTileSource({ renderTileSource: {}, sheetId: undefined })).toBe(false)
+    expect(resolveShouldUseRemoteRenderTileSource({ renderTileSource: {}, sheetId: 1 })).toBe(true)
   })
 
   test('keeps workbook render hook behind the runtime camera boundary', () => {
@@ -108,8 +115,12 @@ describe('grid hook boundary helpers', () => {
     expect(hookSource).not.toContain('useState<VisibleRegionState>')
     expect(hookSource).not.toContain('useWorkbookGridViewportRuntime')
     expect(hookSource).not.toContain('useWorkbookGridRenderPanes')
+    expect(hookSource).not.toContain('devicePixelRatio')
+    expect(hookSource).not.toContain('shouldUseRemoteRenderTileSource')
     expect(drawRuntimeHookSource).toContain('useWorkbookGridViewportRuntime')
     expect(drawRuntimeHookSource).toContain('useWorkbookGridRenderPanes')
+    expect(drawRuntimeHookSource).toContain('devicePixelRatio')
+    expect(drawRuntimeHookSource).toContain('shouldUseRemoteRenderTileSource')
     expect(paneHookSource).toContain('useWorkbookHeaderPanes')
     expect(paneHookSource).toContain('useWorkbookRenderTilePanes')
     expect(paneHookSource).toContain('useWorkbookHeaderCellBounds')

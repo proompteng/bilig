@@ -68,8 +68,6 @@ export function useWorkbookGridRenderState(input: {
   const selectedCell = useMemo(() => parseCellAddress(selectedAddr, sheetName), [selectedAddr, sheetName])
   const selectedItem = useMemo(() => [selectedCell.col, selectedCell.row] as const, [selectedCell.col, selectedCell.row])
   const gridMetrics = useMemo(() => getGridMetrics(), [])
-  const dprBucket = typeof window === 'undefined' ? 1 : Math.max(1, Math.ceil(window.devicePixelRatio || 1))
-  const shouldUseRemoteRenderTileSource = renderTileSource !== undefined && sheetId !== undefined
   const gridTheme = useMemo(() => getGridTheme(), [])
   const {
     focusTargetRef,
@@ -176,7 +174,6 @@ export function useWorkbookGridRenderState(input: {
   const { headerPanes, preloadDataPanes, renderTilePanes, residentDataPanes } = useWorkbookGridDrawRuntime({
     columnAxis,
     columnWidths,
-    dprBucket,
     engine,
     freezeCols,
     freezeRows,
@@ -201,7 +198,6 @@ export function useWorkbookGridRenderState(input: {
     setVisibleRegion,
     sheetId,
     sheetName,
-    shouldUseRemoteRenderTileSource,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
     subscribeViewport,
