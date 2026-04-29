@@ -9,7 +9,20 @@ export interface RenderTileDeltaSubscription extends Viewport {
   readonly cameraSeq?: number | undefined
   readonly dprBucket?: number | undefined
   readonly initialDelta?: 'full' | 'none' | undefined
+  readonly tileInterest?: RenderTileInterestV3 | undefined
   readonly warmTileKeys?: readonly number[] | undefined
+}
+
+export interface RenderTileInterestV3 {
+  readonly seq: number
+  readonly sheetOrdinal: number
+  readonly axisSeqX: number
+  readonly axisSeqY: number
+  readonly freezeSeq: number
+  readonly visibleTileKeys: readonly number[]
+  readonly warmTileKeys: readonly number[]
+  readonly pinnedTileKeys: readonly number[]
+  readonly reason: 'scroll' | 'sheetSwitch' | 'mutation' | 'viewportRestore' | 'prefetch'
 }
 
 export interface RenderTileCoord {

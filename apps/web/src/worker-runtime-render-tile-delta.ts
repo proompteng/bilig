@@ -161,12 +161,28 @@ function resolveMaterializedTileViewports(input: {
 
 function resolveInterestedTileKeys(subscription: RenderTileDeltaSubscription): readonly TileKey53[] {
   const dprBucket = subscription.dprBucket ?? 1
-  const visibleKeys = tileKeysForViewport({
-    dprBucket,
-    sheetOrdinal: subscription.sheetId,
-    viewport: subscription,
-  })
+  const explicitInterest = subscription.tileInterest
+  const visibleKeys =
+    explicitInterest && explicitInterest.visibleTileKeys.length > 0
+      ? explicitInterest.visibleTileKeys.filter((key) => isSubscriptionTileKey(subscription, key))
+      : tileKeysForViewport({
+          dprBucket,
+          sheetOrdinal: subscription.sheetId,
+          viewport: subscription,
+        })
   const keys = new Set<number>(visibleKeys)
+  explicitInterest?.warmTileKeys.forEach((key) => {
+    if (!isSubscriptionTileKey(subscription, key)) {
+      return
+    }
+    keys.add(key)
+  })
+  explicitInterest?.pinnedTileKeys.forEach((key) => {
+    if (!isSubscriptionTileKey(subscription, key)) {
+      return
+    }
+    keys.add(key)
+  })
   subscription.warmTileKeys?.forEach((key) => {
     if (!isSubscriptionTileKey(subscription, key)) {
       return
@@ -177,6 +193,11 @@ function resolveInterestedTileKeys(subscription: RenderTileDeltaSubscription): r
 }
 
 function resolveInterestedTileViewports(subscription: RenderTileDeltaSubscription): readonly Viewport[] {
+  if (subscription.tileInterest?.visibleTileKeys.length) {
+    return resolveInterestedTileKeys(subscription)
+      .map((key) => tileViewportFromKey(subscription, key))
+      .filter((viewport): viewport is Viewport => viewport !== null)
+  }
   const viewportsByKey = new Map<number, Viewport>()
   for (const viewport of listViewportTileBounds(subscription)) {
     viewportsByKey.set(tileKeyFromTileViewport(subscription, viewport), viewport)

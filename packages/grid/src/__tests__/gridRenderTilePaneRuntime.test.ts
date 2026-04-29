@@ -442,7 +442,48 @@ describe('GridRenderTilePaneRuntime', () => {
       sheetId: 7,
       sheetName: 'Sheet1',
     })
+    expect(renderTileSource.captured()?.tileInterest).toMatchObject({
+      axisSeqX: gridRuntimeHost.snapshot().axisSeqX,
+      axisSeqY: gridRuntimeHost.snapshot().axisSeqY,
+      freezeSeq: gridRuntimeHost.snapshot().freezeSeq,
+      reason: 'scroll',
+      sheetOrdinal: 7,
+    })
+    expect(renderTileSource.captured()?.tileInterest?.visibleTileKeys).toEqual([
+      packTileKey53({
+        colTile: 0,
+        dprBucket: 2,
+        rowTile: 0,
+        sheetOrdinal: 7,
+      }),
+      packTileKey53({
+        colTile: 1,
+        dprBucket: 2,
+        rowTile: 0,
+        sheetOrdinal: 7,
+      }),
+      packTileKey53({
+        colTile: 0,
+        dprBucket: 2,
+        rowTile: 1,
+        sheetOrdinal: 7,
+      }),
+      packTileKey53({
+        colTile: 1,
+        dprBucket: 2,
+        rowTile: 1,
+        sheetOrdinal: 7,
+      }),
+    ])
     expect(renderTileSource.captured()?.warmTileKeys).toContain(
+      packTileKey53({
+        colTile: 2,
+        dprBucket: 2,
+        rowTile: 0,
+        sheetOrdinal: 7,
+      }),
+    )
+    expect(renderTileSource.captured()?.tileInterest?.warmTileKeys).toContain(
       packTileKey53({
         colTile: 2,
         dprBucket: 2,

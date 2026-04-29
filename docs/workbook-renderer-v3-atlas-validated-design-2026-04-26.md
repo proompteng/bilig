@@ -28,6 +28,8 @@ Latest implementation note:
 - Frozen pane placements reuse the same fixed content tile under separate body/top/left/corner clip placements. V3 tile-pane buffers are keyed by numeric `tileId`, so body and frozen placements share the content resource.
 - `GridRenderTilePaneRuntime` now upserts mounted fixed content tiles into `GridRuntimeHost.tiles`, reconciles viewport tile interest through the
   host-owned V3 tile coordinator, and exposes exact/stale/miss dirty-readiness diagnostics for the mounted tile-pane path.
+- Render-tile subscriptions now carry the host-built V3 tile-interest batch fields, including explicit visible/warm/pinned numeric tile keys,
+  so the worker materializer no longer has to infer visible fixed tiles from the viewport window when the V3 runtime has already computed them.
 - `TileResidencyV3` refreshes revision tuples in place when a fixed content tile is updated, so stale-compatible lookup and future dirty-tile
   decisions use the current axis/value/style/text/freeze revisions without replacing the stable residency entry.
 - Scroll perf diagnostics no longer expose stale V2 scene-packet counters. The mounted tile-pane adapter reports renderer tile-interest batches,

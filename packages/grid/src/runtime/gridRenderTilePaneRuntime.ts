@@ -213,6 +213,17 @@ export class GridRenderTilePaneRuntime {
         initialDelta: 'full',
         sheetId: input.sheetId,
         sheetName: input.sheetName,
+        tileInterest: {
+          axisSeqX: tileInterest.axisSeqX,
+          axisSeqY: tileInterest.axisSeqY,
+          freezeSeq: tileInterest.freezeSeq,
+          pinnedTileKeys: tileInterest.pinnedTileKeys,
+          reason: tileInterest.reason,
+          seq: tileInterest.seq,
+          sheetOrdinal: tileInterest.sheetOrdinal,
+          visibleTileKeys: tileInterest.visibleTileKeys,
+          warmTileKeys: tileInterest.warmTileKeys,
+        },
         warmTileKeys: tileInterest.warmTileKeys,
       },
       (change) => {

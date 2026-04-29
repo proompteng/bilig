@@ -10,7 +10,20 @@ export interface GridRenderTileDeltaSubscription extends Viewport {
   readonly cameraSeq?: number | undefined
   readonly dprBucket?: number | undefined
   readonly initialDelta?: 'full' | 'none' | undefined
+  readonly tileInterest?: GridRenderTileInterestV3 | undefined
   readonly warmTileKeys?: readonly number[] | undefined
+}
+
+export interface GridRenderTileInterestV3 {
+  readonly seq: number
+  readonly sheetOrdinal: number
+  readonly axisSeqX: number
+  readonly axisSeqY: number
+  readonly freezeSeq: number
+  readonly visibleTileKeys: readonly number[]
+  readonly warmTileKeys: readonly number[]
+  readonly pinnedTileKeys: readonly number[]
+  readonly reason: 'scroll' | 'sheetSwitch' | 'mutation' | 'viewportRestore' | 'prefetch'
 }
 
 export interface GridRenderTileCoord {

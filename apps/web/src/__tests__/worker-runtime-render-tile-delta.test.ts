@@ -181,6 +181,82 @@ describe('worker-runtime-render-tile-delta', () => {
     expect(dirtyBatch.mutations[0]?.kind === 'tileReplace' ? dirtyBatch.mutations[0].dirtyLocalCols : null).toEqual(new Uint32Array([0, 0]))
   })
 
+  it('uses explicit V3 visible tile interest instead of rematerializing the whole viewport window', () => {
+    const visibleTileKey = packTileKey53({
+      colTile: 1,
+      dprBucket: 1,
+      rowTile: 0,
+      sheetOrdinal: 7,
+    })
+    const warmTileKey = packTileKey53({
+      colTile: 1,
+      dprBucket: 1,
+      rowTile: 1,
+      sheetOrdinal: 7,
+    })
+    const subscription = {
+      sheetId: 7,
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 63,
+      colStart: 0,
+      colEnd: 255,
+      dprBucket: 1,
+      cameraSeq: 22,
+      tileInterest: {
+        seq: 9,
+        sheetOrdinal: 7,
+        axisSeqX: 1,
+        axisSeqY: 1,
+        freezeSeq: 1,
+        visibleTileKeys: [visibleTileKey],
+        warmTileKeys: [warmTileKey],
+        pinnedTileKeys: [],
+        reason: 'scroll' as const,
+      },
+    }
+
+    const initialBatch = buildWorkerRenderTileDeltaBatch({
+      engine,
+      generation: 10,
+      subscription,
+    })
+    const dirtyVisibleBatch = buildWorkerRenderTileDeltaBatch({
+      engine,
+      event: createRangeInvalidationEvent('DY2'),
+      generation: 11,
+      subscription,
+    })
+    const dirtyWarmBatch = buildWorkerRenderTileDeltaBatch({
+      engine,
+      event: createRangeInvalidationEvent('DY40'),
+      generation: 12,
+      subscription,
+    })
+    const dirtyViewportOnlyBatch = buildWorkerRenderTileDeltaBatch({
+      engine,
+      event: createRangeInvalidationEvent('B2'),
+      generation: 13,
+      subscription,
+    })
+
+    expect(initialBatch.mutations.filter((mutation) => mutation.kind === 'tileReplace').map((mutation) => mutation.bounds)).toEqual([
+      { rowStart: 0, rowEnd: 31, colStart: 128, colEnd: 255 },
+      { rowStart: 32, rowEnd: 63, colStart: 128, colEnd: 255 },
+    ])
+    expect(dirtyVisibleBatch.mutations).toHaveLength(1)
+    expect(dirtyVisibleBatch.mutations[0]).toMatchObject({
+      bounds: { rowStart: 0, rowEnd: 31, colStart: 128, colEnd: 255 },
+      coord: { rowTile: 0, colTile: 1 },
+    })
+    expect(dirtyWarmBatch.mutations).toHaveLength(1)
+    expect(dirtyWarmBatch.mutations[0]).toMatchObject({
+      bounds: { rowStart: 32, rowEnd: 63, colStart: 128, colEnd: 255 },
+      coord: { rowTile: 1, colTile: 1 },
+    })
+    expect(dirtyViewportOnlyBatch.mutations).toEqual([])
+  })
+
   it('skips event-driven tile materialization when dirty ranges miss the subscription', () => {
     const batch = buildWorkerRenderTileDeltaBatch({
       engine,
