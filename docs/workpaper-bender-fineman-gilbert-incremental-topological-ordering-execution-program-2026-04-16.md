@@ -133,15 +133,23 @@ Make label ordering authoritative where it shows a measurable win.
 
 ### Gate
 
-Only do this if measured gains exist on still-red family-heavy lanes.
+Only do this if measured gains exist on family-heavy lanes that are still active
+blockers in the current artifact. As of `2026-04-29T14:47:16.831Z`, the active
+scorecard is WorkPaper `44/46` with `8/8` holdout wins; this program should not
+run ahead of the current `build-mixed-content`, `structural-delete-rows`, and
+`lookup-text-exact` p95 work.
 
 ## Benchmark gates
 
-Only meaningful if these are still red after earlier programs land:
+Only meaningful if these become active blockers again after earlier programs
+land:
 
 - `partial-recompute-mixed-frontier`
 - `rebuild-runtime-from-snapshot`
 - family-heavy rebuild or trace microbenches
+
+In the current expanded artifact, `partial-recompute-mixed-frontier` and
+`rebuild-runtime-from-snapshot` are not active scorecard blockers.
 
 ## Rollback Criteria
 

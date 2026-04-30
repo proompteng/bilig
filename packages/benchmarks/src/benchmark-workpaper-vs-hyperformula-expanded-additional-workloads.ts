@@ -1,7 +1,12 @@
 import { WorkPaper } from '@bilig/headless'
 import {
   address,
+  build2dAggregateSheet,
+  buildApproxLookupDescendingSheet,
+  buildApproxLookupDuplicateSheet,
   buildSlidingAggregateSheet,
+  buildConditionalAggregationMixedSheet,
+  buildConditionalAggregationSharedCriteriaSheet,
   buildConditionalAggregationSheet,
   buildLookupSheet,
   buildApproxLookupSheet,
@@ -10,7 +15,13 @@ import {
   buildStructuralColumnSheet,
   buildParserCacheMixedTemplateSheet,
   buildParserCacheTemplateSheet,
+  buildParserCacheUniqueFormulaSheet,
+  buildDynamicArraySortSheet,
+  buildDynamicArrayUniqueSheet,
   buildMixedContentSheet,
+  buildNamedExpressionBenchSheet,
+  buildLookupSearchModeReverseSheet,
+  buildRenameDependencySheets,
   buildValueFormulaRows,
   buildBatchMultiColumnRows,
 } from './workpaper-benchmark-fixtures.js'
@@ -713,4 +724,296 @@ export function measureHyperFormulaApproximateLookupAfterColumnWriteSample(rowCo
       formulaValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 4))),
     }),
   )
+}
+
+export function measureWorkPaperParserCacheUniqueFormulaSample(rowCount: number): BenchmarkSample {
+  return measureWorkPaperBuildFromSheets({ Bench: buildParserCacheUniqueFormulaSheet(rowCount) }, (workbook) => {
+    const sheetId = workbook.getSheetId('Bench')!
+    return {
+      dimensions: workbook.getSheetDimensions(sheetId),
+      terminalValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, rowCount - 1, 5))),
+    }
+  })
+}
+
+export function measureHyperFormulaParserCacheUniqueFormulaSample(rowCount: number): BenchmarkSample {
+  return measureHyperFormulaBuildFromSheets({ Bench: toHyperFormulaSheet(buildParserCacheUniqueFormulaSheet(rowCount)) }, (workbook) => {
+    const sheetId = workbook.getSheetId('Bench')!
+    return {
+      dimensions: workbook.getSheetDimensions(sheetId),
+      terminalValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, rowCount - 1, 5))),
+    }
+  })
+}
+
+export function measureWorkPaperSheetRenameDependencySample(): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets(buildRenameDependencySheets())
+  const dataSheetId = workbook.getSheetId('Data')!
+  const summarySheetId = workbook.getSheetId('Summary')!
+  return measureMutationSample(
+    workbook,
+    () => workbook.renameSheet(dataSheetId, 'Source'),
+    () => ({
+      sheetNames: workbook.getSheetNames(),
+      scalarValue: normalizeWorkPaperValue(workbook.getCellValue(address(summarySheetId, 0, 0))),
+      aggregateValue: normalizeWorkPaperValue(workbook.getCellValue(address(summarySheetId, 0, 1))),
+    }),
+  )
+}
+
+export function measureHyperFormulaSheetRenameDependencySample(): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(toHyperFormulaSheets(buildRenameDependencySheets()), {
+    licenseKey: HYPERFORMULA_LICENSE_KEY,
+  })
+  const dataSheetId = workbook.getSheetId('Data')!
+  const summarySheetId = workbook.getSheetId('Summary')!
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => workbook.renameSheet(dataSheetId, 'Source'),
+    () => ({
+      sheetNames: workbook.getSheetNames(),
+      scalarValue: normalizeHyperFormulaValue(workbook.getCellValue(address(summarySheetId, 0, 0))),
+      aggregateValue: normalizeHyperFormulaValue(workbook.getCellValue(address(summarySheetId, 0, 1))),
+    }),
+  )
+}
+
+export function measureWorkPaperNamedExpressionChangeSample(): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildNamedExpressionBenchSheet() }, {}, [{ name: 'Rate', expression: '=2' }])
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureMutationSample(
+    workbook,
+    () => workbook.changeNamedExpression('Rate', '=3'),
+    () => ({
+      rateValue: normalizeWorkPaperValue(workbook.getNamedExpressionValue('Rate')),
+      formulaPlusOne: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, 1))),
+      formulaTimesTwo: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, 2))),
+    }),
+  )
+}
+
+export function measureHyperFormulaNamedExpressionChangeSample(): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet(buildNamedExpressionBenchSheet()) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+    [{ name: 'Rate', expression: '=2' }],
+  )
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => workbook.changeNamedExpression('Rate', '=3'),
+    () => ({
+      rateValue: normalizeHyperFormulaValue(workbook.getNamedExpressionValue('Rate')),
+      formulaPlusOne: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 1))),
+      formulaTimesTwo: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 2))),
+    }),
+  )
+}
+
+export function measureWorkPaper2dAggregateSample(rowCount: number): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({ Bench: build2dAggregateSheet(rowCount) })
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 0), 99),
+    () => ({
+      terminalSum: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, rowCount - 1, 2))),
+      leadingSum: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, 2))),
+    }),
+  )
+}
+
+export function measureHyperFormula2dAggregateSample(rowCount: number): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet(build2dAggregateSheet(rowCount)) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+  )
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 0), 99),
+    () => ({
+      terminalSum: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, rowCount - 1, 2))),
+      leadingSum: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 2))),
+    }),
+  )
+}
+
+export function measureWorkPaperConditionalAggregationSharedCriteriaSample(rowCount: number, criteriaCount: number): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({
+    Bench: buildConditionalAggregationSharedCriteriaSheet(rowCount, criteriaCount),
+  })
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 3), 'B'),
+    () => ({
+      firstSum: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, 3 + criteriaCount))),
+      lastSum: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, 3 + criteriaCount * 2 - 1))),
+    }),
+  )
+}
+
+export function measureHyperFormulaConditionalAggregationSharedCriteriaSample(rowCount: number, criteriaCount: number): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet(buildConditionalAggregationSharedCriteriaSheet(rowCount, criteriaCount)) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+  )
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 3), 'B'),
+    () => ({
+      firstSum: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 3 + criteriaCount))),
+      lastSum: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 3 + criteriaCount * 2 - 1))),
+    }),
+  )
+}
+
+export function measureWorkPaperConditionalAggregationMixedCriteriaSample(rowCount: number, formulaCopies: number): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({
+    Bench: buildConditionalAggregationMixedSheet(rowCount, formulaCopies),
+  })
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 4), 20),
+    () => ({
+      firstCount: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, 5))),
+      firstSum: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, 5 + formulaCopies))),
+    }),
+  )
+}
+
+export function measureHyperFormulaConditionalAggregationMixedCriteriaSample(rowCount: number, formulaCopies: number): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet(buildConditionalAggregationMixedSheet(rowCount, formulaCopies)) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+  )
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 4), 20),
+    () => ({
+      firstCount: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 5))),
+      firstSum: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 5 + formulaCopies))),
+    }),
+  )
+}
+
+export function measureWorkPaperApproximateLookupDescendingSample(rowCount: number): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildApproxLookupDescendingSheet(rowCount) })
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 3), Math.floor(rowCount / 3) + 0.5),
+    () => ({
+      formulaValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, 4))),
+    }),
+  )
+}
+
+export function measureHyperFormulaApproximateLookupDescendingSample(rowCount: number): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet(buildApproxLookupDescendingSheet(rowCount)) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+  )
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 3), Math.floor(rowCount / 3) + 0.5),
+    () => ({
+      formulaValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 4))),
+    }),
+  )
+}
+
+export function measureWorkPaperApproximateLookupDuplicateSample(rowCount: number): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildApproxLookupDuplicateSheet(rowCount) })
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 3), Math.floor(rowCount / 5)),
+    () => ({
+      formulaValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, 4))),
+    }),
+  )
+}
+
+export function measureHyperFormulaApproximateLookupDuplicateSample(rowCount: number): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet(buildApproxLookupDuplicateSheet(rowCount)) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+  )
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 3), Math.floor(rowCount / 5)),
+    () => ({
+      formulaValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 4))),
+    }),
+  )
+}
+
+export function measureWorkPaperReverseSearchLookupSample(rowCount: number): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildLookupSearchModeReverseSheet(rowCount) })
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 3), Math.floor(rowCount / 2)),
+    () => ({
+      formulaValue: normalizeWorkPaperValue(workbook.getCellValue(address(sheetId, 0, 4))),
+    }),
+  )
+}
+
+export function measureHyperFormulaReverseSearchLookupSample(rowCount: number): BenchmarkSample {
+  const workbook = HyperFormula.buildFromSheets(
+    { Bench: toHyperFormulaSheet(buildLookupSearchModeReverseSheet(rowCount)) },
+    { licenseKey: HYPERFORMULA_LICENSE_KEY },
+  )
+  const sheetId = workbook.getSheetId('Bench')!
+  return measureHyperFormulaMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, 0, 3), Math.floor(rowCount / 2)),
+    () => ({
+      formulaValue: normalizeHyperFormulaValue(workbook.getCellValue(address(sheetId, 0, 4))),
+    }),
+  )
+}
+
+export function measureWorkPaperDynamicArraySortSample(rowCount: number): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildDynamicArraySortSheet(rowCount) })
+  const sheetId = workbook.getSheetId('Bench')!
+  const spillAnchor = address(sheetId, 0, 1)
+  return measureMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, rowCount, 0), 0),
+    () => ({
+      spillHeight: workbook.getSheetDimensions(sheetId).height,
+      spillIsArray: workbook.isCellPartOfArray(spillAnchor),
+      spillValue: normalizeWorkPaperValue(workbook.getCellValue(spillAnchor)),
+    }),
+  )
+}
+
+export function measureWorkPaperDynamicArrayUniqueSample(rowCount: number): BenchmarkSample {
+  const workbook = WorkPaper.buildFromSheets({ Bench: buildDynamicArrayUniqueSheet(rowCount) })
+  const sheetId = workbook.getSheetId('Bench')!
+  const spillAnchor = address(sheetId, 0, 1)
+  return measureMutationSample(
+    workbook,
+    () => workbook.setCellContents(address(sheetId, rowCount, 0), rowCount),
+    () => ({
+      spillHeight: workbook.getSheetDimensions(sheetId).height,
+      spillIsArray: workbook.isCellPartOfArray(spillAnchor),
+      spillValue: normalizeWorkPaperValue(workbook.getCellValue(spillAnchor)),
+    }),
+  )
+}
+
+function toHyperFormulaSheets(
+  sheets: Record<string, ReadonlyArray<ReadonlyArray<unknown>>>,
+): Record<string, ReturnType<typeof toHyperFormulaSheet>> {
+  return Object.fromEntries(Object.entries(sheets).map(([sheetName, sheet]) => [sheetName, toHyperFormulaSheet(sheet)]))
 }

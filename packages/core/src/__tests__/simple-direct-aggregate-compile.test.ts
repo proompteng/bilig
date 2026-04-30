@@ -32,8 +32,36 @@ describe('tryCompileSimpleDirectAggregateFormula', () => {
     })
   })
 
+  it('normalizes rectangular aggregate ranges on the direct compiler fast path', () => {
+    const compiled = tryCompileSimpleDirectAggregateFormula('SUM(A1:B2)')
+
+    expect(compiled?.directAggregateCandidate?.aggregateKind).toBe('sum')
+    expect(compiled?.symbolicRanges).toEqual(['A1:B2'])
+    expect(compiled?.parsedSymbolicRanges?.[0]).toMatchObject({
+      startAddress: 'A1',
+      endAddress: 'B2',
+      startRow: 0,
+      endRow: 1,
+      startCol: 0,
+      endCol: 1,
+    })
+  })
+
+  it('preserves literal additive offsets on direct sum formulas', () => {
+    const compiled = tryCompileSimpleDirectAggregateFormula('SUM(A1:A32)+7')
+
+    expect(compiled?.directAggregateCandidate).toMatchObject({
+      aggregateKind: 'sum',
+      resultOffset: 7,
+    })
+    expect(compiled?.optimizedAst).toMatchObject({
+      kind: 'BinaryExpr',
+      operator: '+',
+    })
+    expect(compiled?.symbolicRanges).toEqual(['A1:A32'])
+  })
+
   it('leaves unsupported direct aggregate ranges on the fallback path', () => {
-    expect(tryCompileSimpleDirectAggregateFormula('SUM(A1:B2)')).toBeUndefined()
     expect(tryCompileSimpleDirectAggregateFormula('SUM(A32:A1)')?.parsedSymbolicRanges?.[0]).toMatchObject({
       startAddress: 'A1',
       endAddress: 'A32',

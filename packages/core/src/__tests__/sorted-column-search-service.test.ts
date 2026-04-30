@@ -369,6 +369,65 @@ describe('createSortedColumnSearchService', () => {
     ).toEqual({ handled: true, position: 4 })
   })
 
+  it('answers exact duplicate numeric approximate matches from owner row metadata', () => {
+    const workbook = new WorkbookStore('sorted-index-owner-duplicate-fast-path')
+    const strings = new StringPool()
+    workbook.createSheet('Sheet1')
+
+    ;[1, 3, 3, 3, 5].forEach((value, index) => {
+      setStoredNumber(workbook, strings, `A${index + 1}`, value)
+    })
+    ;[5, 3, 3, 3, 1].forEach((value, index) => {
+      setStoredNumber(workbook, strings, `B${index + 1}`, value)
+    })
+
+    const sorted = createSorted(workbook, strings)
+
+    const ascendingPrepared = sorted.prepareVectorLookup({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 4,
+      col: 0,
+    })
+    const ascendingOwner = ascendingPrepared.internalOwner
+    if (!isLookupColumnOwner(ascendingOwner)) {
+      throw new Error('expected ascending prepared lookup to use an owner')
+    }
+    Object.defineProperty(ascendingOwner, 'numericValues', {
+      value: new Float64Array([Number.NaN, Number.NaN, Number.NaN, Number.NaN, Number.NaN]),
+    })
+
+    expect(
+      sorted.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 3 },
+        prepared: ascendingPrepared,
+        matchMode: 1,
+      }),
+    ).toEqual({ handled: true, position: 4 })
+
+    const descendingPrepared = sorted.prepareVectorLookup({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 4,
+      col: 1,
+    })
+    const descendingOwner = descendingPrepared.internalOwner
+    if (!isLookupColumnOwner(descendingOwner)) {
+      throw new Error('expected descending prepared lookup to use an owner')
+    }
+    Object.defineProperty(descendingOwner, 'numericValues', {
+      value: new Float64Array([Number.NaN, Number.NaN, Number.NaN, Number.NaN, Number.NaN]),
+    })
+
+    expect(
+      sorted.findPreparedVectorMatch({
+        lookupValue: { tag: ValueTag.Number, value: 3 },
+        prepared: descendingPrepared,
+        matchMode: -1,
+      }),
+    ).toEqual({ handled: true, position: 4 })
+  })
+
   it('covers fallback approximate indices when owner coverage is unavailable and invalidates on type-changing writes', () => {
     const strings = new StringPool()
     const columnVersions = new Uint32Array([0, 0])

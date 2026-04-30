@@ -11,7 +11,9 @@ import {
   type StructuralAxisTransform,
   parseCellAddress,
   parseRangeAddress,
-  renameFormulaSheetReferences,
+  renameCompiledFormulaSheetReferences,
+  renameCompiledFormulaSheetReferenceMetadata,
+  renameCompiledFormulaSheetReferenceMetadataInPlace,
   serializeFormula,
   type Uint32Arena,
 } from '@bilig/formula'
@@ -61,6 +63,7 @@ import {
   UNRESOLVED_WASM_OPERAND,
   type U32,
 } from '../runtime-state.js'
+import { getRuntimeFormulaSource } from '../runtime-formula-source.js'
 import { EngineFormulaBindingError } from '../errors.js'
 import type { EngineCompiledPlanService } from './compiled-plan-service.js'
 import type { ExactColumnIndexService } from './exact-column-index-service.js'
@@ -116,6 +119,8 @@ export interface EngineFormulaBindingService {
     templateId?: number,
     ownerPosition?: FormulaOwnerPosition,
   ) => boolean
+  readonly deferCellFormulasForSheetRenameNow: (oldSheetName: string, newSheetName: string) => number
+  readonly rewriteCellFormulasForSheetRenameNow: (oldSheetName: string, newSheetName: string, formulaChangedCount: number) => number
   readonly retargetDirectAggregateFormulaForStructuralTransformNow: (
     cellIndex: number,
     ownerSheetName: string,
@@ -235,14 +240,16 @@ function directRegionIdsForFormula(
       },
 ): number[] {
   if (value.directAggregate && !value.directCriteria) {
-    return [value.directAggregate.regionId]
+    return value.directAggregate.regionIds ? [...value.directAggregate.regionIds] : [value.directAggregate.regionId]
   }
   if (!value.directAggregate && !value.directCriteria) {
     return []
   }
   const regionIds = new Set<number>()
   if (value.directAggregate) {
-    regionIds.add(value.directAggregate.regionId)
+    ;(value.directAggregate.regionIds ?? [value.directAggregate.regionId]).forEach((regionId) => {
+      regionIds.add(regionId)
+    })
   }
   if (value.directCriteria) {
     if (value.directCriteria.aggregateRange) {
@@ -253,6 +260,15 @@ function directRegionIdsForFormula(
     })
   }
   return [...regionIds]
+}
+
+function appendSheetRenameSourceTransform(formula: RuntimeFormula, oldSheetName: string, newSheetName: string): void {
+  const transforms = formula.sourceRenameTransforms
+  if (transforms) {
+    transforms.push({ oldSheetName, newSheetName })
+    return
+  }
+  formula.sourceRenameTransforms = [{ oldSheetName, newSheetName }]
 }
 
 function aggregateColumnDependencyKey(sheetId: number, col: number): number {
@@ -375,6 +391,14 @@ function directCriteriaOperandEqual(
   if (left.kind === 'cell') {
     return right.kind === 'cell' && left.cellIndex === right.cellIndex
   }
+  if (left.kind === 'cell-string-concat') {
+    return (
+      right.kind === 'cell-string-concat' &&
+      left.cellIndex === right.cellIndex &&
+      left.prefix === right.prefix &&
+      left.suffix === right.suffix
+    )
+  }
   return right.kind === 'literal' && JSON.stringify(left.value) === JSON.stringify(right.value)
 }
 
@@ -441,8 +465,55 @@ function directAggregateStructureEqual(
     left.rowStart === right.rowStart &&
     left.rowEnd === right.rowEnd &&
     left.col === right.col &&
+    left.colEnd === right.colEnd &&
     left.length === right.length
   )
+}
+
+function internDirectAggregateRegions(args: {
+  readonly regionGraph: RegionGraph
+  readonly sheetName: string
+  readonly rowStart: number
+  readonly rowEnd: number
+  readonly colStart: number
+  readonly colEnd: number
+}): { readonly regionId: number; readonly regionIds?: readonly number[] } {
+  const regionIds: number[] = []
+  for (let col = args.colStart; col <= args.colEnd; col += 1) {
+    regionIds.push(
+      args.regionGraph.internSingleColumnRegion({
+        sheetName: args.sheetName,
+        rowStart: args.rowStart,
+        rowEnd: args.rowEnd,
+        col,
+      }),
+    )
+  }
+  return regionIds.length === 1 ? { regionId: regionIds[0]! } : { regionId: regionIds[0]!, regionIds }
+}
+
+function renameDirectAggregateDescriptorSheet(args: {
+  readonly descriptor: RuntimeDirectAggregateDescriptor
+  readonly oldSheetName: string
+  readonly newSheetName: string
+  readonly regionGraph: RegionGraph
+}): RuntimeDirectAggregateDescriptor {
+  if (args.descriptor.sheetName !== args.oldSheetName) {
+    return args.descriptor
+  }
+  const nextRegions = internDirectAggregateRegions({
+    regionGraph: args.regionGraph,
+    sheetName: args.newSheetName,
+    rowStart: args.descriptor.rowStart,
+    rowEnd: args.descriptor.rowEnd,
+    colStart: args.descriptor.col,
+    colEnd: args.descriptor.colEnd,
+  })
+  return {
+    ...args.descriptor,
+    ...nextRegions,
+    sheetName: args.newSheetName,
+  }
 }
 
 function rewriteDirectAggregateDescriptorForStructuralTransform(args: {
@@ -460,23 +531,27 @@ function rewriteDirectAggregateDescriptorForStructuralTransform(args: {
       : { start: args.descriptor.rowStart, end: args.descriptor.rowEnd }
   const nextCols =
     args.transform.axis === 'column'
-      ? mapStructuralAxisInterval(args.descriptor.col, args.descriptor.col, args.transform)
-      : { start: args.descriptor.col, end: args.descriptor.col }
-  if (!nextRows || !nextCols || nextCols.start !== nextCols.end) {
+      ? mapStructuralAxisInterval(args.descriptor.col, args.descriptor.colEnd, args.transform)
+      : { start: args.descriptor.col, end: args.descriptor.colEnd }
+  if (!nextRows || !nextCols) {
     return undefined
   }
+  const regions = internDirectAggregateRegions({
+    regionGraph: args.regionGraph,
+    sheetName: args.descriptor.sheetName,
+    rowStart: nextRows.start,
+    rowEnd: nextRows.end,
+    colStart: nextCols.start,
+    colEnd: nextCols.end,
+  })
   return {
     ...args.descriptor,
-    regionId: args.regionGraph.internSingleColumnRegion({
-      sheetName: args.descriptor.sheetName,
-      rowStart: nextRows.start,
-      rowEnd: nextRows.end,
-      col: nextCols.start,
-    }),
+    ...regions,
     rowStart: nextRows.start,
     rowEnd: nextRows.end,
     col: nextCols.start,
-    length: nextRows.end - nextRows.start + 1,
+    colEnd: nextCols.end,
+    length: (nextRows.end - nextRows.start + 1) * (nextCols.end - nextCols.start + 1),
   }
 }
 
@@ -886,6 +961,36 @@ function buildDirectCriteriaDescriptor(args: {
         cellIndex: args.ensureCellTracked(sheetName, criterionNode.ref),
       }
     }
+    if (criterionNode.kind === 'BinaryExpr' && criterionNode.operator === '&') {
+      const leftLiteral = staticCellValue(criterionNode.left)
+      const rightLiteral = staticCellValue(criterionNode.right)
+      const leftCell = criterionNode.left.kind === 'CellRef' ? criterionNode.left : undefined
+      const rightCell = criterionNode.right.kind === 'CellRef' ? criterionNode.right : undefined
+      if (leftLiteral?.tag === ValueTag.String && rightCell) {
+        const sheetName = rightCell.sheetName ?? args.ownerSheetName
+        if (!args.workbook.getSheet(sheetName)) {
+          return undefined
+        }
+        return {
+          kind: 'cell-string-concat',
+          cellIndex: args.ensureCellTracked(sheetName, rightCell.ref),
+          prefix: leftLiteral.value,
+          suffix: '',
+        }
+      }
+      if (rightLiteral?.tag === ValueTag.String && leftCell) {
+        const sheetName = leftCell.sheetName ?? args.ownerSheetName
+        if (!args.workbook.getSheet(sheetName)) {
+          return undefined
+        }
+        return {
+          kind: 'cell-string-concat',
+          cellIndex: args.ensureCellTracked(sheetName, leftCell.ref),
+          prefix: '',
+          suffix: rightLiteral.value,
+        }
+      }
+    }
     const literal = staticCellValue(criterionNode)
     return literal ? { kind: 'literal', value: literal } : undefined
   }
@@ -1007,30 +1112,49 @@ function buildDirectAggregateDescriptor(args: {
   readonly ownerSheetName: string
   readonly regionGraph: RegionGraph
 }): RuntimeDirectAggregateDescriptor | undefined {
+  const buildDescriptor = (descriptor: {
+    readonly sheetName: string
+    readonly rowStart: number
+    readonly rowEnd: number
+    readonly colStart: number
+    readonly colEnd: number
+    readonly aggregateKind: RuntimeDirectAggregateDescriptor['aggregateKind']
+    readonly resultOffset?: number
+  }): RuntimeDirectAggregateDescriptor => {
+    const regions = internDirectAggregateRegions({
+      regionGraph: args.regionGraph,
+      sheetName: descriptor.sheetName,
+      rowStart: descriptor.rowStart,
+      rowEnd: descriptor.rowEnd,
+      colStart: descriptor.colStart,
+      colEnd: descriptor.colEnd,
+    })
+    return {
+      ...regions,
+      aggregateKind: descriptor.aggregateKind,
+      sheetName: descriptor.sheetName,
+      rowStart: descriptor.rowStart,
+      rowEnd: descriptor.rowEnd,
+      col: descriptor.colStart,
+      colEnd: descriptor.colEnd,
+      length: (descriptor.rowEnd - descriptor.rowStart + 1) * (descriptor.colEnd - descriptor.colStart + 1),
+      ...(descriptor.resultOffset !== undefined ? { resultOffset: descriptor.resultOffset } : {}),
+    }
+  }
   const directAggregateCandidate = args.compiled.directAggregateCandidate
   if (directAggregateCandidate) {
     const rangeInfo = args.compiled.parsedSymbolicRanges?.[directAggregateCandidate.symbolicRangeIndex]
-    if (
-      rangeInfo &&
-      rangeInfo.refKind === 'cells' &&
-      (rangeInfo.sheetName === undefined || rangeInfo.sheetName === args.ownerSheetName) &&
-      rangeInfo.startCol === rangeInfo.endCol
-    ) {
+    if (rangeInfo && rangeInfo.refKind === 'cells' && (rangeInfo.sheetName === undefined || rangeInfo.sheetName === args.ownerSheetName)) {
       const sheetName = rangeInfo.sheetName ?? args.ownerSheetName
-      return {
-        regionId: args.regionGraph.internSingleColumnRegion({
-          sheetName,
-          rowStart: rangeInfo.startRow,
-          rowEnd: rangeInfo.endRow,
-          col: rangeInfo.startCol,
-        }),
-        aggregateKind: directAggregateCandidate.aggregateKind,
+      return buildDescriptor({
         sheetName,
         rowStart: rangeInfo.startRow,
         rowEnd: rangeInfo.endRow,
-        col: rangeInfo.startCol,
-        length: rangeInfo.endRow - rangeInfo.startRow + 1,
-      }
+        colStart: rangeInfo.startCol,
+        colEnd: rangeInfo.endCol,
+        aggregateKind: directAggregateCandidate.aggregateKind,
+        ...(directAggregateCandidate.resultOffset !== undefined ? { resultOffset: directAggregateCandidate.resultOffset } : {}),
+      })
     }
   }
   const node = args.compiled.optimizedAst
@@ -1051,25 +1175,20 @@ function buildDirectAggregateDescriptor(args: {
   if (rangeNode.sheetName !== undefined && rangeNode.sheetName !== args.ownerSheetName) {
     return undefined
   }
-  const range = resolveDirectCriteriaRange(rangeNode, args.ownerSheetName)
-  if (!range) {
+  const parsedRange = parseRangeAddress(`${rangeNode.start}:${rangeNode.end}`, rangeNode.sheetName ?? args.ownerSheetName)
+  if (parsedRange.kind !== 'cells') {
     return undefined
   }
-  return {
-    regionId: args.regionGraph.internSingleColumnRegion({
-      sheetName: range.sheetName,
-      rowStart: range.rowStart,
-      rowEnd: range.rowEnd,
-      col: range.col,
-    }),
+  const sheetName = rangeNode.sheetName ?? args.ownerSheetName
+  return buildDescriptor({
+    sheetName,
+    rowStart: parsedRange.start.row,
+    rowEnd: parsedRange.end.row,
+    colStart: parsedRange.start.col,
+    colEnd: parsedRange.end.col,
     aggregateKind:
       callee === 'SUM' ? 'sum' : callee === 'COUNT' ? 'count' : callee === 'MIN' ? 'min' : callee === 'MAX' ? 'max' : 'average',
-    sheetName: range.sheetName,
-    rowStart: range.rowStart,
-    rowEnd: range.rowEnd,
-    col: range.col,
-    length: range.length,
-  }
+  })
 }
 
 function buildDirectScalarOperand(args: {
@@ -1124,6 +1243,26 @@ function buildDirectScalarOperand(args: {
   return undefined
 }
 
+function unwrapDirectScalarBinaryNode(node: FormulaNode): { readonly node: FormulaNode; readonly resultOffset: number | undefined } {
+  if (
+    node.kind === 'BinaryExpr' &&
+    node.operator === '+' &&
+    node.right.kind === 'NumberLiteral' &&
+    Number.isFinite(node.right.value) &&
+    node.left.kind === 'BinaryExpr' &&
+    (node.left.operator === '+' || node.left.operator === '-' || node.left.operator === '*' || node.left.operator === '/')
+  ) {
+    return {
+      node: node.left,
+      resultOffset: node.right.value,
+    }
+  }
+  return {
+    node,
+    resultOffset: undefined,
+  }
+}
+
 function tryParseDependencyRangeAddress(address: string, currentSheetName?: string): ReturnType<typeof parseRangeAddress> | undefined {
   try {
     return parseRangeAddress(address, currentSheetName)
@@ -1168,7 +1307,8 @@ function buildDirectScalarDescriptor(args: {
           return address ? { sheetName: parsed?.sheetName, address, row: parsed?.row, col: parsed?.col } : undefined
         }
       : undefined
-  const node = args.compiled.optimizedAst
+  const unwrapped = unwrapDirectScalarBinaryNode(args.compiled.optimizedAst)
+  const node = unwrapped.node
   if (node.kind === 'BinaryExpr' && (node.operator === '+' || node.operator === '-' || node.operator === '*' || node.operator === '/')) {
     const left = buildDirectScalarOperand({
       node: node.left,
@@ -1194,6 +1334,7 @@ function buildDirectScalarDescriptor(args: {
         operator: node.operator,
         left,
         right,
+        ...(unwrapped.resultOffset !== undefined ? { resultOffset: unwrapped.resultOffset } : {}),
       }
     }
   }
@@ -1654,6 +1795,7 @@ export function createEngineFormulaBindingService(args: {
     untrackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
     existing.source = source
     existing.structuralSourceTransform = undefined
+    existing.sourceRenameTransforms = undefined
     existing.planId = plan.id
     existing.templateId = prepared.templateId
     existing.compiled = plan.compiled
@@ -1676,7 +1818,9 @@ export function createEngineFormulaBindingService(args: {
     } else {
       args.state.workbook.cellStore.flags[cellIndex] = (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly
     }
-    args.scheduleWasmProgramSync()
+    if (prepared.compiled.mode === FormulaMode.WasmFastPath && prepared.runtimeProgram.length > 0) {
+      args.scheduleWasmProgramSync()
+    }
     recordFormulaInstanceNow(cellIndex, source, prepared.templateId)
     registerFormulaFamilyNow(cellIndex, existing)
     trackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
@@ -1755,6 +1899,7 @@ export function createEngineFormulaBindingService(args: {
     const hadDirectRegions = existing.directAggregate !== undefined || existing.directCriteria !== undefined
     existing.source = source
     existing.structuralSourceTransform = undefined
+    existing.sourceRenameTransforms = undefined
     existing.planId = plan.id
     existing.templateId = nextTemplateId
     existing.compiled = plan.compiled
@@ -1807,7 +1952,7 @@ export function createEngineFormulaBindingService(args: {
       existing.directLookup !== undefined ||
       existing.directAggregate !== undefined ||
       existing.directCriteria !== undefined ||
-      existing.rangeDependencies.length !== 0 ||
+      !rangeDependenciesHaveNoFormulaMembers(existing.rangeDependencies) ||
       !canRewriteCompiledPreservingBindings(existing, compiled)
     ) {
       return false
@@ -1816,8 +1961,16 @@ export function createEngineFormulaBindingService(args: {
     const plan = canRetainUnmanagedCompiledPlan(existing.planId, compiled, existing.directScalar)
       ? makeUnmanagedCompiledPlan(source, compiled, nextTemplateId)
       : args.compiledPlans.replace(existing.planId, source, compiled, nextTemplateId)
+    const ownerSheetName =
+      ownerPosition?.sheetName ?? args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
+    const shouldRefreshSheetIndexes =
+      ownerSheetName !== undefined && (hasQualifiedDependencies(existing.compiled) || hasQualifiedDependencies(compiled))
+    if (shouldRefreshSheetIndexes) {
+      untrackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
+    }
     existing.source = source
     existing.structuralSourceTransform = undefined
+    existing.sourceRenameTransforms = undefined
     existing.planId = plan.id
     existing.templateId = nextTemplateId
     existing.compiled = plan.compiled
@@ -1829,7 +1982,199 @@ export function createEngineFormulaBindingService(args: {
     if (!args.formulaInstances.get(cellIndex)) {
       recordFormulaInstanceNow(cellIndex, source, nextTemplateId, ownerPosition)
     }
+    if (shouldRefreshSheetIndexes) {
+      trackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
+    }
     return true
+  }
+
+  const deferCellFormulasForSheetRenameNow = (oldSheetName: string, newSheetName: string): number => {
+    let touchedCount = 0
+    const referencedCandidates = formulaReferencedSheetCells.get(oldSheetName)
+    if (referencedCandidates && referencedCandidates.size > 0) {
+      const mergedReferenced = formulaReferencedSheetCells.get(newSheetName)
+      if (mergedReferenced) {
+        referencedCandidates.forEach((cellIndex) => {
+          mergedReferenced.add(cellIndex)
+        })
+      } else {
+        formulaReferencedSheetCells.set(newSheetName, referencedCandidates)
+      }
+      formulaReferencedSheetCells.delete(oldSheetName)
+      referencedCandidates.forEach((cellIndex) => {
+        const formula = args.state.formulas.get(cellIndex)
+        if (!formula) {
+          return
+        }
+        appendSheetRenameSourceTransform(formula, oldSheetName, newSheetName)
+        if (formula.directAggregate !== undefined) {
+          formula.directAggregate = renameDirectAggregateDescriptorSheet({
+            descriptor: formula.directAggregate,
+            oldSheetName,
+            newSheetName,
+            regionGraph: args.regionGraph,
+          })
+          args.regionGraph.replaceFormulaSubscriptions(cellIndex, directRegionIdsForFormula(formula))
+        }
+        touchedCount += 1
+      })
+    }
+    const ownerCandidates = formulaOwnerSheetCells.get(oldSheetName)
+    if (ownerCandidates && ownerCandidates.size > 0) {
+      const mergedOwners = formulaOwnerSheetCells.get(newSheetName)
+      if (mergedOwners) {
+        ownerCandidates.forEach((cellIndex) => {
+          mergedOwners.add(cellIndex)
+        })
+      } else {
+        formulaOwnerSheetCells.set(newSheetName, ownerCandidates)
+      }
+      formulaOwnerSheetCells.delete(oldSheetName)
+    }
+    return touchedCount
+  }
+
+  const rewriteCellFormulasForSheetRenameNow = (oldSheetName: string, newSheetName: string, formulaChangedCount: number): number => {
+    const referencedCandidates = formulaReferencedSheetCells.get(oldSheetName)
+    const ownerCandidates = formulaOwnerSheetCells.get(oldSheetName)
+    const seen: number[] = []
+    let seenSet: Set<number> | undefined
+    const rewriteCandidate = (cellIndex: number): void => {
+      if (seenSet) {
+        if (seenSet.has(cellIndex)) {
+          return
+        }
+        seenSet.add(cellIndex)
+      } else {
+        for (let index = 0; index < seen.length; index += 1) {
+          if (seen[index] === cellIndex) {
+            return
+          }
+        }
+        seen.push(cellIndex)
+        if (seen.length > 8) {
+          seenSet = new Set(seen)
+        }
+      }
+      const formula = args.state.formulas.get(cellIndex)
+      if (!formula) {
+        return
+      }
+      const ownerSheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
+      if (!ownerSheetName) {
+        return
+      }
+      const previousOwnerSheetName = ownerSheetName === newSheetName ? oldSheetName : ownerSheetName
+      if (
+        args.compiledPlans.isSoleOwner(formula.planId, formula.compiled) &&
+        formula.compiled.symbolicNames.length === 0 &&
+        formula.compiled.symbolicTables.length === 0 &&
+        formula.compiled.symbolicSpills.length === 0 &&
+        formula.directLookup === undefined &&
+        formula.directCriteria === undefined &&
+        (formula.directAggregate !== undefined || rangeDependenciesHaveNoFormulaMembers(formula.rangeDependencies))
+      ) {
+        if (previousOwnerSheetName !== ownerSheetName) {
+          removeTrackedReverseEdge(formulaOwnerSheetCells, previousOwnerSheetName, cellIndex)
+        }
+        const sourceChanged = renameCompiledFormulaSheetReferenceMetadataInPlace(formula.compiled, oldSheetName, newSheetName)
+        if (sourceChanged) {
+          removeTrackedReverseEdge(formulaReferencedSheetCells, oldSheetName, cellIndex)
+          appendSheetRenameSourceTransform(formula, oldSheetName, newSheetName)
+        }
+        if (formula.directAggregate !== undefined) {
+          formula.directAggregate = renameDirectAggregateDescriptorSheet({
+            descriptor: formula.directAggregate,
+            oldSheetName,
+            newSheetName,
+            regionGraph: args.regionGraph,
+          })
+          args.regionGraph.replaceFormulaSubscriptions(cellIndex, directRegionIdsForFormula(formula))
+        }
+        if (previousOwnerSheetName !== ownerSheetName) {
+          appendTrackedReverseEdge(formulaOwnerSheetCells, ownerSheetName, cellIndex)
+        }
+        if (sourceChanged) {
+          appendTrackedReverseEdge(formulaReferencedSheetCells, newSheetName, cellIndex)
+        }
+        return
+      }
+      const renamedMetadata = renameCompiledFormulaSheetReferenceMetadata(formula.compiled, oldSheetName, newSheetName)
+      if (!renamedMetadata.sourceChanged) {
+        if (ownerSheetName === newSheetName) {
+          untrackFormulaSheetIndexes(cellIndex, oldSheetName, formula.compiled)
+          trackFormulaSheetIndexes(cellIndex, newSheetName, formula.compiled)
+        }
+        return
+      }
+      const position = args.state.workbook.getCellPosition(cellIndex)
+      const ownerPosition = position
+        ? {
+            sheetName: ownerSheetName,
+            row: position.row,
+            col: position.col,
+          }
+        : undefined
+      const canPreserveRuntime =
+        formula.directLookup === undefined &&
+        formula.directCriteria === undefined &&
+        (canRewriteCompiledPreservingBindings(formula, renamedMetadata.compiled) ||
+          canRewriteCompiledPreservingDirectAggregate(formula, renamedMetadata.compiled) ||
+          canRewriteCompiledPreservingDirectScalar(formula, renamedMetadata.compiled))
+      if (canPreserveRuntime) {
+        const nextDirectAggregate = formula.directAggregate
+          ? renameDirectAggregateDescriptorSheet({
+              descriptor: formula.directAggregate,
+              oldSheetName,
+              newSheetName,
+              regionGraph: args.regionGraph,
+            })
+          : undefined
+        const nextDirectScalar =
+          formula.directScalar === undefined
+            ? undefined
+            : buildDirectScalarDescriptor({
+                compiled: renamedMetadata.compiled as ParsedCompiledFormula,
+                ownerSheetName,
+                ownerSheetId: args.state.workbook.cellStore.sheetIds[cellIndex],
+                workbook: args.state.workbook,
+                ensureCellTracked: args.ensureCellTracked,
+                ensureCellTrackedByCoords: args.ensureCellTrackedByCoords,
+              })
+        if (formula.directScalar === undefined || nextDirectScalar !== undefined) {
+          const plan = canRetainUnmanagedCompiledPlan(formula.planId, renamedMetadata.compiled, nextDirectScalar)
+            ? makeUnmanagedCompiledPlan(formula.source, renamedMetadata.compiled, formula.templateId)
+            : args.compiledPlans.replace(formula.planId, formula.source, renamedMetadata.compiled, formula.templateId)
+          untrackFormulaSheetIndexes(cellIndex, previousOwnerSheetName, formula.compiled)
+          formula.compiled = plan.compiled
+          formula.plan = plan
+          formula.planId = plan.id
+          formula.constants = plan.compiled.constants
+          formula.constNumberLength = plan.compiled.constants.length
+          formula.directAggregate = nextDirectAggregate
+          formula.directScalar = nextDirectScalar
+          appendSheetRenameSourceTransform(formula, oldSheetName, newSheetName)
+          trackFormulaSheetIndexes(cellIndex, ownerSheetName, formula.compiled)
+          if (formula.directAggregate !== undefined) {
+            args.regionGraph.replaceFormulaSubscriptions(cellIndex, directRegionIdsForFormula(formula))
+          }
+          return
+        }
+      }
+      if (previousOwnerSheetName !== ownerSheetName) {
+        untrackFormulaSheetIndexes(cellIndex, previousOwnerSheetName, formula.compiled)
+      }
+      const renamed = renameCompiledFormulaSheetReferences(formula.compiled, oldSheetName, newSheetName)
+      const preserved =
+        ownerPosition &&
+        rewriteFormulaMetadataPreservingRuntimeNow(cellIndex, renamed.source, renamed.compiled, formula.templateId, ownerPosition)
+      if (!preserved) {
+        bindPreparedFormulaNow(cellIndex, ownerSheetName, renamed.source, renamed.compiled, formula.templateId)
+      }
+    }
+    referencedCandidates?.forEach(rewriteCandidate)
+    ownerCandidates?.forEach(rewriteCandidate)
+    return formulaChangedCount
   }
 
   const retargetDirectAggregateFormulaForStructuralTransformNow = (
@@ -2372,8 +2717,13 @@ export function createEngineFormulaBindingService(args: {
       return undefined
     }
     const sheet = args.state.workbook.getSheet(directAggregate.sheetName)
-    if (!sheet || (formulaColumnCounts.get(formulaColumnCountKey(sheet.id, directAggregate.col)) ?? 0) !== 0) {
+    if (!sheet) {
       return undefined
+    }
+    for (let col = directAggregate.col; col <= directAggregate.colEnd; col += 1) {
+      if ((formulaColumnCounts.get(formulaColumnCountKey(sheet.id, col)) ?? 0) !== 0) {
+        return undefined
+      }
     }
     ensureDependencyBuildCapacity(args.state.workbook.cellStore.size + 1, 1, 1, compiled.symbolicRanges.length + 1)
     args.getSymbolicRangeBindings().fill(UNRESOLVED_WASM_OPERAND, 0, compiled.symbolicRanges.length)
@@ -2511,6 +2861,7 @@ export function createEngineFormulaBindingService(args: {
       args.compiledPlans.release(existing.planId)
       existing.source = source
       existing.structuralSourceTransform = undefined
+      existing.sourceRenameTransforms = undefined
       existing.planId = prepared.plan.id
       existing.templateId = prepared.templateId
       existing.compiled = prepared.plan.compiled
@@ -2532,7 +2883,9 @@ export function createEngineFormulaBindingService(args: {
       } else {
         args.state.workbook.cellStore.flags[cellIndex] = (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly
       }
-      args.scheduleWasmProgramSync()
+      if (prepared.compiled.mode === FormulaMode.WasmFastPath && prepared.runtimeProgram.length > 0) {
+        args.scheduleWasmProgramSync()
+      }
       recordFormulaInstanceNow(cellIndex, source, prepared.templateId)
       if (options.deferFamilyRegistration !== true) {
         registerFormulaFamilyNow(cellIndex, existing)
@@ -2698,8 +3051,10 @@ export function createEngineFormulaBindingService(args: {
       }
     }
     trackFormulaSheetIndexes(cellIndex, ownerSheetName, runtimeFormula.compiled)
-    args.regionGraph.replaceFormulaSubscriptions(cellIndex, directRegionIdsForFormula(runtimeFormula))
-    if (prepared.runtimeProgram.length > 0) {
+    if (runtimeFormula.directAggregate !== undefined || runtimeFormula.directCriteria !== undefined) {
+      args.regionGraph.replaceFormulaSubscriptions(cellIndex, directRegionIdsForFormula(runtimeFormula))
+    }
+    if (prepared.compiled.mode === FormulaMode.WasmFastPath && prepared.runtimeProgram.length > 0) {
       args.scheduleWasmProgramSync()
     }
 
@@ -2744,6 +3099,25 @@ export function createEngineFormulaBindingService(args: {
     })
   }
 
+  const directAggregateContainsOwnerCell = (directAggregate: RuntimeDirectAggregateDescriptor | undefined, cellIndex: number): boolean => {
+    if (!directAggregate) {
+      return false
+    }
+    const ownerSheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
+    const aggregateSheet = args.state.workbook.getSheet(directAggregate.sheetName)
+    if (ownerSheetId === undefined || !aggregateSheet || aggregateSheet.id !== ownerSheetId) {
+      return false
+    }
+    const ownerPosition = args.state.workbook.getCellPosition(cellIndex)
+    return (
+      ownerPosition !== undefined &&
+      ownerPosition.row >= directAggregate.rowStart &&
+      ownerPosition.row <= directAggregate.rowEnd &&
+      ownerPosition.col >= directAggregate.col &&
+      ownerPosition.col <= directAggregate.colEnd
+    )
+  }
+
   const prepareFormulaBindingFromCompiledNow = (
     cellIndex: number,
     ownerSheetName: string,
@@ -2760,7 +3134,7 @@ export function createEngineFormulaBindingService(args: {
       ownerSheetName,
       regionGraph: args.regionGraph,
     })
-    const directAggregate = directAggregateCandidate
+    const directAggregate = directAggregateContainsOwnerCell(directAggregateCandidate, cellIndex) ? undefined : directAggregateCandidate
     const directScalar = buildDirectScalarDescriptor({
       compiled,
       ownerSheetName,
@@ -2894,7 +3268,7 @@ export function createEngineFormulaBindingService(args: {
       const formula = args.state.formulas.get(cellIndex)
       const ownerSheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
       if (formula && ownerSheetName) {
-        bindFormulaNow(cellIndex, ownerSheetName, formula.source)
+        bindFormulaNow(cellIndex, ownerSheetName, getRuntimeFormulaSource(formula))
       }
       formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount)
     })
@@ -2926,7 +3300,7 @@ export function createEngineFormulaBindingService(args: {
         if (!touchesSheet) {
           continue
         }
-        bindFormulaNow(cellIndex, ownerSheetName, formula.source)
+        bindFormulaNow(cellIndex, ownerSheetName, getRuntimeFormulaSource(formula))
         formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount)
       }
       return formulaChangedCount
@@ -2950,7 +3324,7 @@ export function createEngineFormulaBindingService(args: {
       if (!touchesSheet) {
         return
       }
-      bindFormulaNow(cellIndex, ownerSheetName, formula.source)
+      bindFormulaNow(cellIndex, ownerSheetName, getRuntimeFormulaSource(formula))
       formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount)
     })
 
@@ -2994,24 +3368,7 @@ export function createEngineFormulaBindingService(args: {
     },
     rewriteCellFormulasForSheetRename(oldSheetName, newSheetName, formulaChangedCount) {
       return Effect.try({
-        try: () => {
-          args.state.formulas.forEach((formula, cellIndex) => {
-            if (!formula) {
-              return
-            }
-            const ownerSheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
-            if (!ownerSheetName) {
-              return
-            }
-            const nextSource = renameFormulaSheetReferences(formula.source, oldSheetName, newSheetName)
-            if (nextSource === formula.source && ownerSheetName !== newSheetName) {
-              return
-            }
-            bindFormulaNow(cellIndex, ownerSheetName, nextSource)
-            formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount)
-          })
-          return formulaChangedCount
-        },
+        try: () => rewriteCellFormulasForSheetRenameNow(oldSheetName, newSheetName, formulaChangedCount),
         catch: (cause) =>
           new EngineFormulaBindingError({
             message: formulaBindingErrorMessage('Failed to rewrite formulas for sheet rename', cause),
@@ -3127,6 +3484,8 @@ export function createEngineFormulaBindingService(args: {
     bindPreparedFormulaNow,
     rewriteFormulaCompiledPreservingBindingNow,
     rewriteFormulaMetadataPreservingRuntimeNow,
+    deferCellFormulasForSheetRenameNow,
+    rewriteCellFormulasForSheetRenameNow,
     retargetDirectAggregateFormulaForStructuralTransformNow,
     bindInitialFormulaNow,
     clearFormulaNow,

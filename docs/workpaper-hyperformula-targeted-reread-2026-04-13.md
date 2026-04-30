@@ -2,7 +2,7 @@
 
 Date: `2026-04-13`
 
-Status: `captured prior-art notes for the remaining red lanes, updated after broader suite exposed structural columns`
+Status: `captured prior-art notes, reconciled with current expanded benchmark`
 
 ## Purpose
 
@@ -26,6 +26,43 @@ Files reread in the local HyperFormula checkout:
 - `/Users/gregkonush/github.com/hyperformula/src/DependencyGraph/RangeVertex.ts`
 - `/Users/gregkonush/github.com/hyperformula/src/interpreter/CriterionFunctionCompute.ts`
 - `/Users/gregkonush/github.com/hyperformula/src/interpreter/plugin/NumericAggregationPlugin.ts`
+
+## Current WorkPaper Benchmark Reconciliation - 2026-04-29
+
+The HyperFormula implementation patterns below still explain why ownership
+matters, but the active WorkPaper blocker list is now much smaller.
+
+Current checked artifact:
+
+- `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
+- generated at `2026-04-29T14:47:16.831Z`
+- overall scorecard: WorkPaper `44`, HyperFormula `2`, comparable `46`
+- public lane: WorkPaper `36`, HyperFormula `2`
+- holdout lane: WorkPaper `8`, HyperFormula `0`
+
+Current production targets:
+
+| Workload | Current evidence | HyperFormula pattern to use |
+| --- | --- | --- |
+| `build-mixed-content` | mean ratio `1.0362639565590437`, confidence overlap | parser/build services are installed before graph construction; reduce WorkPaper cold-build allocation and duplicated initialization |
+| `structural-delete-rows` | mean ratio `1.0234049542127845`, median green, confidence overlap | structural transforms update address mapping, dependency graph, ranges, lookup state, and undo through one transform model |
+| `lookup-text-exact` p95 | worst p95 ratio `2.27208263805424` | exact lookup uses durable value buckets and narrow invalidation; text normalization and allocation must not spike |
+
+Rows that are no longer current targets despite appearing below:
+
+- structural insert/move/delete column lanes
+- structural insert/move row lanes
+- exact and approximate after-write lookup lanes
+- parser-template build lanes
+- `aggregate-overlapping-sliding-window`
+- broad batch-edit lanes
+
+The remaining order is therefore:
+
+1. cold mixed-build allocation and initialization
+2. structural row-delete transform/result collection
+3. text exact-lookup p95 hardening
+4. preservation of all current green holdout rows
 
 ## Structural Transforms
 
@@ -93,7 +130,7 @@ What that means for WorkPaper:
 
 ## Practical Takeaways
 
-The reread confirmed the correct remaining order:
+The reread originally confirmed this order for the then-current broad red list:
 
 1. `StructuralTransformService`
 2. `FormulaTemplateNormalizationService`
@@ -102,6 +139,9 @@ The reread confirmed the correct remaining order:
 5. `ExactColumnIndexService`
 6. `RangeAggregateCacheService`
 7. `SuspendedBulkMutationLane`
+
+For the current artifact, apply the same prior-art lessons to the narrower
+three-row target list above instead of re-opening every older red family.
 
 The reread also confirmed what not to do:
 

@@ -840,6 +840,8 @@ describe('EngineOperationService', () => {
     expect(result).toEqual({
       firstChangedCellIndex: inputIndex,
       secondChangedCellIndex: formulaIndex,
+      secondChangedRow: 0,
+      secondChangedCol: 1,
       secondChangedNumericValue: 626,
       changedCellCount: 2,
       explicitChangedCount: 1,
@@ -879,6 +881,8 @@ describe('EngineOperationService', () => {
     expect(result).toEqual({
       firstChangedCellIndex: inputIndex,
       secondChangedCellIndex: formulaIndex,
+      secondChangedRow: 0,
+      secondChangedCol: 1,
       secondChangedNumericValue: 626,
       changedCellCount: 2,
       explicitChangedCount: 1,

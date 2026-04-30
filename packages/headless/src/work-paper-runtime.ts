@@ -505,6 +505,49 @@ function scalarFromResult(result: EvaluationResult | CellValue): CellValue {
   return result.values[0] ?? emptyValue()
 }
 
+const SIMPLE_NUMERIC_FORMULA_RE = /^[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[Ee][+-]?\d+)?$/
+
+function tryReadSimpleScalarFormulaBody(raw: RawCellContent): string | undefined {
+  if (typeof raw !== 'string') {
+    return undefined
+  }
+  const trimmed = raw.trim()
+  if (!trimmed.startsWith('=')) {
+    return undefined
+  }
+  const body = trimmed.slice(1).trim()
+  return body.length === 0 ? undefined : body
+}
+
+function tryEvaluateSimpleScalarFormulaBody(body: string): CellValue | undefined {
+  if (SIMPLE_NUMERIC_FORMULA_RE.test(body)) {
+    const value = Number(body)
+    return Number.isFinite(value) ? { tag: ValueTag.Number, value: Object.is(value, -0) ? 0 : value } : undefined
+  }
+  const upper = body.toUpperCase()
+  if (upper === 'TRUE') {
+    return { tag: ValueTag.Boolean, value: true }
+  }
+  if (upper === 'FALSE') {
+    return { tag: ValueTag.Boolean, value: false }
+  }
+  if (body.length >= 2 && body.startsWith('"') && body.endsWith('"')) {
+    return { tag: ValueTag.String, value: body.slice(1, -1).replaceAll('""', '"'), stringId: 0 }
+  }
+  return undefined
+}
+
+function tryEvaluateSimpleNamedExpression(raw: RawCellContent): CellValue | undefined {
+  if (raw === null || typeof raw === 'number' || typeof raw === 'boolean') {
+    return scalarValueFromLiteral(raw)
+  }
+  if (typeof raw === 'string' && !raw.trim().startsWith('=')) {
+    return scalarValueFromLiteral(raw)
+  }
+  const body = tryReadSimpleScalarFormulaBody(raw)
+  return body === undefined ? undefined : tryEvaluateSimpleScalarFormulaBody(body)
+}
+
 function valuesEqual(left: CellValue, right: CellValue): boolean {
   if (left.tag !== right.tag) {
     return false
@@ -851,10 +894,18 @@ function inspectSheetDimensionsWithinLimits(sheetName: string, sheet: WorkPaperS
       throw new WorkPaperUnableToParseError({ sheetName, reason: 'Rows must be arrays' })
     }
     width = Math.max(width, row.length)
+    let rowHasMaterializedCell = false
+    let lastMaterializedCol = -1
     for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
       if (row[colIndex] !== null) {
-        materializedHeight = Math.max(materializedHeight, rowIndex + 1)
-        materializedWidth = Math.max(materializedWidth, colIndex + 1)
+        rowHasMaterializedCell = true
+        lastMaterializedCol = colIndex
+      }
+    }
+    if (rowHasMaterializedCell) {
+      materializedHeight = rowIndex + 1
+      if (lastMaterializedCol + 1 > materializedWidth) {
+        materializedWidth = lastMaterializedCol + 1
       }
     }
   }
@@ -918,16 +969,24 @@ function inspectSheetWithinLimits(sheetName: string, sheet: WorkPaperSheet, conf
       throw new WorkPaperUnableToParseError({ sheetName, reason: 'Rows must be arrays' })
     }
     width = Math.max(width, row.length)
+    let rowHasMaterializedCell = false
+    let lastMaterializedCol = -1
     for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
       const cell = row[colIndex]
       if (cell !== null) {
         materializedCellCount += 1
-        materializedHeight = Math.max(materializedHeight, rowIndex + 1)
-        materializedWidth = Math.max(materializedWidth, colIndex + 1)
+        rowHasMaterializedCell = true
+        lastMaterializedCol = colIndex
       }
       if (typeof cell === 'string' && cellHasFormulaPrefix(cell)) {
         formulaCellCount += 1
         hasFormula = true
+      }
+    }
+    if (rowHasMaterializedCell) {
+      materializedHeight = rowIndex + 1
+      if (lastMaterializedCol + 1 > materializedWidth) {
+        materializedWidth = lastMaterializedCol + 1
       }
     }
   }
@@ -954,17 +1013,17 @@ function cellHasFormulaPrefix(value: string): boolean {
   return value.trimStart().charCodeAt(0) === 61
 }
 
-function runtimeSnapshotMatchesSheetNames(
-  sheets: WorkPaperSheets,
+function runtimeSnapshotMatchesSheetEntries(
+  sheetEntries: readonly (readonly [string, WorkPaperSheet])[],
   runtimeSnapshot: NonNullable<ReturnType<typeof readRuntimeSnapshot>>,
 ): boolean {
-  const sheetNames = Object.keys(sheets)
-  if (runtimeSnapshot.sheets.length !== sheetNames.length) {
+  if (runtimeSnapshot.sheets.length !== sheetEntries.length) {
     return false
   }
   const matchedNames = new Set<string>()
+  const sheetNames = new Set(sheetEntries.map(([sheetName]) => sheetName))
   for (const snapshotSheet of runtimeSnapshot.sheets) {
-    if (!Object.prototype.hasOwnProperty.call(sheets, snapshotSheet.name) || matchedNames.has(snapshotSheet.name)) {
+    if (!sheetNames.has(snapshotSheet.name) || matchedNames.has(snapshotSheet.name)) {
       return false
     }
     matchedNames.add(snapshotSheet.name)
@@ -1083,6 +1142,13 @@ class WorkPaperEmitter {
 
   hasListeners(eventName: WorkPaperEventName): boolean {
     return this.listeners[eventName].size > 0 || this.detailedListeners[eventName].size > 0
+  }
+
+  hasAnyListeners(): boolean {
+    return (
+      Object.values(this.listeners).some((listeners) => listeners.size > 0) ||
+      Object.values(this.detailedListeners).some((listeners) => listeners.size > 0)
+    )
   }
 
   emitDetailed(event: DetailedEvent): void {
@@ -1431,8 +1497,9 @@ export class WorkPaper {
     namedExpressions: readonly SerializedWorkPaperNamedExpression[] = [],
   ): WorkPaper {
     const workbook = new WorkPaper(configInput)
+    const sheetEntries = Object.entries(sheets)
     const runtimeSnapshot = namedExpressions.length === 0 ? readRuntimeSnapshot(sheets) : undefined
-    const runtimeSnapshotMatchesSheets = runtimeSnapshot !== undefined && runtimeSnapshotMatchesSheetNames(sheets, runtimeSnapshot)
+    const runtimeSnapshotMatchesSheets = runtimeSnapshot !== undefined && runtimeSnapshotMatchesSheetEntries(sheetEntries, runtimeSnapshot)
     const runtimeSnapshotSheetsByName = runtimeSnapshotMatchesSheets
       ? new Map(runtimeSnapshot.sheets.map((sheet) => [sheet.name, sheet] as const))
       : undefined
@@ -1440,46 +1507,47 @@ export class WorkPaper {
       runtimeSnapshotMatchesSheets && runtimeSnapshot
         ? new Map((readRuntimeImage(runtimeSnapshot)?.sheetCells ?? []).map((sheet) => [sheet.sheetName, sheet] as const))
         : undefined
-    const inspectedSheets = new Map<string, SheetInspection>()
-    Object.entries(sheets).forEach(([sheetName, sheet]) => {
+    const inspectedSheets: SheetInspection[] = []
+    for (let index = 0; index < sheetEntries.length; index += 1) {
+      const [sheetName, sheet] = sheetEntries[index]!
       const snapshotSheet = runtimeSnapshotSheetsByName?.get(sheetName)
-      inspectedSheets.set(
-        sheetName,
-        snapshotSheet
-          ? (() => {
-              const dimensions = inspectRuntimeSnapshotSheetDimensionsWithinLimits({
-                sheetName,
-                snapshotSheet,
-                runtimeSheetCells: runtimeImageSheetCellsByName?.get(sheetName),
-                config: workbook.config,
-              })
-              return {
-                hasFormula: false,
-                dimensions,
-                materializedCellCount: runtimeImageSheetCellsByName?.get(sheetName)?.cellCount ?? 0,
-                maxColumnCount: dimensions.width,
-                formulaCellCount: 0,
-              }
-            })()
-          : inspectSheetWithinLimits(sheetName, sheet, workbook.config),
-      )
-    })
+      inspectedSheets[index] = snapshotSheet
+        ? (() => {
+            const runtimeSheetCells = runtimeImageSheetCellsByName?.get(sheetName)
+            const dimensions = inspectRuntimeSnapshotSheetDimensionsWithinLimits({
+              sheetName,
+              snapshotSheet,
+              runtimeSheetCells,
+              config: workbook.config,
+            })
+            return {
+              hasFormula: false,
+              dimensions,
+              materializedCellCount: runtimeSheetCells?.cellCount ?? 0,
+              maxColumnCount: dimensions.width,
+              formulaCellCount: 0,
+            }
+          })()
+        : inspectSheetWithinLimits(sheetName, sheet, workbook.config)
+    }
     workbook.withEngineEventCaptureDisabled(() => {
       if (runtimeSnapshot && runtimeSnapshotMatchesSheets) {
         workbook.engine.importSnapshot(runtimeSnapshot)
       } else {
-        Object.keys(sheets).forEach((sheetName) => {
-          workbook.engine.createSheet(sheetName)
-        })
+        const sheetIds: number[] = []
+        for (let index = 0; index < sheetEntries.length; index += 1) {
+          sheetIds[index] = workbook.engine.createSheetForInitialization(sheetEntries[index]![0])
+        }
         namedExpressions.forEach((expression) => {
           workbook.upsertNamedExpressionInternal(expression, { duringInitialization: true })
         })
-        Object.entries(sheets).forEach(([sheetName, sheet]) => {
-          const sheetId = workbook.requireSheetId(sheetName)
-          const inspected = inspectedSheets.get(sheetName)
+        for (let index = 0; index < sheetEntries.length; index += 1) {
+          const [, sheet] = sheetEntries[index]!
+          const sheetId = sheetIds[index]!
+          const inspected = inspectedSheets[index]!
           if (!inspected?.hasFormula) {
             loadInitialLiteralSheet(workbook.engine, sheetId, sheet, inspected)
-            return
+            continue
           }
           const rewriteInitialFormula =
             workbook.namedExpressions.size === 0 && workbook.functionAliasLookup.size === 0
@@ -1492,14 +1560,15 @@ export class WorkPaper {
             rewriteFormula: rewriteInitialFormula,
             inspection: inspected,
           })
-        })
-      }
-      Object.keys(sheets).forEach((sheetName) => {
-        const inspected = inspectedSheets.get(sheetName)
-        if (inspected) {
-          workbook.cacheInitializedSheetDimensions(workbook.requireSheetId(sheetName), inspected.dimensions)
         }
-      })
+      }
+      for (let index = 0; index < sheetEntries.length; index += 1) {
+        const sheetId = workbook.requireSheetId(sheetEntries[index]![0])
+        const inspected = inspectedSheets[index]
+        if (inspected !== undefined) {
+          workbook.cacheInitializedSheetDimensions(sheetId, inspected.dimensions)
+        }
+      }
     })
     workbook.clearHistoryStacks()
     workbook.resetChangeTrackingCaches()
@@ -2411,8 +2480,14 @@ export class WorkPaper {
     scope?: number,
     options?: Record<string, string | number | boolean>,
   ): WorkPaperChange[] {
-    if (!this.isItPossibleToChangeNamedExpression(expressionName, expression, scope)) {
+    this.validateNamedExpression(expressionName, expression, scope)
+    const existing = this.namedExpressions.get(makeNamedExpressionKey(expressionName, scope))
+    if (!existing) {
       throw new WorkPaperNamedExpressionDoesNotExistError(expressionName)
+    }
+    const fastPathChanges = this.tryCaptureNamedExpressionChangeWithoutSnapshots(existing, expressionName, expression, scope, options)
+    if (fastPathChanges) {
+      return fastPathChanges
     }
     return this.captureChanges(undefined, () => {
       this.upsertNamedExpressionInternal({ name: expressionName, expression, scope, options }, { duringInitialization: false })
@@ -3133,11 +3208,37 @@ export class WorkPaper {
   }
 
   renameSheet(sheetId: number, nextName: string): WorkPaperChange[] {
-    if (!this.isItPossibleToRenameSheet(sheetId, nextName)) {
+    const sheet = this.sheetRecord(sheetId)
+    const newName = nextName.trim()
+    if (newName.length === 0) {
+      throw new WorkPaperInvalidArgumentsError('Sheet name must be non-empty')
+    }
+    const existing = this.engine.workbook.getSheet(newName)
+    if (existing && existing.id !== sheetId) {
       throw new WorkPaperSheetError(`Sheet '${sheetId}' cannot be renamed to '${nextName}'`)
     }
-    const oldName = this.sheetName(sheetId)
-    const newName = nextName.trim()
+    const oldName = sheet.name
+    if (this.canUseMetadataOnlySheetRenameFastPath()) {
+      this.assertNotDisposed()
+      if (this.pendingLazyTrackedChanges.length === 0 && !this.batchUsesTrackedFastPath) {
+        try {
+          if (this.engine.renameSheetMetadataOnly(oldName, newName)) {
+            this.sheetRecordsCache = null
+            this.trackedEngineEvents = []
+            return []
+          }
+        } catch (error) {
+          if (error instanceof Error && WORKPAPER_PUBLIC_ERROR_NAMES.has(error.name)) {
+            throw error
+          }
+          throw new WorkPaperOperationError(this.messageOf(error, 'Mutation failed'))
+        }
+      }
+      const fastPathChanges = this.tryRenameSheetWithoutVisibilitySnapshots(oldName, newName)
+      if (fastPathChanges) {
+        return fastPathChanges
+      }
+    }
     return this.captureChanges(
       {
         eventName: 'sheetRenamed',
@@ -4376,6 +4477,14 @@ export class WorkPaper {
     return this.batchDepth === 0 && !this.evaluationSuspended && this.visibilityCache === null && this.namedExpressions.size === 0
   }
 
+  private canUseNamedExpressionChangeFastPath(): boolean {
+    return this.batchDepth === 0 && !this.evaluationSuspended && this.visibilityCache === null && !this.emitter.hasAnyListeners()
+  }
+
+  private canUseMetadataOnlySheetRenameFastPath(): boolean {
+    return this.batchDepth === 0 && !this.evaluationSuspended && this.visibilityCache === null && !this.emitter.hasAnyListeners()
+  }
+
   private downgradeTrackedBatchFastPath(): void {
     if (!this.batchUsesTrackedFastPath || this.batchDepth === 0) {
       return
@@ -4403,6 +4512,144 @@ export class WorkPaper {
       throw new WorkPaperOperationError('Mutation emitted an unsupported invalidation pattern for tracked changes')
     }
     return fastPath.changes
+  }
+
+  private tryCaptureNamedExpressionChangeWithoutSnapshots(
+    existing: InternalNamedExpression,
+    expressionName: string,
+    expression: RawCellContent,
+    scope: number | undefined,
+    options: Record<string, string | number | boolean> | undefined,
+  ): WorkPaperChange[] | null {
+    if (!this.canUseNamedExpressionChangeFastPath()) {
+      return null
+    }
+    this.assertNotDisposed()
+    this.materializePendingLazyTrackedChanges()
+    this.downgradeTrackedBatchFastPath()
+    if (!this.canUseNamedExpressionChangeFastPath()) {
+      return null
+    }
+
+    const key = makeNamedExpressionKey(existing.publicName, existing.scope)
+    const cachedBeforeValue = this.namedExpressionValueCache?.get(key)
+    const beforeValue = cachedBeforeValue ?? this.evaluateNamedExpression(existing)
+    const afterScalarValue = tryEvaluateSimpleNamedExpression(expression)
+    if (afterScalarValue?.tag === ValueTag.Number && !this.emitter.hasAnyListeners()) {
+      const trimmed = expressionName.trim()
+      const internalName = scope === undefined ? trimmed : makeInternalScopedName(scope, trimmed)
+      const record: InternalNamedExpression = {
+        publicName: trimmed,
+        normalizedName: normalizeName(trimmed),
+        internalName,
+        scope,
+        expression,
+        options: options ? structuredClone(options) : undefined,
+      }
+      const definedNameSnapshot = this.toDefinedNameSnapshot(expression, scope)
+      try {
+        const changedCellIndices = this.engine.upsertNumericDefinedNameFast(internalName, definedNameSnapshot, afterScalarValue.value)
+        if (changedCellIndices) {
+          this.namedExpressions.set(makeNamedExpressionKey(trimmed, scope), record)
+          if (this.namedExpressionValueCache) {
+            this.namedExpressionValueCache.set(key, cloneNamedExpressionValue(afterScalarValue))
+          }
+          const cellChanges = changedCellIndices
+            .map((cellIndex) => this.readSingleTrackedCellChange(cellIndex))
+            .filter((change): change is WorkPaperCellChange => change !== undefined)
+          const orderedCellChanges =
+            cellChanges.length > 1 ? orderWorkPaperCellChanges(cellChanges, this.listSheetRecords(), cellChanges.length) : cellChanges
+          return matrixValuesEqual(beforeValue, afterScalarValue)
+            ? orderedCellChanges
+            : [
+                ...orderedCellChanges,
+                {
+                  kind: 'named-expression',
+                  name: record.publicName,
+                  scope: record.scope,
+                  newValue: cloneNamedExpressionValue(afterScalarValue),
+                },
+              ]
+        }
+      } catch (error) {
+        if (error instanceof Error && WORKPAPER_PUBLIC_ERROR_NAMES.has(error.name)) {
+          throw error
+        }
+        throw new WorkPaperOperationError(this.messageOf(error, 'Mutation failed'))
+      }
+    }
+    this.drainTrackedEngineEvents()
+
+    try {
+      this.withRetainedTrackedEngineEventIndices(() => {
+        this.upsertNamedExpressionInternal({ name: expressionName, expression, scope, options }, { duringInitialization: false })
+      })
+    } catch (error) {
+      if (error instanceof Error && WORKPAPER_PUBLIC_ERROR_NAMES.has(error.name)) {
+        throw error
+      }
+      throw new WorkPaperOperationError(this.messageOf(error, 'Mutation failed'))
+    }
+
+    const updated = this.namedExpressionRecord(expressionName, scope)
+    const afterValue = cloneNamedExpressionValue(this.evaluateNamedExpression(updated))
+    if (this.namedExpressionValueCache) {
+      this.namedExpressionValueCache.set(key, cloneNamedExpressionValue(afterValue))
+    }
+    const cellChanges = this.computeTrackedChangesWithoutVisibilityCache(this.drainTrackedEngineEvents(), {
+      preferLazyPublicChanges: !this.emitter.hasAnyListeners(),
+    })
+    if (matrixValuesEqual(beforeValue, afterValue)) {
+      return cellChanges
+    }
+    return [
+      ...cellChanges,
+      {
+        kind: 'named-expression',
+        name: updated.publicName,
+        scope: updated.scope,
+        newValue: cloneNamedExpressionValue(afterValue),
+      },
+    ]
+  }
+
+  private tryRenameSheetWithoutVisibilitySnapshots(oldName: string, newName: string): WorkPaperChange[] | null {
+    if (!this.canUseMetadataOnlySheetRenameFastPath()) {
+      return null
+    }
+    this.assertNotDisposed()
+    if (this.pendingLazyTrackedChanges.length > 0) {
+      this.materializePendingLazyTrackedChanges()
+    }
+    if (this.batchUsesTrackedFastPath) {
+      this.downgradeTrackedBatchFastPath()
+    }
+    if (!this.canUseMetadataOnlySheetRenameFastPath()) {
+      return null
+    }
+    if (this.trackedEngineEvents.length > 0) {
+      this.drainTrackedEngineEvents()
+    }
+    try {
+      if (this.engine.renameSheetMetadataOnly(oldName, newName)) {
+        this.sheetRecordsCache = null
+        this.trackedEngineEvents = []
+      } else {
+        this.withEngineEventCaptureDisabled(() => {
+          this.engine.renameSheet(oldName, newName)
+          this.sheetRecordsCache = null
+        })
+      }
+    } catch (error) {
+      if (error instanceof Error && WORKPAPER_PUBLIC_ERROR_NAMES.has(error.name)) {
+        throw error
+      }
+      throw new WorkPaperOperationError(this.messageOf(error, 'Mutation failed'))
+    }
+    if (this.trackedEngineEvents.length > 0) {
+      this.drainTrackedEngineEvents()
+    }
+    return []
   }
 
   private captureTrackedChangesWithoutVisibilityCache(
@@ -5159,7 +5406,7 @@ export class WorkPaper {
         this.engine.importSnapshot(snapshot)
       } else {
         Object.keys(serializedSheets!).forEach((sheetName) => {
-          this.engine.createSheet(sheetName)
+          this.engine.createSheetForInitialization(sheetName)
         })
         serializedNamedExpressions!.forEach((expression) => {
           this.upsertNamedExpressionInternal(expression, { duringInitialization: true })
@@ -5326,6 +5573,10 @@ export class WorkPaper {
       this.sheetRecord(scope)
     }
     if (isFormulaContent(expression)) {
+      const simpleBody = tryReadSimpleScalarFormulaBody(expression)
+      if (simpleBody !== undefined && tryEvaluateSimpleScalarFormulaBody(simpleBody) !== undefined) {
+        return
+      }
       try {
         const parsed = parseFormula(stripLeadingEquals(expression))
         if (formulaHasRelativeReferences(parsed)) {
@@ -5343,8 +5594,13 @@ export class WorkPaper {
     }
   }
 
-  private upsertNamedExpressionInternal(expression: SerializedWorkPaperNamedExpression, options: { duringInitialization: boolean }): void {
-    this.validateNamedExpression(expression.name, expression.expression, expression.scope)
+  private upsertNamedExpressionInternal(
+    expression: SerializedWorkPaperNamedExpression,
+    options: { duringInitialization: boolean; skipValidation?: boolean },
+  ): void {
+    if (options.skipValidation !== true) {
+      this.validateNamedExpression(expression.name, expression.expression, expression.scope)
+    }
     const trimmed = expression.name.trim()
     const internalName = expression.scope === undefined ? trimmed : makeInternalScopedName(expression.scope, trimmed)
     const record: InternalNamedExpression = {
@@ -5367,6 +5623,13 @@ export class WorkPaper {
       return expression
     }
     if (typeof expression === 'string' && expression.trim().startsWith('=')) {
+      const simpleBody = tryReadSimpleScalarFormulaBody(expression)
+      if (simpleBody !== undefined && tryEvaluateSimpleScalarFormulaBody(simpleBody) !== undefined) {
+        return {
+          kind: 'formula',
+          formula: `=${simpleBody}`,
+        }
+      }
       return {
         kind: 'formula',
         formula: `=${this.rewriteFormulaForStorage(stripLeadingEquals(expression), scope ?? this.listSheetRecords()[0]?.id ?? 1)}`,
@@ -5385,13 +5648,11 @@ export class WorkPaper {
 
   private evaluateNamedExpression(expression: InternalNamedExpression): CellValue | CellValue[][] {
     const raw = expression.expression
-    if (raw === null || typeof raw === 'number' || typeof raw === 'boolean') {
-      return scalarValueFromLiteral(raw)
+    const simpleValue = tryEvaluateSimpleNamedExpression(raw)
+    if (simpleValue !== undefined) {
+      return simpleValue
     }
-    if (typeof raw === 'string' && !raw.trim().startsWith('=')) {
-      return scalarValueFromLiteral(raw)
-    }
-    return this.calculateFormula(raw, expression.scope)
+    return typeof raw === 'string' ? this.calculateFormula(raw, expression.scope) : scalarValueFromLiteral(raw)
   }
 
   private cellSnapshotToRawContent(cell: CellSnapshot, ownerSheetId: number): RawCellContent {

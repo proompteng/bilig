@@ -70,7 +70,8 @@ That overlaps directly with existing `bilig` hot spots:
 - topo dirty-frontier collection
 - snapshot rebuild for repeated formula regions
 
-The paper does not directly solve the current largest misses:
+The paper did not directly solve the largest misses at the time this document
+was written:
 
 - structural row or column transforms
 - exact or approximate lookup after write
@@ -80,6 +81,18 @@ So this design is not a substitute for structural rearchitecture. It is a separa
 that should improve the family-compressible dependency portion of the engine.
 
 ## Current Repo Fit
+
+Current expanded benchmark note:
+
+- The latest artifact is
+  `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`, generated at
+  `2026-04-29T14:47:16.831Z`.
+- WorkPaper leads `44/46` scorecard-eligible comparable workloads and `8/8`
+  holdout workloads.
+- Family-compressed ownership remains useful as a future guardrail, but the
+  immediate current target is narrower: reduce `build-mixed-content` cold-build
+  allocation without regressing `build-parser-cache-unique-formulas` and other
+  build holdout wins.
 
 The following pieces already exist and make this integration substantially easier than the paper’s
 generic graph-compression setup:

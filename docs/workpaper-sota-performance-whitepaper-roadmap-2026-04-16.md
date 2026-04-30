@@ -27,17 +27,19 @@ This document ranks the downloaded whitepapers by expected value for the current
 It is not a literature review. It is the decision document for what to build, what to defer, and
 what to reject.
 
-The benchmark reality in `/Users/gregkonush/github.com/bilig2/docs/workpaper-ultra-performance-engine-architecture-2026-04-12.md`
-still says the dominant misses are:
+The current benchmark reality in `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
+is much narrower than the original paper-ranking context:
 
-- structural row and column transforms
-- parser or template build and snapshot rebuild
-- dirty-frontier discovery over repeated formulas
-- exact and approximate lookup freshness after writes
-- sliding-window aggregate reuse
-- batch plus undo scaffolding
+- generated at `2026-04-29T14:47:16.831Z`
+- WorkPaper wins `44/46` scorecard-eligible comparable workloads
+- public lane is `36/38`
+- holdout lane is `8/8`
+- current HyperFormula mean rows are `build-mixed-content` and
+  `structural-delete-rows`, both with overlapping confidence intervals
+- `lookup-text-exact` is the current p95 tail-risk row
 
-So the papers only matter if they move those families.
+So the papers only matter now if they move the remaining production rows without
+regressing the current green holdout and public rows.
 
 ## Ranked Value
 
@@ -45,20 +47,22 @@ So the papers only matter if they move those families.
 
 1. `TACO`
    - doc: `/Users/gregkonush/github.com/bilig2/docs/workpaper-family-compressed-dependency-graph-design-2026-04-16.md`
-   - why: best direct match for repeated formula dependency ownership and dirty-frontier discovery
+   - why: useful as a guardrail for formula-family ownership, but no longer the
+     first implementation step because parser-cache and holdout build rows are
+     green
    - target families:
-     - `build-parser-cache-row-templates`
-     - `build-parser-cache-mixed-templates`
-     - `partial-recompute-mixed-frontier`
-     - `rebuild-runtime-from-snapshot`
+     - preserve `build-parser-cache-unique-formulas`
+     - reduce `build-mixed-content` cold-build allocation without changing
+       formula semantics
 
 2. `Pearce/Kelly`
    - doc: `/Users/gregkonush/github.com/bilig2/docs/workpaper-pearce-kelly-dynamic-topological-ordering-design-2026-04-16.md`
-   - why: best practical fit for dynamic topo repair on a sparse changing dependency graph
+   - why: still relevant for structural row-delete tail overhead and dependency
+     update locality
    - target families:
-     - structural edits
-     - dirty-frontier ordering after graph changes
-     - broad topo rebuild cost
+     - `structural-delete-rows`
+     - structural preservation checks for insert/move/delete rows and columns
+     - dirty-ordering only where profiling shows it is still on the hot path
 
 ### Tier 2: Build After Tier 1
 
@@ -89,12 +93,18 @@ So the papers only matter if they move those families.
 
 ## Recommended Execution Order
 
-1. finish structural transform ownership already in progress
-2. build TACO-style family-compressed dependency ownership
-3. add Pearce/Kelly-style dynamic topo repair
-4. if the family graph is still too rebuild-heavy, add Bender/Fineman/Gilbert label ordering
-5. add Adapton-style demand control for visible and agent-facing derived surfaces
-6. use Differential Dataflow ideas only for sync and worker event projections
+1. finish `build-mixed-content` cold-build allocation and initialization
+   hardening
+2. finish `structural-delete-rows` metadata/result-collection hardening
+3. harden `lookup-text-exact` p95 tail latency
+4. apply Pearce/Kelly-style dynamic topo repair only if profiling proves topo
+   order maintenance is still the row-delete bottleneck
+5. build TACO-style family-compressed dependency ownership only where it reduces
+   real mixed-build allocation without regressing current build holdouts
+6. if the family graph is still too rebuild-heavy, add Bender/Fineman/Gilbert
+   label ordering
+7. add Adapton-style demand control for visible and agent-facing derived surfaces
+8. use Differential Dataflow ideas only for sync and worker event projections
 
 ## What Not To Do
 

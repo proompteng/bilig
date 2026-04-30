@@ -19,6 +19,36 @@ It is intended to be the comparison point for the next architecture step:
 - exact and approximate lookup state owned by one persistent column owner
 - after-write lookup families as the primary benchmark gate
 
+## Current Expanded-Suite Reconciliation - 2026-04-29
+
+This file remains the Stage 0 baseline, but it should be read alongside the
+current expanded competitive artifact:
+`packages/benchmarks/baselines/workpaper-vs-hyperformula.json`, generated at
+`2026-04-29T14:47:16.831Z`.
+
+Current benchmark position:
+
+- Total workloads: `51`.
+- Scorecard-eligible comparable workloads: `46`.
+- Overall scorecard: WorkPaper `44`, HyperFormula `2`.
+- Public lane: WorkPaper `36`, HyperFormula `2`.
+- Holdout lane: WorkPaper `8`, HyperFormula `0`.
+
+Current active rows:
+
+| Workload | Mean Ratio | Median Ratio | P95 Ratio | Confidence Overlap | Current Owner |
+| --- | ---: | ---: | ---: | --- | --- |
+| `build-mixed-content` | `1.0362639565590437` | `1.0069852963334736` | `1.156165042556` | yes | cold mixed-build initialization/allocation |
+| `structural-delete-rows` | `1.0234049542127845` | `0.8750303474565914` | `1.267650293785557` | yes | row-delete metadata and headless result collection |
+| `lookup-text-exact` p95 | mean green | mean green | `2.27208263805424` | n/a | text lookup tail latency |
+
+Stage 1 achieved its main ownership objective: lookup exact, approximate, and
+after-write rows are no longer the broad blocker set described below. The active
+implementation work is now mixed cold-build allocation, structural row-delete
+tail overhead, and p95 lookup-text stabilization. The Stage 0 tables below are
+kept as the baseline that motivated the ownership refactor, not as current red
+row truth.
+
 ## Commands Run
 
 The baseline below was captured on the current tree with these commands:
@@ -85,29 +115,39 @@ Worst current comparable workloads:
 | `structural-delete-rows` | `HyperFormula` | `2.482x` | `11.141 ms` | `4.490 ms` |
 | `batch-edit-single-column-with-undo` | `HyperFormula` | `2.336x` | `2.704 ms` | `1.157 ms` |
 
-The architectural reading is unchanged:
+The Stage 0 architectural reading at the time was:
 
-- structural rows and columns are still red as families
-- after-write lookup is still red as a family
-- approximate-after-write lookup is still catastrophically red
-- runtime restore is still red
-- sliding-window aggregate remains red
+- structural rows and columns were red as families
+- after-write lookup was red as a family
+- approximate-after-write lookup was catastrophically red
+- runtime restore was red
+- sliding-window aggregate was red
 
-## Why Stage 1 Next
+The current artifact changes that reading: after-write lookup,
+approximate-after-write lookup, runtime restore, and sliding-window aggregate are
+not current blockers. The active rows are `build-mixed-content`,
+`structural-delete-rows`, and `lookup-text-exact` p95.
 
-The next phase should still be durable column ownership because the current scorecard shows:
+## Why Stage 1 Was Next
+
+At this baseline point, the next phase was durable column ownership because the
+scorecard showed:
 
 - `lookup-exact` is already green
 - `lookup-after-write` is still `0 / 2`
 - `lookup-approximate-after-write` is still `0 / 1`
 
-That is the clearest “owner is still wrong after mutation” signal in the current suite.
+That was the clearest “owner is still wrong after mutation” signal in that
+suite.
 
-The target workloads for Stage 1 remain:
+Those Stage 1 target workloads were:
 
 - `lookup-with-column-index-after-column-write`
 - `lookup-with-column-index-after-batch-write`
 - `lookup-approximate-sorted-after-column-write`
+
+In the current expanded artifact those rows are preservation gates, not active
+reds.
 
 ## Contract Baseline
 
@@ -200,11 +240,11 @@ for structural, restore, and after-write helper workloads.
 
 ## Baseline Interpretation
 
-Before the Stage 1 refactor, the repo is in this state:
+Before the Stage 1 refactor, the repo was in this state:
 
 - the scorecard is materially more truthful than before
-- the broad suite is still red overall: `15` wins vs `19` losses on eligible comparable workloads
-- the strongest remaining red families are still:
+- the broad suite was red overall: `15` wins vs `19` losses on eligible comparable workloads
+- the strongest remaining red families at that baseline were:
   - `structural-columns`
   - `structural-rows`
   - `lookup-after-write`
@@ -212,5 +252,9 @@ Before the Stage 1 refactor, the repo is in this state:
   - `runtime-restore`
   - `sliding-window-aggregate`
 - contract benches are mostly healthy, but `renderCommit10k` is close enough to budget that it can flap
+
+Current expanded-suite state is recorded near the top of this document:
+WorkPaper `44/46`, public `36/38`, holdout `8/8`, with active work on
+`build-mixed-content`, `structural-delete-rows`, and `lookup-text-exact` p95.
 
 That is the performance state we are carrying into Stage 1.

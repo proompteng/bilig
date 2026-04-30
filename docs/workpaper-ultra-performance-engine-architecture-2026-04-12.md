@@ -18,12 +18,13 @@ This document defines the engine architecture that can beat HyperFormula across 
 competitive suite in this repo without fallback-first sludge, temporary hacks, or benchmark-only
 special cases.
 
-Several major ownership cuts are already in the tree, but the current broader suite says
-WorkPaper is not leader right now. This document now serves two jobs:
+Several major ownership cuts are already in the tree, and the current expanded
+suite shows WorkPaper leading `44/46` scorecard-eligible comparable workloads
+with `8/8` holdout wins. This document now serves two jobs:
 
 1. record the architecture cuts that actually survived implementation
-2. define the remaining ownership work required to recover performance leadership on the current
-   broader suite
+2. define the remaining ownership work required to close the final two
+   confidence-overlap mean reds and the `lookup-text-exact` p95 tail
 
 The standard remains strict:
 
@@ -38,40 +39,53 @@ The standard remains strict:
 
 Current decision-driving artifact on `main`:
 
-- `/tmp/workpaper-vs-hf-current-sample2.json`
+- `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
+- Generated at `2026-04-29T14:47:16.831Z`
 
-Current position on that broader artifact:
+Current position on the expanded artifact:
 
-- `WorkPaper` wins `12/35` directly comparable workloads
-- `HyperFormula` wins `23/35`
-- `WorkPaper` retains `1` leadership-only workload that HyperFormula does not support
+- Total workloads: `51`
+- Scorecard-eligible comparable workloads: `46`
+- WorkPaper wins `44/46` overall
+- HyperFormula wins `2/46` overall
+- Public lane: WorkPaper `36/38`, HyperFormula `2/38`
+- Holdout lane: WorkPaper `8/8`, HyperFormula `0/8`
 
-The older `sample-count 5` leadership artifact is now historical only. It no longer describes the
-broader suite or the current tree well enough to drive architecture decisions.
+The old `/tmp/workpaper-vs-hf-current-sample2.json` evidence and the 12/35
+scorecard are no longer current. They remain useful only as proof that the
+ownership cuts were necessary.
 
-The remaining red lanes are not “cleanup.” They are the current engine story:
+The remaining decision-driving rows are now much narrower:
 
-| Workload | WorkPaper mean | HyperFormula mean | Primary owner that still must change | Real issue |
-| --- | ---: | ---: | --- | --- |
-| `structural-insert-columns` | `28.460542 ms` | `0.472729 ms` | `StructuralTransformService` | column insert is still routed through far too much generic transform and rebind work |
-| `structural-insert-rows` | `87.243625 ms` | `4.599000 ms` | `StructuralTransformService` | row insert still rebuilds too much range and dependency state |
-| `structural-delete-rows` | `90.903167 ms` | `5.498417 ms` | `StructuralTransformService` | structural delete still pays broad transform bookkeeping |
-| `structural-move-rows` | `97.645687 ms` | `9.541813 ms` | `StructuralTransformService` | row move is still far from a narrow transform-owned operation |
-| `lookup-approximate-sorted-after-column-write` | `0.532750 ms` | `0.052083 ms` | `SortedColumnSearchService` | approximate post-write path still wakes far too much surrounding work |
-| `structural-delete-columns` | `44.231937 ms` | `8.920687 ms` | `StructuralTransformService` | column delete still broadens transform work instead of updating ownership in place |
-| `build-parser-cache-row-templates` | `156.698667 ms` | `34.312834 ms` | `FormulaTemplateNormalizationService` | repeated row-template families still bind too much unique per-cell structure |
-| `partial-recompute-mixed-frontier` | `13.216562 ms` | `3.930520 ms` | `DirtyFrontier` and `RangeAggregateCacheService` | recalculation still over-wakes through mixed range and formula paths |
-| `batch-edit-single-column-with-undo` | `3.913437 ms` | `1.428584 ms` | `SuspendedBulkMutationLane` | batch plus history still pays too much transaction scaffolding |
-| `aggregate-overlapping-sliding-window` | `0.248979 ms` | `0.091479 ms` | `RangeAggregateCacheService` | aggregate reuse exists, but sliding-window extension semantics are still weaker |
-| `structural-move-columns` | `18.526750 ms` | `7.899146 ms` | `StructuralTransformService` | column move still behaves like a broad mutation instead of a narrow transform |
-| `lookup-with-column-index-after-column-write` | `0.150729 ms` | `0.072020 ms` | `ExactColumnIndexService` | exact after-write invalidation is still broader than the raw bucket update |
-| `build-parser-cache-mixed-templates` | `142.403709 ms` | `73.411562 ms` | `FormulaTemplateNormalizationService` | mixed template families still over-materialize bindings after compile reuse |
-| `rebuild-runtime-from-snapshot` | `70.406521 ms` | `39.959250 ms` | `RebuildExecutionPolicy` | snapshot rebuild still rebuilds too much runtime and plan state |
-| `build-mixed-content` | `21.588395 ms` | `12.914250 ms` | `FormulaTemplateNormalizationService` | mixed build still does too much per-formula dependency materialization |
-| `lookup-with-column-index-after-batch-write` | `1.086792 ms` | `0.661750 ms` | `ExactColumnIndexService` | exact batched writes still rebuild or wake more than necessary |
-| `batch-suspended-single-column` | `0.982688 ms` | `0.622895 ms` | `SuspendedBulkMutationLane` | suspended single-column path is still paying extra wrapper overhead |
+| Workload | Mean Ratio | Median Ratio | P95 Ratio | Confidence Overlap | Primary owner that still must change | Real issue |
+| --- | ---: | ---: | ---: | --- | --- | --- |
+| `build-mixed-content` | `1.0362639565590437` | `1.0069852963334736` | `1.156165042556` | yes | formula initialization and cold mixed-sheet build | duplicate initialization and allocation still decide a close row |
+| `structural-delete-rows` | `1.0234049542127845` | `0.8750303474565914` | `1.267650293785557` | yes | structural row-delete metadata and headless result collection | mean red with green median points to tail overhead, not a missing feature |
+| `lookup-text-exact` | mean green | mean green | `2.27208263805424` | n/a for mean winner | text lookup owner and exact index invalidation | p95 allocation/cache churn is still too high |
 
-The architecture only matters insofar as it flips those lanes without turning current greens red.
+Rows that this architecture document previously called active red lanes but that
+are now green in the current artifact or no longer drive implementation order:
+
+- `structural-insert-columns`
+- `structural-insert-rows`
+- `structural-move-rows`
+- `structural-delete-columns`
+- `structural-move-columns`
+- `lookup-approximate-sorted-after-column-write`
+- `lookup-with-column-index-after-column-write`
+- `lookup-with-column-index-after-batch-write`
+- `build-parser-cache-row-templates`
+- `build-parser-cache-mixed-templates`
+- `build-parser-cache-unique-formulas`
+- `aggregate-overlapping-sliding-window`
+- `conditional-aggregation-shared-criteria`
+- `conditional-aggregation-mixed-criteria`
+- `sheet-rename-dependencies`
+- `named-expression-change`
+- `lookup-approximate-duplicates`
+
+The architecture only matters insofar as it removes the remaining production
+costs without turning current greens red.
 
 ## Architecture Already In Tree
 
@@ -96,11 +110,8 @@ Engine-owned aggregate reuse now exists for direct aggregate families.
 Delivered effect:
 
 - `aggregate-overlapping-ranges` is still green
-
-Not yet complete:
-
-- `aggregate-overlapping-sliding-window` is still red because the current cache does not yet extend
-  smaller cached windows as aggressively as HyperFormula’s range reuse model
+- `aggregate-overlapping-sliding-window` is green in the latest checked
+  artifact after earlier noisy red runs
 
 ### `FormulaTemplateNormalizationService`
 
@@ -108,16 +119,20 @@ Template-family detection and astless translated-family reuse are in the tree.
 
 Delivered effect:
 
-- the design direction is still correct, but the current broader suite says both parser-template
-  build lanes are red again on `main`
+- parser-template and unique-formula build rows are no longer current red lanes
+  in the expanded artifact
+- `build-parser-cache-unique-formulas` is green in the holdout lane
 
 Not yet complete:
 
-- `build-parser-cache-row-templates` is still red
-- `build-mixed-content` is still red
-- `build-parser-cache-mixed-templates` is red again on the current broader suite
+- `build-mixed-content` remains the active build-family target, with a small
+  confidence-overlap mean loss
+- remaining work is cold mixed-sheet initialization and binding allocation, not
+  parser-cache benchmark control
 
-That means template normalization is real, but prepared binding family reuse is not complete.
+That means template normalization is real, and the next useful work is reducing
+production allocation in mixed build paths without weakening unique-formula
+verification.
 
 ### Live `useColumnIndex` Runtime Policy
 
@@ -138,12 +153,13 @@ Delivered effect:
 
 - `lookup-with-column-index` is green
 - `lookup-no-column-index` is green
+- `lookup-approximate-duplicates` is green
+- `lookup-with-column-index-after-batch-write` is green
 
 Not yet complete:
 
-- exact after-write lanes are still red
-- approximate sorted steady-state is slightly red again on the current broader suite
-- approximate sorted after-write is still badly red
+- `lookup-text-exact` has the worst p95 ratio and needs tail-latency hardening
+  around text normalization, exact index reuse, invalidation, and allocation
 
 ### Descriptor-Owned Structural Impact Tracking
 
@@ -153,11 +169,13 @@ dependencies. Structural edits no longer blindly force the same formula teardown
 Delivered effect:
 
 - structural ownership got materially cleaner than the original full-rebind design
+- most structural rows and columns are no longer current red lanes
 
 Not yet complete:
 
-- structural rows are catastrophic again on the broader suite
-- structural columns are now one of the worst losses in the entire benchmark
+- `structural-delete-rows` remains a small confidence-overlap mean loss, with a
+  green median and red p95. The active issue is row-delete tail overhead and
+  headless result collection, not the old catastrophic full-transform failure.
 
 ### Suspended-Eval Literal Fast Queue
 
@@ -167,10 +185,11 @@ into the deferred queue.
 Delivered effect:
 
 - batch lanes got closer
+- batch lanes are not current scorecard blockers in the latest artifact
 
 Not yet complete:
 
-- all batch lanes are still red
+- preserve the current batch wins while fixing the active rows above
 
 ## HyperFormula Prior-Art Takeaways
 
@@ -322,15 +341,21 @@ flowchart LR
 
 ## Remaining Execution Order
 
-This is the remaining order that actually matches the current red lanes:
+This is the remaining order that actually matches the current checked artifact:
 
-1. `StructuralTransformService`
-   - in-place range retargeting
-   - transform-owned dependency maintenance
+1. `build-mixed-content`
+   - cold mixed-sheet initialization
+   - formula source registration and binding allocation
+   - preservation of parser-cache and unique-formula holdout wins
+2. `structural-delete-rows`
+   - row-delete metadata narrowing
+   - transform-owned dependency/index maintenance
    - structural undo or redo on the same model
-2. `FormulaTemplateNormalizationService`
-   - prepared binding family reuse for repeated row-shifted formulas
-   - mixed-content build cleanup
+   - headless changed-result collection
+3. `lookup-text-exact`
+   - text-key normalization
+   - exact index reuse and invalidation
+   - p95 allocation tail reduction
 3. `RebuildExecutionPolicy`
    - snapshot rebuild on top of cheaper normalized build machinery
 4. `SortedColumnSearchService`

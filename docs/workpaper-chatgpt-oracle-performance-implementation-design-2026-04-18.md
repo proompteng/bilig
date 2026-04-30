@@ -31,9 +31,37 @@ It is a design statement about what the engine must become if the goal is:
 - multi-x movement on today’s red benchmark families
 - resilience against future benchmark families built around the same ownership failures
 
+## Current Expanded-Suite Reconciliation - 2026-04-29
+
+The oracle design below was correct about ownership direction, but the active
+benchmark state is much further along than the original `bilig2` design capture.
+
+Current artifact:
+
+- `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
+- generated at `2026-04-29T14:47:16.831Z`
+- total workloads: `51`
+- scorecard-eligible comparable workloads: `46`
+- overall scorecard: WorkPaper `44`, HyperFormula `2`
+- public lane: WorkPaper `36`, HyperFormula `2`
+- holdout lane: WorkPaper `8`, HyperFormula `0`
+
+Current active rows:
+
+| Workload | Current Evidence | Implementation Reading |
+| --- | --- | --- |
+| `build-mixed-content` | mean ratio `1.0362639565590437`, confidence overlap | reduce production cold-build allocation and duplicated initialization |
+| `structural-delete-rows` | mean ratio `1.0234049542127845`, median green, confidence overlap | narrow row-delete metadata, dependency/index updates, undo, and headless result collection |
+| `lookup-text-exact` p95 | p95 ratio `2.27208263805424` | harden text lookup normalization/index invalidation/allocation tail |
+
+The broad ownership warnings remain useful, but do not reopen the older red-list
+as the next implementation order. Parser-cache rows, sheet rename dependencies,
+named-expression change, approximate duplicate lookup, sliding-window aggregate,
+and holdout rows are current preservation gates.
+
 ## Executive Verdict
 
-The oracle answer is blunt and the current repo still supports it:
+The oracle answer is blunt and the repo originally supported it:
 
 - `bilig2` will not beat `HyperFormula` by multiples across the broad suite if it stays on the
   current architectural line

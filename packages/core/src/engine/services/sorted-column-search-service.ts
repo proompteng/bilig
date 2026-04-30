@@ -5,7 +5,13 @@ import type { ExactVectorMatchResult } from './exact-column-index-service.js'
 import type { EngineRuntimeColumnStoreService, RuntimeColumnView } from './runtime-column-store-service.js'
 import type { ColumnIndexStore } from '../../indexes/column-index-store.js'
 import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
-import { isLookupColumnOwner, sliceOffsetBounds, summarizeApproximateRange, type LookupColumnOwner } from './lookup-column-owner.js'
+import {
+  findExactNumericApproximateMatchInRange,
+  isLookupColumnOwner,
+  sliceOffsetBounds,
+  summarizeApproximateRange,
+  type LookupColumnOwner,
+} from './lookup-column-owner.js'
 
 export interface ApproximateVectorMatchRequest {
   lookupValue: CellValue
@@ -612,6 +618,10 @@ export function createSortedColumnSearchService(args: {
           if (uniformResult.handled) {
             return uniformResult
           }
+          const exactNumericRow = findExactNumericApproximateMatchInRange(owner, 0, prepared.rowStart, prepared.rowEnd)
+          if (exactNumericRow !== undefined) {
+            return { handled: true, position: exactNumericRow - prepared.rowStart + 1 }
+          }
           let low = bounds.start
           let high = bounds.end
           let best = -1
@@ -683,6 +693,10 @@ export function createSortedColumnSearchService(args: {
         })
         if (uniformResult.handled) {
           return uniformResult
+        }
+        const exactNumericRow = findExactNumericApproximateMatchInRange(owner, lookupValue, prepared.rowStart, prepared.rowEnd)
+        if (exactNumericRow !== undefined) {
+          return { handled: true, position: exactNumericRow - prepared.rowStart + 1 }
         }
         let low = bounds.start
         let high = bounds.end

@@ -60,7 +60,7 @@ interface FormulaTemplateSourceKey {
   readonly templateKey: string
 }
 
-const SIMPLE_ROW_RELATIVE_BINARY_RE = /^=?([A-Z]+)([1-9]\d*)([+\-*/])(?:([A-Z]+)([1-9]\d*)|(\d+(?:\.\d+)?))$/
+const SIMPLE_ROW_RELATIVE_BINARY_RE = /^=?([A-Z]+)([1-9]\d*)([+\-*/])(?:([A-Z]+)([1-9]\d*)|(\d+(?:\.\d+)?))(?:\+(\d+(?:\.\d+)?))?$/
 
 function relativeCellToken(columnText: string, rowText: string, ownerRow: number, ownerCol: number): string | undefined {
   const row = Number(rowText) - 1
@@ -100,7 +100,11 @@ function tryBuildSimpleRowRelativeBinaryTemplateKey(source: string, ownerRow: nu
     return undefined
   }
   const right = match[4] !== undefined ? relativeCellToken(match[4], match[5]!, ownerRow, ownerCol) : `tok:number:"${match[6]!}"`
-  return right ? `${left}|${operator}|${right}|eof` : undefined
+  if (!right) {
+    return undefined
+  }
+  const offset = match[7] === undefined ? '' : `|tok:plus:"+"|tok:number:"${match[7]}"`
+  return `${left}|${operator}|${right}${offset}|eof`
 }
 
 function translateTemplate(compiled: CompiledFormula, rowDelta: number, colDelta: number, source: string): CompiledFormula {

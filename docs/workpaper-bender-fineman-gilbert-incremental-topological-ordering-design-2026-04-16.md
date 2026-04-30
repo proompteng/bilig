@@ -34,6 +34,18 @@ The part not worth adopting directly is:
 
 ## Current Repo Fit
 
+Current expanded benchmark note:
+
+- The latest artifact is
+  `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`, generated at
+  `2026-04-29T14:47:16.831Z`.
+- WorkPaper leads `44/46` scorecard-eligible comparable workloads and `8/8`
+  holdout workloads.
+- Bender/Fineman/Gilbert label ordering is not the next implementation step for
+  the current checkout. Use it only if `structural-delete-rows`,
+  `build-mixed-content`, or future family-heavy workloads show topo-order
+  maintenance as the measured blocker after simpler production hot-path cleanup.
+
 Primary target files:
 
 - `/Users/gregkonush/github.com/bilig2/packages/core/src/scheduler.ts`
@@ -118,7 +130,8 @@ exists, family insertions should allocate order labels in blocks rather than one
 
 ## Benchmark Gates
 
-This design is only worth landing if the earlier work already exists and one of these is still red:
+This design is only worth landing if the earlier work already exists and one of
+these becomes an active blocker again in the current expanded artifact:
 
 - `partial-recompute-mixed-frontier`
 - `rebuild-runtime-from-snapshot`

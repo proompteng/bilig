@@ -202,6 +202,7 @@ type EngineOperationRuntimeConfig = Omit<
   | 'rewriteCellFormulasForSheetRename'
   | 'estimatePotentialNewCells'
   | 'rebindDefinedNameDependents'
+  | 'collectFormulaCellsForDefinedNames'
   | 'rebindTableDependents'
   | 'rebindFormulaCells'
   | 'rebindFormulasForSheet'
@@ -615,6 +616,7 @@ export function createEngineServiceRuntime(args: {
     markInputChanged: (cellIndex, count) => support.markInputChangedNow(cellIndex, count),
     markFormulaChanged: (cellIndex, count) => support.markFormulaChangedNow(cellIndex, count),
     markVolatileFormulasChanged: (count) => support.markVolatileFormulasChangedNow(count),
+    hasVolatileFormulas: () => volatileFormulaCells.size > 0,
     syncDynamicRanges: (formulaChangedCount) => support.syncDynamicRangesNow(formulaChangedCount),
     composeMutationRoots: (changedInputCount, formulaChangedCount) =>
       support.composeMutationRootsNow(changedInputCount, formulaChangedCount),
@@ -656,6 +658,7 @@ export function createEngineServiceRuntime(args: {
     rewriteCellFormulasForSheetRename: (oldSheetName, newSheetName, formulaChangedCount) =>
       runEngineEffect(binding.rewriteCellFormulasForSheetRename(oldSheetName, newSheetName, formulaChangedCount)),
     rebindDefinedNameDependents: (names, formulaChangedCount) => binding.rebindDefinedNameDependentsNow(names, formulaChangedCount),
+    collectFormulaCellsForDefinedNames: (names) => binding.collectFormulaCellsForDefinedNamesNow(names),
     rebindTableDependents: (tableNames, formulaChangedCount) => binding.rebindTableDependentsNow(tableNames, formulaChangedCount),
     rebindFormulaCells: (candidates, formulaChangedCount) => binding.rebindFormulaCellsNow(candidates, formulaChangedCount),
     hasRegionFormulaSubscriptionsForColumn: (sheetName, col) => {
@@ -714,6 +717,7 @@ export function createEngineServiceRuntime(args: {
     recalculate: (changedRoots, kernelSyncRoots) => requireService(recalc, 'recalc').recalculateNowSync(changedRoots, kernelSyncRoots),
     deferKernelSync: deferKernelSyncNow,
     evaluateDirectFormula: (cellIndex: number) => evaluation.evaluateDirectLookupFormulaNow(cellIndex),
+    sortedLookup,
     reconcilePivotOutputs: (baseChanged, forceAllPivots) =>
       requireService(recalc, 'recalc').reconcilePivotOutputsNow(baseChanged, forceAllPivots),
     prepareRegionQueryIndices: () => regionGraph.prepareQueryIndices(),

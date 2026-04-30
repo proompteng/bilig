@@ -2103,6 +2103,52 @@ export function createEngineMutationService(args: {
       }
       return null
     }
+    if (
+      options.returnUndoOps === false &&
+      ops.length === 1 &&
+      options.preparedCellAddressesByOpIndex === undefined &&
+      ops[0]?.kind === 'renameSheet'
+    ) {
+      const op = ops[0]
+      applyForward(potentialNewCells === undefined ? { kind: 'single-op', op } : { kind: 'single-op', op, potentialNewCells })
+      if (args.state.getTransactionReplayDepth() === 0) {
+        args.state.undoStack.push({
+          forward: createLazySingleOpTransactionRecord(
+            { kind: 'renameSheet', oldName: op.oldName, newName: op.newName },
+            potentialNewCells,
+          ),
+          inverse: createLazySingleOpTransactionRecord({ kind: 'renameSheet', oldName: op.newName, newName: op.oldName }),
+        })
+        args.state.redoStack.length = 0
+      }
+      return null
+    }
+    if (
+      options.returnUndoOps === false &&
+      ops.length === 1 &&
+      options.preparedCellAddressesByOpIndex === undefined &&
+      ops[0]?.kind === 'upsertDefinedName'
+    ) {
+      const op = ops[0]
+      const existing = args.state.workbook.getDefinedName(op.name)
+      const inverseOp: EngineOp =
+        existing === undefined
+          ? { kind: 'deleteDefinedName', name: op.name }
+          : { kind: 'upsertDefinedName', name: existing.name, value: structuredClone(existing.value) }
+      applyForward(potentialNewCells === undefined ? { kind: 'single-op', op } : { kind: 'single-op', op, potentialNewCells })
+      if (args.state.getTransactionReplayDepth() === 0) {
+        args.state.undoStack.push({
+          forward: createLazySingleOpTransactionRecord({
+            kind: 'upsertDefinedName',
+            name: op.name,
+            value: structuredClone(op.value),
+          }),
+          inverse: createLazySingleOpTransactionRecord(inverseOp),
+        })
+        args.state.redoStack.length = 0
+      }
+      return null
+    }
     const forward: TransactionRecord =
       potentialNewCells === undefined
         ? options.preparedCellAddressesByOpIndex

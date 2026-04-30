@@ -189,6 +189,29 @@ export class WorkbookStore {
     this.ensureDefaultNumberFormat()
   }
 
+  private hasSheetScopedMetadata(): boolean {
+    const metadata = this.metadata
+    return (
+      metadata.tables.size > 0 ||
+      metadata.spills.size > 0 ||
+      metadata.pivots.size > 0 ||
+      metadata.charts.size > 0 ||
+      metadata.images.size > 0 ||
+      metadata.shapes.size > 0 ||
+      metadata.rowMetadata.size > 0 ||
+      metadata.columnMetadata.size > 0 ||
+      metadata.freezePanes.size > 0 ||
+      metadata.sheetProtections.size > 0 ||
+      metadata.filters.size > 0 ||
+      metadata.sorts.size > 0 ||
+      metadata.dataValidations.size > 0 ||
+      metadata.conditionalFormats.size > 0 ||
+      metadata.rangeProtections.size > 0 ||
+      metadata.commentThreads.size > 0 ||
+      metadata.notes.size > 0
+    )
+  }
+
   createSheet(name: string, order = this.sheetsByName.size, id?: number): SheetRecord {
     const existing = this.sheetsByName.get(name)
     if (existing) {
@@ -287,14 +310,20 @@ export class WorkbookStore {
     this.sheetsByName.delete(oldName)
     sheet.name = trimmedName
     this.sheetsByName.set(trimmedName, sheet)
-    runWorkbookMetadataEffect(this.metadataService.renameSheet(oldName, trimmedName))
+    if (this.hasSheetScopedMetadata()) {
+      runWorkbookMetadataEffect(this.metadataService.renameSheet(oldName, trimmedName))
+    }
 
-    sheet.styleRanges = sheet.styleRanges.map((record) =>
-      record.range.sheetName === oldName ? { ...record, range: { ...record.range, sheetName: trimmedName } } : record,
-    )
-    sheet.formatRanges = sheet.formatRanges.map((record) =>
-      record.range.sheetName === oldName ? { ...record, range: { ...record.range, sheetName: trimmedName } } : record,
-    )
+    if (sheet.styleRanges.length > 0) {
+      sheet.styleRanges = sheet.styleRanges.map((record) =>
+        record.range.sheetName === oldName ? { ...record, range: { ...record.range, sheetName: trimmedName } } : record,
+      )
+    }
+    if (sheet.formatRanges.length > 0) {
+      sheet.formatRanges = sheet.formatRanges.map((record) =>
+        record.range.sheetName === oldName ? { ...record, range: { ...record.range, sheetName: trimmedName } } : record,
+      )
+    }
 
     return sheet
   }
@@ -369,6 +398,14 @@ export class WorkbookStore {
       throw new Error(`Unknown sheet id: ${sheetId}`)
     }
     return sheet.logicalAxisMap.ensureId(axis, index, () => this.createLogicalAxisId(axis))
+  }
+
+  createLogicalAxisIdEnsurer(sheetId: number, axis: 'row' | 'column'): (index: number) => string {
+    const sheet = this.getSheetById(sheetId)
+    if (!sheet) {
+      throw new Error(`Unknown sheet id: ${sheetId}`)
+    }
+    return (index) => sheet.logicalAxisMap.ensureId(axis, index, () => this.createLogicalAxisId(axis))
   }
 
   attachAllocatedCellWithLogicalAxisIds(sheetId: number, row: number, col: number, cellIndex: number, rowId: string, colId: string): void {

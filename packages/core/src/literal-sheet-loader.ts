@@ -1,6 +1,6 @@
 import { ErrorCode, ValueTag, type LiteralInput } from '@bilig/protocol'
 import type { StringPool } from './string-pool.js'
-import { makeCellKey, makeLogicalCellKey, type SheetRecord, type WorkbookStore } from './workbook-store.js'
+import { makeLogicalCellKey, type SheetRecord, type WorkbookStore } from './workbook-store.js'
 import { CellFlags } from './cell-store.js'
 
 interface FreshLiteralCellPageInternals {
@@ -87,6 +87,8 @@ export function loadLiteralSheetIntoEmptySheet(
   const writtenColumns = new Uint8Array(maxColumnCount)
   const rowIds: string[] = []
   const colIds: string[] = []
+  const ensureRowId = workbook.createLogicalAxisIdEnsurer(sheetId, 'row')
+  const ensureColumnId = workbook.createLogicalAxisIdEnsurer(sheetId, 'column')
   const attachFreshCell = createFreshLiteralCellAttacher(workbook, sheet)
   let writtenColumnCount = 0
   const previousOnSetValue = cellStore.onSetValue
@@ -106,8 +108,8 @@ export function loadLiteralSheetIntoEmptySheet(
           writtenColumns[colIndex] = 1
           writtenColumnCount += 1
         }
-        const rowId = (rowIds[rowIndex] ??= workbook.ensureLogicalAxisId(sheetId, 'row', rowIndex))
-        const colId = (colIds[colIndex] ??= workbook.ensureLogicalAxisId(sheetId, 'column', colIndex))
+        const rowId = (rowIds[rowIndex] ??= ensureRowId(rowIndex))
+        const colId = (colIds[colIndex] ??= ensureColumnId(colIndex))
         attachFreshCell(rowIndex, colIndex, cellIndex, rowId, colId)
         writeLiteralCell(cellStore, strings, cellIndex, raw)
       }
@@ -136,17 +138,31 @@ function createFreshLiteralCellAttacher(workbook: WorkbookStore, sheet: SheetRec
     }
   }
 
-  const rowSets = new Map<string, Set<number>>()
   const columnSets = new Map<string, Set<number>>()
+  const setGridCell = sheet.grid.createRowMajorSetter()
+  let lastRowId: string | undefined
+  let lastRowSet: Set<number> | undefined
+  const ensureResidentRowSet = (id: string): Set<number> => {
+    if (lastRowId === id && lastRowSet) {
+      return lastRowSet
+    }
+    let stored = residentByRow.get(id)
+    if (!stored) {
+      stored = new Set<number>()
+      residentByRow.set(id, stored)
+    }
+    lastRowId = id
+    lastRowSet = stored
+    return stored
+  }
 
   return (row, col, cellIndex, rowId, colId) => {
     cells.set(makeLogicalCellKey(sheet.id, rowId, colId), cellIndex)
     identities.set(cellIndex, { sheetId: sheet.id, rowId, colId })
     residentByCell.set(cellIndex, { rowId, colId })
-    ensureFreshLiteralResidentSet(rowSets, residentByRow, rowId).add(cellIndex)
+    ensureResidentRowSet(rowId).add(cellIndex)
     ensureFreshLiteralResidentSet(columnSets, residentByColumn, colId).add(cellIndex)
-    workbook.cellKeyToIndex.set(makeCellKey(sheet.id, row, col), cellIndex)
-    sheet.grid.set(row, col, cellIndex)
+    setGridCell(row, col, cellIndex)
   }
 }
 

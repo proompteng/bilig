@@ -307,7 +307,7 @@ export function build2dAggregateSheet(rowCount: number): WorkPaperSheet {
 }
 
 export function buildDynamicArraySortSheet(rowCount: number): WorkPaperSheet {
-  const rows: Array<Array<number | string>> = [[`=SORT(A2:A${rowCount + 1})`]]
+  const rows: Array<Array<number | string>> = [['', `=SORT(A2:A${rowCount + 1})`]]
   for (let index = 0; index < rowCount; index += 1) {
     rows.push([rowCount - index])
   }
@@ -315,7 +315,7 @@ export function buildDynamicArraySortSheet(rowCount: number): WorkPaperSheet {
 }
 
 export function buildDynamicArrayUniqueSheet(rowCount: number): WorkPaperSheet {
-  const rows: Array<Array<number | string>> = [[`=UNIQUE(A2:A${rowCount + 1})`]]
+  const rows: Array<Array<number | string>> = [['', `=UNIQUE(A2:A${rowCount + 1})`]]
   for (let index = 0; index < rowCount; index += 1) {
     rows.push([Math.floor(index / 2) + 1])
   }

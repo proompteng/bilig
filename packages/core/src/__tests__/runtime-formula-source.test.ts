@@ -65,4 +65,22 @@ describe('runtime formula source helpers', () => {
     expect(rewrittenCompiled?.deps).toEqual(['A1:A11'])
     expect(rewrittenCompiled?.program).toBe(compiled.program)
   })
+
+  it('materializes deferred sheet rename formula source before structural rewrites', () => {
+    const compiled = compileFormula('SUM(Data!A1:A10)')
+    const formula = makeRuntimeFormula('SUM(Data!A1:A10)', compiled, {
+      ownerSheetName: 'Summary',
+      targetSheetName: 'Source',
+      preservesValue: true,
+      transform: {
+        kind: 'insert',
+        axis: 'row',
+        start: 5,
+        count: 1,
+      },
+    })
+    formula.sourceRenameTransforms = [{ oldSheetName: 'Data', newSheetName: 'Source' }]
+
+    expect(getRuntimeFormulaSource(formula)).toBe('SUM(Source!A1:A11)')
+  })
 })

@@ -1,15 +1,29 @@
-import { rewriteCompiledFormulaForStructuralTransform, rewriteFormulaForStructuralTransform, type CompiledFormula } from '@bilig/formula'
+import {
+  renameFormulaSheetReferences,
+  rewriteCompiledFormulaForStructuralTransform,
+  rewriteFormulaForStructuralTransform,
+  type CompiledFormula,
+} from '@bilig/formula'
 import type { RuntimeFormula, RuntimeStructuralFormulaSourceTransform } from './runtime-state.js'
+
+function getRuntimeFormulaBaseSource(formula: RuntimeFormula): string {
+  let source = formula.source
+  formula.sourceRenameTransforms?.forEach((transform) => {
+    source = renameFormulaSheetReferences(source, transform.oldSheetName, transform.newSheetName)
+  })
+  return source
+}
 
 export function getRuntimeFormulaSource(
   formula: RuntimeFormula,
   inheritedStructuralSourceTransform?: RuntimeStructuralFormulaSourceTransform,
 ): string {
+  const source = getRuntimeFormulaBaseSource(formula)
   const deferred = formula.structuralSourceTransform ?? inheritedStructuralSourceTransform
   if (!deferred) {
-    return formula.source
+    return source
   }
-  return rewriteFormulaForStructuralTransform(formula.source, deferred.ownerSheetName, deferred.targetSheetName, deferred.transform)
+  return rewriteFormulaForStructuralTransform(source, deferred.ownerSheetName, deferred.targetSheetName, deferred.transform)
 }
 
 export function getRuntimeFormulaStructuralCompiled(

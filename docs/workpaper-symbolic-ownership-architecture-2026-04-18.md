@@ -2,7 +2,7 @@
 
 Date: `2026-04-18`
 
-Status: `design capture, not implemented`
+Status: `design capture, partially implemented and reconciled with current expanded benchmark`
 
 Related documents:
 
@@ -61,36 +61,41 @@ The required architectural line is:
 
 ## Current Benchmark Reality
 
-The benchmark pattern that motivated this document is not random.
+The benchmark pattern that motivated this document was real, but the current
+expanded suite is much further along.
 
-Recent competitive results discussed in this repo show:
+Current checked artifact:
 
-- `WorkPaper` wins `13` comparable workloads
-- `HyperFormula` wins `22`
+- `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
+- generated at `2026-04-29T14:47:16.831Z`
+- WorkPaper wins `44/46` scorecard-eligible comparable workloads
+- Public lane: WorkPaper `36/38`
+- Holdout lane: WorkPaper `8/8`
 
-The important shape of the loss matters more than the raw count:
+Current active rows:
 
-- steady-state indexed lookup can win
-- one overlapping-range aggregate lane can win
-- corresponding after-write lookup lanes still lose
-- sliding-window aggregate relatives still lose
-- all structural row and column lanes are still red
-- both parser-template build lanes are still red
-- rebuild-from-snapshot is still red
-- mixed-frontier partial recompute is still red
+| Workload | Mean Ratio | Median Ratio | P95 Ratio | Reading |
+| --- | ---: | ---: | ---: | --- |
+| `build-mixed-content` | `1.0362639565590437` | `1.0069852963334736` | `1.156165042556` | cold mixed build still has enough allocation/initialization overhead to lose a close row |
+| `structural-delete-rows` | `1.0234049542127845` | `0.8750303474565914` | `1.267650293785557` | row delete median is green, but mean/p95 show tail overhead in structural metadata or result collection |
+| `lookup-text-exact` p95 | mean green | mean green | `2.27208263805424` | text lookup has tail allocation/cache churn even though its mean is not a current loss |
 
-Representative red lanes from that benchmark set:
+Rows that were representative ownership failures when this document was written
+but are no longer current red rows:
 
-| Workload | WorkPaper | HyperFormula | Reading |
-| --- | ---: | ---: | --- |
-| `structural-insert-columns` | `22.606 ms` | `1.076 ms` | column structure is still on the wrong substrate |
-| `structural-delete-columns` | `46.661 ms` | `13.828 ms` | delete is broad repair, not narrow ownership mutation |
-| `structural-move-columns` | `18.755 ms` | `11.986 ms` | column move still behaves like generic mutation |
-| `lookup-with-column-index-after-column-write` | `0.477 ms` | `0.138 ms` | steady-state owner work does not carry across writes |
-| `lookup-approximate-sorted-after-column-write` | `0.982 ms` | `0.092 ms` | sorted lookup still rebuilds too much per request window |
+- `structural-insert-columns`
+- `structural-delete-columns`
+- `structural-move-columns`
+- `lookup-with-column-index-after-column-write`
+- `lookup-approximate-sorted-after-column-write`
+- `aggregate-overlapping-sliding-window`
+- parser-cache build rows
+- named expression and sheet rename dependency rows
 
-The engine should not read those results as “tune a few hotspots.” It should read them as a map of
-ownership failures.
+The current reading is narrower: symbolic ownership work paid off across most
+families, but the remaining rows still point to ownership costs rather than
+benchmark-definition problems. The next useful work is mixed cold-build
+allocation, structural delete row tail overhead, and text lookup p95 stability.
 
 ## Root-Cause Diagnosis By Workload Family
 

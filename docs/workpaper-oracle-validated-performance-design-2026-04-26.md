@@ -16,6 +16,59 @@ the missing evidence is constant-factor counters. Its proposed small patch was
 sliding aggregate prefix promotion: the 32-row sliding aggregate formulas should
 not repeatedly scan cell ranges when reusable direct aggregate machinery exists.
 
+## Current Expanded-Suite Reconciliation - 2026-04-29
+
+The `2026-04-26` oracle design is still useful for the sliding-aggregate and
+direct-mutation architecture decisions, but the active benchmark surface is now
+the expanded WorkPaper vs HyperFormula suite in
+`packages/benchmarks/baselines/workpaper-vs-hyperformula.json`.
+
+Current artifact:
+
+- Generated at `2026-04-29T14:47:16.831Z`.
+- Total workloads: `51`.
+- Scorecard-eligible comparable workloads: `46`.
+- Leadership-only or non-scorecard workloads: `lookup-reverse-search`,
+  `dynamic-array-filter`, `dynamic-array-sort`, and `dynamic-array-unique`.
+- Overall scorecard: WorkPaper `44`, HyperFormula `2`.
+- Public lane: WorkPaper `36`, HyperFormula `2`.
+- Holdout lane: WorkPaper `8`, HyperFormula `0`.
+
+Current HyperFormula mean rows:
+
+- `build-mixed-content`: WorkPaper/HyperFormula mean ratio
+  `1.0362639565590437`, median ratio `1.0069852963334736`, p95 ratio
+  `1.156165042556`, confidence intervals overlap.
+- `structural-delete-rows`: WorkPaper/HyperFormula mean ratio
+  `1.0234049542127845`, median ratio `0.8750303474565914`, p95 ratio
+  `1.267650293785557`, confidence intervals overlap.
+
+Current tail-risk row:
+
+- `lookup-text-exact`: worst p95 ratio `2.27208263805424`. Its mean scorecard
+  is not a current HyperFormula win, so treat this as p95 hardening rather than
+  a benchmark-definition issue.
+
+Rows from this document that are now green and must be preserved:
+
+- `aggregate-overlapping-sliding-window`
+- `lookup-approximate-sorted`
+- `lookup-approximate-duplicates`
+- `build-mixed-content` in focused higher-sample checks, though the official
+  five-sample artifact still has it as a small confidence-overlap mean red
+
+Active implementation direction:
+
+- Continue production-only optimization in engine/headless paths.
+- Do not change benchmark definitions, workload sizes, sample counts, warmups,
+  scorecard eligibility, or verification keys.
+- Prioritize `build-mixed-content` cold-build allocation, `structural-delete-rows`
+  row-delete metadata/result collection, and `lookup-text-exact` p95 tail
+  allocation/index churn.
+- Re-run focused tests, `pnpm workpaper:bench:competitive:generate`,
+  `pnpm workpaper:bench:competitive:check`, and then `pnpm run ci` after the
+  next implementation slice.
+
 ## Current Checkout Validation
 
 The current checkout is newer than the oracle attachment. A pre-change local
@@ -265,9 +318,12 @@ sampling unchanged:
   direct scalar formulas, avoiding parser/binder churn for that mixed-template
   formula family.
 
-This tranche is still incomplete. The current red families prove there is
-remaining production work in lookup constants, sliding aggregate mutation
-constants, multi-column batch direct deltas, and parser-template build cost.
+This tranche was incomplete at the time it was written. Those then-current red
+families pointed to lookup constants, sliding aggregate mutation constants,
+multi-column batch direct deltas, and parser-template build cost. In the current
+expanded artifact, those rows are no longer the active blocker list; the active
+rows are `build-mixed-content`, `structural-delete-rows`, and
+`lookup-text-exact` p95.
 
 ## Additional Implemented Tranche: Integrated Build/Template Initialization
 
@@ -456,7 +512,7 @@ The next production implementation targets are therefore:
 After the core no-listener direct lookup dispatcher and same-column aggregate
 version-batch shortcut, the latest full artifact
 `/tmp/workpaper-competitive-after-heisenberg-dispatcher.json` has these
-remaining red rows:
+then-remaining red rows:
 
 - `build-many-sheets`: WorkPaper `6.660 ms`, HyperFormula `6.605 ms`,
   `1.008x` slower.
@@ -601,7 +657,7 @@ Final unchanged full competitive artifacts:
 
 - `/tmp/workpaper-competitive-after-mixed-init-raw-sources-2026-04-28.json`:
   `36` WorkPaper wins, `2` HyperFormula wins. `build-mixed-content` was green;
-  remaining reds were `aggregate-overlapping-sliding-window` and
+  then-remaining reds were `aggregate-overlapping-sliding-window` and
   `lookup-approximate-sorted`.
 - `/tmp/workpaper-competitive-after-lookup-compact-2026-04-28.json`: `37`
   WorkPaper wins, `1` HyperFormula win. Remaining red:
@@ -616,5 +672,7 @@ Final unchanged full competitive artifacts:
   `38` WorkPaper wins, `0` HyperFormula wins out of `38` comparable workloads
   on the formatted final code.
 
-Current best scorecard is `38/0`. No comparable benchmark workloads are red in
-the latest full run.
+Best scorecard for the older 38-comparable suite was `38/0`. The current
+expanded suite is larger and stricter: the latest checked artifact has `46`
+scorecard-eligible comparable workloads with WorkPaper at `44/46`, public
+`36/38`, and holdout `8/8`.

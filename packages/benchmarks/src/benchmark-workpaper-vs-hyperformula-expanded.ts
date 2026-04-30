@@ -37,11 +37,19 @@ import {
 } from './workpaper-benchmark-fixtures.js'
 import {
   measureHyperFormulaConditionalAggregationCriteriaEditSample,
+  measureHyperFormula2dAggregateSample,
+  measureHyperFormulaApproximateLookupDescendingSample,
+  measureHyperFormulaApproximateLookupDuplicateSample,
+  measureHyperFormulaConditionalAggregationMixedCriteriaSample,
+  measureHyperFormulaConditionalAggregationSharedCriteriaSample,
   measureHyperFormulaBatchSingleColumnUndoSample,
   measureHyperFormulaIndexedLookupAfterBatchWriteSample,
+  measureHyperFormulaNamedExpressionChangeSample,
   measureHyperFormulaParserCacheMixedTemplateSample,
+  measureHyperFormulaParserCacheUniqueFormulaSample,
   measureHyperFormulaRebuildRuntimeFromSnapshotSample,
   measureHyperFormulaSlidingAggregateSample,
+  measureHyperFormulaSheetRenameDependencySample,
   measureHyperFormulaStructuralDeleteColumnsSample,
   measureHyperFormulaStructuralDeleteRowsSample,
   measureHyperFormulaStructuralInsertColumnsSample,
@@ -59,11 +67,22 @@ import {
   measureHyperFormulaSuspendedBatchMultiColumnEditSample,
   measureHyperFormulaSuspendedBatchSingleColumnEditSample,
   measureWorkPaperConditionalAggregationCriteriaEditSample,
+  measureWorkPaper2dAggregateSample,
+  measureWorkPaperApproximateLookupDescendingSample,
+  measureWorkPaperApproximateLookupDuplicateSample,
+  measureWorkPaperConditionalAggregationMixedCriteriaSample,
+  measureWorkPaperConditionalAggregationSharedCriteriaSample,
   measureWorkPaperBatchSingleColumnUndoSample,
+  measureWorkPaperDynamicArraySortSample,
+  measureWorkPaperDynamicArrayUniqueSample,
   measureWorkPaperIndexedLookupAfterBatchWriteSample,
+  measureWorkPaperNamedExpressionChangeSample,
   measureWorkPaperParserCacheMixedTemplateSample,
+  measureWorkPaperParserCacheUniqueFormulaSample,
   measureWorkPaperRebuildRuntimeFromSnapshotSample,
+  measureWorkPaperReverseSearchLookupSample,
   measureWorkPaperSlidingAggregateSample,
+  measureWorkPaperSheetRenameDependencySample,
   measureWorkPaperStructuralDeleteColumnsSample,
   measureWorkPaperStructuralDeleteRowsSample,
   measureWorkPaperStructuralInsertColumnsSample,
@@ -96,6 +115,11 @@ export interface ExpandedComparativeComparableResult {
   comparison: {
     fasterEngine: 'workpaper' | 'hyperformula'
     meanSpeedup: number
+    workpaperToHyperFormulaMeanRatio: number
+    workpaperToHyperFormulaMedianRatio: number
+    workpaperToHyperFormulaP95Ratio: number
+    maxRelativeNoise: number
+    confidenceIntervalOverlaps: boolean
     verificationEquivalent: true
   }
   engines: {
@@ -193,6 +217,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       () => measureHyperFormulaParserCacheMixedTemplateSample(1_500),
     ),
     runComparableScenario(
+      'build-parser-cache-unique-formulas',
+      { cols: 6, rows: 1_500, templateShapes: 1_500 },
+      runtimeOptions,
+      () => measureWorkPaperParserCacheUniqueFormulaSample(1_500),
+      () => measureHyperFormulaParserCacheUniqueFormulaSample(1_500),
+    ),
+    runComparableScenario(
       'build-many-sheets',
       { sheetCount: 8, rowsPerSheet: 120, colsPerSheet: 12 },
       runtimeOptions,
@@ -219,6 +250,20 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       runtimeOptions,
       () => measureWorkPaperRebuildRuntimeFromSnapshotSample(1_500),
       () => measureHyperFormulaRebuildRuntimeFromSnapshotSample(1_500),
+    ),
+    runComparableScenario(
+      'sheet-rename-dependencies',
+      { sheets: 2, renamedSheet: 'Data->Source', dependentFormulas: 2 },
+      runtimeOptions,
+      () => measureWorkPaperSheetRenameDependencySample(),
+      () => measureHyperFormulaSheetRenameDependencySample(),
+    ),
+    runComparableScenario(
+      'named-expression-change',
+      { namedExpression: 'Rate', formulas: 2, mutation: '=2->=3' },
+      runtimeOptions,
+      () => measureWorkPaperNamedExpressionChangeSample(),
+      () => measureHyperFormulaNamedExpressionChangeSample(),
     ),
     runComparableScenario(
       'single-edit-recalc',
@@ -354,6 +399,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       () => measureHyperFormulaRangeReadSample(240, 24),
     ),
     runComparableScenario(
+      'aggregate-2d-ranges',
+      { rowCount: 1_500, functionName: 'SUM', rangeShape: 'growing-2d' },
+      runtimeOptions,
+      () => measureWorkPaper2dAggregateSample(1_500),
+      () => measureHyperFormula2dAggregateSample(1_500),
+    ),
+    runComparableScenario(
       'aggregate-overlapping-ranges',
       { rowCount: 1_500, functionName: 'SUM' },
       runtimeOptions,
@@ -380,6 +432,20 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       runtimeOptions,
       () => measureWorkPaperConditionalAggregationCriteriaEditSample(2_000, 32),
       () => measureHyperFormulaConditionalAggregationCriteriaEditSample(2_000, 32),
+    ),
+    runComparableScenario(
+      'conditional-aggregation-shared-criteria',
+      { rowCount: 2_000, criteriaCount: 32, mutate: 'shared-criteria-cell' },
+      runtimeOptions,
+      () => measureWorkPaperConditionalAggregationSharedCriteriaSample(2_000, 32),
+      () => measureHyperFormulaConditionalAggregationSharedCriteriaSample(2_000, 32),
+    ),
+    runComparableScenario(
+      'conditional-aggregation-mixed-criteria',
+      { rowCount: 2_000, formulaCopies: 24, functions: ['COUNTIFS', 'SUMIFS'], mutate: 'threshold-cell' },
+      runtimeOptions,
+      () => measureWorkPaperConditionalAggregationMixedCriteriaSample(2_000, 24),
+      () => measureHyperFormulaConditionalAggregationMixedCriteriaSample(2_000, 24),
     ),
     runComparableScenario(
       'lookup-no-column-index',
@@ -417,6 +483,20 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       () => measureHyperFormulaApproximateLookupSample(5_000),
     ),
     runComparableScenario(
+      'lookup-approximate-descending',
+      { rowCount: 5_000, matchMode: -1, ordering: 'descending' },
+      runtimeOptions,
+      () => measureWorkPaperApproximateLookupDescendingSample(5_000),
+      () => measureHyperFormulaApproximateLookupDescendingSample(5_000),
+    ),
+    runComparableScenario(
+      'lookup-approximate-duplicates',
+      { rowCount: 5_000, matchMode: 1, duplicateKeys: true },
+      runtimeOptions,
+      () => measureWorkPaperApproximateLookupDuplicateSample(5_000),
+      () => measureHyperFormulaApproximateLookupDuplicateSample(5_000),
+    ),
+    runComparableScenario(
       'lookup-approximate-sorted-after-column-write',
       { rowCount: 5_000, mutate: 'sorted-column-tail' },
       runtimeOptions,
@@ -431,10 +511,49 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       () => measureHyperFormulaTextLookupSample(5_000),
     ),
     runLeadershipScenario(
+      'lookup-reverse-search',
+      { rowCount: 5_000, functionName: 'XMATCH', searchMode: -1 },
+      runtimeOptions,
+      () => measureWorkPaperReverseSearchLookupSample(5_000),
+      {
+        status: 'unsupported',
+        evidence: ['HyperFormula 3.2.0 returns #NAME? for =XMATCH(D1,A2:A5001,0,-1) in this fixture.'],
+        reason: 'HyperFormula 3.2.0 does not provide an equivalent XMATCH reverse-search result for this workload.',
+      },
+    ),
+    runLeadershipScenario(
       'dynamic-array-filter',
       { rowCount: 750, formula: '=FILTER(A2:A751,A2:A751>B1)' },
       runtimeOptions,
       () => measureWorkPaperDynamicArraySample(750),
+      {
+        status: 'unsupported',
+        evidence: [
+          '/Users/gregkonush/github.com/hyperformula/docs/guide/known-limitations.md',
+          '/Users/gregkonush/github.com/hyperformula/src/HyperFormula.ts',
+        ],
+        reason: 'HyperFormula 3.2.0 documents dynamic arrays as unsupported.',
+      },
+    ),
+    runLeadershipScenario(
+      'dynamic-array-sort',
+      { rowCount: 750, formula: '=SORT(A2:A751)' },
+      runtimeOptions,
+      () => measureWorkPaperDynamicArraySortSample(750),
+      {
+        status: 'unsupported',
+        evidence: [
+          '/Users/gregkonush/github.com/hyperformula/docs/guide/known-limitations.md',
+          '/Users/gregkonush/github.com/hyperformula/src/HyperFormula.ts',
+        ],
+        reason: 'HyperFormula 3.2.0 documents dynamic arrays as unsupported.',
+      },
+    ),
+    runLeadershipScenario(
+      'dynamic-array-unique',
+      { rowCount: 750, formula: '=UNIQUE(A2:A751)' },
+      runtimeOptions,
+      () => measureWorkPaperDynamicArrayUniqueSample(750),
       {
         status: 'unsupported',
         evidence: [
@@ -485,6 +604,13 @@ function runComparableScenario(
     comparison: {
       fasterEngine,
       meanSpeedup: slowerMean / fasterMean,
+      workpaperToHyperFormulaMeanRatio: workpaper.elapsedMs.mean / hyperformula.elapsedMs.mean,
+      workpaperToHyperFormulaMedianRatio: workpaper.elapsedMs.median / hyperformula.elapsedMs.median,
+      workpaperToHyperFormulaP95Ratio: workpaper.elapsedMs.p95 / hyperformula.elapsedMs.p95,
+      maxRelativeNoise: Math.max(workpaper.elapsedMs.relativeStandardDeviation, hyperformula.elapsedMs.relativeStandardDeviation),
+      confidenceIntervalOverlaps:
+        workpaper.elapsedMs.confidence95.low <= hyperformula.elapsedMs.confidence95.high &&
+        hyperformula.elapsedMs.confidence95.low <= workpaper.elapsedMs.confidence95.high,
       verificationEquivalent: true,
     },
     engines: {

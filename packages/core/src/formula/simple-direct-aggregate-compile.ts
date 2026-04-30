@@ -8,7 +8,8 @@ import {
   type ParsedRangeReferenceInfo,
 } from '@bilig/formula'
 
-const SIMPLE_DIRECT_AGGREGATE_RE = /^(?<callee>SUM|AVERAGE|AVG|COUNT|MIN|MAX)\s*\(\s*(?<range>[^(),]+:[^(),]+)\s*\)$/i
+const SIMPLE_DIRECT_AGGREGATE_RE =
+  /^(?<callee>SUM|AVERAGE|AVG|COUNT|MIN|MAX)\s*\(\s*(?<range>[^(),]+:[^(),]+)\s*\)(?:\s*\+\s*(?<offset>[+-]?(?:\d+|\d*\.\d+)))?$/i
 const SIMPLE_COLUMN_RANGE_RE = /^([A-Za-z]+)([1-9][0-9]*):([A-Za-z]+)([1-9][0-9]*)$/
 const EMPTY_STRINGS: string[] = []
 const EMPTY_PROGRAM = new Uint32Array()
@@ -51,10 +52,11 @@ function tryParseSimpleColumnRange(rawRange: string): SimpleColumnRangeInfo | un
   }
   const startColumn = match[1]!.toUpperCase()
   const endColumn = match[3]!.toUpperCase()
-  if (startColumn !== endColumn) {
+  const startCol = columnToIndex(startColumn)
+  const endCol = columnToIndex(endColumn)
+  if (endCol < startCol) {
     return undefined
   }
-  const startCol = columnToIndex(startColumn)
   const startRowNumber = Number.parseInt(match[2]!, 10)
   const endRowNumber = Number.parseInt(match[4]!, 10)
   if (endRowNumber < startRowNumber) {
@@ -69,7 +71,7 @@ function tryParseSimpleColumnRange(rawRange: string): SimpleColumnRangeInfo | un
     startRow: startRowNumber - 1,
     endRow: endRowNumber - 1,
     startCol,
-    endCol: startCol,
+    endCol,
   }
 }
 
@@ -83,6 +85,10 @@ export function tryCompileSimpleDirectAggregateFormula(source: string): Compiled
 
   const callee = match.groups['callee']!.toUpperCase()
   const aggregateKind = DIRECT_AGGREGATE_KIND_BY_CALLEE[callee]!
+  const resultOffset = match.groups['offset'] === undefined ? 0 : Number(match.groups['offset'])
+  if (!Number.isFinite(resultOffset)) {
+    return undefined
+  }
 
   const rawRange = match.groups['range']!.trim()
   const fastRange = tryParseSimpleColumnRange(rawRange)
@@ -123,16 +129,26 @@ export function tryCompileSimpleDirectAggregateFormula(source: string): Compiled
     end: rangeInfo.endAddress,
   }
 
-  const ast: FormulaNode = {
+  const aggregateNode: FormulaNode = {
     kind: 'CallExpr',
     callee,
     args: [rangeNode],
   }
+  const ast: FormulaNode =
+    resultOffset === 0
+      ? aggregateNode
+      : {
+          kind: 'BinaryExpr',
+          operator: '+',
+          left: aggregateNode,
+          right: { kind: 'NumberLiteral', value: resultOffset },
+        }
 
   const directAggregateCandidate: DirectAggregateCandidate = {
     callee,
     aggregateKind,
     symbolicRangeIndex: 0,
+    ...(resultOffset !== 0 ? { resultOffset } : {}),
   }
 
   const baseRecord: FormulaRecord = {

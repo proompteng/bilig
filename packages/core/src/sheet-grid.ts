@@ -155,6 +155,23 @@ export class SheetGrid {
     this.setInBlocks(this.blocks, row, col, cellIndex)
   }
 
+  createRowMajorSetter(): (row: number, col: number, cellIndex: number) => void {
+    let cachedKey = -1
+    let cachedBlock: Uint32Array | undefined
+    return (row, col, cellIndex) => {
+      const key = blockKey(row, col)
+      let block = key === cachedKey ? cachedBlock : this.blocks.get(key)
+      if (!block) {
+        block = new Uint32Array(BLOCK_ROWS * BLOCK_COLS)
+        this.blocks.set(key, block)
+      }
+      cachedKey = key
+      cachedBlock = block
+      const offset = (row % BLOCK_ROWS) * BLOCK_COLS + (col % BLOCK_COLS)
+      block[offset] = cellIndex + 1
+    }
+  }
+
   clear(row: number, col: number): void {
     const block = this.blocks.get(blockKey(row, col))
     if (!block) return

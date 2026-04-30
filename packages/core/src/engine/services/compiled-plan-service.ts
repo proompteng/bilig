@@ -4,6 +4,7 @@ import type { CompiledPlanRecord } from '../runtime-state.js'
 export interface EngineCompiledPlanService {
   readonly intern: (source: string, compiled: CompiledFormula, templateId?: number) => CompiledPlanRecord
   readonly replace: (planId: number, source: string, compiled: CompiledFormula, templateId?: number) => CompiledPlanRecord
+  readonly isSoleOwner: (planId: number, compiled: CompiledFormula) => boolean
   readonly get: (planId: number) => CompiledPlanRecord | undefined
   readonly release: (planId: number) => void
   readonly clear: () => void
@@ -108,6 +109,10 @@ export function createEngineCompiledPlanService(): EngineCompiledPlanService {
       }
       releasePlanReference(existing)
       return this.intern(source, compiled, templateId)
+    },
+    isSoleOwner(planId, compiled) {
+      const existing = records.get(planId)
+      return existing?.compiled === compiled && existing.refCount === 1
     },
     get(planId) {
       return records.get(planId)

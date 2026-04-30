@@ -15,6 +15,26 @@ function hasCaptureVisibilitySnapshot(value: unknown): value is WorkPaper & { ca
   return typeof Reflect.get(value, 'captureVisibilitySnapshot') === 'function'
 }
 
+function trackPrivateMethod(workbook: WorkPaper, methodName: string): { readonly count: number; restore: () => void } {
+  const original = Reflect.get(workbook, methodName)
+  if (typeof original !== 'function') {
+    throw new Error(`Expected WorkPaper to expose ${methodName} in tests`)
+  }
+  let count = 0
+  Reflect.set(workbook, methodName, (...args: unknown[]) => {
+    count += 1
+    return Reflect.apply(original, workbook, args)
+  })
+  return {
+    get count() {
+      return count
+    },
+    restore: () => {
+      Reflect.set(workbook, methodName, original)
+    },
+  }
+}
+
 function expectOnlyCellChanges(changes: WorkPaperChange[]): asserts changes is WorkPaperCellChange[] {
   expect(changes.every((change) => change.kind === 'cell')).toBe(true)
 }
@@ -889,6 +909,32 @@ describe('WorkPaper', () => {
     })
   })
 
+  it('applies duplicate approximate MATCH operand edits through the compact direct path', () => {
+    const rowCount = 64
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: [
+        ['Key', 'Value', '', Math.floor(rowCount / 4), `=MATCH(D1,A2:A${rowCount + 1},1)`],
+        ...Array.from({ length: rowCount }, (_, index) => {
+          const key = Math.ceil((index + 1) / 2)
+          return [key, key * 10]
+        }),
+      ],
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Number, value: rowCount / 2 })
+    workbook.resetPerformanceCounters()
+
+    const changes = workbook.setCellContents(cell(sheetId, 0, 3), rowCount / 4 + 4)
+
+    expect(changes.map((change) => (change.kind === 'cell' ? change.a1 : change.kind))).toEqual(['D1', 'E1'])
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Number, value: rowCount / 2 + 8 })
+    expect(workbook.getPerformanceCounters()).toMatchObject({
+      directFormulaKernelSyncOnlyRecalcSkips: 1,
+      changedCellPayloadsBuilt: 0,
+      lookupOwnerBuilds: 0,
+    })
+  })
+
   it('defers kernel sync for lookup-column writes with no dirty formula dependents', () => {
     const rowCount = 64
     const workbook = WorkPaper.buildFromSheets({
@@ -1319,6 +1365,109 @@ describe('WorkPaper', () => {
       tag: ValueTag.Number,
       value: 3,
     })
+  })
+
+  it('changes workbook-scoped named expressions without full visibility or named-value snapshots when no listeners need them', () => {
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Bench: [[1, '=Rate+1', '=Rate*2'], [2]],
+      },
+      {},
+      [{ name: 'Rate', expression: '=2' }],
+    )
+    const sheetId = workbook.getSheetId('Bench')!
+    const visibilitySnapshots = trackPrivateMethod(workbook, 'captureVisibilitySnapshot')
+    const namedValueSnapshots = trackPrivateMethod(workbook, 'captureNamedExpressionValueSnapshot')
+
+    try {
+      const changes = workbook.changeNamedExpression('Rate', '=3')
+
+      expect(changes.map((change) => (change.kind === 'cell' ? `cell:${change.a1}` : `name:${change.name}`))).toEqual([
+        'cell:B1',
+        'cell:C1',
+        'name:Rate',
+      ])
+      expect(changes[0]).toMatchObject({
+        kind: 'cell',
+        a1: 'B1',
+        newValue: { tag: ValueTag.Number, value: 4 },
+      })
+      expect(changes[1]).toMatchObject({
+        kind: 'cell',
+        a1: 'C1',
+        newValue: { tag: ValueTag.Number, value: 6 },
+      })
+      expect(changes[2]).toMatchObject({
+        kind: 'named-expression',
+        name: 'Rate',
+        newValue: { tag: ValueTag.Number, value: 3 },
+      })
+      expect(workbook.getNamedExpressionValue('Rate')).toEqual({ tag: ValueTag.Number, value: 3 })
+      expect(workbook.getCellValue(cell(sheetId, 0, 1))).toEqual({ tag: ValueTag.Number, value: 4 })
+      expect(workbook.getCellValue(cell(sheetId, 0, 2))).toEqual({ tag: ValueTag.Number, value: 6 })
+      expect(visibilitySnapshots.count).toBe(0)
+      expect(namedValueSnapshots.count).toBe(0)
+    } finally {
+      visibilitySnapshots.restore()
+      namedValueSnapshots.restore()
+    }
+  })
+
+  it('keeps simple scalar named expression changes on the snapshot-free path', () => {
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Bench: [[1, '=Rate+1', '=Rate*2']],
+      },
+      {},
+      [{ name: 'Rate', expression: '=2' }],
+    )
+    const calculateFormula = trackPrivateMethod(workbook, 'calculateFormula')
+    workbook.resetPerformanceCounters()
+
+    try {
+      const changes = workbook.changeNamedExpression('Rate', '=3')
+
+      expect(changes).toContainEqual({
+        kind: 'named-expression',
+        name: 'Rate',
+        scope: undefined,
+        newValue: { tag: ValueTag.Number, value: 3 },
+      })
+      expect(workbook.getNamedExpressionValue('Rate')).toEqual({ tag: ValueTag.Number, value: 3 })
+      expect(workbook.getCellValue(cell(workbook.getSheetId('Bench')!, 0, 1))).toEqual({ tag: ValueTag.Number, value: 4 })
+      expect(workbook.getCellValue(cell(workbook.getSheetId('Bench')!, 0, 2))).toEqual({ tag: ValueTag.Number, value: 6 })
+      expect(workbook.getPerformanceCounters()).toMatchObject({
+        formulasBound: 0,
+        wasmFullUploads: 0,
+      })
+      expect(calculateFormula.count).toBe(0)
+    } finally {
+      calculateFormula.restore()
+    }
+  })
+
+  it('renames sheets without visibility snapshots when the rename preserves formula values and no listeners need events', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Data: [[1], [2], [3]],
+      Summary: [['=Data!A1+1', '=SUM(Data!A1:A3)']],
+    })
+    const dataSheetId = workbook.getSheetId('Data')!
+    const summarySheetId = workbook.getSheetId('Summary')!
+    const visibilitySnapshots = trackPrivateMethod(workbook, 'captureVisibilitySnapshot')
+
+    try {
+      const changes = workbook.renameSheet(dataSheetId, 'Source')
+
+      expect(changes).toEqual([])
+      expect(workbook.getSheetNames()).toEqual(['Source', 'Summary'])
+      expect(workbook.getCellFormula(cell(summarySheetId, 0, 0))).toBe('=Source!A1+1')
+      expect(workbook.getCellFormula(cell(summarySheetId, 0, 1))).toBe('=SUM(Source!A1:A3)')
+      expect(workbook.getCellValue(cell(summarySheetId, 0, 0))).toEqual({ tag: ValueTag.Number, value: 2 })
+      expect(workbook.getCellValue(cell(summarySheetId, 0, 1))).toEqual({ tag: ValueTag.Number, value: 6 })
+      expect(visibilitySnapshots.count).toBe(0)
+    } finally {
+      visibilitySnapshots.restore()
+    }
   })
 
   it('returns changes in deterministic order for cells and named expressions', () => {

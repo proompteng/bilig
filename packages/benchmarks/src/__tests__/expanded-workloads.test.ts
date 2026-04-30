@@ -9,6 +9,24 @@ import {
   type ExpandedComparativeBenchmarkWorkload,
 } from '../benchmark-workpaper-vs-hyperformula-expanded.js'
 import {
+  measureHyperFormula2dAggregateSample,
+  measureHyperFormulaApproximateLookupDescendingSample,
+  measureHyperFormulaApproximateLookupDuplicateSample,
+  measureHyperFormulaConditionalAggregationMixedCriteriaSample,
+  measureHyperFormulaConditionalAggregationSharedCriteriaSample,
+  measureHyperFormulaNamedExpressionChangeSample,
+  measureHyperFormulaParserCacheUniqueFormulaSample,
+  measureHyperFormulaSheetRenameDependencySample,
+  measureWorkPaper2dAggregateSample,
+  measureWorkPaperApproximateLookupDescendingSample,
+  measureWorkPaperApproximateLookupDuplicateSample,
+  measureWorkPaperConditionalAggregationMixedCriteriaSample,
+  measureWorkPaperConditionalAggregationSharedCriteriaSample,
+  measureWorkPaperDynamicArraySortSample,
+  measureWorkPaperDynamicArrayUniqueSample,
+  measureWorkPaperNamedExpressionChangeSample,
+  measureWorkPaperParserCacheUniqueFormulaSample,
+  measureWorkPaperSheetRenameDependencySample,
   measureWorkPaperStructuralDeleteColumnsSample,
   measureWorkPaperStructuralDeleteRowsSample,
   measureWorkPaperStructuralInsertColumnsSample,
@@ -30,10 +48,13 @@ const expectedExpandedWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
   'build-mixed-content',
   'build-parser-cache-row-templates',
   'build-parser-cache-mixed-templates',
+  'build-parser-cache-unique-formulas',
   'build-many-sheets',
   'rebuild-and-recalculate',
   'rebuild-config-toggle',
   'rebuild-runtime-from-snapshot',
+  'sheet-rename-dependencies',
+  'named-expression-change',
   'single-edit-recalc',
   'single-edit-chain',
   'single-edit-fanout',
@@ -53,22 +74,53 @@ const expectedExpandedWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
   'structural-move-columns',
   'range-read',
   'range-read-dense',
+  'aggregate-2d-ranges',
   'aggregate-overlapping-ranges',
   'aggregate-overlapping-sliding-window',
   'conditional-aggregation-reused-ranges',
   'conditional-aggregation-criteria-cell-edit',
+  'conditional-aggregation-shared-criteria',
+  'conditional-aggregation-mixed-criteria',
   'lookup-no-column-index',
   'lookup-with-column-index',
   'lookup-with-column-index-after-column-write',
   'lookup-with-column-index-after-batch-write',
   'lookup-approximate-sorted',
+  'lookup-approximate-descending',
+  'lookup-approximate-duplicates',
   'lookup-approximate-sorted-after-column-write',
   'lookup-text-exact',
+  'lookup-reverse-search',
   'dynamic-array-filter',
+  'dynamic-array-sort',
+  'dynamic-array-unique',
 ]
 
 const benchmarkDir = dirname(fileURLToPath(import.meta.url))
 const expandedBaselinePath = join(benchmarkDir, '..', '..', 'baselines', 'workpaper-vs-hyperformula.json')
+const emptyFamilyMetrics = {
+  meanSpeedupGeomean: null,
+  directionalMeanRatioGeomean: null,
+  directionalP95RatioGeomean: null,
+  worstWorkpaperToHyperFormulaMeanRatio: null,
+  worstMeanRatioWorkload: null,
+  worstWorkpaperToHyperFormulaP95Ratio: null,
+  worstP95RatioWorkload: null,
+}
+const emptyOverallScorecard = {
+  lane: 'overall',
+  comparableCount: 0,
+  workpaperWins: 0,
+  hyperformulaWins: 0,
+  directionalMeanRatioGeomean: null,
+  directionalP95RatioGeomean: null,
+  worstWorkpaperToHyperFormulaMeanRatio: null,
+  worstMeanRatioWorkload: null,
+  worstWorkpaperToHyperFormulaP95Ratio: null,
+  worstP95RatioWorkload: null,
+}
+const emptyPublicScorecard = { ...emptyOverallScorecard, lane: 'public' }
+const emptyHoldoutScorecard = { ...emptyOverallScorecard, lane: 'holdout' }
 
 function familyEligibility(family: ExpandedCompetitiveFamily): { scorecardEligible: boolean; exclusionReason: string | null } {
   switch (family) {
@@ -82,11 +134,14 @@ function familyEligibility(family: ExpandedCompetitiveFamily): { scorecardEligib
             exclusionReason: 'Control-only rebuild toggle; not evidence of broad competitive victory.',
           }
         : { scorecardEligible: true, exclusionReason: null }
+    case 'sheet-lifecycle':
+    case 'named-expression':
     case 'dirty-execution':
     case 'batch-edit':
     case 'structural-rows':
     case 'structural-columns':
     case 'range-read':
+    case 'aggregate-2d':
     case 'overlapping-aggregate':
     case 'sliding-window-aggregate':
     case 'conditional-aggregation':
@@ -160,14 +215,17 @@ describe('expanded comparative benchmark workloads', () => {
         leadershipCount: 0,
         workpaperWins: 0,
         hyperformulaWins: 0,
-        meanSpeedupGeomean: null,
+        ...emptyFamilyMetrics,
       })),
       scorecard: {
+        ...emptyOverallScorecard,
         eligibleFamilies: EXPANDED_COMPARATIVE_FAMILY_ORDER.filter((family) => familyEligibility(family).scorecardEligible),
         excludedFamilies: EXPANDED_COMPARATIVE_FAMILY_ORDER.filter((family) => !familyEligibility(family).scorecardEligible),
-        comparableCount: 0,
-        workpaperWins: 0,
-        hyperformulaWins: 0,
+        scorecards: {
+          overall: emptyOverallScorecard,
+          public: emptyPublicScorecard,
+          holdout: emptyHoldoutScorecard,
+        },
       },
     })
   })
@@ -185,14 +243,17 @@ describe('expanded comparative benchmark workloads', () => {
         leadershipCount: 0,
         workpaperWins: 0,
         hyperformulaWins: 0,
-        meanSpeedupGeomean: null,
+        ...emptyFamilyMetrics,
       })),
       scorecard: {
+        ...emptyOverallScorecard,
         eligibleFamilies: EXPANDED_COMPARATIVE_FAMILY_ORDER.filter((family) => familyEligibility(family).scorecardEligible),
         excludedFamilies: EXPANDED_COMPARATIVE_FAMILY_ORDER.filter((family) => !familyEligibility(family).scorecardEligible),
-        comparableCount: 0,
-        workpaperWins: 0,
-        hyperformulaWins: 0,
+        scorecards: {
+          overall: emptyOverallScorecard,
+          public: emptyPublicScorecard,
+          holdout: emptyHoldoutScorecard,
+        },
       },
     })
   })
@@ -206,6 +267,38 @@ describe('expanded comparative benchmark workloads', () => {
       measureWorkPaperStructuralDeleteColumnsSample(32),
       measureWorkPaperStructuralMoveColumnsSample(32),
     ]
+
+    for (const sample of samples) {
+      expect(sample.engineCounters).toBeDefined()
+      expect(Object.keys(sample.engineCounters ?? {}).toSorted()).toEqual([...ENGINE_COUNTER_KEYS].toSorted())
+    }
+  })
+
+  it('keeps new comparable workload helper verifications equivalent', () => {
+    const samplePairs = [
+      [measureWorkPaperParserCacheUniqueFormulaSample(32), measureHyperFormulaParserCacheUniqueFormulaSample(32)],
+      [measureWorkPaperSheetRenameDependencySample(), measureHyperFormulaSheetRenameDependencySample()],
+      [measureWorkPaperNamedExpressionChangeSample(), measureHyperFormulaNamedExpressionChangeSample()],
+      [measureWorkPaper2dAggregateSample(32), measureHyperFormula2dAggregateSample(32)],
+      [
+        measureWorkPaperConditionalAggregationSharedCriteriaSample(32, 4),
+        measureHyperFormulaConditionalAggregationSharedCriteriaSample(32, 4),
+      ],
+      [
+        measureWorkPaperConditionalAggregationMixedCriteriaSample(32, 4),
+        measureHyperFormulaConditionalAggregationMixedCriteriaSample(32, 4),
+      ],
+      [measureWorkPaperApproximateLookupDescendingSample(32), measureHyperFormulaApproximateLookupDescendingSample(32)],
+      [measureWorkPaperApproximateLookupDuplicateSample(32), measureHyperFormulaApproximateLookupDuplicateSample(32)],
+    ]
+
+    for (const [workpaper, hyperformula] of samplePairs) {
+      expect(workpaper.verification).toEqual(hyperformula.verification)
+    }
+  })
+
+  it('emits engine counters for new WorkPaper leadership workload helpers', () => {
+    const samples = [measureWorkPaperDynamicArraySortSample(32), measureWorkPaperDynamicArrayUniqueSample(32)]
 
     for (const sample of samples) {
       expect(sample.engineCounters).toBeDefined()

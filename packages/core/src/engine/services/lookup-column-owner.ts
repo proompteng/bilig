@@ -533,6 +533,24 @@ export function findExactMatchInRange(
   return row !== undefined && row >= rowStart && row <= rowEnd ? row : undefined
 }
 
+export function findExactNumericApproximateMatchInRange(
+  owner: LookupColumnOwner,
+  lookupValue: number,
+  rowStart: number,
+  rowEnd: number,
+): number | undefined {
+  if (!Number.isFinite(lookupValue)) {
+    return undefined
+  }
+  ensureExactLookupSummaries(owner)
+  const bounds = sliceOffsetBounds(owner, rowStart, rowEnd)
+  if (!bounds || hasOffsetInRange(owner.exactNumericIncompatibleOffsets, bounds.start, bounds.end)) {
+    return undefined
+  }
+  const normalizedValue = Object.is(lookupValue, -0) ? 0 : lookupValue
+  return findExactMatchInRange(owner, `n:${normalizedValue}`, rowStart, rowEnd, -1)
+}
+
 export function buildLookupColumnOwner(args: {
   readonly owner: RuntimeColumnOwner
   readonly normalizeStringId: (stringId: number) => string

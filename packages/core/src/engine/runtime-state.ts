@@ -208,6 +208,12 @@ export type RuntimeDirectCriteriaOperand =
       kind: 'cell'
       cellIndex: number
     }
+  | {
+      kind: 'cell-string-concat'
+      cellIndex: number
+      prefix: string
+      suffix: string
+    }
 
 export interface RuntimeDirectCriteriaPair {
   readonly range: RuntimeDirectCriteriaRange
@@ -222,12 +228,15 @@ export interface RuntimeDirectCriteriaDescriptor {
 
 export interface RuntimeDirectAggregateDescriptor {
   readonly regionId: number
+  readonly regionIds?: readonly number[]
   readonly aggregateKind: 'sum' | 'average' | 'count' | 'min' | 'max'
   readonly sheetName: string
   readonly rowStart: number
   readonly rowEnd: number
   readonly col: number
+  readonly colEnd: number
   readonly length: number
+  readonly resultOffset?: number
 }
 
 export type RuntimeDirectScalarOperand =
@@ -250,6 +259,7 @@ export type RuntimeDirectScalarDescriptor =
       operator: '+' | '-' | '*' | '/'
       left: RuntimeDirectScalarOperand
       right: RuntimeDirectScalarOperand
+      resultOffset?: number
     }
   | {
       kind: 'abs'
@@ -270,6 +280,11 @@ export interface RuntimeStructuralFormulaSourceTransform {
   readonly preservesValue: boolean
 }
 
+export interface RuntimeSheetRenameFormulaSourceTransform {
+  readonly oldSheetName: string
+  readonly newSheetName: string
+}
+
 export interface RuntimeFormula {
   cellIndex: number
   formulaSlotId: number
@@ -284,6 +299,7 @@ export interface RuntimeFormula {
   runtimeProgram: Uint32Array
   constants: Float64Array
   structuralSourceTransform: RuntimeStructuralFormulaSourceTransform | undefined
+  sourceRenameTransforms?: RuntimeSheetRenameFormulaSourceTransform[] | undefined
   programOffset: number
   programLength: number
   constNumberOffset: number

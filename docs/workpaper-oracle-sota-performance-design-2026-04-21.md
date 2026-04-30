@@ -6,7 +6,45 @@ Input archive: `/private/tmp/codex-share/bilig2-codebase-da133b5a-oracle.zip`
 Repo snapshot: `/Users/gregkonush/github.com/bilig2`, `main` at `da133b5a`
 Status: `captured oracle design memo for execution planning`
 
-This document preserves the full oracle response captured from ChatGPT 5.4 Pro after it reviewed the attached codebase archive and the structural/symbolic ownership design docs. The text below is the copied oracle memo; local repo context is limited to this header.
+This document preserves the full oracle response captured from ChatGPT 5.4 Pro
+after it reviewed the attached codebase archive and the structural/symbolic
+ownership design docs. The text below the separator is the copied oracle memo.
+
+## Current Expanded-Suite Reconciliation - 2026-04-29
+
+The captured oracle memo diagnosed a much earlier structural-remap bottleneck.
+That diagnosis drove useful ownership work, but the current `bilig3` checkout is
+no longer at the `9` WorkPaper / `25` HyperFormula state discussed in the memo.
+
+Current decision artifact:
+
+- `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
+- generated at `2026-04-29T14:47:16.831Z`
+- total workloads: `51`
+- scorecard-eligible comparable workloads: `46`
+- overall scorecard: WorkPaper `44`, HyperFormula `2`
+- public lane: WorkPaper `36`, HyperFormula `2`
+- holdout lane: WorkPaper `8`, HyperFormula `0`
+
+Current active performance rows:
+
+| Workload | Mean Ratio | Median Ratio | P95 Ratio | Current Interpretation |
+| --- | ---: | ---: | ---: | --- |
+| `build-mixed-content` | `1.0362639565590437` | `1.0069852963334736` | `1.156165042556` | close confidence-overlap mean loss; optimize production cold-build initialization and allocation |
+| `structural-delete-rows` | `1.0234049542127845` | `0.8750303474565914` | `1.267650293785557` | green median but red mean/p95; optimize row-delete metadata and result collection |
+| `lookup-text-exact` p95 | mean green | mean green | `2.27208263805424` | tail-latency hardening around text normalization, index reuse, invalidation, and allocation |
+
+Rows the memo treated as decisive structural/ownership failures that are no
+longer current scorecard blockers include structural insert/move/delete column
+lanes, structural insert/move row lanes, after-write lookup lanes,
+`aggregate-overlapping-sliding-window`, parser-cache build rows, sheet rename
+dependencies, named-expression change, and approximate duplicate lookup.
+
+The memo's principles still matter: production wins must come from ownership,
+metadata, and allocation changes in engine/headless paths, not from benchmark
+scoring changes. The implementation order for the current checkout is now
+`build-mixed-content`, `structural-delete-rows`, then `lookup-text-exact` p95
+hardening, while preserving all `8/8` holdout wins.
 
 ---
 

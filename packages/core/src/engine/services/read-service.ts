@@ -222,8 +222,8 @@ export function createEngineReadService(args: {
       directDependents: dependencies.directDependents,
     }
 
-    if (formula?.source !== undefined) {
-      explanation.formula = formula.source
+    if (formula !== undefined) {
+      explanation.formula = getRuntimeFormulaSource(formula, args.getFormulaFamilyStructuralSourceTransform(cellIndex))
     }
     if (isFormula) {
       explanation.mode = formula.compiled.mode

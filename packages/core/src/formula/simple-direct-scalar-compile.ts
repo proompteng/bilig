@@ -1,7 +1,7 @@
 import { BuiltinId, FormulaMode, Opcode, type FormulaRecord } from '@bilig/protocol'
 import type { CompiledFormula, FormulaNode, JsPlanInstruction, ParsedCellReferenceInfo, ParsedDependencyReference } from '@bilig/formula'
 
-const SIMPLE_DIRECT_BINARY_RE = /^([A-Za-z]+)([1-9][0-9]*)([+\-*/])(?:([A-Za-z]+)([1-9][0-9]*)|(\d+(?:\.\d+)?))$/
+const SIMPLE_DIRECT_BINARY_RE = /^([A-Za-z]+)([1-9][0-9]*)([+\-*/])(?:([A-Za-z]+)([1-9][0-9]*)|(\d+(?:\.\d+)?))(?:\+(\d+(?:\.\d+)?))?$/
 const SIMPLE_DIRECT_ABS_RE = /^ABS\s*\(\s*([A-Za-z]+)([1-9][0-9]*)\s*\)$/i
 const EMPTY_STRINGS: string[] = []
 const EMPTY_CONSTANTS = new Float64Array()
@@ -12,6 +12,12 @@ type SimpleDirectScalarAst = FormulaNode & {
   readonly operator: SimpleDirectBinaryOperator
   readonly left: FormulaNode & { readonly kind: 'CellRef' }
   readonly right: FormulaNode & ({ readonly kind: 'CellRef' } | { readonly kind: 'NumberLiteral' })
+}
+type SimpleDirectScalarOffsetAst = FormulaNode & {
+  readonly kind: 'BinaryExpr'
+  readonly operator: '+'
+  readonly left: SimpleDirectScalarAst
+  readonly right: FormulaNode & { readonly kind: 'NumberLiteral' }
 }
 type SimpleDirectAbsAst = FormulaNode & {
   readonly kind: 'CallExpr'
@@ -122,6 +128,10 @@ function isSimpleDirectScalarAst(node: FormulaNode): node is SimpleDirectScalarA
   )
 }
 
+function isSimpleDirectScalarOffsetAst(node: FormulaNode): node is SimpleDirectScalarOffsetAst {
+  return node.kind === 'BinaryExpr' && node.operator === '+' && isSimpleDirectScalarAst(node.left) && node.right.kind === 'NumberLiteral'
+}
+
 function isSimpleDirectAbsAst(node: FormulaNode): node is SimpleDirectAbsAst {
   return node.kind === 'CallExpr' && node.callee === 'ABS' && node.args.length === 1 && node.args[0]?.kind === 'CellRef'
 }
@@ -137,11 +147,14 @@ export function translateSimpleDirectScalarFormula(
     compiled.symbolicNames.length !== 0 ||
     compiled.symbolicTables.length !== 0 ||
     compiled.symbolicSpills.length !== 0 ||
-    (!isSimpleDirectScalarAst(compiled.optimizedAst) && !isSimpleDirectAbsAst(compiled.optimizedAst))
+    (!isSimpleDirectScalarAst(compiled.optimizedAst) &&
+      !isSimpleDirectScalarOffsetAst(compiled.optimizedAst) &&
+      !isSimpleDirectAbsAst(compiled.optimizedAst))
   ) {
     return undefined
   }
-  const expectedRefCount = compiled.optimizedAst.kind === 'CallExpr' || compiled.optimizedAst.right.kind !== 'CellRef' ? 1 : 2
+  const scalarAst = isSimpleDirectScalarOffsetAst(compiled.optimizedAst) ? compiled.optimizedAst.left : compiled.optimizedAst
+  const expectedRefCount = isSimpleDirectScalarAst(scalarAst) && scalarAst.right.kind === 'CellRef' ? 2 : 1
   if (compiled.parsedSymbolicRefs === undefined || compiled.parsedSymbolicRefs.length !== expectedRefCount) {
     return undefined
   }
@@ -241,30 +254,56 @@ export function tryCompileSimpleDirectScalarFormula(source: string): CompiledFor
   if (rightRef === undefined && !Number.isFinite(rightNumber)) {
     return undefined
   }
+  const resultOffset = match[7] === undefined ? undefined : Number.parseFloat(match[7])
+  if (resultOffset !== undefined && !Number.isFinite(resultOffset)) {
+    return undefined
+  }
 
   const rightNode: FormulaNode = rightRef ? cellNode(rightRef) : { kind: 'NumberLiteral', value: rightNumber! }
-  const ast: FormulaNode = {
+  const baseAst: FormulaNode = {
     kind: 'BinaryExpr',
     operator,
     left: cellNode(leftRef),
     right: rightNode,
   }
+  const ast: FormulaNode =
+    resultOffset === undefined
+      ? baseAst
+      : {
+          kind: 'BinaryExpr',
+          operator: '+',
+          left: baseAst,
+          right: { kind: 'NumberLiteral', value: resultOffset },
+        }
 
   const symbolicRefs = rightRef ? [leftRef.address, rightRef.address] : [leftRef.address]
   const parsedSymbolicRefs = rightRef ? [leftRef, rightRef] : [leftRef]
-  const constants = rightRef ? EMPTY_CONSTANTS : Float64Array.of(rightNumber!)
-  const program = Uint32Array.of(
+  const constants = rightRef
+    ? resultOffset === undefined
+      ? EMPTY_CONSTANTS
+      : Float64Array.of(resultOffset)
+    : resultOffset === undefined
+      ? Float64Array.of(rightNumber!)
+      : Float64Array.of(rightNumber!, resultOffset)
+  const programInstructions = [
     encodeInstruction(Opcode.PushCell, 0),
     rightRef ? encodeInstruction(Opcode.PushCell, 1) : encodeInstruction(Opcode.PushNumber, 0),
     encodeInstruction(opcode),
-    encodeInstruction(Opcode.Ret),
-  )
+  ]
+  if (resultOffset !== undefined) {
+    programInstructions.push(encodeInstruction(Opcode.PushNumber, rightRef ? 0 : 1), encodeInstruction(Opcode.Add))
+  }
+  programInstructions.push(encodeInstruction(Opcode.Ret))
+  const program = Uint32Array.from(programInstructions)
   const jsPlan: JsPlanInstruction[] = [
     { opcode: 'push-cell', address: leftRef.address },
     rightRef ? { opcode: 'push-cell', address: rightRef.address } : { opcode: 'push-number', value: rightNumber! },
     { opcode: 'binary', operator },
-    { opcode: 'return' },
   ]
+  if (resultOffset !== undefined) {
+    jsPlan.push({ opcode: 'push-number', value: resultOffset }, { opcode: 'binary', operator: '+' })
+  }
+  jsPlan.push({ opcode: 'return' })
   const baseRecord: FormulaRecord = {
     id: 0,
     source: trimmed,

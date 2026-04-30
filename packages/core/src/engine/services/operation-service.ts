@@ -1,5 +1,5 @@
 import { Effect } from 'effect'
-import { compileCriteriaMatcher, formatAddress, matchesCompiledCriteria, parseCellAddress } from '@bilig/formula'
+import { compileCriteriaMatcher, formatAddress, matchesCompiledCriteria, parseCellAddress, parseFormula } from '@bilig/formula'
 import type { EngineOp, EngineOpBatch } from '@bilig/workbook-domain'
 import {
   ErrorCode,
@@ -12,6 +12,7 @@ import {
   type EngineEvent,
   type LiteralInput,
   type SelectionState,
+  type WorkbookDefinedNameValueSnapshot,
 } from '@bilig/protocol'
 import type { EdgeSlice } from '../../edge-arena.js'
 import type {
@@ -44,6 +45,7 @@ import type {
 import { EngineMutationError } from '../errors.js'
 import type { EnginePatch } from '../../patches/patch-types.js'
 import { addEngineCounter } from '../../perf/engine-counters.js'
+import type { SortedColumnSearchService } from './sorted-column-search-service.js'
 
 type MutationSource = 'local' | 'remote' | 'restore' | 'undo' | 'redo'
 const GENERAL_CHANGED_CELL_PAYLOAD_LIMIT = 512
@@ -126,6 +128,35 @@ function reverseUint32Array(values: Uint32Array): Uint32Array {
     reversed[index] = values[values.length - 1 - index]!
   }
   return reversed
+}
+
+function isScalarOnlyDefinedNameValue(value: WorkbookDefinedNameValueSnapshot): boolean {
+  if (typeof value === 'string' && value.startsWith('=')) {
+    try {
+      const ast = parseFormula(value)
+      return ast.kind === 'NumberLiteral' || ast.kind === 'BooleanLiteral' || ast.kind === 'StringLiteral' || ast.kind === 'ErrorLiteral'
+    } catch {
+      return false
+    }
+  }
+  if (value === null || typeof value !== 'object') {
+    return true
+  }
+  if (!('kind' in value)) {
+    return true
+  }
+  if (value.kind === 'scalar') {
+    return true
+  }
+  if (value.kind !== 'formula') {
+    return false
+  }
+  try {
+    const ast = parseFormula(value.formula)
+    return ast.kind === 'NumberLiteral' || ast.kind === 'BooleanLiteral' || ast.kind === 'StringLiteral' || ast.kind === 'ErrorLiteral'
+  } catch {
+    return false
+  }
 }
 
 class PendingNumericCellValues {
@@ -661,6 +692,21 @@ function directAggregateNumericContribution(value: CellValue): number | undefine
   }
 }
 
+function directCriteriaValueString(value: CellValue): string {
+  switch (value.tag) {
+    case ValueTag.Empty:
+      return ''
+    case ValueTag.Number:
+      return String(Object.is(value.value, -0) ? 0 : value.value)
+    case ValueTag.Boolean:
+      return value.value ? 'TRUE' : 'FALSE'
+    case ValueTag.String:
+      return value.value
+    case ValueTag.Error:
+      return String(value.code)
+  }
+}
+
 function collectTrackedDependents(registry: Map<string | number, Set<number>>, keys: readonly (string | number)[]): number[] {
   const candidates = new Set<number>()
   keys.forEach((key) => {
@@ -1045,7 +1091,7 @@ function directScalarLiteralNumericValue(value: unknown): number | undefined {
 
 function directCriteriaTouchesPoint(
   directCriteria: RuntimeDirectCriteriaDescriptor,
-  request: { sheetName: string; row: number; col: number },
+  request: { sheetName: string; row: number; col: number; inputCellIndex?: number },
 ): boolean {
   if (directCriteria.aggregateRange) {
     const aggregateRange = directCriteria.aggregateRange
@@ -1058,13 +1104,20 @@ function directCriteriaTouchesPoint(
       return true
     }
   }
-  return directCriteria.criteriaPairs.some(
-    (pair) =>
+  return directCriteria.criteriaPairs.some((pair) => {
+    if (
       pair.range.sheetName === request.sheetName &&
       pair.range.col === request.col &&
       request.row >= pair.range.rowStart &&
-      request.row <= pair.range.rowEnd,
-  )
+      request.row <= pair.range.rowEnd
+    ) {
+      return true
+    }
+    if (pair.criterion.kind === 'literal') {
+      return false
+    }
+    return request.inputCellIndex !== undefined && pair.criterion.cellIndex === request.inputCellIndex
+  })
 }
 
 function mergeChangedCellIndices(base: readonly number[] | U32, extras: readonly number[] | U32): U32 {
@@ -1225,25 +1278,27 @@ function singleInputAffineDirectScalar(
   const leftLiteral = directScalar.left.kind === 'literal-number' ? directScalar.left.value : undefined
   const rightLiteral = directScalar.right.kind === 'literal-number' ? directScalar.right.value : undefined
   if (leftIsInput && rightLiteral !== undefined) {
+    const resultOffset = directScalar.resultOffset ?? 0
     switch (directScalar.operator) {
       case '+':
-        return { scale: 1, offset: rightLiteral }
+        return { scale: 1, offset: rightLiteral + resultOffset }
       case '-':
-        return { scale: 1, offset: -rightLiteral }
+        return { scale: 1, offset: -rightLiteral + resultOffset }
       case '*':
-        return { scale: rightLiteral, offset: 0 }
+        return { scale: rightLiteral, offset: resultOffset }
       case '/':
-        return rightLiteral === 0 ? null : { scale: 1 / rightLiteral, offset: 0 }
+        return rightLiteral === 0 ? null : { scale: 1 / rightLiteral, offset: resultOffset }
     }
   }
   if (rightIsInput && leftLiteral !== undefined) {
+    const resultOffset = directScalar.resultOffset ?? 0
     switch (directScalar.operator) {
       case '+':
-        return { scale: 1, offset: leftLiteral }
+        return { scale: 1, offset: leftLiteral + resultOffset }
       case '-':
-        return { scale: -1, offset: leftLiteral }
+        return { scale: -1, offset: leftLiteral + resultOffset }
       case '*':
-        return { scale: leftLiteral, offset: 0 }
+        return { scale: leftLiteral, offset: resultOffset }
       case '/':
         return null
     }
@@ -1252,7 +1307,7 @@ function singleInputAffineDirectScalar(
 }
 
 function rowPairDirectScalarCode(directScalar: RuntimeDirectScalarDescriptor, leftCellIndex: number, rightCellIndex: number): number {
-  if (directScalar.kind === 'abs') {
+  if (directScalar.kind === 'abs' || directScalar.resultOffset !== undefined) {
     return 0
   }
   const leftOperandIsLeft = directScalar.left.kind === 'cell' && directScalar.left.cellIndex === leftCellIndex
@@ -1394,6 +1449,7 @@ export function createEngineOperationService(args: {
   readonly rewriteDefinedNamesForSheetRename: (oldSheetName: string, newSheetName: string) => void
   readonly rewriteCellFormulasForSheetRename: (oldSheetName: string, newSheetName: string, formulaChangedCount: number) => number
   readonly rebindDefinedNameDependents: (names: readonly string[], formulaChangedCount: number) => number
+  readonly collectFormulaCellsForDefinedNames: (names: readonly string[]) => readonly number[]
   readonly rebindTableDependents: (tableNames: readonly string[], formulaChangedCount: number) => number
   readonly rebindFormulaCells: (candidates: readonly number[], formulaChangedCount: number) => number
   readonly refreshRangeDependencies: (rangeIndices: readonly number[]) => void
@@ -1452,6 +1508,7 @@ export function createEngineOperationService(args: {
   readonly recalculate: (changedRoots: readonly number[] | U32, kernelSyncRoots?: readonly number[] | U32) => U32
   readonly deferKernelSync: (cellIndices: readonly number[] | U32) => void
   readonly evaluateDirectFormula: (cellIndex: number) => readonly number[] | undefined
+  readonly sortedLookup: Pick<SortedColumnSearchService, 'findPreparedVectorMatch'>
   readonly reconcilePivotOutputs: (baseChanged: U32, forceAllPivots?: boolean) => U32
   readonly prepareRegionQueryIndices: () => void
   readonly getBatchMutationDepth: () => number
@@ -1874,7 +1931,17 @@ export function createEngineOperationService(args: {
   }
 
   const readDirectCriteriaOperandValue = (operand: RuntimeDirectCriteriaDescriptor['criteriaPairs'][number]['criterion']): CellValue => {
-    return operand.kind === 'literal' ? operand.value : readCellValueForLookup(operand.cellIndex).value
+    if (operand.kind === 'literal') {
+      return operand.value
+    }
+    const value = readCellValueForLookup(operand.cellIndex).value
+    if (operand.kind === 'cell') {
+      return value
+    }
+    if (value.tag === ValueTag.Error) {
+      return value
+    }
+    return { tag: ValueTag.String, value: `${operand.prefix}${directCriteriaValueString(value)}${operand.suffix}`, stringId: 0 }
   }
 
   const directCriteriaMatchesChangedAggregateRow = (
@@ -2500,16 +2567,25 @@ export function createEngineOperationService(args: {
     if (left === undefined || right === undefined) {
       return undefined
     }
+    let result: number
     switch (directScalar.operator) {
       case '+':
-        return left + right
+        result = left + right
+        break
       case '-':
-        return left - right
+        result = left - right
+        break
       case '*':
-        return left * right
+        result = left * right
+        break
       case '/':
-        return right === 0 ? undefined : left / right
+        if (right === 0) {
+          return undefined
+        }
+        result = left / right
+        break
     }
+    return result + (directScalar.resultOffset ?? 0)
   }
 
   const tryDirectScalarNumericDelta = (
@@ -2609,16 +2685,25 @@ export function createEngineOperationService(args: {
     if (left === undefined || right === undefined) {
       return undefined
     }
+    let result: number
     switch (directScalar.operator) {
       case '+':
-        return left + right
+        result = left + right
+        break
       case '-':
-        return left - right
+        result = left - right
+        break
       case '*':
-        return left * right
+        result = left * right
+        break
       case '/':
-        return right === 0 ? undefined : left / right
+        if (right === 0) {
+          return undefined
+        }
+        result = left / right
+        break
     }
+    return result + (directScalar.resultOffset ?? 0)
   }
 
   const tryDirectScalarNumericDeltaFromNumbers = (
@@ -2814,6 +2899,21 @@ export function createEngineOperationService(args: {
       return false
     }
     return approximateLookupValue !== undefined
+  }
+
+  const tryDirectApproximateLookupCurrentResultFromNumeric = (
+    directLookup: Extract<RuntimeDirectLookupDescriptor, { kind: 'approximate' }>,
+    lookupValue: number,
+  ): DirectScalarCurrentOperand | undefined => {
+    const result = args.sortedLookup.findPreparedVectorMatch({
+      lookupValue: { tag: ValueTag.Number, value: lookupValue },
+      prepared: directLookup.prepared,
+      matchMode: directLookup.matchMode,
+    })
+    if (!result.handled) {
+      return undefined
+    }
+    return result.position === undefined ? { kind: 'error', code: ErrorCode.NA } : { kind: 'number', value: result.position }
   }
 
   const directScalarCurrentResultMatchesCell = (cellIndex: number, result: DirectScalarCurrentOperand): boolean => {
@@ -3740,7 +3840,8 @@ export function createEngineOperationService(args: {
       if (
         directAggregate &&
         directAggregate.sheetName === request.sheetName &&
-        directAggregate.col === request.col &&
+        request.col >= directAggregate.col &&
+        request.col <= directAggregate.colEnd &&
         request.row >= directAggregate.rowStart &&
         request.row <= directAggregate.rowEnd
       ) {
@@ -3780,7 +3881,8 @@ export function createEngineOperationService(args: {
       if (
         directAggregate &&
         directAggregate.sheetName === request.sheetName &&
-        directAggregate.col === request.col &&
+        request.col >= directAggregate.col &&
+        request.col <= directAggregate.colEnd &&
         request.row >= directAggregate.rowStart &&
         request.row <= directAggregate.rowEnd
       ) {
@@ -3808,7 +3910,8 @@ export function createEngineOperationService(args: {
         (candidateDirectCriteria !== undefined && directCriteriaTouchesPoint(candidateDirectCriteria, request)) ||
         (candidateDirectAggregate !== undefined &&
           candidateDirectAggregate.sheetName === request.sheetName &&
-          candidateDirectAggregate.col === request.col &&
+          request.col >= candidateDirectAggregate.col &&
+          request.col <= candidateDirectAggregate.colEnd &&
           request.row >= candidateDirectAggregate.rowStart &&
           request.row <= candidateDirectAggregate.rowEnd)
       if (!touches) {
@@ -3833,7 +3936,8 @@ export function createEngineOperationService(args: {
       directAggregate?.aggregateKind === 'sum' &&
       formula.dependencyIndices.length === 0 &&
       directAggregate.sheetName === request.sheetName &&
-      directAggregate.col === request.col &&
+      request.col >= directAggregate.col &&
+      request.col <= directAggregate.colEnd &&
       request.row >= directAggregate.rowStart &&
       request.row <= directAggregate.rowEnd &&
       hasNoCellDependents(formulaCellIndex)
@@ -4353,8 +4457,8 @@ export function createEngineOperationService(args: {
         }
       })
     }
-    addEngineCounter(args.state.counters, 'directAggregateDeltaApplications', affectedCount)
-    addEngineCounter(args.state.counters, 'directAggregateDeltaOnlyRecalcSkips')
+    args.state.counters.directAggregateDeltaApplications += affectedCount
+    args.state.counters.directAggregateDeltaOnlyRecalcSkips += 1
     deferSingleCellKernelSync(request.existingIndex)
     const lastMetrics = makeSingleLiteralSkipMetrics()
     args.state.setLastMetrics(lastMetrics)
@@ -4381,7 +4485,11 @@ export function createEngineOperationService(args: {
       return makeExistingNumericMutationResult(changed, 1)
     }
     if (singleAggregateCellIndex >= 0) {
-      return makeCompactExistingNumericMutationResult(request.existingIndex, singleAggregateCellIndex, 1, singleAggregateNumericValue)
+      const cellStore = args.state.workbook.cellStore
+      return makeCompactExistingNumericMutationResult(request.existingIndex, singleAggregateCellIndex, 1, singleAggregateNumericValue, {
+        row: cellStore.rows[singleAggregateCellIndex] ?? 0,
+        col: cellStore.cols[singleAggregateCellIndex] ?? 0,
+      })
     }
     if (affectedCount === 0) {
       return makeCompactExistingNumericMutationResult(request.existingIndex, undefined, 1)
@@ -4574,6 +4682,19 @@ export function createEngineOperationService(args: {
     }
     const formula = args.state.formulas.get(formulaCellIndex)
     const directLookup = formula?.directLookup
+    const compactDirectLookupResult = (
+      resultChanged: boolean,
+      secondChangedNumericValue?: number,
+    ): EngineExistingNumericCellMutationResult => {
+      if (!resultChanged) {
+        return makeCompactExistingNumericMutationResult(request.existingIndex, undefined, 1)
+      }
+      const cellStore = args.state.workbook.cellStore
+      return makeCompactExistingNumericMutationResult(request.existingIndex, formulaCellIndex, 1, secondChangedNumericValue, {
+        row: cellStore.rows[formulaCellIndex] ?? 0,
+        col: cellStore.cols[formulaCellIndex] ?? 0,
+      })
+    }
     const numericResult = tryDirectUniformLookupNumericResultFromDescriptor(
       directLookup,
       request.exactLookupValue,
@@ -4621,12 +4742,122 @@ export function createEngineOperationService(args: {
           explicitChangedCount: 1,
         })
       }
-      return makeCompactExistingNumericMutationResult(
-        request.existingIndex,
-        resultChanged ? formulaCellIndex : undefined,
-        1,
-        resultChanged ? numericResult : undefined,
-      )
+      return compactDirectLookupResult(resultChanged, resultChanged ? numericResult : undefined)
+    }
+    if (
+      typeof request.value === 'number' &&
+      directLookup?.kind === 'approximate' &&
+      directLookup.operandCellIndex === request.existingIndex &&
+      request.approximateLookupValue !== undefined
+    ) {
+      const numericValue = request.value
+      const result = tryDirectApproximateLookupCurrentResultFromNumeric(directLookup, request.approximateLookupValue)
+      if (result !== undefined) {
+        const approximateNumericResult = result.kind === 'number' ? result.value : undefined
+        const resultChanged =
+          approximateNumericResult === undefined
+            ? !directScalarCurrentResultMatchesCell(formulaCellIndex, result)
+            : !directScalarNumericResultMatchesCell(formulaCellIndex, approximateNumericResult)
+        const writeInput = (): void => {
+          if (request.trustedInputSheet !== undefined && request.trustedInputCol !== undefined) {
+            writeTrustedExistingNumericLiteralToCell(
+              request.existingIndex,
+              request.trustedInputSheet,
+              request.trustedInputCol,
+              numericValue,
+            )
+          } else {
+            writeNumericLiteralToExistingCell(request.existingIndex, numericValue)
+          }
+        }
+        const apply = (): void => {
+          writeInput()
+          if (resultChanged) {
+            if (approximateNumericResult !== undefined) {
+              applyTerminalDirectFormulaNumericResult(formulaCellIndex, approximateNumericResult)
+            } else if (!applyDirectFormulaCurrentResult(formulaCellIndex, result)) {
+              throw new Error('Failed to apply direct lookup result')
+            }
+          }
+        }
+        if (resultChanged && cellsShareVersionColumn(request.existingIndex, formulaCellIndex)) {
+          withOptionalColumnVersionBatch(true, apply)
+        } else {
+          apply()
+        }
+        addEngineCounter(args.state.counters, resultChanged ? 'directFormulaKernelSyncOnlyRecalcSkips' : 'kernelSyncOnlyRecalcSkips')
+        deferSingleCellKernelSync(request.existingIndex)
+        const lastMetrics = makeSingleLiteralSkipMetrics()
+        args.state.setLastMetrics(lastMetrics)
+        if (request.emitTracked) {
+          const changedCellIndices = resultChanged
+            ? Uint32Array.of(request.existingIndex, formulaCellIndex)
+            : Uint32Array.of(request.existingIndex)
+          args.state.events.emitTracked({
+            kind: 'batch',
+            invalidation: 'cells',
+            changedCellIndices,
+            invalidatedRanges: [],
+            invalidatedRows: [],
+            invalidatedColumns: [],
+            metrics: lastMetrics,
+            explicitChangedCount: 1,
+          })
+        }
+        return compactDirectLookupResult(resultChanged, approximateNumericResult)
+      }
+    }
+    if (
+      typeof request.value === 'number' &&
+      directLookup?.operandCellIndex === request.existingIndex &&
+      ((directLookup.kind === 'exact' && request.exactLookupValue !== undefined) ||
+        (directLookup.kind === 'approximate' && request.approximateLookupValue !== undefined))
+    ) {
+      const cellStore = args.state.workbook.cellStore
+      const beforeTag = cellStore.tags[formulaCellIndex]
+      const beforeNumber = cellStore.numbers[formulaCellIndex] ?? 0
+      const beforeStringId = cellStore.stringIds[formulaCellIndex] ?? 0
+      const beforeError = cellStore.errors[formulaCellIndex] ?? ErrorCode.None
+      const numericValue = request.value
+      const apply = (): void => {
+        if (request.trustedInputSheet !== undefined && request.trustedInputCol !== undefined) {
+          writeTrustedExistingNumericLiteralToCell(request.existingIndex, request.trustedInputSheet, request.trustedInputCol, numericValue)
+        } else {
+          writeNumericLiteralToExistingCell(request.existingIndex, numericValue)
+        }
+        args.evaluateDirectFormula(formulaCellIndex)
+      }
+      withOptionalColumnVersionBatch(cellsShareVersionColumn(request.existingIndex, formulaCellIndex), apply)
+      const afterTag = cellStore.tags[formulaCellIndex]
+      const afterNumber = cellStore.numbers[formulaCellIndex] ?? 0
+      const afterStringId = cellStore.stringIds[formulaCellIndex] ?? 0
+      const afterError = cellStore.errors[formulaCellIndex] ?? ErrorCode.None
+      const resultChanged =
+        beforeTag !== afterTag ||
+        (afterTag === ValueTag.Number && !Object.is(beforeNumber, afterNumber)) ||
+        (afterTag === ValueTag.Boolean && beforeNumber !== afterNumber) ||
+        (afterTag === ValueTag.String && beforeStringId !== afterStringId) ||
+        (afterTag === ValueTag.Error && beforeError !== afterError)
+      addEngineCounter(args.state.counters, resultChanged ? 'directFormulaKernelSyncOnlyRecalcSkips' : 'kernelSyncOnlyRecalcSkips')
+      deferSingleCellKernelSync(request.existingIndex)
+      const lastMetrics = makeSingleLiteralSkipMetrics()
+      args.state.setLastMetrics(lastMetrics)
+      if (request.emitTracked) {
+        const changedCellIndices = resultChanged
+          ? Uint32Array.of(request.existingIndex, formulaCellIndex)
+          : Uint32Array.of(request.existingIndex)
+        args.state.events.emitTracked({
+          kind: 'batch',
+          invalidation: 'cells',
+          changedCellIndices,
+          invalidatedRanges: [],
+          invalidatedRows: [],
+          invalidatedColumns: [],
+          metrics: lastMetrics,
+          explicitChangedCount: 1,
+        })
+      }
+      return compactDirectLookupResult(resultChanged, resultChanged && afterTag === ValueTag.Number ? afterNumber : undefined)
     }
     let result: DirectScalarCurrentOperand | undefined
     if (directLookup?.kind === 'exact-uniform-numeric') {
@@ -4683,7 +4914,7 @@ export function createEngineOperationService(args: {
         explicitChangedCount: 1,
       })
     }
-    return makeCompactExistingNumericMutationResult(request.existingIndex, resultChanged ? formulaCellIndex : undefined, 1)
+    return compactDirectLookupResult(resultChanged)
   }
 
   const tryApplySingleDirectFormulaLiteralMutationWithoutEvents = (request: {
@@ -4902,16 +5133,25 @@ export function createEngineOperationService(args: {
     if (right.kind === 'error') {
       return right
     }
+    let result: number
     switch (directScalar.operator) {
       case '+':
-        return { kind: 'number', value: left.value + right.value }
+        result = left.value + right.value
+        break
       case '-':
-        return { kind: 'number', value: left.value - right.value }
+        result = left.value - right.value
+        break
       case '*':
-        return { kind: 'number', value: left.value * right.value }
+        result = left.value * right.value
+        break
       case '/':
-        return right.value === 0 ? { kind: 'error', code: ErrorCode.Div0 } : { kind: 'number', value: left.value / right.value }
+        if (right.value === 0) {
+          return { kind: 'error', code: ErrorCode.Div0 }
+        }
+        result = left.value / right.value
+        break
     }
+    return { kind: 'number', value: result + (directScalar.resultOffset ?? 0) }
   }
 
   const applyDirectScalarCurrentValue = (cellIndex: number, directScalar: RuntimeDirectScalarDescriptor): boolean => {
@@ -5013,16 +5253,25 @@ export function createEngineOperationService(args: {
     if (right.kind === 'error') {
       return right
     }
+    let result: number
     switch (directScalar.operator) {
       case '+':
-        return { kind: 'number', value: left.value + right.value }
+        result = left.value + right.value
+        break
       case '-':
-        return { kind: 'number', value: left.value - right.value }
+        result = left.value - right.value
+        break
       case '*':
-        return { kind: 'number', value: left.value * right.value }
+        result = left.value * right.value
+        break
       case '/':
-        return right.value === 0 ? { kind: 'error', code: ErrorCode.Div0 } : { kind: 'number', value: left.value / right.value }
+        if (right.value === 0) {
+          return { kind: 'error', code: ErrorCode.Div0 }
+        }
+        result = left.value / right.value
+        break
     }
+    return { kind: 'number', value: result + (directScalar.resultOffset ?? 0) }
   }
 
   const tryEvaluateDirectScalarNumericWithPendingNumbers = (
@@ -5065,16 +5314,25 @@ export function createEngineOperationService(args: {
     if (left === undefined || right === undefined) {
       return undefined
     }
+    let result: number
     switch (directScalar.operator) {
       case '+':
-        return left + right
+        result = left + right
+        break
       case '-':
-        return left - right
+        result = left - right
+        break
       case '*':
-        return left * right
+        result = left * right
+        break
       case '/':
-        return right === 0 ? undefined : left / right
+        if (right === 0) {
+          return undefined
+        }
+        result = left / right
+        break
     }
+    return result + (directScalar.resultOffset ?? 0)
   }
 
   const tryApplyDenseSingleColumnDirectScalarLiteralBatch = (
@@ -5155,16 +5413,25 @@ export function createEngineOperationService(args: {
       if (left === undefined || right === undefined) {
         return undefined
       }
+      let result: number
       switch (directScalar.operator) {
         case '+':
-          return left + right
+          result = left + right
+          break
         case '-':
-          return left - right
+          result = left - right
+          break
         case '*':
-          return left * right
+          result = left * right
+          break
         case '/':
-          return right === 0 ? undefined : left / right
+          if (right === 0) {
+            return undefined
+          }
+          result = left / right
+          break
       }
+      return result + (directScalar.resultOffset ?? 0)
     }
     let previousRow = firstMutation.row
     for (let refIndex = 0; refIndex < refs.length; refIndex += 1) {
@@ -5840,16 +6107,25 @@ export function createEngineOperationService(args: {
       if (left === undefined || right === undefined) {
         return undefined
       }
+      let result: number
       switch (directScalar.operator) {
         case '+':
-          return left + right
+          result = left + right
+          break
         case '-':
-          return left - right
+          result = left - right
+          break
         case '*':
-          return left * right
+          result = left * right
+          break
         case '/':
-          return right === 0 ? undefined : left / right
+          if (right === 0) {
+            return undefined
+          }
+          result = left / right
+          break
       }
+      return result + (directScalar.resultOffset ?? 0)
     }
 
     for (let refIndex = 0; refIndex < refs.length; refIndex += 2) {
@@ -7548,11 +7824,10 @@ export function createEngineOperationService(args: {
             if (selection.sheetName === op.oldName) {
               args.setSelection(op.newName, selection.address ?? 'A1')
             }
-            args.rewriteDefinedNamesForSheetRename(op.oldName, op.newName)
+            if (args.state.workbook.metadata.definedNames.size > 0) {
+              args.rewriteDefinedNamesForSheetRename(op.oldName, op.newName)
+            }
             formulaChangedCount = args.rewriteCellFormulasForSheetRename(op.oldName, op.newName, formulaChangedCount)
-            topologyChanged = true
-            sheetDeleted = true
-            structuralInvalidation = true
             refreshAllPivots = true
             break
           }
@@ -8093,18 +8368,24 @@ export function createEngineOperationService(args: {
           case 'upsertDefinedName': {
             const normalizedName = normalizeDefinedName(op.name)
             args.state.workbook.setDefinedName(op.name, op.value)
-            const reboundCount = formulaChangedCount
-            formulaChangedCount = args.rebindDefinedNameDependents([normalizedName], formulaChangedCount)
-            topologyChanged = topologyChanged || formulaChangedCount !== reboundCount
+            const dependentFormulaCells = args.collectFormulaCellsForDefinedNames([normalizedName])
+            const canRecalculateWithoutRebind =
+              isScalarOnlyDefinedNameValue(op.value) &&
+              dependentFormulaCells.every((cellIndex) => args.state.formulas.get(cellIndex)?.compiled.mode === FormulaMode.JsOnly)
+            if (canRecalculateWithoutRebind) {
+              for (const cellIndex of dependentFormulaCells) {
+                formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount)
+              }
+            } else {
+              formulaChangedCount = args.rebindDefinedNameDependents([normalizedName], formulaChangedCount)
+            }
             setEntityVersionForOp(op, order)
             break
           }
           case 'deleteDefinedName': {
             const normalizedName = normalizeDefinedName(op.name)
             args.state.workbook.deleteDefinedName(op.name)
-            const reboundCount = formulaChangedCount
             formulaChangedCount = args.rebindDefinedNameDependents([normalizedName], formulaChangedCount)
-            topologyChanged = topologyChanged || formulaChangedCount !== reboundCount
             setEntityVersionForOp(op, order)
             break
           }

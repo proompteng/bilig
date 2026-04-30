@@ -50,7 +50,51 @@ The pushed `ef63195` tranche already landed the following real performance work:
 
 That work materially improved the benchmark surface, but it did not finish the job.
 
-## Latest Measured Position
+## Current Expanded-Suite Position - 2026-04-29
+
+The closeout target is now measured against the expanded competitive artifact at
+`packages/benchmarks/baselines/workpaper-vs-hyperformula.json`, generated at
+`2026-04-29T14:47:16.831Z`.
+
+Current scorecard:
+
+- Total workloads: `51`.
+- Scorecard-eligible comparable workloads: `46`.
+- Overall: WorkPaper `44`, HyperFormula `2`.
+- Public lane: WorkPaper `36`, HyperFormula `2`.
+- Holdout lane: WorkPaper `8`, HyperFormula `0`.
+
+Current HyperFormula mean rows:
+
+| Workload | Mean Ratio | Median Ratio | P95 Ratio | Confidence Overlap | Current Reading |
+| --- | ---: | ---: | ---: | --- | --- |
+| `build-mixed-content` | `1.0362639565590437` | `1.0069852963334736` | `1.156165042556` | yes | close cold-build row; optimize production initialization/allocation |
+| `structural-delete-rows` | `1.0234049542127845` | `0.8750303474565914` | `1.267650293785557` | yes | median green but mean/p95 red; optimize row-delete tail overhead |
+
+Tail risk:
+
+- `lookup-text-exact` has worst p95 ratio `2.27208263805424` and needs
+  tail-latency hardening even though it is not a current mean-scorecard loss.
+
+Rows this closeout plan previously listed as active reds that are no longer
+current blockers:
+
+- `single-edit-chain`
+- `batch-edit-single-column`
+- `lookup-with-column-index`
+- `lookup-approximate-sorted`
+- `single-formula-edit-recalc`
+
+Active closeout order:
+
+1. `build-mixed-content`: reduce production cold-build allocation and duplicated
+   initialization.
+2. `structural-delete-rows`: narrow structural delete metadata and changed-result
+   collection.
+3. `lookup-text-exact`: remove p95 allocation/cache churn.
+4. Preserve the current holdout `8/8` and public scorecard rows.
+
+## Historical Measured Position - ef63195
 
 One confirmed local run on the `ef63195` tree from
 `/tmp/workpaper-vs-hf-final.json` produced:

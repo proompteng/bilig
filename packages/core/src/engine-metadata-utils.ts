@@ -17,6 +17,16 @@ function literalToFormulaNode(input: LiteralInput): FormulaNode | null {
   return null
 }
 
+function literalFormulaNodeToCellValue(input: FormulaNode, stringPool: StringPool): CellValue | undefined {
+  if (input.kind === 'NumberLiteral' || input.kind === 'BooleanLiteral' || input.kind === 'StringLiteral') {
+    return literalToValue(input.value, stringPool)
+  }
+  if (input.kind === 'ErrorLiteral') {
+    return errorValue(input.code)
+  }
+  return undefined
+}
+
 function definedNameValueToFormulaNode(input: WorkbookDefinedNameValueSnapshot): FormulaNode | null {
   if (typeof input === 'object' && input !== null && 'kind' in input) {
     switch (input.kind) {
@@ -88,7 +98,23 @@ export function definedNameValueToCellValue(input: WorkbookDefinedNameValueSnaps
     if (input.kind === 'scalar') {
       return literalToValue(input.value, stringPool)
     }
+    if (input.kind === 'formula') {
+      try {
+        const literalValue = literalFormulaNodeToCellValue(parseFormula(input.formula), stringPool)
+        return literalValue ?? errorValue(ErrorCode.Value)
+      } catch {
+        return errorValue(ErrorCode.Value)
+      }
+    }
     return errorValue(ErrorCode.Value)
+  }
+  if (typeof input === 'string' && input.startsWith('=')) {
+    try {
+      const literalValue = literalFormulaNodeToCellValue(parseFormula(input), stringPool)
+      return literalValue ?? errorValue(ErrorCode.Value)
+    } catch {
+      return errorValue(ErrorCode.Value)
+    }
   }
   return literalToValue(input, stringPool)
 }

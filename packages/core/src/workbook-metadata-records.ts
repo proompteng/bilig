@@ -440,6 +440,9 @@ export function deleteRecordsBySheet<T>(bucket: Map<string, T>, sheetName: strin
 }
 
 export function rekeyRecords<T>(bucket: Map<string, T>, rewrite: (record: T) => T): void {
+  if (bucket.size === 0) {
+    return
+  }
   const rewritten = [...bucket.values()].map((record) => rewrite(record))
   bucket.clear()
   rewritten.forEach((record) => {

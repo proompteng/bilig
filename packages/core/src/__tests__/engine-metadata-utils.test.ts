@@ -33,6 +33,18 @@ describe('engine metadata utils', () => {
       tag: ValueTag.Error,
       code: ErrorCode.Value,
     })
+    expect(definedNameValueToCellValue({ kind: 'formula', formula: '=2' }, strings)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    })
+    expect(definedNameValueToCellValue('=TRUE', strings)).toEqual({
+      tag: ValueTag.Boolean,
+      value: true,
+    })
+    expect(definedNameValueToCellValue('=A1', strings)).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Value,
+    })
 
     expect(
       definedNameValuesEqual(

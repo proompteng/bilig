@@ -68,6 +68,13 @@ function readRuntimeFormula(engine: SpreadsheetEngine, cellIndex: number): unkno
   return Reflect.get(formulas, 'get').call(formulas, cellIndex)
 }
 
+function readRuntimeFormulaProperty(formula: unknown, property: string): unknown {
+  if (typeof formula !== 'object' || formula === null) {
+    throw new TypeError('Expected runtime formula')
+  }
+  return Reflect.get(formula, property)
+}
+
 function readRuntimeTemplateId(engine: SpreadsheetEngine, cellIndex: number): number | undefined {
   const formula = readRuntimeFormula(engine, cellIndex)
   const templateId = typeof formula === 'object' && formula !== null ? Reflect.get(formula, 'templateId') : undefined
@@ -382,6 +389,25 @@ describe('EngineFormulaBindingService', () => {
     expect(engine.getCellValue('Summary', 'A1')).toEqual({ tag: ValueTag.Number, value: 14 })
   })
 
+  it('defers sheet rename formula source materialization while updating dependencies', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'binding-rename-deferred' })
+    await engine.ready()
+    engine.createSheet('Data')
+    engine.createSheet('Summary')
+    engine.setCellValue('Data', 'A1', 7)
+    engine.setCellFormula('Summary', 'A1', 'Data!A1*2')
+
+    expect(engine.renameSheetMetadataOnly('Data', 'Source')).toBe(true)
+
+    const formulaIndex = engine.workbook.getCellIndex('Summary', 'A1')!
+    const runtimeFormula = readRuntimeFormula(engine, formulaIndex)
+    expect(readRuntimeFormulaProperty(runtimeFormula, 'source')).toBe('Data!A1*2')
+    expect(readRuntimeFormulaProperty(runtimeFormula, 'sourceRenameTransforms')).toEqual([{ oldSheetName: 'Data', newSheetName: 'Source' }])
+    expect(engine.getCell('Summary', 'A1').formula).toBe('Source!A1*2')
+    expect(engine.getDependencies('Source', 'A1').directDependents).toContain('Summary!A1')
+    expect(engine.getCellValue('Summary', 'A1')).toEqual({ tag: ValueTag.Number, value: 14 })
+  })
+
   it('binds repeated row-translated formulas through the service without changing results', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'binding-row-template' })
     await engine.ready()
@@ -516,6 +542,49 @@ describe('EngineFormulaBindingService', () => {
       directScalarDeltaApplications: 64,
       directScalarDeltaOnlyRecalcSkips: 1,
       wasmFullUploads: 0,
+    })
+  })
+
+  it('compiles additive-offset scalar formulas as direct scalars', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'binding-direct-scalar-offset-family' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    for (let row = 1; row <= 32; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellValue('Sheet1', `B${row}`, row * 2)
+      engine.setCellFormula('Sheet1', `C${row}`, `A${row}+B${row}+${row}`)
+      engine.setCellFormula('Sheet1', `D${row}`, `C${row}*2+${row}`)
+    }
+
+    expect(engine.getCellValue('Sheet1', 'D32')).toEqual({ tag: ValueTag.Number, value: 288 })
+    const c32Index = engine.workbook.getCellIndex('Sheet1', 'C32')
+    const d32Index = engine.workbook.getCellIndex('Sheet1', 'D32')
+    expect(c32Index).toBeDefined()
+    expect(d32Index).toBeDefined()
+    expect(readRuntimeDirectScalar(engine, c32Index!)).toMatchObject({
+      kind: 'binary',
+      operator: '+',
+      resultOffset: 32,
+    })
+    expect(readRuntimeDirectScalar(engine, d32Index!)).toMatchObject({
+      kind: 'binary',
+      operator: '*',
+      resultOffset: 32,
+    })
+
+    engine.resetPerformanceCounters()
+    engine.setCellValue('Sheet1', 'A32', 40)
+
+    expect(engine.getCellValue('Sheet1', 'D32')).toEqual({ tag: ValueTag.Number, value: 304 })
+    expect(engine.getLastMetrics()).toMatchObject({
+      dirtyFormulaCount: 0,
+      wasmFormulaCount: 0,
+      jsFormulaCount: 0,
+    })
+    expect(engine.getPerformanceCounters()).toMatchObject({
+      directScalarDeltaApplications: 2,
+      directScalarDeltaOnlyRecalcSkips: 1,
     })
   })
 
@@ -673,6 +742,44 @@ describe('EngineFormulaBindingService', () => {
     expect(sumFormula.directCriteria.aggregateKind).toBe('sum')
     expect(minFormula.directCriteria.aggregateKind).toBe('min')
     expect(maxFormula.directCriteria.aggregateKind).toBe('max')
+  })
+
+  it('binds direct criteria descriptors for string-concatenated criteria cells', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'binding-direct-computed-criteria' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    engine.setCellValue('Sheet1', 'A1', 'A')
+    engine.setCellValue('Sheet1', 'A2', 'A')
+    engine.setCellValue('Sheet1', 'A3', 'B')
+    engine.setCellValue('Sheet1', 'B1', 10)
+    engine.setCellValue('Sheet1', 'B2', 20)
+    engine.setCellValue('Sheet1', 'B3', 30)
+    engine.setCellValue('Sheet1', 'C1', 'x')
+    engine.setCellValue('Sheet1', 'C2', 'y')
+    engine.setCellValue('Sheet1', 'C3', 'x')
+    engine.setCellValue('Sheet1', 'D1', 'A')
+    engine.setCellValue('Sheet1', 'E1', 15)
+    engine.setCellFormula('Sheet1', 'G1', 'COUNTIFS(A1:A3,D1,B1:B3,">="&E1,C1:C3,"x")')
+    engine.setCellFormula('Sheet1', 'G2', 'SUMIFS(B1:B3,A1:A3,D1,B1:B3,">="&E1,C1:C3,"x")')
+
+    for (const address of ['G1', 'G2'] as const) {
+      const cellIndex = engine.workbook.getCellIndex('Sheet1', address)
+      if (cellIndex === undefined) {
+        throw new Error(`expected ${address} to be materialized`)
+      }
+      const runtimeFormula = readRuntimeFormula(engine, cellIndex)
+      if (!isRuntimeFormulaWithDirectCriteria(runtimeFormula)) {
+        throw new Error(`expected ${address} to expose direct criteria metadata`)
+      }
+      expect(runtimeFormula.directCriteria.criteriaPairs[1]?.criterion).toMatchObject({
+        kind: 'cell-string-concat',
+        prefix: '>=',
+        suffix: '',
+      })
+    }
+    expect(engine.getCellValue('Sheet1', 'G1')).toEqual({ tag: ValueTag.Number, value: 0 })
+    expect(engine.getCellValue('Sheet1', 'G2')).toEqual({ tag: ValueTag.Number, value: 0 })
   })
 
   it('does not bind direct criteria descriptors for unsupported criteria shapes', async () => {

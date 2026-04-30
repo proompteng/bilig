@@ -6,6 +6,10 @@ export interface RangeAggregateCacheService {
     request: { sheetName: string; rowStart: number; rowEnd: number; col: number },
     aggregateKind?: 'sum' | 'average' | 'count' | 'min' | 'max',
   ) => AggregateStateEntry
+  readonly getOrBuildColumnPrefix: (
+    request: { sheetName: string; rowStart: number; rowEnd: number; col: number },
+    aggregateKind?: 'sum' | 'average' | 'count' | 'min' | 'max',
+  ) => AggregateStateEntry
 }
 
 export function createRangeAggregateCacheService(args: {
@@ -14,6 +18,10 @@ export function createRangeAggregateCacheService(args: {
 }): RangeAggregateCacheService {
   return {
     getOrBuildPrefix(request, aggregateKind) {
+      const regionId = args.regionGraph.internSingleColumnRegion(request)
+      return args.aggregateStateStore.getOrBuildPrefixForRegion(regionId, aggregateKind)
+    },
+    getOrBuildColumnPrefix(request, aggregateKind) {
       const regionId = args.regionGraph.internSingleColumnRegion(request)
       return args.aggregateStateStore.getOrBuildPrefixForRegion(regionId, aggregateKind)
     },

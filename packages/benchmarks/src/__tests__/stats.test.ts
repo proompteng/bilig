@@ -10,7 +10,7 @@ describe('benchmark stats', () => {
     expect(quantile(values, 1)).toBe(50)
   })
 
-  it('summarizes samples into min/median/p95/max/mean', () => {
+  it('summarizes samples into min/median/p95/max/mean and noise fields', () => {
     const summary = summarizeNumbers([7, 1, 5, 3, 9])
     expect(summary.samples).toEqual([1, 3, 5, 7, 9])
     expect(summary.min).toBe(1)
@@ -18,5 +18,10 @@ describe('benchmark stats', () => {
     expect(summary.p95).toBe(9)
     expect(summary.max).toBe(9)
     expect(summary.mean).toBe(5)
+    expect(summary.standardDeviation).toBeCloseTo(Math.sqrt(8))
+    expect(summary.relativeStandardDeviation).toBeCloseTo(Math.sqrt(8) / 5)
+    expect(summary.standardError).toBeCloseTo(Math.sqrt(8) / Math.sqrt(5))
+    expect(summary.confidence95.low).toBeCloseTo(5 - 1.96 * (Math.sqrt(8) / Math.sqrt(5)))
+    expect(summary.confidence95.high).toBeCloseTo(5 + 1.96 * (Math.sqrt(8) / Math.sqrt(5)))
   })
 })

@@ -83,8 +83,8 @@ Current state:
 - external install and consumer smoke paths are checked
 - a checked-in comparison artifact exists at
   `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
-- that artifact currently shows HyperFormula faster on the directly comparable microbenchmarks run
-  on this host
+- that artifact currently shows WorkPaper leading `44/46` scorecard-eligible
+  comparable workloads, with `8/8` holdout wins
 
 So the remaining work is not:
 
@@ -111,7 +111,7 @@ This is the scorecard that should drive engineering priority.
 | Formula breadth | Unified inventory breadth | `525/525` unified tracked functions = `100%` | no comparable local unified inventory artifact | `bilig` leads on tracked breadth | keep the unified inventory generated and current |
 | Formula production quality | Canonical production closure | `300/300` canonical rows production-closed = `100%` | no matching canonical artifact | `bilig` leads on closure | keep the dominance snapshot current and extend grouped-array coverage beyond the canonical SUM forms |
 | Feature dominance | Critical semantics unsupported by HyperFormula but present in `bilig` | dynamic arrays, structured references/tables, multiple workbook instances | HyperFormula docs list all three as unsupported/limited | `bilig` leads | add leadership workload benchmarks and soak tests so the lead is not purely semantic |
-| Performance dominance | Directly comparable benchmark workloads | unified benchmark includes the former control workloads and the broader matrix | HyperFormula still leads several important workloads on current host | `WorkPaper` now has one competitive artifact, but mixed-content build, formula edits, chain edits, batch edits, and indexed lookup remain red | convert the remaining red workloads into majority `bilig` wins across the unified matrix |
+| Performance dominance | Directly comparable benchmark workloads | unified benchmark includes `51` workloads, `46` scorecard-eligible comparable workloads, public and holdout lanes | HyperFormula leads only `build-mixed-content` and `structural-delete-rows` by mean in the latest artifact, both with confidence overlap | `WorkPaper` leads `44/46` overall and `8/8` holdout; `lookup-text-exact` p95 is the worst tail | convert the remaining two mean reds and p95 tail into stable production wins without weakening benchmark gates |
 | Performance dominance | Leadership workloads | `1/1` leadership workload exercised, with HyperFormula marked unsupported | dynamic arrays unsupported | `bilig` leads on capability, not comparable speed | expand leadership artifacts beyond one unsupported workload |
 | Operability dominance | Clean external consumer path | packed tarball install and Vite/Node smoke are checked in-repo | no equivalent artifact in this repo | `bilig` leads in current repo evidence | keep smoke and publish paths green on every release path |
 | Licensing and packaging | Open-source package posture | MIT publishable packages on npm | GPL license key flow in docs | `bilig` leads for embeddable OSS consumption | preserve the publishable OSS path while adding no hidden runtime requirements |
@@ -119,8 +119,10 @@ This is the scorecard that should drive engineering priority.
 The important reading is:
 
 - `bilig` already leads on surface completeness, feature breadth, and package operability
-- `bilig` does not yet lead on directly comparable runtime speed
-- `bilig` does not yet deserve a blanket overall-win claim
+- `bilig` now leads the expanded directly comparable runtime scorecard, but not
+  every workload
+- `bilig` does not yet deserve a blanket overall-win claim until the two
+  remaining mean reds and p95 lookup tail are closed
 
 ## Current Metric Values
 
@@ -233,7 +235,8 @@ This program should be read as a state machine, not a binary done/not-done check
 
 `engine-catching-up`
 
-- directly comparable performance is still red
+- directly comparable performance leads overall but has two confidence-overlap
+  mean reds and one p95 tail-risk row
 - feature or formula leadership may already exist
 - work should focus on the measured deficits, not new surface work
 
@@ -358,12 +361,17 @@ The current repository supports these claims:
   - verified external consumer install path
   - richer detailed event payloads
   - multiple independent workbook instances with no one-instance-one-workbook restriction
+- `WorkPaper` now leads most of the expanded competitive engine scorecard:
+  - `44/46` overall scorecard-eligible comparable workloads
+  - `36/38` public comparable workloads
+  - `8/8` holdout comparable workloads
+  - current artifact generated at `2026-04-29T14:47:16.831Z`
 
 The current repository does not support these claims:
 
-- that `bilig` is faster than HyperFormula in general
+- that `bilig` wins every scorecard-eligible comparable workload by mean
 - that `bilig` is `10x` better overall
-- that all meaningful engine gaps are closed
+- that all p95 tail gaps are closed
 - that formula breadth leadership already implies formula production leadership
 
 That means the engineering program must focus on real runtime work, not just surface-level parity.
@@ -385,30 +393,26 @@ These are existing advantages and must not be traded away while chasing speed.
 
 ### Priority 1: Fix the largest measured performance deficits
 
-Based on the checked-in benchmark artifact, the most urgent directly comparable gaps are:
+Based on the checked-in benchmark artifact, the most urgent directly comparable
+gaps are now:
 
-- batch-edit recalculation: HyperFormula currently leads by `1.70x`
-- lookup with column indexing: HyperFormula currently leads by `1.21x`
-- single-edit recalculation: `WorkPaper` currently leads by `1.61x`
-- lookup without column indexing: `WorkPaper` currently leads by `1.51x`
-- range-read: `WorkPaper` currently leads by `1.01x`
-- build from sheets: `WorkPaper` currently leads by `4.68x`
-- mixed-content build: HyperFormula currently leads by `3.80x`
-- approximate sorted lookup: `WorkPaper` currently leads by `1.07x`
-- single formula edit recalc: HyperFormula currently leads by `1.42x`
-- single edit chain recalc: HyperFormula currently leads by `1.05x`
-- batch single-column edit recalc: HyperFormula currently leads by `1.54x`
-- batch multi-column edit recalc: HyperFormula currently leads by `1.54x`
-- range-read-dense: `WorkPaper` currently leads by `1.18x`
-- lookup with column indexing on the expanded matrix: HyperFormula currently leads by `1.13x`
+- `build-mixed-content`: HyperFormula mean win at `1.0362639565590437x`,
+  confidence intervals overlap.
+- `structural-delete-rows`: HyperFormula mean win at `1.0234049542127845x`,
+  confidence intervals overlap and the median is WorkPaper-green.
+- `lookup-text-exact`: worst current p95 ratio at `2.27208263805424x`; this is
+  a tail-latency hardening target, not a current mean scorecard loss.
 
 The important trend changes are:
 
 - the triple-digit lookup deficits are gone
-- the last tranches proved that `WorkPaper` facade overhead was masking engine progress; removing whole-workbook before/after diffs from ordinary edits cut the lookup workloads down to single-digit territory
-- approximate sorted lookup is no longer red; the remaining primary red lanes are now mixed-content build plus formula-edit and batch-edit recalculation
-- direct reads from workbook storage improved the build and edit workloads again after the event-driven diff path landed
-- `useColumnIndex` is now a real direct lookup path and meets the phase-1 threshold, but HyperFormula still has a faster core search subsystem
+- sheet rename, named-expression changes, parser-cache unique formulas, and
+  approximate duplicate lookup are now holdout wins
+- aggregate overlapping sliding windows are green in the latest artifact after
+  earlier noisy red runs
+- batch-edit and formula-edit rows are not current blockers
+- `useColumnIndex` is now a real direct lookup path; the remaining lookup work is
+  p95 text-exact stabilization
 
 ### Priority 2: Protect formula production-quality leadership
 
@@ -586,7 +590,9 @@ Goal:
 
 - close the current performance gap on lookup-heavy workloads
 
-This is currently one of the clearest directly comparable areas where HyperFormula wins.
+This is now p95-tail hardening rather than a broad mean-scorecard loss. The
+current active lookup target is `lookup-text-exact`, where the p95 ratio is
+`2.27208263805424`.
 
 Required work:
 
@@ -850,14 +856,14 @@ Every substantial patch in this program should produce:
 
 ### Phase 1: Close direct-comparison deficits
 
-- build/load
-- single-edit recalc
-- batch edit
-- lookup/indexing
+- `build-mixed-content`
+- `structural-delete-rows`
+- `lookup-text-exact` p95
 
 Reason:
 
-- these are the cleanest places where HyperFormula currently wins on the checked-in artifact
+- these are the only current mean-red rows plus the worst p95 tail in the
+  checked artifact
 
 ### Phase 2: Strengthen leadership workloads
 

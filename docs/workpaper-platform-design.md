@@ -165,7 +165,10 @@ The current state is therefore:
 - HyperFormula surface parity by public API shape: shipped
 - stronger feature coverage in selected areas such as dynamic arrays and structured references: shipped
 - workload-specific competitive benchmark evidence against HyperFormula: shipped
-- on the checked-in comparable microbenchmarks, HyperFormula currently wins raw throughput on this host
+- on the checked-in expanded comparable benchmark, WorkPaper currently wins
+  `44/46` scorecard-eligible comparable workloads, including `8/8` holdout; the
+  current remaining mean-red rows are `build-mixed-content` and
+  `structural-delete-rows`, both with overlapping confidence intervals
 - blanket `10x` superiority claim: still disallowed without a named workload reference
 
 ## WorkPaper Contract

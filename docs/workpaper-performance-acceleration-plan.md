@@ -26,17 +26,16 @@ Current checkpoint on `main`:
 - literal-only workbook initialization now hydrates directly into fresh core workbook storage
   instead of paying restore-style op execution overhead
 - the checked-in competitive artifact now shows:
-  - `build-from-sheets`: improved from `6.95x` slower to a `WorkPaper` win at `4.68x` faster
-  - `single-edit-recalc`: improved from `1.42x` slower to a `WorkPaper` win at `1.61x` faster
-  - `batch-edit-recalc`: improved to `1.70x` slower
-  - `lookup-no-column-index`: improved from `68.76x` slower to a `WorkPaper` win at `1.51x` faster
-  - `lookup-with-column-index`: improved from `124.42x` slower to `1.21x` slower
-  - `lookup-approximate-sorted`: improved from `6.67x` slower to a `WorkPaper` win at `1.07x` faster
-  - `range-read`: a `WorkPaper` win at `1.01x` faster
+  - Overall scorecard: WorkPaper `44/46`
+  - Public lane: WorkPaper `36/38`
+  - Holdout lane: WorkPaper `8/8`
+  - current mean-red rows: `build-mixed-content` and `structural-delete-rows`,
+    both with overlapping confidence intervals
+  - current p95-tail row: `lookup-text-exact`
 
-So the remaining performance gap is no longer “lookup is completely fake.” The remaining gap is
-that recalculation overhead is still red. Lookup is now close enough that it no longer dominates
-the program.
+So the remaining performance gap is no longer “lookup is completely fake” or
+“recalculation is broadly red.” The remaining gap is two close production
+mean-red rows plus one p95 tail.
 
 It complements:
 
@@ -67,6 +66,60 @@ The repo now tracks one unified competitive benchmark artifact:
   This is the default competitive matrix. It includes the former control workloads and expands the
   proof surface across more build, mutation, and lookup shapes.
 
+## Current Expanded Benchmark Position - 2026-04-29
+
+The decision artifact for the current checkout is
+`packages/benchmarks/baselines/workpaper-vs-hyperformula.json`, generated at
+`2026-04-29T14:47:16.831Z`.
+
+The acceleration program has moved well beyond the original lookup-heavy gap
+described below:
+
+- Total workloads: `51`.
+- Scorecard-eligible comparable workloads: `46`.
+- Leadership-only or non-scorecard workloads: `4`.
+- Overall scorecard: WorkPaper `44`, HyperFormula `2`.
+- Public lane: WorkPaper `36`, HyperFormula `2`.
+- Holdout lane: WorkPaper `8`, HyperFormula `0`.
+- Directional mean-ratio geomean: `0.5304297489404424`.
+- Directional p95-ratio geomean: `0.5437000679179405`.
+
+Current HyperFormula mean rows:
+
+| Workload | Mean Ratio | Median Ratio | P95 Ratio | Confidence Overlap | Current Owner |
+| --- | ---: | ---: | ---: | --- | --- |
+| `build-mixed-content` | `1.0362639565590437` | `1.0069852963334736` | `1.156165042556` | yes | cold mixed-sheet build, formula initialization, binding allocation |
+| `structural-delete-rows` | `1.0234049542127845` | `0.8750303474565914` | `1.267650293785557` | yes | structural row-delete metadata and headless result collection |
+
+Current p95 tail risk:
+
+| Workload | Worst Ratio | Interpretation | Current Owner |
+| --- | ---: | --- | --- |
+| `lookup-text-exact` | `2.27208263805424` p95 | tail-latency hardening, not a current mean-scorecard loss | text-key normalization, index reuse, invalidation, allocation |
+
+Rows that earlier versions of this document treated as active red lanes but
+that are now green or no longer the decision driver:
+
+- `lookup-no-column-index`
+- `lookup-with-column-index`
+- `lookup-approximate-sorted`
+- `lookup-with-column-index-after-batch-write`
+- `aggregate-overlapping-sliding-window`
+- `build-parser-cache-unique-formulas`
+- `sheet-rename-dependencies`
+- `named-expression-change`
+- `lookup-approximate-duplicates`
+
+The live implementation order is now:
+
+1. Reduce production cold-build allocation and duplicated initialization in
+   `build-mixed-content`.
+2. Narrow structural row-delete metadata and changed-result collection for
+   `structural-delete-rows`.
+3. Remove p95 allocation/cache churn from `lookup-text-exact`.
+4. Preserve all existing green holdout rows and rerun the competitive generate
+   and check commands before claiming a stable win.
+
 ## Source Corpus
 
 This design is grounded in the local HyperFormula checkout and the current `bilig` implementation.
@@ -93,7 +146,7 @@ Reviewed current `bilig` implementation:
 - `/Users/gregkonush/github.com/bilig/packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
 - `/Users/gregkonush/github.com/bilig/packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
 
-## Current Measured Gap
+## Historical Measured Gap - 2026-04-10
 
 Current legacy control-workload direct-comparison results from
 `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`:
@@ -443,10 +496,9 @@ Acceptance:
 Status:
 
 - completed on `main`
-- current checked-in result:
-- `lookup-with-column-index` is now `1.39x` slower
-- `lookup-no-column-index` is now a `WorkPaper` win at `1.49x` faster
-- the remaining red work is now phase-2 quality work, not phase-1 plumbing
+- current checked-in result: steady-state lookup and after-write lookup rows are
+  no longer broad scorecard blockers; the active lookup work is
+  `lookup-text-exact` p95 hardening
 
 ### Phase 2: Native Direct Lookup Ops
 
@@ -469,8 +521,9 @@ Status:
   from `6.67x` slower to `1.05x` slower
 - `lookup-no-column-index` has crossed into a `WorkPaper` win at `1.49x` faster
 - `lookup-with-column-index` is under the `3x` target at `1.39x` slower
-- the remaining work is no longer to make lookup plausible; it is to turn the remaining lookup
-  losses into actual wins while the program focus shifts to recalculation and mixed-content build
+- the remaining lookup work is now tail stabilization for `lookup-text-exact`,
+  while the program focus shifts to `build-mixed-content` and
+  `structural-delete-rows`
 
 ### Phase 3: Batch/Recalc and Build Path Reduction
 
@@ -485,33 +538,27 @@ Acceptance:
 
 Status:
 
-- partially satisfied on `main`
-- `build-from-sheets` has already crossed the finish line and is now a `WorkPaper` win at `4.37x`
-  faster
-- `range-read` is now a `WorkPaper` win at `1.03x` faster
-- `single-edit-recalc` is now a `WorkPaper` win at `1.06x` faster after large fresh-workbook
-  formula sets began synchronously initializing the kernel on Node/Bun instead of missing the
-  compiled WASM path on the first real edit, coordinate-native simple-cell mutation stopped
-  reparsing `sheetName + A1`, local-only headless engines stopped paying replica-version
-  bookkeeping, and existing plain literal inputs gained a dedicated overwrite fast path
-- `batch-edit-recalc` improved to `1.61x` slower after internal hot mutation paths stopped
-  crossing the `Effect` boundary per operation, batch-literal undo stopped using the generic
-  engine history builder, coordinate-native simple-cell mutation paths stopped reparsing
-  `sheetName + A1`, existing plain literal inputs gained a dedicated overwrite fast path, and
-  column-version invalidation started batching across local mutation bursts
-- `lookup-no-column-index` is now a `WorkPaper` win at `1.49x` faster
-- the remaining work in this phase is now `batch-edit-recalc`, `lookup-with-column-index`, and
-  the mixed-content import path
+- mostly satisfied on `main`
+- build, range-read, single-edit, batch, and lookup rows are no longer the broad
+  red set described by this older phase plan
+- the remaining work in this phase is `build-mixed-content` cold-build
+  allocation and `structural-delete-rows` row-delete result/metadata overhead
 
 ### Phase 4: Majority Wins
 
-Tune the remaining red workloads until the comparable benchmark suite is mostly green.
+Tune the remaining active workloads until the comparable benchmark suite is
+fully green or any residual overlap row has focused high-sample evidence proving
+it is not a stable production regression.
 
 Acceptance:
 
-- `bilig` wins at least `4/6` directly comparable workloads
-- no remaining loss exceeds `1.25x`
-- at least one lookup workload and one recalculation workload are clear `bilig` wins
+- WorkPaper improves from `44/46` to `46/46` on scorecard-eligible comparable
+  mean winners, or every remaining non-win has confidence-overlap plus focused
+  high-sample evidence
+- public lane remains visible and improves from `36/38`
+- holdout lane remains `8/8`
+- `lookup-text-exact` p95 tail is reduced without changing benchmark sampling or
+  verification
 
 ## Benchmark and Proof Discipline
 

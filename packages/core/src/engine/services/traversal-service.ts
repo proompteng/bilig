@@ -186,7 +186,7 @@ export function createEngineTraversalService(args: {
       for (let index = 0; index < formula.directCriteria.criteriaPairs.length; index += 1) {
         const pair = formula.directCriteria.criteriaPairs[index]!
         pushDirectRegion(pair.range.regionId)
-        if (pair.criterion.kind === 'cell') {
+        if (pair.criterion.kind !== 'literal') {
           push(pair.criterion.cellIndex)
         }
       }

@@ -46,6 +46,29 @@ It explicitly excludes:
 
 Before changing architecture, make the benchmark story trustworthy.
 
+Current checked benchmark truth:
+
+- Artifact: `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
+- Generated at `2026-04-29T14:47:16.831Z`
+- Total workloads: `51`
+- Scorecard-eligible comparable workloads: `46`
+- Overall scorecard: WorkPaper `44`, HyperFormula `2`
+- Public lane: WorkPaper `36`, HyperFormula `2`
+- Holdout lane: WorkPaper `8`, HyperFormula `0`
+
+Current active production rows:
+
+| Workload | Mean Ratio | Median Ratio | P95 Ratio | Current owner |
+| --- | ---: | ---: | ---: | --- |
+| `build-mixed-content` | `1.0362639565590437` | `1.0069852963334736` | `1.156165042556` | cold mixed-build initialization and binding allocation |
+| `structural-delete-rows` | `1.0234049542127845` | `0.8750303474565914` | `1.267650293785557` | structural row-delete metadata and result collection |
+| `lookup-text-exact` p95 | mean green | mean green | `2.27208263805424` | text lookup normalization, index reuse, invalidation, allocation |
+
+Original broad-red workstreams such as structural columns, after-write lookup,
+parser-template build, sliding-window aggregate, batch edit, sheet rename, named
+expression, and approximate duplicate lookup are preservation gates in the
+current artifact, not the next active red-list.
+
 Required reporting dimensions:
 
 - structural rows and structural columns reported separately
@@ -63,20 +86,20 @@ Do not use the following as evidence of broad victory:
 
 The safest production order is:
 
-1. benchmark truth and counters
-2. persistent column index ownership
-3. logical structural ownership
-4. template bank and runtime image
-5. region graph and dependency compression
-6. dynamic topo and calc chain
-7. typed history and typed patches
+1. benchmark truth and counters, already present in the expanded artifact
+2. `build-mixed-content` cold-build allocation and duplicated initialization
+3. `structural-delete-rows` row-delete metadata/result collection
+4. `lookup-text-exact` p95 hardening
+5. preservation checks for all green public and holdout rows
+6. dynamic topo, typed history, or deeper symbolic ownership only where profiling
+   proves they remain on the active hot path
 
 This order is not the same as theoretical purity. It is chosen for production risk:
 
-- lookup ownership has the clearest bounded surface and best near-term ROI
-- structural ownership is the most important broad family, but also the most dangerous migration
-- runtime image and template ownership should not land before the storage substrate is stable
-- typed patch and history work should come after the primary owners exist
+- the current red rows are small and overlapping, so broad rewrites are higher
+  risk than targeted production hot-path cleanup
+- holdout rows are green and must be protected
+- deeper symbolic ownership should follow evidence, not the old broad-red list
 
 ## Task 1: Fix The Scorecard And Counters
 

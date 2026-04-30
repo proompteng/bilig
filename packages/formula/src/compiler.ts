@@ -490,6 +490,7 @@ export interface DirectAggregateCandidate {
   callee: string
   aggregateKind: 'sum' | 'average' | 'count' | 'min' | 'max'
   symbolicRangeIndex: number
+  resultOffset?: number
 }
 
 interface CompileFormulaAstOptions {

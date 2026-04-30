@@ -24,6 +24,17 @@ graph is still sparse in the most important paths:
 
 ## Current Repo Fit
 
+Current expanded benchmark note:
+
+- The latest artifact is
+  `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`, generated at
+  `2026-04-29T14:47:16.831Z`.
+- WorkPaper leads `44/46` scorecard-eligible comparable workloads and `8/8`
+  holdout workloads.
+- Pearce/Kelly-style topo repair is not the next default implementation step.
+  It becomes relevant only if profiling `structural-delete-rows` proves topo
+  order maintenance is still a material part of the remaining row-delete tail.
+
 Primary target files:
 
 - `/Users/gregkonush/github.com/bilig2/packages/core/src/scheduler.ts`
@@ -39,7 +50,7 @@ Current state:
   scratch
 - structural operations still create too much dependency churn before the scheduler ever runs
 
-This makes the following current red lanes worse:
+At the time this document was written, this made these red lanes worse:
 
 - `structural-insert-rows`
 - `structural-delete-rows`
@@ -48,6 +59,10 @@ This makes the following current red lanes worse:
 - `structural-delete-columns`
 - `structural-move-columns`
 - `partial-recompute-mixed-frontier`
+
+In the current artifact, only `structural-delete-rows` remains on this list as
+an active mean-red row, and even that row has confidence-overlap with a green
+median.
 
 ## Decision
 

@@ -31,16 +31,24 @@ import type {
   WorkbookShapeSnapshot,
   WorkbookSnapshot,
 } from '@bilig/protocol'
-import { ValueTag } from '@bilig/protocol'
-import { Float64Arena, Uint32Arena, formatAddress, parseCellAddress, rewriteFormulaForStructuralTransform } from '@bilig/formula'
+import { ErrorCode, ValueTag } from '@bilig/protocol'
+import {
+  Float64Arena,
+  Uint32Arena,
+  formatAddress,
+  parseCellAddress,
+  rewriteFormulaForStructuralTransform,
+  type FormulaNode,
+} from '@bilig/formula'
 import type { EngineOp, EngineOpBatch } from '@bilig/workbook-domain'
+import { CellFlags } from './cell-store.js'
 import type {
   EngineCellMutationRef,
   EngineExistingNumericCellMutationRef,
   EngineExistingNumericCellMutationResult,
   EngineFormulaSourceRef,
 } from './cell-mutations-at.js'
-import { createReplicaState, type OpOrder, type ReplicaState } from './replica-state.js'
+import { batchOpOrder, compareOpOrder, createBatch, createReplicaState, type OpOrder, type ReplicaState } from './replica-state.js'
 import { CycleDetector } from './cycle-detection.js'
 import { EdgeArena, type EdgeSlice } from './edge-arena.js'
 import { definedNameValuesEqual } from './engine-metadata-utils.js'
@@ -98,6 +106,43 @@ export type {
   EngineSyncClientConnection,
   SpreadsheetEngineOptions,
 } from './engine/runtime-state.js'
+
+function namedNumberOperand(node: FormulaNode, normalizedName: string, namedValue: number): number | undefined {
+  if (node.kind === 'NumberLiteral') {
+    return node.value
+  }
+  if (node.kind === 'NameRef' && normalizeDefinedName(node.name) === normalizedName) {
+    return namedValue
+  }
+  return undefined
+}
+
+function evaluateNumericDefinedNameFormula(node: FormulaNode, normalizedName: string, namedValue: number): CellValue | undefined {
+  if (node.kind === 'NameRef' && normalizeDefinedName(node.name) === normalizedName) {
+    return { tag: ValueTag.Number, value: namedValue }
+  }
+  if (node.kind !== 'BinaryExpr') {
+    return undefined
+  }
+  const left = namedNumberOperand(node.left, normalizedName, namedValue)
+  const right = namedNumberOperand(node.right, normalizedName, namedValue)
+  if (left === undefined || right === undefined) {
+    return undefined
+  }
+  if (node.operator === '+') {
+    return { tag: ValueTag.Number, value: left + right }
+  }
+  if (node.operator === '-') {
+    return { tag: ValueTag.Number, value: left - right }
+  }
+  if (node.operator === '*') {
+    return { tag: ValueTag.Number, value: left * right }
+  }
+  if (node.operator === '/') {
+    return right === 0 ? { tag: ValueTag.Error, code: ErrorCode.Div0 } : { tag: ValueTag.Number, value: left / right }
+  }
+  return undefined
+}
 
 export class SpreadsheetEngine {
   private readonly performanceCounters = createEngineCounters()
@@ -419,6 +464,9 @@ export class SpreadsheetEngine {
         noteSortedLookupLiteralWrite: () => {
           return
         },
+        sortedLookup: {
+          findPreparedVectorMatch: () => ({ handled: false }),
+        },
         deferKernelSync: () => {
           return
         },
@@ -513,6 +561,10 @@ export class SpreadsheetEngine {
     this.executeLocalTransaction([{ kind: 'upsertSheet', name, order: this.workbook.sheetsByName.size }])
   }
 
+  createSheetForInitialization(name: string): number {
+    return this.workbook.createSheet(name, this.workbook.sheetsByName.size).id
+  }
+
   renameSheet(oldName: string, newName: string): void {
     const trimmedName = newName.trim()
     if (trimmedName.length === 0 || oldName === trimmedName) {
@@ -522,6 +574,52 @@ export class SpreadsheetEngine {
       return
     }
     this.executeLocalTransaction([{ kind: 'renameSheet', oldName, newName: trimmedName }])
+  }
+
+  renameSheetMetadataOnly(oldName: string, newName: string): boolean {
+    const trimmedName = newName.trim()
+    if (
+      trimmedName.length === 0 ||
+      oldName === trimmedName ||
+      !this.workbook.getSheet(oldName) ||
+      this.workbook.getSheet(trimmedName) ||
+      this.syncClientConnection !== null ||
+      this.batchListeners.size > 0 ||
+      this.batchMutationDepth !== 0 ||
+      this.transactionReplayDepth !== 0
+    ) {
+      return false
+    }
+
+    const renamedSheet = this.workbook.renameSheet(oldName, trimmedName)
+    if (!renamedSheet) {
+      return false
+    }
+    const op: EngineOp = { kind: 'renameSheet', oldName, newName: trimmedName }
+    if (this.state.trackReplicaVersions) {
+      const batch = createBatch(this.replicaState, [op])
+      const order = batchOpOrder(batch, 0)
+      this.entityVersions.set(`sheet:${oldName}`, order)
+      this.entityVersions.set(`sheet:${trimmedName}`, order)
+      this.sheetDeleteVersions.set(oldName, order)
+      const renamedTombstone = this.sheetDeleteVersions.get(trimmedName)
+      if (!renamedTombstone || compareOpOrder(order, renamedTombstone) > 0) {
+        this.sheetDeleteVersions.delete(trimmedName)
+      }
+    }
+    if (this.selection.sheetName === oldName) {
+      this.selection = { ...this.selection, sheetName: trimmedName }
+    }
+    if (this.workbook.metadata.definedNames.size > 0) {
+      runEngineEffect(this.runtime.maintenance.rewriteDefinedNamesForSheetRename(oldName, trimmedName))
+    }
+    this.runtime.binding.deferCellFormulasForSheetRenameNow(oldName, trimmedName)
+    this.undoStack.push({
+      forward: { kind: 'single-op', op },
+      inverse: { kind: 'single-op', op: { kind: 'renameSheet', oldName: trimmedName, newName: oldName } },
+    })
+    this.redoStack.length = 0
+    return true
   }
 
   deleteSheet(name: string): void {
@@ -647,6 +745,73 @@ export class SpreadsheetEngine {
       return
     }
     this.executeLocalTransaction([{ kind: 'upsertDefinedName', name: trimmedName, value }])
+  }
+
+  collectDefinedNameDependentFormulaCells(name: string): readonly number[] {
+    return this.runtime.binding.collectFormulaCellsForDefinedNamesNow([normalizeDefinedName(name)])
+  }
+
+  upsertNumericDefinedNameFast(name: string, value: WorkbookDefinedNameValueSnapshot, numericValue: number): readonly number[] | null {
+    const trimmedName = name.trim()
+    const normalizedName = normalizeDefinedName(trimmedName)
+    const dependentCellIndices = this.runtime.binding.collectFormulaCellsForDefinedNamesNow([normalizedName])
+    const evaluated: Array<{ cellIndex: number; value: CellValue }> = []
+    for (let index = 0; index < dependentCellIndices.length; index += 1) {
+      const cellIndex = dependentCellIndices[index]!
+      const formula = this.formulas.get(cellIndex)
+      if (
+        formula === undefined ||
+        formula.compiled.symbolicNames.length !== 1 ||
+        normalizeDefinedName(formula.compiled.symbolicNames[0]!) !== normalizedName ||
+        formula.compiled.symbolicRanges.length !== 0 ||
+        formula.compiled.symbolicTables.length !== 0 ||
+        formula.compiled.symbolicSpills.length !== 0
+      ) {
+        return null
+      }
+      const nextValue = evaluateNumericDefinedNameFormula(formula.compiled.optimizedAst, normalizedName, numericValue)
+      if (nextValue === undefined) {
+        return null
+      }
+      evaluated.push({ cellIndex, value: nextValue })
+    }
+
+    const existing = this.workbook.getDefinedName(trimmedName)
+    const op: EngineOp = { kind: 'upsertDefinedName', name: trimmedName, value }
+    const batch = createBatch(this.replicaState, [op])
+    const order = batchOpOrder(batch, 0)
+    this.workbook.setDefinedName(trimmedName, value)
+    this.entityVersions.set(`defined-name:${normalizedName}`, order)
+
+    const changedCellIndices: number[] = []
+    const cellStore = this.workbook.cellStore
+    for (let index = 0; index < evaluated.length; index += 1) {
+      const { cellIndex, value: nextValue } = evaluated[index]!
+      const beforeTag = (cellStore.tags[cellIndex] as ValueTag | undefined) ?? ValueTag.Empty
+      const beforeNumber = cellStore.numbers[cellIndex] ?? 0
+      const beforeError = cellStore.errors[cellIndex] ?? ErrorCode.None
+      const changed =
+        beforeTag !== nextValue.tag ||
+        (nextValue.tag === ValueTag.Number && !Object.is(beforeNumber, nextValue.value)) ||
+        (nextValue.tag === ValueTag.Error && (beforeError as ErrorCode) !== nextValue.code)
+      cellStore.flags[cellIndex] = (cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)
+      cellStore.setValue(cellIndex, nextValue, 0)
+      if (changed) {
+        this.workbook.notifyCellValueWritten(cellIndex)
+        changedCellIndices.push(cellIndex)
+      }
+    }
+
+    const inverseOp: EngineOp =
+      existing === undefined
+        ? { kind: 'deleteDefinedName', name: trimmedName }
+        : { kind: 'upsertDefinedName', name: existing.name, value: structuredClone(existing.value) }
+    this.undoStack.push({
+      forward: { kind: 'single-op', op: { kind: 'upsertDefinedName', name: trimmedName, value: structuredClone(value) } },
+      inverse: { kind: 'single-op', op: inverseOp },
+    })
+    this.redoStack.length = 0
+    return changedCellIndices
   }
 
   deleteDefinedName(name: string): boolean {

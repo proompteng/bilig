@@ -1,4 +1,9 @@
-import { EXPANDED_COMPARATIVE_WORKLOADS, type ExpandedComparativeBenchmarkWorkload } from './expanded-competitive-workloads.js'
+import {
+  EXPANDED_COMPARATIVE_WORKLOADS,
+  EXPANDED_COMPARATIVE_WORKLOAD_SCORECARD_LANE,
+  type ExpandedComparativeBenchmarkWorkload,
+  type ExpandedComparativeScorecardLane,
+} from './expanded-competitive-workloads.js'
 import type { ExpandedComparativeBenchmarkResult } from './benchmark-workpaper-vs-hyperformula-expanded.js'
 
 export type ExpandedCompetitiveFamily =
@@ -6,11 +11,14 @@ export type ExpandedCompetitiveFamily =
   | 'rebuild'
   | 'runtime-restore'
   | 'config-toggle'
+  | 'sheet-lifecycle'
+  | 'named-expression'
   | 'dirty-execution'
   | 'batch-edit'
   | 'structural-rows'
   | 'structural-columns'
   | 'range-read'
+  | 'aggregate-2d'
   | 'overlapping-aggregate'
   | 'sliding-window-aggregate'
   | 'conditional-aggregation'
@@ -26,11 +34,14 @@ export const EXPANDED_COMPARATIVE_FAMILY_ORDER = [
   'rebuild',
   'runtime-restore',
   'config-toggle',
+  'sheet-lifecycle',
+  'named-expression',
   'dirty-execution',
   'batch-edit',
   'structural-rows',
   'structural-columns',
   'range-read',
+  'aggregate-2d',
   'overlapping-aggregate',
   'sliding-window-aggregate',
   'conditional-aggregation',
@@ -50,11 +61,14 @@ const EXPANDED_COMPARATIVE_FAMILY_METADATA = {
     scorecardEligible: false,
     exclusionReason: 'Control-only rebuild toggle; not evidence of broad competitive victory.',
   },
+  'sheet-lifecycle': { scorecardEligible: true },
+  'named-expression': { scorecardEligible: true },
   'dirty-execution': { scorecardEligible: true },
   'batch-edit': { scorecardEligible: true },
   'structural-rows': { scorecardEligible: true },
   'structural-columns': { scorecardEligible: true },
   'range-read': { scorecardEligible: true },
+  'aggregate-2d': { scorecardEligible: true },
   'overlapping-aggregate': { scorecardEligible: true },
   'sliding-window-aggregate': { scorecardEligible: true },
   'conditional-aggregation': { scorecardEligible: true },
@@ -76,11 +90,14 @@ export const EXPANDED_COMPARATIVE_FAMILY_GROUPS = {
     'build-mixed-content',
     'build-parser-cache-row-templates',
     'build-parser-cache-mixed-templates',
+    'build-parser-cache-unique-formulas',
     'build-many-sheets',
   ],
   rebuild: ['rebuild-and-recalculate'],
   'runtime-restore': ['rebuild-runtime-from-snapshot'],
   'config-toggle': ['rebuild-config-toggle'],
+  'sheet-lifecycle': ['sheet-rename-dependencies'],
+  'named-expression': ['named-expression-change'],
   'dirty-execution': [
     'single-edit-recalc',
     'single-edit-chain',
@@ -99,15 +116,21 @@ export const EXPANDED_COMPARATIVE_FAMILY_GROUPS = {
   'structural-rows': ['structural-insert-rows', 'structural-delete-rows', 'structural-move-rows'],
   'structural-columns': ['structural-insert-columns', 'structural-delete-columns', 'structural-move-columns'],
   'range-read': ['range-read', 'range-read-dense'],
+  'aggregate-2d': ['aggregate-2d-ranges'],
   'overlapping-aggregate': ['aggregate-overlapping-ranges'],
   'sliding-window-aggregate': ['aggregate-overlapping-sliding-window'],
-  'conditional-aggregation': ['conditional-aggregation-reused-ranges', 'conditional-aggregation-criteria-cell-edit'],
+  'conditional-aggregation': [
+    'conditional-aggregation-reused-ranges',
+    'conditional-aggregation-criteria-cell-edit',
+    'conditional-aggregation-shared-criteria',
+    'conditional-aggregation-mixed-criteria',
+  ],
   'lookup-exact': ['lookup-no-column-index', 'lookup-with-column-index'],
   'lookup-after-write': ['lookup-with-column-index-after-column-write', 'lookup-with-column-index-after-batch-write'],
-  'lookup-approximate': ['lookup-approximate-sorted'],
+  'lookup-approximate': ['lookup-approximate-sorted', 'lookup-approximate-descending', 'lookup-approximate-duplicates'],
   'lookup-approximate-after-write': ['lookup-approximate-sorted-after-column-write'],
-  'lookup-text': ['lookup-text-exact'],
-  'dynamic-array': ['dynamic-array-filter'],
+  'lookup-text': ['lookup-text-exact', 'lookup-reverse-search'],
+  'dynamic-array': ['dynamic-array-filter', 'dynamic-array-sort', 'dynamic-array-unique'],
 } as const satisfies Record<ExpandedCompetitiveFamily, readonly ExpandedComparativeBenchmarkWorkload[]>
 
 export const EXPANDED_COMPARATIVE_WORKLOAD_FAMILY = buildExpandedComparativeWorkloadFamilyMap(EXPANDED_COMPARATIVE_FAMILY_GROUPS)
@@ -123,14 +146,35 @@ export interface ExpandedCompetitiveFamilySummary {
   workpaperWins: number
   hyperformulaWins: number
   meanSpeedupGeomean: number | null
+  directionalMeanRatioGeomean: number | null
+  directionalP95RatioGeomean: number | null
+  worstWorkpaperToHyperFormulaMeanRatio: number | null
+  worstMeanRatioWorkload: ExpandedComparativeBenchmarkWorkload | null
+  worstWorkpaperToHyperFormulaP95Ratio: number | null
+  worstP95RatioWorkload: ExpandedComparativeBenchmarkWorkload | null
 }
 
-export interface ExpandedCompetitiveScorecardSummary {
-  eligibleFamilies: readonly ExpandedCompetitiveFamily[]
-  excludedFamilies: readonly ExpandedCompetitiveFamily[]
+export interface ExpandedCompetitiveScorecardLaneSummary {
+  lane: 'overall' | ExpandedComparativeScorecardLane
   comparableCount: number
   workpaperWins: number
   hyperformulaWins: number
+  directionalMeanRatioGeomean: number | null
+  directionalP95RatioGeomean: number | null
+  worstWorkpaperToHyperFormulaMeanRatio: number | null
+  worstMeanRatioWorkload: ExpandedComparativeBenchmarkWorkload | null
+  worstWorkpaperToHyperFormulaP95Ratio: number | null
+  worstP95RatioWorkload: ExpandedComparativeBenchmarkWorkload | null
+}
+
+export interface ExpandedCompetitiveScorecardSummary extends ExpandedCompetitiveScorecardLaneSummary {
+  eligibleFamilies: readonly ExpandedCompetitiveFamily[]
+  excludedFamilies: readonly ExpandedCompetitiveFamily[]
+  scorecards: {
+    overall: ExpandedCompetitiveScorecardLaneSummary
+    public: ExpandedCompetitiveScorecardLaneSummary
+    holdout: ExpandedCompetitiveScorecardLaneSummary
+  }
 }
 
 export interface ExpandedCompetitiveFamilyReport {
@@ -151,11 +195,14 @@ export function groupExpandedCompetitiveBenchmarkResultsByFamily(
     rebuild: results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'rebuild'),
     'runtime-restore': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'runtime-restore'),
     'config-toggle': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'config-toggle'),
+    'sheet-lifecycle': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'sheet-lifecycle'),
+    'named-expression': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'named-expression'),
     'dirty-execution': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'dirty-execution'),
     'batch-edit': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'batch-edit'),
     'structural-rows': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'structural-rows'),
     'structural-columns': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'structural-columns'),
     'range-read': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'range-read'),
+    'aggregate-2d': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'aggregate-2d'),
     'overlapping-aggregate': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'overlapping-aggregate'),
     'sliding-window-aggregate': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'sliding-window-aggregate'),
     'conditional-aggregation': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'conditional-aggregation'),
@@ -192,6 +239,22 @@ export function summarizeExpandedCompetitiveFamilies(
       hyperformulaWins,
       meanSpeedupGeomean:
         comparableResults.length === 0 ? null : geometricMean(comparableResults.map((result) => result.comparison.meanSpeedup)),
+      directionalMeanRatioGeomean:
+        comparableResults.length === 0
+          ? null
+          : geometricMean(comparableResults.map((result) => result.comparison.workpaperToHyperFormulaMeanRatio)),
+      directionalP95RatioGeomean:
+        comparableResults.length === 0
+          ? null
+          : geometricMean(comparableResults.map((result) => result.comparison.workpaperToHyperFormulaP95Ratio)),
+      worstWorkpaperToHyperFormulaMeanRatio:
+        comparableResults.length === 0 ? null : maxComparableRatio(comparableResults, 'workpaperToHyperFormulaMeanRatio'),
+      worstMeanRatioWorkload:
+        comparableResults.length === 0 ? null : maxComparableRatioWorkload(comparableResults, 'workpaperToHyperFormulaMeanRatio'),
+      worstWorkpaperToHyperFormulaP95Ratio:
+        comparableResults.length === 0 ? null : maxComparableRatio(comparableResults, 'workpaperToHyperFormulaP95Ratio'),
+      worstP95RatioWorkload:
+        comparableResults.length === 0 ? null : maxComparableRatioWorkload(comparableResults, 'workpaperToHyperFormulaP95Ratio'),
     }
   })
 }
@@ -201,15 +264,32 @@ export function buildExpandedCompetitiveFamilyReport(
 ): ExpandedCompetitiveFamilyReport {
   const families = summarizeExpandedCompetitiveFamilies(results)
   const scorecardFamilies = families.filter((family) => family.scorecardEligible)
+  const eligibleFamilySet = new Set(scorecardFamilies.map((family) => family.family))
+  const eligibleComparableResults = results.filter(
+    (result): result is Extract<ExpandedComparativeBenchmarkResult, { comparable: true }> =>
+      result.comparable && eligibleFamilySet.has(getExpandedCompetitiveFamily(result.workload)),
+  )
+  const overallScorecard = buildScorecardLaneSummary('overall', eligibleComparableResults)
+  const publicScorecard = buildScorecardLaneSummary(
+    'public',
+    eligibleComparableResults.filter((result) => EXPANDED_COMPARATIVE_WORKLOAD_SCORECARD_LANE[result.workload] === 'public'),
+  )
+  const holdoutScorecard = buildScorecardLaneSummary(
+    'holdout',
+    eligibleComparableResults.filter((result) => EXPANDED_COMPARATIVE_WORKLOAD_SCORECARD_LANE[result.workload] === 'holdout'),
+  )
   return {
     suite: 'workpaper-vs-hyperformula',
     families,
     scorecard: {
+      ...overallScorecard,
       eligibleFamilies: scorecardFamilies.map((family) => family.family),
       excludedFamilies: families.filter((family) => !family.scorecardEligible).map((family) => family.family),
-      comparableCount: scorecardFamilies.reduce((sum, family) => sum + family.comparableCount, 0),
-      workpaperWins: scorecardFamilies.reduce((sum, family) => sum + family.workpaperWins, 0),
-      hyperformulaWins: scorecardFamilies.reduce((sum, family) => sum + family.hyperformulaWins, 0),
+      scorecards: {
+        overall: overallScorecard,
+        public: publicScorecard,
+        holdout: holdoutScorecard,
+      },
     },
   }
 }
@@ -261,4 +341,40 @@ function geometricMean(values: readonly number[]): number {
     return sum + Math.log(value)
   }, 0)
   return Math.exp(totalLog / values.length)
+}
+
+function buildScorecardLaneSummary(
+  lane: 'overall' | ExpandedComparativeScorecardLane,
+  results: readonly Extract<ExpandedComparativeBenchmarkResult, { comparable: true }>[],
+): ExpandedCompetitiveScorecardLaneSummary {
+  const workpaperWins = results.filter((result) => result.comparison.fasterEngine === 'workpaper').length
+  const hyperformulaWins = results.length - workpaperWins
+  return {
+    lane,
+    comparableCount: results.length,
+    workpaperWins,
+    hyperformulaWins,
+    directionalMeanRatioGeomean:
+      results.length === 0 ? null : geometricMean(results.map((result) => result.comparison.workpaperToHyperFormulaMeanRatio)),
+    directionalP95RatioGeomean:
+      results.length === 0 ? null : geometricMean(results.map((result) => result.comparison.workpaperToHyperFormulaP95Ratio)),
+    worstWorkpaperToHyperFormulaMeanRatio: results.length === 0 ? null : maxComparableRatio(results, 'workpaperToHyperFormulaMeanRatio'),
+    worstMeanRatioWorkload: results.length === 0 ? null : maxComparableRatioWorkload(results, 'workpaperToHyperFormulaMeanRatio'),
+    worstWorkpaperToHyperFormulaP95Ratio: results.length === 0 ? null : maxComparableRatio(results, 'workpaperToHyperFormulaP95Ratio'),
+    worstP95RatioWorkload: results.length === 0 ? null : maxComparableRatioWorkload(results, 'workpaperToHyperFormulaP95Ratio'),
+  }
+}
+
+function maxComparableRatio(
+  results: readonly Extract<ExpandedComparativeBenchmarkResult, { comparable: true }>[],
+  ratioKey: 'workpaperToHyperFormulaMeanRatio' | 'workpaperToHyperFormulaP95Ratio',
+): number {
+  return Math.max(...results.map((result) => result.comparison[ratioKey]))
+}
+
+function maxComparableRatioWorkload(
+  results: readonly Extract<ExpandedComparativeBenchmarkResult, { comparable: true }>[],
+  ratioKey: 'workpaperToHyperFormulaMeanRatio' | 'workpaperToHyperFormulaP95Ratio',
+): ExpandedComparativeBenchmarkWorkload {
+  return results.reduce((worst, result) => (result.comparison[ratioKey] > worst.comparison[ratioKey] ? result : worst)).workload
 }

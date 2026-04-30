@@ -25,11 +25,12 @@ type InitialPrefixAggregateKind = 'sum' | 'count' | 'average' | 'min' | 'max'
 interface InitialPrefixAggregateGroup {
   readonly sheetName: string
   readonly col: number
+  readonly colEnd: number
   readonly aggregateKind: InitialPrefixAggregateKind
   maxRowEnd: number
   lastRowEnd: number
   formulasAreOrdered: boolean
-  readonly formulas: Array<{ cellIndex: number; rowEnd: number }>
+  readonly formulas: Array<{ cellIndex: number; rowEnd: number; resultOffset?: number }>
 }
 
 type DeferredInitialFormulaFamilyRun = Omit<FormulaFamilyRunUpsertArgs, 'members'> & {
@@ -291,6 +292,7 @@ export function createEngineFormulaInitializationService(args: {
   readonly markInputChanged: (cellIndex: number, count: number) => number
   readonly markFormulaChanged: (cellIndex: number, count: number) => number
   readonly markVolatileFormulasChanged: (count: number) => number
+  readonly hasVolatileFormulas?: () => boolean
   readonly syncDynamicRanges: (formulaChangedCount: number) => number
   readonly composeMutationRoots: (changedInputCount: number, formulaChangedCount: number) => U32
   readonly getChangedInputBuffer: () => U32
@@ -455,12 +457,13 @@ export function createEngineFormulaInitializationService(args: {
       if (!formula || !aggregate || aggregate.rowStart !== 0 || formula.dependencyIndices.length !== 0) {
         continue
       }
-      const key = `${aggregate.sheetName}\t${aggregate.col}\t${aggregate.aggregateKind}`
+      const key = `${aggregate.sheetName}\t${aggregate.col}\t${aggregate.colEnd}\t${aggregate.aggregateKind}`
       let group = groups.get(key)
       if (!group) {
         group = {
           sheetName: aggregate.sheetName,
           col: aggregate.col,
+          colEnd: aggregate.colEnd,
           aggregateKind: aggregate.aggregateKind,
           maxRowEnd: aggregate.rowEnd,
           lastRowEnd: aggregate.rowEnd,
@@ -475,7 +478,11 @@ export function createEngineFormulaInitializationService(args: {
         }
         group.lastRowEnd = aggregate.rowEnd
       }
-      group.formulas.push({ cellIndex, rowEnd: aggregate.rowEnd })
+      group.formulas.push({
+        cellIndex,
+        rowEnd: aggregate.rowEnd,
+        ...(aggregate.resultOffset !== undefined ? { resultOffset: aggregate.resultOffset } : {}),
+      })
     }
     if (groups.size === 0) {
       return undefined
@@ -496,39 +503,43 @@ export function createEngineFormulaInitializationService(args: {
       let minimum = Number.POSITIVE_INFINITY
       let maximum = Number.NEGATIVE_INFINITY
       let formulaIndex = 0
-      for (let row = 0; row <= group.maxRowEnd; row += 1) {
-        const memberCellIndex = sheet.structureVersion === 1 ? sheet.grid.getPhysical(row, group.col) : sheet.grid.get(row, group.col)
-        if (memberCellIndex !== -1) {
-          if (((args.state.workbook.cellStore.flags[memberCellIndex] ?? 0) & CellFlags.HasFormula) !== 0) {
-            break
-          }
-          const tag = (args.state.workbook.cellStore.tags[memberCellIndex] as ValueTag | undefined) ?? ValueTag.Empty
-          if (tag === ValueTag.Number) {
-            const numeric = args.state.workbook.cellStore.numbers[memberCellIndex] ?? 0
-            sum += numeric
-            count += 1
-            averageCount += 1
-            minimum = Math.min(minimum, numeric)
-            maximum = Math.max(maximum, numeric)
-          } else if (tag === ValueTag.Boolean) {
-            const numeric = (args.state.workbook.cellStore.numbers[memberCellIndex] ?? 0) !== 0 ? 1 : 0
-            sum += numeric
-            count += 1
-            averageCount += 1
-            minimum = Math.min(minimum, numeric)
-            maximum = Math.max(maximum, numeric)
-          } else if (tag === ValueTag.Empty) {
-            averageCount += 1
-            minimum = Math.min(minimum, 0)
-            maximum = Math.max(maximum, 0)
-          } else if (tag === ValueTag.Error) {
-            errorCode ||= (args.state.workbook.cellStore.errors[memberCellIndex] as ErrorCode | undefined) ?? ErrorCode.None
-            errorCount += 1
+      let encounteredFormulaMember = false
+      for (let row = 0; row <= group.maxRowEnd && !encounteredFormulaMember; row += 1) {
+        for (let col = group.col; col <= group.colEnd; col += 1) {
+          const memberCellIndex = sheet.structureVersion === 1 ? sheet.grid.getPhysical(row, col) : sheet.grid.get(row, col)
+          if (memberCellIndex !== -1) {
+            if (((args.state.workbook.cellStore.flags[memberCellIndex] ?? 0) & CellFlags.HasFormula) !== 0) {
+              encounteredFormulaMember = true
+              break
+            }
+            const tag = (args.state.workbook.cellStore.tags[memberCellIndex] as ValueTag | undefined) ?? ValueTag.Empty
+            if (tag === ValueTag.Number) {
+              const numeric = args.state.workbook.cellStore.numbers[memberCellIndex] ?? 0
+              sum += numeric
+              count += 1
+              averageCount += 1
+              minimum = Math.min(minimum, numeric)
+              maximum = Math.max(maximum, numeric)
+            } else if (tag === ValueTag.Boolean) {
+              const numeric = (args.state.workbook.cellStore.numbers[memberCellIndex] ?? 0) !== 0 ? 1 : 0
+              sum += numeric
+              count += 1
+              averageCount += 1
+              minimum = Math.min(minimum, numeric)
+              maximum = Math.max(maximum, numeric)
+            } else if (tag === ValueTag.Empty) {
+              averageCount += 1
+              minimum = Math.min(minimum, 0)
+              maximum = Math.max(maximum, 0)
+            } else if (tag === ValueTag.Error) {
+              errorCode ||= (args.state.workbook.cellStore.errors[memberCellIndex] as ErrorCode | undefined) ?? ErrorCode.None
+              errorCount += 1
+            }
           }
         }
         while (formulaIndex < formulas.length && formulas[formulaIndex]!.rowEnd <= row) {
           const formula = formulas[formulaIndex]!
-          const value =
+          const aggregateValue =
             group.aggregateKind === 'sum'
               ? errorCount > 0 && errorCode !== ErrorCode.None
                 ? { tag: ValueTag.Error as const, code: errorCode }
@@ -544,6 +555,10 @@ export function createEngineFormulaInitializationService(args: {
                   : group.aggregateKind === 'min'
                     ? { tag: ValueTag.Number as const, value: minimum === Number.POSITIVE_INFINITY ? 0 : minimum }
                     : { tag: ValueTag.Number as const, value: maximum === Number.NEGATIVE_INFINITY ? 0 : maximum }
+          const value =
+            formula.resultOffset !== undefined && aggregateValue.tag === ValueTag.Number
+              ? { tag: ValueTag.Number as const, value: aggregateValue.value + formula.resultOffset }
+              : aggregateValue
           writeFormulaValue(formula.cellIndex, value)
           handled.add(formula.cellIndex)
           pushChangedCellIndex(formula.cellIndex)
@@ -609,16 +624,25 @@ export function createEngineFormulaInitializationService(args: {
     if (right.kind === 'error') {
       return { tag: ValueTag.Error, code: right.code }
     }
+    let result: number
     switch (directScalar.operator) {
       case '+':
-        return { tag: ValueTag.Number, value: left.value + right.value }
+        result = left.value + right.value
+        break
       case '-':
-        return { tag: ValueTag.Number, value: left.value - right.value }
+        result = left.value - right.value
+        break
       case '*':
-        return { tag: ValueTag.Number, value: left.value * right.value }
+        result = left.value * right.value
+        break
       case '/':
-        return right.value === 0 ? { tag: ValueTag.Error, code: ErrorCode.Div0 } : { tag: ValueTag.Number, value: left.value / right.value }
+        if (right.value === 0) {
+          return { tag: ValueTag.Error, code: ErrorCode.Div0 }
+        }
+        result = left.value / right.value
+        break
     }
+    return { tag: ValueTag.Number, value: result + (directScalar.resultOffset ?? 0) }
   }
 
   const coerceInitialDirectScalarNumber = (cellIndex: number): number | undefined => {
@@ -660,16 +684,25 @@ export function createEngineFormulaInitializationService(args: {
     if (left === undefined || right === undefined) {
       return undefined
     }
+    let result: number
     switch (directScalar.operator) {
       case '+':
-        return left + right
+        result = left + right
+        break
       case '-':
-        return left - right
+        result = left - right
+        break
       case '*':
-        return left * right
+        result = left * right
+        break
       case '/':
-        return right === 0 ? undefined : left / right
+        if (right === 0) {
+          return undefined
+        }
+        result = left / right
+        break
     }
+    return result + (directScalar.resultOffset ?? 0)
   }
 
   const evaluateInitialDirectFormulas = (
@@ -953,7 +986,9 @@ export function createEngineFormulaInitializationService(args: {
         })
       }
     }
-    formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount)
+    if (args.hasVolatileFormulas?.() !== false) {
+      formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount)
+    }
     const useInitialDirectEvaluation = canUseInitialDirectEvaluation && formulaChangedCount === orderedPreparedCellIndices.length
     if (!useInitialDirectEvaluation) {
       args.prepareRegionQueryIndices()

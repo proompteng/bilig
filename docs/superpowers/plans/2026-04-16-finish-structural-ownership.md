@@ -40,20 +40,36 @@ This is the production-safe way to do “one turn, non stop”:
 
 ## Current Structural Reality To Beat
 
-Current structural lane reality from the broader competitive suite on `main`:
+Current structural lane reality from the latest checked expanded artifact:
 
-- `structural-insert-rows`: about `10.14 ms` vs HyperFormula `5.95 ms`
-- `structural-delete-rows`: about `56-92 ms` depending on tree state, still badly red
-- `structural-move-rows`: about `66-101 ms`, still badly red
-- `structural-insert-columns`: about `21-23 ms` vs HyperFormula `0.55-0.64 ms`
-- `structural-delete-columns`: about `32-41 ms` vs HyperFormula `8.15-8.19 ms`
-- `structural-move-columns`: about `11.88-12.12 ms` vs HyperFormula `6.23-8.45 ms`
+- Artifact: `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
+- Generated at `2026-04-29T14:47:16.831Z`
+- Overall scorecard: WorkPaper `44/46`
+- Holdout scorecard: WorkPaper `8/8`
+- Only current structural mean red: `structural-delete-rows`
+
+Current structural delete evidence:
+
+- `structural-delete-rows`: mean ratio `1.0234049542127845`
+- median ratio `0.8750303474565914`, so the median run is WorkPaper-green
+- p95 ratio `1.267650293785557`
+- confidence intervals overlap
+
+Structural rows and columns that this plan originally listed as badly red are
+not current blockers in the latest artifact. They remain preservation gates:
+
+- `structural-insert-rows`
+- `structural-move-rows`
+- `structural-insert-columns`
+- `structural-delete-columns`
+- `structural-move-columns`
 
 Key measured fact already established in this repo:
 
 - row delete and row move are **not** dominated by recalc
 - direct engine timing showed `recalcMs` around `1.5-1.9 ms` inside operations that still cost `~60 ms`
-- the remaining bottleneck is structural ownership itself
+- the remaining bottleneck for current structural work is row-delete metadata,
+  dependency/index retargeting, undo, and headless changed-result collection
 
 ## File Map
 

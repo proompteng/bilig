@@ -10,9 +10,14 @@ import {
 } from '../packages/benchmarks/src/benchmark-workpaper-vs-hyperformula.ts'
 import {
   EXPANDED_COMPARATIVE_WORKLOADS,
+  buildExpandedComparativeBenchmarkReport,
   runWorkPaperVsHyperFormulaExpandedBenchmarkSuite,
   type ExpandedComparativeBenchmarkResult,
 } from '../packages/benchmarks/src/benchmark-workpaper-vs-hyperformula-expanded.ts'
+import type {
+  ExpandedCompetitiveFamilySummary,
+  ExpandedCompetitiveScorecardSummary,
+} from '../packages/benchmarks/src/report-competitive-families.ts'
 
 interface ExpandedCompetitiveBenchmarkArtifact {
   schemaVersion: 1
@@ -42,6 +47,8 @@ interface ExpandedCompetitiveBenchmarkArtifact {
       version: string
     }
   }
+  families: readonly ExpandedCompetitiveFamilySummary[]
+  scorecard: ExpandedCompetitiveScorecardSummary
   results: ExpandedComparativeBenchmarkResult[]
 }
 
@@ -87,7 +94,7 @@ if (isCheckMode) {
     schemaVersion: 1,
     suite: 'workpaper-vs-hyperformula',
     results: [...EXPANDED_COMPARATIVE_WORKLOADS].map((workload) =>
-      workload === 'dynamic-array-filter' ? leadershipShape(workload, [], []) : comparableShape(workload, [], []),
+      isLeadershipWorkload(workload) ? leadershipShape(workload, [], []) : comparableShape(workload, [], []),
     ),
   })
 
@@ -113,6 +120,11 @@ if (isCheckMode) {
 
 const workpaperVersion = readPackageVersion(join(rootDir, 'packages', 'headless', 'package.json'))
 const hyperformulaMetadata = readHyperFormulaMetadata(localHyperFormulaRoot)
+const results = runWorkPaperVsHyperFormulaExpandedBenchmarkSuite({
+  sampleCount,
+  warmupCount,
+})
+const benchmarkReport = buildExpandedComparativeBenchmarkReport(results)
 
 const artifact: ExpandedCompetitiveBenchmarkArtifact = {
   schemaVersion: 1,
@@ -135,10 +147,9 @@ const artifact: ExpandedCompetitiveBenchmarkArtifact = {
     },
     hyperformula: hyperformulaMetadata,
   },
-  results: runWorkPaperVsHyperFormulaExpandedBenchmarkSuite({
-    sampleCount,
-    warmupCount,
-  }),
+  families: benchmarkReport.families,
+  scorecard: benchmarkReport.scorecard,
+  results,
 }
 
 mkdirSync(dirname(outputPath), { recursive: true })
@@ -164,6 +175,11 @@ function comparableShape(workload: string, fixtureKeys: string[], verificationKe
     comparison: {
       fasterEngine: 'workpaper',
       meanSpeedup: 1,
+      workpaperToHyperFormulaMeanRatio: 1,
+      workpaperToHyperFormulaMedianRatio: 1,
+      workpaperToHyperFormulaP95Ratio: 1,
+      maxRelativeNoise: 0,
+      confidenceIntervalOverlaps: false,
       verificationEquivalent: true,
     },
     engines: {
@@ -194,23 +210,40 @@ function leadershipShape(workload: string, fixtureKeys: string[], verificationKe
 function measuredEngineShape(verificationKeys: string[]): Record<string, unknown> {
   return {
     status: 'supported',
-    elapsedMs: {
-      max: 0,
-      mean: 0,
-      median: 0,
-      min: 0,
-      p95: 0,
-      samples: [],
-    },
+    elapsedMs: numericSummaryShape(),
     memoryDeltaBytes: {
-      arrayBuffersBytes: { max: 0, mean: 0, median: 0, min: 0, p95: 0, samples: [] },
-      externalBytes: { max: 0, mean: 0, median: 0, min: 0, p95: 0, samples: [] },
-      heapTotalBytes: { max: 0, mean: 0, median: 0, min: 0, p95: 0, samples: [] },
-      heapUsedBytes: { max: 0, mean: 0, median: 0, min: 0, p95: 0, samples: [] },
-      rssBytes: { max: 0, mean: 0, median: 0, min: 0, p95: 0, samples: [] },
+      arrayBuffersBytes: numericSummaryShape(),
+      externalBytes: numericSummaryShape(),
+      heapTotalBytes: numericSummaryShape(),
+      heapUsedBytes: numericSummaryShape(),
+      rssBytes: numericSummaryShape(),
     },
     verification: Object.fromEntries(verificationKeys.map((key) => [key, 'placeholder'])),
   }
+}
+
+function numericSummaryShape(): Record<string, unknown> {
+  return {
+    samples: [],
+    min: 0,
+    median: 0,
+    p95: 0,
+    max: 0,
+    mean: 0,
+    standardDeviation: 0,
+    relativeStandardDeviation: 0,
+    standardError: 0,
+    confidence95: { low: 0, high: 0 },
+  }
+}
+
+function isLeadershipWorkload(workload: string): boolean {
+  return (
+    workload === 'lookup-reverse-search' ||
+    workload === 'dynamic-array-filter' ||
+    workload === 'dynamic-array-sort' ||
+    workload === 'dynamic-array-unique'
+  )
 }
 
 function normalizeArtifactShape(input: ArtifactShapeInput) {

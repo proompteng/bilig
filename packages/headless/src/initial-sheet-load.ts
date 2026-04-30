@@ -114,6 +114,8 @@ export function prepareInitialMixedSheetLoad(args: {
   const writtenColumns = new Uint8Array(maxColumnCount)
   const rowIds: string[] = []
   const colIds: string[] = []
+  const ensureRowId = args.engine.workbook.createLogicalAxisIdEnsurer(args.sheetId, 'row')
+  const ensureColumnId = args.engine.workbook.createLogicalAxisIdEnsurer(args.sheetId, 'column')
   let writtenColumnCount = 0
   const formulaRefs: EngineFormulaSourceRef[] =
     args.inspection?.formulaCellCount !== undefined ? Array<EngineFormulaSourceRef>(args.inspection.formulaCellCount) : []
@@ -132,10 +134,11 @@ export function prepareInitialMixedSheetLoad(args: {
             const formula = readInitialFormulaSource(raw)
             if (formula !== undefined) {
               const cellIndex = cellStore.allocateReserved(args.sheetId, rowIndex, colIndex)
-              rowId ??= args.engine.workbook.ensureLogicalAxisId(args.sheetId, 'row', rowIndex)
-              rowIds[rowIndex] = rowId
-              const colId = (colIds[colIndex] ??= args.engine.workbook.ensureLogicalAxisId(args.sheetId, 'column', colIndex))
-              attachFreshCell(rowIndex, colIndex, cellIndex, rowId, colId)
+              const materializedRowId = rowId ?? ensureRowId(rowIndex)
+              rowId = materializedRowId
+              rowIds[rowIndex] = materializedRowId
+              const colId = (colIds[colIndex] ??= ensureColumnId(colIndex))
+              attachFreshCell(rowIndex, colIndex, cellIndex, materializedRowId, colId)
               formulaRefs[formulaRefCount] = {
                 sheetId: args.sheetId,
                 cellIndex,
@@ -161,10 +164,11 @@ export function prepareInitialMixedSheetLoad(args: {
           cellStore.versions[cellIndex] = 1
           cellStore.topoRanks[cellIndex] = 0
           cellStore.cycleGroupIds[cellIndex] = -1
-          rowId ??= args.engine.workbook.ensureLogicalAxisId(args.sheetId, 'row', rowIndex)
-          rowIds[rowIndex] = rowId
-          const colId = (colIds[colIndex] ??= args.engine.workbook.ensureLogicalAxisId(args.sheetId, 'column', colIndex))
-          attachFreshCell(rowIndex, colIndex, cellIndex, rowId, colId)
+          const materializedRowId = rowId ?? ensureRowId(rowIndex)
+          rowId = materializedRowId
+          rowIds[rowIndex] = materializedRowId
+          const colId = (colIds[colIndex] ??= ensureColumnId(colIndex))
+          attachFreshCell(rowIndex, colIndex, cellIndex, materializedRowId, colId)
           if (typeof raw === 'number') {
             cellStore.tags[cellIndex] = ValueTag.Number
             cellStore.numbers[cellIndex] = raw
@@ -215,6 +219,7 @@ function createFreshInitialCellAttacher(sheet: SheetRecord): FreshInitialCellAtt
   let lastRowId: string | undefined
   let lastRowSet: Set<number> | undefined
   const columnSets = new Map<string, Set<number>>()
+  const setGridCell = sheet.grid.createRowMajorSetter()
   const ensureResidentColumnSet = (id: string): Set<number> => {
     const cached = columnSets.get(id)
     if (cached) {
@@ -248,7 +253,7 @@ function createFreshInitialCellAttacher(sheet: SheetRecord): FreshInitialCellAtt
     residentByCell.set(cellIndex, { rowId, colId })
     ensureResidentRowSet(rowId).add(cellIndex)
     ensureResidentColumnSet(colId).add(cellIndex)
-    sheet.grid.set(row, col, cellIndex)
+    setGridCell(row, col, cellIndex)
   }
 }
 
