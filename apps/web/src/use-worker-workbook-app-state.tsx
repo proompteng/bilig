@@ -286,6 +286,7 @@ export function useWorkerWorkbookAppState(input: {
   const optimisticCellSeedsRef = useRef<Map<string, string>>(new Map())
   const editSessionRef = useRef(0)
   const pendingEditCommitSessionRef = useRef<number | null>(null)
+  const pendingEditCommitMovementAppliedRef = useRef(false)
 
   useEffect(() => {
     const previousSelection = selectionRef.current
@@ -568,6 +569,7 @@ export function useWorkerWorkbookAppState(input: {
       }
       editSessionRef.current += 1
       pendingEditCommitSessionRef.current = null
+      pendingEditCommitMovementAppliedRef.current = false
       const nextEditorValue = seed ?? toEditorValue(getLiveSelectedCell())
       const nextTarget = selectionRef.current
       editorBaseSnapshotRef.current = cloneLiveSelectedCell(nextTarget)
@@ -619,6 +621,10 @@ export function useWorkerWorkbookAppState(input: {
         return
       }
       if (editingModeRef.current === 'idle' && valueOverride === undefined && targetSelectionOverride === undefined) {
+        if (movement && !pendingEditCommitMovementAppliedRef.current) {
+          pendingEditCommitMovementAppliedRef.current = true
+          completeEditNavigation(selectionRef.current, movement)
+        }
         return
       }
       const targetSelection =
@@ -629,9 +635,14 @@ export function useWorkerWorkbookAppState(input: {
           : (valueOverride ?? readMountedCellEditorValue() ?? editorValueRef.current)
       const commitSessionId = editSessionRef.current
       if (pendingEditCommitSessionRef.current === commitSessionId) {
+        if (movement && !pendingEditCommitMovementAppliedRef.current) {
+          pendingEditCommitMovementAppliedRef.current = true
+          finishEditingWithAuthoritative(targetSelection, movement)
+        }
         return
       }
       pendingEditCommitSessionRef.current = commitSessionId
+      pendingEditCommitMovementAppliedRef.current = false
       const parsed = parseEditorInput(nextValue)
       const baseSnapshot = editorBaseSnapshotRef.current
       const liveSnapshot = cloneLiveSelectedCell(targetSelection)
@@ -644,7 +655,9 @@ export function useWorkerWorkbookAppState(input: {
 
       if (!sameCellContent(targetBaseSnapshot, liveSnapshot) && !draftMatchesLiveSnapshot) {
         pendingEditCommitSessionRef.current = null
+        pendingEditCommitMovementAppliedRef.current = false
         if (draftMatchesBase) {
+          pendingEditCommitMovementAppliedRef.current = Boolean(movement)
           finishEditingWithAuthoritative(targetSelection, movement)
           return
         }
@@ -660,11 +673,13 @@ export function useWorkerWorkbookAppState(input: {
 
       if (draftMatchesLiveSnapshot) {
         pendingEditCommitSessionRef.current = null
+        pendingEditCommitMovementAppliedRef.current = Boolean(movement)
         finishEditingWithAuthoritative(targetSelection, movement)
         return
       }
 
       const nextSelection = completeEditNavigation(targetSelection, movement)
+      pendingEditCommitMovementAppliedRef.current = Boolean(movement)
       optimisticCellSeedsRef.current.set(optimisticCellKey(targetSelection.sheetName, targetSelection.address), nextValue)
       const rollbackOptimisticCell = applyOptimisticParsedInput(targetSelection, parsed)
       finishEditingAtSelection(nextSelection)
@@ -801,6 +816,7 @@ export function useWorkerWorkbookAppState(input: {
         const nextTarget = selectionRef.current
         editSessionRef.current += 1
         pendingEditCommitSessionRef.current = null
+        pendingEditCommitMovementAppliedRef.current = false
         editorTargetRef.current = nextTarget
         editorBaseSnapshotRef.current = cloneLiveSelectedCell(nextTarget)
         setEditorConflict(null)
