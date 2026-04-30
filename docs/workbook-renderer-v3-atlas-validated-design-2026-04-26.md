@@ -461,6 +461,9 @@ Completed in the resident-scene deletion tranche:
 - Fill-handle drag preview/commit lifecycle now lives in `gridFillHandleInteractions.ts`, and hover-state resolution moved into
   `gridInteractionHoverState.ts`. `useWorkbookGridInteractions.ts` is back under the 1000-line refactor threshold and no longer inlines those
   interaction state machines.
+- Column/row resize activation, resize-hover stamping, repeated-handle autofit, and shared autofit cleanup now live in
+  `gridResizeInteractions.ts` under focused unit tests. `useWorkbookGridInteractions.ts` wires the controller to React events instead of
+  owning the resize pointer policy inline.
 - Browser perf now has a dedicated fill-handle preview gate that asserts no renderer mutation churn and no data-tile upload while the preview is
   dragged. The same shared fill-handle drag-point helper is used by functional and perf tests.
 - Browser scroll perf reports now include `mutationToVisibleMs`, sampled from a dirty renderer-delta apply to the next V3 draw frame. The

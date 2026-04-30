@@ -41,7 +41,13 @@ import {
   selectEntireWorkbookSheet,
   toggleWorkbookGridBooleanCell,
 } from './gridInteractionCommands.js'
-import { beginWorkbookGridColumnResize, beginWorkbookGridRowResize } from './gridResizeInteractions.js'
+import {
+  applyWorkbookGridColumnAutofit,
+  beginWorkbookGridColumnResize,
+  beginWorkbookGridRowResize,
+  handleWorkbookGridColumnAutofitAtPointer,
+  handleWorkbookGridResizePointerDown,
+} from './gridResizeInteractions.js'
 import { beginWorkbookGridRangeMove } from './gridRangeMoveInteractions.js'
 import { beginWorkbookGridFillHandleDrag } from './gridFillHandleInteractions.js'
 import { handleWorkbookGridKeyDownCapture } from './gridKeyboardCapture.js'
@@ -53,7 +59,6 @@ import type { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js
 import { useWorkbookGridPointerResolvers } from './useWorkbookGridPointerResolvers.js'
 import { useWorkbookGridSelectionSummary } from './useWorkbookGridSelectionSummary.js'
 
-const RESIZE_HANDLE_DOUBLE_CLICK_MS = 700
 const DEFAULT_GRID_HOVER_STATE: GridHoverState = { cell: null, header: null, cursor: 'default' }
 
 function resetGridHoverState(current: GridHoverState): GridHoverState {
@@ -629,6 +634,42 @@ export function useWorkbookGridInteractions(
     },
     [commitColumnWidth, onAutofitColumn, previewColumnWidth],
   )
+  const applyColumnAutofitAtPointer = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement> | ReactPointerEvent<HTMLDivElement>, visibleRegion = getVisibleRegion()): boolean => {
+      return handleWorkbookGridColumnAutofitAtPointer({
+        event,
+        visibleRegion,
+        pointerGeometry: resolvePointerGeometry(visibleRegion),
+        columnWidths,
+        defaultColumnWidth: gridMetrics.columnWidth,
+        isEditingCell,
+        commitActiveEdit,
+        computeAutofitColumnWidth,
+        applyAutofitWidth,
+        finishResize: () => finishGridResize(interactionState),
+        resetPointerInteraction: () => {
+          resetGridPointerInteraction(interactionState, {
+            clearIgnoreNextPointerSelection: true,
+          })
+        },
+        setActiveResizeColumn,
+        resolveColumnResizeTargetAtPointer,
+      })
+    },
+    [
+      applyAutofitWidth,
+      columnWidths,
+      commitActiveEdit,
+      computeAutofitColumnWidth,
+      getVisibleRegion,
+      gridMetrics.columnWidth,
+      interactionState,
+      isEditingCell,
+      resolveColumnResizeTargetAtPointer,
+      resolvePointerGeometry,
+      setActiveResizeColumn,
+    ],
+  )
 
   const handleSelectEntireSheet = useCallback(() => {
     selectEntireWorkbookSheet({
@@ -683,56 +724,11 @@ export function useWorkbookGridInteractions(
       if (event.detail < 2) {
         return
       }
-      const visibleRegion = getVisibleRegion()
-      const pointerGeometry = resolvePointerGeometry(visibleRegion)
-      const resizeTarget = resolveColumnResizeTargetAtPointer(
-        event.clientX,
-        event.clientY,
-        visibleRegion,
-        pointerGeometry,
-        columnWidths,
-        gridMetrics.columnWidth,
-      )
-      if (resizeTarget === null) {
-        return
-      }
-      event.preventDefault()
-      event.stopPropagation()
-      if (isEditingCell) {
-        commitActiveEdit()
-      }
-      const autofitWidth = computeAutofitColumnWidth(resizeTarget)
-      finishGridResize(interactionState)
-      resetGridPointerInteraction(interactionState, {
-        clearIgnoreNextPointerSelection: true,
-      })
-      setActiveResizeColumn(null)
-      applyAutofitWidth(resizeTarget, autofitWidth)
+      applyColumnAutofitAtPointer(event)
     },
     handleHostDoubleClickCapture: (event: ReactMouseEvent<HTMLDivElement>) => {
       const visibleRegion = getVisibleRegion()
-      const pointerGeometry = resolvePointerGeometry(visibleRegion)
-      const resizeTarget = resolveColumnResizeTargetAtPointer(
-        event.clientX,
-        event.clientY,
-        visibleRegion,
-        pointerGeometry,
-        columnWidths,
-        gridMetrics.columnWidth,
-      )
-      if (resizeTarget !== null) {
-        event.preventDefault()
-        event.stopPropagation()
-        if (isEditingCell) {
-          commitActiveEdit()
-        }
-        const autofitWidth = computeAutofitColumnWidth(resizeTarget)
-        finishGridResize(interactionState)
-        resetGridPointerInteraction(interactionState, {
-          clearIgnoreNextPointerSelection: true,
-        })
-        setActiveResizeColumn(null)
-        applyAutofitWidth(resizeTarget, autofitWidth)
+      if (applyColumnAutofitAtPointer(event, visibleRegion)) {
         return
       }
       handleGridBodyDoubleClick({
@@ -788,87 +784,37 @@ export function useWorkbookGridInteractions(
       }
       const visibleRegion = getVisibleRegion()
       const pointerGeometry = resolvePointerGeometry(visibleRegion)
-      const resizeTarget = resolveColumnResizeTargetAtPointer(
-        event.clientX,
-        event.clientY,
-        visibleRegion,
-        pointerGeometry,
-        columnWidths,
-        gridMetrics.columnWidth,
-      )
-      const rowResizeTarget = resolveRowResizeTargetAtPointer(
-        event.clientX,
-        event.clientY,
-        visibleRegion,
-        pointerGeometry,
-        rowHeights,
-        gridMetrics.rowHeight,
-      )
-      if (resizeTarget !== null) {
-        event.preventDefault()
-        event.stopPropagation()
-        if (isEditingCell) {
-          commitActiveEdit()
-        }
-        focusGrid()
-        setActiveHeaderDrag(null)
-        const now = window.performance.now()
-        const lastResizeHandleActivation = lastResizeHandleActivationRef.current
-        const isResizeDoubleClick =
-          event.detail >= 2 ||
-          (lastResizeHandleActivation !== null &&
-            lastResizeHandleActivation.columnIndex === resizeTarget &&
-            now - lastResizeHandleActivation.at <= RESIZE_HANDLE_DOUBLE_CLICK_MS)
-        lastResizeHandleActivationRef.current = { columnIndex: resizeTarget, at: now }
-        if (isResizeDoubleClick) {
-          lastResizeHandleActivationRef.current = null
-          const autofitWidth = computeAutofitColumnWidth(resizeTarget)
-          finishGridResize(interactionState)
-          resetGridPointerInteraction(interactionState, {
-            clearIgnoreNextPointerSelection: true,
-          })
-          setActiveResizeColumn(null)
-          applyAutofitWidth(resizeTarget, autofitWidth)
-          return
-        }
-        setHoverState((current) =>
-          sameGridHoverState(current, {
-            cell: null,
-            header: { kind: 'column', index: resizeTarget },
-            cursor: 'col-resize',
-          })
-            ? current
-            : {
-                cell: null,
-                header: { kind: 'column', index: resizeTarget },
-                cursor: 'col-resize',
-              },
-        )
-        beginColumnResize(resizeTarget, event.clientX)
-        return
-      }
-      if (rowResizeTarget !== null) {
-        event.preventDefault()
-        event.stopPropagation()
-        if (isEditingCell) {
-          commitActiveEdit()
-        }
-        focusGrid()
-        setActiveHeaderDrag(null)
-        setHoverState((current) =>
-          sameGridHoverState(current, {
-            cell: null,
-            header: { kind: 'row', index: rowResizeTarget },
-            cursor: 'row-resize',
-          })
-            ? current
-            : {
-                cell: null,
-                header: { kind: 'row', index: rowResizeTarget },
-                cursor: 'row-resize',
-              },
-        )
-        beginRowResize(rowResizeTarget, event.clientY)
+      if (
+        handleWorkbookGridResizePointerDown({
+          event,
+          visibleRegion,
+          pointerGeometry,
+          columnWidths,
+          rowHeights,
+          defaultColumnWidth: gridMetrics.columnWidth,
+          defaultRowHeight: gridMetrics.rowHeight,
+          isEditingCell,
+          commitActiveEdit,
+          focusGrid,
+          setActiveHeaderDrag,
+          setHoverState,
+          lastResizeHandleActivationRef,
+          now: () => window.performance.now(),
+          computeAutofitColumnWidth,
+          applyAutofitWidth,
+          finishResize: () => finishGridResize(interactionState),
+          resetPointerInteraction: () => {
+            resetGridPointerInteraction(interactionState, {
+              clearIgnoreNextPointerSelection: true,
+            })
+          },
+          setActiveResizeColumn,
+          beginColumnResize,
+          beginRowResize,
+          resolveColumnResizeTargetAtPointer,
+          resolveRowResizeTargetAtPointer,
+        })
+      ) {
         return
       }
 
@@ -955,13 +901,18 @@ export function useWorkbookGridInteractions(
         gridMetrics.columnWidth,
       )
       if (resizeTarget !== null && event.detail >= 2) {
-        const autofitWidth = computeAutofitColumnWidth(resizeTarget)
-        finishGridResize(interactionState)
-        resetGridPointerInteraction(interactionState, {
-          clearIgnoreNextPointerSelection: true,
+        applyWorkbookGridColumnAutofit({
+          columnIndex: resizeTarget,
+          computeAutofitColumnWidth,
+          finishResize: () => finishGridResize(interactionState),
+          resetPointerInteraction: () => {
+            resetGridPointerInteraction(interactionState, {
+              clearIgnoreNextPointerSelection: true,
+            })
+          },
+          setActiveResizeColumn,
+          applyAutofitWidth,
         })
-        setActiveResizeColumn(null)
-        applyAutofitWidth(resizeTarget, autofitWidth)
         return
       }
       const clickedCell = dragDidMoveRef.current || dragHeaderSelectionRef.current ? null : resolvePointerCell(event.clientX, event.clientY)
