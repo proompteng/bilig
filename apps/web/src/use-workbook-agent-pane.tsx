@@ -100,6 +100,14 @@ function formatWorkbookAgentContextLabel(context: WorkbookAgentUiContext): strin
   return `${context.selection.sheetName}!${address}`
 }
 
+function readAppliedRevision(record: unknown): number | null {
+  if (!isRecord(record)) {
+    return null
+  }
+  const revision = record['appliedRevision']
+  return typeof revision === 'number' && Number.isInteger(revision) && revision >= 0 ? revision : null
+}
+
 function createTextEntryFromDelta(event: Extract<WorkbookAgentStreamEvent, { type: 'entryTextDelta' }>) {
   return {
     id: event.itemId,
@@ -162,6 +170,7 @@ export function useWorkbookAgentPane(input: {
   readonly getContext: () => WorkbookAgentUiContext
   readonly applyContext?: (context: WorkbookAgentUiContext) => void
   readonly previewCommandBundle: (bundle: WorkbookAgentCommandBundle) => Promise<WorkbookAgentPreviewSummary>
+  readonly syncAuthoritativeRevision?: (revision: number) => Promise<void> | void
   readonly activeContextLabel?: string
   readonly zero?: ZeroWorkbookAgentSource
   readonly zeroEnabled?: boolean
@@ -174,6 +183,7 @@ export function useWorkbookAgentPane(input: {
     getContext,
     applyContext,
     previewCommandBundle,
+    syncAuthoritativeRevision,
     activeContextLabel = formatWorkbookAgentContextLabel(getContext()),
     zero,
     zeroEnabled = false,
@@ -195,6 +205,7 @@ export function useWorkbookAgentPane(input: {
   const recoveringStreamRef = useRef(false)
   const lastContextKeyRef = useRef<string>('')
   const lastAppliedSnapshotContextKeyRef = useRef<string>('')
+  const lastRequestedAuthoritativeRevisionRef = useRef(0)
   const lastDraftKeyRef = useRef<string | null>(null)
   const getContextRef = useRef(getContext)
   const activeDraftKey = draftKey(snapshot?.threadId ?? null, threadScope)
@@ -407,6 +418,14 @@ export function useWorkbookAgentPane(input: {
           applyContext(nextSnapshot.context)
         }
       }
+      const appliedRevision = nextSnapshot.executionRecords.reduce<number>((maxRevision, record) => {
+        const revision = readAppliedRevision(record)
+        return revision === null ? maxRevision : Math.max(maxRevision, revision)
+      }, 0)
+      if (syncAuthoritativeRevision && appliedRevision > lastRequestedAuthoritativeRevisionRef.current) {
+        lastRequestedAuthoritativeRevisionRef.current = appliedRevision
+        void syncAuthoritativeRevision(appliedRevision)
+      }
       persistStoredSession(documentId, {
         threadId: nextSnapshot.threadId,
       })
@@ -414,7 +433,7 @@ export function useWorkbookAgentPane(input: {
         threadId: nextSnapshot.threadId,
       }
     },
-    [applyContext, documentId],
+    [applyContext, documentId, syncAuthoritativeRevision],
   )
 
   const connectStream = useCallback(
@@ -771,6 +790,20 @@ export function useWorkbookAgentPane(input: {
     setSelectedCommandIndexes([])
     setError(null)
   }, [closeStream, documentId])
+
+  useEffect(() => {
+    if (!showAssistantProgress || !syncAuthoritativeRevision) {
+      return
+    }
+    const refresh = () => {
+      void syncAuthoritativeRevision(0)
+    }
+    refresh()
+    const interval = window.setInterval(refresh, 2_000)
+    return () => {
+      window.clearInterval(interval)
+    }
+  }, [showAssistantProgress, syncAuthoritativeRevision])
 
   useEffect(() => {
     if (!enabled || !snapshot) {

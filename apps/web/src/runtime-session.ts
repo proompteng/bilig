@@ -92,6 +92,7 @@ function createInitialRuntimeState(documentId: string): WorkbookWorkerStateSnaps
     definedNames: [],
     metrics: EMPTY_METRICS,
     syncState: 'syncing',
+    authoritativeRevision: 0,
     localPersistenceMode: 'ephemeral',
     pendingMutationSummary: {
       activeCount: 0,
@@ -128,6 +129,7 @@ function isWorkbookWorkerStateSnapshot(value: unknown): value is WorkbookWorkerS
     typeof value['metrics'] === 'object' &&
     value['metrics'] !== null &&
     typeof value['syncState'] === 'string' &&
+    (value['authoritativeRevision'] === undefined || typeof value['authoritativeRevision'] === 'number') &&
     (value['localPersistenceMode'] === undefined ||
       value['localPersistenceMode'] === 'persistent' ||
       value['localPersistenceMode'] === 'ephemeral' ||
@@ -324,9 +326,13 @@ export async function createWorkerRuntimeSessionController(
   }
 
   const publishRuntimeState = (runtimeState: WorkbookWorkerStateSnapshot) => {
-    currentRuntimeState = runtimeState
-    viewportStore.setKnownSheets(runtimeState.sheetNames)
-    callbacks.onRuntimeState(runtimeState)
+    const runtimeStateWithRevision: WorkbookWorkerStateSnapshot = {
+      ...runtimeState,
+      authoritativeRevision: runtimeState.authoritativeRevision ?? currentAuthoritativeRevision,
+    }
+    currentRuntimeState = runtimeStateWithRevision
+    viewportStore.setKnownSheets(runtimeStateWithRevision.sheetNames)
+    callbacks.onRuntimeState(runtimeStateWithRevision)
   }
 
   const subscribeProjectedViewport = (
@@ -450,6 +456,33 @@ export async function createWorkerRuntimeSessionController(
         }
       }
     })()
+  }
+
+  const refreshAuthoritativeEventsNow = async (targetRevision: number | null): Promise<void> => {
+    if (targetRevision !== null) {
+      requestedAuthoritativeRevision = Math.max(requestedAuthoritativeRevision, targetRevision)
+    }
+    const previousRebaseQueue = rebaseQueue
+    rebaseQueue = (async () => {
+      await previousRebaseQueue.catch(() => undefined)
+      input.perfSession?.markFirstReconcileStarted()
+      publishPhase('reconciling')
+      try {
+        await runAuthoritativeRefresh()
+        await runAuthoritativeRebase()
+      } catch (error) {
+        if (!disposed) {
+          callbacks.onError(toErrorMessage(error))
+        }
+        throw error
+      } finally {
+        if (!disposed) {
+          publishPhase('steady')
+          input.perfSession?.markFirstReconcileSettled()
+        }
+      }
+    })()
+    await rebaseQueue
   }
 
   const runAuthoritativeRebase = async (): Promise<void> => {
@@ -593,7 +626,8 @@ export async function createWorkerRuntimeSessionController(
     },
     async invoke(method, ...args) {
       if (method === 'refreshAuthoritativeEvents') {
-        queueAuthoritativeRefresh()
+        const targetRevision = typeof args[0] === 'number' && Number.isInteger(args[0]) && args[0] >= 0 ? args[0] : null
+        await refreshAuthoritativeEventsNow(targetRevision)
         return undefined
       }
       try {

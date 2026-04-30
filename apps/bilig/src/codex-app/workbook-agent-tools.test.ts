@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { SpreadsheetEngine } from '@bilig/core'
-import type { JsonValue, WorkbookAgentCommandBundle } from '@bilig/agent-api'
+import { createWorkbookAgentCommandBundle, type JsonValue, type WorkbookAgentCommandBundle } from '@bilig/agent-api'
 import { buildWorkbookSourceProjectionFromEngine } from '../zero/projection.js'
 import type { ZeroSyncService } from '../zero/service.js'
+import type { WorkbookChangeRecord } from '../zero/workbook-change-store.js'
 import type { WorkbookRuntime } from '../workbook-runtime/runtime-manager.js'
 import { handleWorkbookAgentToolCall } from './workbook-agent-tools.js'
 import { z } from 'zod'
@@ -149,6 +150,20 @@ function createBundle(command: WorkbookAgentCommandBundle['commands'][number]): 
   }
 }
 
+function createDerivedBundle(command: WorkbookAgentCommandBundle['commands'][number]): WorkbookAgentCommandBundle {
+  return createWorkbookAgentCommandBundle({
+    bundleId: 'bundle-derived',
+    documentId: 'doc-1',
+    threadId: 'thr-1',
+    turnId: 'turn-1',
+    goalText: 'Update cells',
+    baseRevision: 1,
+    context: null,
+    commands: [command],
+    now: 1,
+  })
+}
+
 function readToolJson(response: Awaited<ReturnType<typeof handleWorkbookAgentToolCall>>): unknown {
   const text = response.contentItems[0]
   expect(text?.type).toBe('inputText')
@@ -180,6 +195,8 @@ const renderedSelectionPayloadSchema = z.object({
   }),
   renderedReadback: z.object({
     available: z.boolean(),
+    capturedRevision: z.number().nullable(),
+    capturedBatchId: z.number().nullable(),
     range: z.object({
       rows: z.array(z.array(z.object({ style: z.unknown(), input: z.unknown() }))),
     }),
@@ -2455,6 +2472,236 @@ describe('workbook agent tools', () => {
     expect(engine.getCell('Sheet1', 'C11').value).not.toHaveProperty('code')
   })
 
+  it('returns deterministic mutation receipts when an applied write lacks rendered proof', async () => {
+    const engine = await createEngine()
+    const { zeroSyncService } = createZeroSyncHarness(engine)
+    const workbookChanges: WorkbookChangeRecord[] = [
+      {
+        revision: 2,
+        actorUserId: 'alex@example.com',
+        clientMutationId: null,
+        eventKind: 'applyAgentCommandBundle',
+        summary: 'Write cells in Sheet1!D10',
+        sheetId: null,
+        sheetName: 'Sheet1',
+        anchorAddress: 'D10',
+        range: {
+          sheetName: 'Sheet1',
+          startAddress: 'D10',
+          endAddress: 'D10',
+        },
+        undoBundle: {
+          kind: 'engineOps',
+          ops: [],
+        },
+        revertedByRevision: null,
+        revertsRevision: null,
+        createdAtUnixMs: 2,
+      },
+    ]
+    zeroSyncService.listWorkbookChanges = vi.fn(async () => workbookChanges)
+    const stageCommand = vi.fn(async (command: WorkbookAgentCommandBundle['commands'][number]) => {
+      const bundle = createDerivedBundle(command)
+      applyWorkbookAgentCommandBundleWithUndoCapture(engine, bundle)
+      return {
+        bundle,
+        executionRecord: {
+          id: 'run-receipt',
+          bundleId: bundle.id,
+          documentId: bundle.documentId,
+          threadId: bundle.threadId,
+          turnId: bundle.turnId,
+          actorUserId: 'alex@example.com',
+          goalText: bundle.goalText,
+          planText: null,
+          summary: bundle.summary,
+          scope: bundle.scope,
+          riskClass: bundle.riskClass,
+          acceptedScope: 'full' as const,
+          appliedBy: 'auto' as const,
+          baseRevision: bundle.baseRevision,
+          appliedRevision: 2,
+          context: bundle.context,
+          commands: bundle.commands,
+          preview: {
+            ranges: bundle.affectedRanges,
+            structuralChanges: [],
+            cellDiffs: [
+              {
+                sheetName: 'Sheet1',
+                address: 'D10',
+                beforeInput: null,
+                beforeFormula: null,
+                afterInput: 'Verified receipt',
+                afterFormula: null,
+                changeKinds: ['input' as const],
+              },
+            ],
+            effectSummary: {
+              displayedCellDiffCount: 1,
+              truncatedCellDiffs: false,
+              inputChangeCount: 1,
+              formulaChangeCount: 0,
+              styleChangeCount: 0,
+              numberFormatChangeCount: 0,
+              structuralChangeCount: 0,
+            },
+          },
+          createdAtUnixMs: 2,
+          appliedAtUnixMs: 2,
+        },
+      }
+    })
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand,
+      },
+      {
+        threadId: 'thr-1',
+        turnId: 'turn-1',
+        callId: 'call-write-receipt',
+        tool: 'write_range',
+        arguments: {
+          sheetName: 'Sheet1',
+          startAddress: 'D10',
+          values: [['Verified receipt']],
+        },
+      },
+    )
+
+    expect(response.success).toBe(true)
+    const payload = z
+      .object({
+        status: z.literal('verification_incomplete'),
+        mutationReceipt: z.object({
+          status: z.literal('verification_incomplete'),
+          revision: z.object({
+            before: z.literal(1),
+            after: z.literal(2),
+          }),
+          authoritativeReadback: z.object({
+            requested: z.literal(true),
+            matched: z.literal(true),
+          }),
+          renderedReadback: z.object({
+            requested: z.literal(true),
+            matched: z.null(),
+            incompleteReason: z.string(),
+          }),
+          undo: z.object({
+            available: z.literal(true),
+            token: z.literal('revision:2'),
+          }),
+        }),
+      })
+      .parse(readToolJson(response))
+    expect(payload.mutationReceipt.renderedReadback.incompleteReason).toContain('No browser-rendered context')
+  })
+
+  it('undoes a specific workbook mutation revision and returns verification context', async () => {
+    const engine = await createEngine()
+    engine.setCellValue('Sheet1', 'D10', 'temporary value')
+    const { zeroSyncService } = createZeroSyncHarness(engine)
+    let headRevision = 2
+    const applyServerMutator = vi.fn(async (name: string, args: unknown): Promise<void> => {
+      expect(name).toBe('workbook.revertChange')
+      expect(args).toMatchObject({
+        documentId: 'doc-1',
+        revision: 2,
+      })
+      engine.clearCell('Sheet1', 'D10')
+      headRevision = 3
+    })
+    zeroSyncService.applyServerMutator = applyServerMutator
+    zeroSyncService.getWorkbookHeadRevision = vi.fn(async () => headRevision)
+    const workbookChanges: WorkbookChangeRecord[] = [
+      {
+        revision: 2,
+        actorUserId: 'alex@example.com',
+        clientMutationId: null,
+        eventKind: 'applyAgentCommandBundle',
+        summary: 'Write cells in Sheet1!D10',
+        sheetId: null,
+        sheetName: 'Sheet1',
+        anchorAddress: 'D10',
+        range: {
+          sheetName: 'Sheet1',
+          startAddress: 'D10',
+          endAddress: 'D10',
+        },
+        undoBundle: {
+          kind: 'engineOps',
+          ops: [],
+        },
+        revertedByRevision: null,
+        revertsRevision: null,
+        createdAtUnixMs: 2,
+      },
+    ]
+    zeroSyncService.listWorkbookChanges = vi.fn(async () => workbookChanges)
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: 'createSheet', name: 'unused' })),
+      },
+      {
+        threadId: 'thr-1',
+        turnId: 'turn-1',
+        callId: 'call-undo-revision',
+        tool: 'undo_workbook_mutation',
+        arguments: {
+          revision: 2,
+        },
+      },
+    )
+
+    expect(response.success).toBe(true)
+    const payload = z
+      .object({
+        undone: z.literal(true),
+        status: z.literal('applied'),
+        revision: z.object({
+          before: z.literal(2),
+          after: z.literal(3),
+          reverted: z.literal(2),
+        }),
+        targetChange: z.object({
+          revision: z.literal(2),
+          range: z.object({
+            sheetName: z.literal('Sheet1'),
+            startAddress: z.literal('D10'),
+            endAddress: z.literal('D10'),
+          }),
+        }),
+        verification: z.object({
+          appliedRevision: z.literal(3),
+          authoritativeReadback: z.array(
+            z.object({
+              rows: z.array(z.array(z.object({ value: z.null() }))),
+            }),
+          ),
+        }),
+      })
+      .parse(readToolJson(response))
+    expect(payload.verification.authoritativeReadback[0]?.rows[0]?.[0]?.value).toBeNull()
+    expect(applyServerMutator).toHaveBeenCalledTimes(1)
+  })
+
   it('stages selector-aware formula writes through set_formula', async () => {
     const engine = await createEngine()
     engine.setTable({
@@ -2706,7 +2953,8 @@ describe('workbook agent tools', () => {
       },
       rendered: {
         capturedAtUnixMs: 10,
-        batchId: 11,
+        capturedRevision: 11,
+        batchId: 1,
         selection: {
           range: {
             sheetName: 'Sheet1',
@@ -2759,7 +3007,280 @@ describe('workbook agent tools', () => {
     const payload = renderedSelectionPayloadSchema.parse(readToolJson(response))
     expect(payload.authoritativeReadback.rows[0]?.[0]?.value).toBe('changed')
     expect(payload.renderedReadback.available).toBe(true)
+    expect(payload.renderedReadback.capturedRevision).toBe(11)
+    expect(payload.renderedReadback.capturedBatchId).toBe(1)
     expect(JSON.stringify(payload.renderedReadback.range.rows[0]?.[0]?.style)).toContain('#93c47d')
+  })
+
+  it('reads rendered ranges from a captured visible viewport subset with freshness proof', async () => {
+    const engine = await createEngine()
+    engine.setCellValue('Sheet1', 'B2', 'viewport proof')
+    const { zeroSyncService } = createZeroSyncHarness(engine)
+    const context = {
+      selection: {
+        sheetName: 'Sheet1',
+        address: 'A1',
+      },
+      viewport: {
+        rowStart: 0,
+        rowEnd: 2,
+        colStart: 0,
+        colEnd: 2,
+      },
+      rendered: {
+        capturedAtUnixMs: 10,
+        capturedRevision: 11,
+        batchId: 1,
+        selection: null,
+        visibleRange: {
+          range: {
+            sheetName: 'Sheet1',
+            startAddress: 'A1',
+            endAddress: 'C3',
+          },
+          rowCount: 3,
+          columnCount: 3,
+          cellCount: 9,
+          truncated: false,
+          rows: [
+            [
+              {
+                address: 'A1',
+                input: 42,
+                value: { tag: 1, value: 42 },
+                formula: null,
+                displayFormat: '$42.00',
+                styleId: null,
+                numberFormatId: null,
+                style: null,
+              },
+              {
+                address: 'B1',
+                input: null,
+                value: { tag: 1, value: 42 },
+                formula: '=SUM(A1:A1)',
+                displayFormat: '42',
+                styleId: null,
+                numberFormatId: null,
+                style: null,
+              },
+              {
+                address: 'C1',
+                input: null,
+                value: { tag: 4, code: 7 },
+                formula: '=1/0',
+                displayFormat: '#DIV/0!',
+                styleId: null,
+                numberFormatId: null,
+                style: null,
+              },
+            ],
+            [
+              {
+                address: 'A2',
+                input: 'Gross Margin',
+                value: { tag: 3, value: 'Gross Margin' },
+                formula: null,
+                displayFormat: 'Gross Margin',
+                styleId: null,
+                numberFormatId: null,
+                style: null,
+              },
+              {
+                address: 'B2',
+                input: 'viewport proof',
+                value: { tag: 3, value: 'viewport proof' },
+                formula: null,
+                displayFormat: 'viewport proof',
+                styleId: null,
+                numberFormatId: null,
+                style: null,
+              },
+              {
+                address: 'C2',
+                input: null,
+                value: { tag: 0 },
+                formula: null,
+                displayFormat: null,
+                styleId: null,
+                numberFormatId: null,
+                style: null,
+              },
+            ],
+            [
+              {
+                address: 'A3',
+                input: null,
+                value: { tag: 0 },
+                formula: null,
+                displayFormat: null,
+                styleId: null,
+                numberFormatId: null,
+                style: null,
+              },
+              {
+                address: 'B3',
+                input: null,
+                value: { tag: 0 },
+                formula: null,
+                displayFormat: null,
+                styleId: null,
+                numberFormatId: null,
+                style: null,
+              },
+              {
+                address: 'C3',
+                input: null,
+                value: { tag: 0 },
+                formula: null,
+                displayFormat: null,
+                styleId: null,
+                numberFormatId: null,
+                style: null,
+              },
+            ],
+          ],
+        },
+      },
+    }
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        uiContext: context,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: 'createSheet', name: 'unused' })),
+      },
+      {
+        threadId: 'thr-1',
+        turnId: 'turn-1',
+        callId: 'call-rendered-subset',
+        tool: 'read_rendered_range',
+        arguments: {
+          sheetName: 'Sheet1',
+          startAddress: 'B2',
+          endAddress: 'B2',
+        },
+      },
+    )
+
+    const payload = z
+      .object({
+        renderedReadback: z.object({
+          available: z.literal(true),
+          matched: z.literal(true),
+          stale: z.literal(false),
+          capturedRevision: z.literal(11),
+          capturedBatchId: z.literal(1),
+          sourceRange: z.object({
+            startAddress: z.literal('A1'),
+            endAddress: z.literal('C3'),
+          }),
+          capturedRange: z.object({
+            startAddress: z.literal('B2'),
+            endAddress: z.literal('B2'),
+          }),
+        }),
+      })
+      .parse(readToolJson(response))
+    expect(payload.renderedReadback.sourceRange.startAddress).toBe('A1')
+  })
+
+  it('returns a chunk plan instead of throwing when read_range exceeds the single-call cell limit', async () => {
+    const engine = await createEngine()
+    const { zeroSyncService } = createZeroSyncHarness(engine)
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: 'createSheet', name: 'unused' })),
+      },
+      {
+        threadId: 'thr-1',
+        turnId: 'turn-1',
+        callId: 'call-chunked-read',
+        tool: 'read_range',
+        arguments: {
+          sheetName: 'Sheet1',
+          startAddress: 'A1',
+          endAddress: 'A4001',
+        },
+      },
+    )
+
+    const payload = z
+      .object({
+        chunked: z.literal(true),
+        truncated: z.literal(true),
+        totalCells: z.literal(4001),
+        currentChunk: z.object({
+          startAddress: z.literal('A1'),
+          endAddress: z.literal('A4000'),
+          cellCount: z.literal(4000),
+        }),
+        nextChunk: z.object({
+          startAddress: z.literal('A4001'),
+          endAddress: z.literal('A4001'),
+          cellCount: z.literal(1),
+        }),
+      })
+      .parse(readToolJson(response))
+    expect(payload.nextChunk.cellCount).toBe(1)
+  })
+
+  it('returns actionable formula diagnostics with exact dependencies and recalc status', async () => {
+    const engine = await createEngine()
+    const { zeroSyncService } = createZeroSyncHarness(engine)
+
+    const response = await handleWorkbookAgentToolCall(
+      {
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        uiContext: null,
+        zeroSyncService,
+        stageCommand: vi.fn(async () => createBundle({ kind: 'createSheet', name: 'unused' })),
+      },
+      {
+        threadId: 'thr-1',
+        turnId: 'turn-1',
+        callId: 'call-formula-diagnostics',
+        tool: 'find_formula_issues',
+        arguments: {
+          sheetName: 'Sheet1',
+          limit: 10,
+        },
+      },
+    )
+
+    const payload = z
+      .object({
+        actionableIssues: z.array(
+          z.object({
+            formula: z.string(),
+            errorText: z.string().nullable(),
+            recalculationStatus: z.enum(['upToDate', 'stale']),
+            directPrecedents: z.array(z.string()),
+            directDependents: z.array(z.string()),
+            suggestedNextInspectionRanges: z.array(z.string()),
+          }),
+        ),
+      })
+      .parse(readToolJson(response))
+    expect(payload.actionableIssues.some((issue) => issue.formula === '=1/0' && issue.errorText !== null)).toBe(true)
+    expect(payload.actionableIssues[0]?.suggestedNextInspectionRanges.length).toBeGreaterThan(0)
   })
 
   it('stages format commands with normalized number format presets', async () => {

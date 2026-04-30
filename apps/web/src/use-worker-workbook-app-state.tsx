@@ -149,7 +149,10 @@ function buildRenderedRangeSnapshot(
     const rowEntries: Array<WorkbookAgentRenderedRange['rows'][number][number]> = []
     for (let col = normalized.startCol; col <= normalized.endCol && emittedCells < MAX_AGENT_RENDERED_CONTEXT_CELLS; col += 1) {
       const address = formatAddress(row, col)
-      const snapshot = viewportStore.peekCell(normalized.sheetName, address) ?? viewportStore.getCell(normalized.sheetName, address)
+      const snapshot = viewportStore.peekCell(normalized.sheetName, address)
+      if (!snapshot) {
+        return null
+      }
       rowEntries.push({
         address,
         input: snapshot.input ?? null,
@@ -265,8 +268,10 @@ export function useWorkerWorkbookAppState(input: {
   const [editingMode, setEditingMode] = useState<EditingMode>('idle')
   const [editorConflict, setEditorConflict] = useState<WorkbookEditorConflict | null>(null)
   const [selectionSnapshot, setSelectionSnapshot] = useState<GridSelectionSnapshot>(createSingleCellSelectionSnapshot(selection))
+  const [, setRenderedAgentContextVersion] = useState(0)
   const selectionRef = useRef(selection)
   const workerHandleRef = useRef(workerHandle)
+  const runtimeStateRef = useRef(runtimeState)
   const runtimeControllerRef = useRef(runtimeController)
   const editorValueRef = useRef(editorValue)
   const editingModeRef = useRef(editingMode)
@@ -284,6 +289,7 @@ export function useWorkerWorkbookAppState(input: {
   const selectionRangeRef = useRef<CellRangeRef>(selectionSnapshotToRangeRef(selectionSnapshotRef.current))
   const pendingExternalSelectionRef = useRef<GridSelectionSnapshot | null>(null)
   const optimisticCellSeedsRef = useRef<Map<string, string>>(new Map())
+  const lastRenderedAgentContextKeyRef = useRef('')
   const editSessionRef = useRef(0)
   const pendingEditCommitSessionRef = useRef<number | null>(null)
   const pendingEditCommitMovementAppliedRef = useRef(false)
@@ -318,6 +324,10 @@ export function useWorkerWorkbookAppState(input: {
   useEffect(() => {
     workerHandleRef.current = workerHandle
   }, [workerHandle])
+
+  useEffect(() => {
+    runtimeStateRef.current = runtimeState
+  }, [runtimeState])
 
   useEffect(() => {
     runtimeControllerRef.current = runtimeController
@@ -509,6 +519,17 @@ export function useWorkerWorkbookAppState(input: {
     (nextSelection = selectionRef.current) => structuredClone(getLiveSelectedCell(nextSelection)),
     [getLiveSelectedCell],
   )
+  const notifyRenderedAgentContextChanged = useCallback(() => {
+    const viewportStore = workerHandleRef.current?.viewportStore
+    const revision = viewportStore?.getLastAuthoritativeRevision() ?? null
+    const batchId = viewportStore?.getLastMetrics().batchId ?? null
+    const nextKey = `${revision ?? 'none'}:${batchId ?? 'none'}`
+    if (lastRenderedAgentContextKeyRef.current === nextKey) {
+      return
+    }
+    lastRenderedAgentContextKeyRef.current = nextKey
+    setRenderedAgentContextVersion((version) => version + 1)
+  }, [])
   const resetEditorConflictTracking = useCallback(
     (nextSelection = selectionRef.current) => {
       editorBaseSnapshotRef.current = cloneLiveSelectedCell(nextSelection)
@@ -867,25 +888,35 @@ export function useWorkerWorkbookAppState(input: {
     setEditorSelectionBehavior,
     setEditingMode,
   })
-  const syncVisibleViewportProjection = useCallback((sheetName: string, viewport: Viewport): void => {
-    visibleViewportRef.current = viewport
-    const current = visibleViewportSubscriptionRef.current
-    if (current && current.sheetName === sheetName && viewportContains(current.viewport, viewport)) {
-      return
-    }
-    current?.cleanup()
-    const controller = runtimeControllerRef.current
-    if (!controller) {
-      visibleViewportSubscriptionRef.current = null
-      return
-    }
-    const projectionViewport = expandProjectionViewport(viewport)
-    visibleViewportSubscriptionRef.current = {
-      cleanup: controller.subscribeViewport(sheetName, projectionViewport, () => {}, { initialPatch: 'full' }),
-      sheetName,
-      viewport: projectionViewport,
-    }
-  }, [])
+  const syncVisibleViewportProjection = useCallback(
+    (sheetName: string, viewport: Viewport): void => {
+      visibleViewportRef.current = viewport
+      const current = visibleViewportSubscriptionRef.current
+      if (current && current.sheetName === sheetName && viewportContains(current.viewport, viewport)) {
+        return
+      }
+      current?.cleanup()
+      const controller = runtimeControllerRef.current
+      if (!controller) {
+        visibleViewportSubscriptionRef.current = null
+        return
+      }
+      const projectionViewport = expandProjectionViewport(viewport)
+      visibleViewportSubscriptionRef.current = {
+        cleanup: controller.subscribeViewport(
+          sheetName,
+          projectionViewport,
+          () => {
+            notifyRenderedAgentContextChanged()
+          },
+          { initialPatch: 'full' },
+        ),
+        sheetName,
+        viewport: projectionViewport,
+      }
+    },
+    [notifyRenderedAgentContextChanged],
+  )
   useEffect(() => {
     syncVisibleViewportProjection(selection.sheetName, visibleViewportRef.current)
     return () => {
@@ -925,6 +956,7 @@ export function useWorkerWorkbookAppState(input: {
       viewport: activeViewport,
       rendered: {
         capturedAtUnixMs: Date.now(),
+        capturedRevision: workerHandleRef.current?.viewportStore.getLastAuthoritativeRevision() ?? null,
         batchId: workerHandleRef.current?.viewportStore.getLastMetrics().batchId ?? null,
         selection: buildRenderedRangeSnapshot(workerHandleRef.current?.viewportStore, selectionSnapshotToRangeRef(activeSelection)),
         visibleRange: buildRenderedRangeSnapshot(workerHandleRef.current?.viewportStore, viewportRange),
@@ -981,6 +1013,12 @@ export function useWorkerWorkbookAppState(input: {
     },
     [runtimeController],
   )
+  const syncAgentAuthoritativeRevision = useCallback(
+    async (revision: number) => {
+      await runtimeController?.invoke('refreshAuthoritativeEvents', revision)
+    },
+    [runtimeController],
+  )
 
   const selectedStyle = workerHandle?.viewportStore.getCellStyle(selectedCell.styleId)
   const selectedPosition = useMemo(() => parseCellAddress(selection.address, selection.sheetName), [selection.address, selection.sheetName])
@@ -1026,6 +1064,7 @@ export function useWorkerWorkbookAppState(input: {
     getAgentContext,
     applyAgentContext,
     previewAgentCommandBundle,
+    syncAgentAuthoritativeRevision,
   })
 
   const { ribbon, statusModeLabel } = useWorkbookToolbar({

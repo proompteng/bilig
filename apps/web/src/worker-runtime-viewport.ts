@@ -144,6 +144,7 @@ export function buildViewportPatchFromEngine(input: {
   readonly state: ViewportSubscriptionState
   readonly event: EngineEvent | null
   readonly metrics: RecalcMetrics
+  readonly authoritativeRevision: number
   readonly sheetImpact: SheetViewportImpact | null
   readonly engine: WorkerEngine
   readonly emptyCellSnapshot: (sheetName: string, address: string) => CellSnapshot
@@ -213,6 +214,7 @@ export function buildViewportPatchFromEngine(input: {
 
   return {
     version: state.nextVersion++,
+    authoritativeRevision: input.authoritativeRevision,
     full,
     freezeRows: engine.getFreezePane(viewport.sheetName)?.rows ?? 0,
     freezeCols: engine.getFreezePane(viewport.sheetName)?.cols ?? 0,
@@ -228,6 +230,7 @@ export function buildViewportPatchFromEngine(input: {
 export function buildViewportPatchFromLocalBase(input: {
   readonly state: ViewportSubscriptionState
   readonly metrics: RecalcMetrics
+  readonly authoritativeRevision: number
   readonly base: WorkbookLocalViewportBase
   readonly getFormatId: (format: string | undefined) => number
 }): ViewportPatch {
@@ -290,6 +293,7 @@ export function buildViewportPatchFromLocalBase(input: {
 
   return {
     version: state.nextVersion++,
+    authoritativeRevision: input.authoritativeRevision,
     full: true,
     freezeRows: base.freezeRows,
     freezeCols: base.freezeCols,

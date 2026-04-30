@@ -143,6 +143,7 @@ export function useWorkbookAppPanels(input: {
   getAgentContext: WorkbookAgentContextGetter
   applyAgentContext?: (context: ReturnType<WorkbookAgentContextGetter>) => void
   previewAgentCommandBundle: WorkbookAgentPreviewCommandBundle
+  syncAgentAuthoritativeRevision?: (revision: number) => Promise<void> | void
 }) {
   const {
     changeCount,
@@ -153,6 +154,7 @@ export function useWorkbookAppPanels(input: {
     getAgentContext,
     presenceClientId,
     previewAgentCommandBundle,
+    syncAgentAuthoritativeRevision,
     remoteSyncAvailable,
     replicaId,
     runtimeReady,
@@ -194,6 +196,7 @@ export function useWorkbookAppPanels(input: {
     activeContextLabel: formatWorkbookSelectionLabel(selection),
     ...(applyAgentContext ? { applyContext: applyAgentContext } : {}),
     previewCommandBundle: previewAgentCommandBundle,
+    ...(syncAgentAuthoritativeRevision ? { syncAuthoritativeRevision: syncAgentAuthoritativeRevision } : {}),
     zero,
     zeroEnabled: runtimeReady && zeroConfigured && remoteSyncAvailable,
   })

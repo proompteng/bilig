@@ -19,8 +19,13 @@ export interface WorkbookFormulaIssue {
   readonly issueKinds: readonly ('error' | 'cycle' | 'unsupported')[]
   readonly errorText: string | null
   readonly mode: 'literal' | 'wasm' | 'js'
+  readonly recalculationStatus: 'upToDate' | 'stale'
+  readonly directPrecedents: readonly string[]
+  readonly directDependents: readonly string[]
   readonly directPrecedentCount: number
   readonly directDependentCount: number
+  readonly unsupportedDetails: string | null
+  readonly suggestedNextInspectionRanges: readonly string[]
 }
 
 export interface WorkbookFormulaIssueReport {
@@ -474,8 +479,20 @@ function getFormulaIssueReport(runtime: WorkbookRuntime): WorkbookFormulaIssueRe
             ? formatErrorCode(explanation.value.code)
             : null,
         mode: modeToLabel(explanation.mode),
+        recalculationStatus: runtime.calculatedRevision >= runtime.headRevision ? 'upToDate' : 'stale',
+        directPrecedents: [...explanation.directPrecedents],
+        directDependents: [...explanation.directDependents],
         directPrecedentCount: explanation.directPrecedents.length,
         directDependentCount: explanation.directDependents.length,
+        unsupportedDetails:
+          explanation.mode === FormulaMode.JsOnly
+            ? 'Formula evaluated through the JavaScript compatibility path instead of the WASM fast path.'
+            : null,
+        suggestedNextInspectionRanges: [
+          `${sheet.name}!${cell.address}`,
+          ...explanation.directPrecedents.slice(0, 8),
+          ...explanation.directDependents.slice(0, 8),
+        ],
       })
     }
   }

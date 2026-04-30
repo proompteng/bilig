@@ -83,6 +83,7 @@ export type WorkbookAgentRenderedRange = Schema.Schema.Type<typeof WorkbookAgent
 
 export const WorkbookAgentRenderedContextSchema = Schema.Struct({
   capturedAtUnixMs: Schema.Number,
+  capturedRevision: Schema.optionalWith(Schema.Union(Schema.Number, Schema.Null), {}),
   batchId: Schema.Union(Schema.Number, Schema.Null),
   selection: Schema.Union(WorkbookAgentRenderedRangeSchema, Schema.Null),
   visibleRange: Schema.Union(WorkbookAgentRenderedRangeSchema, Schema.Null),

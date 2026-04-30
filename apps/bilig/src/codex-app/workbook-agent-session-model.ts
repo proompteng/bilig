@@ -53,6 +53,7 @@ const workbookAgentUiContextSchema: z.ZodType<WorkbookAgentUiContext> = z.object
   rendered: z
     .object({
       capturedAtUnixMs: z.number(),
+      capturedRevision: z.number().nullable().optional(),
       batchId: z.number().nullable(),
       selection: workbookAgentRenderedRangeSchema.nullable(),
       visibleRange: workbookAgentRenderedRangeSchema.nullable(),

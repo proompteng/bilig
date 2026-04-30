@@ -24,6 +24,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   private tileSceneStore: ProjectedTileSceneStore | null = null
   private readonly sheetChannelListeners = new Map<string, Map<SheetViewportChannel, Set<() => void>>>()
   private lastBatchId = 0
+  private lastAuthoritativeRevision: number | null = null
 
   readonly workbook = {
     getSheet: (sheetName: string) => this.cellCache.getSheet(sheetName),
@@ -121,6 +122,10 @@ export class ProjectedViewportStore implements GridEngineLike {
 
   getLastMetrics(): Pick<NonNullable<ViewportPatch['metrics']>, 'batchId'> {
     return { batchId: this.lastBatchId }
+  }
+
+  getLastAuthoritativeRevision(): number | null {
+    return this.lastAuthoritativeRevision
   }
 
   setCellSnapshot(snapshot: CellSnapshot): void {
@@ -253,6 +258,10 @@ export class ProjectedViewportStore implements GridEngineLike {
     const batchId = patch.metrics?.batchId
     if (Number.isInteger(batchId) && batchId >= 0) {
       this.lastBatchId = batchId
+    }
+    const authoritativeRevision = patch.authoritativeRevision
+    if (typeof authoritativeRevision === 'number' && Number.isInteger(authoritativeRevision) && authoritativeRevision >= 0) {
+      this.lastAuthoritativeRevision = authoritativeRevision
     }
     const channels: SheetViewportChannel[] = []
     if (result.columnsChanged) {

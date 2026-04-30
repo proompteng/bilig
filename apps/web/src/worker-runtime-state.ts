@@ -87,6 +87,7 @@ export function cloneWorkerRuntimeState(input: {
   definedNames: readonly WorkbookDefinedNameSnapshot[]
   metrics: RecalcMetrics
   syncState: SyncState
+  authoritativeRevision?: number | undefined
   pendingMutationSummary?: WorkbookPendingMutationSummaryLike
   localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
 }): {
@@ -96,6 +97,7 @@ export function cloneWorkerRuntimeState(input: {
   definedNames: WorkbookDefinedNameSnapshot[]
   metrics: RecalcMetrics
   syncState: SyncState
+  authoritativeRevision?: number | undefined
   pendingMutationSummary?: WorkbookPendingMutationSummaryLike
   localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
 } {
@@ -108,6 +110,7 @@ export function cloneWorkerRuntimeState(input: {
     definedNames: input.definedNames.map((entry) => structuredClone(entry)),
     metrics: cloneRuntimeMetrics(input.metrics),
     syncState: input.syncState,
+    ...(typeof input.authoritativeRevision === 'number' ? { authoritativeRevision: input.authoritativeRevision } : {}),
     ...(pendingMutationSummary ? { pendingMutationSummary } : {}),
     ...(input.localPersistenceMode ? { localPersistenceMode: input.localPersistenceMode } : {}),
   }
@@ -121,6 +124,7 @@ export function withExternalSyncState(
     definedNames: readonly WorkbookDefinedNameSnapshot[]
     metrics: RecalcMetrics
     syncState: SyncState
+    authoritativeRevision?: number | undefined
     pendingMutationSummary?: WorkbookPendingMutationSummaryLike
     localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
   },
@@ -132,6 +136,7 @@ export function withExternalSyncState(
   definedNames: WorkbookDefinedNameSnapshot[]
   metrics: RecalcMetrics
   syncState: SyncState
+  authoritativeRevision?: number | undefined
   pendingMutationSummary?: WorkbookPendingMutationSummaryLike
   localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
 } {
@@ -145,6 +150,7 @@ export function buildWorkerRuntimeStateFromBootstrap(input: {
   sheets?: readonly WorkbookRuntimeSheetSnapshot[] | undefined
   sheetNames: readonly string[]
   definedNames?: readonly WorkbookDefinedNameSnapshot[]
+  authoritativeRevision?: number | undefined
   localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
 }): {
   workbookName: string
@@ -153,6 +159,7 @@ export function buildWorkerRuntimeStateFromBootstrap(input: {
   definedNames: WorkbookDefinedNameSnapshot[]
   metrics: RecalcMetrics
   syncState: SyncState
+  authoritativeRevision?: number | undefined
   pendingMutationSummary?: WorkbookPendingMutationSummaryLike
   localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
 } {
@@ -164,6 +171,7 @@ export function buildWorkerRuntimeStateFromBootstrap(input: {
     definedNames: (input.definedNames ?? []).map((entry) => structuredClone(entry)),
     metrics: cloneRuntimeMetrics(),
     syncState: 'syncing',
+    ...(typeof input.authoritativeRevision === 'number' ? { authoritativeRevision: input.authoritativeRevision } : {}),
     ...(input.localPersistenceMode ? { localPersistenceMode: input.localPersistenceMode } : {}),
   }
 }
@@ -175,6 +183,7 @@ export function buildWorkerRuntimeStateFromEngine(engine: SpreadsheetEngine & Wo
   definedNames: WorkbookDefinedNameSnapshot[]
   metrics: RecalcMetrics
   syncState: SyncState
+  authoritativeRevision?: number | undefined
   pendingMutationSummary?: WorkbookPendingMutationSummaryLike
   localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
 } {

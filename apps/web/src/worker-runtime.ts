@@ -101,6 +101,7 @@ export interface WorkbookWorkerStateSnapshot {
   definedNames: WorkbookDefinedNameSnapshot[]
   metrics: RecalcMetrics
   syncState: SyncState
+  authoritativeRevision?: number | undefined
   pendingMutationSummary?: WorkbookPendingMutationSummarySnapshot
   localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
 }
@@ -156,8 +157,10 @@ export class WorkbookWorkerRuntime {
   private readonly snapshotCaches = new WorkerRuntimeSnapshotCaches()
   private readonly viewportTileStore = new WorkerViewportTileStore()
   private readonly viewportPatchPublisher = new WorkerViewportPatchPublisher({
-    buildPatch: (state, event, metrics, sheetImpact) => this.buildViewportPatch(state, event, metrics, sheetImpact),
+    buildPatch: (state, event, metrics, authoritativeRevision, sheetImpact) =>
+      this.buildViewportPatch(state, event, metrics, authoritativeRevision, sheetImpact),
     canReadLocalProjectionForViewport: () => this.canReadLocalProjectionForViewport(),
+    getAuthoritativeRevision: () => this.authoritativeRevision,
     getCurrentMetrics: () => this.getCurrentMetrics(),
     getProjectionEngine: () => this.requireEngine(),
     hasProjectionEngine: () => this.engine !== null,
@@ -324,6 +327,7 @@ export class WorkbookWorkerRuntime {
           definedNames: cachedState.definedNames,
           metrics: cachedState.metrics,
           syncState: cachedState.syncState,
+          authoritativeRevision: this.authoritativeRevision,
           pendingMutationSummary: this.buildPendingMutationSummary(),
           localPersistenceMode: this.localPersistenceMode,
         },
@@ -785,6 +789,7 @@ export class WorkbookWorkerRuntime {
   private storeRuntimeState(state: WorkbookWorkerStateSnapshot): WorkbookWorkerStateSnapshot {
     this.runtimeStateCache = cloneWorkerRuntimeState({
       ...state,
+      authoritativeRevision: this.authoritativeRevision,
       pendingMutationSummary: this.buildPendingMutationSummary(),
     })
     const cachedState = this.runtimeStateCache
@@ -948,8 +953,9 @@ export class WorkbookWorkerRuntime {
     state: ViewportSubscriptionState,
     event: EngineEvent | null,
     metrics: RecalcMetrics = this.getCurrentMetrics(),
+    authoritativeRevision: number = this.authoritativeRevision,
     sheetImpact: SheetViewportImpact | null = null,
   ): ViewportPatch {
-    return this.viewportPatchPublisher.buildPatch(state, event, metrics, sheetImpact)
+    return this.viewportPatchPublisher.buildPatch(state, event, metrics, authoritativeRevision, sheetImpact)
   }
 }

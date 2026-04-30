@@ -32,7 +32,6 @@ import {
   inspectWorkbookRange,
   normalizeWorkbookAgentUiContext,
 } from './workbook-agent-inspection.js'
-import { verifyWorkbookInvariants } from './workbook-agent-audit.js'
 import { handleWorkbookAgentAnnotationToolCall, workbookAgentAnnotationToolSpecs } from './workbook-agent-annotation-tools.js'
 import { handleWorkbookAgentAuditToolCall, workbookAgentAuditToolSpecs } from './workbook-agent-audit-tools.js'
 import {
@@ -77,6 +76,9 @@ import {
   sortToolArgsSchema,
   workbookAgentStructuralToolSpecs,
 } from './workbook-agent-structural-tools.js'
+import { buildWorkbookAgentVerificationReport, stageWorkbookAgentCommandResult } from './workbook-agent-mutation-receipt.js'
+import { selectWorkbookRenderedReadback } from './workbook-agent-rendered-readback.js'
+import { createWorkbookAgentRangeChunkPlan } from './workbook-agent-range-chunks.js'
 
 const MAX_MUTATION_RANGE_CELLS = 400
 const MAX_READ_RANGE_CELLS = 4000
@@ -213,6 +215,9 @@ const applyAndVerifyToolArgsSchema = z.object({
   range: cellRangeRefSchema.optional(),
   includeFormulaIssues: z.boolean().optional(),
   includeInvariants: z.boolean().optional(),
+})
+const undoWorkbookMutationToolArgsSchema = z.object({
+  revision: z.number().int().positive().optional(),
 })
 
 const clearRangeToolArgsSchema = rangeOrSelectorSchema
@@ -505,47 +510,6 @@ function resolveVisibleRange(context: WorkbookAgentUiContext | null): CellRangeR
   return viewportToRange(context.selection.sheetName, context.viewport)
 }
 
-function rangesEqual(left: CellRangeRef, right: CellRangeRef): boolean {
-  const normalizedLeft = normalizeRange(left)
-  const normalizedRight = normalizeRange(right)
-  return (
-    normalizedLeft.sheetName === normalizedRight.sheetName &&
-    normalizedLeft.startAddress === normalizedRight.startAddress &&
-    normalizedLeft.endAddress === normalizedRight.endAddress
-  )
-}
-
-function selectRenderedRange(
-  context: WorkbookAgentUiContext | null,
-  range: CellRangeRef,
-): {
-  readonly available: boolean
-  readonly stale: boolean
-  readonly capturedAtUnixMs: number | null
-  readonly batchId: number | null
-  readonly range: unknown
-} {
-  const rendered = context?.rendered
-  if (!rendered) {
-    return {
-      available: false,
-      stale: true,
-      capturedAtUnixMs: null,
-      batchId: null,
-      range: null,
-    }
-  }
-  const candidates = [rendered.selection, rendered.visibleRange].filter((entry): entry is NonNullable<typeof entry> => entry !== null)
-  const match = candidates.find((entry) => rangesEqual(entry.range, range)) ?? null
-  return {
-    available: match !== null,
-    stale: match === null,
-    capturedAtUnixMs: rendered.capturedAtUnixMs,
-    batchId: rendered.batchId,
-    range: match,
-  }
-}
-
 async function buildVerificationReport(input: {
   readonly context: WorkbookAgentToolContext
   readonly revision: number | null
@@ -553,45 +517,12 @@ async function buildVerificationReport(input: {
   readonly includeFormulaIssues?: boolean
   readonly includeInvariants?: boolean
 }) {
-  return await input.context.zeroSyncService.inspectWorkbook(input.context.documentId, async (runtime) => {
-    const uiContext = normalizeWorkbookAgentUiContext(runtime, input.context.uiContext)
-    const normalizedRanges = input.ranges.map((range) => ({
-      sheetName: range.sheetName,
-      startAddress: normalizeRange(range).startAddress,
-      endAddress: normalizeRange(range).endAddress,
-    }))
-    const authoritativeReadback = normalizedRanges.map((range) => inspectWorkbookRange(runtime, range))
-    const renderedReadback = normalizedRanges.map((range) => {
-      const renderedRange = selectRenderedRange(uiContext, range)
-      return {
-        requestedRange: range,
-        available: renderedRange.available,
-        stale: renderedRange.stale,
-        capturedAtUnixMs: renderedRange.capturedAtUnixMs,
-        batchId: renderedRange.batchId,
-        range: renderedRange.range,
-      }
-    })
-    const formulaIssues =
-      input.includeFormulaIssues === false
-        ? null
-        : findWorkbookFormulaIssues(runtime, {
-            limit: 100,
-          })
-    const invariants = input.includeInvariants === false ? null : await verifyWorkbookInvariants(runtime, { roundTrip: true })
-    return {
-      appliedRevision: input.revision,
-      recalculationStatus: {
-        headRevision: runtime.headRevision,
-        calculatedRevision: runtime.calculatedRevision,
-        upToDate: runtime.calculatedRevision >= runtime.headRevision,
-        lastMetrics: runtime.engine.getLastMetrics(),
-      },
-      authoritativeReadback,
-      renderedReadback,
-      formulaIssues,
-      invariants,
-    }
+  return await buildWorkbookAgentVerificationReport({
+    context: input.context,
+    revision: input.revision,
+    ranges: input.ranges,
+    ...(input.includeFormulaIssues !== undefined ? { includeFormulaIssues: input.includeFormulaIssues } : {}),
+    ...(input.includeInvariants !== undefined ? { includeInvariants: input.includeInvariants } : {}),
   })
 }
 
@@ -649,6 +580,7 @@ export interface WorkbookAgentToolContext {
   readonly zeroSyncService: ZeroSyncService
   readonly stageCommand: (command: WorkbookAgentCommand) => Promise<WorkbookAgentCommandBundle | WorkbookAgentStageCommandResult>
   readonly updateUiContext?: (context: WorkbookAgentUiContext | null) => Promise<void>
+  readonly awaitRenderedRevision?: (revision: number) => Promise<void>
   readonly startWorkflow?: (input: WorkbookAgentStartWorkflowRequest) => Promise<WorkbookAgentWorkflowRun>
 }
 
@@ -745,6 +677,18 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
           range: cellRangeRefJsonSchema,
           includeFormulaIssues: { type: 'boolean' },
           includeInvariants: { type: 'boolean' },
+        },
+      },
+    },
+    {
+      name: WORKBOOK_AGENT_TOOL_NAMES.undoWorkbookMutation,
+      description:
+        'Undo the latest undoable workbook mutation for this assistant user, or revert a specific revision, then return the new head revision and verification context.',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          revision: { type: 'number' },
         },
       },
     },
@@ -1115,69 +1059,7 @@ function createDynamicToolSpecs(): readonly CodexDynamicToolSpec[] {
 export const workbookAgentDynamicToolSpecs = createDynamicToolSpecs()
 
 async function stageCommandResult(context: WorkbookAgentToolContext, command: WorkbookAgentCommand): Promise<CodexDynamicToolCallResult> {
-  const result = await context.stageCommand(command)
-  const normalized: WorkbookAgentStageCommandResult =
-    'bundle' in result ? result : { bundle: result, executionRecord: null, disposition: 'reviewQueued' }
-  const bundle = normalized.bundle
-  if (normalized.executionRecord) {
-    const verificationRanges = bundle.affectedRanges
-      .filter((range) => range.role === 'target')
-      .slice(0, 3)
-      .map((range) => ({
-        sheetName: range.sheetName,
-        startAddress: range.startAddress,
-        endAddress: range.endAddress,
-      }))
-    const verification = await buildVerificationReport({
-      context,
-      revision: normalized.executionRecord.appliedRevision,
-      ranges: verificationRanges,
-    })
-    return textToolResult(
-      stringifyJson({
-        applied: true,
-        staged: false,
-        reviewQueued: false,
-        bundleId: bundle.id,
-        summary: `Applied workbook change set at revision r${String(normalized.executionRecord.appliedRevision)}: ${normalized.executionRecord.summary}`,
-        revision: normalized.executionRecord.appliedRevision,
-        scope: normalized.executionRecord.scope,
-        riskClass: normalized.executionRecord.riskClass,
-        estimatedAffectedCells: bundle.estimatedAffectedCells,
-        affectedRanges: bundle.affectedRanges,
-        verification,
-      }),
-    )
-  }
-  if (normalized.disposition === 'queuedForTurnApply') {
-    return textToolResult(
-      stringifyJson({
-        applied: false,
-        staged: true,
-        reviewQueued: false,
-        queuedForTurnApply: true,
-        bundleId: bundle.id,
-        summary: `Queued workbook change set for turn apply: ${bundle.summary}`,
-        scope: bundle.scope,
-        riskClass: bundle.riskClass,
-        estimatedAffectedCells: bundle.estimatedAffectedCells,
-        affectedRanges: bundle.affectedRanges,
-      }),
-    )
-  }
-  return textToolResult(
-    stringifyJson({
-      applied: false,
-      staged: true,
-      reviewQueued: true,
-      bundleId: bundle.id,
-      summary: `Prepared workbook review item: ${bundle.summary}`,
-      scope: bundle.scope,
-      riskClass: bundle.riskClass,
-      estimatedAffectedCells: bundle.estimatedAffectedCells,
-      affectedRanges: bundle.affectedRanges,
-    }),
-  )
+  return await stageWorkbookAgentCommandResult(context, command, command.kind)
 }
 
 function workflowToolResult(run: WorkbookAgentWorkflowRun): CodexDynamicToolCallResult {
@@ -1282,6 +1164,17 @@ export async function handleWorkbookAgentToolCall(
         return textToolResult(
           stringifyJson({
             updated: true,
+            verificationComplete: false,
+            modelConfirmation: {
+              matched: nextContext?.selection.sheetName === args.sheetName,
+              sheetName: nextContext?.selection.sheetName ?? null,
+              address: nextContext?.selection.address ?? null,
+            },
+            browserConfirmation: {
+              status: 'not_proven',
+              reason:
+                'The server emitted the new workbook context, but this tool call has no synchronous browser acknowledgement channel. Use read_rendered_selection or read_rendered_range after the browser refreshes to prove visible state.',
+            },
             context: nextContext,
           }),
         )
@@ -1321,6 +1214,20 @@ export async function handleWorkbookAgentToolCall(
         return textToolResult(
           stringifyJson({
             updated: true,
+            verificationComplete: false,
+            modelConfirmation: {
+              matched:
+                nextContext?.selection.address === args.address &&
+                (args.sheetName === undefined || nextContext?.selection.sheetName === args.sheetName),
+              sheetName: nextContext?.selection.sheetName ?? null,
+              address: nextContext?.selection.address ?? null,
+              range: nextContext?.selection.range ?? null,
+            },
+            browserConfirmation: {
+              status: 'not_proven',
+              reason:
+                'The server emitted the new selection context, but this tool call has no synchronous browser acknowledgement channel. Use read_rendered_selection after the browser refreshes to prove visible selection state.',
+            },
             context: nextContext,
           }),
         )
@@ -1330,9 +1237,16 @@ export async function handleWorkbookAgentToolCall(
           const uiContext = normalizeWorkbookAgentUiContext(runtime, context.uiContext)
           const range = resolveSelectionRange(uiContext)
           ensureRangeLimit(range, MAX_READ_RANGE_CELLS)
+          const authoritativeReadback = inspectWorkbookRange(runtime, range)
+          const authoritativeRows = authoritativeReadback.rows.filter(Array.isArray) as readonly (readonly unknown[])[]
           return {
-            authoritativeReadback: inspectWorkbookRange(runtime, range),
-            renderedReadback: selectRenderedRange(uiContext, range),
+            authoritativeReadback,
+            renderedReadback: selectWorkbookRenderedReadback({
+              renderedContext: uiContext?.rendered,
+              requestedRange: range,
+              authoritativeRows,
+              minBatchId: runtime.headRevision,
+            }),
           }
         })
         return textToolResult(stringifyJson(result))
@@ -1347,9 +1261,16 @@ export async function handleWorkbookAgentToolCall(
         ensureRangeLimit(range, MAX_READ_RANGE_CELLS)
         const result = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => {
           const normalizedContext = normalizeWorkbookAgentUiContext(runtime, context.uiContext)
+          const authoritativeReadback = inspectWorkbookRange(runtime, range)
+          const authoritativeRows = authoritativeReadback.rows.filter(Array.isArray) as readonly (readonly unknown[])[]
           return {
-            authoritativeReadback: inspectWorkbookRange(runtime, range),
-            renderedReadback: selectRenderedRange(normalizedContext, range),
+            authoritativeReadback,
+            renderedReadback: selectWorkbookRenderedReadback({
+              renderedContext: normalizedContext?.rendered,
+              requestedRange: range,
+              authoritativeRows,
+              minBatchId: runtime.headRevision,
+            }),
           }
         })
         return textToolResult(stringifyJson(result))
@@ -1371,6 +1292,76 @@ export async function handleWorkbookAgentToolCall(
           ...(args.includeInvariants !== undefined ? { includeInvariants: args.includeInvariants } : {}),
         })
         return textToolResult(stringifyJson(report))
+      }
+      case WORKBOOK_AGENT_TOOL_NAMES.undoWorkbookMutation: {
+        const args = undoWorkbookMutationToolArgsSchema.parse(request.arguments)
+        const beforeRevision = await context.zeroSyncService.getWorkbookHeadRevision(context.documentId)
+        const recentChanges = await context.zeroSyncService.listWorkbookChanges(context.documentId, 25)
+        const targetChange =
+          args.revision !== undefined
+            ? (recentChanges.find((change) => change.revision === args.revision) ?? null)
+            : (recentChanges.find(
+                (change) =>
+                  change.undoBundle !== null &&
+                  change.revertedByRevision === null &&
+                  change.eventKind !== 'revertChange' &&
+                  change.revertsRevision === null,
+              ) ?? null)
+        if (args.revision !== undefined) {
+          await context.zeroSyncService.applyServerMutator(
+            'workbook.revertChange',
+            {
+              documentId: context.documentId,
+              revision: args.revision,
+            },
+            context.session,
+          )
+        } else {
+          await context.zeroSyncService.applyServerMutator(
+            'workbook.undoLatestChange',
+            {
+              documentId: context.documentId,
+            },
+            context.session,
+          )
+        }
+        const afterRevision = await context.zeroSyncService.getWorkbookHeadRevision(context.documentId)
+        await context.awaitRenderedRevision?.(afterRevision)
+        const verificationRange = targetChange?.range
+          ? [
+              {
+                sheetName: targetChange.range.sheetName,
+                startAddress: targetChange.range.startAddress,
+                endAddress: targetChange.range.endAddress,
+              },
+            ]
+          : []
+        const verification = await buildVerificationReport({
+          context,
+          revision: afterRevision,
+          ranges: verificationRange,
+        })
+        return textToolResult(
+          stringifyJson({
+            undone: true,
+            status: 'applied',
+            revision: {
+              before: beforeRevision,
+              after: afterRevision,
+              reverted: args.revision ?? targetChange?.revision ?? null,
+            },
+            targetChange: targetChange
+              ? {
+                  revision: targetChange.revision,
+                  summary: targetChange.summary,
+                  sheetName: targetChange.sheetName,
+                  anchorAddress: targetChange.anchorAddress,
+                  range: targetChange.range,
+                }
+              : null,
+            verification,
+          }),
+        )
       }
       case WORKBOOK_AGENT_TOOL_NAMES.listNamedRanges: {
         const namedRanges = await context.zeroSyncService.inspectWorkbook(context.documentId, (runtime) => ({
@@ -1399,9 +1390,38 @@ export async function handleWorkbookAgentToolCall(
           })
           const totalCells = countTotalRangeCells(resolved.ranges)
           if (totalCells > MAX_READ_RANGE_CELLS) {
-            throw new Error(
-              `Resolved selector spans ${String(totalCells)} cells; tool limit is ${String(MAX_READ_RANGE_CELLS)} cells per call`,
-            )
+            const firstRange = resolved.ranges[0]
+            if (!firstRange) {
+              throw new Error('Resolved selector did not produce a readable range')
+            }
+            const firstPlan = createWorkbookAgentRangeChunkPlan(firstRange, MAX_READ_RANGE_CELLS)
+            const firstChunk = firstPlan.chunks[0]
+            if (!firstChunk) {
+              throw new Error('Resolved selector did not produce a readable chunk')
+            }
+            const currentRange = {
+              sheetName: firstChunk.sheetName,
+              startAddress: firstChunk.startAddress,
+              endAddress: firstChunk.endAddress,
+            }
+            return {
+              resolvedSelector: serializeSelectorResolution(resolved.resolution),
+              chunked: true,
+              truncated: true,
+              totalCells,
+              cellLimit: MAX_READ_RANGE_CELLS,
+              rangeCount: resolved.ranges.length,
+              currentChunk: firstChunk,
+              nextChunk: firstPlan.chunks[1] ?? null,
+              chunkPlan:
+                resolved.ranges.length === 1
+                  ? firstPlan
+                  : {
+                      rangeCount: resolved.ranges.length,
+                      plans: resolved.ranges.map((range) => createWorkbookAgentRangeChunkPlan(range, MAX_READ_RANGE_CELLS)),
+                    },
+              readback: inspectWorkbookRange(runtime, currentRange),
+            }
           }
           const inspectedRanges = resolved.ranges.map((range) => inspectWorkbookRange(runtime, range))
           if (inspectedRanges.length === 1) {

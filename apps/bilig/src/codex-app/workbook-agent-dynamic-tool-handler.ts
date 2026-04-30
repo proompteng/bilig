@@ -1,6 +1,8 @@
 import {
   appendWorkbookAgentCommandToBundle,
   toWorkbookAgentCommandBundle,
+  WORKBOOK_AGENT_TOOL_NAMES,
+  normalizeWorkbookAgentToolName,
   type CodexDynamicToolCallRequest,
   type CodexDynamicToolCallResult,
   type WorkbookAgentExecutionRecord,
@@ -12,6 +14,45 @@ import { handleWorkbookAgentToolCall, type WorkbookAgentStartWorkflowRequest } f
 import { createWorkbookAgentServiceError } from '../workbook-agent-errors.js'
 import { cloneUiContext, type WorkbookAgentThreadState, toContextRef } from './workbook-agent-service-shared.js'
 import { normalizeWorkbookAgentUiContext } from './workbook-agent-inspection.js'
+
+const RENDERED_CONTEXT_WAIT_TIMEOUT_MS = 20_000
+const RENDERED_CONTEXT_POLL_INTERVAL_MS = 50
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
+function hasRenderedContext(context: WorkbookAgentThreadState['durable']['context']): boolean {
+  return context?.rendered !== undefined
+}
+
+function renderedRevision(context: WorkbookAgentThreadState['durable']['context']): number | null {
+  const capturedRevision = context?.rendered?.capturedRevision
+  if (typeof capturedRevision === 'number') {
+    return capturedRevision
+  }
+  const legacyBatchId = context?.rendered?.batchId
+  return typeof legacyBatchId === 'number' ? legacyBatchId : null
+}
+
+function hasRenderedContextAtRevision(context: WorkbookAgentThreadState['durable']['context'], minRevision: number | null): boolean {
+  const revision = renderedRevision(context)
+  if (revision === null) {
+    return false
+  }
+  return minRevision === null || revision >= minRevision
+}
+
+function shouldWaitForRenderedTool(toolName: string): boolean {
+  const normalizedTool = normalizeWorkbookAgentToolName(toolName)
+  return (
+    normalizedTool === WORKBOOK_AGENT_TOOL_NAMES.readRenderedSelection ||
+    normalizedTool === WORKBOOK_AGENT_TOOL_NAMES.readRenderedRange ||
+    normalizedTool === WORKBOOK_AGENT_TOOL_NAMES.applyAndVerify
+  )
+}
 
 export function createWorkbookAgentDynamicToolHandler(input: {
   zeroSyncService: ZeroSyncService
@@ -47,16 +88,52 @@ export function createWorkbookAgentDynamicToolHandler(input: {
   return async (request: CodexDynamicToolCallRequest) => {
     const sessionState = input.getSessionByThreadId(request.threadId)
     const requestActorUserId = input.resolveTurnActorUserId(sessionState, request.turnId)
-    const rawRequestContext = input.resolveTurnContext(sessionState, request.turnId)
-    const requestContext = await input.zeroSyncService.inspectWorkbook(sessionState.documentId, (runtime) =>
-      normalizeWorkbookAgentUiContext(runtime, rawRequestContext),
-    )
-    if (JSON.stringify(rawRequestContext) !== JSON.stringify(requestContext)) {
-      sessionState.durable.context = cloneUiContext(requestContext)
-      sessionState.live.turnContextByTurn.set(request.turnId, cloneUiContext(requestContext))
-      await input.persistSessionState(sessionState)
-      input.emitSnapshot(sessionState.threadId)
+    let requestContext: WorkbookAgentThreadState['durable']['context'] = null
+
+    const refreshRequestContext = async (): Promise<WorkbookAgentThreadState['durable']['context']> => {
+      const rawRequestContext = input.resolveTurnContext(sessionState, request.turnId)
+      const normalizedContext = await input.zeroSyncService.inspectWorkbook(sessionState.documentId, (runtime) =>
+        normalizeWorkbookAgentUiContext(runtime, rawRequestContext),
+      )
+      requestContext = normalizedContext
+      if (JSON.stringify(rawRequestContext) !== JSON.stringify(normalizedContext)) {
+        sessionState.durable.context = cloneUiContext(normalizedContext)
+        sessionState.live.turnContextByTurn.set(request.turnId, cloneUiContext(normalizedContext))
+        await input.persistSessionState(sessionState)
+        input.emitSnapshot(sessionState.threadId)
+      }
+      return normalizedContext
     }
+
+    const waitForRenderedContext = async (minRevision: number | null): Promise<WorkbookAgentThreadState['durable']['context']> => {
+      let latestContext = await refreshRequestContext()
+      if (hasRenderedContextAtRevision(latestContext, minRevision)) {
+        return latestContext
+      }
+      if (!hasRenderedContext(latestContext)) {
+        return latestContext
+      }
+      const deadline = Date.now() + RENDERED_CONTEXT_WAIT_TIMEOUT_MS
+      const pollRenderedContext = async (): Promise<WorkbookAgentThreadState['durable']['context']> => {
+        if (Date.now() >= deadline) {
+          return latestContext
+        }
+        await delay(RENDERED_CONTEXT_POLL_INTERVAL_MS)
+        latestContext = await refreshRequestContext()
+        if (hasRenderedContextAtRevision(latestContext, minRevision)) {
+          return latestContext
+        }
+        return pollRenderedContext()
+      }
+      return pollRenderedContext()
+    }
+
+    requestContext = await refreshRequestContext()
+    if (shouldWaitForRenderedTool(request.tool)) {
+      const headRevision = await input.zeroSyncService.getWorkbookHeadRevision(sessionState.documentId).catch(() => null)
+      requestContext = await waitForRenderedContext(headRevision)
+    }
+
     return handleWorkbookAgentToolCall(
       {
         documentId: sessionState.documentId,
@@ -64,13 +141,18 @@ export function createWorkbookAgentDynamicToolHandler(input: {
           userID: requestActorUserId,
           roles: ['editor'],
         },
-        uiContext: requestContext,
+        get uiContext() {
+          return requestContext
+        },
         zeroSyncService: input.zeroSyncService,
         updateUiContext: async (nextContext) => {
           sessionState.durable.context = cloneUiContext(nextContext)
           sessionState.live.turnContextByTurn.set(request.turnId, cloneUiContext(nextContext))
           await input.persistSessionState(sessionState)
           input.emitSnapshot(sessionState.threadId)
+        },
+        awaitRenderedRevision: async (revision) => {
+          requestContext = await waitForRenderedContext(revision)
         },
         stageCommand: async (command) => {
           const currentReviewBundle = sessionState.durable.reviewQueueItems[0]
@@ -95,6 +177,9 @@ export function createWorkbookAgentDynamicToolHandler(input: {
               actorUserId: requestActorUserId,
               bundle,
             })
+            if (executionRecord && hasRenderedContext(requestContext)) {
+              requestContext = await waitForRenderedContext(executionRecord.appliedRevision)
+            }
             return {
               bundle,
               executionRecord,

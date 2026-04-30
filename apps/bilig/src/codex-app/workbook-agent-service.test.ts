@@ -4,6 +4,7 @@ import {
   isWorkbookAgentReviewQueueItem,
   toWorkbookAgentCommandBundle,
   toWorkbookAgentReviewQueueItem,
+  type CodexDynamicToolCallResult,
   type CodexServerNotification,
   type WorkbookAgentCommandBundle,
   type CodexTurn,
@@ -123,6 +124,22 @@ function getPrimaryReviewBundle(snapshot: { reviewQueueItems: readonly unknown[]
     return null
   }
   return toWorkbookAgentCommandBundle(reviewItem)
+}
+
+function readDynamicToolJson(result: CodexDynamicToolCallResult | undefined): Record<string, unknown> {
+  const output = result?.contentItems.find((item) => item.type === 'inputText')
+  if (!output || !('text' in output)) {
+    throw new Error('Expected dynamic tool inputText output')
+  }
+  const parsed = JSON.parse(output.text) as unknown
+  if (!isUnknownRecord(parsed)) {
+    throw new Error('Expected dynamic tool JSON object output')
+  }
+  return parsed
+}
+
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 async function createWorkbookRuntimeStub(documentId = 'doc-1'): Promise<WorkbookRuntime> {
@@ -2948,6 +2965,140 @@ describe('workbook agent service', () => {
           )?.startedByUserId ?? null,
       )
       expect(startedByUserIds).toEqual(['casey@example.com', 'casey@example.com'])
+    } finally {
+      await service.close()
+    }
+  })
+
+  it('refreshes rendered browser context for the active turn when the same user posts a context update', async () => {
+    const fakeCodex = new FakeCodexTransport()
+    const capturedOptions: { current: CodexAppServerClientOptions | null } = { current: null }
+    const service = createWorkbookAgentService(createZeroSyncStub(), {
+      codexClientFactory: (options: CodexAppServerClientOptions): CodexAppServerTransport => {
+        capturedOptions.current = options
+        return fakeCodex
+      },
+    })
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          threadId: 'thr-test',
+          context: {
+            selection: {
+              sheetName: 'Sheet1',
+              address: 'A1',
+              range: {
+                startAddress: 'A1',
+                endAddress: 'A1',
+              },
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 20,
+              colStart: 0,
+              colEnd: 10,
+            },
+          },
+        },
+      })
+
+      await service.startTurn({
+        documentId: 'doc-1',
+        threadId: snapshot.threadId,
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          prompt: 'Verify rendered state',
+        },
+      })
+
+      await service.updateContext({
+        documentId: 'doc-1',
+        threadId: snapshot.threadId,
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          context: {
+            selection: {
+              sheetName: 'Sheet1',
+              address: 'A1',
+              range: {
+                startAddress: 'A1',
+                endAddress: 'A1',
+              },
+            },
+            viewport: {
+              rowStart: 0,
+              rowEnd: 20,
+              colStart: 0,
+              colEnd: 10,
+            },
+            rendered: {
+              capturedAtUnixMs: 100,
+              capturedRevision: 3,
+              batchId: 1,
+              selection: {
+                range: {
+                  sheetName: 'Sheet1',
+                  startAddress: 'A1',
+                  endAddress: 'A1',
+                },
+                rowCount: 1,
+                columnCount: 1,
+                cellCount: 1,
+                truncated: false,
+                rows: [
+                  [
+                    {
+                      address: 'A1',
+                      input: 42,
+                      value: { tag: 1, value: 42 },
+                      formula: null,
+                      displayFormat: null,
+                      styleId: null,
+                      numberFormatId: null,
+                      style: null,
+                    },
+                  ],
+                ],
+              },
+              visibleRange: null,
+            },
+          },
+        },
+      })
+
+      const result = await capturedOptions.current?.handleDynamicToolCall({
+        threadId: snapshot.threadId,
+        turnId: 'turn-1',
+        callId: 'call-rendered-selection',
+        tool: 'read_rendered_selection',
+        arguments: {},
+      })
+      const payload = readDynamicToolJson(result)
+
+      expect(payload).toEqual(
+        expect.objectContaining({
+          renderedReadback: expect.objectContaining({
+            available: true,
+            matched: true,
+            stale: false,
+            capturedRevision: 3,
+            capturedBatchId: 1,
+            incompleteReason: null,
+          }),
+        }),
+      )
     } finally {
       await service.close()
     }

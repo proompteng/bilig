@@ -63,7 +63,8 @@ function isWorkbookWorkerStateSnapshotValue(value: unknown): value is WorkbookWo
     typeof value['workbookName'] === 'string' &&
     Array.isArray(value['sheetNames']) &&
     isRecord(value['metrics']) &&
-    typeof value['syncState'] === 'string'
+    typeof value['syncState'] === 'string' &&
+    (value['authoritativeRevision'] === undefined || typeof value['authoritativeRevision'] === 'number')
   )
 }
 

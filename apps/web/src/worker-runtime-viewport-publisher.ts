@@ -45,9 +45,11 @@ export class WorkerViewportPatchPublisher {
         state: ViewportSubscriptionState,
         event: EngineEvent | null,
         metrics: RecalcMetrics,
+        authoritativeRevision: number,
         sheetImpact: SheetViewportImpact | null,
       ) => ViewportPatch
       canReadLocalProjectionForViewport: () => boolean
+      getAuthoritativeRevision: () => number
       getCurrentMetrics: () => RecalcMetrics
       getProjectionEngine: () => WorkerEngine
       hasProjectionEngine: () => boolean
@@ -78,7 +80,11 @@ export class WorkerViewportPatchPublisher {
       lastRowSignatures: new Map<number, string>(),
     }
     if (subscription.initialPatch !== 'none') {
-      listener(encodeViewportPatch(this.options.buildPatch(state, null, this.options.getCurrentMetrics(), null)))
+      listener(
+        encodeViewportPatch(
+          this.options.buildPatch(state, null, this.options.getCurrentMetrics(), this.options.getAuthoritativeRevision(), null),
+        ),
+      )
     }
     if (!this.options.hasProjectionEngine() && this.options.canReadLocalProjectionForViewport()) {
       this.options.scheduleProjectionEngineMaterialization()
@@ -95,6 +101,7 @@ export class WorkerViewportPatchPublisher {
     state: ViewportSubscriptionState,
     event: EngineEvent | null,
     metrics: RecalcMetrics = this.options.getCurrentMetrics(),
+    authoritativeRevision: number = this.options.getAuthoritativeRevision(),
     sheetImpact: SheetViewportImpact | null = null,
   ): ViewportPatch {
     if ((event === null || event.invalidation === 'full') && this.options.canReadLocalProjectionForViewport()) {
@@ -103,6 +110,7 @@ export class WorkerViewportPatchPublisher {
         return buildViewportPatchFromLocalBase({
           state,
           metrics,
+          authoritativeRevision,
           base: localBase,
           getFormatId: (format) => this.getFormatId(format),
         })
@@ -113,6 +121,7 @@ export class WorkerViewportPatchPublisher {
       state,
       event,
       metrics,
+      authoritativeRevision,
       sheetImpact,
       engine: this.options.getProjectionEngine(),
       emptyCellSnapshot: (sheetName, address) => createEmptyCellSnapshot(sheetName, address),
@@ -137,7 +146,7 @@ export class WorkerViewportPatchPublisher {
       if (input.event !== null && !viewportPatchMayBeImpacted(subscription.subscription, input.event, sheetImpact, impactedSheets)) {
         continue
       }
-      const patch = this.options.buildPatch(subscription, input.event, metrics, sheetImpact)
+      const patch = this.options.buildPatch(subscription, input.event, metrics, this.options.getAuthoritativeRevision(), sheetImpact)
       if (patch.cells.length === 0 && patch.columns.length === 0 && patch.rows.length === 0) {
         continue
       }

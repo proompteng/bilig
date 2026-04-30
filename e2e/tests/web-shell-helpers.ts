@@ -103,7 +103,7 @@ export async function clickProductCell(
   }
 }
 
-export async function dragProductColumnResize(page: Page, columnIndex: number, deltaX: number) {
+async function getProductColumnResizePoint(page: Page, columnIndex: number): Promise<{ readonly x: number; readonly y: number }> {
   const gridLocator = page.getByTestId('sheet-grid')
   await expect(gridLocator).toBeVisible()
   const grid = await gridLocator.boundingBox()
@@ -113,10 +113,27 @@ export async function dragProductColumnResize(page: Page, columnIndex: number, d
 
   const columnLeft = await getProductColumnLeft(page, columnIndex)
   const columnWidth = await getProductColumnWidth(page, columnIndex)
-  const edgeX = grid.x + columnLeft + columnWidth - 1
-  const edgeY = grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2)
+  return {
+    x: grid.x + columnLeft + columnWidth - 1,
+    y: grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2),
+  }
+}
 
-  await page.mouse.move(edgeX, edgeY)
+async function hoverProductColumnResizeHandle(page: Page, columnIndex: number): Promise<{ readonly x: number; readonly y: number }> {
+  const point = await getProductColumnResizePoint(page, columnIndex)
+  const gridLocator = page.getByTestId('sheet-grid')
+  await page.mouse.move(point.x, point.y)
+  await expect
+    .poll(async () => gridLocator.evaluate((node) => window.getComputedStyle(node).cursor), {
+      message: `column ${columnIndex} resize handle is hoverable`,
+    })
+    .toBe('col-resize')
+  return point
+}
+
+export async function dragProductColumnResize(page: Page, columnIndex: number, deltaX: number) {
+  const { x: edgeX, y: edgeY } = await hoverProductColumnResizeHandle(page, columnIndex)
+
   await page.mouse.down()
   await page.mouse.move(edgeX + deltaX, edgeY, { steps: 10 })
   await page.mouse.up()
@@ -157,18 +174,7 @@ export async function getProductFillHandleDragPoints(
 }
 
 export async function doubleClickProductColumnResizeHandle(page: Page, columnIndex: number) {
-  const gridLocator = page.getByTestId('sheet-grid')
-  await expect(gridLocator).toBeVisible()
-  const grid = await gridLocator.boundingBox()
-  if (!grid) {
-    throw new Error('sheet grid is not visible')
-  }
-
-  const columnLeft = await getProductColumnLeft(page, columnIndex)
-  const columnWidth = await getProductColumnWidth(page, columnIndex)
-  const edgeX = grid.x + columnLeft + columnWidth - 1
-  const headerY = grid.y + Math.floor(PRODUCT_HEADER_HEIGHT / 2)
-  await page.mouse.move(edgeX, headerY)
+  const { x: edgeX, y: headerY } = await hoverProductColumnResizeHandle(page, columnIndex)
   await page.mouse.dblclick(edgeX, headerY)
 }
 

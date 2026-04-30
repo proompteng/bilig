@@ -189,6 +189,22 @@ function applyStructuralContextHints(
   return structuralContextChanged && nextContext ? dropRenderedContext(nextContext) : nextContext
 }
 
+function updateDurableUiContextFromUser(input: {
+  readonly sessionState: WorkbookAgentThreadState
+  readonly context: WorkbookAgentUiContext
+  readonly userId: string
+}): void {
+  input.sessionState.durable.context = cloneUiContext(input.context)
+  const activeTurnId = input.sessionState.live.activeTurnId
+  if (!activeTurnId) {
+    return
+  }
+  const activeTurnActorUserId = input.sessionState.live.turnActorUserIdByTurn.get(activeTurnId)
+  if (activeTurnActorUserId === undefined || activeTurnActorUserId === input.userId) {
+    input.sessionState.live.turnContextByTurn.set(activeTurnId, cloneUiContext(input.context))
+  }
+}
+
 export interface WorkbookAgentService {
   readonly enabled: boolean
   createSession(input: { documentId: string; session: SessionIdentity; body: unknown }): Promise<WorkbookAgentThreadSnapshot>
@@ -838,7 +854,11 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       if (sharedSession) {
         const accessibleSession = this.requireOwnedSession(sharedSession, input.documentId, input.session.userID)
         if (parsed.context) {
-          accessibleSession.durable.context = parsed.context
+          updateDurableUiContextFromUser({
+            sessionState: accessibleSession,
+            context: parsed.context,
+            userId: input.session.userID,
+          })
         }
         if (parsed.executionPolicy) {
           accessibleSession.executionPolicy = normalizeExecutionPolicy({
@@ -1036,7 +1056,11 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   }): Promise<WorkbookAgentThreadSnapshot> {
     const parsed = updateContextBodySchema.parse(input.body)
     const sessionState = this.getOwnedSession(input.documentId, input.threadId, input.session.userID)
-    sessionState.durable.context = parsed.context
+    updateDurableUiContextFromUser({
+      sessionState,
+      context: parsed.context,
+      userId: input.session.userID,
+    })
     this.touch(sessionState)
     await this.persistSessionState(sessionState)
     this.emitSnapshot(sessionState.threadId)
@@ -1133,7 +1157,11 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       message: 'Workbook assistant workflows are still limited to the rollout allowlist.',
     })
     if (parsed.context) {
-      sessionState.durable.context = parsed.context
+      updateDurableUiContextFromUser({
+        sessionState,
+        context: parsed.context,
+        userId: input.session.userID,
+      })
     }
     const runningWorkflow = sessionState.durable.workflowRuns.find((run) => run.status === 'running')
     if (runningWorkflow) {

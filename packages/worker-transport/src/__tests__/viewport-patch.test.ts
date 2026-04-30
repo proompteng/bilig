@@ -16,6 +16,7 @@ function createViewport(): Viewport {
 function createPatch(): ViewportPatch {
   return {
     version: 2,
+    authoritativeRevision: 12,
     full: false,
     freezeRows: 1,
     freezeCols: 2,

@@ -37,6 +37,7 @@ export interface ViewportAxisPatch {
 
 export interface ViewportPatch {
   version: number
+  authoritativeRevision?: number
   full: boolean
   freezeRows?: number
   freezeCols?: number
@@ -49,7 +50,7 @@ export interface ViewportPatch {
 }
 
 const VIEWPORT_PATCH_MAGIC = 0x56505450
-const VIEWPORT_PATCH_CODEC_VERSION = 1
+const VIEWPORT_PATCH_CODEC_VERSION = 2
 const OPTIONAL_ABSENT = 0xff
 
 function encodeColumn(index: number): string {
@@ -495,6 +496,7 @@ export function encodeViewportPatch(patch: ViewportPatch): Uint8Array {
   writer.u32(VIEWPORT_PATCH_MAGIC)
   writer.u32(VIEWPORT_PATCH_CODEC_VERSION)
   writer.u32(patch.version)
+  writer.u32(Math.max(0, Math.trunc(patch.authoritativeRevision ?? 0)))
   writer.bool(patch.full)
   writer.u32(patch.freezeRows ?? 0)
   writer.u32(patch.freezeCols ?? 0)
@@ -539,6 +541,7 @@ export function decodeViewportPatch(bytes: Uint8Array): ViewportPatch {
   }
 
   const version = reader.u32()
+  const authoritativeRevision = reader.u32()
   const full = reader.bool()
   const freezeRows = reader.u32()
   const freezeCols = reader.u32()
@@ -551,6 +554,7 @@ export function decodeViewportPatch(bytes: Uint8Array): ViewportPatch {
   }
   const patch: ViewportPatch = {
     version,
+    authoritativeRevision,
     full,
     freezeRows,
     freezeCols,
