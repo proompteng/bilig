@@ -66,9 +66,19 @@ export function CellEditorOverlay({
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const completionRef = useRef<'idle' | 'commit' | 'cancel'>('idle')
   const blurArmedRef = useRef(false)
+  const pendingBlurCommitRef = useRef<number | null>(null)
   const targetSelectionRef = useRef(targetSelection)
   const [isCompleting, setIsCompleting] = useState(false)
   const MAX_EDITOR_HEIGHT = 220
+
+  const cancelPendingBlurCommit = () => {
+    const pendingFrame = pendingBlurCommitRef.current
+    if (pendingFrame === null) {
+      return
+    }
+    pendingBlurCommitRef.current = null
+    window.cancelAnimationFrame(pendingFrame)
+  }
 
   const beginCompletion = (nextState: 'commit' | 'cancel') => {
     completionRef.current = nextState
@@ -94,6 +104,8 @@ export function CellEditorOverlay({
     }
   }, [selectionBehavior, value.length])
 
+  useEffect(() => cancelPendingBlurCommit, [])
+
   useEffect(() => {
     const textarea = inputRef.current
     if (!textarea) {
@@ -106,17 +118,35 @@ export function CellEditorOverlay({
   }, [fontSize, value])
 
   const commit = (movement?: EditMovement) => {
+    if (movement) {
+      cancelPendingBlurCommit()
+    }
     if (completionRef.current !== 'idle') {
+      if (movement && completionRef.current === 'commit') {
+        onCommit(movement, inputRef.current?.value ?? value, targetSelectionRef.current)
+      }
       return
     }
+    cancelPendingBlurCommit()
     beginCompletion('commit')
     onCommit(movement, inputRef.current?.value ?? value, targetSelectionRef.current)
+  }
+
+  const commitAfterBlur = () => {
+    if (!blurArmedRef.current || completionRef.current !== 'idle' || pendingBlurCommitRef.current !== null) {
+      return
+    }
+    pendingBlurCommitRef.current = window.requestAnimationFrame(() => {
+      pendingBlurCommitRef.current = null
+      commit()
+    })
   }
 
   const cancel = () => {
     if (completionRef.current !== 'idle') {
       return
     }
+    cancelPendingBlurCommit()
     beginCompletion('cancel')
     onCancel()
   }
@@ -144,12 +174,7 @@ export function CellEditorOverlay({
           textDecorationLine: underline ? 'underline' : undefined,
         }}
         value={value}
-        onBlur={() => {
-          if (!blurArmedRef.current) {
-            return
-          }
-          commit()
-        }}
+        onBlur={commitAfterBlur}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
           const normalizedNumpadKey = normalizeNumpadKey(event.key, event.code)

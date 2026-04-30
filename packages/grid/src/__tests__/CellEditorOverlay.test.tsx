@@ -8,6 +8,10 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
+function makeTargetSelection() {
+  return { sheetName: 'Sheet1', address: 'B2' }
+}
+
 describe('CellEditorOverlay', () => {
   it('renders a flat single-frame editor without rounded or shadow chrome', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -18,7 +22,15 @@ describe('CellEditorOverlay', () => {
 
     await act(async () => {
       root.render(
-        <CellEditorOverlay label="Sheet1!B2" onCancel={() => {}} onChange={() => {}} onCommit={() => {}} resolvedValue="" value="draft" />,
+        <CellEditorOverlay
+          label="Sheet1!B2"
+          targetSelection={makeTargetSelection()}
+          onCancel={() => {}}
+          onChange={() => {}}
+          onCommit={() => {}}
+          resolvedValue=""
+          value="draft"
+        />,
       )
     })
 
@@ -43,7 +55,15 @@ describe('CellEditorOverlay', () => {
 
     await act(async () => {
       root.render(
-        <CellEditorOverlay label="Sheet1!B2" onCancel={onCancel} onChange={onChange} onCommit={onCommit} resolvedValue="" value="line 1" />,
+        <CellEditorOverlay
+          label="Sheet1!B2"
+          targetSelection={makeTargetSelection()}
+          onCancel={onCancel}
+          onChange={onChange}
+          onCommit={onCommit}
+          resolvedValue=""
+          value="line 1"
+        />,
       )
     })
 
@@ -60,5 +80,79 @@ describe('CellEditorOverlay', () => {
     await act(async () => {
       root.unmount()
     })
+  })
+
+  it('lets movement commits win over a queued blur commit', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const originalRequestAnimationFrame = window.requestAnimationFrame
+    const originalCancelAnimationFrame = window.cancelAnimationFrame
+    const frameCallbacks = new Map<number, FrameRequestCallback>()
+    let nextFrame = 1
+    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      const id = nextFrame
+      nextFrame += 1
+      frameCallbacks.set(id, callback)
+      return id
+    }) as typeof window.requestAnimationFrame
+    window.cancelAnimationFrame = ((id: number) => {
+      frameCallbacks.delete(id)
+    }) as typeof window.cancelAnimationFrame
+    const flushAnimationFrames = () => {
+      const callbacks = [...frameCallbacks.values()]
+      frameCallbacks.clear()
+      callbacks.forEach((callback) => callback(performance.now()))
+    }
+
+    const onCommit = vi.fn()
+    const onCancel = vi.fn()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    try {
+      await act(async () => {
+        root.render(
+          <CellEditorOverlay
+            label="Sheet1!B2"
+            targetSelection={makeTargetSelection()}
+            onCancel={onCancel}
+            onChange={() => {}}
+            onCommit={onCommit}
+            resolvedValue=""
+            value="line 1"
+          />,
+        )
+      })
+      await act(async () => {
+        flushAnimationFrames()
+      })
+
+      const textarea = host.querySelector<HTMLTextAreaElement>("[data-testid='cell-editor-input']")
+
+      await act(async () => {
+        textarea?.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+      })
+      expect(onCommit).not.toHaveBeenCalled()
+
+      await act(async () => {
+        textarea?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      })
+
+      expect(onCommit).toHaveBeenCalledTimes(1)
+      expect(onCommit).toHaveBeenLastCalledWith([0, 1], 'line 1', makeTargetSelection())
+      expect(onCancel).not.toHaveBeenCalled()
+
+      await act(async () => {
+        flushAnimationFrames()
+      })
+      expect(onCommit).toHaveBeenCalledTimes(1)
+    } finally {
+      await act(async () => {
+        root.unmount()
+      })
+      window.requestAnimationFrame = originalRequestAnimationFrame
+      window.cancelAnimationFrame = originalCancelAnimationFrame
+    }
   })
 })
