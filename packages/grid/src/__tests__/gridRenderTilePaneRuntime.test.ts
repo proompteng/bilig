@@ -231,6 +231,43 @@ describe('GridRenderTilePaneRuntime', () => {
     expect(getGridRenderTilePaneRuntime(null)).toBeInstanceOf(GridRenderTilePaneRuntime)
   })
 
+  it('publishes bridge revisions from the runtime-owned external store', () => {
+    const runtime = new GridRenderTilePaneRuntime()
+    const snapshots: unknown[] = []
+    const unsubscribe = runtime.subscribeBridgeState(() => {
+      snapshots.push(runtime.snapshotBridgeState())
+    })
+
+    runtime.noteRenderTileDelta()
+    runtime.noteWorkbookDeltaDamage()
+    runtime.noteLocalFallbackInvalidation()
+    unsubscribe()
+    runtime.noteRenderTileDelta()
+
+    expect(snapshots).toEqual([
+      {
+        forceLocalTiles: false,
+        localFallbackRevision: 0,
+        renderTileRevision: 1,
+      },
+      {
+        forceLocalTiles: false,
+        localFallbackRevision: 0,
+        renderTileRevision: 2,
+      },
+      {
+        forceLocalTiles: true,
+        localFallbackRevision: 1,
+        renderTileRevision: 2,
+      },
+    ])
+    expect(runtime.snapshotBridgeState()).toEqual({
+      forceLocalTiles: false,
+      localFallbackRevision: 1,
+      renderTileRevision: 3,
+    })
+  })
+
   it('resolves remote render tiles into V3 pane placements', () => {
     const runtime = new GridRenderTilePaneRuntime()
     const host = createHost()
@@ -438,6 +475,11 @@ describe('GridRenderTilePaneRuntime', () => {
     invalidationListener?.()
 
     expect(invalidations).toEqual(['invalidated'])
+    expect(runtime.snapshotBridgeState()).toEqual({
+      forceLocalTiles: true,
+      localFallbackRevision: 1,
+      renderTileRevision: 0,
+    })
     expect(
       runtime.resolve(
         createInput({
@@ -603,9 +645,19 @@ describe('GridRenderTilePaneRuntime', () => {
       valueSeq: 7,
     })
     expect(listenerChanges).toHaveLength(1)
+    expect(runtime.snapshotBridgeState()).toEqual({
+      forceLocalTiles: false,
+      localFallbackRevision: 0,
+      renderTileRevision: 1,
+    })
 
     renderTileSource.emit({ invalidatedTileIds: [tileId] })
     expect(host.tiles.residency.getExact(tileId)).toBeNull()
+    expect(runtime.snapshotBridgeState()).toEqual({
+      forceLocalTiles: false,
+      localFallbackRevision: 0,
+      renderTileRevision: 2,
+    })
 
     unsubscribe?.()
     expect(renderTileSource.unsubscribed()).toBe(true)
@@ -671,6 +723,11 @@ describe('GridRenderTilePaneRuntime', () => {
     renderTileSource.emit(createWorkbookDeltaBatch({ seq: 2, sheetId: 8, sheetOrdinal: 8 }))
 
     expect(listenerBatches.map((batch) => batch.seq)).toEqual([1])
+    expect(runtime.snapshotBridgeState()).toEqual({
+      forceLocalTiles: false,
+      localFallbackRevision: 0,
+      renderTileRevision: 1,
+    })
     expect(
       host.tiles.reconcileInterest({
         axisSeqX: 1,
@@ -718,6 +775,11 @@ describe('GridRenderTilePaneRuntime', () => {
     renderTileSource.emit(createWorkbookDeltaBatch({ seq: 2, sheetId: 7, sheetOrdinal: 7 }))
 
     expect(listenerBatches.map((batch) => batch.seq)).toEqual([1])
+    expect(runtime.snapshotBridgeState()).toEqual({
+      forceLocalTiles: false,
+      localFallbackRevision: 0,
+      renderTileRevision: 1,
+    })
     expect(
       host.tiles.reconcileInterest({
         axisSeqX: 1,

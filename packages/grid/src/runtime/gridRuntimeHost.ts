@@ -7,6 +7,7 @@ import { viewportFromVisibleRegion } from '../useGridCameraState.js'
 import { GridAxisRuntime } from './gridAxisRuntime.js'
 import type { AxisEntryOverride } from '../gridAxisIndex.js'
 import { GridCameraRuntime, type GridCameraRuntimeSnapshot } from './gridCameraRuntime.js'
+import { GridInteractionOverlayRuntime } from './gridInteractionOverlayRuntime.js'
 import { GridOverlayRuntime } from './gridOverlayRuntime.js'
 import {
   GridRenderTilePaneRuntime,
@@ -37,6 +38,7 @@ export class GridRuntimeHost {
   readonly columns: GridAxisRuntime
   readonly rows: GridAxisRuntime
   readonly camera: GridCameraRuntime
+  readonly interactionOverlays = new GridInteractionOverlayRuntime()
   readonly overlays = new GridOverlayRuntime()
   readonly tiles = new GridTileCoordinator()
   readonly headers = new GridHeaderPaneRuntime()
@@ -200,9 +202,17 @@ export class GridRuntimeHost {
     return this.viewportResidency.resolve(input)
   }
 
+  snapshotViewportResidencySceneRevision(): number {
+    return this.viewportResidency.snapshotSceneRevision()
+  }
+
+  subscribeViewportResidencySceneRevision(listener: () => void): () => void {
+    return this.viewportResidency.subscribeSceneRevision(listener)
+  }
+
   connectViewportResidencyInvalidation(
     input: GridViewportResidencyInvalidationInput,
-    listener: Parameters<GridViewportResidencyRuntime['connectLocalSceneInvalidation']>[1],
+    listener?: Parameters<GridViewportResidencyRuntime['connectLocalSceneInvalidation']>[1],
   ): ReturnType<GridViewportResidencyRuntime['connectLocalSceneInvalidation']> {
     return this.viewportResidency.connectLocalSceneInvalidation(input, listener)
   }
@@ -222,6 +232,10 @@ export class GridRuntimeHost {
     return this.renderTiles.snapshotBridgeState()
   }
 
+  subscribeRenderTileBridgeState(listener: () => void): () => void {
+    return this.renderTiles.subscribeBridgeState(listener)
+  }
+
   noteRenderTileDelta(): GridRenderTilePaneBridgeState {
     return this.renderTiles.noteRenderTileDelta()
   }
@@ -236,7 +250,7 @@ export class GridRuntimeHost {
 
   connectRenderTileDeltas(
     input: Omit<GridRenderTileDeltaRuntimeInput, 'gridRuntimeHost'>,
-    listener: Parameters<GridRenderTilePaneRuntime['connectRenderTileDeltas']>[1],
+    listener?: Parameters<GridRenderTilePaneRuntime['connectRenderTileDeltas']>[1],
   ): ReturnType<GridRenderTilePaneRuntime['connectRenderTileDeltas']> {
     return this.renderTiles.connectRenderTileDeltas(
       {
@@ -249,7 +263,7 @@ export class GridRuntimeHost {
 
   connectWorkbookDeltaDamage(
     input: Omit<GridRenderTileDamageRuntimeInput, 'gridRuntimeHost'>,
-    listener: Parameters<GridRenderTilePaneRuntime['connectWorkbookDeltaDamage']>[1],
+    listener?: Parameters<GridRenderTilePaneRuntime['connectWorkbookDeltaDamage']>[1],
   ): ReturnType<GridRenderTilePaneRuntime['connectWorkbookDeltaDamage']> {
     return this.renderTiles.connectWorkbookDeltaDamage(
       {
@@ -266,7 +280,7 @@ export class GridRuntimeHost {
 
   connectLocalRenderTileCellInvalidation(
     input: GridRenderTileLocalInvalidationRuntimeInput,
-    listener: Parameters<GridRenderTilePaneRuntime['connectLocalCellInvalidation']>[1],
+    listener?: Parameters<GridRenderTilePaneRuntime['connectLocalCellInvalidation']>[1],
   ): ReturnType<GridRenderTilePaneRuntime['connectLocalCellInvalidation']> {
     return this.renderTiles.connectLocalCellInvalidation(input, listener)
   }

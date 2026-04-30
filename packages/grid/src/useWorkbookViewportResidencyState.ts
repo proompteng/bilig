@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import type { GridEngineLike } from './grid-engine.js'
 import type { VisibleRegionState } from './gridPointer.js'
 import type { GridRuntimeHost } from './runtime/gridRuntimeHost.js'
@@ -16,27 +16,28 @@ export function useWorkbookViewportResidencyState(input: {
   readonly visibleRegion: VisibleRegionState
 }): WorkbookViewportResidencyState {
   const { engine, freezeCols, freezeRows, gridRuntimeHost, sheetName, shouldUseRemoteRenderTileSource, visibleRegion } = input
-  const [invalidationRevision, setInvalidationRevision] = useState(0)
+  const sceneRevision = useSyncExternalStore(
+    (listener) => gridRuntimeHost.subscribeViewportResidencySceneRevision(listener),
+    () => gridRuntimeHost.snapshotViewportResidencySceneRevision(),
+    () => gridRuntimeHost.snapshotViewportResidencySceneRevision(),
+  )
   const state = useMemo(() => {
-    void invalidationRevision
+    void sceneRevision
     return gridRuntimeHost.resolveViewportResidency({
       freezeCols,
       freezeRows,
       visibleRegion,
     })
-  }, [freezeCols, freezeRows, gridRuntimeHost, invalidationRevision, visibleRegion])
+  }, [freezeCols, freezeRows, gridRuntimeHost, sceneRevision, visibleRegion])
   const { visibleAddresses } = state
 
   useEffect(() => {
-    return gridRuntimeHost.connectViewportResidencyInvalidation(
-      {
-        engine,
-        sheetName,
-        shouldUseRemoteRenderTileSource,
-        visibleAddresses,
-      },
-      () => setInvalidationRevision((current) => current + 1),
-    )
+    return gridRuntimeHost.connectViewportResidencyInvalidation({
+      engine,
+      sheetName,
+      shouldUseRemoteRenderTileSource,
+      visibleAddresses,
+    })
   }, [engine, gridRuntimeHost, sheetName, shouldUseRemoteRenderTileSource, visibleAddresses])
 
   return state

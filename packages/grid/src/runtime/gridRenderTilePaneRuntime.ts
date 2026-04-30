@@ -127,6 +127,7 @@ export class GridRenderTilePaneRuntime {
     readonly panes: readonly WorkbookRenderTilePaneState[]
   } | null = null
   private bridgeState = INITIAL_RENDER_TILE_PANE_BRIDGE_STATE
+  private readonly bridgeListeners = new Set<() => void>()
   private readonly lastWorkbookDeltaSeqBySheetOrdinal = new Map<number, number>()
 
   resolve(input: GridRenderTilePaneRuntimeInput): GridRenderTilePaneRuntimeState {
@@ -168,6 +169,13 @@ export class GridRenderTilePaneRuntime {
     return this.bridgeState
   }
 
+  subscribeBridgeState(listener: () => void): () => void {
+    this.bridgeListeners.add(listener)
+    return () => {
+      this.bridgeListeners.delete(listener)
+    }
+  }
+
   noteRenderTileDelta(): GridRenderTilePaneBridgeState {
     const previous = this.bridgeState
     this.bridgeState = {
@@ -175,6 +183,7 @@ export class GridRenderTilePaneRuntime {
       localFallbackRevision: previous.localFallbackRevision,
       renderTileRevision: previous.renderTileRevision + 1,
     }
+    this.emitBridgeState()
     return this.bridgeState
   }
 
@@ -185,6 +194,7 @@ export class GridRenderTilePaneRuntime {
       localFallbackRevision: previous.localFallbackRevision,
       renderTileRevision: previous.renderTileRevision + 1,
     }
+    this.emitBridgeState()
     return this.bridgeState
   }
 
@@ -195,6 +205,7 @@ export class GridRenderTilePaneRuntime {
       localFallbackRevision: previous.localFallbackRevision + 1,
       renderTileRevision: previous.renderTileRevision,
     }
+    this.emitBridgeState()
     return this.bridgeState
   }
 
@@ -216,19 +227,20 @@ export class GridRenderTilePaneRuntime {
     })
   }
 
-  connectLocalCellInvalidation(input: GridRenderTileLocalInvalidationRuntimeInput, listener: () => void): (() => void) | undefined {
+  connectLocalCellInvalidation(input: GridRenderTileLocalInvalidationRuntimeInput, listener?: () => void): (() => void) | undefined {
     if (!input.needsLocalCellInvalidation || input.visibleAddresses.length === 0) {
       return undefined
     }
     return input.engine.subscribeCells(input.sheetName, input.visibleAddresses, () => {
       this.clearRetainedPanes()
-      listener()
+      this.noteLocalFallbackInvalidation()
+      listener?.()
     })
   }
 
   connectWorkbookDeltaDamage(
     input: GridRenderTileDamageRuntimeInput,
-    listener: (batch: WorkbookDeltaBatchLikeV3) => void,
+    listener?: (batch: WorkbookDeltaBatchLikeV3) => void,
   ): (() => void) | undefined {
     const renderTileSource = input.renderTileSource
     if (!renderTileSource?.subscribeWorkbookDeltas || input.sheetId === undefined) {
@@ -242,13 +254,14 @@ export class GridRenderTilePaneRuntime {
       if (!this.applyWorkbookDeltaDamage(input, batch)) {
         return
       }
-      listener(batch)
+      this.noteWorkbookDeltaDamage()
+      listener?.(batch)
     })
   }
 
   connectRenderTileDeltas(
     input: GridRenderTileDeltaRuntimeInput,
-    listener: (change: GridRenderTileSceneChange) => void,
+    listener?: (change: GridRenderTileSceneChange) => void,
   ): (() => void) | undefined {
     if (!input.renderTileSource || input.sheetId === undefined) {
       return undefined
@@ -283,7 +296,8 @@ export class GridRenderTilePaneRuntime {
         if (change) {
           this.applyRenderTileSceneChange(input, change)
         }
-        listener(change)
+        this.noteRenderTileDelta()
+        listener?.(change)
       },
     )
   }
@@ -453,6 +467,12 @@ export class GridRenderTilePaneRuntime {
         viewport: input.renderTileViewport,
       }),
     }
+  }
+
+  private emitBridgeState(): void {
+    this.bridgeListeners.forEach((listener) => {
+      listener()
+    })
   }
 }
 

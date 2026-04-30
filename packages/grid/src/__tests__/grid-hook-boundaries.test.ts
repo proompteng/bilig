@@ -76,6 +76,10 @@ describe('grid hook boundary helpers', () => {
       fileURLToPath(new URL('../useWorkbookGridInteractionRuntime.ts', import.meta.url)),
       'utf8',
     )
+    const interactionOverlayHookSource = readFileSync(
+      fileURLToPath(new URL('../useWorkbookInteractionOverlayState.ts', import.meta.url)),
+      'utf8',
+    )
     const drawRuntimeHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridDrawRuntime.ts', import.meta.url)), 'utf8')
     const paneHookPath = fileURLToPath(new URL('../useWorkbookGridRenderPanes.ts', import.meta.url))
     const tilePaneHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookRenderTilePanes.ts', import.meta.url)), 'utf8')
@@ -132,6 +136,11 @@ describe('grid hook boundary helpers', () => {
     expect(headerHookSource).not.toContain('useRef<')
     expect(tilePaneHookSource).toContain("from './runtime/gridRuntimeHost.js'")
     expect(tilePaneHookSource).not.toContain("from './runtime/gridRenderTilePaneRuntime.js'")
+    expect(tilePaneHookSource).toContain('useSyncExternalStore')
+    expect(tilePaneHookSource).not.toContain('useState')
+    expect(tilePaneHookSource).not.toContain('noteRenderTileDelta')
+    expect(tilePaneHookSource).not.toContain('noteWorkbookDeltaDamage')
+    expect(tilePaneHookSource).not.toContain('noteLocalRenderTileFallbackInvalidation')
     expect(tilePaneHookSource).not.toContain('noteRendererTileReadiness')
     expect(tilePaneHookSource).not.toContain('.subscribeCells(')
     expect(tilePaneHookSource).not.toContain('clearRetainedRenderTilePanes')
@@ -144,6 +153,8 @@ describe('grid hook boundary helpers', () => {
     expect(tilePaneHookSource).not.toContain('noteProjectedViewportPatch')
     expect(viewportResidencyHookSource).toContain("from './runtime/gridRuntimeHost.js'")
     expect(viewportResidencyHookSource).not.toContain("from './runtime/gridViewportResidencyRuntime.js'")
+    expect(viewportResidencyHookSource).toContain('useSyncExternalStore')
+    expect(viewportResidencyHookSource).not.toContain('useState')
     expect(viewportResidencyHookSource).not.toContain('.subscribeCells(')
     expect(viewportResidencyHookSource).not.toContain('setSceneRevision')
     expect(editorHookSource).toContain("from './runtime/gridEditorAnchorRuntime.js'")
@@ -155,6 +166,10 @@ describe('grid hook boundary helpers', () => {
     expect(editorRuntimeHookSource).toContain('useWorkbookColumnAutofit')
     expect(axisRuntimeHookSource).toContain('useWorkbookAxisResizeState')
     expect(interactionRuntimeHookSource).toContain('useWorkbookInteractionOverlayState')
+    expect(interactionRuntimeHookSource).toContain('gridRuntimeHost')
+    expect(interactionOverlayHookSource).toContain('useSyncExternalStore')
+    expect(interactionOverlayHookSource).not.toContain('useState')
+    expect(interactionOverlayHookSource).toContain('GridInteractionOverlayRuntime')
     expect(hostRuntimeHookSource).toContain('useGridElementSize')
     expect(hostRuntimeHookSource).toContain('useRef<HTMLDivElement')
     expect(hostRuntimeHookSource).toContain('useState<VisibleRegionState>')

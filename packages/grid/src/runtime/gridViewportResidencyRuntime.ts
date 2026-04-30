@@ -54,6 +54,7 @@ interface GridViewportResidentCache {
 export class GridViewportResidencyRuntime {
   private residentCache: GridViewportResidentCache | null = null
   private residentViewport: Viewport | null = null
+  private readonly sceneRevisionListeners = new Set<() => void>()
   private sceneRevision = 0
 
   resolve(input: GridViewportResidencyRuntimeInput): GridViewportResidencyState {
@@ -79,16 +80,28 @@ export class GridViewportResidencyRuntime {
 
   invalidateScene(): number {
     this.sceneRevision += 1
+    this.emitSceneRevision()
     return this.sceneRevision
   }
 
-  connectLocalSceneInvalidation(input: GridViewportResidencyInvalidationInput, listener: () => void): (() => void) | undefined {
+  snapshotSceneRevision(): number {
+    return this.sceneRevision
+  }
+
+  subscribeSceneRevision(listener: () => void): () => void {
+    this.sceneRevisionListeners.add(listener)
+    return () => {
+      this.sceneRevisionListeners.delete(listener)
+    }
+  }
+
+  connectLocalSceneInvalidation(input: GridViewportResidencyInvalidationInput, listener?: () => void): (() => void) | undefined {
     if (input.shouldUseRemoteRenderTileSource || input.visibleAddresses.length === 0) {
       return undefined
     }
     return input.engine.subscribeCells(input.sheetName, input.visibleAddresses, () => {
       this.invalidateScene()
-      listener()
+      listener?.()
     })
   }
 
@@ -134,5 +147,11 @@ export class GridViewportResidencyRuntime {
     }
     this.residentCache = next
     return next
+  }
+
+  private emitSceneRevision(): void {
+    this.sceneRevisionListeners.forEach((listener) => {
+      listener()
+    })
   }
 }

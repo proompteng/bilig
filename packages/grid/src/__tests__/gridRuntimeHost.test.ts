@@ -74,6 +74,92 @@ describe('GridRuntimeHost', () => {
     })
   })
 
+  it('owns render tile bridge snapshots and subscriptions', () => {
+    const host = new GridRuntimeHost({
+      columnCount: 1000,
+      defaultColumnWidth: 100,
+      defaultRowHeight: 10,
+      gridMetrics,
+      rowCount: 1000,
+      viewportHeight: 60,
+      viewportWidth: 250,
+    })
+    const snapshots: unknown[] = []
+    const unsubscribe = host.subscribeRenderTileBridgeState(() => {
+      snapshots.push(host.snapshotRenderTileBridgeState())
+    })
+
+    host.noteRenderTileDelta()
+    host.noteWorkbookDeltaDamage()
+    unsubscribe()
+    host.noteLocalRenderTileFallbackInvalidation()
+
+    expect(snapshots).toEqual([
+      {
+        forceLocalTiles: false,
+        localFallbackRevision: 0,
+        renderTileRevision: 1,
+      },
+      {
+        forceLocalTiles: false,
+        localFallbackRevision: 0,
+        renderTileRevision: 2,
+      },
+    ])
+    expect(host.snapshotRenderTileBridgeState()).toEqual({
+      forceLocalTiles: true,
+      localFallbackRevision: 1,
+      renderTileRevision: 2,
+    })
+  })
+
+  it('owns interaction overlay snapshots outside React state', () => {
+    const host = new GridRuntimeHost({
+      columnCount: 1000,
+      defaultColumnWidth: 100,
+      defaultRowHeight: 10,
+      gridMetrics,
+      rowCount: 1000,
+      viewportHeight: 60,
+      viewportWidth: 250,
+    })
+    const snapshots: unknown[] = []
+    const unsubscribe = host.interactionOverlays.subscribe(() => {
+      snapshots.push(host.interactionOverlays.snapshot())
+    })
+
+    host.interactionOverlays.syncSelectedCell({ selectedCol: 3, selectedRow: 4 })
+    host.interactionOverlays.setFillPreviewRange({ height: 1, width: 2, x: 3, y: 4 })
+    host.interactionOverlays.setIsFillHandleDragging(true)
+    unsubscribe()
+    host.interactionOverlays.setIsRangeMoveDragging(true)
+
+    expect(snapshots).toHaveLength(3)
+    expect(host.interactionOverlays.snapshot()).toMatchObject({
+      fillPreviewRange: { height: 1, width: 2, x: 3, y: 4 },
+      isFillHandleDragging: true,
+      isRangeMoveDragging: true,
+    })
+    expect(host.interactionOverlays.snapshot().gridSelection.current?.cell).toEqual([3, 4])
+    expect(
+      host.interactionOverlays.resolveState({
+        activeResizeColumn: null,
+        activeResizeRow: null,
+        getCellLocalBounds: (col, row) =>
+          row === 4 && col >= 3 && col <= 4 ? { height: 10, width: 40, x: col === 3 ? 30 : 70, y: 20 } : undefined,
+        hasColumnResizePreview: false,
+        hasRowResizePreview: false,
+        isEditingCell: false,
+        snapshot: host.interactionOverlays.snapshot(),
+        visibleRange: { height: 10, width: 10, x: 0, y: 0 },
+      }),
+    ).toMatchObject({
+      fillPreviewBounds: { height: 10, width: 80, x: 30, y: 20 },
+      requiresLiveViewportState: true,
+      selectionRange: { height: 1, width: 1, x: 3, y: 4 },
+    })
+  })
+
   it('keeps freeze state in the runtime transaction when update input omits it', () => {
     const host = new GridRuntimeHost({
       columnCount: 1000,
@@ -211,6 +297,33 @@ describe('GridRuntimeHost', () => {
     expect(sameWindow.residentViewport).toBe(first.residentViewport)
     expect(sameWindow.visibleAddresses).toBe(first.visibleAddresses)
     expect(sameWindow.sceneRevision).toBe(1)
+  })
+
+  it('owns viewport residency scene revision subscriptions', () => {
+    const host = new GridRuntimeHost({
+      columnCount: 1000,
+      defaultColumnWidth: 100,
+      defaultRowHeight: 10,
+      freezeCols: 2,
+      freezeRows: 1,
+      gridMetrics,
+      rowCount: 1000,
+      viewportHeight: 80,
+      viewportWidth: 300,
+    })
+    const snapshots: number[] = []
+    const unsubscribe = host.subscribeViewportResidencySceneRevision(() => {
+      snapshots.push(host.snapshotViewportResidencySceneRevision())
+    })
+
+    expect(host.snapshotViewportResidencySceneRevision()).toBe(0)
+    host.viewportResidency.invalidateScene()
+    host.viewportResidency.invalidateScene()
+    unsubscribe()
+    host.viewportResidency.invalidateScene()
+
+    expect(snapshots).toEqual([1, 2])
+    expect(host.snapshotViewportResidencySceneRevision()).toBe(3)
   })
 
   it('owns V3 header pane runtime state instead of letting the React hook allocate it', () => {

@@ -162,6 +162,7 @@ export function useWorkbookGridRenderState(input: {
     activeResizeColumn,
     activeResizeRow,
     getCellLocalBounds,
+    gridRuntimeHost,
     hasColumnResizePreview,
     hasRowResizePreview,
     isEditingCell,

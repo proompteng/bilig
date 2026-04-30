@@ -482,6 +482,7 @@ export function useWorkbookGridInteractions(
             }
           }
           setGridSelection(nextSelection)
+          emitSelectionChange(nextSelection)
           if (source.startAddress !== target.startAddress || source.endAddress !== target.endAddress) {
             onFillRange(source.startAddress, source.endAddress, target.startAddress, target.endAddress)
           }
@@ -515,6 +516,7 @@ export function useWorkbookGridInteractions(
     [
       focusGrid,
       gridSelection,
+      emitSelectionChange,
       onFillRange,
       resolvePointerCell,
       selectionRange,

@@ -264,4 +264,21 @@ describe('GridViewportResidencyRuntime', () => {
     localUnsubscribe?.()
     expect(unsubscribe).toHaveBeenCalledTimes(1)
   })
+
+  it('publishes scene revision changes through the runtime external store', () => {
+    const runtime = new GridViewportResidencyRuntime()
+    const snapshots: number[] = []
+    const unsubscribe = runtime.subscribeSceneRevision(() => {
+      snapshots.push(runtime.snapshotSceneRevision())
+    })
+
+    expect(runtime.snapshotSceneRevision()).toBe(0)
+    runtime.invalidateScene()
+    runtime.invalidateScene()
+    unsubscribe()
+    runtime.invalidateScene()
+
+    expect(snapshots).toEqual([1, 2])
+    expect(runtime.snapshotSceneRevision()).toBe(3)
+  })
 })

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import type { Viewport } from '@bilig/protocol'
 import type { GridEngineLike } from './grid-engine.js'
 import type { GridMetrics } from './gridMetrics.js'
@@ -69,40 +69,30 @@ export function useWorkbookRenderTilePanes(input: {
     visibleAddresses,
     visibleViewport,
   } = input
-  const [renderTileBridgeState, setRenderTileBridgeState] = useState(() => gridRuntimeHost.snapshotRenderTileBridgeState())
+  const renderTileBridgeState = useSyncExternalStore(
+    (listener) => gridRuntimeHost.subscribeRenderTileBridgeState(listener),
+    () => gridRuntimeHost.snapshotRenderTileBridgeState(),
+    () => gridRuntimeHost.snapshotRenderTileBridgeState(),
+  )
 
   useEffect(() => {
-    setRenderTileBridgeState(gridRuntimeHost.snapshotRenderTileBridgeState())
-  }, [gridRuntimeHost])
-
-  useEffect(() => {
-    return gridRuntimeHost.connectRenderTileDeltas(
-      {
-        dprBucket,
-        renderTileSource,
-        renderTileViewport,
-        sheetId,
-        sheetOrdinal,
-        sheetName,
-      },
-      () => {
-        setRenderTileBridgeState(gridRuntimeHost.noteRenderTileDelta())
-      },
-    )
+    return gridRuntimeHost.connectRenderTileDeltas({
+      dprBucket,
+      renderTileSource,
+      renderTileViewport,
+      sheetId,
+      sheetOrdinal,
+      sheetName,
+    })
   }, [dprBucket, gridRuntimeHost, renderTileSource, renderTileViewport, sheetId, sheetName, sheetOrdinal])
 
   useEffect(() => {
-    return gridRuntimeHost.connectWorkbookDeltaDamage(
-      {
-        dprBucket,
-        renderTileSource,
-        sheetId,
-        sheetOrdinal,
-      },
-      () => {
-        setRenderTileBridgeState(gridRuntimeHost.noteWorkbookDeltaDamage())
-      },
-    )
+    return gridRuntimeHost.connectWorkbookDeltaDamage({
+      dprBucket,
+      renderTileSource,
+      sheetId,
+      sheetOrdinal,
+    })
   }, [dprBucket, gridRuntimeHost, renderTileSource, sheetId, sheetOrdinal])
 
   const state = useMemo<WorkbookRenderTilePanesState & { readonly needsLocalCellInvalidation: boolean }>(() => {
@@ -165,17 +155,12 @@ export function useWorkbookRenderTilePanes(input: {
   }, [gridRuntimeHost, state.tileReadiness])
 
   useEffect(() => {
-    return gridRuntimeHost.connectLocalRenderTileCellInvalidation(
-      {
-        engine,
-        needsLocalCellInvalidation: state.needsLocalCellInvalidation,
-        sheetName,
-        visibleAddresses,
-      },
-      () => {
-        setRenderTileBridgeState(gridRuntimeHost.noteLocalRenderTileFallbackInvalidation())
-      },
-    )
+    return gridRuntimeHost.connectLocalRenderTileCellInvalidation({
+      engine,
+      needsLocalCellInvalidation: state.needsLocalCellInvalidation,
+      sheetName,
+      visibleAddresses,
+    })
   }, [engine, gridRuntimeHost, sheetName, state.needsLocalCellInvalidation, visibleAddresses])
 
   return state
