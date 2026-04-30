@@ -9,6 +9,7 @@ export function buildLocalFixedRenderTiles(input: {
   readonly engine: GridEngineLike
   readonly sheetName: string
   readonly sheetId: number
+  readonly sheetOrdinal: number
   readonly viewport: Viewport
   readonly columnWidths: Readonly<Record<number, number>>
   readonly rowHeights: Readonly<Record<number, number>>
@@ -23,7 +24,7 @@ export function buildLocalFixedRenderTiles(input: {
   const axisVersionY = hashAxisOverrides(input.sortedRowHeightOverrides)
   return tileKeysForViewport({
     dprBucket: input.dprBucket,
-    sheetOrdinal: input.sheetId,
+    sheetOrdinal: input.sheetOrdinal,
     viewport: input.viewport,
   }).map((tileId) => {
     const key = unpackTileKey53(tileId)

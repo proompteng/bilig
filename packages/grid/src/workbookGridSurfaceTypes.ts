@@ -42,6 +42,7 @@ export interface WorkbookGridSurfaceProps {
   onToggleBooleanCell?: ((sheetName: string, address: string, nextValue: boolean) => void) | undefined
   onPaste(this: void, sheetName: string, addr: string, values: readonly (readonly string[])[]): void
   sheetId?: number | undefined
+  sheetOrdinal?: number | undefined
   renderTileSource?: GridRenderTileSource | undefined
   columnWidths?: Readonly<Record<number, number>> | undefined
   hiddenColumns?: Readonly<Record<number, true>> | undefined

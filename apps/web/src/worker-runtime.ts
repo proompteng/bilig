@@ -646,11 +646,11 @@ export class WorkbookWorkerRuntime {
         resolveSheetIdentity: (sheetName) => {
           const sheet = engine.workbook.getSheet(sheetName)
           const sheetId = typeof sheet?.id === 'number' && Number.isInteger(sheet.id) && sheet.id >= 0 ? sheet.id : (sheet?.order ?? null)
-          return sheetId === null
+          return !sheet || sheetId === null
             ? null
             : {
                 sheetId,
-                sheetOrdinal: sheetId,
+                sheetOrdinal: sheet.order,
               }
         },
       })

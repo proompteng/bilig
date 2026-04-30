@@ -33,7 +33,12 @@ const engine = {
   },
 }
 
-function createRenderTile(input: { readonly sheetId: number; readonly rowTile: number; readonly colTile: number }): GridRenderTile {
+function createRenderTile(input: {
+  readonly sheetId: number
+  readonly rowTile: number
+  readonly colTile: number
+  readonly sheetOrdinal?: number
+}): GridRenderTile {
   const rowStart = input.rowTile * VIEWPORT_TILE_ROW_COUNT
   const colStart = input.colTile * VIEWPORT_TILE_COLUMN_COUNT
   return {
@@ -49,6 +54,7 @@ function createRenderTile(input: { readonly sheetId: number; readonly rowTile: n
       paneKind: 'body',
       rowTile: input.rowTile,
       sheetId: input.sheetId,
+      sheetOrdinal: input.sheetOrdinal ?? input.sheetId,
     },
     lastBatchId: 3,
     lastCameraSeq: 5,
@@ -61,7 +67,7 @@ function createRenderTile(input: { readonly sheetId: number; readonly rowTile: n
       colTile: input.colTile,
       dprBucket: 1,
       rowTile: input.rowTile,
-      sheetOrdinal: input.sheetId,
+      sheetOrdinal: input.sheetOrdinal ?? input.sheetId,
     }),
     version: {
       axisX: 11,

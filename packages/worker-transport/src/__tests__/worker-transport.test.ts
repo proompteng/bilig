@@ -202,8 +202,9 @@ describe('worker transport', () => {
           listener(
             encodeRenderTileDeltaBatch({
               magic: 'bilig.render.tile.delta',
-              version: 2,
+              version: 3,
               sheetId: subscription.sheetId,
+              sheetOrdinal: subscription.sheetOrdinal ?? subscription.sheetId,
               batchId: 4,
               cameraSeq: 8,
               mutations: [

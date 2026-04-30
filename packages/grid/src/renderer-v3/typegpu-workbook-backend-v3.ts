@@ -148,7 +148,7 @@ function syncRenderTileResidencyFromPanesV3(input: {
       rectSeq: Math.max(tile.version.values, tile.version.styles, tile.version.axisX, tile.version.axisY),
       resources: null,
       rowTile: tile.coord.rowTile,
-      sheetOrdinal: tile.coord.sheetId,
+      sheetOrdinal: tile.coord.sheetOrdinal,
       state: 'ready',
       styleSeq: tile.version.styles,
       textSeq: tile.version.text,

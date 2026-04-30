@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ValueTag, type CellSnapshot, type EngineEvent, type RecalcMetrics } from '@bilig/protocol'
-import { packTileKey53 } from '../../../../packages/grid/src/renderer-v3/tile-key.js'
+import { packTileKey53, unpackTileKey53 } from '../../../../packages/grid/src/renderer-v3/tile-key.js'
 import { buildWorkerRenderTileDeltaBatch } from '../worker-runtime-render-tile-delta.js'
 
 const emptyCell: CellSnapshot = {
@@ -255,6 +255,50 @@ describe('worker-runtime-render-tile-delta', () => {
       coord: { rowTile: 1, colTile: 1 },
     })
     expect(dirtyViewportOnlyBatch.mutations).toEqual([])
+  })
+
+  it('packs render tile keys with sheet ordinal instead of stable sheet id', () => {
+    const visibleTileKey = packTileKey53({
+      colTile: 0,
+      dprBucket: 1,
+      rowTile: 0,
+      sheetOrdinal: 2,
+    })
+    const batch = buildWorkerRenderTileDeltaBatch({
+      engine,
+      generation: 14,
+      subscription: {
+        sheetId: 99,
+        sheetOrdinal: 2,
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 31,
+        colStart: 0,
+        colEnd: 127,
+        dprBucket: 1,
+        cameraSeq: 23,
+        tileInterest: {
+          seq: 10,
+          sheetOrdinal: 2,
+          axisSeqX: 1,
+          axisSeqY: 1,
+          freezeSeq: 1,
+          visibleTileKeys: [visibleTileKey],
+          warmTileKeys: [],
+          pinnedTileKeys: [],
+          reason: 'scroll',
+        },
+      },
+    })
+
+    const replacement = batch.mutations.find((mutation) => mutation.kind === 'tileReplace')
+    expect(batch).toMatchObject({ sheetId: 99, sheetOrdinal: 2 })
+    expect(replacement).toMatchObject({
+      kind: 'tileReplace',
+      coord: expect.objectContaining({ sheetId: 99, sheetOrdinal: 2 }),
+      tileId: visibleTileKey,
+    })
+    expect(replacement?.kind === 'tileReplace' ? unpackTileKey53(replacement.tileId).sheetOrdinal : null).toBe(2)
   })
 
   it('skips event-driven tile materialization when dirty ranges miss the subscription', () => {

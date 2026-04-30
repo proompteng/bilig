@@ -21,6 +21,7 @@ export function useWorkbookGridRenderState(input: {
   editorValue: string
   isEditingCell: boolean
   sheetId?: number | undefined
+  sheetOrdinal?: number | undefined
   renderTileSource?: GridRenderTileSource | undefined
   controlledColumnWidths?: Readonly<Record<number, number>> | undefined
   controlledRowHeights?: Readonly<Record<number, number>> | undefined
@@ -47,6 +48,7 @@ export function useWorkbookGridRenderState(input: {
     editorValue,
     isEditingCell,
     sheetId,
+    sheetOrdinal,
     renderTileSource,
     controlledColumnWidths,
     controlledRowHeights,
@@ -194,6 +196,7 @@ export function useWorkbookGridRenderState(input: {
     selectedCell: selectedItem,
     setVisibleRegion,
     sheetId,
+    sheetOrdinal,
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,

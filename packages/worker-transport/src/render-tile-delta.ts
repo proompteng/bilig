@@ -5,6 +5,7 @@ export type RenderTilePaneKind = 'body' | 'frozenTop' | 'frozenLeft' | 'frozenCo
 
 export interface RenderTileDeltaSubscription extends Viewport {
   readonly sheetId: number
+  readonly sheetOrdinal?: number | undefined
   readonly sheetName: string
   readonly cameraSeq?: number | undefined
   readonly dprBucket?: number | undefined
@@ -27,6 +28,7 @@ export interface RenderTileInterestV3 {
 
 export interface RenderTileCoord {
   readonly sheetId: number
+  readonly sheetOrdinal: number
   readonly paneKind: RenderTilePaneKind
   readonly rowTile: number
   readonly colTile: number
@@ -138,15 +140,17 @@ export type RenderTileMutation =
 
 export interface RenderTileDeltaBatch {
   readonly magic: 'bilig.render.tile.delta'
-  readonly version: 2
+  readonly version: 3
   readonly sheetId: number
+  readonly sheetOrdinal: number
   readonly batchId: number
   readonly cameraSeq: number
   readonly mutations: readonly RenderTileMutation[]
 }
 
 const RENDER_TILE_DELTA_MAGIC = 0x52544431
-const RENDER_TILE_DELTA_VERSION = 2
+const RENDER_TILE_DELTA_VERSION = 3
+const LEGACY_RENDER_TILE_DELTA_VERSION = 2
 
 const PANE_KIND_TAGS: Record<RenderTilePaneKind, number> = {
   body: 0,
@@ -175,6 +179,7 @@ export function encodeRenderTileDeltaBatch(batch: RenderTileDeltaBatch): Uint8Ar
   writer.u32(RENDER_TILE_DELTA_MAGIC)
   writer.u32(RENDER_TILE_DELTA_VERSION)
   writer.u32(batch.sheetId)
+  writer.u32(batch.sheetOrdinal)
   writer.u32(batch.batchId)
   writer.u32(batch.cameraSeq)
   writer.u32(batch.mutations.length)
@@ -189,16 +194,19 @@ export function decodeRenderTileDeltaBatch(bytes: Uint8Array): RenderTileDeltaBa
     throw new BinaryProtocolError('Invalid render tile delta magic')
   }
   const version = reader.u32()
-  if (version !== RENDER_TILE_DELTA_VERSION) {
+  if (version !== RENDER_TILE_DELTA_VERSION && version !== LEGACY_RENDER_TILE_DELTA_VERSION) {
     throw new BinaryProtocolError(`Unsupported render tile delta version ${version}`)
   }
+  const sheetId = reader.u32()
+  const sheetOrdinal = version >= RENDER_TILE_DELTA_VERSION ? reader.u32() : sheetId
   const batch: RenderTileDeltaBatch = {
     magic: 'bilig.render.tile.delta',
-    version: 2,
-    sheetId: reader.u32(),
+    version: 3,
+    sheetId,
+    sheetOrdinal,
     batchId: reader.u32(),
     cameraSeq: reader.u32(),
-    mutations: decodeArray(reader, () => decodeMutation(reader)),
+    mutations: decodeArray(reader, () => decodeMutation(reader, version)),
   }
   if (!reader.done()) {
     throw new BinaryProtocolError('Trailing bytes in render tile delta batch')
@@ -248,13 +256,13 @@ function encodeMutation(writer: BinaryWriter, mutation: RenderTileMutation): voi
   }
 }
 
-function decodeMutation(reader: BinaryReader): RenderTileMutation {
+function decodeMutation(reader: BinaryReader, version = RENDER_TILE_DELTA_VERSION): RenderTileMutation {
   switch (reader.u8()) {
     case 1:
       return withOptionalDirtyLocalArrays({
         kind: 'tileReplace',
         tileId: decodeTileKey(reader),
-        coord: decodeTileCoord(reader),
+        coord: decodeTileCoord(reader, version),
         version: decodeTileVersion(reader),
         bounds: decodeViewport(reader),
         rectInstances: decodeFloat32Array(reader),
@@ -338,14 +346,16 @@ function decodeTileKey(reader: BinaryReader): number {
 
 function encodeTileCoord(writer: BinaryWriter, coord: RenderTileCoord): void {
   writer.u32(coord.sheetId)
+  writer.u32(coord.sheetOrdinal)
   writer.u8(PANE_KIND_TAGS[coord.paneKind])
   writer.u32(coord.rowTile)
   writer.u32(coord.colTile)
   writer.u32(coord.dprBucket)
 }
 
-function decodeTileCoord(reader: BinaryReader): RenderTileCoord {
+function decodeTileCoord(reader: BinaryReader, version = RENDER_TILE_DELTA_VERSION): RenderTileCoord {
   const sheetId = reader.u32()
+  const sheetOrdinal = version >= RENDER_TILE_DELTA_VERSION ? reader.u32() : sheetId
   const paneKindTag = reader.u8()
   const paneKind = PANE_KIND_BY_TAG.get(paneKindTag)
   if (!paneKind) {
@@ -353,6 +363,7 @@ function decodeTileCoord(reader: BinaryReader): RenderTileCoord {
   }
   return {
     sheetId,
+    sheetOrdinal,
     paneKind,
     rowTile: reader.u32(),
     colTile: reader.u32(),

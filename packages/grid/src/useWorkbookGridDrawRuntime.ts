@@ -64,6 +64,7 @@ export function useWorkbookGridDrawRuntime(input: {
   readonly selectedCell: Item
   readonly setVisibleRegion: Dispatch<SetStateAction<VisibleRegionState>>
   readonly sheetId?: number | undefined
+  readonly sheetOrdinal?: number | undefined
   readonly sheetName: string
   readonly sortedColumnWidthOverrides: SortedAxisOverrides
   readonly sortedRowHeightOverrides: SortedAxisOverrides
@@ -97,6 +98,7 @@ export function useWorkbookGridDrawRuntime(input: {
     selectedCell,
     setVisibleRegion,
     sheetId,
+    sheetOrdinal,
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
@@ -165,6 +167,7 @@ export function useWorkbookGridDrawRuntime(input: {
     rowHeights,
     sceneRevision,
     sheetId,
+    sheetOrdinal,
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,

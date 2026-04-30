@@ -58,7 +58,7 @@ function createHost(): GridRuntimeHost {
   })
 }
 
-function createRenderTile(tileId: number, sheetId = 7): GridRenderTile {
+function createRenderTile(tileId: number, sheetId = 7, sheetOrdinal = sheetId): GridRenderTile {
   return {
     bounds: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
     coord: {
@@ -67,6 +67,7 @@ function createRenderTile(tileId: number, sheetId = 7): GridRenderTile {
       paneKind: 'body',
       rowTile: 0,
       sheetId,
+      sheetOrdinal,
     },
     lastBatchId: 1,
     lastCameraSeq: 1,
@@ -688,6 +689,52 @@ describe('GridRenderTilePaneRuntime', () => {
 
     unsubscribe?.()
     expect(renderTileSource.unsubscribed()).toBe(true)
+  })
+
+  it('matches workbook delta damage by sheet ordinal when sheet id differs from order', () => {
+    const runtime = new GridRenderTilePaneRuntime()
+    const host = createHost()
+    const renderTileSource = createWorkbookDeltaSource()
+    const tileId = packTileKey53({
+      colTile: 0,
+      dprBucket: 1,
+      rowTile: 0,
+      sheetOrdinal: 2,
+    })
+    const listenerBatches: WorkbookDeltaBatchLikeV3[] = []
+
+    const unsubscribe = runtime.connectWorkbookDeltaDamage(
+      {
+        dprBucket: 1,
+        gridRuntimeHost: host,
+        renderTileSource: renderTileSource.source,
+        sheetId: 99,
+        sheetOrdinal: 2,
+      },
+      (batch) => listenerBatches.push(batch),
+    )
+
+    renderTileSource.emit(createWorkbookDeltaBatch({ seq: 1, sheetId: 99, sheetOrdinal: 2 }))
+    renderTileSource.emit(createWorkbookDeltaBatch({ seq: 2, sheetId: 7, sheetOrdinal: 7 }))
+
+    expect(listenerBatches.map((batch) => batch.seq)).toEqual([1])
+    expect(
+      host.tiles.reconcileInterest({
+        axisSeqX: 1,
+        axisSeqY: 1,
+        cameraSeq: 1,
+        freezeSeq: 1,
+        pinnedTileKeys: [],
+        reason: 'mutation',
+        seq: 1,
+        sheetId: 99,
+        sheetOrdinal: 2,
+        visibleTileKeys: [tileId],
+        warmTileKeys: [],
+      }).visibleDirtyTileKeys,
+    ).toEqual([tileId])
+
+    unsubscribe?.()
   })
 
   it('does not retain remote panes across sheet switches or before the host is ready', () => {

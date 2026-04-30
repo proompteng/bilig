@@ -28,6 +28,7 @@ function createTilePane(rowStart = 0): WorkbookRenderTilePaneState {
       paneKind: 'body',
       rowTile: Math.floor(rowStart / 32),
       sheetId: 7,
+      sheetOrdinal: 7,
     },
     lastBatchId: 1,
     lastCameraSeq: 1,

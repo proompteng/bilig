@@ -51,6 +51,7 @@ interface WorkbookViewProps {
   sidePanelWidth?: number | undefined
   onSidePanelWidthChange?: ((width: number) => void) | undefined
   sheetId?: number | undefined
+  sheetOrdinal?: number | undefined
   renderTileSource?: React.ComponentProps<typeof WorkbookGridSurface>['renderTileSource'] | undefined
   columnWidths?: Readonly<Record<number, number>> | undefined
   hiddenColumns?: Readonly<Record<number, true>> | undefined
@@ -217,6 +218,7 @@ export function WorkbookView({
   sidePanelWidth,
   onSidePanelWidthChange,
   sheetId,
+  sheetOrdinal,
   renderTileSource,
   columnWidths,
   hiddenColumns,
@@ -343,6 +345,7 @@ export function WorkbookView({
               onSelectionLabelChange={handleSelectionLabelChange}
               onSelectionChange={onSelectionChange}
               sheetId={sheetId}
+              sheetOrdinal={sheetOrdinal}
               renderTileSource={renderTileSource}
               columnWidths={columnWidths}
               hiddenColumns={hiddenColumns}

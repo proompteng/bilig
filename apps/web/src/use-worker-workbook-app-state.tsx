@@ -891,6 +891,10 @@ export function useWorkerWorkbookAppState(input: {
     const entries = runtimeState?.sheets?.map((sheet) => [sheet.name, sheet.id] as const) ?? []
     return Object.fromEntries(entries)
   }, [runtimeState?.sheets])
+  const sheetOrdinalsByName = useMemo(() => {
+    const entries = runtimeState?.sheets?.map((sheet) => [sheet.name, sheet.order] as const) ?? []
+    return Object.fromEntries(entries)
+  }, [runtimeState?.sheets])
   const definedNames = useMemo(() => [...(runtimeState?.definedNames ?? [])], [runtimeState])
   const getAgentContext = useCallback((): WorkbookAgentUiContext => {
     const activeSelection = selectionSnapshotRef.current
@@ -1214,6 +1218,7 @@ export function useWorkerWorkbookAppState(input: {
     handleSelectionChange,
     setSidePanelWidth,
     sheetIdsByName,
+    sheetOrdinalsByName,
     sheetNames,
     sidePanel,
     sidePanelWidth,

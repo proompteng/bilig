@@ -36,6 +36,7 @@ export function useWorkbookRenderTilePanes(input: {
   readonly rowHeights: Readonly<Record<number, number>>
   readonly sceneRevision: number
   readonly sheetId?: number | undefined
+  readonly sheetOrdinal?: number | undefined
   readonly sheetName: string
   readonly sortedColumnWidthOverrides: SortedAxisOverrides
   readonly sortedRowHeightOverrides: SortedAxisOverrides
@@ -61,6 +62,7 @@ export function useWorkbookRenderTilePanes(input: {
     rowHeights,
     sceneRevision,
     sheetId,
+    sheetOrdinal,
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
@@ -80,13 +82,14 @@ export function useWorkbookRenderTilePanes(input: {
         renderTileSource,
         renderTileViewport,
         sheetId,
+        sheetOrdinal,
         sheetName,
       },
       () => {
         setRenderTileBridgeState(gridRuntimeHost.noteRenderTileDelta())
       },
     )
-  }, [dprBucket, gridRuntimeHost, renderTileSource, renderTileViewport, sheetId, sheetName])
+  }, [dprBucket, gridRuntimeHost, renderTileSource, renderTileViewport, sheetId, sheetName, sheetOrdinal])
 
   useEffect(() => {
     return gridRuntimeHost.connectWorkbookDeltaDamage(
@@ -94,12 +97,13 @@ export function useWorkbookRenderTilePanes(input: {
         dprBucket,
         renderTileSource,
         sheetId,
+        sheetOrdinal,
       },
       () => {
         setRenderTileBridgeState(gridRuntimeHost.noteWorkbookDeltaDamage())
       },
     )
-  }, [dprBucket, gridRuntimeHost, renderTileSource, sheetId])
+  }, [dprBucket, gridRuntimeHost, renderTileSource, sheetId, sheetOrdinal])
 
   const state = useMemo<WorkbookRenderTilePanesState & { readonly needsLocalCellInvalidation: boolean }>(() => {
     void renderTileBridgeState.renderTileRevision
@@ -123,6 +127,7 @@ export function useWorkbookRenderTilePanes(input: {
       rowHeights,
       sceneRevision,
       sheetId,
+      sheetOrdinal,
       sheetName,
       sortedColumnWidthOverrides,
       sortedRowHeightOverrides,
@@ -148,6 +153,7 @@ export function useWorkbookRenderTilePanes(input: {
     rowHeights,
     sceneRevision,
     sheetId,
+    sheetOrdinal,
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,

@@ -48,6 +48,7 @@ export interface GridRenderTilePaneRuntimeInput {
   readonly rowHeights: Readonly<Record<number, number>>
   readonly sceneRevision: number
   readonly sheetId?: number | undefined
+  readonly sheetOrdinal?: number | undefined
   readonly sheetName: string
   readonly sortedColumnWidthOverrides: SortedAxisOverrides
   readonly sortedRowHeightOverrides: SortedAxisOverrides
@@ -60,6 +61,7 @@ export interface GridRenderTileDeltaRuntimeInput {
   readonly renderTileSource?: GridRenderTileSource | undefined
   readonly renderTileViewport: Viewport
   readonly sheetId?: number | undefined
+  readonly sheetOrdinal?: number | undefined
   readonly sheetName: string
 }
 
@@ -68,6 +70,7 @@ export interface GridRenderTileDamageRuntimeInput {
   readonly gridRuntimeHost: GridRuntimeHost
   readonly renderTileSource?: GridRenderTileSource | undefined
   readonly sheetId?: number | undefined
+  readonly sheetOrdinal?: number | undefined
 }
 
 export interface GridRenderTileLocalInvalidationRuntimeInput {
@@ -82,6 +85,7 @@ interface GridRenderTileInterestRuntimeInput {
   readonly gridRuntimeHost: GridRuntimeHost
   readonly renderTileViewport: Viewport
   readonly sheetId?: number | undefined
+  readonly sheetOrdinal?: number | undefined
 }
 
 const EMPTY_TILE_PANE_RUNTIME_STATE: GridRenderTilePaneRuntimeState = Object.freeze({
@@ -230,8 +234,9 @@ export class GridRenderTilePaneRuntime {
     if (!renderTileSource?.subscribeWorkbookDeltas || input.sheetId === undefined) {
       return undefined
     }
+    const sheetOrdinal = resolveGridRenderTileInputSheetOrdinal(input)
     return renderTileSource.subscribeWorkbookDeltas((batch) => {
-      if (batch.sheetId !== input.sheetId && batch.sheetOrdinal !== input.sheetId) {
+      if (batch.sheetId !== input.sheetId && batch.sheetOrdinal !== sheetOrdinal) {
         return
       }
       if (!this.applyWorkbookDeltaDamage(input, batch)) {
@@ -259,6 +264,7 @@ export class GridRenderTilePaneRuntime {
         dprBucket: input.dprBucket,
         initialDelta: 'full',
         sheetId: input.sheetId,
+        sheetOrdinal: tileInterest.sheetOrdinal,
         sheetName: input.sheetName,
         tileInterest: {
           axisSeqX: tileInterest.axisSeqX,
@@ -331,20 +337,22 @@ export class GridRenderTilePaneRuntime {
   }
 
   private buildViewportTileInterest(input: GridRenderTileInterestRuntimeInput & { readonly sheetId: number }): GridTileInterestBatchV3 {
+    const sheetOrdinal = resolveGridRenderTileInputSheetOrdinal(input)
     return input.gridRuntimeHost.buildViewportTileInterest({
       dprBucket: input.dprBucket,
       reason: 'scroll',
       sheetId: input.sheetId,
-      sheetOrdinal: input.sheetId,
+      sheetOrdinal,
       viewport: input.renderTileViewport,
       warmTileKeys: this.resolveWarmTileKeys(input),
     })
   }
 
   private resolveWarmTileKeys(input: GridRenderTileInterestRuntimeInput & { readonly sheetId: number }): readonly TileKey53[] {
+    const sheetOrdinal = resolveGridRenderTileInputSheetOrdinal(input)
     const visibleTileKeys = input.gridRuntimeHost.viewportTileKeys({
       dprBucket: input.dprBucket,
-      sheetOrdinal: input.sheetId,
+      sheetOrdinal,
       viewport: input.renderTileViewport,
     })
     if (visibleTileKeys.length === 0) {
@@ -369,7 +377,7 @@ export class GridRenderTilePaneRuntime {
           colTile,
           dprBucket: input.dprBucket,
           rowTile,
-          sheetOrdinal: input.sheetId,
+          sheetOrdinal,
         })
         if (!visibleSet.has(key)) {
           warmTileKeys.push(key)
@@ -393,7 +401,7 @@ export class GridRenderTilePaneRuntime {
     }
     change.changedTileIds.forEach((tileId) => {
       const tile = renderTileSource.peekRenderTile(tileId)
-      if (!tile || tile.coord.sheetId !== input.sheetId) {
+      if (!tile || tile.coord.sheetId !== input.sheetId || tile.coord.sheetOrdinal !== resolveGridRenderTileInputSheetOrdinal(input)) {
         return
       }
       upsertRenderTileIntoHost(input.gridRuntimeHost, tile)
@@ -407,14 +415,15 @@ export class GridRenderTilePaneRuntime {
 
     if (input.renderTileSource && input.sheetId !== undefined) {
       const tiles: GridRenderTile[] = []
+      const sheetOrdinal = resolveGridRenderTileInputSheetOrdinal(input)
       const tileKeys = input.gridRuntimeHost.viewportTileKeys({
         dprBucket: input.dprBucket,
-        sheetOrdinal: input.sheetId,
+        sheetOrdinal,
         viewport: input.renderTileViewport,
       })
       for (const tileKey of tileKeys) {
         const tile = input.renderTileSource.peekRenderTile(tileKey)
-        if (!tile || tile.coord.sheetId !== input.sheetId) {
+        if (!tile || tile.coord.sheetId !== input.sheetId || tile.coord.sheetOrdinal !== sheetOrdinal) {
           return this.retainedFixedRenderTileDataPanes?.sheetId === input.sheetId ? null : this.buildLocalTiles(input)
         }
         tiles.push(tile)
@@ -437,6 +446,7 @@ export class GridRenderTilePaneRuntime {
         gridMetrics: input.gridMetrics,
         rowHeights: input.rowHeights,
         sheetId: input.sheetId ?? 0,
+        sheetOrdinal: resolveGridRenderTileInputSheetOrdinal(input),
         sheetName: input.sheetName,
         sortedColumnWidthOverrides: input.sortedColumnWidthOverrides,
         sortedRowHeightOverrides: input.sortedRowHeightOverrides,
@@ -448,6 +458,13 @@ export class GridRenderTilePaneRuntime {
 
 export function getGridRenderTilePaneRuntime(current: unknown): GridRenderTilePaneRuntime {
   return current instanceof GridRenderTilePaneRuntime ? current : new GridRenderTilePaneRuntime()
+}
+
+function resolveGridRenderTileInputSheetOrdinal(input: {
+  readonly sheetId?: number | undefined
+  readonly sheetOrdinal?: number | undefined
+}): number {
+  return input.sheetOrdinal ?? input.sheetId ?? 0
 }
 
 function upsertRenderTileIntoHost(gridRuntimeHost: GridRuntimeHost, tile: GridRenderTile): void {
@@ -463,7 +480,7 @@ function upsertRenderTileIntoHost(gridRuntimeHost: GridRuntimeHost, tile: GridRe
     packet: tile,
     rectSeq: tile.version.styles,
     rowTile: tile.coord.rowTile,
-    sheetOrdinal: tile.coord.sheetId,
+    sheetOrdinal: tile.coord.sheetOrdinal,
     state: 'ready',
     styleSeq: tile.version.styles,
     textSeq: tile.version.text,

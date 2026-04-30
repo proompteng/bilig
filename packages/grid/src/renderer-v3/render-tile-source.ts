@@ -6,6 +6,7 @@ export type GridRenderTilePaneKind = 'body' | 'frozenTop' | 'frozenLeft' | 'froz
 
 export interface GridRenderTileDeltaSubscription extends Viewport {
   readonly sheetId: number
+  readonly sheetOrdinal?: number | undefined
   readonly sheetName: string
   readonly cameraSeq?: number | undefined
   readonly dprBucket?: number | undefined
@@ -28,6 +29,7 @@ export interface GridRenderTileInterestV3 {
 
 export interface GridRenderTileCoord {
   readonly sheetId: number
+  readonly sheetOrdinal: number
   readonly paneKind: GridRenderTilePaneKind
   readonly rowTile: number
   readonly colTile: number

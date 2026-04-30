@@ -14,8 +14,9 @@ function createBatch(): RenderTileDeltaBatch {
   }
   return {
     magic: 'bilig.render.tile.delta',
-    version: 2,
+    version: 3,
     sheetId: 7,
+    sheetOrdinal: 1,
     batchId: 11,
     cameraSeq: 13,
     mutations: [
@@ -24,6 +25,7 @@ function createBatch(): RenderTileDeltaBatch {
         tileId,
         coord: {
           sheetId: 7,
+          sheetOrdinal: 1,
           paneKind: 'body',
           rowTile: 2,
           colTile: 3,

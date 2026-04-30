@@ -8,12 +8,13 @@ import {
 import { ProjectedTileSceneStore } from '../projected-tile-scene-store.js'
 import { ProjectedViewportStore } from '../projected-viewport-store.js'
 
-function createTileReplace(tileId: number, valuesVersion: number): RenderTileReplaceMutation {
+function createTileReplace(tileId: number, valuesVersion: number, sheetOrdinal = 7, sheetId = 7): RenderTileReplaceMutation {
   return {
     kind: 'tileReplace',
     tileId,
     coord: {
-      sheetId: 7,
+      sheetId,
+      sheetOrdinal,
       paneKind: 'body',
       rowTile: tileId,
       colTile: 0,
@@ -48,8 +49,9 @@ function createTileReplace(tileId: number, valuesVersion: number): RenderTileRep
 function createBatch(batchId: number, mutations: RenderTileDeltaBatch['mutations']): RenderTileDeltaBatch {
   return {
     magic: 'bilig.render.tile.delta',
-    version: 2,
+    version: 3,
     sheetId: 7,
+    sheetOrdinal: 7,
     batchId,
     cameraSeq: batchId + 10,
     mutations,
@@ -124,6 +126,42 @@ describe('ProjectedTileSceneStore', () => {
 
     unsubscribe()
     expect(unsubscribeWorker).toHaveBeenCalledTimes(1)
+  })
+
+  it('indexes subscribed sheets by ordinal when sheet ids differ from order', () => {
+    const store = new ProjectedTileSceneStore({
+      subscribeRenderTileDeltas(_subscription, listener) {
+        listener(
+          encodeRenderTileDeltaBatch({
+            magic: 'bilig.render.tile.delta',
+            version: 3,
+            sheetId: 99,
+            sheetOrdinal: 2,
+            batchId: 4,
+            cameraSeq: 5,
+            mutations: [createTileReplace(202, 4, 2, 99)],
+          }),
+        )
+        return () => undefined
+      },
+    })
+
+    store.subscribe(
+      {
+        sheetId: 99,
+        sheetOrdinal: 2,
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 31,
+        colStart: 0,
+        colEnd: 127,
+      },
+      () => undefined,
+    )
+
+    expect(store.peekTile(202)?.coord).toMatchObject({ sheetId: 99, sheetOrdinal: 2 })
+    store.dropSheets(['Sheet1'])
+    expect(store.peekTile(202)).toBeNull()
   })
 })
 

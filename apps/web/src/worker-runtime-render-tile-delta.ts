@@ -78,8 +78,9 @@ export function buildWorkerRenderTileDeltaBatch(input: {
 
   return {
     magic: 'bilig.render.tile.delta',
-    version: 2,
+    version: 3,
     sheetId: subscription.sheetId,
+    sheetOrdinal: resolveSubscriptionSheetOrdinal(subscription),
     batchId,
     cameraSeq: subscription.cameraSeq ?? 0,
     mutations: materializedViewports.map((viewport) =>
@@ -102,6 +103,7 @@ export function buildWorkerRenderTileDeltaBatch(input: {
           rectSeq: batchId,
           rowHeights: rowAxis.sizes,
           sheetId: subscription.sheetId,
+          sheetOrdinal: resolveSubscriptionSheetOrdinal(subscription),
           sheetName: subscription.sheetName,
           sortedColumnWidthOverrides: columnAxis.sortedOverrides,
           sortedRowHeightOverrides: rowAxis.sortedOverrides,
@@ -132,7 +134,7 @@ function resolveMaterializedTileViewports(input: {
     event,
     subscription,
     dprBucket,
-    sheetOrdinal: subscription.sheetId,
+    sheetOrdinal: resolveSubscriptionSheetOrdinal(subscription),
     sheetName: subscription.sheetName,
   })
 
@@ -167,7 +169,7 @@ function resolveInterestedTileKeys(subscription: RenderTileDeltaSubscription): r
       ? explicitInterest.visibleTileKeys.filter((key) => isSubscriptionTileKey(subscription, key))
       : tileKeysForViewport({
           dprBucket,
-          sheetOrdinal: subscription.sheetId,
+          sheetOrdinal: resolveSubscriptionSheetOrdinal(subscription),
           viewport: subscription,
         })
   const keys = new Set<number>(visibleKeys)
@@ -228,7 +230,7 @@ function tileViewportFromKey(subscription: RenderTileDeltaSubscription, key: Til
 
 function isSubscriptionTileKey(subscription: RenderTileDeltaSubscription, key: TileKey53): boolean {
   const fields = unpackTileKey53(key)
-  return fields.sheetOrdinal === subscription.sheetId && fields.dprBucket === (subscription.dprBucket ?? 1)
+  return fields.sheetOrdinal === resolveSubscriptionSheetOrdinal(subscription) && fields.dprBucket === (subscription.dprBucket ?? 1)
 }
 
 function tileKeyFromTileViewport(subscription: RenderTileDeltaSubscription, viewport: Viewport): TileKey53 {
@@ -236,8 +238,12 @@ function tileKeyFromTileViewport(subscription: RenderTileDeltaSubscription, view
     colTile: Math.floor(viewport.colStart / VIEWPORT_TILE_COLUMN_COUNT),
     dprBucket: subscription.dprBucket ?? 1,
     rowTile: Math.floor(viewport.rowStart / VIEWPORT_TILE_ROW_COUNT),
-    sheetOrdinal: subscription.sheetId,
+    sheetOrdinal: resolveSubscriptionSheetOrdinal(subscription),
   })
+}
+
+function resolveSubscriptionSheetOrdinal(subscription: RenderTileDeltaSubscription): number {
+  return subscription.sheetOrdinal ?? subscription.tileInterest?.sheetOrdinal ?? subscription.sheetId
 }
 
 function collectEventDirtyTileSpans(input: {

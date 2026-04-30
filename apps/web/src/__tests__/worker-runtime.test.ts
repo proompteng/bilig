@@ -612,7 +612,7 @@ describe('WorkbookWorkerRuntime', () => {
     expect(delta).toMatchObject({
       source: 'workerAuthoritative',
       sheetId: 1,
-      sheetOrdinal: 1,
+      sheetOrdinal: 0,
     })
     const ranges = Array.from(delta?.dirty.cellRanges ?? [])
     expect(ranges.some((value, index) => index % 5 === 0 && value === 1 && ranges[index + 2] === 1)).toBe(true)

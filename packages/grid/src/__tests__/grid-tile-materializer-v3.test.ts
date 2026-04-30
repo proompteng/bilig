@@ -59,6 +59,7 @@ describe('renderer-v3 grid tile materializer', () => {
       rectSeq: 12,
       rowHeights: {},
       sheetId: 3,
+      sheetOrdinal: 1,
       sheetName: 'Sheet1',
       sortedColumnWidthOverrides: [],
       sortedRowHeightOverrides: [],
@@ -78,7 +79,7 @@ describe('renderer-v3 grid tile materializer', () => {
 
     expect(tile.packet?.magic).toBe(GRID_TILE_PACKET_V3_MAGIC)
     expect(tile.tileId).toBe(tile.packet?.tileKey)
-    expect(tile.coord).toMatchObject({ colTile: 0, dprBucket: 2, rowTile: 0, sheetId: 3 })
+    expect(tile.coord).toMatchObject({ colTile: 0, dprBucket: 2, rowTile: 0, sheetId: 3, sheetOrdinal: 1 })
     expect(tile.version).toEqual({ axisX: 5, axisY: 6, freeze: 8, styles: 13, text: 14, values: 15 })
     expect(tile.bounds).toEqual({ colEnd: VIEWPORT_TILE_COLUMN_COUNT - 1, colStart: 0, rowEnd: VIEWPORT_TILE_ROW_COUNT - 1, rowStart: 0 })
     expect(tile.textRuns).toContainEqual(expect.objectContaining({ text: 'alpha', x: 0, y: 0 }))
@@ -103,6 +104,7 @@ describe('renderer-v3 grid tile materializer', () => {
       gridMetrics: getGridMetrics(),
       rowHeights: {},
       sheetId: 2,
+      sheetOrdinal: 0,
       sheetName: 'Sheet1',
       sortedColumnWidthOverrides: [],
       sortedRowHeightOverrides: [],

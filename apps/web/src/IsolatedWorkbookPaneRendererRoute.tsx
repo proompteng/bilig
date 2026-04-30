@@ -209,6 +209,7 @@ function createRenderTile(input: {
       paneKind: 'body',
       rowTile,
       sheetId: 1,
+      sheetOrdinal: 1,
     },
     lastBatchId: input.generation,
     lastCameraSeq: input.generation,

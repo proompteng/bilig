@@ -45,7 +45,7 @@ export interface ProjectedTileSceneChange {
 export class ProjectedTileSceneStore {
   private readonly residency = new TileResidencyV3<ProjectedRenderTile>()
   private readonly dirtyTiles = new DirtyTileIndexV3()
-  private readonly sheetIdsByName = new Map<string, number>()
+  private readonly sheetIdentityByName = new Map<string, { readonly sheetId: number; readonly sheetOrdinal: number }>()
   private lastBatchId = 0
   private lastCameraSeq = 0
 
@@ -55,7 +55,10 @@ export class ProjectedTileSceneStore {
     if (!this.client) {
       throw new Error('Worker render tile subscriptions require a worker engine client')
     }
-    this.sheetIdsByName.set(subscription.sheetName, subscription.sheetId)
+    this.sheetIdentityByName.set(subscription.sheetName, {
+      sheetId: subscription.sheetId,
+      sheetOrdinal: subscription.sheetOrdinal ?? subscription.tileInterest?.sheetOrdinal ?? subscription.sheetId,
+    })
     return this.client.subscribeRenderTileDeltas(subscription, (bytes: Uint8Array) => {
       listener(this.applyDelta(decodeRenderTileDeltaBatch(bytes)))
     })
@@ -81,7 +84,7 @@ export class ProjectedTileSceneStore {
     if (structural) {
       for (const entry of this.residency.entries()) {
         const tile = entry.packet
-        if (tile?.coord.sheetId === batch.sheetId) {
+        if (tile?.coord.sheetId === batch.sheetId || tile?.coord.sheetOrdinal === batch.sheetOrdinal) {
           this.residency.delete(entry.key)
           invalidatedTileIds.add(entry.key)
         }
@@ -169,19 +172,21 @@ export class ProjectedTileSceneStore {
 
   dropSheets(sheetNames: readonly string[]): void {
     const sheetIds = new Set<number>()
+    const sheetOrdinals = new Set<number>()
     sheetNames.forEach((sheetName) => {
-      const sheetId = this.sheetIdsByName.get(sheetName)
-      if (sheetId !== undefined) {
-        sheetIds.add(sheetId)
+      const identity = this.sheetIdentityByName.get(sheetName)
+      if (identity) {
+        sheetIds.add(identity.sheetId)
+        sheetOrdinals.add(identity.sheetOrdinal)
       }
-      this.sheetIdsByName.delete(sheetName)
+      this.sheetIdentityByName.delete(sheetName)
     })
-    if (sheetIds.size === 0) {
+    if (sheetIds.size === 0 && sheetOrdinals.size === 0) {
       return
     }
     for (const entry of this.residency.entries()) {
       const tile = entry.packet
-      if (tile && sheetIds.has(tile.coord.sheetId)) {
+      if (tile && (sheetIds.has(tile.coord.sheetId) || sheetOrdinals.has(tile.coord.sheetOrdinal))) {
         this.residency.delete(entry.key)
       }
     }
@@ -190,7 +195,7 @@ export class ProjectedTileSceneStore {
   reset(): void {
     this.residency.clear()
     this.dirtyTiles.clear()
-    this.sheetIdsByName.clear()
+    this.sheetIdentityByName.clear()
     this.lastBatchId = 0
     this.lastCameraSeq = 0
   }
@@ -220,7 +225,7 @@ export class ProjectedTileSceneStore {
       packet: tile,
       rectSeq: tile.version.styles,
       rowTile: tile.coord.rowTile,
-      sheetOrdinal: tile.coord.sheetId,
+      sheetOrdinal: tile.coord.sheetOrdinal,
       state: 'ready',
       styleSeq: tile.version.styles,
       textSeq: tile.version.text,

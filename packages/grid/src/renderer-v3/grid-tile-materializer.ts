@@ -24,6 +24,7 @@ export interface MaterializeGridRenderTileInputV3 extends GridTileMaterializerAx
   readonly engine: GridEngineLike
   readonly sheetName: string
   readonly sheetId: number
+  readonly sheetOrdinal: number
   readonly viewport: Viewport
   readonly dprBucket: number
   readonly packetSeq: number
@@ -56,7 +57,7 @@ export function materializeGridRenderTileV3(input: MaterializeGridRenderTileInpu
     colTile,
     dprBucket: input.dprBucket,
     rowTile,
-    sheetOrdinal: input.sheetId,
+    sheetOrdinal: input.sheetOrdinal,
   })
   const surfaceSize = resolveTileSurfaceSizeV3(input.viewport, input)
   const visibleItems = collectViewportItems(input.viewport)
@@ -154,6 +155,7 @@ export function materializeGridRenderTileV3(input: MaterializeGridRenderTileInpu
       paneKind: 'body',
       rowTile,
       sheetId: input.sheetId,
+      sheetOrdinal: input.sheetOrdinal,
     },
     lastBatchId: packet.packetSeq,
     lastCameraSeq: input.cameraSeq,
