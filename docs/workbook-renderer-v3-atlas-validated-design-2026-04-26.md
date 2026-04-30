@@ -451,6 +451,9 @@ Completed in the resident-scene deletion tranche:
 - V3 text quad construction now reports text-run payload reuse, rebuild, atlas-geometry retry, glyph-dependency, page-dependency, and geometry
   resync counters through the scroll perf collector. This gives browser perf reports direct visibility into whether active scroll/edit paths are
   reusing stable text payloads or rebuilding because atlas geometry changed.
+- V3 tile resource revision keys, dirty-mask sync decisions, and glyph-dependency validation now live in
+  `renderer-v3/typegpu-tile-resource-revisions.ts`. `typegpu-tile-buffer-pool.ts` is focused on buffer/resource lifecycle while preserving the
+  existing public exports for backend and tests.
 - Browser scroll perf gates now assert that warmed TypeGPU scroll does not retry/resync text atlas geometry. When no fixed-tile/header/dirty
   churn occurs, the gates also assert zero text-run payload rebuilds/reuses and zero glyph/page dependency reads, so hidden text resource syncs
   cannot slip through a visually smooth scroll sample.
