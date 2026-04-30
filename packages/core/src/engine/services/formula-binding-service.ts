@@ -501,17 +501,19 @@ function renameDirectAggregateDescriptorSheet(args: {
   if (args.descriptor.sheetName !== args.oldSheetName) {
     return args.descriptor
   }
+  const descriptorColEnd = args.descriptor.colEnd ?? args.descriptor.col
   const nextRegions = internDirectAggregateRegions({
     regionGraph: args.regionGraph,
     sheetName: args.newSheetName,
     rowStart: args.descriptor.rowStart,
     rowEnd: args.descriptor.rowEnd,
     colStart: args.descriptor.col,
-    colEnd: args.descriptor.colEnd,
+    colEnd: descriptorColEnd,
   })
   return {
     ...args.descriptor,
     ...nextRegions,
+    colEnd: descriptorColEnd,
     sheetName: args.newSheetName,
   }
 }
@@ -529,10 +531,11 @@ function rewriteDirectAggregateDescriptorForStructuralTransform(args: {
     args.transform.axis === 'row'
       ? mapStructuralAxisInterval(args.descriptor.rowStart, args.descriptor.rowEnd, args.transform)
       : { start: args.descriptor.rowStart, end: args.descriptor.rowEnd }
+  const descriptorColEnd = args.descriptor.colEnd ?? args.descriptor.col
   const nextCols =
     args.transform.axis === 'column'
-      ? mapStructuralAxisInterval(args.descriptor.col, args.descriptor.colEnd, args.transform)
-      : { start: args.descriptor.col, end: args.descriptor.colEnd }
+      ? mapStructuralAxisInterval(args.descriptor.col, descriptorColEnd, args.transform)
+      : { start: args.descriptor.col, end: descriptorColEnd }
   if (!nextRows || !nextCols) {
     return undefined
   }
