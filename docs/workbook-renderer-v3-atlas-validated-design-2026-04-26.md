@@ -458,6 +458,9 @@ Completed in the resident-scene deletion tranche:
   React tile-pane bridge no longer imports the readiness counter, calls `engine.subscribeCells()` directly, or clears retained panes itself.
 - `GridViewportResidencyRuntime` now owns local fallback scene-revision increments and resident-cell invalidation subscriptions. The viewport
   residency hook no longer carries a React-owned scene revision counter or subscribes to cells directly.
+- Fill-handle drag preview/commit lifecycle now lives in `gridFillHandleInteractions.ts`, and hover-state resolution moved into
+  `gridInteractionHoverState.ts`. `useWorkbookGridInteractions.ts` is back under the 1000-line refactor threshold and no longer inlines those
+  interaction state machines.
 - Browser scroll perf reports now include `mutationToVisibleMs`, sampled from a dirty renderer-delta apply to the next V3 draw frame. The
   collaborator-patch perf gate asserts that visible renderer mutations produce at least one measured visible frame under the remote-edit SLA.
 - V3 dirty-span merging no longer allocates a sorted copy on the dirty tile upload path. Unsorted overlapping spans are merged incrementally,

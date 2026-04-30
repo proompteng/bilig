@@ -12,12 +12,11 @@ import {
 } from 'react'
 import { formatAddress } from '@bilig/formula'
 import { flushSync } from 'react-dom'
-import { createRectangleSelectionFromRange, rectangleToAddresses, selectionToSnapshot, snapshotToSelection } from './gridSelection.js'
+import { selectionToSnapshot, snapshotToSelection } from './gridSelection.js'
 import { resolveGridSelectionPendingSync } from './gridSelectionPendingSync.js'
-import { resolveFillHandlePreviewRange, resolveFillHandleSelectionRange } from './gridFillHandle.js'
 import { resolveSelectionMoveAnchorCell } from './gridRangeMove.js'
 import type { HeaderSelection } from './gridPointer.js'
-import { sameGridHoverState } from './gridHover.js'
+import { sameGridHoverState, type GridHoverState } from './gridHover.js'
 import type { InternalClipboardRange } from './gridInternalClipboard.js'
 import {
   finishGridResize,
@@ -28,7 +27,7 @@ import {
   startGridResize,
 } from './gridInteractionController.js'
 import { clearGridPendingPointerActivation, resetGridPointerInteraction } from './gridInteractionState.js'
-import { resolveGridInteractionHoverState } from './gridInteractionHoverState.js'
+import { resolveWorkbookGridHoverState } from './gridInteractionHoverState.js'
 import {
   applyGridClipboardValues,
   captureGridClipboardSelection,
@@ -44,6 +43,7 @@ import {
 } from './gridInteractionCommands.js'
 import { beginWorkbookGridColumnResize, beginWorkbookGridRowResize } from './gridResizeInteractions.js'
 import { beginWorkbookGridRangeMove } from './gridRangeMoveInteractions.js'
+import { beginWorkbookGridFillHandleDrag } from './gridFillHandleInteractions.js'
 import { handleWorkbookGridKeyDownCapture } from './gridKeyboardCapture.js'
 import type { GridSelection, Item } from './gridTypes.js'
 import type { EditMovement, EditSelectionBehavior, GridSelectionSnapshot, WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
@@ -54,6 +54,11 @@ import { useWorkbookGridPointerResolvers } from './useWorkbookGridPointerResolve
 import { useWorkbookGridSelectionSummary } from './useWorkbookGridSelectionSummary.js'
 
 const RESIZE_HANDLE_DOUBLE_CLICK_MS = 700
+const DEFAULT_GRID_HOVER_STATE: GridHoverState = { cell: null, header: null, cursor: 'default' }
+
+function resetGridHoverState(current: GridHoverState): GridHoverState {
+  return sameGridHoverState(current, DEFAULT_GRID_HOVER_STATE) ? current : DEFAULT_GRID_HOVER_STATE
+}
 
 export function useWorkbookGridInteractions(
   input: Pick<
@@ -184,7 +189,6 @@ export function useWorkbookGridInteractions(
   const lastResizeHandleActivationRef = useRef<{ columnIndex: number; at: number } | null>(null)
   const fillPreviewRangeRef = useRef(fillPreviewRange)
   const fillHandleCleanupRef = useRef<(() => void) | null>(null)
-  const fillHandlePointerIdRef = useRef<number | null>(null)
   const rangeMoveCleanupRef = useRef<(() => void) | null>(null)
   const resizeCleanupRef = useRef<(() => void) | null>(null)
   const activeSheetRef = useRef(sheetName)
@@ -430,88 +434,25 @@ export function useWorkbookGridInteractions(
       event.preventDefault()
       event.stopPropagation()
       focusGrid()
-      fillHandleCleanupRef.current?.()
-      fillPreviewRangeRef.current = null
-      setFillPreviewRange(null)
-      fillHandlePointerIdRef.current = event.pointerId
-      setIsFillHandleDragging(true)
-      setHoverState((current) =>
-        sameGridHoverState(current, { cell: null, header: null, cursor: 'default' })
-          ? current
-          : { cell: null, header: null, cursor: 'default' },
-      )
-
-      const move = (nativeEvent: PointerEvent) => {
-        if (nativeEvent.pointerId !== fillHandlePointerIdRef.current) {
-          return
-        }
-        const pointerCell = resolvePointerCell(nativeEvent.clientX, nativeEvent.clientY)
-        const nextPreviewRange = pointerCell ? resolveFillHandlePreviewRange(selectionRange, pointerCell) : null
-        fillPreviewRangeRef.current = nextPreviewRange
-        setFillPreviewRange(nextPreviewRange)
-      }
-
-      const cleanup = () => {
-        if (fillHandleCleanupRef.current !== cleanup) {
-          return
-        }
-        fillHandleCleanupRef.current = null
-        window.removeEventListener('pointermove', move, true)
-        window.removeEventListener('pointerup', up, true)
-        window.removeEventListener('pointercancel', cancel, true)
-        fillHandlePointerIdRef.current = null
-        setIsFillHandleDragging(false)
-        setHoverState((current) =>
-          sameGridHoverState(current, { cell: null, header: null, cursor: 'default' })
-            ? current
-            : { cell: null, header: null, cursor: 'default' },
-        )
-      }
-
-      const finish = () => {
-        const previewRange = fillPreviewRangeRef.current
-        if (previewRange) {
-          const source = rectangleToAddresses(selectionRange)
-          const target = rectangleToAddresses(previewRange)
-          const nextSelectionRange = resolveFillHandleSelectionRange(selectionRange, previewRange)
-          const nextSelection = createRectangleSelectionFromRange(nextSelectionRange)
-          if (gridSelection.current?.cell && nextSelection.current) {
-            nextSelection.current = {
-              ...nextSelection.current,
-              cell: gridSelection.current.cell,
-            }
-          }
-          setGridSelection(nextSelection)
-          emitSelectionChange(nextSelection)
-          if (source.startAddress !== target.startAddress || source.endAddress !== target.endAddress) {
-            onFillRange(source.startAddress, source.endAddress, target.startAddress, target.endAddress)
-          }
-        }
-        fillPreviewRangeRef.current = null
-        setFillPreviewRange(null)
-        cleanup()
-      }
-
-      const up = (nativeEvent: PointerEvent) => {
-        if (nativeEvent.pointerId !== fillHandlePointerIdRef.current) {
-          return
-        }
-        finish()
-      }
-
-      const cancel = (nativeEvent: PointerEvent) => {
-        if (nativeEvent.pointerId !== fillHandlePointerIdRef.current) {
-          return
-        }
-        fillPreviewRangeRef.current = null
-        setFillPreviewRange(null)
-        cleanup()
-      }
-
-      fillHandleCleanupRef.current = cleanup
-      window.addEventListener('pointermove', move, true)
-      window.addEventListener('pointerup', up, true)
-      window.addEventListener('pointercancel', cancel, true)
+      beginWorkbookGridFillHandleDrag({
+        cleanupRef: fillHandleCleanupRef,
+        listenerTarget: window,
+        pointerId: event.pointerId,
+        sourceRange: selectionRange,
+        gridSelection,
+        resolvePointerCell,
+        setGridSelection,
+        onSelectionChange: emitSelectionChange,
+        onFillRange,
+        setFillPreviewRange,
+        setFillPreviewRangeRef: (range) => {
+          fillPreviewRangeRef.current = range
+        },
+        setIsFillHandleDragging,
+        resetHoverState: () => {
+          setHoverState(resetGridHoverState)
+        },
+      })
     },
     [
       focusGrid,
@@ -529,63 +470,25 @@ export function useWorkbookGridInteractions(
 
   const refreshHoverState = useCallback(
     (clientX: number, clientY: number, buttons: number) => {
-      if (isFillHandleDragging) {
-        setHoverState((current) =>
-          sameGridHoverState(current, { cell: null, header: null, cursor: 'default' })
-            ? current
-            : { cell: null, header: null, cursor: 'default' },
-        )
-        return
-      }
-      if (isRangeMoveDragging) {
-        setHoverState((current) =>
-          sameGridHoverState(current, { cell: null, header: null, cursor: 'grabbing' })
-            ? current
-            : { cell: null, header: null, cursor: 'grabbing' },
-        )
-        return
-      }
-      if (buttons !== 0 || fillPreviewRangeRef.current) {
-        setHoverState((current) =>
-          sameGridHoverState(current, { cell: null, header: null, cursor: 'default' })
-            ? current
-            : { cell: null, header: null, cursor: 'default' },
-        )
-        return
-      }
-      const visibleRegion = getVisibleRegion()
-      const geometry = resolvePointerGeometry(visibleRegion)
-      if (!geometry) {
-        setHoverState((current) =>
-          sameGridHoverState(current, { cell: null, header: null, cursor: 'default' })
-            ? current
-            : { cell: null, header: null, cursor: 'default' },
-        )
-        return
-      }
-      const rangeMoveAnchorCell = allowsRangeMove
-        ? resolveSelectionMoveAnchorCell(clientX, clientY, selectionRange, getCellScreenBounds)
-        : null
-      if (rangeMoveAnchorCell) {
-        setHoverState((current) =>
-          sameGridHoverState(current, { cell: null, header: null, cursor: 'grab' })
-            ? current
-            : { cell: null, header: null, cursor: 'grab' },
-        )
-        return
-      }
-      const next = resolveGridInteractionHoverState({
+      const next = resolveWorkbookGridHoverState({
         clientX,
         clientY,
+        buttons,
+        isFillHandleDragging,
+        isRangeMoveDragging,
+        hasFillPreviewRange: fillPreviewRangeRef.current !== null,
+        allowsRangeMove,
+        selectionRange,
+        getCellScreenBounds,
+        getVisibleRegion,
+        resolvePointerGeometry,
         columnWidths,
-        geometry,
         gridMetrics,
         resolveColumnResizeTargetAtPointer,
         resolveHeaderSelectionAtPointer,
         resolvePointerCell,
         resolveRowResizeTargetAtPointer,
         rowHeights,
-        visibleRegion,
       })
       setHoverState((current) => (sameGridHoverState(current, next) ? current : next))
     },
@@ -990,11 +893,7 @@ export function useWorkbookGridInteractions(
       setActiveResizeColumn(null)
       setActiveResizeRow(null)
       setActiveHeaderDrag(headerSelection)
-      setHoverState((current) =>
-        sameGridHoverState(current, { cell: null, header: null, cursor: 'default' })
-          ? current
-          : { cell: null, header: null, cursor: 'default' },
-      )
+      setHoverState(resetGridHoverState)
       handleGridPointerDown({
         columnWidths,
         defaultColumnWidth: gridMetrics.columnWidth,
@@ -1017,11 +916,7 @@ export function useWorkbookGridInteractions(
       if (activeResizeColumn !== null || activeResizeRow !== null || isFillHandleDragging || isRangeMoveDragging) {
         return
       }
-      setHoverState((current) =>
-        sameGridHoverState(current, { cell: null, header: null, cursor: 'default' })
-          ? current
-          : { cell: null, header: null, cursor: 'default' },
-      )
+      setHoverState(resetGridHoverState)
     },
     handleHostPointerMoveCapture: (event: ReactPointerEvent<HTMLDivElement>) => {
       if (isFillHandleDragging || isFillHandleTarget(event.target)) {
