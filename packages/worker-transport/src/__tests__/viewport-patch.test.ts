@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { ErrorCode, ValueTag, type Viewport } from '@bilig/protocol'
 
-import { decodeViewportPatch, encodeViewportPatch, encodeViewportPatchJson, type ViewportPatch } from '../index.js'
+import { decodeViewportPatch, encodeViewportPatch, type ViewportPatch } from '../index.js'
 
 function createViewport(): Viewport {
   return {
@@ -127,11 +127,9 @@ describe('viewport patch codec', () => {
     expect(decoded).toEqual(patch)
   })
 
-  it('decodes legacy JSON viewport patch payloads', () => {
-    const patch = createPatch()
+  it('rejects legacy JSON viewport patch payloads', () => {
+    const legacyBytes = new TextEncoder().encode(JSON.stringify(createPatch()))
 
-    const decoded = decodeViewportPatch(encodeViewportPatchJson(patch))
-
-    expect(decoded).toEqual(patch)
+    expect(() => decodeViewportPatch(legacyBytes)).toThrow('Invalid viewport patch magic')
   })
 })

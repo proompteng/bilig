@@ -50,21 +50,7 @@ export interface ViewportPatch {
 
 const VIEWPORT_PATCH_MAGIC = 0x56505450
 const VIEWPORT_PATCH_CODEC_VERSION = 1
-const LEGACY_JSON_OBJECT_PREFIX = 0x7b
-const encoder = new TextEncoder()
-const decoder = new TextDecoder()
 const OPTIONAL_ABSENT = 0xff
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
-function isViewportPatch(value: unknown): value is ViewportPatch {
-  if (!isRecord(value) || !isRecord(value['viewport']) || !isRecord(value['metrics'])) {
-    return false
-  }
-  return Array.isArray(value['styles']) && Array.isArray(value['cells']) && Array.isArray(value['columns']) && Array.isArray(value['rows'])
-}
 
 function encodeColumn(index: number): string {
   let value = index
@@ -504,14 +490,6 @@ function decodeAxisPatches(reader: BinaryReader): ViewportAxisPatch[] {
   return patches
 }
 
-function decodeLegacyJson(bytes: Uint8Array): ViewportPatch {
-  const parsed = JSON.parse(decoder.decode(bytes)) as unknown
-  if (!isViewportPatch(parsed)) {
-    throw new Error('Invalid viewport patch payload')
-  }
-  return parsed
-}
-
 export function encodeViewportPatch(patch: ViewportPatch): Uint8Array {
   const writer = new BinaryWriter()
   writer.u32(VIEWPORT_PATCH_MAGIC)
@@ -548,14 +526,11 @@ export function decodeViewportPatch(bytes: Uint8Array): ViewportPatch {
   if (bytes.byteLength === 0) {
     throw new Error('Invalid viewport patch payload')
   }
-  if (bytes[0] === LEGACY_JSON_OBJECT_PREFIX) {
-    return decodeLegacyJson(bytes)
-  }
 
   const reader = new BinaryReader(bytes)
   const magic = reader.u32()
   if (magic !== VIEWPORT_PATCH_MAGIC) {
-    return decodeLegacyJson(bytes)
+    throw new BinaryProtocolError(`Invalid viewport patch magic ${magic}`)
   }
 
   const codecVersion = reader.u32()
@@ -616,8 +591,4 @@ export function decodeViewportPatch(bytes: Uint8Array): ViewportPatch {
   }
 
   return patch
-}
-
-export function encodeViewportPatchJson(patch: ViewportPatch): Uint8Array {
-  return encoder.encode(JSON.stringify(patch))
 }

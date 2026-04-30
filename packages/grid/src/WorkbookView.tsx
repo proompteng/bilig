@@ -11,7 +11,6 @@ import {
   type EditSelectionBehavior,
   type GridSelectionSnapshot,
   type WorkbookGridPreviewRange,
-  type SheetGridViewportSubscription,
 } from './WorkbookGridSurface.js'
 
 interface WorkbookViewProps {
@@ -53,7 +52,6 @@ interface WorkbookViewProps {
   onSidePanelWidthChange?: ((width: number) => void) | undefined
   sheetId?: number | undefined
   renderTileSource?: React.ComponentProps<typeof WorkbookGridSurface>['renderTileSource'] | undefined
-  subscribeViewport?: SheetGridViewportSubscription | undefined
   columnWidths?: Readonly<Record<number, number>> | undefined
   hiddenColumns?: Readonly<Record<number, true>> | undefined
   hiddenRows?: Readonly<Record<number, true>> | undefined
@@ -220,7 +218,6 @@ export function WorkbookView({
   onSidePanelWidthChange,
   sheetId,
   renderTileSource,
-  subscribeViewport,
   columnWidths,
   hiddenColumns,
   hiddenRows,
@@ -347,7 +344,6 @@ export function WorkbookView({
               onSelectionChange={onSelectionChange}
               sheetId={sheetId}
               renderTileSource={renderTileSource}
-              subscribeViewport={subscribeViewport}
               columnWidths={columnWidths}
               hiddenColumns={hiddenColumns}
               hiddenRows={hiddenRows}

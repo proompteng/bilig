@@ -7,7 +7,6 @@ import type { VisibleRegionState } from './gridPointer.js'
 import type { Item } from './gridTypes.js'
 import type { GridCameraStore } from './runtime/gridCameraStore.js'
 import type { GridRuntimeHost } from './runtime/gridRuntimeHost.js'
-import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from './workbookGridScrollStore.js'
 import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
 import { useWorkbookGridViewportRuntime } from './useWorkbookGridViewportRuntime.js'
@@ -68,7 +67,6 @@ export function useWorkbookGridDrawRuntime(input: {
   readonly sheetName: string
   readonly sortedColumnWidthOverrides: SortedAxisOverrides
   readonly sortedRowHeightOverrides: SortedAxisOverrides
-  readonly subscribeViewport?: SheetGridViewportSubscription | undefined
   readonly syncRuntimeAxes: () => void
   readonly visibleRegion: VisibleRegionState
 }) {
@@ -102,7 +100,6 @@ export function useWorkbookGridDrawRuntime(input: {
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
-    subscribeViewport,
     syncRuntimeAxes,
     visibleRegion,
   } = input
@@ -171,7 +168,6 @@ export function useWorkbookGridDrawRuntime(input: {
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
-    subscribeViewport,
     visibleAddresses,
     visibleViewport: viewport,
   })

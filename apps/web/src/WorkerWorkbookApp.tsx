@@ -307,7 +307,6 @@ function WorkerWorkbookAppInner({
                 sheetName={app.selection.sheetName}
                 sheetNames={app.sheetNames}
                 renderTileSource={app.workerHandle?.viewportStore}
-                subscribeViewport={app.subscribeViewport}
                 columnWidths={app.columnWidths}
                 hiddenColumns={app.hiddenColumns}
                 hiddenRows={app.hiddenRows}

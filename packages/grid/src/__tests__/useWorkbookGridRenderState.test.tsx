@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ValueTag, VIEWPORT_TILE_COLUMN_COUNT, VIEWPORT_TILE_ROW_COUNT, type CellSnapshot } from '@bilig/protocol'
 import { packTileKey53 } from '../renderer-v3/tile-key.js'
+import { DirtyMaskV3, type WorkbookDeltaBatchLikeV3 } from '../renderer-v3/tile-damage-index.js'
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
 import { useWorkbookGridRenderState } from '../useWorkbookGridRenderState.js'
 
@@ -120,7 +121,6 @@ describe('useWorkbookGridRenderState viewport residency', () => {
   it('builds local fixed render tiles without renderer viewport subscriptions', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-    const subscribeViewport = vi.fn(() => () => undefined)
     const subscribeCells = vi.fn(() => () => undefined)
     let latestRenderState: ReturnType<typeof useWorkbookGridRenderState> | null = null
     let hostElement: HTMLDivElement | null = null
@@ -137,7 +137,6 @@ describe('useWorkbookGridRenderState viewport residency', () => {
         selectedCellSnapshot: createEmptySnapshot('Sheet1', 'A1'),
         editorValue: '',
         isEditingCell: false,
-        subscribeViewport,
       })
       latestRenderState = renderState
 
@@ -184,7 +183,6 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 
-    expect(subscribeViewport).not.toHaveBeenCalled()
     expect(subscribeCells).toHaveBeenCalled()
     expect(latestRenderState?.renderTilePanes.some((pane) => pane.paneId === 'body')).toBe(true)
 
@@ -194,7 +192,6 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 
-    expect(subscribeViewport).not.toHaveBeenCalled()
     expect(latestRenderState?.scrollTransformStore.getSnapshot()).toMatchObject({
       renderTx: 64 * 104,
       scrollLeft: 64 * 104,
@@ -207,7 +204,6 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 
-    expect(subscribeViewport).not.toHaveBeenCalled()
     expect(latestRenderState?.scrollTransformStore.getSnapshot()).toMatchObject({
       renderTy: 8 * 22,
       scrollTop: 8 * 22,
@@ -222,7 +218,6 @@ describe('useWorkbookGridRenderState viewport residency', () => {
   it('uses fixed render tile deltas and keeps a full viewport projection hydrated when available', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-    const subscribeViewport = vi.fn(() => () => undefined)
     const subscribeRenderTileDeltas = vi.fn(() => () => undefined)
     const peekRenderTile = vi.fn(() => null)
     const scrollPerf = {
@@ -245,7 +240,6 @@ describe('useWorkbookGridRenderState viewport residency', () => {
         selectedCellSnapshot: createEmptySnapshot('Sheet1', 'A1'),
         editorValue: '',
         isEditingCell: false,
-        subscribeViewport,
       })
       latestRenderState = renderState
 
@@ -291,17 +285,6 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       }),
       expect.any(Function),
     )
-    expect(subscribeViewport).toHaveBeenCalledWith(
-      'Sheet1',
-      {
-        rowStart: 0,
-        rowEnd: 23,
-        colStart: 0,
-        colEnd: 11,
-      },
-      expect.any(Function),
-      { initialPatch: 'full' },
-    )
     expect(latestRenderState?.renderTilePanes.some((pane) => pane.paneId === 'body')).toBe(true)
     expect(latestRenderState?.renderTilePanes.find((pane) => pane.paneId === 'body')?.tile.coord.sheetId).toBe(7)
     expect(scrollPerf.noteRendererTileReadiness).toHaveBeenCalledWith(
@@ -318,16 +301,16 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     })
   })
 
-  it('keeps local fallback render tiles fresh from viewport patches while remote tiles are unavailable', async () => {
+  it('keeps local fallback render tiles fresh from V3 workbook deltas while remote tiles are unavailable', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     let cellText = ''
     const subscribeCells = vi.fn(() => () => undefined)
-    let viewportListener: (() => void) | null = null
-    const subscribeViewport = vi.fn((_sheetName: string, _viewport: unknown, listener: () => void) => {
-      viewportListener = listener
+    let workbookDeltaListener: ((batch: WorkbookDeltaBatchLikeV3) => void) | null = null
+    const subscribeWorkbookDeltas = vi.fn((listener: (batch: WorkbookDeltaBatchLikeV3) => void) => {
+      workbookDeltaListener = listener
       return () => {
-        viewportListener = null
+        workbookDeltaListener = null
       }
     })
     const fallbackEngine = {
@@ -362,6 +345,7 @@ describe('useWorkbookGridRenderState viewport residency', () => {
         sheetId: 7,
         renderTileSource: {
           subscribeRenderTileDeltas,
+          subscribeWorkbookDeltas,
           peekRenderTile,
         },
         sheetName: 'Sheet1',
@@ -369,7 +353,6 @@ describe('useWorkbookGridRenderState viewport residency', () => {
         selectedCellSnapshot: fallbackEngine.getCell('Sheet1', 'B10'),
         editorValue: '',
         isEditingCell: false,
-        subscribeViewport,
       })
       latestRenderState = renderState
 
@@ -404,12 +387,21 @@ describe('useWorkbookGridRenderState viewport residency', () => {
     })
 
     expect(subscribeCells).not.toHaveBeenCalled()
-    expect(subscribeViewport).toHaveBeenCalled()
+    expect(subscribeWorkbookDeltas).toHaveBeenCalled()
     expect(latestRenderState?.renderTilePanes.some((pane) => pane.tile.textRuns.some((run) => run.text === cellText))).toBe(false)
 
     cellText = 'ghost content fixed'
     await act(async () => {
-      viewportListener?.()
+      workbookDeltaListener?.({
+        dirty: {
+          axisX: new Uint32Array(),
+          axisY: new Uint32Array(),
+          cellRanges: new Uint32Array([9, 9, 1, 1, DirtyMaskV3.Value | DirtyMaskV3.Text]),
+        },
+        seq: 1,
+        sheetId: 7,
+        sheetOrdinal: 7,
+      })
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 

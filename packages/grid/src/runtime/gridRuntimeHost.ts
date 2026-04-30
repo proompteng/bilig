@@ -234,10 +234,6 @@ export class GridRuntimeHost {
     return this.renderTiles.noteLocalFallbackInvalidation()
   }
 
-  noteProjectedViewportPatch(): GridRenderTilePaneBridgeState {
-    return this.renderTiles.noteProjectedViewportPatch()
-  }
-
   connectRenderTileDeltas(
     input: Omit<GridRenderTileDeltaRuntimeInput, 'gridRuntimeHost'>,
     listener: Parameters<GridRenderTilePaneRuntime['connectRenderTileDeltas']>[1],

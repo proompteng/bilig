@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ValueTag, type RecalcMetrics } from '@bilig/protocol'
-import type { ViewportPatch } from '@bilig/worker-transport'
+import { encodeViewportPatch, type ViewportPatch } from '@bilig/worker-transport'
 import { ProjectedViewportStore } from '../projected-viewport-store.js'
 
 const TEST_METRICS: RecalcMetrics = {
@@ -596,7 +596,7 @@ describe('ProjectedViewportStore', () => {
         },
       ],
     }
-    const encodedPatch = new TextEncoder().encode(JSON.stringify(typedPatch))
+    const encodedPatch = encodeViewportPatch(typedPatch)
     let publishPatch: ((bytes: Uint8Array) => void) | null = null
     const subscribeViewportPatches = vi.fn((subscription, listener: (bytes: Uint8Array) => void) => {
       expect(subscription).toMatchObject({ initialPatch: 'none' })

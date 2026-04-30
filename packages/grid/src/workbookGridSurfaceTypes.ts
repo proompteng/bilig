@@ -11,16 +11,6 @@ export interface EditTargetSelection {
   readonly sheetName: string
   readonly address: string
 }
-export interface SheetGridViewportSubscriptionOptions {
-  readonly initialPatch?: 'full' | 'none'
-}
-export type SheetGridViewportSubscription = (
-  sheetName: string,
-  viewport: Viewport,
-  listener: (damage?: readonly { cell: readonly [number, number] }[]) => void,
-  options?: SheetGridViewportSubscriptionOptions,
-) => () => void
-
 export interface WorkbookGridPreviewRange {
   sheetName: string
   startAddress: string
@@ -53,7 +43,6 @@ export interface WorkbookGridSurfaceProps {
   onPaste(this: void, sheetName: string, addr: string, values: readonly (readonly string[])[]): void
   sheetId?: number | undefined
   renderTileSource?: GridRenderTileSource | undefined
-  subscribeViewport?: SheetGridViewportSubscription | undefined
   columnWidths?: Readonly<Record<number, number>> | undefined
   hiddenColumns?: Readonly<Record<number, true>> | undefined
   hiddenRows?: Readonly<Record<number, true>> | undefined

@@ -16,7 +16,6 @@ export type {
   EditMovement,
   EditSelectionBehavior,
   GridSelectionSnapshot,
-  SheetGridViewportSubscription,
   WorkbookGridPreviewRange,
   WorkbookGridSurfaceProps,
 } from './workbookGridSurfaceTypes.js'
@@ -31,7 +30,6 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     isEditingCell: props.isEditingCell,
     sheetId: props.sheetId,
     renderTileSource: props.renderTileSource,
-    subscribeViewport: props.subscribeViewport,
     controlledColumnWidths: props.columnWidths,
     controlledRowHeights: props.rowHeights,
     controlledHiddenColumns: props.hiddenColumns,

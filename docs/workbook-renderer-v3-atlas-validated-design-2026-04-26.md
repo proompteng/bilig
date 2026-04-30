@@ -24,6 +24,8 @@ Latest implementation note:
 - `useWorkbookGridRenderState.ts` subscribes to projected render-tile deltas when a `renderTileSource` and `sheetId` are available, then prefers fixed content tiles once all required tiles for the resident viewport are ready.
 - With a fixed render-tile source present, the hook no longer mounts renderer-owned resident scene subscriptions or renderer-owned viewport patch subscriptions.
 - With that source present, the hook also bypasses V2 warm resident-viewport planning; tile prefetch needs to move to V3 tile interest batches next.
+- The grid product surface no longer accepts or forwards a renderer `subscribeViewport` prop. Remote render tiles refresh from render-tile delta subscriptions and V3 workbook delta damage only, so viewport patches are now outside the renderer mutation bridge.
+- `packages/worker-transport/src/viewport-patch.ts` no longer decodes or exports the legacy JSON viewport-patch codec; app-state viewport patches must use the binary transport while renderer data correctness uses V3 tile/delta contracts.
 - Transient fixed-tile misses retain the last fixed-tile pane set instead of immediately falling back to a full resident data-scene rebuild.
 - Frozen pane placements reuse the same fixed content tile under separate body/top/left/corner clip placements. V3 tile-pane buffers are keyed by numeric `tileId`, so body and frozen placements share the content resource.
 - `GridRenderTilePaneRuntime` now upserts mounted fixed content tiles into `GridRuntimeHost.tiles`, reconciles viewport tile interest through the

@@ -5,7 +5,6 @@ import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import { getGridMetrics } from './gridMetrics.js'
 import { getGridTheme } from './gridPresentation.js'
 import type { GridEngineLike } from './grid-engine.js'
-import type { SheetGridViewportSubscription } from './workbookGridSurfaceTypes.js'
 import type { GridRenderTileSource } from './renderer-v3/render-tile-source.js'
 import { useWorkbookGridAxisRuntime } from './useWorkbookGridAxisRuntime.js'
 import { useWorkbookGridEditorRuntime } from './useWorkbookGridEditorRuntime.js'
@@ -23,7 +22,6 @@ export function useWorkbookGridRenderState(input: {
   isEditingCell: boolean
   sheetId?: number | undefined
   renderTileSource?: GridRenderTileSource | undefined
-  subscribeViewport?: SheetGridViewportSubscription | undefined
   controlledColumnWidths?: Readonly<Record<number, number>> | undefined
   controlledRowHeights?: Readonly<Record<number, number>> | undefined
   controlledHiddenColumns?: Readonly<Record<number, true>> | undefined
@@ -50,7 +48,6 @@ export function useWorkbookGridRenderState(input: {
     isEditingCell,
     sheetId,
     renderTileSource,
-    subscribeViewport,
     controlledColumnWidths,
     controlledRowHeights,
     controlledHiddenColumns,
@@ -200,7 +197,6 @@ export function useWorkbookGridRenderState(input: {
     sheetName,
     sortedColumnWidthOverrides,
     sortedRowHeightOverrides,
-    subscribeViewport,
     syncRuntimeAxes,
     visibleRegion,
     restoreViewportTarget,

@@ -4,7 +4,15 @@ import { isWorkbookAgentCommandBundle, isWorkbookAgentPreviewSummary, type Workb
 import type { EditMovement, EditSelectionBehavior, GridSelectionSnapshot } from '@bilig/grid'
 import { formatAddress, parseCellAddress } from '@bilig/formula'
 import type { WorkbookAgentRenderedRange, WorkbookAgentUiContext } from '@bilig/contracts'
-import type { CellRangeRef, CellSnapshot, Viewport } from '@bilig/protocol'
+import {
+  MAX_COLS,
+  MAX_ROWS,
+  VIEWPORT_TILE_COLUMN_COUNT,
+  VIEWPORT_TILE_ROW_COUNT,
+  type CellRangeRef,
+  type CellSnapshot,
+  type Viewport,
+} from '@bilig/protocol'
 import { createWorkerRuntimeMachine, getWorkerRuntimeController, getWorkerRuntimeHandle } from './runtime-machine.js'
 import type { resolveRuntimeConfig } from './runtime-config.js'
 import type { WorkerRuntimeSelection, ZeroClient } from './runtime-session.js'
@@ -71,6 +79,23 @@ function selectionViewport(selection: WorkerRuntimeSelection): Viewport {
     rowEnd: parsed.row,
     colStart: parsed.col,
     colEnd: parsed.col,
+  }
+}
+
+function viewportContains(outer: Viewport, inner: Viewport): boolean {
+  return (
+    outer.rowStart <= inner.rowStart && outer.rowEnd >= inner.rowEnd && outer.colStart <= inner.colStart && outer.colEnd >= inner.colEnd
+  )
+}
+
+function expandProjectionViewport(viewport: Viewport): Viewport {
+  const rowPadding = VIEWPORT_TILE_ROW_COUNT * 3
+  const colPadding = VIEWPORT_TILE_COLUMN_COUNT
+  return {
+    rowStart: Math.max(0, viewport.rowStart - rowPadding),
+    rowEnd: Math.min(MAX_ROWS - 1, viewport.rowEnd + rowPadding),
+    colStart: Math.max(0, viewport.colStart - colPadding),
+    colEnd: Math.min(MAX_COLS - 1, viewport.colEnd + colPadding),
   }
 }
 
@@ -250,6 +275,11 @@ export function useWorkerWorkbookAppState(input: {
   const zeroRef = useRef<LocalOnlyZeroSource>(zeroSource)
   const connectionStateRef = useRef(connectionState.name)
   const visibleViewportRef = useRef<Viewport>(selectionViewport(selection))
+  const visibleViewportSubscriptionRef = useRef<{
+    readonly cleanup: () => void
+    readonly sheetName: string
+    readonly viewport: Viewport
+  } | null>(null)
   const selectionSnapshotRef = useRef<GridSelectionSnapshot>(createSingleCellSelectionSnapshot(selection))
   const selectionRangeRef = useRef<CellRangeRef>(selectionSnapshotToRangeRef(selectionSnapshotRef.current))
   const pendingExternalSelectionRef = useRef<GridSelectionSnapshot | null>(null)
@@ -821,9 +851,38 @@ export function useWorkerWorkbookAppState(input: {
     setEditorSelectionBehavior,
     setEditingMode,
   })
-  const handleVisibleViewportChange = useCallback((viewport: Viewport) => {
+  const syncVisibleViewportProjection = useCallback((sheetName: string, viewport: Viewport): void => {
     visibleViewportRef.current = viewport
+    const current = visibleViewportSubscriptionRef.current
+    if (current && current.sheetName === sheetName && viewportContains(current.viewport, viewport)) {
+      return
+    }
+    current?.cleanup()
+    const controller = runtimeControllerRef.current
+    if (!controller) {
+      visibleViewportSubscriptionRef.current = null
+      return
+    }
+    const projectionViewport = expandProjectionViewport(viewport)
+    visibleViewportSubscriptionRef.current = {
+      cleanup: controller.subscribeViewport(sheetName, projectionViewport, () => {}, { initialPatch: 'full' }),
+      sheetName,
+      viewport: projectionViewport,
+    }
   }, [])
+  useEffect(() => {
+    syncVisibleViewportProjection(selection.sheetName, visibleViewportRef.current)
+    return () => {
+      visibleViewportSubscriptionRef.current?.cleanup()
+      visibleViewportSubscriptionRef.current = null
+    }
+  }, [runtimeController, selection.sheetName, syncVisibleViewportProjection])
+  const handleVisibleViewportChange = useCallback(
+    (viewport: Viewport) => {
+      syncVisibleViewportProjection(selectionRef.current.sheetName, viewport)
+    },
+    [syncVisibleViewportProjection],
+  )
   const sheetNames = useMemo(
     () => [...(runtimeState?.sheetNames ?? [selection.sheetName])],
     [runtimeState?.sheetNames, selection.sheetName],
@@ -1015,21 +1074,6 @@ export function useWorkerWorkbookAppState(input: {
     writesAllowed,
   })
 
-  const subscribeViewport = useCallback(
-    (
-      sheetName: string,
-      viewport: Parameters<ProjectedViewportStore['subscribeViewport']>[1],
-      listener: Parameters<ProjectedViewportStore['subscribeViewport']>[2],
-      options?: Parameters<ProjectedViewportStore['subscribeViewport']>[3],
-    ) => {
-      if (!runtimeController) {
-        return () => {}
-      }
-      return runtimeController.subscribeViewport(sheetName, viewport, listener, options)
-    },
-    [runtimeController],
-  )
-
   const { createSheet, deleteSheet, renameSheet } = useWorkbookSheetActions({
     sheetNames,
     selectionRef,
@@ -1177,7 +1221,6 @@ export function useWorkerWorkbookAppState(input: {
     localPersistenceMode,
     pendingTransferRequest,
     requestPersistenceTransfer,
-    subscribeViewport,
     transferRequested,
     toggleBooleanCell,
     visibleEditorValue,
