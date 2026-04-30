@@ -52,13 +52,26 @@ const DIRECT_SCALAR_DELTA_CLOSURE_LIMIT = 4_096
 const EMPTY_CHANGED_CELLS = new Uint32Array(0)
 const TRUSTED_TRACKED_PHYSICAL_SHEET_ID_PROPERTY = '__biligTrackedPhysicalSheetId'
 const TRUSTED_TRACKED_PHYSICAL_SORTED_SPLIT_PROPERTY = '__biligTrackedPhysicalSortedSliceSplit'
-const ENGINE_OPERATION_TEST_HOOKS_ENABLED = process.env['NODE_ENV'] === 'test'
+const ENGINE_OPERATION_TEST_HOOKS_ENABLED = readNodeEnv() === 'test'
 const ROW_PAIR_LEFT_PLUS_RIGHT = 1
 const ROW_PAIR_LEFT_MINUS_RIGHT = 2
 const ROW_PAIR_RIGHT_MINUS_LEFT = 3
 const ROW_PAIR_LEFT_TIMES_RIGHT = 4
 const ROW_PAIR_LEFT_DIV_RIGHT = 5
 const ROW_PAIR_RIGHT_DIV_LEFT = 6
+
+function readNodeEnv(): string | undefined {
+  const maybeProcess = Reflect.get(globalThis, 'process')
+  if (typeof maybeProcess !== 'object' || maybeProcess === null) {
+    return undefined
+  }
+  const maybeEnv = Reflect.get(maybeProcess, 'env')
+  if (typeof maybeEnv !== 'object' || maybeEnv === null) {
+    return undefined
+  }
+  const nodeEnv = Reflect.get(maybeEnv, 'NODE_ENV')
+  return typeof nodeEnv === 'string' ? nodeEnv : undefined
+}
 
 interface DirectFormulaMetricCounts {
   wasmFormulaCount: number
