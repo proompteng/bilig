@@ -106,6 +106,35 @@ describe('FormulaFamilyStore', () => {
     ])
   })
 
+  it('registers fresh uniform row runs directly from cell indices', () => {
+    const store = createFormulaFamilyStore()
+
+    const registered = store.registerFreshUniformRun({
+      sheetId: 1,
+      templateId: 13,
+      shapeKey: 'fresh-direct-uniform-run',
+      axis: 'row',
+      fixedIndex: 5,
+      start: 2,
+      step: 2,
+      cellIndices: Uint32Array.from([300, 301, 302, 303]),
+    })
+
+    expect(registered).toBe(true)
+    expect(store.getStats()).toEqual({ familyCount: 1, runCount: 1, memberCount: 4 })
+    expect(store.getMembership(300)).toEqual(store.getMembership(303))
+    expect(store.listFamilies()[0]?.runs).toEqual([
+      expect.objectContaining({
+        axis: 'row',
+        fixedIndex: 5,
+        start: 2,
+        end: 8,
+        step: 2,
+        cellIndices: [300, 301, 302, 303],
+      }),
+    ])
+  })
+
   it('registers fresh strided row runs in one family run', () => {
     const store = createFormulaFamilyStore()
 

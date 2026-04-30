@@ -484,6 +484,7 @@ export function createEngineServiceRuntime(args: {
     retargetRangeDependencies: (transaction, rangeIndices) => binding.retargetRangeDependenciesNow(transaction, rangeIndices),
     collectFormulaCellsOwnedBySheet: (sheetName) => binding.collectFormulaCellsOwnedBySheetNow(sheetName),
     forEachFormulaCellOwnedBySheet: (sheetName, fn) => binding.forEachFormulaCellOwnedBySheetNow(sheetName, fn),
+    countFormulaSheetMembers: (sheetId) => binding.countFormulaSheetMembersNow(sheetId),
     forEachFormulaFamily: (fn) => binding.forEachFormulaFamilyNow(fn),
     setFormulaFamilyStructuralSourceTransform: (familyId, transform) =>
       binding.setFormulaFamilyStructuralSourceTransformNow(familyId, transform),
@@ -554,6 +555,7 @@ export function createEngineServiceRuntime(args: {
       formulaTemplates.reset()
       formulaInstances.clear()
       formulaFamilies.clear()
+      binding.clearFormulaBookkeepingNow()
       volatileFormulaCells.clear()
     },
     resetWasmState: () => {
@@ -609,6 +611,7 @@ export function createEngineServiceRuntime(args: {
     upsertFormulaFamilyRun: (run) => {
       formulaFamilies.registerFormulaRun(run)
     },
+    registerFreshFormulaFamilyRun: (run) => formulaFamilies.registerFreshUniformRun(run),
     compileTemplateFormula: (source, row, col) => formulaTemplates.resolveForCell(source, row, col),
     clearTemplateFormulaCache: () => formulaTemplates.clear(),
     removeFormula: (cellIndex) => binding.clearFormulaNow(cellIndex),

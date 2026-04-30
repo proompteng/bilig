@@ -217,6 +217,14 @@ interface MaterializedTrackedEventChanges {
   readonly ordered: boolean
 }
 
+function trackedEventHasNoValueChanges(event: TrackedEngineEvent): boolean {
+  return (
+    event.invalidation !== 'full' &&
+    event.changedCellIndices.length === 0 &&
+    !(event.patches?.some((patch) => patch.kind === 'cell') ?? false)
+  )
+}
+
 type QueuedEvent = Extract<
   DetailedEvent,
   {
@@ -4505,6 +4513,9 @@ export class WorkPaper {
     events: readonly TrackedEngineEvent[],
     options: { readonly preferLazyPublicChanges?: boolean } = {},
   ): WorkPaperChange[] {
+    if (events.length > 0 && events.every(trackedEventHasNoValueChanges)) {
+      return []
+    }
     if (events.length === 1) {
       const event = events[0]!
       if (!options.preferLazyPublicChanges || event.changedCellIndices.length <= TINY_TRACKED_CHANGE_LIMIT) {

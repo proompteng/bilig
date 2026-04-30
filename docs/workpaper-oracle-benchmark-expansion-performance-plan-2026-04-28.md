@@ -15,14 +15,16 @@ Browser Use in-app browser and saved verbatim in
 This plan has been reconciled against the current checkout and the latest
 checked benchmark artifact,
 `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`, generated at
-`2026-04-29T14:47:16.831Z`.
+`2026-04-30T07:48:26.341Z`.
 
-The active implementation target is no longer the older red-list from the first
-expansion run. `sheet-rename-dependencies`, `named-expression-change`,
+The older red-list from the first expansion run remains closed.
+`sheet-rename-dependencies`, `named-expression-change`,
 `build-parser-cache-unique-formulas`, and `lookup-approximate-duplicates` are
-green in the current artifact and must be preserved. The next production work is
-focused on `build-mixed-content`, `structural-delete-rows`, and the
-`lookup-text-exact` p95 tail.
+green in the current artifact. The later public-lane blockers
+`build-mixed-content`, `structural-delete-rows`, `structural-insert-columns`,
+`aggregate-overlapping-sliding-window`, and noisy batch rows are also green by
+mean scorecard in the current generated artifact. `lookup-text-exact` remains a
+visible p95 tail-risk row, but it is not a mean scorecard loss.
 
 ## Non-Negotiable Constraints
 
@@ -75,26 +77,25 @@ surfaces, and the checked baseline now points to the current `bilig3`
 
 ## Current Scorecard After Expansion
 
-Generated with `pnpm workpaper:bench:competitive:generate` on `2026-04-29` after
+Generated with `pnpm workpaper:bench:competitive:generate` on `2026-04-30` after
 the benchmark expansion and the retained production engine/headless changes:
 
 - Total workloads: `51`
 - Comparable workloads: `47`
 - Leadership-only workloads: `4`
 - Scorecard-eligible comparable workloads: `46`
-- Overall scorecard: WorkPaper `44`, HyperFormula `2`
-- Public lane: WorkPaper `36`, HyperFormula `2`
+- Overall scorecard: WorkPaper `46`, HyperFormula `0`
+- Public lane: WorkPaper `38`, HyperFormula `0`
 - Holdout lane: WorkPaper `8`, HyperFormula `0`
-- Worst mean ratio: `build-mixed-content`, `1.0362639565590437`
-- Worst p95 ratio: `lookup-text-exact`, `2.27208263805424`
+- Worst mean ratio: `build-mixed-content`, `0.9990806963044364`
+- Worst p95 ratio: `lookup-text-exact`, `1.6076232660717833`
 
-Current HyperFormula mean rows:
+Current HyperFormula mean rows: none.
 
-- `build-mixed-content`: mean ratio `1.0362639565590437`, median ratio
-  `1.0069852963334736`, p95 ratio `1.156165042556`,
-  `confidenceIntervalOverlaps: true`.
-- `structural-delete-rows`: mean ratio `1.0234049542127845`, median ratio
-  `0.8750303474565914`, p95 ratio `1.267650293785557`,
+Closest public mean row:
+
+- `build-mixed-content`: mean ratio `0.9990806963044364`, median ratio
+  `0.9473619208260539`, p95 ratio `0.9635077237973587`,
   `confidenceIntervalOverlaps: true`.
 
 Current preservation rows from the original oracle red-list:
@@ -106,9 +107,9 @@ Current preservation rows from the original oracle red-list:
 - `aggregate-overlapping-sliding-window`: green in the latest official artifact
   after showing noise in earlier runs.
 
-The public lane is close but not complete: `38` comparable workloads, `36`
-WorkPaper wins, `2` HyperFormula wins. The holdout lane is complete in the
-current artifact: `8` comparable workloads, `8` WorkPaper wins.
+The public lane is complete in the current artifact: `38` comparable workloads,
+`38` WorkPaper wins, `0` HyperFormula wins. The holdout lane is complete:
+`8` comparable workloads, `8` WorkPaper wins.
 
 ## Implementation Status
 
@@ -126,21 +127,27 @@ Completed in this tranche:
 - Added rectangular direct aggregate compilation, binding, initial evaluation,
   prefix evaluation, region subscriptions, and mutation touch detection for
   ranges such as `SUM(A1:B1500)`.
+- Added cell-indexed formula instance storage, preserving snapshot hydration and
+  sorted listing while removing hot `Map` churn from cold mixed builds.
+- Reworked formula-family cell records onto primitive cell-indexed storage,
+  preserving unregister, structural invalidation, run splitting, family stats,
+  and list output without allocating one record object per member.
+- Added direct fresh uniform formula-family run registration for initial
+  row-template loads.
+- Added binding-maintained per-sheet formula counts and used them to make
+  structural family-deferral eligibility O(1) instead of scanning formula cells.
+- Added a WorkPaper tracked structural no-value-change fast return so
+  structural insert paths do not materialize public value changes when tracked
+  evidence proves there are none.
 
 Still open:
 
-- `build-mixed-content` still needs production cold-build hardening. The useful
-  work is reducing duplicated initialization and allocation across literal
-  loading, formula source registration, binding, and initial evaluation.
-- `structural-delete-rows` still needs production structural-row hardening. The
-  useful work is narrowing row-delete metadata updates and avoiding full-sheet
-  dependency/result collection when tracked evidence proves it is unnecessary.
-- `lookup-text-exact` has the worst p95 ratio and should be treated as a
-  tail-latency hardening issue around normalization, index reuse, invalidation,
-  and allocation spikes.
+- `lookup-text-exact` remains the worst p95 ratio and should stay visible as a
+  future tail-latency hardening target around normalization, index reuse,
+  invalidation, and allocation spikes.
 - The previous oracle response is saved and validated. A new oracle consultation
-  is only justified if profiling exposes a real architecture blocker or a new
-  decisive non-overlap HyperFormula row appears.
+  is only justified if profiling exposes a real architecture blocker or a future
+  generated artifact produces a stable red row.
 
 ## Current Production Implementation Plan
 
@@ -154,22 +161,20 @@ Files:
 - `packages/core/src/engine/services/formula-initialization-service.ts`
 - `packages/core/src/engine/services/formula-binding-service.ts`
 
-Problem: `build-mixed-content` is the worst current mean-ratio row, but only by
-`1.036x` and with overlapping confidence intervals. It is close enough that
-small general-purpose allocation and duplicated-initialization costs decide the
-row.
+Problem: `build-mixed-content` was the worst mean-ratio row and was close enough
+that small general-purpose allocation and duplicated-initialization costs decided
+the row.
 
 Plan:
 
-- Profile cold mixed-sheet construction by phase: literal grid load, formula
-  source registration, formula initialization, direct descriptor binding,
-  initial evaluation, changed-cell metadata, and inspect/dimension collection.
-- Remove duplicated work only in production paths used by normal headless build
-  APIs.
-- Keep the reverted fresh-formula changed-scratch deferral out unless a corrected
-  version wins the official workload and preserves focused tests.
-- Preserve all formulas, dependency descriptors, result values, source text, and
-  verification keys.
+- Cell-index formula instance storage is implemented.
+- Primitive formula-family member records are implemented.
+- Direct fresh uniform formula-family run registration is implemented.
+- The reverted fresh-formula changed-scratch deferral remains out; a later
+  attempt to revive lazy changed-buffer recording was removed because it did not
+  produce a stable artifact improvement.
+- All formulas, dependency descriptors, result values, source text, and
+  verification keys are preserved.
 
 ### 2. `structural-delete-rows` row-delete hardening
 
@@ -181,21 +186,18 @@ Files:
 - `packages/core/src/engine/services/operation-service.ts`
 - `packages/headless/src/work-paper-runtime.ts`
 
-Problem: `structural-delete-rows` is the other current HyperFormula mean row.
-It is median-green but mean-red, which points to row-delete tail overhead and
-unnecessary result collection rather than a missing correctness feature.
+Problem: structural row and column edits were close enough that proof overhead
+and result collection could flip noisy public rows.
 
 Plan:
 
-- Profile logical/physical row remapping, dependency/index metadata updates,
-  formula-public-text rewrites, undo records, and headless changed-cell payload
-  construction.
-- Narrow touched metadata to deleted intervals and dependent formulas whose
-  ranges actually intersect or shift.
-- Avoid full-sheet recomputation and broad result materialization when the
-  tracked structural plan proves the delete is local.
-- Preserve logical row/column identity, formula rewrite semantics, undo/redo,
-  and verification equality.
+- Structural family-deferral proof now uses binding-maintained per-sheet formula
+  counts instead of collecting formula cells.
+- WorkPaper tracked structural paths now return immediately when the tracked
+  engine event has no full invalidation, no changed cell indices, and no cell
+  patches.
+- Logical row/column identity, formula rewrite semantics, undo/redo, and
+  verification equality are preserved.
 
 ### 3. `lookup-text-exact` p95 hardening
 
@@ -207,8 +209,8 @@ Files:
 - `packages/core/src/engine/services/formula-evaluation-service.ts`
 
 Problem: `lookup-text-exact` is not a current HyperFormula mean row, but it has
-the worst p95 ratio. That makes it a stability target before claiming a durable
-benchmark win.
+the worst p95 ratio. That makes it a future stability target after the all-mean
+scorecard win.
 
 Plan:
 

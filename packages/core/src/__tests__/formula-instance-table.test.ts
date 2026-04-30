@@ -16,4 +16,20 @@ describe('FormulaInstanceTable', () => {
       { cellIndex: 2, sheetName: 'Sheet1', row: 0, col: 1, source: 'A1+1' },
     ])
   })
+
+  it('lists sparse upserts and deletes in sheet order', () => {
+    const table = createFormulaInstanceTable()
+
+    table.upsert({ cellIndex: 8, sheetName: 'Sheet2', row: 0, col: 0, source: 'A1+1' })
+    table.upsert({ cellIndex: 2, sheetName: 'Sheet1', row: 1, col: 0, source: 'A2+1' })
+    table.upsert({ cellIndex: 5, sheetName: 'Sheet1', row: 0, col: 0, source: 'A1+1' })
+
+    expect(table.delete(2)).toBe(true)
+    expect(table.delete(2)).toBe(false)
+    expect(table.get(2)).toBeUndefined()
+    expect(table.list()).toEqual([
+      { cellIndex: 5, sheetName: 'Sheet1', row: 0, col: 0, source: 'A1+1' },
+      { cellIndex: 8, sheetName: 'Sheet2', row: 0, col: 0, source: 'A1+1' },
+    ])
+  })
 })

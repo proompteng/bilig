@@ -1659,10 +1659,12 @@ describe('WorkPaper', () => {
       ],
     })
     const sheetId = workbook.getSheetId('Sheet1')!
+    const computeTrackedChanges = trackComputeCellChangesFromTrackedEvents(workbook)
 
     const changes = workbook.addColumns(sheetId, [1, 1])
 
     expect(changes).toEqual([])
+    expect(computeTrackedChanges.count).toBe(0)
     expect(workbook.getSheetDimensions(sheetId)).toEqual({ width: 5, height: 3 })
     expect(workbook.getCellSerialized(cell(sheetId, 0, 3))).toBe('=A1+C1')
     expect(workbook.getCellSerialized(cell(sheetId, 0, 4))).toBe('=D1*2')
@@ -1678,6 +1680,7 @@ describe('WorkPaper', () => {
     expect(workbook.getSheetDimensions(sheetId)).toEqual({ width: 4, height: 3 })
     expect(workbook.getCellSerialized(cell(sheetId, 0, 2))).toBe('=A1+B1')
     expect(workbook.getCellSerialized(cell(sheetId, 0, 3))).toBe('=C1*2')
+    computeTrackedChanges.restore()
   })
 
   it('applies function translations to registered languages and exposes license validity', () => {

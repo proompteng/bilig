@@ -21,6 +21,14 @@ export interface FormulaFamilyRunUpsertArgs extends FormulaFamilyKey {
   readonly members: readonly FormulaFamilyMember[]
 }
 
+export interface FormulaFamilyFreshUniformRunRegistrationArgs extends FormulaFamilyKey {
+  readonly axis: FormulaFamilyRunAxis
+  readonly fixedIndex: number
+  readonly start: number
+  readonly step: number
+  readonly cellIndices: readonly number[] | Uint32Array
+}
+
 export interface FormulaFamilyMemberRun {
   readonly id: FormulaFamilyRunId
   readonly axis: FormulaFamilyRunAxis
@@ -66,6 +74,7 @@ export interface FormulaFamilyStore {
   readonly upsertFormula: (args: FormulaFamilyKey & FormulaFamilyMember) => FormulaFamilyMembership
   readonly upsertFormulaRun: (args: FormulaFamilyRunUpsertArgs) => FormulaFamilyMembership[]
   readonly registerFormulaRun: (args: FormulaFamilyRunUpsertArgs) => void
+  readonly registerFreshUniformRun: (args: FormulaFamilyFreshUniformRunRegistrationArgs) => boolean
   readonly unregisterFormula: (cellIndex: number) => boolean
   readonly getMembership: (cellIndex: number) => FormulaFamilyMembership | undefined
   readonly countSheetMembers: (sheetId: number) => number
@@ -137,7 +146,11 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
   const familiesById = new Map<FormulaFamilyId, MutableFormulaFamily>()
   const familyIdByKey = new Map<string, FormulaFamilyId>()
   const recentFamilyByTemplateId = new Map<number, MutableFormulaFamily>()
-  const cellRecords: Array<FormulaFamilyCellRecord | undefined> = []
+  const cellRecordSheetIds: Array<number | undefined> = []
+  const cellRecordTemplateIds: Array<number | undefined> = []
+  const cellRecordShapeKeys: Array<string | undefined> = []
+  const cellRecordRows: Array<number | undefined> = []
+  const cellRecordCols: Array<number | undefined> = []
   const membershipFamilyIds: number[] = []
   const membershipRunIds: number[] = []
   const sheetMemberCounts = new Map<number, number>()
@@ -159,6 +172,26 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
       return undefined
     }
     return { familyId, runId: membershipRunIds[cellIndex]! }
+  }
+
+  const getCellRecord = (cellIndex: number): FormulaFamilyCellRecord | undefined => {
+    const sheetId = cellRecordSheetIds[cellIndex]
+    const templateId = cellRecordTemplateIds[cellIndex]
+    const shapeKey = cellRecordShapeKeys[cellIndex]
+    const row = cellRecordRows[cellIndex]
+    const col = cellRecordCols[cellIndex]
+    if (sheetId === undefined || templateId === undefined || shapeKey === undefined || row === undefined || col === undefined) {
+      return undefined
+    }
+    return { sheetId, templateId, shapeKey, cellIndex, row, col }
+  }
+
+  const clearCellRecord = (cellIndex: number): void => {
+    cellRecordSheetIds[cellIndex] = undefined
+    cellRecordTemplateIds[cellIndex] = undefined
+    cellRecordShapeKeys[cellIndex] = undefined
+    cellRecordRows[cellIndex] = undefined
+    cellRecordCols[cellIndex] = undefined
   }
 
   const getExistingFamily = (args: FormulaFamilyKey): MutableFormulaFamily | undefined => {
@@ -204,17 +237,18 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
     return family
   }
 
-  const recordFormulaMember = (key: FormulaFamilyKey, member: FormulaFamilyMember): void => {
-    cellRecords[member.cellIndex] = {
-      sheetId: key.sheetId,
-      templateId: key.templateId,
-      shapeKey: key.shapeKey,
-      cellIndex: member.cellIndex,
-      row: member.row,
-      col: member.col,
-    }
+  const recordFormulaMemberAt = (key: FormulaFamilyKey, cellIndex: number, row: number, col: number): void => {
+    cellRecordSheetIds[cellIndex] = key.sheetId
+    cellRecordTemplateIds[cellIndex] = key.templateId
+    cellRecordShapeKeys[cellIndex] = key.shapeKey
+    cellRecordRows[cellIndex] = row
+    cellRecordCols[cellIndex] = col
     memberCount += 1
     sheetMemberCounts.set(key.sheetId, (sheetMemberCounts.get(key.sheetId) ?? 0) + 1)
+  }
+
+  const recordFormulaMember = (key: FormulaFamilyKey, member: FormulaFamilyMember): void => {
+    recordFormulaMemberAt(key, member.cellIndex, member.row, member.col)
   }
 
   const makeRun = (
@@ -287,7 +321,7 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
     const remainingMembers = run.cellIndices
       .filter((cellIndex) => cellIndex !== removedCellIndex)
       .flatMap((cellIndex): FormulaFamilyMember[] => {
-        const record = cellRecords[cellIndex]
+        const record = getCellRecord(cellIndex)
         return record ? [{ cellIndex, row: record.row, col: record.col }] : []
       })
     unindexRun(family, run)
@@ -308,13 +342,13 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
 
   const unregisterFormula = (cellIndex: number): boolean => {
     const membership = getMembershipRecord(cellIndex)
-    const record = cellRecords[cellIndex]
+    const record = getCellRecord(cellIndex)
     if (!membership || !record) {
       return false
     }
     membershipFamilyIds[cellIndex] = 0
     membershipRunIds[cellIndex] = 0
-    cellRecords[cellIndex] = undefined
+    clearCellRecord(cellIndex)
     memberCount -= 1
     const sheetMemberCount = sheetMemberCounts.get(record.sheetId) ?? 0
     if (sheetMemberCount <= 1) {
@@ -370,14 +404,14 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
       if (runIndex < 0) {
         continue
       }
-      const maybeMembership = tryMergeRun(family, runIndex, run, member, appendMemberToRun, replaceRunWithMembers, cellRecords)
+      const maybeMembership = tryMergeRun(family, runIndex, run, member, appendMemberToRun, replaceRunWithMembers, getCellRecord)
       if (maybeMembership) {
         return maybeMembership
       }
     }
     for (let runIndex = 0; runIndex < family.runs.length; runIndex += 1) {
       const run = family.runs[runIndex]!
-      const maybeMembership = tryMergeRun(family, runIndex, run, member, appendMemberToRun, replaceRunWithMembers, cellRecords)
+      const maybeMembership = tryMergeRun(family, runIndex, run, member, appendMemberToRun, replaceRunWithMembers, getCellRecord)
       if (maybeMembership) {
         return maybeMembership
       }
@@ -429,6 +463,50 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
       run.cellIndices[index] = member.cellIndex
       membershipFamilyIds[member.cellIndex] = family.id
       membershipRunIds[member.cellIndex] = run.id
+    }
+    family.runs.push(run)
+    indexRun(family, run)
+    family.recentAppendRun = run
+    return true
+  }
+
+  const registerFreshUniformRun = (args: FormulaFamilyFreshUniformRunRegistrationArgs): boolean => {
+    const runLength = args.cellIndices.length
+    if (runLength === 0 || (runLength > 1 && args.step <= 0)) {
+      return false
+    }
+    const existingFamily = getExistingFamily(args)
+    if (existingFamily && existingFamily.runs.length > 0) {
+      return false
+    }
+    for (let index = 0; index < runLength; index += 1) {
+      const cellIndex = args.cellIndices[index]!
+      if ((membershipFamilyIds[cellIndex] ?? 0) !== 0) {
+        return false
+      }
+    }
+    const family = existingFamily ?? getOrCreateFamily(args)
+    const step = runLength === 1 ? 1 : args.step
+    const cellIndices: number[] = []
+    cellIndices.length = runLength
+    const run: MutableFormulaFamilyMemberRun = {
+      id: nextRunId++,
+      axis: args.axis,
+      fixedIndex: args.fixedIndex,
+      start: args.start,
+      end: args.start + step * (runLength - 1),
+      step,
+      cellIndices,
+    }
+    for (let index = 0; index < runLength; index += 1) {
+      const cellIndex = args.cellIndices[index]!
+      const variableIndex = args.start + step * index
+      const row = args.axis === 'row' ? variableIndex : args.fixedIndex
+      const col = args.axis === 'row' ? args.fixedIndex : variableIndex
+      recordFormulaMemberAt(args, cellIndex, row, col)
+      run.cellIndices[index] = cellIndex
+      membershipFamilyIds[cellIndex] = family.id
+      membershipRunIds[cellIndex] = run.id
     }
     family.runs.push(run)
     indexRun(family, run)
@@ -521,6 +599,7 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
     upsertFormula,
     upsertFormulaRun,
     registerFormulaRun,
+    registerFreshUniformRun,
     unregisterFormula,
     getMembership(cellIndex) {
       return getMembershipRecord(cellIndex)
@@ -587,10 +666,9 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
     },
     invalidateSheet(sheetId) {
       const removedCellIndices: number[] = []
-      for (let cellIndex = 0; cellIndex < cellRecords.length; cellIndex += 1) {
-        const record = cellRecords[cellIndex]
-        if (record?.sheetId === sheetId) {
-          removedCellIndices.push(record.cellIndex)
+      for (let cellIndex = 0; cellIndex < cellRecordSheetIds.length; cellIndex += 1) {
+        if (cellRecordSheetIds[cellIndex] === sheetId) {
+          removedCellIndices.push(cellIndex)
         }
       }
       removedCellIndices.forEach((cellIndex) => {
@@ -599,14 +677,16 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
     },
     applyStructuralInvalidation(args) {
       const removedCellIndices: number[] = []
-      for (let cellIndex = 0; cellIndex < cellRecords.length; cellIndex += 1) {
-        const record = cellRecords[cellIndex]
-        if (record?.sheetId !== args.sheetId) {
+      for (let cellIndex = 0; cellIndex < cellRecordSheetIds.length; cellIndex += 1) {
+        if (cellRecordSheetIds[cellIndex] !== args.sheetId) {
           continue
         }
-        const axisIndex = args.axis === 'row' ? record.row : record.col
+        const axisIndex = args.axis === 'row' ? cellRecordRows[cellIndex] : cellRecordCols[cellIndex]
+        if (axisIndex === undefined) {
+          continue
+        }
         if (axisIndex >= args.start && axisIndex < args.end) {
-          removedCellIndices.push(record.cellIndex)
+          removedCellIndices.push(cellIndex)
         }
       }
       removedCellIndices.forEach((cellIndex) => {
@@ -617,7 +697,11 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
       familiesById.clear()
       familyIdByKey.clear()
       recentFamilyByTemplateId.clear()
-      cellRecords.length = 0
+      cellRecordSheetIds.length = 0
+      cellRecordTemplateIds.length = 0
+      cellRecordShapeKeys.length = 0
+      cellRecordRows.length = 0
+      cellRecordCols.length = 0
       membershipFamilyIds.length = 0
       membershipRunIds.length = 0
       sheetMemberCounts.clear()
@@ -1006,13 +1090,13 @@ function tryMergeRun(
     members: readonly FormulaFamilyMember[],
     memberCellIndex: number,
   ) => FormulaFamilyMembership,
-  cellRecords: readonly (FormulaFamilyCellRecord | undefined)[],
+  getCellRecord: (cellIndex: number) => FormulaFamilyCellRecord | undefined,
 ): FormulaFamilyMembership | undefined {
   if (run.axis === 'row' && run.fixedIndex === member.col) {
     if (canAppendStridedRunMember(run, member.row)) {
       return appendMemberToRun(family, run, member)
     }
-    const membership = tryReshapeStridedRun(family, runIndex, run, member, replaceRunWithMembers, cellRecords)
+    const membership = tryReshapeStridedRun(family, runIndex, run, member, replaceRunWithMembers, getCellRecord)
     if (membership) {
       return membership
     }
@@ -1021,13 +1105,13 @@ function tryMergeRun(
     if (canAppendStridedRunMember(run, member.col)) {
       return appendMemberToRun(family, run, member)
     }
-    const membership = tryReshapeStridedRun(family, runIndex, run, member, replaceRunWithMembers, cellRecords)
+    const membership = tryReshapeStridedRun(family, runIndex, run, member, replaceRunWithMembers, getCellRecord)
     if (membership) {
       return membership
     }
   }
   if (run.cellIndices.length === 1) {
-    const existingRecord = cellRecords[run.cellIndices[0]!]
+    const existingRecord = getCellRecord(run.cellIndices[0]!)
     if (!existingRecord) {
       return undefined
     }
@@ -1072,14 +1156,14 @@ function tryReshapeStridedRun(
     members: readonly FormulaFamilyMember[],
     memberCellIndex: number,
   ) => FormulaFamilyMembership,
-  cellRecords: readonly (FormulaFamilyCellRecord | undefined)[],
+  getCellRecord: (cellIndex: number) => FormulaFamilyCellRecord | undefined,
 ): FormulaFamilyMembership | undefined {
   const memberIndex = run.axis === 'row' ? member.row : member.col
   if (run.cellIndices.length !== 2 || memberIndex <= run.start || memberIndex >= run.end) {
     return undefined
   }
   const existingMembers = run.cellIndices.flatMap((cellIndex): FormulaFamilyMember[] => {
-    const record = cellRecords[cellIndex]
+    const record = getCellRecord(cellIndex)
     return record ? [{ cellIndex, row: record.row, col: record.col }] : []
   })
   if (existingMembers.length !== run.cellIndices.length) {

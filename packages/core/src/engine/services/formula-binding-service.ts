@@ -131,6 +131,7 @@ export interface EngineFormulaBindingService {
   readonly bindInitialFormulaNow: (cellIndex: number, ownerSheetName: string, source: string) => void
   readonly clearFormulaNow: (cellIndex: number) => boolean
   readonly invalidateFormulaNow: (cellIndex: number) => void
+  readonly clearFormulaBookkeepingNow: () => void
   readonly refreshRangeDependenciesNow: (rangeIndices: readonly number[]) => void
   readonly retargetRangeDependenciesNow: (transaction: StructuralTransaction, rangeIndices: readonly number[]) => void
   readonly rebindFormulaCellsNow: (candidates: readonly number[], formulaChangedCount: number) => number
@@ -138,6 +139,7 @@ export interface EngineFormulaBindingService {
   readonly rebindTableDependentsNow: (tableNames: readonly string[], formulaChangedCount: number) => number
   readonly rebindFormulasForSheetNow: (sheetName: string, formulaChangedCount: number, candidates?: readonly number[] | U32) => number
   readonly forEachFormulaCellOwnedBySheetNow: (sheetName: string, fn: (cellIndex: number) => void) => void
+  readonly countFormulaSheetMembersNow: (sheetId: number) => number
   readonly countFormulaFamilySheetMembersNow: (sheetId: number) => number
   readonly forEachFormulaFamilyNow: (fn: (family: FormulaFamily) => void) => void
   readonly setFormulaFamilyStructuralSourceTransformNow: (familyId: number, transform: FormulaFamilyStructuralSourceTransform) => void
@@ -1531,9 +1533,19 @@ export function createEngineFormulaBindingService(args: {
 }): EngineFormulaBindingService {
   const resolvedCompiledCache = new Map<string, ParsedCompiledFormula>()
   const formulaColumnCounts = new Map<number, number>()
+  const formulaSheetCounts = new Map<number, number>()
   const formulaOwnerSheetCells = new Map<string, Set<number>>()
   const formulaReferencedSheetCells = new Map<string, Set<number>>()
   const formulaFamilyShapeKeyCache = new Map<number, CachedFormulaFamilyShapeKey>()
+
+  const clearFormulaBookkeepingNow = (): void => {
+    resolvedCompiledCache.clear()
+    formulaColumnCounts.clear()
+    formulaSheetCounts.clear()
+    formulaOwnerSheetCells.clear()
+    formulaReferencedSheetCells.clear()
+    formulaFamilyShapeKeyCache.clear()
+  }
 
   const updateVolatileFormulaIndex = (cellIndex: number, formula: RuntimeFormula | undefined): void => {
     if (!args.volatileFormulaCells) {
@@ -2750,13 +2762,21 @@ export function createEngineFormulaBindingService(args: {
       untrackFormulaSheetIndexes(cellIndex, ownerSheetName, existing.compiled)
       const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
       const col = args.state.workbook.getCellPosition(cellIndex)?.col
-      if (sheetId !== undefined && col !== undefined) {
-        const columnKey = formulaColumnCountKey(sheetId, col)
-        const nextCount = (formulaColumnCounts.get(columnKey) ?? 1) - 1
-        if (nextCount <= 0) {
-          formulaColumnCounts.delete(columnKey)
+      if (sheetId !== undefined) {
+        const nextSheetCount = (formulaSheetCounts.get(sheetId) ?? 1) - 1
+        if (nextSheetCount <= 0) {
+          formulaSheetCounts.delete(sheetId)
         } else {
-          formulaColumnCounts.set(columnKey, nextCount)
+          formulaSheetCounts.set(sheetId, nextSheetCount)
+        }
+        if (col !== undefined) {
+          const columnKey = formulaColumnCountKey(sheetId, col)
+          const nextColumnCount = (formulaColumnCounts.get(columnKey) ?? 1) - 1
+          if (nextColumnCount <= 0) {
+            formulaColumnCounts.delete(columnKey)
+          } else {
+            formulaColumnCounts.set(columnKey, nextColumnCount)
+          }
         }
       }
       const dependencyEntities = args.edgeArena.readView(existing.dependencyEntities)
@@ -2991,9 +3011,12 @@ export function createEngineFormulaBindingService(args: {
     runtimeFormula.formulaSlotId = formulaSlotId
     updateVolatileFormulaIndex(cellIndex, runtimeFormula)
     const col = physicalOwnerPosition?.col ?? args.state.workbook.getCellPosition(cellIndex)?.col
-    if (sheetId !== undefined && col !== undefined) {
-      const columnKey = formulaColumnCountKey(sheetId, col)
-      formulaColumnCounts.set(columnKey, (formulaColumnCounts.get(columnKey) ?? 0) + 1)
+    if (sheetId !== undefined) {
+      formulaSheetCounts.set(sheetId, (formulaSheetCounts.get(sheetId) ?? 0) + 1)
+      if (col !== undefined) {
+        const columnKey = formulaColumnCountKey(sheetId, col)
+        formulaColumnCounts.set(columnKey, (formulaColumnCounts.get(columnKey) ?? 0) + 1)
+      }
     }
     args.state.workbook.cellStore.flags[cellIndex] =
       ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)) | CellFlags.HasFormula
@@ -3406,9 +3429,7 @@ export function createEngineFormulaBindingService(args: {
           args.reverseState.reverseAggregateColumnEdges.clear()
           args.reverseState.reverseExactLookupColumnEdges.clear()
           args.reverseState.reverseSortedLookupColumnEdges.clear()
-          formulaColumnCounts.clear()
-          formulaOwnerSheetCells.clear()
-          formulaReferencedSheetCells.clear()
+          clearFormulaBookkeepingNow()
           args.regionGraph.reset()
 
           const activeCellIndices: number[] = []
@@ -3493,6 +3514,7 @@ export function createEngineFormulaBindingService(args: {
     bindInitialFormulaNow,
     clearFormulaNow,
     invalidateFormulaNow,
+    clearFormulaBookkeepingNow,
     refreshRangeDependenciesNow,
     retargetRangeDependenciesNow,
     rebindFormulaCellsNow,
@@ -3506,6 +3528,9 @@ export function createEngineFormulaBindingService(args: {
     rebindFormulasForSheetNow,
     forEachFormulaCellOwnedBySheetNow(sheetName, fn) {
       formulaOwnerSheetCells.get(sheetName)?.forEach(fn)
+    },
+    countFormulaSheetMembersNow(sheetId) {
+      return formulaSheetCounts.get(sheetId) ?? 0
     },
     countFormulaFamilySheetMembersNow(sheetId) {
       return args.formulaFamilies.countSheetMembers(sheetId)

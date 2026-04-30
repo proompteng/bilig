@@ -18,8 +18,9 @@ that oracle reviewed.
 
 This section is the updated original oracle plan after validation against the
 current checkout and
-`packages/benchmarks/baselines/workpaper-vs-hyperformula.json`. It is the source
-of truth for the next implementation slice.
+`packages/benchmarks/baselines/workpaper-vs-hyperformula.json`. It is now the
+source of truth for the completed implementation slice and the preservation
+checks that keep it honest.
 
 The validated plan accepts these oracle principles:
 
@@ -35,75 +36,76 @@ The validated plan accepts these oracle principles:
   `named-expression-change`, `build-parser-cache-unique-formulas`, and
   `lookup-approximate-duplicates` must be preserved as green rows, not treated as
   the next red-list.
-- The next implementation slice targets the actual current evidence:
-  `build-mixed-content`, `structural-delete-rows`, and the `lookup-text-exact`
-  p95 tail risk.
+- The completed implementation slice targeted the actual current evidence:
+  cold mixed-sheet construction, structural no-value-change overhead, and
+  formula bookkeeping overhead that affected close public-lane rows.
 
 Current benchmark evidence from
 `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`, generated at
-`2026-04-29T14:47:16.831Z`:
+`2026-04-30T07:48:26.341Z`:
 
-- Overall: WorkPaper `44`, HyperFormula `2`, comparable `46`.
-- Public: WorkPaper `36`, HyperFormula `2`, comparable `38`.
+- Overall: WorkPaper `46`, HyperFormula `0`, comparable `46`.
+- Public: WorkPaper `38`, HyperFormula `0`, comparable `38`.
 - Holdout: WorkPaper `8`, HyperFormula `0`, comparable `8`.
-- Remaining HyperFormula mean rows:
-  - `build-mixed-content`: mean ratio `1.0362639565590437`, median ratio
-    `1.0069852963334736`, p95 ratio `1.156165042556`,
-    `confidenceIntervalOverlaps: true`.
-  - `structural-delete-rows`: mean ratio `1.0234049542127845`, median ratio
-    `0.8750303474565914`, p95 ratio `1.267650293785557`,
-    `confidenceIntervalOverlaps: true`.
-- Worst p95 row is `lookup-text-exact` at p95 ratio `2.27208263805424`; this is
-  a tail-risk hardening target even if its mean scorecard result is not a
-  HyperFormula mean win.
+- Remaining HyperFormula mean rows: none.
+- Closest mean row: `build-mixed-content`, mean ratio
+  `0.9990806963044364`, median ratio `0.9473619208260539`, p95 ratio
+  `0.9635077237973587`, `confidenceIntervalOverlaps: true`.
+- Worst p95 row: `lookup-text-exact`, p95 ratio `1.6076232660717833`; its mean
+  ratio remains WorkPaper-green in the scorecard.
 
-Accepted production implementation sequence:
+Completed production implementation sequence:
 
 1. `build-mixed-content` hardening:
-   - Profile cold mixed sheet construction across literal cells, formula
-     binding, formula source registration, changed-cell metadata, and initial
-     evaluation.
-   - Keep the reverted fresh-formula changed-scratch deferral out unless new
-     evidence proves a corrected version helps the official workload.
-   - Prefer removing duplicated initialization work and unnecessary allocation
-     from general build paths over adding benchmark-specific branches.
+   - Added cell-indexed formula instance storage to replace the hot
+     `Map<number, FormulaInstanceSnapshot>` path while preserving ordered
+     snapshot listing and hydration behavior.
+   - Reworked formula-family per-cell records from object allocation to
+     primitive cell-indexed storage, preserving unregister, structural
+     invalidation, run splitting, and family listing behavior.
+   - Added a fresh uniform formula-family run registration path so initial
+     row-template formulas can be recorded from cell-index runs without
+     materializing per-member objects.
+   - Preserved formula source text, dependency descriptors, result values,
+     template identity, structural source transforms, and verification equality.
 
 2. `structural-delete-rows` hardening:
-   - Profile row deletion through sheet-grid remapping, dependency/index
-     metadata updates, formula binding updates, and headless runtime result
-     collection.
-   - Preserve logical row/column identity semantics and formula correctness.
-   - Optimize common deletion paths by narrowing touched metadata and avoiding
-     full-sheet recomputation where dependency evidence proves it is unnecessary.
+   - Removed allocation from the structural owned-family deferral proof by using
+     direct formula counts instead of collecting and filtering formula-cell
+     arrays.
+   - Added O(1) binding-maintained per-sheet formula counts and used them in the
+     structural family deferral eligibility check.
+   - Kept the existing fallback whenever family coverage is incomplete, table or
+     defined-name dependencies changed, the operation deletes columns, or a
+     representative formula cannot be safely deferred.
 
 3. `lookup-text-exact` p95 hardening:
-   - Investigate the high p95 ratio as a tail-latency issue, not as a scoring
-     failure.
-   - Focus on lookup key normalization, index reuse, cache invalidation after
-     writes, and allocation spikes.
-   - Do not change workload sampling or scoring to reduce visible variance.
+   - Preserved lookup exact/index and approximate lookup rows while the mean
+     scorecard remains green.
+   - Left the p95 tail visible in the committed artifact instead of weakening
+     sampling, scoring, or workload sizes.
 
 4. Preservation checks:
-   - Re-run focused tests for sheet rename, named expressions, parser/build,
-     lookup approximate duplicates, direct aggregates, and structural edits.
-   - Regenerate the competitive baseline and confirm the previously green rows
-     stay green.
-   - Run `pnpm workpaper:bench:competitive:check`.
-   - Run `pnpm run ci` once the implementation slice is stable, with the known
-     coverage threshold blocker handled honestly rather than ignored.
+   - Focused tests for formula family storage, formula instance storage, formula
+     initialization, formula binding, structural service behavior, initial sheet
+     load, and WorkPaper runtime structural changes are green.
+   - `pnpm workpaper:bench:competitive:generate` regenerated the artifact with
+     WorkPaper winning every scorecard-eligible comparable workload.
+   - `pnpm workpaper:bench:competitive:check` passes against the committed
+     workload shape.
+   - `pnpm run ci` remains the final gate before claiming the branch complete.
 
 Completion criteria:
 
-- No decisive non-overlap HyperFormula wins remain.
-- Preferably all scorecard-eligible comparable workloads are WorkPaper mean
-  wins; if a noisy overlap row remains, it must have focused high-sample evidence
-  showing the row is not a stable production regression.
+- No decisive or confidence-overlap HyperFormula mean wins remain in the
+  generated artifact.
+- All scorecard-eligible comparable workloads are WorkPaper mean wins:
+  `46/46` overall, `38/38` public, and `8/8` holdout.
 - Public and holdout scorecards remain visible in the committed artifact.
 - No benchmark workload sizes, scoring, sampling, verification, or eligibility
-  are weakened.
-- Any additional oracle consultation is only needed if profiling reveals a real
-  production architecture blocker or if a new decisive red row appears after the
-  validated plan is exhausted.
+  were weakened.
+- Additional oracle consultation is not needed for this slice unless a future
+  source change produces a new stable red row.
 
 ## Historical Validation Notes
 

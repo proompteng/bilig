@@ -17,31 +17,55 @@ export interface FormulaInstanceTable {
 }
 
 export function createFormulaInstanceTable(): FormulaInstanceTable {
-  const records = new Map<number, FormulaInstanceSnapshot>()
+  const records: Array<FormulaInstanceSnapshot | undefined> = []
+  let recordCount = 0
 
   return {
     upsert(record) {
-      records.set(record.cellIndex, record)
+      if (records[record.cellIndex] === undefined) {
+        recordCount += 1
+      }
+      records[record.cellIndex] = record
     },
     get(cellIndex) {
-      return records.get(cellIndex)
+      return records[cellIndex]
     },
     delete(cellIndex) {
-      return records.delete(cellIndex)
+      if (records[cellIndex] === undefined) {
+        return false
+      }
+      records[cellIndex] = undefined
+      recordCount -= 1
+      return true
     },
     clear() {
-      records.clear()
+      records.length = 0
+      recordCount = 0
     },
     list() {
-      return [...records.values()].toSorted(
+      if (recordCount === 0) {
+        return []
+      }
+      const snapshots: FormulaInstanceSnapshot[] = []
+      for (let cellIndex = 0; cellIndex < records.length; cellIndex += 1) {
+        const record = records[cellIndex]
+        if (record !== undefined) {
+          snapshots.push(record)
+        }
+      }
+      return snapshots.toSorted(
         (left, right) =>
           left.sheetName.localeCompare(right.sheetName) || left.row - right.row || left.col - right.col || left.cellIndex - right.cellIndex,
       )
     },
     hydrate(entries) {
-      records.clear()
+      records.length = 0
+      recordCount = 0
       entries.forEach((record) => {
-        records.set(record.cellIndex, record)
+        if (records[record.cellIndex] === undefined) {
+          recordCount += 1
+        }
+        records[record.cellIndex] = record
       })
     },
   }

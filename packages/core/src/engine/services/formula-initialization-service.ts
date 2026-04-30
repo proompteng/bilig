@@ -4,7 +4,11 @@ import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import type { EngineCellMutationRef, EngineFormulaSourceRef } from '../../cell-mutations-at.js'
 import { CellFlags } from '../../cell-store.js'
 import { buildFormulaFamilyShapeKey } from '../../formula/formula-family-deps.js'
-import type { FormulaFamilyMember, FormulaFamilyRunUpsertArgs } from '../../formula/formula-family-store.js'
+import type {
+  FormulaFamilyFreshUniformRunRegistrationArgs,
+  FormulaFamilyMember,
+  FormulaFamilyRunUpsertArgs,
+} from '../../formula/formula-family-store.js'
 import type { FormulaTemplateResolution } from '../../formula/template-bank.js'
 import { translateSimpleDirectScalarFormula } from '../../formula/simple-direct-scalar-compile.js'
 import { addEngineCounter } from '../../perf/engine-counters.js'
@@ -35,7 +39,23 @@ interface InitialPrefixAggregateGroup {
 }
 
 type DeferredInitialFormulaFamilyRun = Omit<FormulaFamilyRunUpsertArgs, 'members'> & {
-  members: FormulaFamilyMember[]
+  axis: 'row'
+  fixedIndex: number
+  start: number
+  step: number
+  lastIndex: number
+  ordered: boolean
+  cellIndices: number[]
+  rows?: number[]
+}
+
+function materializeDeferredFormulaFamilyRunMembers(run: DeferredInitialFormulaFamilyRun): FormulaFamilyMember[] {
+  const step = run.cellIndices.length <= 1 ? 1 : run.step
+  return run.cellIndices.map((cellIndex, index) => ({
+    cellIndex,
+    row: run.ordered ? run.start + step * index : run.rows![index]!,
+    col: run.fixedIndex,
+  }))
 }
 
 interface InitialTemplateFormulaCacheEntry {
@@ -286,6 +306,7 @@ export function createEngineFormulaInitializationService(args: {
     options?: { readonly deferFamilyRegistration?: boolean },
   ) => boolean
   readonly upsertFormulaFamilyRun: (args: FormulaFamilyRunUpsertArgs) => void
+  readonly registerFreshFormulaFamilyRun: (args: FormulaFamilyFreshUniformRunRegistrationArgs) => boolean
   readonly compileTemplateFormula: (source: string, row: number, col: number) => FormulaTemplateResolution
   readonly clearTemplateFormulaCache: () => void
   readonly removeFormula: (cellIndex: number) => boolean
@@ -338,6 +359,85 @@ export function createEngineFormulaInitializationService(args: {
     }
     sheetNameById.set(sheetId, sheet.name)
     return sheet.name
+  }
+
+  const noteDeferredFormulaFamilyRunMember = (
+    runs: Map<string, DeferredInitialFormulaFamilyRun> | undefined,
+    prepared: { readonly cellIndex: number; readonly sheetId: number; readonly row: number; readonly col: number },
+  ): void => {
+    if (!runs) {
+      return
+    }
+    const runtimeFormula = args.state.formulas.get(prepared.cellIndex)
+    const templateId = runtimeFormula?.templateId
+    if (runtimeFormula === undefined || templateId === undefined) {
+      return
+    }
+    const familyKey = `${prepared.sheetId}\t${templateId}\t${prepared.col}`
+    let run = runs.get(familyKey)
+    if (!run) {
+      run = {
+        sheetId: prepared.sheetId,
+        templateId,
+        shapeKey: initialFormulaFamilyShapeKey(runtimeFormula),
+        axis: 'row',
+        fixedIndex: prepared.col,
+        start: prepared.row,
+        step: 0,
+        lastIndex: prepared.row,
+        ordered: true,
+        cellIndices: [],
+      }
+      runs.set(familyKey, run)
+    } else {
+      const nextStep = prepared.row - run.lastIndex
+      let breaksOrder = false
+      if (run.cellIndices.length === 1) {
+        run.step = nextStep
+      } else if (run.step !== nextStep) {
+        breaksOrder = true
+      }
+      if (prepared.row <= run.lastIndex || prepared.col !== run.fixedIndex) {
+        breaksOrder = true
+      }
+      if (breaksOrder) {
+        if (!run.rows) {
+          const priorStep = run.cellIndices.length <= 1 ? 1 : run.step
+          const start = run.start
+          run.rows = Array.from({ length: run.cellIndices.length }, (_value, index) => start + priorStep * index)
+        }
+        run.ordered = false
+      }
+      run.lastIndex = prepared.row
+    }
+    run.cellIndices.push(prepared.cellIndex)
+    run.rows?.push(prepared.row)
+  }
+
+  const registerDeferredFormulaFamilyRun = (run: DeferredInitialFormulaFamilyRun): void => {
+    const step = run.cellIndices.length <= 1 ? 1 : run.step
+    if (
+      run.ordered &&
+      step > 0 &&
+      args.registerFreshFormulaFamilyRun({
+        sheetId: run.sheetId,
+        templateId: run.templateId,
+        shapeKey: run.shapeKey,
+        axis: run.axis,
+        fixedIndex: run.fixedIndex,
+        start: run.start,
+        step,
+        cellIndices: run.cellIndices,
+      })
+    ) {
+      return
+    }
+    args.upsertFormulaFamilyRun({
+      sheetId: run.sheetId,
+      templateId: run.templateId,
+      shapeKey: run.shapeKey,
+      members: materializeDeferredFormulaFamilyRunMembers(run),
+    })
   }
 
   const createInitialFormulaValueWriter = (): InitialFormulaValueWriter => {
@@ -939,34 +1039,6 @@ export function createEngineFormulaInitializationService(args: {
       }
     }
 
-    const deferFormulaFamilyRegistration = (prepared: { cellIndex: number; sheetId: number; row: number; col: number }): void => {
-      if (!deferredFormulaFamilyRuns) {
-        return
-      }
-      const runtimeFormula = args.state.formulas.get(prepared.cellIndex)
-      const templateId = runtimeFormula?.templateId
-      if (runtimeFormula === undefined || templateId === undefined) {
-        return
-      }
-      const familyKey = `${prepared.sheetId}\t${templateId}\t${prepared.col}`
-      let run = deferredFormulaFamilyRuns.get(familyKey)
-      if (!run) {
-        const shapeKey = initialFormulaFamilyShapeKey(runtimeFormula)
-        run = {
-          sheetId: prepared.sheetId,
-          templateId,
-          shapeKey,
-          members: [],
-        }
-        deferredFormulaFamilyRuns.set(familyKey, run)
-      }
-      run.members.push({
-        cellIndex: prepared.cellIndex,
-        row: prepared.row,
-        col: prepared.col,
-      })
-    }
-
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1)
     try {
       args.clearTemplateFormulaCache()
@@ -988,7 +1060,7 @@ export function createEngineFormulaInitializationService(args: {
                   deferFamilyRegistration: deferredFormulaFamilyRuns !== undefined,
                 },
               )
-              deferFormulaFamilyRegistration(prepared)
+              noteDeferredFormulaFamilyRunMember(deferredFormulaFamilyRuns, prepared)
               formulaChangedCount = args.markFormulaChanged(prepared.cellIndex, formulaChangedCount)
               topologyChanged = true
               pushOrderedPreparedCellIndex(prepared.cellIndex)
@@ -1023,9 +1095,7 @@ export function createEngineFormulaInitializationService(args: {
             formulaChangedCount = args.syncDynamicRanges(formulaChangedCount)
             topologyChanged = topologyChanged || formulaChangedCount !== reboundCount
           }
-          deferredFormulaFamilyRuns?.forEach((run) => {
-            args.upsertFormulaFamilyRun(run)
-          })
+          deferredFormulaFamilyRuns?.forEach(registerDeferredFormulaFamilyRun)
           inlineInitialDirectScalarWriter?.flush()
         })
       }
@@ -1210,38 +1280,6 @@ export function createEngineFormulaInitializationService(args: {
     let nextTopoRank = 0
     const deferredFormulaFamilyRuns = hadExistingFormulas ? undefined : new Map<string, DeferredInitialFormulaFamilyRun>()
 
-    const deferHydratedFormulaFamilyRegistration = (prepared: {
-      readonly cellIndex: number
-      readonly sheetId: number
-      readonly row: number
-      readonly col: number
-    }): void => {
-      if (!deferredFormulaFamilyRuns) {
-        return
-      }
-      const runtimeFormula = args.state.formulas.get(prepared.cellIndex)
-      const templateId = runtimeFormula?.templateId
-      if (runtimeFormula === undefined || templateId === undefined) {
-        return
-      }
-      const familyKey = `${prepared.sheetId}\t${templateId}\t${prepared.col}`
-      let run = deferredFormulaFamilyRuns.get(familyKey)
-      if (!run) {
-        run = {
-          sheetId: prepared.sheetId,
-          templateId,
-          shapeKey: initialFormulaFamilyShapeKey(runtimeFormula),
-          members: [],
-        }
-        deferredFormulaFamilyRuns.set(familyKey, run)
-      }
-      run.members.push({
-        cellIndex: prepared.cellIndex,
-        row: prepared.row,
-        col: prepared.col,
-      })
-    }
-
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1)
     try {
       args.clearTemplateFormulaCache()
@@ -1259,7 +1297,7 @@ export function createEngineFormulaInitializationService(args: {
               args.bindPreparedFormula(cellIndex, ownerSheetName, ref.source, ref.compiled, ref.templateId, {
                 deferFamilyRegistration: deferredFormulaFamilyRuns !== undefined,
               }) || topologyChanged
-            deferHydratedFormulaFamilyRegistration({
+            noteDeferredFormulaFamilyRunMember(deferredFormulaFamilyRuns, {
               cellIndex,
               sheetId: ref.sheetId,
               row: ref.row,
@@ -1279,9 +1317,7 @@ export function createEngineFormulaInitializationService(args: {
               pendingFormulaCells[cellIndex] = 0
             }
           }
-          deferredFormulaFamilyRuns?.forEach((run) => {
-            args.upsertFormulaFamilyRun(run)
-          })
+          deferredFormulaFamilyRuns?.forEach(registerDeferredFormulaFamilyRun)
           valueWriter.flush()
         })
       }
