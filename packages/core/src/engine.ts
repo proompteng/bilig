@@ -23,6 +23,7 @@ import type {
   WorkbookDefinedNameValueSnapshot,
   WorkbookFreezePaneSnapshot,
   WorkbookImageSnapshot,
+  WorkbookMergeRangeSnapshot,
   WorkbookNoteSnapshot,
   WorkbookPivotSnapshot,
   WorkbookRangeProtectionSnapshot,
@@ -71,6 +72,7 @@ import {
   type WorkbookDataValidationRecord,
   type WorkbookDefinedNameRecord,
   type WorkbookFilterRecord,
+  type WorkbookMergeRangeRecord,
   type WorkbookPropertyRecord,
   type WorkbookRangeProtectionRecord,
   type WorkbookSheetProtectionRecord,
@@ -83,6 +85,7 @@ import {
 import { cellToCsvValue, serializeCsv } from './csv.js'
 import { cloneEngineCounters, createEngineCounters, resetEngineCounters, type EngineCounters } from './perf/engine-counters.js'
 import { canonicalWorkbookRangeRef } from './workbook-range-records.js'
+import { rangesIntersect } from './workbook-merge-records.js'
 import {
   createEngineRuntimeState,
   createInitialRecalcMetrics,
@@ -1189,6 +1192,36 @@ export class SpreadsheetEngine {
 
   getFreezePane(sheetName: string): WorkbookFreezePaneSnapshot | undefined {
     return this.workbook.getFreezePane(sheetName)
+  }
+
+  mergeCells(range: CellRangeRef): void {
+    const normalized = canonicalWorkbookRangeRef(range)
+    const existing = this.workbook.getMergeRangeByRange(normalized)
+    if (existing) {
+      return
+    }
+    this.executeLocalTransaction([{ kind: 'mergeCells', range: normalized }])
+  }
+
+  unmergeCells(range: CellRangeRef): boolean {
+    const overlaps = this.workbook.listMergeRanges(range.sheetName).filter((record) => rangesIntersect(record, range))
+    if (overlaps.length === 0) {
+      return false
+    }
+    this.executeLocalTransaction([{ kind: 'unmergeCells', range: canonicalWorkbookRangeRef(range) }])
+    return true
+  }
+
+  getMergeRange(sheetName: string, address: string): WorkbookMergeRangeSnapshot | undefined {
+    return this.workbook.getMergeRange(sheetName, address)
+  }
+
+  getMergeRangeByRange(range: CellRangeRef): WorkbookMergeRangeSnapshot | undefined {
+    return this.workbook.getMergeRangeByRange(range)
+  }
+
+  listMergeRanges(sheetName: string): WorkbookMergeRangeRecord[] {
+    return this.workbook.listMergeRanges(sheetName)
   }
 
   setSheetProtection(protection: WorkbookSheetProtectionSnapshot): void {

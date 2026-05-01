@@ -62,6 +62,7 @@ describe('ProjectedViewportPatchCoordinator', () => {
     const coordinator = new ProjectedViewportPatchCoordinator({
       cellCache,
       axisStore,
+      mergeRangesBySheet: new Map(),
     })
 
     const damage = coordinator.applyViewportPatch(createPatch())
@@ -97,6 +98,7 @@ describe('ProjectedViewportPatchCoordinator', () => {
       },
       cellCache,
       axisStore,
+      mergeRangesBySheet: new Map(),
     })
     const listener = vi.fn()
 
@@ -147,6 +149,7 @@ describe('ProjectedViewportPatchCoordinator', () => {
       },
       cellCache,
       axisStore,
+      mergeRangesBySheet: new Map(),
     })
     const listener = vi.fn()
 
@@ -184,6 +187,7 @@ describe('ProjectedViewportPatchCoordinator', () => {
       },
       cellCache: new ProjectedViewportCellCache(),
       axisStore: new ProjectedViewportAxisStore(),
+      mergeRangesBySheet: new Map(),
     })
     const listener = vi.fn()
 

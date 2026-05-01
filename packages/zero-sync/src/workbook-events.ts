@@ -125,6 +125,14 @@ export type WorkbookEventPayload =
       cols: number
     }
   | {
+      kind: 'mergeCells'
+      range: CellRangeRef
+    }
+  | {
+      kind: 'unmergeCells'
+      range: CellRangeRef
+    }
+  | {
       kind: 'setRangeStyle'
       range: CellRangeRef
       patch: CellStylePatch
@@ -263,6 +271,9 @@ export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPa
       return typeof value['sheetName'] === 'string' && typeof value['columnIndex'] === 'number' && typeof value['width'] === 'number'
     case 'setFreezePane':
       return typeof value['sheetName'] === 'string' && typeof value['rows'] === 'number' && typeof value['cols'] === 'number'
+    case 'mergeCells':
+    case 'unmergeCells':
+      return isCellRangeRef(value['range'])
     case 'setRangeStyle':
       return isCellRangeRef(value['range']) && typeof value['patch'] === 'object'
     case 'clearRangeStyle':
@@ -356,6 +367,8 @@ export function deriveDirtyRegions(payload: WorkbookEventPayload): DirtyRegion[]
     case 'clearRangeStyle':
     case 'setRangeNumberFormat':
     case 'clearRangeNumberFormat':
+    case 'mergeCells':
+    case 'unmergeCells':
       return [rangeRegion(payload.range)]
     case 'applyBatch':
     case 'applyAgentCommandBundle':
@@ -434,6 +447,12 @@ export function applyWorkbookEvent(engine: SpreadsheetEngine, payload: WorkbookE
       return
     case 'setFreezePane':
       engine.setFreezePane(payload.sheetName, payload.rows, payload.cols)
+      return
+    case 'mergeCells':
+      engine.mergeCells(payload.range)
+      return
+    case 'unmergeCells':
+      engine.unmergeCells(payload.range)
       return
     case 'setRangeStyle':
       engine.setRangeStyle(payload.range, payload.patch)

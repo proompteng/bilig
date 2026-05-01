@@ -9,10 +9,11 @@ interface NameBoxProps {
   readonly sheetName: string
   readonly selectionLabel?: string | undefined
   readonly onCommit: (next: string) => boolean
+  readonly onCommitSuccess?: (() => void) | undefined
 }
 
 export const NameBox = forwardRef<HTMLInputElement, NameBoxProps>(function NameBox(
-  { address, definedNames, sheetName, selectionLabel, onCommit },
+  { address, definedNames, sheetName, selectionLabel, onCommit, onCommitSuccess },
   ref,
 ) {
   const displayValue = resolveNameBoxDisplayValue({
@@ -64,6 +65,7 @@ export const NameBox = forwardRef<HTMLInputElement, NameBoxProps>(function NameB
               setErrorMessage('Unknown range or name')
             } else {
               setErrorMessage(null)
+              onCommitSuccess?.()
             }
           }
           if (event.key === 'Escape') {

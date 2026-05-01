@@ -209,6 +209,14 @@ export const setFreezePaneArgsSchema = baseMutationArgsSchema.extend({
   cols: z.number().int().nonnegative(),
 })
 
+export const mergeCellsArgsSchema = baseMutationArgsSchema.extend({
+  range: cellRangeRefSchema,
+})
+
+export const unmergeCellsArgsSchema = baseMutationArgsSchema.extend({
+  range: cellRangeRefSchema,
+})
+
 export const setRangeStyleArgsSchema = baseMutationArgsSchema.extend({
   range: cellRangeRefSchema,
   patch: cellStylePatchSchema,
@@ -326,6 +334,8 @@ export const mutators = defineMutators({
     insertColumns: defineMutator(structuralAxisMutationArgsSchema, noop),
     deleteColumns: defineMutator(structuralAxisMutationArgsSchema, noop),
     setFreezePane: defineMutator(setFreezePaneArgsSchema, noop),
+    mergeCells: defineMutator(mergeCellsArgsSchema, noop),
+    unmergeCells: defineMutator(unmergeCellsArgsSchema, noop),
     setRangeStyle: defineMutator(setRangeStyleArgsSchema, noop),
     clearRangeStyle: defineMutator(clearRangeStyleArgsSchema, noop),
     setRangeNumberFormat: defineMutator(setRangeNumberFormatArgsSchema, noop),

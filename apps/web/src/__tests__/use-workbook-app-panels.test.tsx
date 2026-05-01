@@ -206,8 +206,10 @@ describe('useWorkbookAppPanels', () => {
     expect(newThreadButton).not.toBeNull()
     expect(newThreadButton?.getAttribute('aria-label')).toBe('New thread')
     expect(newThreadButton?.textContent?.trim()).toBe('')
-    expect(newThreadButton?.className).toContain('bg-[var(--color-mauve-50)]')
+    expect(newThreadButton?.className).toContain('bg-transparent')
+    expect(newThreadButton?.className).not.toContain('bg-[var(--wb-surface)]')
     expect(newThreadButton?.className).toContain('border-transparent')
+    expect(newThreadButton?.className).toContain('shadow-none')
 
     await act(async () => {
       newThreadButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))

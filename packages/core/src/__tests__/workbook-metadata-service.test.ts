@@ -278,6 +278,7 @@ describe('WorkbookMetadataService', () => {
     const service = createWorkbookMetadataService(metadata)
 
     Effect.runSync(service.setFreezePane('Source', 1, 2))
+    Effect.runSync(service.setMergeRange({ sheetName: 'Source', startAddress: 'B2', endAddress: 'C3' }))
     Effect.runSync(
       service.setFilter('Source', {
         sheetName: 'Source',
@@ -391,6 +392,7 @@ describe('WorkbookMetadataService', () => {
       rows: 1,
       cols: 2,
     })
+    expect(Effect.runSync(service.listMergeRanges('Renamed'))).toEqual([{ sheetName: 'Renamed', startAddress: 'B2', endAddress: 'C3' }])
     expect(
       Effect.runSync(
         service.getFilter('Renamed', {
@@ -496,6 +498,7 @@ describe('WorkbookMetadataService', () => {
     Effect.runSync(service.deleteSheetRecords('Renamed'))
 
     expect(Effect.runSync(service.getFreezePane('Renamed'))).toBeUndefined()
+    expect(Effect.runSync(service.listMergeRanges('Renamed'))).toEqual([])
     expect(Effect.runSync(service.listFilters('Renamed'))).toEqual([])
     expect(Effect.runSync(service.listSorts('Renamed'))).toEqual([])
     expect(Effect.runSync(service.listDataValidations('Renamed'))).toEqual([])
@@ -562,6 +565,17 @@ describe('WorkbookMetadataService', () => {
     Effect.runSync(service.setFreezePane('Sheet1', 1, 1))
     expect(Effect.runSync(service.clearFreezePane('Sheet1'))).toBe(true)
     expect(Effect.runSync(service.clearFreezePane('Sheet1'))).toBe(false)
+
+    Effect.runSync(service.setMergeRange({ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B2' }))
+    expect(Effect.runSync(service.getMergeRange('Sheet1', 'B2'))).toEqual({
+      sheetName: 'Sheet1',
+      startAddress: 'A1',
+      endAddress: 'B2',
+    })
+    expect(Effect.runSync(service.clearMergeRanges({ sheetName: 'Sheet1', startAddress: 'B2', endAddress: 'B2' }))).toEqual([
+      { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B2' },
+    ])
+    expect(Effect.runSync(service.clearMergeRanges({ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B2' }))).toEqual([])
 
     Effect.runSync(service.setSheetProtection({ sheetName: 'Sheet1', hideFormulas: true }))
     expect(Effect.runSync(service.clearSheetProtection('Sheet1'))).toBe(true)

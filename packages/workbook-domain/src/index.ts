@@ -11,6 +11,7 @@ import type {
   WorkbookConditionalFormatSnapshot,
   WorkbookDataValidationSnapshot,
   WorkbookImageSnapshot,
+  WorkbookMergeRangeSnapshot,
   WorkbookNoteSnapshot,
   WorkbookRangeProtectionSnapshot,
   WorkbookSheetProtectionSnapshot,
@@ -61,6 +62,7 @@ export interface WorkbookNoteOp extends WorkbookNoteSnapshot {}
 export interface WorkbookChartOp extends WorkbookChartSnapshot {}
 export interface WorkbookImageOp extends WorkbookImageSnapshot {}
 export interface WorkbookShapeOp extends WorkbookShapeSnapshot {}
+export interface WorkbookMergeRangeOp extends WorkbookMergeRangeSnapshot {}
 
 export type WorkbookOp =
   | { kind: 'upsertWorkbook'; name: string }
@@ -106,6 +108,8 @@ export type WorkbookOp =
     }
   | { kind: 'setFreezePane'; sheetName: string; rows: number; cols: number }
   | { kind: 'clearFreezePane'; sheetName: string }
+  | { kind: 'mergeCells'; range: WorkbookMergeRangeOp }
+  | { kind: 'unmergeCells'; range: CellRangeRef }
   | { kind: 'setSheetProtection'; protection: WorkbookSheetProtectionOp }
   | { kind: 'clearSheetProtection'; sheetName: string }
   | { kind: 'setFilter'; sheetName: string; range: CellRangeRef }

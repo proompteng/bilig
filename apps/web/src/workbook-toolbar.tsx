@@ -13,6 +13,8 @@ import {
   PaintBucket,
   Redo2,
   RemoveFormatting,
+  TableCellsMerge,
+  TableCellsSplit,
   TableProperties,
   Undo2,
   Underline,
@@ -76,6 +78,8 @@ const BORDER_PRESET_OPTIONS: readonly BorderPresetOption[] = [
 ] as const
 
 const STRUCTURE_ACTIONS = [
+  { key: 'merge-cells', label: 'Merge cells', template: 'mergeSelectedCells', icon: TableCellsMerge },
+  { key: 'unmerge-cells', label: 'Unmerge cells', template: 'unmergeSelectedCells', icon: TableCellsSplit },
   { key: 'hide-row', label: 'Hide row', template: 'hideCurrentRow' },
   { key: 'unhide-row', label: 'Unhide row', template: 'unhideCurrentRow' },
   { key: 'hide-column', label: 'Hide column', template: 'hideCurrentColumn' },
@@ -171,10 +175,13 @@ export interface WorkbookToolbarProps {
   onApplyBorderPreset(this: void, preset: BorderPreset): void
   canHideCurrentRow: boolean
   canHideCurrentColumn: boolean
+  canMergeSelection: boolean
   canUnhideCurrentRow: boolean
   canUnhideCurrentColumn: boolean
   onHideCurrentRow(this: void): void
   onHideCurrentColumn(this: void): void
+  onMergeSelectedCells(this: void): void
+  onUnmergeSelectedCells(this: void): void
   onUnhideCurrentRow(this: void): void
   onUnhideCurrentColumn(this: void): void
   onToggleWrap(this: void): void
@@ -212,10 +219,13 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
   onApplyBorderPreset,
   canHideCurrentRow,
   canHideCurrentColumn,
+  canMergeSelection,
   canUnhideCurrentRow,
   canUnhideCurrentColumn,
   onHideCurrentRow,
   onHideCurrentColumn,
+  onMergeSelectedCells,
+  onUnmergeSelectedCells,
   onUnhideCurrentRow,
   onUnhideCurrentColumn,
   onToggleWrap,
@@ -261,11 +271,35 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
     })
   }
   const structureActionAvailability = {
+    mergeSelectedCells: canMergeSelection,
+    unmergeSelectedCells: true,
     hideCurrentRow: canHideCurrentRow,
     hideCurrentColumn: canHideCurrentColumn,
     unhideCurrentRow: canUnhideCurrentRow,
     unhideCurrentColumn: canUnhideCurrentColumn,
   } as const
+  const runStructureAction = (template: (typeof STRUCTURE_ACTIONS)[number]['template']) => {
+    switch (template) {
+      case 'mergeSelectedCells':
+        onMergeSelectedCells()
+        break
+      case 'unmergeSelectedCells':
+        onUnmergeSelectedCells()
+        break
+      case 'hideCurrentRow':
+        onHideCurrentRow()
+        break
+      case 'hideCurrentColumn':
+        onHideCurrentColumn()
+        break
+      case 'unhideCurrentRow':
+        onUnhideCurrentRow()
+        break
+      case 'unhideCurrentColumn':
+        onUnhideCurrentColumn()
+        break
+    }
+  }
 
   return (
     <div className={toolbarRootClass()}>
@@ -568,8 +602,9 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
                       <div className="grid gap-1">
                         {STRUCTURE_ACTIONS.map((action) => {
                           const isAvailable = structureActionAvailability[action.template]
+                          const ActionIcon = 'icon' in action ? action.icon : null
                           return (
-                            <Toolbar.Button
+                            <Popover.Close
                               aria-label={action.label}
                               className={cn(
                                 'inline-flex h-8 items-center rounded-md border border-transparent px-2 text-left text-[11px] font-medium outline-none transition-colors focus-visible:border-[var(--color-mauve-400)] focus-visible:bg-[var(--color-mauve-100)]',
@@ -580,25 +615,11 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
                               disabled={!isAvailable}
                               key={action.key}
                               type="button"
-                              onClick={() => {
-                                switch (action.template) {
-                                  case 'hideCurrentRow':
-                                    onHideCurrentRow()
-                                    break
-                                  case 'hideCurrentColumn':
-                                    onHideCurrentColumn()
-                                    break
-                                  case 'unhideCurrentRow':
-                                    onUnhideCurrentRow()
-                                    break
-                                  case 'unhideCurrentColumn':
-                                    onUnhideCurrentColumn()
-                                    break
-                                }
-                              }}
+                              onClick={() => runStructureAction(action.template)}
                             >
+                              {ActionIcon ? <ActionIcon className={cn(toolbarIconClass(), 'mr-2')} /> : null}
                               {action.label}
-                            </Toolbar.Button>
+                            </Popover.Close>
                           )
                         })}
                       </div>

@@ -50,6 +50,9 @@ function formatWorkbookSelectionLabel(selection: WorkerRuntimeSelection): string
   return `${selection.sheetName}!${selection.address}`
 }
 
+const sidePanelHeaderGhostButtonClass =
+  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--wb-radius-control)] border border-transparent bg-transparent p-0 text-[var(--color-mauve-600)] shadow-none transition-[background-color,color,box-shadow] hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-mauve-400)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-mauve-50)] disabled:cursor-not-allowed disabled:opacity-50'
+
 function WorkbookAgentHistoryMenu(props: {
   readonly activeThreadId: string | null
   readonly threadSummaries: readonly WorkbookAgentThreadSummary[]
@@ -64,10 +67,7 @@ function WorkbookAgentHistoryMenu(props: {
     <Popover.Root modal={false}>
       <Popover.Trigger
         aria-label="Previous conversations"
-        className={cn(
-          workbookHeaderActionButtonClass({ active: false, iconOnly: true }),
-          'shrink-0 border-transparent bg-transparent shadow-none hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)]',
-        )}
+        className={sidePanelHeaderGhostButtonClass}
         data-testid="workbook-agent-history-trigger"
         title="Previous conversations"
         type="button"
@@ -323,10 +323,7 @@ export function useWorkbookAppPanels(input: {
             {activeSidePanelTab === 'assistant' ? (
               <Button
                 aria-label="New thread"
-                className={cn(
-                  workbookHeaderActionButtonClass({ active: false, iconOnly: true }),
-                  'ml-auto shrink-0 self-center border-transparent bg-[var(--color-mauve-50)] shadow-none hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)]',
-                )}
+                className={cn(sidePanelHeaderGhostButtonClass, 'ml-auto self-center')}
                 data-testid="workbook-agent-new-thread"
                 title="New thread"
                 type="button"
@@ -337,10 +334,7 @@ export function useWorkbookAppPanels(input: {
             ) : null}
             <Button
               aria-label="Close workbook side panel"
-              className={cn(
-                workbookHeaderActionButtonClass({ active: false, iconOnly: true }),
-                'shrink-0 border-transparent bg-transparent shadow-none hover:bg-[var(--color-mauve-100)] hover:text-[var(--color-mauve-900)]',
-              )}
+              className={sidePanelHeaderGhostButtonClass}
               data-testid="workbook-side-panel-close"
               title="Close side panel"
               type="button"

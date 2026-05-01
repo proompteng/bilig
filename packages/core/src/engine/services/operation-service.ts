@@ -1763,6 +1763,8 @@ export function createEngineOperationService(args: {
       case 'clearSort':
       case 'setStyleRange':
       case 'setFormatRange':
+      case 'mergeCells':
+      case 'unmergeCells':
         if (rangeIsProtected(op.range)) {
           throwProtectionBlocked(`range ${op.range.sheetName}!${op.range.startAddress}:${op.range.endAddress} is protected`)
         }
@@ -7579,6 +7581,9 @@ export function createEngineOperationService(args: {
       case 'setFreezePane':
       case 'clearFreezePane':
         return `freeze:${op.sheetName}`
+      case 'mergeCells':
+      case 'unmergeCells':
+        return `merge:${op.range.sheetName}:${op.range.startAddress}:${op.range.endAddress}`
       case 'setSheetProtection':
       case 'clearSheetProtection':
         return `sheet-protection:${op.kind === 'setSheetProtection' ? op.protection.sheetName : op.sheetName}`
@@ -7718,6 +7723,8 @@ export function createEngineOperationService(args: {
       case 'deleteSpillRange':
       case 'deletePivotTable':
         return sheetDeleteVersions.get(op.sheetName)
+      case 'mergeCells':
+      case 'unmergeCells':
       case 'setStyleRange':
       case 'setFormatRange':
         return sheetDeleteVersions.get(op.range.sheetName)
@@ -8061,6 +8068,18 @@ export function createEngineOperationService(args: {
             break
           case 'clearFreezePane':
             args.state.workbook.clearFreezePane(op.sheetName)
+            structuralInvalidation = true
+            setEntityVersionForOp(op, order)
+            break
+          case 'mergeCells':
+            args.state.workbook.setMergeRange(op.range)
+            invalidatedRanges.push({ ...op.range })
+            structuralInvalidation = true
+            setEntityVersionForOp(op, order)
+            break
+          case 'unmergeCells':
+            args.state.workbook.clearMergeRanges(op.range)
+            invalidatedRanges.push({ ...op.range })
             structuralInvalidation = true
             setEntityVersionForOp(op, order)
             break

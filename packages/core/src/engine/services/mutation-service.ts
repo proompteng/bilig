@@ -39,6 +39,7 @@ import type {
 import { getRuntimeFormulaSource } from '../runtime-formula-source.js'
 import { EngineMutationError } from '../errors.js'
 import { tryBuildFastMutationHistory, type FastMutationHistoryResult } from './mutation-history-fast-path.js'
+import { rangesIntersect } from '../../workbook-merge-records.js'
 
 function mutationErrorMessage(message: string, cause: unknown): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : message
@@ -1387,6 +1388,25 @@ export function createEngineMutationService(args: {
             cols: existing.cols,
           },
         ]
+      }
+      case 'mergeCells': {
+        const existing = args.state.workbook.listMergeRanges(op.range.sheetName).filter((record) => rangesIntersect(record, op.range))
+        return [
+          { kind: 'unmergeCells', range: { ...op.range } },
+          ...existing.map((record) => ({
+            kind: 'mergeCells' as const,
+            range: { ...record },
+          })),
+        ]
+      }
+      case 'unmergeCells': {
+        return args.state.workbook
+          .listMergeRanges(op.range.sheetName)
+          .filter((record) => rangesIntersect(record, op.range))
+          .map((record) => ({
+            kind: 'mergeCells' as const,
+            range: { ...record },
+          }))
       }
       case 'setFilter': {
         const existing = args.state.workbook.getFilter(op.sheetName, op.range)

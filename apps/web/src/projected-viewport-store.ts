@@ -1,6 +1,6 @@
 import type { GridEngineLike } from '@bilig/grid'
 import { parseCellAddress } from '@bilig/formula'
-import type { CellSnapshot, CellStyleRecord, Viewport, WorkbookAxisEntrySnapshot } from '@bilig/protocol'
+import type { CellSnapshot, CellStyleRecord, Viewport, WorkbookAxisEntrySnapshot, WorkbookMergeRangeSnapshot } from '@bilig/protocol'
 import {
   decodeWorkbookDeltaBatchV3,
   type RenderTileDeltaSubscription,
@@ -14,10 +14,11 @@ import { ProjectedViewportPatchCoordinator, type ProjectedViewportPatchApplied }
 import type { ProjectedRenderTile, ProjectedTileSceneChange, ProjectedTileSceneStore } from './projected-tile-scene-store.js'
 import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
 import { DirtyMaskV3 } from '../../../packages/grid/src/renderer-v3/tile-damage-index.js'
+import { normalizeWorkbookMergeRange } from './worker-runtime-support.js'
 
 const MAX_CACHED_CELLS_PER_SHEET = 6000
 type CellItem = readonly [number, number]
-type SheetViewportChannel = 'columnWidths' | 'rowHeights' | 'hiddenColumns' | 'hiddenRows' | 'freeze'
+type SheetViewportChannel = 'columnWidths' | 'rowHeights' | 'hiddenColumns' | 'hiddenRows' | 'freeze' | 'merges'
 type SheetIdentity = { readonly sheetId: number; readonly sheetOrdinal: number }
 export class ProjectedViewportStore implements GridEngineLike {
   private readonly cellCache = new ProjectedViewportCellCache({
@@ -29,6 +30,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   private readonly localWorkbookDeltaListeners = new Set<(batch: WorkbookDeltaBatchV3) => void>()
   private readonly sheetIdentitiesByName = new Map<string, SheetIdentity>()
   private readonly sheetChannelListeners = new Map<string, Map<SheetViewportChannel, Set<() => void>>>()
+  private readonly mergeRangesBySheet = new Map<string, Map<string, WorkbookMergeRangeSnapshot>>()
   private lastBatchId = 0
   private lastAuthoritativeRevision: number | null = null
   private localWorkbookDeltaSeq = 0
@@ -45,6 +47,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     this.patchCoordinator = new ProjectedViewportPatchCoordinator({
       cellCache: this.cellCache,
       axisStore: this.axisStore,
+      mergeRangesBySheet: this.mergeRangesBySheet,
       ...(client ? { client } : {}),
       onViewportPatchApplied: (patch, result) => this.handleViewportPatchApplied(patch, result),
     })
@@ -117,6 +120,37 @@ export class ProjectedViewportStore implements GridEngineLike {
 
   getCellStyle(styleId: string | undefined): CellStyleRecord | undefined {
     return this.cellCache.getCellStyle(styleId)
+  }
+
+  getMergeRange(sheetName: string, address: string): WorkbookMergeRangeSnapshot | undefined {
+    const parsed = parseCellAddress(address, sheetName)
+    for (const range of this.mergeRangesBySheet.get(sheetName)?.values() ?? []) {
+      const normalized = normalizeWorkbookMergeRange(range)
+      if (
+        parsed.row >= normalized.startRow &&
+        parsed.row <= normalized.endRow &&
+        parsed.col >= normalized.startCol &&
+        parsed.col <= normalized.endCol
+      ) {
+        return {
+          sheetName: normalized.sheetName,
+          startAddress: normalized.startAddress,
+          endAddress: normalized.endAddress,
+        }
+      }
+    }
+    return undefined
+  }
+
+  listMergeRanges(sheetName: string): WorkbookMergeRangeSnapshot[] {
+    return [...(this.mergeRangesBySheet.get(sheetName)?.values() ?? [])].map((range) => {
+      const normalized = normalizeWorkbookMergeRange(range)
+      return {
+        sheetName: normalized.sheetName,
+        startAddress: normalized.startAddress,
+        endAddress: normalized.endAddress,
+      }
+    })
   }
 
   getColumnAxisEntries(sheetName: string): WorkbookAxisEntrySnapshot[] {
@@ -195,7 +229,10 @@ export class ProjectedViewportStore implements GridEngineLike {
     const removedSheets = this.cellCache.setKnownSheets(sheetNames)
     this.axisStore.dropSheets(removedSheets)
     this.tileSceneStore?.dropSheets(removedSheets)
-    removedSheets.forEach((sheetName) => this.sheetChannelListeners.delete(sheetName))
+    removedSheets.forEach((sheetName) => {
+      this.mergeRangesBySheet.delete(sheetName)
+      this.sheetChannelListeners.delete(sheetName)
+    })
   }
 
   subscribeCells(sheetName: string, addresses: readonly string[], listener: () => void): () => void {
@@ -290,6 +327,9 @@ export class ProjectedViewportStore implements GridEngineLike {
     }
     if (result.freezeChanged) {
       channels.push('freeze')
+    }
+    if (result.mergesChanged) {
+      channels.push('merges')
     }
     if (channels.length > 0) {
       this.notifySheetChannels(patch.viewport.sheetName, channels)

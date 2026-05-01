@@ -62,6 +62,8 @@ interface ProjectionCommandEngine {
   updateRowMetadata(sheetName: string, start: number, count: number, size: number | null, hidden: boolean | null): void
   updateColumnMetadata(sheetName: string, start: number, count: number, size: number | null, hidden: boolean | null): void
   setFreezePane(sheetName: string, rows: number, cols: number): void
+  mergeCells(range: CellRangeRef): void
+  unmergeCells(range: CellRangeRef): void
   getCell(sheetName: string, address: string): Pick<CellSnapshot, 'value' | 'format'>
 }
 
@@ -193,6 +195,18 @@ export class WorkerRuntimeProjectionCommands {
   async setFreezePane(sheetName: string, rows: number, cols: number): Promise<void> {
     await this.withProjectionMutation((engine) => {
       engine.setFreezePane(sheetName, Math.max(0, Math.round(rows)), Math.max(0, Math.round(cols)))
+    })
+  }
+
+  async mergeCells(range: CellRangeRef): Promise<void> {
+    await this.withProjectionMutation((engine) => {
+      engine.mergeCells(range)
+    })
+  }
+
+  async unmergeCells(range: CellRangeRef): Promise<void> {
+    await this.withProjectionMutation((engine) => {
+      engine.unmergeCells(range)
     })
   }
 

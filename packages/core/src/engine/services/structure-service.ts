@@ -951,6 +951,18 @@ export function createEngineStructureService(args: {
           endAddress: range.endAddress,
         })
       })
+    args.state.workbook.listMergeRanges(sheetName).forEach((merge) => {
+      const range = rewriteRangeForStructuralTransform(merge.startAddress, merge.endAddress, transform)
+      args.state.workbook.clearMergeRanges(merge)
+      if (!range) {
+        return
+      }
+      args.state.workbook.setMergeRange({
+        ...merge,
+        startAddress: range.startAddress,
+        endAddress: range.endAddress,
+      })
+    })
     args.state.workbook.listFilters(sheetName).forEach((filter) => {
       const range = rewriteRangeForStructuralTransform(filter.range.startAddress, filter.range.endAddress, transform)
       args.state.workbook.deleteFilter(sheetName, filter.range)

@@ -11,6 +11,7 @@ import {
   type LiteralInput,
   type RecalcMetrics,
   type Viewport,
+  type WorkbookMergeRangeSnapshot,
 } from '@bilig/protocol'
 
 export interface ViewportPatchSubscription extends Viewport {
@@ -45,12 +46,14 @@ export interface ViewportPatch {
   metrics: RecalcMetrics
   styles: CellStyleRecord[]
   cells: ViewportPatchedCell[]
+  merges?: WorkbookMergeRangeSnapshot[]
   columns: ViewportAxisPatch[]
   rows: ViewportAxisPatch[]
 }
 
 const VIEWPORT_PATCH_MAGIC = 0x56505450
-const VIEWPORT_PATCH_CODEC_VERSION = 2
+const VIEWPORT_PATCH_CODEC_VERSION = 3
+const MIN_VIEWPORT_PATCH_CODEC_VERSION = 2
 const OPTIONAL_ABSENT = 0xff
 
 function encodeColumn(index: number): string {
@@ -491,6 +494,42 @@ function decodeAxisPatches(reader: BinaryReader): ViewportAxisPatch[] {
   return patches
 }
 
+function encodeMergeRange(writer: BinaryWriter, range: WorkbookMergeRangeSnapshot): void {
+  writer.string(range.sheetName)
+  writer.string(range.startAddress)
+  writer.string(range.endAddress)
+}
+
+function decodeMergeRange(reader: BinaryReader): WorkbookMergeRangeSnapshot {
+  return {
+    sheetName: reader.string(),
+    startAddress: reader.string(),
+    endAddress: reader.string(),
+  }
+}
+
+function encodeOptionalMergeRanges(writer: BinaryWriter, ranges: readonly WorkbookMergeRangeSnapshot[] | undefined): void {
+  if (ranges === undefined) {
+    writer.u8(0)
+    return
+  }
+  writer.u8(1)
+  writer.u32(ranges.length)
+  ranges.forEach((range) => encodeMergeRange(writer, range))
+}
+
+function decodeOptionalMergeRanges(reader: BinaryReader): WorkbookMergeRangeSnapshot[] | undefined {
+  if (reader.u8() === 0) {
+    return undefined
+  }
+  const count = reader.u32()
+  const ranges: WorkbookMergeRangeSnapshot[] = []
+  for (let index = 0; index < count; index += 1) {
+    ranges.push(decodeMergeRange(reader))
+  }
+  return ranges
+}
+
 export function encodeViewportPatch(patch: ViewportPatch): Uint8Array {
   const writer = new BinaryWriter()
   writer.u32(VIEWPORT_PATCH_MAGIC)
@@ -521,6 +560,7 @@ export function encodeViewportPatch(patch: ViewportPatch): Uint8Array {
   })
   encodeAxisPatches(writer, patch.columns)
   encodeAxisPatches(writer, patch.rows)
+  encodeOptionalMergeRanges(writer, patch.merges)
   return writer.finish()
 }
 
@@ -536,7 +576,7 @@ export function decodeViewportPatch(bytes: Uint8Array): ViewportPatch {
   }
 
   const codecVersion = reader.u32()
-  if (codecVersion !== VIEWPORT_PATCH_CODEC_VERSION) {
+  if (codecVersion < MIN_VIEWPORT_PATCH_CODEC_VERSION || codecVersion > VIEWPORT_PATCH_CODEC_VERSION) {
     throw new BinaryProtocolError(`Unsupported viewport patch codec version ${codecVersion}`)
   }
 
@@ -589,6 +629,12 @@ export function decodeViewportPatch(bytes: Uint8Array): ViewportPatch {
 
   patch.columns = decodeAxisPatches(reader)
   patch.rows = decodeAxisPatches(reader)
+  if (codecVersion >= 3) {
+    const merges = decodeOptionalMergeRanges(reader)
+    if (merges !== undefined) {
+      patch.merges = merges
+    }
+  }
 
   if (!reader.done()) {
     throw new BinaryProtocolError('Viewport patch payload has trailing bytes')

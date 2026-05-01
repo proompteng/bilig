@@ -265,6 +265,9 @@ function withSheetMetadataFallback(
   if (fallback?.sorts) {
     next.sorts = fallback.sorts
   }
+  if (fallback?.merges) {
+    next.merges = fallback.merges
+  }
   if (rowEntries.length > 0) {
     next.rowMetadata = rowEntries
   } else if (fallback?.rowMetadata) {

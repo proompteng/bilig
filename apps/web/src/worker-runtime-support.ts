@@ -16,6 +16,7 @@ import {
   type SyncState,
   type WorkbookAxisEntrySnapshot,
   type WorkbookFreezePaneSnapshot,
+  type WorkbookMergeRangeSnapshot,
   type WorkbookSnapshot,
 } from '@bilig/protocol'
 import type { ViewportAxisPatch, ViewportPatchSubscription } from '@bilig/worker-transport'
@@ -73,6 +74,10 @@ export interface WorkerEngine {
   updateColumnMetadata(sheetName: string, start: number, count: number, size: number | null, hidden: boolean | null): unknown
   setFreezePane(sheetName: string, rows: number, cols: number): unknown
   getFreezePane(sheetName: string): WorkbookFreezePaneSnapshot | undefined
+  mergeCells(range: CellRangeRef): void
+  unmergeCells(range: CellRangeRef): boolean
+  getMergeRange(sheetName: string, address: string): WorkbookMergeRangeSnapshot | undefined
+  listMergeRanges(sheetName: string): WorkbookMergeRangeSnapshot[]
   exportSnapshot(): WorkbookSnapshot
   exportReplicaSnapshot(): EngineReplicaSnapshot
   importSnapshot(snapshot: WorkbookSnapshot): void
@@ -99,6 +104,7 @@ export interface ViewportSubscriptionState {
   lastCellSignatures: Map<string, string>
   lastColumnSignatures: Map<number, string>
   lastRowSignatures: Map<number, string>
+  lastMergeSignatures: Map<string, string>
 }
 
 export interface ViewportCellPosition {
@@ -414,4 +420,47 @@ export function viewportPatchMayBeImpacted(
   }
 
   return false
+}
+
+export interface NormalizedWorkbookMergeRange extends WorkbookMergeRangeSnapshot {
+  readonly startRow: number
+  readonly endRow: number
+  readonly startCol: number
+  readonly endCol: number
+}
+
+export function normalizeWorkbookMergeRange(range: WorkbookMergeRangeSnapshot): NormalizedWorkbookMergeRange {
+  const start = parseCellAddress(range.startAddress, range.sheetName)
+  const end = parseCellAddress(range.endAddress, range.sheetName)
+  const startRow = Math.min(start.row, end.row)
+  const endRow = Math.max(start.row, end.row)
+  const startCol = Math.min(start.col, end.col)
+  const endCol = Math.max(start.col, end.col)
+  return {
+    sheetName: range.sheetName,
+    startAddress: formatAddress(startRow, startCol),
+    endAddress: formatAddress(endRow, endCol),
+    startRow,
+    endRow,
+    startCol,
+    endCol,
+  }
+}
+
+export function mergeRangeIntersectsViewport(range: WorkbookMergeRangeSnapshot, viewport: ViewportPatchSubscription): boolean {
+  if (range.sheetName !== viewport.sheetName) {
+    return false
+  }
+  const normalized = normalizeWorkbookMergeRange(range)
+  return (
+    normalized.startRow <= viewport.rowEnd &&
+    normalized.endRow >= viewport.rowStart &&
+    normalized.startCol <= viewport.colEnd &&
+    normalized.endCol >= viewport.colStart
+  )
+}
+
+export function mergeRangeSignature(range: WorkbookMergeRangeSnapshot): string {
+  const normalized = normalizeWorkbookMergeRange(range)
+  return `${normalized.sheetName}:${normalized.startAddress}:${normalized.endAddress}`
 }

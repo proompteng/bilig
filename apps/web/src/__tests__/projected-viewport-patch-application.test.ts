@@ -70,6 +70,7 @@ function createPatchState(): ProjectedViewportPatchState {
     hiddenRowsBySheet: new Map(),
     freezeRowsBySheet: new Map(),
     freezeColsBySheet: new Map(),
+    mergeRangesBySheet: new Map(),
     knownSheets: new Set(),
   }
 }
@@ -157,6 +158,49 @@ describe('applyProjectedViewportPatch', () => {
     expect(state.columnWidthsBySheet.get('Sheet1')?.[0]).toBe(0)
     expect(state.hiddenColumnsBySheet.get('Sheet1')?.[0]).toBe(true)
     expect(state.rowHeightsBySheet.get('Sheet1')?.[0]).toBe(44)
+  })
+
+  it('tracks merge metadata and damages the exact merged cells in the viewport', () => {
+    const state = createPatchState()
+
+    const result = applyProjectedViewportPatch({
+      state,
+      patch: {
+        ...createPatch(),
+        cells: [],
+        merges: [{ sheetName: 'Sheet1', startAddress: 'C5', endAddress: 'D5' }],
+      },
+    })
+
+    expect(result.mergesChanged).toBe(true)
+    expect(result.damage).toEqual([{ cell: [2, 4] }, { cell: [3, 4] }])
+    expect(state.mergeRangesBySheet.get('Sheet1')?.size).toBe(1)
+  })
+
+  it('clears intersecting merge metadata when an unmerge patch sends an explicit empty set', () => {
+    const state = createPatchState()
+    applyProjectedViewportPatch({
+      state,
+      patch: {
+        ...createPatch(),
+        cells: [],
+        merges: [{ sheetName: 'Sheet1', startAddress: 'C5', endAddress: 'D5' }],
+      },
+    })
+
+    const result = applyProjectedViewportPatch({
+      state,
+      patch: {
+        ...createPatch(),
+        version: 2,
+        cells: [],
+        merges: [],
+      },
+    })
+
+    expect(result.mergesChanged).toBe(true)
+    expect(result.damage).toEqual([{ cell: [2, 4] }, { cell: [3, 4] }])
+    expect(state.mergeRangesBySheet.get('Sheet1')).toBeUndefined()
   })
 
   it('does not let stale viewport patches override an optimistic hidden row', () => {

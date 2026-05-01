@@ -48,6 +48,20 @@ describe('workbook event guards', () => {
 
     expect(
       isWorkbookEventPayload({
+        kind: 'mergeCells',
+        range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' },
+      }),
+    ).toBe(true)
+
+    expect(
+      isWorkbookEventPayload({
+        kind: 'unmergeCells',
+        range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' },
+      }),
+    ).toBe(true)
+
+    expect(
+      isWorkbookEventPayload({
         kind: 'insertRows',
         sheetName: 'Sheet1',
         start: 1,

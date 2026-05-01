@@ -27,6 +27,7 @@ import {
   cloneDefinedNameValue,
   cloneFilterRecord,
   cloneImageRecord,
+  cloneMergeRangeRecord,
   cloneNoteRecord,
   clonePivotRecord,
   clonePropertyRecord,
@@ -42,6 +43,7 @@ import {
   dataValidationKey,
   deleteRecordsBySheet,
   filterKey,
+  mergeRangeKey,
   noteKey,
   rangeProtectionKey,
   rekeyRecords,
@@ -58,6 +60,7 @@ import {
   type WorkbookConditionalFormatRecord,
   normalizeDefinedName,
   type WorkbookImageRecord,
+  type WorkbookMergeRangeRecord,
   type WorkbookNoteRecord,
   type WorkbookRangeProtectionRecord,
   type WorkbookSheetProtectionRecord,
@@ -78,6 +81,7 @@ import {
   type WorkbookTableRecord,
   type WorkbookVolatileContextRecord,
 } from './workbook-metadata-types.js'
+import { canonicalMergeRangeRef, isSingleCellMergeRange, rangeContainsAddress, rangesIntersect } from './workbook-merge-records.js'
 
 function metadataErrorMessage(message: string, cause: unknown): string {
   return cause instanceof Error && cause.message.length > 0 ? cause.message : message
@@ -149,6 +153,11 @@ export interface WorkbookMetadataService {
   readonly setFreezePane: (sheetName: string, rows: number, cols: number) => Effect.Effect<WorkbookFreezePaneRecord, WorkbookMetadataError>
   readonly getFreezePane: (sheetName: string) => Effect.Effect<WorkbookFreezePaneRecord | undefined, WorkbookMetadataError>
   readonly clearFreezePane: (sheetName: string) => Effect.Effect<boolean, WorkbookMetadataError>
+  readonly setMergeRange: (range: CellRangeRef) => Effect.Effect<WorkbookMergeRangeRecord, WorkbookMetadataError>
+  readonly getMergeRange: (sheetName: string, address: string) => Effect.Effect<WorkbookMergeRangeRecord | undefined, WorkbookMetadataError>
+  readonly getMergeRangeByRange: (range: CellRangeRef) => Effect.Effect<WorkbookMergeRangeRecord | undefined, WorkbookMetadataError>
+  readonly clearMergeRanges: (range: CellRangeRef) => Effect.Effect<WorkbookMergeRangeRecord[], WorkbookMetadataError>
+  readonly listMergeRanges: (sheetName: string) => Effect.Effect<WorkbookMergeRangeRecord[], WorkbookMetadataError>
   readonly setSheetProtection: (
     record: WorkbookSheetProtectionSnapshot,
   ) => Effect.Effect<WorkbookSheetProtectionRecord, WorkbookMetadataError>
@@ -228,6 +237,9 @@ export interface WorkbookMetadataService {
 export function createWorkbookMetadataService(metadata: WorkbookMetadataRecord): WorkbookMetadataService {
   const renameSheetNow = (oldSheetName: string, newSheetName: string): void => {
     rekeyRecords(metadata.freezePanes, (record) => (record.sheetName === oldSheetName ? { ...record, sheetName: newSheetName } : record))
+    rekeyRecords(metadata.merges, (record) =>
+      record.sheetName === oldSheetName ? { ...cloneMergeRangeRecord(record), sheetName: newSheetName } : cloneMergeRangeRecord(record),
+    )
     rekeyRecords(metadata.rowMetadata, (record) => (record.sheetName === oldSheetName ? { ...record, sheetName: newSheetName } : record))
     rekeyRecords(metadata.columnMetadata, (record) => (record.sheetName === oldSheetName ? { ...record, sheetName: newSheetName } : record))
     rekeyRecords(metadata.filters, (record) =>
@@ -346,6 +358,7 @@ export function createWorkbookMetadataService(metadata: WorkbookMetadataRecord):
     deleteRecordsBySheet(metadata.shapes, sheetName, (record) => record.sheetName)
     deleteRecordsBySheet(metadata.rowMetadata, sheetName, (record) => record.sheetName)
     deleteRecordsBySheet(metadata.columnMetadata, sheetName, (record) => record.sheetName)
+    deleteRecordsBySheet(metadata.merges, sheetName, (record) => record.sheetName)
     deleteRecordsBySheet(metadata.filters, sheetName, (record) => record.sheetName)
     deleteRecordsBySheet(metadata.sorts, sheetName, (record) => record.sheetName)
     deleteRecordsBySheet(metadata.dataValidations, sheetName, (record) => record.range.sheetName)
@@ -370,6 +383,7 @@ export function createWorkbookMetadataService(metadata: WorkbookMetadataRecord):
     metadata.rowMetadata.clear()
     metadata.columnMetadata.clear()
     metadata.freezePanes.clear()
+    metadata.merges.clear()
     metadata.sheetProtections.clear()
     metadata.filters.clear()
     metadata.sorts.clear()
@@ -649,6 +663,87 @@ export function createWorkbookMetadataService(metadata: WorkbookMetadataRecord):
         catch: (cause) =>
           new WorkbookMetadataError({
             message: metadataErrorMessage('Failed to clear freeze pane metadata', cause),
+            cause,
+          }),
+      })
+    },
+    setMergeRange(range) {
+      return Effect.try({
+        try: () => {
+          const stored = canonicalMergeRangeRef(range)
+          if (isSingleCellMergeRange(stored)) {
+            throw new Error('Merged ranges must include at least two cells')
+          }
+          const overlapping = [...metadata.merges.values()].filter((record) => rangesIntersect(record, stored))
+          if (overlapping.some((record) => mergeRangeKey(record) !== mergeRangeKey(stored))) {
+            throw new Error('Merged ranges cannot overlap')
+          }
+          metadata.merges.set(mergeRangeKey(stored), stored)
+          return cloneMergeRangeRecord(stored)
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage('Failed to set merged cell metadata', cause),
+            cause,
+          }),
+      })
+    },
+    getMergeRange(sheetName, address) {
+      return Effect.try({
+        try: () => {
+          const record = [...metadata.merges.values()].find((entry) => rangeContainsAddress(entry, sheetName, address))
+          return record ? cloneMergeRangeRecord(record) : undefined
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage('Failed to get merged cell metadata', cause),
+            cause,
+          }),
+      })
+    },
+    getMergeRangeByRange(range) {
+      return Effect.try({
+        try: () => {
+          const record = metadata.merges.get(mergeRangeKey(range))
+          return record ? cloneMergeRangeRecord(record) : undefined
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage('Failed to get merged range metadata', cause),
+            cause,
+          }),
+      })
+    },
+    clearMergeRanges(range) {
+      return Effect.try({
+        try: () => {
+          const removed: WorkbookMergeRangeRecord[] = []
+          for (const [key, record] of metadata.merges.entries()) {
+            if (!rangesIntersect(record, range)) {
+              continue
+            }
+            metadata.merges.delete(key)
+            removed.push(cloneMergeRangeRecord(record))
+          }
+          return removed.toSorted((left, right) => mergeRangeKey(left).localeCompare(mergeRangeKey(right)))
+        },
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage('Failed to clear merged cell metadata', cause),
+            cause,
+          }),
+      })
+    },
+    listMergeRanges(sheetName) {
+      return Effect.try({
+        try: () =>
+          [...metadata.merges.values()]
+            .filter((record) => record.sheetName === sheetName)
+            .toSorted((left, right) => mergeRangeKey(left).localeCompare(mergeRangeKey(right)))
+            .map(cloneMergeRangeRecord),
+        catch: (cause) =>
+          new WorkbookMetadataError({
+            message: metadataErrorMessage('Failed to list merged cell metadata', cause),
             cause,
           }),
       })

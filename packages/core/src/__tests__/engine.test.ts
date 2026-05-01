@@ -4427,6 +4427,7 @@ describe('SpreadsheetEngine', () => {
     primary.setFreezePane('Sheet1', 1, 2)
     primary.setFilter('Sheet1', { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'C10' })
     primary.setSort('Sheet1', { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'C10' }, [{ keyAddress: 'B1', direction: 'desc' }])
+    primary.mergeCells({ sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'E2' })
     primary.setTable({
       name: 'Sales',
       sheetName: 'Sheet1',
@@ -4477,6 +4478,12 @@ describe('SpreadsheetEngine', () => {
     ])
     expect(outbound.at(6)?.ops).toEqual([
       {
+        kind: 'mergeCells',
+        range: { sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'E2' },
+      },
+    ])
+    expect(outbound.at(7)?.ops).toEqual([
+      {
         kind: 'upsertTable',
         table: {
           name: 'Sales',
@@ -4489,7 +4496,7 @@ describe('SpreadsheetEngine', () => {
         },
       },
     ])
-    expect(outbound.at(7)?.ops).toEqual([
+    expect(outbound.at(8)?.ops).toEqual([
       {
         kind: 'upsertSpillRange',
         sheetName: 'Sheet1',
@@ -4505,6 +4512,7 @@ describe('SpreadsheetEngine', () => {
     expect(replica.getRowMetadata('Sheet1')).toEqual([{ sheetName: 'Sheet1', start: 2, count: 3, size: 24, hidden: false }])
     expect(replica.getColumnMetadata('Sheet1')).toEqual([{ sheetName: 'Sheet1', start: 1, count: 2, size: 120, hidden: true }])
     expect(replica.getFreezePane('Sheet1')).toEqual({ sheetName: 'Sheet1', rows: 1, cols: 2 })
+    expect(replica.listMergeRanges('Sheet1')).toEqual([{ sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'E2' }])
     expect(replica.getFilters('Sheet1')).toEqual([
       {
         sheetName: 'Sheet1',

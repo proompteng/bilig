@@ -204,6 +204,8 @@ const OP_TAGS: Record<EngineOp['kind'], number> = {
   deleteImage: 53,
   upsertShape: 54,
   deleteShape: 55,
+  mergeCells: 56,
+  unmergeCells: 57,
 }
 
 type LiteralTag = 0 | 1 | 2 | 3
@@ -1892,6 +1894,10 @@ function encodeEngineOp(writer: BinaryWriter, op: EngineOp): void {
     case 'clearFreezePane':
       writer.string(op.sheetName)
       return
+    case 'mergeCells':
+    case 'unmergeCells':
+      encodeCellRangeRef(writer, op.range)
+      return
     case 'setSheetProtection':
       encodeSheetProtection(writer, op.protection)
       return
@@ -2140,6 +2146,10 @@ function decodeEngineOp(reader: BinaryReader): EngineOp {
       }
     case 8:
       return { kind: 'clearFreezePane', sheetName: reader.string() }
+    case 56:
+      return { kind: 'mergeCells', range: decodeCellRangeRef(reader) }
+    case 57:
+      return { kind: 'unmergeCells', range: decodeCellRangeRef(reader) }
     case 46:
       return {
         kind: 'setSheetProtection',

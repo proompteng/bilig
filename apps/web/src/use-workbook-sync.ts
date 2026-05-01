@@ -295,6 +295,13 @@ export function useWorkbookSync(input: {
           mutation = { method, args: [sheetName, rows, cols] }
           break
         }
+        case 'mergeCells':
+        case 'unmergeCells': {
+          const [range] = args
+          assert(isCellRangeRef(range), `Invalid ${method} args`)
+          mutation = { method, args: [range] }
+          break
+        }
         case 'setRangeStyle': {
           const [range, patch] = args
           assert(isCellRangeRef(range) && isCellStylePatchValue(patch), 'Invalid setRangeStyle args')

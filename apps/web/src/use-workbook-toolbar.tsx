@@ -303,6 +303,9 @@ export function useWorkbookToolbar(input: {
   const isUnderlineActive = activeSelectedStyle?.font?.underline === true
   const horizontalAlignment = activeSelectedStyle?.alignment?.horizontal ?? null
   const isWrapActive = activeSelectedStyle?.alignment?.wrap === true
+  const selectedRangeBounds = getNormalizedRangeBounds(selectionRangeRef.current)
+  const canMergeSelection =
+    selectedRangeBounds.startRow !== selectedRangeBounds.endRow || selectedRangeBounds.startCol !== selectedRangeBounds.endCol
   const currentFillColor = normalizeHexColor(activeSelectedStyle?.fill?.backgroundColor ?? '#ffffff')
   const currentTextColor = normalizeHexColor(activeSelectedStyle?.font?.color ?? '#111827')
   const visibleRecentFillColors = useMemo(
@@ -510,6 +513,17 @@ export function useWorkbookToolbar(input: {
     [invokeMutation, selectionRangeRef],
   )
 
+  const mergeSelectedCells = useCallback(async () => {
+    if (!canMergeSelection) {
+      return
+    }
+    await invokeMutation('mergeCells', selectionRangeRef.current)
+  }, [canMergeSelection, invokeMutation, selectionRangeRef])
+
+  const unmergeSelectedCells = useCallback(async () => {
+    await invokeMutation('unmergeCells', selectionRangeRef.current)
+  }, [invokeMutation, selectionRangeRef])
+
   const shortcutStateRef = useRef({
     applyBorderPreset,
     applyRangeStyle,
@@ -626,6 +640,7 @@ export function useWorkbookToolbar(input: {
         canRedo={canRedo}
         canHideCurrentColumn={canHideCurrentColumn}
         canHideCurrentRow={canHideCurrentRow}
+        canMergeSelection={canMergeSelection}
         canUnhideCurrentColumn={canUnhideCurrentColumn}
         canUnhideCurrentRow={canUnhideCurrentRow}
         canUndo={canUndo}
@@ -660,6 +675,9 @@ export function useWorkbookToolbar(input: {
         }}
         onHideCurrentColumn={onHideCurrentColumn}
         onHideCurrentRow={onHideCurrentRow}
+        onMergeSelectedCells={() => {
+          void mergeSelectedCells()
+        }}
         onNumberFormatChange={(value) => {
           void setNumberFormatPreset(value)
         }}
@@ -686,6 +704,9 @@ export function useWorkbookToolbar(input: {
         onUndo={onUndo}
         onUnhideCurrentColumn={onUnhideCurrentColumn}
         onUnhideCurrentRow={onUnhideCurrentRow}
+        onUnmergeSelectedCells={() => {
+          void unmergeSelectedCells()
+        }}
         recentFillColors={visibleRecentFillColors}
         recentTextColors={visibleRecentTextColors}
         selectedFontSize={selectedFontSize}
@@ -711,6 +732,7 @@ export function useWorkbookToolbar(input: {
       canRedo,
       canHideCurrentColumn,
       canHideCurrentRow,
+      canMergeSelection,
       canUnhideCurrentColumn,
       canUnhideCurrentRow,
       canUndo,
@@ -722,6 +744,7 @@ export function useWorkbookToolbar(input: {
       isItalicActive,
       isUnderlineActive,
       isWrapActive,
+      mergeSelectedCells,
       onRedo,
       onHideCurrentColumn,
       onHideCurrentRow,
@@ -739,6 +762,7 @@ export function useWorkbookToolbar(input: {
       visibleRecentFillColors,
       visibleRecentTextColors,
       writesAllowed,
+      unmergeSelectedCells,
     ],
   )
 

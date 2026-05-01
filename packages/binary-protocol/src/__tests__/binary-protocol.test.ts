@@ -114,6 +114,14 @@ describe('binary protocol', () => {
             },
             { kind: 'setFreezePane', sheetName: 'Sheet1', rows: 1, cols: 2 },
             {
+              kind: 'mergeCells',
+              range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' },
+            },
+            {
+              kind: 'unmergeCells',
+              range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' },
+            },
+            {
               kind: 'setSort',
               sheetName: 'Sheet1',
               range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'C10' },
@@ -271,6 +279,14 @@ describe('binary protocol', () => {
         hidden: null,
       },
       { kind: 'setFreezePane', sheetName: 'Sheet1', rows: 1, cols: 2 },
+      {
+        kind: 'mergeCells',
+        range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' },
+      },
+      {
+        kind: 'unmergeCells',
+        range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' },
+      },
       {
         kind: 'setSort',
         sheetName: 'Sheet1',

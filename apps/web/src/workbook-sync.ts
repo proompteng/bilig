@@ -20,6 +20,8 @@ export type WorkbookMutationMethod =
   | 'updateRowMetadata'
   | 'updateColumnMetadata'
   | 'setFreezePane'
+  | 'mergeCells'
+  | 'unmergeCells'
   | 'setRangeStyle'
   | 'clearRangeStyle'
   | 'setRangeNumberFormat'
@@ -82,6 +84,8 @@ export function isWorkbookMutationMethod(value: unknown): value is WorkbookMutat
     value === 'updateRowMetadata' ||
     value === 'updateColumnMetadata' ||
     value === 'setFreezePane' ||
+    value === 'mergeCells' ||
+    value === 'unmergeCells' ||
     value === 'setRangeStyle' ||
     value === 'clearRangeStyle' ||
     value === 'setRangeNumberFormat' ||
@@ -299,6 +303,20 @@ export function buildZeroWorkbookMutation(
         rows,
         cols,
       })
+    }
+    case 'mergeCells': {
+      const [range] = args
+      if (!isCellRangeRef(range)) {
+        throw new Error('Invalid mergeCells args')
+      }
+      return mutators.workbook.mergeCells({ documentId, clientMutationId, range })
+    }
+    case 'unmergeCells': {
+      const [range] = args
+      if (!isCellRangeRef(range)) {
+        throw new Error('Invalid unmergeCells args')
+      }
+      return mutators.workbook.unmergeCells({ documentId, clientMutationId, range })
     }
     case 'setRangeStyle': {
       const [range, patch] = args

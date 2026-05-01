@@ -281,11 +281,20 @@ export class GridRenderTilePaneRuntime {
     if (!input.needsLocalCellInvalidation || input.visibleAddresses.length === 0) {
       return undefined
     }
-    return input.engine.subscribeCells(input.sheetName, input.visibleAddresses, () => {
+    const invalidate = () => {
       this.clearRetainedPanes()
       this.noteLocalFallbackInvalidation()
       listener?.()
-    })
+    }
+    const unsubscribeCells = input.engine.subscribeCells(input.sheetName, input.visibleAddresses, invalidate)
+    const unsubscribeMerges = input.engine.subscribeSheetChannel?.(input.sheetName, 'merges', invalidate)
+    if (!unsubscribeMerges) {
+      return unsubscribeCells
+    }
+    return () => {
+      unsubscribeCells()
+      unsubscribeMerges()
+    }
   }
 
   syncConnections(input: GridRenderTileConnectionRuntimeInput): void {

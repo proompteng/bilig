@@ -555,6 +555,9 @@ export function isWorkbookOp(value: unknown): value is WorkbookOp {
       return hasString(value, 'sheetName') && hasFiniteNumber(value, 'rows') && hasFiniteNumber(value, 'cols')
     case 'clearFreezePane':
       return hasString(value, 'sheetName')
+    case 'mergeCells':
+    case 'unmergeCells':
+      return isCellRangeRef(value['range'])
     case 'setSheetProtection':
       return isWorkbookSheetProtection(value['protection'])
     case 'clearSheetProtection':

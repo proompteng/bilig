@@ -326,6 +326,9 @@ function restoreSheetMetadata(args: { readonly workbook: WorkbookStore; readonly
   if (sheet.metadata?.freezePane) {
     workbook.setFreezePane(sheet.name, sheet.metadata.freezePane.rows, sheet.metadata.freezePane.cols)
   }
+  sheet.metadata?.merges?.forEach((range) => {
+    workbook.setMergeRange({ ...range, sheetName: range.sheetName ?? sheet.name })
+  })
   if (sheet.metadata?.sheetProtection) {
     workbook.setSheetProtection(structuredClone(sheet.metadata.sheetProtection))
   }

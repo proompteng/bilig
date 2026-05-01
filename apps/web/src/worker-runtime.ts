@@ -627,6 +627,14 @@ export class WorkbookWorkerRuntime {
     await this.projectionCommands.setFreezePane(sheetName, rows, cols)
   }
 
+  async mergeCells(range: CellRangeRef): Promise<void> {
+    await this.projectionCommands.mergeCells(range)
+  }
+
+  async unmergeCells(range: CellRangeRef): Promise<void> {
+    await this.projectionCommands.unmergeCells(range)
+  }
+
   async autofitColumn(sheetName: string, columnIndex: number): Promise<number> {
     return await this.projectionCommands.autofitColumn(sheetName, columnIndex)
   }

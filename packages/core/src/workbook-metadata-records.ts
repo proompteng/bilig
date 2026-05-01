@@ -16,6 +16,7 @@ import {
   type WorkbookConditionalFormatRecord,
   type WorkbookDataValidationRecord,
   type WorkbookImageRecord,
+  type WorkbookMergeRangeRecord,
   normalizeWorkbookObjectName,
   type WorkbookNoteRecord,
   type WorkbookRangeProtectionRecord,
@@ -33,6 +34,7 @@ import {
   type WorkbookSpillRecord,
   type WorkbookTableRecord,
 } from './workbook-metadata-types.js'
+import { cloneMergeRangeRecord, mergeRangeKey } from './workbook-merge-records.js'
 
 export function cloneDefinedNameRecord(record: WorkbookDefinedNameRecord): WorkbookDefinedNameRecord {
   return {
@@ -396,6 +398,8 @@ export function cloneSpillRecord(record: WorkbookSpillRecord): WorkbookSpillReco
   }
 }
 
+export { cloneMergeRangeRecord, mergeRangeKey }
+
 function axisMetadataKey(sheetName: string, start: number, count: number): string {
   return `${sheetName}:${start}:${count}`
 }
@@ -454,6 +458,9 @@ function recordKey(record: unknown): string {
   if (isFreezePaneRecord(record)) {
     return record.sheetName
   }
+  if (isMergeRangeRecord(record)) {
+    return mergeRangeKey(record)
+  }
   if (isAxisMetadataRecord(record)) {
     return axisMetadataKey(record.sheetName, record.start, record.count)
   }
@@ -505,6 +512,19 @@ function recordKey(record: unknown): string {
 function isFreezePaneRecord(record: unknown): record is WorkbookFreezePaneRecord {
   return (
     typeof record === 'object' && record !== null && 'sheetName' in record && 'rows' in record && 'cols' in record && !('address' in record)
+  )
+}
+
+function isMergeRangeRecord(record: unknown): record is WorkbookMergeRangeRecord {
+  return (
+    typeof record === 'object' &&
+    record !== null &&
+    'sheetName' in record &&
+    'startAddress' in record &&
+    'endAddress' in record &&
+    !('range' in record) &&
+    !('name' in record) &&
+    !('columnNames' in record)
   )
 }
 

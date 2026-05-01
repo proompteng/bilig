@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { applyBatchArgsSchema, renderCommitArgsSchema, updatePresenceArgsSchema } from '../mutators.js'
+import {
+  applyBatchArgsSchema,
+  mergeCellsArgsSchema,
+  renderCommitArgsSchema,
+  unmergeCellsArgsSchema,
+  updatePresenceArgsSchema,
+} from '../mutators.js'
 
 describe('zero sync mutator schemas', () => {
   it('accepts workbook presence updates with the current selection payload', () => {
@@ -43,6 +49,16 @@ describe('zero sync mutator schemas', () => {
     })
 
     expect(result.success).toBe(true)
+  })
+
+  it('accepts merge and unmerge cell mutation payloads', () => {
+    const payload = {
+      documentId: 'doc-1',
+      range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' },
+    }
+
+    expect(mergeCellsArgsSchema.safeParse(payload).success).toBe(true)
+    expect(unmergeCellsArgsSchema.safeParse(payload).success).toBe(true)
   })
 
   it('rejects engine batches with malformed workbook ops', () => {

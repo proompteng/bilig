@@ -16,6 +16,7 @@ interface FormulaBarProps {
   definedNames?: readonly WorkbookDefinedNameSnapshot[]
   onBeginEdit(this: void, seed?: string): void
   onAddressCommit(this: void, next: string): boolean
+  onAddressCommitSuccess?: (() => void) | undefined
   onChange(this: void, next: string): void
   onCommit(this: void): void
   onCancel(this: void): void
@@ -31,6 +32,7 @@ export function FormulaBar({
   definedNames,
   onBeginEdit,
   onAddressCommit,
+  onAddressCommitSuccess,
   onChange,
   onCommit,
   onCancel,
@@ -143,6 +145,7 @@ export function FormulaBar({
       <NameBox
         address={address}
         onCommit={onAddressCommit}
+        onCommitSuccess={onAddressCommitSuccess}
         ref={nameBoxRef}
         sheetName={sheetName}
         {...(selectionLabel !== undefined ? { selectionLabel } : {})}

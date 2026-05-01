@@ -476,9 +476,11 @@ describe('GridRenderTilePaneRuntime', () => {
       viewport: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
     })[0]
     let invalidationListener: (() => void) | null = null
+    let mergeInvalidationListener: (() => void) | null = null
     let subscribedSheetName = ''
     let subscribedAddresses: readonly string[] = []
     let unsubscribed = false
+    let mergeUnsubscribed = false
     const engine: GridEngineLike = {
       ...LOCAL_EMPTY_ENGINE,
       subscribeCells: (sheetName, addresses, listener) => {
@@ -487,6 +489,13 @@ describe('GridRenderTilePaneRuntime', () => {
         invalidationListener = listener
         return () => {
           unsubscribed = true
+        }
+      },
+      subscribeSheetChannel: (_sheetName, channel, listener) => {
+        expect(channel).toBe('merges')
+        mergeInvalidationListener = listener
+        return () => {
+          mergeUnsubscribed = true
         }
       },
     }
@@ -519,11 +528,12 @@ describe('GridRenderTilePaneRuntime', () => {
     ).toBe(ready.residentDataPanes)
 
     invalidationListener?.()
+    mergeInvalidationListener?.()
 
-    expect(invalidations).toEqual(['invalidated'])
+    expect(invalidations).toEqual(['invalidated', 'invalidated'])
     expect(runtime.snapshotBridgeState()).toEqual({
       forceLocalTiles: true,
-      localFallbackRevision: 1,
+      localFallbackRevision: 2,
       renderTileRevision: 0,
     })
     expect(
@@ -537,6 +547,7 @@ describe('GridRenderTilePaneRuntime', () => {
     ).not.toBe(ready.residentDataPanes)
     unsubscribe?.()
     expect(unsubscribed).toBe(true)
+    expect(mergeUnsubscribed).toBe(true)
   })
 
   it('owns render tile delta subscription stamping in the runtime', () => {

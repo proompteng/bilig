@@ -39,11 +39,13 @@ function makeEngine(
     tag: ValueTag.String,
     value: 'hello',
   }),
+  mergedRanges: Record<string, { sheetName: string; startAddress: string; endAddress: string }> = {},
 ): GridEngineLike {
   return {
     getCell: (_sheetName, address) =>
       'address' in snapshots ? snapshots : (snapshots[address] ?? createCellSnapshot({ tag: ValueTag.Empty }, undefined)),
     getCellStyle: (styleId) => (styleId ? styles[styleId] : undefined),
+    getMergeRange: (_sheetName, address) => mergedRanges[address],
     subscribeCells: () => () => {},
     workbook: {
       getSheet: () => undefined,
@@ -91,6 +93,84 @@ describe('gridTextScene', () => {
       row: 0,
       underline: false,
       strike: false,
+    })
+  })
+
+  test('renders text once across merged cells', () => {
+    const engine = makeEngine(
+      {},
+      {
+        A1: createCellSnapshot({ tag: ValueTag.String, value: 'merged title' }),
+        B1: createCellSnapshot({ tag: ValueTag.Empty }, undefined),
+      },
+      {
+        A1: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' },
+        B1: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' },
+      },
+    )
+
+    const scene = buildGridTextScene({
+      engine,
+      columnWidths: {},
+      gridMetrics: getGridMetrics(),
+      selectedCell: [0, 0],
+      sheetName: 'Sheet1',
+      visibleItems: [
+        [0, 0],
+        [1, 0],
+      ],
+      visibleRegion: { range: { x: 0, y: 0, width: 2, height: 1 }, tx: 0, ty: 0 },
+      hostBounds: { left: 100, top: 200, width: 300, height: 200 },
+      getCellBounds: (col) => ({ x: 110 + col * 90, y: 220, width: 90, height: 22 }),
+    })
+
+    const dataItems = scene.items.filter((item) => item.text === 'merged title')
+    expect(dataItems).toHaveLength(1)
+    expect(dataItems[0]).toMatchObject({
+      col: 0,
+      row: 0,
+      x: 10,
+      y: 20,
+      width: 180,
+      height: 22,
+    })
+  })
+
+  test('keeps merged ranges visible when the top-left cell is blank', () => {
+    const engine = makeEngine(
+      {},
+      {
+        A1: createCellSnapshot({ tag: ValueTag.Empty }, undefined),
+        B1: createCellSnapshot({ tag: ValueTag.String, value: 'visible after merge' }),
+      },
+      {
+        A1: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' },
+        B1: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' },
+      },
+    )
+
+    const scene = buildGridTextScene({
+      engine,
+      columnWidths: {},
+      gridMetrics: getGridMetrics(),
+      selectedCell: [0, 0],
+      sheetName: 'Sheet1',
+      visibleItems: [
+        [0, 0],
+        [1, 0],
+      ],
+      visibleRegion: { range: { x: 0, y: 0, width: 2, height: 1 }, tx: 0, ty: 0 },
+      hostBounds: { left: 100, top: 200, width: 300, height: 200 },
+      getCellBounds: (col) => ({ x: 110 + col * 90, y: 220, width: 90, height: 22 }),
+    })
+
+    const dataItems = scene.items.filter((item) => item.text === 'visible after merge')
+    expect(dataItems).toHaveLength(1)
+    expect(dataItems[0]).toMatchObject({
+      col: 0,
+      row: 0,
+      text: 'visible after merge',
+      width: 180,
     })
   })
 

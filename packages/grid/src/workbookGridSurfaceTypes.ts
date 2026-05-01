@@ -62,6 +62,7 @@ export interface WorkbookGridSurfaceProps {
   onAutofitColumn?: ((columnIndex: number, fallbackWidth: number) => void | Promise<void>) | undefined
   onVisibleViewportChange?: ((viewport: Viewport) => void) | undefined
   previewRanges?: readonly WorkbookGridPreviewRange[] | undefined
+  focusRequestToken?: number | undefined
   restoreViewportTarget?:
     | {
         readonly token: number

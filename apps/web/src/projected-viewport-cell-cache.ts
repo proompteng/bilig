@@ -194,12 +194,15 @@ export class ProjectedViewportCellCache {
     sheetName: string,
     result: Pick<
       ProjectedViewportPatchApplicationResult,
-      'changedKeys' | 'damage' | 'axisChanged' | 'columnsChanged' | 'rowsChanged' | 'freezeChanged'
+      'changedKeys' | 'damage' | 'axisChanged' | 'columnsChanged' | 'rowsChanged' | 'freezeChanged' | 'mergesChanged'
     >,
-  ): Pick<ProjectedViewportPatchApplicationResult, 'damage' | 'axisChanged' | 'columnsChanged' | 'rowsChanged' | 'freezeChanged'> {
+  ): Pick<
+    ProjectedViewportPatchApplicationResult,
+    'damage' | 'axisChanged' | 'columnsChanged' | 'rowsChanged' | 'freezeChanged' | 'mergesChanged'
+  > {
     this.pruneSheetCache(sheetName)
     this.notifyCellSubscriptions(result.changedKeys)
-    if (result.damage.length > 0 || result.axisChanged || result.freezeChanged) {
+    if (result.damage.length > 0 || result.axisChanged || result.freezeChanged || result.mergesChanged) {
       this.emitChange()
     }
     return {
@@ -208,6 +211,7 @@ export class ProjectedViewportCellCache {
       columnsChanged: result.columnsChanged,
       rowsChanged: result.rowsChanged,
       freezeChanged: result.freezeChanged,
+      mergesChanged: result.mergesChanged,
     }
   }
 

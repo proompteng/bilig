@@ -5,6 +5,7 @@ import { getVisibleColumnBounds, getVisibleRowBounds, type GridMetrics } from '.
 import { indexToColumn } from '@bilig/formula'
 import type { HeaderSelection } from './gridPointer.js'
 import type { Item, Rectangle } from './gridTypes.js'
+import { resolveMergedCell, resolveMergedCellBounds } from './gridMergedRanges.js'
 import { collectVisibleColumnBounds, collectVisibleRowBounds } from './visibleGridAxes.js'
 import { workbookThemeColors } from './workbookTheme.js'
 
@@ -66,6 +67,7 @@ const HEADER_SELECTED_TEXT_COLOR = workbookThemeColors.accent
 const HEADER_DRAG_ANCHOR_TEXT_COLOR = workbookThemeColors.accentDark
 const HEADER_RESIZE_TEXT_COLOR = workbookThemeColors.accentDark
 const DEFAULT_HEADER_FONT_SIZE = 11
+const MERGED_DISPLAY_FALLBACK_SCAN_CELL_LIMIT = 2048
 
 function buildHeaderFont(fontSize: number): string {
   return `500 ${fontSize}px ${getResolvedCellFontFamily()}`
@@ -192,9 +194,15 @@ function buildCellTextItem({
   }
 
   const address = `${indexToColumn(col)}${row + 1}`
-  const snapshot = resolveCellTextSnapshot({
+  const merged = resolveMergedCell(engine, sheetName, row, col)
+  if (merged && !merged.isAnchor) {
+    return null
+  }
+  const cellBounds = merged ? resolveMergedCellBounds({ merged, fallback: bounds, getCellBounds }) : bounds
+  const snapshot = resolveMergedCellTextSnapshot({
     address,
     engine,
+    merged,
     sheetName,
     selectedAddress,
     snapshotOverride,
@@ -208,16 +216,18 @@ function buildCellTextItem({
     return null
   }
 
-  const textRenderBounds = resolveTextRenderBounds({
-    engine,
-    sheetName,
-    row,
-    col,
-    bounds,
-    visibleColumnEnd,
-    getCellBounds,
-    renderCell,
-  })
+  const textRenderBounds = merged
+    ? { bounds: cellBounds, spillColEnd: merged.endCol }
+    : resolveTextRenderBounds({
+        engine,
+        sheetName,
+        row,
+        col,
+        bounds: cellBounds,
+        visibleColumnEnd,
+        getCellBounds,
+        renderCell,
+      })
 
   const localBounds = {
     x: textRenderBounds.bounds.x - hostBounds.left,
@@ -285,6 +295,58 @@ function resolveCellTextSnapshot({
   }
 
   return snapshotOverride
+}
+
+function resolveMergedCellTextSnapshot({
+  address,
+  engine,
+  merged,
+  sheetName,
+  selectedAddress,
+  snapshotOverride,
+}: {
+  address: string
+  engine: GridEngineLike
+  merged: ReturnType<typeof resolveMergedCell> | undefined
+  sheetName: string
+  selectedAddress: string | null
+  snapshotOverride: CellSnapshot | null
+}): CellSnapshot {
+  const anchorSnapshot = resolveCellTextSnapshot({
+    address,
+    engine,
+    sheetName,
+    selectedAddress,
+    snapshotOverride,
+  })
+  if (!merged?.isAnchor || hasRenderableCellText(engine, anchorSnapshot)) {
+    return anchorSnapshot
+  }
+
+  let scanned = 0
+  for (let row = merged.startRow; row <= merged.endRow; row += 1) {
+    for (let col = merged.startCol; col <= merged.endCol; col += 1) {
+      if (row === merged.startRow && col === merged.startCol) {
+        continue
+      }
+      scanned += 1
+      if (scanned > MERGED_DISPLAY_FALLBACK_SCAN_CELL_LIMIT) {
+        return anchorSnapshot
+      }
+      const candidate = engine.getCell(sheetName, `${indexToColumn(col)}${row + 1}`)
+      if (hasRenderableCellText(engine, candidate)) {
+        return candidate
+      }
+    }
+  }
+  return anchorSnapshot
+}
+
+function hasRenderableCellText(engine: GridEngineLike, snapshot: CellSnapshot): boolean {
+  if (snapshot.value.tag === ValueTag.Boolean) {
+    return false
+  }
+  return snapshotToRenderCell(snapshot, engine.getCellStyle(snapshot.styleId)).displayText.length > 0
 }
 
 function resolveTextRenderBounds(options: {

@@ -452,6 +452,56 @@ describe('WorkbookWorkerRuntime', () => {
     expect(received[1]?.cells[0]?.editorText).toBe('#VALUE!')
   })
 
+  it('emits merge and unmerge metadata through incremental viewport patches', async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    })
+    await runtime.bootstrap({
+      documentId: 'merge-viewport-doc',
+      replicaId: 'browser:test',
+      persistState: false,
+    })
+
+    const received = new Array<ReturnType<typeof decodeViewportPatch>>()
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 0,
+        colStart: 0,
+        colEnd: 1,
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes))
+      },
+    )
+
+    await runtime.mergeCells({
+      sheetName: 'Sheet1',
+      startAddress: 'A1',
+      endAddress: 'B1',
+    })
+    await runtime.unmergeCells({
+      sheetName: 'Sheet1',
+      startAddress: 'A1',
+      endAddress: 'B1',
+    })
+
+    const mergePatchIndex = received.findIndex((patch) => patch.merges?.length === 1)
+    const mergePatch = mergePatchIndex >= 0 ? received[mergePatchIndex] : undefined
+    const unmergePatch =
+      mergePatchIndex >= 0
+        ? received.slice(mergePatchIndex + 1).find((patch) => patch.merges !== undefined && patch.merges.length === 0)
+        : undefined
+
+    expect(mergePatch).toMatchObject({
+      merges: [{ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' }],
+    })
+    expect(unmergePatch).toMatchObject({
+      merges: [],
+    })
+  })
+
   it('skips persistence restore when bootstrapped in ephemeral mode', async () => {
     const seedEngine = new SpreadsheetEngine({ workbookName: 'phase3-doc', replicaId: 'seed' })
     seedEngine.createSheet('Sheet1')

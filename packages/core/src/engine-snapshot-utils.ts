@@ -1,4 +1,10 @@
-import type { CellRangeRef, SheetMetadataSnapshot, WorkbookAxisMetadataSnapshot, WorkbookFreezePaneSnapshot } from '@bilig/protocol'
+import type {
+  CellRangeRef,
+  SheetMetadataSnapshot,
+  WorkbookAxisMetadataSnapshot,
+  WorkbookFreezePaneSnapshot,
+  WorkbookMergeRangeSnapshot,
+} from '@bilig/protocol'
 import type { EngineOp } from '@bilig/workbook-domain'
 import type { WorkbookAxisMetadataRecord, WorkbookFreezePaneRecord, WorkbookStore } from './workbook-store.js'
 
@@ -33,6 +39,14 @@ function freezePaneToSnapshot(record: WorkbookFreezePaneRecord | undefined): Wor
   return { rows: record.rows, cols: record.cols }
 }
 
+function mergeRangeToSnapshot(record: WorkbookMergeRangeSnapshot): WorkbookMergeRangeSnapshot {
+  return {
+    sheetName: record.sheetName,
+    startAddress: record.startAddress,
+    endAddress: record.endAddress,
+  }
+}
+
 export function exportSheetMetadata(workbook: WorkbookStore, sheetName: string): SheetMetadataSnapshot | undefined {
   const rows = workbook.listRowAxisEntries(sheetName)
   const columns = workbook.listColumnAxisEntries(sheetName)
@@ -47,6 +61,7 @@ export function exportSheetMetadata(workbook: WorkbookStore, sheetName: string):
     formatId: record.formatId,
   }))
   const freezePane = freezePaneToSnapshot(workbook.getFreezePane(sheetName))
+  const merges = workbook.listMergeRanges(sheetName).map(mergeRangeToSnapshot)
   const sheetProtection = workbook.getSheetProtection(sheetName)
   const filters = workbook.listFilters(sheetName).map((filter) => Object.assign({}, filter.range))
   const sorts = workbook.listSorts(sheetName).map((sort) => ({
@@ -67,6 +82,7 @@ export function exportSheetMetadata(workbook: WorkbookStore, sheetName: string):
     styleRanges.length === 0 &&
     formatRanges.length === 0 &&
     freezePane === undefined &&
+    merges.length === 0 &&
     sheetProtection === undefined &&
     filters.length === 0 &&
     sorts.length === 0 &&
@@ -100,6 +116,9 @@ export function exportSheetMetadata(workbook: WorkbookStore, sheetName: string):
   }
   if (freezePane) {
     metadata.freezePane = freezePane
+  }
+  if (merges.length > 0) {
+    metadata.merges = merges
   }
   if (sheetProtection) {
     metadata.sheetProtection = structuredClone(sheetProtection)
@@ -181,6 +200,9 @@ export function sheetMetadataToOps(
   if (freezePane) {
     ops.push({ kind: 'setFreezePane', sheetName, rows: freezePane.rows, cols: freezePane.cols })
   }
+  workbook.listMergeRanges(sheetName).forEach((record) => {
+    ops.push({ kind: 'mergeCells', range: mergeRangeToSnapshot(record) })
+  })
   const sheetProtection = workbook.getSheetProtection(sheetName)
   if (sheetProtection) {
     ops.push({ kind: 'setSheetProtection', protection: structuredClone(sheetProtection) })

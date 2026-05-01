@@ -136,7 +136,9 @@ export function eventRequiresRecalc(payload: WorkbookEventPayload): boolean {
     payload.kind === 'updateRowMetadata' ||
     payload.kind === 'updateColumnMetadata' ||
     payload.kind === 'updateColumnWidth' ||
-    payload.kind === 'setFreezePane'
+    payload.kind === 'setFreezePane' ||
+    payload.kind === 'mergeCells' ||
+    payload.kind === 'unmergeCells'
   )
 }
 

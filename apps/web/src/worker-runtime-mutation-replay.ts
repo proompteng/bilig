@@ -125,6 +125,20 @@ export function applyPendingWorkbookMutationToEngine(engine: WorkerEngine, mutat
       }
       return
     }
+    case 'mergeCells': {
+      const [range] = args
+      if (isCellRangeRef(range)) {
+        engine.mergeCells(range)
+      }
+      return
+    }
+    case 'unmergeCells': {
+      const [range] = args
+      if (isCellRangeRef(range)) {
+        engine.unmergeCells(range)
+      }
+      return
+    }
     case 'setRangeStyle': {
       const [range, patch] = args
       if (isCellRangeRef(range) && isCellStylePatchValue(patch)) {

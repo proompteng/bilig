@@ -112,10 +112,19 @@ export class GridViewportResidencyRuntime {
     if (input.shouldUseRemoteRenderTileSource || input.visibleAddresses.length === 0) {
       return undefined
     }
-    return input.engine.subscribeCells(input.sheetName, input.visibleAddresses, () => {
+    const invalidate = () => {
       this.invalidateScene()
       listener?.()
-    })
+    }
+    const unsubscribeCells = input.engine.subscribeCells(input.sheetName, input.visibleAddresses, invalidate)
+    const unsubscribeMerges = input.engine.subscribeSheetChannel?.(input.sheetName, 'merges', invalidate)
+    if (!unsubscribeMerges) {
+      return unsubscribeCells
+    }
+    return () => {
+      unsubscribeCells()
+      unsubscribeMerges()
+    }
   }
 
   syncLocalSceneInvalidation(input: GridViewportResidencyInvalidationInput): void {

@@ -301,6 +301,8 @@ export interface WorkbookFreezePaneSnapshot {
   cols: number
 }
 
+export interface WorkbookMergeRangeSnapshot extends CellRangeRef {}
+
 export interface CellStyleFillSnapshot {
   backgroundColor: string
 }
@@ -624,6 +626,7 @@ export interface SheetMetadataSnapshot {
   styleRanges?: SheetStyleRangeSnapshot[]
   formatRanges?: SheetFormatRangeSnapshot[]
   freezePane?: WorkbookFreezePaneSnapshot
+  merges?: WorkbookMergeRangeSnapshot[]
   sheetProtection?: WorkbookSheetProtectionSnapshot
   filters?: CellRangeRef[]
   sorts?: WorkbookSortSnapshot[]

@@ -159,6 +159,9 @@ function entityKeyForOp(op: EngineOp): string {
     case 'setFreezePane':
     case 'clearFreezePane':
       return `freeze:${op.sheetName}`
+    case 'mergeCells':
+    case 'unmergeCells':
+      return `merge:${op.range.sheetName}:${op.range.startAddress}:${op.range.endAddress}`
     case 'setSheetProtection':
     case 'clearSheetProtection':
       return `sheet-protection:${op.kind === 'setSheetProtection' ? op.protection.sheetName : op.sheetName}`
@@ -276,6 +279,8 @@ function sheetDeleteBarrierForOp(op: EngineOp, latestSheetDeletes: Map<string, O
     case 'deleteSpillRange':
     case 'deletePivotTable':
       return latestSheetDeletes.get(op.sheetName)
+    case 'mergeCells':
+    case 'unmergeCells':
     case 'setStyleRange':
     case 'setFormatRange':
       return latestSheetDeletes.get(op.range.sheetName)

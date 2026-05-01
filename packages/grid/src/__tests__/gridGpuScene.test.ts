@@ -18,10 +18,15 @@ function createCellSnapshot(styleId: string | undefined, value: CellSnapshot['va
   }
 }
 
-function makeEngine(styles: Record<string, CellStyleRecord>, snapshot: CellSnapshot = createCellSnapshot('style-1')): GridEngineLike {
+function makeEngine(
+  styles: Record<string, CellStyleRecord>,
+  snapshot: CellSnapshot = createCellSnapshot('style-1'),
+  mergedRanges: Record<string, { sheetName: string; startAddress: string; endAddress: string }> = {},
+): GridEngineLike {
   return {
-    getCell: () => snapshot,
+    getCell: (_sheetName, address) => ({ ...snapshot, address }),
     getCellStyle: (styleId) => (styleId ? styles[styleId] : undefined),
+    getMergeRange: (_sheetName, address) => mergedRanges[address],
     subscribeCells: () => () => {},
     workbook: {
       getSheet: () => undefined,
@@ -111,6 +116,45 @@ describe('gridGpuScene', () => {
       width: 1,
       height: 22,
       color: GRID_LINE_COLOR,
+    })
+  })
+
+  test('paints a merged range as one cell rectangle', () => {
+    const engine = makeEngine(
+      {
+        'style-1': {
+          fill: { backgroundColor: '#ff0000' },
+        },
+      },
+      createCellSnapshot('style-1'),
+      {
+        A1: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' },
+        B1: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' },
+      },
+    )
+
+    const scene = buildGridGpuScene({
+      engine,
+      columnWidths: {},
+      gridMetrics: getGridMetrics(),
+      gridSelection: createSelection(),
+      selectedCell: [0, 0],
+      sheetName: 'Sheet1',
+      visibleItems: [
+        [0, 0],
+        [1, 0],
+      ],
+      visibleRegion: { range: { x: 0, y: 0, width: 2, height: 1 }, tx: 0, ty: 0 },
+      hostBounds: { left: 100, top: 200 },
+      getCellBounds: (col) => ({ x: 110 + col * 90, y: 220, width: 90, height: 22 }),
+    })
+
+    const mergedFill = scene.fillRects.find((rect) => rect.color.r === 1 && rect.color.g === 0 && rect.color.b === 0)
+    expect(mergedFill).toMatchObject({
+      x: 11,
+      y: 21,
+      width: 178,
+      height: 20,
     })
   })
 

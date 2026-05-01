@@ -248,6 +248,7 @@ export function WorkbookView({
   const [isResizingSidePanel, setIsResizingSidePanel] = useState(false)
   const [selectionLabel, setSelectionLabel] = useState(formatSelectionSnapshotSummary(selectionSnapshot))
   const [viewportWidth, setViewportWidth] = useState(getViewportWidth)
+  const [gridFocusRequestToken, setGridFocusRequestToken] = useState(0)
   const resolvedSidePanelWidth = resolveSidePanelWidth(sidePanelWidth ?? 344, viewportWidth)
 
   useEffect(() => {
@@ -317,6 +318,9 @@ export function WorkbookView({
             isEditing={isEditing}
             onBeginEdit={onBeginFormulaEdit}
             onAddressCommit={onAddressCommit}
+            onAddressCommitSuccess={() => {
+              setGridFocusRequestToken((current) => current + 1)
+            }}
             onCancel={onCancelEdit}
             onChange={onEditorChange}
             onCommit={() => onCommitEdit()}
@@ -365,6 +369,7 @@ export function WorkbookView({
               onAutofitColumn={onAutofitColumn}
               onVisibleViewportChange={onVisibleViewportChange}
               previewRanges={previewRanges}
+              focusRequestToken={gridFocusRequestToken}
               restoreViewportTarget={restoreViewportTarget}
               resolvedValue={resolvedValue}
               selectedAddr={selectedAddr}

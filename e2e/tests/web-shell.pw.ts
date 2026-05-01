@@ -960,6 +960,25 @@ for (const key of ['Delete', 'Backspace'] as const) {
   })
 }
 
+test('web app clears the selected cell with Delete after name-box navigation', async ({ page }) => {
+  await page.goto('/')
+  await waitForWorkbookReady(page)
+
+  const formulaInput = page.getByTestId('formula-input')
+  const nameBox = page.getByTestId('name-box')
+
+  await clickProductCell(page, 1, 1)
+  await formulaInput.fill('delete-after-name-box')
+  await formulaInput.press('Enter')
+
+  await nameBox.fill('B2')
+  await nameBox.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
+
+  await page.keyboard.press('Delete')
+  await expect(formulaInput).toHaveValue('')
+})
+
 test('web app ignores right gutter clicks', async ({ page }) => {
   await page.goto('/')
   await waitForWorkbookReady(page)

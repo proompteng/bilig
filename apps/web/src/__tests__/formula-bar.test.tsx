@@ -12,6 +12,7 @@ function FormulaBarHarness(props: {
   definedNames?: readonly WorkbookDefinedNameSnapshot[]
   selectionLabel?: string
   onAddressCommitResult?: (next: string) => boolean
+  onAddressCommitSuccess?: () => void
 }) {
   const [value, setValue] = useState(props.initialValue)
   const [isEditing, setIsEditing] = useState(props.initialEditing ?? true)
@@ -21,6 +22,7 @@ function FormulaBarHarness(props: {
       definedNames={props.definedNames}
       isEditing={isEditing}
       onAddressCommit={(next) => props.onAddressCommitResult?.(next) ?? true}
+      onAddressCommitSuccess={props.onAddressCommitSuccess}
       onBeginEdit={(seed) => {
         if (seed !== undefined) {
           setValue(seed)
@@ -234,6 +236,52 @@ describe('FormulaBar', () => {
 
     expect(nameBox.getAttribute('aria-invalid')).toBeNull()
     expect(nameBox.value).toBe('B2')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('requests grid focus after a successful name-box commit only', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const onAddressCommitSuccess = vi.fn()
+
+    await act(async () => {
+      root.render(
+        <FormulaBarHarness
+          initialEditing={false}
+          initialValue=""
+          onAddressCommitResult={(next) => next === 'C4'}
+          onAddressCommitSuccess={onAddressCommitSuccess}
+          selectionLabel="B2"
+        />,
+      )
+    })
+
+    const nameBox = host.querySelector<HTMLInputElement>("[data-testid='name-box']")
+    expect(nameBox).not.toBeNull()
+    if (!nameBox) {
+      throw new Error('Expected name box input')
+    }
+
+    dispatchInputValue(nameBox, 'NotARange')
+    await act(async () => {
+      nameBox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+
+    expect(onAddressCommitSuccess).not.toHaveBeenCalled()
+
+    dispatchInputValue(nameBox, 'C4')
+    await act(async () => {
+      nameBox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+
+    expect(onAddressCommitSuccess).toHaveBeenCalledTimes(1)
+    expect(nameBox.getAttribute('aria-invalid')).toBeNull()
 
     await act(async () => {
       root.unmount()

@@ -18,10 +18,15 @@ function createCellSnapshot(address: string, value: CellSnapshot['value'], style
   }
 }
 
-function makeEngine(cells: Record<string, CellSnapshot>, styles: Record<string, CellStyleRecord> = {}): GridEngineLike {
+function makeEngine(
+  cells: Record<string, CellSnapshot>,
+  styles: Record<string, CellStyleRecord> = {},
+  mergedRanges: Record<string, { sheetName: string; startAddress: string; endAddress: string }> = {},
+): GridEngineLike {
   return {
     getCell: (_sheetName, address) => cells[address] ?? createCellSnapshot(address, { tag: ValueTag.Empty }, undefined),
     getCellStyle: (styleId) => (styleId ? styles[styleId] : undefined),
+    getMergeRange: (_sheetName, address) => mergedRanges[address],
     subscribeCells: () => () => undefined,
     workbook: {
       getSheet: () => undefined,
@@ -123,5 +128,51 @@ describe('renderer-v3 grid tile materializer', () => {
       GRID_TILE_PACKET_V3_MAGIC,
       GRID_TILE_PACKET_V3_MAGIC,
     ])
+  })
+
+  test('materializes visible text for merged cells whose anchor is blank', () => {
+    const tile = materializeGridRenderTileV3({
+      axisSeqX: 5,
+      axisSeqY: 6,
+      cameraSeq: 7,
+      columnWidths: {},
+      dprBucket: 1,
+      engine: makeEngine(
+        {
+          A1: createCellSnapshot('A1', { tag: ValueTag.Empty }, undefined),
+          B1: createCellSnapshot('B1', { tag: ValueTag.String, value: 'merged value' }, undefined),
+        },
+        {},
+        {
+          A1: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' },
+          B1: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' },
+        },
+      ),
+      freezeSeq: 8,
+      glyphAtlasSeq: 9,
+      gridMetrics: getGridMetrics(),
+      materializedAtSeq: 10,
+      packetSeq: 11,
+      rectSeq: 12,
+      rowHeights: {},
+      sheetId: 3,
+      sheetOrdinal: 1,
+      sheetName: 'Sheet1',
+      sortedColumnWidthOverrides: [],
+      sortedRowHeightOverrides: [],
+      styleSeq: 13,
+      textSeq: 14,
+      valueSeq: 15,
+      viewport: {
+        colEnd: VIEWPORT_TILE_COLUMN_COUNT - 1,
+        colStart: 0,
+        rowEnd: VIEWPORT_TILE_ROW_COUNT - 1,
+        rowStart: 0,
+      },
+    })
+
+    expect(tile.textRuns).toContainEqual(expect.objectContaining({ col: 0, row: 0, text: 'merged value' }))
+    expect(tile.textRuns).not.toContainEqual(expect.objectContaining({ col: 1, row: 0, text: 'merged value' }))
+    expect(tile.textRuns.find((run) => run.text === 'merged value')?.width).toBeGreaterThan(getGridMetrics().columnWidth)
   })
 })

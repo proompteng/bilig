@@ -279,6 +279,7 @@ describe('WorkbookToolbar', () => {
         <WorkbookToolbar
           canHideCurrentColumn={false}
           canHideCurrentRow
+          canMergeSelection={false}
           canRedo={false}
           canUndo={false}
           canUnhideCurrentColumn={false}
@@ -298,6 +299,7 @@ describe('WorkbookToolbar', () => {
           onFontSizeChange={() => {}}
           onHideCurrentColumn={() => {}}
           onHideCurrentRow={onHideCurrentRow}
+          onMergeSelectedCells={() => {}}
           onHorizontalAlignmentChange={() => {}}
           onNumberFormatChange={() => {}}
           onRedo={() => {}}
@@ -308,6 +310,7 @@ describe('WorkbookToolbar', () => {
           onToggleUnderline={() => {}}
           onToggleWrap={() => {}}
           onUndo={() => {}}
+          onUnmergeSelectedCells={() => {}}
           onUnhideCurrentColumn={() => {}}
           onUnhideCurrentRow={() => {}}
           recentFillColors={[]}
@@ -358,6 +361,7 @@ describe('WorkbookToolbar', () => {
         <WorkbookToolbar
           canHideCurrentColumn={false}
           canHideCurrentRow={false}
+          canMergeSelection={false}
           canRedo={false}
           canUndo={false}
           canUnhideCurrentColumn={false}
@@ -377,6 +381,7 @@ describe('WorkbookToolbar', () => {
           onFontSizeChange={() => {}}
           onHideCurrentColumn={() => {}}
           onHideCurrentRow={() => {}}
+          onMergeSelectedCells={() => {}}
           onHorizontalAlignmentChange={() => {}}
           onNumberFormatChange={() => {}}
           onRedo={() => {}}
@@ -387,6 +392,7 @@ describe('WorkbookToolbar', () => {
           onToggleUnderline={() => {}}
           onToggleWrap={() => {}}
           onUndo={() => {}}
+          onUnmergeSelectedCells={() => {}}
           onUnhideCurrentColumn={() => {}}
           onUnhideCurrentRow={() => {}}
           recentFillColors={[]}
@@ -422,6 +428,7 @@ describe('WorkbookToolbar', () => {
         <WorkbookToolbar
           canHideCurrentColumn={false}
           canHideCurrentRow
+          canMergeSelection={false}
           canRedo
           canUndo
           canUnhideCurrentColumn={false}
@@ -441,6 +448,7 @@ describe('WorkbookToolbar', () => {
           onFontSizeChange={() => {}}
           onHideCurrentColumn={() => {}}
           onHideCurrentRow={() => {}}
+          onMergeSelectedCells={() => {}}
           onHorizontalAlignmentChange={() => {}}
           onNumberFormatChange={() => {}}
           onRedo={() => {}}
@@ -451,6 +459,7 @@ describe('WorkbookToolbar', () => {
           onToggleUnderline={() => {}}
           onToggleWrap={() => {}}
           onUndo={() => {}}
+          onUnmergeSelectedCells={() => {}}
           onUnhideCurrentColumn={() => {}}
           onUnhideCurrentRow={() => {}}
           recentFillColors={[]}
@@ -494,6 +503,7 @@ describe('WorkbookToolbar', () => {
         <WorkbookToolbar
           canHideCurrentColumn={false}
           canHideCurrentRow={false}
+          canMergeSelection={false}
           canRedo={false}
           canUndo={false}
           canUnhideCurrentColumn={false}
@@ -513,6 +523,7 @@ describe('WorkbookToolbar', () => {
           onFontSizeChange={() => {}}
           onHideCurrentColumn={() => {}}
           onHideCurrentRow={() => {}}
+          onMergeSelectedCells={() => {}}
           onHorizontalAlignmentChange={() => {}}
           onNumberFormatChange={() => {}}
           onRedo={() => {}}
@@ -523,6 +534,7 @@ describe('WorkbookToolbar', () => {
           onToggleUnderline={() => {}}
           onToggleWrap={() => {}}
           onUndo={() => {}}
+          onUnmergeSelectedCells={() => {}}
           onUnhideCurrentColumn={() => {}}
           onUnhideCurrentRow={() => {}}
           recentFillColors={[]}
@@ -588,6 +600,57 @@ describe('WorkbookToolbar', () => {
         font: { bold: true },
       },
     )
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('dispatches merge and unmerge mutations from the structure menu', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const invokeMutation = vi.fn(async () => {})
+    const selectionRangeRef: MutableRefObject<CellRangeRef> = {
+      current: {
+        sheetName: 'Sheet1',
+        startAddress: 'B2',
+        endAddress: 'D5',
+      },
+    }
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<ToolbarHookHarness invokeMutation={invokeMutation} selectionRangeRef={selectionRangeRef} />)
+    })
+
+    await act(async () => {
+      document.querySelector("[aria-label='Structure']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    await act(async () => {
+      document.querySelector("[aria-label='Merge cells']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(document.querySelector("[aria-label='Merge cells']")).toBeNull()
+    await act(async () => {
+      document.querySelector("[aria-label='Structure']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      document.querySelector("[aria-label='Unmerge cells']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(document.querySelector("[aria-label='Unmerge cells']")).toBeNull()
+
+    expect(invokeMutation).toHaveBeenCalledWith('mergeCells', {
+      sheetName: 'Sheet1',
+      startAddress: 'B2',
+      endAddress: 'D5',
+    })
+    expect(invokeMutation).toHaveBeenCalledWith('unmergeCells', {
+      sheetName: 'Sheet1',
+      startAddress: 'B2',
+      endAddress: 'D5',
+    })
 
     await act(async () => {
       root.unmount()
@@ -839,6 +902,7 @@ describe('WorkbookToolbar', () => {
         <WorkbookToolbar
           canHideCurrentColumn={false}
           canHideCurrentRow={false}
+          canMergeSelection={false}
           canRedo={false}
           canUndo={false}
           canUnhideCurrentColumn={false}
@@ -858,6 +922,7 @@ describe('WorkbookToolbar', () => {
           onFontSizeChange={() => {}}
           onHideCurrentColumn={() => {}}
           onHideCurrentRow={() => {}}
+          onMergeSelectedCells={() => {}}
           onHorizontalAlignmentChange={() => {}}
           onNumberFormatChange={() => {}}
           onRedo={() => {}}
@@ -868,6 +933,7 @@ describe('WorkbookToolbar', () => {
           onToggleUnderline={() => {}}
           onToggleWrap={() => {}}
           onUndo={() => {}}
+          onUnmergeSelectedCells={() => {}}
           onUnhideCurrentColumn={() => {}}
           onUnhideCurrentRow={() => {}}
           recentFillColors={[]}
@@ -903,6 +969,7 @@ describe('WorkbookToolbar', () => {
         <WorkbookToolbar
           canHideCurrentColumn={false}
           canHideCurrentRow={false}
+          canMergeSelection={false}
           canRedo={false}
           canUndo={false}
           canUnhideCurrentColumn={false}
@@ -922,6 +989,7 @@ describe('WorkbookToolbar', () => {
           onFontSizeChange={() => {}}
           onHideCurrentColumn={() => {}}
           onHideCurrentRow={() => {}}
+          onMergeSelectedCells={() => {}}
           onHorizontalAlignmentChange={() => {}}
           onNumberFormatChange={() => {}}
           onRedo={() => {}}
@@ -932,6 +1000,7 @@ describe('WorkbookToolbar', () => {
           onToggleUnderline={() => {}}
           onToggleWrap={() => {}}
           onUndo={() => {}}
+          onUnmergeSelectedCells={() => {}}
           onUnhideCurrentColumn={() => {}}
           onUnhideCurrentRow={() => {}}
           recentFillColors={[]}

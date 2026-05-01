@@ -1,6 +1,7 @@
 import type {
   WorkbookChartSnapshot,
   WorkbookImageSnapshot,
+  WorkbookMergeRangeSnapshot,
   WorkbookShapeSnapshot,
   CellNumberFormatRecord,
   CellRangeRef,
@@ -88,6 +89,8 @@ export interface WorkbookFreezePaneRecord {
   cols: number
 }
 
+export interface WorkbookMergeRangeRecord extends WorkbookMergeRangeSnapshot {}
+
 export interface WorkbookFilterRecord {
   sheetName: string
   range: CellRangeRef
@@ -130,6 +133,7 @@ export interface WorkbookMetadataRecord {
   calculationSettings: WorkbookCalculationSettingsRecord
   volatileContext: WorkbookVolatileContextRecord
   freezePanes: Map<string, WorkbookFreezePaneRecord>
+  merges: Map<string, WorkbookMergeRangeRecord>
   sheetProtections: Map<string, WorkbookSheetProtectionRecord>
   filters: Map<string, WorkbookFilterRecord>
   sorts: Map<string, WorkbookSortRecord>
@@ -155,6 +159,7 @@ export function createWorkbookMetadataRecord(): WorkbookMetadataRecord {
     calculationSettings: { mode: 'automatic', compatibilityMode: 'excel-modern' },
     volatileContext: { recalcEpoch: 0 },
     freezePanes: new Map(),
+    merges: new Map(),
     sheetProtections: new Map(),
     filters: new Map(),
     sorts: new Map(),

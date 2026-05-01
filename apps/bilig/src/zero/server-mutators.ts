@@ -17,6 +17,7 @@ import {
   clearRangeNumberFormatArgsSchema,
   clearRangeStyleArgsSchema,
   clearCellArgsSchema,
+  mergeCellsArgsSchema,
   parseApplyBatchArgs,
   parseRenderCommitArgs,
   redoLatestWorkbookChangeArgsSchema,
@@ -28,6 +29,7 @@ import {
   setRangeNumberFormatArgsSchema,
   setRangeStyleArgsSchema,
   structuralAxisMutationArgsSchema,
+  unmergeCellsArgsSchema,
   undoLatestWorkbookChangeArgsSchema,
   updateColumnMetadataArgsSchema,
   updatePresenceArgsSchema,
@@ -714,6 +716,42 @@ export async function handleServerMutator(
         (engine) => {
           return captureEngineUndoBundle(engine, (draft) => {
             draft.setFreezePane(parsed.sheetName, parsed.rows, parsed.cols)
+          })
+        },
+        parsed.clientMutationId,
+        session,
+      )
+      return
+    }
+
+    case 'workbook.mergeCells': {
+      const parsed = mergeCellsArgsSchema.parse(args)
+      await commitWorkbookMutation(
+        parsed.documentId,
+        serverTx,
+        { kind: 'mergeCells', range: parsed.range },
+        runtimeManager,
+        (engine) => {
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.mergeCells(parsed.range)
+          })
+        },
+        parsed.clientMutationId,
+        session,
+      )
+      return
+    }
+
+    case 'workbook.unmergeCells': {
+      const parsed = unmergeCellsArgsSchema.parse(args)
+      await commitWorkbookMutation(
+        parsed.documentId,
+        serverTx,
+        { kind: 'unmergeCells', range: parsed.range },
+        runtimeManager,
+        (engine) => {
+          return captureEngineUndoBundle(engine, (draft) => {
+            draft.unmergeCells(parsed.range)
           })
         },
         parsed.clientMutationId,

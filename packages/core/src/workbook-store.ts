@@ -52,6 +52,7 @@ import {
   type WorkbookFormatRangeRecord,
   type WorkbookFreezePaneRecord,
   type WorkbookImageRecord,
+  type WorkbookMergeRangeRecord,
   type WorkbookMetadataRecord,
   type WorkbookPivotRecord,
   type WorkbookPropertyRecord,
@@ -114,6 +115,7 @@ export type {
   WorkbookFormatRangeRecord,
   WorkbookFreezePaneRecord,
   WorkbookImageRecord,
+  WorkbookMergeRangeRecord,
   WorkbookMetadataRecord,
   WorkbookPivotRecord,
   WorkbookPropertyRecord,
@@ -877,6 +879,26 @@ export class WorkbookStore {
 
   clearFreezePane(sheetName: string): boolean {
     return runWorkbookMetadataEffect(this.metadataService.clearFreezePane(sheetName))
+  }
+
+  setMergeRange(range: CellRangeRef): WorkbookMergeRangeRecord {
+    return runWorkbookMetadataEffect(this.metadataService.setMergeRange(range))
+  }
+
+  getMergeRange(sheetName: string, address: string): WorkbookMergeRangeRecord | undefined {
+    return runWorkbookMetadataEffect(this.metadataService.getMergeRange(sheetName, address))
+  }
+
+  getMergeRangeByRange(range: CellRangeRef): WorkbookMergeRangeRecord | undefined {
+    return runWorkbookMetadataEffect(this.metadataService.getMergeRangeByRange(range))
+  }
+
+  clearMergeRanges(range: CellRangeRef): WorkbookMergeRangeRecord[] {
+    return runWorkbookMetadataEffect(this.metadataService.clearMergeRanges(range))
+  }
+
+  listMergeRanges(sheetName: string): WorkbookMergeRangeRecord[] {
+    return runWorkbookMetadataEffect(this.metadataService.listMergeRanges(sheetName))
   }
 
   setSheetProtection(record: WorkbookSheetProtectionSnapshot): WorkbookSheetProtectionRecord {

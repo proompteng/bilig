@@ -167,6 +167,8 @@ function normalizeWorkbookChangeRecord(row: WorkbookChangeSelectRow): WorkbookCh
     eventKind !== 'updateColumnMetadata' &&
     eventKind !== 'updateColumnWidth' &&
     eventKind !== 'setFreezePane' &&
+    eventKind !== 'mergeCells' &&
+    eventKind !== 'unmergeCells' &&
     eventKind !== 'setRangeStyle' &&
     eventKind !== 'clearRangeStyle' &&
     eventKind !== 'setRangeNumberFormat' &&
@@ -568,6 +570,26 @@ export function buildWorkbookChangeDescriptor(payload: WorkbookEventPayload): Wo
           endAddress: 'A1',
         },
       }
+    case 'mergeCells': {
+      const range = normalizeRange(payload.range)
+      return {
+        eventKind: payload.kind,
+        summary: `Merged ${rangeLabel(range)}`,
+        sheetName: range.sheetName,
+        anchorAddress: range.startAddress,
+        range,
+      }
+    }
+    case 'unmergeCells': {
+      const range = normalizeRange(payload.range)
+      return {
+        eventKind: payload.kind,
+        summary: `Unmerged cells in ${rangeLabel(range)}`,
+        sheetName: range.sheetName,
+        anchorAddress: range.startAddress,
+        range,
+      }
+    }
     case 'setRangeStyle': {
       const range = normalizeRange(payload.range)
       return {

@@ -112,6 +112,13 @@ function createPatch(): ViewportPatch {
         styleId: 'style-0',
       },
     ],
+    merges: [
+      {
+        sheetName: 'Sheet1',
+        startAddress: 'C3',
+        endAddress: 'D4',
+      },
+    ],
     columns: [{ index: 1, size: 140, hidden: false }],
     rows: [{ index: 2, size: 28, hidden: true }],
   }
@@ -126,6 +133,17 @@ describe('viewport patch codec', () => {
 
     expect(bytes[0]).not.toBe('{'.charCodeAt(0))
     expect(decoded).toEqual(patch)
+  })
+
+  it('round-trips an explicit empty merge set so unmerge patches can clear the viewport', () => {
+    const patch = {
+      ...createPatch(),
+      merges: [],
+    }
+
+    const decoded = decodeViewportPatch(encodeViewportPatch(patch))
+
+    expect(decoded.merges).toEqual([])
   })
 
   it('rejects legacy JSON viewport patch payloads', () => {

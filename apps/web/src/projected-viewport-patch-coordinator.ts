@@ -1,4 +1,4 @@
-import type { Viewport } from '@bilig/protocol'
+import type { Viewport, WorkbookMergeRangeSnapshot } from '@bilig/protocol'
 import { decodeViewportPatch, type ViewportPatch, type WorkerEngineClient } from '@bilig/worker-transport'
 import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
 import type { ProjectedViewportCellCache } from './projected-viewport-cell-cache.js'
@@ -8,7 +8,7 @@ import { applyProjectedViewportPatch, type ProjectedViewportPatchApplicationResu
 type CellItem = readonly [number, number]
 export type ProjectedViewportPatchApplied = Pick<
   ProjectedViewportPatchApplicationResult,
-  'damage' | 'axisChanged' | 'columnsChanged' | 'rowsChanged' | 'freezeChanged'
+  'damage' | 'axisChanged' | 'columnsChanged' | 'rowsChanged' | 'freezeChanged' | 'mergesChanged'
 >
 interface ProjectedViewportSubscriptionOptions {
   readonly initialPatch?: 'full' | 'none'
@@ -20,6 +20,7 @@ export class ProjectedViewportPatchCoordinator {
       client?: WorkerEngineClient
       cellCache: ProjectedViewportCellCache
       axisStore: ProjectedViewportAxisStore
+      mergeRangesBySheet: Map<string, Map<string, WorkbookMergeRangeSnapshot>>
       onViewportPatchApplied?:
         | ((patch: ViewportPatch, result: ProjectedViewportPatchApplied, options: ProjectedViewportSubscriptionOptions) => void)
         | undefined
@@ -104,6 +105,7 @@ export class ProjectedViewportPatchCoordinator {
       state: {
         ...this.options.cellCache.getPatchState(),
         ...this.options.axisStore.getPatchState(),
+        mergeRangesBySheet: this.options.mergeRangesBySheet,
       },
       patch,
       touchCellKey: (key) => this.options.cellCache.touchCellKey(key),

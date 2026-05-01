@@ -5,6 +5,7 @@ import { getVisibleColumnBounds, getVisibleRowBounds, type GridMetrics } from '.
 import { buildGridGpuHeaderScene } from './gridGpuHeaderScene.js'
 import type { HeaderSelection } from './gridPointer.js'
 import type { GridSelection, Item, Rectangle } from './gridTypes.js'
+import { resolveMergedCell, resolveMergedCellBounds } from './gridMergedRanges.js'
 import { collectVisibleColumnBounds, collectVisibleRowBounds } from './visibleGridAxes.js'
 import { workbookThemeColors } from './workbookTheme.js'
 
@@ -176,11 +177,16 @@ export function buildGridGpuScene({
     if (!bounds) {
       continue
     }
+    const merged = resolveMergedCell(engine, sheetName, row, col)
+    if (merged && !merged.isAnchor) {
+      continue
+    }
+    const cellBounds = merged ? resolveMergedCellBounds({ merged, fallback: bounds, getCellBounds }) : bounds
     const rect = {
-      x: bounds.x - hostBounds.left,
-      y: bounds.y - hostBounds.top,
-      width: bounds.width,
-      height: bounds.height,
+      x: cellBounds.x - hostBounds.left,
+      y: cellBounds.y - hostBounds.top,
+      width: cellBounds.width,
+      height: cellBounds.height,
     }
 
     const snapshot = engine.getCell(sheetName, formatAddress(row, col))

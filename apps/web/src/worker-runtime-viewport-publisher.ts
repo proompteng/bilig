@@ -4,6 +4,7 @@ import { encodeViewportPatch, type ViewportPatch, type ViewportPatchSubscription
 import {
   normalizeViewport,
   viewportPatchMayBeImpacted,
+  mergeRangeIntersectsViewport,
   type SheetViewportImpact,
   type ViewportSubscriptionState,
   type WorkerEngine,
@@ -78,6 +79,7 @@ export class WorkerViewportPatchPublisher {
       lastCellSignatures: new Map<string, string>(),
       lastColumnSignatures: new Map<number, string>(),
       lastRowSignatures: new Map<number, string>(),
+      lastMergeSignatures: new Map<string, string>(),
     }
     if (subscription.initialPatch !== 'none') {
       listener(
@@ -107,11 +109,13 @@ export class WorkerViewportPatchPublisher {
     if ((event === null || event.invalidation === 'full') && this.options.canReadLocalProjectionForViewport()) {
       const localBase = this.options.readLocalViewport(state.subscription.sheetName, state.subscription)
       if (localBase && (!this.options.hasProjectionEngine() || !hasFormulaErrorCells(localBase))) {
+        const projectionEngine = this.options.hasProjectionEngine() ? this.options.getProjectionEngine() : undefined
         return buildViewportPatchFromLocalBase({
           state,
           metrics,
           authoritativeRevision,
           base: localBase,
+          ...(projectionEngine ? { engine: projectionEngine } : {}),
           getFormatId: (format) => this.getFormatId(format),
         })
       }
@@ -147,7 +151,7 @@ export class WorkerViewportPatchPublisher {
         continue
       }
       const patch = this.options.buildPatch(subscription, input.event, metrics, this.options.getAuthoritativeRevision(), sheetImpact)
-      if (patch.cells.length === 0 && patch.columns.length === 0 && patch.rows.length === 0) {
+      if (patch.cells.length === 0 && patch.columns.length === 0 && patch.rows.length === 0 && patch.merges === undefined) {
         continue
       }
       if (patch.full) {
@@ -166,6 +170,14 @@ export class WorkerViewportPatchPublisher {
     }
     const localBase = this.options.readLocalViewport(state.subscription.sheetName, state.subscription)
     if (!localBase) {
+      return false
+    }
+    const projectionEngine = this.options.getProjectionEngine()
+    if (
+      projectionEngine
+        .listMergeRanges(state.subscription.sheetName)
+        .some((range) => mergeRangeIntersectsViewport(range, state.subscription))
+    ) {
       return false
     }
     return !hasFormulaErrorCells(localBase)

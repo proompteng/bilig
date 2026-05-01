@@ -1,4 +1,6 @@
-import type { CellSnapshot, CellStyleRecord } from '@bilig/protocol'
+import type { CellSnapshot, CellStyleRecord, WorkbookMergeRangeSnapshot } from '@bilig/protocol'
+
+export type GridEngineSheetChannel = 'merges'
 
 export interface GridSheetLike {
   grid: {
@@ -13,6 +15,9 @@ export interface GridWorkbookLike {
 export interface GridEngineLike {
   getCell(sheetName: string, address: string): CellSnapshot
   getCellStyle(styleId: string | undefined): CellStyleRecord | undefined
+  getMergeRange?(sheetName: string, address: string): WorkbookMergeRangeSnapshot | undefined
+  listMergeRanges?(sheetName: string): readonly WorkbookMergeRangeSnapshot[]
   subscribeCells(sheetName: string, addresses: readonly string[], listener: () => void): () => void
+  subscribeSheetChannel?(sheetName: string, channel: GridEngineSheetChannel, listener: () => void): () => void
   workbook: GridWorkbookLike
 }

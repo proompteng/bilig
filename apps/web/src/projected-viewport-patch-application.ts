@@ -1,7 +1,8 @@
-import { parseCellAddress } from '@bilig/formula'
-import { ValueTag, type CellSnapshot, type CellStyleRecord, type Viewport } from '@bilig/protocol'
+import { formatAddress, parseCellAddress } from '@bilig/formula'
+import { ValueTag, type CellSnapshot, type CellStyleRecord, type Viewport, type WorkbookMergeRangeSnapshot } from '@bilig/protocol'
 import type { ViewportPatch } from '@bilig/worker-transport'
 import { applyProjectedViewportAxisPatches } from './projected-viewport-axis-patches.js'
+import { mergeRangeIntersectsViewport, mergeRangeSignature, normalizeWorkbookMergeRange } from './worker-runtime-support.js'
 
 export type ProjectedViewportCellItem = readonly [number, number]
 
@@ -21,6 +22,7 @@ export interface ProjectedViewportPatchState {
   readonly hiddenRowsBySheet: Map<string, Record<number, true>>
   readonly freezeRowsBySheet: Map<string, number>
   readonly freezeColsBySheet: Map<string, number>
+  readonly mergeRangesBySheet: Map<string, Map<string, WorkbookMergeRangeSnapshot>>
   readonly knownSheets: Set<string>
 }
 
@@ -31,6 +33,7 @@ export interface ProjectedViewportPatchApplicationResult {
   readonly columnsChanged: boolean
   readonly rowsChanged: boolean
   readonly freezeChanged: boolean
+  readonly mergesChanged: boolean
 }
 
 function snapshotValueKey(snapshot: CellSnapshot): string {
@@ -151,6 +154,61 @@ function getSheetCellKeys(state: ProjectedViewportPatchState, sheetName: string)
   const created = new Set<string>()
   state.cellKeysBySheet.set(sheetName, created)
   return created
+}
+
+function getSheetMergeRanges(state: ProjectedViewportPatchState, sheetName: string): Map<string, WorkbookMergeRangeSnapshot> {
+  const existing = state.mergeRangesBySheet.get(sheetName)
+  if (existing) {
+    return existing
+  }
+  const created = new Map<string, WorkbookMergeRangeSnapshot>()
+  state.mergeRangesBySheet.set(sheetName, created)
+  return created
+}
+
+function addDamageCell(
+  input: {
+    readonly damagedCellKeys: Set<string>
+    readonly damage: { cell: ProjectedViewportCellItem }[]
+    readonly changedKeys: Set<string>
+    readonly sheetName: string
+  },
+  row: number,
+  col: number,
+): void {
+  const address = formatAddress(row, col)
+  const key = `${input.sheetName}!${address}`
+  if (input.damagedCellKeys.has(key)) {
+    return
+  }
+  input.damage.push({ cell: [col, row] })
+  input.changedKeys.add(key)
+  input.damagedCellKeys.add(key)
+}
+
+function addMergeDamage(
+  input: {
+    readonly damagedCellKeys: Set<string>
+    readonly damage: { cell: ProjectedViewportCellItem }[]
+    readonly changedKeys: Set<string>
+    readonly viewport: Viewport
+    readonly sheetName: string
+  },
+  range: WorkbookMergeRangeSnapshot,
+): void {
+  const normalized = normalizeWorkbookMergeRange(range)
+  const rowStart = Math.max(input.viewport.rowStart, normalized.startRow)
+  const rowEnd = Math.min(input.viewport.rowEnd, normalized.endRow)
+  const colStart = Math.max(input.viewport.colStart, normalized.startCol)
+  const colEnd = Math.min(input.viewport.colEnd, normalized.endCol)
+  if (rowStart > rowEnd || colStart > colEnd) {
+    return
+  }
+  for (let row = rowStart; row <= rowEnd; row += 1) {
+    for (let col = colStart; col <= colEnd; col += 1) {
+      addDamageCell(input, row, col)
+    }
+  }
 }
 
 export function applyProjectedViewportPatch(input: {
@@ -292,6 +350,60 @@ export function applyProjectedViewportPatch(input: {
     axisChanged = axisChanged || nextRows.axisChanged
   }
 
+  let mergesChanged = false
+  if (patch.merges !== undefined) {
+    const sheetMerges = getSheetMergeRanges(state, patch.viewport.sheetName)
+    const previousIntersecting = [...sheetMerges.values()].filter((range) => mergeRangeIntersectsViewport(range, patch.viewport))
+    const nextMerges = patch.merges.map((range) => normalizeWorkbookMergeRange(range))
+    const previousSignatures = new Set(previousIntersecting.map((range) => mergeRangeSignature(range)))
+    const nextSignatures = new Set(nextMerges.map((range) => mergeRangeSignature(range)))
+    mergesChanged =
+      previousSignatures.size !== nextSignatures.size ||
+      [...previousSignatures].some((signature) => !nextSignatures.has(signature)) ||
+      [...nextSignatures].some((signature) => !previousSignatures.has(signature))
+
+    if (mergesChanged) {
+      previousIntersecting.forEach((range) =>
+        addMergeDamage(
+          {
+            changedKeys,
+            damage,
+            damagedCellKeys,
+            sheetName: patch.viewport.sheetName,
+            viewport: patch.viewport,
+          },
+          range,
+        ),
+      )
+      nextMerges.forEach((range) =>
+        addMergeDamage(
+          {
+            changedKeys,
+            damage,
+            damagedCellKeys,
+            sheetName: patch.viewport.sheetName,
+            viewport: patch.viewport,
+          },
+          range,
+        ),
+      )
+    }
+
+    previousIntersecting.forEach((range) => {
+      sheetMerges.delete(mergeRangeSignature(range))
+    })
+    nextMerges.forEach((range) => {
+      sheetMerges.set(mergeRangeSignature(range), {
+        sheetName: range.sheetName,
+        startAddress: range.startAddress,
+        endAddress: range.endAddress,
+      })
+    })
+    if (sheetMerges.size === 0) {
+      state.mergeRangesBySheet.delete(patch.viewport.sheetName)
+    }
+  }
+
   return {
     damage,
     changedKeys,
@@ -299,5 +411,6 @@ export function applyProjectedViewportPatch(input: {
     columnsChanged,
     rowsChanged,
     freezeChanged,
+    mergesChanged,
   }
 }

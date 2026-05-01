@@ -10,12 +10,16 @@ import {
   type CellStyleRecord,
   type EngineEvent,
   type RecalcMetrics,
+  type WorkbookMergeRangeSnapshot,
 } from '@bilig/protocol'
 import type { ViewportPatch, ViewportPatchedCell } from '@bilig/worker-transport'
 import {
   buildAxisPatches,
   collectViewportCells,
   indexAxisEntries,
+  mergeRangeIntersectsViewport,
+  mergeRangeSignature,
+  normalizeWorkbookMergeRange,
   styleSignature,
   type SheetViewportImpact,
   type ViewportSubscriptionState,
@@ -140,6 +144,51 @@ function appendPatchedCell(context: PatchedCellContext, row: number, col: number
   context.state.lastCellSignatures.set(key, signature)
 }
 
+function sameMergeSignatures(left: ReadonlyMap<string, string>, right: ReadonlyMap<string, string>): boolean {
+  if (left.size !== right.size) {
+    return false
+  }
+  for (const [key, signature] of left) {
+    if (right.get(key) !== signature) {
+      return false
+    }
+  }
+  return true
+}
+
+function collectViewportMergeRanges(
+  engine: WorkerEngine | undefined,
+  state: ViewportSubscriptionState,
+  force: boolean,
+): WorkbookMergeRangeSnapshot[] | undefined {
+  if (!engine) {
+    if (force && state.lastMergeSignatures.size > 0) {
+      state.lastMergeSignatures = new Map()
+      return []
+    }
+    return undefined
+  }
+
+  const merges = engine
+    .listMergeRanges(state.subscription.sheetName)
+    .filter((range) => mergeRangeIntersectsViewport(range, state.subscription))
+    .map((range) => normalizeWorkbookMergeRange(range))
+    .toSorted(
+      (left, right) =>
+        left.startRow - right.startRow || left.startCol - right.startCol || left.endRow - right.endRow || left.endCol - right.endCol,
+    )
+  const nextSignatures = new Map(merges.map((range) => [mergeRangeSignature(range), mergeRangeSignature(range)]))
+  if (!force && sameMergeSignatures(state.lastMergeSignatures, nextSignatures)) {
+    return undefined
+  }
+  state.lastMergeSignatures = nextSignatures
+  return merges.map((range) => ({
+    sheetName: range.sheetName,
+    startAddress: range.startAddress,
+    endAddress: range.endAddress,
+  }))
+}
+
 export function buildViewportPatchFromEngine(input: {
   readonly state: ViewportSubscriptionState
   readonly event: EngineEvent | null
@@ -211,6 +260,7 @@ export function buildViewportPatchFromEngine(input: {
   )
   state.lastColumnSignatures = columnSignatures
   state.lastRowSignatures = rowSignatures
+  const merges = collectViewportMergeRanges(engine, state, full)
 
   return {
     version: state.nextVersion++,
@@ -224,6 +274,7 @@ export function buildViewportPatchFromEngine(input: {
     cells,
     columns,
     rows,
+    ...(merges !== undefined ? { merges } : {}),
   }
 }
 
@@ -232,6 +283,7 @@ export function buildViewportPatchFromLocalBase(input: {
   readonly metrics: RecalcMetrics
   readonly authoritativeRevision: number
   readonly base: WorkbookLocalViewportBase
+  readonly engine?: WorkerEngine | undefined
   readonly getFormatId: (format: string | undefined) => number
 }): ViewportPatch {
   const { state, metrics, base } = input
@@ -290,6 +342,7 @@ export function buildViewportPatchFromLocalBase(input: {
   )
   state.lastColumnSignatures = columnSignatures
   state.lastRowSignatures = rowSignatures
+  const merges = collectViewportMergeRanges(input.engine, state, true)
 
   return {
     version: state.nextVersion++,
@@ -303,5 +356,6 @@ export function buildViewportPatchFromLocalBase(input: {
     cells,
     columns,
     rows,
+    ...(merges !== undefined ? { merges } : {}),
   }
 }

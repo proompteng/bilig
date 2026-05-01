@@ -34,6 +34,17 @@ describe('operation-service metadata operations', () => {
     expect(engine.clearFreezePane('Sheet1')).toBe(true)
     expect(expectNoBatch(() => engine.clearFreezePane('Sheet1'))).toBe(false)
 
+    engine.mergeCells(range)
+    expectNoBatch(() => engine.mergeCells(range))
+    expect(engine.getMergeRange('Sheet1', 'B2')).toEqual({
+      sheetName: 'Sheet1',
+      startAddress: 'A1',
+      endAddress: 'B2',
+    })
+    expect(engine.unmergeCells(otherRange)).toBe(false)
+    expect(engine.unmergeCells(range)).toBe(true)
+    expect(expectNoBatch(() => engine.unmergeCells(range))).toBe(false)
+
     expect(expectNoBatch(() => engine.clearSheetProtection('Sheet1'))).toBe(false)
     engine.setSheetProtection({ sheetName: 'Sheet1', hideFormulas: true })
     expectNoBatch(() => engine.setSheetProtection({ sheetName: 'Sheet1', hideFormulas: true }))

@@ -24,6 +24,7 @@ describe('engine snapshot utils', () => {
     workbook.upsertCellNumberFormat(createCellNumberFormatRecord('format-decimal', '0.00'))
     workbook.setFormatRange({ sheetName: 'Sheet1', startAddress: 'C1', endAddress: 'C3' }, 'format-decimal')
     workbook.setFreezePane('Sheet1', 1, 2)
+    workbook.setMergeRange({ sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'E2' })
     workbook.setFilter('Sheet1', {
       sheetName: 'Sheet1',
       startAddress: 'A1',
@@ -63,6 +64,7 @@ describe('engine snapshot utils', () => {
         },
       ],
       freezePane: { rows: 1, cols: 2 },
+      merges: [{ sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'E2' }],
       filters: [{ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'D8' }],
       sorts: [
         {
@@ -82,7 +84,7 @@ describe('engine snapshot utils', () => {
     expect(workbook.listSorts('Sheet1')[0]?.keys[0]?.direction).toBe('desc')
 
     const ops = sheetMetadataToOps(workbook, 'Sheet1')
-    expect(ops).toHaveLength(14)
+    expect(ops).toHaveLength(15)
     expect(ops).toMatchObject([
       {
         kind: 'insertRows',
@@ -166,6 +168,10 @@ describe('engine snapshot utils', () => {
         sheetName: 'Sheet1',
         rows: 1,
         cols: 2,
+      },
+      {
+        kind: 'mergeCells',
+        range: { sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'E2' },
       },
       {
         kind: 'setFilter',

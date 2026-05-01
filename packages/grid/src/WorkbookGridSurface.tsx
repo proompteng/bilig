@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { parseCellAddress } from '@bilig/formula'
 import { CellEditorOverlay } from './CellEditorOverlay.js'
 import { GridFillHandleOverlay } from './GridFillHandleOverlay.js'
@@ -78,6 +78,15 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     selectedCellSnapshot: props.selectedCellSnapshot,
     renderState,
   })
+  const focusGrid = renderState.focusGrid
+  const lastFocusRequestTokenRef = useRef(props.focusRequestToken)
+  useEffect(() => {
+    if (props.focusRequestToken === undefined || props.focusRequestToken === lastFocusRequestTokenRef.current) {
+      return
+    }
+    lastFocusRequestTokenRef.current = props.focusRequestToken
+    focusGrid()
+  }, [focusGrid, props.focusRequestToken])
   const visibleRange = renderState.visibleRegion.range
   const getCellLocalBounds = renderState.getCellLocalBounds
   const committedCellSelection = useMemo(() => {

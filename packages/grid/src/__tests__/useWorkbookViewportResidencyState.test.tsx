@@ -226,7 +226,9 @@ describe('GridViewportResidencyRuntime', () => {
   it('owns local scene invalidation subscriptions', () => {
     const runtime = new GridViewportResidencyRuntime()
     let invalidateScene: (() => void) | null = null
+    let invalidateMerges: (() => void) | null = null
     const unsubscribe = vi.fn()
+    const unsubscribeMerges = vi.fn()
     const subscribeCells = vi.fn((_sheetName: string, _addresses: readonly string[], listener: () => void) => {
       invalidateScene = listener
       return unsubscribe
@@ -244,7 +246,14 @@ describe('GridViewportResidencyRuntime', () => {
     )
     const localUnsubscribe = runtime.connectLocalSceneInvalidation(
       {
-        engine: createEngine(subscribeCells),
+        engine: {
+          ...createEngine(subscribeCells),
+          subscribeSheetChannel: (_sheetName, channel, listener) => {
+            expect(channel).toBe('merges')
+            invalidateMerges = listener
+            return unsubscribeMerges
+          },
+        },
         sheetName: 'Sheet1',
         shouldUseRemoteRenderTileSource: false,
         visibleAddresses: ['A1', 'B2'],
@@ -258,11 +267,13 @@ describe('GridViewportResidencyRuntime', () => {
     expect(subscribeCells.mock.calls[0]?.[1]).toEqual(['A1', 'B2'])
 
     invalidateScene?.()
+    invalidateMerges?.()
 
-    expect(invalidations).toEqual(['local'])
-    expect(runtime.resolve({ freezeCols: 0, freezeRows: 0, visibleRegion }).sceneRevision).toBe(1)
+    expect(invalidations).toEqual(['local', 'local'])
+    expect(runtime.resolve({ freezeCols: 0, freezeRows: 0, visibleRegion }).sceneRevision).toBe(2)
     localUnsubscribe?.()
     expect(unsubscribe).toHaveBeenCalledTimes(1)
+    expect(unsubscribeMerges).toHaveBeenCalledTimes(1)
   })
 
   it('reconciles local scene invalidation lifecycles without React-owned resubscribe churn', () => {

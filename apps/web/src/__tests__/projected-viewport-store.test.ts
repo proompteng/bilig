@@ -685,4 +685,43 @@ describe('ProjectedViewportStore', () => {
     unsubscribeColumns()
     unsubscribeRows()
   })
+
+  it('exposes viewport merge metadata through the grid engine interface', () => {
+    const cache = new ProjectedViewportStore()
+    const mergeListener = vi.fn()
+    const cellListener = vi.fn()
+    const unsubscribeMerge = cache.subscribeSheetChannel('Sheet1', 'merges', mergeListener)
+    const unsubscribeCell = cache.subscribeCells('Sheet1', ['C5'], cellListener)
+
+    const damage = cache.applyViewportPatch({
+      ...createPatch(),
+      cells: [],
+      viewport: { sheetName: 'Sheet1', rowStart: 4, rowEnd: 4, colStart: 2, colEnd: 3 },
+      merges: [{ sheetName: 'Sheet1', startAddress: 'C5', endAddress: 'D5' }],
+    })
+
+    expect(damage).toEqual([{ cell: [2, 4] }, { cell: [3, 4] }])
+    expect(cache.getMergeRange('Sheet1', 'C5')).toEqual({
+      sheetName: 'Sheet1',
+      startAddress: 'C5',
+      endAddress: 'D5',
+    })
+    expect(cache.getMergeRange('Sheet1', 'D5')).toEqual({
+      sheetName: 'Sheet1',
+      startAddress: 'C5',
+      endAddress: 'D5',
+    })
+    expect(cache.listMergeRanges('Sheet1')).toEqual([
+      {
+        sheetName: 'Sheet1',
+        startAddress: 'C5',
+        endAddress: 'D5',
+      },
+    ])
+    expect(mergeListener).toHaveBeenCalledTimes(1)
+    expect(cellListener).toHaveBeenCalledTimes(1)
+
+    unsubscribeMerge()
+    unsubscribeCell()
+  })
 })
