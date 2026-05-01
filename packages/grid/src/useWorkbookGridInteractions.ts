@@ -3,7 +3,6 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
-  useRef,
   type ClipboardEvent as ReactClipboardEvent,
   type FocusEvent as ReactFocusEvent,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -15,9 +14,7 @@ import { flushSync } from 'react-dom'
 import { selectionToSnapshot, snapshotToSelection } from './gridSelection.js'
 import { resolveGridSelectionPendingSync } from './gridSelectionPendingSync.js'
 import { resolveSelectionMoveAnchorCell } from './gridRangeMove.js'
-import type { HeaderSelection } from './gridPointer.js'
 import { sameGridHoverState, type GridHoverState } from './gridHover.js'
-import type { InternalClipboardRange } from './gridInternalClipboard.js'
 import {
   finishGridResize,
   handleGridBodyDoubleClick,
@@ -52,12 +49,13 @@ import { beginWorkbookGridRangeMove } from './gridRangeMoveInteractions.js'
 import { beginWorkbookGridFillHandleDrag } from './gridFillHandleInteractions.js'
 import { handleWorkbookGridKeyDownCapture } from './gridKeyboardCapture.js'
 import type { GridSelection, Item } from './gridTypes.js'
-import type { EditMovement, EditSelectionBehavior, GridSelectionSnapshot, WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
+import type { EditMovement, EditSelectionBehavior, WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
 import { useWorkbookGridContextMenu } from './useWorkbookGridContextMenu.js'
 import { useWorkbookGridKeyboardHandler } from './useWorkbookGridKeyboardHandler.js'
 import type { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
 import { useWorkbookGridPointerResolvers } from './useWorkbookGridPointerResolvers.js'
 import { useWorkbookGridSelectionSummary } from './useWorkbookGridSelectionSummary.js'
+import { GridInputController } from './runtime/gridInputController.js'
 
 const DEFAULT_GRID_HOVER_STATE: GridHoverState = { cell: null, header: null, cursor: 'default' }
 
@@ -174,42 +172,29 @@ export function useWorkbookGridInteractions(
     () => gridSelection.current?.cell ?? [selectedCell.col, selectedCell.row],
     [gridSelection.current, selectedCell.col, selectedCell.row],
   )
-  const wasEditingOverlayRef = useRef(false)
-  const ignoreNextPointerSelectionRef = useRef(false)
-  const pendingPointerCellRef = useRef<Item | null>(null)
-  const dragAnchorCellRef = useRef<Item | null>(null)
-  const dragPointerCellRef = useRef<Item | null>(null)
-  const dragHeaderSelectionRef = useRef<HeaderSelection | null>(null)
-  const dragDidMoveRef = useRef(false)
-  const postDragSelectionExpiryRef = useRef<number>(0)
-  const columnResizeActiveRef = useRef(false)
-  const lastBodyClickCellRef = useRef<Item | null>(null)
-  const internalClipboardRef = useRef<InternalClipboardRange | null>(null)
-  const pendingClipboardCopySequenceRef = useRef(0)
-  const pendingKeyboardPasteSequenceRef = useRef(0)
-  const suppressNextNativePasteRef = useRef(false)
-  const pendingTypeSeedRef = useRef<string | null>(null)
-  const pendingLocalSelectionSnapshotRef = useRef<GridSelectionSnapshot | null>(null)
-  const pendingLocalSelectionBaseSnapshotRef = useRef<GridSelectionSnapshot | null>(null)
-  const lastResizeHandleActivationRef = useRef<{ columnIndex: number; at: number } | null>(null)
-  const fillPreviewRangeRef = useRef(fillPreviewRange)
-  const fillHandleCleanupRef = useRef<(() => void) | null>(null)
-  const rangeMoveCleanupRef = useRef<(() => void) | null>(null)
-  const resizeCleanupRef = useRef<(() => void) | null>(null)
-  const activeSheetRef = useRef(sheetName)
-  const interactionState = useMemo(
-    () => ({
-      ignoreNextPointerSelectionRef,
-      pendingPointerCellRef,
-      dragAnchorCellRef,
-      dragPointerCellRef,
-      dragHeaderSelectionRef,
-      dragDidMoveRef,
-      postDragSelectionExpiryRef,
-      columnResizeActiveRef,
-    }),
-    [columnResizeActiveRef],
-  )
+  const inputController = useMemo(() => new GridInputController(), [])
+  const interactionState = inputController.interactionState
+  const {
+    dragAnchorCellRef,
+    dragDidMoveRef,
+    dragHeaderSelectionRef,
+    dragPointerCellRef,
+    fillHandleCleanupRef,
+    fillPreviewRangeRef,
+    internalClipboardRef,
+    lastBodyClickCellRef,
+    lastResizeHandleActivationRef,
+    pendingClipboardCopySequenceRef,
+    pendingKeyboardPasteSequenceRef,
+    pendingLocalSelectionBaseSnapshotRef,
+    pendingLocalSelectionSnapshotRef,
+    pendingTypeSeedRef,
+    postDragSelectionExpiryRef,
+    rangeMoveCleanupRef,
+    resizeCleanupRef,
+    suppressNextNativePasteRef,
+    wasEditingOverlayRef,
+  } = inputController
   const {
     resolveColumnResizeTarget: resolveColumnResizeTargetAtPointer,
     resolveRowResizeTarget: resolveRowResizeTargetAtPointer,
@@ -224,21 +209,15 @@ export function useWorkbookGridInteractions(
     getGeometrySnapshot: renderState.getLiveGeometrySnapshot,
   })
   useEffect(() => {
-    fillPreviewRangeRef.current = fillPreviewRange
-  }, [fillPreviewRange])
+    inputController.syncFillPreviewRange(fillPreviewRange)
+  }, [fillPreviewRange, inputController])
   useEffect(() => {
-    const fillHandleCleanup = fillHandleCleanupRef.current
-    const rangeMoveCleanup = rangeMoveCleanupRef.current
-    const resizeCleanup = resizeCleanupRef.current
     return () => {
-      fillHandleCleanup?.()
-      rangeMoveCleanup?.()
-      resizeCleanup?.()
+      inputController.disconnect()
     }
-  }, [])
+  }, [inputController])
   useLayoutEffect(() => {
-    const sheetChanged = activeSheetRef.current !== sheetName
-    activeSheetRef.current = sheetName
+    const sheetChanged = inputController.syncActiveSheet(sheetName)
     setGridSelection((current) => {
       const currentSnapshot = selectionToSnapshot(current, selectionSnapshot.sheetName, selectionSnapshot.address)
       const sync = resolveGridSelectionPendingSync({
@@ -256,7 +235,15 @@ export function useWorkbookGridInteractions(
       clearGridPendingPointerActivation(interactionState)
       return snapshotToSelection(selectionSnapshot)
     })
-  }, [interactionState, selectionSnapshot, setGridSelection, sheetName])
+  }, [
+    inputController,
+    interactionState,
+    pendingLocalSelectionBaseSnapshotRef,
+    pendingLocalSelectionSnapshotRef,
+    selectionSnapshot,
+    setGridSelection,
+    sheetName,
+  ])
   useEffect(() => {
     if (wasEditingOverlayRef.current && !isEditingCell) {
       window.requestAnimationFrame(() => {
@@ -267,7 +254,7 @@ export function useWorkbookGridInteractions(
       pendingTypeSeedRef.current = null
     }
     wasEditingOverlayRef.current = isEditingCell
-  }, [focusGrid, isEditingCell])
+  }, [focusGrid, isEditingCell, pendingTypeSeedRef, wasEditingOverlayRef])
   const beginSelectedEdit = useCallback(
     (seed?: string, selectionBehavior: EditSelectionBehavior = 'caret-end') => {
       const address = formatAddress(activeSelectionCell[1], activeSelectionCell[0])
@@ -346,7 +333,7 @@ export function useWorkbookGridInteractions(
       pendingLocalSelectionSnapshotRef.current = nextSelectionSnapshot
       onSelectionChange(nextSelectionSnapshot)
     },
-    [onSelectionChange, selectionSnapshot, sheetName],
+    [onSelectionChange, pendingLocalSelectionBaseSnapshotRef, pendingLocalSelectionSnapshotRef, selectionSnapshot, sheetName],
   )
   const allowsRangeMove = Boolean(
     selectionRange && gridSelection.columns.length === 0 && gridSelection.rows.length === 0 && !fillPreviewRange && !isFillHandleDragging,
@@ -365,7 +352,7 @@ export function useWorkbookGridInteractions(
         values,
       })
     },
-    [onCopyRange, onPaste, sheetName],
+    [internalClipboardRef, onCopyRange, onPaste, sheetName],
   )
   const captureInternalClipboardSelection = useCallback(() => {
     return captureGridClipboardSelection({
@@ -374,7 +361,7 @@ export function useWorkbookGridInteractions(
       internalClipboardRef,
       sheetName,
     })
-  }, [engine, gridSelection, sheetName])
+  }, [engine, gridSelection, internalClipboardRef, sheetName])
   const { handleGridKey } = useWorkbookGridKeyboardHandler({
     applyClipboardValues,
     beginSelectedEdit,
@@ -464,6 +451,8 @@ export function useWorkbookGridInteractions(
       gridSelection,
       emitSelectionChange,
       onFillRange,
+      fillHandleCleanupRef,
+      fillPreviewRangeRef,
       resolvePointerCell,
       selectionRange,
       setFillPreviewRange,
@@ -504,6 +493,7 @@ export function useWorkbookGridInteractions(
       gridMetrics,
       isFillHandleDragging,
       isRangeMoveDragging,
+      fillPreviewRangeRef,
       resolveColumnResizeTargetAtPointer,
       resolveHeaderSelectionAtPointer,
       resolveRowResizeTargetAtPointer,
@@ -546,6 +536,7 @@ export function useWorkbookGridInteractions(
       isEditingCell,
       onMoveRange,
       emitSelectionChange,
+      rangeMoveCleanupRef,
       renderState.scrollViewportRef,
       refreshHoverState,
       resolvePointerCell,
@@ -583,6 +574,7 @@ export function useWorkbookGridInteractions(
       gridMetrics.columnWidth,
       interactionState,
       previewColumnWidth,
+      resizeCleanupRef,
       refreshHoverState,
       setActiveResizeColumn,
     ],
@@ -614,6 +606,7 @@ export function useWorkbookGridInteractions(
       gridMetrics.rowHeight,
       interactionState,
       previewRowHeight,
+      resizeCleanupRef,
       refreshHoverState,
       rowHeights,
       setActiveResizeRow,

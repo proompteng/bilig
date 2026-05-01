@@ -76,6 +76,7 @@ describe('grid hook boundary helpers', () => {
       fileURLToPath(new URL('../useWorkbookGridInteractionRuntime.ts', import.meta.url)),
       'utf8',
     )
+    const interactionsHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridInteractions.ts', import.meta.url)), 'utf8')
     const interactionOverlayHookSource = readFileSync(
       fileURLToPath(new URL('../useWorkbookInteractionOverlayState.ts', import.meta.url)),
       'utf8',
@@ -173,6 +174,9 @@ describe('grid hook boundary helpers', () => {
     expect(axisRuntimeHookSource).toContain('useWorkbookAxisResizeState')
     expect(interactionRuntimeHookSource).toContain('useWorkbookInteractionOverlayState')
     expect(interactionRuntimeHookSource).toContain('gridRuntimeHost')
+    expect(interactionsHookSource).toContain("from './runtime/gridInputController.js'")
+    expect(interactionsHookSource).not.toContain('useRef')
+    expect(interactionsHookSource).not.toContain('useRef<')
     expect(interactionOverlayHookSource).toContain('useSyncExternalStore')
     expect(interactionOverlayHookSource).not.toContain('useState')
     expect(interactionOverlayHookSource).toContain('GridInteractionOverlayRuntime')
