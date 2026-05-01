@@ -1,5 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
+import { createGridSelection } from '../gridSelection.js'
+import type { GridSelectionSnapshot } from '../gridTypes.js'
 import { GridInputController } from '../runtime/gridInputController.js'
+
+const SHEET1_A1: GridSelectionSnapshot = {
+  address: 'A1',
+  kind: 'cell',
+  range: { endAddress: 'A1', startAddress: 'A1' },
+  sheetName: 'Sheet1',
+}
+
+const SHEET1_B2: GridSelectionSnapshot = {
+  address: 'B2',
+  kind: 'cell',
+  range: { endAddress: 'B2', startAddress: 'B2' },
+  sheetName: 'Sheet1',
+}
 
 describe('GridInputController', () => {
   it('owns pointer interaction refs with a stable interaction-state object', () => {
@@ -45,5 +61,109 @@ describe('GridInputController', () => {
     expect(fillCleanup).toHaveBeenCalledTimes(1)
     expect(moveCleanup).toHaveBeenCalledTimes(1)
     expect(resizeCleanup).toHaveBeenCalledTimes(1)
+  })
+
+  it('applies external selection sync while preserving pending local selection', () => {
+    const controller = new GridInputController()
+
+    expect(
+      controller.syncExternalSelection({
+        currentSelection: createGridSelection(0, 0),
+        externalSnapshot: SHEET1_A1,
+        sheetName: 'Sheet1',
+      }),
+    ).toBeNull()
+
+    const localSnapshot = controller.noteLocalSelectionChange({
+      baseSnapshot: SHEET1_A1,
+      nextSelection: createGridSelection(1, 1),
+      sheetName: 'Sheet1',
+    })
+    expect(localSnapshot).toEqual(SHEET1_B2)
+    expect(controller.pendingLocalSelectionSnapshotRef.current).toEqual(SHEET1_B2)
+
+    controller.interactionState.pendingPointerCellRef.current = [4, 5]
+    expect(
+      controller.syncExternalSelection({
+        currentSelection: createGridSelection(1, 1),
+        externalSnapshot: SHEET1_A1,
+        sheetName: 'Sheet1',
+      }),
+    ).toBeNull()
+    expect(controller.interactionState.pendingPointerCellRef.current).toEqual([4, 5])
+
+    const authoritativeSelection = controller.syncExternalSelection({
+      currentSelection: createGridSelection(1, 1),
+      externalSnapshot: SHEET1_B2,
+      sheetName: 'Sheet1',
+    })
+    expect(authoritativeSelection).toBeNull()
+    expect(controller.pendingLocalSelectionSnapshotRef.current).toBeNull()
+
+    const remoteSelection = controller.syncExternalSelection({
+      currentSelection: createGridSelection(1, 1),
+      externalSnapshot: SHEET1_A1,
+      sheetName: 'Sheet1',
+    })
+    expect(remoteSelection).toEqual(createGridSelection(0, 0))
+    expect(controller.interactionState.pendingPointerCellRef.current).toBeNull()
+  })
+
+  it('syncs editor state and schedules focus after editor close', () => {
+    const controller = new GridInputController()
+    const focusGrid = vi.fn()
+    const requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      callback(0)
+      return 1
+    })
+
+    controller.pendingTypeSeedRef.current = 'x'
+    controller.syncEditingState({
+      focusGrid,
+      isEditingCell: true,
+      requestAnimationFrame,
+    })
+    expect(controller.pendingTypeSeedRef.current).toBeNull()
+    expect(focusGrid).not.toHaveBeenCalled()
+
+    controller.syncEditingState({
+      focusGrid,
+      isEditingCell: false,
+      requestAnimationFrame,
+    })
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(1)
+    expect(focusGrid).toHaveBeenCalledTimes(1)
+  })
+
+  it('flushes mounted editor value when the DOM has newer text', () => {
+    const controller = new GridInputController()
+    const onEditorChange = vi.fn()
+    const flushSync = vi.fn((callback: () => void) => {
+      callback()
+    })
+    const editor = { value: 'typed' }
+    const queryEditor = vi.fn(() => editor)
+
+    expect(
+      controller.syncMountedEditorValue({
+        editorValue: 'old',
+        flushSync,
+        onEditorChange,
+        queryEditor,
+      }),
+    ).toBe('typed')
+    expect(queryEditor).toHaveBeenCalledTimes(1)
+    expect(flushSync).toHaveBeenCalledTimes(1)
+    expect(onEditorChange).toHaveBeenCalledWith('typed')
+
+    expect(
+      controller.syncMountedEditorValue({
+        editorValue: 'typed',
+        flushSync,
+        onEditorChange,
+        queryEditor,
+      }),
+    ).toBe('typed')
+    expect(flushSync).toHaveBeenCalledTimes(1)
   })
 })

@@ -160,6 +160,26 @@ describe('GridRuntimeHost', () => {
     })
   })
 
+  it('owns input interaction refs for the workbook runtime lifetime', () => {
+    const host = new GridRuntimeHost({
+      columnCount: 1000,
+      defaultColumnWidth: 100,
+      defaultRowHeight: 10,
+      gridMetrics,
+      rowCount: 1000,
+      viewportHeight: 60,
+      viewportWidth: 250,
+    })
+
+    const interactionState = host.input.interactionState
+    interactionState.pendingPointerCellRef.current = [1, 2]
+    host.input.syncFillPreviewRange({ height: 1, width: 2, x: 3, y: 4 })
+
+    expect(host.input.interactionState).toBe(interactionState)
+    expect(host.input.pendingPointerCellRef.current).toEqual([1, 2])
+    expect(host.input.fillPreviewRangeRef.current).toEqual({ height: 1, width: 2, x: 3, y: 4 })
+  })
+
   it('keeps freeze state in the runtime transaction when update input omits it', () => {
     const host = new GridRuntimeHost({
       columnCount: 1000,

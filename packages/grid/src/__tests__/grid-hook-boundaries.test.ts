@@ -72,6 +72,7 @@ describe('grid hook boundary helpers', () => {
     const geometryRuntimeSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridGeometryRuntime.ts', import.meta.url)), 'utf8')
     const headerHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookHeaderPanes.ts', import.meta.url)), 'utf8')
     const hostRuntimeHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridHostRuntime.ts', import.meta.url)), 'utf8')
+    const runtimeHostSource = readFileSync(fileURLToPath(new URL('../runtime/gridRuntimeHost.ts', import.meta.url)), 'utf8')
     const interactionRuntimeHookSource = readFileSync(
       fileURLToPath(new URL('../useWorkbookGridInteractionRuntime.ts', import.meta.url)),
       'utf8',
@@ -174,7 +175,10 @@ describe('grid hook boundary helpers', () => {
     expect(axisRuntimeHookSource).toContain('useWorkbookAxisResizeState')
     expect(interactionRuntimeHookSource).toContain('useWorkbookInteractionOverlayState')
     expect(interactionRuntimeHookSource).toContain('gridRuntimeHost')
-    expect(interactionsHookSource).toContain("from './runtime/gridInputController.js'")
+    expect(runtimeHostSource).toContain("from './gridInputController.js'")
+    expect(interactionsHookSource).not.toContain("from './runtime/gridInputController.js'")
+    expect(interactionsHookSource).not.toContain('new GridInputController')
+    expect(interactionsHookSource).toContain('gridRuntimeHost.input')
     expect(interactionsHookSource).not.toContain('useRef')
     expect(interactionsHookSource).not.toContain('useRef<')
     expect(interactionOverlayHookSource).toContain('useSyncExternalStore')

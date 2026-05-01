@@ -1,7 +1,9 @@
 import type { HeaderSelection } from '../gridPointer.js'
-import type { GridInteractionStateRefs } from '../gridInteractionState.js'
+import { clearGridPendingPointerActivation, type GridInteractionStateRefs } from '../gridInteractionState.js'
 import type { InternalClipboardRange } from '../gridInternalClipboard.js'
-import type { GridSelectionSnapshot, Item, Rectangle } from '../gridTypes.js'
+import { selectionToSnapshot, snapshotToSelection } from '../gridSelection.js'
+import { resolveGridSelectionPendingSync } from '../gridSelectionPendingSync.js'
+import type { GridSelection, GridSelectionSnapshot, Item, Rectangle } from '../gridTypes.js'
 
 interface RuntimeRef<T> {
   current: T
@@ -56,6 +58,75 @@ export class GridInputController {
 
   syncFillPreviewRange(fillPreviewRange: Rectangle | null): void {
     this.fillPreviewRangeRef.current = fillPreviewRange
+  }
+
+  syncExternalSelection(input: {
+    readonly currentSelection: GridSelection
+    readonly externalSnapshot: GridSelectionSnapshot
+    readonly sheetName: string
+  }): GridSelection | null {
+    const sheetChanged = this.syncActiveSheet(input.sheetName)
+    const currentSnapshot = selectionToSnapshot(input.currentSelection, input.externalSnapshot.sheetName, input.externalSnapshot.address)
+    const sync = resolveGridSelectionPendingSync({
+      currentSnapshot,
+      externalSnapshot: input.externalSnapshot,
+      pendingBaseSnapshot: this.pendingLocalSelectionBaseSnapshotRef.current,
+      pendingLocalSnapshot: this.pendingLocalSelectionSnapshotRef.current,
+      sheetChanged,
+    })
+    this.pendingLocalSelectionSnapshotRef.current = sync.pendingLocalSnapshot
+    this.pendingLocalSelectionBaseSnapshotRef.current = sync.pendingBaseSnapshot
+    if (sync.keepCurrentSelection) {
+      return null
+    }
+    clearGridPendingPointerActivation(this.interactionState)
+    return snapshotToSelection(input.externalSnapshot)
+  }
+
+  noteLocalSelectionChange(input: {
+    readonly nextSelection: GridSelection
+    readonly sheetName: string
+    readonly baseSnapshot: GridSelectionSnapshot
+  }): GridSelectionSnapshot {
+    const nextSelectionSnapshot = selectionToSnapshot(input.nextSelection, input.sheetName, input.baseSnapshot.address)
+    this.pendingLocalSelectionBaseSnapshotRef.current = input.baseSnapshot
+    this.pendingLocalSelectionSnapshotRef.current = nextSelectionSnapshot
+    return nextSelectionSnapshot
+  }
+
+  syncEditingState(input: {
+    readonly isEditingCell: boolean
+    readonly focusGrid: () => void
+    readonly requestAnimationFrame?: ((callback: FrameRequestCallback) => number) | undefined
+  }): void {
+    if (this.wasEditingOverlayRef.current && !input.isEditingCell) {
+      const requestAnimationFrame = input.requestAnimationFrame ?? globalThis.requestAnimationFrame?.bind(globalThis)
+      requestAnimationFrame?.(() => {
+        input.focusGrid()
+      })
+    }
+    if (input.isEditingCell) {
+      this.pendingTypeSeedRef.current = null
+    }
+    this.wasEditingOverlayRef.current = input.isEditingCell
+  }
+
+  syncMountedEditorValue(input: {
+    readonly editorValue: string
+    readonly onEditorChange: (value: string) => void
+    readonly flushSync: (callback: () => void) => void
+    readonly queryEditor?: (() => { readonly value: string } | null) | undefined
+  }): string | null {
+    const editor = input.queryEditor?.() ?? globalThis.document?.querySelector<HTMLTextAreaElement>('[data-testid="cell-editor-input"]')
+    if (!editor) {
+      return null
+    }
+    if (editor.value !== input.editorValue) {
+      input.flushSync(() => {
+        input.onEditorChange(editor.value)
+      })
+    }
+    return editor.value
   }
 
   disconnect(): void {

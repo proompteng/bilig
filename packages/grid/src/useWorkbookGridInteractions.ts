@@ -11,8 +11,6 @@ import {
 } from 'react'
 import { formatAddress } from '@bilig/formula'
 import { flushSync } from 'react-dom'
-import { selectionToSnapshot, snapshotToSelection } from './gridSelection.js'
-import { resolveGridSelectionPendingSync } from './gridSelectionPendingSync.js'
 import { resolveSelectionMoveAnchorCell } from './gridRangeMove.js'
 import { sameGridHoverState, type GridHoverState } from './gridHover.js'
 import {
@@ -23,7 +21,7 @@ import {
   handleGridPointerUp,
   startGridResize,
 } from './gridInteractionController.js'
-import { clearGridPendingPointerActivation, resetGridPointerInteraction } from './gridInteractionState.js'
+import { resetGridPointerInteraction } from './gridInteractionState.js'
 import { resolveWorkbookGridHoverState } from './gridInteractionHoverState.js'
 import {
   applyGridClipboardValues,
@@ -55,7 +53,6 @@ import { useWorkbookGridKeyboardHandler } from './useWorkbookGridKeyboardHandler
 import type { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
 import { useWorkbookGridPointerResolvers } from './useWorkbookGridPointerResolvers.js'
 import { useWorkbookGridSelectionSummary } from './useWorkbookGridSelectionSummary.js'
-import { GridInputController } from './runtime/gridInputController.js'
 
 const DEFAULT_GRID_HOVER_STATE: GridHoverState = { cell: null, header: null, cursor: 'default' }
 
@@ -151,6 +148,7 @@ export function useWorkbookGridInteractions(
     getPreviewRowHeight,
     gridMetrics,
     gridSelection,
+    gridRuntimeHost,
     hostRef,
     isFillHandleDragging,
     isRangeMoveDragging,
@@ -172,7 +170,7 @@ export function useWorkbookGridInteractions(
     () => gridSelection.current?.cell ?? [selectedCell.col, selectedCell.row],
     [gridSelection.current, selectedCell.col, selectedCell.row],
   )
-  const inputController = useMemo(() => new GridInputController(), [])
+  const inputController = gridRuntimeHost.input
   const interactionState = inputController.interactionState
   const {
     dragAnchorCellRef,
@@ -186,14 +184,11 @@ export function useWorkbookGridInteractions(
     lastResizeHandleActivationRef,
     pendingClipboardCopySequenceRef,
     pendingKeyboardPasteSequenceRef,
-    pendingLocalSelectionBaseSnapshotRef,
-    pendingLocalSelectionSnapshotRef,
     pendingTypeSeedRef,
     postDragSelectionExpiryRef,
     rangeMoveCleanupRef,
     resizeCleanupRef,
     suppressNextNativePasteRef,
-    wasEditingOverlayRef,
   } = inputController
   const {
     resolveColumnResizeTarget: resolveColumnResizeTargetAtPointer,
@@ -217,44 +212,22 @@ export function useWorkbookGridInteractions(
     }
   }, [inputController])
   useLayoutEffect(() => {
-    const sheetChanged = inputController.syncActiveSheet(sheetName)
     setGridSelection((current) => {
-      const currentSnapshot = selectionToSnapshot(current, selectionSnapshot.sheetName, selectionSnapshot.address)
-      const sync = resolveGridSelectionPendingSync({
-        currentSnapshot,
+      const nextSelection = inputController.syncExternalSelection({
+        currentSelection: current,
         externalSnapshot: selectionSnapshot,
-        pendingBaseSnapshot: pendingLocalSelectionBaseSnapshotRef.current,
-        pendingLocalSnapshot: pendingLocalSelectionSnapshotRef.current,
-        sheetChanged,
+        sheetName,
       })
-      pendingLocalSelectionSnapshotRef.current = sync.pendingLocalSnapshot
-      pendingLocalSelectionBaseSnapshotRef.current = sync.pendingBaseSnapshot
-      if (sync.keepCurrentSelection) {
-        return current
-      }
-      clearGridPendingPointerActivation(interactionState)
-      return snapshotToSelection(selectionSnapshot)
+      return nextSelection ?? current
     })
-  }, [
-    inputController,
-    interactionState,
-    pendingLocalSelectionBaseSnapshotRef,
-    pendingLocalSelectionSnapshotRef,
-    selectionSnapshot,
-    setGridSelection,
-    sheetName,
-  ])
+  }, [inputController, selectionSnapshot, setGridSelection, sheetName])
   useEffect(() => {
-    if (wasEditingOverlayRef.current && !isEditingCell) {
-      window.requestAnimationFrame(() => {
-        focusGrid()
-      })
-    }
-    if (isEditingCell) {
-      pendingTypeSeedRef.current = null
-    }
-    wasEditingOverlayRef.current = isEditingCell
-  }, [focusGrid, isEditingCell, pendingTypeSeedRef, wasEditingOverlayRef])
+    inputController.syncEditingState({
+      focusGrid,
+      isEditingCell,
+      requestAnimationFrame: window.requestAnimationFrame.bind(window),
+    })
+  }, [focusGrid, inputController, isEditingCell])
   const beginSelectedEdit = useCallback(
     (seed?: string, selectionBehavior: EditSelectionBehavior = 'caret-end') => {
       const address = formatAddress(activeSelectionCell[1], activeSelectionCell[0])
@@ -284,30 +257,19 @@ export function useWorkbookGridInteractions(
     },
     [engine, getCellEditorSeed, onBeginEdit, sheetName],
   )
-  const syncMountedCellEditorValue = useCallback((): string | null => {
-    if (typeof document === 'undefined') {
-      return null
-    }
-    const editor = document.querySelector<HTMLTextAreaElement>('[data-testid="cell-editor-input"]')
-    if (!editor) {
-      return null
-    }
-    if (editor.value !== editorValue) {
-      flushSync(() => {
-        onEditorChange(editor.value)
-      })
-    }
-    return editor.value
-  }, [editorValue, onEditorChange])
   const commitActiveEdit = useCallback(
     (movement?: EditMovement) => {
-      const valueOverride = syncMountedCellEditorValue()
+      const valueOverride = inputController.syncMountedEditorValue({
+        editorValue,
+        flushSync,
+        onEditorChange,
+      })
       onCommitEdit(movement, valueOverride ?? undefined, {
         sheetName,
         address: formatAddress(activeSelectionCell[1], activeSelectionCell[0]),
       })
     },
-    [activeSelectionCell, onCommitEdit, sheetName, syncMountedCellEditorValue],
+    [activeSelectionCell, editorValue, inputController, onCommitEdit, onEditorChange, sheetName],
   )
   const toggleBooleanCellAt = useCallback(
     (col: number, row: number): boolean => {
@@ -328,12 +290,14 @@ export function useWorkbookGridInteractions(
   })
   const emitSelectionChange = useCallback(
     (nextSelection: GridSelection) => {
-      const nextSelectionSnapshot = selectionToSnapshot(nextSelection, sheetName, selectionSnapshot.address)
-      pendingLocalSelectionBaseSnapshotRef.current = selectionSnapshot
-      pendingLocalSelectionSnapshotRef.current = nextSelectionSnapshot
+      const nextSelectionSnapshot = inputController.noteLocalSelectionChange({
+        baseSnapshot: selectionSnapshot,
+        nextSelection,
+        sheetName,
+      })
       onSelectionChange(nextSelectionSnapshot)
     },
-    [onSelectionChange, pendingLocalSelectionBaseSnapshotRef, pendingLocalSelectionSnapshotRef, selectionSnapshot, sheetName],
+    [inputController, onSelectionChange, selectionSnapshot, sheetName],
   )
   const allowsRangeMove = Boolean(
     selectionRange && gridSelection.columns.length === 0 && gridSelection.rows.length === 0 && !fillPreviewRange && !isFillHandleDragging,

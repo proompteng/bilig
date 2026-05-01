@@ -251,6 +251,7 @@ export function useWorkbookGridRenderState(input: {
     gridMetrics,
     gridSelection,
     gridCameraStore,
+    gridRuntimeHost,
     gridTheme,
     handleHostRef,
     headerPanes,

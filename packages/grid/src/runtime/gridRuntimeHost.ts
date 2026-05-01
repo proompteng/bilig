@@ -8,6 +8,7 @@ import { GridAxisRuntime } from './gridAxisRuntime.js'
 import type { AxisEntryOverride } from '../gridAxisIndex.js'
 import { GridCameraRuntime, type GridCameraRuntimeSnapshot } from './gridCameraRuntime.js'
 import { GridInteractionOverlayRuntime } from './gridInteractionOverlayRuntime.js'
+import { GridInputController } from './gridInputController.js'
 import { GridOverlayRuntime } from './gridOverlayRuntime.js'
 import {
   GridRenderTilePaneRuntime,
@@ -39,6 +40,7 @@ export class GridRuntimeHost {
   readonly columns: GridAxisRuntime
   readonly rows: GridAxisRuntime
   readonly camera: GridCameraRuntime
+  readonly input = new GridInputController()
   readonly interactionOverlays = new GridInteractionOverlayRuntime()
   readonly overlays = new GridOverlayRuntime()
   readonly tiles = new GridTileCoordinator()
