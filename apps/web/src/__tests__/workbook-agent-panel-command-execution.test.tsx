@@ -174,7 +174,7 @@ describe('WorkbookAgentPanel command execution rendering', () => {
     await panel.render()
 
     expect(panel.host.textContent).not.toContain('Codex emitted commandExecution.')
-    expect(panel.host.querySelector("[data-testid='workbook-agent-empty-state']")).not.toBeNull()
+    expect(panel.host.querySelector("[data-testid='workbook-agent-empty-state']")).toBeNull()
 
     await panel.unmount()
   })

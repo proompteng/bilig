@@ -223,7 +223,7 @@ describe('WorkbookAgentPanel reasoning', () => {
     })
   })
 
-  it('lets the empty state shrink to short assistant panels', async () => {
+  it('renders an empty thread without placeholder chrome', async () => {
     const panel = renderPanel({
       id: 'system-empty-1',
       kind: 'system',
@@ -233,13 +233,15 @@ describe('WorkbookAgentPanel reasoning', () => {
 
     await panel.render()
 
-    const emptyState = panel.host.querySelector("[data-testid='workbook-agent-empty-state']")
+    const viewport = panel.host.querySelector("[data-testid='workbook-agent-panel-scroll-viewport']")
+    const content = viewport?.firstElementChild
 
-    expect(emptyState?.className).toContain('flex-1')
-    expect(emptyState?.className).toContain('min-h-0')
-    expect(emptyState?.className).not.toContain('min-h-[360px]')
-    expect(emptyState?.parentElement?.className).toContain('box-border')
-    expect(emptyState?.parentElement?.className).toContain('min-h-full')
+    expect(panel.host.querySelector("[data-testid='workbook-agent-empty-state']")).toBeNull()
+    expect(panel.host.textContent).not.toContain('No messages yet')
+    expect(panel.host.textContent).not.toContain('Active context:')
+    expect(panel.host.textContent).not.toContain('Private thread')
+    expect(viewport instanceof HTMLDivElement).toBe(true)
+    expect(content?.className).toContain('min-h-full')
 
     await act(async () => {
       panel.root.unmount()

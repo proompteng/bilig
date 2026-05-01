@@ -1,7 +1,7 @@
 import { Fragment, type CSSProperties, useEffect, useLayoutEffect, useRef } from 'react'
 import { Button } from '@base-ui/react/button'
 import { ScrollArea } from '@base-ui/react/scroll-area'
-import { ArrowUp, MessageSquareMore, Square } from 'lucide-react'
+import { ArrowUp, Square } from 'lucide-react'
 import { describeWorkbookAgentCommand } from '@bilig/agent-api'
 import { cva } from 'class-variance-authority'
 import type {
@@ -147,23 +147,6 @@ function ThreadSummaryStrip(props: {
           </Button>
         )
       })}
-    </div>
-  )
-}
-
-function WorkbookAgentEmptyState(props: { readonly activeContextLabel: string | null }) {
-  return (
-    <div className="flex min-h-0 w-full flex-1 items-center justify-center px-5 py-6" data-testid="workbook-agent-empty-state">
-      <div className="flex max-w-52 flex-col items-center text-center">
-        <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] text-[var(--wb-text-muted)] shadow-[var(--wb-shadow-sm)]">
-          <MessageSquareMore className="h-4 w-4" aria-hidden="true" />
-        </div>
-        <div className={agentPanelLabelTextClass()}>No messages yet</div>
-        <div className={cn(agentPanelMetaTextClass(), 'mt-1')}>
-          {props.activeContextLabel ? `Active context: ${props.activeContextLabel}` : 'Active context ready'}
-        </div>
-        <div className={cn(agentPanelEyebrowTextClass(), 'mt-3')}>Private thread</div>
-      </div>
     </div>
   )
 }
@@ -758,7 +741,7 @@ export function WorkbookAgentPanel(props: {
                 threadSummaries={props.threadSummaries}
                 onSelectThread={props.onSelectThread}
               />
-              {props.isLoading ? null : visibleEntries.length > 0 ? (
+              {props.isLoading ? null : visibleEntries.length > 0 || props.showAssistantProgress ? (
                 <div className="flex flex-col gap-2">
                   <div className={agentPanelTimelineListClass()}>
                     {visibleEntries.map((entry, index) => (
@@ -789,9 +772,7 @@ export function WorkbookAgentPanel(props: {
                     </div>
                   ) : null}
                 </div>
-              ) : (
-                <WorkbookAgentEmptyState activeContextLabel={props.activeContextLabel} />
-              )}
+              ) : null}
             </div>
           </ScrollArea.Content>
         </ScrollArea.Viewport>

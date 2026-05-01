@@ -375,9 +375,9 @@ describe('workbook agent pane', () => {
     expect(host.textContent).not.toContain('Local Skills')
     expect(host.textContent).not.toContain('Inspect Selection')
     expect(host.textContent).not.toContain('Ask the assistant to inspect, edit, or restructure this workbook.')
-    expect(host.querySelector("[data-testid='workbook-agent-empty-state']")).not.toBeNull()
-    expect(host.textContent).toContain('No messages yet')
-    expect(host.textContent).toContain('Active context: Sheet1!A1')
+    expect(host.querySelector("[data-testid='workbook-agent-empty-state']")).toBeNull()
+    expect(host.textContent).not.toContain('No messages yet')
+    expect(host.textContent).not.toContain('Active context: Sheet1!A1')
     expect(input instanceof HTMLTextAreaElement ? input.getAttribute('placeholder') : null).toBe('Ask the workbook assistant')
 
     await act(async () => {
@@ -1540,7 +1540,7 @@ describe('workbook agent pane', () => {
     })
 
     expect(fetchSpy).not.toHaveBeenCalled()
-    expect(host.textContent).toContain('No messages yet')
+    expect(host.textContent).not.toContain('No messages yet')
 
     await act(async () => {
       root.unmount()
@@ -1719,7 +1719,7 @@ describe('workbook agent pane', () => {
     })
 
     expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).not.toContain('Codex emitted commandExecution.')
-    expect(host.querySelector("[data-testid='workbook-agent-empty-state']")).not.toBeNull()
+    expect(host.querySelector("[data-testid='workbook-agent-empty-state']")).toBeNull()
 
     await act(async () => {
       MockEventSource.latest?.emit({
