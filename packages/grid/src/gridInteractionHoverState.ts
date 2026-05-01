@@ -2,7 +2,7 @@ import type { GridGeometrySnapshot } from './gridGeometry.js'
 import type { GridMetrics } from './gridMetrics.js'
 import type { GridHoverState } from './gridHover.js'
 import type { HeaderSelection, VisibleRegionState } from './gridPointer.js'
-import { resolveSelectionMoveAnchorCell } from './gridRangeMove.js'
+import { resolveSelectionContentMoveCandidateCell, resolveSelectionMoveAnchorCell } from './gridRangeMove.js'
 import type { Item, Rectangle } from './gridTypes.js'
 
 const DEFAULT_HOVER_STATE: GridHoverState = { cell: null, header: null, cursor: 'default' }
@@ -144,6 +144,13 @@ export function resolveWorkbookGridHoverState(input: {
       ? resolveSelectionMoveAnchorCell(input.clientX, input.clientY, input.selectionRange, input.getCellScreenBounds)
       : null
   if (rangeMoveAnchorCell) {
+    return RANGE_MOVE_HOVER_STATE
+  }
+  const rangeMoveInteriorCell =
+    input.allowsRangeMove && input.selectionRange
+      ? resolveSelectionContentMoveCandidateCell(input.clientX, input.clientY, input.selectionRange, input.getCellScreenBounds)
+      : null
+  if (rangeMoveInteriorCell) {
     return RANGE_MOVE_HOVER_STATE
   }
 

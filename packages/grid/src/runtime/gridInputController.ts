@@ -11,6 +11,13 @@ interface RuntimeRef<T> {
 
 type CleanupRef = RuntimeRef<(() => void) | null>
 
+export interface InteriorRangeMoveCandidate {
+  readonly pointerId: number
+  readonly pointerCell: Item
+  readonly startClientX: number
+  readonly startClientY: number
+}
+
 export class GridInputController {
   readonly wasEditingOverlayRef = createRuntimeRef(false)
   readonly ignoreNextPointerSelectionRef = createRuntimeRef(false)
@@ -30,6 +37,7 @@ export class GridInputController {
   readonly pendingLocalSelectionSnapshotRef = createRuntimeRef<GridSelectionSnapshot | null>(null)
   readonly pendingLocalSelectionBaseSnapshotRef = createRuntimeRef<GridSelectionSnapshot | null>(null)
   readonly lastResizeHandleActivationRef = createRuntimeRef<{ columnIndex: number; at: number } | null>(null)
+  readonly interiorRangeMoveCandidateRef = createRuntimeRef<InteriorRangeMoveCandidate | null>(null)
   readonly fillPreviewRangeRef = createRuntimeRef<Rectangle | null>(null)
   readonly fillHandleCleanupRef: CleanupRef = createRuntimeRef(null)
   readonly rangeMoveCleanupRef: CleanupRef = createRuntimeRef(null)

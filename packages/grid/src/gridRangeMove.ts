@@ -2,6 +2,7 @@ import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import type { Item, Rectangle } from './gridTypes.js'
 
 const RANGE_MOVE_BORDER_THRESHOLD = 6
+const RANGE_MOVE_CONTENT_LANE_MAX_WIDTH = 40
 
 export function resolveSelectionBounds(
   sourceRange: Rectangle,
@@ -20,12 +21,11 @@ export function resolveSelectionBounds(
   }
 }
 
-export function resolveSelectionMoveAnchorCell(
+export function resolveSelectionMoveCandidateCell(
   clientX: number,
   clientY: number,
   sourceRange: Rectangle | null | undefined,
   getCellBounds: (col: number, row: number) => Rectangle | undefined,
-  threshold = RANGE_MOVE_BORDER_THRESHOLD,
 ): Item | null {
   if (!sourceRange) {
     return null
@@ -63,6 +63,20 @@ export function resolveSelectionMoveAnchorCell(
   if (!pointerCell) {
     return null
   }
+  return pointerCell
+}
+
+export function resolveSelectionMoveAnchorCell(
+  clientX: number,
+  clientY: number,
+  sourceRange: Rectangle | null | undefined,
+  getCellBounds: (col: number, row: number) => Rectangle | undefined,
+  threshold = RANGE_MOVE_BORDER_THRESHOLD,
+): Item | null {
+  const pointerCell = resolveSelectionMoveCandidateCell(clientX, clientY, sourceRange, getCellBounds)
+  if (!sourceRange || !pointerCell) {
+    return null
+  }
   const cellBounds = getCellBounds(pointerCell[0], pointerCell[1])
   if (!cellBounds) {
     return null
@@ -78,12 +92,35 @@ export function resolveSelectionMoveAnchorCell(
 
   const localX = clientX - cellBounds.x
   const localY = clientY - cellBounds.y
+  const sourceRight = sourceRange.x + sourceRange.width - 1
+  const sourceBottom = sourceRange.y + sourceRange.height - 1
   return (pointerCell[0] === sourceRange.x && localX < threshold) ||
     (pointerCell[0] === sourceRight && localX >= cellBounds.width - threshold) ||
     (pointerCell[1] === sourceRange.y && localY < threshold) ||
     (pointerCell[1] === sourceBottom && localY >= cellBounds.height - threshold)
     ? pointerCell
     : null
+}
+
+export function resolveSelectionContentMoveCandidateCell(
+  clientX: number,
+  clientY: number,
+  sourceRange: Rectangle | null | undefined,
+  getCellBounds: (col: number, row: number) => Rectangle | undefined,
+  threshold = RANGE_MOVE_BORDER_THRESHOLD,
+): Item | null {
+  const pointerCell = resolveSelectionMoveCandidateCell(clientX, clientY, sourceRange, getCellBounds)
+  if (!pointerCell) {
+    return null
+  }
+  const cellBounds = getCellBounds(pointerCell[0], pointerCell[1])
+  if (!cellBounds) {
+    return null
+  }
+  const localX = clientX - cellBounds.x
+  const localY = clientY - cellBounds.y
+  const laneWidth = Math.min(RANGE_MOVE_CONTENT_LANE_MAX_WIDTH, cellBounds.width * 0.45)
+  return localX >= threshold && localX <= laneWidth && localY >= threshold && localY < cellBounds.height - threshold ? pointerCell : null
 }
 
 export function isSelectionMoveHandleHit(

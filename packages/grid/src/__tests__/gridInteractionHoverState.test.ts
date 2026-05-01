@@ -54,7 +54,7 @@ describe('resolveWorkbookGridHoverState', () => {
   it('returns range-move grab when hovering the selected range border', () => {
     const state = resolveWorkbookGridHoverState({
       ...baseInput(),
-      clientX: 100,
+      clientX: 98,
       clientY: 41,
       allowsRangeMove: true,
       selectionRange: { x: 1, y: 1, width: 2, height: 2 },
@@ -71,6 +71,50 @@ describe('resolveWorkbookGridHoverState', () => {
     })
 
     expect(state).toEqual({ cell: null, header: null, cursor: 'grab' })
+  })
+
+  it('returns range-move grab when hovering the content lane inside an already-selected range', () => {
+    const state = resolveWorkbookGridHoverState({
+      ...baseInput(),
+      clientX: 98,
+      clientY: 50,
+      allowsRangeMove: true,
+      selectionRange: { x: 1, y: 1, width: 2, height: 2 },
+      getCellScreenBounds: vi.fn((col, row) =>
+        col >= 1 && col <= 2 && row >= 1 && row <= 2
+          ? {
+              x: 90 + (col - 1) * 20,
+              y: 40 + (row - 1) * 20,
+              width: 20,
+              height: 20,
+            }
+          : undefined,
+      ),
+    })
+
+    expect(state).toEqual({ cell: null, header: null, cursor: 'grab' })
+  })
+
+  it('keeps regular cell hover in the center of an already-selected range so body drags can select ranges', () => {
+    const state = resolveWorkbookGridHoverState({
+      ...baseInput(),
+      clientX: 120,
+      clientY: 50,
+      allowsRangeMove: true,
+      selectionRange: { x: 1, y: 1, width: 2, height: 2 },
+      getCellScreenBounds: vi.fn((col, row) =>
+        col >= 1 && col <= 2 && row >= 1 && row <= 2
+          ? {
+              x: 90 + (col - 1) * 20,
+              y: 40 + (row - 1) * 20,
+              width: 20,
+              height: 20,
+            }
+          : undefined,
+      ),
+    })
+
+    expect(state).toEqual({ cell: [2, 3], header: null, cursor: 'cell' })
   })
 
   it('falls through to cell hover resolution', () => {
