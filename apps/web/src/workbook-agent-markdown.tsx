@@ -67,7 +67,7 @@ function renderInlineTokens(tokens: readonly Token[] | undefined, keyPrefix: str
         return (
           <code
             key={key}
-            className="rounded-[calc(var(--wb-radius-control)-4px)] bg-[var(--wb-surface-subtle)] px-1.5 py-0.5 font-mono text-[0.95em] text-[var(--wb-text)]"
+            className="whitespace-normal break-all rounded-[calc(var(--wb-radius-control)-4px)] bg-[var(--wb-surface-subtle)] px-1.5 py-0.5 font-mono text-[0.95em] text-[var(--wb-text)]"
           >
             {token.text ?? token.raw ?? ''}
           </code>
@@ -150,11 +150,11 @@ function renderBlockTokens(tokens: readonly Token[] | undefined, keyPrefix: stri
           <blockquote
             key={key}
             className={cn(
-              'border-l-2 border-[var(--wb-border-strong)] pl-3',
+              'min-w-0 max-w-full border-l-2 border-[var(--wb-border-strong)] pl-3',
               tone === 'muted' ? 'text-[var(--wb-text-muted)]' : 'text-[var(--wb-text-subtle)]',
             )}
           >
-            <div className="flex flex-col gap-2">{renderBlockTokens(token.tokens, key, tone)}</div>
+            <div className="flex min-w-0 max-w-full flex-col gap-2">{renderBlockTokens(token.tokens, key, tone)}</div>
           </blockquote>
         )
       case 'list': {
@@ -162,12 +162,18 @@ function renderBlockTokens(tokens: readonly Token[] | undefined, keyPrefix: stri
         return (
           <ListTag
             key={key}
-            className={cn('ml-5 flex flex-col gap-2 text-[13px] leading-6', bodyClass, token.ordered ? 'list-decimal' : 'list-disc')}
+            className={cn(
+              'ml-5 flex min-w-0 max-w-full flex-col gap-2 text-[13px] leading-6',
+              bodyClass,
+              token.ordered ? 'list-decimal' : 'list-disc',
+            )}
             start={token.ordered && typeof token.start === 'number' ? token.start : undefined}
           >
             {token.items?.map((item: Tokens.ListItem) => (
               <li key={`${key}-item-${item.raw}`} className="min-w-0 break-words pl-1">
-                <div className="flex flex-col gap-2">{renderBlockTokens(item.tokens, `${key}-item-${item.raw}`, tone)}</div>
+                <div className="flex min-w-0 max-w-full flex-col gap-2">
+                  {renderBlockTokens(item.tokens, `${key}-item-${item.raw}`, tone)}
+                </div>
               </li>
             ))}
           </ListTag>
@@ -177,9 +183,9 @@ function renderBlockTokens(tokens: readonly Token[] | undefined, keyPrefix: stri
         return (
           <pre
             key={key}
-            className="overflow-x-auto rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-3 py-2 font-mono text-[12px] leading-6 text-[var(--wb-text)]"
+            className="box-border min-w-0 w-full max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-[var(--wb-radius-control)] bg-[var(--wb-surface-subtle)] px-3 py-2 font-mono text-[12px] leading-6 text-[var(--wb-text)]"
           >
-            <code>{token.text ?? ''}</code>
+            <code className="whitespace-pre-wrap break-words">{token.text ?? ''}</code>
           </pre>
         )
       case 'hr':
@@ -207,5 +213,9 @@ export function WorkbookAgentMarkdown(props: {
   }
   const tone = props.tone ?? 'default'
   const tokens: TokensList = marked.lexer(normalized, { gfm: true, breaks: true })
-  return <div className={cn('flex min-w-0 flex-col gap-2', props.className)}>{renderBlockTokens(tokens, 'markdown', tone)}</div>
+  return (
+    <div className={cn('flex min-w-0 w-full max-w-full flex-col gap-2 overflow-hidden', props.className)}>
+      {renderBlockTokens(tokens, 'markdown', tone)}
+    </div>
+  )
 }

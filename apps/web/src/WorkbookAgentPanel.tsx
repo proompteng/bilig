@@ -257,7 +257,7 @@ function TextDisclosureEntryRow(props: { readonly entry: WorkbookAgentTimelineEn
       }}
       triggerTestId={`workbook-agent-${disclosureKey}-toggle-${props.entry.id}`}
     >
-      <div className={agentPanelBodyMutedTextClass()}>
+      <div className={cn(agentPanelBodyMutedTextClass(), 'min-w-0 max-w-full overflow-hidden')}>
         <WorkbookAgentMarkdown markdown={bodyText} />
       </div>
       <TimelineCitationList citations={props.entry.citations} />
@@ -269,11 +269,11 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
   const { entry } = props
   if (entry.kind === 'user') {
     return (
-      <div className="flex justify-end px-3 py-3">
+      <div className="flex min-w-0 max-w-full justify-end px-3 py-3">
         <div
           className={cn(
             agentPanelBodyTextClass(),
-            'max-w-[82%] break-words rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]',
+            'min-w-0 max-w-[82%] overflow-hidden break-words rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)]',
           )}
         >
           <WorkbookAgentMarkdown markdown={entry.text ?? ''} />
@@ -291,7 +291,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
       return null
     }
     return (
-      <div className={cn(agentPanelBodyTextClass(), 'px-3 py-3')}>
+      <div className={cn(agentPanelBodyTextClass(), 'min-w-0 w-full max-w-full overflow-hidden px-3 py-3')}>
         <WorkbookAgentMarkdown markdown={entry.text} />
         <TimelineCitationList citations={entry.citations} />
       </div>
@@ -382,7 +382,7 @@ function WorkbookAgentEntryRow(props: { readonly entry: WorkbookAgentTimelineEnt
 
   return (
     <div className="px-3 py-2.5">
-      <div className={agentPanelMetaTextClass()}>{entry.text}</div>
+      <div className={cn(agentPanelMetaTextClass(), 'break-words')}>{entry.text}</div>
       <TimelineCitationList citations={entry.citations} />
     </div>
   )

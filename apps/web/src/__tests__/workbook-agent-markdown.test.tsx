@@ -131,6 +131,44 @@ describe('workbook agent markdown rendering', () => {
     await panel.unmount()
   })
 
+  it('keeps long assistant code blocks inside the assistant rail', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const longPromptLine = `You are working in /Users/gregkonush/github.com/bilig/apps/bilig and this intentionally long instruction must wrap instead of pushing the assistant response off the right side of the panel.`
+    const snapshot = createSnapshot({
+      entries: [
+        {
+          id: 'assistant-long-code',
+          kind: 'assistant',
+          turnId: 'turn-1',
+          text: `Copy/paste this into Codex:\n\n\`\`\`text\n${longPromptLine}\n${longPromptLine}\n\`\`\``,
+          phase: null,
+          toolName: null,
+          toolStatus: null,
+          argumentsText: null,
+          outputText: null,
+          success: null,
+          citations: [],
+        },
+      ],
+    })
+    const panel = renderPanel({ snapshot })
+
+    await panel.render()
+
+    const pre = panel.host.querySelector('pre')
+    const code = pre?.querySelector('code')
+    expect(pre?.className).toContain('w-full')
+    expect(pre?.className).toContain('max-w-full')
+    expect(pre?.className).toContain('overflow-x-hidden')
+    expect(pre?.className).toContain('whitespace-pre-wrap')
+    expect(pre?.className).toContain('break-words')
+    expect(pre?.className).not.toContain('overflow-x-auto')
+    expect(code?.className).toContain('whitespace-pre-wrap')
+    expect(panel.host.textContent).toContain(longPromptLine)
+
+    await panel.unmount()
+  })
+
   it('renders workflow markdown artifacts as structured content without duplicating the title heading', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     const panel = renderPanel({
