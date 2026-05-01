@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useLayoutEffect, type Dispatch, type SetStateAction } from 'react'
 import type { Viewport } from '@bilig/protocol'
 import type { GridMetrics } from './gridMetrics.js'
 import type { VisibleRegionState } from './gridPointer.js'
@@ -7,7 +7,6 @@ import type { Item } from './gridTypes.js'
 import type { GridCameraStore } from './runtime/gridCameraStore.js'
 import type { GridRuntimeHost } from './runtime/gridRuntimeHost.js'
 import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from './workbookGridScrollStore.js'
-import { WorkbookViewportScrollRuntime } from './workbookViewportScrollRuntime.js'
 
 export { shouldCommitWorkbookVisibleRegion } from './workbookViewportScrollRuntime.js'
 
@@ -44,18 +43,8 @@ export function useWorkbookViewportScrollRuntime(input: {
   readonly syncRuntimeAxes: () => void
   readonly viewport: Viewport
 }): void {
-  const runtimeRef = useRef<WorkbookViewportScrollRuntime | null>(null)
-  if (!runtimeRef.current) {
-    runtimeRef.current = new WorkbookViewportScrollRuntime()
-  }
-  const runtime = runtimeRef.current
+  const runtime = input.gridRuntimeHost.viewportScroll
   runtime.updateInput(input)
-
-  useEffect(() => {
-    return () => {
-      runtime.dispose()
-    }
-  }, [runtime])
 
   useEffect(() => {
     runtime.syncLiveVisibleRegionForOverlay()

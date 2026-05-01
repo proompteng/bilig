@@ -192,6 +192,7 @@ describe('GridRuntimeHost', () => {
     })
     const fillCleanup = vi.fn()
     const renderDisconnect = vi.fn()
+    const viewportScrollDispose = vi.spyOn(host.viewportScroll, 'dispose')
 
     host.input.fillHandleCleanupRef.current = fillCleanup
     host.syncRenderTileConnections({
@@ -214,6 +215,7 @@ describe('GridRuntimeHost', () => {
 
     expect(fillCleanup).toHaveBeenCalledTimes(1)
     expect(renderDisconnect).toHaveBeenCalledTimes(1)
+    expect(viewportScrollDispose).toHaveBeenCalledTimes(1)
   })
 
   it('keeps freeze state in the runtime transaction when update input omits it', () => {

@@ -4,6 +4,7 @@ import { tileKeysForViewport, type TileKey53 } from '../renderer-v3/tile-key.js'
 import type { Item } from '../gridTypes.js'
 import type { Viewport } from '@bilig/protocol'
 import { viewportFromVisibleRegion } from '../useGridCameraState.js'
+import { WorkbookViewportScrollRuntime } from '../workbookViewportScrollRuntime.js'
 import { GridAxisRuntime } from './gridAxisRuntime.js'
 import type { AxisEntryOverride } from '../gridAxisIndex.js'
 import { GridCameraRuntime, type GridCameraRuntimeSnapshot } from './gridCameraRuntime.js'
@@ -43,6 +44,7 @@ export class GridRuntimeHost {
   readonly input = new GridInputController()
   readonly interactionOverlays = new GridInteractionOverlayRuntime()
   readonly overlays = new GridOverlayRuntime()
+  readonly viewportScroll = new WorkbookViewportScrollRuntime()
   readonly tiles = new GridTileCoordinator()
   readonly headers = new GridHeaderPaneRuntime()
   readonly renderTiles = new GridRenderTilePaneRuntime()
@@ -50,6 +52,7 @@ export class GridRuntimeHost {
   private freezeRows: number
   private freezeCols: number
   private freezeSeq = 1
+  private disposed = false
 
   constructor(input: {
     readonly columnCount: number
@@ -379,7 +382,12 @@ export class GridRuntimeHost {
   }
 
   dispose(): void {
+    if (this.disposed) {
+      return
+    }
+    this.disposed = true
     this.input.disconnect()
+    this.viewportScroll.dispose()
     this.disconnectRenderTileConnections()
     this.disconnectViewportResidencyInvalidation()
   }

@@ -86,6 +86,10 @@ describe('grid hook boundary helpers', () => {
     const paneHookPath = fileURLToPath(new URL('../useWorkbookGridRenderPanes.ts', import.meta.url))
     const tilePaneHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookRenderTilePanes.ts', import.meta.url)), 'utf8')
     const viewportRuntimeHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridViewportRuntime.ts', import.meta.url)), 'utf8')
+    const viewportScrollRuntimeHookSource = readFileSync(
+      fileURLToPath(new URL('../useWorkbookViewportScrollRuntime.ts', import.meta.url)),
+      'utf8',
+    )
     const viewportResidencyHookSource = readFileSync(
       fileURLToPath(new URL('../useWorkbookViewportResidencyState.ts', import.meta.url)),
       'utf8',
@@ -177,12 +181,16 @@ describe('grid hook boundary helpers', () => {
     expect(interactionRuntimeHookSource).toContain('useWorkbookInteractionOverlayState')
     expect(interactionRuntimeHookSource).toContain('gridRuntimeHost')
     expect(runtimeHostSource).toContain("from './gridInputController.js'")
+    expect(runtimeHostSource).toContain("from '../workbookViewportScrollRuntime.js'")
     expect(interactionsHookSource).not.toContain("from './runtime/gridInputController.js'")
     expect(interactionsHookSource).not.toContain('new GridInputController')
     expect(interactionsHookSource).not.toContain('inputController.disconnect')
     expect(interactionsHookSource).toContain('gridRuntimeHost.input')
     expect(interactionsHookSource).not.toContain('useRef')
     expect(interactionsHookSource).not.toContain('useRef<')
+    expect(viewportScrollRuntimeHookSource).not.toContain('new WorkbookViewportScrollRuntime')
+    expect(viewportScrollRuntimeHookSource).not.toContain('useRef<WorkbookViewportScrollRuntime')
+    expect(viewportScrollRuntimeHookSource).toContain('gridRuntimeHost.viewportScroll')
     expect(interactionOverlayHookSource).toContain('useSyncExternalStore')
     expect(interactionOverlayHookSource).not.toContain('useState')
     expect(interactionOverlayHookSource).toContain('GridInteractionOverlayRuntime')
