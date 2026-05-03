@@ -31,25 +31,45 @@ function parseDimensionOverrides(raw: string | null): Record<string, number> {
 }
 
 export async function getProductColumnWidth(page: Page, columnIndex: number) {
-  const grid = page.getByTestId('sheet-grid')
-  const [defaultWidthRaw, overridesRaw] = await Promise.all([
-    grid.getAttribute('data-default-column-width'),
-    grid.getAttribute('data-column-width-overrides'),
-  ])
-  const defaultWidth = Number(defaultWidthRaw ?? String(PRODUCT_COLUMN_WIDTH))
+  const { defaultSizeRaw, overridesRaw } = await readProductGridDimensionAttributes(page, {
+    defaultAttribute: 'data-default-column-width',
+    overridesAttribute: 'data-column-width-overrides',
+  })
+  const defaultWidth = Number(defaultSizeRaw ?? String(PRODUCT_COLUMN_WIDTH))
   const overrides = parseDimensionOverrides(overridesRaw)
   return overrides[String(columnIndex)] ?? defaultWidth
 }
 
 export async function getProductRowHeight(page: Page, rowIndex: number) {
-  const grid = page.getByTestId('sheet-grid')
-  const [defaultHeightRaw, overridesRaw] = await Promise.all([
-    grid.getAttribute('data-default-row-height'),
-    grid.getAttribute('data-row-height-overrides'),
-  ])
-  const defaultHeight = Number(defaultHeightRaw ?? String(PRODUCT_ROW_HEIGHT))
+  const { defaultSizeRaw, overridesRaw } = await readProductGridDimensionAttributes(page, {
+    defaultAttribute: 'data-default-row-height',
+    overridesAttribute: 'data-row-height-overrides',
+  })
+  const defaultHeight = Number(defaultSizeRaw ?? String(PRODUCT_ROW_HEIGHT))
   const overrides = parseDimensionOverrides(overridesRaw)
   return overrides[String(rowIndex)] ?? defaultHeight
+}
+
+function readProductGridDimensionAttributes(
+  page: Page,
+  attributes: {
+    readonly defaultAttribute: string
+    readonly overridesAttribute: string
+  },
+): Promise<{
+  readonly defaultSizeRaw: string | null
+  readonly overridesRaw: string | null
+}> {
+  return page.evaluate(({ defaultAttribute, overridesAttribute }) => {
+    const grid = document.querySelector('[data-testid="sheet-grid"]')
+    if (!grid) {
+      throw new Error('sheet grid is not attached')
+    }
+    return {
+      defaultSizeRaw: grid.getAttribute(defaultAttribute),
+      overridesRaw: grid.getAttribute(overridesAttribute),
+    }
+  }, attributes)
 }
 
 export async function getProductRowTop(page: Page, rowIndex: number) {
