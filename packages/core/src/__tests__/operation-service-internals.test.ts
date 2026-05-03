@@ -8,23 +8,40 @@ import type {
   RuntimeDirectScalarDescriptor,
 } from '../engine/runtime-state.js'
 import { SpreadsheetEngine } from '../engine.js'
-
-const {
-  DirectFormulaIndexCollection,
-  PendingNumericCellValues,
+import {
+  approximateUniformLookupCurrentResult,
+  approximateUniformLookupNumericResult,
+  canSkipUniformApproximateNumericTailWrite,
+  canSkipUniformApproximateNumericTailWriteFromCurrentResult,
+  canSkipUniformExactNumericTailWriteFromCurrentResult,
+  directLookupRowBounds,
+  exactLookupLiteralNumericValue,
+  exactUniformLookupCurrentResult,
+  exactUniformLookupNumericResult,
+  normalizeApproximateNumericValue,
+  normalizeApproximateTextValue,
+  normalizeExactLookupKey,
+  normalizeExactNumericValue,
+  sameExactNumericValue,
+  withOptionalLookupStringIds,
+} from '../engine/services/direct-lookup-helpers.js'
+import { DirectFormulaIndexCollection, PendingNumericCellValues } from '../engine/services/direct-formula-index-collection.js'
+import {
   ROW_PAIR_LEFT_DIV_RIGHT,
   ROW_PAIR_LEFT_MINUS_RIGHT,
   ROW_PAIR_LEFT_PLUS_RIGHT,
   ROW_PAIR_LEFT_TIMES_RIGHT,
   ROW_PAIR_RIGHT_DIV_LEFT,
   ROW_PAIR_RIGHT_MINUS_LEFT,
+  directScalarLiteralNumericValue,
+  evaluateRowPairDirectScalarCode,
+  rowPairDirectScalarCode,
+  singleInputAffineDirectScalar,
+} from '../engine/services/direct-scalar-helpers.js'
+
+const {
   aggregateColumnDependencyKey,
-  approximateUniformLookupCurrentResult,
-  approximateUniformLookupNumericResult,
   canEvaluatePostRecalcDirectFormulasWithoutKernel,
-  canSkipUniformApproximateNumericTailWrite,
-  canSkipUniformApproximateNumericTailWriteFromCurrentResult,
-  canSkipUniformExactNumericTailWriteFromCurrentResult,
   cellRange,
   collectTrackedDependents,
   composeSingleDisjointExplicitEventChanges,
@@ -32,27 +49,13 @@ const {
   directAggregateNumericContribution,
   directCriteriaTouchesPoint,
   directFormulaChangesAreDisjointFromInputs,
-  directLookupRowBounds,
-  directScalarLiteralNumericValue,
-  evaluateRowPairDirectScalarCode,
-  exactLookupLiteralNumericValue,
-  exactUniformLookupCurrentResult,
-  exactUniformLookupNumericResult,
   lookupImpactCacheKey,
   makeCompactExistingNumericMutationResult,
   makeExistingNumericMutationResult,
   mergeChangedCellIndices,
-  normalizeApproximateNumericValue,
-  normalizeApproximateTextValue,
-  normalizeExactLookupKey,
-  normalizeExactNumericValue,
   rangesIntersect,
-  rowPairDirectScalarCode,
-  sameExactNumericValue,
-  singleInputAffineDirectScalar,
   tagTrustedPhysicalTrackedChanges,
   throwProtectionBlocked,
-  withOptionalLookupStringIds,
 } = operationServiceTestHooks
 
 function exactUniform(overrides: Partial<Extract<RuntimeDirectLookupDescriptor, { kind: 'exact-uniform-numeric' }>> = {}) {

@@ -5,6 +5,16 @@ import { compileCriteriaMatcher, indexToColumn } from '@bilig/formula'
 import { createBatch } from '../replica-state.js'
 import { SpreadsheetEngine } from '../engine.js'
 import { operationServiceTestHooks, type EngineOperationService } from '../engine/services/operation-service.js'
+import {
+  approximateUniformLookupCurrentResult,
+  approximateUniformLookupNumericResult,
+  exactUniformLookupCurrentResult,
+  exactUniformLookupNumericResult,
+  normalizeApproximateNumericValue,
+  normalizeApproximateTextValue,
+  normalizeExactLookupKey,
+} from '../engine/services/direct-lookup-helpers.js'
+import { DirectFormulaIndexCollection } from '../engine/services/direct-formula-index-collection.js'
 import { cellMutationRefToEngineOp, type EngineCellMutationRef } from '../cell-mutations-at.js'
 
 function isEngineOperationService(value: unknown): value is EngineOperationService {
@@ -75,25 +85,21 @@ describe('EngineOperationService', () => {
     expect(operationServiceTestHooks.directAggregateNumericContribution({ tag: ValueTag.String, value: 'x' })).toBe(0)
     expect(operationServiceTestHooks.directAggregateNumericContribution({ tag: ValueTag.Error, code: ErrorCode.VALUE })).toBeUndefined()
 
-    expect(operationServiceTestHooks.normalizeExactLookupKey({ tag: ValueTag.Empty }, lookupTestString)).toBe('e:')
-    expect(operationServiceTestHooks.normalizeExactLookupKey({ tag: ValueTag.Number, value: -0 }, lookupTestString)).toBe('n:0')
-    expect(operationServiceTestHooks.normalizeExactLookupKey({ tag: ValueTag.Boolean, value: true }, lookupTestString)).toBe('b:1')
-    expect(operationServiceTestHooks.normalizeExactLookupKey({ tag: ValueTag.String, value: 'local' }, lookupTestString, 7)).toBe(
-      's:NEEDLE',
-    )
-    expect(operationServiceTestHooks.normalizeExactLookupKey({ tag: ValueTag.Error, code: ErrorCode.NA }, lookupTestString)).toBeUndefined()
+    expect(normalizeExactLookupKey({ tag: ValueTag.Empty }, lookupTestString)).toBe('e:')
+    expect(normalizeExactLookupKey({ tag: ValueTag.Number, value: -0 }, lookupTestString)).toBe('n:0')
+    expect(normalizeExactLookupKey({ tag: ValueTag.Boolean, value: true }, lookupTestString)).toBe('b:1')
+    expect(normalizeExactLookupKey({ tag: ValueTag.String, value: 'local' }, lookupTestString, 7)).toBe('s:NEEDLE')
+    expect(normalizeExactLookupKey({ tag: ValueTag.Error, code: ErrorCode.NA }, lookupTestString)).toBeUndefined()
 
-    expect(operationServiceTestHooks.normalizeApproximateNumericValue({ tag: ValueTag.Empty })).toBe(0)
-    expect(operationServiceTestHooks.normalizeApproximateNumericValue({ tag: ValueTag.Number, value: -0 })).toBe(0)
-    expect(operationServiceTestHooks.normalizeApproximateNumericValue({ tag: ValueTag.Boolean, value: false })).toBe(0)
-    expect(operationServiceTestHooks.normalizeApproximateNumericValue({ tag: ValueTag.String, value: 'x' })).toBeUndefined()
-    expect(operationServiceTestHooks.normalizeApproximateTextValue({ tag: ValueTag.String, value: 'local' }, lookupTestString, 7)).toBe(
-      'NEEDLE',
-    )
-    expect(operationServiceTestHooks.normalizeApproximateTextValue({ tag: ValueTag.Empty }, lookupTestString)).toBe('')
-    expect(operationServiceTestHooks.normalizeApproximateTextValue({ tag: ValueTag.Number, value: 1 }, lookupTestString)).toBeUndefined()
+    expect(normalizeApproximateNumericValue({ tag: ValueTag.Empty })).toBe(0)
+    expect(normalizeApproximateNumericValue({ tag: ValueTag.Number, value: -0 })).toBe(0)
+    expect(normalizeApproximateNumericValue({ tag: ValueTag.Boolean, value: false })).toBe(0)
+    expect(normalizeApproximateNumericValue({ tag: ValueTag.String, value: 'x' })).toBeUndefined()
+    expect(normalizeApproximateTextValue({ tag: ValueTag.String, value: 'local' }, lookupTestString, 7)).toBe('NEEDLE')
+    expect(normalizeApproximateTextValue({ tag: ValueTag.Empty }, lookupTestString)).toBe('')
+    expect(normalizeApproximateTextValue({ tag: ValueTag.Number, value: 1 }, lookupTestString)).toBeUndefined()
 
-    const exactLookup: Parameters<typeof operationServiceTestHooks.exactUniformLookupNumericResult>[0] = {
+    const exactLookup: Parameters<typeof exactUniformLookupNumericResult>[0] = {
       columnVersion: 1,
       kind: 'exact-uniform-numeric',
       length: 4,
@@ -104,11 +110,11 @@ describe('EngineOperationService', () => {
       step: 2,
       structureVersion: 1,
     }
-    expect(operationServiceTestHooks.exactUniformLookupNumericResult(exactLookup, 14)).toBe(3)
-    expect(operationServiceTestHooks.exactUniformLookupNumericResult(exactLookup, 15)).toBeUndefined()
-    expect(operationServiceTestHooks.exactUniformLookupCurrentResult(exactLookup, 15)).toEqual({ kind: 'error', code: ErrorCode.NA })
+    expect(exactUniformLookupNumericResult(exactLookup, 14)).toBe(3)
+    expect(exactUniformLookupNumericResult(exactLookup, 15)).toBeUndefined()
+    expect(exactUniformLookupCurrentResult(exactLookup, 15)).toEqual({ kind: 'error', code: ErrorCode.NA })
     expect(
-      operationServiceTestHooks.exactUniformLookupNumericResult(
+      exactUniformLookupNumericResult(
         {
           ...exactLookup,
           tailPatch: { columnVersion: 2, newNumeric: 99, oldNumeric: 10, row: 0 },
@@ -117,7 +123,7 @@ describe('EngineOperationService', () => {
       ),
     ).toBe(1)
 
-    const approximateLookup: Parameters<typeof operationServiceTestHooks.approximateUniformLookupNumericResult>[0] = {
+    const approximateLookup: Parameters<typeof approximateUniformLookupNumericResult>[0] = {
       columnVersion: 1,
       kind: 'approximate-uniform-numeric',
       length: 4,
@@ -129,9 +135,9 @@ describe('EngineOperationService', () => {
       step: 2,
       structureVersion: 1,
     }
-    expect(operationServiceTestHooks.approximateUniformLookupNumericResult(approximateLookup, 13)).toBe(2)
-    expect(operationServiceTestHooks.approximateUniformLookupNumericResult(approximateLookup, 9)).toBeUndefined()
-    expect(operationServiceTestHooks.approximateUniformLookupCurrentResult(approximateLookup, 9)).toEqual({
+    expect(approximateUniformLookupNumericResult(approximateLookup, 13)).toBe(2)
+    expect(approximateUniformLookupNumericResult(approximateLookup, 9)).toBeUndefined()
+    expect(approximateUniformLookupCurrentResult(approximateLookup, 9)).toEqual({
       kind: 'error',
       code: ErrorCode.NA,
     })
@@ -165,7 +171,7 @@ describe('EngineOperationService', () => {
   })
 
   it('covers direct formula index collection delta materialization branches', () => {
-    const collection = new operationServiceTestHooks.DirectFormulaIndexCollection()
+    const collection = new DirectFormulaIndexCollection()
 
     collection.appendConstantDelta(Uint32Array.from([10, 11, 12]), 3, 'scalar')
     expect(collection.size).toBe(3)
@@ -206,7 +212,7 @@ describe('EngineOperationService', () => {
     expect(cells).toEqual([10, 11, 12, 13])
     expect(indexed).toEqual(['0:10', '1:11', '2:12', '3:13'])
 
-    const largeCollection = new operationServiceTestHooks.DirectFormulaIndexCollection()
+    const largeCollection = new DirectFormulaIndexCollection()
     largeCollection.appendDeltas(
       Uint32Array.from(Array.from({ length: 18 }, (_unused, index) => index + 1)),
       Array.from({ length: 18 }, (_unused, index) => index + 10),
