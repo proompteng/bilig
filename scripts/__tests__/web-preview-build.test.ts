@@ -31,4 +31,12 @@ describe('web preview build gate', () => {
     expect(source).toContain("import { ensureWasmKernelArtifact } from './ensure-wasm-kernel.js'")
     expect(source).toContain('ensureWasmKernelArtifact()')
   })
+
+  it('builds app runtime workspace dependencies before starting the app in run mode', () => {
+    const source = readFileSync(resolve(repoRoot, 'scripts/run-dev-web-local.ts'), 'utf8')
+
+    expect(source).toContain("['pnpm', '--filter', '@bilig/app^...', 'run', 'build']")
+    expect(source).toContain("if (appServerMode === 'run')")
+    expect(source).toContain('buildAppRuntimeDependencies()')
+  })
 })

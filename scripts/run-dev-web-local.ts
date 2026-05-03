@@ -526,6 +526,19 @@ function buildWebPreview(publicServerUrl: string): void {
   }
 }
 
+function buildAppRuntimeDependencies(): void {
+  const result = Bun.spawnSync(['pnpm', '--filter', '@bilig/app^...', 'run', 'build'], {
+    cwd: repoRoot,
+    stdin: childStdinMode(),
+    stdout: 'inherit',
+    stderr: 'inherit',
+    env: process.env,
+  })
+  if (result.exitCode !== 0) {
+    throw new Error(`@bilig/app runtime dependency build failed with exit code ${result.exitCode ?? 1}`)
+  }
+}
+
 function spawnWebPreview(webPort: number, publicServerUrl: string): DevChildProcess {
   return Bun.spawn(
     ['node', '../../node_modules/vite/bin/vite.js', 'preview', '--host', '0.0.0.0', '--port', String(webPort), '--strictPort'],
@@ -615,6 +628,10 @@ process.on('SIGINT', () => forwardSignal('SIGINT'))
 process.on('SIGTERM', () => forwardSignal('SIGTERM'))
 
 try {
+  if (appServerMode === 'run') {
+    console.log('Building local app runtime dependencies for clean startup...')
+    buildAppRuntimeDependencies()
+  }
   await waitForHttp(appHealthUrl)
   if (!disableCompose) {
     runComposeSync(['up', '-d', zeroCacheService])
