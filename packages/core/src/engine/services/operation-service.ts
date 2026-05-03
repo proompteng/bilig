@@ -4,7 +4,6 @@ import type { EngineOp, EngineOpBatch } from '@bilig/workbook-domain'
 import {
   ErrorCode,
   FormulaMode,
-  MAX_COLS,
   ValueTag,
   type CellRangeRef,
   type CellValue,
@@ -70,6 +69,19 @@ import {
   PendingNumericCellValues,
   type DirectScalarCurrentOperand,
 } from './direct-formula-index-collection.js'
+import {
+  aggregateColumnDependencyKey,
+  canEvaluatePostRecalcDirectFormulasWithoutKernel,
+  collectTrackedDependents,
+  composeSingleDisjointExplicitEventChanges,
+  countDirectFormulaDeltaSkip,
+  directAggregateNumericContribution,
+  directCriteriaTouchesPoint,
+  directCriteriaValueString,
+  directFormulaChangesAreDisjointFromInputs,
+  hasCompleteDirectFormulaDeltas,
+  lookupImpactCacheKey,
+} from './direct-formula-recalc-helpers.js'
 import {
   directScalarCellNumber,
   directScalarDeltaFromNumbers,
@@ -230,45 +242,6 @@ function assertNever(value: never): never {
   throw new Error(`Unexpected value: ${String(value)}`)
 }
 
-function directAggregateNumericContribution(value: CellValue): number | undefined {
-  switch (value.tag) {
-    case ValueTag.Number:
-      return value.value
-    case ValueTag.Boolean:
-      return value.value ? 1 : 0
-    case ValueTag.Empty:
-    case ValueTag.String:
-      return 0
-    case ValueTag.Error:
-      return undefined
-  }
-}
-
-function directCriteriaValueString(value: CellValue): string {
-  switch (value.tag) {
-    case ValueTag.Empty:
-      return ''
-    case ValueTag.Number:
-      return String(Object.is(value.value, -0) ? 0 : value.value)
-    case ValueTag.Boolean:
-      return value.value ? 'TRUE' : 'FALSE'
-    case ValueTag.String:
-      return value.value
-    case ValueTag.Error:
-      return String(value.code)
-  }
-}
-
-function collectTrackedDependents(registry: Map<string | number, Set<number>>, keys: readonly (string | number)[]): number[] {
-  const candidates = new Set<number>()
-  keys.forEach((key) => {
-    registry.get(key)?.forEach((cellIndex) => {
-      candidates.add(cellIndex)
-    })
-  })
-  return [...candidates]
-}
-
 function normalizeRange(range: CellRangeRef): CellRangeRef & {
   startRow: number
   endRow: number
@@ -310,37 +283,6 @@ function throwProtectionBlocked(message: string): never {
   throw new Error(`Workbook protection blocks this change: ${message}`)
 }
 
-function directCriteriaTouchesPoint(
-  directCriteria: RuntimeDirectCriteriaDescriptor,
-  request: { sheetName: string; row: number; col: number; inputCellIndex?: number },
-): boolean {
-  if (directCriteria.aggregateRange) {
-    const aggregateRange = directCriteria.aggregateRange
-    if (
-      aggregateRange.sheetName === request.sheetName &&
-      aggregateRange.col === request.col &&
-      request.row >= aggregateRange.rowStart &&
-      request.row <= aggregateRange.rowEnd
-    ) {
-      return true
-    }
-  }
-  return directCriteria.criteriaPairs.some((pair) => {
-    if (
-      pair.range.sheetName === request.sheetName &&
-      pair.range.col === request.col &&
-      request.row >= pair.range.rowStart &&
-      request.row <= pair.range.rowEnd
-    ) {
-      return true
-    }
-    if (pair.criterion.kind === 'literal') {
-      return false
-    }
-    return request.inputCellIndex !== undefined && pair.criterion.cellIndex === request.inputCellIndex
-  })
-}
-
 function mergeChangedCellIndices(base: readonly number[] | U32, extras: readonly number[] | U32): U32 {
   if (base.length === 0) {
     return extras instanceof Uint32Array ? extras : Uint32Array.from(extras)
@@ -361,100 +303,6 @@ function mergeChangedCellIndices(base: readonly number[] | U32, extras: readonly
     merged.add(extras[index]!)
   }
   return Uint32Array.from(merged)
-}
-
-function composeSingleDisjointExplicitEventChanges(explicitCellIndex: number, recalculated: U32): U32 {
-  if (recalculated.length === 0) {
-    return Uint32Array.of(explicitCellIndex)
-  }
-  const changed = new Uint32Array(recalculated.length + 1)
-  changed[0] = explicitCellIndex
-  changed.set(recalculated, 1)
-  return changed
-}
-
-function hasCompleteDirectFormulaDeltas(postRecalcDirectFormulaIndices: DirectFormulaIndexCollection): boolean {
-  return postRecalcDirectFormulaIndices.hasCompleteDeltas()
-}
-
-function directFormulaChangesAreDisjointFromInputs(
-  changedInputArray: U32,
-  changedInputCount: number,
-  postRecalcDirectFormulaIndices: DirectFormulaIndexCollection,
-): boolean {
-  for (let index = 0; index < changedInputCount; index += 1) {
-    if (postRecalcDirectFormulaIndices.has(changedInputArray[index]!)) {
-      return false
-    }
-  }
-  return true
-}
-
-function countDirectFormulaDeltaSkip(
-  formulas: {
-    get(cellIndex: number):
-      | {
-          readonly directAggregate?: unknown
-          readonly directCriteria?: unknown
-          readonly directScalar?: unknown
-        }
-      | undefined
-  },
-  postRecalcDirectFormulaIndices: DirectFormulaIndexCollection,
-  counters: EngineRuntimeState['counters'],
-): void {
-  let sawAggregate = false
-  let sawScalar = false
-  postRecalcDirectFormulaIndices.forEach((cellIndex) => {
-    const formula = formulas.get(cellIndex)
-    sawAggregate ||= formula?.directAggregate !== undefined || formula?.directCriteria !== undefined
-    sawScalar ||= formula?.directScalar !== undefined
-  })
-  if (sawAggregate) {
-    addEngineCounter(counters, 'directAggregateDeltaOnlyRecalcSkips')
-  }
-  if (sawScalar) {
-    addEngineCounter(counters, 'directScalarDeltaOnlyRecalcSkips')
-  }
-}
-
-function canEvaluatePostRecalcDirectFormulasWithoutKernel(
-  formulas: {
-    get(cellIndex: number):
-      | {
-          readonly directAggregate?: unknown
-          readonly directCriteria?: unknown
-          readonly directLookup?: unknown
-          readonly directScalar?: unknown
-        }
-      | undefined
-  },
-  postRecalcDirectFormulaIndices: DirectFormulaIndexCollection,
-): boolean {
-  if (postRecalcDirectFormulaIndices.size === 0) {
-    return false
-  }
-  let canEvaluate = true
-  postRecalcDirectFormulaIndices.forEach((cellIndex) => {
-    const formula = formulas.get(cellIndex)
-    if (
-      formula?.directAggregate === undefined &&
-      formula?.directCriteria === undefined &&
-      formula?.directLookup === undefined &&
-      formula?.directScalar === undefined
-    ) {
-      canEvaluate = false
-    }
-  })
-  return canEvaluate
-}
-
-function lookupImpactCacheKey(sheetId: number, col: number): string {
-  return `${sheetId}:${col}`
-}
-
-function aggregateColumnDependencyKey(sheetId: number, col: number): number {
-  return sheetId * MAX_COLS + col
 }
 
 function tagTrustedPhysicalTrackedChanges(changed: U32, sheetId: number, sortedSliceSplit: number): void {
