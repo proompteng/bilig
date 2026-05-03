@@ -71,7 +71,11 @@ import {
   type DirectScalarCurrentOperand,
 } from './direct-formula-index-collection.js'
 import {
+  directScalarCellNumber,
+  directScalarDeltaFromNumbers,
+  directScalarDeltaFromValues,
   directScalarLiteralNumericValue,
+  directScalarValueNumber,
   evaluateRowPairDirectScalarCode,
   rowPairDirectScalarCode,
   rowPairDirectScalarCodeNeedsZeroGuard,
@@ -1585,95 +1589,11 @@ export function createEngineOperationService(args: {
     return found
   }
 
-  const directScalarNumericValue = (value: CellValue): number | undefined => {
-    switch (value.tag) {
-      case ValueTag.Number:
-        return Object.is(value.value, -0) ? 0 : value.value
-      case ValueTag.Boolean:
-        return value.value ? 1 : 0
-      case ValueTag.Empty:
-        return 0
-      case ValueTag.Error:
-      case ValueTag.String:
-        return undefined
-    }
-  }
+  const readDirectScalarCellNumber = (cellIndex: number): number | undefined =>
+    directScalarValueNumber(args.state.workbook.cellStore.getValue(cellIndex, (id) => args.state.strings.get(id)))
 
-  const directScalarCellNumericValue = (cellIndex: number | undefined): number | undefined => {
-    if (cellIndex === undefined) {
-      return 0
-    }
-    const cellStore = args.state.workbook.cellStore
-    switch ((cellStore.tags[cellIndex] as ValueTag | undefined) ?? ValueTag.Empty) {
-      case ValueTag.Number: {
-        const value = cellStore.numbers[cellIndex] ?? 0
-        return Object.is(value, -0) ? 0 : value
-      }
-      case ValueTag.Boolean:
-        return (cellStore.numbers[cellIndex] ?? 0) !== 0 ? 1 : 0
-      case ValueTag.Empty:
-        return 0
-      case ValueTag.Error:
-      case ValueTag.String:
-        return undefined
-    }
-  }
-
-  const readDirectScalarOperandNumber = (
-    operand: RuntimeDirectScalarOperand,
-    changedCellIndex: number,
-    replacementValue: CellValue,
-    touched: { value: boolean },
-  ): number | undefined => {
-    switch (operand.kind) {
-      case 'literal-number':
-        return operand.value
-      case 'error':
-        return undefined
-      case 'cell':
-        if (operand.cellIndex === changedCellIndex) {
-          touched.value = true
-          return directScalarNumericValue(replacementValue)
-        }
-        return directScalarNumericValue(args.state.workbook.cellStore.getValue(operand.cellIndex, (id) => args.state.strings.get(id)))
-    }
-  }
-
-  const evaluateDirectScalarNumber = (
-    directScalar: RuntimeDirectScalarDescriptor,
-    changedCellIndex: number,
-    replacementValue: CellValue,
-    touched: { value: boolean },
-  ): number | undefined => {
-    if (directScalar.kind === 'abs') {
-      const operand = readDirectScalarOperandNumber(directScalar.operand, changedCellIndex, replacementValue, touched)
-      return operand === undefined ? undefined : Math.abs(operand)
-    }
-    const left = readDirectScalarOperandNumber(directScalar.left, changedCellIndex, replacementValue, touched)
-    const right = readDirectScalarOperandNumber(directScalar.right, changedCellIndex, replacementValue, touched)
-    if (left === undefined || right === undefined) {
-      return undefined
-    }
-    let result: number
-    switch (directScalar.operator) {
-      case '+':
-        result = left + right
-        break
-      case '-':
-        result = left - right
-        break
-      case '*':
-        result = left * right
-        break
-      case '/':
-        if (right === 0) {
-          return undefined
-        }
-        result = left / right
-        break
-    }
-    return result + (directScalar.resultOffset ?? 0)
-  }
+  const directScalarCellNumericValue = (cellIndex: number | undefined): number | undefined =>
+    directScalarCellNumber(args.state.workbook.cellStore, cellIndex)
 
   const tryDirectScalarNumericDelta = (
     directScalar: RuntimeDirectScalarDescriptor,
@@ -1681,116 +1601,7 @@ export function createEngineOperationService(args: {
     oldValue: CellValue,
     newValue: CellValue,
   ): number | undefined => {
-    const oldChangedNumber = directScalarNumericValue(oldValue)
-    const newChangedNumber = directScalarNumericValue(newValue)
-    if (oldChangedNumber !== undefined && newChangedNumber !== undefined) {
-      if (directScalar.kind === 'abs') {
-        return directScalar.operand.kind === 'cell' && directScalar.operand.cellIndex === changedCellIndex
-          ? Math.abs(newChangedNumber) - Math.abs(oldChangedNumber)
-          : undefined
-      }
-      const changedDelta = newChangedNumber - oldChangedNumber
-      if (directScalar.left.kind === 'cell' && directScalar.left.cellIndex === changedCellIndex) {
-        switch (directScalar.operator) {
-          case '+':
-          case '-':
-            return changedDelta
-          case '*':
-            if (directScalar.right.kind === 'literal-number') {
-              return changedDelta * directScalar.right.value
-            }
-            break
-          case '/':
-            return directScalar.right.kind === 'literal-number' && directScalar.right.value !== 0
-              ? changedDelta / directScalar.right.value
-              : undefined
-        }
-      }
-      if (directScalar.right.kind === 'cell' && directScalar.right.cellIndex === changedCellIndex) {
-        switch (directScalar.operator) {
-          case '+':
-            return changedDelta
-          case '-':
-            return -changedDelta
-          case '*':
-            if (directScalar.left.kind === 'literal-number') {
-              return directScalar.left.value * changedDelta
-            }
-            break
-          case '/':
-            return directScalar.left.kind === 'literal-number' && oldChangedNumber !== 0 && newChangedNumber !== 0
-              ? directScalar.left.value / newChangedNumber - directScalar.left.value / oldChangedNumber
-              : undefined
-        }
-      }
-    }
-    const oldTouched = { value: false }
-    const oldResult = evaluateDirectScalarNumber(directScalar, changedCellIndex, oldValue, oldTouched)
-    if (!oldTouched.value || oldResult === undefined) {
-      return undefined
-    }
-    const newTouched = { value: false }
-    const newResult = evaluateDirectScalarNumber(directScalar, changedCellIndex, newValue, newTouched)
-    if (!newTouched.value || newResult === undefined) {
-      return undefined
-    }
-    return newResult - oldResult
-  }
-
-  const readDirectScalarOperandNumberWithReplacement = (
-    operand: RuntimeDirectScalarOperand,
-    changedCellIndex: number,
-    replacementNumber: number,
-    touched: { value: boolean },
-  ): number | undefined => {
-    switch (operand.kind) {
-      case 'literal-number':
-        return operand.value
-      case 'error':
-        return undefined
-      case 'cell':
-        if (operand.cellIndex === changedCellIndex) {
-          touched.value = true
-          return replacementNumber
-        }
-        return directScalarNumericValue(args.state.workbook.cellStore.getValue(operand.cellIndex, (id) => args.state.strings.get(id)))
-    }
-  }
-
-  const evaluateDirectScalarNumberWithReplacement = (
-    directScalar: RuntimeDirectScalarDescriptor,
-    changedCellIndex: number,
-    replacementNumber: number,
-    touched: { value: boolean },
-  ): number | undefined => {
-    if (directScalar.kind === 'abs') {
-      const operand = readDirectScalarOperandNumberWithReplacement(directScalar.operand, changedCellIndex, replacementNumber, touched)
-      return operand === undefined ? undefined : Math.abs(operand)
-    }
-    const left = readDirectScalarOperandNumberWithReplacement(directScalar.left, changedCellIndex, replacementNumber, touched)
-    const right = readDirectScalarOperandNumberWithReplacement(directScalar.right, changedCellIndex, replacementNumber, touched)
-    if (left === undefined || right === undefined) {
-      return undefined
-    }
-    let result: number
-    switch (directScalar.operator) {
-      case '+':
-        result = left + right
-        break
-      case '-':
-        result = left - right
-        break
-      case '*':
-        result = left * right
-        break
-      case '/':
-        if (right === 0) {
-          return undefined
-        }
-        result = left / right
-        break
-    }
-    return result + (directScalar.resultOffset ?? 0)
+    return directScalarDeltaFromValues(directScalar, changedCellIndex, oldValue, newValue, readDirectScalarCellNumber)
   }
 
   const tryDirectScalarNumericDeltaFromNumbers = (
@@ -1799,56 +1610,7 @@ export function createEngineOperationService(args: {
     oldChangedNumber: number,
     newChangedNumber: number,
   ): number | undefined => {
-    if (directScalar.kind === 'abs') {
-      return directScalar.operand.kind === 'cell' && directScalar.operand.cellIndex === changedCellIndex
-        ? Math.abs(newChangedNumber) - Math.abs(oldChangedNumber)
-        : undefined
-    }
-    const changedDelta = newChangedNumber - oldChangedNumber
-    if (directScalar.left.kind === 'cell' && directScalar.left.cellIndex === changedCellIndex) {
-      switch (directScalar.operator) {
-        case '+':
-        case '-':
-          return changedDelta
-        case '*':
-          if (directScalar.right.kind === 'literal-number') {
-            return changedDelta * directScalar.right.value
-          }
-          break
-        case '/':
-          return directScalar.right.kind === 'literal-number' && directScalar.right.value !== 0
-            ? changedDelta / directScalar.right.value
-            : undefined
-      }
-    }
-    if (directScalar.right.kind === 'cell' && directScalar.right.cellIndex === changedCellIndex) {
-      switch (directScalar.operator) {
-        case '+':
-          return changedDelta
-        case '-':
-          return -changedDelta
-        case '*':
-          if (directScalar.left.kind === 'literal-number') {
-            return directScalar.left.value * changedDelta
-          }
-          break
-        case '/':
-          return directScalar.left.kind === 'literal-number' && oldChangedNumber !== 0 && newChangedNumber !== 0
-            ? directScalar.left.value / newChangedNumber - directScalar.left.value / oldChangedNumber
-            : undefined
-      }
-    }
-    const oldTouched = { value: false }
-    const oldResult = evaluateDirectScalarNumberWithReplacement(directScalar, changedCellIndex, oldChangedNumber, oldTouched)
-    if (!oldTouched.value || oldResult === undefined) {
-      return undefined
-    }
-    const newTouched = { value: false }
-    const newResult = evaluateDirectScalarNumberWithReplacement(directScalar, changedCellIndex, newChangedNumber, newTouched)
-    if (!newTouched.value || newResult === undefined) {
-      return undefined
-    }
-    return newResult - oldResult
+    return directScalarDeltaFromNumbers(directScalar, changedCellIndex, oldChangedNumber, newChangedNumber, readDirectScalarCellNumber)
   }
 
   const lookupSheetForUniformLookup = (directLookup: UniformNumericDirectLookup, lookupSheetHint?: SheetRecord): SheetRecord | undefined =>
@@ -2377,8 +2139,8 @@ export function createEngineOperationService(args: {
     newValue: CellValue,
     postRecalcDirectFormulaIndices: DirectFormulaIndexCollection,
   ): boolean => {
-    const oldRootNumber = directScalarNumericValue(oldValue)
-    const newRootNumber = directScalarNumericValue(newValue)
+    const oldRootNumber = directScalarValueNumber(oldValue)
+    const newRootNumber = directScalarValueNumber(newValue)
     if (oldRootNumber === undefined || newRootNumber === undefined) {
       return false
     }
