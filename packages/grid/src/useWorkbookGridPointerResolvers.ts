@@ -3,6 +3,8 @@ import type { GridGeometrySnapshot } from './gridGeometry.js'
 import type { HeaderSelection, VisibleRegionState } from './gridPointer.js'
 import type { GridSelection, Item } from './gridTypes.js'
 
+type LocalPoint = { readonly x: number; readonly y: number }
+
 export function useWorkbookGridPointerResolvers(input: {
   hostRef: MutableRefObject<HTMLDivElement | null>
   selectedCell: { col: number; row: number }
@@ -17,29 +19,27 @@ export function useWorkbookGridPointerResolvers(input: {
   )
 
   const resolveLocalPoint = useCallback(
-    (clientX: number, clientY: number): { readonly x: number; readonly y: number } | null => {
+    (clientX: number, clientY: number): LocalPoint | null => {
       const hostBounds = hostRef.current?.getBoundingClientRect()
-      return hostBounds ? { x: clientX - hostBounds.left, y: clientY - hostBounds.top } : null
+      if (!hostBounds) {
+        return null
+      }
+      return {
+        x: clientX - hostBounds.left,
+        y: clientY - hostBounds.top,
+      }
     },
     [hostRef],
   )
 
   const resolveSelectedCellBounds = useCallback(
-    (
-      geometry: GridGeometrySnapshot,
-    ): { readonly x: number; readonly y: number; readonly width: number; readonly height: number } | null => {
-      const hostBounds = hostRef.current?.getBoundingClientRect()
-      const rect = geometry.cellScreenRect(selectedCell.col, selectedCell.row)
-      return hostBounds && rect
-        ? {
-            x: hostBounds.left + rect.x,
-            y: hostBounds.top + rect.y,
-            width: rect.width,
-            height: rect.height,
-          }
+    (geometry: GridGeometrySnapshot): (LocalPoint & { readonly width: number; readonly height: number }) | null => {
+      const selectedCellRect = geometry.cellScreenRect(selectedCell.col, selectedCell.row)
+      return selectedCellRect
+        ? { x: selectedCellRect.x, y: selectedCellRect.y, width: selectedCellRect.width, height: selectedCellRect.height }
         : null
     },
-    [hostRef, selectedCell.col, selectedCell.row],
+    [selectedCell.col, selectedCell.row],
   )
 
   const resolvePointerCell = useCallback(
@@ -58,10 +58,10 @@ export function useWorkbookGridPointerResolvers(input: {
         gridSelection.rows.length === 0 &&
         selectionRange?.width === 1 &&
         selectionRange?.height === 1 &&
-        clientX >= selectedCellBounds.x - 1 &&
-        clientX < selectedCellBounds.x + selectedCellBounds.width &&
-        clientY >= selectedCellBounds.y - 1 &&
-        clientY < selectedCellBounds.y + selectedCellBounds.height
+        localPoint.x >= selectedCellBounds.x - 1 &&
+        localPoint.x < selectedCellBounds.x + selectedCellBounds.width &&
+        localPoint.y >= selectedCellBounds.y - 1 &&
+        localPoint.y < selectedCellBounds.y + selectedCellBounds.height
       ) {
         return [selectedCell.col, selectedCell.row]
       }

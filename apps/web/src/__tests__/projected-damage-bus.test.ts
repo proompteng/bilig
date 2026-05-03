@@ -65,6 +65,38 @@ describe('ProjectedDamageBus', () => {
     expect(bus.applyWorkbookDelta(createEmptyDeltaBatch(1, 4), { dprBucket: 1 }).applied).toBe(false)
   })
 
+  it('tracks delta ordering independently per source', () => {
+    const bus = new ProjectedDamageBus()
+
+    expect(
+      bus.applyWorkbookDelta(
+        {
+          ...createEmptyDeltaBatch(1, 10),
+          source: 'workerAuthoritative',
+        },
+        { dprBucket: 1 },
+      ).applied,
+    ).toBe(true)
+    expect(
+      bus.applyWorkbookDelta(
+        {
+          ...createEmptyDeltaBatch(1, 1),
+          source: 'localOptimistic',
+        },
+        { dprBucket: 1 },
+      ).applied,
+    ).toBe(true)
+    expect(
+      bus.applyWorkbookDelta(
+        {
+          ...createEmptyDeltaBatch(1, 1),
+          source: 'workerAuthoritative',
+        },
+        { dprBucket: 1 },
+      ).applied,
+    ).toBe(false)
+  })
+
   it('subscribes to encoded workbook delta batches from the worker client', () => {
     const key = tileKeyFromCell({ sheetOrdinal: 1, dprBucket: 1, row: 0, col: 0 })
     const listeners: Array<(bytes: Uint8Array) => void> = []

@@ -189,7 +189,34 @@ function resolveCellAddresses(input: {
   if (input.scope === null || input.scope.fullScan) {
     return listUnionMaterializedAddresses(input.authoritativeEngine, input.projectionEngine, input.sheetName)
   }
-  return sortAddresses(input.scope.cellAddressesBySheet.get(input.sheetName) ?? [], input.sheetName)
+
+  const addresses = new Set(input.scope.cellAddressesBySheet.get(input.sheetName) ?? [])
+  const scopedRows = input.scope.rowAxisIndicesBySheet.get(input.sheetName)
+  const scopedColumns = input.scope.columnAxisIndicesBySheet.get(input.sheetName)
+  const minRowIndex = minScopeIndex(scopedRows)
+  const minColumnIndex = minScopeIndex(scopedColumns)
+
+  if (minRowIndex !== null || minColumnIndex !== null) {
+    for (const address of listUnionMaterializedAddresses(input.authoritativeEngine, input.projectionEngine, input.sheetName)) {
+      const parsed = parseCellAddress(address, input.sheetName)
+      if ((minRowIndex !== null && parsed.row >= minRowIndex) || (minColumnIndex !== null && parsed.col >= minColumnIndex)) {
+        addresses.add(address)
+      }
+    }
+  }
+
+  return sortAddresses(addresses, input.sheetName)
+}
+
+function minScopeIndex(indices: ReadonlySet<number> | undefined): number | null {
+  if (!indices || indices.size === 0) {
+    return null
+  }
+  let min = Number.POSITIVE_INFINITY
+  indices.forEach((index) => {
+    min = Math.min(min, index)
+  })
+  return Number.isFinite(min) ? min : null
 }
 
 function resolveAxisIndices(

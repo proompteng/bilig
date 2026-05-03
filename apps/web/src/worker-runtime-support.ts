@@ -192,20 +192,26 @@ export function collectViewportCells(
   viewport: ViewportPatchSubscription,
   changedCells: ChangedSheetCells | null,
   invalidatedRanges: readonly NormalizedRangeImpact[],
+  invalidatedRows: readonly { startIndex: number; endIndex: number }[] = [],
+  invalidatedColumns: readonly { startIndex: number; endIndex: number }[] = [],
 ): ViewportCellPosition[] {
   const positions: ViewportCellPosition[] = []
   const seen = new Set<string>()
+
+  const pushCell = (row: number, col: number) => {
+    const key = `${row}:${col}`
+    if (seen.has(key)) {
+      return
+    }
+    seen.add(key)
+    positions.push({ address: formatAddress(row, col), row, col })
+  }
 
   changedCells?.positions.forEach((cell) => {
     if (cell.row < viewport.rowStart || cell.row > viewport.rowEnd || cell.col < viewport.colStart || cell.col > viewport.colEnd) {
       return
     }
-    const key = `${cell.row}:${cell.col}`
-    if (seen.has(key)) {
-      return
-    }
-    seen.add(key)
-    positions.push(cell)
+    pushCell(cell.row, cell.col)
   })
 
   for (let index = 0; index < invalidatedRanges.length; index += 1) {
@@ -219,15 +225,37 @@ export function collectViewportCells(
     }
     for (let row = rowStart; row <= rowEnd; row += 1) {
       for (let col = colStart; col <= colEnd; col += 1) {
-        const key = `${row}:${col}`
-        if (seen.has(key)) {
-          continue
-        }
-        seen.add(key)
-        positions.push({ address: formatAddress(row, col), row, col })
+        pushCell(row, col)
       }
     }
   }
+
+  for (let index = 0; index < invalidatedRows.length; index += 1) {
+    const rowInvalidation = invalidatedRows[index]!
+    const rowStart = Math.max(viewport.rowStart, rowInvalidation.startIndex)
+    if (rowStart > viewport.rowEnd) {
+      continue
+    }
+    for (let row = rowStart; row <= viewport.rowEnd; row += 1) {
+      for (let col = viewport.colStart; col <= viewport.colEnd; col += 1) {
+        pushCell(row, col)
+      }
+    }
+  }
+
+  for (let index = 0; index < invalidatedColumns.length; index += 1) {
+    const columnInvalidation = invalidatedColumns[index]!
+    const colStart = Math.max(viewport.colStart, columnInvalidation.startIndex)
+    if (colStart > viewport.colEnd) {
+      continue
+    }
+    for (let row = viewport.rowStart; row <= viewport.rowEnd; row += 1) {
+      for (let col = colStart; col <= viewport.colEnd; col += 1) {
+        pushCell(row, col)
+      }
+    }
+  }
+
   return positions
 }
 

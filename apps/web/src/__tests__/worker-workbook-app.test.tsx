@@ -551,4 +551,151 @@ describe('WorkerWorkbookApp', () => {
       root.unmount()
     })
   })
+
+  it('returns row and column delete promises to the workbook view context-menu handlers', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const deleteRowsTask = Promise.resolve()
+    const deleteColumnsTask = Promise.resolve()
+    const invokeDeleteRowsMutation = vi.fn(() => deleteRowsTask)
+    const invokeDeleteColumnsMutation = vi.fn(() => deleteColumnsTask)
+
+    useWorkerWorkbookAppState.mockReturnValue({
+      agentError: null,
+      approvePersistenceTransfer: vi.fn(),
+      autofitColumn: vi.fn(),
+      beginEditing: vi.fn(),
+      canRedo: false,
+      canUndo: false,
+      cancelEditor: vi.fn(),
+      changeCount: 0,
+      changesPanel: null,
+      clearAgentError: vi.fn(),
+      clearImportError: vi.fn(),
+      clearRuntimeError: vi.fn(),
+      clearSelectedCell: vi.fn(),
+      columnWidths: {},
+      commitEditor: vi.fn(),
+      copySelectionRange: vi.fn(),
+      createSheet: vi.fn(),
+      definedNames: [],
+      deleteSheet: vi.fn(),
+      dismissPersistenceTransferRequest: vi.fn(),
+      editorConflictBanner: null,
+      editorSelectionBehavior: 'select-all',
+      failedPendingMutation: null,
+      fillSelectionRange: vi.fn(),
+      freezeCols: 0,
+      freezeRows: 0,
+      getCellEditorSeed: vi.fn(),
+      handleEditorChange: vi.fn(),
+      handleSelectionChange: vi.fn(),
+      handleVisibleViewportChange: vi.fn(),
+      hiddenColumns: {},
+      hiddenRows: {},
+      importError: null,
+      importPanel: null,
+      importToggle: null,
+      invokeColumnVisibilityMutation: vi.fn(),
+      invokeColumnWidthMutation: vi.fn(),
+      invokeDeleteColumnsMutation,
+      invokeDeleteRowsMutation,
+      invokeInsertColumnsMutation: vi.fn(),
+      invokeInsertRowsMutation: vi.fn(),
+      invokeRowHeightMutation: vi.fn(),
+      invokeRowVisibilityMutation: vi.fn(),
+      invokeSetFreezePaneMutation: vi.fn(),
+      isEditing: false,
+      isEditingCell: false,
+      localPersistenceMode: 'persistent',
+      localPersistenceBanner: null,
+      moveSelectionRange: vi.fn(),
+      pasteIntoSelection: vi.fn(),
+      pendingTransferRequest: null,
+      previewRanges: [],
+      redoLatestChange: vi.fn(),
+      remoteSyncAvailable: true,
+      renameSheet: vi.fn(),
+      reportRuntimeError: vi.fn(),
+      requestPersistenceTransfer: vi.fn(),
+      requestPersistenceTransferBanner: null,
+      resolvedValue: '',
+      retryFailedPendingMutation: vi.fn(),
+      ribbon: null,
+      rowHeights: {},
+      runtimeError: null,
+      runtimeReady: true,
+      selection: { sheetName: 'Sheet1', address: 'A1' },
+      selectionSnapshot: {
+        sheetName: 'Sheet1',
+        address: 'A1',
+        kind: 'cell',
+        range: {
+          startAddress: 'A1',
+          endAddress: 'A1',
+        },
+      },
+      selectAddress: vi.fn(),
+      selectSelectionSnapshot: vi.fn(),
+      selectedCell: { sheetName: 'Sheet1', address: 'A1' },
+      setSidePanelWidth: vi.fn(),
+      sheetIdsByName: { Sheet1: 1 },
+      sheetNames: ['Sheet1'],
+      sheetOrdinalsByName: { Sheet1: 0 },
+      sidePanel: null,
+      sidePanelId: undefined,
+      sidePanelWidth: undefined,
+      statusModeLabel: 'Live',
+      toggleBooleanCell: vi.fn(),
+      toolbarTrailingContent: null,
+      transferRequested: false,
+      undoLatestChange: vi.fn(),
+      visibleEditorValue: '',
+      workbookReady: true,
+      workerHandle: {
+        viewportStore: {},
+      },
+      writesAllowed: true,
+      zeroConfigured: true,
+    })
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <WorkerWorkbookApp
+          config={{
+            currentUserId: 'guest:test',
+            defaultDocumentId: 'doc-1',
+            persistState: true,
+            zeroCacheUrl: 'http://127.0.0.1:4848',
+          }}
+          connectionState={{ name: 'connected' }}
+        />,
+      )
+    })
+
+    const onDeleteRows = latestWorkbookViewProps.current?.['onDeleteRows']
+    const onDeleteColumns = latestWorkbookViewProps.current?.['onDeleteColumns']
+    expect(typeof onDeleteRows).toBe('function')
+    expect(typeof onDeleteColumns).toBe('function')
+    if (typeof onDeleteRows !== 'function' || typeof onDeleteColumns !== 'function') {
+      throw new Error('WorkbookView did not receive delete handlers')
+    }
+
+    const returnedDeleteRowsTask = onDeleteRows(1, 2)
+    const returnedDeleteColumnsTask = onDeleteColumns(3, 1)
+
+    expect(invokeDeleteRowsMutation).toHaveBeenCalledWith('Sheet1', 1, 2)
+    expect(invokeDeleteColumnsMutation).toHaveBeenCalledWith('Sheet1', 3, 1)
+    expect(returnedDeleteRowsTask).toBe(deleteRowsTask)
+    expect(returnedDeleteColumnsTask).toBe(deleteColumnsTask)
+
+    await act(async () => {
+      await Promise.all([returnedDeleteRowsTask, returnedDeleteColumnsTask])
+      root.unmount()
+    })
+  })
 })

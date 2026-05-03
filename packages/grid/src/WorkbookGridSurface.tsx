@@ -87,6 +87,19 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     lastFocusRequestTokenRef.current = props.focusRequestToken
     focusGrid()
   }, [focusGrid, props.focusRequestToken])
+  useEffect(() => {
+    if (props.isEditingCell) {
+      return
+    }
+    if (typeof document !== 'undefined') {
+      const activeElement = document.activeElement
+      const onDocumentBody = activeElement === document.body || activeElement === document.documentElement || activeElement === null
+      if (!onDocumentBody) {
+        return
+      }
+    }
+    focusGrid()
+  }, [focusGrid, props.isEditingCell, props.selectedAddr, props.sheetName])
   const visibleRange = renderState.visibleRegion.range
   const getCellLocalBounds = renderState.getCellLocalBounds
   const committedCellSelection = useMemo(() => {

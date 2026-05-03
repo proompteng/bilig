@@ -8,7 +8,7 @@ import {
   type GridKeyboardEventLike,
 } from './gridClipboardKeyboardController.js'
 import type { InternalClipboardRange } from './gridInternalClipboard.js'
-import type { GridSelection } from './gridTypes.js'
+import type { GridSelection, GridSelectionSnapshot } from './gridTypes.js'
 
 export function useWorkbookGridKeyboardHandler(input: {
   applyClipboardValues: (target: readonly [number, number], values: readonly (readonly string[])[]) => void
@@ -21,7 +21,7 @@ export function useWorkbookGridKeyboardHandler(input: {
   internalClipboardRef: MutableRefObject<InternalClipboardRange | null>
   isEditingCell: boolean
   onCancelEdit: () => void
-  onClearCell: () => void
+  onClearCell: (selection?: GridSelectionSnapshot) => void
   onCommitEdit: (movement?: readonly [-1 | 0 | 1, -1 | 0 | 1], valueOverride?: string) => void
   onEditorChange: (next: string) => void
   onSelectionChange: (selection: GridSelection) => void
@@ -58,6 +58,7 @@ export function useWorkbookGridKeyboardHandler(input: {
         pendingTypeSeedRef: input.pendingTypeSeedRef,
         selectedCell: input.selectedCell,
         setGridSelection: input.setGridSelection,
+        sheetName: input.sheetName,
         suppressNextNativePasteRef: input.suppressNextNativePasteRef,
         toggleSelectedBooleanCell: input.toggleSelectedBooleanCell,
       })

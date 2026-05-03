@@ -7,7 +7,7 @@ import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
 import type { TextQuadRun } from './line-text-quad-buffer.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
 import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from './rect-instance-buffer.js'
-import { resolveTypeGpuV3DrawScrollSnapshot } from './workbook-pane-renderer-runtime.js'
+import { resolveTypeGpuV3DrawScrollSnapshot, resolveWorkbookPaneRendererGeometryV3 } from './workbook-pane-renderer-runtime.js'
 
 type FallbackPane = GridHeaderPaneState | WorkbookRenderTilePaneState
 
@@ -163,7 +163,10 @@ export function resolveWorkbookPaneCanvasFallbackFrame(input: {
   readonly overlay: DynamicGridOverlayBatchV3 | null
   readonly scrollSnapshot: WorkbookGridScrollSnapshot
 } {
-  const geometry = input.cameraStore?.getSnapshot() ?? input.geometry
+  const geometry = resolveWorkbookPaneRendererGeometryV3({
+    cameraStore: input.cameraStore,
+    geometry: input.geometry,
+  })
   return {
     geometry,
     overlay: input.overlayBuilder && geometry ? (input.overlayBuilder(geometry) ?? null) : input.overlay,

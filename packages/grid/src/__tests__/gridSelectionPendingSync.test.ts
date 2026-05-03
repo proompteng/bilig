@@ -14,6 +14,30 @@ function snapshot(address: string, endAddress = address): GridSelectionSnapshot 
   }
 }
 
+function columnSnapshot(address: string, startAddress: string, endAddress: string): GridSelectionSnapshot {
+  return {
+    address,
+    kind: 'column',
+    range: {
+      startAddress,
+      endAddress,
+    },
+    sheetName: 'Sheet1',
+  }
+}
+
+function rowSnapshot(address: string, startAddress: string, endAddress: string): GridSelectionSnapshot {
+  return {
+    address,
+    kind: 'row',
+    range: {
+      startAddress,
+      endAddress,
+    },
+    sheetName: 'Sheet1',
+  }
+}
+
 describe('resolveGridSelectionPendingSync', () => {
   test('keeps an optimistic local selection while the external snapshot is still the base selection', () => {
     const base = snapshot('C4')
@@ -123,6 +147,82 @@ describe('resolveGridSelectionPendingSync', () => {
       }),
     ).toEqual({
       keepCurrentSelection: false,
+      pendingBaseSnapshot: null,
+      pendingLocalSnapshot: null,
+    })
+  })
+
+  test('preserves a pending row selection while the external selection is still the base cell', () => {
+    const base = snapshot('E8')
+    const pending = rowSnapshot('E2', 'A2', 'XFD4')
+
+    expect(
+      resolveGridSelectionPendingSync({
+        currentSnapshot: pending,
+        externalSnapshot: base,
+        pendingBaseSnapshot: base,
+        pendingLocalSnapshot: pending,
+        sheetChanged: false,
+      }),
+    ).toEqual({
+      keepCurrentSelection: true,
+      pendingBaseSnapshot: base,
+      pendingLocalSnapshot: pending,
+    })
+  })
+
+  test('preserves a pending column selection while the external selection is still the base cell', () => {
+    const base = snapshot('E8')
+    const pending = columnSnapshot('B8', 'B1', 'D1048576')
+
+    expect(
+      resolveGridSelectionPendingSync({
+        currentSnapshot: pending,
+        externalSnapshot: base,
+        pendingBaseSnapshot: base,
+        pendingLocalSnapshot: pending,
+        sheetChanged: false,
+      }),
+    ).toEqual({
+      keepCurrentSelection: true,
+      pendingBaseSnapshot: base,
+      pendingLocalSnapshot: pending,
+    })
+  })
+
+  test('clears pending row selection once the external snapshot catches up', () => {
+    const base = snapshot('E8')
+    const pending = rowSnapshot('E2', 'A2', 'XFD4')
+
+    expect(
+      resolveGridSelectionPendingSync({
+        currentSnapshot: pending,
+        externalSnapshot: pending,
+        pendingBaseSnapshot: base,
+        pendingLocalSnapshot: pending,
+        sheetChanged: false,
+      }),
+    ).toEqual({
+      keepCurrentSelection: true,
+      pendingBaseSnapshot: null,
+      pendingLocalSnapshot: null,
+    })
+  })
+
+  test('clears pending column selection once the external snapshot catches up', () => {
+    const base = snapshot('E8')
+    const pending = columnSnapshot('B8', 'B1', 'D1048576')
+
+    expect(
+      resolveGridSelectionPendingSync({
+        currentSnapshot: pending,
+        externalSnapshot: pending,
+        pendingBaseSnapshot: base,
+        pendingLocalSnapshot: pending,
+        sheetChanged: false,
+      }),
+    ).toEqual({
+      keepCurrentSelection: true,
       pendingBaseSnapshot: null,
       pendingLocalSnapshot: null,
     })

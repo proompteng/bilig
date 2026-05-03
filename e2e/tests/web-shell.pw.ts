@@ -1036,6 +1036,59 @@ test('web app clears the selected cell with Delete after name-box navigation', a
   await expect(formulaInput).toHaveValue('')
 })
 
+test('web app clears the querystring-selected cell with Delete after page load', async ({ page }) => {
+  const documentId = `playwright-delete-querystring-selection-${Date.now()}`
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
+  await waitForWorkbookReady(page)
+
+  const formulaInput = page.getByTestId('formula-input')
+  const nameBox = page.getByTestId('name-box')
+
+  await nameBox.fill('F39')
+  await nameBox.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!F39')
+  await formulaInput.fill('delete-after-querystring-load')
+  await formulaInput.press('Enter')
+
+  await page.goto(`/?document=${encodeURIComponent(documentId)}&sheet=Sheet1&cell=F39`)
+  await waitForWorkbookReady(page)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!F39')
+  await expect(page.getByTestId('name-box')).toHaveValue('F39')
+
+  await page.keyboard.press('Delete')
+  await expect(page.getByTestId('formula-input')).toHaveValue('')
+})
+
+test('web app clears the clicked cell after a prior name-box selection changes pending app selection', async ({ page }) => {
+  await page.goto('/')
+  await waitForWorkbookReady(page)
+
+  const formulaInput = page.getByTestId('formula-input')
+  const nameBox = page.getByTestId('name-box')
+
+  await clickProductCell(page, 1, 1)
+  await formulaInput.fill('keep-b2')
+  await formulaInput.press('Enter')
+
+  await clickProductCell(page, 2, 2)
+  await formulaInput.fill('delete-c3')
+  await formulaInput.press('Enter')
+
+  await nameBox.fill('B2')
+  await nameBox.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
+
+  await clickProductCell(page, 2, 2)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C3')
+  await page.keyboard.press('Delete')
+
+  await clickProductCell(page, 2, 2)
+  await expect(formulaInput).toHaveValue('')
+
+  await clickProductCell(page, 1, 1)
+  await expect(formulaInput).toHaveValue('keep-b2')
+})
+
 test('web app ignores right gutter clicks', async ({ page }) => {
   await page.goto('/')
   await waitForWorkbookReady(page)

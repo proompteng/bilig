@@ -355,7 +355,7 @@ export async function createWorkerRuntimeSessionController(
     currentSelection = selection
     callbacks.onSelection(selection)
     const snapshot = await loadSelectionCellSnapshot(selection)
-    viewportStore.setCellSnapshot(snapshot ?? emptyCellSnapshot(selection))
+    viewportStore.setCellSnapshot(snapshot ?? emptyCellSnapshot(selection), { force: true })
     updateSelectionViewport(selection)
     return snapshot ?? emptyCellSnapshot(selection)
   }
@@ -657,6 +657,7 @@ export async function createWorkerRuntimeSessionController(
     async setSelection(selection) {
       try {
         if (sameSelection(selection, currentSelection)) {
+          await applySelection(selection)
           return
         }
         await applySelection(selection)

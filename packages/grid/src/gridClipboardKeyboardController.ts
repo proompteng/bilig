@@ -6,8 +6,9 @@ import {
   createRangeSelection,
   createRowSelection,
   createSheetSelection,
+  selectionToSnapshot,
 } from './gridSelection.js'
-import type { GridSelection, Item } from './gridTypes.js'
+import type { GridSelection, GridSelectionSnapshot, Item } from './gridTypes.js'
 import { parseClipboardContent, parseClipboardPlainText } from './gridClipboard.js'
 import { cellToEditorSeed } from './gridCells.js'
 import { isClipboardShortcut, isHandledGridKey, isNavigationKey, isPrintableKey, normalizeKeyboardKey } from './gridKeyboard.js'
@@ -69,7 +70,7 @@ interface HandleGridKeyOptions {
   isSelectedCellBoolean(this: void): boolean
   isEditingCell: boolean
   onCancelEdit(this: void): void
-  onClearCell(this: void): void
+  onClearCell(this: void, selection?: GridSelectionSnapshot): void
   onCommitEdit(this: void, movement?: EditMovement, valueOverride?: string): void
   onEditorChange(this: void, next: string): void
   onSelectionChange(this: void, selection: GridSelection): void
@@ -78,6 +79,7 @@ interface HandleGridKeyOptions {
   pendingTypeSeedRef: MutableRefObject<string | null>
   selectedCell: SelectedCellLike
   setGridSelection(this: void, selection: GridSelection): void
+  sheetName: string
   suppressNextNativePasteRef: MutableRefObject<boolean>
   toggleSelectedBooleanCell(this: void): void
 }
@@ -200,6 +202,7 @@ export function handleGridKey({
   pendingTypeSeedRef,
   selectedCell,
   setGridSelection,
+  sheetName,
   suppressNextNativePasteRef,
   toggleSelectedBooleanCell,
 }: HandleGridKeyOptions): void {
@@ -269,7 +272,7 @@ export function handleGridKey({
       return
     case 'clear-cell':
       pendingTypeSeedRef.current = action.pendingTypeSeed
-      onClearCell()
+      onClearCell(selectionToSnapshot(gridSelection, sheetName, formatAddress(selectedCell.row, selectedCell.col)))
       return
     case 'clipboard-copy': {
       const clipboard = captureInternalClipboardSelection()

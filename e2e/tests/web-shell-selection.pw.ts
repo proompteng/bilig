@@ -1,4 +1,6 @@
-import { expect, test, type Page } from '@playwright/test'
+import { createHash } from 'node:crypto'
+import { expect, test, type Locator, type Page } from '@playwright/test'
+import { parseCellAddress } from '@bilig/formula'
 import {
   PRODUCT_COLUMN_WIDTH,
   PRODUCT_HEADER_HEIGHT,
@@ -74,6 +76,100 @@ test('web app supports row and column header drag selection', async ({ page }) =
 
   await dragProductHeaderSelection(page, 'row', 1, 3)
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!2:4')
+})
+
+test('web app deletes the selected row range from the header context menu', async ({ page }) => {
+  const documentId = `playwright-delete-selected-rows-${Date.now()}`
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
+  await waitForWorkbookReady(page)
+
+  await writeCellValue(page, 'A2', 'row-2')
+  await writeCellValue(page, 'A3', 'row-3')
+  await writeCellValue(page, 'A4', 'row-4')
+
+  await dragProductHeaderSelection(page, 'row', 1, 2)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!2:3')
+
+  await rightClickProductRowHeader(page, 2)
+  await page.getByTestId('grid-context-action-delete-row').click()
+  await expect(page.getByTestId('grid-context-menu')).toBeHidden({ timeout: 30_000 })
+
+  await selectAddress(page, 'A2')
+  await expect.poll(() => readFormulaValue(page)).toBe('row-4')
+
+  await selectAddress(page, 'A3')
+  await expect.poll(() => readFormulaValue(page)).toBe('')
+})
+
+test('web app deletes the selected column range from the header context menu', async ({ page }) => {
+  const documentId = `playwright-delete-selected-columns-${Date.now()}`
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
+  await waitForWorkbookReady(page)
+
+  await writeCellValue(page, 'B1', 'col-b')
+  await writeCellValue(page, 'C1', 'col-c')
+  await writeCellValue(page, 'D1', 'col-d')
+
+  await dragProductHeaderSelection(page, 'column', 1, 2)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B:C')
+
+  await rightClickProductColumnHeader(page, 2)
+  await page.getByTestId('grid-context-action-delete-column').click()
+  await expect(page.getByTestId('grid-context-menu')).toBeHidden({ timeout: 30_000 })
+
+  await selectAddress(page, 'B1')
+  await expect.poll(() => readFormulaValue(page)).toBe('col-d')
+
+  await selectAddress(page, 'C1')
+  await expect.poll(() => readFormulaValue(page)).toBe('')
+})
+
+test('web app clears the selected row range with Delete after header selection', async ({ page }) => {
+  const documentId = `playwright-clear-selected-rows-${Date.now()}`
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
+  await waitForWorkbookReady(page)
+
+  await writeCellValue(page, 'A2', 'row-2')
+  await writeCellValue(page, 'A3', 'row-3')
+  await writeCellValue(page, 'A4', 'row-4')
+
+  await dragProductHeaderSelection(page, 'row', 1, 2)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!2:3')
+
+  await page.keyboard.press('Delete')
+
+  await selectAddress(page, 'A2')
+  await expect.poll(() => readFormulaValue(page)).toBe('')
+
+  await selectAddress(page, 'A3')
+  await expect.poll(() => readFormulaValue(page)).toBe('')
+
+  await selectAddress(page, 'A4')
+  await expect.poll(() => readFormulaValue(page)).toBe('row-4')
+})
+
+test('web app clears the selected column range with Delete after header selection', async ({ page }) => {
+  const documentId = `playwright-clear-selected-columns-${Date.now()}`
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
+  await waitForWorkbookReady(page)
+
+  await writeCellValue(page, 'B1', 'col-b')
+  await writeCellValue(page, 'C1', 'col-c')
+  await writeCellValue(page, 'D1', 'col-d')
+
+  await dragProductHeaderSelection(page, 'column', 1, 2)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B:C')
+
+  await page.keyboard.press('Delete')
+
+  await selectAddress(page, 'B1')
+  await expect.poll(() => readFormulaValue(page)).toBe('')
+
+  await selectAddress(page, 'C1')
+  await expect.poll(() => readFormulaValue(page)).toBe('')
+
+  await selectAddress(page, 'D1')
+  await expect.poll(() => readFormulaValue(page)).toBe('col-d')
 })
 
 test('web app supports rectangular drag selection', async ({ page }) => {
@@ -388,3 +484,177 @@ async function getGridScrollTop(page: Page): Promise<number> {
     return viewport.scrollTop
   })
 }
+
+async function rightClickProductRowHeader(page: Page, rowIndex: number): Promise<void> {
+  const gridLocator = page.getByTestId('sheet-grid')
+  await expect(gridLocator).toBeVisible()
+  const grid = await gridLocator.boundingBox()
+  if (!grid) {
+    throw new Error('sheet grid is not visible')
+  }
+
+  const rowTop = await getProductRowTop(page, rowIndex)
+  const rowHeight = await getProductRowHeight(page, rowIndex)
+  await gridLocator.click({
+    button: 'right',
+    position: {
+      x: Math.floor(PRODUCT_ROW_MARKER_WIDTH / 2),
+      y: PRODUCT_HEADER_HEIGHT + rowTop + Math.floor(rowHeight / 2),
+    },
+  })
+}
+
+async function rightClickProductColumnHeader(page: Page, columnIndex: number): Promise<void> {
+  const gridLocator = page.getByTestId('sheet-grid')
+  await expect(gridLocator).toBeVisible()
+  const grid = await gridLocator.boundingBox()
+  if (!grid) {
+    throw new Error('sheet grid is not visible')
+  }
+
+  const columnLeft = await getProductColumnLeft(page, columnIndex)
+  const columnWidth = await getProductColumnWidth(page, columnIndex)
+  await gridLocator.click({
+    button: 'right',
+    position: {
+      x: columnLeft + Math.floor(columnWidth / 2),
+      y: Math.floor(PRODUCT_HEADER_HEIGHT / 2),
+    },
+  })
+}
+
+async function writeCellValue(page: Page, address: string, value: string): Promise<void> {
+  await selectAddress(page, address)
+  const formulaInput = page.getByTestId('formula-input')
+  await formulaInput.fill(value)
+  await formulaInput.press('Enter')
+}
+
+async function selectAddress(page: Page, address: string): Promise<void> {
+  const nameBox = page.getByTestId('name-box')
+  await nameBox.fill(address)
+  await nameBox.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText(`Sheet1!${address}`)
+}
+
+async function readFormulaValue(page: Page): Promise<string> {
+  const formulaInput = page.getByTestId('formula-input')
+  return await formulaInput.inputValue()
+}
+
+async function screenshotHash(locator: Locator): Promise<string> {
+  return createHash('sha256')
+    .update(await locator.screenshot({ animations: 'disabled' }))
+    .digest('hex')
+}
+
+async function screenshotCellHash(page: Page, sheetAddress: string): Promise<string> {
+  const parsed = parseCellAddress(sheetAddress, 'Sheet1')
+  const grid = page.getByTestId('sheet-grid')
+  const gridBox = await grid.boundingBox()
+  if (!gridBox) {
+    throw new Error('sheet grid is not visible')
+  }
+  const cellLeft = await getProductColumnLeft(page, parsed.col)
+  const cellWidth = await getProductColumnWidth(page, parsed.col)
+  const rowTop = await getProductRowTop(page, parsed.row)
+  const rowHeight = await getProductRowHeight(page, parsed.row)
+  const scrollViewport = page.getByTestId('grid-scroll-viewport')
+  const scroll = await scrollViewport.evaluate((node) => ({ scrollLeft: node.scrollLeft, scrollTop: node.scrollTop }))
+  const clip = {
+    x: Math.round(gridBox.x + cellLeft - scroll.scrollLeft),
+    y: Math.round(gridBox.y + PRODUCT_HEADER_HEIGHT + rowTop - scroll.scrollTop),
+    width: Math.max(1, Math.round(cellWidth)),
+    height: Math.max(1, Math.round(rowHeight)),
+  }
+  return createHash('sha256')
+    .update(await page.screenshot({ animations: 'disabled', clip }))
+    .digest('hex')
+}
+
+test('debug exact prepaid-template delete repro', async ({ page }) => {
+  test.skip(process.env['BILIG_DEBUG_EXACT_DELETE_REPRO'] !== '1', 'debug-only exact repro')
+
+  const consoleMessages: string[] = []
+  page.on('console', (message) => {
+    consoleMessages.push(`${message.type()}: ${message.text()}`)
+  })
+  page.on('pageerror', (error) => {
+    consoleMessages.push(`pageerror: ${error.stack ?? error.message}`)
+  })
+
+  await page.goto('/?sheet=Prepaid+Template&cell=F39')
+  await waitForWorkbookReady(page)
+
+  await expect(page.getByTestId('name-box')).toHaveValue('F39')
+  await expect(page.getByTestId('status-selection')).toContainText('!F39')
+
+  const readDebugState = async () => {
+    return await page.evaluate(() => {
+      const active = document.activeElement
+      const scrollViewport = document.querySelector<HTMLElement>('[data-testid="grid-scroll-viewport"]')
+      const activeElement =
+        active instanceof HTMLElement
+          ? {
+              testId: active.dataset['testid'] ?? null,
+              tag: active.tagName,
+              ariaLabel: active.getAttribute('aria-label'),
+            }
+          : null
+      return {
+        status: document.querySelector<HTMLElement>('[data-testid="status-selection"]')?.textContent ?? null,
+        nameBox: document.querySelector<HTMLInputElement>('[data-testid="name-box"]')?.value ?? null,
+        formula: document.querySelector<HTMLInputElement>('[data-testid="formula-input"]')?.value ?? null,
+        runtimeError:
+          document.querySelector<HTMLElement>('[data-testid="workbook-toast-region"]')?.textContent ??
+          document.body.textContent?.includes('sqlite3_step() rc= 787 SQLITE_CONSTRAINT_FOREIGNKEY') ??
+          null,
+        scrollViewport:
+          scrollViewport instanceof HTMLElement
+            ? {
+                scrollLeft: scrollViewport.scrollLeft,
+                scrollTop: scrollViewport.scrollTop,
+                clientWidth: scrollViewport.clientWidth,
+                clientHeight: scrollViewport.clientHeight,
+              }
+            : null,
+        activeElement,
+      }
+    })
+  }
+
+  const readGridHashes = async () => {
+    const grid = page.getByTestId('sheet-grid')
+    return {
+      grid: await screenshotHash(grid),
+      paneRenderer: await screenshotHash(page.getByTestId('grid-pane-renderer')),
+      paneRendererFallback: await screenshotHash(page.getByTestId('grid-pane-renderer-fallback')),
+      cellF39: await screenshotCellHash(page, 'F39'),
+    }
+  }
+
+  console.log('debug-before', await readDebugState())
+  console.log('debug-before-grid-hash', await readGridHashes())
+
+  if ((await page.getByTestId('formula-input').inputValue()) === '') {
+    await page.getByTestId('formula-input').fill('debug-delete-seed')
+    await page.getByTestId('formula-input').press('Enter')
+    await page.waitForTimeout(500)
+    console.log('debug-after-seed', await readDebugState())
+    console.log('debug-after-seed-grid-hash', await readGridHashes())
+    await page.getByTestId('sheet-grid').focus()
+    await page.waitForTimeout(100)
+    console.log('debug-after-grid-refocus', await readDebugState())
+    console.log('debug-after-grid-refocus-grid-hash', await readGridHashes())
+  }
+
+  await page.keyboard.press('Delete')
+  await page.waitForTimeout(500)
+  console.log('debug-after-delete', await readDebugState())
+  console.log('debug-after-delete-grid-hash', await readGridHashes())
+  await page.keyboard.press('Backspace')
+  await page.waitForTimeout(500)
+  console.log('debug-after-backspace', await readDebugState())
+  console.log('debug-after-backspace-grid-hash', await readGridHashes())
+  console.log('debug-console', consoleMessages)
+})

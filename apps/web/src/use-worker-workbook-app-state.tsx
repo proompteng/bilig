@@ -787,6 +787,12 @@ export function useWorkerWorkbookAppState(input: {
         previousRange.startAddress === nextSelectionSnapshot.range.startAddress &&
         previousRange.endAddress === nextSelectionSnapshot.range.endAddress
       ) {
+        if (options?.markAsExternal) {
+          runtimeActorRef.send({
+            type: 'selection.changed',
+            selection: { sheetName, address },
+          })
+        }
         return
       }
       if (wasEditing) {

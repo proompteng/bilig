@@ -271,7 +271,9 @@ function WorkerWorkbookAppInner({
                   reportAsyncError(app.invokeInsertColumnsMutation(app.selection.sheetName, startCol, count))
                 }}
                 onDeleteColumns={(startCol: number, count: number) => {
-                  reportAsyncError(app.invokeDeleteColumnsMutation(app.selection.sheetName, startCol, count))
+                  const task = app.invokeDeleteColumnsMutation(app.selection.sheetName, startCol, count)
+                  reportAsyncError(task)
+                  return task
                 }}
                 onSetRowHidden={(rowIndex: number, hidden: boolean) => {
                   reportAsyncError(app.invokeRowVisibilityMutation(app.selection.sheetName, rowIndex, hidden))
@@ -280,7 +282,9 @@ function WorkerWorkbookAppInner({
                   reportAsyncError(app.invokeInsertRowsMutation(app.selection.sheetName, startRow, count))
                 }}
                 onDeleteRows={(startRow: number, count: number) => {
-                  reportAsyncError(app.invokeDeleteRowsMutation(app.selection.sheetName, startRow, count))
+                  const task = app.invokeDeleteRowsMutation(app.selection.sheetName, startRow, count)
+                  reportAsyncError(task)
+                  return task
                 }}
                 onSetFreezePane={(rows: number, cols: number) => {
                   reportAsyncError(app.invokeSetFreezePaneMutation(app.selection.sheetName, rows, cols))

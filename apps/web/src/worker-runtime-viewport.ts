@@ -228,7 +228,13 @@ export function buildViewportPatchFromEngine(input: {
       }
     }
   } else {
-    const targetCells = collectViewportCells(viewport, sheetImpact?.changedCells ?? null, invalidatedRanges)
+    const targetCells = collectViewportCells(
+      viewport,
+      sheetImpact?.changedCells ?? null,
+      invalidatedRanges,
+      invalidatedRows,
+      invalidatedColumns,
+    )
     for (const cell of targetCells) {
       appendPatchedCell(
         context,

@@ -8,6 +8,11 @@ export interface WorkbookGridContextMenuState {
     readonly index: number
     readonly hidden: boolean
   }
+  readonly deleteRange: {
+    readonly kind: 'row' | 'column'
+    readonly start: number
+    readonly count: number
+  }
 }
 
 export function WorkbookGridContextMenu(props: {

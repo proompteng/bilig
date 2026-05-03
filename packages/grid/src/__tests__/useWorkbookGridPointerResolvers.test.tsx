@@ -163,4 +163,77 @@ describe('useWorkbookGridPointerResolvers', () => {
       root.unmount()
     })
   })
+
+  test('resolves header selections using host coordinates', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const gridMetrics = getGridMetrics()
+    let latestResolvers: ReturnType<typeof useWorkbookGridPointerResolvers> | null = null
+
+    function Harness() {
+      const hostRef = useRef<HTMLDivElement | null>(null)
+      const liveGeometry = useMemo(
+        () =>
+          createGridGeometrySnapshotFromAxes({
+            columns: createGridAxisWorldIndex({ axisLength: 300, defaultSize: gridMetrics.columnWidth }),
+            dpr: 1,
+            gridMetrics,
+            hostHeight: 420,
+            hostWidth: 640,
+            rows: createGridAxisWorldIndex({ axisLength: 300, defaultSize: gridMetrics.rowHeight }),
+            scrollLeft: 0,
+            scrollTop: 0,
+            sheetName: 'Sheet1',
+            updatedAt: 100,
+          }),
+        [],
+      )
+      latestResolvers = useWorkbookGridPointerResolvers({
+        getGeometrySnapshot: () => liveGeometry,
+        gridSelection: createGridSelection(0, 0),
+        hostRef,
+        selectedCell: { col: 0, row: 0 },
+      })
+
+      return (
+        <>
+          <div
+            ref={(node) => {
+              hostRef.current = node
+              if (node) {
+                node.getBoundingClientRect = () =>
+                  ({
+                    bottom: 420,
+                    height: 420,
+                    left: 10,
+                    right: 650,
+                    top: 10,
+                    width: 640,
+                    x: 10,
+                    y: 10,
+                    toJSON: () => ({}),
+                  }) as DOMRect
+              }
+            }}
+          />
+        </>
+      )
+    }
+
+    const rootHost = document.createElement('div')
+    document.body.appendChild(rootHost)
+    const root = createRoot(rootHost)
+
+    await act(async () => {
+      root.render(<Harness />)
+    })
+
+    expect(
+      latestResolvers?.resolveHeaderSelectionAtPointer(10 + gridMetrics.rowMarkerWidth + gridMetrics.columnWidth * 2 + 1, 10 + 12),
+    ).toEqual({ kind: 'column', index: 2 })
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
 })

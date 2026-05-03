@@ -13,7 +13,7 @@ export interface WorkbookDeltaSubscriptionClient {
 
 export class ProjectedDamageBus {
   private readonly dirtyTiles = new DirtyTileIndexV3()
-  private readonly lastSeqBySheetOrdinal = new Map<number, number>()
+  private readonly lastSeqBySheetAndSource = new Map<string, number>()
 
   constructor(private readonly client?: WorkbookDeltaSubscriptionClient) {}
 
@@ -32,14 +32,15 @@ export class ProjectedDamageBus {
   }
 
   applyWorkbookDelta(batch: WorkbookDeltaBatchV3, options: { readonly dprBucket: number }): ProjectedDamageBusApplyResult {
-    const lastSeq = this.lastSeqBySheetOrdinal.get(batch.sheetOrdinal) ?? -1
+    const sequenceKey = `${batch.sheetOrdinal}:${batch.source}`
+    const lastSeq = this.lastSeqBySheetAndSource.get(sequenceKey) ?? -1
     if (batch.seq <= lastSeq) {
       return {
         applied: false,
         seq: batch.seq,
       }
     }
-    this.lastSeqBySheetOrdinal.set(batch.sheetOrdinal, batch.seq)
+    this.lastSeqBySheetAndSource.set(sequenceKey, batch.seq)
     markWorkbookDeltaDirtyTilesV3(this.dirtyTiles, batch, options)
     return {
       applied: true,
@@ -61,6 +62,6 @@ export class ProjectedDamageBus {
 
   reset(): void {
     this.dirtyTiles.clear()
-    this.lastSeqBySheetOrdinal.clear()
+    this.lastSeqBySheetAndSource.clear()
   }
 }

@@ -21,6 +21,7 @@ export interface WorkbookDeltaDirtyRangesLikeV3 {
 
 export interface WorkbookDeltaBatchLikeV3 {
   readonly seq?: number | undefined
+  readonly source?: string | undefined
   readonly sheetId?: number | undefined
   readonly sheetOrdinal: number
   readonly dirty: WorkbookDeltaDirtyRangesLikeV3

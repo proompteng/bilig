@@ -174,7 +174,7 @@ export class GridRenderTilePaneRuntime {
   } | null = null
   private bridgeState = INITIAL_RENDER_TILE_PANE_BRIDGE_STATE
   private readonly bridgeListeners = new Set<() => void>()
-  private readonly lastWorkbookDeltaSeqBySheetOrdinal = new Map<number, number>()
+  private readonly lastWorkbookDeltaSeqBySheetAndSource = new Map<string, number>()
   private renderTileDeltaConnection: RuntimeConnection<RenderTileDeltaConnectionIdentity> | null = null
   private workbookDeltaConnection: RuntimeConnection<WorkbookDeltaConnectionIdentity> | null = null
   private localInvalidationConnection: RuntimeConnection<LocalInvalidationConnectionIdentity> | null = null
@@ -240,8 +240,8 @@ export class GridRenderTilePaneRuntime {
   noteWorkbookDeltaDamage(): GridRenderTilePaneBridgeState {
     const previous = this.bridgeState
     this.bridgeState = {
-      forceLocalTiles: previous.forceLocalTiles,
-      localFallbackRevision: previous.localFallbackRevision,
+      forceLocalTiles: true,
+      localFallbackRevision: previous.localFallbackRevision + 1,
       renderTileRevision: previous.renderTileRevision + 1,
     }
     this.emitBridgeState()
@@ -378,11 +378,13 @@ export class GridRenderTilePaneRuntime {
 
   private applyWorkbookDeltaDamage(input: GridRenderTileDamageRuntimeInput, batch: WorkbookDeltaBatchLikeV3): boolean {
     if (batch.seq !== undefined) {
-      const lastSeq = this.lastWorkbookDeltaSeqBySheetOrdinal.get(batch.sheetOrdinal) ?? -1
+      const source = 'source' in batch && typeof batch.source === 'string' ? batch.source : 'unknown'
+      const sequenceKey = `${batch.sheetOrdinal}:${source}`
+      const lastSeq = this.lastWorkbookDeltaSeqBySheetAndSource.get(sequenceKey) ?? -1
       if (batch.seq <= lastSeq) {
         return false
       }
-      this.lastWorkbookDeltaSeqBySheetOrdinal.set(batch.sheetOrdinal, batch.seq)
+      this.lastWorkbookDeltaSeqBySheetAndSource.set(sequenceKey, batch.seq)
     }
     input.gridRuntimeHost.tiles.applyWorkbookDelta(batch, { dprBucket: input.dprBucket })
     return true

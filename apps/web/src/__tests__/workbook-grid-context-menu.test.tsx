@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HeaderSelection, VisibleRegionState } from '../../../../packages/grid/src/gridPointer.js'
 import type { GridSelection } from '../../../../packages/grid/src/gridTypes.js'
+import { createColumnSliceSelection, createGridSelection, createRowSliceSelection } from '../../../../packages/grid/src/gridSelection.js'
 import { WorkbookGridContextMenu } from '../../../../packages/grid/src/WorkbookGridContextMenu.js'
 import { useWorkbookGridContextMenu } from '../../../../packages/grid/src/useWorkbookGridContextMenu.js'
 import type { WorkbookGridContextMenuTarget } from '../../../../packages/grid/src/workbookGridContextMenuTarget.js'
@@ -14,7 +15,9 @@ afterEach(() => {
 
 function ContextMenuHarness(props: {
   focusGrid?: (() => void) | undefined
+  getGridSelection?: (() => GridSelection) | undefined
   headerSelection: HeaderSelection | null
+  gridSelection?: GridSelection | undefined
   hiddenColumns?: Readonly<Record<number, true>> | undefined
   hiddenRows?: Readonly<Record<number, true>> | undefined
   isEditingCell?: boolean
@@ -41,6 +44,7 @@ function ContextMenuHarness(props: {
   }
   const menu = useWorkbookGridContextMenu({
     focusGrid: props.focusGrid ?? (() => {}),
+    getGridSelection: props.getGridSelection,
     getVisibleRegion() {
       return visibleRegion
     },
@@ -59,6 +63,7 @@ function ContextMenuHarness(props: {
     resolveHeaderSelectionAtPointer() {
       return props.headerSelection
     },
+    gridSelection: props.gridSelection ?? createGridSelection(4, 2),
     selectedCell: [4, 2],
     setGridSelection: props.setGridSelection ?? (() => {}),
   })
@@ -482,9 +487,261 @@ describe('workbook grid context menu', () => {
     const deleteButton = host.querySelector("[data-testid='grid-context-action-delete-column']")
     await act(async () => {
       deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
     })
 
     expect(onDeleteColumn).toHaveBeenCalledWith(2, 1)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('deletes an entire selected row range when deleting from inside it', async () => {
+    const onDeleteRow = vi.fn()
+    const onSelectionChange = vi.fn()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <ContextMenuHarness
+          headerSelection={{ kind: 'row', index: 4 }}
+          gridSelection={createRowSliceSelection(0, 2, 5)}
+          onDeleteRow={onDeleteRow}
+          onHideRow={vi.fn()}
+          onSelectionChange={onSelectionChange}
+        />,
+      )
+    })
+
+    const target = host.querySelector("[data-testid='host']")
+    await act(async () => {
+      target?.dispatchEvent(
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          button: 2,
+          clientX: 120,
+          clientY: 90,
+        }),
+      )
+    })
+
+    const deleteButton = host.querySelector("[data-testid='grid-context-action-delete-row']")
+    await act(async () => {
+      deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(onDeleteRow).toHaveBeenCalledWith(2, 4)
+    expect(onSelectionChange).toHaveBeenCalledTimes(0)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('uses the delete range from the moment the menu opened even if selection changes before delete', async () => {
+    const onDeleteRow = vi.fn()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    const render = (selection: GridSelection) => (
+      <ContextMenuHarness
+        headerSelection={{ kind: 'row', index: 2 }}
+        gridSelection={selection}
+        onDeleteRow={onDeleteRow}
+        onHideRow={vi.fn()}
+      />
+    )
+
+    await act(async () => {
+      root.render(render(createRowSliceSelection(0, 0, 6)))
+    })
+
+    const target = host.querySelector("[data-testid='host']")
+    await act(async () => {
+      target?.dispatchEvent(
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          button: 2,
+          clientX: 120,
+          clientY: 90,
+        }),
+      )
+    })
+
+    await act(async () => {
+      root.render(render(createRowSliceSelection(0, 2, 2)))
+    })
+
+    const deleteButton = host.querySelector("[data-testid='grid-context-action-delete-row']")
+    await act(async () => {
+      deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(onDeleteRow).toHaveBeenCalledWith(0, 7)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('prefers the live grid selection when opening a row context menu', async () => {
+    const onDeleteRow = vi.fn()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const staleSelection = createRowSliceSelection(0, 4, 4)
+    const liveSelection = createRowSliceSelection(0, 2, 5)
+
+    await act(async () => {
+      root.render(
+        <ContextMenuHarness
+          headerSelection={{ kind: 'row', index: 4 }}
+          getGridSelection={() => liveSelection}
+          gridSelection={staleSelection}
+          onDeleteRow={onDeleteRow}
+          onHideRow={vi.fn()}
+          openTarget={{
+            target: { kind: 'row', index: 4 },
+            x: 120,
+            y: 90,
+          }}
+        />,
+      )
+    })
+
+    const openButton = host.querySelector("[data-testid='open-context-menu']")
+    await act(async () => {
+      openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const deleteButton = host.querySelector("[data-testid='grid-context-action-delete-row']")
+    await act(async () => {
+      deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(onDeleteRow).toHaveBeenCalledWith(2, 4)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('deletes an entire selected column range when deleting from inside it', async () => {
+    const onDeleteColumn = vi.fn()
+    const onSelectionChange = vi.fn()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <ContextMenuHarness
+          headerSelection={{ kind: 'column', index: 4 }}
+          gridSelection={createColumnSliceSelection(2, 5, 7)}
+          onDeleteColumn={onDeleteColumn}
+          onHideColumn={vi.fn()}
+          onSelectionChange={onSelectionChange}
+        />,
+      )
+    })
+
+    const target = host.querySelector("[data-testid='host']")
+    await act(async () => {
+      target?.dispatchEvent(
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          button: 2,
+          clientX: 64,
+          clientY: 24,
+        }),
+      )
+    })
+
+    const deleteButton = host.querySelector("[data-testid='grid-context-action-delete-column']")
+    await act(async () => {
+      deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(onDeleteColumn).toHaveBeenCalledWith(2, 4)
+    expect(onSelectionChange).toHaveBeenCalledTimes(0)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('deletes only the matching disjoint column segment when selection contains multiple ranges', async () => {
+    const onDeleteColumn = vi.fn()
+    const onSelectionChange = vi.fn()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    const disjointColumnSelection = {
+      current: {
+        cell: [3, 7],
+        range: { x: 1, y: 7, width: 1, height: 1 },
+        rangeStack: [],
+      },
+      columns: {
+        ranges: [
+          [1, 4],
+          [7, 10],
+        ],
+        first() {
+          return 1
+        },
+        last() {
+          return 9
+        },
+        hasIndex(index: number) {
+          return (index >= 1 && index < 4) || (index >= 7 && index < 10)
+        },
+        length: 6,
+      },
+      rows: createGridSelection(0, 0).rows,
+    }
+
+    await act(async () => {
+      root.render(
+        <ContextMenuHarness
+          headerSelection={{ kind: 'column', index: 7 }}
+          gridSelection={disjointColumnSelection}
+          onDeleteColumn={onDeleteColumn}
+          onHideColumn={vi.fn()}
+          onSelectionChange={onSelectionChange}
+        />,
+      )
+    })
+
+    const target = host.querySelector("[data-testid='host']")
+    await act(async () => {
+      target?.dispatchEvent(
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          button: 2,
+          clientX: 64,
+          clientY: 24,
+        }),
+      )
+    })
+
+    const deleteButton = host.querySelector("[data-testid='grid-context-action-delete-column']")
+    await act(async () => {
+      deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(onDeleteColumn).toHaveBeenCalledWith(7, 3)
+    expect(onSelectionChange).toHaveBeenCalledTimes(0)
 
     await act(async () => {
       root.unmount()

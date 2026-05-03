@@ -5,15 +5,27 @@ import type { Item, GridSelection } from './gridTypes.js'
 import type { WorkbookGridContextMenuState } from './WorkbookGridContextMenu.js'
 import type { WorkbookGridContextMenuTarget } from './workbookGridContextMenuTarget.js'
 
+type SingleAxisSelection = Pick<GridSelection['columns'], 'length' | 'hasIndex' | 'ranges'>
+
+function resolveSingleAxisDeleteRange(selection: SingleAxisSelection, targetIndex: number): { start: number; count: number } | null {
+  for (const [start, endExclusive] of selection.ranges) {
+    if (targetIndex >= start && targetIndex < endExclusive) {
+      return { start, count: endExclusive - start }
+    }
+  }
+  return null
+}
+
 export function useWorkbookGridContextMenu(input: {
   focusGrid(this: void): void
+  getGridSelection?(this: void): GridSelection
   getVisibleRegion(this: void): VisibleRegionState
   hiddenColumnsByIndex?: Readonly<Record<number, true>> | undefined
   hiddenRowsByIndex?: Readonly<Record<number, true>> | undefined
   isEditingCell: boolean
   onCommitEdit(this: void): void
-  onDeleteColumns?: ((startCol: number, count: number) => void) | undefined
-  onDeleteRows?: ((startRow: number, count: number) => void) | undefined
+  onDeleteColumns?: ((startCol: number, count: number) => void | Promise<void>) | undefined
+  onDeleteRows?: ((startRow: number, count: number) => void | Promise<void>) | undefined
   onInsertColumns?: ((startCol: number, count: number) => void) | undefined
   onInsertRows?: ((startRow: number, count: number) => void) | undefined
   onSelectionChange(this: void, selection: GridSelection): void
@@ -21,11 +33,13 @@ export function useWorkbookGridContextMenu(input: {
   onSetColumnHidden?: ((columnIndex: number, hidden: boolean) => void) | undefined
   onSetRowHidden?: ((rowIndex: number, hidden: boolean) => void) | undefined
   resolveHeaderSelectionAtPointer(this: void, clientX: number, clientY: number, region?: VisibleRegionState): HeaderSelection | null
+  gridSelection: GridSelection
   selectedCell: Item
   setGridSelection(this: void, selection: GridSelection): void
 }) {
   const {
     focusGrid,
+    getGridSelection,
     getVisibleRegion,
     hiddenColumnsByIndex,
     hiddenRowsByIndex,
@@ -40,6 +54,7 @@ export function useWorkbookGridContextMenu(input: {
     onSetColumnHidden,
     onSetRowHidden,
     resolveHeaderSelectionAtPointer,
+    gridSelection,
     selectedCell,
     setGridSelection,
   } = input
@@ -132,12 +147,17 @@ export function useWorkbookGridContextMenu(input: {
     if (!contextMenuState) {
       return
     }
-    if (contextMenuState.target.kind === 'row') {
-      onDeleteRows?.(contextMenuState.target.index, 1)
-    } else {
-      onDeleteColumns?.(contextMenuState.target.index, 1)
-    }
-    closeContextMenu()
+    void (async () => {
+      try {
+        if (contextMenuState.target.kind === 'row') {
+          await onDeleteRows?.(contextMenuState.deleteRange.start, contextMenuState.deleteRange.count)
+        } else {
+          await onDeleteColumns?.(contextMenuState.deleteRange.start, contextMenuState.deleteRange.count)
+        }
+      } finally {
+        closeContextMenu()
+      }
+    })()
   }, [closeContextMenu, contextMenuState, onDeleteColumns, onDeleteRows])
 
   const freezeTarget = useCallback(() => {
@@ -174,15 +194,28 @@ export function useWorkbookGridContextMenu(input: {
         onCommitEdit()
       }
       focusGrid()
-      if (target.kind === 'row') {
-        const nextSelection = createRowSliceSelection(selectedCell[0], target.index, target.index)
-        setGridSelection(nextSelection)
-        onSelectionChange(nextSelection)
-      } else {
-        const nextSelection = createColumnSliceSelection(target.index, target.index, selectedCell[1])
-        setGridSelection(nextSelection)
-        onSelectionChange(nextSelection)
+
+      const activeGridSelection = getGridSelection?.() ?? gridSelection
+      const activeSelectedCell = activeGridSelection.current?.cell ?? selectedCell
+      const selectedAxis = target.kind === 'row' ? activeGridSelection.rows : activeGridSelection.columns
+      const orthogonalAxis = target.kind === 'row' ? activeGridSelection.columns : activeGridSelection.rows
+      const keepCurrentSelection = selectedAxis.length > 0 && orthogonalAxis.length === 0 && selectedAxis.hasIndex(target.index)
+
+      if (!keepCurrentSelection) {
+        if (target.kind === 'row') {
+          const nextSelection = createRowSliceSelection(activeSelectedCell[0], target.index, target.index)
+          setGridSelection(nextSelection)
+          onSelectionChange(nextSelection)
+        } else {
+          const nextSelection = createColumnSliceSelection(target.index, target.index, activeSelectedCell[1])
+          setGridSelection(nextSelection)
+          onSelectionChange(nextSelection)
+        }
       }
+      const deleteRange = keepCurrentSelection ? resolveSingleAxisDeleteRange(selectedAxis, target.index) : null
+      const deleteRangeStart = deleteRange?.start ?? target.index
+      const deleteRangeCount = deleteRange?.count ?? 1
+
       setContextMenuState({
         x,
         y,
@@ -190,13 +223,20 @@ export function useWorkbookGridContextMenu(input: {
           ...target,
           hidden: isTargetHidden(target),
         },
+        deleteRange: {
+          kind: target.kind,
+          start: deleteRangeStart,
+          count: deleteRangeCount,
+        },
       })
       return true
     },
     [
       focusGrid,
+      getGridSelection,
       isTargetHidden,
       isEditingCell,
+      gridSelection,
       onCommitEdit,
       onDeleteColumns,
       onDeleteRows,

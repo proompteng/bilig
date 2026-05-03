@@ -854,6 +854,15 @@ test('@browser-webgpu @browser-perf main workbook shell keeps typegpu text visib
 async function installTypeGpuReadbackHarness(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const globalWindow = window as Window & {
+      __biligGpuReadbackState?: {
+        bgra: Uint8Array
+        bytesPerRow: number
+        hasGpu: boolean
+        height: number
+        ready: boolean
+        sequence: number
+        width: number
+      }
       __biligGpuReadback?: TypeGpuReadbackSummary
       __biligTypeGpuHarnessInstalled?: boolean
       __biligGpuReadbackInspector?: {
@@ -876,7 +885,7 @@ async function installTypeGpuReadbackHarness(page: Page): Promise<void> {
       }
     }
 
-    const readbackState = {
+    const readbackState = globalWindow.__biligGpuReadbackState ?? {
       bgra: new Uint8Array(0),
       bytesPerRow: 0,
       hasGpu: Boolean(navigator.gpu),
@@ -885,6 +894,14 @@ async function installTypeGpuReadbackHarness(page: Page): Promise<void> {
       sequence: 0,
       width: 0,
     }
+    globalWindow.__biligGpuReadbackState = readbackState
+    readbackState.bgra = new Uint8Array(0)
+    readbackState.bytesPerRow = 0
+    readbackState.hasGpu = Boolean(navigator.gpu)
+    readbackState.height = 0
+    readbackState.ready = false
+    readbackState.sequence = 0
+    readbackState.width = 0
 
     const pointAt = (x: number, y: number): ReadbackPoint => {
       if (!readbackState.ready || x < 0 || y < 0 || x >= readbackState.width || y >= readbackState.height) {
@@ -932,16 +949,12 @@ async function installTypeGpuReadbackHarness(page: Page): Promise<void> {
       },
     }
 
-    if (globalWindow.__biligTypeGpuHarnessInstalled) {
-      return
-    }
-    globalWindow.__biligTypeGpuHarnessInstalled = true
     globalWindow.__biligGpuReadback = {
-      ready: false,
-      hasGpu: Boolean(navigator.gpu),
-      width: 0,
-      height: 0,
-      sequence: 0,
+      ready: readbackState.ready,
+      hasGpu: readbackState.hasGpu,
+      width: readbackState.width,
+      height: readbackState.height,
+      sequence: readbackState.sequence,
       points: {
         headerFill: { r: 0, g: 0, b: 0, a: 0 },
         bodyFill: { r: 0, g: 0, b: 0, a: 0 },
@@ -957,9 +970,15 @@ async function installTypeGpuReadbackHarness(page: Page): Promise<void> {
       },
     }
 
+    if (globalWindow.__biligTypeGpuHarnessInstalled) {
+      return
+    }
+
     if (!navigator.gpu) {
       return
     }
+
+    globalWindow.__biligTypeGpuHarnessInstalled = true
 
     const functionKind = 'function'
     const isCanvasContextConfigure = (value: unknown): value is (this: GPUCanvasContext, descriptor: GPUCanvasConfiguration) => void =>

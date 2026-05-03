@@ -38,7 +38,7 @@ interface WorkbookViewProps {
   onEditorChange(this: void, next: string): void
   onCommitEdit(this: void, movement?: EditMovement, valueOverride?: string): void
   onCancelEdit(this: void): void
-  onClearCell(this: void): void
+  onClearCell(this: void, selection?: GridSelectionSnapshot): void
   onFillRange(this: void, sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void
   onCopyRange(this: void, sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void
   onMoveRange(this: void, sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void
@@ -64,9 +64,9 @@ interface WorkbookViewProps {
   onSetColumnHidden?: ((columnIndex: number, hidden: boolean) => void) | undefined
   onSetRowHidden?: ((rowIndex: number, hidden: boolean) => void) | undefined
   onInsertRows?: ((startRow: number, count: number) => void) | undefined
-  onDeleteRows?: ((startRow: number, count: number) => void) | undefined
+  onDeleteRows?: ((startRow: number, count: number) => void | Promise<void>) | undefined
   onInsertColumns?: ((startCol: number, count: number) => void) | undefined
-  onDeleteColumns?: ((startCol: number, count: number) => void) | undefined
+  onDeleteColumns?: ((startCol: number, count: number) => void | Promise<void>) | undefined
   onSetFreezePane?: ((rows: number, cols: number) => void) | undefined
   onAutofitColumn?: ((columnIndex: number, fallbackWidth: number) => void | Promise<void>) | undefined
   onVisibleViewportChange?: ((viewport: Viewport) => void) | undefined

@@ -71,6 +71,49 @@ describe('ProjectedViewportCellCache', () => {
     expect(listener).not.toHaveBeenCalled()
   })
 
+  it('allows forced selection snapshots to replace stale cached values', () => {
+    const cache = new ProjectedViewportCellCache()
+
+    cache.setCellSnapshot({
+      sheetName: 'Sheet1',
+      address: 'B1',
+      value: { tag: ValueTag.String, value: 'stale', stringId: 1 },
+      flags: 0,
+      version: 99,
+    })
+
+    expect(
+      cache.setCellSnapshot(
+        {
+          sheetName: 'Sheet1',
+          address: 'B1',
+          value: { tag: ValueTag.String, value: 'fresh', stringId: 2 },
+          flags: 0,
+          version: 1,
+        },
+        { force: true },
+      ),
+    ).toBe(true)
+
+    expect(cache.getCell('Sheet1', 'B1').value).toEqual({ tag: ValueTag.String, value: 'fresh', stringId: 2 })
+  })
+
+  it('allows forced empty selection snapshots to clear stale cached values', () => {
+    const cache = new ProjectedViewportCellCache()
+
+    cache.setCellSnapshot({
+      sheetName: 'Sheet1',
+      address: 'C1',
+      value: { tag: ValueTag.String, value: 'stale', stringId: 1 },
+      flags: 0,
+      version: 99,
+    })
+
+    expect(cache.setCellSnapshot(resetEmptySnapshot('C1'), { force: true })).toBe(true)
+
+    expect(cache.getCell('Sheet1', 'C1').value).toEqual({ tag: ValueTag.Empty })
+  })
+
   it('tracks cell subscriptions and exposes sheet grid entries', () => {
     const cache = new ProjectedViewportCellCache()
     const listener = vi.fn()

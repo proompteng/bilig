@@ -2,7 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ValueTag, type CellSnapshot } from '@bilig/protocol'
-import { createGridSelection } from '../gridSelection.js'
+import { createGridSelection, createRangeSelection } from '../gridSelection.js'
 import {
   applyGridClipboardValues,
   captureGridClipboardSelection,
@@ -313,6 +313,51 @@ describe('gridClipboardKeyboardController', () => {
 
     expect(preventDefault).toHaveBeenCalled()
     expect(toggleSelectedBooleanCell).toHaveBeenCalledTimes(1)
+  })
+
+  test('clears the current visible grid selection snapshot on Delete', () => {
+    const onClearCell = vi.fn()
+
+    handleGridKey({
+      applyClipboardValues: vi.fn(),
+      beginSelectedEdit: vi.fn(),
+      captureInternalClipboardSelection: vi.fn(),
+      editorValue: '',
+      event: {
+        key: 'Delete',
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        preventDefault: vi.fn(),
+      },
+      gridSelection: createRangeSelection(createGridSelection(1, 1), [1, 1], [3, 2]),
+      internalClipboardRef: { current: null },
+      isSelectedCellBoolean: () => false,
+      isEditingCell: false,
+      onCancelEdit: vi.fn(),
+      onClearCell,
+      onCommitEdit: vi.fn(),
+      onEditorChange: vi.fn(),
+      onSelectionChange: vi.fn(),
+      pendingClipboardCopySequenceRef: { current: 0 },
+      pendingKeyboardPasteSequenceRef: { current: 0 },
+      pendingTypeSeedRef: { current: null },
+      selectedCell: { col: 1, row: 1 },
+      setGridSelection: vi.fn(),
+      sheetName: 'Sheet1',
+      suppressNextNativePasteRef: { current: false },
+      toggleSelectedBooleanCell: vi.fn(),
+    })
+
+    expect(onClearCell).toHaveBeenCalledWith({
+      sheetName: 'Sheet1',
+      address: 'B2',
+      kind: 'range',
+      range: {
+        startAddress: 'B2',
+        endAddress: 'D3',
+      },
+    })
   })
 
   test('select-all updates the active address to A1', () => {

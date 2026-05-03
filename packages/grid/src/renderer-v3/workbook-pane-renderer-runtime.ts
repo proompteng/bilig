@@ -43,6 +43,20 @@ export interface WorkbookPaneFrameInputV3 {
 
 export type WorkbookPaneFrameDrawerV3 = (input: WorkbookPaneFrameInputV3) => void
 
+export function resolveWorkbookPaneRendererGeometryV3(input: {
+  readonly cameraStore?: GridCameraStore | null | undefined
+  readonly geometry: GridGeometrySnapshot | null
+}): GridGeometrySnapshot | null {
+  const liveGeometry = input.cameraStore?.getSnapshot() ?? null
+  if (!input.geometry) {
+    return liveGeometry
+  }
+  if (!liveGeometry) {
+    return input.geometry
+  }
+  return liveGeometry.camera.seq > input.geometry.camera.seq ? liveGeometry : input.geometry
+}
+
 const EMPTY_SURFACE_SIZE: TypeGpuSurfaceSizeV3 = Object.freeze({
   dpr: 1,
   height: 0,
@@ -156,7 +170,10 @@ export class WorkbookPaneRendererRuntimeV3 {
       return
     }
 
-    const latestGeometry = state.cameraStore?.getSnapshot() ?? state.geometry
+    const latestGeometry = resolveWorkbookPaneRendererGeometryV3({
+      cameraStore: state.cameraStore,
+      geometry: state.geometry,
+    })
     const frameDecision = this.scheduler.resolveFrame({
       camera: latestGeometry?.camera ?? null,
       requestIdlePreloadDraw: () => this.requestDraw(),

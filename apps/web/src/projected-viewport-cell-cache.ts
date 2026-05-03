@@ -121,7 +121,7 @@ export class ProjectedViewportCellCache {
     return this.cellStyles.get(styleId) ?? this.cellStyles.get(DEFAULT_STYLE_ID)
   }
 
-  setCellSnapshot(snapshot: CellSnapshot): boolean {
+  setCellSnapshot(snapshot: CellSnapshot, options: { force?: boolean } = {}): boolean {
     const key = `${snapshot.sheetName}!${snapshot.address}`
     const current = this.cellSnapshots.get(key)
     if (!current && isResetEmptySnapshot(snapshot)) {
@@ -129,7 +129,7 @@ export class ProjectedViewportCellCache {
       return false
     }
     if (current) {
-      if (shouldKeepCurrentSnapshot(current, snapshot, { allowResetEmptyOverride: false })) {
+      if (!options.force && shouldKeepCurrentSnapshot(current, snapshot, { allowResetEmptyOverride: false })) {
         return false
       }
       if (cellSnapshotSignature(current) === cellSnapshotSignature(snapshot)) {

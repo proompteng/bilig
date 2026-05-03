@@ -184,6 +184,34 @@ function createWorkbookDeltaSource(): {
   }
 }
 
+function createMutableWorkbookDeltaRenderTileSource(tiles: readonly GridRenderTile[] = []): {
+  readonly source: GridRenderTileSource
+  readonly emitWorkbookDelta: (batch: WorkbookDeltaBatchLikeV3) => void
+  readonly emitRenderTileDelta: (change: {
+    readonly changedTileIds?: readonly number[] | undefined
+    readonly invalidatedTileIds?: readonly number[] | undefined
+  }) => void
+  readonly setTile: (tile: GridRenderTile) => void
+} {
+  const renderTiles = createMutableRenderTileSource(tiles)
+  let workbookDeltaListener: ((batch: WorkbookDeltaBatchLikeV3) => void) | null = null
+  return {
+    emitRenderTileDelta: (change) => renderTiles.emit(change),
+    emitWorkbookDelta: (batch) => workbookDeltaListener?.(batch),
+    setTile: renderTiles.setTile,
+    source: {
+      peekRenderTile: (tileId) => renderTiles.source.peekRenderTile(tileId),
+      subscribeRenderTileDeltas: (subscription, listener) => renderTiles.source.subscribeRenderTileDeltas(subscription, listener),
+      subscribeWorkbookDeltas: (listener) => {
+        workbookDeltaListener = listener
+        return () => {
+          workbookDeltaListener = null
+        }
+      },
+    },
+  }
+}
+
 function createWorkbookDeltaBatch(overrides: Partial<WorkbookDeltaBatchLikeV3> = {}): WorkbookDeltaBatchLikeV3 {
   return {
     dirty: {
@@ -257,19 +285,19 @@ describe('GridRenderTilePaneRuntime', () => {
         renderTileRevision: 1,
       },
       {
-        forceLocalTiles: false,
-        localFallbackRevision: 0,
+        forceLocalTiles: true,
+        localFallbackRevision: 1,
         renderTileRevision: 2,
       },
       {
         forceLocalTiles: true,
-        localFallbackRevision: 1,
+        localFallbackRevision: 2,
         renderTileRevision: 2,
       },
     ])
     expect(runtime.snapshotBridgeState()).toEqual({
       forceLocalTiles: false,
-      localFallbackRevision: 1,
+      localFallbackRevision: 2,
       renderTileRevision: 3,
     })
   })
@@ -781,8 +809,8 @@ describe('GridRenderTilePaneRuntime', () => {
 
     expect(listenerBatches.map((batch) => batch.seq)).toEqual([1])
     expect(runtime.snapshotBridgeState()).toEqual({
-      forceLocalTiles: false,
-      localFallbackRevision: 0,
+      forceLocalTiles: true,
+      localFallbackRevision: 1,
       renderTileRevision: 1,
     })
     expect(
@@ -908,8 +936,8 @@ describe('GridRenderTilePaneRuntime', () => {
 
     expect(listenerBatches.map((batch) => batch.seq)).toEqual([1])
     expect(runtime.snapshotBridgeState()).toEqual({
-      forceLocalTiles: false,
-      localFallbackRevision: 0,
+      forceLocalTiles: true,
+      localFallbackRevision: 1,
       renderTileRevision: 1,
     })
     expect(
@@ -929,6 +957,156 @@ describe('GridRenderTilePaneRuntime', () => {
     ).toEqual([tileId])
 
     unsubscribe?.()
+  })
+
+  it('falls back to local tiles after workbook delta damage until fresh remote tiles arrive', () => {
+    const runtime = new GridRenderTilePaneRuntime()
+    const host = createHost()
+    const tileId = host.viewportTileKeys({
+      dprBucket: 1,
+      sheetOrdinal: 7,
+      viewport: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
+    })[0]
+    const remoteTile: GridRenderTile = {
+      ...createRenderTile(tileId),
+      textCount: 1,
+      textRuns: [
+        {
+          text: 'stale remote text',
+          x: 0,
+          y: 0,
+          width: 80,
+          height: 20,
+          clipX: 0,
+          clipY: 0,
+          clipWidth: 80,
+          clipHeight: 20,
+          font: '12px sans-serif',
+          fontSize: 12,
+          color: '#000000',
+          underline: false,
+          strike: false,
+        },
+      ],
+    }
+    const renderTileSource = createMutableWorkbookDeltaRenderTileSource([remoteTile])
+
+    const initial = runtime.resolve(
+      createInput({
+        engine: LOCAL_EMPTY_ENGINE,
+        gridRuntimeHost: host,
+        renderTileSource: renderTileSource.source,
+      }),
+    )
+    expect(initial.residentBodyPane?.tile.textRuns[0]?.text).toBe('stale remote text')
+
+    runtime.connectWorkbookDeltaDamage(
+      {
+        dprBucket: 1,
+        gridRuntimeHost: host,
+        renderTileSource: renderTileSource.source,
+        sheetId: 7,
+      },
+      () => undefined,
+    )
+    runtime.connectRenderTileDeltas(
+      {
+        dprBucket: 1,
+        gridRuntimeHost: host,
+        renderTileSource: renderTileSource.source,
+        renderTileViewport: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
+        sheetId: 7,
+        sheetName: 'Sheet1',
+      },
+      () => undefined,
+    )
+    renderTileSource.emitWorkbookDelta({
+      ...createWorkbookDeltaBatch(),
+      source: 'workerAuthoritative',
+    })
+
+    const fallback = runtime.resolve(
+      createInput({
+        engine: LOCAL_EMPTY_ENGINE,
+        forceLocalTiles: runtime.snapshotBridgeState().forceLocalTiles,
+        gridRuntimeHost: host,
+        renderTileSource: renderTileSource.source,
+      }),
+    )
+    expect(runtime.snapshotBridgeState()).toEqual({
+      forceLocalTiles: true,
+      localFallbackRevision: 1,
+      renderTileRevision: 1,
+    })
+    expect(fallback.residentBodyPane?.tile.textRuns.some((run) => run.text === 'stale remote text')).toBe(false)
+
+    const freshRemoteTile: GridRenderTile = {
+      ...remoteTile,
+      lastBatchId: 2,
+      lastCameraSeq: 2,
+      textRuns: [],
+      textCount: 0,
+      version: {
+        ...remoteTile.version,
+        text: remoteTile.version.text + 1,
+        values: remoteTile.version.values + 1,
+      },
+    }
+    renderTileSource.setTile(freshRemoteTile)
+    renderTileSource.emitRenderTileDelta({ changedTileIds: [tileId] })
+
+    const refreshed = runtime.resolve(
+      createInput({
+        engine: LOCAL_EMPTY_ENGINE,
+        forceLocalTiles: runtime.snapshotBridgeState().forceLocalTiles,
+        gridRuntimeHost: host,
+        renderTileSource: renderTileSource.source,
+      }),
+    )
+    expect(runtime.snapshotBridgeState()).toEqual({
+      forceLocalTiles: false,
+      localFallbackRevision: 1,
+      renderTileRevision: 2,
+    })
+    expect(refreshed.residentBodyPane?.tile.textRuns).toEqual([])
+  })
+
+  it('applies local optimistic workbook deltas after higher authoritative seqs on the same sheet', () => {
+    const runtime = new GridRenderTilePaneRuntime()
+    const host = createHost()
+    const renderTileSource = createWorkbookDeltaSource()
+
+    runtime.connectWorkbookDeltaDamage(
+      {
+        dprBucket: 1,
+        gridRuntimeHost: host,
+        renderTileSource: renderTileSource.source,
+        sheetId: 7,
+      },
+      () => undefined,
+    )
+
+    renderTileSource.emit({
+      ...createWorkbookDeltaBatch({ seq: 10 }),
+      source: 'workerAuthoritative',
+    })
+
+    expect(runtime.snapshotBridgeState()).toEqual({
+      forceLocalTiles: true,
+      localFallbackRevision: 1,
+      renderTileRevision: 1,
+    })
+
+    renderTileSource.emit({
+      ...createWorkbookDeltaBatch({ seq: 1 }),
+      source: 'localOptimistic',
+    })
+
+    expect(runtime.snapshotBridgeState()).toEqual({
+      forceLocalTiles: true,
+      localFallbackRevision: 2,
+      renderTileRevision: 2,
+    })
   })
 
   it('does not retain remote panes across sheet switches or before the host is ready', () => {

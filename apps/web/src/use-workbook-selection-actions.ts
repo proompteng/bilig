@@ -1,7 +1,7 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import type { CommitOp } from '@bilig/core'
 import { formatAddress, parseCellAddress, translateFormulaReferences } from '@bilig/formula'
-import type { EditSelectionBehavior } from '@bilig/grid'
+import type { EditSelectionBehavior, GridSelectionSnapshot } from '@bilig/grid'
 import { ValueTag, type CellRangeRef, type CellSnapshot } from '@bilig/protocol'
 import type { WorkerRuntimeSelection } from './runtime-session.js'
 import type { WorkbookMutationMethod } from './workbook-sync.js'
@@ -399,6 +399,14 @@ function createEmptyOptimisticSnapshot(sheetName: string, address: string, versi
   }
 }
 
+function gridSelectionSnapshotToRangeRef(selection: GridSelectionSnapshot): CellRangeRef {
+  return {
+    sheetName: selection.sheetName,
+    startAddress: selection.range.startAddress,
+    endAddress: selection.range.endAddress,
+  }
+}
+
 export function useWorkbookSelectionActions(input: {
   writesAllowed: boolean
   selectionRangeRef: MutableRefObject<CellRangeRef>
@@ -480,27 +488,33 @@ export function useWorkbookSelectionActions(input: {
     [invokeMutation, reportRuntimeError, resetEditingState, resetEditorConflictTracking, selectionRef, viewportStore, writesAllowed],
   )
 
-  const clearSelectedRange = useCallback(() => {
-    if (!writesAllowed) {
-      return
-    }
-    const range = selectionRangeRef.current
-    const rollbackOptimisticClear = applyOptimisticClearRange(viewportStore ?? null, range)
-    resetEditingState('')
-    resetEditorConflictTracking()
-    void (async () => {
-      try {
-        await invokeMutation('clearRange', range)
-      } catch (error) {
-        rollbackOptimisticClear?.()
-        reportRuntimeError(error)
+  const clearSelectedRange = useCallback(
+    (targetSelectionSnapshot?: GridSelectionSnapshot) => {
+      if (!writesAllowed) {
+        return
       }
-    })()
-  }, [invokeMutation, reportRuntimeError, resetEditingState, resetEditorConflictTracking, selectionRangeRef, viewportStore, writesAllowed])
+      const range = targetSelectionSnapshot ? gridSelectionSnapshotToRangeRef(targetSelectionSnapshot) : selectionRangeRef.current
+      const rollbackOptimisticClear = applyOptimisticClearRange(viewportStore ?? null, range)
+      resetEditingState('')
+      resetEditorConflictTracking()
+      void (async () => {
+        try {
+          await invokeMutation('clearRange', range)
+        } catch (error) {
+          rollbackOptimisticClear?.()
+          reportRuntimeError(error)
+        }
+      })()
+    },
+    [invokeMutation, reportRuntimeError, resetEditingState, resetEditorConflictTracking, selectionRangeRef, viewportStore, writesAllowed],
+  )
 
-  const clearSelectedCell = useCallback(() => {
-    clearSelectedRange()
-  }, [clearSelectedRange])
+  const clearSelectedCell = useCallback(
+    (targetSelectionSnapshot?: GridSelectionSnapshot) => {
+      clearSelectedRange(targetSelectionSnapshot)
+    },
+    [clearSelectedRange],
+  )
 
   const toggleBooleanCell = useCallback(
     (sheetName: string, address: string, nextValue: boolean) => {

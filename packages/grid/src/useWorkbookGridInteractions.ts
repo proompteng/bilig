@@ -351,6 +351,7 @@ export function useWorkbookGridInteractions(
   })
   const contextMenu = useWorkbookGridContextMenu({
     focusGrid,
+    getGridSelection: () => gridRuntimeHost.interactionOverlays.snapshot().gridSelection,
     getVisibleRegion,
     hiddenColumnsByIndex: hiddenColumns,
     hiddenRowsByIndex: hiddenRows,
@@ -365,6 +366,7 @@ export function useWorkbookGridInteractions(
     onDeleteColumns,
     onSetFreezePane,
     resolveHeaderSelectionAtPointer,
+    gridSelection,
     selectedCell: activeSelectionCell,
     setGridSelection,
   })

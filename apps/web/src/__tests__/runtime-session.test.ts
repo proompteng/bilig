@@ -1,6 +1,6 @@
 import { MessageChannel } from 'node:worker_threads'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createWorkerEngineHost } from '@bilig/worker-transport'
+import { createWorkerEngineHost, decodeViewportPatch } from '@bilig/worker-transport'
 import { formatAddress } from '@bilig/formula'
 import { WorkbookLocalStoreLockedError, type WorkbookLocalMutationRecord, type WorkbookLocalStoreFactory } from '@bilig/storage-browser'
 import { SpreadsheetEngine } from '@bilig/core'
@@ -1333,6 +1333,393 @@ describe('createWorkerRuntimeSessionController', () => {
       expect(controller.handle.viewportStore.getCell('Sheet1', 'B4').value).toMatchObject({ tag: ValueTag.String, value: 'left' })
       expect(controller.handle.viewportStore.getCell('Sheet1', 'C4').value).toMatchObject({ tag: ValueTag.String, value: 'right' })
       expect(controller.handle.viewportStore.getCell('Sheet1', 'B2').value).toEqual({ tag: ValueTag.Empty })
+    })
+
+    unsubscribe()
+    controller.dispose()
+  })
+
+  it('applies pending column deletes through worker viewport patches', async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    })
+    const patches: Array<ReturnType<typeof decodeViewportPatch>> = []
+    const originalSubscribeViewportPatches = runtime.subscribeViewportPatches.bind(runtime)
+    runtime.subscribeViewportPatches = ((subscription, listener) => {
+      return originalSubscribeViewportPatches(subscription, (bytes) => {
+        patches.push(decodeViewportPatch(bytes))
+        listener(bytes)
+      })
+    }) as typeof runtime.subscribeViewportPatches
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: 'pending-delete-columns-doc',
+        replicaId: 'browser:test',
+        persistState: true,
+        initialSelection: { sheetName: 'Sheet1', address: 'B1' },
+        createWorker: () => createMockWorkerPort(runtime),
+        fetchImpl: vi.fn(async () => new Response(null, { status: 404 })),
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message)
+        },
+      },
+    )
+
+    const unsubscribe = controller.subscribeViewport('Sheet1', { rowStart: 0, rowEnd: 0, colStart: 1, colEnd: 3 }, () => {})
+
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'setCellValue',
+      args: ['Sheet1', 'B1', 'col-b'],
+    })
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'setCellValue',
+      args: ['Sheet1', 'C1', 'col-c'],
+    })
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'setCellValue',
+      args: ['Sheet1', 'D1', 'col-d'],
+    })
+
+    await vi.waitFor(() => {
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'B1').value).toMatchObject({ tag: ValueTag.String, value: 'col-b' })
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'C1').value).toMatchObject({ tag: ValueTag.String, value: 'col-c' })
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'D1').value).toMatchObject({ tag: ValueTag.String, value: 'col-d' })
+    })
+
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'deleteColumns',
+      args: ['Sheet1', 1, 2],
+    })
+
+    await vi.waitFor(() => {
+      const matchingPatch = patches.findLast((patch) => {
+        return (
+          patch.full === false &&
+          patch.viewport.sheetName === 'Sheet1' &&
+          patch.viewport.rowStart === 0 &&
+          patch.viewport.rowEnd === 0 &&
+          patch.viewport.colStart === 1 &&
+          patch.viewport.colEnd === 3
+        )
+      })
+      const patchedB1 = matchingPatch?.cells.find((cell) => cell.snapshot.address === 'B1')
+      const patchedC1 = matchingPatch?.cells.find((cell) => cell.snapshot.address === 'C1')
+      expect(patchedB1?.snapshot.value).toMatchObject({ tag: ValueTag.String, value: 'col-d' })
+      expect(patchedC1?.snapshot.value).toEqual({ tag: ValueTag.Empty })
+    })
+
+    await vi.waitFor(() => {
+      expect(runtime.getCell('Sheet1', 'B1').value).toMatchObject({ tag: ValueTag.String, value: 'col-d' })
+      expect(runtime.getCell('Sheet1', 'C1').value).toEqual({ tag: ValueTag.Empty })
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'B1').value).toMatchObject({ tag: ValueTag.String, value: 'col-d' })
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'C1').value).toEqual({ tag: ValueTag.Empty })
+    })
+
+    unsubscribe()
+    controller.dispose()
+  })
+
+  it('applies pending row deletes through worker viewport patches', async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    })
+    const patches: Array<ReturnType<typeof decodeViewportPatch>> = []
+    const originalSubscribeViewportPatches = runtime.subscribeViewportPatches.bind(runtime)
+    runtime.subscribeViewportPatches = ((subscription, listener) => {
+      return originalSubscribeViewportPatches(subscription, (bytes) => {
+        patches.push(decodeViewportPatch(bytes))
+        listener(bytes)
+      })
+    }) as typeof runtime.subscribeViewportPatches
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: 'pending-delete-rows-doc',
+        replicaId: 'browser:test',
+        persistState: true,
+        initialSelection: { sheetName: 'Sheet1', address: 'A2' },
+        createWorker: () => createMockWorkerPort(runtime),
+        fetchImpl: vi.fn(async () => new Response(null, { status: 404 })),
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message)
+        },
+      },
+    )
+
+    const unsubscribe = controller.subscribeViewport('Sheet1', { rowStart: 1, rowEnd: 3, colStart: 0, colEnd: 0 }, () => {})
+
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'setCellValue',
+      args: ['Sheet1', 'A2', 'row-2'],
+    })
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'setCellValue',
+      args: ['Sheet1', 'A3', 'row-3'],
+    })
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'setCellValue',
+      args: ['Sheet1', 'A4', 'row-4'],
+    })
+
+    await vi.waitFor(() => {
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'A2').value).toMatchObject({ tag: ValueTag.String, value: 'row-2' })
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'A3').value).toMatchObject({ tag: ValueTag.String, value: 'row-3' })
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'A4').value).toMatchObject({ tag: ValueTag.String, value: 'row-4' })
+    })
+
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'deleteRows',
+      args: ['Sheet1', 1, 2],
+    })
+
+    await vi.waitFor(() => {
+      const matchingPatch = patches.findLast((patch) => {
+        return (
+          patch.full === false &&
+          patch.viewport.sheetName === 'Sheet1' &&
+          patch.viewport.rowStart === 1 &&
+          patch.viewport.rowEnd === 3 &&
+          patch.viewport.colStart === 0 &&
+          patch.viewport.colEnd === 0
+        )
+      })
+      const patchedA2 = matchingPatch?.cells.find((cell) => cell.snapshot.address === 'A2')
+      const patchedA3 = matchingPatch?.cells.find((cell) => cell.snapshot.address === 'A3')
+      expect(patchedA2?.snapshot.value).toMatchObject({ tag: ValueTag.String, value: 'row-4' })
+      expect(patchedA3?.snapshot.value).toEqual({ tag: ValueTag.Empty })
+    })
+
+    await vi.waitFor(() => {
+      expect(runtime.getCell('Sheet1', 'A2').value).toMatchObject({ tag: ValueTag.String, value: 'row-4' })
+      expect(runtime.getCell('Sheet1', 'A3').value).toEqual({ tag: ValueTag.Empty })
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'A2').value).toMatchObject({ tag: ValueTag.String, value: 'row-4' })
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'A3').value).toEqual({ tag: ValueTag.Empty })
+    })
+
+    unsubscribe()
+    controller.dispose()
+  })
+
+  it('keeps pending structural column deletes visible when earlier submissions ack afterward', async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    })
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: 'pending-delete-columns-overlap-doc',
+        replicaId: 'browser:test',
+        persistState: true,
+        initialSelection: { sheetName: 'Sheet1', address: 'D1' },
+        createWorker: () => createMockWorkerPort(runtime),
+        fetchImpl: vi.fn(async () => new Response(null, { status: 404 })),
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message)
+        },
+      },
+    )
+
+    const unsubscribe = controller.subscribeViewport('Sheet1', { rowStart: 0, rowEnd: 0, colStart: 1, colEnd: 3 }, () => {})
+
+    const pendingB1 = await controller.invoke('enqueuePendingMutation', {
+      method: 'setCellValue',
+      args: ['Sheet1', 'B1', 'col-b'],
+    })
+    await controller.invoke('markPendingMutationSubmitted', pendingB1.id)
+    await runtime.applyAuthoritativeEvents(
+      [
+        {
+          revision: 1,
+          clientMutationId: pendingB1.id,
+          payload: { kind: 'setCellValue', sheetName: 'Sheet1', address: 'B1', value: 'col-b' },
+        },
+      ],
+      1,
+    )
+
+    const pendingC1 = await controller.invoke('enqueuePendingMutation', {
+      method: 'setCellValue',
+      args: ['Sheet1', 'C1', 'col-c'],
+    })
+    await controller.invoke('markPendingMutationSubmitted', pendingC1.id)
+
+    const pendingD1 = await controller.invoke('enqueuePendingMutation', {
+      method: 'setCellValue',
+      args: ['Sheet1', 'D1', 'col-d'],
+    })
+    await controller.invoke('markPendingMutationSubmitted', pendingD1.id)
+
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'deleteColumns',
+      args: ['Sheet1', 1, 2],
+    })
+
+    await runtime.applyAuthoritativeEvents(
+      [
+        {
+          revision: 2,
+          clientMutationId: pendingC1.id,
+          payload: { kind: 'setCellValue', sheetName: 'Sheet1', address: 'C1', value: 'col-c' },
+        },
+        {
+          revision: 3,
+          clientMutationId: pendingD1.id,
+          payload: { kind: 'setCellValue', sheetName: 'Sheet1', address: 'D1', value: 'col-d' },
+        },
+      ],
+      3,
+    )
+
+    await vi.waitFor(() => {
+      expect(runtime.getCell('Sheet1', 'B1').value).toMatchObject({ tag: ValueTag.String, value: 'col-d' })
+      expect(runtime.getCell('Sheet1', 'C1').value).toEqual({ tag: ValueTag.Empty })
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'B1').value).toMatchObject({ tag: ValueTag.String, value: 'col-d' })
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'C1').value).toEqual({ tag: ValueTag.Empty })
+    })
+
+    unsubscribe()
+    controller.dispose()
+  })
+
+  it('refreshes selected cell snapshots after pending structural deletes even when cache entries are stale', async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    })
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: 'pending-delete-columns-selection-hydrate-doc',
+        replicaId: 'browser:test',
+        persistState: true,
+        initialSelection: { sheetName: 'Sheet1', address: 'B1' },
+        createWorker: () => createMockWorkerPort(runtime),
+        fetchImpl: vi.fn(async () => new Response(null, { status: 404 })),
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message)
+        },
+      },
+    )
+
+    const unsubscribe = controller.subscribeViewport('Sheet1', { rowStart: 0, rowEnd: 0, colStart: 1, colEnd: 3 }, () => {})
+
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'setCellValue',
+      args: ['Sheet1', 'B1', 'col-b'],
+    })
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'setCellValue',
+      args: ['Sheet1', 'C1', 'col-c'],
+    })
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'setCellValue',
+      args: ['Sheet1', 'D1', 'col-d'],
+    })
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'deleteColumns',
+      args: ['Sheet1', 1, 2],
+    })
+
+    await vi.waitFor(() => {
+      expect(runtime.getCell('Sheet1', 'B1').value).toMatchObject({ tag: ValueTag.String, value: 'col-d' })
+      expect(runtime.getCell('Sheet1', 'C1').value).toEqual({ tag: ValueTag.Empty })
+    })
+
+    controller.handle.viewportStore.setCellSnapshot({
+      sheetName: 'Sheet1',
+      address: 'B1',
+      value: { tag: ValueTag.String, value: 'stale-b', stringId: 1 },
+      flags: 0,
+      version: 99,
+    })
+    controller.handle.viewportStore.setCellSnapshot({
+      sheetName: 'Sheet1',
+      address: 'C1',
+      value: { tag: ValueTag.String, value: 'stale-c', stringId: 2 },
+      flags: 0,
+      version: 99,
+    })
+
+    await controller.setSelection({ sheetName: 'Sheet1', address: 'B1' })
+    await vi.waitFor(() => {
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'B1').value).toMatchObject({ tag: ValueTag.String, value: 'col-d' })
+    })
+
+    await controller.setSelection({ sheetName: 'Sheet1', address: 'C1' })
+    await vi.waitFor(() => {
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'C1').value).toEqual({ tag: ValueTag.Empty })
+    })
+
+    unsubscribe()
+    controller.dispose()
+  })
+
+  it('does not overwrite fresher projected row-delete snapshots during immediate selection changes', async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    })
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: 'pending-delete-rows-selection-hydrate-doc',
+        replicaId: 'browser:test',
+        persistState: true,
+        initialSelection: { sheetName: 'Sheet1', address: 'A1' },
+        createWorker: () => createMockWorkerPort(runtime),
+        fetchImpl: vi.fn(async () => new Response(null, { status: 404 })),
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message)
+        },
+      },
+    )
+
+    const unsubscribe = controller.subscribeViewport('Sheet1', { rowStart: 1, rowEnd: 3, colStart: 0, colEnd: 0 }, () => {})
+
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'setCellValue',
+      args: ['Sheet1', 'A2', 'row-2'],
+    })
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'setCellValue',
+      args: ['Sheet1', 'A3', 'row-3'],
+    })
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'setCellValue',
+      args: ['Sheet1', 'A4', 'row-4'],
+    })
+    await controller.invoke('enqueuePendingMutation', {
+      method: 'deleteRows',
+      args: ['Sheet1', 1, 2],
+    })
+
+    await vi.waitFor(() => {
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'A2').value).toMatchObject({ tag: ValueTag.String, value: 'row-4' })
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'A3').value).toEqual({ tag: ValueTag.Empty })
+    })
+
+    await controller.setSelection({ sheetName: 'Sheet1', address: 'A2' })
+    await vi.waitFor(() => {
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'A2').value).toMatchObject({ tag: ValueTag.String, value: 'row-4' })
+    })
+
+    await controller.setSelection({ sheetName: 'Sheet1', address: 'A3' })
+    await vi.waitFor(() => {
+      expect(controller.handle.viewportStore.getCell('Sheet1', 'A3').value).toEqual({ tag: ValueTag.Empty })
     })
 
     unsubscribe()

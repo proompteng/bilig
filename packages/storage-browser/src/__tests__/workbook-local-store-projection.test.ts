@@ -126,4 +126,142 @@ describe('workbook-local-store projection', () => {
       db.close()
     }
   })
+
+  it('upserts referenced parent sheets during delta writes even when base.sheets omits them', async () => {
+    const sqlite3 = await sqlite3InitModule()
+    const db = new sqlite3.oo1.DB(':memory:', 'c')
+    try {
+      initializeWorkbookLocalStoreSchema(db)
+      writeWorkbookAuthoritativeBase(db, createBase({ sheetId: 7, sheetName: 'Revenue', value: 11 }))
+      writeWorkbookProjectionOverlay(db, createEmptyOverlay())
+
+      const delta: WorkbookLocalAuthoritativeDelta = {
+        replaceAll: false,
+        replacedSheetIds: [7],
+        base: {
+          sheets: [],
+          cellInputs: [
+            {
+              sheetId: 7,
+              sheetName: 'Revenue',
+              address: 'A1',
+              rowNum: 0,
+              colNum: 0,
+              input: 22,
+              formula: undefined,
+              format: undefined,
+            },
+          ],
+          cellRenders: [
+            {
+              sheetId: 7,
+              sheetName: 'Revenue',
+              address: 'A1',
+              rowNum: 0,
+              colNum: 0,
+              value: { tag: 1, value: 22 },
+              flags: 0,
+              version: 2,
+              styleId: undefined,
+              numberFormatId: undefined,
+            },
+          ],
+          rowAxisEntries: [],
+          columnAxisEntries: [],
+          styles: [],
+        },
+      }
+
+      expect(() => writeWorkbookAuthoritativeDelta(db, delta)).not.toThrow()
+      writeWorkbookProjectionOverlay(db, createEmptyOverlay())
+
+      expect(
+        readWorkbookViewportProjection(db, 'Revenue', {
+          rowStart: 0,
+          rowEnd: 0,
+          colStart: 0,
+          colEnd: 0,
+        })?.cells[0]?.snapshot.value,
+      ).toEqual({ tag: 1, value: 22 })
+    } finally {
+      db.close()
+    }
+  })
+
+  it('normalizes delta child rows to the canonical parent sheet name for each sheet id', async () => {
+    const sqlite3 = await sqlite3InitModule()
+    const db = new sqlite3.oo1.DB(':memory:', 'c')
+    try {
+      initializeWorkbookLocalStoreSchema(db)
+      writeWorkbookAuthoritativeBase(db, createBase({ sheetId: 7, sheetName: 'Revenue', value: 11 }))
+      writeWorkbookProjectionOverlay(db, createEmptyOverlay())
+
+      const delta: WorkbookLocalAuthoritativeDelta = {
+        replaceAll: false,
+        replacedSheetIds: [7],
+        base: {
+          sheets: [
+            {
+              sheetId: 7,
+              name: 'Revenue 2026',
+              sortOrder: 0,
+              freezeRows: 0,
+              freezeCols: 0,
+            },
+          ],
+          cellInputs: [
+            {
+              sheetId: 7,
+              sheetName: 'Revenue',
+              address: 'A1',
+              rowNum: 0,
+              colNum: 0,
+              input: 22,
+              formula: undefined,
+              format: undefined,
+            },
+          ],
+          cellRenders: [
+            {
+              sheetId: 7,
+              sheetName: 'Revenue',
+              address: 'A1',
+              rowNum: 0,
+              colNum: 0,
+              value: { tag: 1, value: 22 },
+              flags: 0,
+              version: 2,
+              styleId: undefined,
+              numberFormatId: undefined,
+            },
+          ],
+          rowAxisEntries: [],
+          columnAxisEntries: [],
+          styles: [],
+        },
+      }
+
+      expect(() => writeWorkbookAuthoritativeDelta(db, delta)).not.toThrow()
+      writeWorkbookProjectionOverlay(db, createEmptyOverlay())
+
+      expect(
+        readWorkbookViewportProjection(db, 'Revenue 2026', {
+          rowStart: 0,
+          rowEnd: 0,
+          colStart: 0,
+          colEnd: 0,
+        })?.cells[0]?.snapshot.value,
+      ).toEqual({ tag: 1, value: 22 })
+      expect(
+        readWorkbookViewportProjection(db, 'Revenue', {
+          rowStart: 0,
+          rowEnd: 0,
+          colStart: 0,
+          colEnd: 0,
+        }),
+      ).toBeNull()
+    } finally {
+      db.close()
+    }
+  })
 })

@@ -2167,6 +2167,65 @@ describe('WorkbookWorkerRuntime', () => {
     ])
   })
 
+  it('expands viewport cells across shifted rows for structural row invalidations', async () => {
+    const cells = collectViewportCells(
+      {
+        sheetName: 'Sheet1',
+        rowStart: 1,
+        rowEnd: 4,
+        colStart: 0,
+        colEnd: 2,
+      },
+      null,
+      [],
+      [{ sheetName: 'Sheet1', startIndex: 1, endIndex: 2 }],
+      [],
+    )
+
+    expect(cells).toEqual([
+      { address: 'A2', row: 1, col: 0 },
+      { address: 'B2', row: 1, col: 1 },
+      { address: 'C2', row: 1, col: 2 },
+      { address: 'A3', row: 2, col: 0 },
+      { address: 'B3', row: 2, col: 1 },
+      { address: 'C3', row: 2, col: 2 },
+      { address: 'A4', row: 3, col: 0 },
+      { address: 'B4', row: 3, col: 1 },
+      { address: 'C4', row: 3, col: 2 },
+      { address: 'A5', row: 4, col: 0 },
+      { address: 'B5', row: 4, col: 1 },
+      { address: 'C5', row: 4, col: 2 },
+    ])
+  })
+
+  it('expands viewport cells across shifted columns for structural column invalidations', async () => {
+    const cells = collectViewportCells(
+      {
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 2,
+        colStart: 1,
+        colEnd: 3,
+      },
+      null,
+      [],
+      [],
+      [{ sheetName: 'Sheet1', startIndex: 1, endIndex: 2 }],
+    )
+
+    expect(cells).toEqual([
+      { address: 'B1', row: 0, col: 1 },
+      { address: 'C1', row: 0, col: 2 },
+      { address: 'D1', row: 0, col: 3 },
+      { address: 'B2', row: 1, col: 1 },
+      { address: 'C2', row: 1, col: 2 },
+      { address: 'D2', row: 1, col: 3 },
+      { address: 'B3', row: 2, col: 1 },
+      { address: 'C3', row: 2, col: 2 },
+      { address: 'D3', row: 2, col: 3 },
+    ])
+  })
+
   it('collects changed cells without qualified address string round-trips', async () => {
     const runtime = new WorkbookWorkerRuntime({
       localStoreFactory: createMemoryLocalStoreFactory(),

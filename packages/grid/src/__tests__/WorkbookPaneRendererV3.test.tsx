@@ -226,6 +226,69 @@ describe('WorkbookPaneRendererV3', () => {
     runtime.dispose()
   })
 
+  test('draw runtime prefers fresher geometry props over stale camera store snapshots', () => {
+    const metrics = getGridMetrics()
+    const axes = {
+      columns: createGridAxisWorldIndex({ axisLength: 1024, defaultSize: metrics.columnWidth }),
+      rows: createGridAxisWorldIndex({ axisLength: 1024, defaultSize: metrics.rowHeight }),
+    }
+    const staleGeometry = createGridGeometrySnapshotFromAxes({
+      ...axes,
+      dpr: 1,
+      gridMetrics: metrics,
+      hostHeight: 720,
+      hostWidth: 1280,
+      scrollLeft: 0,
+      scrollTop: 13 * metrics.rowHeight + 10,
+      sheetName: 'Sheet1',
+      updatedAt: 100,
+    })
+    const freshGeometry = createGridGeometrySnapshotFromAxes({
+      ...axes,
+      dpr: 1,
+      freezeRows: 7,
+      gridMetrics: metrics,
+      hostHeight: 720,
+      hostWidth: 1280,
+      previousCamera: staleGeometry.camera,
+      scrollLeft: 0,
+      scrollTop: 13 * metrics.rowHeight + 10,
+      sheetName: 'Sheet1',
+      updatedAt: 200,
+    })
+    const cameraStore = new GridCameraStore()
+    cameraStore.setSnapshot(staleGeometry)
+    const scrollStore = new WorkbookGridScrollStore()
+    scrollStore.setSnapshot({
+      scrollLeft: 0,
+      scrollTop: 13 * metrics.rowHeight + 10,
+      tx: 0,
+      ty: 10,
+    })
+    const drawFrame = vi.fn<WorkbookPaneFrameDrawerV3>()
+    const runtime = new WorkbookPaneRendererRuntimeV3(drawFrame)
+
+    runtime.updateState({
+      active: true,
+      backend: {},
+      cameraStore,
+      geometry: freshGeometry,
+      scrollTransformStore: scrollStore,
+      surface: { dpr: 1, height: 720, pixelHeight: 720, pixelWidth: 1280, width: 1280 },
+      tilePanes: [createTilePane()],
+      webGpuReady: true,
+    })
+    runtime.drawNow()
+
+    expect(drawFrame).toHaveBeenCalledTimes(1)
+    expect(drawFrame.mock.calls[0]?.[0].scrollSnapshot).toMatchObject({
+      renderTy: freshGeometry.camera.bodyWorldY,
+    })
+    expect(drawFrame.mock.calls[0]?.[0].scrollSnapshot.renderTy).not.toBe(staleGeometry.camera.bodyWorldY)
+
+    runtime.dispose()
+  })
+
   test('draw runtime owns camera and scroll store subscriptions', () => {
     const metrics = getGridMetrics()
     const geometry = createGridGeometrySnapshotFromAxes({

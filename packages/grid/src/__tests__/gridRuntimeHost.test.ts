@@ -101,14 +101,14 @@ describe('GridRuntimeHost', () => {
         renderTileRevision: 1,
       },
       {
-        forceLocalTiles: false,
-        localFallbackRevision: 0,
+        forceLocalTiles: true,
+        localFallbackRevision: 1,
         renderTileRevision: 2,
       },
     ])
     expect(host.snapshotRenderTileBridgeState()).toEqual({
       forceLocalTiles: true,
-      localFallbackRevision: 1,
+      localFallbackRevision: 2,
       renderTileRevision: 2,
     })
   })
@@ -573,17 +573,17 @@ describe('GridRuntimeHost', () => {
     })
     expect(host.noteWorkbookDeltaDamage()).toEqual({
       forceLocalTiles: true,
-      localFallbackRevision: 1,
+      localFallbackRevision: 2,
       renderTileRevision: 1,
     })
     expect(host.noteRenderTileDelta()).toEqual({
       forceLocalTiles: false,
-      localFallbackRevision: 1,
+      localFallbackRevision: 2,
       renderTileRevision: 2,
     })
     expect(host.snapshotRenderTileBridgeState()).toEqual({
       forceLocalTiles: false,
-      localFallbackRevision: 1,
+      localFallbackRevision: 2,
       renderTileRevision: 2,
     })
   })

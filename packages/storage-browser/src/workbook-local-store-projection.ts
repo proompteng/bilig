@@ -187,7 +187,62 @@ function replaceAuthoritativeStyles(db: Database, styles: readonly CellStyleReco
   }
 }
 
+function collectCanonicalAuthoritativeSheets(base: WorkbookLocalAuthoritativeBase): WorkbookLocalAuthoritativeBase['sheets'] {
+  const sheetsById = new Map<number, WorkbookLocalAuthoritativeBase['sheets'][number]>()
+  base.sheets.forEach((sheet) => {
+    sheetsById.set(sheet.sheetId, sheet)
+  })
+
+  const collect = (sheetId: number, sheetName: string): void => {
+    if (sheetsById.has(sheetId)) {
+      return
+    }
+    sheetsById.set(sheetId, {
+      sheetId,
+      name: sheetName,
+      sortOrder: Number.MAX_SAFE_INTEGER,
+      freezeRows: 0,
+      freezeCols: 0,
+    })
+  }
+
+  base.cellInputs.forEach((cell) => collect(cell.sheetId, cell.sheetName))
+  base.cellRenders.forEach((cell) => collect(cell.sheetId, cell.sheetName))
+  base.rowAxisEntries.forEach((entry) => collect(entry.sheetId, entry.sheetName))
+  base.columnAxisEntries.forEach((entry) => collect(entry.sheetId, entry.sheetName))
+
+  return [...sheetsById.values()].toSorted((left, right) => left.sortOrder - right.sortOrder || left.sheetId - right.sheetId)
+}
+
+function normalizeAuthoritativeBaseSheetNames(base: WorkbookLocalAuthoritativeBase): WorkbookLocalAuthoritativeBase {
+  const sheets = collectCanonicalAuthoritativeSheets(base)
+  const sheetNamesById = new Map(sheets.map((sheet) => [sheet.sheetId, sheet.name]))
+  const resolveSheetName = (sheetId: number, fallbackName: string): string => sheetNamesById.get(sheetId) ?? fallbackName
+
+  return {
+    sheets,
+    cellInputs: base.cellInputs.map((cell) => ({
+      ...cell,
+      sheetName: resolveSheetName(cell.sheetId, cell.sheetName),
+    })),
+    cellRenders: base.cellRenders.map((cell) => ({
+      ...cell,
+      sheetName: resolveSheetName(cell.sheetId, cell.sheetName),
+    })),
+    rowAxisEntries: base.rowAxisEntries.map((entry) => ({
+      ...entry,
+      sheetName: resolveSheetName(entry.sheetId, entry.sheetName),
+    })),
+    columnAxisEntries: base.columnAxisEntries.map((entry) => ({
+      ...entry,
+      sheetName: resolveSheetName(entry.sheetId, entry.sheetName),
+    })),
+    styles: base.styles,
+  }
+}
+
 function insertWorkbookAuthoritativeBaseRows(db: Database, base: WorkbookLocalAuthoritativeBase, includeSheets = true): void {
+  const normalizedBase = normalizeAuthoritativeBaseSheetNames(base)
   const insertSheet = db.prepare(
     `
       INSERT INTO authoritative_sheet (sheet_id, name, sort_order, freeze_rows, freeze_cols)
@@ -244,13 +299,13 @@ function insertWorkbookAuthoritativeBaseRows(db: Database, base: WorkbookLocalAu
   const insertColumnAxis = insertAxis('authoritative_column_axis')
   try {
     if (includeSheets) {
-      for (const sheet of base.sheets) {
+      for (const sheet of normalizedBase.sheets) {
         insertSheet.bind([sheet.sheetId, sheet.name, sheet.sortOrder, sheet.freezeRows, sheet.freezeCols])
         insertSheet.step()
         insertSheet.reset()
       }
     }
-    for (const cell of base.cellInputs) {
+    for (const cell of normalizedBase.cellInputs) {
       insertInput.bind([
         cell.sheetId,
         cell.sheetName,
@@ -264,7 +319,7 @@ function insertWorkbookAuthoritativeBaseRows(db: Database, base: WorkbookLocalAu
       insertInput.step()
       insertInput.reset()
     }
-    for (const cell of base.cellRenders) {
+    for (const cell of normalizedBase.cellRenders) {
       insertRender.bind([
         cell.sheetId,
         cell.sheetName,
@@ -280,7 +335,7 @@ function insertWorkbookAuthoritativeBaseRows(db: Database, base: WorkbookLocalAu
       insertRender.step()
       insertRender.reset()
     }
-    for (const axis of base.rowAxisEntries) {
+    for (const axis of normalizedBase.rowAxisEntries) {
       insertRowAxis.bind([
         axis.sheetId,
         axis.sheetName,
@@ -292,7 +347,7 @@ function insertWorkbookAuthoritativeBaseRows(db: Database, base: WorkbookLocalAu
       insertRowAxis.step()
       insertRowAxis.reset()
     }
-    for (const axis of base.columnAxisEntries) {
+    for (const axis of normalizedBase.columnAxisEntries) {
       insertColumnAxis.bind([
         axis.sheetId,
         axis.sheetName,
@@ -411,9 +466,10 @@ export function writeWorkbookAuthoritativeDelta(db: Database, delta: WorkbookLoc
     return
   }
   deleteAuthoritativeSheetData(db, delta.replacedSheetIds)
-  upsertAuthoritativeSheets(db, delta.base.sheets)
+  const referencedSheets = collectCanonicalAuthoritativeSheets(delta.base)
+  upsertAuthoritativeSheets(db, referencedSheets)
   insertWorkbookAuthoritativeBaseRows(db, delta.base, false)
-  const persistedSheetIds = new Set(delta.base.sheets.map((sheet) => sheet.sheetId))
+  const persistedSheetIds = new Set(referencedSheets.map((sheet) => sheet.sheetId))
   deleteAuthoritativeSheets(
     db,
     delta.replacedSheetIds.filter((sheetId) => !persistedSheetIds.has(sheetId)),

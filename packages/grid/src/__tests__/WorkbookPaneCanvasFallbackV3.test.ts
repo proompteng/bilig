@@ -204,4 +204,61 @@ describe('WorkbookPaneCanvasFallbackV3', () => {
     expect(frame.scrollSnapshot.renderTy).toBe(0)
     expect(overlayBuilder).toHaveBeenCalledWith(liveGeometry)
   })
+
+  test('prefers fresher geometry props over stale live camera store snapshots', () => {
+    const metrics = getGridMetrics()
+    const axes = {
+      columns: createGridAxisWorldIndex({ axisLength: 256, defaultSize: metrics.columnWidth }),
+      rows: createGridAxisWorldIndex({ axisLength: 256, defaultSize: metrics.rowHeight }),
+    }
+    const staleGeometry = createGridGeometrySnapshotFromAxes({
+      ...axes,
+      dpr: 1,
+      gridMetrics: metrics,
+      hostHeight: 240,
+      hostWidth: 480,
+      scrollLeft: 0,
+      scrollTop: metrics.rowHeight * 13 + 10,
+      sheetName: 'Sheet1',
+      updatedAt: 100,
+    })
+    const freshGeometry = createGridGeometrySnapshotFromAxes({
+      ...axes,
+      dpr: 1,
+      freezeRows: 7,
+      gridMetrics: metrics,
+      hostHeight: 240,
+      hostWidth: 480,
+      previousCamera: staleGeometry.camera,
+      scrollLeft: 0,
+      scrollTop: metrics.rowHeight * 13 + 10,
+      sheetName: 'Sheet1',
+      updatedAt: 200,
+    })
+    const cameraStore = new GridCameraStore()
+    cameraStore.setSnapshot(staleGeometry)
+    const scrollStore = new WorkbookGridScrollStore()
+    scrollStore.setSnapshot({
+      scrollLeft: 0,
+      scrollTop: metrics.rowHeight * 13 + 10,
+      tx: 0,
+      ty: 10,
+    })
+    const overlayBuilder = vi.fn((geometry: typeof freshGeometry) => createOverlay(geometry.camera.seq))
+
+    const frame = resolveWorkbookPaneCanvasFallbackFrame({
+      cameraStore,
+      geometry: freshGeometry,
+      overlay: null,
+      overlayBuilder,
+      scrollTransformStore: scrollStore,
+      tilePanes: [createBodyPane()],
+    })
+
+    expect(frame.geometry).toBe(freshGeometry)
+    expect(frame.overlay?.cameraSeq).toBe(freshGeometry.camera.seq)
+    expect(frame.scrollSnapshot.renderTy).toBe(freshGeometry.camera.bodyWorldY)
+    expect(frame.scrollSnapshot.renderTy).not.toBe(staleGeometry.camera.bodyWorldY)
+    expect(overlayBuilder).toHaveBeenCalledWith(freshGeometry)
+  })
 })
