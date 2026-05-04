@@ -53,6 +53,20 @@ export function countWorkbookAgentRangeCells(range: CellRangeRef): number {
   return (normalized.endRow - normalized.startRow + 1) * (normalized.endCol - normalized.startCol + 1)
 }
 
+export function countWorkbookAgentRangesCells(ranges: readonly CellRangeRef[]): number {
+  return ranges.reduce((sum, range) => sum + countWorkbookAgentRangeCells(range), 0)
+}
+
+export function countWorkbookAgentRangeRows(range: CellRangeRef): number {
+  const normalized = normalizeWorkbookAgentRange(range)
+  return normalized.endRow - normalized.startRow + 1
+}
+
+export function countWorkbookAgentRangeColumns(range: CellRangeRef): number {
+  const normalized = normalizeWorkbookAgentRange(range)
+  return normalized.endCol - normalized.startCol + 1
+}
+
 export function enumerateWorkbookAgentRangeAddresses(range: CellRangeRef, limit = 64): string[] {
   const normalized = normalizeWorkbookAgentRange(range)
   const addresses: string[] = []
@@ -71,6 +85,18 @@ export function toWorkbookAgentRangeRef(range: CellRangeRef): CellRangeRef {
     startAddress: normalized.startAddress,
     endAddress: normalized.endAddress,
   }
+}
+
+export function workbookAgentRangesIntersect(left: CellRangeRef, right: CellRangeRef): boolean {
+  const leftBounds = normalizeWorkbookAgentRange(left)
+  const rightBounds = normalizeWorkbookAgentRange(right)
+  return !(
+    leftBounds.sheetName !== rightBounds.sheetName ||
+    leftBounds.endRow < rightBounds.startRow ||
+    rightBounds.endRow < leftBounds.startRow ||
+    leftBounds.endCol < rightBounds.startCol ||
+    rightBounds.endCol < leftBounds.startCol
+  )
 }
 
 export function createWorkbookAgentRangeChunkPlan(range: CellRangeRef, maxCellsPerChunk: number): WorkbookAgentRangeChunkPlan {
@@ -104,5 +130,14 @@ export function createWorkbookAgentRangeChunkPlan(range: CellRangeRef, maxCellsP
     maxCellsPerChunk,
     chunkCount: chunks.length,
     chunks,
+  }
+}
+
+export function ensureWorkbookAgentRangeCellLimit(range: CellRangeRef, limit: number): void {
+  const count = countWorkbookAgentRangeCells(range)
+  if (count > limit) {
+    throw new Error(
+      `Range ${range.sheetName}!${range.startAddress}:${range.endAddress} has ${String(count)} cells; tool limit is ${String(limit)} cells per call`,
+    )
   }
 }

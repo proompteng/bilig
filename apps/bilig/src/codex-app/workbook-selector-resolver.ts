@@ -2,6 +2,7 @@ import { formatAddress, parseCellAddress } from '@bilig/formula'
 import { ValueTag, type CellRangeRef, type WorkbookDefinedNameSnapshot, type WorkbookTableSnapshot } from '@bilig/protocol'
 import type { WorkbookAgentUiContext } from '@bilig/contracts'
 import { z } from 'zod'
+import { toWorkbookAgentRangeRef } from './workbook-agent-range-chunks.js'
 import type { WorkbookRuntime } from '../workbook-runtime/runtime-manager.js'
 
 const selectorRevisionShape = {
@@ -125,22 +126,8 @@ export interface ResolveWorkbookSelectorInput {
   readonly uiContext: WorkbookAgentUiContext | null
 }
 
-function normalizeRange(range: CellRangeRef): CellRangeRef {
-  const start = parseCellAddress(range.startAddress, range.sheetName)
-  const end = parseCellAddress(range.endAddress, range.sheetName)
-  const startRow = Math.min(start.row, end.row)
-  const endRow = Math.max(start.row, end.row)
-  const startCol = Math.min(start.col, end.col)
-  const endCol = Math.max(start.col, end.col)
-  return {
-    sheetName: range.sheetName,
-    startAddress: formatAddress(startRow, startCol),
-    endAddress: formatAddress(endRow, endCol),
-  }
-}
-
 function createRangeRef(sheetName: string, startRow: number, startCol: number, endRow: number, endCol: number): CellRangeRef {
-  return normalizeRange({
+  return toWorkbookAgentRangeRef({
     sheetName,
     startAddress: formatAddress(startRow, startCol),
     endAddress: formatAddress(endRow, endCol),
@@ -165,7 +152,7 @@ function resolveUiSelection(uiContext: WorkbookAgentUiContext | null): CellRange
   if (!uiContext) {
     throwResolutionError('selector_not_found', 'No browser workbook context is attached to this chat session')
   }
-  return normalizeRange({
+  return toWorkbookAgentRangeRef({
     sheetName: uiContext.selection.sheetName,
     startAddress: uiContext.selection.range?.startAddress ?? uiContext.selection.address,
     endAddress: uiContext.selection.range?.endAddress ?? uiContext.selection.address,
@@ -451,7 +438,7 @@ function resolveDefinedNameRange(
       }
     case 'range-ref':
       return {
-        range: normalizeRange({
+        range: toWorkbookAgentRangeRef({
           sheetName: value.sheetName,
           startAddress: value.startAddress,
           endAddress: value.endAddress,
@@ -533,7 +520,7 @@ export function listWorkbookNamedRanges(runtime: WorkbookRuntime): readonly {
           name: namedRange.name,
           valueKind: value.kind,
           displayLabel: namedRange.name,
-          range: normalizeRange({
+          range: toWorkbookAgentRangeRef({
             sheetName: value.sheetName,
             startAddress: value.startAddress,
             endAddress: value.endAddress,
@@ -585,7 +572,7 @@ export function resolveWorkbookSelector(input: ResolveWorkbookSelectorInput): Re
         resolvedRevision: input.runtime.headRevision,
         objectType: 'range',
         derivedA1Ranges: [
-          normalizeRange({
+          toWorkbookAgentRangeRef({
             sheetName: input.selector.sheet,
             startAddress: input.selector.start,
             endAddress: input.selector.end,
@@ -605,7 +592,7 @@ export function resolveWorkbookSelector(input: ResolveWorkbookSelectorInput): Re
         resolvedRevision: input.runtime.headRevision,
         objectType: 'table',
         derivedA1Ranges: [
-          normalizeRange({
+          toWorkbookAgentRangeRef({
             sheetName: table.sheetName,
             startAddress: table.startAddress,
             endAddress: table.endAddress,

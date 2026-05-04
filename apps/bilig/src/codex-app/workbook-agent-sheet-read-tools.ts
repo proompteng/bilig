@@ -13,6 +13,7 @@ import type { ZeroSyncService } from '../zero/service.js'
 import { resolveWorkbookSelector } from './workbook-selector-resolver.js'
 import type { WorkbookRuntime } from '../workbook-runtime/runtime-manager.js'
 import { normalizeWorkbookAgentUiContext } from './workbook-agent-inspection.js'
+import { stringifyJson, textToolResult } from './workbook-agent-tool-shared.js'
 
 const sheetNameArgsSchema = z.object({
   sheetName: z.string().trim().min(1).optional(),
@@ -108,22 +109,6 @@ export interface WorkbookAgentSheetReadToolContext {
   readonly session: SessionIdentity
   readonly uiContext: WorkbookAgentUiContext | null
   readonly zeroSyncService: ZeroSyncService
-}
-
-function textToolResult(text: string, success = true): CodexDynamicToolCallResult {
-  return {
-    success,
-    contentItems: [
-      {
-        type: 'inputText',
-        text,
-      },
-    ],
-  }
-}
-
-function stringifyJson(value: unknown): string {
-  return JSON.stringify(value, null, 2)
 }
 
 function resolveSheetName(runtime: WorkbookRuntime, sheetName: string | undefined, uiContext: WorkbookAgentUiContext | null): string {

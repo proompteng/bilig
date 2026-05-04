@@ -101,3 +101,28 @@ export function getWorkbookAgentWorkflowFamily(
       return 'structural'
   }
 }
+
+export function isWorkbookAgentWorkflowFamilyEnabled(
+  featureFlags: Pick<
+    WorkbookAgentFeatureFlags,
+    | 'formulaWorkflowFamilyEnabled'
+    | 'formattingWorkflowFamilyEnabled'
+    | 'importWorkflowFamilyEnabled'
+    | 'rollupWorkflowFamilyEnabled'
+    | 'structuralWorkflowFamilyEnabled'
+  >,
+  workflowTemplate: WorkbookAgentWorkflowRun['workflowTemplate'],
+): boolean {
+  const workflowFamily = getWorkbookAgentWorkflowFamily(workflowTemplate)
+  return workflowFamily === 'report'
+    ? true
+    : workflowFamily === 'formula'
+      ? featureFlags.formulaWorkflowFamilyEnabled
+      : workflowFamily === 'formatting'
+        ? featureFlags.formattingWorkflowFamilyEnabled
+        : workflowFamily === 'import'
+          ? featureFlags.importWorkflowFamilyEnabled
+          : workflowFamily === 'rollup'
+            ? featureFlags.rollupWorkflowFamilyEnabled
+            : featureFlags.structuralWorkflowFamilyEnabled
+}

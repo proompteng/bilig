@@ -15,8 +15,10 @@ import {
   type WorkbookShapeSnapshot,
 } from '@bilig/protocol'
 import type { JsonValue } from '@bilig/agent-api'
-import type { WorkbookAgentUiContext, WorkbookViewport } from '@bilig/contracts'
+import type { WorkbookAgentUiContext } from '@bilig/contracts'
 import type { WorkbookRuntime } from '../workbook-runtime/runtime-manager.js'
+import { workbookAgentViewportToRange } from './workbook-agent-context-geometry.js'
+import { normalizeWorkbookAgentRange, workbookAgentRangesIntersect } from './workbook-agent-range-chunks.js'
 
 function formatColumnLabel(index: number): string {
   return formatAddress(0, index).replace(/[0-9]/g, '')
@@ -34,14 +36,6 @@ function serializeCellValue(value: { tag: ValueTag; value?: number | boolean | s
       return typeof value.code === 'number' ? formatErrorCode(value.code) : '#ERROR!'
     default:
       return null
-  }
-}
-
-function viewportToRange(sheetName: string, viewport: WorkbookViewport): CellRangeRef {
-  return {
-    sheetName,
-    startAddress: formatAddress(viewport.rowStart, viewport.colStart),
-    endAddress: formatAddress(viewport.rowEnd, viewport.colEnd),
   }
 }
 
@@ -98,45 +92,10 @@ export function normalizeWorkbookAgentUiContext(
   }
 }
 
-function normalizeRange(range: CellRangeRef): CellRangeRef & {
-  startRow: number
-  endRow: number
-  startCol: number
-  endCol: number
-} {
-  const start = parseCellAddress(range.startAddress, range.sheetName)
-  const end = parseCellAddress(range.endAddress, range.sheetName)
-  const startRow = Math.min(start.row, end.row)
-  const endRow = Math.max(start.row, end.row)
-  const startCol = Math.min(start.col, end.col)
-  const endCol = Math.max(start.col, end.col)
-  return {
-    ...range,
-    startAddress: formatAddress(startRow, startCol),
-    endAddress: formatAddress(endRow, endCol),
-    startRow,
-    endRow,
-    startCol,
-    endCol,
-  }
-}
-
-function rangesIntersect(left: CellRangeRef, right: CellRangeRef): boolean {
-  const leftBounds = normalizeRange(left)
-  const rightBounds = normalizeRange(right)
-  return !(
-    leftBounds.sheetName !== rightBounds.sheetName ||
-    leftBounds.endRow < rightBounds.startRow ||
-    rightBounds.endRow < leftBounds.startRow ||
-    leftBounds.endCol < rightBounds.startCol ||
-    rightBounds.endCol < leftBounds.startCol
-  )
-}
-
 function collectIntersectingDataValidations(runtime: WorkbookRuntime, range: CellRangeRef): readonly WorkbookDataValidationSnapshot[] {
   return runtime.engine
     .getDataValidations(range.sheetName)
-    .filter((validation) => rangesIntersect(validation.range, range))
+    .filter((validation) => workbookAgentRangesIntersect(validation.range, range))
     .map((validation) => structuredClone(validation))
 }
 
@@ -146,7 +105,7 @@ function collectIntersectingConditionalFormats(
 ): readonly WorkbookConditionalFormatSnapshot[] {
   return runtime.engine
     .getConditionalFormats(range.sheetName)
-    .filter((format) => rangesIntersect(format.range, range))
+    .filter((format) => workbookAgentRangesIntersect(format.range, range))
     .map((format) => structuredClone(format))
 }
 
@@ -154,7 +113,7 @@ function collectIntersectingCommentThreads(runtime: WorkbookRuntime, range: Cell
   return runtime.engine
     .getCommentThreads(range.sheetName)
     .filter((thread) =>
-      rangesIntersect(range, {
+      workbookAgentRangesIntersect(range, {
         sheetName: thread.sheetName,
         startAddress: thread.address,
         endAddress: thread.address,
@@ -167,7 +126,7 @@ function collectIntersectingNotes(runtime: WorkbookRuntime, range: CellRangeRef)
   return runtime.engine
     .getNotes(range.sheetName)
     .filter((note) =>
-      rangesIntersect(range, {
+      workbookAgentRangesIntersect(range, {
         sheetName: note.sheetName,
         startAddress: note.address,
         endAddress: note.address,
@@ -181,7 +140,7 @@ function collectIntersectingImages(runtime: WorkbookRuntime, range: CellRangeRef
     .getImages()
     .filter((image) => {
       const anchor = parseCellAddress(image.address, image.sheetName)
-      return rangesIntersect(range, {
+      return workbookAgentRangesIntersect(range, {
         sheetName: image.sheetName,
         startAddress: image.address,
         endAddress: formatAddress(anchor.row + Math.max(0, image.rows - 1), anchor.col + Math.max(0, image.cols - 1)),
@@ -195,7 +154,7 @@ function collectIntersectingShapes(runtime: WorkbookRuntime, range: CellRangeRef
     .getShapes()
     .filter((shape) => {
       const anchor = parseCellAddress(shape.address, shape.sheetName)
-      return rangesIntersect(range, {
+      return workbookAgentRangesIntersect(range, {
         sheetName: shape.sheetName,
         startAddress: shape.address,
         endAddress: formatAddress(anchor.row + Math.max(0, shape.rows - 1), anchor.col + Math.max(0, shape.cols - 1)),
@@ -207,7 +166,7 @@ function collectIntersectingShapes(runtime: WorkbookRuntime, range: CellRangeRef
 function collectIntersectingRangeProtections(runtime: WorkbookRuntime, range: CellRangeRef): readonly WorkbookRangeProtectionSnapshot[] {
   return runtime.engine
     .getRangeProtections(range.sheetName)
-    .filter((protection) => rangesIntersect(protection.range, range))
+    .filter((protection) => workbookAgentRangesIntersect(protection.range, range))
     .map((protection) => structuredClone(protection))
 }
 
@@ -222,7 +181,7 @@ function isFormulaHidden(runtime: WorkbookRuntime, sheetName: string, address: s
   return runtime.engine.getRangeProtections(sheetName).some(
     (protection) =>
       protection.hideFormulas === true &&
-      rangesIntersect(protection.range, {
+      workbookAgentRangesIntersect(protection.range, {
         sheetName,
         startAddress: address,
         endAddress: address,
@@ -230,7 +189,10 @@ function isFormulaHidden(runtime: WorkbookRuntime, sheetName: string, address: s
   )
 }
 
-function summarizeWindowAxisState(input: { readonly range: ReturnType<typeof normalizeRange>; readonly runtime: WorkbookRuntime }) {
+function summarizeWindowAxisState(input: {
+  readonly range: ReturnType<typeof normalizeWorkbookAgentRange>
+  readonly runtime: WorkbookRuntime
+}) {
   const rowEntries = input.runtime.engine.getRowAxisEntries(input.range.sheetName)
   const columnEntries = input.runtime.engine.getColumnAxisEntries(input.range.sheetName)
   return {
@@ -263,7 +225,7 @@ function summarizeWindowAxisState(input: { readonly range: ReturnType<typeof nor
 }
 
 function summarizeSelection(context: WorkbookAgentUiContext) {
-  const selectionRange = normalizeRange({
+  const selectionRange = normalizeWorkbookAgentRange({
     sheetName: context.selection.sheetName,
     startAddress: context.selection.range?.startAddress ?? context.selection.address,
     endAddress: context.selection.range?.endAddress ?? context.selection.address,
@@ -305,7 +267,9 @@ export function inspectWorkbookContext(runtime: WorkbookRuntime, context: Workbo
     return 'No browser view context is attached to this chat session yet.'
   }
   const selection = summarizeSelection(normalizedContext)
-  const visibleRange = normalizeRange(viewportToRange(normalizedContext.selection.sheetName, normalizedContext.viewport))
+  const visibleRange = normalizeWorkbookAgentRange(
+    workbookAgentViewportToRange(normalizedContext.selection.sheetName, normalizedContext.viewport),
+  )
   return JSON.stringify(
     {
       selection,
@@ -345,7 +309,7 @@ export function inspectWorkbookRange(
   readonly numberFormats: readonly CellNumberFormatRecord[]
   readonly rows: readonly JsonValue[]
 } {
-  const normalizedRange = normalizeRange(range)
+  const normalizedRange = normalizeWorkbookAgentRange(range)
   const styleIds = new Set<string>()
   const numberFormatIds = new Set<string>()
   const rows: JsonValue[] = []

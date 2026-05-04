@@ -1,4 +1,3 @@
-import { formatAddress, parseCellAddress } from '@bilig/formula'
 import {
   WORKBOOK_AGENT_TOOL_NAMES,
   normalizeWorkbookAgentToolName,
@@ -7,7 +6,6 @@ import {
   type CodexDynamicToolSpec,
   type WorkbookAgentCommand,
   type WorkbookAgentCommandBundle,
-  type WorkbookAgentExecutionRecord,
 } from '@bilig/agent-api'
 import type { CellRangeRef, LiteralInput, WorkbookDataValidationRuleSnapshot, WorkbookDataValidationSnapshot } from '@bilig/protocol'
 import type { WorkbookAgentUiContext } from '@bilig/contracts'
@@ -16,6 +14,8 @@ import type { SessionIdentity } from '../http/session.js'
 import type { ZeroSyncService } from '../zero/service.js'
 import { rangeOrSelectorJsonSchema, rangeOrSelectorSchema, resolveRangeOrSelectorRequest } from './workbook-agent-selector-tooling.js'
 import { stageWorkbookAgentCommandResult } from './workbook-agent-mutation-receipt.js'
+import { toWorkbookAgentRangeRef, workbookAgentRangesIntersect } from './workbook-agent-range-chunks.js'
+import { stringifyJson, textToolResult, type WorkbookAgentStageCommandResult } from './workbook-agent-tool-shared.js'
 import type { WorkbookRuntime } from '../workbook-runtime/runtime-manager.js'
 
 const validationListSourceSchema = z.union([
@@ -173,25 +173,7 @@ export interface WorkbookAgentValidationToolContext {
   readonly session: SessionIdentity
   readonly uiContext: WorkbookAgentUiContext | null
   readonly zeroSyncService: ZeroSyncService
-  readonly stageCommand: (command: WorkbookAgentCommand) => Promise<
-    | WorkbookAgentCommandBundle
-    | {
-        readonly bundle: WorkbookAgentCommandBundle
-        readonly executionRecord: WorkbookAgentExecutionRecord | null
-        readonly disposition?: 'queuedForTurnApply' | 'reviewQueued'
-      }
-  >
-}
-
-function stringifyJson(value: unknown): string {
-  return JSON.stringify(value, null, 2)
-}
-
-function textToolResult(text: string, success = true): CodexDynamicToolCallResult {
-  return {
-    success,
-    contentItems: [{ type: 'inputText', text }],
-  }
+  readonly stageCommand: (command: WorkbookAgentCommand) => Promise<WorkbookAgentCommandBundle | WorkbookAgentStageCommandResult>
 }
 
 async function stageCommandResult(
@@ -199,32 +181,6 @@ async function stageCommandResult(
   command: WorkbookAgentCommand,
 ): Promise<CodexDynamicToolCallResult> {
   return await stageWorkbookAgentCommandResult(context, command, command.kind)
-}
-
-function normalizeRange(range: CellRangeRef): CellRangeRef {
-  const start = parseCellAddress(range.startAddress, range.sheetName)
-  const end = parseCellAddress(range.endAddress, range.sheetName)
-  return {
-    sheetName: range.sheetName,
-    startAddress: formatAddress(Math.min(start.row, end.row), Math.min(start.col, end.col)),
-    endAddress: formatAddress(Math.max(start.row, end.row), Math.max(start.col, end.col)),
-  }
-}
-
-function rangesIntersect(left: CellRangeRef, right: CellRangeRef): boolean {
-  const leftBounds = normalizeRange(left)
-  const rightBounds = normalizeRange(right)
-  const leftStart = parseCellAddress(leftBounds.startAddress, leftBounds.sheetName)
-  const leftEnd = parseCellAddress(leftBounds.endAddress, leftBounds.sheetName)
-  const rightStart = parseCellAddress(rightBounds.startAddress, rightBounds.sheetName)
-  const rightEnd = parseCellAddress(rightBounds.endAddress, rightBounds.sheetName)
-  return !(
-    leftBounds.sheetName !== rightBounds.sheetName ||
-    leftEnd.row < rightStart.row ||
-    rightEnd.row < leftStart.row ||
-    leftEnd.col < rightStart.col ||
-    rightEnd.col < leftStart.col
-  )
 }
 
 function listWorkbookDataValidations(runtime: WorkbookRuntime): WorkbookDataValidationSnapshot[] {
@@ -279,7 +235,7 @@ function toValidationRecord(
   },
 ): WorkbookDataValidationSnapshot {
   return {
-    range: normalizeRange(args.range),
+    range: toWorkbookAgentRangeRef(args.range),
     rule: normalizeValidationRule(args.rule),
     ...(args.allowBlank !== undefined ? { allowBlank: args.allowBlank } : {}),
     ...(args.showDropdown !== undefined ? { showDropdown: args.showDropdown } : {}),
@@ -312,7 +268,7 @@ export async function handleWorkbookAgentValidationToolCall(
                   },
                   uiContext: context.uiContext,
                 })
-                return validations.filter((validation) => rangesIntersect(validation.range, resolved.range))
+                return validations.filter((validation) => workbookAgentRangesIntersect(validation.range, resolved.range))
               })()
             : validations
         return {
@@ -355,7 +311,7 @@ export async function handleWorkbookAgentValidationToolCall(
       )
       return await stageCommandResult(context, {
         kind: 'clearDataValidation',
-        range: normalizeRange(range),
+        range: toWorkbookAgentRangeRef(range),
       })
     }
     default:

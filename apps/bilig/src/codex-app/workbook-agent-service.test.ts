@@ -5076,6 +5076,7 @@ describe('workbook agent service', () => {
           }),
         }),
       )
+      expect(service.getObservabilitySnapshot().counters.sharedReviewApprovedCount).toBe(1)
 
       const applied = await service.applyReviewItem({
         documentId: 'doc-1',
@@ -5187,6 +5188,7 @@ describe('workbook agent service', () => {
           }),
         }),
       )
+      expect(service.getObservabilitySnapshot().counters.sharedRecommendationApprovedCount).toBe(1)
       expect(reviewed.entries).toEqual(
         expect.arrayContaining([
           expect.objectContaining({

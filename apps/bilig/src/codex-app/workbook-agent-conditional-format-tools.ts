@@ -1,4 +1,3 @@
-import { formatAddress, parseCellAddress } from '@bilig/formula'
 import {
   WORKBOOK_AGENT_TOOL_NAMES,
   normalizeWorkbookAgentToolName,
@@ -7,14 +6,8 @@ import {
   type CodexDynamicToolSpec,
   type WorkbookAgentCommand,
   type WorkbookAgentCommandBundle,
-  type WorkbookAgentExecutionRecord,
 } from '@bilig/agent-api'
-import type {
-  CellStylePatch,
-  CellRangeRef,
-  WorkbookConditionalFormatRuleSnapshot,
-  WorkbookConditionalFormatSnapshot,
-} from '@bilig/protocol'
+import type { CellStylePatch, WorkbookConditionalFormatRuleSnapshot, WorkbookConditionalFormatSnapshot } from '@bilig/protocol'
 import type { WorkbookAgentUiContext } from '@bilig/contracts'
 import { setRangeStyleArgsSchema } from '@bilig/zero-sync'
 import { z } from 'zod'
@@ -22,6 +15,8 @@ import type { SessionIdentity } from '../http/session.js'
 import type { ZeroSyncService } from '../zero/service.js'
 import { rangeOrSelectorJsonSchema, rangeOrSelectorSchema, resolveRangeOrSelectorRequest } from './workbook-agent-selector-tooling.js'
 import { stageWorkbookAgentCommandResult } from './workbook-agent-mutation-receipt.js'
+import { workbookAgentRangesIntersect } from './workbook-agent-range-chunks.js'
+import { stringifyJson, textToolResult, type WorkbookAgentStageCommandResult } from './workbook-agent-tool-shared.js'
 import type { WorkbookRuntime } from '../workbook-runtime/runtime-manager.js'
 
 const literalValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()])
@@ -176,25 +171,7 @@ export interface WorkbookAgentConditionalFormatToolContext {
   readonly session: SessionIdentity
   readonly uiContext: WorkbookAgentUiContext | null
   readonly zeroSyncService: ZeroSyncService
-  readonly stageCommand: (command: WorkbookAgentCommand) => Promise<
-    | WorkbookAgentCommandBundle
-    | {
-        readonly bundle: WorkbookAgentCommandBundle
-        readonly executionRecord: WorkbookAgentExecutionRecord | null
-        readonly disposition?: 'queuedForTurnApply' | 'reviewQueued'
-      }
-  >
-}
-
-function stringifyJson(value: unknown): string {
-  return JSON.stringify(value, null, 2)
-}
-
-function textToolResult(text: string, success = true): CodexDynamicToolCallResult {
-  return {
-    success,
-    contentItems: [{ type: 'inputText', text }],
-  }
+  readonly stageCommand: (command: WorkbookAgentCommand) => Promise<WorkbookAgentCommandBundle | WorkbookAgentStageCommandResult>
 }
 
 async function stageCommandResult(
@@ -202,41 +179,6 @@ async function stageCommandResult(
   command: WorkbookAgentCommand,
 ): Promise<CodexDynamicToolCallResult> {
   return await stageWorkbookAgentCommandResult(context, command, command.kind)
-}
-
-function normalizeRangeBounds(range: CellRangeRef): CellRangeRef & {
-  startRow: number
-  endRow: number
-  startCol: number
-  endCol: number
-} {
-  const start = parseCellAddress(range.startAddress, range.sheetName)
-  const end = parseCellAddress(range.endAddress, range.sheetName)
-  const startRow = Math.min(start.row, end.row)
-  const endRow = Math.max(start.row, end.row)
-  const startCol = Math.min(start.col, end.col)
-  const endCol = Math.max(start.col, end.col)
-  return {
-    ...range,
-    startAddress: formatAddress(startRow, startCol),
-    endAddress: formatAddress(endRow, endCol),
-    startRow,
-    endRow,
-    startCol,
-    endCol,
-  }
-}
-
-function rangesIntersect(left: CellRangeRef, right: CellRangeRef): boolean {
-  const leftBounds = normalizeRangeBounds(left)
-  const rightBounds = normalizeRangeBounds(right)
-  return !(
-    leftBounds.sheetName !== rightBounds.sheetName ||
-    leftBounds.endRow < rightBounds.startRow ||
-    rightBounds.endRow < leftBounds.startRow ||
-    leftBounds.endCol < rightBounds.startCol ||
-    rightBounds.endCol < leftBounds.startCol
-  )
 }
 
 function listConditionalFormats(runtime: WorkbookRuntime) {
@@ -359,8 +301,8 @@ export async function handleWorkbookAgentConditionalFormatToolCall(
         })
         return {
           documentId: context.documentId,
-          conditionalFormatCount: formats.filter((format) => rangesIntersect(format.range, resolved.range)).length,
-          conditionalFormats: formats.filter((format) => rangesIntersect(format.range, resolved.range)),
+          conditionalFormatCount: formats.filter((format) => workbookAgentRangesIntersect(format.range, resolved.range)).length,
+          conditionalFormats: formats.filter((format) => workbookAgentRangesIntersect(format.range, resolved.range)),
         }
       })
       return textToolResult(stringifyJson(payload))
@@ -411,7 +353,7 @@ export async function handleWorkbookAgentConditionalFormatToolCall(
                 uiContext: context.uiContext,
               }).range
             : existing.range
-        return {
+        const nextFormat = {
           ...existing,
           range: resolvedRange,
           ...(args.rule !== undefined
@@ -425,8 +367,13 @@ export async function handleWorkbookAgentConditionalFormatToolCall(
               }
             : {}),
           ...(args.stopIfTrue !== undefined ? { stopIfTrue: args.stopIfTrue } : {}),
-          ...(args.priority !== undefined ? (args.priority === null ? {} : { priority: args.priority }) : {}),
         } satisfies WorkbookConditionalFormatSnapshot
+        if (args.priority === null) {
+          delete nextFormat.priority
+        } else if (args.priority !== undefined) {
+          nextFormat.priority = args.priority
+        }
+        return nextFormat
       })
       return await stageCommandResult(context, {
         kind: 'upsertConditionalFormat',

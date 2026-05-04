@@ -15,6 +15,7 @@ import {
   scanWorkbookUsedRangeBloat,
   verifyWorkbookInvariants,
 } from './workbook-agent-audit.js'
+import { stringifyJson, textToolResult } from './workbook-agent-tool-shared.js'
 
 const auditArgsSchema = z.object({
   sheetName: z.string().trim().min(1).optional(),
@@ -108,17 +109,6 @@ export const workbookAgentAuditToolSpecs = [
 export interface WorkbookAgentAuditToolContext {
   readonly documentId: string
   readonly zeroSyncService: ZeroSyncService
-}
-
-function stringifyJson(value: unknown): string {
-  return JSON.stringify(value, null, 2)
-}
-
-function textToolResult(text: string, success = true): CodexDynamicToolCallResult {
-  return {
-    success,
-    contentItems: [{ type: 'inputText', text }],
-  }
 }
 
 export async function handleWorkbookAgentAuditToolCall(

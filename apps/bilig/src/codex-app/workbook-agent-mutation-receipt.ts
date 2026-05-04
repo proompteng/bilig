@@ -22,15 +22,10 @@ import {
   type WorkbookRenderedReadbackProof,
   type WorkbookVerificationMismatch,
 } from './workbook-agent-rendered-readback.js'
+import { stringifyJson, textToolResult, type WorkbookAgentStageCommandResult } from './workbook-agent-tool-shared.js'
 
 const MAX_VERIFICATION_RANGES = 3
 const MAX_RECEIPT_READBACK_CELLS = 4000
-
-export interface WorkbookAgentStageCommandResult {
-  readonly bundle: WorkbookAgentCommandBundle
-  readonly executionRecord: WorkbookAgentExecutionRecord | null
-  readonly disposition?: 'queuedForTurnApply' | 'reviewQueued'
-}
 
 export interface WorkbookAgentMutationReceiptRange {
   readonly sheetName: string
@@ -72,17 +67,6 @@ export interface WorkbookAgentToolStageContext {
   readonly uiContext: WorkbookAgentUiContext | null
   readonly zeroSyncService: ZeroSyncService
   readonly stageCommand: (command: WorkbookAgentCommand) => Promise<WorkbookAgentCommandBundle | WorkbookAgentStageCommandResult>
-}
-
-function stringifyJson(value: unknown): string {
-  return JSON.stringify(value, null, 2)
-}
-
-function textToolResult(text: string, success = true): CodexDynamicToolCallResult {
-  return {
-    success,
-    contentItems: [{ type: 'inputText', text }],
-  }
 }
 
 function commandKind(command: WorkbookAgentCommand): WorkbookAgentMutationReceiptRange['kind'] {

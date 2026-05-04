@@ -8,11 +8,7 @@ import {
   type CodexAppServerThreadConfig,
   type CodexAppServerTransport,
 } from './codex-app-server-client.js'
-import {
-  CodexAppServerClientPool,
-  type CodexAppServerClientPoolStats,
-  type CodexAppServerPoolBackpressureError,
-} from './codex-app-server-pool.js'
+import { CodexAppServerClientPool, type CodexAppServerClientPoolStats } from './codex-app-server-pool.js'
 import { routeWorkbookAgentCodexNotification } from './workbook-agent-codex-notification-router.js'
 import { createWorkbookAgentDynamicToolHandler } from './workbook-agent-dynamic-tool-handler.js'
 import type { WorkbookAgentThreadState } from './workbook-agent-service-shared.js'
@@ -190,8 +186,4 @@ export function createWorkbookAgentThreadResumeInput(threadId: string) {
     baseInstructions: createWorkbookAgentBaseInstructions(),
     developerInstructions: createWorkbookAgentDeveloperInstructions(),
   }
-}
-
-export function isWorkbookAgentCodexBackpressureError(value: unknown): value is CodexAppServerPoolBackpressureError {
-  return value instanceof Error && value.name === 'CodexAppServerPoolBackpressureError'
 }

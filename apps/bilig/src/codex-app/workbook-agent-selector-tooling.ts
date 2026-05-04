@@ -2,6 +2,7 @@ import { formatAddress, parseCellAddress } from '@bilig/formula'
 import type { CellRangeRef } from '@bilig/protocol'
 import type { WorkbookAgentUiContext } from '@bilig/contracts'
 import { z } from 'zod'
+import { countWorkbookAgentRangeColumns, countWorkbookAgentRangeRows, toWorkbookAgentRangeRef } from './workbook-agent-range-chunks.js'
 import {
   resolveWorkbookSelector,
   resolveWorkbookSelectorToSingleRange,
@@ -235,16 +236,6 @@ export const rangeOrSelectorJsonSchema = {
   },
 }
 
-function normalizeRange(range: CellRangeRef): CellRangeRef {
-  const start = parseCellAddress(range.startAddress, range.sheetName)
-  const end = parseCellAddress(range.endAddress, range.sheetName)
-  return {
-    sheetName: range.sheetName,
-    startAddress: formatAddress(Math.min(start.row, end.row), Math.min(start.col, end.col)),
-    endAddress: formatAddress(Math.max(start.row, end.row), Math.max(start.col, end.col)),
-  }
-}
-
 function resolveSelectorRange(input: {
   runtime: WorkbookRuntime
   selector: z.infer<typeof workbookSemanticSelectorSchema>
@@ -255,7 +246,7 @@ function resolveSelectorRange(input: {
 } {
   const resolved = resolveWorkbookSelectorToSingleRange(input)
   return {
-    range: normalizeRange(resolved.range),
+    range: toWorkbookAgentRangeRef(resolved.range),
     resolution: resolved.resolution,
   }
 }
@@ -275,13 +266,13 @@ export function resolveReadRangeRequest(input: {
       uiContext: input.uiContext,
     })
     return {
-      ranges: resolution.derivedA1Ranges.map((range) => normalizeRange(range)),
+      ranges: resolution.derivedA1Ranges.map((range) => toWorkbookAgentRangeRef(range)),
       resolution,
     }
   }
   return {
     ranges: [
-      normalizeRange({
+      toWorkbookAgentRangeRef({
         sheetName: input.args.sheetName,
         startAddress: input.args.startAddress,
         endAddress: input.args.endAddress,
@@ -307,7 +298,7 @@ export function resolveRangeOrSelectorRequest(input: {
     })
   }
   return {
-    range: normalizeRange(input.args.range!),
+    range: toWorkbookAgentRangeRef(input.args.range!),
     resolution: null,
   }
 }
@@ -334,7 +325,7 @@ export function resolveTransferRangeRequest(input: {
           selector: target,
           uiContext: input.uiContext,
         })
-      : { range: normalizeRange(target), resolution: null }
+      : { range: toWorkbookAgentRangeRef(target), resolution: null }
 
   const source = resolveTarget(input.args.source)
   const target = resolveTarget(input.args.target)
@@ -344,20 +335,6 @@ export function resolveTransferRangeRequest(input: {
     sourceResolution: source.resolution,
     targetResolution: target.resolution,
   }
-}
-
-function countRangeRows(range: CellRangeRef): number {
-  const normalized = normalizeRange(range)
-  const start = parseCellAddress(normalized.startAddress, normalized.sheetName)
-  const end = parseCellAddress(normalized.endAddress, normalized.sheetName)
-  return end.row - start.row + 1
-}
-
-function countRangeColumns(range: CellRangeRef): number {
-  const normalized = normalizeRange(range)
-  const start = parseCellAddress(normalized.startAddress, normalized.sheetName)
-  const end = parseCellAddress(normalized.endAddress, normalized.sheetName)
-  return end.col - start.col + 1
 }
 
 export function resolveWriteRangeRequest(input: {
@@ -383,8 +360,8 @@ export function resolveWriteRangeRequest(input: {
   })
   const rowCount = input.args.values.length
   const columnCount = input.args.values.reduce((max, row) => Math.max(max, row.length), 0)
-  const rangeRows = countRangeRows(resolved.range)
-  const rangeColumns = countRangeColumns(resolved.range)
+  const rangeRows = countWorkbookAgentRangeRows(resolved.range)
+  const rangeColumns = countWorkbookAgentRangeColumns(resolved.range)
   if (!(rangeRows === 1 && rangeColumns === 1) && (rangeRows !== rowCount || rangeColumns !== columnCount)) {
     throw new Error(
       `Selector ${resolved.resolution.displayLabel} resolves to ${String(rangeRows)}x${String(rangeColumns)}, but write_range received ${String(rowCount)}x${String(columnCount)} values`,
@@ -409,7 +386,7 @@ export function resolveFormulaRangeRequest(input: {
   const rowCount = formulas.length
   const columnCount = formulas.reduce((max, row) => Math.max(max, row.length), 0)
   if ('range' in input.args) {
-    const range = normalizeRange(input.args.range)
+    const range = toWorkbookAgentRangeRef(input.args.range)
     const start = parseCellAddress(range.startAddress, range.sheetName)
     const end = parseCellAddress(range.endAddress, range.sheetName)
     const rangeRows = end.row - start.row + 1

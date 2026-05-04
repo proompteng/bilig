@@ -7,7 +7,6 @@ import {
   type CodexDynamicToolSpec,
   type WorkbookAgentCommand,
   type WorkbookAgentCommandBundle,
-  type WorkbookAgentExecutionRecord,
 } from '@bilig/agent-api'
 import type { WorkbookCommentThreadSnapshot, WorkbookNoteSnapshot } from '@bilig/protocol'
 import type { WorkbookAgentUiContext } from '@bilig/contracts'
@@ -16,6 +15,7 @@ import type { SessionIdentity } from '../http/session.js'
 import type { ZeroSyncService } from '../zero/service.js'
 import { rangeOrSelectorJsonSchema, rangeOrSelectorSchema, resolveRangeOrSelectorRequest } from './workbook-agent-selector-tooling.js'
 import { stageWorkbookAgentCommandResult } from './workbook-agent-mutation-receipt.js'
+import { stringifyJson, textToolResult, type WorkbookAgentStageCommandResult } from './workbook-agent-tool-shared.js'
 import type { WorkbookRuntime } from '../workbook-runtime/runtime-manager.js'
 
 const listCommentsArgsSchema = z
@@ -151,25 +151,7 @@ export interface WorkbookAgentAnnotationToolContext {
   readonly session: SessionIdentity
   readonly uiContext: WorkbookAgentUiContext | null
   readonly zeroSyncService: ZeroSyncService
-  readonly stageCommand: (command: WorkbookAgentCommand) => Promise<
-    | WorkbookAgentCommandBundle
-    | {
-        readonly bundle: WorkbookAgentCommandBundle
-        readonly executionRecord: WorkbookAgentExecutionRecord | null
-        readonly disposition?: 'queuedForTurnApply' | 'reviewQueued'
-      }
-  >
-}
-
-function stringifyJson(value: unknown): string {
-  return JSON.stringify(value, null, 2)
-}
-
-function textToolResult(text: string, success = true): CodexDynamicToolCallResult {
-  return {
-    success,
-    contentItems: [{ type: 'inputText', text }],
-  }
+  readonly stageCommand: (command: WorkbookAgentCommand) => Promise<WorkbookAgentCommandBundle | WorkbookAgentStageCommandResult>
 }
 
 async function stageCommandResult(

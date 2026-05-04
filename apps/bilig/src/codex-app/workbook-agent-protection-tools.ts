@@ -1,4 +1,3 @@
-import { formatAddress, parseCellAddress } from '@bilig/formula'
 import {
   WORKBOOK_AGENT_TOOL_NAMES,
   normalizeWorkbookAgentToolName,
@@ -7,15 +6,16 @@ import {
   type CodexDynamicToolSpec,
   type WorkbookAgentCommand,
   type WorkbookAgentCommandBundle,
-  type WorkbookAgentExecutionRecord,
 } from '@bilig/agent-api'
-import type { CellRangeRef, WorkbookRangeProtectionSnapshot, WorkbookSheetProtectionSnapshot } from '@bilig/protocol'
+import type { WorkbookRangeProtectionSnapshot, WorkbookSheetProtectionSnapshot } from '@bilig/protocol'
 import type { WorkbookAgentUiContext } from '@bilig/contracts'
 import { z } from 'zod'
 import type { SessionIdentity } from '../http/session.js'
 import type { ZeroSyncService } from '../zero/service.js'
 import { rangeOrSelectorJsonSchema, rangeOrSelectorSchema, resolveRangeOrSelectorRequest } from './workbook-agent-selector-tooling.js'
 import { stageWorkbookAgentCommandResult } from './workbook-agent-mutation-receipt.js'
+import { normalizeWorkbookAgentRange, workbookAgentRangesIntersect } from './workbook-agent-range-chunks.js'
+import { stringifyJson, textToolResult, type WorkbookAgentStageCommandResult } from './workbook-agent-tool-shared.js'
 import type { WorkbookRuntime } from '../workbook-runtime/runtime-manager.js'
 
 const getProtectionStatusArgsSchema = z.object({
@@ -176,25 +176,7 @@ export interface WorkbookAgentProtectionToolContext {
   readonly session: SessionIdentity
   readonly uiContext: WorkbookAgentUiContext | null
   readonly zeroSyncService: ZeroSyncService
-  readonly stageCommand: (command: WorkbookAgentCommand) => Promise<
-    | WorkbookAgentCommandBundle
-    | {
-        readonly bundle: WorkbookAgentCommandBundle
-        readonly executionRecord: WorkbookAgentExecutionRecord | null
-        readonly disposition?: 'queuedForTurnApply' | 'reviewQueued'
-      }
-  >
-}
-
-function stringifyJson(value: unknown): string {
-  return JSON.stringify(value, null, 2)
-}
-
-function textToolResult(text: string, success = true): CodexDynamicToolCallResult {
-  return {
-    success,
-    contentItems: [{ type: 'inputText', text }],
-  }
+  readonly stageCommand: (command: WorkbookAgentCommand) => Promise<WorkbookAgentCommandBundle | WorkbookAgentStageCommandResult>
 }
 
 async function stageCommandResult(
@@ -202,35 +184,6 @@ async function stageCommandResult(
   command: WorkbookAgentCommand,
 ): Promise<CodexDynamicToolCallResult> {
   return await stageWorkbookAgentCommandResult(context, command, command.kind)
-}
-
-function normalizeRangeBounds(range: CellRangeRef): CellRangeRef & {
-  startRow: number
-  endRow: number
-  startCol: number
-  endCol: number
-} {
-  const start = parseCellAddress(range.startAddress, range.sheetName)
-  const end = parseCellAddress(range.endAddress, range.sheetName)
-  const startRow = Math.min(start.row, end.row)
-  const endRow = Math.max(start.row, end.row)
-  const startCol = Math.min(start.col, end.col)
-  const endCol = Math.max(start.col, end.col)
-  return {
-    ...range,
-    startAddress: formatAddress(startRow, startCol),
-    endAddress: formatAddress(endRow, endCol),
-    startRow,
-    endRow,
-    startCol,
-    endCol,
-  }
-}
-
-function rangesIntersect(left: CellRangeRef, right: CellRangeRef): boolean {
-  const a = normalizeRangeBounds(left)
-  const b = normalizeRangeBounds(right)
-  return !(a.sheetName !== b.sheetName || a.endRow < b.startRow || b.endRow < a.startRow || a.endCol < b.startCol || b.endCol < a.startCol)
 }
 
 function listProtectionStatus(runtime: WorkbookRuntime) {
@@ -278,7 +231,7 @@ export async function handleWorkbookAgentProtectionToolCall(
             sheetProtection: runtime.engine.getSheetProtection(resolved.range.sheetName) ?? null,
             rangeProtections: runtime.engine
               .getRangeProtections(resolved.range.sheetName)
-              .filter((entry) => rangesIntersect(entry.range, resolved.range)),
+              .filter((entry) => workbookAgentRangesIntersect(entry.range, resolved.range)),
           }
         }
         return status
@@ -344,9 +297,9 @@ export async function handleWorkbookAgentProtectionToolCall(
           },
           uiContext: context.uiContext,
         })
-        const normalized = normalizeRangeBounds(resolved.range)
+        const normalized = normalizeWorkbookAgentRange(resolved.range)
         const matches = runtime.engine.getRangeProtections(normalized.sheetName).filter((entry) => {
-          const candidate = normalizeRangeBounds(entry.range)
+          const candidate = normalizeWorkbookAgentRange(entry.range)
           return candidate.startAddress === normalized.startAddress && candidate.endAddress === normalized.endAddress
         })
         if (matches.length !== 1) {
