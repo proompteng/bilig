@@ -792,24 +792,21 @@ describe('operation-service internals', () => {
       }),
     ).toBe(0)
 
-    const rangeIsProtected = hookFunction<[{ sheetName: string; startAddress: string; endAddress: string }], boolean>(
-      hooks,
-      'rangeIsProtected',
-    )
-    const sheetHasProtection = hookFunction<[string], boolean>(hooks, 'sheetHasProtection')
-    const assertProtectionAllowsOp = hookFunction<[unknown], void>(hooks, 'assertProtectionAllowsOp')
-
-    expect(sheetHasProtection('Sheet1')).toBe(false)
-    expect(rangeIsProtected({ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' })).toBe(false)
+    expect(protectedSheetHasProtection(engine.state.workbook, 'Sheet1')).toBe(false)
+    expect(protectedRangeIsProtected(engine.state.workbook, { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' })).toBe(false)
     engine.setRangeProtection({ id: 'protect-a1', range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' } })
-    expect(rangeIsProtected({ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' })).toBe(true)
-    expect(() => assertProtectionAllowsOp({ kind: 'setCellValue', sheetName: 'Sheet1', address: 'A1', value: 1 })).toThrow(
+    expect(protectedRangeIsProtected(engine.state.workbook, { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' })).toBe(true)
+    expect(() =>
+      assertProtectionAllowsProtectedOp(engine.state.workbook, { kind: 'setCellValue', sheetName: 'Sheet1', address: 'A1', value: 1 }),
+    ).toThrow(/Workbook protection blocks this change/)
+    engine.setSheetProtection({ sheetName: 'Sheet1' })
+    expect(protectedSheetHasProtection(engine.state.workbook, 'Sheet1')).toBe(true)
+    expect(() => assertProtectionAllowsProtectedOp(engine.state.workbook, { kind: 'deleteSheet', name: 'Sheet1' })).toThrow(
       /Workbook protection blocks this change/,
     )
-    engine.setSheetProtection({ sheetName: 'Sheet1' })
-    expect(sheetHasProtection('Sheet1')).toBe(true)
-    expect(() => assertProtectionAllowsOp({ kind: 'deleteSheet', name: 'Sheet1' })).toThrow(/Workbook protection blocks this change/)
-    expect(() => assertProtectionAllowsOp({ kind: 'setWorkbookMetadata', key: 'owner', value: 'ops' })).not.toThrow()
+    expect(() =>
+      assertProtectionAllowsProtectedOp(engine.state.workbook, { kind: 'setWorkbookMetadata', key: 'owner', value: 'ops' }),
+    ).not.toThrow()
   })
 
   it('evaluates operation protection checks outside the operation service closure', () => {

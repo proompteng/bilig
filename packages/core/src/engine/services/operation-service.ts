@@ -96,19 +96,9 @@ import {
   throwProtectionBlocked,
 } from './operation-change-helpers.js'
 import { isScalarOnlyDefinedNameValue } from './defined-name-value-helpers.js'
-import {
-  entityKeyForOp,
-  noopVersionStore,
-  sheetDeleteBarrierForOp as sheetDeleteBarrierForReplicaOp,
-  shouldApplyOp as shouldApplyReplicaOp,
-  type VersionStore,
-} from './operation-replica-helpers.js'
-import {
-  assertProtectionAllowsOp as assertProtectionAllowsProtectedOp,
-  rangeIsProtected as protectedRangeIsProtected,
-  sheetHasProtection as protectedSheetHasProtection,
-  type OperationProtectionAccess,
-} from './operation-protection-helpers.js'
+import { entityKeyForOp, noopVersionStore, shouldApplyOp as shouldApplyReplicaOp, type VersionStore } from './operation-replica-helpers.js'
+import { assertProtectionAllowsOp as assertProtectionAllowsProtectedOp } from './operation-protection-helpers.js'
+import { createOperationDirectFormulaDeltas } from './operation-direct-formula-deltas.js'
 import { createOperationDirectFormulaValues } from './operation-direct-formula-values.js'
 import { createOperationLookupAccess } from './operation-lookup-access.js'
 import { createOperationLookupPlanner } from './operation-lookup-planner.js'
@@ -438,6 +428,7 @@ export function createEngineOperationService(args: {
 
   const entityVersions: VersionStore = args.state.trackReplicaVersions ? args.state.entityVersions : noopVersionStore
   const sheetDeleteVersions: VersionStore = args.state.trackReplicaVersions ? args.state.sheetDeleteVersions : noopVersionStore
+  const replicaStores = { entityVersions, sheetDeleteVersions }
   const setEntityVersionForOp = (op: EngineOp, order: OpOrder): void => {
     if (!args.state.trackReplicaVersions) {
       return
@@ -456,13 +447,8 @@ export function createEngineOperationService(args: {
     }
     sheetDeleteVersions.set(sheetName, order)
   }
-  const sheetDeleteBarrierForOp = (op: EngineOp): OpOrder | undefined => sheetDeleteBarrierForReplicaOp(op, sheetDeleteVersions)
-  const shouldApplyOp = (op: EngineOp, order: OpOrder): boolean => shouldApplyReplicaOp(op, order, { entityVersions, sheetDeleteVersions })
 
-  const protectionAccess: OperationProtectionAccess = args.state.workbook
-  const sheetHasProtection = (sheetName: string): boolean => protectedSheetHasProtection(protectionAccess, sheetName)
-  const rangeIsProtected = (range: CellRangeRef): boolean => protectedRangeIsProtected(protectionAccess, range)
-  const assertProtectionAllowsOp = (op: EngineOp): void => assertProtectionAllowsProtectedOp(protectionAccess, op)
+  const protectionAccess = args.state.workbook
 
   const {
     readCellValueForLookup,
@@ -1497,6 +1483,17 @@ export function createEngineOperationService(args: {
     return col !== undefined && !hasTrackedColumnDependents(sheetId, col)
   }
 
+  const {
+    applyDirectFormulaNumericDelta,
+    applyTerminalDirectFormulaNumericDeltaAndReturn,
+    tryApplyDirectFormulaDeltas,
+    tryApplyDirectScalarDeltas,
+  } = createOperationDirectFormulaDeltas({
+    state: args.state,
+    canSkipTerminalFormulaColumnVersion,
+    canSkipDirectFormulaColumnVersion,
+  })
+
   const canTrustPhysicalTrackedChangeSplit = (changed: U32, sheetId: number, split: number): boolean => {
     if (split <= 0 || split >= changed.length) {
       return false
@@ -2031,171 +2028,6 @@ export function createEngineOperationService(args: {
       postRecalcDirectFormulaIndices.markDirectRangeInputCovered(request.inputCellIndex)
     }
     return formulaChangedCount
-  }
-
-  const applyDirectFormulaNumericDelta = (cellIndex: number, delta: number): boolean => {
-    const cellStore = args.state.workbook.cellStore
-    if (cellStore.tags[cellIndex] !== ValueTag.Number) {
-      return false
-    }
-    const beforeNumber = cellStore.numbers[cellIndex] ?? 0
-    const nextNumber = beforeNumber + delta
-    cellStore.flags[cellIndex] = (cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)
-    cellStore.numbers[cellIndex] = nextNumber
-    cellStore.stringIds[cellIndex] = 0
-    cellStore.errors[cellIndex] = 0
-    cellStore.versions[cellIndex] = (cellStore.versions[cellIndex] ?? 0) + 1
-    if (cellStore.onSetValue) {
-      cellStore.onSetValue(cellIndex)
-    } else if (!Object.is(beforeNumber, nextNumber)) {
-      args.state.workbook.notifyCellValueWritten(cellIndex)
-    }
-    return true
-  }
-
-  const applyTerminalDirectFormulaNumericDelta = (cellIndex: number, delta: number): boolean => {
-    return applyTerminalDirectFormulaNumericDeltaAndReturn(cellIndex, delta) !== undefined
-  }
-
-  const applyTerminalDirectFormulaNumericDeltaAndReturn = (cellIndex: number, delta: number): number | undefined => {
-    const cellStore = args.state.workbook.cellStore
-    if (cellStore.tags[cellIndex] !== ValueTag.Number) {
-      return undefined
-    }
-    const nextNumber = (cellStore.numbers[cellIndex] ?? 0) + delta
-    const flags = cellStore.flags[cellIndex] ?? 0
-    if ((flags & (CellFlags.SpillChild | CellFlags.PivotOutput)) !== 0) {
-      cellStore.flags[cellIndex] = flags & ~(CellFlags.SpillChild | CellFlags.PivotOutput)
-    }
-    cellStore.numbers[cellIndex] = nextNumber
-    if ((cellStore.stringIds[cellIndex] ?? 0) !== 0) {
-      cellStore.stringIds[cellIndex] = 0
-    }
-    if ((cellStore.errors[cellIndex] ?? 0) !== 0) {
-      cellStore.errors[cellIndex] = 0
-    }
-    cellStore.versions[cellIndex] = (cellStore.versions[cellIndex] ?? 0) + 1
-    return nextNumber
-  }
-
-  const tryApplyDirectFormulaDeltas = (collection: DirectFormulaIndexCollection, captureChanged = true): U32 | undefined => {
-    if (!collection.hasCompleteDeltas()) {
-      return undefined
-    }
-    const cellStore = args.state.workbook.cellStore
-    const changed = captureChanged ? new Uint32Array(collection.size) : EMPTY_CHANGED_CELLS
-    let directAggregateDeltaApplicationCount = 0
-    let directScalarDeltaApplicationCount = 0
-    let canUseTerminalFormulaWrites = true
-    for (let index = 0; index < collection.size; index += 1) {
-      const cellIndex = collection.getCellIndexAt(index)
-      if (
-        ((cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0 ||
-        cellStore.tags[cellIndex] !== ValueTag.Number ||
-        collection.getDeltaAt(index) === undefined
-      ) {
-        return undefined
-      }
-      const formula = args.state.formulas.get(cellIndex)
-      if (formula?.directAggregate !== undefined || formula?.directCriteria !== undefined) {
-        directAggregateDeltaApplicationCount += 1
-      }
-      if (formula?.directScalar !== undefined) {
-        directScalarDeltaApplicationCount += 1
-      }
-      if (canUseTerminalFormulaWrites && !canSkipTerminalFormulaColumnVersion(cellIndex)) {
-        canUseTerminalFormulaWrites = false
-      }
-      if (captureChanged) {
-        changed[index] = cellIndex
-      }
-    }
-    const applyDeltas = (): void => {
-      for (let index = 0; index < collection.size; index += 1) {
-        const cellIndex = captureChanged ? changed[index]! : collection.getCellIndexAt(index)
-        const applied = canUseTerminalFormulaWrites
-          ? applyTerminalDirectFormulaNumericDelta(cellIndex, collection.getDeltaAt(index)!)
-          : applyDirectFormulaNumericDelta(cellIndex, collection.getDeltaAt(index)!)
-        if (!applied) {
-          throw new Error('Failed to apply direct formula delta')
-        }
-      }
-    }
-    if (canUseTerminalFormulaWrites) {
-      applyDeltas()
-    } else {
-      args.state.workbook.withBatchedColumnVersionUpdates(applyDeltas)
-    }
-    if (directAggregateDeltaApplicationCount > 0) {
-      addEngineCounter(args.state.counters, 'directAggregateDeltaApplications', directAggregateDeltaApplicationCount)
-    }
-    if (directScalarDeltaApplicationCount > 0) {
-      addEngineCounter(args.state.counters, 'directScalarDeltaApplications', directScalarDeltaApplicationCount)
-    }
-    return changed
-  }
-
-  const tryApplyDirectScalarDeltas = (collection: DirectFormulaIndexCollection, captureChanged = true): U32 | undefined => {
-    const constantDelta = collection.getConstantScalarDelta()
-    if (constantDelta === undefined && !collection.hasCompleteScalarDeltas()) {
-      return undefined
-    }
-    const cellStore = args.state.workbook.cellStore
-    const changed = captureChanged ? new Uint32Array(collection.size) : EMPTY_CHANGED_CELLS
-    const hasValidatedTerminalWrites = collection.hasValidatedScalarDeltaCells()
-    let canUseTerminalFormulaWrites = hasValidatedTerminalWrites
-    if (!hasValidatedTerminalWrites) {
-      canUseTerminalFormulaWrites = true
-      for (let index = 0; index < collection.size; index += 1) {
-        const cellIndex = collection.getCellIndexAt(index)
-        if (((cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0 || cellStore.tags[cellIndex] !== ValueTag.Number) {
-          return undefined
-        }
-        if (canUseTerminalFormulaWrites && !canSkipDirectFormulaColumnVersion(cellIndex)) {
-          canUseTerminalFormulaWrites = false
-        }
-        if (captureChanged) {
-          changed[index] = cellIndex
-        }
-      }
-    }
-    const applyDeltas = (): void => {
-      for (let index = 0; index < collection.size; index += 1) {
-        const cellIndex = hasValidatedTerminalWrites || !captureChanged ? collection.getCellIndexAt(index) : changed[index]!
-        if (hasValidatedTerminalWrites && captureChanged) {
-          changed[index] = cellIndex
-        }
-        const delta = constantDelta ?? collection.getScalarDeltaAt(index)
-        if (delta === undefined) {
-          throw new Error('Missing direct scalar delta')
-        }
-        if (canUseTerminalFormulaWrites) {
-          if (!applyTerminalDirectFormulaNumericDelta(cellIndex, delta)) {
-            throw new Error('Failed to apply direct scalar delta')
-          }
-        } else {
-          const beforeNumber = cellStore.numbers[cellIndex] ?? 0
-          const nextNumber = beforeNumber + delta
-          cellStore.flags[cellIndex] = (cellStore.flags[cellIndex] ?? 0) & ~(CellFlags.SpillChild | CellFlags.PivotOutput)
-          cellStore.numbers[cellIndex] = nextNumber
-          cellStore.stringIds[cellIndex] = 0
-          cellStore.errors[cellIndex] = 0
-          cellStore.versions[cellIndex] = (cellStore.versions[cellIndex] ?? 0) + 1
-          if (cellStore.onSetValue) {
-            cellStore.onSetValue(cellIndex)
-          } else if (!Object.is(beforeNumber, nextNumber)) {
-            args.state.workbook.notifyCellValueWritten(cellIndex)
-          }
-        }
-      }
-    }
-    if (canUseTerminalFormulaWrites) {
-      applyDeltas()
-    } else {
-      args.state.workbook.withBatchedColumnVersionUpdates(applyDeltas)
-    }
-    addEngineCounter(args.state.counters, 'directScalarDeltaApplications', collection.size)
-    return changed
   }
 
   const tryApplySinglePostRecalcDirectFormula = (
@@ -5230,13 +5062,13 @@ export function createEngineOperationService(args: {
     try {
       if (!isRestore && source !== 'undo' && source !== 'redo') {
         batch.ops.forEach((op) => {
-          assertProtectionAllowsOp(op)
+          assertProtectionAllowsProtectedOp(protectionAccess, op)
         })
       }
       batch.ops.forEach((op, opIndex) => {
         const order = batchOpOrder(batch, opIndex)
         const preparedCellAddress = preparedCellAddressesByOpIndex?.[opIndex] ?? null
-        if (!canSkipOrderChecks && !shouldApplyOp(op, order)) {
+        if (!canSkipOrderChecks && !shouldApplyReplicaOp(op, order, replicaStores)) {
           return
         }
         args.materializeDeferredStructuralFormulaSources()
@@ -7200,7 +7032,6 @@ export function createEngineOperationService(args: {
 
   const __testHooks: Record<string, unknown> = ENGINE_OPERATION_TEST_HOOKS_ENABLED
     ? {
-        assertProtectionAllowsOp,
         canPatchUniformLookupTailWrite,
         canSkipApproximateLookupDirtyMark,
         canSkipApproximateLookupNewNumericColumnWrite,
@@ -7209,7 +7040,6 @@ export function createEngineOperationService(args: {
         collectAffectedDirectRangeDependents,
         collectSingleAffectedDirectRangeDependent,
         directCriteriaMatchesChangedAggregateRow,
-        entityKeyForOp,
         isLocallySortedNumericWrite,
         isLocallySortedTextWrite,
         markAffectedApproximateLookupDependents,
@@ -7219,16 +7049,12 @@ export function createEngineOperationService(args: {
         planExactLookupNumericColumnWrite,
         planSingleApproximateLookupNumericColumnWrite,
         planSingleExactLookupNumericColumnWrite,
-        rangeIsProtected,
         readApproximateNumericValueAtForLookup,
         readApproximateNumericValueForLookup,
         readCellValueAtForLookup,
         readCellValueForLookup,
         readDirectCriteriaOperandValue,
         readExactNumericValueForLookup,
-        sheetDeleteBarrierForOp,
-        sheetHasProtection,
-        shouldApplyOp,
         tryApplyDenseRowPairDirectScalarLiteralBatch,
         tryApplyLookupOnlyNumericColumnLiteralBatch,
         tryApplySingleExistingDirectLiteralMutation,
