@@ -41,10 +41,8 @@
   "scripts": {
     "build": "bun ./scripts/build.ts && tsc -p tsconfig.json"
   },
-  "dependencies": {
-    "@bilig/protocol": "workspace:*"
-  },
   "devDependencies": {
+    "@bilig/protocol": "workspace:*",
     "assemblyscript": "0.28.12"
   },
   "engines": {

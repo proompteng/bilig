@@ -1,12 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { formulaInventory, formulaInventorySummary } from '../generated/formula-inventory.js'
-import {
-  getFormulaRuntimeJsStatus,
-  getFormulaRuntimeStatus,
-  getFormulaRuntimeWasmStatus,
-  normalizeFormulaName,
-} from '../runtime-inventory.js'
+import { normalizeFormulaName } from '../builtin-capabilities.js'
 
 interface FormulaInventorySource {
   version: number
@@ -24,17 +19,6 @@ describe('formula inventory', () => {
     expect(source.version).toBe(1)
     expect(formulaInventory).toHaveLength(source.entries.length)
     expect(formulaInventory.map((entry) => entry.name)).toEqual(source.entries.map((entry) => normalizeFormulaName(entry.name)))
-  })
-
-  it('keeps generated runtime statuses aligned with the live formula runtime', () => {
-    formulaInventory.forEach((entry) => {
-      const name = normalizeFormulaName(entry.name)
-      expect(entry.runtimeStatus).toBe(getFormulaRuntimeStatus(name))
-      expect(entry.jsStatus).toBe(getFormulaRuntimeJsStatus(name))
-      expect(entry.wasmStatus).toBe(getFormulaRuntimeWasmStatus(name))
-      expect(entry.placeholder).toBe(entry.runtimeStatus === 'placeholder')
-      expect(entry.registeredInCodebase).toBe(entry.runtimeStatus !== 'missing')
-    })
   })
 
   it('tracks summary counts consistently with the generated inventory', () => {

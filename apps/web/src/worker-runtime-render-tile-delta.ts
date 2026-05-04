@@ -508,7 +508,7 @@ function packDirtyLocalSpans(spans: readonly DirtyLocalSpan[]): {
   return { dirtyLocalCols, dirtyLocalRows, dirtyMasks }
 }
 
-export function buildRenderTileReplaceMutation(tile: GridRenderTile): RenderTileReplaceMutation {
+function buildRenderTileReplaceMutation(tile: GridRenderTile): RenderTileReplaceMutation {
   return {
     kind: 'tileReplace',
     tileId: tile.tileId,

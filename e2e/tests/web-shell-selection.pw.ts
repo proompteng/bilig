@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto'
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { parseCellAddress } from '@bilig/formula'
 import {
   PRODUCT_COLUMN_WIDTH,
   PRODUCT_HEADER_HEIGHT,

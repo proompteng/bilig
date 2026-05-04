@@ -78,7 +78,7 @@ function stringifyJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
 }
 
-export function textToolResult(text: string, success = true): CodexDynamicToolCallResult {
+function textToolResult(text: string, success = true): CodexDynamicToolCallResult {
   return {
     success,
     contentItems: [{ type: 'inputText', text }],

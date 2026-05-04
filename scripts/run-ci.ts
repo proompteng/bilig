@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 
+import { runCoverageContracts } from './coverage-contracts.ts'
+
 import { spawn, type ChildProcess } from 'node:child_process'
 
 interface CiTask {
@@ -7,6 +9,7 @@ interface CiTask {
   readonly command?: readonly string[]
   readonly steps?: readonly CiTask[]
   readonly env?: Readonly<Record<string, string>>
+  readonly execute?: () => Promise<void>
 }
 
 interface CompletedTask {
@@ -31,10 +34,6 @@ function pnpm(label: string, ...args: string[]): CiTask {
   return { label, command: ['pnpm', ...args] }
 }
 
-function bun(label: string, ...args: string[]): CiTask {
-  return { label, command: ['bun', ...args] }
-}
-
 function git(label: string, ...args: string[]): CiTask {
   return { label, command: ['git', ...args] }
 }
@@ -49,6 +48,15 @@ function withEnv(task: CiTask, env: Readonly<Record<string, string>>): CiTask {
   }
 }
 
+async function runCoverageTask(task: Omit<CiTask, 'command' | 'steps'>): Promise<CompletedTask> {
+  const taskStartedAt = performance.now()
+  log(`start ${task.label}`)
+  await task.execute?.()
+  const elapsedMs = performance.now() - taskStartedAt
+  log(`done ${task.label} in ${formatSeconds(elapsedMs)}`)
+  return { label: task.label, elapsedMs }
+}
+
 async function runTask(task: CiTask, runningChildren: Set<ChildProcess>): Promise<CompletedTask> {
   if (task.steps) {
     const taskStartedAt = performance.now()
@@ -60,6 +68,10 @@ async function runTask(task: CiTask, runningChildren: Set<ChildProcess>): Promis
     const elapsedMs = performance.now() - taskStartedAt
     log(`done ${task.label} in ${formatSeconds(elapsedMs)}`)
     return { label: task.label, elapsedMs }
+  }
+
+  if (task.execute) {
+    return runCoverageTask(task)
   }
 
   if (!task.command) {
@@ -134,7 +146,15 @@ async function runSequential(label: string, tasks: readonly CiTask[]): Promise<C
 
 const coverageLane: CiTask = {
   label: 'coverage + contracts',
-  steps: [pnpm('coverage', 'coverage'), bun('coverage contracts', 'scripts/coverage-contracts.ts')],
+  steps: [
+    pnpm('coverage', 'coverage'),
+    {
+      label: 'coverage contracts',
+      execute: async () => {
+        await runCoverageContracts()
+      },
+    },
+  ],
 }
 const fuzzScript = runDeepGates ? 'test:fuzz:main' : 'test:fuzz'
 const vitestFuzzLane = withEnv(pnpm(runDeepGates ? 'vitest fuzz main' : 'vitest fuzz default', fuzzScript), {

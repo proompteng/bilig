@@ -847,6 +847,10 @@ export const builtinJsSpecialNames = new Set(
   builtinCapabilityManifest.filter((capability) => capability.jsStatus === 'special-js-only').map((capability) => capability.name),
 )
 
+export function normalizeFormulaName(name: string): string {
+  return name.trim().toUpperCase()
+}
+
 export function getBuiltinCapability(name: string): BuiltinCapability | undefined {
-  return builtinCapabilitiesByName.get(name.trim().toUpperCase())
+  return builtinCapabilitiesByName.get(normalizeFormulaName(name))
 }

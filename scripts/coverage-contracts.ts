@@ -1,4 +1,7 @@
 #!/usr/bin/env bun
+import { existsSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
+import { resolve } from 'node:path'
 
 const coveragePath = new URL('../coverage/coverage-final.json', import.meta.url)
 
@@ -9,11 +12,17 @@ const thresholds = [
 ]
 
 const ignoredSuffixes = ['/index.ts', '/snapshot.ts', '/ast.ts']
-const coverage = await Bun.file(coveragePath).json()
 
-function lineStatsForFile(fileCoverage) {
-  const totalLines = new Set()
-  const coveredLines = new Set()
+function lineStatsForFile(fileCoverage: {
+  s?: Record<string, number>
+  statementMap?: Record<string, { start: { line: number }; end: { line: number } }>
+}) {
+  const totalLines = new Set<number>()
+  const coveredLines = new Set<number>()
+
+  if (!fileCoverage.statementMap || !fileCoverage.s) {
+    return { total: 0, covered: 0 }
+  }
 
   for (const [statementId, location] of Object.entries(fileCoverage.statementMap)) {
     const hits = fileCoverage.s[statementId] ?? 0
@@ -31,11 +40,17 @@ function lineStatsForFile(fileCoverage) {
   }
 }
 
-function aggregatePrefix(prefix) {
+function aggregatePrefix(
+  prefix: string,
+  coverageData: Record<
+    string,
+    { s?: Record<string, number>; statementMap?: Record<string, { start: { line: number }; end: { line: number } }> }
+  >,
+) {
   let total = 0
   let covered = 0
 
-  for (const [filePath, fileCoverage] of Object.entries(coverage)) {
+  for (const [filePath, fileCoverage] of Object.entries(coverageData)) {
     if (!filePath.includes(prefix)) {
       continue
     }
@@ -54,16 +69,40 @@ function aggregatePrefix(prefix) {
   return (covered / total) * 100
 }
 
-const results = thresholds.map((threshold) => ({
-  label: threshold.label,
-  linesPct: aggregatePrefix(threshold.prefix),
-  requiredLinesPct: threshold.lines,
-}))
-
-for (const result of results) {
-  if (result.linesPct < result.requiredLinesPct) {
-    throw new Error(`${result.label} line coverage is below target: ${result.linesPct.toFixed(2)}% < ${result.requiredLinesPct}%`)
+function isDirectInvocation(): boolean {
+  const entryPoint = process.argv[1]
+  if (!entryPoint) {
+    return false
+  }
+  try {
+    return pathToFileURL(resolve(entryPoint)).href === import.meta.url
+  } catch {
+    return false
   }
 }
 
-console.log(JSON.stringify({ results }, null, 2))
+export async function runCoverageContracts(path = coveragePath): Promise<void> {
+  if (!existsSync(path instanceof URL ? path : resolve(path))) {
+    throw new Error(`Coverage file not found at ${path instanceof URL ? path.href : path}`)
+  }
+
+  const coverage = await Bun.file(path).json()
+
+  const results = thresholds.map((threshold) => ({
+    label: threshold.label,
+    linesPct: aggregatePrefix(threshold.prefix, coverage),
+    requiredLinesPct: threshold.lines,
+  }))
+
+  for (const result of results) {
+    if (result.linesPct < result.requiredLinesPct) {
+      throw new Error(`${result.label} line coverage is below target: ${result.linesPct.toFixed(2)}% < ${result.requiredLinesPct}%`)
+    }
+  }
+
+  console.log(JSON.stringify({ results }, null, 2))
+}
+
+if (isDirectInvocation()) {
+  await runCoverageContracts()
+}

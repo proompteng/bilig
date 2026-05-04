@@ -8,7 +8,7 @@ import type {
 } from '@bilig/contracts'
 import { z } from 'zod'
 
-export const COMMAND_EXECUTION_TOOL_NAME = 'command_execution'
+const COMMAND_EXECUTION_TOOL_NAME = 'command_execution'
 
 const workbookAgentRenderedRangeSchema = z.object({
   range: z.object({

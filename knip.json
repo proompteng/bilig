@@ -9,6 +9,7 @@
   },
   "workspaces": {
     ".": {
+      "ignoreFiles": ["**/__tests__/**", "**/*.test.ts?(x)", "e2e/**", "scripts/**", "playwright.config.ts", "playwright.prod.config.ts"],
       "entry": ["e2e/tests/prod-smoke.pw.ts", "scripts/bench-worker-runtime.ts"]
     },
     "packages/wasm-kernel": {

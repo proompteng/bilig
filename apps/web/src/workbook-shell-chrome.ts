@@ -59,20 +59,6 @@ export const workbookButtonClass = cva(
   },
 )
 
-export const workbookStatusDotClass = cva('block h-2 w-2 rounded-full', {
-  variants: {
-    tone: {
-      ready: 'bg-[var(--color-mauve-800)]',
-      pending: 'bg-[var(--color-mauve-500)]',
-      danger: 'bg-[#8f2d2d]',
-      neutral: 'bg-[var(--wb-text-subtle)]',
-    },
-  },
-  defaultVariants: {
-    tone: 'neutral',
-  },
-})
-
 export const workbookAlertClass = cva('rounded-[var(--wb-radius-control)] border px-3 py-2 text-[12px] leading-5', {
   variants: {
     tone: {

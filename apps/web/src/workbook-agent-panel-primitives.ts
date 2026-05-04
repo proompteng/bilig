@@ -1,5 +1,8 @@
 import { cva } from 'class-variance-authority'
 
+export const AGENT_COMPOSER_MIN_HEIGHT = 112
+export const AGENT_COMPOSER_MAX_HEIGHT = 224
+
 export const agentPanelFooterClass = cva('border-t border-[var(--wb-border)] bg-[var(--wb-app-bg)] px-3 py-2.5')
 
 export const agentPanelEyebrowTextClass = cva('text-[10px] leading-4 font-medium uppercase tracking-[0.06em] text-[var(--wb-text-subtle)]')

@@ -1,4 +1,4 @@
-import { Fragment, type CSSProperties, useEffect, useLayoutEffect, useRef } from 'react'
+import { Fragment, type CSSProperties, useEffect, useRef } from 'react'
 import { Button } from '@base-ui/react/button'
 import { ScrollArea } from '@base-ui/react/scroll-area'
 import { ArrowUp, Square } from 'lucide-react'
@@ -27,6 +27,8 @@ import {
 } from './workbook-shell-chrome.js'
 import { WorkbookAgentDisclosureRow } from './workbook-agent-panel-disclosure-row.js'
 import {
+  AGENT_COMPOSER_MAX_HEIGHT,
+  AGENT_COMPOSER_MIN_HEIGHT,
   agentPanelBodyMutedTextClass,
   agentPanelBodyTextClass,
   agentPanelComposerFrameClass,
@@ -52,6 +54,7 @@ import { renderToolDisplayName, safeParseToolOutput, StructuredToolOutput, summa
 import { WorkbookAgentMarkdown } from './workbook-agent-markdown.js'
 import { MessageCopyButton } from './workbook-agent-message-copy-button.js'
 import { formatWorkbookCollaboratorLabel } from './workbook-presence-model.js'
+import { useAutoSizingTextarea } from './use-autosizing-textarea.js'
 import { AssistantProgressRow, PreviewRangeList, WorkflowRunRow } from './workbook-agent-panel-history.js'
 
 const toolStatusPillClass = cva(
@@ -84,9 +87,6 @@ const agentPanelThemeStyle: CSSProperties & Record<`--${string}`, string> = {
   '--wb-hover': 'var(--color-mauve-100)',
   '--wb-shadow-sm': '0 1px 2px rgba(15, 23, 42, 0.04)',
 }
-
-const AGENT_COMPOSER_MIN_HEIGHT = 112
-const AGENT_COMPOSER_MAX_HEIGHT = 224
 
 function formatThreadEntryCount(entryCount: number): string {
   return `${entryCount} ${entryCount === 1 ? 'item' : 'items'}`
@@ -687,8 +687,11 @@ export function WorkbookAgentPanel(props: {
   readonly onSubmit: () => void
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  const composerViewportRef = useRef<HTMLDivElement | null>(null)
-  const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const { textareaRef: composerTextareaRef, viewportRef: composerViewportRef } = useAutoSizingTextarea({
+    value: props.draft,
+    minHeight: AGENT_COMPOSER_MIN_HEIGHT,
+    maxHeight: AGENT_COMPOSER_MAX_HEIGHT,
+  })
 
   const optimisticEntries = props.optimisticEntries ?? []
 
@@ -699,20 +702,6 @@ export function WorkbookAgentPanel(props: {
     }
     node.scrollTop = node.scrollHeight
   }, [optimisticEntries.length, props.snapshot?.entries.length, props.snapshot?.status])
-
-  useLayoutEffect(() => {
-    const viewport = composerViewportRef.current
-    const textarea = composerTextareaRef.current
-    if (!viewport || !textarea) {
-      return
-    }
-
-    textarea.style.height = '0px'
-    const measuredHeight = Math.max(textarea.scrollHeight, AGENT_COMPOSER_MIN_HEIGHT)
-    textarea.style.height = `${measuredHeight}px`
-    viewport.style.height = `${Math.min(measuredHeight, AGENT_COMPOSER_MAX_HEIGHT)}px`
-    viewport.scrollTop = viewport.scrollHeight
-  }, [props.draft])
 
   const isRunning = props.snapshot?.status === 'inProgress'
   const visibleEntries = [...optimisticEntries, ...(props.snapshot?.entries ?? [])].filter((entry) => !isHiddenTimelineEntry(entry))

@@ -154,6 +154,52 @@ describe('WorkbookAgentPanel message copy', () => {
     })
   })
 
+  it('falls back to legacy clipboard behavior when navigator.clipboard.writeText throws', async () => {
+    const message = 'Fallback copy path should still work'
+    const writeText = vi.fn(async (_text: string) => {
+      throw new Error('clipboard write denied')
+    })
+    const execCommand = vi.fn((_command: string) => true)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText,
+      } satisfies Pick<Clipboard, 'writeText'>,
+    })
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: execCommand,
+    })
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<WorkbookAgentPanel {...createPanelProps(createSnapshot(createAssistantEntry(message)))} />)
+    })
+
+    const copyButton = host.querySelector("[data-testid='workbook-agent-message-copy-assistant-copy-1']")
+    expect(copyButton instanceof HTMLButtonElement).toBe(true)
+
+    await act(async () => {
+      if (!(copyButton instanceof HTMLButtonElement)) {
+        throw new Error('Assistant copy button not found')
+      }
+      copyButton.click()
+      await Promise.resolve()
+    })
+
+    expect(writeText).toHaveBeenCalledWith(message)
+    expect(execCommand).toHaveBeenCalledWith('copy')
+    expect(copyButton?.getAttribute('aria-label')).toBe('Copied assistant message')
+    expect(copyButton?.getAttribute('data-copy-state')).toBe('copied')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
   it('places the user copy action below the message card instead of inside the message', async () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
@@ -171,6 +217,129 @@ describe('WorkbookAgentPanel message copy', () => {
     expect(messageCard?.contains(copyButton)).toBe(false)
     expect(actions?.contains(copyButton)).toBe(true)
     expect(actions?.previousElementSibling).toBe(messageCard)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('reports failure when copy is unavailable', async () => {
+    const message = 'Copy will fail on all paths'
+    const execCommand = vi.fn((_command: string) => false)
+    const writeText = vi.fn(async (_text: string) => {
+      throw new Error('denied')
+    })
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText,
+      } satisfies Pick<Clipboard, 'writeText'>,
+    })
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: execCommand,
+    })
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<WorkbookAgentPanel {...createPanelProps(createSnapshot(createAssistantEntry(message)))} />)
+    })
+
+    const copyButton = host.querySelector("[data-testid='workbook-agent-message-copy-assistant-copy-1']")
+    expect(copyButton instanceof HTMLButtonElement).toBe(true)
+
+    await act(async () => {
+      if (!(copyButton instanceof HTMLButtonElement)) {
+        throw new Error('Assistant copy button not found')
+      }
+      copyButton.click()
+      await Promise.resolve()
+    })
+
+    expect(execCommand).toHaveBeenCalledWith('copy')
+    expect(copyButton?.getAttribute('aria-label')).toBe('Copy failed. Retry assistant message')
+    expect(copyButton?.getAttribute('data-copy-state')).toBe('failed')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('uses legacy fallback when Clipboard API is missing', async () => {
+    const message = 'No modern clipboard API is available'
+    const execCommand = vi.fn((_command: string) => true)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: undefined,
+    })
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: execCommand,
+    })
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<WorkbookAgentPanel {...createPanelProps(createSnapshot(createAssistantEntry(message)))} />)
+    })
+
+    const copyButton = host.querySelector("[data-testid='workbook-agent-message-copy-assistant-copy-1']")
+    expect(copyButton instanceof HTMLButtonElement).toBe(true)
+
+    await act(async () => {
+      if (!(copyButton instanceof HTMLButtonElement)) {
+        throw new Error('Assistant copy button not found')
+      }
+      copyButton.click()
+      await Promise.resolve()
+    })
+
+    expect(execCommand).toHaveBeenCalledWith('copy')
+    expect(copyButton?.getAttribute('aria-label')).toBe('Copied assistant message')
+    expect(copyButton?.getAttribute('data-copy-state')).toBe('copied')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('reports failure when legacy fallback is unavailable', async () => {
+    const message = 'Neither modern clipboard nor legacy copy is available'
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: undefined,
+    })
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: undefined,
+    })
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<WorkbookAgentPanel {...createPanelProps(createSnapshot(createAssistantEntry(message)))} />)
+    })
+
+    const copyButton = host.querySelector("[data-testid='workbook-agent-message-copy-assistant-copy-1']")
+    expect(copyButton instanceof HTMLButtonElement).toBe(true)
+
+    await act(async () => {
+      if (!(copyButton instanceof HTMLButtonElement)) {
+        throw new Error('Assistant copy button not found')
+      }
+      copyButton.click()
+      await Promise.resolve()
+    })
+
+    expect(copyButton?.getAttribute('aria-label')).toBe('Copy failed. Retry assistant message')
+    expect(copyButton?.getAttribute('data-copy-state')).toBe('failed')
 
     await act(async () => {
       root.unmount()

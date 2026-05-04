@@ -5,8 +5,12 @@ import { cn } from './cn.js'
 
 async function copyTextToClipboard(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
-    return
+    try {
+      await navigator.clipboard.writeText(text)
+      return
+    } catch {
+      // fallback below
+    }
   }
 
   const textarea = document.createElement('textarea')
@@ -23,15 +27,19 @@ async function copyTextToClipboard(text: string): Promise<void> {
   const previousRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null
 
   document.body.appendChild(textarea)
-  textarea.select()
-  textarea.setSelectionRange(0, textarea.value.length)
-  const copied = document.execCommand('copy')
-  textarea.remove()
+  let copied = false
+  try {
+    textarea.select()
+    textarea.setSelectionRange(0, textarea.value.length)
+    copied = typeof document.execCommand === 'function' ? document.execCommand('copy') : false
+  } finally {
+    textarea.remove()
 
-  if (selection) {
-    selection.removeAllRanges()
-    if (previousRange) {
-      selection.addRange(previousRange)
+    if (selection) {
+      selection.removeAllRanges()
+      if (previousRange) {
+        selection.addRange(previousRange)
+      }
     }
   }
 

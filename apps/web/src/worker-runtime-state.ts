@@ -46,7 +46,7 @@ export function listOrderedSheetNames(workbook: WorkbookLike): string[] {
   return listOrderedSheets(workbook).map((sheet) => sheet.name)
 }
 
-export function listOrderedSheets(workbook: WorkbookLike): WorkbookRuntimeSheetSnapshot[] {
+function listOrderedSheets(workbook: WorkbookLike): WorkbookRuntimeSheetSnapshot[] {
   return [...workbook.sheetsByName.values()]
     .toSorted((left, right) => left.order - right.order)
     .map((sheet, index) => ({

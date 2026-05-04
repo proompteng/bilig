@@ -27,10 +27,6 @@ export function buildRenderedAxisState(entries: readonly WorkbookAxisEntrySnapsh
   }
 }
 
-export function resolveRevision(value: number | undefined): number {
-  return Number.isInteger(value) && value !== undefined && value >= 0 ? value : 0
-}
-
 export function buildFreezeVersion(freezeRows: number, freezeCols: number): number {
   return mixRevisionInteger(mixRevisionInteger(2_166_136_261, freezeRows), freezeCols)
 }

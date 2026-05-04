@@ -53,9 +53,6 @@ export const workbookHeaderActionButtonClass = cva(
 export const workbookHeaderSurfaceClass =
   'inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] shadow-[var(--wb-shadow-sm)]'
 
-export const workbookHeaderCountClass =
-  'inline-flex min-w-4 items-center justify-center rounded-full bg-[var(--wb-muted)] px-1.5 text-[10px] font-semibold leading-none text-[var(--wb-text-muted)]'
-
 interface WorkbookHeaderStatusChipProps {
   modeLabel: string
   syncLabel: string
