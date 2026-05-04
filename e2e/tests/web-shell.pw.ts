@@ -7,6 +7,7 @@ import {
   PRODUCT_ROW_HEIGHT,
   clickProductCell,
   clickGridRightEdge,
+  createTestDocumentId,
   dragProductBodySelection,
   dragProductColumnResize,
   getProductFillHandleDragPoints,
@@ -14,6 +15,7 @@ import {
   getProductColumnWidth,
   gotoWorkbookShell,
   remoteSyncEnabled,
+  waitForProductColumnWidthChange,
   waitForWorkbookReady,
 } from './web-shell-helpers.js'
 const fuzzBrowserEnabled = process.env['BILIG_FUZZ_BROWSER'] === '1'
@@ -494,7 +496,7 @@ test('web app keeps selected text cells visible when clicked', async ({ page }) 
 })
 
 test('web app supports fill-handle propagation', async ({ page }) => {
-  await gotoWorkbookShell(page, `/?document=fill-handle-propagation-${Date.now()}`)
+  await gotoWorkbookShell(page, `/?document=${encodeURIComponent(createTestDocumentId('fill-handle-propagation'))}`)
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
@@ -517,7 +519,7 @@ test('web app supports fill-handle propagation', async ({ page }) => {
 
 test('web app enables undo and redo for a normal edit', async ({ page }) => {
   test.skip(!remoteSyncEnabled, 'requires authoritative remote sync history')
-  const documentId = `playwright-undo-redo-basic-${Date.now()}`
+  const documentId = createTestDocumentId('playwright-undo-redo-basic')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
   await expect(page.getByTestId('status-sync')).toHaveText('Saved', { timeout: 30_000 })
@@ -554,7 +556,7 @@ test('web app enables undo and redo for a normal edit', async ({ page }) => {
 
 test('web app preserves redo across a longer undo history', async ({ page }) => {
   test.skip(!remoteSyncEnabled, 'requires authoritative remote sync history')
-  const documentId = `playwright-undo-redo-long-${Date.now()}`
+  const documentId = createTestDocumentId('playwright-undo-redo-long')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
   await expect(page.getByTestId('status-sync')).toHaveText('Saved', { timeout: 30_000 })
@@ -613,7 +615,7 @@ test('web app preserves redo across a longer undo history', async ({ page }) => 
 
 test('web app clears redo after a fresh edit branches history', async ({ page }) => {
   test.skip(!remoteSyncEnabled, 'requires authoritative remote sync history')
-  const documentId = `playwright-undo-redo-branch-${Date.now()}`
+  const documentId = createTestDocumentId('playwright-undo-redo-branch')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
   await expect(page.getByTestId('status-sync')).toHaveText('Saved', { timeout: 30_000 })
@@ -640,7 +642,7 @@ test('web app clears redo after a fresh edit branches history', async ({ page })
 })
 
 test('web app previews and fills rightward autofill like Sheets', async ({ page }) => {
-  await gotoWorkbookShell(page, `/?document=rightward-autofill-${Date.now()}`)
+  await gotoWorkbookShell(page, `/?document=${encodeURIComponent(createTestDocumentId('rightward-autofill'))}`)
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
@@ -785,17 +787,18 @@ test.describe('@clipboard-global web app clipboard flows', () => {
 })
 
 test('web app supports product-shell column resize', async ({ page }) => {
-  const documentId = `playwright-product-shell-column-resize-${Date.now()}`
+  const documentId = createTestDocumentId('playwright-product-shell-column-resize')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
 
   const baselineWidth = await getProductColumnWidth(page, 0)
+  const committedWidthPromise = waitForProductColumnWidthChange(page, 0, baselineWidth)
   await dragProductColumnResize(page, 0, 48)
-  await expect.poll(() => getProductColumnWidth(page, 0)).toBeGreaterThan(baselineWidth + 30)
+  await expect(committedWidthPromise).resolves.toBeGreaterThan(baselineWidth + 30)
 })
 
 test('web app shows #VALUE! for invalid formulas', async ({ page }) => {
-  const documentId = `playwright-invalid-formula-${Date.now()}`
+  const documentId = createTestDocumentId('playwright-invalid-formula')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
 
@@ -840,7 +843,7 @@ test('web app commits in-cell string edits when clicking away', async ({ page })
 })
 
 test('web app drags a selected range by its border with a grab cursor', async ({ page }) => {
-  await gotoWorkbookShell(page, `/?document=range-border-drag-${Date.now()}`)
+  await gotoWorkbookShell(page, `/?document=${encodeURIComponent(createTestDocumentId('range-border-drag'))}`)
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
@@ -887,7 +890,7 @@ test('web app drags a selected range by its border with a grab cursor', async ({
 })
 
 test('web app moves selected cell content from the content drag lane', async ({ page }) => {
-  await gotoWorkbookShell(page, `/?document=range-content-drag-${Date.now()}`)
+  await gotoWorkbookShell(page, `/?document=${encodeURIComponent(createTestDocumentId('range-content-drag'))}`)
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
@@ -1038,7 +1041,7 @@ test('web app clears the selected cell with Delete after name-box navigation', a
 })
 
 test('web app clears the querystring-selected cell with Delete after page load', async ({ page }) => {
-  const documentId = `playwright-delete-querystring-selection-${Date.now()}`
+  const documentId = createTestDocumentId('playwright-delete-querystring-selection')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
 

@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test'
+import { createTestDocumentId } from './web-shell-helpers.js'
 
 test('production smoke loads an isolated workbook and commits edits', async ({ page }) => {
-  const documentId = `prod-smoke-${Date.now()}`
-  const response = await page.goto(`/?document=${documentId}`, {
+  const documentId = createTestDocumentId('prod-smoke')
+  const response = await page.goto(`/?document=${encodeURIComponent(documentId)}`, {
     waitUntil: 'domcontentloaded',
   })
   expect(response?.ok()).toBeTruthy()

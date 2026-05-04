@@ -9,6 +9,7 @@ import {
   clickProductBodyOffset,
   clickProductCell,
   clickProductCellUpperHalf,
+  createTestDocumentId,
   dragProductBodySelection,
   dragProductColumnResize,
   dragProductHeaderSelection,
@@ -79,7 +80,7 @@ test('web app supports row and column header drag selection', async ({ page }) =
 })
 
 test('web app deletes the selected row range from the header context menu', async ({ page }) => {
-  const documentId = `playwright-delete-selected-rows-${Date.now()}`
+  const documentId = createTestDocumentId('playwright-delete-selected-rows')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
 
@@ -102,7 +103,7 @@ test('web app deletes the selected row range from the header context menu', asyn
 })
 
 test('web app deletes the selected column range from the header context menu', async ({ page }) => {
-  const documentId = `playwright-delete-selected-columns-${Date.now()}`
+  const documentId = createTestDocumentId('playwright-delete-selected-columns')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
 
@@ -125,7 +126,7 @@ test('web app deletes the selected column range from the header context menu', a
 })
 
 test('web app clears the selected row range with Delete after header selection', async ({ page }) => {
-  const documentId = `playwright-clear-selected-rows-${Date.now()}`
+  const documentId = createTestDocumentId('playwright-clear-selected-rows')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
 
@@ -149,7 +150,7 @@ test('web app clears the selected row range with Delete after header selection',
 })
 
 test('web app clears the selected column range with Delete after header selection', async ({ page }) => {
-  const documentId = `playwright-clear-selected-columns-${Date.now()}`
+  const documentId = createTestDocumentId('playwright-clear-selected-columns')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
 
@@ -182,7 +183,7 @@ test('web app supports rectangular drag selection', async ({ page }) => {
 
 test('web app keeps moved range data visible when border drag reaches the grid edge', async ({ page }) => {
   await page.setViewportSize({ width: 960, height: 420 })
-  await page.goto(`/?document=range-border-edge-drag-${Date.now()}`)
+  await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('range-border-edge-drag'))}`)
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
@@ -251,7 +252,7 @@ test('web app keeps the active focus inside the sheet grid when clicking a cell'
 })
 
 test('@browser-perf web app keeps normal cell selection out of resident scene invalidation', async ({ page }) => {
-  await page.goto(`/?document=normal-selection-no-resident-refresh-${Date.now()}`)
+  await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('normal-selection-no-resident-refresh'))}`)
   await waitForWorkbookReady(page)
   await settleWorkbookScrollPerf(page, 80)
   await startWorkbookScrollPerf(page, 'normal-selection-no-resident-refresh', { primeRenderer: false })
@@ -283,7 +284,7 @@ test('@browser-perf web app keeps normal cell selection out of resident scene in
 })
 
 test('@browser-perf web app keeps range-move preview out of resident scene invalidation', async ({ page }) => {
-  await page.goto(`/?document=range-move-no-resident-refresh-${Date.now()}`)
+  await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('range-move-no-resident-refresh'))}`)
   await waitForWorkbookReady(page)
 
   const nameBox = page.getByTestId('name-box')
@@ -336,7 +337,7 @@ test('web app maps clicks in the upper half of a cell to that same visible cell'
 })
 
 test('web app supports column resize without breaking hit testing', async ({ page }) => {
-  const documentId = `playwright-column-resize-hit-test-${Date.now()}`
+  const documentId = createTestDocumentId('playwright-column-resize-hit-test')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
 
@@ -350,7 +351,7 @@ test('web app supports column resize without breaking hit testing', async ({ pag
 })
 
 test('web app supports column edge double-click autofit', async ({ page }) => {
-  const documentId = `playwright-column-autofit-${Date.now()}`
+  const documentId = createTestDocumentId('playwright-column-autofit')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
 
@@ -382,7 +383,7 @@ test('web app supports column edge double-click autofit', async ({ page }) => {
 })
 
 test('web app hit-tests typegpu geometry after hiding rows and columns', async ({ page }) => {
-  const documentId = `playwright-hidden-axis-hit-test-${Date.now()}`
+  const documentId = createTestDocumentId('playwright-hidden-axis-hit-test')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
 

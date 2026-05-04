@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { writeFile } from 'node:fs/promises'
 import { expect, type Locator, type Page, type TestInfo } from '@playwright/test'
 
@@ -16,6 +16,10 @@ interface ToolbarSyncAction {
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+export function createTestDocumentId(prefix: string): string {
+  return `${prefix}-${randomUUID()}`
 }
 
 function parseDimensionOverrides(raw: string | null): Record<string, number> {
@@ -38,6 +42,73 @@ export async function getProductColumnWidth(page: Page, columnIndex: number) {
   const defaultWidth = Number(defaultSizeRaw ?? String(PRODUCT_COLUMN_WIDTH))
   const overrides = parseDimensionOverrides(overridesRaw)
   return overrides[String(columnIndex)] ?? defaultWidth
+}
+
+export async function waitForProductColumnWidthChange(
+  page: Page,
+  columnIndex: number,
+  previousWidth: number,
+  timeoutMs = 10_000,
+): Promise<number> {
+  return await page.evaluate(
+    ({ columnIndex: targetColumnIndex, defaultColumnWidth, previousWidth: initialWidth, timeoutMs: waitTimeoutMs }) =>
+      new Promise<number>((resolve, reject) => {
+        const grid = document.querySelector('[data-testid="sheet-grid"]')
+        if (!grid) {
+          reject(new Error('sheet grid is not attached'))
+          return
+        }
+
+        const readColumnWidth = () => {
+          const defaultWidth = Number(grid.getAttribute('data-default-column-width') ?? String(defaultColumnWidth))
+          const overridesRaw = grid.getAttribute('data-column-width-overrides')
+          if (!overridesRaw) {
+            return defaultWidth
+          }
+          const parsed: unknown = JSON.parse(overridesRaw)
+          if (typeof parsed !== 'object' || parsed === null) {
+            return defaultWidth
+          }
+          const override = Object.entries(parsed).find(
+            (entry): entry is [string, number] => entry[0] === String(targetColumnIndex) && typeof entry[1] === 'number',
+          )
+          return override?.[1] ?? defaultWidth
+        }
+
+        let timeout: ReturnType<typeof window.setTimeout> | null = null
+        const observer = new MutationObserver(() => {
+          const nextWidth = readColumnWidth()
+          if (nextWidth === initialWidth) {
+            return
+          }
+          observer.disconnect()
+          if (timeout !== null) {
+            window.clearTimeout(timeout)
+          }
+          resolve(nextWidth)
+        })
+
+        const currentWidth = readColumnWidth()
+        if (currentWidth !== initialWidth) {
+          resolve(currentWidth)
+          return
+        }
+
+        timeout = window.setTimeout(() => {
+          observer.disconnect()
+          reject(
+            new Error(
+              `column ${String(targetColumnIndex)} width did not change from ${String(initialWidth)} within ${String(waitTimeoutMs)}ms`,
+            ),
+          )
+        }, waitTimeoutMs)
+        observer.observe(grid, {
+          attributeFilter: ['data-column-width-overrides', 'data-default-column-width'],
+          attributes: true,
+        })
+      }),
+    { columnIndex, defaultColumnWidth: PRODUCT_COLUMN_WIDTH, previousWidth, timeoutMs },
+  )
 }
 
 export async function getProductRowHeight(page: Page, rowIndex: number) {

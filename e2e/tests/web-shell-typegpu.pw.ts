@@ -3,6 +3,7 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { ISOLATED_WORKBOOK_PANE_RENDERER_PATH } from '../../apps/web/src/root-route.js'
 import {
   clickProductCell,
+  createTestDocumentId,
   gotoWorkbookShell,
   pickToolbarPresetColor,
   PRODUCT_COLUMN_WIDTH,
@@ -140,7 +141,7 @@ test('@browser-webgpu @browser-serial main workbook shell grid renders and updat
 
   await page.setViewportSize({ width: 960, height: 720 })
   await installTypeGpuReadbackHarness(page)
-  await gotoWorkbookShell(page, `/?document=typegpu-grid-updates-${Date.now()}`)
+  await gotoWorkbookShell(page, `/?document=${encodeURIComponent(createTestDocumentId('typegpu-grid-updates'))}`)
   await waitForWorkbookReady(page)
   await waitForTypeGpuRenderer(page)
   await page.waitForFunction(
@@ -246,7 +247,10 @@ test('@browser-webgpu @browser-perf main workbook shell keeps resident typegpu c
   test.slow()
   await page.setViewportSize({ width: 960, height: 720 })
   await installTypeGpuReadbackHarness(page)
-  await gotoWorkbookShell(page, `/?document=typegpu-selection-no-flash-${Date.now()}&benchmarkCorpus=wide-mixed-250k`)
+  await gotoWorkbookShell(
+    page,
+    `/?document=${encodeURIComponent(createTestDocumentId('typegpu-selection-no-flash'))}&benchmarkCorpus=wide-mixed-250k`,
+  )
   await waitForWorkbookReady(page)
   await waitForBenchmarkCorpus(page)
   await waitForTypeGpuRenderer(page)
@@ -659,7 +663,7 @@ test('@browser-webgpu @browser-deep main workbook shell refreshes typegpu reside
 
   await page.setViewportSize({ width: 960, height: 720 })
   await installTypeGpuReadbackHarness(page)
-  await gotoWorkbookShell(page, `/?document=typegpu-style-refresh-${Date.now()}`)
+  await gotoWorkbookShell(page, `/?document=${encodeURIComponent(createTestDocumentId('typegpu-style-refresh'))}`)
   await waitForWorkbookReady(page)
   await waitForTypeGpuRenderer(page)
   await page.waitForFunction(

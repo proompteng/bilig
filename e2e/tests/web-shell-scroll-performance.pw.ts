@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import {
   clickProductCell,
+  createTestDocumentId,
   dragProductColumnResize,
   dragProductRowResize,
   getProductColumnLeft,
@@ -599,7 +600,7 @@ test.describe('@browser-perf web app scroll performance', () => {
 
   test('keeps shell surfaces quiet and coalesces visible collaborator patch churn while browsing', async ({ page }, testInfo) => {
     test.skip(!remoteSyncEnabled, 'requires Zero-backed browser sync')
-    const documentId = `playwright-zero-scroll-patches-${Date.now()}`
+    const documentId = createTestDocumentId('playwright-zero-scroll-patches')
     const mirrorPage = await page.context().newPage()
     const viewport = page.viewportSize()
     if (viewport) {
