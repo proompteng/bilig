@@ -187,24 +187,19 @@ test('web app keeps moved range data visible when border drag reaches the grid e
   await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('range-border-edge-drag'))}`)
   await waitForWorkbookReady(page)
 
-  const nameBox = page.getByTestId('name-box')
   const formulaInput = page.getByTestId('formula-input')
 
-  await nameBox.fill('B2')
-  await nameBox.press('Enter')
+  await selectAddress(page, 'B2')
   await formulaInput.fill('left')
   await formulaInput.press('Enter')
 
-  await nameBox.fill('C2')
-  await nameBox.press('Enter')
+  await selectAddress(page, 'C2')
   await formulaInput.fill('right')
   await formulaInput.press('Enter')
 
-  await nameBox.fill('B2')
-  await nameBox.press('Enter')
+  await selectAddress(page, 'B2')
   await expect(formulaInput).toHaveValue('left')
-  await nameBox.fill('C2')
-  await nameBox.press('Enter')
+  await selectAddress(page, 'C2')
   await expect(formulaInput).toHaveValue('right')
 
   await dragProductBodySelection(page, 1, 1, 2, 1)
@@ -220,16 +215,13 @@ test('web app keeps moved range data visible when border drag reaches the grid e
   const targetRow = Number(match?.[1] ?? 0)
   expect(targetRow).toBeGreaterThan(2)
 
-  await nameBox.fill(`B${targetRow}`)
-  await nameBox.press('Enter')
+  await selectAddress(page, `B${targetRow}`)
   await expect(formulaInput).toHaveValue('left')
 
-  await nameBox.fill(`C${targetRow}`)
-  await nameBox.press('Enter')
+  await selectAddress(page, `C${targetRow}`)
   await expect(formulaInput).toHaveValue('right')
 
-  await nameBox.fill('B2')
-  await nameBox.press('Enter')
+  await selectAddress(page, 'B2')
   await expect(formulaInput).toHaveValue('')
 })
 
