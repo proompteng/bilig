@@ -407,6 +407,32 @@ function gridSelectionSnapshotToRangeRef(selection: GridSelectionSnapshot): Cell
   }
 }
 
+function createPasteTargetRange(sheetName: string, startAddr: string, values: readonly (readonly string[])[]): CellRangeRef | null {
+  const rowCount = values.length
+  const colCount = values.reduce((max, row) => Math.max(max, row.length), 0)
+  if (rowCount === 0 || colCount === 0) {
+    return null
+  }
+  const start = parseCellAddress(startAddr, sheetName)
+  return {
+    sheetName,
+    startAddress: startAddr,
+    endAddress: formatAddress(start.row + rowCount - 1, start.col + colCount - 1),
+  }
+}
+
+function combineRollbacks(...rollbacks: Array<(() => void) | null | undefined>): (() => void) | null {
+  const activeRollbacks = rollbacks.filter((rollback): rollback is () => void => typeof rollback === 'function')
+  if (activeRollbacks.length === 0) {
+    return null
+  }
+  return () => {
+    for (let index = activeRollbacks.length - 1; index >= 0; index -= 1) {
+      activeRollbacks[index]?.()
+    }
+  }
+}
+
 export function useWorkbookSelectionActions(input: {
   writesAllowed: boolean
   selectionRangeRef: MutableRefObject<CellRangeRef>
@@ -417,6 +443,8 @@ export function useWorkbookSelectionActions(input: {
   invokeMutation: (method: WorkbookMutationMethod, ...args: unknown[]) => Promise<void>
   applyParsedInput: (sheetName: string, address: string, parsed: ParsedEditorInput) => Promise<void>
   viewportStore?: OptimisticViewportStore | null | undefined
+  supersedeOptimisticCellSeedsForRange?: ((range: CellRangeRef) => (() => void) | null) | undefined
+  replaceOptimisticCellSeed?: ((sheetName: string, address: string, seed: string) => (() => void) | null) | undefined
   onPasteApplied?: () => void
   resetEditorConflictTracking: (nextSelection?: WorkerRuntimeSelection) => void
   reportRuntimeError: (error: unknown) => void
@@ -432,12 +460,14 @@ export function useWorkbookSelectionActions(input: {
     invokeMutation,
     onPasteApplied,
     reportRuntimeError,
+    replaceOptimisticCellSeed,
     resetEditorConflictTracking,
     selectionRangeRef,
     selectionRef,
     setEditingMode,
     setEditorSelectionBehavior,
     setEditorValue,
+    supersedeOptimisticCellSeedsForRange,
     viewportStore,
     writesAllowed,
   } = input
@@ -474,6 +504,10 @@ export function useWorkbookSelectionActions(input: {
           : method === 'copyRange'
             ? applyOptimisticCopyRange(viewportStore ?? null, source, target)
             : applyOptimisticFillRange(viewportStore ?? null, source, target)
+      const rollbackOptimisticSeeds = combineRollbacks(
+        method === 'moveRange' ? supersedeOptimisticCellSeedsForRange?.(source) : null,
+        supersedeOptimisticCellSeedsForRange?.(target),
+      )
       void (async () => {
         try {
           await invokeMutation(method, source, target)
@@ -481,11 +515,21 @@ export function useWorkbookSelectionActions(input: {
           resetEditorConflictTracking()
         } catch (error) {
           rollbackOptimisticRange?.()
+          rollbackOptimisticSeeds?.()
           reportRuntimeError(error)
         }
       })()
     },
-    [invokeMutation, reportRuntimeError, resetEditingState, resetEditorConflictTracking, selectionRef, viewportStore, writesAllowed],
+    [
+      invokeMutation,
+      reportRuntimeError,
+      resetEditingState,
+      resetEditorConflictTracking,
+      selectionRef,
+      supersedeOptimisticCellSeedsForRange,
+      viewportStore,
+      writesAllowed,
+    ],
   )
 
   const clearSelectedRange = useCallback(
@@ -495,6 +539,11 @@ export function useWorkbookSelectionActions(input: {
       }
       const range = targetSelectionSnapshot ? gridSelectionSnapshotToRangeRef(targetSelectionSnapshot) : selectionRangeRef.current
       const rollbackOptimisticClear = applyOptimisticClearRange(viewportStore ?? null, range)
+      const activeAddress = targetSelectionSnapshot?.address ?? selectionRef.current.address
+      const rollbackOptimisticSeeds = combineRollbacks(
+        supersedeOptimisticCellSeedsForRange?.(range),
+        replaceOptimisticCellSeed?.(range.sheetName, activeAddress, ''),
+      )
       resetEditingState('')
       resetEditorConflictTracking()
       void (async () => {
@@ -502,11 +551,23 @@ export function useWorkbookSelectionActions(input: {
           await invokeMutation('clearRange', range)
         } catch (error) {
           rollbackOptimisticClear?.()
+          rollbackOptimisticSeeds?.()
           reportRuntimeError(error)
         }
       })()
     },
-    [invokeMutation, reportRuntimeError, resetEditingState, resetEditorConflictTracking, selectionRangeRef, viewportStore, writesAllowed],
+    [
+      invokeMutation,
+      reportRuntimeError,
+      resetEditingState,
+      resetEditorConflictTracking,
+      selectionRangeRef,
+      selectionRef,
+      replaceOptimisticCellSeed,
+      supersedeOptimisticCellSeedsForRange,
+      viewportStore,
+      writesAllowed,
+    ],
   )
 
   const clearSelectedCell = useCallback(
@@ -542,19 +603,31 @@ export function useWorkbookSelectionActions(input: {
         return
       }
       const rollbackOptimisticPaste = applyOptimisticCommitOps(viewportStore ?? null, ops)
+      const targetRange = createPasteTargetRange(sheetName, startAddr, values)
+      const rollbackOptimisticSeeds = targetRange ? (supersedeOptimisticCellSeedsForRange?.(targetRange) ?? null) : null
       void (async () => {
         try {
           await invokeMutation('renderCommit', ops)
           onPasteApplied?.()
         } catch (error) {
           rollbackOptimisticPaste?.()
+          rollbackOptimisticSeeds?.()
           reportRuntimeError(error)
         }
       })()
       resetEditingState()
       resetEditorConflictTracking()
     },
-    [invokeMutation, onPasteApplied, reportRuntimeError, resetEditingState, resetEditorConflictTracking, viewportStore, writesAllowed],
+    [
+      invokeMutation,
+      onPasteApplied,
+      reportRuntimeError,
+      resetEditingState,
+      resetEditorConflictTracking,
+      supersedeOptimisticCellSeedsForRange,
+      viewportStore,
+      writesAllowed,
+    ],
   )
 
   const fillSelectionRange = useCallback(

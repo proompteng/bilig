@@ -40,6 +40,8 @@ function createEngine(cells: Record<string, string>): GridEngineLike {
 
 function KeyboardHandlerHarness(props: {
   beginSelectedEdit: ReturnType<typeof vi.fn>
+  getGridSelection?: () => ReturnType<typeof createGridSelection>
+  onClearCell?: ReturnType<typeof vi.fn>
   setGridSelection: ReturnType<typeof vi.fn>
   onSelectionChange: ReturnType<typeof vi.fn>
 }) {
@@ -55,11 +57,12 @@ function KeyboardHandlerHarness(props: {
       getCell: () => ({ value: { tag: ValueTag.String } }),
     },
     gridSelection: createGridSelection(1, 1),
+    getGridSelection: props.getGridSelection,
     hostRef,
     internalClipboardRef,
     isEditingCell: false,
     onCancelEdit: vi.fn(),
-    onClearCell: vi.fn(),
+    onClearCell: props.onClearCell ?? vi.fn(),
     onCommitEdit: vi.fn(),
     onEditorChange: vi.fn(),
     onSelectionChange: props.onSelectionChange,
@@ -475,6 +478,52 @@ describe('gridClipboardKeyboardController', () => {
     expect(beginSelectedEdit).not.toHaveBeenCalled()
     expect(setGridSelection).not.toHaveBeenCalled()
     expect(onSelectionChange).not.toHaveBeenCalled()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  test('reads the latest runtime selection when routing global clear keys', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    document.body.innerHTML = ''
+    const beginSelectedEdit = vi.fn()
+    const onClearCell = vi.fn()
+    const setGridSelection = vi.fn()
+    const onSelectionChange = vi.fn()
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        createElement(KeyboardHandlerHarness, {
+          beginSelectedEdit,
+          getGridSelection: () => createGridSelection(2, 3),
+          onClearCell,
+          onSelectionChange,
+          setGridSelection,
+        }),
+      )
+    })
+
+    const event = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Delete',
+    })
+
+    await act(async () => {
+      window.dispatchEvent(event)
+    })
+
+    expect(onClearCell).toHaveBeenCalledWith({
+      address: 'C4',
+      kind: 'cell',
+      range: { startAddress: 'C4', endAddress: 'C4' },
+      sheetName: 'Sheet1',
+    })
 
     await act(async () => {
       root.unmount()

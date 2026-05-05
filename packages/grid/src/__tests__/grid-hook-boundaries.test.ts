@@ -5,7 +5,7 @@ import { resolveRequiresLiveViewportState } from '../useGridSelectionState.js'
 import { resolveResizeGuideColumn, resolveResizeGuideRow } from '../useGridResizeState.js'
 import { sameBounds } from '../useGridOverlayState.js'
 import { visibleRegionFromCamera } from '../useGridCameraState.js'
-import { resolveGridDrawDprBucket, resolveShouldUseRemoteRenderTileSource } from '../useWorkbookGridDrawRuntime.js'
+import { resolveGridDrawDprBucket, resolveShouldUseRemoteRenderTileSource } from '../useWorkbookGridPaneRenderRuntime.js'
 
 describe('grid hook boundary helpers', () => {
   test('resolves live viewport, resize, overlay, and camera helpers', () => {
@@ -83,11 +83,15 @@ describe('grid hook boundary helpers', () => {
     )
     const paneRuntimeHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridPaneRenderRuntime.ts', import.meta.url)), 'utf8')
     const interactionsHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridInteractions.ts', import.meta.url)), 'utf8')
+    const pointerHandlersHookSource = readFileSync(
+      fileURLToPath(new URL('../useWorkbookGridHostPointerHandlers.ts', import.meta.url)),
+      'utf8',
+    )
     const interactionOverlayHookSource = readFileSync(
       fileURLToPath(new URL('../useWorkbookInteractionOverlayState.ts', import.meta.url)),
       'utf8',
     )
-    const drawRuntimeHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridDrawRuntime.ts', import.meta.url)), 'utf8')
+    const drawRuntimeHookPath = fileURLToPath(new URL('../useWorkbookGridDrawRuntime.ts', import.meta.url))
     const paneHookPath = fileURLToPath(new URL('../useWorkbookGridRenderPanes.ts', import.meta.url))
     const tilePaneHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookRenderTilePanes.ts', import.meta.url)), 'utf8')
     const viewportRuntimeHookSource = readFileSync(fileURLToPath(new URL('../useWorkbookGridViewportRuntime.ts', import.meta.url)), 'utf8')
@@ -140,14 +144,15 @@ describe('grid hook boundary helpers', () => {
     expect(renderPipelineRuntimeHookSource).toContain('useWorkbookGridPaneRenderRuntime')
     expect(renderPipelineRuntimeHookSource).toContain('...interactionState')
     expect(renderPipelineRuntimeHookSource).toContain('...paneState')
-    expect(paneRuntimeHookSource).toContain('useWorkbookGridDrawRuntime')
-    expect(drawRuntimeHookSource).toContain('useWorkbookGridViewportRuntime')
-    expect(drawRuntimeHookSource).not.toContain('useWorkbookGridRenderPanes')
-    expect(drawRuntimeHookSource).toContain('devicePixelRatio')
-    expect(drawRuntimeHookSource).toContain('shouldUseRemoteRenderTileSource')
-    expect(drawRuntimeHookSource).toContain('useWorkbookHeaderPanes')
-    expect(drawRuntimeHookSource).toContain('useWorkbookRenderTilePanes')
-    expect(drawRuntimeHookSource).toContain('useWorkbookHeaderCellBounds')
+    expect(existsSync(drawRuntimeHookPath)).toBe(false)
+    expect(paneRuntimeHookSource).not.toContain('useWorkbookGridDrawRuntime')
+    expect(paneRuntimeHookSource).toContain('useWorkbookGridViewportRuntime')
+    expect(paneRuntimeHookSource).not.toContain('useWorkbookGridRenderPanes')
+    expect(paneRuntimeHookSource).toContain('devicePixelRatio')
+    expect(paneRuntimeHookSource).toContain('shouldUseRemoteRenderTileSource')
+    expect(paneRuntimeHookSource).toContain('useWorkbookHeaderPanes')
+    expect(paneRuntimeHookSource).toContain('useWorkbookRenderTilePanes')
+    expect(paneRuntimeHookSource).toContain('useWorkbookHeaderCellBounds')
     expect(existsSync(paneHookPath)).toBe(false)
     expect(viewportRuntimeHookSource).toContain('useWorkbookViewportResidencyState')
     expect(viewportRuntimeHookSource).toContain('useWorkbookViewportScrollRuntime')
@@ -199,6 +204,16 @@ describe('grid hook boundary helpers', () => {
     expect(interactionsHookSource).not.toContain('new GridInputController')
     expect(interactionsHookSource).not.toContain('inputController.disconnect')
     expect(interactionsHookSource).toContain('gridRuntimeHost.input')
+    expect(interactionsHookSource).toContain('useWorkbookGridHostPointerHandlers')
+    expect(interactionsHookSource).not.toContain('handleGridPointerDown({')
+    expect(interactionsHookSource).not.toContain('handleGridPointerMove({')
+    expect(interactionsHookSource).not.toContain('handleGridPointerUp({')
+    expect(interactionsHookSource).not.toContain('beginWorkbookGridFillHandleDrag({')
+    expect(interactionsHookSource).not.toContain('handleWorkbookGridResizePointerDown({')
+    expect(interactionsHookSource.split('\n').length).toBeLessThan(760)
+    expect(pointerHandlersHookSource).toContain('handleGridPointerDown')
+    expect(pointerHandlersHookSource).toContain('handleWorkbookGridResizePointerDown')
+    expect(pointerHandlersHookSource).toContain('beginWorkbookGridFillHandleDrag')
     expect(interactionsHookSource).not.toContain('useRef')
     expect(interactionsHookSource).not.toContain('useRef<')
     expect(viewportScrollRuntimeHookSource).not.toContain('new WorkbookViewportScrollRuntime')

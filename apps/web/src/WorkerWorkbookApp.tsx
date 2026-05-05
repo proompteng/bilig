@@ -310,6 +310,7 @@ function WorkerWorkbookAppInner({
                 onToggleBooleanCell={app.toggleBooleanCell}
                 onRenameSheet={app.writesAllowed ? app.renameSheet : undefined}
                 onSelectionChange={app.handleSelectionChange}
+                onExternalSelectionSync={app.acknowledgeExternalSelectionSync}
                 onSelectSheet={(sheetName) => app.selectAddress(sheetName, 'A1')}
                 resolvedValue={app.resolvedValue}
                 selectedAddr={app.selection.address}

@@ -17,6 +17,7 @@ export function useWorkbookGridKeyboardHandler(input: {
   editorValue: string
   engine: { getCell(sheetName: string, address: string): { value: { tag: ValueTag } } }
   gridSelection: GridSelection
+  getGridSelection?: (() => GridSelection) | undefined
   hostRef: MutableRefObject<HTMLDivElement | null>
   internalClipboardRef: MutableRefObject<InternalClipboardRange | null>
   isEditingCell: boolean
@@ -36,17 +37,18 @@ export function useWorkbookGridKeyboardHandler(input: {
 }) {
   const handleGridKey = useCallback(
     (event: GridKeyboardEventLike) => {
+      const gridSelection = input.getGridSelection?.() ?? input.gridSelection
+      const selectedCell = gridSelection.current?.cell ?? [input.selectedCell.col, input.selectedCell.row]
       dispatchGridKey({
         applyClipboardValues: input.applyClipboardValues,
         beginSelectedEdit: input.beginSelectedEdit,
         captureInternalClipboardSelection: input.captureInternalClipboardSelection,
         editorValue: input.editorValue,
         event,
-        gridSelection: input.gridSelection,
+        gridSelection,
         internalClipboardRef: input.internalClipboardRef,
         isSelectedCellBoolean: () =>
-          input.engine.getCell(input.sheetName, formatAddress(input.selectedCell.row, input.selectedCell.col)).value.tag ===
-          ValueTag.Boolean,
+          input.engine.getCell(input.sheetName, formatAddress(selectedCell[1], selectedCell[0])).value.tag === ValueTag.Boolean,
         isEditingCell: input.isEditingCell,
         onCancelEdit: input.onCancelEdit,
         onClearCell: input.onClearCell,
@@ -56,7 +58,7 @@ export function useWorkbookGridKeyboardHandler(input: {
         pendingClipboardCopySequenceRef: input.pendingClipboardCopySequenceRef,
         pendingKeyboardPasteSequenceRef: input.pendingKeyboardPasteSequenceRef,
         pendingTypeSeedRef: input.pendingTypeSeedRef,
-        selectedCell: input.selectedCell,
+        selectedCell: { col: selectedCell[0], row: selectedCell[1] },
         setGridSelection: input.setGridSelection,
         sheetName: input.sheetName,
         suppressNextNativePasteRef: input.suppressNextNativePasteRef,

@@ -1,5 +1,6 @@
 import React, { Profiler, useCallback, useEffect, useRef, useState } from 'react'
 import type { CellSnapshot, Viewport, WorkbookDefinedNameSnapshot } from '@bilig/protocol'
+import { flushSync } from 'react-dom'
 import { FormulaBar } from './FormulaBar.js'
 import type { GridEngineLike } from './grid-engine.js'
 import { formatSelectionSnapshotSummary } from './gridSelection.js'
@@ -31,6 +32,7 @@ interface WorkbookViewProps {
   onRenameSheet?: ((currentName: string, nextName: string) => void) | undefined
   onDeleteSheet?: ((sheetName: string) => void) | undefined
   onSelectionChange(this: void, selection: GridSelectionSnapshot): void
+  onExternalSelectionSync?: ((selection: GridSelectionSnapshot) => void) | undefined
   onAddressCommit(this: void, addr: string): boolean
   getCellEditorSeed?: ((sheetName: string, address: string) => string | undefined) | undefined
   onBeginEdit(this: void, seed?: string, selectionBehavior?: EditSelectionBehavior): void
@@ -198,6 +200,7 @@ export function WorkbookView({
   onRenameSheet,
   onDeleteSheet,
   onSelectionChange,
+  onExternalSelectionSync,
   onAddressCommit,
   getCellEditorSeed,
   onBeginEdit,
@@ -249,6 +252,7 @@ export function WorkbookView({
   const [selectionLabel, setSelectionLabel] = useState(formatSelectionSnapshotSummary(selectionSnapshot))
   const [viewportWidth, setViewportWidth] = useState(getViewportWidth)
   const [gridFocusRequestToken, setGridFocusRequestToken] = useState(0)
+  const gridFocusApiRef = useRef<(() => void) | null>(null)
   const resolvedSidePanelWidth = resolveSidePanelWidth(sidePanelWidth ?? 344, viewportWidth)
 
   useEffect(() => {
@@ -319,7 +323,10 @@ export function WorkbookView({
             onBeginEdit={onBeginFormulaEdit}
             onAddressCommit={onAddressCommit}
             onAddressCommitSuccess={() => {
-              setGridFocusRequestToken((current) => current + 1)
+              flushSync(() => {
+                setGridFocusRequestToken((current) => current + 1)
+              })
+              gridFocusApiRef.current?.()
             }}
             onCancel={onCancelEdit}
             onChange={onEditorChange}
@@ -348,6 +355,7 @@ export function WorkbookView({
               onToggleBooleanCell={onToggleBooleanCell}
               onSelectionLabelChange={handleSelectionLabelChange}
               onSelectionChange={onSelectionChange}
+              onExternalSelectionSync={onExternalSelectionSync}
               sheetId={sheetId}
               sheetOrdinal={sheetOrdinal}
               renderTileSource={renderTileSource}
@@ -369,6 +377,7 @@ export function WorkbookView({
               onAutofitColumn={onAutofitColumn}
               onVisibleViewportChange={onVisibleViewportChange}
               previewRanges={previewRanges}
+              focusApiRef={gridFocusApiRef}
               focusRequestToken={gridFocusRequestToken}
               restoreViewportTarget={restoreViewportTarget}
               resolvedValue={resolvedValue}

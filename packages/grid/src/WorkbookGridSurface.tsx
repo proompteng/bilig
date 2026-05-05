@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { parseCellAddress } from '@bilig/formula'
 import { CellEditorOverlay } from './CellEditorOverlay.js'
 import { GridFillHandleOverlay } from './GridFillHandleOverlay.js'
@@ -71,6 +71,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     onDeleteColumns: props.onDeleteColumns,
     onSetFreezePane: props.onSetFreezePane,
     onSelectionChange: props.onSelectionChange,
+    onExternalSelectionSync: props.onExternalSelectionSync,
     onSelectionLabelChange: props.onSelectionLabelChange,
     selectionSnapshot: props.selectionSnapshot,
     onToggleBooleanCell: props.onToggleBooleanCell,
@@ -80,7 +81,19 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
   })
   const focusGrid = renderState.focusGrid
   const lastFocusRequestTokenRef = useRef(props.focusRequestToken)
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const focusApiRef = props.focusApiRef
+    if (!focusApiRef) {
+      return
+    }
+    focusApiRef.current = focusGrid
+    return () => {
+      if (focusApiRef.current === focusGrid) {
+        focusApiRef.current = null
+      }
+    }
+  }, [focusGrid, props.focusApiRef])
+  useLayoutEffect(() => {
     if (props.focusRequestToken === undefined || props.focusRequestToken === lastFocusRequestTokenRef.current) {
       return
     }

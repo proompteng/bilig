@@ -6,23 +6,10 @@ import {
   type ClipboardEvent as ReactClipboardEvent,
   type FocusEvent as ReactFocusEvent,
   type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
-  type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { formatAddress } from '@bilig/formula'
 import { flushSync } from 'react-dom'
-import { resolveSelectionContentMoveCandidateCell, resolveSelectionMoveAnchorCell } from './gridRangeMove.js'
-import { sameGridHoverState, type GridHoverState } from './gridHover.js'
-import {
-  finishGridResize,
-  handleGridBodyDoubleClick,
-  handleGridPointerDown,
-  handleGridPointerMove,
-  handleGridPointerUp,
-  startGridResize,
-} from './gridInteractionController.js'
 import { resetGridPointerInteraction } from './gridInteractionState.js'
-import { resolveWorkbookGridHoverState } from './gridInteractionHoverState.js'
 import {
   applyGridClipboardValues,
   captureGridClipboardSelection,
@@ -36,30 +23,15 @@ import {
   selectEntireWorkbookSheet,
   toggleWorkbookGridBooleanCell,
 } from './gridInteractionCommands.js'
-import {
-  applyWorkbookGridColumnAutofit,
-  beginWorkbookGridColumnResize,
-  beginWorkbookGridRowResize,
-  handleWorkbookGridColumnAutofitAtPointer,
-  handleWorkbookGridResizePointerDown,
-} from './gridResizeInteractions.js'
-import { beginWorkbookGridRangeMove } from './gridRangeMoveInteractions.js'
-import { beginWorkbookGridFillHandleDrag } from './gridFillHandleInteractions.js'
 import { handleWorkbookGridKeyDownCapture } from './gridKeyboardCapture.js'
 import type { GridSelection, Item } from './gridTypes.js'
 import type { EditMovement, EditSelectionBehavior, WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
 import { useWorkbookGridContextMenu } from './useWorkbookGridContextMenu.js'
+import { useWorkbookGridHostPointerHandlers } from './useWorkbookGridHostPointerHandlers.js'
 import { useWorkbookGridKeyboardHandler } from './useWorkbookGridKeyboardHandler.js'
 import type { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
 import { useWorkbookGridPointerResolvers } from './useWorkbookGridPointerResolvers.js'
 import { useWorkbookGridSelectionSummary } from './useWorkbookGridSelectionSummary.js'
-
-const DEFAULT_GRID_HOVER_STATE: GridHoverState = { cell: null, header: null, cursor: 'default' }
-const INTERIOR_RANGE_MOVE_START_THRESHOLD_PX = 4
-
-function resetGridHoverState(current: GridHoverState): GridHoverState {
-  return sameGridHoverState(current, DEFAULT_GRID_HOVER_STATE) ? current : DEFAULT_GRID_HOVER_STATE
-}
 
 export function useWorkbookGridInteractions(
   input: Pick<
@@ -88,6 +60,7 @@ export function useWorkbookGridInteractions(
     | 'onDeleteColumns'
     | 'onSetFreezePane'
     | 'onSelectionChange'
+    | 'onExternalSelectionSync'
     | 'onSelectionLabelChange'
     | 'onToggleBooleanCell'
     | 'selectionSnapshot'
@@ -124,6 +97,7 @@ export function useWorkbookGridInteractions(
     onDeleteColumns,
     onSetFreezePane,
     onSelectionChange,
+    onExternalSelectionSync,
     onSelectionLabelChange,
     onToggleBooleanCell,
     selectionSnapshot,
@@ -133,39 +107,20 @@ export function useWorkbookGridInteractions(
     renderState,
   } = input
   const {
-    activeResizeColumn,
-    activeResizeRow,
-    clearColumnResizePreview,
-    clearRowResizePreview,
-    columnWidths,
     commitColumnWidth,
-    commitRowHeight,
-    computeAutofitColumnWidth,
     fillPreviewRange,
     focusGrid,
     getCellScreenBounds,
     getVisibleRegion,
-    getPreviewColumnWidth,
-    getPreviewRowHeight,
     gridMetrics,
     gridSelection,
     gridRuntimeHost,
     hostRef,
     isFillHandleDragging,
-    isRangeMoveDragging,
     previewColumnWidth,
-    previewRowHeight,
-    rowHeights,
     selectedCell,
     selectionRange,
-    setActiveHeaderDrag,
-    setActiveResizeColumn,
-    setActiveResizeRow,
-    setFillPreviewRange,
     setGridSelection,
-    setHoverState,
-    setIsFillHandleDragging,
-    setIsRangeMoveDragging,
   } = renderState
   const activeSelectionCell = useMemo<Item>(
     () => gridSelection.current?.cell ?? [selectedCell.col, selectedCell.row],
@@ -174,37 +129,19 @@ export function useWorkbookGridInteractions(
   const inputController = gridRuntimeHost.input
   const interactionState = inputController.interactionState
   const {
-    dragAnchorCellRef,
-    dragDidMoveRef,
-    dragHeaderSelectionRef,
-    dragPointerCellRef,
-    fillHandleCleanupRef,
-    fillPreviewRangeRef,
     internalClipboardRef,
-    lastBodyClickCellRef,
-    lastResizeHandleActivationRef,
-    interiorRangeMoveCandidateRef,
     pendingClipboardCopySequenceRef,
     pendingKeyboardPasteSequenceRef,
     pendingTypeSeedRef,
-    postDragSelectionExpiryRef,
-    rangeMoveCleanupRef,
-    resizeCleanupRef,
     suppressNextNativePasteRef,
   } = inputController
-  const {
-    resolveColumnResizeTarget: resolveColumnResizeTargetAtPointer,
-    resolveRowResizeTarget: resolveRowResizeTargetAtPointer,
-    resolveHeaderSelectionAtPointer,
-    resolveHeaderSelectionForPointerDrag,
-    resolvePointerCell,
-    resolvePointerGeometry,
-  } = useWorkbookGridPointerResolvers({
+  const pointerResolvers = useWorkbookGridPointerResolvers({
     hostRef,
     selectedCell: { col: activeSelectionCell[0], row: activeSelectionCell[1] },
     gridSelection,
     getGeometrySnapshot: renderState.getLiveGeometrySnapshot,
   })
+  const { resolveHeaderSelectionAtPointer } = pointerResolvers
   useEffect(() => {
     inputController.syncFillPreviewRange(fillPreviewRange)
   }, [fillPreviewRange, inputController])
@@ -217,7 +154,8 @@ export function useWorkbookGridInteractions(
       })
       return nextSelection ?? current
     })
-  }, [inputController, selectionSnapshot, setGridSelection, sheetName])
+    onExternalSelectionSync?.(selectionSnapshot)
+  }, [inputController, onExternalSelectionSync, selectionSnapshot, setGridSelection, sheetName])
   useEffect(() => {
     inputController.syncEditingState({
       focusGrid,
@@ -299,9 +237,7 @@ export function useWorkbookGridInteractions(
   const allowsRangeMove = Boolean(
     selectionRange && gridSelection.columns.length === 0 && gridSelection.rows.length === 0 && !fillPreviewRange && !isFillHandleDragging,
   )
-  const isFillHandleTarget = useCallback((target: EventTarget | null): boolean => {
-    return target instanceof Element && target.closest("[data-grid-fill-handle='true']") !== null
-  }, [])
+  const getCurrentGridSelection = useCallback(() => gridRuntimeHost.interactionOverlays.snapshot().gridSelection, [gridRuntimeHost])
   const applyClipboardValues = useCallback(
     (target: Item, values: readonly (readonly string[])[]) => {
       applyGridClipboardValues({
@@ -318,11 +254,11 @@ export function useWorkbookGridInteractions(
   const captureInternalClipboardSelection = useCallback(() => {
     return captureGridClipboardSelection({
       engine,
-      gridSelection,
+      gridSelection: getCurrentGridSelection(),
       internalClipboardRef,
       sheetName,
     })
-  }, [engine, gridSelection, internalClipboardRef, sheetName])
+  }, [engine, getCurrentGridSelection, internalClipboardRef, sheetName])
   const { handleGridKey } = useWorkbookGridKeyboardHandler({
     applyClipboardValues,
     beginSelectedEdit,
@@ -330,6 +266,7 @@ export function useWorkbookGridInteractions(
     editorValue,
     engine,
     gridSelection,
+    getGridSelection: getCurrentGridSelection,
     hostRef,
     internalClipboardRef,
     isEditingCell,
@@ -381,241 +318,6 @@ export function useWorkbookGridInteractions(
     })
   }, [contextMenu, getCellScreenBounds, gridMetrics, gridSelection, hostRef, activeSelectionCell])
 
-  const handleFillHandlePointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLButtonElement>) => {
-      if (!selectionRange || event.button !== 0) {
-        return
-      }
-      event.preventDefault()
-      event.stopPropagation()
-      focusGrid()
-      beginWorkbookGridFillHandleDrag({
-        cleanupRef: fillHandleCleanupRef,
-        listenerTarget: window,
-        pointerId: event.pointerId,
-        sourceRange: selectionRange,
-        gridSelection,
-        resolvePointerCell,
-        setGridSelection,
-        onSelectionChange: emitSelectionChange,
-        onFillRange,
-        setFillPreviewRange,
-        setFillPreviewRangeRef: (range) => {
-          fillPreviewRangeRef.current = range
-        },
-        setIsFillHandleDragging,
-        resetHoverState: () => {
-          setHoverState(resetGridHoverState)
-        },
-      })
-    },
-    [
-      focusGrid,
-      gridSelection,
-      emitSelectionChange,
-      onFillRange,
-      fillHandleCleanupRef,
-      fillPreviewRangeRef,
-      resolvePointerCell,
-      selectionRange,
-      setFillPreviewRange,
-      setGridSelection,
-      setHoverState,
-      setIsFillHandleDragging,
-    ],
-  )
-
-  const refreshHoverState = useCallback(
-    (clientX: number, clientY: number, buttons: number) => {
-      const next = resolveWorkbookGridHoverState({
-        clientX,
-        clientY,
-        buttons,
-        isFillHandleDragging,
-        isRangeMoveDragging,
-        hasFillPreviewRange: fillPreviewRangeRef.current !== null,
-        allowsRangeMove,
-        selectionRange,
-        getCellScreenBounds,
-        getVisibleRegion,
-        resolvePointerGeometry,
-        columnWidths,
-        gridMetrics,
-        resolveColumnResizeTargetAtPointer,
-        resolveHeaderSelectionAtPointer,
-        resolvePointerCell,
-        resolveRowResizeTargetAtPointer,
-        rowHeights,
-      })
-      setHoverState((current) => (sameGridHoverState(current, next) ? current : next))
-    },
-    [
-      allowsRangeMove,
-      columnWidths,
-      getCellScreenBounds,
-      gridMetrics,
-      isFillHandleDragging,
-      isRangeMoveDragging,
-      fillPreviewRangeRef,
-      resolveColumnResizeTargetAtPointer,
-      resolveHeaderSelectionAtPointer,
-      resolveRowResizeTargetAtPointer,
-      rowHeights,
-      resolvePointerCell,
-      resolvePointerGeometry,
-      selectionRange,
-      setHoverState,
-      getVisibleRegion,
-    ],
-  )
-
-  const beginRangeMove = useCallback(
-    (pointerCell: Item) => {
-      if (!selectionRange) {
-        return
-      }
-      if (isEditingCell) {
-        commitActiveEdit()
-      }
-      focusGrid()
-      beginWorkbookGridRangeMove({
-        cleanupRef: rangeMoveCleanupRef,
-        listenerTarget: window,
-        sourceRange: selectionRange,
-        pointerCell,
-        resolvePointerCell,
-        setGridSelection,
-        onSelectionChange: emitSelectionChange,
-        onMoveRange,
-        refreshHoverState,
-        scrollViewport: renderState.scrollViewportRef.current,
-        setIsRangeMoveDragging,
-        setHoverState,
-      })
-    },
-    [
-      commitActiveEdit,
-      focusGrid,
-      isEditingCell,
-      onMoveRange,
-      emitSelectionChange,
-      rangeMoveCleanupRef,
-      renderState.scrollViewportRef,
-      refreshHoverState,
-      resolvePointerCell,
-      selectionRange,
-      setGridSelection,
-      setHoverState,
-      setIsRangeMoveDragging,
-    ],
-  )
-
-  const clearInteriorRangeMoveCandidate = useCallback(() => {
-    interiorRangeMoveCandidateRef.current = null
-  }, [interiorRangeMoveCandidateRef])
-
-  const maybeBeginInteriorRangeMove = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>): boolean => {
-      const candidate = interiorRangeMoveCandidateRef.current
-      if (!candidate || candidate.pointerId !== event.pointerId || (event.buttons & 1) !== 1) {
-        return false
-      }
-      const deltaX = event.clientX - candidate.startClientX
-      const deltaY = event.clientY - candidate.startClientY
-      if (Math.hypot(deltaX, deltaY) < INTERIOR_RANGE_MOVE_START_THRESHOLD_PX) {
-        event.preventDefault()
-        event.stopPropagation()
-        return true
-      }
-
-      event.preventDefault()
-      event.stopPropagation()
-      clearInteriorRangeMoveCandidate()
-      resetGridPointerInteraction(interactionState, {
-        clearIgnoreNextPointerSelection: true,
-      })
-      setActiveResizeColumn(null)
-      setActiveResizeRow(null)
-      setActiveHeaderDrag(null)
-      beginRangeMove(candidate.pointerCell)
-      return true
-    },
-    [
-      beginRangeMove,
-      clearInteriorRangeMoveCandidate,
-      interactionState,
-      interiorRangeMoveCandidateRef,
-      setActiveHeaderDrag,
-      setActiveResizeColumn,
-      setActiveResizeRow,
-    ],
-  )
-
-  const beginColumnResize = useCallback(
-    (columnIndex: number, startClientX: number) => {
-      beginWorkbookGridColumnResize({
-        cleanupRef: resizeCleanupRef,
-        listenerTarget: window,
-        startResize: () => startGridResize(interactionState),
-        finishResize: () => finishGridResize(interactionState),
-        refreshHoverState,
-        setActiveResizeColumn,
-        previewColumnWidth,
-        getPreviewColumnWidth,
-        clearColumnResizePreview,
-        commitColumnWidth,
-        columnIndex,
-        startClientX,
-        columnWidths,
-        defaultColumnWidth: gridMetrics.columnWidth,
-      })
-    },
-    [
-      clearColumnResizePreview,
-      columnWidths,
-      commitColumnWidth,
-      getPreviewColumnWidth,
-      gridMetrics.columnWidth,
-      interactionState,
-      previewColumnWidth,
-      resizeCleanupRef,
-      refreshHoverState,
-      setActiveResizeColumn,
-    ],
-  )
-
-  const beginRowResize = useCallback(
-    (rowIndex: number, startClientY: number) => {
-      beginWorkbookGridRowResize({
-        cleanupRef: resizeCleanupRef,
-        listenerTarget: window,
-        startResize: () => startGridResize(interactionState),
-        finishResize: () => finishGridResize(interactionState),
-        refreshHoverState,
-        setActiveResizeRow,
-        previewRowHeight,
-        getPreviewRowHeight,
-        clearRowResizePreview,
-        commitRowHeight,
-        rowIndex,
-        startClientY,
-        rowHeights,
-        defaultRowHeight: gridMetrics.rowHeight,
-      })
-    },
-    [
-      clearRowResizePreview,
-      commitRowHeight,
-      getPreviewRowHeight,
-      gridMetrics.rowHeight,
-      interactionState,
-      previewRowHeight,
-      resizeCleanupRef,
-      refreshHoverState,
-      rowHeights,
-      setActiveResizeRow,
-    ],
-  )
   const applyAutofitWidth = useCallback(
     (columnIndex: number, width: number) => {
       flushSync(() => {
@@ -631,42 +333,23 @@ export function useWorkbookGridInteractions(
     },
     [commitColumnWidth, onAutofitColumn, previewColumnWidth],
   )
-  const applyColumnAutofitAtPointer = useCallback(
-    (event: ReactMouseEvent<HTMLDivElement> | ReactPointerEvent<HTMLDivElement>, visibleRegion = getVisibleRegion()): boolean => {
-      return handleWorkbookGridColumnAutofitAtPointer({
-        event,
-        visibleRegion,
-        pointerGeometry: resolvePointerGeometry(visibleRegion),
-        columnWidths,
-        defaultColumnWidth: gridMetrics.columnWidth,
-        isEditingCell,
-        commitActiveEdit,
-        computeAutofitColumnWidth,
-        applyAutofitWidth,
-        finishResize: () => finishGridResize(interactionState),
-        resetPointerInteraction: () => {
-          resetGridPointerInteraction(interactionState, {
-            clearIgnoreNextPointerSelection: true,
-          })
-        },
-        setActiveResizeColumn,
-        resolveColumnResizeTargetAtPointer,
-      })
-    },
-    [
-      applyAutofitWidth,
-      columnWidths,
-      commitActiveEdit,
-      computeAutofitColumnWidth,
-      getVisibleRegion,
-      gridMetrics.columnWidth,
-      interactionState,
-      isEditingCell,
-      resolveColumnResizeTargetAtPointer,
-      resolvePointerGeometry,
-      setActiveResizeColumn,
-    ],
-  )
+  const pointerHandlers = useWorkbookGridHostPointerHandlers({
+    activeSelectionCell,
+    allowsRangeMove,
+    applyAutofitWidth,
+    beginEditAt,
+    commitActiveEdit,
+    editorValue,
+    emitSelectionChange,
+    inputController,
+    isEditingCell,
+    onAutofitColumn,
+    onFillRange,
+    onMoveRange,
+    pointerResolvers,
+    renderState,
+    toggleBooleanCellAt,
+  })
 
   const handleSelectEntireSheet = useCallback(() => {
     selectEntireWorkbookSheet({
@@ -679,7 +362,7 @@ export function useWorkbookGridInteractions(
   }, [commitActiveEdit, emitSelectionChange, focusGrid, isEditingCell, setGridSelection])
 
   return {
-    handleFillHandlePointerDown,
+    ...pointerHandlers,
     handleGridKey,
     handleHostKeyDownCapture: (event: ReactKeyboardEvent<HTMLDivElement>) => {
       if (isGridKeyboardEditableTarget(event.target)) {
@@ -717,39 +400,6 @@ export function useWorkbookGridInteractions(
         internalClipboardRef,
       })
     },
-    handleHostClickCapture: (event: ReactMouseEvent<HTMLDivElement>) => {
-      if (event.detail < 2) {
-        return
-      }
-      applyColumnAutofitAtPointer(event)
-    },
-    handleHostDoubleClickCapture: (event: ReactMouseEvent<HTMLDivElement>) => {
-      const visibleRegion = getVisibleRegion()
-      if (applyColumnAutofitAtPointer(event, visibleRegion)) {
-        return
-      }
-      handleGridBodyDoubleClick({
-        event,
-        applyColumnWidth: commitColumnWidth,
-        beginEditAt,
-        columnWidths,
-        computeAutofitColumnWidth,
-        defaultColumnWidth: gridMetrics.columnWidth,
-        editorValue,
-        interactionState,
-        isEditingCell,
-        lastBodyClickCell: lastBodyClickCellRef.current,
-        onAutofitColumn,
-        onCommitEdit: commitActiveEdit,
-        onSelectionChange: emitSelectionChange,
-        resolveColumnResizeTargetAtPointer,
-        resolvePointerCell,
-        resolvePointerGeometry,
-        selectedCell: activeSelectionCell,
-        setGridSelection,
-        visibleRegion,
-      })
-    },
     handleHostFocus: (event: ReactFocusEvent<HTMLDivElement>) => {
       if (event.target === event.currentTarget) {
         focusGrid()
@@ -769,192 +419,11 @@ export function useWorkbookGridInteractions(
       handleGridPasteCapture({
         applyClipboardValues,
         event,
-        gridSelection,
+        gridSelection: getCurrentGridSelection(),
         pendingKeyboardPasteSequenceRef,
         selectedCell,
         suppressNextNativePasteRef,
       })
-    },
-    handleHostPointerDownCapture: (event: ReactPointerEvent<HTMLDivElement>) => {
-      clearInteriorRangeMoveCandidate()
-      if (isFillHandleTarget(event.target)) {
-        return
-      }
-      const visibleRegion = getVisibleRegion()
-      const pointerGeometry = resolvePointerGeometry(visibleRegion)
-      if (
-        handleWorkbookGridResizePointerDown({
-          event,
-          visibleRegion,
-          pointerGeometry,
-          columnWidths,
-          rowHeights,
-          defaultColumnWidth: gridMetrics.columnWidth,
-          defaultRowHeight: gridMetrics.rowHeight,
-          isEditingCell,
-          commitActiveEdit,
-          focusGrid,
-          setActiveHeaderDrag,
-          setHoverState,
-          lastResizeHandleActivationRef,
-          now: () => window.performance.now(),
-          computeAutofitColumnWidth,
-          applyAutofitWidth,
-          finishResize: () => finishGridResize(interactionState),
-          resetPointerInteraction: () => {
-            resetGridPointerInteraction(interactionState, {
-              clearIgnoreNextPointerSelection: true,
-            })
-          },
-          setActiveResizeColumn,
-          beginColumnResize,
-          beginRowResize,
-          resolveColumnResizeTargetAtPointer,
-          resolveRowResizeTargetAtPointer,
-        })
-      ) {
-        return
-      }
-
-      if (allowsRangeMove) {
-        const rangeMoveAnchorCell = resolveSelectionMoveAnchorCell(event.clientX, event.clientY, selectionRange, getCellScreenBounds)
-        if (rangeMoveAnchorCell) {
-          event.preventDefault()
-          event.stopPropagation()
-          resetGridPointerInteraction(interactionState, {
-            clearIgnoreNextPointerSelection: true,
-          })
-          setActiveResizeColumn(null)
-          setActiveResizeRow(null)
-          setActiveHeaderDrag(null)
-          beginRangeMove(rangeMoveAnchorCell)
-          return
-        }
-      }
-
-      const pointerCell = pointerGeometry === null ? null : resolvePointerCell(event.clientX, event.clientY, visibleRegion, pointerGeometry)
-      if (allowsRangeMove && !event.shiftKey && selectionRange && pointerCell) {
-        const interiorMoveCell = resolveSelectionContentMoveCandidateCell(event.clientX, event.clientY, selectionRange, getCellScreenBounds)
-        if (interiorMoveCell) {
-          interiorRangeMoveCandidateRef.current = {
-            pointerId: event.pointerId,
-            pointerCell: interiorMoveCell,
-            startClientX: event.clientX,
-            startClientY: event.clientY,
-          }
-        }
-      }
-
-      const headerSelection =
-        pointerGeometry === null ? null : resolveHeaderSelectionAtPointer(event.clientX, event.clientY, visibleRegion, pointerGeometry)
-      setActiveResizeColumn(null)
-      setActiveResizeRow(null)
-      setActiveHeaderDrag(headerSelection)
-      setHoverState(resetGridHoverState)
-      handleGridPointerDown({
-        columnWidths,
-        defaultColumnWidth: gridMetrics.columnWidth,
-        event,
-        focusGrid,
-        interactionState,
-        isEditingCell,
-        onCommitEdit: commitActiveEdit,
-        onSelectionChange: emitSelectionChange,
-        resolveColumnResizeTargetAtPointer,
-        resolveHeaderSelectionAtPointer,
-        resolvePointerCell,
-        resolvePointerGeometry,
-        selectedCell: activeSelectionCell,
-        setGridSelection,
-        visibleRegion,
-      })
-    },
-    handleHostPointerLeave: () => {
-      if (activeResizeColumn !== null || activeResizeRow !== null || isFillHandleDragging || isRangeMoveDragging) {
-        return
-      }
-      setHoverState(resetGridHoverState)
-    },
-    handleHostPointerMoveCapture: (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (isFillHandleDragging || isFillHandleTarget(event.target)) {
-        return
-      }
-      if (maybeBeginInteriorRangeMove(event)) {
-        return
-      }
-      const visibleRegion = getVisibleRegion()
-      handleGridPointerMove({
-        dragAnchorCell: dragAnchorCellRef.current,
-        dragHeaderSelection: dragHeaderSelectionRef.current,
-        dragPointerCell: dragPointerCellRef.current,
-        event,
-        interactionState,
-        isEditingCell,
-        onCommitEdit: commitActiveEdit,
-        onSelectionChange: emitSelectionChange,
-        resolveHeaderSelectionForPointerDrag,
-        resolvePointerCell,
-        selectedCell: activeSelectionCell,
-        setGridSelection,
-        visibleRegion,
-      })
-      refreshHoverState(event.clientX, event.clientY, event.buttons)
-    },
-    handleHostPointerUpCapture: (event: ReactPointerEvent<HTMLDivElement>) => {
-      clearInteriorRangeMoveCandidate()
-      if (isRangeMoveDragging) {
-        return
-      }
-      const visibleRegion = getVisibleRegion()
-      const pointerGeometry = resolvePointerGeometry(visibleRegion)
-      const resizeTarget = resolveColumnResizeTargetAtPointer(
-        event.clientX,
-        event.clientY,
-        visibleRegion,
-        pointerGeometry,
-        columnWidths,
-        gridMetrics.columnWidth,
-      )
-      if (resizeTarget !== null && event.detail >= 2) {
-        applyWorkbookGridColumnAutofit({
-          columnIndex: resizeTarget,
-          computeAutofitColumnWidth,
-          finishResize: () => finishGridResize(interactionState),
-          resetPointerInteraction: () => {
-            resetGridPointerInteraction(interactionState, {
-              clearIgnoreNextPointerSelection: true,
-            })
-          },
-          setActiveResizeColumn,
-          applyAutofitWidth,
-        })
-        return
-      }
-      const clickedCell = dragDidMoveRef.current || dragHeaderSelectionRef.current ? null : resolvePointerCell(event.clientX, event.clientY)
-      handleGridPointerUp({
-        dragAnchorCell: dragAnchorCellRef.current,
-        dragDidMove: dragDidMoveRef.current,
-        dragHeaderSelection: dragHeaderSelectionRef.current,
-        dragPointerCell: dragPointerCellRef.current,
-        event,
-        interactionState,
-        isEditingCell,
-        lastBodyClickCellRef,
-        onCommitEdit: commitActiveEdit,
-        onSelectionChange: emitSelectionChange,
-        postDragSelectionExpiryRef,
-        resolveHeaderSelectionForPointerDrag,
-        resolvePointerCell,
-        selectedCell: [selectedCell.col, selectedCell.row],
-        setGridSelection,
-        visibleRegion,
-      })
-      if (clickedCell) {
-        toggleBooleanCellAt(clickedCell[0], clickedCell[1])
-      }
-      focusGrid()
-      setActiveHeaderDrag(null)
-      refreshHoverState(event.clientX, event.clientY, 0)
     },
     handleSelectEntireSheet,
     contextMenu,

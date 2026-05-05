@@ -66,6 +66,7 @@ export const NameBox = forwardRef<HTMLInputElement, NameBoxProps>(function NameB
             } else {
               setErrorMessage(null)
               onCommitSuccess?.()
+              event.currentTarget.blur()
             }
           }
           if (event.key === 'Escape') {

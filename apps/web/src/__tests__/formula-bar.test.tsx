@@ -275,6 +275,7 @@ describe('FormulaBar', () => {
 
     expect(onAddressCommitSuccess).not.toHaveBeenCalled()
 
+    nameBox.focus()
     dispatchInputValue(nameBox, 'C4')
     await act(async () => {
       nameBox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
@@ -282,6 +283,7 @@ describe('FormulaBar', () => {
 
     expect(onAddressCommitSuccess).toHaveBeenCalledTimes(1)
     expect(nameBox.getAttribute('aria-invalid')).toBeNull()
+    expect(document.activeElement).not.toBe(nameBox)
 
     await act(async () => {
       root.unmount()

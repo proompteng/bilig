@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { EditMovement, EditSelectionBehavior, GridSelectionSnapshot } from '@bilig/grid'
+import { formatAddress, parseCellAddress } from '@bilig/formula'
 import type { CellRangeRef, CellSnapshot } from '@bilig/protocol'
 import { persistSelection } from './selection-persistence.js'
 import type { WorkbookPerfSession } from './perf/workbook-perf.js'
@@ -91,6 +92,7 @@ export function useWorkerWorkbookInteractionState(input: {
   const [editingMode, setEditingMode] = useState<EditingMode>('idle')
   const [editorConflict, setEditorConflict] = useState<WorkbookEditorConflict | null>(null)
   const [selectionSnapshot, setSelectionSnapshot] = useState<GridSelectionSnapshot>(createSingleCellSelectionSnapshot(selection))
+  const [, bumpOptimisticSeedRevision] = useState(0)
 
   const selectionRef = useRef(selection)
   const editorValueRef = useRef(editorValue)
@@ -159,6 +161,59 @@ export function useWorkerWorkbookInteractionState(input: {
     const key = optimisticCellKey(sheetName, address)
     if (optimisticCellSeedsRef.current.get(key) === seed) {
       optimisticCellSeedsRef.current.delete(key)
+      bumpOptimisticSeedRevision((revision) => revision + 1)
+    }
+  }, [])
+  const supersedeOptimisticCellSeedsForRange = useCallback((range: CellRangeRef): (() => void) | null => {
+    const start = parseCellAddress(range.startAddress, range.sheetName)
+    const end = parseCellAddress(range.endAddress, range.sheetName)
+    const startRow = Math.min(start.row, end.row)
+    const endRow = Math.max(start.row, end.row)
+    const startCol = Math.min(start.col, end.col)
+    const endCol = Math.max(start.col, end.col)
+    const removedSeeds: Array<readonly [string, string]> = []
+
+    for (let row = startRow; row <= endRow; row += 1) {
+      for (let col = startCol; col <= endCol; col += 1) {
+        const address = formatAddress(row, col)
+        const key = optimisticCellKey(range.sheetName, address)
+        const seed = optimisticCellSeedsRef.current.get(key)
+        if (seed === undefined) {
+          continue
+        }
+        removedSeeds.push([key, seed])
+        optimisticCellSeedsRef.current.delete(key)
+      }
+    }
+
+    if (removedSeeds.length === 0) {
+      return null
+    }
+
+    bumpOptimisticSeedRevision((revision) => revision + 1)
+    return () => {
+      for (const [key, seed] of removedSeeds) {
+        if (!optimisticCellSeedsRef.current.has(key)) {
+          optimisticCellSeedsRef.current.set(key, seed)
+        }
+      }
+      bumpOptimisticSeedRevision((revision) => revision + 1)
+    }
+  }, [])
+  const replaceOptimisticCellSeed = useCallback((sheetName: string, address: string, seed: string): (() => void) => {
+    const key = optimisticCellKey(sheetName, address)
+    const hadPreviousSeed = optimisticCellSeedsRef.current.has(key)
+    const previousSeed = optimisticCellSeedsRef.current.get(key)
+    optimisticCellSeedsRef.current.set(key, seed)
+    bumpOptimisticSeedRevision((revision) => revision + 1)
+
+    return () => {
+      if (hadPreviousSeed && previousSeed !== undefined) {
+        optimisticCellSeedsRef.current.set(key, previousSeed)
+      } else {
+        optimisticCellSeedsRef.current.delete(key)
+      }
+      bumpOptimisticSeedRevision((revision) => revision + 1)
     }
   }, [])
 
@@ -415,6 +470,8 @@ export function useWorkerWorkbookInteractionState(input: {
       invokeMutation,
       applyParsedInput,
       viewportStore: workerHandle?.viewportStore,
+      supersedeOptimisticCellSeedsForRange,
+      replaceOptimisticCellSeed,
       onPasteApplied: () => {
         perfSession.markFirstPasteApplied?.()
       },
@@ -496,6 +553,13 @@ export function useWorkerWorkbookInteractionState(input: {
     },
     [applySelectionSnapshot],
   )
+  const acknowledgeExternalSelectionSync = useCallback((syncedSelectionSnapshot: GridSelectionSnapshot) => {
+    const activeExternalSelection = pendingExternalSelectionRef.current
+    if (!activeExternalSelection || !selectionSnapshotsEqual(activeExternalSelection, syncedSelectionSnapshot)) {
+      return
+    }
+    pendingExternalSelectionRef.current = null
+  }, [])
 
   const handleEditorChange = useCallback(
     (next: string) => {
@@ -530,8 +594,9 @@ export function useWorkerWorkbookInteractionState(input: {
     if (optimisticSeed === undefined) {
       return
     }
-    if (optimisticSeed === toEditorValue(selectedCell)) {
+    if (optimisticSeed !== '' && optimisticSeed === toEditorValue(selectedCell)) {
       optimisticCellSeedsRef.current.delete(key)
+      bumpOptimisticSeedRevision((revision) => revision + 1)
     }
   }, [selectedCell, selection.address, selection.sheetName])
 
@@ -566,6 +631,7 @@ export function useWorkerWorkbookInteractionState(input: {
     editorSelectionBehavior,
     fillSelectionRange,
     getCellEditorSeed,
+    acknowledgeExternalSelectionSync,
     handleEditorChange,
     handleSelectionChange,
     isEditing,

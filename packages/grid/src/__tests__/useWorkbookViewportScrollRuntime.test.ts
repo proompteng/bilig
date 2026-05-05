@@ -76,6 +76,74 @@ describe('shouldCommitWorkbookVisibleRegion', () => {
 })
 
 describe('WorkbookViewportScrollRuntime', () => {
+  it('keeps intra-resident scroll out of app viewport subscriptions', () => {
+    const metrics = getGridMetrics()
+    const columnAxis = createGridAxisWorldIndexFromRecords({
+      axisLength: MAX_COLS,
+      defaultSize: metrics.columnWidth,
+    })
+    const rowAxis = createGridAxisWorldIndexFromRecords({
+      axisLength: MAX_ROWS,
+      defaultSize: metrics.rowHeight,
+    })
+    const gridRuntimeHost = new GridRuntimeHost({
+      columnCount: MAX_COLS,
+      defaultColumnWidth: metrics.columnWidth,
+      defaultRowHeight: metrics.rowHeight,
+      gridMetrics: metrics,
+      rowCount: MAX_ROWS,
+      viewportHeight: 360,
+      viewportWidth: 640,
+    })
+    const scrollViewport = document.createElement('div')
+    Object.defineProperty(scrollViewport, 'clientWidth', { configurable: true, value: 640 })
+    Object.defineProperty(scrollViewport, 'clientHeight', { configurable: true, value: 360 })
+    const scrollTransformStore = new WorkbookGridScrollStore()
+    const scrollTransformRef = { current: scrollTransformStore.getSnapshot() }
+    const liveVisibleRegionRef = { current: region({ x: 0, y: 0 }) }
+    let committedRegion = liveVisibleRegionRef.current
+    const setVisibleRegion = vi.fn((updater: VisibleRegionState | ((current: VisibleRegionState) => VisibleRegionState)) => {
+      committedRegion = typeof updater === 'function' ? updater(committedRegion) : updater
+    })
+    const onVisibleViewportChange = vi.fn()
+    const runtime = new WorkbookViewportScrollRuntime()
+
+    runtime.updateInput({
+      columnAxis,
+      freezeCols: 0,
+      freezeRows: 0,
+      gridCameraStore: new GridCameraStore(),
+      gridMetrics: metrics,
+      gridRuntimeHost,
+      hostElement: scrollViewport,
+      liveVisibleRegionRef,
+      onVisibleViewportChange,
+      requiresLiveViewportState: false,
+      rowAxis,
+      scrollTransformRef,
+      scrollTransformStore,
+      scrollViewportRef: { current: scrollViewport },
+      selectedCell: [0, 0],
+      setVisibleRegion,
+      sheetName: 'Sheet1',
+      sortedColumnWidthOverrides: [],
+      sortedRowHeightOverrides: [],
+      syncRuntimeAxes: vi.fn(),
+      viewport: { colEnd: 11, colStart: 0, rowEnd: 23, rowStart: 0 },
+    })
+
+    runtime.syncVisibleRegion()
+    expect(onVisibleViewportChange).toHaveBeenCalledTimes(1)
+
+    scrollViewport.scrollLeft = 8 * metrics.columnWidth
+    scrollViewport.scrollTop = 8 * metrics.rowHeight
+    runtime.syncVisibleRegion()
+
+    expect(liveVisibleRegionRef.current.range).toMatchObject({ x: 8, y: 8 })
+    expect(onVisibleViewportChange).toHaveBeenCalledTimes(1)
+    expect(committedRegion.range).toMatchObject({ x: 0, y: 0 })
+  })
+
   it('syncs camera, scroll transform, and visible viewport without React owning the scroll math', () => {
     const metrics = getGridMetrics()
     const columnAxis = createGridAxisWorldIndexFromRecords({

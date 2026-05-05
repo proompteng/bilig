@@ -8,9 +8,16 @@ import { useWorkbookSelectionActions } from '../use-workbook-selection-actions.j
 interface HarnessProps {
   capture: (actions: ReturnType<typeof useWorkbookSelectionActions>) => void
   invokeMutation: (method: string, ...args: unknown[]) => Promise<void>
+  supersedeOptimisticCellSeedsForRange?: Parameters<typeof useWorkbookSelectionActions>[0]['supersedeOptimisticCellSeedsForRange']
+  replaceOptimisticCellSeed?: Parameters<typeof useWorkbookSelectionActions>[0]['replaceOptimisticCellSeed']
 }
 
-function SelectionActionsHarness({ capture, invokeMutation }: HarnessProps) {
+function SelectionActionsHarness({
+  capture,
+  invokeMutation,
+  supersedeOptimisticCellSeedsForRange,
+  replaceOptimisticCellSeed,
+}: HarnessProps) {
   const actions = useWorkbookSelectionActions({
     writesAllowed: true,
     selectionRangeRef: {
@@ -36,6 +43,8 @@ function SelectionActionsHarness({ capture, invokeMutation }: HarnessProps) {
     editingModeRef: { current: 'idle' },
     invokeMutation,
     applyParsedInput: vi.fn(),
+    supersedeOptimisticCellSeedsForRange,
+    replaceOptimisticCellSeed,
     resetEditorConflictTracking: vi.fn(),
     reportRuntimeError: vi.fn(),
     setEditorValue: vi.fn(),
@@ -96,6 +105,98 @@ describe('useWorkbookSelectionActions', () => {
       startAddress: 'A1',
       endAddress: 'A1',
     })
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  test('supersedes optimistic formula-bar seeds when clearing a selected range', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const invokeMutation = vi.fn(async () => undefined)
+    const supersedeOptimisticCellSeedsForRange = vi.fn(() => null)
+    const replaceOptimisticCellSeed = vi.fn(() => null)
+    let capturedActions: ReturnType<typeof useWorkbookSelectionActions> | null = null
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        createElement(SelectionActionsHarness, {
+          capture: (actions: ReturnType<typeof useWorkbookSelectionActions>) => {
+            capturedActions = actions
+          },
+          invokeMutation,
+          supersedeOptimisticCellSeedsForRange,
+          replaceOptimisticCellSeed,
+        }),
+      )
+    })
+
+    const visibleSelection: GridSelectionSnapshot = {
+      sheetName: 'Sheet1',
+      address: 'B2',
+      kind: 'cell',
+      range: {
+        startAddress: 'B2',
+        endAddress: 'B2',
+      },
+    }
+
+    await act(async () => {
+      capturedActions?.clearSelectedCell(visibleSelection)
+      await Promise.resolve()
+    })
+
+    expect(supersedeOptimisticCellSeedsForRange).toHaveBeenCalledWith({
+      sheetName: 'Sheet1',
+      startAddress: 'B2',
+      endAddress: 'B2',
+    })
+    expect(replaceOptimisticCellSeed).toHaveBeenCalledWith('Sheet1', 'B2', '')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  test('restores superseded optimistic seeds when clear mutation fails', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const invokeMutation = vi.fn(async () => {
+      throw new Error('clear failed')
+    })
+    const rollbackOptimisticSeeds = vi.fn()
+    const rollbackSelectedCellSeed = vi.fn()
+    const supersedeOptimisticCellSeedsForRange = vi.fn(() => rollbackOptimisticSeeds)
+    const replaceOptimisticCellSeed = vi.fn(() => rollbackSelectedCellSeed)
+    let capturedActions: ReturnType<typeof useWorkbookSelectionActions> | null = null
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        createElement(SelectionActionsHarness, {
+          capture: (actions: ReturnType<typeof useWorkbookSelectionActions>) => {
+            capturedActions = actions
+          },
+          invokeMutation,
+          supersedeOptimisticCellSeedsForRange,
+          replaceOptimisticCellSeed,
+        }),
+      )
+    })
+
+    await act(async () => {
+      capturedActions?.clearSelectedCell()
+      await Promise.resolve()
+    })
+
+    expect(rollbackOptimisticSeeds).toHaveBeenCalledTimes(1)
+    expect(rollbackSelectedCellSeed).toHaveBeenCalledTimes(1)
 
     await act(async () => {
       root.unmount()

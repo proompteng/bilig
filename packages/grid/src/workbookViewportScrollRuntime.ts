@@ -75,9 +75,25 @@ export function shouldCommitWorkbookVisibleRegion(input: {
   )
 }
 
+export function shouldNotifyWorkbookVisibleViewportChange(input: {
+  readonly previous: Viewport | null
+  readonly next: Viewport
+  readonly requiresLiveViewportState: boolean
+}): boolean {
+  const { previous, next, requiresLiveViewportState } = input
+  if (!previous) {
+    return true
+  }
+  if (requiresLiveViewportState) {
+    return !sameViewportBounds(previous, next)
+  }
+  return !sameViewportBounds(resolveResidentViewport(previous), resolveResidentViewport(next))
+}
+
 export class WorkbookViewportScrollRuntime {
   private autoScrollSelection: { sheetName: string; col: number; row: number } | null = null
   private input: WorkbookViewportScrollRuntimeInput | null = null
+  private lastNotifiedViewport: Viewport | null = null
   private restoredViewportToken: number | null = null
   private scrollSyncFrame: number | null = null
 
@@ -139,7 +155,17 @@ export class WorkbookViewportScrollRuntime {
     }
     input.liveVisibleRegionRef.current = next
     input.scrollTransformStore.setSnapshot(input.scrollTransformRef.current)
-    input.onVisibleViewportChange?.(viewportFromVisibleRegion(next))
+    const nextViewport = viewportFromVisibleRegion(next)
+    if (
+      shouldNotifyWorkbookVisibleViewportChange({
+        next: nextViewport,
+        previous: this.lastNotifiedViewport,
+        requiresLiveViewportState: input.requiresLiveViewportState,
+      })
+    ) {
+      this.lastNotifiedViewport = nextViewport
+      input.onVisibleViewportChange?.(nextViewport)
+    }
     input.setVisibleRegion((current) => {
       if (
         !shouldCommitWorkbookVisibleRegion({
@@ -253,6 +279,7 @@ export class WorkbookViewportScrollRuntime {
   dispose(): void {
     this.cancelScheduledSync()
     this.input = null
+    this.lastNotifiedViewport = null
   }
 
   private cancelScheduledSync(): void {

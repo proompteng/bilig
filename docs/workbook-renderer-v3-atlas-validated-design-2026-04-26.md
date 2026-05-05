@@ -483,11 +483,23 @@ Completed in the resident-scene deletion tranche:
   spill range, so visible dirty tile replacement no longer depends only on the directly edited cell.
 - Fill-handle preview ranges and workbook review preview rectangles now render through `DynamicGridOverlayBatchV3` instead of React DOM
   overlays. The product surface keeps the V3 renderer canvas as the visual path while fill/drop behavior is still verified in browser tests.
+- `WorkbookViewportScrollRuntime` now gates app-level `onVisibleViewportChange` notifications by resident viewport while the renderer is in
+  non-live scroll mode. Steady scroll inside the retained resident tile window still updates camera uniforms and scroll transforms immediately,
+  but it no longer drives app projection subscription churn on every scroll event.
+- Host pointer event policy moved out of `useWorkbookGridInteractions.ts` into `useWorkbookGridHostPointerHandlers.ts`. The main interaction hook
+  now wires selection, keyboard, clipboard, context menu, and runtime-owned pointer handlers instead of inlining fill-handle, range-move, resize,
+  hover, and body pointer state machines.
+- The pane draw/runtime hook is no longer a wrapper over `useWorkbookGridDrawRuntime.ts`; `useWorkbookGridPaneRenderRuntime.ts` now owns the V3
+  viewport residency, fixed render-tile pane, and header-pane wiring directly, and the old draw-runtime wrapper file was deleted.
 
 Migration completion status from this tranche:
 
 - Completed in this migration tranche:
-  - draw/dirty-tile coordination moved out of `useWorkbookGridRenderState.ts` into `useWorkbookGridRenderPipelineRuntime` and
-    `useWorkbookGridPaneRenderRuntime` runtime ownership.
+  - draw/dirty-tile coordination moved out of `useWorkbookGridRenderState.ts` into host-owned V3 render-tile runtimes, with
+    `useWorkbookGridPaneRenderRuntime.ts` now owning pane draw wiring directly rather than delegating through a wrapper hook.
+  - scroll viewport notifications are resident-window gated, so non-live steady scroll no longer calls the app projection subscription bridge for
+    every intra-window camera movement.
+  - pointer interaction event policy moved behind the host pointer handler hook, reducing `useWorkbookGridInteractions.ts` to a wiring adapter
+    instead of a 900+ line owner of pointer state machines.
   - browser perf gates now cover V3 mutation, resize, and collaboration paths with bounded dirty-tile/write envelopes (`web-shell-scroll-performance.pw.ts`)
     plus new row- and column-resize commit samples.

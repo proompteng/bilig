@@ -29,6 +29,7 @@ export interface WorkbookGridSurfaceProps {
   resolvedValue: string
   isEditingCell: boolean
   onSelectionChange(this: void, selection: GridSelectionSnapshot): void
+  onExternalSelectionSync?: ((selection: GridSelectionSnapshot) => void) | undefined
   onSelectionLabelChange?: ((label: string) => void) | undefined
   getCellEditorSeed?: ((sheetName: string, address: string) => string | undefined) | undefined
   onBeginEdit(this: void, seed?: string, selectionBehavior?: EditSelectionBehavior): void
@@ -63,6 +64,7 @@ export interface WorkbookGridSurfaceProps {
   onVisibleViewportChange?: ((viewport: Viewport) => void) | undefined
   previewRanges?: readonly WorkbookGridPreviewRange[] | undefined
   focusRequestToken?: number | undefined
+  focusApiRef?: { current: (() => void) | null } | undefined
   restoreViewportTarget?:
     | {
         readonly token: number
