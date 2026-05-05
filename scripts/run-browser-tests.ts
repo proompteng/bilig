@@ -1,7 +1,10 @@
 #!/usr/bin/env bun
 
-import { existsSync, readFileSync, readlinkSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readlinkSync, rmSync } from 'node:fs'
 import net from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { spawnSync as nodeSpawnSync } from 'node:child_process'
 import { resolveBrowserLocalWebMode } from './browser-stack-config.js'
 import { resolveBrowserTestPhases, type BrowserTestPhase } from './browser-test-phases.js'
 
@@ -24,6 +27,8 @@ type ComposeInvocation = {
 }
 interface BrowserStackProcess {
   readonly exited: Promise<number | null>
+  readonly readyDir?: string | undefined
+  readonly readyFile?: string | undefined
   kill(signal?: 'SIGINT' | 'SIGTERM' | 'SIGKILL' | number): void
 }
 
@@ -233,15 +238,15 @@ function parseSsPids(output: string): number[] {
 
 function getListeningPids(port: number): number[] {
   if (commandExists('lsof')) {
-    const result = Bun.spawnSync(['lsof', '-tiTCP:' + String(port), '-sTCP:LISTEN'], {
-      stdin: 'ignore',
-      stdout: 'pipe',
-      stderr: 'ignore',
+    const result = nodeSpawnSync('lsof', ['-nP', '-tiTCP:' + String(port), '-sTCP:LISTEN'], {
+      encoding: 'utf8',
+      input: '',
+      timeout: 1_000,
     })
-    if (result.exitCode !== 0) {
+    if (result.error || result.status !== 0) {
       return []
     }
-    return parsePidList(textDecoder.decode(result.stdout).trim())
+    return parsePidList(result.stdout.trim())
   }
 
   if (commandExists('ss')) {
@@ -537,6 +542,21 @@ async function waitForHttp(url: string, timeoutMs = 120_000): Promise<void> {
   await pollHttp(url, Date.now() + timeoutMs)
 }
 
+async function pollFile(path: string, deadline: number): Promise<void> {
+  if (Date.now() >= deadline) {
+    throw new Error(`Timed out waiting for ${path}`)
+  }
+  if (existsSync(path)) {
+    return
+  }
+  await Bun.sleep(250)
+  await pollFile(path, deadline)
+}
+
+async function waitForFile(path: string, timeoutMs = 120_000): Promise<void> {
+  await pollFile(path, Date.now() + timeoutMs)
+}
+
 async function resolveReachableHttpHost(hosts: readonly string[], port: string, pathname: string, timeoutMs: number): Promise<string> {
   return pollReachableHttpHost(hosts, port, pathname, Date.now() + timeoutMs)
 }
@@ -707,6 +727,9 @@ async function stopLocalPlaywrightStack(child: BrowserStackProcess): Promise<voi
 async function waitForLocalPlaywrightStack(child: BrowserStackProcess): Promise<void> {
   await Promise.race([
     (async () => {
+      if (child.readyFile) {
+        await waitForFile(child.readyFile, composeStartupTimeoutMs)
+      }
       await waitForHttp(`${getE2eSyncServerUrl()}/runtime-config.json`, composeStartupTimeoutMs)
       await waitForHttp(getE2eBaseUrl(), composeStartupTimeoutMs)
     })(),
@@ -747,7 +770,9 @@ async function waitForLocalPlaywrightStackStable(child: BrowserStackProcess): Pr
 async function startLocalPlaywrightStack(attempt = 1): Promise<BrowserStackProcess> {
   terminatePreviewServers()
   const activePorts = e2ePorts
-  const child = Bun.spawn(['bun', 'scripts/run-dev-web-local.ts'], {
+  const readyDir = mkdtempSync(join(tmpdir(), 'bilig-browser-stack-'))
+  const readyFile = join(readyDir, 'ready')
+  const spawned = Bun.spawn(['bun', 'scripts/run-dev-web-local.ts'], {
     stdin: 'ignore',
     stdout: 'inherit',
     stderr: 'inherit',
@@ -763,8 +788,17 @@ async function startLocalPlaywrightStack(attempt = 1): Promise<BrowserStackProce
       BILIG_DEV_CLEANUP_COMPOSE: 'true',
       BILIG_DEV_DISABLE_COMPOSE: '1',
       BILIG_E2E_REMOTE_SYNC: '0',
+      BILIG_DEV_READY_FILE: readyFile,
     },
   })
+  const child: BrowserStackProcess = {
+    exited: spawned.exited,
+    readyDir,
+    readyFile,
+    kill: (signal) => {
+      spawned.kill(signal)
+    },
+  }
   try {
     await waitForLocalPlaywrightStackStable(child)
     return child
@@ -784,6 +818,9 @@ async function startLocalPlaywrightStack(attempt = 1): Promise<BrowserStackProce
 async function stopAndReapLocalPlaywrightStack(child: BrowserStackProcess | null): Promise<void> {
   if (child) {
     await stopLocalPlaywrightStack(child)
+    if (child.readyDir) {
+      rmSync(child.readyDir, { recursive: true, force: true })
+    }
   }
   terminatePreviewServers()
   await Bun.sleep(1_000)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { existsSync, readFileSync, readlinkSync } from 'node:fs'
+import { existsSync, readFileSync, readlinkSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -25,6 +25,7 @@ const skipPreviewBuild = process.env['BILIG_DEV_WEB_PREVIEW_BUILD'] === '0'
 const preferredZeroPort = resolvePreferredZeroPort(process.env['BILIG_DEV_ZERO_PORT'], configuredZeroProxyUpstream, 4848)
 const composePublishedHost = resolveComposePublishedHost()
 const cleanupCompose = process.env['BILIG_DEV_CLEANUP_COMPOSE'] === 'true'
+const readyFile = process.env['BILIG_DEV_READY_FILE']
 let resolvedAppPort = String(preferredAppPort)
 let resolvedPostgresPort = String(preferredPostgresPort)
 let resolvedZeroPort = String(preferredZeroPort)
@@ -674,6 +675,9 @@ try {
       ? `Local dev stack ready: web=${webAppBaseUrl} app=${publicServerUrl} sync=local-only`
       : `Local dev stack ready: web=${webAppBaseUrl} app=${publicServerUrl} zero=${zeroProxyUpstream}`,
   )
+  if (readyFile) {
+    writeFileSync(readyFile, `${new Date().toISOString()}\n`, 'utf8')
+  }
 } catch (error) {
   forwardSignal('SIGTERM')
   throw error
