@@ -697,40 +697,20 @@ describe('ProjectedViewportStore', () => {
         maxCachedCellsPerSheet: Number.NaN,
       },
     )
-    const unsubscribe = cache.subscribeViewport('Sheet1', { rowStart: 0, rowEnd: 7000, colStart: 0, colEnd: 0 }, () => undefined)
+    const unsubscribe = cache.subscribeViewport(
+      'Sheet1',
+      {
+        rowStart: 0,
+        rowEnd: DEFAULT_MAX_CACHED_CELLS_PER_SHEET,
+        colStart: 0,
+        colEnd: 0,
+      },
+      () => undefined,
+    )
 
-    for (let row = 0; row <= 7000; row += 1) {
-      cache.applyViewportPatch({
-        ...createPatch(),
-        viewport: {
-          sheetName: 'Sheet1',
-          rowStart: row,
-          rowEnd: row,
-          colStart: 0,
-          colEnd: 0,
-        },
-        cells: [
-          {
-            row,
-            col: 0,
-            snapshot: {
-              sheetName: 'Sheet1',
-              address: `A${String(row + 1)}`,
-              value: { tag: ValueTag.Number, value: row },
-              flags: 0,
-              version: 1,
-            },
-            displayText: String(row),
-            copyText: String(row),
-            editorText: String(row),
-            formatId: 0,
-            styleId: 'style-0',
-          },
-        ],
-      })
-    }
+    cache.applyViewportPatch(createLargePatch(DEFAULT_MAX_CACHED_CELLS_PER_SHEET + 1, 1))
 
-    expect(countSheetCells(cache, 'Sheet1')).toBe(7001)
+    expect(countSheetCells(cache, 'Sheet1')).toBe(DEFAULT_MAX_CACHED_CELLS_PER_SHEET + 1)
 
     unsubscribe()
 
