@@ -424,6 +424,48 @@ describe('createWorkerRuntimeSessionController', () => {
     controller.dispose()
   })
 
+  it('does not let selected-cell hydration wipe a fresher optimistic edit', async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    })
+
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: 'selection-hydration-optimistic-doc',
+        replicaId: 'browser:test',
+        persistState: false,
+        initialSelection: { sheetName: 'Sheet1', address: 'C3' },
+        createWorker: () => createMockWorkerPort(runtime),
+        fetchImpl: vi.fn(async () => new Response(null, { status: 404 })),
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          throw new Error(message)
+        },
+      },
+    )
+
+    controller.handle.viewportStore.setCellSnapshot({
+      sheetName: 'Sheet1',
+      address: 'C3',
+      value: { tag: ValueTag.String, value: 'local-write', stringId: 1 },
+      input: 'local-write',
+      flags: 0,
+      version: 99,
+    })
+
+    await controller.setSelection({ sheetName: 'Sheet1', address: 'C3' })
+
+    expect(controller.handle.viewportStore.getCell('Sheet1', 'C3')).toMatchObject({
+      input: 'local-write',
+      value: { tag: ValueTag.String, value: 'local-write' },
+    })
+
+    controller.dispose()
+  })
+
   it('repairs a clean persisted local projection from the latest authoritative snapshot without zero sync', async () => {
     const seedEngine = new SpreadsheetEngine({ workbookName: 'phase0-doc', replicaId: 'seed' })
     seedEngine.createSheet('Sheet1')

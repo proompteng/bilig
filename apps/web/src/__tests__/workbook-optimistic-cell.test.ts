@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ValueTag, type CellSnapshot } from '@bilig/protocol'
+import { ErrorCode, ValueTag, type CellSnapshot } from '@bilig/protocol'
 import { createOptimisticCellSnapshot, evaluateOptimisticFormula } from '../workbook-optimistic-cell.js'
 
 function cell(address: string, value: CellSnapshot['value'], version = 1): CellSnapshot {
@@ -59,6 +59,27 @@ describe('workbook optimistic cell snapshots', () => {
         tag: ValueTag.String,
         value: '=SUM(1:1)',
       },
+    })
+  })
+
+  it('mirrors engine editor text for syntax-invalid formulas before worker readback arrives', () => {
+    const current = cell('A2', { tag: ValueTag.Empty })
+
+    const optimistic = createOptimisticCellSnapshot({
+      sheetName: 'Sheet1',
+      address: 'A2',
+      current,
+      parsed: { kind: 'formula', formula: '1+' },
+      evaluateFormula: () => null,
+    })
+
+    expect(optimistic.formula).toBeUndefined()
+    expect(optimistic).toMatchObject({
+      value: {
+        tag: ValueTag.Error,
+        code: ErrorCode.Value,
+      },
+      version: 2,
     })
   })
 })

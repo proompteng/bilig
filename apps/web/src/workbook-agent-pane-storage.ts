@@ -1,4 +1,5 @@
 import type { WorkbookAgentThreadScope } from '@bilig/contracts'
+import { logDebug } from './runtime-logger.js'
 
 const STORAGE_KEY_PREFIX = 'bilig:workbook-agent:'
 const DRAFT_STORAGE_KEY_PREFIX = 'bilig:workbook-agent-drafts:'
@@ -33,7 +34,9 @@ export function loadStoredSession(documentId: string): StoredWorkbookAgentThread
     if (isStoredWorkbookAgentSession(parsed)) {
       return parsed
     }
-  } catch {}
+  } catch (error) {
+    logDebug('Failed to load stored workbook agent session', { documentId, error })
+  }
   return null
 }
 
@@ -58,7 +61,8 @@ export function loadStoredDrafts(documentId: string): Record<string, string> {
     return Object.fromEntries(
       Object.entries(parsed).flatMap(([key, value]) => (typeof value === 'string' ? ([[key, value]] as const) : [])),
     )
-  } catch {
+  } catch (error) {
+    logDebug('Failed to load stored workbook agent draft', { documentId, error })
     return {}
   }
 }

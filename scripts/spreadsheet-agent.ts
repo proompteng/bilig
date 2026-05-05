@@ -835,7 +835,9 @@ async function main(): Promise<void> {
           sessionId,
         },
       })
-    } catch {}
+    } catch (error) {
+      console.error('Failed to close workbook session', { sessionId, error })
+    }
   }
 }
 

@@ -22,6 +22,7 @@ import {
   upsertEntry,
   upsertWorkflowRun,
 } from './workbook-agent-service-shared.js'
+import { logError } from '../runtime-logger.js'
 
 export class WorkbookAgentWorkflowRuntime {
   private readonly workflowRunTasks = new Map<string, Promise<void>>()
@@ -156,7 +157,7 @@ export class WorkbookAgentWorkflowRuntime {
       try {
         await nextTask
       } catch (error) {
-        console.error(error)
+        logError(error)
       } finally {
         if (this.workflowRunTasks.get(input.sessionState.threadId) === nextTask) {
           this.workflowRunTasks.delete(input.sessionState.threadId)

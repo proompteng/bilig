@@ -1,5 +1,5 @@
 import { evaluateAst, formatAddress, parseFormula, parseRangeAddress, type EvaluationContext } from '@bilig/formula'
-import { MAX_COLS, MAX_ROWS, ValueTag, type CellSnapshot } from '@bilig/protocol'
+import { ErrorCode, MAX_COLS, MAX_ROWS, ValueTag, type CellSnapshot } from '@bilig/protocol'
 import type { ParsedEditorInput } from './worker-workbook-app-model.js'
 
 const MAX_OPTIMISTIC_FORMULA_RANGE_CELLS = 10_000
@@ -27,6 +27,15 @@ export function createOptimisticCellSnapshot(input: {
         version,
       }
     case 'formula':
+      if (!formulaParses(input.parsed.formula)) {
+        return {
+          ...base,
+          sheetName: input.sheetName,
+          address: input.address,
+          value: { tag: ValueTag.Error, code: ErrorCode.Value },
+          version,
+        }
+      }
       return {
         ...base,
         sheetName: input.sheetName,
@@ -48,6 +57,15 @@ export function createOptimisticCellSnapshot(input: {
         value: valueFromLiteral(input.parsed.value),
         version,
       }
+  }
+}
+
+function formulaParses(formula: string): boolean {
+  try {
+    parseFormula(formula)
+    return true
+  } catch {
+    return false
   }
 }
 

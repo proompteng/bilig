@@ -5,12 +5,7 @@ import net from 'node:net'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import {
-  canUsePort as canUsePortWithListeners,
-  resolvePreferredPort,
-  resolvePreferredZeroPort,
-  resolveRequestedOrAvailablePort,
-} from './dev-web-local-ports.js'
+import { canUsePort, resolvePreferredPort, resolvePreferredZeroPort, resolveRequestedOrAvailablePort } from './dev-web-local-ports.js'
 import { ensureWasmKernelArtifact } from './ensure-wasm-kernel.js'
 
 const composeFiles = ['compose.yaml', 'compose.dev-local.yaml'] as const
@@ -92,7 +87,9 @@ function resolveComposePublishedHost(): string {
       }
       return parseProcRouteGateway(gateway) ?? '127.0.0.1'
     }
-  } catch {}
+  } catch (error) {
+    console.warn('Failed to resolve compose published host from /proc/net/route', error)
+  }
 
   return '127.0.0.1'
 }
@@ -291,7 +288,7 @@ async function ensureComposeRuntime(): Promise<void> {
 
 function listListeningPids(port: number): string[] {
   if (commandExists('lsof')) {
-    const result = Bun.spawnSync(['lsof', '-tiTCP:' + String(port), '-sTCP:LISTEN'], {
+    const result = Bun.spawnSync(['lsof', '-nP', '-tiTCP:' + String(port), '-sTCP:LISTEN'], {
       stdin: 'ignore',
       stdout: 'pipe',
       stderr: 'ignore',
@@ -381,11 +378,23 @@ function isRepoOwnedListener(pid: string): boolean {
 }
 
 async function reapStaleRepoListeners(ports: readonly number[]): Promise<void> {
-  const repoOwnedPids = [...new Set(ports.flatMap((port) => listListeningPids(port)).filter(isRepoOwnedListener))]
+  const occupiedPorts = (
+    await Promise.all(
+      ports.map(async (port) => ({
+        port,
+        occupied: !(await canBindLocalPort(port)),
+      })),
+    )
+  )
+    .filter((result) => result.occupied)
+    .map((result) => result.port)
+  const repoOwnedPids = [...new Set(occupiedPorts.flatMap((port) => listListeningPids(port)).filter(isRepoOwnedListener))]
   for (const pid of repoOwnedPids) {
     try {
       process.kill(Number.parseInt(pid, 10), 'SIGTERM')
-    } catch {}
+    } catch (error) {
+      console.warn(`Failed to SIGTERM stale process pid=${pid}`, error)
+    }
   }
 
   const deadline = Date.now() + 5_000
@@ -393,7 +402,11 @@ async function reapStaleRepoListeners(ports: readonly number[]): Promise<void> {
     if (Date.now() > deadline) {
       return
     }
-    const occupied = ports.some((port) => listListeningPids(port).some(isRepoOwnedListener))
+    const occupied = (
+      await Promise.all(
+        occupiedPorts.map(async (port) => ((await canBindLocalPort(port)) ? false : listListeningPids(port).some(isRepoOwnedListener))),
+      )
+    ).some(Boolean)
     if (!occupied) {
       return
     }
@@ -435,22 +448,24 @@ function explicitPortLabel(name: string, preferredPort: number): string {
 }
 
 async function isPortAvailable(port: number): Promise<boolean> {
-  return canUsePortWithListeners({
+  return canUsePort({
     port,
-    listListeningPids,
-    bindProbe: (candidatePort) =>
-      new Promise((resolvePortAvailability) => {
-        const server = net.createServer((socket) => {
-          socket.destroy()
-        })
+    bindProbe: canBindLocalPort,
+  })
+}
 
-        server.once('error', () => resolvePortAvailability(false))
-        server.once('listening', () => {
-          server.close(() => resolvePortAvailability(true))
-        })
+function canBindLocalPort(port: number): Promise<boolean> {
+  return new Promise((resolvePortAvailability) => {
+    const server = net.createServer((socket) => {
+      socket.destroy()
+    })
 
-        server.listen(candidatePort, '127.0.0.1')
-      }),
+    server.once('error', () => resolvePortAvailability(false))
+    server.once('listening', () => {
+      server.close(() => resolvePortAvailability(true))
+    })
+
+    server.listen(port, '127.0.0.1')
   })
 }
 
@@ -563,7 +578,9 @@ function killIfRunning(process: DevChildProcess | null | undefined, signal: Node
   }
   try {
     process.kill(signal)
-  } catch {}
+  } catch (error) {
+    console.warn('Failed to stop compose process', error)
+  }
 }
 
 function cleanupComposeStack(): void {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { logDebug } from './runtime-logger.js'
 
 const ZERO_HEALTH_POLL_DELAY_MS = 250
 
@@ -39,7 +40,9 @@ export function useZeroHealthReady(input: { connectionStateName: string; runtime
           }
           return
         }
-      } catch {}
+      } catch (error) {
+        logDebug('Zero health probe failed', { connectionStateName, error })
+      }
 
       if (!cancelled) {
         scheduleRetry()

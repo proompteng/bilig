@@ -19,6 +19,8 @@ import {
   waitForWorkbookReady,
 } from './web-shell-helpers.js'
 const fuzzBrowserEnabled = process.env['BILIG_FUZZ_BROWSER'] === '1'
+const remoteSyncTest = remoteSyncEnabled ? test : test.skip.bind(test)
+const fuzzBrowserTest = fuzzBrowserEnabled && shouldRunFuzzSuite('browser/grid-selection-focus', 'browser') ? test : test.skip.bind(test)
 
 type BrowserSelectionAction =
   | { kind: 'click'; row: number; col: number }
@@ -517,8 +519,7 @@ test('web app supports fill-handle propagation', async ({ page }) => {
   await expect(resolvedValue).toHaveText('7')
 })
 
-test('web app enables undo and redo for a normal edit', async ({ page }) => {
-  test.skip(!remoteSyncEnabled, 'requires authoritative remote sync history')
+remoteSyncTest('web app enables undo and redo for a normal edit', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-undo-redo-basic')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
@@ -554,8 +555,7 @@ test('web app enables undo and redo for a normal edit', async ({ page }) => {
   await expect(resolvedValue).toHaveText('undo-check')
 })
 
-test('web app preserves redo across a longer undo history', async ({ page }) => {
-  test.skip(!remoteSyncEnabled, 'requires authoritative remote sync history')
+remoteSyncTest('web app preserves redo across a longer undo history', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-undo-redo-long')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
@@ -613,8 +613,7 @@ test('web app preserves redo across a longer undo history', async ({ page }) => 
   await expect(formulaInput).toHaveValue('gamma')
 })
 
-test('web app clears redo after a fresh edit branches history', async ({ page }) => {
-  test.skip(!remoteSyncEnabled, 'requires authoritative remote sync history')
+remoteSyncTest('web app clears redo after a fresh edit branches history', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-undo-redo-branch')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
@@ -1102,45 +1101,46 @@ test('web app ignores right gutter clicks', async ({ page }) => {
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!A1')
 })
 
-test('@fuzz-browser web app preserves valid selection geometry and focus under generated selection actions', async ({ page }) => {
-  test.skip(!fuzzBrowserEnabled || !shouldRunFuzzSuite('browser/grid-selection-focus', 'browser'), 'browser fuzz runs only in fuzz mode')
-
-  await runProperty({
-    suite: 'browser/grid-selection-focus',
-    kind: 'browser',
-    arbitrary: fc.array(
-      fc.oneof<BrowserSelectionAction>(
-        fc.record({
-          kind: fc.constant<'click'>('click'),
-          row: fc.integer({ min: 0, max: 8 }),
-          col: fc.integer({ min: 0, max: 8 }),
-        }),
-        fc.record({
-          kind: fc.constant<'shiftClick'>('shiftClick'),
-          row: fc.integer({ min: 0, max: 8 }),
-          col: fc.integer({ min: 0, max: 8 }),
-        }),
-        fc.record({
-          kind: fc.constant<'key'>('key'),
-          key: fc.constantFrom('ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'),
-          shift: fc.boolean(),
-        }),
+fuzzBrowserTest(
+  '@fuzz-browser web app preserves valid selection geometry and focus under generated selection actions',
+  async ({ page }) => {
+    await runProperty({
+      suite: 'browser/grid-selection-focus',
+      kind: 'browser',
+      arbitrary: fc.array(
+        fc.oneof<BrowserSelectionAction>(
+          fc.record({
+            kind: fc.constant<'click'>('click'),
+            row: fc.integer({ min: 0, max: 8 }),
+            col: fc.integer({ min: 0, max: 8 }),
+          }),
+          fc.record({
+            kind: fc.constant<'shiftClick'>('shiftClick'),
+            row: fc.integer({ min: 0, max: 8 }),
+            col: fc.integer({ min: 0, max: 8 }),
+          }),
+          fc.record({
+            kind: fc.constant<'key'>('key'),
+            key: fc.constantFrom('ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'),
+            shift: fc.boolean(),
+          }),
+        ),
+        { minLength: 6, maxLength: 10 },
       ),
-      { minLength: 6, maxLength: 10 },
-    ),
-    parameters: {
-      interruptAfterTimeLimit: 40_000,
-    },
-    predicate: async (actions) => {
-      await gotoWorkbookShell(page)
-      await waitForWorkbookReady(page)
-      const grid = page.getByTestId('sheet-grid')
-      const nameBox = page.getByTestId('name-box')
-      await expect(grid).toBeVisible({ timeout: 15_000 })
-      await nameBox.fill('C5')
-      await nameBox.press('Enter')
-      await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C5')
-      await runSelectionFuzzActions(page, grid, actions)
-    },
-  })
-})
+      parameters: {
+        interruptAfterTimeLimit: 40_000,
+      },
+      predicate: async (actions) => {
+        await gotoWorkbookShell(page)
+        await waitForWorkbookReady(page)
+        const grid = page.getByTestId('sheet-grid')
+        const nameBox = page.getByTestId('name-box')
+        await expect(grid).toBeVisible({ timeout: 15_000 })
+        await nameBox.fill('C5')
+        await nameBox.press('Enter')
+        await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C5')
+        await runSelectionFuzzActions(page, grid, actions)
+      },
+    })
+  },
+)

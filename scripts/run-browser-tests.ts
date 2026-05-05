@@ -76,7 +76,9 @@ function resolvePublishedServiceHosts(): string[] {
       }
       break
     }
-  } catch {}
+  } catch (error) {
+    console.warn('Failed to resolve published service hosts from /proc/net/route', error)
+  }
 
   return Array.from(new Set(hosts))
 }
@@ -451,7 +453,9 @@ function terminatePreviewServers(): void {
     for (const pid of pids) {
       try {
         process.kill(pid, 'SIGTERM')
-      } catch {}
+      } catch (error) {
+        console.warn(`failed to send SIGTERM to pid ${pid}`, error)
+      }
     }
 
     sleep(300)
@@ -460,7 +464,9 @@ function terminatePreviewServers(): void {
       try {
         process.kill(pid, 0)
         process.kill(pid, 'SIGKILL')
-      } catch {}
+      } catch (error) {
+        console.warn(`failed to force-kill pid ${pid}`, error)
+      }
     }
 
     sleep(100)
@@ -681,7 +687,9 @@ async function runComposePlaywright(): Promise<void> {
 async function stopLocalPlaywrightStack(child: BrowserStackProcess): Promise<void> {
   try {
     child.kill('SIGTERM')
-  } catch {}
+  } catch (error) {
+    console.warn('Failed to request local browser stack SIGTERM', error)
+  }
 
   const exited = await Promise.race([child.exited, Bun.sleep(5_000).then(() => null)])
   if (exited !== null) {
@@ -690,7 +698,9 @@ async function stopLocalPlaywrightStack(child: BrowserStackProcess): Promise<voi
 
   try {
     child.kill('SIGKILL')
-  } catch {}
+  } catch (error) {
+    console.warn('Failed to force local browser stack SIGKILL', error)
+  }
   await child.exited.catch(() => undefined)
 }
 
@@ -720,7 +730,8 @@ async function isLocalPlaywrightStackReady(child: BrowserStackProcess): Promise<
     await waitForHttp(`${getE2eSyncServerUrl()}/runtime-config.json`, 2_000)
     await waitForHttp(getE2eBaseUrl(), 2_000)
     return true
-  } catch {
+  } catch (error) {
+    console.debug('Local browser stack readiness probe failed', error)
     return false
   }
 }

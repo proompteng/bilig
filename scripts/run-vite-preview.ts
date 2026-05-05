@@ -21,7 +21,9 @@ const child = Bun.spawn(['pnpm', 'exec', 'vite', 'preview', '--host', host, '--p
 function forwardAndExit(signal: NodeJS.Signals): void {
   try {
     child.kill(signal)
-  } catch {}
+  } catch (error) {
+    console.warn('Failed to forward signal to preview process', String(signal), error)
+  }
 }
 
 process.on('SIGINT', () => forwardAndExit('SIGINT'))

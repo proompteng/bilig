@@ -1,3 +1,5 @@
+import { logDebug } from './runtime-logger.js'
+
 export async function acquireProjectionEngine<TEngine, TOverlayScope>(args: {
   getInstalledEngine: () => TEngine | null
   getProjectionEnginePromise: () => Promise<TEngine> | null
@@ -64,7 +66,9 @@ export function scheduleProjectionEngineMaterialization(args: {
       try {
         await args.getProjectionEngine()
         args.onProjectionEngineMaterialized?.()
-      } catch {}
+      } catch (error) {
+        logDebug('Failed to materialize projection engine', { error })
+      }
     })()
   })
 }

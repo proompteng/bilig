@@ -6,6 +6,7 @@ import { LocalWorkbookSessionManager } from './workbook-runtime/local-workbook-s
 import { createInProcessWorksheetExecutor } from './workbook-runtime/worksheet-executor.js'
 import { createZeroSyncService } from './zero/service.js'
 import { createWorkbookAgentService } from './codex-app/workbook-agent-service.js'
+import { logError } from './runtime-logger.js'
 
 async function main() {
   const host = process.env['HOST'] ?? '0.0.0.0'
@@ -53,11 +54,15 @@ async function main() {
   } catch (error) {
     try {
       await workbookAgentService.close()
-    } catch {}
+    } catch (closeError) {
+      logError('Failed to close workbook agent service', closeError)
+    }
     try {
       await zeroSyncService.close()
-    } catch {}
-    console.error(error)
+    } catch (closeError) {
+      logError('Failed to close zero sync service', closeError)
+    }
+    logError(error)
     process.exit(1)
   }
 }
@@ -66,7 +71,7 @@ void (async () => {
   try {
     await main()
   } catch (error) {
-    console.error(error)
+    logError(error)
     process.exit(1)
   }
 })()

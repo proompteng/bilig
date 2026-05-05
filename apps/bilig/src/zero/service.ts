@@ -1,4 +1,4 @@
-import { handleMutateRequest, handleQueryRequest } from '@rocicorp/zero/server'
+import { handleMutateRequest, handleQueryRequest, type TransformQueryFunction } from '@rocicorp/zero/server'
 import type { WorkbookSnapshot } from '@bilig/protocol'
 import {
   type AuthoritativeWorkbookEventBatch,
@@ -59,6 +59,7 @@ import {
   listWorkbookThreadWorkflowRuns,
   upsertWorkbookWorkflowRun,
 } from './workbook-workflow-run-store.js'
+import type { z } from 'zod'
 
 export interface ZeroSyncService {
   readonly enabled: boolean
@@ -96,6 +97,19 @@ export interface ZeroSyncService {
   getWorkbookHeadRevision(documentId: string): Promise<number>
   loadLatestWorkbookSnapshot?(documentId: string): Promise<{ revision: number; snapshot: WorkbookSnapshot } | null>
   loadAuthoritativeEvents(documentId: string, afterRevision: number): Promise<AuthoritativeWorkbookEventBatch>
+}
+
+type QueryHandler = {
+  readonly execute: (args: Parameters<TransformQueryFunction>[1], userID: string) => ReturnType<TransformQueryFunction>
+}
+
+function createQueryHandler<TArgs>(
+  argsSchema: z.ZodType<TArgs>,
+  execute: (options: { readonly args: TArgs; readonly ctx: { readonly userID: string } }) => ReturnType<TransformQueryFunction>,
+): QueryHandler {
+  return {
+    execute: (args, userID) => execute({ args: argsSchema.parse(args), ctx: { userID } }),
+  }
 }
 
 function fastifyRequestToWebRequest(request: FastifyRequest): Request {
@@ -237,81 +251,31 @@ class EnabledZeroSyncService implements ZeroSyncService {
 
   async handleQuery(request: FastifyRequest): Promise<unknown> {
     const session = resolveSessionIdentity(request)
-    const queryLookup = {
-      'workbook.get': {
-        query: queries.workbook.get,
-        schema: workbookQueryArgsSchema,
-      },
-      'sheet.byWorkbook': {
-        query: queries.sheet.byWorkbook,
-        schema: workbookQueryArgsSchema,
-      },
-      'cellInput.one': {
-        query: queries.cellInput.one,
-        schema: workbookCellArgsSchema,
-      },
-      'cellInput.tile': {
-        query: queries.cellInput.tile,
-        schema: workbookTileArgsSchema,
-      },
-      'cellEval.one': {
-        query: queries.cellEval.one,
-        schema: workbookCellArgsSchema,
-      },
-      'cellEval.tile': {
-        query: queries.cellEval.tile,
-        schema: workbookTileArgsSchema,
-      },
-      'cellRender.tile': {
-        query: queries.cellRender.tile,
-        schema: workbookTileArgsSchema,
-      },
-      'sheetRow.tile': {
-        query: queries.sheetRow.tile,
-        schema: workbookRowTileArgsSchema,
-      },
-      'sheetCol.tile': {
-        query: queries.sheetCol.tile,
-        schema: workbookColumnTileArgsSchema,
-      },
-      'cellStyle.byWorkbook': {
-        query: queries.cellStyle.byWorkbook,
-        schema: workbookQueryArgsSchema,
-      },
-      'numberFormat.byWorkbook': {
-        query: queries.numberFormat.byWorkbook,
-        schema: workbookQueryArgsSchema,
-      },
-      'presenceCoarse.byWorkbook': {
-        query: queries.presenceCoarse.byWorkbook,
-        schema: workbookQueryArgsSchema,
-      },
-      'presence.byWorkbook': {
-        query: queries.presence.byWorkbook,
-        schema: workbookQueryArgsSchema,
-      },
-      'workbookChange.byWorkbook': {
-        query: queries.workbookChange.byWorkbook,
-        schema: workbookQueryArgsSchema,
-      },
-      'workbookChanges.byWorkbook': {
-        query: queries.workbookChanges.byWorkbook,
-        schema: workbookQueryArgsSchema,
-      },
-    } as const
+    const queryLookup: Record<string, QueryHandler> = {
+      'workbook.get': createQueryHandler(workbookQueryArgsSchema, queries.workbook.get.fn),
+      'sheet.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.sheet.byWorkbook.fn),
+      'cellInput.one': createQueryHandler(workbookCellArgsSchema, queries.cellInput.one.fn),
+      'cellInput.tile': createQueryHandler(workbookTileArgsSchema, queries.cellInput.tile.fn),
+      'cellEval.one': createQueryHandler(workbookCellArgsSchema, queries.cellEval.one.fn),
+      'cellEval.tile': createQueryHandler(workbookTileArgsSchema, queries.cellEval.tile.fn),
+      'cellRender.tile': createQueryHandler(workbookTileArgsSchema, queries.cellRender.tile.fn),
+      'sheetRow.tile': createQueryHandler(workbookRowTileArgsSchema, queries.sheetRow.tile.fn),
+      'sheetCol.tile': createQueryHandler(workbookColumnTileArgsSchema, queries.sheetCol.tile.fn),
+      'cellStyle.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.cellStyle.byWorkbook.fn),
+      'numberFormat.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.numberFormat.byWorkbook.fn),
+      'presenceCoarse.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.presenceCoarse.byWorkbook.fn),
+      'presence.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.presence.byWorkbook.fn),
+      'workbookChange.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookChange.byWorkbook.fn),
+      'workbookChanges.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookChanges.byWorkbook.fn),
+    }
 
     return await handleQueryRequest(
       (name, args) => {
-        if (!hasOwn(queryLookup, name)) {
+        const query = queryLookup[name]
+        if (!query) {
           throw new Error(`Unknown Zero query: ${name}`)
         }
-        const query = queryLookup[name]
-        return query.query.fn({
-          // Zero's query registry erases the specific arg type when accessed through the name map.
-          // oxlint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-          args: query.schema.parse(args) as never,
-          ctx: { userID: session.userID },
-        })
+        return query.execute(args, session.userID)
       },
       schema,
       fastifyRequestToWebRequest(request),
@@ -541,10 +505,6 @@ function resolveOwnerUserId(state: { ownerUserId: string }, session?: SessionIde
     return state.ownerUserId
   }
   return session.userID
-}
-
-function hasOwn<ObjectType extends object>(object: ObjectType, key: PropertyKey): key is keyof ObjectType {
-  return Object.prototype.hasOwnProperty.call(object, key)
 }
 
 export function createZeroSyncService(): ZeroSyncService {

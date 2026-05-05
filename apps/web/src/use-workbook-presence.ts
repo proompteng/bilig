@@ -8,6 +8,7 @@ import {
   WORKBOOK_PRESENCE_STALE_TICK_MS,
   type WorkbookCollaboratorPresence,
 } from './workbook-presence-model.js'
+import { logDebug } from './runtime-logger.js'
 
 interface ZeroLiveView<T> {
   readonly data: T
@@ -43,7 +44,9 @@ function observeZeroMutationResult(result: unknown): void {
   void (async () => {
     try {
       await observer
-    } catch {}
+    } catch (error) {
+      logDebug('Failed to persist workbook presence mutation', error)
+    }
   })()
 }
 

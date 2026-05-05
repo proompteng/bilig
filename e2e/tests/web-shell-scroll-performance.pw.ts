@@ -25,6 +25,7 @@ import {
 
 type ScrollPerfReport = NonNullable<Awaited<ReturnType<typeof stopWorkbookScrollPerf>>>
 type ScrollPerfCounters = ScrollPerfReport['counters']
+const remoteSyncTest = remoteSyncEnabled ? test : test.skip.bind(test)
 
 function readCounter(counters: ScrollPerfCounters, key: keyof ScrollPerfCounters): number {
   return counters[key] ?? 0
@@ -598,8 +599,7 @@ test.describe('@browser-perf web app scroll performance', () => {
     await expect(formulaInput).toHaveValue('7777777')
   })
 
-  test('keeps shell surfaces quiet and coalesces visible collaborator patch churn while browsing', async ({ page }, testInfo) => {
-    test.skip(!remoteSyncEnabled, 'requires Zero-backed browser sync')
+  remoteSyncTest('keeps shell surfaces quiet and coalesces visible collaborator patch churn while browsing', async ({ page }, testInfo) => {
     const documentId = createTestDocumentId('playwright-zero-scroll-patches')
     const mirrorPage = await page.context().newPage()
     const viewport = page.viewportSize()
@@ -653,10 +653,6 @@ test.describe('@browser-perf web app scroll performance', () => {
       await writeFile(testInfo.outputPath('scroll-perf-wide-250k-visible-patches.json'), JSON.stringify(report, null, 2), 'utf8')
 
       expect(report.fixture?.id).toBe('wide-mixed-250k')
-      test.skip(
-        report.counters.damagePatches === 0 && report.counters.rendererDeltaBatches === 0,
-        'remote edits did not arrive during the sampling window',
-      )
       expectBoundedVisibleMutation(report, {
         maxDamagePatches: 6,
         maxRendererDeltaBatches: 6,

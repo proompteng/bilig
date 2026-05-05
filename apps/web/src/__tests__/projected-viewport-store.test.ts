@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ValueTag, type RecalcMetrics } from '@bilig/protocol'
 import { encodeViewportPatch, type ViewportPatch } from '@bilig/worker-transport'
+import { DEFAULT_MAX_CACHED_CELLS_PER_SHEET } from '../projected-viewport-cell-cache.js'
 import { ProjectedViewportStore } from '../projected-viewport-store.js'
 
 const TEST_METRICS: RecalcMetrics = {
@@ -547,7 +548,111 @@ describe('ProjectedViewportStore', () => {
 
     unsubscribe()
 
-    expect(countSheetCells(cache, 'Sheet1')).toBe(6000)
+    expect(countSheetCells(cache, 'Sheet1')).toBe(DEFAULT_MAX_CACHED_CELLS_PER_SHEET)
+  })
+
+  it('supports a configurable viewport cache cap', () => {
+    const cache = new ProjectedViewportStore(
+      {
+        invoke: async () => undefined,
+        ready: async () => undefined,
+        subscribe: () => () => undefined,
+        subscribeBatches: () => () => undefined,
+        subscribeViewportPatches: () => () => undefined,
+        dispose: () => undefined,
+      },
+      {
+        maxCachedCellsPerSheet: 1000,
+      },
+    )
+    const unsubscribe = cache.subscribeViewport('Sheet1', { rowStart: 0, rowEnd: 600, colStart: 0, colEnd: 9 }, () => undefined)
+
+    cache.applyViewportPatch(createLargePatch(601, 10))
+
+    expect(countSheetCells(cache, 'Sheet1')).toBe(6010)
+
+    unsubscribe()
+
+    expect(countSheetCells(cache, 'Sheet1')).toBe(1000)
+  })
+
+  it('supports fractional cache caps in viewport-store options', () => {
+    const cache = new ProjectedViewportStore(
+      {
+        invoke: async () => undefined,
+        ready: async () => undefined,
+        subscribe: () => () => undefined,
+        subscribeBatches: () => () => undefined,
+        subscribeViewportPatches: () => () => undefined,
+        dispose: () => undefined,
+      },
+      {
+        maxCachedCellsPerSheet: 15.4,
+      },
+    )
+    const unsubscribe = cache.subscribeViewport('Sheet1', { rowStart: 0, rowEnd: 2, colStart: 0, colEnd: 9 }, () => undefined)
+
+    cache.applyViewportPatch(createLargePatch(3, 10))
+
+    expect(countSheetCells(cache, 'Sheet1')).toBe(30)
+
+    unsubscribe()
+
+    expect(countSheetCells(cache, 'Sheet1')).toBe(15)
+  })
+
+  it('falls back to the default cache cap for non-finite values', () => {
+    const cache = new ProjectedViewportStore(
+      {
+        invoke: async () => undefined,
+        ready: async () => undefined,
+        subscribe: () => () => undefined,
+        subscribeBatches: () => () => undefined,
+        subscribeViewportPatches: () => () => undefined,
+        dispose: () => undefined,
+      },
+      {
+        maxCachedCellsPerSheet: Number.NaN,
+      },
+    )
+    const unsubscribe = cache.subscribeViewport('Sheet1', { rowStart: 0, rowEnd: 7000, colStart: 0, colEnd: 0 }, () => undefined)
+
+    for (let row = 0; row <= 7000; row += 1) {
+      cache.applyViewportPatch({
+        ...createPatch(),
+        viewport: {
+          sheetName: 'Sheet1',
+          rowStart: row,
+          rowEnd: row,
+          colStart: 0,
+          colEnd: 0,
+        },
+        cells: [
+          {
+            row,
+            col: 0,
+            snapshot: {
+              sheetName: 'Sheet1',
+              address: `A${String(row + 1)}`,
+              value: { tag: ValueTag.Number, value: row },
+              flags: 0,
+              version: 1,
+            },
+            displayText: String(row),
+            copyText: String(row),
+            editorText: String(row),
+            formatId: 0,
+            styleId: 'style-0',
+          },
+        ],
+      })
+    }
+
+    expect(countSheetCells(cache, 'Sheet1')).toBe(7001)
+
+    unsubscribe()
+
+    expect(countSheetCells(cache, 'Sheet1')).toBe(DEFAULT_MAX_CACHED_CELLS_PER_SHEET)
   })
 
   it('keeps pinned cell subscriptions while pruning after viewport teardown', () => {
@@ -567,7 +672,7 @@ describe('ProjectedViewportStore', () => {
     unsubscribeViewport()
 
     expect(cache.peekCell('Sheet1', 'A1')).toBeDefined()
-    expect(countSheetCells(cache, 'Sheet1')).toBe(6000)
+    expect(countSheetCells(cache, 'Sheet1')).toBe(DEFAULT_MAX_CACHED_CELLS_PER_SHEET)
 
     unsubscribeCell()
   })

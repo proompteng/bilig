@@ -73,29 +73,27 @@ describe('resolveRequestedOrAvailablePort', () => {
 })
 
 describe('canUsePort', () => {
-  it('rejects ports that already have listeners before probing', async () => {
+  it('accepts a bindable port', async () => {
     const bindProbe = vi.fn(async () => true)
 
     await expect(
       canUsePort({
         port: 55432,
-        listListeningPids: () => ['952'],
-        bindProbe,
-      }),
-    ).resolves.toBe(false)
-    expect(bindProbe).not.toHaveBeenCalled()
-  })
-
-  it('falls back to a bind probe when there are no listeners', async () => {
-    const bindProbe = vi.fn(async () => true)
-
-    await expect(
-      canUsePort({
-        port: 55434,
-        listListeningPids: () => [],
         bindProbe,
       }),
     ).resolves.toBe(true)
-    expect(bindProbe).toHaveBeenCalledWith(55434)
+    expect(bindProbe).toHaveBeenCalledWith(55432)
+  })
+
+  it('rejects ports that fail the bind probe', async () => {
+    const bindProbe = vi.fn(async () => false)
+
+    await expect(
+      canUsePort({
+        port: 55432,
+        bindProbe,
+      }),
+    ).resolves.toBe(false)
+    expect(bindProbe).toHaveBeenCalledWith(55432)
   })
 })

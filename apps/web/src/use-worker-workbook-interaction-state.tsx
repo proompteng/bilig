@@ -408,18 +408,20 @@ export function useWorkerWorkbookInteractionState(input: {
 
       const nextSelection = completeSelectionNavigation(targetSelection, movement)
       pendingEditCommitMovementAppliedRef.current = Boolean(movement)
-      optimisticCellSeedsRef.current.set(optimisticCellKey(targetSelection.sheetName, targetSelection.address), nextValue)
       const rollbackOptimisticCell = applyOptimisticParsedInput(targetSelection, parsed)
+      const optimisticSnapshot = rollbackOptimisticCell ? getLiveSelectedCell(targetSelection) : null
+      const optimisticEditorValue = optimisticSnapshot ? toEditorValue(optimisticSnapshot) : nextValue
+      optimisticCellSeedsRef.current.set(optimisticCellKey(targetSelection.sheetName, targetSelection.address), optimisticEditorValue)
       finishEditingAtSelection(nextSelection)
       void (async () => {
         try {
           await applyParsedInput(targetSelection.sheetName, targetSelection.address, parsed)
-          clearOptimisticCellSeed(targetSelection.sheetName, targetSelection.address, nextValue)
+          clearOptimisticCellSeed(targetSelection.sheetName, targetSelection.address, optimisticEditorValue)
           if (editSessionRef.current !== commitSessionId) {
             return
           }
         } catch (error) {
-          clearOptimisticCellSeed(targetSelection.sheetName, targetSelection.address, nextValue)
+          clearOptimisticCellSeed(targetSelection.sheetName, targetSelection.address, optimisticEditorValue)
           rollbackOptimisticCell?.()
           if (editSessionRef.current !== commitSessionId) {
             return

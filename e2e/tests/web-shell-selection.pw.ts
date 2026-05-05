@@ -22,6 +22,8 @@ import {
   stopWorkbookScrollPerf,
   waitForWorkbookReady,
 } from './web-shell-helpers.js'
+const debugExactDeleteReproEnabled = process.env['BILIG_DEBUG_EXACT_DELETE_REPRO'] === '1'
+const debugExactDeleteReproTest = debugExactDeleteReproEnabled ? test : test.skip.bind(test)
 
 test('web app keeps sheet tabs and status bar visible in a short viewport', async ({ page }) => {
   await page.setViewportSize({ width: 2048, height: 220 })
@@ -572,9 +574,7 @@ async function screenshotCellHash(page: Page, sheetAddress: string): Promise<str
     .digest('hex')
 }
 
-test('debug exact prepaid-template delete repro', async ({ page }) => {
-  test.skip(process.env['BILIG_DEBUG_EXACT_DELETE_REPRO'] !== '1', 'debug-only exact repro')
-
+debugExactDeleteReproTest('debug exact prepaid-template delete repro', async ({ page }) => {
   const consoleMessages: string[] = []
   page.on('console', (message) => {
     consoleMessages.push(`${message.type()}: ${message.text()}`)

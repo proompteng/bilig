@@ -33,14 +33,9 @@ export async function resolveRequestedOrAvailablePort(options: {
 
 export async function canUsePort(options: {
   readonly port: number
-  readonly listListeningPids: (port: number) => string[]
   readonly bindProbe: (port: number) => Promise<boolean>
 }): Promise<boolean> {
-  const { port, listListeningPids, bindProbe } = options
-  if (listListeningPids(port).length > 0) {
-    return false
-  }
-  return bindProbe(port)
+  return options.bindProbe(options.port)
 }
 
 async function findAvailablePort(

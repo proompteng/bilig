@@ -9,21 +9,22 @@ import {
   type WorkerEngineClient,
 } from '@bilig/worker-transport'
 import { ProjectedViewportAxisStore } from './projected-viewport-axis-store.js'
-import { ProjectedViewportCellCache } from './projected-viewport-cell-cache.js'
+import { DEFAULT_MAX_CACHED_CELLS_PER_SHEET, ProjectedViewportCellCache } from './projected-viewport-cell-cache.js'
 import { ProjectedViewportPatchCoordinator, type ProjectedViewportPatchApplied } from './projected-viewport-patch-coordinator.js'
 import type { ProjectedRenderTile, ProjectedTileSceneChange, ProjectedTileSceneStore } from './projected-tile-scene-store.js'
 import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
 import { DirtyMaskV3 } from '../../../packages/grid/src/renderer-v3/tile-damage-index.js'
 import { normalizeWorkbookMergeRange } from './worker-runtime-support.js'
 
-const MAX_CACHED_CELLS_PER_SHEET = 6000
+export interface ProjectedViewportStoreOptions {
+  readonly maxCachedCellsPerSheet?: number
+}
 type CellItem = readonly [number, number]
 type SheetViewportChannel = 'columnWidths' | 'rowHeights' | 'hiddenColumns' | 'hiddenRows' | 'freeze' | 'merges'
 type SheetIdentity = { readonly sheetId: number; readonly sheetOrdinal: number }
 export class ProjectedViewportStore implements GridEngineLike {
-  private readonly cellCache = new ProjectedViewportCellCache({
-    maxCachedCellsPerSheet: MAX_CACHED_CELLS_PER_SHEET,
-  })
+  private readonly options: ProjectedViewportStoreOptions
+  private readonly cellCache: ProjectedViewportCellCache
   private readonly axisStore: ProjectedViewportAxisStore
   private readonly patchCoordinator: ProjectedViewportPatchCoordinator
   private tileSceneStore: ProjectedTileSceneStore | null = null
@@ -39,7 +40,14 @@ export class ProjectedViewportStore implements GridEngineLike {
     getSheet: (sheetName: string) => this.cellCache.getSheet(sheetName),
   }
 
-  constructor(private readonly client?: WorkerEngineClient) {
+  constructor(
+    private readonly client?: WorkerEngineClient,
+    options: ProjectedViewportStoreOptions = {},
+  ) {
+    this.options = options
+    this.cellCache = new ProjectedViewportCellCache({
+      maxCachedCellsPerSheet: this.options.maxCachedCellsPerSheet ?? DEFAULT_MAX_CACHED_CELLS_PER_SHEET,
+    })
     this.axisStore = new ProjectedViewportAxisStore({
       markSheetKnown: (sheetName) => this.cellCache.markSheetKnown(sheetName),
       notifyListeners: () => this.cellCache.notifyListeners(),

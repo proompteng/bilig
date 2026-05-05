@@ -211,6 +211,16 @@ function emptyCellSnapshot(selection: WorkerRuntimeSelection): CellSnapshot {
   }
 }
 
+function shouldForceSelectionHydration(current: CellSnapshot | undefined, incoming: CellSnapshot): boolean {
+  if (!current) {
+    return false
+  }
+  if ((current.input !== undefined || current.formula !== undefined) && current.version > incoming.version) {
+    return false
+  }
+  return true
+}
+
 function selectionViewport(selection: WorkerRuntimeSelection): Viewport {
   const parsed = parseCellAddress(selection.address, selection.sheetName)
   return {
@@ -355,9 +365,12 @@ export async function createWorkerRuntimeSessionController(
     currentSelection = selection
     callbacks.onSelection(selection)
     const snapshot = await loadSelectionCellSnapshot(selection)
-    viewportStore.setCellSnapshot(snapshot ?? emptyCellSnapshot(selection), { force: true })
+    const nextSnapshot = snapshot ?? emptyCellSnapshot(selection)
+    viewportStore.setCellSnapshot(nextSnapshot, {
+      force: shouldForceSelectionHydration(viewportStore.peekCell(selection.sheetName, selection.address), nextSnapshot),
+    })
     updateSelectionViewport(selection)
-    return snapshot ?? emptyCellSnapshot(selection)
+    return nextSnapshot
   }
 
   const loadSelectionCellSnapshot = async (selection: WorkerRuntimeSelection): Promise<CellSnapshot | null> => {

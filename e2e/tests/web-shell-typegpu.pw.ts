@@ -1094,7 +1094,9 @@ async function installTypeGpuReadbackHarness(page: Page): Promise<void> {
               .finally(() => {
                 try {
                   buffer.unmap()
-                } catch {}
+                } catch (error) {
+                  console.warn('Ignoring GPU buffer unmap error', error)
+                }
                 buffer.destroy()
               })
             return result

@@ -1,6 +1,7 @@
 import { zeroNodePg } from '@rocicorp/zero/server/adapters/pg'
 import { Pool } from 'pg'
 import { schema } from '@bilig/zero-sync'
+import { logError } from '../runtime-logger.js'
 
 export function resolveZeroDatabaseUrl(): string | null {
   return process.env['ZERO_UPSTREAM_DB'] ?? process.env['DATABASE_URL'] ?? process.env['BILIG_DATABASE_URL'] ?? null
@@ -11,7 +12,7 @@ export function createZeroPool(connectionString: string): Pool {
     connectionString,
   })
   pool.on('error', (error) => {
-    console.error('Zero Postgres pool error', error)
+    logError('Zero Postgres pool error', error)
   })
   return pool
 }

@@ -8,11 +8,19 @@ import {
 } from './projected-viewport-patch-application.js'
 
 const DEFAULT_STYLE_ID = 'style-0'
+export const DEFAULT_MAX_CACHED_CELLS_PER_SHEET = 6000
 
 interface CellSubscription {
   sheetName: string
   addresses: Set<string>
   listener: () => void
+}
+
+function normalizeMaxCachedCellsPerSheet(rawMaxCachedCellsPerSheet: number | undefined): number {
+  if (typeof rawMaxCachedCellsPerSheet !== 'number' || !Number.isFinite(rawMaxCachedCellsPerSheet) || rawMaxCachedCellsPerSheet < 1) {
+    return DEFAULT_MAX_CACHED_CELLS_PER_SHEET
+  }
+  return Math.floor(rawMaxCachedCellsPerSheet)
 }
 
 function isResetEmptySnapshot(snapshot: CellSnapshot): boolean {
@@ -40,13 +48,19 @@ export class ProjectedViewportCellCache {
   private readonly cellAccessTicks = new Map<string, number>()
   private nextCellAccessTick = 1
 
+  private readonly options: {
+    maxCachedCellsPerSheet: number
+  }
+
   constructor(
-    private readonly options: {
-      maxCachedCellsPerSheet: number
-    } = {
-      maxCachedCellsPerSheet: 6000,
-    },
-  ) {}
+    options: {
+      maxCachedCellsPerSheet?: number
+    } = {},
+  ) {
+    this.options = {
+      maxCachedCellsPerSheet: normalizeMaxCachedCellsPerSheet(options.maxCachedCellsPerSheet),
+    }
+  }
 
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener)

@@ -20,6 +20,7 @@ import {
 } from '@bilig/contracts'
 import { createWorkbookPerfSession } from './perf/workbook-perf.js'
 import { WorkbookAgentPanel } from './WorkbookAgentPanel.js'
+import { logDebug } from './runtime-logger.js'
 import {
   useWorkbookAgentThreadSummaries,
   useWorkbookAgentWorkflowRuns,
@@ -786,7 +787,9 @@ export function useWorkbookAgentPane(input: {
       void (async () => {
         try {
           await client.syncThreadContext(activeSession.threadId, nextContext)
-        } catch {}
+        } catch (syncError) {
+          logDebug('Failed to sync agent context update', { documentId, error: syncError })
+        }
       })()
     }, 150)
     return () => {

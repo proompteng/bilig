@@ -14,8 +14,9 @@ import {
   waitForWorkbookReady,
 } from './web-shell-helpers.js'
 
-test('web app propagates content and styling changes across live zero tabs', async ({ page }, testInfo) => {
-  test.skip(!remoteSyncEnabled, 'requires Zero-backed browser sync')
+const remoteSyncTest = remoteSyncEnabled ? test : test.skip.bind(test)
+
+remoteSyncTest('web app propagates content and styling changes across live zero tabs', async ({ page }, testInfo) => {
   test.slow()
   const documentId = createTestDocumentId('playwright-zero-style-multiplayer')
   const mirrorPage = await page.context().newPage()
@@ -49,8 +50,7 @@ test('web app propagates content and styling changes across live zero tabs', asy
   }
 })
 
-test('web app keeps two live zero tabs visually converged across toolbar actions', async ({ page }, testInfo) => {
-  test.skip(!remoteSyncEnabled, 'requires Zero-backed browser sync')
+remoteSyncTest('web app keeps two live zero tabs visually converged across toolbar actions', async ({ page }, testInfo) => {
   test.slow()
   const documentId = createTestDocumentId('playwright-zero-toolbar-multiplayer')
   const mirrorPage = await page.context().newPage()
@@ -85,8 +85,7 @@ test('web app keeps two live zero tabs visually converged across toolbar actions
   }
 })
 
-test('web app preserves an in-progress local draft when another tab edits the same cell', async ({ page }) => {
-  test.skip(!remoteSyncEnabled, 'requires Zero-backed browser sync')
+remoteSyncTest('web app preserves an in-progress local draft when another tab edits the same cell', async ({ page }) => {
   test.slow()
   const documentId = createTestDocumentId('playwright-zero-same-cell-draft')
   const mirrorPage = await page.context().newPage()
@@ -128,8 +127,7 @@ test('web app preserves an in-progress local draft when another tab edits the sa
   }
 })
 
-test('web app compares and applies a stale same-cell draft without losing local work', async ({ page }) => {
-  test.skip(!remoteSyncEnabled, 'requires Zero-backed browser sync')
+remoteSyncTest('web app compares and applies a stale same-cell draft without losing local work', async ({ page }) => {
   test.slow()
   const documentId = createTestDocumentId('playwright-zero-same-cell-conflict')
   const mirrorPage = await page.context().newPage()
@@ -178,8 +176,7 @@ test('web app compares and applies a stale same-cell draft without losing local 
   }
 })
 
-test('web app reverts an authoritative change from the changes pane', async ({ page }) => {
-  test.skip(!remoteSyncEnabled, 'requires Zero-backed browser sync')
+remoteSyncTest('web app reverts an authoritative change from the changes pane', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-zero-change-revert')
   await openZeroWorkbookPage(page, documentId)
 
@@ -210,8 +207,7 @@ test('web app reverts an authoritative change from the changes pane', async ({ p
   await expect(changeRows.nth(1)).toContainText('Reverted in r2')
 })
 
-test('web app restores persisted workbook state after a full reload', async ({ page }) => {
-  test.skip(!remoteSyncEnabled, 'requires Zero-backed browser sync')
+remoteSyncTest('web app restores persisted workbook state after a full reload', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-zero-reload-persist')
   const formulaInput = page.getByTestId('formula-input')
   const resolvedValue = page.getByTestId('formula-resolved-value')

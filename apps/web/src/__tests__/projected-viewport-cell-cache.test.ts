@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ValueTag, type CellSnapshot } from '@bilig/protocol'
-import { ProjectedViewportCellCache } from '../projected-viewport-cell-cache.js'
+import { DEFAULT_MAX_CACHED_CELLS_PER_SHEET, ProjectedViewportCellCache } from '../projected-viewport-cell-cache.js'
 
 function countSheetCells(cache: ProjectedViewportCellCache, sheetName: string): number {
   let count = 0
@@ -129,7 +129,7 @@ describe('ProjectedViewportCellCache', () => {
   })
 
   it('prunes to the cache cap after the last viewport unsubscribes while keeping pinned cells', () => {
-    const cache = new ProjectedViewportCellCache({ maxCachedCellsPerSheet: 6000 })
+    const cache = new ProjectedViewportCellCache({ maxCachedCellsPerSheet: DEFAULT_MAX_CACHED_CELLS_PER_SHEET })
     const untrackViewport = cache.trackViewport('Sheet1', {
       rowStart: 0,
       rowEnd: 600,
@@ -148,9 +148,76 @@ describe('ProjectedViewportCellCache', () => {
 
     untrackViewport()
 
-    expect(countSheetCells(cache, 'Sheet1')).toBe(6000)
+    expect(countSheetCells(cache, 'Sheet1')).toBe(DEFAULT_MAX_CACHED_CELLS_PER_SHEET)
     expect(cache.peekCell('Sheet1', 'A1')).toBeDefined()
 
     unsubscribeCell()
+  })
+
+  it('falls back to the default cache cap when misconfigured', () => {
+    const cache = new ProjectedViewportCellCache({ maxCachedCellsPerSheet: 0 })
+
+    const untrackViewport = cache.trackViewport('Sheet1', {
+      rowStart: 0,
+      rowEnd: 600,
+      colStart: 0,
+      colEnd: 9,
+    })
+
+    for (let row = 0; row <= 600; row += 1) {
+      for (let col = 0; col < 10; col += 1) {
+        cache.setCellSnapshot(snapshot(`${columnLabel(col)}${row + 1}`, row * 10 + col))
+      }
+    }
+
+    expect(countSheetCells(cache, 'Sheet1')).toBe(6010)
+
+    untrackViewport()
+
+    expect(countSheetCells(cache, 'Sheet1')).toBe(DEFAULT_MAX_CACHED_CELLS_PER_SHEET)
+  })
+
+  it('floors the cache cap when fractional values are provided', () => {
+    const cache = new ProjectedViewportCellCache({ maxCachedCellsPerSheet: 12.9 })
+
+    const untrackViewport = cache.trackViewport('Sheet1', {
+      rowStart: 0,
+      rowEnd: 3,
+      colStart: 0,
+      colEnd: 3,
+    })
+
+    for (let row = 0; row <= 3; row += 1) {
+      for (let col = 0; col < 10; col += 1) {
+        cache.setCellSnapshot(snapshot(`${columnLabel(col)}${row + 1}`, row * 10 + col))
+      }
+    }
+
+    expect(countSheetCells(cache, 'Sheet1')).toBe(40)
+
+    untrackViewport()
+
+    expect(countSheetCells(cache, 'Sheet1')).toBe(12)
+  })
+
+  it('falls back to the default cache cap for non-finite values', () => {
+    const cache = new ProjectedViewportCellCache({ maxCachedCellsPerSheet: Number.NEGATIVE_INFINITY })
+
+    const untrackViewport = cache.trackViewport('Sheet1', {
+      rowStart: 0,
+      rowEnd: 7000,
+      colStart: 0,
+      colEnd: 0,
+    })
+
+    for (let row = 0; row <= 7000; row += 1) {
+      cache.setCellSnapshot(snapshot(`A${String(row + 1)}`, row + 1))
+    }
+
+    expect(countSheetCells(cache, 'Sheet1')).toBe(7001)
+
+    untrackViewport()
+
+    expect(countSheetCells(cache, 'Sheet1')).toBe(DEFAULT_MAX_CACHED_CELLS_PER_SHEET)
   })
 })

@@ -53,7 +53,7 @@ describe('createZeroPool', () => {
   })
 
   it('attaches a pool error listener so idle client disconnects do not crash the process', () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     const pool = createZeroPool('postgres://example.test/bilig')
     expect(poolCtor).toHaveBeenCalledWith({
       connectionString: 'postgres://example.test/bilig',
@@ -62,13 +62,10 @@ describe('createZeroPool', () => {
     expect(pool.listenerCount('error')).toBeGreaterThan(0)
     pool.emit('error', new Error('Connection terminated unexpectedly'))
 
-    expect(consoleError).toHaveBeenCalledWith(
-      'Zero Postgres pool error',
-      expect.objectContaining({
-        message: 'Connection terminated unexpectedly',
-      }),
+    expect(stderrWrite).toHaveBeenCalledWith(
+      expect.stringContaining('[bilig] Zero Postgres pool error Error: Connection terminated unexpectedly'),
     )
 
-    consoleError.mockRestore()
+    stderrWrite.mockRestore()
   })
 })

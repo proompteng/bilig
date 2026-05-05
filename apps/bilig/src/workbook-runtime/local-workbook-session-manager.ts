@@ -30,6 +30,7 @@ import { createUnsupportedSyncFrame } from './sync-frame-router.js'
 import { createWorkbookLoadOptions, loadWorkbookIntoRuntime } from './workbook-session-shared.js'
 import { WorkbookSessionCore } from './workbook-session-core.js'
 import { WorkbookSyncSessionHost } from './workbook-sync-session-host.js'
+import { logError } from '../runtime-logger.js'
 
 interface LocalWorkbookSession extends LocalWorksheetSessionState, LocalSnapshotSessionState {
   documentId: string
@@ -328,7 +329,7 @@ export class LocalWorkbookSessionManager {
     try {
       await session.upstreamRelay.send(batch)
     } catch (error) {
-      console.error(`Failed to relay batch ${batch.id} for document ${session.documentId}:`, error)
+      logError(`Failed to relay batch ${batch.id} for document ${session.documentId}:`, error)
     }
   }
 }

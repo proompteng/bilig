@@ -8,6 +8,7 @@ import {
 } from '@bilig/agent-api'
 import type { ImportedWorkbookPreview } from '@bilig/excel-import'
 import { resolveWorkbookNavigationUrl } from './workbook-navigation.js'
+import { logDebug } from './runtime-logger.js'
 
 interface WorkbookImportPreviewSuccess {
   type: 'success'
@@ -66,14 +67,18 @@ async function readErrorMessage(response: Response): Promise<string> {
       ) {
         return payload.error.message
       }
-    } catch {}
+    } catch (error) {
+      logDebug('Failed to parse workbook import JSON error payload', { status: response.status, error })
+    }
   }
   try {
     const text = await response.text()
     if (text.trim().length > 0) {
       return text
     }
-  } catch {}
+  } catch (error) {
+    logDebug('Failed to read workbook import error body', { status: response.status, error })
+  }
   return `Workbook import failed with status ${response.status}`
 }
 

@@ -1,6 +1,7 @@
 import type { WorkbookAgentExecutionRecord, WorkbookAgentCommandBundle, CodexServerNotification } from '@bilig/agent-api'
 import type { WorkbookAgentThreadSnapshot, WorkbookAgentStreamEvent } from '@bilig/contracts'
 import type { SessionIdentity } from '../http/session.js'
+import { logError } from '../runtime-logger.js'
 import type { ZeroSyncService } from '../zero/service.js'
 import {
   CodexAppServerClient,
@@ -112,6 +113,11 @@ export class WorkbookAgentCodexRuntime {
           args: [...CODEX_APP_SERVER_ARGS],
           cwd: process.cwd(),
           env: process.env,
+          onLog: (message) => {
+            if (message.length > 0) {
+              logError(message)
+            }
+          },
           handleDynamicToolCall: createWorkbookAgentDynamicToolHandler({
             zeroSyncService: this.options.zeroSyncService,
             now: this.options.now,
@@ -162,8 +168,8 @@ export class WorkbookAgentCodexRuntime {
         emit: this.options.emit,
         now: this.options.now,
       })
-    } catch {
-      return
+    } catch (error) {
+      logError(error)
     }
   }
 }
