@@ -61,6 +61,57 @@ Known open areas include:
 - typed binary agent frames end to end
 - more public package release hardening
 
+## Headless WorkPaper In Five Minutes
+
+Start here when you want to use the spreadsheet engine from Codex, Claude Code,
+a service, or a Node script without opening the browser UI.
+
+`@bilig/headless` is production-targeted for applications that call the
+documented WorkPaper API directly. It is not a complete Excel clone and should
+not be treated as a drop-in engine for arbitrary Excel uploads. The current
+package README is the contract for install, API usage, persistence, validation,
+limits, and agent workflow: [packages/headless/README.md](packages/headless/README.md).
+
+Minimal example:
+
+```ts
+import { WorkPaper, type WorkPaperCellAddress } from "@bilig/headless";
+
+const workbook = WorkPaper.buildFromSheets(
+  {
+    Sheet1: [
+      [10, 20, "=A1+B1"],
+      [7, "=A2*3", null],
+    ],
+  },
+  { maxRows: 1_000, maxColumns: 100, useColumnIndex: true },
+);
+
+const sheet = workbook.getSheetId("Sheet1");
+if (sheet === undefined) {
+  throw new Error("Sheet1 was not created");
+}
+
+const at = (row: number, col: number): WorkPaperCellAddress => ({ sheet, row, col });
+
+workbook.setCellContents(at(1, 2), "=A2+B2");
+console.log(workbook.getCellValue(at(1, 2)));
+```
+
+Rules for agents:
+
+- Use public package exports from `@bilig/headless`; do not reach into `src/` or
+  `dist/` unless the task is to change the package itself.
+- Addresses are zero-based `{ sheet, row, col }`; resolve sheet ids with
+  `getSheetId()`.
+- Use `exportWorkPaperDocument()` and `createWorkPaperFromDocument()` for
+  persistence round trips.
+- Add tests before changing config rebuilds, range bounds, formulas,
+  persistence, or structural edits.
+- Run focused headless tests first, then `pnpm publish:runtime:check`,
+  `pnpm workpaper:bench:competitive:check`, and `pnpm run ci` before publishing
+  or claiming production readiness.
+
 ## Quickstart
 
 Use Node `24+`, Bun, and `pnpm@10.32.1`.
