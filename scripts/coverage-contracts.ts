@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 import { existsSync } from 'node:fs'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 
-const coveragePath = new URL('../coverage/coverage-final.json', import.meta.url)
+const defaultCoveragePath = fileURLToPath(new URL('../coverage/coverage-final.json', import.meta.url))
 
 const thresholds = [
   { label: 'packages/core/src', prefix: '/packages/core/src/', lines: 91 },
@@ -81,12 +81,27 @@ function isDirectInvocation(): boolean {
   }
 }
 
-export async function runCoverageContracts(path = coveragePath): Promise<void> {
-  if (!existsSync(path instanceof URL ? path : resolve(path))) {
-    throw new Error(`Coverage file not found at ${path instanceof URL ? path.href : path}`)
+export function resolveCoverageFilePath(): string {
+  const explicitPath = process.env['BILIG_COVERAGE_FILE']
+  if (explicitPath) {
+    return resolve(explicitPath)
   }
 
-  const coverage = await Bun.file(path).json()
+  const reportsDirectory = process.env['BILIG_COVERAGE_DIR']
+  if (reportsDirectory) {
+    return resolve(reportsDirectory, 'coverage-final.json')
+  }
+
+  return defaultCoveragePath
+}
+
+export async function runCoverageContracts(path = resolveCoverageFilePath()): Promise<void> {
+  const resolvedPath = path instanceof URL ? fileURLToPath(path) : resolve(path)
+  if (!existsSync(resolvedPath)) {
+    throw new Error(`Coverage file not found at ${resolvedPath}`)
+  }
+
+  const coverage = await Bun.file(resolvedPath).json()
 
   const results = thresholds.map((threshold) => ({
     label: threshold.label,

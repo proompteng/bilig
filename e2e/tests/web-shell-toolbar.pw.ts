@@ -1,12 +1,25 @@
-import { expect, test } from '@playwright/test'
+import { expect, type Page, test } from '@playwright/test'
 import {
+  createTestDocumentId,
   expectToolbarColor,
   getBox,
+  getProductColumnWidth,
   getToolbarButton,
+  gotoWorkbookShell,
   pickToolbarPresetColor,
   remoteSyncEnabled,
   waitForWorkbookReady,
 } from './web-shell-helpers.js'
+
+async function expectSelectedCellValue(page: Page, address: string, value: string) {
+  const nameBox = page.getByTestId('name-box')
+  const formulaInput = page.getByTestId('formula-input')
+
+  await nameBox.fill(address)
+  await nameBox.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText(`Sheet1!${address}`)
+  await expect(formulaInput).toHaveValue(value)
+}
 
 test('web app renders the minimal product shell without legacy demo chrome', async ({ page }) => {
   await page.goto('/')
@@ -30,6 +43,26 @@ test('web app renders the minimal product shell without legacy demo chrome', asy
     { timeout: 15_000 },
   )
   await expect(page.locator('.formula-result-shell')).toHaveCount(0)
+})
+
+test('web app applies the prepaid amortization template from the Templates menu', async ({ page }) => {
+  await gotoWorkbookShell(page, `/?document=${encodeURIComponent(createTestDocumentId('prepaid-template-toolbar'))}`)
+  await waitForWorkbookReady(page)
+
+  await page.getByRole('button', { name: 'Templates' }).click()
+  await page.getByRole('button', { name: 'Prepaid amortization template' }).click()
+
+  await expectSelectedCellValue(page, 'A1', 'Prepaid Amortization Schedule')
+  await expectSelectedCellValue(page, 'A5', 'Vendor')
+  await expectSelectedCellValue(page, 'A6', 'ABC Insurance')
+  await expectSelectedCellValue(page, 'A10', 'Cybersecurity Policy')
+  await expectSelectedCellValue(page, 'T5', '2024 Amortized')
+  await expectSelectedCellValue(page, 'W5', 'Notes')
+
+  const januaryFormula = '=ROUND(IFERROR($E6*MAX(0,MIN($D6,EOMONTH(DATE(2024,1,1),0))-MAX($C6,DATE(2024,1,1))+1)/($D6-$C6+1),0),2)'
+  await expectSelectedCellValue(page, 'H6', januaryFormula)
+  await expectSelectedCellValue(page, 'V6', '=IF(U6<=0,"Complete",IF(T6=0,"Not started","In progress"))')
+  expect(await getProductColumnWidth(page, 0)).toBe(184)
 })
 
 test('web app keeps toolbar controls aligned and consistently sized', async ({ page }) => {

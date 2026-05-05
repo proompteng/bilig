@@ -21,6 +21,9 @@ const startedAt = performance.now()
 const ciProfile = process.env['BILIG_CI_PROFILE'] === 'full' ? 'full' : 'default'
 const runDeepGates = ciProfile === 'full'
 const skipBrowserGates = process.env['BILIG_CI_SKIP_BROWSER'] === '1'
+const coverageReportsDirectory = process.env['BILIG_COVERAGE_DIR'] ?? `coverage/ci-${process.pid}`
+
+process.env['BILIG_COVERAGE_DIR'] = coverageReportsDirectory
 
 function formatSeconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`

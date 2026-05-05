@@ -526,10 +526,26 @@ async function writeCellValue(page: Page, address: string, value: string): Promi
 
 async function selectAddress(page: Page, address: string): Promise<void> {
   const nameBox = page.getByTestId('name-box')
-  await nameBox.fill(address)
-  await expect(nameBox).toHaveValue(address)
-  await nameBox.press('Enter')
-  await expect(page.getByTestId('status-selection')).toHaveText(`Sheet1!${address}`)
+  const statusSelection = page.getByTestId('status-selection')
+  const expectedSelection = `Sheet1!${address}`
+
+  async function attemptSelect(attempt: number): Promise<void> {
+    await nameBox.click()
+    await nameBox.fill(address)
+    await expect(nameBox).toHaveValue(address)
+    await nameBox.press('Enter')
+
+    try {
+      await expect(statusSelection).toHaveText(expectedSelection, { timeout: attempt >= 2 ? 5_000 : 1_000 })
+    } catch (error) {
+      if (attempt >= 2) {
+        throw error
+      }
+      await attemptSelect(attempt + 1)
+    }
+  }
+
+  await attemptSelect(0)
 }
 
 async function readFormulaValue(page: Page): Promise<string> {

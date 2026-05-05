@@ -41,6 +41,7 @@ export default defineConfig({
     exclude: ['**/dist/**', '**/build/**'],
     coverage: {
       provider: 'v8',
+      reportsDirectory: process.env['BILIG_COVERAGE_DIR'] ?? './coverage',
       reporter: ['text', 'lcov', 'json', 'json-summary'],
       include: ['packages/core/src/**/*.ts', 'packages/formula/src/**/*.ts', 'packages/renderer/src/**/*.ts'],
       exclude: [
