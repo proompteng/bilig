@@ -32,7 +32,7 @@ export function createOptimisticCellSnapshot(input: {
         version,
       }
     case 'formula':
-      const evaluation = formulaParses(input.parsed.formula)
+      const evaluation: OptimisticFormulaEvaluation | undefined = formulaParses(input.parsed.formula)
         ? input.evaluateFormula?.(input.parsed.formula)
         : {
             kind: 'invalid',
