@@ -97,6 +97,11 @@ export function useWorkerWorkbookAppState(input: {
   const zeroRef = useRef<LocalOnlyZeroSource>(zeroSource)
   const connectionStateRef = useRef(connectionState.name)
 
+  workerHandleRef.current = workerHandle
+  runtimeControllerRef.current = runtimeController
+  zeroRef.current = zeroSource
+  connectionStateRef.current = connectionState.name
+
   useEffect(() => {
     workerHandleRef.current = workerHandle
   }, [workerHandle])

@@ -87,6 +87,7 @@ export function shouldKeepCurrentSnapshot(
   const allowResetEmptyOverride = options.allowResetEmptyOverride ?? true
   if (
     incomingIsResetEmptySnapshot &&
+    !allowResetEmptyOverride &&
     current.version > incoming.version &&
     (current.formula !== undefined || current.input !== undefined)
   ) {
@@ -102,7 +103,10 @@ export function shouldKeepCurrentSnapshot(
     return true
   }
   if (current.version > incoming.version) {
-    return allowResetEmptyOverride ? !incomingIsResetEmptySnapshot : true
+    if (incomingIsResetEmptySnapshot) {
+      return !allowResetEmptyOverride
+    }
+    return true
   }
   if (current.version < incoming.version) {
     return false
@@ -273,7 +277,11 @@ export function applyProjectedViewportPatch(input: {
     const current = state.cellSnapshots.get(key)
     if (current) {
       const incoming = cell.snapshot
-      if (shouldKeepCurrentSnapshot(current, incoming)) {
+      const allowResetEmptyOverride =
+        !patch.full &&
+        (patch.authoritativeRevision !== undefined ||
+          (current.formula === undefined && current.input === undefined && current.value.tag !== ValueTag.Error))
+      if (shouldKeepCurrentSnapshot(current, incoming, { allowResetEmptyOverride })) {
         continue
       }
       if (cellSnapshotSignature(current) === cellSnapshotSignature(incoming)) {

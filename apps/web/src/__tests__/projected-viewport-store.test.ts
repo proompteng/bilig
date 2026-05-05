@@ -139,6 +139,88 @@ describe('ProjectedViewportStore', () => {
     expect(cache.getCell('Sheet1', 'D5').styleId).toBeUndefined()
   })
 
+  it('accepts partial reset-empty patches that clear newer local input after structural deletes', () => {
+    const cache = new ProjectedViewportStore()
+
+    cache.setCellSnapshot({
+      sheetName: 'Sheet1',
+      address: 'D5',
+      value: { tag: ValueTag.String, value: 'stale-tail', stringId: 1 },
+      input: 'stale-tail',
+      flags: 0,
+      version: 7,
+    })
+
+    cache.applyViewportPatch({
+      ...createPatch(),
+      authoritativeRevision: 0,
+      full: false,
+      cells: [
+        {
+          row: 4,
+          col: 3,
+          snapshot: {
+            sheetName: 'Sheet1',
+            address: 'D5',
+            value: { tag: ValueTag.Empty },
+            flags: 0,
+            version: 0,
+          },
+          displayText: '',
+          copyText: '',
+          editorText: '',
+          formatId: 0,
+          styleId: 'style-0',
+        },
+      ],
+    })
+
+    expect(cache.getCell('Sheet1', 'D5').value).toEqual({ tag: ValueTag.Empty })
+    expect(cache.getCell('Sheet1', 'D5').input).toBeUndefined()
+  })
+
+  it('keeps newer local input when a full reset-empty patch arrives during hydration', () => {
+    const cache = new ProjectedViewportStore()
+
+    cache.setCellSnapshot({
+      sheetName: 'Sheet1',
+      address: 'D5',
+      value: { tag: ValueTag.String, value: 'local-edit', stringId: 1 },
+      input: 'local-edit',
+      flags: 0,
+      version: 7,
+    })
+
+    cache.applyViewportPatch({
+      ...createPatch(),
+      full: true,
+      cells: [
+        {
+          row: 4,
+          col: 3,
+          snapshot: {
+            sheetName: 'Sheet1',
+            address: 'D5',
+            value: { tag: ValueTag.Empty },
+            flags: 0,
+            version: 0,
+          },
+          displayText: '',
+          copyText: '',
+          editorText: '',
+          formatId: 0,
+          styleId: 'style-0',
+        },
+      ],
+    })
+
+    expect(cache.getCell('Sheet1', 'D5')).toMatchObject({
+      value: { tag: ValueTag.String, value: 'local-edit' },
+      input: 'local-edit',
+      version: 7,
+    })
+  })
+
   it('keeps an equal-version local formula snapshot when a later patch drops the formula', () => {
     const cache = new ProjectedViewportStore()
 
