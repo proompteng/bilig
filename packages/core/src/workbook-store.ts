@@ -1369,7 +1369,7 @@ export class WorkbookStore {
   }
 
   private createLogicalAxisId(axis: 'row' | 'column'): string {
-    return axis === 'row' ? `logical-row-${this.nextLogicalRowAxisId++}` : `logical-column-${this.nextLogicalColumnAxisId++}`
+    return axis === 'row' ? `lr${this.nextLogicalRowAxisId++}` : `lc${this.nextLogicalColumnAxisId++}`
   }
 
   private setAxisMetadata(

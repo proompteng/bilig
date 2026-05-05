@@ -721,8 +721,8 @@ describe('WorkbookStore', () => {
         fromCol: 1,
         toRow: undefined,
         toCol: undefined,
-        fromRowId: 'logical-row-1',
-        fromColId: 'logical-column-1',
+        fromRowId: expect.any(String),
+        fromColId: expect.any(String),
       }),
     ])
 
