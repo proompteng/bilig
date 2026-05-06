@@ -26,6 +26,35 @@ export interface FormulaDominanceSnapshot {
   }
 }
 
+export interface LargeWorkbookSloMeasurement {
+  id: string
+  category: 'large-workbook-scale' | 'ui-responsiveness' | 'collaboration'
+  label: string
+  materializedCells: number
+  corpusCaseId: string | null
+  metric: string
+  actualP95: number
+  budgetP95: number
+  gateBudgetP95: number
+  sampleCount: number
+  passed: boolean
+  gatePassed: boolean
+}
+
+export interface LargeWorkbookSloScorecard {
+  schemaVersion: 1
+  suite: 'large-workbook-slo'
+  summary: {
+    coveredLargeWorkbookRows: number[]
+    allSloBudgetsPassed: boolean
+    allGateBudgetsPassed: boolean
+    headedBrowserFrameP95Evidence: 'not-captured'
+    externalGoogleSheetsEvidence: 'not-captured'
+    externalMicrosoftExcelEvidence: 'not-captured'
+  }
+  measurements: LargeWorkbookSloMeasurement[]
+}
+
 export interface HyperFormulaSurfaceSnapshot {
   hyperFormulaCommit: string
   hyperFormulaVersion: string
@@ -101,6 +130,7 @@ export interface BiligDominanceScorecard {
   sourceArtifacts: {
     formulaDominanceSnapshot: string
     hyperFormulaSurfaceSnapshot: string
+    largeWorkbookSloScorecard: string
     workpaperCompetitiveBenchmark: {
       generatedAt: string
       hyperFormulaCommit: string
@@ -114,6 +144,8 @@ export interface BiligDominanceScorecard {
     formulaCanonicalProductionPercent: number
     formulaOfficeListedBreadthPercent: number
     formulaTrackedBreadthPercent: number
+    largeWorkbookSloRowsCovered: number[]
+    largeWorkbookSloPassed: boolean
     hyperFormulaComparableWorkloads: number
     hyperFormulaP95GeomeanRatio: number
     hyperFormulaMeanGeomeanRatio: number
@@ -141,6 +173,8 @@ export interface BuildScorecardInput {
   competitiveArtifactPath: string
   formulaSnapshot: FormulaDominanceSnapshot
   formulaSnapshotPath: string
+  largeWorkbookSloScorecard: LargeWorkbookSloScorecard
+  largeWorkbookSloScorecardPath: string
   surfaceSnapshot: HyperFormulaSurfaceSnapshot
   surfaceSnapshotPath: string
 }
@@ -150,6 +184,7 @@ const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const outputPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'bilig-dominance-scorecard.json')
 const competitiveArtifactPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'workpaper-vs-hyperformula.json')
 const formulaSnapshotPath = join(rootDir, 'packages', 'formula', 'src', '__tests__', 'fixtures', 'formula-dominance-snapshot.json')
+const largeWorkbookSloScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'large-workbook-slo-scorecard.json')
 const surfaceSnapshotPath = join(rootDir, 'packages', 'headless', 'src', '__tests__', 'fixtures', 'hyperformula-surface.json')
 
 function main(): void {
@@ -159,6 +194,8 @@ function main(): void {
     competitiveArtifactPath: toRepoPath(competitiveArtifactPath),
     formulaSnapshot: parseFormulaDominanceSnapshot(readJsonObject(formulaSnapshotPath)),
     formulaSnapshotPath: toRepoPath(formulaSnapshotPath),
+    largeWorkbookSloScorecard: parseLargeWorkbookSloScorecard(readJsonObject(largeWorkbookSloScorecardPath)),
+    largeWorkbookSloScorecardPath: toRepoPath(largeWorkbookSloScorecardPath),
     surfaceSnapshot: parseSurfaceSnapshot(readJsonObject(surfaceSnapshotPath)),
     surfaceSnapshotPath: toRepoPath(surfaceSnapshotPath),
   })
@@ -215,6 +252,12 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
   const batchEdit = requiredFamily(input.competitiveArtifact, 'batch-edit')
   const rebuild = requiredFamily(input.competitiveArtifact, 'rebuild')
   const rangeRead = requiredFamily(input.competitiveArtifact, 'range-read')
+  const load100k = requiredSloMeasurement(input.largeWorkbookSloScorecard, 'load100k')
+  const load250k = requiredSloMeasurement(input.largeWorkbookSloScorecard, 'load250k')
+  const workerWarmStart100k = requiredSloMeasurement(input.largeWorkbookSloScorecard, 'workerWarmStart100k')
+  const workerWarmStart250k = requiredSloMeasurement(input.largeWorkbookSloScorecard, 'workerWarmStart250k')
+  const workerVisibleEdit10k = requiredSloMeasurement(input.largeWorkbookSloScorecard, 'workerVisibleEdit10k')
+  const workerReconnectCatchUp100Pending = requiredSloMeasurement(input.largeWorkbookSloScorecard, 'workerReconnectCatchUp100Pending')
   const totalSurfaceMembers =
     input.surfaceSnapshot.classSurface.staticMembers.length +
     input.surfaceSnapshot.classSurface.staticMethods.length +
@@ -241,6 +284,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
     sourceArtifacts: {
       formulaDominanceSnapshot: input.formulaSnapshotPath,
       hyperFormulaSurfaceSnapshot: input.surfaceSnapshotPath,
+      largeWorkbookSloScorecard: input.largeWorkbookSloScorecardPath,
       workpaperCompetitiveBenchmark: {
         path: input.competitiveArtifactPath,
         generatedAt: input.competitiveArtifact.generatedAt,
@@ -254,6 +298,8 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       formulaCanonicalProductionPercent: input.formulaSnapshot.canonical.summary.percent,
       formulaOfficeListedBreadthPercent: input.formulaSnapshot.formulaBreadth.officeListed.percent,
       formulaTrackedBreadthPercent: input.formulaSnapshot.formulaBreadth.tracked.percent,
+      largeWorkbookSloRowsCovered: input.largeWorkbookSloScorecard.summary.coveredLargeWorkbookRows,
+      largeWorkbookSloPassed: input.largeWorkbookSloScorecard.summary.allSloBudgetsPassed,
       hyperFormulaComparableWorkloads: input.competitiveArtifact.scorecard.comparableCount,
       hyperFormulaMeanGeomeanRatio: input.competitiveArtifact.scorecard.directionalMeanRatioGeomean,
       hyperFormulaP95GeomeanRatio: input.competitiveArtifact.scorecard.directionalP95RatioGeomean,
@@ -319,16 +365,21 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
         title: 'Large Workbook Scale',
         objectiveCategory: 'large-workbook scale',
         target: 'Sub-second warm start, import, viewport, paste, sort, and filter behavior on 100k to 250k row workbooks.',
-        status: 'target-only',
+        status: 'partial-repo-evidence',
         currentEvidence: [
           'local-first worker architecture and OPFS/SQLite model are documented',
           'range-read and build families have HyperFormula comparison evidence',
           familyWinSummary(rangeRead),
+          `large-workbook SLO artifact covers ${input.largeWorkbookSloScorecard.summary.coveredLargeWorkbookRows.join(', ')} materialized-cell sessions`,
+          sloSummary(load100k),
+          sloSummary(load250k),
+          sloSummary(workerWarmStart100k),
+          sloSummary(workerWarmStart250k),
         ],
-        evidenceArtifacts: [input.competitiveArtifactPath, 'docs/05-06-next-phase.md'],
-        checkCommands: ['pnpm test:browser:full', 'pnpm bench:smoke'],
+        evidenceArtifacts: [input.competitiveArtifactPath, input.largeWorkbookSloScorecardPath, 'docs/05-06-next-phase.md'],
+        checkCommands: ['pnpm large-workbook:slo:check', 'CI=1 pnpm bench:contracts', 'pnpm test:browser:full', 'pnpm bench:smoke'],
         blockers: [
-          'the repo does not yet have a generated large-workbook SLO artifact for 100k and 250k row browser sessions',
+          'the generated SLO artifact covers core load and browser-worker runtime, but not headed browser frame/render p95 for 100k and 250k sessions',
           'no direct Sheets or Excel large-workbook scale artifact exists in the repo',
         ],
       },
@@ -337,15 +388,21 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
         title: 'UI Responsiveness',
         objectiveCategory: 'UI responsiveness',
         target: 'Local visible response p95 below 16ms, selection paint p95 below 8ms, and stable viewport frame pacing.',
-        status: 'target-only',
+        status: 'partial-repo-evidence',
         currentEvidence: [
           'worker-first local runtime, projected viewport patches, and tile cache architecture are implemented and documented',
           'browser correctness and performance smoke commands exist',
+          sloSummary(workerVisibleEdit10k),
         ],
-        evidenceArtifacts: ['docs/05-06-next-phase.md', 'apps/web/src/perf/workbook-perf.ts', 'apps/web/src/perf/workbook-scroll-perf.ts'],
-        checkCommands: ['pnpm test:browser:full', 'pnpm bench:smoke'],
+        evidenceArtifacts: [
+          input.largeWorkbookSloScorecardPath,
+          'docs/05-06-next-phase.md',
+          'apps/web/src/perf/workbook-perf.ts',
+          'apps/web/src/perf/workbook-scroll-perf.ts',
+        ],
+        checkCommands: ['pnpm large-workbook:slo:check', 'CI=1 pnpm bench:contracts', 'pnpm test:browser:full', 'pnpm bench:smoke'],
         blockers: [
-          'no checked-in browser p95 artifact proves the stated UI latency targets',
+          'worker visible-patch p95 is checked, but no headed browser frame/paint p95 artifact proves the stated UI latency targets',
           'no direct Sheets or Excel browser responsiveness comparison artifact exists in the repo',
         ],
       },
@@ -358,15 +415,22 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
         currentEvidence: [
           'worker runtime, pending-op journal, authoritative delta ingest, presence, and changes-pane tests exist',
           'collaboration product targets are documented',
+          sloSummary(workerReconnectCatchUp100Pending),
         ],
         evidenceArtifacts: [
+          input.largeWorkbookSloScorecardPath,
           'docs/05-06-next-phase.md',
           'apps/web/src/__tests__/workbook-sync.test.ts',
           'apps/web/src/__tests__/workbook-presence.test.tsx',
         ],
-        checkCommands: ['pnpm test:correctness:browser', 'pnpm test:correctness:server'],
+        checkCommands: [
+          'pnpm large-workbook:slo:check',
+          'CI=1 pnpm bench:contracts',
+          'pnpm test:correctness:browser',
+          'pnpm test:correctness:server',
+        ],
         blockers: [
-          'no generated collaboration SLO artifact covers reconnect catch-up, conflict rate, and multi-user viewport behavior',
+          'generated collaboration SLO evidence covers reconnect catch-up only; conflict rate and multi-user viewport behavior remain uncovered',
           'no direct Sheets collaboration comparison artifact exists in the repo',
         ],
       },
@@ -482,6 +546,14 @@ function requiredFamily(artifact: CompetitiveArtifact, familyName: string): Comp
   return family
 }
 
+function requiredSloMeasurement(scorecard: LargeWorkbookSloScorecard, measurementId: string): LargeWorkbookSloMeasurement {
+  const measurement = scorecard.measurements.find((candidate) => candidate.id === measurementId)
+  if (!measurement) {
+    throw new Error(`Large workbook SLO scorecard is missing required measurement: ${measurementId}`)
+  }
+  return measurement
+}
+
 function familyWinSummary(family: CompetitiveFamilySummary): string {
   const worstMean =
     family.worstWorkpaperToHyperFormulaMeanRatio === null || family.worstMeanRatioWorkload === null
@@ -492,6 +564,10 @@ function familyWinSummary(family: CompetitiveFamilySummary): string {
       ? 'no comparable p95 ratio'
       : `worst p95 ratio ${family.worstWorkpaperToHyperFormulaP95Ratio} on ${family.worstP95RatioWorkload}`
   return `${family.family}: WorkPaper ${family.workpaperWins}/${family.comparableCount}, HyperFormula ${family.hyperformulaWins}/${family.comparableCount}; ${worstMean}; ${worstP95}`
+}
+
+function sloSummary(measurement: LargeWorkbookSloMeasurement): string {
+  return `${measurement.id}: ${measurement.metric} ${measurement.actualP95}ms against ${measurement.budgetP95}ms SLO (${measurement.sampleCount} samples)`
 }
 
 function formatRatio(summary: RatioSummary): string {
@@ -528,6 +604,48 @@ function parseFormulaDominanceSnapshot(value: Record<string, unknown>): FormulaD
       nonProductionRows: arrayField(canonical, 'nonProductionRows'),
     },
   }
+}
+
+function parseLargeWorkbookSloScorecard(value: Record<string, unknown>): LargeWorkbookSloScorecard {
+  const summary = objectField(value, 'summary')
+  return {
+    schemaVersion: literalField(value, 'schemaVersion', 1),
+    suite: literalField(value, 'suite', 'large-workbook-slo'),
+    summary: {
+      coveredLargeWorkbookRows: numberArrayField(summary, 'coveredLargeWorkbookRows'),
+      allSloBudgetsPassed: booleanField(summary, 'allSloBudgetsPassed'),
+      allGateBudgetsPassed: booleanField(summary, 'allGateBudgetsPassed'),
+      headedBrowserFrameP95Evidence: literalField(summary, 'headedBrowserFrameP95Evidence', 'not-captured'),
+      externalGoogleSheetsEvidence: literalField(summary, 'externalGoogleSheetsEvidence', 'not-captured'),
+      externalMicrosoftExcelEvidence: literalField(summary, 'externalMicrosoftExcelEvidence', 'not-captured'),
+    },
+    measurements: arrayField(value, 'measurements').map(parseLargeWorkbookSloMeasurement),
+  }
+}
+
+function parseLargeWorkbookSloMeasurement(value: unknown): LargeWorkbookSloMeasurement {
+  const measurement = asObject(value, 'large workbook SLO measurement')
+  return {
+    id: stringField(measurement, 'id'),
+    category: parseSloMeasurementCategory(stringField(measurement, 'category')),
+    label: stringField(measurement, 'label'),
+    materializedCells: numberField(measurement, 'materializedCells'),
+    corpusCaseId: optionalStringField(measurement, 'corpusCaseId'),
+    metric: stringField(measurement, 'metric'),
+    actualP95: numberField(measurement, 'actualP95'),
+    budgetP95: numberField(measurement, 'budgetP95'),
+    gateBudgetP95: numberField(measurement, 'gateBudgetP95'),
+    sampleCount: numberField(measurement, 'sampleCount'),
+    passed: booleanField(measurement, 'passed'),
+    gatePassed: booleanField(measurement, 'gatePassed'),
+  }
+}
+
+function parseSloMeasurementCategory(value: string): LargeWorkbookSloMeasurement['category'] {
+  if (value === 'large-workbook-scale' || value === 'ui-responsiveness' || value === 'collaboration') {
+    return value
+  }
+  throw new Error(`Unexpected large workbook SLO measurement category: ${value}`)
 }
 
 function parseSurfaceSnapshot(value: Record<string, unknown>): HyperFormulaSurfaceSnapshot {
@@ -647,6 +765,14 @@ function stringArrayField(value: Record<string, unknown>, field: string): string
   const fieldValue = arrayField(value, field)
   if (!fieldValue.every((entry) => typeof entry === 'string')) {
     throw new Error(`Expected ${field} to be a string array`)
+  }
+  return fieldValue
+}
+
+function numberArrayField(value: Record<string, unknown>, field: string): number[] {
+  const fieldValue = arrayField(value, field)
+  if (!fieldValue.every(isFiniteNumber)) {
+    throw new Error(`Expected ${field} to be a finite number array`)
   }
   return fieldValue
 }

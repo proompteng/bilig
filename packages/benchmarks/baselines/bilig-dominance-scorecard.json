@@ -30,6 +30,7 @@
   "sourceArtifacts": {
     "formulaDominanceSnapshot": "packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json",
     "hyperFormulaSurfaceSnapshot": "packages/headless/src/__tests__/fixtures/hyperformula-surface.json",
+    "largeWorkbookSloScorecard": "packages/benchmarks/baselines/large-workbook-slo-scorecard.json",
     "workpaperCompetitiveBenchmark": {
       "path": "packages/benchmarks/baselines/workpaper-vs-hyperformula.json",
       "generatedAt": "2026-05-05T19:00:09.455Z",
@@ -43,6 +44,8 @@
     "formulaCanonicalProductionPercent": 100,
     "formulaOfficeListedBreadthPercent": 100,
     "formulaTrackedBreadthPercent": 100,
+    "largeWorkbookSloRowsCovered": [100000, 250000],
+    "largeWorkbookSloPassed": true,
     "hyperFormulaComparableWorkloads": 46,
     "hyperFormulaMeanGeomeanRatio": 0.5126605383809896,
     "hyperFormulaP95GeomeanRatio": 0.5080601177268398,
@@ -115,16 +118,25 @@
       "title": "Large Workbook Scale",
       "objectiveCategory": "large-workbook scale",
       "target": "Sub-second warm start, import, viewport, paste, sort, and filter behavior on 100k to 250k row workbooks.",
-      "status": "target-only",
+      "status": "partial-repo-evidence",
       "currentEvidence": [
         "local-first worker architecture and OPFS/SQLite model are documented",
         "range-read and build families have HyperFormula comparison evidence",
-        "range-read: WorkPaper 2/2, HyperFormula 0/2; worst mean ratio 0.31797694876367255 on range-read; worst p95 ratio 0.2305879299152803 on range-read"
+        "range-read: WorkPaper 2/2, HyperFormula 0/2; worst mean ratio 0.31797694876367255 on range-read; worst p95 ratio 0.2305879299152803 on range-read",
+        "large-workbook SLO artifact covers 100000, 250000 materialized-cell sessions",
+        "load100k: elapsedMs.p95 238.02679200000006ms against 1500ms SLO (5 samples)",
+        "load250k: elapsedMs.p95 637.624791ms against 1500ms SLO (3 samples)",
+        "workerWarmStart100k: elapsedMs.p95 12.95595800000001ms against 500ms SLO (3 samples)",
+        "workerWarmStart250k: elapsedMs.p95 18.255750000000262ms against 700ms SLO (3 samples)"
       ],
-      "evidenceArtifacts": ["packages/benchmarks/baselines/workpaper-vs-hyperformula.json", "docs/05-06-next-phase.md"],
-      "checkCommands": ["pnpm test:browser:full", "pnpm bench:smoke"],
+      "evidenceArtifacts": [
+        "packages/benchmarks/baselines/workpaper-vs-hyperformula.json",
+        "packages/benchmarks/baselines/large-workbook-slo-scorecard.json",
+        "docs/05-06-next-phase.md"
+      ],
+      "checkCommands": ["pnpm large-workbook:slo:check", "CI=1 pnpm bench:contracts", "pnpm test:browser:full", "pnpm bench:smoke"],
       "blockers": [
-        "the repo does not yet have a generated large-workbook SLO artifact for 100k and 250k row browser sessions",
+        "the generated SLO artifact covers core load and browser-worker runtime, but not headed browser frame/render p95 for 100k and 250k sessions",
         "no direct Sheets or Excel large-workbook scale artifact exists in the repo"
       ]
     },
@@ -133,15 +145,21 @@
       "title": "UI Responsiveness",
       "objectiveCategory": "UI responsiveness",
       "target": "Local visible response p95 below 16ms, selection paint p95 below 8ms, and stable viewport frame pacing.",
-      "status": "target-only",
+      "status": "partial-repo-evidence",
       "currentEvidence": [
         "worker-first local runtime, projected viewport patches, and tile cache architecture are implemented and documented",
-        "browser correctness and performance smoke commands exist"
+        "browser correctness and performance smoke commands exist",
+        "workerVisibleEdit10k: visiblePatchMs.p95 4.072958999999969ms against 16ms SLO (5 samples)"
       ],
-      "evidenceArtifacts": ["docs/05-06-next-phase.md", "apps/web/src/perf/workbook-perf.ts", "apps/web/src/perf/workbook-scroll-perf.ts"],
-      "checkCommands": ["pnpm test:browser:full", "pnpm bench:smoke"],
+      "evidenceArtifacts": [
+        "packages/benchmarks/baselines/large-workbook-slo-scorecard.json",
+        "docs/05-06-next-phase.md",
+        "apps/web/src/perf/workbook-perf.ts",
+        "apps/web/src/perf/workbook-scroll-perf.ts"
+      ],
+      "checkCommands": ["pnpm large-workbook:slo:check", "CI=1 pnpm bench:contracts", "pnpm test:browser:full", "pnpm bench:smoke"],
       "blockers": [
-        "no checked-in browser p95 artifact proves the stated UI latency targets",
+        "worker visible-patch p95 is checked, but no headed browser frame/paint p95 artifact proves the stated UI latency targets",
         "no direct Sheets or Excel browser responsiveness comparison artifact exists in the repo"
       ]
     },
@@ -153,16 +171,23 @@
       "status": "partial-repo-evidence",
       "currentEvidence": [
         "worker runtime, pending-op journal, authoritative delta ingest, presence, and changes-pane tests exist",
-        "collaboration product targets are documented"
+        "collaboration product targets are documented",
+        "workerReconnectCatchUp100Pending: catchUpMs.p95 278.3325420000001ms against 2000ms SLO (3 samples)"
       ],
       "evidenceArtifacts": [
+        "packages/benchmarks/baselines/large-workbook-slo-scorecard.json",
         "docs/05-06-next-phase.md",
         "apps/web/src/__tests__/workbook-sync.test.ts",
         "apps/web/src/__tests__/workbook-presence.test.tsx"
       ],
-      "checkCommands": ["pnpm test:correctness:browser", "pnpm test:correctness:server"],
+      "checkCommands": [
+        "pnpm large-workbook:slo:check",
+        "CI=1 pnpm bench:contracts",
+        "pnpm test:correctness:browser",
+        "pnpm test:correctness:server"
+      ],
       "blockers": [
-        "no generated collaboration SLO artifact covers reconnect catch-up, conflict rate, and multi-user viewport behavior",
+        "generated collaboration SLO evidence covers reconnect catch-up only; conflict rate and multi-user viewport behavior remain uncovered",
         "no direct Sheets collaboration comparison artifact exists in the repo"
       ]
     },

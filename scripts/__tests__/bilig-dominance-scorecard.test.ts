@@ -25,6 +25,13 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.summary.externalMicrosoftExcelEvidence).toBe('not-captured-in-repo')
     expect(scorecard.summary.formulaOfficeListedBreadthPercent).toBe(90.7)
     expect(scorecard.summary.formulaTrackedBreadthPercent).toBe(90.5)
+    expect(scorecard.summary.largeWorkbookSloRowsCovered).toEqual([100_000, 250_000])
+    expect(scorecard.summary.largeWorkbookSloPassed).toBe(true)
+    expect(scorecard.sourceArtifacts.largeWorkbookSloScorecard).toBe('packages/benchmarks/baselines/large-workbook-slo-scorecard.json')
+    expect(scorecard.categories.find((category) => category.id === 'large-workbook-scale')).toMatchObject({
+      status: 'partial-repo-evidence',
+      evidenceArtifacts: expect.arrayContaining(['packages/benchmarks/baselines/large-workbook-slo-scorecard.json']),
+    })
   })
 
   it('maps every explicit objective category into the checked-in generated artifact', () => {
@@ -54,7 +61,9 @@ describe('bilig dominance scorecard', () => {
     const runCi = readFileSync(resolve(repoRoot, 'scripts/run-ci.ts'), 'utf8')
 
     expect(packageJson).toContain('"dominance:check": "bun scripts/gen-bilig-dominance-scorecard.ts --check"')
+    expect(packageJson).toContain('"large-workbook:slo:check": "bun scripts/gen-large-workbook-slo-scorecard.ts --check"')
     expect(runCi).toContain("pnpm('bilig dominance scorecard check', 'dominance:check')")
+    expect(runCi).toContain("pnpm('large workbook SLO scorecard check', 'large-workbook:slo:check')")
   })
 })
 
@@ -84,6 +93,7 @@ function buildFixtureInput(): BuildScorecardInput {
   return {
     competitiveArtifactPath: 'packages/benchmarks/baselines/workpaper-vs-hyperformula.json',
     formulaSnapshotPath: 'packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json',
+    largeWorkbookSloScorecardPath: 'packages/benchmarks/baselines/large-workbook-slo-scorecard.json',
     surfaceSnapshotPath: 'packages/headless/src/__tests__/fixtures/hyperformula-surface.json',
     formulaSnapshot: {
       schemaVersion: 1,
@@ -119,6 +129,26 @@ function buildFixtureInput(): BuildScorecardInput {
         instanceMethods: ['getCellValue', 'setCellContents'],
       },
       configKeys: ['licenseKey', 'useColumnIndex'],
+    },
+    largeWorkbookSloScorecard: {
+      schemaVersion: 1,
+      suite: 'large-workbook-slo',
+      summary: {
+        coveredLargeWorkbookRows: [100_000, 250_000],
+        allSloBudgetsPassed: true,
+        allGateBudgetsPassed: true,
+        headedBrowserFrameP95Evidence: 'not-captured',
+        externalGoogleSheetsEvidence: 'not-captured',
+        externalMicrosoftExcelEvidence: 'not-captured',
+      },
+      measurements: [
+        sloMeasurement('load100k', 'large-workbook-scale', 100_000, 230, 1500),
+        sloMeasurement('load250k', 'large-workbook-scale', 250_000, 600, 1500),
+        sloMeasurement('workerWarmStart100k', 'large-workbook-scale', 100_000, 12, 500),
+        sloMeasurement('workerWarmStart250k', 'large-workbook-scale', 250_000, 17, 700),
+        sloMeasurement('workerVisibleEdit10k', 'ui-responsiveness', 10_000, 4, 16),
+        sloMeasurement('workerReconnectCatchUp100Pending', 'collaboration', 10_000, 270, 2000),
+      ],
     },
     competitiveArtifact: {
       generatedAt: '2026-05-05T19:00:09.455Z',
@@ -168,6 +198,29 @@ function buildFixtureInput(): BuildScorecardInput {
         },
       ],
     },
+  }
+}
+
+function sloMeasurement(
+  id: string,
+  category: BuildScorecardInput['largeWorkbookSloScorecard']['measurements'][number]['category'],
+  materializedCells: number,
+  actualP95: number,
+  budgetP95: number,
+): BuildScorecardInput['largeWorkbookSloScorecard']['measurements'][number] {
+  return {
+    id,
+    category,
+    label: id,
+    materializedCells,
+    corpusCaseId: null,
+    metric: 'elapsedMs.p95',
+    actualP95,
+    budgetP95,
+    gateBudgetP95: budgetP95,
+    sampleCount: 3,
+    passed: true,
+    gatePassed: true,
   }
 }
 

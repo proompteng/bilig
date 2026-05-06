@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "suite": "large-workbook-slo",
+  "generatedAt": "2026-05-06T07:56:22.681Z",
+  "source": {
+    "benchmarkCommand": "CI=1 pnpm bench:contracts",
+    "benchmarkScript": "scripts/bench-contracts.ts",
+    "artifactGenerator": "scripts/gen-large-workbook-slo-scorecard.ts"
+  },
+  "summary": {
+    "coveredLargeWorkbookRows": [100000, 250000],
+    "allSloBudgetsPassed": true,
+    "allGateBudgetsPassed": true,
+    "headedBrowserFrameP95Evidence": "not-captured",
+    "externalGoogleSheetsEvidence": "not-captured",
+    "externalMicrosoftExcelEvidence": "not-captured"
+  },
+  "measurements": [
+    {
+      "id": "load100k",
+      "category": "large-workbook-scale",
+      "label": "100k dense-mixed core snapshot load",
+      "materializedCells": 100000,
+      "corpusCaseId": "dense-mixed-100k",
+      "metric": "elapsedMs.p95",
+      "actualP95": 238.02679200000006,
+      "budgetP95": 1500,
+      "gateBudgetP95": 2250,
+      "sampleCount": 5,
+      "passed": true,
+      "gatePassed": true
+    },
+    {
+      "id": "load250k",
+      "category": "large-workbook-scale",
+      "label": "250k dense-mixed core snapshot load",
+      "materializedCells": 250000,
+      "corpusCaseId": "dense-mixed-250k",
+      "metric": "elapsedMs.p95",
+      "actualP95": 637.624791,
+      "budgetP95": 1500,
+      "gateBudgetP95": 2250,
+      "sampleCount": 3,
+      "passed": true,
+      "gatePassed": true
+    },
+    {
+      "id": "workerWarmStart100k",
+      "category": "large-workbook-scale",
+      "label": "100k dense-mixed browser worker warm start",
+      "materializedCells": 100000,
+      "corpusCaseId": "dense-mixed-100k",
+      "metric": "elapsedMs.p95",
+      "actualP95": 12.95595800000001,
+      "budgetP95": 500,
+      "gateBudgetP95": 750,
+      "sampleCount": 3,
+      "passed": true,
+      "gatePassed": true
+    },
+    {
+      "id": "workerWarmStart250k",
+      "category": "large-workbook-scale",
+      "label": "250k dense-mixed browser worker warm start",
+      "materializedCells": 250000,
+      "corpusCaseId": "dense-mixed-250k",
+      "metric": "elapsedMs.p95",
+      "actualP95": 18.255750000000262,
+      "budgetP95": 700,
+      "gateBudgetP95": 1050,
+      "sampleCount": 3,
+      "passed": true,
+      "gatePassed": true
+    },
+    {
+      "id": "workerVisibleEdit10k",
+      "category": "ui-responsiveness",
+      "label": "10k browser worker visible edit patch",
+      "materializedCells": 10000,
+      "corpusCaseId": null,
+      "metric": "visiblePatchMs.p95",
+      "actualP95": 4.072958999999969,
+      "budgetP95": 16,
+      "gateBudgetP95": 24,
+      "sampleCount": 5,
+      "passed": true,
+      "gatePassed": true
+    },
+    {
+      "id": "workerReconnectCatchUp100Pending",
+      "category": "collaboration",
+      "label": "100 pending browser worker reconnect catch-up",
+      "materializedCells": 10000,
+      "corpusCaseId": null,
+      "metric": "catchUpMs.p95",
+      "actualP95": 278.3325420000001,
+      "budgetP95": 2000,
+      "gateBudgetP95": 3000,
+      "sampleCount": 3,
+      "passed": true,
+      "gatePassed": true
+    }
+  ]
+}

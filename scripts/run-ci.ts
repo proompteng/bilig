@@ -207,6 +207,7 @@ try {
       pnpm('protocol check', 'protocol:check'),
       pnpm('formula inventory check', 'formula-inventory:check'),
       pnpm('formula dominance check', 'formula:dominance:check'),
+      pnpm('large workbook SLO scorecard check', 'large-workbook:slo:check'),
       pnpm('bilig dominance scorecard check', 'dominance:check'),
       pnpm('workspace resolution check', 'workspace-resolution:check'),
       pnpm('canonical naming check', 'naming:check'),
