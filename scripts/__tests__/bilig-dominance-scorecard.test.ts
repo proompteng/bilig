@@ -78,7 +78,14 @@ describe('bilig dominance scorecard', () => {
     })
     expect(scorecard.categories.find((category) => category.id === 'reliability')).toMatchObject({
       status: 'partial-repo-evidence',
-      evidenceArtifacts: expect.arrayContaining(['packages/benchmarks/baselines/reliability-scorecard.json']),
+      evidenceArtifacts: expect.arrayContaining([
+        'packages/benchmarks/baselines/reliability-scorecard.json',
+        'e2e/tests/web-shell-remote-sync.pw.ts',
+      ]),
+      blockers: [
+        'generated reliability evidence covers worker-runtime durability and headed browser reload persistence, but not headed browser crash soak or offline network-partition soak',
+        'no direct Sheets or Excel reliability comparison artifact exists in the repo',
+      ],
     })
     expect(scorecard.categories.find((category) => category.id === 'security')).toMatchObject({
       status: 'partial-repo-evidence',
@@ -348,6 +355,7 @@ function buildFixtureInput(): BuildScorecardInput {
         workerRuntimeImplementation: 'apps/web/src/worker-runtime.ts',
         mutationJournalImplementation: 'apps/web/src/worker-runtime-mutation-journal.ts',
         localStoreImplementation: 'packages/storage-browser/src/index.ts',
+        headedBrowserReliabilityTestFile: 'e2e/tests/web-shell-remote-sync.pw.ts',
       },
       summary: {
         allRequiredControlsPassed: true,
@@ -355,8 +363,9 @@ function buildFixtureInput(): BuildScorecardInput {
         authoritativeAckPassed: true,
         authoritativeRebasePassed: true,
         failedRetryPassed: true,
-        coveredControls: ['pending.localReloadSurvival'],
-        uncoveredControls: ['headedBrowser.crashReloadSoak'],
+        headedBrowserReloadPassed: true,
+        coveredControls: ['pending.localReloadSurvival', 'headedBrowser.reloadPersistence'],
+        uncoveredControls: ['headedBrowser.crashSoak', 'offlineNetworkPartitionSoak', 'externalSheetsExcelReliabilityComparison'],
         externalGoogleSheetsEvidence: 'not-captured',
         externalMicrosoftExcelEvidence: 'not-captured',
       },

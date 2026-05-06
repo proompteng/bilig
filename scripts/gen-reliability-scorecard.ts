@@ -11,7 +11,7 @@ import type { PendingWorkbookMutation } from '../apps/web/src/workbook-sync.js'
 
 export interface ReliabilityControl {
   readonly id: string
-  readonly category: 'pending-durability' | 'authoritative-reconcile' | 'failure-recovery'
+  readonly category: 'pending-durability' | 'authoritative-reconcile' | 'failure-recovery' | 'headed-browser'
   readonly required: boolean
   readonly passed: boolean
   readonly coveredControls: string[]
@@ -28,6 +28,7 @@ export interface ReliabilityScorecard {
     readonly workerRuntimeImplementation: 'apps/web/src/worker-runtime.ts'
     readonly mutationJournalImplementation: 'apps/web/src/worker-runtime-mutation-journal.ts'
     readonly localStoreImplementation: 'packages/storage-browser/src/index.ts'
+    readonly headedBrowserReliabilityTestFile: 'e2e/tests/web-shell-remote-sync.pw.ts'
   }
   readonly summary: {
     readonly allRequiredControlsPassed: boolean
@@ -35,6 +36,7 @@ export interface ReliabilityScorecard {
     readonly authoritativeAckPassed: boolean
     readonly authoritativeRebasePassed: boolean
     readonly failedRetryPassed: boolean
+    readonly headedBrowserReloadPassed: boolean
     readonly coveredControls: string[]
     readonly uncoveredControls: string[]
     readonly externalGoogleSheetsEvidence: 'not-captured'
@@ -50,6 +52,7 @@ const requiredControlIds = [
   'submitted-mutations-absorb-authoritative-ack',
   'authoritative-rebase-preserves-unsent-mutations',
   'failed-mutations-survive-reload-and-retry',
+  'headed-browser-reload-persistence-flow',
 ] as const
 const coveredControlOrder = [
   'pending.localReloadSurvival',
@@ -58,12 +61,10 @@ const coveredControlOrder = [
   'pending.authoritativeRebasePreservesLocal',
   'pending.failedRetrySurvival',
   'localStore.journalActiveView',
+  'headedBrowser.reloadPersistence',
 ] as const
-const uncoveredControls = [
-  'headedBrowser.crashReloadSoak',
-  'offlineNetworkPartitionSoak',
-  'externalSheetsExcelReliabilityComparison',
-] as const
+const uncoveredControls = ['headedBrowser.crashSoak', 'offlineNetworkPartitionSoak', 'externalSheetsExcelReliabilityComparison'] as const
+const headedBrowserReliabilityTestFile = 'e2e/tests/web-shell-remote-sync.pw.ts'
 
 async function main(): Promise<void> {
   const isCheckMode = process.argv.includes('--check')
@@ -89,6 +90,7 @@ export async function buildReliabilityScorecard(generatedAt = new Date().toISOSt
     await buildSubmittedAckControl(),
     await buildAuthoritativeRebaseControl(),
     await buildFailedRetryControl(),
+    buildHeadedBrowserReloadPersistenceControl(),
   ]
   const coveredControlSet = new Set(controls.flatMap((control) => control.coveredControls))
   const coveredControls = coveredControlOrder.filter((control) => coveredControlSet.has(control))
@@ -102,6 +104,7 @@ export async function buildReliabilityScorecard(generatedAt = new Date().toISOSt
       workerRuntimeImplementation: 'apps/web/src/worker-runtime.ts',
       mutationJournalImplementation: 'apps/web/src/worker-runtime-mutation-journal.ts',
       localStoreImplementation: 'packages/storage-browser/src/index.ts',
+      headedBrowserReliabilityTestFile,
     },
     summary: {
       allRequiredControlsPassed: controls.filter((control) => control.required).every((control) => control.passed),
@@ -109,6 +112,7 @@ export async function buildReliabilityScorecard(generatedAt = new Date().toISOSt
       authoritativeAckPassed: requiredControl(controls, 'submitted-mutations-absorb-authoritative-ack').passed,
       authoritativeRebasePassed: requiredControl(controls, 'authoritative-rebase-preserves-unsent-mutations').passed,
       failedRetryPassed: requiredControl(controls, 'failed-mutations-survive-reload-and-retry').passed,
+      headedBrowserReloadPassed: requiredControl(controls, 'headed-browser-reload-persistence-flow').passed,
       coveredControls,
       uncoveredControls: [...uncoveredControls],
       externalGoogleSheetsEvidence: 'not-captured',
@@ -280,6 +284,41 @@ async function buildFailedRetryControl(): Promise<ReliabilityControl> {
   })
 }
 
+function buildHeadedBrowserReloadPersistenceControl(): ReliabilityControl {
+  const source = readFileSync(join(rootDir, headedBrowserReliabilityTestFile), 'utf8')
+  const testTitle = 'web app restores persisted workbook state after a full reload'
+  const testBlock = extractBrowserTestBlock(source, 'remoteSyncTest', testTitle)
+  const findings: string[] = []
+  if (!testBlock) {
+    findings.push(`missing remote-sync Playwright test: ${testTitle}`)
+  } else {
+    requireSnippet(
+      testBlock,
+      "createTestDocumentId('playwright-zero-reload-persist')",
+      'uses an isolated persisted reload document',
+      findings,
+    )
+    requireSnippet(testBlock, 'await openZeroWorkbookPage(page, documentId)', 'opens the headed workbook shell through Zero sync', findings)
+    requireSnippet(testBlock, "await expect(page.getByTestId('worker-error')).toHaveCount(0)", 'starts without worker errors', findings)
+    requireSnippet(testBlock, "await formulaInput.fill('17')", 'applies a visible workbook value before reload', findings)
+    requireSnippet(testBlock, "await formulaInput.press('Enter')", 'commits the workbook value before reload', findings)
+    requireSnippet(testBlock, "await expect(resolvedValue).toHaveText('17')", 'verifies calculated value before and after reload', findings)
+    requireSnippet(testBlock, "await page.reload({ waitUntil: 'domcontentloaded' })", 'performs a real headed browser reload', findings)
+    requireSnippet(testBlock, 'await waitForWorkbookReady(page)', 'waits for the reloaded workbook runtime', findings)
+    requireSnippet(testBlock, "await expect(formulaInput).toHaveValue('17')", 'verifies edited input survived reload', findings)
+  }
+
+  return reliabilityControl({
+    id: 'headed-browser-reload-persistence-flow',
+    category: 'headed-browser',
+    passed: findings.length === 0,
+    coveredControls: ['headedBrowser.reloadPersistence'],
+    evidence:
+      'Validated the headed Playwright reload contract that writes a workbook value through the UI, reloads the browser page, and verifies both formula input and resolved value survive.',
+    findings,
+  })
+}
+
 async function createRuntime(
   localStoreFactory: WorkbookLocalStoreFactory,
   documentId: string,
@@ -350,6 +389,7 @@ export function parseReliabilityScorecard(value: unknown): ReliabilityScorecard 
         'apps/web/src/worker-runtime-mutation-journal.ts',
       ),
       localStoreImplementation: literalField(source, 'localStoreImplementation', 'packages/storage-browser/src/index.ts'),
+      headedBrowserReliabilityTestFile: literalField(source, 'headedBrowserReliabilityTestFile', headedBrowserReliabilityTestFile),
     },
     summary: {
       allRequiredControlsPassed: booleanField(summary, 'allRequiredControlsPassed', 'reliability allRequiredControlsPassed'),
@@ -357,6 +397,7 @@ export function parseReliabilityScorecard(value: unknown): ReliabilityScorecard 
       authoritativeAckPassed: booleanField(summary, 'authoritativeAckPassed', 'reliability authoritativeAckPassed'),
       authoritativeRebasePassed: booleanField(summary, 'authoritativeRebasePassed', 'reliability authoritativeRebasePassed'),
       failedRetryPassed: booleanField(summary, 'failedRetryPassed', 'reliability failedRetryPassed'),
+      headedBrowserReloadPassed: booleanField(summary, 'headedBrowserReloadPassed', 'reliability headedBrowserReloadPassed'),
       coveredControls: stringArrayField(summary, 'coveredControls', 'reliability coveredControls'),
       uncoveredControls: stringArrayField(summary, 'uncoveredControls', 'reliability uncoveredControls'),
       externalGoogleSheetsEvidence: literalField(summary, 'externalGoogleSheetsEvidence', 'not-captured'),
@@ -405,10 +446,29 @@ export function validateReliabilityScorecard(scorecard: ReliabilityScorecard): v
 }
 
 function parseReliabilityCategory(value: string): ReliabilityControl['category'] {
-  if (value === 'pending-durability' || value === 'authoritative-reconcile' || value === 'failure-recovery') {
+  if (value === 'pending-durability' || value === 'authoritative-reconcile' || value === 'failure-recovery' || value === 'headed-browser') {
     return value
   }
   throw new Error(`Unexpected reliability category: ${value}`)
+}
+
+function extractBrowserTestBlock(source: string, testFunctionName: 'test' | 'remoteSyncTest', testTitle: string): string | null {
+  const marker = `${testFunctionName}('${testTitle}'`
+  const start = source.indexOf(marker)
+  if (start < 0) {
+    return null
+  }
+  const endCandidates = ['\nremoteSyncTest(', '\ntest(']
+    .map((nextMarker) => source.indexOf(nextMarker, start + marker.length))
+    .filter((index) => index >= 0)
+  const end = endCandidates.length > 0 ? Math.min(...endCandidates) : source.length
+  return source.slice(start, end)
+}
+
+function requireSnippet(source: string, snippet: string, label: string, findings: string[]): void {
+  if (!source.includes(snippet)) {
+    findings.push(`missing ${label}`)
+  }
 }
 
 function logResult(mode: 'check' | 'write', scorecard: ReliabilityScorecard): void {

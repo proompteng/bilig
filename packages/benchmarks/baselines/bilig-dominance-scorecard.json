@@ -125,14 +125,11 @@
       "pending.authoritativeAckAbsorption",
       "pending.authoritativeRebasePreservesLocal",
       "pending.failedRetrySurvival",
-      "localStore.journalActiveView"
+      "localStore.journalActiveView",
+      "headedBrowser.reloadPersistence"
     ],
     "reliabilityPosturePassed": true,
-    "reliabilityUncoveredControls": [
-      "headedBrowser.crashReloadSoak",
-      "offlineNetworkPartitionSoak",
-      "externalSheetsExcelReliabilityComparison"
-    ],
+    "reliabilityUncoveredControls": ["headedBrowser.crashSoak", "offlineNetworkPartitionSoak", "externalSheetsExcelReliabilityComparison"],
     "securityCoveredControls": [
       "formula.noEval",
       "formula.noFunctionConstructor",
@@ -399,13 +396,14 @@
       "status": "partial-repo-evidence",
       "currentEvidence": [
         "generated reliability scorecard passes required controls: true",
-        "covered reliability controls: pending.localReloadSurvival, pending.submittedReloadSurvival, pending.authoritativeAckAbsorption, pending.authoritativeRebasePreservesLocal, pending.failedRetrySurvival, localStore.journalActiveView",
-        "uncovered reliability controls are explicitly disclosed: headedBrowser.crashReloadSoak, offlineNetworkPartitionSoak, externalSheetsExcelReliabilityComparison",
+        "covered reliability controls: pending.localReloadSurvival, pending.submittedReloadSurvival, pending.authoritativeAckAbsorption, pending.authoritativeRebasePreservesLocal, pending.failedRetrySurvival, localStore.journalActiveView, headedBrowser.reloadPersistence",
+        "uncovered reliability controls are explicitly disclosed: headedBrowser.crashSoak, offlineNetworkPartitionSoak, externalSheetsExcelReliabilityComparison",
         "local pending-op journal and reconnect/rebase architecture are documented",
         "runtime sync replay, fuzz, reconnect, and local persistence tests exist"
       ],
       "evidenceArtifacts": [
         "packages/benchmarks/baselines/reliability-scorecard.json",
+        "e2e/tests/web-shell-remote-sync.pw.ts",
         "docs/05-06-next-phase.md",
         "apps/web/src/__tests__/runtime-sync.fuzz.test.ts",
         "apps/web/src/__tests__/worker-runtime.test.ts"
@@ -413,12 +411,13 @@
       "checkCommands": [
         "pnpm reliability:check",
         "pnpm exec vitest run apps/web/src/__tests__/worker-runtime.test.ts apps/web/src/__tests__/worker-runtime-local-persistence.test.ts apps/web/src/__tests__/worker-runtime-bootstrap-persistence.test.ts apps/web/src/__tests__/workbook-mutation-journal.test.ts",
+        "pnpm test:browser e2e/tests/web-shell-remote-sync.pw.ts -g \"restores persisted workbook state after a full reload\"",
         "pnpm test:fuzz:main",
         "pnpm test:correctness:browser",
         "pnpm test:correctness:server"
       ],
       "blockers": [
-        "generated reliability evidence covers worker-runtime reload, submitted ack absorption, authoritative rebase, and failed retry durability, but not headed browser crash/reload or offline network-partition soak",
+        "generated reliability evidence covers worker-runtime durability and headed browser reload persistence, but not headed browser crash soak or offline network-partition soak",
         "no direct Sheets or Excel reliability comparison artifact exists in the repo"
       ]
     },

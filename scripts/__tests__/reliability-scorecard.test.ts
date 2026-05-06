@@ -16,6 +16,7 @@ describe('reliability scorecard', () => {
         authoritativeAckPassed: true,
         authoritativeRebasePassed: true,
         failedRetryPassed: true,
+        headedBrowserReloadPassed: true,
         externalGoogleSheetsEvidence: 'not-captured',
         externalMicrosoftExcelEvidence: 'not-captured',
       },
@@ -25,6 +26,7 @@ describe('reliability scorecard', () => {
       'submitted-mutations-absorb-authoritative-ack',
       'authoritative-rebase-preserves-unsent-mutations',
       'failed-mutations-survive-reload-and-retry',
+      'headed-browser-reload-persistence-flow',
     ])
     expect(scorecard.controls.every((control) => control.required && control.passed)).toBe(true)
     expect(scorecard.summary.coveredControls).toEqual([
@@ -34,9 +36,10 @@ describe('reliability scorecard', () => {
       'pending.authoritativeRebasePreservesLocal',
       'pending.failedRetrySurvival',
       'localStore.journalActiveView',
+      'headedBrowser.reloadPersistence',
     ])
     expect(scorecard.summary.uncoveredControls).toEqual([
-      'headedBrowser.crashReloadSoak',
+      'headedBrowser.crashSoak',
       'offlineNetworkPartitionSoak',
       'externalSheetsExcelReliabilityComparison',
     ])

@@ -1,12 +1,13 @@
 {
   "schemaVersion": 1,
   "suite": "reliability-posture",
-  "generatedAt": "2026-05-06T08:32:44.254Z",
+  "generatedAt": "2026-05-06T09:44:08.565Z",
   "source": {
     "artifactGenerator": "scripts/gen-reliability-scorecard.ts",
     "workerRuntimeImplementation": "apps/web/src/worker-runtime.ts",
     "mutationJournalImplementation": "apps/web/src/worker-runtime-mutation-journal.ts",
-    "localStoreImplementation": "packages/storage-browser/src/index.ts"
+    "localStoreImplementation": "packages/storage-browser/src/index.ts",
+    "headedBrowserReliabilityTestFile": "e2e/tests/web-shell-remote-sync.pw.ts"
   },
   "summary": {
     "allRequiredControlsPassed": true,
@@ -14,15 +15,17 @@
     "authoritativeAckPassed": true,
     "authoritativeRebasePassed": true,
     "failedRetryPassed": true,
+    "headedBrowserReloadPassed": true,
     "coveredControls": [
       "pending.localReloadSurvival",
       "pending.submittedReloadSurvival",
       "pending.authoritativeAckAbsorption",
       "pending.authoritativeRebasePreservesLocal",
       "pending.failedRetrySurvival",
-      "localStore.journalActiveView"
+      "localStore.journalActiveView",
+      "headedBrowser.reloadPersistence"
     ],
-    "uncoveredControls": ["headedBrowser.crashReloadSoak", "offlineNetworkPartitionSoak", "externalSheetsExcelReliabilityComparison"],
+    "uncoveredControls": ["headedBrowser.crashSoak", "offlineNetworkPartitionSoak", "externalSheetsExcelReliabilityComparison"],
     "externalGoogleSheetsEvidence": "not-captured",
     "externalMicrosoftExcelEvidence": "not-captured"
   },
@@ -61,6 +64,15 @@
       "passed": true,
       "coveredControls": ["pending.failedRetrySurvival", "localStore.journalActiveView"],
       "evidence": "Marked a pending mutation failed, reopened the runtime, retried it, reopened again, and verified it returned to local pending state without losing the projected value.",
+      "findings": []
+    },
+    {
+      "id": "headed-browser-reload-persistence-flow",
+      "category": "headed-browser",
+      "required": true,
+      "passed": true,
+      "coveredControls": ["headedBrowser.reloadPersistence"],
+      "evidence": "Validated the headed Playwright reload contract that writes a workbook value through the UI, reloads the browser page, and verifies both formula input and resolved value survive.",
       "findings": []
     }
   ]

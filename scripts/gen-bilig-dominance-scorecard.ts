@@ -638,6 +638,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
         ],
         evidenceArtifacts: [
           input.reliabilityScorecardPath,
+          'e2e/tests/web-shell-remote-sync.pw.ts',
           'docs/05-06-next-phase.md',
           'apps/web/src/__tests__/runtime-sync.fuzz.test.ts',
           'apps/web/src/__tests__/worker-runtime.test.ts',
@@ -645,12 +646,13 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
         checkCommands: [
           'pnpm reliability:check',
           'pnpm exec vitest run apps/web/src/__tests__/worker-runtime.test.ts apps/web/src/__tests__/worker-runtime-local-persistence.test.ts apps/web/src/__tests__/worker-runtime-bootstrap-persistence.test.ts apps/web/src/__tests__/workbook-mutation-journal.test.ts',
+          'pnpm test:browser e2e/tests/web-shell-remote-sync.pw.ts -g "restores persisted workbook state after a full reload"',
           'pnpm test:fuzz:main',
           'pnpm test:correctness:browser',
           'pnpm test:correctness:server',
         ],
         blockers: [
-          'generated reliability evidence covers worker-runtime reload, submitted ack absorption, authoritative rebase, and failed retry durability, but not headed browser crash/reload or offline network-partition soak',
+          'generated reliability evidence covers worker-runtime durability and headed browser reload persistence, but not headed browser crash soak or offline network-partition soak',
           'no direct Sheets or Excel reliability comparison artifact exists in the repo',
         ],
       },
