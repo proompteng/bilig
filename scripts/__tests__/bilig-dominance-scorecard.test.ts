@@ -204,7 +204,11 @@ describe('bilig dominance scorecard', () => {
         'packages/benchmarks/baselines/ui-responsiveness-external-sheets-excel-comparison.json',
         'packages/benchmarks/baselines/ui-responsiveness-live-browser-scorecard.json',
       ]),
-      checkCommands: expect.arrayContaining(['pnpm ui:browser-live:check']),
+      checkCommands: expect.arrayContaining([
+        'pnpm ui:same-corpus:capture -- --preflight --google-sheets-url <url> --microsoft-excel-web-url <url> [--google-sheets-storage-state <state.json>]',
+        'pnpm ui:browser-live:generate -- --capture <capture.json>',
+        'pnpm ui:browser-live:check',
+      ]),
       blockers: ['live UI browser evidence is direct, but it is not a same-corpus 10x proof against incumbents'],
     })
     expect(scorecard.categories.find((category) => category.id === 'collaboration')).toMatchObject({
@@ -369,6 +373,7 @@ describe('bilig dominance scorecard', () => {
     expect(packageJson).toContain('"import-export:fidelity:check": "bun scripts/gen-import-export-fidelity-scorecard.ts --check"')
     expect(packageJson).toContain('"large-workbook:slo:check": "bun scripts/gen-large-workbook-slo-scorecard.ts --check"')
     expect(packageJson).toContain('"ui:same-corpus:capture": "bun scripts/capture-ui-responsiveness-same-corpus.ts"')
+    expect(packageJson).toContain('"ui:browser-live:generate": "bun scripts/gen-ui-responsiveness-live-browser-scorecard.ts"')
     expect(packageJson).toContain('"ui:browser-live:check": "bun scripts/gen-ui-responsiveness-live-browser-scorecard.ts --check"')
     expect(packageJson).toContain('"security:posture:check": "bun scripts/gen-security-posture-scorecard.ts --check"')
     expect(runCi).toContain("pnpm('bilig dominance scorecard check', 'dominance:check')")
