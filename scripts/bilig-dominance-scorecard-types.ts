@@ -18,6 +18,7 @@ import type { MicrosoftExcelLiveRecalculationScorecard } from './gen-microsoft-e
 import type { MicrosoftExcelLiveStructuralScorecard } from './gen-microsoft-excel-live-structural-scorecard.ts'
 import type { ReliabilityScorecard } from './gen-reliability-scorecard.ts'
 import type { SecurityPostureScorecard } from './gen-security-posture-scorecard.ts'
+import type { UiResponsivenessLiveBrowserScorecard } from './gen-ui-responsiveness-live-browser-scorecard.ts'
 
 export type { HeadedBrowserFrameP95Contract, LargeWorkbookSloMeasurement, LargeWorkbookSloScorecard }
 
@@ -131,6 +132,7 @@ export interface BiligDominanceScorecard {
     microsoftExcelLiveStructuralScorecard: string
     importExportFidelityScorecard: string
     largeWorkbookSloScorecard: string
+    uiResponsivenessLiveBrowserScorecard: string
     reliabilityScorecard: string
     securityPostureScorecard: string
     workpaperCompetitiveBenchmark: {
@@ -203,6 +205,8 @@ export interface BiligDominanceScorecard {
     importExportUnsupportedFeatures: string[]
     largeWorkbookSloRowsCovered: number[]
     largeWorkbookSloPassed: boolean
+    uiResponsivenessLiveBrowserPassed: boolean
+    uiResponsivenessLiveBrowserVendors: string[]
     reliabilityCoveredControls: string[]
     reliabilityPosturePassed: boolean
     reliabilityUncoveredControls: string[]
@@ -264,6 +268,8 @@ export interface BuildScorecardInput {
   importExportFidelityScorecardPath: string
   largeWorkbookSloScorecard: LargeWorkbookSloScorecard
   largeWorkbookSloScorecardPath: string
+  uiResponsivenessLiveBrowserScorecard: UiResponsivenessLiveBrowserScorecard
+  uiResponsivenessLiveBrowserScorecardPath: string
   reliabilityScorecard: ReliabilityScorecard
   reliabilityScorecardPath: string
   securityPostureScorecard: SecurityPostureScorecard

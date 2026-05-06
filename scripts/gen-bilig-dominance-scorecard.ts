@@ -9,10 +9,16 @@ import type {
   BiligDominanceScorecard,
   BuildScorecardInput,
   CompetitiveResult,
-  HeadedBrowserFrameP95Contract,
   LargeWorkbookSloMeasurement,
-  RatioSummary,
 } from './bilig-dominance-scorecard-types.ts'
+import {
+  familyWinSummary,
+  formatList,
+  formatRatio,
+  formulaMissingFunctionBlockers,
+  headedBrowserContractSummary,
+  sloSummary,
+} from './bilig-dominance-formatters.ts'
 import { parseCompetitiveArtifact, parseFormulaDominanceSnapshot, parseSurfaceSnapshot } from './bilig-dominance-scorecard-parsers.ts'
 import { parseAuditabilityScorecard } from './gen-auditability-scorecard.ts'
 import { parseAutomationScorecard } from './gen-automation-scorecard.ts'
@@ -30,6 +36,7 @@ import { parseMicrosoftExcelLiveRecalculationScorecard } from './gen-microsoft-e
 import { parseMicrosoftExcelLiveStructuralScorecard } from './gen-microsoft-excel-live-structural-scorecard.ts'
 import { parseReliabilityScorecard } from './gen-reliability-scorecard.ts'
 import { parseSecurityPostureScorecard } from './gen-security-posture-scorecard.ts'
+import { parseUiResponsivenessLiveBrowserScorecard } from './gen-ui-responsiveness-live-browser-scorecard.ts'
 import { isFiniteNumber, readJsonObject } from './json-scorecard-helpers.ts'
 
 export type { BiligDominanceScorecard, BuildScorecardInput } from './bilig-dominance-scorecard-types.ts'
@@ -101,6 +108,13 @@ const microsoftExcelLiveStructuralScorecardPath = join(
 )
 const importExportFidelityScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'import-export-fidelity-scorecard.json')
 const largeWorkbookSloScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'large-workbook-slo-scorecard.json')
+const uiResponsivenessLiveBrowserScorecardPath = join(
+  rootDir,
+  'packages',
+  'benchmarks',
+  'baselines',
+  'ui-responsiveness-live-browser-scorecard.json',
+)
 const reliabilityScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'reliability-scorecard.json')
 const securityPostureScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'security-posture-scorecard.json')
 const surfaceSnapshotPath = join(rootDir, 'packages', 'headless', 'src', '__tests__', 'fixtures', 'hyperformula-surface.json')
@@ -154,6 +168,10 @@ function main(): void {
     importExportFidelityScorecardPath: toRepoPath(importExportFidelityScorecardPath),
     largeWorkbookSloScorecard: parseLargeWorkbookSloScorecard(readJsonObject(largeWorkbookSloScorecardPath)),
     largeWorkbookSloScorecardPath: toRepoPath(largeWorkbookSloScorecardPath),
+    uiResponsivenessLiveBrowserScorecard: parseUiResponsivenessLiveBrowserScorecard(
+      readJsonObject(uiResponsivenessLiveBrowserScorecardPath),
+    ),
+    uiResponsivenessLiveBrowserScorecardPath: toRepoPath(uiResponsivenessLiveBrowserScorecardPath),
     reliabilityScorecard: parseReliabilityScorecard(readJsonObject(reliabilityScorecardPath)),
     reliabilityScorecardPath: toRepoPath(reliabilityScorecardPath),
     securityPostureScorecard: parseSecurityPostureScorecard(readJsonObject(securityPostureScorecardPath)),
@@ -264,6 +282,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
   const structuralDirectTargetsTenXPassed = microsoftExcelStructuralTenXPassed && googleSheetsStructuralTenXPassed
   const largeWorkbookDirectTargetsTenXPassed = microsoftExcelLargeWorkbookTenXPassed && googleSheetsLargeWorkbookTenXPassed
   const calculationSemanticsPassed = input.calculationSemanticsScorecard.summary.allCommittedFormulaSemanticsCovered
+  const uiResponsivenessLiveBrowserPassed = input.uiResponsivenessLiveBrowserScorecard.summary.allRequiredCasesPassed
   const totalSurfaceMembers =
     input.surfaceSnapshot.classSurface.staticMembers.length +
     input.surfaceSnapshot.classSurface.staticMethods.length +
@@ -305,6 +324,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       microsoftExcelLiveStructuralScorecard: input.microsoftExcelLiveStructuralScorecardPath,
       importExportFidelityScorecard: input.importExportFidelityScorecardPath,
       largeWorkbookSloScorecard: input.largeWorkbookSloScorecardPath,
+      uiResponsivenessLiveBrowserScorecard: input.uiResponsivenessLiveBrowserScorecardPath,
       reliabilityScorecard: input.reliabilityScorecardPath,
       securityPostureScorecard: input.securityPostureScorecardPath,
       workpaperCompetitiveBenchmark: {
@@ -386,6 +406,8 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       importExportUnsupportedFeatures: input.importExportFidelityScorecard.summary.unsupportedFeatures,
       largeWorkbookSloRowsCovered: input.largeWorkbookSloScorecard.summary.coveredLargeWorkbookRows,
       largeWorkbookSloPassed: input.largeWorkbookSloScorecard.summary.allSloBudgetsPassed,
+      uiResponsivenessLiveBrowserPassed,
+      uiResponsivenessLiveBrowserVendors: input.uiResponsivenessLiveBrowserScorecard.summary.capturedVendors,
       reliabilityCoveredControls: input.reliabilityScorecard.summary.coveredControls,
       reliabilityPosturePassed: input.reliabilityScorecard.summary.allRequiredControlsPassed,
       reliabilityUncoveredControls: input.reliabilityScorecard.summary.uncoveredControls,
@@ -628,18 +650,32 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           `external UI responsiveness comparison dimensions pass: ${String(
             input.largeWorkbookSloScorecard.uiResponsivenessExternalSheetsExcelComparison.requiredDimensionsPassed,
           )}`,
+          `live incumbent browser timing scorecard passes: ${String(uiResponsivenessLiveBrowserPassed)}`,
+          ...input.uiResponsivenessLiveBrowserScorecard.cases.map(
+            (entry) =>
+              `${entry.vendor}: ${entry.workload} scrollResponseMs.p95 ${entry.scrollResponseMs.p95}ms and postScrollFrameMs.p95 ${entry.postScrollFrameMs.p95}ms (${entry.sampleCount} samples, ${entry.accessMode})`,
+          ),
           ...headedBrowserUiContracts.map(headedBrowserContractSummary),
         ],
         evidenceArtifacts: [
           input.largeWorkbookSloScorecardPath,
           input.largeWorkbookSloScorecard.source.externalUiResponsivenessComparisonArtifact,
+          input.uiResponsivenessLiveBrowserScorecardPath,
           'e2e/tests/web-shell-scroll-performance.pw.ts',
           'docs/05-06-next-phase.md',
           'apps/web/src/perf/workbook-perf.ts',
           'apps/web/src/perf/workbook-scroll-perf.ts',
         ],
-        checkCommands: ['pnpm large-workbook:slo:check', 'CI=1 pnpm bench:contracts', 'pnpm test:browser:full', 'pnpm bench:smoke'],
-        blockers: ['no direct Sheets or Excel browser responsiveness live timing artifact exists in the repo'],
+        checkCommands: [
+          'pnpm large-workbook:slo:check',
+          'pnpm ui:browser-live:check',
+          'CI=1 pnpm bench:contracts',
+          'pnpm test:browser:full',
+          'pnpm bench:smoke',
+        ],
+        blockers: uiResponsivenessLiveBrowserPassed
+          ? []
+          : ['no direct Sheets or Excel browser responsiveness live timing artifact exists in the repo'],
       },
       {
         id: 'collaboration',
@@ -904,40 +940,6 @@ function requiredSloMeasurement(scorecard: LargeWorkbookSloScorecard, measuremen
     throw new Error(`Large workbook SLO scorecard is missing required measurement: ${measurementId}`)
   }
   return measurement
-}
-
-function familyWinSummary(family: CompetitiveFamilySummary): string {
-  const worstMean =
-    family.worstWorkpaperToHyperFormulaMeanRatio === null || family.worstMeanRatioWorkload === null
-      ? 'no comparable mean ratio'
-      : `worst mean ratio ${family.worstWorkpaperToHyperFormulaMeanRatio} on ${family.worstMeanRatioWorkload}`
-  const worstP95 =
-    family.worstWorkpaperToHyperFormulaP95Ratio === null || family.worstP95RatioWorkload === null
-      ? 'no comparable p95 ratio'
-      : `worst p95 ratio ${family.worstWorkpaperToHyperFormulaP95Ratio} on ${family.worstP95RatioWorkload}`
-  return `${family.family}: WorkPaper ${family.workpaperWins}/${family.comparableCount}, HyperFormula ${family.hyperformulaWins}/${family.comparableCount}; ${worstMean}; ${worstP95}`
-}
-
-function formulaMissingFunctionBlockers(missingOfficeFunctionCount: number): string[] {
-  return missingOfficeFunctionCount > 0
-    ? [`${String(missingOfficeFunctionCount)} Office-listed functions are still missing from the runtime inventory`]
-    : []
-}
-
-function sloSummary(measurement: LargeWorkbookSloMeasurement): string {
-  return `${measurement.id}: ${measurement.metric} ${measurement.actualP95}ms against ${measurement.budgetP95}ms SLO (${measurement.sampleCount} samples)`
-}
-
-function headedBrowserContractSummary(contract: HeadedBrowserFrameP95Contract): string {
-  return `${contract.id}: ${contract.metric} budget ${contract.budgetP95}ms on ${contract.materializedCells} materialized cells via ${contract.command}`
-}
-
-function formatRatio(summary: RatioSummary): string {
-  return `${summary.production}/${summary.total} (${summary.percent}%)`
-}
-
-function formatList(values: readonly string[]): string {
-  return values.length === 0 ? 'none' : values.join(', ')
 }
 
 function isComparableWithComparison(result: CompetitiveResult): result is CompetitiveResult & {

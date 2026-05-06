@@ -52,6 +52,8 @@
     "import-export:fidelity:check": "bun scripts/gen-import-export-fidelity-scorecard.ts --check",
     "large-workbook:slo:generate": "bun scripts/gen-large-workbook-slo-scorecard.ts",
     "large-workbook:slo:check": "bun scripts/gen-large-workbook-slo-scorecard.ts --check",
+    "ui:browser-live:generate": "bun scripts/gen-ui-responsiveness-live-browser-scorecard.ts",
+    "ui:browser-live:check": "bun scripts/gen-ui-responsiveness-live-browser-scorecard.ts --check",
     "security:posture:generate": "bun scripts/gen-security-posture-scorecard.ts",
     "security:posture:check": "bun scripts/gen-security-posture-scorecard.ts --check",
     "security:audit": "pnpm audit --prod",

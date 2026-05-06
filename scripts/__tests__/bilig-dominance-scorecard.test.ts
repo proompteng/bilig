@@ -68,6 +68,8 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.summary.importExportFidelityPassed).toBe(true)
     expect(scorecard.summary.largeWorkbookSloRowsCovered).toEqual([100_000, 250_000])
     expect(scorecard.summary.largeWorkbookSloPassed).toBe(true)
+    expect(scorecard.summary.uiResponsivenessLiveBrowserPassed).toBe(true)
+    expect(scorecard.summary.uiResponsivenessLiveBrowserVendors).toEqual(['google-sheets', 'microsoft-excel-web'])
     expect(scorecard.summary.auditabilityPosturePassed).toBe(true)
     expect(scorecard.summary.automationPosturePassed).toBe(true)
     expect(scorecard.summary.collaborationPosturePassed).toBe(true)
@@ -111,6 +113,9 @@ describe('bilig dominance scorecard', () => {
       'packages/benchmarks/baselines/import-export-fidelity-scorecard.json',
     )
     expect(scorecard.sourceArtifacts.largeWorkbookSloScorecard).toBe('packages/benchmarks/baselines/large-workbook-slo-scorecard.json')
+    expect(scorecard.sourceArtifacts.uiResponsivenessLiveBrowserScorecard).toBe(
+      'packages/benchmarks/baselines/ui-responsiveness-live-browser-scorecard.json',
+    )
     expect(scorecard.sourceArtifacts.securityPostureScorecard).toBe('packages/benchmarks/baselines/security-posture-scorecard.json')
     expect(scorecard.categories.find((category) => category.id === 'calculation-correctness')).toMatchObject({
       status: 'partial-repo-evidence',
@@ -167,8 +172,10 @@ describe('bilig dominance scorecard', () => {
       evidenceArtifacts: expect.arrayContaining([
         'packages/benchmarks/baselines/large-workbook-slo-scorecard.json',
         'packages/benchmarks/baselines/ui-responsiveness-external-sheets-excel-comparison.json',
+        'packages/benchmarks/baselines/ui-responsiveness-live-browser-scorecard.json',
       ]),
-      blockers: ['no direct Sheets or Excel browser responsiveness live timing artifact exists in the repo'],
+      checkCommands: expect.arrayContaining(['pnpm ui:browser-live:check']),
+      blockers: [],
     })
     expect(scorecard.categories.find((category) => category.id === 'collaboration')).toMatchObject({
       status: 'partial-repo-evidence',
@@ -255,6 +262,18 @@ describe('bilig dominance scorecard', () => {
     )
   })
 
+  it('does not keep direct incumbent browser UI timing as a blocker after live public-browser evidence exists', () => {
+    const artifact = parseGeneratedScorecard(
+      readFileSync(resolve(repoRoot, 'packages/benchmarks/baselines/bilig-dominance-scorecard.json'), 'utf8'),
+    )
+    const uiResponsiveness = artifact.categories.find((category) => category.id === 'ui-responsiveness')
+
+    expect(uiResponsiveness?.blockers).not.toContain(
+      'no direct Sheets or Excel browser responsiveness live timing artifact exists in the repo',
+    )
+    expect(uiResponsiveness?.evidenceArtifacts).toContain('packages/benchmarks/baselines/ui-responsiveness-live-browser-scorecard.json')
+  })
+
   it('tracks serialized generated-source CI checks as operator workflow evidence', () => {
     const artifact = parseGeneratedScorecard(
       readFileSync(resolve(repoRoot, 'packages/benchmarks/baselines/bilig-dominance-scorecard.json'), 'utf8'),
@@ -317,6 +336,7 @@ describe('bilig dominance scorecard', () => {
     expect(packageJson).toContain('"automation:check": "bun scripts/gen-automation-scorecard.ts --check"')
     expect(packageJson).toContain('"import-export:fidelity:check": "bun scripts/gen-import-export-fidelity-scorecard.ts --check"')
     expect(packageJson).toContain('"large-workbook:slo:check": "bun scripts/gen-large-workbook-slo-scorecard.ts --check"')
+    expect(packageJson).toContain('"ui:browser-live:check": "bun scripts/gen-ui-responsiveness-live-browser-scorecard.ts --check"')
     expect(packageJson).toContain('"security:posture:check": "bun scripts/gen-security-posture-scorecard.ts --check"')
     expect(runCi).toContain("pnpm('bilig dominance scorecard check', 'dominance:check')")
     expect(runCi).toContain("pnpm('calculation semantics scorecard check', 'calculation:semantics:check')")
@@ -334,6 +354,7 @@ describe('bilig dominance scorecard', () => {
     expect(runCi).toContain("pnpm('automation scorecard check', 'automation:check')")
     expect(runCi).toContain("pnpm('import/export fidelity scorecard check', 'import-export:fidelity:check')")
     expect(runCi).toContain("pnpm('large workbook SLO scorecard check', 'large-workbook:slo:check')")
+    expect(runCi).toContain("pnpm('UI responsiveness live browser scorecard check', 'ui:browser-live:check')")
     expect(runCi).toContain("pnpm('security posture scorecard check', 'security:posture:check')")
   })
 })

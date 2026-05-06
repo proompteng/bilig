@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "suite": "ui-responsiveness-live-browser-timing",
+  "generatedAt": "2026-05-06T20:34:17.409Z",
+  "host": {
+    "arch": "arm64",
+    "platform": "darwin"
+  },
+  "source": {
+    "artifactGenerator": "scripts/gen-ui-responsiveness-live-browser-scorecard.ts",
+    "evidenceKind": "live-public-browser-playwright",
+    "browserEngine": "chromium",
+    "measuredOperation": "public-workbook-load-and-viewport-scroll"
+  },
+  "benchmark": {
+    "sampleCount": 3,
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "samplingOrder": "google-sheets-then-microsoft-excel-web"
+  },
+  "summary": {
+    "directBrowserTimingCaptured": true,
+    "allRequiredCasesPassed": true,
+    "requiredVendorCount": 2,
+    "capturedVendors": ["google-sheets", "microsoft-excel-web"],
+    "limitations": [
+      "Public unauthenticated browser timing covers load and viewport scroll only; it does not cover authenticated edit latency.",
+      "The incumbent workbooks are public representative workbooks, not bilig-generated benchmark corpuses.",
+      "Network, tenant, CDN, and browser-cache conditions can move live public-web measurements between runs."
+    ]
+  },
+  "cases": [
+    {
+      "id": "google-sheets-public-grid-scroll",
+      "vendor": "google-sheets",
+      "product": "Google Sheets public spreadsheet",
+      "sourceUrl": "https://docs.google.com/spreadsheets/d/1Awcx961Qm_cJw7X-7hsKEGCzS-0yMw0TqwbniaxNkeU/edit",
+      "finalUrl": "https://docs.google.com/spreadsheets/d/1Awcx961Qm_cJw7X-7hsKEGCzS-0yMw0TqwbniaxNkeU/edit?gid=0#gid=0",
+      "title": "Bitcoin Transactions - Google Sheets",
+      "accessMode": "public-comment-only",
+      "workload": "open-public-workbook-and-scroll-viewport",
+      "sampleCount": 3,
+      "loadToReadyMs": {
+        "samples": [3031.8308330000004, 3072.072, 3158.151833],
+        "min": 3031.8308330000004,
+        "median": 3072.072,
+        "p95": 3158.151833,
+        "max": 3158.151833,
+        "mean": 3087.351555333333,
+        "standardDeviation": 52.68995709897831,
+        "relativeStandardDeviation": 0.017066393688777538,
+        "standardError": 30.420560914684962,
+        "confidence95": {
+          "low": 3027.7272559405505,
+          "high": 3146.975854726116
+        }
+      },
+      "scrollResponseMs": {
+        "samples": [125.99233400000048, 127.16724999999997, 129.7224580000002],
+        "min": 125.99233400000048,
+        "median": 127.16724999999997,
+        "p95": 129.7224580000002,
+        "max": 129.7224580000002,
+        "mean": 127.62734733333355,
+        "standardDeviation": 1.5571819484673701,
+        "relativeStandardDeviation": 0.012201005356636973,
+        "standardError": 0.8990394171248621,
+        "confidence95": {
+          "low": 125.86523007576882,
+          "high": 129.38946459089829
+        }
+      },
+      "postScrollFrameMs": {
+        "samples": [9, 9.599999999999909, 9.800000000000182],
+        "min": 9,
+        "median": 9.599999999999909,
+        "p95": 9.800000000000182,
+        "max": 9.800000000000182,
+        "mean": 9.466666666666697,
+        "standardDeviation": 0.33993463423956655,
+        "relativeStandardDeviation": 0.03590858812389776,
+        "standardError": 0.19626135258509073,
+        "confidence95": {
+          "low": 9.081994415599919,
+          "high": 9.851338917733475
+        }
+      },
+      "passed": true,
+      "limitations": [
+        "Public browser timing cannot exercise authenticated workbook editing or tenant-local collaboration paths.",
+        "This timing is direct incumbent browser evidence, but it is not a same-corpus 10x proof by itself."
+      ]
+    },
+    {
+      "id": "microsoft-excel-web-public-xlsx-scroll",
+      "vendor": "microsoft-excel-web",
+      "product": "Microsoft Office Web Viewer public XLSX",
+      "sourceUrl": "https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Fgithub.com%2Ffileformat-blog-gists%2FSampleFiles%2Fraw%2Fmain%2FSpreadsheet-File-Formats%2FXLSX%2FPivot-Tables-and-Charts.xlsx",
+      "finalUrl": "https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Fgithub.com%2Ffileformat-blog-gists%2FSampleFiles%2Fraw%2Fmain%2FSpreadsheet-File-Formats%2FXLSX%2FPivot-Tables-and-Charts.xlsx",
+      "title": "Pivot-Tables-and-Charts.xlsx",
+      "accessMode": "public-office-web-viewer",
+      "workload": "open-public-workbook-and-scroll-viewport",
+      "sampleCount": 3,
+      "loadToReadyMs": {
+        "samples": [5075.063250000001, 5086.762583, 5091.658667],
+        "min": 5075.063250000001,
+        "median": 5086.762583,
+        "p95": 5091.658667,
+        "max": 5091.658667,
+        "mean": 5084.494833333333,
+        "standardDeviation": 6.96223061783887,
+        "relativeStandardDeviation": 0.0013693062626783153,
+        "standardError": 4.0196457213695265,
+        "confidence95": {
+          "low": 5076.616327719449,
+          "high": 5092.373338947217
+        }
+      },
+      "scrollResponseMs": {
+        "samples": [95.14354100000128, 98.6704159999972, 100.56558300000324],
+        "min": 95.14354100000128,
+        "median": 98.6704159999972,
+        "p95": 100.56558300000324,
+        "max": 100.56558300000324,
+        "mean": 98.1265133333339,
+        "standardDeviation": 2.246702390252421,
+        "relativeStandardDeviation": 0.022895976978417807,
+        "standardError": 1.297134229801211,
+        "confidence95": {
+          "low": 95.58413024292354,
+          "high": 100.66889642374427
+        }
+      },
+      "postScrollFrameMs": {
+        "samples": [9, 9.5, 9.900000000000546],
+        "min": 9,
+        "median": 9.5,
+        "p95": 9.900000000000546,
+        "max": 9.900000000000546,
+        "mean": 9.466666666666848,
+        "standardDeviation": 0.36817870057312274,
+        "relativeStandardDeviation": 0.038892116257723486,
+        "standardError": 0.21256807188577906,
+        "confidence95": {
+          "low": 9.05003324577072,
+          "high": 9.883300087562976
+        }
+      },
+      "passed": true,
+      "limitations": [
+        "Public browser timing cannot exercise authenticated workbook editing or tenant-local collaboration paths.",
+        "This timing is direct incumbent browser evidence, but it is not a same-corpus 10x proof by itself."
+      ]
+    }
+  ]
+}

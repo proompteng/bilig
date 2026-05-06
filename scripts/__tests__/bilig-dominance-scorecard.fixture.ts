@@ -33,6 +33,7 @@ export function buildFixtureInput(): BuildScorecardInput {
     collaborationScorecardPath: 'packages/benchmarks/baselines/collaboration-scorecard.json',
     importExportFidelityScorecardPath: 'packages/benchmarks/baselines/import-export-fidelity-scorecard.json',
     largeWorkbookSloScorecardPath: 'packages/benchmarks/baselines/large-workbook-slo-scorecard.json',
+    uiResponsivenessLiveBrowserScorecardPath: 'packages/benchmarks/baselines/ui-responsiveness-live-browser-scorecard.json',
     reliabilityScorecardPath: 'packages/benchmarks/baselines/reliability-scorecard.json',
     securityPostureScorecardPath: 'packages/benchmarks/baselines/security-posture-scorecard.json',
     surfaceSnapshotPath: 'packages/headless/src/__tests__/fixtures/hyperformula-surface.json',
@@ -848,6 +849,45 @@ export function buildFixtureInput(): BuildScorecardInput {
         findings: [],
       },
     },
+    uiResponsivenessLiveBrowserScorecard: {
+      schemaVersion: 1,
+      suite: 'ui-responsiveness-live-browser-timing',
+      generatedAt: '2026-05-06T20:30:00.000Z',
+      host: {
+        arch: 'arm64',
+        platform: 'darwin',
+      },
+      source: {
+        artifactGenerator: 'scripts/gen-ui-responsiveness-live-browser-scorecard.ts',
+        evidenceKind: 'live-public-browser-playwright',
+        browserEngine: 'chromium',
+        measuredOperation: 'public-workbook-load-and-viewport-scroll',
+      },
+      benchmark: {
+        sampleCount: 3,
+        viewport: {
+          width: 1440,
+          height: 900,
+        },
+        samplingOrder: 'google-sheets-then-microsoft-excel-web',
+      },
+      summary: {
+        directBrowserTimingCaptured: true,
+        allRequiredCasesPassed: true,
+        requiredVendorCount: 2,
+        capturedVendors: ['google-sheets', 'microsoft-excel-web'],
+        limitations: ['Public browser timing is not an authenticated same-corpus edit benchmark.'],
+      },
+      cases: [
+        uiBrowserCase('google-sheets-public-grid-scroll', 'google-sheets', 'Bitcoin Transactions - Google Sheets', 'public-comment-only'),
+        uiBrowserCase(
+          'microsoft-excel-web-public-xlsx-scroll',
+          'microsoft-excel-web',
+          'Pivot-Tables-and-Charts.xlsx',
+          'public-office-web-viewer',
+        ),
+      ],
+    },
     competitiveArtifact: {
       generatedAt: '2026-05-05T19:00:09.455Z',
       engines: {
@@ -896,5 +936,44 @@ export function buildFixtureInput(): BuildScorecardInput {
         },
       ],
     },
+  }
+}
+
+function uiBrowserCase(
+  id: string,
+  vendor: 'google-sheets' | 'microsoft-excel-web',
+  title: string,
+  accessMode: 'public-comment-only' | 'public-office-web-viewer',
+): BuildScorecardInput['uiResponsivenessLiveBrowserScorecard']['cases'][number] {
+  return {
+    id,
+    vendor,
+    product: vendor === 'google-sheets' ? 'Google Sheets public spreadsheet' : 'Microsoft Office Web Viewer public XLSX',
+    sourceUrl:
+      vendor === 'google-sheets' ? 'https://docs.google.com/spreadsheets/d/public/edit' : 'https://view.officeapps.live.com/op/view.aspx',
+    finalUrl:
+      vendor === 'google-sheets'
+        ? 'https://docs.google.com/spreadsheets/d/public/edit?gid=0#gid=0'
+        : 'https://view.officeapps.live.com/op/view.aspx',
+    title,
+    accessMode,
+    workload: 'open-public-workbook-and-scroll-viewport',
+    sampleCount: 3,
+    loadToReadyMs: numericSummary([2000, 2100, 2200]),
+    scrollResponseMs: numericSummary([90, 95, 100]),
+    postScrollFrameMs: numericSummary([10, 11, 12]),
+    passed: true,
+    limitations: ['Fixture uses representative direct browser timing limitations.'],
+  }
+}
+
+function numericSummary(samples: number[]) {
+  return {
+    samples,
+    min: samples[0] ?? 0,
+    median: samples[1] ?? 0,
+    p95: samples[2] ?? 0,
+    max: samples[2] ?? 0,
+    mean: samples.reduce((sum, value) => sum + value, 0) / samples.length,
   }
 }

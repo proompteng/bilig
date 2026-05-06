@@ -44,6 +44,7 @@
     "microsoftExcelLiveStructuralScorecard": "packages/benchmarks/baselines/microsoft-excel-live-structural-scorecard.json",
     "importExportFidelityScorecard": "packages/benchmarks/baselines/import-export-fidelity-scorecard.json",
     "largeWorkbookSloScorecard": "packages/benchmarks/baselines/large-workbook-slo-scorecard.json",
+    "uiResponsivenessLiveBrowserScorecard": "packages/benchmarks/baselines/ui-responsiveness-live-browser-scorecard.json",
     "reliabilityScorecard": "packages/benchmarks/baselines/reliability-scorecard.json",
     "securityPostureScorecard": "packages/benchmarks/baselines/security-posture-scorecard.json",
     "workpaperCompetitiveBenchmark": {
@@ -231,6 +232,8 @@
     "importExportUnsupportedFeatures": ["xlsx.macros.execution"],
     "largeWorkbookSloRowsCovered": [100000, 250000],
     "largeWorkbookSloPassed": true,
+    "uiResponsivenessLiveBrowserPassed": true,
+    "uiResponsivenessLiveBrowserVendors": ["google-sheets", "microsoft-excel-web"],
     "reliabilityCoveredControls": [
       "pending.localReloadSurvival",
       "pending.submittedReloadSurvival",
@@ -423,18 +426,28 @@
         "external Google Sheets UI responsiveness evidence: official-docs-comparison-artifact",
         "external Microsoft Excel UI responsiveness evidence: official-docs-comparison-artifact",
         "external UI responsiveness comparison dimensions pass: true",
+        "live incumbent browser timing scorecard passes: true",
+        "google-sheets: open-public-workbook-and-scroll-viewport scrollResponseMs.p95 129.7224580000002ms and postScrollFrameMs.p95 9.800000000000182ms (3 samples, public-comment-only)",
+        "microsoft-excel-web: open-public-workbook-and-scroll-viewport scrollResponseMs.p95 100.56558300000324ms and postScrollFrameMs.p95 9.900000000000546ms (3 samples, public-office-web-viewer)",
         "headedWide250kVisibleEditCommit: mutationToVisibleMs.p95 budget 50ms on 250000 materialized cells via pnpm test:browser:full"
       ],
       "evidenceArtifacts": [
         "packages/benchmarks/baselines/large-workbook-slo-scorecard.json",
         "packages/benchmarks/baselines/ui-responsiveness-external-sheets-excel-comparison.json",
+        "packages/benchmarks/baselines/ui-responsiveness-live-browser-scorecard.json",
         "e2e/tests/web-shell-scroll-performance.pw.ts",
         "docs/05-06-next-phase.md",
         "apps/web/src/perf/workbook-perf.ts",
         "apps/web/src/perf/workbook-scroll-perf.ts"
       ],
-      "checkCommands": ["pnpm large-workbook:slo:check", "CI=1 pnpm bench:contracts", "pnpm test:browser:full", "pnpm bench:smoke"],
-      "blockers": ["no direct Sheets or Excel browser responsiveness live timing artifact exists in the repo"]
+      "checkCommands": [
+        "pnpm large-workbook:slo:check",
+        "pnpm ui:browser-live:check",
+        "CI=1 pnpm bench:contracts",
+        "pnpm test:browser:full",
+        "pnpm bench:smoke"
+      ],
+      "blockers": []
     },
     {
       "id": "collaboration",
