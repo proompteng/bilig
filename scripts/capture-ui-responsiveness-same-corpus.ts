@@ -42,6 +42,15 @@ interface EmitXlsxArgs {
   readonly targetDirectory: string
 }
 
+interface SaveStorageStateArgs {
+  readonly authUrl: string
+  readonly corpusId: WorkbookBenchmarkCorpusId
+  readonly headless: boolean
+  readonly product: UiResponsivenessSameCorpusProduct
+  readonly readyTimeoutMs: number
+  readonly targetPath: string
+}
+
 interface ScrollSample {
   readonly operationResponseMs: number
   readonly postOperationFrameMs: number
@@ -52,6 +61,11 @@ const defaultCorpusId: WorkbookBenchmarkCorpusId = 'wide-mixed-250k'
 const defaultViewport = { width: 1440, height: 900 } as const
 
 async function main(): Promise<void> {
+  const saveStorageStateArgs = parseSaveStorageStateArgs(process.argv.slice(2))
+  if (saveStorageStateArgs) {
+    await saveStorageState(saveStorageStateArgs)
+    return
+  }
   const emitXlsxArgs = parseEmitXlsxArgs(process.argv.slice(2))
   if (emitXlsxArgs) {
     emitSameCorpusXlsx(emitXlsxArgs)
@@ -97,6 +111,89 @@ export function parseEmitXlsxArgs(argv: readonly string[]): EmitXlsxArgs | null 
   }
 }
 
+export function parseSaveStorageStateArgs(argv: readonly string[]): SaveStorageStateArgs | null {
+  const saveIndex = argv.indexOf('--save-storage-state')
+  if (saveIndex === -1) {
+    return null
+  }
+  const targetPath = argv[saveIndex + 1]
+  if (!targetPath) {
+    throw new Error('Missing file path after --save-storage-state')
+  }
+  const product = parseSameCorpusProduct(argumentValue(argv, '--auth-product') ?? 'google-sheets')
+  const authUrl = argumentValue(argv, '--auth-url') ?? authUrlFromProductArgs(argv, product)
+  if (!authUrl) {
+    throw new Error('Missing auth URL. Pass --auth-url <url> or the product-specific URL flag.')
+  }
+  return {
+    authUrl,
+    corpusId: parseCorpusId(argumentValue(argv, '--corpus') ?? defaultCorpusId),
+    headless: argv.includes('--headless'),
+    product,
+    readyTimeoutMs: parsePositiveInteger(argumentValue(argv, '--ready-timeout-ms') ?? '300000', '--ready-timeout-ms'),
+    targetPath: resolve(targetPath),
+  }
+}
+
+function authUrlFromProductArgs(argv: readonly string[], product: UiResponsivenessSameCorpusProduct): string | null {
+  if (product === 'bilig') {
+    return argumentValue(argv, '--bilig-url')
+  }
+  if (product === 'google-sheets') {
+    return argumentValue(argv, '--google-sheets-url')
+  }
+  return argumentValue(argv, '--microsoft-excel-web-url')
+}
+
+async function saveStorageState(args: SaveStorageStateArgs): Promise<void> {
+  const browser = await chromium.launch({ headless: args.headless })
+  const context = await browser.newContext({ viewport: defaultViewport })
+  const page = await context.newPage()
+  try {
+    await page.goto(args.authUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+    await waitForProductReady(page, args.product, captureArgsForStorageState(args))
+    mkdirSync(dirname(args.targetPath), { recursive: true })
+    await context.storageState({ path: args.targetPath })
+    console.log(
+      JSON.stringify(
+        {
+          mode: 'save-storage-state',
+          product: args.product,
+          targetPath: args.targetPath,
+          finalUrl: page.url(),
+          title: await page.title(),
+        },
+        null,
+        2,
+      ),
+    )
+  } catch (error: unknown) {
+    throw new Error(await productReadyFailureMessage(page, args.product, args.authUrl, 0, error), { cause: error })
+  } finally {
+    await context.close()
+    await browser.close()
+  }
+}
+
+function captureArgsForStorageState(args: SaveStorageStateArgs): CaptureArgs {
+  return {
+    biligUrl: args.authUrl,
+    biligStorageStatePath: null,
+    corpusId: args.corpusId,
+    deltaX: 0,
+    deltaY: 720,
+    googleSheetsUrl: args.authUrl,
+    googleSheetsStorageStatePath: null,
+    headless: args.headless,
+    microsoftExcelWebUrl: args.authUrl,
+    microsoftExcelWebStorageStatePath: null,
+    outputPath: args.targetPath,
+    readyTimeoutMs: args.readyTimeoutMs,
+    sampleCount: 1,
+    storageStatePath: null,
+  }
+}
+
 export function emitSameCorpusXlsx(args: EmitXlsxArgs): void {
   mkdirSync(args.targetDirectory, { recursive: true })
   const corpus = buildWorkbookBenchmarkCorpus(args.corpusId)
@@ -111,6 +208,8 @@ export function emitSameCorpusXlsx(args: EmitXlsxArgs): void {
         materializedCells: corpus.materializedCellCount,
         googleSheetsUploadMode: 'native_google_sheets',
         microsoftExcelWebSource: 'upload-or-host-this-xlsx-for-excel-web',
+        googleSheetsAuthStateCommand:
+          'pnpm ui:same-corpus:capture -- --save-storage-state <state.json> --auth-product google-sheets --google-sheets-url <url>',
         captureCommand:
           'pnpm ui:same-corpus:capture -- --output <capture.json> --google-sheets-url <url> --microsoft-excel-web-url <url> [--google-sheets-storage-state <state.json>]',
       },
@@ -409,6 +508,13 @@ function parseCorpusId(value: string): WorkbookBenchmarkCorpusId {
     throw new Error(`Unexpected workbook benchmark corpus id: ${value}`)
   }
   return value
+}
+
+function parseSameCorpusProduct(value: string): UiResponsivenessSameCorpusProduct {
+  if (value === 'bilig' || value === 'google-sheets' || value === 'microsoft-excel-web') {
+    return value
+  }
+  throw new Error(`Unexpected same-corpus product: ${value}`)
 }
 
 function parsePositiveInteger(value: string, flag: string): number {

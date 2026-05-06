@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseCaptureArgs, parseEmitXlsxArgs } from '../capture-ui-responsiveness-same-corpus.ts'
+import { parseCaptureArgs, parseEmitXlsxArgs, parseSaveStorageStateArgs } from '../capture-ui-responsiveness-same-corpus.ts'
 
 describe('same-corpus UI responsiveness capture CLI', () => {
   it('builds a default Bilig benchmark URL from the selected corpus', () => {
@@ -87,6 +87,32 @@ describe('same-corpus UI responsiveness capture CLI', () => {
       corpusId: 'wide-mixed-variable-250k',
     })
     expect(args?.targetDirectory.endsWith('/tmp/ui-corpus')).toBe(true)
+  })
+
+  it('parses storage-state bootstrap mode for authenticated capture', () => {
+    const args = parseSaveStorageStateArgs([
+      '--save-storage-state',
+      'tmp/google-state.json',
+      '--auth-product',
+      'google-sheets',
+      '--google-sheets-url',
+      'https://docs.google.com/spreadsheets/d/sheet-id/edit',
+      '--ready-timeout-ms',
+      '180000',
+    ])
+
+    expect(args).toMatchObject({
+      authUrl: 'https://docs.google.com/spreadsheets/d/sheet-id/edit',
+      corpusId: 'wide-mixed-250k',
+      headless: false,
+      product: 'google-sheets',
+      readyTimeoutMs: 180000,
+    })
+    expect(args?.targetPath.endsWith('/tmp/google-state.json')).toBe(true)
+  })
+
+  it('requires an auth URL in storage-state bootstrap mode', () => {
+    expect(() => parseSaveStorageStateArgs(['--save-storage-state', 'tmp/state.json'])).toThrow('Missing auth URL.')
   })
 
   it('rejects unknown corpus ids', () => {
