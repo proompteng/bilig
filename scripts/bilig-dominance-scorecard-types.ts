@@ -4,6 +4,7 @@ import type { CollaborationScorecard } from './gen-collaboration-scorecard.ts'
 import type { GoogleSheetsLiveCalculationScorecard } from './gen-google-sheets-live-calculation-scorecard.ts'
 import type { GoogleSheetsLiveLargeWorkbookScorecard } from './gen-google-sheets-live-large-workbook-scorecard.ts'
 import type { GoogleSheetsLiveRecalculationScorecard } from './gen-google-sheets-live-recalculation-scorecard.ts'
+import type { GoogleSheetsLiveStructuralScorecard } from './gen-google-sheets-live-structural-scorecard.ts'
 import type { ImportExportFidelityScorecard } from './gen-import-export-fidelity-scorecard.ts'
 import type {
   HeadedBrowserFrameP95Contract,
@@ -119,6 +120,7 @@ export interface BiligDominanceScorecard {
     formulaDominanceSnapshot: string
     googleSheetsLiveCalculationScorecard: string
     googleSheetsLiveRecalculationScorecard: string
+    googleSheetsLiveStructuralScorecard: string
     googleSheetsLiveLargeWorkbookScorecard: string
     hyperFormulaSurfaceSnapshot: string
     microsoftExcelLiveCalculationScorecard: string
@@ -160,6 +162,11 @@ export interface BiligDominanceScorecard {
     googleSheetsLiveRecalculationPassed: boolean
     googleSheetsLiveRecalculationTenXMeanAndP95CaseCount: number
     googleSheetsLiveRecalculationSpreadsheetIds: string[]
+    googleSheetsLiveStructuralEvidence: 'live-google-sheets-native-conversion-via-google-drive-connector'
+    googleSheetsLiveStructuralCaseCount: number
+    googleSheetsLiveStructuralPassed: boolean
+    googleSheetsLiveStructuralTenXMeanAndP95CaseCount: number
+    googleSheetsLiveStructuralSpreadsheetIds: string[]
     googleSheetsLiveLargeWorkbookEvidence: 'live-google-sheets-native-conversion-via-google-drive-connector'
     googleSheetsLiveLargeWorkbookCaseCount: number
     googleSheetsLiveLargeWorkbookPassed: boolean
@@ -234,6 +241,8 @@ export interface BuildScorecardInput {
   googleSheetsLiveCalculationScorecardPath: string
   googleSheetsLiveRecalculationScorecard: GoogleSheetsLiveRecalculationScorecard
   googleSheetsLiveRecalculationScorecardPath: string
+  googleSheetsLiveStructuralScorecard: GoogleSheetsLiveStructuralScorecard
+  googleSheetsLiveStructuralScorecardPath: string
   googleSheetsLiveLargeWorkbookScorecard: GoogleSheetsLiveLargeWorkbookScorecard
   googleSheetsLiveLargeWorkbookScorecardPath: string
   microsoftExcelLiveCalculationScorecard: MicrosoftExcelLiveCalculationScorecard

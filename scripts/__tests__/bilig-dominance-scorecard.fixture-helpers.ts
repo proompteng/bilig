@@ -184,6 +184,66 @@ export function googleSheetsRecalculationCase(
   }
 }
 
+export function googleSheetsStructuralSpreadsheet(
+  caseId: string,
+  sampleIndex: number,
+): BuildScorecardInput['googleSheetsLiveStructuralScorecard']['googleSheets']['spreadsheets'][number] {
+  const operationLabel = caseId.replace('google-sheets-live-structural-', '')
+  return {
+    caseId,
+    sampleIndex,
+    spreadsheetId: `google-sheets-structural-${operationLabel}-sample-${String(sampleIndex)}`,
+    spreadsheetUrl: `https://docs.google.com/spreadsheets/d/google-sheets-structural-${operationLabel}-sample-${String(sampleIndex)}`,
+    title: `Google Sheets structural ${operationLabel} sample ${String(sampleIndex)}`,
+  }
+}
+
+export function googleSheetsStructuralCase(
+  id: string,
+  operation: BuildScorecardInput['googleSheetsLiveStructuralScorecard']['cases'][number]['operation'],
+  axis: BuildScorecardInput['googleSheetsLiveStructuralScorecard']['cases'][number]['axis'],
+): BuildScorecardInput['googleSheetsLiveStructuralScorecard']['cases'][number] {
+  const workpaperElapsedMs = numericSummary(1)
+  const googleSheetsElapsedMs = numericSummary(30)
+  const verification = googleSheetsStructuralVerification(operation)
+  return {
+    id,
+    operation,
+    axis,
+    rowCount: 500,
+    sampleCount: 3,
+    workpaperElapsedMs,
+    googleSheetsElapsedMs,
+    workpaperToGoogleSheetsMeanRatio: workpaperElapsedMs.mean / googleSheetsElapsedMs.mean,
+    workpaperToGoogleSheetsP95Ratio: workpaperElapsedMs.p95 / googleSheetsElapsedMs.p95,
+    tenXMeanAndP95: true,
+    verification: {
+      workpaper: verification,
+      googleSheets: verification,
+      equivalent: true,
+    },
+    passed: true,
+  }
+}
+
+function googleSheetsStructuralVerification(
+  operation: BuildScorecardInput['googleSheetsLiveStructuralScorecard']['cases'][number]['operation'],
+): Record<string, number | string> {
+  switch (operation) {
+    case 'insert-rows':
+      return { targetCell: 'A501', value: 500 }
+    case 'delete-rows':
+      return { targetCell: 'A499', value: 500 }
+    case 'move-rows':
+      return { targetCell: 'A1', value: 251 }
+    case 'insert-columns':
+    case 'delete-columns':
+      return { targetCell: 'A500', value: 500 }
+    case 'move-columns':
+      return { targetCell: 'A500', value: 1_000 }
+  }
+}
+
 export function recalculationCase(
   id: string,
   workload: BuildScorecardInput['microsoftExcelLiveRecalculationScorecard']['cases'][number]['workload'],

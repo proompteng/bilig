@@ -34,6 +34,7 @@
     "formulaDominanceSnapshot": "packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json",
     "googleSheetsLiveCalculationScorecard": "packages/benchmarks/baselines/google-sheets-live-calculation-scorecard.json",
     "googleSheetsLiveRecalculationScorecard": "packages/benchmarks/baselines/google-sheets-live-recalculation-scorecard.json",
+    "googleSheetsLiveStructuralScorecard": "packages/benchmarks/baselines/google-sheets-live-structural-scorecard.json",
     "googleSheetsLiveLargeWorkbookScorecard": "packages/benchmarks/baselines/google-sheets-live-large-workbook-scorecard.json",
     "hyperFormulaSurfaceSnapshot": "packages/headless/src/__tests__/fixtures/hyperformula-surface.json",
     "microsoftExcelLiveCalculationScorecard": "packages/benchmarks/baselines/microsoft-excel-live-calculation-scorecard.json",
@@ -128,6 +129,30 @@
       "17SdGxbGgtBgXG1lC81Fone0cz1267KPip5Mj-ixJ3kk",
       "1pSJSy5TcPFbltOwcPvgsFzBx7X98-6FnIJJtll5QCJs",
       "1CYbRu0KQwxZEkJotc3cfzWeLsu1Pd5vjllvmrayFHdU"
+    ],
+    "googleSheetsLiveStructuralEvidence": "live-google-sheets-native-conversion-via-google-drive-connector",
+    "googleSheetsLiveStructuralCaseCount": 6,
+    "googleSheetsLiveStructuralPassed": true,
+    "googleSheetsLiveStructuralTenXMeanAndP95CaseCount": 6,
+    "googleSheetsLiveStructuralSpreadsheetIds": [
+      "1iYf9v5ExOxbfZyiXSg9vaSSG8WwLuYPXqKF_uLDBTPk",
+      "1AC5pG958mPxHvD3Ai_YZ5fuvVe02DH80BVoZpPVbxwU",
+      "1G0TxlAGp0s_48t6wKZeJdSdOioNkLfO-tFbx7tTPWlg",
+      "1UycDTvIhr4V_wDceecCdUFXbgohdWtxul576erEeqgY",
+      "1fZMPnvWcv6gP3xl16FD10i70QEb7mZVs_tr7pTwwi7E",
+      "1eQYtMbpJ1-xSPaAv5hXSASjPaqLnXZO2hHOx1fTReDY",
+      "1Vo8lRx4Ea6EC2EevEYd9p8Him8rSsLiJF24_GYJwC14",
+      "1UUz0Ay90T719qog1aORXWJvZiYgHE9fcKWa2KD-SwRg",
+      "1JxEMogafuZs1mNDtjLAcHNNXtNo2UGsl5hiztEQL3jo",
+      "1c9o3g5sm55aRJbQwDC18YqoL58K_A7guirQKx1ESbds",
+      "1sXLEs0VJkKocqbuBSxOSGIKMGir4A2ipCmCv6dvYmdo",
+      "1d1Mom1rcW_jF8XuxmwZyFzgoJDRoTCG7xXDjQfFxPDg",
+      "1Jqo6G3CtAfv6Nq5mgnX547oYmRf0H2GmSK7uNadUTvY",
+      "1X7AdPAoF3fUBaevWlLH6Pyc5JQlqGzILyBCDKt_TIdI",
+      "1uR1aedmARjd6i-wi71_tDi1rlQFC2Kd3sDRW5y2Dz8A",
+      "1jcWkSmJiNtYZYaS_JKB0_2jWzicsSG4uTG1PjPjUH1s",
+      "1xw8aLwesGTKyrPZdTGYneNENMfwOVwE3yCldoWM-afk",
+      "1P0yURuUnv2a-Cf2aagbOH17x-GSFU79Aqmq5pT02mxY"
     ],
     "googleSheetsLiveLargeWorkbookEvidence": "live-google-sheets-native-conversion-via-google-drive-connector",
     "googleSheetsLiveLargeWorkbookCaseCount": 2,
@@ -320,17 +345,21 @@
         "structural-rows: WorkPaper 3/3, HyperFormula 0/3; worst mean ratio 0.7204976453933799 on structural-delete-rows; worst p95 ratio 0.7232483297136605 on structural-insert-rows",
         "structural-columns: WorkPaper 3/3, HyperFormula 0/3; worst mean ratio 0.896687503417026 on structural-insert-columns; worst p95 ratio 0.9601665381659502 on structural-insert-columns",
         "live Microsoft Excel structural scorecard passes 6/6 required cases on Excel 16.108.2",
-        "live Microsoft Excel structural operations with 10x mean+p95 wins: 6/6"
+        "live Microsoft Excel structural operations with 10x mean+p95 wins: 6/6",
+        "live Google Sheets structural scorecard passes 6/6 required cases via native Google Sheets conversion",
+        "live Google Sheets structural operations with 10x mean+p95 wins: 6/6"
       ],
       "evidenceArtifacts": [
         "packages/benchmarks/baselines/workpaper-vs-hyperformula.json",
+        "packages/benchmarks/baselines/google-sheets-live-structural-scorecard.json",
         "packages/benchmarks/baselines/microsoft-excel-live-structural-scorecard.json"
       ],
-      "checkCommands": ["pnpm workpaper:bench:competitive:check", "pnpm structural:excel-live:check"],
-      "blockers": [
-        "structural rows and columns lead HyperFormula, but the worst ratios are not 10x",
-        "no direct Google Sheets structural-edit timing artifact exists in the repo"
-      ]
+      "checkCommands": [
+        "pnpm workpaper:bench:competitive:check",
+        "pnpm structural:excel-live:check",
+        "pnpm structural:google-sheets-live:check"
+      ],
+      "blockers": ["structural rows and columns lead HyperFormula, but the worst ratios are not 10x"]
     },
     {
       "id": "large-workbook-scale",

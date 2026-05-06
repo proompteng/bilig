@@ -20,6 +20,7 @@ import { parseCollaborationScorecard } from './gen-collaboration-scorecard.ts'
 import { parseGoogleSheetsLiveCalculationScorecard } from './gen-google-sheets-live-calculation-scorecard.ts'
 import { parseGoogleSheetsLiveLargeWorkbookScorecard } from './gen-google-sheets-live-large-workbook-scorecard.ts'
 import { parseGoogleSheetsLiveRecalculationScorecard } from './gen-google-sheets-live-recalculation-scorecard.ts'
+import { parseGoogleSheetsLiveStructuralScorecard } from './gen-google-sheets-live-structural-scorecard.ts'
 import { parseImportExportFidelityScorecard } from './gen-import-export-fidelity-scorecard.ts'
 import { parseLargeWorkbookSloScorecard } from './gen-large-workbook-slo-scorecard.ts'
 import { parseMicrosoftExcelLiveCalculationScorecard } from './gen-microsoft-excel-live-calculation-scorecard.ts'
@@ -53,6 +54,13 @@ const googleSheetsLiveRecalculationScorecardPath = join(
   'benchmarks',
   'baselines',
   'google-sheets-live-recalculation-scorecard.json',
+)
+const googleSheetsLiveStructuralScorecardPath = join(
+  rootDir,
+  'packages',
+  'benchmarks',
+  'baselines',
+  'google-sheets-live-structural-scorecard.json',
 )
 const googleSheetsLiveLargeWorkbookScorecardPath = join(
   rootDir,
@@ -116,6 +124,8 @@ function main(): void {
       readJsonObject(googleSheetsLiveRecalculationScorecardPath),
     ),
     googleSheetsLiveRecalculationScorecardPath: toRepoPath(googleSheetsLiveRecalculationScorecardPath),
+    googleSheetsLiveStructuralScorecard: parseGoogleSheetsLiveStructuralScorecard(readJsonObject(googleSheetsLiveStructuralScorecardPath)),
+    googleSheetsLiveStructuralScorecardPath: toRepoPath(googleSheetsLiveStructuralScorecardPath),
     googleSheetsLiveLargeWorkbookScorecard: parseGoogleSheetsLiveLargeWorkbookScorecard(
       readJsonObject(googleSheetsLiveLargeWorkbookScorecardPath),
     ),
@@ -241,6 +251,11 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
     input.microsoftExcelLiveStructuralScorecard.summary.tenXMeanAndP95CaseCount ===
       input.microsoftExcelLiveStructuralScorecard.summary.requiredCaseCount
   const microsoftExcelStructuralPassedCaseCount = input.microsoftExcelLiveStructuralScorecard.cases.filter((entry) => entry.passed).length
+  const googleSheetsStructuralTenXPassed =
+    input.googleSheetsLiveStructuralScorecard.summary.allRequiredCasesPassed &&
+    input.googleSheetsLiveStructuralScorecard.summary.tenXMeanAndP95CaseCount ===
+      input.googleSheetsLiveStructuralScorecard.summary.requiredCaseCount
+  const googleSheetsStructuralPassedCaseCount = input.googleSheetsLiveStructuralScorecard.cases.filter((entry) => entry.passed).length
   const totalSurfaceMembers =
     input.surfaceSnapshot.classSurface.staticMembers.length +
     input.surfaceSnapshot.classSurface.staticMethods.length +
@@ -272,6 +287,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       formulaDominanceSnapshot: input.formulaSnapshotPath,
       googleSheetsLiveCalculationScorecard: input.googleSheetsLiveCalculationScorecardPath,
       googleSheetsLiveRecalculationScorecard: input.googleSheetsLiveRecalculationScorecardPath,
+      googleSheetsLiveStructuralScorecard: input.googleSheetsLiveStructuralScorecardPath,
       googleSheetsLiveLargeWorkbookScorecard: input.googleSheetsLiveLargeWorkbookScorecardPath,
       hyperFormulaSurfaceSnapshot: input.surfaceSnapshotPath,
       microsoftExcelLiveCalculationScorecard: input.microsoftExcelLiveCalculationScorecardPath,
@@ -313,6 +329,13 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       googleSheetsLiveRecalculationPassed: input.googleSheetsLiveRecalculationScorecard.summary.allRequiredCasesPassed,
       googleSheetsLiveRecalculationTenXMeanAndP95CaseCount: input.googleSheetsLiveRecalculationScorecard.summary.tenXMeanAndP95CaseCount,
       googleSheetsLiveRecalculationSpreadsheetIds: input.googleSheetsLiveRecalculationScorecard.googleSheets.spreadsheets.map(
+        (entry) => entry.spreadsheetId,
+      ),
+      googleSheetsLiveStructuralEvidence: input.googleSheetsLiveStructuralScorecard.source.evidenceKind,
+      googleSheetsLiveStructuralCaseCount: input.googleSheetsLiveStructuralScorecard.summary.requiredCaseCount,
+      googleSheetsLiveStructuralPassed: input.googleSheetsLiveStructuralScorecard.summary.allRequiredCasesPassed,
+      googleSheetsLiveStructuralTenXMeanAndP95CaseCount: input.googleSheetsLiveStructuralScorecard.summary.tenXMeanAndP95CaseCount,
+      googleSheetsLiveStructuralSpreadsheetIds: input.googleSheetsLiveStructuralScorecard.googleSheets.spreadsheets.map(
         (entry) => entry.spreadsheetId,
       ),
       googleSheetsLiveLargeWorkbookEvidence: input.googleSheetsLiveLargeWorkbookScorecard.source.evidenceKind,
@@ -475,15 +498,31 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           `live Microsoft Excel structural operations with 10x mean+p95 wins: ${String(
             input.microsoftExcelLiveStructuralScorecard.summary.tenXMeanAndP95CaseCount,
           )}/${String(input.microsoftExcelLiveStructuralScorecard.summary.requiredCaseCount)}`,
+          `live Google Sheets structural scorecard passes ${String(
+            googleSheetsStructuralPassedCaseCount,
+          )}/${String(input.googleSheetsLiveStructuralScorecard.summary.requiredCaseCount)} required cases via native Google Sheets conversion`,
+          `live Google Sheets structural operations with 10x mean+p95 wins: ${String(
+            input.googleSheetsLiveStructuralScorecard.summary.tenXMeanAndP95CaseCount,
+          )}/${String(input.googleSheetsLiveStructuralScorecard.summary.requiredCaseCount)}`,
         ],
-        evidenceArtifacts: [input.competitiveArtifactPath, input.microsoftExcelLiveStructuralScorecardPath],
-        checkCommands: ['pnpm workpaper:bench:competitive:check', 'pnpm structural:excel-live:check'],
+        evidenceArtifacts: [
+          input.competitiveArtifactPath,
+          input.googleSheetsLiveStructuralScorecardPath,
+          input.microsoftExcelLiveStructuralScorecardPath,
+        ],
+        checkCommands: [
+          'pnpm workpaper:bench:competitive:check',
+          'pnpm structural:excel-live:check',
+          'pnpm structural:google-sheets-live:check',
+        ],
         blockers: [
           'structural rows and columns lead HyperFormula, but the worst ratios are not 10x',
           ...(microsoftExcelStructuralTenXPassed
             ? []
             : ['live Microsoft Excel structural timing scorecard does not prove 10x mean+p95 for all structural cases']),
-          'no direct Google Sheets structural-edit timing artifact exists in the repo',
+          ...(googleSheetsStructuralTenXPassed
+            ? []
+            : ['live Google Sheets structural timing scorecard does not prove 10x mean+p95 for all structural cases']),
         ],
       },
       {

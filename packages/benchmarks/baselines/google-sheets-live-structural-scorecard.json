@@ -1,0 +1,475 @@
+{
+  "schemaVersion": 1,
+  "suite": "google-sheets-live-structural-performance",
+  "generatedAt": "2026-05-06T19:57:54.000Z",
+  "host": {
+    "arch": "arm64",
+    "platform": "darwin"
+  },
+  "source": {
+    "artifactGenerator": "scripts/gen-google-sheets-live-structural-scorecard.ts",
+    "implementationPackage": "packages/headless",
+    "evidenceKind": "live-google-sheets-native-conversion-via-google-drive-connector",
+    "captureTransport": "google-drive-connector"
+  },
+  "benchmark": {
+    "rowCount": 500,
+    "sampleCount": 3,
+    "valueRenderOption": "UNFORMATTED_VALUE",
+    "measuredGoogleSheetsOperation": "structural-edit-and-read-verification-values",
+    "measuredWorkpaperOperation": "structural-edit",
+    "samplingOrder": "engine-isolated-workpaper-then-google-sheets"
+  },
+  "googleSheets": {
+    "spreadsheets": [
+      {
+        "caseId": "google-sheets-live-structural-insert-rows",
+        "sampleIndex": 0,
+        "spreadsheetId": "1iYf9v5ExOxbfZyiXSg9vaSSG8WwLuYPXqKF_uLDBTPk",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1iYf9v5ExOxbfZyiXSg9vaSSG8WwLuYPXqKF_uLDBTPk",
+        "title": "bilig structural insert rows probe"
+      },
+      {
+        "caseId": "google-sheets-live-structural-insert-rows",
+        "sampleIndex": 1,
+        "spreadsheetId": "1AC5pG958mPxHvD3Ai_YZ5fuvVe02DH80BVoZpPVbxwU",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1AC5pG958mPxHvD3Ai_YZ5fuvVe02DH80BVoZpPVbxwU",
+        "title": "bilig structural insert rows sample 1"
+      },
+      {
+        "caseId": "google-sheets-live-structural-insert-rows",
+        "sampleIndex": 2,
+        "spreadsheetId": "1G0TxlAGp0s_48t6wKZeJdSdOioNkLfO-tFbx7tTPWlg",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1G0TxlAGp0s_48t6wKZeJdSdOioNkLfO-tFbx7tTPWlg",
+        "title": "bilig structural insert rows sample 2"
+      },
+      {
+        "caseId": "google-sheets-live-structural-delete-rows",
+        "sampleIndex": 0,
+        "spreadsheetId": "1UycDTvIhr4V_wDceecCdUFXbgohdWtxul576erEeqgY",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1UycDTvIhr4V_wDceecCdUFXbgohdWtxul576erEeqgY",
+        "title": "bilig structural delete rows sample 0"
+      },
+      {
+        "caseId": "google-sheets-live-structural-delete-rows",
+        "sampleIndex": 1,
+        "spreadsheetId": "1fZMPnvWcv6gP3xl16FD10i70QEb7mZVs_tr7pTwwi7E",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1fZMPnvWcv6gP3xl16FD10i70QEb7mZVs_tr7pTwwi7E",
+        "title": "bilig structural delete rows sample 1"
+      },
+      {
+        "caseId": "google-sheets-live-structural-delete-rows",
+        "sampleIndex": 2,
+        "spreadsheetId": "1eQYtMbpJ1-xSPaAv5hXSASjPaqLnXZO2hHOx1fTReDY",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1eQYtMbpJ1-xSPaAv5hXSASjPaqLnXZO2hHOx1fTReDY",
+        "title": "bilig structural delete rows sample 2"
+      },
+      {
+        "caseId": "google-sheets-live-structural-move-rows",
+        "sampleIndex": 0,
+        "spreadsheetId": "1Vo8lRx4Ea6EC2EevEYd9p8Him8rSsLiJF24_GYJwC14",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1Vo8lRx4Ea6EC2EevEYd9p8Him8rSsLiJF24_GYJwC14",
+        "title": "bilig structural move rows sample 0"
+      },
+      {
+        "caseId": "google-sheets-live-structural-move-rows",
+        "sampleIndex": 1,
+        "spreadsheetId": "1UUz0Ay90T719qog1aORXWJvZiYgHE9fcKWa2KD-SwRg",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1UUz0Ay90T719qog1aORXWJvZiYgHE9fcKWa2KD-SwRg",
+        "title": "bilig structural move rows sample 1"
+      },
+      {
+        "caseId": "google-sheets-live-structural-move-rows",
+        "sampleIndex": 2,
+        "spreadsheetId": "1JxEMogafuZs1mNDtjLAcHNNXtNo2UGsl5hiztEQL3jo",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1JxEMogafuZs1mNDtjLAcHNNXtNo2UGsl5hiztEQL3jo",
+        "title": "bilig structural move rows sample 2"
+      },
+      {
+        "caseId": "google-sheets-live-structural-insert-columns",
+        "sampleIndex": 0,
+        "spreadsheetId": "1c9o3g5sm55aRJbQwDC18YqoL58K_A7guirQKx1ESbds",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1c9o3g5sm55aRJbQwDC18YqoL58K_A7guirQKx1ESbds",
+        "title": "bilig structural insert columns sample 0"
+      },
+      {
+        "caseId": "google-sheets-live-structural-insert-columns",
+        "sampleIndex": 1,
+        "spreadsheetId": "1sXLEs0VJkKocqbuBSxOSGIKMGir4A2ipCmCv6dvYmdo",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1sXLEs0VJkKocqbuBSxOSGIKMGir4A2ipCmCv6dvYmdo",
+        "title": "bilig structural insert columns sample 1"
+      },
+      {
+        "caseId": "google-sheets-live-structural-insert-columns",
+        "sampleIndex": 2,
+        "spreadsheetId": "1d1Mom1rcW_jF8XuxmwZyFzgoJDRoTCG7xXDjQfFxPDg",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1d1Mom1rcW_jF8XuxmwZyFzgoJDRoTCG7xXDjQfFxPDg",
+        "title": "bilig structural insert columns sample 2"
+      },
+      {
+        "caseId": "google-sheets-live-structural-delete-columns",
+        "sampleIndex": 0,
+        "spreadsheetId": "1Jqo6G3CtAfv6Nq5mgnX547oYmRf0H2GmSK7uNadUTvY",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1Jqo6G3CtAfv6Nq5mgnX547oYmRf0H2GmSK7uNadUTvY",
+        "title": "bilig structural delete columns sample 0"
+      },
+      {
+        "caseId": "google-sheets-live-structural-delete-columns",
+        "sampleIndex": 1,
+        "spreadsheetId": "1X7AdPAoF3fUBaevWlLH6Pyc5JQlqGzILyBCDKt_TIdI",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1X7AdPAoF3fUBaevWlLH6Pyc5JQlqGzILyBCDKt_TIdI",
+        "title": "bilig structural delete columns sample 1"
+      },
+      {
+        "caseId": "google-sheets-live-structural-delete-columns",
+        "sampleIndex": 2,
+        "spreadsheetId": "1uR1aedmARjd6i-wi71_tDi1rlQFC2Kd3sDRW5y2Dz8A",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1uR1aedmARjd6i-wi71_tDi1rlQFC2Kd3sDRW5y2Dz8A",
+        "title": "bilig structural delete columns sample 2"
+      },
+      {
+        "caseId": "google-sheets-live-structural-move-columns",
+        "sampleIndex": 0,
+        "spreadsheetId": "1jcWkSmJiNtYZYaS_JKB0_2jWzicsSG4uTG1PjPjUH1s",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1jcWkSmJiNtYZYaS_JKB0_2jWzicsSG4uTG1PjPjUH1s",
+        "title": "bilig structural move columns sample 0"
+      },
+      {
+        "caseId": "google-sheets-live-structural-move-columns",
+        "sampleIndex": 1,
+        "spreadsheetId": "1xw8aLwesGTKyrPZdTGYneNENMfwOVwE3yCldoWM-afk",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1xw8aLwesGTKyrPZdTGYneNENMfwOVwE3yCldoWM-afk",
+        "title": "bilig structural move columns sample 1"
+      },
+      {
+        "caseId": "google-sheets-live-structural-move-columns",
+        "sampleIndex": 2,
+        "spreadsheetId": "1P0yURuUnv2a-Cf2aagbOH17x-GSFU79Aqmq5pT02mxY",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1P0yURuUnv2a-Cf2aagbOH17x-GSFU79Aqmq5pT02mxY",
+        "title": "bilig structural move columns sample 2"
+      }
+    ]
+  },
+  "summary": {
+    "allRequiredCasesPassed": true,
+    "requiredCaseCount": 6,
+    "tenXMeanAndP95CaseCount": 6,
+    "workpaperWins": 6,
+    "coveredOperations": ["insert-rows", "delete-rows", "move-rows", "insert-columns", "delete-columns", "move-columns"],
+    "microsoftExcelEvidence": "not-covered-by-this-artifact"
+  },
+  "cases": [
+    {
+      "id": "google-sheets-live-structural-insert-rows",
+      "operation": "insert-rows",
+      "axis": "rows",
+      "rowCount": 500,
+      "sampleCount": 3,
+      "workpaperElapsedMs": {
+        "samples": [0.6548750000000041, 2.12579199999999, 4.529000000000011],
+        "min": 0.6548750000000041,
+        "median": 2.12579199999999,
+        "p95": 4.529000000000011,
+        "max": 4.529000000000011,
+        "mean": 2.4365556666666683,
+        "standardDeviation": 1.5967971424691263,
+        "relativeStandardDeviation": 0.6553501585513233,
+        "standardError": 0.9219112600457753,
+        "confidence95": {
+          "low": 0.6296095969769488,
+          "high": 4.243501736356388
+        }
+      },
+      "googleSheetsElapsedMs": {
+        "samples": [1114.4, 1299.9, 1892.5],
+        "min": 1114.4,
+        "median": 1299.9,
+        "p95": 1892.5,
+        "max": 1892.5,
+        "mean": 1435.6000000000001,
+        "standardDeviation": 331.8340649581755,
+        "relativeStandardDeviation": 0.23114660417816624,
+        "standardError": 191.5844867298904,
+        "confidence95": {
+          "low": 1060.094406009415,
+          "high": 1811.1055939905852
+        }
+      },
+      "workpaperToGoogleSheetsMeanRatio": 0.0016972385529859767,
+      "workpaperToGoogleSheetsP95Ratio": 0.002393130779392344,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "workpaper": {
+          "targetCell": "A501",
+          "value": 500
+        },
+        "googleSheets": {
+          "targetCell": "A501",
+          "value": 500
+        },
+        "equivalent": true
+      },
+      "passed": true
+    },
+    {
+      "id": "google-sheets-live-structural-delete-rows",
+      "operation": "delete-rows",
+      "axis": "rows",
+      "rowCount": 500,
+      "sampleCount": 3,
+      "workpaperElapsedMs": {
+        "samples": [0.9253750000000025, 1.1520830000000046, 4.239125000000001],
+        "min": 0.9253750000000025,
+        "median": 1.1520830000000046,
+        "p95": 4.239125000000001,
+        "max": 4.239125000000001,
+        "mean": 2.1055276666666694,
+        "standardDeviation": 1.5115174086374987,
+        "relativeStandardDeviation": 0.7178805733911025,
+        "standardError": 0.8726749827616656,
+        "confidence95": {
+          "low": 0.39508470045380495,
+          "high": 3.8159706328795338
+        }
+      },
+      "googleSheetsElapsedMs": {
+        "samples": [1350, 1379.3, 4790.1],
+        "min": 1350,
+        "median": 1379.3,
+        "p95": 4790.1,
+        "max": 4790.1,
+        "mean": 2506.4666666666667,
+        "standardDeviation": 1614.8169191032844,
+        "relativeStandardDeviation": 0.6442602810476704,
+        "standardError": 932.3149829362434,
+        "confidence95": {
+          "low": 679.1293001116296,
+          "high": 4333.804033221704
+        }
+      },
+      "workpaperToGoogleSheetsMeanRatio": 0.0008400381679389324,
+      "workpaperToGoogleSheetsP95Ratio": 0.0008849763052963406,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "workpaper": {
+          "targetCell": "A499",
+          "value": 500
+        },
+        "googleSheets": {
+          "targetCell": "A499",
+          "value": 500
+        },
+        "equivalent": true
+      },
+      "passed": true
+    },
+    {
+      "id": "google-sheets-live-structural-move-rows",
+      "operation": "move-rows",
+      "axis": "rows",
+      "rowCount": 500,
+      "sampleCount": 3,
+      "workpaperElapsedMs": {
+        "samples": [0.6074590000000057, 0.6475829999999974, 1.6774580000000014],
+        "min": 0.6074590000000057,
+        "median": 0.6475829999999974,
+        "p95": 1.6774580000000014,
+        "max": 1.6774580000000014,
+        "mean": 0.9775000000000015,
+        "standardDeviation": 0.4952160371440595,
+        "relativeStandardDeviation": 0.5066148717586278,
+        "standardError": 0.28591311235214245,
+        "confidence95": {
+          "low": 0.4171102997898023,
+          "high": 1.5378897002102008
+        }
+      },
+      "googleSheetsElapsedMs": {
+        "samples": [1096, 1277.3, 1348],
+        "min": 1096,
+        "median": 1277.3,
+        "p95": 1348,
+        "max": 1348,
+        "mean": 1240.4333333333334,
+        "standardDeviation": 106.12999366604878,
+        "relativeStandardDeviation": 0.08555880498700624,
+        "standardError": 61.27418041218654,
+        "confidence95": {
+          "low": 1120.3359397254478,
+          "high": 1360.530726941219
+        }
+      },
+      "workpaperToGoogleSheetsMeanRatio": 0.0007880310644129751,
+      "workpaperToGoogleSheetsP95Ratio": 0.0012444050445103868,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "workpaper": {
+          "targetCell": "A1",
+          "value": 251
+        },
+        "googleSheets": {
+          "targetCell": "A1",
+          "value": 251
+        },
+        "equivalent": true
+      },
+      "passed": true
+    },
+    {
+      "id": "google-sheets-live-structural-insert-columns",
+      "operation": "insert-columns",
+      "axis": "columns",
+      "rowCount": 500,
+      "sampleCount": 3,
+      "workpaperElapsedMs": {
+        "samples": [0.42412500000000364, 0.5694590000000233, 1.5439169999999933],
+        "min": 0.42412500000000364,
+        "median": 0.5694590000000233,
+        "p95": 1.5439169999999933,
+        "max": 1.5439169999999933,
+        "mean": 0.8458336666666734,
+        "standardDeviation": 0.49717250399790525,
+        "relativeStandardDeviation": 0.5877899208684859,
+        "standardError": 0.2870426790168709,
+        "confidence95": {
+          "low": 0.2832300157936064,
+          "high": 1.4084373175397404
+        }
+      },
+      "googleSheetsElapsedMs": {
+        "samples": [957.5, 1362, 1485.4],
+        "min": 957.5,
+        "median": 1362,
+        "p95": 1485.4,
+        "max": 1485.4,
+        "mean": 1268.3,
+        "standardDeviation": 225.46894834248613,
+        "relativeStandardDeviation": 0.17777256827445095,
+        "standardError": 130.1745580194362,
+        "confidence95": {
+          "low": 1013.157866281905,
+          "high": 1523.442133718095
+        }
+      },
+      "workpaperToGoogleSheetsMeanRatio": 0.0006669034665825699,
+      "workpaperToGoogleSheetsP95Ratio": 0.0010393947758179569,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "workpaper": {
+          "targetCell": "A500",
+          "value": 500
+        },
+        "googleSheets": {
+          "targetCell": "A500",
+          "value": 500
+        },
+        "equivalent": true
+      },
+      "passed": true
+    },
+    {
+      "id": "google-sheets-live-structural-delete-columns",
+      "operation": "delete-columns",
+      "axis": "columns",
+      "rowCount": 500,
+      "sampleCount": 3,
+      "workpaperElapsedMs": {
+        "samples": [0.9737499999999955, 1.2801670000000058, 3.0312920000000076],
+        "min": 0.9737499999999955,
+        "median": 1.2801670000000058,
+        "p95": 3.0312920000000076,
+        "max": 3.0312920000000076,
+        "mean": 1.7617363333333362,
+        "standardDeviation": 0.906385325545504,
+        "relativeStandardDeviation": 0.5144840963974192,
+        "standardError": 0.5233018116932233,
+        "confidence95": {
+          "low": 0.7360647824146185,
+          "high": 2.7874078842520538
+        }
+      },
+      "googleSheetsElapsedMs": {
+        "samples": [1159.6, 1402.4, 1552.8],
+        "min": 1159.6,
+        "median": 1402.4,
+        "p95": 1552.8,
+        "max": 1552.8,
+        "mean": 1371.6000000000001,
+        "standardDeviation": 161.99390935052674,
+        "relativeStandardDeviation": 0.11810579567696611,
+        "standardError": 93.52722717060645,
+        "confidence95": {
+          "low": 1188.2866347456115,
+          "high": 1554.9133652543887
+        }
+      },
+      "workpaperToGoogleSheetsMeanRatio": 0.001284438854865366,
+      "workpaperToGoogleSheetsP95Ratio": 0.0019521458011334415,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "workpaper": {
+          "targetCell": "A500",
+          "value": 500
+        },
+        "googleSheets": {
+          "targetCell": "A500",
+          "value": 500
+        },
+        "equivalent": true
+      },
+      "passed": true
+    },
+    {
+      "id": "google-sheets-live-structural-move-columns",
+      "operation": "move-columns",
+      "axis": "columns",
+      "rowCount": 500,
+      "sampleCount": 3,
+      "workpaperElapsedMs": {
+        "samples": [0.36445900000001075, 0.39204200000000355, 0.5250000000000057],
+        "min": 0.36445900000001075,
+        "median": 0.39204200000000355,
+        "p95": 0.5250000000000057,
+        "max": 0.5250000000000057,
+        "mean": 0.4271670000000067,
+        "standardDeviation": 0.0700888835170493,
+        "relativeStandardDeviation": 0.16407841316639207,
+        "standardError": 0.04046583576576874,
+        "confidence95": {
+          "low": 0.34785396189909995,
+          "high": 0.5064800381009134
+        }
+      },
+      "googleSheetsElapsedMs": {
+        "samples": [1061.6, 1205.8, 1314.6],
+        "min": 1061.6,
+        "median": 1205.8,
+        "p95": 1314.6,
+        "max": 1314.6,
+        "mean": 1193.9999999999998,
+        "standardDeviation": 103.62329210494457,
+        "relativeStandardDeviation": 0.08678667680481121,
+        "standardError": 59.82693559110497,
+        "confidence95": {
+          "low": 1076.739206241434,
+          "high": 1311.2607937585656
+        }
+      },
+      "workpaperToGoogleSheetsMeanRatio": 0.000357761306532669,
+      "workpaperToGoogleSheetsP95Ratio": 0.0003993610223642216,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "workpaper": {
+          "targetCell": "A500",
+          "value": 1000
+        },
+        "googleSheets": {
+          "targetCell": "A500",
+          "value": 1000
+        },
+        "equivalent": true
+      },
+      "passed": true
+    }
+  ]
+}
