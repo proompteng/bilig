@@ -158,6 +158,40 @@ describe('materializeTrackedIndexChanges', () => {
     expect(hasDeferredTrackedIndexChanges(changes)).toBe(false)
   })
 
+  it('lazy materialization returns ordered values from reverse physical indices', () => {
+    const rowCount = 300
+    const engine = new SpreadsheetEngine({ workbookName: 'tracked-index-lazy-reverse-values' })
+    engine.createSheet('Sheet1')
+
+    const changedCellIndices = new Uint32Array(rowCount)
+    for (let row = 0; row < rowCount; row += 1) {
+      const a1 = `A${row + 1}`
+      engine.setCellValue('Sheet1', a1, row + 1)
+      const cellIndex = engine.workbook.getCellIndex('Sheet1', a1)
+      expect(cellIndex).toBeDefined()
+      changedCellIndices[rowCount - row - 1] = cellIndex!
+    }
+
+    const copyTrackedCellIndices = vi.spyOn(Uint32Array, 'from')
+    const orderChanges = vi.spyOn(Array.prototype, 'toSorted')
+    let changes: ReturnType<typeof materializeTrackedIndexChanges>
+    try {
+      changes = materializeTrackedIndexChanges(engine, changedCellIndices, { lazy: true })
+      expect(copyTrackedCellIndices).not.toHaveBeenCalled()
+      expect(orderChanges).not.toHaveBeenCalled()
+    } finally {
+      copyTrackedCellIndices.mockRestore()
+      orderChanges.mockRestore()
+    }
+
+    expect(hasDeferredTrackedIndexChanges(changes)).toBe(true)
+    expect(changes.map((change) => [change.a1, change.newValue])).toEqual(
+      Array.from({ length: rowCount }, (_, row) => [`A${row + 1}`, { tag: ValueTag.Number, value: row + 1 }]),
+    )
+    expect(forceMaterializeTrackedIndexChanges(changes)).toBe(true)
+    expect(hasDeferredTrackedIndexChanges(changes)).toBe(false)
+  })
+
   it('reads a high lazy same-sheet index without materializing earlier public changes', () => {
     const rowCount = 300
     const engine = new SpreadsheetEngine({ workbookName: 'tracked-index-lazy-random-access' })

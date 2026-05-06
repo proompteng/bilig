@@ -204,15 +204,33 @@ export function materializeTrackedIndexChangesWithMetadata(
       }
       return { changes, ordered: true }
     }
-    if (
-      options.lazy &&
-      isPhysicalSheet &&
-      trackedIndicesAllBelongToSheet(cellStore, changedCellIndices, firstSheetId) &&
-      isTrackedIndexSliceSorted(cellStore, changedCellIndices, 0, changedCellIndices.length)
-    ) {
-      return {
-        changes: createLazyPhysicalTrackedIndexChanges(firstSheetId, sheetName, cellStore, engine, changedCellIndices, formatAddressCached),
-        ordered: true,
+    if (options.lazy && isPhysicalSheet && trackedIndicesAllBelongToSheet(cellStore, changedCellIndices, firstSheetId)) {
+      if (isTrackedIndexSliceSorted(cellStore, changedCellIndices, 0, changedCellIndices.length)) {
+        return {
+          changes: createLazyPhysicalTrackedIndexChanges(
+            firstSheetId,
+            sheetName,
+            cellStore,
+            engine,
+            changedCellIndices,
+            formatAddressCached,
+          ),
+          ordered: true,
+        }
+      }
+      const reverseSortedCellIndices = copyReverseSortedTrackedCellIndices(cellStore, changedCellIndices)
+      if (reverseSortedCellIndices) {
+        return {
+          changes: createLazyPhysicalTrackedIndexChanges(
+            firstSheetId,
+            sheetName,
+            cellStore,
+            engine,
+            reverseSortedCellIndices,
+            formatAddressCached,
+          ),
+          ordered: true,
+        }
       }
     }
     let ordered = true
@@ -690,6 +708,28 @@ function isTrackedIndexSliceSorted(
     }
   }
   return true
+}
+
+function copyReverseSortedTrackedCellIndices(
+  cellStore: TrackedCellStore,
+  changedCellIndices: readonly number[] | Uint32Array,
+): Uint32Array | undefined {
+  const length = changedCellIndices.length
+  const result = new Uint32Array(length)
+  let previousRow = Number.POSITIVE_INFINITY
+  let previousCol = Number.POSITIVE_INFINITY
+  for (let index = 0; index < length; index += 1) {
+    const cellIndex = changedCellIndices[index]!
+    const row = cellStore.rows[cellIndex] ?? 0
+    const col = cellStore.cols[cellIndex] ?? 0
+    if (row > previousRow || (row === previousRow && col >= previousCol)) {
+      return undefined
+    }
+    result[length - index - 1] = cellIndex
+    previousRow = row
+    previousCol = col
+  }
+  return result
 }
 
 function formatTrackedAddress(row: number, col: number): string {
