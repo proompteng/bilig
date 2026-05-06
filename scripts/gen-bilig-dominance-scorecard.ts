@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -19,6 +18,7 @@ import {
   headedBrowserContractSummary,
   sloSummary,
 } from './bilig-dominance-formatters.ts'
+import { buildBiligDominanceCompletionAudit } from './bilig-dominance-completion-audit.ts'
 import { parseCompetitiveArtifact, parseFormulaDominanceSnapshot, parseSurfaceSnapshot } from './bilig-dominance-scorecard-parsers.ts'
 import { parseAuditabilityScorecard } from './gen-auditability-scorecard.ts'
 import { parseAutomationScorecard } from './gen-automation-scorecard.ts'
@@ -38,6 +38,7 @@ import { parseReliabilityScorecard } from './gen-reliability-scorecard.ts'
 import { parseSecurityPostureScorecard } from './gen-security-posture-scorecard.ts'
 import { parseUiResponsivenessLiveBrowserScorecard } from './gen-ui-responsiveness-live-browser-scorecard.ts'
 import { isFiniteNumber, readJsonObject } from './json-scorecard-helpers.ts'
+import { formatJsonForRepo } from './scorecard-format.ts'
 
 export type { BiligDominanceScorecard, BuildScorecardInput } from './bilig-dominance-scorecard-types.ts'
 
@@ -179,7 +180,11 @@ function main(): void {
     surfaceSnapshot: parseSurfaceSnapshot(readJsonObject(surfaceSnapshotPath)),
     surfaceSnapshotPath: toRepoPath(surfaceSnapshotPath),
   })
-  const serializedScorecard = formatJsonForRepo(`${JSON.stringify(scorecard, null, 2)}\n`)
+  const serializedScorecard = formatJsonForRepo({
+    rootDir,
+    serializedJson: `${JSON.stringify(scorecard, null, 2)}\n`,
+    tempPrefix: 'bilig-dominance-scorecard',
+  })
 
   if (isCheckMode) {
     if (!existsSync(outputPath)) {
@@ -289,24 +294,32 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
     input.surfaceSnapshot.classSurface.instanceAccessors.length +
     input.surfaceSnapshot.classSurface.instanceMethods.length
   const securityUncoveredControls = new Set(input.securityPostureScorecard.summary.uncoveredControls)
+  const completionAudit = buildBiligDominanceCompletionAudit(input, {
+    calculationSemanticsPassed,
+    googleSheetsLargeWorkbookTenXPassed,
+    googleSheetsRecalculationTenXPassed,
+    googleSheetsStructuralTenXPassed,
+    largeWorkbookDirectTargetsTenXPassed,
+    microsoftExcelLargeWorkbookTenXPassed,
+    microsoftExcelRecalculationTenXPassed,
+    microsoftExcelStructuralTenXPassed,
+    recalculationDirectTargetsTenXPassed,
+    structuralDirectTargetsTenXPassed,
+    uiResponsivenessLiveBrowserPassed,
+  })
 
   return {
     schemaVersion: 1,
     objective:
       'Make bilig decisively better than Google Sheets and Microsoft Excel, targeting at least 10x superiority across major spreadsheet/workbook categories.',
-    goalStatus: 'active-not-achieved',
+    goalStatus: completionAudit.allCriteriaPassed ? 'achieved' : 'active-not-achieved',
     claimPolicy: {
-      blanketTenXClaimAllowed: false,
-      requiredForBlanketTenXClaim: [
-        'direct Google Sheets evidence for every objective category',
-        'direct Microsoft Excel evidence for every objective category',
-        '10x mean and p95 wins for every performance category',
-        'Excel-compatible correctness coverage across the committed formula and workbook semantics surface',
-        'browser UI responsiveness artifacts for large collaborative workbooks',
-        'security and reliability artifacts that cover production deployment behavior',
-      ],
+      blanketTenXClaimAllowed: completionAudit.allCriteriaPassed,
+      requiredForBlanketTenXClaim: completionAudit.criteria.map((entry) => entry.requirement),
+      unmetRequirements: completionAudit.unmetRequirements,
       workloadSpecificTenXWins: tenXWorkloads,
     },
+    completionAudit,
     sourceArtifacts: {
       auditabilityScorecard: input.auditabilityScorecardPath,
       automationScorecard: input.automationScorecardPath,
@@ -915,6 +928,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           'generated parity, formula inventory, formula dominance, workspace resolution, benchmark, publish, and smoke gates exist',
           'generated-source CI checks are serialized to avoid pnpm workspace-state races in the evidence gate',
           'this generated scorecard prevents blanket 10x claims from outrunning evidence',
+          `completion audit criteria passed: ${String(completionAudit.allCriteriaPassed)}`,
         ],
         evidenceArtifacts: [
           'package.json',
@@ -924,9 +938,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           input.surfaceSnapshotPath,
         ],
         checkCommands: ['pnpm dominance:check', 'pnpm run ci'],
-        blockers: [
-          'developer workflow evidence is strong, but it does not prove the product is 10x better across every user-facing category',
-        ],
+        blockers: [],
       },
     ],
   }
@@ -965,27 +977,6 @@ function isComparableWithComparison(result: CompetitiveResult): result is Compet
 
 function toRepoPath(path: string): string {
   return path.startsWith(`${rootDir}/`) ? path.slice(rootDir.length + 1) : path
-}
-
-function formatJsonForRepo(serializedJson: string): string {
-  const tempDir = mkdtempSync(join(tmpdir(), 'bilig-dominance-scorecard-'))
-  const tempFilePath = join(tempDir, 'scorecard.json')
-  writeFileSync(tempFilePath, serializedJson)
-  const oxfmtPath = join(rootDir, 'node_modules', '.bin', 'oxfmt')
-
-  const formatResult = Bun.spawnSync([oxfmtPath, '--write', tempFilePath], {
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  if (formatResult.exitCode !== 0) {
-    rmSync(tempDir, { recursive: true, force: true })
-    throw new Error(`Unable to format generated scorecard: ${new TextDecoder().decode(formatResult.stderr).trim()}`)
-  }
-
-  const formattedJson = readFileSync(tempFilePath, 'utf8')
-  rmSync(tempDir, { recursive: true, force: true })
-  return formattedJson
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

@@ -14,6 +14,33 @@ describe('bilig dominance scorecard', () => {
 
     expect(scorecard.goalStatus).toBe('active-not-achieved')
     expect(scorecard.claimPolicy.blanketTenXClaimAllowed).toBe(false)
+    expect(scorecard.claimPolicy.unmetRequirements).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('calculation-correctness:'),
+        expect.stringContaining('large-workbook-scale:'),
+        'import-export-compatibility: unsupported import/export feature: xlsx.macros.execution',
+        expect.stringContaining('security:'),
+      ]),
+    )
+    expect(scorecard.completionAudit.allCriteriaPassed).toBe(false)
+    expect(scorecard.completionAudit.criteria.map((entry) => entry.id)).toEqual([
+      'calculation-correctness',
+      'recalculation-speed',
+      'structural-edit-performance',
+      'large-workbook-scale',
+      'ui-responsiveness',
+      'collaboration',
+      'automation-api-extensibility',
+      'import-export-compatibility',
+      'auditability',
+      'reliability',
+      'security',
+      'operator-developer-workflow',
+    ])
+    expect(scorecard.completionAudit.criteria.find((entry) => entry.id === 'import-export-compatibility')).toMatchObject({
+      passed: false,
+      gaps: ['unsupported import/export feature: xlsx.macros.execution'],
+    })
     expect(scorecard.claimPolicy.workloadSpecificTenXWins).toEqual([
       {
         workload: 'rebuild-config-toggle',
@@ -285,6 +312,8 @@ describe('bilig dominance scorecard', () => {
     expect(workflow?.currentEvidence).toContain(
       'generated-source CI checks are serialized to avoid pnpm workspace-state races in the evidence gate',
     )
+    expect(workflow?.currentEvidence).toContain('completion audit criteria passed: false')
+    expect(workflow?.blockers).toEqual([])
     expect(workflow?.evidenceArtifacts).toContain('scripts/run-ci.ts')
   })
 

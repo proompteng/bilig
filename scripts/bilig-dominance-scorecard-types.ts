@@ -23,6 +23,7 @@ import type { UiResponsivenessLiveBrowserScorecard } from './gen-ui-responsivene
 export type { HeadedBrowserFrameP95Contract, LargeWorkbookSloMeasurement, LargeWorkbookSloScorecard }
 
 export type DominanceStatus = 'repo-proved-lead' | 'partial-repo-evidence' | 'target-only'
+export type DominanceGoalStatus = 'achieved' | 'active-not-achieved'
 
 export interface RatioSummary {
   percent: number
@@ -104,10 +105,11 @@ export interface CompetitiveArtifact {
 export interface BiligDominanceScorecard {
   schemaVersion: 1
   objective: string
-  goalStatus: 'active-not-achieved'
+  goalStatus: DominanceGoalStatus
   claimPolicy: {
-    blanketTenXClaimAllowed: false
+    blanketTenXClaimAllowed: boolean
     requiredForBlanketTenXClaim: string[]
+    unmetRequirements: string[]
     workloadSpecificTenXWins: Array<{
       workload: string
       meanRatio: number
@@ -115,6 +117,7 @@ export interface BiligDominanceScorecard {
       comparisonTarget: 'HyperFormula'
     }>
   }
+  completionAudit: DominanceCompletionAudit
   sourceArtifacts: {
     auditabilityScorecard: string
     automationScorecard: string
@@ -221,6 +224,20 @@ export interface BiligDominanceScorecard {
     workpaperWins: number
   }
   categories: DominanceCategory[]
+}
+
+export interface DominanceCompletionAudit {
+  allCriteriaPassed: boolean
+  unmetRequirements: string[]
+  criteria: DominanceCompletionCriterion[]
+}
+
+export interface DominanceCompletionCriterion {
+  id: string
+  requirement: string
+  passed: boolean
+  evidence: string[]
+  gaps: string[]
 }
 
 export interface DominanceCategory {
