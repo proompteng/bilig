@@ -1755,6 +1755,48 @@ describe('WorkPaper', () => {
     }
   })
 
+  it('preserves cached dimensions for safe middle row moves without scanning the grid', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Sheet1: [[1], [2], [3], [4]],
+    })
+    const sheetId = workbook.getSheetId('Sheet1')!
+    const forEachCellEntry = vi.spyOn(sheetGridEntryTarget(workbook, sheetId), 'forEachCellEntry')
+
+    try {
+      workbook.moveRows(sheetId, 1, 1, 0)
+
+      forEachCellEntry.mockClear()
+      expect(workbook.getSheetDimensions(sheetId)).toEqual({ width: 1, height: 4 })
+      expect(forEachCellEntry).not.toHaveBeenCalled()
+      expect(workbook.getCellValue(cell(sheetId, 0, 0))).toEqual({ tag: ValueTag.Number, value: 2 })
+      expect(workbook.getCellValue(cell(sheetId, 1, 0))).toEqual({ tag: ValueTag.Number, value: 1 })
+      expect(workbook.getCellValue(cell(sheetId, 3, 0))).toEqual({ tag: ValueTag.Number, value: 4 })
+    } finally {
+      forEachCellEntry.mockRestore()
+    }
+  })
+
+  it('preserves cached dimensions for safe middle column moves without scanning the grid', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Sheet1: [[1, 2, 3, 4]],
+    })
+    const sheetId = workbook.getSheetId('Sheet1')!
+    const forEachCellEntry = vi.spyOn(sheetGridEntryTarget(workbook, sheetId), 'forEachCellEntry')
+
+    try {
+      workbook.moveColumns(sheetId, 1, 1, 0)
+
+      forEachCellEntry.mockClear()
+      expect(workbook.getSheetDimensions(sheetId)).toEqual({ width: 4, height: 1 })
+      expect(forEachCellEntry).not.toHaveBeenCalled()
+      expect(workbook.getCellValue(cell(sheetId, 0, 0))).toEqual({ tag: ValueTag.Number, value: 2 })
+      expect(workbook.getCellValue(cell(sheetId, 0, 1))).toEqual({ tag: ValueTag.Number, value: 1 })
+      expect(workbook.getCellValue(cell(sheetId, 0, 3))).toEqual({ tag: ValueTag.Number, value: 4 })
+    } finally {
+      forEachCellEntry.mockRestore()
+    }
+  })
+
   it('applies function translations to registered languages and exposes license validity', () => {
     WorkPaper.registerLanguage(TEST_LANGUAGE_CODE, { functions: {} })
     WorkPaper.registerFunctionPlugin(

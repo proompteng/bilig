@@ -122,7 +122,11 @@ import {
 } from './tracked-cell-index-changes.js'
 import { calculateWorkPaperFormulaInScratchWorkbook } from './work-paper-scratch-evaluator.js'
 import { replaceWorkPaperSheetContent } from './work-paper-sheet-replacement.js'
-import { applyCachedSheetDimensionDeletion, applyCachedSheetDimensionInsertion } from './work-paper-sheet-dimensions.js'
+import {
+  applyCachedSheetDimensionDeletion,
+  applyCachedSheetDimensionInsertion,
+  applyCachedSheetDimensionMove,
+} from './work-paper-sheet-dimensions.js'
 
 type ListenerMap = {
   [EventName in WorkPaperEventName]: Set<WorkPaperListener<EventName>>
@@ -1353,6 +1357,12 @@ export class WorkPaper {
 
   private applyCachedSheetDimensionDeletion(sheetId: number, axis: 'row' | 'column', start: number, count: number): void {
     if (!applyCachedSheetDimensionDeletion({ axis, cache: this.sheetDimensionsCache, count, sheetId, start })) {
+      this.invalidateSheetDimensions(sheetId)
+    }
+  }
+
+  private applyCachedSheetDimensionMove(sheetId: number, axis: 'row' | 'column', start: number, count: number, target: number): void {
+    if (!applyCachedSheetDimensionMove({ axis, cache: this.sheetDimensionsCache, count, sheetId, start, target })) {
       this.invalidateSheetDimensions(sheetId)
     }
   }
@@ -3164,11 +3174,11 @@ export class WorkPaper {
     return this.canUseTrackedStructuralFastPath()
       ? this.captureTrackedChangesWithoutVisibilityCache(() => {
           this.engine.moveRows(this.sheetName(sheetId), start, count, target)
-          this.invalidateSheetDimensions(sheetId)
+          this.applyCachedSheetDimensionMove(sheetId, 'row', start, count, target)
         })
       : this.captureChanges(undefined, () => {
           this.engine.moveRows(this.sheetName(sheetId), start, count, target)
-          this.invalidateSheetDimensions(sheetId)
+          this.applyCachedSheetDimensionMove(sheetId, 'row', start, count, target)
         })
   }
 
@@ -3179,11 +3189,11 @@ export class WorkPaper {
     return this.canUseTrackedStructuralFastPath()
       ? this.captureTrackedChangesWithoutVisibilityCache(() => {
           this.engine.moveColumns(this.sheetName(sheetId), start, count, target)
-          this.invalidateSheetDimensions(sheetId)
+          this.applyCachedSheetDimensionMove(sheetId, 'column', start, count, target)
         })
       : this.captureChanges(undefined, () => {
           this.engine.moveColumns(this.sheetName(sheetId), start, count, target)
-          this.invalidateSheetDimensions(sheetId)
+          this.applyCachedSheetDimensionMove(sheetId, 'column', start, count, target)
         })
   }
 
