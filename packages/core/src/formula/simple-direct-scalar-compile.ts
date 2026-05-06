@@ -159,20 +159,23 @@ export function translateSimpleDirectScalarFormula(
     return undefined
   }
   const translatedRefs: ParsedCellReferenceInfo[] = []
+  const symbolicRefs: ParsedCellReferenceInfo['address'][] = []
+  const parsedDeps: ParsedDependencyReference[] = []
   for (let index = 0; index < compiled.parsedSymbolicRefs.length; index += 1) {
     const translated = translateParsedLocalCellRef(compiled.parsedSymbolicRefs[index]!, rowDelta, colDelta)
     if (!translated) {
       return undefined
     }
-    translatedRefs.push(translated)
+    translatedRefs[index] = translated
+    symbolicRefs[index] = translated.address
+    parsedDeps[index] = { kind: 'cell', ...translated }
   }
-  const symbolicRefs = translatedRefs.map((ref) => ref.address)
   return {
     ...compiled,
     source,
     astMatchesSource: false,
     deps: symbolicRefs,
-    parsedDeps: translatedRefs.map((ref) => ({ kind: 'cell', ...ref }) satisfies ParsedDependencyReference),
+    parsedDeps,
     symbolicRefs,
     parsedSymbolicRefs: translatedRefs,
   }

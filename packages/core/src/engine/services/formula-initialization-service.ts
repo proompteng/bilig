@@ -157,7 +157,7 @@ function initialReadRelativeCellToken(
   start: number,
   ownerRow: number,
   ownerCol: number,
-): { readonly token: string; readonly next: number } | undefined {
+): { readonly colOffset: number; readonly next: number } | undefined {
   const column = initialReadColumn(source, start)
   if (!column) {
     return undefined
@@ -167,7 +167,7 @@ function initialReadRelativeCellToken(
     return undefined
   }
   const col = initialColumnToIndex(column.column)
-  return col < 0 ? undefined : { token: `c${col - ownerCol}`, next: row.next }
+  return col < 0 ? undefined : { colOffset: col - ownerCol, next: row.next }
 }
 
 function tryBuildInitialSimpleRowRelativeBinaryTemplateKey(source: string, ownerRow: number, ownerCol: number): string | undefined {
@@ -184,10 +184,10 @@ function tryBuildInitialSimpleRowRelativeBinaryTemplateKey(source: string, owner
   index += 1
   const rightCell = initialReadRelativeCellToken(source, index, ownerRow, ownerCol)
   if (rightCell) {
-    return rightCell.next === source.length ? `${left.token}${operator}${rightCell.token}` : undefined
+    return rightCell.next === source.length ? `c${left.colOffset}${operator}c${rightCell.colOffset}` : undefined
   }
   const rightNumber = initialReadNumberLiteral(source, index)
-  return rightNumber && rightNumber.next === source.length ? `${left.token}${operator}n${rightNumber.text}` : undefined
+  return rightNumber && rightNumber.next === source.length ? `c${left.colOffset}${operator}n${rightNumber.text}` : undefined
 }
 
 function initialFormulaFamilyShapeKey(formula: RuntimeFormula): string {
@@ -303,7 +303,7 @@ export function createEngineFormulaInitializationService(args: {
     source: string,
     compiled: CompiledFormula,
     templateId?: number,
-    options?: { readonly deferFamilyRegistration?: boolean },
+    options?: { readonly deferFamilyRegistration?: boolean; readonly assumeFreshFormula?: boolean },
   ) => boolean
   readonly upsertFormulaFamilyRun: (args: FormulaFamilyRunUpsertArgs) => void
   readonly registerFreshFormulaFamilyRun: (args: FormulaFamilyFreshUniformRunRegistrationArgs) => boolean
@@ -1072,6 +1072,7 @@ export function createEngineFormulaInitializationService(args: {
                 prepared.templateId,
                 {
                   deferFamilyRegistration: deferredFormulaFamilyRuns !== undefined,
+                  assumeFreshFormula: !hadExistingFormulas,
                 },
               )
               noteDeferredFormulaFamilyRunMember(deferredFormulaFamilyRuns, prepared)
@@ -1316,6 +1317,7 @@ export function createEngineFormulaInitializationService(args: {
             topologyChanged =
               args.bindPreparedFormula(cellIndex, ownerSheetName, ref.source, ref.compiled, ref.templateId, {
                 deferFamilyRegistration: deferredFormulaFamilyRuns !== undefined,
+                assumeFreshFormula: !hadExistingFormulas,
               }) || topologyChanged
             noteDeferredFormulaFamilyRunMember(deferredFormulaFamilyRuns, {
               cellIndex,

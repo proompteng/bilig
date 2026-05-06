@@ -210,7 +210,7 @@ export class SpreadsheetEngine {
   private readonly runtime: EngineServiceRuntime
 
   constructor(options: SpreadsheetEngineOptions = {}) {
-    this.workbook = new WorkbookStore(options.workbookName ?? 'Workbook', this.performanceCounters)
+    this.workbook = new WorkbookStore(options.workbookName ?? 'Workbook', this.performanceCounters, options.initialCellCapacity)
     this.formulas = new FormulaTable(this.workbook.cellStore)
     this.replicaState = createReplicaState(options.replicaId ?? 'local')
     this.useColumnIndexEnabled = options.useColumnIndex ?? false

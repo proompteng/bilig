@@ -2053,7 +2053,10 @@ export function createEngineOperationService(args: {
     }
     const delta = collection.getDeltaAt(0)
     if (delta !== undefined) {
-      if (!applyDirectFormulaNumericDelta(cellIndex, delta)) {
+      const applied = canSkipTerminalFormulaColumnVersion(cellIndex)
+        ? applyTerminalDirectFormulaNumericDeltaAndReturn(cellIndex, delta) !== undefined
+        : applyDirectFormulaNumericDelta(cellIndex, delta)
+      if (!applied) {
         return undefined
       }
       const formula = args.state.formulas.get(cellIndex)

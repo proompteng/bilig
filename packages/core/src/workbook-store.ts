@@ -159,7 +159,7 @@ export interface EnsuredCell {
 export class WorkbookStore {
   static readonly defaultStyleId = 'style-0'
   static readonly defaultFormatId = 'format-0'
-  readonly cellStore = new CellStore()
+  readonly cellStore: CellStore
   readonly sheetsByName = new Map<string, SheetRecord>()
   readonly sheetsById = new Map<number, SheetRecord>()
   readonly cellKeyToIndex: Map<number, number>
@@ -183,8 +183,10 @@ export class WorkbookStore {
   constructor(
     workbookName = 'Workbook',
     private readonly counters?: EngineCounters,
+    initialCellCapacity = 64,
   ) {
     this.workbookName = workbookName
+    this.cellStore = new CellStore(Math.max(64, initialCellCapacity))
     this.cellKeyToIndex = new LogicalCellKeyIndexMap((sheetId, row, col) => this.getCellIndexAt(sheetId, row, col))
     this.cellStore.onSetValue = (index) => {
       this.notifyCellValueWritten(index)

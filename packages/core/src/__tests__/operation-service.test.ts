@@ -971,7 +971,7 @@ describe('EngineOperationService', () => {
     engine.setCellValue('Sheet1', 'A1', 10)
 
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 537 })
-    expect(sheet!.columnVersions[1]).toBe(formulaColumnVersion + 1)
+    expect(sheet!.columnVersions[1] ?? 0).toBe(formulaColumnVersion)
     expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 0 })
     expect(engine.getPerformanceCounters().directAggregateDeltaApplications).toBe(1)
     expect(engine.getPerformanceCounters().directAggregateDeltaOnlyRecalcSkips).toBe(1)

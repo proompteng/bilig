@@ -495,6 +495,14 @@ function cloneConfig(config: WorkPaperConfig): WorkPaperConfig {
   }
 }
 
+function createWorkPaperConfig(configInput: WorkPaperConfig): WorkPaperConfig {
+  validateWorkPaperConfig(configInput)
+  return {
+    ...cloneConfig(DEFAULT_CONFIG),
+    ...cloneConfig(configInput),
+  }
+}
+
 function emptyValue(): CellValue {
   return { tag: ValueTag.Empty }
 }
@@ -1264,7 +1272,7 @@ export class WorkPaper {
   private readonly functionSnapshot = new Map<string, InternalFunctionBinding>()
   private readonly functionAliasLookup = new Map<string, InternalFunctionBinding>()
   private readonly internalFunctionLookup = new Map<string, InternalFunctionBinding>()
-  readonly internals: WorkPaperInternals
+  private internalsValue: WorkPaperInternals | undefined
   private config: WorkPaperConfig
   private clipboard: ClipboardPayload | null = null
   private visibilityCache: VisibilitySnapshot | null = null
@@ -1437,22 +1445,29 @@ export class WorkPaper {
     }
   }
 
-  private constructor(configInput: WorkPaperConfig = {}) {
+  private constructor(
+    configInput: WorkPaperConfig = {},
+    options: { readonly initialCellCapacity?: number; readonly useConfigDirectly?: boolean } = {},
+  ) {
     ensureCustomAdapterInstalled()
-    validateWorkPaperConfig(configInput)
-    this.config = {
-      ...cloneConfig(DEFAULT_CONFIG),
-      ...cloneConfig(configInput),
-    }
+    this.config = options.useConfigDirectly === true ? configInput : createWorkPaperConfig(configInput)
     this.engine = new SpreadsheetEngine({
       workbookName: 'Workbook',
       useColumnIndex: this.config.useColumnIndex,
       trackReplicaVersions: false,
+      initialCellCapacity: options.initialCellCapacity,
     })
     this.invalidateAllSheetDimensions()
     this.attachEngineEventTracking()
     this.captureFunctionRegistry()
-    this.internals = Object.freeze({
+  }
+
+  get internals(): WorkPaperInternals {
+    return (this.internalsValue ??= this.createInternals())
+  }
+
+  private createInternals(): WorkPaperInternals {
+    return Object.freeze({
       graph: Object.freeze<WorkPaperGraphAdapter>({
         getDependents: (reference) => this.getCellDependents(reference),
         getPrecedents: (reference) => this.getCellPrecedents(reference),
@@ -1532,7 +1547,7 @@ export class WorkPaper {
     configInput: WorkPaperConfig = {},
     namedExpressions: readonly SerializedWorkPaperNamedExpression[] = [],
   ): WorkPaper {
-    const workbook = new WorkPaper(configInput)
+    const config = createWorkPaperConfig(configInput)
     const sheetEntries = Object.entries(sheets)
     const runtimeSnapshot = namedExpressions.length === 0 ? readRuntimeSnapshot(sheets) : undefined
     const runtimeSnapshotMatchesSheets = runtimeSnapshot !== undefined && runtimeSnapshotMatchesSheetEntries(sheetEntries, runtimeSnapshot)
@@ -1554,7 +1569,7 @@ export class WorkPaper {
               sheetName,
               snapshotSheet,
               runtimeSheetCells,
-              config: workbook.config,
+              config,
             })
             return {
               hasFormula: false,
@@ -1564,8 +1579,10 @@ export class WorkPaper {
               formulaCellCount: 0,
             }
           })()
-        : inspectSheetWithinLimits(sheetName, sheet, workbook.config)
+        : inspectSheetWithinLimits(sheetName, sheet, config)
     }
+    const initialCellCapacity = inspectedSheets.reduce((sum, inspected) => sum + (inspected?.materializedCellCount ?? 0), 0)
+    const workbook = new WorkPaper(config, { initialCellCapacity, useConfigDirectly: true })
     workbook.withEngineEventCaptureDisabled(() => {
       if (runtimeSnapshot && runtimeSnapshotMatchesSheets) {
         workbook.engine.importSnapshot(runtimeSnapshot)

@@ -40,6 +40,7 @@ export interface SpreadsheetEngineOptions {
   replicaId?: string
   useColumnIndex?: boolean
   trackReplicaVersions?: boolean
+  initialCellCapacity?: number
 }
 
 export interface EngineSyncClientConnection {

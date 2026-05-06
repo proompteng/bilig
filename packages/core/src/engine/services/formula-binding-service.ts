@@ -154,6 +154,7 @@ export interface EngineFormulaBindingService {
 
 export interface BindPreparedFormulaOptions {
   readonly deferFamilyRegistration?: boolean
+  readonly assumeFreshFormula?: boolean
 }
 
 interface FormulaOwnerPosition {
@@ -2868,6 +2869,10 @@ export function createEngineFormulaBindingService(args: {
     prepared: ReturnType<typeof prepareFormulaBindingFromCompiledNow>,
     options: BindPreparedFormulaOptions = {},
   ): boolean => {
+    if (options.assumeFreshFormula === true) {
+      installFreshFormulaNow(cellIndex, ownerSheetName, source, prepared, options)
+      return true
+    }
     const existing = args.state.formulas.get(cellIndex)
     const topologyChanged =
       existing === undefined ||
