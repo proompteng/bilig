@@ -209,6 +209,7 @@ try {
       pnpm('formula dominance check', 'formula:dominance:check'),
       pnpm('import/export fidelity scorecard check', 'import-export:fidelity:check'),
       pnpm('large workbook SLO scorecard check', 'large-workbook:slo:check'),
+      pnpm('security posture scorecard check', 'security:posture:check'),
       pnpm('bilig dominance scorecard check', 'dominance:check'),
       pnpm('workspace resolution check', 'workspace-resolution:check'),
       pnpm('canonical naming check', 'naming:check'),

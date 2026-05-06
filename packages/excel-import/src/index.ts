@@ -67,7 +67,7 @@ function normalizeWorkbookName(fileName: string): string {
   if (trimmed.length === 0) {
     return 'Imported workbook'
   }
-  return trimmed.replace(/\.(xlsx|csv)$/i, '') || 'Imported workbook'
+  return trimmed.replace(/\.(xlsx|xlsm|csv)$/i, '') || 'Imported workbook'
 }
 
 function normalizeCsvSheetName(workbookName: string): string {
@@ -671,6 +671,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
     cellStyles: true,
     cellText: false,
     cellDates: false,
+    bookVBA: true,
   })
   const workbookName = normalizeWorkbookName(fileName)
   const warnings: string[] = []

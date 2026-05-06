@@ -6,6 +6,7 @@ import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { parseImportExportFidelityScorecard, type ImportExportFidelityScorecard } from './gen-import-export-fidelity-scorecard.ts'
+import { parseSecurityPostureScorecard, type SecurityPostureScorecard } from './gen-security-posture-scorecard.ts'
 
 export type DominanceStatus = 'repo-proved-lead' | 'partial-repo-evidence' | 'target-only'
 
@@ -134,6 +135,7 @@ export interface BiligDominanceScorecard {
     hyperFormulaSurfaceSnapshot: string
     importExportFidelityScorecard: string
     largeWorkbookSloScorecard: string
+    securityPostureScorecard: string
     workpaperCompetitiveBenchmark: {
       generatedAt: string
       hyperFormulaCommit: string
@@ -152,6 +154,9 @@ export interface BiligDominanceScorecard {
     importExportUnsupportedFeatures: string[]
     largeWorkbookSloRowsCovered: number[]
     largeWorkbookSloPassed: boolean
+    securityCoveredControls: string[]
+    securityPosturePassed: boolean
+    securityUncoveredControls: string[]
     hyperFormulaComparableWorkloads: number
     hyperFormulaP95GeomeanRatio: number
     hyperFormulaMeanGeomeanRatio: number
@@ -183,6 +188,8 @@ export interface BuildScorecardInput {
   importExportFidelityScorecardPath: string
   largeWorkbookSloScorecard: LargeWorkbookSloScorecard
   largeWorkbookSloScorecardPath: string
+  securityPostureScorecard: SecurityPostureScorecard
+  securityPostureScorecardPath: string
   surfaceSnapshot: HyperFormulaSurfaceSnapshot
   surfaceSnapshotPath: string
 }
@@ -194,6 +201,7 @@ const competitiveArtifactPath = join(rootDir, 'packages', 'benchmarks', 'baselin
 const formulaSnapshotPath = join(rootDir, 'packages', 'formula', 'src', '__tests__', 'fixtures', 'formula-dominance-snapshot.json')
 const importExportFidelityScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'import-export-fidelity-scorecard.json')
 const largeWorkbookSloScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'large-workbook-slo-scorecard.json')
+const securityPostureScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'security-posture-scorecard.json')
 const surfaceSnapshotPath = join(rootDir, 'packages', 'headless', 'src', '__tests__', 'fixtures', 'hyperformula-surface.json')
 
 function main(): void {
@@ -207,6 +215,8 @@ function main(): void {
     importExportFidelityScorecardPath: toRepoPath(importExportFidelityScorecardPath),
     largeWorkbookSloScorecard: parseLargeWorkbookSloScorecard(readJsonObject(largeWorkbookSloScorecardPath)),
     largeWorkbookSloScorecardPath: toRepoPath(largeWorkbookSloScorecardPath),
+    securityPostureScorecard: parseSecurityPostureScorecard(readJsonObject(securityPostureScorecardPath)),
+    securityPostureScorecardPath: toRepoPath(securityPostureScorecardPath),
     surfaceSnapshot: parseSurfaceSnapshot(readJsonObject(surfaceSnapshotPath)),
     surfaceSnapshotPath: toRepoPath(surfaceSnapshotPath),
   })
@@ -297,6 +307,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       hyperFormulaSurfaceSnapshot: input.surfaceSnapshotPath,
       importExportFidelityScorecard: input.importExportFidelityScorecardPath,
       largeWorkbookSloScorecard: input.largeWorkbookSloScorecardPath,
+      securityPostureScorecard: input.securityPostureScorecardPath,
       workpaperCompetitiveBenchmark: {
         path: input.competitiveArtifactPath,
         generatedAt: input.competitiveArtifact.generatedAt,
@@ -315,6 +326,9 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       importExportUnsupportedFeatures: input.importExportFidelityScorecard.summary.unsupportedFeatures,
       largeWorkbookSloRowsCovered: input.largeWorkbookSloScorecard.summary.coveredLargeWorkbookRows,
       largeWorkbookSloPassed: input.largeWorkbookSloScorecard.summary.allSloBudgetsPassed,
+      securityCoveredControls: input.securityPostureScorecard.summary.coveredControls,
+      securityPosturePassed: input.securityPostureScorecard.summary.allRequiredControlsPassed,
+      securityUncoveredControls: input.securityPostureScorecard.summary.uncoveredControls,
       hyperFormulaComparableWorkloads: input.competitiveArtifact.scorecard.comparableCount,
       hyperFormulaMeanGeomeanRatio: input.competitiveArtifact.scorecard.directionalMeanRatioGeomean,
       hyperFormulaP95GeomeanRatio: input.competitiveArtifact.scorecard.directionalP95RatioGeomean,
@@ -537,12 +551,25 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
         title: 'Security',
         objectiveCategory: 'security',
         target: 'Safe workbook execution, no hidden runtime requirements, controlled agent permissions, and auditable deployment posture.',
-        status: 'target-only',
-        currentEvidence: ['runtime package publish checks exist', 'cluster and release validation commands are documented'],
-        evidenceArtifacts: ['package.json', 'docs/05-06-next-phase.md'],
-        checkCommands: ['pnpm publish:runtime:check', 'pnpm run ci'],
+        status: 'partial-repo-evidence',
+        currentEvidence: [
+          `generated security posture scorecard passes required controls: ${String(input.securityPostureScorecard.summary.allRequiredControlsPassed)}`,
+          `covered security controls: ${input.securityPostureScorecard.summary.coveredControls.join(', ')}`,
+          `uncovered security controls are explicitly disclosed: ${input.securityPostureScorecard.summary.uncoveredControls.join(', ')}`,
+        ],
+        evidenceArtifacts: [
+          input.securityPostureScorecardPath,
+          'packages/excel-import/src/__tests__/excel-import.test.ts',
+          'packages/agent-api/src/__tests__/workbook-agent-execution-policy.test.ts',
+          'scripts/check-package-publish.ts',
+        ],
+        checkCommands: [
+          'pnpm security:posture:check',
+          'pnpm exec vitest run packages/excel-import/src/__tests__/excel-import.test.ts packages/agent-api/src/__tests__/workbook-agent-execution-policy.test.ts',
+          'pnpm publish:runtime:check',
+        ],
         blockers: [
-          'no generated security scorecard covers formula sandboxing, import safety, permissions, and deployment hardening',
+          'generated security posture evidence covers formula dynamic-code scanning, XLSX macro warning, shared-agent owner review, and runtime package hardening, but not browser CSP, dependency vulnerability audit, or deployment network policy',
           'no direct Sheets or Excel security comparison artifact exists in the repo',
         ],
       },

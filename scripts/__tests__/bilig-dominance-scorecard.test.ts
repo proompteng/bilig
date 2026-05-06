@@ -28,10 +28,12 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.summary.importExportFidelityPassed).toBe(true)
     expect(scorecard.summary.largeWorkbookSloRowsCovered).toEqual([100_000, 250_000])
     expect(scorecard.summary.largeWorkbookSloPassed).toBe(true)
+    expect(scorecard.summary.securityPosturePassed).toBe(true)
     expect(scorecard.sourceArtifacts.importExportFidelityScorecard).toBe(
       'packages/benchmarks/baselines/import-export-fidelity-scorecard.json',
     )
     expect(scorecard.sourceArtifacts.largeWorkbookSloScorecard).toBe('packages/benchmarks/baselines/large-workbook-slo-scorecard.json')
+    expect(scorecard.sourceArtifacts.securityPostureScorecard).toBe('packages/benchmarks/baselines/security-posture-scorecard.json')
     expect(scorecard.categories.find((category) => category.id === 'import-export-compatibility')).toMatchObject({
       status: 'partial-repo-evidence',
       evidenceArtifacts: expect.arrayContaining(['packages/benchmarks/baselines/import-export-fidelity-scorecard.json']),
@@ -39,6 +41,10 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.categories.find((category) => category.id === 'large-workbook-scale')).toMatchObject({
       status: 'partial-repo-evidence',
       evidenceArtifacts: expect.arrayContaining(['packages/benchmarks/baselines/large-workbook-slo-scorecard.json']),
+    })
+    expect(scorecard.categories.find((category) => category.id === 'security')).toMatchObject({
+      status: 'partial-repo-evidence',
+      evidenceArtifacts: expect.arrayContaining(['packages/benchmarks/baselines/security-posture-scorecard.json']),
     })
   })
 
@@ -71,9 +77,11 @@ describe('bilig dominance scorecard', () => {
     expect(packageJson).toContain('"dominance:check": "bun scripts/gen-bilig-dominance-scorecard.ts --check"')
     expect(packageJson).toContain('"import-export:fidelity:check": "bun scripts/gen-import-export-fidelity-scorecard.ts --check"')
     expect(packageJson).toContain('"large-workbook:slo:check": "bun scripts/gen-large-workbook-slo-scorecard.ts --check"')
+    expect(packageJson).toContain('"security:posture:check": "bun scripts/gen-security-posture-scorecard.ts --check"')
     expect(runCi).toContain("pnpm('bilig dominance scorecard check', 'dominance:check')")
     expect(runCi).toContain("pnpm('import/export fidelity scorecard check', 'import-export:fidelity:check')")
     expect(runCi).toContain("pnpm('large workbook SLO scorecard check', 'large-workbook:slo:check')")
+    expect(runCi).toContain("pnpm('security posture scorecard check', 'security:posture:check')")
   })
 })
 
@@ -105,6 +113,7 @@ function buildFixtureInput(): BuildScorecardInput {
     formulaSnapshotPath: 'packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json',
     importExportFidelityScorecardPath: 'packages/benchmarks/baselines/import-export-fidelity-scorecard.json',
     largeWorkbookSloScorecardPath: 'packages/benchmarks/baselines/large-workbook-slo-scorecard.json',
+    securityPostureScorecardPath: 'packages/benchmarks/baselines/security-posture-scorecard.json',
     surfaceSnapshotPath: 'packages/headless/src/__tests__/fixtures/hyperformula-surface.json',
     formulaSnapshot: {
       schemaVersion: 1,
@@ -164,6 +173,40 @@ function buildFixtureInput(): BuildScorecardInput {
           coveredFeatures: ['xlsx.values', 'xlsx.formulas', 'xlsx.numberFormats'],
           missingFeatures: [],
           evidence: 'fixture round-tripped',
+        },
+      ],
+    },
+    securityPostureScorecard: {
+      schemaVersion: 1,
+      suite: 'security-posture',
+      generatedAt: '2026-05-06T09:00:00.000Z',
+      source: {
+        artifactGenerator: 'scripts/gen-security-posture-scorecard.ts',
+        formulaRuntimeScanRoots: ['packages/formula/src'],
+        importImplementation: 'packages/excel-import/src/index.ts',
+        agentPolicyImplementation: 'packages/agent-api/src/workbook-agent-execution-policy.ts',
+        runtimePackageGate: 'pnpm publish:runtime:check',
+      },
+      summary: {
+        allRequiredControlsPassed: true,
+        formulaSandboxPassed: true,
+        importSafetyPassed: true,
+        agentPermissionPolicyPassed: true,
+        runtimePackageHardeningPassed: true,
+        coveredControls: ['formula.noEval', 'xlsx.macroWarning'],
+        uncoveredControls: ['browser.contentSecurityPolicy'],
+        externalGoogleSheetsEvidence: 'not-captured',
+        externalMicrosoftExcelEvidence: 'not-captured',
+      },
+      controls: [
+        {
+          id: 'formula-runtime-no-dynamic-code-execution',
+          category: 'formula-sandbox',
+          required: true,
+          passed: true,
+          coveredControls: ['formula.noEval'],
+          evidence: 'fixture scan passed',
+          findings: [],
         },
       ],
     },

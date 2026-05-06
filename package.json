@@ -27,6 +27,8 @@
     "import-export:fidelity:check": "bun scripts/gen-import-export-fidelity-scorecard.ts --check",
     "large-workbook:slo:generate": "bun scripts/gen-large-workbook-slo-scorecard.ts",
     "large-workbook:slo:check": "bun scripts/gen-large-workbook-slo-scorecard.ts --check",
+    "security:posture:generate": "bun scripts/gen-security-posture-scorecard.ts",
+    "security:posture:check": "bun scripts/gen-security-posture-scorecard.ts --check",
     "dominance:generate": "bun scripts/gen-bilig-dominance-scorecard.ts",
     "dominance:check": "bun scripts/gen-bilig-dominance-scorecard.ts --check",
     "workspace-resolution:generate": "bun scripts/gen-workspace-resolution.ts",

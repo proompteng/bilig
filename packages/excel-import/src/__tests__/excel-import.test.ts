@@ -33,6 +33,13 @@ function buildWorkbook(): Uint8Array {
   return XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' })
 }
 
+function buildMacroEnabledWorkbook(): Uint8Array {
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['safe value']]), 'Sheet1')
+  workbook.vbaraw = new Uint8Array([1, 2, 3, 4])
+  return XLSX.write(workbook, { bookType: 'xlsm', type: 'buffer', bookVBA: true })
+}
+
 function buildGenericWorkflowWorkbookFixture(shape: 'multi-sheet-operations' | 'single-sheet-planning'): Uint8Array {
   const workbook = XLSX.utils.book_new()
   if (shape === 'multi-sheet-operations') {
@@ -172,6 +179,14 @@ describe('excel import', () => {
         }),
       ]),
     )
+  })
+
+  it('warns and ignores macro payloads from macro-enabled workbook bytes', () => {
+    const imported = importXlsx(buildMacroEnabledWorkbook(), 'Macro Workbook.xlsm')
+
+    expect(imported.workbookName).toBe('Macro Workbook')
+    expect(imported.warnings).toContain('Macros were ignored during XLSX import.')
+    expect(imported.snapshot.sheets[0]?.cells).toEqual([expect.objectContaining({ address: 'A1', value: 'safe value' })])
   })
 
   it('maps imported xlsx styles into Bilig style records', () => {

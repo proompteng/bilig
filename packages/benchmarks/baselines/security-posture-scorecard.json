@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "suite": "security-posture",
+  "generatedAt": "2026-05-06T08:16:14.708Z",
+  "source": {
+    "artifactGenerator": "scripts/gen-security-posture-scorecard.ts",
+    "formulaRuntimeScanRoots": ["packages/formula/src", "packages/core/src/formula", "packages/core/src/engine/services"],
+    "importImplementation": "packages/excel-import/src/index.ts",
+    "agentPolicyImplementation": "packages/agent-api/src/workbook-agent-execution-policy.ts",
+    "runtimePackageGate": "pnpm publish:runtime:check"
+  },
+  "summary": {
+    "allRequiredControlsPassed": true,
+    "formulaSandboxPassed": true,
+    "importSafetyPassed": true,
+    "agentPermissionPolicyPassed": true,
+    "runtimePackageHardeningPassed": true,
+    "coveredControls": [
+      "formula.noEval",
+      "formula.noFunctionConstructor",
+      "formula.noNodeProcessExecution",
+      "xlsx.macroWarning",
+      "xlsx.noMacroPayloadExport",
+      "agent.sharedMediumHighRiskOwnerReview",
+      "runtime.publishManifest",
+      "runtime.noSourceInTarballs",
+      "runtime.alignedPackageSet"
+    ],
+    "uncoveredControls": [
+      "browser.contentSecurityPolicy",
+      "dependency.vulnerabilityAudit",
+      "deployment.runtimeNetworkPolicy",
+      "externalSheetsExcelSecurityComparison"
+    ],
+    "externalGoogleSheetsEvidence": "not-captured",
+    "externalMicrosoftExcelEvidence": "not-captured"
+  },
+  "controls": [
+    {
+      "id": "formula-runtime-no-dynamic-code-execution",
+      "category": "formula-sandbox",
+      "required": true,
+      "passed": true,
+      "coveredControls": ["formula.noEval", "formula.noFunctionConstructor", "formula.noNodeProcessExecution"],
+      "evidence": "Scanned 74 production formula/runtime TypeScript files for eval, Function constructors, process execution imports, and spawn calls.",
+      "findings": []
+    },
+    {
+      "id": "xlsx-import-macro-non-execution",
+      "category": "import-safety",
+      "required": true,
+      "passed": true,
+      "coveredControls": ["xlsx.macroWarning", "xlsx.noMacroPayloadExport"],
+      "evidence": "Generated XLSM bytes with a VBA payload, verified import warns and supported XLSX export does not emit macro payloads.",
+      "findings": []
+    },
+    {
+      "id": "shared-agent-owner-review",
+      "category": "agent-permissions",
+      "required": true,
+      "passed": true,
+      "coveredControls": ["agent.sharedMediumHighRiskOwnerReview"],
+      "evidence": "Executable policy checks require owner review for shared medium/high-risk workbook command bundles even under auto-apply policies.",
+      "findings": []
+    },
+    {
+      "id": "runtime-publish-package-hardening",
+      "category": "runtime-hardening",
+      "required": true,
+      "passed": true,
+      "coveredControls": ["runtime.publishManifest", "runtime.noSourceInTarballs", "runtime.alignedPackageSet"],
+      "evidence": "Runtime publish check requires aligned package versions and validates packed tarballs omit source/test artifacts and workspace ranges.",
+      "findings": []
+    }
+  ]
+}

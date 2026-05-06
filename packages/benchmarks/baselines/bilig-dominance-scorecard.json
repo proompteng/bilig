@@ -32,6 +32,7 @@
     "hyperFormulaSurfaceSnapshot": "packages/headless/src/__tests__/fixtures/hyperformula-surface.json",
     "importExportFidelityScorecard": "packages/benchmarks/baselines/import-export-fidelity-scorecard.json",
     "largeWorkbookSloScorecard": "packages/benchmarks/baselines/large-workbook-slo-scorecard.json",
+    "securityPostureScorecard": "packages/benchmarks/baselines/security-posture-scorecard.json",
     "workpaperCompetitiveBenchmark": {
       "path": "packages/benchmarks/baselines/workpaper-vs-hyperformula.json",
       "generatedAt": "2026-05-05T19:00:09.455Z",
@@ -73,6 +74,24 @@
     ],
     "largeWorkbookSloRowsCovered": [100000, 250000],
     "largeWorkbookSloPassed": true,
+    "securityCoveredControls": [
+      "formula.noEval",
+      "formula.noFunctionConstructor",
+      "formula.noNodeProcessExecution",
+      "xlsx.macroWarning",
+      "xlsx.noMacroPayloadExport",
+      "agent.sharedMediumHighRiskOwnerReview",
+      "runtime.publishManifest",
+      "runtime.noSourceInTarballs",
+      "runtime.alignedPackageSet"
+    ],
+    "securityPosturePassed": true,
+    "securityUncoveredControls": [
+      "browser.contentSecurityPolicy",
+      "dependency.vulnerabilityAudit",
+      "deployment.runtimeNetworkPolicy",
+      "externalSheetsExcelSecurityComparison"
+    ],
     "hyperFormulaComparableWorkloads": 46,
     "hyperFormulaMeanGeomeanRatio": 0.5126605383809896,
     "hyperFormulaP95GeomeanRatio": 0.5080601177268398,
@@ -309,12 +328,25 @@
       "title": "Security",
       "objectiveCategory": "security",
       "target": "Safe workbook execution, no hidden runtime requirements, controlled agent permissions, and auditable deployment posture.",
-      "status": "target-only",
-      "currentEvidence": ["runtime package publish checks exist", "cluster and release validation commands are documented"],
-      "evidenceArtifacts": ["package.json", "docs/05-06-next-phase.md"],
-      "checkCommands": ["pnpm publish:runtime:check", "pnpm run ci"],
+      "status": "partial-repo-evidence",
+      "currentEvidence": [
+        "generated security posture scorecard passes required controls: true",
+        "covered security controls: formula.noEval, formula.noFunctionConstructor, formula.noNodeProcessExecution, xlsx.macroWarning, xlsx.noMacroPayloadExport, agent.sharedMediumHighRiskOwnerReview, runtime.publishManifest, runtime.noSourceInTarballs, runtime.alignedPackageSet",
+        "uncovered security controls are explicitly disclosed: browser.contentSecurityPolicy, dependency.vulnerabilityAudit, deployment.runtimeNetworkPolicy, externalSheetsExcelSecurityComparison"
+      ],
+      "evidenceArtifacts": [
+        "packages/benchmarks/baselines/security-posture-scorecard.json",
+        "packages/excel-import/src/__tests__/excel-import.test.ts",
+        "packages/agent-api/src/__tests__/workbook-agent-execution-policy.test.ts",
+        "scripts/check-package-publish.ts"
+      ],
+      "checkCommands": [
+        "pnpm security:posture:check",
+        "pnpm exec vitest run packages/excel-import/src/__tests__/excel-import.test.ts packages/agent-api/src/__tests__/workbook-agent-execution-policy.test.ts",
+        "pnpm publish:runtime:check"
+      ],
       "blockers": [
-        "no generated security scorecard covers formula sandboxing, import safety, permissions, and deployment hardening",
+        "generated security posture evidence covers formula dynamic-code scanning, XLSX macro warning, shared-agent owner review, and runtime package hardening, but not browser CSP, dependency vulnerability audit, or deployment network policy",
         "no direct Sheets or Excel security comparison artifact exists in the repo"
       ]
     },
