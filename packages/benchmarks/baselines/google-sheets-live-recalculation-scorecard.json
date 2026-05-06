@@ -1,0 +1,346 @@
+{
+  "schemaVersion": 1,
+  "suite": "google-sheets-live-recalculation-performance",
+  "generatedAt": "2026-05-06T20:20:00.000Z",
+  "host": {
+    "arch": "arm64",
+    "platform": "darwin"
+  },
+  "source": {
+    "artifactGenerator": "scripts/gen-google-sheets-live-recalculation-scorecard.ts",
+    "implementationPackage": "packages/headless",
+    "evidenceKind": "live-google-sheets-native-conversion-via-google-drive-connector",
+    "captureTransport": "google-drive-connector"
+  },
+  "benchmark": {
+    "sampleCount": 3,
+    "warmupCount": 0,
+    "valueRenderOption": "UNFORMATTED_VALUE",
+    "measuredGoogleSheetsOperation": "edit-and-read-recalculated-values",
+    "measuredWorkpaperOperation": "mutate-and-recalculate",
+    "samplingOrder": "engine-isolated-workpaper-then-google-sheets"
+  },
+  "googleSheets": {
+    "spreadsheets": [
+      {
+        "caseId": "google-sheets-live-recalculation-dirty-fanout-edit",
+        "sampleIndex": 0,
+        "spreadsheetId": "1_iZTR4wNIOCl5Tel0wucgKFuMGlsLyVhKIlCBegW-cI",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1_iZTR4wNIOCl5Tel0wucgKFuMGlsLyVhKIlCBegW-cI",
+        "title": "bilig live recalculation dirty fanout sample 1 2026-05-06"
+      },
+      {
+        "caseId": "google-sheets-live-recalculation-dirty-fanout-edit",
+        "sampleIndex": 1,
+        "spreadsheetId": "1hl4BbLu1XF6mCfB0cIwlCYehwYMhoJqLab1uLWGYPjI",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1hl4BbLu1XF6mCfB0cIwlCYehwYMhoJqLab1uLWGYPjI",
+        "title": "bilig live recalculation dirty fanout sample 2 2026-05-06"
+      },
+      {
+        "caseId": "google-sheets-live-recalculation-dirty-fanout-edit",
+        "sampleIndex": 2,
+        "spreadsheetId": "19wakvu6YSAJcyg2Cynvd5lBJOEd9IFH_RdllrRB4CiU",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/19wakvu6YSAJcyg2Cynvd5lBJOEd9IFH_RdllrRB4CiU",
+        "title": "bilig live recalculation dirty fanout sample 3 2026-05-06"
+      },
+      {
+        "caseId": "google-sheets-live-recalculation-suspended-batch-single-column-edit",
+        "sampleIndex": 0,
+        "spreadsheetId": "1RCmsVrwIbnNYx4zYkFNI6LuhYnOizpXXl9hXPeslIcE",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1RCmsVrwIbnNYx4zYkFNI6LuhYnOizpXXl9hXPeslIcE",
+        "title": "bilig live recalculation suspended batch sample 1 2026-05-06"
+      },
+      {
+        "caseId": "google-sheets-live-recalculation-suspended-batch-single-column-edit",
+        "sampleIndex": 1,
+        "spreadsheetId": "1R7AzZkLfeQokvzDSBf_EhZSOAgD3tipvRMIbbOiMxXI",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1R7AzZkLfeQokvzDSBf_EhZSOAgD3tipvRMIbbOiMxXI",
+        "title": "bilig live recalculation suspended batch sample 2 2026-05-06"
+      },
+      {
+        "caseId": "google-sheets-live-recalculation-suspended-batch-single-column-edit",
+        "sampleIndex": 2,
+        "spreadsheetId": "1PRXQtlzwxObeKVy7TCPhf0msuLKFMCvjw6wHgtp-Vsw",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1PRXQtlzwxObeKVy7TCPhf0msuLKFMCvjw6wHgtp-Vsw",
+        "title": "bilig live recalculation suspended batch sample 3 2026-05-06"
+      },
+      {
+        "caseId": "google-sheets-live-recalculation-conditional-aggregation-criteria-edit",
+        "sampleIndex": 0,
+        "spreadsheetId": "1Mb7zms0ybgrJ1eW42c5Tv0BzW3sFrdzLlPogwk4t8k8",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1Mb7zms0ybgrJ1eW42c5Tv0BzW3sFrdzLlPogwk4t8k8",
+        "title": "bilig live recalculation conditional aggregation sample 1 2026-05-06"
+      },
+      {
+        "caseId": "google-sheets-live-recalculation-conditional-aggregation-criteria-edit",
+        "sampleIndex": 1,
+        "spreadsheetId": "1eoG6hkC06KCON_6yPRTItYGsvW0HG9lD9B_5AJHABIw",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1eoG6hkC06KCON_6yPRTItYGsvW0HG9lD9B_5AJHABIw",
+        "title": "bilig live recalculation conditional aggregation sample 2 2026-05-06"
+      },
+      {
+        "caseId": "google-sheets-live-recalculation-conditional-aggregation-criteria-edit",
+        "sampleIndex": 2,
+        "spreadsheetId": "1Zh51MvYLoVV7vWI8UhwGtOJ7gKBJVLEfq-GYGRY5Fzc",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1Zh51MvYLoVV7vWI8UhwGtOJ7gKBJVLEfq-GYGRY5Fzc",
+        "title": "bilig live recalculation conditional aggregation sample 3 2026-05-06"
+      },
+      {
+        "caseId": "google-sheets-live-recalculation-full-rebuild-recalculate",
+        "sampleIndex": 0,
+        "spreadsheetId": "17SdGxbGgtBgXG1lC81Fone0cz1267KPip5Mj-ixJ3kk",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/17SdGxbGgtBgXG1lC81Fone0cz1267KPip5Mj-ixJ3kk",
+        "title": "bilig live recalculation full rebuild sample 1 2026-05-06"
+      },
+      {
+        "caseId": "google-sheets-live-recalculation-full-rebuild-recalculate",
+        "sampleIndex": 1,
+        "spreadsheetId": "1pSJSy5TcPFbltOwcPvgsFzBx7X98-6FnIJJtll5QCJs",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1pSJSy5TcPFbltOwcPvgsFzBx7X98-6FnIJJtll5QCJs",
+        "title": "bilig live recalculation full rebuild sample 2 2026-05-06"
+      },
+      {
+        "caseId": "google-sheets-live-recalculation-full-rebuild-recalculate",
+        "sampleIndex": 2,
+        "spreadsheetId": "1CYbRu0KQwxZEkJotc3cfzWeLsu1Pd5vjllvmrayFHdU",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1CYbRu0KQwxZEkJotc3cfzWeLsu1Pd5vjllvmrayFHdU",
+        "title": "bilig live recalculation full rebuild sample 3 2026-05-06"
+      }
+    ]
+  },
+  "summary": {
+    "allRequiredCasesPassed": true,
+    "requiredCaseCount": 4,
+    "tenXMeanAndP95CaseCount": 4,
+    "workpaperWins": 4,
+    "coveredWorkloads": [
+      "dirty-fanout-edit",
+      "suspended-batch-single-column-edit",
+      "conditional-aggregation-criteria-edit",
+      "full-rebuild-recalculate"
+    ],
+    "microsoftExcelEvidence": "not-covered-by-this-artifact"
+  },
+  "cases": [
+    {
+      "id": "google-sheets-live-recalculation-dirty-fanout-edit",
+      "workload": "dirty-fanout-edit",
+      "fixture": {
+        "rowCount": 1,
+        "formulaCount": 1000,
+        "materializedCells": 1001
+      },
+      "sampleCount": 3,
+      "workpaperElapsedMs": {
+        "samples": [0.29300000000000637, 0.6081670000000088, 3.5760840000000087],
+        "min": 0.29300000000000637,
+        "median": 0.6081670000000088,
+        "p95": 3.5760840000000087,
+        "max": 3.5760840000000087,
+        "mean": 1.4924170000000079,
+        "standardDeviation": 1.4789824620639247,
+        "relativeStandardDeviation": 0.9909981339424014,
+        "standardError": 0.8538909225993424,
+        "confidence95": {
+          "low": -0.18120920829470322,
+          "high": 3.166043208294719
+        }
+      },
+      "googleSheetsElapsedMs": {
+        "samples": [2068.5, 2590.2, 2982.9],
+        "min": 2068.5,
+        "median": 2590.2,
+        "p95": 2982.9,
+        "max": 2982.9,
+        "mean": 2547.2000000000003,
+        "standardDeviation": 374.5384626443592,
+        "relativeStandardDeviation": 0.14703928338738975,
+        "standardError": 216.23988222958937,
+        "confidence95": {
+          "low": 2123.369830830005,
+          "high": 2971.0301691699956
+        }
+      },
+      "workpaperToGoogleSheetsMeanRatio": 0.000585904915201008,
+      "workpaperToGoogleSheetsP95Ratio": 0.0011988615106104826,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "workpaper": {
+          "terminalValue": 1007,
+          "width": 1001
+        },
+        "googleSheets": {
+          "terminalValue": 1007,
+          "width": 1001
+        },
+        "equivalent": true
+      },
+      "passed": true
+    },
+    {
+      "id": "google-sheets-live-recalculation-suspended-batch-single-column-edit",
+      "workload": "suspended-batch-single-column-edit",
+      "fixture": {
+        "rowCount": 1000,
+        "formulaCount": 1000,
+        "materializedCells": 2000
+      },
+      "sampleCount": 3,
+      "workpaperElapsedMs": {
+        "samples": [0.6020830000000217, 0.7627919999999904, 2.9697500000000048],
+        "min": 0.6020830000000217,
+        "median": 0.7627919999999904,
+        "p95": 2.9697500000000048,
+        "max": 2.9697500000000048,
+        "mean": 1.4448750000000057,
+        "standardDeviation": 1.0802436977796555,
+        "relativeStandardDeviation": 0.7476381678551094,
+        "standardError": 0.6236789897034809,
+        "confidence95": {
+          "low": 0.22246418018118308,
+          "high": 2.6672858198188285
+        }
+      },
+      "googleSheetsElapsedMs": {
+        "samples": [2693.6, 2799.9, 2988.2],
+        "min": 2693.6,
+        "median": 2799.9,
+        "p95": 2988.2,
+        "max": 2988.2,
+        "mean": 2827.2333333333336,
+        "standardDeviation": 121.8130352448191,
+        "relativeStandardDeviation": 0.04308559672405971,
+        "standardError": 70.32878868940169,
+        "confidence95": {
+          "low": 2689.388907502106,
+          "high": 2965.077759164561
+        }
+      },
+      "workpaperToGoogleSheetsMeanRatio": 0.0005110561561951043,
+      "workpaperToGoogleSheetsP95Ratio": 0.0009938257144769442,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "workpaper": {
+          "sampleFormulaValue": 13986,
+          "height": 1000
+        },
+        "googleSheets": {
+          "sampleFormulaValue": 13986,
+          "height": 1000
+        },
+        "equivalent": true
+      },
+      "passed": true
+    },
+    {
+      "id": "google-sheets-live-recalculation-conditional-aggregation-criteria-edit",
+      "workload": "conditional-aggregation-criteria-edit",
+      "fixture": {
+        "rowCount": 1000,
+        "formulaCount": 16,
+        "materializedCells": 2020
+      },
+      "sampleCount": 3,
+      "workpaperElapsedMs": {
+        "samples": [0.3707080000000076, 0.4695419999999899, 1.7606250000000045],
+        "min": 0.3707080000000076,
+        "median": 0.4695419999999899,
+        "p95": 1.7606250000000045,
+        "max": 1.7606250000000045,
+        "mean": 0.866958333333334,
+        "standardDeviation": 0.633204613176677,
+        "relativeStandardDeviation": 0.7303749082635764,
+        "standardError": 0.3655808538696673,
+        "confidence95": {
+          "low": 0.15041985974878613,
+          "high": 1.583496806917882
+        }
+      },
+      "googleSheetsElapsedMs": {
+        "samples": [2426.1, 4026, 4272.9],
+        "min": 2426.1,
+        "median": 4026,
+        "p95": 4272.9,
+        "max": 4272.9,
+        "mean": 3575,
+        "standardDeviation": 818.6241750644797,
+        "relativeStandardDeviation": 0.2289857832348195,
+        "standardError": 472.6328878386127,
+        "confidence95": {
+          "low": 2648.6395398363193,
+          "high": 4501.360460163681
+        }
+      },
+      "workpaperToGoogleSheetsMeanRatio": 0.0002425058275058277,
+      "workpaperToGoogleSheetsP95Ratio": 0.0004120445130941526,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "workpaper": {
+          "sampleSumValue": 250000,
+          "sampleCountValue": 500
+        },
+        "googleSheets": {
+          "sampleSumValue": 250000,
+          "sampleCountValue": 500
+        },
+        "equivalent": true
+      },
+      "passed": true
+    },
+    {
+      "id": "google-sheets-live-recalculation-full-rebuild-recalculate",
+      "workload": "full-rebuild-recalculate",
+      "fixture": {
+        "rowCount": 1000,
+        "formulaCount": 4000,
+        "materializedCells": 6000
+      },
+      "sampleCount": 3,
+      "workpaperElapsedMs": {
+        "samples": [3.8437080000000208, 4.710125000000005, 8.637917000000016],
+        "min": 3.8437080000000208,
+        "median": 4.710125000000005,
+        "p95": 8.637917000000016,
+        "max": 8.637917000000016,
+        "mean": 5.730583333333347,
+        "standardDeviation": 2.086002779076502,
+        "relativeStandardDeviation": 0.3640122929445514,
+        "standardError": 1.204354266030126,
+        "confidence95": {
+          "low": 3.3700489719143,
+          "high": 8.091117694752395
+        }
+      },
+      "googleSheetsElapsedMs": {
+        "samples": [2005.2, 2920.5, 5768.3],
+        "min": 2005.2,
+        "median": 2920.5,
+        "p95": 5768.3,
+        "max": 5768.3,
+        "mean": 3564.6666666666665,
+        "standardDeviation": 1602.382273020046,
+        "relativeStandardDeviation": 0.4495181240938973,
+        "standardError": 925.135836672808,
+        "confidence95": {
+          "low": 1751.400426787963,
+          "high": 5377.93290654537
+        }
+      },
+      "workpaperToGoogleSheetsMeanRatio": 0.0016076070693847055,
+      "workpaperToGoogleSheetsP95Ratio": 0.0014974805401938207,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "workpaper": {
+          "terminalAggregateValue": 500500,
+          "terminalChainValue": 506500
+        },
+        "googleSheets": {
+          "terminalAggregateValue": 500500,
+          "terminalChainValue": 506500
+        },
+        "equivalent": true
+      },
+      "passed": true
+    }
+  ]
+}

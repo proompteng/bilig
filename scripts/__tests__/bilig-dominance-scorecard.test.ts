@@ -30,6 +30,10 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.summary.googleSheetsLiveCalculationCaseCount).toBe(2)
     expect(scorecard.summary.googleSheetsLiveCalculationEvidence).toBe('live-google-sheets-native-conversion-via-google-drive-connector')
     expect(scorecard.summary.googleSheetsLiveCalculationSpreadsheetId).toBe('google-sheet-test-id')
+    expect(scorecard.summary.googleSheetsLiveRecalculationPassed).toBe(true)
+    expect(scorecard.summary.googleSheetsLiveRecalculationCaseCount).toBe(4)
+    expect(scorecard.summary.googleSheetsLiveRecalculationTenXMeanAndP95CaseCount).toBe(4)
+    expect(scorecard.summary.googleSheetsLiveRecalculationEvidence).toBe('live-google-sheets-native-conversion-via-google-drive-connector')
     expect(scorecard.summary.googleSheetsLiveLargeWorkbookPassed).toBe(true)
     expect(scorecard.summary.googleSheetsLiveLargeWorkbookCaseCount).toBe(2)
     expect(scorecard.summary.googleSheetsLiveLargeWorkbookTenXMeanAndP95CaseCount).toBe(2)
@@ -70,6 +74,9 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.sourceArtifacts.collaborationScorecard).toBe('packages/benchmarks/baselines/collaboration-scorecard.json')
     expect(scorecard.sourceArtifacts.googleSheetsLiveCalculationScorecard).toBe(
       'packages/benchmarks/baselines/google-sheets-live-calculation-scorecard.json',
+    )
+    expect(scorecard.sourceArtifacts.googleSheetsLiveRecalculationScorecard).toBe(
+      'packages/benchmarks/baselines/google-sheets-live-recalculation-scorecard.json',
     )
     expect(scorecard.sourceArtifacts.googleSheetsLiveLargeWorkbookScorecard).toBe(
       'packages/benchmarks/baselines/google-sheets-live-large-workbook-scorecard.json',
@@ -130,13 +137,11 @@ describe('bilig dominance scorecard', () => {
       status: 'partial-repo-evidence',
       evidenceArtifacts: expect.arrayContaining([
         'packages/benchmarks/baselines/workpaper-vs-hyperformula.json',
+        'packages/benchmarks/baselines/google-sheets-live-recalculation-scorecard.json',
         'packages/benchmarks/baselines/microsoft-excel-live-recalculation-scorecard.json',
       ]),
-      checkCommands: expect.arrayContaining(['pnpm recalculation:excel-live:check']),
-      blockers: [
-        'no direct Google Sheets recalculation timing artifact exists in the repo',
-        'only 1 comparable HyperFormula workloads are 10x wins on both mean and p95',
-      ],
+      checkCommands: expect.arrayContaining(['pnpm recalculation:excel-live:check', 'pnpm recalculation:google-sheets-live:check']),
+      blockers: ['only 1 comparable HyperFormula workloads are 10x wins on both mean and p95'],
     })
     expect(scorecard.categories.find((category) => category.id === 'structural-edit-performance')).toMatchObject({
       status: 'partial-repo-evidence',
@@ -280,6 +285,9 @@ describe('bilig dominance scorecard', () => {
     expect(packageJson).toContain(
       '"recalculation:excel-live:check": "bun scripts/gen-microsoft-excel-live-recalculation-scorecard.ts --check"',
     )
+    expect(packageJson).toContain(
+      '"recalculation:google-sheets-live:check": "bun scripts/gen-google-sheets-live-recalculation-scorecard.ts --check"',
+    )
     expect(packageJson).toContain('"structural:excel-live:check": "bun scripts/gen-microsoft-excel-live-structural-scorecard.ts --check"')
     expect(packageJson).toContain(
       '"large-workbook:excel-live:check": "bun scripts/gen-microsoft-excel-live-large-workbook-scorecard.ts --check"',
@@ -302,6 +310,7 @@ describe('bilig dominance scorecard', () => {
     expect(runCi).toContain("pnpm('Microsoft Excel live calculation scorecard check', 'calculation:excel-live:check')")
     expect(runCi).toContain("pnpm('Google Sheets live calculation scorecard check', 'calculation:google-sheets-live:check')")
     expect(runCi).toContain("pnpm('Microsoft Excel live recalculation scorecard check', 'recalculation:excel-live:check')")
+    expect(runCi).toContain("pnpm('Google Sheets live recalculation scorecard check', 'recalculation:google-sheets-live:check')")
     expect(runCi).toContain("pnpm('Microsoft Excel live structural scorecard check', 'structural:excel-live:check')")
     expect(runCi).toContain("pnpm('Microsoft Excel live large workbook scorecard check', 'large-workbook:excel-live:check')")
     expect(runCi).toContain("pnpm('Google Sheets live large workbook scorecard check', 'large-workbook:google-sheets-live:check')")

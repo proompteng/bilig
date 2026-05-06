@@ -33,6 +33,7 @@
     "collaborationScorecard": "packages/benchmarks/baselines/collaboration-scorecard.json",
     "formulaDominanceSnapshot": "packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json",
     "googleSheetsLiveCalculationScorecard": "packages/benchmarks/baselines/google-sheets-live-calculation-scorecard.json",
+    "googleSheetsLiveRecalculationScorecard": "packages/benchmarks/baselines/google-sheets-live-recalculation-scorecard.json",
     "googleSheetsLiveLargeWorkbookScorecard": "packages/benchmarks/baselines/google-sheets-live-large-workbook-scorecard.json",
     "hyperFormulaSurfaceSnapshot": "packages/headless/src/__tests__/fixtures/hyperformula-surface.json",
     "microsoftExcelLiveCalculationScorecard": "packages/benchmarks/baselines/microsoft-excel-live-calculation-scorecard.json",
@@ -110,6 +111,24 @@
     "googleSheetsLiveCalculationCaseCount": 36,
     "googleSheetsLiveCalculationPassed": true,
     "googleSheetsLiveCalculationSpreadsheetId": "1QCbmmEVkSUyMpo2Y8Kp_JddOGacRgb-QLWO0Q7J7fec",
+    "googleSheetsLiveRecalculationEvidence": "live-google-sheets-native-conversion-via-google-drive-connector",
+    "googleSheetsLiveRecalculationCaseCount": 4,
+    "googleSheetsLiveRecalculationPassed": true,
+    "googleSheetsLiveRecalculationTenXMeanAndP95CaseCount": 4,
+    "googleSheetsLiveRecalculationSpreadsheetIds": [
+      "1_iZTR4wNIOCl5Tel0wucgKFuMGlsLyVhKIlCBegW-cI",
+      "1hl4BbLu1XF6mCfB0cIwlCYehwYMhoJqLab1uLWGYPjI",
+      "19wakvu6YSAJcyg2Cynvd5lBJOEd9IFH_RdllrRB4CiU",
+      "1RCmsVrwIbnNYx4zYkFNI6LuhYnOizpXXl9hXPeslIcE",
+      "1R7AzZkLfeQokvzDSBf_EhZSOAgD3tipvRMIbbOiMxXI",
+      "1PRXQtlzwxObeKVy7TCPhf0msuLKFMCvjw6wHgtp-Vsw",
+      "1Mb7zms0ybgrJ1eW42c5Tv0BzW3sFrdzLlPogwk4t8k8",
+      "1eoG6hkC06KCON_6yPRTItYGsvW0HG9lD9B_5AJHABIw",
+      "1Zh51MvYLoVV7vWI8UhwGtOJ7gKBJVLEfq-GYGRY5Fzc",
+      "17SdGxbGgtBgXG1lC81Fone0cz1267KPip5Mj-ixJ3kk",
+      "1pSJSy5TcPFbltOwcPvgsFzBx7X98-6FnIJJtll5QCJs",
+      "1CYbRu0KQwxZEkJotc3cfzWeLsu1Pd5vjllvmrayFHdU"
+    ],
     "googleSheetsLiveLargeWorkbookEvidence": "live-google-sheets-native-conversion-via-google-drive-connector",
     "googleSheetsLiveLargeWorkbookCaseCount": 2,
     "googleSheetsLiveLargeWorkbookPassed": true,
@@ -274,17 +293,22 @@
         "rebuild: WorkPaper 1/1, HyperFormula 0/1; worst mean ratio 0.21732837385103268 on rebuild-and-recalculate; worst p95 ratio 0.23468319661108736 on rebuild-and-recalculate",
         "overall HyperFormula comparable scorecard is 46/46",
         "live Microsoft Excel recalculation scorecard passes 4/4 required cases on Excel 16.108.2",
-        "live Microsoft Excel recalculation workloads with 10x mean+p95 wins: 4/4"
+        "live Microsoft Excel recalculation workloads with 10x mean+p95 wins: 4/4",
+        "live Google Sheets recalculation scorecard passes 4/4 required cases via native Google Sheets conversion",
+        "live Google Sheets recalculation workloads with 10x mean+p95 wins: 4/4"
       ],
       "evidenceArtifacts": [
         "packages/benchmarks/baselines/workpaper-vs-hyperformula.json",
+        "packages/benchmarks/baselines/google-sheets-live-recalculation-scorecard.json",
         "packages/benchmarks/baselines/microsoft-excel-live-recalculation-scorecard.json"
       ],
-      "checkCommands": ["pnpm workpaper:bench:competitive:check", "pnpm recalculation:excel-live:check", "pnpm bench:contracts"],
-      "blockers": [
-        "no direct Google Sheets recalculation timing artifact exists in the repo",
-        "only 2 comparable HyperFormula workloads are 10x wins on both mean and p95"
-      ]
+      "checkCommands": [
+        "pnpm workpaper:bench:competitive:check",
+        "pnpm recalculation:excel-live:check",
+        "pnpm recalculation:google-sheets-live:check",
+        "pnpm bench:contracts"
+      ],
+      "blockers": ["only 2 comparable HyperFormula workloads are 10x wins on both mean and p95"]
     },
     {
       "id": "structural-edit-performance",

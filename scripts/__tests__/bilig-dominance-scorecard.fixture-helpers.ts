@@ -137,6 +137,53 @@ export function googleSheetsLargeWorkbookCase(
   }
 }
 
+export function googleSheetsRecalculationSpreadsheet(
+  caseId: string,
+  sampleIndex: number,
+): BuildScorecardInput['googleSheetsLiveRecalculationScorecard']['googleSheets']['spreadsheets'][number] {
+  const workloadLabel = caseId.replace('google-sheets-live-recalculation-', '')
+  return {
+    caseId,
+    sampleIndex,
+    spreadsheetId: `google-sheets-recalc-${workloadLabel}-sample-${String(sampleIndex)}`,
+    spreadsheetUrl: `https://docs.google.com/spreadsheets/d/google-sheets-recalc-${workloadLabel}-sample-${String(sampleIndex)}`,
+    title: `Google Sheets recalculation ${workloadLabel} sample ${String(sampleIndex)}`,
+  }
+}
+
+export function googleSheetsRecalculationCase(
+  id: string,
+  workload: BuildScorecardInput['googleSheetsLiveRecalculationScorecard']['cases'][number]['workload'],
+): BuildScorecardInput['googleSheetsLiveRecalculationScorecard']['cases'][number] {
+  const workpaperElapsedMs = numericSummary(1)
+  const googleSheetsElapsedMs = numericSummary(30)
+  return {
+    id,
+    workload,
+    fixture: {
+      rowCount: 1_000,
+      formulaCount: 1_000,
+      materializedCells: 2_000,
+    },
+    sampleCount: 3,
+    workpaperElapsedMs,
+    googleSheetsElapsedMs,
+    workpaperToGoogleSheetsMeanRatio: workpaperElapsedMs.mean / googleSheetsElapsedMs.mean,
+    workpaperToGoogleSheetsP95Ratio: workpaperElapsedMs.p95 / googleSheetsElapsedMs.p95,
+    tenXMeanAndP95: true,
+    verification: {
+      workpaper: {
+        value: 500,
+      },
+      googleSheets: {
+        value: 500,
+      },
+      equivalent: true,
+    },
+    passed: true,
+  }
+}
+
 export function recalculationCase(
   id: string,
   workload: BuildScorecardInput['microsoftExcelLiveRecalculationScorecard']['cases'][number]['workload'],

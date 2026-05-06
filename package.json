@@ -28,6 +28,8 @@
     "calculation:google-sheets-live:check": "bun scripts/gen-google-sheets-live-calculation-scorecard.ts --check",
     "recalculation:excel-live:generate": "bun scripts/gen-microsoft-excel-live-recalculation-scorecard.ts",
     "recalculation:excel-live:check": "bun scripts/gen-microsoft-excel-live-recalculation-scorecard.ts --check",
+    "recalculation:google-sheets-live:generate": "bun scripts/gen-google-sheets-live-recalculation-scorecard.ts",
+    "recalculation:google-sheets-live:check": "bun scripts/gen-google-sheets-live-recalculation-scorecard.ts --check",
     "structural:excel-live:generate": "bun scripts/gen-microsoft-excel-live-structural-scorecard.ts",
     "structural:excel-live:check": "bun scripts/gen-microsoft-excel-live-structural-scorecard.ts --check",
     "large-workbook:excel-live:generate": "bun scripts/gen-microsoft-excel-live-large-workbook-scorecard.ts",

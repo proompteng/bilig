@@ -19,6 +19,7 @@ import { parseAutomationScorecard } from './gen-automation-scorecard.ts'
 import { parseCollaborationScorecard } from './gen-collaboration-scorecard.ts'
 import { parseGoogleSheetsLiveCalculationScorecard } from './gen-google-sheets-live-calculation-scorecard.ts'
 import { parseGoogleSheetsLiveLargeWorkbookScorecard } from './gen-google-sheets-live-large-workbook-scorecard.ts'
+import { parseGoogleSheetsLiveRecalculationScorecard } from './gen-google-sheets-live-recalculation-scorecard.ts'
 import { parseImportExportFidelityScorecard } from './gen-import-export-fidelity-scorecard.ts'
 import { parseLargeWorkbookSloScorecard } from './gen-large-workbook-slo-scorecard.ts'
 import { parseMicrosoftExcelLiveCalculationScorecard } from './gen-microsoft-excel-live-calculation-scorecard.ts'
@@ -45,6 +46,13 @@ const googleSheetsLiveCalculationScorecardPath = join(
   'benchmarks',
   'baselines',
   'google-sheets-live-calculation-scorecard.json',
+)
+const googleSheetsLiveRecalculationScorecardPath = join(
+  rootDir,
+  'packages',
+  'benchmarks',
+  'baselines',
+  'google-sheets-live-recalculation-scorecard.json',
 )
 const googleSheetsLiveLargeWorkbookScorecardPath = join(
   rootDir,
@@ -104,6 +112,10 @@ function main(): void {
       readJsonObject(googleSheetsLiveCalculationScorecardPath),
     ),
     googleSheetsLiveCalculationScorecardPath: toRepoPath(googleSheetsLiveCalculationScorecardPath),
+    googleSheetsLiveRecalculationScorecard: parseGoogleSheetsLiveRecalculationScorecard(
+      readJsonObject(googleSheetsLiveRecalculationScorecardPath),
+    ),
+    googleSheetsLiveRecalculationScorecardPath: toRepoPath(googleSheetsLiveRecalculationScorecardPath),
     googleSheetsLiveLargeWorkbookScorecard: parseGoogleSheetsLiveLargeWorkbookScorecard(
       readJsonObject(googleSheetsLiveLargeWorkbookScorecardPath),
     ),
@@ -207,6 +219,11 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
   const microsoftExcelRecalculationPassedCaseCount = input.microsoftExcelLiveRecalculationScorecard.cases.filter(
     (entry) => entry.passed,
   ).length
+  const googleSheetsRecalculationTenXPassed =
+    input.googleSheetsLiveRecalculationScorecard.summary.allRequiredCasesPassed &&
+    input.googleSheetsLiveRecalculationScorecard.summary.tenXMeanAndP95CaseCount ===
+      input.googleSheetsLiveRecalculationScorecard.summary.requiredCaseCount
+  const googleSheetsRecalculationPassedCaseCount = input.googleSheetsLiveRecalculationScorecard.cases.filter((entry) => entry.passed).length
   const microsoftExcelLargeWorkbookTenXPassed =
     input.microsoftExcelLiveLargeWorkbookScorecard.summary.allRequiredCasesPassed &&
     input.microsoftExcelLiveLargeWorkbookScorecard.summary.tenXMeanAndP95CaseCount ===
@@ -254,6 +271,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       collaborationScorecard: input.collaborationScorecardPath,
       formulaDominanceSnapshot: input.formulaSnapshotPath,
       googleSheetsLiveCalculationScorecard: input.googleSheetsLiveCalculationScorecardPath,
+      googleSheetsLiveRecalculationScorecard: input.googleSheetsLiveRecalculationScorecardPath,
       googleSheetsLiveLargeWorkbookScorecard: input.googleSheetsLiveLargeWorkbookScorecardPath,
       hyperFormulaSurfaceSnapshot: input.surfaceSnapshotPath,
       microsoftExcelLiveCalculationScorecard: input.microsoftExcelLiveCalculationScorecardPath,
@@ -290,6 +308,13 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       googleSheetsLiveCalculationCaseCount: input.googleSheetsLiveCalculationScorecard.summary.requiredCaseCount,
       googleSheetsLiveCalculationPassed: input.googleSheetsLiveCalculationScorecard.summary.allRequiredCasesPassed,
       googleSheetsLiveCalculationSpreadsheetId: input.googleSheetsLiveCalculationScorecard.googleSheets.spreadsheetId,
+      googleSheetsLiveRecalculationEvidence: input.googleSheetsLiveRecalculationScorecard.source.evidenceKind,
+      googleSheetsLiveRecalculationCaseCount: input.googleSheetsLiveRecalculationScorecard.summary.requiredCaseCount,
+      googleSheetsLiveRecalculationPassed: input.googleSheetsLiveRecalculationScorecard.summary.allRequiredCasesPassed,
+      googleSheetsLiveRecalculationTenXMeanAndP95CaseCount: input.googleSheetsLiveRecalculationScorecard.summary.tenXMeanAndP95CaseCount,
+      googleSheetsLiveRecalculationSpreadsheetIds: input.googleSheetsLiveRecalculationScorecard.googleSheets.spreadsheets.map(
+        (entry) => entry.spreadsheetId,
+      ),
       googleSheetsLiveLargeWorkbookEvidence: input.googleSheetsLiveLargeWorkbookScorecard.source.evidenceKind,
       googleSheetsLiveLargeWorkbookCaseCount: input.googleSheetsLiveLargeWorkbookScorecard.summary.requiredCaseCount,
       googleSheetsLiveLargeWorkbookPassed: input.googleSheetsLiveLargeWorkbookScorecard.summary.allRequiredCasesPassed,
@@ -405,14 +430,31 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           `live Microsoft Excel recalculation workloads with 10x mean+p95 wins: ${String(
             input.microsoftExcelLiveRecalculationScorecard.summary.tenXMeanAndP95CaseCount,
           )}/${String(input.microsoftExcelLiveRecalculationScorecard.summary.requiredCaseCount)}`,
+          `live Google Sheets recalculation scorecard passes ${String(
+            googleSheetsRecalculationPassedCaseCount,
+          )}/${String(input.googleSheetsLiveRecalculationScorecard.summary.requiredCaseCount)} required cases via native Google Sheets conversion`,
+          `live Google Sheets recalculation workloads with 10x mean+p95 wins: ${String(
+            input.googleSheetsLiveRecalculationScorecard.summary.tenXMeanAndP95CaseCount,
+          )}/${String(input.googleSheetsLiveRecalculationScorecard.summary.requiredCaseCount)}`,
         ],
-        evidenceArtifacts: [input.competitiveArtifactPath, input.microsoftExcelLiveRecalculationScorecardPath],
-        checkCommands: ['pnpm workpaper:bench:competitive:check', 'pnpm recalculation:excel-live:check', 'pnpm bench:contracts'],
+        evidenceArtifacts: [
+          input.competitiveArtifactPath,
+          input.googleSheetsLiveRecalculationScorecardPath,
+          input.microsoftExcelLiveRecalculationScorecardPath,
+        ],
+        checkCommands: [
+          'pnpm workpaper:bench:competitive:check',
+          'pnpm recalculation:excel-live:check',
+          'pnpm recalculation:google-sheets-live:check',
+          'pnpm bench:contracts',
+        ],
         blockers: [
           ...(microsoftExcelRecalculationTenXPassed
             ? []
             : ['live Microsoft Excel recalculation timing scorecard does not prove 10x mean+p95 for all recalculation cases']),
-          'no direct Google Sheets recalculation timing artifact exists in the repo',
+          ...(googleSheetsRecalculationTenXPassed
+            ? []
+            : ['live Google Sheets recalculation timing scorecard does not prove 10x mean+p95 for all recalculation cases']),
           `only ${tenXWorkloads.length} comparable HyperFormula workloads are 10x wins on both mean and p95`,
         ],
       },

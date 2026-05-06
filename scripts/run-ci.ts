@@ -196,6 +196,7 @@ const generatedSourceChecks: readonly CiTask[] = [
   pnpm('Microsoft Excel live calculation scorecard check', 'calculation:excel-live:check'),
   pnpm('Google Sheets live calculation scorecard check', 'calculation:google-sheets-live:check'),
   pnpm('Microsoft Excel live recalculation scorecard check', 'recalculation:excel-live:check'),
+  pnpm('Google Sheets live recalculation scorecard check', 'recalculation:google-sheets-live:check'),
   pnpm('Microsoft Excel live structural scorecard check', 'structural:excel-live:check'),
   pnpm('Microsoft Excel live large workbook scorecard check', 'large-workbook:excel-live:check'),
   pnpm('Google Sheets live large workbook scorecard check', 'large-workbook:google-sheets-live:check'),
