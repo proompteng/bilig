@@ -1,0 +1,276 @@
+{
+  "schemaVersion": 1,
+  "objective": "Make bilig decisively better than Google Sheets and Microsoft Excel, targeting at least 10x superiority across major spreadsheet/workbook categories.",
+  "goalStatus": "active-not-achieved",
+  "claimPolicy": {
+    "blanketTenXClaimAllowed": false,
+    "requiredForBlanketTenXClaim": [
+      "direct Google Sheets evidence for every objective category",
+      "direct Microsoft Excel evidence for every objective category",
+      "10x mean and p95 wins for every performance category",
+      "Excel-compatible correctness coverage across the committed formula and workbook semantics surface",
+      "browser UI responsiveness artifacts for large collaborative workbooks",
+      "security and reliability artifacts that cover production deployment behavior"
+    ],
+    "workloadSpecificTenXWins": [
+      {
+        "workload": "rebuild-config-toggle",
+        "meanRatio": 0.00536588022841576,
+        "p95Ratio": 0.007797180152795871,
+        "comparisonTarget": "HyperFormula"
+      },
+      {
+        "workload": "structural-move-columns",
+        "meanRatio": 0.057255958665844646,
+        "p95Ratio": 0.06373428595560877,
+        "comparisonTarget": "HyperFormula"
+      }
+    ]
+  },
+  "sourceArtifacts": {
+    "formulaDominanceSnapshot": "packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json",
+    "hyperFormulaSurfaceSnapshot": "packages/headless/src/__tests__/fixtures/hyperformula-surface.json",
+    "workpaperCompetitiveBenchmark": {
+      "path": "packages/benchmarks/baselines/workpaper-vs-hyperformula.json",
+      "generatedAt": "2026-05-05T19:00:09.455Z",
+      "hyperFormulaVersion": "3.2.0",
+      "hyperFormulaCommit": "6de904b8876f920f287b63a95934c479acf78307"
+    }
+  },
+  "summary": {
+    "externalGoogleSheetsEvidence": "not-captured-in-repo",
+    "externalMicrosoftExcelEvidence": "not-captured-in-repo",
+    "formulaCanonicalProductionPercent": 100,
+    "formulaOfficeListedBreadthPercent": 90.7,
+    "hyperFormulaComparableWorkloads": 46,
+    "hyperFormulaMeanGeomeanRatio": 0.5126605383809896,
+    "hyperFormulaP95GeomeanRatio": 0.5080601177268398,
+    "hyperFormulaWins": 0,
+    "tenXMeanAndP95WorkloadCountAgainstHyperFormula": 2,
+    "workpaperWins": 46
+  },
+  "categories": [
+    {
+      "id": "calculation-correctness",
+      "title": "Calculation Correctness",
+      "objectiveCategory": "calculation correctness",
+      "target": "Excel-compatible semantics on the supported workbook and formula surface, with oracle-backed production routing.",
+      "status": "partial-repo-evidence",
+      "currentEvidence": [
+        "canonical formula closure is 300/300 (100%)",
+        "Office-listed formula breadth is 461/508 (90.7%)",
+        "strategic canonical rows are production-routed; open canonical rows: 0"
+      ],
+      "evidenceArtifacts": [
+        "packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json",
+        "docs/excel-parity-program.md",
+        "docs/formula-oracle-capture.md"
+      ],
+      "checkCommands": ["pnpm formula:dominance:check", "pnpm test:correctness:formula"],
+      "blockers": [
+        "47 Office-listed functions are still missing from the runtime inventory",
+        "no generated scorecard currently compares all committed semantics directly against live Google Sheets and Microsoft Excel"
+      ]
+    },
+    {
+      "id": "recalculation-speed",
+      "title": "Recalculation Speed",
+      "objectiveCategory": "recalculation speed",
+      "target": "10x mean and p95 wins on named recalculation workloads against each comparison target.",
+      "status": "partial-repo-evidence",
+      "currentEvidence": [
+        "dirty-execution: WorkPaper 5/5, HyperFormula 0/5; worst mean ratio 0.7022729674628281 on single-formula-edit-recalc; worst p95 ratio 0.7008869230220635 on partial-recompute-mixed-frontier",
+        "batch-edit: WorkPaper 6/6, HyperFormula 0/6; worst mean ratio 0.6445711003548408 on batch-suspended-multi-column; worst p95 ratio 0.7454666392938814 on batch-edit-single-column-with-undo",
+        "rebuild: WorkPaper 1/1, HyperFormula 0/1; worst mean ratio 0.24952910236150572 on rebuild-and-recalculate; worst p95 ratio 0.2409923766794544 on rebuild-and-recalculate",
+        "overall HyperFormula comparable scorecard is 46/46"
+      ],
+      "evidenceArtifacts": ["packages/benchmarks/baselines/workpaper-vs-hyperformula.json"],
+      "checkCommands": ["pnpm workpaper:bench:competitive:check", "pnpm bench:contracts"],
+      "blockers": [
+        "current checked-in benchmark is against HyperFormula, not Google Sheets or Microsoft Excel",
+        "only 2 comparable HyperFormula workloads are 10x wins on both mean and p95"
+      ]
+    },
+    {
+      "id": "structural-edit-performance",
+      "title": "Structural Edit Performance",
+      "objectiveCategory": "structural-edit performance",
+      "target": "10x mean and p95 wins for insert/delete/move rows and columns at workbook scale.",
+      "status": "partial-repo-evidence",
+      "currentEvidence": [
+        "structural-rows: WorkPaper 3/3, HyperFormula 0/3; worst mean ratio 0.7095183752254048 on structural-delete-rows; worst p95 ratio 0.7249915535641869 on structural-delete-rows",
+        "structural-columns: WorkPaper 3/3, HyperFormula 0/3; worst mean ratio 0.8642535647861759 on structural-insert-columns; worst p95 ratio 0.871853534177693 on structural-insert-columns"
+      ],
+      "evidenceArtifacts": ["packages/benchmarks/baselines/workpaper-vs-hyperformula.json"],
+      "checkCommands": ["pnpm workpaper:bench:competitive:check"],
+      "blockers": [
+        "structural rows and columns lead HyperFormula, but the worst ratios are not 10x",
+        "no direct Sheets or Excel structural-edit timing artifact exists in the repo"
+      ]
+    },
+    {
+      "id": "large-workbook-scale",
+      "title": "Large Workbook Scale",
+      "objectiveCategory": "large-workbook scale",
+      "target": "Sub-second warm start, import, viewport, paste, sort, and filter behavior on 100k to 250k row workbooks.",
+      "status": "target-only",
+      "currentEvidence": [
+        "local-first worker architecture and OPFS/SQLite model are documented",
+        "range-read and build families have HyperFormula comparison evidence",
+        "range-read: WorkPaper 2/2, HyperFormula 0/2; worst mean ratio 0.31797694876367255 on range-read; worst p95 ratio 0.2305879299152803 on range-read"
+      ],
+      "evidenceArtifacts": ["packages/benchmarks/baselines/workpaper-vs-hyperformula.json", "docs/05-06-next-phase.md"],
+      "checkCommands": ["pnpm test:browser:full", "pnpm bench:smoke"],
+      "blockers": [
+        "the repo does not yet have a generated large-workbook SLO artifact for 100k and 250k row browser sessions",
+        "no direct Sheets or Excel large-workbook scale artifact exists in the repo"
+      ]
+    },
+    {
+      "id": "ui-responsiveness",
+      "title": "UI Responsiveness",
+      "objectiveCategory": "UI responsiveness",
+      "target": "Local visible response p95 below 16ms, selection paint p95 below 8ms, and stable viewport frame pacing.",
+      "status": "target-only",
+      "currentEvidence": [
+        "worker-first local runtime, projected viewport patches, and tile cache architecture are implemented and documented",
+        "browser correctness and performance smoke commands exist"
+      ],
+      "evidenceArtifacts": ["docs/05-06-next-phase.md", "apps/web/src/perf/workbook-perf.ts", "apps/web/src/perf/workbook-scroll-perf.ts"],
+      "checkCommands": ["pnpm test:browser:full", "pnpm bench:smoke"],
+      "blockers": [
+        "no checked-in browser p95 artifact proves the stated UI latency targets",
+        "no direct Sheets or Excel browser responsiveness comparison artifact exists in the repo"
+      ]
+    },
+    {
+      "id": "collaboration",
+      "title": "Collaboration",
+      "objectiveCategory": "collaboration",
+      "target": "Local-first collaboration with durable pending ops, safe rebase, explicit conflicts, private views, and change review.",
+      "status": "partial-repo-evidence",
+      "currentEvidence": [
+        "worker runtime, pending-op journal, authoritative delta ingest, presence, and changes-pane tests exist",
+        "collaboration product targets are documented"
+      ],
+      "evidenceArtifacts": [
+        "docs/05-06-next-phase.md",
+        "apps/web/src/__tests__/workbook-sync.test.ts",
+        "apps/web/src/__tests__/workbook-presence.test.tsx"
+      ],
+      "checkCommands": ["pnpm test:correctness:browser", "pnpm test:correctness:server"],
+      "blockers": [
+        "no generated collaboration SLO artifact covers reconnect catch-up, conflict rate, and multi-user viewport behavior",
+        "no direct Sheets collaboration comparison artifact exists in the repo"
+      ]
+    },
+    {
+      "id": "automation-api-extensibility",
+      "title": "Automation And API Extensibility",
+      "objectiveCategory": "automation/API extensibility",
+      "target": "Typed semantic workbook operations and agent tools that replace brittle DOM automation.",
+      "status": "partial-repo-evidence",
+      "currentEvidence": [
+        "143 HyperFormula surface members are snapshotted for parity tracking",
+        "38 HyperFormula config keys are snapshotted for parity tracking",
+        "WorkPaper exposes additional detailed events and performance counters"
+      ],
+      "evidenceArtifacts": [
+        "packages/headless/src/__tests__/fixtures/hyperformula-surface.json",
+        "packages/headless/src/__tests__/hyperformula-surface-parity.test.ts"
+      ],
+      "checkCommands": ["pnpm workpaper:parity:check", "pnpm workpaper:smoke:external"],
+      "blockers": [
+        "no generated Google Apps Script or Office Scripts capability comparison exists",
+        "no 10x workflow automation benchmark exists for semantic operations versus incumbent scripting"
+      ]
+    },
+    {
+      "id": "import-export-compatibility",
+      "title": "Import And Export Compatibility",
+      "objectiveCategory": "import/export compatibility",
+      "target": "High-fidelity CSV/XLSX import, preview, authoritative finalization, and compatibility reporting.",
+      "status": "target-only",
+      "currentEvidence": ["import/export architecture is documented", "Excel fixture packages and formula oracle capture rules exist"],
+      "evidenceArtifacts": ["docs/05-06-next-phase.md", "docs/formula-oracle-capture.md"],
+      "checkCommands": ["pnpm test", "pnpm publish:runtime:check"],
+      "blockers": [
+        "no generated import/export fidelity matrix proves XLSX round-trip compatibility against Excel",
+        "no direct Sheets import/export compatibility artifact exists in the repo"
+      ]
+    },
+    {
+      "id": "auditability",
+      "title": "Auditability",
+      "objectiveCategory": "auditability",
+      "target": "Every AI or user workflow is reviewable, previewable, undoable, and tied to durable change evidence.",
+      "status": "partial-repo-evidence",
+      "currentEvidence": [
+        "change bundles, versions, revertable changes, and agent preview/apply rails are documented",
+        "workbook changes and mutation journal tests exist"
+      ],
+      "evidenceArtifacts": [
+        "docs/05-06-next-phase.md",
+        "apps/web/src/__tests__/workbook-changes.test.tsx",
+        "apps/web/src/__tests__/worker-runtime-mutation-journal.test.ts"
+      ],
+      "checkCommands": ["pnpm test:correctness:browser", "pnpm test:correctness:server"],
+      "blockers": [
+        "no generated auditability scorecard covers end-to-end preview/apply/undo/revert workflows",
+        "no direct incumbent auditability comparison artifact exists in the repo"
+      ]
+    },
+    {
+      "id": "reliability",
+      "title": "Reliability",
+      "objectiveCategory": "reliability",
+      "target": "Crash-safe local durability, deterministic replay, durable sync, and no accepted-op loss.",
+      "status": "partial-repo-evidence",
+      "currentEvidence": [
+        "local pending-op journal and reconnect/rebase architecture are documented",
+        "runtime sync replay, fuzz, reconnect, and local persistence tests exist"
+      ],
+      "evidenceArtifacts": ["docs/05-06-next-phase.md", "apps/web/src/__tests__/runtime-sync.fuzz.test.ts"],
+      "checkCommands": ["pnpm test:fuzz:main", "pnpm test:correctness:browser", "pnpm test:correctness:server"],
+      "blockers": [
+        "no generated crash/reload/offline soak artifact proves zero pending-op loss",
+        "no direct Sheets or Excel reliability comparison artifact exists in the repo"
+      ]
+    },
+    {
+      "id": "security",
+      "title": "Security",
+      "objectiveCategory": "security",
+      "target": "Safe workbook execution, no hidden runtime requirements, controlled agent permissions, and auditable deployment posture.",
+      "status": "target-only",
+      "currentEvidence": ["runtime package publish checks exist", "cluster and release validation commands are documented"],
+      "evidenceArtifacts": ["package.json", "docs/05-06-next-phase.md"],
+      "checkCommands": ["pnpm publish:runtime:check", "pnpm run ci"],
+      "blockers": [
+        "no generated security scorecard covers formula sandboxing, import safety, permissions, and deployment hardening",
+        "no direct Sheets or Excel security comparison artifact exists in the repo"
+      ]
+    },
+    {
+      "id": "operator-developer-workflow",
+      "title": "Operator And Developer Workflow",
+      "objectiveCategory": "operator/developer workflow",
+      "target": "One-command verification, generated artifacts, external smoke tests, and no unverifiable leadership claims.",
+      "status": "repo-proved-lead",
+      "currentEvidence": [
+        "generated parity, formula inventory, formula dominance, workspace resolution, benchmark, publish, and smoke gates exist",
+        "this generated scorecard prevents blanket 10x claims from outrunning evidence"
+      ],
+      "evidenceArtifacts": [
+        "package.json",
+        "packages/benchmarks/baselines/workpaper-vs-hyperformula.json",
+        "packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json",
+        "packages/headless/src/__tests__/fixtures/hyperformula-surface.json"
+      ],
+      "checkCommands": ["pnpm dominance:check", "pnpm run ci"],
+      "blockers": [
+        "developer workflow evidence is strong, but it does not prove the product is 10x better across every user-facing category"
+      ]
+    }
+  ]
+}

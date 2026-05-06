@@ -23,6 +23,8 @@
     "formula-inventory:check": "bun scripts/gen-formula-inventory.ts --check",
     "formula:dominance:generate": "bun scripts/gen-formula-dominance-snapshot.ts",
     "formula:dominance:check": "bun scripts/gen-formula-dominance-snapshot.ts --check",
+    "dominance:generate": "bun scripts/gen-bilig-dominance-scorecard.ts",
+    "dominance:check": "bun scripts/gen-bilig-dominance-scorecard.ts --check",
     "workspace-resolution:generate": "bun scripts/gen-workspace-resolution.ts",
     "workspace-resolution:check": "bun scripts/gen-workspace-resolution.ts --check",
     "zero:data-migrate": "bun scripts/run-zero-data-migrations.ts",

@@ -166,10 +166,12 @@ The current state is therefore:
 - stronger feature coverage in selected areas such as dynamic arrays and structured references: shipped
 - workload-specific competitive benchmark evidence against HyperFormula: shipped
 - on the checked-in expanded comparable benchmark, WorkPaper currently wins
-  `44/46` scorecard-eligible comparable workloads, including `8/8` holdout; the
-  current remaining mean-red rows are `build-mixed-content` and
-  `structural-delete-rows`, both with overlapping confidence intervals
-- blanket `10x` superiority claim: still disallowed without a named workload reference
+  `46/46` scorecard-eligible comparable workloads, including `8/8` holdout; the
+  closest current WorkPaper win is `build-mixed-content`
+- top-level dominance scorecard: shipped at
+  `packages/benchmarks/baselines/bilig-dominance-scorecard.json`
+- blanket `10x` superiority claim: still disallowed without direct Google
+  Sheets / Microsoft Excel category evidence and named workload ratios
 
 ## WorkPaper Contract
 
@@ -352,8 +354,11 @@ Because the expanded default artifact now exists, the correct statement is:
 
 - WorkPaper has stronger feature coverage and stronger release/reliability gates than HyperFormula
 - WorkPaper has a checked-in cross-engine benchmark artifact for named workloads
-- the current checked-in artifact does not prove general speed leadership for WorkPaper
-- WorkPaper still must not claim a blanket `10x` win without citing a specific workload ratio from that artifact
+- the current checked-in artifact proves WorkPaper leads the HyperFormula
+  comparable scorecard, but not blanket `10x` superiority
+- WorkPaper still must not claim a blanket `10x` win without citing a specific
+  workload ratio from that artifact and, for the broader product claim, direct
+  Sheets / Excel category evidence from the generated dominance scorecard
 
 ## What Exceeds HyperFormula Today
 

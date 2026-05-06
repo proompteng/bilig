@@ -83,8 +83,12 @@ Current state:
 - external install and consumer smoke paths are checked
 - a checked-in comparison artifact exists at
   `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
-- that artifact currently shows WorkPaper leading `44/46` scorecard-eligible
+- that artifact currently shows WorkPaper leading `46/46` scorecard-eligible
   comparable workloads, with `8/8` holdout wins
+- the broader active Sheets / Excel objective is tracked by
+  `packages/benchmarks/baselines/bilig-dominance-scorecard.json`, which keeps
+  blanket `10x` claims disallowed until direct evidence exists for each
+  category
 
 So the remaining work is not:
 
@@ -107,11 +111,11 @@ This is the scorecard that should drive engineering priority.
 | --- | --- | --- | --- | --- | --- |
 | Surface parity | Public method inventory | `132/132` method names present on `WorkPaper` | local checkout baseline | parity | keep the snapshot artifact green |
 | Surface parity | Config-key inventory | `38/38` config keys present on `WorkPaperConfig` | local checkout baseline | parity | keep the snapshot artifact green |
-| Formula breadth | Registered breadth against Office list | `508/508` registered in codebase = `100%` | docs claim `350/515` Excel functions = `68%` | `bilig` leads on breadth, but denominators are not identical | keep the generated dominance snapshot current |
-| Formula breadth | Unified inventory breadth | `525/525` unified tracked functions = `100%` | no comparable local unified inventory artifact | `bilig` leads on tracked breadth | keep the unified inventory generated and current |
+| Formula breadth | Registered breadth against Office list | `461/508` registered in codebase = `90.7%` | docs claim `350/515` Excel functions = `68%` | `bilig` leads on breadth, but the repo is still below the `95%` internal target | close the missing Office-listed functions or revise the target with evidence |
+| Formula breadth | Unified inventory breadth | `475/525` unified tracked functions = `90.5%` | no comparable local unified inventory artifact | `bilig` leads on tracked breadth, but not complete breadth | keep the unified inventory generated and current |
 | Formula production quality | Canonical production closure | `300/300` canonical rows production-closed = `100%` | no matching canonical artifact | `bilig` leads on closure | keep the dominance snapshot current and extend grouped-array coverage beyond the canonical SUM forms |
 | Feature dominance | Critical semantics unsupported by HyperFormula but present in `bilig` | dynamic arrays, structured references/tables, multiple workbook instances | HyperFormula docs list all three as unsupported/limited | `bilig` leads | add leadership workload benchmarks and soak tests so the lead is not purely semantic |
-| Performance dominance | Directly comparable benchmark workloads | unified benchmark includes `51` workloads, `46` scorecard-eligible comparable workloads, public and holdout lanes | HyperFormula leads only `build-mixed-content` and `structural-delete-rows` by mean in the latest artifact, both with confidence overlap | `WorkPaper` leads `44/46` overall and `8/8` holdout; `lookup-text-exact` p95 is the worst tail | convert the remaining two mean reds and p95 tail into stable production wins without weakening benchmark gates |
+| Performance dominance | Directly comparable benchmark workloads | unified benchmark includes `51` workloads, `46` scorecard-eligible comparable workloads, public and holdout lanes | HyperFormula has `0` current scorecard wins in the latest artifact | `WorkPaper` leads `46/46` overall and `8/8` holdout; closest WorkPaper win is `build-mixed-content` | turn close wins into larger-margin wins without weakening benchmark gates |
 | Performance dominance | Leadership workloads | `1/1` leadership workload exercised, with HyperFormula marked unsupported | dynamic arrays unsupported | `bilig` leads on capability, not comparable speed | expand leadership artifacts beyond one unsupported workload |
 | Operability dominance | Clean external consumer path | packed tarball install and Vite/Node smoke are checked in-repo | no equivalent artifact in this repo | `bilig` leads in current repo evidence | keep smoke and publish paths green on every release path |
 | Licensing and packaging | Open-source package posture | MIT publishable packages on npm | GPL license key flow in docs | `bilig` leads for embeddable OSS consumption | preserve the publishable OSS path while adding no hidden runtime requirements |
@@ -119,10 +123,11 @@ This is the scorecard that should drive engineering priority.
 The important reading is:
 
 - `bilig` already leads on surface completeness, feature breadth, and package operability
-- `bilig` now leads the expanded directly comparable runtime scorecard, but not
-  every workload
-- `bilig` does not yet deserve a blanket overall-win claim until the two
-  remaining mean reds and p95 lookup tail are closed
+- `bilig` now leads every expanded directly comparable HyperFormula runtime
+  workload in the checked-in scorecard
+- `bilig` still does not deserve a blanket `10x` claim: only two comparable
+  HyperFormula workloads are `10x` wins on both mean and p95, and there is no
+  direct generated Google Sheets or Microsoft Excel artifact yet
 
 ## Current Metric Values
 
@@ -131,8 +136,8 @@ Current measured values from local repo artifacts and docs:
 - HyperFormula public API coverage in `WorkPaper`: `132/132`
 - HyperFormula config coverage in `WorkPaperConfig`: `38/38`
 - `bilig` registered formula breadth:
-  - `508/508` Office-listed functions = `100%`
-  - `525/525` unified tracked functions = `100%`
+  - `461/508` Office-listed functions = `90.7%`
+  - `475/525` unified tracked functions = `90.5%`
 - HyperFormula published Excel coverage from the local docs:
   - `350/515` Excel functions = `68%`
 - `bilig` canonical formula production closure:
@@ -222,6 +227,15 @@ Formula breadth and canonical closure:
   - `packages/formula/src/compatibility.ts`
   - `packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json`
 
+Top-level Sheets / Excel dominance tracking:
+
+- artifact:
+  - `packages/benchmarks/baselines/bilig-dominance-scorecard.json`
+- source generator:
+  - `scripts/gen-bilig-dominance-scorecard.ts`
+- check command:
+  - `pnpm dominance:check`
+
 ## Program States
 
 This program should be read as a state machine, not a binary done/not-done checklist.
@@ -253,7 +267,12 @@ This program should be read as a state machine, not a binary done/not-done check
 - feature leadership remains intact
 - performance-leading is true
 
-The current state is `engine-catching-up`.
+The historical state before the latest artifact was `engine-catching-up`. The
+current generated artifacts have moved the HyperFormula performance lane to
+`performance-leading`: WorkPaper is `46/46` on comparable workloads. The active
+program is now about larger margins, formula breadth closure, product-level
+Sheets / Excel evidence, and rejecting blanket `10x` claims until the generated
+scorecard proves them.
 
 ## What Counts As “Fully Beat HyperFormula”
 
@@ -362,17 +381,18 @@ The current repository supports these claims:
   - richer detailed event payloads
   - multiple independent workbook instances with no one-instance-one-workbook restriction
 - `WorkPaper` now leads most of the expanded competitive engine scorecard:
-  - `44/46` overall scorecard-eligible comparable workloads
-  - `36/38` public comparable workloads
+  - `46/46` overall scorecard-eligible comparable workloads
+  - `38/38` public comparable workloads
   - `8/8` holdout comparable workloads
-  - current artifact generated at `2026-04-29T14:47:16.831Z`
+  - current artifact generated at `2026-05-05T19:00:09.455Z`
 
 The current repository does not support these claims:
 
-- that `bilig` wins every scorecard-eligible comparable workload by mean
 - that `bilig` is `10x` better overall
-- that all p95 tail gaps are closed
-- that formula breadth leadership already implies formula production leadership
+- that `bilig` has direct generated proof against Google Sheets and Microsoft
+  Excel in every product category
+- that formula breadth is complete; Office-listed breadth is currently
+  `461/508` (`90.7%`)
 
 That means the engineering program must focus on real runtime work, not just surface-level parity.
 
@@ -391,17 +411,17 @@ Do not regress:
 
 These are existing advantages and must not be traded away while chasing speed.
 
-### Priority 1: Fix the largest measured performance deficits
+### Priority 1: Turn close performance wins into larger-margin wins
 
 Based on the checked-in benchmark artifact, the most urgent directly comparable
-gaps are now:
+performance lanes are now closest wins, not losses:
 
-- `build-mixed-content`: HyperFormula mean win at `1.0362639565590437x`,
-  confidence intervals overlap.
-- `structural-delete-rows`: HyperFormula mean win at `1.0234049542127845x`,
-  confidence intervals overlap and the median is WorkPaper-green.
-- `lookup-text-exact`: worst current p95 ratio at `2.27208263805424x`; this is
-  a tail-latency hardening target, not a current mean scorecard loss.
+- `build-mixed-content`: WorkPaper mean ratio `0.9353922725978107`, confidence
+  intervals overlap.
+- `structural-insert-columns`: WorkPaper mean ratio `0.8642535647861759`.
+- `aggregate-overlapping-sliding-window`: WorkPaper mean ratio
+  `0.8335704735358855`, confidence intervals overlap.
+- `build-many-sheets`: WorkPaper mean ratio `0.8007693406232433`.
 
 The important trend changes are:
 
@@ -411,8 +431,10 @@ The important trend changes are:
 - aggregate overlapping sliding windows are green in the latest artifact after
   earlier noisy red runs
 - batch-edit and formula-edit rows are not current blockers
-- `useColumnIndex` is now a real direct lookup path; the remaining lookup work is
-  p95 text-exact stabilization
+- `useColumnIndex` is now a real direct lookup path
+- the new generated dominance scorecard blocks a blanket `10x` claim because
+  direct Sheets / Excel evidence is not captured and only two comparable
+  HyperFormula workloads are `10x` wins on both mean and p95
 
 ### Priority 2: Protect formula production-quality leadership
 
@@ -590,9 +612,10 @@ Goal:
 
 - close the current performance gap on lookup-heavy workloads
 
-This is now p95-tail hardening rather than a broad mean-scorecard loss. The
-current active lookup target is `lookup-text-exact`, where the p95 ratio is
-`2.27208263805424`.
+This is now larger-margin hardening rather than a broad scorecard loss. The
+current checked-in artifact has `lookup-text-exact` green on both mean and p95;
+lookup work should protect that win while focusing on any fixture where the
+ratio remains too close for a durable leadership claim.
 
 Required work:
 
@@ -762,8 +785,8 @@ Metric:
 
 Current values:
 
-- `508/508` Office-listed = `100%`
-- `525/525` unified tracked = `100%`
+- `461/508` Office-listed = `90.7%`
+- `475/525` unified tracked = `90.5%`
 
 Interpretation:
 
@@ -857,13 +880,15 @@ Every substantial patch in this program should produce:
 ### Phase 1: Close direct-comparison deficits
 
 - `build-mixed-content`
-- `structural-delete-rows`
-- `lookup-text-exact` p95
+- `structural-insert-columns`
+- `aggregate-overlapping-sliding-window`
+- `build-many-sheets`
 
 Reason:
 
-- these are the only current mean-red rows plus the worst p95 tail in the
-  checked artifact
+- these are the closest current WorkPaper wins in the checked artifact; there
+  are no current HyperFormula mean-red rows, but these lanes are not close to
+  the active `10x` target
 
 ### Phase 2: Strengthen leadership workloads
 

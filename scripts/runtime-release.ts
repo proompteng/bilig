@@ -13,6 +13,7 @@ export const RUNTIME_AFFECTING_PATH_PATTERNS = [
   'scripts/publish-runtime-package-set.ts',
   'scripts/check-package-publish.ts',
   'scripts/gen-formula-dominance-snapshot.ts',
+  'scripts/gen-bilig-dominance-scorecard.ts',
   'scripts/gen-workpaper-hyperformula-audit.ts',
   'scripts/gen-workpaper-benchmark-baseline.ts',
   'scripts/gen-workpaper-vs-hyperformula-benchmark.ts',
