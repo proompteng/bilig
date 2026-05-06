@@ -34,6 +34,7 @@
     "formulaDominanceSnapshot": "packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json",
     "hyperFormulaSurfaceSnapshot": "packages/headless/src/__tests__/fixtures/hyperformula-surface.json",
     "microsoftExcelLiveCalculationScorecard": "packages/benchmarks/baselines/microsoft-excel-live-calculation-scorecard.json",
+    "microsoftExcelLiveStructuralScorecard": "packages/benchmarks/baselines/microsoft-excel-live-structural-scorecard.json",
     "importExportFidelityScorecard": "packages/benchmarks/baselines/import-export-fidelity-scorecard.json",
     "largeWorkbookSloScorecard": "packages/benchmarks/baselines/large-workbook-slo-scorecard.json",
     "reliabilityScorecard": "packages/benchmarks/baselines/reliability-scorecard.json",
@@ -105,6 +106,11 @@
     "microsoftExcelLiveCalculationCaseCount": 16,
     "microsoftExcelLiveCalculationPassed": true,
     "microsoftExcelLiveCalculationVersion": "16.108.2",
+    "microsoftExcelLiveStructuralEvidence": "live-local-microsoft-excel-automation",
+    "microsoftExcelLiveStructuralCaseCount": 6,
+    "microsoftExcelLiveStructuralPassed": true,
+    "microsoftExcelLiveStructuralTenXMeanAndP95CaseCount": 6,
+    "microsoftExcelLiveStructuralVersion": "16.108.2",
     "formulaOfficeListedBreadthPercent": 100,
     "formulaTrackedBreadthPercent": 100,
     "importExportCoveredFeatures": [
@@ -245,13 +251,18 @@
       "status": "partial-repo-evidence",
       "currentEvidence": [
         "structural-rows: WorkPaper 3/3, HyperFormula 0/3; worst mean ratio 0.7204976453933799 on structural-delete-rows; worst p95 ratio 0.7232483297136605 on structural-insert-rows",
-        "structural-columns: WorkPaper 3/3, HyperFormula 0/3; worst mean ratio 0.896687503417026 on structural-insert-columns; worst p95 ratio 0.9601665381659502 on structural-insert-columns"
+        "structural-columns: WorkPaper 3/3, HyperFormula 0/3; worst mean ratio 0.896687503417026 on structural-insert-columns; worst p95 ratio 0.9601665381659502 on structural-insert-columns",
+        "live Microsoft Excel structural scorecard passes 6/6 required cases on Excel 16.108.2",
+        "live Microsoft Excel structural operations with 10x mean+p95 wins: 6/6"
       ],
-      "evidenceArtifacts": ["packages/benchmarks/baselines/workpaper-vs-hyperformula.json"],
-      "checkCommands": ["pnpm workpaper:bench:competitive:check"],
+      "evidenceArtifacts": [
+        "packages/benchmarks/baselines/workpaper-vs-hyperformula.json",
+        "packages/benchmarks/baselines/microsoft-excel-live-structural-scorecard.json"
+      ],
+      "checkCommands": ["pnpm workpaper:bench:competitive:check", "pnpm structural:excel-live:check"],
       "blockers": [
         "structural rows and columns lead HyperFormula, but the worst ratios are not 10x",
-        "no direct Sheets or Excel structural-edit timing artifact exists in the repo"
+        "no direct Google Sheets structural-edit timing artifact exists in the repo"
       ]
     },
     {

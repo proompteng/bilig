@@ -208,6 +208,7 @@ try {
       pnpm('formula inventory check', 'formula-inventory:check'),
       pnpm('formula dominance check', 'formula:dominance:check'),
       pnpm('Microsoft Excel live calculation scorecard check', 'calculation:excel-live:check'),
+      pnpm('Microsoft Excel live structural scorecard check', 'structural:excel-live:check'),
       pnpm('auditability scorecard check', 'auditability:check'),
       pnpm('reliability scorecard check', 'reliability:check'),
       pnpm('collaboration scorecard check', 'collaboration:check'),

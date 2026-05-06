@@ -28,6 +28,10 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.summary.microsoftExcelLiveCalculationPassed).toBe(true)
     expect(scorecard.summary.microsoftExcelLiveCalculationCaseCount).toBe(2)
     expect(scorecard.summary.microsoftExcelLiveCalculationEvidence).toBe('live-local-microsoft-excel-automation')
+    expect(scorecard.summary.microsoftExcelLiveStructuralPassed).toBe(true)
+    expect(scorecard.summary.microsoftExcelLiveStructuralCaseCount).toBe(6)
+    expect(scorecard.summary.microsoftExcelLiveStructuralTenXMeanAndP95CaseCount).toBe(6)
+    expect(scorecard.summary.microsoftExcelLiveStructuralEvidence).toBe('live-local-microsoft-excel-automation')
     expect(scorecard.summary.importExportFidelityPassed).toBe(true)
     expect(scorecard.summary.largeWorkbookSloRowsCovered).toEqual([100_000, 250_000])
     expect(scorecard.summary.largeWorkbookSloPassed).toBe(true)
@@ -41,6 +45,9 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.sourceArtifacts.collaborationScorecard).toBe('packages/benchmarks/baselines/collaboration-scorecard.json')
     expect(scorecard.sourceArtifacts.microsoftExcelLiveCalculationScorecard).toBe(
       'packages/benchmarks/baselines/microsoft-excel-live-calculation-scorecard.json',
+    )
+    expect(scorecard.sourceArtifacts.microsoftExcelLiveStructuralScorecard).toBe(
+      'packages/benchmarks/baselines/microsoft-excel-live-structural-scorecard.json',
     )
     expect(scorecard.sourceArtifacts.reliabilityScorecard).toBe('packages/benchmarks/baselines/reliability-scorecard.json')
     expect(scorecard.sourceArtifacts.importExportFidelityScorecard).toBe(
@@ -76,6 +83,18 @@ describe('bilig dominance scorecard', () => {
         'e2e/tests/web-shell-scroll-performance.pw.ts',
       ]),
       blockers: ['no direct Sheets or Excel large-workbook live timing artifact exists in the repo'],
+    })
+    expect(scorecard.categories.find((category) => category.id === 'structural-edit-performance')).toMatchObject({
+      status: 'partial-repo-evidence',
+      evidenceArtifacts: expect.arrayContaining([
+        'packages/benchmarks/baselines/workpaper-vs-hyperformula.json',
+        'packages/benchmarks/baselines/microsoft-excel-live-structural-scorecard.json',
+      ]),
+      checkCommands: expect.arrayContaining(['pnpm structural:excel-live:check']),
+      blockers: [
+        'structural rows and columns lead HyperFormula, but the worst ratios are not 10x',
+        'no direct Google Sheets structural-edit timing artifact exists in the repo',
+      ],
     })
     expect(scorecard.categories.find((category) => category.id === 'ui-responsiveness')).toMatchObject({
       evidenceArtifacts: expect.arrayContaining([
@@ -186,6 +205,7 @@ describe('bilig dominance scorecard', () => {
 
     expect(packageJson).toContain('"dominance:check": "bun scripts/gen-bilig-dominance-scorecard.ts --check"')
     expect(packageJson).toContain('"calculation:excel-live:check": "bun scripts/gen-microsoft-excel-live-calculation-scorecard.ts --check"')
+    expect(packageJson).toContain('"structural:excel-live:check": "bun scripts/gen-microsoft-excel-live-structural-scorecard.ts --check"')
     expect(packageJson).toContain('"auditability:generate": "bun scripts/gen-auditability-scorecard.ts"')
     expect(packageJson).toContain('"auditability:check": "bun scripts/gen-auditability-scorecard.ts --check"')
     expect(packageJson).toContain('"reliability:generate": "bun scripts/gen-reliability-scorecard.ts"')
@@ -199,6 +219,7 @@ describe('bilig dominance scorecard', () => {
     expect(packageJson).toContain('"security:posture:check": "bun scripts/gen-security-posture-scorecard.ts --check"')
     expect(runCi).toContain("pnpm('bilig dominance scorecard check', 'dominance:check')")
     expect(runCi).toContain("pnpm('Microsoft Excel live calculation scorecard check', 'calculation:excel-live:check')")
+    expect(runCi).toContain("pnpm('Microsoft Excel live structural scorecard check', 'structural:excel-live:check')")
     expect(runCi).toContain("pnpm('auditability scorecard check', 'auditability:check')")
     expect(runCi).toContain("pnpm('reliability scorecard check', 'reliability:check')")
     expect(runCi).toContain("pnpm('collaboration scorecard check', 'collaboration:check')")
@@ -244,6 +265,7 @@ function buildFixtureInput(): BuildScorecardInput {
     competitiveArtifactPath: 'packages/benchmarks/baselines/workpaper-vs-hyperformula.json',
     formulaSnapshotPath: 'packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json',
     microsoftExcelLiveCalculationScorecardPath: 'packages/benchmarks/baselines/microsoft-excel-live-calculation-scorecard.json',
+    microsoftExcelLiveStructuralScorecardPath: 'packages/benchmarks/baselines/microsoft-excel-live-structural-scorecard.json',
     auditabilityScorecardPath: 'packages/benchmarks/baselines/auditability-scorecard.json',
     automationScorecardPath: 'packages/benchmarks/baselines/automation-scorecard.json',
     collaborationScorecardPath: 'packages/benchmarks/baselines/collaboration-scorecard.json',
@@ -333,6 +355,46 @@ function buildFixtureInput(): BuildScorecardInput {
           microsoftExcelValue: 6,
           passed: true,
         },
+      ],
+    },
+    microsoftExcelLiveStructuralScorecard: {
+      schemaVersion: 1,
+      suite: 'microsoft-excel-live-structural-performance',
+      generatedAt: '2026-05-06T15:00:00.000Z',
+      host: {
+        arch: 'arm64',
+        platform: 'darwin',
+      },
+      source: {
+        artifactGenerator: 'scripts/gen-microsoft-excel-live-structural-scorecard.ts',
+        implementationPackage: 'packages/headless',
+        evidenceKind: 'live-local-microsoft-excel-automation',
+        appleScriptTransport: 'osascript',
+      },
+      benchmark: {
+        rowCount: 500,
+        sampleCount: 5,
+        screenUpdating: false,
+      },
+      microsoftExcel: {
+        appPath: '/Applications/Microsoft Excel.app',
+        version: '16.test',
+      },
+      summary: {
+        allRequiredCasesPassed: true,
+        requiredCaseCount: 6,
+        tenXMeanAndP95CaseCount: 6,
+        workpaperWins: 6,
+        coveredOperations: ['insert-rows', 'delete-rows', 'move-rows', 'insert-columns', 'delete-columns', 'move-columns'],
+        googleSheetsEvidence: 'not-covered-by-this-artifact',
+      },
+      cases: [
+        structuralCase('excel-live-structural-insert-rows', 'insert-rows', 'rows'),
+        structuralCase('excel-live-structural-delete-rows', 'delete-rows', 'rows'),
+        structuralCase('excel-live-structural-move-rows', 'move-rows', 'rows'),
+        structuralCase('excel-live-structural-insert-columns', 'insert-columns', 'columns'),
+        structuralCase('excel-live-structural-delete-columns', 'delete-columns', 'columns'),
+        structuralCase('excel-live-structural-move-columns', 'move-columns', 'columns'),
       ],
     },
     importExportFidelityScorecard: {
@@ -787,5 +849,58 @@ function family(familyName: string, ratio: number): BuildScorecardInput['competi
     worstMeanRatioWorkload: `${familyName}-workload`,
     worstWorkpaperToHyperFormulaP95Ratio: ratio,
     worstP95RatioWorkload: `${familyName}-workload`,
+  }
+}
+
+function structuralCase(
+  id: string,
+  operation: BuildScorecardInput['microsoftExcelLiveStructuralScorecard']['cases'][number]['operation'],
+  axis: BuildScorecardInput['microsoftExcelLiveStructuralScorecard']['cases'][number]['axis'],
+): BuildScorecardInput['microsoftExcelLiveStructuralScorecard']['cases'][number] {
+  return {
+    id,
+    operation,
+    axis,
+    rowCount: 500,
+    sampleCount: 5,
+    workpaperElapsedMs: numericSummary(1),
+    microsoftExcelElapsedMs: numericSummary(20),
+    workpaperToMicrosoftExcelMeanRatio: 0.05,
+    workpaperToMicrosoftExcelP95Ratio: 0.05,
+    tenXMeanAndP95: true,
+    verification: {
+      workpaper: {
+        height: 500,
+        width: axis === 'columns' ? 4 : 2,
+        value: 500,
+      },
+      microsoftExcel: {
+        height: 500,
+        width: axis === 'columns' ? 4 : 2,
+        value: 500,
+      },
+      equivalent: true,
+    },
+    passed: true,
+  }
+}
+
+function numericSummary(
+  value: number,
+): BuildScorecardInput['microsoftExcelLiveStructuralScorecard']['cases'][number]['workpaperElapsedMs'] {
+  return {
+    samples: [value, value, value, value, value],
+    min: value,
+    median: value,
+    p95: value,
+    max: value,
+    mean: value,
+    standardDeviation: 0,
+    relativeStandardDeviation: 0,
+    standardError: 0,
+    confidence95: {
+      low: value,
+      high: value,
+    },
   }
 }

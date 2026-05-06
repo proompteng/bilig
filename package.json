@@ -25,6 +25,8 @@
     "formula:dominance:check": "bun scripts/gen-formula-dominance-snapshot.ts --check",
     "calculation:excel-live:generate": "bun scripts/gen-microsoft-excel-live-calculation-scorecard.ts",
     "calculation:excel-live:check": "bun scripts/gen-microsoft-excel-live-calculation-scorecard.ts --check",
+    "structural:excel-live:generate": "bun scripts/gen-microsoft-excel-live-structural-scorecard.ts",
+    "structural:excel-live:check": "bun scripts/gen-microsoft-excel-live-structural-scorecard.ts --check",
     "auditability:generate": "bun scripts/gen-auditability-scorecard.ts",
     "auditability:check": "bun scripts/gen-auditability-scorecard.ts --check",
     "reliability:generate": "bun scripts/gen-reliability-scorecard.ts",

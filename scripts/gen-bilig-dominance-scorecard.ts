@@ -14,6 +14,10 @@ import {
   type MicrosoftExcelLiveCalculationScorecard,
 } from './gen-microsoft-excel-live-calculation-scorecard.ts'
 import {
+  parseMicrosoftExcelLiveStructuralScorecard,
+  type MicrosoftExcelLiveStructuralScorecard,
+} from './gen-microsoft-excel-live-structural-scorecard.ts'
+import {
   parseLargeWorkbookSloScorecard,
   type HeadedBrowserFrameP95Contract,
   type LargeWorkbookSloMeasurement,
@@ -136,6 +140,7 @@ export interface BiligDominanceScorecard {
     formulaDominanceSnapshot: string
     hyperFormulaSurfaceSnapshot: string
     microsoftExcelLiveCalculationScorecard: string
+    microsoftExcelLiveStructuralScorecard: string
     importExportFidelityScorecard: string
     largeWorkbookSloScorecard: string
     reliabilityScorecard: string
@@ -166,6 +171,11 @@ export interface BiligDominanceScorecard {
     microsoftExcelLiveCalculationCaseCount: number
     microsoftExcelLiveCalculationPassed: boolean
     microsoftExcelLiveCalculationVersion: string
+    microsoftExcelLiveStructuralEvidence: 'live-local-microsoft-excel-automation'
+    microsoftExcelLiveStructuralCaseCount: number
+    microsoftExcelLiveStructuralPassed: boolean
+    microsoftExcelLiveStructuralTenXMeanAndP95CaseCount: number
+    microsoftExcelLiveStructuralVersion: string
     formulaOfficeListedBreadthPercent: number
     formulaTrackedBreadthPercent: number
     importExportCoveredFeatures: string[]
@@ -214,6 +224,8 @@ export interface BuildScorecardInput {
   formulaSnapshotPath: string
   microsoftExcelLiveCalculationScorecard: MicrosoftExcelLiveCalculationScorecard
   microsoftExcelLiveCalculationScorecardPath: string
+  microsoftExcelLiveStructuralScorecard: MicrosoftExcelLiveStructuralScorecard
+  microsoftExcelLiveStructuralScorecardPath: string
   importExportFidelityScorecard: ImportExportFidelityScorecard
   importExportFidelityScorecardPath: string
   largeWorkbookSloScorecard: LargeWorkbookSloScorecard
@@ -241,6 +253,13 @@ const microsoftExcelLiveCalculationScorecardPath = join(
   'baselines',
   'microsoft-excel-live-calculation-scorecard.json',
 )
+const microsoftExcelLiveStructuralScorecardPath = join(
+  rootDir,
+  'packages',
+  'benchmarks',
+  'baselines',
+  'microsoft-excel-live-structural-scorecard.json',
+)
 const importExportFidelityScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'import-export-fidelity-scorecard.json')
 const largeWorkbookSloScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'large-workbook-slo-scorecard.json')
 const reliabilityScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'reliability-scorecard.json')
@@ -264,6 +283,10 @@ function main(): void {
       readJsonObject(microsoftExcelLiveCalculationScorecardPath),
     ),
     microsoftExcelLiveCalculationScorecardPath: toRepoPath(microsoftExcelLiveCalculationScorecardPath),
+    microsoftExcelLiveStructuralScorecard: parseMicrosoftExcelLiveStructuralScorecard(
+      readJsonObject(microsoftExcelLiveStructuralScorecardPath),
+    ),
+    microsoftExcelLiveStructuralScorecardPath: toRepoPath(microsoftExcelLiveStructuralScorecardPath),
     importExportFidelityScorecard: parseImportExportFidelityScorecard(readJsonObject(importExportFidelityScorecardPath)),
     importExportFidelityScorecardPath: toRepoPath(importExportFidelityScorecardPath),
     largeWorkbookSloScorecard: parseLargeWorkbookSloScorecard(readJsonObject(largeWorkbookSloScorecardPath)),
@@ -340,6 +363,11 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
   const headedBrowserUiContracts = input.largeWorkbookSloScorecard.headedBrowserFrameP95Contracts.filter(
     (contract) => contract.category === 'ui-responsiveness',
   )
+  const microsoftExcelStructuralTenXPassed =
+    input.microsoftExcelLiveStructuralScorecard.summary.allRequiredCasesPassed &&
+    input.microsoftExcelLiveStructuralScorecard.summary.tenXMeanAndP95CaseCount ===
+      input.microsoftExcelLiveStructuralScorecard.summary.requiredCaseCount
+  const microsoftExcelStructuralPassedCaseCount = input.microsoftExcelLiveStructuralScorecard.cases.filter((entry) => entry.passed).length
   const totalSurfaceMembers =
     input.surfaceSnapshot.classSurface.staticMembers.length +
     input.surfaceSnapshot.classSurface.staticMethods.length +
@@ -371,6 +399,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       formulaDominanceSnapshot: input.formulaSnapshotPath,
       hyperFormulaSurfaceSnapshot: input.surfaceSnapshotPath,
       microsoftExcelLiveCalculationScorecard: input.microsoftExcelLiveCalculationScorecardPath,
+      microsoftExcelLiveStructuralScorecard: input.microsoftExcelLiveStructuralScorecardPath,
       importExportFidelityScorecard: input.importExportFidelityScorecardPath,
       largeWorkbookSloScorecard: input.largeWorkbookSloScorecardPath,
       reliabilityScorecard: input.reliabilityScorecardPath,
@@ -401,6 +430,11 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       microsoftExcelLiveCalculationCaseCount: input.microsoftExcelLiveCalculationScorecard.summary.requiredCaseCount,
       microsoftExcelLiveCalculationPassed: input.microsoftExcelLiveCalculationScorecard.summary.allRequiredCasesPassed,
       microsoftExcelLiveCalculationVersion: input.microsoftExcelLiveCalculationScorecard.microsoftExcel.version,
+      microsoftExcelLiveStructuralEvidence: input.microsoftExcelLiveStructuralScorecard.source.evidenceKind,
+      microsoftExcelLiveStructuralCaseCount: input.microsoftExcelLiveStructuralScorecard.summary.requiredCaseCount,
+      microsoftExcelLiveStructuralPassed: input.microsoftExcelLiveStructuralScorecard.summary.allRequiredCasesPassed,
+      microsoftExcelLiveStructuralTenXMeanAndP95CaseCount: input.microsoftExcelLiveStructuralScorecard.summary.tenXMeanAndP95CaseCount,
+      microsoftExcelLiveStructuralVersion: input.microsoftExcelLiveStructuralScorecard.microsoftExcel.version,
       formulaOfficeListedBreadthPercent: input.formulaSnapshot.formulaBreadth.officeListed.percent,
       formulaTrackedBreadthPercent: input.formulaSnapshot.formulaBreadth.tracked.percent,
       importExportCoveredFeatures: input.importExportFidelityScorecard.summary.coveredFeatures,
@@ -481,12 +515,26 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
         objectiveCategory: 'structural-edit performance',
         target: '10x mean and p95 wins for insert/delete/move rows and columns at workbook scale.',
         status: 'partial-repo-evidence',
-        currentEvidence: [familyWinSummary(structuralRows), familyWinSummary(structuralColumns)],
-        evidenceArtifacts: [input.competitiveArtifactPath],
-        checkCommands: ['pnpm workpaper:bench:competitive:check'],
+        currentEvidence: [
+          familyWinSummary(structuralRows),
+          familyWinSummary(structuralColumns),
+          `live Microsoft Excel structural scorecard passes ${String(
+            microsoftExcelStructuralPassedCaseCount,
+          )}/${String(input.microsoftExcelLiveStructuralScorecard.summary.requiredCaseCount)} required cases on Excel ${
+            input.microsoftExcelLiveStructuralScorecard.microsoftExcel.version
+          }`,
+          `live Microsoft Excel structural operations with 10x mean+p95 wins: ${String(
+            input.microsoftExcelLiveStructuralScorecard.summary.tenXMeanAndP95CaseCount,
+          )}/${String(input.microsoftExcelLiveStructuralScorecard.summary.requiredCaseCount)}`,
+        ],
+        evidenceArtifacts: [input.competitiveArtifactPath, input.microsoftExcelLiveStructuralScorecardPath],
+        checkCommands: ['pnpm workpaper:bench:competitive:check', 'pnpm structural:excel-live:check'],
         blockers: [
           'structural rows and columns lead HyperFormula, but the worst ratios are not 10x',
-          'no direct Sheets or Excel structural-edit timing artifact exists in the repo',
+          ...(microsoftExcelStructuralTenXPassed
+            ? []
+            : ['live Microsoft Excel structural timing scorecard does not prove 10x mean+p95 for all structural cases']),
+          'no direct Google Sheets structural-edit timing artifact exists in the repo',
         ],
       },
       {

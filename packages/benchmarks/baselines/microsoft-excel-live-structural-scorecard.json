@@ -1,0 +1,358 @@
+{
+  "schemaVersion": 1,
+  "suite": "microsoft-excel-live-structural-performance",
+  "generatedAt": "2026-05-06T15:37:55.275Z",
+  "host": {
+    "arch": "arm64",
+    "platform": "darwin"
+  },
+  "source": {
+    "artifactGenerator": "scripts/gen-microsoft-excel-live-structural-scorecard.ts",
+    "implementationPackage": "packages/headless",
+    "evidenceKind": "live-local-microsoft-excel-automation",
+    "appleScriptTransport": "osascript"
+  },
+  "benchmark": {
+    "rowCount": 500,
+    "sampleCount": 5,
+    "screenUpdating": false
+  },
+  "microsoftExcel": {
+    "appPath": "/Applications/Microsoft Excel.app",
+    "version": "16.108.2"
+  },
+  "summary": {
+    "allRequiredCasesPassed": true,
+    "requiredCaseCount": 6,
+    "tenXMeanAndP95CaseCount": 6,
+    "workpaperWins": 6,
+    "coveredOperations": ["insert-rows", "delete-rows", "move-rows", "insert-columns", "delete-columns", "move-columns"],
+    "googleSheetsEvidence": "not-covered-by-this-artifact"
+  },
+  "cases": [
+    {
+      "id": "excel-live-structural-insert-rows",
+      "operation": "insert-rows",
+      "axis": "rows",
+      "rowCount": 500,
+      "sampleCount": 5,
+      "workpaperElapsedMs": {
+        "samples": [0.5556660000002012, 0.7635420000001432, 0.8285419999999704, 1.816500000000019, 4.815624999999983],
+        "min": 0.5556660000002012,
+        "median": 0.8285419999999704,
+        "p95": 4.815624999999983,
+        "max": 4.815624999999983,
+        "mean": 1.7559750000000633,
+        "standardDeviation": 1.5906551054570683,
+        "relativeStandardDeviation": 0.9058529338156927,
+        "standardError": 0.7113625889118202,
+        "confidence95": {
+          "low": 0.3617043257328958,
+          "high": 3.150245674267231
+        }
+      },
+      "microsoftExcelElapsedMs": {
+        "samples": [56.148052215576, 67.090034484863, 81.534028053284, 82.605004310608, 106.711983680725],
+        "min": 56.148052215576,
+        "median": 81.534028053284,
+        "p95": 106.711983680725,
+        "max": 106.711983680725,
+        "mean": 78.8178205490112,
+        "standardDeviation": 17.036808639690015,
+        "relativeStandardDeviation": 0.2161542722320777,
+        "standardError": 7.619092447600519,
+        "confidence95": {
+          "low": 63.88439935171419,
+          "high": 93.75124174630822
+        }
+      },
+      "workpaperToMicrosoftExcelMeanRatio": 0.022278908345456563,
+      "workpaperToMicrosoftExcelP95Ratio": 0.04512731217149899,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "workpaper": {
+          "height": 501,
+          "width": 2,
+          "value": 500
+        },
+        "microsoftExcel": {
+          "height": 501,
+          "width": 2,
+          "value": 500
+        },
+        "equivalent": true
+      },
+      "passed": true
+    },
+    {
+      "id": "excel-live-structural-delete-rows",
+      "operation": "delete-rows",
+      "axis": "rows",
+      "rowCount": 500,
+      "sampleCount": 5,
+      "workpaperElapsedMs": {
+        "samples": [1.5727500000002692, 2.345874999999978, 3.2679589999997916, 3.3817079999998896, 7.614209000000301],
+        "min": 1.5727500000002692,
+        "median": 3.2679589999997916,
+        "p95": 7.614209000000301,
+        "max": 7.614209000000301,
+        "mean": 3.6365002000000457,
+        "standardDeviation": 2.095122300666591,
+        "relativeStandardDeviation": 0.5761369958584258,
+        "standardError": 0.9369671770932501,
+        "confidence95": {
+          "low": 1.8000445328972756,
+          "high": 5.472955867102816
+        }
+      },
+      "microsoftExcelElapsedMs": {
+        "samples": [86.940050125122, 103.995084762573, 120.669007301331, 122.210025787354, 133.442997932434],
+        "min": 86.940050125122,
+        "median": 120.669007301331,
+        "p95": 133.442997932434,
+        "max": 133.442997932434,
+        "mean": 113.45143318176278,
+        "standardDeviation": 16.25266094387938,
+        "relativeStandardDeviation": 0.14325655029708326,
+        "standardError": 7.268410937154037,
+        "confidence95": {
+          "low": 99.20534774494087,
+          "high": 127.6975186185847
+        }
+      },
+      "workpaperToMicrosoftExcelMeanRatio": 0.03205336502161182,
+      "workpaperToMicrosoftExcelP95Ratio": 0.05705963683351593,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "workpaper": {
+          "height": 499,
+          "width": 2,
+          "value": 500
+        },
+        "microsoftExcel": {
+          "height": 499,
+          "width": 2,
+          "value": 500
+        },
+        "equivalent": true
+      },
+      "passed": true
+    },
+    {
+      "id": "excel-live-structural-move-rows",
+      "operation": "move-rows",
+      "axis": "rows",
+      "rowCount": 500,
+      "sampleCount": 5,
+      "workpaperElapsedMs": {
+        "samples": [0.7144590000007156, 0.8010830000002898, 1.7377500000002328, 1.8410409999996773, 1.8722500000003492],
+        "min": 0.7144590000007156,
+        "median": 1.7377500000002328,
+        "p95": 1.8722500000003492,
+        "max": 1.8722500000003492,
+        "mean": 1.393316600000253,
+        "standardDeviation": 0.5215471186905535,
+        "relativeStandardDeviation": 0.374320609322001,
+        "standardError": 0.23324296217224572,
+        "confidence95": {
+          "low": 0.9361603941426515,
+          "high": 1.8504728058578546
+        }
+      },
+      "microsoftExcelElapsedMs": {
+        "samples": [101.473927497864, 107.986927032471, 110.65411567688, 112.681984901428, 128.018021583557],
+        "min": 101.473927497864,
+        "median": 110.65411567688,
+        "p95": 128.018021583557,
+        "max": 128.018021583557,
+        "mean": 112.16299533843998,
+        "standardDeviation": 8.782068583533874,
+        "relativeStandardDeviation": 0.07829737924736149,
+        "standardError": 3.9274604671694067,
+        "confidence95": {
+          "low": 104.46517282278795,
+          "high": 119.86081785409202
+        }
+      },
+      "workpaperToMicrosoftExcelMeanRatio": 0.012422248494666778,
+      "workpaperToMicrosoftExcelP95Ratio": 0.014624894033207169,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "workpaper": {
+          "height": 500,
+          "width": 2,
+          "value": 251
+        },
+        "microsoftExcel": {
+          "height": 500,
+          "width": 2,
+          "value": 251
+        },
+        "equivalent": true
+      },
+      "passed": true
+    },
+    {
+      "id": "excel-live-structural-insert-columns",
+      "operation": "insert-columns",
+      "axis": "columns",
+      "rowCount": 500,
+      "sampleCount": 5,
+      "workpaperElapsedMs": {
+        "samples": [0.1862909999999829, 0.2095420000005106, 0.24158400000123947, 0.29275000000052387, 1.735208000000057],
+        "min": 0.1862909999999829,
+        "median": 0.24158400000123947,
+        "p95": 1.735208000000057,
+        "max": 1.735208000000057,
+        "mean": 0.5330750000004627,
+        "standardDeviation": 0.6021261667024352,
+        "relativeStandardDeviation": 1.1295336804425504,
+        "standardError": 0.2692790079556031,
+        "confidence95": {
+          "low": 0.0052881444074805994,
+          "high": 1.0608618555934448
+        }
+      },
+      "microsoftExcelElapsedMs": {
+        "samples": [56.257009506226, 61.068892478943, 76.733946800232, 98.776936531067, 108.357906341553],
+        "min": 56.257009506226,
+        "median": 76.733946800232,
+        "p95": 108.357906341553,
+        "max": 108.357906341553,
+        "mean": 80.2389383316042,
+        "standardDeviation": 20.441341800387956,
+        "relativeStandardDeviation": 0.2547558856762266,
+        "standardError": 9.141645963395082,
+        "confidence95": {
+          "low": 62.321312243349844,
+          "high": 98.15656441985857
+        }
+      },
+      "workpaperToMicrosoftExcelMeanRatio": 0.006643594881545151,
+      "workpaperToMicrosoftExcelP95Ratio": 0.016013672269843782,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "workpaper": {
+          "height": 500,
+          "width": 5,
+          "value": 500
+        },
+        "microsoftExcel": {
+          "height": 500,
+          "width": 5,
+          "value": 500
+        },
+        "equivalent": true
+      },
+      "passed": true
+    },
+    {
+      "id": "excel-live-structural-delete-columns",
+      "operation": "delete-columns",
+      "axis": "columns",
+      "rowCount": 500,
+      "sampleCount": 5,
+      "workpaperElapsedMs": {
+        "samples": [1.4523750000007567, 1.5942079999986163, 1.643458999998984, 2.3302500000027067, 3.832125000000815],
+        "min": 1.4523750000007567,
+        "median": 1.643458999998984,
+        "p95": 3.832125000000815,
+        "max": 3.832125000000815,
+        "mean": 2.170483400000376,
+        "standardDeviation": 0.8845457480902106,
+        "relativeStandardDeviation": 0.40753398440644945,
+        "standardError": 0.3955808843876231,
+        "confidence95": {
+          "low": 1.3951448666006345,
+          "high": 2.945821933400117
+        }
+      },
+      "microsoftExcelElapsedMs": {
+        "samples": [78.863978385925, 84.542989730835, 84.833979606628, 86.117029190063, 88.937997817993],
+        "min": 78.863978385925,
+        "median": 84.833979606628,
+        "p95": 88.937997817993,
+        "max": 88.937997817993,
+        "mean": 84.6591949462888,
+        "standardDeviation": 3.288222103457374,
+        "relativeStandardDeviation": 0.0388406965781278,
+        "standardError": 1.4705376296896069,
+        "confidence95": {
+          "low": 81.77694119209718,
+          "high": 87.54144870048043
+        }
+      },
+      "workpaperToMicrosoftExcelMeanRatio": 0.025637893218538373,
+      "workpaperToMicrosoftExcelP95Ratio": 0.04308760140792758,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "workpaper": {
+          "height": 500,
+          "width": 3,
+          "value": 500
+        },
+        "microsoftExcel": {
+          "height": 500,
+          "width": 3,
+          "value": 500
+        },
+        "equivalent": true
+      },
+      "passed": true
+    },
+    {
+      "id": "excel-live-structural-move-columns",
+      "operation": "move-columns",
+      "axis": "columns",
+      "rowCount": 500,
+      "sampleCount": 5,
+      "workpaperElapsedMs": {
+        "samples": [0.2291670000013255, 0.24099999999816646, 0.28641699999934644, 0.3211250000022119, 0.492167000000336],
+        "min": 0.2291670000013255,
+        "median": 0.28641699999934644,
+        "p95": 0.492167000000336,
+        "max": 0.492167000000336,
+        "mean": 0.31397520000027723,
+        "standardDeviation": 0.09495335930553502,
+        "relativeStandardDeviation": 0.3024231191044744,
+        "standardError": 0.0424644332198277,
+        "confidence95": {
+          "low": 0.23074491088941496,
+          "high": 0.3972054891111395
+        }
+      },
+      "microsoftExcelElapsedMs": {
+        "samples": [94.558000564575, 97.405076026916, 104.177951812744, 116.00399017334, 140.450000762939],
+        "min": 94.558000564575,
+        "median": 104.177951812744,
+        "p95": 140.450000762939,
+        "max": 140.450000762939,
+        "mean": 110.5190038681028,
+        "standardDeviation": 16.690640017298218,
+        "relativeStandardDeviation": 0.15102054337385637,
+        "standardError": 7.464281133331416,
+        "confidence95": {
+          "low": 95.88901284677323,
+          "high": 125.14899488943237
+        }
+      },
+      "workpaperToMicrosoftExcelMeanRatio": 0.002840915942157659,
+      "workpaperToMicrosoftExcelP95Ratio": 0.0035042150041070396,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "workpaper": {
+          "height": 500,
+          "width": 4,
+          "value": 1000
+        },
+        "microsoftExcel": {
+          "height": 500,
+          "width": 4,
+          "value": 1000
+        },
+        "equivalent": true
+      },
+      "passed": true
+    }
+  ]
+}
