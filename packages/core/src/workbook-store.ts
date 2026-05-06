@@ -149,6 +149,8 @@ export interface SheetRecord {
   formatRanges: WorkbookFormatRangeRecord[]
 }
 
+const INITIAL_COLUMN_VERSION_CAPACITY = 16
+
 export interface EnsuredCell {
   cellIndex: number
   created: boolean
@@ -255,7 +257,7 @@ export class WorkbookStore {
       logical,
       cellIdentities,
       residentCells,
-      columnVersions: new Uint32Array(MAX_COLS),
+      columnVersions: new Uint32Array(0),
       structureVersion: 1,
       rowAxis: [],
       columnAxis: [],
@@ -431,8 +433,21 @@ export class WorkbookStore {
     } finally {
       this.batchedColumnVersionUpdates = null
       pending.forEach((columns, sheetId) => {
+        const sheet = this.getSheetById(sheetId)
+        if (!sheet) {
+          return
+        }
+        let maxCol = -1
         columns.forEach((col) => {
-          this.bumpColumnVersion(sheetId, col)
+          if (col >= 0 && col < MAX_COLS && col > maxCol) {
+            maxCol = col
+          }
+        })
+        this.ensureSheetColumnVersionCapacity(sheet, maxCol)
+        columns.forEach((col) => {
+          if (col >= 0 && col < MAX_COLS) {
+            sheet.columnVersions[col] = (sheet.columnVersions[col] ?? 0) + 1
+          }
         })
       })
     }
@@ -455,8 +470,23 @@ export class WorkbookStore {
       }
       return
     }
+    const sheet = this.getSheetById(sheetId)
+    if (!sheet) {
+      return
+    }
+    let maxCol = -1
     for (let index = 0; index < columns.length; index += 1) {
-      this.bumpColumnVersion(sheetId, columns[index]!)
+      const col = columns[index]!
+      if (col >= 0 && col < MAX_COLS && col > maxCol) {
+        maxCol = col
+      }
+    }
+    this.ensureSheetColumnVersionCapacity(sheet, maxCol)
+    for (let index = 0; index < columns.length; index += 1) {
+      const col = columns[index]!
+      if (col >= 0 && col < MAX_COLS) {
+        sheet.columnVersions[col] = (sheet.columnVersions[col] ?? 0) + 1
+      }
     }
   }
 
@@ -480,15 +510,28 @@ export class WorkbookStore {
       columns.add(col)
       return
     }
+    this.bumpSheetColumnVersion(sheet, col)
+  }
+
+  bumpSheetColumnVersion(sheet: SheetRecord, col: number): void {
+    if (col < 0 || col >= MAX_COLS) {
+      return
+    }
+    this.ensureSheetColumnVersionCapacity(sheet, col)
     sheet.columnVersions[col] = (sheet.columnVersions[col] ?? 0) + 1
   }
 
-  private bumpColumnVersion(sheetId: number, col: number): void {
-    const sheet = this.getSheetById(sheetId)
-    if (!sheet) {
+  private ensureSheetColumnVersionCapacity(sheet: SheetRecord, col: number): void {
+    if (col < sheet.columnVersions.length || col < 0 || col >= MAX_COLS) {
       return
     }
-    sheet.columnVersions[col] = (sheet.columnVersions[col] ?? 0) + 1
+    const nextLength = Math.min(
+      MAX_COLS,
+      Math.max(col + 1, sheet.columnVersions.length === 0 ? INITIAL_COLUMN_VERSION_CAPACITY : sheet.columnVersions.length * 2),
+    )
+    const next = new Uint32Array(nextLength)
+    next.set(sheet.columnVersions)
+    sheet.columnVersions = next
   }
 
   getCellIndex(sheetName: string, address: string): number | undefined {

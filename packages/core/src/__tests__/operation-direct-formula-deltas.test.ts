@@ -121,8 +121,8 @@ describe('createOperationDirectFormulaDeltas', () => {
     expect(workbook.cellStore.flags[second]).toBe(CellFlags.Materialized)
     expect(workbook.cellStore.versions[first]).toBe(2)
     expect(workbook.cellStore.versions[second]).toBe(7)
-    expect(sheet.columnVersions[0]).toBe(0)
-    expect(sheet.columnVersions[1]).toBe(0)
+    expect(sheet.columnVersions[0] ?? 0).toBe(0)
+    expect(sheet.columnVersions[1] ?? 0).toBe(0)
     expect(counters.directScalarDeltaApplications).toBe(2)
   })
 
@@ -147,7 +147,7 @@ describe('createOperationDirectFormulaDeltas', () => {
     expect(changed).toBeUndefined()
     expect(workbook.cellStore.numbers[cellIndex]).toBe(5)
     expect(workbook.cellStore.versions[cellIndex]).toBe(7)
-    expect(sheet.columnVersions[0]).toBe(0)
+    expect(sheet.columnVersions[0] ?? 0).toBe(0)
     expect(counters.directAggregateDeltaApplications).toBe(0)
     expect(counters.directScalarDeltaApplications).toBe(0)
   })
@@ -171,7 +171,7 @@ describe('createOperationDirectFormulaDeltas', () => {
     expect(workbook.cellStore.tags[cellIndex]).toBe(ValueTag.String)
     expect(workbook.cellStore.stringIds[cellIndex]).toBe(11)
     expect(workbook.cellStore.versions[cellIndex]).toBe(4)
-    expect(sheet.columnVersions[1]).toBe(0)
+    expect(sheet.columnVersions[1] ?? 0).toBe(0)
   })
 })
 

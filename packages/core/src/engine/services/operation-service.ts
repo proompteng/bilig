@@ -393,7 +393,7 @@ export function createEngineOperationService(args: {
       onSetValue(cellIndex)
       return
     }
-    sheet.columnVersions[col] = (sheet.columnVersions[col] ?? 0) + 1
+    args.state.workbook.bumpSheetColumnVersion(sheet, col)
   }
   const writeFastPathLiteralToExistingCell = (cellIndex: number, value: LiteralInput): void => {
     if (typeof value === 'number') {

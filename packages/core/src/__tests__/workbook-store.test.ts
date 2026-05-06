@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ValueTag, createCellNumberFormatRecord } from '@bilig/protocol'
+import { MAX_COLS, ValueTag, createCellNumberFormatRecord } from '@bilig/protocol'
 import type { StructuralAxisTransform } from '@bilig/formula'
 import { writeLiteralToCellStore } from '../engine-value-utils.js'
 import { createEngineCounters } from '../perf/engine-counters.js'
@@ -48,6 +48,19 @@ function projectAxisEntryIds(entries: Array<{ id: string; index: number }>): Arr
 }
 
 describe('WorkbookStore', () => {
+  it('grows column version storage lazily for sparse sheets', () => {
+    const workbook = new WorkbookStore('lazy-column-versions')
+    const sheet = workbook.createSheet('Sheet1')
+
+    expect(sheet.columnVersions.length).toBe(0)
+
+    workbook.notifyColumnsWritten(sheet.id, Uint32Array.of(2))
+
+    expect(sheet.columnVersions.length).toBeGreaterThan(2)
+    expect(sheet.columnVersions.length).toBeLessThan(MAX_COLS)
+    expect(sheet.columnVersions[2]).toBe(1)
+  })
+
   it('reads physical positions directly before structural edits and logical positions after edits', () => {
     const workbook = new WorkbookStore('cell-position-fast-path')
     workbook.createSheet('Sheet1')
