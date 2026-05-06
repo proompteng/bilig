@@ -18,7 +18,7 @@ import {
   headedBrowserContractSummary,
   sloSummary,
 } from './bilig-dominance-formatters.ts'
-import { buildBiligDominanceCompletionAudit } from './bilig-dominance-completion-audit.ts'
+import { buildBiligDominanceCompletionAudit, hasUiResponsivenessSameCorpusTenXGap } from './bilig-dominance-completion-audit.ts'
 import { parseCompetitiveArtifact, parseFormulaDominanceSnapshot, parseSurfaceSnapshot } from './bilig-dominance-scorecard-parsers.ts'
 import { parseAuditabilityScorecard } from './gen-auditability-scorecard.ts'
 import { parseAutomationScorecard } from './gen-automation-scorecard.ts'
@@ -294,6 +294,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
     input.surfaceSnapshot.classSurface.instanceAccessors.length +
     input.surfaceSnapshot.classSurface.instanceMethods.length
   const securityUncoveredControls = new Set(input.securityPostureScorecard.summary.uncoveredControls)
+  const uiSameCorpusTenXGap = hasUiResponsivenessSameCorpusTenXGap(input.uiResponsivenessLiveBrowserScorecard)
   const completionAudit = buildBiligDominanceCompletionAudit(input, {
     calculationSemanticsPassed,
     googleSheetsLargeWorkbookTenXPassed,
@@ -686,9 +687,12 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           'pnpm test:browser:full',
           'pnpm bench:smoke',
         ],
-        blockers: uiResponsivenessLiveBrowserPassed
-          ? []
-          : ['no direct Sheets or Excel browser responsiveness live timing artifact exists in the repo'],
+        blockers: [
+          ...(uiResponsivenessLiveBrowserPassed
+            ? []
+            : ['no direct Sheets or Excel browser responsiveness live timing artifact exists in the repo']),
+          ...(uiSameCorpusTenXGap ? ['live UI browser evidence is direct, but it is not a same-corpus 10x proof against incumbents'] : []),
+        ],
       },
       {
         id: 'collaboration',

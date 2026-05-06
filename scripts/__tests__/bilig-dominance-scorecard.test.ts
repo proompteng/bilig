@@ -18,6 +18,7 @@ describe('bilig dominance scorecard', () => {
       expect.arrayContaining([
         expect.stringContaining('calculation-correctness:'),
         expect.stringContaining('large-workbook-scale:'),
+        'ui-responsiveness: live UI browser evidence is not a same-corpus 10x proof against incumbents',
         'import-export-compatibility: unsupported import/export feature: xlsx.macros.execution',
         expect.stringContaining('security:'),
       ]),
@@ -204,7 +205,7 @@ describe('bilig dominance scorecard', () => {
         'packages/benchmarks/baselines/ui-responsiveness-live-browser-scorecard.json',
       ]),
       checkCommands: expect.arrayContaining(['pnpm ui:browser-live:check']),
-      blockers: [],
+      blockers: ['live UI browser evidence is direct, but it is not a same-corpus 10x proof against incumbents'],
     })
     expect(scorecard.categories.find((category) => category.id === 'collaboration')).toMatchObject({
       status: 'partial-repo-evidence',

@@ -18,7 +18,10 @@
       "Security controls must pass with no uncovered generated controls.",
       "Operator workflow must preserve one-command verification and prevent unverifiable blanket claims."
     ],
-    "unmetRequirements": ["import-export-compatibility: unsupported import/export feature: xlsx.macros.execution"],
+    "unmetRequirements": [
+      "ui-responsiveness: live UI browser evidence is not a same-corpus 10x proof against incumbents",
+      "import-export-compatibility: unsupported import/export feature: xlsx.macros.execution"
+    ],
     "workloadSpecificTenXWins": [
       {
         "workload": "rebuild-config-toggle",
@@ -36,7 +39,10 @@
   },
   "completionAudit": {
     "allCriteriaPassed": false,
-    "unmetRequirements": ["import-export-compatibility: unsupported import/export feature: xlsx.macros.execution"],
+    "unmetRequirements": [
+      "ui-responsiveness: live UI browser evidence is not a same-corpus 10x proof against incumbents",
+      "import-export-compatibility: unsupported import/export feature: xlsx.macros.execution"
+    ],
     "criteria": [
       {
         "id": "calculation-correctness",
@@ -79,9 +85,9 @@
       {
         "id": "ui-responsiveness",
         "requirement": "UI responsiveness must include live incumbent browser evidence and headed large-workbook frame-budget contracts.",
-        "passed": true,
+        "passed": false,
         "evidence": ["live browser vendors: google-sheets, microsoft-excel-web", "headed browser contracts passed: true"],
-        "gaps": []
+        "gaps": ["live UI browser evidence is not a same-corpus 10x proof against incumbents"]
       },
       {
         "id": "collaboration",
@@ -570,7 +576,7 @@
         "pnpm test:browser:full",
         "pnpm bench:smoke"
       ],
-      "blockers": []
+      "blockers": ["live UI browser evidence is direct, but it is not a same-corpus 10x proof against incumbents"]
     },
     {
       "id": "collaboration",

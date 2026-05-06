@@ -1,4 +1,5 @@
 import type { BuildScorecardInput, DominanceCompletionAudit, DominanceCompletionCriterion } from './bilig-dominance-scorecard-types.ts'
+import type { UiResponsivenessLiveBrowserScorecard } from './gen-ui-responsiveness-live-browser-scorecard.ts'
 
 export interface CompletionAuditSignals {
   readonly calculationSemanticsPassed: boolean
@@ -15,6 +16,7 @@ export interface CompletionAuditSignals {
 }
 
 export function buildBiligDominanceCompletionAudit(input: BuildScorecardInput, signals: CompletionAuditSignals): DominanceCompletionAudit {
+  const uiSameCorpusTenXGap = hasUiResponsivenessSameCorpusTenXGap(input.uiResponsivenessLiveBrowserScorecard)
   const criteria = [
     criterion({
       id: 'calculation-correctness',
@@ -121,6 +123,7 @@ export function buildBiligDominanceCompletionAudit(input: BuildScorecardInput, s
         ...(input.largeWorkbookSloScorecard.summary.headedBrowserFrameP95ContractsPassed
           ? []
           : ['headed browser frame p95 contracts are not all passing']),
+        ...(uiSameCorpusTenXGap ? ['live UI browser evidence is not a same-corpus 10x proof against incumbents'] : []),
       ],
     }),
     requiredControlCriterion({
@@ -187,6 +190,19 @@ export function buildBiligDominanceCompletionAudit(input: BuildScorecardInput, s
     unmetRequirements,
     criteria,
   }
+}
+
+export function hasUiResponsivenessSameCorpusTenXGap(scorecard: UiResponsivenessLiveBrowserScorecard): boolean {
+  const limitations = [...scorecard.summary.limitations, ...scorecard.cases.flatMap((entry) => entry.limitations)].map((entry) =>
+    entry.toLowerCase(),
+  )
+  return limitations.some(
+    (entry) =>
+      entry.includes('not a same-corpus 10x proof') ||
+      entry.includes('not an authenticated same-corpus') ||
+      entry.includes('not live timing') ||
+      entry.includes('does not claim bilig is 10x'),
+  )
 }
 
 function requiredControlCriterion(args: {
