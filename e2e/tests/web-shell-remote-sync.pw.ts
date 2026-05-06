@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import {
   TOOLBAR_SYNC_ACTIONS,
   clickProductCell,
@@ -231,3 +231,52 @@ remoteSyncTest('web app restores persisted workbook state after a full reload', 
   await expect(formulaInput).toHaveValue('17')
   await expect(resolvedValue).toHaveText('17')
 })
+
+remoteSyncTest('web app survives repeated tab crash restarts with persisted workbook state', async ({ page }) => {
+  test.slow()
+  const documentId = createTestDocumentId('playwright-zero-crash-restart-soak')
+
+  await openZeroWorkbookPage(page, documentId)
+  await expect(page.getByTestId('worker-error')).toHaveCount(0)
+  await writeCellValue(page, 0, 0, 'crash-seed')
+
+  const restartedPage = await reopenWorkbookTab(page, documentId)
+  await expectPersistedCellValue(restartedPage, 0, 0, 'Sheet1!A1', 'crash-seed')
+  await writeCellValue(restartedPage, 0, 1, 'restart-one')
+
+  const secondRestartedPage = await reopenWorkbookTab(restartedPage, documentId)
+  await expectPersistedCellValue(secondRestartedPage, 0, 0, 'Sheet1!A1', 'crash-seed')
+  await expectPersistedCellValue(secondRestartedPage, 0, 1, 'Sheet1!B1', 'restart-one')
+  await writeCellValue(secondRestartedPage, 0, 2, 'restart-two')
+
+  const finalRestartedPage = await reopenWorkbookTab(secondRestartedPage, documentId)
+  await expectPersistedCellValue(finalRestartedPage, 0, 0, 'Sheet1!A1', 'crash-seed')
+  await expectPersistedCellValue(finalRestartedPage, 0, 1, 'Sheet1!B1', 'restart-one')
+  await expectPersistedCellValue(finalRestartedPage, 0, 2, 'Sheet1!C1', 'restart-two')
+  await expect(finalRestartedPage.getByTestId('worker-error')).toHaveCount(0)
+  await finalRestartedPage.close({ runBeforeUnload: false }).catch(() => undefined)
+})
+
+async function reopenWorkbookTab(previousPage: Page, documentId: string): Promise<Page> {
+  const context = previousPage.context()
+  await previousPage.close({ runBeforeUnload: false })
+  const nextPage = await context.newPage()
+  await openZeroWorkbookPage(nextPage, documentId)
+  await expect(nextPage.getByTestId('worker-error')).toHaveCount(0)
+  return nextPage
+}
+
+async function writeCellValue(page: Page, row: number, column: number, value: string): Promise<void> {
+  const formulaInput = page.getByTestId('formula-input')
+  await clickProductCell(page, column, row)
+  await formulaInput.fill(value)
+  await formulaInput.press('Enter')
+  await expect(formulaInput).toHaveValue(value)
+}
+
+async function expectPersistedCellValue(page: Page, row: number, column: number, selection: string, value: string): Promise<void> {
+  const formulaInput = page.getByTestId('formula-input')
+  await clickProductCell(page, column, row)
+  await expect(page.getByTestId('status-selection')).toHaveText(selection)
+  await expect(formulaInput).toHaveValue(value)
+}

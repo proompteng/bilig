@@ -38,6 +38,7 @@ export interface ReliabilityScorecard {
     readonly authoritativeRebasePassed: boolean
     readonly failedRetryPassed: boolean
     readonly headedBrowserReloadPassed: boolean
+    readonly headedBrowserCrashSoakPassed: boolean
     readonly offlineNetworkPartitionPassed: boolean
     readonly coveredControls: string[]
     readonly uncoveredControls: string[]
@@ -55,6 +56,7 @@ const requiredControlIds = [
   'authoritative-rebase-preserves-unsent-mutations',
   'failed-mutations-survive-reload-and-retry',
   'headed-browser-reload-persistence-flow',
+  'headed-browser-crash-restart-soak',
   'offline-network-partition-recovery-soak',
 ] as const
 const coveredControlOrder = [
@@ -65,9 +67,10 @@ const coveredControlOrder = [
   'pending.failedRetrySurvival',
   'localStore.journalActiveView',
   'headedBrowser.reloadPersistence',
+  'headedBrowser.crashSoak',
   'offline.networkPartitionRecoverySoak',
 ] as const
-const uncoveredControls = ['headedBrowser.crashSoak', 'externalSheetsExcelReliabilityComparison'] as const
+const uncoveredControls = ['externalSheetsExcelReliabilityComparison'] as const
 const headedBrowserReliabilityTestFile = 'e2e/tests/web-shell-remote-sync.pw.ts'
 
 async function main(): Promise<void> {
@@ -95,6 +98,7 @@ export async function buildReliabilityScorecard(generatedAt = new Date().toISOSt
     await buildAuthoritativeRebaseControl(),
     await buildFailedRetryControl(),
     buildHeadedBrowserReloadPersistenceControl(),
+    buildHeadedBrowserCrashRestartSoakControl(),
     await buildOfflineNetworkPartitionRecoveryControl(),
   ]
   const coveredControlSet = new Set(controls.flatMap((control) => control.coveredControls))
@@ -118,6 +122,7 @@ export async function buildReliabilityScorecard(generatedAt = new Date().toISOSt
       authoritativeRebasePassed: requiredControl(controls, 'authoritative-rebase-preserves-unsent-mutations').passed,
       failedRetryPassed: requiredControl(controls, 'failed-mutations-survive-reload-and-retry').passed,
       headedBrowserReloadPassed: requiredControl(controls, 'headed-browser-reload-persistence-flow').passed,
+      headedBrowserCrashSoakPassed: requiredControl(controls, 'headed-browser-crash-restart-soak').passed,
       offlineNetworkPartitionPassed: requiredControl(controls, 'offline-network-partition-recovery-soak').passed,
       coveredControls,
       uncoveredControls: [...uncoveredControls],
@@ -321,6 +326,73 @@ function buildHeadedBrowserReloadPersistenceControl(): ReliabilityControl {
     coveredControls: ['headedBrowser.reloadPersistence'],
     evidence:
       'Validated the headed Playwright reload contract that writes a workbook value through the UI, reloads the browser page, and verifies both formula input and resolved value survive.',
+    findings,
+  })
+}
+
+function buildHeadedBrowserCrashRestartSoakControl(): ReliabilityControl {
+  const source = readFileSync(join(rootDir, headedBrowserReliabilityTestFile), 'utf8')
+  const testTitle = 'web app survives repeated tab crash restarts with persisted workbook state'
+  const testBlock = extractBrowserTestBlock(source, 'remoteSyncTest', testTitle)
+  const findings: string[] = []
+  if (!testBlock) {
+    findings.push(`missing remote-sync Playwright test: ${testTitle}`)
+  } else {
+    requireSnippet(
+      testBlock,
+      "createTestDocumentId('playwright-zero-crash-restart-soak')",
+      'uses an isolated crash-restart document',
+      findings,
+    )
+    requireSnippet(testBlock, "await writeCellValue(page, 0, 0, 'crash-seed')", 'writes the initial value before restart', findings)
+    requireSnippet(testBlock, 'const restartedPage = await reopenWorkbookTab(page, documentId)', 'performs first tab restart', findings)
+    requireSnippet(
+      testBlock,
+      'const secondRestartedPage = await reopenWorkbookTab(restartedPage, documentId)',
+      'performs second tab restart',
+      findings,
+    )
+    requireSnippet(
+      testBlock,
+      'const finalRestartedPage = await reopenWorkbookTab(secondRestartedPage, documentId)',
+      'performs final tab restart',
+      findings,
+    )
+    requireSnippet(
+      testBlock,
+      "await expectPersistedCellValue(finalRestartedPage, 0, 2, 'Sheet1!C1', 'restart-two')",
+      'verifies state written across restarts',
+      findings,
+    )
+    requireSnippet(
+      testBlock,
+      "await expect(finalRestartedPage.getByTestId('worker-error')).toHaveCount(0)",
+      'asserts the final restarted tab has no worker error',
+      findings,
+    )
+  }
+  requireSnippet(
+    source,
+    'await previousPage.close({ runBeforeUnload: false })',
+    'closes the previous headed tab without unload hooks',
+    findings,
+  )
+  requireSnippet(source, 'const nextPage = await context.newPage()', 'creates a replacement headed tab', findings)
+  requireSnippet(source, 'await openZeroWorkbookPage(nextPage, documentId)', 'opens the same workbook document after restart', findings)
+  requireSnippet(
+    source,
+    "await expect(nextPage.getByTestId('worker-error')).toHaveCount(0)",
+    'checks worker health after every restart',
+    findings,
+  )
+
+  return reliabilityControl({
+    id: 'headed-browser-crash-restart-soak',
+    category: 'headed-browser',
+    passed: findings.length === 0,
+    coveredControls: ['headedBrowser.crashSoak'],
+    evidence:
+      'Validated the headed Playwright crash-restart contract that closes and recreates the workbook tab three times, writes cells across restarts, and verifies persisted workbook state with no worker error.',
     findings,
   })
 }
@@ -538,6 +610,7 @@ export function parseReliabilityScorecard(value: unknown): ReliabilityScorecard 
       authoritativeRebasePassed: booleanField(summary, 'authoritativeRebasePassed', 'reliability authoritativeRebasePassed'),
       failedRetryPassed: booleanField(summary, 'failedRetryPassed', 'reliability failedRetryPassed'),
       headedBrowserReloadPassed: booleanField(summary, 'headedBrowserReloadPassed', 'reliability headedBrowserReloadPassed'),
+      headedBrowserCrashSoakPassed: booleanField(summary, 'headedBrowserCrashSoakPassed', 'reliability headedBrowserCrashSoakPassed'),
       offlineNetworkPartitionPassed: booleanField(summary, 'offlineNetworkPartitionPassed', 'reliability offlineNetworkPartitionPassed'),
       coveredControls: stringArrayField(summary, 'coveredControls', 'reliability coveredControls'),
       uncoveredControls: stringArrayField(summary, 'uncoveredControls', 'reliability uncoveredControls'),

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "suite": "reliability-posture",
-  "generatedAt": "2026-05-06T09:54:10.992Z",
+  "generatedAt": "2026-05-06T09:58:10.204Z",
   "source": {
     "artifactGenerator": "scripts/gen-reliability-scorecard.ts",
     "workerRuntimeImplementation": "apps/web/src/worker-runtime.ts",
@@ -16,6 +16,7 @@
     "authoritativeRebasePassed": true,
     "failedRetryPassed": true,
     "headedBrowserReloadPassed": true,
+    "headedBrowserCrashSoakPassed": true,
     "offlineNetworkPartitionPassed": true,
     "coveredControls": [
       "pending.localReloadSurvival",
@@ -25,9 +26,10 @@
       "pending.failedRetrySurvival",
       "localStore.journalActiveView",
       "headedBrowser.reloadPersistence",
+      "headedBrowser.crashSoak",
       "offline.networkPartitionRecoverySoak"
     ],
-    "uncoveredControls": ["headedBrowser.crashSoak", "externalSheetsExcelReliabilityComparison"],
+    "uncoveredControls": ["externalSheetsExcelReliabilityComparison"],
     "externalGoogleSheetsEvidence": "not-captured",
     "externalMicrosoftExcelEvidence": "not-captured"
   },
@@ -75,6 +77,15 @@
       "passed": true,
       "coveredControls": ["headedBrowser.reloadPersistence"],
       "evidence": "Validated the headed Playwright reload contract that writes a workbook value through the UI, reloads the browser page, and verifies both formula input and resolved value survive.",
+      "findings": []
+    },
+    {
+      "id": "headed-browser-crash-restart-soak",
+      "category": "headed-browser",
+      "required": true,
+      "passed": true,
+      "coveredControls": ["headedBrowser.crashSoak"],
+      "evidence": "Validated the headed Playwright crash-restart contract that closes and recreates the workbook tab three times, writes cells across restarts, and verifies persisted workbook state with no worker error.",
       "findings": []
     },
     {

@@ -17,6 +17,7 @@ describe('reliability scorecard', () => {
         authoritativeRebasePassed: true,
         failedRetryPassed: true,
         headedBrowserReloadPassed: true,
+        headedBrowserCrashSoakPassed: true,
         offlineNetworkPartitionPassed: true,
         externalGoogleSheetsEvidence: 'not-captured',
         externalMicrosoftExcelEvidence: 'not-captured',
@@ -28,6 +29,7 @@ describe('reliability scorecard', () => {
       'authoritative-rebase-preserves-unsent-mutations',
       'failed-mutations-survive-reload-and-retry',
       'headed-browser-reload-persistence-flow',
+      'headed-browser-crash-restart-soak',
       'offline-network-partition-recovery-soak',
     ])
     expect(scorecard.controls.every((control) => control.required && control.passed)).toBe(true)
@@ -39,9 +41,10 @@ describe('reliability scorecard', () => {
       'pending.failedRetrySurvival',
       'localStore.journalActiveView',
       'headedBrowser.reloadPersistence',
+      'headedBrowser.crashSoak',
       'offline.networkPartitionRecoverySoak',
     ])
-    expect(scorecard.summary.uncoveredControls).toEqual(['headedBrowser.crashSoak', 'externalSheetsExcelReliabilityComparison'])
+    expect(scorecard.summary.uncoveredControls).toEqual(['externalSheetsExcelReliabilityComparison'])
   })
 
   it('rejects stale artifacts missing required reliability controls', async () => {

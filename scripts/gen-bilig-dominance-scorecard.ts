@@ -651,10 +651,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           'pnpm test:correctness:browser',
           'pnpm test:correctness:server',
         ],
-        blockers: [
-          'generated reliability evidence covers worker-runtime durability, headed browser reload persistence, and offline network-partition recovery, but not headed browser crash soak',
-          'no direct Sheets or Excel reliability comparison artifact exists in the repo',
-        ],
+        blockers: ['no direct Sheets or Excel reliability comparison artifact exists in the repo'],
       },
       {
         id: 'security',
