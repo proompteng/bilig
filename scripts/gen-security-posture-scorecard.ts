@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
@@ -17,7 +18,13 @@ import { buildSyncServerContentSecurityPolicy } from '../apps/bilig/src/http/syn
 
 export interface SecurityPostureControl {
   readonly id: string
-  readonly category: 'formula-sandbox' | 'import-safety' | 'agent-permissions' | 'runtime-hardening' | 'browser-runtime'
+  readonly category:
+    | 'formula-sandbox'
+    | 'import-safety'
+    | 'agent-permissions'
+    | 'runtime-hardening'
+    | 'browser-runtime'
+    | 'dependency-audit'
   readonly required: boolean
   readonly passed: boolean
   readonly coveredControls: string[]
@@ -35,6 +42,7 @@ export interface SecurityPostureScorecard {
     readonly importImplementation: 'packages/excel-import/src/index.ts'
     readonly agentPolicyImplementation: 'packages/agent-api/src/workbook-agent-execution-policy.ts'
     readonly browserSecurityHeadersImplementation: 'apps/bilig/src/http/sync-server-security-headers.ts'
+    readonly dependencyAuditCommand: 'pnpm audit --prod --json'
     readonly runtimePackageGate: 'pnpm publish:runtime:check'
   }
   readonly summary: {
@@ -44,6 +52,7 @@ export interface SecurityPostureScorecard {
     readonly agentPermissionPolicyPassed: boolean
     readonly runtimePackageHardeningPassed: boolean
     readonly browserCspPassed: boolean
+    readonly dependencyAuditPassed: boolean
     readonly coveredControls: string[]
     readonly uncoveredControls: string[]
     readonly externalGoogleSheetsEvidence: 'not-captured'
@@ -67,6 +76,7 @@ const requiredControlIds = [
   'shared-agent-owner-review',
   'runtime-publish-package-hardening',
   'browser-content-security-policy',
+  'production-dependency-vulnerability-audit',
 ] as const
 const coveredControlOrder = [
   'formula.noEval',
@@ -81,12 +91,9 @@ const coveredControlOrder = [
   'browser.contentSecurityPolicy',
   'browser.crossOriginIsolation',
   'browser.workerWasmRuntimeAllowlist',
-] as const
-const uncoveredControls = [
   'dependency.vulnerabilityAudit',
-  'deployment.runtimeNetworkPolicy',
-  'externalSheetsExcelSecurityComparison',
 ] as const
+const uncoveredControls = ['deployment.runtimeNetworkPolicy', 'externalSheetsExcelSecurityComparison'] as const
 const disallowedImportModules = new Set(['node:child_process', 'child_process', 'node:vm', 'vm', 'bun:ffi'])
 const formulaRuntimeServiceFileNames = new Set([
   'direct-formula-index-collection.ts',
@@ -126,6 +133,7 @@ export function buildSecurityPostureScorecard(generatedAt = new Date().toISOStri
     buildAgentPermissionPolicyControl(),
     buildRuntimePackageHardeningControl(),
     buildBrowserContentSecurityPolicyControl(),
+    buildProductionDependencyAuditControl(),
   ]
   const coveredControlSet = new Set(controls.flatMap((control) => control.coveredControls))
   const coveredControls = coveredControlOrder.filter((control) => coveredControlSet.has(control))
@@ -140,6 +148,7 @@ export function buildSecurityPostureScorecard(generatedAt = new Date().toISOStri
       importImplementation: 'packages/excel-import/src/index.ts',
       agentPolicyImplementation: 'packages/agent-api/src/workbook-agent-execution-policy.ts',
       browserSecurityHeadersImplementation: 'apps/bilig/src/http/sync-server-security-headers.ts',
+      dependencyAuditCommand: 'pnpm audit --prod --json',
       runtimePackageGate: 'pnpm publish:runtime:check',
     },
     summary: {
@@ -149,6 +158,7 @@ export function buildSecurityPostureScorecard(generatedAt = new Date().toISOStri
       agentPermissionPolicyPassed: requiredControl(controls, 'shared-agent-owner-review').passed,
       runtimePackageHardeningPassed: requiredControl(controls, 'runtime-publish-package-hardening').passed,
       browserCspPassed: requiredControl(controls, 'browser-content-security-policy').passed,
+      dependencyAuditPassed: requiredControl(controls, 'production-dependency-vulnerability-audit').passed,
       coveredControls,
       uncoveredControls: [...uncoveredControls],
       externalGoogleSheetsEvidence: 'not-captured',
@@ -283,6 +293,53 @@ function buildBrowserContentSecurityPolicyControl(): SecurityPostureControl {
     coveredControls: ['browser.contentSecurityPolicy', 'browser.crossOriginIsolation', 'browser.workerWasmRuntimeAllowlist'],
     evidence:
       'Built the production workbook browser CSP and verified default-deny, framing/object restrictions, cross-origin connection allowlisting, and worker/WASM allowances required by the runtime.',
+    findings,
+  })
+}
+
+function buildProductionDependencyAuditControl(): SecurityPostureControl {
+  const result = spawnSync('pnpm', ['audit', '--prod', '--json'], {
+    cwd: rootDir,
+    encoding: 'utf8',
+  })
+  const stdout = result.stdout.trim()
+  const stderr = result.stderr.trim()
+  const findings: string[] = []
+  let dependencyCount = 0
+  let vulnerabilityCount = 0
+
+  try {
+    const auditReport = toRecord(JSON.parse(stdout), 'production dependency audit report')
+    const advisories = toRecord(auditReport['advisories'] ?? {}, 'production dependency audit advisories')
+    const metadata = toRecord(auditReport['metadata'] ?? {}, 'production dependency audit metadata')
+    const vulnerabilities = toRecord(metadata['vulnerabilities'] ?? {}, 'production dependency audit vulnerability counts')
+    dependencyCount = typeof metadata['dependencies'] === 'number' ? metadata['dependencies'] : 0
+    vulnerabilityCount = Object.values(vulnerabilities).reduce(
+      (total, value) => total + (typeof value === 'number' && Number.isFinite(value) ? value : 0),
+      0,
+    )
+    findings.push(...Object.keys(advisories).map((id) => `advisory ${id}`))
+    if (vulnerabilityCount > 0 && findings.length === 0) {
+      findings.push(`audit reported ${String(vulnerabilityCount)} vulnerabilities without advisory details`)
+    }
+  } catch (error) {
+    findings.push(`unable to parse pnpm audit JSON: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  if (result.error) {
+    findings.push(`unable to run pnpm audit: ${result.error.message}`)
+  }
+  if (result.status !== 0) {
+    findings.push(`pnpm audit exited ${String(result.status)}${stderr ? `: ${stderr}` : ''}`)
+  }
+
+  return securityControl({
+    id: 'production-dependency-vulnerability-audit',
+    category: 'dependency-audit',
+    passed: findings.length === 0,
+    coveredControls: ['dependency.vulnerabilityAudit'],
+    evidence: `Ran pnpm audit --prod --json against ${String(dependencyCount)} production dependencies and found ${String(
+      vulnerabilityCount,
+    )} vulnerabilities.`,
     findings,
   })
 }
@@ -457,6 +514,7 @@ export function parseSecurityPostureScorecard(value: unknown): SecurityPostureSc
         'browserSecurityHeadersImplementation',
         'apps/bilig/src/http/sync-server-security-headers.ts',
       ),
+      dependencyAuditCommand: literalField(source, 'dependencyAuditCommand', 'pnpm audit --prod --json'),
       runtimePackageGate: literalField(source, 'runtimePackageGate', 'pnpm publish:runtime:check'),
     },
     summary: {
@@ -470,6 +528,7 @@ export function parseSecurityPostureScorecard(value: unknown): SecurityPostureSc
         'security posture runtimePackageHardeningPassed',
       ),
       browserCspPassed: booleanField(summary, 'browserCspPassed', 'security posture browserCspPassed'),
+      dependencyAuditPassed: booleanField(summary, 'dependencyAuditPassed', 'security posture dependencyAuditPassed'),
       coveredControls: stringArrayField(summary, 'coveredControls', 'security posture coveredControls'),
       uncoveredControls: stringArrayField(summary, 'uncoveredControls', 'security posture uncoveredControls'),
       externalGoogleSheetsEvidence: literalField(summary, 'externalGoogleSheetsEvidence', 'not-captured'),
@@ -523,7 +582,8 @@ function parseSecurityPostureCategory(value: string): SecurityPostureControl['ca
     value === 'import-safety' ||
     value === 'agent-permissions' ||
     value === 'runtime-hardening' ||
-    value === 'browser-runtime'
+    value === 'browser-runtime' ||
+    value === 'dependency-audit'
   ) {
     return value
   }

@@ -147,14 +147,11 @@
       "runtime.alignedPackageSet",
       "browser.contentSecurityPolicy",
       "browser.crossOriginIsolation",
-      "browser.workerWasmRuntimeAllowlist"
+      "browser.workerWasmRuntimeAllowlist",
+      "dependency.vulnerabilityAudit"
     ],
     "securityPosturePassed": true,
-    "securityUncoveredControls": [
-      "dependency.vulnerabilityAudit",
-      "deployment.runtimeNetworkPolicy",
-      "externalSheetsExcelSecurityComparison"
-    ],
+    "securityUncoveredControls": ["deployment.runtimeNetworkPolicy", "externalSheetsExcelSecurityComparison"],
     "hyperFormulaComparableWorkloads": 46,
     "hyperFormulaMeanGeomeanRatio": 0.5126605383809896,
     "hyperFormulaP95GeomeanRatio": 0.5080601177268398,
@@ -436,11 +433,12 @@
       "status": "partial-repo-evidence",
       "currentEvidence": [
         "generated security posture scorecard passes required controls: true",
-        "covered security controls: formula.noEval, formula.noFunctionConstructor, formula.noNodeProcessExecution, xlsx.macroWarning, xlsx.noMacroPayloadExport, agent.sharedMediumHighRiskOwnerReview, runtime.publishManifest, runtime.noSourceInTarballs, runtime.alignedPackageSet, browser.contentSecurityPolicy, browser.crossOriginIsolation, browser.workerWasmRuntimeAllowlist",
-        "uncovered security controls are explicitly disclosed: dependency.vulnerabilityAudit, deployment.runtimeNetworkPolicy, externalSheetsExcelSecurityComparison"
+        "covered security controls: formula.noEval, formula.noFunctionConstructor, formula.noNodeProcessExecution, xlsx.macroWarning, xlsx.noMacroPayloadExport, agent.sharedMediumHighRiskOwnerReview, runtime.publishManifest, runtime.noSourceInTarballs, runtime.alignedPackageSet, browser.contentSecurityPolicy, browser.crossOriginIsolation, browser.workerWasmRuntimeAllowlist, dependency.vulnerabilityAudit",
+        "uncovered security controls are explicitly disclosed: deployment.runtimeNetworkPolicy, externalSheetsExcelSecurityComparison"
       ],
       "evidenceArtifacts": [
         "packages/benchmarks/baselines/security-posture-scorecard.json",
+        "pnpm-lock.yaml",
         "apps/bilig/src/http/sync-server-security-headers.ts",
         "apps/bilig/src/http/sync-server-security-headers.test.ts",
         "packages/excel-import/src/__tests__/excel-import.test.ts",
@@ -449,11 +447,12 @@
       ],
       "checkCommands": [
         "pnpm security:posture:check",
+        "pnpm security:audit",
         "pnpm exec vitest run apps/bilig/src/http/sync-server-security-headers.test.ts apps/bilig/src/http/sync-server.test.ts packages/excel-import/src/__tests__/excel-import.test.ts packages/agent-api/src/__tests__/workbook-agent-execution-policy.test.ts",
         "pnpm publish:runtime:check"
       ],
       "blockers": [
-        "generated security posture evidence covers formula dynamic-code scanning, XLSX macro warning, shared-agent owner review, runtime package hardening, and browser CSP, but not dependency vulnerability audit or deployment network policy",
+        "generated security posture evidence covers formula dynamic-code scanning, XLSX macro warning, shared-agent owner review, runtime package hardening, browser CSP, and production dependency audit, but not deployment network policy",
         "no direct Sheets or Excel security comparison artifact exists in the repo"
       ]
     },

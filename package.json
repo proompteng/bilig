@@ -37,6 +37,7 @@
     "large-workbook:slo:check": "bun scripts/gen-large-workbook-slo-scorecard.ts --check",
     "security:posture:generate": "bun scripts/gen-security-posture-scorecard.ts",
     "security:posture:check": "bun scripts/gen-security-posture-scorecard.ts --check",
+    "security:audit": "pnpm audit --prod",
     "dominance:generate": "bun scripts/gen-bilig-dominance-scorecard.ts",
     "dominance:check": "bun scripts/gen-bilig-dominance-scorecard.ts --check",
     "workspace-resolution:generate": "bun scripts/gen-workspace-resolution.ts",
@@ -123,7 +124,7 @@
     "typescript": "6.0.2",
     "vite": "8.0.9",
     "vitest": "4.1.2",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm hooks:pre-commit",
@@ -141,5 +142,11 @@
     "bun": ">=1.0.0",
     "node": ">=24.0.0"
   },
-  "packageManager": "pnpm@10.32.1"
+  "packageManager": "pnpm@10.32.1",
+  "pnpm": {
+    "overrides": {
+      "defu": "6.1.7",
+      "protobufjs": "7.5.5"
+    }
+  }
 }

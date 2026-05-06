@@ -17,6 +17,7 @@ describe('security posture scorecard', () => {
         agentPermissionPolicyPassed: true,
         runtimePackageHardeningPassed: true,
         browserCspPassed: true,
+        dependencyAuditPassed: true,
         externalGoogleSheetsEvidence: 'not-captured',
         externalMicrosoftExcelEvidence: 'not-captured',
       },
@@ -27,6 +28,7 @@ describe('security posture scorecard', () => {
       'shared-agent-owner-review',
       'runtime-publish-package-hardening',
       'browser-content-security-policy',
+      'production-dependency-vulnerability-audit',
     ])
     expect(scorecard.controls.every((control) => control.required && control.passed)).toBe(true)
     expect(scorecard.summary.coveredControls).toEqual([
@@ -42,12 +44,9 @@ describe('security posture scorecard', () => {
       'browser.contentSecurityPolicy',
       'browser.crossOriginIsolation',
       'browser.workerWasmRuntimeAllowlist',
-    ])
-    expect(scorecard.summary.uncoveredControls).toEqual([
       'dependency.vulnerabilityAudit',
-      'deployment.runtimeNetworkPolicy',
-      'externalSheetsExcelSecurityComparison',
     ])
+    expect(scorecard.summary.uncoveredControls).toEqual(['deployment.runtimeNetworkPolicy', 'externalSheetsExcelSecurityComparison'])
   })
 
   it('rejects stale artifacts missing required security controls', () => {

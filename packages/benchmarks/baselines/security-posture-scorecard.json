@@ -1,13 +1,14 @@
 {
   "schemaVersion": 1,
   "suite": "security-posture",
-  "generatedAt": "2026-05-06T09:04:06.611Z",
+  "generatedAt": "2026-05-06T09:10:14.109Z",
   "source": {
     "artifactGenerator": "scripts/gen-security-posture-scorecard.ts",
     "formulaRuntimeScanRoots": ["packages/formula/src", "packages/core/src/formula", "packages/core/src/engine/services"],
     "importImplementation": "packages/excel-import/src/index.ts",
     "agentPolicyImplementation": "packages/agent-api/src/workbook-agent-execution-policy.ts",
     "browserSecurityHeadersImplementation": "apps/bilig/src/http/sync-server-security-headers.ts",
+    "dependencyAuditCommand": "pnpm audit --prod --json",
     "runtimePackageGate": "pnpm publish:runtime:check"
   },
   "summary": {
@@ -17,6 +18,7 @@
     "agentPermissionPolicyPassed": true,
     "runtimePackageHardeningPassed": true,
     "browserCspPassed": true,
+    "dependencyAuditPassed": true,
     "coveredControls": [
       "formula.noEval",
       "formula.noFunctionConstructor",
@@ -29,9 +31,10 @@
       "runtime.alignedPackageSet",
       "browser.contentSecurityPolicy",
       "browser.crossOriginIsolation",
-      "browser.workerWasmRuntimeAllowlist"
+      "browser.workerWasmRuntimeAllowlist",
+      "dependency.vulnerabilityAudit"
     ],
-    "uncoveredControls": ["dependency.vulnerabilityAudit", "deployment.runtimeNetworkPolicy", "externalSheetsExcelSecurityComparison"],
+    "uncoveredControls": ["deployment.runtimeNetworkPolicy", "externalSheetsExcelSecurityComparison"],
     "externalGoogleSheetsEvidence": "not-captured",
     "externalMicrosoftExcelEvidence": "not-captured"
   },
@@ -79,6 +82,15 @@
       "passed": true,
       "coveredControls": ["browser.contentSecurityPolicy", "browser.crossOriginIsolation", "browser.workerWasmRuntimeAllowlist"],
       "evidence": "Built the production workbook browser CSP and verified default-deny, framing/object restrictions, cross-origin connection allowlisting, and worker/WASM allowances required by the runtime.",
+      "findings": []
+    },
+    {
+      "id": "production-dependency-vulnerability-audit",
+      "category": "dependency-audit",
+      "required": true,
+      "passed": true,
+      "coveredControls": ["dependency.vulnerabilityAudit"],
+      "evidence": "Ran pnpm audit --prod --json against 484 production dependencies and found 0 vulnerabilities.",
       "findings": []
     }
   ]

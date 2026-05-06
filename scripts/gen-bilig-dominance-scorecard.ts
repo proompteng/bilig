@@ -681,6 +681,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
         ],
         evidenceArtifacts: [
           input.securityPostureScorecardPath,
+          'pnpm-lock.yaml',
           'apps/bilig/src/http/sync-server-security-headers.ts',
           'apps/bilig/src/http/sync-server-security-headers.test.ts',
           'packages/excel-import/src/__tests__/excel-import.test.ts',
@@ -689,11 +690,12 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
         ],
         checkCommands: [
           'pnpm security:posture:check',
+          'pnpm security:audit',
           'pnpm exec vitest run apps/bilig/src/http/sync-server-security-headers.test.ts apps/bilig/src/http/sync-server.test.ts packages/excel-import/src/__tests__/excel-import.test.ts packages/agent-api/src/__tests__/workbook-agent-execution-policy.test.ts',
           'pnpm publish:runtime:check',
         ],
         blockers: [
-          'generated security posture evidence covers formula dynamic-code scanning, XLSX macro warning, shared-agent owner review, runtime package hardening, and browser CSP, but not dependency vulnerability audit or deployment network policy',
+          'generated security posture evidence covers formula dynamic-code scanning, XLSX macro warning, shared-agent owner review, runtime package hardening, browser CSP, and production dependency audit, but not deployment network policy',
           'no direct Sheets or Excel security comparison artifact exists in the repo',
         ],
       },
