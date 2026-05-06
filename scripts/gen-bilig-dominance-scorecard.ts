@@ -588,7 +588,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           'pnpm exec vitest run packages/excel-import/src/__tests__/excel-import.test.ts packages/core/src/__tests__/engine-import-export.fuzz.test.ts',
         ],
         blockers: [
-          'generated XLSX round-trip evidence covers supported snapshot semantics, not full native Excel object-model round trips for styles, charts, pivots, macros, comments, and defined names',
+          'generated XLSX round-trip evidence covers supported snapshot semantics, not full native Excel object-model round trips for pivots and macros',
           'no direct Sheets import/export compatibility artifact exists in the repo',
           'no direct Microsoft Excel import/export compatibility artifact exists in the repo',
         ],

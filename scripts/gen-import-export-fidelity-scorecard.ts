@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url'
 
 import { SpreadsheetEngine } from '../packages/core/src/engine.js'
 import { exportXlsx, importCsv, importXlsx } from '../packages/excel-import/src/index.js'
-import type { WorkbookSnapshot } from '../packages/protocol/src/types.js'
+import type { WorkbookChartSnapshot, WorkbookSnapshot } from '../packages/protocol/src/types.js'
 
 export interface ImportExportFidelityCase {
   readonly id: string
@@ -50,6 +50,7 @@ const requiredCaseIds = [
   'xlsx-import-preview',
   'xlsx-snapshot-roundtrip-values-formulas-formats',
   'xlsx-snapshot-roundtrip-dimensions-merges',
+  'xlsx-snapshot-roundtrip-charts',
   'xlsx-unsupported-features-warning',
 ] as const
 const coveredFeatureOrder = [
@@ -69,10 +70,11 @@ const coveredFeatureOrder = [
   'xlsx.styles',
   'xlsx.rowColumnDimensions',
   'xlsx.merges',
+  'xlsx.charts.roundtrip',
   'xlsx.multiSheet',
   'xlsx.unsupportedFeatureWarnings',
 ] as const
-const unsupportedFeatures = ['xlsx.macros.execution', 'xlsx.charts.roundtrip', 'xlsx.pivots.roundtrip'] as const
+const unsupportedFeatures = ['xlsx.macros.execution', 'xlsx.pivots.roundtrip'] as const
 
 async function main(): Promise<void> {
   const isCheckMode = process.argv.includes('--check')
@@ -99,6 +101,7 @@ export async function buildImportExportFidelityScorecard(generatedAt = new Date(
     runXlsxImportPreviewCase(),
     runXlsxSnapshotRoundTripValuesCase(),
     runXlsxSnapshotRoundTripDimensionsCase(),
+    runXlsxSnapshotRoundTripChartsCase(),
     runXlsxUnsupportedFeaturesWarningCase(),
   ]
   const coveredFeatureSet = new Set(cases.flatMap((entry) => entry.coveredFeatures))
@@ -235,6 +238,21 @@ function runXlsxSnapshotRoundTripDimensionsCase(): ImportExportFidelityCase {
   })
 }
 
+function runXlsxSnapshotRoundTripChartsCase(): ImportExportFidelityCase {
+  const expected = projectSupportedSnapshotSemantics(createFidelitySnapshot())
+  const actual = projectSupportedSnapshotSemantics(importXlsx(exportXlsx(createFidelitySnapshot()), 'fidelity.xlsx').snapshot)
+  const passed = JSON.stringify(actual.charts) === JSON.stringify(expected.charts)
+  return fidelityCase({
+    id: 'xlsx-snapshot-roundtrip-charts',
+    format: 'xlsx',
+    direction: 'export-import',
+    passed,
+    coveredFeatures: ['xlsx.charts.roundtrip'],
+    evidence:
+      'WorkbookSnapshot exported to XLSX imports back with equivalent Bilig chart metadata backed by real XLSX chart/drawing parts.',
+  })
+}
+
 function runXlsxUnsupportedFeaturesWarningCase(): ImportExportFidelityCase {
   const snapshot = createFidelitySnapshot()
   const imported = importXlsx(exportXlsx(snapshot), 'fidelity.xlsx')
@@ -290,6 +308,22 @@ function createFidelitySnapshot(): WorkbookSnapshot {
             borders: { bottom: { style: 'solid', weight: 'thin', color: '#000000' } },
           },
         ],
+        charts: [
+          {
+            id: 'summary-trend',
+            sheetName: 'Summary',
+            address: 'E1',
+            source: { sheetName: 'Summary', startAddress: 'A1', endAddress: 'B3' },
+            chartType: 'line',
+            seriesOrientation: 'columns',
+            firstRowAsHeaders: true,
+            firstColumnAsLabels: true,
+            title: 'Summary Trend',
+            legendPosition: 'right',
+            rows: 12,
+            cols: 6,
+          },
+        ],
       },
     },
     sheets: [
@@ -340,6 +374,49 @@ function createFidelitySnapshot(): WorkbookSnapshot {
   }
 }
 
+interface ProjectedChartSemantics {
+  id: string
+  sheetName: string
+  address: string
+  source: WorkbookChartSnapshot['source']
+  chartType: WorkbookChartSnapshot['chartType']
+  seriesOrientation?: WorkbookChartSnapshot['seriesOrientation']
+  firstRowAsHeaders?: WorkbookChartSnapshot['firstRowAsHeaders']
+  firstColumnAsLabels?: WorkbookChartSnapshot['firstColumnAsLabels']
+  title?: WorkbookChartSnapshot['title']
+  legendPosition?: WorkbookChartSnapshot['legendPosition']
+  rows: number
+  cols: number
+}
+
+function projectChartSemantics(chart: WorkbookChartSnapshot): ProjectedChartSemantics {
+  const projected: ProjectedChartSemantics = {
+    id: chart.id,
+    sheetName: chart.sheetName,
+    address: chart.address,
+    source: chart.source,
+    chartType: chart.chartType,
+    rows: chart.rows,
+    cols: chart.cols,
+  }
+  if (chart.seriesOrientation !== undefined) {
+    projected.seriesOrientation = chart.seriesOrientation
+  }
+  if (chart.firstRowAsHeaders !== undefined) {
+    projected.firstRowAsHeaders = chart.firstRowAsHeaders
+  }
+  if (chart.firstColumnAsLabels !== undefined) {
+    projected.firstColumnAsLabels = chart.firstColumnAsLabels
+  }
+  if (chart.title !== undefined) {
+    projected.title = chart.title
+  }
+  if (chart.legendPosition !== undefined) {
+    projected.legendPosition = chart.legendPosition
+  }
+  return projected
+}
+
 function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
   const stylesById = new Map((snapshot.workbook.metadata?.styles ?? []).map((style) => [style.id, style]))
   const portableStyle = (styleId: string) => {
@@ -380,6 +457,9 @@ function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
           `${right.range.sheetName}:${right.range.startAddress}:${right.range.endAddress}`,
         ),
       ),
+    charts: (snapshot.workbook.metadata?.charts ?? [])
+      .map(projectChartSemantics)
+      .toSorted((left, right) => left.id.localeCompare(right.id)),
     valueFormulaFormatSheets: snapshot.sheets
       .toSorted((left, right) => left.order - right.order)
       .map((sheet) => ({

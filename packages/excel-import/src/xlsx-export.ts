@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx'
 import * as XLSXStyle from 'xlsx-js-style'
 
 import type { LiteralInput, WorkbookAxisEntrySnapshot, WorkbookMergeRangeSnapshot, WorkbookSnapshot } from '@bilig/protocol'
+import { addExportChartsToXlsxBytes } from './xlsx-charts.js'
 import { addExportCommentsToWorksheet } from './xlsx-comments.js'
 import { buildExportDefinedNames } from './xlsx-defined-names.js'
 import { addExportStylesToWorksheet } from './xlsx-styles.js'
@@ -218,11 +219,12 @@ export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
     }
   }
 
-  return toUint8Array(
+  const bytes = toUint8Array(
     XLSXStyle.write(workbook, {
       bookType: 'xlsx',
       type: 'buffer',
       cellStyles: true,
     }) as unknown,
   )
+  return addExportChartsToXlsxBytes(bytes, snapshot, exportSheetNamesByOriginalName)
 }

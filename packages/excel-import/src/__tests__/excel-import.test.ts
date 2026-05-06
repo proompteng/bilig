@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { strFromU8, unzipSync } from 'fflate'
 import * as XLSX from 'xlsx'
 
-import type { WorkbookSnapshot } from '@bilig/protocol'
+import type { WorkbookChartSnapshot, WorkbookSnapshot } from '@bilig/protocol'
 import { exportXlsx, importCsv, importWorkbookFile, importXlsx, readImportedXlsxCellStyle } from '../index.js'
 import { CSV_CONTENT_TYPE } from '@bilig/agent-api'
 
@@ -364,6 +365,22 @@ describe('excel import', () => {
               borders: { bottom: { style: 'solid', weight: 'thin', color: '#000000' } },
             },
           ],
+          charts: [
+            {
+              id: 'summary-trend',
+              sheetName: 'Summary',
+              address: 'E1',
+              source: { sheetName: 'Summary', startAddress: 'A1', endAddress: 'B3' },
+              chartType: 'line',
+              seriesOrientation: 'columns',
+              firstRowAsHeaders: true,
+              firstColumnAsLabels: true,
+              title: 'Summary Trend',
+              legendPosition: 'right',
+              rows: 12,
+              cols: 6,
+            },
+          ],
         },
       },
       sheets: [
@@ -415,11 +432,60 @@ describe('excel import', () => {
 
     const bytes = exportXlsx(snapshot)
     const imported = importXlsx(bytes, 'roundtrip.xlsx')
+    const zip = unzipSync(bytes)
 
     expect(bytes.byteLength).toBeGreaterThan(0)
+    expect(Object.keys(zip)).toEqual(expect.arrayContaining(['xl/charts/chart1.xml', 'xl/drawings/drawing1.xml']))
+    expect(strFromU8(zip['xl/charts/chart1.xml'] ?? new Uint8Array())).toContain('<c:lineChart>')
+    expect(strFromU8(zip['xl/drawings/_rels/drawing1.xml.rels'] ?? new Uint8Array())).toContain(
+      'http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart',
+    )
     expect(projectSupportedSnapshotSemantics(imported.snapshot)).toEqual(projectSupportedSnapshotSemantics(snapshot))
   })
 })
+
+interface ProjectedChartSemantics {
+  id: string
+  sheetName: string
+  address: string
+  source: WorkbookChartSnapshot['source']
+  chartType: WorkbookChartSnapshot['chartType']
+  seriesOrientation?: WorkbookChartSnapshot['seriesOrientation']
+  firstRowAsHeaders?: WorkbookChartSnapshot['firstRowAsHeaders']
+  firstColumnAsLabels?: WorkbookChartSnapshot['firstColumnAsLabels']
+  title?: WorkbookChartSnapshot['title']
+  legendPosition?: WorkbookChartSnapshot['legendPosition']
+  rows: number
+  cols: number
+}
+
+function projectChartSemantics(chart: WorkbookChartSnapshot): ProjectedChartSemantics {
+  const projected: ProjectedChartSemantics = {
+    id: chart.id,
+    sheetName: chart.sheetName,
+    address: chart.address,
+    source: chart.source,
+    chartType: chart.chartType,
+    rows: chart.rows,
+    cols: chart.cols,
+  }
+  if (chart.seriesOrientation !== undefined) {
+    projected.seriesOrientation = chart.seriesOrientation
+  }
+  if (chart.firstRowAsHeaders !== undefined) {
+    projected.firstRowAsHeaders = chart.firstRowAsHeaders
+  }
+  if (chart.firstColumnAsLabels !== undefined) {
+    projected.firstColumnAsLabels = chart.firstColumnAsLabels
+  }
+  if (chart.title !== undefined) {
+    projected.title = chart.title
+  }
+  if (chart.legendPosition !== undefined) {
+    projected.legendPosition = chart.legendPosition
+  }
+  return projected
+}
 
 function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
   const stylesById = new Map((snapshot.workbook.metadata?.styles ?? []).map((style) => [style.id, style]))
@@ -439,6 +505,9 @@ function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
     definedNames: (snapshot.workbook.metadata?.definedNames ?? [])
       .map((definedName) => ({ name: definedName.name, value: definedName.value }))
       .toSorted((left, right) => left.name.localeCompare(right.name)),
+    charts: (snapshot.workbook.metadata?.charts ?? [])
+      .map(projectChartSemantics)
+      .toSorted((left, right) => left.id.localeCompare(right.id)),
     sheets: snapshot.sheets
       .toSorted((left, right) => left.order - right.order)
       .map((sheet) => ({

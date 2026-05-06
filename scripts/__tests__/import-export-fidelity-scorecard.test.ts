@@ -25,6 +25,7 @@ describe('import/export fidelity scorecard', () => {
       'xlsx-import-preview',
       'xlsx-snapshot-roundtrip-values-formulas-formats',
       'xlsx-snapshot-roundtrip-dimensions-merges',
+      'xlsx-snapshot-roundtrip-charts',
       'xlsx-unsupported-features-warning',
     ])
     expect(scorecard.cases.every((entry) => entry.required && entry.passed)).toBe(true)
@@ -45,10 +46,11 @@ describe('import/export fidelity scorecard', () => {
       'xlsx.styles',
       'xlsx.rowColumnDimensions',
       'xlsx.merges',
+      'xlsx.charts.roundtrip',
       'xlsx.multiSheet',
       'xlsx.unsupportedFeatureWarnings',
     ])
-    expect(scorecard.summary.unsupportedFeatures).toEqual(['xlsx.macros.execution', 'xlsx.charts.roundtrip', 'xlsx.pivots.roundtrip'])
+    expect(scorecard.summary.unsupportedFeatures).toEqual(['xlsx.macros.execution', 'xlsx.pivots.roundtrip'])
   })
 
   it('rejects stale artifacts missing required fidelity cases', async () => {

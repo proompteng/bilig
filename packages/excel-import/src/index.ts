@@ -18,6 +18,7 @@ import type {
   WorkbookMetadataSnapshot,
   WorkbookSnapshot,
 } from '@bilig/protocol'
+import { readImportedWorkbookCharts } from './xlsx-charts.js'
 import { readImportedSheetComments } from './xlsx-comments.js'
 import { readImportedDefinedNames } from './xlsx-defined-names.js'
 import { readImportedWorkbookFileStyles } from './xlsx-styles.js'
@@ -470,6 +471,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
   const importedDefinedNames = readImportedDefinedNames(workbook)
   addWorkbookWarnings(workbook, warnings, importedDefinedNames.ignoredCount)
   const importedWorkbookStyles = readImportedWorkbookFileStyles(workbook, workbook.SheetNames)
+  const importedCharts = readImportedWorkbookCharts(data, workbook.SheetNames)
 
   let ignoredCommentsSeen = false
   const styleCatalog = new Map<string, CellStyleRecord>()
@@ -584,6 +586,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
   const workbookMetadata: WorkbookMetadataSnapshot = {
     ...(styleCatalog.size > 0 ? { styles: [...styleCatalog.values()] } : {}),
     ...(importedDefinedNames.definedNames ? { definedNames: importedDefinedNames.definedNames } : {}),
+    ...(importedCharts ? { charts: importedCharts } : {}),
   }
 
   return {

@@ -332,6 +332,9 @@ importers:
       fast-xml-parser:
         specifier: 5.7.3
         version: 5.7.3
+      fflate:
+        specifier: 0.3.11
+        version: 0.3.11
       xlsx:
         specifier: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
         version: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
