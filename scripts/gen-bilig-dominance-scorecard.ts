@@ -5,273 +5,31 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import { parseAuditabilityScorecard, type AuditabilityScorecard } from './gen-auditability-scorecard.ts'
-import { parseAutomationScorecard, type AutomationScorecard } from './gen-automation-scorecard.ts'
-import { parseCollaborationScorecard, type CollaborationScorecard } from './gen-collaboration-scorecard.ts'
-import { parseImportExportFidelityScorecard, type ImportExportFidelityScorecard } from './gen-import-export-fidelity-scorecard.ts'
-import {
-  parseGoogleSheetsLiveCalculationScorecard,
-  type GoogleSheetsLiveCalculationScorecard,
-} from './gen-google-sheets-live-calculation-scorecard.ts'
-import {
-  parseMicrosoftExcelLiveCalculationScorecard,
-  type MicrosoftExcelLiveCalculationScorecard,
-} from './gen-microsoft-excel-live-calculation-scorecard.ts'
-import {
-  parseMicrosoftExcelLiveRecalculationScorecard,
-  type MicrosoftExcelLiveRecalculationScorecard,
-} from './gen-microsoft-excel-live-recalculation-scorecard.ts'
-import {
-  parseMicrosoftExcelLiveLargeWorkbookScorecard,
-  type MicrosoftExcelLiveLargeWorkbookScorecard,
-} from './gen-microsoft-excel-live-large-workbook-scorecard.ts'
-import {
-  parseMicrosoftExcelLiveStructuralScorecard,
-  type MicrosoftExcelLiveStructuralScorecard,
-} from './gen-microsoft-excel-live-structural-scorecard.ts'
-import {
-  parseLargeWorkbookSloScorecard,
-  type HeadedBrowserFrameP95Contract,
-  type LargeWorkbookSloMeasurement,
-  type LargeWorkbookSloScorecard,
-} from './gen-large-workbook-slo-scorecard.ts'
-import { parseReliabilityScorecard, type ReliabilityScorecard } from './gen-reliability-scorecard.ts'
-import { parseSecurityPostureScorecard, type SecurityPostureScorecard } from './gen-security-posture-scorecard.ts'
-import {
-  arrayField,
-  asObject,
-  booleanField,
-  isFiniteNumber,
-  literalField,
-  numberField,
-  objectField,
-  optionalNumberField,
-  optionalStringField,
-  readJsonObject,
-  stringArrayField,
-  stringField,
-} from './json-scorecard-helpers.ts'
+import type {
+  BiligDominanceScorecard,
+  BuildScorecardInput,
+  CompetitiveResult,
+  HeadedBrowserFrameP95Contract,
+  LargeWorkbookSloMeasurement,
+  RatioSummary,
+} from './bilig-dominance-scorecard-types.ts'
+import { parseCompetitiveArtifact, parseFormulaDominanceSnapshot, parseSurfaceSnapshot } from './bilig-dominance-scorecard-parsers.ts'
+import { parseAuditabilityScorecard } from './gen-auditability-scorecard.ts'
+import { parseAutomationScorecard } from './gen-automation-scorecard.ts'
+import { parseCollaborationScorecard } from './gen-collaboration-scorecard.ts'
+import { parseGoogleSheetsLiveCalculationScorecard } from './gen-google-sheets-live-calculation-scorecard.ts'
+import { parseGoogleSheetsLiveLargeWorkbookScorecard } from './gen-google-sheets-live-large-workbook-scorecard.ts'
+import { parseImportExportFidelityScorecard } from './gen-import-export-fidelity-scorecard.ts'
+import { parseLargeWorkbookSloScorecard } from './gen-large-workbook-slo-scorecard.ts'
+import { parseMicrosoftExcelLiveCalculationScorecard } from './gen-microsoft-excel-live-calculation-scorecard.ts'
+import { parseMicrosoftExcelLiveLargeWorkbookScorecard } from './gen-microsoft-excel-live-large-workbook-scorecard.ts'
+import { parseMicrosoftExcelLiveRecalculationScorecard } from './gen-microsoft-excel-live-recalculation-scorecard.ts'
+import { parseMicrosoftExcelLiveStructuralScorecard } from './gen-microsoft-excel-live-structural-scorecard.ts'
+import { parseReliabilityScorecard } from './gen-reliability-scorecard.ts'
+import { parseSecurityPostureScorecard } from './gen-security-posture-scorecard.ts'
+import { isFiniteNumber, readJsonObject } from './json-scorecard-helpers.ts'
 
-export type DominanceStatus = 'repo-proved-lead' | 'partial-repo-evidence' | 'target-only'
-
-export interface RatioSummary {
-  percent: number
-  production: number
-  total: number
-}
-
-export interface FormulaDominanceSnapshot {
-  schemaVersion: 1
-  formulaBreadth: {
-    officeListed: RatioSummary
-    tracked: RatioSummary
-    missingOfficeFunctions: string[]
-  }
-  canonical: {
-    summary: RatioSummary
-    nonProductionRows: unknown[]
-  }
-}
-
-export interface HyperFormulaSurfaceSnapshot {
-  hyperFormulaCommit: string
-  hyperFormulaVersion: string
-  classSurface: {
-    staticMembers: string[]
-    staticMethods: string[]
-    instanceAccessors: string[]
-    instanceMethods: string[]
-  }
-  configKeys: string[]
-}
-
-export interface CompetitiveScorecardSummary {
-  comparableCount: number
-  directionalMeanRatioGeomean: number
-  directionalP95RatioGeomean: number
-  hyperformulaWins: number
-  worstMeanRatioWorkload: string
-  worstP95RatioWorkload: string
-  worstWorkpaperToHyperFormulaMeanRatio: number
-  worstWorkpaperToHyperFormulaP95Ratio: number
-  workpaperWins: number
-}
-
-export interface CompetitiveFamilySummary {
-  comparableCount: number
-  family: string
-  hyperformulaWins: number
-  scorecardEligible: boolean
-  workpaperWins: number
-  worstMeanRatioWorkload: string | null
-  worstP95RatioWorkload: string | null
-  worstWorkpaperToHyperFormulaMeanRatio: number | null
-  worstWorkpaperToHyperFormulaP95Ratio: number | null
-}
-
-export interface CompetitiveResult {
-  comparable: boolean
-  workload: string
-  comparison?: {
-    workpaperToHyperFormulaMeanRatio: number
-    workpaperToHyperFormulaP95Ratio: number
-  }
-}
-
-export interface CompetitiveArtifact {
-  generatedAt: string
-  engines: {
-    hyperformula: {
-      commit: string
-      version: string
-    }
-  }
-  families: CompetitiveFamilySummary[]
-  results: CompetitiveResult[]
-  scorecard: CompetitiveScorecardSummary
-}
-
-export interface BiligDominanceScorecard {
-  schemaVersion: 1
-  objective: string
-  goalStatus: 'active-not-achieved'
-  claimPolicy: {
-    blanketTenXClaimAllowed: false
-    requiredForBlanketTenXClaim: string[]
-    workloadSpecificTenXWins: Array<{
-      workload: string
-      meanRatio: number
-      p95Ratio: number
-      comparisonTarget: 'HyperFormula'
-    }>
-  }
-  sourceArtifacts: {
-    auditabilityScorecard: string
-    automationScorecard: string
-    collaborationScorecard: string
-    formulaDominanceSnapshot: string
-    googleSheetsLiveCalculationScorecard: string
-    hyperFormulaSurfaceSnapshot: string
-    microsoftExcelLiveCalculationScorecard: string
-    microsoftExcelLiveRecalculationScorecard: string
-    microsoftExcelLiveLargeWorkbookScorecard: string
-    microsoftExcelLiveStructuralScorecard: string
-    importExportFidelityScorecard: string
-    largeWorkbookSloScorecard: string
-    reliabilityScorecard: string
-    securityPostureScorecard: string
-    workpaperCompetitiveBenchmark: {
-      generatedAt: string
-      hyperFormulaCommit: string
-      hyperFormulaVersion: string
-      path: string
-    }
-  }
-  summary: {
-    auditabilityCoveredControls: string[]
-    auditabilityPosturePassed: boolean
-    auditabilityUncoveredControls: string[]
-    automationCoveredControls: string[]
-    automationPosturePassed: boolean
-    automationRegisteredToolCount: number
-    automationSemanticCommandKindCount: number
-    automationUncoveredControls: string[]
-    collaborationCoveredControls: string[]
-    collaborationPosturePassed: boolean
-    collaborationUncoveredControls: string[]
-    externalGoogleSheetsEvidence: 'not-captured-in-repo'
-    externalMicrosoftExcelEvidence: 'not-captured-in-repo'
-    formulaCanonicalProductionPercent: number
-    googleSheetsLiveCalculationEvidence: 'live-google-sheets-native-conversion-via-google-drive-connector'
-    googleSheetsLiveCalculationCaseCount: number
-    googleSheetsLiveCalculationPassed: boolean
-    googleSheetsLiveCalculationSpreadsheetId: string
-    microsoftExcelLiveCalculationEvidence: 'live-local-microsoft-excel-automation'
-    microsoftExcelLiveCalculationCaseCount: number
-    microsoftExcelLiveCalculationPassed: boolean
-    microsoftExcelLiveCalculationVersion: string
-    microsoftExcelLiveRecalculationEvidence: 'live-local-microsoft-excel-automation'
-    microsoftExcelLiveRecalculationCaseCount: number
-    microsoftExcelLiveRecalculationPassed: boolean
-    microsoftExcelLiveRecalculationTenXMeanAndP95CaseCount: number
-    microsoftExcelLiveRecalculationVersion: string
-    microsoftExcelLiveLargeWorkbookEvidence: 'live-local-microsoft-excel-automation'
-    microsoftExcelLiveLargeWorkbookCaseCount: number
-    microsoftExcelLiveLargeWorkbookPassed: boolean
-    microsoftExcelLiveLargeWorkbookTenXMeanAndP95CaseCount: number
-    microsoftExcelLiveLargeWorkbookVersion: string
-    microsoftExcelLiveStructuralEvidence: 'live-local-microsoft-excel-automation'
-    microsoftExcelLiveStructuralCaseCount: number
-    microsoftExcelLiveStructuralPassed: boolean
-    microsoftExcelLiveStructuralTenXMeanAndP95CaseCount: number
-    microsoftExcelLiveStructuralVersion: string
-    formulaOfficeListedBreadthPercent: number
-    formulaTrackedBreadthPercent: number
-    importExportCoveredFeatures: string[]
-    importExportFidelityPassed: boolean
-    importExportUnsupportedFeatures: string[]
-    largeWorkbookSloRowsCovered: number[]
-    largeWorkbookSloPassed: boolean
-    reliabilityCoveredControls: string[]
-    reliabilityPosturePassed: boolean
-    reliabilityUncoveredControls: string[]
-    securityCoveredControls: string[]
-    securityPosturePassed: boolean
-    securityUncoveredControls: string[]
-    hyperFormulaComparableWorkloads: number
-    hyperFormulaP95GeomeanRatio: number
-    hyperFormulaMeanGeomeanRatio: number
-    hyperFormulaWins: number
-    tenXMeanAndP95WorkloadCountAgainstHyperFormula: number
-    workpaperWins: number
-  }
-  categories: DominanceCategory[]
-}
-
-export interface DominanceCategory {
-  id: string
-  title: string
-  objectiveCategory: string
-  target: string
-  status: DominanceStatus
-  currentEvidence: string[]
-  evidenceArtifacts: string[]
-  checkCommands: string[]
-  blockers: string[]
-}
-
-export interface BuildScorecardInput {
-  auditabilityScorecard: AuditabilityScorecard
-  auditabilityScorecardPath: string
-  automationScorecard: AutomationScorecard
-  automationScorecardPath: string
-  collaborationScorecard: CollaborationScorecard
-  collaborationScorecardPath: string
-  competitiveArtifact: CompetitiveArtifact
-  competitiveArtifactPath: string
-  formulaSnapshot: FormulaDominanceSnapshot
-  formulaSnapshotPath: string
-  googleSheetsLiveCalculationScorecard: GoogleSheetsLiveCalculationScorecard
-  googleSheetsLiveCalculationScorecardPath: string
-  microsoftExcelLiveCalculationScorecard: MicrosoftExcelLiveCalculationScorecard
-  microsoftExcelLiveCalculationScorecardPath: string
-  microsoftExcelLiveRecalculationScorecard: MicrosoftExcelLiveRecalculationScorecard
-  microsoftExcelLiveRecalculationScorecardPath: string
-  microsoftExcelLiveLargeWorkbookScorecard: MicrosoftExcelLiveLargeWorkbookScorecard
-  microsoftExcelLiveLargeWorkbookScorecardPath: string
-  microsoftExcelLiveStructuralScorecard: MicrosoftExcelLiveStructuralScorecard
-  microsoftExcelLiveStructuralScorecardPath: string
-  importExportFidelityScorecard: ImportExportFidelityScorecard
-  importExportFidelityScorecardPath: string
-  largeWorkbookSloScorecard: LargeWorkbookSloScorecard
-  largeWorkbookSloScorecardPath: string
-  reliabilityScorecard: ReliabilityScorecard
-  reliabilityScorecardPath: string
-  securityPostureScorecard: SecurityPostureScorecard
-  securityPostureScorecardPath: string
-  surfaceSnapshot: HyperFormulaSurfaceSnapshot
-  surfaceSnapshotPath: string
-}
+export type { BiligDominanceScorecard, BuildScorecardInput } from './bilig-dominance-scorecard-types.ts'
 
 const TEN_X_RATIO = 0.1
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
@@ -287,6 +45,13 @@ const googleSheetsLiveCalculationScorecardPath = join(
   'benchmarks',
   'baselines',
   'google-sheets-live-calculation-scorecard.json',
+)
+const googleSheetsLiveLargeWorkbookScorecardPath = join(
+  rootDir,
+  'packages',
+  'benchmarks',
+  'baselines',
+  'google-sheets-live-large-workbook-scorecard.json',
 )
 const microsoftExcelLiveCalculationScorecardPath = join(
   rootDir,
@@ -339,6 +104,10 @@ function main(): void {
       readJsonObject(googleSheetsLiveCalculationScorecardPath),
     ),
     googleSheetsLiveCalculationScorecardPath: toRepoPath(googleSheetsLiveCalculationScorecardPath),
+    googleSheetsLiveLargeWorkbookScorecard: parseGoogleSheetsLiveLargeWorkbookScorecard(
+      readJsonObject(googleSheetsLiveLargeWorkbookScorecardPath),
+    ),
+    googleSheetsLiveLargeWorkbookScorecardPath: toRepoPath(googleSheetsLiveLargeWorkbookScorecardPath),
     microsoftExcelLiveCalculationScorecard: parseMicrosoftExcelLiveCalculationScorecard(
       readJsonObject(microsoftExcelLiveCalculationScorecardPath),
     ),
@@ -445,6 +214,11 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
   const microsoftExcelLargeWorkbookPassedCaseCount = input.microsoftExcelLiveLargeWorkbookScorecard.cases.filter(
     (entry) => entry.passed,
   ).length
+  const googleSheetsLargeWorkbookTenXPassed =
+    input.googleSheetsLiveLargeWorkbookScorecard.summary.allRequiredCasesPassed &&
+    input.googleSheetsLiveLargeWorkbookScorecard.summary.tenXMeanAndP95CaseCount ===
+      input.googleSheetsLiveLargeWorkbookScorecard.summary.requiredCaseCount
+  const googleSheetsLargeWorkbookPassedCaseCount = input.googleSheetsLiveLargeWorkbookScorecard.cases.filter((entry) => entry.passed).length
   const microsoftExcelStructuralTenXPassed =
     input.microsoftExcelLiveStructuralScorecard.summary.allRequiredCasesPassed &&
     input.microsoftExcelLiveStructuralScorecard.summary.tenXMeanAndP95CaseCount ===
@@ -480,6 +254,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       collaborationScorecard: input.collaborationScorecardPath,
       formulaDominanceSnapshot: input.formulaSnapshotPath,
       googleSheetsLiveCalculationScorecard: input.googleSheetsLiveCalculationScorecardPath,
+      googleSheetsLiveLargeWorkbookScorecard: input.googleSheetsLiveLargeWorkbookScorecardPath,
       hyperFormulaSurfaceSnapshot: input.surfaceSnapshotPath,
       microsoftExcelLiveCalculationScorecard: input.microsoftExcelLiveCalculationScorecardPath,
       microsoftExcelLiveRecalculationScorecard: input.microsoftExcelLiveRecalculationScorecardPath,
@@ -515,6 +290,13 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       googleSheetsLiveCalculationCaseCount: input.googleSheetsLiveCalculationScorecard.summary.requiredCaseCount,
       googleSheetsLiveCalculationPassed: input.googleSheetsLiveCalculationScorecard.summary.allRequiredCasesPassed,
       googleSheetsLiveCalculationSpreadsheetId: input.googleSheetsLiveCalculationScorecard.googleSheets.spreadsheetId,
+      googleSheetsLiveLargeWorkbookEvidence: input.googleSheetsLiveLargeWorkbookScorecard.source.evidenceKind,
+      googleSheetsLiveLargeWorkbookCaseCount: input.googleSheetsLiveLargeWorkbookScorecard.summary.requiredCaseCount,
+      googleSheetsLiveLargeWorkbookPassed: input.googleSheetsLiveLargeWorkbookScorecard.summary.allRequiredCasesPassed,
+      googleSheetsLiveLargeWorkbookTenXMeanAndP95CaseCount: input.googleSheetsLiveLargeWorkbookScorecard.summary.tenXMeanAndP95CaseCount,
+      googleSheetsLiveLargeWorkbookSpreadsheetIds: input.googleSheetsLiveLargeWorkbookScorecard.googleSheets.spreadsheets.map(
+        (entry) => entry.spreadsheetId,
+      ),
       microsoftExcelLiveCalculationEvidence: input.microsoftExcelLiveCalculationScorecard.source.evidenceKind,
       microsoftExcelLiveCalculationCaseCount: input.microsoftExcelLiveCalculationScorecard.summary.requiredCaseCount,
       microsoftExcelLiveCalculationPassed: input.microsoftExcelLiveCalculationScorecard.summary.allRequiredCasesPassed,
@@ -687,6 +469,12 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           `live Microsoft Excel large-workbook cases with 10x mean+p95 wins: ${String(
             input.microsoftExcelLiveLargeWorkbookScorecard.summary.tenXMeanAndP95CaseCount,
           )}/${String(input.microsoftExcelLiveLargeWorkbookScorecard.summary.requiredCaseCount)}`,
+          `live Google Sheets large-workbook scorecard passes ${String(
+            googleSheetsLargeWorkbookPassedCaseCount,
+          )}/${String(input.googleSheetsLiveLargeWorkbookScorecard.summary.requiredCaseCount)} required cases via native Google Sheets conversion`,
+          `live Google Sheets large-workbook cases with 10x mean+p95 wins: ${String(
+            input.googleSheetsLiveLargeWorkbookScorecard.summary.tenXMeanAndP95CaseCount,
+          )}/${String(input.googleSheetsLiveLargeWorkbookScorecard.summary.requiredCaseCount)}`,
           `external large-workbook comparison dimensions pass: ${String(
             input.largeWorkbookSloScorecard.externalSheetsExcelComparison.requiredDimensionsPassed,
           )}`,
@@ -698,6 +486,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
         evidenceArtifacts: [
           input.competitiveArtifactPath,
           input.largeWorkbookSloScorecardPath,
+          input.googleSheetsLiveLargeWorkbookScorecardPath,
           input.microsoftExcelLiveLargeWorkbookScorecardPath,
           input.largeWorkbookSloScorecard.source.externalLargeWorkbookComparisonArtifact,
           'e2e/tests/web-shell-scroll-performance.pw.ts',
@@ -706,6 +495,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
         checkCommands: [
           'pnpm large-workbook:slo:check',
           'pnpm large-workbook:excel-live:check',
+          'pnpm large-workbook:google-sheets-live:check',
           'CI=1 pnpm bench:contracts',
           'pnpm test:browser:full',
           'pnpm bench:smoke',
@@ -714,7 +504,9 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           ...(microsoftExcelLargeWorkbookTenXPassed
             ? []
             : ['live Microsoft Excel large-workbook timing scorecard does not prove 10x mean+p95 for all large-workbook cases']),
-          'no direct Google Sheets large-workbook live timing artifact exists in the repo',
+          ...(googleSheetsLargeWorkbookTenXPassed
+            ? []
+            : ['live Google Sheets large-workbook timing scorecard does not prove 10x mean+p95 for all large-workbook cases']),
         ],
       },
       {
@@ -1057,109 +849,6 @@ function isComparableWithComparison(result: CompetitiveResult): result is Compet
     isFiniteNumber(result.comparison.workpaperToHyperFormulaMeanRatio) &&
     isFiniteNumber(result.comparison.workpaperToHyperFormulaP95Ratio)
   )
-}
-
-function parseFormulaDominanceSnapshot(value: Record<string, unknown>): FormulaDominanceSnapshot {
-  const formulaBreadth = objectField(value, 'formulaBreadth')
-  const canonical = objectField(value, 'canonical')
-  return {
-    schemaVersion: literalField(value, 'schemaVersion', 1),
-    formulaBreadth: {
-      officeListed: ratioField(formulaBreadth, 'officeListed'),
-      tracked: ratioField(formulaBreadth, 'tracked'),
-      missingOfficeFunctions: stringArrayField(formulaBreadth, 'missingOfficeFunctions'),
-    },
-    canonical: {
-      summary: ratioField(canonical, 'summary'),
-      nonProductionRows: arrayField(canonical, 'nonProductionRows'),
-    },
-  }
-}
-
-function parseSurfaceSnapshot(value: Record<string, unknown>): HyperFormulaSurfaceSnapshot {
-  const classSurface = objectField(value, 'classSurface')
-  return {
-    hyperFormulaVersion: stringField(value, 'hyperFormulaVersion'),
-    hyperFormulaCommit: stringField(value, 'hyperFormulaCommit'),
-    classSurface: {
-      staticMembers: stringArrayField(classSurface, 'staticMembers'),
-      staticMethods: stringArrayField(classSurface, 'staticMethods'),
-      instanceAccessors: stringArrayField(classSurface, 'instanceAccessors'),
-      instanceMethods: stringArrayField(classSurface, 'instanceMethods'),
-    },
-    configKeys: stringArrayField(value, 'configKeys'),
-  }
-}
-
-function parseCompetitiveArtifact(value: Record<string, unknown>): CompetitiveArtifact {
-  const engines = objectField(value, 'engines')
-  const hyperformula = objectField(engines, 'hyperformula')
-  const scorecard = objectField(value, 'scorecard')
-  return {
-    generatedAt: stringField(value, 'generatedAt'),
-    engines: {
-      hyperformula: {
-        commit: stringField(hyperformula, 'commit'),
-        version: stringField(hyperformula, 'version'),
-      },
-    },
-    families: arrayField(value, 'families').map(parseCompetitiveFamily),
-    results: arrayField(value, 'results').map(parseCompetitiveResult),
-    scorecard: {
-      comparableCount: numberField(scorecard, 'comparableCount'),
-      directionalMeanRatioGeomean: numberField(scorecard, 'directionalMeanRatioGeomean'),
-      directionalP95RatioGeomean: numberField(scorecard, 'directionalP95RatioGeomean'),
-      hyperformulaWins: numberField(scorecard, 'hyperformulaWins'),
-      worstMeanRatioWorkload: stringField(scorecard, 'worstMeanRatioWorkload'),
-      worstP95RatioWorkload: stringField(scorecard, 'worstP95RatioWorkload'),
-      worstWorkpaperToHyperFormulaMeanRatio: numberField(scorecard, 'worstWorkpaperToHyperFormulaMeanRatio'),
-      worstWorkpaperToHyperFormulaP95Ratio: numberField(scorecard, 'worstWorkpaperToHyperFormulaP95Ratio'),
-      workpaperWins: numberField(scorecard, 'workpaperWins'),
-    },
-  }
-}
-
-function parseCompetitiveFamily(value: unknown): CompetitiveFamilySummary {
-  const family = asObject(value, 'competitive family')
-  return {
-    comparableCount: numberField(family, 'comparableCount'),
-    family: stringField(family, 'family'),
-    hyperformulaWins: numberField(family, 'hyperformulaWins'),
-    scorecardEligible: booleanField(family, 'scorecardEligible'),
-    workpaperWins: numberField(family, 'workpaperWins'),
-    worstMeanRatioWorkload: optionalStringField(family, 'worstMeanRatioWorkload'),
-    worstP95RatioWorkload: optionalStringField(family, 'worstP95RatioWorkload'),
-    worstWorkpaperToHyperFormulaMeanRatio: optionalNumberField(family, 'worstWorkpaperToHyperFormulaMeanRatio'),
-    worstWorkpaperToHyperFormulaP95Ratio: optionalNumberField(family, 'worstWorkpaperToHyperFormulaP95Ratio'),
-  }
-}
-
-function parseCompetitiveResult(value: unknown): CompetitiveResult {
-  const result = asObject(value, 'competitive result')
-  const comparison = result['comparison']
-  return {
-    comparable: booleanField(result, 'comparable'),
-    workload: stringField(result, 'workload'),
-    comparison:
-      comparison === undefined
-        ? undefined
-        : {
-            workpaperToHyperFormulaMeanRatio: numberField(
-              asObject(comparison, 'competitive comparison'),
-              'workpaperToHyperFormulaMeanRatio',
-            ),
-            workpaperToHyperFormulaP95Ratio: numberField(asObject(comparison, 'competitive comparison'), 'workpaperToHyperFormulaP95Ratio'),
-          },
-  }
-}
-
-function ratioField(value: Record<string, unknown>, field: string): RatioSummary {
-  const ratioValue = objectField(value, field)
-  return {
-    percent: numberField(ratioValue, 'percent'),
-    production: numberField(ratioValue, 'production'),
-    total: numberField(ratioValue, 'total'),
-  }
 }
 
 function toRepoPath(path: string): string {

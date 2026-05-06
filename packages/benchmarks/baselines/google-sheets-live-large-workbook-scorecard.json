@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "suite": "google-sheets-live-large-workbook-performance",
+  "generatedAt": "2026-05-06T19:25:00.000Z",
+  "host": {
+    "arch": "arm64",
+    "platform": "darwin"
+  },
+  "source": {
+    "artifactGenerator": "scripts/gen-google-sheets-live-large-workbook-scorecard.ts",
+    "implementationPackage": "packages/core",
+    "xlsxExportPackage": "packages/excel-import",
+    "corpusPackage": "packages/benchmarks",
+    "evidenceKind": "live-google-sheets-native-conversion-via-google-drive-connector",
+    "captureTransport": "google-drive-connector"
+  },
+  "benchmark": {
+    "sampleCount": 3,
+    "valueRenderOption": "UNFORMATTED_VALUE",
+    "measuredGoogleSheetsOperation": "native-xlsx-import-and-read-terminal-cell",
+    "measuredBiligOperation": "import-snapshot",
+    "samplingOrder": "engine-isolated-bilig-then-google-sheets"
+  },
+  "googleSheets": {
+    "spreadsheets": [
+      {
+        "caseId": "google-sheets-live-large-workbook-import-read-dense-mixed-100k",
+        "sampleIndex": 0,
+        "spreadsheetId": "1P9VrR3kf_uW9k-UbJmdU2hhJAxxzfRWTY0xW25-Wc0o",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1P9VrR3kf_uW9k-UbJmdU2hhJAxxzfRWTY0xW25-Wc0o",
+        "title": "bilig live large workbook 100k sample 1 2026-05-06"
+      },
+      {
+        "caseId": "google-sheets-live-large-workbook-import-read-dense-mixed-100k",
+        "sampleIndex": 1,
+        "spreadsheetId": "13Tsd7_PXsaS_OEWxO3_mrZ9zmJCpoWG2FDBYJqJKKmI",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/13Tsd7_PXsaS_OEWxO3_mrZ9zmJCpoWG2FDBYJqJKKmI",
+        "title": "bilig live large workbook 100k sample 2 2026-05-06"
+      },
+      {
+        "caseId": "google-sheets-live-large-workbook-import-read-dense-mixed-100k",
+        "sampleIndex": 2,
+        "spreadsheetId": "1uouvWkgpmceVUYZqWHntNP7SQ-kd6XwLW6ecC1UZH4g",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1uouvWkgpmceVUYZqWHntNP7SQ-kd6XwLW6ecC1UZH4g",
+        "title": "bilig live large workbook 100k sample 3 2026-05-06"
+      },
+      {
+        "caseId": "google-sheets-live-large-workbook-import-read-dense-mixed-250k",
+        "sampleIndex": 0,
+        "spreadsheetId": "1cMsJGah5QbyKpbE1iJvIljkOueo9gA6oB_ub1JaKn9I",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1cMsJGah5QbyKpbE1iJvIljkOueo9gA6oB_ub1JaKn9I",
+        "title": "bilig live large workbook 250k sample 1 2026-05-06"
+      },
+      {
+        "caseId": "google-sheets-live-large-workbook-import-read-dense-mixed-250k",
+        "sampleIndex": 1,
+        "spreadsheetId": "1NGCNAmkr9fNlwHiB1mmPcFcbZ_W3rNmjEt3wfrcsu5E",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1NGCNAmkr9fNlwHiB1mmPcFcbZ_W3rNmjEt3wfrcsu5E",
+        "title": "bilig live large workbook 250k sample 2 2026-05-06"
+      },
+      {
+        "caseId": "google-sheets-live-large-workbook-import-read-dense-mixed-250k",
+        "sampleIndex": 2,
+        "spreadsheetId": "1YKha9oSq9BR3pWigovNGPNGVtlNo9nkXUfOZpeRxDLA",
+        "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1YKha9oSq9BR3pWigovNGPNGVtlNo9nkXUfOZpeRxDLA",
+        "title": "bilig live large workbook 250k sample 3 2026-05-06"
+      }
+    ]
+  },
+  "summary": {
+    "allRequiredCasesPassed": true,
+    "requiredCaseCount": 2,
+    "tenXMeanAndP95CaseCount": 2,
+    "biligWins": 2,
+    "coveredCorpusCaseIds": ["dense-mixed-100k", "dense-mixed-250k"],
+    "coveredMaterializedCells": [100000, 250000],
+    "microsoftExcelEvidence": "not-covered-by-this-artifact"
+  },
+  "cases": [
+    {
+      "id": "google-sheets-live-large-workbook-import-read-dense-mixed-100k",
+      "workload": "native-import-read-dense-mixed-100k",
+      "corpusCaseId": "dense-mixed-100k",
+      "materializedCells": 100000,
+      "sampleCount": 3,
+      "biligElapsedMs": {
+        "samples": [32.88687500000003, 34.40620899999999, 45.932208],
+        "min": 32.88687500000003,
+        "median": 34.40620899999999,
+        "p95": 45.932208,
+        "max": 45.932208,
+        "mean": 37.74176400000001,
+        "standardDeviation": 5.8246386805672845,
+        "relativeStandardDeviation": 0.15432873462319574,
+        "standardError": 3.3628567101578284,
+        "confidence95": {
+          "low": 31.150564848090667,
+          "high": 44.332963151909354
+        }
+      },
+      "googleSheetsElapsedMs": {
+        "samples": [7353.5, 8709.7, 9394],
+        "min": 7353.5,
+        "median": 8709.7,
+        "p95": 9394,
+        "max": 9394,
+        "mean": 8485.733333333334,
+        "standardDeviation": 847.9508096319948,
+        "relativeStandardDeviation": 0.09992663878572602,
+        "standardError": 489.56462820059335,
+        "confidence95": {
+          "low": 7526.18666206017,
+          "high": 9445.280004606497
+        }
+      },
+      "biligToGoogleSheetsMeanRatio": 0.004447672642710118,
+      "biligToGoogleSheetsP95Ratio": 0.0048895260804769,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "bilig": {
+          "sheetCount": 1,
+          "height": 25000,
+          "width": 4,
+          "usedRangeCells": 100000,
+          "terminalAddress": "C25000",
+          "terminalValue": 1825000
+        },
+        "googleSheets": {
+          "sheetCount": 1,
+          "height": 25000,
+          "width": 4,
+          "usedRangeCells": 100000,
+          "terminalAddress": "C25000",
+          "terminalValue": 1825000
+        },
+        "equivalent": true
+      },
+      "passed": true
+    },
+    {
+      "id": "google-sheets-live-large-workbook-import-read-dense-mixed-250k",
+      "workload": "native-import-read-dense-mixed-250k",
+      "corpusCaseId": "dense-mixed-250k",
+      "materializedCells": 250000,
+      "sampleCount": 3,
+      "biligElapsedMs": {
+        "samples": [58.27191699999997, 59.479999999999905, 64.573375],
+        "min": 58.27191699999997,
+        "median": 59.479999999999905,
+        "p95": 64.573375,
+        "max": 64.573375,
+        "mean": 60.77509733333329,
+        "standardDeviation": 2.73069601122089,
+        "relativeStandardDeviation": 0.04493116639935328,
+        "standardError": 1.5765680771534183,
+        "confidence95": {
+          "low": 57.68502390211259,
+          "high": 63.865170764553994
+        }
+      },
+      "googleSheetsElapsedMs": {
+        "samples": [8207.7, 9573.8, 11542.7],
+        "min": 8207.7,
+        "median": 9573.8,
+        "p95": 11542.7,
+        "max": 11542.7,
+        "mean": 9774.733333333334,
+        "standardDeviation": 1368.901482535865,
+        "relativeStandardDeviation": 0.14004489287372188,
+        "standardError": 790.3356394361595,
+        "confidence95": {
+          "low": 8225.67548003846,
+          "high": 11323.791186628207
+        }
+      },
+      "biligToGoogleSheetsMeanRatio": 0.006217570880024003,
+      "biligToGoogleSheetsP95Ratio": 0.0055943041922600426,
+      "tenXMeanAndP95": true,
+      "verification": {
+        "bilig": {
+          "sheetCount": 1,
+          "height": 62500,
+          "width": 4,
+          "usedRangeCells": 250000,
+          "terminalAddress": "C62500",
+          "terminalValue": 2125000
+        },
+        "googleSheets": {
+          "sheetCount": 1,
+          "height": 62500,
+          "width": 4,
+          "usedRangeCells": 250000,
+          "terminalAddress": "C62500",
+          "terminalValue": 2125000
+        },
+        "equivalent": true
+      },
+      "passed": true
+    }
+  ]
+}

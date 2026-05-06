@@ -33,6 +33,7 @@
     "collaborationScorecard": "packages/benchmarks/baselines/collaboration-scorecard.json",
     "formulaDominanceSnapshot": "packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json",
     "googleSheetsLiveCalculationScorecard": "packages/benchmarks/baselines/google-sheets-live-calculation-scorecard.json",
+    "googleSheetsLiveLargeWorkbookScorecard": "packages/benchmarks/baselines/google-sheets-live-large-workbook-scorecard.json",
     "hyperFormulaSurfaceSnapshot": "packages/headless/src/__tests__/fixtures/hyperformula-surface.json",
     "microsoftExcelLiveCalculationScorecard": "packages/benchmarks/baselines/microsoft-excel-live-calculation-scorecard.json",
     "microsoftExcelLiveRecalculationScorecard": "packages/benchmarks/baselines/microsoft-excel-live-recalculation-scorecard.json",
@@ -109,6 +110,18 @@
     "googleSheetsLiveCalculationCaseCount": 36,
     "googleSheetsLiveCalculationPassed": true,
     "googleSheetsLiveCalculationSpreadsheetId": "1QCbmmEVkSUyMpo2Y8Kp_JddOGacRgb-QLWO0Q7J7fec",
+    "googleSheetsLiveLargeWorkbookEvidence": "live-google-sheets-native-conversion-via-google-drive-connector",
+    "googleSheetsLiveLargeWorkbookCaseCount": 2,
+    "googleSheetsLiveLargeWorkbookPassed": true,
+    "googleSheetsLiveLargeWorkbookTenXMeanAndP95CaseCount": 2,
+    "googleSheetsLiveLargeWorkbookSpreadsheetIds": [
+      "1P9VrR3kf_uW9k-UbJmdU2hhJAxxzfRWTY0xW25-Wc0o",
+      "13Tsd7_PXsaS_OEWxO3_mrZ9zmJCpoWG2FDBYJqJKKmI",
+      "1uouvWkgpmceVUYZqWHntNP7SQ-kd6XwLW6ecC1UZH4g",
+      "1cMsJGah5QbyKpbE1iJvIljkOueo9gA6oB_ub1JaKn9I",
+      "1NGCNAmkr9fNlwHiB1mmPcFcbZ_W3rNmjEt3wfrcsu5E",
+      "1YKha9oSq9BR3pWigovNGPNGVtlNo9nkXUfOZpeRxDLA"
+    ],
     "microsoftExcelLiveCalculationEvidence": "live-local-microsoft-excel-automation",
     "microsoftExcelLiveCalculationCaseCount": 36,
     "microsoftExcelLiveCalculationPassed": true,
@@ -314,6 +327,8 @@
         "external Microsoft Excel large-workbook evidence: official-docs-comparison-artifact",
         "live Microsoft Excel large-workbook scorecard passes 2/2 required cases on Excel 16.108.2",
         "live Microsoft Excel large-workbook cases with 10x mean+p95 wins: 2/2",
+        "live Google Sheets large-workbook scorecard passes 2/2 required cases via native Google Sheets conversion",
+        "live Google Sheets large-workbook cases with 10x mean+p95 wins: 2/2",
         "external large-workbook comparison dimensions pass: true",
         "headed browser frame p95 contracts pass: true",
         "headedDense100kDiagonalBrowse: frameMs.p95 budget 20ms on 100000 materialized cells via pnpm test:browser:full",
@@ -322,6 +337,7 @@
       "evidenceArtifacts": [
         "packages/benchmarks/baselines/workpaper-vs-hyperformula.json",
         "packages/benchmarks/baselines/large-workbook-slo-scorecard.json",
+        "packages/benchmarks/baselines/google-sheets-live-large-workbook-scorecard.json",
         "packages/benchmarks/baselines/microsoft-excel-live-large-workbook-scorecard.json",
         "packages/benchmarks/baselines/large-workbook-external-sheets-excel-comparison.json",
         "e2e/tests/web-shell-scroll-performance.pw.ts",
@@ -330,11 +346,12 @@
       "checkCommands": [
         "pnpm large-workbook:slo:check",
         "pnpm large-workbook:excel-live:check",
+        "pnpm large-workbook:google-sheets-live:check",
         "CI=1 pnpm bench:contracts",
         "pnpm test:browser:full",
         "pnpm bench:smoke"
       ],
-      "blockers": ["no direct Google Sheets large-workbook live timing artifact exists in the repo"]
+      "blockers": []
     },
     {
       "id": "ui-responsiveness",
