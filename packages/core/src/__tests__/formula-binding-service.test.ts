@@ -1,6 +1,7 @@
 import { Effect } from 'effect'
 import { describe, expect, it, vi } from 'vitest'
 import { ValueTag } from '@bilig/protocol'
+import { compileFormula } from '@bilig/formula'
 import { SpreadsheetEngine } from '../engine.js'
 import { EngineFormulaBindingError } from '../engine/errors.js'
 import type { EngineCellMutationRef } from '../cell-mutations-at.js'
@@ -298,6 +299,27 @@ describe('EngineFormulaBindingService', () => {
     expect(sheet1Owned).toEqual([engine.workbook.getCellIndex('Sheet1', 'B1')!])
     expect(sheet2Owned).toEqual([engine.workbook.getCellIndex('Sheet2', 'C1')!])
     expect(sheet1Referenced).toEqual([engine.workbook.getCellIndex('Sheet2', 'C1')!])
+  })
+
+  it('rebuilds deferred formula owner indexes for fresh direct scalar bindings', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'binding-deferred-sheet-indexes' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 7)
+    engine.setCellValue('Sheet1', 'B1', 0)
+
+    const formulaCellIndex = engine.workbook.getCellIndex('Sheet1', 'B1')
+    expect(formulaCellIndex).toBeDefined()
+
+    const binding = getBindingService(engine)
+    expect(
+      binding.bindPreparedFormulaNow(formulaCellIndex!, 'Sheet1', 'A1+1', compileFormula('A1+1'), undefined, {
+        assumeFreshFormula: true,
+      }),
+    ).toBe(true)
+    expect(readRuntimeDirectScalar(engine, formulaCellIndex!)).toBeDefined()
+
+    expect(binding.collectFormulaCellsOwnedBySheetNow('Sheet1')).toEqual([formulaCellIndex!])
   })
 
   it('clears reverse dependency edges when a formula is removed through the service', async () => {

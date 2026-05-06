@@ -612,6 +612,8 @@ export function createEngineServiceRuntime(args: {
       formulaFamilies.registerFormulaRun(run)
     },
     registerFreshFormulaFamilyRun: (run) => formulaFamilies.registerFreshUniformRun(run),
+    deferFormulaFamilyIndexRebuild: () => binding.deferFormulaFamilyIndexRebuildNow(),
+    deferFormulaInstanceTableRebuild: () => binding.deferFormulaInstanceTableRebuildNow(),
     compileTemplateFormula: (source, row, col) => formulaTemplates.resolveForCell(source, row, col),
     clearTemplateFormulaCache: () => formulaTemplates.clear(),
     removeFormula: (cellIndex) => binding.clearFormulaNow(cellIndex),
@@ -844,7 +846,7 @@ export function createEngineServiceRuntime(args: {
     resetWorkbook: (workbookName) => runEngineEffect(maintenance.resetWorkbook(workbookName)),
     exportTemplateBank: () => formulaTemplates.listTemplates(),
     exportFormulaInstances: () =>
-      formulaInstances.list().flatMap((record) => {
+      binding.exportFormulaInstancesNow().flatMap((record) => {
         const sheetId = args.state.workbook.cellStore.sheetIds[record.cellIndex]
         const position = args.state.workbook.getCellPosition(record.cellIndex)
         const formula = args.state.formulas.get(record.cellIndex)

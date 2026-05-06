@@ -42,7 +42,7 @@ import type {
   FormulaFamilyStructuralSourceTransform,
   FormulaFamilyStructuralSourceTransformEntry,
 } from '../../formula/formula-family-store.js'
-import type { FormulaInstanceTable } from '../../formula/formula-instance-table.js'
+import type { FormulaInstanceSnapshot, FormulaInstanceTable } from '../../formula/formula-instance-table.js'
 import type { FormulaTemplateResolution } from '../../formula/template-bank.js'
 import { mapStructuralAxisInterval } from '../../engine-structural-utils.js'
 import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
@@ -50,6 +50,11 @@ import { retargetFormulaInstance } from '../../formula/structural-retargeting.js
 import { normalizeDefinedName } from '../../workbook-store.js'
 import type { StructuralTransaction } from '../structural-transaction.js'
 import type { RegionGraph } from '../../deps/region-graph.js'
+import {
+  type DeferredFormulaFamilyIndexRun,
+  noteDeferredFormulaFamilyIndexRunMember,
+  registerDeferredFormulaFamilyIndexRun,
+} from './formula-family-index-rebuild.js'
 import {
   type CompiledPlanRecord,
   type EngineRuntimeState,
@@ -145,6 +150,9 @@ export interface EngineFormulaBindingService {
   readonly setFormulaFamilyStructuralSourceTransformNow: (familyId: number, transform: FormulaFamilyStructuralSourceTransform) => void
   readonly getFormulaFamilyStructuralSourceTransformNow: (cellIndex: number) => FormulaFamilyStructuralSourceTransform | undefined
   readonly consumeFormulaFamilyStructuralSourceTransformsNow: () => FormulaFamilyStructuralSourceTransformEntry[]
+  readonly deferFormulaFamilyIndexRebuildNow: () => void
+  readonly deferFormulaInstanceTableRebuildNow: () => void
+  readonly exportFormulaInstancesNow: () => FormulaInstanceSnapshot[]
   readonly collectFormulaCellsOwnedBySheetNow: (sheetName: string) => readonly number[]
   readonly collectFormulaCellsReferencingSheetNow: (sheetName: string) => readonly number[]
   readonly collectFormulaCellsForDefinedNamesNow: (names: readonly string[]) => readonly number[]
@@ -154,6 +162,7 @@ export interface EngineFormulaBindingService {
 
 export interface BindPreparedFormulaOptions {
   readonly deferFamilyRegistration?: boolean
+  readonly deferFormulaInstanceRegistration?: boolean
   readonly assumeFreshFormula?: boolean
 }
 
@@ -1538,6 +1547,10 @@ export function createEngineFormulaBindingService(args: {
   const formulaOwnerSheetCells = new Map<string, Set<number>>()
   const formulaReferencedSheetCells = new Map<string, Set<number>>()
   const formulaFamilyShapeKeyCache = new Map<number, CachedFormulaFamilyShapeKey>()
+  let formulaOwnerSheetCellsDirty = false
+  let formulaFamilyIndexDirty = false
+  let formulaInstanceTableDirty = false
+  let directScalarDependencyEntityScratch = new Uint32Array(4)
 
   const clearFormulaBookkeepingNow = (): void => {
     resolvedCompiledCache.clear()
@@ -1545,7 +1558,13 @@ export function createEngineFormulaBindingService(args: {
     formulaSheetCounts.clear()
     formulaOwnerSheetCells.clear()
     formulaReferencedSheetCells.clear()
+    args.formulaFamilies.clear()
     formulaFamilyShapeKeyCache.clear()
+    formulaOwnerSheetCellsDirty = false
+    formulaFamilyIndexDirty = false
+    args.formulaInstances.clear()
+    formulaInstanceTableDirty = false
+    directScalarDependencyEntityScratch = new Uint32Array(4)
   }
 
   const updateVolatileFormulaIndex = (cellIndex: number, formula: RuntimeFormula | undefined): void => {
@@ -1570,8 +1589,35 @@ export function createEngineFormulaBindingService(args: {
     return [...sheets]
   }
 
-  const trackFormulaSheetIndexes = (cellIndex: number, ownerSheetName: string, compiled: Pick<CompiledFormula, 'deps'>): void => {
-    appendTrackedReverseEdge(formulaOwnerSheetCells, ownerSheetName, cellIndex)
+  const ensureFormulaOwnerSheetIndex = (): void => {
+    if (!formulaOwnerSheetCellsDirty) {
+      return
+    }
+    formulaOwnerSheetCells.clear()
+    args.state.formulas.forEach((_formula, cellIndex) => {
+      const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
+      if (sheetId === undefined) {
+        return
+      }
+      const sheetName = args.state.workbook.getSheetNameById(sheetId)
+      if (sheetName) {
+        appendTrackedReverseEdge(formulaOwnerSheetCells, sheetName, cellIndex)
+      }
+    })
+    formulaOwnerSheetCellsDirty = false
+  }
+
+  const trackFormulaSheetIndexes = (
+    cellIndex: number,
+    ownerSheetName: string,
+    compiled: Pick<CompiledFormula, 'deps'>,
+    options: { readonly deferOwnerSheetIndex?: boolean } = {},
+  ): void => {
+    if (options.deferOwnerSheetIndex === true || formulaOwnerSheetCellsDirty) {
+      formulaOwnerSheetCellsDirty = true
+    } else {
+      appendTrackedReverseEdge(formulaOwnerSheetCells, ownerSheetName, cellIndex)
+    }
     referencedSheetsForCompiled(compiled).forEach((sheetName) => {
       appendTrackedReverseEdge(formulaReferencedSheetCells, sheetName, cellIndex)
     })
@@ -1582,7 +1628,7 @@ export function createEngineFormulaBindingService(args: {
     ownerSheetName: string | undefined,
     compiled: Pick<CompiledFormula, 'deps'> | undefined,
   ): void => {
-    if (ownerSheetName) {
+    if (ownerSheetName && !formulaOwnerSheetCellsDirty) {
       removeTrackedReverseEdge(formulaOwnerSheetCells, ownerSheetName, cellIndex)
     }
     if (!compiled) {
@@ -1591,6 +1637,61 @@ export function createEngineFormulaBindingService(args: {
     referencedSheetsForCompiled(compiled).forEach((sheetName) => {
       removeTrackedReverseEdge(formulaReferencedSheetCells, sheetName, cellIndex)
     })
+  }
+
+  const directScalarDependencyEntityBuffer = (capacity: number): Uint32Array => {
+    if (directScalarDependencyEntityScratch.length < capacity) {
+      let nextLength = directScalarDependencyEntityScratch.length
+      while (nextLength < capacity) {
+        nextLength *= 2
+      }
+      directScalarDependencyEntityScratch = new Uint32Array(nextLength)
+    }
+    return directScalarDependencyEntityScratch
+  }
+
+  const deferFormulaFamilyIndexRebuildNow = (): void => {
+    args.formulaFamilies.clear()
+    formulaFamilyShapeKeyCache.clear()
+    formulaFamilyIndexDirty = true
+  }
+
+  const deferFormulaInstanceTableRebuildNow = (): void => {
+    args.formulaInstances.clear()
+    formulaInstanceTableDirty = true
+  }
+
+  const exportFormulaInstancesNow = (): FormulaInstanceSnapshot[] => {
+    if (!formulaInstanceTableDirty) {
+      return args.formulaInstances.list()
+    }
+    const records: FormulaInstanceSnapshot[] = []
+    args.state.formulas.forEach((formula, cellIndex) => {
+      const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
+      const position = args.state.workbook.getCellPosition(cellIndex)
+      if (sheetId === undefined || !position) {
+        return
+      }
+      const sheetName = args.state.workbook.getSheetNameById(sheetId)
+      if (!sheetName) {
+        return
+      }
+      records.push({
+        cellIndex,
+        sheetName,
+        row: position.row,
+        col: position.col,
+        source: getRuntimeFormulaSource(
+          formula,
+          formulaFamilyIndexDirty ? undefined : args.formulaFamilies.getStructuralSourceTransform(cellIndex),
+        ),
+        ...(formula.templateId !== undefined ? { templateId: formula.templateId } : {}),
+      })
+    })
+    return records.toSorted(
+      (left, right) =>
+        left.sheetName.localeCompare(right.sheetName) || left.row - right.row || left.col - right.col || left.cellIndex - right.cellIndex,
+    )
   }
 
   const normalizeLookupCompileMode = (compiled: ParsedCompiledFormula): ParsedCompiledFormula => {
@@ -2035,6 +2136,7 @@ export function createEngineFormulaBindingService(args: {
         touchedCount += 1
       })
     }
+    ensureFormulaOwnerSheetIndex()
     const ownerCandidates = formulaOwnerSheetCells.get(oldSheetName)
     if (ownerCandidates && ownerCandidates.size > 0) {
       const mergedOwners = formulaOwnerSheetCells.get(newSheetName)
@@ -2052,6 +2154,7 @@ export function createEngineFormulaBindingService(args: {
 
   const rewriteCellFormulasForSheetRenameNow = (oldSheetName: string, newSheetName: string, formulaChangedCount: number): number => {
     const referencedCandidates = formulaReferencedSheetCells.get(oldSheetName)
+    ensureFormulaOwnerSheetIndex()
     const ownerCandidates = formulaOwnerSheetCells.get(oldSheetName)
     const seen: number[] = []
     let seenSet: Set<number> | undefined
@@ -2290,6 +2393,9 @@ export function createEngineFormulaBindingService(args: {
     templateId: number | undefined,
     ownerPosition?: FormulaOwnerPosition,
   ): void => {
+    if (formulaInstanceTableDirty) {
+      return
+    }
     if (ownerPosition) {
       const existing = args.formulaInstances.get(cellIndex)
       if (existing) {
@@ -2349,6 +2455,9 @@ export function createEngineFormulaBindingService(args: {
   }
 
   const registerFormulaFamilyNow = (cellIndex: number, formula: RuntimeFormula, ownerPosition?: FormulaOwnerPosition): void => {
+    if (formulaFamilyIndexDirty) {
+      return
+    }
     const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
     const position = ownerPosition ?? args.state.workbook.getCellPosition(cellIndex)
     if (sheetId === undefined || !position || formula.templateId === undefined) {
@@ -2365,6 +2474,35 @@ export function createEngineFormulaBindingService(args: {
       col: position.col,
       templateId: formula.templateId,
       shapeKey: getFormulaFamilyShapeKeyNow(formula),
+    })
+  }
+
+  const ensureFormulaFamilyIndexNow = (): void => {
+    if (!formulaFamilyIndexDirty) {
+      return
+    }
+    args.formulaFamilies.clear()
+    formulaFamilyShapeKeyCache.clear()
+    formulaFamilyIndexDirty = false
+    const runs = new Map<string, DeferredFormulaFamilyIndexRun>()
+    args.state.formulas.forEach((formula, cellIndex) => {
+      const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
+      const position = args.state.workbook.getCellPosition(cellIndex)
+      const templateId = formula.templateId
+      if (sheetId === undefined || !position || templateId === undefined) {
+        return
+      }
+      noteDeferredFormulaFamilyIndexRunMember(runs, {
+        cellIndex,
+        sheetId,
+        templateId,
+        shapeKey: getFormulaFamilyShapeKeyNow(formula),
+        row: position.row,
+        col: position.col,
+      })
+    })
+    runs.forEach((run) => {
+      registerDeferredFormulaFamilyIndexRun(args.formulaFamilies, run)
     })
   }
 
@@ -2672,7 +2810,7 @@ export function createEngineFormulaBindingService(args: {
       return undefined
     }
     const dependencyIndices = new Uint32Array(Math.min(compiled.symbolicRefs.length, 2))
-    const dependencyEntities = new Uint32Array(compiled.symbolicRefs.length)
+    const dependencyEntities = directScalarDependencyEntityBuffer(compiled.symbolicRefs.length)
     let dependencyIndexCount = 0
     let dependencyEntityCount = 0
     const appendOperand = (operand: RuntimeDirectScalarOperand): boolean => {
@@ -2708,12 +2846,110 @@ export function createEngineFormulaBindingService(args: {
     return {
       dependencyIndices:
         dependencyIndexCount === dependencyIndices.length ? dependencyIndices : dependencyIndices.subarray(0, dependencyIndexCount),
-      dependencyEntities,
+      dependencyEntities:
+        dependencyEntityCount === dependencyEntities.length ? dependencyEntities : dependencyEntities.subarray(0, dependencyEntityCount),
       rangeDependencies: EMPTY_DEPENDENCY_BUFFER,
       symbolicRangeIndices: EMPTY_DEPENDENCY_BUFFER,
       symbolicRangeCount: 0,
       newRangeIndices: EMPTY_DEPENDENCY_BUFFER,
       newRangeCount: 0,
+    }
+  }
+
+  const tryPrepareFreshLocalDirectScalarBindingNow = (
+    ownerSheetId: number | undefined,
+    compiled: ParsedCompiledFormula,
+  ):
+    | {
+        readonly directScalar: RuntimeDirectScalarDescriptor
+        readonly dependencies: MaterializedDependencies
+      }
+    | undefined => {
+    if (
+      ownerSheetId === undefined ||
+      compiled.symbolicRanges.length !== 0 ||
+      compiled.symbolicNames.length !== 0 ||
+      compiled.symbolicTables.length !== 0 ||
+      compiled.symbolicSpills.length !== 0 ||
+      compiled.parsedSymbolicRefs === undefined ||
+      compiled.parsedSymbolicRefs.length !== compiled.symbolicRefs.length ||
+      compiled.parsedSymbolicRefs.some((ref) => ref.sheetName !== undefined || ref.explicitSheet === true)
+    ) {
+      return undefined
+    }
+    const dependencyIndices = new Uint32Array(Math.min(compiled.symbolicRefs.length, 2))
+    const dependencyEntities = directScalarDependencyEntityBuffer(compiled.symbolicRefs.length)
+    let refIndex = 0
+    let dependencyIndexCount = 0
+    let dependencyEntityCount = 0
+    const appendDependency = (cellIndex: number): void => {
+      let seen = false
+      for (let existingIndex = 0; existingIndex < dependencyIndexCount; existingIndex += 1) {
+        if (dependencyIndices[existingIndex] === cellIndex) {
+          seen = true
+          break
+        }
+      }
+      if (!seen) {
+        dependencyIndices[dependencyIndexCount] = cellIndex
+        dependencyIndexCount += 1
+      }
+      dependencyEntities[dependencyEntityCount] = makeCellEntity(cellIndex)
+      dependencyEntityCount += 1
+    }
+    const operandForNode = (node: FormulaNode): RuntimeDirectScalarOperand | undefined => {
+      if (node.kind === 'NumberLiteral') {
+        return { kind: 'literal-number', value: node.value }
+      }
+      if (node.kind !== 'CellRef') {
+        return undefined
+      }
+      const parsed = compiled.parsedSymbolicRefs?.[refIndex]
+      refIndex += 1
+      if (!parsed || parsed.row === undefined || parsed.col === undefined) {
+        return undefined
+      }
+      const dependencyCellIndex = args.ensureCellTrackedByCoords(ownerSheetId, parsed.row, parsed.col)
+      appendDependency(dependencyCellIndex)
+      return { kind: 'cell', cellIndex: dependencyCellIndex }
+    }
+    const unwrapped = unwrapDirectScalarBinaryNode(compiled.optimizedAst)
+    const node = unwrapped.node
+    let directScalar: RuntimeDirectScalarDescriptor | undefined
+    if (node.kind === 'BinaryExpr' && (node.operator === '+' || node.operator === '-' || node.operator === '*' || node.operator === '/')) {
+      const left = operandForNode(node.left)
+      const right = operandForNode(node.right)
+      if (left && right) {
+        directScalar = {
+          kind: 'binary',
+          operator: node.operator,
+          left,
+          right,
+          ...(unwrapped.resultOffset !== undefined ? { resultOffset: unwrapped.resultOffset } : {}),
+        }
+      }
+    } else if (node.kind === 'CallExpr' && node.callee.trim().toUpperCase() === 'ABS' && node.args.length === 1) {
+      const operand = operandForNode(node.args[0]!)
+      if (operand) {
+        directScalar = { kind: 'abs', operand }
+      }
+    }
+    if (!directScalar || refIndex !== compiled.symbolicRefs.length || dependencyEntityCount !== compiled.symbolicRefs.length) {
+      return undefined
+    }
+    return {
+      directScalar,
+      dependencies: {
+        dependencyIndices:
+          dependencyIndexCount === dependencyIndices.length ? dependencyIndices : dependencyIndices.subarray(0, dependencyIndexCount),
+        dependencyEntities:
+          dependencyEntityCount === dependencyEntities.length ? dependencyEntities : dependencyEntities.subarray(0, dependencyEntityCount),
+        rangeDependencies: EMPTY_DEPENDENCY_BUFFER,
+        symbolicRangeIndices: EMPTY_DEPENDENCY_BUFFER,
+        symbolicRangeCount: 0,
+        newRangeIndices: EMPTY_DEPENDENCY_BUFFER,
+        newRangeCount: 0,
+      },
     }
   }
 
@@ -2914,7 +3150,9 @@ export function createEngineFormulaBindingService(args: {
       if (prepared.compiled.mode === FormulaMode.WasmFastPath && prepared.runtimeProgram.length > 0) {
         args.scheduleWasmProgramSync()
       }
-      recordFormulaInstanceNow(cellIndex, source, prepared.templateId)
+      if (options.deferFormulaInstanceRegistration !== true) {
+        recordFormulaInstanceNow(cellIndex, source, prepared.templateId)
+      }
       if (options.deferFamilyRegistration !== true) {
         registerFormulaFamilyNow(cellIndex, existing)
       }
@@ -2960,6 +3198,10 @@ export function createEngineFormulaBindingService(args: {
       return undefined
     }
     const ownerSheetId = args.state.workbook.cellStore.sheetIds[cellIndex] ?? args.state.workbook.getSheet(ownerSheetName)?.id
+    const fastLocalBinding = tryPrepareFreshLocalDirectScalarBindingNow(ownerSheetId, compiled)
+    if (fastLocalBinding) {
+      return fastLocalBinding
+    }
     const directScalar = buildDirectScalarDescriptor({
       compiled,
       ownerSheetName,
@@ -3044,7 +3286,9 @@ export function createEngineFormulaBindingService(args: {
     } else {
       cellStore.flags[cellIndex] = (cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly
     }
-    recordFormulaInstanceNow(cellIndex, source, templateId, physicalOwnerPosition)
+    if (options.deferFormulaInstanceRegistration !== true) {
+      recordFormulaInstanceNow(cellIndex, source, templateId, physicalOwnerPosition)
+    }
     if (options.deferFamilyRegistration !== true) {
       registerFormulaFamilyNow(cellIndex, runtimeFormula, physicalOwnerPosition)
     }
@@ -3052,7 +3296,7 @@ export function createEngineFormulaBindingService(args: {
     for (let index = 0; index < dependencies.dependencyEntities.length; index += 1) {
       appendReverseEdge(dependencies.dependencyEntities[index]!, formulaEntity)
     }
-    trackFormulaSheetIndexes(cellIndex, ownerSheetName, compiled)
+    trackFormulaSheetIndexes(cellIndex, ownerSheetName, compiled, { deferOwnerSheetIndex: true })
   }
 
   const bindFormulaNow = (cellIndex: number, ownerSheetName: string, source: string): boolean => {
@@ -3164,7 +3408,9 @@ export function createEngineFormulaBindingService(args: {
     } else {
       args.state.workbook.cellStore.flags[cellIndex] = (args.state.workbook.cellStore.flags[cellIndex] ?? 0) & ~CellFlags.JsOnly
     }
-    recordFormulaInstanceNow(cellIndex, source, prepared.templateId, physicalOwnerPosition)
+    if (options.deferFormulaInstanceRegistration !== true) {
+      recordFormulaInstanceNow(cellIndex, source, prepared.templateId, physicalOwnerPosition)
+    }
     if (options.deferFamilyRegistration !== true) {
       registerFormulaFamilyNow(cellIndex, runtimeFormula, physicalOwnerPosition)
     }
@@ -3672,27 +3918,39 @@ export function createEngineFormulaBindingService(args: {
     },
     rebindFormulasForSheetNow,
     forEachFormulaCellOwnedBySheetNow(sheetName, fn) {
+      ensureFormulaOwnerSheetIndex()
       formulaOwnerSheetCells.get(sheetName)?.forEach(fn)
     },
     countFormulaSheetMembersNow(sheetId) {
       return formulaSheetCounts.get(sheetId) ?? 0
     },
     countFormulaFamilySheetMembersNow(sheetId) {
+      ensureFormulaFamilyIndexNow()
       return args.formulaFamilies.countSheetMembers(sheetId)
     },
     forEachFormulaFamilyNow(fn) {
+      ensureFormulaFamilyIndexNow()
       args.formulaFamilies.forEachFamily(fn)
     },
     setFormulaFamilyStructuralSourceTransformNow(familyId, transform) {
+      ensureFormulaFamilyIndexNow()
       args.formulaFamilies.setStructuralSourceTransform(familyId, transform)
     },
     getFormulaFamilyStructuralSourceTransformNow(cellIndex) {
+      if (formulaFamilyIndexDirty) {
+        return undefined
+      }
       return args.formulaFamilies.getStructuralSourceTransform(cellIndex)
     },
     consumeFormulaFamilyStructuralSourceTransformsNow() {
+      ensureFormulaFamilyIndexNow()
       return args.formulaFamilies.consumeStructuralSourceTransforms()
     },
+    deferFormulaFamilyIndexRebuildNow,
+    deferFormulaInstanceTableRebuildNow,
+    exportFormulaInstancesNow,
     collectFormulaCellsOwnedBySheetNow(sheetName) {
+      ensureFormulaOwnerSheetIndex()
       return [...(formulaOwnerSheetCells.get(sheetName) ?? [])]
     },
     collectFormulaCellsReferencingSheetNow(sheetName) {
@@ -3711,6 +3969,7 @@ export function createEngineFormulaBindingService(args: {
       )
     },
     getFormulaFamilyStatsNow() {
+      ensureFormulaFamilyIndexNow()
       return args.formulaFamilies.getStats()
     },
   }

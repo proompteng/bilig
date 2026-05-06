@@ -36,6 +36,12 @@ function getFormulaFamilyStore(engine: SpreadsheetEngine): FormulaFamilyStore {
   if (!isFormulaFamilyStore(formulaFamilies)) {
     throw new TypeError('Expected formula family store')
   }
+  const binding = Reflect.get(runtime, 'binding')
+  const getFormulaFamilyStatsNow =
+    typeof binding === 'object' && binding !== null ? Reflect.get(binding, 'getFormulaFamilyStatsNow') : undefined
+  if (typeof getFormulaFamilyStatsNow === 'function') {
+    getFormulaFamilyStatsNow.call(binding)
+  }
   return formulaFamilies
 }
 
@@ -383,7 +389,7 @@ describe('SpreadsheetEngine formula initialization', () => {
     ])
   })
 
-  it('bulk-registers hydrated runtime snapshot formulas into strided family runs', async () => {
+  it('lazily materializes hydrated runtime snapshot formulas into strided family runs', async () => {
     const rowCount = 12
     const source = new SpreadsheetEngine({ workbookName: 'engine-formula-initialize-hydrated-families-source' })
     await source.ready()
@@ -421,6 +427,8 @@ describe('SpreadsheetEngine formula initialization', () => {
     const registerRunSpy = vi.spyOn(restoredStore, 'registerFormulaRun')
     try {
       restored.importSnapshot(snapshot)
+      expect(registerRunSpy).not.toHaveBeenCalled()
+      getFormulaFamilyStore(restored)
 
       const restoredSheetId = restored.workbook.getSheet('Sheet1')!.id
       const stridedOutputRuns = restoredStore
@@ -431,8 +439,6 @@ describe('SpreadsheetEngine formula initialization', () => {
         .toSorted((left, right) => left[0]! - right[0]!)
       expect(restored.getCellValue('Sheet1', 'F12')).toEqual({ tag: ValueTag.Number, value: 48 })
       expect(restored.workbook.getSheet('Sheet1')!.id).toBe(restoredSheetId)
-      expect(registerRunSpy.mock.calls.length).toBeGreaterThan(0)
-      expect(registerRunSpy.mock.calls.length).toBeLessThan(refs.length)
       expect(restoredStore.getStats()).toEqual({ familyCount: 10, runCount: 12, memberCount: rowCount * 4 })
       expect(stridedOutputRuns).toEqual([
         [0, 9],

@@ -303,10 +303,16 @@ export function createEngineFormulaInitializationService(args: {
     source: string,
     compiled: CompiledFormula,
     templateId?: number,
-    options?: { readonly deferFamilyRegistration?: boolean; readonly assumeFreshFormula?: boolean },
+    options?: {
+      readonly deferFamilyRegistration?: boolean
+      readonly deferFormulaInstanceRegistration?: boolean
+      readonly assumeFreshFormula?: boolean
+    },
   ) => boolean
   readonly upsertFormulaFamilyRun: (args: FormulaFamilyRunUpsertArgs) => void
   readonly registerFreshFormulaFamilyRun: (args: FormulaFamilyFreshUniformRunRegistrationArgs) => boolean
+  readonly deferFormulaFamilyIndexRebuild?: () => void
+  readonly deferFormulaInstanceTableRebuild?: () => void
   readonly compileTemplateFormula: (source: string, row: number, col: number) => FormulaTemplateResolution
   readonly clearTemplateFormulaCache: () => void
   readonly removeFormula: (cellIndex: number) => boolean
@@ -956,7 +962,10 @@ export function createEngineFormulaInitializationService(args: {
       ? new Uint32Array(Math.max(refs.length, 1))
       : undefined
     let inlineInitialDirectScalarCellCount = 0
-    const deferredFormulaFamilyRuns = hadExistingFormulas ? undefined : new Map<string, DeferredInitialFormulaFamilyRun>()
+    const shouldDeferFormulaFamilyIndex = !hadExistingFormulas && args.deferFormulaFamilyIndexRebuild !== undefined
+    const shouldDeferFormulaInstanceTable = !hadExistingFormulas && args.deferFormulaInstanceTableRebuild !== undefined
+    const deferredFormulaFamilyRuns =
+      hadExistingFormulas || shouldDeferFormulaFamilyIndex ? undefined : new Map<string, DeferredInitialFormulaFamilyRun>()
     let freshFormulaChangedBufferMaterialized = hadExistingFormulas
 
     const materializeOrderedPreparedCellIndices = (): number[] => {
@@ -1071,7 +1080,8 @@ export function createEngineFormulaInitializationService(args: {
                 prepared.compiled,
                 prepared.templateId,
                 {
-                  deferFamilyRegistration: deferredFormulaFamilyRuns !== undefined,
+                  deferFamilyRegistration: shouldDeferFormulaFamilyIndex || deferredFormulaFamilyRuns !== undefined,
+                  deferFormulaInstanceRegistration: shouldDeferFormulaInstanceTable,
                   assumeFreshFormula: !hadExistingFormulas,
                 },
               )
@@ -1112,7 +1122,14 @@ export function createEngineFormulaInitializationService(args: {
             formulaChangedCount = args.syncDynamicRanges(formulaChangedCount)
             topologyChanged = topologyChanged || formulaChangedCount !== reboundCount
           }
-          deferredFormulaFamilyRuns?.forEach(registerDeferredFormulaFamilyRun)
+          if (shouldDeferFormulaFamilyIndex) {
+            args.deferFormulaFamilyIndexRebuild?.()
+          } else {
+            deferredFormulaFamilyRuns?.forEach(registerDeferredFormulaFamilyRun)
+          }
+          if (shouldDeferFormulaInstanceTable) {
+            args.deferFormulaInstanceTableRebuild?.()
+          }
           inlineInitialDirectScalarWriter?.flush()
         })
       }
@@ -1286,6 +1303,8 @@ export function createEngineFormulaInitializationService(args: {
     args.state.workbook.cellStore.ensureCapacity(args.state.workbook.cellStore.size + reservedNewCells)
     args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.size + reservedNewCells + 1)
     args.resetMaterializedCellScratch(reservedNewCells)
+    const shouldDeferFormulaFamilyIndex = !hadExistingFormulas && args.deferFormulaFamilyIndexRebuild !== undefined
+    const shouldDeferFormulaInstanceTable = !hadExistingFormulas && args.deferFormulaInstanceTableRebuild !== undefined
     const targetCellIndices = hadExistingFormulas
       ? []
       : refs.map((ref) => ref.cellIndex ?? args.ensureCellTrackedByCoords(ref.sheetId, ref.row, ref.col))
@@ -1299,7 +1318,8 @@ export function createEngineFormulaInitializationService(args: {
     }
     let canAssignTopoInBatch = !hadExistingFormulas
     let nextTopoRank = 0
-    const deferredFormulaFamilyRuns = hadExistingFormulas ? undefined : new Map<string, DeferredInitialFormulaFamilyRun>()
+    const deferredFormulaFamilyRuns =
+      hadExistingFormulas || shouldDeferFormulaFamilyIndex ? undefined : new Map<string, DeferredInitialFormulaFamilyRun>()
 
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1)
     try {
@@ -1316,7 +1336,8 @@ export function createEngineFormulaInitializationService(args: {
             const ownerSheetName = resolveSheetName(ref.sheetId)
             topologyChanged =
               args.bindPreparedFormula(cellIndex, ownerSheetName, ref.source, ref.compiled, ref.templateId, {
-                deferFamilyRegistration: deferredFormulaFamilyRuns !== undefined,
+                deferFamilyRegistration: shouldDeferFormulaFamilyIndex || deferredFormulaFamilyRuns !== undefined,
+                deferFormulaInstanceRegistration: shouldDeferFormulaInstanceTable,
                 assumeFreshFormula: !hadExistingFormulas,
               }) || topologyChanged
             noteDeferredFormulaFamilyRunMember(deferredFormulaFamilyRuns, {
@@ -1339,7 +1360,14 @@ export function createEngineFormulaInitializationService(args: {
               pendingFormulaCells[cellIndex] = 0
             }
           }
-          deferredFormulaFamilyRuns?.forEach(registerDeferredFormulaFamilyRun)
+          if (shouldDeferFormulaFamilyIndex) {
+            args.deferFormulaFamilyIndexRebuild?.()
+          } else {
+            deferredFormulaFamilyRuns?.forEach(registerDeferredFormulaFamilyRun)
+          }
+          if (shouldDeferFormulaInstanceTable) {
+            args.deferFormulaInstanceTableRebuild?.()
+          }
           valueWriter.flush()
         })
       }
