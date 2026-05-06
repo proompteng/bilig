@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ValueTag } from '@bilig/protocol'
 import { SpreadsheetEngine } from '../engine.js'
-import { loadLiteralSheetIntoEmptySheet } from '../literal-sheet-loader.js'
+import { loadDenseLiteralSheetIntoEmptySheet, loadLiteralSheetIntoEmptySheet } from '../literal-sheet-loader.js'
 
 describe('loadLiteralSheetIntoEmptySheet', () => {
   it('rejects unknown sheet ids before allocating cells', () => {
@@ -88,5 +88,21 @@ describe('loadLiteralSheetIntoEmptySheet', () => {
     })
     expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Empty })
     expect(engine.getCellValue('Sheet1', 'C2')).toEqual({ tag: ValueTag.Boolean, value: false })
+  })
+
+  it('hydrates fully dense literal sheets through a dedicated dense loader', () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'literal-dense-load' })
+    engine.workbook.createSheet('Sheet1')
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+
+    const loaded = loadDenseLiteralSheetIntoEmptySheet(engine.workbook, engine.strings, sheetId, [
+      [1, 2, 3],
+      [4, 5, 6],
+    ])
+
+    expect(loaded).toBe(6)
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Number, value: 1 })
+    expect(engine.getCellValue('Sheet1', 'C2')).toEqual({ tag: ValueTag.Number, value: 6 })
+    expect(Array.from(engine.workbook.getSheet('Sheet1')!.columnVersions.slice(0, 3))).toEqual([1, 1, 1])
   })
 })

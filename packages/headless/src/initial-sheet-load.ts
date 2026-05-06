@@ -1,5 +1,6 @@
 import {
   CellFlags,
+  loadDenseLiteralSheetIntoEmptySheet,
   loadLiteralSheetIntoEmptySheet,
   makeLogicalCellKey,
   type EngineFormulaSourceRef,
@@ -20,7 +21,15 @@ export function loadInitialLiteralSheet(
   content: WorkPaperSheet,
   inspection?: InitialSheetMaterializationInspection,
 ): void {
+  if (inspection && isDenseInitialLiteralSheet(content, inspection)) {
+    loadDenseLiteralSheetIntoEmptySheet(engine.workbook, engine.strings, sheetId, content, inspection)
+    return
+  }
   loadLiteralSheetIntoEmptySheet(engine.workbook, engine.strings, sheetId, content, undefined, inspection)
+}
+
+function isDenseInitialLiteralSheet(content: WorkPaperSheet, inspection: InitialSheetMaterializationInspection): boolean {
+  return inspection.materializedCellCount === content.length * inspection.maxColumnCount
 }
 
 export function tryLoadInitialLiteralSheet(engine: SpreadsheetEngine, sheetId: number, content: WorkPaperSheet): boolean {

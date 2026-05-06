@@ -124,6 +124,70 @@ export function loadLiteralSheetIntoEmptySheet(
   return literalCount
 }
 
+export function loadDenseLiteralSheetIntoEmptySheet(
+  workbook: WorkbookStore,
+  strings: StringPool,
+  sheetId: number,
+  content: readonly (readonly LiteralInput[])[],
+  inspection?: LiteralSheetLoadInspection,
+): number {
+  const sheet = workbook.getSheetById(sheetId)
+  if (!sheet) {
+    throw new Error(`Unknown sheet id: ${sheetId}`)
+  }
+
+  let potentialCellCount = inspection?.materializedCellCount ?? 0
+  let maxColumnCount = inspection?.maxColumnCount ?? 0
+  if (!inspection) {
+    for (let rowIndex = 0; rowIndex < content.length; rowIndex += 1) {
+      const row = content[rowIndex]
+      maxColumnCount = Math.max(maxColumnCount, row?.length ?? 0)
+      potentialCellCount += row?.length ?? 0
+    }
+  }
+  if (potentialCellCount === 0) {
+    return 0
+  }
+
+  const cellStore = workbook.cellStore
+  cellStore.ensureCapacity(cellStore.size + potentialCellCount)
+  const writtenColumns = new Uint8Array(maxColumnCount)
+  const rowIds: string[] = []
+  const colIds: string[] = []
+  const ensureRowId = workbook.createLogicalAxisIdEnsurer(sheetId, 'row')
+  const ensureColumnId = workbook.createLogicalAxisIdEnsurer(sheetId, 'column')
+  const attachFreshCell = createFreshLiteralCellAttacher(workbook, sheet)
+  let writtenColumnCount = 0
+  const previousOnSetValue = cellStore.onSetValue
+  cellStore.onSetValue = null
+  let literalCount = 0
+  try {
+    for (let rowIndex = 0; rowIndex < content.length; rowIndex += 1) {
+      const row = content[rowIndex]!
+      const rowId = (rowIds[rowIndex] ??= ensureRowId(rowIndex))
+      for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+        const raw = row[colIndex]!
+        const cellIndex = cellStore.allocateReserved(sheetId, rowIndex, colIndex)
+        literalCount += 1
+        if (writtenColumns[colIndex] === 0) {
+          writtenColumns[colIndex] = 1
+          writtenColumnCount += 1
+        }
+        const colId = (colIds[colIndex] ??= ensureColumnId(colIndex))
+        attachFreshCell(rowIndex, colIndex, cellIndex, rowId, colId)
+        writeLiteralCell(cellStore, strings, cellIndex, raw)
+      }
+    }
+    if (writtenColumnCount > 0) {
+      workbook.notifyColumnsWritten(sheetId, materializeWrittenColumns(writtenColumns, writtenColumnCount))
+    }
+  } finally {
+    cellStore.onSetValue = previousOnSetValue
+  }
+
+  return literalCount
+}
+
 function createFreshLiteralCellAttacher(workbook: WorkbookStore, sheet: SheetRecord): FreshLiteralCellAttacher {
   const logicalCandidate: unknown = sheet.logical
   const logical = isFreshLiteralLogicalSheetInternals(logicalCandidate) ? logicalCandidate : undefined
