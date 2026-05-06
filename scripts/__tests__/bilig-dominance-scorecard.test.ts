@@ -25,6 +25,9 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.summary.externalMicrosoftExcelEvidence).toBe('not-captured-in-repo')
     expect(scorecard.summary.formulaOfficeListedBreadthPercent).toBe(90.7)
     expect(scorecard.summary.formulaTrackedBreadthPercent).toBe(90.5)
+    expect(scorecard.summary.microsoftExcelLiveCalculationPassed).toBe(true)
+    expect(scorecard.summary.microsoftExcelLiveCalculationCaseCount).toBe(2)
+    expect(scorecard.summary.microsoftExcelLiveCalculationEvidence).toBe('live-local-microsoft-excel-automation')
     expect(scorecard.summary.importExportFidelityPassed).toBe(true)
     expect(scorecard.summary.largeWorkbookSloRowsCovered).toEqual([100_000, 250_000])
     expect(scorecard.summary.largeWorkbookSloPassed).toBe(true)
@@ -36,12 +39,27 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.sourceArtifacts.auditabilityScorecard).toBe('packages/benchmarks/baselines/auditability-scorecard.json')
     expect(scorecard.sourceArtifacts.automationScorecard).toBe('packages/benchmarks/baselines/automation-scorecard.json')
     expect(scorecard.sourceArtifacts.collaborationScorecard).toBe('packages/benchmarks/baselines/collaboration-scorecard.json')
+    expect(scorecard.sourceArtifacts.microsoftExcelLiveCalculationScorecard).toBe(
+      'packages/benchmarks/baselines/microsoft-excel-live-calculation-scorecard.json',
+    )
     expect(scorecard.sourceArtifacts.reliabilityScorecard).toBe('packages/benchmarks/baselines/reliability-scorecard.json')
     expect(scorecard.sourceArtifacts.importExportFidelityScorecard).toBe(
       'packages/benchmarks/baselines/import-export-fidelity-scorecard.json',
     )
     expect(scorecard.sourceArtifacts.largeWorkbookSloScorecard).toBe('packages/benchmarks/baselines/large-workbook-slo-scorecard.json')
     expect(scorecard.sourceArtifacts.securityPostureScorecard).toBe('packages/benchmarks/baselines/security-posture-scorecard.json')
+    expect(scorecard.categories.find((category) => category.id === 'calculation-correctness')).toMatchObject({
+      status: 'partial-repo-evidence',
+      evidenceArtifacts: expect.arrayContaining([
+        'packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json',
+        'packages/benchmarks/baselines/microsoft-excel-live-calculation-scorecard.json',
+      ]),
+      blockers: [
+        '2 Office-listed functions are still missing from the runtime inventory',
+        'no generated scorecard currently compares committed semantics directly against live Google Sheets',
+        'live Microsoft Excel calculation scorecard covers representative required cases, not all committed formula semantics',
+      ],
+    })
     expect(scorecard.categories.find((category) => category.id === 'import-export-compatibility')).toMatchObject({
       status: 'partial-repo-evidence',
       evidenceArtifacts: expect.arrayContaining([
@@ -141,7 +159,10 @@ describe('bilig dominance scorecard', () => {
 
     expect(calculation?.blockers).not.toContain('0 Office-listed functions are still missing from the runtime inventory')
     expect(calculation?.blockers).toContain(
-      'no generated scorecard currently compares all committed semantics directly against live Google Sheets and Microsoft Excel',
+      'no generated scorecard currently compares committed semantics directly against live Google Sheets',
+    )
+    expect(calculation?.blockers).toContain(
+      'live Microsoft Excel calculation scorecard covers representative required cases, not all committed formula semantics',
     )
   })
 
@@ -164,6 +185,7 @@ describe('bilig dominance scorecard', () => {
     const runCi = readFileSync(resolve(repoRoot, 'scripts/run-ci.ts'), 'utf8')
 
     expect(packageJson).toContain('"dominance:check": "bun scripts/gen-bilig-dominance-scorecard.ts --check"')
+    expect(packageJson).toContain('"calculation:excel-live:check": "bun scripts/gen-microsoft-excel-live-calculation-scorecard.ts --check"')
     expect(packageJson).toContain('"auditability:generate": "bun scripts/gen-auditability-scorecard.ts"')
     expect(packageJson).toContain('"auditability:check": "bun scripts/gen-auditability-scorecard.ts --check"')
     expect(packageJson).toContain('"reliability:generate": "bun scripts/gen-reliability-scorecard.ts"')
@@ -176,6 +198,7 @@ describe('bilig dominance scorecard', () => {
     expect(packageJson).toContain('"large-workbook:slo:check": "bun scripts/gen-large-workbook-slo-scorecard.ts --check"')
     expect(packageJson).toContain('"security:posture:check": "bun scripts/gen-security-posture-scorecard.ts --check"')
     expect(runCi).toContain("pnpm('bilig dominance scorecard check', 'dominance:check')")
+    expect(runCi).toContain("pnpm('Microsoft Excel live calculation scorecard check', 'calculation:excel-live:check')")
     expect(runCi).toContain("pnpm('auditability scorecard check', 'auditability:check')")
     expect(runCi).toContain("pnpm('reliability scorecard check', 'reliability:check')")
     expect(runCi).toContain("pnpm('collaboration scorecard check', 'collaboration:check')")
@@ -220,6 +243,7 @@ function buildFixtureInput(): BuildScorecardInput {
   return {
     competitiveArtifactPath: 'packages/benchmarks/baselines/workpaper-vs-hyperformula.json',
     formulaSnapshotPath: 'packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json',
+    microsoftExcelLiveCalculationScorecardPath: 'packages/benchmarks/baselines/microsoft-excel-live-calculation-scorecard.json',
     auditabilityScorecardPath: 'packages/benchmarks/baselines/auditability-scorecard.json',
     automationScorecardPath: 'packages/benchmarks/baselines/automation-scorecard.json',
     collaborationScorecardPath: 'packages/benchmarks/baselines/collaboration-scorecard.json',
@@ -262,6 +286,54 @@ function buildFixtureInput(): BuildScorecardInput {
         instanceMethods: ['getCellValue', 'setCellContents'],
       },
       configKeys: ['licenseKey', 'useColumnIndex'],
+    },
+    microsoftExcelLiveCalculationScorecard: {
+      schemaVersion: 1,
+      suite: 'microsoft-excel-live-calculation-correctness',
+      generatedAt: '2026-05-06T09:00:00.000Z',
+      host: {
+        arch: 'arm64',
+        platform: 'darwin',
+      },
+      source: {
+        artifactGenerator: 'scripts/gen-microsoft-excel-live-calculation-scorecard.ts',
+        implementationPackage: 'packages/headless',
+        evidenceKind: 'live-local-microsoft-excel-automation',
+        appleScriptTransport: 'osascript',
+      },
+      microsoftExcel: {
+        appPath: '/Applications/Microsoft Excel.app',
+        version: '16.test',
+      },
+      summary: {
+        allRequiredCasesPassed: true,
+        requiredCaseCount: 2,
+        matchingCaseCount: 2,
+        coveredFeatures: ['excelLive.arithmeticPrecedence', 'excelLive.aggregateSumRange'],
+        googleSheetsEvidence: 'not-covered-by-this-artifact',
+      },
+      cases: [
+        {
+          id: 'arithmetic-precedence',
+          formula: '=A2+B2*2',
+          formulaCell: 'D2',
+          coveredFeature: 'excelLive.arithmeticPrecedence',
+          biligValue: 24,
+          microsoftExcelRawValue: '24.0',
+          microsoftExcelValue: 24,
+          passed: true,
+        },
+        {
+          id: 'aggregate-sum-range',
+          formula: '=SUM(A3:C3)',
+          formulaCell: 'D3',
+          coveredFeature: 'excelLive.aggregateSumRange',
+          biligValue: 6,
+          microsoftExcelRawValue: '6.0',
+          microsoftExcelValue: 6,
+          passed: true,
+        },
+      ],
     },
     importExportFidelityScorecard: {
       schemaVersion: 1,

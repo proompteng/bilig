@@ -23,6 +23,8 @@
     "formula-inventory:check": "bun scripts/gen-formula-inventory.ts --check",
     "formula:dominance:generate": "bun scripts/gen-formula-dominance-snapshot.ts",
     "formula:dominance:check": "bun scripts/gen-formula-dominance-snapshot.ts --check",
+    "calculation:excel-live:generate": "bun scripts/gen-microsoft-excel-live-calculation-scorecard.ts",
+    "calculation:excel-live:check": "bun scripts/gen-microsoft-excel-live-calculation-scorecard.ts --check",
     "auditability:generate": "bun scripts/gen-auditability-scorecard.ts",
     "auditability:check": "bun scripts/gen-auditability-scorecard.ts --check",
     "reliability:generate": "bun scripts/gen-reliability-scorecard.ts",

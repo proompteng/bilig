@@ -33,6 +33,7 @@
     "collaborationScorecard": "packages/benchmarks/baselines/collaboration-scorecard.json",
     "formulaDominanceSnapshot": "packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json",
     "hyperFormulaSurfaceSnapshot": "packages/headless/src/__tests__/fixtures/hyperformula-surface.json",
+    "microsoftExcelLiveCalculationScorecard": "packages/benchmarks/baselines/microsoft-excel-live-calculation-scorecard.json",
     "importExportFidelityScorecard": "packages/benchmarks/baselines/import-export-fidelity-scorecard.json",
     "largeWorkbookSloScorecard": "packages/benchmarks/baselines/large-workbook-slo-scorecard.json",
     "reliabilityScorecard": "packages/benchmarks/baselines/reliability-scorecard.json",
@@ -100,6 +101,10 @@
     "externalGoogleSheetsEvidence": "not-captured-in-repo",
     "externalMicrosoftExcelEvidence": "not-captured-in-repo",
     "formulaCanonicalProductionPercent": 100,
+    "microsoftExcelLiveCalculationEvidence": "live-local-microsoft-excel-automation",
+    "microsoftExcelLiveCalculationCaseCount": 16,
+    "microsoftExcelLiveCalculationPassed": true,
+    "microsoftExcelLiveCalculationVersion": "16.108.2",
     "formulaOfficeListedBreadthPercent": 100,
     "formulaTrackedBreadthPercent": 100,
     "importExportCoveredFeatures": [
@@ -197,16 +202,20 @@
         "canonical formula closure is 300/300 (100%)",
         "Office-listed formula breadth is 508/508 (100%)",
         "tracked formula breadth is 525/525 (100%)",
-        "strategic canonical rows are production-routed; open canonical rows: 0"
+        "strategic canonical rows are production-routed; open canonical rows: 0",
+        "live Microsoft Excel calculation scorecard passes 16/16 required cases on Excel 16.108.2",
+        "live Microsoft Excel calculation features: excelLive.arithmeticPrecedence, excelLive.aggregateSumRange, excelLive.conditionalIfComparison, excelLive.numericRounding, excelLive.aggregateCountRange, excelLive.textConcat, excelLive.textJoinIgnoreEmptyRange, excelLive.lookupXlookupExact, excelLive.lookupMatchExact, excelLive.lookupIndexRange, excelLive.booleanAnd, excelLive.booleanOr, excelLive.dateSerial, excelLive.dateYearFromSerial, excelLive.conditionalSumifRange, excelLive.mathAbsSqrt"
       ],
       "evidenceArtifacts": [
         "packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json",
+        "packages/benchmarks/baselines/microsoft-excel-live-calculation-scorecard.json",
         "docs/excel-parity-program.md",
         "docs/formula-oracle-capture.md"
       ],
-      "checkCommands": ["pnpm formula:dominance:check", "pnpm test:correctness:formula"],
+      "checkCommands": ["pnpm formula:dominance:check", "pnpm calculation:excel-live:check", "pnpm test:correctness:formula"],
       "blockers": [
-        "no generated scorecard currently compares all committed semantics directly against live Google Sheets and Microsoft Excel"
+        "no generated scorecard currently compares committed semantics directly against live Google Sheets",
+        "live Microsoft Excel calculation scorecard covers representative required cases, not all committed formula semantics"
       ]
     },
     {

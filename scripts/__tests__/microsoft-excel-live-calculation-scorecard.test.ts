@@ -1,0 +1,105 @@
+import { describe, expect, it } from 'vitest'
+
+import {
+  buildMicrosoftExcelLiveCalculationScorecard,
+  evaluateBiligCases,
+  validateMicrosoftExcelLiveCalculationScorecard,
+  type CalculationScalarValue,
+} from '../gen-microsoft-excel-live-calculation-scorecard.ts'
+
+describe('Microsoft Excel live calculation scorecard', () => {
+  it('builds a required-case scorecard from Bilig and live-Excel-shaped values', () => {
+    const biligValues = evaluateBiligCases()
+    const scorecard = buildMicrosoftExcelLiveCalculationScorecard('2026-05-06T09:00:00.000Z', {
+      excelVersion: '16.test',
+      rawValuesByCaseId: new Map([...biligValues].map(([caseId, value]) => [caseId, toExcelRawValue(value)])),
+    })
+
+    expect(scorecard).toMatchObject({
+      schemaVersion: 1,
+      suite: 'microsoft-excel-live-calculation-correctness',
+      generatedAt: '2026-05-06T09:00:00.000Z',
+      source: {
+        artifactGenerator: 'scripts/gen-microsoft-excel-live-calculation-scorecard.ts',
+        evidenceKind: 'live-local-microsoft-excel-automation',
+        appleScriptTransport: 'osascript',
+      },
+      microsoftExcel: {
+        appPath: '/Applications/Microsoft Excel.app',
+        version: '16.test',
+      },
+      summary: {
+        allRequiredCasesPassed: true,
+        requiredCaseCount: 16,
+        matchingCaseCount: 16,
+        googleSheetsEvidence: 'not-covered-by-this-artifact',
+      },
+    })
+    expect(scorecard.summary.coveredFeatures).toEqual([
+      'excelLive.arithmeticPrecedence',
+      'excelLive.aggregateSumRange',
+      'excelLive.conditionalIfComparison',
+      'excelLive.numericRounding',
+      'excelLive.aggregateCountRange',
+      'excelLive.textConcat',
+      'excelLive.textJoinIgnoreEmptyRange',
+      'excelLive.lookupXlookupExact',
+      'excelLive.lookupMatchExact',
+      'excelLive.lookupIndexRange',
+      'excelLive.booleanAnd',
+      'excelLive.booleanOr',
+      'excelLive.dateSerial',
+      'excelLive.dateYearFromSerial',
+      'excelLive.conditionalSumifRange',
+      'excelLive.mathAbsSqrt',
+    ])
+    expect(scorecard.cases.map((entry) => entry.id)).toEqual([
+      'arithmetic-precedence',
+      'aggregate-sum-range',
+      'conditional-if-comparison',
+      'numeric-rounding',
+      'aggregate-count-range',
+      'text-concat',
+      'textjoin-ignore-empty-range',
+      'lookup-xlookup-exact',
+      'lookup-match-exact',
+      'lookup-index-range',
+      'boolean-and',
+      'boolean-or',
+      'date-serial',
+      'date-year-from-serial',
+      'conditional-sumif-range',
+      'math-abs-sqrt',
+    ])
+    expect(scorecard.cases.every((entry) => entry.passed)).toBe(true)
+    validateMicrosoftExcelLiveCalculationScorecard(scorecard)
+  })
+
+  it('rejects stale artifacts missing required cases', () => {
+    const biligValues = evaluateBiligCases()
+    const scorecard = buildMicrosoftExcelLiveCalculationScorecard('2026-05-06T09:00:00.000Z', {
+      excelVersion: '16.test',
+      rawValuesByCaseId: new Map([...biligValues].map(([caseId, value]) => [caseId, toExcelRawValue(value)])),
+    })
+
+    expect(() =>
+      validateMicrosoftExcelLiveCalculationScorecard({
+        ...scorecard,
+        cases: scorecard.cases.filter((entry) => entry.id !== 'lookup-xlookup-exact'),
+      }),
+    ).toThrow('Microsoft Excel live calculation scorecard required cases are stale')
+  })
+})
+
+function toExcelRawValue(value: CalculationScalarValue): string {
+  if (value === null) {
+    return ''
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false'
+  }
+  if (typeof value === 'number' || typeof value === 'string') {
+    return String(value)
+  }
+  return value.error
+}

@@ -1,0 +1,205 @@
+{
+  "schemaVersion": 1,
+  "suite": "microsoft-excel-live-calculation-correctness",
+  "generatedAt": "2026-05-06T15:27:45.591Z",
+  "host": {
+    "arch": "arm64",
+    "platform": "darwin"
+  },
+  "source": {
+    "artifactGenerator": "scripts/gen-microsoft-excel-live-calculation-scorecard.ts",
+    "implementationPackage": "packages/headless",
+    "evidenceKind": "live-local-microsoft-excel-automation",
+    "appleScriptTransport": "osascript"
+  },
+  "microsoftExcel": {
+    "appPath": "/Applications/Microsoft Excel.app",
+    "version": "16.108.2"
+  },
+  "summary": {
+    "allRequiredCasesPassed": true,
+    "requiredCaseCount": 16,
+    "matchingCaseCount": 16,
+    "coveredFeatures": [
+      "excelLive.arithmeticPrecedence",
+      "excelLive.aggregateSumRange",
+      "excelLive.conditionalIfComparison",
+      "excelLive.numericRounding",
+      "excelLive.aggregateCountRange",
+      "excelLive.textConcat",
+      "excelLive.textJoinIgnoreEmptyRange",
+      "excelLive.lookupXlookupExact",
+      "excelLive.lookupMatchExact",
+      "excelLive.lookupIndexRange",
+      "excelLive.booleanAnd",
+      "excelLive.booleanOr",
+      "excelLive.dateSerial",
+      "excelLive.dateYearFromSerial",
+      "excelLive.conditionalSumifRange",
+      "excelLive.mathAbsSqrt"
+    ],
+    "googleSheetsEvidence": "not-covered-by-this-artifact"
+  },
+  "cases": [
+    {
+      "id": "arithmetic-precedence",
+      "formula": "=A2+B2*2",
+      "formulaCell": "D2",
+      "coveredFeature": "excelLive.arithmeticPrecedence",
+      "biligValue": 24,
+      "microsoftExcelRawValue": "24.0",
+      "microsoftExcelValue": 24,
+      "passed": true
+    },
+    {
+      "id": "aggregate-sum-range",
+      "formula": "=SUM(A3:C3)",
+      "formulaCell": "D3",
+      "coveredFeature": "excelLive.aggregateSumRange",
+      "biligValue": 6,
+      "microsoftExcelRawValue": "6.0",
+      "microsoftExcelValue": 6,
+      "passed": true
+    },
+    {
+      "id": "conditional-if-comparison",
+      "formula": "=IF(A4>B4,\"over\",\"under\")",
+      "formulaCell": "D4",
+      "coveredFeature": "excelLive.conditionalIfComparison",
+      "biligValue": "over",
+      "microsoftExcelRawValue": "over",
+      "microsoftExcelValue": "over",
+      "passed": true
+    },
+    {
+      "id": "numeric-rounding",
+      "formula": "=ROUND(A5/B5,2)",
+      "formulaCell": "D5",
+      "coveredFeature": "excelLive.numericRounding",
+      "biligValue": 3.33,
+      "microsoftExcelRawValue": "3.33",
+      "microsoftExcelValue": 3.33,
+      "passed": true
+    },
+    {
+      "id": "aggregate-count-range",
+      "formula": "=COUNT(A6:C6)",
+      "formulaCell": "D6",
+      "coveredFeature": "excelLive.aggregateCountRange",
+      "biligValue": 2,
+      "microsoftExcelRawValue": "2.0",
+      "microsoftExcelValue": 2,
+      "passed": true
+    },
+    {
+      "id": "text-concat",
+      "formula": "=CONCAT(A7,B7)",
+      "formulaCell": "D7",
+      "coveredFeature": "excelLive.textConcat",
+      "biligValue": "Bilig",
+      "microsoftExcelRawValue": "Bilig",
+      "microsoftExcelValue": "Bilig",
+      "passed": true
+    },
+    {
+      "id": "textjoin-ignore-empty-range",
+      "formula": "=TEXTJOIN(\"-\",TRUE,A8:C8)",
+      "formulaCell": "D8",
+      "coveredFeature": "excelLive.textJoinIgnoreEmptyRange",
+      "biligValue": "a-c",
+      "microsoftExcelRawValue": "a-c",
+      "microsoftExcelValue": "a-c",
+      "passed": true
+    },
+    {
+      "id": "lookup-xlookup-exact",
+      "formula": "=XLOOKUP(\"b\",$A$20:$A$22,$B$20:$B$22)",
+      "formulaCell": "D9",
+      "coveredFeature": "excelLive.lookupXlookupExact",
+      "biligValue": 20,
+      "microsoftExcelRawValue": "20.0",
+      "microsoftExcelValue": 20,
+      "passed": true
+    },
+    {
+      "id": "lookup-match-exact",
+      "formula": "=MATCH(\"b\",$A$20:$A$22,0)",
+      "formulaCell": "D10",
+      "coveredFeature": "excelLive.lookupMatchExact",
+      "biligValue": 2,
+      "microsoftExcelRawValue": "2.0",
+      "microsoftExcelValue": 2,
+      "passed": true
+    },
+    {
+      "id": "lookup-index-range",
+      "formula": "=INDEX($B$20:$B$22,2,1)",
+      "formulaCell": "D11",
+      "coveredFeature": "excelLive.lookupIndexRange",
+      "biligValue": 20,
+      "microsoftExcelRawValue": "20.0",
+      "microsoftExcelValue": 20,
+      "passed": true
+    },
+    {
+      "id": "boolean-and",
+      "formula": "=AND(TRUE,A2>0)",
+      "formulaCell": "D12",
+      "coveredFeature": "excelLive.booleanAnd",
+      "biligValue": true,
+      "microsoftExcelRawValue": "true",
+      "microsoftExcelValue": true,
+      "passed": true
+    },
+    {
+      "id": "boolean-or",
+      "formula": "=OR(FALSE,A2=10)",
+      "formulaCell": "D13",
+      "coveredFeature": "excelLive.booleanOr",
+      "biligValue": true,
+      "microsoftExcelRawValue": "true",
+      "microsoftExcelValue": true,
+      "passed": true
+    },
+    {
+      "id": "date-serial",
+      "formula": "=N(DATE(2026,5,6))",
+      "formulaCell": "D14",
+      "coveredFeature": "excelLive.dateSerial",
+      "biligValue": 46148,
+      "microsoftExcelRawValue": "4.6148E+4",
+      "microsoftExcelValue": 46148,
+      "passed": true
+    },
+    {
+      "id": "date-year-from-serial",
+      "formula": "=YEAR(D14)",
+      "formulaCell": "D15",
+      "coveredFeature": "excelLive.dateYearFromSerial",
+      "biligValue": 2026,
+      "microsoftExcelRawValue": "2026.0",
+      "microsoftExcelValue": 2026,
+      "passed": true
+    },
+    {
+      "id": "conditional-sumif-range",
+      "formula": "=SUMIF($A$20:$A$22,\"b\",$B$20:$B$22)",
+      "formulaCell": "D16",
+      "coveredFeature": "excelLive.conditionalSumifRange",
+      "biligValue": 20,
+      "microsoftExcelRawValue": "20.0",
+      "microsoftExcelValue": 20,
+      "passed": true
+    },
+    {
+      "id": "math-abs-sqrt",
+      "formula": "=ABS(A18)+SQRT(16)",
+      "formulaCell": "D18",
+      "coveredFeature": "excelLive.mathAbsSqrt",
+      "biligValue": 13,
+      "microsoftExcelRawValue": "13.0",
+      "microsoftExcelValue": 13,
+      "passed": true
+    }
+  ]
+}

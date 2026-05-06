@@ -10,6 +10,10 @@ import { parseAutomationScorecard, type AutomationScorecard } from './gen-automa
 import { parseCollaborationScorecard, type CollaborationScorecard } from './gen-collaboration-scorecard.ts'
 import { parseImportExportFidelityScorecard, type ImportExportFidelityScorecard } from './gen-import-export-fidelity-scorecard.ts'
 import {
+  parseMicrosoftExcelLiveCalculationScorecard,
+  type MicrosoftExcelLiveCalculationScorecard,
+} from './gen-microsoft-excel-live-calculation-scorecard.ts'
+import {
   parseLargeWorkbookSloScorecard,
   type HeadedBrowserFrameP95Contract,
   type LargeWorkbookSloMeasurement,
@@ -131,6 +135,7 @@ export interface BiligDominanceScorecard {
     collaborationScorecard: string
     formulaDominanceSnapshot: string
     hyperFormulaSurfaceSnapshot: string
+    microsoftExcelLiveCalculationScorecard: string
     importExportFidelityScorecard: string
     largeWorkbookSloScorecard: string
     reliabilityScorecard: string
@@ -157,6 +162,10 @@ export interface BiligDominanceScorecard {
     externalGoogleSheetsEvidence: 'not-captured-in-repo'
     externalMicrosoftExcelEvidence: 'not-captured-in-repo'
     formulaCanonicalProductionPercent: number
+    microsoftExcelLiveCalculationEvidence: 'live-local-microsoft-excel-automation'
+    microsoftExcelLiveCalculationCaseCount: number
+    microsoftExcelLiveCalculationPassed: boolean
+    microsoftExcelLiveCalculationVersion: string
     formulaOfficeListedBreadthPercent: number
     formulaTrackedBreadthPercent: number
     importExportCoveredFeatures: string[]
@@ -203,6 +212,8 @@ export interface BuildScorecardInput {
   competitiveArtifactPath: string
   formulaSnapshot: FormulaDominanceSnapshot
   formulaSnapshotPath: string
+  microsoftExcelLiveCalculationScorecard: MicrosoftExcelLiveCalculationScorecard
+  microsoftExcelLiveCalculationScorecardPath: string
   importExportFidelityScorecard: ImportExportFidelityScorecard
   importExportFidelityScorecardPath: string
   largeWorkbookSloScorecard: LargeWorkbookSloScorecard
@@ -223,6 +234,13 @@ const collaborationScorecardPath = join(rootDir, 'packages', 'benchmarks', 'base
 const outputPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'bilig-dominance-scorecard.json')
 const competitiveArtifactPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'workpaper-vs-hyperformula.json')
 const formulaSnapshotPath = join(rootDir, 'packages', 'formula', 'src', '__tests__', 'fixtures', 'formula-dominance-snapshot.json')
+const microsoftExcelLiveCalculationScorecardPath = join(
+  rootDir,
+  'packages',
+  'benchmarks',
+  'baselines',
+  'microsoft-excel-live-calculation-scorecard.json',
+)
 const importExportFidelityScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'import-export-fidelity-scorecard.json')
 const largeWorkbookSloScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'large-workbook-slo-scorecard.json')
 const reliabilityScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'reliability-scorecard.json')
@@ -242,6 +260,10 @@ function main(): void {
     competitiveArtifactPath: toRepoPath(competitiveArtifactPath),
     formulaSnapshot: parseFormulaDominanceSnapshot(readJsonObject(formulaSnapshotPath)),
     formulaSnapshotPath: toRepoPath(formulaSnapshotPath),
+    microsoftExcelLiveCalculationScorecard: parseMicrosoftExcelLiveCalculationScorecard(
+      readJsonObject(microsoftExcelLiveCalculationScorecardPath),
+    ),
+    microsoftExcelLiveCalculationScorecardPath: toRepoPath(microsoftExcelLiveCalculationScorecardPath),
     importExportFidelityScorecard: parseImportExportFidelityScorecard(readJsonObject(importExportFidelityScorecardPath)),
     importExportFidelityScorecardPath: toRepoPath(importExportFidelityScorecardPath),
     largeWorkbookSloScorecard: parseLargeWorkbookSloScorecard(readJsonObject(largeWorkbookSloScorecardPath)),
@@ -348,6 +370,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       collaborationScorecard: input.collaborationScorecardPath,
       formulaDominanceSnapshot: input.formulaSnapshotPath,
       hyperFormulaSurfaceSnapshot: input.surfaceSnapshotPath,
+      microsoftExcelLiveCalculationScorecard: input.microsoftExcelLiveCalculationScorecardPath,
       importExportFidelityScorecard: input.importExportFidelityScorecardPath,
       largeWorkbookSloScorecard: input.largeWorkbookSloScorecardPath,
       reliabilityScorecard: input.reliabilityScorecardPath,
@@ -374,6 +397,10 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       externalGoogleSheetsEvidence: 'not-captured-in-repo',
       externalMicrosoftExcelEvidence: 'not-captured-in-repo',
       formulaCanonicalProductionPercent: input.formulaSnapshot.canonical.summary.percent,
+      microsoftExcelLiveCalculationEvidence: input.microsoftExcelLiveCalculationScorecard.source.evidenceKind,
+      microsoftExcelLiveCalculationCaseCount: input.microsoftExcelLiveCalculationScorecard.summary.requiredCaseCount,
+      microsoftExcelLiveCalculationPassed: input.microsoftExcelLiveCalculationScorecard.summary.allRequiredCasesPassed,
+      microsoftExcelLiveCalculationVersion: input.microsoftExcelLiveCalculationScorecard.microsoftExcel.version,
       formulaOfficeListedBreadthPercent: input.formulaSnapshot.formulaBreadth.officeListed.percent,
       formulaTrackedBreadthPercent: input.formulaSnapshot.formulaBreadth.tracked.percent,
       importExportCoveredFeatures: input.importExportFidelityScorecard.summary.coveredFeatures,
@@ -406,12 +433,27 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           `Office-listed formula breadth is ${formatRatio(input.formulaSnapshot.formulaBreadth.officeListed)}`,
           `tracked formula breadth is ${formatRatio(input.formulaSnapshot.formulaBreadth.tracked)}`,
           `strategic canonical rows are production-routed; open canonical rows: ${input.formulaSnapshot.canonical.nonProductionRows.length}`,
+          `live Microsoft Excel calculation scorecard passes ${String(
+            input.microsoftExcelLiveCalculationScorecard.summary.matchingCaseCount,
+          )}/${String(input.microsoftExcelLiveCalculationScorecard.summary.requiredCaseCount)} required cases on Excel ${
+            input.microsoftExcelLiveCalculationScorecard.microsoftExcel.version
+          }`,
+          `live Microsoft Excel calculation features: ${input.microsoftExcelLiveCalculationScorecard.summary.coveredFeatures.join(', ')}`,
         ],
-        evidenceArtifacts: [input.formulaSnapshotPath, 'docs/excel-parity-program.md', 'docs/formula-oracle-capture.md'],
-        checkCommands: ['pnpm formula:dominance:check', 'pnpm test:correctness:formula'],
+        evidenceArtifacts: [
+          input.formulaSnapshotPath,
+          input.microsoftExcelLiveCalculationScorecardPath,
+          'docs/excel-parity-program.md',
+          'docs/formula-oracle-capture.md',
+        ],
+        checkCommands: ['pnpm formula:dominance:check', 'pnpm calculation:excel-live:check', 'pnpm test:correctness:formula'],
         blockers: [
           ...formulaMissingFunctionBlockers(input.formulaSnapshot.formulaBreadth.missingOfficeFunctions.length),
-          'no generated scorecard currently compares all committed semantics directly against live Google Sheets and Microsoft Excel',
+          ...(input.microsoftExcelLiveCalculationScorecard.summary.allRequiredCasesPassed
+            ? []
+            : ['live Microsoft Excel calculation scorecard has failing required cases']),
+          'no generated scorecard currently compares committed semantics directly against live Google Sheets',
+          'live Microsoft Excel calculation scorecard covers representative required cases, not all committed formula semantics',
         ],
       },
       {
