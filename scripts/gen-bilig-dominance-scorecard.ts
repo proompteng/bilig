@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+import { parseAuditabilityScorecard, type AuditabilityScorecard } from './gen-auditability-scorecard.ts'
 import { parseImportExportFidelityScorecard, type ImportExportFidelityScorecard } from './gen-import-export-fidelity-scorecard.ts'
 import { parseSecurityPostureScorecard, type SecurityPostureScorecard } from './gen-security-posture-scorecard.ts'
 
@@ -131,6 +132,7 @@ export interface BiligDominanceScorecard {
     }>
   }
   sourceArtifacts: {
+    auditabilityScorecard: string
     formulaDominanceSnapshot: string
     hyperFormulaSurfaceSnapshot: string
     importExportFidelityScorecard: string
@@ -144,6 +146,9 @@ export interface BiligDominanceScorecard {
     }
   }
   summary: {
+    auditabilityCoveredControls: string[]
+    auditabilityPosturePassed: boolean
+    auditabilityUncoveredControls: string[]
     externalGoogleSheetsEvidence: 'not-captured-in-repo'
     externalMicrosoftExcelEvidence: 'not-captured-in-repo'
     formulaCanonicalProductionPercent: number
@@ -180,6 +185,8 @@ export interface DominanceCategory {
 }
 
 export interface BuildScorecardInput {
+  auditabilityScorecard: AuditabilityScorecard
+  auditabilityScorecardPath: string
   competitiveArtifact: CompetitiveArtifact
   competitiveArtifactPath: string
   formulaSnapshot: FormulaDominanceSnapshot
@@ -196,6 +203,7 @@ export interface BuildScorecardInput {
 
 const TEN_X_RATIO = 0.1
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
+const auditabilityScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'auditability-scorecard.json')
 const outputPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'bilig-dominance-scorecard.json')
 const competitiveArtifactPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'workpaper-vs-hyperformula.json')
 const formulaSnapshotPath = join(rootDir, 'packages', 'formula', 'src', '__tests__', 'fixtures', 'formula-dominance-snapshot.json')
@@ -207,6 +215,8 @@ const surfaceSnapshotPath = join(rootDir, 'packages', 'headless', 'src', '__test
 function main(): void {
   const isCheckMode = process.argv.includes('--check')
   const scorecard = buildBiligDominanceScorecard({
+    auditabilityScorecard: parseAuditabilityScorecard(readJsonObject(auditabilityScorecardPath)),
+    auditabilityScorecardPath: toRepoPath(auditabilityScorecardPath),
     competitiveArtifact: parseCompetitiveArtifact(readJsonObject(competitiveArtifactPath)),
     competitiveArtifactPath: toRepoPath(competitiveArtifactPath),
     formulaSnapshot: parseFormulaDominanceSnapshot(readJsonObject(formulaSnapshotPath)),
@@ -303,6 +313,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       workloadSpecificTenXWins: tenXWorkloads,
     },
     sourceArtifacts: {
+      auditabilityScorecard: input.auditabilityScorecardPath,
       formulaDominanceSnapshot: input.formulaSnapshotPath,
       hyperFormulaSurfaceSnapshot: input.surfaceSnapshotPath,
       importExportFidelityScorecard: input.importExportFidelityScorecardPath,
@@ -316,6 +327,9 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       },
     },
     summary: {
+      auditabilityCoveredControls: input.auditabilityScorecard.summary.coveredControls,
+      auditabilityPosturePassed: input.auditabilityScorecard.summary.allRequiredControlsPassed,
+      auditabilityUncoveredControls: input.auditabilityScorecard.summary.uncoveredControls,
       externalGoogleSheetsEvidence: 'not-captured-in-repo',
       externalMicrosoftExcelEvidence: 'not-captured-in-repo',
       formulaCanonicalProductionPercent: input.formulaSnapshot.canonical.summary.percent,
@@ -515,17 +529,26 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
         target: 'Every AI or user workflow is reviewable, previewable, undoable, and tied to durable change evidence.',
         status: 'partial-repo-evidence',
         currentEvidence: [
+          `generated auditability scorecard passes required controls: ${String(input.auditabilityScorecard.summary.allRequiredControlsPassed)}`,
+          `covered auditability controls: ${input.auditabilityScorecard.summary.coveredControls.join(', ')}`,
+          `uncovered auditability controls are explicitly disclosed: ${input.auditabilityScorecard.summary.uncoveredControls.join(', ')}`,
           'change bundles, versions, revertable changes, and agent preview/apply rails are documented',
           'workbook changes and mutation journal tests exist',
         ],
         evidenceArtifacts: [
+          input.auditabilityScorecardPath,
           'docs/05-06-next-phase.md',
           'apps/web/src/__tests__/workbook-changes.test.tsx',
           'apps/web/src/__tests__/worker-runtime-mutation-journal.test.ts',
         ],
-        checkCommands: ['pnpm test:correctness:browser', 'pnpm test:correctness:server'],
+        checkCommands: [
+          'pnpm auditability:check',
+          'pnpm exec vitest run packages/agent-api/src/__tests__/workbook-agent-preview.test.ts apps/bilig/src/zero/__tests__/workbook-agent-apply.test.ts packages/zero-sync/src/__tests__/workbook-history-state.test.ts',
+          'pnpm test:correctness:browser',
+          'pnpm test:correctness:server',
+        ],
         blockers: [
-          'no generated auditability scorecard covers end-to-end preview/apply/undo/revert workflows',
+          'generated auditability evidence covers preview/apply parity, undo bundle capture, authoritative stale/mismatch guards, and history revert/redo state, but not headed browser preview/apply/revert flow',
           'no direct incumbent auditability comparison artifact exists in the repo',
         ],
       },

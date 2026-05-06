@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "suite": "auditability-posture",
+  "generatedAt": "2026-05-06T08:28:01.364Z",
+  "source": {
+    "artifactGenerator": "scripts/gen-auditability-scorecard.ts",
+    "previewImplementation": "packages/agent-api/src/workbook-agent-preview.ts",
+    "applyImplementation": "apps/bilig/src/zero/workbook-agent-apply.ts",
+    "authoritativeApplyImplementation": "apps/bilig/src/zero/service.ts",
+    "historyImplementation": "packages/zero-sync/src/workbook-history-state.ts"
+  },
+  "summary": {
+    "allRequiredControlsPassed": true,
+    "previewApplyParityPassed": true,
+    "applyUndoRoundTripPassed": true,
+    "authoritativeApplyGuardPassed": true,
+    "historyRevertRedoPassed": true,
+    "coveredControls": [
+      "agent.previewDiffParity",
+      "agent.authoritativePreviewMismatchFailsClosed",
+      "agent.baseRevisionStaleApplyFailsClosed",
+      "agent.applyCapturesUndoBundle",
+      "agent.undoBundleRestoresSnapshot",
+      "history.revertRedoStack",
+      "history.revertLinkage"
+    ],
+    "uncoveredControls": ["headedBrowser.previewApplyRevertFlow", "externalSheetsExcelAuditabilityComparison"],
+    "externalGoogleSheetsEvidence": "not-captured",
+    "externalMicrosoftExcelEvidence": "not-captured"
+  },
+  "controls": [
+    {
+      "id": "agent-preview-apply-parity",
+      "category": "preview-apply",
+      "required": true,
+      "passed": true,
+      "coveredControls": [
+        "agent.previewDiffParity",
+        "agent.authoritativePreviewMismatchFailsClosed",
+        "agent.baseRevisionStaleApplyFailsClosed"
+      ],
+      "evidence": "Executed workbook-agent preview twice from the same snapshot, compared the summaries for parity, and checked the sampled preview diff against the applied workbook. Effect summary: {\"displayedCellDiffCount\":2,\"truncatedCellDiffs\":false,\"inputChangeCount\":0,\"formulaChangeCount\":1,\"styleChangeCount\":1,\"numberFormatChangeCount\":1,\"structuralChangeCount\":0}.",
+      "findings": []
+    },
+    {
+      "id": "agent-apply-undo-roundtrip",
+      "category": "undo-revert",
+      "required": true,
+      "passed": true,
+      "coveredControls": ["agent.applyCapturesUndoBundle", "agent.undoBundleRestoresSnapshot"],
+      "evidence": "Applied a workbook-agent bundle through the server apply helper, required a captured undo bundle, and replayed it to restore the selected workbook snapshot.",
+      "findings": []
+    },
+    {
+      "id": "authoritative-agent-apply-fails-closed",
+      "category": "authoritative-apply",
+      "required": true,
+      "passed": true,
+      "coveredControls": ["agent.authoritativePreviewMismatchFailsClosed", "agent.baseRevisionStaleApplyFailsClosed"],
+      "evidence": "Statically checked the authoritative apply service rejects stale base revisions and preview mismatches before applying and persisting the command bundle.",
+      "findings": []
+    },
+    {
+      "id": "workbook-history-revert-redo-state",
+      "category": "history-state",
+      "required": true,
+      "passed": true,
+      "coveredControls": ["history.revertRedoStack", "history.revertLinkage"],
+      "evidence": "Executed actor history derivation across own changes, collaborator changes, revert linkage, and redo linkage to prove the UI can expose undo/redo targets deterministically.",
+      "findings": []
+    }
+  ]
+}

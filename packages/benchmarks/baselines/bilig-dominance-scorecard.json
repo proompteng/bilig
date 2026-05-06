@@ -28,6 +28,7 @@
     ]
   },
   "sourceArtifacts": {
+    "auditabilityScorecard": "packages/benchmarks/baselines/auditability-scorecard.json",
     "formulaDominanceSnapshot": "packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json",
     "hyperFormulaSurfaceSnapshot": "packages/headless/src/__tests__/fixtures/hyperformula-surface.json",
     "importExportFidelityScorecard": "packages/benchmarks/baselines/import-export-fidelity-scorecard.json",
@@ -41,6 +42,17 @@
     }
   },
   "summary": {
+    "auditabilityCoveredControls": [
+      "agent.previewDiffParity",
+      "agent.authoritativePreviewMismatchFailsClosed",
+      "agent.baseRevisionStaleApplyFailsClosed",
+      "agent.applyCapturesUndoBundle",
+      "agent.undoBundleRestoresSnapshot",
+      "history.revertRedoStack",
+      "history.revertLinkage"
+    ],
+    "auditabilityPosturePassed": true,
+    "auditabilityUncoveredControls": ["headedBrowser.previewApplyRevertFlow", "externalSheetsExcelAuditabilityComparison"],
     "externalGoogleSheetsEvidence": "not-captured-in-repo",
     "externalMicrosoftExcelEvidence": "not-captured-in-repo",
     "formulaCanonicalProductionPercent": 100,
@@ -292,17 +304,26 @@
       "target": "Every AI or user workflow is reviewable, previewable, undoable, and tied to durable change evidence.",
       "status": "partial-repo-evidence",
       "currentEvidence": [
+        "generated auditability scorecard passes required controls: true",
+        "covered auditability controls: agent.previewDiffParity, agent.authoritativePreviewMismatchFailsClosed, agent.baseRevisionStaleApplyFailsClosed, agent.applyCapturesUndoBundle, agent.undoBundleRestoresSnapshot, history.revertRedoStack, history.revertLinkage",
+        "uncovered auditability controls are explicitly disclosed: headedBrowser.previewApplyRevertFlow, externalSheetsExcelAuditabilityComparison",
         "change bundles, versions, revertable changes, and agent preview/apply rails are documented",
         "workbook changes and mutation journal tests exist"
       ],
       "evidenceArtifacts": [
+        "packages/benchmarks/baselines/auditability-scorecard.json",
         "docs/05-06-next-phase.md",
         "apps/web/src/__tests__/workbook-changes.test.tsx",
         "apps/web/src/__tests__/worker-runtime-mutation-journal.test.ts"
       ],
-      "checkCommands": ["pnpm test:correctness:browser", "pnpm test:correctness:server"],
+      "checkCommands": [
+        "pnpm auditability:check",
+        "pnpm exec vitest run packages/agent-api/src/__tests__/workbook-agent-preview.test.ts apps/bilig/src/zero/__tests__/workbook-agent-apply.test.ts packages/zero-sync/src/__tests__/workbook-history-state.test.ts",
+        "pnpm test:correctness:browser",
+        "pnpm test:correctness:server"
+      ],
       "blockers": [
-        "no generated auditability scorecard covers end-to-end preview/apply/undo/revert workflows",
+        "generated auditability evidence covers preview/apply parity, undo bundle capture, authoritative stale/mismatch guards, and history revert/redo state, but not headed browser preview/apply/revert flow",
         "no direct incumbent auditability comparison artifact exists in the repo"
       ]
     },

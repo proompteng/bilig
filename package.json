@@ -23,6 +23,8 @@
     "formula-inventory:check": "bun scripts/gen-formula-inventory.ts --check",
     "formula:dominance:generate": "bun scripts/gen-formula-dominance-snapshot.ts",
     "formula:dominance:check": "bun scripts/gen-formula-dominance-snapshot.ts --check",
+    "auditability:generate": "bun scripts/gen-auditability-scorecard.ts",
+    "auditability:check": "bun scripts/gen-auditability-scorecard.ts --check",
     "import-export:fidelity:generate": "bun scripts/gen-import-export-fidelity-scorecard.ts",
     "import-export:fidelity:check": "bun scripts/gen-import-export-fidelity-scorecard.ts --check",
     "large-workbook:slo:generate": "bun scripts/gen-large-workbook-slo-scorecard.ts",

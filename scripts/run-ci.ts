@@ -207,6 +207,7 @@ try {
       pnpm('protocol check', 'protocol:check'),
       pnpm('formula inventory check', 'formula-inventory:check'),
       pnpm('formula dominance check', 'formula:dominance:check'),
+      pnpm('auditability scorecard check', 'auditability:check'),
       pnpm('import/export fidelity scorecard check', 'import-export:fidelity:check'),
       pnpm('large workbook SLO scorecard check', 'large-workbook:slo:check'),
       pnpm('security posture scorecard check', 'security:posture:check'),

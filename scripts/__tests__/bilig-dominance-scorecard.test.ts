@@ -28,7 +28,9 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.summary.importExportFidelityPassed).toBe(true)
     expect(scorecard.summary.largeWorkbookSloRowsCovered).toEqual([100_000, 250_000])
     expect(scorecard.summary.largeWorkbookSloPassed).toBe(true)
+    expect(scorecard.summary.auditabilityPosturePassed).toBe(true)
     expect(scorecard.summary.securityPosturePassed).toBe(true)
+    expect(scorecard.sourceArtifacts.auditabilityScorecard).toBe('packages/benchmarks/baselines/auditability-scorecard.json')
     expect(scorecard.sourceArtifacts.importExportFidelityScorecard).toBe(
       'packages/benchmarks/baselines/import-export-fidelity-scorecard.json',
     )
@@ -41,6 +43,10 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.categories.find((category) => category.id === 'large-workbook-scale')).toMatchObject({
       status: 'partial-repo-evidence',
       evidenceArtifacts: expect.arrayContaining(['packages/benchmarks/baselines/large-workbook-slo-scorecard.json']),
+    })
+    expect(scorecard.categories.find((category) => category.id === 'auditability')).toMatchObject({
+      status: 'partial-repo-evidence',
+      evidenceArtifacts: expect.arrayContaining(['packages/benchmarks/baselines/auditability-scorecard.json']),
     })
     expect(scorecard.categories.find((category) => category.id === 'security')).toMatchObject({
       status: 'partial-repo-evidence',
@@ -75,10 +81,13 @@ describe('bilig dominance scorecard', () => {
     const runCi = readFileSync(resolve(repoRoot, 'scripts/run-ci.ts'), 'utf8')
 
     expect(packageJson).toContain('"dominance:check": "bun scripts/gen-bilig-dominance-scorecard.ts --check"')
+    expect(packageJson).toContain('"auditability:generate": "bun scripts/gen-auditability-scorecard.ts"')
+    expect(packageJson).toContain('"auditability:check": "bun scripts/gen-auditability-scorecard.ts --check"')
     expect(packageJson).toContain('"import-export:fidelity:check": "bun scripts/gen-import-export-fidelity-scorecard.ts --check"')
     expect(packageJson).toContain('"large-workbook:slo:check": "bun scripts/gen-large-workbook-slo-scorecard.ts --check"')
     expect(packageJson).toContain('"security:posture:check": "bun scripts/gen-security-posture-scorecard.ts --check"')
     expect(runCi).toContain("pnpm('bilig dominance scorecard check', 'dominance:check')")
+    expect(runCi).toContain("pnpm('auditability scorecard check', 'auditability:check')")
     expect(runCi).toContain("pnpm('import/export fidelity scorecard check', 'import-export:fidelity:check')")
     expect(runCi).toContain("pnpm('large workbook SLO scorecard check', 'large-workbook:slo:check')")
     expect(runCi).toContain("pnpm('security posture scorecard check', 'security:posture:check')")
@@ -111,6 +120,7 @@ function buildFixtureInput(): BuildScorecardInput {
   return {
     competitiveArtifactPath: 'packages/benchmarks/baselines/workpaper-vs-hyperformula.json',
     formulaSnapshotPath: 'packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json',
+    auditabilityScorecardPath: 'packages/benchmarks/baselines/auditability-scorecard.json',
     importExportFidelityScorecardPath: 'packages/benchmarks/baselines/import-export-fidelity-scorecard.json',
     largeWorkbookSloScorecardPath: 'packages/benchmarks/baselines/large-workbook-slo-scorecard.json',
     securityPostureScorecardPath: 'packages/benchmarks/baselines/security-posture-scorecard.json',
@@ -173,6 +183,40 @@ function buildFixtureInput(): BuildScorecardInput {
           coveredFeatures: ['xlsx.values', 'xlsx.formulas', 'xlsx.numberFormats'],
           missingFeatures: [],
           evidence: 'fixture round-tripped',
+        },
+      ],
+    },
+    auditabilityScorecard: {
+      schemaVersion: 1,
+      suite: 'auditability-posture',
+      generatedAt: '2026-05-06T10:00:00.000Z',
+      source: {
+        artifactGenerator: 'scripts/gen-auditability-scorecard.ts',
+        previewImplementation: 'packages/agent-api/src/workbook-agent-preview.ts',
+        applyImplementation: 'apps/bilig/src/zero/workbook-agent-apply.ts',
+        authoritativeApplyImplementation: 'apps/bilig/src/zero/service.ts',
+        historyImplementation: 'packages/zero-sync/src/workbook-history-state.ts',
+      },
+      summary: {
+        allRequiredControlsPassed: true,
+        previewApplyParityPassed: true,
+        applyUndoRoundTripPassed: true,
+        authoritativeApplyGuardPassed: true,
+        historyRevertRedoPassed: true,
+        coveredControls: ['agent.previewDiffParity', 'agent.applyCapturesUndoBundle'],
+        uncoveredControls: ['headedBrowser.previewApplyRevertFlow'],
+        externalGoogleSheetsEvidence: 'not-captured',
+        externalMicrosoftExcelEvidence: 'not-captured',
+      },
+      controls: [
+        {
+          id: 'agent-preview-apply-parity',
+          category: 'preview-apply',
+          required: true,
+          passed: true,
+          coveredControls: ['agent.previewDiffParity'],
+          evidence: 'fixture preview matched apply',
+          findings: [],
         },
       ],
     },
