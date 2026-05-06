@@ -464,14 +464,16 @@ export function restoreWorkbookFromSnapshot(args: WorkbookSnapshotRestoreArgs): 
         const sheetId = sheetRecord.id
         const rowIds: string[] = []
         const colIds: string[] = []
+        const ensureRowId = args.workbook.createLogicalAxisIdEnsurer(sheetId, 'row')
+        const ensureColId = args.workbook.createLogicalAxisIdEnsurer(sheetId, 'column')
         const attachFreshCell = createFreshRuntimeCellAttacher(args.workbook, sheetRecord)
         let literalColumns: WrittenColumnTracker | undefined
         for (let cellIndex = 0; cellIndex < sheet.cells.length; cellIndex += 1) {
           const cell = sheet.cells[cellIndex]!
           const coords = readRestoredCellCoordinates(sheet.name, cell)
           const restoredCellIndex = args.workbook.cellStore.allocateReserved(sheetId, coords.row, coords.col)
-          const rowId = (rowIds[coords.row] ??= args.workbook.ensureLogicalAxisId(sheetId, 'row', coords.row))
-          const colId = (colIds[coords.col] ??= args.workbook.ensureLogicalAxisId(sheetId, 'column', coords.col))
+          const rowId = (rowIds[coords.row] ??= ensureRowId(coords.row))
+          const colId = (colIds[coords.col] ??= ensureColId(coords.col))
           attachFreshCell(coords.row, coords.col, restoredCellIndex, rowId, colId)
           if (cell.formula !== undefined) {
             formulaRefs.push({
@@ -554,6 +556,8 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
       const sheetCoords = sheetCellsByName.get(sheet.name)
       const rowIds: string[] = []
       const colIds: string[] = []
+      const ensureRowId = args.workbook.createLogicalAxisIdEnsurer(sheetId, 'row')
+      const ensureColId = args.workbook.createLogicalAxisIdEnsurer(sheetId, 'column')
       const attachFreshCell = createFreshRuntimeCellAttacher(args.workbook, sheetRecord)
       const formulaSpan = formulaSpansBySheet.get(sheet.name)
       let formulaInstanceIndex = formulaSpan?.start ?? 0
@@ -573,8 +577,8 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
         const restoredFormula =
           candidateFormula && compareFormulaInstanceToCoordinate(candidateFormula, coords) === 0 ? candidateFormula : undefined
         const cellIndex = args.workbook.cellStore.allocateReserved(sheetId, coords.row, coords.col)
-        const rowId = (rowIds[coords.row] ??= args.workbook.ensureLogicalAxisId(sheetId, 'row', coords.row))
-        const colId = (colIds[coords.col] ??= args.workbook.ensureLogicalAxisId(sheetId, 'column', coords.col))
+        const rowId = (rowIds[coords.row] ??= ensureRowId(coords.row))
+        const colId = (colIds[coords.col] ??= ensureColId(coords.col))
         attachFreshCell(coords.row, coords.col, cellIndex, rowId, colId)
         if (cell.formula === undefined && restoredFormula === undefined) {
           writeLiteralToCellStore(args.workbook.cellStore, cellIndex, cell.value ?? null, args.strings)

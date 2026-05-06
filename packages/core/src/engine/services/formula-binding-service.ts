@@ -1611,12 +1611,15 @@ export function createEngineFormulaBindingService(args: {
     cellIndex: number,
     ownerSheetName: string,
     compiled: Pick<CompiledFormula, 'deps'>,
-    options: { readonly deferOwnerSheetIndex?: boolean } = {},
+    options: { readonly deferOwnerSheetIndex?: boolean; readonly skipReferencedSheetIndex?: boolean } = {},
   ): void => {
     if (options.deferOwnerSheetIndex === true || formulaOwnerSheetCellsDirty) {
       formulaOwnerSheetCellsDirty = true
     } else {
       appendTrackedReverseEdge(formulaOwnerSheetCells, ownerSheetName, cellIndex)
+    }
+    if (options.skipReferencedSheetIndex === true) {
+      return
     }
     referencedSheetsForCompiled(compiled).forEach((sheetName) => {
       appendTrackedReverseEdge(formulaReferencedSheetCells, sheetName, cellIndex)
@@ -2879,9 +2882,15 @@ export function createEngineFormulaBindingService(args: {
     }
     const dependencyIndices = new Uint32Array(Math.min(compiled.symbolicRefs.length, 2))
     const dependencyEntities = directScalarDependencyEntityBuffer(compiled.symbolicRefs.length)
+    const ownerSheet = args.state.workbook.getSheetById(ownerSheetId)
     let refIndex = 0
     let dependencyIndexCount = 0
     let dependencyEntityCount = 0
+    const resolveDependencyCellIndex = (row: number, col: number): number => {
+      const existing =
+        ownerSheet && ownerSheet.structureVersion === 1 ? ownerSheet.grid.getPhysical(row, col) : (ownerSheet?.grid.get(row, col) ?? -1)
+      return existing === -1 ? args.ensureCellTrackedByCoords(ownerSheetId, row, col) : existing
+    }
     const appendDependency = (cellIndex: number): void => {
       let seen = false
       for (let existingIndex = 0; existingIndex < dependencyIndexCount; existingIndex += 1) {
@@ -2909,7 +2918,7 @@ export function createEngineFormulaBindingService(args: {
       if (!parsed || parsed.row === undefined || parsed.col === undefined) {
         return undefined
       }
-      const dependencyCellIndex = args.ensureCellTrackedByCoords(ownerSheetId, parsed.row, parsed.col)
+      const dependencyCellIndex = resolveDependencyCellIndex(parsed.row, parsed.col)
       appendDependency(dependencyCellIndex)
       return { kind: 'cell', cellIndex: dependencyCellIndex }
     }
@@ -3296,7 +3305,7 @@ export function createEngineFormulaBindingService(args: {
     for (let index = 0; index < dependencies.dependencyEntities.length; index += 1) {
       appendReverseEdge(dependencies.dependencyEntities[index]!, formulaEntity)
     }
-    trackFormulaSheetIndexes(cellIndex, ownerSheetName, compiled, { deferOwnerSheetIndex: true })
+    trackFormulaSheetIndexes(cellIndex, ownerSheetName, compiled, { deferOwnerSheetIndex: true, skipReferencedSheetIndex: true })
   }
 
   const bindFormulaNow = (cellIndex: number, ownerSheetName: string, source: string): boolean => {
