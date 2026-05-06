@@ -32,6 +32,7 @@ describe('Microsoft Excel live large-workbook scorecard', () => {
         calculationMode: 'manual-during-open-and-calculate',
         measuredExcelOperation: 'open-workbook-and-calculate-full-rebuild',
         measuredBiligOperation: 'import-snapshot',
+        samplingOrder: 'engine-isolated-bilig-then-excel',
       },
       summary: {
         allRequiredCasesPassed: true,

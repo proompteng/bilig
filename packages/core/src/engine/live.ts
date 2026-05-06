@@ -878,6 +878,8 @@ export function createEngineServiceRuntime(args: {
     resolveTemplateById: (templateId, source, row, col) => formulaTemplates.resolveTrustedByTemplateId(templateId, source, row, col),
     initializeCellFormulasAt: (refs, potentialNewCells) =>
       requireService(formulaInitialization, 'formulaInitialization').initializeCellFormulasAtNow(refs, potentialNewCells),
+    initializeFormulaSourcesAt: (refs, potentialNewCells) =>
+      requireService(formulaInitialization, 'formulaInitialization').initializeFormulaSourcesAtNow(refs, potentialNewCells),
     initializePreparedCellFormulasAt: (refs, potentialNewCells) =>
       requireService(formulaInitialization, 'formulaInitialization').initializePreparedCellFormulasAtNow(refs, potentialNewCells),
     initializeHydratedPreparedCellFormulasAt: (refs, potentialNewCells) =>

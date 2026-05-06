@@ -67,6 +67,7 @@ export interface MicrosoftExcelLiveLargeWorkbookScorecard {
     readonly calculationMode: 'manual-during-open-and-calculate'
     readonly measuredExcelOperation: 'open-workbook-and-calculate-full-rebuild'
     readonly measuredBiligOperation: 'import-snapshot'
+    readonly samplingOrder: 'engine-isolated-bilig-then-excel'
   }
   readonly microsoftExcel: {
     readonly appPath: '/Applications/Microsoft Excel.app'
@@ -188,6 +189,7 @@ export async function buildMicrosoftExcelLiveLargeWorkbookScorecard(
       calculationMode: 'manual-during-open-and-calculate',
       measuredExcelOperation: 'open-workbook-and-calculate-full-rebuild',
       measuredBiligOperation: 'import-snapshot',
+      samplingOrder: 'engine-isolated-bilig-then-excel',
     },
     microsoftExcel: {
       appPath: excelAppPath,
@@ -234,6 +236,7 @@ export function parseMicrosoftExcelLiveLargeWorkbookScorecard(value: Record<stri
       calculationMode: literalField(benchmark, 'calculationMode', 'manual-during-open-and-calculate'),
       measuredExcelOperation: literalField(benchmark, 'measuredExcelOperation', 'open-workbook-and-calculate-full-rebuild'),
       measuredBiligOperation: literalField(benchmark, 'measuredBiligOperation', 'import-snapshot'),
+      samplingOrder: literalField(benchmark, 'samplingOrder', 'engine-isolated-bilig-then-excel'),
     },
     microsoftExcel: {
       appPath: literalField(microsoftExcel, 'appPath', excelAppPath),
@@ -328,20 +331,23 @@ async function runLargeWorkbookCase(caseSpec: LargeWorkbookCaseSpec): Promise<La
   const excelVerifications: Array<Record<string, boolean | number | string | null>> = []
   const excelVersions = new Set<string>()
 
-  const collectSamples = async (index: number): Promise<void> => {
-    if (index >= sampleCount) {
-      return
-    }
+  const collectBiligSamples = async (index: number): Promise<void> => {
+    if (index >= sampleCount) return
     const biligSample = await runBiligSample(caseSpec, corpus.snapshot)
-    const excelSample = runExcelSample(caseSpec, workbookBytes)
     biligSamples.push(biligSample.elapsedMs)
-    excelSamples.push(excelSample.elapsedMs)
     biligVerifications.push(biligSample.verification)
+    await collectBiligSamples(index + 1)
+  }
+  const collectExcelSamples = (index: number): void => {
+    if (index >= sampleCount) return
+    const excelSample = runExcelSample(caseSpec, workbookBytes)
+    excelSamples.push(excelSample.elapsedMs)
     excelVerifications.push(excelSample.verification)
     excelVersions.add(excelSample.excelVersion)
-    await collectSamples(index + 1)
+    collectExcelSamples(index + 1)
   }
-  await collectSamples(0)
+  await collectBiligSamples(0)
+  collectExcelSamples(0)
 
   const biligElapsedMs = summarizeNumbers(biligSamples)
   const microsoftExcelElapsedMs = summarizeNumbers(excelSamples)

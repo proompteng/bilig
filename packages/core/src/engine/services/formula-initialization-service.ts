@@ -1,10 +1,14 @@
 import { Effect } from 'effect'
 import type { CompiledFormula } from '@bilig/formula'
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
-import type { EngineCellMutationRef, EngineFormulaSourceRef } from '../../cell-mutations-at.js'
+import type { EngineCellMutationRef, EngineFormulaSourceRefs } from '../../cell-mutations-at.js'
 import { CellFlags } from '../../cell-store.js'
 import { buildFormulaFamilyShapeKey } from '../../formula/formula-family-deps.js'
-import { tryMatchInitialSimpleRowRelativeBinaryTemplate } from '../../formula/initial-simple-direct-scalar-template.js'
+import {
+  tryMatchInitialSimpleRowRelativeBinaryTemplate,
+  tryMatchInitialSimpleRowRelativeBinaryTemplateShape,
+  type InitialSimpleRowRelativeBinaryTemplateShape,
+} from '../../formula/initial-simple-direct-scalar-template.js'
 import type {
   FormulaFamilyFreshUniformRunRegistrationArgs,
   FormulaFamilyMember,
@@ -42,6 +46,24 @@ interface InitialPrefixAggregateGroup {
   readonly formulas: Array<{ cellIndex: number; rowEnd: number; resultOffset?: number }>
 }
 
+interface InitialResolvedFormulaEntry {
+  cellIndex: number
+  sheetId: number
+  row: number
+  col: number
+  ownerSheetName: string
+  source: string
+  compiled: CompiledFormula
+  templateId?: number
+}
+
+interface InitialIndexedFormulaEntryRefs<Entry> {
+  readonly length: number
+  readonly at: (index: number) => Entry
+}
+
+type InitialFormulaEntryRefSource<Entry> = readonly Entry[] | InitialIndexedFormulaEntryRefs<Entry>
+
 type DeferredInitialFormulaFamilyRun = Omit<FormulaFamilyRunUpsertArgs, 'members'> & {
   axis: 'row'
   fixedIndex: number
@@ -62,11 +84,27 @@ function materializeDeferredFormulaFamilyRunMembers(run: DeferredInitialFormulaF
   }))
 }
 
+function initialFormulaEntryRefAt<Entry>(refs: InitialFormulaEntryRefSource<Entry>, index: number): Entry {
+  if (isInitialIndexedFormulaEntryRefs(refs)) {
+    return refs.at(index)
+  }
+  const ref = refs[index]
+  if (ref === undefined) {
+    throw new Error(`Missing initial formula entry at index ${String(index)}`)
+  }
+  return ref
+}
+
+function isInitialIndexedFormulaEntryRefs<Entry>(refs: InitialFormulaEntryRefSource<Entry>): refs is InitialIndexedFormulaEntryRefs<Entry> {
+  return !Array.isArray(refs)
+}
+
 interface InitialTemplateFormulaCacheEntry {
   readonly resolution: FormulaTemplateResolution
   readonly anchorRow: number
   readonly anchorCol: number
   readonly anchorCompiled: CompiledFormula
+  readonly simpleShape: InitialSimpleRowRelativeBinaryTemplateShape
 }
 
 function mutationErrorMessage(message: string, cause: unknown): string {
@@ -113,7 +151,7 @@ export interface EngineFormulaInitializationService {
     potentialNewCells?: number,
   ) => Effect.Effect<void, EngineMutationError>
   readonly initializeCellFormulasAtNow: (refs: readonly EngineCellMutationRef[], potentialNewCells?: number) => void
-  readonly initializeFormulaSourcesAtNow: (refs: readonly EngineFormulaSourceRef[], potentialNewCells?: number) => void
+  readonly initializeFormulaSourcesAtNow: (refs: EngineFormulaSourceRefs, potentialNewCells?: number) => void
   readonly initializePreparedCellFormulasAt: (
     refs: readonly PreparedFormulaInitializationRef[],
     potentialNewCells?: number,
@@ -449,7 +487,31 @@ export function createEngineFormulaInitializationService(args: {
 
   const createInitialTemplateFormulaResolver = (): ((source: string, row: number, col: number) => FormulaTemplateResolution) => {
     const simpleTemplateCache = new Map<string, InitialTemplateFormulaCacheEntry>()
+    const simpleTemplateCandidates: InitialTemplateFormulaCacheEntry[] = []
     return (source, row, col) => {
+      for (let index = 0; index < simpleTemplateCandidates.length; index += 1) {
+        const cached = simpleTemplateCandidates[index]!
+        const simpleTemplate = tryMatchInitialSimpleRowRelativeBinaryTemplateShape(source, row, col, cached.simpleShape)
+        if (!simpleTemplate) {
+          continue
+        }
+        const anchorRowDelta = row - cached.anchorRow
+        const anchorColDelta = col - cached.anchorCol
+        const compiled =
+          translateSimpleDirectScalarFormulaWithParsedRefs(cached.anchorCompiled, source, simpleTemplate) ??
+          translateSimpleDirectScalarFormula(cached.anchorCompiled, anchorRowDelta, anchorColDelta, source)
+        if (compiled) {
+          return {
+            templateId: cached.resolution.templateId,
+            templateKey: cached.resolution.templateKey,
+            baseSource: cached.resolution.baseSource,
+            compiled,
+            translated: cached.resolution.translated || anchorRowDelta !== 0 || anchorColDelta !== 0,
+            rowDelta: cached.resolution.rowDelta + anchorRowDelta,
+            colDelta: cached.resolution.colDelta + anchorColDelta,
+          }
+        }
+      }
       const simpleTemplate = tryMatchInitialSimpleRowRelativeBinaryTemplate(source, row, col)
       const templateKey = simpleTemplate?.templateKey
       const cached = templateKey === undefined ? undefined : simpleTemplateCache.get(templateKey)
@@ -459,11 +521,13 @@ export function createEngineFormulaInitializationService(args: {
         const compiled =
           simpleTemplate === undefined
             ? undefined
-            : (translateSimpleDirectScalarFormulaWithParsedRefs(cached.anchorCompiled, source, simpleTemplate.parsedSymbolicRefs) ??
+            : (translateSimpleDirectScalarFormulaWithParsedRefs(cached.anchorCompiled, source, simpleTemplate) ??
               translateSimpleDirectScalarFormula(cached.anchorCompiled, anchorRowDelta, anchorColDelta, source))
         if (compiled) {
           return {
-            ...cached.resolution,
+            templateId: cached.resolution.templateId,
+            templateKey: cached.resolution.templateKey,
+            baseSource: cached.resolution.baseSource,
             compiled,
             translated: cached.resolution.translated || anchorRowDelta !== 0 || anchorColDelta !== 0,
             rowDelta: cached.resolution.rowDelta + anchorRowDelta,
@@ -472,13 +536,16 @@ export function createEngineFormulaInitializationService(args: {
         }
       }
       const resolution = args.compileTemplateFormula(source, row, col)
-      if (templateKey !== undefined) {
-        simpleTemplateCache.set(templateKey, {
+      if (simpleTemplate) {
+        const entry = {
           resolution,
           anchorRow: row,
           anchorCol: col,
           anchorCompiled: resolution.compiled,
-        })
+          simpleShape: simpleTemplate,
+        }
+        simpleTemplateCache.set(simpleTemplate.templateKey, entry)
+        simpleTemplateCandidates.push(entry)
       }
       return resolution
     }
@@ -810,22 +877,10 @@ export function createEngineFormulaInitializationService(args: {
   }
 
   const initializeFormulaEntriesNow = <Entry>(
-    refs: readonly Entry[],
+    refs: InitialFormulaEntryRefSource<Entry>,
     potentialNewCells: number | undefined,
     resolveCellIndex: (ref: Entry) => number,
-    resolveEntry: (
-      ref: Entry,
-      cellIndex: number,
-    ) => {
-      cellIndex: number
-      sheetId: number
-      row: number
-      col: number
-      ownerSheetName: string
-      source: string
-      compiled: CompiledFormula
-      templateId?: number
-    },
+    resolveEntry: (ref: Entry, cellIndex: number) => InitialResolvedFormulaEntry,
   ): void => {
     if (refs.length === 0) {
       return
@@ -847,7 +902,7 @@ export function createEngineFormulaInitializationService(args: {
     let maxTargetCellIndex = 0
     if (!hadExistingFormulas) {
       for (let index = 0; index < refs.length; index += 1) {
-        const cellIndex = resolveCellIndex(refs[index]!)
+        const cellIndex = resolveCellIndex(initialFormulaEntryRefAt(refs, index))
         targetCellIndices[index] = cellIndex
         if (cellIndex > maxTargetCellIndex) {
           maxTargetCellIndex = cellIndex
@@ -979,7 +1034,7 @@ export function createEngineFormulaInitializationService(args: {
       const bindFormulaEntries = (): void => {
         args.state.workbook.withBatchedColumnVersionUpdates(() => {
           for (let refIndex = 0; refIndex < refs.length; refIndex += 1) {
-            const ref = refs[refIndex]!
+            const ref = initialFormulaEntryRefAt(refs, refIndex)
             const cellIndex = hadExistingFormulas ? resolveCellIndex(ref) : targetCellIndices[refIndex]!
             try {
               const prepared = resolveEntry(ref, cellIndex)
@@ -1154,8 +1209,9 @@ export function createEngineFormulaInitializationService(args: {
     )
   }
 
-  const initializeFormulaSourcesAtNow = (refs: readonly EngineFormulaSourceRef[], potentialNewCells?: number): void => {
+  const initializeFormulaSourcesAtNow = (refs: EngineFormulaSourceRefs, potentialNewCells?: number): void => {
     const resolveInitialTemplateFormula = createInitialTemplateFormulaResolver()
+    let preparedEntry: InitialResolvedFormulaEntry | undefined
     initializeFormulaEntriesNow(
       refs,
       potentialNewCells,
@@ -1163,16 +1219,28 @@ export function createEngineFormulaInitializationService(args: {
       (ref, cellIndex) => {
         const ownerSheetName = resolveSheetName(ref.sheetId)
         const template = resolveInitialTemplateFormula(ref.source, ref.row, ref.col)
-        return {
-          cellIndex,
-          sheetId: ref.sheetId,
-          row: ref.row,
-          col: ref.col,
-          ownerSheetName,
-          source: ref.source,
-          compiled: template.compiled,
-          templateId: template.templateId,
+        if (!preparedEntry) {
+          preparedEntry = {
+            cellIndex,
+            sheetId: ref.sheetId,
+            row: ref.row,
+            col: ref.col,
+            ownerSheetName,
+            source: ref.source,
+            compiled: template.compiled,
+            templateId: template.templateId,
+          }
+          return preparedEntry
         }
+        preparedEntry.cellIndex = cellIndex
+        preparedEntry.sheetId = ref.sheetId
+        preparedEntry.row = ref.row
+        preparedEntry.col = ref.col
+        preparedEntry.ownerSheetName = ownerSheetName
+        preparedEntry.source = ref.source
+        preparedEntry.compiled = template.compiled
+        preparedEntry.templateId = template.templateId
+        return preparedEntry
       },
     )
   }

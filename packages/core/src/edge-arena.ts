@@ -26,10 +26,12 @@ export class EdgeArena {
       return EMPTY_SLICE
     }
 
-    const freeIndex = this.freeList.findIndex((slice) => slice.cap >= size)
-    if (freeIndex !== -1) {
-      const [slice] = this.freeList.splice(freeIndex, 1)
-      return { ptr: slice!.ptr, len: 0, cap: slice!.cap }
+    if (this.freeList.length > 0) {
+      const freeIndex = this.freeList.findIndex((slice) => slice.cap >= size)
+      if (freeIndex !== -1) {
+        const [slice] = this.freeList.splice(freeIndex, 1)
+        return { ptr: slice!.ptr, len: 0, cap: slice!.cap }
+      }
     }
 
     const ptr = this.nextPtr
@@ -71,6 +73,16 @@ export class EdgeArena {
       return new Uint32Array()
     }
     return this.buffer.subarray(slice.ptr, slice.ptr + slice.len)
+  }
+
+  singleton(value: number): EdgeSlice {
+    const target = this.alloc(1)
+    this.buffer[target.ptr] = value
+    return {
+      ptr: target.ptr,
+      len: 1,
+      cap: target.cap,
+    }
   }
 
   valueAt(slice: EdgeSlice, index: number): number {

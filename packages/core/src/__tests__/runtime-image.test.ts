@@ -1,12 +1,34 @@
 import { compileFormulaAst, parseFormula } from '@bilig/formula'
 import { ValueTag, type WorkbookSnapshot } from '@bilig/protocol'
 import { describe, expect, it } from 'vitest'
+import type { EngineFormulaSourceRefs } from '../cell-mutations-at.js'
 import { restoreWorkbookFromRuntimeImage, restoreWorkbookFromSnapshot } from '../snapshot/runtime-image.js'
 import { StringPool } from '../string-pool.js'
 import { WorkbookStore } from '../workbook-store.js'
 
 function failOnCellWiseSnapshotRestoreNotification(): void {
   throw new Error('fresh snapshot restore should batch literal column notifications')
+}
+
+function collectFormulaSourceRefs(refs: EngineFormulaSourceRefs): Array<{
+  cellIndex?: number
+  col: number
+  row: number
+  sheetId: number
+  source: string
+}> {
+  const collected: Array<{ cellIndex?: number; col: number; row: number; sheetId: number; source: string }> = []
+  for (let index = 0; index < refs.length; index += 1) {
+    const ref = Array.isArray(refs) ? refs[index]! : refs.at(index)
+    collected.push({
+      sheetId: ref.sheetId,
+      cellIndex: ref.cellIndex,
+      row: ref.row,
+      col: ref.col,
+      source: ref.source,
+    })
+  }
+  return collected
 }
 
 describe('restoreWorkbookFromRuntimeImage', () => {
@@ -304,5 +326,91 @@ describe('restoreWorkbookFromSnapshot', () => {
       },
     ])
     expect(workbook.cellStore.onSetValue).toBe(failOnCellWiseSnapshotRestoreNotification)
+  })
+
+  it('reuses restored string ids for repeated snapshot literals', () => {
+    const workbook = new WorkbookStore('snapshot-repeated-strings')
+    const strings = new StringPool()
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'snapshot-repeated-strings' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Sheet1',
+          order: 0,
+          cells: [
+            { address: 'A1', row: 0, col: 0, value: 'segment-1' },
+            { address: 'A2', row: 1, col: 0, value: 'segment-1' },
+            { address: 'A3', row: 2, col: 0, value: 'segment-2' },
+          ],
+        },
+      ],
+    }
+
+    restoreWorkbookFromSnapshot({
+      snapshot,
+      workbook,
+      strings,
+      resetWorkbook: () => {},
+      initializeCellFormulasAt: () => {},
+    })
+
+    const a1 = workbook.getCellIndex('Sheet1', 'A1')
+    const a2 = workbook.getCellIndex('Sheet1', 'A2')
+    const a3 = workbook.getCellIndex('Sheet1', 'A3')
+    expect(a1).toBeDefined()
+    expect(a2).toBeDefined()
+    expect(a3).toBeDefined()
+    expect(workbook.cellStore.stringIds[a1!]).toBe(workbook.cellStore.stringIds[a2!])
+    expect(workbook.cellStore.stringIds[a3!]).not.toBe(workbook.cellStore.stringIds[a1!])
+    expect(strings.size).toBe(3)
+  })
+
+  it('uses flat formula source refs during fresh snapshot restore when available', () => {
+    const workbook = new WorkbookStore('snapshot-flat-formula-sources')
+    const sourceCalls: Array<{ cellIndex?: number; col: number; row: number; sheetId: number; source: string }> = []
+    const mutationCalls: unknown[] = []
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'snapshot-flat-formula-sources' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Sheet1',
+          order: 0,
+          cells: [
+            { address: 'A1', row: 0, col: 0, value: 1 },
+            { address: 'B1', row: 0, col: 1, formula: 'A1+1' },
+          ],
+        },
+      ],
+    }
+
+    restoreWorkbookFromSnapshot({
+      snapshot,
+      workbook,
+      strings: new StringPool(),
+      resetWorkbook: () => {},
+      initializeCellFormulasAt: (refs) => {
+        mutationCalls.push(...refs)
+      },
+      initializeFormulaSourcesAt: (refs) => {
+        sourceCalls.push(...collectFormulaSourceRefs(refs))
+      },
+    })
+
+    const formulaCellIndex = workbook.getCellIndex('Sheet1', 'B1')
+    expect(formulaCellIndex).toBeDefined()
+    expect(mutationCalls).toEqual([])
+    expect(sourceCalls).toEqual([
+      {
+        sheetId: 1,
+        cellIndex: formulaCellIndex,
+        row: 0,
+        col: 1,
+        source: 'A1+1',
+      },
+    ])
   })
 })

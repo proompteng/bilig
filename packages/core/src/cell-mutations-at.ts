@@ -22,6 +22,13 @@ export interface EngineFormulaSourceRef {
   cellIndex?: number
 }
 
+export interface EngineFormulaSourceRefTable {
+  readonly length: number
+  readonly at: (index: number) => EngineFormulaSourceRef
+}
+
+export type EngineFormulaSourceRefs = readonly EngineFormulaSourceRef[] | EngineFormulaSourceRefTable
+
 export interface EngineExistingNumericCellMutationRef {
   sheetId: number
   row: number

@@ -47,7 +47,7 @@ import type {
   EngineCellMutationRef,
   EngineExistingNumericCellMutationRef,
   EngineExistingNumericCellMutationResult,
-  EngineFormulaSourceRef,
+  EngineFormulaSourceRefs,
 } from './cell-mutations-at.js'
 import { batchOpOrder, compareOpOrder, createBatch, createReplicaState, type OpOrder, type ReplicaState } from './replica-state.js'
 import { CycleDetector } from './cycle-detection.js'
@@ -712,7 +712,7 @@ export class SpreadsheetEngine {
     this.runtime.formulaInitialization.initializeCellFormulasAtNow(refs, potentialNewCells)
   }
 
-  initializeFormulaSourcesAtNow(refs: readonly EngineFormulaSourceRef[], potentialNewCells?: number): void {
+  initializeFormulaSourcesAtNow(refs: EngineFormulaSourceRefs, potentialNewCells?: number): void {
     this.runtime.formulaInitialization.initializeFormulaSourcesAtNow(refs, potentialNewCells)
   }
 

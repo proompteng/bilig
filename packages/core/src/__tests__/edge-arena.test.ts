@@ -56,6 +56,16 @@ describe('EdgeArena', () => {
     expect([...arena.read(slice)]).toEqual([4, 16, 15])
   })
 
+  it('allocates a singleton slice for fresh reverse-edge inserts', () => {
+    const arena = new EdgeArena()
+
+    const slice = arena.singleton(42)
+
+    expect(slice.len).toBe(1)
+    expect(slice.cap).toBe(1)
+    expect([...arena.readView(slice)]).toEqual([42])
+  })
+
   it('leaves slices unchanged when removing a value that is not present', () => {
     const arena = new EdgeArena()
     const slice = arena.replace(arena.empty(), Uint32Array.from([2, 4, 8]))

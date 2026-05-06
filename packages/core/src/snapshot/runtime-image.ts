@@ -12,7 +12,13 @@ import type {
   WorkbookSortSnapshot,
   WorkbookVolatileContextSnapshot,
 } from '@bilig/protocol'
-import type { EngineCellMutationRef } from '../cell-mutations-at.js'
+import { ErrorCode, ValueTag } from '@bilig/protocol'
+import type {
+  EngineCellMutationRef,
+  EngineFormulaSourceRef,
+  EngineFormulaSourceRefs,
+  EngineFormulaSourceRefTable,
+} from '../cell-mutations-at.js'
 import { CellFlags } from '../cell-store.js'
 import { writeLiteralToCellStore } from '../engine-value-utils.js'
 import type { FormulaInstanceSnapshot } from '../formula/formula-instance-table.js'
@@ -81,6 +87,7 @@ export interface WorkbookSnapshotRestoreArgs {
   readonly strings: StringPool
   readonly resetWorkbook: (workbookName?: string) => void
   readonly initializeCellFormulasAt: (refs: readonly EngineCellMutationRef[], potentialNewCells?: number) => void
+  readonly initializeFormulaSourcesAt?: (refs: EngineFormulaSourceRefs, potentialNewCells?: number) => void
 }
 
 export interface PreparedRuntimeFormulaRef {
@@ -178,7 +185,8 @@ function readRestoredCellCoordinates(sheetName: string, cell: WorkbookSnapshotCe
 }
 
 interface WrittenColumnTracker {
-  columns: Uint8Array
+  smallColumns: number
+  columns?: Uint8Array
   count: number
 }
 
@@ -188,7 +196,7 @@ interface FreshRuntimeCellPageInternals {
 }
 
 interface FreshRuntimeCellIdentityInternals {
-  readonly identities?: Map<number, { readonly sheetId: number; readonly rowId: string; readonly colId: string }>
+  readonly setParts?: (cellIndex: number, sheetId: number, rowId: string, colId: string) => void
 }
 
 interface FreshRuntimeResidentCellInternals {
@@ -204,39 +212,106 @@ interface FreshRuntimeLogicalSheetInternals {
 
 type FreshRuntimeCellAttacher = (row: number, col: number, cellIndex: number, rowId: string, colId: string) => void
 
+class RestoredFormulaSourceRefTable implements EngineFormulaSourceRefTable {
+  readonly sheetIds: Uint32Array
+  readonly cellIndices: Uint32Array
+  readonly rows: Uint32Array
+  readonly cols: Uint32Array
+  readonly sources: string[]
+  readonly reusable: EngineFormulaSourceRef = {
+    sheetId: 0,
+    cellIndex: 0,
+    row: 0,
+    col: 0,
+    source: '',
+  }
+  length = 0
+
+  constructor(capacity: number) {
+    this.sheetIds = new Uint32Array(capacity)
+    this.cellIndices = new Uint32Array(capacity)
+    this.rows = new Uint32Array(capacity)
+    this.cols = new Uint32Array(capacity)
+    this.sources = []
+  }
+
+  push(sheetId: number, cellIndex: number, row: number, col: number, source: string): void {
+    const index = this.length
+    this.sheetIds[index] = sheetId
+    this.cellIndices[index] = cellIndex
+    this.rows[index] = row
+    this.cols[index] = col
+    this.sources[index] = source
+    this.length = index + 1
+  }
+
+  at(index: number): EngineFormulaSourceRef {
+    this.reusable.sheetId = this.sheetIds[index]!
+    this.reusable.cellIndex = this.cellIndices[index]!
+    this.reusable.row = this.rows[index]!
+    this.reusable.col = this.cols[index]!
+    this.reusable.source = this.sources[index]!
+    return this.reusable
+  }
+}
+
 function isFreshRuntimeLogicalSheetInternals(value: unknown): value is FreshRuntimeLogicalSheetInternals {
   return typeof value === 'object' && value !== null
 }
 
 function createWrittenColumnTracker(): WrittenColumnTracker {
   return {
-    columns: new Uint8Array(8),
+    smallColumns: 0,
     count: 0,
   }
 }
 
 function markWrittenColumn(tracker: WrittenColumnTracker, col: number): void {
-  if (col >= tracker.columns.length) {
-    let nextLength = tracker.columns.length
+  if (col < 30) {
+    const bit = 1 << col
+    if ((tracker.smallColumns & bit) !== 0) {
+      return
+    }
+    tracker.smallColumns |= bit
+    tracker.count += 1
+    return
+  }
+  let columns = tracker.columns
+  if (!columns) {
+    columns = new Uint8Array(Math.max(32, col + 1))
+    tracker.columns = columns
+  } else if (col >= columns.length) {
+    let nextLength = columns.length
     while (nextLength <= col) {
       nextLength *= 2
     }
     const nextColumns = new Uint8Array(nextLength)
-    nextColumns.set(tracker.columns)
-    tracker.columns = nextColumns
+    nextColumns.set(columns)
+    columns = nextColumns
+    tracker.columns = columns
   }
-  if (tracker.columns[col] !== 0) {
+  if (columns[col] !== 0) {
     return
   }
-  tracker.columns[col] = 1
+  columns[col] = 1
   tracker.count += 1
 }
 
 function materializeWrittenColumns(tracker: WrittenColumnTracker): Uint32Array {
   const columns = new Uint32Array(tracker.count)
   let writeIndex = 0
-  for (let col = 0; col < tracker.columns.length; col += 1) {
-    if (tracker.columns[col] !== 0) {
+  for (let col = 0; col < 30; col += 1) {
+    if ((tracker.smallColumns & (1 << col)) !== 0) {
+      columns[writeIndex] = col
+      writeIndex += 1
+    }
+  }
+  const largeColumns = tracker.columns
+  if (largeColumns) {
+    for (let col = 30; col < largeColumns.length; col += 1) {
+      if (largeColumns[col] === 0) {
+        continue
+      }
       columns[writeIndex] = col
       writeIndex += 1
     }
@@ -249,10 +324,10 @@ function createFreshRuntimeCellAttacher(workbook: WorkbookStore, sheet: SheetRec
   const logical = isFreshRuntimeLogicalSheetInternals(logicalCandidate) ? logicalCandidate : undefined
   const setDeferredCellPage = logical?.cellPages?.setDeferred?.bind(logical.cellPages)
   const deferCellPageRebuild = logical?.cellPages?.deferRebuild?.bind(logical.cellPages)
-  const identities = logical?.cellIdentities?.identities
+  const setCellIdentityParts = logical?.cellIdentities?.setParts?.bind(logical.cellIdentities)
   const addDeferredResidentCell = logical?.residentCells?.addDeferred?.bind(logical.residentCells)
   const deferResidentCellRebuild = logical?.residentCells?.deferRebuild?.bind(logical.residentCells)
-  if ((!deferCellPageRebuild && !setDeferredCellPage) || !identities || (!deferResidentCellRebuild && !addDeferredResidentCell)) {
+  if ((!deferCellPageRebuild && !setDeferredCellPage) || !setCellIdentityParts || (!deferResidentCellRebuild && !addDeferredResidentCell)) {
     return (row, col, cellIndex, rowId, colId) => {
       workbook.attachAllocatedCellWithLogicalAxisIds(sheet.id, row, col, cellIndex, rowId, colId)
     }
@@ -270,15 +345,14 @@ function createFreshRuntimeCellAttacher(workbook: WorkbookStore, sheet: SheetRec
         setDeferredCellPage!({ sheetId, rowId, colId }, cellIndex)
       }
     }
-    const identity = { sheetId, rowId, colId }
-    identities.set(cellIndex, identity)
+    setCellIdentityParts(cellIndex, sheetId, rowId, colId)
     if (deferResidentCellRebuild) {
       if (!residentRebuildDeferred) {
         residentRebuildDeferred = true
         deferResidentCellRebuild()
       }
     } else {
-      addDeferredResidentCell!(cellIndex, identity)
+      addDeferredResidentCell!(cellIndex, { rowId, colId })
     }
     sheet.grid.set(row, col, cellIndex)
   }
@@ -455,22 +529,61 @@ function restoreWorkbookStructure(args: {
   return orderedSheets
 }
 
-function restoreLiteralCell(args: {
-  readonly workbook: WorkbookStore
-  readonly strings: StringPool
-  readonly cellIndex: number
-  readonly value: LiteralInput
-}): void {
-  writeLiteralToCellStore(args.workbook.cellStore, args.cellIndex, args.value, args.strings)
-  if (args.value === null) {
-    args.workbook.cellStore.flags[args.cellIndex] = (args.workbook.cellStore.flags[args.cellIndex] ?? 0) | CellFlags.AuthoredBlank
+function restoreLiteralCell(
+  workbook: WorkbookStore,
+  strings: StringPool,
+  cellIndex: number,
+  value: LiteralInput,
+  stringIdCache?: Map<string, number>,
+): void {
+  const cellStore = workbook.cellStore
+  const flags = cellStore.flags[cellIndex] ?? 0
+  if (value === null) {
+    cellStore.tags[cellIndex] = ValueTag.Empty
+    cellStore.errors[cellIndex] = ErrorCode.None
+    cellStore.stringIds[cellIndex] = 0
+    cellStore.numbers[cellIndex] = 0
+    cellStore.flags[cellIndex] = flags | CellFlags.AuthoredBlank
+  } else if (typeof value === 'number') {
+    cellStore.tags[cellIndex] = ValueTag.Number
+    cellStore.errors[cellIndex] = ErrorCode.None
+    cellStore.stringIds[cellIndex] = 0
+    cellStore.numbers[cellIndex] = value
+    if ((flags & CellFlags.AuthoredBlank) !== 0) {
+      cellStore.flags[cellIndex] = flags & ~CellFlags.AuthoredBlank
+    }
+  } else if (typeof value === 'boolean') {
+    cellStore.tags[cellIndex] = ValueTag.Boolean
+    cellStore.errors[cellIndex] = ErrorCode.None
+    cellStore.stringIds[cellIndex] = 0
+    cellStore.numbers[cellIndex] = value ? 1 : 0
+    if ((flags & CellFlags.AuthoredBlank) !== 0) {
+      cellStore.flags[cellIndex] = flags & ~CellFlags.AuthoredBlank
+    }
+  } else {
+    let stringId = stringIdCache?.get(value)
+    if (stringId === undefined) {
+      stringId = strings.intern(value)
+      stringIdCache?.set(value, stringId)
+    }
+    cellStore.tags[cellIndex] = ValueTag.String
+    cellStore.errors[cellIndex] = ErrorCode.None
+    cellStore.stringIds[cellIndex] = stringId
+    cellStore.numbers[cellIndex] = 0
+    if ((flags & CellFlags.AuthoredBlank) !== 0) {
+      cellStore.flags[cellIndex] = flags & ~CellFlags.AuthoredBlank
+    }
   }
+  cellStore.versions[cellIndex] = (cellStore.versions[cellIndex] ?? 0) + 1
+  cellStore.onSetValue?.(cellIndex)
 }
 
 export function restoreWorkbookFromSnapshot(args: WorkbookSnapshotRestoreArgs): WorkbookRestoreResult {
   const orderedSheets = restoreWorkbookStructure(args)
   const potentialNewCells = orderedSheets.reduce((count, sheet) => count + sheet.cells.length, 0)
   const formulaRefs: EngineCellMutationRef[] = []
+  const formulaSourceRefs = args.initializeFormulaSourcesAt ? new RestoredFormulaSourceRefTable(potentialNewCells) : undefined
+  const restoredStringIds = new Map<string, number>()
 
   args.workbook.cellStore.ensureCapacity(args.workbook.cellStore.size + potentialNewCells)
   const previousOnSetValue = args.workbook.cellStore.onSetValue
@@ -498,23 +611,22 @@ export function restoreWorkbookFromSnapshot(args: WorkbookSnapshotRestoreArgs): 
           const colId = (colIds[coords.col] ??= ensureColId(coords.col))
           attachFreshCell(coords.row, coords.col, restoredCellIndex, rowId, colId)
           if (cell.formula !== undefined) {
-            formulaRefs.push({
-              sheetId,
-              cellIndex: restoredCellIndex,
-              mutation: {
-                kind: 'setCellFormula',
-                row: coords.row,
-                col: coords.col,
-                formula: cell.formula,
-              },
-            })
+            if (formulaSourceRefs) {
+              formulaSourceRefs.push(sheetId, restoredCellIndex, coords.row, coords.col, cell.formula)
+            } else {
+              formulaRefs.push({
+                sheetId,
+                cellIndex: restoredCellIndex,
+                mutation: {
+                  kind: 'setCellFormula',
+                  row: coords.row,
+                  col: coords.col,
+                  formula: cell.formula,
+                },
+              })
+            }
           } else {
-            restoreLiteralCell({
-              workbook: args.workbook,
-              strings: args.strings,
-              cellIndex: restoredCellIndex,
-              value: cell.value ?? null,
-            })
+            restoreLiteralCell(args.workbook, args.strings, restoredCellIndex, cell.value ?? null, restoredStringIds)
             literalColumns ??= createWrittenColumnTracker()
             markWrittenColumn(literalColumns, coords.col)
           }
@@ -531,7 +643,9 @@ export function restoreWorkbookFromSnapshot(args: WorkbookSnapshotRestoreArgs): 
     }
   })
 
-  if (formulaRefs.length > 0) {
+  if (formulaSourceRefs && formulaSourceRefs.length > 0) {
+    args.initializeFormulaSourcesAt!(formulaSourceRefs, potentialNewCells)
+  } else if (formulaRefs.length > 0) {
     args.initializeCellFormulasAt(formulaRefs, potentialNewCells)
   }
 
@@ -539,7 +653,7 @@ export function restoreWorkbookFromSnapshot(args: WorkbookSnapshotRestoreArgs): 
     workbook: args.workbook,
     workbookMetadata: args.snapshot.workbook.metadata,
   })
-  return { formulaCount: formulaRefs.length }
+  return { formulaCount: formulaSourceRefs?.length ?? formulaRefs.length }
 }
 
 export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): WorkbookRestoreResult {

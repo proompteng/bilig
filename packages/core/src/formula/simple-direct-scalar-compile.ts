@@ -150,6 +150,12 @@ function parsedCellDependency(ref: ParsedCellReferenceInfo): ParsedDependencyRef
   return dependency
 }
 
+export interface SimpleDirectScalarParsedReferenceSet {
+  readonly symbolicRefs: string[]
+  readonly parsedDeps: ParsedDependencyReference[]
+  readonly parsedSymbolicRefs: ParsedCellReferenceInfo[]
+}
+
 function parsedTranslatedSourceRef(
   column: string,
   rowText: string,
@@ -288,7 +294,7 @@ function isSimpleDirectAbsAst(node: FormulaNode): node is SimpleDirectAbsAst {
 export function translateSimpleDirectScalarFormulaWithParsedRefs(
   compiled: CompiledFormula,
   source: string,
-  parsedSymbolicRefs: ParsedCellReferenceInfo[],
+  parsedRefs: SimpleDirectScalarParsedReferenceSet,
 ): CompiledFormula | undefined {
   if (
     compiled.symbolicRanges.length !== 0 ||
@@ -303,12 +309,14 @@ export function translateSimpleDirectScalarFormulaWithParsedRefs(
   }
   const scalarAst = isSimpleDirectScalarOffsetAst(compiled.optimizedAst) ? compiled.optimizedAst.left : compiled.optimizedAst
   const expectedRefCount = isSimpleDirectScalarAst(scalarAst) && scalarAst.right.kind === 'CellRef' ? 2 : 1
-  if (parsedSymbolicRefs.length !== expectedRefCount) {
+  if (
+    parsedRefs.parsedSymbolicRefs.length !== expectedRefCount ||
+    parsedRefs.symbolicRefs.length !== expectedRefCount ||
+    parsedRefs.parsedDeps.length !== expectedRefCount
+  ) {
     return undefined
   }
-  const symbolicRefs = parsedSymbolicRefs.map((ref) => ref.address)
-  const parsedDeps = parsedSymbolicRefs.map(parsedCellDependency)
-  return translatedCompiledFormula(compiled, source, symbolicRefs, parsedDeps, parsedSymbolicRefs)
+  return translatedCompiledFormula(compiled, source, parsedRefs.symbolicRefs, parsedRefs.parsedDeps, parsedRefs.parsedSymbolicRefs)
 }
 
 export function translateSimpleDirectScalarFormula(

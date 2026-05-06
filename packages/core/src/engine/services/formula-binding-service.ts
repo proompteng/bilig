@@ -1778,7 +1778,11 @@ export function createEngineFormulaBindingService(args: {
   }
 
   const appendReverseEdge = (entityId: number, dependentEntityId: number): void => {
-    const slice = getReverseEdgeSlice(entityId) ?? args.edgeArena.empty()
+    const slice = getReverseEdgeSlice(entityId)
+    if (!slice) {
+      setReverseEdgeSlice(entityId, args.edgeArena.singleton(dependentEntityId))
+      return
+    }
     setReverseEdgeSlice(entityId, args.edgeArena.appendUnique(slice, dependentEntityId))
   }
 

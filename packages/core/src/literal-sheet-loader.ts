@@ -9,7 +9,7 @@ interface FreshLiteralCellPageInternals {
 }
 
 interface FreshLiteralCellIdentityInternals {
-  readonly identities?: Map<number, { readonly sheetId: number; readonly rowId: string; readonly colId: string }>
+  readonly setParts?: (cellIndex: number, sheetId: number, rowId: string, colId: string) => void
 }
 
 interface FreshLiteralResidentCellInternals {
@@ -177,9 +177,9 @@ function createFreshLiteralCellAttacher(workbook: WorkbookStore, sheet: SheetRec
   const logicalCandidate: unknown = sheet.logical
   const logical = isFreshLiteralLogicalSheetInternals(logicalCandidate) ? logicalCandidate : undefined
   const setDeferredCellPage = logical?.cellPages?.setDeferred?.bind(logical.cellPages)
-  const identities = logical?.cellIdentities?.identities
+  const setCellIdentityParts = logical?.cellIdentities?.setParts?.bind(logical.cellIdentities)
   const addDeferredResidentCell = logical?.residentCells?.addDeferred?.bind(logical.residentCells)
-  if (!setDeferredCellPage || !identities || !addDeferredResidentCell) {
+  if (!setDeferredCellPage || !setCellIdentityParts || !addDeferredResidentCell) {
     return (row, col, cellIndex, rowId, colId) => {
       workbook.attachAllocatedCellWithLogicalAxisIds(sheet.id, row, col, cellIndex, rowId, colId)
     }
@@ -189,7 +189,7 @@ function createFreshLiteralCellAttacher(workbook: WorkbookStore, sheet: SheetRec
 
   return (row, col, cellIndex, rowId, colId) => {
     setDeferredCellPage({ sheetId: sheet.id, rowId, colId }, cellIndex)
-    identities.set(cellIndex, { sheetId: sheet.id, rowId, colId })
+    setCellIdentityParts(cellIndex, sheet.id, rowId, colId)
     addDeferredResidentCell(cellIndex, { rowId, colId })
     setGridCell(row, col, cellIndex)
   }

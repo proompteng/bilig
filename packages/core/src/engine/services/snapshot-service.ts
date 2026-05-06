@@ -1,6 +1,6 @@
 import { Effect } from 'effect'
 import { ValueTag, type CellSnapshot, type WorkbookSnapshot } from '@bilig/protocol'
-import type { EngineCellMutationRef } from '../../cell-mutations-at.js'
+import type { EngineCellMutationRef, EngineFormulaSourceRefs } from '../../cell-mutations-at.js'
 import { CellFlags } from '../../cell-store.js'
 import { cloneCellStyleRecord } from '../../engine-style-utils.js'
 import { exportSheetMetadata } from '../../engine-snapshot-utils.js'
@@ -30,6 +30,7 @@ export function createEngineSnapshotService(args: {
   readonly hydrateTemplateBank?: (templates: readonly FormulaTemplateSnapshot[]) => void
   readonly resolveTemplateById?: (templateId: number, source: string, row: number, col: number) => FormulaTemplateResolution | undefined
   readonly initializeCellFormulasAt: (refs: readonly EngineCellMutationRef[], potentialNewCells?: number) => void
+  readonly initializeFormulaSourcesAt?: (refs: EngineFormulaSourceRefs, potentialNewCells?: number) => void
   readonly initializePreparedCellFormulasAt?: (refs: readonly PreparedFormulaInitializationRef[], potentialNewCells?: number) => void
   readonly initializeHydratedPreparedCellFormulasAt?: (
     refs: readonly HydratedPreparedFormulaInitializationRef[],
@@ -275,6 +276,7 @@ export function createEngineSnapshotService(args: {
             strings: args.state.strings,
             resetWorkbook: args.resetWorkbook,
             initializeCellFormulasAt: args.initializeCellFormulasAt,
+            ...(args.initializeFormulaSourcesAt ? { initializeFormulaSourcesAt: args.initializeFormulaSourcesAt } : {}),
           })
           materializeImportedPivots()
           args.emitFullInvalidation?.({ incrementMetrics: restoreResult.formulaCount === 0 })

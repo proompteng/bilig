@@ -121,7 +121,7 @@
     "microsoftExcelLiveLargeWorkbookEvidence": "live-local-microsoft-excel-automation",
     "microsoftExcelLiveLargeWorkbookCaseCount": 2,
     "microsoftExcelLiveLargeWorkbookPassed": true,
-    "microsoftExcelLiveLargeWorkbookTenXMeanAndP95CaseCount": 1,
+    "microsoftExcelLiveLargeWorkbookTenXMeanAndP95CaseCount": 2,
     "microsoftExcelLiveLargeWorkbookVersion": "16.108.2",
     "microsoftExcelLiveStructuralEvidence": "live-local-microsoft-excel-automation",
     "microsoftExcelLiveStructuralCaseCount": 6,
@@ -313,7 +313,7 @@
         "external Google Sheets large-workbook evidence: official-docs-comparison-artifact",
         "external Microsoft Excel large-workbook evidence: official-docs-comparison-artifact",
         "live Microsoft Excel large-workbook scorecard passes 2/2 required cases on Excel 16.108.2",
-        "live Microsoft Excel large-workbook cases with 10x mean+p95 wins: 1/2",
+        "live Microsoft Excel large-workbook cases with 10x mean+p95 wins: 2/2",
         "external large-workbook comparison dimensions pass: true",
         "headed browser frame p95 contracts pass: true",
         "headedDense100kDiagonalBrowse: frameMs.p95 budget 20ms on 100000 materialized cells via pnpm test:browser:full",
@@ -334,10 +334,7 @@
         "pnpm test:browser:full",
         "pnpm bench:smoke"
       ],
-      "blockers": [
-        "live Microsoft Excel large-workbook timing scorecard does not prove 10x mean+p95 for all large-workbook cases",
-        "no direct Google Sheets large-workbook live timing artifact exists in the repo"
-      ]
+      "blockers": ["no direct Google Sheets large-workbook live timing artifact exists in the repo"]
     },
     {
       "id": "ui-responsiveness",
