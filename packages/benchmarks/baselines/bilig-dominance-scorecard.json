@@ -132,7 +132,10 @@
       "xlsx.charts.roundtrip",
       "xlsx.pivots.roundtrip",
       "xlsx.multiSheet",
-      "xlsx.unsupportedFeatureWarnings"
+      "xlsx.unsupportedFeatureWarnings",
+      "external.googleSheetsImportExportDocs",
+      "external.microsoftExcelImportExportDocs",
+      "external.sheetsExcelImportExportComparison"
     ],
     "importExportFidelityPassed": true,
     "importExportUnsupportedFeatures": ["xlsx.macros.execution"],
@@ -367,11 +370,14 @@
       "status": "partial-repo-evidence",
       "currentEvidence": [
         "generated import/export fidelity scorecard passes required cases: true",
-        "covered import/export features: csv.import, csv.preview, csv.export, csv.roundtrip, xlsx.import, xlsx.preview, xlsx.export, xlsx.roundtrip, xlsx.values, xlsx.formulas, xlsx.numberFormats, xlsx.workbookProperties, xlsx.calculationSettings, xlsx.definedNames, xlsx.comments, xlsx.styles, xlsx.conditionalFormats.roundtrip, xlsx.rowColumnDimensions, xlsx.merges, xlsx.freezePanes.roundtrip, xlsx.filters.roundtrip, xlsx.sorts.roundtrip, xlsx.sheetProtection.roundtrip, xlsx.protectedRanges.roundtrip, xlsx.dataValidations.roundtrip, xlsx.tables.roundtrip, xlsx.charts.roundtrip, xlsx.pivots.roundtrip, xlsx.multiSheet, xlsx.unsupportedFeatureWarnings",
-        "unsupported XLSX features are explicitly disclosed: xlsx.macros.execution"
+        "covered import/export features: csv.import, csv.preview, csv.export, csv.roundtrip, xlsx.import, xlsx.preview, xlsx.export, xlsx.roundtrip, xlsx.values, xlsx.formulas, xlsx.numberFormats, xlsx.workbookProperties, xlsx.calculationSettings, xlsx.definedNames, xlsx.comments, xlsx.styles, xlsx.conditionalFormats.roundtrip, xlsx.rowColumnDimensions, xlsx.merges, xlsx.freezePanes.roundtrip, xlsx.filters.roundtrip, xlsx.sorts.roundtrip, xlsx.sheetProtection.roundtrip, xlsx.protectedRanges.roundtrip, xlsx.dataValidations.roundtrip, xlsx.tables.roundtrip, xlsx.charts.roundtrip, xlsx.pivots.roundtrip, xlsx.multiSheet, xlsx.unsupportedFeatureWarnings, external.googleSheetsImportExportDocs, external.microsoftExcelImportExportDocs, external.sheetsExcelImportExportComparison",
+        "unsupported XLSX features are explicitly disclosed: xlsx.macros.execution",
+        "external Google Sheets import/export evidence: official-docs-comparison-artifact",
+        "external Microsoft Excel import/export evidence: official-docs-comparison-artifact"
       ],
       "evidenceArtifacts": [
         "packages/benchmarks/baselines/import-export-fidelity-scorecard.json",
+        "packages/benchmarks/baselines/import-export-external-sheets-excel-comparison.json",
         "packages/excel-import/src/__tests__/excel-import.test.ts",
         "packages/core/src/__tests__/engine-import-export.fuzz.test.ts",
         "docs/formula-oracle-capture.md"
@@ -381,9 +387,7 @@
         "pnpm exec vitest run packages/excel-import/src/__tests__/excel-import.test.ts packages/core/src/__tests__/engine-import-export.fuzz.test.ts"
       ],
       "blockers": [
-        "generated XLSX round-trip evidence covers supported snapshot semantics, not full native Excel macro execution semantics",
-        "no direct Sheets import/export compatibility artifact exists in the repo",
-        "no direct Microsoft Excel import/export compatibility artifact exists in the repo"
+        "generated XLSX round-trip evidence covers supported snapshot semantics, not full native Excel macro execution semantics"
       ]
     },
     {

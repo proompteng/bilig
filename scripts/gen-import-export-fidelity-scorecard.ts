@@ -8,12 +8,18 @@ import { pathToFileURL } from 'node:url'
 import { SpreadsheetEngine } from '../packages/core/src/engine.js'
 import { exportXlsx, importCsv, importXlsx } from '../packages/excel-import/src/index.js'
 import type { WorkbookSnapshot } from '../packages/protocol/src/types.js'
+import {
+  externalImportExportComparisonArtifactRepoPath,
+  externalImportExportComparisonCoveredFeatures,
+  parseExternalImportExportComparisonArtifact,
+  validateExternalImportExportComparisonArtifact,
+} from './import-export-external-sheets-excel-comparison.ts'
 import { projectSupportedSnapshotSemantics } from './import-export-fidelity-projection.ts'
 
 export interface ImportExportFidelityCase {
   readonly id: string
-  readonly format: 'csv' | 'xlsx'
-  readonly direction: 'import' | 'export-import' | 'import-export-import'
+  readonly format: 'csv' | 'xlsx' | 'external-docs'
+  readonly direction: 'import' | 'export-import' | 'import-export-import' | 'comparison'
   readonly required: boolean
   readonly passed: boolean
   readonly coveredFeatures: string[]
@@ -29,6 +35,7 @@ export interface ImportExportFidelityScorecard {
     readonly artifactGenerator: 'scripts/gen-import-export-fidelity-scorecard.ts'
     readonly implementationPackage: 'packages/excel-import'
     readonly enginePackage: 'packages/core'
+    readonly externalImportExportComparisonArtifact: 'packages/benchmarks/baselines/import-export-external-sheets-excel-comparison.json'
   }
   readonly summary: {
     readonly allRequiredCasesPassed: boolean
@@ -37,14 +44,15 @@ export interface ImportExportFidelityScorecard {
     readonly xlsxSnapshotRoundTripPassed: boolean
     readonly coveredFeatures: string[]
     readonly unsupportedFeatures: string[]
-    readonly externalGoogleSheetsEvidence: 'not-captured'
-    readonly externalMicrosoftExcelEvidence: 'not-captured'
+    readonly externalGoogleSheetsEvidence: 'official-docs-comparison-artifact'
+    readonly externalMicrosoftExcelEvidence: 'official-docs-comparison-artifact'
   }
   readonly cases: ImportExportFidelityCase[]
 }
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const outputPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'import-export-fidelity-scorecard.json')
+const externalImportExportComparisonArtifactPath = join(rootDir, externalImportExportComparisonArtifactRepoPath)
 const requiredCaseIds = [
   'csv-import-preview',
   'csv-engine-roundtrip',
@@ -61,6 +69,7 @@ const requiredCaseIds = [
   'xlsx-snapshot-roundtrip-charts',
   'xlsx-snapshot-roundtrip-pivots',
   'xlsx-unsupported-features-warning',
+  'external-sheets-excel-import-export-comparison',
 ] as const
 const coveredFeatureOrder = [
   'csv.import',
@@ -93,6 +102,7 @@ const coveredFeatureOrder = [
   'xlsx.pivots.roundtrip',
   'xlsx.multiSheet',
   'xlsx.unsupportedFeatureWarnings',
+  ...externalImportExportComparisonCoveredFeatures,
 ] as const
 const unsupportedFeatures = ['xlsx.macros.execution'] as const
 
@@ -131,6 +141,7 @@ export async function buildImportExportFidelityScorecard(generatedAt = new Date(
     runXlsxSnapshotRoundTripChartsCase(),
     runXlsxSnapshotRoundTripPivotsCase(),
     runXlsxUnsupportedFeaturesWarningCase(),
+    runExternalSheetsExcelImportExportComparisonCase(),
   ]
   const coveredFeatureSet = new Set(cases.flatMap((entry) => entry.coveredFeatures))
   const coveredFeatures = coveredFeatureOrder.filter((feature) => coveredFeatureSet.has(feature))
@@ -143,6 +154,7 @@ export async function buildImportExportFidelityScorecard(generatedAt = new Date(
       artifactGenerator: 'scripts/gen-import-export-fidelity-scorecard.ts',
       implementationPackage: 'packages/excel-import',
       enginePackage: 'packages/core',
+      externalImportExportComparisonArtifact: externalImportExportComparisonArtifactRepoPath,
     },
     summary: {
       allRequiredCasesPassed: cases.filter((entry) => entry.required).every((entry) => entry.passed),
@@ -162,8 +174,8 @@ export async function buildImportExportFidelityScorecard(generatedAt = new Date(
         requiredCase(cases, 'xlsx-snapshot-roundtrip-pivots').passed,
       coveredFeatures,
       unsupportedFeatures: [...unsupportedFeatures],
-      externalGoogleSheetsEvidence: 'not-captured',
-      externalMicrosoftExcelEvidence: 'not-captured',
+      externalGoogleSheetsEvidence: 'official-docs-comparison-artifact',
+      externalMicrosoftExcelEvidence: 'official-docs-comparison-artifact',
     },
     cases,
   }
@@ -426,6 +438,28 @@ function runXlsxUnsupportedFeaturesWarningCase(): ImportExportFidelityCase {
   })
 }
 
+function runExternalSheetsExcelImportExportComparisonCase(): ImportExportFidelityCase {
+  const artifact = parseExternalImportExportComparisonArtifact(
+    JSON.parse(readFileSync(externalImportExportComparisonArtifactPath, 'utf8')) as unknown,
+  )
+  const findings = validateExternalImportExportComparisonArtifact(artifact)
+  const googleSourceCount = artifact.officialSources.filter((source) => source.vendor === 'google-sheets').length
+  const microsoftSourceCount = artifact.officialSources.filter((source) => source.vendor === 'microsoft-excel').length
+
+  return fidelityCase({
+    id: 'external-sheets-excel-import-export-comparison',
+    format: 'external-docs',
+    direction: 'comparison',
+    passed: findings.length === 0,
+    coveredFeatures: externalImportExportComparisonCoveredFeatures,
+    missingFeatures: findings,
+    evidence:
+      `Validated ${externalImportExportComparisonArtifactRepoPath} from ${artifact.sourceBasis}: ` +
+      `${String(artifact.dimensions.length)} required comparison dimensions cite ${String(googleSourceCount)} official Google Sheets/Drive sources ` +
+      `and ${String(microsoftSourceCount)} official Microsoft Excel sources.`,
+  })
+}
+
 function fidelityCase(input: {
   readonly id: ImportExportFidelityCase['id']
   readonly format: ImportExportFidelityCase['format']
@@ -652,6 +686,11 @@ export function parseImportExportFidelityScorecard(value: unknown): ImportExport
       artifactGenerator: literalField(source, 'artifactGenerator', 'scripts/gen-import-export-fidelity-scorecard.ts'),
       implementationPackage: literalField(source, 'implementationPackage', 'packages/excel-import'),
       enginePackage: literalField(source, 'enginePackage', 'packages/core'),
+      externalImportExportComparisonArtifact: literalField(
+        source,
+        'externalImportExportComparisonArtifact',
+        'packages/benchmarks/baselines/import-export-external-sheets-excel-comparison.json',
+      ),
     },
     summary: {
       allRequiredCasesPassed: booleanField(summary, 'allRequiredCasesPassed', 'import/export fidelity allRequiredCasesPassed'),
@@ -664,8 +703,8 @@ export function parseImportExportFidelityScorecard(value: unknown): ImportExport
       ),
       coveredFeatures: stringArrayField(summary, 'coveredFeatures', 'import/export fidelity coveredFeatures'),
       unsupportedFeatures: stringArrayField(summary, 'unsupportedFeatures', 'import/export fidelity unsupportedFeatures'),
-      externalGoogleSheetsEvidence: literalField(summary, 'externalGoogleSheetsEvidence', 'not-captured'),
-      externalMicrosoftExcelEvidence: literalField(summary, 'externalMicrosoftExcelEvidence', 'not-captured'),
+      externalGoogleSheetsEvidence: literalField(summary, 'externalGoogleSheetsEvidence', 'official-docs-comparison-artifact'),
+      externalMicrosoftExcelEvidence: literalField(summary, 'externalMicrosoftExcelEvidence', 'official-docs-comparison-artifact'),
     },
     cases: arrayField(record, 'cases', 'import/export fidelity cases').map(parseImportExportFidelityCase),
   }
@@ -709,14 +748,14 @@ export function validateImportExportFidelityScorecard(scorecard: ImportExportFid
 }
 
 function parseFormat(value: string): ImportExportFidelityCase['format'] {
-  if (value === 'csv' || value === 'xlsx') {
+  if (value === 'csv' || value === 'xlsx' || value === 'external-docs') {
     return value
   }
   throw new Error(`Unexpected import/export fidelity format: ${value}`)
 }
 
 function parseDirection(value: string): ImportExportFidelityCase['direction'] {
-  if (value === 'import' || value === 'export-import' || value === 'import-export-import') {
+  if (value === 'import' || value === 'export-import' || value === 'import-export-import' || value === 'comparison') {
     return value
   }
   throw new Error(`Unexpected import/export fidelity direction: ${value}`)

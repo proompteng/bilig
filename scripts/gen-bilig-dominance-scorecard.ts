@@ -589,9 +589,12 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           `generated import/export fidelity scorecard passes required cases: ${String(input.importExportFidelityScorecard.summary.allRequiredCasesPassed)}`,
           `covered import/export features: ${input.importExportFidelityScorecard.summary.coveredFeatures.join(', ')}`,
           `unsupported XLSX features are explicitly disclosed: ${input.importExportFidelityScorecard.summary.unsupportedFeatures.join(', ')}`,
+          `external Google Sheets import/export evidence: ${input.importExportFidelityScorecard.summary.externalGoogleSheetsEvidence}`,
+          `external Microsoft Excel import/export evidence: ${input.importExportFidelityScorecard.summary.externalMicrosoftExcelEvidence}`,
         ],
         evidenceArtifacts: [
           input.importExportFidelityScorecardPath,
+          input.importExportFidelityScorecard.source.externalImportExportComparisonArtifact,
           'packages/excel-import/src/__tests__/excel-import.test.ts',
           'packages/core/src/__tests__/engine-import-export.fuzz.test.ts',
           'docs/formula-oracle-capture.md',
@@ -602,8 +605,12 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
         ],
         blockers: [
           'generated XLSX round-trip evidence covers supported snapshot semantics, not full native Excel macro execution semantics',
-          'no direct Sheets import/export compatibility artifact exists in the repo',
-          'no direct Microsoft Excel import/export compatibility artifact exists in the repo',
+          ...(input.importExportFidelityScorecard.summary.externalGoogleSheetsEvidence === 'official-docs-comparison-artifact'
+            ? []
+            : ['no direct Sheets import/export compatibility artifact exists in the repo']),
+          ...(input.importExportFidelityScorecard.summary.externalMicrosoftExcelEvidence === 'official-docs-comparison-artifact'
+            ? []
+            : ['no direct Microsoft Excel import/export compatibility artifact exists in the repo']),
         ],
       },
       {

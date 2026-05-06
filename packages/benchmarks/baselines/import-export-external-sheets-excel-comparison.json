@@ -1,0 +1,240 @@
+{
+  "schemaVersion": 1,
+  "suite": "external-sheets-excel-import-export-comparison",
+  "generatedAt": "2026-05-06T15:04:00.000Z",
+  "sourceBasis": "official-public-docs-reviewed-2026-05-06",
+  "officialSources": [
+    {
+      "id": "google-sheets-file-formats",
+      "vendor": "google-sheets",
+      "title": "How to use Google Sheets",
+      "url": "https://support.google.com/docs/answer/6000292?co=GENIE.Platform%3DAndroid&hl=en",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Google documents opening and editing XLS, XLSX, XLSM, CSV, ODS, and TSV files in Sheets.",
+        "Google documents exporting Sheets as XLSX, ODS, PDF, HTML ZIP, and single-sheet CSV or TSV."
+      ]
+    },
+    {
+      "id": "google-drive-office-files",
+      "vendor": "google-sheets",
+      "title": "Work with Microsoft Office files",
+      "url": "https://support.google.com/drive/answer/9406611?hl=en-en",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Google documents editing, commenting, and collaborating directly on Office files from Google Drive, Docs, Sheets, and Slides.",
+        "Google documents that changes to Office files can be auto-saved to the original Office format, while add-ons, Apps Script, protected ranges, and translate options require conversion to Google editor formats."
+      ]
+    },
+    {
+      "id": "google-sheets-excel-best-practices",
+      "vendor": "google-sheets",
+      "title": "Use both Excel and Sheets: Best practices",
+      "url": "https://support.google.com/docs/answer/9331167?hl=en",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Google documents importing Excel data into new or existing Sheets files without changing the original Excel file.",
+        "Google documents converting Excel files to Sheets and downloading Sheets files in Excel, PDF, CSV, ODS, or other formats."
+      ]
+    },
+    {
+      "id": "google-sheets-data-ingestion",
+      "vendor": "google-sheets",
+      "title": "Learn how to optimize your data ingestion",
+      "url": "https://support.google.com/docs/answer/12236443?hl=en",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Google documents File > Import and Drive upload as preferred paths for large Excel or supported-file ingestion.",
+        "Google documents importing large CSV files through Connected Sheets and BigQuery when direct Sheets import is too large."
+      ]
+    },
+    {
+      "id": "google-drive-file-sizes",
+      "vendor": "google-sheets",
+      "title": "Files you can store in Google Drive",
+      "url": "https://support.google.com/drive/answer/37603?hl=en",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Google documents spreadsheet limits for Sheets-created, Sheets-converted, Excel-imported, and CSV-imported spreadsheets.",
+        "Google documents that cells over a documented character threshold are removed when converting Excel documents to Google Sheets."
+      ]
+    },
+    {
+      "id": "microsoft-excel-file-formats",
+      "vendor": "microsoft-excel",
+      "title": "File formats that are supported in Excel",
+      "url": "https://support.microsoft.com/en-gb/office/file-formats-that-are-supported-in-excel-0943ff2c-6014-4e8d-aaea-b83d51d46247",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Microsoft documents modern Excel workbook formats including XLSX, XLSB, and XLSM.",
+        "Microsoft documents CSV and tab-delimited text formats as active-sheet text exports and documents ODS support with potential formatting loss."
+      ]
+    },
+    {
+      "id": "microsoft-excel-feature-loss-other-formats",
+      "vendor": "microsoft-excel",
+      "title": "Excel formatting and features that are not transferred to other file formats",
+      "url": "https://support.microsoft.com/en-us/office/excel-formatting-and-features-that-are-not-transferred-to-other-file-formats-8fdd91a3-792e-4aef-a5bb-46f603d0e585",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Microsoft documents that XLSX preserves worksheet and chart data, formatting, and earlier workbook features, while XLSM also preserves macros and macro sheets.",
+        "Microsoft documents that CSV saves displayed text and values for the active worksheet while formatting, graphics, objects, and other worksheet contents are lost."
+      ]
+    },
+    {
+      "id": "microsoft-excel-import-export-text-csv",
+      "vendor": "microsoft-excel",
+      "title": "Import or export text (.txt or .csv) files",
+      "url": "https://support.microsoft.com/en-us/office/import-or-export-text-txt-or-csv-files-5250ac4c-663c-47ce-937b-339e391393ba",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Microsoft documents opening TXT and CSV files in Excel, including automatic CSV opening and Text Import Wizard behavior.",
+        "Microsoft documents saving active worksheets as TXT or CSV and warning that unsupported features may be lost."
+      ]
+    },
+    {
+      "id": "microsoft-excel-specifications-limits",
+      "vendor": "microsoft-excel",
+      "title": "Excel specifications and limits",
+      "url": "https://support.microsoft.com/en-us/office/excel-specifications-and-limits-1672b34d-7043-467e-8e27-269d656771c3",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Microsoft documents Excel worksheet dimensions and workbook limits.",
+        "Microsoft documents feature-specific limits that affect compatibility for imported or exported workbooks."
+      ]
+    }
+  ],
+  "summary": {
+    "comparisonCaptured": true,
+    "requiredDimensionsPassed": true,
+    "coveredFeatures": [
+      "external.googleSheetsImportExportDocs",
+      "external.microsoftExcelImportExportDocs",
+      "external.sheetsExcelImportExportComparison"
+    ],
+    "limitations": [
+      "This artifact captures current official public documentation, not a live round-trip execution run inside Google Sheets or Microsoft Excel.",
+      "The comparison proves direct external import/export compatibility evidence exists; it does not claim bilig is 10x better across import/export or every objective category.",
+      "bilig still explicitly treats native Excel macro execution as unsupported."
+    ]
+  },
+  "dimensions": [
+    {
+      "id": "supported-file-formats-and-office-editing",
+      "title": "Supported File Formats And Office Editing",
+      "required": true,
+      "passed": true,
+      "sourceIds": [
+        "google-sheets-file-formats",
+        "google-drive-office-files",
+        "google-sheets-excel-best-practices",
+        "microsoft-excel-file-formats"
+      ],
+      "biligEvidence": [
+        "The import/export fidelity scorecard executes CSV import preview, CSV engine round trip, XLSX import preview, and XLSX export/import round trips.",
+        "The checked feature list includes CSV import, CSV preview, CSV export, CSV round trip, XLSX import, XLSX preview, XLSX export, XLSX round trip, and multi-sheet XLSX coverage."
+      ],
+      "googleSheetsEvidence": [
+        "Google documents opening, editing, importing, converting, and exporting Excel and common spreadsheet formats from Sheets and Drive.",
+        "Google documents direct Office-file editing plus conversion to Google editor formats for features such as add-ons, Apps Script, and protected ranges."
+      ],
+      "microsoftExcelEvidence": [
+        "Microsoft documents native Excel workbook formats and text/CSV formats.",
+        "Microsoft documents ODS and PDF support with format-specific limitations."
+      ],
+      "comparisonResult": "bilig has executable CSV/XLSX import/export coverage for its supported snapshot semantics; Google Sheets and Excel have broader officially documented format surfaces and Office-file workflows.",
+      "residualLimitations": [
+        "bilig does not yet cover every incumbent file format listed by Google or Microsoft.",
+        "The external comparison is documentation-backed and does not run native Google Sheets or Excel conversion engines."
+      ]
+    },
+    {
+      "id": "xlsx-roundtrip-fidelity-and-feature-preservation",
+      "title": "XLSX Roundtrip Fidelity And Feature Preservation",
+      "required": true,
+      "passed": true,
+      "sourceIds": [
+        "google-drive-office-files",
+        "google-sheets-excel-best-practices",
+        "microsoft-excel-file-formats",
+        "microsoft-excel-feature-loss-other-formats"
+      ],
+      "biligEvidence": [
+        "The scorecard round trips values, formulas, number formats, workbook properties, calculation settings, defined names, comments, styles, conditional formats, row and column dimensions, merges, freeze panes, filters, sorts, sheet protection, protected ranges, data validations, tables, charts, pivots, and multi-sheet order through generated XLSX.",
+        "Unsupported Excel macro execution remains listed as an unsupported feature instead of being silently treated as supported."
+      ],
+      "googleSheetsEvidence": [
+        "Google documents saving Office-file edits back to the original Office format and converting Excel files to Sheets copies.",
+        "Google documents that some Sheets features require conversion to Google editor formats rather than direct Office editing."
+      ],
+      "microsoftExcelEvidence": [
+        "Microsoft documents XLSX preserving worksheet and chart data, formatting, and related workbook features.",
+        "Microsoft documents XLSM as the macro-enabled workbook format that preserves macros and macro sheets in addition to workbook features."
+      ],
+      "comparisonResult": "bilig has repo-executable XLSX subset round-trip proof, while Excel remains the native format owner and Google Sheets supports Office-file editing and conversion with documented feature-mode distinctions.",
+      "residualLimitations": [
+        "bilig still needs native Excel macro preservation or execution semantics before eliminating the macro limitation.",
+        "Round-trip proof is limited to the supported WorkbookSnapshot projection, not every XLSX construct accepted by Excel or Sheets."
+      ]
+    },
+    {
+      "id": "csv-text-import-export-and-loss-boundaries",
+      "title": "CSV Text Import Export And Loss Boundaries",
+      "required": true,
+      "passed": true,
+      "sourceIds": [
+        "google-sheets-file-formats",
+        "google-sheets-data-ingestion",
+        "microsoft-excel-file-formats",
+        "microsoft-excel-feature-loss-other-formats",
+        "microsoft-excel-import-export-text-csv"
+      ],
+      "biligEvidence": [
+        "The CSV scorecard imports formulas and typed values, exports the engine sheet, imports the exported CSV again, and verifies the reserialized CSV is stable.",
+        "CSV and XLSX feature coverage are separated so the scorecard does not imply text formats preserve workbook objects."
+      ],
+      "googleSheetsEvidence": [
+        "Google documents CSV and TSV import/export support, single-sheet CSV/TSV export, and Import functions for CSV or TSV data.",
+        "Google documents Connected Sheets as a path for very large CSV ingestion when direct import is too large."
+      ],
+      "microsoftExcelEvidence": [
+        "Microsoft documents CSV opening, Text Import Wizard behavior, From Text/CSV import, and Save As text or CSV export.",
+        "Microsoft documents that CSV and text formats preserve only certain active-worksheet text/value data and lose unsupported workbook features."
+      ],
+      "comparisonResult": "bilig's CSV round-trip proof is explicit and narrow; Google Sheets and Excel document mature CSV/text workflows with well-known feature-loss boundaries.",
+      "residualLimitations": [
+        "bilig still needs locale, encoding, delimiter, and large-file differential tests against native Google and Microsoft behavior.",
+        "CSV stability does not prove chart, pivot, formatting, or macro compatibility."
+      ]
+    },
+    {
+      "id": "workbook-size-and-compatibility-limits",
+      "title": "Workbook Size And Compatibility Limits",
+      "required": true,
+      "passed": true,
+      "sourceIds": [
+        "google-drive-file-sizes",
+        "google-sheets-data-ingestion",
+        "microsoft-excel-specifications-limits",
+        "microsoft-excel-feature-loss-other-formats"
+      ],
+      "biligEvidence": [
+        "The import/export fidelity scorecard checks feature compatibility, and the large-workbook SLO scorecard separately covers 100k and 250k row workbook behavior.",
+        "The dominance scorecard keeps import/export and large-workbook-scale as separate categories so file-format compatibility is not used as a proxy for scale leadership."
+      ],
+      "googleSheetsEvidence": [
+        "Google documents spreadsheet cell and column limits for Sheets-created, Sheets-converted, Excel-imported, and CSV-imported files.",
+        "Google documents Connected Sheets and BigQuery as a route when direct CSV import is too large."
+      ],
+      "microsoftExcelEvidence": [
+        "Microsoft documents Excel workbook and worksheet specifications and limits.",
+        "Microsoft documents format-specific feature-loss risks when converting to non-native formats."
+      ],
+      "comparisonResult": "bilig has checked compatibility artifacts and separate scale artifacts; Google Sheets and Excel publish product limits and format-loss caveats that remain necessary comparison inputs.",
+      "residualLimitations": [
+        "bilig needs direct native Sheets and Excel scale import/export timings before claiming import/export performance dominance.",
+        "The comparison does not prove compatibility for every edge case in the incumbent limits tables."
+      ]
+    }
+  ]
+}

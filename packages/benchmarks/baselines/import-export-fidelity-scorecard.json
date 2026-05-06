@@ -1,11 +1,12 @@
 {
   "schemaVersion": 1,
   "suite": "import-export-fidelity",
-  "generatedAt": "2026-05-06T12:07:40.396Z",
+  "generatedAt": "2026-05-06T14:44:19.358Z",
   "source": {
     "artifactGenerator": "scripts/gen-import-export-fidelity-scorecard.ts",
     "implementationPackage": "packages/excel-import",
-    "enginePackage": "packages/core"
+    "enginePackage": "packages/core",
+    "externalImportExportComparisonArtifact": "packages/benchmarks/baselines/import-export-external-sheets-excel-comparison.json"
   },
   "summary": {
     "allRequiredCasesPassed": true,
@@ -42,11 +43,14 @@
       "xlsx.charts.roundtrip",
       "xlsx.pivots.roundtrip",
       "xlsx.multiSheet",
-      "xlsx.unsupportedFeatureWarnings"
+      "xlsx.unsupportedFeatureWarnings",
+      "external.googleSheetsImportExportDocs",
+      "external.microsoftExcelImportExportDocs",
+      "external.sheetsExcelImportExportComparison"
     ],
     "unsupportedFeatures": ["xlsx.macros.execution"],
-    "externalGoogleSheetsEvidence": "not-captured",
-    "externalMicrosoftExcelEvidence": "not-captured"
+    "externalGoogleSheetsEvidence": "official-docs-comparison-artifact",
+    "externalMicrosoftExcelEvidence": "official-docs-comparison-artifact"
   },
   "cases": [
     {
@@ -211,6 +215,20 @@
       "coveredFeatures": ["xlsx.unsupportedFeatureWarnings"],
       "missingFeatures": ["xlsx.macros.execution"],
       "evidence": "Scorecard explicitly records unsupported XLSX surfaces instead of treating a subset round trip as full Excel parity."
+    },
+    {
+      "id": "external-sheets-excel-import-export-comparison",
+      "format": "external-docs",
+      "direction": "comparison",
+      "required": true,
+      "passed": true,
+      "coveredFeatures": [
+        "external.googleSheetsImportExportDocs",
+        "external.microsoftExcelImportExportDocs",
+        "external.sheetsExcelImportExportComparison"
+      ],
+      "missingFeatures": [],
+      "evidence": "Validated packages/benchmarks/baselines/import-export-external-sheets-excel-comparison.json from official-public-docs-reviewed-2026-05-06: 4 required comparison dimensions cite 5 official Google Sheets/Drive sources and 4 official Microsoft Excel sources."
     }
   ]
 }

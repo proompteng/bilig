@@ -44,7 +44,11 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.sourceArtifacts.securityPostureScorecard).toBe('packages/benchmarks/baselines/security-posture-scorecard.json')
     expect(scorecard.categories.find((category) => category.id === 'import-export-compatibility')).toMatchObject({
       status: 'partial-repo-evidence',
-      evidenceArtifacts: expect.arrayContaining(['packages/benchmarks/baselines/import-export-fidelity-scorecard.json']),
+      evidenceArtifacts: expect.arrayContaining([
+        'packages/benchmarks/baselines/import-export-fidelity-scorecard.json',
+        'packages/benchmarks/baselines/import-export-external-sheets-excel-comparison.json',
+      ]),
+      blockers: ['generated XLSX round-trip evidence covers supported snapshot semantics, not full native Excel macro execution semantics'],
     })
     expect(scorecard.categories.find((category) => category.id === 'large-workbook-scale')).toMatchObject({
       status: 'partial-repo-evidence',
@@ -257,15 +261,29 @@ function buildFixtureInput(): BuildScorecardInput {
     importExportFidelityScorecard: {
       schemaVersion: 1,
       suite: 'import-export-fidelity',
+      generatedAt: '2026-05-06T08:00:00.000Z',
+      source: {
+        artifactGenerator: 'scripts/gen-import-export-fidelity-scorecard.ts',
+        implementationPackage: 'packages/excel-import',
+        enginePackage: 'packages/core',
+        externalImportExportComparisonArtifact: 'packages/benchmarks/baselines/import-export-external-sheets-excel-comparison.json',
+      },
       summary: {
         allRequiredCasesPassed: true,
         csvRoundTripPassed: true,
         xlsxImportPassed: true,
         xlsxSnapshotRoundTripPassed: true,
-        coveredFeatures: ['csv.import', 'xlsx.import', 'xlsx.export'],
+        coveredFeatures: [
+          'csv.import',
+          'xlsx.import',
+          'xlsx.export',
+          'external.googleSheetsImportExportDocs',
+          'external.microsoftExcelImportExportDocs',
+          'external.sheetsExcelImportExportComparison',
+        ],
         unsupportedFeatures: ['xlsx.styles.export'],
-        externalGoogleSheetsEvidence: 'not-captured',
-        externalMicrosoftExcelEvidence: 'not-captured',
+        externalGoogleSheetsEvidence: 'official-docs-comparison-artifact',
+        externalMicrosoftExcelEvidence: 'official-docs-comparison-artifact',
       },
       cases: [
         {

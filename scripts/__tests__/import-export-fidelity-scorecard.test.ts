@@ -15,10 +15,13 @@ describe('import/export fidelity scorecard', () => {
         csvRoundTripPassed: true,
         xlsxImportPassed: true,
         xlsxSnapshotRoundTripPassed: true,
-        externalGoogleSheetsEvidence: 'not-captured',
-        externalMicrosoftExcelEvidence: 'not-captured',
+        externalGoogleSheetsEvidence: 'official-docs-comparison-artifact',
+        externalMicrosoftExcelEvidence: 'official-docs-comparison-artifact',
       },
     })
+    expect(scorecard.source.externalImportExportComparisonArtifact).toBe(
+      'packages/benchmarks/baselines/import-export-external-sheets-excel-comparison.json',
+    )
     expect(scorecard.cases.map((entry) => entry.id)).toEqual([
       'csv-import-preview',
       'csv-engine-roundtrip',
@@ -35,8 +38,18 @@ describe('import/export fidelity scorecard', () => {
       'xlsx-snapshot-roundtrip-charts',
       'xlsx-snapshot-roundtrip-pivots',
       'xlsx-unsupported-features-warning',
+      'external-sheets-excel-import-export-comparison',
     ])
     expect(scorecard.cases.every((entry) => entry.required && entry.passed)).toBe(true)
+    expect(scorecard.cases.find((entry) => entry.id === 'external-sheets-excel-import-export-comparison')).toMatchObject({
+      format: 'external-docs',
+      direction: 'comparison',
+      coveredFeatures: [
+        'external.googleSheetsImportExportDocs',
+        'external.microsoftExcelImportExportDocs',
+        'external.sheetsExcelImportExportComparison',
+      ],
+    })
     expect(scorecard.summary.coveredFeatures).toEqual([
       'csv.import',
       'csv.preview',
@@ -68,6 +81,9 @@ describe('import/export fidelity scorecard', () => {
       'xlsx.pivots.roundtrip',
       'xlsx.multiSheet',
       'xlsx.unsupportedFeatureWarnings',
+      'external.googleSheetsImportExportDocs',
+      'external.microsoftExcelImportExportDocs',
+      'external.sheetsExcelImportExportComparison',
     ])
     expect(scorecard.summary.unsupportedFeatures).toEqual(['xlsx.macros.execution'])
   })
