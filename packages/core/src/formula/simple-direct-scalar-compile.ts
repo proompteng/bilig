@@ -110,13 +110,162 @@ function translateParsedLocalCellRef(
   if (row < 0 || col < 0) {
     return undefined
   }
-  return {
+  const translated: ParsedCellReferenceInfo = {
     address: `${indexToColumn(col)}${row + 1}`,
     row,
     col,
-    ...(ref.rowAbsolute !== undefined ? { rowAbsolute: ref.rowAbsolute } : {}),
-    ...(ref.colAbsolute !== undefined ? { colAbsolute: ref.colAbsolute } : {}),
   }
+  if (ref.rowAbsolute !== undefined) {
+    translated.rowAbsolute = ref.rowAbsolute
+  }
+  if (ref.colAbsolute !== undefined) {
+    translated.colAbsolute = ref.colAbsolute
+  }
+  return translated
+}
+
+function parsedCellDependency(ref: ParsedCellReferenceInfo): ParsedDependencyReference {
+  const dependency: ParsedDependencyReference = {
+    kind: 'cell',
+    address: ref.address,
+  }
+  if (ref.sheetName !== undefined) {
+    dependency.sheetName = ref.sheetName
+  }
+  if (ref.explicitSheet !== undefined) {
+    dependency.explicitSheet = ref.explicitSheet
+  }
+  if (ref.row !== undefined) {
+    dependency.row = ref.row
+  }
+  if (ref.col !== undefined) {
+    dependency.col = ref.col
+  }
+  if (ref.rowAbsolute !== undefined) {
+    dependency.rowAbsolute = ref.rowAbsolute
+  }
+  if (ref.colAbsolute !== undefined) {
+    dependency.colAbsolute = ref.colAbsolute
+  }
+  return dependency
+}
+
+function parsedTranslatedSourceRef(
+  column: string,
+  rowText: string,
+  baseRef: ParsedCellReferenceInfo,
+  rowDelta: number,
+  colDelta: number,
+): ParsedCellReferenceInfo | undefined {
+  if (baseRef.sheetName !== undefined || baseRef.explicitSheet === true) {
+    return undefined
+  }
+  const baseRow = baseRef.row
+  const baseCol = baseRef.col
+  if (baseRow === undefined || baseCol === undefined) {
+    return undefined
+  }
+  const row = baseRef.rowAbsolute ? baseRow : baseRow + rowDelta
+  const col = baseRef.colAbsolute ? baseCol : baseCol + colDelta
+  const parsed = parsedCellRef(column, rowText)
+  if (parsed.row !== row || parsed.col !== col) {
+    return undefined
+  }
+  if (baseRef.rowAbsolute !== undefined) {
+    parsed.rowAbsolute = baseRef.rowAbsolute
+  }
+  if (baseRef.colAbsolute !== undefined) {
+    parsed.colAbsolute = baseRef.colAbsolute
+  }
+  return parsed
+}
+
+function translatedRefsFromSource(
+  compiled: CompiledFormula,
+  scalarAst: SimpleDirectScalarAst | SimpleDirectAbsAst,
+  rowDelta: number,
+  colDelta: number,
+  source: string,
+): ParsedCellReferenceInfo[] | undefined {
+  const parsedRefs = compiled.parsedSymbolicRefs
+  if (parsedRefs === undefined) {
+    return undefined
+  }
+  const trimmedSource = source.trim()
+  const trimmed = trimmedSource.startsWith('=') ? trimmedSource.slice(1).trim() : trimmedSource
+  if (isSimpleDirectAbsAst(scalarAst)) {
+    const absMatch = SIMPLE_DIRECT_ABS_RE.exec(trimmed)
+    if (!absMatch || parsedRefs.length !== 1) {
+      return undefined
+    }
+    const operand = parsedTranslatedSourceRef(absMatch[1]!, absMatch[2]!, parsedRefs[0]!, rowDelta, colDelta)
+    return operand ? [operand] : undefined
+  }
+
+  const binaryMatch = SIMPLE_DIRECT_BINARY_RE.exec(trimmed)
+  if (!binaryMatch) {
+    return undefined
+  }
+  const left = parsedTranslatedSourceRef(binaryMatch[1]!, binaryMatch[2]!, parsedRefs[0]!, rowDelta, colDelta)
+  if (!left) {
+    return undefined
+  }
+  if (scalarAst.right.kind !== 'CellRef') {
+    return parsedRefs.length === 1 && binaryMatch[4] === undefined ? [left] : undefined
+  }
+  if (parsedRefs.length !== 2 || binaryMatch[4] === undefined) {
+    return undefined
+  }
+  const right = parsedTranslatedSourceRef(binaryMatch[4], binaryMatch[5]!, parsedRefs[1]!, rowDelta, colDelta)
+  return right ? [left, right] : undefined
+}
+
+function translatedCompiledFormula(
+  compiled: CompiledFormula,
+  source: string,
+  deps: string[],
+  parsedDeps: ParsedDependencyReference[],
+  parsedSymbolicRefs: ParsedCellReferenceInfo[],
+): CompiledFormula {
+  const translated: CompiledFormula = {
+    id: compiled.id,
+    source,
+    mode: compiled.mode,
+    depsPtr: compiled.depsPtr,
+    depsLen: compiled.depsLen,
+    programOffset: compiled.programOffset,
+    programLength: compiled.programLength,
+    constNumberOffset: compiled.constNumberOffset,
+    constNumberLength: compiled.constNumberLength,
+    rangeListOffset: compiled.rangeListOffset,
+    rangeListLength: compiled.rangeListLength,
+    maxStackDepth: compiled.maxStackDepth,
+    ast: compiled.ast,
+    optimizedAst: compiled.optimizedAst,
+    astMatchesSource: false,
+    deps,
+    parsedDeps,
+    symbolicNames: compiled.symbolicNames,
+    symbolicTables: compiled.symbolicTables,
+    symbolicSpills: compiled.symbolicSpills,
+    volatile: compiled.volatile,
+    randCallCount: compiled.randCallCount,
+    producesSpill: compiled.producesSpill,
+    jsPlan: compiled.jsPlan,
+    program: compiled.program,
+    constants: compiled.constants,
+    symbolicRefs: deps,
+    parsedSymbolicRefs,
+    symbolicRanges: compiled.symbolicRanges,
+    symbolicStrings: compiled.symbolicStrings,
+  }
+  if (compiled.parsedSymbolicRanges !== undefined) {
+    translated.parsedSymbolicRanges = compiled.parsedSymbolicRanges
+  }
+  if (compiled.directAggregateCandidate !== undefined) {
+    translated.directAggregateCandidate = compiled.directAggregateCandidate
+  }
+  return translated
 }
 
 function isSimpleDirectScalarAst(node: FormulaNode): node is SimpleDirectScalarAst {
@@ -134,6 +283,32 @@ function isSimpleDirectScalarOffsetAst(node: FormulaNode): node is SimpleDirectS
 
 function isSimpleDirectAbsAst(node: FormulaNode): node is SimpleDirectAbsAst {
   return node.kind === 'CallExpr' && node.callee === 'ABS' && node.args.length === 1 && node.args[0]?.kind === 'CellRef'
+}
+
+export function translateSimpleDirectScalarFormulaWithParsedRefs(
+  compiled: CompiledFormula,
+  source: string,
+  parsedSymbolicRefs: ParsedCellReferenceInfo[],
+): CompiledFormula | undefined {
+  if (
+    compiled.symbolicRanges.length !== 0 ||
+    compiled.symbolicNames.length !== 0 ||
+    compiled.symbolicTables.length !== 0 ||
+    compiled.symbolicSpills.length !== 0 ||
+    (!isSimpleDirectScalarAst(compiled.optimizedAst) &&
+      !isSimpleDirectScalarOffsetAst(compiled.optimizedAst) &&
+      !isSimpleDirectAbsAst(compiled.optimizedAst))
+  ) {
+    return undefined
+  }
+  const scalarAst = isSimpleDirectScalarOffsetAst(compiled.optimizedAst) ? compiled.optimizedAst.left : compiled.optimizedAst
+  const expectedRefCount = isSimpleDirectScalarAst(scalarAst) && scalarAst.right.kind === 'CellRef' ? 2 : 1
+  if (parsedSymbolicRefs.length !== expectedRefCount) {
+    return undefined
+  }
+  const symbolicRefs = parsedSymbolicRefs.map((ref) => ref.address)
+  const parsedDeps = parsedSymbolicRefs.map(parsedCellDependency)
+  return translatedCompiledFormula(compiled, source, symbolicRefs, parsedDeps, parsedSymbolicRefs)
 }
 
 export function translateSimpleDirectScalarFormula(
@@ -158,6 +333,12 @@ export function translateSimpleDirectScalarFormula(
   if (compiled.parsedSymbolicRefs === undefined || compiled.parsedSymbolicRefs.length !== expectedRefCount) {
     return undefined
   }
+  const sourceRefs = translatedRefsFromSource(compiled, scalarAst, rowDelta, colDelta, source)
+  if (sourceRefs) {
+    const sourceSymbolicRefs = sourceRefs.map((ref) => ref.address)
+    const sourceParsedDeps = sourceRefs.map(parsedCellDependency)
+    return translatedCompiledFormula(compiled, source, sourceSymbolicRefs, sourceParsedDeps, sourceRefs)
+  }
   const translatedRefs: ParsedCellReferenceInfo[] = []
   const symbolicRefs: ParsedCellReferenceInfo['address'][] = []
   const parsedDeps: ParsedDependencyReference[] = []
@@ -168,17 +349,9 @@ export function translateSimpleDirectScalarFormula(
     }
     translatedRefs[index] = translated
     symbolicRefs[index] = translated.address
-    parsedDeps[index] = { kind: 'cell', ...translated }
+    parsedDeps[index] = parsedCellDependency(translated)
   }
-  return {
-    ...compiled,
-    source,
-    astMatchesSource: false,
-    deps: symbolicRefs,
-    parsedDeps,
-    symbolicRefs,
-    parsedSymbolicRefs: translatedRefs,
-  }
+  return translatedCompiledFormula(compiled, source, symbolicRefs, parsedDeps, translatedRefs)
 }
 
 export function tryCompileSimpleDirectScalarFormula(source: string): CompiledFormula | undefined {

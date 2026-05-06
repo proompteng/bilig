@@ -33,6 +33,10 @@ export class CellPageStore {
     this.pagesDirty = true
   }
 
+  deferRebuild(): void {
+    this.pagesDirty = true
+  }
+
   delete(location: LogicalCellLocation): boolean {
     this.ensurePages()
     return this.cells.delete(this.key(location))
