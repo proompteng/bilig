@@ -551,12 +551,16 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           `covered automation controls: ${input.automationScorecard.summary.coveredControls.join(', ')}`,
           `registered workbook-agent tool count: ${String(input.automationScorecard.summary.registeredToolCount)}`,
           `semantic command kinds exercised by scorecard: ${String(input.automationScorecard.summary.semanticCommandKindCount)}`,
+          `uncovered automation controls are explicitly disclosed: ${formatList(input.automationScorecard.summary.uncoveredControls)}`,
+          `external Google Apps Script evidence: ${input.automationScorecard.summary.externalGoogleSheetsEvidence}`,
+          `external Microsoft Office Scripts evidence: ${input.automationScorecard.summary.externalMicrosoftExcelEvidence}`,
           `${totalSurfaceMembers} HyperFormula surface members are snapshotted for parity tracking`,
           `${input.surfaceSnapshot.configKeys.length} HyperFormula config keys are snapshotted for parity tracking`,
           'WorkPaper exposes additional detailed events and performance counters',
         ],
         evidenceArtifacts: [
           input.automationScorecardPath,
+          input.automationScorecard.source.externalAutomationComparisonArtifact,
           input.surfaceSnapshotPath,
           'packages/headless/src/__tests__/hyperformula-surface-parity.test.ts',
           'packages/agent-api/src/__tests__/workbook-agent-bundles.test.ts',
@@ -567,10 +571,13 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           'pnpm workpaper:smoke:external',
           'pnpm exec vitest run scripts/__tests__/automation-scorecard.test.ts packages/agent-api/src/__tests__/workbook-agent-bundles.test.ts packages/headless/src/__tests__/work-paper.test.ts apps/web/src/__tests__/worker-runtime.test.ts',
         ],
-        blockers: [
-          `generated automation evidence still leaves uncovered controls: ${input.automationScorecard.summary.uncoveredControls.join(', ')}`,
-          'no direct generated Google Apps Script or Office Scripts execution comparison exists',
-        ],
+        blockers:
+          input.automationScorecard.summary.uncoveredControls.length > 0
+            ? [
+                `generated automation evidence still leaves uncovered controls: ${input.automationScorecard.summary.uncoveredControls.join(', ')}`,
+                'no direct generated Google Apps Script or Office Scripts execution comparison exists',
+              ]
+            : [],
       },
       {
         id: 'import-export-compatibility',

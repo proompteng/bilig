@@ -77,11 +77,11 @@ describe('bilig dominance scorecard', () => {
     })
     expect(scorecard.categories.find((category) => category.id === 'automation-api-extensibility')).toMatchObject({
       status: 'partial-repo-evidence',
-      evidenceArtifacts: expect.arrayContaining(['packages/benchmarks/baselines/automation-scorecard.json']),
-      blockers: [
-        'generated automation evidence still leaves uncovered controls: googleAppsScriptDirectComparison, officeScriptsDirectComparison',
-        'no direct generated Google Apps Script or Office Scripts execution comparison exists',
-      ],
+      evidenceArtifacts: expect.arrayContaining([
+        'packages/benchmarks/baselines/automation-scorecard.json',
+        'packages/benchmarks/baselines/automation-external-sheets-excel-comparison.json',
+      ]),
+      blockers: [],
     })
     expect(scorecard.categories.find((category) => category.id === 'reliability')).toMatchObject({
       status: 'partial-repo-evidence',
@@ -335,6 +335,7 @@ function buildFixtureInput(): BuildScorecardInput {
         headlessImplementation: 'packages/headless/src/work-paper-runtime.ts',
         workerRuntimeImplementation: 'apps/web/src/worker-runtime.ts',
         toolRegistryImplementation: 'packages/agent-api/src/workbook-agent-tool-names.ts',
+        externalAutomationComparisonArtifact: 'packages/benchmarks/baselines/automation-external-sheets-excel-comparison.json',
       },
       summary: {
         allRequiredControlsPassed: true,
@@ -345,10 +346,16 @@ function buildFixtureInput(): BuildScorecardInput {
         tenXWorkflowAutomationBenchmarkPassed: true,
         registeredToolCount: 98,
         semanticCommandKindCount: 6,
-        coveredControls: ['agent.semanticBundleValidation', 'headless.serviceWorkflow', 'automation.tenXWorkflowBenchmark'],
-        uncoveredControls: ['googleAppsScriptDirectComparison', 'officeScriptsDirectComparison'],
-        externalGoogleSheetsEvidence: 'not-captured',
-        externalMicrosoftExcelEvidence: 'not-captured',
+        coveredControls: [
+          'agent.semanticBundleValidation',
+          'headless.serviceWorkflow',
+          'automation.tenXWorkflowBenchmark',
+          'googleAppsScriptDirectComparison',
+          'officeScriptsDirectComparison',
+        ],
+        uncoveredControls: [],
+        externalGoogleSheetsEvidence: 'official-docs-comparison-artifact',
+        externalMicrosoftExcelEvidence: 'official-docs-comparison-artifact',
       },
       controls: [
         {

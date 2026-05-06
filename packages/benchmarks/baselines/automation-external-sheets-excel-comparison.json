@@ -1,0 +1,249 @@
+{
+  "schemaVersion": 1,
+  "suite": "external-sheets-excel-automation-comparison",
+  "generatedAt": "2026-05-06T14:29:00.000Z",
+  "sourceBasis": "official-public-docs-reviewed-2026-05-06",
+  "officialSources": [
+    {
+      "id": "google-apps-script-extend-sheets",
+      "vendor": "google-sheets",
+      "title": "Extend Google Sheets",
+      "url": "https://developers.google.com/apps-script/guides/sheets",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Google documents Apps Script APIs for programmatically creating, reading, and editing Sheets.",
+        "Google documents bound scripts with Sheets UI integration and automatic responses when the spreadsheet is opened."
+      ]
+    },
+    {
+      "id": "google-apps-script-custom-functions",
+      "vendor": "google-sheets",
+      "title": "Custom Functions in Google Sheets",
+      "url": "https://developers.google.com/apps-script/guides/sheets/functions",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Google documents Apps Script custom functions that can be used from Sheets like built-in functions.",
+        "Google documents custom-function recalculation, side-effect, deterministic-argument, and runtime constraints."
+      ]
+    },
+    {
+      "id": "google-apps-script-macros",
+      "vendor": "google-sheets",
+      "title": "Google Sheets Macros",
+      "url": "https://developers.google.com/apps-script/guides/sheets/macros",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Google documents recording Sheets macros that generate bound Apps Script functions.",
+        "Google documents that macros can be edited in Apps Script or written from scratch and imported into Sheets."
+      ]
+    },
+    {
+      "id": "google-apps-script-triggers",
+      "vendor": "google-sheets",
+      "title": "Simple Triggers",
+      "url": "https://developers.google.com/apps-script/guides/triggers",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Google documents Sheets-compatible triggers such as open, edit, and selection-change handlers.",
+        "Google documents trigger queueing and skipped selection-change behavior under rapid changes."
+      ]
+    },
+    {
+      "id": "google-apps-script-quotas",
+      "vendor": "google-sheets",
+      "title": "Quotas for Google Services",
+      "url": "https://developers.google.com/apps-script/guides/services/quotas",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Google documents Apps Script quotas and limitations for script runtime, custom-function runtime, simultaneous executions, and trigger runtime.",
+        "Google documents quota and limitation exception messages for service calls, computer time, and repeated custom-function execution."
+      ]
+    },
+    {
+      "id": "microsoft-office-scripts-overview",
+      "vendor": "microsoft-excel",
+      "title": "Office Scripts in Excel",
+      "url": "https://learn.microsoft.com/en-us/office/dev/scripts/overview/excel",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Microsoft documents Office Scripts for automating day-to-day Excel tasks with the action recorder and code editor.",
+        "Microsoft documents running scripts from workbook buttons and using Power Automate for broader workflows."
+      ]
+    },
+    {
+      "id": "microsoft-office-scripts-fundamentals",
+      "vendor": "microsoft-excel",
+      "title": "Fundamentals for Office Scripts in Excel",
+      "url": "https://learn.microsoft.com/en-us/office/dev/scripts/develop/scripting-fundamentals",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Microsoft documents a typed ExcelScript.Workbook object passed into the script main function.",
+        "Microsoft documents object-model access for worksheets, tables, charts, ranges, comments, PivotTables, shapes, and related Excel objects."
+      ]
+    },
+    {
+      "id": "microsoft-office-scripts-platform-limits",
+      "vendor": "microsoft-excel",
+      "title": "Platform limits, requirements, and error messages for Office Scripts",
+      "url": "https://learn.microsoft.com/en-us/office/dev/scripts/testing/platform-limits",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Microsoft documents Office Scripts platform limits, requirements, and error handling.",
+        "Microsoft documents that external fetch calls fail when an Office Script runs through Power Automate and need equivalent connector actions."
+      ]
+    },
+    {
+      "id": "microsoft-office-scripts-vba-differences",
+      "vendor": "microsoft-excel",
+      "title": "Differences between Office Scripts and VBA macros",
+      "url": "https://learn.microsoft.com/en-us/office/dev/scripts/resources/vba-differences",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Microsoft documents Office Scripts as secure, cross-platform, cloud-based automation compared with desktop-centric VBA.",
+        "Microsoft documents Office Scripts workbook-only access, administrator controls, licensing considerations, and platform support differences."
+      ]
+    },
+    {
+      "id": "microsoft-office-scripts-power-automate",
+      "vendor": "microsoft-excel",
+      "title": "Run Office Scripts with Power Automate",
+      "url": "https://learn.microsoft.com/en-us/office/dev/scripts/develop/power-automate-integration",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Microsoft documents adding Office Scripts to Power Automate workflows across workbook and non-workbook services.",
+        "Microsoft documents passing static values, expressions, and dynamic content between Power Automate flows and scripts."
+      ]
+    }
+  ],
+  "summary": {
+    "comparisonCaptured": true,
+    "requiredDimensionsPassed": true,
+    "coveredControls": ["googleAppsScriptDirectComparison", "officeScriptsDirectComparison"],
+    "limitations": [
+      "This artifact captures current official public documentation, not a live tenant execution benchmark against Google Apps Script or Microsoft Office Scripts.",
+      "The comparison proves direct external automation evidence exists; it does not claim bilig is 10x better across automation or every objective category."
+    ]
+  },
+  "dimensions": [
+    {
+      "id": "automation-surface-and-workflow",
+      "title": "Automation Surface And Workflow",
+      "required": true,
+      "passed": true,
+      "sourceIds": [
+        "google-apps-script-extend-sheets",
+        "google-apps-script-macros",
+        "google-apps-script-triggers",
+        "microsoft-office-scripts-overview",
+        "microsoft-office-scripts-fundamentals",
+        "microsoft-office-scripts-power-automate"
+      ],
+      "biligEvidence": [
+        "The automation scorecard executes semantic workbook-agent command bundle validation, preview projection, apply behavior, worker-runtime preview, and headless WorkPaper workflows.",
+        "The workbook-agent registry exposes canonical typed tools for semantic workbook inspection, mutation, preview, undo, object, protection, and media operations."
+      ],
+      "googleSheetsEvidence": [
+        "Google documents Apps Script APIs for Sheets automation, bound scripts, macros, custom menus, and event triggers.",
+        "Google documents Sheets macro recording into editable Apps Script functions."
+      ],
+      "microsoftExcelEvidence": [
+        "Microsoft documents Office Scripts action recording, script editing, workbook buttons, sharing, and Power Automate integration.",
+        "Microsoft documents the ExcelScript.Workbook object as the top-level script interaction surface."
+      ],
+      "comparisonResult": "bilig has repo-executable typed semantic command and preview/apply controls; Google Sheets and Microsoft Excel have documented script frameworks centered on Apps Script and Office Scripts.",
+      "residualLimitations": [
+        "bilig still needs live incumbent execution benchmarks before claiming automation dominance over Google Apps Script or Office Scripts.",
+        "Official docs can lag tenant-specific feature rollout, admin policy, and license configuration."
+      ]
+    },
+    {
+      "id": "formula-custom-function-integration",
+      "title": "Formula Custom Function Integration",
+      "required": true,
+      "passed": true,
+      "sourceIds": [
+        "google-apps-script-custom-functions",
+        "google-apps-script-quotas",
+        "microsoft-office-scripts-overview",
+        "microsoft-office-scripts-vba-differences"
+      ],
+      "biligEvidence": [
+        "bilig's automation evidence focuses on workbook commands that can write formulas, set ranges, format cells, and preview the resulting formula effects before apply.",
+        "bilig's broader formula and dominance artifacts track runtime formula production coverage separately from workbook automation controls."
+      ],
+      "googleSheetsEvidence": [
+        "Google documents Apps Script custom functions callable from Sheets formulas and subject to custom-function recalculation and runtime limits.",
+        "Google documents that custom functions return values and cannot arbitrarily edit cells outside their returned output."
+      ],
+      "microsoftExcelEvidence": [
+        "Microsoft Office Scripts automate Excel through scripts, recorders, buttons, and Power Automate rather than by adding worksheet custom functions.",
+        "Microsoft documents Office Scripts separately from desktop VBA macros and Office Add-ins."
+      ],
+      "comparisonResult": "Google Sheets has a documented custom-function formula extension path; bilig currently has stronger checked preview/apply command semantics but not a matching custom-function plugin surface, and Office Scripts is positioned as task automation rather than formula UDF extension.",
+      "residualLimitations": [
+        "bilig needs a first-class custom function or add-in API artifact before it can claim complete automation/API superiority in formula extensibility.",
+        "This dimension records evidence and gaps instead of converting the category into a blanket win."
+      ]
+    },
+    {
+      "id": "execution-limits-and-runtime-governance",
+      "title": "Execution Limits And Runtime Governance",
+      "required": true,
+      "passed": true,
+      "sourceIds": [
+        "google-apps-script-quotas",
+        "google-apps-script-triggers",
+        "microsoft-office-scripts-platform-limits",
+        "microsoft-office-scripts-vba-differences",
+        "microsoft-office-scripts-power-automate"
+      ],
+      "biligEvidence": [
+        "The automation scorecard's semantic workflow benchmark measures host-call reduction by comparing five typed semantic commands against 1202 incumbent-style row-by-row script-visible operations.",
+        "The agent execution policy and auditability scorecards separately verify permission and preview/apply rails for agent-driven workbook mutation."
+      ],
+      "googleSheetsEvidence": [
+        "Google documents Apps Script script-runtime, custom-function-runtime, simultaneous-execution, trigger-count, and daily trigger-runtime limits.",
+        "Google documents trigger queueing and quota exception modes that automation code must handle."
+      ],
+      "microsoftExcelEvidence": [
+        "Microsoft documents Office Scripts platform limits, supported environments, Power Automate restrictions, and external-call behavior.",
+        "Microsoft documents workbook-only script access, tenant-level controls, and sharing controls for Office Scripts."
+      ],
+      "comparisonResult": "bilig can prove a 10x host-call reduction for one local semantic workflow, while Google Apps Script and Office Scripts publish runtime and governance limits that must be handled by script authors.",
+      "residualLimitations": [
+        "The 10x workflow result is workload-specific and local; it is not a live Google or Microsoft runtime timing comparison.",
+        "bilig still needs production runtime quotas, cancellation, and tenant-policy artifacts before the automation governance claim is complete."
+      ]
+    },
+    {
+      "id": "typed-api-and-local-automation",
+      "title": "Typed API And Local Automation",
+      "required": true,
+      "passed": true,
+      "sourceIds": [
+        "google-apps-script-extend-sheets",
+        "google-apps-script-custom-functions",
+        "microsoft-office-scripts-fundamentals",
+        "microsoft-office-scripts-overview",
+        "microsoft-office-scripts-vba-differences"
+      ],
+      "biligEvidence": [
+        "bilig validates command bundles with typed semantic workbook commands, affected ranges, preview summaries, and deterministic application into the SpreadsheetEngine.",
+        "bilig verifies headless WorkPaper automation through copy, paste, batch formula writes, persistence round trip, undo, and redo without browser DOM automation."
+      ],
+      "googleSheetsEvidence": [
+        "Google Apps Script uses JavaScript and spreadsheet-bound APIs to automate Sheets and expose custom functions.",
+        "Google Sheets custom functions and triggers are constrained by documented recalculation, side-effect, and runtime limits."
+      ],
+      "microsoftExcelEvidence": [
+        "Microsoft Office Scripts use TypeScript-facing ExcelScript object types with a workbook root object.",
+        "Microsoft positions Office Scripts as cloud-based cross-platform task automation with workbook-scoped access."
+      ],
+      "comparisonResult": "bilig's checked automation model is local-first, previewable, undoable, and expressed as typed workbook semantics; Google and Microsoft expose mature script ecosystems with documented cloud or workspace constraints.",
+      "residualLimitations": [
+        "bilig needs public SDK documentation and external-client smoke tests before this becomes an API ecosystem lead claim.",
+        "The comparison intentionally separates bilig's repo-executable semantics from incumbent marketplace, add-on, and enterprise ecosystem breadth."
+      ]
+    }
+  ]
+}

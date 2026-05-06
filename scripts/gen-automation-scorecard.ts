@@ -30,11 +30,23 @@ import {
   type WorkPaperCellAddress,
 } from '@bilig/headless'
 import { WorkbookWorkerRuntime } from '../apps/web/src/worker-runtime.js'
+import {
+  externalAutomationComparisonArtifactRepoPath,
+  externalAutomationComparisonCoveredControls,
+  parseExternalAutomationComparisonArtifact,
+  validateExternalAutomationComparisonArtifact,
+} from './automation-external-sheets-excel-comparison.ts'
 import { arrayField, asObject, booleanField, literalField, numberField, stringArrayField, stringField } from './json-scorecard-helpers.ts'
 
 export interface AutomationControl {
   readonly id: string
-  readonly category: 'semantic-command-api' | 'headless-service-api' | 'worker-runtime-api' | 'tool-registry' | 'workflow-benchmark'
+  readonly category:
+    | 'semantic-command-api'
+    | 'headless-service-api'
+    | 'worker-runtime-api'
+    | 'tool-registry'
+    | 'workflow-benchmark'
+    | 'external-comparison'
   readonly required: boolean
   readonly passed: boolean
   readonly coveredControls: string[]
@@ -53,6 +65,7 @@ export interface AutomationScorecard {
     readonly headlessImplementation: 'packages/headless/src/work-paper-runtime.ts'
     readonly workerRuntimeImplementation: 'apps/web/src/worker-runtime.ts'
     readonly toolRegistryImplementation: 'packages/agent-api/src/workbook-agent-tool-names.ts'
+    readonly externalAutomationComparisonArtifact: 'packages/benchmarks/baselines/automation-external-sheets-excel-comparison.json'
   }
   readonly summary: {
     readonly allRequiredControlsPassed: boolean
@@ -65,20 +78,22 @@ export interface AutomationScorecard {
     readonly semanticCommandKindCount: number
     readonly coveredControls: string[]
     readonly uncoveredControls: string[]
-    readonly externalGoogleSheetsEvidence: 'not-captured'
-    readonly externalMicrosoftExcelEvidence: 'not-captured'
+    readonly externalGoogleSheetsEvidence: 'official-docs-comparison-artifact'
+    readonly externalMicrosoftExcelEvidence: 'official-docs-comparison-artifact'
   }
   readonly controls: AutomationControl[]
 }
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const outputPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'automation-scorecard.json')
+const externalAutomationComparisonArtifactPath = join(rootDir, externalAutomationComparisonArtifactRepoPath)
 const requiredControlIds = [
   'semantic-command-bundle-preview-apply',
   'headless-service-automation-workflow',
   'worker-runtime-agent-preview',
   'agent-tool-registry-semantic-coverage',
   'semantic-workflow-automation-ten-x-benchmark',
+  'external-apps-script-office-scripts-comparison',
 ] as const
 const coveredControlOrder = [
   'agent.semanticBundleValidation',
@@ -91,8 +106,9 @@ const coveredControlOrder = [
   'tools.semanticWorkbookRegistry',
   'tools.legacyNameNormalization',
   'automation.tenXWorkflowBenchmark',
+  ...externalAutomationComparisonCoveredControls,
 ] as const
-const uncoveredControls = ['googleAppsScriptDirectComparison', 'officeScriptsDirectComparison'] as const
+const uncoveredControls: readonly string[] = []
 const requiredSemanticToolNames = [
   WORKBOOK_AGENT_TOOL_NAMES.applyAndVerify,
   WORKBOOK_AGENT_TOOL_NAMES.undoWorkbookMutation,
@@ -131,6 +147,7 @@ export async function buildAutomationScorecard(generatedAt = new Date().toISOStr
     await buildWorkerRuntimePreviewControl(),
     buildToolRegistryControl(),
     await buildSemanticWorkflowAutomationBenchmarkControl(),
+    buildExternalAppsScriptOfficeScriptsComparisonControl(),
   ]
   const coveredControlSet = new Set(controls.flatMap((control) => control.coveredControls))
   const coveredControls = coveredControlOrder.filter((control) => coveredControlSet.has(control))
@@ -146,6 +163,7 @@ export async function buildAutomationScorecard(generatedAt = new Date().toISOStr
       headlessImplementation: 'packages/headless/src/work-paper-runtime.ts',
       workerRuntimeImplementation: 'apps/web/src/worker-runtime.ts',
       toolRegistryImplementation: 'packages/agent-api/src/workbook-agent-tool-names.ts',
+      externalAutomationComparisonArtifact: externalAutomationComparisonArtifactRepoPath,
     },
     summary: {
       allRequiredControlsPassed: controls.filter((control) => control.required).every((control) => control.passed),
@@ -158,8 +176,8 @@ export async function buildAutomationScorecard(generatedAt = new Date().toISOStr
       semanticCommandKindCount: new Set(createSemanticWorkflowCommands().map((command) => command.kind)).size,
       coveredControls,
       uncoveredControls: [...uncoveredControls],
-      externalGoogleSheetsEvidence: 'not-captured',
-      externalMicrosoftExcelEvidence: 'not-captured',
+      externalGoogleSheetsEvidence: 'official-docs-comparison-artifact',
+      externalMicrosoftExcelEvidence: 'official-docs-comparison-artifact',
     },
     controls,
   }
@@ -436,6 +454,28 @@ async function buildSemanticWorkflowAutomationBenchmarkControl(): Promise<Automa
           ]),
       ...(scriptOutputPassed ? [] : [`script-style baseline produced unexpected output: D${String(finalRow)}=${String(scriptFinalValue)}`]),
     ],
+  })
+}
+
+function buildExternalAppsScriptOfficeScriptsComparisonControl(): AutomationControl {
+  const artifact = parseExternalAutomationComparisonArtifact(
+    JSON.parse(readFileSync(externalAutomationComparisonArtifactPath, 'utf8')) as unknown,
+  )
+  const findings = validateExternalAutomationComparisonArtifact(artifact)
+  const googleSourceCount = artifact.officialSources.filter((source) => source.vendor === 'google-sheets').length
+  const microsoftSourceCount = artifact.officialSources.filter((source) => source.vendor === 'microsoft-excel').length
+
+  return automationControl({
+    id: 'external-apps-script-office-scripts-comparison',
+    category: 'external-comparison',
+    passed: findings.length === 0,
+    coveredControls: externalAutomationComparisonCoveredControls,
+    evidence:
+      `Validated ${externalAutomationComparisonArtifactRepoPath} from ${artifact.sourceBasis}: ` +
+      `${String(artifact.dimensions.length)} required automation comparison dimensions cite ${String(
+        googleSourceCount,
+      )} official Google Apps Script/Sheets sources and ${String(microsoftSourceCount)} official Microsoft Office Scripts/Excel sources.`,
+    findings,
   })
 }
 
@@ -763,6 +803,11 @@ export function parseAutomationScorecard(value: unknown): AutomationScorecard {
       headlessImplementation: literalField(source, 'headlessImplementation', 'packages/headless/src/work-paper-runtime.ts'),
       workerRuntimeImplementation: literalField(source, 'workerRuntimeImplementation', 'apps/web/src/worker-runtime.ts'),
       toolRegistryImplementation: literalField(source, 'toolRegistryImplementation', 'packages/agent-api/src/workbook-agent-tool-names.ts'),
+      externalAutomationComparisonArtifact: literalField(
+        source,
+        'externalAutomationComparisonArtifact',
+        'packages/benchmarks/baselines/automation-external-sheets-excel-comparison.json',
+      ),
     },
     summary: {
       allRequiredControlsPassed: booleanField(summary, 'allRequiredControlsPassed'),
@@ -775,8 +820,8 @@ export function parseAutomationScorecard(value: unknown): AutomationScorecard {
       semanticCommandKindCount: numberField(summary, 'semanticCommandKindCount'),
       coveredControls: stringArrayField(summary, 'coveredControls'),
       uncoveredControls: stringArrayField(summary, 'uncoveredControls'),
-      externalGoogleSheetsEvidence: literalField(summary, 'externalGoogleSheetsEvidence', 'not-captured'),
-      externalMicrosoftExcelEvidence: literalField(summary, 'externalMicrosoftExcelEvidence', 'not-captured'),
+      externalGoogleSheetsEvidence: literalField(summary, 'externalGoogleSheetsEvidence', 'official-docs-comparison-artifact'),
+      externalMicrosoftExcelEvidence: literalField(summary, 'externalMicrosoftExcelEvidence', 'official-docs-comparison-artifact'),
     },
     controls: arrayField(record, 'controls').map(parseAutomationControl),
   }
@@ -826,7 +871,8 @@ function parseAutomationCategory(value: string): AutomationControl['category'] {
     value === 'headless-service-api' ||
     value === 'worker-runtime-api' ||
     value === 'tool-registry' ||
-    value === 'workflow-benchmark'
+    value === 'workflow-benchmark' ||
+    value === 'external-comparison'
   ) {
     return value
   }

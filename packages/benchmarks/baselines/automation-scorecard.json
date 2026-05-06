@@ -1,14 +1,15 @@
 {
   "schemaVersion": 1,
   "suite": "automation-api-extensibility",
-  "generatedAt": "2026-05-06T10:05:45.189Z",
+  "generatedAt": "2026-05-06T14:32:28.517Z",
   "source": {
     "artifactGenerator": "scripts/gen-automation-scorecard.ts",
     "commandBundleImplementation": "packages/agent-api/src/workbook-agent-bundles.ts",
     "previewImplementation": "packages/agent-api/src/workbook-agent-preview.ts",
     "headlessImplementation": "packages/headless/src/work-paper-runtime.ts",
     "workerRuntimeImplementation": "apps/web/src/worker-runtime.ts",
-    "toolRegistryImplementation": "packages/agent-api/src/workbook-agent-tool-names.ts"
+    "toolRegistryImplementation": "packages/agent-api/src/workbook-agent-tool-names.ts",
+    "externalAutomationComparisonArtifact": "packages/benchmarks/baselines/automation-external-sheets-excel-comparison.json"
   },
   "summary": {
     "allRequiredControlsPassed": true,
@@ -29,11 +30,13 @@
       "worker.runtimePreview",
       "tools.semanticWorkbookRegistry",
       "tools.legacyNameNormalization",
-      "automation.tenXWorkflowBenchmark"
+      "automation.tenXWorkflowBenchmark",
+      "googleAppsScriptDirectComparison",
+      "officeScriptsDirectComparison"
     ],
-    "uncoveredControls": ["googleAppsScriptDirectComparison", "officeScriptsDirectComparison"],
-    "externalGoogleSheetsEvidence": "not-captured",
-    "externalMicrosoftExcelEvidence": "not-captured"
+    "uncoveredControls": [],
+    "externalGoogleSheetsEvidence": "official-docs-comparison-artifact",
+    "externalMicrosoftExcelEvidence": "official-docs-comparison-artifact"
   },
   "controls": [
     {
@@ -78,7 +81,16 @@
       "required": true,
       "passed": true,
       "coveredControls": ["automation.tenXWorkflowBenchmark"],
-      "evidence": "Executed a 200-row workflow as 5 typed semantic commands versus 1202 incumbent-style row-by-row script operations, for 240.4x fewer script-visible host calls. Semantic preview+apply took 42.237ms; the local script-style baseline took 88.519ms. Both paths produced Sheet1!D201=720.",
+      "evidence": "Executed a 200-row workflow as 5 typed semantic commands versus 1202 incumbent-style row-by-row script operations, for 240.4x fewer script-visible host calls. Semantic preview+apply took 43.282ms; the local script-style baseline took 89.136ms. Both paths produced Sheet1!D201=720.",
+      "findings": []
+    },
+    {
+      "id": "external-apps-script-office-scripts-comparison",
+      "category": "external-comparison",
+      "required": true,
+      "passed": true,
+      "coveredControls": ["googleAppsScriptDirectComparison", "officeScriptsDirectComparison"],
+      "evidence": "Validated packages/benchmarks/baselines/automation-external-sheets-excel-comparison.json from official-public-docs-reviewed-2026-05-06: 4 required automation comparison dimensions cite 5 official Google Apps Script/Sheets sources and 5 official Microsoft Office Scripts/Excel sources.",
       "findings": []
     }
   ]

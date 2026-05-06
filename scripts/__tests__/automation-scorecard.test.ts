@@ -17,18 +17,26 @@ describe('automation scorecard', () => {
         workerPreviewWorkflowPassed: true,
         toolRegistryPassed: true,
         tenXWorkflowAutomationBenchmarkPassed: true,
-        externalGoogleSheetsEvidence: 'not-captured',
-        externalMicrosoftExcelEvidence: 'not-captured',
+        externalGoogleSheetsEvidence: 'official-docs-comparison-artifact',
+        externalMicrosoftExcelEvidence: 'official-docs-comparison-artifact',
       },
     })
+    expect(scorecard.source.externalAutomationComparisonArtifact).toBe(
+      'packages/benchmarks/baselines/automation-external-sheets-excel-comparison.json',
+    )
     expect(scorecard.controls.map((control) => control.id)).toEqual([
       'semantic-command-bundle-preview-apply',
       'headless-service-automation-workflow',
       'worker-runtime-agent-preview',
       'agent-tool-registry-semantic-coverage',
       'semantic-workflow-automation-ten-x-benchmark',
+      'external-apps-script-office-scripts-comparison',
     ])
     expect(scorecard.controls.every((control) => control.required && control.passed)).toBe(true)
+    expect(scorecard.controls.find((control) => control.id === 'external-apps-script-office-scripts-comparison')).toMatchObject({
+      category: 'external-comparison',
+      coveredControls: ['googleAppsScriptDirectComparison', 'officeScriptsDirectComparison'],
+    })
     expect(scorecard.summary.coveredControls).toEqual([
       'agent.semanticBundleValidation',
       'agent.previewApplyExecution',
@@ -40,8 +48,10 @@ describe('automation scorecard', () => {
       'tools.semanticWorkbookRegistry',
       'tools.legacyNameNormalization',
       'automation.tenXWorkflowBenchmark',
+      'googleAppsScriptDirectComparison',
+      'officeScriptsDirectComparison',
     ])
-    expect(scorecard.summary.uncoveredControls).toEqual(['googleAppsScriptDirectComparison', 'officeScriptsDirectComparison'])
+    expect(scorecard.summary.uncoveredControls).toEqual([])
 
     validateAutomationScorecard(scorecard)
   })
