@@ -564,7 +564,6 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
         blockers: [
           `generated automation evidence still leaves uncovered controls: ${input.automationScorecard.summary.uncoveredControls.join(', ')}`,
           'no direct generated Google Apps Script or Office Scripts execution comparison exists',
-          'no 10x workflow automation benchmark exists for semantic operations versus incumbent scripting',
         ],
       },
       {

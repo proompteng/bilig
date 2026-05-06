@@ -79,6 +79,10 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.categories.find((category) => category.id === 'automation-api-extensibility')).toMatchObject({
       status: 'partial-repo-evidence',
       evidenceArtifacts: expect.arrayContaining(['packages/benchmarks/baselines/automation-scorecard.json']),
+      blockers: [
+        'generated automation evidence still leaves uncovered controls: googleAppsScriptDirectComparison, officeScriptsDirectComparison',
+        'no direct generated Google Apps Script or Office Scripts execution comparison exists',
+      ],
     })
     expect(scorecard.categories.find((category) => category.id === 'reliability')).toMatchObject({
       status: 'partial-repo-evidence',
@@ -292,10 +296,11 @@ function buildFixtureInput(): BuildScorecardInput {
         headlessServiceWorkflowPassed: true,
         workerPreviewWorkflowPassed: true,
         toolRegistryPassed: true,
+        tenXWorkflowAutomationBenchmarkPassed: true,
         registeredToolCount: 98,
         semanticCommandKindCount: 6,
-        coveredControls: ['agent.semanticBundleValidation', 'headless.serviceWorkflow'],
-        uncoveredControls: ['googleAppsScriptDirectComparison'],
+        coveredControls: ['agent.semanticBundleValidation', 'headless.serviceWorkflow', 'automation.tenXWorkflowBenchmark'],
+        uncoveredControls: ['googleAppsScriptDirectComparison', 'officeScriptsDirectComparison'],
         externalGoogleSheetsEvidence: 'not-captured',
         externalMicrosoftExcelEvidence: 'not-captured',
       },

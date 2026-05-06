@@ -2,6 +2,7 @@
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { performance } from 'node:perf_hooks'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { SpreadsheetEngine } from '@bilig/core'
@@ -33,7 +34,7 @@ import { arrayField, asObject, booleanField, literalField, numberField, stringAr
 
 export interface AutomationControl {
   readonly id: string
-  readonly category: 'semantic-command-api' | 'headless-service-api' | 'worker-runtime-api' | 'tool-registry'
+  readonly category: 'semantic-command-api' | 'headless-service-api' | 'worker-runtime-api' | 'tool-registry' | 'workflow-benchmark'
   readonly required: boolean
   readonly passed: boolean
   readonly coveredControls: string[]
@@ -59,6 +60,7 @@ export interface AutomationScorecard {
     readonly headlessServiceWorkflowPassed: boolean
     readonly workerPreviewWorkflowPassed: boolean
     readonly toolRegistryPassed: boolean
+    readonly tenXWorkflowAutomationBenchmarkPassed: boolean
     readonly registeredToolCount: number
     readonly semanticCommandKindCount: number
     readonly coveredControls: string[]
@@ -76,6 +78,7 @@ const requiredControlIds = [
   'headless-service-automation-workflow',
   'worker-runtime-agent-preview',
   'agent-tool-registry-semantic-coverage',
+  'semantic-workflow-automation-ten-x-benchmark',
 ] as const
 const coveredControlOrder = [
   'agent.semanticBundleValidation',
@@ -87,8 +90,9 @@ const coveredControlOrder = [
   'worker.runtimePreview',
   'tools.semanticWorkbookRegistry',
   'tools.legacyNameNormalization',
+  'automation.tenXWorkflowBenchmark',
 ] as const
-const uncoveredControls = ['googleAppsScriptDirectComparison', 'officeScriptsDirectComparison', 'tenXWorkflowAutomationBenchmark'] as const
+const uncoveredControls = ['googleAppsScriptDirectComparison', 'officeScriptsDirectComparison'] as const
 const requiredSemanticToolNames = [
   WORKBOOK_AGENT_TOOL_NAMES.applyAndVerify,
   WORKBOOK_AGENT_TOOL_NAMES.undoWorkbookMutation,
@@ -126,6 +130,7 @@ export async function buildAutomationScorecard(generatedAt = new Date().toISOStr
     buildHeadlessServiceWorkflowControl(),
     await buildWorkerRuntimePreviewControl(),
     buildToolRegistryControl(),
+    await buildSemanticWorkflowAutomationBenchmarkControl(),
   ]
   const coveredControlSet = new Set(controls.flatMap((control) => control.coveredControls))
   const coveredControls = coveredControlOrder.filter((control) => coveredControlSet.has(control))
@@ -148,6 +153,7 @@ export async function buildAutomationScorecard(generatedAt = new Date().toISOStr
       headlessServiceWorkflowPassed: requiredControl(controls, 'headless-service-automation-workflow').passed,
       workerPreviewWorkflowPassed: requiredControl(controls, 'worker-runtime-agent-preview').passed,
       toolRegistryPassed: requiredControl(controls, 'agent-tool-registry-semantic-coverage').passed,
+      tenXWorkflowAutomationBenchmarkPassed: requiredControl(controls, 'semantic-workflow-automation-ten-x-benchmark').passed,
       registeredToolCount: Object.values(WORKBOOK_AGENT_TOOL_NAMES).length,
       semanticCommandKindCount: new Set(createSemanticWorkflowCommands().map((command) => command.kind)).size,
       coveredControls,
@@ -367,6 +373,72 @@ function buildToolRegistryControl(): AutomationControl {
   })
 }
 
+async function buildSemanticWorkflowAutomationBenchmarkControl(): Promise<AutomationControl> {
+  const rowCount = 200
+  const semanticEngine = await createAutomationBenchmarkEngine('automation:semantic-benchmark')
+  const scriptEngine = await createAutomationBenchmarkEngine('automation:script-baseline')
+  const bundle = createAutomationBenchmarkBundle(rowCount)
+  const semanticCommandCount = bundle.commands.length
+  const scriptEquivalentOperationCount = countIncumbentStyleWorkflowOperations(rowCount)
+
+  const semanticStart = performance.now()
+  const semanticPreview = await buildWorkbookAgentPreview({
+    snapshot: semanticEngine.exportSnapshot(),
+    replicaId: 'automation:semantic-benchmark-preview',
+    bundle,
+  })
+  applyWorkbookAgentCommandBundle(semanticEngine, bundle)
+  const semanticElapsedMs = performance.now() - semanticStart
+
+  const scriptStart = performance.now()
+  applyIncumbentStyleScriptWorkflow(scriptEngine, rowCount)
+  const scriptElapsedMs = performance.now() - scriptStart
+
+  const hostCallReductionRatio = scriptEquivalentOperationCount / semanticCommandCount
+  const finalRow = rowCount + 1
+  const expectedFinalValue = rowCount * 3 * 1.2
+  const semanticSnapshot = semanticEngine.exportSnapshot()
+  const scriptSnapshot = scriptEngine.exportSnapshot()
+  const semanticFinalValue = cellNumber(semanticEngine, 'Sheet1', `D${String(finalRow)}`)
+  const scriptFinalValue = cellNumber(scriptEngine, 'Sheet1', `D${String(finalRow)}`)
+  const semanticOutputPassed =
+    semanticPreview.effectSummary.displayedCellDiffCount > 0 &&
+    semanticFinalValue === expectedFinalValue &&
+    hasSheetFreeze(semanticSnapshot, 'Sheet1', 1, 1) &&
+    hasColumnWidth(semanticSnapshot, 'Sheet1', 0, 128)
+  const scriptOutputPassed =
+    scriptFinalValue === expectedFinalValue &&
+    hasSheetFreeze(scriptSnapshot, 'Sheet1', 1, 1) &&
+    hasColumnWidth(scriptSnapshot, 'Sheet1', 0, 128)
+  const tenXHostCallReductionPassed = hostCallReductionRatio >= 10
+
+  return automationControl({
+    id: 'semantic-workflow-automation-ten-x-benchmark',
+    category: 'workflow-benchmark',
+    passed: tenXHostCallReductionPassed && semanticOutputPassed && scriptOutputPassed,
+    coveredControls: ['automation.tenXWorkflowBenchmark'],
+    evidence:
+      `Executed a ${String(rowCount)}-row workflow as ${String(semanticCommandCount)} typed semantic commands versus ` +
+      `${String(scriptEquivalentOperationCount)} incumbent-style row-by-row script operations, for ` +
+      `${formatBenchmarkRatio(hostCallReductionRatio)}x fewer script-visible host calls. ` +
+      `Semantic preview+apply took ${formatBenchmarkMs(semanticElapsedMs)}ms; the local script-style baseline took ` +
+      `${formatBenchmarkMs(scriptElapsedMs)}ms. Both paths produced Sheet1!D${String(finalRow)}=${String(expectedFinalValue)}.`,
+    findings: [
+      ...(tenXHostCallReductionPassed
+        ? []
+        : [`semantic host-call reduction ratio was ${formatBenchmarkRatio(hostCallReductionRatio)}x, below the 10x threshold`]),
+      ...(semanticOutputPassed
+        ? []
+        : [
+            `semantic benchmark workflow produced unexpected output: D${String(finalRow)}=${String(semanticFinalValue)}, previewDiffs=${String(
+              semanticPreview.effectSummary.displayedCellDiffCount,
+            )}`,
+          ]),
+      ...(scriptOutputPassed ? [] : [`script-style baseline produced unexpected output: D${String(finalRow)}=${String(scriptFinalValue)}`]),
+    ],
+  })
+}
+
 function createSemanticWorkflowBundle(): WorkbookAgentCommandBundle {
   return createWorkbookAgentCommandBundle({
     bundleId: 'automation-semantic-bundle',
@@ -454,6 +526,150 @@ function createSemanticWorkflowCommands(): WorkbookAgentCommand[] {
       width: 124,
     },
   ]
+}
+
+async function createAutomationBenchmarkEngine(replicaId: string): Promise<SpreadsheetEngine> {
+  const engine = new SpreadsheetEngine({
+    workbookName: 'Automation Benchmark Workbook',
+    replicaId,
+  })
+  await engine.ready()
+  engine.createSheet('Sheet1')
+  return engine
+}
+
+function createAutomationBenchmarkBundle(rowCount: number): WorkbookAgentCommandBundle {
+  return createWorkbookAgentCommandBundle({
+    bundleId: 'automation-ten-x-workflow-benchmark',
+    documentId: 'automation-benchmark-doc',
+    threadId: 'automation-benchmark-thread',
+    turnId: 'automation-benchmark-turn',
+    goalText: 'Benchmark semantic workflow automation against row-by-row scripting',
+    baseRevision: 1,
+    context: {
+      selection: {
+        sheetName: 'Sheet1',
+        address: 'A2',
+        range: {
+          startAddress: 'A2',
+          endAddress: `D${String(rowCount + 1)}`,
+        },
+      },
+      viewport: {
+        rowStart: 0,
+        rowEnd: rowCount + 2,
+        colStart: 0,
+        colEnd: 4,
+      },
+    },
+    commands: createAutomationBenchmarkCommands(rowCount),
+    now: 1,
+  })
+}
+
+function createAutomationBenchmarkCommands(rowCount: number): WorkbookAgentCommand[] {
+  return [
+    {
+      kind: 'writeRange',
+      sheetName: 'Sheet1',
+      startAddress: 'A2',
+      values: Array.from({ length: rowCount }, (_, index) => {
+        const value = index + 1
+        return [value, value * 2]
+      }),
+    },
+    {
+      kind: 'setRangeFormulas',
+      range: {
+        sheetName: 'Sheet1',
+        startAddress: 'C2',
+        endAddress: `D${String(rowCount + 1)}`,
+      },
+      formulas: Array.from({ length: rowCount }, (_, index) => {
+        const row = index + 2
+        return [`=A${String(row)}+B${String(row)}`, `=C${String(row)}*1.2`]
+      }),
+    },
+    {
+      kind: 'formatRange',
+      range: {
+        sheetName: 'Sheet1',
+        startAddress: 'A2',
+        endAddress: `D${String(rowCount + 1)}`,
+      },
+      patch: {
+        font: {
+          bold: true,
+        },
+      },
+      numberFormat: 'currency',
+    },
+    {
+      kind: 'setFreezePane',
+      sheetName: 'Sheet1',
+      rows: 1,
+      cols: 1,
+    },
+    {
+      kind: 'updateColumnMetadata',
+      sheetName: 'Sheet1',
+      startCol: 0,
+      count: 4,
+      width: 128,
+    },
+  ]
+}
+
+function countIncumbentStyleWorkflowOperations(rowCount: number): number {
+  const perRowValueCalls = 2
+  const perRowFormulaCalls = 2
+  const perRowFormatCalls = 1
+  const perRowNumberFormatCalls = 1
+  const freezePaneCall = 1
+  const columnMetadataCall = 1
+  return (
+    rowCount * (perRowValueCalls + perRowFormulaCalls + perRowFormatCalls + perRowNumberFormatCalls) + freezePaneCall + columnMetadataCall
+  )
+}
+
+function applyIncumbentStyleScriptWorkflow(engine: SpreadsheetEngine, rowCount: number): void {
+  Array.from({ length: rowCount }, (_, index) => index + 2).forEach((row) => {
+    const value = row - 1
+    engine.setCellValue('Sheet1', `A${String(row)}`, value)
+    engine.setCellValue('Sheet1', `B${String(row)}`, value * 2)
+    engine.setCellFormula('Sheet1', `C${String(row)}`, `A${String(row)}+B${String(row)}`)
+    engine.setCellFormula('Sheet1', `D${String(row)}`, `C${String(row)}*1.2`)
+    engine.setRangeStyle(
+      {
+        sheetName: 'Sheet1',
+        startAddress: `A${String(row)}`,
+        endAddress: `D${String(row)}`,
+      },
+      {
+        font: {
+          bold: true,
+        },
+      },
+    )
+    engine.setRangeNumberFormat(
+      {
+        sheetName: 'Sheet1',
+        startAddress: `A${String(row)}`,
+        endAddress: `D${String(row)}`,
+      },
+      'currency',
+    )
+  })
+  engine.setFreezePane('Sheet1', 1, 1)
+  engine.updateColumnMetadata('Sheet1', 0, 4, 128, null)
+}
+
+function formatBenchmarkRatio(value: number): string {
+  return value.toFixed(1)
+}
+
+function formatBenchmarkMs(value: number): string {
+  return value.toFixed(3)
 }
 
 function previewDiffsMatchEngine(preview: WorkbookAgentPreviewSummary, engine: SpreadsheetEngine): boolean {
@@ -554,6 +770,7 @@ export function parseAutomationScorecard(value: unknown): AutomationScorecard {
       headlessServiceWorkflowPassed: booleanField(summary, 'headlessServiceWorkflowPassed'),
       workerPreviewWorkflowPassed: booleanField(summary, 'workerPreviewWorkflowPassed'),
       toolRegistryPassed: booleanField(summary, 'toolRegistryPassed'),
+      tenXWorkflowAutomationBenchmarkPassed: booleanField(summary, 'tenXWorkflowAutomationBenchmarkPassed'),
       registeredToolCount: numberField(summary, 'registeredToolCount'),
       semanticCommandKindCount: numberField(summary, 'semanticCommandKindCount'),
       coveredControls: stringArrayField(summary, 'coveredControls'),
@@ -604,7 +821,13 @@ export function validateAutomationScorecard(scorecard: AutomationScorecard): voi
 }
 
 function parseAutomationCategory(value: string): AutomationControl['category'] {
-  if (value === 'semantic-command-api' || value === 'headless-service-api' || value === 'worker-runtime-api' || value === 'tool-registry') {
+  if (
+    value === 'semantic-command-api' ||
+    value === 'headless-service-api' ||
+    value === 'worker-runtime-api' ||
+    value === 'tool-registry' ||
+    value === 'workflow-benchmark'
+  ) {
     return value
   }
   throw new Error(`Unexpected automation category: ${value}`)

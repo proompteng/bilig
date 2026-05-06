@@ -16,6 +16,7 @@ describe('automation scorecard', () => {
         headlessServiceWorkflowPassed: true,
         workerPreviewWorkflowPassed: true,
         toolRegistryPassed: true,
+        tenXWorkflowAutomationBenchmarkPassed: true,
         externalGoogleSheetsEvidence: 'not-captured',
         externalMicrosoftExcelEvidence: 'not-captured',
       },
@@ -25,6 +26,7 @@ describe('automation scorecard', () => {
       'headless-service-automation-workflow',
       'worker-runtime-agent-preview',
       'agent-tool-registry-semantic-coverage',
+      'semantic-workflow-automation-ten-x-benchmark',
     ])
     expect(scorecard.controls.every((control) => control.required && control.passed)).toBe(true)
     expect(scorecard.summary.coveredControls).toEqual([
@@ -37,12 +39,9 @@ describe('automation scorecard', () => {
       'worker.runtimePreview',
       'tools.semanticWorkbookRegistry',
       'tools.legacyNameNormalization',
+      'automation.tenXWorkflowBenchmark',
     ])
-    expect(scorecard.summary.uncoveredControls).toEqual([
-      'googleAppsScriptDirectComparison',
-      'officeScriptsDirectComparison',
-      'tenXWorkflowAutomationBenchmark',
-    ])
+    expect(scorecard.summary.uncoveredControls).toEqual(['googleAppsScriptDirectComparison', 'officeScriptsDirectComparison'])
 
     validateAutomationScorecard(scorecard)
   })

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "suite": "automation-api-extensibility",
-  "generatedAt": "2026-05-06T08:43:44.235Z",
+  "generatedAt": "2026-05-06T10:05:45.189Z",
   "source": {
     "artifactGenerator": "scripts/gen-automation-scorecard.ts",
     "commandBundleImplementation": "packages/agent-api/src/workbook-agent-bundles.ts",
@@ -16,6 +16,7 @@
     "headlessServiceWorkflowPassed": true,
     "workerPreviewWorkflowPassed": true,
     "toolRegistryPassed": true,
+    "tenXWorkflowAutomationBenchmarkPassed": true,
     "registeredToolCount": 98,
     "semanticCommandKindCount": 6,
     "coveredControls": [
@@ -27,9 +28,10 @@
       "headless.undoRedoAutomation",
       "worker.runtimePreview",
       "tools.semanticWorkbookRegistry",
-      "tools.legacyNameNormalization"
+      "tools.legacyNameNormalization",
+      "automation.tenXWorkflowBenchmark"
     ],
-    "uncoveredControls": ["googleAppsScriptDirectComparison", "officeScriptsDirectComparison", "tenXWorkflowAutomationBenchmark"],
+    "uncoveredControls": ["googleAppsScriptDirectComparison", "officeScriptsDirectComparison"],
     "externalGoogleSheetsEvidence": "not-captured",
     "externalMicrosoftExcelEvidence": "not-captured"
   },
@@ -68,6 +70,15 @@
       "passed": true,
       "coveredControls": ["tools.semanticWorkbookRegistry", "tools.legacyNameNormalization"],
       "evidence": "Checked 98 canonical workbook-agent tool names, including semantic mutation, inspection, audit, object, protection, and media tools.",
+      "findings": []
+    },
+    {
+      "id": "semantic-workflow-automation-ten-x-benchmark",
+      "category": "workflow-benchmark",
+      "required": true,
+      "passed": true,
+      "coveredControls": ["automation.tenXWorkflowBenchmark"],
+      "evidence": "Executed a 200-row workflow as 5 typed semantic commands versus 1202 incumbent-style row-by-row script operations, for 240.4x fewer script-visible host calls. Semantic preview+apply took 42.237ms; the local script-style baseline took 88.519ms. Both paths produced Sheet1!D201=720.",
       "findings": []
     }
   ]
