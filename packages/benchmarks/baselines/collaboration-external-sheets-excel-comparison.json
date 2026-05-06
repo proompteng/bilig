@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "suite": "external-sheets-excel-collaboration-comparison",
+  "generatedAt": "2026-05-06T14:22:00.000Z",
+  "sourceBasis": "official-public-docs-reviewed-2026-05-06",
+  "officialSources": [
+    {
+      "id": "google-sheets-collaborate",
+      "vendor": "google-sheets",
+      "title": "Collaborate in Sheets",
+      "url": "https://support.google.com/docs/answer/9331169?hl=en",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Google documents sharing Sheets with Viewer, Commenter, or Editor access.",
+        "Google documents comments, task assignment, email collaborators, Activity dashboard, and protected ranges in the Sheets collaboration help page."
+      ]
+    },
+    {
+      "id": "google-drive-share-files",
+      "vendor": "google-sheets",
+      "title": "Share files from Google Drive",
+      "url": "https://support.google.com/drive/answer/2494822?hl=en-to",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Google documents role-based file sharing for Viewer, Commenter, and Editor access.",
+        "Google documents share-link and restricted access controls for Drive, Docs, Sheets, and Slides."
+      ]
+    },
+    {
+      "id": "google-workspace-share-collaborate-spreadsheet",
+      "vendor": "google-sheets",
+      "title": "Share and collaborate on a spreadsheet",
+      "url": "https://support.google.com/a/users/answer/13309904?hl=en",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Google documents simultaneous collaboration limits for Docs, Sheets and Slides.",
+        "Google documents that when 100 or more users access a file, only the owner and some users with edit permissions can edit."
+      ]
+    },
+    {
+      "id": "google-docs-activity-dashboard",
+      "vendor": "google-sheets",
+      "title": "View the activity on your Google Docs, Sheets and Slides",
+      "url": "https://support.google.com/docs/answer/7378739/view-the-activity-on-your-google-docs-sheets-and-slides-computer?co=GENIE.Platform%3DDesktop&hl=en-GB",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Google documents an Activity dashboard for Docs, Sheets and Slides.",
+        "Google documents viewer and activity settings that can affect visible collaboration data."
+      ]
+    },
+    {
+      "id": "microsoft-excel-coauthoring",
+      "vendor": "microsoft-excel",
+      "title": "Collaborate on Excel workbooks at the same time with co-authoring",
+      "url": "https://support.microsoft.com/en-us/office/collaborate-on-excel-workbooks-at-the-same-time-with-co-authoring-7152aa8b-b791-414c-a3bb-3024e46fb104",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Microsoft documents Excel co-authoring requirements, supported versions, OneDrive or SharePoint storage, and AutoSave dependency.",
+        "Microsoft documents seeing other coauthors' names and colored selections while editing supported cloud workbooks."
+      ]
+    },
+    {
+      "id": "microsoft-excel-share-collaborate",
+      "vendor": "microsoft-excel",
+      "title": "Quick tips: Share and collaborate with Excel for Windows",
+      "url": "https://support.microsoft.com/en-us/office/quick-tips-share-and-collaborate-with-excel-for-windows-0f53132d-db34-4166-b874-a2f6618ac309",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Microsoft documents saving a workbook to OneDrive to access and collaborate from different devices.",
+        "Microsoft documents sharing with view or edit permissions."
+      ]
+    },
+    {
+      "id": "microsoft-excel-comments",
+      "vendor": "microsoft-excel",
+      "title": "Insert comments and notes in Excel",
+      "url": "https://support.microsoft.com/en-us/office/insert-comments-and-notes-in-excel-bdcc9f5d-38e2-45b4-9a92-0b2b5c7bf6f8",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Microsoft documents threaded comments, notes, and a Comments task pane in Excel.",
+        "Microsoft documents @mentions in comments for email notification and task assignment."
+      ]
+    },
+    {
+      "id": "microsoft-office-mentions",
+      "vendor": "microsoft-excel",
+      "title": "Use @mention in comments to tag someone for feedback",
+      "url": "https://support.microsoft.com/en-gb/office/use-mention-in-comments-to-tag-someone-for-feedback-644bf689-31a0-4977-a4fb-afe01820c1fd",
+      "retrievedAt": "2026-05-06",
+      "evidence": [
+        "Microsoft documents @mentions in Word, Excel and PowerPoint comments.",
+        "Microsoft documents assigning tasks to users from comment replies."
+      ]
+    }
+  ],
+  "summary": {
+    "comparisonCaptured": true,
+    "requiredDimensionsPassed": true,
+    "coveredControls": [
+      "external.googleSheetsCollaborationDocs",
+      "external.microsoftExcelCollaborationDocs",
+      "external.sheetsExcelCollaborationComparison"
+    ],
+    "limitations": [
+      "This artifact captures current official public documentation, not a live multi-user browser benchmark against Google Sheets or Microsoft Excel.",
+      "The comparison proves direct external collaboration evidence exists; it does not claim bilig is 10x better across collaboration or every objective category."
+    ]
+  },
+  "dimensions": [
+    {
+      "id": "simultaneous-editing-and-presence",
+      "title": "Simultaneous Editing And Presence",
+      "required": true,
+      "passed": true,
+      "sourceIds": [
+        "google-sheets-collaborate",
+        "google-workspace-share-collaborate-spreadsheet",
+        "google-docs-activity-dashboard",
+        "microsoft-excel-coauthoring"
+      ],
+      "biligEvidence": [
+        "The collaboration scorecard verifies presence session lifecycle, selection schema validation, collaborator filtering, and headed multi-user viewport soak coverage.",
+        "The large-workbook SLO scorecard separately covers headed browser frame budgets while interacting with workbook viewports."
+      ],
+      "googleSheetsEvidence": [
+        "Google documents real-time spreadsheet collaboration with role-based access, comments, activity dashboard, and user access limits.",
+        "Google documents that high-concurrency files shift editing behavior once 100 or more users access a file."
+      ],
+      "microsoftExcelEvidence": [
+        "Microsoft documents Excel co-authoring with supported Excel versions, OneDrive or SharePoint storage, AutoSave, coauthor names, and colored selections.",
+        "Microsoft documents that all coauthors need AutoSave enabled for colored selections in supported Microsoft 365 scenarios."
+      ],
+      "comparisonResult": "bilig has executable presence and viewport-soak controls; Sheets and Excel have documented cloud collaboration with incumbent-specific storage, account, version, and concurrency requirements.",
+      "residualLimitations": [
+        "bilig still needs a direct multi-user hosted browser benchmark against Sheets and Excel before claiming collaboration dominance.",
+        "The external comparison is documentation-backed, not a tenant-specific live run."
+      ]
+    },
+    {
+      "id": "sharing-permissions-and-access",
+      "title": "Sharing Permissions And Access",
+      "required": true,
+      "passed": true,
+      "sourceIds": [
+        "google-drive-share-files",
+        "google-sheets-collaborate",
+        "microsoft-excel-share-collaborate",
+        "microsoft-excel-coauthoring"
+      ],
+      "biligEvidence": [
+        "The current collaboration scorecard focuses on sync, presence, conflict, and viewport behavior.",
+        "Security and auditability scorecards separately cover shared-agent owner review and change-review rails."
+      ],
+      "googleSheetsEvidence": [
+        "Google documents Viewer, Commenter, and Editor roles plus restricted and link-sharing access.",
+        "Google documents protected sheets and ranges for constraining editor updates."
+      ],
+      "microsoftExcelEvidence": [
+        "Microsoft documents sharing Excel workbooks from OneDrive with view or edit permissions.",
+        "Microsoft documents cloud storage and supported clients as co-authoring prerequisites."
+      ],
+      "comparisonResult": "bilig has collaboration mechanics checked, while Google Sheets and Excel have broader documented sharing and permission surfaces.",
+      "residualLimitations": [
+        "bilig needs generated role/share-permission evidence before this dimension can become a product-wide collaboration lead claim.",
+        "Tenant and storage policies can materially change incumbent access behavior."
+      ]
+    },
+    {
+      "id": "comments-mentions-and-tasks",
+      "title": "Comments Mentions And Tasks",
+      "required": true,
+      "passed": true,
+      "sourceIds": ["google-sheets-collaborate", "microsoft-excel-comments", "microsoft-office-mentions"],
+      "biligEvidence": [
+        "bilig's checked collaboration evidence covers workbook presence, sync, conflict, and viewport correctness.",
+        "bilig does not yet have generated comment-thread, mention, or task-assignment collaboration evidence."
+      ],
+      "googleSheetsEvidence": [
+        "Google documents comments, task assignment, and email collaborators from Sheets.",
+        "Google documents Activity dashboard support for Docs, Sheets and Slides."
+      ],
+      "microsoftExcelEvidence": [
+        "Microsoft documents threaded comments, notes, @mentions, task assignment, and email notifications in Excel and Office.",
+        "Microsoft documents a Comments task pane for navigating worksheet comments."
+      ],
+      "comparisonResult": "bilig has strong workbook-operation collaboration controls, while Sheets and Excel have broader documented comment and task collaboration surfaces.",
+      "residualLimitations": [
+        "This remains a collaboration product gap for overall dominance.",
+        "Future bilig work should add comment/thread/task workflows or explicitly scope collaboration away from annotation workflows."
+      ]
+    },
+    {
+      "id": "collaboration-limits-and-conflict-recovery",
+      "title": "Collaboration Limits And Conflict Recovery",
+      "required": true,
+      "passed": true,
+      "sourceIds": ["google-workspace-share-collaborate-spreadsheet", "microsoft-excel-coauthoring"],
+      "biligEvidence": [
+        "The collaboration scorecard verifies accepted-operation convergence and zero unexpected conflicts across a long-running collaboration control.",
+        "The editor conflict and viewport control verifies authoritative drift detection, optimistic axis protection, and authoritative catchup behavior."
+      ],
+      "googleSheetsEvidence": [
+        "Google documents simultaneous access limits and degraded edit availability above documented collaboration thresholds.",
+        "Google documents role and access controls that affect who can edit during collaboration."
+      ],
+      "microsoftExcelEvidence": [
+        "Microsoft documents Excel co-authoring dependencies on supported clients, OneDrive or SharePoint, and AutoSave.",
+        "Microsoft documents that unsupported versions or locations affect live co-authoring availability."
+      ],
+      "comparisonResult": "bilig has executable long-running conflict-rate evidence; Sheets and Excel publish collaboration limits and prerequisites instead of repo-executable conflict contracts.",
+      "residualLimitations": [
+        "bilig still needs adversarial multi-user conflict tests against larger workbook scenarios.",
+        "The comparison does not measure real incumbent conflict frequency under identical edit streams."
+      ]
+    }
+  ]
+}

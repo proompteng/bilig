@@ -88,10 +88,13 @@
       "viewport.authoritativeCatchupClearsPending",
       "headedBrowser.multiUserViewportSoak",
       "conflict.longRunningZeroUnexpectedConflicts",
-      "sync.longRunningAcceptedOpConvergence"
+      "sync.longRunningAcceptedOpConvergence",
+      "external.googleSheetsCollaborationDocs",
+      "external.microsoftExcelCollaborationDocs",
+      "external.sheetsExcelCollaborationComparison"
     ],
     "collaborationPosturePassed": true,
-    "collaborationUncoveredControls": ["externalSheetsCollaborationComparison"],
+    "collaborationUncoveredControls": [],
     "externalGoogleSheetsEvidence": "not-captured-in-repo",
     "externalMicrosoftExcelEvidence": "not-captured-in-repo",
     "formulaCanonicalProductionPercent": 100,
@@ -296,12 +299,15 @@
         "worker runtime, pending-op journal, authoritative delta ingest, presence, and changes-pane tests exist",
         "collaboration product targets are documented",
         "generated collaboration scorecard passes required controls: true",
-        "covered collaboration controls: sync.pendingRebase, sync.authoritativeAck, sync.noAcceptedOpLoss, presence.sessionLifecycle, presence.selectionSchema, presence.collaboratorFiltering, conflict.authoritativeDriftDetection, viewport.optimisticAxisProtection, viewport.authoritativeCatchupClearsPending, headedBrowser.multiUserViewportSoak, conflict.longRunningZeroUnexpectedConflicts, sync.longRunningAcceptedOpConvergence",
-        "uncovered collaboration controls are explicitly disclosed: externalSheetsCollaborationComparison",
+        "covered collaboration controls: sync.pendingRebase, sync.authoritativeAck, sync.noAcceptedOpLoss, presence.sessionLifecycle, presence.selectionSchema, presence.collaboratorFiltering, conflict.authoritativeDriftDetection, viewport.optimisticAxisProtection, viewport.authoritativeCatchupClearsPending, headedBrowser.multiUserViewportSoak, conflict.longRunningZeroUnexpectedConflicts, sync.longRunningAcceptedOpConvergence, external.googleSheetsCollaborationDocs, external.microsoftExcelCollaborationDocs, external.sheetsExcelCollaborationComparison",
+        "uncovered collaboration controls are explicitly disclosed: none",
+        "external Google Sheets collaboration evidence: official-docs-comparison-artifact",
+        "external Microsoft Excel collaboration evidence: official-docs-comparison-artifact",
         "workerReconnectCatchUp100Pending: catchUpMs.p95 260.9891669999997ms against 2000ms SLO (3 samples)"
       ],
       "evidenceArtifacts": [
         "packages/benchmarks/baselines/collaboration-scorecard.json",
+        "packages/benchmarks/baselines/collaboration-external-sheets-excel-comparison.json",
         "packages/benchmarks/baselines/large-workbook-slo-scorecard.json",
         "e2e/tests/web-shell-scroll-performance.pw.ts",
         "docs/05-06-next-phase.md",
@@ -316,10 +322,7 @@
         "pnpm test:correctness:browser",
         "pnpm test:correctness:server"
       ],
-      "blockers": [
-        "generated collaboration evidence still leaves uncovered controls: externalSheetsCollaborationComparison",
-        "no direct Sheets collaboration comparison artifact exists in the repo"
-      ]
+      "blockers": []
     },
     {
       "id": "automation-api-extensibility",

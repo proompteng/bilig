@@ -61,12 +61,10 @@ describe('bilig dominance scorecard', () => {
       status: 'partial-repo-evidence',
       evidenceArtifacts: expect.arrayContaining([
         'packages/benchmarks/baselines/collaboration-scorecard.json',
+        'packages/benchmarks/baselines/collaboration-external-sheets-excel-comparison.json',
         'e2e/tests/web-shell-scroll-performance.pw.ts',
       ]),
-      blockers: [
-        'generated collaboration evidence still leaves uncovered controls: externalSheetsCollaborationComparison',
-        'no direct Sheets collaboration comparison artifact exists in the repo',
-      ],
+      blockers: [],
     })
     expect(scorecard.categories.find((category) => category.id === 'auditability')).toMatchObject({
       status: 'partial-repo-evidence',
@@ -376,6 +374,7 @@ function buildFixtureInput(): BuildScorecardInput {
         viewportPatchImplementation: 'apps/web/src/projected-viewport-patch-application.ts',
         editorConflictImplementation: 'apps/web/src/use-workbook-editor-conflict.tsx',
         headedBrowserViewportTestFile: 'e2e/tests/web-shell-scroll-performance.pw.ts',
+        externalCollaborationComparisonArtifact: 'packages/benchmarks/baselines/collaboration-external-sheets-excel-comparison.json',
       },
       summary: {
         allRequiredControlsPassed: true,
@@ -389,10 +388,13 @@ function buildFixtureInput(): BuildScorecardInput {
           'presence.sessionLifecycle',
           'headedBrowser.multiUserViewportSoak',
           'conflict.longRunningZeroUnexpectedConflicts',
+          'external.googleSheetsCollaborationDocs',
+          'external.microsoftExcelCollaborationDocs',
+          'external.sheetsExcelCollaborationComparison',
         ],
-        uncoveredControls: ['externalSheetsCollaborationComparison'],
-        externalGoogleSheetsEvidence: 'not-captured',
-        externalMicrosoftExcelEvidence: 'not-captured',
+        uncoveredControls: [],
+        externalGoogleSheetsEvidence: 'official-docs-comparison-artifact',
+        externalMicrosoftExcelEvidence: 'official-docs-comparison-artifact',
       },
       controls: [
         {

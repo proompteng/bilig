@@ -511,11 +511,14 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
             input.collaborationScorecard.summary.allRequiredControlsPassed,
           )}`,
           `covered collaboration controls: ${input.collaborationScorecard.summary.coveredControls.join(', ')}`,
-          `uncovered collaboration controls are explicitly disclosed: ${input.collaborationScorecard.summary.uncoveredControls.join(', ')}`,
+          `uncovered collaboration controls are explicitly disclosed: ${formatList(input.collaborationScorecard.summary.uncoveredControls)}`,
+          `external Google Sheets collaboration evidence: ${input.collaborationScorecard.summary.externalGoogleSheetsEvidence}`,
+          `external Microsoft Excel collaboration evidence: ${input.collaborationScorecard.summary.externalMicrosoftExcelEvidence}`,
           sloSummary(workerReconnectCatchUp100Pending),
         ],
         evidenceArtifacts: [
           input.collaborationScorecardPath,
+          input.collaborationScorecard.source.externalCollaborationComparisonArtifact,
           input.largeWorkbookSloScorecardPath,
           'e2e/tests/web-shell-scroll-performance.pw.ts',
           'docs/05-06-next-phase.md',
@@ -530,10 +533,12 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           'pnpm test:correctness:browser',
           'pnpm test:correctness:server',
         ],
-        blockers: [
-          `generated collaboration evidence still leaves uncovered controls: ${input.collaborationScorecard.summary.uncoveredControls.join(', ')}`,
-          'no direct Sheets collaboration comparison artifact exists in the repo',
-        ],
+        blockers: input.collaborationScorecard.summary.uncoveredControls.includes('externalSheetsCollaborationComparison')
+          ? [
+              `generated collaboration evidence still leaves uncovered controls: ${input.collaborationScorecard.summary.uncoveredControls.join(', ')}`,
+              'no direct Sheets collaboration comparison artifact exists in the repo',
+            ]
+          : [],
       },
       {
         id: 'automation-api-extensibility',

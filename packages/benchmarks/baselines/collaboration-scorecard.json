@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "suite": "collaboration-posture",
-  "generatedAt": "2026-05-06T09:49:18.454Z",
+  "generatedAt": "2026-05-06T14:22:57.501Z",
   "source": {
     "artifactGenerator": "scripts/gen-collaboration-scorecard.ts",
     "workerRuntimeImplementation": "apps/web/src/worker-runtime.ts",
@@ -9,7 +9,8 @@
     "presenceSessionImplementation": "apps/bilig/src/workbook-runtime/document-presence-session-store.ts",
     "viewportPatchImplementation": "apps/web/src/projected-viewport-patch-application.ts",
     "editorConflictImplementation": "apps/web/src/use-workbook-editor-conflict.tsx",
-    "headedBrowserViewportTestFile": "e2e/tests/web-shell-scroll-performance.pw.ts"
+    "headedBrowserViewportTestFile": "e2e/tests/web-shell-scroll-performance.pw.ts",
+    "externalCollaborationComparisonArtifact": "packages/benchmarks/baselines/collaboration-external-sheets-excel-comparison.json"
   },
   "summary": {
     "allRequiredControlsPassed": true,
@@ -30,11 +31,14 @@
       "viewport.authoritativeCatchupClearsPending",
       "headedBrowser.multiUserViewportSoak",
       "conflict.longRunningZeroUnexpectedConflicts",
-      "sync.longRunningAcceptedOpConvergence"
+      "sync.longRunningAcceptedOpConvergence",
+      "external.googleSheetsCollaborationDocs",
+      "external.microsoftExcelCollaborationDocs",
+      "external.sheetsExcelCollaborationComparison"
     ],
-    "uncoveredControls": ["externalSheetsCollaborationComparison"],
-    "externalGoogleSheetsEvidence": "not-captured",
-    "externalMicrosoftExcelEvidence": "not-captured"
+    "uncoveredControls": [],
+    "externalGoogleSheetsEvidence": "official-docs-comparison-artifact",
+    "externalMicrosoftExcelEvidence": "official-docs-comparison-artifact"
   },
   "controls": [
     {
@@ -84,6 +88,19 @@
       "passed": true,
       "coveredControls": ["conflict.longRunningZeroUnexpectedConflicts", "sync.longRunningAcceptedOpConvergence"],
       "evidence": "Executed 64 local writes interleaved with 64 collaborator authoritative writes, rebased pending operations across each collaborator edit, acknowledged every local mutation in batches, and verified zero unexpected failed mutations plus final convergence.",
+      "findings": []
+    },
+    {
+      "id": "external-sheets-excel-collaboration-comparison",
+      "category": "external-comparison",
+      "required": true,
+      "passed": true,
+      "coveredControls": [
+        "external.googleSheetsCollaborationDocs",
+        "external.microsoftExcelCollaborationDocs",
+        "external.sheetsExcelCollaborationComparison"
+      ],
+      "evidence": "Validated packages/benchmarks/baselines/collaboration-external-sheets-excel-comparison.json from official-public-docs-reviewed-2026-05-06: 4 required comparison dimensions cite 4 official Google Sheets/Workspace sources and 4 official Microsoft Excel/Microsoft 365 sources.",
       "findings": []
     }
   ]

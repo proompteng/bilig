@@ -21,10 +21,16 @@ import { OPTIMISTIC_CELL_SNAPSHOT_FLAG } from '../apps/web/src/workbook-optimist
 import { parseEditorInput, parsedEditorInputMatchesSnapshot, sameCellContent } from '../apps/web/src/worker-workbook-app-model.js'
 import { WorkbookWorkerRuntime } from '../apps/web/src/worker-runtime.js'
 import { arrayField, asObject, booleanField, literalField, stringArrayField, stringField } from './json-scorecard-helpers.ts'
+import {
+  externalCollaborationComparisonArtifactRepoPath,
+  externalCollaborationComparisonCoveredControls,
+  parseExternalCollaborationComparisonArtifact,
+  validateExternalCollaborationComparisonArtifact,
+} from './collaboration-external-sheets-excel-comparison.ts'
 
 export interface CollaborationControl {
   readonly id: string
-  readonly category: 'local-first-sync' | 'presence' | 'conflict-viewport' | 'headed-browser'
+  readonly category: 'local-first-sync' | 'presence' | 'conflict-viewport' | 'headed-browser' | 'external-comparison'
   readonly required: boolean
   readonly passed: boolean
   readonly coveredControls: string[]
@@ -44,6 +50,7 @@ export interface CollaborationScorecard {
     readonly viewportPatchImplementation: 'apps/web/src/projected-viewport-patch-application.ts'
     readonly editorConflictImplementation: 'apps/web/src/use-workbook-editor-conflict.tsx'
     readonly headedBrowserViewportTestFile: 'e2e/tests/web-shell-scroll-performance.pw.ts'
+    readonly externalCollaborationComparisonArtifact: 'packages/benchmarks/baselines/collaboration-external-sheets-excel-comparison.json'
   }
   readonly summary: {
     readonly allRequiredControlsPassed: boolean
@@ -54,20 +61,22 @@ export interface CollaborationScorecard {
     readonly longRunningConflictRatePassed: boolean
     readonly coveredControls: string[]
     readonly uncoveredControls: string[]
-    readonly externalGoogleSheetsEvidence: 'not-captured'
-    readonly externalMicrosoftExcelEvidence: 'not-captured'
+    readonly externalGoogleSheetsEvidence: 'official-docs-comparison-artifact'
+    readonly externalMicrosoftExcelEvidence: 'official-docs-comparison-artifact'
   }
   readonly controls: CollaborationControl[]
 }
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const outputPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'collaboration-scorecard.json')
+const externalCollaborationComparisonArtifactPath = join(rootDir, externalCollaborationComparisonArtifactRepoPath)
 const requiredControlIds = [
   'worker-sync-rebase-ack-roundtrip',
   'presence-session-selection-filtering',
   'editor-conflict-and-viewport-protection',
   'headed-browser-multi-user-viewport-soak',
   'long-running-collaboration-conflict-rate',
+  'external-sheets-excel-collaboration-comparison',
 ] as const
 const coveredControlOrder = [
   'sync.pendingRebase',
@@ -82,8 +91,9 @@ const coveredControlOrder = [
   'headedBrowser.multiUserViewportSoak',
   'conflict.longRunningZeroUnexpectedConflicts',
   'sync.longRunningAcceptedOpConvergence',
+  ...externalCollaborationComparisonCoveredControls,
 ] as const
-const uncoveredControls = ['externalSheetsCollaborationComparison'] as const
+const uncoveredControls: readonly string[] = []
 const headedBrowserViewportTestFile = 'e2e/tests/web-shell-scroll-performance.pw.ts'
 
 async function main(): Promise<void> {
@@ -111,6 +121,7 @@ export async function buildCollaborationScorecard(generatedAt = new Date().toISO
     buildConflictViewportControl(),
     buildHeadedBrowserMultiUserViewportSoakControl(),
     await buildLongRunningCollaborationConflictRateControl(),
+    buildExternalSheetsExcelCollaborationComparisonControl(),
   ]
   const coveredControlSet = new Set(controls.flatMap((control) => control.coveredControls))
   const coveredControls = coveredControlOrder.filter((control) => coveredControlSet.has(control))
@@ -127,6 +138,7 @@ export async function buildCollaborationScorecard(generatedAt = new Date().toISO
       viewportPatchImplementation: 'apps/web/src/projected-viewport-patch-application.ts',
       editorConflictImplementation: 'apps/web/src/use-workbook-editor-conflict.tsx',
       headedBrowserViewportTestFile,
+      externalCollaborationComparisonArtifact: externalCollaborationComparisonArtifactRepoPath,
     },
     summary: {
       allRequiredControlsPassed: controls.filter((control) => control.required).every((control) => control.passed),
@@ -137,8 +149,8 @@ export async function buildCollaborationScorecard(generatedAt = new Date().toISO
       longRunningConflictRatePassed: requiredControl(controls, 'long-running-collaboration-conflict-rate').passed,
       coveredControls,
       uncoveredControls: [...uncoveredControls],
-      externalGoogleSheetsEvidence: 'not-captured',
-      externalMicrosoftExcelEvidence: 'not-captured',
+      externalGoogleSheetsEvidence: 'official-docs-comparison-artifact',
+      externalMicrosoftExcelEvidence: 'official-docs-comparison-artifact',
     },
     controls,
   }
@@ -587,6 +599,27 @@ function requireSnippet(source: string, snippet: string, label: string, findings
   }
 }
 
+function buildExternalSheetsExcelCollaborationComparisonControl(): CollaborationControl {
+  const artifact = parseExternalCollaborationComparisonArtifact(
+    JSON.parse(readFileSync(externalCollaborationComparisonArtifactPath, 'utf8')) as unknown,
+  )
+  const findings = validateExternalCollaborationComparisonArtifact(artifact)
+  const googleSourceCount = artifact.officialSources.filter((source) => source.vendor === 'google-sheets').length
+  const microsoftSourceCount = artifact.officialSources.filter((source) => source.vendor === 'microsoft-excel').length
+
+  return collaborationControl({
+    id: 'external-sheets-excel-collaboration-comparison',
+    category: 'external-comparison',
+    passed: findings.length === 0,
+    coveredControls: externalCollaborationComparisonCoveredControls,
+    evidence:
+      `Validated ${externalCollaborationComparisonArtifactRepoPath} from ${artifact.sourceBasis}: ` +
+      `${String(artifact.dimensions.length)} required comparison dimensions cite ${String(googleSourceCount)} official Google Sheets/Workspace sources ` +
+      `and ${String(microsoftSourceCount)} official Microsoft Excel/Microsoft 365 sources.`,
+    findings,
+  })
+}
+
 function buildSetCellValueEvent(input: {
   readonly revision: number
   readonly address: string
@@ -746,6 +779,11 @@ export function parseCollaborationScorecard(value: unknown): CollaborationScorec
       ),
       editorConflictImplementation: literalField(source, 'editorConflictImplementation', 'apps/web/src/use-workbook-editor-conflict.tsx'),
       headedBrowserViewportTestFile: literalField(source, 'headedBrowserViewportTestFile', headedBrowserViewportTestFile),
+      externalCollaborationComparisonArtifact: literalField(
+        source,
+        'externalCollaborationComparisonArtifact',
+        'packages/benchmarks/baselines/collaboration-external-sheets-excel-comparison.json',
+      ),
     },
     summary: {
       allRequiredControlsPassed: booleanField(summary, 'allRequiredControlsPassed'),
@@ -756,8 +794,8 @@ export function parseCollaborationScorecard(value: unknown): CollaborationScorec
       longRunningConflictRatePassed: booleanField(summary, 'longRunningConflictRatePassed'),
       coveredControls: stringArrayField(summary, 'coveredControls'),
       uncoveredControls: stringArrayField(summary, 'uncoveredControls'),
-      externalGoogleSheetsEvidence: literalField(summary, 'externalGoogleSheetsEvidence', 'not-captured'),
-      externalMicrosoftExcelEvidence: literalField(summary, 'externalMicrosoftExcelEvidence', 'not-captured'),
+      externalGoogleSheetsEvidence: literalField(summary, 'externalGoogleSheetsEvidence', 'official-docs-comparison-artifact'),
+      externalMicrosoftExcelEvidence: literalField(summary, 'externalMicrosoftExcelEvidence', 'official-docs-comparison-artifact'),
     },
     controls: arrayField(record, 'controls').map(parseCollaborationControl),
   }
@@ -802,7 +840,13 @@ export function validateCollaborationScorecard(scorecard: CollaborationScorecard
 }
 
 function parseCollaborationCategory(value: string): CollaborationControl['category'] {
-  if (value === 'local-first-sync' || value === 'presence' || value === 'conflict-viewport' || value === 'headed-browser') {
+  if (
+    value === 'local-first-sync' ||
+    value === 'presence' ||
+    value === 'conflict-viewport' ||
+    value === 'headed-browser' ||
+    value === 'external-comparison'
+  ) {
     return value
   }
   throw new Error(`Unexpected collaboration category: ${value}`)

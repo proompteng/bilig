@@ -17,18 +17,30 @@ describe('collaboration scorecard', () => {
         conflictViewportPassed: true,
         headedBrowserViewportPassed: true,
         longRunningConflictRatePassed: true,
-        externalGoogleSheetsEvidence: 'not-captured',
-        externalMicrosoftExcelEvidence: 'not-captured',
+        externalGoogleSheetsEvidence: 'official-docs-comparison-artifact',
+        externalMicrosoftExcelEvidence: 'official-docs-comparison-artifact',
       },
     })
+    expect(scorecard.source.externalCollaborationComparisonArtifact).toBe(
+      'packages/benchmarks/baselines/collaboration-external-sheets-excel-comparison.json',
+    )
     expect(scorecard.controls.map((control) => control.id)).toEqual([
       'worker-sync-rebase-ack-roundtrip',
       'presence-session-selection-filtering',
       'editor-conflict-and-viewport-protection',
       'headed-browser-multi-user-viewport-soak',
       'long-running-collaboration-conflict-rate',
+      'external-sheets-excel-collaboration-comparison',
     ])
     expect(scorecard.controls.every((control) => control.required && control.passed)).toBe(true)
+    expect(scorecard.controls.find((control) => control.id === 'external-sheets-excel-collaboration-comparison')).toMatchObject({
+      category: 'external-comparison',
+      coveredControls: [
+        'external.googleSheetsCollaborationDocs',
+        'external.microsoftExcelCollaborationDocs',
+        'external.sheetsExcelCollaborationComparison',
+      ],
+    })
     expect(scorecard.summary.coveredControls).toEqual([
       'sync.pendingRebase',
       'sync.authoritativeAck',
@@ -42,8 +54,11 @@ describe('collaboration scorecard', () => {
       'headedBrowser.multiUserViewportSoak',
       'conflict.longRunningZeroUnexpectedConflicts',
       'sync.longRunningAcceptedOpConvergence',
+      'external.googleSheetsCollaborationDocs',
+      'external.microsoftExcelCollaborationDocs',
+      'external.sheetsExcelCollaborationComparison',
     ])
-    expect(scorecard.summary.uncoveredControls).toEqual(['externalSheetsCollaborationComparison'])
+    expect(scorecard.summary.uncoveredControls).toEqual([])
 
     validateCollaborationScorecard(scorecard)
   })
