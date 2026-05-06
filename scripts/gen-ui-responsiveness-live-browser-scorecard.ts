@@ -44,6 +44,7 @@ export interface UiResponsivenessSameCorpusMeasurement {
   readonly source: string
   readonly operationResponseMs: NumericSummary
   readonly postOperationFrameMs: NumericSummary
+  readonly corpusVerification: SameCorpusCaptureCorpusVerification
   readonly limitations: string[]
 }
 
@@ -149,7 +150,22 @@ export interface SameCorpusCaptureMeasurement {
   readonly source: string
   readonly operationResponseMsSamples: number[]
   readonly postOperationFrameMsSamples: number[]
+  readonly corpusVerification: SameCorpusCaptureCorpusVerification
   readonly limitations: string[]
+}
+
+export interface SameCorpusCaptureVerifiedCell {
+  readonly address: string
+  readonly expected: string
+  readonly actual: string
+}
+
+export interface SameCorpusCaptureCorpusVerification {
+  readonly verified: boolean
+  readonly method: 'bilig-benchmark-state' | 'google-sheets-xlsx-export' | 'microsoft-excel-web-source-xlsx'
+  readonly sheetName: string
+  readonly materializedCells: number
+  readonly checkedCells: readonly SameCorpusCaptureVerifiedCell[]
 }
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
@@ -401,6 +417,7 @@ function validateSameCorpusCapture(capture: SameCorpusCapture): void {
       ) {
         throw new Error(`UI responsiveness same-corpus capture has too few samples for ${entry.id}`)
       }
+      validateSameCorpusCaptureVerification(measurement.corpusVerification, measurement.product, entry.materializedCells, entry.id)
     }
   }
 }
@@ -544,6 +561,7 @@ function buildSameCorpusMeasurement(capture: SameCorpusCaptureMeasurement): UiRe
     source: capture.source,
     operationResponseMs: summarizeNumbers(capture.operationResponseMsSamples),
     postOperationFrameMs: summarizeNumbers(capture.postOperationFrameMsSamples),
+    corpusVerification: cloneSameCorpusVerification(capture.corpusVerification),
     limitations: [...capture.limitations],
   }
 }
@@ -615,6 +633,7 @@ function parseSameCorpusMeasurement(value: Record<string, unknown>): UiResponsiv
     source: stringField(value, 'source'),
     operationResponseMs: parseNumericSummary(objectField(value, 'operationResponseMs')),
     postOperationFrameMs: parseNumericSummary(objectField(value, 'postOperationFrameMs')),
+    corpusVerification: parseSameCorpusVerification(objectField(value, 'corpusVerification')),
     limitations: stringArrayField(value, 'limitations'),
   }
 }
@@ -655,7 +674,27 @@ function parseSameCorpusCaptureMeasurement(
     source: stringField(value, 'source'),
     operationResponseMsSamples: numericArrayField(value, 'operationResponseMsSamples'),
     postOperationFrameMsSamples: numericArrayField(value, 'postOperationFrameMsSamples'),
+    corpusVerification: parseSameCorpusVerification(objectField(value, 'corpusVerification')),
     limitations: stringArrayField(value, 'limitations'),
+  }
+}
+
+function parseSameCorpusVerification(value: Record<string, unknown>): SameCorpusCaptureCorpusVerification {
+  return {
+    verified: booleanField(value, 'verified'),
+    method: parseSameCorpusVerificationMethod(stringField(value, 'method')),
+    sheetName: stringField(value, 'sheetName'),
+    materializedCells: numberField(value, 'materializedCells'),
+    checkedCells: arrayField(value, 'checkedCells').map(parseSameCorpusVerifiedCell),
+  }
+}
+
+function parseSameCorpusVerifiedCell(value: unknown): SameCorpusCaptureVerifiedCell {
+  const record = asObject(value, 'UI responsiveness same-corpus verified cell')
+  return {
+    address: stringField(record, 'address'),
+    expected: stringField(record, 'expected'),
+    actual: stringField(record, 'actual'),
   }
 }
 
@@ -703,6 +742,13 @@ function parseSameCorpusProduct(value: string): UiResponsivenessSameCorpusProduc
     return value
   }
   throw new Error(`Unexpected UI responsiveness same-corpus product: ${value}`)
+}
+
+function parseSameCorpusVerificationMethod(value: string): SameCorpusCaptureCorpusVerification['method'] {
+  if (value === 'bilig-benchmark-state' || value === 'google-sheets-xlsx-export' || value === 'microsoft-excel-web-source-xlsx') {
+    return value
+  }
+  throw new Error(`Unexpected UI responsiveness same-corpus verification method: ${value}`)
 }
 
 function parseSameCorpusWorkload(value: string): UiResponsivenessSameCorpusWorkload {
@@ -804,6 +850,48 @@ function validateSameCorpusMeasurement(
   }
   validateSummary(measurement.operationResponseMs, `${caseId} ${product} operationResponseMs`)
   validateSummary(measurement.postOperationFrameMs, `${caseId} ${product} postOperationFrameMs`)
+  validateSameCorpusCaptureVerification(measurement.corpusVerification, product, null, caseId)
+}
+
+function validateSameCorpusCaptureVerification(
+  verification: SameCorpusCaptureCorpusVerification,
+  product: UiResponsivenessSameCorpusProduct,
+  expectedMaterializedCells: number | null,
+  caseId: string,
+): void {
+  if (!verification.verified) {
+    throw new Error(`UI responsiveness same-corpus verification is not marked verified for ${caseId} ${product}`)
+  }
+  if (expectedMaterializedCells !== null && verification.materializedCells !== expectedMaterializedCells) {
+    throw new Error(`UI responsiveness same-corpus verification materialized cell count mismatch for ${caseId} ${product}`)
+  }
+  if (product === 'bilig' && verification.method !== 'bilig-benchmark-state') {
+    throw new Error(`UI responsiveness same-corpus verification method mismatch for ${caseId} ${product}`)
+  }
+  if (product === 'google-sheets' && verification.method !== 'google-sheets-xlsx-export') {
+    throw new Error(`UI responsiveness same-corpus verification method mismatch for ${caseId} ${product}`)
+  }
+  if (product === 'microsoft-excel-web' && verification.method !== 'microsoft-excel-web-source-xlsx') {
+    throw new Error(`UI responsiveness same-corpus verification method mismatch for ${caseId} ${product}`)
+  }
+  if (product !== 'bilig' && verification.checkedCells.length < 3) {
+    throw new Error(`UI responsiveness same-corpus verification must check at least 3 cells for ${caseId} ${product}`)
+  }
+  for (const cell of verification.checkedCells) {
+    if (cell.address.trim().length === 0 || cell.expected !== cell.actual) {
+      throw new Error(`UI responsiveness same-corpus verification cell mismatch for ${caseId} ${product}`)
+    }
+  }
+}
+
+function cloneSameCorpusVerification(verification: SameCorpusCaptureCorpusVerification): SameCorpusCaptureCorpusVerification {
+  return {
+    verified: verification.verified,
+    method: verification.method,
+    sheetName: verification.sheetName,
+    materializedCells: verification.materializedCells,
+    checkedCells: verification.checkedCells.map((cell) => ({ ...cell })),
+  }
 }
 
 function sampleCountForSameCorpus(): number {

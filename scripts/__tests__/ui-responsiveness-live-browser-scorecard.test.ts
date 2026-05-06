@@ -128,6 +128,7 @@ function buildSameCorpusCapture(): SameCorpusCapture {
           source: 'e2e/tests/web-shell-scroll-performance.pw.ts',
           operationResponseMsSamples: [4, 5, 6],
           postOperationFrameMsSamples: [8, 9, 10],
+          corpusVerification: corpusVerification('bilig-benchmark-state', []),
           limitations: [],
         },
         googleSheets: {
@@ -135,6 +136,7 @@ function buildSameCorpusCapture(): SameCorpusCapture {
           source: 'https://docs.google.com/spreadsheets/d/example',
           operationResponseMsSamples: [100, 100, 100],
           postOperationFrameMsSamples: [14, 15, 16],
+          corpusVerification: corpusVerification('google-sheets-xlsx-export', verifiedCells()),
           limitations: [],
         },
         microsoftExcelWeb: {
@@ -142,9 +144,31 @@ function buildSameCorpusCapture(): SameCorpusCapture {
           source: 'https://view.officeapps.live.com/op/view.aspx?src=example',
           operationResponseMsSamples: [75, 75, 90],
           postOperationFrameMsSamples: [14, 15, 16],
+          corpusVerification: corpusVerification('microsoft-excel-web-source-xlsx', verifiedCells()),
           limitations: [],
         },
       },
     ],
   }
+}
+
+function corpusVerification(
+  method: 'bilig-benchmark-state' | 'google-sheets-xlsx-export' | 'microsoft-excel-web-source-xlsx',
+  checkedCells: readonly { address: string; expected: string; actual: string }[],
+) {
+  return {
+    verified: true,
+    method,
+    sheetName: 'WideGrid',
+    materializedCells: 250000,
+    checkedCells,
+  }
+}
+
+function verifiedCells() {
+  return [
+    { address: 'A1', expected: 'metric-1', actual: 'metric-1' },
+    { address: 'B1', expected: 'metric-2', actual: 'metric-2' },
+    { address: 'F2', expected: 'note-1-5', actual: 'note-1-5' },
+  ]
 }

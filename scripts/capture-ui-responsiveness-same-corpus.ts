@@ -6,14 +6,16 @@ import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
 
 import { chromium, type Browser, type BrowserContextOptions, type Page } from '@playwright/test'
+import * as XLSX from 'xlsx'
 import { exportXlsx } from '../packages/excel-import/src/index.js'
 import {
   buildWorkbookBenchmarkCorpus,
-  getWorkbookBenchmarkCorpusDefinition,
   isWorkbookBenchmarkCorpusId,
+  type WorkbookBenchmarkCorpusCase,
   type WorkbookBenchmarkCorpusId,
 } from '../packages/benchmarks/src/workbook-corpus.js'
 import type {
+  SameCorpusCaptureCorpusVerification,
   SameCorpusCapture,
   SameCorpusCaptureMeasurement,
   UiResponsivenessSameCorpusProduct,
@@ -55,6 +57,20 @@ interface SaveStorageStateArgs {
 interface ScrollSample {
   readonly operationResponseMs: number
   readonly postOperationFrameMs: number
+}
+
+interface ProductSampleCollection {
+  readonly corpusVerification: SameCorpusCaptureCorpusVerification
+  readonly samples: readonly ScrollSample[]
+}
+
+interface SameCorpusFingerprint {
+  readonly materializedCells: number
+  readonly sheetName: string
+  readonly checkedCells: readonly {
+    readonly address: string
+    readonly expected: string
+  }[]
 }
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
@@ -277,13 +293,13 @@ export function parseCaptureArgs(argv: readonly string[]): CaptureArgs {
 }
 
 export async function captureSameCorpusUiResponsiveness(args: CaptureArgs): Promise<SameCorpusCapture> {
-  const corpus = getWorkbookBenchmarkCorpusDefinition(args.corpusId)
+  const corpus = buildWorkbookBenchmarkCorpus(args.corpusId)
   const browser = await chromium.launch({ headless: args.headless })
   try {
     const [bilig, googleSheets, microsoftExcelWeb] = await Promise.all([
-      measureProduct(browser, 'bilig', args.biligUrl, args),
-      measureProduct(browser, 'google-sheets', args.googleSheetsUrl, args),
-      measureProduct(browser, 'microsoft-excel-web', args.microsoftExcelWebUrl, args),
+      measureProduct(browser, 'bilig', args.biligUrl, corpus, args),
+      measureProduct(browser, 'google-sheets', args.googleSheetsUrl, corpus, args),
+      measureProduct(browser, 'microsoft-excel-web', args.microsoftExcelWebUrl, corpus, args),
     ])
     return {
       schemaVersion: 1,
@@ -314,15 +330,17 @@ async function measureProduct(
   browser: Browser,
   product: UiResponsivenessSameCorpusProduct,
   url: string,
+  corpus: WorkbookBenchmarkCorpusCase,
   args: CaptureArgs,
 ): Promise<SameCorpusCaptureMeasurement> {
-  const samples = await measureProductSamples(browser, product, url, args)
+  const { corpusVerification, samples } = await measureProductSamples(browser, product, url, corpus, args)
 
   return {
     product,
     source: url,
     operationResponseMsSamples: samples.map((entry) => entry.operationResponseMs),
     postOperationFrameMsSamples: samples.map((entry) => entry.postOperationFrameMs),
+    corpusVerification,
     limitations: productLimitations(product, storageStatePathForProduct(product, args)),
   }
 }
@@ -331,25 +349,32 @@ async function measureProductSamples(
   browser: Browser,
   product: UiResponsivenessSameCorpusProduct,
   url: string,
+  corpus: WorkbookBenchmarkCorpusCase,
   args: CaptureArgs,
   sampleIndex = 0,
   samples: ScrollSample[] = [],
-): Promise<ScrollSample[]> {
+  corpusVerification: SameCorpusCaptureCorpusVerification | null = null,
+): Promise<ProductSampleCollection> {
   if (sampleIndex >= args.sampleCount) {
-    return samples
+    if (!corpusVerification) {
+      throw new Error(`Missing same-corpus fingerprint verification for ${product}`)
+    }
+    return { corpusVerification, samples }
   }
   const context = await browser.newContext(browserContextOptionsForProduct(product, args))
   const page = await context.newPage()
+  let nextCorpusVerification = corpusVerification
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 })
     await waitForProductReady(page, product, args)
+    nextCorpusVerification ??= await verifyProductCorpus(page, product, url, corpus)
     samples.push(await measureVisibleScrollResponse(page, args.deltaX, args.deltaY))
   } catch (error: unknown) {
     throw new Error(await productReadyFailureMessage(page, product, url, sampleIndex, error), { cause: error })
   } finally {
     await context.close()
   }
-  return measureProductSamples(browser, product, url, args, sampleIndex + 1, samples)
+  return measureProductSamples(browser, product, url, corpus, args, sampleIndex + 1, samples, nextCorpusVerification)
 }
 
 function browserContextOptionsForProduct(product: UiResponsivenessSameCorpusProduct, args: CaptureArgs): BrowserContextOptions {
@@ -413,6 +438,207 @@ async function waitForProductReady(page: Page, product: UiResponsivenessSameCorp
     { timeout: args.readyTimeoutMs },
   )
   await settleFrames(page, 180)
+}
+
+async function verifyProductCorpus(
+  page: Page,
+  product: UiResponsivenessSameCorpusProduct,
+  sourceUrl: string,
+  corpus: WorkbookBenchmarkCorpusCase,
+): Promise<SameCorpusCaptureCorpusVerification> {
+  if (product === 'bilig') {
+    return verifyBiligBenchmarkState(page, corpus)
+  }
+  if (product === 'google-sheets') {
+    return verifyGoogleSheetsXlsxExport(page, sourceUrl, corpus)
+  }
+  return verifyMicrosoftExcelWebSourceXlsx(page, sourceUrl, corpus)
+}
+
+async function verifyBiligBenchmarkState(page: Page, corpus: WorkbookBenchmarkCorpusCase): Promise<SameCorpusCaptureCorpusVerification> {
+  const state = await page.evaluate(() => {
+    const collector = (
+      window as Window & {
+        __biligScrollPerf?: {
+          getBenchmarkState?: () => {
+            state: string
+            error: string | null
+            fixture: { id: string; materializedCellCount: number; sheetName: string } | null
+          }
+        }
+      }
+    ).__biligScrollPerf
+    return collector?.getBenchmarkState?.() ?? null
+  })
+  if (state?.state !== 'ready' || state.fixture?.id !== corpus.id) {
+    throw new Error(`Bilig benchmark state does not match same-corpus fixture: expected ${corpus.id}, got ${JSON.stringify(state)}`)
+  }
+  if (state.fixture.materializedCellCount !== corpus.materializedCellCount) {
+    throw new Error(
+      `Bilig benchmark state has stale materialized cell count: expected ${String(corpus.materializedCellCount)}, got ${String(
+        state.fixture.materializedCellCount,
+      )}`,
+    )
+  }
+  return {
+    verified: true,
+    method: 'bilig-benchmark-state',
+    sheetName: state.fixture.sheetName,
+    materializedCells: state.fixture.materializedCellCount,
+    checkedCells: [],
+  }
+}
+
+async function verifyGoogleSheetsXlsxExport(
+  page: Page,
+  sourceUrl: string,
+  corpus: WorkbookBenchmarkCorpusCase,
+): Promise<SameCorpusCaptureCorpusVerification> {
+  const exportUrl = googleSheetsExportUrl(sourceUrl)
+  const bytes = await fetchXlsxBytesForPage(page, exportUrl, 'Google Sheets same-corpus XLSX export')
+  return verifyXlsxCorpusFingerprint(bytes, corpus, 'google-sheets-xlsx-export')
+}
+
+async function verifyMicrosoftExcelWebSourceXlsx(
+  page: Page,
+  sourceUrl: string,
+  corpus: WorkbookBenchmarkCorpusCase,
+): Promise<SameCorpusCaptureCorpusVerification> {
+  const xlsxUrl = microsoftExcelWebSourceUrl(sourceUrl)
+  const bytes = await fetchXlsxBytesForPage(page, xlsxUrl, 'Microsoft Excel Web same-corpus source XLSX')
+  return verifyXlsxCorpusFingerprint(bytes, corpus, 'microsoft-excel-web-source-xlsx')
+}
+
+async function fetchXlsxBytesForPage(page: Page, url: string, label: string): Promise<Uint8Array> {
+  const response = await page.context().request.get(url, { timeout: 60_000 })
+  if (!response.ok()) {
+    const bodySnippet = (await response.text().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 300)
+    throw new Error(`${label} returned HTTP ${String(response.status())}: ${bodySnippet}`)
+  }
+  const bytes = await response.body()
+  if (looksLikeHtml(bytes)) {
+    throw new Error(`${label} returned HTML instead of XLSX bytes`)
+  }
+  return bytes
+}
+
+function googleSheetsExportUrl(sourceUrl: string): string {
+  const spreadsheetId = /\/spreadsheets\/d\/([^/?#]+)/u.exec(sourceUrl)?.[1]
+  if (!spreadsheetId) {
+    throw new Error(`Unable to extract Google Sheets spreadsheet ID from URL: ${sourceUrl}`)
+  }
+  return `https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/export?format=xlsx`
+}
+
+function microsoftExcelWebSourceUrl(sourceUrl: string): string {
+  const parsed = new URL(sourceUrl)
+  if (!parsed.hostname.includes('view.officeapps.live.com')) {
+    return sourceUrl
+  }
+  const source = parsed.searchParams.get('src')
+  if (!source) {
+    throw new Error(`Unable to extract Microsoft Excel Web source XLSX URL from viewer URL: ${sourceUrl}`)
+  }
+  return source
+}
+
+function looksLikeHtml(bytes: Uint8Array): boolean {
+  const prefix = new TextDecoder()
+    .decode(bytes.slice(0, Math.min(bytes.length, 256)))
+    .trimStart()
+    .toLowerCase()
+  return prefix.startsWith('<!doctype html') || prefix.startsWith('<html')
+}
+
+export function verifyXlsxCorpusFingerprint(
+  bytes: Uint8Array,
+  corpus: WorkbookBenchmarkCorpusCase,
+  method: SameCorpusCaptureCorpusVerification['method'],
+): SameCorpusCaptureCorpusVerification {
+  const fingerprint = buildSameCorpusFingerprint(corpus)
+  const workbook = XLSX.read(Buffer.from(bytes), { type: 'buffer' })
+  const worksheet = workbook.Sheets[fingerprint.sheetName]
+  if (!worksheet) {
+    throw new Error(`Same-corpus XLSX is missing sheet: ${fingerprint.sheetName}`)
+  }
+  const checkedCells = fingerprint.checkedCells.map((cell) => {
+    const actual = normalizeSpreadsheetValue(worksheet[cell.address]?.v)
+    if (actual !== cell.expected) {
+      throw new Error(
+        `Same-corpus XLSX cell mismatch at ${fingerprint.sheetName}!${cell.address}: expected ${cell.expected}, got ${actual}`,
+      )
+    }
+    return {
+      address: cell.address,
+      expected: cell.expected,
+      actual,
+    }
+  })
+  return {
+    verified: true,
+    method,
+    sheetName: fingerprint.sheetName,
+    materializedCells: fingerprint.materializedCells,
+    checkedCells,
+  }
+}
+
+export function buildSameCorpusFingerprint(corpus: WorkbookBenchmarkCorpusCase): SameCorpusFingerprint {
+  const sheet = corpus.snapshot.sheets.find((candidate) => candidate.name === corpus.primaryViewport.sheetName)
+  if (!sheet) {
+    throw new Error(`Same-corpus snapshot is missing primary sheet: ${corpus.primaryViewport.sheetName}`)
+  }
+  const literalCells = sheet.cells
+    .filter((cell) => cell.value !== undefined && cell.value !== null)
+    .map((cell) => ({ address: cell.address, expected: normalizeSpreadsheetValue(cell.value) }))
+  const checkedCells = selectFingerprintCells(literalCells)
+  if (checkedCells.length < 3) {
+    throw new Error(`Same-corpus fingerprint needs at least 3 literal cells for ${corpus.id}`)
+  }
+  return {
+    sheetName: sheet.name,
+    materializedCells: sheet.cells.length,
+    checkedCells,
+  }
+}
+
+function selectFingerprintCells(
+  cells: readonly {
+    readonly address: string
+    readonly expected: string
+  }[],
+): readonly {
+  readonly address: string
+  readonly expected: string
+}[] {
+  const selected = new Map<string, { address: string; expected: string }>()
+  for (const index of [0, 1, Math.floor(cells.length / 2), cells.length - 2, cells.length - 1]) {
+    const cell = cells[index]
+    if (cell) {
+      selected.set(cell.address, cell)
+    }
+  }
+  return [...selected.values()]
+}
+
+function normalizeSpreadsheetValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return ''
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    return String(value)
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'TRUE' : 'FALSE'
+  }
+  if (value instanceof Date) {
+    return value.toISOString()
+  }
+  const serialized = JSON.stringify(value)
+  if (serialized === undefined) {
+    throw new Error(`Unable to normalize spreadsheet value of type ${typeof value}`)
+  }
+  return serialized
 }
 
 async function productReadyFailureMessage(

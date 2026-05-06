@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseCaptureArgs, parseEmitXlsxArgs, parseSaveStorageStateArgs } from '../capture-ui-responsiveness-same-corpus.ts'
+import { exportXlsx } from '../../packages/excel-import/src/index.js'
+import { buildWorkbookBenchmarkCorpus } from '../../packages/benchmarks/src/workbook-corpus.js'
+import {
+  buildSameCorpusFingerprint,
+  parseCaptureArgs,
+  parseEmitXlsxArgs,
+  parseSaveStorageStateArgs,
+  verifyXlsxCorpusFingerprint,
+} from '../capture-ui-responsiveness-same-corpus.ts'
 
 describe('same-corpus UI responsiveness capture CLI', () => {
   it('builds a default Bilig benchmark URL from the selected corpus', () => {
@@ -98,6 +106,32 @@ describe('same-corpus UI responsiveness capture CLI', () => {
       corpusId: 'wide-mixed-250k',
     })
     expect(args?.targetDirectory.endsWith('/packages/benchmarks/baselines/ui-same-corpus')).toBe(true)
+  })
+
+  it('builds deterministic literal-cell fingerprints for same-corpus verification', () => {
+    const corpus = buildWorkbookBenchmarkCorpus('wide-mixed-250k')
+    const fingerprint = buildSameCorpusFingerprint(corpus)
+
+    expect(fingerprint).toMatchObject({
+      sheetName: 'WideGrid',
+      materializedCells: 250000,
+    })
+    expect(fingerprint.checkedCells.length).toBeGreaterThanOrEqual(3)
+    expect(fingerprint.checkedCells[0]).toEqual({ address: 'A1', expected: 'metric-1' })
+  })
+
+  it('verifies same-corpus XLSX bytes before accepting external timing evidence', () => {
+    const corpus = buildWorkbookBenchmarkCorpus('wide-mixed-250k')
+    const verification = verifyXlsxCorpusFingerprint(Buffer.from(exportXlsx(corpus.snapshot)), corpus, 'microsoft-excel-web-source-xlsx')
+
+    expect(verification).toMatchObject({
+      verified: true,
+      method: 'microsoft-excel-web-source-xlsx',
+      sheetName: 'WideGrid',
+      materializedCells: 250000,
+    })
+    expect(verification.checkedCells.length).toBeGreaterThanOrEqual(3)
+    expect(verification.checkedCells.every((cell) => cell.expected === cell.actual)).toBe(true)
   })
 
   it('parses storage-state bootstrap mode for authenticated capture', () => {
