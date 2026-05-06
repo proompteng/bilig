@@ -73,6 +73,34 @@ function formatCellAddress(rowIndex: number, columnIndex: number): string {
   return `${formatColumnName(columnIndex)}${String(rowIndex + 1)}`
 }
 
+function parseBenchmarkCellAddress(address: string): { row: number; col: number } {
+  let col = 0
+  let index = 0
+  while (index < address.length) {
+    const code = address.charCodeAt(index)
+    if (code < 65 || code > 90) {
+      break
+    }
+    col = col * 26 + code - 64
+    index += 1
+  }
+  const row = Number(address.slice(index))
+  if (col <= 0 || !Number.isInteger(row) || row <= 0) {
+    throw new Error(`Invalid benchmark cell address: ${address}`)
+  }
+  return { row: row - 1, col: col - 1 }
+}
+
+function withBenchmarkCellCoordinates(cell: WorkbookBenchmarkCell): WorkbookBenchmarkCell {
+  if (cell.row !== undefined && cell.col !== undefined) {
+    return cell
+  }
+  return {
+    ...cell,
+    ...parseBenchmarkCellAddress(cell.address),
+  }
+}
+
 function countSheetCells(sheet: WorkbookBenchmarkSheet): number {
   return sheet.cells.length
 }
@@ -93,7 +121,7 @@ export function buildDenseMixedWorkbookSnapshot(
     if (remaining === 0) {
       return false
     }
-    sheet.cells.push(cell)
+    sheet.cells.push(withBenchmarkCellCoordinates(cell))
     remaining -= 1
     return true
   }
@@ -142,7 +170,7 @@ export function buildWideMixedWorkbookSnapshot(
     if (remaining === 0) {
       return false
     }
-    sheet.cells.push(cell)
+    sheet.cells.push(withBenchmarkCellCoordinates(cell))
     remaining -= 1
     return true
   }
@@ -228,7 +256,7 @@ export function buildAnalysisMultisheetWorkbookSnapshot(
     if (remaining === 0) {
       return false
     }
-    sheet.cells.push(cell)
+    sheet.cells.push(withBenchmarkCellCoordinates(cell))
     remaining -= 1
     return true
   }

@@ -650,6 +650,8 @@ export interface WorkbookSnapshot {
     metadata?: SheetMetadataSnapshot
     cells: Array<{
       address: string
+      row?: number
+      col?: number
       value?: LiteralInput
       formula?: string
       format?: string

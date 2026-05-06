@@ -20,6 +20,8 @@ import type { FormulaTemplateResolution, FormulaTemplateSnapshot } from '../form
 import type { StringPool } from '../string-pool.js'
 import { makeCellKey, makeLogicalCellKey, type SheetRecord, type WorkbookStore } from '../workbook-store.js'
 
+type WorkbookSnapshotCell = WorkbookSnapshot['sheets'][number]['cells'][number]
+
 export interface RuntimeImage {
   readonly version: 1
   readonly templateBank: readonly FormulaTemplateSnapshot[]
@@ -156,8 +158,18 @@ function buildRuntimeFormulaSheetSpans(records: readonly FormulaInstanceSnapshot
   return spans
 }
 
-function parseRestoredCellCoordinates(sheetName: string, cellAddress: string): RuntimeImageCellCoordinateSnapshot {
-  const parsed = parseCellAddress(cellAddress, sheetName)
+function hasSnapshotCoordinate(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
+}
+
+function readRestoredCellCoordinates(sheetName: string, cell: WorkbookSnapshotCell): RuntimeImageCellCoordinateSnapshot {
+  if (hasSnapshotCoordinate(cell.row) && hasSnapshotCoordinate(cell.col)) {
+    return {
+      row: cell.row,
+      col: cell.col,
+    }
+  }
+  const parsed = parseCellAddress(cell.address, sheetName)
   return {
     row: parsed.row,
     col: parsed.col,
@@ -471,7 +483,7 @@ export function restoreWorkbookFromSnapshot(args: WorkbookSnapshotRestoreArgs): 
       }
       for (let cellIndex = 0; cellIndex < sheet.cells.length; cellIndex += 1) {
         const cell = sheet.cells[cellIndex]!
-        const coords = parseCellAddress(cell.address, sheet.name)
+        const coords = readRestoredCellCoordinates(sheet.name, cell)
         const ensured = args.workbook.ensureCellAt(sheetId, coords.row, coords.col)
         if (cell.formula !== undefined) {
           formulaRefs.push({
@@ -552,7 +564,7 @@ export function restoreWorkbookFromRuntimeImage(args: RuntimeImageRestoreArgs): 
       let literalColumns: WrittenColumnTracker | undefined
       for (let index = 0; index < sheet.cells.length; index += 1) {
         const cell = sheet.cells[index]!
-        const coords = sheetCoords?.[index] ?? parseRestoredCellCoordinates(sheet.name, cell.address)
+        const coords = sheetCoords?.[index] ?? readRestoredCellCoordinates(sheet.name, cell)
         while (
           formulaInstanceIndex < formulaInstanceEnd &&
           compareFormulaInstanceToCoordinate(args.runtimeImage.formulaInstances[formulaInstanceIndex]!, coords) < 0

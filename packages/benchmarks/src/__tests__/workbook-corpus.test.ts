@@ -15,10 +15,10 @@ describe('workbook benchmark corpus', () => {
     expect(countWorkbookSnapshotCells(corpus.snapshot)).toBe(100_000)
     expect(corpus.snapshot.sheets[0]?.name).toBe('Grid')
     expect(corpus.snapshot.sheets[0]?.cells.slice(0, 4)).toEqual([
-      { address: 'A1', value: 1 },
-      { address: 'B1', value: 3 },
-      { address: 'C1', formula: 'A1*B1' },
-      { address: 'D1', value: 'segment-1' },
+      { address: 'A1', row: 0, col: 0, value: 1 },
+      { address: 'B1', row: 0, col: 1, value: 3 },
+      { address: 'C1', row: 0, col: 2, formula: 'A1*B1' },
+      { address: 'D1', row: 0, col: 3, value: 'segment-1' },
     ])
   })
 
@@ -36,19 +36,21 @@ describe('workbook benchmark corpus', () => {
     expect(countWorkbookSnapshotCells(corpus.snapshot)).toBe(250_000)
     expect(corpus.snapshot.sheets.map((sheet) => sheet.name)).toEqual(['Inputs', 'Ledger', 'Summary'])
     expect(corpus.snapshot.sheets[0]?.cells.slice(0, 3)).toEqual([
-      { address: 'A1', value: 1 },
-      { address: 'B1', value: 2 },
-      { address: 'C1', formula: 'A1*B1' },
+      { address: 'A1', row: 0, col: 0, value: 1 },
+      { address: 'B1', row: 0, col: 1, value: 2 },
+      { address: 'C1', row: 0, col: 2, formula: 'A1*B1' },
     ])
     expect(corpus.snapshot.sheets[1]?.cells.slice(0, 5)).toEqual([
-      { address: 'A1', value: 1 },
-      { address: 'B1', value: 5 },
-      { address: 'C1', value: 1 },
-      { address: 'D1', formula: 'A1*B1' },
-      { address: 'E1', formula: 'D1+C1+Inputs!C1' },
+      { address: 'A1', row: 0, col: 0, value: 1 },
+      { address: 'B1', row: 0, col: 1, value: 5 },
+      { address: 'C1', row: 0, col: 2, value: 1 },
+      { address: 'D1', row: 0, col: 3, formula: 'A1*B1' },
+      { address: 'E1', row: 0, col: 4, formula: 'D1+C1+Inputs!C1' },
     ])
     expect(corpus.snapshot.sheets[2]?.cells[1]).toEqual({
       address: 'B1',
+      row: 0,
+      col: 1,
       formula: 'SUM(Ledger!E1:E256)',
     })
   })
@@ -67,18 +69,18 @@ describe('workbook benchmark corpus', () => {
     expect(countWorkbookSnapshotCells(corpus.snapshot)).toBe(250_000)
     expect(corpus.snapshot.sheets[0]?.name).toBe('WideGrid')
     expect(corpus.snapshot.sheets[0]?.cells.slice(0, 12)).toEqual([
-      { address: 'A1', value: 'metric-1' },
-      { address: 'B1', value: 'metric-2' },
-      { address: 'C1', value: 'metric-3' },
-      { address: 'D1', value: 'metric-4' },
-      { address: 'E1', value: 'metric-5' },
-      { address: 'F1', value: 'metric-6' },
-      { address: 'G1', value: 'metric-7' },
-      { address: 'H1', value: 'metric-8' },
-      { address: 'I1', value: 'metric-9' },
-      { address: 'J1', value: 'metric-10' },
-      { address: 'K1', value: 'metric-11' },
-      { address: 'L1', value: 'metric-12' },
+      { address: 'A1', row: 0, col: 0, value: 'metric-1' },
+      { address: 'B1', row: 0, col: 1, value: 'metric-2' },
+      { address: 'C1', row: 0, col: 2, value: 'metric-3' },
+      { address: 'D1', row: 0, col: 3, value: 'metric-4' },
+      { address: 'E1', row: 0, col: 4, value: 'metric-5' },
+      { address: 'F1', row: 0, col: 5, value: 'metric-6' },
+      { address: 'G1', row: 0, col: 6, value: 'metric-7' },
+      { address: 'H1', row: 0, col: 7, value: 'metric-8' },
+      { address: 'I1', row: 0, col: 8, value: 'metric-9' },
+      { address: 'J1', row: 0, col: 9, value: 'metric-10' },
+      { address: 'K1', row: 0, col: 10, value: 'metric-11' },
+      { address: 'L1', row: 0, col: 11, value: 'metric-12' },
     ])
   })
 
