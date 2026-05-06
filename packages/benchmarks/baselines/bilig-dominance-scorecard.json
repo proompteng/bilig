@@ -569,6 +569,7 @@
       ],
       "checkCommands": [
         "pnpm ui:same-corpus:capture -- --emit-xlsx <directory>",
+        "pnpm ui:same-corpus:fixture:check",
         "pnpm ui:same-corpus:capture -- --save-storage-state <state.json> --auth-product google-sheets --google-sheets-url <url>",
         "pnpm ui:same-corpus:capture -- --output <capture.json> --google-sheets-url <url> --microsoft-excel-web-url <url>",
         "pnpm ui:same-corpus:capture -- --output <capture.json> --google-sheets-url <url> --google-sheets-storage-state <state.json> --microsoft-excel-web-url <url>",

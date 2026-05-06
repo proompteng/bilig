@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
@@ -38,6 +38,7 @@ interface CaptureArgs {
 }
 
 interface EmitXlsxArgs {
+  readonly check: boolean
   readonly corpusId: WorkbookBenchmarkCorpusId
   readonly targetDirectory: string
 }
@@ -106,6 +107,7 @@ export function parseEmitXlsxArgs(argv: readonly string[]): EmitXlsxArgs | null 
     throw new Error('Missing directory after --emit-xlsx')
   }
   return {
+    check: argv.includes('--check'),
     corpusId: parseCorpusId(argumentValue(argv, '--corpus') ?? defaultCorpusId),
     targetDirectory: resolve(targetDirectory),
   }
@@ -198,16 +200,30 @@ export function emitSameCorpusXlsx(args: EmitXlsxArgs): void {
   mkdirSync(args.targetDirectory, { recursive: true })
   const corpus = buildWorkbookBenchmarkCorpus(args.corpusId)
   const outputFile = join(args.targetDirectory, `${args.corpusId}.xlsx`)
-  writeFileSync(outputFile, exportXlsx(corpus.snapshot))
+  const workbookBytes = Buffer.from(exportXlsx(corpus.snapshot))
+  if (args.check) {
+    if (!existsSync(outputFile)) {
+      throw new Error(`Same-corpus XLSX fixture is missing: ${outputFile}`)
+    }
+    const existingBytes = readFileSync(outputFile)
+    if (!existingBytes.equals(workbookBytes)) {
+      throw new Error(`Same-corpus XLSX fixture is stale: ${outputFile}`)
+    }
+  } else {
+    writeFileSync(outputFile, workbookBytes)
+  }
+  const publicGithubRawUrl = `https://raw.githubusercontent.com/proompteng/bilig/main/packages/benchmarks/baselines/ui-same-corpus/${corpus.id}.xlsx`
   console.log(
     JSON.stringify(
       {
-        mode: 'emit-xlsx',
+        mode: args.check ? 'check-xlsx' : 'emit-xlsx',
         outputFile,
         corpusCaseId: corpus.id,
         materializedCells: corpus.materializedCellCount,
         googleSheetsUploadMode: 'native_google_sheets',
-        microsoftExcelWebSource: 'upload-or-host-this-xlsx-for-excel-web',
+        publicGithubRawUrl,
+        publicForgejoRawUrl: `https://code.proompteng.ai/kalmyk/bilig/raw/branch/main/packages/benchmarks/baselines/ui-same-corpus/${corpus.id}.xlsx`,
+        microsoftExcelWebUrl: `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(publicGithubRawUrl)}`,
         googleSheetsAuthStateCommand:
           'pnpm ui:same-corpus:capture -- --save-storage-state <state.json> --auth-product google-sheets --google-sheets-url <url>',
         captureCommand:

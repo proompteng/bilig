@@ -84,9 +84,20 @@ describe('same-corpus UI responsiveness capture CLI', () => {
     const args = parseEmitXlsxArgs(['--emit-xlsx', 'tmp/ui-corpus', '--corpus', 'wide-mixed-variable-250k'])
 
     expect(args).toMatchObject({
+      check: false,
       corpusId: 'wide-mixed-variable-250k',
     })
     expect(args?.targetDirectory.endsWith('/tmp/ui-corpus')).toBe(true)
+  })
+
+  it('parses checked XLSX fixture mode', () => {
+    const args = parseEmitXlsxArgs(['--emit-xlsx', 'packages/benchmarks/baselines/ui-same-corpus', '--check'])
+
+    expect(args).toMatchObject({
+      check: true,
+      corpusId: 'wide-mixed-250k',
+    })
+    expect(args?.targetDirectory.endsWith('/packages/benchmarks/baselines/ui-same-corpus')).toBe(true)
   })
 
   it('parses storage-state bootstrap mode for authenticated capture', () => {
