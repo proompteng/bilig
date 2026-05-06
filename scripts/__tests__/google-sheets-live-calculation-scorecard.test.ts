@@ -29,8 +29,8 @@ describe('Google Sheets live calculation scorecard', () => {
       },
       summary: {
         allRequiredCasesPassed: true,
-        requiredCaseCount: 16,
-        matchingCaseCount: 16,
+        requiredCaseCount: 36,
+        matchingCaseCount: 36,
         microsoftExcelEvidence: 'not-covered-by-this-artifact',
       },
     })
@@ -51,6 +51,26 @@ describe('Google Sheets live calculation scorecard', () => {
       'excelLive.dateYearFromSerial',
       'excelLive.conditionalSumifRange',
       'excelLive.mathAbsSqrt',
+      'excelLive.aggregateAverageRange',
+      'excelLive.aggregateMinRange',
+      'excelLive.aggregateMaxRange',
+      'excelLive.aggregateCountaRange',
+      'excelLive.aggregateCountblankRange',
+      'excelLive.mathProductRange',
+      'excelLive.mathSumsqRange',
+      'excelLive.mathMod',
+      'excelLive.mathPower',
+      'excelLive.mathGcdRange',
+      'excelLive.textLeft',
+      'excelLive.textRight',
+      'excelLive.textMid',
+      'excelLive.textLen',
+      'excelLive.textTrimUpper',
+      'excelLive.textSearchCaseInsensitive',
+      'excelLive.lookupVlookupExact',
+      'excelLive.lookupChoose',
+      'excelLive.statisticalCountif',
+      'excelLive.statisticalAverageif',
     ])
     expect(scorecard.cases.every((entry) => entry.passed)).toBe(true)
     validateGoogleSheetsLiveCalculationScorecard(scorecard)
@@ -64,7 +84,7 @@ describe('Google Sheets live calculation scorecard', () => {
         ...scorecard,
         summary: {
           ...scorecard.summary,
-          requiredCaseCount: 15,
+          requiredCaseCount: 35,
         },
         cases: scorecard.cases.filter((entry) => entry.id !== 'math-abs-sqrt'),
       }),

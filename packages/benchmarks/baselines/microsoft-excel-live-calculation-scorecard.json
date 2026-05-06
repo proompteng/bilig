@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "suite": "microsoft-excel-live-calculation-correctness",
-  "generatedAt": "2026-05-06T15:27:45.591Z",
+  "generatedAt": "2026-05-06T16:36:48.072Z",
   "host": {
     "arch": "arm64",
     "platform": "darwin"
@@ -18,8 +18,8 @@
   },
   "summary": {
     "allRequiredCasesPassed": true,
-    "requiredCaseCount": 16,
-    "matchingCaseCount": 16,
+    "requiredCaseCount": 36,
+    "matchingCaseCount": 36,
     "coveredFeatures": [
       "excelLive.arithmeticPrecedence",
       "excelLive.aggregateSumRange",
@@ -36,7 +36,27 @@
       "excelLive.dateSerial",
       "excelLive.dateYearFromSerial",
       "excelLive.conditionalSumifRange",
-      "excelLive.mathAbsSqrt"
+      "excelLive.mathAbsSqrt",
+      "excelLive.aggregateAverageRange",
+      "excelLive.aggregateMinRange",
+      "excelLive.aggregateMaxRange",
+      "excelLive.aggregateCountaRange",
+      "excelLive.aggregateCountblankRange",
+      "excelLive.mathProductRange",
+      "excelLive.mathSumsqRange",
+      "excelLive.mathMod",
+      "excelLive.mathPower",
+      "excelLive.mathGcdRange",
+      "excelLive.textLeft",
+      "excelLive.textRight",
+      "excelLive.textMid",
+      "excelLive.textLen",
+      "excelLive.textTrimUpper",
+      "excelLive.textSearchCaseInsensitive",
+      "excelLive.lookupVlookupExact",
+      "excelLive.lookupChoose",
+      "excelLive.statisticalCountif",
+      "excelLive.statisticalAverageif"
     ],
     "googleSheetsEvidence": "not-covered-by-this-artifact"
   },
@@ -199,6 +219,206 @@
       "biligValue": 13,
       "microsoftExcelRawValue": "13.0",
       "microsoftExcelValue": 13,
+      "passed": true
+    },
+    {
+      "id": "aggregate-average-range",
+      "formula": "=AVERAGE(A23:C23)",
+      "formulaCell": "D23",
+      "coveredFeature": "excelLive.aggregateAverageRange",
+      "biligValue": 4,
+      "microsoftExcelRawValue": "4.0",
+      "microsoftExcelValue": 4,
+      "passed": true
+    },
+    {
+      "id": "aggregate-min-range",
+      "formula": "=MIN(A24:C24)",
+      "formulaCell": "D24",
+      "coveredFeature": "excelLive.aggregateMinRange",
+      "biligValue": 2,
+      "microsoftExcelRawValue": "2.0",
+      "microsoftExcelValue": 2,
+      "passed": true
+    },
+    {
+      "id": "aggregate-max-range",
+      "formula": "=MAX(A25:C25)",
+      "formulaCell": "D25",
+      "coveredFeature": "excelLive.aggregateMaxRange",
+      "biligValue": 8,
+      "microsoftExcelRawValue": "8.0",
+      "microsoftExcelValue": 8,
+      "passed": true
+    },
+    {
+      "id": "aggregate-counta-range",
+      "formula": "=COUNTA(A26:C26)",
+      "formulaCell": "D26",
+      "coveredFeature": "excelLive.aggregateCountaRange",
+      "biligValue": 2,
+      "microsoftExcelRawValue": "2.0",
+      "microsoftExcelValue": 2,
+      "passed": true
+    },
+    {
+      "id": "aggregate-countblank-range",
+      "formula": "=COUNTBLANK(A27:C27)",
+      "formulaCell": "D27",
+      "coveredFeature": "excelLive.aggregateCountblankRange",
+      "biligValue": 1,
+      "microsoftExcelRawValue": "1.0",
+      "microsoftExcelValue": 1,
+      "passed": true
+    },
+    {
+      "id": "math-product-range",
+      "formula": "=PRODUCT(A28:C28)",
+      "formulaCell": "D28",
+      "coveredFeature": "excelLive.mathProductRange",
+      "biligValue": 24,
+      "microsoftExcelRawValue": "24.0",
+      "microsoftExcelValue": 24,
+      "passed": true
+    },
+    {
+      "id": "math-sumsq-range",
+      "formula": "=SUMSQ(A29:C29)",
+      "formulaCell": "D29",
+      "coveredFeature": "excelLive.mathSumsqRange",
+      "biligValue": 29,
+      "microsoftExcelRawValue": "29.0",
+      "microsoftExcelValue": 29,
+      "passed": true
+    },
+    {
+      "id": "math-mod",
+      "formula": "=MOD(A30,B30)",
+      "formulaCell": "D30",
+      "coveredFeature": "excelLive.mathMod",
+      "biligValue": 1,
+      "microsoftExcelRawValue": "1.0",
+      "microsoftExcelValue": 1,
+      "passed": true
+    },
+    {
+      "id": "math-power",
+      "formula": "=POWER(A31,B31)",
+      "formulaCell": "D31",
+      "coveredFeature": "excelLive.mathPower",
+      "biligValue": 8,
+      "microsoftExcelRawValue": "8.0",
+      "microsoftExcelValue": 8,
+      "passed": true
+    },
+    {
+      "id": "math-gcd-range",
+      "formula": "=GCD(A32:C32)",
+      "formulaCell": "D32",
+      "coveredFeature": "excelLive.mathGcdRange",
+      "biligValue": 1,
+      "microsoftExcelRawValue": "1.0",
+      "microsoftExcelValue": 1,
+      "passed": true
+    },
+    {
+      "id": "text-left",
+      "formula": "=LEFT(A33,2)",
+      "formulaCell": "D33",
+      "coveredFeature": "excelLive.textLeft",
+      "biligValue": "Bi",
+      "microsoftExcelRawValue": "Bi",
+      "microsoftExcelValue": "Bi",
+      "passed": true
+    },
+    {
+      "id": "text-right",
+      "formula": "=RIGHT(A34,3)",
+      "formulaCell": "D34",
+      "coveredFeature": "excelLive.textRight",
+      "biligValue": "lig",
+      "microsoftExcelRawValue": "lig",
+      "microsoftExcelValue": "lig",
+      "passed": true
+    },
+    {
+      "id": "text-mid",
+      "formula": "=MID(A35,2,3)",
+      "formulaCell": "D35",
+      "coveredFeature": "excelLive.textMid",
+      "biligValue": "ili",
+      "microsoftExcelRawValue": "ili",
+      "microsoftExcelValue": "ili",
+      "passed": true
+    },
+    {
+      "id": "text-len",
+      "formula": "=LEN(A36)",
+      "formulaCell": "D36",
+      "coveredFeature": "excelLive.textLen",
+      "biligValue": 5,
+      "microsoftExcelRawValue": "5.0",
+      "microsoftExcelValue": 5,
+      "passed": true
+    },
+    {
+      "id": "text-trim-upper",
+      "formula": "=UPPER(TRIM(A37))",
+      "formulaCell": "D37",
+      "coveredFeature": "excelLive.textTrimUpper",
+      "biligValue": "BILIG",
+      "microsoftExcelRawValue": "BILIG",
+      "microsoftExcelValue": "BILIG",
+      "passed": true
+    },
+    {
+      "id": "text-search-case-insensitive",
+      "formula": "=SEARCH(\"LI\",A38)",
+      "formulaCell": "D38",
+      "coveredFeature": "excelLive.textSearchCaseInsensitive",
+      "biligValue": 3,
+      "microsoftExcelRawValue": "3.0",
+      "microsoftExcelValue": 3,
+      "passed": true
+    },
+    {
+      "id": "lookup-vlookup-exact",
+      "formula": "=VLOOKUP(\"b\",$A$20:$B$22,2,FALSE)",
+      "formulaCell": "D39",
+      "coveredFeature": "excelLive.lookupVlookupExact",
+      "biligValue": 20,
+      "microsoftExcelRawValue": "20.0",
+      "microsoftExcelValue": 20,
+      "passed": true
+    },
+    {
+      "id": "lookup-choose",
+      "formula": "=CHOOSE(2,\"red\",\"blue\",\"green\")",
+      "formulaCell": "D40",
+      "coveredFeature": "excelLive.lookupChoose",
+      "biligValue": "blue",
+      "microsoftExcelRawValue": "blue",
+      "microsoftExcelValue": "blue",
+      "passed": true
+    },
+    {
+      "id": "statistical-countif",
+      "formula": "=COUNTIF(A41:C41,\">0\")",
+      "formulaCell": "D41",
+      "coveredFeature": "excelLive.statisticalCountif",
+      "biligValue": 2,
+      "microsoftExcelRawValue": "2.0",
+      "microsoftExcelValue": 2,
+      "passed": true
+    },
+    {
+      "id": "statistical-averageif",
+      "formula": "=AVERAGEIF(A42:C42,\">0\")",
+      "formulaCell": "D42",
+      "coveredFeature": "excelLive.statisticalAverageif",
+      "biligValue": 3,
+      "microsoftExcelRawValue": "3.0",
+      "microsoftExcelValue": 3,
       "passed": true
     }
   ]
