@@ -27,6 +27,8 @@
     "auditability:check": "bun scripts/gen-auditability-scorecard.ts --check",
     "reliability:generate": "bun scripts/gen-reliability-scorecard.ts",
     "reliability:check": "bun scripts/gen-reliability-scorecard.ts --check",
+    "collaboration:generate": "bun scripts/gen-collaboration-scorecard.ts",
+    "collaboration:check": "bun scripts/gen-collaboration-scorecard.ts --check",
     "automation:generate": "bun scripts/gen-automation-scorecard.ts",
     "automation:check": "bun scripts/gen-automation-scorecard.ts --check",
     "import-export:fidelity:generate": "bun scripts/gen-import-export-fidelity-scorecard.ts",

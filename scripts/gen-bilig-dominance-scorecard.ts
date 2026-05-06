@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url'
 
 import { parseAuditabilityScorecard, type AuditabilityScorecard } from './gen-auditability-scorecard.ts'
 import { parseAutomationScorecard, type AutomationScorecard } from './gen-automation-scorecard.ts'
+import { parseCollaborationScorecard, type CollaborationScorecard } from './gen-collaboration-scorecard.ts'
 import { parseImportExportFidelityScorecard, type ImportExportFidelityScorecard } from './gen-import-export-fidelity-scorecard.ts'
 import { parseReliabilityScorecard, type ReliabilityScorecard } from './gen-reliability-scorecard.ts'
 import { parseSecurityPostureScorecard, type SecurityPostureScorecard } from './gen-security-posture-scorecard.ts'
@@ -151,6 +152,7 @@ export interface BiligDominanceScorecard {
   sourceArtifacts: {
     auditabilityScorecard: string
     automationScorecard: string
+    collaborationScorecard: string
     formulaDominanceSnapshot: string
     hyperFormulaSurfaceSnapshot: string
     importExportFidelityScorecard: string
@@ -173,6 +175,9 @@ export interface BiligDominanceScorecard {
     automationRegisteredToolCount: number
     automationSemanticCommandKindCount: number
     automationUncoveredControls: string[]
+    collaborationCoveredControls: string[]
+    collaborationPosturePassed: boolean
+    collaborationUncoveredControls: string[]
     externalGoogleSheetsEvidence: 'not-captured-in-repo'
     externalMicrosoftExcelEvidence: 'not-captured-in-repo'
     formulaCanonicalProductionPercent: number
@@ -216,6 +221,8 @@ export interface BuildScorecardInput {
   auditabilityScorecardPath: string
   automationScorecard: AutomationScorecard
   automationScorecardPath: string
+  collaborationScorecard: CollaborationScorecard
+  collaborationScorecardPath: string
   competitiveArtifact: CompetitiveArtifact
   competitiveArtifactPath: string
   formulaSnapshot: FormulaDominanceSnapshot
@@ -236,6 +243,7 @@ const TEN_X_RATIO = 0.1
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const auditabilityScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'auditability-scorecard.json')
 const automationScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'automation-scorecard.json')
+const collaborationScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'collaboration-scorecard.json')
 const outputPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'bilig-dominance-scorecard.json')
 const competitiveArtifactPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'workpaper-vs-hyperformula.json')
 const formulaSnapshotPath = join(rootDir, 'packages', 'formula', 'src', '__tests__', 'fixtures', 'formula-dominance-snapshot.json')
@@ -252,6 +260,8 @@ function main(): void {
     auditabilityScorecardPath: toRepoPath(auditabilityScorecardPath),
     automationScorecard: parseAutomationScorecard(readJsonObject(automationScorecardPath)),
     automationScorecardPath: toRepoPath(automationScorecardPath),
+    collaborationScorecard: parseCollaborationScorecard(readJsonObject(collaborationScorecardPath)),
+    collaborationScorecardPath: toRepoPath(collaborationScorecardPath),
     competitiveArtifact: parseCompetitiveArtifact(readJsonObject(competitiveArtifactPath)),
     competitiveArtifactPath: toRepoPath(competitiveArtifactPath),
     formulaSnapshot: parseFormulaDominanceSnapshot(readJsonObject(formulaSnapshotPath)),
@@ -352,6 +362,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
     sourceArtifacts: {
       auditabilityScorecard: input.auditabilityScorecardPath,
       automationScorecard: input.automationScorecardPath,
+      collaborationScorecard: input.collaborationScorecardPath,
       formulaDominanceSnapshot: input.formulaSnapshotPath,
       hyperFormulaSurfaceSnapshot: input.surfaceSnapshotPath,
       importExportFidelityScorecard: input.importExportFidelityScorecardPath,
@@ -374,6 +385,9 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       automationRegisteredToolCount: input.automationScorecard.summary.registeredToolCount,
       automationSemanticCommandKindCount: input.automationScorecard.summary.semanticCommandKindCount,
       automationUncoveredControls: input.automationScorecard.summary.uncoveredControls,
+      collaborationCoveredControls: input.collaborationScorecard.summary.coveredControls,
+      collaborationPosturePassed: input.collaborationScorecard.summary.allRequiredControlsPassed,
+      collaborationUncoveredControls: input.collaborationScorecard.summary.uncoveredControls,
       externalGoogleSheetsEvidence: 'not-captured-in-repo',
       externalMicrosoftExcelEvidence: 'not-captured-in-repo',
       formulaCanonicalProductionPercent: input.formulaSnapshot.canonical.summary.percent,
@@ -505,22 +519,31 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
         currentEvidence: [
           'worker runtime, pending-op journal, authoritative delta ingest, presence, and changes-pane tests exist',
           'collaboration product targets are documented',
+          `generated collaboration scorecard passes required controls: ${String(
+            input.collaborationScorecard.summary.allRequiredControlsPassed,
+          )}`,
+          `covered collaboration controls: ${input.collaborationScorecard.summary.coveredControls.join(', ')}`,
+          `uncovered collaboration controls are explicitly disclosed: ${input.collaborationScorecard.summary.uncoveredControls.join(', ')}`,
           sloSummary(workerReconnectCatchUp100Pending),
         ],
         evidenceArtifacts: [
+          input.collaborationScorecardPath,
           input.largeWorkbookSloScorecardPath,
           'docs/05-06-next-phase.md',
           'apps/web/src/__tests__/workbook-sync.test.ts',
           'apps/web/src/__tests__/workbook-presence.test.tsx',
         ],
         checkCommands: [
+          'pnpm collaboration:check',
           'pnpm large-workbook:slo:check',
           'CI=1 pnpm bench:contracts',
+          'pnpm exec vitest run scripts/__tests__/collaboration-scorecard.test.ts apps/web/src/__tests__/worker-runtime-reconnect.test.ts apps/web/src/__tests__/workbook-presence.test.tsx apps/web/src/__tests__/projected-viewport-patch-application.test.ts apps/web/src/__tests__/worker-workbook-app-model.test.ts apps/bilig/src/workbook-runtime/document-presence-session-store.test.ts packages/zero-sync/src/__tests__/mutators.test.ts',
           'pnpm test:correctness:browser',
           'pnpm test:correctness:server',
         ],
         blockers: [
-          'generated collaboration SLO evidence covers reconnect catch-up only; conflict rate and multi-user viewport behavior remain uncovered',
+          `generated collaboration evidence still leaves uncovered controls: ${input.collaborationScorecard.summary.uncoveredControls.join(', ')}`,
+          'generated collaboration SLO evidence covers reconnect catch-up only; headed browser multi-user viewport behavior remains uncovered',
           'no direct Sheets collaboration comparison artifact exists in the repo',
         ],
       },

@@ -30,10 +30,12 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.summary.largeWorkbookSloPassed).toBe(true)
     expect(scorecard.summary.auditabilityPosturePassed).toBe(true)
     expect(scorecard.summary.automationPosturePassed).toBe(true)
+    expect(scorecard.summary.collaborationPosturePassed).toBe(true)
     expect(scorecard.summary.reliabilityPosturePassed).toBe(true)
     expect(scorecard.summary.securityPosturePassed).toBe(true)
     expect(scorecard.sourceArtifacts.auditabilityScorecard).toBe('packages/benchmarks/baselines/auditability-scorecard.json')
     expect(scorecard.sourceArtifacts.automationScorecard).toBe('packages/benchmarks/baselines/automation-scorecard.json')
+    expect(scorecard.sourceArtifacts.collaborationScorecard).toBe('packages/benchmarks/baselines/collaboration-scorecard.json')
     expect(scorecard.sourceArtifacts.reliabilityScorecard).toBe('packages/benchmarks/baselines/reliability-scorecard.json')
     expect(scorecard.sourceArtifacts.importExportFidelityScorecard).toBe(
       'packages/benchmarks/baselines/import-export-fidelity-scorecard.json',
@@ -47,6 +49,10 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.categories.find((category) => category.id === 'large-workbook-scale')).toMatchObject({
       status: 'partial-repo-evidence',
       evidenceArtifacts: expect.arrayContaining(['packages/benchmarks/baselines/large-workbook-slo-scorecard.json']),
+    })
+    expect(scorecard.categories.find((category) => category.id === 'collaboration')).toMatchObject({
+      status: 'partial-repo-evidence',
+      evidenceArtifacts: expect.arrayContaining(['packages/benchmarks/baselines/collaboration-scorecard.json']),
     })
     expect(scorecard.categories.find((category) => category.id === 'auditability')).toMatchObject({
       status: 'partial-repo-evidence',
@@ -97,6 +103,8 @@ describe('bilig dominance scorecard', () => {
     expect(packageJson).toContain('"auditability:check": "bun scripts/gen-auditability-scorecard.ts --check"')
     expect(packageJson).toContain('"reliability:generate": "bun scripts/gen-reliability-scorecard.ts"')
     expect(packageJson).toContain('"reliability:check": "bun scripts/gen-reliability-scorecard.ts --check"')
+    expect(packageJson).toContain('"collaboration:generate": "bun scripts/gen-collaboration-scorecard.ts"')
+    expect(packageJson).toContain('"collaboration:check": "bun scripts/gen-collaboration-scorecard.ts --check"')
     expect(packageJson).toContain('"automation:generate": "bun scripts/gen-automation-scorecard.ts"')
     expect(packageJson).toContain('"automation:check": "bun scripts/gen-automation-scorecard.ts --check"')
     expect(packageJson).toContain('"import-export:fidelity:check": "bun scripts/gen-import-export-fidelity-scorecard.ts --check"')
@@ -105,6 +113,7 @@ describe('bilig dominance scorecard', () => {
     expect(runCi).toContain("pnpm('bilig dominance scorecard check', 'dominance:check')")
     expect(runCi).toContain("pnpm('auditability scorecard check', 'auditability:check')")
     expect(runCi).toContain("pnpm('reliability scorecard check', 'reliability:check')")
+    expect(runCi).toContain("pnpm('collaboration scorecard check', 'collaboration:check')")
     expect(runCi).toContain("pnpm('automation scorecard check', 'automation:check')")
     expect(runCi).toContain("pnpm('import/export fidelity scorecard check', 'import-export:fidelity:check')")
     expect(runCi).toContain("pnpm('large workbook SLO scorecard check', 'large-workbook:slo:check')")
@@ -140,6 +149,7 @@ function buildFixtureInput(): BuildScorecardInput {
     formulaSnapshotPath: 'packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json',
     auditabilityScorecardPath: 'packages/benchmarks/baselines/auditability-scorecard.json',
     automationScorecardPath: 'packages/benchmarks/baselines/automation-scorecard.json',
+    collaborationScorecardPath: 'packages/benchmarks/baselines/collaboration-scorecard.json',
     importExportFidelityScorecardPath: 'packages/benchmarks/baselines/import-export-fidelity-scorecard.json',
     largeWorkbookSloScorecardPath: 'packages/benchmarks/baselines/large-workbook-slo-scorecard.json',
     reliabilityScorecardPath: 'packages/benchmarks/baselines/reliability-scorecard.json',
@@ -273,6 +283,40 @@ function buildFixtureInput(): BuildScorecardInput {
           passed: true,
           coveredControls: ['agent.semanticBundleValidation'],
           evidence: 'fixture bundle previewed and applied',
+          findings: [],
+        },
+      ],
+    },
+    collaborationScorecard: {
+      schemaVersion: 1,
+      suite: 'collaboration-posture',
+      generatedAt: '2026-05-06T13:00:00.000Z',
+      source: {
+        artifactGenerator: 'scripts/gen-collaboration-scorecard.ts',
+        workerRuntimeImplementation: 'apps/web/src/worker-runtime.ts',
+        presenceImplementation: 'apps/web/src/workbook-presence-model.ts',
+        presenceSessionImplementation: 'apps/bilig/src/workbook-runtime/document-presence-session-store.ts',
+        viewportPatchImplementation: 'apps/web/src/projected-viewport-patch-application.ts',
+        editorConflictImplementation: 'apps/web/src/use-workbook-editor-conflict.tsx',
+      },
+      summary: {
+        allRequiredControlsPassed: true,
+        syncRebaseAckPassed: true,
+        presenceSelectionPassed: true,
+        conflictViewportPassed: true,
+        coveredControls: ['sync.pendingRebase', 'presence.sessionLifecycle'],
+        uncoveredControls: ['headedBrowser.multiUserViewportSoak'],
+        externalGoogleSheetsEvidence: 'not-captured',
+        externalMicrosoftExcelEvidence: 'not-captured',
+      },
+      controls: [
+        {
+          id: 'worker-sync-rebase-ack-roundtrip',
+          category: 'local-first-sync',
+          required: true,
+          passed: true,
+          coveredControls: ['sync.pendingRebase'],
+          evidence: 'fixture pending mutations rebased and acked',
           findings: [],
         },
       ],

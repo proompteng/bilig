@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "suite": "collaboration-posture",
+  "generatedAt": "2026-05-06T08:53:41.985Z",
+  "source": {
+    "artifactGenerator": "scripts/gen-collaboration-scorecard.ts",
+    "workerRuntimeImplementation": "apps/web/src/worker-runtime.ts",
+    "presenceImplementation": "apps/web/src/workbook-presence-model.ts",
+    "presenceSessionImplementation": "apps/bilig/src/workbook-runtime/document-presence-session-store.ts",
+    "viewportPatchImplementation": "apps/web/src/projected-viewport-patch-application.ts",
+    "editorConflictImplementation": "apps/web/src/use-workbook-editor-conflict.tsx"
+  },
+  "summary": {
+    "allRequiredControlsPassed": true,
+    "syncRebaseAckPassed": true,
+    "presenceSelectionPassed": true,
+    "conflictViewportPassed": true,
+    "coveredControls": [
+      "sync.pendingRebase",
+      "sync.authoritativeAck",
+      "sync.noAcceptedOpLoss",
+      "presence.sessionLifecycle",
+      "presence.selectionSchema",
+      "presence.collaboratorFiltering",
+      "conflict.authoritativeDriftDetection",
+      "viewport.optimisticAxisProtection",
+      "viewport.authoritativeCatchupClearsPending"
+    ],
+    "uncoveredControls": [
+      "headedBrowser.multiUserViewportSoak",
+      "conflictRateLongRunningCollaboration",
+      "externalSheetsCollaborationComparison"
+    ],
+    "externalGoogleSheetsEvidence": "not-captured",
+    "externalMicrosoftExcelEvidence": "not-captured"
+  },
+  "controls": [
+    {
+      "id": "worker-sync-rebase-ack-roundtrip",
+      "category": "local-first-sync",
+      "required": true,
+      "passed": true,
+      "coveredControls": ["sync.pendingRebase", "sync.authoritativeAck", "sync.noAcceptedOpLoss"],
+      "evidence": "Queued five local workbook mutations, replayed unrelated authoritative drift over them, verified rebased local and remote values, then absorbed authoritative acknowledgements without accepted-op loss.",
+      "findings": []
+    },
+    {
+      "id": "presence-session-selection-filtering",
+      "category": "presence",
+      "required": true,
+      "passed": true,
+      "coveredControls": ["presence.sessionLifecycle", "presence.selectionSchema", "presence.collaboratorFiltering"],
+      "evidence": "Opened and closed presence-backed sessions through the document runtime store, validated Zero presence selection payloads, and filtered collaborator rows to one active real user.",
+      "findings": []
+    },
+    {
+      "id": "editor-conflict-and-viewport-protection",
+      "category": "conflict-viewport",
+      "required": true,
+      "passed": true,
+      "coveredControls": [
+        "conflict.authoritativeDriftDetection",
+        "viewport.optimisticAxisProtection",
+        "viewport.authoritativeCatchupClearsPending"
+      ],
+      "evidence": "Exercised editor conflict model helpers against authoritative cell drift, then applied stale and confirming viewport patches to prove optimistic row state survives until authoritative catch-up.",
+      "findings": []
+    }
+  ]
+}

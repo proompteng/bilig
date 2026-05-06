@@ -30,6 +30,7 @@
   "sourceArtifacts": {
     "auditabilityScorecard": "packages/benchmarks/baselines/auditability-scorecard.json",
     "automationScorecard": "packages/benchmarks/baselines/automation-scorecard.json",
+    "collaborationScorecard": "packages/benchmarks/baselines/collaboration-scorecard.json",
     "formulaDominanceSnapshot": "packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json",
     "hyperFormulaSurfaceSnapshot": "packages/headless/src/__tests__/fixtures/hyperformula-surface.json",
     "importExportFidelityScorecard": "packages/benchmarks/baselines/import-export-fidelity-scorecard.json",
@@ -70,6 +71,23 @@
     "automationRegisteredToolCount": 98,
     "automationSemanticCommandKindCount": 6,
     "automationUncoveredControls": ["googleAppsScriptDirectComparison", "officeScriptsDirectComparison", "tenXWorkflowAutomationBenchmark"],
+    "collaborationCoveredControls": [
+      "sync.pendingRebase",
+      "sync.authoritativeAck",
+      "sync.noAcceptedOpLoss",
+      "presence.sessionLifecycle",
+      "presence.selectionSchema",
+      "presence.collaboratorFiltering",
+      "conflict.authoritativeDriftDetection",
+      "viewport.optimisticAxisProtection",
+      "viewport.authoritativeCatchupClearsPending"
+    ],
+    "collaborationPosturePassed": true,
+    "collaborationUncoveredControls": [
+      "headedBrowser.multiUserViewportSoak",
+      "conflictRateLongRunningCollaboration",
+      "externalSheetsCollaborationComparison"
+    ],
     "externalGoogleSheetsEvidence": "not-captured-in-repo",
     "externalMicrosoftExcelEvidence": "not-captured-in-repo",
     "formulaCanonicalProductionPercent": 100,
@@ -261,22 +279,29 @@
       "currentEvidence": [
         "worker runtime, pending-op journal, authoritative delta ingest, presence, and changes-pane tests exist",
         "collaboration product targets are documented",
+        "generated collaboration scorecard passes required controls: true",
+        "covered collaboration controls: sync.pendingRebase, sync.authoritativeAck, sync.noAcceptedOpLoss, presence.sessionLifecycle, presence.selectionSchema, presence.collaboratorFiltering, conflict.authoritativeDriftDetection, viewport.optimisticAxisProtection, viewport.authoritativeCatchupClearsPending",
+        "uncovered collaboration controls are explicitly disclosed: headedBrowser.multiUserViewportSoak, conflictRateLongRunningCollaboration, externalSheetsCollaborationComparison",
         "workerReconnectCatchUp100Pending: catchUpMs.p95 278.3325420000001ms against 2000ms SLO (3 samples)"
       ],
       "evidenceArtifacts": [
+        "packages/benchmarks/baselines/collaboration-scorecard.json",
         "packages/benchmarks/baselines/large-workbook-slo-scorecard.json",
         "docs/05-06-next-phase.md",
         "apps/web/src/__tests__/workbook-sync.test.ts",
         "apps/web/src/__tests__/workbook-presence.test.tsx"
       ],
       "checkCommands": [
+        "pnpm collaboration:check",
         "pnpm large-workbook:slo:check",
         "CI=1 pnpm bench:contracts",
+        "pnpm exec vitest run scripts/__tests__/collaboration-scorecard.test.ts apps/web/src/__tests__/worker-runtime-reconnect.test.ts apps/web/src/__tests__/workbook-presence.test.tsx apps/web/src/__tests__/projected-viewport-patch-application.test.ts apps/web/src/__tests__/worker-workbook-app-model.test.ts apps/bilig/src/workbook-runtime/document-presence-session-store.test.ts packages/zero-sync/src/__tests__/mutators.test.ts",
         "pnpm test:correctness:browser",
         "pnpm test:correctness:server"
       ],
       "blockers": [
-        "generated collaboration SLO evidence covers reconnect catch-up only; conflict rate and multi-user viewport behavior remain uncovered",
+        "generated collaboration evidence still leaves uncovered controls: headedBrowser.multiUserViewportSoak, conflictRateLongRunningCollaboration, externalSheetsCollaborationComparison",
+        "generated collaboration SLO evidence covers reconnect catch-up only; headed browser multi-user viewport behavior remains uncovered",
         "no direct Sheets collaboration comparison artifact exists in the repo"
       ]
     },

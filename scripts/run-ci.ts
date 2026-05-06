@@ -209,6 +209,7 @@ try {
       pnpm('formula dominance check', 'formula:dominance:check'),
       pnpm('auditability scorecard check', 'auditability:check'),
       pnpm('reliability scorecard check', 'reliability:check'),
+      pnpm('collaboration scorecard check', 'collaboration:check'),
       pnpm('automation scorecard check', 'automation:check'),
       pnpm('import/export fidelity scorecard check', 'import-export:fidelity:check'),
       pnpm('large workbook SLO scorecard check', 'large-workbook:slo:check'),
