@@ -34,6 +34,7 @@
     "formulaDominanceSnapshot": "packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json",
     "hyperFormulaSurfaceSnapshot": "packages/headless/src/__tests__/fixtures/hyperformula-surface.json",
     "microsoftExcelLiveCalculationScorecard": "packages/benchmarks/baselines/microsoft-excel-live-calculation-scorecard.json",
+    "microsoftExcelLiveRecalculationScorecard": "packages/benchmarks/baselines/microsoft-excel-live-recalculation-scorecard.json",
     "microsoftExcelLiveStructuralScorecard": "packages/benchmarks/baselines/microsoft-excel-live-structural-scorecard.json",
     "importExportFidelityScorecard": "packages/benchmarks/baselines/import-export-fidelity-scorecard.json",
     "largeWorkbookSloScorecard": "packages/benchmarks/baselines/large-workbook-slo-scorecard.json",
@@ -106,6 +107,11 @@
     "microsoftExcelLiveCalculationCaseCount": 16,
     "microsoftExcelLiveCalculationPassed": true,
     "microsoftExcelLiveCalculationVersion": "16.108.2",
+    "microsoftExcelLiveRecalculationEvidence": "live-local-microsoft-excel-automation",
+    "microsoftExcelLiveRecalculationCaseCount": 4,
+    "microsoftExcelLiveRecalculationPassed": true,
+    "microsoftExcelLiveRecalculationTenXMeanAndP95CaseCount": 2,
+    "microsoftExcelLiveRecalculationVersion": "16.108.2",
     "microsoftExcelLiveStructuralEvidence": "live-local-microsoft-excel-automation",
     "microsoftExcelLiveStructuralCaseCount": 6,
     "microsoftExcelLiveStructuralPassed": true,
@@ -234,12 +240,18 @@
         "dirty-execution: WorkPaper 5/5, HyperFormula 0/5; worst mean ratio 0.7342285536437574 on partial-recompute-mixed-frontier; worst p95 ratio 0.8646420731516313 on single-edit-recalc",
         "batch-edit: WorkPaper 6/6, HyperFormula 0/6; worst mean ratio 0.6164272929931617 on batch-edit-recalc; worst p95 ratio 0.7097222994345019 on batch-suspended-single-column",
         "rebuild: WorkPaper 1/1, HyperFormula 0/1; worst mean ratio 0.21732837385103268 on rebuild-and-recalculate; worst p95 ratio 0.23468319661108736 on rebuild-and-recalculate",
-        "overall HyperFormula comparable scorecard is 46/46"
+        "overall HyperFormula comparable scorecard is 46/46",
+        "live Microsoft Excel recalculation scorecard passes 4/4 required cases on Excel 16.108.2",
+        "live Microsoft Excel recalculation workloads with 10x mean+p95 wins: 2/4"
       ],
-      "evidenceArtifacts": ["packages/benchmarks/baselines/workpaper-vs-hyperformula.json"],
-      "checkCommands": ["pnpm workpaper:bench:competitive:check", "pnpm bench:contracts"],
+      "evidenceArtifacts": [
+        "packages/benchmarks/baselines/workpaper-vs-hyperformula.json",
+        "packages/benchmarks/baselines/microsoft-excel-live-recalculation-scorecard.json"
+      ],
+      "checkCommands": ["pnpm workpaper:bench:competitive:check", "pnpm recalculation:excel-live:check", "pnpm bench:contracts"],
       "blockers": [
-        "current checked-in benchmark is against HyperFormula, not Google Sheets or Microsoft Excel",
+        "live Microsoft Excel recalculation timing scorecard does not prove 10x mean+p95 for all recalculation cases",
+        "no direct Google Sheets recalculation timing artifact exists in the repo",
         "only 2 comparable HyperFormula workloads are 10x wins on both mean and p95"
       ]
     },

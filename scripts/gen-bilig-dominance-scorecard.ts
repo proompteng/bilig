@@ -14,6 +14,10 @@ import {
   type MicrosoftExcelLiveCalculationScorecard,
 } from './gen-microsoft-excel-live-calculation-scorecard.ts'
 import {
+  parseMicrosoftExcelLiveRecalculationScorecard,
+  type MicrosoftExcelLiveRecalculationScorecard,
+} from './gen-microsoft-excel-live-recalculation-scorecard.ts'
+import {
   parseMicrosoftExcelLiveStructuralScorecard,
   type MicrosoftExcelLiveStructuralScorecard,
 } from './gen-microsoft-excel-live-structural-scorecard.ts'
@@ -140,6 +144,7 @@ export interface BiligDominanceScorecard {
     formulaDominanceSnapshot: string
     hyperFormulaSurfaceSnapshot: string
     microsoftExcelLiveCalculationScorecard: string
+    microsoftExcelLiveRecalculationScorecard: string
     microsoftExcelLiveStructuralScorecard: string
     importExportFidelityScorecard: string
     largeWorkbookSloScorecard: string
@@ -171,6 +176,11 @@ export interface BiligDominanceScorecard {
     microsoftExcelLiveCalculationCaseCount: number
     microsoftExcelLiveCalculationPassed: boolean
     microsoftExcelLiveCalculationVersion: string
+    microsoftExcelLiveRecalculationEvidence: 'live-local-microsoft-excel-automation'
+    microsoftExcelLiveRecalculationCaseCount: number
+    microsoftExcelLiveRecalculationPassed: boolean
+    microsoftExcelLiveRecalculationTenXMeanAndP95CaseCount: number
+    microsoftExcelLiveRecalculationVersion: string
     microsoftExcelLiveStructuralEvidence: 'live-local-microsoft-excel-automation'
     microsoftExcelLiveStructuralCaseCount: number
     microsoftExcelLiveStructuralPassed: boolean
@@ -224,6 +234,8 @@ export interface BuildScorecardInput {
   formulaSnapshotPath: string
   microsoftExcelLiveCalculationScorecard: MicrosoftExcelLiveCalculationScorecard
   microsoftExcelLiveCalculationScorecardPath: string
+  microsoftExcelLiveRecalculationScorecard: MicrosoftExcelLiveRecalculationScorecard
+  microsoftExcelLiveRecalculationScorecardPath: string
   microsoftExcelLiveStructuralScorecard: MicrosoftExcelLiveStructuralScorecard
   microsoftExcelLiveStructuralScorecardPath: string
   importExportFidelityScorecard: ImportExportFidelityScorecard
@@ -252,6 +264,13 @@ const microsoftExcelLiveCalculationScorecardPath = join(
   'benchmarks',
   'baselines',
   'microsoft-excel-live-calculation-scorecard.json',
+)
+const microsoftExcelLiveRecalculationScorecardPath = join(
+  rootDir,
+  'packages',
+  'benchmarks',
+  'baselines',
+  'microsoft-excel-live-recalculation-scorecard.json',
 )
 const microsoftExcelLiveStructuralScorecardPath = join(
   rootDir,
@@ -283,6 +302,10 @@ function main(): void {
       readJsonObject(microsoftExcelLiveCalculationScorecardPath),
     ),
     microsoftExcelLiveCalculationScorecardPath: toRepoPath(microsoftExcelLiveCalculationScorecardPath),
+    microsoftExcelLiveRecalculationScorecard: parseMicrosoftExcelLiveRecalculationScorecard(
+      readJsonObject(microsoftExcelLiveRecalculationScorecardPath),
+    ),
+    microsoftExcelLiveRecalculationScorecardPath: toRepoPath(microsoftExcelLiveRecalculationScorecardPath),
     microsoftExcelLiveStructuralScorecard: parseMicrosoftExcelLiveStructuralScorecard(
       readJsonObject(microsoftExcelLiveStructuralScorecardPath),
     ),
@@ -363,6 +386,13 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
   const headedBrowserUiContracts = input.largeWorkbookSloScorecard.headedBrowserFrameP95Contracts.filter(
     (contract) => contract.category === 'ui-responsiveness',
   )
+  const microsoftExcelRecalculationTenXPassed =
+    input.microsoftExcelLiveRecalculationScorecard.summary.allRequiredCasesPassed &&
+    input.microsoftExcelLiveRecalculationScorecard.summary.tenXMeanAndP95CaseCount ===
+      input.microsoftExcelLiveRecalculationScorecard.summary.requiredCaseCount
+  const microsoftExcelRecalculationPassedCaseCount = input.microsoftExcelLiveRecalculationScorecard.cases.filter(
+    (entry) => entry.passed,
+  ).length
   const microsoftExcelStructuralTenXPassed =
     input.microsoftExcelLiveStructuralScorecard.summary.allRequiredCasesPassed &&
     input.microsoftExcelLiveStructuralScorecard.summary.tenXMeanAndP95CaseCount ===
@@ -399,6 +429,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       formulaDominanceSnapshot: input.formulaSnapshotPath,
       hyperFormulaSurfaceSnapshot: input.surfaceSnapshotPath,
       microsoftExcelLiveCalculationScorecard: input.microsoftExcelLiveCalculationScorecardPath,
+      microsoftExcelLiveRecalculationScorecard: input.microsoftExcelLiveRecalculationScorecardPath,
       microsoftExcelLiveStructuralScorecard: input.microsoftExcelLiveStructuralScorecardPath,
       importExportFidelityScorecard: input.importExportFidelityScorecardPath,
       largeWorkbookSloScorecard: input.largeWorkbookSloScorecardPath,
@@ -430,6 +461,12 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
       microsoftExcelLiveCalculationCaseCount: input.microsoftExcelLiveCalculationScorecard.summary.requiredCaseCount,
       microsoftExcelLiveCalculationPassed: input.microsoftExcelLiveCalculationScorecard.summary.allRequiredCasesPassed,
       microsoftExcelLiveCalculationVersion: input.microsoftExcelLiveCalculationScorecard.microsoftExcel.version,
+      microsoftExcelLiveRecalculationEvidence: input.microsoftExcelLiveRecalculationScorecard.source.evidenceKind,
+      microsoftExcelLiveRecalculationCaseCount: input.microsoftExcelLiveRecalculationScorecard.summary.requiredCaseCount,
+      microsoftExcelLiveRecalculationPassed: input.microsoftExcelLiveRecalculationScorecard.summary.allRequiredCasesPassed,
+      microsoftExcelLiveRecalculationTenXMeanAndP95CaseCount:
+        input.microsoftExcelLiveRecalculationScorecard.summary.tenXMeanAndP95CaseCount,
+      microsoftExcelLiveRecalculationVersion: input.microsoftExcelLiveRecalculationScorecard.microsoftExcel.version,
       microsoftExcelLiveStructuralEvidence: input.microsoftExcelLiveStructuralScorecard.source.evidenceKind,
       microsoftExcelLiveStructuralCaseCount: input.microsoftExcelLiveStructuralScorecard.summary.requiredCaseCount,
       microsoftExcelLiveStructuralPassed: input.microsoftExcelLiveStructuralScorecard.summary.allRequiredCasesPassed,
@@ -501,11 +538,22 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           familyWinSummary(batchEdit),
           familyWinSummary(rebuild),
           `overall HyperFormula comparable scorecard is ${input.competitiveArtifact.scorecard.workpaperWins}/${input.competitiveArtifact.scorecard.comparableCount}`,
+          `live Microsoft Excel recalculation scorecard passes ${String(
+            microsoftExcelRecalculationPassedCaseCount,
+          )}/${String(input.microsoftExcelLiveRecalculationScorecard.summary.requiredCaseCount)} required cases on Excel ${
+            input.microsoftExcelLiveRecalculationScorecard.microsoftExcel.version
+          }`,
+          `live Microsoft Excel recalculation workloads with 10x mean+p95 wins: ${String(
+            input.microsoftExcelLiveRecalculationScorecard.summary.tenXMeanAndP95CaseCount,
+          )}/${String(input.microsoftExcelLiveRecalculationScorecard.summary.requiredCaseCount)}`,
         ],
-        evidenceArtifacts: [input.competitiveArtifactPath],
-        checkCommands: ['pnpm workpaper:bench:competitive:check', 'pnpm bench:contracts'],
+        evidenceArtifacts: [input.competitiveArtifactPath, input.microsoftExcelLiveRecalculationScorecardPath],
+        checkCommands: ['pnpm workpaper:bench:competitive:check', 'pnpm recalculation:excel-live:check', 'pnpm bench:contracts'],
         blockers: [
-          'current checked-in benchmark is against HyperFormula, not Google Sheets or Microsoft Excel',
+          ...(microsoftExcelRecalculationTenXPassed
+            ? []
+            : ['live Microsoft Excel recalculation timing scorecard does not prove 10x mean+p95 for all recalculation cases']),
+          'no direct Google Sheets recalculation timing artifact exists in the repo',
           `only ${tenXWorkloads.length} comparable HyperFormula workloads are 10x wins on both mean and p95`,
         ],
       },

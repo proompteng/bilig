@@ -28,6 +28,10 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.summary.microsoftExcelLiveCalculationPassed).toBe(true)
     expect(scorecard.summary.microsoftExcelLiveCalculationCaseCount).toBe(2)
     expect(scorecard.summary.microsoftExcelLiveCalculationEvidence).toBe('live-local-microsoft-excel-automation')
+    expect(scorecard.summary.microsoftExcelLiveRecalculationPassed).toBe(true)
+    expect(scorecard.summary.microsoftExcelLiveRecalculationCaseCount).toBe(4)
+    expect(scorecard.summary.microsoftExcelLiveRecalculationTenXMeanAndP95CaseCount).toBe(2)
+    expect(scorecard.summary.microsoftExcelLiveRecalculationEvidence).toBe('live-local-microsoft-excel-automation')
     expect(scorecard.summary.microsoftExcelLiveStructuralPassed).toBe(true)
     expect(scorecard.summary.microsoftExcelLiveStructuralCaseCount).toBe(6)
     expect(scorecard.summary.microsoftExcelLiveStructuralTenXMeanAndP95CaseCount).toBe(6)
@@ -45,6 +49,9 @@ describe('bilig dominance scorecard', () => {
     expect(scorecard.sourceArtifacts.collaborationScorecard).toBe('packages/benchmarks/baselines/collaboration-scorecard.json')
     expect(scorecard.sourceArtifacts.microsoftExcelLiveCalculationScorecard).toBe(
       'packages/benchmarks/baselines/microsoft-excel-live-calculation-scorecard.json',
+    )
+    expect(scorecard.sourceArtifacts.microsoftExcelLiveRecalculationScorecard).toBe(
+      'packages/benchmarks/baselines/microsoft-excel-live-recalculation-scorecard.json',
     )
     expect(scorecard.sourceArtifacts.microsoftExcelLiveStructuralScorecard).toBe(
       'packages/benchmarks/baselines/microsoft-excel-live-structural-scorecard.json',
@@ -83,6 +90,19 @@ describe('bilig dominance scorecard', () => {
         'e2e/tests/web-shell-scroll-performance.pw.ts',
       ]),
       blockers: ['no direct Sheets or Excel large-workbook live timing artifact exists in the repo'],
+    })
+    expect(scorecard.categories.find((category) => category.id === 'recalculation-speed')).toMatchObject({
+      status: 'partial-repo-evidence',
+      evidenceArtifacts: expect.arrayContaining([
+        'packages/benchmarks/baselines/workpaper-vs-hyperformula.json',
+        'packages/benchmarks/baselines/microsoft-excel-live-recalculation-scorecard.json',
+      ]),
+      checkCommands: expect.arrayContaining(['pnpm recalculation:excel-live:check']),
+      blockers: [
+        'live Microsoft Excel recalculation timing scorecard does not prove 10x mean+p95 for all recalculation cases',
+        'no direct Google Sheets recalculation timing artifact exists in the repo',
+        'only 1 comparable HyperFormula workloads are 10x wins on both mean and p95',
+      ],
     })
     expect(scorecard.categories.find((category) => category.id === 'structural-edit-performance')).toMatchObject({
       status: 'partial-repo-evidence',
@@ -205,6 +225,9 @@ describe('bilig dominance scorecard', () => {
 
     expect(packageJson).toContain('"dominance:check": "bun scripts/gen-bilig-dominance-scorecard.ts --check"')
     expect(packageJson).toContain('"calculation:excel-live:check": "bun scripts/gen-microsoft-excel-live-calculation-scorecard.ts --check"')
+    expect(packageJson).toContain(
+      '"recalculation:excel-live:check": "bun scripts/gen-microsoft-excel-live-recalculation-scorecard.ts --check"',
+    )
     expect(packageJson).toContain('"structural:excel-live:check": "bun scripts/gen-microsoft-excel-live-structural-scorecard.ts --check"')
     expect(packageJson).toContain('"auditability:generate": "bun scripts/gen-auditability-scorecard.ts"')
     expect(packageJson).toContain('"auditability:check": "bun scripts/gen-auditability-scorecard.ts --check"')
@@ -219,6 +242,7 @@ describe('bilig dominance scorecard', () => {
     expect(packageJson).toContain('"security:posture:check": "bun scripts/gen-security-posture-scorecard.ts --check"')
     expect(runCi).toContain("pnpm('bilig dominance scorecard check', 'dominance:check')")
     expect(runCi).toContain("pnpm('Microsoft Excel live calculation scorecard check', 'calculation:excel-live:check')")
+    expect(runCi).toContain("pnpm('Microsoft Excel live recalculation scorecard check', 'recalculation:excel-live:check')")
     expect(runCi).toContain("pnpm('Microsoft Excel live structural scorecard check', 'structural:excel-live:check')")
     expect(runCi).toContain("pnpm('auditability scorecard check', 'auditability:check')")
     expect(runCi).toContain("pnpm('reliability scorecard check', 'reliability:check')")
@@ -265,6 +289,7 @@ function buildFixtureInput(): BuildScorecardInput {
     competitiveArtifactPath: 'packages/benchmarks/baselines/workpaper-vs-hyperformula.json',
     formulaSnapshotPath: 'packages/formula/src/__tests__/fixtures/formula-dominance-snapshot.json',
     microsoftExcelLiveCalculationScorecardPath: 'packages/benchmarks/baselines/microsoft-excel-live-calculation-scorecard.json',
+    microsoftExcelLiveRecalculationScorecardPath: 'packages/benchmarks/baselines/microsoft-excel-live-recalculation-scorecard.json',
     microsoftExcelLiveStructuralScorecardPath: 'packages/benchmarks/baselines/microsoft-excel-live-structural-scorecard.json',
     auditabilityScorecardPath: 'packages/benchmarks/baselines/auditability-scorecard.json',
     automationScorecardPath: 'packages/benchmarks/baselines/automation-scorecard.json',
@@ -355,6 +380,49 @@ function buildFixtureInput(): BuildScorecardInput {
           microsoftExcelValue: 6,
           passed: true,
         },
+      ],
+    },
+    microsoftExcelLiveRecalculationScorecard: {
+      schemaVersion: 1,
+      suite: 'microsoft-excel-live-recalculation-performance',
+      generatedAt: '2026-05-06T15:30:00.000Z',
+      host: {
+        arch: 'arm64',
+        platform: 'darwin',
+      },
+      source: {
+        artifactGenerator: 'scripts/gen-microsoft-excel-live-recalculation-scorecard.ts',
+        implementationPackage: 'packages/headless',
+        evidenceKind: 'live-local-microsoft-excel-automation',
+        appleScriptTransport: 'osascript',
+      },
+      benchmark: {
+        sampleCount: 5,
+        screenUpdating: false,
+        calculationMode: 'manual-during-measurement',
+      },
+      microsoftExcel: {
+        appPath: '/Applications/Microsoft Excel.app',
+        version: '16.test',
+      },
+      summary: {
+        allRequiredCasesPassed: true,
+        requiredCaseCount: 4,
+        tenXMeanAndP95CaseCount: 2,
+        workpaperWins: 4,
+        coveredWorkloads: [
+          'dirty-fanout-edit',
+          'suspended-batch-single-column-edit',
+          'conditional-aggregation-criteria-edit',
+          'full-rebuild-recalculate',
+        ],
+        googleSheetsEvidence: 'not-covered-by-this-artifact',
+      },
+      cases: [
+        recalculationCase('excel-live-recalculation-dirty-fanout-edit', 'dirty-fanout-edit', true),
+        recalculationCase('excel-live-recalculation-suspended-batch-single-column-edit', 'suspended-batch-single-column-edit', false),
+        recalculationCase('excel-live-recalculation-conditional-aggregation-criteria-edit', 'conditional-aggregation-criteria-edit', true),
+        recalculationCase('excel-live-recalculation-full-rebuild-recalculate', 'full-rebuild-recalculate', false),
       ],
     },
     microsoftExcelLiveStructuralScorecard: {
@@ -849,6 +917,40 @@ function family(familyName: string, ratio: number): BuildScorecardInput['competi
     worstMeanRatioWorkload: `${familyName}-workload`,
     worstWorkpaperToHyperFormulaP95Ratio: ratio,
     worstP95RatioWorkload: `${familyName}-workload`,
+  }
+}
+
+function recalculationCase(
+  id: string,
+  workload: BuildScorecardInput['microsoftExcelLiveRecalculationScorecard']['cases'][number]['workload'],
+  tenXMeanAndP95: boolean,
+): BuildScorecardInput['microsoftExcelLiveRecalculationScorecard']['cases'][number] {
+  const workpaperElapsedMs = numericSummary(tenXMeanAndP95 ? 1 : 3)
+  const microsoftExcelElapsedMs = numericSummary(20)
+  return {
+    id,
+    workload,
+    fixture: {
+      rowCount: 1_000,
+      formulaCount: 1_000,
+      materializedCells: 2_000,
+    },
+    sampleCount: 5,
+    workpaperElapsedMs,
+    microsoftExcelElapsedMs,
+    workpaperToMicrosoftExcelMeanRatio: workpaperElapsedMs.mean / microsoftExcelElapsedMs.mean,
+    workpaperToMicrosoftExcelP95Ratio: workpaperElapsedMs.p95 / microsoftExcelElapsedMs.p95,
+    tenXMeanAndP95,
+    verification: {
+      workpaper: {
+        value: 500,
+      },
+      microsoftExcel: {
+        value: 500,
+      },
+      equivalent: true,
+    },
+    passed: true,
   }
 }
 
