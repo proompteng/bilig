@@ -5,6 +5,7 @@ import type { LiteralInput, WorkbookAxisEntrySnapshot, WorkbookMergeRangeSnapsho
 import { addExportChartsToXlsxBytes } from './xlsx-charts.js'
 import { addExportCommentsToWorksheet } from './xlsx-comments.js'
 import { buildExportDefinedNames } from './xlsx-defined-names.js'
+import { addExportPivotsToXlsxBytes } from './xlsx-pivots.js'
 import { addExportStylesToWorksheet } from './xlsx-styles.js'
 
 function buildExportColumns(columns: readonly WorkbookAxisEntrySnapshot[] | undefined): XLSX.ColInfo[] | undefined {
@@ -226,5 +227,9 @@ export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
       cellStyles: true,
     }) as unknown,
   )
-  return addExportChartsToXlsxBytes(bytes, snapshot, exportSheetNamesByOriginalName)
+  return addExportChartsToXlsxBytes(
+    addExportPivotsToXlsxBytes(bytes, snapshot, exportSheetNamesByOriginalName),
+    snapshot,
+    exportSheetNamesByOriginalName,
+  )
 }

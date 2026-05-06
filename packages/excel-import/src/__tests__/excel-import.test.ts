@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { strFromU8, unzipSync } from 'fflate'
 import * as XLSX from 'xlsx'
 
-import type { WorkbookChartSnapshot, WorkbookSnapshot } from '@bilig/protocol'
+import type { WorkbookChartSnapshot, WorkbookPivotSnapshot, WorkbookPivotValueSnapshot, WorkbookSnapshot } from '@bilig/protocol'
 import { exportXlsx, importCsv, importWorkbookFile, importXlsx, readImportedXlsxCellStyle } from '../index.js'
 import { CSV_CONTENT_TYPE } from '@bilig/agent-api'
 
@@ -381,6 +381,21 @@ describe('excel import', () => {
               cols: 6,
             },
           ],
+          pivots: [
+            {
+              name: 'SalesByRegion',
+              sheetName: 'Summary',
+              address: 'E15',
+              source: { sheetName: 'Inputs', startAddress: 'A1', endAddress: 'D4' },
+              groupBy: ['Region'],
+              values: [
+                { sourceColumn: 'Sales', summarizeBy: 'sum', outputLabel: 'Total Sales' },
+                { sourceColumn: 'Product', summarizeBy: 'count', outputLabel: 'Rows' },
+              ],
+              rows: 4,
+              cols: 3,
+            },
+          ],
         },
       },
       sheets: [
@@ -424,7 +439,21 @@ describe('excel import', () => {
           order: 1,
           cells: [
             { address: 'A1', value: 'Region' },
-            { address: 'B1', value: 'north' },
+            { address: 'B1', value: 'Product' },
+            { address: 'C1', value: 'Sales' },
+            { address: 'D1', value: 'Notes' },
+            { address: 'A2', value: 'East' },
+            { address: 'B2', value: 'Widget' },
+            { address: 'C2', value: 10 },
+            { address: 'D2', value: 'Priority' },
+            { address: 'A3', value: 'West' },
+            { address: 'B3', value: 'Widget' },
+            { address: 'C3', value: 7 },
+            { address: 'D3', value: 'Priority' },
+            { address: 'A4', value: 'East' },
+            { address: 'B4', value: 'Gizmo' },
+            { address: 'C4', value: 5 },
+            { address: 'D4', value: 'Standard' },
           ],
         },
       ],
@@ -436,9 +465,20 @@ describe('excel import', () => {
 
     expect(bytes.byteLength).toBeGreaterThan(0)
     expect(Object.keys(zip)).toEqual(expect.arrayContaining(['xl/charts/chart1.xml', 'xl/drawings/drawing1.xml']))
+    expect(Object.keys(zip)).toEqual(
+      expect.arrayContaining([
+        'xl/pivotTables/pivotTable1.xml',
+        'xl/pivotCache/pivotCacheDefinition1.xml',
+        'xl/pivotCache/pivotCacheRecords1.xml',
+      ]),
+    )
     expect(strFromU8(zip['xl/charts/chart1.xml'] ?? new Uint8Array())).toContain('<c:lineChart>')
     expect(strFromU8(zip['xl/drawings/_rels/drawing1.xml.rels'] ?? new Uint8Array())).toContain(
       'http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart',
+    )
+    expect(strFromU8(zip['xl/pivotTables/pivotTable1.xml'] ?? new Uint8Array())).toContain('<pivotTableDefinition')
+    expect(strFromU8(zip['xl/pivotCache/pivotCacheDefinition1.xml'] ?? new Uint8Array())).toContain(
+      '<worksheetSource ref="A1:D4" sheet="Inputs"/>',
     )
     expect(projectSupportedSnapshotSemantics(imported.snapshot)).toEqual(projectSupportedSnapshotSemantics(snapshot))
   })
@@ -487,6 +527,30 @@ function projectChartSemantics(chart: WorkbookChartSnapshot): ProjectedChartSema
   return projected
 }
 
+function projectPivotValue(value: WorkbookPivotValueSnapshot): WorkbookPivotValueSnapshot {
+  const projected: WorkbookPivotValueSnapshot = {
+    sourceColumn: value.sourceColumn,
+    summarizeBy: value.summarizeBy,
+  }
+  if (value.outputLabel !== undefined) {
+    projected.outputLabel = value.outputLabel
+  }
+  return projected
+}
+
+function projectPivotSemantics(pivot: WorkbookPivotSnapshot): WorkbookPivotSnapshot {
+  return {
+    name: pivot.name,
+    sheetName: pivot.sheetName,
+    address: pivot.address,
+    source: pivot.source,
+    groupBy: [...pivot.groupBy],
+    values: pivot.values.map(projectPivotValue),
+    rows: pivot.rows,
+    cols: pivot.cols,
+  }
+}
+
 function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
   const stylesById = new Map((snapshot.workbook.metadata?.styles ?? []).map((style) => [style.id, style]))
   const portableStyle = (styleId: string) => {
@@ -508,6 +572,11 @@ function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
     charts: (snapshot.workbook.metadata?.charts ?? [])
       .map(projectChartSemantics)
       .toSorted((left, right) => left.id.localeCompare(right.id)),
+    pivots: (snapshot.workbook.metadata?.pivots ?? [])
+      .map(projectPivotSemantics)
+      .toSorted((left, right) =>
+        `${left.sheetName}:${left.address}:${left.name}`.localeCompare(`${right.sheetName}:${right.address}:${right.name}`),
+      ),
     sheets: snapshot.sheets
       .toSorted((left, right) => left.order - right.order)
       .map((sheet) => ({

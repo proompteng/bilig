@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "suite": "import-export-fidelity",
-  "generatedAt": "2026-05-06T10:56:15.008Z",
+  "generatedAt": "2026-05-06T11:07:22.296Z",
   "source": {
     "artifactGenerator": "scripts/gen-import-export-fidelity-scorecard.ts",
     "implementationPackage": "packages/excel-import",
@@ -30,10 +30,11 @@
       "xlsx.rowColumnDimensions",
       "xlsx.merges",
       "xlsx.charts.roundtrip",
+      "xlsx.pivots.roundtrip",
       "xlsx.multiSheet",
       "xlsx.unsupportedFeatureWarnings"
     ],
-    "unsupportedFeatures": ["xlsx.macros.execution", "xlsx.pivots.roundtrip"],
+    "unsupportedFeatures": ["xlsx.macros.execution"],
     "externalGoogleSheetsEvidence": "not-captured",
     "externalMicrosoftExcelEvidence": "not-captured"
   },
@@ -109,13 +110,23 @@
       "evidence": "WorkbookSnapshot exported to XLSX imports back with equivalent Bilig chart metadata backed by real XLSX chart/drawing parts."
     },
     {
+      "id": "xlsx-snapshot-roundtrip-pivots",
+      "format": "xlsx",
+      "direction": "export-import",
+      "required": true,
+      "passed": true,
+      "coveredFeatures": ["xlsx.pivots.roundtrip"],
+      "missingFeatures": [],
+      "evidence": "WorkbookSnapshot exported to XLSX imports back with equivalent Bilig pivot metadata backed by real XLSX pivot table, cache definition, and cache records parts."
+    },
+    {
       "id": "xlsx-unsupported-features-warning",
       "format": "xlsx",
       "direction": "export-import",
       "required": true,
       "passed": true,
       "coveredFeatures": ["xlsx.unsupportedFeatureWarnings"],
-      "missingFeatures": ["xlsx.macros.execution", "xlsx.pivots.roundtrip"],
+      "missingFeatures": ["xlsx.macros.execution"],
       "evidence": "Scorecard explicitly records unsupported XLSX surfaces instead of treating a subset round trip as full Excel parity."
     }
   ]

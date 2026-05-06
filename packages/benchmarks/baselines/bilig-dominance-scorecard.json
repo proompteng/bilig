@@ -112,11 +112,12 @@
       "xlsx.rowColumnDimensions",
       "xlsx.merges",
       "xlsx.charts.roundtrip",
+      "xlsx.pivots.roundtrip",
       "xlsx.multiSheet",
       "xlsx.unsupportedFeatureWarnings"
     ],
     "importExportFidelityPassed": true,
-    "importExportUnsupportedFeatures": ["xlsx.macros.execution", "xlsx.pivots.roundtrip"],
+    "importExportUnsupportedFeatures": ["xlsx.macros.execution"],
     "largeWorkbookSloRowsCovered": [100000, 250000],
     "largeWorkbookSloPassed": true,
     "reliabilityCoveredControls": [
@@ -341,8 +342,8 @@
       "status": "partial-repo-evidence",
       "currentEvidence": [
         "generated import/export fidelity scorecard passes required cases: true",
-        "covered import/export features: csv.import, csv.preview, csv.export, csv.roundtrip, xlsx.import, xlsx.preview, xlsx.export, xlsx.roundtrip, xlsx.values, xlsx.formulas, xlsx.numberFormats, xlsx.definedNames, xlsx.comments, xlsx.styles, xlsx.rowColumnDimensions, xlsx.merges, xlsx.charts.roundtrip, xlsx.multiSheet, xlsx.unsupportedFeatureWarnings",
-        "unsupported XLSX features are explicitly disclosed: xlsx.macros.execution, xlsx.pivots.roundtrip"
+        "covered import/export features: csv.import, csv.preview, csv.export, csv.roundtrip, xlsx.import, xlsx.preview, xlsx.export, xlsx.roundtrip, xlsx.values, xlsx.formulas, xlsx.numberFormats, xlsx.definedNames, xlsx.comments, xlsx.styles, xlsx.rowColumnDimensions, xlsx.merges, xlsx.charts.roundtrip, xlsx.pivots.roundtrip, xlsx.multiSheet, xlsx.unsupportedFeatureWarnings",
+        "unsupported XLSX features are explicitly disclosed: xlsx.macros.execution"
       ],
       "evidenceArtifacts": [
         "packages/benchmarks/baselines/import-export-fidelity-scorecard.json",
@@ -355,7 +356,7 @@
         "pnpm exec vitest run packages/excel-import/src/__tests__/excel-import.test.ts packages/core/src/__tests__/engine-import-export.fuzz.test.ts"
       ],
       "blockers": [
-        "generated XLSX round-trip evidence covers supported snapshot semantics, not full native Excel object-model round trips for pivots and macros",
+        "generated XLSX round-trip evidence covers supported snapshot semantics, not full native Excel macro execution semantics",
         "no direct Sheets import/export compatibility artifact exists in the repo",
         "no direct Microsoft Excel import/export compatibility artifact exists in the repo"
       ]

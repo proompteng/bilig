@@ -7,7 +7,12 @@ import { pathToFileURL } from 'node:url'
 
 import { SpreadsheetEngine } from '../packages/core/src/engine.js'
 import { exportXlsx, importCsv, importXlsx } from '../packages/excel-import/src/index.js'
-import type { WorkbookChartSnapshot, WorkbookSnapshot } from '../packages/protocol/src/types.js'
+import type {
+  WorkbookChartSnapshot,
+  WorkbookPivotSnapshot,
+  WorkbookPivotValueSnapshot,
+  WorkbookSnapshot,
+} from '../packages/protocol/src/types.js'
 
 export interface ImportExportFidelityCase {
   readonly id: string
@@ -51,6 +56,7 @@ const requiredCaseIds = [
   'xlsx-snapshot-roundtrip-values-formulas-formats',
   'xlsx-snapshot-roundtrip-dimensions-merges',
   'xlsx-snapshot-roundtrip-charts',
+  'xlsx-snapshot-roundtrip-pivots',
   'xlsx-unsupported-features-warning',
 ] as const
 const coveredFeatureOrder = [
@@ -71,10 +77,11 @@ const coveredFeatureOrder = [
   'xlsx.rowColumnDimensions',
   'xlsx.merges',
   'xlsx.charts.roundtrip',
+  'xlsx.pivots.roundtrip',
   'xlsx.multiSheet',
   'xlsx.unsupportedFeatureWarnings',
 ] as const
-const unsupportedFeatures = ['xlsx.macros.execution', 'xlsx.pivots.roundtrip'] as const
+const unsupportedFeatures = ['xlsx.macros.execution'] as const
 
 async function main(): Promise<void> {
   const isCheckMode = process.argv.includes('--check')
@@ -102,6 +109,7 @@ export async function buildImportExportFidelityScorecard(generatedAt = new Date(
     runXlsxSnapshotRoundTripValuesCase(),
     runXlsxSnapshotRoundTripDimensionsCase(),
     runXlsxSnapshotRoundTripChartsCase(),
+    runXlsxSnapshotRoundTripPivotsCase(),
     runXlsxUnsupportedFeaturesWarningCase(),
   ]
   const coveredFeatureSet = new Set(cases.flatMap((entry) => entry.coveredFeatures))
@@ -253,6 +261,21 @@ function runXlsxSnapshotRoundTripChartsCase(): ImportExportFidelityCase {
   })
 }
 
+function runXlsxSnapshotRoundTripPivotsCase(): ImportExportFidelityCase {
+  const expected = projectSupportedSnapshotSemantics(createFidelitySnapshot())
+  const actual = projectSupportedSnapshotSemantics(importXlsx(exportXlsx(createFidelitySnapshot()), 'fidelity.xlsx').snapshot)
+  const passed = JSON.stringify(actual.pivots) === JSON.stringify(expected.pivots)
+  return fidelityCase({
+    id: 'xlsx-snapshot-roundtrip-pivots',
+    format: 'xlsx',
+    direction: 'export-import',
+    passed,
+    coveredFeatures: ['xlsx.pivots.roundtrip'],
+    evidence:
+      'WorkbookSnapshot exported to XLSX imports back with equivalent Bilig pivot metadata backed by real XLSX pivot table, cache definition, and cache records parts.',
+  })
+}
+
 function runXlsxUnsupportedFeaturesWarningCase(): ImportExportFidelityCase {
   const snapshot = createFidelitySnapshot()
   const imported = importXlsx(exportXlsx(snapshot), 'fidelity.xlsx')
@@ -324,6 +347,21 @@ function createFidelitySnapshot(): WorkbookSnapshot {
             cols: 6,
           },
         ],
+        pivots: [
+          {
+            name: 'SalesByRegion',
+            sheetName: 'Summary',
+            address: 'E15',
+            source: { sheetName: 'Inputs', startAddress: 'A1', endAddress: 'D4' },
+            groupBy: ['Region'],
+            values: [
+              { sourceColumn: 'Sales', summarizeBy: 'sum', outputLabel: 'Total Sales' },
+              { sourceColumn: 'Product', summarizeBy: 'count', outputLabel: 'Rows' },
+            ],
+            rows: 4,
+            cols: 3,
+          },
+        ],
       },
     },
     sheets: [
@@ -367,7 +405,21 @@ function createFidelitySnapshot(): WorkbookSnapshot {
         order: 1,
         cells: [
           { address: 'A1', value: 'Region' },
-          { address: 'B1', value: 'north' },
+          { address: 'B1', value: 'Product' },
+          { address: 'C1', value: 'Sales' },
+          { address: 'D1', value: 'Notes' },
+          { address: 'A2', value: 'East' },
+          { address: 'B2', value: 'Widget' },
+          { address: 'C2', value: 10 },
+          { address: 'D2', value: 'Priority' },
+          { address: 'A3', value: 'West' },
+          { address: 'B3', value: 'Widget' },
+          { address: 'C3', value: 7 },
+          { address: 'D3', value: 'Priority' },
+          { address: 'A4', value: 'East' },
+          { address: 'B4', value: 'Gizmo' },
+          { address: 'C4', value: 5 },
+          { address: 'D4', value: 'Standard' },
         ],
       },
     ],
@@ -417,6 +469,30 @@ function projectChartSemantics(chart: WorkbookChartSnapshot): ProjectedChartSema
   return projected
 }
 
+function projectPivotValue(value: WorkbookPivotValueSnapshot): WorkbookPivotValueSnapshot {
+  const projected: WorkbookPivotValueSnapshot = {
+    sourceColumn: value.sourceColumn,
+    summarizeBy: value.summarizeBy,
+  }
+  if (value.outputLabel !== undefined) {
+    projected.outputLabel = value.outputLabel
+  }
+  return projected
+}
+
+function projectPivotSemantics(pivot: WorkbookPivotSnapshot): WorkbookPivotSnapshot {
+  return {
+    name: pivot.name,
+    sheetName: pivot.sheetName,
+    address: pivot.address,
+    source: pivot.source,
+    groupBy: [...pivot.groupBy],
+    values: pivot.values.map(projectPivotValue),
+    rows: pivot.rows,
+    cols: pivot.cols,
+  }
+}
+
 function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
   const stylesById = new Map((snapshot.workbook.metadata?.styles ?? []).map((style) => [style.id, style]))
   const portableStyle = (styleId: string) => {
@@ -460,6 +536,11 @@ function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
     charts: (snapshot.workbook.metadata?.charts ?? [])
       .map(projectChartSemantics)
       .toSorted((left, right) => left.id.localeCompare(right.id)),
+    pivots: (snapshot.workbook.metadata?.pivots ?? [])
+      .map(projectPivotSemantics)
+      .toSorted((left, right) =>
+        `${left.sheetName}:${left.address}:${left.name}`.localeCompare(`${right.sheetName}:${right.address}:${right.name}`),
+      ),
     valueFormulaFormatSheets: snapshot.sheets
       .toSorted((left, right) => left.order - right.order)
       .map((sheet) => ({
