@@ -307,10 +307,10 @@
         "range-read and build families have HyperFormula comparison evidence",
         "range-read: WorkPaper 2/2, HyperFormula 0/2; worst mean ratio 0.25234528852366667 on range-read; worst p95 ratio 0.2715931629086945 on range-read",
         "large-workbook SLO artifact covers 100000, 250000 materialized-cell sessions",
-        "load100k: elapsedMs.p95 279.31154100000003ms against 1500ms SLO (5 samples)",
-        "load250k: elapsedMs.p95 732.916875ms against 1500ms SLO (3 samples)",
-        "workerWarmStart100k: elapsedMs.p95 13.600541000000248ms against 500ms SLO (3 samples)",
-        "workerWarmStart250k: elapsedMs.p95 15.387249999999767ms against 700ms SLO (3 samples)",
+        "load100k: elapsedMs.p95 160.93233300000003ms against 1500ms SLO (5 samples)",
+        "load250k: elapsedMs.p95 446.558541ms against 1500ms SLO (3 samples)",
+        "workerWarmStart100k: elapsedMs.p95 6.787083000000166ms against 500ms SLO (3 samples)",
+        "workerWarmStart250k: elapsedMs.p95 19.07679199999984ms against 700ms SLO (3 samples)",
         "external Google Sheets large-workbook evidence: official-docs-comparison-artifact",
         "external Microsoft Excel large-workbook evidence: official-docs-comparison-artifact",
         "live Microsoft Excel large-workbook scorecard passes 2/2 required cases on Excel 16.108.2",
@@ -349,7 +349,7 @@
       "currentEvidence": [
         "worker-first local runtime, projected viewport patches, and tile cache architecture are implemented and documented",
         "browser correctness and performance smoke commands exist",
-        "workerVisibleEdit10k: visiblePatchMs.p95 4.226084000000014ms against 16ms SLO (5 samples)",
+        "workerVisibleEdit10k: visiblePatchMs.p95 3.8935000000000173ms against 16ms SLO (5 samples)",
         "external Google Sheets UI responsiveness evidence: official-docs-comparison-artifact",
         "external Microsoft Excel UI responsiveness evidence: official-docs-comparison-artifact",
         "external UI responsiveness comparison dimensions pass: true",
@@ -380,7 +380,7 @@
         "uncovered collaboration controls are explicitly disclosed: none",
         "external Google Sheets collaboration evidence: official-docs-comparison-artifact",
         "external Microsoft Excel collaboration evidence: official-docs-comparison-artifact",
-        "workerReconnectCatchUp100Pending: catchUpMs.p95 301.72820800000045ms against 2000ms SLO (3 samples)"
+        "workerReconnectCatchUp100Pending: catchUpMs.p95 269.4568330000002ms against 2000ms SLO (3 samples)"
       ],
       "evidenceArtifacts": [
         "packages/benchmarks/baselines/collaboration-scorecard.json",

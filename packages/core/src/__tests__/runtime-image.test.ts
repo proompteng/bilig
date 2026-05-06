@@ -1,9 +1,13 @@
 import { compileFormulaAst, parseFormula } from '@bilig/formula'
 import { ValueTag, type WorkbookSnapshot } from '@bilig/protocol'
 import { describe, expect, it } from 'vitest'
-import { restoreWorkbookFromRuntimeImage } from '../snapshot/runtime-image.js'
+import { restoreWorkbookFromRuntimeImage, restoreWorkbookFromSnapshot } from '../snapshot/runtime-image.js'
 import { StringPool } from '../string-pool.js'
 import { WorkbookStore } from '../workbook-store.js'
+
+function failOnCellWiseSnapshotRestoreNotification(): void {
+  throw new Error('fresh snapshot restore should batch literal column notifications')
+}
 
 describe('restoreWorkbookFromRuntimeImage', () => {
   it('prefers prepared template initialization when runtime image instances carry template ids', () => {
@@ -241,5 +245,64 @@ describe('restoreWorkbookFromRuntimeImage', () => {
       [0, 1, { tag: ValueTag.Number, value: 2 }],
       [1, 1, { tag: ValueTag.Number, value: 3 }],
     ])
+  })
+})
+
+describe('restoreWorkbookFromSnapshot', () => {
+  it('uses fresh coordinate restore without reparsing address strings or cell-wise value notifications', () => {
+    const workbook = new WorkbookStore('snapshot-coordinate-restore')
+    const plainCalls: Array<{
+      cellIndex?: number
+      mutation: { col: number; formula: string; kind: string; row: number }
+      sheetId: number
+    }> = []
+    workbook.cellStore.onSetValue = failOnCellWiseSnapshotRestoreNotification
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'snapshot-coordinate-restore' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Sheet1',
+          order: 0,
+          cells: [
+            { address: '__ignored_literal__', row: 9, col: 2, value: 42 },
+            { address: '__ignored_formula__', row: 9, col: 3, formula: 'C10+1' },
+          ],
+        },
+      ],
+    }
+
+    restoreWorkbookFromSnapshot({
+      snapshot,
+      workbook,
+      strings: new StringPool(),
+      resetWorkbook: () => {},
+      initializeCellFormulasAt: (refs) => {
+        plainCalls.push(...refs)
+      },
+    })
+
+    const sheet = workbook.getSheet('Sheet1')
+    expect(sheet).toBeDefined()
+    const literalCellIndex = sheet!.grid.get(9, 2)
+    const formulaCellIndex = sheet!.grid.get(9, 3)
+    expect(literalCellIndex).toBeGreaterThanOrEqual(0)
+    expect(formulaCellIndex).toBeGreaterThanOrEqual(0)
+    expect(workbook.cellStore.tags[literalCellIndex]).toBe(ValueTag.Number)
+    expect(workbook.cellStore.numbers[literalCellIndex]).toBe(42)
+    expect(plainCalls).toEqual([
+      {
+        sheetId: 1,
+        cellIndex: formulaCellIndex,
+        mutation: {
+          kind: 'setCellFormula',
+          row: 9,
+          col: 3,
+          formula: 'C10+1',
+        },
+      },
+    ])
+    expect(workbook.cellStore.onSetValue).toBe(failOnCellWiseSnapshotRestoreNotification)
   })
 })

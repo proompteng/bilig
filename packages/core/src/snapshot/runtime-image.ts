@@ -474,39 +474,59 @@ export function restoreWorkbookFromSnapshot(args: WorkbookSnapshotRestoreArgs): 
   const formulaRefs: EngineCellMutationRef[] = []
 
   args.workbook.cellStore.ensureCapacity(args.workbook.cellStore.size + potentialNewCells)
+  const previousOnSetValue = args.workbook.cellStore.onSetValue
+  args.workbook.cellStore.onSetValue = null
   args.workbook.withBatchedColumnVersionUpdates(() => {
-    for (let sheetIndex = 0; sheetIndex < orderedSheets.length; sheetIndex += 1) {
-      const sheet = orderedSheets[sheetIndex]!
-      const sheetId = args.workbook.getSheet(sheet.name)?.id
-      if (sheetId === undefined) {
-        throw new Error(`Missing sheet during snapshot restore: ${sheet.name}`)
-      }
-      for (let cellIndex = 0; cellIndex < sheet.cells.length; cellIndex += 1) {
-        const cell = sheet.cells[cellIndex]!
-        const coords = readRestoredCellCoordinates(sheet.name, cell)
-        const ensured = args.workbook.ensureCellAt(sheetId, coords.row, coords.col)
-        if (cell.formula !== undefined) {
-          formulaRefs.push({
-            sheetId,
-            mutation: {
-              kind: 'setCellFormula',
-              row: coords.row,
-              col: coords.col,
-              formula: cell.formula,
-            },
-          })
-        } else {
-          restoreLiteralCell({
-            workbook: args.workbook,
-            strings: args.strings,
-            cellIndex: ensured.cellIndex,
-            value: cell.value ?? null,
-          })
+    try {
+      for (let sheetIndex = 0; sheetIndex < orderedSheets.length; sheetIndex += 1) {
+        const sheet = orderedSheets[sheetIndex]!
+        const sheetRecord = args.workbook.getSheet(sheet.name)
+        if (!sheetRecord) {
+          throw new Error(`Missing sheet during snapshot restore: ${sheet.name}`)
         }
-        if (cell.format !== undefined) {
-          args.workbook.setCellFormat(ensured.cellIndex, cell.format)
+        const sheetId = sheetRecord.id
+        const rowIds: string[] = []
+        const colIds: string[] = []
+        const attachFreshCell = createFreshRuntimeCellAttacher(args.workbook, sheetRecord)
+        let literalColumns: WrittenColumnTracker | undefined
+        for (let cellIndex = 0; cellIndex < sheet.cells.length; cellIndex += 1) {
+          const cell = sheet.cells[cellIndex]!
+          const coords = readRestoredCellCoordinates(sheet.name, cell)
+          const restoredCellIndex = args.workbook.cellStore.allocateReserved(sheetId, coords.row, coords.col)
+          const rowId = (rowIds[coords.row] ??= args.workbook.ensureLogicalAxisId(sheetId, 'row', coords.row))
+          const colId = (colIds[coords.col] ??= args.workbook.ensureLogicalAxisId(sheetId, 'column', coords.col))
+          attachFreshCell(coords.row, coords.col, restoredCellIndex, rowId, colId)
+          if (cell.formula !== undefined) {
+            formulaRefs.push({
+              sheetId,
+              cellIndex: restoredCellIndex,
+              mutation: {
+                kind: 'setCellFormula',
+                row: coords.row,
+                col: coords.col,
+                formula: cell.formula,
+              },
+            })
+          } else {
+            restoreLiteralCell({
+              workbook: args.workbook,
+              strings: args.strings,
+              cellIndex: restoredCellIndex,
+              value: cell.value ?? null,
+            })
+            literalColumns ??= createWrittenColumnTracker()
+            markWrittenColumn(literalColumns, coords.col)
+          }
+          if (cell.format !== undefined) {
+            args.workbook.setCellFormat(restoredCellIndex, cell.format)
+          }
+        }
+        if (literalColumns && literalColumns.count > 0) {
+          args.workbook.notifyColumnsWritten(sheetId, materializeWrittenColumns(literalColumns))
         }
       }
+    } finally {
+      args.workbook.cellStore.onSetValue = previousOnSetValue
     }
   })
 
