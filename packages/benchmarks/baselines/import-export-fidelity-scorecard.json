@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "suite": "import-export-fidelity",
-  "generatedAt": "2026-05-06T08:06:05.572Z",
+  "generatedAt": "2026-05-06T10:15:39.837Z",
   "source": {
     "artifactGenerator": "scripts/gen-import-export-fidelity-scorecard.ts",
     "implementationPackage": "packages/excel-import",
@@ -24,6 +24,7 @@
       "xlsx.values",
       "xlsx.formulas",
       "xlsx.numberFormats",
+      "xlsx.definedNames",
       "xlsx.rowColumnDimensions",
       "xlsx.merges",
       "xlsx.multiSheet",
@@ -32,7 +33,6 @@
     "unsupportedFeatures": [
       "xlsx.macros.execution",
       "xlsx.comments.roundtrip",
-      "xlsx.definedNames.roundtrip",
       "xlsx.charts.roundtrip",
       "xlsx.pivots.roundtrip",
       "xlsx.styles.export"
@@ -77,9 +77,17 @@
       "direction": "export-import",
       "required": true,
       "passed": true,
-      "coveredFeatures": ["xlsx.export", "xlsx.roundtrip", "xlsx.values", "xlsx.formulas", "xlsx.numberFormats", "xlsx.multiSheet"],
+      "coveredFeatures": [
+        "xlsx.export",
+        "xlsx.roundtrip",
+        "xlsx.values",
+        "xlsx.formulas",
+        "xlsx.numberFormats",
+        "xlsx.definedNames",
+        "xlsx.multiSheet"
+      ],
       "missingFeatures": [],
-      "evidence": "WorkbookSnapshot exported to XLSX imports back with the same values, formulas, formats, and sheet order."
+      "evidence": "WorkbookSnapshot exported to XLSX imports back with the same values, formulas, formats, defined names, and sheet order."
     },
     {
       "id": "xlsx-snapshot-roundtrip-dimensions-merges",
@@ -101,7 +109,6 @@
       "missingFeatures": [
         "xlsx.macros.execution",
         "xlsx.comments.roundtrip",
-        "xlsx.definedNames.roundtrip",
         "xlsx.charts.roundtrip",
         "xlsx.pivots.roundtrip",
         "xlsx.styles.export"

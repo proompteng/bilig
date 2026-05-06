@@ -106,6 +106,7 @@
       "xlsx.values",
       "xlsx.formulas",
       "xlsx.numberFormats",
+      "xlsx.definedNames",
       "xlsx.rowColumnDimensions",
       "xlsx.merges",
       "xlsx.multiSheet",
@@ -115,7 +116,6 @@
     "importExportUnsupportedFeatures": [
       "xlsx.macros.execution",
       "xlsx.comments.roundtrip",
-      "xlsx.definedNames.roundtrip",
       "xlsx.charts.roundtrip",
       "xlsx.pivots.roundtrip",
       "xlsx.styles.export"
@@ -343,8 +343,8 @@
       "status": "partial-repo-evidence",
       "currentEvidence": [
         "generated import/export fidelity scorecard passes required cases: true",
-        "covered import/export features: csv.import, csv.preview, csv.export, csv.roundtrip, xlsx.import, xlsx.preview, xlsx.export, xlsx.roundtrip, xlsx.values, xlsx.formulas, xlsx.numberFormats, xlsx.rowColumnDimensions, xlsx.merges, xlsx.multiSheet, xlsx.unsupportedFeatureWarnings",
-        "unsupported XLSX features are explicitly disclosed: xlsx.macros.execution, xlsx.comments.roundtrip, xlsx.definedNames.roundtrip, xlsx.charts.roundtrip, xlsx.pivots.roundtrip, xlsx.styles.export"
+        "covered import/export features: csv.import, csv.preview, csv.export, csv.roundtrip, xlsx.import, xlsx.preview, xlsx.export, xlsx.roundtrip, xlsx.values, xlsx.formulas, xlsx.numberFormats, xlsx.definedNames, xlsx.rowColumnDimensions, xlsx.merges, xlsx.multiSheet, xlsx.unsupportedFeatureWarnings",
+        "unsupported XLSX features are explicitly disclosed: xlsx.macros.execution, xlsx.comments.roundtrip, xlsx.charts.roundtrip, xlsx.pivots.roundtrip, xlsx.styles.export"
       ],
       "evidenceArtifacts": [
         "packages/benchmarks/baselines/import-export-fidelity-scorecard.json",

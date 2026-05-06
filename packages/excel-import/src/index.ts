@@ -16,8 +16,10 @@ import type {
   SheetStyleRangeSnapshot,
   WorkbookAxisEntrySnapshot,
   WorkbookMergeRangeSnapshot,
+  WorkbookMetadataSnapshot,
   WorkbookSnapshot,
 } from '@bilig/protocol'
+import { buildExportDefinedNames, readImportedDefinedNames } from './xlsx-defined-names.js'
 
 const PREVIEW_ROW_LIMIT = 8
 const PREVIEW_COLUMN_LIMIT = 6
@@ -593,6 +595,7 @@ function toUint8Array(value: unknown): Uint8Array {
 export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
   const workbook = XLSX.utils.book_new()
   const usedNames = new Set<string>()
+  const exportSheetNamesByOriginalName = new Map<string, string>()
 
   for (const sheet of snapshot.sheets.toSorted((left, right) => left.order - right.order)) {
     const worksheet: XLSX.WorkSheet = {}
@@ -620,7 +623,17 @@ export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
       worksheet['!merges'] = merges
     }
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, normalizeExportSheetName(sheet.name, sheet.order, usedNames))
+    const exportSheetName = normalizeExportSheetName(sheet.name, sheet.order, usedNames)
+    exportSheetNamesByOriginalName.set(sheet.name, exportSheetName)
+    XLSX.utils.book_append_sheet(workbook, worksheet, exportSheetName)
+  }
+
+  const definedNames = buildExportDefinedNames(snapshot.workbook.metadata?.definedNames, exportSheetNamesByOriginalName)
+  if (definedNames) {
+    workbook.Workbook = {
+      ...workbook.Workbook,
+      Names: definedNames,
+    }
   }
 
   return toUint8Array(
@@ -640,13 +653,12 @@ function createCellRange(sheetName: string, address: string) {
   }
 }
 
-function addWorkbookWarnings(workbook: XLSX.WorkBook, warnings: string[]): void {
+function addWorkbookWarnings(workbook: XLSX.WorkBook, warnings: string[], ignoredDefinedNameCount: number): void {
   if (workbook.vbaraw) {
     warnings.push('Macros were ignored during XLSX import.')
   }
-  const definedNames = workbook.Workbook?.Names
-  if (Array.isArray(definedNames) && definedNames.length > 0) {
-    warnings.push('Defined names were ignored during XLSX import.')
+  if (ignoredDefinedNameCount > 0) {
+    warnings.push('Some defined names were ignored during XLSX import.')
   }
 }
 
@@ -675,7 +687,8 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
   })
   const workbookName = normalizeWorkbookName(fileName)
   const warnings: string[] = []
-  addWorkbookWarnings(workbook, warnings)
+  const importedDefinedNames = readImportedDefinedNames(workbook)
+  addWorkbookWarnings(workbook, warnings, importedDefinedNames.ignoredCount)
 
   const ignoredComments = { seen: false }
   const styleCatalog = new Map<string, CellStyleRecord>()
@@ -782,12 +795,17 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
     }
   })
 
+  const workbookMetadata: WorkbookMetadataSnapshot = {
+    ...(styleCatalog.size > 0 ? { styles: [...styleCatalog.values()] } : {}),
+    ...(importedDefinedNames.definedNames ? { definedNames: importedDefinedNames.definedNames } : {}),
+  }
+
   return {
     snapshot: {
       version: 1,
       workbook: {
         name: workbookName,
-        ...(styleCatalog.size > 0 ? { metadata: { styles: [...styleCatalog.values()] } } : {}),
+        ...(Object.keys(workbookMetadata).length > 0 ? { metadata: workbookMetadata } : {}),
       },
       sheets,
     },

@@ -27,7 +27,10 @@ function buildWorkbook(): Uint8Array {
   XLSX.utils.book_append_sheet(workbook, sheet1, 'Sheet1')
   XLSX.utils.book_append_sheet(workbook, sheet2, 'Sheet2')
   workbook.Workbook = {
-    Names: [{ Name: 'IgnoredName', Ref: 'Sheet1!$A$1' }],
+    Names: [
+      { Name: 'InputValue', Ref: 'Sheet1!$A$1' },
+      { Name: 'InputBlock', Ref: 'Sheet1!$A$1:$B$2' },
+    ],
   }
 
   return XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' })
@@ -162,7 +165,11 @@ describe('excel import', () => {
     expect(imported.snapshot.sheets[1]?.cells).toEqual(expect.arrayContaining([expect.objectContaining({ address: 'A1', value: 'hello' })]))
     expect(imported.snapshot.sheets[1]?.cells).toEqual(expect.arrayContaining([expect.objectContaining({ address: 'A2', value: true })]))
 
-    expect(imported.warnings).toEqual(['Defined names were ignored during XLSX import.', 'Cell comments were ignored during XLSX import.'])
+    expect(imported.snapshot.workbook.metadata?.definedNames).toEqual([
+      { name: 'InputBlock', value: { kind: 'range-ref', sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B2' } },
+      { name: 'InputValue', value: { kind: 'cell-ref', sheetName: 'Sheet1', address: 'A1' } },
+    ])
+    expect(imported.warnings).toEqual(['Cell comments were ignored during XLSX import.'])
     expect(imported.preview.workbookName).toBe('Quarterly Report')
     expect(imported.preview.sheetCount).toBe(2)
     expect(imported.preview.sheets).toEqual(
@@ -334,6 +341,13 @@ describe('excel import', () => {
       version: 1,
       workbook: {
         name: 'Roundtrip Workbook',
+        metadata: {
+          definedNames: [
+            { name: 'SummaryTotal', value: { kind: 'cell-ref', sheetName: 'Summary', address: 'B1' } },
+            { name: 'InputRegion', value: { kind: 'range-ref', sheetName: 'Inputs', startAddress: 'A1', endAddress: 'B1' } },
+            { name: 'TaxRate', value: { kind: 'scalar', value: 0.085 } },
+          ],
+        },
       },
       sheets: [
         {
@@ -383,6 +397,9 @@ describe('excel import', () => {
 
 function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
   return {
+    definedNames: (snapshot.workbook.metadata?.definedNames ?? [])
+      .map((definedName) => ({ name: definedName.name, value: definedName.value }))
+      .toSorted((left, right) => left.name.localeCompare(right.name)),
     sheets: snapshot.sheets
       .toSorted((left, right) => left.order - right.order)
       .map((sheet) => ({

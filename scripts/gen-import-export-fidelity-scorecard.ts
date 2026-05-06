@@ -64,6 +64,7 @@ const coveredFeatureOrder = [
   'xlsx.values',
   'xlsx.formulas',
   'xlsx.numberFormats',
+  'xlsx.definedNames',
   'xlsx.rowColumnDimensions',
   'xlsx.merges',
   'xlsx.multiSheet',
@@ -72,7 +73,6 @@ const coveredFeatureOrder = [
 const unsupportedFeatures = [
   'xlsx.macros.execution',
   'xlsx.comments.roundtrip',
-  'xlsx.definedNames.roundtrip',
   'xlsx.charts.roundtrip',
   'xlsx.pivots.roundtrip',
   'xlsx.styles.export',
@@ -206,8 +206,16 @@ function runXlsxSnapshotRoundTripValuesCase(): ImportExportFidelityCase {
     format: 'xlsx',
     direction: 'export-import',
     passed,
-    coveredFeatures: ['xlsx.export', 'xlsx.roundtrip', 'xlsx.values', 'xlsx.formulas', 'xlsx.numberFormats', 'xlsx.multiSheet'],
-    evidence: 'WorkbookSnapshot exported to XLSX imports back with the same values, formulas, formats, and sheet order.',
+    coveredFeatures: [
+      'xlsx.export',
+      'xlsx.roundtrip',
+      'xlsx.values',
+      'xlsx.formulas',
+      'xlsx.numberFormats',
+      'xlsx.definedNames',
+      'xlsx.multiSheet',
+    ],
+    evidence: 'WorkbookSnapshot exported to XLSX imports back with the same values, formulas, formats, defined names, and sheet order.',
   })
 }
 
@@ -265,6 +273,13 @@ function createFidelitySnapshot(): WorkbookSnapshot {
     version: 1,
     workbook: {
       name: 'Import Export Fidelity',
+      metadata: {
+        definedNames: [
+          { name: 'SummaryTotal', value: { kind: 'cell-ref', sheetName: 'Summary', address: 'B1' } },
+          { name: 'InputRegion', value: { kind: 'range-ref', sheetName: 'Inputs', startAddress: 'A1', endAddress: 'B1' } },
+          { name: 'TaxRate', value: { kind: 'scalar', value: 0.085 } },
+        ],
+      },
     },
     sheets: [
       {
@@ -307,6 +322,9 @@ function createFidelitySnapshot(): WorkbookSnapshot {
 
 function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
   return {
+    definedNames: (snapshot.workbook.metadata?.definedNames ?? [])
+      .map((definedName) => ({ name: definedName.name, value: definedName.value }))
+      .toSorted((left, right) => left.name.localeCompare(right.name)),
     valueFormulaFormatSheets: snapshot.sheets
       .toSorted((left, right) => left.order - right.order)
       .map((sheet) => ({
