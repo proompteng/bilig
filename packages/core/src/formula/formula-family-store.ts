@@ -479,16 +479,17 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
     if (existingFamily && existingFamily.runs.length > 0) {
       return false
     }
+    const cellIndices: number[] = []
+    cellIndices.length = runLength
     for (let index = 0; index < runLength; index += 1) {
       const cellIndex = args.cellIndices[index]!
       if ((membershipFamilyIds[cellIndex] ?? 0) !== 0) {
         return false
       }
+      cellIndices[index] = cellIndex
     }
     const family = existingFamily ?? getOrCreateFamily(args)
     const step = runLength === 1 ? 1 : args.step
-    const cellIndices: number[] = []
-    cellIndices.length = runLength
     const run: MutableFormulaFamilyMemberRun = {
       id: nextRunId++,
       axis: args.axis,
@@ -499,12 +500,11 @@ export function createFormulaFamilyStore(): FormulaFamilyStore {
       cellIndices,
     }
     for (let index = 0; index < runLength; index += 1) {
-      const cellIndex = args.cellIndices[index]!
+      const cellIndex = cellIndices[index]!
       const variableIndex = args.start + step * index
       const row = args.axis === 'row' ? variableIndex : args.fixedIndex
       const col = args.axis === 'row' ? args.fixedIndex : variableIndex
       recordFormulaMemberAt(args, cellIndex, row, col)
-      run.cellIndices[index] = cellIndex
       membershipFamilyIds[cellIndex] = family.id
       membershipRunIds[cellIndex] = run.id
     }

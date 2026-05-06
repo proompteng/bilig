@@ -135,6 +135,36 @@ describe('FormulaFamilyStore', () => {
     ])
   })
 
+  it('registers fresh uniform runs with a single pass over caller cell indices', () => {
+    const store = createFormulaFamilyStore()
+    const sourceCellIndices = [320, 321, 322, 323]
+    let numericCellIndexReads = 0
+    const cellIndices = new Proxy(sourceCellIndices, {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && /^\d+$/.test(property)) {
+          numericCellIndexReads += 1
+        }
+        return Reflect.get(target, property, receiver)
+      },
+    })
+
+    const registered = store.registerFreshUniformRun({
+      sheetId: 1,
+      templateId: 14,
+      shapeKey: 'fresh-direct-single-pass',
+      axis: 'row',
+      fixedIndex: 5,
+      start: 0,
+      step: 1,
+      cellIndices,
+    })
+
+    expect(registered).toBe(true)
+    expect(numericCellIndexReads).toBe(sourceCellIndices.length)
+    expect(store.getStats()).toEqual({ familyCount: 1, runCount: 1, memberCount: 4 })
+    expect(store.listFamilies()[0]?.runs[0]?.cellIndices).toEqual(sourceCellIndices)
+  })
+
   it('registers fresh strided row runs in one family run', () => {
     const store = createFormulaFamilyStore()
 
