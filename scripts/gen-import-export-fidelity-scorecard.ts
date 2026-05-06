@@ -7,14 +7,8 @@ import { pathToFileURL } from 'node:url'
 
 import { SpreadsheetEngine } from '../packages/core/src/engine.js'
 import { exportXlsx, importCsv, importXlsx } from '../packages/excel-import/src/index.js'
-import type {
-  WorkbookChartSnapshot,
-  WorkbookDataValidationSnapshot,
-  WorkbookPivotSnapshot,
-  WorkbookPivotValueSnapshot,
-  WorkbookSnapshot,
-  WorkbookTableSnapshot,
-} from '../packages/protocol/src/types.js'
+import type { WorkbookSnapshot } from '../packages/protocol/src/types.js'
+import { projectSupportedSnapshotSemantics } from './import-export-fidelity-projection.ts'
 
 export interface ImportExportFidelityCase {
   readonly id: string
@@ -60,6 +54,7 @@ const requiredCaseIds = [
   'xlsx-snapshot-roundtrip-freeze-panes',
   'xlsx-snapshot-roundtrip-filters',
   'xlsx-snapshot-roundtrip-sheet-protection',
+  'xlsx-snapshot-roundtrip-protected-ranges',
   'xlsx-snapshot-roundtrip-data-validations',
   'xlsx-snapshot-roundtrip-tables',
   'xlsx-snapshot-roundtrip-charts',
@@ -86,6 +81,7 @@ const coveredFeatureOrder = [
   'xlsx.freezePanes.roundtrip',
   'xlsx.filters.roundtrip',
   'xlsx.sheetProtection.roundtrip',
+  'xlsx.protectedRanges.roundtrip',
   'xlsx.dataValidations.roundtrip',
   'xlsx.tables.roundtrip',
   'xlsx.charts.roundtrip',
@@ -123,6 +119,7 @@ export async function buildImportExportFidelityScorecard(generatedAt = new Date(
     runXlsxSnapshotRoundTripFreezePanesCase(),
     runXlsxSnapshotRoundTripFiltersCase(),
     runXlsxSnapshotRoundTripSheetProtectionCase(),
+    runXlsxSnapshotRoundTripProtectedRangesCase(),
     runXlsxSnapshotRoundTripDataValidationsCase(),
     runXlsxSnapshotRoundTripTablesCase(),
     runXlsxSnapshotRoundTripChartsCase(),
@@ -151,6 +148,7 @@ export async function buildImportExportFidelityScorecard(generatedAt = new Date(
         requiredCase(cases, 'xlsx-snapshot-roundtrip-freeze-panes').passed &&
         requiredCase(cases, 'xlsx-snapshot-roundtrip-filters').passed &&
         requiredCase(cases, 'xlsx-snapshot-roundtrip-sheet-protection').passed &&
+        requiredCase(cases, 'xlsx-snapshot-roundtrip-protected-ranges').passed &&
         requiredCase(cases, 'xlsx-snapshot-roundtrip-data-validations').passed &&
         requiredCase(cases, 'xlsx-snapshot-roundtrip-tables').passed &&
         requiredCase(cases, 'xlsx-snapshot-roundtrip-charts').passed &&
@@ -310,6 +308,21 @@ function runXlsxSnapshotRoundTripSheetProtectionCase(): ImportExportFidelityCase
     coveredFeatures: ['xlsx.sheetProtection.roundtrip'],
     evidence:
       'WorkbookSnapshot exported to XLSX imports back with equivalent sheet protection metadata backed by native XLSX sheetProtection nodes.',
+  })
+}
+
+function runXlsxSnapshotRoundTripProtectedRangesCase(): ImportExportFidelityCase {
+  const expected = projectSupportedSnapshotSemantics(createFidelitySnapshot())
+  const actual = projectSupportedSnapshotSemantics(importXlsx(exportXlsx(createFidelitySnapshot()), 'fidelity.xlsx').snapshot)
+  const passed = JSON.stringify(actual.protectedRanges) === JSON.stringify(expected.protectedRanges)
+  return fidelityCase({
+    id: 'xlsx-snapshot-roundtrip-protected-ranges',
+    format: 'xlsx',
+    direction: 'export-import',
+    passed,
+    coveredFeatures: ['xlsx.protectedRanges.roundtrip'],
+    evidence:
+      'WorkbookSnapshot exported to XLSX imports back with equivalent protected-range metadata backed by native XLSX protectedRange nodes.',
   })
 }
 
@@ -497,6 +510,12 @@ function createFidelitySnapshot(): WorkbookSnapshot {
           freezePane: { rows: 1, cols: 2 },
           merges: [{ sheetName: 'Summary', startAddress: 'A5', endAddress: 'B5' }],
           sheetProtection: { sheetName: 'Summary' },
+          protectedRanges: [
+            {
+              id: 'protect-summary-inputs',
+              range: { sheetName: 'Summary', startAddress: 'A2', endAddress: 'B3' },
+            },
+          ],
           filters: [{ sheetName: 'Summary', startAddress: 'A1', endAddress: 'B3' }],
           validations: [
             {
@@ -558,195 +577,6 @@ function createFidelitySnapshot(): WorkbookSnapshot {
         ],
       },
     ],
-  }
-}
-
-interface ProjectedChartSemantics {
-  id: string
-  sheetName: string
-  address: string
-  source: WorkbookChartSnapshot['source']
-  chartType: WorkbookChartSnapshot['chartType']
-  seriesOrientation?: WorkbookChartSnapshot['seriesOrientation']
-  firstRowAsHeaders?: WorkbookChartSnapshot['firstRowAsHeaders']
-  firstColumnAsLabels?: WorkbookChartSnapshot['firstColumnAsLabels']
-  title?: WorkbookChartSnapshot['title']
-  legendPosition?: WorkbookChartSnapshot['legendPosition']
-  rows: number
-  cols: number
-}
-
-function projectChartSemantics(chart: WorkbookChartSnapshot): ProjectedChartSemantics {
-  const projected: ProjectedChartSemantics = {
-    id: chart.id,
-    sheetName: chart.sheetName,
-    address: chart.address,
-    source: chart.source,
-    chartType: chart.chartType,
-    rows: chart.rows,
-    cols: chart.cols,
-  }
-  if (chart.seriesOrientation !== undefined) {
-    projected.seriesOrientation = chart.seriesOrientation
-  }
-  if (chart.firstRowAsHeaders !== undefined) {
-    projected.firstRowAsHeaders = chart.firstRowAsHeaders
-  }
-  if (chart.firstColumnAsLabels !== undefined) {
-    projected.firstColumnAsLabels = chart.firstColumnAsLabels
-  }
-  if (chart.title !== undefined) {
-    projected.title = chart.title
-  }
-  if (chart.legendPosition !== undefined) {
-    projected.legendPosition = chart.legendPosition
-  }
-  return projected
-}
-
-function projectPivotValue(value: WorkbookPivotValueSnapshot): WorkbookPivotValueSnapshot {
-  const projected: WorkbookPivotValueSnapshot = {
-    sourceColumn: value.sourceColumn,
-    summarizeBy: value.summarizeBy,
-  }
-  if (value.outputLabel !== undefined) {
-    projected.outputLabel = value.outputLabel
-  }
-  return projected
-}
-
-function projectPivotSemantics(pivot: WorkbookPivotSnapshot): WorkbookPivotSnapshot {
-  return {
-    name: pivot.name,
-    sheetName: pivot.sheetName,
-    address: pivot.address,
-    source: pivot.source,
-    groupBy: [...pivot.groupBy],
-    values: pivot.values.map(projectPivotValue),
-    rows: pivot.rows,
-    cols: pivot.cols,
-  }
-}
-
-function projectTableSemantics(table: WorkbookTableSnapshot): WorkbookTableSnapshot {
-  return {
-    name: table.name,
-    sheetName: table.sheetName,
-    startAddress: table.startAddress,
-    endAddress: table.endAddress,
-    columnNames: [...table.columnNames],
-    headerRow: table.headerRow,
-    totalsRow: table.totalsRow,
-  }
-}
-
-function projectValidationSemantics(validation: WorkbookDataValidationSnapshot): WorkbookDataValidationSnapshot {
-  return structuredClone(validation)
-}
-
-function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
-  const stylesById = new Map((snapshot.workbook.metadata?.styles ?? []).map((style) => [style.id, style]))
-  const portableStyle = (styleId: string) => {
-    const style = stylesById.get(styleId)
-    if (!style) {
-      return undefined
-    }
-    return {
-      ...(style.fill ? { fill: style.fill } : {}),
-      ...(style.font ? { font: style.font } : {}),
-      ...(style.alignment ? { alignment: style.alignment } : {}),
-      ...(style.borders ? { borders: style.borders } : {}),
-    }
-  }
-  return {
-    definedNames: (snapshot.workbook.metadata?.definedNames ?? [])
-      .map((definedName) => ({ name: definedName.name, value: definedName.value }))
-      .toSorted((left, right) => left.name.localeCompare(right.name)),
-    commentThreads: snapshot.sheets
-      .flatMap((sheet) => sheet.metadata?.commentThreads ?? [])
-      .map((thread) => ({
-        sheetName: thread.sheetName,
-        address: thread.address,
-        comments: thread.comments.map((comment) => ({
-          body: comment.body,
-          ...(comment.authorDisplayName !== undefined ? { authorDisplayName: comment.authorDisplayName } : {}),
-        })),
-      }))
-      .toSorted((left, right) => `${left.sheetName}:${left.address}`.localeCompare(`${right.sheetName}:${right.address}`)),
-    styleRanges: snapshot.sheets
-      .flatMap((sheet) => sheet.metadata?.styleRanges ?? [])
-      .map((styleRange) => ({
-        range: styleRange.range,
-        style: portableStyle(styleRange.styleId),
-      }))
-      .toSorted((left, right) =>
-        `${left.range.sheetName}:${left.range.startAddress}:${left.range.endAddress}`.localeCompare(
-          `${right.range.sheetName}:${right.range.startAddress}:${right.range.endAddress}`,
-        ),
-      ),
-    tables: (snapshot.workbook.metadata?.tables ?? [])
-      .map(projectTableSemantics)
-      .toSorted((left, right) => left.name.localeCompare(right.name)),
-    charts: (snapshot.workbook.metadata?.charts ?? [])
-      .map(projectChartSemantics)
-      .toSorted((left, right) => left.id.localeCompare(right.id)),
-    pivots: (snapshot.workbook.metadata?.pivots ?? [])
-      .map(projectPivotSemantics)
-      .toSorted((left, right) =>
-        `${left.sheetName}:${left.address}:${left.name}`.localeCompare(`${right.sheetName}:${right.address}:${right.name}`),
-      ),
-    validations: snapshot.sheets
-      .flatMap((sheet) => sheet.metadata?.validations ?? [])
-      .map(projectValidationSemantics)
-      .toSorted((left, right) =>
-        `${left.range.sheetName}:${left.range.startAddress}:${left.range.endAddress}`.localeCompare(
-          `${right.range.sheetName}:${right.range.startAddress}:${right.range.endAddress}`,
-        ),
-      ),
-    freezePanes: snapshot.sheets
-      .flatMap((sheet) => (sheet.metadata?.freezePane ? [{ sheetName: sheet.name, freezePane: sheet.metadata.freezePane }] : []))
-      .toSorted((left, right) => left.sheetName.localeCompare(right.sheetName)),
-    filters: snapshot.sheets
-      .flatMap((sheet) => sheet.metadata?.filters ?? [])
-      .map(({ sheetName, startAddress, endAddress }) => ({ sheetName, startAddress, endAddress }))
-      .toSorted((left, right) =>
-        `${left.sheetName}:${left.startAddress}:${left.endAddress}`.localeCompare(
-          `${right.sheetName}:${right.startAddress}:${right.endAddress}`,
-        ),
-      ),
-    sheetProtections: snapshot.sheets
-      .flatMap((sheet) => (sheet.metadata?.sheetProtection ? [structuredClone(sheet.metadata.sheetProtection)] : []))
-      .toSorted((left, right) => left.sheetName.localeCompare(right.sheetName)),
-    valueFormulaFormatSheets: snapshot.sheets
-      .toSorted((left, right) => left.order - right.order)
-      .map((sheet) => ({
-        name: sheet.name,
-        order: sheet.order,
-        cells: sheet.cells
-          .map((cell) => ({
-            address: cell.address,
-            ...(cell.value !== undefined ? { value: cell.value } : {}),
-            ...(cell.formula !== undefined ? { formula: cell.formula } : {}),
-            ...(cell.format !== undefined ? { format: cell.format } : {}),
-          }))
-          .toSorted((left, right) => left.address.localeCompare(right.address)),
-      })),
-    dimensionSheets: snapshot.sheets
-      .toSorted((left, right) => left.order - right.order)
-      .map((sheet) => ({
-        name: sheet.name,
-        columns: (sheet.metadata?.columns ?? [])
-          .map(({ index, size }) => ({ index, size }))
-          .toSorted((left, right) => left.index - right.index),
-        rows: (sheet.metadata?.rows ?? []).map(({ index, size }) => ({ index, size })).toSorted((left, right) => left.index - right.index),
-        merges: (sheet.metadata?.merges ?? [])
-          .map(({ sheetName, startAddress, endAddress }) => ({ sheetName, startAddress, endAddress }))
-          .toSorted((left, right) =>
-            `${left.sheetName}:${left.startAddress}:${left.endAddress}`.localeCompare(
-              `${right.sheetName}:${right.startAddress}:${right.endAddress}`,
-            ),
-          ),
-      })),
   }
 }
 

@@ -24,6 +24,7 @@ import { readImportedDefinedNames } from './xlsx-defined-names.js'
 import { readImportedWorkbookFilters } from './xlsx-filters.js'
 import { readImportedWorkbookFreezePanes } from './xlsx-freeze-panes.js'
 import { readImportedWorkbookPivots } from './xlsx-pivots.js'
+import { readImportedWorkbookProtectedRanges } from './xlsx-protected-ranges.js'
 import { readImportedWorkbookSheetProtections } from './xlsx-sheet-protection.js'
 import { readImportedWorkbookFileStyles } from './xlsx-styles.js'
 import { readImportedWorkbookTables } from './xlsx-tables.js'
@@ -483,6 +484,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
   const importedFiltersBySheet = readImportedWorkbookFilters(data, workbook.SheetNames)
   const importedFreezePanesBySheet = readImportedWorkbookFreezePanes(data, workbook.SheetNames)
   const importedSheetProtectionsBySheet = readImportedWorkbookSheetProtections(data, workbook.SheetNames)
+  const importedProtectedRangesBySheet = readImportedWorkbookProtectedRanges(data, workbook.SheetNames)
   const importedValidationsBySheet = readImportedWorkbookDataValidations(data, workbook.SheetNames)
 
   let ignoredCommentsSeen = false
@@ -577,6 +579,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
     const importedFreezePane = importedFreezePanesBySheet.get(sheetName)
     const merges = buildMergeEntries(sheetName, sheet['!merges'])
     const importedSheetProtection = importedSheetProtectionsBySheet.get(sheetName)
+    const importedProtectedRanges = importedProtectedRangesBySheet.get(sheetName)
     const importedFilters = importedFiltersBySheet.get(sheetName)
     const importedValidations = importedValidationsBySheet.get(sheetName)
     const metadata =
@@ -586,6 +589,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
       importedFreezePane ||
       merges ||
       importedSheetProtection ||
+      importedProtectedRanges ||
       importedFilters ||
       importedValidations ||
       importedComments.commentThreads
@@ -596,6 +600,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
             ...(importedFreezePane ? { freezePane: importedFreezePane } : {}),
             ...(merges ? { merges } : {}),
             ...(importedSheetProtection ? { sheetProtection: importedSheetProtection } : {}),
+            ...(importedProtectedRanges ? { protectedRanges: importedProtectedRanges } : {}),
             ...(importedFilters ? { filters: importedFilters } : {}),
             ...(importedValidations ? { validations: importedValidations } : {}),
             ...(importedComments.commentThreads ? { commentThreads: importedComments.commentThreads } : {}),

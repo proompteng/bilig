@@ -7,6 +7,7 @@ import type {
   WorkbookDataValidationSnapshot,
   WorkbookPivotSnapshot,
   WorkbookPivotValueSnapshot,
+  WorkbookRangeProtectionSnapshot,
   WorkbookSnapshot,
   WorkbookTableSnapshot,
 } from '@bilig/protocol'
@@ -442,6 +443,12 @@ describe('excel import', () => {
             freezePane: { rows: 1, cols: 2 },
             merges: [{ sheetName: 'Summary', startAddress: 'A5', endAddress: 'B5' }],
             sheetProtection: { sheetName: 'Summary' },
+            protectedRanges: [
+              {
+                id: 'protect-summary-inputs',
+                range: { sheetName: 'Summary', startAddress: 'A2', endAddress: 'B3' },
+              },
+            ],
             filters: [{ sheetName: 'Summary', startAddress: 'A1', endAddress: 'B3' }],
             validations: [
               {
@@ -540,6 +547,10 @@ describe('excel import', () => {
       '<pane xSplit="2" ySplit="1" topLeftCell="C2" activePane="bottomRight" state="frozen"/>',
     )
     expect(strFromU8(zip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())).toContain('<sheetProtection sheet="1"/>')
+    expect(strFromU8(zip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())).toContain('<protectedRanges>')
+    expect(strFromU8(zip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())).toContain(
+      '<protectedRange name="protect-summary-inputs" sqref="A2:B3"/>',
+    )
     expect(strFromU8(zip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())).toContain('<autoFilter ref="A1:B3"/>')
     expect(projectSupportedSnapshotSemantics(imported.snapshot)).toEqual(projectSupportedSnapshotSemantics(snapshot))
   })
@@ -628,6 +639,10 @@ function projectValidationSemantics(validation: WorkbookDataValidationSnapshot):
   return structuredClone(validation)
 }
 
+function projectRangeProtectionSemantics(protection: WorkbookRangeProtectionSnapshot): WorkbookRangeProtectionSnapshot {
+  return structuredClone(protection)
+}
+
 function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
   const stylesById = new Map((snapshot.workbook.metadata?.styles ?? []).map((style) => [style.id, style]))
   const portableStyle = (styleId: string) => {
@@ -698,6 +713,13 @@ function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
             .toSorted((left, right) =>
               `${left.range.sheetName}:${left.range.startAddress}:${left.range.endAddress}`.localeCompare(
                 `${right.range.sheetName}:${right.range.startAddress}:${right.range.endAddress}`,
+              ),
+            ),
+          protectedRanges: (sheet.metadata?.protectedRanges ?? [])
+            .map(projectRangeProtectionSemantics)
+            .toSorted((left, right) =>
+              `${left.range.sheetName}:${left.range.startAddress}:${left.range.endAddress}:${left.id}`.localeCompare(
+                `${right.range.sheetName}:${right.range.startAddress}:${right.range.endAddress}:${right.id}`,
               ),
             ),
           commentThreads: (sheet.metadata?.commentThreads ?? [])

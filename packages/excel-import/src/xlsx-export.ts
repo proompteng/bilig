@@ -8,6 +8,7 @@ import { buildExportDefinedNames } from './xlsx-defined-names.js'
 import { addExportFiltersToXlsxBytes } from './xlsx-filters.js'
 import { addExportFreezePanesToXlsxBytes } from './xlsx-freeze-panes.js'
 import { addExportPivotsToXlsxBytes } from './xlsx-pivots.js'
+import { addExportProtectedRangesToXlsxBytes } from './xlsx-protected-ranges.js'
 import { addExportSheetProtectionsToXlsxBytes } from './xlsx-sheet-protection.js'
 import { addExportStylesToWorksheet } from './xlsx-styles.js'
 import { addExportTablesToXlsxBytes } from './xlsx-tables.js'
@@ -237,7 +238,10 @@ export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
       addExportTablesToXlsxBytes(
         addExportDataValidationsToXlsxBytes(
           addExportFiltersToXlsxBytes(
-            addExportSheetProtectionsToXlsxBytes(addExportFreezePanesToXlsxBytes(bytes, snapshot), snapshot),
+            addExportProtectedRangesToXlsxBytes(
+              addExportSheetProtectionsToXlsxBytes(addExportFreezePanesToXlsxBytes(bytes, snapshot), snapshot),
+              snapshot,
+            ),
             snapshot,
           ),
           snapshot,
