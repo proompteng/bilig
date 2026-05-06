@@ -527,6 +527,7 @@ export function buildFixtureInput(): BuildScorecardInput {
           'xlsx.import',
           'xlsx.export',
           'xlsx.macros.payloadRoundtrip',
+          'xlsx.macros.codeNameRoundtrip',
           'external.googleSheetsImportExportDocs',
           'external.microsoftExcelImportExportDocs',
           'external.sheetsExcelImportExportComparison',

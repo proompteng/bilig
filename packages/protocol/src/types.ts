@@ -296,12 +296,19 @@ export interface WorkbookVolatileContextSnapshot {
   recalcEpoch: number
 }
 
+export interface WorkbookMacroSheetCodeNameSnapshot {
+  sheetName: string
+  codeName: string
+}
+
 export interface WorkbookMacroPayloadSnapshot {
   kind: 'vbaProject'
   storage: 'base64'
   dataBase64: string
   byteLength: number
   preservedWithoutExecution: true
+  workbookCodeName?: string
+  sheetCodeNames?: WorkbookMacroSheetCodeNameSnapshot[]
 }
 
 export interface WorkbookFreezePaneSnapshot {

@@ -1,7 +1,13 @@
 import * as XLSX from 'xlsx'
 import * as XLSXStyle from 'xlsx-js-style'
 
-import type { LiteralInput, WorkbookAxisEntrySnapshot, WorkbookMergeRangeSnapshot, WorkbookSnapshot } from '@bilig/protocol'
+import type {
+  LiteralInput,
+  WorkbookAxisEntrySnapshot,
+  WorkbookMacroPayloadSnapshot,
+  WorkbookMergeRangeSnapshot,
+  WorkbookSnapshot,
+} from '@bilig/protocol'
 import { addExportCalculationSettingsToXlsxBytes } from './xlsx-calculation-settings.js'
 import { addExportChartsToXlsxBytes } from './xlsx-charts.js'
 import { addExportCommentsToWorksheet } from './xlsx-comments.js'
@@ -185,6 +191,45 @@ function toUint8Array(value: unknown): Uint8Array {
   throw new Error('XLSX writer returned unsupported output bytes')
 }
 
+function applyMacroCodeNamesToWorkbook(
+  workbook: XLSXStyle.WorkBook,
+  macroPayload: WorkbookMacroPayloadSnapshot | undefined,
+  exportSheetNamesByOriginalName: ReadonlyMap<string, string>,
+): void {
+  if (!macroPayload?.workbookCodeName && (!macroPayload?.sheetCodeNames || macroPayload.sheetCodeNames.length === 0)) {
+    return
+  }
+
+  const workbookMetadata = {
+    ...workbook.Workbook,
+  }
+  if (macroPayload.workbookCodeName) {
+    workbookMetadata.WBProps = {
+      ...workbookMetadata.WBProps,
+      CodeName: macroPayload.workbookCodeName,
+    }
+  }
+
+  if (macroPayload.sheetCodeNames && macroPayload.sheetCodeNames.length > 0) {
+    const codeNamesByExportSheetName = new Map<string, string>()
+    for (const entry of macroPayload.sheetCodeNames) {
+      const exportSheetName = exportSheetNamesByOriginalName.get(entry.sheetName) ?? entry.sheetName
+      codeNamesByExportSheetName.set(exportSheetName, entry.codeName)
+    }
+    const existingSheets = workbookMetadata.Sheets ?? []
+    workbookMetadata.Sheets = workbook.SheetNames.map((sheetName, index) => {
+      const codeName = codeNamesByExportSheetName.get(sheetName) ?? existingSheets[index]?.CodeName
+      return {
+        ...existingSheets[index],
+        name: sheetName,
+        ...(codeName ? { CodeName: codeName } : {}),
+      }
+    })
+  }
+
+  workbook.Workbook = workbookMetadata
+}
+
 export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
   const workbook = XLSXStyle.utils.book_new()
   const usedNames = new Set<string>()
@@ -231,10 +276,12 @@ export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
     }
   }
 
-  const preservedVbaProject = decodePreservedVbaProjectPayload(snapshot.workbook.metadata?.macroPayloads?.[0])
+  const macroPayload = snapshot.workbook.metadata?.macroPayloads?.[0]
+  const preservedVbaProject = decodePreservedVbaProjectPayload(macroPayload)
   if (preservedVbaProject) {
     const macroWorkbook = workbook as { vbaraw?: Uint8Array }
     macroWorkbook.vbaraw = preservedVbaProject
+    applyMacroCodeNamesToWorkbook(workbook, macroPayload, exportSheetNamesByOriginalName)
   }
 
   const bytes = toUint8Array(

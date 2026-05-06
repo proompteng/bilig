@@ -33,7 +33,7 @@ import { readImportedWorkbookFileStyles } from './xlsx-styles.js'
 import { readImportedWorkbookTables } from './xlsx-tables.js'
 import { readImportedWorkbookDataValidations } from './xlsx-validations.js'
 import { readImportedWorkbookProperties } from './xlsx-workbook-properties.js'
-import { createPreservedVbaProjectPayload } from './xlsx-macros.js'
+import { createPreservedVbaProjectPayload, type PreservedVbaProjectCodeNames } from './xlsx-macros.js'
 
 export { exportXlsx } from './xlsx-export.js'
 
@@ -467,6 +467,35 @@ function toUint8Array(value: unknown): Uint8Array | null {
   return null
 }
 
+function readNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+function readImportedMacroCodeNames(workbook: XLSX.WorkBook): PreservedVbaProjectCodeNames {
+  const workbookMetadata = isRecord(workbook.Workbook) ? workbook.Workbook : undefined
+  const workbookProperties = isRecord(workbookMetadata?.['WBProps']) ? workbookMetadata['WBProps'] : undefined
+  const workbookCodeName = readNonEmptyString(workbookProperties?.['CodeName'])
+  const workbookSheets = workbookMetadata?.['Sheets']
+  const sheetCodeNames = Array.isArray(workbookSheets)
+    ? workbookSheets.flatMap((entry) => {
+        if (!isRecord(entry)) {
+          return []
+        }
+        const sheetName = readNonEmptyString(entry['name'])
+        const codeName = readNonEmptyString(entry['CodeName'])
+        return sheetName && codeName ? [{ sheetName, codeName }] : []
+      })
+    : []
+  return {
+    ...(workbookCodeName ? { workbookCodeName } : {}),
+    ...(sheetCodeNames.length > 0 ? { sheetCodeNames } : {}),
+  }
+}
+
 function addWorkbookWarnings(workbook: XLSX.WorkBook, warnings: string[], ignoredDefinedNameCount: number): void {
   if (workbook.vbaraw) {
     warnings.push('Macros were preserved but not executed during XLSX import.')
@@ -496,6 +525,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
   const importedWorkbookProperties = readImportedWorkbookProperties(data)
   const importedCalculationSettings = readImportedWorkbookCalculationSettings(data)
   const importedMacroPayload = toUint8Array(workbook.vbaraw)
+  const importedMacroCodeNames = importedMacroPayload ? readImportedMacroCodeNames(workbook) : undefined
   const importedCharts = readImportedWorkbookCharts(data, workbook.SheetNames)
   const importedPivots = readImportedWorkbookPivots(data, workbook.SheetNames)
   const importedTables = readImportedWorkbookTables(data, workbook.SheetNames)
@@ -645,7 +675,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
   const workbookMetadata: WorkbookMetadataSnapshot = {
     ...(importedWorkbookProperties ? { properties: importedWorkbookProperties } : {}),
     ...(importedCalculationSettings ? { calculationSettings: importedCalculationSettings } : {}),
-    ...(importedMacroPayload ? { macroPayloads: [createPreservedVbaProjectPayload(importedMacroPayload)] } : {}),
+    ...(importedMacroPayload ? { macroPayloads: [createPreservedVbaProjectPayload(importedMacroPayload, importedMacroCodeNames)] } : {}),
     ...(styleCatalog.size > 0 ? { styles: [...styleCatalog.values()] } : {}),
     ...(importedDefinedNames.definedNames ? { definedNames: importedDefinedNames.definedNames } : {}),
     ...(importedTables ? { tables: importedTables } : {}),

@@ -222,6 +222,8 @@ describe('EngineSnapshotService', () => {
               dataBase64: 'AQIDBA==',
               byteLength: 4,
               preservedWithoutExecution: true as const,
+              workbookCodeName: 'ThisWorkbook',
+              sheetCodeNames: [{ sheetName: 'Sheet1', codeName: 'Sheet1' }],
             },
           ],
         },

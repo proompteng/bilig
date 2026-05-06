@@ -486,7 +486,10 @@ export function createWorkbookMetadataService(metadata: WorkbookMetadataRecord):
             record.dataBase64.length === 0 ||
             !Number.isInteger(record.byteLength) ||
             record.byteLength < 0 ||
-            !record.preservedWithoutExecution
+            !record.preservedWithoutExecution ||
+            (record.workbookCodeName !== undefined && record.workbookCodeName.trim().length === 0) ||
+            (record.sheetCodeNames !== undefined &&
+              !record.sheetCodeNames.every((entry) => entry.sheetName.trim().length > 0 && entry.codeName.trim().length > 0))
           ) {
             throw new Error('Invalid workbook macro payload metadata')
           }

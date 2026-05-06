@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "suite": "import-export-fidelity",
-  "generatedAt": "2026-05-06T20:42:22.094Z",
+  "generatedAt": "2026-05-06T20:55:25.909Z",
   "source": {
     "artifactGenerator": "scripts/gen-import-export-fidelity-scorecard.ts",
     "implementationPackage": "packages/excel-import",
@@ -45,6 +45,7 @@
       "xlsx.multiSheet",
       "xlsx.macros.detectedNoExecution",
       "xlsx.macros.payloadRoundtrip",
+      "xlsx.macros.codeNameRoundtrip",
       "xlsx.unsupportedFeatureWarnings",
       "external.googleSheetsImportExportDocs",
       "external.microsoftExcelImportExportDocs",
@@ -214,9 +215,14 @@
       "direction": "import-export-import",
       "required": true,
       "passed": true,
-      "coveredFeatures": ["xlsx.macros.detectedNoExecution", "xlsx.macros.payloadRoundtrip", "xlsx.unsupportedFeatureWarnings"],
+      "coveredFeatures": [
+        "xlsx.macros.detectedNoExecution",
+        "xlsx.macros.payloadRoundtrip",
+        "xlsx.macros.codeNameRoundtrip",
+        "xlsx.unsupportedFeatureWarnings"
+      ],
       "missingFeatures": ["xlsx.macros.execution"],
-      "evidence": "Macro-enabled XLSM import preserves safe workbook cells, records a non-execution warning, exports an XLSM with the original VBA payload, and re-imports with identical macro payload metadata."
+      "evidence": "Macro-enabled XLSM import preserves safe workbook cells, records a non-execution warning, exports an XLSM with the original VBA payload and code names, and re-imports with identical macro payload metadata."
     },
     {
       "id": "xlsx-unsupported-features-warning",

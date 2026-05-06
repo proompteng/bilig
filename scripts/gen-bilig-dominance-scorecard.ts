@@ -770,6 +770,9 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           `macro-enabled workbook payload preservation covered: ${String(
             input.importExportFidelityScorecard.summary.coveredFeatures.includes('xlsx.macros.payloadRoundtrip'),
           )}`,
+          `macro-enabled workbook code-name preservation covered: ${String(
+            input.importExportFidelityScorecard.summary.coveredFeatures.includes('xlsx.macros.codeNameRoundtrip'),
+          )}`,
           `unsupported XLSX features are explicitly disclosed: ${input.importExportFidelityScorecard.summary.unsupportedFeatures.join(', ')}`,
           `external Google Sheets import/export evidence: ${input.importExportFidelityScorecard.summary.externalGoogleSheetsEvidence}`,
           `external Microsoft Excel import/export evidence: ${input.importExportFidelityScorecard.summary.externalMicrosoftExcelEvidence}`,
@@ -786,7 +789,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           'pnpm exec vitest run packages/excel-import/src/__tests__/excel-import.test.ts packages/core/src/__tests__/engine-import-export.fuzz.test.ts',
         ],
         blockers: [
-          'generated XLSX/XLSM round-trip evidence preserves macro payloads without execution, but full native Excel macro execution semantics remain intentionally unsupported',
+          'generated XLSX/XLSM round-trip evidence preserves macro payloads and code names without execution, but full native Excel macro execution semantics remain intentionally unsupported',
           ...(input.importExportFidelityScorecard.summary.externalGoogleSheetsEvidence === 'official-docs-comparison-artifact'
             ? []
             : ['no direct Sheets import/export compatibility artifact exists in the repo']),

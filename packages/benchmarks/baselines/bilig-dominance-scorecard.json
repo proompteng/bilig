@@ -224,6 +224,7 @@
       "xlsx.multiSheet",
       "xlsx.macros.detectedNoExecution",
       "xlsx.macros.payloadRoundtrip",
+      "xlsx.macros.codeNameRoundtrip",
       "xlsx.unsupportedFeatureWarnings",
       "external.googleSheetsImportExportDocs",
       "external.microsoftExcelImportExportDocs",
@@ -527,8 +528,9 @@
       "status": "partial-repo-evidence",
       "currentEvidence": [
         "generated import/export fidelity scorecard passes required cases: true",
-        "covered import/export features: csv.import, csv.preview, csv.export, csv.roundtrip, xlsx.import, xlsx.preview, xlsx.export, xlsx.roundtrip, xlsx.values, xlsx.formulas, xlsx.numberFormats, xlsx.workbookProperties, xlsx.calculationSettings, xlsx.definedNames, xlsx.comments, xlsx.styles, xlsx.conditionalFormats.roundtrip, xlsx.rowColumnDimensions, xlsx.merges, xlsx.freezePanes.roundtrip, xlsx.filters.roundtrip, xlsx.sorts.roundtrip, xlsx.sheetProtection.roundtrip, xlsx.protectedRanges.roundtrip, xlsx.dataValidations.roundtrip, xlsx.tables.roundtrip, xlsx.charts.roundtrip, xlsx.pivots.roundtrip, xlsx.multiSheet, xlsx.macros.detectedNoExecution, xlsx.macros.payloadRoundtrip, xlsx.unsupportedFeatureWarnings, external.googleSheetsImportExportDocs, external.microsoftExcelImportExportDocs, external.sheetsExcelImportExportComparison",
+        "covered import/export features: csv.import, csv.preview, csv.export, csv.roundtrip, xlsx.import, xlsx.preview, xlsx.export, xlsx.roundtrip, xlsx.values, xlsx.formulas, xlsx.numberFormats, xlsx.workbookProperties, xlsx.calculationSettings, xlsx.definedNames, xlsx.comments, xlsx.styles, xlsx.conditionalFormats.roundtrip, xlsx.rowColumnDimensions, xlsx.merges, xlsx.freezePanes.roundtrip, xlsx.filters.roundtrip, xlsx.sorts.roundtrip, xlsx.sheetProtection.roundtrip, xlsx.protectedRanges.roundtrip, xlsx.dataValidations.roundtrip, xlsx.tables.roundtrip, xlsx.charts.roundtrip, xlsx.pivots.roundtrip, xlsx.multiSheet, xlsx.macros.detectedNoExecution, xlsx.macros.payloadRoundtrip, xlsx.macros.codeNameRoundtrip, xlsx.unsupportedFeatureWarnings, external.googleSheetsImportExportDocs, external.microsoftExcelImportExportDocs, external.sheetsExcelImportExportComparison",
         "macro-enabled workbook payload preservation covered: true",
+        "macro-enabled workbook code-name preservation covered: true",
         "unsupported XLSX features are explicitly disclosed: xlsx.macros.execution",
         "external Google Sheets import/export evidence: official-docs-comparison-artifact",
         "external Microsoft Excel import/export evidence: official-docs-comparison-artifact"
@@ -545,7 +547,7 @@
         "pnpm exec vitest run packages/excel-import/src/__tests__/excel-import.test.ts packages/core/src/__tests__/engine-import-export.fuzz.test.ts"
       ],
       "blockers": [
-        "generated XLSX/XLSM round-trip evidence preserves macro payloads without execution, but full native Excel macro execution semantics remain intentionally unsupported"
+        "generated XLSX/XLSM round-trip evidence preserves macro payloads and code names without execution, but full native Excel macro execution semantics remain intentionally unsupported"
       ]
     },
     {

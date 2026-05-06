@@ -106,6 +106,7 @@ const coveredFeatureOrder = [
   'xlsx.multiSheet',
   'xlsx.macros.detectedNoExecution',
   'xlsx.macros.payloadRoundtrip',
+  'xlsx.macros.codeNameRoundtrip',
   'xlsx.unsupportedFeatureWarnings',
   ...externalImportExportComparisonCoveredFeatures,
 ] as const
@@ -444,17 +445,26 @@ function runXlsxMacroPayloadPreservedWithoutExecutionCase(): ImportExportFidelit
     safeCell?.value === 'safe macro workbook value' &&
     roundTripSafeCell?.value === 'safe macro workbook value' &&
     macroPayload?.dataBase64 === 'AQIDBA==' &&
-    roundTripMacroPayload?.dataBase64 === macroPayload.dataBase64
+    macroPayload.workbookCodeName === 'ThisWorkbook' &&
+    macroPayload.sheetCodeNames?.[0]?.codeName === 'Sheet1' &&
+    roundTripMacroPayload?.dataBase64 === macroPayload.dataBase64 &&
+    roundTripMacroPayload.workbookCodeName === macroPayload.workbookCodeName &&
+    JSON.stringify(roundTripMacroPayload.sheetCodeNames) === JSON.stringify(macroPayload.sheetCodeNames)
 
   return fidelityCase({
     id: 'xlsx-macro-payload-preserved-without-execution',
     format: 'xlsx',
     direction: 'import-export-import',
     passed,
-    coveredFeatures: ['xlsx.macros.detectedNoExecution', 'xlsx.macros.payloadRoundtrip', 'xlsx.unsupportedFeatureWarnings'],
+    coveredFeatures: [
+      'xlsx.macros.detectedNoExecution',
+      'xlsx.macros.payloadRoundtrip',
+      'xlsx.macros.codeNameRoundtrip',
+      'xlsx.unsupportedFeatureWarnings',
+    ],
     missingFeatures: [...unsupportedFeatures],
     evidence:
-      'Macro-enabled XLSM import preserves safe workbook cells, records a non-execution warning, exports an XLSM with the original VBA payload, and re-imports with identical macro payload metadata.',
+      'Macro-enabled XLSM import preserves safe workbook cells, records a non-execution warning, exports an XLSM with the original VBA payload and code names, and re-imports with identical macro payload metadata.',
   })
 }
 
@@ -475,6 +485,10 @@ function runXlsxUnsupportedFeaturesWarningCase(): ImportExportFidelityCase {
 function createMacroEnabledWorkbookBytes(): Uint8Array {
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['safe macro workbook value']]), 'Sheet1')
+  workbook.Workbook = {
+    WBProps: { CodeName: 'ThisWorkbook' },
+    Sheets: [{ name: 'Sheet1', CodeName: 'Sheet1' }],
+  }
   workbook.vbaraw = new Uint8Array([1, 2, 3, 4])
   return XLSX.write(workbook, { bookType: 'xlsm', type: 'buffer', bookVBA: true })
 }

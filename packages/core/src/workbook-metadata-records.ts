@@ -84,6 +84,8 @@ export function cloneMacroPayloadRecord(record: WorkbookMacroPayloadRecord): Wor
     dataBase64: record.dataBase64,
     byteLength: record.byteLength,
     preservedWithoutExecution: record.preservedWithoutExecution,
+    ...(record.workbookCodeName ? { workbookCodeName: record.workbookCodeName } : {}),
+    ...(record.sheetCodeNames ? { sheetCodeNames: record.sheetCodeNames.map((entry) => ({ ...entry })) } : {}),
   }
 }
 

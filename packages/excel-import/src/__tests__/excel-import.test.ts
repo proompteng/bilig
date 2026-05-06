@@ -50,6 +50,10 @@ function buildWorkbook(): Uint8Array {
 function buildMacroEnabledWorkbook(): Uint8Array {
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['safe value']]), 'Sheet1')
+  workbook.Workbook = {
+    WBProps: { CodeName: 'ThisWorkbook' },
+    Sheets: [{ name: 'Sheet1', CodeName: 'Sheet1' }],
+  }
   workbook.vbaraw = new Uint8Array([1, 2, 3, 4])
   return XLSX.write(workbook, { bookType: 'xlsm', type: 'buffer', bookVBA: true })
 }
@@ -219,6 +223,8 @@ describe('excel import', () => {
         dataBase64: 'AQIDBA==',
         byteLength: 4,
         preservedWithoutExecution: true,
+        workbookCodeName: 'ThisWorkbook',
+        sheetCodeNames: [{ sheetName: 'Sheet1', codeName: 'Sheet1' }],
       },
     ])
     expect(imported.snapshot.sheets[0]?.cells).toEqual([expect.objectContaining({ address: 'A1', value: 'safe value' })])
@@ -227,6 +233,8 @@ describe('excel import', () => {
     const roundTripped = XLSX.read(exported, { type: 'array', bookVBA: true })
     expect(Array.from(roundTripped.vbaraw ?? [])).toEqual([1, 2, 3, 4])
     expect(roundTripped.SheetNames).toEqual(['Sheet1'])
+    expect(roundTripped.Workbook?.WBProps?.CodeName).toBe('ThisWorkbook')
+    expect(roundTripped.Workbook?.Sheets?.[0]?.CodeName).toBe('Sheet1')
     expect(roundTripped.Sheets['Sheet1']?.['A1']?.v).toBe('safe value')
   })
 

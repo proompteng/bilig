@@ -45,7 +45,12 @@ describe('import/export fidelity scorecard', () => {
     expect(scorecard.cases.find((entry) => entry.id === 'xlsx-macro-payload-preserved-without-execution')).toMatchObject({
       format: 'xlsx',
       direction: 'import-export-import',
-      coveredFeatures: ['xlsx.macros.detectedNoExecution', 'xlsx.macros.payloadRoundtrip', 'xlsx.unsupportedFeatureWarnings'],
+      coveredFeatures: [
+        'xlsx.macros.detectedNoExecution',
+        'xlsx.macros.payloadRoundtrip',
+        'xlsx.macros.codeNameRoundtrip',
+        'xlsx.unsupportedFeatureWarnings',
+      ],
       missingFeatures: ['xlsx.macros.execution'],
     })
     expect(scorecard.cases.find((entry) => entry.id === 'external-sheets-excel-import-export-comparison')).toMatchObject({
@@ -89,6 +94,7 @@ describe('import/export fidelity scorecard', () => {
       'xlsx.multiSheet',
       'xlsx.macros.detectedNoExecution',
       'xlsx.macros.payloadRoundtrip',
+      'xlsx.macros.codeNameRoundtrip',
       'xlsx.unsupportedFeatureWarnings',
       'external.googleSheetsImportExportDocs',
       'external.microsoftExcelImportExportDocs',
