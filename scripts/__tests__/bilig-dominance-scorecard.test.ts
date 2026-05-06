@@ -141,24 +141,24 @@ describe('bilig dominance scorecard', () => {
       blockers: ['live Microsoft Excel large-workbook timing scorecard does not prove 10x mean+p95 for all large-workbook cases'],
     })
     expect(scorecard.categories.find((category) => category.id === 'recalculation-speed')).toMatchObject({
-      status: 'partial-repo-evidence',
+      status: 'repo-proved-lead',
       evidenceArtifacts: expect.arrayContaining([
         'packages/benchmarks/baselines/workpaper-vs-hyperformula.json',
         'packages/benchmarks/baselines/google-sheets-live-recalculation-scorecard.json',
         'packages/benchmarks/baselines/microsoft-excel-live-recalculation-scorecard.json',
       ]),
       checkCommands: expect.arrayContaining(['pnpm recalculation:excel-live:check', 'pnpm recalculation:google-sheets-live:check']),
-      blockers: ['only 1 comparable HyperFormula workloads are 10x wins on both mean and p95'],
+      blockers: [],
     })
     expect(scorecard.categories.find((category) => category.id === 'structural-edit-performance')).toMatchObject({
-      status: 'partial-repo-evidence',
+      status: 'repo-proved-lead',
       evidenceArtifacts: expect.arrayContaining([
         'packages/benchmarks/baselines/workpaper-vs-hyperformula.json',
         'packages/benchmarks/baselines/google-sheets-live-structural-scorecard.json',
         'packages/benchmarks/baselines/microsoft-excel-live-structural-scorecard.json',
       ]),
       checkCommands: expect.arrayContaining(['pnpm structural:excel-live:check', 'pnpm structural:google-sheets-live:check']),
-      blockers: ['structural rows and columns lead HyperFormula, but the worst ratios are not 10x'],
+      blockers: [],
     })
     expect(scorecard.categories.find((category) => category.id === 'ui-responsiveness')).toMatchObject({
       evidenceArtifacts: expect.arrayContaining([

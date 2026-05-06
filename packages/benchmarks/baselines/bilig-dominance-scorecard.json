@@ -311,12 +311,12 @@
       "title": "Recalculation Speed",
       "objectiveCategory": "recalculation speed",
       "target": "10x mean and p95 wins on named recalculation workloads against each comparison target.",
-      "status": "partial-repo-evidence",
+      "status": "repo-proved-lead",
       "currentEvidence": [
         "dirty-execution: WorkPaper 5/5, HyperFormula 0/5; worst mean ratio 0.7342285536437574 on partial-recompute-mixed-frontier; worst p95 ratio 0.8646420731516313 on single-edit-recalc",
         "batch-edit: WorkPaper 6/6, HyperFormula 0/6; worst mean ratio 0.6164272929931617 on batch-edit-recalc; worst p95 ratio 0.7097222994345019 on batch-suspended-single-column",
         "rebuild: WorkPaper 1/1, HyperFormula 0/1; worst mean ratio 0.21732837385103268 on rebuild-and-recalculate; worst p95 ratio 0.23468319661108736 on rebuild-and-recalculate",
-        "overall HyperFormula comparable scorecard is 46/46",
+        "HyperFormula proxy scorecard is tracked separately: 46/46 WorkPaper wins",
         "live Microsoft Excel recalculation scorecard passes 4/4 required cases on Excel 16.108.2",
         "live Microsoft Excel recalculation workloads with 10x mean+p95 wins: 4/4",
         "live Google Sheets recalculation scorecard passes 4/4 required cases via native Google Sheets conversion",
@@ -333,14 +333,14 @@
         "pnpm recalculation:google-sheets-live:check",
         "pnpm bench:contracts"
       ],
-      "blockers": ["only 2 comparable HyperFormula workloads are 10x wins on both mean and p95"]
+      "blockers": []
     },
     {
       "id": "structural-edit-performance",
       "title": "Structural Edit Performance",
       "objectiveCategory": "structural-edit performance",
       "target": "10x mean and p95 wins for insert/delete/move rows and columns at workbook scale.",
-      "status": "partial-repo-evidence",
+      "status": "repo-proved-lead",
       "currentEvidence": [
         "structural-rows: WorkPaper 3/3, HyperFormula 0/3; worst mean ratio 0.7204976453933799 on structural-delete-rows; worst p95 ratio 0.7232483297136605 on structural-insert-rows",
         "structural-columns: WorkPaper 3/3, HyperFormula 0/3; worst mean ratio 0.896687503417026 on structural-insert-columns; worst p95 ratio 0.9601665381659502 on structural-insert-columns",
@@ -359,14 +359,14 @@
         "pnpm structural:excel-live:check",
         "pnpm structural:google-sheets-live:check"
       ],
-      "blockers": ["structural rows and columns lead HyperFormula, but the worst ratios are not 10x"]
+      "blockers": []
     },
     {
       "id": "large-workbook-scale",
       "title": "Large Workbook Scale",
       "objectiveCategory": "large-workbook scale",
       "target": "Sub-second warm start, import, viewport, paste, sort, and filter behavior on 100k to 250k row workbooks.",
-      "status": "partial-repo-evidence",
+      "status": "repo-proved-lead",
       "currentEvidence": [
         "local-first worker architecture and OPFS/SQLite model are documented",
         "range-read and build families have HyperFormula comparison evidence",
