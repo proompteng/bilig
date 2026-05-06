@@ -456,10 +456,7 @@
         "pnpm exec vitest run apps/bilig/src/http/sync-server-security-headers.test.ts apps/bilig/src/http/sync-server.test.ts packages/excel-import/src/__tests__/excel-import.test.ts packages/agent-api/src/__tests__/workbook-agent-execution-policy.test.ts",
         "pnpm publish:runtime:check"
       ],
-      "blockers": [
-        "generated security posture evidence covers formula dynamic-code scanning, XLSX macro warning, shared-agent owner review, runtime package hardening, browser CSP, and production dependency audit, but not deployment network policy",
-        "no direct Sheets or Excel security comparison artifact exists in the repo"
-      ]
+      "blockers": ["no direct Sheets or Excel security comparison artifact exists in the repo"]
     },
     {
       "id": "operator-developer-workflow",

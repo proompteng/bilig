@@ -132,6 +132,20 @@ describe('bilig dominance scorecard', () => {
     )
   })
 
+  it('does not keep deployment network policy as a blocker after security evidence covers it', () => {
+    const input = buildFixtureInput()
+    input.securityPostureScorecard.summary.coveredControls = [
+      ...input.securityPostureScorecard.summary.coveredControls,
+      'deployment.runtimeNetworkPolicy',
+    ]
+    input.securityPostureScorecard.summary.uncoveredControls = ['externalSheetsExcelSecurityComparison']
+
+    const scorecard = buildBiligDominanceScorecard(input)
+    const security = scorecard.categories.find((category) => category.id === 'security')
+
+    expect(security?.blockers).toEqual(['no direct Sheets or Excel security comparison artifact exists in the repo'])
+  })
+
   it('wires the dominance check into fast CI generated checks', () => {
     const packageJson = readFileSync(resolve(repoRoot, 'package.json'), 'utf8')
     const runCi = readFileSync(resolve(repoRoot, 'scripts/run-ci.ts'), 'utf8')

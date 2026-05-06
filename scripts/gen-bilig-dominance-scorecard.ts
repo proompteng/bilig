@@ -323,6 +323,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
     input.surfaceSnapshot.classSurface.staticMethods.length +
     input.surfaceSnapshot.classSurface.instanceAccessors.length +
     input.surfaceSnapshot.classSurface.instanceMethods.length
+  const securityUncoveredControls = new Set(input.securityPostureScorecard.summary.uncoveredControls)
 
   return {
     schemaVersion: 1,
@@ -679,7 +680,11 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           'pnpm publish:runtime:check',
         ],
         blockers: [
-          'generated security posture evidence covers formula dynamic-code scanning, XLSX macro warning, shared-agent owner review, runtime package hardening, browser CSP, and production dependency audit, but not deployment network policy',
+          ...(securityUncoveredControls.has('deployment.runtimeNetworkPolicy')
+            ? [
+                'generated security posture evidence covers formula dynamic-code scanning, XLSX macro warning, shared-agent owner review, runtime package hardening, browser CSP, and production dependency audit, but not deployment network policy',
+              ]
+            : []),
           'no direct Sheets or Excel security comparison artifact exists in the repo',
         ],
       },
