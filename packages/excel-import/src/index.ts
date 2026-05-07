@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { unzipSync } from 'fflate'
+import { strFromU8, strToU8, unzipSync, zipSync, type Unzipped } from 'fflate'
 
 import { parseCsv, parseCsvCellInput } from '@bilig/core'
 import type {
@@ -58,6 +58,7 @@ export function normalizeWorkbookImportContentType(contentType: string): Workboo
 const PREVIEW_ROW_LIMIT = 8
 const PREVIEW_COLUMN_LIMIT = 6
 const largeWorkbookStyleCandidateThreshold = 100_000
+const xlsxWorksheetXmlPathPattern = /^xl\/worksheets\/[^/]+\.xml$/u
 
 export interface ImportedWorkbook {
   snapshot: WorkbookSnapshot
@@ -116,6 +117,37 @@ interface RectangularStyleRun extends HorizontalStyleRun {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function isStyleOnlyBlankCellTag(tag: string): boolean {
+  const attributes = [...tag.matchAll(/\s([A-Za-z_:][\w:.-]*)=(?:"[^"]*"|'[^']*')/gu)].map((match) => match[1])
+  const attributeNames = new Set(attributes)
+  return attributeNames.size === 2 && attributeNames.has('r') && attributeNames.has('s')
+}
+
+function stripStyleOnlyBlankCells(sheetXml: string): string {
+  return sheetXml.replace(/<c\b[^>]*\/>/gu, (tag) => (isStyleOnlyBlankCellTag(tag) ? '' : tag))
+}
+
+function stripStyleOnlyBlankCellsForSheetJs(data: Uint8Array, zip: Unzipped): Uint8Array {
+  let changed = false
+  for (const path of Object.keys(zip)) {
+    if (!xlsxWorksheetXmlPathPattern.test(path)) {
+      continue
+    }
+    const worksheetBytes = zip[path]
+    if (!worksheetBytes) {
+      continue
+    }
+    const worksheetXml = strFromU8(worksheetBytes)
+    const strippedWorksheetXml = stripStyleOnlyBlankCells(worksheetXml)
+    if (strippedWorksheetXml === worksheetXml) {
+      continue
+    }
+    zip[path] = strToU8(strippedWorksheetXml)
+    changed = true
+  }
+  return changed ? zipSync(zip) : data
 }
 
 function styleRunKey(run: Pick<RectangularStyleRun, 'styleId' | 'startColumn' | 'endColumn'>): string {
@@ -635,9 +667,9 @@ function addWorkbookWarnings(workbook: XLSX.WorkBook, warnings: string[], ignore
   }
 }
 
-function assertValidXlsxZipContainer(bytes: Uint8Array): void {
+function readValidXlsxZipContainer(bytes: Uint8Array): Unzipped {
   try {
-    unzipSync(bytes)
+    return unzipSync(bytes)
   } catch {
     throw new InvalidXlsxZipContainerError()
   }
@@ -645,8 +677,8 @@ function assertValidXlsxZipContainer(bytes: Uint8Array): void {
 
 export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): ImportedWorkbook {
   const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-  assertValidXlsxZipContainer(data)
-  const workbook = XLSX.read(data, {
+  const workbookZip = readValidXlsxZipContainer(data)
+  const workbook = XLSX.read(stripStyleOnlyBlankCellsForSheetJs(data, workbookZip), {
     type: 'array',
     cellFormula: true,
     cellNF: true,
