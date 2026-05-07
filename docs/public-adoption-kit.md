@@ -44,6 +44,8 @@ Shorter version:
   [`docs/headless-workpaper-benchmark-evidence.md`](headless-workpaper-benchmark-evidence.md)
 - Benchmark explainer:
   [`docs/what-workpaper-benchmark-proves.md`](what-workpaper-benchmark-proves.md)
+- Local benchmark walkthrough:
+  [`docs/local-workpaper-benchmark-walkthrough.md`](local-workpaper-benchmark-walkthrough.md)
 - HyperFormula comparison:
   [`docs/hyperformula-alternative-headless-workpaper.md`](hyperformula-alternative-headless-workpaper.md)
 - Technical article:
@@ -176,6 +178,11 @@ For service payloads that start as tabular data, link the
 [`CSV-shaped WorkPaper input recipe`](csv-shaped-workpaper-input-recipe.md). It
 keeps parsing deliberately small, normalizes rows into `WorkPaper.buildFromSheets()`,
 and reads formula-backed summary values.
+
+For evaluators who want to reproduce the benchmark checks locally, link the
+[`Local WorkPaper benchmark walkthrough`](local-workpaper-benchmark-walkthrough.md).
+It separates the fast artifact check from noisy local smoke runs and explains
+which scorecard fields matter in benchmark diffs.
 
 For a framework-neutral agent integration pattern, link the
 [`WorkPaper tool-calling recipe`](agent-workpaper-tool-calling-recipe.md). It

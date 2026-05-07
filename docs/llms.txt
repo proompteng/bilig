@@ -19,6 +19,7 @@ language: typescript
 - https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md
 - https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md
 - https://github.com/proompteng/bilig/blob/main/docs/agent-workpaper-tool-calling-recipe.md
+- https://github.com/proompteng/bilig/blob/main/docs/local-workpaper-benchmark-walkthrough.md
 - https://github.com/proompteng/bilig/discussions/115
 
 ## what to use it for
@@ -57,6 +58,8 @@ npm run agent:verify
   https://github.com/proompteng/bilig/blob/main/docs/hyperformula-alternative-headless-workpaper.md
 - benchmark evidence:
   https://github.com/proompteng/bilig/blob/main/docs/headless-workpaper-benchmark-evidence.md
+- local benchmark walkthrough:
+  https://github.com/proompteng/bilig/blob/main/docs/local-workpaper-benchmark-walkthrough.md
 - workbook APIs for agents:
   https://github.com/proompteng/bilig/blob/main/docs/why-agents-need-workbook-apis.md
 - node service recipe:

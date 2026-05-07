@@ -256,6 +256,11 @@ For the benchmark-focused explainer, see
 It states the `46/46` mean-win claim and the known p95 caveat without turning
 the benchmark into a blanket performance claim.
 
+For a local benchmark command walkthrough, see
+[`docs/local-workpaper-benchmark-walkthrough.md`](docs/local-workpaper-benchmark-walkthrough.md).
+It shows how to verify the checked-in artifact, run a reduced local smoke
+benchmark, and compare benchmark diffs.
+
 For a concise HyperFormula comparison and evaluation path, see
 [`docs/hyperformula-alternative-headless-workpaper.md`](docs/hyperformula-alternative-headless-workpaper.md).
 
@@ -405,6 +410,7 @@ Start here:
 - `docs/workpaper-engine-leadership-program.md`
 - `docs/headless-workpaper-benchmark-evidence.md`
 - `docs/what-workpaper-benchmark-proves.md`
+- `docs/local-workpaper-benchmark-walkthrough.md`
 - `docs/workpaper-oracle-sota-performance-design-2026-04-21.md`
 - `docs/workpaper-oracle-validated-performance-design-2026-04-26.md`
 - `docs/workpaper-oracle-benchmark-expansion-performance-plan-2026-04-28.md`

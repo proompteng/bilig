@@ -115,6 +115,8 @@ Repository:
   [`docs/xlsx-corpus-verifier-walkthrough.md`](../../docs/xlsx-corpus-verifier-walkthrough.md)
 - HyperFormula comparison:
   [`docs/hyperformula-alternative-headless-workpaper.md`](../../docs/hyperformula-alternative-headless-workpaper.md)
+- local benchmark walkthrough:
+  [`docs/local-workpaper-benchmark-walkthrough.md`](../../docs/local-workpaper-benchmark-walkthrough.md)
 - XLOOKUP exact fixture walkthrough:
   [`docs/formula-edge-xlookup-exact-fixture.md`](../../docs/formula-edge-xlookup-exact-fixture.md)
 - SUMIFS paired criteria fixture walkthrough:
@@ -462,6 +464,11 @@ pnpm publish:runtime:check
 pnpm workpaper:bench:competitive:check
 pnpm run ci
 ```
+
+For a newcomer-friendly benchmark command walkthrough, see
+[`docs/local-workpaper-benchmark-walkthrough.md`](../../docs/local-workpaper-benchmark-walkthrough.md).
+It explains the committed artifact check, a reduced local smoke run, and the
+scorecard fields to compare in benchmark diffs.
 
 Regenerate the competitive artifact only when intentionally updating benchmark
 evidence:

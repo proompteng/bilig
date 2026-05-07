@@ -200,6 +200,8 @@ Follow-up artifact if anyone engages:
   turn tabular service data into formula-backed workbook state
 - link `docs/agent-workpaper-tool-calling-recipe.md` when someone asks how an
   agent should safely read, write, verify, and persist a workbook
+- link `docs/local-workpaper-benchmark-walkthrough.md` when someone asks how to
+  reproduce or inspect the WorkPaper benchmark locally
 - link `examples/headless-workpaper` for the runnable Node example
 - point at `npm run agent:verify` inside that example when someone asks what
   writeback verification looks like
