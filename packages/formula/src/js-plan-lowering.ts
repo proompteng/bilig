@@ -211,6 +211,14 @@ function lowerApproximateVectorLookup(node: Extract<FormulaNode, { kind: 'CallEx
   return false
 }
 
+function lowerIfResultNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
+  if (node.kind === 'OmittedArgument') {
+    plan.push({ opcode: 'push-number', value: 0 })
+    return
+  }
+  lowerNode(node, plan)
+}
+
 function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
   switch (node.kind) {
     case 'NumberLiteral':
@@ -324,10 +332,10 @@ function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
       if (callee === 'IF' && node.args.length === 3) {
         lowerNode(node.args[0]!, plan)
         const jumpIfFalseIndex = plan.push({ opcode: 'jump-if-false', target: -1 }) - 1
-        lowerNode(node.args[1]!, plan)
+        lowerIfResultNode(node.args[1]!, plan)
         const jumpIndex = plan.push({ opcode: 'jump', target: -1 }) - 1
         const falseTarget = plan.length
-        lowerNode(node.args[2]!, plan)
+        lowerIfResultNode(node.args[2]!, plan)
         const endTarget = plan.length
         plan[jumpIfFalseIndex] = { opcode: 'jump-if-false', target: falseTarget }
         plan[jumpIndex] = { opcode: 'jump', target: endTarget }
