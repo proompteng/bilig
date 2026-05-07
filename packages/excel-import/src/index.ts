@@ -9,6 +9,7 @@ import type {
   CellStyleAlignmentSnapshot,
   CellStyleBordersSnapshot,
   CellStyleFontSnapshot,
+  CellStyleProtectionSnapshot,
   CellStyleRecord,
   CellVerticalAlignment,
   SheetStyleRangeSnapshot,
@@ -533,6 +534,17 @@ function readImportedBorderStyle(style: Record<string, unknown>): CellStyleBorde
   return Object.keys(borders).length > 0 ? borders : undefined
 }
 
+function readImportedProtectionStyle(style: Record<string, unknown>): CellStyleProtectionSnapshot | undefined {
+  const protectionRecord = isRecord(style['protection']) ? style['protection'] : null
+  if (!protectionRecord) {
+    return undefined
+  }
+  return {
+    ...(typeof protectionRecord['locked'] === 'boolean' ? { locked: protectionRecord['locked'] } : {}),
+    ...(typeof protectionRecord['hidden'] === 'boolean' ? { hidden: protectionRecord['hidden'] } : {}),
+  }
+}
+
 export function readImportedXlsxCellStyle(value: unknown): Omit<CellStyleRecord, 'id'> | null {
   if (!isRecord(value)) {
     return null
@@ -541,11 +553,13 @@ export function readImportedXlsxCellStyle(value: unknown): Omit<CellStyleRecord,
   const font = readImportedFontStyle(value)
   const alignment = readImportedAlignmentStyle(value)
   const borders = readImportedBorderStyle(value)
+  const protection = readImportedProtectionStyle(value)
   const style: Omit<CellStyleRecord, 'id'> = {
     ...(fill ? { fill } : {}),
     ...(font ? { font } : {}),
     ...(alignment ? { alignment } : {}),
     ...(borders ? { borders } : {}),
+    ...(protection !== undefined ? { protection } : {}),
   }
   return Object.keys(style).length > 0 ? style : null
 }

@@ -386,12 +386,18 @@ export interface CellStyleBordersSnapshot {
   left?: CellBorderSideSnapshot
 }
 
+export interface CellStyleProtectionSnapshot {
+  locked?: boolean
+  hidden?: boolean
+}
+
 export interface CellStyleRecord {
   id: string
   fill?: CellStyleFillSnapshot
   font?: CellStyleFontSnapshot
   alignment?: CellStyleAlignmentSnapshot
   borders?: CellStyleBordersSnapshot
+  protection?: CellStyleProtectionSnapshot
 }
 
 export interface CellStyleFillPatch {

@@ -123,6 +123,7 @@ export function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
       ...(style.font ? { font: style.font } : {}),
       ...(style.alignment ? { alignment: style.alignment } : {}),
       ...(style.borders ? { borders: style.borders } : {}),
+      ...(style.protection ? { protection: style.protection } : {}),
     }
   }
   return {

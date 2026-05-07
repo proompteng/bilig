@@ -49,6 +49,7 @@ describe('binary protocol', () => {
                 id: 'style-a',
                 fill: { backgroundColor: '#ff0000' },
                 font: { family: 'IBM Plex Sans' },
+                protection: { locked: false, hidden: true },
               },
             },
             {
@@ -81,6 +82,7 @@ describe('binary protocol', () => {
           id: 'style-a',
           fill: { backgroundColor: '#ff0000' },
           font: { family: 'IBM Plex Sans' },
+          protection: { locked: false, hidden: true },
         },
       },
       {

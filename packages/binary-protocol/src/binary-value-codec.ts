@@ -281,6 +281,17 @@ export function encodeCellStyleRecord(writer: BinaryWriter, style: CellStyleReco
     encodeBorderSide(writer, style.borders.bottom)
     encodeBorderSide(writer, style.borders.left)
   }
+  writer.bool(style.protection !== undefined)
+  if (style.protection) {
+    writer.bool(style.protection.locked !== undefined)
+    if (style.protection.locked !== undefined) {
+      writer.bool(style.protection.locked)
+    }
+    writer.bool(style.protection.hidden !== undefined)
+    if (style.protection.hidden !== undefined) {
+      writer.bool(style.protection.hidden)
+    }
+  }
 }
 
 export function encodeCellNumberFormatRecord(writer: BinaryWriter, format: CellNumberFormatRecord): void {
@@ -360,6 +371,16 @@ export function decodeCellStyleRecord(reader: BinaryReader): CellStyleRecord {
       ...(bottom ? { bottom } : {}),
       ...(left ? { left } : {}),
     }
+  }
+  if (reader.bool()) {
+    const protection: NonNullable<CellStyleRecord['protection']> = {}
+    if (reader.bool()) {
+      protection.locked = reader.bool()
+    }
+    if (reader.bool()) {
+      protection.hidden = reader.bool()
+    }
+    style.protection = protection
   }
   return style
 }

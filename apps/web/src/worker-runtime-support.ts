@@ -137,6 +137,7 @@ export function styleSignature(style: CellStyleRecord): string {
   const font = style.font
   const alignment = style.alignment
   const borders = style.borders
+  const protection = style.protection
   return [
     fill,
     font?.family ?? '',
@@ -153,6 +154,8 @@ export function styleSignature(style: CellStyleRecord): string {
     borders?.right ? `${borders.right.style}:${borders.right.weight}:${borders.right.color}` : '',
     borders?.bottom ? `${borders.bottom.style}:${borders.bottom.weight}:${borders.bottom.color}` : '',
     borders?.left ? `${borders.left.style}:${borders.left.weight}:${borders.left.color}` : '',
+    protection?.locked === undefined ? '' : protection.locked ? 1 : 0,
+    protection?.hidden === undefined ? '' : protection.hidden ? 1 : 0,
   ].join('|')
 }
 

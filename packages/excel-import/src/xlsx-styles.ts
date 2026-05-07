@@ -11,6 +11,7 @@ import type {
   CellStyleBordersSnapshot,
   CellStyleFillSnapshot,
   CellStyleFontSnapshot,
+  CellStyleProtectionSnapshot,
   CellStyleRecord,
   CellVerticalAlignment,
   WorkbookAxisEntrySnapshot,
@@ -284,6 +285,28 @@ function readAlignment(alignment: unknown): CellStyleAlignmentSnapshot | undefin
   return Object.keys(output).length > 0 ? output : undefined
 }
 
+function readBooleanAttribute(value: unknown): boolean | undefined {
+  if (value === true || value === '1' || (typeof value === 'string' && value.toLowerCase() === 'true')) {
+    return true
+  }
+  if (value === false || value === '0' || (typeof value === 'string' && value.toLowerCase() === 'false')) {
+    return false
+  }
+  return undefined
+}
+
+function readProtection(protection: unknown): CellStyleProtectionSnapshot | undefined {
+  if (!isRecord(protection)) {
+    return undefined
+  }
+  const locked = readBooleanAttribute(protection['locked'])
+  const hidden = readBooleanAttribute(protection['hidden'])
+  return {
+    ...(locked !== undefined ? { locked } : {}),
+    ...(hidden !== undefined ? { hidden } : {}),
+  }
+}
+
 function parseWorkbookStyles(stylesXml: string): Map<number, ImportedCellStyle> {
   const parsed: unknown = xmlParser.parse(stylesXml)
   const styleSheet = recordChild(parsed, 'styleSheet')
@@ -308,11 +331,13 @@ function parseWorkbookStyles(stylesXml: string): Map<number, ImportedCellStyle> 
     const fill = fillId !== null ? fills[fillId] : undefined
     const bordersValue = borderId !== null ? borders[borderId] : undefined
     const alignment = readAlignment(entry['alignment'])
+    const protection = entry['applyProtection'] === '1' ? (readProtection(entry['protection']) ?? {}) : readProtection(entry['protection'])
     const style: ImportedCellStyle = {
       ...(entry['applyFill'] === '1' && fill ? { fill } : {}),
       ...(entry['applyFont'] === '1' && font ? { font } : {}),
       ...(entry['applyAlignment'] === '1' && alignment ? { alignment } : {}),
       ...(entry['applyBorder'] === '1' && bordersValue ? { borders: bordersValue } : {}),
+      ...(protection !== undefined ? { protection } : {}),
     }
     if (Object.keys(style).length > 0) {
       styles.set(index, style)

@@ -19,6 +19,9 @@ export function cloneCellStyleRecord(style: CellStyleRecord): CellStyleRecord {
       ...(style.borders.left ? { left: { ...style.borders.left } } : {}),
     }
   }
+  if (style.protection !== undefined) {
+    cloned.protection = { ...style.protection }
+  }
   return cloned
 }
 
@@ -214,6 +217,9 @@ function cloneStyleWithoutId(style: Omit<CellStyleRecord, 'id'>): Omit<CellStyle
       ...(style.borders.bottom ? { bottom: { ...style.borders.bottom } } : {}),
       ...(style.borders.left ? { left: { ...style.borders.left } } : {}),
     }
+  }
+  if (style.protection !== undefined) {
+    cloned.protection = { ...style.protection }
   }
   return cloned
 }

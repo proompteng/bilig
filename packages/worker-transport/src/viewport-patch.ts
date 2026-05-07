@@ -387,6 +387,12 @@ function encodeCellStyleRecord(writer: BinaryWriter, style: CellStyleRecord): vo
     encodeBorderSide(writer, style.borders.bottom)
     encodeBorderSide(writer, style.borders.left)
   }
+
+  writer.u8(style.protection ? 1 : 0)
+  if (style.protection) {
+    encodeOptionalBoolean(writer, style.protection.locked)
+    encodeOptionalBoolean(writer, style.protection.hidden)
+  }
 }
 
 function decodeCellStyleRecord(reader: BinaryReader): CellStyleRecord {
@@ -436,6 +442,15 @@ function decodeCellStyleRecord(reader: BinaryReader): CellStyleRecord {
       ...(right ? { right } : {}),
       ...(bottom ? { bottom } : {}),
       ...(left ? { left } : {}),
+    }
+  }
+
+  if (reader.u8() === 1) {
+    const locked = decodeOptionalBoolean(reader)
+    const hidden = decodeOptionalBoolean(reader)
+    style.protection = {
+      ...(locked !== undefined ? { locked } : {}),
+      ...(hidden !== undefined ? { hidden } : {}),
     }
   }
 

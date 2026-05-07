@@ -463,6 +463,17 @@ function fastStyleAlignmentXml(style: CellStyleRecord): string {
   return attributes.length > 0 ? `<alignment ${attributes.join(' ')}/>` : ''
 }
 
+function fastStyleProtectionXml(style: CellStyleRecord): string {
+  if (style.protection === undefined) {
+    return ''
+  }
+  const attributes = [
+    style.protection.locked !== undefined ? `locked="${style.protection.locked ? '1' : '0'}"` : null,
+    style.protection.hidden !== undefined ? `hidden="${style.protection.hidden ? '1' : '0'}"` : null,
+  ].filter((entry): entry is string => Boolean(entry))
+  return attributes.length > 0 ? `<protection ${attributes.join(' ')}/>` : '<protection/>'
+}
+
 function appendXmlChildren(
   xml: string,
   elementName: 'fonts' | 'fills' | 'borders',
@@ -528,6 +539,8 @@ function appendFastStyleXfs(
     const fillId = fillXml ? nextFillIndex++ : 0
     const borderId = borderXml ? nextBorderIndex++ : 0
     const alignmentXml = fastStyleAlignmentXml(style)
+    const protectionXml = fastStyleProtectionXml(style)
+    const childXml = `${alignmentXml}${protectionXml}`
     const attributes = [
       'numFmtId="0"',
       `fontId="${String(fontId)}"`,
@@ -538,9 +551,10 @@ function appendFastStyleXfs(
       fillXml ? 'applyFill="1"' : null,
       borderXml ? 'applyBorder="1"' : null,
       alignmentXml ? 'applyAlignment="1"' : null,
+      protectionXml ? 'applyProtection="1"' : null,
     ].filter((entry): entry is string => Boolean(entry))
     styleIndexById.set(style.id, baseStyleCount + styleXfs.length)
-    styleXfs.push(alignmentXml ? `<xf ${attributes.join(' ')}>${alignmentXml}</xf>` : `<xf ${attributes.join(' ')}/>`)
+    styleXfs.push(childXml ? `<xf ${attributes.join(' ')}>${childXml}</xf>` : `<xf ${attributes.join(' ')}/>`)
   })
 
   return {
@@ -932,8 +946,5 @@ export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
     snapshot,
     exportSheetNamesByOriginalName,
   )
-  return preserveSnapshotNumberFormats(
-    useLargeSimpleFastPath ? preserveSnapshotStyles(enrichedBytes, snapshot) : enrichedBytes,
-    exportSheetFormats,
-  )
+  return preserveSnapshotNumberFormats(preserveSnapshotStyles(enrichedBytes, snapshot), exportSheetFormats)
 }

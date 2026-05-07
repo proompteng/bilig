@@ -54,6 +54,7 @@ function createPatch(): ViewportPatch {
           top: { style: 'solid', weight: 'thin', color: '#dadce0' },
           bottom: { style: 'double', weight: 'medium', color: '#1f1f1f' },
         },
+        protection: { locked: false, hidden: true },
       },
     ],
     cells: [

@@ -140,6 +140,14 @@ function isCellStyleRecord(value: unknown): boolean {
     return false
   }
 
+  const protection = value['protection']
+  if (
+    protection !== undefined &&
+    (!isRecord(protection) || !isOptionalBoolean(protection['locked']) || !isOptionalBoolean(protection['hidden']))
+  ) {
+    return false
+  }
+
   return true
 }
 

@@ -32,6 +32,10 @@ describe('workbook store records', () => {
         top: { color: '#f0f', style: 'solid', weight: 'thin' },
         right: { color: '#112233', style: 'solid' },
       },
+      protection: {
+        locked: false,
+        hidden: true,
+      },
     }
 
     expect(normalizeCellStyleRecord(style)).toEqual({
@@ -52,6 +56,10 @@ describe('workbook store records', () => {
       },
       borders: {
         top: { color: '#ff00ff', style: 'solid', weight: 'thin' },
+      },
+      protection: {
+        locked: false,
+        hidden: true,
       },
     })
   })

@@ -66,6 +66,12 @@ export function normalizeCellStyleRecord(style: CellStyleRecord): WorkbookCellSt
   if (borders) {
     record.borders = borders
   }
+  if (style.protection !== undefined) {
+    record.protection = {
+      ...(style.protection.locked !== undefined ? { locked: style.protection.locked } : {}),
+      ...(style.protection.hidden !== undefined ? { hidden: style.protection.hidden } : {}),
+    }
+  }
   return record
 }
 
@@ -88,6 +94,7 @@ export function cellStyleKey(style: CellStyleRecord): string {
     font: style.font ?? null,
     alignment: style.alignment ?? null,
     borders: style.borders ?? null,
+    protection: style.protection ?? null,
   })
 }
 

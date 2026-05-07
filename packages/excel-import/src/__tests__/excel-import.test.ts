@@ -447,6 +447,10 @@ describe('excel import', () => {
             color: { rgb: 'FF000000' },
           },
         },
+        protection: {
+          locked: false,
+          hidden: true,
+        },
       }),
     ).toEqual({
       fill: { backgroundColor: '#1d3989' },
@@ -470,6 +474,10 @@ describe('excel import', () => {
           weight: 'thin',
           color: '#000000',
         },
+      },
+      protection: {
+        locked: false,
+        hidden: true,
       },
     })
   })
@@ -528,6 +536,69 @@ describe('excel import', () => {
       fill: { backgroundColor: '#1d3989' },
       font: { bold: true, color: '#ffffff' },
     })
+  })
+
+  it('preserves cell-level protection style metadata across XLSX export round trips', () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: {
+        name: 'Cell protection styles',
+        metadata: {
+          styles: [
+            {
+              id: 'unlocked-input',
+              fill: { backgroundColor: '#fff2cc' },
+              protection: { locked: false },
+            },
+            {
+              id: 'hidden-formula',
+              font: { color: '#000000' },
+              protection: { locked: true, hidden: true },
+            },
+          ],
+        },
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'Protected',
+          order: 0,
+          metadata: {
+            sheetProtection: { sheetName: 'Protected' },
+            styleRanges: [
+              { range: { sheetName: 'Protected', startAddress: 'B2', endAddress: 'B3' }, styleId: 'unlocked-input' },
+              { range: { sheetName: 'Protected', startAddress: 'C2', endAddress: 'C3' }, styleId: 'hidden-formula' },
+            ],
+          },
+          cells: [
+            { address: 'B2', value: 10 },
+            { address: 'B3', value: 25 },
+            { address: 'C2', formula: 'B2*2' },
+            { address: 'C3', formula: 'B3*2' },
+          ],
+        },
+      ],
+    }
+
+    const exported = exportXlsx(snapshot)
+    const zip = unzipSync(exported)
+    const stylesXml = strFromU8(zip['xl/styles.xml'] ?? new Uint8Array())
+    const sheetXml = strFromU8(zip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())
+    const imported = importXlsx(exported, 'cell-protection-style-roundtrip.xlsx')
+    const stylesById = new Map((imported.snapshot.workbook.metadata?.styles ?? []).map((style) => [style.id, style]))
+    const styleForRange = (startAddress: string, endAddress: string) => {
+      const styleRange = imported.snapshot.sheets[0]?.metadata?.styleRanges?.find(
+        (entry) => entry.range.startAddress === startAddress && entry.range.endAddress === endAddress,
+      )
+      return styleRange ? stylesById.get(styleRange.styleId) : undefined
+    }
+
+    expect(stylesXml).toContain('applyProtection="1"')
+    expect(stylesXml).toContain('<protection locked="0"/>')
+    expect(stylesXml).toContain('<protection locked="1" hidden="1"/>')
+    expect(sheetXml).toContain('<sheetProtection sheet="1"/>')
+    expect(styleForRange('B2', 'B3')?.protection).toEqual({ locked: false })
+    expect(styleForRange('C2', 'C3')?.protection).toEqual({ locked: true, hidden: true })
   })
 
   it('imports multiple generic workbook shapes without file-specific dispatch', () => {
@@ -1166,6 +1237,7 @@ function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
       ...(style.font ? { font: style.font } : {}),
       ...(style.alignment ? { alignment: style.alignment } : {}),
       ...(style.borders ? { borders: style.borders } : {}),
+      ...(style.protection ? { protection: style.protection } : {}),
     }
   }
   return {
