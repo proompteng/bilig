@@ -435,6 +435,7 @@ export function isWasmSafeBuiltinArgs(callee: string, args: readonly FormulaNode
         isScalarArg(args[0]!) &&
         isCellVectorArg(args[1]!) &&
         isCellVectorArg(args[2]!) &&
+        (args.length < 5 || args[4]?.kind === 'OmittedArgument' || isIntegerLiteral(args[4], 0)) &&
         args.slice(3).every((arg) => isScalarArg(arg))
       )
     case 'INDEX':

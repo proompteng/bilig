@@ -168,6 +168,7 @@ function createLookupBuiltinMap(options: LookupBuiltinResolverOptions = {}): Rec
   const lookupReferenceBuiltins = createLookupReferenceBuiltins({
     errorValue,
     numberResult,
+    arrayResult,
     isError,
     isRangeArg,
     toBoolean,

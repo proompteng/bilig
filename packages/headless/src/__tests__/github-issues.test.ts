@@ -806,4 +806,62 @@ describe('GitHub issue reductions', () => {
 
     expectNumber(cellValue(workbook, 'Sheet1', 2, 5), 19)
   })
+
+  it('resolves issue #116 advanced XLOOKUP modes and spill returns', () => {
+    const rows = Array.from({ length: 20 }, () => Array.from<TestCell>({ length: 22 }).fill(null))
+
+    rows[0][0] = '=XLOOKUP(72,G1:G5,H1:H5,,-1)'
+    ;[
+      [50, 'D'],
+      [60, 'C'],
+      [70, 'B'],
+      [80, 'A'],
+      [90, 'S'],
+    ].forEach(([score, grade], index) => {
+      rows[index][6] = score
+      rows[index][7] = grade
+    })
+
+    rows[2][0] = '=XLOOKUP("ID2",O1:O3,P1:R3)'
+    rows[0][14] = 'ID1'
+    rows[1][14] = 'ID2'
+    rows[2][14] = 'ID3'
+    rows[0][15] = 'Alex'
+    rows[0][16] = 'North'
+    rows[0][17] = 10
+    rows[1][15] = 'James'
+    rows[1][16] = 'South'
+    rows[1][17] = 20
+    rows[2][15] = 'Mina'
+    rows[2][16] = 'West'
+    rows[2][17] = 30
+
+    rows[4][0] = '=XLOOKUP(T1:T3,J1:M1,J2:M2)'
+    rows[0][19] = 'Q2'
+    rows[1][19] = 'Q4'
+    rows[2][19] = 'Q1'
+    rows[0][9] = 'Q1'
+    rows[0][10] = 'Q2'
+    rows[0][11] = 'Q3'
+    rows[0][12] = 'Q4'
+    rows[1][9] = 'Keyboard'
+    rows[1][10] = 'Printer'
+    rows[1][11] = 'Monitor'
+    rows[1][12] = 'Dock'
+
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Sheet1: rows,
+      },
+      { maxRows: 40, maxColumns: 24, useColumnIndex: true },
+    )
+
+    expectString(cellValue(workbook, 'Sheet1', 0, 0), 'B')
+    expectString(cellValue(workbook, 'Sheet1', 2, 0), 'James')
+    expectString(cellValue(workbook, 'Sheet1', 2, 1), 'South')
+    expectNumber(cellValue(workbook, 'Sheet1', 2, 2), 20)
+    expectString(cellValue(workbook, 'Sheet1', 4, 0), 'Printer')
+    expectString(cellValue(workbook, 'Sheet1', 5, 0), 'Dock')
+    expectString(cellValue(workbook, 'Sheet1', 6, 0), 'Keyboard')
+  })
 })

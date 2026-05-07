@@ -535,6 +535,53 @@ describe('lookup builtins', () => {
     ).toEqual(num(20))
   })
 
+  it('supports advanced XLOOKUP match and spill shapes', () => {
+    const XLOOKUP = getLookupBuiltin('XLOOKUP')!
+
+    expect(
+      XLOOKUP(
+        num(72),
+        cellRange([num(50), num(60), num(70), num(80), num(90)], 5, 1),
+        cellRange([text('D'), text('C'), text('B'), text('A'), text('S')], 5, 1),
+        undefined,
+        num(-1),
+      ),
+    ).toEqual(text('B'))
+    expect(
+      XLOOKUP(
+        num(72),
+        cellRange([num(50), num(60), num(70), num(80), num(90)], 5, 1),
+        cellRange([text('D'), text('C'), text('B'), text('A'), text('S')], 5, 1),
+        undefined,
+        num(1),
+      ),
+    ).toEqual(text('A'))
+
+    expect(
+      XLOOKUP(
+        text('ID2'),
+        cellRange([text('ID1'), text('ID2'), text('ID3')], 3, 1),
+        cellRange([text('Alex'), text('North'), num(10), text('James'), text('South'), num(20), text('Mina'), text('West'), num(30)], 3, 3),
+      ),
+    ).toEqual({ kind: 'array', rows: 1, cols: 3, values: [text('James'), text('South'), num(20)] })
+
+    expect(
+      XLOOKUP(
+        cellRange([text('Q2'), text('Q4'), text('missing')], 3, 1),
+        cellRange([text('Q1'), text('Q2'), text('Q3'), text('Q4')], 1, 4),
+        cellRange([text('Keyboard'), text('Printer'), text('Monitor'), text('Dock')], 1, 4),
+        text('fallback'),
+      ),
+    ).toEqual({ kind: 'array', rows: 3, cols: 1, values: [text('Printer'), text('Dock'), text('fallback')] })
+    expect(
+      XLOOKUP(
+        cellRange([text('Q2'), err(ErrorCode.Ref)], 2, 1),
+        cellRange([text('Q1'), text('Q2'), text('Q3'), text('Q4')], 1, 4),
+        cellRange([text('Keyboard'), text('Printer'), text('Monitor'), text('Dock')], 1, 4),
+      ),
+    ).toEqual({ kind: 'array', rows: 2, cols: 1, values: [text('Printer'), err(ErrorCode.Ref)] })
+  })
+
   it('covers conditional aggregate validation and error branches', () => {
     const COUNTIF = getLookupBuiltin('COUNTIF')!
     const COUNTIFS = getLookupBuiltin('COUNTIFS')!
@@ -1307,8 +1354,8 @@ describe('lookup builtins', () => {
     expect(HLOOKUP(num(2), cellRange([text('x'), num(1), num(10), num(20)], 2, 2), num(2))).toEqual(err(ErrorCode.Value))
 
     expect(XLOOKUP(text('pear'), duplicateLookup, duplicateReturn, text('fallback'), num(0), num(-1))).toEqual(num(30))
-    expect(XLOOKUP(text('pear'), duplicateLookup, duplicateReturn, text('fallback'), num(1), num(1))).toEqual(err(ErrorCode.Value))
-    expect(XLOOKUP(cellRange([text('pear')], 1, 1), duplicateLookup, duplicateReturn)).toEqual(err(ErrorCode.Value))
+    expect(XLOOKUP(text('pear'), duplicateLookup, duplicateReturn, text('fallback'), num(1), num(1))).toEqual(num(10))
+    expect(XLOOKUP(cellRange([text('pear')], 1, 1), duplicateLookup, duplicateReturn)).toEqual(num(10))
     expect(XLOOKUP(text('pear'), duplicateLookup, cellRange([num(1), num(2)], 2, 1))).toEqual(err(ErrorCode.Value))
     expect(XLOOKUP(err(ErrorCode.Ref), duplicateLookup, duplicateReturn)).toEqual(err(ErrorCode.Ref))
     expect(XLOOKUP(text('pear'), duplicateLookup, duplicateReturn, text('fallback'), err(ErrorCode.Name))).toEqual(err(ErrorCode.Name))
