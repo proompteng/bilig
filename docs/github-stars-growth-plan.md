@@ -30,6 +30,12 @@ Verified on 2026-05-07:
   - `packages/headless/README.md`
   - `docs/public-adoption-kit.md`
   - `docs/launch-post-headless-workpaper.md`
+  - `docs/why-agents-need-workbook-apis.md`
+  - `docs/persisting-formula-backed-workpaper-documents-in-node.md`
+  - `docs/what-workpaper-benchmark-proves.md`
+  - `docs/building-a-revenue-model-with-headless-workpaper.md`
+  - `examples/headless-workpaper/revenue-scenarios.mjs`
+  - `docs/starter-issues.md`
   - `docs/assets/github-social-preview.png`
   - `CONTRIBUTING.md`
   - `CODE_OF_CONDUCT.md`
@@ -75,6 +81,17 @@ Case studies and founder writeups are also consistent:
   Official X guidance treats duplicated unsolicited replies as spam behavior,
   and its automation rules prohibit using non-API website scripting or keyword
   searches to spray automated replies.
+
+GitHub's 2026 maintainer guidance adds one important constraint: growth is only
+useful if the project can absorb it. AI-assisted contributions can increase
+issue and pull-request volume without increasing quality, so the growth loop
+needs stronger docs, scoped issues, runnable examples, and fast maintainer
+triage before a major launch spike.
+
+The 2025 Hacker News launch-diffusion study is directionally useful for launch
+planning. It reports large average star gains after HN exposure for AI-tool
+repos, but it also says timing and launch fit matter. Treat HN as one
+distribution event in a repeatable proof loop, not as the whole plan.
 
 Do not buy stars or run fake-star exchanges. Recent research found increasing
 fake-star campaigns, and GitHub Trending appears to filter out most superficial
@@ -197,6 +214,19 @@ Daily loop:
 5. If the same question appears twice, convert the answer into a doc, example,
    issue, or benchmark note before replying again.
 
+Tone rule:
+
+- lowercase, direct, and slightly informal
+- one concrete idea per reply
+- no "check out my repo" unless the link answers the exact post
+- no duplicated reply body across multiple posts
+- no pretending to be neutral when the reply is from the maintainer
+
+Sam Altman-style lower-case tone works because it reads casual and compressed:
+short sentences, minimal punctuation, and little launch-copy polish. Use that
+shape, but keep the substance specific to `bilig`; do not impersonate anyone or
+turn replies into vague hype.
+
 Good reply shapes:
 
 > the hard part is not generating a formula once. it is preserving workbook
@@ -259,15 +289,17 @@ audience, or product friction.
 
 ## Immediate Next Actions
 
-1. Upload `docs/assets/github-social-preview.png` as the GitHub social preview
-   image.
-2. Create `3` to `5` scoped public `good first issue` tickets.
-3. Publish the first launch post using `docs/launch-post-headless-workpaper.md`.
-4. Share the post in one high-fit channel at a time and respond to every serious
-   comment.
-5. Convert repeated questions into README, package README, or example updates.
-6. After the first organic star movement, add a Star History chart near the end
-   of the README.
+1. Post one lower-case X update for the revenue-model article and runnable
+   `revenue-scenarios.mjs` example.
+2. Manually reply to at most `2` high-fit X posts per day. Start with the idea;
+   add a link only when it materially helps the thread.
+3. Respond to serious Hacker News and GitHub Discussion comments within the same
+   day, then convert repeated feedback into docs or examples.
+4. Ship the next proof article: `Where bilig is not Excel-compatible yet`.
+5. Track GitHub stars, npm downloads, GitHub traffic referrers, and issue
+   quality every week.
+6. Add a Star History chart only after there is enough organic movement for the
+   graph to communicate momentum instead of early-stage emptiness.
 
 ## Sources
 
@@ -285,6 +317,8 @@ audience, or product friction.
   <https://opensource.guide/building-community/>
 - GitHub Blog, building an open source community:
   <https://github.blog/open-source/maintainers/four-steps-toward-building-an-open-source-community/>
+- GitHub Blog, open source in 2026:
+  <https://github.blog/open-source/maintainers/what-to-expect-for-open-source-in-2026/>
 - X rules and best practices for replies:
   <https://help.x.com/en/rules-and-policies/x-rules-and-best-practices>
 - X automation rules:
@@ -299,3 +333,5 @@ audience, or product friction.
   <https://arxiv.org/abs/2511.04453>
 - Fake-star campaign study:
   <https://cmustrudel.github.io/papers/icse2026fakestars.pdf>
+- Fortune coverage of Sam Altman's lower-case social style:
+  <https://fortune.com/2026/01/29/openai-ceo-sam-altman-types-all-lowercase-like-gen-z-but-could-be-career-chatgpt-boss/>
