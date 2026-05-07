@@ -1,6 +1,7 @@
-import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
-import { parseCellAddress, parseRangeAddress } from './addressing.js'
+import { ErrorCode, MAX_COLS, MAX_ROWS, ValueTag, type CellValue } from '@bilig/protocol'
+import { formatAddress, parseCellAddress, parseRangeAddress } from './addressing.js'
 import { getBuiltin } from './builtins.js'
+import { getLookupBuiltin, type RangeBuiltinArgument } from './builtins/lookup.js'
 import { evaluateGroupBy, evaluatePivotBy } from './group-pivot-evaluator.js'
 import { isArrayValue } from './runtime-values.js'
 import type { EvaluationContext, ReferenceOperand, StackValue } from './js-evaluator.js'
@@ -34,6 +35,241 @@ interface WorkbookSpecialCallDeps {
 
 function valueError(): CellValue {
   return { tag: ValueTag.Error, code: ErrorCode.Value }
+}
+
+type WholeAxisRefKind = 'rows' | 'cols'
+type WholeAxisRangeAddress = Extract<ReturnType<typeof parseRangeAddress>, { kind: WholeAxisRefKind }>
+
+interface WholeAxisReference {
+  sheetName: string
+  start: string
+  end: string
+  refKind: WholeAxisRefKind
+  parsed: WholeAxisRangeAddress
+}
+
+type ScalarArgumentResult = { kind: 'ok'; value: CellValue | undefined } | { kind: 'error'; value: CellValue }
+type IntegerArgumentResult = { kind: 'omitted' } | { kind: 'ok'; value: number } | { kind: 'error'; value: CellValue }
+
+function isWholeAxisRefKind(refKind: 'cells' | 'rows' | 'cols' | undefined): refKind is WholeAxisRefKind {
+  return refKind === 'rows' || refKind === 'cols'
+}
+
+function wholeAxisReferenceFromArg(
+  value: StackValue | undefined,
+  ref: ReferenceOperand | undefined,
+  context: EvaluationContext,
+  deps: WorkbookSpecialCallDeps,
+): WholeAxisReference | undefined {
+  const refKind = isWholeAxisRefKind(ref?.refKind)
+    ? ref.refKind
+    : value?.kind === 'range' && isWholeAxisRefKind(value.refKind)
+      ? value.refKind
+      : undefined
+  if (!refKind) {
+    return undefined
+  }
+
+  const start = (ref?.kind === 'range' ? ref.start : undefined) ?? (value?.kind === 'range' ? value.start : undefined)
+  const end = (ref?.kind === 'range' ? ref.end : undefined) ?? (value?.kind === 'range' ? value.end : undefined)
+  if (!start || !end) {
+    return undefined
+  }
+
+  const sheetName = deps.referenceSheetName(ref, context) ?? (value?.kind === 'range' ? value.sheetName : undefined) ?? context.sheetName
+  try {
+    const parsed = parseRangeAddress(`${start}:${end}`, sheetName)
+    if (parsed.kind !== refKind) {
+      return undefined
+    }
+    return {
+      sheetName,
+      start,
+      end,
+      refKind,
+      parsed,
+    }
+  } catch {
+    return undefined
+  }
+}
+
+function scalarLookupArgument(value: StackValue | undefined, deps: WorkbookSpecialCallDeps): ScalarArgumentResult {
+  if (!value || (value.kind === 'omitted' && value.source === 'argument')) {
+    return { kind: 'ok', value: undefined }
+  }
+  const scalar = deps.isSingleCellValue(value)
+  if (!scalar) {
+    return { kind: 'error', value: valueError() }
+  }
+  return { kind: 'ok', value: scalar }
+}
+
+function integerIndexArgument(value: StackValue | undefined, deps: WorkbookSpecialCallDeps): IntegerArgumentResult {
+  if (!value || (value.kind === 'omitted' && value.source === 'argument')) {
+    return { kind: 'omitted' }
+  }
+  const scalar = deps.isSingleCellValue(value)
+  if (!scalar) {
+    return { kind: 'error', value: valueError() }
+  }
+  if (scalar.tag === ValueTag.Error) {
+    return { kind: 'error', value: scalar }
+  }
+  const integer = deps.scalarIntegerArgument(value)
+  return integer === undefined ? { kind: 'error', value: valueError() } : { kind: 'ok', value: integer }
+}
+
+function wholeAxisLookupRange(
+  reference: WholeAxisReference,
+  context: EvaluationContext,
+  deps: WorkbookSpecialCallDeps,
+): RangeBuiltinArgument | CellValue {
+  const values = context.resolveRange(reference.sheetName, reference.start, reference.end, reference.refKind)
+  if (reference.parsed.kind === 'rows') {
+    const rowCount = reference.parsed.end.row - reference.parsed.start.row + 1
+    if (rowCount !== 1) {
+      return deps.error(ErrorCode.Value)
+    }
+    return {
+      kind: 'range',
+      values,
+      refKind: 'cells',
+      rows: 1,
+      cols: values.length,
+      sheetName: reference.sheetName,
+      start: formatAddress(reference.parsed.start.row, 0),
+      end: formatAddress(reference.parsed.start.row, Math.max(values.length - 1, 0)),
+    }
+  }
+
+  const colCount = reference.parsed.end.col - reference.parsed.start.col + 1
+  if (colCount !== 1) {
+    return deps.error(ErrorCode.Value)
+  }
+  return {
+    kind: 'range',
+    values,
+    refKind: 'cells',
+    rows: values.length,
+    cols: 1,
+    sheetName: reference.sheetName,
+    start: formatAddress(0, reference.parsed.start.col),
+    end: formatAddress(Math.max(values.length - 1, 0), reference.parsed.start.col),
+  }
+}
+
+function evaluateWholeAxisMatch(
+  callee: 'MATCH' | 'XMATCH',
+  rawArgs: StackValue[],
+  context: EvaluationContext,
+  argRefs: readonly (ReferenceOperand | undefined)[],
+  deps: WorkbookSpecialCallDeps,
+): StackValue | undefined {
+  const reference = wholeAxisReferenceFromArg(rawArgs[1], argRefs[1], context, deps)
+  if (!reference) {
+    return undefined
+  }
+  if (rawArgs.length < 2 || (callee === 'MATCH' ? rawArgs.length > 3 : rawArgs.length > 4)) {
+    return deps.stackScalar(deps.error(ErrorCode.Value))
+  }
+  const lookupValue = deps.isSingleCellValue(rawArgs[0]!)
+  if (!lookupValue) {
+    return deps.stackScalar(deps.error(ErrorCode.Value))
+  }
+  const lookupRange = wholeAxisLookupRange(reference, context, deps)
+  if ('tag' in lookupRange) {
+    return deps.stackScalar(lookupRange)
+  }
+
+  const lookupBuiltin = context.resolveLookupBuiltin?.(callee) ?? getLookupBuiltin(callee)
+  if (!lookupBuiltin) {
+    return undefined
+  }
+
+  const firstOptional = scalarLookupArgument(rawArgs[2], deps)
+  if (firstOptional.kind === 'error') {
+    return deps.stackScalar(firstOptional.value)
+  }
+  if (callee === 'MATCH') {
+    const result = lookupBuiltin(lookupValue, lookupRange, firstOptional.value)
+    return isArrayValue(result) ? result : deps.stackScalar(result)
+  }
+
+  const secondOptional = scalarLookupArgument(rawArgs[3], deps)
+  if (secondOptional.kind === 'error') {
+    return deps.stackScalar(secondOptional.value)
+  }
+  const result = lookupBuiltin(lookupValue, lookupRange, firstOptional.value, secondOptional.value)
+  return isArrayValue(result) ? result : deps.stackScalar(result)
+}
+
+function evaluateWholeAxisIndex(
+  rawArgs: StackValue[],
+  context: EvaluationContext,
+  argRefs: readonly (ReferenceOperand | undefined)[],
+  deps: WorkbookSpecialCallDeps,
+): StackValue | undefined {
+  const reference = wholeAxisReferenceFromArg(rawArgs[0], argRefs[0], context, deps)
+  if (!reference) {
+    return undefined
+  }
+  if (rawArgs.length < 1 || rawArgs.length > 3) {
+    return deps.stackScalar(deps.error(ErrorCode.Value))
+  }
+
+  const rowArg = integerIndexArgument(rawArgs[1], deps)
+  if (rowArg.kind === 'error') {
+    return deps.stackScalar(rowArg.value)
+  }
+  const colArg = integerIndexArgument(rawArgs[2], deps)
+  if (colArg.kind === 'error') {
+    return deps.stackScalar(colArg.value)
+  }
+
+  const rawRowNum = rowArg.kind === 'ok' ? rowArg.value : undefined
+  const rawColNum = colArg.kind === 'ok' ? colArg.value : undefined
+  if (rawRowNum === undefined && rawColNum === undefined) {
+    return deps.stackScalar(deps.error(ErrorCode.Value))
+  }
+
+  if (reference.parsed.kind === 'cols') {
+    const colCount = reference.parsed.end.col - reference.parsed.start.col + 1
+    const rowNum = rawRowNum ?? 0
+    const colNum = rawColNum ?? (colCount === 1 && rowNum !== 0 ? 1 : 0)
+    if (rowNum <= 0 || colNum <= 0) {
+      return deps.stackScalar(deps.error(ErrorCode.Value))
+    }
+    if (rowNum > MAX_ROWS || colNum > colCount) {
+      return deps.stackScalar(deps.error(ErrorCode.Ref))
+    }
+    const targetRow = rowNum - 1
+    const targetCol = reference.parsed.start.col + colNum - 1
+    if (targetCol >= MAX_COLS) {
+      return deps.stackScalar(deps.error(ErrorCode.Ref))
+    }
+    return deps.stackScalar(context.resolveCell(reference.sheetName, formatAddress(targetRow, targetCol)))
+  }
+
+  const rowCount = reference.parsed.end.row - reference.parsed.start.row + 1
+  let rowNum = rawRowNum ?? 0
+  let colNum = rawColNum ?? 0
+  if (rowCount === 1 && rawColNum === undefined && rawRowNum !== undefined && rawRowNum !== 0) {
+    rowNum = 1
+    colNum = rawRowNum
+  }
+  if (rowNum <= 0 || colNum <= 0) {
+    return deps.stackScalar(deps.error(ErrorCode.Value))
+  }
+  if (rowNum > rowCount || colNum > MAX_COLS) {
+    return deps.stackScalar(deps.error(ErrorCode.Ref))
+  }
+  const targetRow = reference.parsed.start.row + rowNum - 1
+  const targetCol = colNum - 1
+  if (targetRow >= MAX_ROWS) {
+    return deps.stackScalar(deps.error(ErrorCode.Ref))
+  }
+  return deps.stackScalar(context.resolveCell(reference.sheetName, formatAddress(targetRow, targetCol)))
 }
 
 function hiddenAwareSubtotalValues(value: StackValue, ref: ReferenceOperand | undefined, context: EvaluationContext): CellValue[] {
@@ -94,6 +330,11 @@ export function evaluateWorkbookSpecialCall(
   deps: WorkbookSpecialCallDeps,
 ): StackValue | undefined {
   switch (callee) {
+    case 'MATCH':
+    case 'XMATCH':
+      return evaluateWholeAxisMatch(callee, rawArgs, context, argRefs, deps)
+    case 'INDEX':
+      return evaluateWholeAxisIndex(rawArgs, context, argRefs, deps)
     case 'SUBTOTAL': {
       const functionNum = deps.scalarIntegerArgument(rawArgs[0])
       if (functionNum === undefined) {

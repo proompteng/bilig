@@ -1,5 +1,5 @@
 import { Effect } from 'effect'
-import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
+import { ErrorCode, MAX_COLS, MAX_ROWS, ValueTag, type CellValue } from '@bilig/protocol'
 import {
   createLookupBuiltinResolver,
   evaluatePlanResult,
@@ -113,6 +113,44 @@ export function createEngineFormulaEvaluationService(args: {
     readCellValueByIndex,
   }
 
+  const readRectangularRangeValues = (
+    sheetName: string,
+    bounds: {
+      rowStart: number
+      rowEnd: number
+      colStart: number
+      colEnd: number
+    },
+    replacements?: ReadonlyMap<string, { sheetName: string; address: string }>,
+    visiting?: Set<string>,
+  ): CellValue[] => {
+    if (bounds.rowEnd < bounds.rowStart || bounds.colEnd < bounds.colStart) {
+      return []
+    }
+    const cellCount = (bounds.rowEnd - bounds.rowStart + 1) * (bounds.colEnd - bounds.colStart + 1)
+    args.checkEvaluationBudget(cellCount)
+    if (!replacements || !visiting) {
+      const rangeValues = args.runtimeColumnStore.readRangeValues({
+        sheetName,
+        rowStart: bounds.rowStart,
+        rowEnd: bounds.rowEnd,
+        colStart: bounds.colStart,
+        colEnd: bounds.colEnd,
+      })
+      args.checkEvaluationBudget(rangeValues.length)
+      return rangeValues
+    }
+
+    const values: CellValue[] = []
+    for (let row = bounds.rowStart; row <= bounds.rowEnd; row += 1) {
+      for (let col = bounds.colStart; col <= bounds.colEnd; col += 1) {
+        args.checkEvaluationBudget()
+        values.push(evaluateCellWithReferenceReplacements(sheetName, formatAddress(row, col), replacements, visiting))
+      }
+    }
+    return values
+  }
+
   const readRangeValues = (
     sheetName: string,
     start: string,
@@ -121,37 +159,77 @@ export function createEngineFormulaEvaluationService(args: {
     replacements?: ReadonlyMap<string, { sheetName: string; address: string }>,
     visiting?: Set<string>,
   ): CellValue[] => {
-    if (refKind !== 'cells') {
-      return []
-    }
-    if (!args.state.workbook.getSheet(sheetName)) {
+    const sheet = args.state.workbook.getSheet(sheetName)
+    if (!sheet) {
       return [errorValue(ErrorCode.Ref)]
     }
     const range = parseRangeAddress(`${start}:${end}`, sheetName)
-    if (range.kind !== 'cells') {
-      return []
-    }
-    const cellCount = (range.end.row - range.start.row + 1) * (range.end.col - range.start.col + 1)
-    args.checkEvaluationBudget(cellCount)
-    const values: CellValue[] = []
-    if (!replacements || !visiting) {
-      const rangeValues = args.runtimeColumnStore.readRangeValues({
+    if (range.kind === 'cells' && refKind === 'cells') {
+      return readRectangularRangeValues(
         sheetName,
-        rowStart: range.start.row,
-        rowEnd: range.end.row,
-        colStart: range.start.col,
-        colEnd: range.end.col,
-      })
-      args.checkEvaluationBudget(rangeValues.length)
-      return rangeValues
+        {
+          rowStart: range.start.row,
+          rowEnd: range.end.row,
+          colStart: range.start.col,
+          colEnd: range.end.col,
+        },
+        replacements,
+        visiting,
+      )
     }
-    for (let row = range.start.row; row <= range.end.row; row += 1) {
-      for (let col = range.start.col; col <= range.end.col; col += 1) {
-        args.checkEvaluationBudget()
-        values.push(evaluateCellWithReferenceReplacements(sheetName, formatAddress(row, col), replacements, visiting))
+    if (range.kind === 'rows' && refKind === 'rows') {
+      const rowStart = Math.max(0, range.start.row)
+      const rowEnd = Math.min(MAX_ROWS - 1, range.end.row)
+      if (rowEnd < rowStart) {
+        return []
       }
+      let maxResidentCol = -1
+      sheet.grid.forEachCellEntry((_cellIndex, row, col) => {
+        if (row >= rowStart && row <= rowEnd && col >= 0 && col < MAX_COLS && col > maxResidentCol) {
+          maxResidentCol = col
+        }
+      })
+      return maxResidentCol < 0
+        ? []
+        : readRectangularRangeValues(
+            sheetName,
+            {
+              rowStart,
+              rowEnd,
+              colStart: 0,
+              colEnd: maxResidentCol,
+            },
+            replacements,
+            visiting,
+          )
     }
-    return values
+    if (range.kind === 'cols' && refKind === 'cols') {
+      const colStart = Math.max(0, range.start.col)
+      const colEnd = Math.min(MAX_COLS - 1, range.end.col)
+      if (colEnd < colStart) {
+        return []
+      }
+      let maxResidentRow = -1
+      sheet.grid.forEachCellEntry((_cellIndex, row, col) => {
+        if (col >= colStart && col <= colEnd && row >= 0 && row < MAX_ROWS && row > maxResidentRow) {
+          maxResidentRow = row
+        }
+      })
+      return maxResidentRow < 0
+        ? []
+        : readRectangularRangeValues(
+            sheetName,
+            {
+              rowStart: 0,
+              rowEnd: maxResidentRow,
+              colStart,
+              colEnd,
+            },
+            replacements,
+            visiting,
+          )
+    }
+    return []
   }
 
   const createRowHiddenResolver = (): ((sheetName: string, rowIndex: number) => boolean) => {

@@ -306,7 +306,7 @@ describe('EngineFormulaEvaluationService', () => {
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 2 })
   })
 
-  it('evaluates full-column MATCH formulas through the generic vector lookup fallback', async () => {
+  it('evaluates full-column MATCH formulas through the whole-column lookup fallback', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'evaluation-full-column-match' })
     await engine.ready()
     engine.createSheet('Sheet1')
@@ -328,14 +328,8 @@ describe('EngineFormulaEvaluationService', () => {
     Effect.runSync(evaluation.evaluateUnsupportedFormula(f1Index!))
     Effect.runSync(evaluation.evaluateUnsupportedFormula(f2Index!))
 
-    expect(engine.getCellValue('Sheet1', 'F1')).toEqual({
-      tag: ValueTag.Error,
-      code: ErrorCode.Value,
-    })
-    expect(engine.getCellValue('Sheet1', 'F2')).toEqual({
-      tag: ValueTag.Error,
-      code: ErrorCode.Value,
-    })
+    expect(engine.getCellValue('Sheet1', 'F1')).toEqual({ tag: ValueTag.Number, value: 2 })
+    expect(engine.getCellValue('Sheet1', 'F2')).toEqual({ tag: ValueTag.Number, value: 5 })
   })
 
   it('treats missing external sheets as #REF! during JS evaluation', async () => {
