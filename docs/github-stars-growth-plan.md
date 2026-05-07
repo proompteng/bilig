@@ -20,8 +20,8 @@ Verified on 2026-05-07 after the Show HN launch and topic refresh:
 - GitHub open issues: `75`
 - Community profile: `100%`
 - Public package: `@bilig/headless`
-- GitHub repo description: headless spreadsheet engine for agents and Node
-  services
+- GitHub repo description: headless spreadsheet engine for formulas, persisted
+  WorkPaper state, agents, and Node services
 - Topics: `20`, including `spreadsheet`, `spreadsheet-engine`,
   `headless-spreadsheet`, `ai-agents`, `ai-spreadsheet`, `formula-engine`,
   `spreadsheet-api`, `workbook`, `workbook-api`, `excel-automation`,
