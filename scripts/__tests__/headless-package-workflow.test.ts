@@ -14,6 +14,7 @@ describe('headless package workflow', () => {
     expect(testPaths).toContain('packages/headless/src/__tests__/work-paper-runtime.test.ts')
     expect(testPaths).toContain('packages/headless/src/__tests__/work-paper-parity.test.ts')
     expect(testPaths).toContain('packages/headless/src/__tests__/github-issues.test.ts')
+    expect(testPaths).toContain('packages/headless/src/__tests__/github-issue-124-sumifs-wildcard-arithmetic.test.ts')
     expect(testPaths).toContain('packages/headless/src/__tests__/github-issue-125-xlookup-decimal.test.ts')
     expect(testPaths).toContain('packages/headless/src/__tests__/persistence.test.ts')
     expect(testPaths).toContain('packages/headless/src/__tests__/persistence.fuzz.test.ts')

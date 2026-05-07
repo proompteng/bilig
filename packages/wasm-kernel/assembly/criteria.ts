@@ -10,6 +10,87 @@ const CRITERIA_OP_GTE: i32 = 3
 const CRITERIA_OP_LT: i32 = 4
 const CRITERIA_OP_LTE: i32 = 5
 
+function hasCriteriaWildcardPattern(pattern: string): bool {
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern.charCodeAt(index)
+    if (char == 126) {
+      index += 1
+      continue
+    }
+    if (char == 42 || char == 63) {
+      return true
+    }
+  }
+  return false
+}
+
+function unescapeCriteriaPattern(pattern: string): string {
+  let unescaped = ''
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern.charCodeAt(index)
+    if (char == 126) {
+      const escapedIndex = index + 1
+      if (escapedIndex < pattern.length) {
+        unescaped += String.fromCharCode(pattern.charCodeAt(escapedIndex))
+        index = escapedIndex
+        continue
+      }
+    }
+    unescaped += String.fromCharCode(char)
+  }
+  return unescaped
+}
+
+function wildcardCriteriaMatches(pattern: string, value: string): bool {
+  let p = 0
+  let v = 0
+  let starPatternIndex = -1
+  let starValueIndex = -1
+
+  while (v < value.length) {
+    if (p < pattern.length) {
+      const char = pattern.charCodeAt(p)
+      if (char == 126) {
+        const escapedIndex = p + 1
+        const expected = escapedIndex < pattern.length ? pattern.charCodeAt(escapedIndex) : 126
+        if (value.charCodeAt(v) == expected) {
+          p = escapedIndex < pattern.length ? escapedIndex + 1 : escapedIndex
+          v += 1
+          continue
+        }
+      }
+      if (char == 42) {
+        p += 1
+        while (p < pattern.length && pattern.charCodeAt(p) == 42) {
+          p += 1
+        }
+        starPatternIndex = p
+        starValueIndex = v
+        continue
+      }
+      if (char == 63 || value.charCodeAt(v) == char) {
+        p += 1
+        v += 1
+        continue
+      }
+    }
+
+    if (starPatternIndex >= 0) {
+      starValueIndex += 1
+      p = starPatternIndex
+      v = starValueIndex
+      continue
+    }
+
+    return false
+  }
+
+  while (p < pattern.length && pattern.charCodeAt(p) == 42) {
+    p += 1
+  }
+  return p == pattern.length
+}
+
 export function matchesCriteriaValue(
   valueTag: u8,
   valueValue: f64,
@@ -106,6 +187,30 @@ export function matchesCriteriaValue(
           }
         }
       }
+    }
+  }
+
+  if ((operator == CRITERIA_OP_EQ || operator == CRITERIA_OP_NE) && operandText != null) {
+    const textPattern = operandText
+    if (hasCriteriaWildcardPattern(textPattern)) {
+      const valueText = scalarText(
+        valueTag,
+        valueValue,
+        stringOffsets,
+        stringLengths,
+        stringData,
+        outputStringOffsets,
+        outputStringLengths,
+        outputStringData,
+      )
+      if (valueText == null) {
+        return false
+      }
+      const matches = wildcardCriteriaMatches(textPattern.toUpperCase(), valueText.toUpperCase())
+      return operator == CRITERIA_OP_EQ ? matches : !matches
+    }
+    if (textPattern.indexOf('~') >= 0) {
+      operandText = unescapeCriteriaPattern(textPattern)
     }
   }
 

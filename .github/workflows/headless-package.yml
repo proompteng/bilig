@@ -117,6 +117,7 @@ jobs:
             packages/headless/src/__tests__/work-paper-runtime.test.ts \
             packages/headless/src/__tests__/work-paper-parity.test.ts \
             packages/headless/src/__tests__/github-issues.test.ts \
+            packages/headless/src/__tests__/github-issue-124-sumifs-wildcard-arithmetic.test.ts \
             packages/headless/src/__tests__/github-issue-125-xlookup-decimal.test.ts \
             packages/headless/src/__tests__/persistence.test.ts \
             packages/headless/src/__tests__/persistence.fuzz.test.ts \
