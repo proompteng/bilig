@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   highestPublishedStableSemver,
   highestStableSemver,
+  missingPublishedRuntimePackageNames,
+  resolvePublishedRuntimePackageBaseline,
   RUNTIME_PACKAGE_DIRS,
-  shouldAttemptRuntimePackagePublish,
 } from '../runtime-package-set.ts'
 import { bumpVersion, isRuntimeAffectingPath, parseConventionalCommit, releaseTypeForConventionalCommit } from '../runtime-release.ts'
 
@@ -90,29 +91,46 @@ describe('runtime release helpers', () => {
     expect(highestPublishedStableSemver([null, undefined])).toBeNull()
   })
 
-  it('publishes the Excel importer with the aligned runtime package set', () => {
-    expect(RUNTIME_PACKAGE_DIRS).toContain('packages/excel-import')
+  it('allows explicit same-version recovery from a partial runtime publish set', () => {
+    const publishedVersions = [
+      { packageName: '@bilig/protocol', version: '0.10.1' },
+      { packageName: '@bilig/core', version: '0.10.1' },
+      { packageName: '@bilig/excel-import', version: null },
+      { packageName: '@bilig/headless', version: '0.10.0' },
+    ]
+
+    expect(resolvePublishedRuntimePackageBaseline(publishedVersions, { allowPartialPublishedSet: true })).toBe('0.10.1')
+    expect(() => resolvePublishedRuntimePackageBaseline(publishedVersions, { allowPartialPublishedSet: false })).toThrow(
+      'Published runtime package versions are not aligned',
+    )
   })
 
-  it('requires explicit opt-in before attempting first-time npm package creation', () => {
+  it('keeps a new unpublished runtime package on the existing aligned baseline before first release', () => {
     expect(
-      shouldAttemptRuntimePackagePublish({
-        packagePublished: true,
-        allowNewPackagePublishing: false,
-      }),
-    ).toBe(true)
+      resolvePublishedRuntimePackageBaseline(
+        [
+          { packageName: '@bilig/protocol', version: '0.10.0' },
+          { packageName: '@bilig/core', version: '0.10.0' },
+          { packageName: '@bilig/excel-import', version: null },
+          { packageName: '@bilig/headless', version: '0.10.0' },
+        ],
+        { allowPartialPublishedSet: false },
+      ),
+    ).toBe('0.10.0')
+  })
+
+  it('identifies missing npm packages before a non-dry-run publish mutates the package set', () => {
     expect(
-      shouldAttemptRuntimePackagePublish({
-        packagePublished: false,
-        allowNewPackagePublishing: false,
-      }),
-    ).toBe(false)
-    expect(
-      shouldAttemptRuntimePackagePublish({
-        packagePublished: false,
-        allowNewPackagePublishing: true,
-      }),
-    ).toBe(true)
+      missingPublishedRuntimePackageNames([
+        { packageName: '@bilig/protocol', version: '0.10.1' },
+        { packageName: '@bilig/excel-import', version: null },
+        { packageName: '@bilig/headless', version: '0.10.0' },
+      ]),
+    ).toEqual(['@bilig/excel-import'])
+  })
+
+  it('publishes the Excel importer with the aligned runtime package set', () => {
+    expect(RUNTIME_PACKAGE_DIRS).toContain('packages/excel-import')
   })
 
   it('matches runtime-affecting publish paths', () => {

@@ -4,14 +4,21 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 
-import { assertAlignedVersions, loadRuntimePackages, parseBooleanEnv, shouldAttemptRuntimePackagePublish } from './runtime-package-set.ts'
+import {
+  assertAlignedVersions,
+  formatRuntimePackagePublishedVersions,
+  loadRuntimePackages,
+  missingPublishedRuntimePackageNames,
+  parseBooleanEnv,
+  type RuntimePackagePublishedVersion,
+} from './runtime-package-set.ts'
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const defaultPackDir = join(rootDir, 'build', 'npm-packages-runtime')
 const textDecoder = new TextDecoder()
 const distTag = process.env.NPM_DIST_TAG ?? 'latest'
 const dryRun = parseBooleanEnv(process.env.DRY_RUN)
-const allowNewPackagePublishing = parseBooleanEnv(process.env.ALLOW_NEW_NPM_PACKAGES)
+const allowNewNpmPackages = parseBooleanEnv(process.env.ALLOW_NEW_NPM_PACKAGES)
 const targetVersion = process.env.TARGET_VERSION?.trim()
 
 if (!targetVersion) {
@@ -20,6 +27,9 @@ if (!targetVersion) {
 
 const runtimePackages = loadRuntimePackages(rootDir)
 assertAlignedVersions(runtimePackages)
+
+const currentPublishedRuntimeVersions = readPublishedRuntimePackageVersions(runtimePackages.map((runtimePackage) => runtimePackage.name))
+assertKnownNpmPackagesBeforePublishing(currentPublishedRuntimeVersions)
 
 const stageDir = mkdtempSync(join(tmpdir(), 'bilig-runtime-package-set-'))
 const packDir = resolve(process.env.PACK_DIR ?? defaultPackDir)
@@ -55,22 +65,6 @@ try {
     const tarballPath = tarballsByPackage.get(`${runtimePackage.name}@${targetVersion}`)
     if (!tarballPath) {
       throw new Error(`Packed tarball missing for ${runtimePackage.name}@${targetVersion}`)
-    }
-
-    const packagePublished = isPackagePublished(runtimePackage.name)
-    if (
-      !shouldAttemptRuntimePackagePublish({
-        packagePublished,
-        allowNewPackagePublishing,
-      })
-    ) {
-      results.push({
-        package: runtimePackage.name,
-        version: targetVersion,
-        status: 'skipped',
-        reason: 'package name is not provisioned on npm; set ALLOW_NEW_NPM_PACKAGES=true after npm permissions are configured',
-      })
-      continue
     }
 
     if (isVersionPublished(runtimePackage.name, targetVersion)) {
@@ -151,17 +145,6 @@ function rewriteInternalDependencyRanges(manifest: Record<string, unknown>, inte
   }
 }
 
-function isPackagePublished(packageName: string) {
-  const result = Bun.spawnSync(['npm', 'view', packageName, 'name', '--json'], {
-    cwd: rootDir,
-    env: process.env,
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  return result.exitCode === 0
-}
-
 function indexTarballs(targetDir: string) {
   const tarballs = readdirSync(targetDir).filter((entry) => entry.endsWith('.tgz'))
   const entriesByPackage = new Map()
@@ -187,6 +170,49 @@ function isVersionPublished(packageName: string, version: string) {
     stderr: 'pipe',
   })
   return result.exitCode === 0
+}
+
+function readPublishedRuntimePackageVersions(packageNames: string[]): RuntimePackagePublishedVersion[] {
+  return packageNames.map((packageName) => ({
+    packageName,
+    version: getPublishedVersion(packageName),
+  }))
+}
+
+function getPublishedVersion(packageName: string): string | null {
+  const result = Bun.spawnSync(['npm', 'view', packageName, 'dist-tags.latest', '--json'], {
+    cwd: rootDir,
+    env: process.env,
+    stdin: 'ignore',
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  if (result.exitCode !== 0) {
+    return null
+  }
+  const output = textDecoder.decode(result.stdout).trim()
+  if (!output || output === 'null') {
+    return null
+  }
+  return JSON.parse(output)
+}
+
+function assertKnownNpmPackagesBeforePublishing(publishedVersions: readonly RuntimePackagePublishedVersion[]): void {
+  if (dryRun || allowNewNpmPackages) {
+    return
+  }
+  const missingPackages = missingPublishedRuntimePackageNames(publishedVersions)
+  if (missingPackages.length === 0) {
+    return
+  }
+  throw new Error(
+    [
+      `Refusing to publish a partial runtime package set because npm does not know every runtime package yet (${formatRuntimePackagePublishedVersions(
+        publishedVersions,
+      )}).`,
+      'Create the missing npm package(s) and configure trusted publishing first, or explicitly set ALLOW_NEW_NPM_PACKAGES=true when using credentials that can create new public packages.',
+    ].join(' '),
+  )
 }
 
 function getDistTags(packageName: string): Record<string, string> {

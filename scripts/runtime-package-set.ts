@@ -17,6 +17,11 @@ export interface RuntimePackageManifest {
   version: string
 }
 
+export interface RuntimePackagePublishedVersion {
+  packageName: string
+  version: string | null
+}
+
 export interface StableSemver {
   major: number
   minor: number
@@ -66,10 +71,6 @@ export function parseBooleanEnv(value: string | undefined): boolean {
     default:
       throw new Error(`Expected boolean environment value, received ${value}`)
   }
-}
-
-export function shouldAttemptRuntimePackagePublish(options: { packagePublished: boolean; allowNewPackagePublishing: boolean }): boolean {
-  return options.packagePublished || options.allowNewPackagePublishing
 }
 
 export function determineRuntimeReleaseVersion(options: {
@@ -142,4 +143,33 @@ export function parseStableSemver(version: string): StableSemver {
     minor: Number(match[2]),
     patch: Number(match[3]),
   }
+}
+
+export function formatRuntimePackagePublishedVersions(publishedVersions: readonly RuntimePackagePublishedVersion[]): string {
+  return publishedVersions.map((entry) => `${entry.packageName}@${entry.version ?? 'unpublished'}`).join(', ')
+}
+
+export function missingPublishedRuntimePackageNames(publishedVersions: readonly RuntimePackagePublishedVersion[]): string[] {
+  return publishedVersions.filter((entry) => entry.version === null).map((entry) => entry.packageName)
+}
+
+export function resolvePublishedRuntimePackageBaseline(
+  publishedVersions: readonly RuntimePackagePublishedVersion[],
+  options: { allowPartialPublishedSet: boolean },
+): string | null {
+  const versions = publishedVersions
+    .map((entry) => entry.version)
+    .filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
+  const versionSet = new Set(versions)
+  if (versionSet.size === 0) {
+    return null
+  }
+  if (versionSet.size > 1) {
+    if (!options.allowPartialPublishedSet) {
+      throw new Error(`Published runtime package versions are not aligned (${formatRuntimePackagePublishedVersions(publishedVersions)})`)
+    }
+    return highestStableSemver([...versionSet])
+  }
+  const [publishedVersion] = versionSet
+  return publishedVersion ?? null
 }

@@ -98,4 +98,66 @@ describe('structured reference XLSX import', () => {
     expect(engine.getCellValue('Imports', 'D8')).toEqual({ tag: ValueTag.Number, value: 1 })
     expect(engine.getCellValue('Imports', 'F10')).toEqual({ tag: ValueTag.Number, value: 225 })
   })
+
+  it('preserves lowercase defined names and named ranges used by simulation formulas', async () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: {
+        name: 'Simulation Model',
+        metadata: {
+          definedNames: [
+            { name: 'distribution', value: { kind: 'range-ref', sheetName: 'newsvendor', startAddress: 'H35', endAddress: 'K36' } },
+            { name: 'mean', value: { kind: 'cell-ref', sheetName: 'newsvendor', address: 'D9' } },
+            { name: 'std', value: { kind: 'cell-ref', sheetName: 'newsvendor', address: 'D10' } },
+          ],
+        },
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'newsvendor',
+          order: 0,
+          cells: [
+            { address: 'D9', value: 5000 },
+            { address: 'D10', value: 250 },
+            { address: 'H35', value: 0.25 },
+            { address: 'I35', value: 125 },
+            { address: 'J35', value: 'low' },
+            { address: 'K35', value: true },
+            { address: 'H36', value: 0.5 },
+            { address: 'I36', value: 225 },
+            { address: 'J36', value: 'high' },
+            { address: 'K36', value: false },
+            { address: 'I17', value: 0.975 },
+            { address: 'I18', formula: 'mean+(NORM.S.INV(I17)*std)' },
+            { address: 'I19', formula: 'VLOOKUP(0.5,distribution,2,FALSE)' },
+          ],
+        },
+      ],
+    }
+
+    const imported = importXlsx(exportXlsx(snapshot), 'newsvendor-simulation.xlsm')
+    const definedNames = imported.snapshot.workbook.metadata?.definedNames ?? []
+
+    expect(definedNames.find((name) => name.name === 'mean')?.value).toEqual({
+      kind: 'cell-ref',
+      sheetName: 'newsvendor',
+      address: 'D9',
+    })
+    expect(definedNames.find((name) => name.name === 'distribution')?.value).toEqual({
+      kind: 'range-ref',
+      sheetName: 'newsvendor',
+      startAddress: 'H35',
+      endAddress: 'K36',
+    })
+
+    const engine = new SpreadsheetEngine({ workbookName: 'newsvendor-import' })
+    await engine.ready()
+    engine.importSnapshot(imported.snapshot)
+
+    const i18 = engine.getCellValue('newsvendor', 'I18')
+    expect(i18.tag).toBe(ValueTag.Number)
+    expect(i18.tag === ValueTag.Number ? i18.value : Number.NaN).toBeCloseTo(5489.990996, 5)
+    expect(engine.getCellValue('newsvendor', 'I19')).toEqual({ tag: ValueTag.Number, value: 225 })
+  })
 })

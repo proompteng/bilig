@@ -6,10 +6,11 @@ import { dirname, resolve } from 'node:path'
 import {
   assertAlignedVersions,
   compareStableSemver,
-  highestPublishedStableSemver,
   highestStableSemver,
   loadRuntimePackages,
   parseStableSemver,
+  resolvePublishedRuntimePackageBaseline,
+  type RuntimePackagePublishedVersion,
 } from './runtime-package-set.ts'
 import {
   bumpVersion,
@@ -63,8 +64,13 @@ const allowManualBootstrap = cliArgs.has('allow-untagged-baseline')
 
 const runtimePackages = loadRuntimePackages(rootDir)
 const runtimeManifestVersion = assertAlignedVersions(runtimePackages)
-const latestPublishedVersion = getPublishedBaselineVersion(runtimePackages.map((runtimePackage) => runtimePackage.name))
 const latestReachableTag = getLatestReachableRuntimeTag()
+const latestPublishedVersion = resolvePublishedRuntimePackageBaseline(
+  readPublishedRuntimePackageVersions(runtimePackages.map((runtimePackage) => runtimePackage.name)),
+  {
+    allowPartialPublishedSet: requestedReleaseAs !== null && latestReachableTag !== null,
+  },
+)
 
 const runtimeReleasePlan = buildRuntimeReleasePlan({
   manifestVersion: runtimeManifestVersion,
@@ -321,9 +327,11 @@ function getLatestReachableRuntimeTag(): string | null {
   )
 }
 
-function getPublishedBaselineVersion(packageNames: string[]): string | null {
-  const publishedVersions = packageNames.map((packageName) => getPublishedVersion(packageName))
-  return highestPublishedStableSemver(publishedVersions)
+function readPublishedRuntimePackageVersions(packageNames: string[]): RuntimePackagePublishedVersion[] {
+  return packageNames.map((packageName) => ({
+    packageName,
+    version: getPublishedVersion(packageName),
+  }))
 }
 
 function getPublishedVersion(packageName: string): string | null {

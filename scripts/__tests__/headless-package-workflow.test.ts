@@ -29,6 +29,8 @@ describe('headless package workflow', () => {
     expect(source).toContain('pnpm --filter @bilig/excel-import build')
     expect(source).toContain('packages/excel-import/package.json')
     expect(source).toContain('packages/excel-import')
+    expect(source).toContain('allow_new_packages')
+    expect(source).toContain('ALLOW_NEW_NPM_PACKAGES')
     expect(source).toContain('pnpm publish:runtime:check')
     expect(source).toContain('pnpm workpaper:bench:competitive:check')
     expect(source).toContain('pnpm workpaper:smoke:external')
