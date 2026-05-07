@@ -75,7 +75,7 @@ export function upsertNumericDefinedNameFast(args: {
     ) {
       return null
     }
-    const nextValue = evaluateNumericDefinedNameFormula(formula.compiled.optimizedAst, normalizedName, args.numericValue)
+    const nextValue = evaluateNumericDefinedNameFormula(formula.compiled.ast, normalizedName, args.numericValue)
     if (nextValue === undefined) {
       return null
     }
