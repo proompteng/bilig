@@ -36,6 +36,8 @@ Verified on 2026-05-07:
   - `docs/building-a-revenue-model-with-headless-workpaper.md`
   - `docs/where-bilig-is-not-excel-compatible-yet.md`
   - `docs/xlsx-corpus-verifier-walkthrough.md`
+  - `docs/show-hn-launch-pack.md`
+  - `docs/community-launch-pack.md`
   - `examples/headless-workpaper/revenue-scenarios.mjs`
   - `docs/starter-issues.md`
   - `docs/assets/github-social-preview.png`
@@ -168,6 +170,8 @@ Actions:
     post is deeply technical
   - Product Hunt after the social preview, demo, and example are polished
   - dev.to or a personal/company blog with the benchmark story
+  - use `docs/community-launch-pack.md` for platform-specific drafts and
+    anti-spam guardrails before posting outside HN
 - Track which posts create GitHub visitors, npm downloads, issues, and stars.
   Do not judge by likes alone.
 - Answer comments quickly. If the same question appears twice, convert it into

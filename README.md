@@ -178,6 +178,9 @@ For the lower-case, manual X reply playbook, see
 For the Hacker News launch checklist, see
 [`docs/show-hn-launch-pack.md`](docs/show-hn-launch-pack.md).
 
+For Reddit, DEV, Lobsters, and Product Hunt launch drafts, see
+[`docs/community-launch-pack.md`](docs/community-launch-pack.md).
+
 ## Quickstart
 
 Use Node `24+`, Bun, and `pnpm@10.32.1`.

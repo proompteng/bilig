@@ -99,6 +99,8 @@ Repository:
   [`docs/x-reply-growth-playbook.md`](../../docs/x-reply-growth-playbook.md)
 - Show HN launch pack:
   [`docs/show-hn-launch-pack.md`](../../docs/show-hn-launch-pack.md)
+- Community launch pack:
+  [`docs/community-launch-pack.md`](../../docs/community-launch-pack.md)
 
 Inside this monorepo:
 

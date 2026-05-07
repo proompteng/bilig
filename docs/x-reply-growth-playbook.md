@@ -77,6 +77,23 @@ Avoid:
 - emojis as decoration
 - repeated sentence templates
 
+## Current Style Scan
+
+Checked on 2026-05-07. Recent high-engagement `@sama` posts and replies tend to
+be compressed, casual, and low-friction:
+
+- mostly lowercase, except when announcing a product milestone
+- one idea per post
+- plain verbs instead of launch-copy adjectives
+- little punctuation
+- concrete belief or observation first, explanation second
+- no decorative hashtags
+
+Use that shape only as a tone reference. Do not impersonate anyone, copy
+phrasing, or turn posts into vague ai hype. For `bilig`, the useful version is
+lowercase and human but still specific: workbook state, formula parity,
+readback, fixtures, examples, and measured caveats.
+
 ## Reply Templates
 
 Use these as starting points, not copy/paste automation.
@@ -154,17 +171,39 @@ For every useful reply:
 This compounds better than raw posting volume because it turns market feedback
 into repository evidence.
 
+## Continuous Growth Cadence
+
+Run this as a weekly loop:
+
+1. Ship one small proof artifact in the repo: fixture walkthrough, runnable
+   example, benchmark note, compatibility caveat, or starter issue.
+2. Publish one maintainer post that explains the proof in lowercase, direct
+   language.
+3. Spend `3` days watching related X discussions and add at most `2`
+   high-context replies per day.
+4. Log every serious objection and convert repeated questions into docs,
+   issues, fixtures, or examples before posting the next link.
+5. At the end of the week, compare GitHub stars, npm downloads, GitHub traffic
+   referrers, issue quality, and repeat questions.
+
+Do not optimize for reply count. The compounding unit is a public artifact that
+is good enough to link when the same question appears again.
+
 ## Sources
 
 - X automation rules and best practices:
   <https://help.x.com/en/rules-and-policies/x-automation>
 - X account behavior best practices:
   <https://help.x.com/en/rules-and-policies/x-rules-and-best-practices>
+- Sam Altman Codex milestone post, tone reference:
+  <https://x.com/sama/status/2041658719839383945>
+- Sam Altman voice-model post, tone reference:
+  <https://di.gg/ai/25eceafd-986f-45ed-8b10-6a35eac12d30>
+- Sam Altman AI-access reply, tone reference:
+  <https://di.gg/ai/c7d99e5e-4e8b-456f-bc3d-788f8c775fb8>
 - GitHub repository topics:
   <https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/classifying-your-repository-with-topics>
 - Open Source Guides, building community:
   <https://opensource.guide/building-community/>
 - GitHub Blog, building an open source community:
   <https://github.blog/open-source/maintainers/four-steps-toward-building-an-open-source-community/>
-- Sam Altman X profile reference:
-  <https://x.com/sama>
