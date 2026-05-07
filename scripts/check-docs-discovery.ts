@@ -9,7 +9,6 @@ const siteRoot = 'https://proompteng.github.io/bilig/'
 const expectedSitemapUrls = [
   siteRoot,
   `${siteRoot}why-agents-need-workbook-apis.html`,
-  `${siteRoot}dev-to-workbook-apis-post.html`,
   `${siteRoot}building-a-revenue-model-with-headless-workpaper.html`,
   `${siteRoot}persisting-formula-backed-workpaper-documents-in-node.html`,
   `${siteRoot}what-workpaper-benchmark-proves.html`,
@@ -24,7 +23,6 @@ const expectedSitemapUrls = [
 const sourceFilesByUrl = new Map<string, string>([
   [siteRoot, 'index.html'],
   [`${siteRoot}why-agents-need-workbook-apis.html`, 'why-agents-need-workbook-apis.md'],
-  [`${siteRoot}dev-to-workbook-apis-post.html`, 'dev-to-workbook-apis-post.md'],
   [`${siteRoot}building-a-revenue-model-with-headless-workpaper.html`, 'building-a-revenue-model-with-headless-workpaper.md'],
   [`${siteRoot}persisting-formula-backed-workpaper-documents-in-node.html`, 'persisting-formula-backed-workpaper-documents-in-node.md'],
   [`${siteRoot}what-workpaper-benchmark-proves.html`, 'what-workpaper-benchmark-proves.md'],
@@ -46,6 +44,32 @@ async function requireFile(path: string): Promise<void> {
   const info = await stat(path)
   if (!info.isFile()) {
     throw new Error(`${path} is not a file`)
+  }
+}
+
+function getFrontMatter(content: string): string | undefined {
+  if (!content.startsWith('---\n')) {
+    return undefined
+  }
+
+  const end = content.indexOf('\n---', 4)
+  if (end === -1) {
+    return undefined
+  }
+
+  return content.slice(4, end)
+}
+
+async function requirePublishedSource(path: string): Promise<void> {
+  await requireFile(path)
+
+  if (!path.endsWith('.md')) {
+    return
+  }
+
+  const frontMatter = getFrontMatter(await readFile(path, 'utf8'))
+  if (frontMatter !== undefined && /^published:\s*false\s*$/m.test(frontMatter)) {
+    throw new Error(`${path} is listed in the sitemap but has published: false`)
   }
 }
 
@@ -100,7 +124,7 @@ for (const expectedUrl of expectedSitemapUrls) {
   sourceFilesToVerify.push(sourceFile)
 }
 
-await Promise.all(sourceFilesToVerify.map((sourceFile) => requireFile(join(docsRoot, sourceFile))))
+await Promise.all(sourceFilesToVerify.map((sourceFile) => requirePublishedSource(join(docsRoot, sourceFile))))
 
 for (const url of actualSitemapUrls) {
   if (!url.startsWith(siteRoot)) {
