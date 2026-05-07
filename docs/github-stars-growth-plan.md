@@ -29,6 +29,7 @@ Verified on 2026-05-07:
   - root `README.md`
   - `packages/headless/README.md`
   - `docs/public-adoption-kit.md`
+  - `docs/assets/github-social-preview.png`
   - `CONTRIBUTING.md`
   - `CODE_OF_CONDUCT.md`
   - `SECURITY.md`
@@ -107,8 +108,9 @@ first star feel like a useful bookmark.
 
 Actions:
 
-- Upload a custom GitHub social preview image through repository settings.
-  Recommended GitHub size: `1280x640`, under `1 MB`, solid background.
+- Upload `docs/assets/github-social-preview.png` as the custom GitHub social
+  preview image through repository settings. It is `1280x640`, under `1 MB`,
+  and uses a solid background.
 - Pin or surface the external example in all launch copy:
   `examples/headless-workpaper`.
 - Add a Star History chart only after the repo has enough organic movement to
@@ -215,7 +217,8 @@ audience, or product friction.
 
 ## Immediate Next Actions
 
-1. Upload a GitHub social preview image.
+1. Upload `docs/assets/github-social-preview.png` as the GitHub social preview
+   image.
 2. Create `3` to `5` scoped public `good first issue` tickets.
 3. Publish the first launch post using the copy above.
 4. Share the post in one high-fit channel at a time and respond to every serious
