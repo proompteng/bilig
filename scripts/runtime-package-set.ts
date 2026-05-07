@@ -95,6 +95,11 @@ export function highestStableSemver(versions: readonly (string | null | undefine
   return parsedVersions.reduce((highest, version) => (compareStableSemver(version, highest) > 0 ? version : highest))
 }
 
+export function highestPublishedStableSemver(versions: readonly (string | null | undefined)[]): string | null {
+  const parsedVersions = versions.flatMap((version) => (version ? [version] : []))
+  return parsedVersions.length > 0 ? highestStableSemver(parsedVersions) : null
+}
+
 export function compareStableSemver(left: string, right: string): number {
   const leftVersion = parseStableSemver(left)
   const rightVersion = parseStableSemver(right)

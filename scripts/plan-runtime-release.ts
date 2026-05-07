@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path'
 import {
   assertAlignedVersions,
   compareStableSemver,
+  highestPublishedStableSemver,
   highestStableSemver,
   loadRuntimePackages,
   parseStableSemver,
@@ -62,7 +63,7 @@ const allowManualBootstrap = cliArgs.has('allow-untagged-baseline')
 
 const runtimePackages = loadRuntimePackages(rootDir)
 const runtimeManifestVersion = assertAlignedVersions(runtimePackages)
-const latestPublishedVersion = getAlignedPublishedVersion(runtimePackages.map((runtimePackage) => runtimePackage.name))
+const latestPublishedVersion = getPublishedBaselineVersion(runtimePackages.map((runtimePackage) => runtimePackage.name))
 const latestReachableTag = getLatestReachableRuntimeTag()
 
 const runtimeReleasePlan = buildRuntimeReleasePlan({
@@ -320,23 +321,9 @@ function getLatestReachableRuntimeTag(): string | null {
   )
 }
 
-function getAlignedPublishedVersion(packageNames: string[]): string | null {
-  const publishedVersions = packageNames.map((packageName) => ({
-    packageName,
-    version: getPublishedVersion(packageName),
-  }))
-  const versionSet = new Set(
-    publishedVersions.map((entry) => entry.version).filter((entry): entry is string => typeof entry === 'string' && entry.length > 0),
-  )
-  if (versionSet.size > 1) {
-    throw new Error(
-      `Published runtime package versions are not aligned (${publishedVersions
-        .map((entry) => `${entry.packageName}@${entry.version ?? 'unpublished'}`)
-        .join(', ')})`,
-    )
-  }
-  const [firstVersion] = versionSet
-  return firstVersion ?? null
+function getPublishedBaselineVersion(packageNames: string[]): string | null {
+  const publishedVersions = packageNames.map((packageName) => getPublishedVersion(packageName))
+  return highestPublishedStableSemver(publishedVersions)
 }
 
 function getPublishedVersion(packageName: string): string | null {

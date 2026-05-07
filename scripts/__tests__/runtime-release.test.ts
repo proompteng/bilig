@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { highestStableSemver, RUNTIME_PACKAGE_DIRS } from '../runtime-package-set.ts'
+import { highestPublishedStableSemver, highestStableSemver, RUNTIME_PACKAGE_DIRS } from '../runtime-package-set.ts'
 import { bumpVersion, isRuntimeAffectingPath, parseConventionalCommit, releaseTypeForConventionalCommit } from '../runtime-release.ts'
 
 describe('runtime release helpers', () => {
@@ -78,6 +78,11 @@ describe('runtime release helpers', () => {
 
   it('uses the highest known runtime version as the publish baseline', () => {
     expect(highestStableSemver(['0.7.8', '0.9.3', '0.1.95'])).toBe('0.9.3')
+  })
+
+  it('derives a published runtime baseline from partial package publishing', () => {
+    expect(highestPublishedStableSemver(['0.10.1', '0.10.0', null, undefined])).toBe('0.10.1')
+    expect(highestPublishedStableSemver([null, undefined])).toBeNull()
   })
 
   it('publishes the Excel importer with the aligned runtime package set', () => {
