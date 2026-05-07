@@ -36,3 +36,18 @@ Use `WorkPaper.buildFromSnapshot()` for imported XLSX files. It preserves the
 workbook metadata that Excel formulas need, including defined names, table
 metadata, and structured-reference translations. `WorkPaper.buildFromSheets()`
 is intentionally metadata-free.
+
+## CSV Import
+
+```ts
+import { importCsv } from '@bilig/excel-import'
+
+const imported = importCsv('Account;Amount\n4000;125,50', 'ledger.csv', {
+  delimiter: ';',
+  decimalSeparator: ',',
+})
+```
+
+CSV import auto-detects comma, semicolon, and tab delimiters. Semicolon and tab
+exports that contain decimal-comma values are parsed as locale accounting CSV by
+default; pass explicit options when the source format is known.

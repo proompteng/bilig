@@ -33,6 +33,7 @@ import type {
   WorkbookShapeSnapshot,
   WorkbookSnapshot,
 } from '@bilig/protocol'
+import type { CsvParseOptions } from './csv.js'
 import { formatAddress } from '@bilig/formula'
 import type { EngineOp, EngineOpBatch } from '@bilig/workbook-domain'
 import type {
@@ -895,8 +896,8 @@ export class SpreadsheetEngine extends SpreadsheetEngineRuntimeBase {
     return runEngineEffect(this.runtime.read.exportSheetCsv(sheetName))
   }
 
-  importSheetCsv(sheetName: string, csv: string): void {
-    runEngineEffect(this.runtime.mutation.importSheetCsv(sheetName, csv))
+  importSheetCsv(sheetName: string, csv: string, options?: CsvParseOptions): void {
+    runEngineEffect(this.runtime.mutation.importSheetCsv(sheetName, csv, options))
     if (csv.includes('=')) {
       // CSV import applies one bulk mutation batch. A second full recalc settles
       // formulas whose imported ranges include other formulas introduced later in the same batch.

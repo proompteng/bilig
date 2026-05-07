@@ -2,7 +2,7 @@ import { Effect } from 'effect'
 import { formatAddress } from '@bilig/formula'
 import type { CellRangeRef, CellSnapshot, LiteralInput } from '@bilig/protocol'
 import type { EngineOp } from '@bilig/workbook-domain'
-import { parseCsv, parseCsvCellInput } from '../../csv.js'
+import { parseCsv, parseCsvCellInput, resolveCsvParseOptions, type CsvParseOptions } from '../../csv.js'
 import { normalizeRange } from '../../engine-range-utils.js'
 import type { WorkbookStore } from '../../workbook-store.js'
 import { EngineMutationError } from '../errors.js'
@@ -23,7 +23,7 @@ export interface MutationRangeOperations {
   readonly fillRange: (source: CellRangeRef, target: CellRangeRef) => Effect.Effect<void, EngineMutationError>
   readonly copyRange: (source: CellRangeRef, target: CellRangeRef) => Effect.Effect<void, EngineMutationError>
   readonly moveRange: (source: CellRangeRef, target: CellRangeRef) => Effect.Effect<void, EngineMutationError>
-  readonly importSheetCsv: (sheetName: string, csv: string) => Effect.Effect<void, EngineMutationError>
+  readonly importSheetCsv: (sheetName: string, csv: string, options?: CsvParseOptions) => Effect.Effect<void, EngineMutationError>
 }
 
 interface MutationRangeOperationsRuntime {
@@ -347,10 +347,11 @@ export function createMutationRangeOperations(args: MutationRangeOperationsRunti
           }),
       })
     },
-    importSheetCsv(sheetName, csv) {
+    importSheetCsv(sheetName, csv, options) {
       return Effect.try({
         try: () => {
-          const rows = parseCsv(csv)
+          const csvOptions = resolveCsvParseOptions(csv, options)
+          const rows = parseCsv(csv, csvOptions)
           const existingSheet = args.workbook.getSheet(sheetName)
           const order = existingSheet?.order ?? args.workbook.sheetsByName.size
           const ops: EngineOp[] = []
@@ -363,7 +364,7 @@ export function createMutationRangeOperations(args: MutationRangeOperationsRunti
 
           rows.forEach((row, rowIndex) => {
             row.forEach((raw, colIndex) => {
-              const parsed = parseCsvCellInput(raw)
+              const parsed = parseCsvCellInput(raw, csvOptions)
               if (!parsed) {
                 return
               }

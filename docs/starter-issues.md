@@ -6,7 +6,8 @@ search indexing.
 
 Current starter tickets as of May 7, 2026:
 
-- [`#32 CSV import lacks locale delimiter/decimal options for semicolon accounting exports`](https://github.com/proompteng/bilig/issues/32)
+No scoped starter tickets are currently open. Add a new one when the expected
+patch is small, testable, and safe for a first-time contributor.
 
 The list intentionally excludes closed issues and broad corpus/parity epics. Add
 new starter tickets only when the expected patch can stay small, has a clear

@@ -75,6 +75,13 @@ describe('csv helpers', () => {
     expect(parseCsv('solo')).toEqual([['solo']])
   })
 
+  it('auto-detects semicolon-delimited CSV rows', () => {
+    expect(parseCsv('Account;Amount;Tax\n4000;125,50;20,08')).toEqual([
+      ['Account', 'Amount', 'Tax'],
+      ['4000', '125,50', '20,08'],
+    ])
+  })
+
   it('parses CSV cell inputs into formulas, booleans, numbers, raw strings, or empties', () => {
     expect(parseCsvCellInput('   ')).toBeUndefined()
     expect(parseCsvCellInput('=SUM(A1:A2)')).toEqual({ formula: 'SUM(A1:A2)' })
@@ -83,6 +90,14 @@ describe('csv helpers', () => {
     expect(parseCsvCellInput(' -12.5 ')).toEqual({ value: -12.5 })
     expect(parseCsvCellInput('001')).toEqual({ value: 1 })
     expect(parseCsvCellInput('hello')).toEqual({ value: 'hello' })
+  })
+
+  it('parses decimal-comma CSV cell inputs when requested', () => {
+    expect(parseCsvCellInput('125,50', { decimalSeparator: ',' })).toEqual({ value: 125.5 })
+    expect(parseCsvCellInput('-12,25', { decimalSeparator: ',' })).toEqual({ value: -12.25 })
+    expect(parseCsvCellInput('0,00', { decimalSeparator: ',' })).toEqual({ value: 0 })
+    expect(parseCsvCellInput('1.234', { decimalSeparator: ',' })).toEqual({ value: 1234 })
+    expect(parseCsvCellInput('1.234,56', { decimalSeparator: ',' })).toEqual({ value: 1234.56 })
   })
 
   it('parses common accounting number formats', () => {

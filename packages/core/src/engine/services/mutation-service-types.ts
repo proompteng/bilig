@@ -6,6 +6,7 @@ import type {
   EngineExistingNumericCellMutationRef,
   EngineExistingNumericCellMutationResult,
 } from '../../cell-mutations-at.js'
+import type { CsvParseOptions } from '../../csv.js'
 import type { CommitOp, TransactionRecord } from '../runtime-state.js'
 import type { EngineMutationError } from '../errors.js'
 
@@ -92,6 +93,6 @@ export interface EngineMutationService {
   readonly fillRange: (source: CellRangeRef, target: CellRangeRef) => Effect.Effect<void, EngineMutationError>
   readonly copyRange: (source: CellRangeRef, target: CellRangeRef) => Effect.Effect<void, EngineMutationError>
   readonly moveRange: (source: CellRangeRef, target: CellRangeRef) => Effect.Effect<void, EngineMutationError>
-  readonly importSheetCsv: (sheetName: string, csv: string) => Effect.Effect<void, EngineMutationError>
+  readonly importSheetCsv: (sheetName: string, csv: string, options?: CsvParseOptions) => Effect.Effect<void, EngineMutationError>
   readonly renderCommit: (ops: CommitOp[]) => Effect.Effect<void, EngineMutationError>
 }

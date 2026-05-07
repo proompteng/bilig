@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx'
 import { strFromU8, strToU8, unzipSync, zipSync, type Unzipped } from 'fflate'
 
-import { parseCsv, parseCsvCellInput } from '@bilig/core'
+import { parseCsv, parseCsvCellInput, resolveCsvParseOptions, type CsvParseOptions } from '@bilig/core'
 import type {
   CellBorderSideSnapshot,
   CellBorderStyle,
@@ -88,6 +88,12 @@ export interface ImportedWorkbookSheetPreview {
   columnCount: number
   nonEmptyCellCount: number
   previewRows: readonly (readonly string[])[]
+}
+
+export type CsvImportOptions = CsvParseOptions
+
+export interface WorkbookImportFileOptions {
+  csv?: CsvImportOptions
 }
 
 export class InvalidXlsxZipContainerError extends Error {
@@ -963,10 +969,12 @@ export function importXlsb(bytes: Uint8Array | ArrayBuffer, fileName: string): I
   return importSheetJsWorkbook(data, fileName, XLSB_CONTENT_TYPE, null)
 }
 
-export function importCsv(text: string, fileName: string): ImportedWorkbook {
+export function importCsv(text: string, fileName: string, options: CsvImportOptions = {}): ImportedWorkbook {
   const workbookName = normalizeWorkbookName(fileName)
   const sheetName = normalizeCsvSheetName(workbookName)
-  const rows = parseCsv(text)
+  const csvOptions = resolveCsvParseOptions(text, options)
+  const rows = parseCsv(text, csvOptions)
+  const textColumnIndexes = inferCsvTextColumnIndexes(rows)
   const cells: WorkbookSnapshot['sheets'][number]['cells'] = []
   let nonEmptyCellCount = 0
   let hasRaggedRows = false
@@ -977,7 +985,8 @@ export function importCsv(text: string, fileName: string): ImportedWorkbook {
       hasRaggedRows = true
     }
     row.forEach((raw, colIndex) => {
-      const parsed = parseCsvCellInput(raw)
+      const parsed =
+        textColumnIndexes.has(colIndex) && rowIndex > 0 && raw.trim() !== '' ? { value: raw } : parseCsvCellInput(raw, csvOptions)
       if (!parsed) {
         return
       }
@@ -1031,7 +1040,12 @@ export function importCsv(text: string, fileName: string): ImportedWorkbook {
   }
 }
 
-export function importWorkbookFile(bytes: Uint8Array | ArrayBuffer, fileName: string, contentType: string): ImportedWorkbook {
+export function importWorkbookFile(
+  bytes: Uint8Array | ArrayBuffer,
+  fileName: string,
+  contentType: string,
+  options: WorkbookImportFileOptions = {},
+): ImportedWorkbook {
   const normalizedContentType = normalizeWorkbookImportContentType(contentType)
   if (normalizedContentType === XLSX_CONTENT_TYPE) {
     return importXlsx(bytes, fileName)
@@ -1041,7 +1055,27 @@ export function importWorkbookFile(bytes: Uint8Array | ArrayBuffer, fileName: st
   }
   if (normalizedContentType === CSV_CONTENT_TYPE) {
     const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-    return importCsv(new TextDecoder().decode(data), fileName)
+    return importCsv(new TextDecoder().decode(data), fileName, options.csv)
   }
   throw new Error('Unsupported workbook import content type')
+}
+
+function inferCsvTextColumnIndexes(rows: readonly (readonly string[])[]): Set<number> {
+  const header = rows[0]
+  const textColumnIndexes = new Set<number>()
+  if (!header) {
+    return textColumnIndexes
+  }
+
+  header.forEach((rawHeader, colIndex) => {
+    const headerText = rawHeader.trim().toLowerCase().replaceAll('_', ' ').replaceAll('-', ' ')
+    if (isIdentifierLikeCsvHeader(headerText)) {
+      textColumnIndexes.add(colIndex)
+    }
+  })
+  return textColumnIndexes
+}
+
+function isIdentifierLikeCsvHeader(headerText: string): boolean {
+  return /^(?:account|acct|id|code|sku)(?: (?:id|number|no|code))?$/u.test(headerText)
 }

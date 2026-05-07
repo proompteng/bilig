@@ -104,11 +104,14 @@ of `@bilig/core`:
 consumers. It is not yet published as an npm package:
 
 - `importXlsx(bytes, fileName)`
-- `importCsv(text, fileName)`
-- `importWorkbookFile({ bytes, fileName, contentType })`
+- `importCsv(text, fileName, options?)`
+- `importWorkbookFile(bytes, fileName, contentType, options?)`
 - `exportXlsx(snapshot)`
 - `CSV_CONTENT_TYPE`
 - `XLSX_CONTENT_TYPE`
+
+CSV import auto-detects comma, semicolon, and tab delimiters. For locale-specific
+accounting exports, pass `{ delimiter: ";", decimalSeparator: "," }`.
 
 Use `importXlsx(...).snapshot` with `WorkPaper.buildFromSnapshot()` when a
 consumer needs Excel workbook metadata such as defined names, tables, and

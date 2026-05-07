@@ -793,6 +793,30 @@ describe('excel import', () => {
     )
   })
 
+  it('imports semicolon-delimited accounting csv files with decimal commas', () => {
+    const imported = importCsv('Account;Amount;Tax\n4000;125,50;20,08\n5000;-12,25;0,00', 'locale-accounting.csv')
+
+    expect(imported.warnings).toEqual([])
+    expect(imported.preview.sheets[0]?.previewRows).toEqual([
+      ['Account', 'Amount', 'Tax'],
+      ['4000', '125,50', '20,08'],
+      ['5000', '-12,25', '0,00'],
+    ])
+    expect(imported.snapshot.sheets[0]?.cells).toEqual(
+      expect.arrayContaining([
+        { address: 'A1', value: 'Account' },
+        { address: 'B1', value: 'Amount' },
+        { address: 'C1', value: 'Tax' },
+        { address: 'A2', value: '4000' },
+        { address: 'B2', value: 125.5 },
+        { address: 'C2', value: 20.08 },
+        { address: 'A3', value: '5000' },
+        { address: 'B3', value: -12.25 },
+        { address: 'C3', value: 0 },
+      ]),
+    )
+  })
+
   it('dispatches workbook import by content type', () => {
     const imported = importWorkbookFile(new TextEncoder().encode('A,B\n1,2'), 'dispatch.csv', CSV_CONTENT_TYPE)
 
