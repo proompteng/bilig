@@ -11,6 +11,7 @@ import type {
   WorkbookSnapshot,
   WorkbookValidationComparisonOperator,
 } from '@bilig/protocol'
+import { applyExportRowMetadataToWorksheetXml } from './xlsx-dimensions.js'
 import { readXlsxZipEntries, type XlsxZipSource } from './xlsx-zip.js'
 
 type ZipEntries = Record<string, Uint8Array>
@@ -435,9 +436,6 @@ export function addExportConditionalFormatsToXlsxBytes(bytes: Uint8Array, snapsh
   let changed = false
   sheets.forEach((sheet, sheetIndex) => {
     const conditionalFormats = sheet.metadata?.conditionalFormats ?? []
-    if (conditionalFormats.length === 0) {
-      return
-    }
     const conditionalFormattingXml: string[] = []
     for (const format of conditionalFormats) {
       const dxfXml = buildDxfXml(format.style)
@@ -459,15 +457,19 @@ export function addExportConditionalFormatsToXlsxBytes(bytes: Uint8Array, snapsh
         conditionalFormattingXml.push(xml)
       }
     }
-    if (conditionalFormattingXml.length === 0) {
-      return
-    }
     const sheetPath = `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`
     const sheetXml = getZipText(zip, sheetPath)
     if (!sheetXml) {
       return
     }
-    setZipText(zip, sheetPath, insertWorksheetConditionalFormatting(sheetXml, conditionalFormattingXml))
+    const updatedSheetXml = applyExportRowMetadataToWorksheetXml(
+      insertWorksheetConditionalFormatting(sheetXml, conditionalFormattingXml),
+      sheet.metadata?.rows,
+    )
+    if (updatedSheetXml === sheetXml) {
+      return
+    }
+    setZipText(zip, sheetPath, updatedSheetXml)
     changed = true
   })
 

@@ -101,7 +101,7 @@ function keyConditionRef(range: CellRangeRef, keyAddress: string): string | null
     if (key.c < rangeBounds.s.c || key.c > rangeBounds.e.c || key.r > rangeBounds.e.r) {
       return null
     }
-    const startRow = Math.max(rangeBounds.s.r, key.r)
+    const startRow = key.r
     return XLSX.utils.encode_range({
       s: { r: startRow, c: key.c },
       e: { r: rangeBounds.e.r, c: key.c },
