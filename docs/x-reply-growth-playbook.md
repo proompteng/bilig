@@ -146,6 +146,34 @@ the hard part is not generating formulas. it is proving ranges, formulas, recalc
 i think "excel compatible" has to be replaced with fixture-scoped claims and verifier commands.
 ```
 
+## Manual Reply Log - 2026-05-07
+
+### IronCalc suggestion from Mert Deveci
+
+Target:
+<https://x.com/gm_mertd/status/2052346891807920413>
+
+Posted reply:
+<https://x.com/GregKonush/status/2052471748826996909>
+
+Text:
+
+```text
+yeah ironcalc is probably the main one to watch on the rust/wasm side. my angle is narrower: node/service workbooks with mutation receipts, formula readback, and persistence checks for agents.
+```
+
+Why it fit:
+
+- It was a direct response to a real suggestion, not a keyword-search cold
+  reply.
+- It used no link, no star ask, and no claim that `bilig` replaces IronCalc.
+- The reply acknowledged IronCalc's public positioning as an open-source
+  Rust/WASM spreadsheet engine, then clarified `bilig`'s narrower Node/service
+  and agent-readback angle.
+- This is the preferred pattern for competitor or adjacent-project mentions:
+  respect the project, name the boundary, and avoid dragging the thread into a
+  repo pitch unless someone asks for implementation evidence.
+
 ## Live Reply Queue - 2026-05-07
 
 These are hand-picked targets from the logged-in Atlas X session. Do not treat
@@ -585,3 +613,5 @@ is good enough to link when the same question appears again.
   <https://opensource.guide/building-community/>
 - GitHub Blog, building an open source community:
   <https://github.blog/open-source/maintainers/four-steps-toward-building-an-open-source-community/>
+- IronCalc official site:
+  <https://www.ironcalc.com/>

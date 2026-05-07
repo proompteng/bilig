@@ -93,6 +93,12 @@ Verified on 2026-05-07 after the Show HN launch and topic refresh:
   headless spreadsheet library:
   <https://github.com/statico/jsgrids/pull/92>. This is a discovery-list
   placement, not a social repost.
+- Posted one no-link follow-up reply to Mert Deveci after he suggested
+  IronCalc as an adjacent open-source spreadsheet engine:
+  <https://x.com/GregKonush/status/2052471748826996909>. The reply
+  acknowledged IronCalc as a strong Rust/WASM project and positioned `bilig`
+  narrowly around Node/service WorkPaper state, mutation receipts, formula
+  readback, and persistence checks for agents.
 
 ## Research Findings
 
@@ -457,3 +463,5 @@ audience, or product friction.
   <https://cmustrudel.github.io/papers/icse2026fakestars.pdf>
 - Fortune coverage of Sam Altman's lower-case social style:
   <https://fortune.com/2026/01/29/openai-ceo-sam-altman-types-all-lowercase-like-gen-z-but-could-be-career-chatgpt-boss/>
+- IronCalc official site, used for the adjacent-engine positioning reply:
+  <https://www.ironcalc.com/>
