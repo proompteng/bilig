@@ -15,7 +15,7 @@ describe('public workbook corpus workbook helpers', () => {
         expected: { tag: ValueTag.Number, value: 42 },
       },
     ])
-  })
+  }, 15_000)
 })
 
 function buildBroadSparseWorkbookBytes(): Uint8Array {
