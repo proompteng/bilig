@@ -4,7 +4,7 @@ import {
   type ProtocolFrame,
   type SnapshotChunkFrame,
 } from '@bilig/binary-protocol'
-import { CSV_CONTENT_TYPE, type WorkbookImportContentType } from '@bilig/agent-api'
+import { CSV_CONTENT_TYPE, XLSB_CONTENT_TYPE, type WorkbookImportContentType } from '@bilig/agent-api'
 import { isWorkbookSnapshot, type WorkbookSnapshot } from '@bilig/protocol'
 
 const snapshotEncoder = new TextEncoder()
@@ -101,7 +101,7 @@ export function decodeWorkbookBase64(bytesBase64: string): Uint8Array {
 export function createImportedDocumentId(contentType?: WorkbookImportContentType): string {
   const random =
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).slice(2)
-  const prefix = contentType === CSV_CONTENT_TYPE ? 'csv' : 'xlsx'
+  const prefix = contentType === CSV_CONTENT_TYPE ? 'csv' : contentType === XLSB_CONTENT_TYPE ? 'xlsb' : 'xlsx'
   return `${prefix}:${random}`
 }
 

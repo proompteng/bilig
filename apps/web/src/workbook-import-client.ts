@@ -1,5 +1,6 @@
 import {
   CSV_CONTENT_TYPE,
+  XLSB_CONTENT_TYPE,
   XLSX_CONTENT_TYPE,
   decodeAgentFrame,
   encodeAgentFrame,
@@ -88,6 +89,9 @@ export function resolveWorkbookImportContentType(file: Pick<File, 'name' | 'type
   const normalizedName = file.name.trim().toLowerCase()
   if (normalizedType === XLSX_CONTENT_TYPE || normalizedName.endsWith('.xlsx')) {
     return XLSX_CONTENT_TYPE
+  }
+  if (normalizedType === XLSB_CONTENT_TYPE || normalizedName.endsWith('.xlsb')) {
+    return XLSB_CONTENT_TYPE
   }
   if (normalizedType === CSV_CONTENT_TYPE || normalizedName.endsWith('.csv')) {
     return CSV_CONTENT_TYPE

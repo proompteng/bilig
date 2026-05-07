@@ -17,14 +17,15 @@ const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()
 
 export const XLSX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+export const XLSB_CONTENT_TYPE = 'application/vnd.ms-excel.sheet.binary.macroenabled.12'
 export const CSV_CONTENT_TYPE = 'text/csv'
-export const WORKBOOK_IMPORT_CONTENT_TYPES = [XLSX_CONTENT_TYPE, CSV_CONTENT_TYPE] as const
+export const WORKBOOK_IMPORT_CONTENT_TYPES = [XLSX_CONTENT_TYPE, XLSB_CONTENT_TYPE, CSV_CONTENT_TYPE] as const
 export type WorkbookImportContentType = (typeof WORKBOOK_IMPORT_CONTENT_TYPES)[number]
 export type WorkbookFileOpenMode = 'create' | 'replace'
 
 export function normalizeWorkbookImportContentType(contentType: string): WorkbookImportContentType | null {
   const mediaType = contentType.split(';', 1)[0]?.trim().toLowerCase() ?? ''
-  if (mediaType === XLSX_CONTENT_TYPE || mediaType === CSV_CONTENT_TYPE) {
+  if (mediaType === XLSX_CONTENT_TYPE || mediaType === XLSB_CONTENT_TYPE || mediaType === CSV_CONTENT_TYPE) {
     return mediaType
   }
   return null

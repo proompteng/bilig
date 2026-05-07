@@ -1,6 +1,6 @@
 import { useId } from 'react'
 import { Upload } from 'lucide-react'
-import type { WorkbookImportContentType } from '@bilig/agent-api'
+import { CSV_CONTENT_TYPE, XLSB_CONTENT_TYPE, type WorkbookImportContentType } from '@bilig/agent-api'
 import type { ImportedWorkbookPreview } from '@bilig/excel-import'
 import { cn } from './cn.js'
 import { workbookAlertClass, workbookButtonClass, workbookPillClass, workbookSurfaceClass } from './workbook-shell-chrome.js'
@@ -16,7 +16,13 @@ function formatFileSize(bytes: number): string {
 }
 
 function formatImportType(contentType: WorkbookImportContentType): string {
-  return contentType === 'text/csv' ? 'CSV' : 'XLSX'
+  if (contentType === CSV_CONTENT_TYPE) {
+    return 'CSV'
+  }
+  if (contentType === XLSB_CONTENT_TYPE) {
+    return 'XLSB'
+  }
+  return 'XLSX'
 }
 
 function createPreviewRowDescriptors(rows: readonly (readonly string[])[]): readonly {
@@ -151,7 +157,7 @@ export function WorkbookImportPanel(props: {
                   <span className="truncate">{props.stagedPreview?.fileName ?? 'File'}</span>
                 </div>
                 <input
-                  accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  accept=".csv,.xlsx,.xlsb,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.binary.macroEnabled.12"
                   className="sr-only"
                   data-testid="workbook-import-file"
                   disabled={!props.enabled || props.isPreviewing || props.isImporting}

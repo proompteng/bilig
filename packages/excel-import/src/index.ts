@@ -43,13 +43,16 @@ import { worksheetCellAt, worksheetCellEntries, worksheetCellEntriesAtAddresses,
 export { exportXlsx } from './xlsx-export.js'
 
 export const XLSX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+export const XLSB_CONTENT_TYPE = 'application/vnd.ms-excel.sheet.binary.macroenabled.12'
 export const CSV_CONTENT_TYPE = 'text/csv'
-export const WORKBOOK_IMPORT_CONTENT_TYPES = [XLSX_CONTENT_TYPE, CSV_CONTENT_TYPE] as const
+export const EXCEL_WORKBOOK_IMPORT_CONTENT_TYPES = [XLSX_CONTENT_TYPE, XLSB_CONTENT_TYPE] as const
+export type ExcelWorkbookImportContentType = (typeof EXCEL_WORKBOOK_IMPORT_CONTENT_TYPES)[number]
+export const WORKBOOK_IMPORT_CONTENT_TYPES = [...EXCEL_WORKBOOK_IMPORT_CONTENT_TYPES, CSV_CONTENT_TYPE] as const
 export type WorkbookImportContentType = (typeof WORKBOOK_IMPORT_CONTENT_TYPES)[number]
 
 export function normalizeWorkbookImportContentType(contentType: string): WorkbookImportContentType | null {
   const mediaType = contentType.split(';', 1)[0]?.trim().toLowerCase() ?? ''
-  if (mediaType === XLSX_CONTENT_TYPE || mediaType === CSV_CONTENT_TYPE) {
+  if (mediaType === XLSX_CONTENT_TYPE || mediaType === XLSB_CONTENT_TYPE || mediaType === CSV_CONTENT_TYPE) {
     return mediaType
   }
   return null
@@ -196,7 +199,7 @@ function normalizeWorkbookName(fileName: string): string {
   if (trimmed.length === 0) {
     return 'Imported workbook'
   }
-  return trimmed.replace(/\.(xlsx|xlsm|csv)$/i, '') || 'Imported workbook'
+  return trimmed.replace(/\.(xlsx|xlsm|xlsb|csv)$/i, '') || 'Imported workbook'
 }
 
 function normalizeCsvSheetName(workbookName: string): string {
@@ -675,10 +678,14 @@ function readValidXlsxZipContainer(bytes: Uint8Array): Unzipped {
   }
 }
 
-export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): ImportedWorkbook {
-  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-  const workbookZip = readValidXlsxZipContainer(data)
-  const workbook = XLSX.read(stripStyleOnlyBlankCellsForSheetJs(data, workbookZip), {
+function importSheetJsWorkbook(
+  data: Uint8Array,
+  fileName: string,
+  contentType: ExcelWorkbookImportContentType,
+  workbookZip: Unzipped | null,
+): ImportedWorkbook {
+  const parserData = workbookZip ? stripStyleOnlyBlankCellsForSheetJs(data, workbookZip) : data
+  const workbook = XLSX.read(parserData, {
     type: 'array',
     cellFormula: true,
     cellNF: true,
@@ -701,21 +708,23 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
           styleCandidateAddressesBySheet: styleCandidates.addressesBySheet,
         })
   const importedWorkbookSheetDimensions = readImportedWorkbookSheetDimensions(workbook, workbook.SheetNames)
-  const importedWorkbookProperties = readImportedWorkbookProperties(workbookZip)
-  const importedCalculationSettings = readImportedWorkbookCalculationSettings(workbookZip)
+  const importedWorkbookProperties = workbookZip ? readImportedWorkbookProperties(workbookZip) : undefined
+  const importedCalculationSettings = workbookZip ? readImportedWorkbookCalculationSettings(workbookZip) : undefined
   const importedMacroPayload = toUint8Array(workbook.vbaraw)
   const importedMacroCodeNames = importedMacroPayload ? readImportedMacroCodeNames(workbook) : undefined
-  const importedCharts = readImportedWorkbookCharts(workbookZip, workbook.SheetNames)
-  const importedPivots = readImportedWorkbookPivots(workbookZip, workbook.SheetNames)
-  const importedTables = readImportedWorkbookTables(workbookZip, workbook.SheetNames)
-  const importedFiltersBySheet = readImportedWorkbookFilters(workbookZip, workbook.SheetNames)
-  const importedFreezePanesBySheet = readImportedWorkbookFreezePanes(workbookZip, workbook.SheetNames)
-  const importedSheetTabColorsBySheet = readImportedWorkbookSheetTabColors(workbookZip, workbook.SheetNames)
-  const importedSheetProtectionsBySheet = readImportedWorkbookSheetProtections(workbookZip, workbook.SheetNames)
-  const importedProtectedRangesBySheet = readImportedWorkbookProtectedRanges(workbookZip, workbook.SheetNames)
-  const importedSortsBySheet = readImportedWorkbookSorts(workbookZip, workbook.SheetNames)
-  const importedValidationsBySheet = readImportedWorkbookDataValidations(workbookZip, workbook.SheetNames)
-  const importedConditionalFormatsBySheet = readImportedWorkbookConditionalFormats(workbookZip, workbook.SheetNames)
+  const importedCharts = workbookZip ? readImportedWorkbookCharts(workbookZip, workbook.SheetNames) : undefined
+  const importedPivots = workbookZip ? readImportedWorkbookPivots(workbookZip, workbook.SheetNames) : undefined
+  const importedTables = workbookZip ? readImportedWorkbookTables(workbookZip, workbook.SheetNames) : undefined
+  const importedFiltersBySheet = workbookZip ? readImportedWorkbookFilters(workbookZip, workbook.SheetNames) : new Map()
+  const importedFreezePanesBySheet = workbookZip ? readImportedWorkbookFreezePanes(workbookZip, workbook.SheetNames) : new Map()
+  const importedSheetTabColorsBySheet = workbookZip ? readImportedWorkbookSheetTabColors(workbookZip, workbook.SheetNames) : new Map()
+  const importedSheetProtectionsBySheet = workbookZip ? readImportedWorkbookSheetProtections(workbookZip, workbook.SheetNames) : new Map()
+  const importedProtectedRangesBySheet = workbookZip ? readImportedWorkbookProtectedRanges(workbookZip, workbook.SheetNames) : new Map()
+  const importedSortsBySheet = workbookZip ? readImportedWorkbookSorts(workbookZip, workbook.SheetNames) : new Map()
+  const importedValidationsBySheet = workbookZip ? readImportedWorkbookDataValidations(workbookZip, workbook.SheetNames) : new Map()
+  const importedConditionalFormatsBySheet = workbookZip
+    ? readImportedWorkbookConditionalFormats(workbookZip, workbook.SheetNames)
+    : new Map()
 
   let ignoredCommentsSeen = false
   const styleCatalog = new Map<string, CellStyleRecord>()
@@ -930,7 +939,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
     sheetNames: workbook.SheetNames,
     warnings,
     preview: createWorkbookPreview({
-      contentType: XLSX_CONTENT_TYPE,
+      contentType,
       fileName,
       fileSizeBytes: data.byteLength,
       workbookName,
@@ -938,6 +947,17 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
       warnings,
     }),
   }
+}
+
+export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): ImportedWorkbook {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+  const workbookZip = readValidXlsxZipContainer(data)
+  return importSheetJsWorkbook(data, fileName, XLSX_CONTENT_TYPE, workbookZip)
+}
+
+export function importXlsb(bytes: Uint8Array | ArrayBuffer, fileName: string): ImportedWorkbook {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+  return importSheetJsWorkbook(data, fileName, XLSB_CONTENT_TYPE, null)
 }
 
 export function importCsv(text: string, fileName: string): ImportedWorkbook {
@@ -1012,6 +1032,9 @@ export function importWorkbookFile(bytes: Uint8Array | ArrayBuffer, fileName: st
   const normalizedContentType = normalizeWorkbookImportContentType(contentType)
   if (normalizedContentType === XLSX_CONTENT_TYPE) {
     return importXlsx(bytes, fileName)
+  }
+  if (normalizedContentType === XLSB_CONTENT_TYPE) {
+    return importXlsb(bytes, fileName)
   }
   if (normalizedContentType === CSV_CONTENT_TYPE) {
     const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)

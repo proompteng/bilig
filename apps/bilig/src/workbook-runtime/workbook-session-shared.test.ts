@@ -114,6 +114,62 @@ describe('workbook-session-shared', () => {
     )
   })
 
+  it('supports xlsb imports through the shared workbook load path', async () => {
+    const publishImportedSnapshot = vi.fn()
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.aoa_to_sheet([
+        ['Name', 'Value'],
+        ['alpha', 12],
+      ]),
+      'Sheet1',
+    )
+    const encodedWorkbook: unknown = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsb' })
+    if (!(encodedWorkbook instanceof Uint8Array)) {
+      throw new Error('Expected xlsb writer to return workbook bytes')
+    }
+
+    const response = await loadWorkbookIntoRuntime(
+      {
+        kind: 'loadWorkbookFile',
+        id: 'load-xlsb-1',
+        replicaId: 'replica-1',
+        fileName: 'tiny.xlsb',
+        contentType: 'application/vnd.ms-excel.sheet.binary.macroEnabled.12',
+        openMode: 'create',
+        bytesBase64: Buffer.from(encodedWorkbook).toString('base64'),
+      },
+      {
+        serverUrl: 'http://127.0.0.1:4321',
+      },
+      {
+        registerPreparedSession: vi.fn(),
+        publishImportedSnapshot,
+      },
+    )
+
+    expect(response).toEqual(
+      expect.objectContaining({
+        kind: 'workbookLoaded',
+        id: 'load-xlsb-1',
+        documentId: expect.stringMatching(/^xlsb:/),
+        sheetNames: ['Sheet1'],
+      }),
+    )
+    expect(publishImportedSnapshot).toHaveBeenCalledWith(
+      expect.stringMatching(/^xlsb:/),
+      expect.objectContaining({
+        sheets: [
+          expect.objectContaining({
+            name: 'Sheet1',
+          }),
+        ],
+      }),
+      expect.any(Object),
+    )
+  })
+
   it('normalizes open and close workbook session lifecycle responses', async () => {
     const openResponse = await handleWorkbookAgentFrame(
       {

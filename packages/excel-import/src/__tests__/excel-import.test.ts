@@ -17,6 +17,7 @@ import { SpreadsheetEngine } from '@bilig/core'
 import {
   CSV_CONTENT_TYPE,
   InvalidXlsxZipContainerError,
+  XLSB_CONTENT_TYPE,
   XLSX_CONTENT_TYPE,
   exportXlsx,
   importCsv,
@@ -54,6 +55,17 @@ function buildWorkbook(): Uint8Array {
   }
 
   return XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' })
+}
+
+function buildBinaryWorkbook(): Uint8Array {
+  const workbook = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['Name', 'Value'],
+    ['alpha', 12],
+  ])
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Sheet1')
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['notes']]), 'Sheet2')
+  return XLSX.write(workbook, { bookType: 'xlsb', type: 'buffer' })
 }
 
 function buildMacroEnabledWorkbook(): Uint8Array {
@@ -729,6 +741,14 @@ describe('excel import', () => {
       expect(imported.preview.contentType).toBe(XLSX_CONTENT_TYPE)
       expect(imported.sheetNames).toEqual(['Sheet1', 'Sheet2'])
     }
+  })
+
+  it('dispatches binary Excel workbooks by XLSB content type', () => {
+    const imported = importWorkbookFile(buildBinaryWorkbook(), 'dispatch.xlsb', 'application/vnd.ms-excel.sheet.binary.macroEnabled.12')
+
+    expect(imported.preview.contentType).toBe(XLSB_CONTENT_TYPE)
+    expect(imported.workbookName).toBe('dispatch')
+    expect(imported.sheetNames).toEqual(['Sheet1', 'Sheet2'])
   })
 
   it('rejects corrupt zip-backed xlsx packages before parsing', () => {
