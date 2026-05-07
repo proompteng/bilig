@@ -1,0 +1,314 @@
+import * as XLSX from 'xlsx'
+
+import type { WorkbookTableSnapshot } from '@bilig/protocol'
+
+type StructuredReferenceSection = 'all' | 'data' | 'headers' | 'this-row' | 'totals'
+
+interface StructuredReferenceParts {
+  readonly section?: StructuredReferenceSection
+  readonly columnName?: string
+}
+
+interface StructuredReferenceRewriteContext {
+  readonly formula: string
+  readonly ownerSheetName: string
+  readonly ownerAddress: string
+  readonly tables: readonly WorkbookTableSnapshot[] | undefined
+}
+
+function isIdentifierStart(character: string): boolean {
+  return /[A-Za-z_]/u.test(character)
+}
+
+function isIdentifierPart(character: string): boolean {
+  return /[A-Za-z0-9_.]/u.test(character)
+}
+
+function skipDoubleQuotedString(source: string, startIndex: number): number {
+  let index = startIndex + 1
+  while (index < source.length) {
+    if (source[index] === '"') {
+      if (source[index + 1] === '"') {
+        index += 2
+        continue
+      }
+      return index + 1
+    }
+    index += 1
+  }
+  return source.length
+}
+
+function skipSingleQuotedSheetName(source: string, startIndex: number): number {
+  let index = startIndex + 1
+  while (index < source.length) {
+    if (source[index] === "'") {
+      if (source[index + 1] === "'") {
+        index += 2
+        continue
+      }
+      return index + 1
+    }
+    index += 1
+  }
+  return source.length
+}
+
+function readBalancedStructuredReference(
+  source: string,
+  startIndex: number,
+): { readonly text: string; readonly endIndex: number } | undefined {
+  let depth = 0
+  for (let index = startIndex; index < source.length; index += 1) {
+    const character = source[index]
+    if (character === '[') {
+      depth += 1
+    } else if (character === ']') {
+      depth -= 1
+      if (depth === 0) {
+        return {
+          text: source.slice(startIndex + 1, index),
+          endIndex: index + 1,
+        }
+      }
+    }
+  }
+  return undefined
+}
+
+function splitStructuredReferenceItems(text: string): string[] | undefined {
+  const trimmed = text.trim()
+  if (trimmed.length === 0) {
+    return undefined
+  }
+  if (!trimmed.startsWith('[')) {
+    return [trimmed]
+  }
+
+  const items: string[] = []
+  let index = 0
+  while (index < trimmed.length) {
+    while (trimmed[index] === ' ' || trimmed[index] === '\t' || trimmed[index] === '\n' || trimmed[index] === ',') {
+      index += 1
+    }
+    if (index >= trimmed.length) {
+      break
+    }
+    if (trimmed[index] !== '[') {
+      return undefined
+    }
+    const endIndex = trimmed.indexOf(']', index + 1)
+    if (endIndex < 0) {
+      return undefined
+    }
+    items.push(trimmed.slice(index + 1, endIndex).trim())
+    index = endIndex + 1
+    while (trimmed[index] === ' ' || trimmed[index] === '\t' || trimmed[index] === '\n') {
+      index += 1
+    }
+    if (index < trimmed.length && trimmed[index] !== ',') {
+      return undefined
+    }
+  }
+  return items.length > 0 ? items : undefined
+}
+
+function normalizeStructuredReferenceSection(item: string): StructuredReferenceSection | undefined {
+  const normalized = item.replace(/\s+/gu, ' ').trim().toUpperCase()
+  switch (normalized) {
+    case '#ALL':
+      return 'all'
+    case '#DATA':
+      return 'data'
+    case '#HEADERS':
+      return 'headers'
+    case '#THIS ROW':
+    case '#THISROW':
+    case '@':
+      return 'this-row'
+    case '#TOTALS':
+      return 'totals'
+    default:
+      return undefined
+  }
+}
+
+function unescapeStructuredColumnName(item: string): string {
+  return item.replace(/^@/u, '').replace(/''/gu, "'").trim()
+}
+
+function parseStructuredReferenceParts(text: string): StructuredReferenceParts | undefined {
+  const items = splitStructuredReferenceItems(text)
+  if (!items) {
+    return undefined
+  }
+
+  let section: StructuredReferenceSection | undefined
+  let columnName: string | undefined
+  for (const rawItem of items) {
+    const item = rawItem.trim()
+    if (item.length === 0) {
+      continue
+    }
+    if (item.startsWith('@')) {
+      section = 'this-row'
+      const shorthandColumnName = unescapeStructuredColumnName(item)
+      if (shorthandColumnName.length > 0) {
+        columnName = shorthandColumnName
+      }
+      continue
+    }
+    const parsedSection = normalizeStructuredReferenceSection(item)
+    if (parsedSection) {
+      section = parsedSection
+      continue
+    }
+    columnName = unescapeStructuredColumnName(item)
+  }
+
+  return section || columnName ? { ...(section ? { section } : {}), ...(columnName ? { columnName } : {}) } : undefined
+}
+
+function decodeAddress(address: string): XLSX.CellAddress | undefined {
+  try {
+    return XLSX.utils.decode_cell(address.replaceAll('$', ''))
+  } catch {
+    return undefined
+  }
+}
+
+function encodeAddress(row: number, col: number): string {
+  return XLSX.utils.encode_cell({ r: row, c: col })
+}
+
+function quoteSheetName(sheetName: string): string {
+  return `'${sheetName.replaceAll("'", "''")}'`
+}
+
+function formatFormulaReference(sheetName: string, startRow: number, startCol: number, endRow: number, endCol: number): string {
+  const startAddress = encodeAddress(startRow, startCol)
+  const endAddress = encodeAddress(endRow, endCol)
+  const prefix = `${quoteSheetName(sheetName)}!`
+  return startAddress === endAddress ? `${prefix}${startAddress}` : `${prefix}${startAddress}:${endAddress}`
+}
+
+function findTableColumnIndex(table: WorkbookTableSnapshot, columnName: string): number {
+  const normalizedColumnName = columnName.trim().toLocaleLowerCase('en-US')
+  return table.columnNames.findIndex((candidate) => candidate.trim().toLocaleLowerCase('en-US') === normalizedColumnName)
+}
+
+function rewriteStructuredReference(
+  table: WorkbookTableSnapshot,
+  parts: StructuredReferenceParts,
+  ownerSheetName: string,
+  ownerAddress: string,
+): string | undefined {
+  const tableStart = decodeAddress(table.startAddress)
+  const tableEnd = decodeAddress(table.endAddress)
+  const owner = decodeAddress(ownerAddress)
+  if (!tableStart || !tableEnd || !owner) {
+    return undefined
+  }
+
+  const section = parts.section ?? 'data'
+  let startRow = tableStart.r + (table.headerRow && section === 'data' ? 1 : 0)
+  let endRow = tableEnd.r - (table.totalsRow && section === 'data' ? 1 : 0)
+
+  if (section === 'all') {
+    startRow = tableStart.r
+    endRow = tableEnd.r
+  } else if (section === 'headers') {
+    if (!table.headerRow) {
+      return '#REF!'
+    }
+    startRow = tableStart.r
+    endRow = tableStart.r
+  } else if (section === 'totals') {
+    if (!table.totalsRow) {
+      return '#REF!'
+    }
+    startRow = tableEnd.r
+    endRow = tableEnd.r
+  } else if (section === 'this-row') {
+    if (ownerSheetName !== table.sheetName || owner.r < tableStart.r || owner.r > tableEnd.r) {
+      return '#REF!'
+    }
+    startRow = owner.r
+    endRow = owner.r
+  }
+
+  let startCol = tableStart.c
+  let endCol = tableEnd.c
+  if (parts.columnName) {
+    const columnIndex = findTableColumnIndex(table, parts.columnName)
+    if (columnIndex < 0) {
+      return '#REF!'
+    }
+    startCol = tableStart.c + columnIndex
+    endCol = startCol
+  }
+
+  if (endRow < startRow || endCol < startCol) {
+    return '#REF!'
+  }
+  return formatFormulaReference(table.sheetName, startRow, startCol, endRow, endCol)
+}
+
+export function translateImportedFormulaStructuredReferences({
+  formula,
+  ownerSheetName,
+  ownerAddress,
+  tables,
+}: StructuredReferenceRewriteContext): string {
+  if (!tables || tables.length === 0 || !formula.includes('[')) {
+    return formula
+  }
+
+  const tablesByName = new Map(tables.map((table) => [table.name.toLocaleLowerCase('en-US'), table]))
+  let output = ''
+  let index = 0
+  while (index < formula.length) {
+    const character = formula[index]!
+    if (character === '"') {
+      const endIndex = skipDoubleQuotedString(formula, index)
+      output += formula.slice(index, endIndex)
+      index = endIndex
+      continue
+    }
+    if (character === "'") {
+      const endIndex = skipSingleQuotedSheetName(formula, index)
+      output += formula.slice(index, endIndex)
+      index = endIndex
+      continue
+    }
+    if (!isIdentifierStart(character)) {
+      output += character
+      index += 1
+      continue
+    }
+
+    let identifierEnd = index + 1
+    while (identifierEnd < formula.length && isIdentifierPart(formula[identifierEnd]!)) {
+      identifierEnd += 1
+    }
+    const tableName = formula.slice(index, identifierEnd)
+    const table = tablesByName.get(tableName.toLocaleLowerCase('en-US'))
+    if (!table || formula[identifierEnd] !== '[') {
+      output += tableName
+      index = identifierEnd
+      continue
+    }
+
+    const structuredReference = readBalancedStructuredReference(formula, identifierEnd)
+    const parts = structuredReference ? parseStructuredReferenceParts(structuredReference.text) : undefined
+    const rewritten = parts ? rewriteStructuredReference(table, parts, ownerSheetName, ownerAddress) : undefined
+    if (!structuredReference || !rewritten) {
+      output += tableName
+      index = identifierEnd
+      continue
+    }
+    output += rewritten
+    index = structuredReference.endIndex
+  }
+  return output
+}

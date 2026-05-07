@@ -30,6 +30,11 @@ interface EnginePivotState {
   readonly pivotOutputOwners: Map<number, string>
 }
 
+const VISIBLE_PIVOT_SCAN_ROWS = 300
+const VISIBLE_PIVOT_SCAN_COLS = 120
+const VISIBLE_PIVOT_LABEL_COLS = 8
+const VISIBLE_PIVOT_HEADER_ROWS = 24
+
 export interface EnginePivotService {
   readonly materializePivot: (pivot: WorkbookPivotRecord) => Effect.Effect<number[], EnginePivotError>
   readonly resolvePivotData: (
@@ -56,6 +61,182 @@ function toPivotDefinition(pivot: WorkbookPivotRecord): PivotDefinitionInput {
     groupBy: pivot.groupBy,
     values: pivot.values,
   }
+}
+
+type VisiblePivotCellReader = (sheetName: string, row: number, col: number) => CellValue
+
+function normalizeVisiblePivotText(value: string): string {
+  return normalizePivotLookupText(value.replace(/\s+/gu, ' '))
+}
+
+function addVisiblePivotAlias(aliases: Set<string>, value: string): void {
+  const normalized = normalizeVisiblePivotText(value)
+  if (normalized.length === 0) {
+    return
+  }
+  aliases.add(normalized)
+  const withoutAggregatePrefix = normalized.replace(/^(SUM|COUNT|AVERAGE|MIN|MAX) OF\s+/u, '')
+  if (withoutAggregatePrefix.length > 0) {
+    aliases.add(withoutAggregatePrefix)
+  }
+}
+
+function visiblePivotTextAliases(value: string): readonly string[] {
+  const aliases = new Set<string>()
+  addVisiblePivotAlias(aliases, value)
+  for (const match of value.matchAll(/\[([^\]]+)\]/gu)) {
+    addVisiblePivotAlias(aliases, match[1] ?? '')
+  }
+  return [...aliases]
+}
+
+function visiblePivotCellAliases(value: CellValue): readonly string[] {
+  return visiblePivotTextAliases(cellValueDisplayText(value))
+}
+
+function visiblePivotFilterItemAliases(value: CellValue): readonly string[] {
+  const display = cellValueDisplayText(value)
+  const bracketValues = [...display.matchAll(/\[([^\]]+)\]/gu)].map((match) => match[1] ?? '').filter((part) => part.trim().length > 0)
+  if (bracketValues.length === 0) {
+    return visiblePivotTextAliases(display)
+  }
+  const aliases = new Set<string>()
+  addVisiblePivotAlias(aliases, display)
+  addVisiblePivotAlias(aliases, bracketValues[bracketValues.length - 1]!)
+  return [...aliases]
+}
+
+function visiblePivotCellMatches(cell: CellValue, expectedAliases: ReadonlySet<string>): boolean {
+  return visiblePivotCellAliases(cell).some((alias) => expectedAliases.has(alias))
+}
+
+function findVisiblePivotMeasureRow(
+  sheetName: string,
+  startRow: number,
+  startCol: number,
+  dataField: string,
+  readCell: VisiblePivotCellReader,
+): number | undefined {
+  const expectedAliases = new Set(visiblePivotTextAliases(dataField))
+  if (expectedAliases.size === 0) {
+    return undefined
+  }
+  const endRow = Math.min(MAX_ROWS - 1, startRow + VISIBLE_PIVOT_SCAN_ROWS)
+  const endCol = Math.min(MAX_COLS - 1, startCol + VISIBLE_PIVOT_LABEL_COLS)
+  for (let row = startRow; row <= endRow; row += 1) {
+    for (let col = startCol; col <= endCol; col += 1) {
+      if (visiblePivotCellMatches(readCell(sheetName, row, col), expectedAliases)) {
+        return row
+      }
+    }
+  }
+  return undefined
+}
+
+function visiblePivotHeaderRowsForFilter(
+  sheetName: string,
+  startRow: number,
+  startCol: number,
+  valueRow: number,
+  filterField: string,
+  readCell: VisiblePivotCellReader,
+): readonly number[] {
+  const fieldAliases = new Set(visiblePivotTextAliases(filterField))
+  const rows = new Set<number>()
+  const endRow = Math.min(valueRow, startRow + VISIBLE_PIVOT_HEADER_ROWS)
+  const endCol = Math.min(MAX_COLS - 1, startCol + VISIBLE_PIVOT_SCAN_COLS)
+
+  for (let row = startRow; row <= endRow; row += 1) {
+    for (let col = startCol; col <= endCol; col += 1) {
+      if (!visiblePivotCellMatches(readCell(sheetName, row, col), fieldAliases)) {
+        continue
+      }
+      rows.add(row)
+      if (row + 1 <= valueRow) {
+        rows.add(row + 1)
+      }
+      if (row + 2 <= valueRow) {
+        rows.add(row + 2)
+      }
+    }
+  }
+
+  if (rows.size === 0) {
+    for (let row = startRow; row <= endRow; row += 1) {
+      rows.add(row)
+    }
+  }
+  return [...rows].toSorted((left, right) => left - right)
+}
+
+function findVisiblePivotFilterColumns(
+  sheetName: string,
+  startRow: number,
+  startCol: number,
+  valueRow: number,
+  filter: { field: string; item: CellValue },
+  readCell: VisiblePivotCellReader,
+): readonly number[] {
+  const itemAliases = new Set(visiblePivotFilterItemAliases(filter.item))
+  if (itemAliases.size === 0) {
+    return []
+  }
+  const rows = visiblePivotHeaderRowsForFilter(sheetName, startRow, startCol, valueRow, filter.field, readCell)
+  const endCol = Math.min(MAX_COLS - 1, startCol + VISIBLE_PIVOT_SCAN_COLS)
+  const columns = new Set<number>()
+  for (const row of rows) {
+    for (let col = startCol + 1; col <= endCol; col += 1) {
+      if (visiblePivotCellMatches(readCell(sheetName, row, col), itemAliases)) {
+        columns.add(col)
+      }
+    }
+  }
+  return [...columns].toSorted((left, right) => left - right)
+}
+
+function firstVisiblePivotValueColumn(
+  sheetName: string,
+  startCol: number,
+  valueRow: number,
+  readCell: VisiblePivotCellReader,
+): number | undefined {
+  const endCol = Math.min(MAX_COLS - 1, startCol + VISIBLE_PIVOT_SCAN_COLS)
+  for (let col = startCol + 1; col <= endCol; col += 1) {
+    if (readCell(sheetName, valueRow, col).tag !== ValueTag.Empty) {
+      return col
+    }
+  }
+  return undefined
+}
+
+function findVisiblePivotValueColumn(
+  sheetName: string,
+  startRow: number,
+  startCol: number,
+  valueRow: number,
+  filters: ReadonlyArray<{ field: string; item: CellValue }>,
+  readCell: VisiblePivotCellReader,
+): number | undefined {
+  if (filters.length === 0) {
+    return firstVisiblePivotValueColumn(sheetName, startCol, valueRow, readCell)
+  }
+
+  let candidates: Set<number> | undefined
+  for (const filter of filters) {
+    const columns = findVisiblePivotFilterColumns(sheetName, startRow, startCol, valueRow, filter, readCell)
+    if (columns.length === 0) {
+      return undefined
+    }
+    if (!candidates) {
+      candidates = new Set(columns)
+      continue
+    }
+    candidates = new Set(columns.filter((column) => candidates?.has(column)))
+    if (candidates.size === 0) {
+      return undefined
+    }
+  }
+  return candidates ? Math.min(...candidates) : undefined
 }
 
 export function createEnginePivotService(args: {
@@ -219,6 +400,11 @@ export function createEnginePivotService(args: {
     return rows
   }
 
+  const readVisibleCell = (sheetName: string, row: number, col: number): CellValue => {
+    const cellIndex = args.state.workbook.getCellIndex(sheetName, formatAddress(row, col))
+    return cellIndex === undefined ? emptyValue() : args.state.workbook.cellStore.getValue(cellIndex, (id) => args.state.strings.get(id))
+  }
+
   const materializePivotNow = (pivot: WorkbookPivotRecord): number[] => {
     const changedCellIndices = clearOwnedPivotNow(pivot)
     const sourceSheet = args.state.workbook.getSheet(pivot.source.sheetName)
@@ -240,12 +426,34 @@ export function createEnginePivotService(args: {
     return writePivotOutput(pivot, materialized.rows, materialized.cols, materialized.values, changedCellIndices)
   }
 
+  const resolveVisiblePivotDataNow = (
+    sheetName: string,
+    address: string,
+    dataField: string,
+    filters: ReadonlyArray<{ field: string; item: CellValue }>,
+  ): CellValue | undefined => {
+    if (!args.state.workbook.getSheet(sheetName)) {
+      return undefined
+    }
+    const anchor = parseCellAddress(address, sheetName)
+    const valueRow = findVisiblePivotMeasureRow(sheetName, anchor.row, anchor.col, dataField, readVisibleCell)
+    if (valueRow === undefined) {
+      return undefined
+    }
+    const valueCol = findVisiblePivotValueColumn(sheetName, anchor.row, anchor.col, valueRow, filters, readVisibleCell)
+    if (valueCol === undefined) {
+      return undefined
+    }
+    return readVisibleCell(sheetName, valueRow, valueCol)
+  }
+
   const resolvePivotDataNow = (
     sheetName: string,
     address: string,
     dataField: string,
     filters: ReadonlyArray<{ field: string; item: CellValue }>,
   ): CellValue => {
+    const visibleFallback = (): CellValue => resolveVisiblePivotDataNow(sheetName, address, dataField, filters) ?? errorValue(ErrorCode.Ref)
     const target = parseCellAddress(address, sheetName)
     const pivot = args.state.workbook.listPivots().find((candidate) => {
       if (candidate.sheetName !== sheetName || candidate.rows <= 0 || candidate.cols <= 0) {
@@ -260,7 +468,7 @@ export function createEnginePivotService(args: {
       )
     })
     if (!pivot) {
-      return errorValue(ErrorCode.Ref)
+      return visibleFallback()
     }
 
     const normalizedDataField = normalizePivotLookupText(dataField)
@@ -273,13 +481,13 @@ export function createEnginePivotService(args: {
       )
     })
     if (!valueField) {
-      return errorValue(ErrorCode.Ref)
+      return visibleFallback()
     }
 
     const sourceRows = readPivotSourceRows(pivot.source)
     const headerRow = sourceRows[0]
     if (!headerRow || headerRow.length === 0) {
-      return errorValue(ErrorCode.Ref)
+      return visibleFallback()
     }
 
     const headerLookup = new Map<string, number>()
@@ -292,7 +500,7 @@ export function createEnginePivotService(args: {
 
     const valueColumnIndex = headerLookup.get(normalizePivotLookupText(valueField.sourceColumn))
     if (valueColumnIndex === undefined) {
-      return errorValue(ErrorCode.Ref)
+      return visibleFallback()
     }
 
     const materializedFilters = filters.map((filter) => ({
@@ -300,7 +508,7 @@ export function createEnginePivotService(args: {
       item: filter.item,
     }))
     if (materializedFilters.some((filter) => filter.fieldIndex === undefined)) {
-      return errorValue(ErrorCode.Ref)
+      return visibleFallback()
     }
 
     for (let filterIndex = 0; filterIndex < materializedFilters.length; filterIndex += 1) {
@@ -308,7 +516,7 @@ export function createEnginePivotService(args: {
       const fieldIndex = filter.fieldIndex!
       const itemSeen = sourceRows.slice(1).some((row) => pivotItemMatches(row[fieldIndex] ?? emptyValue(), filter.item))
       if (!itemSeen) {
-        return errorValue(ErrorCode.Ref)
+        return visibleFallback()
       }
     }
 
@@ -329,7 +537,7 @@ export function createEnginePivotService(args: {
       }
     }
 
-    return matched ? { tag: ValueTag.Number, value: aggregate } : errorValue(ErrorCode.Ref)
+    return matched ? { tag: ValueTag.Number, value: aggregate } : visibleFallback()
   }
 
   const clearPivotForCellNow = (cellIndex: number): number[] => {

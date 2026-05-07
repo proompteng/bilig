@@ -7,6 +7,8 @@ import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 import * as XLSX from 'xlsx'
 
+import { attachRuntimeSnapshot } from '@bilig/core'
+import { importXlsx } from '@bilig/excel-import'
 import { WorkPaper, type WorkPaperConfig, type WorkPaperSheet, type WorkPaperSheets } from '@bilig/headless'
 import { formatErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import { formatByteSize } from './public-workbook-corpus-process.ts'
@@ -380,7 +382,8 @@ function checkWorkbookFile(
 }
 
 function prepareWorkbook(filePath: string, skippedByReason: Record<WorkPaperXlsxFormulaSkipReason, number>): PreparedWorkbook {
-  const workbook = XLSX.read(readFileSync(filePath), {
+  const workbookBytes = readFileSync(filePath)
+  const workbook = XLSX.read(workbookBytes, {
     type: 'buffer',
     cellFormula: true,
     cellNF: true,
@@ -430,7 +433,7 @@ function prepareWorkbook(filePath: string, skippedByReason: Record<WorkPaperXlsx
   }
 
   return {
-    sheets,
+    sheets: formulaCells.length === 0 ? sheets : attachRuntimeSnapshot(sheets, importXlsx(workbookBytes, basename(filePath)).snapshot),
     formulaCells,
     maxRows,
     maxColumns,

@@ -236,7 +236,7 @@ export type RuntimeDirectCriteriaResultTransform =
     }
 
 export interface RuntimeDirectCriteriaDescriptor {
-  readonly aggregateKind: 'count' | 'sum' | 'average' | 'min' | 'max'
+  readonly aggregateKind: 'count' | 'sum' | 'average' | 'min' | 'max' | 'first'
   readonly aggregateRange: RuntimeDirectCriteriaRange | undefined
   readonly criteriaPairs: readonly RuntimeDirectCriteriaPair[]
   readonly resultTransforms?: readonly RuntimeDirectCriteriaResultTransform[]

@@ -2,6 +2,11 @@ import * as XLSX from 'xlsx'
 
 import type { LiteralInput, WorkbookDefinedNameSnapshot, WorkbookDefinedNameValueSnapshot } from '@bilig/protocol'
 
+interface ImportedSheetBounds {
+  readonly endRow: number
+  readonly endCol: number
+}
+
 function normalizeA1Address(value: string): string | null {
   const normalized = value.trim().replace(/\$/g, '').toUpperCase()
   if (!/^[A-Z]+[1-9][0-9]*$/.test(normalized)) {
@@ -58,7 +63,92 @@ function parseSheetReference(value: string): { sheetName: string; reference: str
   return sheetName.length > 0 && reference.length > 0 ? { sheetName, reference } : null
 }
 
-function parseDefinedNameReferenceValue(sheetName: string, reference: string): WorkbookDefinedNameValueSnapshot | null {
+function normalizeColumnReference(value: string): string | null {
+  const normalized = value.trim().replace(/\$/g, '').toUpperCase()
+  if (!/^[A-Z]+$/.test(normalized)) {
+    return null
+  }
+  try {
+    return XLSX.utils.encode_col(XLSX.utils.decode_col(normalized))
+  } catch {
+    return null
+  }
+}
+
+function normalizeRowReference(value: string): number | null {
+  const normalized = value.trim().replace(/\$/g, '')
+  if (!/^[1-9][0-9]*$/.test(normalized)) {
+    return null
+  }
+  const row = Number.parseInt(normalized, 10)
+  return Number.isSafeInteger(row) && row > 0 ? row : null
+}
+
+function readImportedSheetBounds(workbook: XLSX.WorkBook): ReadonlyMap<string, ImportedSheetBounds> {
+  const bounds = new Map<string, ImportedSheetBounds>()
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName]
+    if (!sheet?.['!ref']) {
+      continue
+    }
+    try {
+      const decoded = XLSX.utils.decode_range(sheet['!ref'])
+      bounds.set(sheetName, {
+        endRow: Math.max(decoded.e.r, 0),
+        endCol: Math.max(decoded.e.c, 0),
+      })
+    } catch {
+      // Invalid worksheet dimensions should not prevent formula-preserving name import.
+    }
+  }
+  return bounds
+}
+
+function parseBoundedWholeColumnReference(
+  sheetName: string,
+  start: string,
+  end: string,
+  sheetBoundsByName: ReadonlyMap<string, ImportedSheetBounds>,
+): WorkbookDefinedNameValueSnapshot | null {
+  const startColumn = normalizeColumnReference(start)
+  const endColumn = normalizeColumnReference(end)
+  const sheetBounds = sheetBoundsByName.get(sheetName)
+  if (!startColumn || !endColumn || !sheetBounds) {
+    return null
+  }
+  return {
+    kind: 'range-ref',
+    sheetName,
+    startAddress: `${startColumn}1`,
+    endAddress: XLSX.utils.encode_cell({ r: sheetBounds.endRow, c: XLSX.utils.decode_col(endColumn) }),
+  }
+}
+
+function parseBoundedWholeRowReference(
+  sheetName: string,
+  start: string,
+  end: string,
+  sheetBoundsByName: ReadonlyMap<string, ImportedSheetBounds>,
+): WorkbookDefinedNameValueSnapshot | null {
+  const startRow = normalizeRowReference(start)
+  const endRow = normalizeRowReference(end)
+  const sheetBounds = sheetBoundsByName.get(sheetName)
+  if (!startRow || !endRow || !sheetBounds) {
+    return null
+  }
+  return {
+    kind: 'range-ref',
+    sheetName,
+    startAddress: XLSX.utils.encode_cell({ r: startRow - 1, c: 0 }),
+    endAddress: XLSX.utils.encode_cell({ r: endRow - 1, c: sheetBounds.endCol }),
+  }
+}
+
+function parseDefinedNameReferenceValue(
+  sheetName: string,
+  reference: string,
+  sheetBoundsByName: ReadonlyMap<string, ImportedSheetBounds>,
+): WorkbookDefinedNameValueSnapshot | null {
   const parts = reference.split(':')
   if (parts.length === 1) {
     const address = normalizeA1Address(parts[0] ?? '')
@@ -67,7 +157,13 @@ function parseDefinedNameReferenceValue(sheetName: string, reference: string): W
   if (parts.length === 2) {
     const startAddress = normalizeA1Address(parts[0] ?? '')
     const endAddress = normalizeA1Address(parts[1] ?? '')
-    return startAddress && endAddress ? { kind: 'range-ref', sheetName, startAddress, endAddress } : null
+    if (startAddress && endAddress) {
+      return { kind: 'range-ref', sheetName, startAddress, endAddress }
+    }
+    return (
+      parseBoundedWholeColumnReference(sheetName, parts[0] ?? '', parts[1] ?? '', sheetBoundsByName) ??
+      parseBoundedWholeRowReference(sheetName, parts[0] ?? '', parts[1] ?? '', sheetBoundsByName)
+    )
   }
   return null
 }
@@ -90,7 +186,10 @@ function parseDefinedNameScalarValue(value: string): WorkbookDefinedNameValueSna
   return null
 }
 
-function parseImportedDefinedNameValue(ref: string): WorkbookDefinedNameValueSnapshot | null {
+function parseImportedDefinedNameValue(
+  ref: string,
+  sheetBoundsByName: ReadonlyMap<string, ImportedSheetBounds>,
+): WorkbookDefinedNameValueSnapshot | null {
   const trimmed = ref.trim()
   if (trimmed.length === 0) {
     return null
@@ -98,7 +197,7 @@ function parseImportedDefinedNameValue(ref: string): WorkbookDefinedNameValueSna
   const expression = trimmed.startsWith('=') ? trimmed.slice(1).trim() : trimmed
   const sheetReference = parseSheetReference(expression)
   if (sheetReference && !sheetReference.sheetName.startsWith('[')) {
-    const parsedReference = parseDefinedNameReferenceValue(sheetReference.sheetName, sheetReference.reference)
+    const parsedReference = parseDefinedNameReferenceValue(sheetReference.sheetName, sheetReference.reference, sheetBoundsByName)
     if (parsedReference) {
       return parsedReference
     }
@@ -120,6 +219,7 @@ export function readImportedDefinedNames(workbook: XLSX.WorkBook): {
   }
 
   const definedNamesByNormalizedName = new Map<string, WorkbookDefinedNameSnapshot>()
+  const sheetBoundsByName = readImportedSheetBounds(workbook)
   let ignoredCount = 0
   for (const entry of entries) {
     const name = typeof entry.Name === 'string' ? entry.Name.trim() : ''
@@ -128,7 +228,7 @@ export function readImportedDefinedNames(workbook: XLSX.WorkBook): {
       ignoredCount += 1
       continue
     }
-    const value = parseImportedDefinedNameValue(ref)
+    const value = parseImportedDefinedNameValue(ref, sheetBoundsByName)
     if (!value) {
       ignoredCount += 1
       continue

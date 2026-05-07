@@ -10,6 +10,7 @@ import { makeCellEntity, makeRangeEntity } from '../../entity-ids.js'
 import type { FormulaBindingMemberCounts } from './formula-binding-member-counts.js'
 import { tryParseDependencyCellAddress, tryParseDependencyRangeAddress } from './formula-binding-direct-scalar.js'
 import type { ParsedCompiledFormula } from './formula-binding-direct-descriptors.js'
+import { collectDynamicIndexDependencyPlan } from './formula-binding-dynamic-index-dependencies.js'
 import type { CreateEngineFormulaBindingServiceArgs } from './formula-binding-service-types.js'
 
 const EMPTY_DEPENDENCY_BUFFER = new Uint32Array(0)
@@ -102,9 +103,33 @@ export function createFormulaBindingDependencyMaterializer(
       }
     }
 
+    const dynamicIndexDependencyPlan = collectDynamicIndexDependencyPlan({
+      compiled,
+      ownerSheetName: currentSheetName,
+      workbook: args.state.workbook,
+      strings: args.state.strings,
+      getFormulaAst: (sheetName, address) => {
+        const cellIndex = args.state.workbook.getCellIndex(sheetName, address)
+        const formula = cellIndex === undefined ? undefined : args.state.formulas.get(cellIndex)
+        if (cellIndex === undefined || !formula) {
+          return undefined
+        }
+        const position = args.state.workbook.getCellPosition(cellIndex)
+        const parsed = position ? undefined : tryParseDependencyCellAddress(address, sheetName)
+        return {
+          sheetName,
+          address,
+          row: position?.row ?? parsed?.row ?? args.state.workbook.cellStore.rows[cellIndex] ?? 0,
+          col: position?.col ?? parsed?.col ?? args.state.workbook.cellStore.cols[cellIndex] ?? 0,
+          ast: formula.compiled.optimizedAst,
+        }
+      },
+    })
+    const extraDynamicCellDependencyCount = dynamicIndexDependencyPlan?.selectedCells.length ?? 0
+
     ensureDependencyBuildCapacity(
       args.state.workbook.cellStore.size + 1,
-      deps.length + 1,
+      deps.length + extraDynamicCellDependencyCount + 1,
       compiled.symbolicRefs.length + 1,
       compiled.symbolicRanges.length + 1,
     )
@@ -123,6 +148,24 @@ export function createFormulaBindingDependencyMaterializer(
       compiled.symbolicRanges.length > 0 ? new Map(compiled.symbolicRanges.map((range, index) => [range, index])) : undefined
     args.getSymbolicRangeBindings().fill(UNRESOLVED_WASM_OPERAND, 0, compiled.symbolicRanges.length)
 
+    const appendCellDependency = (cellIndex: number): void => {
+      if (args.getDependencyBuildSeen()[cellIndex] !== epoch) {
+        args.getDependencyBuildSeen()[cellIndex] = epoch
+        args.getDependencyBuildCells()[dependencyIndexCount] = cellIndex
+        dependencyIndexCount += 1
+      }
+      args.getDependencyBuildEntities()[dependencyEntityCount] = makeCellEntity(cellIndex)
+      dependencyEntityCount += 1
+    }
+
+    dynamicIndexDependencyPlan?.selectedCells.forEach((cell) => {
+      const sheet = args.state.workbook.getSheet(cell.sheetName)
+      if (!sheet) {
+        return
+      }
+      appendCellDependency(args.ensureCellTrackedByCoords(sheet.id, cell.row, cell.col))
+    })
+
     for (let depIndex = 0; depIndex < deps.length; depIndex += 1) {
       const dep = deps[depIndex]!
       const parsedDep = compiled.parsedDeps?.[depIndex]
@@ -134,13 +177,7 @@ export function createFormulaBindingDependencyMaterializer(
           parsedDep.sheetName === undefined && parsedDep.row !== undefined && parsedDep.col !== undefined && currentSheetId !== undefined
             ? args.ensureCellTrackedByCoords(currentSheetId, parsedDep.row, parsedDep.col)
             : args.ensureCellTracked(parsedDep.sheetName ?? currentSheetName, parsedDep.address)
-        if (args.getDependencyBuildSeen()[cellIndex] !== epoch) {
-          args.getDependencyBuildSeen()[cellIndex] = epoch
-          args.getDependencyBuildCells()[dependencyIndexCount] = cellIndex
-          dependencyIndexCount += 1
-        }
-        args.getDependencyBuildEntities()[dependencyEntityCount] = makeCellEntity(cellIndex)
-        dependencyEntityCount += 1
+        appendCellDependency(cellIndex)
         continue
       }
       if (dep.includes(':')) {
@@ -195,6 +232,7 @@ export function createFormulaBindingDependencyMaterializer(
         if (!sheet) {
           continue
         }
+        const shouldCompactDynamicIndexRange = dynamicIndexDependencyPlan?.compactedRangeDependencies.has(dep) === true
         const compactDirectAggregateRange =
           directAggregate !== undefined &&
           range.kind === 'cells' &&
@@ -233,6 +271,9 @@ export function createFormulaBindingDependencyMaterializer(
         if (symbolicRangeIndex !== -1) {
           args.getSymbolicRangeBindings()[symbolicRangeIndex] = registered.rangeIndex
         }
+        if (shouldCompactDynamicIndexRange) {
+          continue
+        }
         const rangeEntity = makeRangeEntity(registered.rangeIndex)
         args.getDependencyBuildEntities()[dependencyEntityCount] = rangeEntity
         dependencyEntityCount += 1
@@ -263,13 +304,7 @@ export function createFormulaBindingDependencyMaterializer(
         continue
       }
       const cellIndex = args.ensureCellTracked(sheetName, parsed.text)
-      if (args.getDependencyBuildSeen()[cellIndex] !== epoch) {
-        args.getDependencyBuildSeen()[cellIndex] = epoch
-        args.getDependencyBuildCells()[dependencyIndexCount] = cellIndex
-        dependencyIndexCount += 1
-      }
-      args.getDependencyBuildEntities()[dependencyEntityCount] = makeCellEntity(cellIndex)
-      dependencyEntityCount += 1
+      appendCellDependency(cellIndex)
     }
     return {
       dependencyIndices: args.getDependencyBuildCells().slice(0, dependencyIndexCount),

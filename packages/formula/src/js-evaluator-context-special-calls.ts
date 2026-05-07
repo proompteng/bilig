@@ -31,6 +31,41 @@ export function evaluateContextSpecialCall(
   deps: ContextSpecialCallDeps,
 ): StackValue | undefined {
   switch (callee) {
+    case 'SINGLE': {
+      if (rawArgs.length !== 1) {
+        return deps.stackScalar(deps.error(ErrorCode.Value))
+      }
+      const target = rawArgs[0]!
+      const scalar = deps.isSingleCellValue(target)
+      if (scalar) {
+        return deps.stackScalar(scalar)
+      }
+      if (target.kind !== 'array' && target.kind !== 'range') {
+        return deps.stackScalar(deps.error(ErrorCode.Value))
+      }
+      const bounds = offsetReferenceBounds(argRefs[0], context, deps)
+      const current = deps.currentCellReference(context)
+      const currentAddress = deps.referenceTopLeftAddress(current)
+      const currentSheetName = deps.referenceSheetName(current, context)
+      if (!bounds || !currentAddress || !currentSheetName || !sameSheetName(bounds.sheetName, currentSheetName)) {
+        return deps.stackScalar(deps.error(ErrorCode.Value))
+      }
+      const currentCell = parseCellAddress(currentAddress, currentSheetName)
+      const rowOffset = currentCell.row - bounds.row
+      const colOffset = currentCell.col - bounds.col
+      const selected =
+        bounds.cols === 1 && rowOffset >= 0 && rowOffset < bounds.rows
+          ? { row: rowOffset, col: 0 }
+          : bounds.rows === 1 && colOffset >= 0 && colOffset < bounds.cols
+            ? { row: 0, col: colOffset }
+            : rowOffset >= 0 && rowOffset < bounds.rows && colOffset >= 0 && colOffset < bounds.cols
+              ? { row: rowOffset, col: colOffset }
+              : undefined
+      if (!selected || selected.row >= target.rows || selected.col >= target.cols) {
+        return deps.stackScalar(deps.error(ErrorCode.Value))
+      }
+      return deps.stackScalar(target.values[selected.row * target.cols + selected.col] ?? deps.emptyValue())
+    }
     case 'ROW': {
       if (rawArgs.length > 1) {
         return deps.stackScalar(deps.error(ErrorCode.Value))
@@ -218,6 +253,10 @@ export function evaluateContextSpecialCall(
     default:
       return undefined
   }
+}
+
+function sameSheetName(left: string, right: string): boolean {
+  return left.trim().toUpperCase() === right.trim().toUpperCase()
 }
 
 function scalarIntegerArg(value: StackValue | undefined, deps: ContextSpecialCallDeps): number | undefined {

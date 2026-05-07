@@ -50,6 +50,47 @@ describe('formula builtins and JS evaluator', () => {
     expect(NOT({ tag: ValueTag.Empty })).toEqual({ tag: ValueTag.Boolean, value: true })
   })
 
+  it('evaluates the Excel implicit-intersection SINGLE wrapper around lookup results and ranges', () => {
+    const num = (value: number): CellValue => ({ tag: ValueTag.Number, value })
+
+    expect(
+      evaluateAst(parseFormula('SINGLE(INDEX(A1:A3,2))'), {
+        sheetName: 'Sheet1',
+        currentAddress: 'B2',
+        resolveCell: (_sheetName: string, address: string): CellValue => {
+          if (address === 'A1') return num(10)
+          if (address === 'A2') return num(20)
+          if (address === 'A3') return num(30)
+          return { tag: ValueTag.Empty }
+        },
+        resolveRange: (_sheetName: string, start: string, end: string, refKind: 'cells' | 'rows' | 'cols'): CellValue[] => {
+          if (refKind === 'cells' && start === 'A1' && end === 'A3') {
+            return [num(10), num(20), num(30)]
+          }
+          return []
+        },
+      }),
+    ).toEqual(num(20))
+    expect(
+      evaluateAst(parseFormula('SINGLE(A1:A3)'), {
+        sheetName: 'Sheet1',
+        currentAddress: 'B2',
+        resolveCell: (_sheetName: string, address: string): CellValue => {
+          if (address === 'A1') return num(10)
+          if (address === 'A2') return num(20)
+          if (address === 'A3') return num(30)
+          return { tag: ValueTag.Empty }
+        },
+        resolveRange: (_sheetName: string, start: string, end: string, refKind: 'cells' | 'rows' | 'cols'): CellValue[] => {
+          if (refKind === 'cells' && start === 'A1' && end === 'A3') {
+            return [num(10), num(20), num(30)]
+          }
+          return []
+        },
+      }),
+    ).toEqual(num(20))
+  })
+
   it('evaluates range, concat, unary, comparison, builtin, and error paths', () => {
     const num = (value: number): CellValue => ({ tag: ValueTag.Number, value })
     const empty = (): CellValue => ({ tag: ValueTag.Empty })

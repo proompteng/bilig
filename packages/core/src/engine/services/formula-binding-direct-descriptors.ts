@@ -149,6 +149,13 @@ function staticCellValue(node: FormulaNode | undefined): CellValue | undefined {
   }
 }
 
+function flattenCriteriaProduct(node: FormulaNode): FormulaNode[] {
+  if (node.kind !== 'BinaryExpr' || node.operator !== '*') {
+    return [node]
+  }
+  return [...flattenCriteriaProduct(node.left), ...flattenCriteriaProduct(node.right)]
+}
+
 function resolveDirectCriteriaRange(
   node: FormulaNode | undefined,
   ownerSheetName: string,
@@ -176,6 +183,9 @@ function resolveDirectCriteriaRange(
     length: parsed.end.row - parsed.start.row + 1,
   }
 }
+
+type DirectCriteriaResolvedRange = NonNullable<ReturnType<typeof resolveDirectCriteriaRange>>
+type DirectCriteriaCallNode = Extract<FormulaNode, { readonly kind: 'CallExpr' }>
 
 function appendDirectCriteriaResultTransform(
   descriptor: RuntimeDirectCriteriaDescriptor,
@@ -244,6 +254,16 @@ export function buildDirectCriteriaDescriptor(args: {
     return literal ? { kind: 'literal', value: literal } : undefined
   }
 
+  const withRangeRegion = (range: DirectCriteriaResolvedRange): DirectCriteriaResolvedRange & { readonly regionId: number } => ({
+    ...range,
+    regionId: args.regionGraph.internSingleColumnRegion({
+      sheetName: range.sheetName,
+      rowStart: range.rowStart,
+      rowEnd: range.rowEnd,
+      col: range.col,
+    }),
+  })
+
   const pair = (
     rangeNode: FormulaNode | undefined,
     criterionNode: FormulaNode | undefined,
@@ -254,16 +274,66 @@ export function buildDirectCriteriaDescriptor(args: {
       return undefined
     }
     return {
-      range: {
-        ...range,
-        regionId: args.regionGraph.internSingleColumnRegion({
-          sheetName: range.sheetName,
-          rowStart: range.rowStart,
-          rowEnd: range.rowEnd,
-          col: range.col,
-        }),
-      },
+      range: withRangeRegion(range),
       criterion,
+    }
+  }
+
+  const directCriteriaPairFromEquality = (node: FormulaNode): RuntimeDirectCriteriaDescriptor['criteriaPairs'][number] | undefined => {
+    if (node.kind !== 'BinaryExpr' || node.operator !== '=') {
+      return undefined
+    }
+    return pair(node.left, node.right) ?? pair(node.right, node.left)
+  }
+
+  const buildCriteriaPairsFromProduct = (
+    node: FormulaNode,
+  ): Array<RuntimeDirectCriteriaDescriptor['criteriaPairs'][number]> | undefined => {
+    const pairs: Array<RuntimeDirectCriteriaDescriptor['criteriaPairs'][number]> = []
+    for (const factor of flattenCriteriaProduct(node)) {
+      const criteriaPair = directCriteriaPairFromEquality(factor)
+      if (!criteriaPair) {
+        return undefined
+      }
+      pairs.push(criteriaPair)
+    }
+    if (pairs.length === 0) {
+      return undefined
+    }
+    const expectedLength = pairs[0]!.range.length
+    return pairs.every((current) => current.range.length === expectedLength) ? pairs : undefined
+  }
+
+  const isStaticNumber = (node: FormulaNode | undefined, expected: number): boolean => {
+    const value = staticCellValue(node)
+    return value?.tag === ValueTag.Number && Object.is(value.value, expected)
+  }
+
+  const buildIndexMatchCriteriaDescriptor = (node: DirectCriteriaCallNode): RuntimeDirectCriteriaDescriptor | undefined => {
+    const aggregateRange = resolveDirectCriteriaRange(node.args[0], args.ownerSheetName)
+    const rowLookup = node.args[1]
+    const columnLookup = node.args[2]
+    if (
+      !aggregateRange ||
+      node.args.length < 2 ||
+      node.args.length > 3 ||
+      (columnLookup !== undefined && !isStaticNumber(columnLookup, 1)) ||
+      rowLookup?.kind !== 'CallExpr' ||
+      rowLookup.callee.trim().toUpperCase() !== 'MATCH' ||
+      rowLookup.args.length !== 3 ||
+      !isStaticNumber(rowLookup.args[0], 1) ||
+      !isStaticNumber(rowLookup.args[2], 0)
+    ) {
+      return undefined
+    }
+    const criteriaPairs = buildCriteriaPairsFromProduct(rowLookup.args[1]!)
+    if (!criteriaPairs || criteriaPairs.some((criteriaPair) => criteriaPair.range.length !== aggregateRange.length)) {
+      return undefined
+    }
+    return {
+      aggregateKind: 'first',
+      aggregateRange: withRangeRegion(aggregateRange),
+      criteriaPairs,
     }
   }
 
@@ -289,6 +359,10 @@ export function buildDirectCriteriaDescriptor(args: {
       }
       const inner = buildDescriptorForNode(node.args[0]!)
       return inner ? appendDirectCriteriaResultTransform(inner, { kind: 'if-error', fallback }) : undefined
+    }
+
+    if (callee === 'INDEX') {
+      return buildIndexMatchCriteriaDescriptor(node)
     }
 
     if (callee === 'COUNTIF') {
@@ -337,15 +411,7 @@ export function buildDirectCriteriaDescriptor(args: {
       }
       return {
         aggregateKind: callee === 'SUMIF' ? 'sum' : 'average',
-        aggregateRange: {
-          ...aggregateRange,
-          regionId: args.regionGraph.internSingleColumnRegion({
-            sheetName: aggregateRange.sheetName,
-            rowStart: aggregateRange.rowStart,
-            rowEnd: aggregateRange.rowEnd,
-            col: aggregateRange.col,
-          }),
-        },
+        aggregateRange: withRangeRegion(aggregateRange),
         criteriaPairs: [criteriaPair],
       }
     }
@@ -367,15 +433,7 @@ export function buildDirectCriteriaDescriptor(args: {
     }
     return {
       aggregateKind: callee === 'SUMIFS' ? 'sum' : callee === 'AVERAGEIFS' ? 'average' : callee === 'MINIFS' ? 'min' : 'max',
-      aggregateRange: {
-        ...aggregateRange,
-        regionId: args.regionGraph.internSingleColumnRegion({
-          sheetName: aggregateRange.sheetName,
-          rowStart: aggregateRange.rowStart,
-          rowEnd: aggregateRange.rowEnd,
-          col: aggregateRange.col,
-        }),
-      },
+      aggregateRange: withRangeRegion(aggregateRange),
       criteriaPairs,
     }
   }

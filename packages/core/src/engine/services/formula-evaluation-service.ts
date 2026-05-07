@@ -282,6 +282,23 @@ export function createEngineFormulaEvaluationService(args: {
     if (cachedAggregate) {
       return applyDirectCriteriaResultTransforms(formula, cachedAggregate)
     }
+
+    if (directCriteria.aggregateKind === 'first') {
+      const firstOffset = matches.rows[0]
+      const result =
+        firstOffset === undefined
+          ? directErrorResult(ErrorCode.NA)
+          : args.runtimeColumnStore
+              .getColumnView({
+                sheetName: aggregateRange.sheetName,
+                rowStart: aggregateRange.rowStart,
+                rowEnd: aggregateRange.rowEnd,
+                col: aggregateRange.col,
+              })
+              .readCellValueAt(firstOffset)
+      return applyDirectCriteriaResultTransforms(formula, rememberDirectCriteriaResult(aggregateCacheKey, result))
+    }
+
     const aggregateSlice = args.runtimeColumnStore.getColumnSlice({
       sheetName: aggregateRange.sheetName,
       rowStart: aggregateRange.rowStart,

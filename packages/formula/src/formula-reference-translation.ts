@@ -1,5 +1,5 @@
 import type { RangeAddress } from './addressing.js'
-import { formatRangeAddress, parseCellAddress, parseRangeAddress } from './addressing.js'
+import { parseCellAddress, parseRangeAddress } from './addressing.js'
 import type { ParsedCellReferenceInfo, ParsedDependencyReference, ParsedRangeReferenceInfo } from './compiler.js'
 import {
   formatAxisReference,
@@ -196,11 +196,45 @@ export function translateQualifiedDependencyReference(raw: string, rowDelta: num
 export function translateQualifiedRangeReference(raw: string, rowDelta: number, colDelta: number): string {
   const explicitlyQualified = raw.includes('!')
   const parsed = parseRangeAddress(raw)
-  const nextRange = translateRangeAddress(parsed, rowDelta, colDelta)
+  const rawRange = splitRawRangeReference(raw)
+  const nextRange = translateRangeEndpoints(parsed.kind, rawRange.start, rawRange.end, rowDelta, colDelta)
   if (explicitlyQualified) {
-    return formatRangeAddress(nextRange)
+    return formatQualifiedRangeReference(parsed.sheetName, nextRange.start, nextRange.end)
   }
-  return `${nextRange.start.text}:${nextRange.end.text}`
+  return `${nextRange.start}:${nextRange.end}`
+}
+
+function splitRawRangeReference(raw: string): { start: string; end: string } {
+  const separator = raw.indexOf(':')
+  return {
+    start: stripSheetQualifier(separator === -1 ? raw : raw.slice(0, separator).trim()),
+    end: stripSheetQualifier(separator === -1 ? raw : raw.slice(separator + 1).trim()),
+  }
+}
+
+function translateRangeEndpoints(
+  refKind: 'cells' | 'rows' | 'cols',
+  start: string,
+  end: string,
+  rowDelta: number,
+  colDelta: number,
+): { start: string; end: string } {
+  if (refKind === 'cells') {
+    return {
+      start: translateCellReference(start, rowDelta, colDelta),
+      end: translateCellReference(end, rowDelta, colDelta),
+    }
+  }
+  if (refKind === 'rows') {
+    return {
+      start: translateRowReference(start, rowDelta),
+      end: translateRowReference(end, rowDelta),
+    }
+  }
+  return {
+    start: translateColumnReference(start, colDelta),
+    end: translateColumnReference(end, colDelta),
+  }
 }
 
 export function translateRangeAddress(range: RangeAddress, rowDelta: number, colDelta: number): RangeAddress {

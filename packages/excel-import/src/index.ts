@@ -33,6 +33,7 @@ import { readImportedWorkbookFileStyles, readImportedWorkbookSheetDimensions } f
 import { readImportedWorkbookTables } from './xlsx-tables.js'
 import { readImportedWorkbookDataValidations } from './xlsx-validations.js'
 import { readImportedWorkbookProperties } from './xlsx-workbook-properties.js'
+import { translateImportedFormulaStructuredReferences } from './xlsx-formula-translation.js'
 import { createPreservedVbaProjectPayload, type PreservedVbaProjectCodeNames } from './xlsx-macros.js'
 
 export { exportXlsx } from './xlsx-export.js'
@@ -775,7 +776,12 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
       const nextCell: WorkbookSnapshot['sheets'][number]['cells'][number] = { address }
       const formula = cell['f']
       if (typeof formula === 'string' && formula.trim().length > 0) {
-        nextCell.formula = formula
+        nextCell.formula = translateImportedFormulaStructuredReferences({
+          formula,
+          ownerSheetName: sheetName,
+          ownerAddress: address,
+          tables: importedTables,
+        })
       } else {
         const literal = toLiteralInput(cell['v'])
         if (literal !== undefined) {

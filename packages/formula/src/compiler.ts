@@ -703,6 +703,99 @@ function parseDependencyReference(reference: string): ParsedDependencyReference 
   }
 }
 
+function normalizedDependencyReferenceKey(reference: string): string | undefined {
+  try {
+    if (reference.includes(':')) {
+      return formatRangeAddress(parseRangeAddress(reference))
+    }
+    const parsedCell = parseCellAddress(reference)
+    return parsedCell.sheetName === undefined ? parsedCell.text : `${parsedCell.sheetName}!${parsedCell.text}`
+  } catch {
+    return undefined
+  }
+}
+
+function registerParsedDependencyReference(
+  referencesByKey: Map<string, ParsedDependencyReference>,
+  reference: string,
+  parsed: ParsedDependencyReference,
+): void {
+  if (!referencesByKey.has(reference)) {
+    referencesByKey.set(reference, parsed)
+  }
+  const normalized = normalizedDependencyReferenceKey(reference)
+  if (normalized !== undefined && !referencesByKey.has(normalized)) {
+    referencesByKey.set(normalized, parsed)
+  }
+}
+
+function collectParsedDependencyReferencesFromAst(ast: FormulaNode): Map<string, ParsedDependencyReference> {
+  const referencesByKey = new Map<string, ParsedDependencyReference>()
+
+  const collect = (node: FormulaNode): void => {
+    switch (node.kind) {
+      case 'NumberLiteral':
+      case 'BooleanLiteral':
+      case 'StringLiteral':
+      case 'ErrorLiteral':
+      case 'NameRef':
+      case 'StructuredRef':
+      case 'SpillRef':
+      case 'RowRef':
+      case 'ColumnRef':
+        return
+      case 'CellRef': {
+        const reference = node.sheetName ? `${node.sheetName}!${node.ref}` : node.ref
+        registerParsedDependencyReference(referencesByKey, reference, {
+          kind: 'cell',
+          ...buildParsedCellReferenceInfo(reference),
+        })
+        return
+      }
+      case 'RangeRef': {
+        const reference = node.sheetName ? `${node.sheetName}!${node.start}:${node.end}` : `${node.start}:${node.end}`
+        registerParsedDependencyReference(referencesByKey, reference, buildParsedRangeReferenceInfo(reference))
+        return
+      }
+      case 'UnaryExpr':
+        collect(node.argument)
+        return
+      case 'BinaryExpr':
+        collect(node.left)
+        collect(node.right)
+        return
+      case 'CallExpr': {
+        const rewritten = rewriteSpecialCall(node)
+        if (rewritten) {
+          collect(rewritten)
+          return
+        }
+        node.args.forEach(collect)
+        return
+      }
+      case 'InvokeExpr':
+        collect(node.callee)
+        node.args.forEach(collect)
+        return
+    }
+  }
+
+  collect(ast)
+  return referencesByKey
+}
+
+function buildParsedDependenciesFromAst(ast: FormulaNode, deps: readonly string[]): ParsedDependencyReference[] {
+  const referencesByKey = collectParsedDependencyReferencesFromAst(ast)
+  return deps.map((dependency) => {
+    const normalized = normalizedDependencyReferenceKey(dependency)
+    return (
+      referencesByKey.get(dependency) ??
+      (normalized === undefined ? undefined : referencesByKey.get(normalized)) ??
+      parseDependencyReference(dependency)
+    )
+  })
+}
+
 function buildSimpleCompiledFormula(source: string): CompiledFormula | null {
   const trimmed = source.trim()
   const singleOperand = parseSimpleOperand(trimmed)
@@ -886,6 +979,7 @@ export function compileFormulaAst(source: string, ast: FormulaNode, options: Com
   const volatileMetadata = analyzeVolatileMetadata(options.originalAst ?? ast)
   const spillResult = producesSpillResult(optimizedAst)
   const directAggregateCandidate = buildDirectAggregateCandidate(optimizedAst, state.ranges)
+  const parsedDependencies = buildParsedDependenciesFromAst(optimizedAst, bound.deps)
 
   if (bound.mode === FormulaMode.WasmFastPath) {
     emitNode(optimizedAst, state)
@@ -916,7 +1010,7 @@ export function compileFormulaAst(source: string, ast: FormulaNode, options: Com
     astMatchesSource: true,
     ...(directAggregateCandidate ? { directAggregateCandidate } : {}),
     deps: bound.deps,
-    parsedDeps: bound.deps.map(parseDependencyReference),
+    parsedDeps: parsedDependencies,
     symbolicNames: options.symbolicNames ?? bound.symbolicNames,
     symbolicTables: options.symbolicTables ?? bound.symbolicTables,
     symbolicSpills: options.symbolicSpills ?? bound.symbolicSpills,

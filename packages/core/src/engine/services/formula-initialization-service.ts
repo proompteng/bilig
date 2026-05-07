@@ -43,6 +43,10 @@ export type {
 const INITIAL_DIRECT_FORMULA_EVALUATION_LIMIT = 16_384
 const EMPTY_U32 = new Uint32Array(0)
 
+function compiledFormulaRequiresWorkbookMetadataBinding(compiled: CompiledFormula): boolean {
+  return compiled.symbolicNames.length > 0 || compiled.symbolicTables.length > 0 || compiled.symbolicSpills.length > 0
+}
+
 type InitialPrefixAggregateKind = 'sum' | 'count' | 'average' | 'min' | 'max'
 
 interface InitialPrefixAggregateGroup {
@@ -600,6 +604,32 @@ export function createEngineFormulaInitializationService(args: {
           pushInlineInitialDirectScalarCell(prepared.cellIndex)
         }
       }
+      const noteBoundFormula = (prepared: { cellIndex: number; sheetId: number; col: number }): void => {
+        if (hadExistingFormulas) {
+          formulaChangedCount = args.markFormulaChanged(prepared.cellIndex, formulaChangedCount)
+        }
+        topologyChanged = true
+        pushOrderedPreparedCellIndex(prepared.cellIndex)
+        if (canAssignTopoInBatch && pendingFormulaCells) {
+          const runtimeFormula = args.state.formulas.get(prepared.cellIndex)
+          if (!canEvaluateInitialDirectRuntimeFormula(runtimeFormula)) {
+            allPreparedFormulasCanUseInitialDirectEvaluation = false
+          }
+          if (runtimeFormula?.directAggregate !== undefined) {
+            hasInitialPrefixAggregateCandidates = true
+          }
+          if (
+            !runtimeFormula ||
+            hasPendingFormulaDependency(runtimeFormula, pendingFormulaCells, (rangeIndex) => args.state.ranges.getMembersView(rangeIndex))
+          ) {
+            canAssignTopoInBatch = false
+          } else {
+            args.state.workbook.cellStore.topoRanks[prepared.cellIndex] = nextTopoRank
+            nextTopoRank += 1
+            tryInlineInitialDirectScalarEvaluation(prepared, runtimeFormula)
+          }
+        }
+      }
 
       args.setBatchMutationDepth(args.getBatchMutationDepth() + 1)
       try {
@@ -613,45 +643,25 @@ export function createEngineFormulaInitializationService(args: {
               const cellIndex = hadExistingFormulas ? resolveCellIndex(ref) : targetCellIndices[refIndex]!
               try {
                 const prepared = resolveEntry(ref, cellIndex)
-                args.bindPreparedFormula(
-                  prepared.cellIndex,
-                  prepared.ownerSheetName,
-                  prepared.source,
-                  prepared.compiled,
-                  prepared.templateId,
-                  {
-                    deferFamilyRegistration: shouldDeferFormulaFamilyIndex || deferredFormulaFamilyRuns !== undefined,
-                    deferFormulaInstanceRegistration: shouldDeferFormulaInstanceTable,
-                    assumeFreshFormula: !hadExistingFormulas,
-                  },
-                )
-                noteDeferredFormulaFamilyRunMember(deferredFormulaFamilyRuns, prepared)
-                if (hadExistingFormulas) {
-                  formulaChangedCount = args.markFormulaChanged(prepared.cellIndex, formulaChangedCount)
+                const requiresWorkbookMetadataBinding = compiledFormulaRequiresWorkbookMetadataBinding(prepared.compiled)
+                if (requiresWorkbookMetadataBinding) {
+                  args.bindFormula(prepared.cellIndex, prepared.ownerSheetName, prepared.source)
+                } else {
+                  args.bindPreparedFormula(
+                    prepared.cellIndex,
+                    prepared.ownerSheetName,
+                    prepared.source,
+                    prepared.compiled,
+                    prepared.templateId,
+                    {
+                      deferFamilyRegistration: shouldDeferFormulaFamilyIndex || deferredFormulaFamilyRuns !== undefined,
+                      deferFormulaInstanceRegistration: shouldDeferFormulaInstanceTable,
+                      assumeFreshFormula: !hadExistingFormulas,
+                    },
+                  )
+                  noteDeferredFormulaFamilyRunMember(deferredFormulaFamilyRuns, prepared)
                 }
-                topologyChanged = true
-                pushOrderedPreparedCellIndex(prepared.cellIndex)
-                if (canAssignTopoInBatch && pendingFormulaCells) {
-                  const runtimeFormula = args.state.formulas.get(prepared.cellIndex)
-                  if (!canEvaluateInitialDirectRuntimeFormula(runtimeFormula)) {
-                    allPreparedFormulasCanUseInitialDirectEvaluation = false
-                  }
-                  if (runtimeFormula?.directAggregate !== undefined) {
-                    hasInitialPrefixAggregateCandidates = true
-                  }
-                  if (
-                    !runtimeFormula ||
-                    hasPendingFormulaDependency(runtimeFormula, pendingFormulaCells, (rangeIndex) =>
-                      args.state.ranges.getMembersView(rangeIndex),
-                    )
-                  ) {
-                    canAssignTopoInBatch = false
-                  } else {
-                    args.state.workbook.cellStore.topoRanks[prepared.cellIndex] = nextTopoRank
-                    nextTopoRank += 1
-                    tryInlineInitialDirectScalarEvaluation(prepared, runtimeFormula)
-                  }
-                }
+                noteBoundFormula(prepared)
               } catch {
                 noteSkippedOrderedPreparedCellIndex()
                 topologyChanged = args.removeFormula(cellIndex) || topologyChanged

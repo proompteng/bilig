@@ -1,7 +1,7 @@
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import type { FormulaNode } from './ast.js'
 import { parseRangeAddress } from './addressing.js'
-import { getBuiltin } from './builtins.js'
+import { getBuiltin, normalizeBuiltinLookupName } from './builtins.js'
 import { getLookupBuiltin, type RangeBuiltinArgument } from './builtins/lookup.js'
 import { evaluateArraySpecialCall } from './js-evaluator-array-special-calls.js'
 import { emptyValue, error, numberValue, stringValue } from './js-evaluator-cell-values.js'
@@ -119,10 +119,11 @@ function evaluateSpecialCall(
   context: EvaluationContext,
   argRefs: readonly (ReferenceOperand | undefined)[] = [],
 ): StackValue | undefined {
+  const normalizedCallee = normalizeBuiltinLookupName(callee)
   switch (callee) {
     default:
       return (
-        evaluateWorkbookSpecialCall(callee, rawArgs, context, argRefs, {
+        evaluateWorkbookSpecialCall(normalizedCallee, rawArgs, context, argRefs, {
           error,
           stackScalar,
           toStringValue,
@@ -137,7 +138,7 @@ function evaluateSpecialCall(
           coerceOptionalBooleanArgument,
           isCellValueError,
         }) ??
-        evaluateContextSpecialCall(callee, rawArgs, context, argRefs, {
+        evaluateContextSpecialCall(normalizedCallee, rawArgs, context, argRefs, {
           error,
           emptyValue,
           numberValue,
@@ -157,7 +158,7 @@ function evaluateSpecialCall(
           sheetNames,
           sheetIndexByName,
         }) ??
-        evaluateArraySpecialCall(callee, rawArgs, context, {
+        evaluateArraySpecialCall(normalizedCallee, rawArgs, context, {
           error,
           emptyValue,
           numberValue,

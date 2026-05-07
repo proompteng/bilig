@@ -619,8 +619,6 @@ export function createEngineServiceRuntime(args: {
       formulaFamilies.registerFormulaRun(run)
     },
     registerFreshFormulaFamilyRun: (run) => formulaFamilies.registerFreshUniformRun(run),
-    deferFormulaFamilyIndexRebuild: () => binding.deferFormulaFamilyIndexRebuildNow(),
-    deferFormulaInstanceTableRebuild: () => binding.deferFormulaInstanceTableRebuildNow(),
     compileTemplateFormula: (source, row, col) => formulaTemplates.resolveForCell(source, row, col),
     clearTemplateFormulaCache: () => formulaTemplates.clear(),
     removeFormula: (cellIndex) => binding.clearFormulaNow(cellIndex),

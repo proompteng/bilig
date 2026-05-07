@@ -570,6 +570,31 @@ describe('excel import', () => {
     expect(imported.sheetNames).toEqual(['dispatch'])
   })
 
+  it('bounds whole-column defined names to the imported sheet extent', () => {
+    const workbook = XLSX.utils.book_new()
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ['Symbol', 'Year', 'Revenue'],
+      ['AAA', 2020, 100],
+      ['BBB', 2021, 200],
+    ])
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Projectdata_NYSE')
+    workbook.Workbook = {
+      Names: [
+        { Name: 'Symbol', Ref: 'Projectdata_NYSE!$A:$A' },
+        { Name: 'Year_num', Ref: 'Projectdata_NYSE!$B:$B' },
+        { Name: 'Total_Revenue', Ref: 'Projectdata_NYSE!$C:$C' },
+      ],
+    }
+
+    const imported = importXlsx(XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }), 'nyse.xlsx')
+
+    expect(imported.snapshot.workbook.metadata?.definedNames).toEqual([
+      { name: 'Symbol', value: { kind: 'range-ref', sheetName: 'Projectdata_NYSE', startAddress: 'A1', endAddress: 'A3' } },
+      { name: 'Total_Revenue', value: { kind: 'range-ref', sheetName: 'Projectdata_NYSE', startAddress: 'C1', endAddress: 'C3' } },
+      { name: 'Year_num', value: { kind: 'range-ref', sheetName: 'Projectdata_NYSE', startAddress: 'B1', endAddress: 'B3' } },
+    ])
+  })
+
   it('exports workbook snapshots to XLSX bytes that import back with supported workbook semantics', () => {
     const snapshot: WorkbookSnapshot = {
       version: 1,

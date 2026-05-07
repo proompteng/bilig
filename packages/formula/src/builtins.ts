@@ -35,6 +35,11 @@ import { textBuiltins } from './builtins/text.js'
 
 type Builtin = (...args: CellValue[]) => EvaluationResult
 
+export function normalizeBuiltinLookupName(name: string): string {
+  const upper = name.toUpperCase()
+  return upper.startsWith('_XLFN.') || upper.startsWith('_XLWS.') ? upper.slice(6) : upper
+}
+
 function toNumber(value: CellValue): number | undefined {
   switch (value.tag) {
     case ValueTag.Number:
@@ -425,6 +430,12 @@ const scalarBuiltins: Record<string, Builtin> = {
     const value = values[index - 1]
     return value === undefined ? valueError() : value
   },
+  SINGLE: (value, ...rest) => {
+    if (value === undefined || rest.length > 0) {
+      return valueError()
+    }
+    return value
+  },
   MIN: (...args) => numberResult(Math.min(...args.map((arg) => toNumber(arg) ?? Number.POSITIVE_INFINITY))),
   MAX: (...args) => numberResult(Math.max(...args.map((arg) => toNumber(arg) ?? Number.NEGATIVE_INFINITY))),
   MAXA: (...args) => {
@@ -738,11 +749,12 @@ builtinIdByName.set('USE.THE.COUNTIF', BuiltinId.Countif)
 builtinIdByName.set('FORECAST.LINEAR', BuiltinId.Forecast)
 
 export function getBuiltin(name: string): Builtin | undefined {
-  return builtins[name.toUpperCase()] ?? getExternalScalarFunction(name)
+  const normalized = normalizeBuiltinLookupName(name)
+  return builtins[normalized] ?? getExternalScalarFunction(normalized)
 }
 
 export function hasBuiltin(name: string): boolean {
-  const upper = name.toUpperCase()
+  const upper = normalizeBuiltinLookupName(name)
   return (
     builtins[upper] !== undefined ||
     lookupBuiltins[upper] !== undefined ||
@@ -753,5 +765,5 @@ export function hasBuiltin(name: string): boolean {
 }
 
 export function getBuiltinId(name: string): BuiltinId | undefined {
-  return builtinIdByName.get(name.toUpperCase())
+  return builtinIdByName.get(normalizeBuiltinLookupName(name))
 }

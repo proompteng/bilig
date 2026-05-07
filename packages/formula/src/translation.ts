@@ -1,7 +1,7 @@
 import { FormulaMode } from '@bilig/protocol'
 import type { FormulaNode } from './ast.js'
-import { parseRangeAddress } from './addressing.js'
-import type { CompiledFormula, ParsedCellReferenceInfo, ParsedRangeReferenceInfo } from './compiler.js'
+import { formatRangeAddress, parseRangeAddress } from './addressing.js'
+import type { CompiledFormula, ParsedCellReferenceInfo, ParsedDependencyReference, ParsedRangeReferenceInfo } from './compiler.js'
 import type { JsPlanInstruction, ReferenceOperand } from './js-evaluator.js'
 import { parseFormula } from './parser.js'
 import { serializeFormula } from './formula-serializer.js'
@@ -17,7 +17,6 @@ import {
   buildTranslatedCellReferenceMap,
   buildTranslatedRangeReferenceMap,
   formatParsedCellReference,
-  formatParsedDependencyReference,
   formatParsedLocalCellReference,
   formatParsedRangeReference,
   translatedCellInstructionKey,
@@ -30,7 +29,6 @@ import {
   translateQualifiedCellReference,
   translateQualifiedDependencyReference,
   translateQualifiedRangeReference,
-  translateRangeAddress,
   translateRowReference,
 } from './formula-reference-translation.js'
 import { quoteSheetNameIfNeeded } from './translation-reference-utils.js'
@@ -101,7 +99,7 @@ export function translateCompiledFormulaWithoutAst(
       source,
       astMatchesSource: false,
       deps:
-        translatedParsedDeps?.map((dependency) => formatParsedDependencyReference(dependency)) ??
+        translatedParsedDeps?.map((dependency) => formatCompiledDependencyReference(dependency)) ??
         compiled.deps.map((dependency) => translateQualifiedDependencyReference(dependency, rowDelta, colDelta)),
       symbolicRefs:
         translatedParsedSymbolicRefs?.map((reference) => formatParsedCellReference(reference)) ??
@@ -148,7 +146,7 @@ export function translateCompiledFormula(
       optimizedAst: translatedOptimizedAst,
       astMatchesSource: true,
       deps:
-        translatedParsedDeps?.map((dependency) => formatParsedDependencyReference(dependency)) ??
+        translatedParsedDeps?.map((dependency) => formatCompiledDependencyReference(dependency)) ??
         compiled.deps.map((dependency) => translateQualifiedDependencyReference(dependency, rowDelta, colDelta)),
       symbolicRefs:
         translatedParsedSymbolicRefs?.map((reference) => formatParsedCellReference(reference)) ??
@@ -275,12 +273,12 @@ function translateJsPlanInstruction(instruction: JsPlanInstruction, rowDelta: nu
         address: translateCellReference(instruction.address, rowDelta, colDelta),
       }
     case 'push-range': {
-      const nextRange = translatePlanRangeInstruction(instruction.sheetName, instruction.start, instruction.end, rowDelta, colDelta)
+      const nextRange = translatePlanRangeInstruction(instruction.refKind, instruction.start, instruction.end, rowDelta, colDelta)
       return { ...instruction, ...nextRange }
     }
     case 'lookup-exact-match':
     case 'lookup-approximate-match': {
-      const nextRange = translatePlanRangeInstruction(instruction.sheetName, instruction.start, instruction.end, rowDelta, colDelta)
+      const nextRange = translatePlanRangeInstruction(instruction.refKind, instruction.start, instruction.end, rowDelta, colDelta)
       const parsed = parseRangeAddress(formatQualifiedRangeReference(instruction.sheetName, nextRange.start, nextRange.end))
       if (parsed.kind !== 'cells') {
         return instruction
@@ -420,7 +418,7 @@ function translateReferenceOperand(operand: ReferenceOperand, rowDelta: number, 
       }
       return {
         ...operand,
-        ...translatePlanRangeInstruction(operand.sheetName, operand.start, operand.end, rowDelta, colDelta),
+        ...translatePlanRangeInstruction(operand.refKind, operand.start, operand.end, rowDelta, colDelta),
       }
     case 'row':
       return operand.address
@@ -482,21 +480,53 @@ function translateReferenceOperandWithoutAst(
 }
 
 function translatePlanRangeInstruction(
-  explicitSheetName: string | undefined,
+  refKind: 'cells' | 'rows' | 'cols',
   start: string,
   end: string,
   rowDelta: number,
   colDelta: number,
 ): { start: string; end: string } {
-  const parsed = parseRangeAddress(formatQualifiedRangeReference(explicitSheetName, start, end))
-  const nextRange = translateRangeAddress(parsed, rowDelta, colDelta)
-  return {
-    start: nextRange.start.text,
-    end: nextRange.end.text,
-  }
+  return translateRangeEndpoints(refKind, start, end, rowDelta, colDelta)
 }
 
 function formatQualifiedRangeReference(sheetName: string | undefined, start: string, end: string): string {
   const prefix = sheetName ? `${quoteSheetNameIfNeeded(sheetName)}!` : ''
   return `${prefix}${start}:${end}`
+}
+
+function formatCompiledDependencyReference(reference: ParsedDependencyReference): string {
+  const formatted = reference.kind === 'range' ? formatParsedRangeReference(reference) : formatParsedCellReference(reference)
+  if (reference.kind !== 'range') {
+    return formatted
+  }
+  try {
+    return formatRangeAddress(parseRangeAddress(formatted))
+  } catch {
+    return formatted
+  }
+}
+
+function translateRangeEndpoints(
+  refKind: 'cells' | 'rows' | 'cols',
+  start: string,
+  end: string,
+  rowDelta: number,
+  colDelta: number,
+): { start: string; end: string } {
+  if (refKind === 'cells') {
+    return {
+      start: translateCellReference(start, rowDelta, colDelta),
+      end: translateCellReference(end, rowDelta, colDelta),
+    }
+  }
+  if (refKind === 'rows') {
+    return {
+      start: translateRowReference(start, rowDelta),
+      end: translateRowReference(end, rowDelta),
+    }
+  }
+  return {
+    start: translateColumnReference(start, colDelta),
+    end: translateColumnReference(end, colDelta),
+  }
 }

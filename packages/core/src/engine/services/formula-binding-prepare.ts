@@ -1,5 +1,5 @@
 import type { CompiledFormula } from '@bilig/formula'
-import { Opcode } from '@bilig/protocol'
+import { FormulaMode, Opcode } from '@bilig/protocol'
 import { resolveRuntimeDirectLookupBinding } from '../direct-vector-lookup.js'
 import {
   type CompiledPlanRecord,
@@ -26,6 +26,14 @@ const PUSH_CELL_OPCODE = Number(Opcode.PushCell)
 const PUSH_RANGE_OPCODE = Number(Opcode.PushRange)
 const PUSH_STRING_OPCODE = Number(Opcode.PushString)
 const EMPTY_RUNTIME_PROGRAM = new Uint32Array(0)
+
+function shouldEvaluateMetadataCellAliasInJs(compiled: ParsedCompiledFormula): boolean {
+  return compiled.symbolicNames.length > 0 && compiled.optimizedAst.kind === 'CellRef'
+}
+
+function normalizeMetadataCellAliasMode(compiled: ParsedCompiledFormula): ParsedCompiledFormula {
+  return shouldEvaluateMetadataCellAliasInJs(compiled) ? { ...compiled, mode: FormulaMode.JsOnly } : compiled
+}
 
 export interface PreparedFormulaBinding {
   readonly compiled: ParsedCompiledFormula
@@ -61,7 +69,7 @@ export function prepareFormulaBindingFromCompiled(args: {
 }): PreparedFormulaBinding {
   const serviceArgs = args.serviceArgs
   const ownerSheetId = serviceArgs.state.workbook.getSheet(args.ownerSheetName)?.id
-  const compiled = args.normalizeLookupCompileMode(args.compiledInput)
+  const compiled = normalizeMetadataCellAliasMode(args.normalizeLookupCompileMode(args.compiledInput))
   const hasLookupInstruction = hasLookupPlanInstruction(compiled.jsPlan)
   const directLookupBinding = hasLookupInstruction ? resolveRuntimeDirectLookupBinding(compiled.jsPlan, args.ownerSheetName) : undefined
   const directScalar = buildDirectScalarDescriptor({
