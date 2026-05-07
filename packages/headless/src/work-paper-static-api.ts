@@ -19,8 +19,8 @@ import type {
   WorkPaperFunctionTranslationsPackage,
   WorkPaperLanguagePackage,
 } from './work-paper-types.js'
+export { WORKPAPER_VERSION } from './work-paper-version.js'
 
-export const WORKPAPER_VERSION = '0.1.95'
 export const WORKPAPER_BUILD_DATE = '2026-04-10'
 export const WORKPAPER_RELEASE_DATE = '2026-04-10'
 export const workPaperLanguages: Record<string, WorkPaperLanguagePackage> = {}

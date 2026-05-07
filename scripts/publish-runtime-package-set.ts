@@ -13,6 +13,7 @@ import {
   parseBooleanEnv,
   type RuntimePackagePublishedVersion,
 } from './runtime-package-set.ts'
+import { validateStagedRuntimePackageVersion } from './runtime-package-publish-validation.ts'
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const defaultPackDir = join(rootDir, 'build', 'npm-packages-runtime')
@@ -54,6 +55,7 @@ try {
     manifest.version = targetVersion
     rewriteInternalDependencyRanges(manifest, internalPackageNames, targetVersion)
     writeFileSync(packageJsonPath, `${JSON.stringify(manifest, null, 2)}\n`)
+    validateStagedRuntimePackageVersion(runtimePackage.name, stagedPackageDir, targetVersion)
 
     runCommand('npm', ['pack', '--pack-destination', packDir], {
       cwd: stagedPackageDir,

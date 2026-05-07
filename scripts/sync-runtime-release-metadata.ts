@@ -35,7 +35,6 @@ for (const runtimePackage of runtimePackages) {
   manifest.version = version
   writeFileSync(packageJsonPath, `${JSON.stringify(manifest, null, 2)}\n`)
 }
-syncWorkPaperRuntimeVersion(version)
 
 const changelogPath = join(rootDir, 'packages/headless/CHANGELOG.md')
 const existingChangelog = readFileSync(changelogPath, 'utf8')
@@ -53,22 +52,12 @@ console.log(
       version,
       updatedPackages: runtimePackages.map((runtimePackage) => runtimePackage.name),
       changelogPath,
-      runtimeVersionPath: 'packages/headless/src/work-paper-runtime.ts',
+      runtimeVersionSource: 'packages/headless/package.json',
     },
     null,
     2,
   ),
 )
-
-function syncWorkPaperRuntimeVersion(targetVersion: string): void {
-  const runtimePath = join(rootDir, 'packages/headless/src/work-paper-runtime.ts')
-  const existing = readFileSync(runtimePath, 'utf8')
-  const next = existing.replace(/const WORKPAPER_VERSION = '[^']*'/, `const WORKPAPER_VERSION = '${targetVersion}'`)
-  if (next === existing) {
-    throw new Error(`Unable to update WORKPAPER_VERSION in ${runtimePath}`)
-  }
-  writeFileSync(runtimePath, next)
-}
 
 function extractChangelogIntro(content: string): string {
   const lines = content.trim().split('\n')

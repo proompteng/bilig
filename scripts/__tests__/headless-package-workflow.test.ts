@@ -9,19 +9,22 @@ describe('headless package workflow', () => {
   it('runs current headless test files instead of stale paths', () => {
     const source = readFileSync(resolve(repoRoot, '.github/workflows/headless-package.yml'), 'utf8')
     const testPaths = [...source.matchAll(/packages\/headless\/src\/__tests__\/[A-Za-z0-9.-]+\.test\.ts/g)].map((match) => match[0])
+    const scriptTestPaths = [...source.matchAll(/scripts\/__tests__\/[A-Za-z0-9.-]+\.test\.ts/g)].map((match) => match[0])
 
     expect(testPaths).toContain('packages/headless/src/__tests__/work-paper.test.ts')
     expect(testPaths).toContain('packages/headless/src/__tests__/work-paper-runtime.test.ts')
     expect(testPaths).toContain('packages/headless/src/__tests__/work-paper-parity.test.ts')
     expect(testPaths).toContain('packages/headless/src/__tests__/github-issues.test.ts')
+    expect(testPaths).toContain('packages/headless/src/__tests__/github-issue-122-workpaper-version.test.ts')
     expect(testPaths).toContain('packages/headless/src/__tests__/github-issue-123-sum-formula-members.test.ts')
     expect(testPaths).toContain('packages/headless/src/__tests__/github-issue-124-sumifs-wildcard-arithmetic.test.ts')
     expect(testPaths).toContain('packages/headless/src/__tests__/github-issue-125-xlookup-decimal.test.ts')
     expect(testPaths).toContain('packages/headless/src/__tests__/persistence.test.ts')
     expect(testPaths).toContain('packages/headless/src/__tests__/persistence.fuzz.test.ts')
     expect(testPaths).toContain('packages/headless/src/__tests__/hyperformula-surface-parity.test.ts')
+    expect(scriptTestPaths).toContain('scripts/__tests__/runtime-package-publish-validation.test.ts')
 
-    for (const testPath of testPaths) {
+    for (const testPath of [...testPaths, ...scriptTestPaths]) {
       expect(existsSync(resolve(repoRoot, testPath)), `${testPath} should exist`).toBe(true)
     }
   })
