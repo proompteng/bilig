@@ -9,6 +9,7 @@ import * as XLSX from 'xlsx'
 
 import { WorkPaper, type WorkPaperConfig, type WorkPaperSheet, type WorkPaperSheets } from '@bilig/headless'
 import { formatErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
+import { formatByteSize } from './public-workbook-corpus-process.ts'
 
 type CellContent = WorkPaperSheet[number][number]
 
@@ -27,6 +28,7 @@ export type WorkPaperXlsxFormulaSkipReason =
 export interface WorkPaperXlsxCorpusOptions {
   readonly childProcessTimeoutMs?: number
   readonly evaluationTimeoutMs?: number
+  readonly maxFileBytes?: number
   readonly mismatchSampleLimit?: number
 }
 
@@ -103,6 +105,7 @@ interface CliOptions extends WorkPaperXlsxCorpusOptions {
 
 const defaultEvaluationTimeoutMs = 30_000
 const childProcessTimeoutPaddingMs = 1_000
+const defaultMaxFileBytes = 50 * 1024 * 1024
 const defaultMismatchSampleLimit = 25
 const ignoredDirectoryNames = new Set(['.git', 'build', 'dist', 'node_modules'])
 const skipReasons: readonly WorkPaperXlsxFormulaSkipReason[] = [
@@ -211,6 +214,10 @@ function checkWorkbookFileInChildProcess(
   mismatches: WorkPaperXlsxCorpusMismatch[],
   mismatchSampleLimit: number,
 ): WorkPaperXlsxCorpusFileResult {
+  const oversizeResult = oversizedWorkbookResult(filePath, options)
+  if (oversizeResult) {
+    return oversizeResult
+  }
   const childTimeoutMs =
     options.childProcessTimeoutMs ?? (options.evaluationTimeoutMs ?? defaultEvaluationTimeoutMs) + childProcessTimeoutPaddingMs
   const child = spawnSync(
@@ -223,6 +230,8 @@ function checkWorkbookFileInChildProcess(
       String(options.evaluationTimeoutMs ?? defaultEvaluationTimeoutMs),
       '--mismatch-sample-limit',
       String(mismatchSampleLimit),
+      '--max-file-bytes',
+      String(maxFileBytesFor(options)),
     ],
     {
       cwd: process.cwd(),
@@ -334,6 +343,10 @@ function checkWorkbookFile(
 ): WorkPaperXlsxCorpusFileResult {
   const startedAt = performance.now()
   const fileName = basename(filePath)
+  const oversizeResult = oversizedWorkbookResult(filePath, options, startedAt)
+  if (oversizeResult) {
+    return oversizeResult
+  }
   let prepared: PreparedWorkbook | undefined
   try {
     prepared = prepareWorkbook(filePath, skippedByReason)
@@ -575,6 +588,35 @@ function collectXlsxFilesFromPath(path: string, files: string[]): void {
   }
 }
 
+function oversizedWorkbookResult(
+  filePath: string,
+  options: WorkPaperXlsxCorpusOptions,
+  startedAt = performance.now(),
+): WorkPaperXlsxCorpusFileResult | null {
+  const maxFileBytes = maxFileBytesFor(options)
+  const fileSizeBytes = statSync(filePath).size
+  if (fileSizeBytes <= maxFileBytes) {
+    return null
+  }
+  return {
+    path: filePath,
+    fileName: basename(filePath),
+    status: 'error',
+    ...emptyCounts(0),
+    matchRate: 1,
+    elapsedMs: roundElapsed(performance.now() - startedAt),
+    error: `XLSX file exceeds max file size: ${formatByteSize(fileSizeBytes)} > ${formatByteSize(maxFileBytes)}`,
+  }
+}
+
+function maxFileBytesFor(options: WorkPaperXlsxCorpusOptions): number {
+  const maxFileBytes = options.maxFileBytes ?? defaultMaxFileBytes
+  if (!Number.isFinite(maxFileBytes) || maxFileBytes <= 0) {
+    throw new Error(`maxFileBytes must be a positive finite integer, got ${String(maxFileBytes)}`)
+  }
+  return Math.trunc(maxFileBytes)
+}
+
 function formulaText(cell: XLSX.CellObject): string | null {
   if (typeof cell.f !== 'string') {
     return null
@@ -719,6 +761,7 @@ function parseCliArgs(argv: readonly string[]): CliOptions {
   let minMatchRate = 1
   let evaluationTimeoutMs: number | undefined
   let isolateFiles = true
+  let maxFileBytes: number | undefined
   let mismatchSampleLimit: number | undefined
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -743,6 +786,10 @@ function parseCliArgs(argv: readonly string[]): CliOptions {
         maxMismatches = parseNonNegativeInteger(requiredArgValue(argv, index, arg), arg)
         index += 1
         break
+      case '--max-file-bytes':
+        maxFileBytes = parsePositiveInteger(requiredArgValue(argv, index, arg), arg)
+        index += 1
+        break
       case '--min-match-rate':
         minMatchRate = parseMatchRate(requiredArgValue(argv, index, arg), arg)
         index += 1
@@ -756,6 +803,12 @@ function parseCliArgs(argv: readonly string[]): CliOptions {
         index += 1
         break
       case '--no-isolate':
+        if (process.env['BILIG_ALLOW_UNISOLATED_XLSX_CORPUS'] !== '1') {
+          throw new CliUsageError(
+            '--no-isolate is disabled for corpus CLI runs because it can retain workbook memory across large corpora. Set BILIG_ALLOW_UNISOLATED_XLSX_CORPUS=1 only for a single-file debugger run.',
+            2,
+          )
+        }
         isolateFiles = false
         break
       default:
@@ -776,6 +829,7 @@ function parseCliArgs(argv: readonly string[]): CliOptions {
     isolateFiles,
     paths,
     jsonOut,
+    maxFileBytes,
     maxMismatches,
     minMatchRate,
     evaluationTimeoutMs,
@@ -799,6 +853,14 @@ function parseNonNegativeInteger(value: string, option: string): number {
   return parsed
 }
 
+function parsePositiveInteger(value: string, option: string): number {
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0 || String(parsed) !== value) {
+    throw new CliUsageError(`${option} expects a positive integer, got ${value}`, 2)
+  }
+  return parsed
+}
+
 function parseMatchRate(value: string, option: string): number {
   const parsed = Number.parseFloat(value)
   if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
@@ -814,7 +876,8 @@ function usageText(): string {
     'Options:',
     '  --timeout-ms <ms>              WorkPaper initial evaluation timeout per workbook. Default: 30000.',
     '  --child-timeout-ms <ms>        Child-process timeout per workbook. Default: timeout-ms + 1000.',
-    '  --no-isolate                  Check files in the current process instead of one child process per workbook.',
+    '  --max-file-bytes <bytes>       Fail a workbook before loading it when the file is larger. Default: 52428800.',
+    '  --no-isolate                  Debug-only: requires BILIG_ALLOW_UNISOLATED_XLSX_CORPUS=1.',
     '  --max-mismatches <count>       Maximum comparable cached-result mismatches before failing. Default: 0.',
     '  --min-match-rate <ratio>       Minimum comparable cached-result match rate before failing. Default: 1.',
     '  --mismatch-sample-limit <n>    Number of mismatch samples to keep in JSON output. Default: 25.',
@@ -840,6 +903,9 @@ function runCli(): void {
       return
     }
     const options = parseCliArgs(process.argv.slice(2))
+    if (!options.isolateFiles) {
+      assertUnisolatedCliDebuggerPath(options.paths)
+    }
     const result = options.isolateFiles
       ? runWorkPaperXlsxCorpusInChildProcesses(options.paths, options)
       : runWorkPaperXlsxCorpus(options.paths, options)
@@ -866,9 +932,21 @@ function runCli(): void {
   }
 }
 
+function assertUnisolatedCliDebuggerPath(paths: readonly string[]): void {
+  if (paths.length !== 1) {
+    throw new CliUsageError('--no-isolate only supports one explicit XLSX file for debugger runs.', 2)
+  }
+
+  const path = resolve(paths[0])
+  if (!existsSync(path) || !statSync(path).isFile() || !xlsxExtensions.has(extname(path).toLowerCase())) {
+    throw new CliUsageError('--no-isolate only supports one explicit XLSX file for debugger runs.', 2)
+  }
+}
+
 function runInternalFileCheckCli(argv: readonly string[]): void {
   const paths: string[] = []
   let evaluationTimeoutMs: number | undefined
+  let maxFileBytes: number | undefined
   let mismatchSampleLimit: number | undefined
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -880,6 +958,10 @@ function runInternalFileCheckCli(argv: readonly string[]): void {
         break
       case '--mismatch-sample-limit':
         mismatchSampleLimit = parseNonNegativeInteger(requiredArgValue(argv, index, arg), arg)
+        index += 1
+        break
+      case '--max-file-bytes':
+        maxFileBytes = parsePositiveInteger(requiredArgValue(argv, index, arg), arg)
         index += 1
         break
       case '--timeout-ms':
@@ -894,7 +976,7 @@ function runInternalFileCheckCli(argv: readonly string[]): void {
   if (paths.length !== 1) {
     throw new CliUsageError('Internal XLSX corpus check expects exactly one file path.', 2)
   }
-  process.stdout.write(`${JSON.stringify(runWorkPaperXlsxCorpus(paths, { evaluationTimeoutMs, mismatchSampleLimit }))}\n`)
+  process.stdout.write(`${JSON.stringify(runWorkPaperXlsxCorpus(paths, { evaluationTimeoutMs, maxFileBytes, mismatchSampleLimit }))}\n`)
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

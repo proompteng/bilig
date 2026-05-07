@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -77,6 +78,52 @@ describe('WorkPaper XLSX corpus verifier', () => {
     })
   })
 
+  it('fails oversized workbook files before loading them', () => {
+    withTempCorpus((corpusDir) => {
+      const workbookPath = join(corpusDir, 'oversized.xlsx')
+      writeWorkbook(workbookPath, buildIssueRegressionWorkbook())
+
+      const result = runWorkPaperXlsxCorpus([workbookPath], { maxFileBytes: 1 })
+
+      expect(result.summary).toMatchObject({
+        totalFiles: 1,
+        filesProcessed: 1,
+        ok: 0,
+        failedErrors: 1,
+        failedTimeouts: 0,
+      })
+      expect(result.files[0]).toMatchObject({
+        fileName: 'oversized.xlsx',
+        status: 'error',
+        formulaCells: 0,
+      })
+      expect(result.files[0]?.error).toContain('XLSX file exceeds max file size')
+    })
+  })
+
+  it('refuses unisolated CLI corpus runs unless explicitly enabled for debugging', () => {
+    const env = { ...process.env }
+    delete env.BILIG_ALLOW_UNISOLATED_XLSX_CORPUS
+
+    const result = spawnSync('bun', [checkerScriptPath(), '--no-isolate', checkedInCorpusDir()], {
+      encoding: 'utf8',
+      env,
+    })
+
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('--no-isolate is disabled for corpus CLI runs')
+  })
+
+  it('refuses unisolated CLI directory sweeps even with the debug escape hatch', () => {
+    const result = spawnSync('bun', [checkerScriptPath(), '--no-isolate', checkedInCorpusDir()], {
+      encoding: 'utf8',
+      env: { ...process.env, BILIG_ALLOW_UNISOLATED_XLSX_CORPUS: '1' },
+    })
+
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('--no-isolate only supports one explicit XLSX file')
+  })
+
   it('reports actionable mismatch samples with workbook, sheet, address, formula, expected, and actual values', () => {
     withTempCorpus((corpusDir) => {
       const workbook = XLSX.utils.book_new()
@@ -150,6 +197,10 @@ describe('WorkPaper XLSX corpus verifier', () => {
 
 function checkedInCorpusDir(): string {
   return join(dirname(fileURLToPath(import.meta.url)), '../../packages/headless/fixtures/xlsx-corpus')
+}
+
+function checkerScriptPath(): string {
+  return join(dirname(fileURLToPath(import.meta.url)), '../check-workpaper-xlsx-corpus.ts')
 }
 
 function withTempCorpus(run: (corpusDir: string) => void): void {
