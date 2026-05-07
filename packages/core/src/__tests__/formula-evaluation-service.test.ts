@@ -929,15 +929,19 @@ describe('EngineFormulaEvaluationService', () => {
     for (let row = 1; row <= 64; row += 1) {
       engine.setCellValue('Sheet1', `A${row}`, 1)
       engine.setCellValue('Sheet1', `C${row}`, 'ignored')
+      if (row % 2 === 1) {
+        engine.setCellValue('Sheet1', `D${row}`, 1)
+      }
     }
     engine.setCellFormula('Sheet1', 'B1', 'SUM(A1:A32)')
     engine.setCellFormula('Sheet1', 'B2', 'SUM(A2:A33)')
     engine.setCellFormula('Sheet1', 'B3', 'COUNT(A1:A32)')
     engine.setCellFormula('Sheet1', 'B4', 'AVERAGE(A1:A32)')
     engine.setCellFormula('Sheet1', 'B5', 'AVERAGE(C1:C32)')
+    engine.setCellFormula('Sheet1', 'B6', 'AVERAGE(D1:D32)')
 
     const evaluation = getEvaluationService(engine)
-    const formulaIndices = ['B1', 'B2', 'B3', 'B4', 'B5'].map((address) => engine.workbook.getCellIndex('Sheet1', address))
+    const formulaIndices = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6'].map((address) => engine.workbook.getCellIndex('Sheet1', address))
     expect(formulaIndices.every((index) => index !== undefined)).toBe(true)
 
     engine.resetPerformanceCounters()
@@ -948,11 +952,12 @@ describe('EngineFormulaEvaluationService', () => {
     const counters = engine.getPerformanceCounters()
     expect(counters.directAggregateScanEvaluations).toBe(0)
     expect(counters.directAggregateScanCells).toBe(0)
-    expect(counters.directAggregatePrefixEvaluations).toBe(5)
+    expect(counters.directAggregatePrefixEvaluations).toBe(6)
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 32 })
     expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 32 })
     expect(engine.getCellValue('Sheet1', 'B3')).toEqual({ tag: ValueTag.Number, value: 32 })
     expect(engine.getCellValue('Sheet1', 'B4')).toEqual({ tag: ValueTag.Number, value: 1 })
     expect(engine.getCellValue('Sheet1', 'B5')).toEqual({ tag: ValueTag.Error, code: ErrorCode.Div0 })
+    expect(engine.getCellValue('Sheet1', 'B6')).toEqual({ tag: ValueTag.Number, value: 1 })
   })
 })

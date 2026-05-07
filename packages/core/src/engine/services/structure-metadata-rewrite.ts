@@ -1,4 +1,4 @@
-import type { SheetFormatRangeSnapshot, SheetStyleRangeSnapshot } from '@bilig/protocol'
+import type { CellRangeRef, SheetFormatRangeSnapshot, SheetStyleRangeSnapshot } from '@bilig/protocol'
 import {
   rewriteAddressForStructuralTransform,
   rewriteFormulaForStructuralTransform,
@@ -19,7 +19,10 @@ export function rewriteDefinedNamesForStructuralTransform(
   const changedNames = new Set<string>()
   args.state.workbook.listDefinedNames().forEach((record) => {
     if (typeof record.value === 'string' && record.value.startsWith('=')) {
-      const nextFormula = rewriteFormulaForStructuralTransform(record.value.slice(1), sheetName, sheetName, transform)
+      const nextFormula = rewriteDefinedNameFormulaOrNull(record.value.slice(1), sheetName, transform)
+      if (nextFormula === null) {
+        return
+      }
       if (`=${nextFormula}` !== record.value) {
         args.state.workbook.setDefinedName(record.name, `=${nextFormula}`)
       }
@@ -30,12 +33,14 @@ export function rewriteDefinedNamesForStructuralTransform(
     }
     switch (record.value.kind) {
       case 'formula': {
-        const nextFormula = rewriteFormulaForStructuralTransform(
+        const nextFormula = rewriteDefinedNameFormulaOrNull(
           record.value.formula.startsWith('=') ? record.value.formula.slice(1) : record.value.formula,
-          sheetName,
           sheetName,
           transform,
         )
+        if (nextFormula === null) {
+          return
+        }
         const nextValue = {
           ...record.value,
           formula: record.value.formula.startsWith('=') ? `=${nextFormula}` : nextFormula,
@@ -93,6 +98,14 @@ export function rewriteDefinedNamesForStructuralTransform(
   return changedNames
 }
 
+function rewriteDefinedNameFormulaOrNull(formula: string, sheetName: string, transform: StructuralAxisTransform): string | null {
+  try {
+    return rewriteFormulaForStructuralTransform(formula, sheetName, sheetName, transform)
+  } catch {
+    return null
+  }
+}
+
 export function rewriteWorkbookMetadataForStructuralTransform(
   args: StructureMetadataRewriteArgs,
   sheetName: string,
@@ -116,18 +129,20 @@ export function rewriteWorkbookMetadataForStructuralTransform(
         endAddress: range.endAddress,
       })
     })
-  args.state.workbook.listMergeRanges(sheetName).forEach((merge) => {
+  const mergeRanges = args.state.workbook.listMergeRanges(sheetName)
+  const rewrittenMergeRanges: CellRangeRef[] = []
+  mergeRanges.forEach((merge) => {
     const range = rewriteRangeForStructuralTransform(merge.startAddress, merge.endAddress, transform)
-    args.state.workbook.clearMergeRanges(merge)
     if (!range) {
       return
     }
-    args.state.workbook.setMergeRange({
+    rewrittenMergeRanges.push({
       ...merge,
       startAddress: range.startAddress,
       endAddress: range.endAddress,
     })
   })
+  args.state.workbook.setMergeRanges(sheetName, rewrittenMergeRanges)
   args.state.workbook.listFilters(sheetName).forEach((filter) => {
     const range = rewriteRangeForStructuralTransform(filter.range.startAddress, filter.range.endAddress, transform)
     args.state.workbook.deleteFilter(sheetName, filter.range)

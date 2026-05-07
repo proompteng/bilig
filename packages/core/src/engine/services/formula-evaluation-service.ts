@@ -391,8 +391,6 @@ export function createEngineFormulaEvaluationService(args: {
               break
             }
             case ValueTag.Empty:
-              minimum = Math.min(minimum, 0)
-              maximum = Math.max(maximum, 0)
               break
             case ValueTag.Error:
               if (directAggregate.aggregateKind === 'sum' || directAggregate.aggregateKind === 'average') {

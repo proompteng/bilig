@@ -1,4 +1,5 @@
 import { Cause, Effect, Exit } from 'effect'
+import { parseCellAddress } from '@bilig/formula'
 import { canonicalWorkbookAddress, canonicalWorkbookRangeRef } from './workbook-range-records.js'
 import {
   cloneChartRecord,
@@ -93,6 +94,46 @@ function renameDataValidationSourceSheet(
       return cloned
   }
   return cloned
+}
+
+interface NormalizedMergeRangeRecord {
+  readonly record: WorkbookMergeRangeRecord
+  readonly startRow: number
+  readonly endRow: number
+  readonly startCol: number
+  readonly endCol: number
+}
+
+function normalizeMergeRangeForOverlap(record: WorkbookMergeRangeRecord): NormalizedMergeRangeRecord {
+  const start = parseCellAddress(record.startAddress, record.sheetName)
+  const end = parseCellAddress(record.endAddress, record.sheetName)
+  return {
+    record,
+    startRow: Math.min(start.row, end.row),
+    endRow: Math.max(start.row, end.row),
+    startCol: Math.min(start.col, end.col),
+    endCol: Math.max(start.col, end.col),
+  }
+}
+
+function mergeRangesOverlap(left: NormalizedMergeRangeRecord, right: NormalizedMergeRangeRecord): boolean {
+  return !(left.endRow < right.startRow || right.endRow < left.startRow || left.endCol < right.startCol || right.endCol < left.startCol)
+}
+
+function assertMergeRangesDoNotOverlap(ranges: readonly WorkbookMergeRangeRecord[]): void {
+  const normalized = ranges.map(normalizeMergeRangeForOverlap).toSorted((left, right) => left.startRow - right.startRow)
+  const active: NormalizedMergeRangeRecord[] = []
+  for (const range of normalized) {
+    for (let index = active.length - 1; index >= 0; index -= 1) {
+      if (active[index]!.endRow < range.startRow) {
+        active.splice(index, 1)
+      }
+    }
+    if (active.some((entry) => mergeRangesOverlap(entry, range))) {
+      throw new Error('Merged ranges cannot overlap')
+    }
+    active.push(range)
+  }
 }
 
 function metadataEffect<Success>(message: string, run: () => Success): Effect.Effect<Success, WorkbookMetadataError> {
@@ -423,6 +464,28 @@ export function createWorkbookMetadataService(metadata: WorkbookMetadataRecord):
         }
         metadata.merges.set(mergeRangeKey(stored), stored)
         return cloneMergeRangeRecord(stored)
+      })
+    },
+    setMergeRanges(sheetName, ranges) {
+      return metadataEffect('Failed to set merged cell metadata ranges', () => {
+        const storedRanges = ranges.map((range) => canonicalMergeRangeRef({ ...range, sheetName: range.sheetName ?? sheetName }))
+        const seenKeys = new Set<string>()
+        for (const stored of storedRanges) {
+          if (isSingleCellMergeRange(stored)) {
+            throw new Error('Merged ranges must include at least two cells')
+          }
+          const key = mergeRangeKey(stored)
+          if (seenKeys.has(key)) {
+            throw new Error('Merged ranges cannot contain duplicate ranges')
+          }
+          seenKeys.add(key)
+        }
+        assertMergeRangesDoNotOverlap(storedRanges)
+        deleteRecordsBySheet(metadata.merges, sheetName, (record) => record.sheetName)
+        for (const stored of storedRanges) {
+          metadata.merges.set(mergeRangeKey(stored), stored)
+        }
+        return storedRanges.toSorted((left, right) => mergeRangeKey(left).localeCompare(mergeRangeKey(right))).map(cloneMergeRangeRecord)
       })
     },
     getMergeRange(sheetName, address) {

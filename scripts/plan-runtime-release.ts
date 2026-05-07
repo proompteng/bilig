@@ -3,7 +3,13 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 
-import { assertAlignedVersions, compareStableSemver, loadRuntimePackages, parseStableSemver } from './runtime-package-set.ts'
+import {
+  assertAlignedVersions,
+  compareStableSemver,
+  highestStableSemver,
+  loadRuntimePackages,
+  parseStableSemver,
+} from './runtime-package-set.ts'
 import {
   bumpVersion,
   extractVersionFromRuntimeTag,
@@ -159,7 +165,8 @@ function buildRuntimeReleasePlan(input: {
   const runtimeCommits = commits.filter((commit) => commit.runtimeAffecting)
   const strongestReleaseType = runtimeCommits.reduce<ReleaseType>((highest, commit) => maxReleaseType(highest, commit.releaseType), 'none')
 
-  const baselineVersion = extractVersionFromRuntimeTag(lastTag ?? '') ?? publishedVersion ?? manifestVersion
+  const tagVersion = extractVersionFromRuntimeTag(lastTag ?? '')
+  const baselineVersion = highestStableSemver([tagVersion, publishedVersion, manifestVersion])
 
   if (!runtimeCommits.length && !releaseAs) {
     return {

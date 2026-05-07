@@ -3015,7 +3015,7 @@ describe('SpreadsheetEngine', () => {
     engine.setCellFormula('Sheet1', 'B3', 'COUNT(A1:A3)')
 
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 3 })
-    expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 1 })
+    expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 1.5 })
     expect(engine.getCellValue('Sheet1', 'B3')).toEqual({ tag: ValueTag.Number, value: 2 })
     expect(engine.explainCell('Sheet1', 'B1').mode).toBe(FormulaMode.WasmFastPath)
     expect(engine.explainCell('Sheet1', 'B2').mode).toBe(FormulaMode.JsOnly)
@@ -3058,7 +3058,7 @@ describe('SpreadsheetEngine', () => {
 
     engine.setCellValue('Sheet1', 'A1', 5)
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 6 })
-    expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 2 })
+    expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 3 })
     expect(engine.getCellValue('Sheet1', 'B3')).toEqual({ tag: ValueTag.Number, value: 2 })
   })
 
@@ -4809,6 +4809,37 @@ describe('SpreadsheetEngine', () => {
       { id: 'row-1', index: 0, size: 30, hidden: false },
       { id: 'row-2', index: 2 },
     ])
+  })
+
+  it('preserves adjacent merge ranges across structural row inserts', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'adjacent-merge-structural-rewrite' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.mergeCells({ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'K1' })
+    engine.mergeCells({ sheetName: 'Sheet1', startAddress: 'A2', endAddress: 'K2' })
+    engine.mergeCells({ sheetName: 'Sheet1', startAddress: 'A3', endAddress: 'K3' })
+
+    engine.insertRows('Sheet1', 0, 1)
+
+    expect(engine.listMergeRanges('Sheet1')).toEqual([
+      { sheetName: 'Sheet1', startAddress: 'A2', endAddress: 'K2' },
+      { sheetName: 'Sheet1', startAddress: 'A3', endAddress: 'K3' },
+      { sheetName: 'Sheet1', startAddress: 'A4', endAddress: 'K4' },
+    ])
+  })
+
+  it('leaves unsupported defined-name formulas unchanged across structural row inserts', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'unsupported-defined-name-structural-rewrite' })
+    await engine.ready()
+    engine.createSheet('Data')
+    engine.setDefinedName('UnsupportedExcelRef', { kind: 'formula', formula: '={"\'excel\'!$A$1:$I$24"}' })
+
+    engine.insertRows('Data', 0, 1)
+
+    expect(engine.getDefinedName('UnsupportedExcelRef')).toEqual({
+      name: 'UnsupportedExcelRef',
+      value: { kind: 'formula', formula: '={"\'excel\'!$A$1:$I$24"}' },
+    })
   })
 
   it('keeps repeated direct aggregate families correct across structural row transforms', async () => {

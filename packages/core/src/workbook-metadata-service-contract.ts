@@ -89,6 +89,10 @@ export interface WorkbookMetadataService {
   readonly getFreezePane: (sheetName: string) => Effect.Effect<WorkbookFreezePaneRecord | undefined, WorkbookMetadataError>
   readonly clearFreezePane: (sheetName: string) => Effect.Effect<boolean, WorkbookMetadataError>
   readonly setMergeRange: (range: CellRangeRef) => Effect.Effect<WorkbookMergeRangeRecord, WorkbookMetadataError>
+  readonly setMergeRanges: (
+    sheetName: string,
+    ranges: readonly CellRangeRef[],
+  ) => Effect.Effect<WorkbookMergeRangeRecord[], WorkbookMetadataError>
   readonly getMergeRange: (sheetName: string, address: string) => Effect.Effect<WorkbookMergeRangeRecord | undefined, WorkbookMetadataError>
   readonly getMergeRangeByRange: (range: CellRangeRef) => Effect.Effect<WorkbookMergeRangeRecord | undefined, WorkbookMetadataError>
   readonly clearMergeRanges: (range: CellRangeRef) => Effect.Effect<WorkbookMergeRangeRecord[], WorkbookMetadataError>

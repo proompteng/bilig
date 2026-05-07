@@ -593,6 +593,10 @@ export class WorkbookStore {
     return runWorkbookMetadataEffect(this.metadataService.setMergeRange(range))
   }
 
+  setMergeRanges(sheetName: string, ranges: readonly CellRangeRef[]): WorkbookMergeRangeRecord[] {
+    return runWorkbookMetadataEffect(this.metadataService.setMergeRanges(sheetName, ranges))
+  }
+
   getMergeRange(sheetName: string, address: string): WorkbookMergeRangeRecord | undefined {
     return runWorkbookMetadataEffect(this.metadataService.getMergeRange(sheetName, address))
   }

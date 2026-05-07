@@ -86,6 +86,14 @@ export function determineRuntimeReleaseVersion(options: {
   return incrementPatch(publishedVersion)
 }
 
+export function highestStableSemver(versions: readonly (string | null | undefined)[]): string {
+  const parsedVersions = versions.flatMap((version) => (version ? [version] : []))
+  if (parsedVersions.length === 0) {
+    throw new Error('Expected at least one semantic version')
+  }
+  return parsedVersions.reduce((highest, version) => (compareStableSemver(version, highest) > 0 ? version : highest))
+}
+
 export function compareStableSemver(left: string, right: string): number {
   const leftVersion = parseStableSemver(left)
   const rightVersion = parseStableSemver(right)

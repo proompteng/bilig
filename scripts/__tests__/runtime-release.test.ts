@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { highestStableSemver } from '../runtime-package-set.ts'
 import { bumpVersion, isRuntimeAffectingPath, parseConventionalCommit, releaseTypeForConventionalCommit } from '../runtime-release.ts'
 
 describe('runtime release helpers', () => {
@@ -73,6 +74,10 @@ describe('runtime release helpers', () => {
     expect(bumpVersion('0.1.2', 'patch')).toBe('0.1.3')
     expect(bumpVersion('0.1.2', 'minor')).toBe('0.2.0')
     expect(bumpVersion('0.1.2', 'major')).toBe('1.0.0')
+  })
+
+  it('uses the highest known runtime version as the publish baseline', () => {
+    expect(highestStableSemver(['0.7.8', '0.9.3', '0.1.95'])).toBe('0.9.3')
   })
 
   it('matches runtime-affecting publish paths', () => {

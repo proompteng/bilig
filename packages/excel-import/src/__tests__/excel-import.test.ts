@@ -13,6 +13,7 @@ import type {
   WorkbookSnapshot,
   WorkbookTableSnapshot,
 } from '@bilig/protocol'
+import { SpreadsheetEngine } from '@bilig/core'
 import { exportXlsx, importCsv, importWorkbookFile, importXlsx, readImportedXlsxCellStyle } from '../index.js'
 import { CSV_CONTENT_TYPE } from '@bilig/agent-api'
 
@@ -209,6 +210,106 @@ describe('excel import', () => {
         }),
       ]),
     )
+  })
+
+  it('drops degenerate single-cell merge records during import', async () => {
+    const workbook = XLSX.utils.book_new()
+    const sheet = XLSX.utils.aoa_to_sheet([['A', 'B']])
+    sheet['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } },
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 1 } },
+    ]
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Sheet1')
+
+    const imported = importXlsx(XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }), 'single-cell-merge.xlsx')
+
+    expect(imported.snapshot.sheets[0]?.metadata?.merges).toEqual([{ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B1' }])
+    const engine = new SpreadsheetEngine({ workbookName: 'single-cell-merge-import' })
+    await engine.ready()
+    expect(() => engine.importSnapshot(imported.snapshot)).not.toThrow()
+  })
+
+  it('ignores zero-size row and column metadata during import', () => {
+    const workbook = XLSX.utils.book_new()
+    const sheet = XLSX.utils.aoa_to_sheet([['Value']])
+    sheet['!rows'] = [{ hpx: 0 }]
+    sheet['!cols'] = [{ wpx: 0 }]
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Sheet1')
+
+    const imported = importXlsx(XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }), 'zero-size.xlsx')
+
+    expect(imported.snapshot.sheets[0]?.metadata?.rows).toBeUndefined()
+    expect(imported.snapshot.sheets[0]?.metadata?.columns).toBeUndefined()
+  })
+
+  it('preserves external workbook defined names as formulas across export round trips', () => {
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['local']]), 'Sheet1')
+    workbook.Workbook = {
+      Names: [
+        { Name: 'ExternalRange', Ref: '[1]Sheet1!$A$1:$A$2' },
+        { Name: 'ExternalBrokenRef', Ref: '[2]Sheet1!#REF!' },
+      ],
+    }
+
+    const imported = importXlsx(XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }), 'external-defined-names.xlsx')
+    expect(imported.snapshot.workbook.metadata?.definedNames).toEqual([
+      { name: 'ExternalBrokenRef', value: { kind: 'formula', formula: '=[2]Sheet1!#REF!' } },
+      { name: 'ExternalRange', value: { kind: 'formula', formula: '=[1]Sheet1!$A$1:$A$2' } },
+    ])
+
+    const roundTripped = importXlsx(exportXlsx(imported.snapshot), 'external-defined-names.xlsx')
+    expect(roundTripped.snapshot.workbook.metadata?.definedNames).toEqual(imported.snapshot.workbook.metadata?.definedNames)
+  })
+
+  it('preserves sheet names with trailing spaces across export round trips', () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'Trailing Space Workbook' },
+      sheets: [
+        {
+          id: 'sheet-trailing-space',
+          name: 'Table 2.1.2  ',
+          order: 0,
+          cells: [
+            { address: 'A1', row: 0, col: 0, value: 'Header' },
+            { address: 'B1', row: 0, col: 1, value: 'Value' },
+          ],
+          metadata: {
+            merges: [{ sheetName: 'Table 2.1.2  ', startAddress: 'A1', endAddress: 'B1' }],
+          },
+        },
+      ],
+    }
+
+    const roundTripped = importXlsx(exportXlsx(snapshot), 'trailing-space-sheet.xlsx')
+    expect(roundTripped.snapshot.sheets[0]?.name).toBe('Table 2.1.2  ')
+    expect(roundTripped.snapshot.sheets[0]?.metadata?.merges).toEqual([
+      { sheetName: 'Table 2.1.2  ', startAddress: 'A1', endAddress: 'B1' },
+    ])
+  })
+
+  it('preserves leading-zero number formats across export round trips', () => {
+    const snapshot: WorkbookSnapshot = {
+      workbook: { name: 'leading-zero-number-format' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Codes',
+          order: 0,
+          cells: [{ address: 'A1', value: 7, format: '00' }],
+        },
+      ],
+    }
+
+    const bytes = exportXlsx(snapshot)
+    const zip = unzipSync(bytes)
+    const stylesXml = strFromU8(zip['xl/styles.xml'] ?? new Uint8Array())
+    const roundTripped = importXlsx(bytes, 'leading-zero-number-format.xlsx')
+
+    expect(stylesXml).toContain('formatCode="00"')
+    expect(stylesXml).not.toContain('numFmtId="00"')
+    expect(roundTripped.snapshot.sheets[0]?.cells).toEqual([{ address: 'A1', value: 7, format: '00' }])
   })
 
   it('preserves macro payloads without executing them across macro-enabled workbook import and export', () => {
@@ -620,6 +721,71 @@ describe('excel import', () => {
     expect(strFromU8(zip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())).toContain('<sortState ref="A1:B3">')
     expect(strFromU8(zip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())).toContain('<sortCondition descending="1" ref="B1:B3"/>')
     expect(projectSupportedSnapshotSemantics(imported.snapshot)).toEqual(projectSupportedSnapshotSemantics(snapshot))
+  })
+
+  it('exports custom number formats on populated and blank cells', () => {
+    const snapshot: WorkbookSnapshot = {
+      workbook: { id: 'custom-number-format-workbook', name: 'custom-number-format-workbook' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Formats',
+          order: 0,
+          cells: [
+            { address: 'A1', value: 0, format: '00' },
+            { address: 'A2', format: '00' },
+            { address: 'B1', value: 12.34, format: '"$"#,##0.00' },
+          ],
+        },
+      ],
+    }
+
+    const imported = importXlsx(exportXlsx(snapshot), 'custom-number-format-workbook.xlsx')
+
+    expect(imported.snapshot.sheets[0]?.cells).toEqual(
+      expect.arrayContaining([
+        { address: 'A1', value: 0, format: '00' },
+        { address: 'A2', format: '00' },
+        { address: 'B1', value: 12.34, format: '"$"#,##0.00' },
+      ]),
+    )
+  })
+
+  it('exports range-only number formats on populated and blank cells', () => {
+    const snapshot: WorkbookSnapshot = {
+      workbook: {
+        id: 'range-number-format-workbook',
+        name: 'range-number-format-workbook',
+        metadata: {
+          formats: [{ id: 'format-zip-code', code: '00000', kind: 'number' }],
+        },
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'Formats',
+          order: 0,
+          metadata: {
+            formatRanges: [
+              {
+                range: { sheetName: 'Formats', startAddress: 'B2', endAddress: 'C3' },
+                formatId: 'format-zip-code',
+              },
+            ],
+          },
+          cells: [{ address: 'B2', value: 7 }],
+        },
+      ],
+    }
+
+    const imported = importXlsx(exportXlsx(snapshot), 'range-number-format-workbook.xlsx')
+
+    expect(imported.snapshot.sheets[0]?.cells).toEqual(
+      expect.arrayContaining([
+        { address: 'B2', value: 7, format: '00000' },
+        { address: 'C3', format: '00000' },
+      ]),
+    )
   })
 })
 

@@ -344,6 +344,13 @@ describe('formula builtins', () => {
     expect(
       getBuiltin('AVERAGE')?.({ tag: ValueTag.Number, value: 2 }, { tag: ValueTag.Number, value: 4 }, { tag: ValueTag.Number, value: 6 }),
     ).toEqual({ tag: ValueTag.Number, value: 4 })
+    expect(
+      getBuiltin('AVERAGE')?.(
+        { tag: ValueTag.Number, value: 2 },
+        { tag: ValueTag.Empty },
+        { tag: ValueTag.String, value: 'skip', stringId: 1 },
+      ),
+    ).toEqual({ tag: ValueTag.Number, value: 2 })
 
     expect(getBuiltinId('sum')).toBe(BuiltinId.Sum)
     expect(getBuiltinId('concat')).toBe(BuiltinId.Concat)

@@ -383,6 +383,7 @@ function exportAlignment(alignment: CellStyleAlignmentSnapshot): ExportCellAlign
     ...(alignment.horizontal && alignment.horizontal !== 'general' ? { horizontal: alignment.horizontal } : {}),
     ...(alignment.vertical ? { vertical: alignment.vertical === 'middle' ? 'center' : alignment.vertical } : {}),
     ...(alignment.wrap === true ? { wrapText: true } : {}),
+    ...(alignment.indent !== undefined && alignment.indent >= 0 ? { indent: alignment.indent } : {}),
   }
 }
 

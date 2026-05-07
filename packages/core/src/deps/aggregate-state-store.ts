@@ -273,9 +273,6 @@ export function createAggregateStateStore(args: {
           break
         }
         case ValueTag.Empty:
-          runningAverageCount += 1
-          runningMinimum = Math.min(runningMinimum, 0)
-          runningMaximum = Math.max(runningMaximum, 0)
           break
         case ValueTag.Error:
           runningErrorCode ||= view.readErrorAt(offset) ?? ErrorCode.None

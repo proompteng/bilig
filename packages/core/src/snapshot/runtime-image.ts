@@ -396,18 +396,21 @@ function restoreSheetMetadata(args: { readonly workbook: WorkbookStore; readonly
   if (sheet.metadata?.freezePane) {
     workbook.setFreezePane(sheet.name, sheet.metadata.freezePane.rows, sheet.metadata.freezePane.cols)
   }
-  sheet.metadata?.merges?.forEach((range) => {
-    workbook.setMergeRange({ ...range, sheetName: range.sheetName ?? sheet.name })
-  })
+  if (sheet.metadata?.merges && sheet.metadata.merges.length > 0) {
+    workbook.setMergeRanges(
+      sheet.name,
+      sheet.metadata.merges.map((range) => ({ ...range, sheetName: range.sheetName ?? sheet.name })),
+    )
+  }
   if (sheet.metadata?.sheetProtection) {
     workbook.setSheetProtection(structuredClone(sheet.metadata.sheetProtection))
   }
-  sheet.metadata?.styleRanges?.forEach((range) => {
-    workbook.setStyleRange({ ...range.range }, range.styleId)
-  })
-  sheet.metadata?.formatRanges?.forEach((range) => {
-    workbook.setFormatRange({ ...range.range }, range.formatId)
-  })
+  if (sheet.metadata?.styleRanges && sheet.metadata.styleRanges.length > 0) {
+    workbook.setStyleRanges(sheet.name, sheet.metadata.styleRanges)
+  }
+  if (sheet.metadata?.formatRanges && sheet.metadata.formatRanges.length > 0) {
+    workbook.setFormatRanges(sheet.name, sheet.metadata.formatRanges)
+  }
   sheet.metadata?.filters?.forEach((range) => {
     workbook.setFilter(sheet.name, { ...range })
   })

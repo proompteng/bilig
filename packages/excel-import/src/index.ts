@@ -171,6 +171,10 @@ function toPixelSize(value: number | undefined, unit: 'pt' | 'ch'): number | nul
   return Math.round(value * 8 + 5)
 }
 
+function toPositivePixelSize(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.round(value) : null
+}
+
 function buildColumnEntries(columns: unknown[] | undefined): WorkbookAxisEntrySnapshot[] | undefined {
   if (!Array.isArray(columns) || columns.length === 0) {
     return undefined
@@ -182,7 +186,7 @@ function buildColumnEntries(columns: unknown[] | undefined): WorkbookAxisEntrySn
     }
     const size =
       typeof entry['wpx'] === 'number'
-        ? Math.round(entry['wpx'])
+        ? toPositivePixelSize(entry['wpx'])
         : typeof entry['wch'] === 'number'
           ? toPixelSize(entry['wch'], 'ch')
           : null
@@ -212,7 +216,7 @@ function buildRowEntries(rows: unknown[] | undefined): WorkbookAxisEntrySnapshot
     }
     const size =
       typeof entry['hpx'] === 'number'
-        ? Math.round(entry['hpx'])
+        ? toPositivePixelSize(entry['hpx'])
         : typeof entry['hpt'] === 'number'
           ? toPixelSize(entry['hpt'], 'pt')
           : null
@@ -442,11 +446,18 @@ function buildMergeEntries(sheetName: string, merges: readonly XLSX.Range[] | un
   if (!Array.isArray(merges) || merges.length === 0) {
     return undefined
   }
-  return merges.map((range) => ({
-    sheetName,
-    startAddress: XLSX.utils.encode_cell(range.s),
-    endAddress: XLSX.utils.encode_cell(range.e),
-  }))
+  const entries = merges.flatMap((range) =>
+    range.s.r === range.e.r && range.s.c === range.e.c
+      ? []
+      : [
+          {
+            sheetName,
+            startAddress: XLSX.utils.encode_cell(range.s),
+            endAddress: XLSX.utils.encode_cell(range.e),
+          },
+        ],
+  )
+  return entries.length > 0 ? entries : undefined
 }
 
 function createCellRange(sheetName: string, address: string) {

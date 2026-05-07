@@ -97,7 +97,7 @@ function parseImportedDefinedNameValue(ref: string): WorkbookDefinedNameValueSna
   }
   const expression = trimmed.startsWith('=') ? trimmed.slice(1).trim() : trimmed
   const sheetReference = parseSheetReference(expression)
-  if (sheetReference) {
+  if (sheetReference && !sheetReference.sheetName.startsWith('[')) {
     const parsedReference = parseDefinedNameReferenceValue(sheetReference.sheetName, sheetReference.reference)
     if (parsedReference) {
       return parsedReference
