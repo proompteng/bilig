@@ -344,9 +344,12 @@ audience, or product friction.
 5. Keep shipping compact formula-edge fixture articles that follow the XLOOKUP,
    SUMIFS, and GROUPBY walkthrough pattern: one real formula family, exact
    fixture inputs, expected result or spill output, and verifier command.
-6. Track GitHub stars, npm downloads, GitHub traffic referrers, and issue
+6. Share the HyperFormula comparison only in threads where someone is already
+   evaluating headless spreadsheet engines; keep the caveats visible and do not
+   frame it as a blanket replacement claim.
+7. Track GitHub stars, npm downloads, GitHub traffic referrers, and issue
    quality every week.
-7. Add a Star History chart only after there is enough organic movement for the
+8. Add a Star History chart only after there is enough organic movement for the
    graph to communicate momentum instead of early-stage emptiness.
 
 ## Sources

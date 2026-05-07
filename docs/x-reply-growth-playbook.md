@@ -461,6 +461,17 @@ workloads, with the p95 caveat left attached:
 https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md
 ```
 
+### hyperformula comparison
+
+```text
+hyperformula is still the default thing i would compare against for a headless
+spreadsheet engine.
+
+the wedge for bilig is narrower: a node workpaper object for formulas,
+structural edits, persistence, restore, and agent readback:
+https://github.com/proompteng/bilig/blob/main/docs/hyperformula-alternative-headless-workpaper.md
+```
+
 ## No-Link Replies
 
 Use these when a link would feel premature:

@@ -241,6 +241,9 @@ For the benchmark-focused explainer, see
 It states the `46/46` mean-win claim and the known p95 caveat without turning
 the benchmark into a blanket performance claim.
 
+For a concise HyperFormula comparison and evaluation path, see
+[`docs/hyperformula-alternative-headless-workpaper.md`](docs/hyperformula-alternative-headless-workpaper.md).
+
 For a runnable revenue-model walkthrough, see
 [`docs/building-a-revenue-model-with-headless-workpaper.md`](docs/building-a-revenue-model-with-headless-workpaper.md)
 and

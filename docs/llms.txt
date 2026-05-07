@@ -50,6 +50,8 @@ npm run agent:verify
 
 - benchmark explainer:
   https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md
+- hyperformula comparison:
+  https://github.com/proompteng/bilig/blob/main/docs/hyperformula-alternative-headless-workpaper.md
 - benchmark evidence:
   https://github.com/proompteng/bilig/blob/main/docs/headless-workpaper-benchmark-evidence.md
 - workbook APIs for agents:

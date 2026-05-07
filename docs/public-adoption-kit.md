@@ -40,6 +40,8 @@ Shorter version:
   [`docs/headless-workpaper-benchmark-evidence.md`](headless-workpaper-benchmark-evidence.md)
 - Benchmark explainer:
   [`docs/what-workpaper-benchmark-proves.md`](what-workpaper-benchmark-proves.md)
+- HyperFormula comparison:
+  [`docs/hyperformula-alternative-headless-workpaper.md`](hyperformula-alternative-headless-workpaper.md)
 - Technical article:
   [`docs/why-agents-need-workbook-apis.md`](why-agents-need-workbook-apis.md)
 - DEV-ready article:

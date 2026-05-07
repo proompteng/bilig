@@ -107,8 +107,14 @@ Repository:
   [`docs/where-bilig-is-not-excel-compatible-yet.md`](../../docs/where-bilig-is-not-excel-compatible-yet.md)
 - XLSX corpus verifier walkthrough:
   [`docs/xlsx-corpus-verifier-walkthrough.md`](../../docs/xlsx-corpus-verifier-walkthrough.md)
+- HyperFormula comparison:
+  [`docs/hyperformula-alternative-headless-workpaper.md`](../../docs/hyperformula-alternative-headless-workpaper.md)
 - XLOOKUP exact fixture walkthrough:
   [`docs/formula-edge-xlookup-exact-fixture.md`](../../docs/formula-edge-xlookup-exact-fixture.md)
+- SUMIFS paired criteria fixture walkthrough:
+  [`docs/formula-edge-sumifs-paired-criteria-fixture.md`](../../docs/formula-edge-sumifs-paired-criteria-fixture.md)
+- GROUPBY spill fixture walkthrough:
+  [`docs/formula-edge-groupby-spill-fixture.md`](../../docs/formula-edge-groupby-spill-fixture.md)
 - X reply growth playbook:
   [`docs/x-reply-growth-playbook.md`](../../docs/x-reply-growth-playbook.md)
 - Show HN launch pack:
