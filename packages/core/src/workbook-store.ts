@@ -13,6 +13,7 @@ import type {
   WorkbookConditionalFormatSnapshot,
   WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
+  WorkbookFreezePaneSnapshot,
   WorkbookImageSnapshot,
   WorkbookMacroPayloadSnapshot,
   WorkbookNoteSnapshot,
@@ -578,8 +579,13 @@ export class WorkbookStore {
     this.bumpSheetStructureVersion(sheet)
   }
 
-  setFreezePane(sheetName: string, rows: number, cols: number): WorkbookFreezePaneRecord {
-    return runWorkbookMetadataEffect(this.metadataService.setFreezePane(sheetName, rows, cols))
+  setFreezePane(
+    sheetName: string,
+    rows: number,
+    cols: number,
+    options?: Pick<WorkbookFreezePaneSnapshot, 'topLeftCell' | 'activePane'>,
+  ): WorkbookFreezePaneRecord {
+    return runWorkbookMetadataEffect(this.metadataService.setFreezePane(sheetName, rows, cols, options))
   }
 
   getFreezePane(sheetName: string): WorkbookFreezePaneRecord | undefined {

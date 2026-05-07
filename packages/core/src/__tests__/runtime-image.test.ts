@@ -271,6 +271,41 @@ describe('restoreWorkbookFromRuntimeImage', () => {
 })
 
 describe('restoreWorkbookFromSnapshot', () => {
+  it('preserves imported freeze pane scroll metadata during snapshot restore', () => {
+    const workbook = new WorkbookStore('snapshot-freeze-pane-metadata')
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'snapshot-freeze-pane-metadata' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Sheet1',
+          order: 0,
+          metadata: {
+            freezePane: { rows: 3, cols: 2, topLeftCell: 'I32', activePane: 'bottomRight' },
+          },
+          cells: [],
+        },
+      ],
+    }
+
+    restoreWorkbookFromSnapshot({
+      snapshot,
+      workbook,
+      strings: new StringPool(),
+      resetWorkbook: () => {},
+      initializeCellFormulasAt: () => {},
+    })
+
+    expect(workbook.getFreezePane('Sheet1')).toEqual({
+      sheetName: 'Sheet1',
+      rows: 3,
+      cols: 2,
+      topLeftCell: 'I32',
+      activePane: 'bottomRight',
+    })
+  })
+
   it('uses fresh coordinate restore without reparsing address strings or cell-wise value notifications', () => {
     const workbook = new WorkbookStore('snapshot-coordinate-restore')
     const plainCalls: Array<{

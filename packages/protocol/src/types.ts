@@ -341,9 +341,13 @@ export interface WorkbookMacroPayloadSnapshot {
   sheetCodeNames?: WorkbookMacroSheetCodeNameSnapshot[]
 }
 
+export type WorkbookFreezePaneActivePane = 'bottomRight' | 'bottomLeft' | 'topRight' | 'topLeft'
+
 export interface WorkbookFreezePaneSnapshot {
   rows: number
   cols: number
+  topLeftCell?: string
+  activePane?: WorkbookFreezePaneActivePane
 }
 
 export interface WorkbookMergeRangeSnapshot extends CellRangeRef {}

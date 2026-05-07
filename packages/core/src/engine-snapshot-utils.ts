@@ -36,7 +36,14 @@ function freezePaneToSnapshot(record: WorkbookFreezePaneRecord | undefined): Wor
   if (!record) {
     return undefined
   }
-  return { rows: record.rows, cols: record.cols }
+  const snapshot: WorkbookFreezePaneSnapshot = { rows: record.rows, cols: record.cols }
+  if (record.topLeftCell !== undefined) {
+    snapshot.topLeftCell = record.topLeftCell
+  }
+  if (record.activePane !== undefined) {
+    snapshot.activePane = record.activePane
+  }
+  return snapshot
 }
 
 function mergeRangeToSnapshot(record: WorkbookMergeRangeSnapshot): WorkbookMergeRangeSnapshot {

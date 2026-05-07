@@ -394,7 +394,10 @@ function restoreSheetMetadata(args: { readonly workbook: WorkbookStore; readonly
     workbook.setColumnMetadata(sheet.name, record.start, record.count, record.size ?? null, record.hidden ?? null)
   })
   if (sheet.metadata?.freezePane) {
-    workbook.setFreezePane(sheet.name, sheet.metadata.freezePane.rows, sheet.metadata.freezePane.cols)
+    workbook.setFreezePane(sheet.name, sheet.metadata.freezePane.rows, sheet.metadata.freezePane.cols, {
+      ...(sheet.metadata.freezePane.topLeftCell !== undefined ? { topLeftCell: sheet.metadata.freezePane.topLeftCell } : {}),
+      ...(sheet.metadata.freezePane.activePane !== undefined ? { activePane: sheet.metadata.freezePane.activePane } : {}),
+    })
   }
   if (sheet.metadata?.merges && sheet.metadata.merges.length > 0) {
     workbook.setMergeRanges(

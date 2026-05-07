@@ -16,6 +16,7 @@ import type {
   WorkbookConditionalFormatSnapshot,
   WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
+  WorkbookFreezePaneSnapshot,
   WorkbookNoteSnapshot,
   WorkbookRangeProtectionSnapshot,
   WorkbookSheetProtectionSnapshot,
@@ -88,10 +89,8 @@ export interface WorkbookCalculationSettingsRecord extends WorkbookCalculationSe
 
 export interface WorkbookVolatileContextRecord extends WorkbookVolatileContextSnapshot {}
 
-export interface WorkbookFreezePaneRecord {
+export interface WorkbookFreezePaneRecord extends WorkbookFreezePaneSnapshot {
   sheetName: string
-  rows: number
-  cols: number
 }
 
 export interface WorkbookMergeRangeRecord extends WorkbookMergeRangeSnapshot {}

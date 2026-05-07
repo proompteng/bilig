@@ -6,6 +6,7 @@ import type {
   WorkbookChartSnapshot,
   WorkbookConditionalFormatSnapshot,
   WorkbookDataValidationSnapshot,
+  WorkbookFreezePaneSnapshot,
   WorkbookPivotSnapshot,
   WorkbookPivotValueSnapshot,
   WorkbookRangeProtectionSnapshot,
@@ -976,6 +977,36 @@ describe('excel import', () => {
     expect(projectSupportedSnapshotSemantics(imported.snapshot)).toEqual(projectSupportedSnapshotSemantics(snapshot))
   })
 
+  it('preserves imported frozen pane scroll targets on export', () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'frozen-pane-scroll-target' },
+      sheets: [
+        {
+          id: 1,
+          name: 'View',
+          order: 0,
+          metadata: {
+            freezePane: { rows: 3, cols: 2, topLeftCell: 'I32', activePane: 'bottomRight' },
+          },
+          cells: [
+            { address: 'A1', value: 'Account' },
+            { address: 'B1', value: 'Amount' },
+            { address: 'I32', value: 'scroll target' },
+          ],
+        },
+      ],
+    }
+
+    const imported = importXlsx(exportXlsx(snapshot), 'frozen-pane-scroll-target.xlsx')
+    const freezePane = imported.snapshot.sheets[0]?.metadata?.freezePane
+    const exportedZip = unzipSync(exportXlsx(imported.snapshot))
+    const sheetXml = strFromU8(exportedZip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())
+
+    expect(freezePane).toEqual({ rows: 3, cols: 2, topLeftCell: 'I32', activePane: 'bottomRight' })
+    expect(sheetXml).toContain('<pane xSplit="2" ySplit="3" topLeftCell="I32" activePane="bottomRight" state="frozen"/>')
+  })
+
   it('exports custom number formats on populated and blank cells', () => {
     const snapshot: WorkbookSnapshot = {
       workbook: { id: 'custom-number-format-workbook', name: 'custom-number-format-workbook' },
@@ -1215,6 +1246,33 @@ function projectSortSemantics(sort: WorkbookSortSnapshot): WorkbookSortSnapshot 
   return structuredClone(sort)
 }
 
+function defaultFreezePaneActivePane(freezePane: WorkbookFreezePaneSnapshot): string {
+  if (freezePane.rows > 0 && freezePane.cols > 0) {
+    return 'bottomRight'
+  }
+  return freezePane.rows > 0 ? 'bottomLeft' : 'topRight'
+}
+
+function defaultFreezePaneTopLeftCell(freezePane: WorkbookFreezePaneSnapshot): string {
+  return XLSX.utils.encode_cell({ r: freezePane.rows, c: freezePane.cols })
+}
+
+function projectFreezePaneSemantics(freezePane: WorkbookFreezePaneSnapshot | undefined): WorkbookFreezePaneSnapshot | undefined {
+  if (!freezePane) {
+    return undefined
+  }
+  return {
+    rows: freezePane.rows,
+    cols: freezePane.cols,
+    ...(freezePane.topLeftCell !== undefined && freezePane.topLeftCell !== defaultFreezePaneTopLeftCell(freezePane)
+      ? { topLeftCell: freezePane.topLeftCell }
+      : {}),
+    ...(freezePane.activePane !== undefined && freezePane.activePane !== defaultFreezePaneActivePane(freezePane)
+      ? { activePane: freezePane.activePane }
+      : {}),
+  }
+}
+
 function projectConditionalFormatSemantics(format: WorkbookConditionalFormatSnapshot) {
   return {
     range: format.range,
@@ -1279,7 +1337,7 @@ function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
           rows: (sheet.metadata?.rows ?? [])
             .map(({ index, size }) => ({ index, size }))
             .toSorted((left, right) => left.index - right.index),
-          freezePane: sheet.metadata?.freezePane,
+          freezePane: projectFreezePaneSemantics(sheet.metadata?.freezePane),
           sheetProtection: sheet.metadata?.sheetProtection,
           merges: (sheet.metadata?.merges ?? [])
             .map(({ sheetName, startAddress, endAddress }) => ({ sheetName, startAddress, endAddress }))

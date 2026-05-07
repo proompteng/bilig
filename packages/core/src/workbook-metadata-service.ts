@@ -451,9 +451,15 @@ export function createWorkbookMetadataService(metadata: WorkbookMetadataRecord):
           .map(cloneTableRecord),
       )
     },
-    setFreezePane(sheetName, rows, cols) {
+    setFreezePane(sheetName, rows, cols, options) {
       return metadataEffect('Failed to set freeze pane metadata', () => {
         const record: WorkbookFreezePaneRecord = { sheetName, rows, cols }
+        if (options?.topLeftCell !== undefined) {
+          record.topLeftCell = options.topLeftCell
+        }
+        if (options?.activePane !== undefined) {
+          record.activePane = options.activePane
+        }
         metadata.freezePanes.set(sheetName, record)
         return { ...record }
       })

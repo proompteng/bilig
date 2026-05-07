@@ -9,6 +9,7 @@ import type {
   WorkbookConditionalFormatSnapshot,
   WorkbookDataValidationSnapshot,
   WorkbookDefinedNameValueSnapshot,
+  WorkbookFreezePaneSnapshot,
   WorkbookImageSnapshot,
   WorkbookMacroPayloadSnapshot,
   WorkbookNoteSnapshot,
@@ -90,7 +91,12 @@ export interface WorkbookMetadataService {
   readonly getTable: (name: string) => Effect.Effect<WorkbookTableRecord | undefined, WorkbookMetadataError>
   readonly deleteTable: (name: string) => Effect.Effect<boolean, WorkbookMetadataError>
   readonly listTables: () => Effect.Effect<WorkbookTableRecord[], WorkbookMetadataError>
-  readonly setFreezePane: (sheetName: string, rows: number, cols: number) => Effect.Effect<WorkbookFreezePaneRecord, WorkbookMetadataError>
+  readonly setFreezePane: (
+    sheetName: string,
+    rows: number,
+    cols: number,
+    options?: Pick<WorkbookFreezePaneSnapshot, 'topLeftCell' | 'activePane'>,
+  ) => Effect.Effect<WorkbookFreezePaneRecord, WorkbookMetadataError>
   readonly getFreezePane: (sheetName: string) => Effect.Effect<WorkbookFreezePaneRecord | undefined, WorkbookMetadataError>
   readonly clearFreezePane: (sheetName: string) => Effect.Effect<boolean, WorkbookMetadataError>
   readonly setMergeRange: (range: CellRangeRef) => Effect.Effect<WorkbookMergeRangeRecord, WorkbookMetadataError>

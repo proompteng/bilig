@@ -2,7 +2,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { XMLParser } from 'fast-xml-parser'
 import * as XLSX from 'xlsx'
 
-import type { WorkbookFreezePaneSnapshot, WorkbookSnapshot } from '@bilig/protocol'
+import type { WorkbookFreezePaneActivePane, WorkbookFreezePaneSnapshot, WorkbookSnapshot } from '@bilig/protocol'
 
 type ZipEntries = Record<string, Uint8Array>
 
@@ -54,16 +54,56 @@ function toPositiveInteger(value: unknown): number {
   return Number.isInteger(number) && number > 0 ? number : 0
 }
 
+function normalizeCellReference(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  const normalized = value.trim().replaceAll('$', '').toUpperCase()
+  if (!/^[A-Z]{1,3}[1-9][0-9]*$/u.test(normalized)) {
+    return undefined
+  }
+  try {
+    const decoded = XLSX.utils.decode_cell(normalized)
+    return decoded.r >= 0 && decoded.c >= 0 ? XLSX.utils.encode_cell(decoded) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function normalizeActivePane(value: unknown): WorkbookFreezePaneActivePane | undefined {
+  switch (value) {
+    case 'bottomRight':
+    case 'bottomLeft':
+    case 'topRight':
+    case 'topLeft':
+      return value
+    default:
+      return undefined
+  }
+}
+
 function normalizeFreezePane(freezePane: WorkbookFreezePaneSnapshot | undefined): WorkbookFreezePaneSnapshot | null {
   if (!freezePane) {
     return null
   }
   const rows = toPositiveInteger(freezePane.rows)
   const cols = toPositiveInteger(freezePane.cols)
-  return rows > 0 || cols > 0 ? { rows, cols } : null
+  if (rows <= 0 && cols <= 0) {
+    return null
+  }
+  const normalized: WorkbookFreezePaneSnapshot = { rows, cols }
+  const topLeftCell = normalizeCellReference(freezePane.topLeftCell)
+  if (topLeftCell !== undefined) {
+    normalized.topLeftCell = topLeftCell
+  }
+  const activePane = normalizeActivePane(freezePane.activePane)
+  if (activePane !== undefined) {
+    normalized.activePane = activePane
+  }
+  return normalized
 }
 
-function activePaneForFreeze(freezePane: WorkbookFreezePaneSnapshot): string {
+function activePaneForFreeze(freezePane: WorkbookFreezePaneSnapshot): WorkbookFreezePaneActivePane {
   if (freezePane.rows > 0 && freezePane.cols > 0) {
     return 'bottomRight'
   }
@@ -78,8 +118,8 @@ function buildFreezePaneXml(freezePane: WorkbookFreezePaneSnapshot): string {
   if (freezePane.rows > 0) {
     attributes.push(`ySplit="${String(freezePane.rows)}"`)
   }
-  const topLeftCell = XLSX.utils.encode_cell({ r: freezePane.rows, c: freezePane.cols })
-  const activePane = activePaneForFreeze(freezePane)
+  const topLeftCell = freezePane.topLeftCell ?? XLSX.utils.encode_cell({ r: freezePane.rows, c: freezePane.cols })
+  const activePane = freezePane.activePane ?? activePaneForFreeze(freezePane)
   attributes.push(`topLeftCell="${escapeXml(topLeftCell)}"`)
   attributes.push(`activePane="${activePane}"`)
   attributes.push('state="frozen"')
@@ -152,7 +192,19 @@ function parseFreezePane(pane: Record<string, unknown>): WorkbookFreezePaneSnaps
   }
   const rows = toPositiveInteger(pane['ySplit'])
   const cols = toPositiveInteger(pane['xSplit'])
-  return rows > 0 || cols > 0 ? { rows, cols } : null
+  if (rows <= 0 && cols <= 0) {
+    return null
+  }
+  const freezePane: WorkbookFreezePaneSnapshot = { rows, cols }
+  const topLeftCell = normalizeCellReference(pane['topLeftCell'])
+  if (topLeftCell !== undefined) {
+    freezePane.topLeftCell = topLeftCell
+  }
+  const activePane = normalizeActivePane(pane['activePane'])
+  if (activePane !== undefined) {
+    freezePane.activePane = activePane
+  }
+  return freezePane
 }
 
 export function readImportedWorkbookFreezePanes(bytes: Uint8Array, sheetNames: readonly string[]): Map<string, WorkbookFreezePaneSnapshot> {
