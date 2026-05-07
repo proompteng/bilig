@@ -17,6 +17,7 @@ import type {
   WorkbookRangeProtectionSnapshot,
   WorkbookShapeSnapshot,
   WorkbookSheetProtectionSnapshot,
+  WorkbookSheetTabColorSnapshot,
   WorkbookTableSnapshot,
   WorkbookVolatileContextSnapshot,
 } from '@bilig/protocol'
@@ -37,6 +38,7 @@ import type {
   WorkbookPropertyRecord,
   WorkbookRangeProtectionRecord,
   WorkbookSheetProtectionRecord,
+  WorkbookSheetTabColorRecord,
   WorkbookShapeRecord,
   WorkbookSortKeyRecord,
   WorkbookSortRecord,
@@ -99,6 +101,12 @@ export interface WorkbookMetadataService {
   ) => Effect.Effect<WorkbookFreezePaneRecord, WorkbookMetadataError>
   readonly getFreezePane: (sheetName: string) => Effect.Effect<WorkbookFreezePaneRecord | undefined, WorkbookMetadataError>
   readonly clearFreezePane: (sheetName: string) => Effect.Effect<boolean, WorkbookMetadataError>
+  readonly setSheetTabColor: (
+    sheetName: string,
+    tabColor: WorkbookSheetTabColorSnapshot,
+  ) => Effect.Effect<WorkbookSheetTabColorRecord, WorkbookMetadataError>
+  readonly getSheetTabColor: (sheetName: string) => Effect.Effect<WorkbookSheetTabColorRecord | undefined, WorkbookMetadataError>
+  readonly clearSheetTabColor: (sheetName: string) => Effect.Effect<boolean, WorkbookMetadataError>
   readonly setMergeRange: (range: CellRangeRef) => Effect.Effect<WorkbookMergeRangeRecord, WorkbookMetadataError>
   readonly setMergeRanges: (
     sheetName: string,

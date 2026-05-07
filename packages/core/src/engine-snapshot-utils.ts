@@ -4,9 +4,10 @@ import type {
   WorkbookAxisMetadataSnapshot,
   WorkbookFreezePaneSnapshot,
   WorkbookMergeRangeSnapshot,
+  WorkbookSheetTabColorSnapshot,
 } from '@bilig/protocol'
 import type { EngineOp } from '@bilig/workbook-domain'
-import type { WorkbookAxisMetadataRecord, WorkbookFreezePaneRecord, WorkbookStore } from './workbook-store.js'
+import type { WorkbookAxisMetadataRecord, WorkbookFreezePaneRecord, WorkbookSheetTabColorRecord, WorkbookStore } from './workbook-store.js'
 
 function cloneSnapshotRangeRef(range: CellRangeRef): CellRangeRef {
   return {
@@ -54,6 +55,29 @@ function mergeRangeToSnapshot(record: WorkbookMergeRangeSnapshot): WorkbookMerge
   }
 }
 
+function sheetTabColorToSnapshot(record: WorkbookSheetTabColorRecord | undefined): WorkbookSheetTabColorSnapshot | undefined {
+  if (!record) {
+    return undefined
+  }
+  const snapshot: WorkbookSheetTabColorSnapshot = {}
+  if (record.rgb !== undefined) {
+    snapshot.rgb = record.rgb
+  }
+  if (record.theme !== undefined) {
+    snapshot.theme = record.theme
+  }
+  if (record.tint !== undefined) {
+    snapshot.tint = record.tint
+  }
+  if (record.indexed !== undefined) {
+    snapshot.indexed = record.indexed
+  }
+  if (record.auto !== undefined) {
+    snapshot.auto = record.auto
+  }
+  return snapshot
+}
+
 export function exportSheetMetadata(workbook: WorkbookStore, sheetName: string): SheetMetadataSnapshot | undefined {
   const rows = workbook.listRowAxisEntries(sheetName)
   const columns = workbook.listColumnAxisEntries(sheetName)
@@ -68,6 +92,7 @@ export function exportSheetMetadata(workbook: WorkbookStore, sheetName: string):
     formatId: record.formatId,
   }))
   const freezePane = freezePaneToSnapshot(workbook.getFreezePane(sheetName))
+  const tabColor = sheetTabColorToSnapshot(workbook.getSheetTabColor(sheetName))
   const merges = workbook.listMergeRanges(sheetName).map(mergeRangeToSnapshot)
   const sheetProtection = workbook.getSheetProtection(sheetName)
   const filters = workbook.listFilters(sheetName).map((filter) => structuredClone(filter.range))
@@ -89,6 +114,7 @@ export function exportSheetMetadata(workbook: WorkbookStore, sheetName: string):
     styleRanges.length === 0 &&
     formatRanges.length === 0 &&
     freezePane === undefined &&
+    tabColor === undefined &&
     merges.length === 0 &&
     sheetProtection === undefined &&
     filters.length === 0 &&
@@ -123,6 +149,9 @@ export function exportSheetMetadata(workbook: WorkbookStore, sheetName: string):
   }
   if (freezePane) {
     metadata.freezePane = freezePane
+  }
+  if (tabColor) {
+    metadata.tabColor = tabColor
   }
   if (merges.length > 0) {
     metadata.merges = merges

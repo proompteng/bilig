@@ -20,6 +20,7 @@ import type {
   WorkbookNoteSnapshot,
   WorkbookRangeProtectionSnapshot,
   WorkbookSheetProtectionSnapshot,
+  WorkbookSheetTabColorSnapshot,
   WorkbookPivotSnapshot,
   WorkbookPivotValueSnapshot,
   WorkbookTableSnapshot,
@@ -93,6 +94,10 @@ export interface WorkbookFreezePaneRecord extends WorkbookFreezePaneSnapshot {
   sheetName: string
 }
 
+export interface WorkbookSheetTabColorRecord extends WorkbookSheetTabColorSnapshot {
+  sheetName: string
+}
+
 export interface WorkbookMergeRangeRecord extends WorkbookMergeRangeSnapshot {}
 
 export interface WorkbookFilterRecord {
@@ -138,6 +143,7 @@ export interface WorkbookMetadataRecord {
   calculationSettings: WorkbookCalculationSettingsRecord
   volatileContext: WorkbookVolatileContextRecord
   freezePanes: Map<string, WorkbookFreezePaneRecord>
+  sheetTabColors: Map<string, WorkbookSheetTabColorRecord>
   merges: Map<string, WorkbookMergeRangeRecord>
   sheetProtections: Map<string, WorkbookSheetProtectionRecord>
   filters: Map<string, WorkbookFilterRecord>
@@ -165,6 +171,7 @@ export function createWorkbookMetadataRecord(): WorkbookMetadataRecord {
     calculationSettings: { mode: 'automatic', compatibilityMode: 'excel-modern' },
     volatileContext: { recalcEpoch: 0 },
     freezePanes: new Map(),
+    sheetTabColors: new Map(),
     merges: new Map(),
     sheetProtections: new Map(),
     filters: new Map(),

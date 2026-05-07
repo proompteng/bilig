@@ -24,6 +24,7 @@ describe('engine snapshot utils', () => {
     workbook.upsertCellNumberFormat(createCellNumberFormatRecord('format-decimal', '0.00'))
     workbook.setFormatRange({ sheetName: 'Sheet1', startAddress: 'C1', endAddress: 'C3' }, 'format-decimal')
     workbook.setFreezePane('Sheet1', 1, 2)
+    workbook.setSheetTabColor('Sheet1', { theme: '8', tint: '-0.25' })
     workbook.setMergeRange({ sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'E2' })
     workbook.setFilter('Sheet1', {
       sheetName: 'Sheet1',
@@ -68,6 +69,7 @@ describe('engine snapshot utils', () => {
         },
       ],
       freezePane: { rows: 1, cols: 2 },
+      tabColor: { theme: '8', tint: '-0.25' },
       merges: [{ sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'E2' }],
       filters: [
         {

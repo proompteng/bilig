@@ -152,6 +152,7 @@ export class WorkbookSheetRegistryStore {
       metadata.rowMetadata.size > 0 ||
       metadata.columnMetadata.size > 0 ||
       metadata.freezePanes.size > 0 ||
+      metadata.sheetTabColors.size > 0 ||
       metadata.sheetProtections.size > 0 ||
       metadata.filters.size > 0 ||
       metadata.sorts.size > 0 ||

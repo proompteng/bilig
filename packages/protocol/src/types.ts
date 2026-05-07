@@ -350,6 +350,14 @@ export interface WorkbookFreezePaneSnapshot {
   activePane?: WorkbookFreezePaneActivePane
 }
 
+export interface WorkbookSheetTabColorSnapshot {
+  rgb?: string
+  theme?: string
+  tint?: string
+  indexed?: string
+  auto?: string
+}
+
 export interface WorkbookMergeRangeSnapshot extends CellRangeRef {}
 
 export interface CellStyleFillSnapshot {
@@ -682,6 +690,7 @@ export interface SheetMetadataSnapshot {
   styleRanges?: SheetStyleRangeSnapshot[]
   formatRanges?: SheetFormatRangeSnapshot[]
   freezePane?: WorkbookFreezePaneSnapshot
+  tabColor?: WorkbookSheetTabColorSnapshot
   merges?: WorkbookMergeRangeSnapshot[]
   sheetProtection?: WorkbookSheetProtectionSnapshot
   filters?: WorkbookAutoFilterSnapshot[]

@@ -19,6 +19,7 @@ import type {
   WorkbookNoteSnapshot,
   WorkbookRangeProtectionSnapshot,
   WorkbookSheetProtectionSnapshot,
+  WorkbookSheetTabColorSnapshot,
   WorkbookPivotSnapshot,
   WorkbookShapeSnapshot,
   WorkbookTableSnapshot,
@@ -52,6 +53,7 @@ import {
   type WorkbookPropertyRecord,
   type WorkbookRangeProtectionRecord,
   type WorkbookSheetProtectionRecord,
+  type WorkbookSheetTabColorRecord,
   type WorkbookShapeRecord,
   type WorkbookSortKeyRecord,
   type WorkbookSortRecord,
@@ -116,6 +118,7 @@ export type {
   WorkbookPropertyRecord,
   WorkbookRangeProtectionRecord,
   WorkbookSheetProtectionRecord,
+  WorkbookSheetTabColorRecord,
   WorkbookShapeRecord,
   WorkbookSortKeyRecord,
   WorkbookSortRecord,
@@ -594,6 +597,18 @@ export class WorkbookStore {
 
   clearFreezePane(sheetName: string): boolean {
     return runWorkbookMetadataEffect(this.metadataService.clearFreezePane(sheetName))
+  }
+
+  setSheetTabColor(sheetName: string, tabColor: WorkbookSheetTabColorSnapshot): WorkbookSheetTabColorRecord {
+    return runWorkbookMetadataEffect(this.metadataService.setSheetTabColor(sheetName, tabColor))
+  }
+
+  getSheetTabColor(sheetName: string): WorkbookSheetTabColorRecord | undefined {
+    return runWorkbookMetadataEffect(this.metadataService.getSheetTabColor(sheetName))
+  }
+
+  clearSheetTabColor(sheetName: string): boolean {
+    return runWorkbookMetadataEffect(this.metadataService.clearSheetTabColor(sheetName))
   }
 
   setMergeRange(range: CellRangeRef): WorkbookMergeRangeRecord {

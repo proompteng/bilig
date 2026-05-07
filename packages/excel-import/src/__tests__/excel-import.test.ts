@@ -1006,6 +1006,51 @@ describe('excel import', () => {
     expect(sheetXml).toContain('<pane xSplit="2" ySplit="3" topLeftCell="I32" activePane="bottomRight" state="frozen"/>')
   })
 
+  it('preserves worksheet tab colors on import and export', () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'tab-color-roundtrip' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Rgb',
+          order: 0,
+          metadata: { tabColor: { rgb: 'FF0070C0' } },
+          cells: [{ address: 'A1', value: 'rgb tab' }],
+        },
+        {
+          id: 2,
+          name: 'Theme',
+          order: 1,
+          metadata: { tabColor: { theme: '8' } },
+          cells: [{ address: 'A1', value: 'theme tab' }],
+        },
+        {
+          id: 3,
+          name: 'Tint',
+          order: 2,
+          metadata: { tabColor: { theme: '0', tint: '-0.14999847407452621' } },
+          cells: [{ address: 'A1', value: 'tint tab' }],
+        },
+      ],
+    }
+
+    const exported = exportXlsx(snapshot)
+    const imported = importXlsx(exported, 'tab-color-roundtrip.xlsx')
+    const reexportedZip = unzipSync(exportXlsx(imported.snapshot))
+
+    expect(imported.snapshot.sheets.map((sheet) => sheet.metadata?.tabColor)).toEqual([
+      { rgb: 'FF0070C0' },
+      { theme: '8' },
+      { theme: '0', tint: '-0.14999847407452621' },
+    ])
+    expect(strFromU8(reexportedZip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())).toContain('<tabColor rgb="FF0070C0"/>')
+    expect(strFromU8(reexportedZip['xl/worksheets/sheet2.xml'] ?? new Uint8Array())).toContain('<tabColor theme="8"/>')
+    expect(strFromU8(reexportedZip['xl/worksheets/sheet3.xml'] ?? new Uint8Array())).toContain(
+      '<tabColor theme="0" tint="-0.14999847407452621"/>',
+    )
+  })
+
   it('exports custom number formats on populated and blank cells', () => {
     const snapshot: WorkbookSnapshot = {
       workbook: { id: 'custom-number-format-workbook', name: 'custom-number-format-workbook' },
@@ -1344,6 +1389,7 @@ function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
             .map(({ index, size }) => ({ index, size }))
             .toSorted((left, right) => left.index - right.index),
           freezePane: projectFreezePaneSemantics(sheet.metadata?.freezePane),
+          tabColor: sheet.metadata?.tabColor,
           sheetProtection: sheet.metadata?.sheetProtection,
           merges: (sheet.metadata?.merges ?? [])
             .map(({ sheetName, startAddress, endAddress }) => ({ sheetName, startAddress, endAddress }))

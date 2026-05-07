@@ -401,6 +401,9 @@ function restoreSheetMetadata(args: { readonly workbook: WorkbookStore; readonly
       ...(sheet.metadata.freezePane.activePane !== undefined ? { activePane: sheet.metadata.freezePane.activePane } : {}),
     })
   }
+  if (sheet.metadata?.tabColor) {
+    workbook.setSheetTabColor(sheet.name, structuredClone(sheet.metadata.tabColor))
+  }
   if (sheet.metadata?.merges && sheet.metadata.merges.length > 0) {
     workbook.setMergeRanges(
       sheet.name,

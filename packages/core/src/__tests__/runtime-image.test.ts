@@ -283,6 +283,7 @@ describe('restoreWorkbookFromSnapshot', () => {
           order: 0,
           metadata: {
             freezePane: { rows: 3, cols: 2, topLeftCell: 'I32', activePane: 'bottomRight' },
+            tabColor: { rgb: 'FF0070C0' },
           },
           cells: [],
         },
@@ -303,6 +304,10 @@ describe('restoreWorkbookFromSnapshot', () => {
       cols: 2,
       topLeftCell: 'I32',
       activePane: 'bottomRight',
+    })
+    expect(workbook.getSheetTabColor('Sheet1')).toEqual({
+      sheetName: 'Sheet1',
+      rgb: 'FF0070C0',
     })
   })
 

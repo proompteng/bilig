@@ -158,6 +158,9 @@ function metadataEffect<Success>(message: string, run: () => Success): Effect.Ef
 export function createWorkbookMetadataService(metadata: WorkbookMetadataRecord): WorkbookMetadataService {
   const renameSheetNow = (oldSheetName: string, newSheetName: string): void => {
     rekeyRecords(metadata.freezePanes, (record) => (record.sheetName === oldSheetName ? { ...record, sheetName: newSheetName } : record))
+    rekeyRecords(metadata.sheetTabColors, (record) =>
+      record.sheetName === oldSheetName ? { ...record, sheetName: newSheetName } : { ...record },
+    )
     rekeyRecords(metadata.merges, (record) =>
       record.sheetName === oldSheetName ? { ...cloneMergeRangeRecord(record), sheetName: newSheetName } : cloneMergeRangeRecord(record),
     )
@@ -295,6 +298,7 @@ export function createWorkbookMetadataService(metadata: WorkbookMetadataRecord):
     deleteRecordsBySheet(metadata.commentThreads, sheetName, (record) => record.sheetName)
     deleteRecordsBySheet(metadata.notes, sheetName, (record) => record.sheetName)
     metadata.freezePanes.delete(sheetName)
+    metadata.sheetTabColors.delete(sheetName)
   }
 
   const resetNow = (): void => {
@@ -311,6 +315,7 @@ export function createWorkbookMetadataService(metadata: WorkbookMetadataRecord):
     metadata.rowMetadata.clear()
     metadata.columnMetadata.clear()
     metadata.freezePanes.clear()
+    metadata.sheetTabColors.clear()
     metadata.merges.clear()
     metadata.sheetProtections.clear()
     metadata.filters.clear()
@@ -472,6 +477,22 @@ export function createWorkbookMetadataService(metadata: WorkbookMetadataRecord):
     },
     clearFreezePane(sheetName) {
       return metadataEffect('Failed to clear freeze pane metadata', () => metadata.freezePanes.delete(sheetName))
+    },
+    setSheetTabColor(sheetName, tabColor) {
+      return metadataEffect('Failed to set sheet tab color metadata', () => {
+        const record = { sheetName, ...tabColor }
+        metadata.sheetTabColors.set(sheetName, record)
+        return { ...record }
+      })
+    },
+    getSheetTabColor(sheetName) {
+      return metadataEffect('Failed to get sheet tab color metadata', () => {
+        const record = metadata.sheetTabColors.get(sheetName)
+        return record ? { ...record } : undefined
+      })
+    },
+    clearSheetTabColor(sheetName) {
+      return metadataEffect('Failed to clear sheet tab color metadata', () => metadata.sheetTabColors.delete(sheetName))
     },
     setMergeRange(range) {
       return metadataEffect('Failed to set merged cell metadata', () => {

@@ -31,6 +31,7 @@ import { readImportedWorkbookProtectedRanges } from './xlsx-protected-ranges.js'
 import { readImportedWorkbookSheetProtections } from './xlsx-sheet-protection.js'
 import { readImportedWorkbookSorts } from './xlsx-sorts.js'
 import { readImportedWorkbookFileStyles, readImportedWorkbookSheetDimensions } from './xlsx-styles.js'
+import { readImportedWorkbookSheetTabColors } from './xlsx-tab-colors.js'
 import { readImportedWorkbookTables } from './xlsx-tables.js'
 import { readImportedWorkbookDataValidations } from './xlsx-validations.js'
 import { readImportedWorkbookProperties } from './xlsx-workbook-properties.js'
@@ -660,6 +661,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
   const importedTables = readImportedWorkbookTables(data, workbook.SheetNames)
   const importedFiltersBySheet = readImportedWorkbookFilters(data, workbook.SheetNames)
   const importedFreezePanesBySheet = readImportedWorkbookFreezePanes(data, workbook.SheetNames)
+  const importedSheetTabColorsBySheet = readImportedWorkbookSheetTabColors(data, workbook.SheetNames)
   const importedSheetProtectionsBySheet = readImportedWorkbookSheetProtections(data, workbook.SheetNames)
   const importedProtectedRangesBySheet = readImportedWorkbookProtectedRanges(data, workbook.SheetNames)
   const importedSortsBySheet = readImportedWorkbookSorts(data, workbook.SheetNames)
@@ -806,6 +808,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
     const rows = importedSheetDimensions?.rows ?? buildRowEntries(sheet['!rows'])
     const columns = importedSheetDimensions?.columns ?? buildColumnEntries(sheet['!cols'])
     const importedFreezePane = importedFreezePanesBySheet.get(sheetName)
+    const importedSheetTabColor = importedSheetTabColorsBySheet.get(sheetName)
     const merges = buildMergeEntries(sheetName, sheet['!merges'])
     const importedSheetProtection = importedSheetProtectionsBySheet.get(sheetName)
     const importedProtectedRanges = importedProtectedRangesBySheet.get(sheetName)
@@ -818,6 +821,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
       columns ||
       styleRanges.length > 0 ||
       importedFreezePane ||
+      importedSheetTabColor ||
       merges ||
       importedSheetProtection ||
       importedProtectedRanges ||
@@ -831,6 +835,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
             ...(columns ? { columns } : {}),
             ...(styleRanges.length > 0 ? { styleRanges } : {}),
             ...(importedFreezePane ? { freezePane: importedFreezePane } : {}),
+            ...(importedSheetTabColor ? { tabColor: importedSheetTabColor } : {}),
             ...(merges ? { merges } : {}),
             ...(importedSheetProtection ? { sheetProtection: importedSheetProtection } : {}),
             ...(importedProtectedRanges ? { protectedRanges: importedProtectedRanges } : {}),
