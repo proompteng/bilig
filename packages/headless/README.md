@@ -25,9 +25,12 @@ Current release posture:
 - Full local CI passed after the latest headless hardening work, including unit,
   contract, fuzz, browser, clean-diff, release-budget, runtime-publish, and
   WorkPaper competitive benchmark gates.
-- The checked-in competitive artifact generated on `2026-05-05T19:00:09.455Z`
+- The checked-in competitive artifact generated on `2026-05-06T14:54:57.091Z`
   shows `46/46` comparable WorkPaper mean wins against HyperFormula-style
   workloads: `38/38` public and `8/8` holdout.
+- The public benchmark evidence note explains the measured workload families,
+  engine metadata, exclusions, and the current p95 nuance:
+  [`docs/headless-workpaper-benchmark-evidence.md`](../../docs/headless-workpaper-benchmark-evidence.md).
 - Recently fixed and hardened P1 risks are covered by regression tests:
   - `updateConfig()` now applies `useColumnIndex` correctly when a rebuild-only
     config key changes in the same update.

@@ -216,9 +216,19 @@ The WorkPaper track is the repo's performance-leadership program. It compares
 bilig's spreadsheet runtime against HyperFormula-style workloads and keeps the
 important claims tied to benchmark artifacts, counters, and docs.
 
+Current public evidence:
+
+- `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`, generated at
+  `2026-05-06T14:54:57.091Z`, records WorkPaper `46/46` mean wins on
+  scorecard-eligible comparable workloads: `38/38` public and `8/8` holdout.
+- `docs/headless-workpaper-benchmark-evidence.md` explains what is measured,
+  what is excluded, and why this is a mean-win claim rather than a blanket p95
+  guarantee.
+
 Start here:
 
 - `docs/workpaper-engine-leadership-program.md`
+- `docs/headless-workpaper-benchmark-evidence.md`
 - `docs/workpaper-oracle-sota-performance-design-2026-04-21.md`
 - `docs/workpaper-oracle-validated-performance-design-2026-04-26.md`
 - `docs/workpaper-oracle-benchmark-expansion-performance-plan-2026-04-28.md`
