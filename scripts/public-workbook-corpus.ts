@@ -627,6 +627,24 @@ function readFlagArg(name: string): boolean {
   return process.argv.includes(name)
 }
 
+function readDebugOnlyFlagArg(name: string, envVar: string, reason: string): boolean {
+  const enabled = readFlagArg(name)
+  if (enabled && process.env[envVar] !== '1') {
+    throw new Error(`${name} is disabled for public corpus CLI runs because ${reason}. Set ${envVar}=1 only for focused debugging.`)
+  }
+  return enabled
+}
+
+function readVerifyConcurrencyArg(): number {
+  const verifyConcurrency = readNumberArg('--verify-concurrency', defaultVerifyConcurrency)
+  if (verifyConcurrency > 1 && process.env['BILIG_ALLOW_PARALLEL_PUBLIC_CORPUS_VERIFY'] !== '1') {
+    throw new Error(
+      `--verify-concurrency greater than 1 is disabled for public corpus CLI runs because each worker can consume substantial memory. Set BILIG_ALLOW_PARALLEL_PUBLIC_CORPUS_VERIFY=1 only on a host sized for parallel verification.`,
+    )
+  }
+  return verifyConcurrency
+}
+
 function startSelfRssGuard(maxRssBytes: number, label: string): () => void {
   const normalizedMaxRssBytes = Math.max(1, Math.trunc(maxRssBytes))
   const timer = setInterval(() => {
@@ -708,6 +726,11 @@ async function main(): Promise<void> {
     return
   }
   if (command === 'fetch') {
+    const inProcessFingerprinting = readDebugOnlyFlagArg(
+      '--in-process-fingerprint',
+      'BILIG_ALLOW_IN_PROCESS_PUBLIC_CORPUS_FINGERPRINT',
+      'it can retain workbook fingerprinting memory across large fetch runs',
+    )
     const manifest = await withPublicWorkbookCorpusCacheLock(cacheDir, 'fetch', async () => {
       const fetchedManifest = await fetchPublicWorkbookArtifacts({
         manifest: readManifest(manifestPath),
@@ -716,7 +739,7 @@ async function main(): Promise<void> {
         downloadTimeoutMs: readNumberArg('--download-timeout-ms', defaultDownloadTimeoutMs),
         fingerprintTimeoutMs: readNumberArg('--fingerprint-timeout-ms', defaultFingerprintTimeoutMs),
         fingerprintMaxRssBytes: readMegabytesArg('--fingerprint-max-rss-mb', defaultFingerprintMaxRssBytes),
-        isolatedFingerprinting: !readFlagArg('--in-process-fingerprint'),
+        isolatedFingerprinting: !inProcessFingerprinting,
         maxBytes: readNumberArg('--max-bytes', 50 * 1024 * 1024),
         onArtifactsCommitted: (checkpointManifest) => {
           writeJson(manifestPath, checkpointManifest, 'public-workbook-corpus-manifest')
@@ -816,6 +839,12 @@ async function main(): Promise<void> {
     return
   }
   if (command === 'verify') {
+    const inProcessVerification = readDebugOnlyFlagArg(
+      '--in-process',
+      'BILIG_ALLOW_IN_PROCESS_PUBLIC_CORPUS_VERIFY',
+      'it can retain workbook verification memory across large corpus runs',
+    )
+    const verifyConcurrency = readVerifyConcurrencyArg()
     const scorecard = await withPublicWorkbookCorpusCacheLock(cacheDir, 'verify', async () => {
       const manifest = readManifest(manifestPath)
       const checkpointInterval = readNumberArg('--verify-checkpoint-interval', 10)
@@ -838,9 +867,9 @@ async function main(): Promise<void> {
           manifest,
           cacheDir,
           manifestPath,
-          isolatedVerification: !readFlagArg('--in-process'),
+          isolatedVerification: !inProcessVerification,
           structuralSmokeSampleLimit: readNumberArg('--structural-smoke-sample-limit', 50),
-          verifyConcurrency: readNumberArg('--verify-concurrency', defaultVerifyConcurrency),
+          verifyConcurrency,
           verifyTimeoutMs: readNumberArg('--verify-timeout-ms', defaultVerifyTimeoutMs),
           verifyMaxRssBytes: capVerifyMaxRssBytes(readMegabytesArg('--verify-max-rss-mb', defaultVerifyMaxRssBytes)),
           verifyMaxCellCount: readNumberArg('--verify-max-cells', defaultVerifyMaxCellCount),
