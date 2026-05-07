@@ -18,14 +18,14 @@
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://proompteng.github.io/bilig/" />
-    <meta property="og:image" content="https://proompteng.github.io/bilig/assets/github-social-preview.png" />
+    <meta property="og:image" content="https://proompteng.github.io/bilig/assets/github-social-preview.png?v=2026-05-07" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="bilig - headless spreadsheet engine" />
     <meta
       name="twitter:description"
       content="A TypeScript workbook runtime for services and agents that need formulas without a spreadsheet UI."
     />
-    <meta name="twitter:image" content="https://proompteng.github.io/bilig/assets/github-social-preview.png" />
+    <meta name="twitter:image" content="https://proompteng.github.io/bilig/assets/github-social-preview.png?v=2026-05-07" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -37,7 +37,7 @@
         "programmingLanguage": "TypeScript",
         "runtimePlatform": "Node.js 24+",
         "url": "https://proompteng.github.io/bilig/",
-        "image": "https://proompteng.github.io/bilig/assets/github-social-preview.png"
+        "image": "https://proompteng.github.io/bilig/assets/github-social-preview.png?v=2026-05-07"
       }
     </script>
     <style>
@@ -147,12 +147,12 @@
       }
 
       .hero {
-        padding: 78px 0 62px;
+        padding: 66px 0 54px;
       }
 
       .hero-grid {
         display: grid;
-        grid-template-columns: minmax(0, 0.95fr) minmax(360px, 0.78fr);
+        grid-template-columns: minmax(0, 0.92fr) minmax(380px, 0.82fr);
         gap: 46px;
         align-items: center;
       }
@@ -184,10 +184,10 @@
       }
 
       h1 {
-        max-width: 780px;
+        max-width: 700px;
         margin-top: 18px;
-        font-size: clamp(42px, 5.8vw, 76px);
-        line-height: 0.98;
+        font-size: clamp(40px, 5vw, 66px);
+        line-height: 1;
         letter-spacing: 0;
       }
 
@@ -195,14 +195,47 @@
         max-width: 680px;
         margin-top: 24px;
         color: var(--muted);
-        font-size: clamp(18px, 2vw, 22px);
+        font-size: clamp(18px, 1.7vw, 20px);
+      }
+
+      .proof-strip {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        max-width: 760px;
+        margin-top: 24px;
+      }
+
+      .proof-strip div {
+        min-height: 92px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.72);
+        padding: 13px 14px;
+      }
+
+      .proof-strip strong,
+      .proof-strip span {
+        display: block;
+      }
+
+      .proof-strip strong {
+        color: var(--ink);
+        font-size: 13px;
+      }
+
+      .proof-strip span {
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.35;
       }
 
       .actions {
         display: flex;
         flex-wrap: wrap;
         gap: 12px;
-        margin-top: 30px;
+        margin-top: 26px;
       }
 
       .button {
@@ -521,6 +554,7 @@
         }
 
         .hero-grid,
+        .proof-strip,
         .quickstart,
         .quickstart-wide,
         .surface,
@@ -574,11 +608,25 @@
         <div class="hero-grid">
           <div>
             <p class="label">workbook runtime for code</p>
-            <h1 id="hero-title">Headless spreadsheet engine for services and agents.</h1>
+            <h1 id="hero-title">Spreadsheet formulas without a spreadsheet UI.</h1>
             <p class="lede">
-              bilig gives TypeScript programs a workbook API: formulas, sheet edits, structural operations, snapshots, and restore paths
-              without driving a browser spreadsheet UI.
+              bilig gives TypeScript programs a workbook API for formulas, structural edits, snapshots, and persisted readback without
+              driving a browser grid.
             </p>
+            <div class="proof-strip" aria-label="evaluation proof">
+              <div>
+                <strong>npm-only eval</strong>
+                <span>install @bilig/headless, run one node script, and verify formula restore.</span>
+              </div>
+              <div>
+                <strong>agent writeback</strong>
+                <span>mutate workbook inputs, recalculate formulas, and prove the saved document round-trips.</span>
+              </div>
+              <div>
+                <strong>bounded claims</strong>
+                <span>compatibility notes, fixtures, and open issues show what works and what does not yet.</span>
+              </div>
+            </div>
             <div class="actions">
               <a class="button primary" href="https://www.npmjs.com/package/@bilig/headless">Install @bilig/headless</a>
               <a class="button" href="https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper">Run the example</a>
@@ -587,7 +635,7 @@
             </div>
           </div>
           <aside class="hero-card" aria-label="bilig preview">
-            <img src="./assets/github-social-preview.png" alt="bilig engine diagram and workbook preview" />
+            <img src="./assets/github-social-preview.png?v=2026-05-07" alt="bilig engine diagram and workbook preview" />
             <div class="hero-card-footer">
               <div class="stat">
                 <strong>TypeScript</strong>

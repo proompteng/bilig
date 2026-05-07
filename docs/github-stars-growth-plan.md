@@ -119,6 +119,15 @@ Verified on 2026-05-07 after the Show HN launch and topic refresh:
   GitHub Pages walkthrough and framed "Excel compatible" claims as
   fixture-scoped evidence: workbook files, cached formula results, skips,
   mismatches, and a rerunnable verifier command.
+- Closed public correctness issues `#63`, `#62`, and `#54` with committed
+  regressions or verified main-branch coverage, green local checks, and green
+  GitHub workflows before closing each issue. This improves the trust surface
+  before sending more launch traffic to the repo.
+- Refreshed the GitHub Pages first viewport and social preview card around the
+  source-backed conversion points: npm-only evaluation, agent writeback proof,
+  and bounded compatibility claims. Verified the static page in browser at
+  desktop and mobile widths, and re-ran the social-preview and docs-discovery
+  checks.
 
 ## Research Findings
 

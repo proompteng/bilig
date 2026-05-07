@@ -301,14 +301,14 @@ const html = String.raw`<!doctype html>
                 <span></span>
                 <span></span>
               </div>
-              <div class="eyebrow">@bilig/headless</div>
+              <div class="eyebrow">npm i @bilig/headless</div>
             </div>
             <h1>bilig</h1>
-            <p class="subtitle">headless spreadsheet engine for services and agents</p>
+            <p class="subtitle">spreadsheet formulas without a spreadsheet ui</p>
             <div class="badges" aria-label="package badges">
-              <span class="badge">formulas</span>
-              <span class="badge">persistence</span>
-              <span class="badge">agent readback</span>
+              <span class="badge">formula readback</span>
+              <span class="badge">snapshot restore</span>
+              <span class="badge">node services</span>
             </div>
           </div>
           <div class="url">github.com/proompteng/bilig</div>
@@ -317,7 +317,7 @@ const html = String.raw`<!doctype html>
         <div class="right">
           <section class="panel" aria-label="workpaper grid">
             <div class="panel-title">
-              <span>workpaper scenario</span>
+              <span>write data -> verify formulas</span>
               <span>after agent edit</span>
             </div>
             <table class="grid">
@@ -353,8 +353,8 @@ const html = String.raw`<!doctype html>
             </table>
             <div class="result">
               <div>
-                <small>verified restored arr</small>
-                <strong>224,640</strong>
+                <small>restored formula result</small>
+                <strong>$224,640 ARR</strong>
               </div>
               <span class="verified">formulas persisted</span>
             </div>
@@ -370,9 +370,9 @@ const html = String.raw`<!doctype html>
               <span>node proof</span>
             </div>
             <div class="terminal-body">
-              <div><span class="prompt">&gt;</span> npm run agent:verify</div>
-              <div class="ok">ok writeback readback verified</div>
-              <div class="ok">ok formulas persisted after restore</div>
+              <div><span class="prompt">&gt;</span> node eval.mjs</div>
+              <div class="ok">ok recalculated after edit</div>
+              <div class="ok">ok persisted after restore</div>
             </div>
           </section>
         </div>
