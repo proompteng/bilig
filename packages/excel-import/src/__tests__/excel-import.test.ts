@@ -249,6 +249,21 @@ describe('excel import', () => {
     expect(imported.snapshot.sheets[0]?.metadata?.columns).toBeUndefined()
   })
 
+  it('preserves hidden row metadata even when the row has no custom height', () => {
+    const workbook = XLSX.utils.book_new()
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ['Header', 'Value'],
+      ['Visible', 10],
+      ['Hidden', 20],
+    ])
+    sheet['!rows'] = [undefined, undefined, { hidden: true }]
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Table')
+
+    const imported = importXlsx(XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }), 'hidden-row.xlsx')
+
+    expect(imported.snapshot.sheets[0]?.metadata?.rows).toEqual([{ id: 'row:2', index: 2, hidden: true }])
+  })
+
   it('canonicalizes imported multiline text to LF line breaks', () => {
     const workbook = XLSX.utils.book_new()
     const sheet = XLSX.utils.aoa_to_sheet([['Line 1\r\nLine 2\rLine 3']])

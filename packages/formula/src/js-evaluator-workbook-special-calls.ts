@@ -1,5 +1,6 @@
-import { ErrorCode, type CellValue } from '@bilig/protocol'
+import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import { parseCellAddress, parseRangeAddress } from './addressing.js'
+import { getBuiltin } from './builtins.js'
 import { evaluateGroupBy, evaluatePivotBy } from './group-pivot-evaluator.js'
 import { isArrayValue } from './runtime-values.js'
 import type { EvaluationContext, ReferenceOperand, StackValue } from './js-evaluator.js'
@@ -31,6 +32,60 @@ interface WorkbookSpecialCallDeps {
   isCellValueError: (value: number | boolean | string | CellValue) => value is CellValue
 }
 
+function valueError(): CellValue {
+  return { tag: ValueTag.Error, code: ErrorCode.Value }
+}
+
+function hiddenAwareSubtotalValues(value: StackValue, ref: ReferenceOperand | undefined, context: EvaluationContext): CellValue[] {
+  if (value.kind === 'scalar') {
+    if (ref?.kind !== 'cell' || !ref.address) {
+      return [value.value]
+    }
+    const sheetName = ref.sheetName ?? context.sheetName
+    const row = parseCellAddress(ref.address, sheetName).row
+    return context.isRowHidden?.(sheetName, row) === true ? [] : [value.value]
+  }
+  if (value.kind === 'omitted' || value.kind === 'lambda') {
+    return [valueError()]
+  }
+  if (value.kind === 'array') {
+    return [...value.values]
+  }
+  if (value.refKind !== 'cells') {
+    return [...value.values]
+  }
+
+  const sheetName = ref?.sheetName ?? value.sheetName ?? context.sheetName
+  const start = ref?.kind === 'range' ? ref.start : value.start
+  const end = ref?.kind === 'range' ? ref.end : value.end
+  if (!start || !end) {
+    return [...value.values]
+  }
+
+  let startRow = 0
+  let cols = value.cols
+  try {
+    const parsed = parseRangeAddress(`${start}:${end}`, sheetName)
+    if (parsed.kind !== 'cells') {
+      return [...value.values]
+    }
+    startRow = parsed.start.row
+    cols = parsed.end.col - parsed.start.col + 1
+  } catch {
+    return [...value.values]
+  }
+
+  const visibleValues: CellValue[] = []
+  for (let index = 0; index < value.values.length; index += 1) {
+    const row = startRow + Math.floor(index / cols)
+    if (context.isRowHidden?.(sheetName, row) === true) {
+      continue
+    }
+    visibleValues.push(value.values[index]!)
+  }
+  return visibleValues
+}
+
 export function evaluateWorkbookSpecialCall(
   callee: string,
   rawArgs: StackValue[],
@@ -39,6 +94,22 @@ export function evaluateWorkbookSpecialCall(
   deps: WorkbookSpecialCallDeps,
 ): StackValue | undefined {
   switch (callee) {
+    case 'SUBTOTAL': {
+      const functionNum = deps.scalarIntegerArgument(rawArgs[0])
+      if (functionNum === undefined) {
+        return deps.stackScalar(deps.error(ErrorCode.Value))
+      }
+      if (functionNum <= 100 || !context.isRowHidden) {
+        return undefined
+      }
+      const subtotal = getBuiltin('SUBTOTAL')
+      if (!subtotal) {
+        return undefined
+      }
+      const values = rawArgs.slice(1).flatMap((value, index) => hiddenAwareSubtotalValues(value, argRefs[index + 1], context))
+      const result = subtotal({ tag: ValueTag.Number, value: functionNum }, ...values)
+      return isArrayValue(result) ? result : deps.stackScalar(result)
+    }
     case 'GETPIVOTDATA': {
       if (rawArgs.length < 2 || (rawArgs.length - 2) % 2 !== 0) {
         return deps.stackScalar(deps.error(ErrorCode.Value))

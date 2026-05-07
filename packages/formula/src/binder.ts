@@ -13,7 +13,7 @@ import { formatAddress, formatRangeAddress, parseCellAddress, parseRangeAddress 
 import { hasBuiltin } from './builtins.js'
 import { rewriteSpecialCall } from './special-call-rewrites.js'
 
-const CONTEXTUAL_BUILTINS = new Set(['CELL', 'COLUMN', 'FORMULATEXT', 'OFFSET', 'ROW', 'SHEET', 'SHEETS'])
+const CONTEXTUAL_BUILTINS = new Set(['CELL', 'COLUMN', 'FORMULATEXT', 'OFFSET', 'ROW', 'SHEET', 'SHEETS', 'SUBTOTAL'])
 const MAX_EXPANDED_OFFSET_DEPENDENCY_CELLS = 4096
 
 interface OffsetReferenceBounds {

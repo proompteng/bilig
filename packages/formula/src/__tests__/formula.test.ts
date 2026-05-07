@@ -148,6 +148,10 @@ describe('formula', () => {
     expect(compileFormula('RAND()').mode).toBe(1)
   })
 
+  it('marks SUBTOTAL as metadata-sensitive for row visibility recalculation', () => {
+    expect(compileFormula('SUBTOTAL(109,A1:A2)').volatile).toBe(true)
+  })
+
   it('routes native sequence spills through the wasm path, including numeric aggregate consumers', () => {
     expect(compileFormula('SEQUENCE(3,1,1,1)')).toMatchObject({ mode: 1, producesSpill: true })
     expect(compileFormula('SUM(SEQUENCE(A1,1,1,1))').mode).toBe(1)

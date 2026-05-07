@@ -154,6 +154,34 @@ export function createEngineFormulaEvaluationService(args: {
     return values
   }
 
+  const createRowHiddenResolver = (): ((sheetName: string, rowIndex: number) => boolean) => {
+    const hiddenRowsBySheet = new Map<string, Set<number>>()
+    return (sheetName, rowIndex) => {
+      if (!Number.isInteger(rowIndex) || rowIndex < 0) {
+        return false
+      }
+      let hiddenRows = hiddenRowsBySheet.get(sheetName)
+      if (hiddenRows === undefined) {
+        hiddenRows = new Set<number>()
+        for (const entry of args.state.workbook.listRowAxisEntries(sheetName)) {
+          if (entry.hidden === true) {
+            hiddenRows.add(entry.index)
+          }
+        }
+        for (const record of args.state.workbook.listRowMetadata(sheetName)) {
+          if (record.hidden !== true) {
+            continue
+          }
+          for (let row = record.start; row < record.start + record.count; row += 1) {
+            hiddenRows.add(row)
+          }
+        }
+        hiddenRowsBySheet.set(sheetName, hiddenRows)
+      }
+      return hiddenRows.has(rowIndex)
+    }
+  }
+
   const resolveIndexedExactMatch = (lookupValue: CellValue, range: RangeBuiltinArgument): number | undefined => {
     if (!args.state.getUseColumnIndex() || range.refKind !== 'cells' || range.cols !== 1) {
       return undefined
@@ -578,6 +606,7 @@ export function createEngineFormulaEvaluationService(args: {
     }
 
     visiting.add(visitKey)
+    const isRowHidden = createRowHiddenResolver()
     const evaluationContext: EvaluationContext = {
       sheetName,
       currentAddress: address,
@@ -620,6 +649,7 @@ export function createEngineFormulaEvaluationService(args: {
       }) => resolveMultipleOperationsNow(nested),
       listSheetNames: () =>
         [...args.state.workbook.sheetsByName.values()].toSorted((left, right) => left.order - right.order).map((sheet) => sheet.name),
+      isRowHidden,
       checkEvaluationBudget: (stepCost) => args.checkEvaluationBudget(stepCost),
     }
     const jsPlan = formula.compiled.jsPlan.length > 0 ? formula.compiled.jsPlan : lowerToPlan(formula.compiled.optimizedAst)
@@ -744,6 +774,7 @@ export function createEngineFormulaEvaluationService(args: {
       return storeFormulaResult(cellIndex, formula, directResult)
     }
 
+    const isRowHidden = createRowHiddenResolver()
     const evaluationContext: EvaluationContext = {
       sheetName,
       currentAddress: args.state.workbook.getAddress(cellIndex),
@@ -786,6 +817,7 @@ export function createEngineFormulaEvaluationService(args: {
       }) => resolveMultipleOperationsNow(request),
       listSheetNames: () =>
         [...args.state.workbook.sheetsByName.values()].toSorted((left, right) => left.order - right.order).map((sheet) => sheet.name),
+      isRowHidden,
       checkEvaluationBudget: (stepCost) => args.checkEvaluationBudget(stepCost),
       resolveExactVectorMatch: (request) => {
         if (

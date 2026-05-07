@@ -76,6 +76,26 @@ describe('js evaluator', () => {
     })
   })
 
+  it('filters hidden rows for visibility-aware SUBTOTAL function numbers', () => {
+    const visibilityContext = {
+      ...context,
+      isRowHidden: (_sheetName: string, rowIndex: number) => rowIndex === 1,
+    }
+
+    expect(evaluatePlan(lowerToPlan(parseFormula('SUBTOTAL(109,A1:B2)')), visibilityContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 5,
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('SUBTOTAL(103,A1:B2)')), visibilityContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 2,
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('SUBTOTAL(9,A1:B2)')), visibilityContext)).toEqual({
+      tag: ValueTag.Number,
+      value: 6,
+    })
+  })
+
   it('keeps range shape for lookup/reference builtins', () => {
     expect(
       evaluatePlan(

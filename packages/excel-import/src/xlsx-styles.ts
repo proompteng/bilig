@@ -341,6 +341,11 @@ function readXmlPositiveIntegerAttribute(tag: string, name: string): number | nu
   return value !== null && Number.isSafeInteger(value) && value > 0 ? value : null
 }
 
+function readXmlBooleanAttribute(tag: string, name: string): boolean {
+  const raw = readXmlAttribute(tag, name)
+  return raw === '1' || raw?.toLowerCase() === 'true'
+}
+
 function parseSheetStyleIndexes(sheetXml: string): Map<string, number> {
   const output = new Map<string, number>()
 
@@ -391,18 +396,20 @@ function parseSheetRowEntries(sheetXml: string): WorkbookAxisEntrySnapshot[] | u
     const rowTag = match[0]
     const rowNumber = readXmlPositiveIntegerAttribute(rowTag, 'r')
     const height = readXmlNumberAttribute(rowTag, 'ht')
-    if (rowNumber === null || height === null || height <= 0) {
+    const hidden = readXmlBooleanAttribute(rowTag, 'hidden')
+    if (rowNumber === null) {
       continue
     }
     const index = rowNumber - 1
-    const size = Math.round(height)
-    if (size <= 0) {
+    const size = height !== null && height > 0 ? Math.round(height) : null
+    if ((size === null || size <= 0) && !hidden) {
       continue
     }
     entries.push({
       id: `row:${String(index)}`,
       index,
-      size,
+      ...(size !== null && size > 0 ? { size } : {}),
+      ...(hidden ? { hidden: true } : {}),
     })
   }
   return entries.length > 0 ? entries : undefined

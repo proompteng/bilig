@@ -119,4 +119,24 @@ describe('EngineRecalcService', () => {
       value: 0.75,
     })
   })
+
+  it('recalculates SUBTOTAL when row visibility metadata changes', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'recalc-subtotal-row-visibility' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellValue('Sheet1', 'A2', 2)
+    engine.setCellValue('Sheet1', 'A3', 3)
+    engine.setCellFormula('Sheet1', 'B1', 'SUBTOTAL(109,A1:A3)')
+
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 6 })
+
+    engine.updateRowMetadata('Sheet1', 1, 1, null, true)
+
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 4 })
+
+    engine.updateRowMetadata('Sheet1', 1, 1, null, false)
+
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 6 })
+  })
 })

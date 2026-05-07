@@ -864,4 +864,51 @@ describe('GitHub issue reductions', () => {
     expectString(cellValue(workbook, 'Sheet1', 5, 0), 'Dock')
     expectString(cellValue(workbook, 'Sheet1', 6, 0), 'Keyboard')
   })
+
+  it('resolves issue #117 imported hidden-row SUBTOTAL values', () => {
+    const tableRows: Array<{ readonly amount: number; readonly quarter: string }> = [
+      { amount: 3255, quarter: 'Qtr 2' },
+      { amount: 4865, quarter: 'Qtr 4' },
+      { amount: 9339, quarter: 'Qtr 2' },
+      { amount: 14808, quarter: 'Qtr 4' },
+      { amount: 1390, quarter: 'Qtr 3' },
+      { amount: 7433, quarter: 'Qtr 1' },
+      { amount: 9213, quarter: 'Qtr 4' },
+      { amount: 9698, quarter: 'Qtr 1' },
+      { amount: 16753, quarter: 'Qtr 3' },
+      { amount: 18919, quarter: 'Qtr 3' },
+      { amount: 10644, quarter: 'Qtr 2' },
+      { amount: 12438, quarter: 'Qtr 1' },
+      { amount: 14867, quarter: 'Qtr 3' },
+      { amount: 19302, quarter: 'Qtr 4' },
+    ]
+    const hiddenRows = [3, 6, 9, 11, 12, 14]
+    const dataCells = tableRows.flatMap((row, index) => {
+      const excelRow = index + 2
+      return [
+        { address: `B${excelRow}`, value: row.amount },
+        { address: `D${excelRow}`, value: row.quarter },
+      ]
+    })
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'issue-117-subtotal-filtered-table' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Table',
+          order: 0,
+          metadata: {
+            rows: hiddenRows.map((index) => ({ id: `row:${index}`, index, hidden: true })),
+          },
+          cells: [...dataCells, { address: 'B16', formula: 'SUBTOTAL(109,B2:B15)' }, { address: 'D16', formula: 'SUBTOTAL(103,D2:D15)' }],
+        },
+      ],
+    }
+
+    const workbook = WorkPaper.buildFromSnapshot(snapshot, { maxRows: 50, maxColumns: 8, useColumnIndex: true })
+
+    expectNumber(cellValue(workbook, 'Table', 15, 1), 77_015)
+    expectNumber(cellValue(workbook, 'Table', 15, 3), 8)
+  })
 })

@@ -88,7 +88,8 @@ interface SheetColumnInfo {
 
 interface SheetRowInfo {
   index: number
-  size: number
+  size: number | null
+  hidden: boolean
 }
 
 interface WorksheetCellEntry {
@@ -389,19 +390,28 @@ function buildRowEntries(rows: unknown[] | undefined): WorkbookAxisEntrySnapshot
         : typeof entry['hpt'] === 'number'
           ? toPixelSize(entry['hpt'], 'pt')
           : null
-    if (size === null) {
+    const hidden = entry['hidden'] === true
+    if (size === null && !hidden) {
       return
     }
-    entries.push({ index, size })
+    entries.push({ index, size, hidden })
   })
   if (entries.length === 0) {
     return undefined
   }
-  return entries.map(({ index, size }) => ({
-    id: `row:${index}`,
-    index,
-    size,
-  }))
+  return entries.map(({ index, size, hidden }) => {
+    const snapshot: WorkbookAxisEntrySnapshot = {
+      id: `row:${index}`,
+      index,
+    }
+    if (size !== null) {
+      snapshot.size = size
+    }
+    if (hidden) {
+      snapshot.hidden = true
+    }
+    return snapshot
+  })
 }
 
 function normalizeRgbColor(value: unknown): string | null {
