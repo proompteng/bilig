@@ -191,6 +191,7 @@ const focusedCorrectnessLanes: readonly CiTask[] = [
 ]
 const generatedSourceChecks: readonly CiTask[] = [
   pnpm('protocol check', 'protocol:check'),
+  pnpm('protocol package build for generated-source imports', '--filter', '@bilig/protocol', 'build'),
   pnpm('formula inventory check', 'formula-inventory:check'),
   pnpm('formula dominance check', 'formula:dominance:check'),
   pnpm('calculation semantics scorecard check', 'calculation:semantics:check'),
