@@ -317,10 +317,10 @@ function executePlan(
         stack.push({ kind: 'omitted' })
         break
       case 'push-cell':
-        stack.push({
-          kind: 'scalar',
-          value: context.resolveCell(instruction.sheetName ?? context.sheetName, instruction.address),
-        })
+        {
+          const value = context.resolveCell(instruction.sheetName ?? context.sheetName, instruction.address)
+          stack.push(stackScalar(value, value.tag === ValueTag.Empty))
+        }
         break
       case 'push-range':
         {

@@ -29,6 +29,17 @@ const context = {
 }
 
 describe('js evaluator', () => {
+  it('coerces final blank cell references to number zero without changing empty formula results', () => {
+    expect(evaluatePlan(lowerToPlan(parseFormula('A2')), context)).toEqual(num(0))
+    expect(evaluatePlan(lowerToPlan(parseFormula('IF(A2="",B2,A2)')), context)).toEqual(num(0))
+    expect(evaluatePlan(lowerToPlan(parseFormula('A2+1')), context)).toEqual(num(1))
+    expect(evaluatePlan(lowerToPlan(parseFormula('"x"&A2')), context)).toMatchObject({
+      tag: ValueTag.String,
+      value: 'x',
+    })
+    expect(evaluatePlan(lowerToPlan(parseFormula('T(1)')), context)).toEqual(empty())
+  })
+
   it('evaluates direct plans for ranges, jumps, and fallback stack handling', () => {
     expect(
       evaluatePlan(

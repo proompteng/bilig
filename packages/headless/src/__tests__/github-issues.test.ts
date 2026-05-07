@@ -122,6 +122,50 @@ describe('GitHub issue reductions', () => {
     expectNumber(cellValue(workbook, 'PDF Extract', 248, 5), 70)
   })
 
+  it('resolves issue #93 blank-reference formulas as numeric zero', () => {
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Inputs: [[null, null]],
+        Summary: [
+          ['=Inputs!A1', '=Inputs!$A$1', '=IF(Inputs!A1="",Inputs!B1,Inputs!A1)', '=Inputs!A1+1', '=SUM(Inputs!A1)', '="x"&Inputs!A1'],
+          [null, '=A2', '=IF(A2="",D2,A2)', null, '=T(1)', '=""'],
+        ],
+      },
+      { maxRows: 8, maxColumns: 8, useColumnIndex: true },
+    )
+    const inputs = workbook.getSheetId('Inputs')!
+
+    expectNumber(cellValue(workbook, 'Summary', 0, 0), 0)
+    expectNumber(cellValue(workbook, 'Summary', 0, 1), 0)
+    expectNumber(cellValue(workbook, 'Summary', 0, 2), 0)
+    expectNumber(cellValue(workbook, 'Summary', 1, 1), 0)
+    expectNumber(cellValue(workbook, 'Summary', 1, 2), 0)
+
+    expectNumber(cellValue(workbook, 'Summary', 0, 3), 1)
+    expectNumber(cellValue(workbook, 'Summary', 0, 4), 0)
+    expectString(cellValue(workbook, 'Summary', 0, 5), 'x')
+    expect(cellValue(workbook, 'Summary', 1, 4)).toEqual({ tag: ValueTag.Empty })
+    expectString(cellValue(workbook, 'Summary', 1, 5), '')
+
+    workbook.setCellContents({ sheet: inputs, row: 0, col: 0 }, 7)
+
+    expectNumber(cellValue(workbook, 'Summary', 0, 0), 7)
+    expectNumber(cellValue(workbook, 'Summary', 0, 1), 7)
+    expectNumber(cellValue(workbook, 'Summary', 0, 2), 7)
+    expectNumber(cellValue(workbook, 'Summary', 0, 3), 8)
+    expectNumber(cellValue(workbook, 'Summary', 0, 4), 7)
+    expectString(cellValue(workbook, 'Summary', 0, 5), 'x7')
+
+    workbook.setCellContents({ sheet: inputs, row: 0, col: 0 }, null)
+
+    expectNumber(cellValue(workbook, 'Summary', 0, 0), 0)
+    expectNumber(cellValue(workbook, 'Summary', 0, 1), 0)
+    expectNumber(cellValue(workbook, 'Summary', 0, 2), 0)
+    expectNumber(cellValue(workbook, 'Summary', 0, 3), 1)
+    expectNumber(cellValue(workbook, 'Summary', 0, 4), 0)
+    expectString(cellValue(workbook, 'Summary', 0, 5), 'x')
+  })
+
   it('resolves sheet-scoped defined names from imported snapshots before broken globals', () => {
     const snapshot: WorkbookSnapshot = {
       version: 1,

@@ -136,7 +136,7 @@ export type JsPlanInstruction =
   | { opcode: 'return' }
 
 export type StackValue =
-  | { kind: 'scalar'; value: CellValue }
+  | { kind: 'scalar'; value: CellValue; blankReference?: boolean }
   | { kind: 'omitted' }
   | {
       kind: 'range'

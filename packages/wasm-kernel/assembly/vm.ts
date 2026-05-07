@@ -215,6 +215,7 @@ const valueStack = new Float64Array(256)
 const tagStack = new Uint8Array(256)
 const kindStack = new Uint8Array(256)
 const rangeIndexStack = new Uint32Array(256)
+const blankReferenceStack = new Uint8Array(256)
 let binaryResultTag: u8 = <u8>ValueTag.Empty
 let binaryResultValue: f64 = 0
 
@@ -634,11 +635,12 @@ export function writeCachedRangeSum(rangeIndex: u32, tag: u8, value: f64): void 
   sumRangeCacheValues[rangeIndex] = value
 }
 
-function writeScalar(slot: i32, tag: u8, value: f64): void {
+function writeScalar(slot: i32, tag: u8, value: f64, blankReference: u8 = 0): void {
   kindStack[slot] = STACK_KIND_SCALAR
   rangeIndexStack[slot] = 0
   tagStack[slot] = tag
   valueStack[slot] = value
+  blankReferenceStack[slot] = blankReference
 }
 
 function evalProgram(cellIndex: i32, formulaIndex: i32): void {
@@ -682,12 +684,13 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
         sp++
         continue
       }
-      if (tags[operand] == ValueTag.Error) {
+      const cellTag = tags[operand]
+      if (cellTag == ValueTag.Error) {
         writeScalar(sp, <u8>ValueTag.Error, errors[operand])
-      } else if (tags[operand] == ValueTag.String) {
+      } else if (cellTag == ValueTag.String) {
         writeScalar(sp, <u8>ValueTag.String, stringIds[operand])
       } else {
-        writeScalar(sp, tags[operand], numbers[operand])
+        writeScalar(sp, cellTag, numbers[operand], cellTag == ValueTag.Empty ? 1 : 0)
       }
       sp++
       continue
@@ -698,6 +701,7 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
       rangeIndexStack[sp] = operand
       tagStack[sp] = ValueTag.Empty
       valueStack[sp] = 0
+      blankReferenceStack[sp] = 0
       sp++
       continue
     }
@@ -775,6 +779,7 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
         rangeIndexStack[sp - 2] = arrayIndex
         tagStack[sp - 2] = ValueTag.Empty
         valueStack[sp - 2] = 0
+        blankReferenceStack[sp - 2] = 0
         sp--
         continue
       }
@@ -850,6 +855,9 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
         outputStringData,
         sp,
       )
+      if (sp > 0) {
+        blankReferenceStack[sp - 1] = 0
+      }
       continue
     }
 
@@ -865,8 +873,13 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
         writeCellValue(cellIndex, length > 0 ? spillTags[offset] : <u8>ValueTag.Empty, length > 0 ? spillNumbers[offset] : 0)
         return
       }
-      const resultTag = tagStack[sp - 1]
-      writeCellValue(cellIndex, resultTag, valueStack[sp - 1])
+      let resultTag = tagStack[sp - 1]
+      let resultValue = valueStack[sp - 1]
+      if (resultTag == ValueTag.Empty && blankReferenceStack[sp - 1] != 0) {
+        resultTag = <u8>ValueTag.Number
+        resultValue = 0
+      }
+      writeCellValue(cellIndex, resultTag, resultValue)
       return
     }
   }

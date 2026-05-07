@@ -1,7 +1,7 @@
 import { ErrorCode, ValueTag, formatErrorCode, formatGeneralNumberValue, type CellValue } from '@bilig/protocol'
 import type { RangeBuiltinArgument } from './builtins/lookup.js'
 import type { MatrixValue } from './group-pivot-evaluator.js'
-import { emptyValue, error } from './js-evaluator-cell-values.js'
+import { emptyValue, error, numberValue } from './js-evaluator-cell-values.js'
 import type { JsPlanInstruction, StackValue } from './js-evaluator-types.js'
 import type { EvaluationResult, RangeLikeValue } from './runtime-values.js'
 
@@ -131,6 +131,9 @@ export function toEvaluationResult(value: StackValue | undefined): EvaluationRes
     return error(ErrorCode.Value)
   }
   if (value.kind === 'scalar') {
+    if (value.blankReference === true && value.value.tag === ValueTag.Empty) {
+      return numberValue(0)
+    }
     return value.value
   }
   if (value.kind === 'omitted') {
@@ -152,7 +155,9 @@ export function toEvaluationResult(value: StackValue | undefined): EvaluationRes
 
 export function cloneStackValue(value: StackValue): StackValue {
   if (value.kind === 'scalar') {
-    return { kind: 'scalar', value: value.value }
+    return value.blankReference === true
+      ? { kind: 'scalar', value: value.value, blankReference: true }
+      : { kind: 'scalar', value: value.value }
   }
   if (value.kind === 'omitted') {
     return { kind: 'omitted' }
@@ -303,8 +308,8 @@ export function evaluateBinary(operator: BinaryOperator, leftValue: StackValue, 
   return rows === 1 && cols === 1 ? (values[0] ?? emptyValue()) : { kind: 'array', values, rows, cols }
 }
 
-export function stackScalar(value: CellValue): StackValue {
-  return { kind: 'scalar', value }
+export function stackScalar(value: CellValue, blankReference = false): StackValue {
+  return blankReference ? { kind: 'scalar', value, blankReference: true } : { kind: 'scalar', value }
 }
 
 export function normalizeScopeName(name: string): string {
