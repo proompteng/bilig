@@ -14,17 +14,18 @@ not from paid, automated, reciprocal, or misleading campaigns.
 
 ## Current Public State
 
-Verified on 2026-05-07:
+Verified on 2026-05-07 after the Show HN launch and topic refresh:
 
-- GitHub stars: `5`
+- GitHub stars: `6`
 - GitHub open issues: `75`
 - Community profile: `100%`
 - Public package: `@bilig/headless`
 - GitHub repo description: headless spreadsheet engine for agents and Node
   services
 - Topics: `20`, including `spreadsheet`, `spreadsheet-engine`,
-  `headless-spreadsheet`, `ai-agents`, `formula-engine`, `workbook`,
-  `workbook-api`, `excel-automation`, `typescript`, and `wasm`
+  `headless-spreadsheet`, `ai-agents`, `ai-spreadsheet`, `formula-engine`,
+  `spreadsheet-api`, `workbook`, `workbook-api`, `excel-automation`,
+  `typescript`, and `wasm`
 - Public launch assets already present:
   - root `README.md`
   - `packages/headless/README.md`
@@ -76,6 +77,11 @@ Verified on 2026-05-07:
   <https://news.ycombinator.com/item?id=48052832>. Preflight included green
   GitHub workflow pages, public site and repository checks, and a passing
   `pnpm workpaper:smoke:external`. Stars remained `5` at launch.
+- Rechecked the Show HN thread through Hacker News and Algolia. The item was
+  live with no external comments to answer yet, and public GitHub stars had
+  moved to `6`.
+- Refreshed GitHub discovery topics by replacing broad `agents` and `headless`
+  tags with exact-fit `ai-spreadsheet` and `spreadsheet-api` tags.
 
 ## Research Findings
 
