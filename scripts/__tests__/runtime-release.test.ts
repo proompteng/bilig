@@ -6,6 +6,7 @@ import {
   missingPublishedRuntimePackageNames,
   planRuntimePackagePublishProvisioning,
   resolvePublishedRuntimePackageBaseline,
+  RUNTIME_NPM_PACKAGE_DIRS,
   RUNTIME_PACKAGE_DIRS,
 } from '../runtime-package-set.ts'
 import { bumpVersion, isRuntimeAffectingPath, parseConventionalCommit, releaseTypeForConventionalCommit } from '../runtime-release.ts'
@@ -158,8 +159,10 @@ describe('runtime release helpers', () => {
     ).toBe(true)
   })
 
-  it('publishes the Excel importer with the aligned runtime package set', () => {
+  it('keeps the Excel importer aligned without publishing it before npm provisioning', () => {
     expect(RUNTIME_PACKAGE_DIRS).toContain('packages/excel-import')
+    expect(RUNTIME_NPM_PACKAGE_DIRS).not.toContain('packages/excel-import')
+    expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/headless')
   })
 
   it('matches runtime-affecting publish paths', () => {

@@ -11,8 +11,21 @@ export const RUNTIME_PACKAGE_DIRS = [
   'packages/headless',
 ] as const
 
+export type RuntimePackageDir = (typeof RUNTIME_PACKAGE_DIRS)[number]
+
+// Keep unprovisioned runtime packages in the aligned build/check set without
+// blocking releases of packages that already have npm publishing configured.
+export const RUNTIME_NPM_PACKAGE_DIRS = [
+  'packages/protocol',
+  'packages/workbook-domain',
+  'packages/wasm-kernel',
+  'packages/formula',
+  'packages/core',
+  'packages/headless',
+] as const satisfies readonly RuntimePackageDir[]
+
 export interface RuntimePackageManifest {
-  dir: (typeof RUNTIME_PACKAGE_DIRS)[number]
+  dir: RuntimePackageDir
   name: string
   version: string
 }
@@ -35,17 +48,23 @@ export interface StableSemver {
 }
 
 export function loadRuntimePackages(rootDir: string): RuntimePackageManifest[] {
-  return RUNTIME_PACKAGE_DIRS.map((dir) => {
-    const manifest = JSON.parse(readFileSync(join(rootDir, dir, 'package.json'), 'utf8'))
-    if (typeof manifest.name !== 'string' || typeof manifest.version !== 'string') {
-      throw new Error(`Invalid package manifest: ${join(rootDir, dir, 'package.json')}`)
-    }
-    return {
-      dir,
-      name: manifest.name,
-      version: manifest.version,
-    }
-  })
+  return RUNTIME_PACKAGE_DIRS.map((dir) => loadRuntimePackageManifest(rootDir, dir))
+}
+
+export function loadRuntimeNpmPackages(rootDir: string): RuntimePackageManifest[] {
+  return RUNTIME_NPM_PACKAGE_DIRS.map((dir) => loadRuntimePackageManifest(rootDir, dir))
+}
+
+function loadRuntimePackageManifest(rootDir: string, dir: RuntimePackageDir): RuntimePackageManifest {
+  const manifest = JSON.parse(readFileSync(join(rootDir, dir, 'package.json'), 'utf8'))
+  if (typeof manifest.name !== 'string' || typeof manifest.version !== 'string') {
+    throw new Error(`Invalid package manifest: ${join(rootDir, dir, 'package.json')}`)
+  }
+  return {
+    dir,
+    name: manifest.name,
+    version: manifest.version,
+  }
 }
 
 export function assertAlignedVersions(runtimePackages: RuntimePackageManifest[]): string {

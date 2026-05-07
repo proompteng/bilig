@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 
 import {
   formatRuntimePackagePublishedVersions,
-  loadRuntimePackages,
+  loadRuntimeNpmPackages,
   parseBooleanEnv,
   planRuntimePackagePublishProvisioning,
   type RuntimePackagePublishedVersion,
@@ -16,7 +16,7 @@ const textDecoder = new TextDecoder()
 const allowNewNpmPackages = parseBooleanEnv(process.env.ALLOW_NEW_NPM_PACKAGES)
 const dryRun = parseBooleanEnv(process.env.DRY_RUN)
 
-const runtimePackages = loadRuntimePackages(rootDir)
+const runtimePackages = loadRuntimeNpmPackages(rootDir)
 const publishedVersions = readPublishedRuntimePackageVersions(runtimePackages.map((runtimePackage) => runtimePackage.name))
 const provisioningPlan = planRuntimePackagePublishProvisioning({
   publishedVersions,

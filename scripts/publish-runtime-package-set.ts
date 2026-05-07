@@ -7,6 +7,7 @@ import { basename, join, resolve } from 'node:path'
 import {
   assertAlignedVersions,
   formatRuntimePackagePublishedVersions,
+  loadRuntimeNpmPackages,
   loadRuntimePackages,
   planRuntimePackagePublishProvisioning,
   parseBooleanEnv,
@@ -25,15 +26,16 @@ if (!targetVersion) {
   throw new Error('TARGET_VERSION is required')
 }
 
-const runtimePackages = loadRuntimePackages(rootDir)
-assertAlignedVersions(runtimePackages)
+const allRuntimePackages = loadRuntimePackages(rootDir)
+assertAlignedVersions(allRuntimePackages)
+const runtimePackages = loadRuntimeNpmPackages(rootDir)
 
 const currentPublishedRuntimeVersions = readPublishedRuntimePackageVersions(runtimePackages.map((runtimePackage) => runtimePackage.name))
 assertKnownNpmPackagesBeforePublishing(currentPublishedRuntimeVersions)
 
 const stageDir = mkdtempSync(join(tmpdir(), 'bilig-runtime-package-set-'))
 const packDir = resolve(process.env.PACK_DIR ?? defaultPackDir)
-const internalPackageNames = new Set(runtimePackages.map((runtimePackage) => runtimePackage.name))
+const internalPackageNames = new Set(allRuntimePackages.map((runtimePackage) => runtimePackage.name))
 
 rmSync(packDir, { recursive: true, force: true })
 mkdirSync(packDir, { recursive: true })

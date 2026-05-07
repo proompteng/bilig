@@ -8,6 +8,7 @@ import {
   compareStableSemver,
   highestPublishedStableSemver,
   highestStableSemver,
+  loadRuntimeNpmPackages,
   loadRuntimePackages,
   parseStableSemver,
   planRuntimePackagePublishProvisioning,
@@ -73,9 +74,10 @@ const allowNewNpmPackages = cliArgs.has('allow-new-npm-packages')
 const dryRun = cliArgs.has('dry-run')
 
 const runtimePackages = loadRuntimePackages(rootDir)
+const runtimeNpmPackages = loadRuntimeNpmPackages(rootDir)
 const runtimeManifestVersion = assertAlignedVersions(runtimePackages)
 const latestReachableTag = getLatestReachableRuntimeTag()
-const publishedRuntimeVersions = readPublishedRuntimePackageVersions(runtimePackages.map((runtimePackage) => runtimePackage.name))
+const publishedRuntimeVersions = readPublishedRuntimePackageVersions(runtimeNpmPackages.map((runtimePackage) => runtimePackage.name))
 const provisioningPlan = planRuntimePackagePublishProvisioning({
   publishedVersions: publishedRuntimeVersions,
   allowNewNpmPackages,
@@ -83,7 +85,7 @@ const provisioningPlan = planRuntimePackagePublishProvisioning({
 })
 const latestPublishedVersion = provisioningPlan.publishAllowed
   ? resolvePublishedRuntimePackageBaseline(publishedRuntimeVersions, {
-      allowPartialPublishedSet: dryRun || allowNewNpmPackages || (requestedReleaseAs !== null && latestReachableTag !== null),
+      allowPartialPublishedSet: dryRun || allowNewNpmPackages || latestReachableTag !== null,
     })
   : highestPublishedStableSemver(publishedRuntimeVersions.map((entry) => entry.version))
 
