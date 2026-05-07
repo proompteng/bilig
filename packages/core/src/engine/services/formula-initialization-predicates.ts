@@ -16,11 +16,27 @@ export function canEvaluateInitialDirectRuntimeFormula(formula: RuntimeFormula |
   )
 }
 
-export function hasPendingFormulaDependency(formula: RuntimeFormula, pendingFormulaCells: Uint8Array): boolean {
+export function hasPendingFormulaDependency(
+  formula: RuntimeFormula,
+  pendingFormulaCells: Uint8Array,
+  getRangeMembers?: (rangeIndex: number) => Uint32Array,
+): boolean {
   const dependencies = formula.dependencyIndices
   for (let index = 0; index < dependencies.length; index += 1) {
     if ((pendingFormulaCells[dependencies[index]!] ?? 0) !== 0) {
       return true
+    }
+  }
+  if (getRangeMembers === undefined) {
+    return false
+  }
+  const ranges = formula.rangeDependencies
+  for (let rangeIndexCursor = 0; rangeIndexCursor < ranges.length; rangeIndexCursor += 1) {
+    const members = getRangeMembers(ranges[rangeIndexCursor]!)
+    for (let memberIndex = 0; memberIndex < members.length; memberIndex += 1) {
+      if ((pendingFormulaCells[members[memberIndex]!] ?? 0) !== 0) {
+        return true
+      }
     }
   }
   return false

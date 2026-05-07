@@ -673,7 +673,12 @@ export function createEngineFormulaInitializationService(args: {
                   if (runtimeFormula?.directAggregate !== undefined) {
                     hasInitialPrefixAggregateCandidates = true
                   }
-                  if (!runtimeFormula || hasPendingFormulaDependency(runtimeFormula, pendingFormulaCells)) {
+                  if (
+                    !runtimeFormula ||
+                    hasPendingFormulaDependency(runtimeFormula, pendingFormulaCells, (rangeIndex) =>
+                      args.state.ranges.getMembersView(rangeIndex),
+                    )
+                  ) {
                     canAssignTopoInBatch = false
                   } else {
                     args.state.workbook.cellStore.topoRanks[prepared.cellIndex] = nextTopoRank
@@ -922,7 +927,12 @@ export function createEngineFormulaInitializationService(args: {
             valueWriter.writeValueAt(cellIndex, ref.sheetId, ref.col, ref.value)
             if (canAssignTopoInBatch && pendingFormulaCells) {
               const runtimeFormula = args.state.formulas.get(cellIndex)
-              if (!runtimeFormula || hasPendingFormulaDependency(runtimeFormula, pendingFormulaCells)) {
+              if (
+                !runtimeFormula ||
+                hasPendingFormulaDependency(runtimeFormula, pendingFormulaCells, (rangeIndex) =>
+                  args.state.ranges.getMembersView(rangeIndex),
+                )
+              ) {
                 canAssignTopoInBatch = false
               } else {
                 args.state.workbook.cellStore.topoRanks[cellIndex] = nextTopoRank

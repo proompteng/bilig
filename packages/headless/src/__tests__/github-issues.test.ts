@@ -315,6 +315,32 @@ describe('GitHub issue reductions', () => {
     expect(workbook.getCellFormulaDiagnostics({ sheet: tax, row: 10, col: 1 })[0]?.code).toBe('financial-invalid-cash-flow')
   })
 
+  it('evaluates issue #24 XIRR over formula-derived numeric cash-flow cells', () => {
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Project: [
+          ['Metric', 'Amount'],
+          ['Equity required', 37_237_200],
+          ['Sale proceeds', 101_705_094.7368421],
+          ['Project IRR', '=XIRR(B6:B7,A6:A7)'],
+          ['Date', 'Cash flow'],
+          [44_927, '=-B2'],
+          [46_388, '=B3'],
+          [null, null],
+          ['Literal project IRR', '=XIRR(B10:B11,A10:A11)'],
+          [44_927, -37_237_200],
+          [46_388, 101_705_094.7368421],
+        ],
+      },
+      { maxRows: 100_000, maxColumns: 512, useColumnIndex: true },
+    )
+
+    expectNumberClose(cellValue(workbook, 'Project', 5, 1), -37_237_200)
+    expectNumberClose(cellValue(workbook, 'Project', 6, 1), 101_705_094.7368421)
+    expectNumberClose(cellValue(workbook, 'Project', 3, 1), 0.28533624352898757)
+    expect(cellValue(workbook, 'Project', 3, 1)).toEqual(cellValue(workbook, 'Project', 8, 1))
+  })
+
   it('reports the published package version through WorkPaper.version', () => {
     expect(WorkPaper.version).toBe(readHeadlessPackageVersion())
   })
