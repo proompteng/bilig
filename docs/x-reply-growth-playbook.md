@@ -176,6 +176,74 @@ Only add a repo link if someone asks what an implementation of that boundary
 looks like. If that happens, link the website or adoption kit rather than
 dropping the repository into the first reply.
 
+### PopSheets AI spreadsheet mention
+
+Target:
+<https://x.com/AudreyLimsAi/status/2052019390225555807>
+
+Why it fits:
+
+- The post is specifically about an AI spreadsheet that researches, analyzes,
+  charts, and reports from data.
+- A useful reply can add the developer infrastructure angle without competing
+  with the product mention.
+- Do not link on the first reply unless someone asks about implementation.
+
+Draft reply:
+
+```text
+this is the right product surface.
+
+the infrastructure layer i keep watching is whether the agent can prove what it
+changed: ranges, formulas, recalc, readback, and export fidelity.
+```
+
+### ChatGPT Excel add-in personalization reply
+
+Target:
+<https://x.com/KieranJame86217/status/2051998803771949424>
+
+Why it fits:
+
+- The post is about skills syncing and personalized instructions for an Excel
+  add-in.
+- The useful angle is that personalization needs reliable workbook operations,
+  not just prompt memory.
+- Keep it as a normal technical reply with no repo link.
+
+Draft reply:
+
+```text
+yeah, the interesting bit is making the instructions operational.
+
+not just "remember how i like models", but stable workbook ops the add-in can
+run and then verify after edits.
+```
+
+### Native Excel agent launch reply
+
+Target:
+<https://x.com/gardnersmitha/status/2051456316942458898>
+
+Why it fits:
+
+- The post mentions a native Excel add-in, direct data access, hot-swappable
+  models, and domain skills.
+- A useful reply can focus on the verification/writeback boundary that matters
+  after an agent mutates a workbook.
+- Use no link first; add `bilig` only if asked for open-source infrastructure
+  examples.
+
+Draft reply:
+
+```text
+direct data access is a big deal.
+
+the other half i care about for spreadsheet agents is writeback verification:
+after the model changes a workbook, can you inspect formulas/ranges and prove
+what changed.
+```
+
 ## Reply Templates
 
 Use these as starting points, not copy/paste automation.

@@ -100,6 +100,13 @@ planning. It reports large average star gains after HN exposure for AI-tool
 repos, but it also says timing and launch fit matter. Treat HN as one
 distribution event in a repeatable proof loop, not as the whole plan.
 
+Official HN guidance makes the same launch constraint concrete: a Show HN should
+be something people can try directly, preferably without signups or email gates,
+and it should be work the poster personally built and can discuss in the thread.
+For `bilig`, that means the launch link should point at the repository or public
+docs with the npm-only quickstart visible immediately, not a generic landing
+page.
+
 Do not buy stars or run fake-star exchanges. Recent research found increasing
 fake-star campaigns, and GitHub Trending appears to filter out most superficial
 fake-star activity. Fake growth creates trust and supply-chain risk for a
@@ -339,6 +346,10 @@ audience, or product friction.
   <https://github.blog/open-source/maintainers/four-steps-toward-building-an-open-source-community/>
 - GitHub Blog, open source in 2026:
   <https://github.blog/open-source/maintainers/what-to-expect-for-open-source-in-2026/>
+- Hacker News, Show HN guidelines:
+  <https://news.ycombinator.com/showhn.html>
+- Hacker News, site guidelines:
+  <https://news.ycombinator.com/newsguidelines.html>
 - X rules and best practices for replies:
   <https://help.x.com/en/rules-and-policies/x-rules-and-best-practices>
 - X automation rules:
