@@ -1,0 +1,78 @@
+# bilig
+
+> headless spreadsheet engine for node services, coding agents, local-first
+> workbook automation, and formula-backed business workflows.
+
+site: https://proompteng.github.io/bilig/
+repository: https://github.com/proompteng/bilig
+npm package: https://www.npmjs.com/package/@bilig/headless
+license: mit
+language: typescript
+
+## best entry points
+
+- https://proompteng.github.io/bilig/
+- https://github.com/proompteng/bilig/tree/main/packages/headless#readme
+- https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper
+- https://github.com/proompteng/bilig/blob/main/docs/public-adoption-kit.md
+
+## what to use it for
+
+- programmatic workbook creation in node services
+- formula evaluation and formula readback without a browser grid
+- agent workflows that need stable cell addresses and post-write verification
+- snapshot, restore, and persistence tests for formula-backed business logic
+- benchmarkable spreadsheet-engine workloads
+
+## runnable evaluation
+
+```sh
+mkdir bilig-headless-eval
+cd bilig-headless-eval
+npm init -y
+npm pkg set type=module
+npm install @bilig/headless
+```
+
+repository example:
+
+```sh
+git clone https://github.com/proompteng/bilig.git
+cd bilig/examples/headless-workpaper
+npm install
+npm start
+npm run agent:verify
+```
+
+## proof and caveats
+
+- benchmark explainer:
+  https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md
+- benchmark evidence:
+  https://github.com/proompteng/bilig/blob/main/docs/headless-workpaper-benchmark-evidence.md
+- workbook APIs for agents:
+  https://github.com/proompteng/bilig/blob/main/docs/why-agents-need-workbook-apis.md
+- persistence walkthrough:
+  https://github.com/proompteng/bilig/blob/main/docs/persisting-formula-backed-workpaper-documents-in-node.md
+- revenue model walkthrough:
+  https://github.com/proompteng/bilig/blob/main/docs/building-a-revenue-model-with-headless-workpaper.md
+- compatibility boundaries:
+  https://github.com/proompteng/bilig/blob/main/docs/where-bilig-is-not-excel-compatible-yet.md
+- xlsx verifier walkthrough:
+  https://github.com/proompteng/bilig/blob/main/docs/xlsx-corpus-verifier-walkthrough.md
+- xlookup exact fixture:
+  https://github.com/proompteng/bilig/blob/main/docs/formula-edge-xlookup-exact-fixture.md
+
+## boundaries
+
+bilig is early infrastructure and not a finished excel clone. do not claim full
+excel formula parity, complete xlsx compatibility, or blanket speed wins. the
+current public performance claim is the checked-in workpaper benchmark evidence,
+including its p95 caveat.
+
+## contributor path
+
+- starter issues:
+  https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md
+- good first issue search:
+  https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22

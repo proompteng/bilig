@@ -218,6 +218,7 @@ const generatedSourceChecks: readonly CiTask[] = [
   pnpm('bilig dominance scorecard check', 'dominance:check'),
   pnpm('workspace resolution check', 'workspace-resolution:check'),
   pnpm('canonical naming check', 'naming:check'),
+  pnpm('docs discovery check', 'docs:discovery:check'),
 ]
 
 try {

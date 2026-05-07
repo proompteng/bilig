@@ -77,6 +77,7 @@
     "naming:check": "bun scripts/check-canonical-naming.ts",
     "docs:social-preview:generate": "tsx scripts/render-social-preview.ts",
     "docs:social-preview:check": "tsx scripts/render-social-preview.ts --check",
+    "docs:discovery:check": "tsx scripts/check-docs-discovery.ts",
     "sheet:agent": "bun scripts/spreadsheet-agent.ts",
     "format": "oxfmt --write .oxlintrc.json package.json playwright.config.ts tsconfig.base.json tsconfig.json vitest.config.ts vitest.workspace.ts apps packages e2e scripts",
     "format:check": "oxfmt --check .oxlintrc.json package.json playwright.config.ts tsconfig.base.json tsconfig.json vitest.config.ts vitest.workspace.ts apps packages e2e scripts",
