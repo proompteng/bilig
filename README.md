@@ -14,8 +14,7 @@ If the WorkPaper package is relevant to your agent or Node workflow, star the
 repo as a bookmark: <https://github.com/proompteng/bilig/stargazers>
 
 If you want to try a small contribution first, start with the public
-[`good first issue`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22)
-list.
+[`starter issues`](docs/starter-issues.md) list.
 
 It is not a table widget. The repo contains a real workbook engine, formula
 parser/compiler, React workbook reconciler, reusable grid shell, binary sync
@@ -287,8 +286,8 @@ contributions are usually:
 - docs that turn existing architecture notes into runnable examples
 
 The shortest public on-ramp is the
-[`good first issue`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22)
-queue. Current starter issues are scoped around WorkPaper recipes, benchmark
+[`starter issues`](docs/starter-issues.md) queue. Current starter issues are
+scoped around WorkPaper recipes, benchmark
 walkthroughs, and agent/tooling docs.
 
 Please keep changes small, tested, and tied to the package that owns the

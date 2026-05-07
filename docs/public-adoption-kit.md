@@ -45,8 +45,7 @@ Shorter version:
 - Launch post draft:
   [`docs/launch-post-headless-workpaper.md`](launch-post-headless-workpaper.md)
 - Launch discussion: <https://github.com/proompteng/bilig/discussions/18>
-- Good first issues:
-  <https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22>
+- Starter issues: [`docs/starter-issues.md`](starter-issues.md)
 - Public API notes: [`docs/public-api.md`](public-api.md)
 - Contributing guide: [`CONTRIBUTING.md`](../CONTRIBUTING.md)
 
