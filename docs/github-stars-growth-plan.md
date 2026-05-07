@@ -82,6 +82,10 @@ Verified on 2026-05-07 after the Show HN launch and topic refresh:
   moved to `6`.
 - Refreshed GitHub discovery topics by replacing broad `agents` and `headless`
   tags with exact-fit `ai-spreadsheet` and `spreadsheet-api` tags.
+- Posted one adapted comment in the `r/github` self-promotion megathread under
+  the logged-in maintainer account, linking the npm package, repository, and
+  runnable example without asking for votes or stars:
+  <https://www.reddit.com/r/github/comments/1jy8rea/promote_your_projects_here_selfpromotion/okhx8b5/>.
 
 ## Research Findings
 
