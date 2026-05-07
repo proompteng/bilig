@@ -9,6 +9,7 @@ import {
   type SpreadsheetEngine,
 } from '@bilig/core'
 import { ErrorCode, ValueTag } from '@bilig/protocol'
+import { isBlankRawCellContent } from './work-paper-runtime-helpers.js'
 import type { WorkPaperSheet } from './work-paper-types.js'
 
 export interface InitialSheetMaterializationInspection extends LiteralSheetLoadInspection {
@@ -109,7 +110,7 @@ export function prepareInitialMixedSheetLoad(args: {
         continue
       }
       for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
-        if (row[colIndex] !== null) {
+        if (!isBlankRawCellContent(row[colIndex])) {
           potentialCellCount += 1
         }
       }
@@ -159,7 +160,7 @@ export function prepareInitialMixedSheetLoad(args: {
               continue
             }
           }
-          if (raw === null) {
+          if (isBlankRawCellContent(raw)) {
             continue
           }
           const cellIndex = cellStore.allocateReserved(args.sheetId, rowIndex, colIndex)

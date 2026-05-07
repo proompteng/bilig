@@ -341,6 +341,44 @@ describe('GitHub issue reductions', () => {
     expect(cellValue(workbook, 'Project', 3, 1)).toEqual(cellValue(workbook, 'Project', 8, 1))
   })
 
+  it('treats issue #95 undefined and sparse buildFromSheets cells as blanks', () => {
+    const leadingSparseRow: unknown[] = []
+    leadingSparseRow[1] = 'Revenue'
+    const middleSparseRow: unknown[] = Array(3)
+    middleSparseRow[0] = 1
+    middleSparseRow[2] = 3
+    const allSparseRow: unknown[] = Array(3)
+    const sheets = {
+      ExplicitUndefined: [[undefined]],
+      LeadingSparse: [leadingSparseRow],
+      MiddleSparse: [middleSparseRow],
+      AllSparse: [allSparseRow],
+      FormulaSparse: [[undefined, '=A1+1']],
+    } satisfies Record<string, readonly (readonly unknown[])[]>
+
+    const buildFromSheets: unknown = Reflect.get(WorkPaper, 'buildFromSheets')
+    if (typeof buildFromSheets !== 'function') {
+      throw new Error('Expected WorkPaper.buildFromSheets to be callable')
+    }
+    const buildResult: unknown = Reflect.apply(buildFromSheets, WorkPaper, [sheets, { maxRows: 8, maxColumns: 8, useColumnIndex: true }])
+    expect(buildResult).toBeInstanceOf(WorkPaper)
+    if (!(buildResult instanceof WorkPaper)) {
+      throw new Error('Expected buildFromSheets to return a WorkPaper')
+    }
+    const workbook = buildResult
+
+    expect(workbook.getSheetDimensions(workbook.getSheetId('ExplicitUndefined'))).toEqual({ width: 0, height: 0 })
+    expect(workbook.getSheetDimensions(workbook.getSheetId('AllSparse'))).toEqual({ width: 0, height: 0 })
+    expect(workbook.getSheetDimensions(workbook.getSheetId('LeadingSparse'))).toEqual({ width: 2, height: 1 })
+    expect(workbook.getSheetDimensions(workbook.getSheetId('MiddleSparse'))).toEqual({ width: 3, height: 1 })
+    expect(cellValue(workbook, 'LeadingSparse', 0, 0).tag).toBe(ValueTag.Empty)
+    expectString(cellValue(workbook, 'LeadingSparse', 0, 1), 'Revenue')
+    expectNumber(cellValue(workbook, 'MiddleSparse', 0, 0), 1)
+    expect(cellValue(workbook, 'MiddleSparse', 0, 1).tag).toBe(ValueTag.Empty)
+    expectNumber(cellValue(workbook, 'MiddleSparse', 0, 2), 3)
+    expectNumber(cellValue(workbook, 'FormulaSparse', 0, 1), 1)
+  })
+
   it('reports the published package version through WorkPaper.version', () => {
     expect(WorkPaper.version).toBe(readHeadlessPackageVersion())
   })

@@ -1,6 +1,7 @@
 import { MAX_COLS, MAX_ROWS, ValueTag, type CellValue, type WorkbookSnapshot } from '@bilig/protocol'
 import { parseCellAddress } from '@bilig/formula'
 import { WorkPaperSheetSizeLimitExceededError, WorkPaperUnableToParseError } from './work-paper-errors.js'
+import { isBlankRawCellContent } from './work-paper-runtime-helpers.js'
 import type {
   WorkPaperCellAddress,
   WorkPaperCellType,
@@ -45,7 +46,7 @@ export function inspectSheetDimensionsWithinLimits(
     let rowHasMaterializedCell = false
     let lastMaterializedCol = -1
     for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
-      if (row[colIndex] !== null) {
+      if (!isBlankRawCellContent(row[colIndex])) {
         rowHasMaterializedCell = true
         lastMaterializedCol = colIndex
       }
@@ -122,7 +123,7 @@ export function inspectSheetWithinLimits(sheetName: string, sheet: WorkPaperShee
     let lastMaterializedCol = -1
     for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
       const cell = row[colIndex]
-      if (cell !== null) {
+      if (!isBlankRawCellContent(cell)) {
         materializedCellCount += 1
         rowHasMaterializedCell = true
         lastMaterializedCol = colIndex

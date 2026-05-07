@@ -150,6 +150,10 @@ export function isFormulaContent(content: RawCellContent): content is string {
   return typeof content === 'string' && content.trim().startsWith('=')
 }
 
+export function isBlankRawCellContent(content: RawCellContent | undefined): content is null | undefined {
+  return content === null || content === undefined
+}
+
 export function isWorkPaperSheetMatrix(value: RawCellContent | WorkPaperSheet): value is WorkPaperSheet {
   return Array.isArray(value)
 }

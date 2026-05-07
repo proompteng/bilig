@@ -1,5 +1,5 @@
 import type { EngineCellMutationRef } from '@bilig/core'
-import { isDeferredBatchLiteralContent, isFormulaContent, stripLeadingEquals } from './work-paper-runtime-helpers.js'
+import { isBlankRawCellContent, isDeferredBatchLiteralContent, isFormulaContent, stripLeadingEquals } from './work-paper-runtime-helpers.js'
 import type { RawCellContent } from './work-paper-types.js'
 
 export function buildWorkPaperRawCellMutation(args: {
@@ -8,7 +8,7 @@ export function buildWorkPaperRawCellMutation(args: {
   readonly content: RawCellContent
   readonly rewriteFormulaForStorage: (formula: string) => string
 }): EngineCellMutationRef['mutation'] {
-  if (args.content === null) {
+  if (isBlankRawCellContent(args.content)) {
     return { kind: 'clearCell', row: args.row, col: args.col }
   }
   if (isFormulaContent(args.content)) {
@@ -50,7 +50,7 @@ export function tryEnqueueWorkPaperLiteralMutation(args: {
     }),
     ...(args.cellIndex !== undefined ? { cellIndex: args.cellIndex } : {}),
   })
-  if (args.content !== null && args.cellIndex === undefined) {
+  if (!isBlankRawCellContent(args.content) && args.cellIndex === undefined) {
     args.addPotentialNewCell()
   }
   return true

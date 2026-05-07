@@ -33,12 +33,18 @@ export interface LiteralSheetLoadInspection {
   readonly maxColumnCount: number
 }
 
+type LiteralSheetCellInput = LiteralInput | undefined
+
+function shouldMaterializeLiteralCell(raw: LiteralSheetCellInput): boolean {
+  return raw !== null && raw !== undefined
+}
+
 export function loadLiteralSheetIntoEmptySheet(
   workbook: WorkbookStore,
   strings: StringPool,
   sheetId: number,
-  content: readonly (readonly LiteralInput[])[],
-  shouldMaterialize: (raw: LiteralInput, rowIndex: number, colIndex: number) => boolean = (raw) => raw !== null,
+  content: readonly (readonly LiteralSheetCellInput[])[],
+  shouldMaterialize: (raw: LiteralSheetCellInput, rowIndex: number, colIndex: number) => boolean = shouldMaterializeLiteralCell,
   inspection?: LiteralSheetLoadInspection,
 ): number {
   const sheet = workbook.getSheetById(sheetId)
@@ -57,7 +63,7 @@ export function loadLiteralSheetIntoEmptySheet(
         continue
       }
       for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
-        if (shouldMaterialize(row[colIndex]!, rowIndex, colIndex)) {
+        if (shouldMaterialize(row[colIndex], rowIndex, colIndex)) {
           potentialCellCount += 1
         }
       }
@@ -113,7 +119,7 @@ export function loadDenseLiteralSheetIntoEmptySheet(
   workbook: WorkbookStore,
   strings: StringPool,
   sheetId: number,
-  content: readonly (readonly LiteralInput[])[],
+  content: readonly (readonly LiteralSheetCellInput[])[],
   inspection?: LiteralSheetLoadInspection,
 ): number {
   const sheet = workbook.getSheetById(sheetId)
@@ -207,7 +213,7 @@ function materializeWrittenColumns(writtenColumns: Uint8Array, count: number): U
   return columns
 }
 
-function writeLiteralCell(cellStore: WorkbookStore['cellStore'], strings: StringPool, cellIndex: number, raw: LiteralInput): void {
+function writeLiteralCell(cellStore: WorkbookStore['cellStore'], strings: StringPool, cellIndex: number, raw: LiteralSheetCellInput): void {
   cellStore.flags[cellIndex] = CellFlags.Materialized
   cellStore.formulaIds[cellIndex] = 0
   cellStore.errors[cellIndex] = ErrorCode.None
@@ -215,7 +221,7 @@ function writeLiteralCell(cellStore: WorkbookStore['cellStore'], strings: String
   cellStore.topoRanks[cellIndex] = 0
   cellStore.cycleGroupIds[cellIndex] = -1
 
-  if (raw === null) {
+  if (raw === null || raw === undefined) {
     cellStore.flags[cellIndex] |= CellFlags.AuthoredBlank
     cellStore.tags[cellIndex] = ValueTag.Empty
     cellStore.numbers[cellIndex] = 0

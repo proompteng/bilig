@@ -1,5 +1,6 @@
 import type { EngineCellMutationRef } from '@bilig/core'
 import { formatAddress } from '@bilig/formula'
+import { isBlankRawCellContent } from './work-paper-runtime-helpers.js'
 import type { WorkPaperCellAddress, WorkPaperSheet, RawCellContent } from './work-paper-types.js'
 
 export type MatrixMutationRef = EngineCellMutationRef
@@ -57,7 +58,7 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
       }
       const address = formatAddress(destination.row, destination.col)
 
-      if (raw === null) {
+      if (isBlankRawCellContent(raw)) {
         if (!args.skipNulls) {
           const ref = {
             sheetId: args.target.sheet,
