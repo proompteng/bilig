@@ -107,6 +107,11 @@ For a runnable external-consumer example, start with
 test executes that same example against packed local runtime packages with
 `pnpm workpaper:smoke:external`.
 
+That example also includes `npm run agent:verify`, a small agent writeback demo
+that records the exact assumption cells changed, verifies dependent formula
+readback, persists the workbook, restores it, and proves the formulas and values
+survived the round trip.
+
 Quickstart:
 
 ```js
@@ -149,9 +154,7 @@ const at = (row, col) => ({
 const before = workbook.getCellValue(at(1, 1))
 workbook.setCellContents({ sheet: revenue, row: 1, col: 1 }, 32)
 
-const saved = serializeWorkPaperDocument(
-  exportWorkPaperDocument(workbook, { includeConfig: true }),
-)
+const saved = serializeWorkPaperDocument(exportWorkPaperDocument(workbook, { includeConfig: true }))
 const restored = createWorkPaperFromDocument(parseWorkPaperDocument(saved))
 const restoredSummary = restored.getSheetId('Summary')
 if (restoredSummary === undefined) {

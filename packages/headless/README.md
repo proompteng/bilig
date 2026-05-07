@@ -181,6 +181,16 @@ npm install
 npm start
 ```
 
+For the agent-specific writeback proof, run:
+
+```sh
+npm run agent:verify
+```
+
+That demo records the exact assumption cells changed, verifies dependent formula
+readback, persists the workbook, restores it, and checks that formulas and
+outputs survived the round trip.
+
 Repository CI also runs the same example against packed local runtime packages
 through `pnpm workpaper:smoke:external`.
 

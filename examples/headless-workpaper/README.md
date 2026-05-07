@@ -37,6 +37,64 @@ Expected output:
 The repository smoke test runs this same example against packed local runtime
 packages through `pnpm workpaper:smoke:external`.
 
+## Agent Writeback Verification
+
+Run the agent verification demo when you want a small artifact for the claim
+that spreadsheet agents need workbook APIs, not screenshots. It applies an
+agent-style assumption edit, records the exact input cells changed, verifies the
+dependent formulas and readback values, persists the workbook, restores it, and
+checks that formulas and outputs survived the round trip:
+
+```sh
+npm run agent:verify
+```
+
+Expected output:
+
+```json
+{
+  "edits": [
+    { "cell": "Assumptions!B2", "before": 500, "after": 650 },
+    { "cell": "Assumptions!B3", "before": 0.08, "after": 0.1 },
+    { "cell": "Assumptions!B5", "before": 1.1, "after": 1.2 }
+  ],
+  "before": {
+    "customers": 40,
+    "grossMrr": 9600,
+    "expansionMrr": 10560,
+    "annualizedArr": 126720,
+    "arrTargetDelta": -23280
+  },
+  "after": {
+    "customers": 65,
+    "grossMrr": 15600,
+    "expansionMrr": 18720,
+    "annualizedArr": 224640,
+    "arrTargetDelta": 74640
+  },
+  "restored": {
+    "customers": 65,
+    "grossMrr": 15600,
+    "expansionMrr": 18720,
+    "annualizedArr": 224640,
+    "arrTargetDelta": 74640
+  },
+  "formulaContracts": {
+    "customers": "=Assumptions!B2*Assumptions!B3",
+    "grossMrr": "=B2*Assumptions!B4",
+    "expansionMrr": "=B3*Assumptions!B5",
+    "annualizedArr": "=B4*12",
+    "arrTargetDelta": "=Plan!B5-150000"
+  },
+  "verified": {
+    "formulasUnchanged": true,
+    "formulasPersisted": true,
+    "restoredMatchesAfter": true,
+    "serializedBytes": 1237
+  }
+}
+```
+
 ## Revenue Scenarios
 
 Run the scenario model when you want to see a multi-sheet revenue workbook,

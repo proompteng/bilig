@@ -53,6 +53,10 @@ cd bilig/examples/headless-workpaper
 npm install
 npm start
 
+there is also an agent writeback proof in the same example:
+
+npm run agent:verify
+
 the repo also includes benchmark evidence against hyperformula-style workloads. the current checked-in claim is 46/46 mean wins on scorecard-eligible comparable workloads, with the p95 caveat left attached. it is not a finished excel clone; the compatibility boundaries doc calls out macro, formula, xlsx, and ui gaps.
 
 i'm especially interested in feedback from people who have built spreadsheet-backed services, formula engines, xlsx import/export, or agent workflows that need reliable workbook state.

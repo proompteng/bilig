@@ -143,6 +143,16 @@ npm install
 npm start
 ```
 
+For the agent-specific writeback proof, run:
+
+```sh
+npm run agent:verify
+```
+
+That command records the exact assumption cells changed, verifies dependent
+formula outputs, persists the workbook, restores it, and checks that formulas
+and values survived the round trip.
+
 ## Shareable Copy
 
 Short:

@@ -146,6 +146,8 @@ Follow-up artifact if anyone engages:
 
 - link `docs/why-agents-need-workbook-apis.md` for the conceptual argument
 - link `examples/headless-workpaper` for the runnable Node example
+- point at `npm run agent:verify` inside that example when someone asks what
+  writeback verification looks like
 - if someone asks about Excel parity, link the fixture-scoped caveats instead
   of making a broad compatibility claim
 
@@ -233,6 +235,8 @@ Why it fits:
   after an agent mutates a workbook.
 - Use no link first; add `bilig` only if asked for open-source infrastructure
   examples.
+- If asked, use the `examples/headless-workpaper` package and its
+  `npm run agent:verify` command as the concrete artifact.
 
 Draft reply:
 

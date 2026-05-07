@@ -4,6 +4,7 @@
   "description": "Runnable Node example for the @bilig/headless WorkPaper API.",
   "type": "module",
   "scripts": {
+    "agent:verify": "node agent-writeback-verification.mjs",
     "persistence": "node persistence-roundtrip.mjs",
     "scenarios": "node revenue-scenarios.mjs",
     "start": "node revenue-plan.mjs"

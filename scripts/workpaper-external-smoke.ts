@@ -96,6 +96,7 @@ function runNodeSmoke(
     persistedSheets: string[]
     serializedBytes: number
   }
+  agentVerification: AgentVerificationSummary
   output: {
     afterAgentEdit: {
       enterpriseArpa: number
@@ -124,6 +125,7 @@ function runNodeSmoke(
 } {
   mkdirSync(projectDir, { recursive: true })
   copyFileSync(join(headlessExampleDir, 'package.json'), join(projectDir, 'package.json'))
+  copyFileSync(join(headlessExampleDir, 'agent-writeback-verification.mjs'), join(projectDir, 'agent-writeback-verification.mjs'))
   copyFileSync(join(headlessExampleDir, 'revenue-plan.mjs'), join(projectDir, 'revenue-plan.mjs'))
   copyFileSync(join(headlessExampleDir, 'persistence-roundtrip.mjs'), join(projectDir, 'persistence-roundtrip.mjs'))
   copyFileSync(join(headlessExampleDir, 'revenue-scenarios.mjs'), join(projectDir, 'revenue-scenarios.mjs'))
@@ -218,9 +220,13 @@ function runNodeSmoke(
   const output = parseNodeSmokeOutput(runTextCommand('node', ['revenue-plan.mjs'], { cwd: projectDir }))
   const persistence = parseNodePersistenceOutput(runTextCommand('node', ['persistence-roundtrip.mjs'], { cwd: projectDir }))
   const scenarios = parseNodeRevenueScenarioOutput(runTextCommand('node', ['revenue-scenarios.mjs'], { cwd: projectDir }))
+  const agentVerification = parseNodeAgentVerificationOutput(
+    runTextCommand('node', ['agent-writeback-verification.mjs'], { cwd: projectDir }),
+  )
   const snapshotImport = parseNodeSnapshotImportOutput(runTextCommand('node', ['snapshot-import.mjs'], { cwd: projectDir }))
 
   return {
+    agentVerification,
     persistence,
     projectDir,
     scenarios,
@@ -527,6 +533,38 @@ type RevenueScenarioSummary = {
   totalNetMrr: number
 }
 
+type AgentVerificationProjection = {
+  annualizedArr: number
+  arrTargetDelta: number
+  customers: number
+  expansionMrr: number
+  grossMrr: number
+}
+
+type AgentVerificationSummary = {
+  after: AgentVerificationProjection
+  before: AgentVerificationProjection
+  edits: {
+    after: number
+    before: number
+    cell: string
+  }[]
+  formulaContracts: {
+    annualizedArr: string
+    arrTargetDelta: string
+    customers: string
+    expansionMrr: string
+    grossMrr: string
+  }
+  restored: AgentVerificationProjection
+  verified: {
+    formulasPersisted: boolean
+    formulasUnchanged: boolean
+    restoredMatchesAfter: boolean
+    serializedBytes: number
+  }
+}
+
 function parseNodeRevenueScenarioOutput(output: string): {
   afterEdit: RevenueScenarioSummary
   beforeEdit: RevenueScenarioSummary
@@ -577,6 +615,126 @@ function parseRevenueScenarioSummary(value: unknown, context: string): RevenueSc
       stretchNetMrr: scenarios.stretchNetMrr,
     },
   }
+}
+
+function parseNodeAgentVerificationOutput(output: string): AgentVerificationSummary {
+  const parsed = parseJsonRecord(output, 'node agent verification output')
+  const before = parseAgentVerificationProjection(parsed.before, 'node agent verification before output')
+  const after = parseAgentVerificationProjection(parsed.after, 'node agent verification after output')
+  const restored = parseAgentVerificationProjection(parsed.restored, 'node agent verification restored output')
+  const edits = parseAgentVerificationEdits(parsed.edits)
+  const formulaContracts = parseAgentVerificationFormulaContracts(parsed.formulaContracts)
+  const verified = parseRecordValue(parsed.verified, 'node agent verification flags')
+
+  if (
+    before.customers !== 40 ||
+    before.grossMrr !== 9600 ||
+    before.expansionMrr !== 10560 ||
+    before.annualizedArr !== 126720 ||
+    before.arrTargetDelta !== -23280 ||
+    after.customers !== 65 ||
+    after.grossMrr !== 15600 ||
+    after.expansionMrr !== 18720 ||
+    after.annualizedArr !== 224640 ||
+    after.arrTargetDelta !== 74640 ||
+    restored.customers !== after.customers ||
+    restored.grossMrr !== after.grossMrr ||
+    restored.expansionMrr !== after.expansionMrr ||
+    restored.annualizedArr !== after.annualizedArr ||
+    restored.arrTargetDelta !== after.arrTargetDelta ||
+    formulaContracts.customers !== '=Assumptions!B2*Assumptions!B3' ||
+    formulaContracts.grossMrr !== '=B2*Assumptions!B4' ||
+    formulaContracts.expansionMrr !== '=B3*Assumptions!B5' ||
+    formulaContracts.annualizedArr !== '=B4*12' ||
+    formulaContracts.arrTargetDelta !== '=Plan!B5-150000' ||
+    verified.formulasUnchanged !== true ||
+    verified.formulasPersisted !== true ||
+    verified.restoredMatchesAfter !== true ||
+    typeof verified.serializedBytes !== 'number' ||
+    verified.serializedBytes <= 0
+  ) {
+    throw new Error(`Unexpected node agent verification output: ${output}`)
+  }
+
+  return {
+    after,
+    before,
+    edits,
+    formulaContracts,
+    restored,
+    verified: {
+      formulasPersisted: verified.formulasPersisted,
+      formulasUnchanged: verified.formulasUnchanged,
+      restoredMatchesAfter: verified.restoredMatchesAfter,
+      serializedBytes: verified.serializedBytes,
+    },
+  }
+}
+
+function parseAgentVerificationProjection(value: unknown, context: string): AgentVerificationProjection {
+  const parsed = parseRecordValue(value, context)
+  if (
+    typeof parsed.customers !== 'number' ||
+    typeof parsed.grossMrr !== 'number' ||
+    typeof parsed.expansionMrr !== 'number' ||
+    typeof parsed.annualizedArr !== 'number' ||
+    typeof parsed.arrTargetDelta !== 'number'
+  ) {
+    throw new Error(`Unexpected ${context}: ${JSON.stringify(value)}`)
+  }
+  return {
+    annualizedArr: parsed.annualizedArr,
+    arrTargetDelta: parsed.arrTargetDelta,
+    customers: parsed.customers,
+    expansionMrr: parsed.expansionMrr,
+    grossMrr: parsed.grossMrr,
+  }
+}
+
+function parseAgentVerificationFormulaContracts(value: unknown): AgentVerificationSummary['formulaContracts'] {
+  const parsed = parseRecordValue(value, 'node agent verification formula contracts')
+  if (
+    typeof parsed.customers !== 'string' ||
+    typeof parsed.grossMrr !== 'string' ||
+    typeof parsed.expansionMrr !== 'string' ||
+    typeof parsed.annualizedArr !== 'string' ||
+    typeof parsed.arrTargetDelta !== 'string'
+  ) {
+    throw new Error(`Unexpected node agent verification formula contracts: ${JSON.stringify(value)}`)
+  }
+  return {
+    annualizedArr: parsed.annualizedArr,
+    arrTargetDelta: parsed.arrTargetDelta,
+    customers: parsed.customers,
+    expansionMrr: parsed.expansionMrr,
+    grossMrr: parsed.grossMrr,
+  }
+}
+
+function parseAgentVerificationEdits(value: unknown): AgentVerificationSummary['edits'] {
+  if (!Array.isArray(value)) {
+    throw new Error(`Expected node agent verification edits to be an array: ${JSON.stringify(value)}`)
+  }
+  const edits = value.map((entry, index) => {
+    const edit = parseRecordValue(entry, `node agent verification edit ${index + 1}`)
+    if (typeof edit.cell !== 'string' || typeof edit.before !== 'number' || typeof edit.after !== 'number') {
+      throw new Error(`Unexpected node agent verification edit: ${JSON.stringify(entry)}`)
+    }
+    return {
+      after: edit.after,
+      before: edit.before,
+      cell: edit.cell,
+    }
+  })
+  const expected = [
+    { after: 650, before: 500, cell: 'Assumptions!B2' },
+    { after: 0.1, before: 0.08, cell: 'Assumptions!B3' },
+    { after: 1.2, before: 1.1, cell: 'Assumptions!B5' },
+  ]
+  if (JSON.stringify(edits) !== JSON.stringify(expected)) {
+    throw new Error(`Unexpected node agent verification edits: ${JSON.stringify(value)}`)
+  }
+  return edits
 }
 
 function parseJsonRecord(serialized: string, context: string): Record<string, unknown> {
