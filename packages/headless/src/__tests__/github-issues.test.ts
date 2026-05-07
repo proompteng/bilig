@@ -717,4 +717,56 @@ describe('GitHub issue reductions', () => {
     expectNumberClose(cellValue(workbook, 'Sheet1', 0, 2), 0.203806425664055)
     expectNumberClose(cellValue(workbook, 'Sheet1', 0, 3), 0.2831397103054239)
   })
+
+  it('resolves issue #104 whole-column AVERAGE references', () => {
+    const rows = Array.from({ length: 25 }, () => Array.from<TestCell>({ length: 30 }).fill(null))
+    const values = [5, 10, 20, 25, 40]
+
+    rows[13][21] = 'ignored'
+    values.forEach((value, index) => {
+      rows[index + 14][21] = value
+    })
+    rows[0][0] = '=AVERAGE(V:V)'
+    rows[0][1] = '=AVERAGE(V15:V19)'
+    rows[0][2] = '=SUM(V:V)'
+    rows[0][3] = '=MAX(V:V)'
+    rows[0][4] = '=MIN(V:V)'
+    rows[0][5] = '=COUNT(V:V)'
+    rows[0][6] = '=AVG(V:V)'
+
+    const data = Array.from({ length: 8 }, () => [null] as TestCell[])
+    values.forEach((value, index) => {
+      data[index + 1][0] = value
+    })
+    rows[1][0] = '=AVERAGE(Data!$A:$A)'
+    rows[1][1] = '=AVERAGE(Data!$A$2:$A$6)'
+    rows[1][2] = '=SUM(Data!$A:$A)'
+    rows[1][3] = '=MAX(Data!$A:$A)'
+    rows[1][4] = '=MIN(Data!$A:$A)'
+    rows[1][5] = '=COUNT(Data!$A:$A)'
+    rows[1][6] = '=AVG(Data!$A:$A)'
+
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Sheet1: rows,
+        Data: data,
+      },
+      { maxRows: 100, maxColumns: 30, useColumnIndex: true },
+    )
+
+    expectNumber(cellValue(workbook, 'Sheet1', 0, 0), 20)
+    expectNumber(cellValue(workbook, 'Sheet1', 0, 1), 20)
+    expectNumber(cellValue(workbook, 'Sheet1', 0, 2), 100)
+    expectNumber(cellValue(workbook, 'Sheet1', 0, 3), 40)
+    expectNumber(cellValue(workbook, 'Sheet1', 0, 4), 5)
+    expectNumber(cellValue(workbook, 'Sheet1', 0, 5), 5)
+    expectNumber(cellValue(workbook, 'Sheet1', 0, 6), 20)
+    expectNumber(cellValue(workbook, 'Sheet1', 1, 0), 20)
+    expectNumber(cellValue(workbook, 'Sheet1', 1, 1), 20)
+    expectNumber(cellValue(workbook, 'Sheet1', 1, 2), 100)
+    expectNumber(cellValue(workbook, 'Sheet1', 1, 3), 40)
+    expectNumber(cellValue(workbook, 'Sheet1', 1, 4), 5)
+    expectNumber(cellValue(workbook, 'Sheet1', 1, 5), 5)
+    expectNumber(cellValue(workbook, 'Sheet1', 1, 6), 20)
+  })
 })

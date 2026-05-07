@@ -51,6 +51,7 @@ const jsSpecialBuiltinNames = new Set([
 
 const wasmProductionBuiltinNames = new Set([
   'SUM',
+  'AVERAGE',
   'AVG',
   'MIN',
   'MAX',
@@ -474,7 +475,7 @@ const wasmProductionBuiltinNames = new Set([
   'TBILLEQ',
 ])
 
-const aggregationBuiltinNames = new Set(['SUM', 'AVG', 'MIN', 'MAX', 'COUNT', 'COUNTA', 'COUNTBLANK'])
+const aggregationBuiltinNames = new Set(['SUM', 'AVERAGE', 'AVG', 'MIN', 'MAX', 'COUNT', 'COUNTA', 'COUNTBLANK'])
 const logicalBuiltinNames = new Set(['IF', 'IFS', 'AND', 'OR', 'NOT', 'SWITCH', 'XOR', 'IFERROR', 'IFNA', 'NA'])
 const informationBuiltinNames = new Set([
   'CELL',
@@ -832,6 +833,7 @@ function buildCapability(name: string, id?: BuiltinId, jsStatus: BuiltinJsStatus
 
 export const builtinCapabilityManifest: readonly BuiltinCapability[] = [
   ...BUILTINS.map((builtin) => buildCapability(builtin.name.toUpperCase(), builtin.id)),
+  buildCapability('AVERAGE', BuiltinId.Avg),
   ...Array.from(jsSpecialBuiltinNames, (name) => buildCapability(name, undefined, 'special-js-only')),
   buildCapability('FORECAST.LINEAR', BuiltinId.Forecast),
   buildCapability('USE.THE.COUNTIF'),

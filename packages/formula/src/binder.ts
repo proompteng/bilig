@@ -425,6 +425,7 @@ export function isBuiltinAvailable(name: string): boolean {
 export function encodeBuiltin(name: string): BuiltinId {
   const builtins: Record<string, BuiltinId> = {
     SUM: BuiltinId.Sum,
+    AVERAGE: BuiltinId.Avg,
     AVG: BuiltinId.Avg,
     CHOOSE: BuiltinId.Choose,
     MIN: BuiltinId.Min,

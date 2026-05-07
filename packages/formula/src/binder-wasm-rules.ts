@@ -178,6 +178,19 @@ export function isCellVectorNode(node: FormulaNode): boolean {
   }
 }
 
+function isAxisRangeNode(node: FormulaNode): boolean {
+  if (node.kind !== 'RangeRef') {
+    return false
+  }
+  try {
+    const sheetPrefix = node.sheetName ? `${node.sheetName}!` : ''
+    const range = parseRangeAddress(`${sheetPrefix}${node.start}:${node.end}`)
+    return range.kind === 'rows' || range.kind === 'cols'
+  } catch {
+    return false
+  }
+}
+
 function isWasmSafeCellVectorNode(node: FormulaNode): boolean {
   if (node.kind !== 'RangeRef') {
     return false
@@ -256,13 +269,15 @@ export function isWasmSafeBuiltinArgs(callee: string, args: readonly FormulaNode
 
   switch (callee) {
     case 'SUM':
-    case 'AVG':
     case 'MIN':
     case 'MAX':
     case 'COUNT':
     case 'COUNTA':
     case 'COUNTBLANK':
       return args.every((arg) => deps.isWasmSafe(arg, true) || isNativeSequenceArg(arg))
+    case 'AVERAGE':
+    case 'AVG':
+      return args.every((arg) => isAxisRangeNode(arg) || isNativeSequenceArg(arg))
     case 'CHOOSE':
       return argc >= 2 && isScalarArg(args[0]!) && args.slice(1).every((arg) => deps.isWasmSafe(arg, true) || isNativeSequenceArg(arg))
     case 'IF':
