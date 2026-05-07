@@ -11,6 +11,14 @@ Current starter tickets as of May 7, 2026:
 - [`#21 docs(agents): add a WorkPaper tool-calling recipe`](https://github.com/proompteng/bilig/issues/21)
 - [`#22 docs(benchmarks): add a local benchmark walkthrough`](https://github.com/proompteng/bilig/issues/22)
 - [`#23 docs(headless): add an unsupported-formula troubleshooting recipe`](https://github.com/proompteng/bilig/issues/23)
+- [`#29 workbook import dispatcher rejects MIME types with parameters or different case`](https://github.com/proompteng/bilig/issues/29)
+
+Useful filters:
+
+- [`good first issue`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22)
+- [`area: import-export`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22area%3A%20import-export%22)
+- [`area: formula`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22area%3A%20formula%22)
+- [`needs reduced fixture`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22needs%20reduced%20fixture%22)
 
 ## What Makes A Good Starter Patch
 
