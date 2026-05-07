@@ -8,6 +8,8 @@
 **bilig is a local-first spreadsheet engine and runtime for browser workbooks,
 agent workflows, and collaborative sync.**
 
+Project site: <https://proompteng.github.io/bilig/>
+
 It is not a table widget. The repo contains a real workbook engine, formula
 parser/compiler, React workbook reconciler, reusable grid shell, binary sync
 protocol, agent API, browser/server persistence layers, and a conservative

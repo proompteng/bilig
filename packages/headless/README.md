@@ -74,6 +74,7 @@ pnpm add @bilig/headless
 
 Repository:
 
+- Website: <https://proompteng.github.io/bilig/>
 - GitHub: <https://github.com/proompteng/bilig>
 - npm: <https://www.npmjs.com/package/@bilig/headless>
 - runnable example:

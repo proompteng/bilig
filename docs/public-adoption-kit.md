@@ -30,6 +30,7 @@ Shorter version:
 ## Proof Points To Link
 
 - GitHub: <https://github.com/proompteng/bilig>
+- Website: <https://proompteng.github.io/bilig/>
 - npm: <https://www.npmjs.com/package/@bilig/headless>
 - Package README:
   [`packages/headless/README.md`](../packages/headless/README.md)

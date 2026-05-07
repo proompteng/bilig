@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>bilig | headless spreadsheet engine</title>
+    <meta
+      name="description"
+      content="bilig is a headless spreadsheet engine for Node services, coding agents, local-first workbook automation, and formula-backed business workflows."
+    />
+    <meta property="og:title" content="bilig | headless spreadsheet engine" />
+    <meta property="og:description" content="formulas, workbook edits, persistence, and benchmark evidence in one TypeScript package." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://proompteng.github.io/bilig/" />
+    <meta property="og:image" content="https://proompteng.github.io/bilig/assets/github-social-preview.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="bilig | headless spreadsheet engine" />
+    <meta name="twitter:description" content="a headless spreadsheet engine for Node services and coding agents." />
+    <meta name="twitter:image" content="https://proompteng.github.io/bilig/assets/github-social-preview.png" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #080a0d;
+        --surface: #10151c;
+        --surface-2: #151b24;
+        --text: #f4f7fb;
+        --muted: #b6c0cb;
+        --dim: #84909e;
+        --border: #2a3340;
+        --accent: #ff5a3d;
+        --accent-2: #73d18a;
+        --link: #8ab4ff;
+        --shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+        line-height: 1.55;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .shell {
+        min-height: 100vh;
+      }
+
+      .nav {
+        position: fixed;
+        z-index: 10;
+        top: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 16px max(24px, calc((100vw - 1120px) / 2));
+        background: rgba(8, 10, 13, 0.76);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(14px);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 720;
+      }
+
+      .mark {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        background: #d91515;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+      }
+
+      .mark::before {
+        width: 12px;
+        height: 15px;
+        background: #fff;
+        content: '';
+        clip-path: polygon(0 0, 100% 0, 100% 100%, 58% 100%, 58% 34%, 42% 34%, 42% 100%, 0 100%);
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .nav-links a:hover,
+      .nav-links a:focus-visible {
+        color: var(--text);
+      }
+
+      .hero {
+        min-height: 90vh;
+        display: grid;
+        align-items: end;
+        padding: 124px max(24px, calc((100vw - 1120px) / 2)) 70px;
+        background:
+          linear-gradient(180deg, rgba(8, 10, 13, 0.12) 0%, rgba(8, 10, 13, 0.94) 82%),
+          linear-gradient(90deg, #080a0d 0%, #080a0d 48%, rgba(8, 10, 13, 0.7) 72%, rgba(8, 10, 13, 0.28) 100%),
+          url('./assets/github-social-preview.png') center / cover no-repeat;
+      }
+
+      .hero-content {
+        max-width: 940px;
+      }
+
+      .eyebrow {
+        color: var(--accent-2);
+        font-size: 13px;
+        font-weight: 680;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        max-width: 900px;
+        margin-top: 18px;
+        font-size: clamp(42px, 6.4vw, 84px);
+        line-height: 0.96;
+        letter-spacing: 0;
+      }
+
+      .lede {
+        max-width: 690px;
+        margin-top: 24px;
+        color: var(--muted);
+        font-size: clamp(18px, 2.3vw, 24px);
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 32px;
+      }
+
+      .button {
+        display: inline-flex;
+        min-height: 42px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 8px;
+        padding: 10px 16px;
+        background: rgba(255, 255, 255, 0.1);
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 680;
+      }
+
+      .button.primary {
+        background: var(--text);
+        color: #10151c;
+      }
+
+      .button:hover,
+      .button:focus-visible {
+        border-color: rgba(255, 255, 255, 0.5);
+      }
+
+      main {
+        display: grid;
+        gap: 74px;
+        padding: 58px max(24px, calc((100vw - 1120px) / 2)) 86px;
+      }
+
+      section {
+        display: grid;
+        gap: 24px;
+      }
+
+      .section-head {
+        display: grid;
+        max-width: 720px;
+        gap: 10px;
+      }
+
+      h2 {
+        font-size: clamp(28px, 4vw, 44px);
+        line-height: 1.05;
+        letter-spacing: 0;
+      }
+
+      .section-head p,
+      .muted {
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        padding: 20px;
+      }
+
+      .card h3 {
+        margin-bottom: 10px;
+        font-size: 17px;
+      }
+
+      .card p,
+      .card li {
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .card ul {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding-left: 18px;
+      }
+
+      .proof {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 14px;
+        align-items: stretch;
+      }
+
+      .code {
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #06080b;
+        padding: 20px;
+      }
+
+      pre {
+        margin: 0;
+        color: #dbe8f6;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        white-space: pre;
+      }
+
+      .metric-list {
+        display: grid;
+        gap: 14px;
+      }
+
+      .metric {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface-2);
+        padding: 18px;
+      }
+
+      .metric strong {
+        display: block;
+        color: var(--text);
+        font-size: 28px;
+        line-height: 1;
+      }
+
+      .metric span {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .links {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .link-row {
+        display: flex;
+        min-height: 54px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        padding: 14px 16px;
+        color: var(--text);
+        font-weight: 650;
+      }
+
+      .link-row span {
+        color: var(--dim);
+        font-size: 13px;
+        font-weight: 520;
+      }
+
+      .link-row:hover,
+      .link-row:focus-visible {
+        border-color: var(--link);
+      }
+
+      footer {
+        border-top: 1px solid var(--border);
+        padding: 24px max(24px, calc((100vw - 1120px) / 2));
+        color: var(--dim);
+        font-size: 13px;
+      }
+
+      @media (max-width: 820px) {
+        .nav {
+          position: static;
+          flex-direction: column;
+          align-items: flex-start;
+          padding: 18px 20px;
+        }
+
+        .nav-links {
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+
+        .hero {
+          min-height: 82vh;
+          padding: 72px 20px 54px;
+          background:
+            linear-gradient(180deg, rgba(8, 10, 13, 0.4) 0%, rgba(8, 10, 13, 0.98) 82%),
+            linear-gradient(90deg, rgba(8, 10, 13, 0.98) 0%, rgba(8, 10, 13, 0.86) 100%),
+            url('./assets/github-social-preview.png') center / cover no-repeat;
+        }
+
+        main {
+          gap: 48px;
+          padding: 46px 20px 64px;
+        }
+
+        .grid,
+        .proof,
+        .links {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <nav class="nav" aria-label="primary">
+        <a class="brand" href="https://github.com/proompteng/bilig">
+          <span class="mark" aria-hidden="true"></span>
+          <span>bilig</span>
+        </a>
+        <div class="nav-links">
+          <a href="#quickstart">quickstart</a>
+          <a href="#proof">proof</a>
+          <a href="https://www.npmjs.com/package/@bilig/headless">npm</a>
+          <a href="https://github.com/proompteng/bilig">github</a>
+        </div>
+      </nav>
+
+      <header class="hero">
+        <div class="hero-content">
+          <p class="eyebrow">headless workbook runtime</p>
+          <h1>bilig runs spreadsheet logic without the spreadsheet ui.</h1>
+          <p class="lede">
+            a TypeScript spreadsheet engine for Node services, coding agents, local-first automation, formulas, structural edits,
+            persistence, and benchmarkable workbook workflows.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="https://www.npmjs.com/package/@bilig/headless">install @bilig/headless</a>
+            <a class="button" href="https://github.com/proompteng/bilig">star on github</a>
+            <a class="button" href="https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper">run the example</a>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section aria-labelledby="why">
+          <div class="section-head">
+            <h2 id="why">use it when a grid is the wrong abstraction.</h2>
+            <p>
+              bilig exposes workbook behavior as a runtime API, so services and agents can work with formulas and workbook state directly.
+            </p>
+          </div>
+          <div class="grid">
+            <article class="card">
+              <h3>formulas and workbook edits</h3>
+              <p>create sheets, set values, evaluate formulas, move cells, undo, redo, snapshot, restore, and inspect workbook state.</p>
+            </article>
+            <article class="card">
+              <h3>agent-addressable runtime</h3>
+              <p>stable request and document shapes let coding agents mutate spreadsheet state without screen scraping a browser grid.</p>
+            </article>
+            <article class="card">
+              <h3>local-first persistence</h3>
+              <p>
+                round-trip workbook documents through explicit serialization and restoration helpers built for deterministic service
+                workflows.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section id="quickstart" aria-labelledby="quickstart-title">
+          <div class="section-head">
+            <h2 id="quickstart-title">quickstart</h2>
+            <p>install the package and build a workbook from plain arrays.</p>
+          </div>
+          <div class="proof">
+            <div class="code">
+              <pre><code>pnpm add @bilig/headless</code></pre>
+            </div>
+            <div class="code">
+              <pre><code>import { WorkPaper } from "@bilig/headless";
+
+const workbook = WorkPaper.buildFromSheets({
+  Sheet1: [
+    [10, 20, "=A1+B1"],
+    [7, "=A2*3", null],
+  ],
+});
+
+const sheet = workbook.getSheetId("Sheet1");
+console.log(workbook.getCellValue({ sheet, row: 0, col: 2 }));</code></pre>
+            </div>
+          </div>
+        </section>
+
+        <section id="proof" aria-labelledby="proof-title">
+          <div class="section-head">
+            <h2 id="proof-title">evidence, not vibes.</h2>
+            <p>the public package is backed by repository examples, CI gates, benchmark artifacts, and honest scope notes.</p>
+          </div>
+          <div class="proof">
+            <div class="metric-list">
+              <div class="metric">
+                <strong>46/46</strong>
+                <span>mean wins in checked-in comparable WorkPaper benchmark rows against HyperFormula-style workloads.</span>
+              </div>
+              <div class="metric">
+                <strong>node 24+</strong>
+                <span>ESM-first package contract for services, tests, and agent tool calls.</span>
+              </div>
+            </div>
+            <article class="card">
+              <h3>current scope</h3>
+              <ul>
+                <li>programmatic workbook creation and formula evaluation</li>
+                <li>structural edits and persistence round trips</li>
+                <li>external-consumer smoke example</li>
+                <li>not a finished Excel clone or full formula-parity claim</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section aria-labelledby="links-title">
+          <div class="section-head">
+            <h2 id="links-title">follow the artifacts.</h2>
+          </div>
+          <div class="links">
+            <a class="link-row" href="https://github.com/proompteng/bilig"> github repository <span>source, issues, discussions</span> </a>
+            <a class="link-row" href="https://www.npmjs.com/package/@bilig/headless"> npm package <span>@bilig/headless</span> </a>
+            <a class="link-row" href="https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper">
+              runnable example <span>external-consumer smoke path</span>
+            </a>
+            <a class="link-row" href="https://github.com/proompteng/bilig/blob/main/docs/public-adoption-kit.md">
+              adoption kit <span>evaluation notes and proof links</span>
+            </a>
+          </div>
+        </section>
+      </main>
+
+      <footer>mit licensed. built in the open at github.com/proompteng/bilig.</footer>
+    </div>
+  </body>
+</html>
