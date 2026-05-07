@@ -86,6 +86,138 @@ export interface MetadataResolutionContext {
   resolveSpillReference: (sheetName: string | undefined, address: string) => FormulaNode | undefined
 }
 
+type MetadataFormulaValueContext = 'scalar' | 'array'
+
+const ARRAY_CONTEXT_ALL_ARGUMENT_CALLEES = new Set([
+  'SUM',
+  'AVG',
+  'AVERAGE',
+  'MIN',
+  'MAX',
+  'COUNT',
+  'COUNTA',
+  'COUNTBLANK',
+  'PRODUCT',
+  'SUMPRODUCT',
+  'SUMSQ',
+  'GEOMEAN',
+  'HARMEAN',
+  'STDEV',
+  'STDEV.P',
+  'STDEV.S',
+  'STDEVA',
+  'STDEVP',
+  'STDEVPA',
+  'VAR',
+  'VAR.P',
+  'VAR.S',
+  'VARA',
+  'VARP',
+  'VARPA',
+  'SKEW',
+  'SKEW.P',
+  'KURT',
+  'AND',
+  'OR',
+  'BYROW',
+  'BYCOL',
+  'MAP',
+  'SCAN',
+  'MAKEARRAY',
+  'MMULT',
+  'SLOPE',
+  'INTERCEPT',
+  'CORREL',
+  'COVAR',
+  'COVARIANCE.P',
+  'COVARIANCE.S',
+  'FORECAST',
+  'FORECAST.LINEAR',
+  'LINEST',
+  'LOGEST',
+  'TREND',
+  'GROWTH',
+])
+
+const ARRAY_CONTEXT_ARGUMENT_INDEXES = new Map<string, ReadonlySet<number>>([
+  ['SINGLE', new Set([0])],
+  ['SUMIF', new Set([0, 2])],
+  ['SUMIFS', new Set([0])],
+  ['COUNTIF', new Set([0])],
+  ['COUNTIFS', new Set([0])],
+  ['AVERAGEIF', new Set([0, 2])],
+  ['AVERAGEIFS', new Set([0])],
+  ['MINIFS', new Set([0])],
+  ['MAXIFS', new Set([0])],
+  ['SUBTOTAL', new Set([1])],
+  ['AGGREGATE', new Set([2])],
+  ['INDEX', new Set([0])],
+  ['MATCH', new Set([1])],
+  ['XMATCH', new Set([1])],
+  ['LOOKUP', new Set([1, 2])],
+  ['VLOOKUP', new Set([1])],
+  ['HLOOKUP', new Set([1])],
+  ['XLOOKUP', new Set([1, 2])],
+  ['FILTER', new Set([0, 1])],
+  ['SORT', new Set([0])],
+  ['SORTBY', new Set([0, 1])],
+  ['UNIQUE', new Set([0])],
+  ['TAKE', new Set([0])],
+  ['DROP', new Set([0])],
+  ['CHOOSECOLS', new Set([0])],
+  ['CHOOSEROWS', new Set([0])],
+  ['TOCOL', new Set([0])],
+  ['TOROW', new Set([0])],
+  ['WRAPROWS', new Set([0])],
+  ['WRAPCOLS', new Set([0])],
+  ['TRANSPOSE', new Set([0])],
+  ['TRIMRANGE', new Set([0])],
+  ['EXPAND', new Set([0])],
+  ['FREQUENCY', new Set([0, 1])],
+  ['MODE.MULT', new Set([0])],
+  ['IRR', new Set([0])],
+  ['MIRR', new Set([0])],
+  ['XIRR', new Set([0, 1])],
+  ['XNPV', new Set([1, 2])],
+  ['ROW', new Set([0])],
+  ['COLUMN', new Set([0])],
+  ['FORMULA', new Set([0])],
+  ['FORMULATEXT', new Set([0])],
+  ['CELL', new Set([1])],
+])
+
+function callArgumentValueContext(
+  callee: string,
+  argIndex: number,
+  parentContext: MetadataFormulaValueContext,
+): MetadataFormulaValueContext {
+  const normalized = callee.trim().toUpperCase()
+  if (
+    ARRAY_CONTEXT_ALL_ARGUMENT_CALLEES.has(normalized) ||
+    ARRAY_CONTEXT_ARGUMENT_INDEXES.get(normalized)?.has(argIndex) ||
+    ((normalized === 'SUMIFS' || normalized === 'AVERAGEIFS' || normalized === 'MINIFS' || normalized === 'MAXIFS') &&
+      (argIndex === 0 || argIndex % 2 === 1)) ||
+    (normalized === 'COUNTIFS' && argIndex % 2 === 0) ||
+    (normalized === 'SUBTOTAL' && argIndex >= 1) ||
+    (normalized === 'AGGREGATE' && argIndex >= 2) ||
+    (normalized === 'SORTBY' && (argIndex === 0 || argIndex % 2 === 1))
+  ) {
+    return 'array'
+  }
+  return parentContext
+}
+
+function maybeImplicitIntersectRangeName(node: FormulaNode, valueContext: MetadataFormulaValueContext): FormulaNode {
+  if (valueContext !== 'scalar' || node.kind !== 'RangeRef') {
+    return node
+  }
+  return {
+    kind: 'CallExpr',
+    callee: 'SINGLE',
+    args: [node],
+  }
+}
+
 export function definedNameValuesEqual(left: WorkbookDefinedNameValueSnapshot, right: WorkbookDefinedNameValueSnapshot): boolean {
   if (left === right) {
     return true
@@ -150,6 +282,7 @@ export function resolveMetadataReferencesInAst(
   node: FormulaNode,
   context: MetadataResolutionContext,
   activeNames = new Set<string>(),
+  valueContext: MetadataFormulaValueContext = 'scalar',
 ): { node: FormulaNode; fullyResolved: boolean; substituted: boolean } {
   switch (node.kind) {
     case 'NumberLiteral':
@@ -181,8 +314,12 @@ export function resolveMetadataReferencesInAst(
       }
       const nextActiveNames = new Set(activeNames)
       nextActiveNames.add(normalized)
-      const resolved = resolveMetadataReferencesInAst(replacement, context, nextActiveNames)
-      return { node: resolved.node, fullyResolved: resolved.fullyResolved, substituted: true }
+      const resolved = resolveMetadataReferencesInAst(replacement, context, nextActiveNames, valueContext)
+      return {
+        node: maybeImplicitIntersectRangeName(resolved.node, valueContext),
+        fullyResolved: resolved.fullyResolved,
+        substituted: true,
+      }
     }
     case 'StructuredRef': {
       const replacement =
@@ -196,7 +333,7 @@ export function resolveMetadataReferencesInAst(
       return { node: replacement, fullyResolved: true, substituted: true }
     }
     case 'UnaryExpr': {
-      const resolved = resolveMetadataReferencesInAst(node.argument, context, activeNames)
+      const resolved = resolveMetadataReferencesInAst(node.argument, context, activeNames, valueContext)
       return {
         node: resolved.substituted ? { ...node, argument: resolved.node } : node,
         fullyResolved: resolved.fullyResolved,
@@ -204,8 +341,8 @@ export function resolveMetadataReferencesInAst(
       }
     }
     case 'BinaryExpr': {
-      const left = resolveMetadataReferencesInAst(node.left, context, activeNames)
-      const right = resolveMetadataReferencesInAst(node.right, context, activeNames)
+      const left = resolveMetadataReferencesInAst(node.left, context, activeNames, valueContext)
+      const right = resolveMetadataReferencesInAst(node.right, context, activeNames, valueContext)
       return {
         node: left.substituted || right.substituted ? { ...node, left: left.node, right: right.node } : node,
         fullyResolved: left.fullyResolved && right.fullyResolved,
@@ -215,8 +352,13 @@ export function resolveMetadataReferencesInAst(
     case 'CallExpr': {
       let fullyResolved = true
       let substituted = false
-      const args = node.args.map((arg) => {
-        const resolved = resolveMetadataReferencesInAst(arg, context, activeNames)
+      const args = node.args.map((arg, index) => {
+        const resolved = resolveMetadataReferencesInAst(
+          arg,
+          context,
+          activeNames,
+          callArgumentValueContext(node.callee, index, valueContext),
+        )
         fullyResolved = fullyResolved && resolved.fullyResolved
         substituted = substituted || resolved.substituted
         return resolved.node
@@ -228,11 +370,11 @@ export function resolveMetadataReferencesInAst(
       }
     }
     case 'InvokeExpr': {
-      const callee = resolveMetadataReferencesInAst(node.callee, context, activeNames)
+      const callee = resolveMetadataReferencesInAst(node.callee, context, activeNames, valueContext)
       let fullyResolved = callee.fullyResolved
       let substituted = callee.substituted
       const args = node.args.map((arg) => {
-        const resolved = resolveMetadataReferencesInAst(arg, context, activeNames)
+        const resolved = resolveMetadataReferencesInAst(arg, context, activeNames, valueContext)
         fullyResolved = fullyResolved && resolved.fullyResolved
         substituted = substituted || resolved.substituted
         return resolved.node

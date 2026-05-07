@@ -133,6 +133,46 @@ describe('engine metadata utils', () => {
     })
   })
 
+  it('implicitly intersects range-valued defined names in scalar contexts while preserving range consumers', () => {
+    const resolved = resolveMetadataReferencesInAst(
+      {
+        kind: 'BinaryExpr',
+        operator: '+',
+        left: { kind: 'NameRef', name: 'RateCurve' },
+        right: {
+          kind: 'CallExpr',
+          callee: 'SUM',
+          args: [{ kind: 'NameRef', name: 'RateCurve' }],
+        },
+      },
+      {
+        resolveName: (name) =>
+          name === 'RateCurve' ? { kind: 'range-ref', sheetName: 'Model', startAddress: 'C4', endAddress: 'E4' } : undefined,
+        resolveStructuredReference: () => undefined,
+        resolveSpillReference: () => undefined,
+      },
+    )
+
+    expect(resolved).toEqual({
+      fullyResolved: true,
+      substituted: true,
+      node: {
+        kind: 'BinaryExpr',
+        operator: '+',
+        left: {
+          kind: 'CallExpr',
+          callee: 'SINGLE',
+          args: [{ kind: 'RangeRef', refKind: 'cells', sheetName: 'Model', start: 'C4', end: 'E4' }],
+        },
+        right: {
+          kind: 'CallExpr',
+          callee: 'SUM',
+          args: [{ kind: 'RangeRef', refKind: 'cells', sheetName: 'Model', start: 'C4', end: 'E4' }],
+        },
+      },
+    })
+  })
+
   it('treats broken formula metadata and unresolved scalar names predictably', () => {
     expect(
       resolveMetadataReferencesInAst(

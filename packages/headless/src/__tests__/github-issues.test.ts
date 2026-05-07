@@ -530,6 +530,89 @@ describe('GitHub issue reductions', () => {
     expectNumber(cellValue(workbook, 'Sheet1', 6, 4), 30)
   })
 
+  it('resolves issues #101, #107, and #109 range-valued defined names with scalar implicit intersection', () => {
+    const rows = Array.from({ length: 43 }, () => Array.from<TestCell>({ length: 8 }).fill(null))
+    rows[2][2] = 1
+    rows[2][3] = 2
+    rows[2][4] = 3
+    rows[3][2] = 0.05
+    rows[3][3] = 0.052
+    rows[3][4] = 0.055
+    rows[4][5] = 2
+    rows[4][3] = '=TimeValues^3'
+    rows[5][5] = 3
+    rows[6][0] = 1
+    rows[6][2] = '=1/(1+rate+(Year_=Year)*0.0001)^Year'
+    rows[6][5] = 5
+    rows[6][6] = '=2*3*TimeValues^1'
+    rows[7][0] = 2
+    rows[7][3] = '=1/(1+rate+(Year_=Year)*0.0001)^Year'
+    rows[7][5] = 7
+    rows[7][6] = '="a_"&TimeValues'
+    rows[8][0] = 3
+    rows[8][4] = '=1/(1+rate+(Year_=Year)*0.0001)^Year'
+    rows[9][6] = '=SUM(TimeValues)'
+    rows[40][2] = 10
+    rows[40][3] = 20
+    rows[41][2] = '=HorizontalValues*C43'
+    rows[41][3] = '=HorizontalValues*D43'
+    rows[41][5] = '=INDEX(HorizontalValues,1,2)'
+    rows[41][6] = '=SUM(HorizontalValues)'
+    rows[42][2] = 2
+    rows[42][3] = 3
+
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: {
+        name: 'range-defined-name-implicit-intersection',
+        metadata: {
+          definedNames: [
+            { name: 'rate', value: { kind: 'range-ref', sheetName: 'Model', startAddress: 'C4', endAddress: 'E4' } },
+            { name: 'Year', value: { kind: 'range-ref', sheetName: 'Model', startAddress: 'C3', endAddress: 'E3' } },
+            { name: 'Year_', value: { kind: 'range-ref', sheetName: 'Model', startAddress: 'A7', endAddress: 'A9' } },
+            { name: 'TimeValues', value: { kind: 'range-ref', sheetName: 'Model', startAddress: 'F5', endAddress: 'F8' } },
+            {
+              name: 'HorizontalValues',
+              value: { kind: 'range-ref', sheetName: 'Model', startAddress: 'C41', endAddress: 'D41' },
+            },
+          ],
+        },
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'Model',
+          order: 0,
+          cells: rows.flatMap((row, rowIndex) =>
+            row.flatMap((content, colIndex) => {
+              if (content === null) {
+                return []
+              }
+              const address = `${String.fromCharCode(65 + colIndex)}${rowIndex + 1}`
+              return typeof content === 'string' && content.startsWith('=')
+                ? [{ address, formula: content.slice(1) }]
+                : [{ address, value: content }]
+            }),
+          ),
+        },
+      ],
+    }
+
+    const workbook = WorkPaper.buildFromSnapshot(snapshot, { maxRows: 80, maxColumns: 16, useColumnIndex: true })
+
+    expectNumberClose(cellValue(workbook, 'Model', 6, 2), 0.9522902580706599)
+    expectNumberClose(cellValue(workbook, 'Model', 7, 3), 0.9034122159454043)
+    expectNumberClose(cellValue(workbook, 'Model', 8, 4), 0.8513715450616418)
+    expectNumber(cellValue(workbook, 'Model', 4, 3), 8)
+    expectNumber(cellValue(workbook, 'Model', 6, 6), 30)
+    expectString(cellValue(workbook, 'Model', 7, 6), 'a_7')
+    expectNumber(cellValue(workbook, 'Model', 9, 6), 17)
+    expectNumber(cellValue(workbook, 'Model', 41, 2), 20)
+    expectNumber(cellValue(workbook, 'Model', 41, 3), 60)
+    expectNumber(cellValue(workbook, 'Model', 41, 5), 20)
+    expectNumber(cellValue(workbook, 'Model', 41, 6), 30)
+  })
+
   it('resolves issue #110 adjacent SLOPE formulas that share an absolute x-range', () => {
     const buildRows = (withFirstSlope: boolean): TestCell[][] => {
       const rows = Array.from({ length: 28 }, () => Array.from<TestCell>({ length: 16 }).fill(null))
