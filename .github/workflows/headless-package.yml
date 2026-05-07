@@ -276,6 +276,12 @@ jobs:
           if [[ -n "${INPUT_TARGET_VERSION:-}" ]]; then
             planner_args="--release-as ${INPUT_TARGET_VERSION} --allow-untagged-baseline"
           fi
+          if [[ "${allow_new_packages_value}" == "true" ]]; then
+            planner_args="${planner_args:+${planner_args} }--allow-new-npm-packages"
+          fi
+          if [[ "${dry_run_value}" == "true" ]]; then
+            planner_args="${planner_args:+${planner_args} }--dry-run"
+          fi
 
           echo "npm_tag=$npm_tag_input" >> "$GITHUB_OUTPUT"
           echo "dry_run=$dry_run_value" >> "$GITHUB_OUTPUT"

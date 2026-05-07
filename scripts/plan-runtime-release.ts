@@ -6,9 +6,11 @@ import { dirname, resolve } from 'node:path'
 import {
   assertAlignedVersions,
   compareStableSemver,
+  highestPublishedStableSemver,
   highestStableSemver,
   loadRuntimePackages,
   parseStableSemver,
+  planRuntimePackagePublishProvisioning,
   resolvePublishedRuntimePackageBaseline,
   type RuntimePackagePublishedVersion,
 } from './runtime-package-set.ts'
@@ -33,7 +35,13 @@ interface RuntimeReleasePlan {
   bootstrapRequired: boolean
   manualOverride: boolean
   releaseType: ReleaseType
-  reason: 'bootstrap-required' | 'manual-override' | 'no-runtime-commits' | 'no-release-commits' | 'release-required'
+  reason:
+    | 'bootstrap-required'
+    | 'manual-override'
+    | 'no-runtime-commits'
+    | 'no-release-commits'
+    | 'release-required'
+    | 'npm-packages-unprovisioned'
   targetVersion: string | null
   tagName: string | null
   notesMarkdown: string | null
@@ -61,24 +69,38 @@ const requestedReleaseAs = readOptionalStringArg('release-as')
 const requestedNotesFile = readOptionalStringArg('notes-file')
 const requestedGithubOutput = readOptionalStringArg('github-output')
 const allowManualBootstrap = cliArgs.has('allow-untagged-baseline')
+const allowNewNpmPackages = cliArgs.has('allow-new-npm-packages')
+const dryRun = cliArgs.has('dry-run')
 
 const runtimePackages = loadRuntimePackages(rootDir)
 const runtimeManifestVersion = assertAlignedVersions(runtimePackages)
 const latestReachableTag = getLatestReachableRuntimeTag()
-const latestPublishedVersion = resolvePublishedRuntimePackageBaseline(
-  readPublishedRuntimePackageVersions(runtimePackages.map((runtimePackage) => runtimePackage.name)),
-  {
-    allowPartialPublishedSet: requestedReleaseAs !== null && latestReachableTag !== null,
-  },
-)
-
-const runtimeReleasePlan = buildRuntimeReleasePlan({
-  manifestVersion: runtimeManifestVersion,
-  publishedVersion: latestPublishedVersion,
-  lastTag: latestReachableTag,
-  releaseAs: requestedReleaseAs,
-  allowUntaggedBaseline: allowManualBootstrap,
+const publishedRuntimeVersions = readPublishedRuntimePackageVersions(runtimePackages.map((runtimePackage) => runtimePackage.name))
+const provisioningPlan = planRuntimePackagePublishProvisioning({
+  publishedVersions: publishedRuntimeVersions,
+  allowNewNpmPackages,
+  dryRun,
 })
+const latestPublishedVersion = provisioningPlan.publishAllowed
+  ? resolvePublishedRuntimePackageBaseline(publishedRuntimeVersions, {
+      allowPartialPublishedSet: dryRun || allowNewNpmPackages || (requestedReleaseAs !== null && latestReachableTag !== null),
+    })
+  : highestPublishedStableSemver(publishedRuntimeVersions.map((entry) => entry.version))
+
+const runtimeReleasePlan = provisioningPlan.publishAllowed
+  ? buildRuntimeReleasePlan({
+      manifestVersion: runtimeManifestVersion,
+      publishedVersion: latestPublishedVersion,
+      lastTag: latestReachableTag,
+      releaseAs: requestedReleaseAs,
+      allowUntaggedBaseline: allowManualBootstrap,
+    })
+  : buildUnprovisionedRuntimeReleasePlan({
+      manifestVersion: runtimeManifestVersion,
+      publishedVersion: latestPublishedVersion,
+      lastTag: latestReachableTag,
+      releaseAs: requestedReleaseAs,
+    })
 
 if (requestedNotesFile && runtimeReleasePlan.notesMarkdown) {
   ensureParentDir(requestedNotesFile)
@@ -91,6 +113,28 @@ if (requestedGithubOutput) {
 }
 
 console.log(JSON.stringify(runtimeReleasePlan, null, 2))
+
+function buildUnprovisionedRuntimeReleasePlan(input: {
+  manifestVersion: string
+  publishedVersion: string | null
+  lastTag: string | null
+  releaseAs: string | null
+}): RuntimeReleasePlan {
+  return {
+    manifestVersion: input.manifestVersion,
+    publishedVersion: input.publishedVersion,
+    lastTag: input.lastTag,
+    releaseNeeded: false,
+    bootstrapRequired: false,
+    manualOverride: Boolean(input.releaseAs),
+    releaseType: 'none',
+    reason: 'npm-packages-unprovisioned',
+    targetVersion: null,
+    tagName: null,
+    notesMarkdown: null,
+    commits: [],
+  }
+}
 
 function buildRuntimeReleasePlan(input: {
   manifestVersion: string
