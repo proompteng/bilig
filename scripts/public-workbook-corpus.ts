@@ -26,7 +26,11 @@ import {
 import { withPublicWorkbookCorpusCacheLock } from './public-workbook-corpus-lock.ts'
 import { formatByteSize, startChildRssWatchdog, terminateChildProcess } from './public-workbook-corpus-process.ts'
 import { roundTripSemanticsDigest } from './public-workbook-corpus-roundtrip.ts'
-import { buildPublicWorkbookCorpusScorecardFromCases, validatePublicWorkbookCorpusScorecard } from './public-workbook-corpus-scorecard.ts'
+import {
+  buildPublicWorkbookCorpusScorecardFromCases,
+  validatePublicWorkbookCorpusScorecard,
+  validatePublicWorkbookCorpusScorecardManifestCoverage,
+} from './public-workbook-corpus-scorecard.ts'
 import { defaultFinancialWorkbookQueries } from './public-workbook-corpus-topics.ts'
 import {
   indexReusablePublicWorkbookCorpusCases,
@@ -852,6 +856,7 @@ async function main(): Promise<void> {
         ? []
         : readReusablePublicWorkbookCorpusCases([scorecardPath, verifyCheckpointPath])
       const checkpointCasesById = new Map(reusableCases.map((entry) => [entry.id, entry]))
+      const progressIntervalMs = Math.max(1_000, readNumberArg('--verify-progress-interval-ms', 15_000))
       let completedCount = 0
       let latestArtifactId = 'none'
       const startedAt = Date.now()
@@ -860,7 +865,7 @@ async function main(): Promise<void> {
         console.error(
           `Public workbook corpus verify progress: ${String(completedCount)}/${String(manifest.artifacts.length)} completed; latest=${latestArtifactId}; elapsed=${String(elapsedSeconds)}s`,
         )
-      }, 15_000)
+      }, progressIntervalMs)
       progressTimer.unref()
       try {
         const verifiedScorecard = await buildPublicWorkbookCorpusScorecard({
@@ -911,6 +916,12 @@ async function main(): Promise<void> {
   if (command === 'check') {
     const parsed: unknown = JSON.parse(readFileSync(scorecardPath, 'utf8'))
     const scorecard = parsePublicWorkbookCorpusScorecardJson(parsed)
+    if (!readFlagArg('--skip-manifest-check') && existsSync(manifestPath)) {
+      validatePublicWorkbookCorpusScorecardManifestCoverage({
+        scorecard,
+        manifest: readManifest(manifestPath),
+      })
+    }
     if (process.argv.includes('--require-target') && scorecard.summary.remainingToTarget > 0) {
       throw new Error(`Public workbook corpus target incomplete: ${String(scorecard.summary.remainingToTarget)} remaining`)
     }

@@ -81,6 +81,38 @@ export function validatePublicWorkbookCorpusScorecard(scorecard: PublicWorkbookC
   }
 }
 
+export function validatePublicWorkbookCorpusScorecardManifestCoverage(args: {
+  readonly scorecard: PublicWorkbookCorpusScorecard
+  readonly manifest: PublicWorkbookManifest
+}): void {
+  if (args.scorecard.summary.targetWorkbookCount !== args.manifest.targetWorkbookCount) {
+    throw new Error('Public workbook corpus scorecard target count does not match the manifest')
+  }
+  if (args.scorecard.summary.sourceCount !== args.manifest.sources.length) {
+    throw new Error('Public workbook corpus scorecard source count does not match the manifest')
+  }
+  if (args.scorecard.summary.cachedWorkbookCount !== args.manifest.artifacts.length) {
+    throw new Error('Public workbook corpus scorecard cached workbook count does not match the manifest')
+  }
+  if (args.scorecard.cases.length !== args.manifest.artifacts.length) {
+    throw new Error('Public workbook corpus scorecard cases do not cover every manifest artifact')
+  }
+
+  args.manifest.artifacts.forEach((artifact, index) => {
+    const corpusCase = args.scorecard.cases[index]
+    if (
+      !corpusCase ||
+      corpusCase.id !== artifact.id ||
+      corpusCase.sourceId !== artifact.sourceId ||
+      corpusCase.sourceUrl !== artifact.sourceUrl ||
+      corpusCase.sha256 !== artifact.sha256 ||
+      corpusCase.byteSize !== artifact.byteSize
+    ) {
+      throw new Error(`Public workbook corpus scorecard case ${artifact.id} does not match the manifest artifact`)
+    }
+  })
+}
+
 export function countFormulaOracleMatches(cases: readonly PublicWorkbookCorpusCase[]): number {
   return cases.reduce(
     (sum, entry) => sum + Math.max(0, entry.validation.formulaOracleComparisons - entry.validation.formulaOracleMismatches.length),

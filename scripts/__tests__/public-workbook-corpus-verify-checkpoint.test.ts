@@ -12,6 +12,7 @@ import {
   readReusablePublicWorkbookCorpusCases,
   writePublicWorkbookCorpusVerificationCheckpoint,
 } from '../public-workbook-corpus-verify-checkpoint.ts'
+import { validatePublicWorkbookCorpusScorecardManifestCoverage } from '../public-workbook-corpus-scorecard.ts'
 import type { PublicWorkbookArtifact, PublicWorkbookCorpusCase, PublicWorkbookManifest } from '../public-workbook-corpus-types.ts'
 
 describe('public workbook corpus verification checkpoints', () => {
@@ -72,6 +73,24 @@ describe('public workbook corpus verification checkpoints', () => {
     })
 
     expect(readReusablePublicWorkbookCorpusCases([checkpointPath]).map((entry) => entry.id)).toEqual(['workbook-a', 'workbook-b'])
+  })
+
+  it('rejects scorecards that do not cover the current manifest artifacts', async () => {
+    const artifactA = workbookArtifact('workbook-a')
+    const artifactB = workbookArtifact('workbook-b')
+    const scorecard = await buildPublicWorkbookCorpusScorecard({
+      manifest: manifestWithArtifacts([artifactA]),
+      cacheDir: mkdtempSync(join(tmpdir(), 'public-workbook-corpus-coverage-')),
+      generatedAt: '2026-05-07T01:00:00.000Z',
+      reusableCases: [passedCase(artifactA, true)],
+    })
+
+    expect(() =>
+      validatePublicWorkbookCorpusScorecardManifestCoverage({
+        scorecard,
+        manifest: manifestWithArtifacts([artifactA, artifactB]),
+      }),
+    ).toThrow('Public workbook corpus scorecard source count does not match the manifest')
   })
 })
 
