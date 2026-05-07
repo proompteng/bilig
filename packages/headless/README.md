@@ -87,6 +87,8 @@ Repository:
   [`examples/headless-workpaper`](../../examples/headless-workpaper)
 - public adoption kit:
   [`docs/public-adoption-kit.md`](../../docs/public-adoption-kit.md)
+- revenue-model article:
+  [`docs/building-a-revenue-model-with-headless-workpaper.md`](../../docs/building-a-revenue-model-with-headless-workpaper.md)
 
 Inside this monorepo:
 

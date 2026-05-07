@@ -90,6 +90,12 @@ function runNodeSmoke(
     persistedSheets: string[]
     saveFileBytes: number
   }
+  scenarios: {
+    afterEdit: RevenueScenarioSummary
+    beforeEdit: RevenueScenarioSummary
+    persistedSheets: string[]
+    serializedBytes: number
+  }
   output: {
     afterAgentEdit: {
       enterpriseArpa: number
@@ -113,14 +119,17 @@ function runNodeSmoke(
   copyFileSync(join(headlessExampleDir, 'package.json'), join(projectDir, 'package.json'))
   copyFileSync(join(headlessExampleDir, 'revenue-plan.mjs'), join(projectDir, 'revenue-plan.mjs'))
   copyFileSync(join(headlessExampleDir, 'persistence-roundtrip.mjs'), join(projectDir, 'persistence-roundtrip.mjs'))
+  copyFileSync(join(headlessExampleDir, 'revenue-scenarios.mjs'), join(projectDir, 'revenue-scenarios.mjs'))
 
   installTarballs(projectDir, tarballPaths)
   const output = parseNodeSmokeOutput(runTextCommand('node', ['revenue-plan.mjs'], { cwd: projectDir }))
   const persistence = parseNodePersistenceOutput(runTextCommand('node', ['persistence-roundtrip.mjs'], { cwd: projectDir }))
+  const scenarios = parseNodeRevenueScenarioOutput(runTextCommand('node', ['revenue-scenarios.mjs'], { cwd: projectDir }))
 
   return {
     persistence,
     projectDir,
+    scenarios,
     output,
   }
 }
@@ -383,6 +392,70 @@ function parseNodePersistenceOutput(output: string): {
     persistedSheets,
     persistedNamedExpressions,
     saveFileBytes: parsed.saveFileBytes,
+  }
+}
+
+type RevenueScenarioSummary = {
+  annualRunRate: number
+  enterpriseNetMrr: number
+  expansionTarget: number
+  scenarios: {
+    conservativeNetMrr: number
+    expansionNetMrr: number
+    stretchNetMrr: number
+  }
+  totalNetMrr: number
+}
+
+function parseNodeRevenueScenarioOutput(output: string): {
+  afterEdit: RevenueScenarioSummary
+  beforeEdit: RevenueScenarioSummary
+  persistedSheets: string[]
+  serializedBytes: number
+} {
+  const parsed = parseJsonRecord(output, 'node revenue scenario output')
+  const beforeEdit = parseRevenueScenarioSummary(parsed.beforeEdit, 'before-edit revenue scenario output')
+  const afterEdit = parseRevenueScenarioSummary(parsed.afterEdit, 'after-edit revenue scenario output')
+  const persistedSheets = parsed.persistedSheets
+
+  if (!isStringArray(persistedSheets) || typeof parsed.serializedBytes !== 'number' || parsed.serializedBytes <= 0) {
+    throw new Error(`Unexpected node revenue scenario output: ${output}`)
+  }
+
+  return {
+    beforeEdit,
+    afterEdit,
+    persistedSheets,
+    serializedBytes: parsed.serializedBytes,
+  }
+}
+
+function parseRevenueScenarioSummary(value: unknown, context: string): RevenueScenarioSummary {
+  const parsed = parseRecordValue(value, context)
+  const scenarios = parseRecordValue(parsed.scenarios, `${context} scenarios`)
+
+  if (
+    typeof parsed.totalNetMrr !== 'number' ||
+    typeof parsed.annualRunRate !== 'number' ||
+    typeof parsed.enterpriseNetMrr !== 'number' ||
+    typeof parsed.expansionTarget !== 'number' ||
+    typeof scenarios.conservativeNetMrr !== 'number' ||
+    typeof scenarios.expansionNetMrr !== 'number' ||
+    typeof scenarios.stretchNetMrr !== 'number'
+  ) {
+    throw new Error(`Unexpected ${context}: ${JSON.stringify(value)}`)
+  }
+
+  return {
+    totalNetMrr: parsed.totalNetMrr,
+    annualRunRate: parsed.annualRunRate,
+    enterpriseNetMrr: parsed.enterpriseNetMrr,
+    expansionTarget: parsed.expansionTarget,
+    scenarios: {
+      conservativeNetMrr: scenarios.conservativeNetMrr,
+      expansionNetMrr: scenarios.expansionNetMrr,
+      stretchNetMrr: scenarios.stretchNetMrr,
+    },
   }
 }
 

@@ -44,6 +44,8 @@ Shorter version:
   [`docs/why-agents-need-workbook-apis.md`](why-agents-need-workbook-apis.md)
 - Persistence article:
   [`docs/persisting-formula-backed-workpaper-documents-in-node.md`](persisting-formula-backed-workpaper-documents-in-node.md)
+- Revenue-model article:
+  [`docs/building-a-revenue-model-with-headless-workpaper.md`](building-a-revenue-model-with-headless-workpaper.md)
 - GitHub stars growth plan:
   [`docs/github-stars-growth-plan.md`](github-stars-growth-plan.md)
 - Launch post draft:
@@ -141,6 +143,12 @@ With proof:
 > spreadsheet automation. It has npm install docs, a runnable external example,
 > persistence helpers, and checked-in benchmark evidence against
 > HyperFormula-style workloads.
+
+Revenue-model angle:
+
+> `@bilig/headless` can run a multi-sheet revenue model in Node: formulas,
+> scenario inputs, an agent-style edit, persistence, restore, and verified
+> readback without opening a browser grid.
 
 For contributors:
 

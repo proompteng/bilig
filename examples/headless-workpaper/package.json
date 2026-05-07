@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "persistence": "node persistence-roundtrip.mjs",
+    "scenarios": "node revenue-scenarios.mjs",
     "start": "node revenue-plan.mjs"
   },
   "dependencies": {

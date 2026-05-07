@@ -152,6 +152,11 @@ For the benchmark-focused explainer, see
 It states the `46/46` mean-win claim and the known p95 caveat without turning
 the benchmark into a blanket performance claim.
 
+For a runnable revenue-model walkthrough, see
+[`docs/building-a-revenue-model-with-headless-workpaper.md`](docs/building-a-revenue-model-with-headless-workpaper.md)
+and
+[`examples/headless-workpaper/revenue-scenarios.mjs`](examples/headless-workpaper/revenue-scenarios.mjs).
+
 For the researched public-growth plan toward `1000` legitimate GitHub stars,
 see [`docs/github-stars-growth-plan.md`](docs/github-stars-growth-plan.md).
 
