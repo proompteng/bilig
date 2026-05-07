@@ -1,5 +1,6 @@
 import type { EngineCellMutationRef } from '@bilig/core'
 import type { WorkPaperSheetDimensions } from './work-paper-types.js'
+import type { WorkPaperAxisIntervalEditMode, WorkPaperAxisKind } from './work-paper-axis-helpers.js'
 
 export interface WorkPaperSheetDimensionEngine {
   readonly workbook: {
@@ -99,6 +100,61 @@ export class WorkPaperSheetDimensionCache {
       }
       this.expand(ref.sheetId, mutation.row, mutation.col)
     }
+  }
+
+  updateAfterAxisIntervalEdit(
+    axis: WorkPaperAxisKind,
+    mode: WorkPaperAxisIntervalEditMode,
+    sheetId: number,
+    start: number,
+    amount: number,
+  ): void {
+    const cached = this.dimensions.get(sheetId)
+    if (!cached) {
+      return
+    }
+    if (this.sheetHasSpills(sheetId)) {
+      this.invalidate(sheetId)
+      return
+    }
+    const dimension = axis === 'row' ? 'height' : 'width'
+    const current = cached[dimension]
+    if (mode === 'add') {
+      if (start < current) {
+        cached[dimension] = current + amount
+      }
+      return
+    }
+    if (start >= current) {
+      return
+    }
+    if (start + amount < current) {
+      cached[dimension] = current - amount
+      return
+    }
+    this.invalidate(sheetId)
+  }
+
+  updateAfterAxisMove(axis: WorkPaperAxisKind, sheetId: number, start: number, count: number, target: number): void {
+    const cached = this.dimensions.get(sheetId)
+    if (!cached) {
+      return
+    }
+    if (this.sheetHasSpills(sheetId)) {
+      this.invalidate(sheetId)
+      return
+    }
+    const current = axis === 'row' ? cached.height : cached.width
+    const sourceInsideBounds = start < current
+    const targetInsideOrAtBounds = target <= current
+    const sourceEndsInsideBounds = start + count <= current
+    if (!sourceInsideBounds && target >= current) {
+      return
+    }
+    if (sourceInsideBounds && sourceEndsInsideBounds && targetInsideOrAtBounds) {
+      return
+    }
+    this.invalidate(sheetId)
   }
 
   private expand(sheetId: number, row: number, col: number): void {

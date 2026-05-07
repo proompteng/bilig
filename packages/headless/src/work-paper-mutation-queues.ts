@@ -65,7 +65,6 @@ export class WorkPaperMutationQueues {
       potentialNewCells,
       applyCellMutationsAtWithOptions: this.runtime.applyCellMutationsAtWithOptions,
       updateSheetDimensionsAfterCellMutationRefs: this.runtime.updateSheetDimensionsAfterCellMutationRefs,
-      alwaysUpdateDimensions: true,
     })
   }
 

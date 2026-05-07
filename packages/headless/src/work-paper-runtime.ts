@@ -1,4 +1,4 @@
-import { SpreadsheetEngine, type SheetRecord } from '@bilig/core'
+import { SpreadsheetEngine, type EngineCellMutationRef, type SheetRecord } from '@bilig/core'
 import { MAX_COLS, MAX_ROWS, type CellSnapshot, type CellValue } from '@bilig/protocol'
 import { tryLoadInitialLiteralSheet } from './initial-sheet-load.js'
 import { WorkPaperNamedExpressionDoesNotExistError, WorkPaperSheetSizeLimitExceededError } from './work-paper-errors.js'
@@ -72,7 +72,7 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
   protected readonly functionSnapshot = new Map<string, InternalFunctionBinding>()
   protected readonly functionAliasLookup = new Map<string, InternalFunctionBinding>()
   private readonly internalFunctionLookup = new Map<string, InternalFunctionBinding>()
-  readonly internals: WorkPaperInternals
+  private readonly workPaperInternals: WorkPaperInternals
   protected readonly sheetDimensionCache: WorkPaperSheetDimensionCache
   protected config: WorkPaperConfig
   private clipboard: WorkPaperClipboardPayload | null = null
@@ -95,7 +95,7 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
     applyCellMutationsAtWithOptions: (refs, options) => {
       this.engine.applyCellMutationsAtWithOptions(refs, options)
     },
-    updateSheetDimensionsAfterCellMutationRefs: (refs) => this.sheetDimensionCache.updateAfterCellMutationRefs(refs),
+    updateSheetDimensionsAfterCellMutationRefs: (refs) => this.updateSheetDimensionsAfterCellMutationRefs(refs),
   })
   protected readonly runtimeAdapters = createWorkPaperRuntimeAdapters({
     getEngine: () => this.engine,
@@ -223,7 +223,7 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
     this.sheetDimensionCache.invalidateAll()
     this.engineEvents.attach(this.engine)
     this.captureFunctionRegistry()
-    this.internals = createWorkPaperInternals({
+    this.workPaperInternals = createWorkPaperInternals({
       getCellDependents: (reference) => this.getCellDependents(reference),
       getCellPrecedents: (reference) => this.getCellPrecedents(reference),
       getRangeValues: (range) => this.getRangeValues(range),
@@ -243,6 +243,10 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
       validateFormula: (formula) => this.validateFormula(formula),
       getNamedExpressionsFromFormula: (formula) => this.getNamedExpressionsFromFormula(formula),
     })
+  }
+
+  get internals(): WorkPaperInternals {
+    return this.workPaperInternals
   }
 
   static buildEmpty(configInput: WorkPaperConfig = {}, namedExpressions: readonly SerializedWorkPaperNamedExpression[] = []): WorkPaper {
@@ -338,7 +342,7 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
     } else {
       this.engine.deleteColumns(this.sheetName(sheetId), start, amount)
     }
-    this.sheetDimensionCache.invalidate(sheetId)
+    this.sheetDimensionCache.updateAfterAxisIntervalEdit(axis, mode, sheetId, start, amount)
   }
 
   private applyAxisMove(axis: WorkPaperAxisKind, sheetId: number, start: number, count: number, target: number): void {
@@ -347,7 +351,11 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
     } else {
       this.engine.moveColumns(this.sheetName(sheetId), start, count, target)
     }
-    this.sheetDimensionCache.invalidate(sheetId)
+    this.sheetDimensionCache.updateAfterAxisMove(axis, sheetId, start, count, target)
+  }
+
+  private updateSheetDimensionsAfterCellMutationRefs(refs: readonly EngineCellMutationRef[]): void {
+    this.sheetDimensionCache.updateAfterCellMutationRefs(refs)
   }
 
   destroy(): void {
