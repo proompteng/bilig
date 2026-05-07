@@ -2,6 +2,8 @@ import { ErrorCode, ValueTag } from '@bilig/protocol'
 import type { CellSnapshot, LiteralInput } from '@bilig/protocol'
 
 const NUMERIC_RE = /^-?\d+(\.\d+)?$/
+const GROUPED_NUMERIC_RE = /^\d{1,3}(,\d{3})+(\.\d+)?$/
+const PLAIN_POSITIVE_NUMERIC_RE = /^\d+(\.\d+)?$/
 
 interface CsvCellInput {
   formula?: string
@@ -117,5 +119,49 @@ export function parseCsvCellInput(raw: string): CsvCellInput | undefined {
   if (NUMERIC_RE.test(normalized)) {
     return { value: Number(normalized) }
   }
+  const accountingNumber = parseAccountingNumberInput(normalized)
+  if (accountingNumber !== null) {
+    return { value: accountingNumber }
+  }
   return { value: raw }
+}
+
+function parseAccountingNumberInput(normalized: string): number | null {
+  let text = normalized
+  let sign = 1
+
+  if (text.startsWith('(') && text.endsWith(')')) {
+    sign = -1
+    text = text.slice(1, -1).trim()
+  }
+
+  if (text.startsWith('-')) {
+    sign *= -1
+    text = text.slice(1).trim()
+  }
+
+  if (text.startsWith('$')) {
+    text = text.slice(1).trim()
+  }
+
+  if (text.startsWith('-')) {
+    sign *= -1
+    text = text.slice(1).trim()
+  }
+
+  const isPercent = text.endsWith('%')
+  if (isPercent) {
+    text = text.slice(0, -1).trim()
+  }
+
+  if (!PLAIN_POSITIVE_NUMERIC_RE.test(text) && !GROUPED_NUMERIC_RE.test(text)) {
+    return null
+  }
+
+  const parsed = Number(text.replaceAll(',', ''))
+  if (!Number.isFinite(parsed)) {
+    return null
+  }
+
+  return (sign * parsed) / (isPercent ? 100 : 1)
 }

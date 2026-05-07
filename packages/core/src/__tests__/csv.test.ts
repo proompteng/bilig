@@ -84,4 +84,12 @@ describe('csv helpers', () => {
     expect(parseCsvCellInput('001')).toEqual({ value: 1 })
     expect(parseCsvCellInput('hello')).toEqual({ value: 'hello' })
   })
+
+  it('parses common accounting number formats', () => {
+    expect(parseCsvCellInput('$1,234.56')).toEqual({ value: 1234.56 })
+    expect(parseCsvCellInput('12.5%')).toEqual({ value: 0.125 })
+    expect(parseCsvCellInput('-3.25%')).toEqual({ value: -0.0325 })
+    expect(parseCsvCellInput('($987.65)')).toEqual({ value: -987.65 })
+    expect(parseCsvCellInput('(987.65)')).toEqual({ value: -987.65 })
+  })
 })

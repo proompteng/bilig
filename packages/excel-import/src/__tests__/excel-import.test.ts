@@ -718,6 +718,25 @@ describe('excel import', () => {
     })
   })
 
+  it('parses common accounting number formats from csv imports', () => {
+    const imported = importCsv(
+      'Account,Amount,Margin,Variance\nRevenue,"$1,234.56",12.5%,"$1,234.56"\nCOGS,"($987.65)",-3.25%,"(987.65)"',
+      'accounting.csv',
+    )
+
+    expect(imported.warnings).toEqual([])
+    expect(imported.snapshot.sheets[0]?.cells).toEqual(
+      expect.arrayContaining([
+        { address: 'B2', value: 1234.56 },
+        { address: 'C2', value: 0.125 },
+        { address: 'D2', value: 1234.56 },
+        { address: 'B3', value: -987.65 },
+        { address: 'C3', value: -0.0325 },
+        { address: 'D3', value: -987.65 },
+      ]),
+    )
+  })
+
   it('dispatches workbook import by content type', () => {
     const imported = importWorkbookFile(new TextEncoder().encode('A,B\n1,2'), 'dispatch.csv', CSV_CONTENT_TYPE)
 

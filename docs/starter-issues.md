@@ -7,8 +7,6 @@ search indexing.
 Current starter tickets as of May 7, 2026:
 
 - [`#32 CSV import lacks locale delimiter/decimal options for semicolon accounting exports`](https://github.com/proompteng/bilig/issues/32)
-- [`#41 Excel import dispatcher rejects XLSB content type despite direct parser support`](https://github.com/proompteng/bilig/issues/41)
-- [`#46 CSV import leaves common accounting number formats as strings`](https://github.com/proompteng/bilig/issues/46)
 - [`#49 WORKDAY and NETWORKDAYS ignore holiday ranges without diagnostics`](https://github.com/proompteng/bilig/issues/49)
 
 The list intentionally excludes closed issues and broad corpus/parity epics. Add
