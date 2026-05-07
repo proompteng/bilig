@@ -8,6 +8,8 @@ import {
 
 const ALLOWED_BILIG_INSTANCE_METHODS = [
   'dispose',
+  'getCellDisplayValue',
+  'getCellFormulaDiagnostics',
   'getPerformanceCounters',
   'offDetailed',
   'onDetailed',
