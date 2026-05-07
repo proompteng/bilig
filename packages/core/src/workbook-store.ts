@@ -5,6 +5,7 @@ import type {
   LiteralInput,
   SheetFormatRangeSnapshot,
   SheetStyleRangeSnapshot,
+  WorkbookAutoFilterSnapshot,
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationSettingsSnapshot,
   WorkbookCommentThreadSnapshot,
@@ -625,7 +626,7 @@ export class WorkbookStore {
     return runWorkbookMetadataEffect(this.metadataService.clearSheetProtection(sheetName))
   }
 
-  setFilter(sheetName: string, range: CellRangeRef): WorkbookFilterRecord {
+  setFilter(sheetName: string, range: WorkbookAutoFilterSnapshot): WorkbookFilterRecord {
     return runWorkbookMetadataEffect(this.metadataService.setFilter(sheetName, range))
   }
 

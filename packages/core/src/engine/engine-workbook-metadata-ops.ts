@@ -1,5 +1,6 @@
 import type {
   CellRangeRef,
+  WorkbookAutoFilterSnapshot,
   WorkbookConditionalFormatSnapshot,
   WorkbookDataValidationSnapshot,
   WorkbookRangeProtectionSnapshot,
@@ -23,11 +24,11 @@ export function buildSetSheetProtectionOps(workbook: WorkbookStore, protection: 
   return [{ kind: 'setSheetProtection', protection: normalized }]
 }
 
-export function buildSetFilterOps(workbook: WorkbookStore, sheetName: string, range: CellRangeRef): EngineOp[] | null {
+export function buildSetFilterOps(workbook: WorkbookStore, sheetName: string, range: WorkbookAutoFilterSnapshot): EngineOp[] | null {
   if (workbook.getFilter(sheetName, range)) {
     return null
   }
-  return [{ kind: 'setFilter', sheetName, range: { ...range } }]
+  return [{ kind: 'setFilter', sheetName, range: structuredClone(range) }]
 }
 
 export function buildSetSortOps(

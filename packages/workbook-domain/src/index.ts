@@ -6,6 +6,7 @@ import type {
   CellStyleRecord,
   CellStylePatch,
   LiteralInput,
+  WorkbookAutoFilterSnapshot,
   WorkbookCommentThreadSnapshot,
   WorkbookChartSnapshot,
   WorkbookConditionalFormatSnapshot,
@@ -112,7 +113,7 @@ export type WorkbookOp =
   | { kind: 'unmergeCells'; range: CellRangeRef }
   | { kind: 'setSheetProtection'; protection: WorkbookSheetProtectionOp }
   | { kind: 'clearSheetProtection'; sheetName: string }
-  | { kind: 'setFilter'; sheetName: string; range: CellRangeRef }
+  | { kind: 'setFilter'; sheetName: string; range: WorkbookAutoFilterSnapshot }
   | { kind: 'clearFilter'; sheetName: string; range: CellRangeRef }
   | { kind: 'setSort'; sheetName: string; range: CellRangeRef; keys: WorkbookSortKey[] }
   | { kind: 'clearSort'; sheetName: string; range: CellRangeRef }

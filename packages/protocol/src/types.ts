@@ -122,6 +122,35 @@ export interface CellRangeRef {
   endAddress: string
 }
 
+export type WorkbookAutoFilterCustomOperator = 'equal' | 'lessThan' | 'lessThanOrEqual' | 'notEqual' | 'greaterThanOrEqual' | 'greaterThan'
+
+export interface WorkbookAutoFilterValueCriteriaSnapshot {
+  blank?: boolean
+  values: string[]
+}
+
+export interface WorkbookAutoFilterCustomCriterionSnapshot {
+  operator?: WorkbookAutoFilterCustomOperator
+  value: string
+}
+
+export interface WorkbookAutoFilterCustomCriteriaSnapshot {
+  and?: boolean
+  filters: WorkbookAutoFilterCustomCriterionSnapshot[]
+}
+
+export interface WorkbookAutoFilterColumnSnapshot {
+  colId: number
+  hiddenButton?: boolean
+  showButton?: boolean
+  filters?: WorkbookAutoFilterValueCriteriaSnapshot
+  customFilters?: WorkbookAutoFilterCustomCriteriaSnapshot
+}
+
+export interface WorkbookAutoFilterSnapshot extends CellRangeRef {
+  criteria?: WorkbookAutoFilterColumnSnapshot[]
+}
+
 export interface SelectionRange {
   startAddress: string
   endAddress: string
@@ -645,7 +674,7 @@ export interface SheetMetadataSnapshot {
   freezePane?: WorkbookFreezePaneSnapshot
   merges?: WorkbookMergeRangeSnapshot[]
   sheetProtection?: WorkbookSheetProtectionSnapshot
-  filters?: CellRangeRef[]
+  filters?: WorkbookAutoFilterSnapshot[]
   sorts?: WorkbookSortSnapshot[]
   validations?: WorkbookDataValidationSnapshot[]
   conditionalFormats?: WorkbookConditionalFormatSnapshot[]

@@ -106,7 +106,7 @@ export function cloneTableRecord(record: WorkbookTableRecord): WorkbookTableReco
 export function cloneFilterRecord(record: WorkbookFilterRecord): WorkbookFilterRecord {
   return {
     sheetName: record.sheetName,
-    range: { ...record.range },
+    range: structuredClone(record.range),
   }
 }
 

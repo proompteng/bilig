@@ -63,7 +63,7 @@ export function exportSheetMetadata(workbook: WorkbookStore, sheetName: string):
   const freezePane = freezePaneToSnapshot(workbook.getFreezePane(sheetName))
   const merges = workbook.listMergeRanges(sheetName).map(mergeRangeToSnapshot)
   const sheetProtection = workbook.getSheetProtection(sheetName)
-  const filters = workbook.listFilters(sheetName).map((filter) => Object.assign({}, filter.range))
+  const filters = workbook.listFilters(sheetName).map((filter) => structuredClone(filter.range))
   const sorts = workbook.listSorts(sheetName).map((sort) => ({
     range: { ...sort.range },
     keys: sort.keys.map((key) => ({ ...key })),
@@ -208,7 +208,7 @@ export function sheetMetadataToOps(
     ops.push({ kind: 'setSheetProtection', protection: structuredClone(sheetProtection) })
   }
   workbook.listFilters(sheetName).forEach((record) => {
-    ops.push({ kind: 'setFilter', sheetName, range: { ...record.range } })
+    ops.push({ kind: 'setFilter', sheetName, range: structuredClone(record.range) })
   })
   workbook.listSorts(sheetName).forEach((record) => {
     ops.push({

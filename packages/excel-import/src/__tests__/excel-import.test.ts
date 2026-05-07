@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { strFromU8, unzipSync } from 'fflate'
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import * as XLSX from 'xlsx'
 
 import type {
@@ -931,6 +931,88 @@ describe('excel import', () => {
         { address: 'B1', value: 12.34, format: '"$"#,##0.00' },
       ]),
     )
+  })
+
+  it('roundtrips worksheet AutoFilter criteria and custom filters', () => {
+    const sourceSnapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'autofilter-criteria-source' },
+      sheets: [
+        {
+          name: 'Ledger',
+          order: 0,
+          metadata: {
+            filters: [{ sheetName: 'Ledger', startAddress: 'A1', endAddress: 'D6' }],
+          },
+          cells: [
+            { address: 'A1', value: 'Date' },
+            { address: 'B1', value: 'Department' },
+            { address: 'C1', value: 'Amount' },
+            { address: 'D1', value: 'Status' },
+            { address: 'A2', value: '2026-01-01' },
+            { address: 'B2', value: 'Finance' },
+            { address: 'C2', value: -100 },
+            { address: 'D2', value: 'Approved' },
+            { address: 'A3', value: '2026-01-02' },
+            { address: 'B3', value: 'Operations' },
+            { address: 'C3', value: 75 },
+            { address: 'D3', value: 'Pending' },
+            { address: 'A4', value: '2026-01-03' },
+            { address: 'B4', value: 'Finance' },
+            { address: 'C4', value: -25 },
+            { address: 'D4', value: 'Approved' },
+            { address: 'A5', value: '2026-01-04' },
+            { address: 'B5', value: 'Sales' },
+            { address: 'C5', value: 50 },
+            { address: 'D5', value: 'Rejected' },
+            { address: 'A6', value: '2026-01-05' },
+            { address: 'B6', value: 'Finance' },
+            { address: 'C6', value: -1 },
+            { address: 'D6', value: 'Approved' },
+          ],
+        },
+      ],
+    }
+    const sourceZip = unzipSync(exportXlsx(sourceSnapshot))
+    const sheetPath = 'xl/worksheets/sheet1.xml'
+    const sourceSheetXml = strFromU8(sourceZip[sheetPath] ?? new Uint8Array())
+    sourceZip[sheetPath] = strToU8(
+      sourceSheetXml.replace(
+        '<autoFilter ref="A1:D6"/>',
+        [
+          '<autoFilter ref="A1:D6">',
+          '<filterColumn colId="1"><filters blank="0"><filter val="Finance"/></filters></filterColumn>',
+          '<filterColumn colId="2"><customFilters><customFilter operator="lessThan" val="0"/></customFilters></filterColumn>',
+          '<filterColumn colId="3"><filters blank="0"><filter val="Approved"/></filters></filterColumn>',
+          '</autoFilter>',
+        ].join(''),
+      ),
+    )
+
+    const imported = importXlsx(zipSync(sourceZip), 'autofilter-criteria-source.xlsx')
+
+    expect(imported.snapshot.sheets[0]?.metadata?.filters).toEqual([
+      {
+        sheetName: 'Ledger',
+        startAddress: 'A1',
+        endAddress: 'D6',
+        criteria: [
+          { colId: 1, filters: { blank: false, values: ['Finance'] } },
+          { colId: 2, customFilters: { filters: [{ operator: 'lessThan', value: '0' }] } },
+          { colId: 3, filters: { blank: false, values: ['Approved'] } },
+        ],
+      },
+    ])
+
+    const exportedZip = unzipSync(exportXlsx(imported.snapshot))
+    const exportedSheetXml = strFromU8(exportedZip[sheetPath] ?? new Uint8Array())
+
+    expect(exportedSheetXml).toContain('<autoFilter ref="A1:D6">')
+    expect(exportedSheetXml).toContain('<filterColumn colId="1"><filters blank="0"><filter val="Finance"/></filters></filterColumn>')
+    expect(exportedSheetXml).toContain(
+      '<filterColumn colId="2"><customFilters><customFilter operator="lessThan" val="0"/></customFilters></filterColumn>',
+    )
+    expect(exportedSheetXml).toContain('<filterColumn colId="3"><filters blank="0"><filter val="Approved"/></filters></filterColumn>')
   })
 
   it('exports range-only number formats on populated and blank cells', () => {

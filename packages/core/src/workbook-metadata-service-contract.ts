@@ -2,6 +2,7 @@ import type { Effect } from 'effect'
 import type {
   CellRangeRef,
   LiteralInput,
+  WorkbookAutoFilterSnapshot,
   WorkbookCalculationSettingsSnapshot,
   WorkbookChartSnapshot,
   WorkbookCommentThreadSnapshot,
@@ -106,7 +107,7 @@ export interface WorkbookMetadataService {
   ) => Effect.Effect<WorkbookSheetProtectionRecord, WorkbookMetadataError>
   readonly getSheetProtection: (sheetName: string) => Effect.Effect<WorkbookSheetProtectionRecord | undefined, WorkbookMetadataError>
   readonly clearSheetProtection: (sheetName: string) => Effect.Effect<boolean, WorkbookMetadataError>
-  readonly setFilter: (sheetName: string, range: CellRangeRef) => Effect.Effect<WorkbookFilterRecord, WorkbookMetadataError>
+  readonly setFilter: (sheetName: string, range: WorkbookAutoFilterSnapshot) => Effect.Effect<WorkbookFilterRecord, WorkbookMetadataError>
   readonly getFilter: (sheetName: string, range: CellRangeRef) => Effect.Effect<WorkbookFilterRecord | undefined, WorkbookMetadataError>
   readonly deleteFilter: (sheetName: string, range: CellRangeRef) => Effect.Effect<boolean, WorkbookMetadataError>
   readonly listFilters: (sheetName: string) => Effect.Effect<WorkbookFilterRecord[], WorkbookMetadataError>

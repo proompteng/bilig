@@ -9,6 +9,7 @@ import type {
   CellStylePatch,
   CellStyleRecord,
   LiteralInput,
+  WorkbookAutoFilterSnapshot,
   WorkbookCalculationSettingsSnapshot,
   WorkbookCommentEntrySnapshot,
   WorkbookCommentThreadSnapshot,
@@ -97,7 +98,7 @@ export interface WorkbookMergeRangeRecord extends WorkbookMergeRangeSnapshot {}
 
 export interface WorkbookFilterRecord {
   sheetName: string
-  range: CellRangeRef
+  range: WorkbookAutoFilterSnapshot
 }
 
 export interface WorkbookSortKeyRecord {

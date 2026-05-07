@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "suite": "import-export-fidelity",
-  "generatedAt": "2026-05-06T21:38:39.809Z",
+  "generatedAt": "2026-05-07T18:33:43.553Z",
   "source": {
     "artifactGenerator": "scripts/gen-import-export-fidelity-scorecard.ts",
     "implementationPackage": "packages/excel-import",
@@ -138,7 +138,7 @@
       "passed": true,
       "coveredFeatures": ["xlsx.filters.roundtrip"],
       "missingFeatures": [],
-      "evidence": "WorkbookSnapshot exported to XLSX imports back with equivalent sheet filter ranges backed by native XLSX autoFilter nodes."
+      "evidence": "WorkbookSnapshot exported to XLSX imports back with equivalent sheet filter ranges and criteria backed by native XLSX autoFilter nodes."
     },
     {
       "id": "xlsx-snapshot-roundtrip-sorts",

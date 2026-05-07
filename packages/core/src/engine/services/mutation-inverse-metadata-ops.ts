@@ -99,16 +99,16 @@ export function buildMutationMetadataInverseOps(workbook: WorkbookStore, op: Eng
     case 'setFilter': {
       const existing = workbook.getFilter(op.sheetName, op.range)
       if (!existing) {
-        return [{ kind: 'clearFilter', sheetName: op.sheetName, range: { ...op.range } }]
+        return [{ kind: 'clearFilter', sheetName: op.sheetName, range: structuredClone(op.range) }]
       }
-      return [{ kind: 'setFilter', sheetName: op.sheetName, range: { ...existing.range } }]
+      return [{ kind: 'setFilter', sheetName: op.sheetName, range: structuredClone(existing.range) }]
     }
     case 'clearFilter': {
       const existing = workbook.getFilter(op.sheetName, op.range)
       if (!existing) {
         return []
       }
-      return [{ kind: 'setFilter', sheetName: op.sheetName, range: { ...existing.range } }]
+      return [{ kind: 'setFilter', sheetName: op.sheetName, range: structuredClone(existing.range) }]
     }
     case 'setSort': {
       const existing = workbook.getSort(op.sheetName, op.range)

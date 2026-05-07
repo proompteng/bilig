@@ -14,6 +14,7 @@ import type {
   RecalcMetrics,
   SelectionState,
   SyncState,
+  WorkbookAutoFilterSnapshot,
   WorkbookAxisEntrySnapshot,
   WorkbookCalculationSettingsSnapshot,
   WorkbookChartSnapshot,
@@ -559,7 +560,7 @@ export class SpreadsheetEngine extends SpreadsheetEngineRuntimeBase {
     return this.workbook.getSheetProtection(sheetName)
   }
 
-  setFilter(sheetName: string, range: CellRangeRef): void {
+  setFilter(sheetName: string, range: WorkbookAutoFilterSnapshot): void {
     this.executeLocalTransaction(buildSetFilterOps(this.workbook, sheetName, range) ?? [])
   }
 

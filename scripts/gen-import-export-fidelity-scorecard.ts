@@ -327,7 +327,8 @@ function runXlsxSnapshotRoundTripFiltersCase(): ImportExportFidelityCase {
     direction: 'export-import',
     passed,
     coveredFeatures: ['xlsx.filters.roundtrip'],
-    evidence: 'WorkbookSnapshot exported to XLSX imports back with equivalent sheet filter ranges backed by native XLSX autoFilter nodes.',
+    evidence:
+      'WorkbookSnapshot exported to XLSX imports back with equivalent sheet filter ranges and criteria backed by native XLSX autoFilter nodes.',
   })
 }
 
@@ -640,7 +641,17 @@ function createFidelitySnapshot(): WorkbookSnapshot {
               range: { sheetName: 'Summary', startAddress: 'A2', endAddress: 'B3' },
             },
           ],
-          filters: [{ sheetName: 'Summary', startAddress: 'A1', endAddress: 'B3' }],
+          filters: [
+            {
+              sheetName: 'Summary',
+              startAddress: 'A1',
+              endAddress: 'B3',
+              criteria: [
+                { colId: 0, filters: { blank: false, values: ['Revenue'] } },
+                { colId: 1, customFilters: { filters: [{ operator: 'greaterThan', value: '1000' }] } },
+              ],
+            },
+          ],
           sorts: [
             {
               range: { sheetName: 'Summary', startAddress: 'A1', endAddress: 'B3' },

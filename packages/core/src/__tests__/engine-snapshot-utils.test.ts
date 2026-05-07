@@ -29,6 +29,10 @@ describe('engine snapshot utils', () => {
       sheetName: 'Sheet1',
       startAddress: 'A1',
       endAddress: 'D8',
+      criteria: [
+        { colId: 1, filters: { blank: false, values: ['Finance'] } },
+        { colId: 2, customFilters: { filters: [{ operator: 'lessThan', value: '0' }] } },
+      ],
     })
     workbook.setSort('Sheet1', { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'D8' }, [{ keyAddress: 'B2', direction: 'desc' }])
 
@@ -65,7 +69,17 @@ describe('engine snapshot utils', () => {
       ],
       freezePane: { rows: 1, cols: 2 },
       merges: [{ sheetName: 'Sheet1', startAddress: 'D1', endAddress: 'E2' }],
-      filters: [{ sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'D8' }],
+      filters: [
+        {
+          sheetName: 'Sheet1',
+          startAddress: 'A1',
+          endAddress: 'D8',
+          criteria: [
+            { colId: 1, filters: { blank: false, values: ['Finance'] } },
+            { colId: 2, customFilters: { filters: [{ operator: 'lessThan', value: '0' }] } },
+          ],
+        },
+      ],
       sorts: [
         {
           range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'D8' },
@@ -78,9 +92,11 @@ describe('engine snapshot utils', () => {
       throw new Error('Expected sheet metadata')
     }
     metadata.styleRanges![0].range.startAddress = 'Z9'
+    metadata.filters![0].criteria![0].filters!.values[0] = 'Operations'
     metadata.sorts![0].keys[0].direction = 'asc'
 
     expect(workbook.listStyleRanges('Sheet1')[0]?.range.startAddress).toBe('A1')
+    expect(workbook.listFilters('Sheet1')[0]?.range.criteria?.[0]?.filters?.values[0]).toBe('Finance')
     expect(workbook.listSorts('Sheet1')[0]?.keys[0]?.direction).toBe('desc')
 
     const ops = sheetMetadataToOps(workbook, 'Sheet1')
@@ -176,7 +192,15 @@ describe('engine snapshot utils', () => {
       {
         kind: 'setFilter',
         sheetName: 'Sheet1',
-        range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'D8' },
+        range: {
+          sheetName: 'Sheet1',
+          startAddress: 'A1',
+          endAddress: 'D8',
+          criteria: [
+            { colId: 1, filters: { blank: false, values: ['Finance'] } },
+            { colId: 2, customFilters: { filters: [{ operator: 'lessThan', value: '0' }] } },
+          ],
+        },
       },
       {
         kind: 'setSort',

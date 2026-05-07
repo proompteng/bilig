@@ -138,6 +138,12 @@ function assertMergeRangesDoNotOverlap(ranges: readonly WorkbookMergeRangeRecord
   }
 }
 
+function canonicalWorkbookFilterRange(range: WorkbookFilterRecord['range']): WorkbookFilterRecord['range'] {
+  const normalized = canonicalWorkbookRangeRef(range)
+  const criteria = range.criteria?.length ? structuredClone(range.criteria) : undefined
+  return criteria ? { ...normalized, criteria } : normalized
+}
+
 function metadataEffect<Success>(message: string, run: () => Success): Effect.Effect<Success, WorkbookMetadataError> {
   return Effect.try({
     try: run,
@@ -551,7 +557,7 @@ export function createWorkbookMetadataService(metadata: WorkbookMetadataRecord):
     },
     setFilter(sheetName, range) {
       return metadataEffect('Failed to set filter metadata', () => {
-        const storedRange = canonicalWorkbookRangeRef(range)
+        const storedRange = canonicalWorkbookFilterRange(range)
         const record: WorkbookFilterRecord = { sheetName, range: storedRange }
         metadata.filters.set(filterKey(sheetName, storedRange), record)
         return cloneFilterRecord(record)

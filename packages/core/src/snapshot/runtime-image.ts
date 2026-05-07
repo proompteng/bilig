@@ -412,7 +412,7 @@ function restoreSheetMetadata(args: { readonly workbook: WorkbookStore; readonly
     workbook.setFormatRanges(sheet.name, sheet.metadata.formatRanges)
   }
   sheet.metadata?.filters?.forEach((range) => {
-    workbook.setFilter(sheet.name, { ...range })
+    workbook.setFilter(sheet.name, structuredClone(range))
   })
   sheet.metadata?.sorts?.forEach((sort) => {
     workbook.setSort(sheet.name, { ...sort.range }, sort.keys.map((key) => ({ ...key })) as WorkbookSortSnapshot['keys'])
