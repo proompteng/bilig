@@ -4,8 +4,12 @@
   "description": "Headless spreadsheet engine and WorkPaper workbook facade for Node services, coding agents, and HyperFormula-style workflows.",
   "keywords": [
     "agent",
+    "agents",
+    "ai-agents",
     "automation",
     "bilig",
+    "coding-agents",
+    "excel-automation",
     "formula",
     "formula-engine",
     "headless",
@@ -13,9 +17,14 @@
     "hyperformula",
     "local-first",
     "node",
+    "nodejs",
     "spreadsheet",
+    "spreadsheet-automation",
     "spreadsheet-engine",
-    "workbook"
+    "workbook",
+    "workbook-api",
+    "workbook-engine",
+    "workpaper"
   ],
   "homepage": "https://proompteng.github.io/bilig/",
   "bugs": {
