@@ -68,6 +68,7 @@ export function installFreshFormulaBindingNow(args: {
     dependencyIndices: args.prepared.dependencies.dependencyIndices,
     dependencyEntities,
     rangeDependencies: args.prepared.dependencies.rangeDependencies,
+    graphRangeDependencies: args.prepared.dependencies.graphRangeDependencies,
     runtimeProgram: args.prepared.runtimeProgram,
     constants: args.prepared.compiled.constants,
     structuralSourceTransform: undefined,

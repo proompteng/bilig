@@ -311,6 +311,8 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
     existing.plan = plan
     existing.dependencyIndices = prepared.dependencies.dependencyIndices
     existing.dependencyEntities = args.edgeArena.replace(existing.dependencyEntities, nextDependencies)
+    existing.rangeDependencies = prepared.dependencies.rangeDependencies
+    existing.graphRangeDependencies = prepared.dependencies.graphRangeDependencies
     existing.runtimeProgram = prepared.runtimeProgram
     existing.constants = prepared.compiled.constants
     existing.programLength = prepared.runtimeProgram.length

@@ -97,6 +97,7 @@ export function createFormulaBindingDependencyMaterializer(
         dependencyIndices: args.getDependencyBuildCells().slice(0, dependencyIndexCount),
         dependencyEntities: args.getDependencyBuildEntities().slice(0, dependencyEntityCount),
         rangeDependencies: args.getDependencyBuildRanges().slice(0, 0),
+        graphRangeDependencies: args.getDependencyBuildRanges().slice(0, 0),
         symbolicRangeIndices: args.getSymbolicRangeBindings(),
         symbolicRangeCount: 0,
         newRangeIndices: args.getDependencyBuildNewRanges(),
@@ -145,6 +146,7 @@ export function createFormulaBindingDependencyMaterializer(
     let dependencyEntityCount = 0
     let rangeDependencyCount = 0
     let newRangeCount = 0
+    const graphRangeDependencies: number[] = []
     const symbolicRangeIndexByAddress =
       compiled.symbolicRanges.length > 0 ? new Map(compiled.symbolicRanges.map((range, index) => [range, index])) : undefined
     args.getSymbolicRangeBindings().fill(UNRESOLVED_WASM_OPERAND, 0, compiled.symbolicRanges.length)
@@ -173,6 +175,21 @@ export function createFormulaBindingDependencyMaterializer(
         }
       }
       return false
+    }
+
+    const appendRuntimeRangeDependency = (rangeIndex: number, needsSourceEdgeSync: boolean): void => {
+      args.getDependencyBuildRanges()[rangeDependencyCount] = rangeIndex
+      rangeDependencyCount += 1
+      if (needsSourceEdgeSync) {
+        args.getDependencyBuildNewRanges()[newRangeCount] = rangeIndex
+        newRangeCount += 1
+      }
+    }
+
+    const appendGraphRangeDependency = (rangeIndex: number): void => {
+      args.getDependencyBuildEntities()[dependencyEntityCount] = makeRangeEntity(rangeIndex)
+      dependencyEntityCount += 1
+      graphRangeDependencies.push(rangeIndex)
     }
 
     dynamicIndexDependencyPlan?.selectedCells.forEach((cell) => {
@@ -288,14 +305,13 @@ export function createFormulaBindingDependencyMaterializer(
         if (symbolicRangeIndex !== -1) {
           args.getSymbolicRangeBindings()[symbolicRangeIndex] = registered.rangeIndex
         }
+        const needsSourceEdgeSync = registered.materialized || rangeDependencySourceEdgesNeedSync(registered.rangeIndex)
         if (shouldCompactDynamicIndexRange) {
+          appendRuntimeRangeDependency(registered.rangeIndex, needsSourceEdgeSync)
           continue
         }
-        const rangeEntity = makeRangeEntity(registered.rangeIndex)
-        args.getDependencyBuildEntities()[dependencyEntityCount] = rangeEntity
-        dependencyEntityCount += 1
-        args.getDependencyBuildRanges()[rangeDependencyCount] = registered.rangeIndex
-        rangeDependencyCount += 1
+        appendRuntimeRangeDependency(registered.rangeIndex, needsSourceEdgeSync)
+        appendGraphRangeDependency(registered.rangeIndex)
         const memberIndices = args.state.ranges.getFormulaMembersView(registered.rangeIndex)
         for (let memberIndex = 0; memberIndex < memberIndices.length; memberIndex += 1) {
           const cellIndex = memberIndices[memberIndex]!
@@ -305,10 +321,6 @@ export function createFormulaBindingDependencyMaterializer(
           args.getDependencyBuildSeen()[cellIndex] = epoch
           args.getDependencyBuildCells()[dependencyIndexCount] = cellIndex
           dependencyIndexCount += 1
-        }
-        if (registered.materialized || rangeDependencySourceEdgesNeedSync(registered.rangeIndex)) {
-          args.getDependencyBuildNewRanges()[newRangeCount] = registered.rangeIndex
-          newRangeCount += 1
         }
         continue
       }
@@ -327,6 +339,7 @@ export function createFormulaBindingDependencyMaterializer(
       dependencyIndices: args.getDependencyBuildCells().slice(0, dependencyIndexCount),
       dependencyEntities: args.getDependencyBuildEntities().slice(0, dependencyEntityCount),
       rangeDependencies: args.getDependencyBuildRanges().slice(0, rangeDependencyCount),
+      graphRangeDependencies: Uint32Array.from(graphRangeDependencies),
       symbolicRangeIndices: args.getSymbolicRangeBindings(),
       symbolicRangeCount: compiled.symbolicRanges.length,
       newRangeIndices: args.getDependencyBuildNewRanges(),
@@ -387,6 +400,7 @@ export function createFormulaBindingDependencyMaterializer(
         dependencyIndexCount === dependencyIndices.length ? dependencyIndices : dependencyIndices.subarray(0, dependencyIndexCount),
       dependencyEntities,
       rangeDependencies: EMPTY_DEPENDENCY_BUFFER,
+      graphRangeDependencies: EMPTY_DEPENDENCY_BUFFER,
       symbolicRangeIndices: EMPTY_DEPENDENCY_BUFFER,
       symbolicRangeCount: 0,
       newRangeIndices: EMPTY_DEPENDENCY_BUFFER,
@@ -424,6 +438,7 @@ export function createFormulaBindingDependencyMaterializer(
       dependencyIndices: args.getDependencyBuildCells().slice(0, 0),
       dependencyEntities: args.getDependencyBuildEntities().slice(0, 0),
       rangeDependencies: args.getDependencyBuildRanges().slice(0, 0),
+      graphRangeDependencies: args.getDependencyBuildRanges().slice(0, 0),
       symbolicRangeIndices: args.getSymbolicRangeBindings(),
       symbolicRangeCount: compiled.symbolicRanges.length,
       newRangeIndices: args.getDependencyBuildNewRanges(),

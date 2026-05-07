@@ -30,7 +30,7 @@ export function hasPendingFormulaDependency(
   if (getRangeMembers === undefined) {
     return false
   }
-  const ranges = formula.rangeDependencies
+  const ranges = formula.graphRangeDependencies
   for (let rangeIndexCursor = 0; rangeIndexCursor < ranges.length; rangeIndexCursor += 1) {
     const members = getRangeMembers(ranges[rangeIndexCursor]!)
     for (let memberIndex = 0; memberIndex < members.length; memberIndex += 1) {

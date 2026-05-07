@@ -312,6 +312,7 @@ export interface RuntimeFormula {
   dependencyIndices: Uint32Array
   dependencyEntities: EdgeSlice
   rangeDependencies: Uint32Array
+  graphRangeDependencies: Uint32Array
   runtimeProgram: Uint32Array
   constants: Float64Array
   structuralSourceTransform: RuntimeStructuralFormulaSourceTransform | undefined
@@ -336,6 +337,7 @@ export interface MaterializedDependencies {
   dependencyIndices: Uint32Array
   dependencyEntities: Uint32Array
   rangeDependencies: Uint32Array
+  graphRangeDependencies: Uint32Array
   symbolicRangeIndices: U32
   symbolicRangeCount: number
   newRangeIndices: U32

@@ -19,6 +19,7 @@ function makeRuntimeFormula(
     dependencyIndices: new Uint32Array(0),
     dependencyEntities: { ptr: -1, len: 0, cap: 0 },
     rangeDependencies: new Uint32Array(0),
+    graphRangeDependencies: new Uint32Array(0),
     runtimeProgram: compiled.program,
     constants: compiled.constants,
     structuralSourceTransform,

@@ -249,6 +249,7 @@ function createRuntimeFormula(
     dependencyIndices: new Uint32Array(0),
     dependencyEntities: { ptr: -1, len: 0, cap: 0 },
     rangeDependencies: new Uint32Array(0),
+    graphRangeDependencies: new Uint32Array(0),
     runtimeProgram: TEST_COMPILED_FORMULA.program,
     constants: TEST_COMPILED_FORMULA.constants,
     structuralSourceTransform: undefined,

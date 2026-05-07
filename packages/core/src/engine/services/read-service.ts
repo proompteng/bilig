@@ -165,7 +165,7 @@ export function createEngineReadService(args: {
       directPrecedents.add(dependencyCellIndex)
     })
     const formula = args.state.formulas.get(cellIndex)
-    formula?.rangeDependencies.forEach((rangeIndex) => {
+    formula?.graphRangeDependencies.forEach((rangeIndex) => {
       const members = args.state.ranges.expandToCells(rangeIndex)
       for (let index = 0; index < members.length; index += 1) {
         directPrecedents.add(members[index]!)

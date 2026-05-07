@@ -140,8 +140,8 @@ export function createEngineTraversalService(args: {
     for (let index = 0; index < formula.dependencyIndices.length; index += 1) {
       push(formula.dependencyIndices[index]!)
     }
-    for (let index = 0; index < formula.rangeDependencies.length; index += 1) {
-      const members = args.state.ranges.expandToCells(formula.rangeDependencies[index]!)
+    for (let index = 0; index < formula.graphRangeDependencies.length; index += 1) {
+      const members = args.state.ranges.expandToCells(formula.graphRangeDependencies[index]!)
       for (let memberIndex = 0; memberIndex < members.length; memberIndex += 1) {
         push(members[memberIndex]!)
       }

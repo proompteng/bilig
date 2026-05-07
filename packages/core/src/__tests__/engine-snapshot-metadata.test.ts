@@ -278,6 +278,72 @@ describe('engine snapshot metadata formula restore', () => {
     expect(engine.explainCell('Calcs', 'AF8').directPrecedents).not.toContain('Calcs!AG8')
   })
 
+  it('keeps normal range formulas dirty when compacted criteria aggregates share the same range', async () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'Shared Range Criteria Aggregate Model' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Deals',
+          order: 0,
+          cells: [
+            { address: 'A1', value: 'Region' },
+            { address: 'B1', value: 'Segment' },
+            { address: 'C1', value: 'Customers' },
+            { address: 'D1', value: 'ARPA' },
+            { address: 'E1', value: 'Revenue' },
+            { address: 'A2', value: 'West' },
+            { address: 'B2', value: 'Enterprise' },
+            { address: 'C2', value: 12 },
+            { address: 'D2', value: 1200 },
+            { address: 'E2', formula: 'C2*D2' },
+            { address: 'A3', value: 'East' },
+            { address: 'B3', value: 'SMB' },
+            { address: 'C3', value: 30 },
+            { address: 'D3', value: 250 },
+            { address: 'E3', formula: 'C3*D3' },
+            { address: 'A4', value: 'West' },
+            { address: 'B4', value: 'SMB' },
+            { address: 'C4', value: 18 },
+            { address: 'D4', value: 300 },
+            { address: 'E4', formula: 'C4*D4' },
+          ],
+        },
+        {
+          id: 2,
+          name: 'Summary',
+          order: 1,
+          cells: [
+            { address: 'A1', value: 'Metric' },
+            { address: 'B1', value: 'Value' },
+            { address: 'A2', value: 'Total revenue' },
+            { address: 'B2', formula: 'SUM(Deals!E2:E4)' },
+            { address: 'A3', value: 'West customers' },
+            { address: 'B3', formula: 'SUMIF(Deals!A2:A4,"West",Deals!C2:C4)' },
+            { address: 'A6', value: 'Qualified customer counts' },
+            { address: 'B6', formula: 'FILTER(Deals!C2:C4,Deals!C2:C4>=18)' },
+          ],
+        },
+      ],
+    }
+
+    const engine = new SpreadsheetEngine({ workbookName: 'shared-range-criteria-dirtying' })
+    await engine.ready()
+    engine.importSnapshot(snapshot)
+
+    expect(engine.getCellValue('Summary', 'B3')).toEqual({ tag: ValueTag.Number, value: 30 })
+    expect(engine.getCellValue('Summary', 'B6')).toEqual({ tag: ValueTag.Number, value: 30 })
+    expect(engine.getCellValue('Summary', 'B7')).toEqual({ tag: ValueTag.Number, value: 18 })
+
+    expect(engine.setCellValue('Deals', 'C2', 20)).toEqual({ tag: ValueTag.Number, value: 20 })
+
+    expect(engine.getCellValue('Summary', 'B3')).toEqual({ tag: ValueTag.Number, value: 38 })
+    expect(engine.getCellValue('Summary', 'B6')).toEqual({ tag: ValueTag.Number, value: 20 })
+    expect(engine.getCellValue('Summary', 'B7')).toEqual({ tag: ValueTag.Number, value: 30 })
+    expect(engine.getCellValue('Summary', 'B8')).toEqual({ tag: ValueTag.Number, value: 18 })
+  })
+
   it('resolves imported data-model GETPIVOTDATA formulas from visible pivot output', async () => {
     const snapshot: WorkbookSnapshot = {
       version: 1,
