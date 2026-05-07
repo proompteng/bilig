@@ -87,8 +87,8 @@ Case studies and founder writeups are also consistent:
   install path, proof, and contribution path first
 - X replies should be manual, low-volume, and tied to the specific post.
   Official X guidance treats duplicated unsolicited replies as spam behavior,
-  and its automation rules prohibit using non-API website scripting or keyword
-  searches to spray automated replies.
+  and its automation rules and developer guidelines prohibit using non-API
+  website scripting or keyword searches to spray automated replies.
 
 GitHub's 2026 maintainer guidance adds one important constraint: growth is only
 useful if the project can absorb it. AI-assisted contributions can increase
@@ -368,6 +368,8 @@ audience, or product friction.
   <https://help.x.com/en/rules-and-policies/x-rules-and-best-practices>
 - X automation rules:
   <https://help.x.com/en/rules-and-policies/x-automation>
+- X developer guidelines:
+  <https://docs.x.com/developer-guidelines>
 - Lago first-1000-stars case study:
   <https://getlago.com/blog/how-we-got-our-first-1000-github-stars>
 - Indie Hackers first-1000-stars writeup:

@@ -12,6 +12,9 @@ the link were removed.
 
 - Reply manually.
 - Do not use browser automation or bots to post replies.
+- Do not scrape or browser-automate X for reply queues; if any tool ever reads X
+  programmatically, use the official API and keep it read-only unless a human
+  explicitly sends the post.
 - Do not send duplicated replies across many accounts.
 - Do not reply from keyword search alone.
 - Do not mass mention people.
@@ -21,9 +24,10 @@ the link were removed.
   formula engines, agent tooling, or open-source implementation evidence.
 
 X's own rules say unsolicited automated replies based only on keyword searches
-are not permitted, and its behavior guidance treats repeated duplicated
-unsolicited replies as spam. That makes the correct strategy simple: fewer
-replies, higher fit, and no automation.
+are not permitted, its developer guidelines require official API use instead of
+scraping or browser automation, and its behavior guidance treats repeated
+duplicated unsolicited replies as spam. That makes the correct strategy simple:
+fewer replies, higher fit, and no automation.
 
 ## Daily Reply Budget
 
@@ -396,6 +400,8 @@ is good enough to link when the same question appears again.
   <https://help.x.com/en/rules-and-policies/x-automation>
 - X account behavior best practices:
   <https://help.x.com/en/rules-and-policies/x-rules-and-best-practices>
+- X developer guidelines:
+  <https://docs.x.com/developer-guidelines>
 - Sam Altman Codex milestone post, tone reference:
   <https://x.com/sama/status/2041658719839383945>
 - Sam Altman open-model launch post, tone reference:

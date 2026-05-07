@@ -14,7 +14,9 @@ language: typescript
 - https://proompteng.github.io/bilig/
 - https://github.com/proompteng/bilig/tree/main/packages/headless#readme
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper
+- https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md
 - https://github.com/proompteng/bilig/blob/main/docs/public-adoption-kit.md
+- https://github.com/proompteng/bilig/discussions/115
 
 ## what to use it for
 
@@ -62,6 +64,23 @@ npm run agent:verify
   https://github.com/proompteng/bilig/blob/main/docs/xlsx-corpus-verifier-walkthrough.md
 - xlookup exact fixture:
   https://github.com/proompteng/bilig/blob/main/docs/formula-edge-xlookup-exact-fixture.md
+- public adoption kit:
+  https://github.com/proompteng/bilig/blob/main/docs/public-adoption-kit.md
+
+## launch and feedback
+
+- feedback discussion for agent and service workflow input:
+  https://github.com/proompteng/bilig/discussions/115
+- dev-ready article draft:
+  https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md
+- launch post draft:
+  https://github.com/proompteng/bilig/blob/main/docs/launch-post-headless-workpaper.md
+- show hn launch pack:
+  https://github.com/proompteng/bilig/blob/main/docs/show-hn-launch-pack.md
+- community launch pack:
+  https://github.com/proompteng/bilig/blob/main/docs/community-launch-pack.md
+- x reply growth playbook:
+  https://github.com/proompteng/bilig/blob/main/docs/x-reply-growth-playbook.md
 
 ## boundaries
 

@@ -20,19 +20,16 @@ pnpm exec vitest run packages/excel-import/src/__tests__/excel-import.test.ts
 ## XLSX To WorkPaper
 
 ```ts
-import { readFileSync } from "node:fs";
-import { WorkPaper } from "@bilig/headless";
-import { importXlsx } from "@bilig/excel-import";
+import { readFileSync } from 'node:fs'
+import { WorkPaper } from '@bilig/headless'
+import { importXlsx } from '@bilig/excel-import'
 
-const imported = importXlsx(
-  new Uint8Array(readFileSync("model.xlsx")),
-  "model.xlsx",
-);
+const imported = importXlsx(new Uint8Array(readFileSync('model.xlsx')), 'model.xlsx')
 
 const workbook = WorkPaper.buildFromSnapshot(imported.snapshot, {
   evaluationTimeoutMs: 30_000,
   useColumnIndex: true,
-});
+})
 ```
 
 Use `WorkPaper.buildFromSnapshot()` for imported XLSX files. It preserves the
