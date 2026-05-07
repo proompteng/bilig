@@ -1,9 +1,17 @@
 # @bilig/headless
 
+[![npm: @bilig/headless](https://img.shields.io/npm/v/@bilig/headless?label=%40bilig%2Fheadless)](https://www.npmjs.com/package/@bilig/headless)
+[![GitHub](https://img.shields.io/badge/GitHub-proompteng%2Fbilig-blue)](https://github.com/proompteng/bilig)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](../../LICENSE)
+
 `@bilig/headless` is the production-targeted WorkPaper workbook facade for
 `bilig`. It runs the `@bilig/core` spreadsheet engine without the browser UI and
 exposes HyperFormula-style workbook workflows for services, tests, agents, and
 server-side spreadsheet automation.
+
+Use it when you need a headless spreadsheet engine for Node services, coding
+agents, benchmark harnesses, persistence tests, formula-backed business logic,
+or local-first workbook automation.
 
 ## Production Status
 
@@ -51,6 +59,13 @@ Published package:
 ```sh
 pnpm add @bilig/headless
 ```
+
+Repository:
+
+- GitHub: <https://github.com/proompteng/bilig>
+- npm: <https://www.npmjs.com/package/@bilig/headless>
+- runnable example:
+  [`examples/headless-workpaper`](../../examples/headless-workpaper)
 
 Inside this monorepo:
 

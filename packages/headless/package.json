@@ -1,12 +1,20 @@
 {
   "name": "@bilig/headless",
   "version": "0.1.95",
-  "description": "WorkPaper spreadsheet workbook facade for bilig with HyperFormula-style workflows.",
+  "description": "Headless spreadsheet engine and WorkPaper workbook facade for Node services, coding agents, and HyperFormula-style workflows.",
   "keywords": [
+    "agent",
+    "automation",
     "bilig",
     "formula",
+    "formula-engine",
     "headless",
+    "headless-spreadsheet",
+    "hyperformula",
+    "local-first",
+    "node",
     "spreadsheet",
+    "spreadsheet-engine",
     "workbook"
   ],
   "homepage": "https://github.com/proompteng/bilig/tree/main/packages/headless#readme",

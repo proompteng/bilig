@@ -1,6 +1,7 @@
 # bilig
 
 [![CI](https://github.com/proompteng/bilig/actions/workflows/ci.yml/badge.svg)](https://github.com/proompteng/bilig/actions/workflows/ci.yml)
+[![npm: @bilig/headless](https://img.shields.io/npm/v/@bilig/headless?label=%40bilig%2Fheadless)](https://www.npmjs.com/package/@bilig/headless)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 **bilig is a local-first spreadsheet engine and runtime for browser workbooks,
@@ -71,6 +72,12 @@ WorkPaper API directly. The package README is the contract for install, API
 usage, persistence, validation, supported scope, and agent workflow:
 [packages/headless/README.md](packages/headless/README.md).
 
+Install from npm:
+
+```bash
+pnpm add @bilig/headless
+```
+
 For a runnable external-consumer example, start with
 [examples/headless-workpaper](examples/headless-workpaper). The repository smoke
 test executes that same example against packed local runtime packages with
@@ -79,27 +86,27 @@ test executes that same example against packed local runtime packages with
 Minimal example:
 
 ```ts
-import { WorkPaper, type WorkPaperCellAddress } from "@bilig/headless";
+import { WorkPaper, type WorkPaperCellAddress } from '@bilig/headless'
 
 const workbook = WorkPaper.buildFromSheets(
   {
     Sheet1: [
-      [10, 20, "=A1+B1"],
-      [7, "=A2*3", null],
+      [10, 20, '=A1+B1'],
+      [7, '=A2*3', null],
     ],
   },
   { maxRows: 1_000, maxColumns: 100, useColumnIndex: true },
-);
+)
 
-const sheet = workbook.getSheetId("Sheet1");
+const sheet = workbook.getSheetId('Sheet1')
 if (sheet === undefined) {
-  throw new Error("Sheet1 was not created");
+  throw new Error('Sheet1 was not created')
 }
 
-const at = (row: number, col: number): WorkPaperCellAddress => ({ sheet, row, col });
+const at = (row: number, col: number): WorkPaperCellAddress => ({ sheet, row, col })
 
-workbook.setCellContents(at(1, 2), "=A2+B2");
-console.log(workbook.getCellValue(at(1, 2)));
+workbook.setCellContents(at(1, 2), '=A2+B2')
+console.log(workbook.getCellValue(at(1, 2)))
 ```
 
 Rules for agents:
@@ -160,25 +167,25 @@ docker compose down -v
 
 ## Package Map
 
-| Path | Role |
-| --- | --- |
-| `apps/web` | Vite/React browser source compiled into the monolith |
-| `apps/bilig` | Fullstack monolith runtime, API surface, and static asset server |
-| `packages/protocol` | Shared enums, opcodes, constants, and protocol types |
-| `packages/formula` | A1 addressing, lexer, parser, binder, compiler, JS evaluator |
-| `packages/core` | Workbook engine, scheduler, snapshots, selectors, sync ownership, WASM facade |
-| `packages/headless` | Headless WorkPaper runtime surfaces |
-| `packages/zero-sync` | Zero schema, workbook queries, projection, and event payload helpers |
-| `packages/binary-protocol` | Wire format for sync frames |
-| `packages/agent-api` | Agent request, response, event, and framing model |
-| `packages/worker-transport` | Engine host/client bridge for worker execution |
-| `packages/renderer` | Custom workbook reconciler and workbook DSL |
-| `packages/grid` | Reusable React spreadsheet UI components and hooks |
-| `packages/wasm-kernel` | AssemblyScript/WASM compute fast path |
-| `packages/storage-browser` | Browser-side persistence |
-| `packages/storage-server` | Server-side storage integration points |
-| `packages/excel-fixtures` | Checked-in formula parity fixtures |
-| `packages/benchmarks` | Benchmark harness and performance contracts |
+| Path                        | Role                                                                          |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| `apps/web`                  | Vite/React browser source compiled into the monolith                          |
+| `apps/bilig`                | Fullstack monolith runtime, API surface, and static asset server              |
+| `packages/protocol`         | Shared enums, opcodes, constants, and protocol types                          |
+| `packages/formula`          | A1 addressing, lexer, parser, binder, compiler, JS evaluator                  |
+| `packages/core`             | Workbook engine, scheduler, snapshots, selectors, sync ownership, WASM facade |
+| `packages/headless`         | Headless WorkPaper runtime surfaces                                           |
+| `packages/zero-sync`        | Zero schema, workbook queries, projection, and event payload helpers          |
+| `packages/binary-protocol`  | Wire format for sync frames                                                   |
+| `packages/agent-api`        | Agent request, response, event, and framing model                             |
+| `packages/worker-transport` | Engine host/client bridge for worker execution                                |
+| `packages/renderer`         | Custom workbook reconciler and workbook DSL                                   |
+| `packages/grid`             | Reusable React spreadsheet UI components and hooks                            |
+| `packages/wasm-kernel`      | AssemblyScript/WASM compute fast path                                         |
+| `packages/storage-browser`  | Browser-side persistence                                                      |
+| `packages/storage-server`   | Server-side storage integration points                                        |
+| `packages/excel-fixtures`   | Checked-in formula parity fixtures                                            |
+| `packages/benchmarks`       | Benchmark harness and performance contracts                                   |
 
 ## Verification
 
