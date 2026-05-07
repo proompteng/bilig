@@ -133,6 +133,8 @@ Repository:
   [`docs/show-hn-launch-pack.md`](../../docs/show-hn-launch-pack.md)
 - Community launch pack:
   [`docs/community-launch-pack.md`](../../docs/community-launch-pack.md)
+- Product Hunt launch assets:
+  [`docs/product-hunt-launch-assets.md`](../../docs/product-hunt-launch-assets.md)
 - published DEV article:
   <https://dev.to/gregkonush/why-agents-need-workbook-apis-instead-of-spreadsheet-screenshots-3d61>
 - DEV article source:

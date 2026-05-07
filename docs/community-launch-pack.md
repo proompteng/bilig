@@ -185,16 +185,18 @@ Do not submit the repository homepage as a product announcement.
 
 ## Product Hunt
 
-Product Hunt is a distribution surface for packaged products. It is probably
-premature until the project has a tighter demo asset, small gallery images, and a
-clear product page for `@bilig/headless`. Use it after at least one technical
-community launch produces feedback.
+Product Hunt is a distribution surface for packaged products. The thumbnail and
+gallery images now exist in
+[`docs/product-hunt-launch-assets.md`](product-hunt-launch-assets.md), so the
+next safe step is a draft, not a scheduled launch. Do not launch until there is
+a support window for comments and one more concrete product proof item to point
+people at.
 
 Draft listing:
 
 ```text
-Name: Bilig Headless
-Tagline: Headless spreadsheet engine for Node services and agents
+Name: bilig
+Tagline: headless spreadsheet engine for services and agents
 URL: https://github.com/proompteng/bilig
 ```
 
@@ -210,8 +212,8 @@ It is early infrastructure, not a finished Excel clone. I would most like feedba
 
 Do not launch on Product Hunt until these are ready:
 
-- small thumbnail or logo
-- gallery images showing code and output
+- small thumbnail or logo: ready in `docs/assets/product-hunt-thumbnail.png`
+- gallery images showing code and output: ready in `docs/assets/product-hunt-gallery-*.png`
 - one short demo recording
 - maintainer comment
 - support window for launch-day comments

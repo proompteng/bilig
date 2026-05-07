@@ -82,6 +82,8 @@ Shorter version:
   [`docs/show-hn-launch-pack.md`](show-hn-launch-pack.md)
 - Community launch pack:
   [`docs/community-launch-pack.md`](community-launch-pack.md)
+- Product Hunt launch assets:
+  [`docs/product-hunt-launch-assets.md`](product-hunt-launch-assets.md)
 - Feedback discussion:
   <https://github.com/proompteng/bilig/discussions/115>
 - Launch discussion: <https://github.com/proompteng/bilig/discussions/18>
