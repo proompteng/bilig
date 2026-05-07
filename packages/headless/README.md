@@ -166,6 +166,16 @@ For a concise evaluator-facing summary with copy-paste npm commands, proof
 links, shareable copy, and overclaim guardrails, use the root
 [`Public Adoption Kit`](../../docs/public-adoption-kit.md).
 
+For a focused persistence walkthrough, see
+[`docs/persisting-formula-backed-workpaper-documents-in-node.md`](../../docs/persisting-formula-backed-workpaper-documents-in-node.md)
+and run the example package:
+
+```sh
+cd examples/headless-workpaper
+npm install
+npm run persistence
+```
+
 ## Core Concepts
 
 - `WorkPaper` is the top-level workbook object. Create it with

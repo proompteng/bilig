@@ -36,3 +36,32 @@ Expected output:
 
 The repository smoke test runs this same example against packed local runtime
 packages through `pnpm workpaper:smoke:external`.
+
+## Persistence Round Trip
+
+Run the focused persistence example when you want to see a WorkPaper document
+written to disk, restored, edited, and exported again:
+
+```sh
+npm run persistence
+```
+
+Expected output:
+
+```json
+{
+  "beforeSave": {
+    "quarterNetMrr": 42100,
+    "annualizedRunRate": 505200,
+    "expansionAdjustedArr": 545616
+  },
+  "afterRestoreAndEdit": {
+    "quarterNetMrr": 45100,
+    "annualizedRunRate": 541200,
+    "expansionAdjustedArr": 584496
+  },
+  "persistedSheets": ["Plan", "Summary"],
+  "persistedNamedExpressions": ["ExpansionRatePercent"],
+  "saveFileBytes": 1209
+}
+```

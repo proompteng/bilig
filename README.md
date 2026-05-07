@@ -142,6 +142,11 @@ For the first technical adoption article, see
 It explains why agents should operate on workbook APIs instead of spreadsheet
 screenshots.
 
+For the persistence-focused follow-up article and runnable example, see
+[`docs/persisting-formula-backed-workpaper-documents-in-node.md`](docs/persisting-formula-backed-workpaper-documents-in-node.md)
+and
+[`examples/headless-workpaper/persistence-roundtrip.mjs`](examples/headless-workpaper/persistence-roundtrip.mjs).
+
 For the researched public-growth plan toward `1000` legitimate GitHub stars,
 see [`docs/github-stars-growth-plan.md`](docs/github-stars-growth-plan.md).
 

@@ -4,6 +4,7 @@
   "description": "Runnable Node example for the @bilig/headless WorkPaper API.",
   "type": "module",
   "scripts": {
+    "persistence": "node persistence-roundtrip.mjs",
     "start": "node revenue-plan.mjs"
   },
   "dependencies": {

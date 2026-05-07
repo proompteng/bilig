@@ -40,6 +40,8 @@ Shorter version:
   [`docs/headless-workpaper-benchmark-evidence.md`](headless-workpaper-benchmark-evidence.md)
 - Technical article:
   [`docs/why-agents-need-workbook-apis.md`](why-agents-need-workbook-apis.md)
+- Persistence article:
+  [`docs/persisting-formula-backed-workpaper-documents-in-node.md`](persisting-formula-backed-workpaper-documents-in-node.md)
 - GitHub stars growth plan:
   [`docs/github-stars-growth-plan.md`](github-stars-growth-plan.md)
 - Launch post draft:

@@ -75,6 +75,21 @@ function runNodeSmoke(
   projectDir: string,
   tarballPaths: string[],
 ): {
+  persistence: {
+    afterRestoreAndEdit: {
+      annualizedRunRate: number
+      expansionAdjustedArr: number
+      quarterNetMrr: number
+    }
+    beforeSave: {
+      annualizedRunRate: number
+      expansionAdjustedArr: number
+      quarterNetMrr: number
+    }
+    persistedNamedExpressions: string[]
+    persistedSheets: string[]
+    saveFileBytes: number
+  }
   output: {
     afterAgentEdit: {
       enterpriseArpa: number
@@ -97,11 +112,14 @@ function runNodeSmoke(
   mkdirSync(projectDir, { recursive: true })
   copyFileSync(join(headlessExampleDir, 'package.json'), join(projectDir, 'package.json'))
   copyFileSync(join(headlessExampleDir, 'revenue-plan.mjs'), join(projectDir, 'revenue-plan.mjs'))
+  copyFileSync(join(headlessExampleDir, 'persistence-roundtrip.mjs'), join(projectDir, 'persistence-roundtrip.mjs'))
 
   installTarballs(projectDir, tarballPaths)
   const output = parseNodeSmokeOutput(runTextCommand('node', ['revenue-plan.mjs'], { cwd: projectDir }))
+  const persistence = parseNodePersistenceOutput(runTextCommand('node', ['persistence-roundtrip.mjs'], { cwd: projectDir }))
 
   return {
+    persistence,
     projectDir,
     output,
   }
@@ -312,6 +330,59 @@ function parseNodeSmokeOutput(output: string): {
     persistedSheets,
     persistedNamedExpressions,
     restoredGrowthRatePercent: parsed.restoredGrowthRatePercent,
+  }
+}
+
+function parseNodePersistenceOutput(output: string): {
+  afterRestoreAndEdit: {
+    annualizedRunRate: number
+    expansionAdjustedArr: number
+    quarterNetMrr: number
+  }
+  beforeSave: {
+    annualizedRunRate: number
+    expansionAdjustedArr: number
+    quarterNetMrr: number
+  }
+  persistedNamedExpressions: string[]
+  persistedSheets: string[]
+  saveFileBytes: number
+} {
+  const parsed = parseJsonRecord(output, 'node persistence output')
+  const beforeSave = parseRecordValue(parsed.beforeSave, 'node persistence before-save output')
+  const afterRestoreAndEdit = parseRecordValue(parsed.afterRestoreAndEdit, 'node persistence restored output')
+  const persistedSheets = parsed.persistedSheets
+  const persistedNamedExpressions = parsed.persistedNamedExpressions
+
+  if (
+    typeof beforeSave.quarterNetMrr !== 'number' ||
+    typeof beforeSave.annualizedRunRate !== 'number' ||
+    typeof beforeSave.expansionAdjustedArr !== 'number' ||
+    typeof afterRestoreAndEdit.quarterNetMrr !== 'number' ||
+    typeof afterRestoreAndEdit.annualizedRunRate !== 'number' ||
+    typeof afterRestoreAndEdit.expansionAdjustedArr !== 'number' ||
+    !isStringArray(persistedSheets) ||
+    !isStringArray(persistedNamedExpressions) ||
+    typeof parsed.saveFileBytes !== 'number' ||
+    parsed.saveFileBytes <= 0
+  ) {
+    throw new Error(`Unexpected node persistence output: ${output}`)
+  }
+
+  return {
+    beforeSave: {
+      quarterNetMrr: beforeSave.quarterNetMrr,
+      annualizedRunRate: beforeSave.annualizedRunRate,
+      expansionAdjustedArr: beforeSave.expansionAdjustedArr,
+    },
+    afterRestoreAndEdit: {
+      quarterNetMrr: afterRestoreAndEdit.quarterNetMrr,
+      annualizedRunRate: afterRestoreAndEdit.annualizedRunRate,
+      expansionAdjustedArr: afterRestoreAndEdit.expansionAdjustedArr,
+    },
+    persistedSheets,
+    persistedNamedExpressions,
+    saveFileBytes: parsed.saveFileBytes,
   }
 }
 
