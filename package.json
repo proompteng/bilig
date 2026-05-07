@@ -110,7 +110,7 @@
     "test:correctness:server": "bun scripts/run-vitest.ts --run apps/bilig/src/zero/__tests__/projection.test.ts apps/bilig/src/zero/__tests__/projection-parity.test.ts apps/bilig/src/zero/__tests__/sync-relay.test.ts apps/bilig/src/http/sync-server.test.ts apps/bilig/src/workbook-runtime/browser-sync-replay.test.ts apps/bilig/src/workbook-runtime/sync-frame-shared.test.ts apps/bilig/src/workbook-runtime/sync-frame-router.test.ts apps/bilig/src/workbook-runtime/workbook-sync-session-host.test.ts",
     "test:correctness:fast": "pnpm analyze:quality && pnpm test:correctness:core && pnpm test:correctness:formula && pnpm test:correctness:corpus && pnpm test:correctness:server",
     "test:correctness:medium": "pnpm test:correctness:fast && pnpm test:correctness:browser",
-    "test:correctness:deep": "pnpm test:correctness:medium && pnpm test:fuzz:main && pnpm bench:smoke && CI=1 pnpm bench:contracts",
+    "test:correctness:deep": "bun scripts/clean-package-builds.ts && pnpm build && pnpm test:correctness:medium && pnpm test:fuzz:main && pnpm bench:smoke && CI=1 pnpm bench:contracts",
     "test:watch": "bun scripts/run-vitest.ts",
     "bench": "pnpm --filter @bilig/benchmarks bench",
     "bench:workpaper": "tsx packages/benchmarks/src/benchmark-workpaper.ts",
