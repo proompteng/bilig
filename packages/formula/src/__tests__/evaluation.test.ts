@@ -1070,10 +1070,10 @@ describe('formula builtins and JS evaluator', () => {
     expect(legacyTTest.value).toBeCloseTo(0.035098718645984794, 12)
     const zTest = evaluateAst(parseFormula('Z.TEST(D20:D24,2,1)'), context)
     expect(zTest).toMatchObject({ tag: ValueTag.Number })
-    expect(zTest.value).toBeCloseTo(0.012673617875446075, 12)
+    expect(zTest.value).toBeCloseTo(0.012673659338733989, 12)
     const legacyZTest = evaluateAst(parseFormula('ZTEST(D20:D24,2,1)'), context)
     expect(legacyZTest).toMatchObject({ tag: ValueTag.Number })
-    expect(legacyZTest.value).toBeCloseTo(0.012673617875446075, 12)
+    expect(legacyZTest.value).toBeCloseTo(0.012673659338733989, 12)
     expect(evaluateAst(parseFormula('LENB("é")'), context)).toEqual({
       tag: ValueTag.Number,
       value: 2,

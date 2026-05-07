@@ -159,7 +159,7 @@ describe('wasm kernel statistical test helpers', () => {
 
     expectNumberCell(kernel, outputCells[0], 0.0003082, 7)
     expectNumberCell(kernel, outputCells[1], 0.648317846786175, 12)
-    expectNumberCell(kernel, outputCells[2], 0.012673617875446075, 12)
+    expectNumberCell(kernel, outputCells[2], 0.012673659338733989, 12)
   })
 
   it('keeps t-test helpers stable across refactors', async () => {

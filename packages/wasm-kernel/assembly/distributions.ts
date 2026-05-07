@@ -11,8 +11,62 @@ export function standardNormalPdf(value: f64): f64 {
   return Math.exp(-(value * value) / 2.0) / Math.sqrt(2.0 * Math.PI)
 }
 
+// Keep normal CDF tighter than the legacy ERF approximation used by ERF/ERFC.
+const STANDARD_NORMAL_CDF_SERIES_MAX_ABSOLUTE = 5.0
+const STANDARD_NORMAL_TAIL_CONTINUED_FRACTION_TERMS = 32
+const SQRT_TWO_PI = 2.5066282746310002
+
 export function standardNormalCdf(value: f64): f64 {
-  return 0.5 * (1.0 + erfApprox(value / Math.sqrt(2.0)))
+  if (isNaN(value)) {
+    return NaN
+  }
+  if (!isFinite(value)) {
+    return value < 0.0 ? 0.0 : 1.0
+  }
+
+  const absolute = Math.abs(value)
+  if (absolute >= STANDARD_NORMAL_CDF_SERIES_MAX_ABSOLUTE) {
+    const tail = standardNormalUpperTail(absolute)
+    return value < 0.0 ? tail : clampProbability(1.0 - tail)
+  }
+
+  return clampProbability(standardNormalCdfSeries(value))
+}
+
+function standardNormalCdfSeries(value: f64): f64 {
+  const density = standardNormalPdf(value)
+  const squared = value * value
+  let sum = 0.0
+  let term = value
+
+  for (let denominator = 3; denominator < 256; denominator += 2) {
+    const next = sum + term
+    if (next == sum) {
+      break
+    }
+    sum = next
+    term *= squared / <f64>denominator
+  }
+
+  return 0.5 + density * sum
+}
+
+function standardNormalUpperTail(absolute: f64): f64 {
+  let continuedFraction = 0.0
+  for (let term = STANDARD_NORMAL_TAIL_CONTINUED_FRACTION_TERMS; term >= 1; term -= 1) {
+    continuedFraction = <f64>term / (absolute + continuedFraction)
+  }
+  return Math.exp(-(absolute * absolute) / 2.0) / SQRT_TWO_PI / (absolute + continuedFraction)
+}
+
+function clampProbability(value: f64): f64 {
+  if (value <= 0.0) {
+    return 0.0
+  }
+  if (value >= 1.0) {
+    return 1.0
+  }
+  return value
 }
 
 export function inverseStandardNormal(value: f64): f64 {

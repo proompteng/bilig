@@ -4360,8 +4360,8 @@ describe('wasm kernel', () => {
 
     expectNumberCell(kernel, cellIndex(2, 0, width), 0.648317846786175, 12)
     expectNumberCell(kernel, cellIndex(2, 1, width), 0.648317846786175, 12)
-    expectNumberCell(kernel, cellIndex(2, 2, width), 0.012673617875446075, 12)
-    expectNumberCell(kernel, cellIndex(2, 3, width), 0.012673617875446075, 12)
+    expectNumberCell(kernel, cellIndex(2, 2, width), 0.012673659338733989, 12)
+    expectNumberCell(kernel, cellIndex(2, 3, width), 0.012673659338733989, 12)
   })
 
   it('evaluates beta and f distribution functions and aliases on the wasm path', async () => {

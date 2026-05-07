@@ -661,4 +661,25 @@ describe('GitHub issue reductions', () => {
   it('reports the published package version through WorkPaper.version', () => {
     expect(WorkPaper.version).toBe(readHeadlessPackageVersion())
   })
+
+  it('resolves issue #106 normal CDF drift in option-pricing formulas', () => {
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Sheet1: [
+          [
+            '=NORMSDIST(-0.8281017980432489)',
+            '=NORMSDIST(-0.9281017980432489)',
+            '=NORM.DIST(-0.8281017980432489,0,1,TRUE)',
+            '=NORM.DIST(-0.8281017980432489,0,1,FALSE)',
+          ],
+        ],
+      },
+      { maxRows: 10, maxColumns: 8, useColumnIndex: true },
+    )
+
+    expectNumberClose(cellValue(workbook, 'Sheet1', 0, 0), 0.203806425664055)
+    expectNumberClose(cellValue(workbook, 'Sheet1', 0, 1), 0.17667738351319964)
+    expectNumberClose(cellValue(workbook, 'Sheet1', 0, 2), 0.203806425664055)
+    expectNumberClose(cellValue(workbook, 'Sheet1', 0, 3), 0.2831397103054239)
+  })
 })

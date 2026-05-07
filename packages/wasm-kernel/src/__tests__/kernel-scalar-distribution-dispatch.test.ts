@@ -76,6 +76,32 @@ function expectNumberCell(kernel: Awaited<ReturnType<typeof createKernel>>, inde
 }
 
 describe('wasm kernel scalar distribution dispatch', () => {
+  it('matches Excel normal CDF precision for option-pricing inputs', async () => {
+    const kernel = await createKernel()
+    const width = 8
+    kernel.init(16, 3, 7, 1, 1)
+    kernel.writeCells(new Uint8Array(16), new Float64Array(16), new Uint32Array(16), new Uint16Array(16))
+
+    const packed = packPrograms([
+      [encodePushNumber(0), encodeCall(BuiltinId.Normsdist, 1), encodeRet()],
+      [encodePushNumber(0), encodeCall(BuiltinId.Normsdist, 1), encodeRet()],
+      [encodePushNumber(0), encodePushNumber(1), encodePushNumber(2), encodePushNumber(3), encodeCall(BuiltinId.NormDist, 4), encodeRet()],
+    ])
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([cellIndex(1, 0, width), cellIndex(1, 1, width), cellIndex(1, 2, width)]),
+    )
+    const constants = packConstants([[-0.8281017980432489], [-0.9281017980432489], [-0.8281017980432489, 0, 1, 1]])
+    kernel.uploadConstants(constants.constants, constants.offsets, constants.lengths)
+    kernel.evalBatch(Uint32Array.from([cellIndex(1, 0, width), cellIndex(1, 1, width), cellIndex(1, 2, width)]))
+
+    expectNumberCell(kernel, cellIndex(1, 0, width), 0.203806425664055, 12)
+    expectNumberCell(kernel, cellIndex(1, 1, width), 0.17667738351319964, 12)
+    expectNumberCell(kernel, cellIndex(1, 2, width), 0.203806425664055, 12)
+  })
+
   it('keeps scalar distribution and special-function dispatch stable across refactors', async () => {
     const kernel = await createKernel()
     const width = 24
@@ -137,7 +163,7 @@ describe('wasm kernel scalar distribution dispatch', () => {
     kernel.uploadConstants(constants.constants, constants.offsets, constants.lengths)
     kernel.evalBatch(Uint32Array.from(Array.from({ length: 17 }, (_, index) => cellIndex(1, index, width))))
 
-    expectNumberCell(kernel, cellIndex(1, 0, width), 0.477249937113, 10)
+    expectNumberCell(kernel, cellIndex(1, 0, width), 0.477249868052, 12)
     expectNumberCell(kernel, cellIndex(1, 1, width), 0.053990966513, 12)
     expectNumberCell(kernel, cellIndex(1, 2, width), 0.842700689748, 10)
     expectNumberCell(kernel, cellIndex(1, 3, width), 0.842700688748, 10)
@@ -147,12 +173,12 @@ describe('wasm kernel scalar distribution dispatch', () => {
     expectNumberCell(kernel, cellIndex(1, 7, width), 0.97998199306, 10)
     expectNumberCell(kernel, cellIndex(1, 8, width), 1.06572477278, 10)
     expectNumberCell(kernel, cellIndex(1, 9, width), 1, 12)
-    expectNumberCell(kernel, cellIndex(1, 10, width), 0.908788715231, 10)
+    expectNumberCell(kernel, cellIndex(1, 10, width), 0.908788780274, 12)
     expectNumberCell(kernel, cellIndex(1, 11, width), 41.92232734621, 10)
     expectNumberCell(kernel, cellIndex(1, 12, width), 0.182649085389, 10)
     expectNumberCell(kernel, cellIndex(1, 13, width), 0.674489750223, 10)
     expectNumberCell(kernel, cellIndex(1, 14, width), 4.140475417393, 10)
-    expectNumberCell(kernel, cellIndex(1, 15, width), 0.578174078093, 10)
+    expectNumberCell(kernel, cellIndex(1, 15, width), 0.578174100803, 12)
     expectNumberCell(kernel, cellIndex(1, 16, width), 2, 10)
   })
 })

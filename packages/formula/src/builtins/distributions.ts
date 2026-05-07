@@ -1,4 +1,4 @@
-import { erfApprox, populationStandardDeviation, sampleStandardDeviation } from './statistics.js'
+import { populationStandardDeviation, sampleStandardDeviation } from './statistics.js'
 
 const LANCZOS_G = 7
 const LANCZOS_COEFFICIENTS = [
@@ -697,8 +697,62 @@ export function standardNormalPdf(value: number): number {
   return Math.exp(-(value * value) / 2) / Math.sqrt(2 * Math.PI)
 }
 
+// Keep normal CDF tighter than the legacy ERF approximation used by ERF/ERFC.
+const STANDARD_NORMAL_CDF_SERIES_MAX_ABSOLUTE = 5
+const STANDARD_NORMAL_TAIL_CONTINUED_FRACTION_TERMS = 32
+const SQRT_TWO_PI = Math.sqrt(2 * Math.PI)
+
 export function standardNormalCdf(value: number): number {
-  return 0.5 * (1 + erfApprox(value / Math.SQRT2))
+  if (Number.isNaN(value)) {
+    return Number.NaN
+  }
+  if (!Number.isFinite(value)) {
+    return value < 0 ? 0 : 1
+  }
+
+  const absolute = Math.abs(value)
+  if (absolute >= STANDARD_NORMAL_CDF_SERIES_MAX_ABSOLUTE) {
+    const tail = standardNormalUpperTail(absolute)
+    return value < 0 ? tail : clampProbability(1 - tail)
+  }
+
+  return clampProbability(standardNormalCdfSeries(value))
+}
+
+function standardNormalCdfSeries(value: number): number {
+  const density = standardNormalPdf(value)
+  const squared = value * value
+  let sum = 0
+  let term = value
+
+  for (let denominator = 3; denominator < 256; denominator += 2) {
+    const next = sum + term
+    if (next === sum) {
+      break
+    }
+    sum = next
+    term *= squared / denominator
+  }
+
+  return 0.5 + density * sum
+}
+
+function standardNormalUpperTail(absolute: number): number {
+  let continuedFraction = 0
+  for (let term = STANDARD_NORMAL_TAIL_CONTINUED_FRACTION_TERMS; term >= 1; term -= 1) {
+    continuedFraction = term / (absolute + continuedFraction)
+  }
+  return Math.exp(-(absolute * absolute) / 2) / SQRT_TWO_PI / (absolute + continuedFraction)
+}
+
+function clampProbability(value: number): number {
+  if (value <= 0) {
+    return 0
+  }
+  if (value >= 1) {
+    return 1
+  }
+  return value
 }
 
 export function inverseStandardNormal(probability: number): number | undefined {

@@ -304,13 +304,13 @@ describe('lookup builtins', () => {
     if (zTest.tag !== ValueTag.Number) {
       throw new Error('Z.TEST should return a number')
     }
-    expect(zTest.value).toBeCloseTo(0.012673617875446075, 12)
+    expect(zTest.value).toBeCloseTo(0.012673659338733989, 12)
 
     const legacyZTest = ZTEST(zSample, num(2), num(1))
     if (legacyZTest.tag !== ValueTag.Number) {
       throw new Error('ZTEST should return a number')
     }
-    expect(legacyZTest.value).toBeCloseTo(0.012673617875446075, 12)
+    expect(legacyZTest.value).toBeCloseTo(0.012673659338733989, 12)
 
     expect(F_TEST(cellRange([num(1), text('x')], 2, 1), cellRange([num(1)], 1, 1))).toEqual(err(ErrorCode.Div0))
     expect(F_TEST(cellRange([num(3), num(3)], 2, 1), cellRange([num(1), num(2)], 2, 1))).toEqual(err(ErrorCode.Div0))

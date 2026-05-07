@@ -47,6 +47,12 @@ describe('distribution helpers', () => {
     expect(inverseStandardNormal(0.001)).toBeCloseTo(-3.090232306167813, 8)
   })
 
+  it('matches Excel normal CDF precision for option-pricing inputs', () => {
+    expect(standardNormalCdf(-0.8281017980432489)).toBeCloseTo(0.203806425664055, 12)
+    expect(standardNormalCdf(-0.9281017980432489)).toBeCloseTo(0.17667738351319964, 12)
+    expect(percentileNormal(0, 1, -0.8281017980432489)).toBeCloseTo(0.203806425664055, 12)
+  })
+
   it('computes continuous distribution helpers', () => {
     const betaCdf = betaDistributionCdf(2, 8, 10, 1, 3)
     expect(betaCdf).toBeCloseTo(0.6854705810117458, 10)

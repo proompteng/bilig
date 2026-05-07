@@ -1,5 +1,6 @@
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import type { LookupBuiltin, LookupBuiltinArgument, RangeBuiltinArgument } from './lookup.js'
+import { standardNormalCdf } from './distributions.js'
 
 interface LookupHypothesisBuiltinDeps {
   errorValue: (code: ErrorCode) => CellValue
@@ -79,19 +80,6 @@ function regularizedLowerGamma(shape: number, x: number): number {
 function regularizedUpperGamma(shape: number, x: number): number {
   const lower = regularizedLowerGamma(shape, x)
   return Number.isFinite(lower) ? 1 - lower : Number.NaN
-}
-
-function erfApprox(value: number): number {
-  const sign = value < 0 ? -1 : 1
-  const absolute = Math.abs(value)
-  const t = 1 / (1 + 0.3275911 * absolute)
-  const y =
-    1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-absolute * absolute)
-  return sign * y
-}
-
-function standardNormalCdf(value: number): number {
-  return 0.5 * (1 + erfApprox(value / Math.sqrt(2)))
 }
 
 function logBeta(alpha: number, beta: number): number {

@@ -2063,10 +2063,10 @@ describe('SpreadsheetEngine', () => {
     expect(g1.value).toBeCloseTo(0.648317846786175, 12)
     const h1 = engine.getCellValue('Sheet1', 'H1')
     expect(h1).toMatchObject({ tag: ValueTag.Number })
-    expect(h1.value).toBeCloseTo(0.012673617875446075, 12)
+    expect(h1.value).toBeCloseTo(0.012673659338733989, 12)
     const i1 = engine.getCellValue('Sheet1', 'I1')
     expect(i1).toMatchObject({ tag: ValueTag.Number })
-    expect(i1.value).toBeCloseTo(0.012673617875446075, 12)
+    expect(i1.value).toBeCloseTo(0.012673659338733989, 12)
 
     expect(engine.explainCell('Sheet1', 'F1').mode).toBe(FormulaMode.WasmFastPath)
     expect(engine.explainCell('Sheet1', 'G1').mode).toBe(FormulaMode.WasmFastPath)
