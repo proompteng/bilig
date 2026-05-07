@@ -1,4 +1,4 @@
-import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
+import { ErrorCode, ValueTag, formatGeneralNumberValue, type CellValue } from '@bilig/protocol'
 import type { ArrayValue, EvaluationResult } from '../runtime-values.js'
 
 export interface RangeBuiltinArgument {
@@ -101,7 +101,7 @@ export function toStringValue(value: CellValue | undefined): string {
     case ValueTag.Empty:
       return ''
     case ValueTag.Number:
-      return String(value.value)
+      return formatGeneralNumberValue(value.value)
     case ValueTag.Boolean:
       return value.value ? 'TRUE' : 'FALSE'
     case ValueTag.String:

@@ -1,4 +1,4 @@
-import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
+import { ErrorCode, ValueTag, formatGeneralNumberValue, type CellValue } from '@bilig/protocol'
 import { createBlockedBuiltinMap, textPlaceholderBuiltinNames } from './placeholder.js'
 import { createTextCoreBuiltins } from './text-core-builtins.js'
 import { createTextFormatBuiltins } from './text-format-builtins.js'
@@ -32,7 +32,7 @@ function coerceText(value: CellValue): string {
     case ValueTag.Empty:
       return ''
     case ValueTag.Number:
-      return String(value.value)
+      return formatGeneralNumberValue(value.value)
     case ValueTag.Boolean:
       return value.value ? 'TRUE' : 'FALSE'
     case ValueTag.String:

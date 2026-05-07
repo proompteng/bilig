@@ -1,4 +1,4 @@
-import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
+import { ErrorCode, ValueTag, formatGeneralNumberValue, type CellValue } from '@bilig/protocol'
 import type { ArrayValue } from '../runtime-values.js'
 import type { LookupBuiltin, LookupBuiltinArgument, RangeBuiltinArgument } from './lookup.js'
 
@@ -22,7 +22,7 @@ function arrayTextCell(value: CellValue, strict: boolean): string | undefined {
     case ValueTag.Empty:
       return ''
     case ValueTag.Number:
-      return String(value.value)
+      return formatGeneralNumberValue(value.value)
     case ValueTag.Boolean:
       return value.value ? 'TRUE' : 'FALSE'
     case ValueTag.String:

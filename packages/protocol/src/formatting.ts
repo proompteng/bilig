@@ -166,13 +166,53 @@ export function formatCellDisplayValue(value: CellValue, formatCode: string | un
   }
 }
 
+export function formatGeneralNumberValue(value: number): string {
+  if (!Number.isFinite(value)) {
+    return String(value)
+  }
+  if (Object.is(value, -0) || value === 0) {
+    return '0'
+  }
+
+  return normalizeGeneralNumberText(value.toPrecision(15))
+}
+
+function normalizeGeneralNumberText(text: string): string {
+  const exponentIndex = text.search(/[eE]/)
+  if (exponentIndex >= 0) {
+    const mantissa = trimDecimalZeros(text.slice(0, exponentIndex))
+    const exponent = Number(text.slice(exponentIndex + 1))
+    if (!Number.isFinite(exponent)) {
+      return text
+    }
+    return `${mantissa}E${exponent >= 0 ? '+' : ''}${String(exponent)}`
+  }
+
+  const normalized = trimDecimalZeros(text)
+  return normalized === '-0' ? '0' : normalized
+}
+
+function trimDecimalZeros(text: string): string {
+  if (!text.includes('.')) {
+    return text
+  }
+  let end = text.length
+  while (end > 0 && text[end - 1] === '0') {
+    end -= 1
+  }
+  if (text[end - 1] === '.') {
+    end -= 1
+  }
+  return text.slice(0, end)
+}
+
 function formatNumberValue(value: number, format: CellNumberFormatPreset): string {
   const normalized = normalizeCellNumberFormatPreset(format)
   switch (format.kind) {
     case 'general':
-      return String(value)
+      return formatGeneralNumberValue(value)
     case 'text':
-      return String(value)
+      return formatGeneralNumberValue(value)
     case 'number':
       return new Intl.NumberFormat('en-US', {
         minimumFractionDigits: normalized.decimals,

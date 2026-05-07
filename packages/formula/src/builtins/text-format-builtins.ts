@@ -1,4 +1,4 @@
-import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
+import { ErrorCode, ValueTag, formatGeneralNumberValue, type CellValue } from '@bilig/protocol'
 import { excelSerialToDateParts } from './datetime.js'
 import type { TextBuiltin } from './text.js'
 
@@ -21,7 +21,7 @@ function valueToTextResult(deps: TextFormatBuiltinDeps, value: CellValue, format
     case ValueTag.Empty:
       return deps.stringResult('')
     case ValueTag.Number:
-      return deps.stringResult(String(value.value))
+      return deps.stringResult(formatGeneralNumberValue(value.value))
     case ValueTag.Boolean:
       return deps.stringResult(value.value ? 'TRUE' : 'FALSE')
     case ValueTag.String:

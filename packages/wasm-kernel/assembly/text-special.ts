@@ -1,6 +1,6 @@
 import { ValueTag } from './protocol'
 import { EXCEL_SECONDS_PER_DAY } from './date-finance'
-import { scalarText, trimAsciiWhitespace } from './text-codec'
+import { generalNumberText, scalarText, trimAsciiWhitespace } from './text-codec'
 import { substituteText } from './text-ops'
 
 function toNumberExactValue(tag: u8, value: f64): f64 {
@@ -263,7 +263,7 @@ export function arrayToTextCell(
   outputStringData: Uint16Array,
 ): string | null {
   if (tag == ValueTag.Number) {
-    return value == Math.trunc(value) ? (<i64>value).toString() : value.toString()
+    return generalNumberText(value)
   }
   const text = scalarText(tag, value, stringOffsets, stringLengths, stringData, outputStringOffsets, outputStringLengths, outputStringData)
   if (text == null) {

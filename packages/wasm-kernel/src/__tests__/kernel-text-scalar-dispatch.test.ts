@@ -20,6 +20,10 @@ function encodePushError(code: ErrorCode): number {
   return (Opcode.PushError << 24) | code
 }
 
+function encodeBinary(opcode: Opcode): number {
+  return opcode << 24
+}
+
 function encodeRet(): number {
   return Opcode.Ret << 24
 }
@@ -146,5 +150,38 @@ describe('wasm kernel scalar text/search dispatch', () => {
     expect(kernel.readNumbers()[cellIndex(1, 16, width)]).toBe(1)
     expect(kernel.readTags()[cellIndex(1, 17, width)]).toBe(ValueTag.Error)
     expect(kernel.readErrors()[cellIndex(1, 17, width)]).toBe(ErrorCode.Ref)
+  })
+
+  it('coerces numbers to General-format text before concatenation', async () => {
+    const kernel = await createKernel()
+    const width = 8
+    const pooledStrings = ['|', '0', 'x']
+    kernel.init(32, pooledStrings.length, 4, 1, 1)
+    kernel.uploadStrings(
+      Uint32Array.from([0, 1, 2]),
+      Uint32Array.from([1, 1, 1]),
+      Uint16Array.from(Array.from('|0x', (char) => char.charCodeAt(0))),
+    )
+    kernel.writeCells(new Uint8Array(32), new Float64Array(32), new Uint32Array(32), new Uint16Array(32))
+
+    const packed = packPrograms([
+      [encodePushNumber(0), encodePushString(0), encodeBinary(Opcode.Concat), encodeRet()],
+      [encodePushString(1), encodePushNumber(0), encodeBinary(Opcode.Concat), encodeRet()],
+      [encodePushString(2), encodePushNumber(0), encodeCall(BuiltinId.Concat, 2), encodeRet()],
+    ])
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([cellIndex(1, 0, width), cellIndex(1, 1, width), cellIndex(1, 2, width)]),
+    )
+    const constants = packConstants([[1989], [1], [0.1 + 0.2]])
+    kernel.uploadConstants(constants.constants, constants.offsets, constants.lengths)
+
+    kernel.evalBatch(Uint32Array.from([cellIndex(1, 0, width), cellIndex(1, 1, width), cellIndex(1, 2, width)]))
+
+    expect(readStringCell(kernel, cellIndex(1, 0, width), pooledStrings)).toBe('1989|')
+    expect(readStringCell(kernel, cellIndex(1, 1, width), pooledStrings)).toBe('01')
+    expect(readStringCell(kernel, cellIndex(1, 2, width), pooledStrings)).toBe('x0.3')
   })
 })

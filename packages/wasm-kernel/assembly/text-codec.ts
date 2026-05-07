@@ -1,6 +1,8 @@
 import { ValueTag } from './protocol'
 
 const OUTPUT_STRING_BASE: f64 = 2147483648.0
+const GENERAL_NUMBER_SIGNIFICANT_DIGITS: i32 = 15
+const MAX_SAFE_INTEGER_F64: f64 = 9007199254740991.0
 
 function outputStringIndex(value: f64): i32 {
   if (value < OUTPUT_STRING_BASE) {
@@ -17,7 +19,8 @@ export function textLength(tag: u8, value: f64, stringLengths: Uint32Array, outp
     return value != 0 ? 4 : 5
   }
   if (tag == ValueTag.Number) {
-    return value.toString().length
+    const text = generalNumberText(value)
+    return text == null ? -1 : text.length
   }
   if (tag == ValueTag.String) {
     const outputIndex = outputStringIndex(value)
@@ -35,6 +38,69 @@ export function textLength(tag: u8, value: f64, stringLengths: Uint32Array, outp
     return <i32>stringLengths[stringId]
   }
   return -1
+}
+
+function trimDecimalZeros(text: string): string {
+  const decimalIndex = text.indexOf('.')
+  if (decimalIndex < 0) {
+    return text
+  }
+
+  let end = text.length
+  while (end > decimalIndex && text.charCodeAt(end - 1) == 48) {
+    end -= 1
+  }
+  if (end > 0 && text.charCodeAt(end - 1) == 46) {
+    end -= 1
+  }
+  return text.slice(0, end)
+}
+
+function trimGeneralNumberText(text: string): string {
+  const exponentIndex = text.indexOf('e') >= 0 ? text.indexOf('e') : text.indexOf('E')
+  if (exponentIndex >= 0) {
+    const mantissa = trimDecimalZeros(text.slice(0, exponentIndex))
+    const exponent = text.slice(exponentIndex + 1)
+    return mantissa + 'E' + (exponent.startsWith('+') || exponent.startsWith('-') ? exponent : '+' + exponent)
+  }
+
+  const trimmed = trimDecimalZeros(text)
+  return trimmed == '-0' ? '0' : trimmed
+}
+
+function roundToSignificantDigits(value: f64, digits: i32): f64 {
+  if (value == 0.0 || !isFinite(value)) {
+    return value
+  }
+
+  const sign = value < 0.0 ? -1.0 : 1.0
+  const absolute = Math.abs(value)
+  const exponent = <i32>Math.floor(Math.log(absolute) / Math.log(10.0))
+  const scaleExponent = digits - exponent - 1
+  const scale = Math.pow(10.0, <f64>scaleExponent)
+  if (!isFinite(scale) || scale == 0.0) {
+    return value
+  }
+
+  return (sign * Math.round(absolute * scale)) / scale
+}
+
+export function generalNumberText(value: f64): string | null {
+  if (!isFinite(value)) {
+    return null
+  }
+  if (value == 0.0) {
+    return '0'
+  }
+
+  const rounded = roundToSignificantDigits(value, GENERAL_NUMBER_SIGNIFICANT_DIGITS)
+  if (rounded == 0.0) {
+    return '0'
+  }
+  if (rounded == Math.trunc(rounded) && Math.abs(rounded) <= MAX_SAFE_INTEGER_F64) {
+    return (<i64>rounded).toString()
+  }
+  return trimGeneralNumberText(rounded.toString())
 }
 
 export function utf8ByteLength(text: string): i32 {
@@ -242,7 +308,7 @@ export function scalarText(
     return value != 0 ? 'TRUE' : 'FALSE'
   }
   if (tag == ValueTag.Number) {
-    return value.toString()
+    return generalNumberText(value)
   }
   if (tag == ValueTag.String) {
     const outputIndex = outputStringIndex(value)

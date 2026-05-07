@@ -1,4 +1,4 @@
-import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
+import { ErrorCode, ValueTag, formatGeneralNumberValue, type CellValue } from '@bilig/protocol'
 
 export function valueError(): CellValue {
   return { tag: ValueTag.Error, code: ErrorCode.Value }
@@ -33,7 +33,7 @@ export function coerceText(value: CellValue): string | undefined {
     case ValueTag.String:
       return value.value
     case ValueTag.Number:
-      return String(value.value)
+      return formatGeneralNumberValue(value.value)
     case ValueTag.Boolean:
       return value.value ? 'TRUE' : 'FALSE'
     case ValueTag.Empty:

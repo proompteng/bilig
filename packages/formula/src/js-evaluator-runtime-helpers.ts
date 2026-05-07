@@ -1,4 +1,4 @@
-import { ErrorCode, ValueTag, formatErrorCode, type CellValue } from '@bilig/protocol'
+import { ErrorCode, ValueTag, formatErrorCode, formatGeneralNumberValue, type CellValue } from '@bilig/protocol'
 import type { RangeBuiltinArgument } from './builtins/lookup.js'
 import type { MatrixValue } from './group-pivot-evaluator.js'
 import { emptyValue, error } from './js-evaluator-cell-values.js'
@@ -40,7 +40,7 @@ export function toStringValue(value: CellValue): string {
     case ValueTag.Empty:
       return ''
     case ValueTag.Number:
-      return String(value.value)
+      return formatGeneralNumberValue(value.value)
     case ValueTag.Boolean:
       return value.value ? 'TRUE' : 'FALSE'
     case ValueTag.String:

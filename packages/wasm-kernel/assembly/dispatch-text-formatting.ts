@@ -1,6 +1,6 @@
 import { BuiltinId, ErrorCode, ValueTag } from './protocol'
 import { scalarArgsOnly, scalarErrorAt } from './builtin-args'
-import { poolString, scalarText } from './text-codec'
+import { generalNumberText, poolString, scalarText } from './text-codec'
 import {
   arrayToTextCell,
   coerceScalarNumberLikeText,
@@ -556,7 +556,7 @@ export function tryApplyTextFormattingBuiltin(
     if (tag == ValueTag.Empty) {
       textResult = ''
     } else if (tag == ValueTag.Number) {
-      textResult = valueStack[base].toString()
+      textResult = generalNumberText(valueStack[base])
     } else if (tag == ValueTag.Boolean) {
       textResult = valueStack[base] != 0 ? 'TRUE' : 'FALSE'
     } else if (tag == ValueTag.String) {

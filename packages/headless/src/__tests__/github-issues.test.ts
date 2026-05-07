@@ -865,6 +865,35 @@ describe('GitHub issue reductions', () => {
     expectString(cellValue(workbook, 'Sheet1', 6, 0), 'Keyboard')
   })
 
+  it('resolves issue #102 formula number text coercion during concatenation', () => {
+    const rows = Array.from({ length: 45 }, () => Array.from<TestCell>({ length: 10 }).fill(null))
+
+    rows[5][4] = 1989
+    rows[5][5] = 1
+    rows[5][6] = '=E6&"|"&IF(F6<10,"0"&F6,F6)'
+    rows[15][2] = '$'
+    rows[15][3] = 1_000_000
+    rows[27][4] = 1989
+    rows[27][5] = 2
+    rows[27][6] = '=E28&"|"&IF(F28<10,"0"&F28,F28)'
+    rows[44][3] = '=IF(D16>=1000000,$C16&ROUNDUP(D16/1000000,2)&"m",$C16&ROUNDUP(D16/1000,0)&"k")&" at "'
+    rows[44][4] = '=ROUND(0.5*100,0)&"%"'
+    rows[44][5] = '=(0.1+0.2)&" cash"'
+
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        'Step 1': rows,
+      },
+      { maxRows: 80, maxColumns: 12, useColumnIndex: true },
+    )
+
+    expectString(cellValue(workbook, 'Step 1', 5, 6), '1989|01')
+    expectString(cellValue(workbook, 'Step 1', 27, 6), '1989|02')
+    expectString(cellValue(workbook, 'Step 1', 44, 3), '$1m at ')
+    expectString(cellValue(workbook, 'Step 1', 44, 4), '50%')
+    expectString(cellValue(workbook, 'Step 1', 44, 5), '0.3 cash')
+  })
+
   it('resolves issue #117 imported hidden-row SUBTOTAL values', () => {
     const tableRows: Array<{ readonly amount: number; readonly quarter: string }> = [
       { amount: 3255, quarter: 'Qtr 2' },

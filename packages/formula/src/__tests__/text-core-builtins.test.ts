@@ -29,6 +29,14 @@ describe('text core builtins', () => {
     expect(trimmed).toEqual(text('alpha beta'))
   })
 
+  it('coerces numeric text arguments with General-format semantics', () => {
+    const CONCAT = getTextBuiltin('CONCAT')!
+    const LEN = getTextBuiltin('LEN')!
+
+    expect(CONCAT(text('FY'), number(1989), text('-'), number(0.1 + 0.2))).toEqual(text('FY1989-0.3'))
+    expect(LEN(number(1989))).toEqual(number(4))
+  })
+
   it('should support localization and baht text helpers', () => {
     // Arrange
     const ASC = getTextBuiltin('ASC')!
