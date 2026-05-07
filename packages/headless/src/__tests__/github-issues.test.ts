@@ -204,6 +204,46 @@ describe('GitHub issue reductions', () => {
     expect(thrown.message).toContain('timed out')
   })
 
+  it('keeps issue #7 wrapped criteria aggregates on the direct evaluator path', () => {
+    const rowCount = 5_000
+    const formulaCount = 20
+    const data = Array.from({ length: rowCount }, (_, row) => [row % 3 === 0 ? 'Deposit' : 'Withdrawal', row + 1])
+    const formulas = Array.from({ length: formulaCount }, (_, row) => [
+      row,
+      `=IFERROR(ROUND(SUMIFS(Data!$B$1:$B$${rowCount},Data!$A$1:$A$${rowCount},"Deposit"),2),0)`,
+    ])
+
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Data: data,
+        Formulas: formulas,
+      },
+      { maxRows: rowCount + formulaCount + 10, maxColumns: 8, useColumnIndex: true },
+    )
+
+    expectNumber(cellValue(workbook, 'Formulas', formulaCount - 1, 1), 4_167_500)
+    expect(workbook.getPerformanceCounters().directFormulaInitialEvaluations).toBe(formulaCount)
+  })
+
+  it('recalculates rounded criteria aggregates after edits instead of applying raw deltas', () => {
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Data: [
+          ['Deposit', 1.235],
+          ['Deposit', 0],
+        ],
+        Summary: [['=ROUND(SUMIFS(Data!$B$1:$B$2,Data!$A$1:$A$2,"Deposit"),2)']],
+      },
+      { maxRows: 10, maxColumns: 4, useColumnIndex: true },
+    )
+    const dataSheetId = workbook.getSheetId('Data')
+
+    expectNumber(cellValue(workbook, 'Summary', 0, 0), 1.24)
+    workbook.setCellContents({ sheet: dataSheetId, row: 0, col: 1 }, 1.236)
+
+    expectNumber(cellValue(workbook, 'Summary', 0, 0), 1.24)
+  })
+
   it('reports the published package version through WorkPaper.version', () => {
     expect(WorkPaper.version).toBe(readHeadlessPackageVersion())
   })

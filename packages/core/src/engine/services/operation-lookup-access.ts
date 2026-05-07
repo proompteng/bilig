@@ -153,6 +153,7 @@ export function createOperationLookupAccess(args: {
     const aggregateRange = directCriteria.aggregateRange
     if (
       directCriteria.aggregateKind !== 'sum' ||
+      (directCriteria.resultTransforms?.length ?? 0) > 0 ||
       aggregateRange === undefined ||
       aggregateRange.sheetName !== request.sheetName ||
       aggregateRange.col !== request.col ||

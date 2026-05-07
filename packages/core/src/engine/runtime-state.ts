@@ -225,10 +225,21 @@ export interface RuntimeDirectCriteriaPair {
   readonly criterion: RuntimeDirectCriteriaOperand
 }
 
+export type RuntimeDirectCriteriaResultTransform =
+  | {
+      readonly kind: 'round'
+      readonly digits: CellValue
+    }
+  | {
+      readonly kind: 'if-error'
+      readonly fallback: CellValue
+    }
+
 export interface RuntimeDirectCriteriaDescriptor {
   readonly aggregateKind: 'count' | 'sum' | 'average' | 'min' | 'max'
   readonly aggregateRange: RuntimeDirectCriteriaRange | undefined
   readonly criteriaPairs: readonly RuntimeDirectCriteriaPair[]
+  readonly resultTransforms?: readonly RuntimeDirectCriteriaResultTransform[]
 }
 
 export interface RuntimeDirectAggregateDescriptor {

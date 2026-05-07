@@ -15,6 +15,7 @@ import type {
   EngineRuntimeState,
   RuntimeDirectAggregateDescriptor,
   RuntimeDirectCriteriaDescriptor,
+  RuntimeDirectCriteriaResultTransform,
   RuntimeDirectLookupDescriptor,
 } from '../runtime-state.js'
 import type { RegionGraph } from '../../deps/region-graph.js'
@@ -176,6 +177,16 @@ function resolveDirectCriteriaRange(
   }
 }
 
+function appendDirectCriteriaResultTransform(
+  descriptor: RuntimeDirectCriteriaDescriptor,
+  transform: RuntimeDirectCriteriaResultTransform,
+): RuntimeDirectCriteriaDescriptor {
+  return {
+    ...descriptor,
+    resultTransforms: [...(descriptor.resultTransforms ?? []), transform],
+  }
+}
+
 export function buildDirectCriteriaDescriptor(args: {
   readonly compiled: ParsedCompiledFormula
   readonly ownerSheetName: string
@@ -183,12 +194,6 @@ export function buildDirectCriteriaDescriptor(args: {
   readonly ensureCellTracked: (sheetName: string, address: string) => number
   readonly regionGraph: RegionGraph
 }): RuntimeDirectCriteriaDescriptor | undefined {
-  const node = args.compiled.optimizedAst
-  if (node.kind !== 'CallExpr') {
-    return undefined
-  }
-  const callee = node.callee.trim().toUpperCase()
-
   const resolveCriterionOperand = (
     criterionNode: FormulaNode | undefined,
   ): RuntimeDirectCriteriaDescriptor['criteriaPairs'][number]['criterion'] | undefined => {
@@ -262,52 +267,106 @@ export function buildDirectCriteriaDescriptor(args: {
     }
   }
 
-  if (callee === 'COUNTIF') {
-    const criteriaPair = pair(node.args[0], node.args[1])
-    if (!criteriaPair) {
+  const buildDescriptorForNode = (node: FormulaNode): RuntimeDirectCriteriaDescriptor | undefined => {
+    if (node.kind !== 'CallExpr') {
       return undefined
     }
-    return {
-      aggregateKind: 'count',
-      aggregateRange: undefined,
-      criteriaPairs: [criteriaPair],
-    }
-  }
+    const callee = node.callee.trim().toUpperCase()
 
-  if (callee === 'COUNTIFS') {
-    if (node.args.length === 0 || node.args.length % 2 !== 0) {
+    if (callee === 'ROUND') {
+      const digits = staticCellValue(node.args[1])
+      if (node.args.length !== 2 || !digits) {
+        return undefined
+      }
+      const inner = buildDescriptorForNode(node.args[0]!)
+      return inner ? appendDirectCriteriaResultTransform(inner, { kind: 'round', digits }) : undefined
+    }
+
+    if (callee === 'IFERROR') {
+      const fallback = staticCellValue(node.args[1])
+      if (node.args.length !== 2 || !fallback) {
+        return undefined
+      }
+      const inner = buildDescriptorForNode(node.args[0]!)
+      return inner ? appendDirectCriteriaResultTransform(inner, { kind: 'if-error', fallback }) : undefined
+    }
+
+    if (callee === 'COUNTIF') {
+      const criteriaPair = pair(node.args[0], node.args[1])
+      if (!criteriaPair) {
+        return undefined
+      }
+      return {
+        aggregateKind: 'count',
+        aggregateRange: undefined,
+        criteriaPairs: [criteriaPair],
+      }
+    }
+
+    if (callee === 'COUNTIFS') {
+      if (node.args.length === 0 || node.args.length % 2 !== 0) {
+        return undefined
+      }
+      const criteriaPairs: Array<RuntimeDirectCriteriaDescriptor['criteriaPairs'][number]> = []
+      for (let index = 0; index < node.args.length; index += 2) {
+        const criteriaPair = pair(node.args[index], node.args[index + 1])
+        if (!criteriaPair) {
+          return undefined
+        }
+        criteriaPairs.push(criteriaPair)
+      }
+      const expectedLength = criteriaPairs[0]!.range.length
+      if (criteriaPairs.some((current) => current.range.length !== expectedLength)) {
+        return undefined
+      }
+      return {
+        aggregateKind: 'count',
+        aggregateRange: undefined,
+        criteriaPairs,
+      }
+    }
+
+    if (callee === 'SUMIF' || callee === 'AVERAGEIF') {
+      const criteriaPair = pair(node.args[0], node.args[1])
+      if (!criteriaPair) {
+        return undefined
+      }
+      const aggregateRange = resolveDirectCriteriaRange(node.args[2] ?? node.args[0], args.ownerSheetName)
+      if (!aggregateRange || aggregateRange.length !== criteriaPair.range.length) {
+        return undefined
+      }
+      return {
+        aggregateKind: callee === 'SUMIF' ? 'sum' : 'average',
+        aggregateRange: {
+          ...aggregateRange,
+          regionId: args.regionGraph.internSingleColumnRegion({
+            sheetName: aggregateRange.sheetName,
+            rowStart: aggregateRange.rowStart,
+            rowEnd: aggregateRange.rowEnd,
+            col: aggregateRange.col,
+          }),
+        },
+        criteriaPairs: [criteriaPair],
+      }
+    }
+
+    if (callee !== 'SUMIFS' && callee !== 'AVERAGEIFS' && callee !== 'MINIFS' && callee !== 'MAXIFS') {
+      return undefined
+    }
+    const aggregateRange = resolveDirectCriteriaRange(node.args[0], args.ownerSheetName)
+    if (!aggregateRange || node.args.length < 3 || node.args.length % 2 === 0) {
       return undefined
     }
     const criteriaPairs: Array<RuntimeDirectCriteriaDescriptor['criteriaPairs'][number]> = []
-    for (let index = 0; index < node.args.length; index += 2) {
+    for (let index = 1; index < node.args.length; index += 2) {
       const criteriaPair = pair(node.args[index], node.args[index + 1])
-      if (!criteriaPair) {
+      if (!criteriaPair || criteriaPair.range.length !== aggregateRange.length) {
         return undefined
       }
       criteriaPairs.push(criteriaPair)
     }
-    const expectedLength = criteriaPairs[0]!.range.length
-    if (criteriaPairs.some((current) => current.range.length !== expectedLength)) {
-      return undefined
-    }
     return {
-      aggregateKind: 'count',
-      aggregateRange: undefined,
-      criteriaPairs,
-    }
-  }
-
-  if (callee === 'SUMIF' || callee === 'AVERAGEIF') {
-    const criteriaPair = pair(node.args[0], node.args[1])
-    if (!criteriaPair) {
-      return undefined
-    }
-    const aggregateRange = resolveDirectCriteriaRange(node.args[2] ?? node.args[0], args.ownerSheetName)
-    if (!aggregateRange || aggregateRange.length !== criteriaPair.range.length) {
-      return undefined
-    }
-    return {
-      aggregateKind: callee === 'SUMIF' ? 'sum' : 'average',
+      aggregateKind: callee === 'SUMIFS' ? 'sum' : callee === 'AVERAGEIFS' ? 'average' : callee === 'MINIFS' ? 'min' : 'max',
       aggregateRange: {
         ...aggregateRange,
         regionId: args.regionGraph.internSingleColumnRegion({
@@ -317,38 +376,11 @@ export function buildDirectCriteriaDescriptor(args: {
           col: aggregateRange.col,
         }),
       },
-      criteriaPairs: [criteriaPair],
+      criteriaPairs,
     }
   }
 
-  if (callee !== 'SUMIFS' && callee !== 'AVERAGEIFS' && callee !== 'MINIFS' && callee !== 'MAXIFS') {
-    return undefined
-  }
-  const aggregateRange = resolveDirectCriteriaRange(node.args[0], args.ownerSheetName)
-  if (!aggregateRange || node.args.length < 3 || node.args.length % 2 === 0) {
-    return undefined
-  }
-  const criteriaPairs: Array<RuntimeDirectCriteriaDescriptor['criteriaPairs'][number]> = []
-  for (let index = 1; index < node.args.length; index += 2) {
-    const criteriaPair = pair(node.args[index], node.args[index + 1])
-    if (!criteriaPair || criteriaPair.range.length !== aggregateRange.length) {
-      return undefined
-    }
-    criteriaPairs.push(criteriaPair)
-  }
-  return {
-    aggregateKind: callee === 'SUMIFS' ? 'sum' : callee === 'AVERAGEIFS' ? 'average' : callee === 'MINIFS' ? 'min' : 'max',
-    aggregateRange: {
-      ...aggregateRange,
-      regionId: args.regionGraph.internSingleColumnRegion({
-        sheetName: aggregateRange.sheetName,
-        rowStart: aggregateRange.rowStart,
-        rowEnd: aggregateRange.rowEnd,
-        col: aggregateRange.col,
-      }),
-    },
-    criteriaPairs,
-  }
+  return buildDescriptorForNode(args.compiled.optimizedAst)
 }
 
 export function buildDirectAggregateDescriptor(args: {

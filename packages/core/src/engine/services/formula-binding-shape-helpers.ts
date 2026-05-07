@@ -98,6 +98,34 @@ export function directCriteriaOperandEqual(
   return right.kind === 'literal' && JSON.stringify(left.value) === JSON.stringify(right.value)
 }
 
+function directCriteriaResultTransformsEqual(
+  left: RuntimeDirectCriteriaDescriptor['resultTransforms'],
+  right: RuntimeDirectCriteriaDescriptor['resultTransforms'],
+): boolean {
+  const leftTransforms = left ?? []
+  const rightTransforms = right ?? []
+  if (leftTransforms.length !== rightTransforms.length) {
+    return false
+  }
+  for (let index = 0; index < leftTransforms.length; index += 1) {
+    const leftTransform = leftTransforms[index]!
+    const rightTransform = rightTransforms[index]!
+    if (leftTransform.kind !== rightTransform.kind) {
+      return false
+    }
+    if (leftTransform.kind === 'round') {
+      if (rightTransform.kind !== 'round' || JSON.stringify(leftTransform.digits) !== JSON.stringify(rightTransform.digits)) {
+        return false
+      }
+      continue
+    }
+    if (rightTransform.kind !== 'if-error' || JSON.stringify(leftTransform.fallback) !== JSON.stringify(rightTransform.fallback)) {
+      return false
+    }
+  }
+  return true
+}
+
 export function directCriteriaStructureEqual(
   left: RuntimeDirectCriteriaDescriptor | undefined,
   right: RuntimeDirectCriteriaDescriptor | undefined,
@@ -124,6 +152,9 @@ export function directCriteriaStructureEqual(
     return false
   }
   if (left.criteriaPairs.length !== right.criteriaPairs.length) {
+    return false
+  }
+  if (!directCriteriaResultTransformsEqual(left.resultTransforms, right.resultTransforms)) {
     return false
   }
   for (let index = 0; index < left.criteriaPairs.length; index += 1) {

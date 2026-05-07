@@ -4,6 +4,7 @@ import {
   createLookupBuiltinResolver,
   evaluatePlanResult,
   formatAddress,
+  getBuiltin,
   isArrayValue,
   lowerToPlan,
   type EvaluationContext,
@@ -65,6 +66,7 @@ export function createEngineFormulaEvaluationService(args: {
 }): EngineFormulaEvaluationService {
   const emptyChangedCellIndices: number[] = []
   const directCriteriaAggregateCache = new Map<string, CellValue>()
+  const roundBuiltin = getBuiltin('ROUND')
 
   const directCriteriaRangeVersionKey = (range: { sheetName: string; rowStart: number; rowEnd: number; col: number }): string => {
     const sheet = args.state.workbook.getSheet(range.sheetName)
@@ -221,6 +223,26 @@ export function createEngineFormulaEvaluationService(args: {
     return { tag: ValueTag.String, value: `${operand.prefix}${cellValueCriteriaString(value)}${operand.suffix}`, stringId: 0 }
   }
 
+  const applyDirectCriteriaResultTransforms = (formula: RuntimeFormula, value: CellValue): CellValue => {
+    const transforms = formula.directCriteria?.resultTransforms
+    if (!transforms || transforms.length === 0) {
+      return value
+    }
+    let current = value
+    for (let index = 0; index < transforms.length; index += 1) {
+      const transform = transforms[index]!
+      if (transform.kind === 'if-error') {
+        if (current.tag === ValueTag.Error) {
+          current = transform.fallback
+        }
+        continue
+      }
+      const rounded = roundBuiltin?.(current, transform.digits) ?? errorValue(ErrorCode.Name)
+      current = isArrayValue(rounded) ? errorValue(ErrorCode.Value) : rounded
+    }
+    return current
+  }
+
   const tryEvaluateDirectCriteriaAggregate = (formula: RuntimeFormula): CellValue | undefined => {
     const directCriteria = formula.directCriteria
     if (!directCriteria) {
@@ -244,7 +266,7 @@ export function createEngineFormulaEvaluationService(args: {
     }
 
     if (directCriteria.aggregateKind === 'count') {
-      return directNumberResult(matches.length)
+      return applyDirectCriteriaResultTransforms(formula, directNumberResult(matches.length))
     }
 
     const aggregateRange = directCriteria.aggregateRange
@@ -258,7 +280,7 @@ export function createEngineFormulaEvaluationService(args: {
     ].join('\u0000')
     const cachedAggregate = directCriteriaAggregateCache.get(aggregateCacheKey)
     if (cachedAggregate) {
-      return cachedAggregate
+      return applyDirectCriteriaResultTransforms(formula, cachedAggregate)
     }
     const aggregateSlice = args.runtimeColumnStore.getColumnSlice({
       sheetName: aggregateRange.sheetName,
@@ -272,7 +294,7 @@ export function createEngineFormulaEvaluationService(args: {
       for (let index = 0; index < matches.length; index += 1) {
         sum += numericLikeValueAt(aggregateSlice, matches.rows[index]!) ?? 0
       }
-      return rememberDirectCriteriaResult(aggregateCacheKey, directNumberResult(sum))
+      return applyDirectCriteriaResultTransforms(formula, rememberDirectCriteriaResult(aggregateCacheKey, directNumberResult(sum)))
     }
 
     if (directCriteria.aggregateKind === 'average') {
@@ -286,9 +308,9 @@ export function createEngineFormulaEvaluationService(args: {
         count += 1
         sum += numeric
       }
-      return rememberDirectCriteriaResult(
-        aggregateCacheKey,
-        count === 0 ? directErrorResult(ErrorCode.Div0) : directNumberResult(sum / count),
+      return applyDirectCriteriaResultTransforms(
+        formula,
+        rememberDirectCriteriaResult(aggregateCacheKey, count === 0 ? directErrorResult(ErrorCode.Div0) : directNumberResult(sum / count)),
       )
     }
 
@@ -301,7 +323,10 @@ export function createEngineFormulaEvaluationService(args: {
         }
         minimum = Math.min(minimum, numeric)
       }
-      return rememberDirectCriteriaResult(aggregateCacheKey, directNumberResult(minimum === Number.POSITIVE_INFINITY ? 0 : minimum))
+      return applyDirectCriteriaResultTransforms(
+        formula,
+        rememberDirectCriteriaResult(aggregateCacheKey, directNumberResult(minimum === Number.POSITIVE_INFINITY ? 0 : minimum)),
+      )
     }
 
     let maximum = Number.NEGATIVE_INFINITY
@@ -312,7 +337,10 @@ export function createEngineFormulaEvaluationService(args: {
       }
       maximum = Math.max(maximum, numeric)
     }
-    return rememberDirectCriteriaResult(aggregateCacheKey, directNumberResult(maximum === Number.NEGATIVE_INFINITY ? 0 : maximum))
+    return applyDirectCriteriaResultTransforms(
+      formula,
+      rememberDirectCriteriaResult(aggregateCacheKey, directNumberResult(maximum === Number.NEGATIVE_INFINITY ? 0 : maximum)),
+    )
   }
 
   const tryEvaluateDirectAggregate = (formula: RuntimeFormula): CellValue | undefined => {
