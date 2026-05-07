@@ -140,6 +140,11 @@ For a runnable external-consumer example, start with
 test executes that same example against packed local runtime packages with
 `pnpm workpaper:smoke:external`.
 
+For backend adoption, see
+[`docs/node-service-workpaper-recipe.md`](docs/node-service-workpaper-recipe.md).
+It shows a minimal Node service boundary that reads computed summaries, applies
+one controlled edit, and persists the WorkPaper document.
+
 That example also includes `npm run agent:verify`, a small agent writeback demo
 that records the exact assumption cells changed, verifies dependent formula
 readback, persists the workbook, restores it, and proves the formulas and values

@@ -36,6 +36,8 @@ Shorter version:
   [`packages/headless/README.md`](../packages/headless/README.md)
 - Runnable external-consumer example:
   [`examples/headless-workpaper`](../examples/headless-workpaper)
+- Node service recipe:
+  [`docs/node-service-workpaper-recipe.md`](node-service-workpaper-recipe.md)
 - Benchmark evidence:
   [`docs/headless-workpaper-benchmark-evidence.md`](headless-workpaper-benchmark-evidence.md)
 - Benchmark explainer:
@@ -162,6 +164,11 @@ npm run agent:verify
 That command records the exact assumption cells changed, verifies dependent
 formula outputs, persists the workbook, restores it, and checks that formulas
 and values survived the round trip.
+
+For backend evaluators, link the
+[`WorkPaper Node service recipe`](node-service-workpaper-recipe.md). It shows a
+minimal built-in HTTP service that reads a computed summary, applies a controlled
+edit, and persists the workbook document without adding a framework dependency.
 
 For a framework-neutral agent integration pattern, link the
 [`WorkPaper tool-calling recipe`](agent-workpaper-tool-calling-recipe.md). It

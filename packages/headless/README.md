@@ -99,6 +99,8 @@ Repository:
 - npm: <https://www.npmjs.com/package/@bilig/headless>
 - runnable example:
   [`examples/headless-workpaper`](../../examples/headless-workpaper)
+- Node service recipe:
+  [`docs/node-service-workpaper-recipe.md`](../../docs/node-service-workpaper-recipe.md)
 - agent tool-calling recipe:
   [`docs/agent-workpaper-tool-calling-recipe.md`](../../docs/agent-workpaper-tool-calling-recipe.md)
 - public adoption kit:
@@ -218,6 +220,11 @@ persistence after a successful edit.
 
 Repository CI also runs the same example against packed local runtime packages
 through `pnpm workpaper:smoke:external`.
+
+For a minimal service boundary with no framework dependency, see
+[`docs/node-service-workpaper-recipe.md`](../../docs/node-service-workpaper-recipe.md).
+It shows a built-in Node HTTP route that reads a computed summary, applies one
+controlled input edit, and persists the WorkPaper document.
 
 For a concise evaluator-facing summary with copy-paste npm commands, proof
 links, shareable copy, and overclaim guardrails, use the root
