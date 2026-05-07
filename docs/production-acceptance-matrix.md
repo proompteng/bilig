@@ -9,6 +9,9 @@
 - closed canonical families route to WASM in production mode
 - XLSX cached-formula corpus investigations have a maintained verifier:
   `pnpm workpaper:xlsx-corpus:check -- <xlsx-file-or-directory>`
+- The issue #8 reduced cached-formula corpus is checked in at
+  `packages/headless/fixtures/xlsx-corpus` and gated by
+  `pnpm workpaper:xlsx-corpus:fixtures:check`.
 
 ## Metadata and dynamic arrays
 

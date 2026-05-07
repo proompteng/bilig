@@ -1,12 +1,59 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
 
-import { runWorkPaperXlsxCorpus } from '../check-workpaper-xlsx-corpus.ts'
+import { runWorkPaperXlsxCorpus, runWorkPaperXlsxCorpusInChildProcesses } from '../check-workpaper-xlsx-corpus.ts'
 
 describe('WorkPaper XLSX corpus verifier', () => {
+  it('keeps a checked-in issue #8 XLSX compatibility corpus green', () => {
+    const result = runWorkPaperXlsxCorpus([checkedInCorpusDir()])
+
+    expect(result.summary).toMatchObject({
+      totalFiles: 1,
+      filesProcessed: 1,
+      ok: 1,
+      failedErrors: 0,
+      failedTimeouts: 0,
+      formulaCells: 13,
+      comparableFormulaCells: 13,
+      matchingFormulaCells: 13,
+      mismatchedFormulaCells: 0,
+      skippedFormulaCells: 0,
+      matchRate: 1,
+    })
+    expect(result.files[0]).toMatchObject({
+      fileName: 'issue-8-production-regressions.xlsx',
+      status: 'ok',
+      formulaCells: 13,
+    })
+    expect(result.mismatches).toEqual([])
+  })
+
+  it('can isolate each workbook check in a child process with the same parity result', () => {
+    const direct = runWorkPaperXlsxCorpus([checkedInCorpusDir()])
+    const isolated = runWorkPaperXlsxCorpusInChildProcesses([checkedInCorpusDir()], {
+      childProcessTimeoutMs: 10_000,
+    })
+
+    expect(isolated.summary).toMatchObject({
+      totalFiles: direct.summary.totalFiles,
+      filesProcessed: direct.summary.filesProcessed,
+      ok: direct.summary.ok,
+      failedErrors: 0,
+      failedTimeouts: 0,
+      formulaCells: direct.summary.formulaCells,
+      comparableFormulaCells: direct.summary.comparableFormulaCells,
+      matchingFormulaCells: direct.summary.matchingFormulaCells,
+      mismatchedFormulaCells: 0,
+      skippedFormulaCells: direct.summary.skippedFormulaCells,
+      matchRate: 1,
+    })
+    expect(isolated.mismatches).toEqual([])
+  })
+
   it('matches cached formula results from a production-style XLSX reduction corpus', () => {
     withTempCorpus((corpusDir) => {
       writeWorkbook(join(corpusDir, 'issue-regressions.xlsx'), buildIssueRegressionWorkbook())
@@ -100,6 +147,10 @@ describe('WorkPaper XLSX corpus verifier', () => {
     })
   })
 })
+
+function checkedInCorpusDir(): string {
+  return join(dirname(fileURLToPath(import.meta.url)), '../../packages/headless/fixtures/xlsx-corpus')
+}
 
 function withTempCorpus(run: (corpusDir: string) => void): void {
   const corpusDir = mkdtempSync(join(tmpdir(), 'bilig-workpaper-xlsx-corpus-'))

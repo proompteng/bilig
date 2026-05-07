@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { basename, extname, join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
@@ -24,6 +25,7 @@ export type WorkPaperXlsxFormulaSkipReason =
   | 'volatile-or-environment-dependent-formula'
 
 export interface WorkPaperXlsxCorpusOptions {
+  readonly childProcessTimeoutMs?: number
   readonly evaluationTimeoutMs?: number
   readonly mismatchSampleLimit?: number
 }
@@ -92,6 +94,7 @@ interface PreparedWorkbook {
 }
 
 interface CliOptions extends WorkPaperXlsxCorpusOptions {
+  readonly isolateFiles: boolean
   readonly paths: readonly string[]
   readonly jsonOut?: string
   readonly maxMismatches: number
@@ -99,8 +102,14 @@ interface CliOptions extends WorkPaperXlsxCorpusOptions {
 }
 
 const defaultEvaluationTimeoutMs = 30_000
+const childProcessTimeoutPaddingMs = 1_000
 const defaultMismatchSampleLimit = 25
 const ignoredDirectoryNames = new Set(['.git', 'build', 'dist', 'node_modules'])
+const skipReasons: readonly WorkPaperXlsxFormulaSkipReason[] = [
+  'missing-cached-result',
+  'unsupported-cached-result-type',
+  'volatile-or-environment-dependent-formula',
+]
 const xlsxExtensions = new Set(['.xls', '.xlsm', '.xlsx'])
 const xlsxErrorTextByCode = new Map<number, string>([
   [0, '#NULL!'],
@@ -117,6 +126,33 @@ const volatileOrEnvironmentFunctionPattern = /\b(CELL|INFO|NOW|RAND|RANDBETWEEN|
 export function runWorkPaperXlsxCorpus(paths: readonly string[], options: WorkPaperXlsxCorpusOptions = {}): WorkPaperXlsxCorpusResult {
   const startedAt = performance.now()
   const files = collectXlsxFiles(paths)
+  return runWorkPaperXlsxCorpusFiles(files, startedAt, options, (filePath, skippedByReason, mismatches, mismatchSampleLimit) =>
+    checkWorkbookFile(filePath, options, skippedByReason, mismatches, mismatchSampleLimit),
+  )
+}
+
+export function runWorkPaperXlsxCorpusInChildProcesses(
+  paths: readonly string[],
+  options: WorkPaperXlsxCorpusOptions = {},
+): WorkPaperXlsxCorpusResult {
+  const startedAt = performance.now()
+  const files = collectXlsxFiles(paths)
+  return runWorkPaperXlsxCorpusFiles(files, startedAt, options, (filePath, skippedByReason, mismatches, mismatchSampleLimit) =>
+    checkWorkbookFileInChildProcess(filePath, options, skippedByReason, mismatches, mismatchSampleLimit),
+  )
+}
+
+function runWorkPaperXlsxCorpusFiles(
+  files: readonly string[],
+  startedAt: number,
+  options: WorkPaperXlsxCorpusOptions,
+  checkFile: (
+    filePath: string,
+    skippedByReason: Record<WorkPaperXlsxFormulaSkipReason, number>,
+    mismatches: WorkPaperXlsxCorpusMismatch[],
+    mismatchSampleLimit: number,
+  ) => WorkPaperXlsxCorpusFileResult,
+): WorkPaperXlsxCorpusResult {
   const mismatchSampleLimit = options.mismatchSampleLimit ?? defaultMismatchSampleLimit
   const skippedByReason: Record<WorkPaperXlsxFormulaSkipReason, number> = {
     'missing-cached-result': 0,
@@ -127,7 +163,7 @@ export function runWorkPaperXlsxCorpus(paths: readonly string[], options: WorkPa
   const fileResults: WorkPaperXlsxCorpusFileResult[] = []
   const mismatches: WorkPaperXlsxCorpusMismatch[] = []
   for (const filePath of files) {
-    const result = checkWorkbookFile(filePath, options, skippedByReason, mismatches, mismatchSampleLimit)
+    const result = checkFile(filePath, skippedByReason, mismatches, mismatchSampleLimit)
     fileResults.push(result)
   }
 
@@ -166,6 +202,127 @@ export function runWorkPaperXlsxCorpus(paths: readonly string[], options: WorkPa
     mismatches,
     skippedByReason,
   }
+}
+
+function checkWorkbookFileInChildProcess(
+  filePath: string,
+  options: WorkPaperXlsxCorpusOptions,
+  skippedByReason: Record<WorkPaperXlsxFormulaSkipReason, number>,
+  mismatches: WorkPaperXlsxCorpusMismatch[],
+  mismatchSampleLimit: number,
+): WorkPaperXlsxCorpusFileResult {
+  const childTimeoutMs =
+    options.childProcessTimeoutMs ?? (options.evaluationTimeoutMs ?? defaultEvaluationTimeoutMs) + childProcessTimeoutPaddingMs
+  const child = spawnSync(
+    'bun',
+    [
+      fileURLToPath(import.meta.url),
+      '--internal-check-file-json',
+      filePath,
+      '--timeout-ms',
+      String(options.evaluationTimeoutMs ?? defaultEvaluationTimeoutMs),
+      '--mismatch-sample-limit',
+      String(mismatchSampleLimit),
+    ],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      timeout: childTimeoutMs,
+    },
+  )
+  const fileName = basename(filePath)
+
+  if (child.error) {
+    const status = child.error.message.includes('ETIMEDOUT') ? 'timeout' : 'error'
+    return {
+      path: filePath,
+      fileName,
+      status,
+      ...emptyCounts(0),
+      matchRate: 1,
+      elapsedMs: childTimeoutMs,
+      error: child.error.message,
+    }
+  }
+
+  if (child.signal || child.status !== 0) {
+    return {
+      path: filePath,
+      fileName,
+      status: child.signal === 'SIGTERM' || child.signal === 'SIGKILL' ? 'timeout' : 'error',
+      ...emptyCounts(0),
+      matchRate: 1,
+      elapsedMs: childTimeoutMs,
+      error: child.stderr.trim() || child.stdout.trim() || `child process exited with ${String(child.status)}`,
+    }
+  }
+
+  let result: WorkPaperXlsxCorpusResult
+  try {
+    result = parseChildCorpusResult(child.stdout, filePath)
+  } catch (error) {
+    return {
+      path: filePath,
+      fileName,
+      status: 'error',
+      ...emptyCounts(0),
+      matchRate: 1,
+      elapsedMs: childTimeoutMs,
+      error: errorMessage(error),
+    }
+  }
+  for (const reason of skipReasons) {
+    skippedByReason[reason] += result.skippedByReason[reason]
+  }
+  for (const mismatch of result.mismatches) {
+    addMismatch(mismatches, mismatchSampleLimit, mismatch)
+  }
+  return (
+    result.files[0] ?? {
+      path: filePath,
+      fileName,
+      status: 'error',
+      ...emptyCounts(0),
+      matchRate: 1,
+      elapsedMs: 0,
+      error: 'child process did not return a file result',
+    }
+  )
+}
+
+function parseChildCorpusResult(stdout: string, filePath: string): WorkPaperXlsxCorpusResult {
+  try {
+    const parsed: unknown = JSON.parse(stdout)
+    if (!isWorkPaperXlsxCorpusResult(parsed)) {
+      throw new Error('child output did not match the XLSX corpus result shape')
+    }
+    return parsed
+  } catch (error) {
+    throw new Error(`Failed to parse isolated XLSX corpus result for ${filePath}: ${errorMessage(error)}`, { cause: error })
+  }
+}
+
+function isWorkPaperXlsxCorpusResult(value: unknown): value is WorkPaperXlsxCorpusResult {
+  if (!isRecord(value)) {
+    return false
+  }
+  return (
+    isRecord(value['summary']) &&
+    Array.isArray(value['files']) &&
+    Array.isArray(value['mismatches']) &&
+    isSkippedByReason(value['skippedByReason'])
+  )
+}
+
+function isSkippedByReason(value: unknown): value is Readonly<Record<WorkPaperXlsxFormulaSkipReason, number>> {
+  if (!isRecord(value)) {
+    return false
+  }
+  return skipReasons.every((reason) => typeof value[reason] === 'number')
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
 }
 
 function checkWorkbookFile(
@@ -557,9 +714,11 @@ function errorMessage(error: unknown): string {
 function parseCliArgs(argv: readonly string[]): CliOptions {
   const paths: string[] = []
   let jsonOut: string | undefined
+  let childProcessTimeoutMs: number | undefined
   let maxMismatches = 0
   let minMatchRate = 1
   let evaluationTimeoutMs: number | undefined
+  let isolateFiles = true
   let mismatchSampleLimit: number | undefined
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -571,6 +730,10 @@ function parseCliArgs(argv: readonly string[]): CliOptions {
       case '--allow-mismatches':
         maxMismatches = Number.POSITIVE_INFINITY
         minMatchRate = 0
+        break
+      case '--child-timeout-ms':
+        childProcessTimeoutMs = parseNonNegativeInteger(requiredArgValue(argv, index, arg), arg)
+        index += 1
         break
       case '--json-out':
         jsonOut = requiredArgValue(argv, index, arg)
@@ -592,6 +755,9 @@ function parseCliArgs(argv: readonly string[]): CliOptions {
         evaluationTimeoutMs = parseNonNegativeInteger(requiredArgValue(argv, index, arg), arg)
         index += 1
         break
+      case '--no-isolate':
+        isolateFiles = false
+        break
       default:
         if (arg.startsWith('-')) {
           throw new CliUsageError(`Unknown option: ${arg}\n\n${usageText()}`, 2)
@@ -606,6 +772,8 @@ function parseCliArgs(argv: readonly string[]): CliOptions {
   }
 
   return {
+    childProcessTimeoutMs,
+    isolateFiles,
     paths,
     jsonOut,
     maxMismatches,
@@ -645,6 +813,8 @@ function usageText(): string {
     '',
     'Options:',
     '  --timeout-ms <ms>              WorkPaper initial evaluation timeout per workbook. Default: 30000.',
+    '  --child-timeout-ms <ms>        Child-process timeout per workbook. Default: timeout-ms + 1000.',
+    '  --no-isolate                  Check files in the current process instead of one child process per workbook.',
     '  --max-mismatches <count>       Maximum comparable cached-result mismatches before failing. Default: 0.',
     '  --min-match-rate <ratio>       Minimum comparable cached-result match rate before failing. Default: 1.',
     '  --mismatch-sample-limit <n>    Number of mismatch samples to keep in JSON output. Default: 25.',
@@ -665,8 +835,14 @@ class CliUsageError extends Error {
 
 function runCli(): void {
   try {
+    if (process.argv.includes('--internal-check-file-json')) {
+      runInternalFileCheckCli(process.argv.slice(2))
+      return
+    }
     const options = parseCliArgs(process.argv.slice(2))
-    const result = runWorkPaperXlsxCorpus(options.paths, options)
+    const result = options.isolateFiles
+      ? runWorkPaperXlsxCorpusInChildProcesses(options.paths, options)
+      : runWorkPaperXlsxCorpus(options.paths, options)
     const output = `${JSON.stringify(result, null, 2)}\n`
     if (options.jsonOut) {
       writeFileSync(resolve(options.jsonOut), output)
@@ -688,6 +864,37 @@ function runCli(): void {
     }
     throw error
   }
+}
+
+function runInternalFileCheckCli(argv: readonly string[]): void {
+  const paths: string[] = []
+  let evaluationTimeoutMs: number | undefined
+  let mismatchSampleLimit: number | undefined
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index]
+    switch (arg) {
+      case '--internal-check-file-json':
+        paths.push(requiredArgValue(argv, index, arg))
+        index += 1
+        break
+      case '--mismatch-sample-limit':
+        mismatchSampleLimit = parseNonNegativeInteger(requiredArgValue(argv, index, arg), arg)
+        index += 1
+        break
+      case '--timeout-ms':
+        evaluationTimeoutMs = parseNonNegativeInteger(requiredArgValue(argv, index, arg), arg)
+        index += 1
+        break
+      default:
+        throw new CliUsageError(`Unknown internal option: ${arg}`, 2)
+    }
+  }
+
+  if (paths.length !== 1) {
+    throw new CliUsageError('Internal XLSX corpus check expects exactly one file path.', 2)
+  }
+  process.stdout.write(`${JSON.stringify(runWorkPaperXlsxCorpus(paths, { evaluationTimeoutMs, mismatchSampleLimit }))}\n`)
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

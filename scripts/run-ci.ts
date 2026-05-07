@@ -210,6 +210,7 @@ const generatedSourceChecks: readonly CiTask[] = [
   pnpm('automation scorecard check', 'automation:check'),
   pnpm('import/export fidelity scorecard check', 'import-export:fidelity:check'),
   pnpm('large workbook SLO scorecard check', 'large-workbook:slo:check'),
+  pnpm('WorkPaper XLSX corpus fixture check', 'workpaper:xlsx-corpus:fixtures:check'),
   pnpm('UI same-corpus XLSX fixture check', 'ui:same-corpus:fixture:check'),
   pnpm('UI responsiveness live browser scorecard check', 'ui:browser-live:check'),
   pnpm('security posture scorecard check', 'security:posture:check'),

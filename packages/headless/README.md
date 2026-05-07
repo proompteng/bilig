@@ -45,6 +45,14 @@ Supported scope:
 - The contract is the WorkPaper/headless API exported by this package.
 - Excel-file ingestion belongs to import/export pipelines before data reaches
   `WorkPaper`; this package executes the validated WorkPaper workbook model.
+- XLSX cached-result parity investigations are covered by the repository
+  verifier, not by the published package surface. Use
+  `pnpm workpaper:xlsx-corpus:check -- <xlsx-file-or-directory>` for external
+  corpora, and `pnpm workpaper:xlsx-corpus:fixtures:check` for the checked-in
+  issue #8 reduction corpus. The verifier compares deterministic cached formula
+  results and skips volatile or environment-dependent formulas such as `NOW()`
+  and `CELL("filename")`; unsupported deterministic formulas remain visible as
+  mismatches instead of being silently accepted.
 - Custom function plugins and callback hooks are runtime registrations. Persist
   workbook data with the helpers below, then register custom behavior in
   application code before restore.
