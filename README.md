@@ -5,8 +5,8 @@
 [![npm: @bilig/headless](https://img.shields.io/npm/v/@bilig/headless?label=%40bilig%2Fheadless)](https://www.npmjs.com/package/@bilig/headless)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**bilig is a local-first spreadsheet engine and runtime for browser workbooks,
-agent workflows, and collaborative sync.**
+**bilig is a headless spreadsheet engine for Node services, coding agents, and
+local-first workbook automation.**
 
 Project site: <https://proompteng.github.io/bilig/>
 
@@ -15,6 +15,39 @@ repo as a bookmark: <https://github.com/proompteng/bilig/stargazers>
 
 If you want to try a small contribution first, start with the public
 [`starter issues`](docs/starter-issues.md) list.
+
+## Try `@bilig/headless`
+
+The fastest evaluation path is the checked example package. It uses the
+published npm package, builds a formula-backed workbook, applies agent-style
+edits, persists the document, restores it, and verifies formula readback.
+
+```bash
+git clone https://github.com/proompteng/bilig.git
+cd bilig/examples/headless-workpaper
+npm install
+npm start
+npm run agent:verify
+```
+
+Expected proof from `npm run agent:verify`:
+
+```json
+{
+  "after": {
+    "customers": 65,
+    "grossMrr": 15600,
+    "expansionMrr": 18720,
+    "annualizedArr": 224640,
+    "arrTargetDelta": 74640
+  },
+  "verified": {
+    "formulasUnchanged": true,
+    "formulasPersisted": true,
+    "restoredMatchesAfter": true
+  }
+}
+```
 
 It is not a table widget. The repo contains a real workbook engine, formula
 parser/compiler, React workbook reconciler, reusable grid shell, binary sync
