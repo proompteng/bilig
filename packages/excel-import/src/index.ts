@@ -13,10 +13,10 @@ import type {
   CellVerticalAlignment,
   SheetStyleRangeSnapshot,
   WorkbookAxisEntrySnapshot,
-  WorkbookMergeRangeSnapshot,
   WorkbookMetadataSnapshot,
   WorkbookSnapshot,
 } from '@bilig/protocol'
+import { readImportedArrayFormulaSpills } from './xlsx-array-formulas.js'
 import { readImportedWorkbookCalculationSettings } from './xlsx-calculation-settings.js'
 import { readImportedWorkbookCharts } from './xlsx-charts.js'
 import { readImportedSheetComments } from './xlsx-comments.js'
@@ -24,6 +24,7 @@ import { readImportedWorkbookConditionalFormats } from './xlsx-conditional-forma
 import { readImportedDefinedNames } from './xlsx-defined-names.js'
 import { readImportedWorkbookFilters } from './xlsx-filters.js'
 import { readImportedWorkbookFreezePanes } from './xlsx-freeze-panes.js'
+import { buildMergeEntries } from './xlsx-merge-entries.js'
 import { readImportedWorkbookPivots } from './xlsx-pivots.js'
 import { readImportedWorkbookProtectedRanges } from './xlsx-protected-ranges.js'
 import { readImportedWorkbookSheetProtections } from './xlsx-sheet-protection.js'
@@ -602,24 +603,6 @@ function internImportedStyle(style: Omit<CellStyleRecord, 'id'>, catalog: Map<st
   return record.id
 }
 
-function buildMergeEntries(sheetName: string, merges: readonly XLSX.Range[] | undefined): WorkbookMergeRangeSnapshot[] | undefined {
-  if (!Array.isArray(merges) || merges.length === 0) {
-    return undefined
-  }
-  const entries = merges.flatMap((range) =>
-    range.s.r === range.e.r && range.s.c === range.e.c
-      ? []
-      : [
-          {
-            sheetName,
-            startAddress: XLSX.utils.encode_cell(range.s),
-            endAddress: XLSX.utils.encode_cell(range.e),
-          },
-        ],
-  )
-  return entries.length > 0 ? entries : undefined
-}
-
 function toUint8Array(value: unknown): Uint8Array | null {
   if (value instanceof Uint8Array) {
     return new Uint8Array(value)
@@ -707,6 +690,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
 
   let ignoredCommentsSeen = false
   const styleCatalog = new Map<string, CellStyleRecord>()
+  const importedArrayFormulaSpills: NonNullable<WorkbookMetadataSnapshot['spills']> = []
   const previewSheets: ImportedWorkbookSheetPreview[] = []
   const sheets = workbook.SheetNames.map((sheetName, order) => {
     const sheet = workbook.Sheets[sheetName]
@@ -732,6 +716,10 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
     if (importedComments.ignoredCount > 0 && !ignoredCommentsSeen) {
       ignoredCommentsSeen = true
       warnings.push('Some cell comments were ignored during XLSX import.')
+    }
+    const importedArrayFormulaSheetSpills = readImportedArrayFormulaSpills(sheetName, sheet)
+    if (importedArrayFormulaSheetSpills) {
+      importedArrayFormulaSpills.push(...importedArrayFormulaSheetSpills)
     }
     const range = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']) : null
     const cells: WorkbookSnapshot['sheets'][number]['cells'] = []
@@ -885,6 +873,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
     ...(styleCatalog.size > 0 ? { styles: [...styleCatalog.values()] } : {}),
     ...(importedDefinedNames.definedNames ? { definedNames: importedDefinedNames.definedNames } : {}),
     ...(importedTables ? { tables: importedTables } : {}),
+    ...(importedArrayFormulaSpills.length > 0 ? { spills: importedArrayFormulaSpills } : {}),
     ...(importedPivots ? { pivots: importedPivots } : {}),
     ...(importedCharts ? { charts: importedCharts } : {}),
   }
