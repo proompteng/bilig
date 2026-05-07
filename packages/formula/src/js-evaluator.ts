@@ -194,20 +194,22 @@ function coerceDirectNumericTextAggregateArgument(callee: string, value: CellVal
   return numeric === undefined ? error(ErrorCode.Value) : numberValue(numeric)
 }
 
-const arrayLiftedScalarBuiltinNames = new Set([
-  'ISBLANK',
-  'ISERR',
-  'ISERROR',
-  'ISEVEN',
-  'ISFORMULA',
-  'ISLOGICAL',
-  'ISNA',
-  'ISNONTEXT',
-  'ISNUMBER',
-  'ISODD',
-  'ISREF',
-  'ISTEXT',
-  'NOT',
+const arrayLiftedScalarBuiltinArities = new Map<string, number>([
+  ['IFERROR', 2],
+  ['IFNA', 2],
+  ['ISBLANK', 1],
+  ['ISERR', 1],
+  ['ISERROR', 1],
+  ['ISEVEN', 1],
+  ['ISFORMULA', 1],
+  ['ISLOGICAL', 1],
+  ['ISNA', 1],
+  ['ISNONTEXT', 1],
+  ['ISNUMBER', 1],
+  ['ISODD', 1],
+  ['ISREF', 1],
+  ['ISTEXT', 1],
+  ['NOT', 1],
 ])
 
 function evaluateArrayLiftedScalarBuiltin(
@@ -215,9 +217,10 @@ function evaluateArrayLiftedScalarBuiltin(
   rawArgs: readonly StackValue[],
   builtin: (...args: CellValue[]) => EvaluationResult,
 ): StackValue | undefined {
+  const expectedArity = arrayLiftedScalarBuiltinArities.get(callee)
   if (
-    rawArgs.length !== 1 ||
-    !arrayLiftedScalarBuiltinNames.has(callee) ||
+    expectedArity === undefined ||
+    rawArgs.length !== expectedArity ||
     !rawArgs.some((arg) => arg.kind === 'array' || arg.kind === 'range')
   ) {
     return undefined

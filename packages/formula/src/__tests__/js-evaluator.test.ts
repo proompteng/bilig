@@ -49,6 +49,21 @@ describe('js evaluator', () => {
     })
   })
 
+  it('lifts IFERROR over array arithmetic before SUMPRODUCT aggregation', () => {
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula('SUMPRODUCT(IFERROR(1*A1:B2,0))')), {
+        sheetName: 'Sheet1',
+        resolveCell: (): CellValue => ({ tag: ValueTag.Empty }),
+        resolveRange: (): CellValue[] => [
+          { tag: ValueTag.String, value: 'x', stringId: 0 },
+          { tag: ValueTag.Number, value: 2 },
+          { tag: ValueTag.String, value: '3', stringId: 0 },
+          { tag: ValueTag.String, value: 'bad', stringId: 0 },
+        ],
+      }),
+    ).toEqual(num(5))
+  })
+
   it('evaluates direct plans for ranges, jumps, and fallback stack handling', () => {
     expect(
       evaluatePlan(
