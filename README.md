@@ -134,6 +134,11 @@ For a concise public evaluation path, share
 positioning, npm-only evaluation commands, proof links, shareable copy, and
 guardrails for honest benchmark claims.
 
+For the first technical adoption article, see
+[`docs/why-agents-need-workbook-apis.md`](docs/why-agents-need-workbook-apis.md).
+It explains why agents should operate on workbook APIs instead of spreadsheet
+screenshots.
+
 For the researched public-growth plan toward `1000` legitimate GitHub stars,
 see [`docs/github-stars-growth-plan.md`](docs/github-stars-growth-plan.md).
 

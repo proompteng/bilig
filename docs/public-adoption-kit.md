@@ -38,6 +38,8 @@ Shorter version:
   [`examples/headless-workpaper`](../examples/headless-workpaper)
 - Benchmark evidence:
   [`docs/headless-workpaper-benchmark-evidence.md`](headless-workpaper-benchmark-evidence.md)
+- Technical article:
+  [`docs/why-agents-need-workbook-apis.md`](why-agents-need-workbook-apis.md)
 - GitHub stars growth plan:
   [`docs/github-stars-growth-plan.md`](github-stars-growth-plan.md)
 - Launch post draft:
@@ -75,35 +77,35 @@ import {
   exportWorkPaperDocument,
   parseWorkPaperDocument,
   serializeWorkPaperDocument,
-} from "@bilig/headless";
+} from '@bilig/headless'
 
 const workbook = WorkPaper.buildFromSheets({
   Revenue: [
-    ["Region", "Customers", "ARPA", "Revenue"],
-    ["West", 20, 1200, "=B2*C2"],
-    ["East", 30, 250, "=B3*C3"],
-    ["Central", 18, 300, "=B4*C4"],
+    ['Region', 'Customers', 'ARPA', 'Revenue'],
+    ['West', 20, 1200, '=B2*C2'],
+    ['East', 30, 250, '=B3*C3'],
+    ['Central', 18, 300, '=B4*C4'],
   ],
   Summary: [
-    ["Metric", "Value"],
-    ["Total revenue", "=SUM(Revenue!D2:D4)"],
-    ["West customers", '=SUMIF(Revenue!A2:A4,"West",Revenue!B2:B4)'],
+    ['Metric', 'Value'],
+    ['Total revenue', '=SUM(Revenue!D2:D4)'],
+    ['West customers', '=SUMIF(Revenue!A2:A4,"West",Revenue!B2:B4)'],
   ],
-});
+})
 
-const summary = workbook.getSheetId("Summary");
+const summary = workbook.getSheetId('Summary')
 if (summary === undefined) {
-  throw new Error("Summary sheet was not created");
+  throw new Error('Summary sheet was not created')
 }
 
-const total = workbook.getCellValue({ sheet: summary, row: 1, col: 1 });
-const saved = serializeWorkPaperDocument(exportWorkPaperDocument(workbook, { includeConfig: true }));
-const restored = createWorkPaperFromDocument(parseWorkPaperDocument(saved));
+const total = workbook.getCellValue({ sheet: summary, row: 1, col: 1 })
+const saved = serializeWorkPaperDocument(exportWorkPaperDocument(workbook, { includeConfig: true }))
+const restored = createWorkPaperFromDocument(parseWorkPaperDocument(saved))
 
 console.log({
   total,
   sheets: restored.getSheetNames(),
-});
+})
 ```
 
 Run it:
