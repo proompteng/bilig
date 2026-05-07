@@ -82,6 +82,54 @@ function withInvalidTransformKind(transform: StructuralAxisTransform, kind: stri
 }
 
 describe('translation coverage edges', () => {
+  it('preserves issue #105 absolute VLOOKUP table anchors when translating compiled formula templates', () => {
+    const compiled = compileFormula('VLOOKUP(A3,$D$2:$E$8,2,FALSE)')
+    const translated = translateCompiledFormula(compiled, 1, 0, 'VLOOKUP(A4,$D$2:$E$8,2,FALSE)')
+    const translatedLookupCell = translated.compiled.parsedSymbolicRefs?.[0]
+    const translatedTable = translated.compiled.parsedSymbolicRanges?.[0]
+
+    expect(compiled.deps).toEqual(['A3', 'D2:E8'])
+    expect(compiled.symbolicRefs).toEqual(['A3'])
+    expect(compiled.symbolicRanges).toEqual(['D2:E8'])
+    expect(compiled.parsedSymbolicRanges?.[0]).toMatchObject({
+      address: '$D$2:$E$8',
+      startAddress: 'D2',
+      endAddress: 'E8',
+      startRowAbsolute: true,
+      endRowAbsolute: true,
+      startColAbsolute: true,
+      endColAbsolute: true,
+    })
+
+    expect(translated.source).toBe('VLOOKUP(A4,$D$2:$E$8,2,FALSE)')
+    expect(translated.compiled.deps).toEqual(['A4', 'D2:E8'])
+    expect(translated.compiled.symbolicRefs).toEqual(['A4'])
+    expect(translated.compiled.symbolicRanges).toEqual(['D2:E8'])
+    expect(translatedLookupCell).toMatchObject({ address: 'A4', row: 3, col: 0 })
+    expect(translatedTable).toMatchObject({
+      address: '$D$2:$E$8',
+      startAddress: '$D$2',
+      endAddress: '$E$8',
+      startRowAbsolute: true,
+      endRowAbsolute: true,
+      startColAbsolute: true,
+      endColAbsolute: true,
+    })
+    expect(translated.compiled.jsPlan).toEqual([
+      { opcode: 'push-cell', address: 'A4' },
+      { opcode: 'push-range', start: '$D$2', end: '$E$8', refKind: 'cells' },
+      { opcode: 'push-number', value: 2 },
+      { opcode: 'push-boolean', value: false },
+      {
+        opcode: 'call',
+        callee: 'VLOOKUP',
+        argc: 4,
+        argRefs: [{ kind: 'cell', address: 'A4' }, { kind: 'range', start: '$D$2', end: '$E$8', refKind: 'cells' }, undefined, undefined],
+      },
+      { opcode: 'return' },
+    ])
+  })
+
   it('builds template keys for literal, invalid, and invoke-heavy AST shapes', () => {
     expect(buildRelativeFormulaTemplateKeyFromAst({ kind: 'NumberLiteral', value: 7 }, 0, 0)).toBe('n:7')
     expect(buildRelativeFormulaTemplateKeyFromAst({ kind: 'BooleanLiteral', value: false }, 0, 0)).toBe('b:0')

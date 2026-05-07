@@ -530,6 +530,41 @@ describe('GitHub issue reductions', () => {
     expectNumber(cellValue(workbook, 'Sheet1', 6, 4), 30)
   })
 
+  it('resolves issue #105 VLOOKUP cell-reference keys across translated formula templates', () => {
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Sheet1: [
+          [null, null, null, 'Key', 'Day'],
+          [1, null, null, 1, 'Sunday'],
+          [2, '=VLOOKUP(A3,$D$2:$E$8,2,FALSE)', null, 2, 'Monday'],
+          [3, '=VLOOKUP(A4,$D$2:$E$8,2,FALSE)', null, 3, 'Tuesday'],
+          [4, '=VLOOKUP(A5,$D$2:$E$8,2,FALSE)', null, 4, 'Wednesday'],
+          [5, null, null, 5, 'Thursday'],
+          [6, null, null, 6, 'Friday'],
+          [7, null, null, 7, 'Saturday'],
+        ],
+        'Step 1': [
+          [null, null, null, null],
+          [null, null, 'Key', 'Value'],
+          [null, null, 3, 'Three'],
+          [null, null, 4, 'Four'],
+          [null, null, 5, 'Five'],
+        ],
+        Quoted: [
+          [null, null],
+          [null, null],
+          [4, "=VLOOKUP(A3,'Step 1'!$C$3:$D$5,2,FALSE)"],
+        ],
+      },
+      { maxRows: 40, maxColumns: 10, useColumnIndex: true },
+    )
+
+    expectString(cellValue(workbook, 'Sheet1', 2, 1), 'Monday')
+    expectString(cellValue(workbook, 'Sheet1', 3, 1), 'Tuesday')
+    expectString(cellValue(workbook, 'Sheet1', 4, 1), 'Wednesday')
+    expectString(cellValue(workbook, 'Quoted', 2, 1), 'Four')
+  })
+
   it('resolves issues #101, #107, and #109 range-valued defined names with scalar implicit intersection', () => {
     const rows = Array.from({ length: 43 }, () => Array.from<TestCell>({ length: 8 }).fill(null))
     rows[2][2] = 1
