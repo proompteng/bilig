@@ -29,6 +29,7 @@ Verified on 2026-05-07:
   - root `README.md`
   - `packages/headless/README.md`
   - `docs/public-adoption-kit.md`
+  - `docs/launch-post-headless-workpaper.md`
   - `docs/assets/github-social-preview.png`
   - `CONTRIBUTING.md`
   - `CODE_OF_CONDUCT.md`
@@ -131,6 +132,7 @@ Goal: earn attention from targeted developer communities.
 Actions:
 
 - Publish one technical launch post:
+  - use `docs/launch-post-headless-workpaper.md` as the starting draft
   - title angle: `A headless spreadsheet engine for AI agents and Node services`
   - include the npm install path, the maintained example, and the benchmark
     evidence
@@ -220,7 +222,7 @@ audience, or product friction.
 1. Upload `docs/assets/github-social-preview.png` as the GitHub social preview
    image.
 2. Create `3` to `5` scoped public `good first issue` tickets.
-3. Publish the first launch post using the copy above.
+3. Publish the first launch post using `docs/launch-post-headless-workpaper.md`.
 4. Share the post in one high-fit channel at a time and respond to every serious
    comment.
 5. Convert repeated questions into README, package README, or example updates.
