@@ -341,9 +341,9 @@ audience, or product friction.
    day, then convert repeated feedback into docs or examples.
    For a concrete Hacker News launch checklist, use
    [`docs/show-hn-launch-pack.md`](show-hn-launch-pack.md).
-5. Ship the next proof artifact: a compact formula-edge fixture article that
-   follows the XLOOKUP exact walkthrough pattern, starts from one real formula
-   family, and shows the fixture, expected result, and verifier command.
+5. Keep shipping compact formula-edge fixture articles that follow the XLOOKUP,
+   SUMIFS, and GROUPBY walkthrough pattern: one real formula family, exact
+   fixture inputs, expected result or spill output, and verifier command.
 6. Track GitHub stars, npm downloads, GitHub traffic referrers, and issue
    quality every week.
 7. Add a Star History chart only after there is enough organic movement for the

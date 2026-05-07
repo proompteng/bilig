@@ -66,6 +66,8 @@ npm run agent:verify
   https://github.com/proompteng/bilig/blob/main/docs/formula-edge-xlookup-exact-fixture.md
 - sumifs paired criteria fixture:
   https://github.com/proompteng/bilig/blob/main/docs/formula-edge-sumifs-paired-criteria-fixture.md
+- groupby spill fixture:
+  https://github.com/proompteng/bilig/blob/main/docs/formula-edge-groupby-spill-fixture.md
 - public adoption kit:
   https://github.com/proompteng/bilig/blob/main/docs/public-adoption-kit.md
 

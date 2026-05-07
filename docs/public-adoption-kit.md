@@ -56,6 +56,8 @@ Shorter version:
   [`docs/formula-edge-xlookup-exact-fixture.md`](formula-edge-xlookup-exact-fixture.md)
 - SUMIFS paired criteria fixture walkthrough:
   [`docs/formula-edge-sumifs-paired-criteria-fixture.md`](formula-edge-sumifs-paired-criteria-fixture.md)
+- GROUPBY spill fixture walkthrough:
+  [`docs/formula-edge-groupby-spill-fixture.md`](formula-edge-groupby-spill-fixture.md)
 - GitHub stars growth plan:
   [`docs/github-stars-growth-plan.md`](github-stars-growth-plan.md)
 - X reply growth playbook:

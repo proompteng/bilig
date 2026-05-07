@@ -261,6 +261,10 @@ see
 For a formula-edge fixture walkthrough covering paired-criteria `SUMIFS`, see
 [`docs/formula-edge-sumifs-paired-criteria-fixture.md`](docs/formula-edge-sumifs-paired-criteria-fixture.md).
 
+For a formula-edge fixture walkthrough covering grouped dynamic-array `GROUPBY`
+output, see
+[`docs/formula-edge-groupby-spill-fixture.md`](docs/formula-edge-groupby-spill-fixture.md).
+
 For the researched public-growth plan toward `1000` legitimate GitHub stars,
 see [`docs/github-stars-growth-plan.md`](docs/github-stars-growth-plan.md).
 

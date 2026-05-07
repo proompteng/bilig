@@ -421,6 +421,16 @@ expected rows, registry status, and the verifier command:
 https://github.com/proompteng/bilig/blob/main/docs/formula-edge-sumifs-paired-criteria-fixture.md
 ```
 
+### dynamic arrays
+
+```text
+the interesting spreadsheet-agent cases are not just scalar formulas.
+
+for bilig i am trying to keep grouped spill claims small and auditable: one
+groupby fixture, exact expected output, and the verifier command:
+https://github.com/proompteng/bilig/blob/main/docs/formula-edge-groupby-spill-fixture.md
+```
+
 ### xlsx compatibility
 
 ```text
