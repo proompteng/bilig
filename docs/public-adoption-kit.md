@@ -58,6 +58,8 @@ Shorter version:
   [`docs/x-reply-growth-playbook.md`](x-reply-growth-playbook.md)
 - Launch post draft:
   [`docs/launch-post-headless-workpaper.md`](launch-post-headless-workpaper.md)
+- Show HN launch pack:
+  [`docs/show-hn-launch-pack.md`](show-hn-launch-pack.md)
 - Launch discussion: <https://github.com/proompteng/bilig/discussions/18>
 - Starter issues: [`docs/starter-issues.md`](starter-issues.md)
 - Public API notes: [`docs/public-api.md`](public-api.md)

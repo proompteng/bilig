@@ -175,6 +175,9 @@ see [`docs/github-stars-growth-plan.md`](docs/github-stars-growth-plan.md).
 For the lower-case, manual X reply playbook, see
 [`docs/x-reply-growth-playbook.md`](docs/x-reply-growth-playbook.md).
 
+For the Hacker News launch checklist, see
+[`docs/show-hn-launch-pack.md`](docs/show-hn-launch-pack.md).
+
 ## Quickstart
 
 Use Node `24+`, Bun, and `pnpm@10.32.1`.

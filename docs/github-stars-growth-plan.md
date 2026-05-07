@@ -299,6 +299,8 @@ audience, or product friction.
    reply budget, tone, examples, and platform-rule boundaries.
 3. Respond to serious Hacker News and GitHub Discussion comments within the same
    day, then convert repeated feedback into docs or examples.
+   For a concrete Hacker News launch checklist, use
+   [`docs/show-hn-launch-pack.md`](show-hn-launch-pack.md).
 4. Ship the next proof artifact: a compact formula-edge fixture article that
    follows the XLOOKUP exact walkthrough pattern, starts from one real formula
    family, and shows the fixture, expected result, and verifier command.

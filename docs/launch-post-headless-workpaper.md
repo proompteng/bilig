@@ -6,6 +6,9 @@ Use this as the first broad technical post for Hacker News, Reddit, dev.to, a
 personal blog, or a project site. Adapt tone and length per channel, but keep
 the evidence and caveats intact.
 
+For a Hacker News-specific submission checklist, title, first-comment draft,
+and preflight, use [`docs/show-hn-launch-pack.md`](show-hn-launch-pack.md).
+
 ## Long-Form Version
 
 Title:
