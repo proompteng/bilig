@@ -1,5 +1,11 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Starter issues
+    url: https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md
+    about: Find scoped good-first and step-up tasks before opening a new issue.
+  - name: Feedback discussion
+    url: https://github.com/proompteng/bilig/discussions/115
+    about: Share workflow feedback that is not a bug, feature request, or reduced formula mismatch.
   - name: Architecture docs
     url: https://github.com/proompteng/bilig/tree/main/docs
     about: Start here for engine, formula, sync, agent, and performance design notes.

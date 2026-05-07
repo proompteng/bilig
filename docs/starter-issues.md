@@ -13,6 +13,8 @@ Current starter tickets as of May 7, 2026:
 - [`#23 docs(headless): add an unsupported-formula troubleshooting recipe`](https://github.com/proompteng/bilig/issues/23)
 - [`#29 workbook import dispatcher rejects MIME types with parameters or different case`](https://github.com/proompteng/bilig/issues/29)
 - [`#67 XLSX import/export drops worksheet tab colors`](https://github.com/proompteng/bilig/issues/67)
+- [`#102 formula text coercion appends .0 to integer numbers during concatenation`](https://github.com/proompteng/bilig/issues/102)
+- [`#104 average over whole-column references returns 0 while bounded average works`](https://github.com/proompteng/bilig/issues/104)
 
 Step-up tickets with a small but production-facing implementation surface:
 
@@ -24,6 +26,13 @@ Useful filters:
 - [`area: import-export`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22area%3A%20import-export%22)
 - [`area: formula`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22area%3A%20formula%22)
 - [`needs reduced fixture`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22needs%20reduced%20fixture%22)
+
+GitHub surfaces issues labeled `good first issue` in contributor discovery
+paths, per
+[GitHub's label guidance](https://docs.github.com/articles/helping-new-contributors-find-your-project-with-labels),
+so starter tickets should stay genuinely scoped and current. Do not use that
+label for cross-cutting formula, import/export, or runtime changes that require
+broad architectural context.
 
 ## What Makes A Good Starter Patch
 

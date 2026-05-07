@@ -1,0 +1,99 @@
+name: Formula parity report
+description: Report a reduced Excel-compatible formula or workbook result mismatch.
+title: "[formula]: "
+labels: ["bug", "area: formula", "needs reduced fixture"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for formula or cached-workbook result differences where Excel and bilig disagree. A small reduced case is more useful than a large private workbook.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What formula behavior differs from Excel?
+      placeholder: AVERAGE over a whole-column reference returns 0 while Excel averages the numeric values.
+    validations:
+      required: true
+  - type: textarea
+    id: formula
+    attributes:
+      label: Formula and inputs
+      description: Include the exact formula, sheet names, cell addresses, named ranges, and minimal input values.
+      placeholder: |
+        Formula: =AVERAGE(V:V)
+        Inputs:
+        - V15: 5
+        - V16: 10
+        - V17: 20
+        - V18: 25
+        - V19: 40
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Excel expected result
+      description: Paste the Excel cached value or the expected result from a reduced workbook.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: bilig actual result
+      description: Paste the value, error code, diagnostic, or mismatch report from bilig.
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: Evidence source
+      description: Where did the expected result come from?
+      options:
+        - reduced workbook with Excel cached value
+        - public workbook corpus
+        - manually checked in Excel
+        - manually checked in another spreadsheet engine
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction command or script
+      description: Include the smallest command, test, or script that reproduces the mismatch.
+      placeholder: |
+        pnpm test:correctness:formula
+
+        or:
+
+        pnpm workpaper:xlsx-corpus:check ./path/to/reduced.xlsx -- --from-import-snapshot
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Known scope
+      description: List related formulas, controls that pass, or cases that are intentionally out of scope.
+      placeholder: |
+        Controls that pass:
+        - =SUM(V:V)
+        - =AVERAGE(V15:V19)
+
+        Not covered:
+        - volatile formulas
+        - private workbook data
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Package version, commit, Node, pnpm, OS, and import path.
+      placeholder: |
+        @bilig/headless:
+        Commit:
+        Node:
+        pnpm:
+        OS:
+        Import path:
+    validations:
+      required: true
