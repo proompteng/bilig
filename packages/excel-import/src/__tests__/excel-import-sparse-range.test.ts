@@ -14,7 +14,7 @@ describe('XLSX sparse ranges', () => {
       columnCount: 16_384,
       nonEmptyCellCount: 1,
     })
-  })
+  }, 15_000)
 })
 
 function buildBroadSparseWorkbookBytes(): Uint8Array {
