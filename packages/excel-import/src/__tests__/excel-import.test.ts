@@ -242,6 +242,16 @@ describe('excel import', () => {
     expect(imported.snapshot.sheets[0]?.metadata?.columns).toBeUndefined()
   })
 
+  it('canonicalizes imported multiline text to LF line breaks', () => {
+    const workbook = XLSX.utils.book_new()
+    const sheet = XLSX.utils.aoa_to_sheet([['Line 1\r\nLine 2\rLine 3']])
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Sheet1')
+
+    const imported = importXlsx(XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }), 'multiline.xlsx')
+
+    expect(imported.snapshot.sheets[0]?.cells).toContainEqual({ address: 'A1', value: 'Line 1\nLine 2\nLine 3' })
+  })
+
   it('preserves external workbook defined names as formulas across export round trips', () => {
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['local']]), 'Sheet1')

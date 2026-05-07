@@ -86,7 +86,7 @@ export function inspectWorkbookFootprint(bytes: Uint8Array, fileName: string): W
     cellFormula: true,
     cellText: false,
     cellDates: false,
-    dense: true,
+    dense: false,
   })
   const featureCounts = emptyFeatureCounts()
   const dimensions: PublicWorkbookCorpusCase['workbookMetadata']['dimensions'] = []

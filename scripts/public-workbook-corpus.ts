@@ -26,7 +26,13 @@ import {
 import { withPublicWorkbookCorpusCacheLock } from './public-workbook-corpus-lock.ts'
 import { formatByteSize, startChildRssWatchdog, terminateChildProcess } from './public-workbook-corpus-process.ts'
 import { roundTripSemanticsDigest } from './public-workbook-corpus-roundtrip.ts'
+import { buildPublicWorkbookCorpusScorecardFromCases, validatePublicWorkbookCorpusScorecard } from './public-workbook-corpus-scorecard.ts'
 import { defaultFinancialWorkbookQueries } from './public-workbook-corpus-topics.ts'
+import {
+  indexReusablePublicWorkbookCorpusCases,
+  readReusablePublicWorkbookCorpusCases,
+  writePublicWorkbookCorpusVerificationCheckpoint,
+} from './public-workbook-corpus-verify-checkpoint.ts'
 import {
   cellValuesMatchOracle,
   countWorkbookFeatures,
@@ -63,6 +69,7 @@ export {
   discoverCkanWorkbookSources,
   parsePublicWorkbookCorpusScorecardJson,
   parsePublicWorkbookManifestJson,
+  validatePublicWorkbookCorpusScorecard,
   validatePublicWorkbookManifest,
   fetchPublicWorkbookArtifacts,
 }
@@ -105,8 +112,26 @@ export async function buildPublicWorkbookCorpusScorecard(args: BuildScorecardArg
   const verifyMaxRssBytes = capVerifyMaxRssBytes(Math.max(1, Math.trunc(args.verifyMaxRssBytes ?? defaultVerifyMaxRssBytes)))
   const verifyMaxCellCount = Math.max(1, Math.trunc(args.verifyMaxCellCount ?? defaultVerifyMaxCellCount))
   const verifyRssCheckIntervalMs = Math.max(100, Math.trunc(args.verifyRssCheckIntervalMs ?? 250))
+  const reusableCasesById = indexReusablePublicWorkbookCorpusCases({
+    manifest: args.manifest,
+    cases: args.reusableCases ?? [],
+    structuralSmokeSampleLimit,
+  })
   let completedCount = 0
+  const reportVerifiedCase = (verifiedCase: PublicWorkbookCorpusCase): PublicWorkbookCorpusCase => {
+    completedCount += 1
+    args.onCaseVerified?.({
+      completedCount,
+      totalCount: args.manifest.artifacts.length,
+      latestCase: verifiedCase,
+    })
+    return verifiedCase
+  }
   const cases = await mapWithConcurrency(args.manifest.artifacts, verifyConcurrency, (artifact, index) => {
+    const reusableCase = reusableCasesById.get(artifact.id)
+    if (reusableCase) {
+      return Promise.resolve(reportVerifiedCase(reusableCase))
+    }
     const runStructuralSmoke = index < structuralSmokeSampleLimit
     const verifiedCasePromise =
       isolatedVerification && verificationManifestPath
@@ -121,43 +146,13 @@ export async function buildPublicWorkbookCorpusScorecard(args: BuildScorecardArg
             rssCheckIntervalMs: verifyRssCheckIntervalMs,
           })
         : verifyCachedWorkbookArtifact(artifact, args.cacheDir, runStructuralSmoke, verifyMaxCellCount)
-    return verifiedCasePromise.then((verifiedCase) => {
-      completedCount += 1
-      args.onCaseVerified?.({
-        completedCount,
-        totalCount: args.manifest.artifacts.length,
-        latestCase: verifiedCase,
-      })
-      return verifiedCase
-    })
+    return verifiedCasePromise.then(reportVerifiedCase)
   })
-  const passedWorkbookCount = cases.filter((entry) => entry.status === 'passed').length
-  const failedWorkbookCount = cases.filter((entry) => entry.status === 'failed').length
-  const errorWorkbookCount = cases.filter((entry) => entry.status === 'error').length
-  const unsupportedWorkbookCount = cases.filter((entry) => entry.status === 'unsupported').length
-  const formulaOracleComparisonCount = cases.reduce((sum, entry) => sum + entry.validation.formulaOracleComparisons, 0)
-  const formulaOracleMatchCount = countFormulaOracleMatches(cases)
-  return {
-    schemaVersion: 1,
-    suite: 'public-workbook-corpus',
-    generatedAt: args.generatedAt ?? new Date().toISOString(),
-    summary: {
-      targetWorkbookCount: args.manifest.targetWorkbookCount,
-      sourceCount: args.manifest.sources.length,
-      cachedWorkbookCount: args.manifest.artifacts.length,
-      importedWorkbookCount: cases.filter((entry) => entry.validation.importPassed).length,
-      passedWorkbookCount,
-      failedWorkbookCount,
-      errorWorkbookCount,
-      unsupportedWorkbookCount,
-      formulaOracleComparisonCount,
-      formulaOracleMatchCount,
-      structuralSmokeRunCount: cases.filter((entry) => entry.validation.structuralSmokePassed !== null).length,
-      allCachedWorkbooksPassed: cases.every((entry) => entry.passed),
-      remainingToTarget: Math.max(0, args.manifest.targetWorkbookCount - args.manifest.artifacts.length),
-    },
+  return buildPublicWorkbookCorpusScorecardFromCases({
+    manifest: args.manifest,
+    generatedAt: args.generatedAt,
     cases,
-  }
+  })
 }
 
 function verifyCachedWorkbookArtifactIsolated(args: {
@@ -277,54 +272,6 @@ function createOneShotResolver<T>(resolveValue: (value: T) => void, cleanup: () 
   }
 }
 
-export function validatePublicWorkbookCorpusScorecard(scorecard: PublicWorkbookCorpusScorecard): void {
-  if (scorecard.schemaVersion !== 1 || scorecard.suite !== 'public-workbook-corpus') {
-    throw new Error('Unexpected public workbook corpus scorecard header')
-  }
-  if (!Number.isInteger(scorecard.summary.targetWorkbookCount) || scorecard.summary.targetWorkbookCount <= 0) {
-    throw new Error('Public workbook corpus scorecard has an invalid target workbook count')
-  }
-  if (scorecard.cases.length !== scorecard.summary.cachedWorkbookCount) {
-    throw new Error('Public workbook corpus scorecard case count does not match cached workbook count')
-  }
-  if (scorecard.summary.remainingToTarget !== Math.max(0, scorecard.summary.targetWorkbookCount - scorecard.summary.cachedWorkbookCount)) {
-    throw new Error('Public workbook corpus scorecard remaining target count is stale')
-  }
-  const passedWorkbookCount = scorecard.cases.filter((entry) => entry.status === 'passed').length
-  const failedWorkbookCount = scorecard.cases.filter((entry) => entry.status === 'failed').length
-  const errorWorkbookCount = scorecard.cases.filter((entry) => entry.status === 'error').length
-  const unsupportedWorkbookCount = scorecard.cases.filter((entry) => entry.status === 'unsupported').length
-  if (scorecard.summary.passedWorkbookCount !== passedWorkbookCount) {
-    throw new Error('Public workbook corpus scorecard passed workbook count is stale')
-  }
-  if (scorecard.summary.failedWorkbookCount !== failedWorkbookCount) {
-    throw new Error('Public workbook corpus scorecard failed workbook count is stale')
-  }
-  if (scorecard.summary.errorWorkbookCount !== errorWorkbookCount) {
-    throw new Error('Public workbook corpus scorecard error workbook count is stale')
-  }
-  if (scorecard.summary.unsupportedWorkbookCount !== unsupportedWorkbookCount) {
-    throw new Error('Public workbook corpus scorecard unsupported workbook count is stale')
-  }
-  const importedWorkbookCount = scorecard.cases.filter((entry) => entry.validation.importPassed).length
-  if (scorecard.summary.importedWorkbookCount !== importedWorkbookCount) {
-    throw new Error('Public workbook corpus scorecard imported workbook count is stale')
-  }
-  const formulaOracleComparisonCount = scorecard.cases.reduce((sum, entry) => sum + entry.validation.formulaOracleComparisons, 0)
-  if (scorecard.summary.formulaOracleComparisonCount !== formulaOracleComparisonCount) {
-    throw new Error('Public workbook corpus scorecard formula oracle comparison count is stale')
-  }
-  if (scorecard.summary.formulaOracleMatchCount !== countFormulaOracleMatches(scorecard.cases)) {
-    throw new Error('Public workbook corpus scorecard formula oracle match count is stale')
-  }
-  if (scorecard.summary.allCachedWorkbooksPassed !== scorecard.cases.every((entry) => entry.passed)) {
-    throw new Error('Public workbook corpus scorecard pass summary is stale')
-  }
-  if (!scorecard.summary.allCachedWorkbooksPassed) {
-    throw new Error('Public workbook corpus scorecard has cached workbooks that did not pass')
-  }
-}
-
 async function verifyCachedWorkbookArtifact(
   artifact: PublicWorkbookArtifact,
   cacheDir: string,
@@ -348,10 +295,15 @@ async function verifyCachedWorkbookArtifact(
     if (footprint.featureCounts.cellCount > maxCellCount) {
       return unsupportedResourceLimitCase(artifact, baseEvidence, footprint, maxCellCount)
     }
+    collectGarbage()
     const imported = importXlsx(bytes, artifact.fileName)
     const featureCounts = countWorkbookFeatures(imported.snapshot, imported.warnings)
     const metadata = workbookMetadata(imported.snapshot)
-    const formulaOracleValidation = await validateFormulaOracles(imported.snapshot, bytes)
+    const formulaOracleValidation =
+      footprint.featureCounts.formulaCellCount === 0
+        ? { comparisons: 0, mismatches: [] }
+        : await validateFormulaOracles(imported.snapshot, bytes)
+    collectGarbage()
     const structuralSmokePassed = runStructuralSmoke ? runStructuralSmokeOps(imported.snapshot) : null
     const unsupportedFeatureClassifications = classifyUnsupportedFeatures(imported.snapshot, imported.warnings)
     const roundTripPassed = roundTripsSupportedSemantics(detachImportedWorkbookSnapshot(imported))
@@ -621,13 +573,6 @@ async function mapWithConcurrency<T, R>(
   return results
 }
 
-function countFormulaOracleMatches(cases: readonly PublicWorkbookCorpusCase[]): number {
-  return cases.reduce(
-    (sum, entry) => sum + Math.max(0, entry.validation.formulaOracleComparisons - entry.validation.formulaOracleMismatches.length),
-    0,
-  )
-}
-
 function compactProcessOutput(value: string): string | null {
   const compacted = value.replaceAll(rootDir, '<repo>').replace(/\s+/gu, ' ').trim()
   return compacted.length > 0 ? compacted.slice(0, 1_000) : null
@@ -714,6 +659,7 @@ async function main(): Promise<void> {
   const manifestPath = resolve(readStringArg('--manifest', defaultManifestPath))
   const cacheDir = resolve(readStringArg('--cache-dir', defaultCacheDir))
   const scorecardPath = resolve(readStringArg('--scorecard', defaultScorecardPath))
+  const verifyCheckpointPath = resolve(readStringArg('--verify-checkpoint', join(cacheDir, 'verification-checkpoint.json')))
   const targetWorkbookCount = readNumberArg('--target-workbook-count', 10_000)
   if (command === 'init') {
     await withPublicWorkbookCorpusCacheLock(cacheDir, 'init', async () => {
@@ -871,6 +817,11 @@ async function main(): Promise<void> {
   if (command === 'verify') {
     const scorecard = await withPublicWorkbookCorpusCacheLock(cacheDir, 'verify', async () => {
       const manifest = readManifest(manifestPath)
+      const checkpointInterval = readNumberArg('--verify-checkpoint-interval', 10)
+      const reusableCases = readFlagArg('--no-verify-resume')
+        ? []
+        : readReusablePublicWorkbookCorpusCases([scorecardPath, verifyCheckpointPath])
+      const checkpointCasesById = new Map(reusableCases.map((entry) => [entry.id, entry]))
       let completedCount = 0
       let latestArtifactId = 'none'
       const startedAt = Date.now()
@@ -892,9 +843,18 @@ async function main(): Promise<void> {
           verifyTimeoutMs: readNumberArg('--verify-timeout-ms', defaultVerifyTimeoutMs),
           verifyMaxRssBytes: capVerifyMaxRssBytes(readMegabytesArg('--verify-max-rss-mb', defaultVerifyMaxRssBytes)),
           verifyMaxCellCount: readNumberArg('--verify-max-cells', defaultVerifyMaxCellCount),
+          reusableCases,
           onCaseVerified: (progress) => {
             completedCount = progress.completedCount
             latestArtifactId = progress.latestCase.id
+            checkpointCasesById.set(progress.latestCase.id, progress.latestCase)
+            if (progress.completedCount % checkpointInterval === 0 || progress.completedCount === progress.totalCount) {
+              writePublicWorkbookCorpusVerificationCheckpoint({
+                path: verifyCheckpointPath,
+                manifest,
+                casesById: checkpointCasesById,
+              })
+            }
             if (
               progress.completedCount === progress.totalCount ||
               progress.completedCount % 50 === 0 ||

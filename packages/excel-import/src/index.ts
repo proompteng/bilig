@@ -249,7 +249,10 @@ function toLiteralInput(value: unknown) {
   if (value === null || value === undefined) {
     return undefined
   }
-  if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') {
+  if (typeof value === 'string') {
+    return value.replace(/\r\n?/gu, '\n')
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
     return value
   }
   if (value instanceof Date) {
@@ -671,7 +674,7 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
     cellDates: false,
     bookFiles: true,
     bookVBA: true,
-    dense: true,
+    dense: false,
   })
   const workbookName = normalizeWorkbookName(fileName)
   const warnings: string[] = []

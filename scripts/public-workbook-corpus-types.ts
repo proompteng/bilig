@@ -144,6 +144,7 @@ export interface BuildScorecardArgs {
   readonly verifyMaxRssBytes?: number
   readonly verifyRssCheckIntervalMs?: number
   readonly verifyMaxCellCount?: number
+  readonly reusableCases?: readonly PublicWorkbookCorpusCase[]
   readonly onCaseVerified?: (progress: PublicWorkbookCorpusVerificationProgress) => void
 }
 
