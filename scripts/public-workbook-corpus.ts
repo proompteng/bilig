@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 
 import { spawn } from 'node:child_process'
-import { createHash, type Hash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -9,7 +8,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { SpreadsheetEngine } from '../packages/core/src/engine.js'
 import { exportXlsx, importXlsx } from '../packages/excel-import/src/index.js'
 import type { WorkbookSnapshot } from '../packages/protocol/src/types.js'
-import { projectSupportedSnapshotSemantics } from './import-export-fidelity-projection.ts'
 import {
   createEmptyPublicWorkbookManifest,
   parsePublicWorkbookCorpusCase,
@@ -27,6 +25,7 @@ import {
 } from './public-workbook-corpus-fetch.ts'
 import { withPublicWorkbookCorpusCacheLock } from './public-workbook-corpus-lock.ts'
 import { formatByteSize, startChildRssWatchdog, terminateChildProcess } from './public-workbook-corpus-process.ts'
+import { roundTripSemanticsDigest } from './public-workbook-corpus-roundtrip.ts'
 import { defaultFinancialWorkbookQueries } from './public-workbook-corpus-topics.ts'
 import {
   cellValuesMatchOracle,
@@ -562,59 +561,6 @@ function collectGarbage(): void {
   if (typeof gc === 'function') {
     gc()
   }
-}
-
-function roundTripSemanticsDigest(snapshot: WorkbookSnapshot): string {
-  const hash = createHash('sha256')
-  const populatedCellKeys = new Set<string>()
-  for (const sheet of snapshot.sheets) {
-    for (const cell of sheet.cells) {
-      if (cell.value !== undefined || cell.formula !== undefined) {
-        populatedCellKeys.add(`${sheet.name}:${cell.address}`)
-      }
-    }
-  }
-  const metadataOnlyProjection = projectSupportedSnapshotSemantics({
-    ...snapshot,
-    sheets: snapshot.sheets.map((sheet) => ({
-      ...sheet,
-      cells: [],
-    })),
-  })
-  updateDigestJson(hash, {
-    ...metadataOnlyProjection,
-    valueFormulaFormatSheets: metadataOnlyProjection.valueFormulaFormatSheets.map((sheet) => ({ ...sheet, cells: [] })),
-    styleRanges: metadataOnlyProjection.styleRanges.filter(
-      (styleRange) =>
-        populatedCellKeys.has(`${styleRange.range.sheetName}:${styleRange.range.startAddress}`) ||
-        populatedCellKeys.has(`${styleRange.range.sheetName}:${styleRange.range.endAddress}`),
-    ),
-    dimensionSheets: metadataOnlyProjection.dimensionSheets.map((sheet) => ({
-      name: sheet.name,
-      columns: sheet.columns.filter((column) => column.size > 0).map((column) => ({ index: column.index, size: 0 })),
-      rows: sheet.rows.filter((row) => row.size > 0).map((row) => ({ index: row.index, size: 0 })),
-      merges: sheet.merges,
-    })),
-  })
-  for (const sheet of snapshot.sheets.toSorted((left, right) => left.order - right.order)) {
-    updateDigestJson(hash, ['sheet-cells', sheet.name, sheet.order])
-    for (const cell of sheet.cells
-      .filter((entry) => entry.value !== undefined || entry.formula !== undefined)
-      .toSorted((left, right) => left.address.localeCompare(right.address))) {
-      updateDigestJson(hash, {
-        address: cell.address,
-        ...(cell.value !== undefined ? { value: cell.value } : {}),
-        ...(cell.formula !== undefined ? { formula: cell.formula } : {}),
-        ...(cell.format !== undefined ? { format: cell.format } : {}),
-      })
-    }
-  }
-  return hash.digest('hex')
-}
-
-function updateDigestJson(hash: Hash, value: unknown): void {
-  hash.update(JSON.stringify(value))
-  hash.update('\n')
 }
 
 function runStructuralSmokeOps(snapshot: WorkbookSnapshot): boolean | null {

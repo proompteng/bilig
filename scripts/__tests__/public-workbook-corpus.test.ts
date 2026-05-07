@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as XLSX from 'xlsx'
 
+import type { WorkbookSnapshot } from '../../packages/protocol/src/types.js'
 import {
   buildPublicWorkbookCorpusScorecard,
   createEmptyPublicWorkbookManifest,
@@ -16,6 +17,7 @@ import {
   type PublicWorkbookManifest,
   type PublicWorkbookSource,
 } from '../public-workbook-corpus.ts'
+import { roundTripSemanticsDigest } from '../public-workbook-corpus-roundtrip.ts'
 
 const spawnMock = vi.hoisted(() => vi.fn())
 
@@ -282,6 +284,15 @@ describe('public workbook corpus', () => {
         structuralSmokePassed: true,
       },
     })
+  })
+
+  it('compares populated-cell styles when round trips shrink blank style ranges', () => {
+    const broadStyleRange = buildInteriorStyledSnapshot('A1', 'C3')
+    const populatedOnlyStyleRange = buildInteriorStyledSnapshot('B2', 'B2')
+    const differentPopulatedStyle = buildInteriorStyledSnapshot('B2', 'B2', '#00ccff')
+
+    expect(roundTripSemanticsDigest(broadStyleRange)).toBe(roundTripSemanticsDigest(populatedOnlyStyleRange))
+    expect(roundTripSemanticsDigest(broadStyleRange)).not.toBe(roundTripSemanticsDigest(differentPopulatedStyle))
   })
 
   it('runs structural smoke against a mutable sheet when the first sheet is protected', async () => {
@@ -951,6 +962,40 @@ function buildTrailingSpaceWorkbookBytes(): Uint8Array {
   sheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }]
   XLSX.utils.book_append_sheet(workbook, sheet, sheetName)
   return XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' })
+}
+
+function buildInteriorStyledSnapshot(startAddress: string, endAddress: string, backgroundColor = '#ffcc00'): WorkbookSnapshot {
+  return {
+    version: 1,
+    workbook: {
+      name: 'interior-styled-range',
+      metadata: {
+        styles: [
+          {
+            id: 'accent-style',
+            fill: { backgroundColor },
+            font: { bold: true },
+          },
+        ],
+      },
+    },
+    sheets: [
+      {
+        id: 1,
+        name: 'Styled',
+        order: 0,
+        cells: [{ address: 'B2', value: 'Interior' }],
+        metadata: {
+          styleRanges: [
+            {
+              range: { sheetName: 'Styled', startAddress, endAddress },
+              styleId: 'accent-style',
+            },
+          ],
+        },
+      },
+    ],
+  }
 }
 
 function buildProtectedFirstWorkbookBytes(): Uint8Array {
