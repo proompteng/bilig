@@ -1,4 +1,6 @@
 import type { FormulaFamilyStore } from '../../formula/formula-family-store.js'
+import type { EngineRuntimeState } from '../runtime-state.js'
+import { getFormulaBindingFamilyShapeKey, type FormulaBindingFamilyShapeKeyCache } from './formula-binding-family-shape-key.js'
 
 export interface DeferredFormulaFamilyIndexRun {
   readonly sheetId: number
@@ -94,5 +96,34 @@ export function registerDeferredFormulaFamilyIndexRun(
       row: run.ordered ? run.start + step * index : run.rows![index]!,
       col: run.fixedIndex,
     })),
+  })
+}
+
+export function rebuildDeferredFormulaFamilyIndex(args: {
+  readonly state: Pick<EngineRuntimeState, 'workbook' | 'formulas'>
+  readonly store: FormulaFamilyStore
+  readonly shapeKeyCache: FormulaBindingFamilyShapeKeyCache
+}): void {
+  const runs = new Map<string, DeferredFormulaFamilyIndexRun>()
+  args.store.clear()
+  args.shapeKeyCache.clear()
+  args.state.formulas.forEach((formula, cellIndex) => {
+    const templateId = formula.templateId
+    const sheetId = args.state.workbook.cellStore.sheetIds[cellIndex]
+    const position = args.state.workbook.getCellPosition(cellIndex)
+    if (templateId === undefined || sheetId === undefined || !position) {
+      return
+    }
+    noteDeferredFormulaFamilyIndexRunMember(runs, {
+      cellIndex,
+      sheetId,
+      templateId,
+      shapeKey: getFormulaBindingFamilyShapeKey(args.shapeKeyCache, formula),
+      row: position.row,
+      col: position.col,
+    })
+  })
+  runs.forEach((run) => {
+    registerDeferredFormulaFamilyIndexRun(args.store, run)
   })
 }

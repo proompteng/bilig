@@ -25,9 +25,11 @@ import {
 } from './formula-initialization-refs.js'
 import {
   canEvaluateInitialDirectRuntimeFormula,
+  compiledFormulaRequiresWorkbookMetadataBinding,
   hasPendingFormulaDependency,
   mutationErrorMessage,
 } from './formula-initialization-predicates.js'
+import type { InitialPrefixAggregateGroup } from './formula-initialization-prefix-aggregates.js'
 import type {
   EngineFormulaInitializationService,
   HydratedPreparedFormulaInitializationRef,
@@ -42,23 +44,6 @@ export type {
 
 const INITIAL_DIRECT_FORMULA_EVALUATION_LIMIT = 16_384
 const EMPTY_U32 = new Uint32Array(0)
-
-function compiledFormulaRequiresWorkbookMetadataBinding(compiled: CompiledFormula): boolean {
-  return compiled.symbolicNames.length > 0 || compiled.symbolicTables.length > 0 || compiled.symbolicSpills.length > 0
-}
-
-type InitialPrefixAggregateKind = 'sum' | 'count' | 'average' | 'min' | 'max'
-
-interface InitialPrefixAggregateGroup {
-  readonly sheetName: string
-  readonly col: number
-  readonly colEnd: number
-  readonly aggregateKind: InitialPrefixAggregateKind
-  maxRowEnd: number
-  lastRowEnd: number
-  formulasAreOrdered: boolean
-  readonly formulas: Array<{ cellIndex: number; rowEnd: number; resultOffset?: number }>
-}
 
 export function createEngineFormulaInitializationService(args: {
   readonly state: Pick<
@@ -875,7 +860,9 @@ export function createEngineFormulaInitializationService(args: {
     }
     let canAssignTopoInBatch = !hadExistingFormulas
     let nextTopoRank = 0
-    const deferredFormulaFamilyRuns = hadExistingFormulas ? undefined : new Map<string, DeferredInitialFormulaFamilyRun>()
+    const shouldDeferFormulaFamilyIndex = !hadExistingFormulas && args.deferFormulaFamilyIndexRebuild !== undefined
+    const deferredFormulaFamilyRuns =
+      hadExistingFormulas || shouldDeferFormulaFamilyIndex ? undefined : new Map<string, DeferredInitialFormulaFamilyRun>()
 
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1)
     try {
@@ -892,7 +879,7 @@ export function createEngineFormulaInitializationService(args: {
             const ownerSheetName = resolveSheetName(ref.sheetId)
             topologyChanged =
               args.bindPreparedFormula(cellIndex, ownerSheetName, ref.source, ref.compiled, ref.templateId, {
-                deferFamilyRegistration: deferredFormulaFamilyRuns !== undefined,
+                deferFamilyRegistration: shouldDeferFormulaFamilyIndex || deferredFormulaFamilyRuns !== undefined,
               }) || topologyChanged
             noteDeferredFormulaFamilyRunMember(deferredFormulaFamilyRuns, {
               cellIndex,
@@ -919,7 +906,11 @@ export function createEngineFormulaInitializationService(args: {
               pendingFormulaCells[cellIndex] = 0
             }
           }
-          deferredFormulaFamilyRuns?.forEach(registerDeferredFormulaFamilyRun)
+          if (shouldDeferFormulaFamilyIndex) {
+            args.deferFormulaFamilyIndexRebuild?.()
+          } else {
+            deferredFormulaFamilyRuns?.forEach(registerDeferredFormulaFamilyRun)
+          }
           valueWriter.flush()
         })
       }

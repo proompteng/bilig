@@ -10,12 +10,7 @@ import { errorValue } from '../../engine-value-utils.js'
 import { addEngineCounter } from '../../perf/engine-counters.js'
 import { normalizeDefinedName } from '../../workbook-store.js'
 import type { StructuralTransaction } from '../structural-transaction.js'
-import type {
-  CompiledPlanRecord,
-  RuntimeDirectAggregateDescriptor,
-  RuntimeDirectScalarDescriptor,
-  RuntimeFormula,
-} from '../runtime-state.js'
+import type { RuntimeDirectAggregateDescriptor, RuntimeDirectScalarDescriptor, RuntimeFormula } from '../runtime-state.js'
 import { EngineFormulaBindingError } from '../errors.js'
 import {
   canRewriteCompiledPreservingBindings,
@@ -62,6 +57,8 @@ import { clearFormulaBindingNow } from './formula-binding-clear.js'
 import { installFreshFormulaBindingNow } from './formula-binding-install.js'
 import { createFormulaBindingSheetRenameHandler } from './formula-binding-sheet-rename.js'
 import { createFormulaBindingRebinds } from './formula-binding-rebind.js'
+import { rebuildDeferredFormulaFamilyIndex } from './formula-family-index-rebuild.js'
+import { canRetainUnmanagedCompiledPlan, formulaBindingErrorMessage, makeUnmanagedCompiledPlan } from './formula-binding-plan-helpers.js'
 import { normalizeFormulaBindingLookupCompileMode } from './formula-binding-lookup-mode.js'
 import { primeFormulaBindingLookupCandidates } from './formula-binding-lookup-primer.js'
 import { directAggregateContainsFormulaOwnerCell } from './formula-binding-direct-aggregate-owner.js'
@@ -80,36 +77,12 @@ export type {
   FormulaOwnerPosition,
 } from './formula-binding-service-types.js'
 
-function formulaBindingErrorMessage(message: string, cause: unknown): string {
-  return cause instanceof Error && cause.message.length > 0 ? cause.message : message
-}
-
-function canUseDirectOnlyRuntimeProgram(compiled: CompiledFormula, directScalar: RuntimeDirectScalarDescriptor | undefined): boolean {
-  return directScalar !== undefined && !compiled.volatile && !compiled.producesSpill
-}
-
-function makeUnmanagedCompiledPlan(source: string, compiled: CompiledFormula, templateId: number | undefined): CompiledPlanRecord {
-  return {
-    id: 0,
-    source,
-    compiled,
-    ...(templateId !== undefined ? { templateId } : {}),
-  }
-}
-
-function canRetainUnmanagedCompiledPlan(
-  existingPlanId: number,
-  compiled: CompiledFormula,
-  directScalar: RuntimeDirectScalarDescriptor | undefined,
-): boolean {
-  return existingPlanId === 0 && canUseDirectOnlyRuntimeProgram(compiled, directScalar)
-}
-
 export function createEngineFormulaBindingService(args: CreateEngineFormulaBindingServiceArgs): EngineFormulaBindingService {
   const resolvedCompiledCache = new Map<string, ParsedCompiledFormula>()
   const formulaMemberCounts = createFormulaBindingMemberCounts()
   const formulaSheetIndex = createFormulaBindingSheetIndex()
   const formulaFamilyShapeKeyCache: FormulaBindingFamilyShapeKeyCache = new Map()
+  let formulaFamilyIndexNeedsRebuild = false
   const { recordFormulaInstanceNow, registerFormulaFamilyNow } = createFormulaBindingInstanceTracker({
     serviceArgs: args,
     formulaFamilyShapeKeyCache,
@@ -120,6 +93,19 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
     formulaMemberCounts.clear()
     formulaSheetIndex.clear()
     formulaFamilyShapeKeyCache.clear()
+    formulaFamilyIndexNeedsRebuild = false
+  }
+
+  const ensureFormulaFamilyIndexNow = (): void => {
+    if (!formulaFamilyIndexNeedsRebuild) {
+      return
+    }
+    rebuildDeferredFormulaFamilyIndex({
+      state: args.state,
+      store: args.formulaFamilies,
+      shapeKeyCache: formulaFamilyShapeKeyCache,
+    })
+    formulaFamilyIndexNeedsRebuild = false
   }
 
   const updateVolatileFormulaIndex = (cellIndex: number, formula: RuntimeFormula | undefined): void => {
@@ -925,6 +911,7 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
     clearFormulaBookkeepingNow,
     deferFormulaFamilyIndexRebuildNow() {
       formulaFamilyShapeKeyCache.clear()
+      formulaFamilyIndexNeedsRebuild = true
     },
     deferFormulaInstanceTableRebuildNow() {},
     exportFormulaInstancesNow() {
@@ -948,18 +935,23 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
       return formulaMemberCounts.countSheetMembers(sheetId)
     },
     countFormulaFamilySheetMembersNow(sheetId) {
+      ensureFormulaFamilyIndexNow()
       return args.formulaFamilies.countSheetMembers(sheetId)
     },
     forEachFormulaFamilyNow(fn) {
+      ensureFormulaFamilyIndexNow()
       args.formulaFamilies.forEachFamily(fn)
     },
     setFormulaFamilyStructuralSourceTransformNow(familyId, transform) {
+      ensureFormulaFamilyIndexNow()
       args.formulaFamilies.setStructuralSourceTransform(familyId, transform)
     },
     getFormulaFamilyStructuralSourceTransformNow(cellIndex) {
+      ensureFormulaFamilyIndexNow()
       return args.formulaFamilies.getStructuralSourceTransform(cellIndex)
     },
     consumeFormulaFamilyStructuralSourceTransformsNow() {
+      ensureFormulaFamilyIndexNow()
       return args.formulaFamilies.consumeStructuralSourceTransforms()
     },
     collectFormulaCellsOwnedBySheetNow(sheetName) {
@@ -981,6 +973,7 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
       )
     },
     getFormulaFamilyStatsNow() {
+      ensureFormulaFamilyIndexNow()
       return args.formulaFamilies.getStats()
     },
   }

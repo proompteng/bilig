@@ -1,3 +1,4 @@
+import type { CompiledFormula } from '@bilig/formula'
 import type { RuntimeFormula } from '../runtime-state.js'
 
 export function mutationErrorMessage(message: string, cause: unknown): string {
@@ -14,6 +15,10 @@ export function canEvaluateInitialDirectRuntimeFormula(formula: RuntimeFormula |
       formula.directLookup !== undefined ||
       formula.directScalar !== undefined)
   )
+}
+
+export function compiledFormulaRequiresWorkbookMetadataBinding(compiled: CompiledFormula): boolean {
+  return compiled.symbolicNames.length > 0 || compiled.symbolicTables.length > 0 || compiled.symbolicSpills.length > 0
 }
 
 export function hasPendingFormulaDependency(

@@ -79,8 +79,8 @@ Avoid:
 
 ## Current Style Scan
 
-Checked on 2026-05-07 in Atlas on the live `@sama` X profile. Recent
-high-engagement posts and replies tend to be compressed, casual, and
+Checked on 2026-05-07 from public X pages and indexed web results for `@sama`.
+Recent high-engagement posts and replies tend to be compressed, casual, and
 low-friction:
 
 - mostly lowercase, except when announcing a product milestone
@@ -96,6 +96,42 @@ Use that shape only as a tone reference. Do not impersonate anyone, copy
 phrasing, or turn posts into vague ai hype. For `bilig`, the useful version is
 lowercase and human but still specific: workbook state, formula parity,
 readback, fixtures, examples, and measured caveats.
+
+## Research Refresh - 2026-05-07
+
+What is working:
+
+- public proof beats abstract launch copy: runnable examples, exact verifier
+  commands, fixture-scoped compatibility, and benchmark caveats
+- HN can still move GitHub stars when the project is immediately tryable, but
+  the launch needs a repo/docs page people can evaluate without a signup wall
+- X replies should be few, manual, and useful without the repo link; the link is
+  for threads where someone is already asking about spreadsheet engines,
+  workbook APIs, Excel automation, formula parity, or agent writeback
+- repeated objections should become docs or examples before being used as more
+  replies
+
+Working tone for `bilig`:
+
+- lowercase by default
+- one concrete technical point
+- no hashtags unless the thread already uses a precise project tag
+- no "please star" ask in replies
+- link only after the reply earns the link
+
+Good one-line reply shapes:
+
+```text
+the grid is the ui. workbook state is the api the agent needs to mutate and verify.
+```
+
+```text
+the hard part is not generating formulas. it is proving ranges, formulas, recalc, and export still match after edits.
+```
+
+```text
+i think "excel compatible" has to be replaced with fixture-scoped claims and verifier commands.
+```
 
 ## Live Reply Queue - 2026-05-07
 
@@ -359,6 +395,10 @@ is good enough to link when the same question appears again.
   <https://help.x.com/en/rules-and-policies/x-rules-and-best-practices>
 - Sam Altman Codex milestone post, tone reference:
   <https://x.com/sama/status/2041658719839383945>
+- Sam Altman open-model launch post, tone reference:
+  <https://x.com/sama/status/1952777539052814448>
+- Sam Altman MIT Technology Review share, tone reference:
+  <https://x.com/sama/status/1950936581810041143>
 - Sam Altman voice-model post, tone reference:
   <https://di.gg/ai/25eceafd-986f-45ed-8b10-6a35eac12d30>
 - Sam Altman AI-access reply, tone reference:

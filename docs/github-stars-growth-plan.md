@@ -17,12 +17,13 @@ not from paid, automated, reciprocal, or misleading campaigns.
 Verified on 2026-05-07:
 
 - GitHub stars: `5`
+- GitHub open issues: `84`
 - Community profile: `100%`
 - Public package: `@bilig/headless`
-- GitHub repo description: headless spreadsheet engine and local-first workbook
-  runtime for Node services, AI agents, collaborative sync, and
-  WASM-accelerated formulas
-- Topics: `19`, including `spreadsheet`, `spreadsheet-engine`,
+- GitHub repo description: headless spreadsheet engine for TypeScript, Node
+  services, local-first workbook automation, and agent-controlled formula
+  workflows
+- Topics: `20`, including `spreadsheet`, `spreadsheet-engine`,
   `headless-spreadsheet`, `ai-agents`, `formula-engine`, `workbook`,
   `typescript`, and `wasm`
 - Public launch assets already present:
@@ -96,9 +97,18 @@ needs stronger docs, scoped issues, runnable examples, and fast maintainer
 triage before a major launch spike.
 
 The 2025 Hacker News launch-diffusion study is directionally useful for launch
-planning. It reports large average star gains after HN exposure for AI-tool
-repos, but it also says timing and launch fit matter. Treat HN as one
-distribution event in a repeatable proof loop, not as the whole plan.
+planning. It analyzed 138 AI and LLM-tool repository launches from 2024-2025
+and reported average post-HN gains of `121` stars within 24 hours, `189` within
+48 hours, and `289` within a week. It also says timing and launch fit matter.
+Treat HN as one distribution event in a repeatable proof loop, not as the whole
+plan.
+
+The most useful 2026 founder playbooks repeat the same lesson: large star
+growth came from a specific, tryable product plus repeated distribution across
+HN, Reddit, Product Hunt, X, and community channels. AFFiNE's public case study
+claims `1,000` stars in 72 hours and `6,000` in seven days, but the useful
+takeaway is not the spike; it is the clean positioning, global distribution,
+and immediate user conversations after the traffic arrived.
 
 Official HN guidance makes the same launch constraint concrete: a Show HN should
 be something people can try directly, preferably without signups or email gates,
@@ -366,6 +376,8 @@ audience, or product friction.
   <https://arxiv.org/abs/1811.07643>
 - Hacker News launch diffusion study, arXiv:
   <https://arxiv.org/abs/2511.04453>
+- AFFiNE open-source growth case study:
+  <https://gingiris.github.io/growth-tools/blog/2026/03/07/i-led-affine-from-0-to-60k-github-stars-here-are-my-open-source-growth-playbooks/>
 - Fake-star campaign study:
   <https://cmustrudel.github.io/papers/icse2026fakestars.pdf>
 - Fortune coverage of Sam Altman's lower-case social style:
