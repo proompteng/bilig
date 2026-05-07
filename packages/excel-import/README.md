@@ -2,10 +2,19 @@
 
 CSV/XLSX-to-`WorkbookSnapshot` import helpers and supported-subset XLSX export helpers for bilig.
 
-## Install
+## Package Status
+
+This package is part of the `bilig` monorepo runtime package set, but the
+`@bilig/excel-import` npm name is not provisioned yet. Use it from a repository
+checkout for now. The external npm install path will be documented here after
+the package is published.
+
+From the repository:
 
 ```sh
-pnpm add @bilig/excel-import @bilig/headless
+pnpm install
+pnpm --filter @bilig/excel-import build
+pnpm exec vitest run packages/excel-import/src/__tests__/excel-import.test.ts
 ```
 
 ## XLSX To WorkPaper

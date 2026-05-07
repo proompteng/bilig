@@ -81,8 +81,13 @@ pnpm add @bilig/headless
 For XLSX ingestion:
 
 ```sh
-pnpm add @bilig/headless @bilig/excel-import
+pnpm add @bilig/headless
 ```
+
+`@bilig/excel-import` lives in this monorepo, but its npm package name is still
+being provisioned. Until that package is published on npm, use the repository
+XLSX verifier and import/export tests from a checkout instead of adding
+`@bilig/excel-import` as an external dependency.
 
 Repository:
 

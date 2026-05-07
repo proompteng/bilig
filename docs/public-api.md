@@ -10,6 +10,11 @@
 
 ## Stable packages
 
+`@bilig/headless` is the current external npm adoption path. The other package
+surfaces listed here are stable repository package boundaries; not every package
+name is provisioned on npm yet. In particular, `@bilig/excel-import` is still a
+repository package until its npm package name is configured.
+
 - `@bilig/core`
 - `@bilig/headless`
 - `@bilig/excel-import`
@@ -95,8 +100,8 @@ of `@bilig/core`:
 
 ## Excel Import Surface
 
-`@bilig/excel-import` exposes the public CSV/XLSX boundary for WorkPaper
-consumers:
+`@bilig/excel-import` exposes the repository CSV/XLSX boundary for WorkPaper
+consumers. It is not yet published as an npm package:
 
 - `importXlsx(bytes, fileName)`
 - `importCsv(text, fileName)`

@@ -51,11 +51,14 @@ function extractSitemapUrls(sitemap: string): string[] {
   return [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1] ?? '')
 }
 
-const [index, robots, sitemap, llms] = await Promise.all([
+const [index, robots, sitemap, llms, headlessReadme, excelImportReadme, publicApi] = await Promise.all([
   readFile(join(docsRoot, 'index.html'), 'utf8'),
   readFile(join(docsRoot, 'robots.txt'), 'utf8'),
   readFile(join(docsRoot, 'sitemap.xml'), 'utf8'),
   readFile(join(docsRoot, 'llms.txt'), 'utf8'),
+  readFile(join(repoRoot, 'packages', 'headless', 'README.md'), 'utf8'),
+  readFile(join(repoRoot, 'packages', 'excel-import', 'README.md'), 'utf8'),
+  readFile(join(docsRoot, 'public-api.md'), 'utf8'),
 ])
 
 requireIncludes(index, '<link rel="canonical" href="https://proompteng.github.io/bilig/" />', 'docs/index.html')
@@ -112,6 +115,20 @@ for (const required of [
   'https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md',
 ]) {
   requireIncludes(llms, required, 'docs/llms.txt')
+}
+
+const publicDocs = [
+  ['packages/headless/README.md', headlessReadme],
+  ['packages/excel-import/README.md', excelImportReadme],
+  ['docs/public-api.md', publicApi],
+] as const
+
+for (const [path, content] of publicDocs) {
+  for (const blockedSnippet of ['pnpm add @bilig/headless @bilig/excel-import', 'pnpm add @bilig/excel-import']) {
+    if (content.includes(blockedSnippet)) {
+      throw new Error(`${path} points users at unpublished npm package command: ${blockedSnippet}`)
+    }
+  }
 }
 
 console.log(
