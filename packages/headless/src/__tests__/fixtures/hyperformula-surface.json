@@ -1,7 +1,7 @@
 {
   "hyperFormulaRoot": "/Users/gregkonush/github.com/hyperformula",
   "hyperFormulaVersion": "3.2.0",
-  "hyperFormulaCommit": "6de904b8876f920f287b63a95934c479acf78307",
+  "hyperFormulaCommit": "9a510a2acb97c3d3490f9e3b9e961a1c4a98b9ad",
   "knownLimitations": [
     "Node.js versions older than 13 don't properly compare",
     "Multiple workbooks are not supported. One instance of HyperFormula",
@@ -44,7 +44,6 @@
       "dependencyGraph",
       "evaluator",
       "graph",
-      "internals",
       "lazilyTransformingAstService",
       "licenseKeyValidityState",
       "rangeMapping",
@@ -178,7 +177,6 @@
     "dateFormats",
     "decimalSeparator",
     "evaluateNullToZero",
-    "evaluationTimeoutMs",
     "functionArgSeparator",
     "functionPlugins",
     "ignorePunctuation",

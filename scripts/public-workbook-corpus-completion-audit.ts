@@ -26,6 +26,7 @@ export interface PublicWorkbookCorpusCompletionAudit {
     readonly unmetRequirements: readonly string[]
   }
   readonly currentState: PublicWorkbookCorpusAuditState
+  readonly secondaryFormulaCorpus: PublicWorkbookCorpusSecondaryFormulaCorpusStatus
   readonly checklist: readonly PublicWorkbookCorpusAuditChecklistItem[]
 }
 
@@ -59,6 +60,19 @@ export interface PublicWorkbookCorpusAuditChecklistItem {
   readonly gaps: readonly string[]
 }
 
+export interface PublicWorkbookCorpusSecondaryFormulaCorpusStatus {
+  readonly artifact: string
+  readonly artifactPresent: boolean
+  readonly suite: string | null
+  readonly resultCount: number
+  readonly comparableCount: number
+  readonly workpaperWins: number
+  readonly hyperformulaWins: number
+  readonly comparableVerificationEquivalentCount: number
+  readonly allComparableVerificationEquivalent: boolean
+  readonly parseError: string | null
+}
+
 type PublicWorkbookCorpusRequirementId =
   | 'download-10000-public-spreadsheets'
   | 'source-license-hash-metadata-manifest'
@@ -84,6 +98,7 @@ const objective =
   'Build a 10,000-spreadsheet legally usable public workbook corpus, verify every workbook through repeatable bilig correctness checks, and keep unsupported workbook behavior classified with evidence.'
 
 const baselineScorecardArtifact = 'packages/benchmarks/baselines/public-workbook-corpus-scorecard.json'
+const hyperFormulaSecondaryCorpusArtifact = 'packages/benchmarks/baselines/workpaper-vs-hyperformula.json'
 const manifestArtifact = '.cache/public-workbook-corpus/manifest.json'
 const checkpointArtifact = '.cache/public-workbook-corpus/verification-checkpoint.json'
 
@@ -126,6 +141,7 @@ export function buildPublicWorkbookCorpusCompletionAuditFromArgs(): PublicWorkbo
   const recordedCases = readRecordedCases({ manifest, scorecardPath, verifyCheckpointPath })
   return buildPublicWorkbookCorpusCompletionAudit({
     generatedAt,
+    hyperformulaSecondaryCorpus: readHyperFormulaSecondaryCorpus(resolve(rootDir, hyperFormulaSecondaryCorpusArtifact)),
     manifest,
     recordedCases,
     status: readPublicWorkbookCorpusStatus({
@@ -141,14 +157,17 @@ export function buildPublicWorkbookCorpusCompletionAuditFromArgs(): PublicWorkbo
 
 export function buildPublicWorkbookCorpusCompletionAudit(args: {
   readonly generatedAt: string
+  readonly hyperformulaSecondaryCorpus?: PublicWorkbookCorpusSecondaryFormulaCorpusStatus
   readonly manifest: PublicWorkbookManifest | null
   readonly recordedCases: readonly PublicWorkbookCorpusCase[]
   readonly status: PublicWorkbookCorpusStatus
   readonly stopMarkerActive: boolean
 }): PublicWorkbookCorpusCompletionAudit {
   const currentState = buildAuditState(args.status, args.recordedCases)
+  const secondaryFormulaCorpus = args.hyperformulaSecondaryCorpus ?? missingHyperFormulaSecondaryCorpus()
   const context = {
     currentState,
+    hyperformulaSecondaryCorpus: secondaryFormulaCorpus,
     manifest: args.manifest,
     recordedCases: args.recordedCases,
     status: args.status,
@@ -169,6 +188,7 @@ export function buildPublicWorkbookCorpusCompletionAudit(args: {
       unmetRequirements,
     },
     currentState,
+    secondaryFormulaCorpus,
     checklist,
   }
 }
@@ -240,6 +260,7 @@ export function validatePublicWorkbookCorpusCompletionAudit(
 
 interface RequirementContext {
   readonly currentState: PublicWorkbookCorpusAuditState
+  readonly hyperformulaSecondaryCorpus: PublicWorkbookCorpusSecondaryFormulaCorpusStatus
   readonly manifest: PublicWorkbookManifest | null
   readonly recordedCases: readonly PublicWorkbookCorpusCase[]
   readonly status: PublicWorkbookCorpusStatus
@@ -571,18 +592,60 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
           : [`unsupported cases missing classifications/evidence: ${String(unsupportedWithoutEvidenceCount)}`],
     })
   },
-  (_context) =>
+  (context) =>
     checklistItem({
       id: 'hyperformula-secondary-corpus',
       priority: 7,
       promptRequirement: 'Fold HyperFormula parity cases into the same reporting system as a secondary formula-behavior corpus.',
-      passed: false,
+      passed:
+        context.hyperformulaSecondaryCorpus.artifactPresent &&
+        context.hyperformulaSecondaryCorpus.suite === 'workpaper-vs-hyperformula' &&
+        context.hyperformulaSecondaryCorpus.comparableCount > 0 &&
+        context.hyperformulaSecondaryCorpus.allComparableVerificationEquivalent &&
+        hasPackageScripts(['workpaper:parity:check', 'workpaper:bench:competitive:check', 'public-workbook-corpus:completion-audit:check']),
       evidence: [
-        'workpaper:parity:check exists as a separate HyperFormula parity lane',
-        'the public workbook corpus scorecard does not yet carry HyperFormula secondary-corpus parity cases',
+        `secondary artifact present: ${String(context.hyperformulaSecondaryCorpus.artifactPresent)}`,
+        `secondary suite: ${context.hyperformulaSecondaryCorpus.suite ?? 'missing'}`,
+        `secondary result count: ${String(context.hyperformulaSecondaryCorpus.resultCount)}`,
+        `secondary comparable parity cases: ${String(context.hyperformulaSecondaryCorpus.comparableCount)}`,
+        `secondary comparable verification-equivalent cases: ${String(
+          context.hyperformulaSecondaryCorpus.comparableVerificationEquivalentCount,
+        )}/${String(context.hyperformulaSecondaryCorpus.comparableCount)}`,
+        `WorkPaper wins in secondary parity artifact: ${String(context.hyperformulaSecondaryCorpus.workpaperWins)}`,
+        `HyperFormula wins in secondary parity artifact: ${String(context.hyperformulaSecondaryCorpus.hyperformulaWins)}`,
       ],
-      gaps: ['HyperFormula parity evidence remains a separate lane instead of being folded into this corpus reporting system'],
-      checkCommands: ['pnpm workpaper:parity:check', 'pnpm public-workbook-corpus:completion-audit:check'],
+      gaps: [
+        ...(context.hyperformulaSecondaryCorpus.artifactPresent ? [] : ['HyperFormula secondary corpus artifact is missing']),
+        ...(context.hyperformulaSecondaryCorpus.parseError
+          ? [`HyperFormula secondary corpus artifact could not be parsed: ${context.hyperformulaSecondaryCorpus.parseError}`]
+          : []),
+        ...(context.hyperformulaSecondaryCorpus.suite === 'workpaper-vs-hyperformula'
+          ? []
+          : [`unexpected HyperFormula secondary corpus suite: ${context.hyperformulaSecondaryCorpus.suite ?? 'missing'}`]),
+        ...(context.hyperformulaSecondaryCorpus.comparableCount > 0 ? [] : ['no comparable HyperFormula parity cases recorded']),
+        ...(context.hyperformulaSecondaryCorpus.allComparableVerificationEquivalent
+          ? []
+          : [
+              `comparable HyperFormula parity cases missing equivalent verification: ${String(
+                context.hyperformulaSecondaryCorpus.comparableVerificationEquivalentCount,
+              )}/${String(context.hyperformulaSecondaryCorpus.comparableCount)}`,
+            ]),
+        ...missingPackageScripts([
+          'workpaper:parity:check',
+          'workpaper:bench:competitive:check',
+          'public-workbook-corpus:completion-audit:check',
+        ]).map((script) => `missing package script: ${script}`),
+      ],
+      evidenceArtifacts: [
+        baselineScorecardArtifact,
+        hyperFormulaSecondaryCorpusArtifact,
+        'packages/headless/src/__tests__/fixtures/hyperformula-surface.json',
+      ],
+      checkCommands: [
+        'pnpm workpaper:parity:check',
+        'pnpm workpaper:bench:competitive:check',
+        'pnpm public-workbook-corpus:completion-audit:check',
+      ],
     }),
 ]
 
@@ -627,6 +690,59 @@ function readRecordedCases(args: {
   })
 }
 
+function readHyperFormulaSecondaryCorpus(path: string): PublicWorkbookCorpusSecondaryFormulaCorpusStatus {
+  if (!existsSync(path)) {
+    return missingHyperFormulaSecondaryCorpus()
+  }
+  try {
+    const record = JSON.parse(readFileSync(path, 'utf8')) as unknown
+    if (!isRecord(record)) {
+      throw new Error('artifact root is not an object')
+    }
+    const scorecard = isRecord(record['scorecard']) ? record['scorecard'] : {}
+    const results = Array.isArray(record['results']) ? record['results'] : []
+    const comparableResults = results.filter((entry) => isRecord(entry) && entry['comparable'] === true)
+    const comparableVerificationEquivalentCount = comparableResults.filter((entry) => {
+      const comparison = isRecord(entry) ? entry['comparison'] : null
+      return isRecord(comparison) && comparison['verificationEquivalent'] === true
+    }).length
+    const comparableCount = comparableResults.length || readNonNegativeInteger(scorecard, 'comparableCount', 0)
+    return {
+      artifact: hyperFormulaSecondaryCorpusArtifact,
+      artifactPresent: true,
+      suite: typeof record['suite'] === 'string' ? record['suite'] : null,
+      resultCount: results.length,
+      comparableCount,
+      workpaperWins: readNonNegativeInteger(scorecard, 'workpaperWins', 0),
+      hyperformulaWins: readNonNegativeInteger(scorecard, 'hyperformulaWins', 0),
+      comparableVerificationEquivalentCount,
+      allComparableVerificationEquivalent: comparableCount > 0 && comparableVerificationEquivalentCount === comparableCount,
+      parseError: null,
+    }
+  } catch (error) {
+    return {
+      ...missingHyperFormulaSecondaryCorpus(),
+      artifactPresent: true,
+      parseError: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+function missingHyperFormulaSecondaryCorpus(): PublicWorkbookCorpusSecondaryFormulaCorpusStatus {
+  return {
+    artifact: hyperFormulaSecondaryCorpusArtifact,
+    artifactPresent: false,
+    suite: null,
+    resultCount: 0,
+    comparableCount: 0,
+    workpaperWins: 0,
+    hyperformulaWins: 0,
+    comparableVerificationEquivalentCount: 0,
+    allComparableVerificationEquivalent: false,
+    parseError: null,
+  }
+}
+
 function checklistItem(
   item: Omit<PublicWorkbookCorpusAuditChecklistItem, 'evidenceArtifacts' | 'checkCommands'> & {
     readonly evidenceArtifacts?: readonly string[]
@@ -661,6 +777,11 @@ function countGap(actual: number, required: number, label: string): string[] {
 
 function duplicateGap(values: readonly string[], label: string): string[] {
   return new Set(values).size === values.length ? [] : [`${label}: ${String(values.length - new Set(values).size)}`]
+}
+
+function readNonNegativeInteger(record: Record<string, unknown>, key: string, fallback: number): number {
+  const value = record[key]
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : fallback
 }
 
 function packageScripts(): ReadonlySet<string> {

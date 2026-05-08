@@ -59,11 +59,12 @@ describe('public workbook corpus completion audit', () => {
     expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
   })
 
-  it('keeps the goal active when the public corpus is complete but HyperFormula parity is still separate', () => {
+  it('marks the goal achieved when public corpus evidence is complete and HyperFormula parity is folded in', () => {
     const artifactA = workbookArtifact('workbook-a')
     const artifactB = workbookArtifact('workbook-b')
     const audit = buildPublicWorkbookCorpusCompletionAudit({
       generatedAt: '2026-05-08T00:00:00.000Z',
+      hyperformulaSecondaryCorpus: hyperFormulaSecondaryCorpusFixture(),
       manifest: manifestWithArtifacts([artifactA, artifactB], 2),
       recordedCases: [passedCase(artifactA, 1), passedCase(artifactB, 2)],
       status: statusFixture({
@@ -83,15 +84,16 @@ describe('public workbook corpus completion audit', () => {
     })
 
     expect(audit.completionVerdict).toMatchObject({
-      goalStatus: 'active-not-achieved',
+      goalStatus: 'achieved',
       targetComplete: true,
-      allChecklistItemsPassed: false,
+      allChecklistItemsPassed: true,
     })
     expect(requirement(audit.checklist, 'hyperformula-secondary-corpus')).toMatchObject({
-      passed: false,
-      gaps: ['HyperFormula parity evidence remains a separate lane instead of being folded into this corpus reporting system'],
+      passed: true,
+      gaps: [],
     })
     expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
+    expect(validatePublicWorkbookCorpusCompletionAudit(audit, { requireComplete: true })).toEqual([])
   })
 
   it('fails require-complete mode until every mapped objective requirement is satisfied', () => {
@@ -249,5 +251,20 @@ function statusFixture(input: {
     scorecardCoversManifest: input.scorecardCoversManifest,
     targetComplete: input.targetComplete,
     gaps: input.gaps,
+  }
+}
+
+function hyperFormulaSecondaryCorpusFixture() {
+  return {
+    artifact: 'packages/benchmarks/baselines/workpaper-vs-hyperformula.json',
+    artifactPresent: true,
+    suite: 'workpaper-vs-hyperformula',
+    resultCount: 2,
+    comparableCount: 2,
+    workpaperWins: 2,
+    hyperformulaWins: 0,
+    comparableVerificationEquivalentCount: 2,
+    allComparableVerificationEquivalent: true,
+    parseError: null,
   }
 }
