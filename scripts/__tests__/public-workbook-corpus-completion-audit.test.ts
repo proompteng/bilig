@@ -155,6 +155,7 @@ describe('public workbook corpus completion audit', () => {
       ciSource: ciSourceFor([
         'public-workbook-corpus:check:offline',
         'public-workbook-corpus:resume-plan:check',
+        'public-workbook-corpus:resume-financial:check',
         'public-workbook-corpus:completion-audit:check',
         'test:correctness:corpus',
       ]),
@@ -165,6 +166,7 @@ describe('public workbook corpus completion audit', () => {
       expect.arrayContaining([
         'package script public-workbook-corpus:check:offline: bun scripts/public-workbook-corpus.ts check --skip-manifest-check',
         'CI invokes package script: public-workbook-corpus:check:offline',
+        'CI invokes package script: public-workbook-corpus:resume-financial:check',
         'CI invokes package script: test:correctness:corpus',
       ]),
     )
@@ -176,6 +178,7 @@ describe('public workbook corpus completion audit', () => {
       ciSource: [
         "bunScript('public workbook corpus offline scorecard check', 'scripts/public-workbook-corpus.ts', 'check', '--skip-manifest-check')",
         "bunScript('public workbook corpus resume plan check', 'scripts/public-workbook-corpus-resume-plan.ts', '--check')",
+        "directPackageScript('financial public workbook corpus resume check', 'public-workbook-corpus:resume-financial:check')",
         "bunScript('public workbook corpus completion audit check', 'scripts/public-workbook-corpus-completion-audit.ts', '--check')",
         "pnpm('correctness public workbook corpus', 'test:correctness:corpus')",
       ].join('\n'),
@@ -186,6 +189,7 @@ describe('public workbook corpus completion audit', () => {
       expect.arrayContaining([
         'CI invokes equivalent direct gate: public-workbook-corpus:check:offline',
         'CI invokes equivalent direct gate: public-workbook-corpus:resume-plan:check',
+        'CI invokes package script: public-workbook-corpus:resume-financial:check',
         'CI invokes equivalent direct gate: public-workbook-corpus:completion-audit:check',
         'CI invokes package script: test:correctness:corpus',
       ]),
@@ -208,6 +212,7 @@ describe('public workbook corpus completion audit', () => {
         'package script public-workbook-corpus:check:offline uses CI-unsafe corpus tokens: fetch',
         expect.stringContaining('package script test:correctness:corpus missing required coverage files:'),
         'CI does not invoke package script or equivalent direct gate: public-workbook-corpus:check:offline',
+        'CI does not invoke package script or equivalent direct gate: public-workbook-corpus:resume-financial:check',
         'CI does not invoke package script or equivalent direct gate: public-workbook-corpus:completion-audit:check',
       ]),
     )
@@ -475,6 +480,10 @@ function offlineCiPackageScripts(overrides: readonly (readonly [string, string])
   const scripts = new Map<string, string>([
     ['public-workbook-corpus:check:offline', 'bun scripts/public-workbook-corpus.ts check --skip-manifest-check'],
     ['public-workbook-corpus:resume-plan:check', 'bun scripts/public-workbook-corpus-resume-plan.ts --check'],
+    [
+      'public-workbook-corpus:resume-financial:check',
+      'bun scripts/public-workbook-corpus-resume-plan.ts --check --manifest .cache/public-workbook-corpus-financial/manifest.json --cache-dir .cache/public-workbook-corpus-financial --scorecard .cache/public-workbook-corpus-financial/scorecard.json --verify-checkpoint .cache/public-workbook-corpus-financial/verification-checkpoint.json --fetch-limit 5000 --fetch-batch-size 6',
+    ],
     ['public-workbook-corpus:completion-audit:check', 'bun scripts/public-workbook-corpus-completion-audit.ts --check'],
     [
       'test:correctness:corpus',

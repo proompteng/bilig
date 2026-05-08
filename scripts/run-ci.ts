@@ -308,6 +308,7 @@ const generatedSourceChecks: readonly CiTask[] = [
   ),
   bunScript('public workbook corpus offline scorecard check', 'scripts/public-workbook-corpus.ts', 'check', '--skip-manifest-check'),
   bunScript('public workbook corpus resume plan check', 'scripts/public-workbook-corpus-resume-plan.ts', '--check'),
+  directPackageScript('financial public workbook corpus resume check', 'public-workbook-corpus:resume-financial:check'),
   bunScript('public workbook corpus completion audit check', 'scripts/public-workbook-corpus-completion-audit.ts', '--check'),
   bunScript('large workbook SLO scorecard check', 'scripts/gen-large-workbook-slo-scorecard.ts', '--check'),
   {

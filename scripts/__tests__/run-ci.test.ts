@@ -18,6 +18,9 @@ describe('run-ci', () => {
     )
     expect(source).toContain('const wasmBuildTask: CiTask = {')
     expect(source).toContain("directPackageScript('correctness public workbook corpus', 'test:correctness:corpus')")
+    expect(source).toContain(
+      "directPackageScript('financial public workbook corpus resume check', 'public-workbook-corpus:resume-financial:check')",
+    )
     expect(source).not.toContain("pnpm('protocol check'")
     expect(source).not.toContain("pnpm('wasm build'")
     expect(source).not.toContain("pnpm('correctness public workbook corpus'")

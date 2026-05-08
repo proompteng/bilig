@@ -406,6 +406,7 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
         financialCheckpointArtifact,
       ],
       checkCommands: [
+        'pnpm public-workbook-corpus:resume-financial:check',
         'pnpm public-workbook-corpus:discover-financial',
         'pnpm public-workbook-corpus:fetch-financial',
         'pnpm public-workbook-corpus:verify-financial',
@@ -721,6 +722,7 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
       checkCommands: [
         'pnpm public-workbook-corpus:check:offline',
         'pnpm public-workbook-corpus:resume-plan:check',
+        'pnpm public-workbook-corpus:resume-financial:check',
         'pnpm public-workbook-corpus:completion-audit:check',
         'pnpm test:correctness:corpus',
       ],
