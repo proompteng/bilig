@@ -13,9 +13,10 @@ import {
   runWorkPaperVsHyperFormulaExpandedBenchmarkSuite,
   type ExpandedComparativeBenchmarkResult,
 } from '../packages/benchmarks/src/benchmark-workpaper-vs-hyperformula-expanded.ts'
-import type {
-  ExpandedCompetitiveFamilySummary,
-  ExpandedCompetitiveScorecardSummary,
+import {
+  buildExpandedCompetitiveFamilyReport,
+  type ExpandedCompetitiveFamilySummary,
+  type ExpandedCompetitiveScorecardSummary,
 } from '../packages/benchmarks/src/report-competitive-families.ts'
 import { formatJsonForRepo } from './scorecard-format.ts'
 
@@ -69,6 +70,14 @@ interface ArtifactShapeInput {
   }>
 }
 
+interface ArtifactReportInput {
+  schemaVersion: 1
+  suite: 'workpaper-vs-hyperformula'
+  families: readonly ExpandedCompetitiveFamilySummary[]
+  scorecard: ExpandedCompetitiveScorecardSummary
+  results: ExpandedComparativeBenchmarkResult[]
+}
+
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const outputPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'workpaper-vs-hyperformula.json')
 const localHyperFormulaRoot = '/Users/gregkonush/github.com/hyperformula'
@@ -82,7 +91,8 @@ if (isCheckMode) {
     throw new Error('WorkPaper competitive benchmark artifact is missing. Run: bun scripts/gen-workpaper-vs-hyperformula-benchmark.ts')
   }
 
-  const existing = parseArtifactForShape(readFileSync(outputPath, 'utf8'))
+  const artifactJson = readFileSync(outputPath, 'utf8')
+  const existing = parseArtifactForShape(artifactJson)
   const actualShape = normalizeArtifactShape(existing)
   const actualWorkloads = actualShape.workloads.map((workload) => workload.workload)
   if (JSON.stringify(actualWorkloads) !== JSON.stringify([...EXPANDED_COMPARATIVE_WORKLOADS])) {
@@ -103,6 +113,8 @@ if (isCheckMode) {
       'WorkPaper competitive benchmark artifact shape is out of date. Run: bun scripts/gen-workpaper-vs-hyperformula-benchmark.ts',
     )
   }
+
+  assertArtifactReportDerivedFromResults(parseArtifactForReport(artifactJson))
 
   console.log(
     JSON.stringify(
@@ -269,6 +281,34 @@ function parseArtifactForShape(json: string): ArtifactShapeInput {
   return parsed
 }
 
+function parseArtifactForReport(json: string): ArtifactReportInput {
+  const parsed = parseJsonRecord(json)
+  if (!isArtifactReportInput(parsed)) {
+    throw new Error('Competitive benchmark artifact report has an unexpected format')
+  }
+  return parsed
+}
+
+function assertArtifactReportDerivedFromResults(reportArtifact: ArtifactReportInput): void {
+  const expectedReport = buildExpandedCompetitiveFamilyReport(reportArtifact.results)
+  const mismatchedSections: string[] = []
+  if (JSON.stringify(reportArtifact.families) !== JSON.stringify(expectedReport.families)) {
+    mismatchedSections.push('families')
+  }
+  if (JSON.stringify(reportArtifact.scorecard) !== JSON.stringify(expectedReport.scorecard)) {
+    mismatchedSections.push('scorecard')
+  }
+  if (mismatchedSections.length === 0) {
+    return
+  }
+
+  throw new Error(
+    `WorkPaper competitive benchmark artifact ${mismatchedSections.join(
+      ' and ',
+    )} do not match the raw benchmark results. Run: bun scripts/gen-workpaper-vs-hyperformula-benchmark.ts`,
+  )
+}
+
 function readPackageVersion(packagePath: string): string {
   const pkg = parseJsonRecord(readFileSync(packagePath, 'utf8'))
   if (typeof pkg.version !== 'string' || pkg.version.length === 0) {
@@ -333,4 +373,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isArtifactShapeInput(value: Record<string, unknown>): value is ArtifactShapeInput {
   return value.schemaVersion === 1 && value.suite === 'workpaper-vs-hyperformula' && Array.isArray(value.results)
+}
+
+function isArtifactReportInput(value: Record<string, unknown>): value is ArtifactReportInput {
+  return isArtifactShapeInput(value) && Array.isArray(value.families) && isRecord(value.scorecard)
 }

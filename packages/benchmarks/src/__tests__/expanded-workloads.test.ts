@@ -6,6 +6,7 @@ import { ENGINE_COUNTER_KEYS } from '../../../core/src/perf/engine-counters.js'
 import {
   EXPANDED_COMPARATIVE_WORKLOADS,
   buildExpandedComparativeBenchmarkReport,
+  type ExpandedComparativeBenchmarkResult,
   type ExpandedComparativeBenchmarkWorkload,
 } from '../benchmark-workpaper-vs-hyperformula-expanded.js'
 import {
@@ -37,8 +38,9 @@ import {
 import {
   EXPANDED_COMPARATIVE_FAMILY_GROUPS,
   EXPANDED_COMPARATIVE_FAMILY_ORDER,
-  formatExpandedCompetitiveFamilyReport,
   EXPANDED_COMPARATIVE_WORKLOAD_FAMILY,
+  buildExpandedCompetitiveFamilyReport,
+  formatExpandedCompetitiveFamilyReport,
   type ExpandedCompetitiveFamily,
 } from '../report-competitive-families.js'
 
@@ -176,6 +178,63 @@ function readExpandedBaselineWorkloads(path: string): string[] {
   return parsed.results.map((result) => result.workload)
 }
 
+function readExpandedBaselineReport(path: string): {
+  families: unknown
+  scorecard: unknown
+  results: ExpandedComparativeBenchmarkResult[]
+} {
+  const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
+  const results = parsed !== null && typeof parsed === 'object' && 'results' in parsed ? parsed.results : undefined
+  if (
+    parsed === null ||
+    typeof parsed !== 'object' ||
+    !('families' in parsed) ||
+    !('scorecard' in parsed) ||
+    !Array.isArray(results) ||
+    !results.every(isExpandedComparativeBenchmarkResult)
+  ) {
+    throw new Error(`Unexpected expanded baseline report format: ${path}`)
+  }
+  return {
+    families: parsed.families,
+    scorecard: parsed.scorecard,
+    results,
+  }
+}
+
+function isExpandedComparativeBenchmarkResult(value: unknown): value is ExpandedComparativeBenchmarkResult {
+  if (value === null || typeof value !== 'object') {
+    return false
+  }
+  return (
+    'workload' in value &&
+    typeof value.workload === 'string' &&
+    'category' in value &&
+    typeof value.category === 'string' &&
+    'comparable' in value &&
+    typeof value.comparable === 'boolean' &&
+    'fixture' in value &&
+    value.fixture !== null &&
+    typeof value.fixture === 'object' &&
+    'engines' in value &&
+    value.engines !== null &&
+    typeof value.engines === 'object'
+  )
+}
+
+function normalizeCompetitiveReportValue(value: unknown): unknown {
+  if (typeof value === 'number') {
+    return Number(value.toPrecision(12))
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeCompetitiveReportValue(item))
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, normalizeCompetitiveReportValue(item)]))
+  }
+  return value
+}
+
 describe('expanded comparative benchmark workloads', () => {
   it('enumerates the full expanded workload inventory without duplicates', () => {
     expect(new Set(EXPANDED_COMPARATIVE_WORKLOADS).size).toBe(EXPANDED_COMPARATIVE_WORKLOADS.length)
@@ -184,6 +243,14 @@ describe('expanded comparative benchmark workloads', () => {
 
   it('checked-in expanded baseline covers every expanded workload exactly once', () => {
     expect(readExpandedBaselineWorkloads(expandedBaselinePath)).toEqual(expectedExpandedWorkloads)
+  })
+
+  it('keeps checked-in expanded baseline summaries derived from raw workload results', () => {
+    const baseline = readExpandedBaselineReport(expandedBaselinePath)
+    const expectedReport = buildExpandedCompetitiveFamilyReport(baseline.results)
+
+    expect(normalizeCompetitiveReportValue(baseline.families)).toEqual(normalizeCompetitiveReportValue(expectedReport.families))
+    expect(normalizeCompetitiveReportValue(baseline.scorecard)).toEqual(normalizeCompetitiveReportValue(expectedReport.scorecard))
   })
 
   it('assigns every expanded workload to exactly one family', () => {
