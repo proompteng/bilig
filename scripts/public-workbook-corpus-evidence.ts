@@ -1,6 +1,6 @@
 import type { PublicWorkbookCorpusCase } from './public-workbook-corpus-types.ts'
 
-export const publicWorkbookImportWarningClassifierEvidence = 'import-warning-classifier=2026-05-08'
+export const publicWorkbookImportWarningClassifierEvidence = 'import-warning-classifier=2026-05-08-full-precision-formula-aware'
 
 export type PublicWorkbookCorpusEvidenceRefreshReason = 'missing-used-range-evidence' | 'missing-import-warning-classifier-evidence'
 

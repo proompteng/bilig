@@ -55,6 +55,31 @@ describe('public workbook corpus evidence refresh reasons', () => {
     ])
   })
 
+  it('marks pre-full-precision classifier evidence stale after importer precision support changes', () => {
+    const artifact = workbookArtifact('workbook-a')
+    const status = buildPublicWorkbookCorpusStatus({
+      manifest: manifestWithArtifacts([artifact]),
+      scorecard: emptyScorecard(),
+      checkpointCases: [
+        {
+          ...importWarningUnsupportedCase(artifact, {
+            hasCurrentClassifierEvidence: false,
+            hasUsedRangeEvidence: true,
+          }),
+          evidence: [
+            `source=${artifact.sourceUrl}`,
+            `license=${artifact.license.title}`,
+            `sha256=${artifact.sha256}`,
+            'import-warning-classifier=2026-05-08',
+          ],
+        },
+      ],
+    })
+
+    expect(status.staleRecordedVerificationCount).toBe(1)
+    expect(status.staleRecordedVerificationSample[0]?.reasons).toEqual(['missing-import-warning-classifier-evidence'])
+  })
+
   it('keeps all stale reasons in verify-stale dry-run output', () => {
     const artifactA = workbookArtifact('workbook-a')
     const artifactB = workbookArtifact('workbook-b')
