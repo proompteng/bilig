@@ -29,98 +29,25 @@ import {
   isResourceLimitedUnsupportedCase,
   pnpmScriptName,
   readNonNegativeInteger,
-  type PublicWorkbookCorpusUnsupportedClassificationCount,
 } from './public-workbook-corpus-completion-audit-helpers.ts'
 import type { PublicWorkbookCorpusCase, PublicWorkbookManifest } from './public-workbook-corpus-types.ts'
+import type {
+  PublicWorkbookCorpusAuditChecklistItem,
+  PublicWorkbookCorpusAuditState,
+  PublicWorkbookCorpusCompletionAudit,
+  PublicWorkbookCorpusCompletionStatus,
+  PublicWorkbookCorpusRequirementId,
+  PublicWorkbookCorpusSecondaryFormulaCorpusStatus,
+} from './public-workbook-corpus-completion-audit-types.ts'
 
-export type PublicWorkbookCorpusCompletionStatus = 'achieved' | 'active-not-achieved'
-
-export interface PublicWorkbookCorpusCompletionAudit {
-  readonly schemaVersion: 1
-  readonly generatedAt: string
-  readonly objective: string
-  readonly completionVerdict: {
-    readonly goalStatus: PublicWorkbookCorpusCompletionStatus
-    readonly allChecklistItemsPassed: boolean
-    readonly targetComplete: boolean
-    readonly stopMarkerActive: boolean
-    readonly nextCorpusRunRequiresExplicitResume: boolean
-    readonly unmetRequirements: readonly string[]
-  }
-  readonly currentState: PublicWorkbookCorpusAuditState
-  readonly secondaryFormulaCorpus: PublicWorkbookCorpusSecondaryFormulaCorpusStatus
-  readonly checklist: readonly PublicWorkbookCorpusAuditChecklistItem[]
-}
-
-export interface PublicWorkbookCorpusAuditState {
-  readonly targetWorkbookCount: number
-  readonly financialWorkbookTargetCount: number
-  readonly sourceCount: number
-  readonly cachedArtifactCount: number
-  readonly financialSourceCount: number
-  readonly financialCachedArtifactCount: number
-  readonly scorecardCaseCount: number
-  readonly checkpointCaseCount: number
-  readonly recordedManifestArtifactCount: number
-  readonly recordedFinancialManifestArtifactCount: number
-  readonly recordedFinancialNonPassingCaseCount: number
-  readonly missingCachedArtifactCount: number
-  readonly missingVerificationCount: number
-  readonly staleRecordedVerificationCount: number
-  readonly missingFeatureWitnessCount: number
-  readonly missingFeatureWitnesses: readonly string[]
-  readonly recordedPassedCaseCount: number
-  readonly recordedUnsupportedCaseCount: number
-  readonly staleRecordedUnsupportedCaseCount: number
-  readonly currentRecordedUnsupportedCaseCount: number
-  readonly currentUnsupportedClassifications: readonly PublicWorkbookCorpusUnsupportedClassificationCount[]
-  readonly staleUnsupportedClassifications: readonly PublicWorkbookCorpusUnsupportedClassificationCount[]
-  readonly recordedFailedCaseCount: number
-  readonly recordedErrorCaseCount: number
-  readonly recordedFormulaOracleComparisonCount: number
-  readonly recordedFormulaOracleMismatchCount: number
-  readonly recordedStructuralSmokeRunCount: number
-  readonly recordedRoundTripFailureCount: number
-}
-
-export interface PublicWorkbookCorpusAuditChecklistItem {
-  readonly id: PublicWorkbookCorpusRequirementId
-  readonly priority: number
-  readonly promptRequirement: string
-  readonly passed: boolean
-  readonly evidence: readonly string[]
-  readonly evidenceArtifacts: readonly string[]
-  readonly checkCommands: readonly string[]
-  readonly gaps: readonly string[]
-}
-
-export interface PublicWorkbookCorpusSecondaryFormulaCorpusStatus {
-  readonly artifact: string
-  readonly artifactPresent: boolean
-  readonly suite: string | null
-  readonly resultCount: number
-  readonly comparableCount: number
-  readonly workpaperWins: number
-  readonly hyperformulaWins: number
-  readonly comparableVerificationEquivalentCount: number
-  readonly allComparableVerificationEquivalent: boolean
-  readonly parseError: string | null
-}
-
-type PublicWorkbookCorpusRequirementId =
-  | 'download-10000-public-spreadsheets'
-  | 'financial-accounting-workpapers-5000'
-  | 'source-license-hash-metadata-manifest'
-  | 'hash-and-structure-dedupe'
-  | 'import-every-workbook'
-  | 'validate-workbook-features'
-  | 'formula-recalc-oracle'
-  | 'structural-smoke'
-  | 'roundtrip-supported-workbooks'
-  | 'scorecard-all-10000'
-  | 'ci-offline-cached-mode'
-  | 'unsupported-features-evidence'
-  | 'hyperformula-secondary-corpus'
+export type {
+  PublicWorkbookCorpusAuditChecklistItem,
+  PublicWorkbookCorpusAuditState,
+  PublicWorkbookCorpusCompletionAudit,
+  PublicWorkbookCorpusCompletionStatus,
+  PublicWorkbookCorpusRequirementId,
+  PublicWorkbookCorpusSecondaryFormulaCorpusStatus,
+} from './public-workbook-corpus-completion-audit-types.ts'
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const defaultCacheDir = join(rootDir, '.cache', 'public-workbook-corpus')
@@ -668,13 +595,18 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
       promptRequirement: 'Round-trip export/import every supported workbook.',
       passed:
         context.status.recordedCoversManifest &&
+        context.currentState.recordedRoundTripPassedCount > 0 &&
         context.currentState.recordedRoundTripFailureCount === 0 &&
         context.currentState.cachedArtifactCount >= context.currentState.targetWorkbookCount,
-      evidence: [`round-trip failures among recorded cases: ${String(context.currentState.recordedRoundTripFailureCount)}`],
+      evidence: [
+        `supported round-trip passed cases: ${String(context.currentState.recordedRoundTripPassedCount)}`,
+        `round-trip failures among recorded cases: ${String(context.currentState.recordedRoundTripFailureCount)}`,
+      ],
       gaps: [
         ...(context.status.recordedCoversManifest
           ? []
           : [`cached artifacts missing round-trip evidence: ${String(context.currentState.missingVerificationCount)}`]),
+        ...(context.currentState.recordedRoundTripPassedCount > 0 ? [] : ['no supported round-trip successes recorded']),
         ...(context.currentState.recordedRoundTripFailureCount === 0
           ? []
           : [`round-trip failures: ${String(context.currentState.recordedRoundTripFailureCount)}`]),
@@ -873,6 +805,8 @@ function buildAuditState(
     recordedFormulaOracleComparisonCount: recordedCases.reduce((sum, entry) => sum + entry.validation.formulaOracleComparisons, 0),
     recordedFormulaOracleMismatchCount: recordedCases.reduce((sum, entry) => sum + entry.validation.formulaOracleMismatches.length, 0),
     recordedStructuralSmokeRunCount: recordedCases.filter((entry) => entry.validation.structuralSmokePassed !== null).length,
+    recordedRoundTripPassedCount: recordedCases.filter((entry) => entry.validation.roundTripPassed && entry.status !== 'unsupported')
+      .length,
     recordedRoundTripFailureCount: recordedCases.filter((entry) => !entry.validation.roundTripPassed && entry.status !== 'unsupported')
       .length,
   }
