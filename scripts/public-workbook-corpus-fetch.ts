@@ -22,7 +22,7 @@ const publicWorkbookCorpusScriptPath = fileURLToPath(new URL('./public-workbook-
 export const defaultDownloadTimeoutMs = 60_000
 export const defaultFetchBatchSize = 6
 export const defaultFetchConcurrency = 1
-export const defaultFetchMaxRssBytes = 768 * 1024 * 1024
+export const defaultFetchMaxRssBytes = 1536 * 1024 * 1024
 export const defaultFingerprintTimeoutMs = 180_000
 export const defaultFingerprintMaxRssBytes = 1024 * 1024 * 1024
 const noop = (): void => undefined
@@ -50,9 +50,11 @@ export function planPublicWorkbookCorpusFetch(args: {
   const remainingArtifactSlots = Math.max(0, targetArtifactCount - args.manifest.artifacts.length)
   const existingSourceIds = new Set(args.manifest.artifacts.map((artifact) => artifact.sourceId))
   const existingDownloadUrls = new Set(args.manifest.artifacts.map((artifact) => normalizeSourceUrl(artifact.downloadUrl)))
-  const candidateSources = dedupeCandidateSources(
-    args.manifest.sources.filter(
-      (source) => !existingSourceIds.has(source.id) && !existingDownloadUrls.has(normalizeSourceUrl(source.downloadUrl)),
+  const candidateSources = prioritizeCandidateSources(
+    dedupeCandidateSources(
+      args.manifest.sources.filter(
+        (source) => !existingSourceIds.has(source.id) && !existingDownloadUrls.has(normalizeSourceUrl(source.downloadUrl)),
+      ),
     ),
   )
   return {
@@ -230,6 +232,27 @@ function dedupeCandidateSources(sources: readonly PublicWorkbookSource[]): Publi
   return deduped
 }
 
+function prioritizeCandidateSources(sources: readonly PublicWorkbookSource[]): PublicWorkbookSource[] {
+  return sources
+    .map((source, index) => ({ index, source }))
+    .toSorted((left, right) => {
+      const priorityDifference = workbookSourceFetchPriority(left.source) - workbookSourceFetchPriority(right.source)
+      return priorityDifference === 0 ? left.index - right.index : priorityDifference
+    })
+    .map(({ source }) => source)
+}
+
+function workbookSourceFetchPriority(source: PublicWorkbookSource): number {
+  const extension = spreadsheetExtension(source.fileName)
+  if (extension === 'xlsx') {
+    return 0
+  }
+  if (extension === 'xlsm') {
+    return 1
+  }
+  return 2
+}
+
 function normalizeSourceUrl(value: string): string {
   return value.trim().toLowerCase()
 }
@@ -343,14 +366,21 @@ export function fingerprintWorkbookFileIsolated(
     let timer: ReturnType<typeof setTimeout>
     let settled = false
     let stopRssWatchdog = noop
-    const cleanup = (): void => {
-      clearTimeout(timer)
-      stopRssWatchdog()
-      onCleanup()
-    }
     const terminateChild = (signal: 'SIGTERM' | 'SIGKILL'): void => {
       terminateChildProcess(child, signal, { processGroup: true })
     }
+    const terminateChildOnParentExit = (): void => terminateChild('SIGTERM')
+    const parentSignalHandlers = registerParentTerminationHandlers(terminateChildOnParentExit)
+    const cleanup = (): void => {
+      clearTimeout(timer)
+      stopRssWatchdog()
+      process.off('exit', terminateChildOnParentExit)
+      for (const { signal, handler } of parentSignalHandlers) {
+        process.off(signal, handler)
+      }
+      onCleanup()
+    }
+    process.once('exit', terminateChildOnParentExit)
     const finish = (value: string): void => {
       if (settled) {
         return
@@ -426,6 +456,30 @@ export function fingerprintWorkbookFileIsolated(
       }
     })
   })
+}
+
+function registerParentTerminationHandlers(onTerminate: () => void): ReadonlyArray<{
+  readonly signal: NodeJS.Signals
+  readonly handler: () => void
+}> {
+  return (['SIGHUP', 'SIGINT', 'SIGTERM'] as const).map((signal) => {
+    const handler = (): void => {
+      onTerminate()
+      process.exit(signalExitCode(signal))
+    }
+    process.once(signal, handler)
+    return { signal, handler }
+  })
+}
+
+function signalExitCode(signal: NodeJS.Signals): number {
+  if (signal === 'SIGHUP') {
+    return 129
+  }
+  if (signal === 'SIGINT') {
+    return 130
+  }
+  return 143
 }
 
 async function downloadWorkbookBytes(url: string, maxBytes: number, timeoutMs: number): Promise<Uint8Array> {

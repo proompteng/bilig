@@ -946,6 +946,55 @@ describe('public workbook corpus', () => {
     expect(fetched.artifacts).toHaveLength(1)
   })
 
+  it('prioritizes xlsx candidate sources before legacy xls fetches', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-fetch-xlsx-first-'))
+    const workbookBytes = buildWorkbookBytes()
+    const fetchMock = vi.fn(async () => new Response(workbookBytes, { headers: { 'content-length': String(workbookBytes.byteLength) } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const license = {
+      spdxId: 'CC-BY-4.0',
+      title: 'Creative Commons Attribution 4.0 International',
+      evidenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    }
+    const manifest: PublicWorkbookManifest = {
+      ...createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'),
+      sources: [
+        {
+          id: 'source-legacy-xls',
+          kind: 'direct-url',
+          sourceUrl: 'https://example.com/legacy.xls',
+          downloadUrl: 'https://example.com/legacy.xls',
+          fileName: 'legacy.xls',
+          discoveredAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+        {
+          id: 'source-modern-xlsx',
+          kind: 'direct-url',
+          sourceUrl: 'https://example.com/modern.xlsx',
+          downloadUrl: 'https://example.com/modern.xlsx',
+          fileName: 'modern.xlsx',
+          discoveredAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+      ],
+    }
+
+    const fetched = await fetchPublicWorkbookArtifacts({
+      manifest,
+      cacheDir,
+      limit: 1,
+      fetchedAt: '2026-05-07T01:00:00.000Z',
+      fetchBatchSize: 1,
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://example.com/modern.xlsx')
+    expect(fetched.artifacts).toHaveLength(1)
+    expect(fetched.artifacts[0]?.sourceId).toBe('source-modern-xlsx')
+  })
+
   it('checkpoints the manifest when fetched artifacts are committed', async () => {
     const cacheDir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-fetch-checkpoint-'))
     const workbookBytes = buildWorkbookBytes()
@@ -1109,6 +1158,30 @@ describe('public workbook corpus', () => {
     expect(spawnMock.mock.calls[0]?.[2]).toMatchObject({ detached: true })
     expect(killSpy).toHaveBeenCalledWith(-24_680, 'SIGTERM')
     expect(child.kill).not.toHaveBeenCalled()
+  })
+
+  it('terminates isolated fingerprint process groups when the parent receives SIGTERM', async () => {
+    vi.useFakeTimers()
+
+    const child = createMockChildProcess(24_682)
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null): never => {
+      throw new Error(`process.exit ${String(code)}`)
+    })
+    spawnMock.mockImplementationOnce(() => child)
+
+    const fingerprintPromise = fingerprintWorkbookFileIsolated('/tmp/public-budget.xlsx', 'public-budget.xlsx', 5_000, {
+      maxRssBytes: 1024 * 1024,
+      rssCheckIntervalMs: 100,
+    })
+
+    expect(() => process.emit('SIGTERM')).toThrow('process.exit 143')
+    child.emit('close', 1, null)
+
+    await expect(fingerprintPromise).rejects.toThrow('Workbook fingerprinting subprocess exited with code 1')
+    expect(killSpy).toHaveBeenCalledWith(-24_682, 'SIGTERM')
+    expect(child.kill).not.toHaveBeenCalled()
+    expect(exitSpy).toHaveBeenCalledWith(143)
   })
 
   it('skips malformed CKAN resource URLs during workbook discovery', async () => {

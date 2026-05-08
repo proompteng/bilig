@@ -433,36 +433,49 @@ async function main(): Promise<void> {
       batchSize: 1,
       concurrency: 1,
     })
-    const result = await withPublicWorkbookCorpusCacheLock(cacheDir, 'fetch-source', async () => {
-      const manifest = readManifest(manifestPath)
-      if (!manifest.sources.some((source) => source.id === sourceId)) {
-        throw new Error(`Manifest does not contain public workbook source ${sourceId}`)
-      }
-      const beforeArtifactIds = new Set(manifest.artifacts.map((artifact) => artifact.id))
-      const fetchedManifest = await fetchPublicWorkbookArtifacts({
-        manifest,
-        cacheDir,
-        limit: manifest.artifacts.length + 1,
-        downloadTimeoutMs: readNumberArg('--download-timeout-ms', defaultDownloadTimeoutMs),
-        ...fetchRunArgs,
-        fingerprintTimeoutMs: readNumberArg('--fingerprint-timeout-ms', defaultFingerprintTimeoutMs),
-        fingerprintMaxRssBytes: readMegabytesArg('--fingerprint-max-rss-mb', defaultFingerprintMaxRssBytes),
-        isolatedFingerprinting: !inProcessFingerprinting,
-        maxBytes: readNumberArg('--max-bytes', 50 * 1024 * 1024),
-        sourceIds: [sourceId],
-        onArtifactsCommitted: (checkpointManifest) => {
-          writeJson(manifestPath, checkpointManifest, 'public-workbook-corpus-manifest')
-        },
+    const stopSelfRssGuard = startSelfRssGuard(
+      readMegabytesArg('--fetch-max-rss-mb', defaultFetchMaxRssBytes),
+      'Public workbook corpus fetch-source',
+    )
+    let result: {
+      readonly artifactCountBefore: number
+      readonly artifactCountAfter: number
+      readonly fetchedArtifactIds: readonly string[]
+    }
+    try {
+      result = await withPublicWorkbookCorpusCacheLock(cacheDir, 'fetch-source', async () => {
+        const manifest = readManifest(manifestPath)
+        if (!manifest.sources.some((source) => source.id === sourceId)) {
+          throw new Error(`Manifest does not contain public workbook source ${sourceId}`)
+        }
+        const beforeArtifactIds = new Set(manifest.artifacts.map((artifact) => artifact.id))
+        const fetchedManifest = await fetchPublicWorkbookArtifacts({
+          manifest,
+          cacheDir,
+          limit: manifest.artifacts.length + 1,
+          downloadTimeoutMs: readNumberArg('--download-timeout-ms', defaultDownloadTimeoutMs),
+          ...fetchRunArgs,
+          fingerprintTimeoutMs: readNumberArg('--fingerprint-timeout-ms', defaultFingerprintTimeoutMs),
+          fingerprintMaxRssBytes: readMegabytesArg('--fingerprint-max-rss-mb', defaultFingerprintMaxRssBytes),
+          isolatedFingerprinting: !inProcessFingerprinting,
+          maxBytes: readNumberArg('--max-bytes', 50 * 1024 * 1024),
+          sourceIds: [sourceId],
+          onArtifactsCommitted: (checkpointManifest) => {
+            writeJson(manifestPath, checkpointManifest, 'public-workbook-corpus-manifest')
+          },
+        })
+        writeJson(manifestPath, fetchedManifest, 'public-workbook-corpus-manifest')
+        return {
+          artifactCountBefore: manifest.artifacts.length,
+          artifactCountAfter: fetchedManifest.artifacts.length,
+          fetchedArtifactIds: fetchedManifest.artifacts
+            .filter((artifact) => !beforeArtifactIds.has(artifact.id))
+            .map((artifact) => artifact.id),
+        }
       })
-      writeJson(manifestPath, fetchedManifest, 'public-workbook-corpus-manifest')
-      return {
-        artifactCountBefore: manifest.artifacts.length,
-        artifactCountAfter: fetchedManifest.artifacts.length,
-        fetchedArtifactIds: fetchedManifest.artifacts
-          .filter((artifact) => !beforeArtifactIds.has(artifact.id))
-          .map((artifact) => artifact.id),
-      }
-    })
+    } finally {
+      stopSelfRssGuard()
+    }
     process.stdout.write(
       `${JSON.stringify(
         {

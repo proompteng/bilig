@@ -140,6 +140,36 @@ describe('public workbook corpus CLI resource guards', () => {
     expect(result.stderr).toContain('Expected --fetch-max-rss-mb to be a positive number of MiB')
   })
 
+  it('validates the fetch RSS guard limit before running a mutating source fetch', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-cli-fetch-source-rss-'))
+    const manifestPath = join(dir, 'manifest.json')
+    writeFileSync(manifestPath, `${JSON.stringify(createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'), null, 2)}\n`)
+
+    const result = spawnSync(
+      'bun',
+      [
+        corpusScriptPath(),
+        'fetch-source',
+        '--manifest',
+        manifestPath,
+        '--cache-dir',
+        dir,
+        '--source-id',
+        'source-1',
+        '--fetch-max-rss-mb',
+        '0',
+        '--corpus-run-stop-marker',
+        join(dir, 'inactive-stop-marker.md'),
+      ],
+      {
+        encoding: 'utf8',
+      },
+    )
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('Expected --fetch-max-rss-mb to be a positive number of MiB')
+  })
+
   it('refuses broad corpus runs while a stop marker is active', () => {
     const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-cli-stop-marker-'))
     const stopMarkerPath = join(dir, 'stop.md')
