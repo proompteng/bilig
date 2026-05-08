@@ -5,7 +5,11 @@ import { parsePublicWorkbookCorpusScorecardJson, parsePublicWorkbookManifestJson
 import { publicCorpusStopMarkerOverrideEnvVar, publicCorpusStopMarkerOverrideFlag } from './public-workbook-corpus-cli.ts'
 import { listStalePublicWorkbookArtifacts } from './public-workbook-corpus-missing.ts'
 import { readReusablePublicWorkbookCorpusCases } from './public-workbook-corpus-verify-checkpoint.ts'
-import { publicWorkbookCorpusCaseNeedsEvidenceRefresh } from './public-workbook-corpus-evidence.ts'
+import {
+  publicWorkbookCorpusCaseEvidenceRefreshReasons,
+  publicWorkbookCorpusCaseNeedsEvidenceRefresh,
+  type PublicWorkbookCorpusEvidenceRefreshReason,
+} from './public-workbook-corpus-evidence.ts'
 import type {
   PublicWorkbookArtifact,
   PublicWorkbookCorpusCase,
@@ -47,7 +51,7 @@ export interface MissingManifestArtifactSummary {
 }
 
 export interface StaleRecordedVerificationSummary extends MissingManifestArtifactSummary {
-  readonly reason: 'missing-used-range-evidence'
+  readonly reason: PublicWorkbookCorpusEvidenceRefreshReason
 }
 
 const missingManifestArtifactSampleLimit = 20
@@ -156,18 +160,23 @@ export function buildPublicWorkbookCorpusStatus(args: {
   const recordedUnsupportedCaseCount = recordedCases.filter((entry) => entry.status === 'unsupported').length
   const recordedFailedCaseCount = recordedCases.filter((entry) => entry.status === 'failed').length
   const recordedErrorCaseCount = recordedCases.filter((entry) => entry.status === 'error').length
+  const recordedCasesById = new Map(recordedCases.map((entry) => [entry.id, entry]))
   const recordedCoversManifest = recordedManifestArtifactCount >= cachedArtifactCount
   const recordedAllCasesPassed = recordedCases.every((entry) => entry.passed)
   const missingManifestArtifactSample = args.manifest ? manifestMissingArtifactSample(args.manifest, candidateCases) : []
   const staleRecordedVerificationSample = staleRecordedVerificationArtifacts
     .slice(0, missingManifestArtifactSampleLimit)
-    .map((artifact) => ({
-      id: artifact.id,
-      fileName: artifact.fileName,
-      byteSize: artifact.byteSize,
-      sourceUrl: artifact.sourceUrl,
-      reason: 'missing-used-range-evidence' as const,
-    }))
+    .map((artifact) => {
+      const recordedCase = recordedCasesById.get(artifact.id)
+      const reasons = recordedCase ? publicWorkbookCorpusCaseEvidenceRefreshReasons(recordedCase) : []
+      return {
+        id: artifact.id,
+        fileName: artifact.fileName,
+        byteSize: artifact.byteSize,
+        sourceUrl: artifact.sourceUrl,
+        reason: reasons[0] ?? 'missing-used-range-evidence',
+      }
+    })
   const nextMissingVerificationCommand =
     missingManifestArtifactCount > 0 && args.commandPaths
       ? formatPublicWorkbookCorpusVerifySliceCommand(args.commandPaths, 'verify-missing', 'verify')

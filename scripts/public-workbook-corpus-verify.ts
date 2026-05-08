@@ -14,6 +14,10 @@ import {
 } from '../packages/excel-import/src/index.js'
 import type { WorkbookSnapshot } from '../packages/protocol/src/types.js'
 import { parsePublicWorkbookCorpusCase, validatePublicWorkbookManifest } from './public-workbook-corpus-json.ts'
+import {
+  hasImportWarningUnsupportedClassifications,
+  publicWorkbookImportWarningClassifierEvidence,
+} from './public-workbook-corpus-evidence.ts'
 import { inspectWorkbookFootprintIsolated, type PublicWorkbookCorpusWorkerOptions } from './public-workbook-corpus-footprint.ts'
 import { formatByteSize, startChildRssWatchdog, terminateChildProcess } from './public-workbook-corpus-process.ts'
 import { roundTripSemanticsDigest } from './public-workbook-corpus-roundtrip.ts'
@@ -305,6 +309,9 @@ export async function verifyCachedWorkbookArtifact(
         `sheets=${String(featureCounts.sheetCount)}`,
         `cells=${String(featureCounts.cellCount)}`,
         `formulas=${String(featureCounts.formulaCellCount)}`,
+        ...(hasImportWarningUnsupportedClassifications(unsupportedFeatureClassifications)
+          ? [publicWorkbookImportWarningClassifierEvidence]
+          : []),
         ...(roundTripSkipEvidence ? [roundTripSkipEvidence] : []),
         ...validationEvidence(validation),
       ],

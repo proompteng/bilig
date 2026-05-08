@@ -23,6 +23,7 @@ import {
   type PublicWorkbookManifest,
   type PublicWorkbookSource,
 } from '../public-workbook-corpus.ts'
+import { publicWorkbookImportWarningClassifierEvidence } from '../public-workbook-corpus-evidence.ts'
 import { roundTripSemanticsDigest } from '../public-workbook-corpus-roundtrip.ts'
 
 const spawnMock = vi.hoisted(() => vi.fn())
@@ -231,7 +232,10 @@ describe('public workbook corpus', () => {
       unsupportedFeatureClassifications: [`xlsx.import.warning:${externalWorkbookReferencesWarning}`],
     })
     expect(scorecard.cases[0]?.evidence).toEqual(
-      expect.arrayContaining(['Round-trip projection skipped because external workbook links are not recalculated during XLSX import.']),
+      expect.arrayContaining([
+        publicWorkbookImportWarningClassifierEvidence,
+        'Round-trip projection skipped because external workbook links are not recalculated during XLSX import.',
+      ]),
     )
   })
 

@@ -1193,6 +1193,63 @@ describe('public workbook corpus CLI resource guards', () => {
     expect(nextVerificationCommand).toContain('--allow-active-stop-marker')
   })
 
+  it('lists stale import-warning classifier evidence in verify-stale plans', async () => {
+    const artifactA = workbookArtifact('workbook-a')
+    const artifactB = workbookArtifact('workbook-b')
+    const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-cli-verify-stale-warning-plan-'))
+    const manifestPath = join(dir, 'manifest.json')
+    const scorecardPath = join(dir, 'scorecard.json')
+    const checkpointPath = join(dir, 'verification-checkpoint.json')
+    const stopMarkerPath = join(dir, 'stop.md')
+    const fullManifest = manifestWithArtifacts([artifactA, artifactB])
+    writeFileSync(manifestPath, `${JSON.stringify(fullManifest, null, 2)}\n`)
+    writeFileSync(stopMarkerPath, '# paused\n')
+    writePublicWorkbookCorpusVerificationCheckpoint({
+      path: checkpointPath,
+      manifest: fullManifest,
+      casesById: new Map([
+        [artifactA.id, importWarningUnsupportedCaseWithUsedRange(artifactA, false)],
+        [artifactB.id, importWarningUnsupportedCaseWithUsedRange(artifactB, true)],
+      ]),
+      generatedAt: '2026-05-07T01:30:00.000Z',
+    })
+
+    const result = spawnSync(
+      'bun',
+      [
+        corpusScriptPath(),
+        'verify-stale',
+        '--dry-run',
+        '--manifest',
+        manifestPath,
+        '--scorecard',
+        scorecardPath,
+        '--verify-checkpoint',
+        checkpointPath,
+        '--corpus-run-stop-marker',
+        stopMarkerPath,
+        '--limit',
+        '20',
+      ],
+      {
+        encoding: 'utf8',
+      },
+    )
+    const planned: unknown = JSON.parse(result.stdout)
+
+    expect(result.status).toBe(0)
+    expect(planned).toMatchObject({
+      totalStaleArtifactCount: 1,
+      selectedArtifactCount: 1,
+      artifacts: [
+        {
+          id: artifactA.id,
+          reason: 'missing-import-warning-classifier-evidence',
+        },
+      ],
+    })
+  })
+
   it('refreshes the checked-in scorecard from existing checkpoint cases without verification workers', async () => {
     const artifactA = workbookArtifact('workbook-a')
     const artifactB = workbookArtifact('workbook-b')

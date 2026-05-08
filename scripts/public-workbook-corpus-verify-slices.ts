@@ -22,6 +22,7 @@ import {
   selectMissingPublicWorkbookArtifacts,
   selectStalePublicWorkbookArtifacts,
 } from './public-workbook-corpus-missing.ts'
+import { publicWorkbookCorpusCaseEvidenceRefreshReasons } from './public-workbook-corpus-evidence.ts'
 import {
   readReusablePublicWorkbookCorpusCases,
   writePublicWorkbookCorpusVerificationCheckpoint,
@@ -34,7 +35,7 @@ import {
   defaultVerifyMaxRssBytes,
   defaultVerifyTimeoutMs,
 } from './public-workbook-corpus-verify.ts'
-import type { PublicWorkbookManifest } from './public-workbook-corpus-types.ts'
+import type { PublicWorkbookCorpusCase, PublicWorkbookManifest } from './public-workbook-corpus-types.ts'
 
 export interface PublicWorkbookCorpusVerifySliceCommandArgs {
   readonly cacheDir: string
@@ -98,6 +99,7 @@ export async function runPublicWorkbookCorpusVerifyStaleCommand(args: PublicWork
     const manifest = readManifest(args.manifestPath)
     const recordedCases = readReusablePublicWorkbookCorpusCases([args.scorecardPath, args.verifyCheckpointPath])
     const staleArtifacts = listStalePublicWorkbookArtifacts({ manifest, cases: recordedCases })
+    const recordedCasesById = indexPublicWorkbookCorpusCases(recordedCases)
     const selectedArtifactCount = Math.min(limit, staleArtifacts.length)
     process.stdout.write(
       `${JSON.stringify(
@@ -110,7 +112,7 @@ export async function runPublicWorkbookCorpusVerifyStaleCommand(args: PublicWork
             byteSize: artifact.byteSize,
             sourceUrl: artifact.sourceUrl,
             cachePath: artifact.cachePath,
-            reason: 'missing-used-range-evidence',
+            reason: staleArtifactReason(artifact.id, recordedCasesById),
           })),
           nextVerificationCommand:
             selectedArtifactCount > 0 ? formatVerifySliceCommand({ ...args, limit: selectedArtifactCount, slice: 'verify-stale' }) : null,
@@ -192,6 +194,15 @@ async function verifySelectedPublicWorkbookArtifacts(
     })
     return scorecard.cases.length
   })
+}
+
+function staleArtifactReason(
+  artifactId: string,
+  recordedCasesById: ReadonlyMap<string, PublicWorkbookCorpusCase>,
+): ReturnType<typeof publicWorkbookCorpusCaseEvidenceRefreshReasons>[number] {
+  const recordedCase = recordedCasesById.get(artifactId)
+  const reasons = recordedCase ? publicWorkbookCorpusCaseEvidenceRefreshReasons(recordedCase) : []
+  return reasons[0] ?? 'missing-used-range-evidence'
 }
 
 function readManifest(path: string): PublicWorkbookManifest {

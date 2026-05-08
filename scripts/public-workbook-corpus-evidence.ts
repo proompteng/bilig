@@ -1,7 +1,24 @@
 import type { PublicWorkbookCorpusCase } from './public-workbook-corpus-types.ts'
 
+export const publicWorkbookImportWarningClassifierEvidence = 'import-warning-classifier=2026-05-08'
+
+export type PublicWorkbookCorpusEvidenceRefreshReason = 'missing-used-range-evidence' | 'missing-import-warning-classifier-evidence'
+
 export function publicWorkbookCorpusCaseNeedsEvidenceRefresh(entry: PublicWorkbookCorpusCase): boolean {
-  return !hasPublicWorkbookCorpusUsedRangeEvidence(entry)
+  return publicWorkbookCorpusCaseEvidenceRefreshReasons(entry).length > 0
+}
+
+export function publicWorkbookCorpusCaseEvidenceRefreshReasons(
+  entry: PublicWorkbookCorpusCase,
+): readonly PublicWorkbookCorpusEvidenceRefreshReason[] {
+  const reasons: PublicWorkbookCorpusEvidenceRefreshReason[] = []
+  if (!hasPublicWorkbookCorpusUsedRangeEvidence(entry)) {
+    reasons.push('missing-used-range-evidence')
+  }
+  if (hasImportWarningUnsupportedClassification(entry) && !hasCurrentImportWarningClassifierEvidence(entry)) {
+    reasons.push('missing-import-warning-classifier-evidence')
+  }
+  return reasons
 }
 
 export function hasPublicWorkbookCorpusUsedRangeEvidence(entry: PublicWorkbookCorpusCase): boolean {
@@ -24,4 +41,16 @@ export function hasPublicWorkbookCorpusUsedRangeEvidence(entry: PublicWorkbookCo
       dimension.columnCount === range.endColumn + 1
     )
   })
+}
+
+export function hasImportWarningUnsupportedClassification(entry: PublicWorkbookCorpusCase): boolean {
+  return hasImportWarningUnsupportedClassifications(entry.unsupportedFeatureClassifications)
+}
+
+export function hasImportWarningUnsupportedClassifications(classifications: readonly string[]): boolean {
+  return classifications.some((classification) => classification.startsWith('xlsx.import.warning:'))
+}
+
+function hasCurrentImportWarningClassifierEvidence(entry: PublicWorkbookCorpusCase): boolean {
+  return entry.evidence.includes(publicWorkbookImportWarningClassifierEvidence)
 }
