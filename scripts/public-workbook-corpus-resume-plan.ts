@@ -11,7 +11,7 @@ import {
   readStringArg,
 } from './public-workbook-corpus-cli.ts'
 import { planPublicWorkbookCorpusFetch } from './public-workbook-corpus-fetch.ts'
-import { parsePublicWorkbookManifestJson } from './public-workbook-corpus-json.ts'
+import { createEmptyPublicWorkbookManifest, parsePublicWorkbookManifestJson } from './public-workbook-corpus-json.ts'
 import { readPublicWorkbookCorpusStatus } from './public-workbook-corpus-status.ts'
 
 export interface PublicWorkbookCorpusResumePlan {
@@ -97,21 +97,19 @@ export function buildPublicWorkbookCorpusResumePlanFromArgs(): PublicWorkbookCor
   const fetchLimit = readNumberArg('--fetch-limit', 10_000)
   const fetchBatchSize = readNumberArg('--fetch-batch-size', 6)
   const generatedAt = readStringArg('--generated-at', new Date().toISOString())
-  if (!existsSync(manifestPath)) {
-    throw new Error(`Public workbook corpus manifest is missing: ${manifestPath}`)
-  }
-  const manifest = parsePublicWorkbookManifestJson(JSON.parse(readFileSync(manifestPath, 'utf8')) as unknown)
   const status = readPublicWorkbookCorpusStatus({
     manifestPath,
     scorecardPath,
     cacheDir,
     verifyCheckpointPath,
   })
-  const fetchPlan = planPublicWorkbookCorpusFetch({
-    manifest,
-    limit: fetchLimit,
-    sampleLimit: 0,
-  })
+  const fetchPlan = existsSync(manifestPath)
+    ? planPublicWorkbookCorpusFetch({
+        manifest: parsePublicWorkbookManifestJson(JSON.parse(readFileSync(manifestPath, 'utf8')) as unknown),
+        limit: fetchLimit,
+        sampleLimit: 0,
+      })
+    : fallbackPublicWorkbookCorpusFetchPlan(status)
   return buildPublicWorkbookCorpusResumePlan({
     cacheDir,
     fetchBatchSize,
@@ -126,6 +124,30 @@ export function buildPublicWorkbookCorpusResumePlanFromArgs(): PublicWorkbookCor
     verifyBatchSize,
     verifyCheckpointPath,
   })
+}
+
+function fallbackPublicWorkbookCorpusFetchPlan(status: {
+  readonly cachedArtifactCount: number
+  readonly targetWorkbookCount: number
+}): Parameters<typeof buildPublicWorkbookCorpusResumePlan>[0]['fetchPlan'] {
+  const targetManifest = createEmptyPublicWorkbookManifest(new Date(0).toISOString(), status.targetWorkbookCount)
+  const remainingArtifactSlots = Math.max(0, status.targetWorkbookCount - status.cachedArtifactCount)
+  if (remainingArtifactSlots === 0) {
+    return {
+      candidateSourceCount: 0,
+      candidateSourceDeficitCount: 0,
+      recommendedDiscoveryLimit: targetManifest.targetWorkbookCount,
+      remainingArtifactSlots: 0,
+      targetReachableFromKnownCandidates: true,
+    }
+  }
+  return {
+    candidateSourceCount: 0,
+    candidateSourceDeficitCount: remainingArtifactSlots,
+    recommendedDiscoveryLimit: targetManifest.targetWorkbookCount,
+    remainingArtifactSlots,
+    targetReachableFromKnownCandidates: false,
+  }
 }
 
 export function buildPublicWorkbookCorpusResumePlan(args: {

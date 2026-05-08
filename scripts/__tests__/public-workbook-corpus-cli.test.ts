@@ -255,6 +255,62 @@ describe('public workbook corpus CLI resource guards', () => {
     expect(validatePublicWorkbookCorpusResumePlan(plan)).toEqual([])
   })
 
+  it('checks a resume plan from the checked-in scorecard when the local manifest cache is absent', async () => {
+    const artifactA = workbookArtifact('workbook-a')
+    const artifactB = workbookArtifact('workbook-b')
+    const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-resume-plan-scorecard-'))
+    const scorecardPath = join(dir, 'scorecard.json')
+    const missingManifestPath = join(dir, 'missing-manifest.json')
+    const checkpointPath = join(dir, 'verification-checkpoint.json')
+    const manifest: PublicWorkbookManifest = {
+      ...manifestWithArtifacts([artifactA, artifactB]),
+      targetWorkbookCount: 2,
+    }
+    const scorecard = await buildPublicWorkbookCorpusScorecard({
+      manifest,
+      cacheDir: dir,
+      generatedAt: '2026-05-07T01:00:00.000Z',
+      reusableCases: [passedCase(artifactA), passedCase(artifactB)],
+    })
+    writeFileSync(scorecardPath, `${JSON.stringify(scorecard, null, 2)}\n`)
+
+    const result = spawnSync(
+      'bun',
+      [
+        resumePlanScriptPath(),
+        '--check',
+        '--manifest',
+        missingManifestPath,
+        '--scorecard',
+        scorecardPath,
+        '--verify-checkpoint',
+        checkpointPath,
+        '--cache-dir',
+        dir,
+        '--fetch-limit',
+        '2',
+      ],
+      { encoding: 'utf8' },
+    )
+    const output: unknown = JSON.parse(result.stdout)
+
+    expect(result.status).toBe(0)
+    expect(output).toMatchObject({
+      mode: 'check',
+      currentState: {
+        targetWorkbookCount: 2,
+        cachedArtifactCount: 2,
+        recordedManifestArtifactCount: 2,
+        missingCachedArtifactCount: 0,
+        missingVerificationCount: 0,
+      },
+      phases: {
+        discoverAdditionalSources: { status: 'not-needed' },
+        fetchAdditionalArtifacts: { status: 'not-needed' },
+      },
+    })
+  })
+
   it('rejects unsafe resume plans that hide active stop-marker overrides', () => {
     const plan = buildPublicWorkbookCorpusResumePlan({
       cacheDir: '/repo/.cache/public-workbook-corpus',
@@ -888,6 +944,10 @@ function readPackageJson(): { readonly scripts?: Record<string, string> } {
 
 function corpusScriptPath(): string {
   return join(dirname(fileURLToPath(import.meta.url)), '../public-workbook-corpus.ts')
+}
+
+function resumePlanScriptPath(): string {
+  return join(dirname(fileURLToPath(import.meta.url)), '../public-workbook-corpus-resume-plan.ts')
 }
 
 function manifestWithArtifacts(artifacts: readonly PublicWorkbookArtifact[]): PublicWorkbookManifest {
