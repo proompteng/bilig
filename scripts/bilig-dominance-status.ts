@@ -103,6 +103,7 @@ export interface BiligDominanceStatus {
     readonly nextMissingVerificationCommand: string | null
     readonly nextStaleVerificationPlanCommand: string | null
     readonly nextStaleVerificationCommand: string | null
+    readonly blockedCommands: readonly string[]
     readonly corpusRunStopMarkerActive: boolean
     readonly corpusRunStopMarkerPath: string
     readonly nextCorpusRunRequiresExplicitResume: boolean
@@ -298,6 +299,17 @@ export function buildBiligDominanceStatus(args: {
   const liveStatusBlockers = [...corpusBlockers, ...localCiResourceGuardBlockers]
   const unmetRequirements = [...scorecard.claimPolicy.unmetRequirements, ...liveStatusBlockers]
   const blanketTenXClaimAllowed = scorecard.claimPolicy.blanketTenXClaimAllowed && liveStatusBlockers.length === 0
+  const nextDiscoveryCommand =
+    args.fetchPlan && args.fetchPlan.candidateSourceDeficitCount > 0
+      ? formatPublicWorkbookCorpusDiscoveryCommand(args.fetchPlan.recommendedDiscoveryLimit)
+      : null
+  const nextMissingVerificationCommand = args.publicWorkbookCorpusStatus.nextMissingVerificationCommand
+  const nextStaleVerificationCommand = args.publicWorkbookCorpusStatus.nextStaleVerificationCommand
+  const blockedCorpusCommands = args.stopMarkerActive
+    ? nonEmptyCommands([nextDiscoveryCommand, nextMissingVerificationCommand, nextStaleVerificationCommand]).map(
+        corpusStopMarkerOverrideCommand,
+      )
+    : []
   return {
     goalStatus: scorecard.goalStatus === 'achieved' && liveStatusBlockers.length === 0 ? 'achieved' : 'active-not-achieved',
     blanketTenXClaimAllowed,
@@ -334,18 +346,12 @@ export function buildBiligDominanceStatus(args: {
         args.fetchPlan && args.fetchPlan.candidateSourceDeficitCount > 0
           ? formatPublicWorkbookCorpusDiscoveryPlanCommand(args.fetchPlan.recommendedDiscoveryLimit)
           : null,
-      nextDiscoveryCommand:
-        args.fetchPlan && args.fetchPlan.candidateSourceDeficitCount > 0
-          ? formatPublicWorkbookCorpusDiscoveryCommand(args.fetchPlan.recommendedDiscoveryLimit, args.stopMarkerActive)
-          : null,
+      nextDiscoveryCommand: args.stopMarkerActive ? null : nextDiscoveryCommand,
       nextMissingVerificationPlanCommand: args.publicWorkbookCorpusStatus.nextMissingVerificationPlanCommand,
-      nextMissingVerificationCommand: args.publicWorkbookCorpusStatus.nextMissingVerificationCommand
-        ? stopMarkerGuardedCorpusCommand(args.publicWorkbookCorpusStatus.nextMissingVerificationCommand, args.stopMarkerActive)
-        : null,
+      nextMissingVerificationCommand: args.stopMarkerActive ? null : nextMissingVerificationCommand,
       nextStaleVerificationPlanCommand: args.publicWorkbookCorpusStatus.nextStaleVerificationPlanCommand,
-      nextStaleVerificationCommand: args.publicWorkbookCorpusStatus.nextStaleVerificationCommand
-        ? stopMarkerGuardedCorpusCommand(args.publicWorkbookCorpusStatus.nextStaleVerificationCommand, args.stopMarkerActive)
-        : null,
+      nextStaleVerificationCommand: args.stopMarkerActive ? null : nextStaleVerificationCommand,
+      blockedCommands: blockedCorpusCommands,
       corpusRunStopMarkerActive: args.stopMarkerActive,
       corpusRunStopMarkerPath: args.stopMarkerPath,
       nextCorpusRunRequiresExplicitResume: args.stopMarkerActive,
@@ -698,11 +704,8 @@ function formatPublicWorkbookCorpusDiscoveryPlanCommand(limit: number): string {
   return ['pnpm', 'public-workbook-corpus:discover:plan', '--', '--limit', String(limit)].map(shellQuote).join(' ')
 }
 
-function formatPublicWorkbookCorpusDiscoveryCommand(limit: number, stopMarkerActive: boolean): string {
-  return stopMarkerGuardedCorpusCommand(
-    ['pnpm', 'public-workbook-corpus:discover', '--', '--limit', String(limit)].map(shellQuote).join(' '),
-    stopMarkerActive,
-  )
+function formatPublicWorkbookCorpusDiscoveryCommand(limit: number): string {
+  return ['pnpm', 'public-workbook-corpus:discover', '--', '--limit', String(limit)].map(shellQuote).join(' ')
 }
 
 function formatPublicWorkbookCorpusFetchPlanCommand(args: {
@@ -741,8 +744,12 @@ function shellQuote(value: string): string {
   return /^[A-Za-z0-9_./:=@+-]+$/u.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`
 }
 
-function stopMarkerGuardedCorpusCommand(command: string, stopMarkerActive: boolean): string {
-  if (!stopMarkerActive || command.includes(`${publicCorpusStopMarkerOverrideEnvVar}=1`)) {
+function nonEmptyCommands(commands: readonly (string | null)[]): string[] {
+  return commands.filter((command): command is string => typeof command === 'string' && command.trim().length > 0)
+}
+
+function corpusStopMarkerOverrideCommand(command: string): string {
+  if (command.includes(`${publicCorpusStopMarkerOverrideEnvVar}=1`)) {
     return command
   }
   return `${publicCorpusStopMarkerOverrideEnvVar}=1 ${command} ${publicCorpusStopMarkerOverrideFlag}`

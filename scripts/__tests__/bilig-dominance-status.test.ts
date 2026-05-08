@@ -201,6 +201,28 @@ describe('bilig dominance status', () => {
     expect(status.goalStatus).toBe('active-not-achieved')
   })
 
+  it('separates stop-marker-blocked public corpus runs from runnable next commands', () => {
+    const status = buildBiligDominanceStatus({
+      input: buildFixtureInput(),
+      financialCorpusStatus: completeFinancialCorpusStatus(),
+      publicWorkbookCorpusStatus: incompletePublicWorkbookCorpusStatus(),
+      stopMarkerActive: true,
+      stopMarkerPath: '.agent-coordination/stop.md',
+    })
+
+    expect(status.publicWorkbookCorpus.nextMissingVerificationPlanCommand).toBe('pnpm public-workbook-corpus:verify-missing:plan')
+    expect(status.publicWorkbookCorpus.nextMissingVerificationCommand).toBeNull()
+    expect(status.publicWorkbookCorpus.nextStaleVerificationPlanCommand).toBe('pnpm public-workbook-corpus:verify-stale:plan')
+    expect(status.publicWorkbookCorpus.nextStaleVerificationCommand).toBeNull()
+    expect(status.publicWorkbookCorpus.blockedCommands).toEqual([
+      'BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1 pnpm public-workbook-corpus:verify-missing -- --limit 1 --allow-active-stop-marker',
+      'BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1 pnpm public-workbook-corpus:verify-stale -- --limit 1 --allow-active-stop-marker',
+    ])
+    expect(status.publicWorkbookCorpus.nextCorpusRunRequiresExplicitResume).toBe(true)
+    expect(status.publicWorkbookCorpus.corpusRunStopMarkerOverrideEnvVar).toBe('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE')
+    expect(status.publicWorkbookCorpus.corpusRunStopMarkerOverrideFlag).toBe('--allow-active-stop-marker')
+  })
+
   it('exposes the guarded financial corpus plan in dominance status', () => {
     const status = buildBiligDominanceStatus({
       input: buildFixtureInput(),
@@ -312,6 +334,32 @@ function completeFinancialCorpusStatus() {
     cachedArtifactCount: 5_000,
     recordedManifestArtifactCount: 5_000,
     recordedNonPassingCaseCount: 0,
+  }
+}
+
+function incompletePublicWorkbookCorpusStatus(): PublicWorkbookCorpusStatus {
+  return {
+    ...completePublicWorkbookCorpusStatus(),
+    cachedArtifactCount: 9_900,
+    scorecardCaseCount: 9_750,
+    checkpointCaseCount: 9_750,
+    recordedManifestArtifactCount: 9_750,
+    missingManifestArtifactCount: 150,
+    staleRecordedVerificationCount: 25,
+    recordedPassedCaseCount: 9_750,
+    recordedCoversManifest: false,
+    nextMissingVerificationCommand: 'pnpm public-workbook-corpus:verify-missing -- --limit 1',
+    nextMissingVerificationPlanCommand: 'pnpm public-workbook-corpus:verify-missing:plan',
+    nextStaleVerificationCommand: 'pnpm public-workbook-corpus:verify-stale -- --limit 1',
+    nextStaleVerificationPlanCommand: 'pnpm public-workbook-corpus:verify-stale:plan',
+    scorecardCoversManifest: false,
+    targetComplete: false,
+    gaps: [
+      'cached artifacts below target: 9900/10000',
+      'scorecard cases do not cover manifest artifacts: 9750/9900',
+      'recorded verification cases below cached artifacts: 9750/9900',
+      'recorded verification cases need evidence refresh: 25',
+    ],
   }
 }
 
