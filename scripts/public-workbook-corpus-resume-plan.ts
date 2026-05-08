@@ -51,6 +51,7 @@ export interface ResumePlanPhase {
   readonly batchSize: number
   readonly batchCount: number
   readonly commands: readonly string[]
+  readonly blockedCommands: readonly string[]
 }
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
@@ -307,13 +308,9 @@ function buildVerifyMissingPhase(args: Parameters<typeof buildPublicWorkbookCorp
     return notNeededPhase('all cached artifacts already have recorded verification evidence')
   }
   const batchSize = verificationBatchSize(args)
-  return {
-    status: phaseStatus(args.stopMarkerActive),
-    reason: 'cached workbook artifacts exist locally but do not all have recorded verification cases',
-    totalWorkItems,
-    batchSize,
-    batchCount: batchCount(totalWorkItems, batchSize),
-    commands: [
+  const commands = phaseCommands(
+    args.stopMarkerActive,
+    [
       command([
         'pnpm',
         'public-workbook-corpus:verify-missing:plan',
@@ -327,7 +324,9 @@ function buildVerifyMissingPhase(args: Parameters<typeof buildPublicWorkbookCorp
         '--cache-dir',
         commandPath(args.cacheDir, args.displayRootDir),
       ]),
-      guardedCommand(args.stopMarkerActive, [
+    ],
+    [
+      [
         'pnpm',
         'public-workbook-corpus:verify-missing',
         '--',
@@ -341,8 +340,16 @@ function buildVerifyMissingPhase(args: Parameters<typeof buildPublicWorkbookCorp
         commandPath(args.cacheDir, args.displayRootDir),
         '--limit',
         String(batchSize),
-      ]),
+      ],
     ],
+  )
+  return {
+    status: phaseStatus(args.stopMarkerActive),
+    reason: 'cached workbook artifacts exist locally but do not all have recorded verification cases',
+    totalWorkItems,
+    batchSize,
+    batchCount: batchCount(totalWorkItems, batchSize),
+    ...commands,
   }
 }
 
@@ -354,13 +361,9 @@ function buildRefreshStaleRecordedEvidencePhase(
     return notNeededPhase('all recorded verification cases already satisfy the current evidence schema')
   }
   const batchSize = verificationBatchSize(args)
-  return {
-    status: phaseStatus(args.stopMarkerActive),
-    reason: 'recorded verification cases need refresh for current metadata evidence requirements',
-    totalWorkItems,
-    batchSize,
-    batchCount: batchCount(totalWorkItems, batchSize),
-    commands: [
+  const commands = phaseCommands(
+    args.stopMarkerActive,
+    [
       command([
         'pnpm',
         'public-workbook-corpus:verify-stale:plan',
@@ -374,7 +377,9 @@ function buildRefreshStaleRecordedEvidencePhase(
         '--cache-dir',
         commandPath(args.cacheDir, args.displayRootDir),
       ]),
-      guardedCommand(args.stopMarkerActive, [
+    ],
+    [
+      [
         'pnpm',
         'public-workbook-corpus:verify-stale',
         '--',
@@ -388,8 +393,16 @@ function buildRefreshStaleRecordedEvidencePhase(
         commandPath(args.cacheDir, args.displayRootDir),
         '--limit',
         String(batchSize),
-      ]),
+      ],
     ],
+  )
+  return {
+    status: phaseStatus(args.stopMarkerActive),
+    reason: 'recorded verification cases need refresh for current metadata evidence requirements',
+    totalWorkItems,
+    batchSize,
+    batchCount: batchCount(totalWorkItems, batchSize),
+    ...commands,
   }
 }
 
@@ -404,20 +417,23 @@ function buildDiscoverPhase(args: Parameters<typeof buildPublicWorkbookCorpusRes
     totalWorkItems,
     batchSize: totalWorkItems,
     batchCount: 1,
-    commands: [
-      command(['pnpm', 'public-workbook-corpus:discover:plan', '--', '--limit', String(args.fetchPlan.recommendedDiscoveryLimit)]),
-      guardedCommand(args.stopMarkerActive, [
-        'pnpm',
-        'public-workbook-corpus:discover',
-        '--',
-        '--manifest',
-        commandPath(args.manifestPath, args.displayRootDir),
-        '--cache-dir',
-        commandPath(args.cacheDir, args.displayRootDir),
-        '--limit',
-        String(args.fetchPlan.recommendedDiscoveryLimit),
-      ]),
-    ],
+    ...phaseCommands(
+      args.stopMarkerActive,
+      [command(['pnpm', 'public-workbook-corpus:discover:plan', '--', '--limit', String(args.fetchPlan.recommendedDiscoveryLimit)])],
+      [
+        [
+          'pnpm',
+          'public-workbook-corpus:discover',
+          '--',
+          '--manifest',
+          commandPath(args.manifestPath, args.displayRootDir),
+          '--cache-dir',
+          commandPath(args.cacheDir, args.displayRootDir),
+          '--limit',
+          String(args.fetchPlan.recommendedDiscoveryLimit),
+        ],
+      ],
+    ),
   }
 }
 
@@ -437,32 +453,37 @@ function buildFetchPhase(args: Parameters<typeof buildPublicWorkbookCorpusResume
     totalWorkItems,
     batchSize,
     batchCount: batchCount(totalWorkItems, batchSize),
-    commands: [
-      command([
-        'pnpm',
-        'public-workbook-corpus:fetch:plan',
-        '--',
-        '--manifest',
-        commandPath(args.manifestPath, args.displayRootDir),
-        '--cache-dir',
-        commandPath(args.cacheDir, args.displayRootDir),
-        '--limit',
-        String(nextFetchLimit),
-      ]),
-      guardedCommand(args.stopMarkerActive, [
-        'pnpm',
-        'public-workbook-corpus:fetch',
-        '--',
-        '--manifest',
-        commandPath(args.manifestPath, args.displayRootDir),
-        '--cache-dir',
-        commandPath(args.cacheDir, args.displayRootDir),
-        '--limit',
-        String(nextFetchLimit),
-        '--fetch-batch-size',
-        String(batchSize),
-      ]),
-    ],
+    ...phaseCommands(
+      args.stopMarkerActive,
+      [
+        command([
+          'pnpm',
+          'public-workbook-corpus:fetch:plan',
+          '--',
+          '--manifest',
+          commandPath(args.manifestPath, args.displayRootDir),
+          '--cache-dir',
+          commandPath(args.cacheDir, args.displayRootDir),
+          '--limit',
+          String(nextFetchLimit),
+        ]),
+      ],
+      [
+        [
+          'pnpm',
+          'public-workbook-corpus:fetch',
+          '--',
+          '--manifest',
+          commandPath(args.manifestPath, args.displayRootDir),
+          '--cache-dir',
+          commandPath(args.cacheDir, args.displayRootDir),
+          '--limit',
+          String(nextFetchLimit),
+          '--fetch-batch-size',
+          String(batchSize),
+        ],
+      ],
+    ),
   }
 }
 
@@ -473,24 +494,29 @@ function buildFinalEvidenceRefreshPhase(args: Parameters<typeof buildPublicWorkb
     totalWorkItems: 1,
     batchSize: 1,
     batchCount: 1,
-    commands: [
-      guardedCommand(args.stopMarkerActive, [
-        'pnpm',
-        'public-workbook-corpus:verify',
-        '--',
-        '--manifest',
-        commandPath(args.manifestPath, args.displayRootDir),
-        '--scorecard',
-        commandPath(args.scorecardPath, args.displayRootDir),
-        '--verify-checkpoint',
-        commandPath(args.verifyCheckpointPath, args.displayRootDir),
-        '--cache-dir',
-        commandPath(args.cacheDir, args.displayRootDir),
-      ]),
-      command(['pnpm', 'public-workbook-corpus:completion-audit:check', '--', '--require-complete']),
-      command(['pnpm', 'dominance:generate']),
-      command(['pnpm', 'dominance:check']),
-    ],
+    ...phaseCommands(
+      args.stopMarkerActive,
+      [
+        command(['pnpm', 'public-workbook-corpus:completion-audit:check', '--', '--require-complete']),
+        command(['pnpm', 'dominance:generate']),
+        command(['pnpm', 'dominance:check']),
+      ],
+      [
+        [
+          'pnpm',
+          'public-workbook-corpus:verify',
+          '--',
+          '--manifest',
+          commandPath(args.manifestPath, args.displayRootDir),
+          '--scorecard',
+          commandPath(args.scorecardPath, args.displayRootDir),
+          '--verify-checkpoint',
+          commandPath(args.verifyCheckpointPath, args.displayRootDir),
+          '--cache-dir',
+          commandPath(args.cacheDir, args.displayRootDir),
+        ],
+      ],
+    ),
   }
 }
 
@@ -502,6 +528,7 @@ function notNeededPhase(reason: string): ResumePlanPhase {
     batchSize: 0,
     batchCount: 0,
     commands: [],
+    blockedCommands: [],
   }
 }
 
@@ -509,11 +536,39 @@ function phaseStatus(stopMarkerActive: boolean): ResumePlanPhase['status'] {
   return stopMarkerActive ? 'blocked-by-stop-marker' : 'ready'
 }
 
-function guardedCommand(stopMarkerActive: boolean, parts: readonly string[]): string {
-  if (!stopMarkerActive) {
-    return command(parts)
+function phaseCommands(
+  stopMarkerActive: boolean,
+  runnableCommands: readonly string[],
+  mutatingCommandParts: readonly (readonly string[])[],
+): Pick<ResumePlanPhase, 'commands' | 'blockedCommands'> {
+  const commands = [...runnableCommands]
+  const blockedCommands: string[] = []
+  for (const parts of mutatingCommandParts) {
+    const split = splitGuardedCommand(stopMarkerActive, parts)
+    if (split.command !== null) {
+      commands.push(split.command)
+    }
+    if (split.blockedCommand !== null) {
+      blockedCommands.push(split.blockedCommand)
+    }
   }
-  return `${publicCorpusStopMarkerOverrideEnvVar}=1 ${command([...parts, publicCorpusStopMarkerOverrideFlag])}`
+  return { commands, blockedCommands }
+}
+
+function splitGuardedCommand(
+  stopMarkerActive: boolean,
+  parts: readonly string[],
+): { readonly command: string | null; readonly blockedCommand: string | null } {
+  if (!stopMarkerActive) {
+    return {
+      command: command(parts),
+      blockedCommand: null,
+    }
+  }
+  return {
+    command: null,
+    blockedCommand: `${publicCorpusStopMarkerOverrideEnvVar}=1 ${command([...parts, publicCorpusStopMarkerOverrideFlag])}`,
+  }
 }
 
 function commandPath(path: string, displayRootDir: string | undefined): string {
@@ -545,12 +600,16 @@ function verificationBatchSize(
   return args.stopMarkerActive ? 1 : normalizedBatchSize(args.verifyBatchSize)
 }
 
-function phaseCheckSummary(phase: ResumePlanPhase): Pick<ResumePlanPhase, 'status' | 'totalWorkItems' | 'batchSize' | 'batchCount'> {
+function phaseCheckSummary(
+  phase: ResumePlanPhase,
+): Pick<ResumePlanPhase, 'status' | 'totalWorkItems' | 'batchSize' | 'batchCount' | 'commands' | 'blockedCommands'> {
   return {
     status: phase.status,
     totalWorkItems: phase.totalWorkItems,
     batchSize: phase.batchSize,
     batchCount: phase.batchCount,
+    commands: phase.commands,
+    blockedCommands: phase.blockedCommands,
   }
 }
 
@@ -569,7 +628,7 @@ function validatePhase(name: string, phase: ResumePlanPhase, stopMarkerActive: b
     if (phase.status !== 'not-needed') {
       findings.push(`${name} has no work but is not marked not-needed`)
     }
-    if (phase.batchSize !== 0 || phase.batchCount !== 0 || phase.commands.length !== 0) {
+    if (phase.batchSize !== 0 || phase.batchCount !== 0 || phase.commands.length !== 0 || phase.blockedCommands.length !== 0) {
       findings.push(`${name} has no work but still has batch data or commands`)
     }
     return
@@ -590,18 +649,23 @@ function validatePhase(name: string, phase: ResumePlanPhase, stopMarkerActive: b
   } else if (phase.batchCount !== batchCount(phase.totalWorkItems, phase.batchSize)) {
     findings.push(`${name} batch count does not match total work items and batch size`)
   }
-  if (phase.commands.length === 0) {
+  if (phase.commands.length === 0 && phase.blockedCommands.length === 0) {
     findings.push(`${name} has work items but no commands`)
   }
   if (stopMarkerActive) {
-    for (const mutatingCommand of phase.commands.filter(isCorpusMutatingCommand)) {
+    for (const runnableMutatingCommand of phase.commands.filter(isCorpusMutatingCommand)) {
+      findings.push(`${name} mutating command is runnable while stop marker is active: ${runnableMutatingCommand}`)
+    }
+    for (const blockedMutatingCommand of phase.blockedCommands.filter(isCorpusMutatingCommand)) {
       if (
-        !mutatingCommand.includes(`${publicCorpusStopMarkerOverrideEnvVar}=1`) ||
-        !mutatingCommand.includes(publicCorpusStopMarkerOverrideFlag)
+        !blockedMutatingCommand.includes(`${publicCorpusStopMarkerOverrideEnvVar}=1`) ||
+        !blockedMutatingCommand.includes(publicCorpusStopMarkerOverrideFlag)
       ) {
-        findings.push(`${name} mutating command is missing the explicit stop-marker override: ${mutatingCommand}`)
+        findings.push(`${name} blocked mutating command is missing the explicit stop-marker override: ${blockedMutatingCommand}`)
       }
     }
+  } else if (phase.blockedCommands.length !== 0) {
+    findings.push(`${name} has blocked commands while stop marker is inactive`)
   }
 }
 
@@ -611,7 +675,9 @@ function validateFetchPhaseTrancheLimit(plan: PublicWorkbookCorpusResumePlan, fi
     return
   }
   const maximumNextFetchLimit = plan.currentState.cachedArtifactCount + phase.batchSize
-  for (const mutatingCommand of phase.commands.filter((commandText) => commandText.includes('public-workbook-corpus:fetch --'))) {
+  for (const mutatingCommand of [...phase.commands, ...phase.blockedCommands].filter((commandText) =>
+    commandText.includes('public-workbook-corpus:fetch --'),
+  )) {
     const limit = commandLimit(mutatingCommand)
     if (limit !== null && limit > maximumNextFetchLimit) {
       findings.push(
