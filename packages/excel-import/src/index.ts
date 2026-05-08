@@ -13,6 +13,7 @@ import type {
   CellStyleProtectionSnapshot,
   CellStyleRecord,
   CellVerticalAlignment,
+  LiteralInput,
   WorkbookAxisEntrySnapshot,
   WorkbookMetadataSnapshot,
   WorkbookSnapshot,
@@ -72,6 +73,16 @@ export function normalizeWorkbookImportContentType(contentType: string): Workboo
 
 const largeWorkbookStyleCandidateThreshold = 100_000
 const xlsxWorksheetXmlPathPattern = /^xl\/worksheets\/[^/]+\.xml$/u
+const legacyExcelErrorTextByCode = new Map<number, string>([
+  [0, '#NULL!'],
+  [7, '#DIV/0!'],
+  [15, '#VALUE!'],
+  [23, '#REF!'],
+  [29, '#NAME?'],
+  [36, '#NUM!'],
+  [42, '#N/A'],
+  [43, '#GETTING_DATA'],
+])
 
 export interface ImportedWorkbook {
   snapshot: WorkbookSnapshot
@@ -543,6 +554,32 @@ function readNonEmptyString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined
 }
 
+function readImportedLiteralCellValue(cell: Record<string, unknown>): LiteralInput | undefined {
+  if (cell['t'] === 'e') {
+    if (Object.hasOwn(cell, 'w')) {
+      const displayText = toLiteralInput(cell['w'])
+      if (typeof displayText === 'string' && displayText.startsWith('#')) {
+        return displayText
+      }
+    }
+    if (!Object.hasOwn(cell, 'v')) {
+      return undefined
+    }
+    const errorCode = cell['v']
+    if (errorCode === undefined || errorCode === null) {
+      return undefined
+    }
+    if (typeof errorCode === 'number') {
+      return legacyExcelErrorTextByCode.get(errorCode) ?? '#ERROR!'
+    }
+    if (typeof errorCode === 'string' && errorCode.startsWith('#')) {
+      return errorCode
+    }
+    return '#ERROR!'
+  }
+  return toLiteralInput(cell['v'])
+}
+
 function readImportedMacroCodeNames(workbook: XLSX.WorkBook): PreservedVbaProjectCodeNames {
   const workbookMetadata = isRecord(workbook.Workbook) ? workbook.Workbook : undefined
   const workbookProperties = isRecord(workbookMetadata?.['WBProps']) ? workbookMetadata['WBProps'] : undefined
@@ -724,12 +761,12 @@ function importSheetJsWorkbook(
           ownerAddress: address,
           tables: importedTables,
         })
-        const cachedLiteral = toLiteralInput(cell['v'])
+        const cachedLiteral = readImportedLiteralCellValue(cell)
         if (cachedLiteral !== undefined) {
           nextCell.value = cachedLiteral
         }
       } else {
-        const literal = toLiteralInput(cell['v'])
+        const literal = readImportedLiteralCellValue(cell)
         if (literal !== undefined) {
           nextCell.value = literal
         }
@@ -766,7 +803,7 @@ function importSheetJsWorkbook(
           if (typeof formula === 'string' && formula.trim().length > 0) {
             return `=${formula}`
           }
-          return toDisplayText(toLiteralInput(cell['v']))
+          return toDisplayText(readImportedLiteralCellValue(cell))
         },
       }),
     )

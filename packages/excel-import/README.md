@@ -37,6 +37,9 @@ workbook metadata that Excel formulas need, including defined names, table
 metadata, and structured-reference translations. `WorkPaper.buildFromSheets()`
 is intentionally metadata-free.
 
+Literal Excel error cells such as `#N/A`, `#DIV/0!`, `#REF!`, and `#VALUE!`
+are imported as their display text instead of SheetJS numeric error codes.
+
 ## CSV Import
 
 ```ts
