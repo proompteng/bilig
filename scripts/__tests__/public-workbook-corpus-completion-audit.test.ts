@@ -502,9 +502,17 @@ describe('public workbook corpus completion audit', () => {
       recordedUnsupportedCaseCount: 2,
       staleRecordedUnsupportedCaseCount: 1,
       currentRecordedUnsupportedCaseCount: 1,
+      currentUnsupportedClassifications: [{ classification: 'xlsx.publicCorpus.resourceLimit:rss>1536MiB', count: 1 }],
+      staleUnsupportedClassifications: [{ classification: 'xlsx.publicCorpus.resourceLimit:rss>1536MiB', count: 1 }],
     })
     expect(requirement(audit.checklist, 'scorecard-all-10000')).toMatchObject({
-      evidence: expect.arrayContaining(['scorecard unsupported cases: 2', 'stale unsupported cases: 1', 'current unsupported cases: 1']),
+      evidence: expect.arrayContaining([
+        'scorecard unsupported cases: 2',
+        'stale unsupported cases: 1',
+        'current unsupported cases: 1',
+        'current unsupported classifications: xlsx.publicCorpus.resourceLimit:rss>1536MiB=1',
+        'stale unsupported classifications: xlsx.publicCorpus.resourceLimit:rss>1536MiB=1',
+      ]),
       gaps: expect.arrayContaining(['recorded verification cases need evidence refresh: 1']),
     })
     expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])

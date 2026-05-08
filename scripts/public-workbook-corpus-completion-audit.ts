@@ -10,15 +10,14 @@ import { readPublicWorkbookCorpusStatus, type PublicWorkbookCorpusStatus } from 
 import { readReusablePublicWorkbookCorpusCases } from './public-workbook-corpus-verify-checkpoint.ts'
 import { readFlagArg, readStringArg } from './public-workbook-corpus-cli.ts'
 import { auditPublicWorkbookCorpusCiOfflineCachedMode } from './public-workbook-corpus-ci-offline-audit.ts'
-import {
-  hasPublicWorkbookCorpusUsedRangeEvidence,
-  publicWorkbookCorpusCaseNeedsEvidenceRefresh,
-} from './public-workbook-corpus-evidence.ts'
+import { hasPublicWorkbookCorpusUsedRangeEvidence } from './public-workbook-corpus-evidence.ts'
 import {
   buildFeatureWitnessCoverage,
+  buildUnsupportedCaseSummary,
   countGap,
   duplicateGap,
   financialWorkbookTargetCount,
+  formatUnsupportedClassificationCounts,
   hasCacheIntegrityFailureEvidence,
   hasFeatureValidationEvidence,
   hasFinancialTopicEvidence,
@@ -30,6 +29,7 @@ import {
   isResourceLimitedUnsupportedCase,
   pnpmScriptName,
   readNonNegativeInteger,
+  type PublicWorkbookCorpusUnsupportedClassificationCount,
 } from './public-workbook-corpus-completion-audit-helpers.ts'
 import type { PublicWorkbookCorpusCase, PublicWorkbookManifest } from './public-workbook-corpus-types.ts'
 
@@ -73,6 +73,8 @@ export interface PublicWorkbookCorpusAuditState {
   readonly recordedUnsupportedCaseCount: number
   readonly staleRecordedUnsupportedCaseCount: number
   readonly currentRecordedUnsupportedCaseCount: number
+  readonly currentUnsupportedClassifications: readonly PublicWorkbookCorpusUnsupportedClassificationCount[]
+  readonly staleUnsupportedClassifications: readonly PublicWorkbookCorpusUnsupportedClassificationCount[]
   readonly recordedFailedCaseCount: number
   readonly recordedErrorCaseCount: number
   readonly recordedFormulaOracleComparisonCount: number
@@ -702,6 +704,10 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
         `scorecard unsupported cases: ${String(context.currentState.recordedUnsupportedCaseCount)}`,
         `current unsupported cases: ${String(context.currentState.currentRecordedUnsupportedCaseCount)}`,
         `stale unsupported cases: ${String(context.currentState.staleRecordedUnsupportedCaseCount)}`,
+        `current unsupported classifications: ${formatUnsupportedClassificationCounts(
+          context.currentState.currentUnsupportedClassifications,
+        )}`,
+        `stale unsupported classifications: ${formatUnsupportedClassificationCounts(context.currentState.staleUnsupportedClassifications)}`,
         `stale recorded verification cases: ${String(context.currentState.staleRecordedVerificationCount)}`,
         `scorecard covers manifest: ${String(context.status.scorecardCoversManifest)}`,
         `target complete: ${String(context.status.targetComplete)}`,
@@ -837,9 +843,7 @@ function buildAuditState(
   const missingFeatureWitnesses = buildFeatureWitnessCoverage(recordedCases)
     .filter((entry) => entry.witnessCaseCount === 0)
     .map((entry) => entry.label)
-  const staleRecordedUnsupportedCaseCount = recordedCases.filter(
-    (entry) => entry.status === 'unsupported' && publicWorkbookCorpusCaseNeedsEvidenceRefresh(entry),
-  ).length
+  const unsupportedCaseSummary = buildUnsupportedCaseSummary(recordedCases)
   const recordedFinancialCases = financialArtifacts.flatMap((artifact) => {
     const candidate = recordedCasesById.get(artifact.id)
     return candidate && publicWorkbookCorpusCaseMatchesArtifact(candidate, artifact) ? [candidate] : []
@@ -863,8 +867,7 @@ function buildAuditState(
     missingFeatureWitnesses,
     recordedPassedCaseCount: status.recordedPassedCaseCount,
     recordedUnsupportedCaseCount: status.recordedUnsupportedCaseCount,
-    staleRecordedUnsupportedCaseCount,
-    currentRecordedUnsupportedCaseCount: Math.max(0, status.recordedUnsupportedCaseCount - staleRecordedUnsupportedCaseCount),
+    ...unsupportedCaseSummary,
     recordedFailedCaseCount: status.recordedFailedCaseCount,
     recordedErrorCaseCount: status.recordedErrorCaseCount,
     recordedFormulaOracleComparisonCount: recordedCases.reduce((sum, entry) => sum + entry.validation.formulaOracleComparisons, 0),
@@ -874,7 +877,6 @@ function buildAuditState(
       .length,
   }
 }
-
 function readRecordedCases(args: {
   readonly manifest: PublicWorkbookManifest | null
   readonly scorecardPath: string
@@ -890,7 +892,6 @@ function readRecordedCases(args: {
     return candidate && publicWorkbookCorpusCaseMatchesArtifact(candidate, artifact) ? [candidate] : []
   })
 }
-
 function readHyperFormulaSecondaryCorpus(path: string): PublicWorkbookCorpusSecondaryFormulaCorpusStatus {
   if (!existsSync(path)) {
     return missingHyperFormulaSecondaryCorpus()

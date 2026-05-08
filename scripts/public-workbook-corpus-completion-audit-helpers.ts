@@ -1,4 +1,5 @@
 import type { PublicWorkbookCorpusCase } from './public-workbook-corpus-types.ts'
+import { publicWorkbookCorpusCaseNeedsEvidenceRefresh } from './public-workbook-corpus-evidence.ts'
 
 const requiredFeatureWitnesses = [
   { id: 'formulas', label: 'formulas', count: (entry: PublicWorkbookCorpusCase) => entry.featureCounts.formulaCellCount },
@@ -22,6 +23,47 @@ export function financialWorkbookTargetCount(targetWorkbookCount: number): numbe
 
 export function hasFinancialTopicEvidence(entry: { readonly topicEvidence?: readonly string[] }): boolean {
   return (entry.topicEvidence?.length ?? 0) > 0
+}
+
+export interface PublicWorkbookCorpusUnsupportedClassificationCount {
+  readonly classification: string
+  readonly count: number
+}
+
+export function buildUnsupportedClassificationCounts(
+  cases: readonly PublicWorkbookCorpusCase[],
+): PublicWorkbookCorpusUnsupportedClassificationCount[] {
+  const counts = new Map<string, number>()
+  for (const entry of cases) {
+    for (const classification of entry.unsupportedFeatureClassifications) {
+      counts.set(classification, (counts.get(classification) ?? 0) + 1)
+    }
+  }
+  return [...counts.entries()]
+    .map(([classification, count]) => ({ classification, count }))
+    .toSorted((left, right) => right.count - left.count || left.classification.localeCompare(right.classification))
+}
+
+export function formatUnsupportedClassificationCounts(counts: readonly PublicWorkbookCorpusUnsupportedClassificationCount[]): string {
+  return counts.length === 0 ? 'none' : counts.map((entry) => `${entry.classification}=${String(entry.count)}`).join('; ')
+}
+
+export interface PublicWorkbookCorpusUnsupportedCaseSummary {
+  readonly currentRecordedUnsupportedCaseCount: number
+  readonly staleRecordedUnsupportedCaseCount: number
+  readonly currentUnsupportedClassifications: readonly PublicWorkbookCorpusUnsupportedClassificationCount[]
+  readonly staleUnsupportedClassifications: readonly PublicWorkbookCorpusUnsupportedClassificationCount[]
+}
+
+export function buildUnsupportedCaseSummary(cases: readonly PublicWorkbookCorpusCase[]): PublicWorkbookCorpusUnsupportedCaseSummary {
+  const staleCases = cases.filter((entry) => entry.status === 'unsupported' && publicWorkbookCorpusCaseNeedsEvidenceRefresh(entry))
+  const currentCases = cases.filter((entry) => entry.status === 'unsupported' && !publicWorkbookCorpusCaseNeedsEvidenceRefresh(entry))
+  return {
+    currentRecordedUnsupportedCaseCount: currentCases.length,
+    staleRecordedUnsupportedCaseCount: staleCases.length,
+    currentUnsupportedClassifications: buildUnsupportedClassificationCounts(currentCases),
+    staleUnsupportedClassifications: buildUnsupportedClassificationCounts(staleCases),
+  }
 }
 
 export function countGap(actual: number, required: number, label: string): string[] {
