@@ -170,6 +170,28 @@ describe('public workbook corpus completion audit', () => {
     )
   })
 
+  it('accepts safe direct CI gates for offline cached corpus checks', () => {
+    const result = auditPublicWorkbookCorpusCiOfflineCachedMode({
+      scripts: offlineCiPackageScripts(),
+      ciSource: [
+        "bunScript('public workbook corpus offline scorecard check', 'scripts/public-workbook-corpus.ts', 'check', '--skip-manifest-check')",
+        "bunScript('public workbook corpus resume plan check', 'scripts/public-workbook-corpus-resume-plan.ts', '--check')",
+        "bunScript('public workbook corpus completion audit check', 'scripts/public-workbook-corpus-completion-audit.ts', '--check')",
+        "pnpm('correctness public workbook corpus', 'test:correctness:corpus')",
+      ].join('\n'),
+    })
+
+    expect(result).toMatchObject({ passed: true, gaps: [] })
+    expect(result.evidence).toEqual(
+      expect.arrayContaining([
+        'CI invokes equivalent direct gate: public-workbook-corpus:check:offline',
+        'CI invokes equivalent direct gate: public-workbook-corpus:resume-plan:check',
+        'CI invokes equivalent direct gate: public-workbook-corpus:completion-audit:check',
+        'CI invokes package script: test:correctness:corpus',
+      ]),
+    )
+  })
+
   it('rejects named offline corpus gates when they mutate the corpus or are not wired into CI', () => {
     const result = auditPublicWorkbookCorpusCiOfflineCachedMode({
       scripts: offlineCiPackageScripts([
@@ -185,8 +207,8 @@ describe('public workbook corpus completion audit', () => {
         'package script public-workbook-corpus:check:offline missing required tokens: check, --skip-manifest-check',
         'package script public-workbook-corpus:check:offline uses CI-unsafe corpus tokens: fetch',
         expect.stringContaining('package script test:correctness:corpus missing required coverage files:'),
-        'CI does not invoke package script: public-workbook-corpus:check:offline',
-        'CI does not invoke package script: public-workbook-corpus:completion-audit:check',
+        'CI does not invoke package script or equivalent direct gate: public-workbook-corpus:check:offline',
+        'CI does not invoke package script or equivalent direct gate: public-workbook-corpus:completion-audit:check',
       ]),
     )
   })

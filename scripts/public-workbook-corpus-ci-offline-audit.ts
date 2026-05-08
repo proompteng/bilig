@@ -95,10 +95,13 @@ export function auditPublicWorkbookCorpusCiOfflineCachedMode(args: {
     evidence.push(`package script ${policy.name}: ${command}`)
   }
   for (const scriptName of ciOfflineCachedCorpusScriptNames) {
+    const policy = ciOfflineCachedCorpusScriptPolicies.find((entry) => entry.name === scriptName)
     if (ciSourceInvokesPackageScript(args.ciSource, scriptName)) {
       evidence.push(`CI invokes package script: ${scriptName}`)
+    } else if (policy && ciSourceInvokesEquivalentDirectGate(args.ciSource, policy)) {
+      evidence.push(`CI invokes equivalent direct gate: ${scriptName}`)
     } else {
-      gaps.push(`CI does not invoke package script: ${scriptName}`)
+      gaps.push(`CI does not invoke package script or equivalent direct gate: ${scriptName}`)
     }
   }
   return {
@@ -122,6 +125,19 @@ function matchesPackageScriptToken(token: string, forbidden: string): boolean {
 function ciSourceInvokesPackageScript(ciSource: string, scriptName: string): boolean {
   const escapedScriptName = escapeRegExp(scriptName)
   return new RegExp(`['"]${escapedScriptName}['"]`, 'u').test(ciSource)
+}
+
+function ciSourceInvokesEquivalentDirectGate(ciSource: string, policy: PublicWorkbookCorpusCiPackageScriptPolicy): boolean {
+  const requiredSourceLiterals = policy.requiredTokens.filter((token) => token !== 'bun')
+  if (requiredSourceLiterals.length === 0) {
+    return false
+  }
+  return sourceContainsOrderedStringLiterals(ciSource, requiredSourceLiterals)
+}
+
+function sourceContainsOrderedStringLiterals(source: string, literals: readonly string[]): boolean {
+  const orderedLiteralPattern = literals.map((literal) => `['"]${escapeRegExp(literal)}['"]`).join('[\\s\\S]{0,240}')
+  return new RegExp(orderedLiteralPattern, 'u').test(source)
 }
 
 function escapeRegExp(value: string): string {
