@@ -70,6 +70,7 @@
     "public-workbook-corpus:refresh-scorecard-from-checkpoint:check": "bun scripts/public-workbook-corpus.ts refresh-scorecard-from-checkpoint --check",
     "public-workbook-corpus:verify-financial": "bun scripts/public-workbook-corpus.ts verify --manifest .cache/public-workbook-corpus-financial/manifest.json --cache-dir .cache/public-workbook-corpus-financial --scorecard .cache/public-workbook-corpus-financial/scorecard.json",
     "public-workbook-corpus:check": "bun scripts/public-workbook-corpus.ts check",
+    "public-workbook-corpus:check:offline": "bun scripts/public-workbook-corpus.ts check --skip-manifest-check",
     "public-workbook-corpus:status": "bun scripts/public-workbook-corpus.ts status",
     "public-workbook-corpus:resume-plan": "bun scripts/public-workbook-corpus-resume-plan.ts",
     "public-workbook-corpus:resume-plan:check": "bun scripts/public-workbook-corpus-resume-plan.ts --check",

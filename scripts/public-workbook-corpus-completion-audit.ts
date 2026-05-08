@@ -9,6 +9,7 @@ import { publicWorkbookCorpusCaseMatchesArtifact } from './public-workbook-corpu
 import { readPublicWorkbookCorpusStatus, type PublicWorkbookCorpusStatus } from './public-workbook-corpus-status.ts'
 import { readReusablePublicWorkbookCorpusCases } from './public-workbook-corpus-verify-checkpoint.ts'
 import { readFlagArg, readStringArg } from './public-workbook-corpus-cli.ts'
+import { auditPublicWorkbookCorpusCiOfflineCachedMode } from './public-workbook-corpus-ci-offline-audit.ts'
 import type { PublicWorkbookCorpusCase, PublicWorkbookManifest } from './public-workbook-corpus-types.ts'
 
 export type PublicWorkbookCorpusCompletionStatus = 'achieved' | 'active-not-achieved'
@@ -610,30 +611,27 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
         ...(context.status.targetComplete ? [] : context.status.gaps),
       ],
     }),
-  (_context) =>
-    checklistItem({
+  (_context) => {
+    const ciOfflineCachedMode = auditPublicWorkbookCorpusCiOfflineCachedMode({
+      scripts: packageScripts(),
+      ciSource: readFileSync(resolve(rootDir, 'scripts', 'run-ci.ts'), 'utf8'),
+    })
+    return checklistItem({
       id: 'ci-offline-cached-mode',
       priority: 6,
       promptRequirement: 'Add CI-friendly focused gates plus an offline cached corpus mode.',
-      passed: hasPackageScripts([
-        'public-workbook-corpus:check',
-        'public-workbook-corpus:resume-plan:check',
-        'public-workbook-corpus:completion-audit:check',
-        'test:correctness:corpus',
-      ]),
-      evidence: [
-        'public-workbook-corpus:check validates cached scorecard/manifest evidence',
-        'public-workbook-corpus:resume-plan:check validates bounded resume commands without running workers',
-        'public-workbook-corpus:completion-audit:check maps the objective to current artifacts',
-        'test:correctness:corpus covers the offline corpus harness and XLSX import/export regressions',
+      passed: ciOfflineCachedMode.passed,
+      evidence: ciOfflineCachedMode.evidence,
+      evidenceArtifacts: [manifestArtifact, baselineScorecardArtifact, checkpointArtifact, 'package.json', 'scripts/run-ci.ts'],
+      checkCommands: [
+        'pnpm public-workbook-corpus:check:offline',
+        'pnpm public-workbook-corpus:resume-plan:check',
+        'pnpm public-workbook-corpus:completion-audit:check',
+        'pnpm test:correctness:corpus',
       ],
-      gaps: missingPackageScripts([
-        'public-workbook-corpus:check',
-        'public-workbook-corpus:resume-plan:check',
-        'public-workbook-corpus:completion-audit:check',
-        'test:correctness:corpus',
-      ]).map((script) => `missing package script: ${script}`),
-    }),
+      gaps: ciOfflineCachedMode.gaps,
+    })
+  },
   (context) => {
     const unsupportedCases = context.recordedCases.filter((entry) => entry.status === 'unsupported')
     const unsupportedWithoutEvidenceCount = unsupportedCases.filter(
@@ -928,12 +926,19 @@ function readNonNegativeInteger(record: Record<string, unknown>, key: string, fa
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : fallback
 }
 
-function packageScripts(): ReadonlySet<string> {
+function packageScripts(): ReadonlyMap<string, string> {
   const parsed = JSON.parse(readFileSync(resolve(rootDir, 'package.json'), 'utf8')) as unknown
   if (!isRecord(parsed) || !isRecord(parsed['scripts'])) {
     throw new Error('package.json is missing scripts')
   }
-  return new Set(Object.keys(parsed['scripts']))
+  const scripts = new Map<string, string>()
+  for (const [name, command] of Object.entries(parsed['scripts'])) {
+    if (typeof command !== 'string') {
+      throw new Error(`package.json script is not a string: ${name}`)
+    }
+    scripts.set(name, command)
+  }
+  return scripts
 }
 
 function hasPackageScripts(names: readonly string[]): boolean {

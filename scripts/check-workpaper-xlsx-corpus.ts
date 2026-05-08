@@ -114,6 +114,7 @@ const defaultMismatchSampleLimit = 25
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const defaultCorpusRunStopMarkerPath = join(rootDir, '.agent-coordination', '20260507T074946Z-codex-stop-interactive-corpus-runs.md')
 const ignoredDirectoryNames = new Set(['.git', 'build', 'dist', 'node_modules'])
+const checkedInFixtureCorpusDirectories = new Set([resolve(rootDir, 'packages/headless/fixtures/xlsx-corpus')])
 const skipReasons: readonly WorkPaperXlsxFormulaSkipReason[] = [
   'missing-cached-result',
   'unsupported-cached-result-type',
@@ -971,7 +972,7 @@ function isBroadCorpusSweep(paths: readonly string[]): boolean {
     paths.length > 1 ||
     paths.some((entry) => {
       const path = resolve(entry)
-      return existsSync(path) && statSync(path).isDirectory()
+      return existsSync(path) && statSync(path).isDirectory() && !checkedInFixtureCorpusDirectories.has(path)
     })
   )
 }

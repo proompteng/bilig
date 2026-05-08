@@ -212,6 +212,7 @@ const generatedSourceChecks: readonly CiTask[] = [
   pnpm('import/export fidelity scorecard check', 'import-export:fidelity:check'),
   pnpm('public workbook corpus shared-link lifecycle plan check', 'public-workbook-corpus:link-plan:check'),
   pnpm('public workbook corpus shared-link intake check', 'public-workbook-corpus:add-link:check'),
+  pnpm('public workbook corpus offline scorecard check', 'public-workbook-corpus:check:offline'),
   pnpm('public workbook corpus resume plan check', 'public-workbook-corpus:resume-plan:check'),
   pnpm('public workbook corpus completion audit check', 'public-workbook-corpus:completion-audit:check'),
   pnpm('large workbook SLO scorecard check', 'large-workbook:slo:check'),

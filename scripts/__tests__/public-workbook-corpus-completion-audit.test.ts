@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { auditPublicWorkbookCorpusCiOfflineCachedMode } from '../public-workbook-corpus-ci-offline-audit.ts'
 import {
   buildPublicWorkbookCorpusCompletionAudit,
   validatePublicWorkbookCorpusCompletionAudit,
@@ -130,6 +131,48 @@ describe('public workbook corpus completion audit', () => {
       passed: true,
     })
     expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
+  })
+
+  it('accepts offline cached corpus gates only when the scripts are safe and wired into CI', () => {
+    const result = auditPublicWorkbookCorpusCiOfflineCachedMode({
+      scripts: offlineCiPackageScripts(),
+      ciSource: ciSourceFor([
+        'public-workbook-corpus:check:offline',
+        'public-workbook-corpus:resume-plan:check',
+        'public-workbook-corpus:completion-audit:check',
+        'test:correctness:corpus',
+      ]),
+    })
+
+    expect(result).toMatchObject({ passed: true, gaps: [] })
+    expect(result.evidence).toEqual(
+      expect.arrayContaining([
+        'package script public-workbook-corpus:check:offline: bun scripts/public-workbook-corpus.ts check --skip-manifest-check',
+        'CI invokes package script: public-workbook-corpus:check:offline',
+        'CI invokes package script: test:correctness:corpus',
+      ]),
+    )
+  })
+
+  it('rejects named offline corpus gates when they mutate the corpus or are not wired into CI', () => {
+    const result = auditPublicWorkbookCorpusCiOfflineCachedMode({
+      scripts: offlineCiPackageScripts([
+        ['public-workbook-corpus:check:offline', 'bun scripts/public-workbook-corpus.ts fetch'],
+        ['test:correctness:corpus', 'bun scripts/run-vitest.ts --run scripts/__tests__/public-workbook-corpus.test.ts'],
+      ]),
+      ciSource: ciSourceFor(['public-workbook-corpus:resume-plan:check', 'test:correctness:corpus']),
+    })
+
+    expect(result.passed).toBe(false)
+    expect(result.gaps).toEqual(
+      expect.arrayContaining([
+        'package script public-workbook-corpus:check:offline missing required tokens: check, --skip-manifest-check',
+        'package script public-workbook-corpus:check:offline uses CI-unsafe corpus tokens: fetch',
+        expect.stringContaining('package script test:correctness:corpus missing required coverage files:'),
+        'CI does not invoke package script: public-workbook-corpus:check:offline',
+        'CI does not invoke package script: public-workbook-corpus:completion-audit:check',
+      ]),
+    )
   })
 
   it('fails completion when manifest cache paths are not hash-addressed', () => {
@@ -388,6 +431,36 @@ function requirement(
     throw new Error(`Missing checklist item: ${id}`)
   }
   return item
+}
+
+function offlineCiPackageScripts(overrides: readonly (readonly [string, string])[] = []): ReadonlyMap<string, string> {
+  const scripts = new Map<string, string>([
+    ['public-workbook-corpus:check:offline', 'bun scripts/public-workbook-corpus.ts check --skip-manifest-check'],
+    ['public-workbook-corpus:resume-plan:check', 'bun scripts/public-workbook-corpus-resume-plan.ts --check'],
+    ['public-workbook-corpus:completion-audit:check', 'bun scripts/public-workbook-corpus-completion-audit.ts --check'],
+    [
+      'test:correctness:corpus',
+      [
+        'bun scripts/run-vitest.ts --run',
+        'scripts/__tests__/public-workbook-corpus.test.ts',
+        'scripts/__tests__/public-workbook-corpus-cli.test.ts',
+        'scripts/__tests__/public-workbook-corpus-completion-audit.test.ts',
+        'scripts/__tests__/public-workbook-corpus-links.test.ts',
+        'scripts/__tests__/public-workbook-corpus-verify-checkpoint.test.ts',
+        'scripts/__tests__/public-workbook-corpus-workbook.test.ts',
+        'packages/excel-import/src/__tests__/excel-import.test.ts',
+        'packages/excel-import/src/__tests__/xlsx-export-large-simple.test.ts',
+      ].join(' '),
+    ],
+  ])
+  for (const [name, command] of overrides) {
+    scripts.set(name, command)
+  }
+  return scripts
+}
+
+function ciSourceFor(scriptNames: readonly string[]): string {
+  return scriptNames.map((scriptName) => `pnpm('fixture ${scriptName}', '${scriptName}')`).join('\n')
 }
 
 function manifestWithArtifacts(artifacts: readonly PublicWorkbookArtifact[], targetWorkbookCount: number): PublicWorkbookManifest {

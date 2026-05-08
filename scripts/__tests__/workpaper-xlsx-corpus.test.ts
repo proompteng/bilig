@@ -128,14 +128,35 @@ describe('WorkPaper XLSX corpus verifier', () => {
     withTempCorpus((tempDir) => {
       const stopMarkerPath = join(tempDir, 'stop.md')
       writeFileSync(stopMarkerPath, 'stop')
+      writeWorkbook(join(tempDir, 'issue-regressions.xlsx'), buildIssueRegressionWorkbook())
 
-      const result = spawnSync('bun', [checkerScriptPath(), '--corpus-run-stop-marker', stopMarkerPath, checkedInCorpusDir()], {
+      const result = spawnSync('bun', [checkerScriptPath(), '--corpus-run-stop-marker', stopMarkerPath, tempDir], {
         encoding: 'utf8',
       })
 
       expect(result.status).toBe(2)
       expect(result.stderr).toContain('workpaper:xlsx-corpus directory sweep is disabled while the public corpus stop marker is active')
       expect(result.stderr).toContain('--allow-active-stop-marker')
+    })
+  })
+
+  it('allows the checked-in fixture corpus directory while the corpus stop marker is active', () => {
+    withTempCorpus((tempDir) => {
+      const stopMarkerPath = join(tempDir, 'stop.md')
+      writeFileSync(stopMarkerPath, 'stop')
+
+      const result = spawnSync('bun', [checkerScriptPath(), '--corpus-run-stop-marker', stopMarkerPath, checkedInCorpusDir()], {
+        encoding: 'utf8',
+      })
+
+      expect(result.status).toBe(0)
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        summary: {
+          totalFiles: 1,
+          filesProcessed: 1,
+          ok: 1,
+        },
+      })
     })
   })
 
