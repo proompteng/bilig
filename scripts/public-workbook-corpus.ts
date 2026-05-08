@@ -133,6 +133,11 @@ async function main(): Promise<void> {
   const corpusRunStopMarkerPath = resolve(readStringArg('--corpus-run-stop-marker', defaultCorpusRunStopMarkerPath))
   if (command === 'init') {
     await withPublicWorkbookCorpusCacheLock(cacheDir, 'init', async () => {
+      if (existsSync(manifestPath) && !readFlagArg('--force')) {
+        throw new Error(
+          `Public workbook corpus manifest already exists at ${formatCommandPath(manifestPath)}; pass --force to reinitialize it`,
+        )
+      }
       writeJson(manifestPath, createEmptyPublicWorkbookManifest(undefined, targetWorkbookCount), 'public-workbook-corpus-manifest')
     })
     return

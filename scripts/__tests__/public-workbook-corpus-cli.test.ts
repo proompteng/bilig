@@ -16,6 +16,48 @@ import {
 import type { PublicWorkbookArtifact, PublicWorkbookCorpusCase, PublicWorkbookManifest } from '../public-workbook-corpus-types.ts'
 
 describe('public workbook corpus CLI resource guards', () => {
+  it('refuses to reinitialize an existing manifest unless forced', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-cli-init-existing-'))
+    const manifestPath = join(dir, 'manifest.json')
+    const existingManifest = createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z', 12_345)
+    writeFileSync(manifestPath, `${JSON.stringify(existingManifest, null, 2)}\n`)
+
+    const result = spawnSync('bun', [corpusScriptPath(), 'init', '--manifest', manifestPath, '--cache-dir', dir], {
+      encoding: 'utf8',
+    })
+    const manifestAfterBlockedInit: unknown = JSON.parse(readFileSync(manifestPath, 'utf8'))
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('Public workbook corpus manifest already exists')
+    expect(result.stderr).toContain('pass --force to reinitialize it')
+    expect(manifestAfterBlockedInit).toMatchObject({
+      generatedAt: '2026-05-07T00:00:00.000Z',
+      targetWorkbookCount: 12_345,
+    })
+  })
+
+  it('allows explicit forced manifest reinitialization', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-cli-init-force-'))
+    const manifestPath = join(dir, 'manifest.json')
+    writeFileSync(manifestPath, `${JSON.stringify(createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z', 12_345), null, 2)}\n`)
+
+    const result = spawnSync(
+      'bun',
+      [corpusScriptPath(), 'init', '--manifest', manifestPath, '--cache-dir', dir, '--target-workbook-count', '9', '--force'],
+      {
+        encoding: 'utf8',
+      },
+    )
+    const manifestAfterForcedInit: unknown = JSON.parse(readFileSync(manifestPath, 'utf8'))
+
+    expect(result.status).toBe(0)
+    expect(manifestAfterForcedInit).toMatchObject({
+      targetWorkbookCount: 9,
+      sources: [],
+      artifacts: [],
+    })
+  })
+
   it('refuses in-process verification unless explicitly enabled for debugging', () => {
     const env = { ...process.env }
     delete env.BILIG_ALLOW_IN_PROCESS_PUBLIC_CORPUS_VERIFY
