@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
+import { summarizeNumbers } from '../../packages/benchmarks/src/stats.js'
 import { buildBiligDominancePromptArtifactAudit, validateBiligDominancePromptArtifactAudit } from '../bilig-dominance-audit.ts'
 import { buildBiligDominanceStatus } from '../bilig-dominance-status.ts'
-import {
-  buildSameCorpusProof,
-  type SameCorpusCapture,
-  type SameCorpusCaptureMeasurement,
-  type UiResponsivenessSameCorpusProduct,
+import type {
+  UiResponsivenessSameCorpusMeasurement,
+  UiResponsivenessSameCorpusProduct,
+  UiResponsivenessSameCorpusProof,
 } from '../gen-ui-responsiveness-live-browser-scorecard.ts'
 import { buildBiligDominanceScorecard } from '../gen-bilig-dominance-scorecard.ts'
 import type { PublicWorkbookCorpusStatus } from '../public-workbook-corpus-status.ts'
@@ -159,7 +159,7 @@ describe('bilig dominance prompt-to-artifact audit', () => {
         ...input,
         uiResponsivenessLiveBrowserScorecard: {
           ...input.uiResponsivenessLiveBrowserScorecard,
-          sameCorpusProof: buildSameCorpusProof(legacyOperationOnlySameCorpusCapture()),
+          sameCorpusProof: legacyOperationOnlySameCorpusProof(),
         },
       },
       publicWorkbookCorpusStatus: publicWorkbookCorpusStatusFixture(),
@@ -379,11 +379,18 @@ function publicWorkbookCorpusStatusFixture(overrides: Partial<PublicWorkbookCorp
   }
 }
 
-function legacyOperationOnlySameCorpusCapture(): SameCorpusCapture {
+function legacyOperationOnlySameCorpusProof(): UiResponsivenessSameCorpusProof {
+  const bilig = sameCorpusProofMeasurement('bilig', 'bilig-benchmark-state', [200, 200, 200])
+  const googleSheets = sameCorpusProofMeasurement('google-sheets', 'google-sheets-xlsx-export', [100, 100, 100])
+  const microsoftExcelWeb = sameCorpusProofMeasurement('microsoft-excel-web', 'microsoft-excel-web-source-xlsx', [100, 100, 100])
+
   return {
-    schemaVersion: 1,
-    suite: 'ui-responsiveness-same-corpus-capture',
-    sampleCount: 3,
+    captured: true,
+    evidenceKind: 'same-corpus-browser-capture',
+    requiredProductCount: 3,
+    requiredCaseCount: 1,
+    tenXMeanAndP95CaseCount: 0,
+    coveredCorpusCaseIds: ['wide-mixed-250k'],
     limitations: [],
     cases: [
       {
@@ -391,24 +398,33 @@ function legacyOperationOnlySameCorpusCapture(): SameCorpusCapture {
         corpusCaseId: 'wide-mixed-250k',
         materializedCells: 250_000,
         workload: 'visible-scroll-response',
-        bilig: sameCorpusCaptureMeasurement('bilig', 'bilig-benchmark-state', [200, 200, 200]),
-        googleSheets: sameCorpusCaptureMeasurement('google-sheets', 'google-sheets-xlsx-export', [100, 100, 100]),
-        microsoftExcelWeb: sameCorpusCaptureMeasurement('microsoft-excel-web', 'microsoft-excel-web-source-xlsx', [100, 100, 100]),
+        sampleCount: 3,
+        bilig,
+        googleSheets,
+        microsoftExcelWeb,
+        biligToGoogleSheetsMeanRatio: 2,
+        biligToGoogleSheetsP95Ratio: 2,
+        biligToMicrosoftExcelWebMeanRatio: 2,
+        biligToMicrosoftExcelWebP95Ratio: 2,
+        tenXMeanAndP95Metric: 'operationResponseMs',
+        tenXMeanAndP95AgainstGoogleSheets: false,
+        tenXMeanAndP95AgainstMicrosoftExcelWeb: false,
+        passed: false,
       },
     ],
   }
 }
 
-function sameCorpusCaptureMeasurement(
+function sameCorpusProofMeasurement(
   product: UiResponsivenessSameCorpusProduct,
-  method: SameCorpusCapture['cases'][number]['bilig']['corpusVerification']['method'],
+  method: UiResponsivenessSameCorpusMeasurement['corpusVerification']['method'],
   operationResponseMsSamples: number[],
-): SameCorpusCaptureMeasurement {
+): UiResponsivenessSameCorpusMeasurement {
   return {
     product,
     source: product === 'bilig' ? 'http://127.0.0.1:5173/?benchmarkCorpus=wide-mixed-250k' : 'https://example.com/same-corpus',
-    operationResponseMsSamples,
-    postOperationFrameMsSamples: [12, 12, 12],
+    operationResponseMs: summarizeNumbers(operationResponseMsSamples),
+    postOperationFrameMs: summarizeNumbers([12, 12, 12]),
     corpusVerification: {
       verified: true,
       method,

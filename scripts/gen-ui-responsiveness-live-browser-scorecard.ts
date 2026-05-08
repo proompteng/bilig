@@ -389,6 +389,7 @@ function validateSameCorpusCapture(capture: SameCorpusCapture): void {
     const hasAnyScrollEventSamples = [entry.bilig, entry.googleSheets, entry.microsoftExcelWeb].some(
       (measurement) => measurement.scrollEventResponseMsSamples !== undefined || measurement.scrollMovementPxSamples !== undefined,
     )
+    const requiresScrollEventSamples = entry.workload === 'visible-scroll-response' || hasAnyScrollEventSamples
     for (const measurement of [entry.bilig, entry.googleSheets, entry.microsoftExcelWeb]) {
       if (
         measurement.operationResponseMsSamples.length < capture.sampleCount ||
@@ -397,7 +398,7 @@ function validateSameCorpusCapture(capture: SameCorpusCapture): void {
         throw new Error(`UI responsiveness same-corpus capture has too few samples for ${entry.id}`)
       }
       if (
-        hasAnyScrollEventSamples &&
+        requiresScrollEventSamples &&
         ((measurement.scrollEventResponseMsSamples?.length ?? 0) < capture.sampleCount ||
           (measurement.scrollMovementPxSamples?.length ?? 0) < capture.sampleCount)
       ) {

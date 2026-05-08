@@ -109,18 +109,12 @@ describe('UI responsiveness live browser scorecard', () => {
     })
   })
 
-  it('does not clear the 10x proof from legacy operation-only captures', () => {
-    const proof = buildSameCorpusProof(buildSameCorpusCapture({ includeScrollEventSamples: false, workload: 'visible-scroll-response' }))
-
-    expect(proof).toMatchObject({
-      tenXMeanAndP95CaseCount: 0,
-    })
-    expect(proof.cases[0]).toMatchObject({
-      tenXMeanAndP95Metric: 'operationResponseMs',
-      tenXMeanAndP95AgainstGoogleSheets: false,
-      tenXMeanAndP95AgainstMicrosoftExcelWeb: false,
-      passed: false,
-    })
+  it('rejects legacy operation-only same-corpus captures before generating proof', () => {
+    expect(() =>
+      buildSameCorpusProof(buildSameCorpusCapture({ includeScrollEventSamples: false, workload: 'visible-scroll-response' })),
+    ).toThrow(
+      'UI responsiveness same-corpus capture has too few scroll-event samples for same-corpus-wide-mixed-250k-visible-scroll-response',
+    )
   })
 
   it('allows same-corpus proof to clear the public-browser limitation blocker', () => {
