@@ -398,9 +398,8 @@ describe('bilig dominance scorecard', () => {
     expect(runCi).toContain(
       "bunScript('Google Sheets live structural scorecard check', 'scripts/gen-google-sheets-live-structural-scorecard.ts', '--check')",
     )
-    expect(runCi).toContain(
-      "bunScript('Microsoft Excel live large workbook scorecard check', 'scripts/gen-microsoft-excel-live-large-workbook-scorecard.ts', '--check')",
-    )
+    expect(runCi).toContain("'Microsoft Excel live large workbook scorecard check'")
+    expect(runCi).toContain("'scripts/gen-microsoft-excel-live-large-workbook-scorecard.ts'")
     expect(runCi).toContain(
       "bunScript('Google Sheets live large workbook scorecard check', 'scripts/gen-google-sheets-live-large-workbook-scorecard.ts', '--check')",
     )

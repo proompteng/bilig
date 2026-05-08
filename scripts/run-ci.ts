@@ -308,6 +308,13 @@ try {
     log('browser gates disabled by BILIG_CI_SKIP_BROWSER=1')
   }
 
+  allCompleted.push(
+    ...(await runSequential('static package build prerequisites', [
+      skipBrowserGates ? wasmBuildTask : appRuntimeDependencyBuild,
+      ...(skipBrowserGates ? [] : [pnpm('playwright chromium install', 'exec', 'playwright', 'install', 'chromium')]),
+    ])),
+  )
+
   // Keep generated-source checks serialized; later checks read artifacts validated by earlier ones.
   allCompleted.push(...(await runSequential('generated-source checks', generatedSourceChecks)))
 
@@ -327,13 +334,6 @@ try {
       ),
       direct('source size check', 'bun', 'scripts/check-source-file-size.ts'),
       direct('typecheck', workspaceBin('tsc'), '-b', '--pretty', 'false'),
-    ])),
-  )
-
-  allCompleted.push(
-    ...(await runSequential('static package build prerequisites', [
-      skipBrowserGates ? wasmBuildTask : appRuntimeDependencyBuild,
-      ...(skipBrowserGates ? [] : [pnpm('playwright chromium install', 'exec', 'playwright', 'install', 'chromium')]),
     ])),
   )
 
