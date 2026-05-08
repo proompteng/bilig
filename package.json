@@ -93,6 +93,7 @@
     "ui:same-corpus:capture": "bun scripts/capture-ui-responsiveness-same-corpus.ts",
     "ui:same-corpus:fixture:generate": "bun scripts/capture-ui-responsiveness-same-corpus.ts --emit-xlsx packages/benchmarks/baselines/ui-same-corpus",
     "ui:same-corpus:fixture:check": "bun scripts/capture-ui-responsiveness-same-corpus.ts --emit-xlsx packages/benchmarks/baselines/ui-same-corpus --check",
+    "ui:same-corpus:public-check": "bun scripts/ui-responsiveness-same-corpus-public-access-check.ts",
     "ui:browser-live:generate": "bun scripts/gen-ui-responsiveness-live-browser-scorecard.ts",
     "ui:browser-live:check": "bun scripts/gen-ui-responsiveness-live-browser-scorecard.ts --check",
     "security:posture:generate": "bun scripts/gen-security-posture-scorecard.ts",

@@ -31,6 +31,7 @@ describe('bilig dominance status', () => {
         localXlsxPath: 'packages/benchmarks/baselines/ui-same-corpus/wide-mixed-250k.xlsx',
       },
       nextFixtureCheckCommand: 'pnpm ui:same-corpus:fixture:check',
+      nextPublicAccessCheckCommand: expect.stringContaining('pnpm ui:same-corpus:public-check'),
       nextScorecardGenerateCommand: 'pnpm ui:browser-live:generate -- --capture .cache/ui-responsiveness/same-corpus-capture.json',
       nextDominanceCheckCommand: 'pnpm dominance:generate && pnpm dominance:check && pnpm dominance:audit:check',
     })
@@ -56,6 +57,8 @@ describe('bilig dominance status', () => {
     expect(status.uiSameCorpus.missingInputs).toEqual([])
     expect(status.uiSameCorpus.nextPreflightCommand).toContain(googleSheetsUrl)
     expect(status.uiSameCorpus.nextPreflightCommand).not.toContain('<google-sheets-url>')
+    expect(status.uiSameCorpus.nextPublicAccessCheckCommand).toContain(googleSheetsUrl)
+    expect(status.uiSameCorpus.nextPublicAccessCheckCommand).not.toContain('<google-sheets-url>')
     expect(status.uiSameCorpus.nextCaptureCommand).toContain(googleSheetsUrl)
     expect(status.uiSameCorpus.nextCaptureCommand).not.toContain('<google-sheets-url>')
   })

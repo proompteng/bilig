@@ -117,6 +117,7 @@ export interface BiligDominanceStatus {
     readonly googleSheetsUrlEnvVar: string
     readonly missingInputs: readonly string[]
     readonly nextFixtureCheckCommand: string
+    readonly nextPublicAccessCheckCommand: string
     readonly nextGoogleSheetsUploadInstruction: string
     readonly nextPreflightCommand: string
     readonly nextCaptureCommand: string
@@ -464,6 +465,17 @@ function buildUiSameCorpusStatus(input: BuildScorecardInput, googleSheetsUrl: st
     googleSheetsUrlEnvVar: uiSameCorpusGoogleSheetsUrlEnvVar,
     missingInputs: googleSheetsUrl || tenXRequirementSatisfied ? [] : ['googleSheetsUrlForUploadedSameCorpusWorkbook'],
     nextFixtureCheckCommand: 'pnpm ui:same-corpus:fixture:check',
+    nextPublicAccessCheckCommand: [
+      'pnpm',
+      'ui:same-corpus:public-check',
+      '--',
+      '--google-sheets-url',
+      googleSheetsUrlArgument,
+      '--microsoft-excel-web-url',
+      fixture.microsoftExcelWebUrl,
+    ]
+      .map(shellQuote)
+      .join(' '),
     nextGoogleSheetsUploadInstruction: `Upload ${fixture.localXlsxPath} to Google Sheets as a native Google Sheet, share it to anyone with the link, then pass its edit URL as --google-sheets-url.`,
     nextPreflightCommand: [
       'pnpm',
