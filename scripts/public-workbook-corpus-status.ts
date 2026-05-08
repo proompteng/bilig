@@ -36,8 +36,10 @@ export interface PublicWorkbookCorpusStatus {
   readonly staleRecordedVerificationSample: readonly StaleRecordedVerificationSummary[]
   readonly nextMissingVerificationCommand: string | null
   readonly nextMissingVerificationPlanCommand: string | null
+  readonly blockedMissingVerificationCommand: string | null
   readonly nextStaleVerificationCommand: string | null
   readonly nextStaleVerificationPlanCommand: string | null
+  readonly blockedStaleVerificationCommand: string | null
   readonly scorecardCoversManifest: boolean
   readonly targetComplete: boolean
   readonly gaps: readonly string[]
@@ -71,7 +73,11 @@ export function writePublicWorkbookCorpusCheck(args: {
     const status = readPublicWorkbookCorpusStatus(args)
     const blockingGaps = publicWorkbookCorpusVerificationBlockingGaps(status)
     if (blockingGaps.length > 0) {
-      const nextCommand = status.nextMissingVerificationCommand ?? status.nextStaleVerificationCommand
+      const nextCommand =
+        status.nextMissingVerificationPlanCommand ??
+        status.nextStaleVerificationPlanCommand ??
+        status.nextMissingVerificationCommand ??
+        status.nextStaleVerificationCommand
       const nextCommandMessage = nextCommand ? `; next command: ${nextCommand}` : ''
       throw new Error(`Public workbook corpus verification incomplete: ${blockingGaps.join('; ')}${nextCommandMessage}`)
     }
@@ -189,18 +195,18 @@ export function buildPublicWorkbookCorpusStatus(args: {
         reasons,
       }
     })
-  const nextMissingVerificationCommand =
+  const nextMissingVerificationRun =
     missingManifestArtifactCount > 0 && args.commandPaths
-      ? formatPublicWorkbookCorpusVerifySliceCommand(args.commandPaths, 'verify-missing', 'verify')
-      : null
+      ? splitPublicWorkbookCorpusVerifySliceCommand(args.commandPaths, 'verify-missing')
+      : { command: null, blockedCommand: null }
   const nextMissingVerificationPlanCommand =
     missingManifestArtifactCount > 0 && args.commandPaths
       ? formatPublicWorkbookCorpusVerifySliceCommand(args.commandPaths, 'verify-missing', 'plan')
       : null
-  const nextStaleVerificationCommand =
+  const nextStaleVerificationRun =
     staleRecordedVerificationCount > 0 && args.commandPaths
-      ? formatPublicWorkbookCorpusVerifySliceCommand(args.commandPaths, 'verify-stale', 'verify')
-      : null
+      ? splitPublicWorkbookCorpusVerifySliceCommand(args.commandPaths, 'verify-stale')
+      : { command: null, blockedCommand: null }
   const nextStaleVerificationPlanCommand =
     staleRecordedVerificationCount > 0 && args.commandPaths
       ? formatPublicWorkbookCorpusVerifySliceCommand(args.commandPaths, 'verify-stale', 'plan')
@@ -253,10 +259,12 @@ export function buildPublicWorkbookCorpusStatus(args: {
     recordedAllCasesPassed,
     missingManifestArtifactSample,
     staleRecordedVerificationSample,
-    nextMissingVerificationCommand,
+    nextMissingVerificationCommand: nextMissingVerificationRun.command,
     nextMissingVerificationPlanCommand,
-    nextStaleVerificationCommand,
+    blockedMissingVerificationCommand: nextMissingVerificationRun.blockedCommand,
+    nextStaleVerificationCommand: nextStaleVerificationRun.command,
     nextStaleVerificationPlanCommand,
+    blockedStaleVerificationCommand: nextStaleVerificationRun.blockedCommand,
     scorecardCoversManifest,
     targetComplete,
     gaps,
@@ -320,11 +328,24 @@ function formatPublicWorkbookCorpusVerifySliceCommand(
           '--limit',
           '1',
         ]
-  const command = ['pnpm', script, '--', ...args]
-  if (mode === 'verify' && paths.stopMarkerActive === true) {
-    return `${publicCorpusStopMarkerOverrideEnvVar}=1 ${[...command, publicCorpusStopMarkerOverrideFlag].map(shellQuote).join(' ')}`
+  return ['pnpm', script, '--', ...args].map(shellQuote).join(' ')
+}
+
+function splitPublicWorkbookCorpusVerifySliceCommand(
+  paths: PublicWorkbookCorpusCommandPaths,
+  slice: 'verify-missing' | 'verify-stale',
+): { readonly command: string | null; readonly blockedCommand: string | null } {
+  const command = formatPublicWorkbookCorpusVerifySliceCommand(paths, slice, 'verify')
+  if (paths.stopMarkerActive === true) {
+    return {
+      command: null,
+      blockedCommand: `${publicCorpusStopMarkerOverrideEnvVar}=1 ${command} ${publicCorpusStopMarkerOverrideFlag}`,
+    }
   }
-  return command.map(shellQuote).join(' ')
+  return {
+    command,
+    blockedCommand: null,
+  }
 }
 
 function formatPublicWorkbookCorpusResumePlanCheckCommand(paths: PublicWorkbookCorpusCommandPaths): string {

@@ -508,11 +508,12 @@ describe('public workbook corpus CLI resource guards', () => {
       },
     })
 
-    expect(status.nextMissingVerificationCommand).toContain('--manifest .cache/public-workbook-corpus/manifest.json')
-    expect(status.nextMissingVerificationCommand).toContain(
+    expect(status.nextMissingVerificationCommand).toBeNull()
+    expect(status.blockedMissingVerificationCommand).toContain('--manifest .cache/public-workbook-corpus/manifest.json')
+    expect(status.blockedMissingVerificationCommand).toContain(
       '--scorecard packages/benchmarks/baselines/public-workbook-corpus-scorecard.json',
     )
-    expect(status.nextMissingVerificationCommand).not.toContain('/repo/')
+    expect(status.blockedMissingVerificationCommand).not.toContain('/repo/')
     expect(status.nextMissingVerificationPlanCommand).not.toContain('/repo/')
   })
 
@@ -856,8 +857,10 @@ describe('public workbook corpus CLI resource guards', () => {
       staleRecordedVerificationSample: [],
       nextMissingVerificationCommand: null,
       nextMissingVerificationPlanCommand: null,
+      blockedMissingVerificationCommand: null,
       nextStaleVerificationCommand: null,
       nextStaleVerificationPlanCommand: null,
+      blockedStaleVerificationCommand: null,
       scorecardCoversManifest: false,
       targetComplete: false,
       gaps: expect.arrayContaining(['cached artifacts below target: 2/10000', 'scorecard cases do not cover manifest artifacts: 1/2']),
@@ -1032,16 +1035,18 @@ describe('public workbook corpus CLI resource guards', () => {
 
     expect(result.status).toBe(0)
     expect(status).toMatchObject({
-      nextMissingVerificationCommand: expect.stringContaining('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1'),
+      nextMissingVerificationCommand: null,
       nextMissingVerificationPlanCommand: expect.not.stringContaining('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1'),
-      nextStaleVerificationCommand: expect.stringContaining('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1'),
+      blockedMissingVerificationCommand: expect.stringContaining('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1'),
+      nextStaleVerificationCommand: null,
       nextStaleVerificationPlanCommand: expect.not.stringContaining('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1'),
+      blockedStaleVerificationCommand: expect.stringContaining('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1'),
     })
     expect(status).toMatchObject({
-      nextMissingVerificationCommand: expect.stringContaining('--allow-active-stop-marker'),
       nextMissingVerificationPlanCommand: expect.stringContaining('public-workbook-corpus:verify-missing:plan'),
-      nextStaleVerificationCommand: expect.stringContaining('--allow-active-stop-marker'),
+      blockedMissingVerificationCommand: expect.stringContaining('--allow-active-stop-marker'),
       nextStaleVerificationPlanCommand: expect.stringContaining('public-workbook-corpus:verify-stale:plan'),
+      blockedStaleVerificationCommand: expect.stringContaining('--allow-active-stop-marker'),
     })
   })
 

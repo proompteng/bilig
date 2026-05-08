@@ -334,8 +334,10 @@ function completePublicWorkbookCorpusStatus(): PublicWorkbookCorpusStatus {
     staleRecordedVerificationSample: [],
     nextMissingVerificationCommand: null,
     nextMissingVerificationPlanCommand: null,
+    blockedMissingVerificationCommand: null,
     nextStaleVerificationCommand: null,
     nextStaleVerificationPlanCommand: null,
+    blockedStaleVerificationCommand: null,
     scorecardCoversManifest: true,
     targetComplete: true,
     gaps: [],
@@ -363,10 +365,14 @@ function incompletePublicWorkbookCorpusStatus(): PublicWorkbookCorpusStatus {
     staleRecordedVerificationCount: 25,
     recordedPassedCaseCount: 9_750,
     recordedCoversManifest: false,
-    nextMissingVerificationCommand: 'pnpm public-workbook-corpus:verify-missing -- --limit 1',
+    nextMissingVerificationCommand: null,
     nextMissingVerificationPlanCommand: 'pnpm public-workbook-corpus:verify-missing:plan',
-    nextStaleVerificationCommand: 'pnpm public-workbook-corpus:verify-stale -- --limit 1',
+    blockedMissingVerificationCommand:
+      'BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1 pnpm public-workbook-corpus:verify-missing -- --limit 1 --allow-active-stop-marker',
+    nextStaleVerificationCommand: null,
     nextStaleVerificationPlanCommand: 'pnpm public-workbook-corpus:verify-stale:plan',
+    blockedStaleVerificationCommand:
+      'BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1 pnpm public-workbook-corpus:verify-stale -- --limit 1 --allow-active-stop-marker',
     scorecardCoversManifest: false,
     targetComplete: false,
     gaps: [

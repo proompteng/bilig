@@ -32,7 +32,7 @@ export function buildPublicWorkbookCorpusAuditNextActions(args: {
           ...(args.stopMarkerActive ? [] : [args.status.nextMissingVerificationCommand]),
           'pnpm public-workbook-corpus:completion-audit:check',
         ],
-        blockedCommands: args.stopMarkerActive ? [args.status.nextMissingVerificationCommand] : [],
+        blockedCommands: args.stopMarkerActive ? [args.status.blockedMissingVerificationCommand] : [],
       }),
     )
   }
@@ -47,7 +47,7 @@ export function buildPublicWorkbookCorpusAuditNextActions(args: {
           ...(args.stopMarkerActive ? [] : [args.status.nextStaleVerificationCommand]),
           'pnpm public-workbook-corpus:completion-audit:check',
         ],
-        blockedCommands: args.stopMarkerActive ? [args.status.nextStaleVerificationCommand] : [],
+        blockedCommands: args.stopMarkerActive ? [args.status.blockedStaleVerificationCommand] : [],
       }),
     )
   }

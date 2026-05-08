@@ -67,7 +67,9 @@ describe('public workbook corpus completion audit', () => {
             'pnpm public-workbook-corpus:verify-missing:plan',
             'pnpm public-workbook-corpus:completion-audit:check',
           ]),
-          blockedCommands: ['pnpm public-workbook-corpus:verify-missing -- --limit 1'],
+          blockedCommands: [
+            'BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1 pnpm public-workbook-corpus:verify-missing -- --limit 1 --allow-active-stop-marker',
+          ],
         }),
         expect.objectContaining({
           id: 'refresh-stale-verification-evidence',
@@ -76,7 +78,9 @@ describe('public workbook corpus completion audit', () => {
             'pnpm public-workbook-corpus:verify-stale:plan',
             'pnpm public-workbook-corpus:completion-audit:check',
           ]),
-          blockedCommands: ['pnpm public-workbook-corpus:verify-stale -- --limit 1'],
+          blockedCommands: [
+            'BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1 pnpm public-workbook-corpus:verify-stale -- --limit 1 --allow-active-stop-marker',
+          ],
         }),
         expect.objectContaining({
           id: 'resume-financial-workpapers',
@@ -1009,10 +1013,18 @@ function statusFixture(input: {
     nextMissingVerificationCommand:
       input.missingManifestArtifactCount > 0 ? 'pnpm public-workbook-corpus:verify-missing -- --limit 1' : null,
     nextMissingVerificationPlanCommand: input.missingManifestArtifactCount > 0 ? 'pnpm public-workbook-corpus:verify-missing:plan' : null,
+    blockedMissingVerificationCommand:
+      input.missingManifestArtifactCount > 0
+        ? 'BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1 pnpm public-workbook-corpus:verify-missing -- --limit 1 --allow-active-stop-marker'
+        : null,
     nextStaleVerificationCommand:
       (input.staleRecordedVerificationCount ?? 0) > 0 ? 'pnpm public-workbook-corpus:verify-stale -- --limit 1' : null,
     nextStaleVerificationPlanCommand:
       (input.staleRecordedVerificationCount ?? 0) > 0 ? 'pnpm public-workbook-corpus:verify-stale:plan' : null,
+    blockedStaleVerificationCommand:
+      (input.staleRecordedVerificationCount ?? 0) > 0
+        ? 'BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1 pnpm public-workbook-corpus:verify-stale -- --limit 1 --allow-active-stop-marker'
+        : null,
     scorecardCoversManifest: input.scorecardCoversManifest,
     targetComplete: input.targetComplete,
     gaps: input.gaps,

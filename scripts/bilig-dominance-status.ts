@@ -309,9 +309,13 @@ export function buildBiligDominanceStatus(args: {
   const nextMissingVerificationCommand = args.publicWorkbookCorpusStatus.nextMissingVerificationCommand
   const nextStaleVerificationCommand = args.publicWorkbookCorpusStatus.nextStaleVerificationCommand
   const blockedCorpusCommands = args.stopMarkerActive
-    ? nonEmptyCommands([nextDiscoveryCommand, nextMissingVerificationCommand, nextStaleVerificationCommand]).map(
-        corpusStopMarkerOverrideCommand,
-      )
+    ? [
+        ...nonEmptyCommands([nextDiscoveryCommand]).map(corpusStopMarkerOverrideCommand),
+        ...nonEmptyCommands([
+          args.publicWorkbookCorpusStatus.blockedMissingVerificationCommand,
+          args.publicWorkbookCorpusStatus.blockedStaleVerificationCommand,
+        ]),
+      ]
     : []
   return {
     goalStatus: scorecard.goalStatus === 'achieved' && liveStatusBlockers.length === 0 ? 'achieved' : 'active-not-achieved',
