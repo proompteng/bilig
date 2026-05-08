@@ -118,6 +118,43 @@ describe('public workbook corpus completion audit', () => {
     expect(validatePublicWorkbookCorpusCompletionAudit(audit, { requireComplete: true })).toEqual([])
   })
 
+  it('fails the financial workbook lane when a recorded financial case is non-passing', () => {
+    const artifactA = financialWorkbookArtifact('workbook-a')
+    const artifactB = financialWorkbookArtifact('workbook-b')
+    const audit = buildPublicWorkbookCorpusCompletionAudit({
+      generatedAt: '2026-05-08T00:00:00.000Z',
+      hyperformulaSecondaryCorpus: hyperFormulaSecondaryCorpusFixture(),
+      manifest: manifestWithArtifacts([artifactA, artifactB], 2),
+      recordedCases: [passedCase(artifactA, 1), caseWithCacheIntegrityFailure(artifactB)],
+      status: statusFixture({
+        targetWorkbookCount: 2,
+        sourceCount: 2,
+        cachedArtifactCount: 2,
+        scorecardCaseCount: 2,
+        checkpointCaseCount: 0,
+        recordedManifestArtifactCount: 2,
+        missingManifestArtifactCount: 0,
+        recordedPassedCaseCount: 1,
+        recordedFailedCaseCount: 1,
+        scorecardCoversManifest: true,
+        targetComplete: true,
+        gaps: [],
+      }),
+      stopMarkerActive: false,
+    })
+
+    expect(requirement(audit.checklist, 'financial-accounting-workpapers-5000')).toMatchObject({
+      passed: false,
+      gaps: expect.arrayContaining(['financial/accounting non-passing recorded cases: 1']),
+      evidence: expect.arrayContaining([
+        'financial/accounting cached artifacts: 2/2',
+        'financial/accounting recorded verification cases: 2/2',
+        'financial/accounting non-passing recorded cases: 1',
+      ]),
+    })
+    expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
+  })
+
   it('treats resource-limited unsupported cases as evidenced metadata exceptions', () => {
     const artifactA = workbookArtifact('workbook-a')
     const artifactB = workbookArtifact('workbook-b')
