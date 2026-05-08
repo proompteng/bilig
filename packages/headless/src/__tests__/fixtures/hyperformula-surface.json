@@ -177,6 +177,7 @@
     "dateFormats",
     "decimalSeparator",
     "evaluateNullToZero",
+    "evaluationTimeoutMs",
     "functionArgSeparator",
     "functionPlugins",
     "ignorePunctuation",
