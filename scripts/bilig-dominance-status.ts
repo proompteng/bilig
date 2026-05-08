@@ -12,8 +12,12 @@ import { buildWorkbookBenchmarkCorpus, type WorkbookBenchmarkCorpusId } from '..
 import { publicCorpusStopMarkerOverrideEnvVar, publicCorpusStopMarkerOverrideFlag, readStringArg } from './public-workbook-corpus-cli.ts'
 import { planPublicWorkbookCorpusFetch, type PublicWorkbookCorpusFetchPlan } from './public-workbook-corpus-fetch.ts'
 import { parsePublicWorkbookManifestJson } from './public-workbook-corpus-json.ts'
+import { publicWorkbookCorpusCaseMatchesArtifact } from './public-workbook-corpus-missing.ts'
 import type { PublicWorkbookCorpusStatus } from './public-workbook-corpus-status.ts'
 import { readPublicWorkbookCorpusStatus } from './public-workbook-corpus-status.ts'
+import { readReusablePublicWorkbookCorpusCases } from './public-workbook-corpus-verify-checkpoint.ts'
+import { financialWorkbookTargetCount } from './public-workbook-corpus-completion-audit-helpers.ts'
+import type { PublicWorkbookManifest } from './public-workbook-corpus-types.ts'
 
 export interface BiligDominanceStatus {
   readonly goalStatus: 'achieved' | 'active-not-achieved'
@@ -26,6 +30,11 @@ export interface BiligDominanceStatus {
     readonly missingCachedArtifactCount: number
     readonly recordedManifestArtifactCount: number
     readonly missingManifestArtifactCount: number
+    readonly financialWorkbookTargetCount: number | null
+    readonly financialSourceCount: number | null
+    readonly financialCachedArtifactCount: number | null
+    readonly recordedFinancialManifestArtifactCount: number | null
+    readonly recordedFinancialNonPassingCaseCount: number | null
     readonly fetchCandidateSourceCount: number | null
     readonly fetchCandidateSourceDeficitCount: number | null
     readonly minimumAdditionalSourceCount: number | null
@@ -80,6 +89,10 @@ const defaultCacheDir = join(rootDir, '.cache', 'public-workbook-corpus')
 const defaultManifestPath = join(defaultCacheDir, 'manifest.json')
 const defaultScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'public-workbook-corpus-scorecard.json')
 const defaultVerifyCheckpointPath = join(defaultCacheDir, 'verification-checkpoint.json')
+const defaultFinancialCacheDir = join(rootDir, '.cache', 'public-workbook-corpus-financial')
+const defaultFinancialManifestPath = join(defaultFinancialCacheDir, 'manifest.json')
+const defaultFinancialScorecardPath = join(defaultFinancialCacheDir, 'scorecard.json')
+const defaultFinancialVerifyCheckpointPath = join(defaultFinancialCacheDir, 'verification-checkpoint.json')
 const defaultCorpusRunStopMarkerPath = join(rootDir, '.agent-coordination', '20260507T074946Z-codex-stop-interactive-corpus-runs.md')
 const defaultUiSameCorpusId: WorkbookBenchmarkCorpusId = 'wide-mixed-250k'
 const requiredUiSameCorpusWorkloads = ['visible-scroll-response'] as const satisfies readonly UiResponsivenessSameCorpusWorkload[]
@@ -93,6 +106,9 @@ export function buildBiligDominanceStatusFromArgs(): BiligDominanceStatus {
   const scorecardPath = resolve(readStringArg('--scorecard', defaultScorecardPath))
   const manifestPath = resolve(readStringArg('--manifest', defaultManifestPath))
   const verifyCheckpointPath = resolve(readStringArg('--verify-checkpoint', defaultVerifyCheckpointPath))
+  const financialManifestPath = resolve(readStringArg('--financial-manifest', defaultFinancialManifestPath))
+  const financialScorecardPath = resolve(readStringArg('--financial-scorecard', defaultFinancialScorecardPath))
+  const financialVerifyCheckpointPath = resolve(readStringArg('--financial-verify-checkpoint', defaultFinancialVerifyCheckpointPath))
   const stopMarkerPath = resolve(readStringArg('--corpus-run-stop-marker', defaultCorpusRunStopMarkerPath))
   const input = loadBiligDominanceScorecardInput()
   const publicWorkbookCorpusStatus = readPublicWorkbookCorpusStatus({
@@ -121,6 +137,12 @@ export function buildBiligDominanceStatusFromArgs(): BiligDominanceStatus {
     : null
   return buildBiligDominanceStatus({
     fetchPlan,
+    financialCorpusStatus: readFinancialWorkbookCorpusStatus({
+      manifestPath: financialManifestPath,
+      scorecardPath: financialScorecardPath,
+      targetWorkbookCount: publicWorkbookCorpusStatus.targetWorkbookCount,
+      verifyCheckpointPath: financialVerifyCheckpointPath,
+    }),
     input,
     nextFetchPlanCommand,
     publicWorkbookCorpusStatus,
@@ -131,6 +153,7 @@ export function buildBiligDominanceStatusFromArgs(): BiligDominanceStatus {
 
 export function buildBiligDominanceStatus(args: {
   readonly fetchPlan?: PublicWorkbookCorpusFetchPlan | null
+  readonly financialCorpusStatus?: FinancialWorkbookCorpusStatus | null
   readonly input: BuildScorecardInput
   readonly nextFetchPlanCommand?: string | null
   readonly publicWorkbookCorpusStatus: PublicWorkbookCorpusStatus
@@ -143,13 +166,15 @@ export function buildBiligDominanceStatus(args: {
   })
   const importExportCategory = scorecard.categories.find((category) => category.id === 'import-export-compatibility')
   const publicWorkbookCorpusBlockers = publicWorkbookCorpusDominanceBlockers(args.publicWorkbookCorpusStatus)
-  const unmetRequirements = [...scorecard.claimPolicy.unmetRequirements, ...publicWorkbookCorpusBlockers]
-  const blanketTenXClaimAllowed = scorecard.claimPolicy.blanketTenXClaimAllowed && publicWorkbookCorpusBlockers.length === 0
+  const financialCorpusBlockers = financialWorkbookCorpusDominanceBlockers(args.financialCorpusStatus ?? null)
+  const corpusBlockers = [...publicWorkbookCorpusBlockers, ...financialCorpusBlockers]
+  const unmetRequirements = [...scorecard.claimPolicy.unmetRequirements, ...corpusBlockers]
+  const blanketTenXClaimAllowed = scorecard.claimPolicy.blanketTenXClaimAllowed && corpusBlockers.length === 0
   return {
-    goalStatus: scorecard.goalStatus === 'achieved' && publicWorkbookCorpusBlockers.length === 0 ? 'achieved' : 'active-not-achieved',
+    goalStatus: scorecard.goalStatus === 'achieved' && corpusBlockers.length === 0 ? 'achieved' : 'active-not-achieved',
     blanketTenXClaimAllowed,
     unmetRequirements,
-    importExportBlockers: [...(importExportCategory?.blockers ?? []), ...publicWorkbookCorpusBlockers],
+    importExportBlockers: [...(importExportCategory?.blockers ?? []), ...corpusBlockers],
     publicWorkbookCorpus: {
       targetWorkbookCount: args.publicWorkbookCorpusStatus.targetWorkbookCount,
       cachedArtifactCount: args.publicWorkbookCorpusStatus.cachedArtifactCount,
@@ -159,6 +184,11 @@ export function buildBiligDominanceStatus(args: {
       ),
       recordedManifestArtifactCount: args.publicWorkbookCorpusStatus.recordedManifestArtifactCount,
       missingManifestArtifactCount: args.publicWorkbookCorpusStatus.missingManifestArtifactCount,
+      financialWorkbookTargetCount: args.financialCorpusStatus?.targetWorkbookCount ?? null,
+      financialSourceCount: args.financialCorpusStatus?.sourceCount ?? null,
+      financialCachedArtifactCount: args.financialCorpusStatus?.cachedArtifactCount ?? null,
+      recordedFinancialManifestArtifactCount: args.financialCorpusStatus?.recordedManifestArtifactCount ?? null,
+      recordedFinancialNonPassingCaseCount: args.financialCorpusStatus?.recordedNonPassingCaseCount ?? null,
       fetchCandidateSourceCount: args.fetchPlan?.candidateSourceCount ?? null,
       fetchCandidateSourceDeficitCount: args.fetchPlan?.candidateSourceDeficitCount ?? null,
       targetReachableFromKnownCandidates: args.fetchPlan?.targetReachableFromKnownCandidates ?? null,
@@ -195,6 +225,14 @@ export function buildBiligDominanceStatus(args: {
   }
 }
 
+interface FinancialWorkbookCorpusStatus {
+  readonly targetWorkbookCount: number
+  readonly sourceCount: number
+  readonly cachedArtifactCount: number
+  readonly recordedManifestArtifactCount: number
+  readonly recordedNonPassingCaseCount: number
+}
+
 function publicWorkbookCorpusDominanceBlockers(status: PublicWorkbookCorpusStatus): string[] {
   return status.gaps.map((gap) => {
     const scorecardCoverage = /^scorecard cases do not cover manifest artifacts: (.+)$/u.exec(gap)
@@ -202,6 +240,93 @@ function publicWorkbookCorpusDominanceBlockers(status: PublicWorkbookCorpusStatu
       return `public workbook corpus scorecard cases below cached artifacts: ${scorecardCoverage[1]}`
     }
     return `public workbook corpus ${gap}`
+  })
+}
+
+function financialWorkbookCorpusDominanceBlockers(status: FinancialWorkbookCorpusStatus | null): string[] {
+  if (!status) {
+    return []
+  }
+  return [
+    ...countDominanceGap(
+      status.cachedArtifactCount,
+      status.targetWorkbookCount,
+      'financial/accounting corpus cached artifacts below target',
+    ),
+    ...countDominanceGap(
+      status.recordedManifestArtifactCount,
+      status.targetWorkbookCount,
+      'financial/accounting corpus recorded verification cases below target',
+    ),
+    ...(status.recordedManifestArtifactCount >= status.cachedArtifactCount
+      ? []
+      : [
+          `financial/accounting corpus cached artifacts missing verification evidence: ${String(
+            status.cachedArtifactCount - status.recordedManifestArtifactCount,
+          )}`,
+        ]),
+    ...(status.recordedNonPassingCaseCount === 0
+      ? []
+      : [`financial/accounting corpus non-passing recorded cases: ${String(status.recordedNonPassingCaseCount)}`]),
+  ]
+}
+
+function countDominanceGap(actual: number, required: number, label: string): string[] {
+  return actual >= required ? [] : [`${label}: ${String(actual)}/${String(required)}`]
+}
+
+function readFinancialWorkbookCorpusStatus(args: {
+  readonly manifestPath: string
+  readonly scorecardPath: string
+  readonly targetWorkbookCount: number
+  readonly verifyCheckpointPath: string
+}): FinancialWorkbookCorpusStatus {
+  const manifest = existsSync(args.manifestPath)
+    ? parsePublicWorkbookManifestJson(JSON.parse(readFileSync(args.manifestPath, 'utf8')) as unknown)
+    : null
+  return buildFinancialWorkbookCorpusStatus({
+    manifest,
+    recordedCases: readRecordedFinancialCases({
+      manifest,
+      scorecardPath: args.scorecardPath,
+      verifyCheckpointPath: args.verifyCheckpointPath,
+    }),
+    targetWorkbookCount: financialWorkbookTargetCount(args.targetWorkbookCount),
+  })
+}
+
+function buildFinancialWorkbookCorpusStatus(args: {
+  readonly manifest: PublicWorkbookManifest | null
+  readonly recordedCases: ReturnType<typeof readReusablePublicWorkbookCorpusCases>
+  readonly targetWorkbookCount: number
+}): FinancialWorkbookCorpusStatus {
+  const recordedCasesById = new Map(args.recordedCases.map((entry) => [entry.id, entry]))
+  const recordedManifestCases = (args.manifest?.artifacts ?? []).flatMap((artifact) => {
+    const candidate = recordedCasesById.get(artifact.id)
+    return candidate && publicWorkbookCorpusCaseMatchesArtifact(candidate, artifact) ? [candidate] : []
+  })
+  return {
+    targetWorkbookCount: args.manifest?.targetWorkbookCount ?? args.targetWorkbookCount,
+    sourceCount: args.manifest?.sources.length ?? 0,
+    cachedArtifactCount: args.manifest?.artifacts.length ?? 0,
+    recordedManifestArtifactCount: recordedManifestCases.length,
+    recordedNonPassingCaseCount: recordedManifestCases.filter((entry) => !entry.passed).length,
+  }
+}
+
+function readRecordedFinancialCases(args: {
+  readonly manifest: PublicWorkbookManifest | null
+  readonly scorecardPath: string
+  readonly verifyCheckpointPath: string
+}): ReturnType<typeof readReusablePublicWorkbookCorpusCases> {
+  const reusableCases = readReusablePublicWorkbookCorpusCases([args.scorecardPath, args.verifyCheckpointPath])
+  if (!args.manifest) {
+    return reusableCases
+  }
+  const casesById = new Map(reusableCases.map((entry) => [entry.id, entry]))
+  return args.manifest.artifacts.flatMap((artifact) => {
+    const candidate = casesById.get(artifact.id)
+    return candidate && publicWorkbookCorpusCaseMatchesArtifact(candidate, artifact) ? [candidate] : []
   })
 }
 
