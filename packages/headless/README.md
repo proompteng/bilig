@@ -4,7 +4,7 @@
 [![npm weekly downloads](https://img.shields.io/npm/dw/@bilig/headless?label=npm%20downloads)](https://www.npmjs.com/package/@bilig/headless)
 [![GitHub](https://img.shields.io/badge/GitHub-proompteng%2Fbilig-blue)](https://github.com/proompteng/bilig)
 [![GitHub Repo stars](https://img.shields.io/github/stars/proompteng/bilig?style=social)](https://github.com/proompteng/bilig/stargazers)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](../../LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/proompteng/bilig/blob/main/LICENSE)
 
 `@bilig/headless` lets Node.js programs build workbooks, write formulas, read
 calculated cells, and save or restore the workbook as JSON. It is the `bilig`
@@ -34,17 +34,17 @@ pnpm --filter @bilig/headless build
 - Run the [quickstart](#quickstart) for a one-file formula and persistence
   smoke test.
 - Try the runnable examples:
-  [`examples/headless-workpaper`](../../examples/headless-workpaper) and
-  [`npm run json-records`](../../examples/headless-workpaper#json-records-input).
+  [`examples/headless-workpaper`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper) and
+  [`npm run json-records`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input).
 - Build a small service from the
-  [Node service recipe](../../docs/node-service-workpaper-recipe.md).
+  [Node service recipe](https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md).
 - Check the
-  [compatibility boundaries](../../docs/where-bilig-is-not-excel-compatible-yet.md)
+  [compatibility boundaries](https://github.com/proompteng/bilig/blob/main/docs/where-bilig-is-not-excel-compatible-yet.md)
   before assuming full Excel parity.
 - Compare against other engines with the
-  [SheetJS and ExcelJS comparison](../../docs/sheetjs-exceljs-alternative-formula-workbook-api.md),
-  [HyperFormula comparison](../../docs/hyperformula-alternative-headless-workpaper.md)
-  and [benchmark explainer](../../docs/what-workpaper-benchmark-proves.md).
+  [SheetJS and ExcelJS comparison](https://github.com/proompteng/bilig/blob/main/docs/sheetjs-exceljs-alternative-formula-workbook-api.md),
+  [HyperFormula comparison](https://github.com/proompteng/bilig/blob/main/docs/hyperformula-alternative-headless-workpaper.md)
+  and [benchmark explainer](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md).
 - Star or bookmark the project:
   <https://github.com/proompteng/bilig/stargazers>.
 
@@ -65,10 +65,10 @@ Current release posture:
   workloads: `38/38` public and `8/8` holdout.
 - The public benchmark evidence note explains the measured workload families,
   engine metadata, exclusions, and the current p95 nuance:
-  [`docs/headless-workpaper-benchmark-evidence.md`](../../docs/headless-workpaper-benchmark-evidence.md).
+  [`docs/headless-workpaper-benchmark-evidence.md`](https://github.com/proompteng/bilig/blob/main/docs/headless-workpaper-benchmark-evidence.md).
 - The shareable benchmark explainer states what the scorecard proves and what
   it does not:
-  [`docs/what-workpaper-benchmark-proves.md`](../../docs/what-workpaper-benchmark-proves.md).
+  [`docs/what-workpaper-benchmark-proves.md`](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md).
 - Recently fixed and hardened P1 risks are covered by regression tests:
   - `updateConfig()` now applies `useColumnIndex` correctly when a rebuild-only
     config key changes in the same update.
@@ -127,39 +127,39 @@ Repository links:
   <https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only>
 - npm: <https://www.npmjs.com/package/@bilig/headless>
 - runnable example:
-  [`examples/headless-workpaper`](../../examples/headless-workpaper)
+  [`examples/headless-workpaper`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper)
 - JSON records input example:
-  [`npm run json-records`](../../examples/headless-workpaper#json-records-input)
+  [`npm run json-records`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input)
 - Node service recipe:
-  [`docs/node-service-workpaper-recipe.md`](../../docs/node-service-workpaper-recipe.md)
+  [`docs/node-service-workpaper-recipe.md`](https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md)
 - CSV-shaped input recipe:
-  [`docs/csv-shaped-workpaper-input-recipe.md`](../../docs/csv-shaped-workpaper-input-recipe.md)
+  [`docs/csv-shaped-workpaper-input-recipe.md`](https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md)
 - unsupported formula troubleshooting:
-  [`docs/unsupported-formula-troubleshooting-recipe.md`](../../docs/unsupported-formula-troubleshooting-recipe.md)
+  [`docs/unsupported-formula-troubleshooting-recipe.md`](https://github.com/proompteng/bilig/blob/main/docs/unsupported-formula-troubleshooting-recipe.md)
 - agent tool-calling recipe:
-  [`docs/agent-workpaper-tool-calling-recipe.md`](../../docs/agent-workpaper-tool-calling-recipe.md)
+  [`docs/agent-workpaper-tool-calling-recipe.md`](https://github.com/proompteng/bilig/blob/main/docs/agent-workpaper-tool-calling-recipe.md)
 - revenue-model article:
-  [`docs/building-a-revenue-model-with-headless-workpaper.md`](../../docs/building-a-revenue-model-with-headless-workpaper.md)
+  [`docs/building-a-revenue-model-with-headless-workpaper.md`](https://github.com/proompteng/bilig/blob/main/docs/building-a-revenue-model-with-headless-workpaper.md)
 - compatibility boundaries:
-  [`docs/where-bilig-is-not-excel-compatible-yet.md`](../../docs/where-bilig-is-not-excel-compatible-yet.md)
+  [`docs/where-bilig-is-not-excel-compatible-yet.md`](https://github.com/proompteng/bilig/blob/main/docs/where-bilig-is-not-excel-compatible-yet.md)
 - XLSX corpus verifier walkthrough:
-  [`docs/xlsx-corpus-verifier-walkthrough.md`](../../docs/xlsx-corpus-verifier-walkthrough.md)
+  [`docs/xlsx-corpus-verifier-walkthrough.md`](https://github.com/proompteng/bilig/blob/main/docs/xlsx-corpus-verifier-walkthrough.md)
 - HyperFormula comparison:
-  [`docs/hyperformula-alternative-headless-workpaper.md`](../../docs/hyperformula-alternative-headless-workpaper.md)
+  [`docs/hyperformula-alternative-headless-workpaper.md`](https://github.com/proompteng/bilig/blob/main/docs/hyperformula-alternative-headless-workpaper.md)
 - SheetJS and ExcelJS comparison:
-  [`docs/sheetjs-exceljs-alternative-formula-workbook-api.md`](../../docs/sheetjs-exceljs-alternative-formula-workbook-api.md)
+  [`docs/sheetjs-exceljs-alternative-formula-workbook-api.md`](https://github.com/proompteng/bilig/blob/main/docs/sheetjs-exceljs-alternative-formula-workbook-api.md)
 - local benchmark walkthrough:
-  [`docs/local-workpaper-benchmark-walkthrough.md`](../../docs/local-workpaper-benchmark-walkthrough.md)
+  [`docs/local-workpaper-benchmark-walkthrough.md`](https://github.com/proompteng/bilig/blob/main/docs/local-workpaper-benchmark-walkthrough.md)
 - XLOOKUP exact fixture walkthrough:
-  [`docs/formula-edge-xlookup-exact-fixture.md`](../../docs/formula-edge-xlookup-exact-fixture.md)
+  [`docs/formula-edge-xlookup-exact-fixture.md`](https://github.com/proompteng/bilig/blob/main/docs/formula-edge-xlookup-exact-fixture.md)
 - SUMIFS paired criteria fixture walkthrough:
-  [`docs/formula-edge-sumifs-paired-criteria-fixture.md`](../../docs/formula-edge-sumifs-paired-criteria-fixture.md)
+  [`docs/formula-edge-sumifs-paired-criteria-fixture.md`](https://github.com/proompteng/bilig/blob/main/docs/formula-edge-sumifs-paired-criteria-fixture.md)
 - GROUPBY spill fixture walkthrough:
-  [`docs/formula-edge-groupby-spill-fixture.md`](../../docs/formula-edge-groupby-spill-fixture.md)
+  [`docs/formula-edge-groupby-spill-fixture.md`](https://github.com/proompteng/bilig/blob/main/docs/formula-edge-groupby-spill-fixture.md)
 - published DEV article:
   <https://dev.to/gregkonush/why-agents-need-workbook-apis-instead-of-spreadsheet-screenshots-3d61>
 - DEV article source:
-  [`docs/dev-to-workbook-apis-post.md`](../../docs/dev-to-workbook-apis-post.md)
+  [`docs/dev-to-workbook-apis-post.md`](https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md)
 
 ## Quickstart
 
@@ -242,7 +242,7 @@ console.log({ initial, restoredValue, bytes: json.length, verified })
 ## Runnable Example
 
 The repo includes a small external-consumer project at
-[`examples/headless-workpaper`](../../examples/headless-workpaper). It builds a
+[`examples/headless-workpaper`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper). It builds a
 revenue workbook, evaluates formulas, applies an agent-style edit, persists and
 restores the workbook, and verifies the final result.
 
@@ -269,7 +269,7 @@ persistence bytes, and restored readback equality.
 
 For a framework-neutral recipe that wraps WorkPaper operations as agent-callable
 tools, see
-[`docs/agent-workpaper-tool-calling-recipe.md`](../../docs/agent-workpaper-tool-calling-recipe.md).
+[`docs/agent-workpaper-tool-calling-recipe.md`](https://github.com/proompteng/bilig/blob/main/docs/agent-workpaper-tool-calling-recipe.md).
 It covers validated sheet/address parsing, computed before/after readback, and
 persistence after a successful edit.
 
@@ -277,23 +277,23 @@ Repository CI also runs the same example against packed local runtime packages
 through `pnpm workpaper:smoke:external`.
 
 For a minimal service boundary with no framework dependency, see
-[`docs/node-service-workpaper-recipe.md`](../../docs/node-service-workpaper-recipe.md).
+[`docs/node-service-workpaper-recipe.md`](https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md).
 It shows a built-in Node HTTP route that reads a computed summary, applies one
 controlled input edit, and persists the WorkPaper document.
 
 For simple tabular service payloads, see
-[`docs/csv-shaped-workpaper-input-recipe.md`](../../docs/csv-shaped-workpaper-input-recipe.md).
+[`docs/csv-shaped-workpaper-input-recipe.md`](https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md).
 It normalizes a small CSV-shaped fixture into the `WorkPaper.buildFromSheets()`
 array shape and reads formula-backed summaries.
 
 For formula error handling, see
-[`docs/unsupported-formula-troubleshooting-recipe.md`](../../docs/unsupported-formula-troubleshooting-recipe.md).
+[`docs/unsupported-formula-troubleshooting-recipe.md`](https://github.com/proompteng/bilig/blob/main/docs/unsupported-formula-troubleshooting-recipe.md).
 It shows how to pair `getCellDisplayValue()` with
 `getCellFormulaDiagnostics()` so Node services and agent tools can return
 actionable errors instead of silently accepting unsupported formula inputs.
 
 For a focused persistence walkthrough, see
-[`docs/persisting-formula-backed-workpaper-documents-in-node.md`](../../docs/persisting-formula-backed-workpaper-documents-in-node.md)
+[`docs/persisting-formula-backed-workpaper-documents-in-node.md`](https://github.com/proompteng/bilig/blob/main/docs/persisting-formula-backed-workpaper-documents-in-node.md)
 and run the example package:
 
 ```sh
@@ -519,7 +519,7 @@ pnpm run ci
 ```
 
 For a newcomer-friendly benchmark command walkthrough, see
-[`docs/local-workpaper-benchmark-walkthrough.md`](../../docs/local-workpaper-benchmark-walkthrough.md).
+[`docs/local-workpaper-benchmark-walkthrough.md`](https://github.com/proompteng/bilig/blob/main/docs/local-workpaper-benchmark-walkthrough.md).
 It explains the committed artifact check, a reduced local smoke run, and the
 scorecard fields to compare in benchmark diffs.
 
