@@ -28,6 +28,7 @@ import { addExportTablesToXlsxBytes } from './xlsx-tables.js'
 import { addExportDataValidationsToXlsxBytes } from './xlsx-validations.js'
 import { addExportWorkbookProtectionToXlsxBytes } from './xlsx-workbook-protection.js'
 import { addExportWorkbookPropertiesToXlsxBytes } from './xlsx-workbook-properties.js'
+import { addExportIgnoredErrorsToXlsxBytes } from './xlsx-ignored-errors.js'
 import { decodePreservedVbaProjectPayload } from './xlsx-macros.js'
 import { addExportPrinterSettingsToXlsxBytes } from './xlsx-printer-settings.js'
 import { addExportWorksheetPropertiesToXlsxBytes } from './xlsx-sheet-properties.js'
@@ -887,8 +888,9 @@ export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
   const styledBytes = preserveSnapshotStyles(enrichedBytes, snapshot)
   const formattedBytes = preserveSnapshotNumberFormats(styledBytes, exportSheetFormats)
   const dimensionedBytes = addExportWorksheetDimensionsToXlsxBytes(formattedBytes, snapshot)
+  const ignoredErrorsBytes = addExportIgnoredErrorsToXlsxBytes(dimensionedBytes, snapshot)
   return addExportCellMetadataToXlsxBytes(
-    addExportPrinterSettingsToXlsxBytes(addExportLegacyCommentVmlToXlsxBytes(dimensionedBytes, snapshot), snapshot),
+    addExportPrinterSettingsToXlsxBytes(addExportLegacyCommentVmlToXlsxBytes(ignoredErrorsBytes, snapshot), snapshot),
     snapshot,
   )
 }

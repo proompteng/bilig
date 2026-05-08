@@ -22,6 +22,7 @@ interface ImportedSheetMetadataInput {
   readonly legacyCommentVml?: SheetMetadataSnapshot['legacyCommentVml']
   readonly hyperlinks?: SheetMetadataSnapshot['hyperlinks']
   readonly printerSettings?: SheetMetadataSnapshot['printerSettings']
+  readonly ignoredErrors?: SheetMetadataSnapshot['ignoredErrors']
   readonly cellMetadataRefs?: SheetMetadataSnapshot['cellMetadataRefs']
 }
 
@@ -48,6 +49,7 @@ export function buildImportedSheetMetadata(input: ImportedSheetMetadataInput): S
     ...(input.legacyCommentVml ? { legacyCommentVml: input.legacyCommentVml } : {}),
     ...(input.hyperlinks ? { hyperlinks: input.hyperlinks } : {}),
     ...(input.printerSettings ? { printerSettings: input.printerSettings } : {}),
+    ...(input.ignoredErrors ? { ignoredErrors: input.ignoredErrors } : {}),
     ...(input.cellMetadataRefs ? { cellMetadataRefs: input.cellMetadataRefs } : {}),
   }
   return Object.keys(metadata).length > 0 ? metadata : undefined

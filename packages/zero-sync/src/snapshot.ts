@@ -265,6 +265,9 @@ function withSheetMetadataFallback(
   if (fallback?.sorts) {
     next.sorts = fallback.sorts
   }
+  if (fallback?.ignoredErrors) {
+    next.ignoredErrors = fallback.ignoredErrors
+  }
   if (fallback?.merges) {
     next.merges = fallback.merges
   }

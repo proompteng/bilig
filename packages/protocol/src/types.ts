@@ -762,6 +762,10 @@ export interface WorkbookSheetPrSnapshot {
   xml: string
 }
 
+export interface WorkbookIgnoredErrorsSnapshot {
+  xml: string
+}
+
 export type WorkbookSheetVisibilitySnapshot = 'hidden' | 'veryHidden'
 
 export interface WorkbookCellMetadataSnapshot {
@@ -817,6 +821,7 @@ export interface SheetMetadataSnapshot {
   legacyCommentVml?: WorkbookLegacyCommentVmlSnapshot
   printerSettings?: WorkbookPrinterSettingsSnapshot[]
   sheetPr?: WorkbookSheetPrSnapshot
+  ignoredErrors?: WorkbookIgnoredErrorsSnapshot
   visibility?: WorkbookSheetVisibilitySnapshot
   cellMetadataRefs?: WorkbookCellMetadataReferenceSnapshot[]
 }

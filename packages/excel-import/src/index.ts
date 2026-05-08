@@ -30,6 +30,7 @@ import { readImportedWorkbookConditionalFormats } from './xlsx-conditional-forma
 import { readImportedDefinedNames } from './xlsx-defined-names.js'
 import { readImportedWorkbookFilters } from './xlsx-filters.js'
 import { readImportedWorkbookFreezePanes } from './xlsx-freeze-panes.js'
+import { readImportedWorkbookIgnoredErrors } from './xlsx-ignored-errors.js'
 import { buildMergeEntries } from './xlsx-merge-entries.js'
 import { readImportedWorkbookPivots } from './xlsx-pivots.js'
 import { readImportedWorkbookPrinterSettings } from './xlsx-printer-settings.js'
@@ -587,6 +588,7 @@ function importSheetJsWorkbook(
   const importedFreezePanesBySheet = workbookZip ? readImportedWorkbookFreezePanes(workbookZip, workbook.SheetNames) : new Map()
   const importedSheetTabColorsBySheet = workbookZip ? readImportedWorkbookSheetTabColors(workbookZip, workbook.SheetNames) : new Map()
   const importedSheetPropertiesBySheet = workbookZip ? readImportedWorkbookSheetProperties(workbookZip, workbook.SheetNames) : new Map()
+  const importedIgnoredErrorsBySheet = workbookZip ? readImportedWorkbookIgnoredErrors(workbookZip, workbook.SheetNames) : new Map()
   const importedSheetVisibilitiesBySheet = readImportedWorkbookSheetVisibilities(workbook, workbook.SheetNames)
   const importedSheetProtectionsBySheet = workbookZip ? readImportedWorkbookSheetProtections(workbookZip, workbook.SheetNames) : new Map()
   const importedProtectedRangesBySheet = workbookZip ? readImportedWorkbookProtectedRanges(workbookZip, workbook.SheetNames) : new Map()
@@ -766,6 +768,7 @@ function importSheetJsWorkbook(
     const importedFreezePane = importedFreezePanesBySheet.get(sheetName)
     const importedSheetTabColor = importedSheetTabColorsBySheet.get(sheetName)
     const importedSheetPr = importedSheetPropertiesBySheet.get(sheetName)
+    const importedIgnoredErrors = importedIgnoredErrorsBySheet.get(sheetName)
     const importedSheetVisibility = importedSheetVisibilitiesBySheet.get(sheetName)
     const merges = buildMergeEntries(sheetName, sheet['!merges'])
     const importedSheetProtection = importedSheetProtectionsBySheet.get(sheetName)
@@ -786,6 +789,7 @@ function importSheetJsWorkbook(
       freezePane: importedFreezePane,
       tabColor: importedSheetTabColor,
       sheetPr: importedSheetPr,
+      ignoredErrors: importedIgnoredErrors,
       visibility: importedSheetVisibility,
       merges,
       sheetProtection: importedSheetProtection,
