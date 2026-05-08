@@ -1315,6 +1315,12 @@ describe('public workbook corpus CLI resource guards', () => {
     expect(packageJson.scripts?.['public-workbook-corpus:resume-plan:check']).toBe(
       'bun scripts/public-workbook-corpus-resume-plan.ts --check',
     )
+    expect(packageJson.scripts?.['public-workbook-corpus:feature-witness:plan']).toBe(
+      'bun scripts/public-workbook-corpus-feature-witness-plan.ts',
+    )
+    expect(packageJson.scripts?.['public-workbook-corpus:feature-witness:check']).toBe(
+      'bun scripts/public-workbook-corpus-feature-witness-plan.ts --check',
+    )
   })
 })
 

@@ -570,6 +570,12 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
         ),
         `recorded unsupported cases: ${String(context.currentState.recordedUnsupportedCaseCount)}`,
       ],
+      checkCommands: [
+        'pnpm public-workbook-corpus:feature-witness:plan',
+        'pnpm public-workbook-corpus:feature-witness:check',
+        'pnpm public-workbook-corpus:status',
+        'pnpm public-workbook-corpus:completion-audit:check',
+      ],
       gaps: [
         ...(context.status.recordedCoversManifest
           ? []

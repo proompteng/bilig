@@ -80,6 +80,8 @@
     "public-workbook-corpus:status": "bun scripts/public-workbook-corpus.ts status",
     "public-workbook-corpus:resume-plan": "bun scripts/public-workbook-corpus-resume-plan.ts",
     "public-workbook-corpus:resume-plan:check": "bun scripts/public-workbook-corpus-resume-plan.ts --check",
+    "public-workbook-corpus:feature-witness:plan": "bun scripts/public-workbook-corpus-feature-witness-plan.ts",
+    "public-workbook-corpus:feature-witness:check": "bun scripts/public-workbook-corpus-feature-witness-plan.ts --check",
     "public-workbook-corpus:completion-audit": "bun scripts/public-workbook-corpus-completion-audit.ts",
     "public-workbook-corpus:completion-audit:check": "bun scripts/public-workbook-corpus-completion-audit.ts --check",
     "public-workbook-corpus:check-financial": "bun scripts/public-workbook-corpus.ts check --manifest .cache/public-workbook-corpus-financial/manifest.json --cache-dir .cache/public-workbook-corpus-financial --scorecard .cache/public-workbook-corpus-financial/scorecard.json --verify-checkpoint .cache/public-workbook-corpus-financial/verification-checkpoint.json --require-target",
