@@ -8,6 +8,7 @@ export interface EvaluationContext {
   resolveCell: (sheetName: string, address: string) => CellValue
   resolveRange: (sheetName: string, start: string, end: string, refKind: 'cells' | 'rows' | 'cols') => CellValue[]
   resolveName?: (name: string) => CellValue
+  resolveNameReference?: (name: string) => ReferenceOperand | undefined
   resolveFormula?: (sheetName: string, address: string) => string | undefined
   resolvePivotData?: (request: {
     dataField: string

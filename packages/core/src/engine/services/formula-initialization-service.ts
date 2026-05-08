@@ -1,12 +1,9 @@
 import { Effect } from 'effect'
-import type { CompiledFormula } from '@bilig/formula'
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import type { EngineCellMutationRef, EngineFormulaSourceRefs } from '../../cell-mutations-at.js'
 import { CellFlags } from '../../cell-store.js'
-import type { FormulaFamilyFreshUniformRunRegistrationArgs, FormulaFamilyRunUpsertArgs } from '../../formula/formula-family-store.js'
-import type { FormulaTemplateResolution } from '../../formula/template-bank.js'
 import { addEngineCounter } from '../../perf/engine-counters.js'
-import type { EngineRuntimeState, RuntimeFormula, U32 } from '../runtime-state.js'
+import type { RuntimeFormula, U32 } from '../runtime-state.js'
 import { EngineMutationError } from '../errors.js'
 import { evaluateInitialDirectScalar, evaluateInitialDirectScalarNumber } from './formula-initialization-direct-scalar.js'
 import { materializeDeferredFormulaFamilyRunMembers, type DeferredInitialFormulaFamilyRun } from './formula-initialization-family-runs.js'
@@ -19,6 +16,7 @@ import {
   type InitialFormulaEntryRefSource,
   type InitialResolvedFormulaEntry,
 } from './formula-initialization-refs.js'
+import { recalculateFreshVolatileFormulasAfterInitialMaterialization } from './formula-initialization-volatile-pass.js'
 import {
   canEvaluateInitialDirectRuntimeFormula,
   compiledFormulaRequiresWorkbookMetadataBinding,
@@ -28,12 +26,14 @@ import {
 import type { InitialPrefixAggregateGroup } from './formula-initialization-prefix-aggregates.js'
 import type {
   EngineFormulaInitializationService,
+  EngineFormulaInitializationServiceArgs,
   HydratedPreparedFormulaInitializationRef,
   PreparedFormulaInitializationRef,
 } from './formula-initialization-service-types.js'
 
 export type {
   EngineFormulaInitializationService,
+  EngineFormulaInitializationServiceArgs,
   HydratedPreparedFormulaInitializationRef,
   PreparedFormulaInitializationRef,
 } from './formula-initialization-service-types.js'
@@ -41,66 +41,7 @@ export type {
 const INITIAL_DIRECT_FORMULA_EVALUATION_LIMIT = 16_384
 const EMPTY_U32 = new Uint32Array(0)
 
-export function createEngineFormulaInitializationService(args: {
-  readonly state: Pick<
-    EngineRuntimeState,
-    'workbook' | 'strings' | 'formulas' | 'ranges' | 'counters' | 'getLastMetrics' | 'setLastMetrics'
-  >
-  readonly beginMutationCollection: () => void
-  readonly ensureRecalcScratchCapacity: (size: number) => void
-  readonly ensureCellTrackedByCoords: (sheetId: number, row: number, col: number) => number
-  readonly resetMaterializedCellScratch: (expectedSize: number) => void
-  readonly bindFormula: (cellIndex: number, ownerSheetName: string, source: string) => void
-  readonly withInitialFormulaCells: <T>(cellIndices: readonly number[] | U32, callback: () => T) => T
-  readonly bindPreparedFormula: (
-    cellIndex: number,
-    ownerSheetName: string,
-    source: string,
-    compiled: CompiledFormula,
-    templateId?: number,
-    options?: {
-      readonly deferFamilyRegistration?: boolean
-      readonly deferFormulaInstanceRegistration?: boolean
-      readonly assumeFreshFormula?: boolean
-    },
-  ) => boolean
-  readonly upsertFormulaFamilyRun: (args: FormulaFamilyRunUpsertArgs) => void
-  readonly registerFreshFormulaFamilyRun: (args: FormulaFamilyFreshUniformRunRegistrationArgs) => boolean
-  readonly deferFormulaFamilyIndexRebuild?: () => void
-  readonly deferFormulaInstanceTableRebuild?: () => void
-  readonly compileTemplateFormula: (source: string, row: number, col: number) => FormulaTemplateResolution
-  readonly clearTemplateFormulaCache: () => void
-  readonly removeFormula: (cellIndex: number) => boolean
-  readonly setInvalidFormulaValue: (cellIndex: number) => void
-  readonly markInputChanged: (cellIndex: number, count: number) => number
-  readonly markFormulaChanged: (cellIndex: number, count: number) => number
-  readonly markVolatileFormulasChanged: (count: number) => number
-  readonly hasVolatileFormulas?: () => boolean
-  readonly syncDynamicRanges: (formulaChangedCount: number) => number
-  readonly composeMutationRoots: (changedInputCount: number, formulaChangedCount: number) => U32
-  readonly getChangedInputBuffer: () => U32
-  readonly getChangedFormulaBuffer: () => U32
-  readonly rebuildTopoRanks: () => void
-  readonly repairTopoRanks: (changedFormulaCells: readonly number[] | U32) => boolean
-  readonly detectCycles: () => void
-  readonly recalculate: (changedRoots: readonly number[] | U32, kernelSyncRoots?: readonly number[] | U32) => U32
-  readonly deferKernelSync: (cellIndices: readonly number[] | U32) => void
-  readonly evaluateDirectFormula: (cellIndex: number) => readonly number[] | undefined
-  readonly recalculatePreordered: (
-    changedRoots: readonly number[] | U32,
-    orderedFormulaCellIndices: readonly number[] | U32,
-    orderedFormulaCount: number,
-    kernelSyncRoots?: readonly number[] | U32,
-  ) => U32
-  readonly beginEvaluationBudget: (startedAtMs: number) => void
-  readonly endEvaluationBudget: () => void
-  readonly checkEvaluationBudget: (stepCost?: number) => void
-  readonly reconcilePivotOutputs: (baseChanged: U32, forceAllPivots?: boolean) => U32
-  readonly getBatchMutationDepth: () => number
-  readonly setBatchMutationDepth: (next: number) => void
-  readonly prepareRegionQueryIndices: () => void
-  readonly writeHydratedFormulaValue: (cellIndex: number, value: CellValue) => void
-}): EngineFormulaInitializationService {
+export function createEngineFormulaInitializationService(args: EngineFormulaInitializationServiceArgs): EngineFormulaInitializationService {
   const sheetNameById = new Map<number, string>()
   const hasCycleMembersNow = (): boolean => {
     addEngineCounter(args.state.counters, 'cycleFormulaScans')
@@ -671,7 +612,8 @@ export function createEngineFormulaInitializationService(args: {
           })
         }
       }
-      if (args.hasVolatileFormulas?.() !== false) {
+      const hasVolatileFormulaWork = args.hasVolatileFormulas?.() !== false
+      if (hasVolatileFormulaWork) {
         materializeFreshFormulaChangedBuffer()
         formulaChangedCount = args.markVolatileFormulasChanged(formulaChangedCount)
       }
@@ -712,6 +654,9 @@ export function createEngineFormulaInitializationService(args: {
             : args.recalculate(changedRoots, changedInputArray)
       }
       recalculated = args.reconcilePivotOutputs(recalculated, false)
+      if (!hadExistingFormulas && hasVolatileFormulaWork) {
+        recalculated = recalculateFreshVolatileFormulasAfterInitialMaterialization(args, recalculated)
+      }
       void recalculated
       const lastMetrics = args.state.getLastMetrics()
       args.state.setLastMetrics({

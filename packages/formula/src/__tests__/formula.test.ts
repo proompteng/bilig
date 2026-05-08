@@ -150,6 +150,7 @@ describe('formula', () => {
 
   it('marks SUBTOTAL as metadata-sensitive for row visibility recalculation', () => {
     expect(compileFormula('SUBTOTAL(109,A1:A2)').volatile).toBe(true)
+    expect(compileFormula('INDIRECT("A1")').volatile).toBe(true)
   })
 
   it('routes native sequence spills through the wasm path, including numeric aggregate consumers', () => {

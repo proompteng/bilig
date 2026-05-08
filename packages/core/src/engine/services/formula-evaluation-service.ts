@@ -15,7 +15,7 @@ import {
   parseRangeAddress,
 } from '@bilig/formula'
 import { CellFlags } from '../../cell-store.js'
-import { definedNameValueToCellValue } from '../../engine-metadata-utils.js'
+import { definedNameValueToCellValue, definedNameValueToReferenceOperand } from '../../engine-metadata-utils.js'
 import { emptyValue, errorValue } from '../../engine-value-utils.js'
 import { addEngineCounter } from '../../perf/engine-counters.js'
 import type { EngineRuntimeState, RuntimeDirectCriteriaOperand, RuntimeFormula, SpillMaterialization } from '../runtime-state.js'
@@ -693,6 +693,10 @@ export function createEngineFormulaEvaluationService(args: {
         }
         return definedNameValueToCellValue(definedName.value, args.state.strings)
       },
+      resolveNameReference: (name: string) => {
+        const definedName = args.state.workbook.getDefinedName(name, sheetName)
+        return definedName ? definedNameValueToReferenceOperand(definedName.value) : undefined
+      },
       resolveFormula: (targetSheetName: string, targetAddress: string) => {
         const targetCellIndex = args.state.workbook.getCellIndex(targetSheetName, targetAddress)
         return targetCellIndex === undefined ? undefined : args.state.formulas.get(targetCellIndex)?.source
@@ -860,6 +864,10 @@ export function createEngineFormulaEvaluationService(args: {
           return errorValue(ErrorCode.Name)
         }
         return definedNameValueToCellValue(definedName.value, args.state.strings)
+      },
+      resolveNameReference: (name: string) => {
+        const definedName = args.state.workbook.getDefinedName(name, sheetName)
+        return definedName ? definedNameValueToReferenceOperand(definedName.value) : undefined
       },
       resolveFormula: (targetSheetName: string, address: string) => {
         const targetCellIndex = args.state.workbook.getCellIndex(targetSheetName, address)

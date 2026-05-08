@@ -94,6 +94,47 @@ function wholeAxisReferenceFromArg(
   }
 }
 
+function stackReferenceOperand(ref: ReferenceOperand, context: EvaluationContext, deps: WorkbookSpecialCallDeps): StackValue {
+  const sheetName = deps.referenceSheetName(ref, context) ?? context.sheetName
+  if (ref.kind === 'cell') {
+    const address = ref.address ?? deps.referenceTopLeftAddress(ref)
+    return address ? deps.stackScalar(context.resolveCell(sheetName, address)) : deps.stackScalar(deps.error(ErrorCode.Ref))
+  }
+
+  const start = ref.start
+  const end = ref.end
+  const refKind = ref.refKind ?? (ref.kind === 'row' ? 'rows' : ref.kind === 'col' ? 'cols' : 'cells')
+  if (!start || !end) {
+    return deps.stackScalar(deps.error(ErrorCode.Ref))
+  }
+
+  const values = context.resolveRange(sheetName, start, end, refKind)
+  let rows = values.length
+  let cols = 1
+  if (refKind === 'cells') {
+    try {
+      const parsed = parseRangeAddress(`${start}:${end}`, sheetName)
+      if (parsed.kind === 'cells') {
+        rows = parsed.end.row - parsed.start.row + 1
+        cols = parsed.end.col - parsed.start.col + 1
+      }
+    } catch {
+      rows = values.length
+      cols = 1
+    }
+  }
+  return {
+    kind: 'range',
+    values,
+    refKind,
+    rows,
+    cols,
+    sheetName,
+    start,
+    end,
+  }
+}
+
 function scalarLookupArgument(value: StackValue | undefined, deps: WorkbookSpecialCallDeps): ScalarArgumentResult {
   if (!value || (value.kind === 'omitted' && value.source === 'argument')) {
     return { kind: 'ok', value: undefined }
@@ -528,6 +569,11 @@ export function evaluateWorkbookSpecialCall(
         }
       } catch {
         // fall through
+      }
+
+      const resolvedReference = context.resolveNameReference?.(normalizedRefText)
+      if (resolvedReference) {
+        return stackReferenceOperand(resolvedReference, context, deps)
       }
 
       const resolvedName = context.resolveName?.(normalizedRefText)

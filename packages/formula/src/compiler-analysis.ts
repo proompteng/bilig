@@ -1,7 +1,7 @@
 import type { FormulaNode } from './ast.js'
 import { rewriteSpecialCall } from './special-call-rewrites.js'
 
-const VOLATILE_BUILTINS = new Set(['TODAY', 'NOW', 'RAND', 'RANDBETWEEN', 'RANDARRAY', 'OFFSET', 'SUBTOTAL'])
+const VOLATILE_BUILTINS = new Set(['TODAY', 'NOW', 'RAND', 'RANDBETWEEN', 'RANDARRAY', 'OFFSET', 'INDIRECT', 'SUBTOTAL'])
 
 export interface VolatileMetadata {
   volatile: boolean

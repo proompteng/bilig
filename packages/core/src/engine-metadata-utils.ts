@@ -1,5 +1,5 @@
 import { ErrorCode, type CellValue, type LiteralInput, type WorkbookDefinedNameValueSnapshot } from '@bilig/protocol'
-import { parseCellAddress, parseFormula, renameFormulaSheetReferences, type FormulaNode } from '@bilig/formula'
+import { parseCellAddress, parseFormula, renameFormulaSheetReferences, type FormulaNode, type ReferenceOperand } from '@bilig/formula'
 import type { StringPool } from './string-pool.js'
 import { errorValue, literalToValue } from './engine-value-utils.js'
 import { normalizeDefinedName, normalizeWorkbookObjectName } from './workbook-store.js'
@@ -249,6 +249,89 @@ export function definedNameValueToCellValue(input: WorkbookDefinedNameValueSnaps
     }
   }
   return literalToValue(input, stringPool)
+}
+
+function formulaNodeToReferenceOperand(input: FormulaNode): ReferenceOperand | undefined {
+  switch (input.kind) {
+    case 'CellRef':
+      return {
+        kind: 'cell',
+        ...(input.sheetName !== undefined ? { sheetName: input.sheetName } : {}),
+        address: input.ref,
+      }
+    case 'RangeRef':
+      return {
+        kind: 'range',
+        refKind: input.refKind,
+        start: input.start,
+        end: input.end,
+        ...(input.sheetName !== undefined ? { sheetName: input.sheetName } : {}),
+        ...(input.sheetEndName !== undefined ? { sheetEndName: input.sheetEndName } : {}),
+      }
+    case 'RowRef':
+      return {
+        kind: 'row',
+        refKind: 'rows',
+        start: input.ref,
+        end: input.ref,
+        ...(input.sheetName !== undefined ? { sheetName: input.sheetName } : {}),
+      }
+    case 'ColumnRef':
+      return {
+        kind: 'col',
+        refKind: 'cols',
+        start: input.ref,
+        end: input.ref,
+        ...(input.sheetName !== undefined ? { sheetName: input.sheetName } : {}),
+      }
+    case 'BinaryExpr':
+    case 'BooleanLiteral':
+    case 'CallExpr':
+    case 'ErrorLiteral':
+    case 'InvokeExpr':
+    case 'NameRef':
+    case 'NumberLiteral':
+    case 'OmittedArgument':
+    case 'SpillRef':
+    case 'StringLiteral':
+    case 'StructuredRef':
+    case 'UnaryExpr':
+      return undefined
+  }
+}
+
+export function definedNameValueToReferenceOperand(input: WorkbookDefinedNameValueSnapshot): ReferenceOperand | undefined {
+  if (typeof input === 'object' && input !== null && 'kind' in input) {
+    switch (input.kind) {
+      case 'cell-ref':
+        return { kind: 'cell', sheetName: input.sheetName, address: input.address }
+      case 'range-ref':
+        return {
+          kind: 'range',
+          refKind: 'cells',
+          sheetName: input.sheetName,
+          start: input.startAddress,
+          end: input.endAddress,
+        }
+      case 'formula':
+        try {
+          return formulaNodeToReferenceOperand(parseFormula(input.formula))
+        } catch {
+          return undefined
+        }
+      case 'scalar':
+      case 'structured-ref':
+        return undefined
+    }
+  }
+  if (typeof input === 'string' && input.startsWith('=')) {
+    try {
+      return formulaNodeToReferenceOperand(parseFormula(input))
+    } catch {
+      return undefined
+    }
+  }
+  return undefined
 }
 
 export function renameDefinedNameValueSheet(

@@ -2,7 +2,10 @@ import type { Effect } from 'effect'
 import type { CompiledFormula } from '@bilig/formula'
 import type { CellValue } from '@bilig/protocol'
 import type { EngineCellMutationRef, EngineFormulaSourceRefs } from '../../cell-mutations-at.js'
+import type { FormulaFamilyFreshUniformRunRegistrationArgs, FormulaFamilyRunUpsertArgs } from '../../formula/formula-family-store.js'
+import type { FormulaTemplateResolution } from '../../formula/template-bank.js'
 import type { EngineMutationError } from '../errors.js'
+import type { EngineRuntimeState, U32 } from '../runtime-state.js'
 
 export interface EngineFormulaInitializationService {
   readonly initializeCellFormulasAt: (
@@ -38,4 +41,65 @@ export interface PreparedFormulaInitializationRef {
 
 export interface HydratedPreparedFormulaInitializationRef extends PreparedFormulaInitializationRef {
   readonly value: CellValue
+}
+
+export interface EngineFormulaInitializationServiceArgs {
+  readonly state: Pick<
+    EngineRuntimeState,
+    'workbook' | 'strings' | 'formulas' | 'ranges' | 'counters' | 'getLastMetrics' | 'setLastMetrics'
+  >
+  readonly beginMutationCollection: () => void
+  readonly ensureRecalcScratchCapacity: (size: number) => void
+  readonly ensureCellTrackedByCoords: (sheetId: number, row: number, col: number) => number
+  readonly resetMaterializedCellScratch: (expectedSize: number) => void
+  readonly bindFormula: (cellIndex: number, ownerSheetName: string, source: string) => void
+  readonly withInitialFormulaCells: <T>(cellIndices: readonly number[] | U32, callback: () => T) => T
+  readonly bindPreparedFormula: (
+    cellIndex: number,
+    ownerSheetName: string,
+    source: string,
+    compiled: CompiledFormula,
+    templateId?: number,
+    options?: {
+      readonly deferFamilyRegistration?: boolean
+      readonly deferFormulaInstanceRegistration?: boolean
+      readonly assumeFreshFormula?: boolean
+    },
+  ) => boolean
+  readonly upsertFormulaFamilyRun: (args: FormulaFamilyRunUpsertArgs) => void
+  readonly registerFreshFormulaFamilyRun: (args: FormulaFamilyFreshUniformRunRegistrationArgs) => boolean
+  readonly deferFormulaFamilyIndexRebuild?: () => void
+  readonly deferFormulaInstanceTableRebuild?: () => void
+  readonly compileTemplateFormula: (source: string, row: number, col: number) => FormulaTemplateResolution
+  readonly clearTemplateFormulaCache: () => void
+  readonly removeFormula: (cellIndex: number) => boolean
+  readonly setInvalidFormulaValue: (cellIndex: number) => void
+  readonly markInputChanged: (cellIndex: number, count: number) => number
+  readonly markFormulaChanged: (cellIndex: number, count: number) => number
+  readonly markVolatileFormulasChanged: (count: number) => number
+  readonly hasVolatileFormulas?: () => boolean
+  readonly syncDynamicRanges: (formulaChangedCount: number) => number
+  readonly composeMutationRoots: (changedInputCount: number, formulaChangedCount: number) => U32
+  readonly getChangedInputBuffer: () => U32
+  readonly getChangedFormulaBuffer: () => U32
+  readonly rebuildTopoRanks: () => void
+  readonly repairTopoRanks: (changedFormulaCells: readonly number[] | U32) => boolean
+  readonly detectCycles: () => void
+  readonly recalculate: (changedRoots: readonly number[] | U32, kernelSyncRoots?: readonly number[] | U32) => U32
+  readonly deferKernelSync: (cellIndices: readonly number[] | U32) => void
+  readonly evaluateDirectFormula: (cellIndex: number) => readonly number[] | undefined
+  readonly recalculatePreordered: (
+    changedRoots: readonly number[] | U32,
+    orderedFormulaCellIndices: readonly number[] | U32,
+    orderedFormulaCount: number,
+    kernelSyncRoots?: readonly number[] | U32,
+  ) => U32
+  readonly beginEvaluationBudget: (startedAtMs: number) => void
+  readonly endEvaluationBudget: () => void
+  readonly checkEvaluationBudget: (stepCost?: number) => void
+  readonly reconcilePivotOutputs: (baseChanged: U32, forceAllPivots?: boolean) => U32
+  readonly getBatchMutationDepth: () => number
+  readonly setBatchMutationDepth: (next: number) => void
+  readonly prepareRegionQueryIndices: () => void
+  readonly writeHydratedFormulaValue: (cellIndex: number, value: CellValue) => void
 }

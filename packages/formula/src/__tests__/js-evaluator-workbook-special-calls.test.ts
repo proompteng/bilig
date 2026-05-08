@@ -10,6 +10,15 @@ describe('js evaluator workbook special calls', () => {
       resolveRange: (_sheetName: string, start: string, end: string): CellValue[] =>
         start === 'A1' && end === 'A3' ? [number(2), number(3), number(4)] : [],
       resolveName: (name: string): CellValue => (name === 'TaxRate' ? number(0.085) : err(ErrorCode.Name)),
+      resolveNameReference: (name: string) => {
+        if (name === 'TaxCell') {
+          return { kind: 'cell' as const, sheetName: 'Sheet1', address: 'A1' }
+        }
+        if (name === 'TaxRange') {
+          return { kind: 'range' as const, refKind: 'cells' as const, sheetName: 'Sheet1', start: 'A1', end: 'A3' }
+        }
+        return undefined
+      },
       resolvePivotData: ({
         dataField,
         address,
@@ -32,9 +41,16 @@ describe('js evaluator workbook special calls', () => {
 
     expect(evaluateAst(parseFormula('GETPIVOTDATA("Sales",B2,"Region","East")'), context)).toEqual(number(15))
     expect(evaluateAst(parseFormula('INDIRECT("A1")'), context)).toEqual(number(2))
+    expect(evaluateAst(parseFormula('INDIRECT("TaxCell")+1'), context)).toEqual(number(3))
     expect(evaluateAst(parseFormula('INDIRECT("TaxRate")+1'), context)).toEqual(number(1.085))
     expect(evaluateAst(parseFormula('INDIRECT("")'), context)).toEqual(err(ErrorCode.Ref))
     expect(evaluateAstResult(parseFormula('INDIRECT("A1:A3")'), context)).toEqual({
+      kind: 'array',
+      rows: 3,
+      cols: 1,
+      values: [number(2), number(3), number(4)],
+    })
+    expect(evaluateAstResult(parseFormula('INDIRECT("TaxRange")'), context)).toEqual({
       kind: 'array',
       rows: 3,
       cols: 1,
