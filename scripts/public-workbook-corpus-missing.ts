@@ -18,10 +18,12 @@ export function listMissingPublicWorkbookArtifacts(args: {
   readonly cases: readonly PublicWorkbookCorpusCase[]
 }): PublicWorkbookArtifact[] {
   const casesById = new Map(args.cases.map((entry) => [entry.id, entry]))
-  return args.manifest.artifacts.filter((artifact) => {
-    const corpusCase = casesById.get(artifact.id)
-    return !corpusCase || !publicWorkbookCorpusCaseMatchesArtifact(corpusCase, artifact)
-  })
+  return args.manifest.artifacts
+    .filter((artifact) => {
+      const corpusCase = casesById.get(artifact.id)
+      return !corpusCase || !publicWorkbookCorpusCaseMatchesArtifact(corpusCase, artifact)
+    })
+    .toSorted(compareVerificationArtifactPriority)
 }
 
 export function selectStalePublicWorkbookArtifacts(args: {
@@ -41,14 +43,16 @@ export function listStalePublicWorkbookArtifacts(args: {
   readonly cases: readonly PublicWorkbookCorpusCase[]
 }): PublicWorkbookArtifact[] {
   const casesById = new Map(args.cases.map((entry) => [entry.id, entry]))
-  return args.manifest.artifacts.filter((artifact) => {
-    const corpusCase = casesById.get(artifact.id)
-    return (
-      corpusCase !== undefined &&
-      publicWorkbookCorpusCaseMatchesArtifact(corpusCase, artifact) &&
-      publicWorkbookCorpusCaseNeedsEvidenceRefresh(corpusCase)
-    )
-  })
+  return args.manifest.artifacts
+    .filter((artifact) => {
+      const corpusCase = casesById.get(artifact.id)
+      return (
+        corpusCase !== undefined &&
+        publicWorkbookCorpusCaseMatchesArtifact(corpusCase, artifact) &&
+        publicWorkbookCorpusCaseNeedsEvidenceRefresh(corpusCase)
+      )
+    })
+    .toSorted(compareVerificationArtifactPriority)
 }
 
 export function indexPublicWorkbookCorpusCases(cases: readonly PublicWorkbookCorpusCase[]): Map<string, PublicWorkbookCorpusCase> {
@@ -64,4 +68,8 @@ export function publicWorkbookCorpusCaseMatchesArtifact(corpusCase: PublicWorkbo
     corpusCase.sha256 === artifact.sha256 &&
     corpusCase.byteSize === artifact.byteSize
   )
+}
+
+function compareVerificationArtifactPriority(left: PublicWorkbookArtifact, right: PublicWorkbookArtifact): number {
+  return left.byteSize - right.byteSize || left.fileName.localeCompare(right.fileName) || left.id.localeCompare(right.id)
 }

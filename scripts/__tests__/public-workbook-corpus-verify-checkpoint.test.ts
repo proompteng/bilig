@@ -13,6 +13,7 @@ import {
   upsertPublicWorkbookCorpusVerificationCheckpoint,
   writePublicWorkbookCorpusVerificationCheckpoint,
 } from '../public-workbook-corpus-verify-checkpoint.ts'
+import { listMissingPublicWorkbookArtifacts, listStalePublicWorkbookArtifacts } from '../public-workbook-corpus-missing.ts'
 import { validatePublicWorkbookCorpusScorecardManifestCoverage } from '../public-workbook-corpus-scorecard.ts'
 import type { PublicWorkbookArtifact, PublicWorkbookCorpusCase, PublicWorkbookManifest } from '../public-workbook-corpus-types.ts'
 
@@ -218,6 +219,26 @@ describe('public workbook corpus verification checkpoints', () => {
       }),
     ).toThrow('Public workbook corpus scorecard source count does not match the manifest')
   })
+
+  it('prioritizes smaller missing and stale verification artifacts', () => {
+    const large = workbookArtifact('workbook-large', { byteSize: 5_000, fileName: 'large.xlsx' })
+    const matched = workbookArtifact('workbook-matched', { byteSize: 1, fileName: 'already-recorded.xlsx' })
+    const smallLater = workbookArtifact('workbook-small-later', { byteSize: 10, fileName: 'z-small.xlsx' })
+    const smallFirst = workbookArtifact('workbook-small-first', { byteSize: 10, fileName: 'a-small.xlsx' })
+    const manifest = manifestWithArtifacts([large, matched, smallLater, smallFirst])
+
+    expect(listMissingPublicWorkbookArtifacts({ manifest, cases: [passedCase(matched, true)] }).map((entry) => entry.id)).toEqual([
+      'workbook-small-first',
+      'workbook-small-later',
+      'workbook-large',
+    ])
+    expect(
+      listStalePublicWorkbookArtifacts({
+        manifest,
+        cases: [passedCase(large, true), passedCase(smallLater, true), passedCase(smallFirst, true)],
+      }).map((entry) => entry.id),
+    ).toEqual(['workbook-small-first', 'workbook-small-later', 'workbook-large'])
+  })
 })
 
 function manifestWithArtifacts(artifacts: readonly PublicWorkbookArtifact[]): PublicWorkbookManifest {
@@ -236,17 +257,20 @@ function manifestWithArtifacts(artifacts: readonly PublicWorkbookArtifact[]): Pu
   }
 }
 
-function workbookArtifact(id: string): PublicWorkbookArtifact {
+function workbookArtifact(
+  id: string,
+  overrides: Partial<Pick<PublicWorkbookArtifact, 'byteSize' | 'fileName'>> = {},
+): PublicWorkbookArtifact {
   const hashNibble = id.endsWith('b') ? 'b' : 'a'
   return {
     id,
     sourceId: `source-${id}`,
     sourceUrl: `https://example.com/${id}.xlsx`,
     downloadUrl: `https://example.com/${id}.xlsx`,
-    fileName: `${id}.xlsx`,
+    fileName: overrides.fileName ?? `${id}.xlsx`,
     cachePath: `files/${id}.xlsx`,
     sha256: hashNibble.repeat(64),
-    byteSize: 1024,
+    byteSize: overrides.byteSize ?? 1024,
     workbookFingerprint: `${id}-fingerprint`,
     fetchedAt: '2026-05-07T00:00:00.000Z',
     license: {
