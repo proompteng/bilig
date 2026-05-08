@@ -25,6 +25,7 @@ const expectedSitemapUrls = [
   `${siteRoot}formula-edge-sumifs-paired-criteria-fixture.html`,
   `${siteRoot}formula-edge-groupby-spill-fixture.html`,
   `${siteRoot}starter-issues.html`,
+  `${siteRoot}community-launch-pack.html`,
   `${siteRoot}llms.txt`,
 ] as const
 
@@ -47,6 +48,7 @@ const sourceFilesByUrl = new Map<string, string>([
   [`${siteRoot}formula-edge-sumifs-paired-criteria-fixture.html`, 'formula-edge-sumifs-paired-criteria-fixture.md'],
   [`${siteRoot}formula-edge-groupby-spill-fixture.html`, 'formula-edge-groupby-spill-fixture.md'],
   [`${siteRoot}starter-issues.html`, 'starter-issues.md'],
+  [`${siteRoot}community-launch-pack.html`, 'community-launch-pack.md'],
   [`${siteRoot}llms.txt`, 'llms.txt'],
 ])
 
@@ -168,6 +170,7 @@ for (const required of [
   'https://github.com/proompteng/bilig/blob/main/docs/formula-edge-groupby-spill-fixture.md',
   'https://github.com/proompteng/bilig/blob/main/docs/new-contributor-guide.md',
   'https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md',
+  'https://github.com/proompteng/bilig/blob/main/docs/community-launch-pack.md',
 ]) {
   requireIncludes(llms, required, 'docs/llms.txt')
 }

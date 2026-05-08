@@ -109,8 +109,14 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://proompteng.github.io/bilig/community-launch-pack.html</loc>
+    <lastmod>2026-05-08</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://proompteng.github.io/bilig/llms.txt</loc>
-    <lastmod>2026-05-07</lastmod>
+    <lastmod>2026-05-08</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
