@@ -140,8 +140,9 @@ export interface BiligDominanceStatus {
     readonly nextFixtureCheckCommand: string
     readonly nextPublicAccessCheckCommand: string
     readonly nextGoogleSheetsUploadInstruction: string
-    readonly nextPreflightCommand: string
-    readonly nextCaptureCommand: string
+    readonly nextPreflightCommand: string | null
+    readonly nextCaptureCommand: string | null
+    readonly blockedCommands: readonly string[]
     readonly browserCaptureGuard: {
       readonly active: boolean
       readonly activeMarkerPaths: readonly string[]
@@ -537,6 +538,31 @@ function buildUiSameCorpusStatus(
   const tenXRequirementSatisfied = uiSameCorpusTenXRequirementSatisfied(proof, missingRequiredWorkloads)
   const googleSheetsUrlArgument = args.googleSheetsUrl ?? '<google-sheets-url>'
   const browserCaptureGuard = buildBrowserCaptureGuardStatus(args.localCiResourceGuardStatus)
+  const nextPreflightCommand = [
+    'pnpm',
+    'ui:same-corpus:capture',
+    '--',
+    '--preflight',
+    '--google-sheets-url',
+    googleSheetsUrlArgument,
+    '--microsoft-excel-web-url',
+    fixture.microsoftExcelWebUrl,
+  ]
+    .map(shellQuote)
+    .join(' ')
+  const nextCaptureCommand = [
+    'pnpm',
+    'ui:same-corpus:capture',
+    '--',
+    '--output',
+    '.cache/ui-responsiveness/same-corpus-capture.json',
+    '--google-sheets-url',
+    googleSheetsUrlArgument,
+    '--microsoft-excel-web-url',
+    fixture.microsoftExcelWebUrl,
+  ]
+    .map(shellQuote)
+    .join(' ')
   return {
     captured: proof.captured,
     evidenceKind: proof.evidenceKind,
@@ -569,31 +595,9 @@ function buildUiSameCorpusStatus(
       .map(shellQuote)
       .join(' '),
     nextGoogleSheetsUploadInstruction: `Upload ${fixture.localXlsxPath} to Google Sheets as a native Google Sheet, share it to anyone with the link, then pass its edit URL as --google-sheets-url.`,
-    nextPreflightCommand: [
-      'pnpm',
-      'ui:same-corpus:capture',
-      '--',
-      '--preflight',
-      '--google-sheets-url',
-      googleSheetsUrlArgument,
-      '--microsoft-excel-web-url',
-      fixture.microsoftExcelWebUrl,
-    ]
-      .map(shellQuote)
-      .join(' '),
-    nextCaptureCommand: [
-      'pnpm',
-      'ui:same-corpus:capture',
-      '--',
-      '--output',
-      '.cache/ui-responsiveness/same-corpus-capture.json',
-      '--google-sheets-url',
-      googleSheetsUrlArgument,
-      '--microsoft-excel-web-url',
-      fixture.microsoftExcelWebUrl,
-    ]
-      .map(shellQuote)
-      .join(' '),
+    nextPreflightCommand: browserCaptureGuard.active ? null : nextPreflightCommand,
+    nextCaptureCommand: browserCaptureGuard.active ? null : nextCaptureCommand,
+    blockedCommands: browserCaptureGuard.active ? [nextPreflightCommand, nextCaptureCommand].map(localCiResourceGuardOverrideCommand) : [],
     browserCaptureGuard,
     nextScorecardGenerateCommand: 'pnpm ui:browser-live:generate -- --capture .cache/ui-responsiveness/same-corpus-capture.json',
     nextDominanceCheckCommand: 'pnpm dominance:generate && pnpm dominance:check && pnpm dominance:audit:check',
@@ -759,6 +763,13 @@ function corpusStopMarkerOverrideCommand(command: string): string {
     return command
   }
   return `${publicCorpusStopMarkerOverrideEnvVar}=1 ${command} ${publicCorpusStopMarkerOverrideFlag}`
+}
+
+function localCiResourceGuardOverrideCommand(command: string): string {
+  if (command.includes(`${localCiResourceGuardOverrideEnv}=1`)) {
+    return command
+  }
+  return `${localCiResourceGuardOverrideEnv}=1 ${command}`
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

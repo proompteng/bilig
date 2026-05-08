@@ -45,6 +45,7 @@ describe('bilig dominance status', () => {
       },
       nextScorecardGenerateCommand: 'pnpm ui:browser-live:generate -- --capture .cache/ui-responsiveness/same-corpus-capture.json',
       nextDominanceCheckCommand: 'pnpm dominance:generate && pnpm dominance:check && pnpm dominance:audit:check',
+      blockedCommands: [],
     })
     expect(status.uiSameCorpus.fixture.microsoftExcelWebUrl).toContain('view.officeapps.live.com/op/view.aspx')
     expect(status.uiSameCorpus.nextPublicAccessCheckCommand).toContain(
@@ -127,6 +128,14 @@ describe('bilig dominance status', () => {
       nextPreflightRequiresOverride: true,
       nextCaptureRequiresOverride: true,
     })
+    expect(status.uiSameCorpus.nextPreflightCommand).toBeNull()
+    expect(status.uiSameCorpus.nextCaptureCommand).toBeNull()
+    expect(status.uiSameCorpus.blockedCommands).toEqual([
+      expect.stringContaining('BILIG_ALLOW_LOCAL_CI_RESOURCE_GUARD=1 pnpm ui:same-corpus:capture -- --preflight'),
+      expect.stringContaining(
+        'BILIG_ALLOW_LOCAL_CI_RESOURCE_GUARD=1 pnpm ui:same-corpus:capture -- --output .cache/ui-responsiveness/same-corpus-capture.json',
+      ),
+    ])
     expect(status.localCiResourceGuard).toEqual({
       active: true,
       activeMarkerPaths: [
