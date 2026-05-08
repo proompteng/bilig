@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import {
@@ -56,8 +56,6 @@ import {
 import { formatJsonForRepo } from './scorecard-format.ts'
 import {
   assertPublicCorpusRunNotStopped,
-  publicCorpusStopMarkerOverrideEnvVar,
-  publicCorpusStopMarkerOverrideFlag,
   readDebugOnlyFlagArg,
   readFetchRunArgs,
   readFlagArg,
@@ -67,11 +65,26 @@ import {
   readStringArg,
   readVerifyConcurrencyArg,
 } from './public-workbook-corpus-cli.ts'
+import {
+  formatCommandPath,
+  formatPublicWorkbookCorpusAddLinkCommand,
+  formatPublicWorkbookCorpusDiscoverCommand,
+  formatPublicWorkbookCorpusFetchSourceCommand,
+  formatPublicWorkbookCorpusLinkPlanCommand,
+  formatPublicWorkbookCorpusStatusCommand,
+  formatPublicWorkbookCorpusVerifyArtifactCommand,
+  publicWorkbookCorpusPlanStopMarker,
+  splitPublicWorkbookCorpusFetchCommand,
+  splitPublicWorkbookCorpusFetchSourceCommand,
+  splitPublicWorkbookCorpusVerifyArtifactCommand,
+  type PublicWorkbookLinkInput,
+} from './public-workbook-corpus-command-format.ts'
 
 export {
   buildPublicWorkbookCorpusScorecard,
   createEmptyPublicWorkbookManifest,
   discoverCkanWorkbookSources,
+  formatPublicWorkbookCorpusVerifyArtifactCommand,
   parsePublicWorkbookCorpusScorecardJson,
   parsePublicWorkbookManifestJson,
   validatePublicWorkbookCorpusScorecard,
@@ -150,6 +163,22 @@ async function main(): Promise<void> {
     const recordedCaseIds = new Set(recordedCases.map((entry) => entry.id))
     const sourceArtifacts = manifest.artifacts.filter((artifact) => artifact.sourceId === result.source.id)
     const unverifiedArtifactIds = sourceArtifacts.filter((artifact) => !recordedCaseIds.has(artifact.id)).map((artifact) => artifact.id)
+    const stopMarkerActive = existsSync(corpusRunStopMarkerPath)
+    const fetchSourceCommand = splitPublicWorkbookCorpusFetchSourceCommand({
+      cacheDir,
+      manifestPath,
+      sourceId: result.source.id,
+      stopMarkerActive,
+    })
+    const verifyArtifactCommands = unverifiedArtifactIds.map((artifactId) =>
+      splitPublicWorkbookCorpusVerifyArtifactCommand({
+        artifactId,
+        cacheDir,
+        manifestPath,
+        stopMarkerActive,
+        verifyCheckpointPath,
+      }),
+    )
     process.stdout.write(
       `${JSON.stringify(
         {
@@ -163,22 +192,13 @@ async function main(): Promise<void> {
           unverifiedArtifactIds,
           commands: {
             addLink: formatPublicWorkbookCorpusAddLinkCommand({ linkInput, manifestPath }),
-            fetchSource: formatPublicWorkbookCorpusFetchSourceCommand({
-              cacheDir,
-              manifestPath,
-              sourceId: result.source.id,
-              stopMarkerActive: existsSync(corpusRunStopMarkerPath),
-            }),
-            verifyArtifacts: unverifiedArtifactIds.map((artifactId) =>
-              formatPublicWorkbookCorpusVerifyArtifactCommand({
-                artifactId,
-                cacheDir,
-                manifestPath,
-                stopMarkerActive: existsSync(corpusRunStopMarkerPath),
-                verifyCheckpointPath,
-              }),
-            ),
+            fetchSource: fetchSourceCommand.command,
+            verifyArtifacts: verifyArtifactCommands.flatMap((entry) => (entry.command ? [entry.command] : [])),
             status: formatPublicWorkbookCorpusStatusCommand({ cacheDir, manifestPath, scorecardPath, verifyCheckpointPath }),
+          },
+          blockedCommands: {
+            fetchSource: fetchSourceCommand.blockedCommand,
+            verifyArtifacts: verifyArtifactCommands.flatMap((entry) => (entry.blockedCommand ? [entry.blockedCommand] : [])),
           },
         },
         null,
@@ -193,6 +213,12 @@ async function main(): Promise<void> {
     if (readFlagArg('--dry-run') || readFlagArg('--list')) {
       const manifest = readOrCreateManifest(manifestPath, targetWorkbookCount)
       const result = addSource(manifest)
+      const fetchSourceCommand = splitPublicWorkbookCorpusFetchSourceCommand({
+        cacheDir,
+        manifestPath,
+        sourceId: result.source.id,
+        stopMarkerActive: existsSync(corpusRunStopMarkerPath),
+      })
       process.stdout.write(
         `${JSON.stringify(
           {
@@ -201,12 +227,8 @@ async function main(): Promise<void> {
             sourceCountBefore: manifest.sources.length,
             sourceCountAfter: result.manifest.sources.length,
             source: result.source,
-            nextFetchSourceCommand: formatPublicWorkbookCorpusFetchSourceCommand({
-              cacheDir,
-              manifestPath,
-              sourceId: result.source.id,
-              stopMarkerActive: existsSync(corpusRunStopMarkerPath),
-            }),
+            nextFetchSourceCommand: fetchSourceCommand.command,
+            blockedFetchSourceCommand: fetchSourceCommand.blockedCommand,
             nextPlanCommand: formatPublicWorkbookCorpusLinkPlanCommand({ linkInput, manifestPath, scorecardPath, verifyCheckpointPath }),
           },
           null,
@@ -287,6 +309,28 @@ async function main(): Promise<void> {
       })
       const stopMarkerActive = existsSync(corpusRunStopMarkerPath)
       const needsDiscovery = !plan.targetReachableFromKnownCandidates
+      const fetchCommand =
+        plan.remainingArtifactSlots > 0 && plan.candidateSourceCount > 0 && plan.targetReachableFromKnownCandidates
+          ? splitPublicWorkbookCorpusFetchCommand({
+              cacheDir,
+              limit: plan.targetArtifactCount,
+              manifestPath,
+              stopMarkerActive,
+            })
+          : null
+      const blockedCommands = {
+        ...(needsDiscovery && stopMarkerActive
+          ? {
+              discover: formatPublicWorkbookCorpusDiscoverCommand({
+                cacheDir,
+                limit: plan.recommendedDiscoveryLimit,
+                manifestPath,
+                stopMarkerActive: true,
+              }),
+            }
+          : {}),
+        ...(fetchCommand?.blockedCommand ? { fetch: fetchCommand.blockedCommand } : {}),
+      }
       process.stdout.write(
         `${JSON.stringify(
           {
@@ -310,17 +354,8 @@ async function main(): Promise<void> {
                     limit: plan.recommendedDiscoveryLimit,
                     manifestPath,
                   }),
-            blockedCommands:
-              needsDiscovery && stopMarkerActive
-                ? {
-                    discover: formatPublicWorkbookCorpusDiscoverCommand({
-                      cacheDir,
-                      limit: plan.recommendedDiscoveryLimit,
-                      manifestPath,
-                      stopMarkerActive: true,
-                    }),
-                  }
-                : {},
+            recommendedFetchCommand: fetchCommand?.command ?? null,
+            blockedCommands,
             targetReachableFromKnownCandidates: plan.targetReachableFromKnownCandidates,
             sampledCandidateSources: plan.sampledCandidateSources.map((source) => ({
               id: source.id,
@@ -419,15 +454,26 @@ async function main(): Promise<void> {
         {
           sourceId,
           ...result,
-          nextVerifyArtifactCommands: result.fetchedArtifactIds.map((artifactId) =>
-            formatPublicWorkbookCorpusVerifyArtifactCommand({
+          nextVerifyArtifactCommands: result.fetchedArtifactIds.flatMap((artifactId) => {
+            const verifyCommand = splitPublicWorkbookCorpusVerifyArtifactCommand({
               artifactId,
               cacheDir,
               manifestPath,
               stopMarkerActive: existsSync(corpusRunStopMarkerPath),
               verifyCheckpointPath,
-            }),
-          ),
+            })
+            return verifyCommand.command ? [verifyCommand.command] : []
+          }),
+          blockedVerifyArtifactCommands: result.fetchedArtifactIds.flatMap((artifactId) => {
+            const verifyCommand = splitPublicWorkbookCorpusVerifyArtifactCommand({
+              artifactId,
+              cacheDir,
+              manifestPath,
+              stopMarkerActive: existsSync(corpusRunStopMarkerPath),
+              verifyCheckpointPath,
+            })
+            return verifyCommand.blockedCommand ? [verifyCommand.blockedCommand] : []
+          }),
         },
         null,
         2,
@@ -785,52 +831,6 @@ function selectRecordedCasesInManifestOrder(
   })
 }
 
-function formatPublicWorkbookCorpusDiscoverCommand(args: {
-  readonly cacheDir: string
-  readonly limit: number
-  readonly manifestPath: string
-  readonly stopMarkerActive?: boolean
-}): string {
-  const parts = [
-    'pnpm',
-    'public-workbook-corpus:discover',
-    '--',
-    '--manifest',
-    formatCommandPath(args.manifestPath),
-    '--cache-dir',
-    formatCommandPath(args.cacheDir),
-    '--limit',
-    String(args.limit),
-  ]
-  if (args.stopMarkerActive !== true) {
-    return parts.map(shellQuote).join(' ')
-  }
-  return `${publicCorpusStopMarkerOverrideEnvVar}=1 ${[...parts, publicCorpusStopMarkerOverrideFlag].map(shellQuote).join(' ')}`
-}
-
-function publicWorkbookCorpusPlanStopMarker(active: boolean): {
-  readonly active: boolean
-  readonly requiresExplicitResume: boolean
-  readonly overrideFlag: string
-  readonly overrideEnvVar: string
-} {
-  return {
-    active,
-    requiresExplicitResume: active,
-    overrideFlag: publicCorpusStopMarkerOverrideFlag,
-    overrideEnvVar: publicCorpusStopMarkerOverrideEnvVar,
-  }
-}
-
-interface PublicWorkbookLinkInput {
-  readonly sourceUrl: string
-  readonly downloadUrl: string
-  readonly fileName: string
-  readonly licenseTitle: string
-  readonly licenseUrl: string
-  readonly licenseSpdxId: string | null
-}
-
 function readPublicWorkbookLinkInput(commandName: string): PublicWorkbookLinkInput {
   const sourceUrl = readStringArg('--source-url', readStringArg('--url', ''))
   if (!sourceUrl) {
@@ -856,132 +856,6 @@ function addPublicWorkbookLinkSourceFromInput(manifest: PublicWorkbookManifest, 
     licenseUrl: input.licenseUrl,
     licenseSpdxId: input.licenseSpdxId,
   })
-}
-
-function formatPublicWorkbookCorpusAddLinkCommand(args: {
-  readonly linkInput: PublicWorkbookLinkInput
-  readonly manifestPath: string
-}): string {
-  return linkCommandParts('public-workbook-corpus:add-link', args.linkInput, args.manifestPath).map(shellQuote).join(' ')
-}
-
-function formatPublicWorkbookCorpusLinkPlanCommand(args: {
-  readonly linkInput: PublicWorkbookLinkInput
-  readonly manifestPath: string
-  readonly scorecardPath: string
-  readonly verifyCheckpointPath: string
-}): string {
-  return [
-    ...linkCommandParts('public-workbook-corpus:link-plan', args.linkInput, args.manifestPath),
-    '--scorecard',
-    formatCommandPath(args.scorecardPath),
-    '--verify-checkpoint',
-    formatCommandPath(args.verifyCheckpointPath),
-  ]
-    .map(shellQuote)
-    .join(' ')
-}
-
-function linkCommandParts(scriptName: string, input: PublicWorkbookLinkInput, manifestPath: string): string[] {
-  return [
-    'pnpm',
-    scriptName,
-    '--',
-    '--manifest',
-    formatCommandPath(manifestPath),
-    '--source-url',
-    input.sourceUrl,
-    ...(input.downloadUrl ? ['--download-url', input.downloadUrl] : []),
-    ...(input.fileName ? ['--file-name', input.fileName] : []),
-    '--license-title',
-    input.licenseTitle,
-    '--license-url',
-    input.licenseUrl,
-    ...(input.licenseSpdxId ? ['--license-spdx', input.licenseSpdxId] : []),
-  ]
-}
-
-function formatPublicWorkbookCorpusFetchSourceCommand(args: {
-  readonly cacheDir: string
-  readonly manifestPath: string
-  readonly sourceId: string
-  readonly stopMarkerActive: boolean
-}): string {
-  const parts = [
-    'pnpm',
-    'public-workbook-corpus:fetch-source',
-    '--',
-    '--manifest',
-    formatCommandPath(args.manifestPath),
-    '--cache-dir',
-    formatCommandPath(args.cacheDir),
-    '--source-id',
-    args.sourceId,
-  ]
-  if (!args.stopMarkerActive) {
-    return parts.map(shellQuote).join(' ')
-  }
-  return `${publicCorpusStopMarkerOverrideEnvVar}=1 ${[...parts, publicCorpusStopMarkerOverrideFlag].map(shellQuote).join(' ')}`
-}
-
-export function formatPublicWorkbookCorpusVerifyArtifactCommand(args: {
-  readonly artifactId: string
-  readonly cacheDir: string
-  readonly manifestPath: string
-  readonly stopMarkerActive?: boolean
-  readonly verifyCheckpointPath: string
-}): string {
-  const parts = [
-    'pnpm',
-    'public-workbook-corpus:verify-artifact',
-    '--',
-    '--manifest',
-    formatCommandPath(args.manifestPath),
-    '--cache-dir',
-    formatCommandPath(args.cacheDir),
-    '--verify-checkpoint',
-    formatCommandPath(args.verifyCheckpointPath),
-    '--artifact-id',
-    args.artifactId,
-    '--update-verify-checkpoint',
-  ]
-  if (args.stopMarkerActive !== true) {
-    return parts.map(shellQuote).join(' ')
-  }
-  return `${publicCorpusStopMarkerOverrideEnvVar}=1 ${[...parts, publicCorpusStopMarkerOverrideFlag].map(shellQuote).join(' ')}`
-}
-
-function formatPublicWorkbookCorpusStatusCommand(args: {
-  readonly cacheDir: string
-  readonly manifestPath: string
-  readonly scorecardPath: string
-  readonly verifyCheckpointPath: string
-}): string {
-  return [
-    'pnpm',
-    'public-workbook-corpus:status',
-    '--',
-    '--manifest',
-    formatCommandPath(args.manifestPath),
-    '--scorecard',
-    formatCommandPath(args.scorecardPath),
-    '--verify-checkpoint',
-    formatCommandPath(args.verifyCheckpointPath),
-    '--cache-dir',
-    formatCommandPath(args.cacheDir),
-  ]
-    .map(shellQuote)
-    .join(' ')
-}
-
-function shellQuote(value: string): string {
-  return /^[A-Za-z0-9_./:=@+-]+$/u.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`
-}
-
-function formatCommandPath(path: string): string {
-  const absolutePath = resolve(path)
-  const relativePath = relative(rootDir, absolutePath)
-  return relativePath && !relativePath.startsWith('..') && !isAbsolute(relativePath) ? relativePath : path
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

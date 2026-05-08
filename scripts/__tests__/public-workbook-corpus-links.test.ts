@@ -89,6 +89,7 @@ describe('public workbook corpus shared links', () => {
   it('prints a bounded fetch-source command during dry-run link intake', () => {
     const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-add-link-'))
     const manifestPath = join(dir, 'manifest.json')
+    const inactiveStopMarkerPath = join(dir, 'not-stopped.md')
     writeFileSync(manifestPath, `${JSON.stringify(createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'), null, 2)}\n`)
 
     const result = spawnSync(
@@ -101,6 +102,8 @@ describe('public workbook corpus shared links', () => {
         manifestPath,
         '--cache-dir',
         dir,
+        '--corpus-run-stop-marker',
+        inactiveStopMarkerPath,
         '--source-url',
         'https://docs.google.com/spreadsheets/d/abc123SharedSheet/edit?usp=sharing',
         '--license-title',
@@ -137,6 +140,7 @@ describe('public workbook corpus shared links', () => {
     const manifestPath = join(dir, 'manifest.json')
     const scorecardPath = join(dir, 'scorecard.json')
     const checkpointPath = join(dir, 'verification-checkpoint.json')
+    const inactiveStopMarkerPath = join(dir, 'not-stopped.md')
     writeFileSync(manifestPath, `${JSON.stringify(createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'), null, 2)}\n`)
 
     const result = spawnSync(
@@ -152,6 +156,8 @@ describe('public workbook corpus shared links', () => {
         checkpointPath,
         '--cache-dir',
         dir,
+        '--corpus-run-stop-marker',
+        inactiveStopMarkerPath,
         '--source-url',
         'https://docs.google.com/spreadsheets/d/abc123SharedSheet/edit?usp=sharing',
         '--license-title',
@@ -189,6 +195,7 @@ describe('public workbook corpus shared links', () => {
   it('plans checkpoint verification for an already cached shared-link artifact', () => {
     const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-link-plan-cached-'))
     const manifestPath = join(dir, 'manifest.json')
+    const inactiveStopMarkerPath = join(dir, 'not-stopped.md')
     const source = directSource('source-cached', 'https://example.com/cached.xlsx')
     const artifact = workbookArtifact(source)
     const manifest: PublicWorkbookManifest = {
@@ -207,6 +214,8 @@ describe('public workbook corpus shared links', () => {
         manifestPath,
         '--cache-dir',
         dir,
+        '--corpus-run-stop-marker',
+        inactiveStopMarkerPath,
         '--source-url',
         source.sourceUrl,
         '--license-title',
@@ -271,19 +280,82 @@ describe('public workbook corpus shared links', () => {
 
     expect(result.status).toBe(0)
     expect(dryRun).toMatchObject({
-      nextFetchSourceCommand: expect.stringContaining('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1'),
+      nextFetchSourceCommand: null,
+      blockedFetchSourceCommand: expect.stringContaining('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1'),
     })
     expect(dryRun).toMatchObject({
-      nextFetchSourceCommand: expect.stringContaining('--allow-active-stop-marker'),
+      blockedFetchSourceCommand: expect.stringContaining('--allow-active-stop-marker'),
     })
   })
 
-  it('prints default shared-link plan commands with repo-relative corpus paths', () => {
+  it('keeps paused link-plan fetch and verification commands in blocked commands', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-link-plan-paused-'))
+    const manifestPath = join(dir, 'manifest.json')
+    const stopMarkerPath = join(dir, 'stop.md')
+    const source = directSource('source-cached', 'https://example.com/cached.xlsx')
+    const artifact = workbookArtifact(source)
+    const manifest: PublicWorkbookManifest = {
+      ...createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'),
+      sources: [source],
+      artifacts: [artifact],
+    }
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+    writeFileSync(stopMarkerPath, '# paused\n')
+
     const result = spawnSync(
       'bun',
       [
         corpusScriptPath(),
         'link-plan',
+        '--manifest',
+        manifestPath,
+        '--cache-dir',
+        dir,
+        '--corpus-run-stop-marker',
+        stopMarkerPath,
+        '--source-url',
+        source.sourceUrl,
+        '--license-title',
+        license.licenseTitle,
+        '--license-url',
+        license.licenseUrl,
+        '--license-spdx',
+        license.licenseSpdxId,
+      ],
+      {
+        encoding: 'utf8',
+      },
+    )
+    const plan: unknown = JSON.parse(result.stdout)
+
+    expect(result.status).toBe(0)
+    expect(plan).toMatchObject({
+      commands: {
+        fetchSource: null,
+        verifyArtifacts: [],
+      },
+      blockedCommands: {
+        fetchSource: expect.stringContaining('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1'),
+        verifyArtifacts: [expect.stringContaining(`--artifact-id ${artifact.id}`)],
+      },
+    })
+    expect(plan).toMatchObject({
+      blockedCommands: {
+        fetchSource: expect.stringContaining('--allow-active-stop-marker'),
+        verifyArtifacts: [expect.stringContaining('--allow-active-stop-marker')],
+      },
+    })
+  })
+
+  it('prints default shared-link plan commands with repo-relative corpus paths', () => {
+    const inactiveStopMarkerPath = join(tmpdir(), 'public-workbook-corpus-default-link-plan-not-stopped.md')
+    const result = spawnSync(
+      'bun',
+      [
+        corpusScriptPath(),
+        'link-plan',
+        '--corpus-run-stop-marker',
+        inactiveStopMarkerPath,
         '--source-url',
         'https://docs.google.com/spreadsheets/d/repoRelativePlanCheck/edit?usp=sharing',
         '--license-title',
@@ -309,12 +381,15 @@ describe('public workbook corpus shared links', () => {
   })
 
   it('prints default shared-link dry-run commands with repo-relative corpus paths', () => {
+    const inactiveStopMarkerPath = join(tmpdir(), 'public-workbook-corpus-default-add-link-not-stopped.md')
     const result = spawnSync(
       'bun',
       [
         corpusScriptPath(),
         'add-link',
         '--dry-run',
+        '--corpus-run-stop-marker',
+        inactiveStopMarkerPath,
         '--source-url',
         'https://docs.google.com/spreadsheets/d/repoRelativeDryRunCheck/edit?usp=sharing',
         '--license-title',

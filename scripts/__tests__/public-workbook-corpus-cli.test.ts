@@ -269,6 +269,7 @@ describe('public workbook corpus CLI resource guards', () => {
       recommendedDiscoveryLimit: 2,
       recommendedDiscoveryPlanCommand: null,
       recommendedDiscoveryCommand: null,
+      recommendedFetchCommand: expect.stringContaining('public-workbook-corpus:fetch'),
       blockedCommands: {},
       targetReachableFromKnownCandidates: true,
       sampledCandidateSources: [
@@ -282,6 +283,7 @@ describe('public workbook corpus CLI resource guards', () => {
         },
       ],
     })
+    expect(asRecord(plan)['recommendedFetchCommand']).toContain('--limit 2')
   })
 
   it('omits mutating discovery commands when known candidates can reach the artifact target', () => {
@@ -390,6 +392,48 @@ describe('public workbook corpus CLI resource guards', () => {
     expect(blockedCommands['discover']).toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
     expect(blockedCommands['discover']).toContain('public-workbook-corpus:discover')
     expect(blockedCommands['discover']).toContain('--allow-active-stop-marker')
+  })
+
+  it('keeps mutating fetch commands blocked in fetch plans while the stop marker is active', () => {
+    const artifactA = workbookArtifact('workbook-a')
+    const artifactB = workbookArtifact('workbook-b')
+    const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-cli-fetch-plan-fetch-paused-'))
+    const manifestPath = join(dir, 'manifest.json')
+    const stopMarkerPath = join(dir, 'stop.md')
+    const manifest = {
+      ...manifestWithArtifacts([artifactA, artifactB]),
+      targetWorkbookCount: 2,
+      artifacts: [artifactA],
+    }
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+    writeFileSync(stopMarkerPath, '# stop\n')
+
+    const result = spawnSync(
+      'bun',
+      [corpusScriptPath(), 'fetch', '--dry-run', '--manifest', manifestPath, '--limit', '2', '--corpus-run-stop-marker', stopMarkerPath],
+      {
+        encoding: 'utf8',
+      },
+    )
+    const plan = asRecord(JSON.parse(result.stdout))
+    const blockedCommands = asRecord(plan['blockedCommands'])
+
+    expect(result.status).toBe(0)
+    expect(plan).toMatchObject({
+      stopMarker: {
+        active: true,
+        requiresExplicitResume: true,
+        overrideFlag: '--allow-active-stop-marker',
+        overrideEnvVar: 'BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE',
+      },
+      recommendedDiscoveryCommand: null,
+      recommendedFetchCommand: null,
+      targetReachableFromKnownCandidates: true,
+    })
+    expect(blockedCommands['fetch']).toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
+    expect(blockedCommands['fetch']).toContain('public-workbook-corpus:fetch')
+    expect(blockedCommands['fetch']).toContain('--limit 2')
+    expect(blockedCommands['fetch']).toContain('--allow-active-stop-marker')
   })
 
   it('builds a stop-marker-aware bounded resume plan for the remaining corpus evidence', () => {
