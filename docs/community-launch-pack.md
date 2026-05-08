@@ -7,13 +7,21 @@ paid stars, spam, or inflated claims.
 Baseline verified on May 8, 2026:
 
 - GitHub repo: <https://github.com/proompteng/bilig>
-- Current GitHub surface: public repo, `8` stars, `1` fork, `39` open issues
+- Baseline GitHub surface: public repo, `8` stars, `1` fork, `39` open issues
 - npm package: <https://www.npmjs.com/package/@bilig/headless>
-- Current npm surface: `@bilig/headless@0.10.62`, MIT, TypeScript types, npm
+- Baseline npm surface: `@bilig/headless@0.10.62`, MIT, TypeScript types, npm
   API downloads: `2,399` last week and `16,491` last month
 - Existing Hacker News launch:
   <https://news.ycombinator.com/item?id=48045427>, `2` points and `1`
   self-comment after roughly one day
+
+Latest public snapshot on May 8, 2026:
+
+- GitHub surface: public repo, `9` stars, `2` forks, `46` open issues
+- npm surface: `@bilig/headless@0.11.2`, MIT, TypeScript types, npm API
+  downloads: `7,182` last week and `21,748` last month
+- Contributor funnel: `18` open `good first issue`, `18` open
+  `first-timers-only`, and `18` open `help wanted` issues
 
 ## Goal Text
 
