@@ -1,9 +1,13 @@
 import type { PublicWorkbookCorpusStatus } from './public-workbook-corpus-status.ts'
+import { publicCorpusStopMarkerOverrideEnvVar, publicCorpusStopMarkerOverrideFlag } from './public-workbook-corpus-cli.ts'
 import type {
   PublicWorkbookCorpusAuditNextAction,
   PublicWorkbookCorpusAuditState,
   PublicWorkbookCorpusNextActionId,
 } from './public-workbook-corpus-completion-audit-types.ts'
+
+const resumeFetchBatchSize = 6
+const financialFetchBatchSize = 20
 
 export function buildPublicWorkbookCorpusAuditNextActions(args: {
   readonly currentState: PublicWorkbookCorpusAuditState
@@ -18,6 +22,7 @@ export function buildPublicWorkbookCorpusAuditNextActions(args: {
         priority: 1,
         reason: `cached artifacts below target by ${String(args.currentState.missingCachedArtifactCount)}`,
         commands: ['pnpm public-workbook-corpus:resume-plan:check', 'pnpm public-workbook-corpus:fetch:plan'],
+        blockedCommands: args.stopMarkerActive ? resumePublicCorpusIngestBlockedCommands(args.currentState) : [],
       }),
     )
   }
@@ -84,6 +89,7 @@ export function buildPublicWorkbookCorpusAuditNextActions(args: {
           'pnpm public-workbook-corpus:resume-financial:check',
           'pnpm public-workbook-corpus:fetch-financial:plan',
         ],
+        blockedCommands: args.stopMarkerActive ? resumeFinancialWorkbookBlockedCommands(args.currentState) : [],
       }),
     )
   }
@@ -102,6 +108,48 @@ export function buildPublicWorkbookCorpusAuditNextActions(args: {
   return actions.toSorted((left, right) => left.priority - right.priority || left.id.localeCompare(right.id))
 }
 
+function resumePublicCorpusIngestBlockedCommands(state: PublicWorkbookCorpusAuditState): string[] {
+  if (state.missingCachedArtifactCount <= 0) {
+    return []
+  }
+  const batchSize = Math.min(resumeFetchBatchSize, state.missingCachedArtifactCount)
+  return [
+    blockedCommand([
+      'pnpm',
+      'public-workbook-corpus:fetch',
+      '--',
+      '--limit',
+      String(state.cachedArtifactCount + batchSize),
+      '--fetch-batch-size',
+      String(batchSize),
+    ]),
+  ]
+}
+
+function resumeFinancialWorkbookBlockedCommands(state: PublicWorkbookCorpusAuditState): string[] {
+  const commands: string[] = []
+  const missingFinancialArtifacts = Math.max(0, state.financialWorkbookTargetCount - state.financialCachedArtifactCount)
+  if (missingFinancialArtifacts > 0) {
+    commands.push(
+      blockedCommand([
+        'pnpm',
+        'public-workbook-corpus:fetch-financial',
+        '--',
+        '--limit',
+        String(Math.min(financialFetchBatchSize, missingFinancialArtifacts)),
+      ]),
+    )
+  }
+  if (state.financialCachedArtifactCount > state.recordedFinancialManifestArtifactCount) {
+    commands.push(blockedCommand(['pnpm', 'public-workbook-corpus:verify-financial']))
+  }
+  return commands
+}
+
+function blockedCommand(parts: readonly string[]): string {
+  return `${publicCorpusStopMarkerOverrideEnvVar}=1 ${[...parts, publicCorpusStopMarkerOverrideFlag].map(shellQuote).join(' ')}`
+}
+
 function nextAction(action: {
   readonly id: PublicWorkbookCorpusNextActionId
   readonly priority: number
@@ -118,4 +166,8 @@ function nextAction(action: {
       (command): command is string => typeof command === 'string' && command.trim().length > 0,
     ),
   }
+}
+
+function shellQuote(value: string): string {
+  return /^[A-Za-z0-9_./:=@+-]+$/u.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`
 }
