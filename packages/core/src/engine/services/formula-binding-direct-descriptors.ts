@@ -694,6 +694,30 @@ export function buildDirectLookupDescriptor(args: {
       matchMode: binding.matchMode,
     }
   }
+  if (
+    prepared.comparableKind === 'numeric' &&
+    prepared.repeatedUniformStart !== undefined &&
+    prepared.repeatedUniformStep !== undefined &&
+    prepared.repeatedUniformRunLength !== undefined
+  ) {
+    return {
+      kind: 'approximate-uniform-numeric',
+      operandCellIndex,
+      sheetName: binding.lookupSheetName,
+      sheetId: lookupSheet.id,
+      rowStart: binding.rowStart,
+      rowEnd: binding.rowEnd,
+      col: binding.col,
+      length: prepared.length,
+      columnVersion: prepared.columnVersion,
+      structureVersion: prepared.structureVersion,
+      sheetColumnVersions: prepared.sheetColumnVersions,
+      start: prepared.repeatedUniformStart,
+      step: prepared.repeatedUniformStep,
+      repeatedRunLength: prepared.repeatedUniformRunLength,
+      matchMode: binding.matchMode,
+    }
+  }
   return {
     kind: 'approximate',
     operandCellIndex,

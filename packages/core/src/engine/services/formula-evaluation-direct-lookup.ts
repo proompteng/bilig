@@ -2,7 +2,7 @@ import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import type { EngineRuntimeState, PreparedApproximateVectorLookup, PreparedExactVectorLookup, RuntimeFormula } from '../runtime-state.js'
 import type { ExactColumnIndexService } from './exact-column-index-service.js'
 import type { SortedColumnSearchService } from './sorted-column-search-service.js'
-import { exactUniformLookupNumericResult } from './direct-lookup-helpers.js'
+import { approximateUniformLookupCurrentResult, exactUniformLookupNumericResult } from './direct-lookup-helpers.js'
 import { directErrorResult, directNumberResult } from './formula-evaluation-helpers.js'
 
 interface DirectVectorLookupContext {
@@ -83,6 +83,23 @@ function refreshDirectExactUniformLookup(
     directLookup.sheetColumnVersions = refreshed.sheetColumnVersions
     directLookup.start = refreshed.uniformStart
     directLookup.step = refreshed.uniformStep
+    delete directLookup.repeatedRunLength
+    delete directLookup.tailPatch
+    return directLookup
+  }
+  if (
+    refreshed.comparableKind === 'numeric' &&
+    refreshed.repeatedUniformStart !== undefined &&
+    refreshed.repeatedUniformStep !== undefined &&
+    refreshed.repeatedUniformRunLength !== undefined
+  ) {
+    directLookup.length = refreshed.length
+    directLookup.columnVersion = refreshed.columnVersion
+    directLookup.structureVersion = refreshed.structureVersion
+    directLookup.sheetColumnVersions = refreshed.sheetColumnVersions
+    directLookup.start = refreshed.repeatedUniformStart
+    directLookup.step = refreshed.repeatedUniformStep
+    directLookup.repeatedRunLength = refreshed.repeatedUniformRunLength
     delete directLookup.tailPatch
     return directLookup
   }
@@ -199,45 +216,11 @@ export function tryEvaluateDirectVectorLookup(context: DirectVectorLookupContext
       case ValueTag.String:
         return undefined
     }
-    const lastValue = refreshed.start + refreshed.step * (refreshed.length - 1)
-    const tailPatch = refreshed.tailPatch
-    if (refreshed.matchMode === 1 && refreshed.step > 0) {
-      if (lookupValue < refreshed.start) {
-        return directErrorResult(ErrorCode.NA)
-      }
-      if (tailPatch !== undefined && tailPatch.row === refreshed.rowEnd && tailPatch.newNumeric > tailPatch.oldNumeric) {
-        if (lookupValue >= tailPatch.newNumeric) {
-          return directNumberResult(refreshed.length)
-        }
-        if (lookupValue >= tailPatch.oldNumeric) {
-          return directNumberResult(refreshed.length - 1)
-        }
-      }
-      if (lookupValue >= lastValue) {
-        return directNumberResult(refreshed.length)
-      }
-      const position = Math.floor((lookupValue - refreshed.start) / refreshed.step) + 1
-      return directNumberResult(Math.min(refreshed.length, Math.max(1, position)))
+    const lookupResult = approximateUniformLookupCurrentResult(refreshed, lookupValue)
+    if (lookupResult?.kind === 'number') {
+      return directNumberResult(lookupResult.value)
     }
-    if (refreshed.matchMode === -1 && refreshed.step < 0) {
-      if (lookupValue > refreshed.start) {
-        return directErrorResult(ErrorCode.NA)
-      }
-      if (tailPatch !== undefined && tailPatch.row === refreshed.rowEnd && tailPatch.newNumeric < tailPatch.oldNumeric) {
-        if (lookupValue <= tailPatch.newNumeric) {
-          return directNumberResult(refreshed.length)
-        }
-        if (lookupValue <= tailPatch.oldNumeric) {
-          return directNumberResult(refreshed.length - 1)
-        }
-      }
-      if (lookupValue <= lastValue) {
-        return directNumberResult(refreshed.length)
-      }
-      const position = Math.floor((refreshed.start - lookupValue) / -refreshed.step) + 1
-      return directNumberResult(Math.min(refreshed.length, Math.max(1, position)))
-    }
-    return undefined
+    return lookupResult?.kind === 'error' ? directErrorResult(lookupResult.code) : undefined
   }
   const prepared = refreshDirectApproximateLookup(context, directLookup)
   const cellIndex = directLookup.operandCellIndex

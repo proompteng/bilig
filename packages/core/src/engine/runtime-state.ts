@@ -191,6 +191,7 @@ export type RuntimeDirectLookupDescriptor =
       sheetColumnVersions: Uint32Array
       start: number
       step: number
+      repeatedRunLength?: number
       matchMode: 1 | -1
       tailPatch?: RuntimeUniformLookupTailPatch
     }

@@ -116,6 +116,9 @@ export function canSkipUniformApproximateNumericTailWrite(
   oldNumeric: number,
   newNumeric: number,
 ): boolean {
+  if (directLookup.repeatedRunLength !== undefined) {
+    return false
+  }
   if (directLookup.matchMode === 1 && directLookup.step > 0) {
     return row === directLookup.rowEnd && oldNumeric > operandNumeric && newNumeric > operandNumeric && newNumeric >= oldNumeric
   }
@@ -136,6 +139,9 @@ export function canSkipUniformApproximateNumericTailWriteFromCurrentResult(
   oldNumeric: number,
   newNumeric: number,
 ): boolean {
+  if (directLookup.repeatedRunLength !== undefined) {
+    return false
+  }
   if (
     !(
       (directLookup.matchMode === 1 && directLookup.step > 0 && row === directLookup.rowEnd && newNumeric >= oldNumeric) ||
@@ -279,6 +285,19 @@ export function approximateUniformLookupNumericResult(
   directLookup: Extract<RuntimeDirectLookupDescriptor, { kind: 'approximate-uniform-numeric' }>,
   lookupValue: number,
 ): number | undefined {
+  if (directLookup.repeatedRunLength !== undefined) {
+    const repeatedUniformResult = approximateRepeatedUniformLookupCurrentResult(
+      {
+        length: directLookup.length,
+        repeatedUniformStart: directLookup.start,
+        repeatedUniformStep: directLookup.step,
+        repeatedUniformRunLength: directLookup.repeatedRunLength,
+      },
+      directLookup.matchMode,
+      lookupValue,
+    )
+    return repeatedUniformResult?.kind === 'number' ? repeatedUniformResult.value : undefined
+  }
   const tailPatch = directLookup.tailPatch
   if (tailPatch === undefined && directLookup.matchMode === 1 && directLookup.step === 1) {
     if (lookupValue < directLookup.start) {

@@ -369,6 +369,9 @@ export function createOperationLookupPlanner(args: {
     oldNumeric: number,
     newNumeric: number,
   ): boolean => {
+    if (directLookup.kind === 'approximate-uniform-numeric' && directLookup.repeatedRunLength !== undefined) {
+      return false
+    }
     if (directLookup.tailPatch !== undefined || row !== directLookup.rowEnd || directLookup.length < 2) {
       return false
     }

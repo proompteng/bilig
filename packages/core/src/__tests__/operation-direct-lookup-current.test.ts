@@ -192,6 +192,26 @@ describe('operation direct lookup current results', () => {
     })
     expect(approximateService.tryDirectUniformLookupNumericResultFromDescriptor(approximateUniform(), undefined, 3.5, matchingHint)).toBe(3)
     expect(approximateService.canEvaluateDirectUniformLookupCurrentResultFromNumeric(10, undefined, 3.5)).toBe(true)
+
+    const repeatedApproximate = approximateUniform({
+      length: 6,
+      rowEnd: 5,
+      start: 1,
+      step: 1,
+      repeatedRunLength: 2,
+    })
+    const repeatedApproximateService = createService({ directLookup: repeatedApproximate }).service
+    expect(repeatedApproximateService.tryDirectUniformLookupCurrentResultFromNumeric(10, undefined, 2.5, matchingHint)).toEqual({
+      kind: 'number',
+      value: 4,
+    })
+    expect(
+      repeatedApproximateService.tryDirectUniformLookupNumericResultFromDescriptor(repeatedApproximate, undefined, 2.5, matchingHint),
+    ).toBe(4)
+    expect(repeatedApproximateService.tryDirectUniformLookupCurrentResultFromNumeric(10, undefined, 0, matchingHint)).toEqual({
+      kind: 'error',
+      code: ErrorCode.NA,
+    })
   })
 
   it('evaluates non-uniform exact and approximate prepared lookups', () => {

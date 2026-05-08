@@ -3258,6 +3258,34 @@ describe('SpreadsheetEngine', () => {
     expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 0, wasmFormulaCount: 0 })
   })
 
+  it('uses the compact direct js path for repeated approximate MATCH keys', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'approx-lookup-duplicates' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    ;[1, 1, 2, 2, 3, 3].forEach((value, index) => {
+      engine.setCellValue('Sheet1', `A${index + 1}`, value)
+    })
+    engine.setCellValue('Sheet1', 'D1', 2.5)
+
+    engine.setCellFormula('Sheet1', 'E1', 'MATCH(D1,A1:A6,1)')
+    const formulaCellIndex = engine.workbook.getCellIndex('Sheet1', 'E1')
+    const runtimeFormula = formulaCellIndex === undefined ? undefined : readRuntimeFormula(engine, formulaCellIndex)
+    expect(isRuntimeFormulaWithDirectLookup(runtimeFormula)).toBe(true)
+    expect(runtimeFormula?.directLookup).toMatchObject({
+      kind: 'approximate-uniform-numeric',
+      start: 1,
+      step: 1,
+      repeatedRunLength: 2,
+      length: 6,
+    })
+    expect(engine.getCellValue('Sheet1', 'E1')).toEqual({ tag: ValueTag.Number, value: 4 })
+    expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 0, wasmFormulaCount: 0 })
+
+    engine.setCellValue('Sheet1', 'D1', 3)
+    expect(engine.getCellValue('Sheet1', 'E1')).toEqual({ tag: ValueTag.Number, value: 6 })
+    expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 0, wasmFormulaCount: 0 })
+  })
+
   it('skips dirtying approximate MATCH when an irrelevant high-side tail value changes', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'approx-lookup-tail' })
     await engine.ready()
