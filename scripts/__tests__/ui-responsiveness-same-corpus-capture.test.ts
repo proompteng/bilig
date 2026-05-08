@@ -8,6 +8,7 @@ import { buildWorkbookBenchmarkCorpus } from '../../packages/benchmarks/src/work
 import {
   assertSameCorpusBrowserRunAllowed,
   buildSameCorpusFingerprint,
+  collectSameCorpusProductMeasurements,
   parseCaptureArgs,
   parseEmitXlsxArgs,
   parsePreflightArgs,
@@ -182,6 +183,37 @@ describe('same-corpus UI responsiveness capture CLI', () => {
     })
     expect(verification.checkedCells.length).toBeGreaterThanOrEqual(3)
     expect(verification.checkedCells.every((cell) => cell.expected === cell.actual)).toBe(true)
+  })
+
+  it('rejects operation-only measurements before writing a same-corpus capture', async () => {
+    await expect(
+      collectSameCorpusProductMeasurements(
+        {
+          biligUrl: 'http://127.0.0.1:5173/?benchmarkCorpus=wide-mixed-250k',
+          googleSheetsUrl: 'https://docs.google.com/spreadsheets/d/sheet-id/edit',
+          microsoftExcelWebUrl: 'https://view.officeapps.live.com/op/view.aspx?src=example.xlsx',
+        },
+        async (product, url) => ({
+          product,
+          source: url,
+          operationResponseMsSamples: [10, 11, 12],
+          postOperationFrameMsSamples: [8, 9, 10],
+          corpusVerification: {
+            verified: true,
+            method:
+              product === 'bilig'
+                ? 'bilig-benchmark-state'
+                : product === 'google-sheets'
+                  ? 'google-sheets-xlsx-export'
+                  : 'microsoft-excel-web-source-xlsx',
+            sheetName: 'WideGrid',
+            materializedCells: 250000,
+            checkedCells: [],
+          },
+          limitations: [],
+        }),
+      ),
+    ).rejects.toThrow('same-corpus UI measurement for bilig is missing scroll-event response samples')
   })
 
   it('parses storage-state bootstrap mode for authenticated capture', () => {

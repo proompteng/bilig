@@ -133,9 +133,65 @@ export async function collectSameCorpusProductMeasurements(
   measure: SameCorpusProductMeasure,
 ): Promise<SameCorpusProductMeasurements> {
   const bilig = await measure('bilig', urls.biligUrl)
+  assertSameCorpusProductMeasurement('bilig', urls.biligUrl, bilig)
   const googleSheets = await measure('google-sheets', urls.googleSheetsUrl)
+  assertSameCorpusProductMeasurement('google-sheets', urls.googleSheetsUrl, googleSheets)
   const microsoftExcelWeb = await measure('microsoft-excel-web', urls.microsoftExcelWebUrl)
+  assertSameCorpusProductMeasurement('microsoft-excel-web', urls.microsoftExcelWebUrl, microsoftExcelWeb)
   return { bilig, googleSheets, microsoftExcelWeb }
+}
+
+function assertSameCorpusProductMeasurement(
+  product: UiResponsivenessSameCorpusProduct,
+  source: string,
+  measurement: SameCorpusCaptureMeasurement,
+): void {
+  if (measurement.product !== product) {
+    throw new Error(`same-corpus UI measurement expected ${product} but received ${measurement.product}`)
+  }
+  if (measurement.source !== source) {
+    throw new Error(`same-corpus UI measurement for ${product} used an unexpected source URL`)
+  }
+  assertSameCorpusSampleArray(product, 'operation response', measurement.operationResponseMsSamples)
+  assertSameCorpusSampleArray(
+    product,
+    'post-operation frame',
+    measurement.postOperationFrameMsSamples,
+    measurement.operationResponseMsSamples.length,
+  )
+  assertSameCorpusSampleArray(
+    product,
+    'scroll-event response',
+    measurement.scrollEventResponseMsSamples,
+    measurement.operationResponseMsSamples.length,
+  )
+  assertSameCorpusSampleArray(
+    product,
+    'scroll movement',
+    measurement.scrollMovementPxSamples,
+    measurement.operationResponseMsSamples.length,
+  )
+}
+
+function assertSameCorpusSampleArray(
+  product: UiResponsivenessSameCorpusProduct,
+  label: string,
+  samples: readonly number[] | undefined,
+  expectedLength?: number,
+): void {
+  if (!samples || samples.length === 0) {
+    throw new Error(`same-corpus UI measurement for ${product} is missing ${label} samples`)
+  }
+  if (expectedLength !== undefined && samples.length !== expectedLength) {
+    throw new Error(
+      `same-corpus UI measurement for ${product} has ${String(samples.length)} ${label} samples but expected ${String(expectedLength)}`,
+    )
+  }
+  for (const sample of samples) {
+    if (!Number.isFinite(sample)) {
+      throw new Error(`same-corpus UI measurement for ${product} has a non-finite ${label} sample`)
+    }
+  }
 }
 
 export async function preflightSameCorpusIncumbentAccess(args: PreflightArgs): Promise<SameCorpusPreflight> {
