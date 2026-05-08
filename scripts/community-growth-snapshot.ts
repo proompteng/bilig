@@ -5,6 +5,7 @@ export interface CommunityGrowthSnapshot {
   readonly capturedAt: string
   readonly github: GitHubRepoGrowthMetrics
   readonly npm: NpmPackageGrowthMetrics
+  readonly contributorFunnel: ContributorFunnelMetrics
   readonly traffic: GitHubTrafficSnapshot
 }
 
@@ -35,6 +36,13 @@ export interface NpmDownloadWindow {
   readonly downloads: number
   readonly start: string
   readonly end: string
+}
+
+export interface ContributorFunnelMetrics {
+  readonly openGoodFirstIssueCount: number
+  readonly openFirstTimersOnlyIssueCount: number
+  readonly openHelpWantedIssueCount: number
+  readonly openPullRequestCount: number
 }
 
 export type GitHubTrafficSnapshot =
@@ -234,6 +242,45 @@ function parseTrafficPaths(value: unknown): readonly GitHubTrafficPath[] {
   }))
 }
 
+function parseSearchCount(value: unknown, context: string): number {
+  return numberField(asRecord(value, context), 'total_count', context)
+}
+
+async function fetchIssueSearchCount(fetchImpl: typeof fetch, githubToken: string | undefined, query: string): Promise<number> {
+  const searchUrl = new URL('https://api.github.com/search/issues')
+  searchUrl.searchParams.set('q', query)
+  searchUrl.searchParams.set('per_page', '1')
+
+  const result = await fetchJson(fetchImpl, searchUrl.href, {
+    headers: githubHeaders(githubToken),
+  })
+
+  return parseSearchCount(result, `GitHub issue search ${query}`)
+}
+
+async function collectContributorFunnel(
+  fetchImpl: typeof fetch,
+  owner: string,
+  repo: string,
+  githubToken: string | undefined,
+): Promise<ContributorFunnelMetrics> {
+  const repoQualifier = `repo:${owner}/${repo}`
+
+  const [openGoodFirstIssueCount, openFirstTimersOnlyIssueCount, openHelpWantedIssueCount, openPullRequestCount] = await Promise.all([
+    fetchIssueSearchCount(fetchImpl, githubToken, `${repoQualifier} is:issue is:open label:"good first issue"`),
+    fetchIssueSearchCount(fetchImpl, githubToken, `${repoQualifier} is:issue is:open label:first-timers-only`),
+    fetchIssueSearchCount(fetchImpl, githubToken, `${repoQualifier} is:issue is:open label:"help wanted"`),
+    fetchIssueSearchCount(fetchImpl, githubToken, `${repoQualifier} is:pr is:open`),
+  ])
+
+  return {
+    openGoodFirstIssueCount,
+    openFirstTimersOnlyIssueCount,
+    openHelpWantedIssueCount,
+    openPullRequestCount,
+  }
+}
+
 async function collectGitHubTraffic(
   fetchImpl: typeof fetch,
   owner: string,
@@ -279,7 +326,7 @@ export async function collectCommunityGrowthSnapshot(options: CommunityGrowthSna
   const githubToken = options.githubToken ?? process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN
   const encodedPackageName = encodeURIComponent(packageName)
 
-  const [github, npmMetadata, lastWeekDownloads, lastMonthDownloads, traffic] = await Promise.all([
+  const [github, npmMetadata, lastWeekDownloads, lastMonthDownloads, contributorFunnel, traffic] = await Promise.all([
     fetchJson(fetchImpl, `https://api.github.com/repos/${owner}/${repo}`, {
       headers: githubHeaders(githubToken),
     }).then(parseGitHubRepoMetrics),
@@ -290,6 +337,7 @@ export async function collectCommunityGrowthSnapshot(options: CommunityGrowthSna
     fetchJson(fetchImpl, `https://api.npmjs.org/downloads/point/last-month/${encodedPackageName}`).then((value) =>
       parseDownloadWindow(value, 'npm last-month downloads'),
     ),
+    collectContributorFunnel(fetchImpl, owner, repo, githubToken),
     collectGitHubTraffic(fetchImpl, owner, repo, githubToken),
   ])
 
@@ -300,6 +348,7 @@ export async function collectCommunityGrowthSnapshot(options: CommunityGrowthSna
       lastWeek: lastWeekDownloads,
       lastMonth: lastMonthDownloads,
     }),
+    contributorFunnel,
     traffic,
   }
 }

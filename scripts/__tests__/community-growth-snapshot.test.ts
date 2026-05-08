@@ -70,6 +70,22 @@ describe('community growth snapshot', () => {
         })
       }
 
+      if (url.startsWith('https://api.github.com/search/issues?')) {
+        const query = new URL(url).searchParams.get('q')
+        if (query === 'repo:proompteng/bilig is:issue is:open label:"good first issue"') {
+          return responseJson({ total_count: 8 })
+        }
+        if (query === 'repo:proompteng/bilig is:issue is:open label:first-timers-only') {
+          return responseJson({ total_count: 5 })
+        }
+        if (query === 'repo:proompteng/bilig is:issue is:open label:"help wanted"') {
+          return responseJson({ total_count: 8 })
+        }
+        if (query === 'repo:proompteng/bilig is:pr is:open') {
+          return responseJson({ total_count: 2 })
+        }
+      }
+
       throw new Error(`unexpected fetch ${url}`)
     }
 
@@ -98,6 +114,12 @@ describe('community growth snapshot', () => {
             downloads: 16491,
           },
         },
+      },
+      contributorFunnel: {
+        openGoodFirstIssueCount: 8,
+        openFirstTimersOnlyIssueCount: 5,
+        openHelpWantedIssueCount: 8,
+        openPullRequestCount: 2,
       },
       traffic: {
         available: false,
@@ -143,6 +165,22 @@ describe('community growth snapshot', () => {
 
       if (url === 'https://api.npmjs.org/downloads/point/last-month/%40bilig%2Fheadless') {
         return responseJson({ downloads: 2, start: '2026-04-07', end: '2026-05-06' })
+      }
+
+      if (url.startsWith('https://api.github.com/search/issues?')) {
+        const query = new URL(url).searchParams.get('q')
+        if (query === 'repo:proompteng/bilig is:issue is:open label:"good first issue"') {
+          return responseJson({ total_count: 8 })
+        }
+        if (query === 'repo:proompteng/bilig is:issue is:open label:first-timers-only') {
+          return responseJson({ total_count: 5 })
+        }
+        if (query === 'repo:proompteng/bilig is:issue is:open label:"help wanted"') {
+          return responseJson({ total_count: 8 })
+        }
+        if (query === 'repo:proompteng/bilig is:pr is:open') {
+          return responseJson({ total_count: 2 })
+        }
       }
 
       if (url === 'https://api.github.com/repos/proompteng/bilig/traffic/views') {
