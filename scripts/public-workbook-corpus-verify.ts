@@ -277,19 +277,22 @@ export async function verifyCachedWorkbookArtifact(
     const featureCounts = mergeImportedAndFootprintFeatureCounts(importedFeatureCounts, footprint.featureCounts)
     const metadata = workbookMetadata(imported.snapshot)
     const formulaOracleValidation =
-      footprint.featureCounts.formulaCellCount === 0 || hasUnsupportedFormulaOracleWarning(imported.warnings)
+      footprint.featureCounts.formulaCellCount === 0 || hasFormulaOracleBlockingWarning(imported.warnings)
         ? { comparisons: 0, mismatches: [] }
         : await validateFormulaOracles(imported.snapshot, bytes)
+    const unsupportedFormulaOracleWarning = hasUnsupportedPrecisionAsDisplayedOracleWarning(imported.warnings, formulaOracleValidation)
     collectGarbage()
     const structuralSmokePassed = runStructuralSmoke ? runStructuralSmokeOps(imported.snapshot) : null
-    const unsupportedFeatureClassifications = classifyUnsupportedFeatures(imported.snapshot, imported.warnings, featureCounts)
+    const unsupportedFeatureClassifications = classifyUnsupportedFeatures(imported.snapshot, imported.warnings, featureCounts, {
+      supportedImportWarnings: supportedFormulaOracleImportWarnings(imported.warnings, formulaOracleValidation),
+    })
     const roundTripSkipEvidence = roundTripValidationSkipEvidence(imported.warnings)
     const roundTripPassed = roundTripSkipEvidence ? true : roundTripsSupportedSemantics(detachImportedWorkbookSnapshot(imported))
     const validation: PublicWorkbookValidationSummary = {
       importPassed: true,
-      formulaOraclePassed: formulaOracleValidation.mismatches.length === 0,
+      formulaOraclePassed: unsupportedFormulaOracleWarning || formulaOracleValidation.mismatches.length === 0,
       formulaOracleComparisons: formulaOracleValidation.comparisons,
-      formulaOracleMismatches: formulaOracleValidation.mismatches,
+      formulaOracleMismatches: unsupportedFormulaOracleWarning ? [] : formulaOracleValidation.mismatches,
       roundTripPassed,
       structuralSmokePassed,
     }
@@ -379,14 +382,21 @@ async function validateFormulaOracles(snapshot: WorkbookSnapshot, bytes: Uint8Ar
   }
 }
 
-function hasUnsupportedFormulaOracleWarning(warnings: readonly string[]): boolean {
+function hasFormulaOracleBlockingWarning(warnings: readonly string[]): boolean {
   return warnings.some(
     (warning) =>
-      warning === precisionAsDisplayedCalculationWarning ||
-      warning === externalWorkbookReferencesWarning ||
-      warning === manualCalculationModeWarning ||
-      warning === volatileFormulasWarning,
+      warning === externalWorkbookReferencesWarning || warning === manualCalculationModeWarning || warning === volatileFormulasWarning,
   )
+}
+
+function hasUnsupportedPrecisionAsDisplayedOracleWarning(warnings: readonly string[], validation: FormulaOracleValidationResult): boolean {
+  return warnings.includes(precisionAsDisplayedCalculationWarning) && validation.comparisons > 0 && validation.mismatches.length > 0
+}
+
+function supportedFormulaOracleImportWarnings(warnings: readonly string[], validation: FormulaOracleValidationResult): readonly string[] {
+  return warnings.includes(precisionAsDisplayedCalculationWarning) && validation.comparisons > 0 && validation.mismatches.length === 0
+    ? [precisionAsDisplayedCalculationWarning]
+    : []
 }
 
 function roundTripValidationSkipEvidence(warnings: readonly string[]): string | null {
@@ -613,8 +623,10 @@ export function classifyUnsupportedFeatures(
   snapshot: WorkbookSnapshot,
   warnings: readonly string[],
   featureCounts: PublicWorkbookFeatureCounts = countWorkbookFeatures(snapshot, warnings),
+  options: { readonly supportedImportWarnings?: readonly string[] } = {},
 ): string[] {
   const classifications = new Set<string>()
+  const supportedImportWarnings = new Set(options.supportedImportWarnings ?? [])
   if ((snapshot.workbook.metadata?.macroPayloads?.length ?? 0) > 0) {
     classifications.add('xlsx.macros.execution.declined')
   }
@@ -624,6 +636,9 @@ export function classifyUnsupportedFeatures(
     )
   }
   for (const warning of warnings) {
+    if (supportedImportWarnings.has(warning)) {
+      continue
+    }
     classifications.add(`xlsx.import.warning:${warning}`)
   }
   return [...classifications].toSorted()

@@ -9,6 +9,7 @@ import {
   externalWorkbookReferencesWarning,
   externalPivotCachesWarning,
   manualCalculationModeWarning,
+  precisionAsDisplayedCalculationWarning,
   volatileFormulasWarning,
 } from '../../packages/excel-import/src/index.js'
 import { addExportCalculationSettingsToXlsxBytes } from '../../packages/excel-import/src/xlsx-calculation-settings.js'
@@ -356,6 +357,68 @@ describe('public workbook corpus', () => {
       validation: { formulaOraclePassed: true, formulaOracleComparisons: 0, roundTripPassed: true },
       unsupportedFeatureClassifications: [`xlsx.import.warning:${manualCalculationModeWarning}`],
     })
+  })
+
+  it('accepts precision-as-displayed formulas when formula oracle validation matches cached Excel values', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-precision-displayed-'))
+    mkdirSync(join(cacheDir, 'files'), { recursive: true })
+    const workbookBytes = buildPrecisionAsDisplayedFormulaWorkbookBytes()
+    const sha256 = await sha256Hex(workbookBytes)
+    writeFileSync(join(cacheDir, 'files', `${sha256}.xlsx`), workbookBytes)
+    const license = {
+      spdxId: 'CC-BY-4.0',
+      title: 'Creative Commons Attribution 4.0 International',
+      evidenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    }
+    const manifest: PublicWorkbookManifest = {
+      ...createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'),
+      sources: [
+        {
+          id: 'source-precision-displayed',
+          kind: 'direct-url',
+          sourceUrl: 'https://example.com/precision-displayed.xlsx',
+          downloadUrl: 'https://example.com/precision-displayed.xlsx',
+          fileName: 'precision-displayed.xlsx',
+          discoveredAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+      ],
+      artifacts: [
+        {
+          id: `workbook-${sha256.slice(0, 16)}`,
+          sourceId: 'source-precision-displayed',
+          sourceUrl: 'https://example.com/precision-displayed.xlsx',
+          downloadUrl: 'https://example.com/precision-displayed.xlsx',
+          fileName: 'precision-displayed.xlsx',
+          cachePath: `files/${sha256}.xlsx`,
+          sha256,
+          byteSize: workbookBytes.byteLength,
+          workbookFingerprint: 'precision-displayed-fingerprint',
+          fetchedAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+      ],
+    }
+
+    const scorecard = await buildPublicWorkbookCorpusScorecard({
+      manifest,
+      cacheDir,
+      generatedAt: '2026-05-07T01:00:00.000Z',
+    })
+
+    expect(scorecard.summary.allCachedWorkbooksPassed).toBe(true)
+    expect(scorecard.summary.formulaOracleComparisonCount).toBe(1)
+    expect(scorecard.cases[0]).toMatchObject({
+      status: 'passed',
+      passed: true,
+      featureCounts: { formulaCellCount: 1, warningCount: 1 },
+      validation: { formulaOraclePassed: true, formulaOracleComparisons: 1, roundTripPassed: true },
+      unsupportedFeatureClassifications: [],
+    })
+    expect(scorecard.cases[0]?.evidence).not.toContain(publicWorkbookImportWarningClassifierEvidence)
+    expect(scorecard.cases[0]?.unsupportedFeatureClassifications).not.toContain(
+      `xlsx.import.warning:${precisionAsDisplayedCalculationWarning}`,
+    )
   })
 
   it('classifies volatile cached formula values as unsupported instead of oracle failures', async () => {
@@ -1397,6 +1460,27 @@ function buildManualCalculationWorkbookBytes(): Uint8Array {
     workbook: {
       name: 'manual-calculation',
       metadata: { calculationSettings: { mode: 'manual', compatibilityMode: 'excel-modern' } },
+    },
+    sheets: [],
+  })
+}
+
+function buildPrecisionAsDisplayedFormulaWorkbookBytes(): Uint8Array {
+  const workbook = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['Input', 'Value'],
+    ['A', 1],
+    ['B', 2],
+    ['Total', null],
+  ])
+  sheet.B4 = { t: 'n', f: 'B2+B3', v: 3 }
+  sheet['!ref'] = 'A1:B4'
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Summary')
+  return addExportCalculationSettingsToXlsxBytes(XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }), {
+    version: 1,
+    workbook: {
+      name: 'precision-displayed',
+      metadata: { calculationSettings: { mode: 'automatic', compatibilityMode: 'excel-modern', fullPrecision: false } },
     },
     sheets: [],
   })
