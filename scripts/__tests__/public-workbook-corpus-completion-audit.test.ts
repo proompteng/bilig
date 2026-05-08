@@ -168,6 +168,46 @@ describe('public workbook corpus completion audit', () => {
     )
   })
 
+  it('uses a bounded financial verify-missing command after financial workpapers are cached', () => {
+    const artifactA = financialWorkbookArtifact('workbook-a')
+    const artifactB = financialWorkbookArtifact('workbook-b')
+    const audit = buildPublicWorkbookCorpusCompletionAudit({
+      generatedAt: '2026-05-08T00:00:00.000Z',
+      hyperformulaSecondaryCorpus: hyperFormulaSecondaryCorpusFixture(),
+      manifest: manifestWithArtifacts([artifactA, artifactB], 2),
+      financialManifest: manifestWithArtifacts([artifactA, artifactB], 2),
+      financialRecordedCases: [passedCase(artifactA, 1)],
+      recordedCases: [passedCase(artifactA, 1), passedCase(artifactB, 1)],
+      status: statusFixture({
+        targetWorkbookCount: 2,
+        sourceCount: 2,
+        cachedArtifactCount: 2,
+        scorecardCaseCount: 2,
+        checkpointCaseCount: 0,
+        recordedManifestArtifactCount: 2,
+        missingManifestArtifactCount: 0,
+        recordedPassedCaseCount: 2,
+        scorecardCoversManifest: true,
+        targetComplete: true,
+        gaps: [],
+      }),
+      stopMarkerActive: true,
+    })
+
+    expect(audit.nextActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'resume-financial-workpapers',
+          reason: 'financial/accounting cached artifacts: 2/2; recorded cases: 1/2; non-passing cases: 0',
+          blockedCommands: [
+            'BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1 pnpm public-workbook-corpus:verify-missing -- --manifest .cache/public-workbook-corpus-financial/manifest.json --scorecard .cache/public-workbook-corpus-financial/scorecard.json --verify-checkpoint .cache/public-workbook-corpus-financial/verification-checkpoint.json --cache-dir .cache/public-workbook-corpus-financial --limit 1 --allow-active-stop-marker',
+          ],
+        }),
+      ]),
+    )
+    expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
+  })
+
   it('marks the goal achieved when public corpus evidence is complete and HyperFormula parity is folded in', () => {
     const artifactA = financialWorkbookArtifact('workbook-a')
     const artifactB = financialWorkbookArtifact('workbook-b')

@@ -9,6 +9,10 @@ import type {
 const resumeFetchBatchSize = 6
 const financialFetchTrancheSize = 20
 const financialFetchBatchSize = 6
+const financialManifestPath = '.cache/public-workbook-corpus-financial/manifest.json'
+const financialCacheDir = '.cache/public-workbook-corpus-financial'
+const financialScorecardPath = '.cache/public-workbook-corpus-financial/scorecard.json'
+const financialVerifyCheckpointPath = '.cache/public-workbook-corpus-financial/verification-checkpoint.json'
 
 export function buildPublicWorkbookCorpusAuditNextActions(args: {
   readonly currentState: PublicWorkbookCorpusAuditState
@@ -155,7 +159,23 @@ function resumeFinancialWorkbookBlockedCommands(state: PublicWorkbookCorpusAudit
     )
   }
   if (state.financialCachedArtifactCount > state.recordedFinancialManifestArtifactCount) {
-    commands.push(blockedCommand(['pnpm', 'public-workbook-corpus:verify-financial']))
+    commands.push(
+      blockedCommand([
+        'pnpm',
+        'public-workbook-corpus:verify-missing',
+        '--',
+        '--manifest',
+        financialManifestPath,
+        '--scorecard',
+        financialScorecardPath,
+        '--verify-checkpoint',
+        financialVerifyCheckpointPath,
+        '--cache-dir',
+        financialCacheDir,
+        '--limit',
+        '1',
+      ]),
+    )
   }
   return commands
 }
