@@ -36,6 +36,7 @@ async function main(): Promise<void> {
     limit,
     sampleLimit,
   })
+  const needsAdditionalDiscovery = !plan.targetReachableFromKnownCandidates
 
   process.stdout.write(
     `${JSON.stringify(
@@ -62,16 +63,21 @@ async function main(): Promise<void> {
         candidateSourceDeficitCount: plan.candidateSourceDeficitCount,
         minimumAdditionalSourceCount: plan.minimumAdditionalSourceCount,
         recommendedDiscoveryLimit: Math.max(plan.recommendedDiscoveryLimit, targetWorkbookCount),
+        needsAdditionalDiscovery,
         targetReachableFromKnownCandidates: plan.targetReachableFromKnownCandidates,
         commands: {
-          discoverPlan: formatFinancialDiscoveryPlanCommand({ cacheDir, limit, manifestPath, targetWorkbookCount }),
-          discover: formatFinancialDiscoveryCommand({
-            cacheDir,
-            limit: Math.max(plan.recommendedDiscoveryLimit, targetWorkbookCount),
-            manifestPath,
-            stopMarkerActive,
-            targetWorkbookCount,
-          }),
+          discoverPlan: needsAdditionalDiscovery
+            ? formatFinancialDiscoveryPlanCommand({ cacheDir, limit, manifestPath, targetWorkbookCount })
+            : null,
+          discover: needsAdditionalDiscovery
+            ? formatFinancialDiscoveryCommand({
+                cacheDir,
+                limit: Math.max(plan.recommendedDiscoveryLimit, targetWorkbookCount),
+                manifestPath,
+                stopMarkerActive,
+                targetWorkbookCount,
+              })
+            : null,
           fetchPlan: formatFinancialFetchPlanCommand({ cacheDir, limit, manifestPath }),
           fetch: formatFinancialFetchCommand({ cacheDir, limit, manifestPath, stopMarkerActive }),
           verify: formatFinancialVerifyCommand({ cacheDir, manifestPath, scorecardPath, stopMarkerActive, verifyCheckpointPath }),

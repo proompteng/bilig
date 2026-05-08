@@ -246,8 +246,8 @@ describe('public workbook corpus CLI resource guards', () => {
       candidateSourceDeficitCount: 0,
       minimumAdditionalSourceCount: 0,
       recommendedDiscoveryLimit: 2,
-      recommendedDiscoveryPlanCommand: 'pnpm public-workbook-corpus:discover:plan -- --limit 2',
-      recommendedDiscoveryCommand: expect.stringContaining('pnpm public-workbook-corpus:discover --'),
+      recommendedDiscoveryPlanCommand: null,
+      recommendedDiscoveryCommand: null,
       targetReachableFromKnownCandidates: true,
       sampledCandidateSources: [
         {
@@ -257,6 +257,31 @@ describe('public workbook corpus CLI resource guards', () => {
           downloadUrl: artifactB.downloadUrl,
         },
       ],
+    })
+  })
+
+  it('omits mutating discovery commands when known candidates can reach the artifact target', () => {
+    const artifactA = workbookArtifact('workbook-a')
+    const artifactB = workbookArtifact('workbook-b')
+    const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-cli-discover-not-needed-'))
+    const manifestPath = join(dir, 'manifest.json')
+    const manifest = {
+      ...manifestWithArtifacts([artifactA, artifactB]),
+      targetWorkbookCount: 2,
+      artifacts: [artifactA],
+    }
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+
+    const result = spawnSync('bun', [corpusScriptPath(), 'discover-plan', '--manifest', manifestPath, '--limit', '2'], {
+      encoding: 'utf8',
+    })
+    const plan: unknown = JSON.parse(result.stdout)
+
+    expect(result.status).toBe(0)
+    expect(plan).toMatchObject({
+      candidateSourceDeficitCount: 0,
+      recommendedDiscoveryCommand: null,
+      targetReachableFromKnownCandidates: true,
     })
   })
 

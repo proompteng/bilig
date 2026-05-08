@@ -296,12 +296,16 @@ async function main(): Promise<void> {
             candidateSourceDeficitCount: plan.candidateSourceDeficitCount,
             minimumAdditionalSourceCount: plan.minimumAdditionalSourceCount,
             recommendedDiscoveryLimit: plan.recommendedDiscoveryLimit,
-            recommendedDiscoveryPlanCommand: `pnpm public-workbook-corpus:discover:plan -- --limit ${String(plan.recommendedDiscoveryLimit)}`,
-            recommendedDiscoveryCommand: formatPublicWorkbookCorpusDiscoverCommand({
-              cacheDir,
-              limit: plan.recommendedDiscoveryLimit,
-              manifestPath,
-            }),
+            recommendedDiscoveryPlanCommand: plan.targetReachableFromKnownCandidates
+              ? null
+              : `pnpm public-workbook-corpus:discover:plan -- --limit ${String(plan.recommendedDiscoveryLimit)}`,
+            recommendedDiscoveryCommand: plan.targetReachableFromKnownCandidates
+              ? null
+              : formatPublicWorkbookCorpusDiscoverCommand({
+                  cacheDir,
+                  limit: plan.recommendedDiscoveryLimit,
+                  manifestPath,
+                }),
             targetReachableFromKnownCandidates: plan.targetReachableFromKnownCandidates,
             sampledCandidateSources: plan.sampledCandidateSources.map((source) => ({
               id: source.id,
@@ -428,11 +432,13 @@ async function main(): Promise<void> {
           candidateSourceDeficitCount: plan.candidateSourceDeficitCount,
           minimumAdditionalSourceCount: plan.minimumAdditionalSourceCount,
           recommendedDiscoveryLimit: plan.recommendedDiscoveryLimit,
-          recommendedDiscoveryCommand: formatPublicWorkbookCorpusDiscoverCommand({
-            cacheDir,
-            limit: plan.recommendedDiscoveryLimit,
-            manifestPath,
-          }),
+          recommendedDiscoveryCommand: plan.targetReachableFromKnownCandidates
+            ? null
+            : formatPublicWorkbookCorpusDiscoverCommand({
+                cacheDir,
+                limit: plan.recommendedDiscoveryLimit,
+                manifestPath,
+              }),
           targetReachableFromKnownCandidates: plan.targetReachableFromKnownCandidates,
         },
         null,

@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 
 import { asRecord, createEmptyPublicWorkbookManifest } from '../public-workbook-corpus-json.ts'
+import type { PublicWorkbookSource } from '../public-workbook-corpus-types.ts'
 
 describe('public workbook financial corpus plan CLI', () => {
   it('plans the financial corpus lane without creating cache files or starting network work', () => {
@@ -37,6 +38,7 @@ describe('public workbook financial corpus plan CLI', () => {
       candidateSourceCount: 0,
       candidateSourceDeficitCount: 5,
       minimumAdditionalSourceCount: 5,
+      needsAdditionalDiscovery: true,
       recommendedDiscoveryLimit: 5,
       targetReachableFromKnownCandidates: false,
       commands: {
@@ -49,6 +51,38 @@ describe('public workbook financial corpus plan CLI', () => {
       },
       sampledCandidateSources: [],
     })
+  })
+
+  it('omits mutating discovery commands when known financial candidates can fill the target', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-financial-plan-no-discovery-'))
+    const manifestPath = join(dir, 'manifest.json')
+    const cacheDir = join(dir, 'cache')
+    const manifest = {
+      ...createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z', 2),
+      sources: [financialSource('source-a'), financialSource('source-b')],
+    }
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+
+    const result = spawnSync(
+      'bun',
+      [financialPlanScriptPath(), '--manifest', manifestPath, '--cache-dir', cacheDir, '--target-workbook-count', '2', '--limit', '2'],
+      {
+        encoding: 'utf8',
+      },
+    )
+    const plan = asRecord(JSON.parse(result.stdout))
+    const commands = asRecord(plan['commands'])
+
+    expect(result.status).toBe(0)
+    expect(plan).toMatchObject({
+      candidateSourceCount: 2,
+      candidateSourceDeficitCount: 0,
+      needsAdditionalDiscovery: false,
+      targetReachableFromKnownCandidates: true,
+    })
+    expect(commands['discoverPlan']).toBeNull()
+    expect(commands['discover']).toBeNull()
+    expect(commands['fetch']).toEqual(expect.stringContaining('public-workbook-corpus:fetch-financial'))
   })
 
   it('exposes non-mutating package scripts for the financial corpus lane', () => {
@@ -138,4 +172,21 @@ function corpusScriptPath(): string {
 
 function packageJsonPath(): string {
   return join(dirname(fileURLToPath(import.meta.url)), '../../package.json')
+}
+
+function financialSource(id: string): PublicWorkbookSource {
+  return {
+    id,
+    kind: 'direct-url',
+    sourceUrl: `https://example.com/${id}.xlsx`,
+    downloadUrl: `https://example.com/${id}.xlsx`,
+    fileName: `${id}.xlsx`,
+    discoveredAt: '2026-05-07T00:00:00.000Z',
+    license: {
+      spdxId: 'CC-BY-4.0',
+      title: 'Creative Commons Attribution 4.0 International',
+      evidenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    },
+    topicEvidence: ['financial:fileName'],
+  }
 }
