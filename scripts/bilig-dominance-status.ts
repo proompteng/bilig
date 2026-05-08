@@ -6,6 +6,11 @@ import { pathToFileURL } from 'node:url'
 
 import type { BuildScorecardInput } from './bilig-dominance-scorecard-types.ts'
 import { loadBiligDominanceScorecardInput, rootDir } from './bilig-dominance-scorecard-input.ts'
+import {
+  localCiResourceGuardOverrideEnv,
+  readLocalCiResourceGuardStatus,
+  type LocalCiResourceGuardStatus,
+} from './ci-local-resource-guard.ts'
 import { buildBiligDominanceScorecard } from './gen-bilig-dominance-scorecard.ts'
 import type { UiResponsivenessSameCorpusWorkload } from './gen-ui-responsiveness-live-browser-scorecard.ts'
 import {
@@ -127,6 +132,14 @@ export interface BiligDominanceStatus {
     readonly nextGoogleSheetsUploadInstruction: string
     readonly nextPreflightCommand: string
     readonly nextCaptureCommand: string
+    readonly browserCaptureGuard: {
+      readonly active: boolean
+      readonly activeMarkerPaths: readonly string[]
+      readonly overrideEnvVar: string
+      readonly overridePrefix: string | null
+      readonly nextPreflightRequiresOverride: boolean
+      readonly nextCaptureRequiresOverride: boolean
+    }
     readonly nextScorecardGenerateCommand: string
     readonly nextDominanceCheckCommand: string
   }
@@ -243,6 +256,7 @@ export function buildBiligDominanceStatusFromArgs(): BiligDominanceStatus {
     stopMarkerActive,
     stopMarkerPath: formatBiligDominanceStatusPathForMessage(stopMarkerPath, rootDir),
     uiSameCorpusGoogleSheetsUrl: explicitUiSameCorpusGoogleSheetsUrl,
+    uiSameCorpusLocalCiResourceGuardStatus: readLocalCiResourceGuardStatus(rootDir),
     uiSameCorpusPublicAccessCheck,
     uiSameCorpusPublicAccessCheckPath: formatBiligDominanceStatusPathForMessage(uiSameCorpusPublicAccessCheckPath, rootDir),
   })
@@ -259,6 +273,7 @@ export function buildBiligDominanceStatus(args: {
   readonly stopMarkerActive: boolean
   readonly stopMarkerPath: string
   readonly uiSameCorpusGoogleSheetsUrl?: string | null
+  readonly uiSameCorpusLocalCiResourceGuardStatus?: LocalCiResourceGuardStatus
   readonly uiSameCorpusPublicAccessCheck?: SameCorpusPublicAccessCheck | null
   readonly uiSameCorpusPublicAccessCheckPath?: string
 }): BiligDominanceStatus {
@@ -326,6 +341,7 @@ export function buildBiligDominanceStatus(args: {
       gaps: args.publicWorkbookCorpusStatus.gaps,
     },
     uiSameCorpus: buildUiSameCorpusStatus(args.input, {
+      localCiResourceGuardStatus: args.uiSameCorpusLocalCiResourceGuardStatus ?? { activeMarkerPaths: [] },
       publicAccessCheckPath: args.uiSameCorpusPublicAccessCheckPath ?? '.cache/ui-responsiveness/same-corpus-public-access-check.json',
       ...resolveUiSameCorpusGoogleSheetsUrl({
         corpusCaseId: defaultUiSameCorpusId,
@@ -471,6 +487,7 @@ function buildUiSameCorpusStatus(
   args: {
     readonly googleSheetsUrl: string | null
     readonly googleSheetsUrlSource: UiSameCorpusGoogleSheetsUrlSource
+    readonly localCiResourceGuardStatus: LocalCiResourceGuardStatus
     readonly publicAccessCheckPath: string
   },
 ): BiligDominanceStatus['uiSameCorpus'] {
@@ -480,6 +497,7 @@ function buildUiSameCorpusStatus(
   const missingRequiredWorkloads = requiredUiSameCorpusWorkloads.filter((workload) => !coveredWorkloads.has(workload))
   const tenXRequirementSatisfied = uiSameCorpusTenXRequirementSatisfied(proof, missingRequiredWorkloads)
   const googleSheetsUrlArgument = args.googleSheetsUrl ?? '<google-sheets-url>'
+  const browserCaptureGuard = buildBrowserCaptureGuardStatus(args.localCiResourceGuardStatus)
   return {
     captured: proof.captured,
     evidenceKind: proof.evidenceKind,
@@ -537,8 +555,21 @@ function buildUiSameCorpusStatus(
     ]
       .map(shellQuote)
       .join(' '),
+    browserCaptureGuard,
     nextScorecardGenerateCommand: 'pnpm ui:browser-live:generate -- --capture .cache/ui-responsiveness/same-corpus-capture.json',
     nextDominanceCheckCommand: 'pnpm dominance:generate && pnpm dominance:check && pnpm dominance:audit:check',
+  }
+}
+
+function buildBrowserCaptureGuardStatus(status: LocalCiResourceGuardStatus): BiligDominanceStatus['uiSameCorpus']['browserCaptureGuard'] {
+  const active = status.activeMarkerPaths.length > 0
+  return {
+    active,
+    activeMarkerPaths: status.activeMarkerPaths,
+    overrideEnvVar: localCiResourceGuardOverrideEnv,
+    overridePrefix: active ? `${localCiResourceGuardOverrideEnv}=1` : null,
+    nextPreflightRequiresOverride: active,
+    nextCaptureRequiresOverride: active,
   }
 }
 

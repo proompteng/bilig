@@ -35,6 +35,14 @@ describe('bilig dominance status', () => {
       },
       nextFixtureCheckCommand: 'pnpm ui:same-corpus:fixture:check',
       nextPublicAccessCheckCommand: expect.stringContaining('pnpm ui:same-corpus:public-check'),
+      browserCaptureGuard: {
+        active: false,
+        activeMarkerPaths: [],
+        overrideEnvVar: 'BILIG_ALLOW_LOCAL_CI_RESOURCE_GUARD',
+        overridePrefix: null,
+        nextPreflightRequiresOverride: false,
+        nextCaptureRequiresOverride: false,
+      },
       nextScorecardGenerateCommand: 'pnpm ui:browser-live:generate -- --capture .cache/ui-responsiveness/same-corpus-capture.json',
       nextDominanceCheckCommand: 'pnpm dominance:generate && pnpm dominance:check && pnpm dominance:audit:check',
     })
@@ -91,6 +99,34 @@ describe('bilig dominance status', () => {
       '--output .cache/ui-responsiveness/same-corpus-public-access-check.json',
     )
     expect(status.uiSameCorpus.nextCaptureCommand).toContain(googleSheetsUrl)
+  })
+
+  it('surfaces local resource guard state before same-corpus browser capture', () => {
+    const status = buildBiligDominanceStatus({
+      input: buildFixtureInput(),
+      financialCorpusStatus: completeFinancialCorpusStatus(),
+      publicWorkbookCorpusStatus: completePublicWorkbookCorpusStatus(),
+      stopMarkerActive: false,
+      stopMarkerPath: '/repo/.agent-coordination/stop.md',
+      uiSameCorpusLocalCiResourceGuardStatus: {
+        activeMarkerPaths: [
+          '.agent-coordination/20260507T074946Z-codex-stop-interactive-corpus-runs.md',
+          '.agent-coordination/20260508T092619Z-codex-memory-pressure-stop.md',
+        ],
+      },
+    })
+
+    expect(status.uiSameCorpus.browserCaptureGuard).toEqual({
+      active: true,
+      activeMarkerPaths: [
+        '.agent-coordination/20260507T074946Z-codex-stop-interactive-corpus-runs.md',
+        '.agent-coordination/20260508T092619Z-codex-memory-pressure-stop.md',
+      ],
+      overrideEnvVar: 'BILIG_ALLOW_LOCAL_CI_RESOURCE_GUARD',
+      overridePrefix: 'BILIG_ALLOW_LOCAL_CI_RESOURCE_GUARD=1',
+      nextPreflightRequiresOverride: true,
+      nextCaptureRequiresOverride: true,
+    })
   })
 
   it('keeps asking for the Google Sheets URL when captured same-corpus proof is not 10x', () => {
