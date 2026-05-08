@@ -1,8 +1,12 @@
 import type { PublicWorkbookCorpusCase } from './public-workbook-corpus-types.ts'
 
 export const publicWorkbookImportWarningClassifierEvidence = 'import-warning-classifier=2026-05-08-full-precision-formula-aware'
+export const publicWorkbookPivotClassifierEvidence = 'pivot-classifier=2026-05-08-external-cache-warning'
 
-export type PublicWorkbookCorpusEvidenceRefreshReason = 'missing-used-range-evidence' | 'missing-import-warning-classifier-evidence'
+export type PublicWorkbookCorpusEvidenceRefreshReason =
+  | 'missing-used-range-evidence'
+  | 'missing-import-warning-classifier-evidence'
+  | 'missing-pivot-classifier-evidence'
 
 export function publicWorkbookCorpusCaseNeedsEvidenceRefresh(entry: PublicWorkbookCorpusCase): boolean {
   return publicWorkbookCorpusCaseEvidenceRefreshReasons(entry).length > 0
@@ -17,6 +21,9 @@ export function publicWorkbookCorpusCaseEvidenceRefreshReasons(
   }
   if (hasImportWarningUnsupportedClassification(entry) && !hasCurrentImportWarningClassifierEvidence(entry)) {
     reasons.push('missing-import-warning-classifier-evidence')
+  }
+  if (hasPivotUnsupportedClassification(entry) && !hasCurrentPivotClassifierEvidence(entry)) {
+    reasons.push('missing-pivot-classifier-evidence')
   }
   return reasons
 }
@@ -51,6 +58,18 @@ export function hasImportWarningUnsupportedClassifications(classifications: read
   return classifications.some((classification) => classification.startsWith('xlsx.import.warning:'))
 }
 
+export function hasPivotUnsupportedClassifications(classifications: readonly string[]): boolean {
+  return classifications.some((classification) => classification.startsWith('xlsx.pivots.'))
+}
+
+function hasPivotUnsupportedClassification(entry: PublicWorkbookCorpusCase): boolean {
+  return hasPivotUnsupportedClassifications(entry.unsupportedFeatureClassifications)
+}
+
 function hasCurrentImportWarningClassifierEvidence(entry: PublicWorkbookCorpusCase): boolean {
   return entry.evidence.includes(publicWorkbookImportWarningClassifierEvidence)
+}
+
+function hasCurrentPivotClassifierEvidence(entry: PublicWorkbookCorpusCase): boolean {
+  return entry.evidence.includes(publicWorkbookPivotClassifierEvidence)
 }

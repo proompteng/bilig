@@ -38,6 +38,11 @@ interface ParsedPivotCache {
   readonly fields: readonly string[]
 }
 
+export interface ImportedWorkbookPivots {
+  readonly pivots: WorkbookPivotSnapshot[] | undefined
+  readonly hasExternalPivotCaches: boolean
+}
+
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '',
@@ -613,6 +618,12 @@ function parsePivotCacheDefinition(
   return fields.length > 0 ? { cacheId, source, fields } : null
 }
 
+function pivotCacheDefinitionHasExternalSource(xml: string): boolean {
+  const parsed: unknown = xmlParser.parse(xml)
+  const cacheSource = recordChild(recordChild(parsed, 'pivotCacheDefinition'), 'cacheSource')
+  return cacheSource?.['type'] === 'external'
+}
+
 function sourceRangeForName(
   name: string,
   sheetName: string | null,
@@ -662,20 +673,23 @@ function parsePivotCaches(
   zip: ZipEntries,
   tables: readonly WorkbookTableSnapshot[],
   definedNames: readonly WorkbookDefinedNameSnapshot[],
-): Map<number, ParsedPivotCache> {
+): { readonly caches: Map<number, ParsedPivotCache>; readonly hasExternalPivotCaches: boolean } {
   const cacheDefinitions = readWorkbookPivotCaches(zip)
   const tablesByName = new Map(tables.map((table) => [table.name.toLocaleLowerCase('en-US'), table]))
   const definedNamesByName = new Map(
     definedNames.map((definedName) => [definedNameKey(definedName.name, definedName.scopeSheetName), definedName]),
   )
   const output = new Map<number, ParsedPivotCache>()
+  let hasExternalPivotCaches = false
   for (const [cacheId, path] of cacheDefinitions.entries()) {
-    const parsed = parsePivotCacheDefinition(cacheId, getZipText(zip, path) ?? '', tablesByName, definedNamesByName)
+    const xml = getZipText(zip, path) ?? ''
+    hasExternalPivotCaches ||= pivotCacheDefinitionHasExternalSource(xml)
+    const parsed = parsePivotCacheDefinition(cacheId, xml, tablesByName, definedNamesByName)
     if (parsed) {
       output.set(cacheId, parsed)
     }
   }
-  return output
+  return { caches: output, hasExternalPivotCaches }
 }
 
 function aggregationFromSubtotal(value: unknown): PivotAggregation | null {
@@ -754,11 +768,11 @@ export function readImportedWorkbookPivots(
   sheetNames: readonly string[],
   tables: readonly WorkbookTableSnapshot[] = [],
   definedNames: readonly WorkbookDefinedNameSnapshot[] = [],
-): WorkbookPivotSnapshot[] | undefined {
+): ImportedWorkbookPivots {
   const zip = readXlsxZipEntries(source)
-  const caches = parsePivotCaches(zip, tables, definedNames)
+  const { caches, hasExternalPivotCaches } = parsePivotCaches(zip, tables, definedNames)
   if (caches.size === 0) {
-    return undefined
+    return { pivots: undefined, hasExternalPivotCaches }
   }
   const pivots: WorkbookPivotSnapshot[] = []
   sheetNames.forEach((sheetName, sheetIndex) => {
@@ -787,9 +801,13 @@ export function readImportedWorkbookPivots(
       }
     })
   })
-  return pivots.length > 0
-    ? pivots.toSorted((left, right) =>
-        `${left.sheetName}:${left.address}:${left.name}`.localeCompare(`${right.sheetName}:${right.address}:${right.name}`),
-      )
-    : undefined
+  return {
+    pivots:
+      pivots.length > 0
+        ? pivots.toSorted((left, right) =>
+            `${left.sheetName}:${left.address}:${left.name}`.localeCompare(`${right.sheetName}:${right.address}:${right.name}`),
+          )
+        : undefined,
+    hasExternalPivotCaches,
+  }
 }

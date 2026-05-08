@@ -1,6 +1,7 @@
 import type * as XLSX from 'xlsx'
 
 export const externalWorkbookReferencesWarning = 'External workbook links were preserved but not recalculated during XLSX import.'
+export const externalPivotCachesWarning = 'External pivot caches were detected but not semantically imported during XLSX import.'
 export const volatileFormulasWarning =
   'Volatile formulas were preserved during XLSX import; cached formula values may depend on workbook calculation time.'
 

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { createEmptyPublicWorkbookManifest } from '../public-workbook-corpus.ts'
-import { publicWorkbookImportWarningClassifierEvidence } from '../public-workbook-corpus-evidence.ts'
+import { publicWorkbookImportWarningClassifierEvidence, publicWorkbookPivotClassifierEvidence } from '../public-workbook-corpus-evidence.ts'
 import { buildPublicWorkbookCorpusStatus } from '../public-workbook-corpus-status.ts'
 import { writePublicWorkbookCorpusVerificationCheckpoint } from '../public-workbook-corpus-verify-checkpoint.ts'
 import type {
@@ -78,6 +78,23 @@ describe('public workbook corpus evidence refresh reasons', () => {
 
     expect(status.staleRecordedVerificationCount).toBe(1)
     expect(status.staleRecordedVerificationSample[0]?.reasons).toEqual(['missing-import-warning-classifier-evidence'])
+  })
+
+  it('marks old raw pivot classifier evidence stale after external-cache pivot detection changes', () => {
+    const artifact = workbookArtifact('workbook-a')
+    const status = buildPublicWorkbookCorpusStatus({
+      manifest: manifestWithArtifacts([artifact]),
+      scorecard: emptyScorecard(),
+      checkpointCases: [
+        pivotUnsupportedCase(artifact, {
+          hasCurrentClassifierEvidence: false,
+          hasUsedRangeEvidence: true,
+        }),
+      ],
+    })
+
+    expect(status.staleRecordedVerificationCount).toBe(1)
+    expect(status.staleRecordedVerificationSample[0]?.reasons).toEqual(['missing-pivot-classifier-evidence'])
   })
 
   it('keeps all stale reasons in verify-stale dry-run output', () => {
@@ -248,6 +265,71 @@ function importWarningUnsupportedCase(
       `license=${artifact.license.title}`,
       `sha256=${artifact.sha256}`,
       ...(options.hasCurrentClassifierEvidence ? [publicWorkbookImportWarningClassifierEvidence] : []),
+    ],
+  }
+}
+
+function pivotUnsupportedCase(
+  artifact: PublicWorkbookArtifact,
+  options: {
+    readonly hasCurrentClassifierEvidence: boolean
+    readonly hasUsedRangeEvidence: boolean
+  },
+): PublicWorkbookCorpusCase {
+  const dimensions: PublicWorkbookCorpusCase['workbookMetadata']['dimensions'] = [
+    {
+      sheetName: 'Sheet1',
+      rowCount: 1,
+      columnCount: 1,
+      nonEmptyCellCount: 1,
+      ...(options.hasUsedRangeEvidence ? { usedRange: { startRow: 0, startColumn: 0, endRow: 0, endColumn: 0 } } : {}),
+    },
+  ]
+  return {
+    id: artifact.id,
+    sourceId: artifact.sourceId,
+    sourceUrl: artifact.sourceUrl,
+    fileName: artifact.fileName,
+    sha256: artifact.sha256,
+    byteSize: artifact.byteSize,
+    license: artifact.license,
+    status: 'unsupported',
+    passed: true,
+    featureCounts: {
+      sheetCount: 1,
+      cellCount: 1,
+      formulaCellCount: 0,
+      valueCellCount: 1,
+      definedNameCount: 0,
+      tableCount: 0,
+      chartCount: 0,
+      pivotCount: 1,
+      mergeCount: 0,
+      styleRangeCount: 0,
+      conditionalFormatCount: 0,
+      dataValidationCount: 0,
+      macroPayloadCount: 0,
+      warningCount: 0,
+    },
+    workbookMetadata: {
+      workbookName: artifact.fileName,
+      sheetNames: ['Sheet1'],
+      dimensions,
+    },
+    validation: {
+      importPassed: true,
+      formulaOraclePassed: true,
+      formulaOracleComparisons: 0,
+      formulaOracleMismatches: [],
+      roundTripPassed: true,
+      structuralSmokePassed: true,
+    },
+    unsupportedFeatureClassifications: ['xlsx.pivots.rawPartNotSemanticallyImported'],
+    evidence: [
+      `source=${artifact.sourceUrl}`,
+      `license=${artifact.license.title}`,
+      `sha256=${artifact.sha256}`,
+      ...(options.hasCurrentClassifierEvidence ? [publicWorkbookPivotClassifierEvidence] : []),
     ],
   }
 }

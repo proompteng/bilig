@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { SpreadsheetEngine } from '../packages/core/src/engine.js'
 import {
   exportXlsx,
+  externalPivotCachesWarning,
   externalWorkbookReferencesWarning,
   importXlsx,
   manualCalculationModeWarning,
@@ -16,7 +17,9 @@ import type { WorkbookSnapshot } from '../packages/protocol/src/types.js'
 import { parsePublicWorkbookCorpusCase, validatePublicWorkbookManifest } from './public-workbook-corpus-json.ts'
 import {
   hasImportWarningUnsupportedClassifications,
+  hasPivotUnsupportedClassifications,
   publicWorkbookImportWarningClassifierEvidence,
+  publicWorkbookPivotClassifierEvidence,
 } from './public-workbook-corpus-evidence.ts'
 import { inspectWorkbookFootprintIsolated, type PublicWorkbookCorpusWorkerOptions } from './public-workbook-corpus-footprint.ts'
 import { formatByteSize, startChildRssWatchdog, terminateChildProcess } from './public-workbook-corpus-process.ts'
@@ -65,6 +68,7 @@ export const isolatedFootprintByteThreshold = 1_000_000
 const externalWorkbookRoundTripSkipEvidence =
   'Round-trip projection skipped because external workbook links are not recalculated during XLSX import.'
 export const rawPivotPartUnsupportedClassification = 'xlsx.pivots.rawPartNotSemanticallyImported'
+export const externalPivotCacheUnsupportedClassification = 'xlsx.pivots.externalCacheNotSemanticallyImported'
 
 export async function buildPublicWorkbookCorpusScorecard(args: BuildScorecardArgs): Promise<PublicWorkbookCorpusScorecard> {
   validatePublicWorkbookManifest(args.manifest)
@@ -316,6 +320,7 @@ export async function verifyCachedWorkbookArtifact(
         ...(hasImportWarningUnsupportedClassifications(unsupportedFeatureClassifications)
           ? [publicWorkbookImportWarningClassifierEvidence]
           : []),
+        ...(hasPivotUnsupportedClassifications(unsupportedFeatureClassifications) ? [publicWorkbookPivotClassifierEvidence] : []),
         ...(roundTripSkipEvidence ? [roundTripSkipEvidence] : []),
         ...validationEvidence(validation),
       ],
@@ -610,7 +615,9 @@ export function classifyUnsupportedFeatures(
     classifications.add('xlsx.macros.execution.declined')
   }
   if (featureCounts.pivotCount > (snapshot.workbook.metadata?.pivots?.length ?? 0)) {
-    classifications.add(rawPivotPartUnsupportedClassification)
+    classifications.add(
+      warnings.includes(externalPivotCachesWarning) ? externalPivotCacheUnsupportedClassification : rawPivotPartUnsupportedClassification,
+    )
   }
   for (const warning of warnings) {
     classifications.add(`xlsx.import.warning:${warning}`)

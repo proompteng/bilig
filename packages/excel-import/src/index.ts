@@ -70,6 +70,7 @@ import { translateImportedFormulaStructuredReferences } from './xlsx-formula-tra
 import { readImportedSheetHyperlinks } from './xlsx-hyperlinks.js'
 import { buildImportedSheetMetadata } from './xlsx-import-sheet-metadata.js'
 import {
+  externalPivotCachesWarning,
   externalWorkbookReferencesWarning,
   formulaReferencesExternalWorkbook,
   formulaReferencesVolatileFunction,
@@ -81,7 +82,7 @@ import { worksheetCellAt, worksheetCellEntries, worksheetCellEntriesAtAddresses,
 
 export { exportXlsx } from './xlsx-export.js'
 export { manualCalculationModeWarning, precisionAsDisplayedCalculationWarning } from './xlsx-calculation-settings.js'
-export { externalWorkbookReferencesWarning, volatileFormulasWarning } from './xlsx-import-warnings.js'
+export { externalPivotCachesWarning, externalWorkbookReferencesWarning, volatileFormulasWarning } from './xlsx-import-warnings.js'
 export type { ImportedWorkbookSheetPreview } from './workbook-import-helpers.js'
 export type { ImportedWorkbookPreview } from './workbook-import-preview.js'
 export {
@@ -577,6 +578,9 @@ function importSheetJsWorkbook(
   const importedPivots = workbookZip
     ? readImportedWorkbookPivots(workbookZip, workbook.SheetNames, importedTables, importedDefinedNames.definedNames)
     : undefined
+  if (importedPivots?.hasExternalPivotCaches) {
+    warnings.push(externalPivotCachesWarning)
+  }
   const importedLegacyCommentVmlBySheet = workbookZip ? readImportedWorkbookLegacyCommentVml(workbookZip, workbook.SheetNames) : new Map()
   const importedPrinterSettingsBySheet = workbookZip ? readImportedWorkbookPrinterSettings(workbookZip, workbook.SheetNames) : new Map()
   const importedFiltersBySheet = workbookZip ? readImportedWorkbookFilters(workbookZip, workbook.SheetNames) : new Map()
@@ -819,7 +823,7 @@ function importSheetJsWorkbook(
     ...(importedDefinedNames.definedNames ? { definedNames: importedDefinedNames.definedNames } : {}),
     ...(importedTables ? { tables: importedTables } : {}),
     ...(importedArrayFormulaSpills.length > 0 ? { spills: importedArrayFormulaSpills } : {}),
-    ...(importedPivots ? { pivots: importedPivots } : {}),
+    ...(importedPivots?.pivots ? { pivots: importedPivots.pivots } : {}),
     ...(importedCharts ? { charts: importedCharts } : {}),
     ...(importedCellMetadata?.workbookMetadata ? { cellMetadata: importedCellMetadata.workbookMetadata } : {}),
   }
