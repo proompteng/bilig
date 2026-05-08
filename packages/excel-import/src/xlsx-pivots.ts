@@ -599,7 +599,7 @@ function parsePivotCacheDefinition(
   const sheetName = typeof sourceRecord?.['sheet'] === 'string' ? sourceRecord['sheet'] : null
   const ref = typeof sourceRecord?.['ref'] === 'string' ? sourceRecord['ref'] : null
   const sourceName = typeof sourceRecord?.['name'] === 'string' ? sourceRecord['name'].trim() : ''
-  const namedSource = sourceName.length > 0 ? sourceRangeForName(sourceName, tablesByName, definedNamesByName) : null
+  const namedSource = sourceName.length > 0 ? sourceRangeForName(sourceName, sheetName, tablesByName, definedNamesByName) : null
   const source = sheetName && ref ? parseRangeRef(sheetName, ref) : namedSource
   if (!source) {
     return null
@@ -615,6 +615,7 @@ function parsePivotCacheDefinition(
 
 function sourceRangeForName(
   name: string,
+  sheetName: string | null,
   tablesByName: ReadonlyMap<string, WorkbookTableSnapshot>,
   definedNamesByName: ReadonlyMap<string, WorkbookDefinedNameSnapshot>,
 ): CellRangeRef | null {
@@ -627,7 +628,9 @@ function sourceRangeForName(
       endAddress: table.endAddress,
     }
   }
-  const definedName = definedNamesByName.get(normalizedName)
+  const definedName = sheetName
+    ? (definedNamesByName.get(definedNameKey(name, sheetName)) ?? definedNamesByName.get(normalizedName))
+    : definedNamesByName.get(normalizedName)
   if (!definedName) {
     return null
   }
@@ -649,6 +652,12 @@ function sourceRangeForName(
   return null
 }
 
+function definedNameKey(name: string, scopeSheetName: string | undefined): string {
+  return scopeSheetName
+    ? `${scopeSheetName.toLocaleLowerCase('en-US')}:${name.toLocaleLowerCase('en-US')}`
+    : name.toLocaleLowerCase('en-US')
+}
+
 function parsePivotCaches(
   zip: ZipEntries,
   tables: readonly WorkbookTableSnapshot[],
@@ -657,9 +666,7 @@ function parsePivotCaches(
   const cacheDefinitions = readWorkbookPivotCaches(zip)
   const tablesByName = new Map(tables.map((table) => [table.name.toLocaleLowerCase('en-US'), table]))
   const definedNamesByName = new Map(
-    definedNames
-      .filter((definedName) => definedName.scopeSheetName === undefined)
-      .map((definedName) => [definedName.name.toLocaleLowerCase('en-US'), definedName]),
+    definedNames.map((definedName) => [definedNameKey(definedName.name, definedName.scopeSheetName), definedName]),
   )
   const output = new Map<number, ParsedPivotCache>()
   for (const [cacheId, path] of cacheDefinitions.entries()) {
