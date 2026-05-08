@@ -249,6 +249,9 @@ describe('bilig dominance status', () => {
         },
       ],
     })
+    expect(status.importExportBlockers).toContain('public workbook corpus missing feature witness coverage: pivots')
+    expect(status.unmetRequirements).toContain('public workbook corpus missing feature witness coverage: pivots')
+    expect(status.goalStatus).toBe('active-not-achieved')
   })
 
   it('formats repo-local status paths without exposing the checkout root', () => {

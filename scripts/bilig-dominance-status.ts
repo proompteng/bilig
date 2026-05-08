@@ -283,8 +283,9 @@ export function buildBiligDominanceStatus(args: {
   })
   const importExportCategory = scorecard.categories.find((category) => category.id === 'import-export-compatibility')
   const publicWorkbookCorpusBlockers = publicWorkbookCorpusDominanceBlockers(args.publicWorkbookCorpusStatus)
+  const featureWitnessBlockers = publicWorkbookCorpusFeatureWitnessBlockers(args.featureWitnessPlan ?? null)
   const financialCorpusBlockers = financialWorkbookCorpusDominanceBlockers(args.financialCorpusStatus ?? null)
-  const corpusBlockers = [...publicWorkbookCorpusBlockers, ...financialCorpusBlockers]
+  const corpusBlockers = [...publicWorkbookCorpusBlockers, ...featureWitnessBlockers, ...financialCorpusBlockers]
   const unmetRequirements = [...scorecard.claimPolicy.unmetRequirements, ...corpusBlockers]
   const blanketTenXClaimAllowed = scorecard.claimPolicy.blanketTenXClaimAllowed && corpusBlockers.length === 0
   return {
@@ -368,6 +369,14 @@ function publicWorkbookCorpusDominanceBlockers(status: PublicWorkbookCorpusStatu
     }
     return `public workbook corpus ${gap}`
   })
+}
+
+function publicWorkbookCorpusFeatureWitnessBlockers(plan: PublicWorkbookCorpusFeatureWitnessPlan | null): string[] {
+  const missingWitnesses = plan?.coverage.filter((entry) => entry.needsWitness).map((entry) => entry.label) ?? []
+  if (missingWitnesses.length === 0) {
+    return []
+  }
+  return [`public workbook corpus missing feature witness coverage: ${missingWitnesses.join(', ')}`]
 }
 
 function financialWorkbookCorpusDominanceBlockers(status: FinancialWorkbookCorpusStatus | null): string[] {
