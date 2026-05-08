@@ -122,6 +122,8 @@ export interface BiligDominanceStatus {
     readonly tenXRequirementSatisfied: boolean
     readonly requiredWorkloads: readonly UiResponsivenessSameCorpusWorkload[]
     readonly missingRequiredWorkloads: readonly UiResponsivenessSameCorpusWorkload[]
+    readonly scrollEventEvidenceCaseCount: number
+    readonly casesMissingScrollEventEvidence: readonly string[]
     readonly coveredCorpusCaseIds: readonly string[]
     readonly limitations: readonly string[]
     readonly fixture: {
@@ -539,7 +541,12 @@ function buildUiSameCorpusStatus(
   const fixture = uiSameCorpusFixtureStatus(defaultUiSameCorpusId)
   const coveredWorkloads = new Set(proof.cases.map((entry) => entry.workload))
   const missingRequiredWorkloads = requiredUiSameCorpusWorkloads.filter((workload) => !coveredWorkloads.has(workload))
-  const tenXRequirementSatisfied = uiSameCorpusTenXRequirementSatisfied(proof, missingRequiredWorkloads)
+  const requiredProofCases = proof.cases.filter((entry) => requiredUiSameCorpusWorkloads.includes(entry.workload))
+  const casesMissingScrollEventEvidence = requiredProofCases
+    .filter((entry) => !uiSameCorpusCaseHasScrollEventEvidence(entry))
+    .map((entry) => entry.id)
+  const scrollEventEvidenceCaseCount = Math.max(0, requiredProofCases.length - casesMissingScrollEventEvidence.length)
+  const tenXRequirementSatisfied = uiSameCorpusTenXRequirementSatisfied(proof, missingRequiredWorkloads, casesMissingScrollEventEvidence)
   const googleSheetsUrlArgument = args.googleSheetsUrl ?? '<google-sheets-url>'
   const browserCaptureGuard = buildBrowserCaptureGuardStatus(args.localCiResourceGuardStatus)
   const nextPreflightCommand = [
@@ -576,6 +583,8 @@ function buildUiSameCorpusStatus(
     tenXRequirementSatisfied,
     requiredWorkloads: requiredUiSameCorpusWorkloads,
     missingRequiredWorkloads,
+    scrollEventEvidenceCaseCount,
+    casesMissingScrollEventEvidence,
     coveredCorpusCaseIds: proof.coveredCorpusCaseIds,
     limitations: proof.limitations,
     fixture,
@@ -687,6 +696,7 @@ function verifiedGoogleSheetsUrlFromPublicAccessCheck(
 function uiSameCorpusTenXRequirementSatisfied(
   proof: BuildScorecardInput['uiResponsivenessLiveBrowserScorecard']['sameCorpusProof'],
   missingRequiredWorkloads: readonly UiResponsivenessSameCorpusWorkload[],
+  casesMissingScrollEventEvidence: readonly string[],
 ): boolean {
   return (
     proof.captured &&
@@ -696,7 +706,22 @@ function uiSameCorpusTenXRequirementSatisfied(
     proof.cases.length === proof.requiredCaseCount &&
     proof.tenXMeanAndP95CaseCount === proof.requiredCaseCount &&
     missingRequiredWorkloads.length === 0 &&
+    casesMissingScrollEventEvidence.length === 0 &&
     proof.cases.every((entry) => entry.passed)
+  )
+}
+
+function uiSameCorpusCaseHasScrollEventEvidence(
+  entry: BuildScorecardInput['uiResponsivenessLiveBrowserScorecard']['sameCorpusProof']['cases'][number],
+): boolean {
+  return (
+    entry.tenXMeanAndP95Metric === 'scrollEventResponseMs' &&
+    Boolean(entry.bilig.scrollEventResponseMs) &&
+    Boolean(entry.googleSheets.scrollEventResponseMs) &&
+    Boolean(entry.microsoftExcelWeb.scrollEventResponseMs) &&
+    Boolean(entry.bilig.scrollMovementPx) &&
+    Boolean(entry.googleSheets.scrollMovementPx) &&
+    Boolean(entry.microsoftExcelWeb.scrollMovementPx)
   )
 }
 

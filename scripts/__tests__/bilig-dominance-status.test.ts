@@ -173,6 +173,8 @@ describe('bilig dominance status', () => {
       tenXMeanAndP95CaseCount: 0,
       tenXRequirementSatisfied: false,
       missingRequiredWorkloads: [],
+      scrollEventEvidenceCaseCount: 0,
+      casesMissingScrollEventEvidence: ['same-corpus-wide-mixed-250k-visible-scroll-response'],
       missingInputs: ['googleSheetsUrlForUploadedSameCorpusWorkbook'],
     })
     expect(status.uiSameCorpus.nextPreflightCommand).toContain('<google-sheets-url>')

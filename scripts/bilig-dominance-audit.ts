@@ -245,6 +245,12 @@ function buildChecklistItem(args: {
               )}`,
               `live same-corpus UI required workloads: ${args.liveUiSameCorpus.requiredWorkloads.join(', ') || 'none'}`,
               `live same-corpus UI missing required workloads: ${args.liveUiSameCorpus.missingRequiredWorkloads.join(', ') || 'none'}`,
+              `live same-corpus UI scroll-event evidence cases: ${String(args.liveUiSameCorpus.scrollEventEvidenceCaseCount)}/${String(
+                args.liveUiSameCorpus.requiredCaseCount,
+              )}`,
+              `live same-corpus UI cases missing scroll-event evidence: ${
+                args.liveUiSameCorpus.casesMissingScrollEventEvidence.join(', ') || 'none'
+              }`,
               `live same-corpus UI missing inputs: ${args.liveUiSameCorpus.missingInputs.join(', ') || 'none'}`,
               `live same-corpus UI Google Sheets URL source: ${args.liveUiSameCorpus.googleSheetsUrlSource}`,
               `live same-corpus UI browser capture guard active: ${String(args.liveUiSameCorpus.browserCaptureGuard.active)}`,
@@ -290,6 +296,9 @@ function uiSameCorpusLiveBlockers(status: BiligDominanceStatus['uiSameCorpus']):
   }
   if (status.missingRequiredWorkloads.length > 0) {
     blockers.push(`same-corpus UI proof missing required workloads: ${status.missingRequiredWorkloads.join(', ')}`)
+  }
+  if (status.casesMissingScrollEventEvidence.length > 0) {
+    blockers.push(`same-corpus UI proof missing scroll-event evidence: ${status.casesMissingScrollEventEvidence.join(', ')}`)
   }
   if (status.captured && !status.tenXRequirementSatisfied) {
     blockers.push(

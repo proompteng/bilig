@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import { buildBiligDominancePromptArtifactAudit, validateBiligDominancePromptArtifactAudit } from '../bilig-dominance-audit.ts'
 import { buildBiligDominanceStatus } from '../bilig-dominance-status.ts'
+import {
+  buildSameCorpusProof,
+  type SameCorpusCapture,
+  type SameCorpusCaptureMeasurement,
+  type UiResponsivenessSameCorpusProduct,
+} from '../gen-ui-responsiveness-live-browser-scorecard.ts'
 import { buildBiligDominanceScorecard } from '../gen-bilig-dominance-scorecard.ts'
 import type { PublicWorkbookCorpusStatus } from '../public-workbook-corpus-status.ts'
 import { buildFixtureInput } from './bilig-dominance-scorecard.fixture.ts'
@@ -141,6 +147,46 @@ describe('bilig dominance prompt-to-artifact audit', () => {
         'live same-corpus UI missing required workloads: visible-scroll-response',
         'live same-corpus UI missing inputs: googleSheetsUrlForUploadedSameCorpusWorkbook',
         'live same-corpus UI browser capture guard active: true',
+      ]),
+    })
+    expect(validateBiligDominancePromptArtifactAudit(audit)).toEqual([])
+  })
+
+  it('calls out legacy operation-only same-corpus UI captures', () => {
+    const input = buildFixtureInput()
+    const status = buildBiligDominanceStatus({
+      input: {
+        ...input,
+        uiResponsivenessLiveBrowserScorecard: {
+          ...input.uiResponsivenessLiveBrowserScorecard,
+          sameCorpusProof: buildSameCorpusProof(legacyOperationOnlySameCorpusCapture()),
+        },
+      },
+      publicWorkbookCorpusStatus: publicWorkbookCorpusStatusFixture(),
+      stopMarkerActive: false,
+      stopMarkerPath: '/repo/.agent-coordination/stop.md',
+      uiSameCorpusGoogleSheetsUrl: 'https://docs.google.com/spreadsheets/d/sameCorpusSheet/edit',
+    })
+    const audit = buildBiligDominancePromptArtifactAudit({
+      scorecard: buildBiligDominanceScorecard(input),
+      status,
+    })
+    const uiItem = audit.checklist.find((entry) => entry.id === 'ui-responsiveness')
+
+    expect(audit.liveUiSameCorpus).toMatchObject({
+      captured: true,
+      scrollEventEvidenceCaseCount: 0,
+      casesMissingScrollEventEvidence: ['same-corpus-wide-mixed-250k-visible-scroll-response'],
+    })
+    expect(uiItem).toMatchObject({
+      passed: false,
+      liveBlockers: expect.arrayContaining([
+        'same-corpus UI proof missing scroll-event evidence: same-corpus-wide-mixed-250k-visible-scroll-response',
+        'same-corpus UI proof has 0/1 required 10x cases',
+      ]),
+      evidence: expect.arrayContaining([
+        'live same-corpus UI scroll-event evidence cases: 0/1',
+        'live same-corpus UI cases missing scroll-event evidence: same-corpus-wide-mixed-250k-visible-scroll-response',
       ]),
     })
     expect(validateBiligDominancePromptArtifactAudit(audit)).toEqual([])
@@ -326,5 +372,53 @@ function publicWorkbookCorpusStatusFixture(overrides: Partial<PublicWorkbookCorp
     targetComplete: true,
     gaps: [],
     ...overrides,
+  }
+}
+
+function legacyOperationOnlySameCorpusCapture(): SameCorpusCapture {
+  return {
+    schemaVersion: 1,
+    suite: 'ui-responsiveness-same-corpus-capture',
+    sampleCount: 3,
+    limitations: [],
+    cases: [
+      {
+        id: 'same-corpus-wide-mixed-250k-visible-scroll-response',
+        corpusCaseId: 'wide-mixed-250k',
+        materializedCells: 250_000,
+        workload: 'visible-scroll-response',
+        bilig: sameCorpusCaptureMeasurement('bilig', 'bilig-benchmark-state', [200, 200, 200]),
+        googleSheets: sameCorpusCaptureMeasurement('google-sheets', 'google-sheets-xlsx-export', [100, 100, 100]),
+        microsoftExcelWeb: sameCorpusCaptureMeasurement('microsoft-excel-web', 'microsoft-excel-web-source-xlsx', [100, 100, 100]),
+      },
+    ],
+  }
+}
+
+function sameCorpusCaptureMeasurement(
+  product: UiResponsivenessSameCorpusProduct,
+  method: SameCorpusCapture['cases'][number]['bilig']['corpusVerification']['method'],
+  operationResponseMsSamples: number[],
+): SameCorpusCaptureMeasurement {
+  return {
+    product,
+    source: product === 'bilig' ? 'http://127.0.0.1:5173/?benchmarkCorpus=wide-mixed-250k' : 'https://example.com/same-corpus',
+    operationResponseMsSamples,
+    postOperationFrameMsSamples: [12, 12, 12],
+    corpusVerification: {
+      verified: true,
+      method,
+      sheetName: 'WideGrid',
+      materializedCells: 250_000,
+      checkedCells:
+        product === 'bilig'
+          ? []
+          : [
+              { address: 'A1', expected: 'metric-1', actual: 'metric-1' },
+              { address: 'B1', expected: 'metric-2', actual: 'metric-2' },
+              { address: 'F2', expected: 'note-1-5', actual: 'note-1-5' },
+            ],
+    },
+    limitations: [],
   }
 }
