@@ -97,7 +97,17 @@ describe('public workbook financial corpus plan CLI', () => {
       sourceCount: 0,
       cachedArtifactCount: 0,
       remainingArtifactSlots: 5,
+      candidateSourceCount: 0,
       needsAdditionalDiscovery: true,
+      recommendedFetchLimit: 5,
+      nextCommands: {
+        discover: expect.stringContaining('public-workbook-corpus:discover-financial'),
+        fetch: expect.stringContaining('public-workbook-corpus:fetch-financial'),
+        fetchPlan: expect.stringContaining('public-workbook-corpus:fetch-financial:plan'),
+        resumeCheck: expect.stringContaining('public-workbook-corpus:resume-financial:check'),
+        verify: expect.stringContaining('public-workbook-corpus:verify-financial'),
+        check: expect.stringContaining('public-workbook-corpus:check-financial'),
+      },
     })
   })
 
