@@ -577,7 +577,9 @@ function importSheetJsWorkbook(
   const importedCellMetadata = workbookZip ? readImportedWorkbookCellMetadata(workbookZip, workbook.SheetNames) : undefined
   const importedCharts = workbookZip ? readImportedWorkbookCharts(workbookZip, workbook.SheetNames) : undefined
   const importedTables = workbookZip ? readImportedWorkbookTables(workbookZip, workbook.SheetNames) : undefined
-  const importedPivots = workbookZip ? readImportedWorkbookPivots(workbookZip, workbook.SheetNames, importedTables) : undefined
+  const importedPivots = workbookZip
+    ? readImportedWorkbookPivots(workbookZip, workbook.SheetNames, importedTables, importedDefinedNames.definedNames)
+    : undefined
   const importedLegacyCommentVmlBySheet = workbookZip ? readImportedWorkbookLegacyCommentVml(workbookZip, workbook.SheetNames) : new Map()
   const importedPrinterSettingsBySheet = workbookZip ? readImportedWorkbookPrinterSettings(workbookZip, workbook.SheetNames) : new Map()
   const importedFiltersBySheet = workbookZip ? readImportedWorkbookFilters(workbookZip, workbook.SheetNames) : new Map()

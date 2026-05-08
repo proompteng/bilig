@@ -160,4 +160,83 @@ describe('xlsx pivot import', () => {
       },
     ])
   })
+
+  it('resolves pivot cache named-range sources to imported defined-name ranges', () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: {
+        name: 'pivot-named-range-source',
+        metadata: {
+          definedNames: [
+            {
+              name: 'PivotInput',
+              value: { kind: 'range-ref', sheetName: 'Data', startAddress: 'A1', endAddress: 'B4' },
+            },
+          ],
+          pivots: [
+            {
+              name: 'SalesByRegion',
+              sheetName: 'Pivot',
+              address: 'A1',
+              source: { sheetName: 'Data', startAddress: 'A1', endAddress: 'B4' },
+              groupBy: ['Region'],
+              values: [{ sourceColumn: 'Sales', summarizeBy: 'sum', outputLabel: 'Sales Total' }],
+              rows: 4,
+              cols: 2,
+            },
+          ],
+        },
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'Data',
+          order: 0,
+          cells: [
+            { address: 'A1', value: 'Region' },
+            { address: 'B1', value: 'Sales' },
+            { address: 'A2', value: 'East' },
+            { address: 'B2', value: 10 },
+            { address: 'A3', value: 'West' },
+            { address: 'B3', value: 7 },
+            { address: 'A4', value: 'East' },
+            { address: 'B4', value: 5 },
+          ],
+        },
+        {
+          id: 2,
+          name: 'Pivot',
+          order: 1,
+          cells: [],
+        },
+      ],
+    }
+    const zip = unzipSync(exportXlsx(snapshot))
+    const cachePath = 'xl/pivotCache/pivotCacheDefinition1.xml'
+    const cacheXml = strFromU8(zip[cachePath] ?? new Uint8Array())
+
+    expect(cacheXml).toContain('<worksheetSource ref="A1:B4" sheet="Data"/>')
+    zip[cachePath] = strToU8(cacheXml.replace('<worksheetSource ref="A1:B4" sheet="Data"/>', '<worksheetSource name="PivotInput"/>'))
+
+    const imported = importXlsx(zipSync(zip), 'pivot-named-range-source.xlsx')
+
+    expect(imported.snapshot.workbook.metadata?.definedNames).toEqual([
+      {
+        name: 'PivotInput',
+        value: { kind: 'range-ref', sheetName: 'Data', startAddress: 'A1', endAddress: 'B4' },
+      },
+    ])
+    expect(imported.snapshot.workbook.metadata?.pivots).toEqual([
+      {
+        name: 'SalesByRegion',
+        sheetName: 'Pivot',
+        address: 'A1',
+        source: { sheetName: 'Data', startAddress: 'A1', endAddress: 'B4' },
+        groupBy: ['Region'],
+        values: [{ sourceColumn: 'Sales', summarizeBy: 'sum', outputLabel: 'Sales Total' }],
+        rows: 4,
+        cols: 2,
+      },
+    ])
+  })
 })
