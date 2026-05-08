@@ -75,7 +75,7 @@ export abstract class WorkPaperRuntimeSurface extends WorkPaperPublicSurface {
   protected abstract readonly namedExpressions: Map<string, InternalNamedExpression>
   protected abstract readonly engineEvents: WorkPaperEngineEventTracker
   protected abstract readonly mutationQueues: WorkPaperMutationQueues
-  protected abstract readonly sheetDimensionCache: WorkPaperSheetDimensionCache
+  protected abstract sheetDimensionCache: WorkPaperSheetDimensionCache
   protected abstract visibilityCache: VisibilitySnapshot | null
   protected abstract namedExpressionValueCache: NamedExpressionValueSnapshot | null
   protected abstract sheetRecordsCache: readonly SheetRecord[] | null

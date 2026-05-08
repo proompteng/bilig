@@ -104,7 +104,7 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
   protected readonly functionAliasLookup = new Map<string, InternalFunctionBinding>()
   private readonly internalFunctionLookup = new Map<string, InternalFunctionBinding>()
   private readonly workPaperInternals: WorkPaperInternals
-  protected readonly sheetDimensionCache: WorkPaperSheetDimensionCache
+  protected sheetDimensionCache: WorkPaperSheetDimensionCache
   protected config: WorkPaperConfig
   private clipboard: WorkPaperClipboardPayload | null = null
   protected visibilityCache: VisibilitySnapshot | null = null
@@ -245,12 +245,7 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
       ...cloneConfig(DEFAULT_CONFIG),
       ...cloneConfig(configInput),
     }
-    this.engine = new SpreadsheetEngine({
-      workbookName: 'Workbook',
-      trackReplicaVersions: false,
-      ...(this.config.useColumnIndex !== undefined ? { useColumnIndex: this.config.useColumnIndex } : {}),
-      ...(this.config.evaluationTimeoutMs !== undefined ? { evaluationTimeoutMs: this.config.evaluationTimeoutMs } : {}),
-    })
+    this.engine = createWorkPaperEngine(this.config)
     this.sheetDimensionCache = new WorkPaperSheetDimensionCache(this.engine)
     this.sheetDimensionCache.invalidateAll()
     this.engineEvents.attach(this.engine)
@@ -486,13 +481,7 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
   private restoreTransactionSnapshot(snapshot: WorkPaperTransactionSnapshot): void {
     this.clearFunctionBindings({ preserveInternalFunctionLookup: true })
     this.namedExpressions.clear()
-    this.engine = new SpreadsheetEngine({
-      workbookName: 'Workbook',
-      trackReplicaVersions: false,
-      ...(snapshot.config.useColumnIndex !== undefined ? { useColumnIndex: snapshot.config.useColumnIndex } : {}),
-      ...(snapshot.config.evaluationTimeoutMs !== undefined ? { evaluationTimeoutMs: snapshot.config.evaluationTimeoutMs } : {}),
-    })
-    this.engineEvents.attach(this.engine)
+    this.replaceEngineForConfig(snapshot.config)
     this.config = cloneConfig(snapshot.config)
     this.captureFunctionRegistry()
     this.engineEvents.withCaptureDisabled(() => {
@@ -679,13 +668,7 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
     if (!canReuseSnapshot) {
       this.namedExpressions.clear()
     }
-    this.engine = new SpreadsheetEngine({
-      workbookName: 'Workbook',
-      trackReplicaVersions: false,
-      ...(nextConfig.useColumnIndex !== undefined ? { useColumnIndex: nextConfig.useColumnIndex } : {}),
-      ...(nextConfig.evaluationTimeoutMs !== undefined ? { evaluationTimeoutMs: nextConfig.evaluationTimeoutMs } : {}),
-    })
-    this.engineEvents.attach(this.engine)
+    this.replaceEngineForConfig(nextConfig)
     this.config = cloneConfig(nextConfig)
     this.captureFunctionRegistry()
 
@@ -735,6 +718,13 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
       functionAliasLookup: this.functionAliasLookup,
       messageOf: (error, fallback) => this.messageOf(error, fallback),
     })
+  }
+
+  private replaceEngineForConfig(config: WorkPaperConfig): void {
+    this.engine = createWorkPaperEngine(config)
+    this.sheetDimensionCache = new WorkPaperSheetDimensionCache(this.engine)
+    this.sheetDimensionCache.invalidateAll()
+    this.engineEvents.attach(this.engine)
   }
 
   private restorePublicFormula(formula: string, ownerSheetId: number): string {
@@ -805,6 +795,15 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
   protected messageOf(error: unknown, fallback: string): string {
     return error instanceof Error && error.message.length > 0 ? error.message : fallback
   }
+}
+
+function createWorkPaperEngine(config: WorkPaperConfig): SpreadsheetEngine {
+  return new SpreadsheetEngine({
+    workbookName: 'Workbook',
+    trackReplicaVersions: false,
+    ...(config.useColumnIndex !== undefined ? { useColumnIndex: config.useColumnIndex } : {}),
+    ...(config.evaluationTimeoutMs !== undefined ? { evaluationTimeoutMs: config.evaluationTimeoutMs } : {}),
+  })
 }
 
 function cloneWorkPaperHistoryRecords(records: readonly WorkPaperHistoryRecord[]): WorkPaperHistoryRecord[] {
