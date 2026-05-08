@@ -117,7 +117,8 @@ export class InvalidXlsxZipContainerError extends Error {
 
 interface SheetColumnInfo {
   index: number
-  size: number
+  size: number | null
+  hidden: boolean
 }
 
 interface SheetRowInfo {
@@ -209,19 +210,28 @@ function buildColumnEntries(columns: unknown[] | undefined): WorkbookAxisEntrySn
         : typeof entry['wch'] === 'number'
           ? toPixelSize(entry['wch'], 'ch')
           : null
-    if (size === null) {
+    const hidden = entry['hidden'] === true
+    if (size === null && !hidden) {
       return
     }
-    entries.push({ index, size })
+    entries.push({ index, size, hidden })
   })
   if (entries.length === 0) {
     return undefined
   }
-  return entries.map(({ index, size }) => ({
-    id: `col:${index}`,
-    index,
-    size,
-  }))
+  return entries.map(({ index, size, hidden }) => {
+    const snapshot: WorkbookAxisEntrySnapshot = {
+      id: `col:${index}`,
+      index,
+    }
+    if (size !== null) {
+      snapshot.size = size
+    }
+    if (hidden) {
+      snapshot.hidden = true
+    }
+    return snapshot
+  })
 }
 
 function buildRowEntries(rows: unknown[] | undefined): WorkbookAxisEntrySnapshot[] | undefined {

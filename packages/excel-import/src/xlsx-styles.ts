@@ -505,14 +505,12 @@ function parseSheetColumnEntries(sheetXml: string): {
     const columnTag = match[0]
     const min = readXmlPositiveIntegerAttribute(columnTag, 'min')
     const max = readXmlPositiveIntegerAttribute(columnTag, 'max') ?? min
+    if (min === null || max === null || max < min) {
+      continue
+    }
     const width = readXmlNumberAttribute(columnTag, 'width')
-    if (min === null || max === null || width === null || width <= 0) {
-      continue
-    }
-    const size = Math.round(width * 6)
-    if (size <= 0) {
-      continue
-    }
+    const widthSize = width !== null && width > 0 ? Math.round(width * 6) : null
+    const size = widthSize !== null && widthSize > 0 ? widthSize : null
     const startColumn = min - 1
     const endColumn = max - 1
     const columnCount = endColumn - startColumn + 1
@@ -524,17 +522,23 @@ function parseSheetColumnEntries(sheetXml: string): {
     const hidden = readXmlOptionalBooleanAttribute(columnTag, 'hidden')
     const outlineLevel = readXmlNonNegativeIntegerAttribute(columnTag, 'outlineLevel')
     const collapsed = readXmlOptionalBooleanAttribute(columnTag, 'collapsed')
+    if (size === null && customWidth === null && bestFit === null && hidden === null && outlineLevel === null && collapsed === null) {
+      continue
+    }
     metadata.push({
       start: startColumn,
       count: columnCount,
-      size,
-      xlsxWidth: width,
+      ...(size !== null && size > 0 ? { size } : {}),
+      ...(width !== null && width > 0 ? { xlsxWidth: width } : {}),
       ...(customWidth !== null ? { customWidth } : {}),
       ...(bestFit !== null ? { bestFit } : {}),
       ...(hidden !== null ? { hidden } : {}),
       ...(outlineLevel !== null ? { outlineLevel } : {}),
       ...(collapsed !== null ? { collapsed } : {}),
     })
+    if (size === null && hidden !== true) {
+      continue
+    }
     if (entries.length + columnCount > maxExpandedColumnMetadataEntries) {
       skipped = true
       continue
@@ -543,7 +547,8 @@ function parseSheetColumnEntries(sheetXml: string): {
       entries.push({
         id: `col:${String(column)}`,
         index: column,
-        size,
+        ...(size !== null ? { size } : {}),
+        ...(hidden === true ? { hidden: true } : {}),
       })
     }
   }

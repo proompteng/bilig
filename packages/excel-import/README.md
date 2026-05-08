@@ -40,6 +40,10 @@ is intentionally metadata-free.
 Literal Excel error cells such as `#N/A`, `#DIV/0!`, `#REF!`, and `#VALUE!`
 are imported as their display text instead of SheetJS numeric error codes.
 
+Hidden XLSX rows and columns are preserved in workbook metadata and exported
+back into worksheet XML, including hidden column states attached to width
+metadata.
+
 ## CSV Import
 
 ```ts
