@@ -11,6 +11,7 @@ import { attachRuntimeSnapshot } from '@bilig/core'
 import { importXlsx } from '@bilig/excel-import'
 import { WorkPaper, type WorkPaperConfig, type WorkPaperSheet, type WorkPaperSheets } from '@bilig/headless'
 import { formatErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
+import { assertPublicCorpusRunNotStopped, publicCorpusStopMarkerOverrideFlag } from './public-workbook-corpus-cli.ts'
 import { formatByteSize } from './public-workbook-corpus-process.ts'
 
 type CellContent = WorkPaperSheet[number][number]
@@ -103,12 +104,15 @@ interface CliOptions extends WorkPaperXlsxCorpusOptions {
   readonly jsonOut?: string
   readonly maxMismatches: number
   readonly minMatchRate: number
+  readonly stopMarkerPath: string
 }
 
 const defaultEvaluationTimeoutMs = 30_000
 const childProcessTimeoutPaddingMs = 1_000
 const defaultMaxFileBytes = 50 * 1024 * 1024
 const defaultMismatchSampleLimit = 25
+const rootDir = resolve(new URL('..', import.meta.url).pathname)
+const defaultCorpusRunStopMarkerPath = join(rootDir, '.agent-coordination', '20260507T074946Z-codex-stop-interactive-corpus-runs.md')
 const ignoredDirectoryNames = new Set(['.git', 'build', 'dist', 'node_modules'])
 const skipReasons: readonly WorkPaperXlsxFormulaSkipReason[] = [
   'missing-cached-result',
@@ -766,6 +770,7 @@ function parseCliArgs(argv: readonly string[]): CliOptions {
   let isolateFiles = true
   let maxFileBytes: number | undefined
   let mismatchSampleLimit: number | undefined
+  let stopMarkerPath = defaultCorpusRunStopMarkerPath
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
@@ -777,8 +782,14 @@ function parseCliArgs(argv: readonly string[]): CliOptions {
         maxMismatches = Number.POSITIVE_INFINITY
         minMatchRate = 0
         break
+      case publicCorpusStopMarkerOverrideFlag:
+        break
       case '--child-timeout-ms':
         childProcessTimeoutMs = parseNonNegativeInteger(requiredArgValue(argv, index, arg), arg)
+        index += 1
+        break
+      case '--corpus-run-stop-marker':
+        stopMarkerPath = resolve(requiredArgValue(argv, index, arg))
         index += 1
         break
       case '--json-out':
@@ -835,6 +846,7 @@ function parseCliArgs(argv: readonly string[]): CliOptions {
     maxFileBytes,
     maxMismatches,
     minMatchRate,
+    stopMarkerPath,
     evaluationTimeoutMs,
     mismatchSampleLimit,
   }
@@ -885,6 +897,7 @@ function usageText(): string {
     '  --min-match-rate <ratio>       Minimum comparable cached-result match rate before failing. Default: 1.',
     '  --mismatch-sample-limit <n>    Number of mismatch samples to keep in JSON output. Default: 25.',
     '  --json-out <path>              Also write the JSON report to a file.',
+    '  --corpus-run-stop-marker <path> Fail closed for directory or multi-file corpus sweeps while marker exists.',
     '  --allow-mismatches             Report mismatches without failing the process.',
   ].join('\n')
 }
@@ -909,6 +922,7 @@ function runCli(): void {
     if (!options.isolateFiles) {
       assertUnisolatedCliDebuggerPath(options.paths)
     }
+    assertBroadCorpusSweepNotStopped(options.paths, options.stopMarkerPath)
     const result = options.isolateFiles
       ? runWorkPaperXlsxCorpusInChildProcesses(options.paths, options)
       : runWorkPaperXlsxCorpus(options.paths, options)
@@ -933,6 +947,33 @@ function runCli(): void {
     }
     throw error
   }
+}
+
+function assertBroadCorpusSweepNotStopped(paths: readonly string[], stopMarkerPath: string): void {
+  if (!isBroadCorpusSweep(paths)) {
+    return
+  }
+  try {
+    assertPublicCorpusRunNotStopped({
+      commandName: 'workpaper:xlsx-corpus directory sweep',
+      stopMarkerPath,
+    })
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new CliUsageError(error.message, 2)
+    }
+    throw error
+  }
+}
+
+function isBroadCorpusSweep(paths: readonly string[]): boolean {
+  return (
+    paths.length > 1 ||
+    paths.some((entry) => {
+      const path = resolve(entry)
+      return existsSync(path) && statSync(path).isDirectory()
+    })
+  )
 }
 
 function assertUnisolatedCliDebuggerPath(paths: readonly string[]): void {

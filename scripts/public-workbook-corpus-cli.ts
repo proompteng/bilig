@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { isAbsolute, relative, resolve } from 'node:path'
 
 export function readStringArg(name: string, fallback: string): string {
   const index = process.argv.indexOf(name)
@@ -37,6 +38,7 @@ export function readDebugOnlyFlagArg(name: string, envVar: string, reason: strin
 
 export const publicCorpusStopMarkerOverrideFlag = '--allow-active-stop-marker'
 export const publicCorpusStopMarkerOverrideEnvVar = 'BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE'
+const rootDir = resolve(new URL('..', import.meta.url).pathname)
 
 export function assertPublicCorpusRunNotStopped(args: { readonly commandName: string; readonly stopMarkerPath: string }): void {
   if (!existsSync(args.stopMarkerPath)) {
@@ -46,8 +48,18 @@ export function assertPublicCorpusRunNotStopped(args: { readonly commandName: st
     return
   }
   throw new Error(
-    `${args.commandName} is disabled while the public corpus stop marker is active: ${args.stopMarkerPath}. The marker protects the interactive host from broad workbook corpus runs. Resume only after the user explicitly asks, then pass ${publicCorpusStopMarkerOverrideFlag} with ${publicCorpusStopMarkerOverrideEnvVar}=1.`,
+    `${args.commandName} is disabled while the public corpus stop marker is active: ${formatPublicCorpusStopMarkerPathForMessage(
+      args.stopMarkerPath,
+    )}. The marker protects the interactive host from broad workbook corpus runs. Resume only after the user explicitly asks, then pass ${publicCorpusStopMarkerOverrideFlag} with ${publicCorpusStopMarkerOverrideEnvVar}=1.`,
   )
+}
+
+export function formatPublicCorpusStopMarkerPathForMessage(path: string, displayRootDir = rootDir): string {
+  const relativePath = relative(displayRootDir, path)
+  if (!relativePath || relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    return path
+  }
+  return relativePath
 }
 
 export function readVerifyConcurrencyArg(defaultVerifyConcurrency: number): number {

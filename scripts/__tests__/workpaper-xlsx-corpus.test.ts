@@ -124,6 +124,41 @@ describe('WorkPaper XLSX corpus verifier', () => {
     expect(result.stderr).toContain('--no-isolate only supports one explicit XLSX file')
   })
 
+  it('refuses broad CLI directory sweeps while the corpus stop marker is active', () => {
+    withTempCorpus((tempDir) => {
+      const stopMarkerPath = join(tempDir, 'stop.md')
+      writeFileSync(stopMarkerPath, 'stop')
+
+      const result = spawnSync('bun', [checkerScriptPath(), '--corpus-run-stop-marker', stopMarkerPath, checkedInCorpusDir()], {
+        encoding: 'utf8',
+      })
+
+      expect(result.status).toBe(2)
+      expect(result.stderr).toContain('workpaper:xlsx-corpus directory sweep is disabled while the public corpus stop marker is active')
+      expect(result.stderr).toContain('--allow-active-stop-marker')
+    })
+  })
+
+  it('allows a single-file CLI debugger check while the corpus stop marker is active', () => {
+    withTempCorpus((tempDir) => {
+      const stopMarkerPath = join(tempDir, 'stop.md')
+      writeFileSync(stopMarkerPath, 'stop')
+
+      const result = spawnSync('bun', [checkerScriptPath(), '--corpus-run-stop-marker', stopMarkerPath, checkedInCorpusFile()], {
+        encoding: 'utf8',
+      })
+
+      expect(result.status).toBe(0)
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        summary: {
+          totalFiles: 1,
+          filesProcessed: 1,
+          ok: 1,
+        },
+      })
+    })
+  })
+
   it('reports actionable mismatch samples with workbook, sheet, address, formula, expected, and actual values', () => {
     withTempCorpus((corpusDir) => {
       const workbook = XLSX.utils.book_new()
@@ -197,6 +232,10 @@ describe('WorkPaper XLSX corpus verifier', () => {
 
 function checkedInCorpusDir(): string {
   return join(dirname(fileURLToPath(import.meta.url)), '../../packages/headless/fixtures/xlsx-corpus')
+}
+
+function checkedInCorpusFile(): string {
+  return join(checkedInCorpusDir(), 'issue-8-production-regressions.xlsx')
 }
 
 function checkerScriptPath(): string {

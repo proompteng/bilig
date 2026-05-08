@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { buildPublicWorkbookCorpusScorecard, createEmptyPublicWorkbookManifest } from '../public-workbook-corpus.ts'
+import { formatPublicCorpusStopMarkerPathForMessage } from '../public-workbook-corpus-cli.ts'
 import { buildPublicWorkbookCorpusResumePlan, validatePublicWorkbookCorpusResumePlan } from '../public-workbook-corpus-resume-plan.ts'
 import { buildPublicWorkbookCorpusStatus } from '../public-workbook-corpus-status.ts'
 import {
@@ -103,6 +104,11 @@ describe('public workbook corpus CLI resource guards', () => {
 
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('public-workbook-corpus fetch is disabled while the public corpus stop marker is active')
+  })
+
+  it('formats repo-local stop marker paths without exposing the checkout root', () => {
+    expect(formatPublicCorpusStopMarkerPathForMessage('/repo/.agent-coordination/stop.md', '/repo')).toBe('.agent-coordination/stop.md')
+    expect(formatPublicCorpusStopMarkerPathForMessage('/tmp/stop.md', '/repo')).toBe('/tmp/stop.md')
   })
 
   it('plans fetch progress without starting network work', () => {
