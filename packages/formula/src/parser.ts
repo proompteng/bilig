@@ -14,6 +14,7 @@ import type {
   UnaryExprNode,
 } from './ast.js'
 import { isCellReferenceText, isColumnReferenceText, isRowReferenceText } from './addressing.js'
+import { normalizeFormulaFunctionName } from './function-name-normalization.js'
 import { lexFormula, type Token } from './lexer.js'
 import { ErrorCode } from '@bilig/protocol'
 
@@ -350,7 +351,7 @@ export function parseFormula(source: string): FormulaNode {
       } else if (current().kind === 'lparen') {
         result = {
           kind: 'CallExpr',
-          callee: first.toUpperCase(),
+          callee: normalizeFormulaFunctionName(first),
           args: parseCallArguments(),
         } satisfies CallExprNode
       } else if (current().kind === 'lbracket') {

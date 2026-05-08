@@ -1,5 +1,6 @@
 import type { CellValue } from '@bilig/protocol'
 import type { EvaluationResult } from './runtime-values.js'
+import { normalizeFormulaFunctionName } from './function-name-normalization.js'
 
 export const externalFunctionSurfaces = ['cube', 'web', 'host', 'external-data', 'add-in'] as const
 
@@ -30,7 +31,7 @@ export interface ExternalFunctionAdapter {
 const adapters = new Map<ExternalFunctionSurface, ExternalFunctionAdapter>()
 
 function normalizeFunctionName(name: string): string {
-  return name.trim().toUpperCase()
+  return normalizeFormulaFunctionName(name)
 }
 
 function resolveExternalFunction(name: string): ExternalFunctionBinding | undefined {

@@ -1,4 +1,5 @@
 import { BUILTINS, BuiltinId } from '@bilig/protocol'
+import { normalizeFormulaFunctionName } from './function-name-normalization.js'
 
 export type BuiltinCapabilityCategory =
   | 'aggregation'
@@ -850,7 +851,7 @@ export const builtinJsSpecialNames = new Set(
 )
 
 export function normalizeFormulaName(name: string): string {
-  return name.trim().toUpperCase()
+  return normalizeFormulaFunctionName(name)
 }
 
 export function getBuiltinCapability(name: string): BuiltinCapability | undefined {
