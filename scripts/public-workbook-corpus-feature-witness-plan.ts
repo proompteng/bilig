@@ -37,7 +37,10 @@ export interface PublicWorkbookCorpusFeatureWitnessPlan {
     readonly cachedCandidateCount: number
     readonly cachedCandidates: readonly PublicWorkbookCorpusFeatureWitnessCandidate[]
     readonly commands: {
-      readonly discover: string
+      readonly discover: string | null
+    }
+    readonly blockedCommands: {
+      readonly discover: string | null
     }
   }[]
   readonly missingWitnessCount: number
@@ -45,7 +48,8 @@ export interface PublicWorkbookCorpusFeatureWitnessPlan {
     readonly id: string
     readonly label: string
     readonly discoveryQuery: string
-    readonly discoverCommand: string
+    readonly discoverCommand: string | null
+    readonly blockedDiscoverCommand: string | null
     readonly cachedCandidateCount: number
     readonly cachedCandidates: readonly PublicWorkbookCorpusFeatureWitnessCandidate[]
   }[]
@@ -56,7 +60,8 @@ export interface PublicWorkbookCorpusFeatureWitnessCandidate {
   readonly fileName: string
   readonly byteSize: number
   readonly sourceUrl: string
-  readonly verifyArtifactCommand: string
+  readonly verifyArtifactCommand: string | null
+  readonly blockedVerifyArtifactCommand: string | null
 }
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
@@ -181,6 +186,19 @@ export function buildPublicWorkbookCorpusFeatureWitnessPlan(args: {
   const coverage = buildFeatureWitnessCoverage(args.cases).map((entry) => {
     const discoveryQuery = featureDiscoveryQueries[entry.id] ?? `${entry.label} xlsx`
     const candidateArtifacts = featureCandidateArtifacts(entry.id, args.artifacts ?? [])
+    const discoverCommand = splitGuardedCommand(args.stopMarkerActive, [
+      'pnpm',
+      'public-workbook-corpus:discover',
+      '--',
+      '--manifest',
+      commandPath(args.manifestPath, args.displayRootDir),
+      '--cache-dir',
+      commandPath(args.cacheDir, args.displayRootDir),
+      '--query',
+      discoveryQuery,
+      '--limit',
+      String(Math.max(0, Math.trunc(args.discoveryLimit))),
+    ])
     const cachedCandidates = candidateArtifacts.slice(0, 5).map((artifact) =>
       featureWitnessCandidate({
         artifact,
@@ -201,19 +219,10 @@ export function buildPublicWorkbookCorpusFeatureWitnessPlan(args: {
       cachedCandidateCount: candidateArtifacts.length,
       cachedCandidates,
       commands: {
-        discover: guardedCommand(args.stopMarkerActive, [
-          'pnpm',
-          'public-workbook-corpus:discover',
-          '--',
-          '--manifest',
-          commandPath(args.manifestPath, args.displayRootDir),
-          '--cache-dir',
-          commandPath(args.cacheDir, args.displayRootDir),
-          '--query',
-          discoveryQuery,
-          '--limit',
-          String(Math.max(0, Math.trunc(args.discoveryLimit))),
-        ]),
+        discover: discoverCommand.command,
+      },
+      blockedCommands: {
+        discover: discoverCommand.blockedCommand,
       },
     }
   })
@@ -224,6 +233,7 @@ export function buildPublicWorkbookCorpusFeatureWitnessPlan(args: {
       label: entry.label,
       discoveryQuery: entry.discoveryQuery,
       discoverCommand: entry.commands.discover,
+      blockedDiscoverCommand: entry.blockedCommands.discover,
       cachedCandidateCount: entry.cachedCandidateCount,
       cachedCandidates: entry.cachedCandidates,
     }))
@@ -279,30 +289,63 @@ export function validatePublicWorkbookCorpusFeatureWitnessPlan(plan: PublicWorkb
     if (entry.cachedCandidateCount < entry.cachedCandidates.length) {
       findings.push(`feature witness candidate count is below listed candidates: ${entry.id}`)
     }
-    if (plan.stopMarker.active && !entry.commands.discover.includes(publicCorpusStopMarkerOverrideFlag)) {
-      findings.push(`feature witness discover command is missing stop-marker override: ${entry.id}`)
+    if (entry.commands.discover !== null && !entry.commands.discover.includes('public-workbook-corpus:discover')) {
+      findings.push(`feature witness discover command is missing discover script: ${entry.id}`)
+    }
+    if (plan.stopMarker.active && entry.commands.discover !== null) {
+      findings.push(`feature witness discover command is runnable while stop marker is active: ${entry.id}`)
+    }
+    if (!plan.stopMarker.active && entry.commands.discover === null) {
+      findings.push(`feature witness discover command is missing while stop marker is inactive: ${entry.id}`)
+    }
+    if (plan.stopMarker.active) {
+      if (!entry.blockedCommands.discover?.includes(publicCorpusStopMarkerOverrideFlag)) {
+        findings.push(`feature witness blocked discover command is missing stop-marker override: ${entry.id}`)
+      }
+    } else if (entry.blockedCommands.discover !== null) {
+      findings.push(`feature witness blocked discover command is present while stop marker is inactive: ${entry.id}`)
     }
     for (const candidate of entry.cachedCandidates) {
       if (!candidate.artifactId.trim() || !candidate.fileName.trim() || !candidate.sourceUrl.trim()) {
         findings.push(`feature witness cached candidate has empty identity: ${entry.id}`)
       }
-      if (!candidate.verifyArtifactCommand.includes('public-workbook-corpus:verify-artifact')) {
+      if (candidate.verifyArtifactCommand !== null && !candidate.verifyArtifactCommand.includes('public-workbook-corpus:verify-artifact')) {
         findings.push(`feature witness cached candidate verify command is missing verify-artifact script: ${entry.id}`)
       }
-      if (!candidate.verifyArtifactCommand.includes('--update-verify-checkpoint')) {
+      if (candidate.verifyArtifactCommand !== null && !candidate.verifyArtifactCommand.includes('--update-verify-checkpoint')) {
         findings.push(`feature witness cached candidate verify command is missing checkpoint update flag: ${entry.id}`)
       }
-      if (plan.stopMarker.active && !candidate.verifyArtifactCommand.includes(publicCorpusStopMarkerOverrideFlag)) {
-        findings.push(`feature witness cached candidate verify command is missing stop-marker override: ${entry.id}`)
+      if (plan.stopMarker.active && candidate.verifyArtifactCommand !== null) {
+        findings.push(`feature witness cached candidate verify command is runnable while stop marker is active: ${entry.id}`)
+      }
+      if (!plan.stopMarker.active && candidate.verifyArtifactCommand === null) {
+        findings.push(`feature witness cached candidate verify command is missing while stop marker is inactive: ${entry.id}`)
+      }
+      if (plan.stopMarker.active) {
+        if (!candidate.blockedVerifyArtifactCommand?.includes(publicCorpusStopMarkerOverrideFlag)) {
+          findings.push(`feature witness cached candidate blocked verify command is missing stop-marker override: ${entry.id}`)
+        }
+      } else if (candidate.blockedVerifyArtifactCommand !== null) {
+        findings.push(`feature witness cached candidate blocked verify command is present while stop marker is inactive: ${entry.id}`)
       }
     }
   }
   for (const entry of plan.missingWitnesses) {
-    if (!entry.id.trim() || !entry.label.trim() || !entry.discoveryQuery.trim() || !entry.discoverCommand.trim()) {
+    if (!entry.id.trim() || !entry.label.trim() || !entry.discoveryQuery.trim()) {
       findings.push(`missing feature witness summary has empty fields: ${entry.id}`)
     }
-    if (plan.stopMarker.active && !entry.discoverCommand.includes(publicCorpusStopMarkerOverrideFlag)) {
-      findings.push(`missing feature witness summary discover command is missing stop-marker override: ${entry.id}`)
+    if (plan.stopMarker.active && entry.discoverCommand !== null) {
+      findings.push(`missing feature witness summary discover command is runnable while stop marker is active: ${entry.id}`)
+    }
+    if (!plan.stopMarker.active && entry.discoverCommand === null) {
+      findings.push(`missing feature witness summary discover command is missing while stop marker is inactive: ${entry.id}`)
+    }
+    if (plan.stopMarker.active) {
+      if (!entry.blockedDiscoverCommand?.includes(publicCorpusStopMarkerOverrideFlag)) {
+        findings.push(`missing feature witness summary blocked discover command is missing stop-marker override: ${entry.id}`)
+      }
+    } else if (entry.blockedDiscoverCommand !== null) {
+      findings.push(`missing feature witness summary blocked discover command is present while stop marker is inactive: ${entry.id}`)
     }
   }
   return findings
@@ -333,25 +376,43 @@ function featureWitnessCandidate(args: {
   readonly stopMarkerActive: boolean
   readonly verifyCheckpointPath: string
 }): PublicWorkbookCorpusFeatureWitnessCandidate {
+  const verifyArtifactCommand = splitGuardedCommand(args.stopMarkerActive, [
+    'pnpm',
+    'public-workbook-corpus:verify-artifact',
+    '--',
+    '--manifest',
+    commandPath(args.manifestPath, args.displayRootDir),
+    '--cache-dir',
+    commandPath(args.cacheDir, args.displayRootDir),
+    '--verify-checkpoint',
+    commandPath(args.verifyCheckpointPath, args.displayRootDir),
+    '--artifact-id',
+    args.artifact.id,
+    '--update-verify-checkpoint',
+  ])
   return {
     artifactId: args.artifact.id,
     fileName: args.artifact.fileName,
     byteSize: args.artifact.byteSize,
     sourceUrl: args.artifact.sourceUrl,
-    verifyArtifactCommand: guardedCommand(args.stopMarkerActive, [
-      'pnpm',
-      'public-workbook-corpus:verify-artifact',
-      '--',
-      '--manifest',
-      commandPath(args.manifestPath, args.displayRootDir),
-      '--cache-dir',
-      commandPath(args.cacheDir, args.displayRootDir),
-      '--verify-checkpoint',
-      commandPath(args.verifyCheckpointPath, args.displayRootDir),
-      '--artifact-id',
-      args.artifact.id,
-      '--update-verify-checkpoint',
-    ]),
+    verifyArtifactCommand: verifyArtifactCommand.command,
+    blockedVerifyArtifactCommand: verifyArtifactCommand.blockedCommand,
+  }
+}
+
+function splitGuardedCommand(
+  stopMarkerActive: boolean,
+  parts: readonly string[],
+): { readonly command: string | null; readonly blockedCommand: string | null } {
+  if (!stopMarkerActive) {
+    return {
+      command: command(parts),
+      blockedCommand: null,
+    }
+  }
+  return {
+    command: null,
+    blockedCommand: guardedCommand(true, parts),
   }
 }
 

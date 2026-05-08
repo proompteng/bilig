@@ -448,12 +448,27 @@ function featureWitnessPlanFixture(): PublicWorkbookCorpusFeatureWitnessPlan {
         needsWitness: true,
         discoveryQuery: 'pivot table xlsx',
         commands: {
+          discover: null,
+        },
+        blockedCommands: {
           discover:
             "BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1 pnpm public-workbook-corpus:discover -- --manifest .cache/public-workbook-corpus/manifest.json --cache-dir .cache/public-workbook-corpus --query 'pivot table xlsx' --limit 10000 --allow-active-stop-marker",
         },
       },
     ],
     missingWitnessCount: 1,
+    missingWitnesses: [
+      {
+        id: 'pivots',
+        label: 'pivots',
+        discoveryQuery: 'pivot table xlsx',
+        discoverCommand: null,
+        blockedDiscoverCommand:
+          "BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1 pnpm public-workbook-corpus:discover -- --manifest .cache/public-workbook-corpus/manifest.json --cache-dir .cache/public-workbook-corpus --query 'pivot table xlsx' --limit 10000 --allow-active-stop-marker",
+        cachedCandidateCount: 0,
+        cachedCandidates: [],
+      },
+    ],
   }
 }
 

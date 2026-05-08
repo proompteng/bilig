@@ -481,8 +481,8 @@ function buildFeatureWitnessPlanStatus(
       witnessCaseCount: entry.witnessCaseCount,
       needsWitness: entry.needsWitness,
       discoveryQuery: entry.discoveryQuery,
-      nextDiscoverCommand: plan.stopMarker.active ? null : entry.commands.discover,
-      blockedDiscoverCommand: plan.stopMarker.active ? entry.commands.discover : null,
+      nextDiscoverCommand: entry.commands.discover,
+      blockedDiscoverCommand: entry.blockedCommands.discover,
     })),
   }
 }

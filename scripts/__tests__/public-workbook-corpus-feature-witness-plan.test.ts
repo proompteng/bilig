@@ -48,7 +48,8 @@ describe('public workbook corpus feature witness plan', () => {
           id: 'pivots',
           label: 'pivots',
           discoveryQuery: 'pivot table xlsx',
-          discoverCommand: expect.stringContaining("--query 'pivot table xlsx'"),
+          discoverCommand: null,
+          blockedDiscoverCommand: expect.stringContaining("--query 'pivot table xlsx'"),
           cachedCandidateCount: 1,
           cachedCandidates: [
             {
@@ -56,7 +57,8 @@ describe('public workbook corpus feature witness plan', () => {
               fileName: 'visitor-visas-granted-pivot-table.xlsx',
               byteSize: 1024,
               sourceUrl: 'https://data.gov.au/data/dataset/visitor-visas-granted-pivot-table',
-              verifyArtifactCommand: expect.stringContaining('--artifact-id pivot-artifact-a'),
+              verifyArtifactCommand: null,
+              blockedVerifyArtifactCommand: expect.stringContaining('--artifact-id pivot-artifact-a'),
             },
           ],
         },
@@ -72,16 +74,22 @@ describe('public workbook corpus feature witness plan', () => {
       needsWitness: true,
       totalCount: 0,
       witnessCaseCount: 0,
+      commands: {
+        discover: null,
+      },
+      blockedCommands: {
+        discover: expect.stringContaining("--query 'pivot table xlsx'"),
+      },
     })
     expect(pivotCoverage?.cachedCandidateCount).toBe(1)
-    expect(pivotCoverage?.cachedCandidates[0]?.verifyArtifactCommand).toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
-    expect(pivotCoverage?.cachedCandidates[0]?.verifyArtifactCommand).toContain('public-workbook-corpus:verify-artifact')
-    expect(pivotCoverage?.cachedCandidates[0]?.verifyArtifactCommand).toContain('--update-verify-checkpoint')
-    expect(pivotCoverage?.cachedCandidates[0]?.verifyArtifactCommand).toContain('--allow-active-stop-marker')
-    expect(pivotCoverage?.commands.discover).toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
-    expect(pivotCoverage?.commands.discover).toContain('public-workbook-corpus:discover')
-    expect(pivotCoverage?.commands.discover).toContain("--query 'pivot table xlsx'")
-    expect(pivotCoverage?.commands.discover).toContain('--allow-active-stop-marker')
+    expect(pivotCoverage?.cachedCandidates[0]?.blockedVerifyArtifactCommand).toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
+    expect(pivotCoverage?.cachedCandidates[0]?.blockedVerifyArtifactCommand).toContain('public-workbook-corpus:verify-artifact')
+    expect(pivotCoverage?.cachedCandidates[0]?.blockedVerifyArtifactCommand).toContain('--update-verify-checkpoint')
+    expect(pivotCoverage?.cachedCandidates[0]?.blockedVerifyArtifactCommand).toContain('--allow-active-stop-marker')
+    expect(pivotCoverage?.blockedCommands.discover).toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
+    expect(pivotCoverage?.blockedCommands.discover).toContain('public-workbook-corpus:discover')
+    expect(pivotCoverage?.blockedCommands.discover).toContain("--query 'pivot table xlsx'")
+    expect(pivotCoverage?.blockedCommands.discover).toContain('--allow-active-stop-marker')
     expect(JSON.stringify(plan)).not.toContain('/repo/')
     expect(validatePublicWorkbookCorpusFeatureWitnessPlan(plan)).toEqual([])
   })
