@@ -1,8 +1,12 @@
 import { Effect } from 'effect'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ValueTag } from '@bilig/protocol'
 import { SpreadsheetEngine } from '../engine.js'
 import type { EngineStructureService } from '../engine/services/structure-service.js'
+
+interface FormulaBindingServiceForStructureTest {
+  readonly collectFormulaCellsReferencingSheetNow: (sheetName: string) => readonly number[]
+}
 
 function isEngineStructureService(value: unknown): value is EngineStructureService {
   if (typeof value !== 'object' || value === null) {
@@ -16,16 +20,34 @@ function isEngineStructureService(value: unknown): value is EngineStructureServi
   )
 }
 
-function getStructureService(engine: SpreadsheetEngine): EngineStructureService {
+function getEngineRuntime(engine: SpreadsheetEngine): object {
   const runtime = Reflect.get(engine, 'runtime')
   if (typeof runtime !== 'object' || runtime === null) {
     throw new TypeError('Expected engine runtime')
   }
+  return runtime
+}
+
+function isFormulaBindingServiceForStructureTest(value: unknown): value is FormulaBindingServiceForStructureTest {
+  return typeof value === 'object' && value !== null && typeof Reflect.get(value, 'collectFormulaCellsReferencingSheetNow') === 'function'
+}
+
+function getStructureService(engine: SpreadsheetEngine): EngineStructureService {
+  const runtime = getEngineRuntime(engine)
   const structure = Reflect.get(runtime, 'structure')
   if (!isEngineStructureService(structure)) {
     throw new TypeError('Expected engine structure service')
   }
   return structure
+}
+
+function getFormulaBindingService(engine: SpreadsheetEngine): FormulaBindingServiceForStructureTest {
+  const runtime = getEngineRuntime(engine)
+  const binding = Reflect.get(runtime, 'binding')
+  if (!isFormulaBindingServiceForStructureTest(binding)) {
+    throw new TypeError('Expected engine formula binding service')
+  }
+  return binding
 }
 
 describe('EngineStructureService', () => {
@@ -451,6 +473,39 @@ describe('EngineStructureService', () => {
       expect(engine.getCell('Sheet1', `E${row}`).formula).toBe(`D${row}*2`)
       expect(engine.getCellValue('Sheet1', `D${row}`)).toEqual({ tag: ValueTag.Number, value: row * 3 })
       expect(engine.getCellValue('Sheet1', `E${row}`)).toEqual({ tag: ValueTag.Number, value: row * 6 })
+    }
+  })
+
+  it('skips reference-sheet scans when column-family deferral covers every formula', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structure-preserve-column-family-scan-skip' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    for (let row = 1; row <= 8; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellValue('Sheet1', `B${row}`, row * 2)
+      engine.setCellFormula('Sheet1', `C${row}`, `A${row}+B${row}`)
+      engine.setCellFormula('Sheet1', `D${row}`, `C${row}*2`)
+    }
+    const collectReferencingSheet = vi.spyOn(getFormulaBindingService(engine), 'collectFormulaCellsReferencingSheetNow')
+
+    try {
+      const result = Effect.runSync(
+        getStructureService(engine).applyStructuralAxisOp({
+          kind: 'insertColumns',
+          sheetName: 'Sheet1',
+          start: 1,
+          count: 1,
+        }),
+      )
+
+      expect(result.topologyChanged).toBe(false)
+      expect(result.formulaCellIndices).toEqual([])
+      expect(collectReferencingSheet).not.toHaveBeenCalled()
+      expect(engine.getCell('Sheet1', 'D8').formula).toBe('A8+C8')
+      expect(engine.getCell('Sheet1', 'E8').formula).toBe('D8*2')
+      expect(engine.getCellValue('Sheet1', 'E8')).toEqual({ tag: ValueTag.Number, value: 48 })
+    } finally {
+      collectReferencingSheet.mockRestore()
     }
   })
 

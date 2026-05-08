@@ -238,6 +238,7 @@ export function createEngineStructureService(args: CreateEngineStructureServiceA
     const precomputedDirectAggregateValueCellIndices = new Set<number>()
     const directAggregateRetargetCellIndices = new Set<number>()
     let sharedOwnedPreservingSourceTransform: RuntimeFormula['structuralSourceTransform']
+    let deferredOwnedFormulaFamilyMemberCount = 0
     const ownedPreservingSourceTransform = (): NonNullable<RuntimeFormula['structuralSourceTransform']> =>
       (sharedOwnedPreservingSourceTransform ??= {
         ownerSheetName: argsForImpact.sheetName,
@@ -285,6 +286,7 @@ export function createEngineStructureService(args: CreateEngineStructureServiceA
         args.setFormulaFamilyStructuralSourceTransform(familyId, transform)
       })
       hasDeferredStructuralFormulaSources = true
+      deferredOwnedFormulaFamilyMemberCount = ownedFormulaCount
       return true
     }
     const canSkipOwnedDirectAggregateCandidate = (cellIndex: number): boolean => {
@@ -460,7 +462,8 @@ export function createEngineStructureService(args: CreateEngineStructureServiceA
       }
       return true
     }
-    if (!tryDeferOwnedFormulaFamilies()) {
+    const deferredOwnedFormulaFamilies = tryDeferOwnedFormulaFamilies()
+    if (!deferredOwnedFormulaFamilies) {
       args.forEachFormulaCellOwnedBySheet(argsForImpact.sheetName, (cellIndex) => {
         if (tryDeferOwnedSimpleFormula(cellIndex)) {
           return
@@ -485,16 +488,20 @@ export function createEngineStructureService(args: CreateEngineStructureServiceA
         candidateCellIndices.add(cellIndex)
       })
     }
-    args.collectFormulaCellsReferencingSheet(argsForImpact.sheetName).forEach((cellIndex) => {
-      if (directAggregateRetargetCellIndices.has(cellIndex)) {
-        return
-      }
-      const formula = args.state.formulas.get(cellIndex)
-      if (formula?.structuralSourceTransform !== undefined) {
-        return
-      }
-      candidateCellIndices.add(cellIndex)
-    })
+    const ownedFamilyDeferralCoversEveryFormula =
+      deferredOwnedFormulaFamilies && deferredOwnedFormulaFamilyMemberCount === args.state.formulas.size
+    if (!ownedFamilyDeferralCoversEveryFormula) {
+      args.collectFormulaCellsReferencingSheet(argsForImpact.sheetName).forEach((cellIndex) => {
+        if (directAggregateRetargetCellIndices.has(cellIndex)) {
+          return
+        }
+        const formula = args.state.formulas.get(cellIndex)
+        if (formula?.structuralSourceTransform !== undefined) {
+          return
+        }
+        candidateCellIndices.add(cellIndex)
+      })
+    }
     if (argsForImpact.changedDefinedNames.size > 0) {
       args.collectFormulaCellsForDefinedNames([...argsForImpact.changedDefinedNames]).forEach((cellIndex) => {
         candidateCellIndices.add(cellIndex)
