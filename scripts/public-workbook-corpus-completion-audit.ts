@@ -108,7 +108,9 @@ function main(): void {
   if (readFlagArg('--check')) {
     const findings = validatePublicWorkbookCorpusCompletionAudit(audit, { requireComplete })
     if (findings.length > 0) {
-      throw new Error(`Public workbook corpus completion audit is invalid: ${findings.join('; ')}`)
+      process.stderr.write(`Public workbook corpus completion audit is invalid: ${findings.join('; ')}\n`)
+      process.exitCode = 1
+      return
     }
     process.stdout.write(
       `${JSON.stringify(
@@ -417,15 +419,18 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
       ],
     })
   },
-  (context) =>
-    checklistItem({
+  (context) => {
+    const featureValidationGapCount = context.recordedCases.filter((entry) => !hasFeatureValidationEvidence(entry)).length
+    const usedRangeGapCount = context.recordedCases.filter((entry) => !hasUsedRangeValidationEvidence(entry)).length
+    return checklistItem({
       id: 'validate-workbook-features',
       priority: 3,
       promptRequirement:
         'Validate sheets, dimensions, used ranges, formulas, values, names, tables, charts, pivots, styles, merged ranges, conditional formats, and unsupported feature classifications.',
       passed:
         context.status.recordedCoversManifest &&
-        context.recordedCases.every(hasFeatureValidationEvidence) &&
+        featureValidationGapCount === 0 &&
+        usedRangeGapCount === 0 &&
         context.currentState.cachedArtifactCount >= context.currentState.targetWorkbookCount,
       evidence: [
         `feature-count fields validated by recorded cases: ${String(context.recordedCases.filter(hasFeatureValidationEvidence).length)}/${String(
@@ -437,13 +442,18 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
         ...(context.status.recordedCoversManifest
           ? []
           : [`cached artifacts missing feature validation evidence: ${String(context.currentState.missingVerificationCount)}`]),
+        ...(featureValidationGapCount === 0
+          ? []
+          : [`recorded cases with incomplete feature validation evidence: ${String(featureValidationGapCount)}`]),
+        ...(usedRangeGapCount === 0 ? [] : [`recorded cases missing explicit used-range evidence: ${String(usedRangeGapCount)}`]),
         ...countGap(
           context.currentState.cachedArtifactCount,
           context.currentState.targetWorkbookCount,
           'feature validation does not yet cover target artifacts',
         ),
       ],
-    }),
+    })
+  },
   (context) =>
     checklistItem({
       id: 'formula-recalc-oracle',
@@ -533,10 +543,16 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
       promptRequirement: 'Produce a pass/fail/error/unsupported scorecard covering all 10,000 workbooks.',
       passed:
         context.status.scorecardCoversManifest &&
+        context.currentState.recordedFailedCaseCount === 0 &&
+        context.currentState.recordedErrorCaseCount === 0 &&
         context.currentState.scorecardCaseCount >= context.currentState.targetWorkbookCount &&
         context.status.targetComplete,
       evidence: [
         `scorecard cases: ${String(context.currentState.scorecardCaseCount)}/${String(context.currentState.targetWorkbookCount)}`,
+        `scorecard passed cases: ${String(context.currentState.recordedPassedCaseCount)}`,
+        `scorecard failed cases: ${String(context.currentState.recordedFailedCaseCount)}`,
+        `scorecard error cases: ${String(context.currentState.recordedErrorCaseCount)}`,
+        `scorecard unsupported cases: ${String(context.currentState.recordedUnsupportedCaseCount)}`,
         `scorecard covers manifest: ${String(context.status.scorecardCoversManifest)}`,
         `target complete: ${String(context.status.targetComplete)}`,
       ],
@@ -548,6 +564,12 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
                 context.currentState.cachedArtifactCount,
               )}`,
             ]),
+        ...(context.currentState.recordedFailedCaseCount === 0
+          ? []
+          : [`failed scorecard cases: ${String(context.currentState.recordedFailedCaseCount)}`]),
+        ...(context.currentState.recordedErrorCaseCount === 0
+          ? []
+          : [`error scorecard cases: ${String(context.currentState.recordedErrorCaseCount)}`]),
         ...countGap(context.currentState.scorecardCaseCount, context.currentState.targetWorkbookCount, 'scorecard cases below target'),
         ...(context.status.targetComplete ? [] : context.status.gaps),
       ],
@@ -761,9 +783,20 @@ function checklistItem(
 }
 
 function hasFeatureValidationEvidence(entry: PublicWorkbookCorpusCase): boolean {
+  const dimensionCellCount = entry.workbookMetadata.dimensions.reduce((sum, dimension) => sum + dimension.nonEmptyCellCount, 0)
   return (
+    entry.workbookMetadata.workbookName.trim().length > 0 &&
     entry.workbookMetadata.sheetNames.length === entry.featureCounts.sheetCount &&
     entry.workbookMetadata.dimensions.length === entry.featureCounts.sheetCount &&
+    dimensionCellCount === entry.featureCounts.cellCount &&
+    entry.workbookMetadata.dimensions.every(
+      (dimension) =>
+        dimension.sheetName.trim().length > 0 &&
+        dimension.rowCount >= 0 &&
+        dimension.columnCount >= 0 &&
+        dimension.nonEmptyCellCount >= 0 &&
+        (dimension.nonEmptyCellCount === 0 || (dimension.rowCount > 0 && dimension.columnCount > 0)),
+    ) &&
     entry.featureCounts.cellCount >= entry.featureCounts.formulaCellCount + entry.featureCounts.valueCellCount &&
     entry.featureCounts.definedNameCount >= 0 &&
     entry.featureCounts.tableCount >= 0 &&
@@ -771,8 +804,33 @@ function hasFeatureValidationEvidence(entry: PublicWorkbookCorpusCase): boolean 
     entry.featureCounts.pivotCount >= 0 &&
     entry.featureCounts.mergeCount >= 0 &&
     entry.featureCounts.styleRangeCount >= 0 &&
-    entry.featureCounts.conditionalFormatCount >= 0
+    entry.featureCounts.conditionalFormatCount >= 0 &&
+    entry.featureCounts.dataValidationCount >= 0 &&
+    entry.featureCounts.macroPayloadCount >= 0 &&
+    entry.featureCounts.warningCount >= 0
   )
+}
+
+function hasUsedRangeValidationEvidence(entry: PublicWorkbookCorpusCase): boolean {
+  return entry.workbookMetadata.dimensions.every((dimension) => {
+    if (!Object.hasOwn(dimension, 'usedRange')) {
+      return false
+    }
+    const range = dimension.usedRange
+    if (dimension.nonEmptyCellCount === 0) {
+      return range === null
+    }
+    return (
+      range !== null &&
+      range !== undefined &&
+      range.startRow >= 0 &&
+      range.startColumn >= 0 &&
+      range.endRow >= range.startRow &&
+      range.endColumn >= range.startColumn &&
+      dimension.rowCount === range.endRow + 1 &&
+      dimension.columnCount === range.endColumn + 1
+    )
+  })
 }
 
 function hasWorkbookMetadata(entry: PublicWorkbookCorpusCase): boolean {

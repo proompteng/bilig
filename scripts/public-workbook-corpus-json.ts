@@ -329,13 +329,36 @@ function parsePublicWorkbookMetadata(value: unknown): PublicWorkbookCorpusCase['
     sheetNames: readStringArray(record, 'sheetNames'),
     dimensions: readRequiredArray(record, 'dimensions').map((dimension) => {
       const dimensionRecord = asRecord(dimension)
-      return {
+      const usedRange = parseOptionalUsedRange(dimensionRecord['usedRange'])
+      const parsedDimension: PublicWorkbookCorpusCase['workbookMetadata']['dimensions'][number] = {
         sheetName: readRequiredString(dimensionRecord, 'sheetName'),
         rowCount: readRequiredInteger(dimensionRecord, 'rowCount'),
         columnCount: readRequiredInteger(dimensionRecord, 'columnCount'),
         nonEmptyCellCount: readRequiredInteger(dimensionRecord, 'nonEmptyCellCount'),
       }
+      if (usedRange !== undefined) {
+        Object.assign(parsedDimension, { usedRange })
+      }
+      return parsedDimension
     }),
+  }
+}
+
+function parseOptionalUsedRange(
+  value: unknown,
+): PublicWorkbookCorpusCase['workbookMetadata']['dimensions'][number]['usedRange'] | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  if (value === null) {
+    return null
+  }
+  const record = asRecord(value)
+  return {
+    startRow: readRequiredInteger(record, 'startRow'),
+    startColumn: readRequiredInteger(record, 'startColumn'),
+    endRow: readRequiredInteger(record, 'endRow'),
+    endColumn: readRequiredInteger(record, 'endColumn'),
   }
 }
 

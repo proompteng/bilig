@@ -92,6 +92,12 @@ export interface PublicWorkbookCorpusCase {
       readonly rowCount: number
       readonly columnCount: number
       readonly nonEmptyCellCount: number
+      readonly usedRange?: {
+        readonly startRow: number
+        readonly startColumn: number
+        readonly endRow: number
+        readonly endColumn: number
+      } | null
     }[]
   }
   readonly validation: PublicWorkbookValidationSummary

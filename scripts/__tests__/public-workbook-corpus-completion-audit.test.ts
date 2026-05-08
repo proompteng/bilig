@@ -158,6 +158,100 @@ describe('public workbook corpus completion audit', () => {
       expect.arrayContaining([expect.stringContaining('public workbook corpus goal is not achieved')]),
     )
   })
+
+  it('fails completion when scorecard evidence still contains failed or error cases', () => {
+    const artifactA = workbookArtifact('workbook-a')
+    const artifactB = workbookArtifact('workbook-b')
+    const audit = buildPublicWorkbookCorpusCompletionAudit({
+      generatedAt: '2026-05-08T00:00:00.000Z',
+      hyperformulaSecondaryCorpus: hyperFormulaSecondaryCorpusFixture(),
+      manifest: manifestWithArtifacts([artifactA, artifactB], 2),
+      recordedCases: [passedCase(artifactA, 1), passedCase(artifactB, 1)],
+      status: statusFixture({
+        targetWorkbookCount: 2,
+        sourceCount: 2,
+        cachedArtifactCount: 2,
+        scorecardCaseCount: 2,
+        checkpointCaseCount: 0,
+        recordedManifestArtifactCount: 2,
+        missingManifestArtifactCount: 0,
+        recordedPassedCaseCount: 0,
+        recordedFailedCaseCount: 1,
+        recordedErrorCaseCount: 1,
+        scorecardCoversManifest: true,
+        targetComplete: true,
+        gaps: [],
+      }),
+      stopMarkerActive: false,
+    })
+
+    expect(requirement(audit.checklist, 'scorecard-all-10000')).toMatchObject({
+      passed: false,
+      gaps: expect.arrayContaining(['failed scorecard cases: 1', 'error scorecard cases: 1']),
+      evidence: expect.arrayContaining(['scorecard failed cases: 1', 'scorecard error cases: 1']),
+    })
+    expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
+  })
+
+  it('fails completion when recorded feature evidence is internally inconsistent', () => {
+    const artifact = workbookArtifact('workbook-a')
+    const audit = buildPublicWorkbookCorpusCompletionAudit({
+      generatedAt: '2026-05-08T00:00:00.000Z',
+      hyperformulaSecondaryCorpus: hyperFormulaSecondaryCorpusFixture(),
+      manifest: manifestWithArtifacts([artifact], 1),
+      recordedCases: [caseWithInvalidFeatureEvidence(artifact)],
+      status: statusFixture({
+        targetWorkbookCount: 1,
+        sourceCount: 1,
+        cachedArtifactCount: 1,
+        scorecardCaseCount: 1,
+        checkpointCaseCount: 0,
+        recordedManifestArtifactCount: 1,
+        missingManifestArtifactCount: 0,
+        recordedPassedCaseCount: 1,
+        scorecardCoversManifest: true,
+        targetComplete: true,
+        gaps: [],
+      }),
+      stopMarkerActive: false,
+    })
+
+    expect(requirement(audit.checklist, 'validate-workbook-features')).toMatchObject({
+      passed: false,
+      gaps: expect.arrayContaining(['recorded cases with incomplete feature validation evidence: 1']),
+    })
+    expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
+  })
+
+  it('fails completion when recorded sheet dimensions omit explicit used-range evidence', () => {
+    const artifact = workbookArtifact('workbook-a')
+    const audit = buildPublicWorkbookCorpusCompletionAudit({
+      generatedAt: '2026-05-08T00:00:00.000Z',
+      hyperformulaSecondaryCorpus: hyperFormulaSecondaryCorpusFixture(),
+      manifest: manifestWithArtifacts([artifact], 1),
+      recordedCases: [caseWithoutUsedRangeEvidence(artifact)],
+      status: statusFixture({
+        targetWorkbookCount: 1,
+        sourceCount: 1,
+        cachedArtifactCount: 1,
+        scorecardCaseCount: 1,
+        checkpointCaseCount: 0,
+        recordedManifestArtifactCount: 1,
+        missingManifestArtifactCount: 0,
+        recordedPassedCaseCount: 1,
+        scorecardCoversManifest: true,
+        targetComplete: true,
+        gaps: [],
+      }),
+      stopMarkerActive: false,
+    })
+
+    expect(requirement(audit.checklist, 'validate-workbook-features')).toMatchObject({
+      passed: false,
+      gaps: expect.arrayContaining(['recorded cases missing explicit used-range evidence: 1']),
+    })
+    expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
+  })
 })
 
 function requirement(
@@ -238,7 +332,15 @@ function passedCase(artifact: PublicWorkbookArtifact, formulaOracleComparisons: 
     workbookMetadata: {
       workbookName: artifact.fileName,
       sheetNames: ['Sheet1'],
-      dimensions: [{ sheetName: 'Sheet1', rowCount: 1, columnCount: 2, nonEmptyCellCount: 2 }],
+      dimensions: [
+        {
+          sheetName: 'Sheet1',
+          rowCount: 1,
+          columnCount: 2,
+          nonEmptyCellCount: 2,
+          usedRange: { startRow: 0, startColumn: 0, endRow: 0, endColumn: 1 },
+        },
+      ],
     },
     validation: {
       importPassed: true,
@@ -297,6 +399,42 @@ function resourceLimitedUnsupportedCase(artifact: PublicWorkbookArtifact): Publi
   }
 }
 
+function caseWithInvalidFeatureEvidence(artifact: PublicWorkbookArtifact): PublicWorkbookCorpusCase {
+  const base = passedCase(artifact, 1)
+  return {
+    ...base,
+    featureCounts: {
+      ...base.featureCounts,
+      cellCount: 3,
+      dataValidationCount: -1,
+    },
+    workbookMetadata: {
+      workbookName: artifact.fileName,
+      sheetNames: ['Sheet1'],
+      dimensions: [
+        {
+          sheetName: 'Sheet1',
+          rowCount: 1,
+          columnCount: 2,
+          nonEmptyCellCount: 2,
+          usedRange: { startRow: 0, startColumn: 0, endRow: 0, endColumn: 1 },
+        },
+      ],
+    },
+  }
+}
+
+function caseWithoutUsedRangeEvidence(artifact: PublicWorkbookArtifact): PublicWorkbookCorpusCase {
+  return {
+    ...passedCase(artifact, 1),
+    workbookMetadata: {
+      workbookName: artifact.fileName,
+      sheetNames: ['Sheet1'],
+      dimensions: [{ sheetName: 'Sheet1', rowCount: 1, columnCount: 2, nonEmptyCellCount: 2 }],
+    },
+  }
+}
+
 function statusFixture(input: {
   readonly targetWorkbookCount: number
   readonly sourceCount: number
@@ -307,6 +445,8 @@ function statusFixture(input: {
   readonly missingManifestArtifactCount: number
   readonly recordedPassedCaseCount: number
   readonly recordedUnsupportedCaseCount?: number
+  readonly recordedFailedCaseCount?: number
+  readonly recordedErrorCaseCount?: number
   readonly scorecardCoversManifest: boolean
   readonly targetComplete: boolean
   readonly gaps: readonly string[]
@@ -321,8 +461,8 @@ function statusFixture(input: {
     missingManifestArtifactCount: input.missingManifestArtifactCount,
     recordedPassedCaseCount: input.recordedPassedCaseCount,
     recordedUnsupportedCaseCount: input.recordedUnsupportedCaseCount ?? 0,
-    recordedFailedCaseCount: 0,
-    recordedErrorCaseCount: 0,
+    recordedFailedCaseCount: input.recordedFailedCaseCount ?? 0,
+    recordedErrorCaseCount: input.recordedErrorCaseCount ?? 0,
     recordedCoversManifest: input.recordedManifestArtifactCount >= input.cachedArtifactCount,
     recordedAllCasesPassed: true,
     missingManifestArtifactSample: [],

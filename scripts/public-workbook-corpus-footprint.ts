@@ -111,13 +111,34 @@ function readWorkbookMetadata(record: Record<string, unknown>): WorkbookFootprin
     sheetNames: readRequiredStringArray(record, 'sheetNames'),
     dimensions: readRequiredArray(record, 'dimensions').map((entry) => {
       const dimension = asRecord(entry)
-      return {
+      const usedRange = readOptionalUsedRange(dimension['usedRange'])
+      const parsedDimension: WorkbookFootprint['workbookMetadata']['dimensions'][number] = {
         sheetName: readRequiredString(dimension, 'sheetName'),
         rowCount: readInteger(dimension, 'rowCount'),
         columnCount: readInteger(dimension, 'columnCount'),
         nonEmptyCellCount: readInteger(dimension, 'nonEmptyCellCount'),
       }
+      if (usedRange !== undefined) {
+        Object.assign(parsedDimension, { usedRange })
+      }
+      return parsedDimension
     }),
+  }
+}
+
+function readOptionalUsedRange(value: unknown): WorkbookFootprint['workbookMetadata']['dimensions'][number]['usedRange'] | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  if (value === null) {
+    return null
+  }
+  const record = asRecord(value)
+  return {
+    startRow: readInteger(record, 'startRow'),
+    startColumn: readInteger(record, 'startColumn'),
+    endRow: readInteger(record, 'endRow'),
+    endColumn: readInteger(record, 'endColumn'),
   }
 }
 

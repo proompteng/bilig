@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
 
 import { ValueTag } from '../../packages/protocol/src/enums.js'
-import { extractFormulaOracles } from '../public-workbook-corpus-workbook.ts'
+import { extractFormulaOracles, inspectWorkbookFootprint } from '../public-workbook-corpus-workbook.ts'
 
 describe('public workbook corpus workbook helpers', () => {
   it('extracts formula oracles from broad sparse worksheet refs', () => {
@@ -13,6 +13,20 @@ describe('public workbook corpus workbook helpers', () => {
         sheetName: 'Sparse',
         address: 'XFD512',
         expected: { tag: ValueTag.Number, value: 42 },
+      },
+    ])
+  }, 15_000)
+
+  it('records explicit used ranges from actual populated cells instead of broad worksheet refs', () => {
+    const footprint = inspectWorkbookFootprint(buildBroadSparseWorkbookBytes(), 'sparse.xlsx')
+
+    expect(footprint.workbookMetadata.dimensions).toEqual([
+      {
+        sheetName: 'Sparse',
+        rowCount: 512,
+        columnCount: 16_384,
+        nonEmptyCellCount: 1,
+        usedRange: { startRow: 511, startColumn: 16_383, endRow: 511, endColumn: 16_383 },
       },
     ])
   }, 15_000)

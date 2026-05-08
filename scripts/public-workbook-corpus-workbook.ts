@@ -12,6 +12,8 @@ export interface WorkbookFootprint {
   readonly workbookMetadata: PublicWorkbookCorpusCase['workbookMetadata']
 }
 
+type WorkbookSheetUsedRange = NonNullable<PublicWorkbookCorpusCase['workbookMetadata']['dimensions'][number]['usedRange']>
+
 interface WorksheetCellEntry {
   readonly address: string
   readonly cell: Record<string, unknown>
@@ -47,15 +49,20 @@ export function workbookMetadata(snapshot: WorkbookSnapshot): PublicWorkbookCorp
       .map((sheet) => {
         let rowCount = 0
         let columnCount = 0
+        let usedRange: WorkbookSheetUsedRange | null = null
         for (const cell of sheet.cells) {
-          rowCount = Math.max(rowCount, (cell.row ?? rowIndexFromAddress(cell.address)) + 1)
-          columnCount = Math.max(columnCount, (cell.col ?? columnIndexFromAddress(cell.address)) + 1)
+          const row = cell.row ?? rowIndexFromAddress(cell.address)
+          const column = cell.col ?? columnIndexFromAddress(cell.address)
+          rowCount = Math.max(rowCount, row + 1)
+          columnCount = Math.max(columnCount, column + 1)
+          usedRange = expandUsedRange(usedRange, row, column)
         }
         return {
           sheetName: sheet.name,
           rowCount,
           columnCount,
           nonEmptyCellCount: sheet.cells.length,
+          usedRange,
         }
       }),
   }
@@ -97,11 +104,13 @@ export function inspectWorkbookFootprint(bytes: Uint8Array, fileName: string): W
     let rowCount = 0
     let columnCount = 0
     let nonEmptyCellCount = 0
+    let usedRange: WorkbookSheetUsedRange | null = null
     if (sheet) {
       for (const { cell, row, column } of worksheetCellEntries(sheet)) {
         rowCount = Math.max(rowCount, row + 1)
         columnCount = Math.max(columnCount, column + 1)
         nonEmptyCellCount += 1
+        usedRange = expandUsedRange(usedRange, row, column)
         featureCounts.cellCount += 1
         if (typeof cell.f === 'string' && cell.f.trim().length > 0) {
           featureCounts.formulaCellCount += 1
@@ -112,7 +121,7 @@ export function inspectWorkbookFootprint(bytes: Uint8Array, fileName: string): W
       }
       featureCounts.mergeCount += Array.isArray(sheet['!merges']) ? sheet['!merges'].length : 0
     }
-    dimensions.push({ sheetName, rowCount, columnCount, nonEmptyCellCount })
+    dimensions.push({ sheetName, rowCount, columnCount, nonEmptyCellCount, usedRange })
   }
   return {
     featureCounts,
@@ -211,6 +220,17 @@ function cellValueFromXlsx(cell: Record<string, unknown>): CellValue | null {
     default:
       return null
   }
+}
+
+function expandUsedRange(current: WorkbookSheetUsedRange | null, row: number, column: number): WorkbookSheetUsedRange {
+  return current
+    ? {
+        startRow: Math.min(current.startRow, row),
+        startColumn: Math.min(current.startColumn, column),
+        endRow: Math.max(current.endRow, row),
+        endColumn: Math.max(current.endColumn, column),
+      }
+    : { startRow: row, startColumn: column, endRow: row, endColumn: column }
 }
 
 function worksheetCellEntries(sheet: XLSX.WorkSheet): WorksheetCellEntry[] {
