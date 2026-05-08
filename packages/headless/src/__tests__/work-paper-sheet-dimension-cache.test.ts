@@ -44,6 +44,16 @@ describe('WorkPaperSheetDimensionCache', () => {
     expect(cache.get(2)).toEqual({ width: 4, height: 5 })
   })
 
+  it('does not cache scanned dimensions for sheets with spills', () => {
+    const cache = new WorkPaperSheetDimensionCache(engineWithSpills(['Sheet1']))
+
+    cache.cacheScanned(1, { width: 2, height: 3 })
+    cache.cacheScanned(2, { width: 4, height: 5 })
+
+    expect(cache.get(1)).toBeUndefined()
+    expect(cache.get(2)).toEqual({ width: 4, height: 5 })
+  })
+
   it('expands dimensions for non-spill value writes and invalidates edge clears', () => {
     const cache = new WorkPaperSheetDimensionCache(engineWithSpills())
     cache.cache(1, { width: 2, height: 2 })

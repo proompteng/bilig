@@ -74,7 +74,7 @@ describe('work paper mutation queues', () => {
     expect(dimensionUpdates).toHaveLength(1)
   })
 
-  it('forces dimension updates when suspended mutations are flushed', () => {
+  it('skips dimension updates for known existing suspended literal mutations', () => {
     const { queues, dimensionUpdates } = createRecordedQueues()
     const refs: EngineCellMutationRef[] = [
       {
@@ -86,6 +86,22 @@ describe('work paper mutation queues', () => {
 
     queues.appendSuspendedCellMutationRefs(refs)
     queues.addSuspendedCellMutationPotentialNewCells(0)
+    queues.flushSuspendedCellMutations()
+
+    expect(dimensionUpdates).toEqual([])
+  })
+
+  it('updates dimensions for suspended mutations that may add cells', () => {
+    const { queues, dimensionUpdates } = createRecordedQueues()
+    const refs: EngineCellMutationRef[] = [
+      {
+        sheetId: 2,
+        mutation: { kind: 'setCellValue', row: 4, col: 1, value: 12 },
+      },
+    ]
+
+    queues.appendSuspendedCellMutationRefs(refs)
+    queues.addSuspendedCellMutationPotentialNewCells(1)
     queues.flushSuspendedCellMutations()
 
     expect(dimensionUpdates).toEqual([refs])

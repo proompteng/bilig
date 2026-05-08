@@ -1,5 +1,5 @@
 import { MAX_COLS, MAX_ROWS, ValueTag, type CellValue, type WorkbookSnapshot } from '@bilig/protocol'
-import { parseCellAddress } from '@bilig/formula'
+import { compileFormula, parseCellAddress } from '@bilig/formula'
 import { WorkPaperSheetSizeLimitExceededError, WorkPaperUnableToParseError } from './work-paper-errors.js'
 import { isBlankRawCellContent } from './work-paper-runtime-helpers.js'
 import type {
@@ -14,6 +14,7 @@ import type {
 
 export interface WorkPaperSheetInspection {
   readonly hasFormula: boolean
+  readonly hasDynamicSpillFormula: boolean
   readonly dimensions: WorkPaperSheetDimensions
   readonly materializedCellCount: number
   readonly maxColumnCount: number
@@ -113,6 +114,7 @@ export function inspectSheetWithinLimits(sheetName: string, sheet: WorkPaperShee
   let maxColumnCount = 0
   let formulaCellCount = 0
   let hasFormula = false
+  let hasDynamicSpillFormula = false
   for (let rowIndex = 0; rowIndex < sheet.length; rowIndex += 1) {
     const row = sheet[rowIndex]
     if (!Array.isArray(row)) {
@@ -131,6 +133,7 @@ export function inspectSheetWithinLimits(sheetName: string, sheet: WorkPaperShee
       if (typeof cell === 'string' && cellHasFormulaPrefix(cell)) {
         formulaCellCount += 1
         hasFormula = true
+        hasDynamicSpillFormula ||= formulaMayResizeDynamically(cell)
       }
     }
     if (rowHasMaterializedCell) {
@@ -146,11 +149,32 @@ export function inspectSheetWithinLimits(sheetName: string, sheet: WorkPaperShee
   }
   return {
     hasFormula,
+    hasDynamicSpillFormula,
     dimensions: { width: materializedWidth, height: materializedHeight },
     materializedCellCount,
     maxColumnCount,
     formulaCellCount,
   }
+}
+
+export function workPaperSheetHasDynamicSpillFormula(sheet: WorkPaperSheet): boolean {
+  for (let rowIndex = 0; rowIndex < sheet.length; rowIndex += 1) {
+    const row = sheet[rowIndex]
+    if (!Array.isArray(row)) {
+      continue
+    }
+    for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+      const cell = row[colIndex]
+      if (typeof cell === 'string' && cellHasFormulaPrefix(cell) && formulaMayResizeDynamically(cell)) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+export function workbookSnapshotSheetHasDynamicSpillFormula(snapshotSheet: WorkbookSnapshot['sheets'][number]): boolean {
+  return snapshotSheet.cells.some((cell) => typeof cell.formula === 'string' && formulaMayResizeDynamically(cell.formula))
 }
 
 export function cellHasFormulaPrefix(value: string): boolean {
@@ -162,6 +186,20 @@ export function cellHasFormulaPrefix(value: string): boolean {
     return false
   }
   return value.trimStart().charCodeAt(0) === 61
+}
+
+function formulaMayResizeDynamically(value: string): boolean {
+  const formula = stripFormulaPrefix(value)
+  try {
+    return compileFormula(formula).producesSpill
+  } catch {
+    return true
+  }
+}
+
+function stripFormulaPrefix(value: string): string {
+  const trimmed = value.trimStart()
+  return trimmed.startsWith('=') ? trimmed.slice(1) : trimmed
 }
 
 export function classifyWorkPaperCell(input: {

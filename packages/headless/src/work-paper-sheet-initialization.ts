@@ -5,6 +5,8 @@ import {
   inspectRuntimeSnapshotSheetDimensionsWithinLimits,
   inspectSheetWithinLimits,
   runtimeSnapshotMatchesSheetEntries,
+  workbookSnapshotSheetHasDynamicSpillFormula,
+  workPaperSheetHasDynamicSpillFormula,
   type WorkPaperSheetInspection,
 } from './work-paper-sheet-inspection.js'
 import type { SerializedWorkPaperNamedExpression, WorkPaperConfig, WorkPaperSheetDimensions, WorkPaperSheets } from './work-paper-types.js'
@@ -20,7 +22,11 @@ export function initializeWorkPaperFromSheets(args: {
   readonly upsertNamedExpression: (expression: SerializedWorkPaperNamedExpression, options: { duringInitialization: boolean }) => void
   readonly rewriteFormulaForStorage: (formula: string, sheetId: number) => string
   readonly requireSheetId: (name: string) => number
-  readonly cacheInitializedSheetDimensions: (sheetId: number, dimensions: WorkPaperSheetDimensions) => void
+  readonly cacheInitializedSheetDimensions: (
+    sheetId: number,
+    dimensions: WorkPaperSheetDimensions,
+    options?: { readonly mayResizeDynamically?: boolean },
+  ) => void
   readonly clearHistoryStacks: () => void
   readonly resetChangeTrackingCaches: () => void
 }): void {
@@ -81,7 +87,9 @@ export function initializeWorkPaperFromSheets(args: {
       const sheetId = args.requireSheetId(sheetEntries[index]![0])
       const inspected = inspectedSheets[index]
       if (inspected !== undefined) {
-        args.cacheInitializedSheetDimensions(sheetId, inspected.dimensions)
+        args.cacheInitializedSheetDimensions(sheetId, inspected.dimensions, {
+          mayResizeDynamically: inspected.hasDynamicSpillFormula,
+        })
       }
     }
   })
@@ -95,7 +103,11 @@ export function initializeWorkPaperFromSnapshot(args: {
   readonly snapshot: WorkbookSnapshot
   readonly withEngineEventCaptureDisabled: (callback: () => void) => void
   readonly requireSheetId: (name: string) => number
-  readonly cacheInitializedSheetDimensions: (sheetId: number, dimensions: WorkPaperSheetDimensions) => void
+  readonly cacheInitializedSheetDimensions: (
+    sheetId: number,
+    dimensions: WorkPaperSheetDimensions,
+    options?: { readonly mayResizeDynamically?: boolean },
+  ) => void
   readonly clearHistoryStacks: () => void
   readonly resetChangeTrackingCaches: () => void
 }): void {
@@ -116,8 +128,11 @@ export function initializeWorkPaperFromSnapshot(args: {
   args.withEngineEventCaptureDisabled(() => {
     args.engine.importSnapshot(args.snapshot)
     for (let index = 0; index < args.snapshot.sheets.length; index += 1) {
-      const sheetId = args.requireSheetId(args.snapshot.sheets[index]!.name)
-      args.cacheInitializedSheetDimensions(sheetId, inspectedSheets[index]!)
+      const snapshotSheet = args.snapshot.sheets[index]!
+      const sheetId = args.requireSheetId(snapshotSheet.name)
+      args.cacheInitializedSheetDimensions(sheetId, inspectedSheets[index]!, {
+        mayResizeDynamically: workbookSnapshotSheetHasDynamicSpillFormula(snapshotSheet),
+      })
     }
   })
   args.clearHistoryStacks()
@@ -149,6 +164,7 @@ function inspectWorkPaperInitialSheets(args: {
           })
           return {
             hasFormula: false,
+            hasDynamicSpillFormula: workPaperSheetHasDynamicSpillFormula(sheet),
             dimensions,
             materializedCellCount: runtimeSheetCells?.cellCount ?? 0,
             maxColumnCount: dimensions.width,

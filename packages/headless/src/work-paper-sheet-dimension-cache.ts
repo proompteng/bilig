@@ -29,8 +29,16 @@ export class WorkPaperSheetDimensionCache {
     this.dimensions.set(sheetId, { width: dimensions.width, height: dimensions.height })
   }
 
-  cacheInitialized(sheetId: number, dimensions: WorkPaperSheetDimensions): void {
-    if (this.sheetHasSpills(sheetId)) {
+  cacheInitialized(sheetId: number, dimensions: WorkPaperSheetDimensions, options: { readonly mayResizeDynamically?: boolean } = {}): void {
+    if (options.mayResizeDynamically === true || this.sheetHasSpills(sheetId)) {
+      this.invalidate(sheetId)
+      return
+    }
+    this.cache(sheetId, dimensions)
+  }
+
+  cacheScanned(sheetId: number, dimensions: WorkPaperSheetDimensions, options: { readonly mayResizeDynamically?: boolean } = {}): void {
+    if (options.mayResizeDynamically === true || this.sheetHasSpills(sheetId)) {
       this.invalidate(sheetId)
       return
     }

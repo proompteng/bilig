@@ -15,7 +15,11 @@ import {
   WORKPAPER_CONFIG_KEYS,
 } from './work-paper-config.js'
 import { makeNamedExpressionKey } from './work-paper-runtime-helpers.js'
-import { inspectSheetDimensionsWithinLimits, validateSheetWithinLimits } from './work-paper-sheet-inspection.js'
+import {
+  inspectSheetDimensionsWithinLimits,
+  validateSheetWithinLimits,
+  workPaperSheetHasDynamicSpillFormula,
+} from './work-paper-sheet-inspection.js'
 import { WorkPaperSheetDimensionCache } from './work-paper-sheet-dimension-cache.js'
 import type { WorkPaperAxisIntervalEditMode, WorkPaperAxisKind } from './work-paper-axis-helpers.js'
 import {
@@ -314,7 +318,8 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
         upsertNamedExpression: (expression, options) => workbook.upsertNamedExpressionInternal(expression, options),
         rewriteFormulaForStorage: (formula, ownerSheetId) => workbook.rewriteFormulaForStorage(formula, ownerSheetId),
         requireSheetId: (name) => workbook.requireSheetId(name),
-        cacheInitializedSheetDimensions: (sheetId, dimensions) => workbook.sheetDimensionCache.cacheInitialized(sheetId, dimensions),
+        cacheInitializedSheetDimensions: (sheetId, dimensions, options) =>
+          workbook.sheetDimensionCache.cacheInitialized(sheetId, dimensions, options),
         clearHistoryStacks: () => workbook.clearHistoryStacks(),
         resetChangeTrackingCaches: () => workbook.resetChangeTrackingCaches(),
       })
@@ -337,7 +342,8 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
         snapshot,
         withEngineEventCaptureDisabled: (callback) => workbook.engineEvents.withCaptureDisabled(callback),
         requireSheetId: (name) => workbook.requireSheetId(name),
-        cacheInitializedSheetDimensions: (sheetId, dimensions) => workbook.sheetDimensionCache.cacheInitialized(sheetId, dimensions),
+        cacheInitializedSheetDimensions: (sheetId, dimensions, options) =>
+          workbook.sheetDimensionCache.cacheInitialized(sheetId, dimensions, options),
         clearHistoryStacks: () => workbook.clearHistoryStacks(),
         resetChangeTrackingCaches: () => workbook.resetChangeTrackingCaches(),
       })
@@ -496,7 +502,8 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
         upsertNamedExpression: (expression, options) => this.upsertNamedExpressionInternal(expression, options),
         rewriteFormulaForStorage: (formula, ownerSheetId) => this.rewriteFormulaForStorage(formula, ownerSheetId),
         requireSheetId: (name) => this.requireSheetId(name),
-        cacheInitializedSheetDimensions: (sheetId, dimensions) => this.sheetDimensionCache.cacheInitialized(sheetId, dimensions),
+        cacheInitializedSheetDimensions: (sheetId, dimensions, options) =>
+          this.sheetDimensionCache.cacheInitialized(sheetId, dimensions, options),
         clearHistoryStacks: () => this.clearHistoryStacks(),
         resetChangeTrackingCaches: () => this.resetChangeTrackingCaches(),
       })
@@ -562,7 +569,9 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
       getUndoStackLength: () => this.getUndoStack().length,
       mergeUndoHistory: (undoStackStart) => this.mergeUndoHistory(undoStackStart),
     })
-    this.sheetDimensionCache.cacheInitialized(sheetId, dimensions)
+    this.sheetDimensionCache.cacheInitialized(sheetId, dimensions, {
+      mayResizeDynamically: workPaperSheetHasDynamicSpillFormula(content),
+    })
   }
 
   private applyRawContent(address: WorkPaperCellAddress, content: RawCellContent): void {
@@ -688,7 +697,8 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
             upsertNamedExpression: (expression, options) => this.upsertNamedExpressionInternal(expression, options),
             rewriteFormulaForStorage: (formula, ownerSheetId) => this.rewriteFormulaForStorage(formula, ownerSheetId),
             requireSheetId: (name) => this.requireSheetId(name),
-            cacheInitializedSheetDimensions: (sheetId, dimensions) => this.sheetDimensionCache.cacheInitialized(sheetId, dimensions),
+            cacheInitializedSheetDimensions: (sheetId, dimensions, options) =>
+              this.sheetDimensionCache.cacheInitialized(sheetId, dimensions, options),
             clearHistoryStacks: () => this.clearHistoryStacks(),
             resetChangeTrackingCaches: () => this.resetChangeTrackingCaches(),
           })

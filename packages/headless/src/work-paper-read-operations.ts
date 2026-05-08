@@ -1,5 +1,6 @@
 import type { SpreadsheetEngine, SheetRecord } from '@bilig/core'
 import { ValueTag, type CellRangeRef, type CellSnapshot, type CellValue } from '@bilig/protocol'
+import { compileFormula, formatAddress } from '@bilig/formula'
 import {
   buildWorkPaperDenseRange,
   collectSerializedWorkPaperSheets,
@@ -131,8 +132,11 @@ export function createWorkPaperReadOperations(runtime: WorkPaperReadOperationsRu
     if (cached) {
       return { width: cached.width, height: cached.height }
     }
-    const dimensions = sheetDimensionCache.scan(sheet)
-    sheetDimensionCache.cache(sheetId, dimensions)
+    const scanned = scanSheetDimensionsAndDynamicFormula(engine(), sheet)
+    const dimensions = scanned.dimensions
+    sheetDimensionCache.cacheScanned(sheetId, dimensions, {
+      mayResizeDynamically: scanned.mayResizeDynamically,
+    })
     return dimensions
   }
 
@@ -280,4 +284,28 @@ export function createWorkPaperReadOperations(runtime: WorkPaperReadOperationsRu
     },
     getCellValueFormat,
   }
+}
+
+function scanSheetDimensionsAndDynamicFormula(
+  engine: SpreadsheetEngine,
+  sheet: SheetRecord,
+): { readonly dimensions: WorkPaperSheetDimensions; readonly mayResizeDynamically: boolean } {
+  let width = 0
+  let height = 0
+  let mayResize = false
+  sheet.grid.forEachCellEntry((_cellIndex, row, col) => {
+    height = Math.max(height, row + 1)
+    width = Math.max(width, col + 1)
+    if (!mayResize) {
+      const formula = engine.getCell(sheet.name, formatAddress(row, col)).formula
+      if (formula !== undefined) {
+        try {
+          mayResize = compileFormula(formula).producesSpill
+        } catch {
+          mayResize = true
+        }
+      }
+    }
+  })
+  return { dimensions: { width, height }, mayResizeDynamically: mayResize }
 }
