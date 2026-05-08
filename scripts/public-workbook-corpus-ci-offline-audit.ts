@@ -15,6 +15,7 @@ const ciOfflineCachedCorpusScriptNames = [
   'public-workbook-corpus:check:offline',
   'public-workbook-corpus:resume-plan:check',
   'public-workbook-corpus:resource-limit:check',
+  'public-workbook-corpus:feature-witness:check',
   'public-workbook-corpus:discover-financial:check',
   'public-workbook-corpus:resume-financial:check',
   'public-workbook-corpus:completion-audit:check',
@@ -49,6 +50,11 @@ const ciOfflineCachedCorpusScriptPolicies: readonly PublicWorkbookCorpusCiPackag
   {
     name: 'public-workbook-corpus:resource-limit:check',
     requiredTokens: ['bun', 'scripts/public-workbook-corpus-resource-limit-plan.ts', '--check'],
+    forbiddenTokens: ciUnsafeCorpusScriptTokens,
+  },
+  {
+    name: 'public-workbook-corpus:feature-witness:check',
+    requiredTokens: ['bun', 'scripts/public-workbook-corpus-feature-witness-plan.ts', '--check'],
     forbiddenTokens: ciUnsafeCorpusScriptTokens,
   },
   {
@@ -89,6 +95,7 @@ const ciOfflineCachedCorpusScriptPolicies: readonly PublicWorkbookCorpusCiPackag
       'scripts/__tests__/public-workbook-corpus.test.ts',
       'scripts/__tests__/public-workbook-corpus-cli.test.ts',
       'scripts/__tests__/public-workbook-corpus-completion-audit.test.ts',
+      'scripts/__tests__/public-workbook-corpus-feature-witness-plan.test.ts',
       'scripts/__tests__/public-workbook-corpus-links.test.ts',
       'scripts/__tests__/public-workbook-corpus-verify-checkpoint.test.ts',
       'scripts/__tests__/public-workbook-corpus-workbook.test.ts',
