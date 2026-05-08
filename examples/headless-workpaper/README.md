@@ -164,3 +164,20 @@ Expected output:
   "saveFileBytes": 1209
 }
 ```
+
+## CSV Shaped Input
+
+Run the CSV shaped input example when you want to see how to load a simple array or CSV-shaped data into a WorkPaper, add a formula-backed summary cell, and read back the result:
+
+```sh
+node csv-shaped-input.mjs
+```
+
+Expected output:
+
+```json
+{
+  "success": true,
+  "totalQ1": 480
+}
+```
