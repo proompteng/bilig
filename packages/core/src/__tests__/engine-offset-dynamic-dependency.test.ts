@@ -42,4 +42,36 @@ describe('engine OFFSET dynamic dependencies', () => {
     expect(engine.getCellValue('Forecast', 'J19')).toMatchObject({ tag: ValueTag.Number, value: 404 })
     expect(engine.getCellValue('Forecast', 'K19')).toMatchObject({ tag: ValueTag.Number, value: 4004 })
   })
+
+  it('evaluates imported OFFSET aggregates after formula targets selected by cell-valued dimensions', async () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: {
+        name: 'Offset Dimension Import',
+        metadata: {
+          definedNames: [{ name: 'Window', value: { kind: 'cell-ref', sheetName: 'Analysis', address: 'V10' } }],
+        },
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'Analysis',
+          order: 0,
+          cells: [
+            { address: 'V10', value: 3 },
+            { address: 'W7', formula: 'STDEV.S(OFFSET(W$20,-2*Window-1,0,Window))' },
+            { address: 'W13', formula: '10/10' },
+            { address: 'W14', formula: '1+1' },
+            { address: 'W15', formula: '6/2' },
+          ],
+        },
+      ],
+    }
+
+    const engine = new SpreadsheetEngine({ workbookName: 'offset-dimension-import' })
+    await engine.ready()
+    engine.importSnapshot(snapshot)
+
+    expect(engine.getCellValue('Analysis', 'W7')).toMatchObject({ tag: ValueTag.Number, value: 1 })
+  })
 })

@@ -1,5 +1,5 @@
 import { compileFormulaAst, serializeFormula } from '@bilig/formula'
-import { resolveMetadataReferencesInAst } from '../../engine-metadata-utils.js'
+import { resolveMetadataReferencesInAst, type MetadataFormulaValueContext } from '../../engine-metadata-utils.js'
 import type { FormulaTemplateResolution } from '../../formula/template-bank.js'
 import type { ParsedCompiledFormula } from './formula-binding-direct-descriptors.js'
 import type { CreateEngineFormulaBindingServiceArgs } from './formula-binding-service-types.js'
@@ -25,11 +25,16 @@ export function compileFormulaBindingForCell(args: {
     }
   }
 
-  const resolved = resolveMetadataReferencesInAst(compiled.ast, {
-    resolveName: (name) => args.serviceArgs.state.workbook.getDefinedName(name, args.currentSheetName)?.value,
-    resolveStructuredReference: (tableName, columnName) => args.serviceArgs.resolveStructuredReference(tableName, columnName),
-    resolveSpillReference: (sheetName, address) => args.serviceArgs.resolveSpillReference(args.currentSheetName, sheetName, address),
-  })
+  const resolved = resolveMetadataReferencesInAst(
+    compiled.ast,
+    {
+      resolveName: (name) => args.serviceArgs.state.workbook.getDefinedName(name, args.currentSheetName)?.value,
+      resolveStructuredReference: (tableName, columnName) => args.serviceArgs.resolveStructuredReference(tableName, columnName),
+      resolveSpillReference: (sheetName, address) => args.serviceArgs.resolveSpillReference(args.currentSheetName, sheetName, address),
+    },
+    new Set<string>(),
+    metadataValueContextForCell(args.serviceArgs.state.workbook, args.currentSheetName, args.cellIndex),
+  )
   if (!resolved.substituted || !resolved.fullyResolved) {
     return {
       compiled,
@@ -54,4 +59,12 @@ export function compileFormulaBindingForCell(args: {
     compiled: resolvedCompiled,
     templateResolution,
   }
+}
+
+function metadataValueContextForCell(
+  workbook: CreateEngineFormulaBindingServiceArgs['state']['workbook'],
+  sheetName: string,
+  cellIndex: number,
+): MetadataFormulaValueContext {
+  return workbook.getSpill(sheetName, workbook.getAddress(cellIndex)) ? 'array' : 'scalar'
 }

@@ -5,6 +5,7 @@ import type { WorkbookStore } from '../../workbook-store.js'
 import type { ParsedCompiledFormula } from './formula-binding-direct-descriptors.js'
 
 const MAX_COMPACT_INDEX_DEPENDENCY_CELLS = 4096
+const MAX_DYNAMIC_OFFSET_DEPENDENCY_CELLS = 4096
 
 export interface DynamicIndexDependencyPlan {
   readonly compactedRangeDependencies: ReadonlySet<string>
@@ -301,6 +302,64 @@ function criterionMatches(value: CellValue, criterion: CellValue): boolean | und
   return result.tag === ValueTag.Boolean ? result.value : undefined
 }
 
+function isCriteriaAggregateCallee(callee: string): boolean {
+  return (
+    callee === 'SUMIF' ||
+    callee === 'AVERAGEIF' ||
+    callee === 'SUMIFS' ||
+    callee === 'AVERAGEIFS' ||
+    callee === 'MINIFS' ||
+    callee === 'MAXIFS'
+  )
+}
+
+export function formulaMayNeedDynamicIndexDependencyPlan(compiled: ParsedCompiledFormula): boolean {
+  let found = false
+  const visit = (node: FormulaNode): void => {
+    if (found) {
+      return
+    }
+    switch (node.kind) {
+      case 'CallExpr': {
+        const callee = node.callee.trim().toUpperCase()
+        if (callee === 'INDEX' || callee === 'OFFSET' || isCriteriaAggregateCallee(callee)) {
+          found = true
+          return
+        }
+        node.args.forEach(visit)
+        return
+      }
+      case 'UnaryExpr':
+        visit(node.argument)
+        return
+      case 'BinaryExpr':
+        visit(node.left)
+        visit(node.right)
+        return
+      case 'InvokeExpr':
+        visit(node.callee)
+        node.args.forEach(visit)
+        return
+      case 'BooleanLiteral':
+      case 'CellRef':
+      case 'ColumnRef':
+      case 'ErrorLiteral':
+      case 'NameRef':
+      case 'NumberLiteral':
+      case 'OmittedArgument':
+      case 'RangeRef':
+      case 'RowRef':
+      case 'SpillRef':
+      case 'StringLiteral':
+      case 'StructuredRef':
+        return
+    }
+  }
+
+  visit(compiled.optimizedAst)
+  return found
+}
+
 function evaluateScalar(args: {
   readonly workbook: WorkbookStore
   readonly strings: StringPool
@@ -516,6 +575,81 @@ function selectedIndexCells(args: {
   return cells
 }
 
+function offsetReferenceBounds(node: FormulaNode | undefined, ownerSheetName: string): DynamicRangeBounds | undefined {
+  if (!node) {
+    return undefined
+  }
+  if (node.kind === 'CellRef') {
+    try {
+      const parsed = parseCellAddress(node.ref, node.sheetName ?? ownerSheetName)
+      return {
+        sheetName: parsed.sheetName ?? ownerSheetName,
+        rowStart: parsed.row,
+        rowEnd: parsed.row,
+        colStart: parsed.col,
+        colEnd: parsed.col,
+      }
+    } catch {
+      return undefined
+    }
+  }
+  return rangeBounds(node, ownerSheetName)
+}
+
+function selectedOffsetCells(args: {
+  readonly workbook: WorkbookStore
+  readonly strings: StringPool
+  readonly ownerSheetName: string
+  readonly getFormulaAst?: DynamicFormulaAstResolver | undefined
+  readonly node: Extract<FormulaNode, { readonly kind: 'CallExpr' }>
+}): DynamicIndexSelectedCell[] {
+  if (args.node.args.length < 3 || args.node.args.length > 5) {
+    return []
+  }
+  const reference = offsetReferenceBounds(args.node.args[0], args.ownerSheetName)
+  if (!reference) {
+    return []
+  }
+  const referenceRows = reference.rowEnd - reference.rowStart + 1
+  const referenceCols = reference.colEnd - reference.colStart + 1
+  const rowOffset = integerScalar({ ...args, node: args.node.args[1] })
+  const colOffset = integerScalar({ ...args, node: args.node.args[2] })
+  const height = args.node.args[3] ? integerScalar({ ...args, node: args.node.args[3] }) : referenceRows
+  const width = args.node.args[4] ? integerScalar({ ...args, node: args.node.args[4] }) : referenceCols
+  if (rowOffset === undefined || colOffset === undefined || height === undefined || width === undefined || height < 1 || width < 1) {
+    return []
+  }
+
+  const rowStart = reference.rowStart + rowOffset
+  const rowEnd = rowStart + height - 1
+  const colStart = reference.colStart + colOffset
+  const colEnd = colStart + width - 1
+  const selectedCellCount = (rowEnd - rowStart + 1) * (colEnd - colStart + 1)
+  if (
+    rowStart < 0 ||
+    colStart < 0 ||
+    rowEnd < rowStart ||
+    colEnd < colStart ||
+    selectedCellCount <= 0 ||
+    selectedCellCount > MAX_DYNAMIC_OFFSET_DEPENDENCY_CELLS
+  ) {
+    return []
+  }
+
+  const cells: DynamicIndexSelectedCell[] = []
+  for (let row = rowStart; row <= rowEnd; row += 1) {
+    for (let col = colStart; col <= colEnd; col += 1) {
+      cells.push({
+        sheetName: reference.sheetName,
+        row,
+        col,
+        address: formatAddress(row, col),
+      })
+    }
+  }
+  return cells
+}
+
 function cellWithStaticOffset(node: FormulaNode):
   | {
       readonly cell: Extract<FormulaNode, { readonly kind: 'CellRef' }>
@@ -568,11 +702,10 @@ function selectedCriteriaAggregateCells(args: {
     }
   | undefined {
   const callee = args.node.callee.trim().toUpperCase()
-  const isSumIf = callee === 'SUMIF' || callee === 'AVERAGEIF'
-  const isSumIfs = callee === 'SUMIFS' || callee === 'AVERAGEIFS' || callee === 'MINIFS' || callee === 'MAXIFS'
-  if (!isSumIf && !isSumIfs) {
+  if (!isCriteriaAggregateCallee(callee)) {
     return undefined
   }
+  const isSumIf = callee === 'SUMIF' || callee === 'AVERAGEIF'
 
   const aggregateNode = isSumIf ? (args.node.args[2] ?? args.node.args[0]) : args.node.args[0]
   const aggregateRangeDependency = aggregateNode?.kind === 'RangeRef' ? normalizeRangeDependency(aggregateNode) : undefined
@@ -792,6 +925,19 @@ export function collectDynamicIndexDependencyPlan(args: {
         }
         return
       }
+      if (callee === 'OFFSET') {
+        node.args.forEach((arg) => visit(arg, active))
+        if (active) {
+          selectedOffsetCells({
+            workbook: args.workbook,
+            strings: args.strings,
+            ownerSheetName: args.ownerSheetName,
+            getFormulaAst: args.getFormulaAst,
+            node,
+          }).forEach(addSelectedCell)
+        }
+        return
+      }
       const criteriaAggregate = selectedCriteriaAggregateCells({
         workbook: args.workbook,
         strings: args.strings,
@@ -826,7 +972,7 @@ export function collectDynamicIndexDependencyPlan(args: {
   }
 
   visit(args.compiled.optimizedAst, true)
-  return compactedRangeDependencies.size === 0
+  return compactedRangeDependencies.size === 0 && selectedCells.length === 0
     ? undefined
     : {
         compactedRangeDependencies,

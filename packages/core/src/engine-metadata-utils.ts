@@ -86,7 +86,7 @@ export interface MetadataResolutionContext {
   resolveSpillReference: (sheetName: string | undefined, address: string) => FormulaNode | undefined
 }
 
-type MetadataFormulaValueContext = 'scalar' | 'array'
+export type MetadataFormulaValueContext = 'scalar' | 'array'
 
 const ARRAY_CONTEXT_ALL_ARGUMENT_CALLEES = new Set([
   'SUM',

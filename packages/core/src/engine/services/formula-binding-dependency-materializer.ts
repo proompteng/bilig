@@ -9,7 +9,10 @@ import {
 import { makeCellEntity, makeRangeEntity } from '../../entity-ids.js'
 import { tryParseDependencyCellAddress, tryParseDependencyRangeAddress } from './formula-binding-direct-scalar.js'
 import type { ParsedCompiledFormula } from './formula-binding-direct-descriptors.js'
-import { collectDynamicIndexDependencyPlan } from './formula-binding-dynamic-index-dependencies.js'
+import {
+  collectDynamicIndexDependencyPlan,
+  formulaMayNeedDynamicIndexDependencyPlan,
+} from './formula-binding-dynamic-index-dependencies.js'
 import { getFormulaBindingReverseEdgeSlice } from './formula-binding-reverse-edges.js'
 import type { CreateEngineFormulaBindingServiceArgs } from './formula-binding-service-types.js'
 
@@ -60,7 +63,32 @@ export function createFormulaBindingDependencyMaterializer(
     const currentSheetId = args.state.workbook.getSheet(currentSheetName)?.id
     const deps = compiled.deps
     const parsedCellDeps = compiled.parsedDeps
+    const dynamicIndexDependencyPlan = formulaMayNeedDynamicIndexDependencyPlan(compiled)
+      ? collectDynamicIndexDependencyPlan({
+          compiled,
+          ownerSheetName: currentSheetName,
+          workbook: args.state.workbook,
+          strings: args.state.strings,
+          getFormulaAst: (sheetName, address) => {
+            const cellIndex = args.state.workbook.getCellIndex(sheetName, address)
+            const formula = cellIndex === undefined ? undefined : args.state.formulas.get(cellIndex)
+            if (cellIndex === undefined || !formula) {
+              return undefined
+            }
+            const position = args.state.workbook.getCellPosition(cellIndex)
+            const parsed = position ? undefined : tryParseDependencyCellAddress(address, sheetName)
+            return {
+              sheetName,
+              address,
+              row: position?.row ?? parsed?.row ?? args.state.workbook.cellStore.rows[cellIndex] ?? 0,
+              col: position?.col ?? parsed?.col ?? args.state.workbook.cellStore.cols[cellIndex] ?? 0,
+              ast: formula.compiled.optimizedAst,
+            }
+          },
+        })
+      : undefined
     if (
+      dynamicIndexDependencyPlan === undefined &&
       compiled.symbolicRanges.length === 0 &&
       parsedCellDeps !== undefined &&
       parsedCellDeps.length === deps.length &&
@@ -106,28 +134,6 @@ export function createFormulaBindingDependencyMaterializer(
       }
     }
 
-    const dynamicIndexDependencyPlan = collectDynamicIndexDependencyPlan({
-      compiled,
-      ownerSheetName: currentSheetName,
-      workbook: args.state.workbook,
-      strings: args.state.strings,
-      getFormulaAst: (sheetName, address) => {
-        const cellIndex = args.state.workbook.getCellIndex(sheetName, address)
-        const formula = cellIndex === undefined ? undefined : args.state.formulas.get(cellIndex)
-        if (cellIndex === undefined || !formula) {
-          return undefined
-        }
-        const position = args.state.workbook.getCellPosition(cellIndex)
-        const parsed = position ? undefined : tryParseDependencyCellAddress(address, sheetName)
-        return {
-          sheetName,
-          address,
-          row: position?.row ?? parsed?.row ?? args.state.workbook.cellStore.rows[cellIndex] ?? 0,
-          col: position?.col ?? parsed?.col ?? args.state.workbook.cellStore.cols[cellIndex] ?? 0,
-          ast: formula.compiled.optimizedAst,
-        }
-      },
-    })
     const extraDynamicCellDependencyCount = dynamicIndexDependencyPlan?.selectedCells.length ?? 0
     const sheetNamesInSpan = (startSheetName: string, endSheetName: string): string[] | undefined => {
       const sheetNames = [...args.state.workbook.sheetsByName.values()]
