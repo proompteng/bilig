@@ -245,8 +245,8 @@ describe('public workbook corpus CLI resource guards', () => {
           status: 'blocked-by-stop-marker',
           commands: expect.arrayContaining([
             expect.stringContaining('public-workbook-corpus:verify'),
+            'pnpm public-workbook-corpus:completion-audit:check -- --require-complete',
             'pnpm dominance:generate',
-            'pnpm dominance:audit:check',
             'pnpm dominance:check',
           ]),
         },

@@ -260,7 +260,11 @@ export function validatePublicWorkbookCorpusResumePlan(plan: PublicWorkbookCorpu
     findings.push('fetch phase does not match missing cached artifact count')
   }
   const finalCommands = plan.phases.finalEvidenceRefresh.commands
-  for (const requiredCommand of ['pnpm dominance:generate', 'pnpm dominance:audit:check', 'pnpm dominance:check']) {
+  for (const requiredCommand of [
+    'pnpm public-workbook-corpus:completion-audit:check -- --require-complete',
+    'pnpm dominance:generate',
+    'pnpm dominance:check',
+  ]) {
     if (!finalCommands.includes(requiredCommand)) {
       findings.push(`final evidence refresh is missing command: ${requiredCommand}`)
     }
@@ -406,8 +410,8 @@ function buildFinalEvidenceRefreshPhase(args: Parameters<typeof buildPublicWorkb
         '--cache-dir',
         args.cacheDir,
       ]),
+      command(['pnpm', 'public-workbook-corpus:completion-audit:check', '--', '--require-complete']),
       command(['pnpm', 'dominance:generate']),
-      command(['pnpm', 'dominance:audit:check']),
       command(['pnpm', 'dominance:check']),
     ],
   }

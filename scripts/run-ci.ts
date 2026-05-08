@@ -213,6 +213,7 @@ const generatedSourceChecks: readonly CiTask[] = [
   pnpm('public workbook corpus shared-link lifecycle plan check', 'public-workbook-corpus:link-plan:check'),
   pnpm('public workbook corpus shared-link intake check', 'public-workbook-corpus:add-link:check'),
   pnpm('public workbook corpus resume plan check', 'public-workbook-corpus:resume-plan:check'),
+  pnpm('public workbook corpus completion audit check', 'public-workbook-corpus:completion-audit:check'),
   pnpm('large workbook SLO scorecard check', 'large-workbook:slo:check'),
   pnpm('WorkPaper XLSX corpus fixture check', 'workpaper:xlsx-corpus:fixtures:check'),
   pnpm('UI same-corpus XLSX fixture check', 'ui:same-corpus:fixture:check'),
