@@ -80,6 +80,7 @@
     "public-workbook-corpus:status": "bun scripts/public-workbook-corpus.ts status",
     "public-workbook-corpus:resume-plan": "bun scripts/public-workbook-corpus-resume-plan.ts",
     "public-workbook-corpus:resume-plan:check": "bun scripts/public-workbook-corpus-resume-plan.ts --check",
+    "public-workbook-corpus:resource-limit:plan": "bun scripts/public-workbook-corpus-resource-limit-plan.ts",
     "public-workbook-corpus:feature-witness:plan": "bun scripts/public-workbook-corpus-feature-witness-plan.ts",
     "public-workbook-corpus:feature-witness:check": "bun scripts/public-workbook-corpus-feature-witness-plan.ts --check",
     "public-workbook-corpus:completion-audit": "bun scripts/public-workbook-corpus-completion-audit.ts",
