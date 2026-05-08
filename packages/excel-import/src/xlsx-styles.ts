@@ -17,8 +17,11 @@ import type {
   WorkbookAxisMetadataSnapshot,
   WorkbookAxisEntrySnapshot,
   WorkbookSheetFormatPrSnapshot,
+  WorkbookSheetStyleArtifactsSnapshot,
+  WorkbookStyleArtifactsSnapshot,
   SheetStyleRangeSnapshot,
 } from '@bilig/protocol'
+import { getZipText as getZipEntryText, readXlsxZipEntries, type XlsxZipSource } from './xlsx-zip.js'
 
 type ImportedCellStyle = Omit<CellStyleRecord, 'id'>
 type ExportCellAlignment = Record<string, boolean | number | string>
@@ -34,6 +37,11 @@ interface ImportedSheetDimensions {
 
 interface ImportedWorkbookFileStylesOptions {
   styleCandidateAddressesBySheet?: ReadonlyMap<string, ReadonlySet<string>>
+}
+
+interface ImportedWorkbookStyleArtifacts {
+  workbookArtifacts?: WorkbookStyleArtifactsSnapshot
+  sheetArtifactsByName: Map<string, WorkbookSheetStyleArtifactsSnapshot>
 }
 
 const xmlParser = new XMLParser({
@@ -319,6 +327,11 @@ function readBooleanAttribute(value: unknown): boolean | undefined {
   return undefined
 }
 
+function isStyleComponentApplied(flag: unknown, componentId: number | null): boolean {
+  const explicit = readBooleanAttribute(flag)
+  return explicit ?? (componentId !== null && componentId > 0)
+}
+
 function readProtection(protection: unknown): CellStyleProtectionSnapshot | undefined {
   if (!isRecord(protection)) {
     return undefined
@@ -366,10 +379,10 @@ function parseWorkbookStyles(stylesXml: string): Map<number, ImportedCellStyle> 
     const alignment = readAlignment(entry['alignment'])
     const protection = entry['applyProtection'] === '1' ? (readProtection(entry['protection']) ?? {}) : readProtection(entry['protection'])
     const style: ImportedCellStyle = {
-      ...(entry['applyFill'] === '1' && fill ? { fill } : {}),
-      ...(entry['applyFont'] === '1' && font ? { font } : {}),
+      ...(isStyleComponentApplied(entry['applyFill'], fillId) && fill ? { fill } : {}),
+      ...(isStyleComponentApplied(entry['applyFont'], fontId) && font ? { font } : {}),
       ...(entry['applyAlignment'] === '1' && alignment ? { alignment } : {}),
-      ...(entry['applyBorder'] === '1' && bordersValue ? { borders: bordersValue } : {}),
+      ...(isStyleComponentApplied(entry['applyBorder'], borderId) && bordersValue ? { borders: bordersValue } : {}),
       ...(protection !== undefined ? { protection } : {}),
     }
     if (Object.keys(style).length > 0) {
@@ -462,6 +475,13 @@ function parseSheetStyleIndexes(sheetXml: string, candidateAddresses?: ReadonlyS
   }
 
   return output
+}
+
+function parseSheetCellStyleIndexArtifacts(sheetXml: string): WorkbookSheetStyleArtifactsSnapshot | undefined {
+  const cellStyleIndexes = [...parseSheetStyleIndexes(sheetXml).entries()]
+    .map(([address, styleIndex]) => ({ address, styleIndex }))
+    .filter((entry) => Number.isSafeInteger(entry.styleIndex) && entry.styleIndex >= 0)
+  return cellStyleIndexes.length > 0 ? { cellStyleIndexes } : undefined
 }
 
 function parseSheetFormatPr(sheetXml: string): WorkbookSheetFormatPrSnapshot | undefined {
@@ -693,6 +713,42 @@ export function readImportedWorkbookFileStyles(
   })
 
   return output
+}
+
+export function readImportedWorkbookStyleArtifacts(
+  workbook: XLSX.WorkBook,
+  sheetNames: readonly string[],
+  source?: XlsxZipSource,
+): ImportedWorkbookStyleArtifacts {
+  const zip = source ? readXlsxZipEntries(source) : null
+  const files = workbookFiles(workbook)
+  const stylePath = workbookStylePath(workbook)
+  const readPartText = (path: string | null | undefined): string | null => {
+    if (!path) {
+      return null
+    }
+    return zip ? getZipEntryText(zip, path) : getFileText(files, path)
+  }
+  const stylesXml = readPartText(stylePath)
+  const sheetPaths = workbookSheetPaths(workbook)
+  const sheetArtifactsByName = new Map<string, WorkbookSheetStyleArtifactsSnapshot>()
+
+  sheetNames.forEach((sheetName, index) => {
+    const sheetPath = sheetPaths[index]
+    const sheetXml = readPartText(sheetPath)
+    if (!sheetXml) {
+      return
+    }
+    const sheetArtifacts = parseSheetCellStyleIndexArtifacts(sheetXml)
+    if (sheetArtifacts) {
+      sheetArtifactsByName.set(sheetName, sheetArtifacts)
+    }
+  })
+
+  return {
+    ...(stylesXml ? { workbookArtifacts: { stylesXml } } : {}),
+    sheetArtifactsByName,
+  }
 }
 
 function exportColor(value: string): XLSXStyle.CellStyleColor | undefined {

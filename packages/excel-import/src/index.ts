@@ -42,7 +42,7 @@ import { readImportedWorkbookSorts } from './xlsx-sorts.js'
 import { readImportedWorkbookSparklines } from './xlsx-sparklines.js'
 import { stripStyleOnlyBlankCellsForSheetJs } from './xlsx-style-only-blank-cells.js'
 import { mergeStyleRuns, styleRunsToRanges, type HorizontalStyleRun, type RectangularStyleRun } from './xlsx-style-runs.js'
-import { readImportedWorkbookFileStyles, readImportedWorkbookSheetDimensions } from './xlsx-styles.js'
+import { readImportedWorkbookFileStyles, readImportedWorkbookSheetDimensions, readImportedWorkbookStyleArtifacts } from './xlsx-styles.js'
 import { readImportedWorkbookSheetTabColors } from './xlsx-tab-colors.js'
 import { readImportedWorkbookTables } from './xlsx-tables.js'
 import { readImportedWorkbookDataValidations } from './xlsx-validations.js'
@@ -537,6 +537,8 @@ function importSheetJsWorkbook(
       : readImportedWorkbookFileStyles(workbook, workbook.SheetNames, {
           styleCandidateAddressesBySheet: styleCandidates.addressesBySheet,
         })
+  const styleArtifactSource = contentType === XLSX_CONTENT_TYPE || contentType === XLSM_CONTENT_TYPE ? data : undefined
+  const importedStyleArtifacts = readImportedWorkbookStyleArtifacts(workbook, workbook.SheetNames, styleArtifactSource)
   const importedWorkbookSheetDimensions = readImportedWorkbookSheetDimensions(workbook, workbook.SheetNames)
   const importedWorkbookProperties = workbookZip ? readImportedWorkbookProperties(workbookZip) : undefined
   const importedWorkbookProtection = workbookZip ? readImportedWorkbookProtection(workbookZip) : undefined
@@ -741,6 +743,7 @@ function importSheetJsWorkbook(
     const importedSheetPr = importedSheetPropertiesBySheet.get(sheetName)
     const importedIgnoredErrors = importedIgnoredErrorsBySheet.get(sheetName)
     const importedSparklines = importedSparklinesBySheet.get(sheetName)
+    const importedStyleArtifactsForSheet = importedStyleArtifacts.sheetArtifactsByName.get(sheetName)
     const importedPivotArtifacts = importedPivots?.sheetArtifactsByName.get(sheetName)
     const importedSheetVisibility = importedSheetVisibilitiesBySheet.get(sheetName)
     const merges = buildMergeEntries(sheetName, sheet['!merges'])
@@ -764,6 +767,7 @@ function importSheetJsWorkbook(
       sheetPr: importedSheetPr,
       ignoredErrors: importedIgnoredErrors,
       sparklines: importedSparklines,
+      styleArtifacts: importedStyleArtifactsForSheet,
       pivotArtifacts: importedPivotArtifacts,
       visibility: importedSheetVisibility,
       merges,
@@ -805,6 +809,7 @@ function importSheetJsWorkbook(
     ...(importedPivots?.pivots ? { pivots: importedPivots.pivots } : {}),
     ...(importedPivots?.artifacts ? { pivotArtifacts: importedPivots.artifacts } : {}),
     ...(importedCharts ? { charts: importedCharts } : {}),
+    ...(importedStyleArtifacts.workbookArtifacts ? { styleArtifacts: importedStyleArtifacts.workbookArtifacts } : {}),
     ...(importedCellMetadata?.workbookMetadata ? { cellMetadata: importedCellMetadata.workbookMetadata } : {}),
   }
 

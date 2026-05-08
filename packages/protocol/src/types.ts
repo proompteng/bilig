@@ -260,6 +260,19 @@ export interface WorkbookPivotSnapshot {
   cols: number
 }
 
+export interface WorkbookStyleArtifactsSnapshot {
+  stylesXml: string
+}
+
+export interface WorkbookSheetCellStyleIndexSnapshot {
+  address: string
+  styleIndex: number
+}
+
+export interface WorkbookSheetStyleArtifactsSnapshot {
+  cellStyleIndexes: WorkbookSheetCellStyleIndexSnapshot[]
+}
+
 export interface WorkbookPackageRelationshipSnapshot {
   id: string
   type: string
@@ -819,6 +832,7 @@ export interface WorkbookMetadataSnapshot {
   images?: WorkbookImageSnapshot[]
   shapes?: WorkbookShapeSnapshot[]
   styles?: CellStyleRecord[]
+  styleArtifacts?: WorkbookStyleArtifactsSnapshot
   formats?: CellNumberFormatRecord[]
   macroPayloads?: WorkbookMacroPayloadSnapshot[]
   calculationSettings?: WorkbookCalculationSettingsSnapshot
@@ -851,6 +865,7 @@ export interface SheetMetadataSnapshot {
   sheetPr?: WorkbookSheetPrSnapshot
   ignoredErrors?: WorkbookIgnoredErrorsSnapshot
   sparklines?: WorkbookSparklinesSnapshot
+  styleArtifacts?: WorkbookSheetStyleArtifactsSnapshot
   pivotArtifacts?: WorkbookSheetPivotArtifactsSnapshot
   visibility?: WorkbookSheetVisibilitySnapshot
   cellMetadataRefs?: WorkbookCellMetadataReferenceSnapshot[]

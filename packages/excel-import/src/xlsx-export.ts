@@ -7,6 +7,7 @@ import type {
   WorkbookAxisEntrySnapshot,
   WorkbookMacroPayloadSnapshot,
   WorkbookMergeRangeSnapshot,
+  WorkbookSheetCellStyleIndexSnapshot,
   WorkbookSnapshot,
 } from '@bilig/protocol'
 import { addExportCellMetadataToXlsxBytes } from './xlsx-cell-metadata.js'
@@ -261,7 +262,7 @@ function addMissingFormattedCells(sheetXml: string, cells: readonly { readonly a
   const byRow = new Map<number, string[]>()
   for (const cell of cells) {
     const rowNumber = XLSX.utils.decode_cell(cell.address).r + 1
-    const cellXml = `<c r="${cell.address}" s="${String(cell.styleIndex)}" t="z"/>`
+    const cellXml = `<c r="${cell.address}" s="${String(cell.styleIndex)}" t="z"></c>`
     byRow.set(rowNumber, [...(byRow.get(rowNumber) ?? []), cellXml])
   }
   for (const [rowNumber, rowCells] of byRow) {
@@ -582,6 +583,28 @@ function applyStyleIndexesToSheetXml(
   return missingCells.length > 0 ? addMissingFormattedCells(output, missingCells) : output
 }
 
+function applyStyleArtifactIndexesToSheetXml(sheetXml: string, cellStyleIndexes: readonly WorkbookSheetCellStyleIndexSnapshot[]): string {
+  if (cellStyleIndexes.length === 0) {
+    return sheetXml
+  }
+  const stylesByAddress = new Map(cellStyleIndexes.map((entry) => [entry.address, entry.styleIndex]))
+  const handledAddresses = new Set<string>()
+  let output = sheetXml.replace(/<c\b[^>]*(?:\/>|>[\s\S]*?<\/c>)/gu, (cellXml) => {
+    const openingTag = /<c\b[^>]*(?:\/>|>)/u.exec(cellXml)?.[0]
+    const address = openingTag ? /\br="([^"]+)"/u.exec(openingTag)?.[1] : undefined
+    const styleIndex = address ? stylesByAddress.get(address) : undefined
+    if (!openingTag || !address || styleIndex === undefined) {
+      return cellXml
+    }
+    handledAddresses.add(address)
+    return cellXml.replace(openingTag, setXmlAttribute(openingTag, 's', String(styleIndex)))
+  })
+  const missingCells = [...stylesByAddress.entries()]
+    .filter(([address]) => !handledAddresses.has(address))
+    .map(([address, styleIndex]) => ({ address, styleIndex }))
+  return missingCells.length > 0 ? addMissingFormattedCells(output, missingCells) : output
+}
+
 function preserveSnapshotStyles(bytes: Uint8Array, snapshot: WorkbookSnapshot): Uint8Array {
   const styles = snapshot.workbook.metadata?.styles ?? []
   const hasStyleRanges = snapshot.sheets.some((sheet) => (sheet.metadata?.styleRanges?.length ?? 0) > 0)
@@ -608,6 +631,29 @@ function preserveSnapshotStyles(bytes: Uint8Array, snapshot: WorkbookSnapshot): 
       }
     })
   setZipText(zip, 'xl/styles.xml', nextStylesXml)
+  return zipSync(zip)
+}
+
+function addExportStyleArtifactsToXlsxBytes(bytes: Uint8Array, snapshot: WorkbookSnapshot): Uint8Array {
+  const stylesXml = snapshot.workbook.metadata?.styleArtifacts?.stylesXml
+  if (!stylesXml) {
+    return bytes
+  }
+  const zip = unzipSync(bytes)
+  setZipText(zip, 'xl/styles.xml', stylesXml)
+  snapshot.sheets
+    .toSorted((left, right) => left.order - right.order)
+    .forEach((sheet, sheetIndex) => {
+      const cellStyleIndexes = sheet.metadata?.styleArtifacts?.cellStyleIndexes ?? []
+      if (cellStyleIndexes.length === 0) {
+        return
+      }
+      const sheetPath = `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`
+      const sheetXml = getZipText(zip, sheetPath)
+      if (sheetXml) {
+        setZipText(zip, sheetPath, applyStyleArtifactIndexesToSheetXml(sheetXml, cellStyleIndexes))
+      }
+    })
   return zipSync(zip)
 }
 
@@ -888,7 +934,8 @@ export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
   )
   const styledBytes = preserveSnapshotStyles(enrichedBytes, snapshot)
   const formattedBytes = preserveSnapshotNumberFormats(styledBytes, exportSheetFormats)
-  const dimensionedBytes = addExportWorksheetDimensionsToXlsxBytes(formattedBytes, snapshot)
+  const styleArtifactBytes = addExportStyleArtifactsToXlsxBytes(formattedBytes, snapshot)
+  const dimensionedBytes = addExportWorksheetDimensionsToXlsxBytes(styleArtifactBytes, snapshot)
   const ignoredErrorsBytes = addExportIgnoredErrorsToXlsxBytes(dimensionedBytes, snapshot)
   const sparklineBytes = addExportSparklinesToXlsxBytes(ignoredErrorsBytes, snapshot)
   return addExportCellMetadataToXlsxBytes(
