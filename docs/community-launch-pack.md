@@ -9,8 +9,8 @@ Baseline verified on May 8, 2026:
 - GitHub repo: <https://github.com/proompteng/bilig>
 - Current GitHub surface: public repo, `8` stars, `1` fork, `39` open issues
 - npm package: <https://www.npmjs.com/package/@bilig/headless>
-- Current npm surface: `@bilig/headless@0.10.62`, MIT, TypeScript types,
-  visible weekly downloads: `1,925`
+- Current npm surface: `@bilig/headless@0.10.62`, MIT, TypeScript types, npm
+  API downloads: `2,399` last week and `16,491` last month
 - Existing Hacker News launch:
   <https://news.ycombinator.com/item?id=48045427>, `2` points and `1`
   self-comment after roughly one day
