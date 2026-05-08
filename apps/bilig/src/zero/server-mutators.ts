@@ -155,6 +155,18 @@ function normalizeStylePatch(patch: z.infer<typeof setRangeStyleArgsSchema>['pat
       if (patch.alignment.indent !== undefined) {
         alignment.indent = patch.alignment.indent
       }
+      if (patch.alignment.shrinkToFit !== undefined) {
+        alignment.shrinkToFit = patch.alignment.shrinkToFit
+      }
+      if (patch.alignment.readingOrder !== undefined) {
+        alignment.readingOrder = patch.alignment.readingOrder
+      }
+      if (patch.alignment.textRotation !== undefined) {
+        alignment.textRotation = patch.alignment.textRotation
+      }
+      if (patch.alignment.justifyLastLine !== undefined) {
+        alignment.justifyLastLine = patch.alignment.justifyLastLine
+      }
       normalized.alignment = alignment
     }
   }

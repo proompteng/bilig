@@ -47,6 +47,30 @@ export function toDisplayText(value: LiteralInput | undefined): string {
   return String(value)
 }
 
+export function readImportedAlignmentBoolean(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') {
+    return value
+  }
+  if (value === '1' || value === 'true') {
+    return true
+  }
+  if (value === '0' || value === 'false') {
+    return false
+  }
+  return undefined
+}
+
+export function readImportedAlignmentNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const number = Number(value)
+    return Number.isFinite(number) ? number : null
+  }
+  return null
+}
+
 export function createSheetPreview(input: {
   name: string
   rowCount: number

@@ -19,7 +19,7 @@ import type {
 } from '@bilig/protocol'
 
 type ImportedCellStyle = Omit<CellStyleRecord, 'id'>
-type ExportCellAlignment = NonNullable<XLSXStyle.CellStyle['alignment']>
+type ExportCellAlignment = Record<string, boolean | number | string>
 
 interface ImportedSheetDimensions {
   columns?: WorkbookAxisEntrySnapshot[]
@@ -254,6 +254,10 @@ function readHorizontalAlignment(value: unknown): CellHorizontalAlignment | unde
     case 'left':
     case 'center':
     case 'right':
+    case 'fill':
+    case 'justify':
+    case 'centerContinuous':
+    case 'distributed':
       return value
     default:
       return undefined
@@ -269,6 +273,10 @@ function readVerticalAlignment(value: unknown): CellVerticalAlignment | undefine
       return 'middle'
     case 'bottom':
       return 'bottom'
+    case 'justify':
+      return 'justify'
+    case 'distributed':
+      return 'distributed'
     default:
       return undefined
   }
@@ -281,11 +289,17 @@ function readAlignment(alignment: unknown): CellStyleAlignmentSnapshot | undefin
   const horizontal = readHorizontalAlignment(alignment['horizontal'])
   const vertical = readVerticalAlignment(alignment['vertical'])
   const indent = numberValue(alignment['indent'])
+  const readingOrder = numberValue(alignment['readingOrder'])
+  const textRotation = numberValue(alignment['textRotation'])
   const output: CellStyleAlignmentSnapshot = {
     ...(horizontal ? { horizontal } : {}),
     ...(vertical ? { vertical } : {}),
-    ...(alignment['wrapText'] === 'true' || alignment['wrapText'] === '1' ? { wrap: true } : {}),
+    ...(readBooleanAttribute(alignment['wrapText']) === true ? { wrap: true } : {}),
     ...(indent !== null && indent >= 0 ? { indent } : {}),
+    ...(readBooleanAttribute(alignment['shrinkToFit']) === true ? { shrinkToFit: true } : {}),
+    ...(readingOrder !== null ? { readingOrder } : {}),
+    ...(textRotation !== null ? { textRotation } : {}),
+    ...(readBooleanAttribute(alignment['justifyLastLine']) === true ? { justifyLastLine: true } : {}),
   }
   return Object.keys(output).length > 0 ? output : undefined
 }
@@ -583,6 +597,10 @@ function exportAlignment(alignment: CellStyleAlignmentSnapshot): ExportCellAlign
     ...(alignment.vertical ? { vertical: alignment.vertical === 'middle' ? 'center' : alignment.vertical } : {}),
     ...(alignment.wrap === true ? { wrapText: true } : {}),
     ...(alignment.indent !== undefined && alignment.indent >= 0 ? { indent: alignment.indent } : {}),
+    ...(alignment.shrinkToFit === true ? { shrinkToFit: true } : {}),
+    ...(alignment.readingOrder !== undefined ? { readingOrder: alignment.readingOrder } : {}),
+    ...(alignment.textRotation !== undefined ? { textRotation: alignment.textRotation } : {}),
+    ...(alignment.justifyLastLine === true ? { justifyLastLine: true } : {}),
   }
 }
 
@@ -636,7 +654,7 @@ function exportStyle(style: CellStyleRecord): XLSXStyle.CellStyle {
   if (style.alignment) {
     const alignment = exportAlignment(style.alignment)
     if (Object.keys(alignment).length > 0) {
-      output.alignment = alignment
+      output.alignment = alignment as NonNullable<XLSXStyle.CellStyle['alignment']>
     }
   }
 

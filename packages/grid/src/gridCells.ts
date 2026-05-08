@@ -217,9 +217,14 @@ function resolveContentAlign(snapshot: Pick<CellSnapshot, 'value' | 'format'>, s
     case 'left':
       return 'left'
     case 'center':
+    case 'centerContinuous':
+    case 'distributed':
       return 'center'
     case 'right':
       return 'right'
+    case 'fill':
+    case 'justify':
+      return 'left'
     case 'general':
     case undefined:
       return shouldRightAlignCell(snapshot.value, snapshot.format) ? 'right' : 'left'

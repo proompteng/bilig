@@ -52,7 +52,7 @@ export interface ViewportPatch {
 }
 
 const VIEWPORT_PATCH_MAGIC = 0x56505450
-const VIEWPORT_PATCH_CODEC_VERSION = 3
+const VIEWPORT_PATCH_CODEC_VERSION = 4
 const MIN_VIEWPORT_PATCH_CODEC_VERSION = 2
 const OPTIONAL_ABSENT = 0xff
 
@@ -162,6 +162,14 @@ function encodeHorizontalAlignment(value: CellHorizontalAlignment): number {
       return 2
     case 'right':
       return 3
+    case 'fill':
+      return 4
+    case 'justify':
+      return 5
+    case 'centerContinuous':
+      return 6
+    case 'distributed':
+      return 7
   }
 }
 
@@ -175,6 +183,14 @@ function decodeHorizontalAlignment(value: number): CellHorizontalAlignment {
       return 'center'
     case 3:
       return 'right'
+    case 4:
+      return 'fill'
+    case 5:
+      return 'justify'
+    case 6:
+      return 'centerContinuous'
+    case 7:
+      return 'distributed'
     default:
       throw new BinaryProtocolError(`Unknown horizontal alignment tag ${value}`)
   }
@@ -188,6 +204,10 @@ function encodeVerticalAlignment(value: CellVerticalAlignment): number {
       return 1
     case 'bottom':
       return 2
+    case 'justify':
+      return 3
+    case 'distributed':
+      return 4
   }
 }
 
@@ -199,6 +219,10 @@ function decodeVerticalAlignment(value: number): CellVerticalAlignment {
       return 'middle'
     case 2:
       return 'bottom'
+    case 3:
+      return 'justify'
+    case 4:
+      return 'distributed'
     default:
       throw new BinaryProtocolError(`Unknown vertical alignment tag ${value}`)
   }
@@ -378,6 +402,10 @@ function encodeCellStyleRecord(writer: BinaryWriter, style: CellStyleRecord): vo
     encodeOptionalTag(writer, style.alignment.vertical ? encodeVerticalAlignment(style.alignment.vertical) : undefined)
     encodeOptionalBoolean(writer, style.alignment.wrap)
     encodeOptionalNumber(writer, style.alignment.indent)
+    encodeOptionalBoolean(writer, style.alignment.shrinkToFit)
+    encodeOptionalNumber(writer, style.alignment.readingOrder)
+    encodeOptionalNumber(writer, style.alignment.textRotation)
+    encodeOptionalBoolean(writer, style.alignment.justifyLastLine)
   }
 
   writer.u8(style.borders ? 1 : 0)
@@ -395,7 +423,7 @@ function encodeCellStyleRecord(writer: BinaryWriter, style: CellStyleRecord): vo
   }
 }
 
-function decodeCellStyleRecord(reader: BinaryReader): CellStyleRecord {
+function decodeCellStyleRecord(reader: BinaryReader, codecVersion: number): CellStyleRecord {
   const style: CellStyleRecord = { id: reader.string() }
 
   if (reader.u8() === 1) {
@@ -424,11 +452,19 @@ function decodeCellStyleRecord(reader: BinaryReader): CellStyleRecord {
     const vertical = decodeOptionalTag(reader)
     const wrap = decodeOptionalBoolean(reader)
     const indent = decodeOptionalNumber(reader)
+    const shrinkToFit = codecVersion >= 4 ? decodeOptionalBoolean(reader) : undefined
+    const readingOrder = codecVersion >= 4 ? decodeOptionalNumber(reader) : undefined
+    const textRotation = codecVersion >= 4 ? decodeOptionalNumber(reader) : undefined
+    const justifyLastLine = codecVersion >= 4 ? decodeOptionalBoolean(reader) : undefined
     style.alignment = {
       ...(horizontal !== undefined ? { horizontal: decodeHorizontalAlignment(horizontal) } : {}),
       ...(vertical !== undefined ? { vertical: decodeVerticalAlignment(vertical) } : {}),
       ...(wrap !== undefined ? { wrap } : {}),
       ...(indent !== undefined ? { indent } : {}),
+      ...(shrinkToFit !== undefined ? { shrinkToFit } : {}),
+      ...(readingOrder !== undefined ? { readingOrder } : {}),
+      ...(textRotation !== undefined ? { textRotation } : {}),
+      ...(justifyLastLine !== undefined ? { justifyLastLine } : {}),
     }
   }
 
@@ -623,7 +659,7 @@ export function decodeViewportPatch(bytes: Uint8Array): ViewportPatch {
 
   const styleCount = reader.u32()
   for (let index = 0; index < styleCount; index += 1) {
-    patch.styles.push(decodeCellStyleRecord(reader))
+    patch.styles.push(decodeCellStyleRecord(reader, codecVersion))
   }
 
   const cellCount = reader.u32()

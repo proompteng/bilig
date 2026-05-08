@@ -35,10 +35,17 @@ const cellStylePatchSchema = z.object({
     .optional(),
   alignment: z
     .object({
-      horizontal: z.enum(['general', 'left', 'center', 'right']).nullable().optional(),
-      vertical: z.enum(['top', 'middle', 'bottom']).nullable().optional(),
+      horizontal: z
+        .enum(['general', 'left', 'center', 'right', 'fill', 'justify', 'centerContinuous', 'distributed'])
+        .nullable()
+        .optional(),
+      vertical: z.enum(['top', 'middle', 'bottom', 'justify', 'distributed']).nullable().optional(),
       wrap: z.boolean().nullable().optional(),
       indent: z.number().nullable().optional(),
+      shrinkToFit: z.boolean().nullable().optional(),
+      readingOrder: z.number().nullable().optional(),
+      textRotation: z.number().nullable().optional(),
+      justifyLastLine: z.boolean().nullable().optional(),
     })
     .nullable()
     .optional(),
@@ -93,6 +100,10 @@ const cellStyleFieldSchema = z.enum([
   'alignmentVertical',
   'alignmentWrap',
   'alignmentIndent',
+  'alignmentShrinkToFit',
+  'alignmentReadingOrder',
+  'alignmentTextRotation',
+  'alignmentJustifyLastLine',
   'borderTop',
   'borderRight',
   'borderBottom',

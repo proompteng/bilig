@@ -273,6 +273,22 @@ export function encodeCellStyleRecord(writer: BinaryWriter, style: CellStyleReco
     if (style.alignment.indent !== undefined) {
       writer.u32(style.alignment.indent)
     }
+    writer.bool(style.alignment.shrinkToFit !== undefined)
+    if (style.alignment.shrinkToFit !== undefined) {
+      writer.bool(style.alignment.shrinkToFit)
+    }
+    writer.bool(style.alignment.readingOrder !== undefined)
+    if (style.alignment.readingOrder !== undefined) {
+      writer.u32(style.alignment.readingOrder)
+    }
+    writer.bool(style.alignment.textRotation !== undefined)
+    if (style.alignment.textRotation !== undefined) {
+      writer.u32(style.alignment.textRotation)
+    }
+    writer.bool(style.alignment.justifyLastLine !== undefined)
+    if (style.alignment.justifyLastLine !== undefined) {
+      writer.bool(style.alignment.justifyLastLine)
+    }
   }
   writer.bool(style.borders !== undefined)
   if (style.borders) {
@@ -358,6 +374,18 @@ export function decodeCellStyleRecord(reader: BinaryReader): CellStyleRecord {
     if (reader.bool()) {
       alignment.indent = reader.u32()
     }
+    if (reader.bool()) {
+      alignment.shrinkToFit = reader.bool()
+    }
+    if (reader.bool()) {
+      alignment.readingOrder = reader.u32()
+    }
+    if (reader.bool()) {
+      alignment.textRotation = reader.u32()
+    }
+    if (reader.bool()) {
+      alignment.justifyLastLine = reader.bool()
+    }
     style.alignment = alignment
   }
   if (reader.bool()) {
@@ -413,6 +441,10 @@ export function encodeCellStylePatch(writer: BinaryWriter, patch: CellStylePatch
       encodeOptionalNullableString(writer, patch.alignment.vertical)
       encodeOptionalNullableBoolean(writer, patch.alignment.wrap)
       encodeOptionalNullableNumber(writer, patch.alignment.indent)
+      encodeOptionalNullableBoolean(writer, patch.alignment.shrinkToFit)
+      encodeOptionalNullableNumber(writer, patch.alignment.readingOrder)
+      encodeOptionalNullableNumber(writer, patch.alignment.textRotation)
+      encodeOptionalNullableBoolean(writer, patch.alignment.justifyLastLine)
     }
   }
   writer.bool(patch.borders !== undefined)
@@ -487,6 +519,22 @@ export function decodeCellStylePatch(reader: BinaryReader): CellStylePatch {
       const indent = decodeOptionalNullableNumber(reader)
       if (indent !== undefined) {
         alignment.indent = indent
+      }
+      const shrinkToFit = decodeOptionalNullableBoolean(reader)
+      if (shrinkToFit !== undefined) {
+        alignment.shrinkToFit = shrinkToFit
+      }
+      const readingOrder = decodeOptionalNullableNumber(reader)
+      if (readingOrder !== undefined) {
+        alignment.readingOrder = readingOrder
+      }
+      const textRotation = decodeOptionalNullableNumber(reader)
+      if (textRotation !== undefined) {
+        alignment.textRotation = textRotation
+      }
+      const justifyLastLine = decodeOptionalNullableBoolean(reader)
+      if (justifyLastLine !== undefined) {
+        alignment.justifyLastLine = justifyLastLine
       }
       patch.alignment = alignment
     } else {
@@ -606,6 +654,10 @@ function decodeHorizontalAlignment(value: string): CellHorizontalAlignment | und
     case 'left':
     case 'center':
     case 'right':
+    case 'fill':
+    case 'justify':
+    case 'centerContinuous':
+    case 'distributed':
       return value
     default:
       return undefined
@@ -617,6 +669,8 @@ function decodeVerticalAlignment(value: string): CellVerticalAlignment | undefin
     case 'top':
     case 'middle':
     case 'bottom':
+    case 'justify':
+    case 'distributed':
       return value
     default:
       return undefined

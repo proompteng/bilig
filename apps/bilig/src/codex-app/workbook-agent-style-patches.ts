@@ -2,8 +2,8 @@ import type { CellStylePatch } from '@bilig/protocol'
 import { setRangeStyleArgsSchema } from '@bilig/zero-sync'
 import { z } from 'zod'
 
-const alignmentHorizontalSchema = z.enum(['general', 'left', 'center', 'right'])
-const alignmentVerticalSchema = z.enum(['top', 'middle', 'bottom'])
+const alignmentHorizontalSchema = z.enum(['general', 'left', 'center', 'right', 'fill', 'justify', 'centerContinuous', 'distributed'])
+const alignmentVerticalSchema = z.enum(['top', 'middle', 'bottom', 'justify', 'distributed'])
 const borderStyleSchema = z.enum(['solid', 'dashed', 'dotted', 'double'])
 const borderWeightSchema = z.enum(['thin', 'medium', 'thick'])
 
@@ -30,6 +30,10 @@ export const workbookAgentStylePatchSchema = setRangeStyleArgsSchema.shape.patch
   verticalAlignment: alignmentVerticalSchema.nullable().optional(),
   wrap: z.boolean().nullable().optional(),
   indent: z.number().nullable().optional(),
+  shrinkToFit: z.boolean().nullable().optional(),
+  readingOrder: z.number().nullable().optional(),
+  textRotation: z.number().nullable().optional(),
+  justifyLastLine: z.boolean().nullable().optional(),
   border: styleBorderSidePatchSchema,
   borderTop: styleBorderSidePatchSchema,
   borderRight: styleBorderSidePatchSchema,
@@ -56,10 +60,17 @@ export const workbookAgentStylePatchJsonSchema = {
     fontUnderline: { type: 'boolean' },
     fontColor: { type: 'string' },
     textColor: { type: 'string' },
-    horizontalAlignment: { type: 'string', enum: ['general', 'left', 'center', 'right'] },
-    verticalAlignment: { type: 'string', enum: ['top', 'middle', 'bottom'] },
+    horizontalAlignment: {
+      type: 'string',
+      enum: ['general', 'left', 'center', 'right', 'fill', 'justify', 'centerContinuous', 'distributed'],
+    },
+    verticalAlignment: { type: 'string', enum: ['top', 'middle', 'bottom', 'justify', 'distributed'] },
     wrap: { type: 'boolean' },
     indent: { type: 'number' },
+    shrinkToFit: { type: 'boolean' },
+    readingOrder: { type: 'number' },
+    textRotation: { type: 'number' },
+    justifyLastLine: { type: 'boolean' },
     border: { type: 'object' },
     borderTop: { type: 'object' },
     borderRight: { type: 'object' },
@@ -136,6 +147,22 @@ export function normalizeWorkbookAgentStylePatch(patch: WorkbookAgentStylePatchI
     const indent = firstDefined(patch.alignment?.indent, patch.indent)
     if (indent !== undefined) {
       alignment.indent = indent
+    }
+    const shrinkToFit = firstDefined(patch.alignment?.shrinkToFit, patch.shrinkToFit)
+    if (shrinkToFit !== undefined) {
+      alignment.shrinkToFit = shrinkToFit
+    }
+    const readingOrder = firstDefined(patch.alignment?.readingOrder, patch.readingOrder)
+    if (readingOrder !== undefined) {
+      alignment.readingOrder = readingOrder
+    }
+    const textRotation = firstDefined(patch.alignment?.textRotation, patch.textRotation)
+    if (textRotation !== undefined) {
+      alignment.textRotation = textRotation
+    }
+    const justifyLastLine = firstDefined(patch.alignment?.justifyLastLine, patch.justifyLastLine)
+    if (justifyLastLine !== undefined) {
+      alignment.justifyLastLine = justifyLastLine
     }
     if (Object.keys(alignment).length > 0) {
       normalized.alignment = alignment

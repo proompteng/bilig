@@ -461,6 +461,10 @@ function fastStyleAlignmentXml(style: CellStyleRecord): string {
     alignment.vertical ? `vertical="${alignment.vertical === 'middle' ? 'center' : alignment.vertical}"` : null,
     alignment.wrap === true ? 'wrapText="1"' : null,
     alignment.indent !== undefined && alignment.indent >= 0 ? `indent="${String(alignment.indent)}"` : null,
+    alignment.shrinkToFit === true ? 'shrinkToFit="1"' : null,
+    alignment.readingOrder !== undefined ? `readingOrder="${String(alignment.readingOrder)}"` : null,
+    alignment.textRotation !== undefined ? `textRotation="${String(alignment.textRotation)}"` : null,
+    alignment.justifyLastLine === true ? 'justifyLastLine="1"' : null,
   ].filter((entry): entry is string => Boolean(entry))
   return attributes.length > 0 ? `<alignment ${attributes.join(' ')}/>` : ''
 }

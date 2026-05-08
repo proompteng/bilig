@@ -246,6 +246,10 @@ function normalizeConditionalFormatStylePatch(style: ConditionalFormatStyleInput
             ...(style.alignment.vertical !== undefined ? { vertical: style.alignment.vertical } : {}),
             ...(style.alignment.wrap !== undefined ? { wrap: style.alignment.wrap } : {}),
             ...(style.alignment.indent !== undefined ? { indent: style.alignment.indent } : {}),
+            ...(style.alignment.shrinkToFit !== undefined ? { shrinkToFit: style.alignment.shrinkToFit } : {}),
+            ...(style.alignment.readingOrder !== undefined ? { readingOrder: style.alignment.readingOrder } : {}),
+            ...(style.alignment.textRotation !== undefined ? { textRotation: style.alignment.textRotation } : {}),
+            ...(style.alignment.justifyLastLine !== undefined ? { justifyLastLine: style.alignment.justifyLastLine } : {}),
           }
   }
   if (style.borders !== undefined) {

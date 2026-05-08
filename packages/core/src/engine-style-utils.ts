@@ -66,6 +66,18 @@ export function normalizeCellStylePatch(patch: CellStylePatch): CellStylePatch {
     if (patch.alignment.indent !== undefined) {
       normalized.alignment.indent = patch.alignment.indent
     }
+    if (patch.alignment.shrinkToFit !== undefined) {
+      normalized.alignment.shrinkToFit = patch.alignment.shrinkToFit
+    }
+    if (patch.alignment.readingOrder !== undefined) {
+      normalized.alignment.readingOrder = patch.alignment.readingOrder
+    }
+    if (patch.alignment.textRotation !== undefined) {
+      normalized.alignment.textRotation = patch.alignment.textRotation
+    }
+    if (patch.alignment.justifyLastLine !== undefined) {
+      normalized.alignment.justifyLastLine = patch.alignment.justifyLastLine
+    }
   }
   if (patch.borders) {
     normalized.borders = {}
@@ -115,6 +127,10 @@ export function applyStylePatch(baseStyle: Omit<CellStyleRecord, 'id'>, patch: C
     applyOptionalField(alignment, 'vertical', patch.alignment.vertical)
     applyOptionalField(alignment, 'wrap', patch.alignment.wrap)
     applyOptionalField(alignment, 'indent', patch.alignment.indent)
+    applyOptionalField(alignment, 'shrinkToFit', patch.alignment.shrinkToFit)
+    applyOptionalField(alignment, 'readingOrder', patch.alignment.readingOrder)
+    applyOptionalField(alignment, 'textRotation', patch.alignment.textRotation)
+    applyOptionalField(alignment, 'justifyLastLine', patch.alignment.justifyLastLine)
     if (Object.keys(alignment).length > 0) {
       next.alignment = alignment
     } else {
@@ -173,6 +189,10 @@ export function clearStyleFields(
       ['alignmentVertical', 'vertical'],
       ['alignmentWrap', 'wrap'],
       ['alignmentIndent', 'indent'],
+      ['alignmentShrinkToFit', 'shrinkToFit'],
+      ['alignmentReadingOrder', 'readingOrder'],
+      ['alignmentTextRotation', 'textRotation'],
+      ['alignmentJustifyLastLine', 'justifyLastLine'],
     ],
     cleared,
   )

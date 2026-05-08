@@ -54,12 +54,29 @@ export function normalizeCellStyleRecord(style: CellStyleRecord): WorkbookCellSt
     typeof style.alignment?.indent === 'number' && Number.isFinite(style.alignment.indent)
       ? Math.max(0, Math.min(16, Math.trunc(style.alignment.indent)))
       : undefined
-  if (horizontal || vertical || wrap || indent !== undefined) {
+  const shrinkToFit = style.alignment?.shrinkToFit === true ? true : undefined
+  const readingOrder = normalizeReadingOrder(style.alignment?.readingOrder)
+  const textRotation = normalizeTextRotation(style.alignment?.textRotation)
+  const justifyLastLine = style.alignment?.justifyLastLine === true ? true : undefined
+  if (
+    horizontal ||
+    vertical ||
+    wrap ||
+    indent !== undefined ||
+    shrinkToFit ||
+    readingOrder !== undefined ||
+    textRotation !== undefined ||
+    justifyLastLine
+  ) {
     record.alignment = {
       ...(horizontal ? { horizontal } : {}),
       ...(vertical ? { vertical } : {}),
       ...(wrap ? { wrap: true } : {}),
       ...(indent !== undefined ? { indent } : {}),
+      ...(shrinkToFit ? { shrinkToFit: true } : {}),
+      ...(readingOrder !== undefined ? { readingOrder } : {}),
+      ...(textRotation !== undefined ? { textRotation } : {}),
+      ...(justifyLastLine ? { justifyLastLine: true } : {}),
     }
   }
   const borders = normalizeBorders(style.borders)
@@ -154,6 +171,10 @@ function normalizeHorizontalAlignment(value: CellHorizontalAlignment | undefined
     case 'left':
     case 'center':
     case 'right':
+    case 'fill':
+    case 'justify':
+    case 'centerContinuous':
+    case 'distributed':
       return value
     default:
       return undefined
@@ -167,10 +188,31 @@ function normalizeVerticalAlignment(value: CellVerticalAlignment | undefined): C
     case 'top':
     case 'middle':
     case 'bottom':
+    case 'justify':
+    case 'distributed':
       return value
     default:
       return undefined
   }
+}
+
+function normalizeReadingOrder(value: number | undefined): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined
+  }
+  const normalized = Math.trunc(value)
+  return normalized >= 0 && normalized <= 2 ? normalized : undefined
+}
+
+function normalizeTextRotation(value: number | undefined): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined
+  }
+  const normalized = Math.trunc(value)
+  if (normalized === 255) {
+    return normalized
+  }
+  return normalized >= 0 && normalized <= 180 ? normalized : undefined
 }
 
 function normalizeBorderStyle(value: CellBorderSideSnapshot['style'] | undefined): CellBorderSideSnapshot['style'] | undefined {

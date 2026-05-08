@@ -373,8 +373,8 @@ export interface CellStyleFontSnapshot {
   color?: string
 }
 
-export type CellHorizontalAlignment = 'general' | 'left' | 'center' | 'right'
-export type CellVerticalAlignment = 'top' | 'middle' | 'bottom'
+export type CellHorizontalAlignment = 'general' | 'left' | 'center' | 'right' | 'fill' | 'justify' | 'centerContinuous' | 'distributed'
+export type CellVerticalAlignment = 'top' | 'middle' | 'bottom' | 'justify' | 'distributed'
 export type CellBorderStyle = 'solid' | 'dashed' | 'dotted' | 'double'
 export type CellBorderWeight = 'thin' | 'medium' | 'thick'
 
@@ -383,6 +383,10 @@ export interface CellStyleAlignmentSnapshot {
   vertical?: CellVerticalAlignment
   wrap?: boolean
   indent?: number
+  shrinkToFit?: boolean
+  readingOrder?: number
+  textRotation?: number
+  justifyLastLine?: boolean
 }
 
 export interface CellBorderSideSnapshot {
@@ -430,6 +434,10 @@ export interface CellStyleAlignmentPatch {
   vertical?: CellVerticalAlignment | null
   wrap?: boolean | null
   indent?: number | null
+  shrinkToFit?: boolean | null
+  readingOrder?: number | null
+  textRotation?: number | null
+  justifyLastLine?: boolean | null
 }
 
 export interface CellBorderSidePatch {
@@ -464,6 +472,10 @@ export type CellStyleField =
   | 'alignmentVertical'
   | 'alignmentWrap'
   | 'alignmentIndent'
+  | 'alignmentShrinkToFit'
+  | 'alignmentReadingOrder'
+  | 'alignmentTextRotation'
+  | 'alignmentJustifyLastLine'
   | 'borderTop'
   | 'borderRight'
   | 'borderBottom'

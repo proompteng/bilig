@@ -84,11 +84,20 @@ export function isDirtyRegion(value: unknown): value is DirtyRegion {
 }
 
 function isCellHorizontalAlignment(value: unknown): value is CellHorizontalAlignment {
-  return value === 'general' || value === 'left' || value === 'center' || value === 'right'
+  return (
+    value === 'general' ||
+    value === 'left' ||
+    value === 'center' ||
+    value === 'right' ||
+    value === 'fill' ||
+    value === 'justify' ||
+    value === 'centerContinuous' ||
+    value === 'distributed'
+  )
 }
 
 function isCellVerticalAlignment(value: unknown): value is CellVerticalAlignment {
-  return value === 'top' || value === 'middle' || value === 'bottom'
+  return value === 'top' || value === 'middle' || value === 'bottom' || value === 'justify' || value === 'distributed'
 }
 
 function isCellBorderStyle(value: unknown): value is CellBorderStyle {
@@ -267,6 +276,10 @@ export function parseCellStyleRecord(value: unknown): CellStyleRecord | null {
       ...(isCellVerticalAlignment(alignment['vertical']) ? { vertical: alignment['vertical'] } : {}),
       ...(typeof alignment['wrap'] === 'boolean' ? { wrap: alignment['wrap'] } : {}),
       ...(typeof alignment['indent'] === 'number' ? { indent: alignment['indent'] } : {}),
+      ...(typeof alignment['shrinkToFit'] === 'boolean' ? { shrinkToFit: alignment['shrinkToFit'] } : {}),
+      ...(typeof alignment['readingOrder'] === 'number' ? { readingOrder: alignment['readingOrder'] } : {}),
+      ...(typeof alignment['textRotation'] === 'number' ? { textRotation: alignment['textRotation'] } : {}),
+      ...(typeof alignment['justifyLastLine'] === 'boolean' ? { justifyLastLine: alignment['justifyLastLine'] } : {}),
     }
     if (Object.keys(nextAlignment).length > 0) {
       record.alignment = nextAlignment

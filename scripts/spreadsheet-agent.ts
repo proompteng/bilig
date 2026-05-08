@@ -245,11 +245,22 @@ function parseStylePatch(value: unknown, label: string): CellStylePatch {
       alignment.horizontal === 'general' ||
       alignment.horizontal === 'left' ||
       alignment.horizontal === 'center' ||
-      alignment.horizontal === 'right'
+      alignment.horizontal === 'right' ||
+      alignment.horizontal === 'fill' ||
+      alignment.horizontal === 'justify' ||
+      alignment.horizontal === 'centerContinuous' ||
+      alignment.horizontal === 'distributed'
     ) {
       patch.alignment.horizontal = alignment.horizontal
     }
-    if (alignment.vertical === null || alignment.vertical === 'top' || alignment.vertical === 'middle' || alignment.vertical === 'bottom') {
+    if (
+      alignment.vertical === null ||
+      alignment.vertical === 'top' ||
+      alignment.vertical === 'middle' ||
+      alignment.vertical === 'bottom' ||
+      alignment.vertical === 'justify' ||
+      alignment.vertical === 'distributed'
+    ) {
       patch.alignment.vertical = alignment.vertical
     }
     if (typeof alignment.wrap === 'boolean' || alignment.wrap === null) {
@@ -257,6 +268,18 @@ function parseStylePatch(value: unknown, label: string): CellStylePatch {
     }
     if (typeof alignment.indent === 'number' || alignment.indent === null) {
       patch.alignment.indent = alignment.indent
+    }
+    if (typeof alignment.shrinkToFit === 'boolean' || alignment.shrinkToFit === null) {
+      patch.alignment.shrinkToFit = alignment.shrinkToFit
+    }
+    if (typeof alignment.readingOrder === 'number' || alignment.readingOrder === null) {
+      patch.alignment.readingOrder = alignment.readingOrder
+    }
+    if (typeof alignment.textRotation === 'number' || alignment.textRotation === null) {
+      patch.alignment.textRotation = alignment.textRotation
+    }
+    if (typeof alignment.justifyLastLine === 'boolean' || alignment.justifyLastLine === null) {
+      patch.alignment.justifyLastLine = alignment.justifyLastLine
     }
   }
   if ('borders' in value) {
@@ -312,6 +335,10 @@ function parseStyleFields(value: unknown, label: string): CellStyleField[] {
       entry !== 'alignmentVertical' &&
       entry !== 'alignmentWrap' &&
       entry !== 'alignmentIndent' &&
+      entry !== 'alignmentShrinkToFit' &&
+      entry !== 'alignmentReadingOrder' &&
+      entry !== 'alignmentTextRotation' &&
+      entry !== 'alignmentJustifyLastLine' &&
       entry !== 'borderTop' &&
       entry !== 'borderRight' &&
       entry !== 'borderBottom' &&

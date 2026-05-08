@@ -40,6 +40,8 @@ import {
   createSheetPreview,
   normalizeCsvSheetName,
   normalizeWorkbookName,
+  readImportedAlignmentBoolean,
+  readImportedAlignmentNumber,
   toDisplayText,
   toLiteralInput,
   type ImportedWorkbookSheetPreview,
@@ -372,6 +374,10 @@ function readHorizontalAlignment(value: unknown): CellHorizontalAlignment | unde
     case 'left':
     case 'center':
     case 'right':
+    case 'fill':
+    case 'justify':
+    case 'centerContinuous':
+    case 'distributed':
       return value
     default:
       return undefined
@@ -386,7 +392,9 @@ function readVerticalAlignment(value: unknown): CellVerticalAlignment | undefine
     case 'middle':
       return 'middle'
     case 'bottom':
-      return 'bottom'
+    case 'justify':
+    case 'distributed':
+      return value
     default:
       return undefined
   }
@@ -399,12 +407,18 @@ function readImportedAlignmentStyle(style: Record<string, unknown>): CellStyleAl
   }
   const horizontal = readHorizontalAlignment(alignmentRecord['horizontal'])
   const vertical = readVerticalAlignment(alignmentRecord['vertical'])
-  const indent = readFiniteNumber(alignmentRecord['indent'])
+  const indent = readImportedAlignmentNumber(alignmentRecord['indent'])
+  const readingOrder = readImportedAlignmentNumber(alignmentRecord['readingOrder'])
+  const textRotation = readImportedAlignmentNumber(alignmentRecord['textRotation'])
   const alignment: CellStyleAlignmentSnapshot = {
     ...(horizontal ? { horizontal } : {}),
     ...(vertical ? { vertical } : {}),
-    ...(alignmentRecord['wrapText'] === true ? { wrap: true } : {}),
+    ...(readImportedAlignmentBoolean(alignmentRecord['wrapText']) === true ? { wrap: true } : {}),
     ...(indent !== null && indent >= 0 ? { indent } : {}),
+    ...(readImportedAlignmentBoolean(alignmentRecord['shrinkToFit']) === true ? { shrinkToFit: true } : {}),
+    ...(readingOrder !== null ? { readingOrder } : {}),
+    ...(textRotation !== null ? { textRotation } : {}),
+    ...(readImportedAlignmentBoolean(alignmentRecord['justifyLastLine']) === true ? { justifyLastLine: true } : {}),
   }
   return Object.keys(alignment).length > 0 ? alignment : undefined
 }

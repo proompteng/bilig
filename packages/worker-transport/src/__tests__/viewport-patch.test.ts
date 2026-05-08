@@ -45,10 +45,14 @@ function createPatch(): ViewportPatch {
           color: '#202124',
         },
         alignment: {
-          horizontal: 'right',
-          vertical: 'middle',
+          horizontal: 'centerContinuous',
+          vertical: 'distributed',
           wrap: true,
           indent: 2,
+          shrinkToFit: true,
+          readingOrder: 2,
+          textRotation: 45,
+          justifyLastLine: true,
         },
         borders: {
           top: { style: 'solid', weight: 'thin', color: '#dadce0' },

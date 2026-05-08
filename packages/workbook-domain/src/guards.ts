@@ -1,8 +1,8 @@
 import { isCellRangeRef, isLiteralInput } from '@bilig/protocol'
 import type { EngineOp, EngineOpBatch, WorkbookOp } from './index.js'
 
-const HORIZONTAL_ALIGNMENT_VALUES = new Set(['general', 'left', 'center', 'right'])
-const VERTICAL_ALIGNMENT_VALUES = new Set(['top', 'middle', 'bottom'])
+const HORIZONTAL_ALIGNMENT_VALUES = new Set(['general', 'left', 'center', 'right', 'fill', 'justify', 'centerContinuous', 'distributed'])
+const VERTICAL_ALIGNMENT_VALUES = new Set(['top', 'middle', 'bottom', 'justify', 'distributed'])
 const BORDER_STYLE_VALUES = new Set(['solid', 'dashed', 'dotted', 'double'])
 const BORDER_WEIGHT_VALUES = new Set(['thin', 'medium', 'thick'])
 const NUMBER_FORMAT_KIND_VALUES = new Set(['general', 'number', 'currency', 'accounting', 'percent', 'date', 'time', 'datetime', 'text'])
@@ -123,7 +123,11 @@ function isCellStyleRecord(value: unknown): boolean {
         (typeof alignment['vertical'] === 'string' && VERTICAL_ALIGNMENT_VALUES.has(alignment['vertical']))
       ) ||
       !isOptionalBoolean(alignment['wrap']) ||
-      !isOptionalNumber(alignment['indent']))
+      !isOptionalNumber(alignment['indent']) ||
+      !isOptionalBoolean(alignment['shrinkToFit']) ||
+      !isOptionalNumber(alignment['readingOrder']) ||
+      !isOptionalNumber(alignment['textRotation']) ||
+      !isOptionalBoolean(alignment['justifyLastLine']))
   ) {
     return false
   }
@@ -293,7 +297,11 @@ function isCellStylePatch(value: unknown): boolean {
         (typeof alignment['vertical'] === 'string' && VERTICAL_ALIGNMENT_VALUES.has(alignment['vertical']))
       ) ||
       !isOptionalNullableBoolean(alignment['wrap']) ||
-      !isOptionalNullableNumber(alignment['indent']))
+      !isOptionalNullableNumber(alignment['indent']) ||
+      !isOptionalNullableBoolean(alignment['shrinkToFit']) ||
+      !isOptionalNullableNumber(alignment['readingOrder']) ||
+      !isOptionalNullableNumber(alignment['textRotation']) ||
+      !isOptionalNullableBoolean(alignment['justifyLastLine']))
   ) {
     return false
   }

@@ -27,6 +27,10 @@ describe('workbook store records', () => {
         vertical: 'middle',
         wrap: true,
         indent: 24.8,
+        shrinkToFit: true,
+        readingOrder: 2,
+        textRotation: 255,
+        justifyLastLine: true,
       },
       borders: {
         top: { color: '#f0f', style: 'solid', weight: 'thin' },
@@ -53,6 +57,10 @@ describe('workbook store records', () => {
         vertical: 'middle',
         wrap: true,
         indent: 16,
+        shrinkToFit: true,
+        readingOrder: 2,
+        textRotation: 255,
+        justifyLastLine: true,
       },
       borders: {
         top: { color: '#ff00ff', style: 'solid', weight: 'thin' },

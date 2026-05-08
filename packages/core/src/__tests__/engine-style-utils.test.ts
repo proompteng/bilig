@@ -48,7 +48,7 @@ describe('engine style utils', () => {
           },
         },
         {
-          alignment: { horizontal: 'center' },
+          alignment: { horizontal: 'center', shrinkToFit: true, textRotation: 45 },
           borders: {
             left: { style: 'solid', weight: 'thin', color: null },
           },
@@ -56,7 +56,7 @@ describe('engine style utils', () => {
       ),
     ).toEqual({
       font: { family: 'Inter', bold: true },
-      alignment: { horizontal: 'center' },
+      alignment: { horizontal: 'center', shrinkToFit: true, textRotation: 45 },
     })
   })
 
@@ -65,13 +65,13 @@ describe('engine style utils', () => {
       clearStyleFields(
         {
           font: { family: 'Inter', bold: true },
-          alignment: { horizontal: 'right', wrap: true },
+          alignment: { horizontal: 'right', wrap: true, textRotation: 45 },
           borders: {
             top: { style: 'solid', weight: 'thin', color: '#111111' },
             left: { style: 'double', weight: 'medium', color: '#222222' },
           },
         },
-        ['fontBold', 'alignmentWrap', 'borderTop'],
+        ['fontBold', 'alignmentWrap', 'alignmentTextRotation', 'borderTop'],
       ),
     ).toEqual({
       font: { family: 'Inter' },
