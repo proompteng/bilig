@@ -3,6 +3,7 @@
 import { runCoverageContracts } from './coverage-contracts.ts'
 
 import { spawn, type ChildProcess } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 
 interface CiTask {
   readonly label: string
@@ -23,6 +24,7 @@ const runFullGates = ciProfile === 'full'
 const runDeepGates = runFullGates
 const skipBrowserGates = process.env['BILIG_CI_SKIP_BROWSER'] === '1'
 const coverageReportsDirectory = process.env['BILIG_COVERAGE_DIR'] ?? `coverage/ci-${process.pid}`
+const packageScripts = readPackageScripts()
 
 process.env['BILIG_COVERAGE_DIR'] = coverageReportsDirectory
 
@@ -46,6 +48,10 @@ function direct(label: string, ...args: string[]): CiTask {
   return { label, command: args }
 }
 
+function directPackageScript(label: string, scriptName: string): CiTask {
+  return direct(label, ...packageScriptCommand(scriptName))
+}
+
 function bunScript(label: string, script: string, ...args: string[]): CiTask {
   return direct(label, 'bun', script, ...args)
 }
@@ -56,6 +62,42 @@ function tsxScript(label: string, script: string, ...args: string[]): CiTask {
 
 function workspaceBin(name: string): string {
   return process.platform === 'win32' ? `node_modules\\.bin\\${name}.cmd` : `node_modules/.bin/${name}`
+}
+
+function readPackageScripts(): Readonly<Record<string, string>> {
+  const packageJson: unknown = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  if (!isStringRecordContainer(packageJson, 'scripts')) {
+    return {}
+  }
+  return packageJson.scripts
+}
+
+function packageScriptCommand(scriptName: string): readonly string[] {
+  const command = packageScripts[scriptName]
+  if (!command) {
+    throw new Error(`missing package script: ${scriptName}`)
+  }
+  const unsupportedShellTokens = new Set(['&&', '||', ';', '|', '>', '<'])
+  const tokens = command
+    .trim()
+    .split(/\s+/u)
+    .filter((token) => token.length > 0)
+  const unsupportedToken = tokens.find((token) => unsupportedShellTokens.has(token))
+  if (unsupportedToken) {
+    throw new Error(`package script ${scriptName} uses unsupported shell token ${unsupportedToken}`)
+  }
+  return tokens
+}
+
+function isStringRecordContainer(value: unknown, key: string): value is Record<string, Record<string, string>> {
+  if (!isRecord(value) || !isRecord(value[key])) {
+    return false
+  }
+  return Object.values(value[key]).every((entry) => typeof entry === 'string')
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
 }
 
 function withEnv(task: CiTask, env: Readonly<Record<string, string>>): CiTask {
@@ -207,12 +249,12 @@ const browserLane: CiTask = {
   ],
 }
 const parallelFocusedCorrectnessLanes: readonly CiTask[] = [
-  pnpm('correctness core', 'test:correctness:core'),
-  pnpm('correctness formula', 'test:correctness:formula'),
-  pnpm('correctness server', 'test:correctness:server'),
-  pnpm('correctness browser runtime', 'test:correctness:browser'),
+  directPackageScript('correctness core', 'test:correctness:core'),
+  directPackageScript('correctness formula', 'test:correctness:formula'),
+  directPackageScript('correctness server', 'test:correctness:server'),
+  directPackageScript('correctness browser runtime', 'test:correctness:browser'),
 ]
-const corpusCorrectnessLane = pnpm('correctness public workbook corpus', 'test:correctness:corpus')
+const corpusCorrectnessLane = directPackageScript('correctness public workbook corpus', 'test:correctness:corpus')
 const generatedSourceChecks: readonly CiTask[] = [
   bunScript('protocol check', 'scripts/gen-protocol.ts', '--check'),
   direct('protocol package build for generated-source imports', workspaceBin('tsc'), '-p', 'packages/protocol/tsconfig.json'),

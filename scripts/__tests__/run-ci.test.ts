@@ -17,8 +17,10 @@ describe('run-ci', () => {
       "direct('protocol package build for generated-source imports', workspaceBin('tsc'), '-p', 'packages/protocol/tsconfig.json')",
     )
     expect(source).toContain('const wasmBuildTask: CiTask = {')
+    expect(source).toContain("directPackageScript('correctness public workbook corpus', 'test:correctness:corpus')")
     expect(source).not.toContain("pnpm('protocol check'")
     expect(source).not.toContain("pnpm('wasm build'")
+    expect(source).not.toContain("pnpm('correctness public workbook corpus'")
     expect(source).not.toContain("await runStage('generated-source checks'")
     expect(source).not.toContain("await runStage('static package build prerequisites'")
   })
