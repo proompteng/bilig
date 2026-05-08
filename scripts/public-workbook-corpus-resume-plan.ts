@@ -306,7 +306,7 @@ function buildVerifyMissingPhase(args: Parameters<typeof buildPublicWorkbookCorp
   if (totalWorkItems === 0) {
     return notNeededPhase('all cached artifacts already have recorded verification evidence')
   }
-  const batchSize = normalizedBatchSize(args.verifyBatchSize)
+  const batchSize = verificationBatchSize(args)
   return {
     status: phaseStatus(args.stopMarkerActive),
     reason: 'cached workbook artifacts exist locally but do not all have recorded verification cases',
@@ -353,7 +353,7 @@ function buildRefreshStaleRecordedEvidencePhase(
   if (totalWorkItems === 0) {
     return notNeededPhase('all recorded verification cases already satisfy the current evidence schema')
   }
-  const batchSize = normalizedBatchSize(args.verifyBatchSize)
+  const batchSize = verificationBatchSize(args)
   return {
     status: phaseStatus(args.stopMarkerActive),
     reason: 'recorded verification cases need refresh for current metadata evidence requirements',
@@ -537,6 +537,12 @@ function batchCount(totalWorkItems: number, batchSize: number): number {
 
 function normalizedBatchSize(value: number): number {
   return Math.max(1, Math.trunc(value))
+}
+
+function verificationBatchSize(
+  args: Pick<Parameters<typeof buildPublicWorkbookCorpusResumePlan>[0], 'stopMarkerActive' | 'verifyBatchSize'>,
+): number {
+  return args.stopMarkerActive ? 1 : normalizedBatchSize(args.verifyBatchSize)
 }
 
 function phaseCheckSummary(phase: ResumePlanPhase): Pick<ResumePlanPhase, 'status' | 'totalWorkItems' | 'batchSize' | 'batchCount'> {

@@ -319,34 +319,25 @@ describe('public workbook corpus CLI resource guards', () => {
   })
 
   it('builds a stop-marker-aware bounded resume plan for the remaining corpus evidence', () => {
-    const plan = buildPublicWorkbookCorpusResumePlan({
-      cacheDir: '/repo/.cache/public-workbook-corpus',
-      fetchBatchSize: 6,
-      fetchLimit: 10_000,
-      fetchPlan: {
-        candidateSourceCount: 2_389,
-        candidateSourceDeficitCount: 1_983,
-        recommendedDiscoveryLimit: 11_983,
-        remainingArtifactSlots: 4_372,
-        targetReachableFromKnownCandidates: false,
-      },
-      generatedAt: '2026-05-07T08:00:00.000Z',
-      displayRootDir: '/repo',
-      manifestPath: '/repo/.cache/public-workbook-corpus/manifest.json',
-      scorecardPath: '/repo/packages/benchmarks/baselines/public-workbook-corpus-scorecard.json',
-      status: {
-        targetWorkbookCount: 10_000,
-        cachedArtifactCount: 5_628,
-        recordedManifestArtifactCount: 4_940,
-        missingManifestArtifactCount: 688,
-        recordedAllCasesPassed: true,
-      },
-      staleRecordedVerificationCount: 4_897,
-      stopMarkerActive: true,
-      stopMarkerPath: '/repo/.agent-coordination/stop.md',
-      verifyBatchSize: 20,
-      verifyCheckpointPath: '/repo/.cache/public-workbook-corpus/verification-checkpoint.json',
-    })
+    const plan = buildPublicWorkbookCorpusResumePlan(
+      resumePlanArgs({
+        fetchPlan: {
+          candidateSourceCount: 2_389,
+          candidateSourceDeficitCount: 1_983,
+          recommendedDiscoveryLimit: 11_983,
+          remainingArtifactSlots: 4_372,
+          targetReachableFromKnownCandidates: false,
+        },
+        status: {
+          targetWorkbookCount: 10_000,
+          cachedArtifactCount: 5_628,
+          recordedManifestArtifactCount: 4_940,
+          missingManifestArtifactCount: 688,
+          recordedAllCasesPassed: true,
+        },
+        staleRecordedVerificationCount: 4_897,
+      }),
+    )
 
     expect(plan).toMatchObject({
       schemaVersion: 1,
@@ -368,21 +359,23 @@ describe('public workbook corpus CLI resource guards', () => {
         verifyMissingCachedArtifacts: {
           status: 'blocked-by-stop-marker',
           totalWorkItems: 688,
-          batchSize: 20,
-          batchCount: 35,
+          batchSize: 1,
+          batchCount: 688,
           commands: expect.arrayContaining([
             expect.stringContaining('public-workbook-corpus:verify-missing:plan'),
             expect.stringContaining('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1 pnpm public-workbook-corpus:verify-missing'),
+            expect.stringContaining('--limit 1'),
           ]),
         },
         refreshStaleRecordedEvidence: {
           status: 'blocked-by-stop-marker',
           totalWorkItems: 4_897,
-          batchSize: 20,
-          batchCount: 245,
+          batchSize: 1,
+          batchCount: 4_897,
           commands: expect.arrayContaining([
             expect.stringContaining('public-workbook-corpus:verify-stale:plan'),
             expect.stringContaining('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1 pnpm public-workbook-corpus:verify-stale'),
+            expect.stringContaining('--limit 1'),
           ]),
         },
         discoverAdditionalSources: {
@@ -507,32 +500,24 @@ describe('public workbook corpus CLI resource guards', () => {
   })
 
   it('rejects unsafe resume plans that hide active stop-marker overrides', () => {
-    const plan = buildPublicWorkbookCorpusResumePlan({
-      cacheDir: '/repo/.cache/public-workbook-corpus',
-      fetchBatchSize: 6,
-      fetchLimit: 10_000,
-      fetchPlan: {
-        candidateSourceCount: 1,
-        candidateSourceDeficitCount: 0,
-        recommendedDiscoveryLimit: 10_000,
-        remainingArtifactSlots: 1,
-        targetReachableFromKnownCandidates: true,
-      },
-      generatedAt: '2026-05-07T08:00:00.000Z',
-      manifestPath: '/repo/.cache/public-workbook-corpus/manifest.json',
-      scorecardPath: '/repo/packages/benchmarks/baselines/public-workbook-corpus-scorecard.json',
-      status: {
-        targetWorkbookCount: 10_000,
-        cachedArtifactCount: 9_999,
-        recordedManifestArtifactCount: 9_998,
-        missingManifestArtifactCount: 1,
-        recordedAllCasesPassed: true,
-      },
-      stopMarkerActive: true,
-      stopMarkerPath: '/repo/.agent-coordination/stop.md',
-      verifyBatchSize: 20,
-      verifyCheckpointPath: '/repo/.cache/public-workbook-corpus/verification-checkpoint.json',
-    })
+    const plan = buildPublicWorkbookCorpusResumePlan(
+      resumePlanArgs({
+        fetchPlan: {
+          candidateSourceCount: 1,
+          candidateSourceDeficitCount: 0,
+          recommendedDiscoveryLimit: 10_000,
+          remainingArtifactSlots: 1,
+          targetReachableFromKnownCandidates: true,
+        },
+        status: {
+          targetWorkbookCount: 10_000,
+          cachedArtifactCount: 9_999,
+          recordedManifestArtifactCount: 9_998,
+          missingManifestArtifactCount: 1,
+          recordedAllCasesPassed: true,
+        },
+      }),
+    )
     const invalidPlan = {
       ...plan,
       phases: {
@@ -552,33 +537,11 @@ describe('public workbook corpus CLI resource guards', () => {
   })
 
   it('rejects stale-evidence resume plans that hide active stop-marker overrides', () => {
-    const plan = buildPublicWorkbookCorpusResumePlan({
-      cacheDir: '/repo/.cache/public-workbook-corpus',
-      fetchBatchSize: 6,
-      fetchLimit: 10_000,
-      fetchPlan: {
-        candidateSourceCount: 1,
-        candidateSourceDeficitCount: 0,
-        recommendedDiscoveryLimit: 10_000,
-        remainingArtifactSlots: 0,
-        targetReachableFromKnownCandidates: true,
-      },
-      generatedAt: '2026-05-07T08:00:00.000Z',
-      manifestPath: '/repo/.cache/public-workbook-corpus/manifest.json',
-      scorecardPath: '/repo/packages/benchmarks/baselines/public-workbook-corpus-scorecard.json',
-      status: {
-        targetWorkbookCount: 10_000,
-        cachedArtifactCount: 10_000,
-        recordedManifestArtifactCount: 10_000,
-        missingManifestArtifactCount: 0,
-        recordedAllCasesPassed: true,
-      },
-      staleRecordedVerificationCount: 12,
-      stopMarkerActive: true,
-      stopMarkerPath: '/repo/.agent-coordination/stop.md',
-      verifyBatchSize: 20,
-      verifyCheckpointPath: '/repo/.cache/public-workbook-corpus/verification-checkpoint.json',
-    })
+    const plan = buildPublicWorkbookCorpusResumePlan(
+      resumePlanArgs({
+        staleRecordedVerificationCount: 12,
+      }),
+    )
     const invalidPlan = {
       ...plan,
       phases: {
@@ -597,32 +560,25 @@ describe('public workbook corpus CLI resource guards', () => {
   })
 
   it('rejects stale resume plans with impossible current-state counts', () => {
-    const plan = buildPublicWorkbookCorpusResumePlan({
-      cacheDir: '/repo/.cache/public-workbook-corpus',
-      fetchBatchSize: 6,
-      fetchLimit: 10_000,
-      fetchPlan: {
-        candidateSourceCount: 6,
-        candidateSourceDeficitCount: 0,
-        recommendedDiscoveryLimit: 10_000,
-        remainingArtifactSlots: 6,
-        targetReachableFromKnownCandidates: true,
-      },
-      generatedAt: '2026-05-07T08:00:00.000Z',
-      manifestPath: '/repo/.cache/public-workbook-corpus/manifest.json',
-      scorecardPath: '/repo/packages/benchmarks/baselines/public-workbook-corpus-scorecard.json',
-      status: {
-        targetWorkbookCount: 10_000,
-        cachedArtifactCount: 9_994,
-        recordedManifestArtifactCount: 9_994,
-        missingManifestArtifactCount: 0,
-        recordedAllCasesPassed: true,
-      },
-      stopMarkerActive: false,
-      stopMarkerPath: '/repo/.agent-coordination/stop.md',
-      verifyBatchSize: 20,
-      verifyCheckpointPath: '/repo/.cache/public-workbook-corpus/verification-checkpoint.json',
-    })
+    const plan = buildPublicWorkbookCorpusResumePlan(
+      resumePlanArgs({
+        fetchPlan: {
+          candidateSourceCount: 6,
+          candidateSourceDeficitCount: 0,
+          recommendedDiscoveryLimit: 10_000,
+          remainingArtifactSlots: 6,
+          targetReachableFromKnownCandidates: true,
+        },
+        status: {
+          targetWorkbookCount: 10_000,
+          cachedArtifactCount: 9_994,
+          recordedManifestArtifactCount: 9_994,
+          missingManifestArtifactCount: 0,
+          recordedAllCasesPassed: true,
+        },
+        stopMarkerActive: false,
+      }),
+    )
     const invalidPlan = {
       ...plan,
       currentState: {
@@ -1399,6 +1355,39 @@ describe('public workbook corpus CLI resource guards', () => {
     )
   })
 })
+
+type ResumePlanArgs = Parameters<typeof buildPublicWorkbookCorpusResumePlan>[0]
+
+function resumePlanArgs(overrides: Partial<ResumePlanArgs> = {}): ResumePlanArgs {
+  return {
+    cacheDir: '/repo/.cache/public-workbook-corpus',
+    fetchBatchSize: 6,
+    fetchLimit: 10_000,
+    fetchPlan: {
+      candidateSourceCount: 1,
+      candidateSourceDeficitCount: 0,
+      recommendedDiscoveryLimit: 10_000,
+      remainingArtifactSlots: 0,
+      targetReachableFromKnownCandidates: true,
+    },
+    generatedAt: '2026-05-07T08:00:00.000Z',
+    displayRootDir: '/repo',
+    manifestPath: '/repo/.cache/public-workbook-corpus/manifest.json',
+    scorecardPath: '/repo/packages/benchmarks/baselines/public-workbook-corpus-scorecard.json',
+    status: {
+      targetWorkbookCount: 10_000,
+      cachedArtifactCount: 10_000,
+      recordedManifestArtifactCount: 10_000,
+      missingManifestArtifactCount: 0,
+      recordedAllCasesPassed: true,
+    },
+    stopMarkerActive: true,
+    stopMarkerPath: '/repo/.agent-coordination/stop.md',
+    verifyBatchSize: 20,
+    verifyCheckpointPath: '/repo/.cache/public-workbook-corpus/verification-checkpoint.json',
+    ...overrides,
+  }
+}
 
 function readPackageJson(): { readonly scripts?: Record<string, string> } {
   const parsed: unknown = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../..', 'package.json'), 'utf8'))
