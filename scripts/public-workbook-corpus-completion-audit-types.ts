@@ -32,6 +32,10 @@ export interface PublicWorkbookCorpusAuditState {
   readonly targetWorkbookCount: number
   readonly financialWorkbookTargetCount: number
   readonly sourceCount: number
+  readonly fetchCandidateSourceCount: number
+  readonly fetchCandidateSourceDeficitCount: number
+  readonly fetchTargetReachableFromKnownCandidates: boolean
+  readonly recommendedDiscoveryLimit: number
   readonly cachedArtifactCount: number
   readonly financialSourceCount: number
   readonly financialCachedArtifactCount: number

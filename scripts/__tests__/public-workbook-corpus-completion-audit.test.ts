@@ -45,6 +45,10 @@ describe('public workbook corpus completion audit', () => {
     expect(audit.currentState).toMatchObject({
       targetWorkbookCount: 3,
       cachedArtifactCount: 2,
+      fetchCandidateSourceCount: 0,
+      fetchCandidateSourceDeficitCount: 1,
+      fetchTargetReachableFromKnownCandidates: false,
+      recommendedDiscoveryLimit: 3,
       recordedManifestArtifactCount: 1,
       missingCachedArtifactCount: 1,
       missingVerificationCount: 1,
@@ -58,8 +62,13 @@ describe('public workbook corpus completion audit', () => {
         expect.objectContaining({
           id: 'resume-public-corpus-ingest',
           reason: 'cached artifacts below target by 1',
-          commands: ['pnpm public-workbook-corpus:resume-plan:check', 'pnpm public-workbook-corpus:fetch:plan'],
+          commands: [
+            'pnpm public-workbook-corpus:resume-plan:check',
+            'pnpm public-workbook-corpus:discover:plan -- --limit 3',
+            'pnpm public-workbook-corpus:fetch:plan',
+          ],
           blockedCommands: [
+            'BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1 pnpm public-workbook-corpus:discover -- --limit 3 --allow-active-stop-marker',
             'BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1 pnpm public-workbook-corpus:fetch -- --limit 3 --fetch-batch-size 1 --allow-active-stop-marker',
           ],
         }),

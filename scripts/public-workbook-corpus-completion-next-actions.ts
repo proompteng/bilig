@@ -22,7 +22,13 @@ export function buildPublicWorkbookCorpusAuditNextActions(args: {
         id: 'resume-public-corpus-ingest',
         priority: 1,
         reason: `cached artifacts below target by ${String(args.currentState.missingCachedArtifactCount)}`,
-        commands: ['pnpm public-workbook-corpus:resume-plan:check', 'pnpm public-workbook-corpus:fetch:plan'],
+        commands: [
+          'pnpm public-workbook-corpus:resume-plan:check',
+          ...(args.currentState.fetchTargetReachableFromKnownCandidates
+            ? []
+            : [`pnpm public-workbook-corpus:discover:plan -- --limit ${String(args.currentState.recommendedDiscoveryLimit)}`]),
+          'pnpm public-workbook-corpus:fetch:plan',
+        ],
         blockedCommands: args.stopMarkerActive ? resumePublicCorpusIngestBlockedCommands(args.currentState) : [],
       }),
     )
@@ -114,7 +120,11 @@ function resumePublicCorpusIngestBlockedCommands(state: PublicWorkbookCorpusAudi
     return []
   }
   const batchSize = Math.min(resumeFetchBatchSize, state.missingCachedArtifactCount)
-  return [
+  const commands: string[] = []
+  if (!state.fetchTargetReachableFromKnownCandidates) {
+    commands.push(blockedCommand(['pnpm', 'public-workbook-corpus:discover', '--', '--limit', String(state.recommendedDiscoveryLimit)]))
+  }
+  commands.push(
     blockedCommand([
       'pnpm',
       'public-workbook-corpus:fetch',
@@ -124,7 +134,8 @@ function resumePublicCorpusIngestBlockedCommands(state: PublicWorkbookCorpusAudi
       '--fetch-batch-size',
       String(batchSize),
     ]),
-  ]
+  )
+  return commands
 }
 
 function resumeFinancialWorkbookBlockedCommands(state: PublicWorkbookCorpusAuditState): string[] {

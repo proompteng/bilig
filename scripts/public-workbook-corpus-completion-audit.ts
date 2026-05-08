@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { hasUsableLicenseEvidence, parsePublicWorkbookManifestJson } from './public-workbook-corpus-json.ts'
+import { planPublicWorkbookCorpusFetch } from './public-workbook-corpus-fetch.ts'
 import { publicWorkbookCorpusCaseMatchesArtifact } from './public-workbook-corpus-missing.ts'
 import { readPublicWorkbookCorpusStatus, type PublicWorkbookCorpusStatus } from './public-workbook-corpus-status.ts'
 import { readReusablePublicWorkbookCorpusCases } from './public-workbook-corpus-verify-checkpoint.ts'
@@ -802,6 +803,7 @@ function buildAuditState(
   const financialSources = financialManifest ? financialManifest.sources : (manifest?.sources.filter(hasFinancialTopicEvidence) ?? [])
   const financialCaseCandidates = financialManifest ? financialRecordedCases : recordedCases
   const recordedCasesById = new Map(financialCaseCandidates.map((entry) => [entry.id, entry]))
+  const fetchPlan = manifest ? planPublicWorkbookCorpusFetch({ manifest, limit: status.targetWorkbookCount, sampleLimit: 0 }) : null
   const missingFeatureWitnesses = buildFeatureWitnessCoverage(recordedCases)
     .filter((entry) => entry.witnessCaseCount === 0)
     .map((entry) => entry.label)
@@ -814,6 +816,12 @@ function buildAuditState(
     targetWorkbookCount: status.targetWorkbookCount,
     financialWorkbookTargetCount: financialWorkbookTargetCount(status.targetWorkbookCount),
     sourceCount: status.sourceCount,
+    fetchCandidateSourceCount: fetchPlan?.candidateSourceCount ?? 0,
+    fetchCandidateSourceDeficitCount:
+      fetchPlan?.candidateSourceDeficitCount ?? Math.max(0, status.targetWorkbookCount - status.sourceCount),
+    fetchTargetReachableFromKnownCandidates:
+      fetchPlan?.targetReachableFromKnownCandidates ?? status.cachedArtifactCount >= status.targetWorkbookCount,
+    recommendedDiscoveryLimit: fetchPlan?.recommendedDiscoveryLimit ?? status.targetWorkbookCount,
     cachedArtifactCount: status.cachedArtifactCount,
     financialSourceCount: financialSources.length,
     financialCachedArtifactCount: financialArtifacts.length,
