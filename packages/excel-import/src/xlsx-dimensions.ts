@@ -33,6 +33,9 @@ interface ExportColumnMetadata {
   collapsed?: boolean
 }
 
+const worksheetRowElementPattern = /<row\b[^>]*\/>|<row\b[^>]*>[\s\S]*?<\/row>/gu
+const worksheetRowOpeningTagPattern = /^<row\b[^>]*\/>|^<row\b[^>]*>/u
+
 function finitePositiveNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
 }
@@ -434,7 +437,7 @@ function buildEmptyRowXml(row: ExportRowMetadata): string {
 }
 
 function updateExistingRowXml(rowXml: string, row: ExportRowMetadata): string {
-  const openingTag = /^<row\b[^>]*(?:\/>|>)/u.exec(rowXml)?.[0]
+  const openingTag = worksheetRowOpeningTagPattern.exec(rowXml)?.[0]
   if (!openingTag) {
     return rowXml
   }
@@ -471,7 +474,7 @@ function upsertWorksheetRowMetadata(sheetXml: string, rows: readonly ExportRowMe
   let outputBody = ''
   let lastIndex = 0
   let missingIndex = 0
-  for (const match of sheetDataBody.matchAll(/<row\b[^>]*(?:\/>|>[\s\S]*?<\/row>)/gu)) {
+  for (const match of sheetDataBody.matchAll(worksheetRowElementPattern)) {
     const rowXml = match[0]
     const existingRowNumber = readRowNumber(rowXml)
     outputBody += sheetDataBody.slice(lastIndex, match.index)
