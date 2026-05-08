@@ -21,6 +21,7 @@ Project site: <https://proompteng.github.io/bilig/>
 - **Evaluate in 90 seconds**: run the npm-only
   [`@bilig/headless` quickstart](#try-biligheadless-in-90-seconds).
 - **Compare spreadsheet engines**: read the
+  [SheetJS and ExcelJS comparison](docs/sheetjs-exceljs-alternative-formula-workbook-api.md),
   [HyperFormula comparison](docs/hyperformula-alternative-headless-workpaper.md),
   [engine comparison](docs/headless-spreadsheet-engine-comparison.md), and
   [benchmark explainer](docs/what-workpaper-benchmark-proves.md).

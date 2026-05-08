@@ -42,6 +42,7 @@ pnpm --filter @bilig/headless build
   [compatibility boundaries](../../docs/where-bilig-is-not-excel-compatible-yet.md)
   before assuming full Excel parity.
 - Compare against other engines with the
+  [SheetJS and ExcelJS comparison](../../docs/sheetjs-exceljs-alternative-formula-workbook-api.md),
   [HyperFormula comparison](../../docs/hyperformula-alternative-headless-workpaper.md)
   and [benchmark explainer](../../docs/what-workpaper-benchmark-proves.md).
 - Star or bookmark the project:
@@ -122,6 +123,8 @@ Repository links:
   <https://github.com/proompteng/bilig/discussions/115>
 - Good first issues:
   <https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md>
+- First-timers-only issues:
+  <https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only>
 - npm: <https://www.npmjs.com/package/@bilig/headless>
 - runnable example:
   [`examples/headless-workpaper`](../../examples/headless-workpaper)
@@ -143,6 +146,8 @@ Repository links:
   [`docs/xlsx-corpus-verifier-walkthrough.md`](../../docs/xlsx-corpus-verifier-walkthrough.md)
 - HyperFormula comparison:
   [`docs/hyperformula-alternative-headless-workpaper.md`](../../docs/hyperformula-alternative-headless-workpaper.md)
+- SheetJS and ExcelJS comparison:
+  [`docs/sheetjs-exceljs-alternative-formula-workbook-api.md`](../../docs/sheetjs-exceljs-alternative-formula-workbook-api.md)
 - local benchmark walkthrough:
   [`docs/local-workpaper-benchmark-walkthrough.md`](../../docs/local-workpaper-benchmark-walkthrough.md)
 - XLOOKUP exact fixture walkthrough:

@@ -207,12 +207,21 @@ for (const required of [
 
 for (const [path, content] of [
   ['README.md', readme],
+  ['packages/headless/README.md', headlessReadme],
   ['CONTRIBUTING.md', contributing],
   ['docs/new-contributor-guide.md', newContributorGuide],
   ['docs/starter-issues.md', starterIssues],
   ['docs/llms.txt', llms],
 ] as const) {
   requireIncludes(content, 'https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only', path)
+}
+
+for (const [path, content] of [
+  ['README.md', readme],
+  ['packages/headless/README.md', headlessReadme],
+  ['docs/llms.txt', llms],
+] as const) {
+  requireIncludes(content, 'docs/sheetjs-exceljs-alternative-formula-workbook-api.md', path)
 }
 
 for (const required of [
