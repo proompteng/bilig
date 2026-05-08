@@ -3,6 +3,7 @@ import type {
   WorkbookImageSnapshot,
   WorkbookMacroPayloadSnapshot,
   WorkbookMergeRangeSnapshot,
+  WorkbookProtectionSnapshot,
   WorkbookShapeSnapshot,
   CellNumberFormatRecord,
   CellRangeRef,
@@ -40,6 +41,8 @@ export interface WorkbookPropertyRecord {
   key: string
   value: LiteralInput
 }
+
+export interface WorkbookProtectionRecord extends WorkbookProtectionSnapshot {}
 
 export interface WorkbookMacroPayloadRecord extends WorkbookMacroPayloadSnapshot {}
 
@@ -132,6 +135,7 @@ export interface WorkbookNoteRecord extends WorkbookNoteSnapshot {}
 
 export interface WorkbookMetadataRecord {
   properties: Map<string, WorkbookPropertyRecord>
+  workbookProtection: WorkbookProtectionRecord | undefined
   macroPayloads: Map<string, WorkbookMacroPayloadRecord>
   definedNames: Map<string, WorkbookDefinedNameRecord>
   tables: Map<string, WorkbookTableRecord>
@@ -160,6 +164,7 @@ export interface WorkbookMetadataRecord {
 export function createWorkbookMetadataRecord(): WorkbookMetadataRecord {
   return {
     properties: new Map(),
+    workbookProtection: undefined,
     macroPayloads: new Map(),
     definedNames: new Map(),
     tables: new Map(),

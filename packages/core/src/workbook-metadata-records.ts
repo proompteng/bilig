@@ -21,6 +21,7 @@ import {
   definedNameKey,
   normalizeWorkbookObjectName,
   type WorkbookNoteRecord,
+  type WorkbookProtectionRecord,
   type WorkbookRangeProtectionRecord,
   type WorkbookSheetProtectionRecord,
   pivotKey,
@@ -77,6 +78,10 @@ export function cloneDefinedNameValue(value: WorkbookDefinedNameValueSnapshot): 
 
 export function clonePropertyRecord(record: WorkbookPropertyRecord): WorkbookPropertyRecord {
   return { key: record.key, value: record.value }
+}
+
+export function cloneWorkbookProtectionRecord(record: WorkbookProtectionRecord): WorkbookProtectionRecord {
+  return structuredClone(record)
 }
 
 export function cloneMacroPayloadRecord(record: WorkbookMacroPayloadRecord): WorkbookMacroPayloadRecord {

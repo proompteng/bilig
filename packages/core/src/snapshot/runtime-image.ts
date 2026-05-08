@@ -9,6 +9,7 @@ import type {
   WorkbookImageSnapshot,
   WorkbookMacroPayloadSnapshot,
   WorkbookPivotSnapshot,
+  WorkbookProtectionSnapshot,
   WorkbookSnapshot,
   WorkbookSortSnapshot,
   WorkbookVolatileContextSnapshot,
@@ -352,6 +353,7 @@ function restoreWorkbookMetadata(args: {
   readonly workbookMetadata:
     | {
         properties?: Array<{ key: string; value: LiteralInput }>
+        workbookProtection?: WorkbookProtectionSnapshot
         macroPayloads?: WorkbookMacroPayloadSnapshot[]
         definedNames?: Array<{ name: string; scopeSheetName?: string; value: WorkbookDefinedNameValueSnapshot }>
         calculationSettings?: WorkbookCalculationSettingsSnapshot
@@ -370,6 +372,9 @@ function restoreWorkbookMetadata(args: {
   args.workbookMetadata?.properties?.forEach(({ key, value }) => {
     args.workbook.setWorkbookProperty(key, value)
   })
+  if (args.workbookMetadata?.workbookProtection) {
+    args.workbook.setWorkbookProtection(args.workbookMetadata.workbookProtection)
+  }
   args.workbookMetadata?.macroPayloads?.forEach((payload) => {
     args.workbook.setMacroPayload(payload)
   })

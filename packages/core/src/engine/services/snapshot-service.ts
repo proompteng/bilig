@@ -64,6 +64,7 @@ export function createEngineSnapshotService(args: {
             name: args.state.workbook.workbookName,
           }
           const properties = args.state.workbook.listWorkbookProperties().map(({ key, value }) => ({ key, value }))
+          const workbookProtection = args.state.workbook.getWorkbookProtection()
           const macroPayloads = args.state.workbook.listMacroPayloads().map((payload) => Object.assign({}, payload))
           const definedNames = args.state.workbook.listDefinedNames().map(({ name, scopeSheetName, value }) => {
             const snapshot: { name: string; scopeSheetName?: string; value: typeof value } = { name, value }
@@ -119,6 +120,7 @@ export function createEngineSnapshotService(args: {
           const shapes = args.state.workbook.listShapes().map((shape) => structuredClone(shape))
           if (
             properties.length > 0 ||
+            workbookProtection !== undefined ||
             macroPayloads.length > 0 ||
             definedNames.length > 0 ||
             tables.length > 0 ||
@@ -135,6 +137,9 @@ export function createEngineSnapshotService(args: {
             workbook.metadata = {}
             if (properties.length > 0) {
               workbook.metadata.properties = properties
+            }
+            if (workbookProtection) {
+              workbook.metadata.workbookProtection = workbookProtection
             }
             if (macroPayloads.length > 0) {
               workbook.metadata.macroPayloads = macroPayloads

@@ -226,6 +226,7 @@ export function createWorkbookMetadataService(metadata: WorkbookMetadataRecord):
   const resetNow = (): void => {
     const defaults = createWorkbookMetadataRecord()
     metadata.properties.clear()
+    metadata.workbookProtection = defaults.workbookProtection
     metadata.macroPayloads.clear()
     metadata.definedNames.clear()
     metadata.tables.clear()

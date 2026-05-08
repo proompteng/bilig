@@ -26,6 +26,7 @@ import { addExportSortsToXlsxBytes } from './xlsx-sorts.js'
 import { addExportSheetTabColorsToXlsxBytes } from './xlsx-tab-colors.js'
 import { addExportTablesToXlsxBytes } from './xlsx-tables.js'
 import { addExportDataValidationsToXlsxBytes } from './xlsx-validations.js'
+import { addExportWorkbookProtectionToXlsxBytes } from './xlsx-workbook-protection.js'
 import { addExportWorkbookPropertiesToXlsxBytes } from './xlsx-workbook-properties.js'
 import { decodePreservedVbaProjectPayload } from './xlsx-macros.js'
 import { addExportPrinterSettingsToXlsxBytes } from './xlsx-printer-settings.js'
@@ -851,7 +852,10 @@ export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
                     addExportFreezePanesToXlsxBytes(
                       addExportWorksheetPropertiesToXlsxBytes(
                         addExportSheetTabColorsToXlsxBytes(
-                          addExportCalculationSettingsToXlsxBytes(addExportWorkbookPropertiesToXlsxBytes(bytes, snapshot), snapshot),
+                          addExportCalculationSettingsToXlsxBytes(
+                            addExportWorkbookProtectionToXlsxBytes(addExportWorkbookPropertiesToXlsxBytes(bytes, snapshot), snapshot),
+                            snapshot,
+                          ),
                           snapshot,
                         ),
                         snapshot,

@@ -43,6 +43,7 @@ import { readImportedWorkbookFileStyles, readImportedWorkbookSheetDimensions } f
 import { readImportedWorkbookSheetTabColors } from './xlsx-tab-colors.js'
 import { readImportedWorkbookTables } from './xlsx-tables.js'
 import { readImportedWorkbookDataValidations } from './xlsx-validations.js'
+import { readImportedWorkbookProtection } from './xlsx-workbook-protection.js'
 import { readImportedWorkbookProperties } from './xlsx-workbook-properties.js'
 import {
   createSheetPreview,
@@ -566,6 +567,7 @@ function importSheetJsWorkbook(
         })
   const importedWorkbookSheetDimensions = readImportedWorkbookSheetDimensions(workbook, workbook.SheetNames)
   const importedWorkbookProperties = workbookZip ? readImportedWorkbookProperties(workbookZip) : undefined
+  const importedWorkbookProtection = workbookZip ? readImportedWorkbookProtection(workbookZip) : undefined
   const importedCalculationSettings = workbookZip ? readImportedWorkbookCalculationSettings(workbookZip) : undefined
   if (workbookZip) {
     warnings.push(...readImportedWorkbookCalculationWarnings(workbookZip))
@@ -805,6 +807,7 @@ function importSheetJsWorkbook(
 
   const workbookMetadata: WorkbookMetadataSnapshot = {
     ...(importedWorkbookProperties ? { properties: importedWorkbookProperties } : {}),
+    ...(importedWorkbookProtection ? { workbookProtection: importedWorkbookProtection } : {}),
     ...(importedCalculationSettings ? { calculationSettings: importedCalculationSettings } : {}),
     ...(importedMacroPayload ? { macroPayloads: [createPreservedVbaProjectPayload(importedMacroPayload, importedMacroCodeNames)] } : {}),
     ...(styleCatalog.size > 0 ? { styles: [...styleCatalog.values()] } : {}),

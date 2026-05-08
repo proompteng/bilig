@@ -18,6 +18,7 @@ import type {
   WorkbookImageSnapshot,
   WorkbookMacroPayloadSnapshot,
   WorkbookNoteSnapshot,
+  WorkbookProtectionSnapshot,
   WorkbookRangeProtectionSnapshot,
   WorkbookSheetProtectionSnapshot,
   WorkbookSheetFormatPrSnapshot,
@@ -33,6 +34,7 @@ import { CellStore } from './cell-store.js'
 import type { StructuralTransaction } from './engine/structural-transaction.js'
 import type { EngineCounters } from './perf/engine-counters.js'
 import { createWorkbookMetadataService, runWorkbookMetadataEffect } from './workbook-metadata-service.js'
+import { cloneWorkbookProtectionRecord } from './workbook-metadata-records.js'
 import {
   createWorkbookMetadataRecord,
   type WorkbookAxisMetadataRecord,
@@ -52,6 +54,7 @@ import {
   type WorkbookMergeRangeRecord,
   type WorkbookMetadataRecord,
   type WorkbookPivotRecord,
+  type WorkbookProtectionRecord,
   type WorkbookPropertyRecord,
   type WorkbookRangeProtectionRecord,
   type WorkbookSheetProtectionRecord,
@@ -408,6 +411,16 @@ export class WorkbookStore {
 
   listWorkbookProperties(): WorkbookPropertyRecord[] {
     return runWorkbookMetadataEffect(this.metadataService.listWorkbookProperties())
+  }
+
+  setWorkbookProtection(record: WorkbookProtectionSnapshot): WorkbookProtectionRecord {
+    const stored = cloneWorkbookProtectionRecord(record)
+    this.metadata.workbookProtection = stored
+    return cloneWorkbookProtectionRecord(stored)
+  }
+
+  getWorkbookProtection(): WorkbookProtectionRecord | undefined {
+    return this.metadata.workbookProtection ? cloneWorkbookProtectionRecord(this.metadata.workbookProtection) : undefined
   }
 
   setMacroPayload(record: WorkbookMacroPayloadSnapshot): WorkbookMacroPayloadRecord {

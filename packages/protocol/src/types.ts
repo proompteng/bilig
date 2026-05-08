@@ -222,6 +222,18 @@ export interface WorkbookPropertySnapshot {
   value: LiteralInput
 }
 
+export interface WorkbookProtectionXmlAttributeSnapshot {
+  name: string
+  value: string
+}
+
+export interface WorkbookProtectionSnapshot {
+  lockStructure?: boolean
+  lockWindows?: boolean
+  lockRevision?: boolean
+  xmlAttributes?: WorkbookProtectionXmlAttributeSnapshot[]
+}
+
 export interface WorkbookSpillSnapshot {
   sheetName: string
   address: string
@@ -764,6 +776,7 @@ export interface WorkbookCellMetadataReferenceSnapshot {
 
 export interface WorkbookMetadataSnapshot {
   properties?: WorkbookPropertySnapshot[]
+  workbookProtection?: WorkbookProtectionSnapshot
   definedNames?: WorkbookDefinedNameSnapshot[]
   tables?: WorkbookTableSnapshot[]
   spills?: WorkbookSpillSnapshot[]
