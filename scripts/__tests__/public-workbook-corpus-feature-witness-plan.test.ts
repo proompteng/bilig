@@ -36,6 +36,14 @@ describe('public workbook corpus feature witness plan', () => {
       schemaVersion: 1,
       mode: 'feature-witness-plan',
       missingWitnessCount: 1,
+      missingWitnesses: [
+        {
+          id: 'pivots',
+          label: 'pivots',
+          discoveryQuery: 'pivot table xlsx',
+          discoverCommand: expect.stringContaining("--query 'pivot table xlsx'"),
+        },
+      ],
       recordedCaseCount: 1,
       stopMarker: {
         active: true,

@@ -39,6 +39,12 @@ export interface PublicWorkbookCorpusFeatureWitnessPlan {
     }
   }[]
   readonly missingWitnessCount: number
+  readonly missingWitnesses: readonly {
+    readonly id: string
+    readonly label: string
+    readonly discoveryQuery: string
+    readonly discoverCommand: string
+  }[]
 }
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
@@ -90,6 +96,7 @@ function main(): void {
           schemaVersion: plan.schemaVersion,
           generatedAt: plan.generatedAt,
           missingWitnessCount: plan.missingWitnessCount,
+          missingWitnesses: plan.missingWitnesses,
           recordedCaseCount: plan.recordedCaseCount,
         },
         null,
@@ -161,6 +168,14 @@ export function buildPublicWorkbookCorpusFeatureWitnessPlan(args: {
       },
     }
   })
+  const missingWitnesses = coverage
+    .filter((entry) => entry.needsWitness)
+    .map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      discoveryQuery: entry.discoveryQuery,
+      discoverCommand: entry.commands.discover,
+    }))
   return {
     schemaVersion: 1,
     mode: 'feature-witness-plan',
@@ -173,7 +188,8 @@ export function buildPublicWorkbookCorpusFeatureWitnessPlan(args: {
     },
     recordedCaseCount: args.cases.length,
     coverage,
-    missingWitnessCount: coverage.filter((entry) => entry.needsWitness).length,
+    missingWitnessCount: missingWitnesses.length,
+    missingWitnesses,
   }
 }
 
@@ -194,6 +210,14 @@ export function validatePublicWorkbookCorpusFeatureWitnessPlan(plan: PublicWorkb
   if (plan.missingWitnessCount !== plan.coverage.filter((entry) => entry.needsWitness).length) {
     findings.push('missing witness count does not match coverage rows')
   }
+  if (plan.missingWitnessCount !== plan.missingWitnesses.length) {
+    findings.push('missing witness count does not match missing witness summaries')
+  }
+  const missingCoverageIds = plan.coverage.filter((entry) => entry.needsWitness).map((entry) => entry.id)
+  const missingSummaryIds = plan.missingWitnesses.map((entry) => entry.id)
+  if (JSON.stringify(missingCoverageIds) !== JSON.stringify(missingSummaryIds)) {
+    findings.push('missing witness summaries do not match missing coverage rows')
+  }
   for (const entry of plan.coverage) {
     if (!entry.id.trim() || !entry.label.trim() || !entry.discoveryQuery.trim()) {
       findings.push(`feature witness row has empty identity or query: ${entry.id}`)
@@ -203,6 +227,14 @@ export function validatePublicWorkbookCorpusFeatureWitnessPlan(plan: PublicWorkb
     }
     if (plan.stopMarker.active && !entry.commands.discover.includes(publicCorpusStopMarkerOverrideFlag)) {
       findings.push(`feature witness discover command is missing stop-marker override: ${entry.id}`)
+    }
+  }
+  for (const entry of plan.missingWitnesses) {
+    if (!entry.id.trim() || !entry.label.trim() || !entry.discoveryQuery.trim() || !entry.discoverCommand.trim()) {
+      findings.push(`missing feature witness summary has empty fields: ${entry.id}`)
+    }
+    if (plan.stopMarker.active && !entry.discoverCommand.includes(publicCorpusStopMarkerOverrideFlag)) {
+      findings.push(`missing feature witness summary discover command is missing stop-marker override: ${entry.id}`)
     }
   }
   return findings
