@@ -252,6 +252,37 @@ describe('public workbook corpus completion audit', () => {
     })
     expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
   })
+
+  it('fails completion when a named feature family has no recorded witness', () => {
+    const artifact = workbookArtifact('workbook-a')
+    const audit = buildPublicWorkbookCorpusCompletionAudit({
+      generatedAt: '2026-05-08T00:00:00.000Z',
+      hyperformulaSecondaryCorpus: hyperFormulaSecondaryCorpusFixture(),
+      manifest: manifestWithArtifacts([artifact], 1),
+      recordedCases: [caseWithoutChartWitness(artifact)],
+      status: statusFixture({
+        targetWorkbookCount: 1,
+        sourceCount: 1,
+        cachedArtifactCount: 1,
+        scorecardCaseCount: 1,
+        checkpointCaseCount: 0,
+        recordedManifestArtifactCount: 1,
+        missingManifestArtifactCount: 0,
+        recordedPassedCaseCount: 1,
+        scorecardCoversManifest: true,
+        targetComplete: true,
+        gaps: [],
+      }),
+      stopMarkerActive: false,
+    })
+
+    expect(requirement(audit.checklist, 'validate-workbook-features')).toMatchObject({
+      passed: false,
+      gaps: expect.arrayContaining(['no recorded charts witness in corpus evidence']),
+      evidence: expect.arrayContaining(['charts witnessed cases: 0; total recorded count: 0']),
+    })
+    expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
+  })
 })
 
 function requirement(
@@ -319,12 +350,12 @@ function passedCase(artifact: PublicWorkbookArtifact, formulaOracleComparisons: 
       formulaCellCount: formulaOracleComparisons > 0 ? 1 : 0,
       valueCellCount: 1,
       definedNameCount: 1,
-      tableCount: 0,
-      chartCount: 0,
-      pivotCount: 0,
-      mergeCount: 0,
+      tableCount: 1,
+      chartCount: 1,
+      pivotCount: 1,
+      mergeCount: 1,
       styleRangeCount: 1,
-      conditionalFormatCount: 0,
+      conditionalFormatCount: 1,
       dataValidationCount: 0,
       macroPayloadCount: 0,
       warningCount: 0,
@@ -431,6 +462,17 @@ function caseWithoutUsedRangeEvidence(artifact: PublicWorkbookArtifact): PublicW
       workbookName: artifact.fileName,
       sheetNames: ['Sheet1'],
       dimensions: [{ sheetName: 'Sheet1', rowCount: 1, columnCount: 2, nonEmptyCellCount: 2 }],
+    },
+  }
+}
+
+function caseWithoutChartWitness(artifact: PublicWorkbookArtifact): PublicWorkbookCorpusCase {
+  const base = passedCase(artifact, 1)
+  return {
+    ...base,
+    featureCounts: {
+      ...base.featureCounts,
+      chartCount: 0,
     },
   }
 }

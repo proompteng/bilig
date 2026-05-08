@@ -101,6 +101,21 @@ const baselineScorecardArtifact = 'packages/benchmarks/baselines/public-workbook
 const hyperFormulaSecondaryCorpusArtifact = 'packages/benchmarks/baselines/workpaper-vs-hyperformula.json'
 const manifestArtifact = '.cache/public-workbook-corpus/manifest.json'
 const checkpointArtifact = '.cache/public-workbook-corpus/verification-checkpoint.json'
+const requiredFeatureWitnesses = [
+  { id: 'formulas', label: 'formulas', count: (entry: PublicWorkbookCorpusCase) => entry.featureCounts.formulaCellCount },
+  { id: 'values', label: 'values', count: (entry: PublicWorkbookCorpusCase) => entry.featureCounts.valueCellCount },
+  { id: 'names', label: 'defined names', count: (entry: PublicWorkbookCorpusCase) => entry.featureCounts.definedNameCount },
+  { id: 'tables', label: 'tables', count: (entry: PublicWorkbookCorpusCase) => entry.featureCounts.tableCount },
+  { id: 'charts', label: 'charts', count: (entry: PublicWorkbookCorpusCase) => entry.featureCounts.chartCount },
+  { id: 'pivots', label: 'pivots', count: (entry: PublicWorkbookCorpusCase) => entry.featureCounts.pivotCount },
+  { id: 'styles', label: 'styles', count: (entry: PublicWorkbookCorpusCase) => entry.featureCounts.styleRangeCount },
+  { id: 'merged ranges', label: 'merged ranges', count: (entry: PublicWorkbookCorpusCase) => entry.featureCounts.mergeCount },
+  {
+    id: 'conditional formats',
+    label: 'conditional formats',
+    count: (entry: PublicWorkbookCorpusCase) => entry.featureCounts.conditionalFormatCount,
+  },
+] as const
 
 function main(): void {
   const audit = buildPublicWorkbookCorpusCompletionAuditFromArgs()
@@ -422,6 +437,8 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
   (context) => {
     const featureValidationGapCount = context.recordedCases.filter((entry) => !hasFeatureValidationEvidence(entry)).length
     const usedRangeGapCount = context.recordedCases.filter((entry) => !hasUsedRangeValidationEvidence(entry)).length
+    const featureWitnessCoverage = buildFeatureWitnessCoverage(context.recordedCases)
+    const missingFeatureWitnesses = featureWitnessCoverage.filter((entry) => entry.witnessCaseCount === 0)
     return checklistItem({
       id: 'validate-workbook-features',
       priority: 3,
@@ -431,11 +448,15 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
         context.status.recordedCoversManifest &&
         featureValidationGapCount === 0 &&
         usedRangeGapCount === 0 &&
+        missingFeatureWitnesses.length === 0 &&
         context.currentState.cachedArtifactCount >= context.currentState.targetWorkbookCount,
       evidence: [
         `feature-count fields validated by recorded cases: ${String(context.recordedCases.filter(hasFeatureValidationEvidence).length)}/${String(
           context.currentState.cachedArtifactCount,
         )}`,
+        ...featureWitnessCoverage.map(
+          (entry) => `${entry.label} witnessed cases: ${String(entry.witnessCaseCount)}; total recorded count: ${String(entry.totalCount)}`,
+        ),
         `recorded unsupported cases: ${String(context.currentState.recordedUnsupportedCaseCount)}`,
       ],
       gaps: [
@@ -446,6 +467,7 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
           ? []
           : [`recorded cases with incomplete feature validation evidence: ${String(featureValidationGapCount)}`]),
         ...(usedRangeGapCount === 0 ? [] : [`recorded cases missing explicit used-range evidence: ${String(usedRangeGapCount)}`]),
+        ...missingFeatureWitnesses.map((entry) => `no recorded ${entry.label} witness in corpus evidence`),
         ...countGap(
           context.currentState.cachedArtifactCount,
           context.currentState.targetWorkbookCount,
@@ -831,6 +853,20 @@ function hasUsedRangeValidationEvidence(entry: PublicWorkbookCorpusCase): boolea
       dimension.columnCount === range.endColumn + 1
     )
   })
+}
+
+function buildFeatureWitnessCoverage(cases: readonly PublicWorkbookCorpusCase[]): {
+  readonly id: string
+  readonly label: string
+  readonly totalCount: number
+  readonly witnessCaseCount: number
+}[] {
+  return requiredFeatureWitnesses.map((family) => ({
+    id: family.id,
+    label: family.label,
+    totalCount: cases.reduce((sum, entry) => sum + family.count(entry), 0),
+    witnessCaseCount: cases.filter((entry) => family.count(entry) > 0).length,
+  }))
 }
 
 function hasWorkbookMetadata(entry: PublicWorkbookCorpusCase): boolean {
