@@ -22,6 +22,7 @@ const publicWorkbookCorpusScriptPath = fileURLToPath(new URL('./public-workbook-
 export const defaultDownloadTimeoutMs = 60_000
 export const defaultFetchBatchSize = 6
 export const defaultFetchConcurrency = 1
+export const defaultFetchMaxRssBytes = 768 * 1024 * 1024
 export const defaultFingerprintTimeoutMs = 180_000
 export const defaultFingerprintMaxRssBytes = 1024 * 1024 * 1024
 const noop = (): void => undefined
@@ -210,6 +211,7 @@ async function fetchArtifactsFromCandidateSources(args: {
         artifacts: [...args.artifacts],
       })
     }
+    releaseFetchBatchMemory()
     startIndex += batchSize
   }
 }
@@ -230,6 +232,27 @@ function dedupeCandidateSources(sources: readonly PublicWorkbookSource[]): Publi
 
 function normalizeSourceUrl(value: string): string {
   return value.trim().toLowerCase()
+}
+
+function releaseFetchBatchMemory(): void {
+  const maybeBun = Reflect.get(globalThis, 'Bun')
+  const maybeBunGc = maybeBun && typeof maybeBun === 'object' ? Reflect.get(maybeBun, 'gc') : null
+  if (typeof maybeBunGc === 'function') {
+    try {
+      Reflect.apply(maybeBunGc, maybeBun, [true])
+    } catch {
+      // Batch memory release is a best-effort guard; fetch correctness is owned by the checkpointed artifacts.
+    }
+    return
+  }
+  const maybeGlobalGc = Reflect.get(globalThis, 'gc')
+  if (typeof maybeGlobalGc === 'function') {
+    try {
+      Reflect.apply(maybeGlobalGc, globalThis, [])
+    } catch {
+      // Ignore unavailable host GC hooks after already committing the bounded batch.
+    }
+  }
 }
 
 async function downloadWorkbookCandidate(

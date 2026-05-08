@@ -988,6 +988,8 @@ describe('public workbook corpus', () => {
 
   it('fetches multi-batch corpus tranches without retaining prior batch results', async () => {
     const cacheDir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-fetch-iterative-'))
+    const gcMock = vi.fn()
+    vi.stubGlobal('Bun', { gc: gcMock })
     const fetchMock = vi.fn(async (url: string) => {
       const index = Number(url.match(/iterative-(\d+)/u)?.[1] ?? '0')
       const workbookBytes = buildWorkbookBytes(`Batch${String(index)}`)
@@ -1030,6 +1032,8 @@ describe('public workbook corpus', () => {
     expect(fetched.artifacts).toHaveLength(4)
     expect(fetchMock).toHaveBeenCalledTimes(4)
     expect(checkpoints).toEqual([1, 2, 3, 4])
+    expect(gcMock).toHaveBeenCalledTimes(4)
+    expect(gcMock).toHaveBeenCalledWith(true)
   })
 
   it('times out stalled workbook response bodies during fetch', async () => {

@@ -15,6 +15,7 @@ import {
   defaultDownloadTimeoutMs,
   defaultFetchBatchSize,
   defaultFetchConcurrency,
+  defaultFetchMaxRssBytes,
   defaultFingerprintMaxRssBytes,
   defaultFingerprintTimeoutMs,
   fetchPublicWorkbookArtifacts,
@@ -388,25 +389,34 @@ async function main(): Promise<void> {
       commandName: 'public-workbook-corpus fetch',
       stopMarkerPath: corpusRunStopMarkerPath,
     })
-    const manifest = await withPublicWorkbookCorpusCacheLock(cacheDir, 'fetch', async () => {
-      const fetchedManifest = await fetchPublicWorkbookArtifacts({
-        manifest: readManifest(manifestPath),
-        cacheDir,
-        limit: readNumberArg('--limit', 10_000),
-        downloadTimeoutMs: readNumberArg('--download-timeout-ms', defaultDownloadTimeoutMs),
-        ...fetchRunArgs,
-        fingerprintTimeoutMs: readNumberArg('--fingerprint-timeout-ms', defaultFingerprintTimeoutMs),
-        fingerprintMaxRssBytes: readMegabytesArg('--fingerprint-max-rss-mb', defaultFingerprintMaxRssBytes),
-        isolatedFingerprinting: !inProcessFingerprinting,
-        maxBytes: readNumberArg('--max-bytes', 50 * 1024 * 1024),
-        onArtifactsCommitted: (checkpointManifest) => {
-          writeJson(manifestPath, checkpointManifest, 'public-workbook-corpus-manifest')
-          console.error(`Cached ${String(checkpointManifest.artifacts.length)} public workbook artifacts`)
-        },
+    const stopSelfRssGuard = startSelfRssGuard(
+      readMegabytesArg('--fetch-max-rss-mb', defaultFetchMaxRssBytes),
+      'Public workbook corpus fetch',
+    )
+    let manifest: PublicWorkbookManifest
+    try {
+      manifest = await withPublicWorkbookCorpusCacheLock(cacheDir, 'fetch', async () => {
+        const fetchedManifest = await fetchPublicWorkbookArtifacts({
+          manifest: readManifest(manifestPath),
+          cacheDir,
+          limit: readNumberArg('--limit', 10_000),
+          downloadTimeoutMs: readNumberArg('--download-timeout-ms', defaultDownloadTimeoutMs),
+          ...fetchRunArgs,
+          fingerprintTimeoutMs: readNumberArg('--fingerprint-timeout-ms', defaultFingerprintTimeoutMs),
+          fingerprintMaxRssBytes: readMegabytesArg('--fingerprint-max-rss-mb', defaultFingerprintMaxRssBytes),
+          isolatedFingerprinting: !inProcessFingerprinting,
+          maxBytes: readNumberArg('--max-bytes', 50 * 1024 * 1024),
+          onArtifactsCommitted: (checkpointManifest) => {
+            writeJson(manifestPath, checkpointManifest, 'public-workbook-corpus-manifest')
+            console.error(`Cached ${String(checkpointManifest.artifacts.length)} public workbook artifacts`)
+          },
+        })
+        writeJson(manifestPath, fetchedManifest, 'public-workbook-corpus-manifest')
+        return fetchedManifest
       })
-      writeJson(manifestPath, fetchedManifest, 'public-workbook-corpus-manifest')
-      return fetchedManifest
-    })
+    } finally {
+      stopSelfRssGuard()
+    }
     console.log(`Cached ${String(manifest.artifacts.length)} public workbook artifacts`)
     return
   }
