@@ -498,37 +498,6 @@ describe('public workbook corpus completion audit', () => {
     expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
   })
 
-  it('fails completion when no supported workbook recorded a successful round-trip', () => {
-    const artifact = workbookArtifact('workbook-a')
-    const audit = buildPublicWorkbookCorpusCompletionAudit({
-      generatedAt: '2026-05-08T00:00:00.000Z',
-      hyperformulaSecondaryCorpus: hyperFormulaSecondaryCorpusFixture(),
-      manifest: manifestWithArtifacts([artifact], 1),
-      recordedCases: [resourceLimitedUnsupportedCase(artifact)],
-      status: statusFixture({
-        targetWorkbookCount: 1,
-        sourceCount: 1,
-        cachedArtifactCount: 1,
-        scorecardCaseCount: 1,
-        checkpointCaseCount: 0,
-        recordedManifestArtifactCount: 1,
-        missingManifestArtifactCount: 0,
-        recordedUnsupportedCaseCount: 1,
-        scorecardCoversManifest: true,
-        targetComplete: true,
-        gaps: [],
-      }),
-      stopMarkerActive: false,
-    })
-
-    expect(requirement(audit.checklist, 'roundtrip-supported-workbooks')).toMatchObject({
-      passed: false,
-      gaps: expect.arrayContaining(['no supported round-trip successes recorded']),
-      evidence: expect.arrayContaining(['supported round-trip passed cases: 0']),
-    })
-    expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
-  })
-
   it('fails completion when recorded feature evidence is internally inconsistent', () => {
     const artifact = workbookArtifact('workbook-a')
     const audit = buildPublicWorkbookCorpusCompletionAudit({
@@ -700,6 +669,7 @@ function offlineCiPackageScripts(overrides: readonly (readonly [string, string])
         'scripts/__tests__/public-workbook-corpus.test.ts',
         'scripts/__tests__/public-workbook-corpus-cli.test.ts',
         'scripts/__tests__/public-workbook-corpus-completion-audit.test.ts',
+        'scripts/__tests__/public-workbook-corpus-completion-audit-roundtrip.test.ts',
         'scripts/__tests__/public-workbook-corpus-feature-witness-plan.test.ts',
         'scripts/__tests__/public-workbook-corpus-financial-plan.test.ts',
         'scripts/__tests__/public-workbook-corpus-links.test.ts',
