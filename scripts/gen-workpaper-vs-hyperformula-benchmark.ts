@@ -1,8 +1,7 @@
 #!/usr/bin/env bun
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import {
   DEFAULT_COMPETITIVE_SAMPLE_COUNT,
@@ -18,6 +17,7 @@ import type {
   ExpandedCompetitiveFamilySummary,
   ExpandedCompetitiveScorecardSummary,
 } from '../packages/benchmarks/src/report-competitive-families.ts'
+import { formatJsonForRepo } from './scorecard-format.ts'
 
 interface ExpandedCompetitiveBenchmarkArtifact {
   schemaVersion: 1
@@ -333,19 +333,4 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isArtifactShapeInput(value: Record<string, unknown>): value is ArtifactShapeInput {
   return value.schemaVersion === 1 && value.suite === 'workpaper-vs-hyperformula' && Array.isArray(value.results)
-}
-
-function formatJsonForRepo(content: string): string {
-  const tempDir = mkdtempSync(join(tmpdir(), 'bilig-competitive-benchmark-'))
-  const tempFile = join(tempDir, 'artifact.json')
-  writeFileSync(tempFile, content)
-  try {
-    execFileSync('pnpm', ['exec', 'oxfmt', '--write', tempFile], {
-      cwd: rootDir,
-      stdio: 'ignore',
-    })
-    return readFileSync(tempFile, 'utf8')
-  } finally {
-    rmSync(tempDir, { force: true, recursive: true })
-  }
 }

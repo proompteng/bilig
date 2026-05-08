@@ -1,8 +1,7 @@
 #!/usr/bin/env bun
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import * as ts from 'typescript'
@@ -21,6 +20,7 @@ import {
   parseExternalSecurityComparisonArtifact,
   validateExternalSecurityComparisonArtifact,
 } from './security-external-sheets-excel-comparison.ts'
+import { formatJsonForRepo } from './scorecard-format.ts'
 
 export interface SecurityPostureControl {
   readonly id: string
@@ -871,27 +871,6 @@ function toRecord(value: unknown, name: string): Record<string, unknown> {
 
 function toRepoPath(path: string): string {
   return relative(rootDir, path)
-}
-
-function formatJsonForRepo(serializedJson: string): string {
-  const tempDir = mkdtempSync(join(tmpdir(), 'security-posture-scorecard-'))
-  const tempFilePath = join(tempDir, 'scorecard.json')
-  writeFileSync(tempFilePath, serializedJson)
-  const oxfmtPath = join(rootDir, 'node_modules', '.bin', 'oxfmt')
-
-  const formatResult = Bun.spawnSync([oxfmtPath, '--write', tempFilePath], {
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  if (formatResult.exitCode !== 0) {
-    rmSync(tempDir, { recursive: true, force: true })
-    throw new Error(`Unable to format generated security posture scorecard: ${new TextDecoder().decode(formatResult.stderr).trim()}`)
-  }
-
-  const formattedJson = readFileSync(tempFilePath, 'utf8')
-  rmSync(tempDir, { recursive: true, force: true })
-  return formattedJson
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

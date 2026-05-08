@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { runWorkPaperBenchmarkSuite, type WorkPaperBenchmarkResult } from '../packages/benchmarks/src/benchmark-workpaper.ts'
+import { formatJsonForRepo } from './scorecard-format.ts'
 
 interface WorkPaperBenchmarkBaselineDocument {
   schemaVersion: 1
@@ -152,26 +152,4 @@ function toRecord(value: unknown, context: string): Record<string, unknown> {
     record[key] = entryValue
   }
   return record
-}
-
-function formatJsonForRepo(serializedJson: string): string {
-  const tempDir = mkdtempSync(join(tmpdir(), 'workpaper-bench-baseline-'))
-  const tempFilePath = join(tempDir, 'baseline.json')
-  writeFileSync(tempFilePath, serializedJson)
-  const oxfmtPath = join(rootDir, 'node_modules', '.bin', 'oxfmt')
-
-  const formatResult = Bun.spawnSync([oxfmtPath, '--write', tempFilePath], {
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  if (formatResult.exitCode !== 0) {
-    const stderr = new TextDecoder().decode(formatResult.stderr).trim()
-    rmSync(tempDir, { recursive: true, force: true })
-    throw new Error(`Unable to format generated WorkPaper benchmark baseline: ${stderr}`)
-  }
-
-  const formattedJson = readFileSync(tempFilePath, 'utf8')
-  rmSync(tempDir, { recursive: true, force: true })
-  return formattedJson
 }

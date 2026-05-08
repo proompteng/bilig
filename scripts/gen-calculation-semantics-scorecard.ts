@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -12,6 +11,7 @@ import {
 } from '../packages/excel-fixtures/src/index.ts'
 import { formulaCompatibilityRegistry, getCompatibilityEntry } from '../packages/formula/src/compatibility.ts'
 import { asObject, booleanField, literalField, numberField, readJsonObject, stringArrayField } from './json-scorecard-helpers.ts'
+import { formatJsonForRepo } from './scorecard-format.ts'
 
 export interface CalculationSemanticsScorecard {
   readonly schemaVersion: 1
@@ -230,27 +230,6 @@ function isStableExecutableFormulaFixture(fixture: { readonly family: string; re
   const entry = getCompatibilityEntry(fixture.id)
   const hasVolatileCall = /\b(TODAY|NOW|RAND)\s*\(/iu.test(fixture.formula)
   return entry !== undefined && executableStatuses.has(entry.status) && fixture.family !== 'volatile' && !hasVolatileCall
-}
-
-function formatJsonForRepo(serializedJson: string): string {
-  const tempDir = mkdtempSync(join(tmpdir(), 'calculation-semantics-scorecard-'))
-  const tempFilePath = join(tempDir, 'scorecard.json')
-  writeFileSync(tempFilePath, serializedJson)
-  const oxfmtPath = join(rootDir, 'node_modules', '.bin', 'oxfmt')
-
-  const formatResult = Bun.spawnSync([oxfmtPath, '--write', tempFilePath], {
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  if (formatResult.exitCode !== 0) {
-    rmSync(tempDir, { recursive: true, force: true })
-    throw new Error(`Unable to format calculation semantics scorecard: ${new TextDecoder().decode(formatResult.stderr).trim()}`)
-  }
-
-  const formattedJson = readFileSync(tempFilePath, 'utf8')
-  rmSync(tempDir, { recursive: true, force: true })
-  return formattedJson
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

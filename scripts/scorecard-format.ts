@@ -5,14 +5,23 @@ type JsonObject = { readonly [key: string]: JsonValue }
 // Matches the generated scorecard line width used before this helper stopped shelling out to oxfmt.
 const jsonPrintWidth = 139
 
-export function formatJsonForRepo(args: {
-  readonly rootDir: string
-  readonly serializedJson: string
-  readonly tempPrefix: string
-}): string {
-  void args.rootDir
-  void args.tempPrefix
-  const parsedValue: unknown = JSON.parse(args.serializedJson)
+export function formatJsonForRepo(args: { readonly rootDir: string; readonly serializedJson: string; readonly tempPrefix: string }): string
+export function formatJsonForRepo(serializedJson: string): string
+export function formatJsonForRepo(
+  args:
+    | {
+        readonly rootDir: string
+        readonly serializedJson: string
+        readonly tempPrefix: string
+      }
+    | string,
+): string {
+  const serializedJson = typeof args === 'string' ? args : args.serializedJson
+  if (typeof args !== 'string') {
+    void args.rootDir
+    void args.tempPrefix
+  }
+  const parsedValue: unknown = JSON.parse(serializedJson)
   return `${formatJsonValue(parsedValue, 0, 0)}\n`
 }
 

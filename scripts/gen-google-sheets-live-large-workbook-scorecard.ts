@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { performance } from 'node:perf_hooks'
@@ -23,6 +22,7 @@ import {
   stringArrayField,
   stringField,
 } from './json-scorecard-helpers.ts'
+import { formatJsonForRepo } from './scorecard-format.ts'
 
 export type GoogleSheetsLiveLargeWorkbookWorkload = 'native-import-read-dense-mixed-100k' | 'native-import-read-dense-mixed-250k'
 
@@ -769,29 +769,6 @@ function logResult(mode: 'check' | 'write', scorecard: GoogleSheetsLiveLargeWork
       2,
     ),
   )
-}
-
-function formatJsonForRepo(serializedJson: string): string {
-  const tempDir = mkdtempSync(join(tmpdir(), 'google-sheets-live-large-workbook-scorecard-'))
-  const tempFilePath = join(tempDir, 'scorecard.json')
-  writeFileSync(tempFilePath, serializedJson)
-  const oxfmtPath = join(rootDir, 'node_modules', '.bin', 'oxfmt')
-
-  const formatResult = Bun.spawnSync([oxfmtPath, '--write', tempFilePath], {
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  if (formatResult.exitCode !== 0) {
-    rmSync(tempDir, { recursive: true, force: true })
-    throw new Error(
-      `Unable to format generated Google Sheets live large-workbook scorecard: ${new TextDecoder().decode(formatResult.stderr).trim()}`,
-    )
-  }
-
-  const formattedJson = readFileSync(tempFilePath, 'utf8')
-  rmSync(tempDir, { recursive: true, force: true })
-  return formattedJson
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

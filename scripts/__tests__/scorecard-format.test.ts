@@ -6,6 +6,20 @@ import { describe, expect, it } from 'vitest'
 import { formatJsonForRepo } from '../scorecard-format.ts'
 
 describe('scorecard JSON formatting', () => {
+  it('accepts legacy serialized JSON string callers while preserving compact primitive arrays', () => {
+    expect(
+      formatJsonForRepo(
+        `${JSON.stringify(
+          {
+            dimensions: ['Sheet1', 'Summary'],
+          },
+          null,
+          2,
+        )}\n`,
+      ),
+    ).toBe('{\n  "dimensions": ["Sheet1", "Summary"]\n}\n')
+  })
+
   it('normalizes already-serialized JSON without invoking repo formatter binaries', () => {
     const rootDirWithoutNodeModules = mkdtempSync(join(tmpdir(), 'scorecard-format-no-node-modules-'))
     const serializedJson = `${JSON.stringify(

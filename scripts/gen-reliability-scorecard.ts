@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { ValueTag } from '@bilig/protocol'
@@ -15,6 +14,7 @@ import {
   parseExternalReliabilityComparisonArtifact,
   validateExternalReliabilityComparisonArtifact,
 } from './reliability-external-sheets-excel-comparison.ts'
+import { formatJsonForRepo } from './scorecard-format.ts'
 
 export interface ReliabilityControl {
   readonly id: string
@@ -804,27 +804,6 @@ function toRecord(value: unknown, name: string): Record<string, unknown> {
     record[key] = Reflect.get(value, key)
   }
   return record
-}
-
-function formatJsonForRepo(serializedJson: string): string {
-  const tempDir = mkdtempSync(join(tmpdir(), 'reliability-scorecard-'))
-  const tempFilePath = join(tempDir, 'scorecard.json')
-  writeFileSync(tempFilePath, serializedJson)
-  const oxfmtPath = join(rootDir, 'node_modules', '.bin', 'oxfmt')
-
-  const formatResult = Bun.spawnSync([oxfmtPath, '--write', tempFilePath], {
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  if (formatResult.exitCode !== 0) {
-    rmSync(tempDir, { recursive: true, force: true })
-    throw new Error(`Unable to format generated reliability scorecard: ${new TextDecoder().decode(formatResult.stderr).trim()}`)
-  }
-
-  const formattedJson = readFileSync(tempFilePath, 'utf8')
-  rmSync(tempDir, { recursive: true, force: true })
-  return formattedJson
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

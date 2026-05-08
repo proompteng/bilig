@@ -9,6 +9,7 @@ import { summarizeNumbers, type NumericSummary } from '../packages/benchmarks/sr
 import { assertLocalCiResourceGuardAllowsRun } from './ci-local-resource-guard.ts'
 import { readJsonObject } from './json-scorecard-helpers.ts'
 import { parseSameCorpusCapture, parseUiResponsivenessLiveBrowserScorecard } from './ui-responsiveness-live-browser-scorecard-parse.ts'
+import { formatJsonForRepo } from './scorecard-format.ts'
 
 export { parseSameCorpusCapture, parseUiResponsivenessLiveBrowserScorecard } from './ui-responsiveness-live-browser-scorecard-parse.ts'
 
@@ -848,10 +849,6 @@ function logResult(mode: 'check' | 'write', scorecard: UiResponsivenessLiveBrows
       2,
     ),
   )
-}
-
-function formatJsonForRepo(value: string): string {
-  return `${value.trim()}\n`
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

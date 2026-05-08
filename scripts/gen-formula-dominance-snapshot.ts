@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import {
   compatibilityFamilies,
@@ -11,6 +10,7 @@ import {
   type FormulaCompatibilityEntry,
 } from '../packages/formula/src/compatibility.ts'
 import { formulaInventory, formulaInventorySummary } from '../packages/formula/src/generated/formula-inventory.ts'
+import { formatJsonForRepo } from './scorecard-format.ts'
 
 interface FormulaDominanceSnapshot {
   schemaVersion: 1
@@ -162,25 +162,4 @@ function toDominanceRow(entry: FormulaCompatibilityEntry): FormulaDominanceRow {
     wasmStatus: entry.wasmStatus,
     notes: entry.notes,
   }
-}
-
-function formatJsonForRepo(serializedJson: string): string {
-  const tempDir = mkdtempSync(join(tmpdir(), 'formula-dominance-'))
-  const tempFilePath = join(tempDir, 'snapshot.json')
-  writeFileSync(tempFilePath, serializedJson)
-  const oxfmtPath = join(rootDir, 'node_modules', '.bin', 'oxfmt')
-
-  const formatResult = Bun.spawnSync([oxfmtPath, '--write', tempFilePath], {
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  if (formatResult.exitCode !== 0) {
-    rmSync(tempDir, { recursive: true, force: true })
-    throw new Error(`Unable to format generated snapshot: ${new TextDecoder().decode(formatResult.stderr).trim()}`)
-  }
-
-  const formattedJson = readFileSync(tempFilePath, 'utf8')
-  rmSync(tempDir, { recursive: true, force: true })
-  return formattedJson
 }
