@@ -349,6 +349,11 @@ export type WorkbookCalculationMode = 'automatic' | 'manual'
 export interface WorkbookCalculationSettingsSnapshot {
   mode: WorkbookCalculationMode
   compatibilityMode?: CompatibilityMode
+  iterate?: boolean | null
+  iterateCount?: number | null
+  iterateDelta?: string | null
+  fullCalcOnLoad?: boolean | null
+  concurrentCalc?: boolean | null
 }
 
 export interface WorkbookVolatileContextSnapshot {

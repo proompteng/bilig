@@ -44,6 +44,10 @@ Hidden XLSX rows and columns are preserved in workbook metadata and exported
 back into worksheet XML, including hidden column states attached to width
 metadata.
 
+Workbook calculation properties such as iterative calculation, iteration count
+and delta, forced recalculation, concurrent calculation, and manual calculation
+mode are preserved from XLSX `<calcPr>` metadata on roundtrip.
+
 ## CSV Import
 
 ```ts

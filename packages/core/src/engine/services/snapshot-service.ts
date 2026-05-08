@@ -1,5 +1,5 @@
 import { Effect } from 'effect'
-import { ValueTag, type CellSnapshot, type WorkbookSnapshot } from '@bilig/protocol'
+import { ValueTag, type CellSnapshot, type WorkbookCalculationSettingsSnapshot, type WorkbookSnapshot } from '@bilig/protocol'
 import type { EngineCellMutationRef, EngineFormulaSourceRefs } from '../../cell-mutations-at.js'
 import { CellFlags } from '../../cell-store.js'
 import { cloneCellStyleRecord } from '../../engine-style-utils.js'
@@ -19,6 +19,18 @@ export interface EngineSnapshotService {
   readonly importWorkbook: (snapshot: WorkbookSnapshot) => Effect.Effect<void, EngineSnapshotError>
   readonly exportReplica: () => Effect.Effect<EngineReplicaSnapshot, EngineSnapshotError>
   readonly importReplica: (snapshot: EngineReplicaSnapshot) => Effect.Effect<void, EngineSnapshotError>
+}
+
+function hasNonDefaultCalculationSettings(calculationSettings: WorkbookCalculationSettingsSnapshot): boolean {
+  return (
+    calculationSettings.mode !== 'automatic' ||
+    calculationSettings.compatibilityMode !== 'excel-modern' ||
+    calculationSettings.iterate !== undefined ||
+    calculationSettings.iterateCount !== undefined ||
+    calculationSettings.iterateDelta !== undefined ||
+    calculationSettings.fullCalcOnLoad !== undefined ||
+    calculationSettings.concurrentCalc !== undefined
+  )
 }
 
 export function createEngineSnapshotService(args: {
@@ -116,8 +128,7 @@ export function createEngineSnapshotService(args: {
             shapes.length > 0 ||
             styles.length > 0 ||
             formats.length > 0 ||
-            calculationSettings.mode !== 'automatic' ||
-            calculationSettings.compatibilityMode !== 'excel-modern' ||
+            hasNonDefaultCalculationSettings(calculationSettings) ||
             volatileContext.recalcEpoch !== 0
           ) {
             workbook.metadata = {}
@@ -154,7 +165,7 @@ export function createEngineSnapshotService(args: {
             if (formats.length > 0) {
               workbook.metadata.formats = formats
             }
-            if (calculationSettings.mode !== 'automatic' || calculationSettings.compatibilityMode !== 'excel-modern') {
+            if (hasNonDefaultCalculationSettings(calculationSettings)) {
               workbook.metadata.calculationSettings = calculationSettings
             }
             if (volatileContext.recalcEpoch !== 0) {

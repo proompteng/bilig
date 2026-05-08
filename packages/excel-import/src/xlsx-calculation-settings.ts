@@ -2,6 +2,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { XMLParser } from 'fast-xml-parser'
 
 import type { WorkbookCalculationSettingsSnapshot, WorkbookSnapshot } from '@bilig/protocol'
+import { escapeXmlAttribute } from './xlsx-export-xml.js'
 import { readXlsxZipEntries, type XlsxZipSource } from './xlsx-zip.js'
 
 type ZipEntries = Record<string, Uint8Array>
@@ -37,6 +38,75 @@ function recordChild(value: unknown, key: string): Record<string, unknown> | nul
   return isRecord(child) ? child : null
 }
 
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null
+}
+
+function booleanAttributeValue(value: unknown): boolean | undefined {
+  const raw = stringValue(value)
+  if (raw === null) {
+    return undefined
+  }
+  return raw === '1' || raw.toLowerCase() === 'true'
+}
+
+function finiteIntegerAttributeValue(value: unknown): number | undefined {
+  const raw = stringValue(value)
+  if (raw === null) {
+    return undefined
+  }
+  const number = Number(raw)
+  return Number.isSafeInteger(number) ? number : undefined
+}
+
+function finiteNumericStringAttributeValue(value: unknown): string | undefined {
+  const raw = stringValue(value)
+  if (raw === null) {
+    return undefined
+  }
+  return Number.isFinite(Number(raw)) ? raw : undefined
+}
+
+function formatBooleanAttribute(value: boolean): string {
+  return value ? '1' : '0'
+}
+
+function calcPrAttribute(name: string, value: string | undefined): string {
+  return value === undefined ? '' : ` ${name}="${escapeXmlAttribute(value)}"`
+}
+
+function hasSemanticCalculationSettings(settings: WorkbookCalculationSettingsSnapshot): boolean {
+  return (
+    settings.mode === 'manual' ||
+    settings.iterate !== undefined ||
+    settings.iterateCount !== undefined ||
+    settings.iterateDelta !== undefined ||
+    settings.fullCalcOnLoad !== undefined ||
+    settings.concurrentCalc !== undefined
+  )
+}
+
+function buildWorkbookCalcPr(settings: WorkbookCalculationSettingsSnapshot): string | null {
+  if (!hasSemanticCalculationSettings(settings)) {
+    return null
+  }
+  const attributes = [
+    calcPrAttribute('calcMode', settings.mode === 'manual' ? 'manual' : undefined),
+    calcPrAttribute('iterate', typeof settings.iterate === 'boolean' ? formatBooleanAttribute(settings.iterate) : undefined),
+    calcPrAttribute('iterateCount', Number.isSafeInteger(settings.iterateCount) ? String(settings.iterateCount) : undefined),
+    calcPrAttribute('iterateDelta', typeof settings.iterateDelta === 'string' ? settings.iterateDelta : undefined),
+    calcPrAttribute(
+      'fullCalcOnLoad',
+      typeof settings.fullCalcOnLoad === 'boolean' ? formatBooleanAttribute(settings.fullCalcOnLoad) : undefined,
+    ),
+    calcPrAttribute(
+      'concurrentCalc',
+      typeof settings.concurrentCalc === 'boolean' ? formatBooleanAttribute(settings.concurrentCalc) : undefined,
+    ),
+  ].join('')
+  return attributes.length > 0 ? `<calcPr${attributes}/>` : null
+}
+
 function normalizeZipPath(path: string): string {
   return path.replace(/^\/+/, '')
 }
@@ -69,7 +139,10 @@ function insertWorkbookCalcPr(workbookXml: string, calcPrXml: string): string {
 }
 
 export function addExportCalculationSettingsToXlsxBytes(bytes: Uint8Array, snapshot: WorkbookSnapshot): Uint8Array {
-  if (snapshot.workbook.metadata?.calculationSettings?.mode !== 'manual') {
+  const calcPrXml = snapshot.workbook.metadata?.calculationSettings
+    ? buildWorkbookCalcPr(snapshot.workbook.metadata.calculationSettings)
+    : null
+  if (!calcPrXml) {
     return bytes
   }
 
@@ -78,7 +151,7 @@ export function addExportCalculationSettingsToXlsxBytes(bytes: Uint8Array, snaps
   if (!workbookXml) {
     return bytes
   }
-  setZipText(zip, 'xl/workbook.xml', insertWorkbookCalcPr(workbookXml, '<calcPr calcMode="manual"/>'))
+  setZipText(zip, 'xl/workbook.xml', insertWorkbookCalcPr(workbookXml, calcPrXml))
   return zipSync(zip)
 }
 
@@ -90,8 +163,23 @@ export function readImportedWorkbookCalculationSettings(source: XlsxZipSource): 
   }
   const parsed: unknown = xmlParser.parse(workbookXml)
   const calcPr = recordChild(recordChild(parsed, 'workbook'), 'calcPr')
-  if (calcPr?.['calcMode'] !== 'manual') {
+  if (!calcPr) {
     return undefined
   }
-  return { mode: 'manual', compatibilityMode: 'excel-modern' }
+  const mode = calcPr['calcMode'] === 'manual' ? 'manual' : 'automatic'
+  const iterate = booleanAttributeValue(calcPr['iterate'])
+  const iterateCount = finiteIntegerAttributeValue(calcPr['iterateCount'])
+  const iterateDelta = finiteNumericStringAttributeValue(calcPr['iterateDelta'])
+  const fullCalcOnLoad = booleanAttributeValue(calcPr['fullCalcOnLoad'])
+  const concurrentCalc = booleanAttributeValue(calcPr['concurrentCalc'])
+  const settings: WorkbookCalculationSettingsSnapshot = {
+    mode,
+    compatibilityMode: 'excel-modern',
+    ...(iterate !== undefined ? { iterate } : {}),
+    ...(iterateCount !== undefined ? { iterateCount } : {}),
+    ...(iterateDelta !== undefined ? { iterateDelta } : {}),
+    ...(fullCalcOnLoad !== undefined ? { fullCalcOnLoad } : {}),
+    ...(concurrentCalc !== undefined ? { concurrentCalc } : {}),
+  }
+  return hasSemanticCalculationSettings(settings) ? settings : undefined
 }
