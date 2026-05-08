@@ -3,6 +3,7 @@ import { MAX_COLS, MAX_ROWS, type CellSnapshot, type CellValue, type WorkbookSna
 import {
   WorkPaperEvaluationTimeoutError,
   WorkPaperNamedExpressionDoesNotExistError,
+  WorkPaperOperationError,
   WorkPaperSheetSizeLimitExceededError,
 } from './work-paper-errors.js'
 import {
@@ -30,6 +31,7 @@ import type {
   WorkPaperAxisInterval,
   WorkPaperCellAddress,
   WorkPaperCellRange,
+  WorkPaperChange,
   WorkPaperConfig,
   WorkPaperSheet,
   WorkPaperSheets,
@@ -62,8 +64,18 @@ import { WorkPaperMutationQueues } from './work-paper-mutation-queues.js'
 import { WorkPaperEngineEventTracker } from './work-paper-engine-event-tracker.js'
 import { createWorkPaperRuntimeAdapters } from './work-paper-runtime-adapters.js'
 import { WorkPaperRuntimeSurface } from './work-paper-runtime-surface.js'
+import type { WorkPaperHistoryRecord, WorkPaperHistoryTransactionRecord } from './work-paper-history.js'
 
 type NamedExpressionValueSnapshot = WorkPaperNamedExpressionValueSnapshot
+
+interface WorkPaperTransactionSnapshot {
+  readonly clipboard: WorkPaperClipboardPayload | null
+  readonly config: WorkPaperConfig
+  readonly namedExpressions: readonly SerializedWorkPaperNamedExpression[]
+  readonly redoStack: readonly WorkPaperHistoryRecord[]
+  readonly sheets: WorkPaperSheets
+  readonly undoStack: readonly WorkPaperHistoryRecord[]
+}
 
 let nextWorkbookId = 1
 
@@ -363,6 +375,21 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
     this.rebuildWithConfig(merged)
   }
 
+  transaction(operations: () => void): WorkPaperChange[] {
+    this.assertNotDisposed()
+    if (this.shouldSuppressEvents()) {
+      throw new WorkPaperOperationError('WorkPaper transactions cannot run inside another suppressed mutation scope')
+    }
+    this.engineEvents.materializePendingLazyChanges()
+    const snapshot = this.captureTransactionSnapshot()
+    try {
+      return this.batch(operations)
+    } catch (error) {
+      this.restoreTransactionSnapshot(snapshot)
+      throw error
+    }
+  }
+
   private canEditAxisIntervals(
     axis: WorkPaperAxisKind,
     mode: WorkPaperAxisIntervalEditMode,
@@ -443,6 +470,73 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
       applyCellMutationRefs: (refs, options) => this.applyCellMutationRefs(refs, options),
       rewriteFormulaForStorage: (formula, ownerSheetId) => this.rewriteFormulaForStorage(formula, ownerSheetId),
     })
+  }
+
+  private captureTransactionSnapshot(): WorkPaperTransactionSnapshot {
+    return {
+      clipboard: cloneWorkPaperClipboardPayload(this.clipboard),
+      config: cloneConfig(this.config),
+      namedExpressions: this.getAllNamedExpressionsSerialized(),
+      redoStack: cloneWorkPaperHistoryRecords(this.getRedoStack()),
+      sheets: this.getAllSheetsSerialized(),
+      undoStack: cloneWorkPaperHistoryRecords(this.getUndoStack()),
+    }
+  }
+
+  private restoreTransactionSnapshot(snapshot: WorkPaperTransactionSnapshot): void {
+    this.clearFunctionBindings({ preserveInternalFunctionLookup: true })
+    this.namedExpressions.clear()
+    this.engine = new SpreadsheetEngine({
+      workbookName: 'Workbook',
+      trackReplicaVersions: false,
+      ...(snapshot.config.useColumnIndex !== undefined ? { useColumnIndex: snapshot.config.useColumnIndex } : {}),
+      ...(snapshot.config.evaluationTimeoutMs !== undefined ? { evaluationTimeoutMs: snapshot.config.evaluationTimeoutMs } : {}),
+    })
+    this.engineEvents.attach(this.engine)
+    this.config = cloneConfig(snapshot.config)
+    this.captureFunctionRegistry()
+    this.engineEvents.withCaptureDisabled(() => {
+      initializeWorkPaperFromSheets({
+        engine: this.engine,
+        config: this.config,
+        sheets: snapshot.sheets,
+        namedExpressions: snapshot.namedExpressions,
+        hasNamedExpressions: () => this.namedExpressions.size > 0,
+        hasFunctionAliases: () => this.functionAliasLookup.size > 0 || this.internalFunctionLookup.size > 0,
+        withEngineEventCaptureDisabled: (callback) => callback(),
+        upsertNamedExpression: (expression, options) => this.upsertNamedExpressionInternal(expression, options),
+        rewriteFormulaForStorage: (formula, ownerSheetId) => this.rewriteFormulaForStorage(formula, ownerSheetId),
+        requireSheetId: (name) => this.requireSheetId(name),
+        cacheInitializedSheetDimensions: (sheetId, dimensions) => this.sheetDimensionCache.cacheInitialized(sheetId, dimensions),
+        clearHistoryStacks: () => this.clearHistoryStacks(),
+        resetChangeTrackingCaches: () => this.resetChangeTrackingCaches(),
+      })
+    })
+    this.resetTransactionRuntimeState()
+    this.restoreHistoryStacks(snapshot)
+    this.clipboard = cloneWorkPaperClipboardPayload(snapshot.clipboard)
+  }
+
+  private resetTransactionRuntimeState(): void {
+    this.batchDepth = 0
+    this.batchStartVisibility = null
+    this.batchStartNamedValues = null
+    this.batchUsesTrackedFastPath = false
+    this.batchUndoStackLength = 0
+    this.evaluationSuspended = false
+    this.suspendedVisibility = null
+    this.suspendedNamedValues = null
+    this.suspendedUsesTrackedFastPath = false
+    this.queuedEvents = []
+    this.clearHistoryStacks()
+    this.resetChangeTrackingCaches()
+  }
+
+  private restoreHistoryStacks(snapshot: WorkPaperTransactionSnapshot): void {
+    const undoStack = this.getUndoStack()
+    const redoStack = this.getRedoStack()
+    undoStack.push(...cloneWorkPaperHistoryRecords(snapshot.undoStack))
+    redoStack.push(...cloneWorkPaperHistoryRecords(snapshot.redoStack))
   }
 
   private applyMatrixContents(
@@ -710,5 +804,48 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
 
   protected messageOf(error: unknown, fallback: string): string {
     return error instanceof Error && error.message.length > 0 ? error.message : fallback
+  }
+}
+
+function cloneWorkPaperHistoryRecords(records: readonly WorkPaperHistoryRecord[]): WorkPaperHistoryRecord[] {
+  return records.map((record) => ({
+    forward: cloneWorkPaperHistoryTransactionRecord(record.forward),
+    inverse: cloneWorkPaperHistoryTransactionRecord(record.inverse),
+  }))
+}
+
+function cloneWorkPaperHistoryTransactionRecord(record: WorkPaperHistoryTransactionRecord): WorkPaperHistoryTransactionRecord {
+  switch (record.kind) {
+    case 'ops':
+      return {
+        kind: 'ops',
+        ops: record.ops.map((op) => structuredClone(op)),
+        ...(record.potentialNewCells !== undefined ? { potentialNewCells: record.potentialNewCells } : {}),
+      }
+    case 'single-op':
+      return {
+        kind: 'single-op',
+        op: structuredClone(record.op),
+        ...(record.potentialNewCells !== undefined ? { potentialNewCells: record.potentialNewCells } : {}),
+      }
+    case 'single-existing-numeric-cell-mutation':
+      return {
+        kind: 'single-existing-numeric-cell-mutation',
+        sheetId: record.sheetId,
+        row: record.row,
+        col: record.col,
+        cellIndex: record.cellIndex,
+        value: record.value,
+        ...(record.potentialNewCells !== undefined ? { potentialNewCells: record.potentialNewCells } : {}),
+      }
+    case 'cell-mutations':
+      return {
+        kind: 'cell-mutations',
+        refs: record.refs.map((ref) => ({
+          sheetId: ref.sheetId,
+          mutation: { ...ref.mutation },
+        })),
+        ...(record.potentialNewCells !== undefined ? { potentialNewCells: record.potentialNewCells } : {}),
+      }
   }
 }
