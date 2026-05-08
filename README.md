@@ -14,11 +14,24 @@ local-first workbook automation.**
 
 Project site: <https://proompteng.github.io/bilig/>
 
-If the WorkPaper package is relevant to your agent or Node workflow, star the
-repo as a bookmark: <https://github.com/proompteng/bilig/stargazers>
+## Choose Your Path
 
-If you want to try a small contribution first, start with the public
-[`starter issues`](docs/starter-issues.md) list.
+- **Evaluate in 90 seconds**: run the npm-only
+  [`@bilig/headless` quickstart](#try-biligheadless-in-90-seconds).
+- **Compare spreadsheet engines**: read the
+  [HyperFormula comparison](docs/hyperformula-alternative-headless-workpaper.md),
+  [engine comparison](docs/headless-spreadsheet-engine-comparison.md), and
+  [benchmark explainer](docs/what-workpaper-benchmark-proves.md).
+- **Build a Node or agent workflow**: start from the
+  [runnable WorkPaper example](examples/headless-workpaper),
+  [Node service recipe](docs/node-service-workpaper-recipe.md), or
+  [agent tool-calling recipe](docs/agent-workpaper-tool-calling-recipe.md).
+- **Contribute a small patch**: pick a scoped
+  [`good first issue`](docs/starter-issues.md).
+- **Report an Excel compatibility gap**: use the issue templates and link the
+  smallest workbook, formula, or fixture that reproduces the mismatch.
+- **Follow the project**: star the repo as a bookmark:
+  <https://github.com/proompteng/bilig/stargazers>.
 
 Contributor and security docs:
 [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`SECURITY.md`](SECURITY.md).
