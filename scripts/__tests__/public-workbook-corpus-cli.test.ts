@@ -615,8 +615,8 @@ describe('public workbook corpus CLI resource guards', () => {
       path: checkpointPath,
       manifest: fullManifest,
       casesById: new Map([
-        [artifactA.id, passedCase(artifactA)],
-        [artifactB.id, passedCase(artifactB)],
+        [artifactA.id, passedCaseWithUsedRange(artifactA)],
+        [artifactB.id, passedCaseWithUsedRange(artifactB)],
       ]),
       generatedAt: '2026-05-07T01:30:00.000Z',
     })
@@ -651,8 +651,8 @@ describe('public workbook corpus CLI resource guards', () => {
       path: checkpointPath,
       manifest: fullManifest,
       casesById: new Map([
-        [artifactA.id, passedCase(artifactA)],
-        [artifactB.id, passedCase(artifactB)],
+        [artifactA.id, passedCaseWithUsedRange(artifactA)],
+        [artifactB.id, passedCaseWithUsedRange(artifactB)],
       ]),
       generatedAt: '2026-05-07T01:30:00.000Z',
     })
@@ -673,13 +673,17 @@ describe('public workbook corpus CLI resource guards', () => {
       checkpointCaseCount: 2,
       recordedManifestArtifactCount: 2,
       missingManifestArtifactCount: 0,
+      staleRecordedVerificationCount: 0,
       recordedPassedCaseCount: 2,
       recordedUnsupportedCaseCount: 0,
       recordedFailedCaseCount: 0,
       recordedErrorCaseCount: 0,
       missingManifestArtifactSample: [],
+      staleRecordedVerificationSample: [],
       nextMissingVerificationCommand: null,
       nextMissingVerificationPlanCommand: null,
+      nextStaleVerificationCommand: null,
+      nextStaleVerificationPlanCommand: null,
       scorecardCoversManifest: false,
       targetComplete: false,
       gaps: expect.arrayContaining(['cached artifacts below target: 2/10000', 'scorecard cases do not cover manifest artifacts: 1/2']),
@@ -753,6 +757,65 @@ describe('public workbook corpus CLI resource guards', () => {
     })
   })
 
+  it('reports stale verification evidence with bounded next-step commands', async () => {
+    const artifactA = workbookArtifact('workbook-a')
+    const artifactB = workbookArtifact('workbook-b')
+    const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-cli-status-stale-'))
+    const manifestPath = join(dir, 'manifest.json')
+    const scorecardPath = join(dir, 'missing-scorecard.json')
+    const checkpointPath = join(dir, 'verification-checkpoint.json')
+    const fullManifest = manifestWithArtifacts([artifactA, artifactB])
+    writeFileSync(manifestPath, `${JSON.stringify(fullManifest, null, 2)}\n`)
+    writePublicWorkbookCorpusVerificationCheckpoint({
+      path: checkpointPath,
+      manifest: fullManifest,
+      casesById: new Map([
+        [artifactA.id, passedCase(artifactA)],
+        [artifactB.id, passedCaseWithUsedRange(artifactB)],
+      ]),
+      generatedAt: '2026-05-07T01:30:00.000Z',
+    })
+
+    const result = spawnSync(
+      'bun',
+      [
+        corpusScriptPath(),
+        'status',
+        '--manifest',
+        manifestPath,
+        '--scorecard',
+        scorecardPath,
+        '--verify-checkpoint',
+        checkpointPath,
+        '--cache-dir',
+        dir,
+      ],
+      {
+        encoding: 'utf8',
+      },
+    )
+    const status: unknown = JSON.parse(result.stdout)
+
+    expect(result.status).toBe(0)
+    expect(status).toMatchObject({
+      recordedManifestArtifactCount: 2,
+      missingManifestArtifactCount: 0,
+      staleRecordedVerificationCount: 1,
+      staleRecordedVerificationSample: [
+        {
+          id: artifactA.id,
+          fileName: artifactA.fileName,
+          byteSize: artifactA.byteSize,
+          sourceUrl: artifactA.sourceUrl,
+          reason: 'missing-used-range-evidence',
+        },
+      ],
+      nextStaleVerificationCommand: expect.stringContaining('public-workbook-corpus:verify-stale'),
+      nextStaleVerificationPlanCommand: expect.stringContaining('public-workbook-corpus:verify-stale:plan'),
+      gaps: expect.arrayContaining(['recorded verification cases need evidence refresh: 1']),
+    })
+  })
+
   it('guards status suggested verification commands while a stop marker is active', async () => {
     const artifactA = workbookArtifact('workbook-a')
     const artifactB = workbookArtifact('workbook-b')
@@ -797,10 +860,14 @@ describe('public workbook corpus CLI resource guards', () => {
     expect(status).toMatchObject({
       nextMissingVerificationCommand: expect.stringContaining('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1'),
       nextMissingVerificationPlanCommand: expect.not.stringContaining('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1'),
+      nextStaleVerificationCommand: expect.stringContaining('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1'),
+      nextStaleVerificationPlanCommand: expect.not.stringContaining('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1'),
     })
     expect(status).toMatchObject({
       nextMissingVerificationCommand: expect.stringContaining('--allow-active-stop-marker'),
       nextMissingVerificationPlanCommand: expect.stringContaining('public-workbook-corpus:verify-missing:plan'),
+      nextStaleVerificationCommand: expect.stringContaining('--allow-active-stop-marker'),
+      nextStaleVerificationPlanCommand: expect.stringContaining('public-workbook-corpus:verify-stale:plan'),
     })
   })
 

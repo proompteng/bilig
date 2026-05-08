@@ -3,7 +3,9 @@ import { isAbsolute, relative, resolve } from 'node:path'
 
 import { parsePublicWorkbookCorpusScorecardJson, parsePublicWorkbookManifestJson } from './public-workbook-corpus-json.ts'
 import { publicCorpusStopMarkerOverrideEnvVar, publicCorpusStopMarkerOverrideFlag } from './public-workbook-corpus-cli.ts'
+import { listStalePublicWorkbookArtifacts } from './public-workbook-corpus-missing.ts'
 import { readReusablePublicWorkbookCorpusCases } from './public-workbook-corpus-verify-checkpoint.ts'
+import { publicWorkbookCorpusCaseNeedsEvidenceRefresh } from './public-workbook-corpus-evidence.ts'
 import type {
   PublicWorkbookArtifact,
   PublicWorkbookCorpusCase,
@@ -19,6 +21,7 @@ export interface PublicWorkbookCorpusStatus {
   readonly checkpointCaseCount: number
   readonly recordedManifestArtifactCount: number
   readonly missingManifestArtifactCount: number
+  readonly staleRecordedVerificationCount: number
   readonly recordedPassedCaseCount: number
   readonly recordedUnsupportedCaseCount: number
   readonly recordedFailedCaseCount: number
@@ -26,8 +29,11 @@ export interface PublicWorkbookCorpusStatus {
   readonly recordedCoversManifest: boolean
   readonly recordedAllCasesPassed: boolean
   readonly missingManifestArtifactSample: readonly MissingManifestArtifactSummary[]
+  readonly staleRecordedVerificationSample: readonly StaleRecordedVerificationSummary[]
   readonly nextMissingVerificationCommand: string | null
   readonly nextMissingVerificationPlanCommand: string | null
+  readonly nextStaleVerificationCommand: string | null
+  readonly nextStaleVerificationPlanCommand: string | null
   readonly scorecardCoversManifest: boolean
   readonly targetComplete: boolean
   readonly gaps: readonly string[]
@@ -38,6 +44,10 @@ export interface MissingManifestArtifactSummary {
   readonly fileName: string
   readonly byteSize: number
   readonly sourceUrl: string
+}
+
+export interface StaleRecordedVerificationSummary extends MissingManifestArtifactSummary {
+  readonly reason: 'missing-used-range-evidence'
 }
 
 const missingManifestArtifactSampleLimit = 20
@@ -56,8 +66,9 @@ export function writePublicWorkbookCorpusCheck(args: {
     const status = readPublicWorkbookCorpusStatus(args)
     const blockingGaps = publicWorkbookCorpusVerificationBlockingGaps(status)
     if (blockingGaps.length > 0) {
-      const nextCommand = status.nextMissingVerificationCommand ? `; next command: ${status.nextMissingVerificationCommand}` : ''
-      throw new Error(`Public workbook corpus verification incomplete: ${blockingGaps.join('; ')}${nextCommand}`)
+      const nextCommand = status.nextMissingVerificationCommand ?? status.nextStaleVerificationCommand
+      const nextCommandMessage = nextCommand ? `; next command: ${nextCommand}` : ''
+      throw new Error(`Public workbook corpus verification incomplete: ${blockingGaps.join('; ')}${nextCommandMessage}`)
     }
     if (args.requireTarget && status.cachedArtifactCount < status.targetWorkbookCount) {
       throw new Error(`Public workbook corpus target incomplete: ${status.gaps.join('; ')}`)
@@ -131,32 +142,55 @@ export function buildPublicWorkbookCorpusStatus(args: {
   const cachedArtifactCount = args.manifest?.artifacts.length ?? args.scorecard?.summary.cachedWorkbookCount ?? 0
   const scorecardCaseCount = args.scorecard?.cases.length ?? 0
   const checkpointCaseCount = args.checkpointCases.length
-  const recordedCases = args.manifest
-    ? manifestRecordedCases(args.manifest, [...(args.scorecard?.cases ?? []), ...args.checkpointCases])
-    : [...(args.scorecard?.cases ?? []), ...args.checkpointCases]
+  const candidateCases = [...(args.scorecard?.cases ?? []), ...args.checkpointCases]
+  const recordedCases = args.manifest ? manifestRecordedCases(args.manifest, candidateCases) : candidateCases
   const recordedManifestArtifactCount = args.manifest ? recordedCases.length : Math.max(scorecardCaseCount, checkpointCaseCount)
   const missingManifestArtifactCount = Math.max(0, cachedArtifactCount - recordedManifestArtifactCount)
+  const staleRecordedVerificationArtifacts = args.manifest
+    ? listStalePublicWorkbookArtifacts({ manifest: args.manifest, cases: recordedCases })
+    : []
+  const staleRecordedVerificationCount = args.manifest
+    ? staleRecordedVerificationArtifacts.length
+    : recordedCases.filter(publicWorkbookCorpusCaseNeedsEvidenceRefresh).length
   const recordedPassedCaseCount = recordedCases.filter((entry) => entry.status === 'passed').length
   const recordedUnsupportedCaseCount = recordedCases.filter((entry) => entry.status === 'unsupported').length
   const recordedFailedCaseCount = recordedCases.filter((entry) => entry.status === 'failed').length
   const recordedErrorCaseCount = recordedCases.filter((entry) => entry.status === 'error').length
   const recordedCoversManifest = recordedManifestArtifactCount >= cachedArtifactCount
   const recordedAllCasesPassed = recordedCases.every((entry) => entry.passed)
-  const missingManifestArtifactSample = args.manifest
-    ? manifestMissingArtifactSample(args.manifest, [...(args.scorecard?.cases ?? []), ...args.checkpointCases])
-    : []
+  const missingManifestArtifactSample = args.manifest ? manifestMissingArtifactSample(args.manifest, candidateCases) : []
+  const staleRecordedVerificationSample = staleRecordedVerificationArtifacts
+    .slice(0, missingManifestArtifactSampleLimit)
+    .map((artifact) => ({
+      id: artifact.id,
+      fileName: artifact.fileName,
+      byteSize: artifact.byteSize,
+      sourceUrl: artifact.sourceUrl,
+      reason: 'missing-used-range-evidence' as const,
+    }))
   const nextMissingVerificationCommand =
     missingManifestArtifactCount > 0 && args.commandPaths
-      ? formatPublicWorkbookCorpusVerifyMissingCommand(args.commandPaths, 'verify')
+      ? formatPublicWorkbookCorpusVerifySliceCommand(args.commandPaths, 'verify-missing', 'verify')
       : null
   const nextMissingVerificationPlanCommand =
-    missingManifestArtifactCount > 0 && args.commandPaths ? formatPublicWorkbookCorpusVerifyMissingCommand(args.commandPaths, 'plan') : null
+    missingManifestArtifactCount > 0 && args.commandPaths
+      ? formatPublicWorkbookCorpusVerifySliceCommand(args.commandPaths, 'verify-missing', 'plan')
+      : null
+  const nextStaleVerificationCommand =
+    staleRecordedVerificationCount > 0 && args.commandPaths
+      ? formatPublicWorkbookCorpusVerifySliceCommand(args.commandPaths, 'verify-stale', 'verify')
+      : null
+  const nextStaleVerificationPlanCommand =
+    staleRecordedVerificationCount > 0 && args.commandPaths
+      ? formatPublicWorkbookCorpusVerifySliceCommand(args.commandPaths, 'verify-stale', 'plan')
+      : null
   const scorecardCoversManifest =
     args.manifest && args.scorecard ? scorecardMatchesManifest(args.scorecard, args.manifest) : scorecardCaseCount >= cachedArtifactCount
   const targetComplete =
     cachedArtifactCount >= targetWorkbookCount &&
     recordedCoversManifest &&
     recordedAllCasesPassed &&
+    staleRecordedVerificationCount === 0 &&
     recordedFailedCaseCount === 0 &&
     recordedErrorCaseCount === 0
   const gaps = [
@@ -172,6 +206,9 @@ export function buildPublicWorkbookCorpusStatus(args: {
     ...(recordedManifestArtifactCount >= cachedArtifactCount
       ? []
       : [`recorded verification cases below cached artifacts: ${String(recordedManifestArtifactCount)}/${String(cachedArtifactCount)}`]),
+    ...(staleRecordedVerificationCount === 0
+      ? []
+      : [`recorded verification cases need evidence refresh: ${String(staleRecordedVerificationCount)}`]),
     ...(recordedFailedCaseCount === 0 ? [] : [`recorded failed cases: ${String(recordedFailedCaseCount)}`]),
     ...(recordedErrorCaseCount === 0 ? [] : [`recorded error cases: ${String(recordedErrorCaseCount)}`]),
     ...(args.scorecard && args.scorecard.summary.allCachedWorkbooksPassed
@@ -186,6 +223,7 @@ export function buildPublicWorkbookCorpusStatus(args: {
     checkpointCaseCount,
     recordedManifestArtifactCount,
     missingManifestArtifactCount,
+    staleRecordedVerificationCount,
     recordedPassedCaseCount,
     recordedUnsupportedCaseCount,
     recordedFailedCaseCount,
@@ -193,8 +231,11 @@ export function buildPublicWorkbookCorpusStatus(args: {
     recordedCoversManifest,
     recordedAllCasesPassed,
     missingManifestArtifactSample,
+    staleRecordedVerificationSample,
     nextMissingVerificationCommand,
     nextMissingVerificationPlanCommand,
+    nextStaleVerificationCommand,
+    nextStaleVerificationPlanCommand,
     scorecardCoversManifest,
     targetComplete,
     gaps,
@@ -210,6 +251,9 @@ function publicWorkbookCorpusVerificationBlockingGaps(status: PublicWorkbookCorp
             status.cachedArtifactCount,
           )}`,
         ]),
+    ...(status.staleRecordedVerificationCount === 0
+      ? []
+      : [`recorded verification cases need evidence refresh: ${String(status.staleRecordedVerificationCount)}`]),
     ...(status.recordedFailedCaseCount === 0 ? [] : [`recorded failed cases: ${String(status.recordedFailedCaseCount)}`]),
     ...(status.recordedErrorCaseCount === 0 ? [] : [`recorded error cases: ${String(status.recordedErrorCaseCount)}`]),
     ...(status.recordedAllCasesPassed ? [] : ['recorded verification contains non-passing cases']),
@@ -225,8 +269,12 @@ interface PublicWorkbookCorpusCommandPaths {
   readonly stopMarkerActive?: boolean
 }
 
-function formatPublicWorkbookCorpusVerifyMissingCommand(paths: PublicWorkbookCorpusCommandPaths, mode: 'plan' | 'verify'): string {
-  const script = mode === 'plan' ? 'public-workbook-corpus:verify-missing:plan' : 'public-workbook-corpus:verify-missing'
+function formatPublicWorkbookCorpusVerifySliceCommand(
+  paths: PublicWorkbookCorpusCommandPaths,
+  slice: 'verify-missing' | 'verify-stale',
+  mode: 'plan' | 'verify',
+): string {
+  const script = mode === 'plan' ? `public-workbook-corpus:${slice}:plan` : `public-workbook-corpus:${slice}`
   const args =
     mode === 'plan'
       ? [

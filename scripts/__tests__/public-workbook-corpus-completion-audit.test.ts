@@ -682,6 +682,7 @@ function statusFixture(input: {
   readonly checkpointCaseCount: number
   readonly recordedManifestArtifactCount: number
   readonly missingManifestArtifactCount: number
+  readonly staleRecordedVerificationCount?: number
   readonly recordedPassedCaseCount: number
   readonly recordedUnsupportedCaseCount?: number
   readonly recordedFailedCaseCount?: number
@@ -698,6 +699,7 @@ function statusFixture(input: {
     checkpointCaseCount: input.checkpointCaseCount,
     recordedManifestArtifactCount: input.recordedManifestArtifactCount,
     missingManifestArtifactCount: input.missingManifestArtifactCount,
+    staleRecordedVerificationCount: input.staleRecordedVerificationCount ?? 0,
     recordedPassedCaseCount: input.recordedPassedCaseCount,
     recordedUnsupportedCaseCount: input.recordedUnsupportedCaseCount ?? 0,
     recordedFailedCaseCount: input.recordedFailedCaseCount ?? 0,
@@ -705,9 +707,14 @@ function statusFixture(input: {
     recordedCoversManifest: input.recordedManifestArtifactCount >= input.cachedArtifactCount,
     recordedAllCasesPassed: true,
     missingManifestArtifactSample: [],
+    staleRecordedVerificationSample: [],
     nextMissingVerificationCommand:
       input.missingManifestArtifactCount > 0 ? 'pnpm public-workbook-corpus:verify-missing -- --limit 1' : null,
     nextMissingVerificationPlanCommand: input.missingManifestArtifactCount > 0 ? 'pnpm public-workbook-corpus:verify-missing:plan' : null,
+    nextStaleVerificationCommand:
+      (input.staleRecordedVerificationCount ?? 0) > 0 ? 'pnpm public-workbook-corpus:verify-stale -- --limit 1' : null,
+    nextStaleVerificationPlanCommand:
+      (input.staleRecordedVerificationCount ?? 0) > 0 ? 'pnpm public-workbook-corpus:verify-stale:plan' : null,
     scorecardCoversManifest: input.scorecardCoversManifest,
     targetComplete: input.targetComplete,
     gaps: input.gaps,
