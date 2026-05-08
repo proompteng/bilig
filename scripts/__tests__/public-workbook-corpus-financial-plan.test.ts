@@ -7,6 +7,10 @@ import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 
 import { asRecord, createEmptyPublicWorkbookManifest } from '../public-workbook-corpus-json.ts'
+import {
+  validatePublicWorkbookCorpusFinancialPlan,
+  type PublicWorkbookCorpusFinancialPlan,
+} from '../public-workbook-corpus-financial-plan.ts'
 import type { PublicWorkbookSource } from '../public-workbook-corpus-types.ts'
 
 describe('public workbook financial corpus plan CLI', () => {
@@ -27,6 +31,7 @@ describe('public workbook financial corpus plan CLI', () => {
     expect(existsSync(manifestPath)).toBe(false)
     expect(existsSync(cacheDir)).toBe(false)
     expect(plan).toMatchObject({
+      schemaVersion: 1,
       mode: 'plan',
       corpus: 'financial-accounting-workpapers',
       manifestExists: false,
@@ -54,6 +59,45 @@ describe('public workbook financial corpus plan CLI', () => {
         check: expect.stringContaining('public-workbook-corpus:check-financial'),
       },
       sampledCandidateSources: [],
+    })
+  })
+
+  it('checks the financial corpus lane plan without creating cache files or starting network work', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-financial-check-'))
+    const manifestPath = join(dir, 'manifest.json')
+    const cacheDir = join(dir, 'cache')
+    const result = spawnSync(
+      'bun',
+      [
+        financialPlanScriptPath(),
+        '--check',
+        '--manifest',
+        manifestPath,
+        '--cache-dir',
+        cacheDir,
+        '--target-workbook-count',
+        '5',
+        '--limit',
+        '5',
+      ],
+      {
+        encoding: 'utf8',
+      },
+    )
+    const check = JSON.parse(result.stdout)
+
+    expect(result.status).toBe(0)
+    expect(existsSync(manifestPath)).toBe(false)
+    expect(existsSync(cacheDir)).toBe(false)
+    expect(check).toMatchObject({
+      mode: 'check',
+      schemaVersion: 1,
+      corpus: 'financial-accounting-workpapers',
+      targetWorkbookCount: 5,
+      sourceCount: 0,
+      cachedArtifactCount: 0,
+      remainingArtifactSlots: 5,
+      needsAdditionalDiscovery: true,
     })
   })
 
@@ -137,6 +181,7 @@ describe('public workbook financial corpus plan CLI', () => {
     const scripts = asRecord(packageJson['scripts'])
 
     expect(scripts['public-workbook-corpus:discover-financial:plan']).toBe('bun scripts/public-workbook-corpus-financial-plan.ts')
+    expect(scripts['public-workbook-corpus:discover-financial:check']).toBe('bun scripts/public-workbook-corpus-financial-plan.ts --check')
     expect(scripts['public-workbook-corpus:fetch-financial:plan']).toBe(
       'bun scripts/public-workbook-corpus.ts fetch --dry-run --manifest .cache/public-workbook-corpus-financial/manifest.json --cache-dir .cache/public-workbook-corpus-financial --limit 5000 --sample-limit 20',
     )
@@ -218,6 +263,62 @@ describe('public workbook financial corpus plan CLI', () => {
     expect(commands['verify']).toContain('--allow-active-stop-marker')
     expect(commands['fetchPlan']).not.toContain('--allow-active-stop-marker')
     expect(commands['check']).not.toContain('--allow-active-stop-marker')
+    expect(validatePublicWorkbookCorpusFinancialPlan(parseFinancialPlan(result.stdout))).toEqual([])
+  })
+
+  it('rejects inconsistent financial plan counts and unsafe command overrides', () => {
+    const plan: PublicWorkbookCorpusFinancialPlan = {
+      schemaVersion: 1,
+      mode: 'plan',
+      corpus: 'financial-accounting-workpapers',
+      generatedAt: '2026-05-08T10:00:00.000Z',
+      manifestExists: false,
+      targetWorkbookCount: 5,
+      manifestPath: '.cache/public-workbook-corpus-financial/manifest.json',
+      cacheDir: '.cache/public-workbook-corpus-financial',
+      scorecardPath: '.cache/public-workbook-corpus-financial/scorecard.json',
+      verifyCheckpointPath: '.cache/public-workbook-corpus-financial/verification-checkpoint.json',
+      stopMarker: {
+        active: true,
+        path: '.agent-coordination/stop.md',
+        overrideFlag: '--allow-active-stop-marker',
+        overrideEnvVar: 'BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE',
+      },
+      sourceCount: 0,
+      targetArtifactCount: 5,
+      cachedArtifactCount: 0,
+      remainingArtifactSlots: 4,
+      candidateSourceCount: 0,
+      candidateSourceDeficitCount: 5,
+      minimumAdditionalSourceCount: 5,
+      recommendedDiscoveryLimit: 5,
+      recommendedFetchTrancheSize: 20,
+      recommendedFetchLimit: null,
+      needsAdditionalDiscovery: true,
+      targetReachableFromKnownCandidates: false,
+      commands: {
+        discoverPlan: 'pnpm public-workbook-corpus:discover-financial:plan -- --allow-active-stop-marker',
+        discover: 'pnpm public-workbook-corpus:discover-financial',
+        fetchPlan: 'pnpm public-workbook-corpus:fetch-financial:plan',
+        fetch: null,
+        fetchAll: 'pnpm public-workbook-corpus:fetch-financial',
+        resumePlan: 'pnpm public-workbook-corpus:resume-financial:plan',
+        resumeCheck: 'pnpm public-workbook-corpus:resume-financial:check',
+        verify: 'pnpm public-workbook-corpus:verify-financial',
+        check: 'pnpm public-workbook-corpus:check-financial',
+      },
+      sampledCandidateSources: [],
+    }
+
+    expect(validatePublicWorkbookCorpusFinancialPlan(plan)).toEqual(
+      expect.arrayContaining([
+        'remaining artifact slots do not match target and cached artifact counts',
+        'recommended fetch limit is missing while artifacts remain',
+        'bounded fetch command is missing while artifacts remain',
+        expect.stringContaining('mutating command is missing stop-marker override'),
+        expect.stringContaining('non-mutating command unexpectedly bypasses stop marker'),
+      ]),
+    )
   })
 })
 
@@ -231,6 +332,58 @@ function corpusScriptPath(): string {
 
 function packageJsonPath(): string {
   return join(dirname(fileURLToPath(import.meta.url)), '../../package.json')
+}
+
+function parseFinancialPlan(json: string): PublicWorkbookCorpusFinancialPlan {
+  const value: unknown = JSON.parse(json)
+  if (!isFinancialPlan(value)) {
+    throw new Error('Expected financial corpus plan JSON')
+  }
+  return value
+}
+
+function isFinancialPlan(value: unknown): value is PublicWorkbookCorpusFinancialPlan {
+  const record = asRecord(value)
+  const stopMarker = asRecord(record['stopMarker'])
+  const commands = asRecord(record['commands'])
+  return (
+    record['schemaVersion'] === 1 &&
+    record['mode'] === 'plan' &&
+    record['corpus'] === 'financial-accounting-workpapers' &&
+    typeof record['generatedAt'] === 'string' &&
+    typeof record['manifestExists'] === 'boolean' &&
+    typeof record['targetWorkbookCount'] === 'number' &&
+    typeof record['manifestPath'] === 'string' &&
+    typeof record['cacheDir'] === 'string' &&
+    typeof record['scorecardPath'] === 'string' &&
+    typeof record['verifyCheckpointPath'] === 'string' &&
+    typeof stopMarker['active'] === 'boolean' &&
+    typeof stopMarker['path'] === 'string' &&
+    typeof stopMarker['overrideFlag'] === 'string' &&
+    typeof stopMarker['overrideEnvVar'] === 'string' &&
+    typeof record['sourceCount'] === 'number' &&
+    typeof record['targetArtifactCount'] === 'number' &&
+    typeof record['cachedArtifactCount'] === 'number' &&
+    typeof record['remainingArtifactSlots'] === 'number' &&
+    typeof record['candidateSourceCount'] === 'number' &&
+    typeof record['candidateSourceDeficitCount'] === 'number' &&
+    typeof record['minimumAdditionalSourceCount'] === 'number' &&
+    typeof record['recommendedDiscoveryLimit'] === 'number' &&
+    typeof record['recommendedFetchTrancheSize'] === 'number' &&
+    (typeof record['recommendedFetchLimit'] === 'number' || record['recommendedFetchLimit'] === null) &&
+    typeof record['needsAdditionalDiscovery'] === 'boolean' &&
+    typeof record['targetReachableFromKnownCandidates'] === 'boolean' &&
+    (typeof commands['discoverPlan'] === 'string' || commands['discoverPlan'] === null) &&
+    (typeof commands['discover'] === 'string' || commands['discover'] === null) &&
+    typeof commands['fetchPlan'] === 'string' &&
+    (typeof commands['fetch'] === 'string' || commands['fetch'] === null) &&
+    typeof commands['fetchAll'] === 'string' &&
+    typeof commands['resumePlan'] === 'string' &&
+    typeof commands['resumeCheck'] === 'string' &&
+    typeof commands['verify'] === 'string' &&
+    typeof commands['check'] === 'string' &&
+    Array.isArray(record['sampledCandidateSources'])
+  )
 }
 
 function financialSource(id: string): PublicWorkbookSource {

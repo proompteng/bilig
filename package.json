@@ -59,6 +59,7 @@
     "public-workbook-corpus:discover:plan": "bun scripts/public-workbook-corpus.ts discover-plan",
     "public-workbook-corpus:discover-financial": "bun scripts/public-workbook-corpus.ts discover-financial-ckan --manifest .cache/public-workbook-corpus-financial/manifest.json --cache-dir .cache/public-workbook-corpus-financial --target-workbook-count 5000 --limit 15000",
     "public-workbook-corpus:discover-financial:plan": "bun scripts/public-workbook-corpus-financial-plan.ts",
+    "public-workbook-corpus:discover-financial:check": "bun scripts/public-workbook-corpus-financial-plan.ts --check",
     "public-workbook-corpus:fetch": "bun scripts/public-workbook-corpus.ts fetch",
     "public-workbook-corpus:fetch:plan": "bun scripts/public-workbook-corpus.ts fetch --dry-run --sample-limit 20",
     "public-workbook-corpus:fetch-source": "bun scripts/public-workbook-corpus.ts fetch-source",
