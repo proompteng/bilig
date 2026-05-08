@@ -117,6 +117,7 @@ export function formatPublicWorkbookCorpusVerifyArtifactCommand(args: {
   readonly cacheDir: string
   readonly manifestPath: string
   readonly stopMarkerActive?: boolean
+  readonly updateVerifyCheckpoint?: boolean
   readonly verifyCheckpointPath: string
 }): string {
   const split = splitPublicWorkbookCorpusVerifyArtifactCommand(args)
@@ -203,6 +204,7 @@ export function splitPublicWorkbookCorpusVerifyArtifactCommand(args: {
   readonly cacheDir: string
   readonly manifestPath: string
   readonly stopMarkerActive?: boolean
+  readonly updateVerifyCheckpoint?: boolean
   readonly verifyCheckpointPath: string
 }): SplitPublicWorkbookCorpusCommand {
   return splitStopMarkerCommand(publicWorkbookCorpusVerifyArtifactCommandParts(args), args.stopMarkerActive === true)
@@ -212,6 +214,7 @@ function publicWorkbookCorpusVerifyArtifactCommandParts(args: {
   readonly artifactId: string
   readonly cacheDir: string
   readonly manifestPath: string
+  readonly updateVerifyCheckpoint?: boolean
   readonly verifyCheckpointPath: string
 }): string[] {
   return [
@@ -226,7 +229,7 @@ function publicWorkbookCorpusVerifyArtifactCommandParts(args: {
     formatCommandPath(args.verifyCheckpointPath),
     '--artifact-id',
     args.artifactId,
-    '--update-verify-checkpoint',
+    ...(args.updateVerifyCheckpoint === false ? [] : ['--update-verify-checkpoint']),
   ]
 }
 

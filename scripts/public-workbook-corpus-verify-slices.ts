@@ -1,5 +1,4 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { isAbsolute, relative, resolve } from 'node:path'
 
 import {
   assertPublicCorpusRunNotStopped,
@@ -13,6 +12,7 @@ import {
   readVerifyConcurrencyArg,
   readVerifyMissingLimitArg,
 } from './public-workbook-corpus-cli.ts'
+import { formatCommandPath, formatPublicWorkbookCorpusVerifyArtifactCommand } from './public-workbook-corpus-command-format.ts'
 import { parsePublicWorkbookManifestJson } from './public-workbook-corpus-json.ts'
 import { withPublicWorkbookCorpusCacheLock } from './public-workbook-corpus-lock.ts'
 import {
@@ -45,7 +45,6 @@ export interface PublicWorkbookCorpusVerifySliceCommandArgs {
   readonly verifyCheckpointPath: string
 }
 
-const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const largeVerifyStaleLimitEnvVar = 'BILIG_ALLOW_LARGE_PUBLIC_CORPUS_VERIFY_STALE'
 
 export async function runPublicWorkbookCorpusVerifyMissingCommand(args: PublicWorkbookCorpusVerifySliceCommandArgs): Promise<void> {
@@ -57,14 +56,18 @@ export async function runPublicWorkbookCorpusVerifyMissingCommand(args: PublicWo
     const recordedCases = readReusablePublicWorkbookCorpusCases([args.scorecardPath, args.verifyCheckpointPath])
     const missingArtifacts = listMissingPublicWorkbookArtifacts({ manifest, cases: recordedCases })
     const selectedArtifactCount = Math.min(limit, missingArtifacts.length)
+    const selectedArtifacts = missingArtifacts.slice(0, limit)
     const verificationCommand =
       selectedArtifactCount > 0 ? splitVerifySliceCommand({ ...args, limit: selectedArtifactCount, slice: 'verify-missing' }) : null
+    const artifactVerificationCommand = selectedArtifacts[0]
+      ? formatVerifyArtifactCommand({ ...args, artifactId: selectedArtifacts[0].id })
+      : null
     process.stdout.write(
       `${JSON.stringify(
         {
           totalMissingArtifactCount: missingArtifacts.length,
           selectedArtifactCount,
-          artifacts: missingArtifacts.slice(0, limit).map((artifact) => ({
+          artifacts: selectedArtifacts.map((artifact) => ({
             id: artifact.id,
             fileName: artifact.fileName,
             byteSize: artifact.byteSize,
@@ -73,6 +76,7 @@ export async function runPublicWorkbookCorpusVerifyMissingCommand(args: PublicWo
           })),
           nextVerificationCommand: verificationCommand?.command ?? null,
           blockedVerificationCommand: verificationCommand?.blockedCommand ?? null,
+          artifactVerificationCommand,
         },
         null,
         2,
@@ -105,14 +109,18 @@ export async function runPublicWorkbookCorpusVerifyStaleCommand(args: PublicWork
     const staleArtifacts = listStalePublicWorkbookArtifacts({ manifest, cases: recordedCases })
     const recordedCasesById = indexPublicWorkbookCorpusCases(recordedCases)
     const selectedArtifactCount = Math.min(limit, staleArtifacts.length)
+    const selectedArtifacts = staleArtifacts.slice(0, limit)
     const verificationCommand =
       selectedArtifactCount > 0 ? splitVerifySliceCommand({ ...args, limit: selectedArtifactCount, slice: 'verify-stale' }) : null
+    const artifactVerificationCommand = selectedArtifacts[0]
+      ? formatVerifyArtifactCommand({ ...args, artifactId: selectedArtifacts[0].id })
+      : null
     process.stdout.write(
       `${JSON.stringify(
         {
           totalStaleArtifactCount: staleArtifacts.length,
           selectedArtifactCount,
-          artifacts: staleArtifacts.slice(0, limit).map((artifact) => ({
+          artifacts: selectedArtifacts.map((artifact) => ({
             id: artifact.id,
             fileName: artifact.fileName,
             byteSize: artifact.byteSize,
@@ -123,6 +131,7 @@ export async function runPublicWorkbookCorpusVerifyStaleCommand(args: PublicWork
           })),
           nextVerificationCommand: verificationCommand?.command ?? null,
           blockedVerificationCommand: verificationCommand?.blockedCommand ?? null,
+          artifactVerificationCommand,
         },
         null,
         2,
@@ -223,12 +232,6 @@ function readManifest(path: string): PublicWorkbookManifest {
   return parsePublicWorkbookManifestJson(parsed)
 }
 
-function formatCommandPath(path: string): string {
-  const absolutePath = resolve(path)
-  const relativePath = relative(rootDir, absolutePath)
-  return relativePath && !relativePath.startsWith('..') && !isAbsolute(relativePath) ? relativePath : path
-}
-
 function stopMarkerAwareDryRunLimit(requestedLimit: number, stopMarkerPath: string): number {
   return existsSync(stopMarkerPath) ? Math.min(requestedLimit, 1) : requestedLimit
 }
@@ -255,6 +258,10 @@ function formatVerifySliceCommand(
     String(args.limit),
   ]
   return command.map(shellQuote).join(' ')
+}
+
+function formatVerifyArtifactCommand(args: PublicWorkbookCorpusVerifySliceCommandArgs & { readonly artifactId: string }): string {
+  return formatPublicWorkbookCorpusVerifyArtifactCommand({ ...args, stopMarkerActive: false, updateVerifyCheckpoint: false })
 }
 
 function splitVerifySliceCommand(

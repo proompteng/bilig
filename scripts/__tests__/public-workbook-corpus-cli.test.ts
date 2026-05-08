@@ -1335,11 +1335,17 @@ describe('public workbook corpus CLI resource guards', () => {
       ],
       nextVerificationCommand: null,
       blockedVerificationCommand: expect.stringContaining('public-workbook-corpus:verify-missing'),
+      artifactVerificationCommand: expect.stringContaining('public-workbook-corpus:verify-artifact'),
     })
     const blockedVerificationCommand = readPlanCommand(planned, 'blockedVerificationCommand')
+    const artifactVerificationCommand = readPlanCommand(planned, 'artifactVerificationCommand')
     expect(blockedVerificationCommand).toContain('--limit 1')
     expect(blockedVerificationCommand).toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
     expect(blockedVerificationCommand).toContain('--allow-active-stop-marker')
+    expect(artifactVerificationCommand).toContain(`--artifact-id ${artifactB.id}`)
+    expect(artifactVerificationCommand).not.toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
+    expect(artifactVerificationCommand).not.toContain('--allow-active-stop-marker')
+    expect(artifactVerificationCommand).not.toContain('--update-verify-checkpoint')
     expect(readReusablePublicWorkbookCorpusCases([checkpointPath])).toEqual([])
   })
 
@@ -1403,11 +1409,17 @@ describe('public workbook corpus CLI resource guards', () => {
       ],
       nextVerificationCommand: null,
       blockedVerificationCommand: expect.stringContaining('public-workbook-corpus:verify-stale'),
+      artifactVerificationCommand: expect.stringContaining('public-workbook-corpus:verify-artifact'),
     })
     const blockedVerificationCommand = readPlanCommand(planned, 'blockedVerificationCommand')
+    const artifactVerificationCommand = readPlanCommand(planned, 'artifactVerificationCommand')
     expect(blockedVerificationCommand).toContain('--limit 1')
     expect(blockedVerificationCommand).toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
     expect(blockedVerificationCommand).toContain('--allow-active-stop-marker')
+    expect(artifactVerificationCommand).toContain(`--artifact-id ${artifactA.id}`)
+    expect(artifactVerificationCommand).not.toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
+    expect(artifactVerificationCommand).not.toContain('--allow-active-stop-marker')
+    expect(artifactVerificationCommand).not.toContain('--update-verify-checkpoint')
   })
 
   it('lists stale import-warning classifier evidence in verify-stale plans', async () => {

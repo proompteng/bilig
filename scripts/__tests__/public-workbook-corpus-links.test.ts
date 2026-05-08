@@ -469,6 +469,20 @@ describe('public workbook corpus shared links', () => {
     )
   })
 
+  it('formats read-only one-artifact verification commands without checkpoint mutation', () => {
+    expect(
+      formatPublicWorkbookCorpusVerifyArtifactCommand({
+        artifactId: 'workbook-abc123',
+        cacheDir: '/repo/.cache/public-workbook-corpus',
+        manifestPath: '/repo/.cache/public-workbook-corpus/manifest.json',
+        updateVerifyCheckpoint: false,
+        verifyCheckpointPath: '/repo/.cache/public-workbook-corpus/verification-checkpoint.json',
+      }),
+    ).toBe(
+      'pnpm public-workbook-corpus:verify-artifact -- --manifest /repo/.cache/public-workbook-corpus/manifest.json --cache-dir /repo/.cache/public-workbook-corpus --verify-checkpoint /repo/.cache/public-workbook-corpus/verification-checkpoint.json --artifact-id workbook-abc123',
+    )
+  })
+
   it('marks checkpoint-updating artifact verification commands with stop-marker overrides when paused', () => {
     expect(
       formatPublicWorkbookCorpusVerifyArtifactCommand({
