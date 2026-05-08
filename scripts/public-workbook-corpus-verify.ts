@@ -20,6 +20,7 @@ import {
   hasPivotUnsupportedClassifications,
   publicWorkbookImportWarningClassifierEvidence,
   publicWorkbookPivotClassifierEvidence,
+  publicWorkbookResourceLimitClassifierEvidence,
 } from './public-workbook-corpus-evidence.ts'
 import { inspectWorkbookFootprintIsolated, type PublicWorkbookCorpusWorkerOptions } from './public-workbook-corpus-footprint.ts'
 import { formatByteSize, startChildRssWatchdog, terminateChildProcess } from './public-workbook-corpus-process.ts'
@@ -465,6 +466,7 @@ function unsupportedResourceLimitCase(
     unsupportedFeatureClassifications: [`xlsx.publicCorpus.resourceLimit:cellCount>${String(maxCellCount)}`],
     evidence: [
       ...evidence,
+      publicWorkbookResourceLimitClassifierEvidence,
       `cells=${String(footprint.featureCounts.cellCount)}`,
       `Public corpus verification cell-count limit exceeded: ${String(footprint.featureCounts.cellCount)} > ${String(maxCellCount)}`,
     ],
@@ -501,6 +503,7 @@ function unsupportedRssLimitCase(
     unsupportedFeatureClassifications: [`xlsx.publicCorpus.resourceLimit:rss>${String(Math.ceil(maxRssBytes / 1024 / 1024))}MiB`],
     evidence: [
       ...evidence,
+      publicWorkbookResourceLimitClassifierEvidence,
       `Public corpus verification RSS limit exceeded: ${formatByteSize(rssBytes)} > ${formatByteSize(maxRssBytes)}`,
       ...details,
     ],

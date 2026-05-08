@@ -6,7 +6,11 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { createEmptyPublicWorkbookManifest } from '../public-workbook-corpus.ts'
-import { publicWorkbookImportWarningClassifierEvidence, publicWorkbookPivotClassifierEvidence } from '../public-workbook-corpus-evidence.ts'
+import {
+  publicWorkbookImportWarningClassifierEvidence,
+  publicWorkbookPivotClassifierEvidence,
+  publicWorkbookResourceLimitClassifierEvidence,
+} from '../public-workbook-corpus-evidence.ts'
 import { buildPublicWorkbookCorpusStatus } from '../public-workbook-corpus-status.ts'
 import { writePublicWorkbookCorpusVerificationCheckpoint } from '../public-workbook-corpus-verify-checkpoint.ts'
 import type {
@@ -95,6 +99,24 @@ describe('public workbook corpus evidence refresh reasons', () => {
 
     expect(status.staleRecordedVerificationCount).toBe(1)
     expect(status.staleRecordedVerificationSample[0]?.reasons).toEqual(['missing-pivot-classifier-evidence'])
+  })
+
+  it('marks pre-resource-limit classifier evidence stale after verifier behavior changes', () => {
+    const staleArtifact = workbookArtifact('workbook-a')
+    const currentArtifact = workbookArtifact('workbook-b')
+    const status = buildPublicWorkbookCorpusStatus({
+      manifest: manifestWithArtifacts([staleArtifact, currentArtifact]),
+      scorecard: emptyScorecard(),
+      checkpointCases: [
+        resourceLimitUnsupportedCase(staleArtifact, { hasCurrentClassifierEvidence: false }),
+        resourceLimitUnsupportedCase(currentArtifact, { hasCurrentClassifierEvidence: true }),
+      ],
+    })
+
+    expect(status.staleRecordedVerificationCount).toBe(1)
+    expect(status.currentRecordedUnsupportedCaseCount).toBe(1)
+    expect(status.staleRecordedUnsupportedCaseCount).toBe(1)
+    expect(status.staleRecordedVerificationSample[0]?.reasons).toEqual(['missing-resource-limit-classifier-evidence'])
   })
 
   it('keeps all stale reasons in verify-stale dry-run output', () => {
@@ -330,6 +352,61 @@ function pivotUnsupportedCase(
       `license=${artifact.license.title}`,
       `sha256=${artifact.sha256}`,
       ...(options.hasCurrentClassifierEvidence ? [publicWorkbookPivotClassifierEvidence] : []),
+    ],
+  }
+}
+
+function resourceLimitUnsupportedCase(
+  artifact: PublicWorkbookArtifact,
+  options: {
+    readonly hasCurrentClassifierEvidence: boolean
+  },
+): PublicWorkbookCorpusCase {
+  return {
+    id: artifact.id,
+    sourceId: artifact.sourceId,
+    sourceUrl: artifact.sourceUrl,
+    fileName: artifact.fileName,
+    sha256: artifact.sha256,
+    byteSize: artifact.byteSize,
+    license: artifact.license,
+    status: 'unsupported',
+    passed: true,
+    featureCounts: {
+      sheetCount: 0,
+      cellCount: 0,
+      formulaCellCount: 0,
+      valueCellCount: 0,
+      definedNameCount: 0,
+      tableCount: 0,
+      chartCount: 0,
+      pivotCount: 0,
+      mergeCount: 0,
+      styleRangeCount: 0,
+      conditionalFormatCount: 0,
+      dataValidationCount: 0,
+      macroPayloadCount: 0,
+      warningCount: 0,
+    },
+    workbookMetadata: {
+      workbookName: artifact.fileName,
+      sheetNames: [],
+      dimensions: [],
+    },
+    validation: {
+      importPassed: false,
+      formulaOraclePassed: true,
+      formulaOracleComparisons: 0,
+      formulaOracleMismatches: [],
+      roundTripPassed: true,
+      structuralSmokePassed: null,
+    },
+    unsupportedFeatureClassifications: ['xlsx.publicCorpus.resourceLimit:rss>1536MiB'],
+    evidence: [
+      `source=${artifact.sourceUrl}`,
+      `license=${artifact.license.title}`,
+      `sha256=${artifact.sha256}`,
+      ...(options.hasCurrentClassifierEvidence ? [publicWorkbookResourceLimitClassifierEvidence] : []),
     ],
   }
 }

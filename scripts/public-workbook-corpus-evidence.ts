@@ -2,11 +2,13 @@ import type { PublicWorkbookCorpusCase } from './public-workbook-corpus-types.ts
 
 export const publicWorkbookImportWarningClassifierEvidence = 'import-warning-classifier=2026-05-08-full-precision-formula-aware'
 export const publicWorkbookPivotClassifierEvidence = 'pivot-classifier=2026-05-08-external-cache-warning'
+export const publicWorkbookResourceLimitClassifierEvidence = 'resource-limit-classifier=2026-05-08-isolated-worker-footprint-aware'
 
 export type PublicWorkbookCorpusEvidenceRefreshReason =
   | 'missing-used-range-evidence'
   | 'missing-import-warning-classifier-evidence'
   | 'missing-pivot-classifier-evidence'
+  | 'missing-resource-limit-classifier-evidence'
 
 export function publicWorkbookCorpusCaseNeedsEvidenceRefresh(entry: PublicWorkbookCorpusCase): boolean {
   return publicWorkbookCorpusCaseEvidenceRefreshReasons(entry).length > 0
@@ -24,6 +26,9 @@ export function publicWorkbookCorpusCaseEvidenceRefreshReasons(
   }
   if (hasPivotUnsupportedClassification(entry) && !hasCurrentPivotClassifierEvidence(entry)) {
     reasons.push('missing-pivot-classifier-evidence')
+  }
+  if (hasResourceLimitUnsupportedClassification(entry) && !hasCurrentResourceLimitClassifierEvidence(entry)) {
+    reasons.push('missing-resource-limit-classifier-evidence')
   }
   return reasons
 }
@@ -62,8 +67,16 @@ export function hasPivotUnsupportedClassifications(classifications: readonly str
   return classifications.some((classification) => classification.startsWith('xlsx.pivots.'))
 }
 
+export function hasResourceLimitUnsupportedClassifications(classifications: readonly string[]): boolean {
+  return classifications.some((classification) => classification.startsWith('xlsx.publicCorpus.resourceLimit:'))
+}
+
 function hasPivotUnsupportedClassification(entry: PublicWorkbookCorpusCase): boolean {
   return hasPivotUnsupportedClassifications(entry.unsupportedFeatureClassifications)
+}
+
+function hasResourceLimitUnsupportedClassification(entry: PublicWorkbookCorpusCase): boolean {
+  return hasResourceLimitUnsupportedClassifications(entry.unsupportedFeatureClassifications)
 }
 
 function hasCurrentImportWarningClassifierEvidence(entry: PublicWorkbookCorpusCase): boolean {
@@ -72,4 +85,8 @@ function hasCurrentImportWarningClassifierEvidence(entry: PublicWorkbookCorpusCa
 
 function hasCurrentPivotClassifierEvidence(entry: PublicWorkbookCorpusCase): boolean {
   return entry.evidence.includes(publicWorkbookPivotClassifierEvidence)
+}
+
+function hasCurrentResourceLimitClassifierEvidence(entry: PublicWorkbookCorpusCase): boolean {
+  return entry.evidence.includes(publicWorkbookResourceLimitClassifierEvidence)
 }

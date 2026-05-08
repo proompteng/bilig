@@ -8,6 +8,7 @@ import {
   buildPublicWorkbookCorpusResourceLimitPlan,
   validatePublicWorkbookCorpusResourceLimitPlan,
 } from '../public-workbook-corpus-resource-limit-plan.ts'
+import { publicWorkbookResourceLimitClassifierEvidence } from '../public-workbook-corpus-evidence.ts'
 import { asRecord, createEmptyPublicWorkbookManifest } from '../public-workbook-corpus-json.ts'
 import type { PublicWorkbookArtifact, PublicWorkbookCorpusCase, PublicWorkbookManifest } from '../public-workbook-corpus-types.ts'
 
@@ -194,6 +195,7 @@ function resourceLimitedCase(artifact: PublicWorkbookArtifact): PublicWorkbookCo
       `source=${artifact.sourceUrl}`,
       `license=${artifact.license.title}`,
       `sha256=${artifact.sha256}`,
+      publicWorkbookResourceLimitClassifierEvidence,
       'Public corpus verification RSS limit exceeded: 1.60 GiB > 1.50 GiB',
     ],
   }
@@ -202,6 +204,7 @@ function resourceLimitedCase(artifact: PublicWorkbookArtifact): PublicWorkbookCo
 function staleResourceLimitedCase(artifact: PublicWorkbookArtifact): PublicWorkbookCorpusCase {
   return {
     ...resourceLimitedCase(artifact),
+    evidence: resourceLimitedCase(artifact).evidence.filter((entry) => entry !== publicWorkbookResourceLimitClassifierEvidence),
     workbookMetadata: {
       workbookName: artifact.fileName,
       sheetNames: ['Sheet1'],

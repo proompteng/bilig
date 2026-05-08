@@ -24,7 +24,10 @@ import {
   type PublicWorkbookManifest,
   type PublicWorkbookSource,
 } from '../public-workbook-corpus.ts'
-import { publicWorkbookImportWarningClassifierEvidence } from '../public-workbook-corpus-evidence.ts'
+import {
+  publicWorkbookImportWarningClassifierEvidence,
+  publicWorkbookResourceLimitClassifierEvidence,
+} from '../public-workbook-corpus-evidence.ts'
 import { roundTripSemanticsDigest } from '../public-workbook-corpus-roundtrip.ts'
 import {
   classifyUnsupportedFeatures,
@@ -467,7 +470,12 @@ describe('public workbook corpus', () => {
       validation: { importPassed: false },
       unsupportedFeatureClassifications: ['xlsx.publicCorpus.resourceLimit:cellCount>2'],
     })
-    expect(scorecard.cases[0]?.evidence).toEqual(expect.arrayContaining(['Public corpus verification cell-count limit exceeded: 10 > 2']))
+    expect(scorecard.cases[0]?.evidence).toEqual(
+      expect.arrayContaining([
+        publicWorkbookResourceLimitClassifierEvidence,
+        'Public corpus verification cell-count limit exceeded: 10 > 2',
+      ]),
+    )
   })
 
   it('passes corpus round-trip validation for sheet names with trailing spaces', async () => {
@@ -1287,6 +1295,7 @@ describe('public workbook corpus', () => {
     expect(scorecard.cases[0]?.unsupportedFeatureClassifications).toEqual(['xlsx.publicCorpus.resourceLimit:rss>1MiB'])
     expect(scorecard.cases[0]?.evidence).toEqual(
       expect.arrayContaining([
+        publicWorkbookResourceLimitClassifierEvidence,
         'Public corpus verification RSS limit exceeded: 2.0 MiB > 1.0 MiB',
         'The workbook was isolated in a subprocess so the corpus verification run could continue.',
       ]),
