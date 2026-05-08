@@ -118,6 +118,47 @@ describe('public workbook corpus completion audit', () => {
     expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
   })
 
+  it('rejects blocked next-action commands that do not carry the explicit stop-marker override', () => {
+    const artifact = workbookArtifact('workbook-a')
+    const audit = buildPublicWorkbookCorpusCompletionAudit({
+      generatedAt: '2026-05-08T00:00:00.000Z',
+      manifest: manifestWithArtifacts([artifact], 2),
+      recordedCases: [passedCase(artifact, 1)],
+      status: statusFixture({
+        targetWorkbookCount: 2,
+        sourceCount: 2,
+        cachedArtifactCount: 1,
+        scorecardCaseCount: 1,
+        checkpointCaseCount: 1,
+        recordedManifestArtifactCount: 1,
+        missingManifestArtifactCount: 0,
+        recordedPassedCaseCount: 1,
+        scorecardCoversManifest: true,
+        targetComplete: false,
+        gaps: ['cached artifacts below target: 1/2'],
+      }),
+      stopMarkerActive: true,
+    })
+    const invalidNextActions = audit.nextActions.slice()
+    const resumeActionIndex = invalidNextActions.findIndex((action) => action.id === 'resume-public-corpus-ingest')
+    const resumeAction = invalidNextActions[resumeActionIndex]
+    if (!resumeAction) {
+      throw new Error('expected resume-public-corpus-ingest next action')
+    }
+    invalidNextActions[resumeActionIndex] = Object.assign({}, resumeAction, {
+      blockedCommands: ['pnpm public-workbook-corpus:fetch -- --limit 2'],
+    })
+    const invalidAudit = Object.assign({}, audit, {
+      nextActions: invalidNextActions,
+    })
+
+    expect(validatePublicWorkbookCorpusCompletionAudit(invalidAudit)).toEqual(
+      expect.arrayContaining([
+        'resume-public-corpus-ingest blocked next action command is missing the active corpus stop-marker override: pnpm public-workbook-corpus:fetch -- --limit 2',
+      ]),
+    )
+  })
+
   it('marks the goal achieved when public corpus evidence is complete and HyperFormula parity is folded in', () => {
     const artifactA = financialWorkbookArtifact('workbook-a')
     const artifactB = financialWorkbookArtifact('workbook-b')

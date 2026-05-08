@@ -27,6 +27,9 @@ export function validatePublicWorkbookCorpusAuditNextActions(args: {
       validatePnpmScriptCommand(`${action.id} next action command`, command, args.packageScripts, findings)
     }
     for (const command of action.blockedCommands) {
+      if (args.audit.completionVerdict.nextCorpusRunRequiresExplicitResume && !bypassesActiveStopMarker(command)) {
+        findings.push(`${action.id} blocked next action command is missing the active corpus stop-marker override: ${command}`)
+      }
       validatePnpmScriptCommand(`${action.id} blocked command`, command, args.packageScripts, findings)
     }
   }
