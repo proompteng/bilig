@@ -249,6 +249,17 @@ Every week until `1,000` stars:
 6. If a channel produces no useful feedback after two attempts, change the
    angle before posting there again.
 
+Capture the baseline before and after each distribution push:
+
+```sh
+pnpm community:growth:snapshot
+```
+
+Set `GITHUB_TOKEN` or `GH_TOKEN` with repository traffic access to include
+views, clones, popular referrers, and popular paths. Without a token, the
+snapshot still records public GitHub stars, forks, open issues, package version,
+and npm download windows.
+
 ## Anti-Spam Rules
 
 - Do not buy stars, trade stars, automate follows, or ask unrelated audiences

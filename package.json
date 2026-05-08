@@ -105,6 +105,7 @@
     "docs:launch-demo:generate": "tsx scripts/render-launch-demo.ts",
     "docs:launch-demo:check": "tsx scripts/render-launch-demo.ts --check",
     "docs:discovery:check": "tsx scripts/check-docs-discovery.ts",
+    "community:growth:snapshot": "tsx scripts/community-growth-snapshot.ts",
     "sheet:agent": "bun scripts/spreadsheet-agent.ts",
     "format": "oxfmt --write .oxlintrc.json package.json playwright.config.ts tsconfig.base.json tsconfig.json vitest.config.ts vitest.workspace.ts apps packages e2e scripts",
     "format:check": "oxfmt --check .oxlintrc.json package.json playwright.config.ts tsconfig.base.json tsconfig.json vitest.config.ts vitest.workspace.ts apps packages e2e scripts",
