@@ -3,41 +3,67 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>bilig - headless spreadsheet engine</title>
+    <title>bilig - Headless Spreadsheet Engine for Node.js</title>
     <link rel="canonical" href="https://proompteng.github.io/bilig/" />
     <link rel="sitemap" type="application/xml" href="https://proompteng.github.io/bilig/sitemap.xml" />
     <link rel="alternate" type="text/plain" href="https://proompteng.github.io/bilig/llms.txt" title="llms.txt" />
+    <link rel="preload" as="image" href="https://proompteng.github.io/bilig/assets/bilig-hero-workbook-api.png?v=2026-05-08" />
     <meta
       name="description"
-      content="bilig is a headless spreadsheet engine for TypeScript, Node services, local-first workbook automation, and agent-controlled formula workflows."
+      content="bilig lets Node.js code build workbooks, write formulas, recalculate cells, and save the result as JSON without opening a browser spreadsheet grid."
     />
-    <meta property="og:title" content="bilig - headless spreadsheet engine" />
+    <meta
+      name="keywords"
+      content="headless spreadsheet engine, Node spreadsheet engine, TypeScript formula engine, spreadsheet engine for agents, workbook automation, HyperFormula alternative, formula evaluation in Node"
+    />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta property="og:site_name" content="bilig" />
+    <meta property="og:title" content="bilig - Headless Spreadsheet Engine for Node.js" />
     <meta
       property="og:description"
-      content="A TypeScript workbook runtime for formulas, structural edits, persistence, and benchmarkable spreadsheet automation."
+      content="Build a workbook from arrays or JSON records, recalculate formulas, and save the result from TypeScript."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://proompteng.github.io/bilig/" />
     <meta property="og:image" content="https://proompteng.github.io/bilig/assets/github-social-preview.png?v=2026-05-08" />
+    <meta property="og:image:alt" content="bilig headless spreadsheet engine workbook and TypeScript code preview" />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="640" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="bilig - headless spreadsheet engine" />
-    <meta
-      name="twitter:description"
-      content="A TypeScript workbook runtime for services and agents that need formulas without a spreadsheet UI."
-    />
+    <meta name="twitter:title" content="bilig - Headless Spreadsheet Engine for Node.js" />
+    <meta name="twitter:description" content="Spreadsheet formulas, workbook edits, and JSON persistence for Node.js programs." />
     <meta name="twitter:image" content="https://proompteng.github.io/bilig/assets/github-social-preview.png?v=2026-05-08" />
+    <meta name="twitter:image:alt" content="bilig headless spreadsheet engine workbook and TypeScript code preview" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "SoftwareSourceCode",
         "name": "bilig",
-        "description": "Headless spreadsheet engine for TypeScript, Node services, local-first workbook automation, and agent-controlled formula workflows.",
+        "description": "TypeScript headless spreadsheet engine for Node.js programs that need formulas, workbook edits, and JSON persistence without a spreadsheet UI.",
         "codeRepository": "https://github.com/proompteng/bilig",
         "license": "https://github.com/proompteng/bilig/blob/main/LICENSE",
         "programmingLanguage": "TypeScript",
         "runtimePlatform": "Node.js 24+",
         "url": "https://proompteng.github.io/bilig/",
-        "image": "https://proompteng.github.io/bilig/assets/github-social-preview.png?v=2026-05-08"
+        "downloadUrl": "https://www.npmjs.com/package/@bilig/headless",
+        "installUrl": "https://www.npmjs.com/package/@bilig/headless",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "macOS, Linux, Windows",
+        "isAccessibleForFree": true,
+        "image": "https://proompteng.github.io/bilig/assets/github-social-preview.png?v=2026-05-08",
+        "sameAs": [
+          "https://github.com/proompteng/bilig",
+          "https://www.npmjs.com/package/@bilig/headless",
+          "https://dev.to/gregkonush/why-agents-need-workbook-apis-instead-of-spreadsheet-screenshots-3d61"
+        ],
+        "keywords": [
+          "headless spreadsheet engine",
+          "Node spreadsheet engine",
+          "TypeScript formula engine",
+          "spreadsheet engine for agents",
+          "workbook automation",
+          "HyperFormula alternative"
+        ]
       }
     </script>
     <style>
@@ -147,14 +173,26 @@
       }
 
       .hero {
-        padding: 66px 0 54px;
+        position: relative;
+        display: flex;
+        width: 100vw;
+        min-height: min(720px, calc(100vh - 68px));
+        align-items: center;
+        margin: 0 calc(50% - 50vw);
+        overflow: hidden;
+        border-bottom: 1px solid var(--line);
+        background:
+          linear-gradient(90deg, rgba(246, 248, 250, 0.98) 0%, rgba(246, 248, 250, 0.92) 37%, rgba(246, 248, 250, 0.2) 72%),
+          linear-gradient(180deg, rgba(246, 248, 250, 0.24), rgba(246, 248, 250, 0.86)),
+          url('./assets/bilig-hero-workbook-api.png?v=2026-05-08');
+        background-position: center;
+        background-size: cover;
+        padding: 72px max(40px, calc((100vw - 1120px) / 2)) 64px;
       }
 
-      .hero-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 0.92fr) minmax(380px, 0.82fr);
-        gap: 46px;
-        align-items: center;
+      .hero-content {
+        width: min(690px, 100%);
+        padding: 0;
       }
 
       .label {
@@ -184,15 +222,15 @@
       }
 
       h1 {
-        max-width: 700px;
+        max-width: 720px;
         margin-top: 18px;
-        font-size: clamp(40px, 5vw, 66px);
-        line-height: 1;
+        font-size: clamp(42px, 5vw, 70px);
+        line-height: 0.98;
         letter-spacing: 0;
       }
 
       .lede {
-        max-width: 680px;
+        max-width: 660px;
         margin-top: 24px;
         color: var(--muted);
         font-size: clamp(18px, 1.7vw, 20px);
@@ -263,54 +301,10 @@
         border-color: var(--blue);
       }
 
-      .hero-card {
-        overflow: hidden;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--panel);
-        box-shadow: var(--shadow);
-      }
-
-      .hero-card img {
-        display: block;
-        width: 100%;
-        aspect-ratio: 2 / 1;
-        object-fit: cover;
-        background: #111820;
-      }
-
-      .hero-card-footer {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        border-top: 1px solid var(--line);
-      }
-
-      .stat {
-        padding: 14px 16px;
-        border-right: 1px solid var(--line);
-      }
-
-      .stat:last-child {
-        border-right: 0;
-      }
-
-      .stat strong {
-        display: block;
-        font-size: 18px;
-        line-height: 1.2;
-      }
-
-      .stat span {
-        display: block;
-        margin-top: 2px;
-        color: var(--subtle);
-        font-size: 12px;
-      }
-
       main {
         display: grid;
         gap: 70px;
-        padding: 18px 0 88px;
+        padding: 64px 0 88px;
       }
 
       section {
@@ -497,36 +491,22 @@
         font-size: 14px;
       }
 
-      .links {
+      .doc-groups {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
       }
 
-      .link-row {
-        display: flex;
-        min-height: 58px;
-        align-items: center;
-        justify-content: space-between;
-        gap: 18px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--panel);
-        padding: 14px 16px;
+      .doc-groups a {
         color: var(--ink);
-        font-weight: 680;
+        text-decoration: underline;
+        text-decoration-color: rgba(47, 95, 159, 0.35);
+        text-underline-offset: 3px;
       }
 
-      .link-row span {
-        color: var(--subtle);
-        font-size: 13px;
-        font-weight: 520;
-        text-align: right;
-      }
-
-      .link-row:hover,
-      .link-row:focus-visible {
-        border-color: var(--blue);
+      .doc-groups a:hover,
+      .doc-groups a:focus-visible {
+        text-decoration-color: var(--blue);
       }
 
       footer {
@@ -550,31 +530,27 @@
         }
 
         .hero {
-          padding: 52px 0 44px;
+          min-height: auto;
+          background:
+            linear-gradient(180deg, rgba(246, 248, 250, 0.98) 0%, rgba(246, 248, 250, 0.88) 58%, rgba(246, 248, 250, 0.72) 100%),
+            url('./assets/bilig-hero-workbook-api.png?v=2026-05-08');
+          background-position: center top;
+          background-size: cover;
+          padding: 54px 20px 48px;
         }
 
-        .hero-grid,
+        .hero-content {
+          width: 100%;
+        }
+
         .proof-strip,
         .quickstart,
         .quickstart-wide,
         .surface,
         .proof,
-        .links,
+        .doc-groups,
         .cols-3 {
           grid-template-columns: 1fr;
-        }
-
-        .hero-card-footer {
-          grid-template-columns: 1fr;
-        }
-
-        .stat {
-          border-right: 0;
-          border-bottom: 1px solid var(--line);
-        }
-
-        .stat:last-child {
-          border-bottom: 0;
         }
 
         pre {
@@ -595,7 +571,7 @@
         <nav class="nav" aria-label="primary">
           <a href="#install">Install</a>
           <a href="#runtime">Runtime</a>
-          <a href="#proof">Proof</a>
+          <a href="#proof">Checks</a>
           <a href="https://www.npmjs.com/package/@bilig/headless">npm</a>
           <a href="https://github.com/proompteng/bilig/stargazers">Star</a>
           <a href="https://github.com/proompteng/bilig">GitHub</a>
@@ -605,87 +581,64 @@
 
     <div class="wrap">
       <section class="hero" aria-labelledby="hero-title">
-        <div class="hero-grid">
-          <div>
-            <p class="label">workbook runtime for code</p>
-            <h1 id="hero-title">Spreadsheet formulas without a spreadsheet UI.</h1>
-            <p class="lede">
-              bilig gives TypeScript programs a workbook API for formulas, structural edits, snapshots, and persisted readback without
-              driving a browser grid.
-            </p>
-            <div class="proof-strip" aria-label="evaluation proof">
-              <div>
-                <strong>npm-only eval</strong>
-                <span>install @bilig/headless, run one node script, and verify formula restore.</span>
-              </div>
-              <div>
-                <strong>agent writeback</strong>
-                <span>mutate workbook inputs, recalculate formulas, and prove the saved document round-trips.</span>
-              </div>
-              <div>
-                <strong>bounded claims</strong>
-                <span>compatibility notes, fixtures, and open issues show what works and what does not yet.</span>
-              </div>
+        <div class="hero-content">
+          <p class="label">@bilig/headless</p>
+          <h1 id="hero-title">Run spreadsheet formulas from Node.js.</h1>
+          <p class="lede">
+            Build a workbook from arrays or JSON records, edit cells, recalculate formulas, and save the document. No hidden grid, no screen
+            scraping.
+          </p>
+          <div class="proof-strip" aria-label="project facts">
+            <div>
+              <strong>published package</strong>
+              <span>install it from npm and run the examples in a clean Node project.</span>
             </div>
-            <div class="actions">
-              <a class="button primary" href="https://www.npmjs.com/package/@bilig/headless">Install @bilig/headless</a>
-              <a class="button" href="https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper">Run the example</a>
-              <a class="button" href="https://github.com/proompteng/bilig/stargazers">Star on GitHub</a>
-              <a class="button" href="https://github.com/proompteng/bilig">View source</a>
+            <div>
+              <strong>plain data in</strong>
+              <span>turn service records into sheets, formulas, and summary cells.</span>
+            </div>
+            <div>
+              <strong>known limits</strong>
+              <span>the docs call out where Excel compatibility is still incomplete.</span>
             </div>
           </div>
-          <aside class="hero-card" aria-label="bilig preview">
-            <img src="./assets/github-social-preview.png?v=2026-05-08" alt="bilig engine diagram and workbook preview" />
-            <div class="hero-card-footer">
-              <div class="stat">
-                <strong>TypeScript</strong>
-                <span>ESM package</span>
-              </div>
-              <div class="stat">
-                <strong>Node 24+</strong>
-                <span>service runtime</span>
-              </div>
-              <div class="stat">
-                <strong>MIT</strong>
-                <span>open source</span>
-              </div>
-            </div>
-          </aside>
+          <div class="actions">
+            <a class="button primary" href="https://www.npmjs.com/package/@bilig/headless">Install the package</a>
+            <a class="button" href="https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input">
+              Run the JSON example
+            </a>
+            <a class="button" href="https://github.com/proompteng/bilig/stargazers">Star on GitHub</a>
+            <a class="button" href="https://github.com/proompteng/bilig">Read the source</a>
+          </div>
         </div>
       </section>
 
       <main>
         <section aria-labelledby="why-title">
           <div class="section-head">
-            <h2 id="why-title">Use workbook behavior as a library boundary.</h2>
-            <p>
-              A grid component is the wrong primitive for backend jobs, coding agents, and local-first sync. bilig keeps the workbook model
-              addressable from code.
-            </p>
+            <h2 id="why-title">Use a workbook when a table is not enough.</h2>
+            <p>Some backend jobs need sheets, ranges, formulas, and saved workbook state. bilig gives that model a TypeScript API.</p>
           </div>
           <div class="cols-3">
             <article class="card">
-              <h3>Formula-backed state</h3>
-              <p>Create sheets, write cells, evaluate formulas, and inspect calculated values through a typed API.</p>
+              <h3>Write formulas</h3>
+              <p>Create sheets, set cells, and read calculated values from code.</p>
             </article>
             <article class="card">
-              <h3>Structural edits</h3>
-              <p>Move cells, apply workbook operations, undo and redo changes, and preserve state through snapshots.</p>
+              <h3>Edit the workbook</h3>
+              <p>Apply structural changes, undo and redo edits, and keep snapshots portable.</p>
             </article>
             <article class="card">
-              <h3>Agent-ready shape</h3>
-              <p>Stable document and request shapes let tools mutate workbook state without screen scraping or hidden UI state.</p>
+              <h3>Skip UI automation</h3>
+              <p>Services and tools call an API instead of clicking around a spreadsheet screen.</p>
             </article>
           </div>
         </section>
 
         <section id="install" aria-labelledby="install-title">
           <div class="section-head">
-            <h2 id="install-title">Try the published package without cloning the repo.</h2>
-            <p>
-              The first evaluation path uses npm only. It builds a formula-backed workbook, edits source data, persists the document,
-              restores it, and verifies the recalculated value.
-            </p>
+            <h2 id="install-title">Try it from npm.</h2>
+            <p>The shortest smoke test creates a workbook, changes an input, saves it, restores it, and checks the recalculated value.</p>
           </div>
           <div class="quickstart quickstart-wide">
             <div class="copy-path">
@@ -699,8 +652,8 @@ npm install @bilig/headless</code></pre>
               <div class="expected">
                 <strong>then create <code>eval.mjs</code> and run <code>node eval.mjs</code></strong>
                 <p>
-                  the script fails if formula readback or restore behavior changes; successful output includes <code>verified: true</code>
-                  and a positive serialized byte count.
+                  the script fails if calculation or restore behavior changes. Successful output includes <code>verified: true</code> and a
+                  positive serialized byte count.
                 </p>
               </div>
             </div>
@@ -764,8 +717,8 @@ console.log({ before, after, sheets: restored.getSheetNames(), bytes: saved.leng
 
         <section id="runtime" aria-labelledby="runtime-title">
           <div class="section-head">
-            <h2 id="runtime-title">Runtime surface</h2>
-            <p>Use bilig where workbook semantics matter more than a rendered grid.</p>
+            <h2 id="runtime-title">What is in scope</h2>
+            <p>Use bilig when spreadsheet behavior belongs inside a program.</p>
           </div>
           <div class="surface">
             <table class="matrix">
@@ -795,12 +748,12 @@ console.log({ before, after, sheets: restored.getSheetNames(), bytes: saved.leng
               </tbody>
             </table>
             <article class="card">
-              <h3>Current scope</h3>
+              <h3>Good fit</h3>
               <ul>
-                <li>For Node services, scripts, and agent-controlled workbook workflows.</li>
-                <li>For formula-backed business logic that needs deterministic readback.</li>
-                <li>Not presented as a finished Excel clone or complete formula-parity claim.</li>
-                <li>Use the checked-in examples and tests as the acceptance surface.</li>
+                <li>Node services, scripts, and tool-calling workflows.</li>
+                <li>Formula-backed business logic that needs deterministic readback.</li>
+                <li>Saved workbook documents that should round-trip as JSON.</li>
+                <li>Not a finished Excel clone; use the compatibility docs for limits.</li>
               </ul>
             </article>
           </div>
@@ -808,40 +761,29 @@ console.log({ before, after, sheets: restored.getSheetNames(), bytes: saved.leng
 
         <section id="proof" aria-labelledby="proof-title">
           <div class="section-head">
-            <h2 id="proof-title">Evidence links</h2>
-            <p>
-              Start from artifacts, not claims. The repo includes examples, benchmark notes, and public issue threads for adoption work.
-            </p>
+            <h2 id="proof-title">Start with the repo.</h2>
+            <p>The useful starting points are runnable examples, comparison notes, and small issues for first-time contributors.</p>
           </div>
           <div class="proof">
             <div class="metric-list">
               <div class="metric">
                 <strong>46/46</strong>
-                <span>mean wins in checked-in comparable WorkPaper benchmark rows against HyperFormula-style workloads.</span>
+                <span>mean wins in the checked-in WorkPaper benchmark rows where the workloads are comparable.</span>
               </div>
               <div class="metric">
                 <strong>CI gated</strong>
-                <span>types, unit tests, generated-file checks, package smoke paths, and browser checks run in the repo gate.</span>
+                <span>type checks, unit tests, generated-file checks, package smoke paths, and browser checks run in CI.</span>
               </div>
             </div>
             <article class="card">
-              <h3>What to review first</h3>
+              <h3>Start here</h3>
               <ul>
-                <li>the external-consumer example for package shape</li>
-                <li>the agent writeback demo for formula and persistence readback</li>
-                <li>the package readme for evaluation commands</li>
-                <li>the workbook-api article for agent workflow positioning</li>
-                <li>the unsupported-formula recipe for actionable error diagnostics</li>
-                <li>the revenue-model article for a multi-sheet planning example</li>
-                <li>the HyperFormula comparison for headless-engine evaluators</li>
-                <li>the engine comparison for HyperFormula, IronCalc, ExcelJS, and Formula.js boundaries</li>
-                <li>the benchmark explainer for the measured claim and caveat</li>
-                <li>the GROUPBY fixture for a grouped dynamic-array proof</li>
-                <li>
-                  <a href="https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md">starter issues</a>
-                  for small contribution paths
-                </li>
-                <li>benchmark evidence for the WorkPaper runtime path</li>
+                <li>Runnable package example</li>
+                <li>JSON-records example for service payloads</li>
+                <li>Package readme with install commands</li>
+                <li>Compatibility notes before making Excel-parity assumptions</li>
+                <li>Benchmark explainer with the measured claim and caveat</li>
+                <li><a href="https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md">starter issues</a> for small patches</li>
               </ul>
             </article>
           </div>
@@ -849,81 +791,79 @@ console.log({ before, after, sheets: restored.getSheetNames(), bytes: saved.leng
 
         <section aria-labelledby="links-title">
           <div class="section-head">
-            <h2 id="links-title">Project links</h2>
+            <h2 id="links-title">Useful links</h2>
           </div>
-          <div class="links">
-            <a class="link-row" href="https://github.com/proompteng/bilig">GitHub repository <span>source, issues, discussions</span></a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/stargazers">Star or bookmark <span>follow the project</span></a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/discussions/115">
-              Feedback discussion <span>agent and service workflow input</span>
-            </a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md">
-              Starter issues <span>small contribution paths</span>
-            </a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/blob/main/docs/community-launch-pack.md">
-              Community launch pack <span>growth loops, channel copy, and anti-spam rules</span>
-            </a>
-            <a class="link-row" href="https://www.npmjs.com/package/@bilig/headless">npm package <span>@bilig/headless</span></a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/blob/main/docs/why-agents-need-workbook-apis.md">
-              Technical article <span>workbook APIs for agents</span>
-            </a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md">
-              Node service recipe <span>computed summaries behind HTTP</span>
-            </a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md">
-              CSV-shaped input recipe <span>tabular rows into formula-backed summaries</span>
-            </a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/blob/main/docs/unsupported-formula-troubleshooting-recipe.md">
-              Unsupported formula recipe <span>display errors and structured diagnostics</span>
-            </a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/blob/main/docs/local-workpaper-benchmark-walkthrough.md">
-              Benchmark walkthrough <span>local commands and scorecard fields</span>
-            </a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/blob/main/docs/agent-workpaper-tool-calling-recipe.md">
-              Agent tool-calling recipe <span>validated writes and computed readback</span>
-            </a>
-            <a
-              class="link-row"
-              href="https://github.com/proompteng/bilig/blob/main/docs/persisting-formula-backed-workpaper-documents-in-node.md"
-            >
-              Persistence article <span>save and restore WorkPaper JSON</span>
-            </a>
-            <a
-              class="link-row"
-              href="https://github.com/proompteng/bilig/blob/main/docs/building-a-revenue-model-with-headless-workpaper.md"
-            >
-              Revenue model article <span>formula-backed scenarios in Node</span>
-            </a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/blob/main/docs/where-bilig-is-not-excel-compatible-yet.md">
-              Compatibility boundaries <span>what is not Excel-compatible yet</span>
-            </a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/blob/main/docs/xlsx-corpus-verifier-walkthrough.md">
-              XLSX verifier walkthrough <span>matched, skipped, and mismatched formulas</span>
-            </a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/blob/main/docs/formula-edge-xlookup-exact-fixture.md">
-              XLOOKUP exact fixture <span>one formula claim with verifier evidence</span>
-            </a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/blob/main/docs/formula-edge-sumifs-paired-criteria-fixture.md">
-              SUMIFS paired criteria fixture <span>criteria aggregate claim with verifier evidence</span>
-            </a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/blob/main/docs/formula-edge-groupby-spill-fixture.md">
-              GROUPBY spill fixture <span>grouped dynamic-array claim with verifier evidence</span>
-            </a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md">
-              Benchmark explainer <span>46/46 mean wins, p95 caveat</span>
-            </a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/blob/main/docs/hyperformula-alternative-headless-workpaper.md">
-              HyperFormula comparison <span>where WorkPaper fits and where it does not</span>
-            </a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/blob/main/docs/headless-spreadsheet-engine-comparison.md">
-              Engine comparison <span>HyperFormula, IronCalc, ExcelJS, and Formula.js boundaries</span>
-            </a>
-            <a class="link-row" href="https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper">
-              Runnable example <span>external package and agent writeback smoke paths</span>
-            </a>
-            <a class="link-row" href="https://dev.to/gregkonush/why-agents-need-workbook-apis-instead-of-spreadsheet-screenshots-3d61">
-              Published DEV article <span>workbook APIs instead of screenshots</span>
-            </a>
+          <div class="doc-groups">
+            <article class="card">
+              <h3>Try it</h3>
+              <ul>
+                <li><a href="https://www.npmjs.com/package/@bilig/headless">npm package</a></li>
+                <li><a href="https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper">runnable example</a></li>
+                <li>
+                  <a href="https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input">
+                    JSON records example
+                  </a>
+                </li>
+                <li>
+                  <a href="https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md">Node service recipe</a>
+                </li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>Learn the API</h3>
+              <ul>
+                <li>
+                  <a href="https://github.com/proompteng/bilig/blob/main/docs/why-agents-need-workbook-apis.md">workbook API article</a>
+                </li>
+                <li>
+                  <a href="https://github.com/proompteng/bilig/blob/main/docs/agent-workpaper-tool-calling-recipe.md">
+                    tool-calling recipe
+                  </a>
+                </li>
+                <li>
+                  <a href="https://github.com/proompteng/bilig/blob/main/docs/persisting-formula-backed-workpaper-documents-in-node.md">
+                    persistence article
+                  </a>
+                </li>
+                <li>
+                  <a href="https://github.com/proompteng/bilig/blob/main/docs/building-a-revenue-model-with-headless-workpaper.md">
+                    revenue model article
+                  </a>
+                </li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>Compare it</h3>
+              <ul>
+                <li>
+                  <a href="https://github.com/proompteng/bilig/blob/main/docs/headless-spreadsheet-engine-comparison.md">
+                    engine comparison
+                  </a>
+                </li>
+                <li>
+                  <a href="https://github.com/proompteng/bilig/blob/main/docs/hyperformula-alternative-headless-workpaper.md">
+                    HyperFormula comparison
+                  </a>
+                </li>
+                <li>
+                  <a href="https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md">benchmark explainer</a>
+                </li>
+                <li>
+                  <a href="https://github.com/proompteng/bilig/blob/main/docs/where-bilig-is-not-excel-compatible-yet.md">
+                    compatibility limits
+                  </a>
+                </li>
+              </ul>
+            </article>
+            <article class="card">
+              <h3>Contribute</h3>
+              <ul>
+                <li><a href="https://github.com/proompteng/bilig">GitHub repository</a></li>
+                <li><a href="https://github.com/proompteng/bilig/stargazers">star the project</a></li>
+                <li><a href="https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md">starter issues</a></li>
+                <li><a href="https://github.com/proompteng/bilig/discussions/115">feedback discussion</a></li>
+              </ul>
+            </article>
           </div>
         </section>
       </main>

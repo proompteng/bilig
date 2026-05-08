@@ -118,6 +118,11 @@ requireIncludes(
 )
 requireIncludes(index, '"@type": "SoftwareSourceCode"', 'docs/index.html')
 requireIncludes(index, '"codeRepository": "https://github.com/proompteng/bilig"', 'docs/index.html')
+requireIncludes(index, '<title>bilig - Headless Spreadsheet Engine for Node.js</title>', 'docs/index.html')
+requireIncludes(index, '<meta name="robots" content="index, follow, max-image-preview:large" />', 'docs/index.html')
+requireIncludes(index, 'bilig-hero-workbook-api.png?v=2026-05-08', 'docs/index.html')
+requireIncludes(index, '"downloadUrl": "https://www.npmjs.com/package/@bilig/headless"', 'docs/index.html')
+requireIncludes(index, '"applicationCategory": "DeveloperApplication"', 'docs/index.html')
 
 requireIncludes(robots, 'User-agent: *', 'docs/robots.txt')
 requireIncludes(robots, 'Allow: /', 'docs/robots.txt')
@@ -154,6 +159,7 @@ for (const required of [
   'repository: https://github.com/proompteng/bilig',
   'npm package: https://www.npmjs.com/package/@bilig/headless',
   'npm run agent:verify',
+  'https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input',
   'https://github.com/proompteng/bilig/discussions',
   'https://github.com/proompteng/bilig/discussions/115',
   'https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md',

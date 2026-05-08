@@ -45,8 +45,8 @@ function execFileBuffer(file: string, args: readonly string[]): Promise<Buffer> 
 async function buildSvg(): Promise<string> {
   const background = await readFile(backgroundPath)
   const backgroundUri = `data:image/png;base64,${background.toString('base64')}`
-  const titleLines = ['headless spreadsheet', 'engine for node + agents']
-  const subtitleLines = ['formulas, structural edits, snapshots,', 'and persisted readback without a grid']
+  const titleLines = ['spreadsheet formulas', 'for Node.js programs']
+  const subtitleLines = ['build, recalc, and save workbooks', 'without opening a browser grid']
 
   return String.raw`<svg xmlns="http://www.w3.org/2000/svg" width="${previewWidth}" height="${previewHeight}" viewBox="0 0 ${previewWidth} ${previewHeight}">
   <defs>
@@ -103,7 +103,7 @@ async function buildSvg(): Promise<string> {
 
   <g transform="translate(760 438)">
     <rect x="0" y="0" width="420" height="92" rx="18" fill="#102033" fill-opacity="0.94"/>
-    <text x="24" y="35" fill="#93a8bc" font-family="Inter, Arial, Helvetica, sans-serif" font-size="18" font-weight="740">verified workbook loop</text>
+    <text x="24" y="35" fill="#93a8bc" font-family="Inter, Arial, Helvetica, sans-serif" font-size="18" font-weight="740">workbook round trip</text>
     <text x="24" y="66" fill="#ffffff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="28" font-weight="800">write &#8594; recalc &#8594; save</text>
     <rect x="334" y="24" width="56" height="44" rx="14" fill="#e6f8eb"/>
     <path d="M350 46 l11 12 l23 -28" fill="none" stroke="#177344" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
