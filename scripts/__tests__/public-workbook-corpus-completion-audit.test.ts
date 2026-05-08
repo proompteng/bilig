@@ -714,6 +714,7 @@ function offlineCiPackageScripts(overrides: readonly (readonly [string, string])
         'scripts/__tests__/public-workbook-corpus-workbook.test.ts',
         'packages/excel-import/src/__tests__/excel-import.test.ts',
         'packages/excel-import/src/__tests__/xlsx-defined-names-import.test.ts',
+        'packages/excel-import/src/__tests__/xlsx-pivot-import.test.ts',
         'packages/excel-import/src/__tests__/xlsx-export-large-simple.test.ts',
       ].join(' '),
     ],

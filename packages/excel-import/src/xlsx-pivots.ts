@@ -621,6 +621,8 @@ function parsePivotCaches(zip: ZipEntries): Map<number, ParsedPivotCache> {
 
 function aggregationFromSubtotal(value: unknown): PivotAggregation | null {
   switch (value) {
+    case undefined:
+    case null:
     case 'sum':
       return 'sum'
     case 'count':
