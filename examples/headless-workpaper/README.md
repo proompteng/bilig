@@ -219,6 +219,47 @@ Expected output:
 }
 ```
 
+## Named Expression Update
+
+Run the named expression example when you want to see a service or agent change
+a workbook-scoped named expression, recalculate dependent formulas, persist the
+workbook, restore it, and verify the restored value still matches the edited
+state:
+
+```sh
+npm run named-expression
+```
+
+Expected output:
+
+```json
+{
+  "verified": true,
+  "namedExpression": "GrowthRatePercent",
+  "before": {
+    "baseRevenue": 36000,
+    "growthAdjustedRevenue": 39600
+  },
+  "after": {
+    "baseRevenue": 36000,
+    "growthAdjustedRevenue": 45000
+  },
+  "restored": {
+    "baseRevenue": 36000,
+    "growthAdjustedRevenue": 45000
+  },
+  "namedExpressionValues": {
+    "before": 10,
+    "after": 25,
+    "restored": 25
+  },
+  "persistedNamedExpressions": [
+    "GrowthRatePercent"
+  ],
+  "restoredMatchesAfter": true
+}
+```
+
 ## CSV Shaped Input
 
 Run the CSV shaped input example when you want to see how to load a simple array or CSV-shaped data into a WorkPaper, add a formula-backed summary cell, and read back the result:
