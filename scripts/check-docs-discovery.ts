@@ -95,12 +95,27 @@ function extractSitemapUrls(sitemap: string): string[] {
   return [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1] ?? '')
 }
 
-const [index, robots, sitemap, llms, starterIssues, headlessReadme, excelImportReadme, publicApi] = await Promise.all([
+const [
+  readme,
+  contributing,
+  index,
+  robots,
+  sitemap,
+  llms,
+  starterIssues,
+  newContributorGuide,
+  headlessReadme,
+  excelImportReadme,
+  publicApi,
+] = await Promise.all([
+  readFile(join(repoRoot, 'README.md'), 'utf8'),
+  readFile(join(repoRoot, 'CONTRIBUTING.md'), 'utf8'),
   readFile(join(docsRoot, 'index.html'), 'utf8'),
   readFile(join(docsRoot, 'robots.txt'), 'utf8'),
   readFile(join(docsRoot, 'sitemap.xml'), 'utf8'),
   readFile(join(docsRoot, 'llms.txt'), 'utf8'),
   readFile(join(docsRoot, 'starter-issues.md'), 'utf8'),
+  readFile(join(docsRoot, 'new-contributor-guide.md'), 'utf8'),
   readFile(join(repoRoot, 'packages', 'headless', 'README.md'), 'utf8'),
   readFile(join(repoRoot, 'packages', 'excel-import', 'README.md'), 'utf8'),
   readFile(join(docsRoot, 'public-api.md'), 'utf8'),
@@ -178,8 +193,19 @@ for (const required of [
   'https://github.com/proompteng/bilig/blob/main/docs/new-contributor-guide.md',
   'https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md',
   'https://github.com/proompteng/bilig/blob/main/docs/community-launch-pack.md',
+  'https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only',
 ]) {
   requireIncludes(llms, required, 'docs/llms.txt')
+}
+
+for (const [path, content] of [
+  ['README.md', readme],
+  ['CONTRIBUTING.md', contributing],
+  ['docs/new-contributor-guide.md', newContributorGuide],
+  ['docs/starter-issues.md', starterIssues],
+  ['docs/llms.txt', llms],
+] as const) {
+  requireIncludes(content, 'https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only', path)
 }
 
 for (const required of [

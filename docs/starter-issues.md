@@ -35,6 +35,7 @@ code-map, and PR-proof path.
 Useful filters:
 
 - [`good first issue`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22)
+- [`first-timers-only`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only)
 - [`area: import-export`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22area%3A%20import-export%22)
 - [`area: formula`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22area%3A%20formula%22)
 - [`needs reduced fixture`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22needs%20reduced%20fixture%22)
@@ -45,6 +46,11 @@ paths, per
 so starter tickets should stay genuinely scoped and current. Do not use that
 label for cross-cutting formula, import/export, or runtime changes that require
 broad architectural context.
+
+Use `first-timers-only` only for issues that are ready for someone making their
+first contribution to this repository. Those issues should name the expected
+files, a copyable validation command, and a narrow acceptance proof in the issue
+body.
 
 ## What Makes A Good Starter Patch
 
@@ -64,7 +70,9 @@ When opening a starter task, use the `Starter task` issue template and include:
 - any out-of-scope behavior that should not be pulled into the first PR
 
 Add `good first issue` only after the task has enough context for a newcomer to
-make progress without learning the whole workbook runtime.
+make progress without learning the whole workbook runtime. Add
+`first-timers-only` only when the issue can be completed from the issue body and
+linked docs without maintainer-only context.
 
 Before opening a PR, read [`CONTRIBUTING.md`](../CONTRIBUTING.md) and run the
 smallest relevant local check first. If the change touches package behavior,

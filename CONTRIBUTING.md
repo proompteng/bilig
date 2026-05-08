@@ -8,6 +8,9 @@ they change.
 
 - For a first patch, pick a current scoped ticket from
   [`docs/starter-issues.md`](docs/starter-issues.md).
+- If this is your first contribution to this repository, start with the
+  [`first-timers-only`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only)
+  queue.
 - If this is your first `bilig` pull request, use
   [`docs/new-contributor-guide.md`](docs/new-contributor-guide.md) for the
   shortest setup, code-map, and PR-proof path.

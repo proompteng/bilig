@@ -9,6 +9,11 @@ Start with [`docs/starter-issues.md`](starter-issues.md). Comment on the issue
 before opening a pull request so a maintainer can confirm the scope is still
 current.
 
+If this is your first patch to this repository, prefer the
+[`first-timers-only`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only)
+filter. Those issues are reserved for tasks that should be possible from the
+issue body, linked docs, and one focused validation command.
+
 A useful claim comment says:
 
 ```md

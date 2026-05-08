@@ -562,6 +562,9 @@ The shortest public on-ramp is the
 scoped around small runnable examples with explicit acceptance commands, so a
 first contribution can improve the public WorkPaper evaluation path without
 understanding the whole engine.
+If this is your first contribution to `bilig`, start with the
+[`first-timers-only`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only)
+filter.
 
 Please keep changes small, tested, and tied to the package that owns the
 behavior.
