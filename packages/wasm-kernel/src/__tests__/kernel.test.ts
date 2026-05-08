@@ -2883,13 +2883,13 @@ describe('wasm kernel', () => {
     expect(kernel.readSpillCols()[17]).toBe(3)
     expect(kernel.readSpillLengths()[17]).toBe(6)
     expect(Array.from(kernel.readSpillNumbers().slice(kernel.readSpillOffsets()[17], kernel.readSpillOffsets()[17] + 6))).toEqual([
-      1, 1, 1, 4, 4, 4,
+      4, 5, 6, 1, 2, 3,
     ])
     expect(kernel.readSpillRows()[18]).toBe(4)
     expect(kernel.readSpillCols()[18]).toBe(1)
     expect(kernel.readSpillLengths()[18]).toBe(4)
     expect(Array.from(kernel.readSpillNumbers().slice(kernel.readSpillOffsets()[18], kernel.readSpillOffsets()[18] + 4))).toEqual([
-      4, 4, 4, 4,
+      1, 2, 3, 4,
     ])
     expect(kernel.readSpillRows()[19]).toBe(6)
     expect(kernel.readSpillCols()[19]).toBe(1)

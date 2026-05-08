@@ -134,6 +134,8 @@ export function applyBuiltin(
     rangeMembers,
     cellTags,
     cellNumbers,
+    cellStringIds,
+    cellErrors,
     stringOffsets,
     stringLengths,
     stringData,

@@ -1,10 +1,11 @@
 import { BuiltinId, ErrorCode, ValueTag } from './protocol'
 import { compareScalarValues } from './comparison'
-import { inputCellNumeric, inputCellTag, inputColsFromSlot, inputRowsFromSlot } from './operands'
+import { copyInputCellToSpill } from './array-materialize'
+import { inputCellScalarValue, inputCellTag, inputColsFromSlot, inputRowsFromSlot } from './operands'
 import { coerceInteger } from './numeric-core'
 import { scalarErrorAt } from './builtin-args'
 import { STACK_KIND_ARRAY, STACK_KIND_RANGE, STACK_KIND_SCALAR, writeArrayResult, writeResult } from './result-io'
-import { allocateSpillArrayResult, writeSpillArrayNumber } from './vm'
+import { allocateSpillArrayResult } from './vm'
 
 function coerceBoolean(tag: u8, value: f64): i32 {
   if (tag == ValueTag.Boolean || tag == ValueTag.Number) {
@@ -27,6 +28,158 @@ function writeValueError(
   return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, code, rangeIndexStack, valueStack, tagStack, kindStack)
 }
 
+function compareInputCells(
+  leftSlot: i32,
+  leftRow: i32,
+  leftCol: i32,
+  rightSlot: i32,
+  rightRow: i32,
+  rightCol: i32,
+  kindStack: Uint8Array,
+  valueStack: Float64Array,
+  tagStack: Uint8Array,
+  rangeIndexStack: Uint32Array,
+  rangeOffsets: Uint32Array,
+  rangeLengths: Uint32Array,
+  rangeRowCounts: Uint32Array,
+  rangeColCounts: Uint32Array,
+  rangeMembers: Uint32Array,
+  cellTags: Uint8Array,
+  cellNumbers: Float64Array,
+  cellStringIds: Uint32Array,
+  cellErrors: Uint16Array,
+  stringOffsets: Uint32Array,
+  stringLengths: Uint32Array,
+  stringData: Uint16Array,
+  outputStringOffsets: Uint32Array,
+  outputStringLengths: Uint32Array,
+  outputStringData: Uint16Array,
+): i32 {
+  const leftTag = inputCellTag(
+    leftSlot,
+    leftRow,
+    leftCol,
+    kindStack,
+    valueStack,
+    tagStack,
+    rangeIndexStack,
+    rangeOffsets,
+    rangeLengths,
+    rangeRowCounts,
+    rangeColCounts,
+    rangeMembers,
+    cellTags,
+    cellNumbers,
+  )
+  const leftValue = inputCellScalarValue(
+    leftSlot,
+    leftRow,
+    leftCol,
+    kindStack,
+    valueStack,
+    tagStack,
+    rangeIndexStack,
+    rangeOffsets,
+    rangeLengths,
+    rangeRowCounts,
+    rangeColCounts,
+    rangeMembers,
+    cellTags,
+    cellNumbers,
+    cellStringIds,
+    cellErrors,
+  )
+  const rightTag = inputCellTag(
+    rightSlot,
+    rightRow,
+    rightCol,
+    kindStack,
+    valueStack,
+    tagStack,
+    rangeIndexStack,
+    rangeOffsets,
+    rangeLengths,
+    rangeRowCounts,
+    rangeColCounts,
+    rangeMembers,
+    cellTags,
+    cellNumbers,
+  )
+  const rightValue = inputCellScalarValue(
+    rightSlot,
+    rightRow,
+    rightCol,
+    kindStack,
+    valueStack,
+    tagStack,
+    rangeIndexStack,
+    rangeOffsets,
+    rangeLengths,
+    rangeRowCounts,
+    rangeColCounts,
+    rangeMembers,
+    cellTags,
+    cellNumbers,
+    cellStringIds,
+    cellErrors,
+  )
+  return compareScalarValues(
+    leftTag,
+    leftValue,
+    rightTag,
+    rightValue,
+    null,
+    stringOffsets,
+    stringLengths,
+    stringData,
+    outputStringOffsets,
+    outputStringLengths,
+    outputStringData,
+  )
+}
+
+function copyOrderingCellToSpill(
+  arrayIndex: u32,
+  outputOffset: i32,
+  slot: i32,
+  row: i32,
+  col: i32,
+  kindStack: Uint8Array,
+  valueStack: Float64Array,
+  tagStack: Uint8Array,
+  rangeIndexStack: Uint32Array,
+  rangeOffsets: Uint32Array,
+  rangeLengths: Uint32Array,
+  rangeRowCounts: Uint32Array,
+  rangeColCounts: Uint32Array,
+  rangeMembers: Uint32Array,
+  cellTags: Uint8Array,
+  cellNumbers: Float64Array,
+  cellStringIds: Uint32Array,
+  cellErrors: Uint16Array,
+): i32 {
+  return copyInputCellToSpill(
+    arrayIndex,
+    outputOffset,
+    slot,
+    row,
+    col,
+    kindStack,
+    valueStack,
+    tagStack,
+    rangeIndexStack,
+    rangeOffsets,
+    rangeLengths,
+    rangeRowCounts,
+    rangeColCounts,
+    rangeMembers,
+    cellTags,
+    cellNumbers,
+    cellStringIds,
+    cellErrors,
+  )
+}
+
 export function tryApplyArrayOrderingBuiltin(
   builtinId: i32,
   argc: i32,
@@ -42,6 +195,8 @@ export function tryApplyArrayOrderingBuiltin(
   rangeMembers: Uint32Array,
   cellTags: Uint8Array,
   cellNumbers: Float64Array,
+  cellStringIds: Uint32Array,
+  cellErrors: Uint16Array,
   stringOffsets: Uint32Array,
   stringLengths: Uint32Array,
   stringData: Uint16Array,
@@ -84,7 +239,9 @@ export function tryApplyArrayOrderingBuiltin(
     for (let row = 0; row < sourceRows; row++) {
       for (let selectedColIndex = 0; selectedColIndex < outputCols; selectedColIndex++) {
         const selectedCol = selectedCols[selectedColIndex]
-        const sourceValue = inputCellNumeric(
+        const copyError = copyOrderingCellToSpill(
+          arrayIndex,
+          outputOffset,
           base,
           row,
           selectedCol,
@@ -99,11 +256,12 @@ export function tryApplyArrayOrderingBuiltin(
           rangeMembers,
           cellTags,
           cellNumbers,
+          cellStringIds,
+          cellErrors,
         )
-        if (isNaN(sourceValue)) {
-          return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
+        if (copyError != ErrorCode.None) {
+          return writeValueError(base, copyError, rangeIndexStack, valueStack, tagStack, kindStack)
         }
-        writeSpillArrayNumber(arrayIndex, outputOffset, sourceValue)
         outputOffset += 1
       }
     }
@@ -145,7 +303,9 @@ export function tryApplyArrayOrderingBuiltin(
     for (let selectedRowIndex = 0; selectedRowIndex < outputRows; selectedRowIndex++) {
       const selectedRow = selectedRows[selectedRowIndex]
       for (let col = 0; col < sourceCols; col++) {
-        const sourceValue = inputCellNumeric(
+        const copyError = copyOrderingCellToSpill(
+          arrayIndex,
+          outputOffset,
           base,
           selectedRow,
           col,
@@ -160,11 +320,12 @@ export function tryApplyArrayOrderingBuiltin(
           rangeMembers,
           cellTags,
           cellNumbers,
+          cellStringIds,
+          cellErrors,
         )
-        if (isNaN(sourceValue)) {
-          return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
+        if (copyError != ErrorCode.None) {
+          return writeValueError(base, copyError, rangeIndexStack, valueStack, tagStack, kindStack)
         }
-        writeSpillArrayNumber(arrayIndex, outputOffset, sourceValue)
         outputOffset += 1
       }
     }
@@ -196,7 +357,7 @@ export function tryApplyArrayOrderingBuiltin(
 
     if (sourceRows == 1 || sourceCols == 1) {
       const length = sourceRows * sourceCols
-      const order = new Array<i32>(length)
+      const order = new Array<i32>()
       for (let index = 0; index < length; index++) {
         order.push(index)
       }
@@ -204,31 +365,15 @@ export function tryApplyArrayOrderingBuiltin(
         const current = order[index]
         const currentRow = current / sourceCols
         const currentCol = current - currentRow * sourceCols
-        const currentValue = inputCellNumeric(
-          base,
-          currentRow,
-          currentCol,
-          kindStack,
-          valueStack,
-          tagStack,
-          rangeIndexStack,
-          rangeOffsets,
-          rangeLengths,
-          rangeRowCounts,
-          rangeColCounts,
-          rangeMembers,
-          cellTags,
-          cellNumbers,
-        )
-        if (isNaN(currentValue)) {
-          return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-        }
         let cursor = index
         while (cursor > 0) {
           const previous = order[cursor - 1]
           const previousRow = previous / sourceCols
           const previousCol = previous - previousRow * sourceCols
-          const previousValue = inputCellNumeric(
+          const comparison = compareInputCells(
+            base,
+            currentRow,
+            currentCol,
             base,
             previousRow,
             previousCol,
@@ -243,11 +388,18 @@ export function tryApplyArrayOrderingBuiltin(
             rangeMembers,
             cellTags,
             cellNumbers,
+            cellStringIds,
+            cellErrors,
+            stringOffsets,
+            stringLengths,
+            stringData,
+            outputStringOffsets,
+            outputStringLengths,
+            outputStringData,
           )
-          if (isNaN(previousValue)) {
+          if (comparison == i32.MIN_VALUE) {
             return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
           }
-          const comparison = currentValue == previousValue ? 0 : currentValue < previousValue ? -1 : 1
           if (comparison * sortOrder < 0) {
             order[cursor] = previous
             cursor -= 1
@@ -262,7 +414,9 @@ export function tryApplyArrayOrderingBuiltin(
         const sourceOffset = order[index]
         const sourceRow = sourceOffset / sourceCols
         const sourceCol = sourceOffset - sourceRow * sourceCols
-        const sourceValue = inputCellNumeric(
+        const copyError = copyOrderingCellToSpill(
+          arrayIndex,
+          index,
           base,
           sourceRow,
           sourceCol,
@@ -277,49 +431,34 @@ export function tryApplyArrayOrderingBuiltin(
           rangeMembers,
           cellTags,
           cellNumbers,
+          cellStringIds,
+          cellErrors,
         )
-        if (isNaN(sourceValue)) {
-          return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
+        if (copyError != ErrorCode.None) {
+          return writeValueError(base, copyError, rangeIndexStack, valueStack, tagStack, kindStack)
         }
-        writeSpillArrayNumber(arrayIndex, index, sourceValue)
       }
       return writeArrayResult(base, arrayIndex, sourceRows, sourceCols, rangeIndexStack, valueStack, tagStack, kindStack)
     }
 
-    if (sortByCol) {
-      if (sortIndex > sourceRows) {
+    if (!sortByCol) {
+      if (sortIndex > sourceCols) {
         return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
       }
-      const rowSort = new Array<i32>(sourceRows)
+      const rowSort = new Array<i32>()
       for (let row = 0; row < sourceRows; row++) {
         rowSort.push(row)
       }
       const sortCol = sortIndex - 1
       for (let cursor = 1; cursor < sourceRows; cursor++) {
         const currentRow = rowSort[cursor]
-        const currentValue = inputCellNumeric(
-          base,
-          currentRow,
-          sortCol,
-          kindStack,
-          valueStack,
-          tagStack,
-          rangeIndexStack,
-          rangeOffsets,
-          rangeLengths,
-          rangeRowCounts,
-          rangeColCounts,
-          rangeMembers,
-          cellTags,
-          cellNumbers,
-        )
-        if (isNaN(currentValue)) {
-          return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-        }
         let position = cursor
         while (position > 0) {
           const previousRow = rowSort[position - 1]
-          const previousValue = inputCellNumeric(
+          const comparison = compareInputCells(
+            base,
+            currentRow,
+            sortCol,
             base,
             previousRow,
             sortCol,
@@ -334,11 +473,18 @@ export function tryApplyArrayOrderingBuiltin(
             rangeMembers,
             cellTags,
             cellNumbers,
+            cellStringIds,
+            cellErrors,
+            stringOffsets,
+            stringLengths,
+            stringData,
+            outputStringOffsets,
+            outputStringLengths,
+            outputStringData,
           )
-          if (isNaN(previousValue)) {
+          if (comparison == i32.MIN_VALUE) {
             return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
           }
-          const comparison = currentValue == previousValue ? 0 : currentValue < previousValue ? -1 : 1
           if (comparison * sortOrder < 0) {
             rowSort[position] = previousRow
             position -= 1
@@ -353,7 +499,9 @@ export function tryApplyArrayOrderingBuiltin(
       for (let sortedRow = 0; sortedRow < sourceRows; sortedRow++) {
         const sourceRow = rowSort[sortedRow]
         for (let col = 0; col < sourceCols; col++) {
-          const value = inputCellNumeric(
+          const copyError = copyOrderingCellToSpill(
+            arrayIndex,
+            outputOffset,
             base,
             sourceRow,
             col,
@@ -368,53 +516,38 @@ export function tryApplyArrayOrderingBuiltin(
             rangeMembers,
             cellTags,
             cellNumbers,
+            cellStringIds,
+            cellErrors,
           )
-          if (isNaN(value)) {
-            return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
+          if (copyError != ErrorCode.None) {
+            return writeValueError(base, copyError, rangeIndexStack, valueStack, tagStack, kindStack)
           }
-          writeSpillArrayNumber(arrayIndex, outputOffset, value)
           outputOffset += 1
         }
       }
       return writeArrayResult(base, arrayIndex, sourceRows, sourceCols, rangeIndexStack, valueStack, tagStack, kindStack)
     }
 
-    if (sortIndex > sourceCols) {
+    if (sortIndex > sourceRows) {
       return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
     }
-    const colSort = new Array<i32>(sourceCols)
+    const colSort = new Array<i32>()
     for (let col = 0; col < sourceCols; col++) {
       colSort.push(col)
     }
     const sortRow = sortIndex - 1
     for (let cursor = 1; cursor < sourceCols; cursor++) {
       const currentCol = colSort[cursor]
-      const currentValue = inputCellNumeric(
-        base,
-        currentCol,
-        sortRow,
-        kindStack,
-        valueStack,
-        tagStack,
-        rangeIndexStack,
-        rangeOffsets,
-        rangeLengths,
-        rangeRowCounts,
-        rangeColCounts,
-        rangeMembers,
-        cellTags,
-        cellNumbers,
-      )
-      if (isNaN(currentValue)) {
-        return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-      }
       let position = cursor
       while (position > 0) {
         const previousCol = colSort[position - 1]
-        const previousValue = inputCellNumeric(
+        const comparison = compareInputCells(
           base,
-          previousCol,
           sortRow,
+          currentCol,
+          base,
+          sortRow,
+          previousCol,
           kindStack,
           valueStack,
           tagStack,
@@ -426,11 +559,18 @@ export function tryApplyArrayOrderingBuiltin(
           rangeMembers,
           cellTags,
           cellNumbers,
+          cellStringIds,
+          cellErrors,
+          stringOffsets,
+          stringLengths,
+          stringData,
+          outputStringOffsets,
+          outputStringLengths,
+          outputStringData,
         )
-        if (isNaN(previousValue)) {
+        if (comparison == i32.MIN_VALUE) {
           return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
         }
-        const comparison = currentValue == previousValue ? 0 : currentValue < previousValue ? -1 : 1
         if (comparison * sortOrder < 0) {
           colSort[position] = previousCol
           position -= 1
@@ -445,7 +585,9 @@ export function tryApplyArrayOrderingBuiltin(
     for (let row = 0; row < sourceRows; row++) {
       for (let sortedCol = 0; sortedCol < sourceCols; sortedCol++) {
         const sourceCol = colSort[sortedCol]
-        const value = inputCellNumeric(
+        const copyError = copyOrderingCellToSpill(
+          arrayIndex,
+          outputOffset,
           base,
           row,
           sourceCol,
@@ -460,11 +602,12 @@ export function tryApplyArrayOrderingBuiltin(
           rangeMembers,
           cellTags,
           cellNumbers,
+          cellStringIds,
+          cellErrors,
         )
-        if (isNaN(value)) {
-          return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
+        if (copyError != ErrorCode.None) {
+          return writeValueError(base, copyError, rangeIndexStack, valueStack, tagStack, kindStack)
         }
-        writeSpillArrayNumber(arrayIndex, outputOffset, value)
         outputOffset += 1
       }
     }
@@ -541,60 +684,16 @@ export function tryApplyArrayOrderingBuiltin(
       return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
     }
 
-    const sourceIndexes = new Array<i32>(sourceLength)
+    const sourceIndexes = new Array<i32>()
     for (let offset = 0; offset < sourceLength; offset++) {
       sourceIndexes.push(offset)
     }
 
     for (let cursor = 1; cursor < sourceLength; cursor++) {
       const currentOffset = sourceIndexes[cursor]
-      const currentSourceRow = currentOffset / sourceCols
-      const currentSourceCol = currentOffset - currentSourceRow * sourceCols
-      const currentSourceValue = inputCellNumeric(
-        base,
-        currentSourceRow,
-        currentSourceCol,
-        kindStack,
-        valueStack,
-        tagStack,
-        rangeIndexStack,
-        rangeOffsets,
-        rangeLengths,
-        rangeRowCounts,
-        rangeColCounts,
-        rangeMembers,
-        cellTags,
-        cellNumbers,
-      )
-      if (isNaN(currentSourceValue)) {
-        return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-      }
-
       let position = cursor
       while (position > 0) {
         const previousOffset = sourceIndexes[position - 1]
-        const previousSourceRow = previousOffset / sourceCols
-        const previousSourceCol = previousOffset - previousSourceRow * sourceCols
-        const previousSourceValue = inputCellNumeric(
-          base,
-          previousSourceRow,
-          previousSourceCol,
-          kindStack,
-          valueStack,
-          tagStack,
-          rangeIndexStack,
-          rangeOffsets,
-          rangeLengths,
-          rangeRowCounts,
-          rangeColCounts,
-          rangeMembers,
-          cellTags,
-          cellNumbers,
-        )
-        if (isNaN(previousSourceValue)) {
-          return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-        }
-
         let comparison = 0
         for (let sortByIndex = 0; sortByIndex < sortBySlots.length; sortByIndex++) {
           const slot = sortBySlots[sortByIndex]
@@ -625,7 +724,7 @@ export function tryApplyArrayOrderingBuiltin(
             cellTags,
             cellNumbers,
           )
-          const currentCriterionValue = inputCellNumeric(
+          const currentCriterionValue = inputCellScalarValue(
             slot,
             currentCriterionRow,
             currentCriterionCol,
@@ -640,6 +739,8 @@ export function tryApplyArrayOrderingBuiltin(
             rangeMembers,
             cellTags,
             cellNumbers,
+            cellStringIds,
+            cellErrors,
           )
           const previousCriterionTag = inputCellTag(
             slot,
@@ -657,7 +758,7 @@ export function tryApplyArrayOrderingBuiltin(
             cellTags,
             cellNumbers,
           )
-          const previousCriterionValue = inputCellNumeric(
+          const previousCriterionValue = inputCellScalarValue(
             slot,
             previousCriterionRow,
             previousCriterionCol,
@@ -672,6 +773,8 @@ export function tryApplyArrayOrderingBuiltin(
             rangeMembers,
             cellTags,
             cellNumbers,
+            cellStringIds,
+            cellErrors,
           )
           const criterionComparison = compareScalarValues(
             currentCriterionTag,
@@ -713,7 +816,9 @@ export function tryApplyArrayOrderingBuiltin(
       const sortedOffset = sourceIndexes[index]
       const sourceRow = sortedOffset / sourceCols
       const sourceCol = sortedOffset - sourceRow * sourceCols
-      const sourceValue = inputCellNumeric(
+      const copyError = copyOrderingCellToSpill(
+        arrayIndex,
+        outputOffset,
         base,
         sourceRow,
         sourceCol,
@@ -728,11 +833,12 @@ export function tryApplyArrayOrderingBuiltin(
         rangeMembers,
         cellTags,
         cellNumbers,
+        cellStringIds,
+        cellErrors,
       )
-      if (isNaN(sourceValue)) {
-        return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
+      if (copyError != ErrorCode.None) {
+        return writeValueError(base, copyError, rangeIndexStack, valueStack, tagStack, kindStack)
       }
-      writeSpillArrayNumber(arrayIndex, outputOffset, sourceValue)
       outputOffset += 1
     }
     return writeArrayResult(base, arrayIndex, sourceRows, sourceCols, rangeIndexStack, valueStack, tagStack, kindStack)
