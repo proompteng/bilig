@@ -16,8 +16,6 @@ language: typescript
 - https://github.com/proompteng/bilig/tree/main/packages/headless#readme
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper
 - https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md
-- https://github.com/proompteng/bilig/blob/main/docs/public-adoption-kit.md
-- https://github.com/proompteng/bilig/blob/main/docs/product-hunt-launch-assets.md
 - https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md
 - https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md
 - https://github.com/proompteng/bilig/blob/main/docs/unsupported-formula-troubleshooting-recipe.md
@@ -44,9 +42,9 @@ npm pkg set type=module
 npm install @bilig/headless
 ```
 
-create an eval.mjs file from the quickstart in the repository readme or public
-adoption kit, then run `node eval.mjs`. a successful smoke test prints
-`verified: true` after formula readback survives a persisted restore.
+create an eval.mjs file from the quickstart in the repository readme, then run
+`node eval.mjs`. a successful smoke test prints `verified: true` after formula
+readback survives a persisted restore.
 
 repository example:
 
@@ -94,23 +92,12 @@ npm run agent:verify
   https://github.com/proompteng/bilig/blob/main/docs/formula-edge-sumifs-paired-criteria-fixture.md
 - groupby spill fixture:
   https://github.com/proompteng/bilig/blob/main/docs/formula-edge-groupby-spill-fixture.md
-- public adoption kit:
-  https://github.com/proompteng/bilig/blob/main/docs/public-adoption-kit.md
-
 ## launch and feedback
 
 - feedback discussion for agent and service workflow input:
   https://github.com/proompteng/bilig/discussions/115
-- dev-ready article draft:
+- published dev article source:
   https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md
-- launch post draft:
-  https://github.com/proompteng/bilig/blob/main/docs/launch-post-headless-workpaper.md
-- show hn launch pack:
-  https://github.com/proompteng/bilig/blob/main/docs/show-hn-launch-pack.md
-- community launch pack:
-  https://github.com/proompteng/bilig/blob/main/docs/community-launch-pack.md
-- x reply growth playbook:
-  https://github.com/proompteng/bilig/blob/main/docs/x-reply-growth-playbook.md
 
 ## boundaries
 

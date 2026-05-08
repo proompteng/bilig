@@ -127,6 +127,4 @@ Keep persistence at the workbook-document boundary:
 - Keep screenshots as human review artifacts, not as the saved state.
 
 For a broader package overview, start with
-[`packages/headless/README.md`](../packages/headless/README.md). For public
-evaluation links and shareable copy, use
-[`docs/public-adoption-kit.md`](public-adoption-kit.md).
+[`packages/headless/README.md`](../packages/headless/README.md).

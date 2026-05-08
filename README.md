@@ -323,11 +323,6 @@ Rules for agents:
   `pnpm workpaper:bench:competitive:check`, and `pnpm run ci` before publishing
   or claiming production readiness.
 
-For a concise public evaluation path, share
-[`docs/public-adoption-kit.md`](docs/public-adoption-kit.md). It includes
-positioning, npm-only evaluation commands, proof links, shareable copy, and
-guardrails for honest benchmark claims.
-
 For implementation feedback from people building agent or service workflows,
 use the GitHub discussion:
 <https://github.com/proompteng/bilig/discussions/115>.
@@ -387,21 +382,6 @@ For a formula-edge fixture walkthrough covering paired-criteria `SUMIFS`, see
 For a formula-edge fixture walkthrough covering grouped dynamic-array `GROUPBY`
 output, see
 [`docs/formula-edge-groupby-spill-fixture.md`](docs/formula-edge-groupby-spill-fixture.md).
-
-For the researched public-growth plan toward `1000` legitimate GitHub stars,
-see [`docs/github-stars-growth-plan.md`](docs/github-stars-growth-plan.md).
-
-For the lower-case, manual X reply playbook, see
-[`docs/x-reply-growth-playbook.md`](docs/x-reply-growth-playbook.md).
-
-For the Hacker News launch checklist, see
-[`docs/show-hn-launch-pack.md`](docs/show-hn-launch-pack.md).
-
-For Reddit, DEV, Lobsters, and Product Hunt launch drafts, see
-[`docs/community-launch-pack.md`](docs/community-launch-pack.md).
-
-For Product Hunt gallery images, thumbnail, demo recording, and draft copy, see
-[`docs/product-hunt-launch-assets.md`](docs/product-hunt-launch-assets.md).
 
 For the published DEV article, see
 <https://dev.to/gregkonush/why-agents-need-workbook-apis-instead-of-spreadsheet-screenshots-3d61>.

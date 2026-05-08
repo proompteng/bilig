@@ -24,8 +24,6 @@ const expectedSitemapUrls = [
   `${siteRoot}formula-edge-xlookup-exact-fixture.html`,
   `${siteRoot}formula-edge-sumifs-paired-criteria-fixture.html`,
   `${siteRoot}formula-edge-groupby-spill-fixture.html`,
-  `${siteRoot}public-adoption-kit.html`,
-  `${siteRoot}product-hunt-launch-assets.html`,
   `${siteRoot}starter-issues.html`,
   `${siteRoot}llms.txt`,
 ] as const
@@ -48,8 +46,6 @@ const sourceFilesByUrl = new Map<string, string>([
   [`${siteRoot}formula-edge-xlookup-exact-fixture.html`, 'formula-edge-xlookup-exact-fixture.md'],
   [`${siteRoot}formula-edge-sumifs-paired-criteria-fixture.html`, 'formula-edge-sumifs-paired-criteria-fixture.md'],
   [`${siteRoot}formula-edge-groupby-spill-fixture.html`, 'formula-edge-groupby-spill-fixture.md'],
-  [`${siteRoot}public-adoption-kit.html`, 'public-adoption-kit.md'],
-  [`${siteRoot}product-hunt-launch-assets.html`, 'product-hunt-launch-assets.md'],
   [`${siteRoot}starter-issues.html`, 'starter-issues.md'],
   [`${siteRoot}llms.txt`, 'llms.txt'],
 ])
@@ -169,9 +165,6 @@ for (const required of [
   'https://github.com/proompteng/bilig/blob/main/docs/where-bilig-is-not-excel-compatible-yet.md',
   'https://github.com/proompteng/bilig/blob/main/docs/formula-edge-sumifs-paired-criteria-fixture.md',
   'https://github.com/proompteng/bilig/blob/main/docs/formula-edge-groupby-spill-fixture.md',
-  'https://github.com/proompteng/bilig/blob/main/docs/x-reply-growth-playbook.md',
-  'https://github.com/proompteng/bilig/blob/main/docs/community-launch-pack.md',
-  'https://github.com/proompteng/bilig/blob/main/docs/product-hunt-launch-assets.md',
   'https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md',
 ]) {
   requireIncludes(llms, required, 'docs/llms.txt')

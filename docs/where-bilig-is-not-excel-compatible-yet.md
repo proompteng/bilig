@@ -120,7 +120,6 @@ than every spreadsheet UI. Keep those claims separated.
 
 Start with:
 
-- [`docs/public-adoption-kit.md`](public-adoption-kit.md)
 - [`docs/why-agents-need-workbook-apis.md`](why-agents-need-workbook-apis.md)
 - [`docs/building-a-revenue-model-with-headless-workpaper.md`](building-a-revenue-model-with-headless-workpaper.md)
 - [`examples/headless-workpaper`](../examples/headless-workpaper)

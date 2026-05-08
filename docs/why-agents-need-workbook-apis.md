@@ -128,7 +128,6 @@ Read the benchmark note here:
 - GitHub: <https://github.com/proompteng/bilig>
 - Website: <https://proompteng.github.io/bilig/>
 - npm: <https://www.npmjs.com/package/@bilig/headless>
-- Evaluation kit: [`docs/public-adoption-kit.md`](public-adoption-kit.md)
 - Runnable example: [`examples/headless-workpaper`](../examples/headless-workpaper)
 
 If this is relevant to an agent or Node workflow, star the repo as a bookmark:

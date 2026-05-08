@@ -111,5 +111,4 @@ paths, but it does not execute native macro code.
 ## Related Public Notes
 
 - [`docs/where-bilig-is-not-excel-compatible-yet.md`](where-bilig-is-not-excel-compatible-yet.md)
-- [`docs/public-adoption-kit.md`](public-adoption-kit.md)
 - [`packages/headless/README.md`](../packages/headless/README.md)

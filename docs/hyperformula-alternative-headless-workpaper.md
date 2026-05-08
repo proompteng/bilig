@@ -115,8 +115,6 @@ fits a later slice.
 
 - Package README:
   [`packages/headless/README.md`](../packages/headless/README.md)
-- Public adoption kit:
-  [`docs/public-adoption-kit.md`](public-adoption-kit.md)
 - Benchmark explainer:
   [`docs/what-workpaper-benchmark-proves.md`](what-workpaper-benchmark-proves.md)
 - Benchmark evidence:

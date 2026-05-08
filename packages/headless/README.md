@@ -109,8 +109,6 @@ Repository:
   [`docs/unsupported-formula-troubleshooting-recipe.md`](../../docs/unsupported-formula-troubleshooting-recipe.md)
 - agent tool-calling recipe:
   [`docs/agent-workpaper-tool-calling-recipe.md`](../../docs/agent-workpaper-tool-calling-recipe.md)
-- public adoption kit:
-  [`docs/public-adoption-kit.md`](../../docs/public-adoption-kit.md)
 - revenue-model article:
   [`docs/building-a-revenue-model-with-headless-workpaper.md`](../../docs/building-a-revenue-model-with-headless-workpaper.md)
 - compatibility boundaries:
@@ -127,14 +125,6 @@ Repository:
   [`docs/formula-edge-sumifs-paired-criteria-fixture.md`](../../docs/formula-edge-sumifs-paired-criteria-fixture.md)
 - GROUPBY spill fixture walkthrough:
   [`docs/formula-edge-groupby-spill-fixture.md`](../../docs/formula-edge-groupby-spill-fixture.md)
-- X reply growth playbook:
-  [`docs/x-reply-growth-playbook.md`](../../docs/x-reply-growth-playbook.md)
-- Show HN launch pack:
-  [`docs/show-hn-launch-pack.md`](../../docs/show-hn-launch-pack.md)
-- Community launch pack:
-  [`docs/community-launch-pack.md`](../../docs/community-launch-pack.md)
-- Product Hunt launch assets:
-  [`docs/product-hunt-launch-assets.md`](../../docs/product-hunt-launch-assets.md)
 - published DEV article:
   <https://dev.to/gregkonush/why-agents-need-workbook-apis-instead-of-spreadsheet-screenshots-3d61>
 - DEV article source:
@@ -272,10 +262,6 @@ For formula error handling, see
 It shows how to pair `getCellDisplayValue()` with
 `getCellFormulaDiagnostics()` so Node services and agent tools can return
 actionable errors instead of silently accepting unsupported formula inputs.
-
-For a concise evaluator-facing summary with copy-paste npm commands, proof
-links, shareable copy, and overclaim guardrails, use the root
-[`Public Adoption Kit`](../../docs/public-adoption-kit.md).
 
 For a focused persistence walkthrough, see
 [`docs/persisting-formula-backed-workpaper-documents-in-node.md`](../../docs/persisting-formula-backed-workpaper-documents-in-node.md)

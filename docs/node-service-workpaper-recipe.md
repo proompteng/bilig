@@ -7,8 +7,7 @@ service shape without adopting a web framework.
 Use this when a backend job, queue worker, API route, or agent tool needs
 formula-backed workbook state with controlled edits and persistence. Start with
 the package contract in
-[`packages/headless/README.md`](../packages/headless/README.md), and use the
-[`public adoption kit`](public-adoption-kit.md) when sharing the evaluator path.
+[`packages/headless/README.md`](../packages/headless/README.md).
 
 ## Setup
 
