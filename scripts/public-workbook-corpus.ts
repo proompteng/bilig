@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import {
@@ -785,9 +785,9 @@ function formatPublicWorkbookCorpusDiscoverCommand(args: {
     'public-workbook-corpus:discover',
     '--',
     '--manifest',
-    args.manifestPath,
+    formatCommandPath(args.manifestPath),
     '--cache-dir',
-    args.cacheDir,
+    formatCommandPath(args.cacheDir),
     '--limit',
     String(args.limit),
   ]
@@ -847,9 +847,9 @@ function formatPublicWorkbookCorpusLinkPlanCommand(args: {
   return [
     ...linkCommandParts('public-workbook-corpus:link-plan', args.linkInput, args.manifestPath),
     '--scorecard',
-    args.scorecardPath,
+    formatCommandPath(args.scorecardPath),
     '--verify-checkpoint',
-    args.verifyCheckpointPath,
+    formatCommandPath(args.verifyCheckpointPath),
   ]
     .map(shellQuote)
     .join(' ')
@@ -861,7 +861,7 @@ function linkCommandParts(scriptName: string, input: PublicWorkbookLinkInput, ma
     scriptName,
     '--',
     '--manifest',
-    manifestPath,
+    formatCommandPath(manifestPath),
     '--source-url',
     input.sourceUrl,
     ...(input.downloadUrl ? ['--download-url', input.downloadUrl] : []),
@@ -885,9 +885,9 @@ function formatPublicWorkbookCorpusFetchSourceCommand(args: {
     'public-workbook-corpus:fetch-source',
     '--',
     '--manifest',
-    args.manifestPath,
+    formatCommandPath(args.manifestPath),
     '--cache-dir',
-    args.cacheDir,
+    formatCommandPath(args.cacheDir),
     '--source-id',
     args.sourceId,
   ]
@@ -908,11 +908,11 @@ export function formatPublicWorkbookCorpusVerifyArtifactCommand(args: {
     'public-workbook-corpus:verify-artifact',
     '--',
     '--manifest',
-    args.manifestPath,
+    formatCommandPath(args.manifestPath),
     '--cache-dir',
-    args.cacheDir,
+    formatCommandPath(args.cacheDir),
     '--verify-checkpoint',
-    args.verifyCheckpointPath,
+    formatCommandPath(args.verifyCheckpointPath),
     '--artifact-id',
     args.artifactId,
     '--update-verify-checkpoint',
@@ -932,13 +932,13 @@ function formatPublicWorkbookCorpusStatusCommand(args: {
     'public-workbook-corpus:status',
     '--',
     '--manifest',
-    args.manifestPath,
+    formatCommandPath(args.manifestPath),
     '--scorecard',
-    args.scorecardPath,
+    formatCommandPath(args.scorecardPath),
     '--verify-checkpoint',
-    args.verifyCheckpointPath,
+    formatCommandPath(args.verifyCheckpointPath),
     '--cache-dir',
-    args.cacheDir,
+    formatCommandPath(args.cacheDir),
   ]
     .map(shellQuote)
     .join(' ')
@@ -946,6 +946,12 @@ function formatPublicWorkbookCorpusStatusCommand(args: {
 
 function shellQuote(value: string): string {
   return /^[A-Za-z0-9_./:=@+-]+$/u.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`
+}
+
+function formatCommandPath(path: string): string {
+  const absolutePath = resolve(path)
+  const relativePath = relative(rootDir, absolutePath)
+  return relativePath && !relativePath.startsWith('..') && !isAbsolute(relativePath) ? relativePath : path
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

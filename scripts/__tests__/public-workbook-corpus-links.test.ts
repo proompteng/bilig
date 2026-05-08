@@ -278,6 +278,64 @@ describe('public workbook corpus shared links', () => {
     })
   })
 
+  it('prints default shared-link plan commands with repo-relative corpus paths', () => {
+    const result = spawnSync(
+      'bun',
+      [
+        corpusScriptPath(),
+        'link-plan',
+        '--source-url',
+        'https://docs.google.com/spreadsheets/d/repoRelativePlanCheck/edit?usp=sharing',
+        '--license-title',
+        license.licenseTitle,
+        '--license-url',
+        license.licenseUrl,
+        '--license-spdx',
+        license.licenseSpdxId,
+      ],
+      { encoding: 'utf8' },
+    )
+    const plan: unknown = JSON.parse(result.stdout)
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).not.toContain(repoRoot())
+    expect(plan).toMatchObject({
+      commands: {
+        addLink: expect.stringContaining('--manifest .cache/public-workbook-corpus/manifest.json'),
+        fetchSource: expect.stringContaining('--cache-dir .cache/public-workbook-corpus'),
+        status: expect.stringContaining('--scorecard packages/benchmarks/baselines/public-workbook-corpus-scorecard.json'),
+      },
+    })
+  })
+
+  it('prints default shared-link dry-run commands with repo-relative corpus paths', () => {
+    const result = spawnSync(
+      'bun',
+      [
+        corpusScriptPath(),
+        'add-link',
+        '--dry-run',
+        '--source-url',
+        'https://docs.google.com/spreadsheets/d/repoRelativeDryRunCheck/edit?usp=sharing',
+        '--license-title',
+        license.licenseTitle,
+        '--license-url',
+        license.licenseUrl,
+        '--license-spdx',
+        license.licenseSpdxId,
+      ],
+      { encoding: 'utf8' },
+    )
+    const dryRun: unknown = JSON.parse(result.stdout)
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).not.toContain(repoRoot())
+    expect(dryRun).toMatchObject({
+      nextFetchSourceCommand: expect.stringContaining('--cache-dir .cache/public-workbook-corpus'),
+      nextPlanCommand: expect.stringContaining('--verify-checkpoint .cache/public-workbook-corpus/verification-checkpoint.json'),
+    })
+  })
+
   it('refuses bounded fetch-source while the corpus stop marker is active', () => {
     const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-fetch-source-paused-'))
     const stopMarkerPath = join(dir, 'stop.md')
@@ -385,4 +443,8 @@ function buildWorkbookBytes(): Uint8Array {
 
 function corpusScriptPath(): string {
   return join(dirname(fileURLToPath(import.meta.url)), '../public-workbook-corpus.ts')
+}
+
+function repoRoot(): string {
+  return join(dirname(fileURLToPath(import.meta.url)), '../..')
 }
