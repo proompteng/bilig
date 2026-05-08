@@ -1164,12 +1164,13 @@ describe('public workbook corpus CLI resource guards', () => {
           cachePath: artifactB.cachePath,
         },
       ],
-      nextVerificationCommand: expect.stringContaining('public-workbook-corpus:verify-missing'),
+      nextVerificationCommand: null,
+      blockedVerificationCommand: expect.stringContaining('public-workbook-corpus:verify-missing'),
     })
-    const nextVerificationCommand = readNextVerificationCommand(planned)
-    expect(nextVerificationCommand).toContain('--limit 1')
-    expect(nextVerificationCommand).toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
-    expect(nextVerificationCommand).toContain('--allow-active-stop-marker')
+    const blockedVerificationCommand = readPlanCommand(planned, 'blockedVerificationCommand')
+    expect(blockedVerificationCommand).toContain('--limit 1')
+    expect(blockedVerificationCommand).toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
+    expect(blockedVerificationCommand).toContain('--allow-active-stop-marker')
     expect(readReusablePublicWorkbookCorpusCases([checkpointPath])).toEqual([])
   })
 
@@ -1231,12 +1232,13 @@ describe('public workbook corpus CLI resource guards', () => {
           reason: 'missing-used-range-evidence',
         },
       ],
-      nextVerificationCommand: expect.stringContaining('public-workbook-corpus:verify-stale'),
+      nextVerificationCommand: null,
+      blockedVerificationCommand: expect.stringContaining('public-workbook-corpus:verify-stale'),
     })
-    const nextVerificationCommand = readNextVerificationCommand(planned)
-    expect(nextVerificationCommand).toContain('--limit 1')
-    expect(nextVerificationCommand).toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
-    expect(nextVerificationCommand).toContain('--allow-active-stop-marker')
+    const blockedVerificationCommand = readPlanCommand(planned, 'blockedVerificationCommand')
+    expect(blockedVerificationCommand).toContain('--limit 1')
+    expect(blockedVerificationCommand).toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
+    expect(blockedVerificationCommand).toContain('--allow-active-stop-marker')
   })
 
   it('lists stale import-warning classifier evidence in verify-stale plans', async () => {
@@ -1495,13 +1497,13 @@ function readPackageJson(): { readonly scripts?: Record<string, string> } {
   return { scripts: Object.fromEntries(Object.entries(scripts).filter((entry): entry is [string, string] => typeof entry[1] === 'string')) }
 }
 
-function readNextVerificationCommand(plan: unknown): string {
+function readPlanCommand(plan: unknown, key: string): string {
   if (typeof plan !== 'object' || plan === null) {
     throw new Error('verify slice plan was not an object')
   }
-  const command = Reflect.get(plan, 'nextVerificationCommand')
+  const command = Reflect.get(plan, key)
   if (typeof command !== 'string') {
-    throw new Error('verify slice plan did not include a next verification command')
+    throw new Error(`verify slice plan did not include ${key}`)
   }
   return command
 }

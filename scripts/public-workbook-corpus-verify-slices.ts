@@ -57,6 +57,8 @@ export async function runPublicWorkbookCorpusVerifyMissingCommand(args: PublicWo
     const recordedCases = readReusablePublicWorkbookCorpusCases([args.scorecardPath, args.verifyCheckpointPath])
     const missingArtifacts = listMissingPublicWorkbookArtifacts({ manifest, cases: recordedCases })
     const selectedArtifactCount = Math.min(limit, missingArtifacts.length)
+    const verificationCommand =
+      selectedArtifactCount > 0 ? splitVerifySliceCommand({ ...args, limit: selectedArtifactCount, slice: 'verify-missing' }) : null
     process.stdout.write(
       `${JSON.stringify(
         {
@@ -69,8 +71,8 @@ export async function runPublicWorkbookCorpusVerifyMissingCommand(args: PublicWo
             sourceUrl: artifact.sourceUrl,
             cachePath: artifact.cachePath,
           })),
-          nextVerificationCommand:
-            selectedArtifactCount > 0 ? formatVerifySliceCommand({ ...args, limit: selectedArtifactCount, slice: 'verify-missing' }) : null,
+          nextVerificationCommand: verificationCommand?.command ?? null,
+          blockedVerificationCommand: verificationCommand?.blockedCommand ?? null,
         },
         null,
         2,
@@ -103,6 +105,8 @@ export async function runPublicWorkbookCorpusVerifyStaleCommand(args: PublicWork
     const staleArtifacts = listStalePublicWorkbookArtifacts({ manifest, cases: recordedCases })
     const recordedCasesById = indexPublicWorkbookCorpusCases(recordedCases)
     const selectedArtifactCount = Math.min(limit, staleArtifacts.length)
+    const verificationCommand =
+      selectedArtifactCount > 0 ? splitVerifySliceCommand({ ...args, limit: selectedArtifactCount, slice: 'verify-stale' }) : null
     process.stdout.write(
       `${JSON.stringify(
         {
@@ -117,8 +121,8 @@ export async function runPublicWorkbookCorpusVerifyStaleCommand(args: PublicWork
             reason: staleArtifactReason(artifact.id, recordedCasesById),
             reasons: staleArtifactReasons(artifact.id, recordedCasesById),
           })),
-          nextVerificationCommand:
-            selectedArtifactCount > 0 ? formatVerifySliceCommand({ ...args, limit: selectedArtifactCount, slice: 'verify-stale' }) : null,
+          nextVerificationCommand: verificationCommand?.command ?? null,
+          blockedVerificationCommand: verificationCommand?.blockedCommand ?? null,
         },
         null,
         2,
@@ -250,10 +254,26 @@ function formatVerifySliceCommand(
     '--limit',
     String(args.limit),
   ]
+  return command.map(shellQuote).join(' ')
+}
+
+function splitVerifySliceCommand(
+  args: PublicWorkbookCorpusVerifySliceCommandArgs & {
+    readonly limit: number
+    readonly slice: 'verify-missing' | 'verify-stale'
+  },
+): { readonly command: string | null; readonly blockedCommand: string | null } {
+  const command = formatVerifySliceCommand(args)
   if (!existsSync(args.corpusRunStopMarkerPath)) {
-    return command.map(shellQuote).join(' ')
+    return {
+      command,
+      blockedCommand: null,
+    }
   }
-  return `${publicCorpusStopMarkerOverrideEnvVar}=1 ${[...command, publicCorpusStopMarkerOverrideFlag].map(shellQuote).join(' ')}`
+  return {
+    command: null,
+    blockedCommand: `${publicCorpusStopMarkerOverrideEnvVar}=1 ${command} ${publicCorpusStopMarkerOverrideFlag}`,
+  }
 }
 
 function shellQuote(value: string): string {
