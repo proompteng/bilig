@@ -66,6 +66,7 @@ describe('public workbook financial corpus plan CLI', () => {
     const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-financial-check-'))
     const manifestPath = join(dir, 'manifest.json')
     const cacheDir = join(dir, 'cache')
+    const inactiveStopMarkerPath = join(dir, 'missing-stop.md')
     const result = spawnSync(
       'bun',
       [
@@ -75,6 +76,8 @@ describe('public workbook financial corpus plan CLI', () => {
         manifestPath,
         '--cache-dir',
         cacheDir,
+        '--corpus-run-stop-marker',
+        inactiveStopMarkerPath,
         '--target-workbook-count',
         '5',
         '--limit',
@@ -100,6 +103,10 @@ describe('public workbook financial corpus plan CLI', () => {
       candidateSourceCount: 0,
       needsAdditionalDiscovery: true,
       recommendedFetchLimit: 5,
+      stopMarker: {
+        active: false,
+        requiresExplicitResume: false,
+      },
       nextCommands: {
         discover: expect.stringContaining('public-workbook-corpus:discover-financial'),
         fetch: expect.stringContaining('public-workbook-corpus:fetch-financial'),
@@ -108,7 +115,69 @@ describe('public workbook financial corpus plan CLI', () => {
         verify: expect.stringContaining('public-workbook-corpus:verify-financial'),
         check: expect.stringContaining('public-workbook-corpus:check-financial'),
       },
+      blockedCommands: {},
     })
+  })
+
+  it('keeps stop-marker blocked mutating commands out of financial check next steps', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-financial-check-paused-'))
+    const manifestPath = join(dir, 'manifest.json')
+    const cacheDir = join(dir, 'cache')
+    const stopMarkerPath = join(dir, 'stop.md')
+    writeFileSync(stopMarkerPath, '# stop\n')
+
+    const result = spawnSync(
+      'bun',
+      [
+        financialPlanScriptPath(),
+        '--check',
+        '--manifest',
+        manifestPath,
+        '--cache-dir',
+        cacheDir,
+        '--corpus-run-stop-marker',
+        stopMarkerPath,
+        '--target-workbook-count',
+        '5',
+        '--limit',
+        '5',
+      ],
+      {
+        encoding: 'utf8',
+      },
+    )
+    const check = JSON.parse(result.stdout)
+
+    expect(result.status).toBe(0)
+    expect(check).toMatchObject({
+      mode: 'check',
+      stopMarker: {
+        active: true,
+        requiresExplicitResume: true,
+        overrideFlag: '--allow-active-stop-marker',
+        overrideEnvVar: 'BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE',
+      },
+      nextCommands: {
+        fetchPlan: expect.stringContaining('public-workbook-corpus:fetch-financial:plan'),
+        resumeCheck: expect.stringContaining('public-workbook-corpus:resume-financial:check'),
+        check: expect.stringContaining('public-workbook-corpus:check-financial'),
+      },
+      blockedCommands: {
+        discover: expect.stringContaining('public-workbook-corpus:discover-financial'),
+        fetch: expect.stringContaining('public-workbook-corpus:fetch-financial'),
+        fetchAll: expect.stringContaining('public-workbook-corpus:fetch-financial'),
+        verify: expect.stringContaining('public-workbook-corpus:verify-financial'),
+      },
+    })
+    expect(check.nextCommands).not.toHaveProperty('discover')
+    expect(check.nextCommands).not.toHaveProperty('fetch')
+    expect(check.nextCommands).not.toHaveProperty('verify')
+    expect(check.blockedCommands.discover).toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
+    expect(check.blockedCommands.discover).toContain('--allow-active-stop-marker')
+    expect(check.blockedCommands.fetch).toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
+    expect(check.blockedCommands.fetch).toContain('--allow-active-stop-marker')
+    expect(check.blockedCommands.verify).toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
+    expect(check.blockedCommands.verify).toContain('--allow-active-stop-marker')
   })
 
   it('omits mutating discovery commands when known financial candidates can fill the target', () => {

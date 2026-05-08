@@ -12,6 +12,7 @@ import { readFlagArg, readStringArg } from './public-workbook-corpus-cli.ts'
 import { auditPublicWorkbookCorpusCiOfflineCachedMode } from './public-workbook-corpus-ci-offline-audit.ts'
 import { hasPublicWorkbookCorpusUsedRangeEvidence } from './public-workbook-corpus-evidence.ts'
 import { buildPublicWorkbookCorpusAuditNextActions } from './public-workbook-corpus-completion-next-actions.ts'
+import { validatePublicWorkbookCorpusAuditNextActions } from './public-workbook-corpus-completion-next-action-validation.ts'
 import {
   buildFeatureWitnessCoverage,
   buildUnsupportedCaseSummary,
@@ -169,7 +170,11 @@ export function buildPublicWorkbookCorpusCompletionAudit(args: {
   const checklist = requirementBuilders.map((builder) => builder(context))
   const allChecklistItemsPassed = checklist.every((entry) => entry.passed)
   const unmetRequirements = checklist.flatMap((entry) => (entry.passed ? [] : entry.gaps.map((gap) => `${entry.id}: ${gap}`)))
-  const nextActions = buildPublicWorkbookCorpusAuditNextActions({ currentState, status: args.status })
+  const nextActions = buildPublicWorkbookCorpusAuditNextActions({
+    currentState,
+    status: args.status,
+    stopMarkerActive: args.stopMarkerActive,
+  })
   return {
     schemaVersion: 1,
     generatedAt: args.generatedAt,
@@ -248,28 +253,7 @@ export function validatePublicWorkbookCorpusCompletionAudit(
   if (audit.completionVerdict.goalStatus === 'active-not-achieved' && audit.nextActions.length === 0) {
     findings.push('active goal has no concrete next actions')
   }
-  for (const action of audit.nextActions) {
-    if (!action.id.trim()) {
-      findings.push('next action is missing an id')
-    }
-    if (!Number.isFinite(action.priority) || action.priority <= 0) {
-      findings.push(`${action.id} next action has invalid priority`)
-    }
-    if (!action.reason.trim()) {
-      findings.push(`${action.id} next action is missing a reason`)
-    }
-    if (action.commands.length === 0) {
-      findings.push(`${action.id} next action has no commands`)
-    }
-    for (const command of action.commands) {
-      const scriptName = pnpmScriptName(command)
-      if (!scriptName) {
-        findings.push(`${action.id} next action command is not a pnpm package script: ${command}`)
-      } else if (!packageScripts().has(scriptName)) {
-        findings.push(`${action.id} next action command references missing package script: ${scriptName}`)
-      }
-    }
-  }
+  findings.push(...validatePublicWorkbookCorpusAuditNextActions({ audit, packageScripts: packageScripts() }))
   if (audit.completionVerdict.nextCorpusRunRequiresExplicitResume && !audit.completionVerdict.stopMarkerActive) {
     findings.push('explicit corpus resume is required without an active stop marker')
   }

@@ -8,6 +8,7 @@ import type {
 export function buildPublicWorkbookCorpusAuditNextActions(args: {
   readonly currentState: PublicWorkbookCorpusAuditState
   readonly status: PublicWorkbookCorpusStatus
+  readonly stopMarkerActive: boolean
 }): PublicWorkbookCorpusAuditNextAction[] {
   const actions: PublicWorkbookCorpusAuditNextAction[] = []
   if (args.currentState.missingCachedArtifactCount > 0) {
@@ -28,9 +29,10 @@ export function buildPublicWorkbookCorpusAuditNextActions(args: {
         reason: `cached artifacts missing verification evidence: ${String(args.currentState.missingVerificationCount)}`,
         commands: [
           args.status.nextMissingVerificationPlanCommand,
-          args.status.nextMissingVerificationCommand,
+          ...(args.stopMarkerActive ? [] : [args.status.nextMissingVerificationCommand]),
           'pnpm public-workbook-corpus:completion-audit:check',
         ],
+        blockedCommands: args.stopMarkerActive ? [args.status.nextMissingVerificationCommand] : [],
       }),
     )
   }
@@ -42,9 +44,10 @@ export function buildPublicWorkbookCorpusAuditNextActions(args: {
         reason: `recorded verification cases need evidence refresh: ${String(args.currentState.staleRecordedVerificationCount)}`,
         commands: [
           args.status.nextStaleVerificationPlanCommand,
-          args.status.nextStaleVerificationCommand,
+          ...(args.stopMarkerActive ? [] : [args.status.nextStaleVerificationCommand]),
           'pnpm public-workbook-corpus:completion-audit:check',
         ],
+        blockedCommands: args.stopMarkerActive ? [args.status.nextStaleVerificationCommand] : [],
       }),
     )
   }
@@ -104,11 +107,15 @@ function nextAction(action: {
   readonly priority: number
   readonly reason: string
   readonly commands: readonly (string | null)[]
+  readonly blockedCommands?: readonly (string | null)[]
 }): PublicWorkbookCorpusAuditNextAction {
   return {
     id: action.id,
     priority: action.priority,
     reason: action.reason,
     commands: action.commands.filter((command): command is string => typeof command === 'string' && command.trim().length > 0),
+    blockedCommands: (action.blockedCommands ?? []).filter(
+      (command): command is string => typeof command === 'string' && command.trim().length > 0,
+    ),
   }
 }

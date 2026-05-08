@@ -65,16 +65,18 @@ describe('public workbook corpus completion audit', () => {
           reason: 'cached artifacts missing verification evidence: 1',
           commands: expect.arrayContaining([
             'pnpm public-workbook-corpus:verify-missing:plan',
-            'pnpm public-workbook-corpus:verify-missing -- --limit 1',
+            'pnpm public-workbook-corpus:completion-audit:check',
           ]),
+          blockedCommands: ['pnpm public-workbook-corpus:verify-missing -- --limit 1'],
         }),
         expect.objectContaining({
           id: 'refresh-stale-verification-evidence',
           reason: 'recorded verification cases need evidence refresh: 1',
           commands: expect.arrayContaining([
             'pnpm public-workbook-corpus:verify-stale:plan',
-            'pnpm public-workbook-corpus:verify-stale -- --limit 1',
+            'pnpm public-workbook-corpus:completion-audit:check',
           ]),
+          blockedCommands: ['pnpm public-workbook-corpus:verify-stale -- --limit 1'],
         }),
         expect.objectContaining({
           id: 'resume-financial-workpapers',

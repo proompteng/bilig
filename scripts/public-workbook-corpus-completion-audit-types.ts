@@ -25,6 +25,7 @@ export interface PublicWorkbookCorpusAuditNextAction {
   readonly priority: number
   readonly reason: string
   readonly commands: readonly string[]
+  readonly blockedCommands: readonly string[]
 }
 
 export interface PublicWorkbookCorpusAuditState {

@@ -94,14 +94,14 @@ async function main(): Promise<void> {
           candidateSourceDeficitCount: plan.candidateSourceDeficitCount,
           recommendedFetchLimit: plan.recommendedFetchLimit,
           needsAdditionalDiscovery: plan.needsAdditionalDiscovery,
-          nextCommands: {
-            ...(plan.commands.discover ? { discover: plan.commands.discover } : {}),
-            fetch: plan.commands.fetch,
-            fetchPlan: plan.commands.fetchPlan,
-            resumeCheck: plan.commands.resumeCheck,
-            verify: plan.commands.verify,
-            check: plan.commands.check,
+          stopMarker: {
+            active: plan.stopMarker.active,
+            requiresExplicitResume: plan.stopMarker.active,
+            overrideFlag: plan.stopMarker.overrideFlag,
+            overrideEnvVar: plan.stopMarker.overrideEnvVar,
           },
+          nextCommands: financialCheckNextCommands(plan),
+          blockedCommands: financialCheckBlockedCommands(plan),
         },
         null,
         2,
@@ -320,6 +320,34 @@ export function validatePublicWorkbookCorpusFinancialPlan(plan: PublicWorkbookCo
   }
   validateFinancialCommands(plan, findings)
   return findings
+}
+
+function financialCheckNextCommands(plan: PublicWorkbookCorpusFinancialPlan): Record<string, string | null> {
+  const commands: Record<string, string | null> = {
+    fetchPlan: plan.commands.fetchPlan,
+    resumeCheck: plan.commands.resumeCheck,
+    check: plan.commands.check,
+  }
+  if (!plan.stopMarker.active) {
+    if (plan.commands.discover !== null) {
+      commands['discover'] = plan.commands.discover
+    }
+    commands['fetch'] = plan.commands.fetch
+    commands['verify'] = plan.commands.verify
+  }
+  return commands
+}
+
+function financialCheckBlockedCommands(plan: PublicWorkbookCorpusFinancialPlan): Record<string, string | null> {
+  if (!plan.stopMarker.active) {
+    return {}
+  }
+  return {
+    ...(plan.commands.discover ? { discover: plan.commands.discover } : {}),
+    fetch: plan.commands.fetch,
+    fetchAll: plan.commands.fetchAll,
+    verify: plan.commands.verify,
+  }
 }
 
 function readOrCreateFinancialManifest(path: string, targetWorkbookCount: number): PublicWorkbookManifest {
