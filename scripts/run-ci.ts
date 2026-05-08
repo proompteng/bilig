@@ -46,6 +46,14 @@ function direct(label: string, ...args: string[]): CiTask {
   return { label, command: args }
 }
 
+function bunScript(label: string, script: string, ...args: string[]): CiTask {
+  return direct(label, 'bun', script, ...args)
+}
+
+function tsxScript(label: string, script: string, ...args: string[]): CiTask {
+  return direct(label, workspaceBin('tsx'), script, ...args)
+}
+
 function workspaceBin(name: string): string {
   return process.platform === 'win32' ? `node_modules\\.bin\\${name}.cmd` : `node_modules/.bin/${name}`
 }
@@ -176,6 +184,13 @@ const browserWebBundleBuild = withEnv(pnpm('browser web bundle build', '--filter
   VITE_BILIG_REMOTE_SYNC: '0',
 })
 const appRuntimeDependencyBuild = pnpm('app runtime dependency build', '--filter', '@bilig/app^...', 'run', 'build')
+const wasmBuildTask: CiTask = {
+  label: 'wasm build',
+  steps: [
+    bunScript('wasm assembly build', 'packages/wasm-kernel/scripts/build.ts'),
+    direct('wasm TypeScript build', workspaceBin('tsc'), '-p', 'packages/wasm-kernel/tsconfig.json'),
+  ],
+}
 const browserLane: CiTask = {
   label: runFullGates ? 'browser tests + perf + fuzz' : 'browser ci smoke tests',
   steps: [
@@ -199,40 +214,86 @@ const parallelFocusedCorrectnessLanes: readonly CiTask[] = [
 ]
 const corpusCorrectnessLane = pnpm('correctness public workbook corpus', 'test:correctness:corpus')
 const generatedSourceChecks: readonly CiTask[] = [
-  pnpm('protocol check', 'protocol:check'),
-  pnpm('protocol package build for generated-source imports', '--filter', '@bilig/protocol', 'build'),
-  pnpm('agent API package build for generated-source imports', '--filter', '@bilig/agent-api', 'build'),
-  pnpm('formula inventory check', 'formula-inventory:check'),
-  pnpm('formula dominance check', 'formula:dominance:check'),
-  pnpm('calculation semantics scorecard check', 'calculation:semantics:check'),
-  pnpm('Microsoft Excel live calculation scorecard check', 'calculation:excel-live:check'),
-  pnpm('Google Sheets live calculation scorecard check', 'calculation:google-sheets-live:check'),
-  pnpm('Microsoft Excel live recalculation scorecard check', 'recalculation:excel-live:check'),
-  pnpm('Google Sheets live recalculation scorecard check', 'recalculation:google-sheets-live:check'),
-  pnpm('Microsoft Excel live structural scorecard check', 'structural:excel-live:check'),
-  pnpm('Google Sheets live structural scorecard check', 'structural:google-sheets-live:check'),
-  pnpm('Microsoft Excel live large workbook scorecard check', 'large-workbook:excel-live:check'),
-  pnpm('Google Sheets live large workbook scorecard check', 'large-workbook:google-sheets-live:check'),
-  pnpm('auditability scorecard check', 'auditability:check'),
-  pnpm('reliability scorecard check', 'reliability:check'),
-  pnpm('collaboration scorecard check', 'collaboration:check'),
-  pnpm('automation scorecard check', 'automation:check'),
-  pnpm('import/export fidelity scorecard check', 'import-export:fidelity:check'),
-  pnpm('public workbook corpus shared-link lifecycle plan check', 'public-workbook-corpus:link-plan:check'),
-  pnpm('public workbook corpus shared-link intake check', 'public-workbook-corpus:add-link:check'),
-  pnpm('public workbook corpus offline scorecard check', 'public-workbook-corpus:check:offline'),
-  pnpm('public workbook corpus resume plan check', 'public-workbook-corpus:resume-plan:check'),
-  pnpm('public workbook corpus completion audit check', 'public-workbook-corpus:completion-audit:check'),
-  pnpm('large workbook SLO scorecard check', 'large-workbook:slo:check'),
-  pnpm('WorkPaper XLSX corpus fixture check', 'workpaper:xlsx-corpus:fixtures:check'),
-  pnpm('UI same-corpus XLSX fixture check', 'ui:same-corpus:fixture:check'),
-  pnpm('UI responsiveness live browser scorecard check', 'ui:browser-live:check'),
-  pnpm('security posture scorecard check', 'security:posture:check'),
-  pnpm('bilig dominance scorecard check', 'dominance:check'),
-  pnpm('bilig dominance audit check', 'dominance:audit:check'),
-  pnpm('workspace resolution check', 'workspace-resolution:check'),
-  pnpm('canonical naming check', 'naming:check'),
-  pnpm('docs discovery check', 'docs:discovery:check'),
+  bunScript('protocol check', 'scripts/gen-protocol.ts', '--check'),
+  direct('protocol package build for generated-source imports', workspaceBin('tsc'), '-p', 'packages/protocol/tsconfig.json'),
+  direct('agent API package build for generated-source imports', workspaceBin('tsc'), '-b', 'packages/agent-api/tsconfig.json'),
+  bunScript('formula inventory check', 'scripts/gen-formula-inventory.ts', '--check'),
+  bunScript('formula dominance check', 'scripts/gen-formula-dominance-snapshot.ts', '--check'),
+  bunScript('calculation semantics scorecard check', 'scripts/gen-calculation-semantics-scorecard.ts', '--check'),
+  bunScript('Microsoft Excel live calculation scorecard check', 'scripts/gen-microsoft-excel-live-calculation-scorecard.ts', '--check'),
+  bunScript('Google Sheets live calculation scorecard check', 'scripts/gen-google-sheets-live-calculation-scorecard.ts', '--check'),
+  bunScript('Microsoft Excel live recalculation scorecard check', 'scripts/gen-microsoft-excel-live-recalculation-scorecard.ts', '--check'),
+  bunScript('Google Sheets live recalculation scorecard check', 'scripts/gen-google-sheets-live-recalculation-scorecard.ts', '--check'),
+  bunScript('Microsoft Excel live structural scorecard check', 'scripts/gen-microsoft-excel-live-structural-scorecard.ts', '--check'),
+  bunScript('Google Sheets live structural scorecard check', 'scripts/gen-google-sheets-live-structural-scorecard.ts', '--check'),
+  bunScript(
+    'Microsoft Excel live large workbook scorecard check',
+    'scripts/gen-microsoft-excel-live-large-workbook-scorecard.ts',
+    '--check',
+  ),
+  bunScript('Google Sheets live large workbook scorecard check', 'scripts/gen-google-sheets-live-large-workbook-scorecard.ts', '--check'),
+  bunScript('auditability scorecard check', 'scripts/gen-auditability-scorecard.ts', '--check'),
+  bunScript('reliability scorecard check', 'scripts/gen-reliability-scorecard.ts', '--check'),
+  bunScript('collaboration scorecard check', 'scripts/gen-collaboration-scorecard.ts', '--check'),
+  bunScript('automation scorecard check', 'scripts/gen-automation-scorecard.ts', '--check'),
+  bunScript('import/export fidelity scorecard check', 'scripts/gen-import-export-fidelity-scorecard.ts', '--check'),
+  bunScript(
+    'public workbook corpus shared-link lifecycle plan check',
+    'scripts/public-workbook-corpus.ts',
+    'link-plan',
+    '--source-url',
+    'https://docs.google.com/spreadsheets/d/biligSharedWorkbookCheck/edit?usp=sharing',
+    '--license-title',
+    'Creative Commons Attribution 4.0 International',
+    '--license-url',
+    'https://creativecommons.org/licenses/by/4.0/',
+    '--license-spdx',
+    'CC-BY-4.0',
+  ),
+  bunScript(
+    'public workbook corpus shared-link intake check',
+    'scripts/public-workbook-corpus.ts',
+    'add-link',
+    '--dry-run',
+    '--source-url',
+    'https://docs.google.com/spreadsheets/d/biligSharedWorkbookCheck/edit?usp=sharing',
+    '--license-title',
+    'Creative Commons Attribution 4.0 International',
+    '--license-url',
+    'https://creativecommons.org/licenses/by/4.0/',
+    '--license-spdx',
+    'CC-BY-4.0',
+  ),
+  bunScript('public workbook corpus offline scorecard check', 'scripts/public-workbook-corpus.ts', 'check', '--skip-manifest-check'),
+  bunScript('public workbook corpus resume plan check', 'scripts/public-workbook-corpus-resume-plan.ts', '--check'),
+  bunScript('public workbook corpus completion audit check', 'scripts/public-workbook-corpus-completion-audit.ts', '--check'),
+  bunScript('large workbook SLO scorecard check', 'scripts/gen-large-workbook-slo-scorecard.ts', '--check'),
+  {
+    label: 'WorkPaper XLSX corpus fixture check',
+    steps: [
+      bunScript('WorkPaper XLSX corpus fixture generation check', 'scripts/gen-workpaper-xlsx-corpus-fixtures.ts', '--check'),
+      bunScript(
+        'WorkPaper XLSX corpus parity check',
+        'scripts/check-workpaper-xlsx-corpus.ts',
+        '--',
+        'packages/headless/fixtures/xlsx-corpus',
+      ),
+    ],
+  },
+  bunScript(
+    'UI same-corpus XLSX fixture check',
+    'scripts/capture-ui-responsiveness-same-corpus.ts',
+    '--emit-xlsx',
+    'packages/benchmarks/baselines/ui-same-corpus',
+    '--check',
+  ),
+  bunScript('UI responsiveness live browser scorecard check', 'scripts/gen-ui-responsiveness-live-browser-scorecard.ts', '--check'),
+  bunScript('security posture scorecard check', 'scripts/gen-security-posture-scorecard.ts', '--check'),
+  bunScript('bilig dominance scorecard check', 'scripts/gen-bilig-dominance-scorecard.ts', '--check'),
+  bunScript('bilig dominance audit check', 'scripts/bilig-dominance-audit.ts', '--check'),
+  bunScript('workspace resolution check', 'scripts/gen-workspace-resolution.ts', '--check'),
+  bunScript('canonical naming check', 'scripts/check-canonical-naming.ts'),
+  tsxScript('docs discovery check', 'scripts/check-docs-discovery.ts'),
 ]
 
 try {
@@ -247,7 +308,7 @@ try {
     log('browser gates disabled by BILIG_CI_SKIP_BROWSER=1')
   }
 
-  // Keep pnpm generated-source checks serialized; parallel pnpm invocations can race on .pnpm-workspace-state-v1.json.
+  // Keep generated-source checks serialized; later checks read artifacts validated by earlier ones.
   allCompleted.push(...(await runSequential('generated-source checks', generatedSourceChecks)))
 
   allCompleted.push(
@@ -271,7 +332,7 @@ try {
 
   allCompleted.push(
     ...(await runSequential('static package build prerequisites', [
-      skipBrowserGates ? pnpm('wasm build', '--filter', '@bilig/wasm-kernel', 'build') : appRuntimeDependencyBuild,
+      skipBrowserGates ? wasmBuildTask : appRuntimeDependencyBuild,
       ...(skipBrowserGates ? [] : [pnpm('playwright chromium install', 'exec', 'playwright', 'install', 'chromium')]),
     ])),
   )

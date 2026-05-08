@@ -376,24 +376,46 @@ describe('bilig dominance scorecard', () => {
     expect(packageJson).toContain('"ui:browser-live:generate": "bun scripts/gen-ui-responsiveness-live-browser-scorecard.ts"')
     expect(packageJson).toContain('"ui:browser-live:check": "bun scripts/gen-ui-responsiveness-live-browser-scorecard.ts --check"')
     expect(packageJson).toContain('"security:posture:check": "bun scripts/gen-security-posture-scorecard.ts --check"')
-    expect(runCi).toContain("pnpm('bilig dominance scorecard check', 'dominance:check')")
-    expect(runCi).toContain("pnpm('calculation semantics scorecard check', 'calculation:semantics:check')")
-    expect(runCi).toContain("pnpm('Microsoft Excel live calculation scorecard check', 'calculation:excel-live:check')")
-    expect(runCi).toContain("pnpm('Google Sheets live calculation scorecard check', 'calculation:google-sheets-live:check')")
-    expect(runCi).toContain("pnpm('Microsoft Excel live recalculation scorecard check', 'recalculation:excel-live:check')")
-    expect(runCi).toContain("pnpm('Google Sheets live recalculation scorecard check', 'recalculation:google-sheets-live:check')")
-    expect(runCi).toContain("pnpm('Microsoft Excel live structural scorecard check', 'structural:excel-live:check')")
-    expect(runCi).toContain("pnpm('Google Sheets live structural scorecard check', 'structural:google-sheets-live:check')")
-    expect(runCi).toContain("pnpm('Microsoft Excel live large workbook scorecard check', 'large-workbook:excel-live:check')")
-    expect(runCi).toContain("pnpm('Google Sheets live large workbook scorecard check', 'large-workbook:google-sheets-live:check')")
-    expect(runCi).toContain("pnpm('auditability scorecard check', 'auditability:check')")
-    expect(runCi).toContain("pnpm('reliability scorecard check', 'reliability:check')")
-    expect(runCi).toContain("pnpm('collaboration scorecard check', 'collaboration:check')")
-    expect(runCi).toContain("pnpm('automation scorecard check', 'automation:check')")
-    expect(runCi).toContain("pnpm('import/export fidelity scorecard check', 'import-export:fidelity:check')")
-    expect(runCi).toContain("pnpm('large workbook SLO scorecard check', 'large-workbook:slo:check')")
-    expect(runCi).toContain("pnpm('UI responsiveness live browser scorecard check', 'ui:browser-live:check')")
-    expect(runCi).toContain("pnpm('security posture scorecard check', 'security:posture:check')")
+    expect(runCi).toContain("bunScript('bilig dominance scorecard check', 'scripts/gen-bilig-dominance-scorecard.ts', '--check')")
+    expect(runCi).toContain(
+      "bunScript('calculation semantics scorecard check', 'scripts/gen-calculation-semantics-scorecard.ts', '--check')",
+    )
+    expect(runCi).toContain(
+      "bunScript('Microsoft Excel live calculation scorecard check', 'scripts/gen-microsoft-excel-live-calculation-scorecard.ts', '--check')",
+    )
+    expect(runCi).toContain(
+      "bunScript('Google Sheets live calculation scorecard check', 'scripts/gen-google-sheets-live-calculation-scorecard.ts', '--check')",
+    )
+    expect(runCi).toContain(
+      "bunScript('Microsoft Excel live recalculation scorecard check', 'scripts/gen-microsoft-excel-live-recalculation-scorecard.ts', '--check')",
+    )
+    expect(runCi).toContain(
+      "bunScript('Google Sheets live recalculation scorecard check', 'scripts/gen-google-sheets-live-recalculation-scorecard.ts', '--check')",
+    )
+    expect(runCi).toContain(
+      "bunScript('Microsoft Excel live structural scorecard check', 'scripts/gen-microsoft-excel-live-structural-scorecard.ts', '--check')",
+    )
+    expect(runCi).toContain(
+      "bunScript('Google Sheets live structural scorecard check', 'scripts/gen-google-sheets-live-structural-scorecard.ts', '--check')",
+    )
+    expect(runCi).toContain(
+      "bunScript('Microsoft Excel live large workbook scorecard check', 'scripts/gen-microsoft-excel-live-large-workbook-scorecard.ts', '--check')",
+    )
+    expect(runCi).toContain(
+      "bunScript('Google Sheets live large workbook scorecard check', 'scripts/gen-google-sheets-live-large-workbook-scorecard.ts', '--check')",
+    )
+    expect(runCi).toContain("bunScript('auditability scorecard check', 'scripts/gen-auditability-scorecard.ts', '--check')")
+    expect(runCi).toContain("bunScript('reliability scorecard check', 'scripts/gen-reliability-scorecard.ts', '--check')")
+    expect(runCi).toContain("bunScript('collaboration scorecard check', 'scripts/gen-collaboration-scorecard.ts', '--check')")
+    expect(runCi).toContain("bunScript('automation scorecard check', 'scripts/gen-automation-scorecard.ts', '--check')")
+    expect(runCi).toContain(
+      "bunScript('import/export fidelity scorecard check', 'scripts/gen-import-export-fidelity-scorecard.ts', '--check')",
+    )
+    expect(runCi).toContain("bunScript('large workbook SLO scorecard check', 'scripts/gen-large-workbook-slo-scorecard.ts', '--check')")
+    expect(runCi).toContain(
+      "bunScript('UI responsiveness live browser scorecard check', 'scripts/gen-ui-responsiveness-live-browser-scorecard.ts', '--check')",
+    )
+    expect(runCi).toContain("bunScript('security posture scorecard check', 'scripts/gen-security-posture-scorecard.ts', '--check')")
   })
 })
 
