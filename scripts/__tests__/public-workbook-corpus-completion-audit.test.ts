@@ -26,6 +26,7 @@ describe('public workbook corpus completion audit', () => {
         checkpointCaseCount: 1,
         recordedManifestArtifactCount: 1,
         missingManifestArtifactCount: 1,
+        staleRecordedVerificationCount: 1,
         recordedPassedCaseCount: 1,
         scorecardCoversManifest: false,
         targetComplete: false,
@@ -47,6 +48,7 @@ describe('public workbook corpus completion audit', () => {
       recordedManifestArtifactCount: 1,
       missingCachedArtifactCount: 1,
       missingVerificationCount: 1,
+      staleRecordedVerificationCount: 1,
       recordedFormulaOracleComparisonCount: 1,
     })
     expect(requirement(audit.checklist, 'download-10000-public-spreadsheets')).toMatchObject({
@@ -63,6 +65,7 @@ describe('public workbook corpus completion audit', () => {
     expect(requirement(audit.checklist, 'scorecard-all-10000')).toMatchObject({
       passed: false,
       gaps: expect.arrayContaining(['scorecard cases do not cover manifest artifacts: 1/2']),
+      evidence: expect.arrayContaining(['stale recorded verification cases: 1']),
     })
     expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
   })

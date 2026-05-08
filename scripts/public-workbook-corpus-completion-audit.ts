@@ -63,6 +63,7 @@ export interface PublicWorkbookCorpusAuditState {
   readonly recordedFinancialNonPassingCaseCount: number
   readonly missingCachedArtifactCount: number
   readonly missingVerificationCount: number
+  readonly staleRecordedVerificationCount: number
   readonly recordedPassedCaseCount: number
   readonly recordedUnsupportedCaseCount: number
   readonly recordedFailedCaseCount: number
@@ -692,6 +693,7 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
         `scorecard failed cases: ${String(context.currentState.recordedFailedCaseCount)}`,
         `scorecard error cases: ${String(context.currentState.recordedErrorCaseCount)}`,
         `scorecard unsupported cases: ${String(context.currentState.recordedUnsupportedCaseCount)}`,
+        `stale recorded verification cases: ${String(context.currentState.staleRecordedVerificationCount)}`,
         `scorecard covers manifest: ${String(context.status.scorecardCoversManifest)}`,
         `target complete: ${String(context.status.targetComplete)}`,
       ],
@@ -841,6 +843,7 @@ function buildAuditState(
     recordedFinancialNonPassingCaseCount: recordedFinancialCases.filter((entry) => !entry.passed).length,
     missingCachedArtifactCount: Math.max(0, status.targetWorkbookCount - status.cachedArtifactCount),
     missingVerificationCount: status.missingManifestArtifactCount,
+    staleRecordedVerificationCount: status.staleRecordedVerificationCount,
     recordedPassedCaseCount: status.recordedPassedCaseCount,
     recordedUnsupportedCaseCount: status.recordedUnsupportedCaseCount,
     recordedFailedCaseCount: status.recordedFailedCaseCount,
