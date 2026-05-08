@@ -336,12 +336,18 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
       passed:
         context.currentState.financialCachedArtifactCount >= context.currentState.financialWorkbookTargetCount &&
         context.currentState.recordedFinancialManifestArtifactCount >= context.currentState.financialWorkbookTargetCount &&
-        context.currentState.recordedFinancialNonPassingCaseCount === 0,
+        context.currentState.recordedFinancialNonPassingCaseCount === 0 &&
+        context.currentState.financialSourceWithoutTopicEvidenceCount === 0 &&
+        context.currentState.financialArtifactWithoutTopicEvidenceCount === 0,
       evidence: [
         `financial/accounting workbook target: ${String(context.currentState.financialWorkbookTargetCount)}`,
         `financial/accounting discovered sources: ${String(context.currentState.financialSourceCount)}`,
+        `financial/accounting sources missing topic evidence: ${String(context.currentState.financialSourceWithoutTopicEvidenceCount)}`,
         `financial/accounting cached artifacts: ${String(context.currentState.financialCachedArtifactCount)}/${String(
           context.currentState.financialWorkbookTargetCount,
+        )}`,
+        `financial/accounting cached artifacts missing topic evidence: ${String(
+          context.currentState.financialArtifactWithoutTopicEvidenceCount,
         )}`,
         `financial/accounting recorded verification cases: ${String(context.currentState.recordedFinancialManifestArtifactCount)}/${String(
           context.currentState.financialCachedArtifactCount,
@@ -370,6 +376,20 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
         ...(context.currentState.recordedFinancialNonPassingCaseCount === 0
           ? []
           : [`financial/accounting non-passing recorded cases: ${String(context.currentState.recordedFinancialNonPassingCaseCount)}`]),
+        ...(context.currentState.financialSourceWithoutTopicEvidenceCount === 0
+          ? []
+          : [
+              `financial/accounting sources missing topic evidence: ${String(
+                context.currentState.financialSourceWithoutTopicEvidenceCount,
+              )}`,
+            ]),
+        ...(context.currentState.financialArtifactWithoutTopicEvidenceCount === 0
+          ? []
+          : [
+              `financial/accounting cached artifacts missing topic evidence: ${String(
+                context.currentState.financialArtifactWithoutTopicEvidenceCount,
+              )}`,
+            ]),
       ],
       evidenceArtifacts: [
         manifestArtifact,
@@ -805,8 +825,10 @@ function buildAuditState(
   financialManifest: PublicWorkbookManifest | null,
   financialRecordedCases: readonly PublicWorkbookCorpusCase[],
 ): PublicWorkbookCorpusAuditState {
-  const financialArtifacts = financialManifest ? financialManifest.artifacts : (manifest?.artifacts.filter(hasFinancialTopicEvidence) ?? [])
-  const financialSources = financialManifest ? financialManifest.sources : (manifest?.sources.filter(hasFinancialTopicEvidence) ?? [])
+  const financialArtifactCandidates = financialManifest ? financialManifest.artifacts : (manifest?.artifacts ?? [])
+  const financialSourceCandidates = financialManifest ? financialManifest.sources : (manifest?.sources ?? [])
+  const financialArtifacts = financialArtifactCandidates.filter(hasFinancialTopicEvidence)
+  const financialSources = financialSourceCandidates.filter(hasFinancialTopicEvidence)
   const financialCaseCandidates = financialManifest ? financialRecordedCases : recordedCases
   const recordedCasesById = new Map(financialCaseCandidates.map((entry) => [entry.id, entry]))
   const fetchPlan = planPublicWorkbookCorpusFetchForAudit(manifest, status.targetWorkbookCount)
@@ -831,6 +853,8 @@ function buildAuditState(
     cachedArtifactCount: status.cachedArtifactCount,
     financialSourceCount: financialSources.length,
     financialCachedArtifactCount: financialArtifacts.length,
+    financialSourceWithoutTopicEvidenceCount: financialManifest ? financialSourceCandidates.length - financialSources.length : 0,
+    financialArtifactWithoutTopicEvidenceCount: financialManifest ? financialArtifactCandidates.length - financialArtifacts.length : 0,
     xlsxArtifactCount: (manifest?.artifacts ?? []).filter((entry) => isXlsxArtifact(entry.fileName, entry.cachePath)).length,
     nonXlsxArtifactCount: (manifest?.artifacts ?? []).filter((entry) => !isXlsxArtifact(entry.fileName, entry.cachePath)).length,
     scorecardCaseCount: status.scorecardCaseCount,

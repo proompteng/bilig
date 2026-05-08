@@ -299,6 +299,57 @@ describe('public workbook corpus completion audit', () => {
     expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
   })
 
+  it('requires topic evidence before counting dedicated financial manifest workbooks', () => {
+    const financialArtifact = financialWorkbookArtifact('workbook-a')
+    const untaggedArtifact = workbookArtifact('workbook-b')
+    const audit = buildPublicWorkbookCorpusCompletionAudit({
+      generatedAt: '2026-05-08T00:00:00.000Z',
+      hyperformulaSecondaryCorpus: hyperFormulaSecondaryCorpusFixture(),
+      manifest: manifestWithArtifacts([financialArtifact, untaggedArtifact], 2),
+      financialManifest: manifestWithArtifacts([financialArtifact, untaggedArtifact], 2),
+      financialRecordedCases: [passedCase(financialArtifact, 1), passedCase(untaggedArtifact, 1)],
+      recordedCases: [passedCase(financialArtifact, 1), passedCase(untaggedArtifact, 1)],
+      status: statusFixture({
+        targetWorkbookCount: 2,
+        sourceCount: 2,
+        cachedArtifactCount: 2,
+        scorecardCaseCount: 2,
+        checkpointCaseCount: 0,
+        recordedManifestArtifactCount: 2,
+        missingManifestArtifactCount: 0,
+        recordedPassedCaseCount: 2,
+        scorecardCoversManifest: true,
+        targetComplete: true,
+        gaps: [],
+      }),
+      stopMarkerActive: false,
+    })
+
+    expect(audit.currentState).toMatchObject({
+      financialSourceCount: 1,
+      financialCachedArtifactCount: 1,
+      financialSourceWithoutTopicEvidenceCount: 1,
+      financialArtifactWithoutTopicEvidenceCount: 1,
+      recordedFinancialManifestArtifactCount: 1,
+    })
+    expect(requirement(audit.checklist, 'financial-accounting-workpapers-5000')).toMatchObject({
+      passed: false,
+      gaps: expect.arrayContaining([
+        'financial/accounting cached artifacts below target: 1/2',
+        'financial/accounting recorded verification cases below target: 1/2',
+        'financial/accounting sources missing topic evidence: 1',
+        'financial/accounting cached artifacts missing topic evidence: 1',
+      ]),
+      evidence: expect.arrayContaining([
+        'financial/accounting discovered sources: 1',
+        'financial/accounting sources missing topic evidence: 1',
+        'financial/accounting cached artifacts: 1/2',
+        'financial/accounting cached artifacts missing topic evidence: 1',
+      ]),
+    })
+    expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
+  })
+
   it('marks the goal achieved when public corpus evidence is complete and HyperFormula parity is folded in', () => {
     const artifactA = financialWorkbookArtifact('workbook-a')
     const artifactB = financialWorkbookArtifact('workbook-b')
@@ -934,6 +985,7 @@ function manifestWithArtifacts(artifacts: readonly PublicWorkbookArtifact[], tar
       fileName: entry.fileName,
       discoveredAt: '2026-05-08T00:00:00.000Z',
       license: entry.license,
+      ...(entry.topicEvidence ? { topicEvidence: entry.topicEvidence } : {}),
     })),
     artifacts,
   }
