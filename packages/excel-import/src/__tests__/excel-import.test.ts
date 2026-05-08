@@ -998,7 +998,7 @@ describe('excel import', () => {
           ],
           tables: [
             {
-              name: 'InputTable',
+              name: 'Input.Table',
               sheetName: 'Inputs',
               startAddress: 'A1',
               endAddress: 'D4',
@@ -1184,6 +1184,7 @@ describe('excel import', () => {
     expect(strFromU8(zip['docProps/custom.xml'] ?? new Uint8Array())).toContain('name="reviewed"><vt:bool>true</vt:bool>')
     expect(strFromU8(zip['docProps/custom.xml'] ?? new Uint8Array())).toContain('name="threshold"><vt:r8>0.085</vt:r8>')
     expect(strFromU8(zip['xl/tables/table1.xml'] ?? new Uint8Array())).toContain('<table ')
+    expect(strFromU8(zip['xl/tables/table1.xml'] ?? new Uint8Array())).toContain('displayName="Input.Table"')
     expect(strFromU8(zip['xl/tables/table1.xml'] ?? new Uint8Array())).toContain('<tableColumn id="3" name="Sales"/>')
     expect(strFromU8(zip['xl/workbook.xml'] ?? new Uint8Array())).toContain('<calcPr calcMode="manual"/>')
     expect(strFromU8(zip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())).toContain('<dataValidations count="1">')
