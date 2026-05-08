@@ -675,7 +675,7 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
         `scorecard covers manifest: ${String(context.status.scorecardCoversManifest)}`,
         `target complete: ${String(context.status.targetComplete)}`,
       ],
-      gaps: [
+      gaps: uniqueStrings([
         ...(context.status.scorecardCoversManifest
           ? []
           : [
@@ -691,7 +691,7 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
           : [`error scorecard cases: ${String(context.currentState.recordedErrorCaseCount)}`]),
         ...countGap(context.currentState.scorecardCaseCount, context.currentState.targetWorkbookCount, 'scorecard cases below target'),
         ...(context.status.targetComplete ? [] : context.status.gaps),
-      ],
+      ]),
     }),
   (_context) => {
     const ciOfflineCachedMode = auditPublicWorkbookCorpusCiOfflineCachedMode({
@@ -943,6 +943,10 @@ function checklistItem(
     checkCommands: ['pnpm public-workbook-corpus:status', 'pnpm public-workbook-corpus:completion-audit:check'],
     ...item,
   }
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values)]
 }
 
 function packageScripts(): ReadonlyMap<string, string> {

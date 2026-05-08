@@ -124,6 +124,8 @@ describe('public workbook corpus completion audit', () => {
       gaps: expect.arrayContaining(['scorecard cases do not cover manifest artifacts: 1/2']),
       evidence: expect.arrayContaining(['stale recorded verification cases: 1']),
     })
+    const scorecardGaps = requirement(audit.checklist, 'scorecard-all-10000').gaps
+    expect(scorecardGaps).toHaveLength(new Set(scorecardGaps).size)
     expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
   })
 
