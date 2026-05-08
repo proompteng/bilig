@@ -14,10 +14,10 @@ not from paid, automated, reciprocal, or misleading campaigns.
 
 ## Current Public State
 
-Verified on 2026-05-08 after the `libraries-v0.10.41` release:
+Verified on 2026-05-08 after the `libraries-v0.10.46` release:
 
 - GitHub stars: `6`
-- GitHub open issues: `56`
+- GitHub open issues: `49`
 - Community profile: `100%`
 - Public package: `@bilig/headless`
 - GitHub repo description: headless spreadsheet engine for formulas, persisted
@@ -57,6 +57,16 @@ Verified on 2026-05-08 after the `libraries-v0.10.41` release:
 
 2026-05-08:
 
+- Closed public correctness issues `#30` and `#28` with focused regressions,
+  green GitHub workflows, and runtime releases through `libraries-v0.10.46`.
+  `#30` normalizes Excel `_xlfn` and `_xlws` function prefixes on import and
+  evaluation. `#28` preserves unsigned integer-like CSV identifiers with leading
+  zeros while keeping normal numeric inference for amounts, decimals,
+  percentages, booleans, formulas, and zero.
+- Rechecked the logged-in Atlas X search for spreadsheet-agent and workbook-API
+  conversations. The visible queue was stale or low-fit for a maintainer reply,
+  so no X reply was posted. The operating rule remains manual, low-volume,
+  high-context replies only.
 - Closed public correctness issues `#130`, `#131`, `#132`, and `#133` with
   focused regressions, green GitHub workflows, and runtime releases through
   `libraries-v0.10.41`. The most recent fix keeps deferred-revenue style

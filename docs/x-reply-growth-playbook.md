@@ -392,6 +392,27 @@ Do not work this like a lead list. Pick one high-fit thread, reply once, and
 then wait. If a thread is mostly a launch announcement for another product, use
 a no-link technical reply or skip it.
 
+## Atlas Search Pass - 2026-05-08
+
+Query visible in the logged-in Atlas session:
+
+```text
+("spreadsheet agent" OR "excel agent" OR "spreadsheet automation" OR "workbook api") -filter:replies
+```
+
+Result: skip posting from this pass.
+
+The visible results were either stale, low-reach, or launch announcements where
+a `bilig` maintainer reply would read as inserted promotion instead of a useful
+technical answer. The best-fit visible thread was the May 2 Excel-agent-startup
+question already tracked below, but it is old enough that a first reply should
+still be no-link and only if the maintainer wants to add the product-surface vs
+automation-substrate distinction manually.
+
+Do not use this search result as permission to post a link. Wait for fresher
+threads, direct follow-ups, or questions where workbook state, formula
+verification, import/export fidelity, or agent writeback is already the topic.
+
 ### OpenCode Excel agent demo
 
 Target:
