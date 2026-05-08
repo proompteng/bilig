@@ -32,21 +32,14 @@ describe('UI responsiveness live browser scorecard', () => {
     expect(scorecard.cases.map((entry) => entry.id)).toEqual(['google-sheets-public-grid-scroll', 'microsoft-excel-web-public-xlsx-scroll'])
     expect(scorecard.cases.every((entry) => entry.sampleCount >= 3 && entry.limitations.length > 0)).toBe(true)
     expect(scorecard.sameCorpusProof).toMatchObject({
-      captured: true,
-      evidenceKind: 'same-corpus-browser-capture',
+      captured: false,
+      evidenceKind: 'not-captured',
       requiredProductCount: 3,
-      requiredCaseCount: 1,
+      requiredCaseCount: 0,
       tenXMeanAndP95CaseCount: 0,
-      coveredCorpusCaseIds: ['wide-mixed-250k'],
+      coveredCorpusCaseIds: [],
     })
-    expect(scorecard.sameCorpusProof.cases).toHaveLength(1)
-    expect(scorecard.sameCorpusProof.cases[0]).toMatchObject({
-      corpusCaseId: 'wide-mixed-250k',
-      workload: 'visible-scroll-response',
-      passed: false,
-      tenXMeanAndP95AgainstGoogleSheets: false,
-      tenXMeanAndP95AgainstMicrosoftExcelWeb: false,
-    })
+    expect(scorecard.sameCorpusProof.cases).toHaveLength(0)
     validateUiResponsivenessLiveBrowserScorecard(scorecard)
   })
 
@@ -114,6 +107,46 @@ describe('UI responsiveness live browser scorecard', () => {
       buildSameCorpusProof(buildSameCorpusCapture({ includeScrollEventSamples: false, workload: 'visible-scroll-response' })),
     ).toThrow(
       'UI responsiveness same-corpus capture has too few scroll-event samples for same-corpus-wide-mixed-250k-visible-scroll-response',
+    )
+  })
+
+  it('rejects captured same-corpus proof without scroll-event evidence', () => {
+    const scorecard = parseUiResponsivenessLiveBrowserScorecard(
+      readJsonObject(resolve(repoRoot, 'packages/benchmarks/baselines/ui-responsiveness-live-browser-scorecard.json')),
+    )
+    const proof = buildSameCorpusProof(buildSameCorpusCapture({ workload: 'visible-scroll-response' }))
+    const {
+      scrollEventResponseMs: _biligScrollEventResponseMs,
+      scrollMovementPx: _biligScrollMovementPx,
+      ...biligWithoutScrollEvidence
+    } = proof.cases[0].bilig
+    const {
+      scrollEventResponseMs: _googleSheetsScrollEventResponseMs,
+      scrollMovementPx: _googleSheetsScrollMovementPx,
+      ...googleSheetsWithoutScrollEvidence
+    } = proof.cases[0].googleSheets
+    const {
+      scrollEventResponseMs: _microsoftExcelWebScrollEventResponseMs,
+      scrollMovementPx: _microsoftExcelWebScrollMovementPx,
+      ...microsoftExcelWebWithoutScrollEvidence
+    } = proof.cases[0].microsoftExcelWeb
+    const staleScorecard: UiResponsivenessLiveBrowserScorecard = {
+      ...scorecard,
+      sameCorpusProof: {
+        ...proof,
+        cases: [
+          {
+            ...proof.cases[0],
+            bilig: biligWithoutScrollEvidence,
+            googleSheets: googleSheetsWithoutScrollEvidence,
+            microsoftExcelWeb: microsoftExcelWebWithoutScrollEvidence,
+          },
+        ],
+      },
+    }
+
+    expect(() => validateUiResponsivenessLiveBrowserScorecard(staleScorecard)).toThrow(
+      'UI responsiveness same-corpus proof is missing scroll-event evidence for same-corpus-wide-mixed-250k-visible-scroll-response',
     )
   })
 

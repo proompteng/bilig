@@ -552,11 +552,10 @@
         "external Microsoft Excel UI responsiveness evidence: official-docs-comparison-artifact",
         "external UI responsiveness comparison dimensions pass: true",
         "live incumbent browser timing scorecard passes: true",
-        "same-corpus UI 10x proof captured: true",
-        "same-corpus UI 10x cases: 0/1",
+        "same-corpus UI 10x proof captured: false",
+        "same-corpus UI 10x cases: 0/0",
         "google-sheets: open-public-workbook-and-scroll-viewport scrollResponseMs.p95 142.9385829999992ms and postScrollFrameMs.p95 9ms (3 samples, public-comment-only)",
         "microsoft-excel-web: open-public-workbook-and-scroll-viewport scrollResponseMs.p95 100.50479099999939ms and postScrollFrameMs.p95 11.199999999999818ms (3 samples, public-office-web-viewer)",
-        "wide-mixed-250k: visible-scroll-response bilig p95 ratio 1.538831497481274 vs Google Sheets and 2.8315233660846513 vs Excel Web",
         "headedWide250kVisibleEditCommit: mutationToVisibleMs.p95 budget 50ms on 250000 materialized cells via pnpm test:browser:full"
       ],
       "evidenceArtifacts": [

@@ -656,6 +656,12 @@ function validateSameCorpusCase(entry: UiResponsivenessSameCorpusCase): void {
   validateSameCorpusMeasurement(entry.bilig, 'bilig', entry.id)
   validateSameCorpusMeasurement(entry.googleSheets, 'google-sheets', entry.id)
   validateSameCorpusMeasurement(entry.microsoftExcelWeb, 'microsoft-excel-web', entry.id)
+  if (
+    entry.workload === 'visible-scroll-response' &&
+    ![entry.bilig, entry.googleSheets, entry.microsoftExcelWeb].every((measurement) => hasSameCorpusScrollEvidence(measurement))
+  ) {
+    throw new Error(`UI responsiveness same-corpus proof is missing scroll-event evidence for ${entry.id}`)
+  }
   const comparableSampleCount = Math.min(
     entry.bilig.operationResponseMs.samples.length,
     entry.googleSheets.operationResponseMs.samples.length,
@@ -724,6 +730,16 @@ function validateSameCorpusCase(entry: UiResponsivenessSameCorpusCase): void {
   ) {
     throw new Error(`UI responsiveness same-corpus pass flag is stale: ${entry.id}`)
   }
+}
+
+function hasSameCorpusScrollEvidence(measurement: UiResponsivenessSameCorpusMeasurement): boolean {
+  return Boolean(
+    measurement.scrollEventResponseMs &&
+    measurement.scrollMovementPx &&
+    measurement.scrollEventResponseMs.samples.length >= sampleCountForSameCorpus() &&
+    measurement.scrollMovementPx.samples.length >= sampleCountForSameCorpus() &&
+    measurement.scrollMovementPx.min >= 1,
+  )
 }
 
 function validateSameCorpusMeasurement(
