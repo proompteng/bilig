@@ -13,6 +13,17 @@ The list intentionally excludes closed issues and broad corpus/parity epics. Add
 new starter tickets only when the expected patch can stay small, has a clear
 acceptance test, and does not require understanding the whole workbook runtime.
 
+## Claim A Starter Issue
+
+Comment on the issue before opening a pull request. If the issue is unassigned,
+a maintainer can assign it to you and keep the scope reserved while you work.
+If it already has an assignee, pick another starter ticket or ask whether the
+current assignee still wants help.
+
+For a first patch, keep the pull request focused on the issue's acceptance
+proof. Include the command you ran, mention the issue number, and open a draft
+pull request early if any requirement is unclear.
+
 Useful filters:
 
 - [`good first issue`](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22)
