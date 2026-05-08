@@ -633,7 +633,7 @@
         "external Google Apps Script evidence: official-docs-comparison-artifact",
         "external Microsoft Office Scripts evidence: official-docs-comparison-artifact",
         "143 HyperFormula surface members are snapshotted for parity tracking",
-        "39 HyperFormula config keys are snapshotted for parity tracking",
+        "38 HyperFormula config keys are snapshotted for parity tracking",
         "WorkPaper exposes additional detailed events and performance counters"
       ],
       "evidenceArtifacts": [

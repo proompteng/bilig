@@ -18,6 +18,7 @@ const ALLOWED_BILIG_INSTANCE_METHODS = [
 ] as const
 const ALLOWED_BILIG_INSTANCE_ACCESSORS = ['internals'] as const
 const ALLOWED_BILIG_STATIC_METHODS = ['buildFromSnapshot'] as const
+const ALLOWED_BILIG_CONFIG_KEYS = ['evaluationTimeoutMs'] as const
 
 describe('WorkPaper HyperFormula snapshot parity', () => {
   it('matches the checked-in HyperFormula class surface snapshot', () => {
@@ -51,7 +52,7 @@ describe('WorkPaper HyperFormula snapshot parity', () => {
       'WorkPaperConfig',
     )
 
-    expect(currentConfigKeys).toEqual(snapshot.configKeys)
+    expect(currentConfigKeys).toEqual([...new Set([...snapshot.configKeys, ...ALLOWED_BILIG_CONFIG_KEYS])].toSorted())
   })
 })
 
