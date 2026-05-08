@@ -31,6 +31,7 @@ import { decodePreservedVbaProjectPayload } from './xlsx-macros.js'
 import { addExportPrinterSettingsToXlsxBytes } from './xlsx-printer-settings.js'
 import { addExportWorksheetPropertiesToXlsxBytes } from './xlsx-sheet-properties.js'
 import { applyExportSheetVisibilitiesToWorkbook } from './xlsx-sheet-visibility.js'
+import { addExportHyperlinksToWorksheet, hasExportHyperlinks } from './xlsx-hyperlinks.js'
 import {
   addCustomNumberFormatsToStylesXml,
   customNumberFormatStartId,
@@ -646,6 +647,9 @@ function inferExportWorksheetRange(sheet: WorkbookSnapshot['sheets'][number]): s
   for (const thread of sheet.metadata?.commentThreads ?? []) {
     bounds = updateWorksheetBounds(bounds, thread.address)
   }
+  for (const hyperlink of sheet.metadata?.hyperlinks ?? []) {
+    bounds = updateWorksheetBounds(bounds, hyperlink.address)
+  }
   for (const styleRange of sheet.metadata?.styleRanges ?? []) {
     bounds = updateWorksheetBounds(bounds, styleRange.range.startAddress)
     bounds = updateWorksheetBounds(bounds, styleRange.range.endAddress)
@@ -797,6 +801,9 @@ export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
       worksheet['!merges'] = merges
     }
     addExportCommentsToWorksheet(worksheet, sheet.metadata?.commentThreads)
+    if (hasExportHyperlinks(sheet.metadata)) {
+      addExportHyperlinksToWorksheet(worksheet, sheet)
+    }
 
     const exportSheetName = normalizeExportSheetName(sheet.name, sheet.order, usedNames)
     exportSheetNamesByOriginalName.set(sheet.name, exportSheetName)

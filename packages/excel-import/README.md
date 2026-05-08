@@ -62,6 +62,9 @@ Worksheet `<sheetPr>` properties preserve non-tabColor code names,
 Workbook sheet visibility preserves hidden and very hidden worksheet state
 during no-op XLSX roundtrips.
 
+Cell hyperlinks preserve external URL targets, internal workbook targets,
+tooltips, and display text during no-op XLSX roundtrips.
+
 ## CSV Import
 
 ```ts

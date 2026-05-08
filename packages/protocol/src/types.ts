@@ -718,6 +718,14 @@ export interface WorkbookNoteSnapshot {
   text: string
 }
 
+export interface WorkbookHyperlinkSnapshot {
+  sheetName: string
+  address: string
+  target: string
+  tooltip?: string
+  display?: string
+}
+
 export interface WorkbookLegacyCommentVmlSnapshot {
   relationshipTarget: string
   vmlXml: string
@@ -786,6 +794,7 @@ export interface SheetMetadataSnapshot {
   protectedRanges?: WorkbookRangeProtectionSnapshot[]
   commentThreads?: WorkbookCommentThreadSnapshot[]
   notes?: WorkbookNoteSnapshot[]
+  hyperlinks?: WorkbookHyperlinkSnapshot[]
   legacyCommentVml?: WorkbookLegacyCommentVmlSnapshot
   printerSettings?: WorkbookPrinterSettingsSnapshot[]
   sheetPr?: WorkbookSheetPrSnapshot

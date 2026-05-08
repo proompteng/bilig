@@ -56,6 +56,7 @@ import {
 } from './workbook-import-helpers.js'
 import { readImportedExternalLinkCaches, translateImportedFormulaExternalReferences } from './xlsx-external-references.js'
 import { translateImportedFormulaStructuredReferences } from './xlsx-formula-translation.js'
+import { readImportedSheetHyperlinks } from './xlsx-hyperlinks.js'
 import { buildImportedSheetMetadata } from './xlsx-import-sheet-metadata.js'
 import { createPreservedVbaProjectPayload, type PreservedVbaProjectCodeNames } from './xlsx-macros.js'
 import { worksheetCellAt, worksheetCellEntries, worksheetCellEntriesAtAddresses, worksheetCellRecords } from './xlsx-worksheet-cells.js'
@@ -728,6 +729,7 @@ function importSheetJsWorkbook(
     }
 
     const importedComments = readImportedSheetComments(sheetName, sheet)
+    const importedHyperlinks = readImportedSheetHyperlinks(sheetName, sheet)
     if (importedComments.ignoredCount > 0 && !ignoredCommentsSeen) {
       ignoredCommentsSeen = true
       warnings.push('Some cell comments were ignored during XLSX import.')
@@ -886,6 +888,7 @@ function importSheetJsWorkbook(
       conditionalFormats: importedConditionalFormats,
       commentThreads: importedComments.commentThreads,
       legacyCommentVml: importedLegacyCommentVml,
+      hyperlinks: importedHyperlinks,
       printerSettings: importedPrinterSettings,
       cellMetadataRefs: importedCellMetadataRefs,
     })

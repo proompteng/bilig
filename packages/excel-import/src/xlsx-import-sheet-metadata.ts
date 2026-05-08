@@ -20,6 +20,7 @@ interface ImportedSheetMetadataInput {
   readonly conditionalFormats?: SheetMetadataSnapshot['conditionalFormats']
   readonly commentThreads?: SheetMetadataSnapshot['commentThreads']
   readonly legacyCommentVml?: SheetMetadataSnapshot['legacyCommentVml']
+  readonly hyperlinks?: SheetMetadataSnapshot['hyperlinks']
   readonly printerSettings?: SheetMetadataSnapshot['printerSettings']
   readonly cellMetadataRefs?: SheetMetadataSnapshot['cellMetadataRefs']
 }
@@ -45,6 +46,7 @@ export function buildImportedSheetMetadata(input: ImportedSheetMetadataInput): S
     ...(input.conditionalFormats ? { conditionalFormats: input.conditionalFormats } : {}),
     ...(input.commentThreads ? { commentThreads: input.commentThreads } : {}),
     ...(input.legacyCommentVml ? { legacyCommentVml: input.legacyCommentVml } : {}),
+    ...(input.hyperlinks ? { hyperlinks: input.hyperlinks } : {}),
     ...(input.printerSettings ? { printerSettings: input.printerSettings } : {}),
     ...(input.cellMetadataRefs ? { cellMetadataRefs: input.cellMetadataRefs } : {}),
   }
