@@ -74,6 +74,7 @@ export function buildBiligDominancePromptArtifactAudit(args: {
       criterion,
       liveBlockers: liveBlockersForCriterion(args.status, criterion.id),
       livePublicWorkbookCorpus: args.status.publicWorkbookCorpus,
+      liveUiSameCorpus: args.status.uiSameCorpus,
     }),
   )
   return {
@@ -143,6 +144,7 @@ export function validateBiligDominancePromptArtifactAudit(audit: BiligDominanceP
     findings.push('goal is achieved without blanket claim permission and complete checklist evidence')
   }
   const importExportItem = audit.checklist.find((entry) => entry.id === 'import-export-compatibility')
+  const uiResponsivenessItem = audit.checklist.find((entry) => entry.id === 'ui-responsiveness')
   if (!audit.livePublicWorkbookCorpus.targetComplete) {
     if (!importExportItem) {
       findings.push('live public workbook corpus is incomplete but import/export checklist item is missing')
@@ -152,6 +154,18 @@ export function validateBiligDominancePromptArtifactAudit(audit: BiligDominanceP
       }
       if (importExportItem.liveBlockers.length === 0) {
         findings.push('live public workbook corpus target is incomplete but import/export live blockers are empty')
+      }
+    }
+  }
+  if (!audit.liveUiSameCorpus.tenXRequirementSatisfied) {
+    if (!uiResponsivenessItem) {
+      findings.push('live same-corpus UI proof is incomplete but UI responsiveness checklist item is missing')
+    } else {
+      if (uiResponsivenessItem.passed) {
+        findings.push('UI responsiveness checklist passed while live same-corpus UI proof is incomplete')
+      }
+      if (uiResponsivenessItem.liveBlockers.length === 0) {
+        findings.push('live same-corpus UI proof is incomplete but UI responsiveness live blockers are empty')
       }
     }
   }
@@ -181,6 +195,7 @@ function buildChecklistItem(args: {
   readonly criterion: DominanceCompletionCriterion
   readonly liveBlockers: readonly string[]
   readonly livePublicWorkbookCorpus: BiligDominanceStatus['publicWorkbookCorpus']
+  readonly liveUiSameCorpus: BiligDominanceStatus['uiSameCorpus']
 }): BiligDominancePromptArtifactChecklistItem {
   const gaps = uniqueStrings([...args.criterion.gaps, ...args.liveBlockers])
   return {
@@ -204,7 +219,20 @@ function buildChecklistItem(args: {
             `live public workbook corpus recorded all cases passed: ${String(args.livePublicWorkbookCorpus.recordedAllCasesPassed)}`,
             ...args.category.currentEvidence.filter((entry) => entry.startsWith('public workbook corpus next')),
           ]
-        : args.criterion.evidence,
+        : args.criterion.id === 'ui-responsiveness'
+          ? [
+              ...args.criterion.evidence,
+              `live same-corpus UI proof captured: ${String(args.liveUiSameCorpus.captured)}`,
+              `live same-corpus UI 10x cases: ${String(args.liveUiSameCorpus.tenXMeanAndP95CaseCount)}/${String(
+                args.liveUiSameCorpus.requiredCaseCount,
+              )}`,
+              `live same-corpus UI required workloads: ${args.liveUiSameCorpus.requiredWorkloads.join(', ') || 'none'}`,
+              `live same-corpus UI missing required workloads: ${args.liveUiSameCorpus.missingRequiredWorkloads.join(', ') || 'none'}`,
+              `live same-corpus UI missing inputs: ${args.liveUiSameCorpus.missingInputs.join(', ') || 'none'}`,
+              `live same-corpus UI Google Sheets URL source: ${args.liveUiSameCorpus.googleSheetsUrlSource}`,
+              `live same-corpus UI browser capture guard active: ${String(args.liveUiSameCorpus.browserCaptureGuard.active)}`,
+            ]
+          : args.criterion.evidence,
     evidenceArtifacts:
       args.criterion.id === 'import-export-compatibility'
         ? [...args.category.evidenceArtifacts, 'packages/benchmarks/baselines/public-workbook-corpus-scorecard.json']
@@ -222,14 +250,34 @@ function liveBlockersForCriterion(status: BiligDominanceStatus, criterionId: str
   if (criterionId === 'import-export-compatibility') {
     return status.importExportBlockers
   }
-  if (criterionId === 'ui-responsiveness' && status.uiSameCorpus.browserCaptureGuard.active) {
-    return [
-      `same-corpus UI browser capture paused by local resource guard: ${status.uiSameCorpus.browserCaptureGuard.activeMarkerPaths.join(
-        ', ',
-      )}`,
-    ]
+  if (criterionId === 'ui-responsiveness') {
+    return uiSameCorpusLiveBlockers(status.uiSameCorpus)
   }
   return []
+}
+
+function uiSameCorpusLiveBlockers(status: BiligDominanceStatus['uiSameCorpus']): readonly string[] {
+  const blockers: string[] = []
+  if (!status.captured) {
+    blockers.push('same-corpus UI browser capture has not been recorded')
+  }
+  if (status.missingRequiredWorkloads.length > 0) {
+    blockers.push(`same-corpus UI proof missing required workloads: ${status.missingRequiredWorkloads.join(', ')}`)
+  }
+  if (status.captured && !status.tenXRequirementSatisfied) {
+    blockers.push(
+      `same-corpus UI proof has ${String(status.tenXMeanAndP95CaseCount)}/${String(status.requiredCaseCount)} required 10x cases`,
+    )
+  }
+  if (status.missingInputs.length > 0) {
+    blockers.push(`same-corpus UI proof missing inputs: ${status.missingInputs.join(', ')}`)
+  }
+  if (status.browserCaptureGuard.active) {
+    blockers.push(
+      `same-corpus UI browser capture paused by local resource guard: ${status.browserCaptureGuard.activeMarkerPaths.join(', ')}`,
+    )
+  }
+  return blockers
 }
 
 function uniqueStrings(values: readonly string[]): readonly string[] {

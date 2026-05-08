@@ -116,12 +116,26 @@ describe('bilig dominance prompt-to-artifact audit', () => {
     expect(uiItem).toMatchObject({
       passed: false,
       liveBlockers: [
+        'same-corpus UI browser capture has not been recorded',
+        'same-corpus UI proof missing required workloads: visible-scroll-response',
+        'same-corpus UI proof missing inputs: googleSheetsUrlForUploadedSameCorpusWorkbook',
         'same-corpus UI browser capture paused by local resource guard: .agent-coordination/20260508T092619Z-codex-memory-pressure-stop.md',
       ],
       gaps: [
         'live UI browser evidence is not a same-corpus 10x proof against incumbents',
+        'same-corpus UI browser capture has not been recorded',
+        'same-corpus UI proof missing required workloads: visible-scroll-response',
+        'same-corpus UI proof missing inputs: googleSheetsUrlForUploadedSameCorpusWorkbook',
         'same-corpus UI browser capture paused by local resource guard: .agent-coordination/20260508T092619Z-codex-memory-pressure-stop.md',
       ],
+      evidence: expect.arrayContaining([
+        'live same-corpus UI proof captured: false',
+        'live same-corpus UI 10x cases: 0/0',
+        'live same-corpus UI required workloads: visible-scroll-response',
+        'live same-corpus UI missing required workloads: visible-scroll-response',
+        'live same-corpus UI missing inputs: googleSheetsUrlForUploadedSameCorpusWorkbook',
+        'live same-corpus UI browser capture guard active: true',
+      ]),
     })
     expect(validateBiligDominancePromptArtifactAudit(audit)).toEqual([])
   })
@@ -155,12 +169,22 @@ describe('bilig dominance prompt-to-artifact audit', () => {
       status,
     })
     const importExportIndex = audit.checklist.findIndex((entry) => entry.id === 'import-export-compatibility')
+    const uiResponsivenessIndex = audit.checklist.findIndex((entry) => entry.id === 'ui-responsiveness')
     const checklist = [...audit.checklist]
     const importExportItem = audit.checklist[importExportIndex]
     if (!importExportItem) {
       throw new Error('fixture audit is missing import/export checklist item')
     }
+    const uiResponsivenessItem = audit.checklist[uiResponsivenessIndex]
+    if (!uiResponsivenessItem) {
+      throw new Error('fixture audit is missing UI responsiveness checklist item')
+    }
     checklist[importExportIndex] = Object.assign({}, importExportItem, {
+      passed: true,
+      gaps: [],
+      liveBlockers: [],
+    })
+    checklist[uiResponsivenessIndex] = Object.assign({}, uiResponsivenessItem, {
       passed: true,
       gaps: [],
       liveBlockers: [],
@@ -179,6 +203,8 @@ describe('bilig dominance prompt-to-artifact audit', () => {
         'blanket 10x claim is allowed before every checklist item passed',
         'import/export checklist passed while live public workbook corpus target is incomplete',
         'live public workbook corpus target is incomplete but import/export live blockers are empty',
+        'UI responsiveness checklist passed while live same-corpus UI proof is incomplete',
+        'live same-corpus UI proof is incomplete but UI responsiveness live blockers are empty',
       ]),
     )
   })
