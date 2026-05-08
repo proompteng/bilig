@@ -14,10 +14,10 @@ not from paid, automated, reciprocal, or misleading campaigns.
 
 ## Current Public State
 
-Verified on 2026-05-07 after the Show HN launch and topic refresh:
+Verified on 2026-05-08 after the `libraries-v0.10.41` release:
 
 - GitHub stars: `6`
-- GitHub open issues: `75`
+- GitHub open issues: `56`
 - Community profile: `100%`
 - Public package: `@bilig/headless`
 - GitHub repo description: headless spreadsheet engine for formulas, persisted
@@ -54,6 +54,21 @@ Verified on 2026-05-07 after the Show HN launch and topic refresh:
   - `good first issue` and `help wanted` labels
 
 ## Execution Log
+
+2026-05-08:
+
+- Closed public correctness issues `#130`, `#131`, `#132`, and `#133` with
+  focused regressions, green GitHub workflows, and runtime releases through
+  `libraries-v0.10.41`. The most recent fix keeps deferred-revenue style
+  month-window `SUMIFS` criteria on the direct optimized path and adds a
+  293-row by 57-column WorkPaper regression for the reported timeout shape.
+- Added a committed regression for older adoption-harness issue `#48`, covering
+  `SUMIFS` and `COUNTIFS` criteria built from date cells such as
+  `">="&G2` and `"<="&H2` across indexed and non-indexed evaluation paths.
+- Re-verified the public GitHub mirror at commit `1a411bfc`, GitHub CI, runtime
+  packages, the `libraries-v0.10.41` release, repository topics, social preview
+  URL, and public star count. Stars remain `6`, so the growth goal is still
+  active.
 
 2026-05-07:
 
