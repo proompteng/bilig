@@ -2,8 +2,13 @@ import { existsSync } from 'node:fs'
 import { isAbsolute, relative, resolve } from 'node:path'
 
 export function readStringArg(name: string, fallback: string): string {
-  const index = process.argv.indexOf(name)
-  return index >= 0 ? (process.argv[index + 1] ?? fallback) : fallback
+  let value: string | null = null
+  process.argv.forEach((arg, index) => {
+    if (arg === name && process.argv[index + 1] !== undefined) {
+      value = process.argv[index + 1]
+    }
+  })
+  return value ?? fallback
 }
 
 export function readNumberArg(name: string, fallback: number): number {
