@@ -96,6 +96,42 @@ describe('public workbook corpus completion audit', () => {
     expect(validatePublicWorkbookCorpusCompletionAudit(audit, { requireComplete: true })).toEqual([])
   })
 
+  it('treats resource-limited unsupported cases as evidenced metadata exceptions', () => {
+    const artifactA = workbookArtifact('workbook-a')
+    const artifactB = workbookArtifact('workbook-b')
+    const audit = buildPublicWorkbookCorpusCompletionAudit({
+      generatedAt: '2026-05-08T00:00:00.000Z',
+      hyperformulaSecondaryCorpus: hyperFormulaSecondaryCorpusFixture(),
+      manifest: manifestWithArtifacts([artifactA, artifactB], 2),
+      recordedCases: [passedCase(artifactA, 1), resourceLimitedUnsupportedCase(artifactB)],
+      status: statusFixture({
+        targetWorkbookCount: 2,
+        sourceCount: 2,
+        cachedArtifactCount: 2,
+        scorecardCaseCount: 2,
+        checkpointCaseCount: 0,
+        recordedManifestArtifactCount: 2,
+        missingManifestArtifactCount: 0,
+        recordedPassedCaseCount: 1,
+        recordedUnsupportedCaseCount: 1,
+        scorecardCoversManifest: true,
+        targetComplete: true,
+        gaps: [],
+      }),
+      stopMarkerActive: false,
+    })
+
+    expect(requirement(audit.checklist, 'source-license-hash-metadata-manifest')).toMatchObject({
+      passed: true,
+      gaps: [],
+      evidence: expect.arrayContaining(['resource-limited unsupported cases with metadata unavailable: 1']),
+    })
+    expect(requirement(audit.checklist, 'unsupported-features-evidence')).toMatchObject({
+      passed: true,
+    })
+    expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
+  })
+
   it('fails require-complete mode until every mapped objective requirement is satisfied', () => {
     const artifact = workbookArtifact('workbook-a')
     const audit = buildPublicWorkbookCorpusCompletionAudit({
@@ -217,6 +253,50 @@ function passedCase(artifact: PublicWorkbookArtifact, formulaOracleComparisons: 
   }
 }
 
+function resourceLimitedUnsupportedCase(artifact: PublicWorkbookArtifact): PublicWorkbookCorpusCase {
+  return {
+    ...passedCase(artifact, 0),
+    status: 'unsupported',
+    validation: {
+      importPassed: false,
+      formulaOraclePassed: true,
+      formulaOracleComparisons: 0,
+      formulaOracleMismatches: [],
+      roundTripPassed: true,
+      structuralSmokePassed: null,
+    },
+    featureCounts: {
+      sheetCount: 0,
+      cellCount: 0,
+      formulaCellCount: 0,
+      valueCellCount: 0,
+      definedNameCount: 0,
+      tableCount: 0,
+      chartCount: 0,
+      pivotCount: 0,
+      mergeCount: 0,
+      styleRangeCount: 0,
+      conditionalFormatCount: 0,
+      dataValidationCount: 0,
+      macroPayloadCount: 0,
+      warningCount: 0,
+    },
+    workbookMetadata: {
+      workbookName: artifact.fileName,
+      sheetNames: [],
+      dimensions: [],
+    },
+    unsupportedFeatureClassifications: ['xlsx.publicCorpus.resourceLimit:rss>1536MiB'],
+    evidence: [
+      `source=${artifact.sourceUrl}`,
+      `license=${artifact.license.title}`,
+      `sha256=${artifact.sha256}`,
+      'Public corpus verification RSS limit exceeded: 1.53 GiB > 1.50 GiB',
+      'The workbook was isolated in a subprocess so the corpus verification run could continue.',
+    ],
+  }
+}
+
 function statusFixture(input: {
   readonly targetWorkbookCount: number
   readonly sourceCount: number
@@ -226,6 +306,7 @@ function statusFixture(input: {
   readonly recordedManifestArtifactCount: number
   readonly missingManifestArtifactCount: number
   readonly recordedPassedCaseCount: number
+  readonly recordedUnsupportedCaseCount?: number
   readonly scorecardCoversManifest: boolean
   readonly targetComplete: boolean
   readonly gaps: readonly string[]
@@ -239,7 +320,7 @@ function statusFixture(input: {
     recordedManifestArtifactCount: input.recordedManifestArtifactCount,
     missingManifestArtifactCount: input.missingManifestArtifactCount,
     recordedPassedCaseCount: input.recordedPassedCaseCount,
-    recordedUnsupportedCaseCount: 0,
+    recordedUnsupportedCaseCount: input.recordedUnsupportedCaseCount ?? 0,
     recordedFailedCaseCount: 0,
     recordedErrorCaseCount: 0,
     recordedCoversManifest: input.recordedManifestArtifactCount >= input.cachedArtifactCount,

@@ -309,7 +309,10 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
       (entry) => !entry.sourceUrl || !entry.downloadUrl || !entry.fetchedAt || !entry.sha256 || entry.byteSize <= 0,
     ).length
     const metadataCaseGapCount = context.recordedCases.filter(
-      (entry) => entry.workbookMetadata.sheetNames.length === 0 || entry.workbookMetadata.dimensions.length === 0,
+      (entry) => !hasWorkbookMetadata(entry) && !isResourceLimitedUnsupportedCase(entry),
+    ).length
+    const resourceLimitedMetadataUnavailableCount = context.recordedCases.filter(
+      (entry) => !hasWorkbookMetadata(entry) && isResourceLimitedUnsupportedCase(entry),
     ).length
     return checklistItem({
       id: 'source-license-hash-metadata-manifest',
@@ -330,6 +333,7 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
         `recorded workbook metadata cases: ${String(context.recordedCases.length - metadataCaseGapCount)}/${String(
           context.currentState.cachedArtifactCount,
         )}`,
+        `resource-limited unsupported cases with metadata unavailable: ${String(resourceLimitedMetadataUnavailableCount)}`,
       ],
       gaps: [
         ...(context.manifest ? [] : ['manifest artifact is missing']),
@@ -768,6 +772,19 @@ function hasFeatureValidationEvidence(entry: PublicWorkbookCorpusCase): boolean 
     entry.featureCounts.mergeCount >= 0 &&
     entry.featureCounts.styleRangeCount >= 0 &&
     entry.featureCounts.conditionalFormatCount >= 0
+  )
+}
+
+function hasWorkbookMetadata(entry: PublicWorkbookCorpusCase): boolean {
+  return entry.workbookMetadata.sheetNames.length > 0 && entry.workbookMetadata.dimensions.length > 0
+}
+
+function isResourceLimitedUnsupportedCase(entry: PublicWorkbookCorpusCase): boolean {
+  return (
+    entry.status === 'unsupported' &&
+    entry.passed &&
+    entry.unsupportedFeatureClassifications.some((classification) => classification.startsWith('xlsx.publicCorpus.resourceLimit:')) &&
+    entry.evidence.some((line) => line.startsWith('Public corpus verification RSS limit exceeded:'))
   )
 }
 
