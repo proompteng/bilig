@@ -8,6 +8,10 @@ import type { BuildScorecardInput } from './bilig-dominance-scorecard-types.ts'
 import { loadBiligDominanceScorecardInput, rootDir } from './bilig-dominance-scorecard-input.ts'
 import { buildBiligDominanceScorecard } from './gen-bilig-dominance-scorecard.ts'
 import type { UiResponsivenessSameCorpusWorkload } from './gen-ui-responsiveness-live-browser-scorecard.ts'
+import {
+  parseSameCorpusPublicAccessCheckJson,
+  type SameCorpusPublicAccessCheck,
+} from './ui-responsiveness-same-corpus-public-access-check.ts'
 import { buildWorkbookBenchmarkCorpus, type WorkbookBenchmarkCorpusId } from '../packages/benchmarks/src/workbook-corpus.js'
 import { publicCorpusStopMarkerOverrideEnvVar, publicCorpusStopMarkerOverrideFlag, readStringArg } from './public-workbook-corpus-cli.ts'
 import { planPublicWorkbookCorpusFetch, type PublicWorkbookCorpusFetchPlan } from './public-workbook-corpus-fetch.ts'
@@ -114,7 +118,9 @@ export interface BiligDominanceStatus {
       readonly microsoftExcelWebUrl: string
     }
     readonly googleSheetsUrl: string | null
+    readonly googleSheetsUrlSource: UiSameCorpusGoogleSheetsUrlSource
     readonly googleSheetsUrlEnvVar: string
+    readonly publicAccessCheckPath: string
     readonly missingInputs: readonly string[]
     readonly nextFixtureCheckCommand: string
     readonly nextPublicAccessCheckCommand: string
@@ -126,6 +132,8 @@ export interface BiligDominanceStatus {
   }
 }
 
+type UiSameCorpusGoogleSheetsUrlSource = 'argument-or-environment' | 'public-access-check' | 'missing'
+
 const defaultCacheDir = join(rootDir, '.cache', 'public-workbook-corpus')
 const defaultManifestPath = join(defaultCacheDir, 'manifest.json')
 const defaultScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'public-workbook-corpus-scorecard.json')
@@ -136,6 +144,7 @@ const defaultFinancialScorecardPath = join(defaultFinancialCacheDir, 'scorecard.
 const defaultFinancialVerifyCheckpointPath = join(defaultFinancialCacheDir, 'verification-checkpoint.json')
 const defaultCorpusRunStopMarkerPath = join(rootDir, '.agent-coordination', '20260507T074946Z-codex-stop-interactive-corpus-runs.md')
 const defaultUiSameCorpusId: WorkbookBenchmarkCorpusId = 'wide-mixed-250k'
+const defaultUiSameCorpusPublicAccessCheckPath = join(rootDir, '.cache', 'ui-responsiveness', 'same-corpus-public-access-check.json')
 const uiSameCorpusGoogleSheetsUrlEnvVar = 'BILIG_UI_SAME_CORPUS_GOOGLE_SHEETS_URL'
 const requiredUiSameCorpusWorkloads = ['visible-scroll-response'] as const satisfies readonly UiResponsivenessSameCorpusWorkload[]
 
@@ -153,8 +162,12 @@ export function buildBiligDominanceStatusFromArgs(): BiligDominanceStatus {
   const financialScorecardPath = resolve(readStringArg('--financial-scorecard', defaultFinancialScorecardPath))
   const financialVerifyCheckpointPath = resolve(readStringArg('--financial-verify-checkpoint', defaultFinancialVerifyCheckpointPath))
   const stopMarkerPath = resolve(readStringArg('--corpus-run-stop-marker', defaultCorpusRunStopMarkerPath))
-  const uiSameCorpusGoogleSheetsUrl =
+  const uiSameCorpusPublicAccessCheckPath = resolve(
+    readStringArg('--ui-same-corpus-public-access-check', defaultUiSameCorpusPublicAccessCheckPath),
+  )
+  const explicitUiSameCorpusGoogleSheetsUrl =
     readStringArg('--ui-same-corpus-google-sheets-url', process.env[uiSameCorpusGoogleSheetsUrlEnvVar] ?? '') || null
+  const uiSameCorpusPublicAccessCheck = readSameCorpusPublicAccessCheckOrNull(uiSameCorpusPublicAccessCheckPath)
   const input = loadBiligDominanceScorecardInput()
   const publicWorkbookCorpusStatus = readPublicWorkbookCorpusStatus({
     manifestPath,
@@ -229,7 +242,9 @@ export function buildBiligDominanceStatusFromArgs(): BiligDominanceStatus {
     publicWorkbookCorpusStatus,
     stopMarkerActive,
     stopMarkerPath: formatBiligDominanceStatusPathForMessage(stopMarkerPath, rootDir),
-    uiSameCorpusGoogleSheetsUrl,
+    uiSameCorpusGoogleSheetsUrl: explicitUiSameCorpusGoogleSheetsUrl,
+    uiSameCorpusPublicAccessCheck,
+    uiSameCorpusPublicAccessCheckPath: formatBiligDominanceStatusPathForMessage(uiSameCorpusPublicAccessCheckPath, rootDir),
   })
 }
 
@@ -244,6 +259,8 @@ export function buildBiligDominanceStatus(args: {
   readonly stopMarkerActive: boolean
   readonly stopMarkerPath: string
   readonly uiSameCorpusGoogleSheetsUrl?: string | null
+  readonly uiSameCorpusPublicAccessCheck?: SameCorpusPublicAccessCheck | null
+  readonly uiSameCorpusPublicAccessCheckPath?: string
 }): BiligDominanceStatus {
   const scorecard = buildBiligDominanceScorecard({
     ...args.input,
@@ -308,7 +325,14 @@ export function buildBiligDominanceStatus(args: {
       corpusRunStopMarkerOverrideEnvVar: publicCorpusStopMarkerOverrideEnvVar,
       gaps: args.publicWorkbookCorpusStatus.gaps,
     },
-    uiSameCorpus: buildUiSameCorpusStatus(args.input, args.uiSameCorpusGoogleSheetsUrl ?? null),
+    uiSameCorpus: buildUiSameCorpusStatus(args.input, {
+      publicAccessCheckPath: args.uiSameCorpusPublicAccessCheckPath ?? '.cache/ui-responsiveness/same-corpus-public-access-check.json',
+      ...resolveUiSameCorpusGoogleSheetsUrl({
+        corpusCaseId: defaultUiSameCorpusId,
+        explicitGoogleSheetsUrl: args.uiSameCorpusGoogleSheetsUrl ?? null,
+        publicAccessCheck: args.uiSameCorpusPublicAccessCheck ?? null,
+      }),
+    }),
   }
 }
 
@@ -442,13 +466,20 @@ function readRecordedFinancialCases(args: {
   })
 }
 
-function buildUiSameCorpusStatus(input: BuildScorecardInput, googleSheetsUrl: string | null): BiligDominanceStatus['uiSameCorpus'] {
+function buildUiSameCorpusStatus(
+  input: BuildScorecardInput,
+  args: {
+    readonly googleSheetsUrl: string | null
+    readonly googleSheetsUrlSource: UiSameCorpusGoogleSheetsUrlSource
+    readonly publicAccessCheckPath: string
+  },
+): BiligDominanceStatus['uiSameCorpus'] {
   const proof = input.uiResponsivenessLiveBrowserScorecard.sameCorpusProof
   const fixture = uiSameCorpusFixtureStatus(defaultUiSameCorpusId)
   const coveredWorkloads = new Set(proof.cases.map((entry) => entry.workload))
   const missingRequiredWorkloads = requiredUiSameCorpusWorkloads.filter((workload) => !coveredWorkloads.has(workload))
   const tenXRequirementSatisfied = uiSameCorpusTenXRequirementSatisfied(proof, missingRequiredWorkloads)
-  const googleSheetsUrlArgument = googleSheetsUrl ?? '<google-sheets-url>'
+  const googleSheetsUrlArgument = args.googleSheetsUrl ?? '<google-sheets-url>'
   return {
     captured: proof.captured,
     evidenceKind: proof.evidenceKind,
@@ -461,14 +492,18 @@ function buildUiSameCorpusStatus(input: BuildScorecardInput, googleSheetsUrl: st
     coveredCorpusCaseIds: proof.coveredCorpusCaseIds,
     limitations: proof.limitations,
     fixture,
-    googleSheetsUrl,
+    googleSheetsUrl: args.googleSheetsUrl,
+    googleSheetsUrlSource: args.googleSheetsUrlSource,
     googleSheetsUrlEnvVar: uiSameCorpusGoogleSheetsUrlEnvVar,
-    missingInputs: googleSheetsUrl || tenXRequirementSatisfied ? [] : ['googleSheetsUrlForUploadedSameCorpusWorkbook'],
+    publicAccessCheckPath: args.publicAccessCheckPath,
+    missingInputs: args.googleSheetsUrl || tenXRequirementSatisfied ? [] : ['googleSheetsUrlForUploadedSameCorpusWorkbook'],
     nextFixtureCheckCommand: 'pnpm ui:same-corpus:fixture:check',
     nextPublicAccessCheckCommand: [
       'pnpm',
       'ui:same-corpus:public-check',
       '--',
+      '--output',
+      args.publicAccessCheckPath,
       '--google-sheets-url',
       googleSheetsUrlArgument,
       '--microsoft-excel-web-url',
@@ -505,6 +540,60 @@ function buildUiSameCorpusStatus(input: BuildScorecardInput, googleSheetsUrl: st
     nextScorecardGenerateCommand: 'pnpm ui:browser-live:generate -- --capture .cache/ui-responsiveness/same-corpus-capture.json',
     nextDominanceCheckCommand: 'pnpm dominance:generate && pnpm dominance:check && pnpm dominance:audit:check',
   }
+}
+
+function readSameCorpusPublicAccessCheckOrNull(path: string): SameCorpusPublicAccessCheck | null {
+  if (!existsSync(path)) {
+    return null
+  }
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
+    return parseSameCorpusPublicAccessCheckJson(parsed)
+  } catch {
+    return null
+  }
+}
+
+function resolveUiSameCorpusGoogleSheetsUrl(args: {
+  readonly corpusCaseId: WorkbookBenchmarkCorpusId
+  readonly explicitGoogleSheetsUrl: string | null
+  readonly publicAccessCheck: SameCorpusPublicAccessCheck | null
+}): {
+  readonly googleSheetsUrl: string | null
+  readonly googleSheetsUrlSource: UiSameCorpusGoogleSheetsUrlSource
+} {
+  if (args.explicitGoogleSheetsUrl) {
+    return {
+      googleSheetsUrl: args.explicitGoogleSheetsUrl,
+      googleSheetsUrlSource: 'argument-or-environment',
+    }
+  }
+  const verifiedPublicAccessUrl = verifiedGoogleSheetsUrlFromPublicAccessCheck(args.publicAccessCheck, args.corpusCaseId)
+  if (verifiedPublicAccessUrl) {
+    return {
+      googleSheetsUrl: verifiedPublicAccessUrl,
+      googleSheetsUrlSource: 'public-access-check',
+    }
+  }
+  return {
+    googleSheetsUrl: null,
+    googleSheetsUrlSource: 'missing',
+  }
+}
+
+function verifiedGoogleSheetsUrlFromPublicAccessCheck(
+  check: SameCorpusPublicAccessCheck | null,
+  corpusCaseId: WorkbookBenchmarkCorpusId,
+): string | null {
+  if (!check || check.corpusCaseId !== corpusCaseId) {
+    return null
+  }
+  const corpus = buildWorkbookBenchmarkCorpus(corpusCaseId)
+  if (check.materializedCells !== corpus.materializedCellCount) {
+    return null
+  }
+  const product = check.products.find((entry) => entry.product === 'google-sheets')
+  return product?.corpusVerification.verified ? product.source : null
 }
 
 function uiSameCorpusTenXRequirementSatisfied(

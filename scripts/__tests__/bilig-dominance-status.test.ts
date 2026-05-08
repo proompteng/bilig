@@ -5,6 +5,7 @@ import { buildSameCorpusProof, type SameCorpusCapture } from '../gen-ui-responsi
 import type { PublicWorkbookCorpusFinancialPlan } from '../public-workbook-corpus-financial-plan.ts'
 import type { PublicWorkbookCorpusFeatureWitnessPlan } from '../public-workbook-corpus-feature-witness-plan.ts'
 import type { PublicWorkbookCorpusStatus } from '../public-workbook-corpus-status.ts'
+import type { SameCorpusPublicAccessCheck } from '../ui-responsiveness-same-corpus-public-access-check.ts'
 import { buildFixtureInput } from './bilig-dominance-scorecard.fixture.ts'
 
 describe('bilig dominance status', () => {
@@ -23,7 +24,9 @@ describe('bilig dominance status', () => {
       requiredWorkloads: ['visible-scroll-response'],
       missingRequiredWorkloads: ['visible-scroll-response'],
       googleSheetsUrl: null,
+      googleSheetsUrlSource: 'missing',
       googleSheetsUrlEnvVar: 'BILIG_UI_SAME_CORPUS_GOOGLE_SHEETS_URL',
+      publicAccessCheckPath: '.cache/ui-responsiveness/same-corpus-public-access-check.json',
       missingInputs: ['googleSheetsUrlForUploadedSameCorpusWorkbook'],
       fixture: {
         corpusCaseId: 'wide-mixed-250k',
@@ -36,6 +39,9 @@ describe('bilig dominance status', () => {
       nextDominanceCheckCommand: 'pnpm dominance:generate && pnpm dominance:check && pnpm dominance:audit:check',
     })
     expect(status.uiSameCorpus.fixture.microsoftExcelWebUrl).toContain('view.officeapps.live.com/op/view.aspx')
+    expect(status.uiSameCorpus.nextPublicAccessCheckCommand).toContain(
+      '--output .cache/ui-responsiveness/same-corpus-public-access-check.json',
+    )
     expect(status.uiSameCorpus.nextPreflightCommand).toContain('--google-sheets-url')
     expect(status.uiSameCorpus.nextPreflightCommand).toContain('<google-sheets-url>')
     expect(status.uiSameCorpus.nextCaptureCommand).toContain('.cache/ui-responsiveness/same-corpus-capture.json')
@@ -54,6 +60,7 @@ describe('bilig dominance status', () => {
     })
 
     expect(status.uiSameCorpus.googleSheetsUrl).toBe(googleSheetsUrl)
+    expect(status.uiSameCorpus.googleSheetsUrlSource).toBe('argument-or-environment')
     expect(status.uiSameCorpus.missingInputs).toEqual([])
     expect(status.uiSameCorpus.nextPreflightCommand).toContain(googleSheetsUrl)
     expect(status.uiSameCorpus.nextPreflightCommand).not.toContain('<google-sheets-url>')
@@ -61,6 +68,29 @@ describe('bilig dominance status', () => {
     expect(status.uiSameCorpus.nextPublicAccessCheckCommand).not.toContain('<google-sheets-url>')
     expect(status.uiSameCorpus.nextCaptureCommand).toContain(googleSheetsUrl)
     expect(status.uiSameCorpus.nextCaptureCommand).not.toContain('<google-sheets-url>')
+  })
+
+  it('reuses verified public-access evidence for same-corpus UI proof commands', () => {
+    const googleSheetsUrl = 'https://docs.google.com/spreadsheets/d/sameCorpusSheet/edit'
+    const status = buildBiligDominanceStatus({
+      input: buildFixtureInput(),
+      financialCorpusStatus: completeFinancialCorpusStatus(),
+      publicWorkbookCorpusStatus: completePublicWorkbookCorpusStatus(),
+      stopMarkerActive: false,
+      stopMarkerPath: '/repo/.agent-coordination/stop.md',
+      uiSameCorpusPublicAccessCheck: sameCorpusPublicAccessCheckFixture(googleSheetsUrl),
+      uiSameCorpusPublicAccessCheckPath: '.cache/ui-responsiveness/same-corpus-public-access-check.json',
+    })
+
+    expect(status.uiSameCorpus.googleSheetsUrl).toBe(googleSheetsUrl)
+    expect(status.uiSameCorpus.googleSheetsUrlSource).toBe('public-access-check')
+    expect(status.uiSameCorpus.missingInputs).toEqual([])
+    expect(status.uiSameCorpus.nextPreflightCommand).toContain(googleSheetsUrl)
+    expect(status.uiSameCorpus.nextPreflightCommand).not.toContain('<google-sheets-url>')
+    expect(status.uiSameCorpus.nextPublicAccessCheckCommand).toContain(
+      '--output .cache/ui-responsiveness/same-corpus-public-access-check.json',
+    )
+    expect(status.uiSameCorpus.nextCaptureCommand).toContain(googleSheetsUrl)
   })
 
   it('keeps asking for the Google Sheets URL when captured same-corpus proof is not 10x', () => {
@@ -309,6 +339,43 @@ function featureWitnessPlanFixture(): PublicWorkbookCorpusFeatureWitnessPlan {
       },
     ],
     missingWitnessCount: 1,
+  }
+}
+
+function sameCorpusPublicAccessCheckFixture(googleSheetsUrl: string): SameCorpusPublicAccessCheck {
+  return {
+    schemaVersion: 1,
+    suite: 'ui-responsiveness-same-corpus-public-access-check',
+    generatedAt: '2026-05-08T10:00:00.000Z',
+    corpusCaseId: 'wide-mixed-250k',
+    materializedCells: 250_000,
+    requestedProductCount: 1,
+    verifiedProductCount: 1,
+    allRequestedProductsVerified: true,
+    products: [
+      {
+        product: 'google-sheets',
+        source: googleSheetsUrl,
+        resolvedXlsxUrl: 'https://docs.google.com/spreadsheets/d/sameCorpusSheet/export?format=xlsx',
+        byteSize: 1_440_952,
+        corpusVerification: {
+          verified: true,
+          method: 'google-sheets-xlsx-export',
+          sheetName: 'WideGrid',
+          materializedCells: 250_000,
+          checkedCells: [
+            { address: 'A1', expected: 'metric-1', actual: 'metric-1' },
+            { address: 'B1', expected: 'metric-2', actual: 'metric-2' },
+            { address: 'AP977', expected: 'note-8-2', actual: 'note-8-2' },
+          ],
+        },
+        limitations: ['Google Sheets must be shared so anyone with the link can export the native sheet as XLSX.'],
+      },
+    ],
+    limitations: [
+      'This check proves URL reachability and same-corpus workbook identity through XLSX export bytes.',
+      'It is not browser timing evidence and does not satisfy the same-corpus 10x UI responsiveness requirement by itself.',
+    ],
   }
 }
 

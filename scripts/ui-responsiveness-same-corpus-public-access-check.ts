@@ -8,6 +8,7 @@ import { buildWorkbookBenchmarkCorpus, isWorkbookBenchmarkCorpusId } from '../pa
 import type { WorkbookBenchmarkCorpusId } from '../packages/benchmarks/src/workbook-corpus.js'
 import type {
   SameCorpusCaptureCorpusVerification,
+  SameCorpusCaptureVerifiedCell,
   UiResponsivenessSameCorpusProduct,
 } from './gen-ui-responsiveness-live-browser-scorecard.ts'
 import { formatJsonForRepo } from './scorecard-format.ts'
@@ -163,6 +164,14 @@ export function validateSameCorpusPublicAccessCheck(check: SameCorpusPublicAcces
   }
 }
 
+export function parseSameCorpusPublicAccessCheckJson(value: unknown): SameCorpusPublicAccessCheck {
+  if (!isSameCorpusPublicAccessCheck(value)) {
+    throw new Error('Unexpected same-corpus public access check JSON')
+  }
+  validateSameCorpusPublicAccessCheck(value)
+  return value
+}
+
 export async function fetchSameCorpusXlsxBytes(url: string, label: string): Promise<Uint8Array> {
   const response = await fetch(url, { redirect: 'follow' })
   if (!response.ok) {
@@ -246,6 +255,69 @@ function argumentValue(argv: readonly string[], name: string): string | null {
     throw new Error(`Missing value after ${name}`)
   }
   return value
+}
+
+function isSameCorpusPublicAccessCheck(value: unknown): value is SameCorpusPublicAccessCheck {
+  if (!isJsonRecord(value)) {
+    return false
+  }
+  return (
+    value.schemaVersion === 1 &&
+    value.suite === 'ui-responsiveness-same-corpus-public-access-check' &&
+    typeof value.generatedAt === 'string' &&
+    isWorkbookBenchmarkCorpusId(value.corpusCaseId) &&
+    typeof value.materializedCells === 'number' &&
+    typeof value.requestedProductCount === 'number' &&
+    typeof value.verifiedProductCount === 'number' &&
+    typeof value.allRequestedProductsVerified === 'boolean' &&
+    Array.isArray(value.products) &&
+    value.products.every(isSameCorpusPublicAccessProductResult) &&
+    Array.isArray(value.limitations) &&
+    value.limitations.every(isString)
+  )
+}
+
+function isSameCorpusPublicAccessProductResult(value: unknown): value is SameCorpusPublicAccessProductResult {
+  if (!isJsonRecord(value)) {
+    return false
+  }
+  return (
+    (value.product === 'google-sheets' || value.product === 'microsoft-excel-web') &&
+    typeof value.source === 'string' &&
+    typeof value.resolvedXlsxUrl === 'string' &&
+    typeof value.byteSize === 'number' &&
+    isSameCorpusCaptureCorpusVerification(value.corpusVerification) &&
+    Array.isArray(value.limitations) &&
+    value.limitations.every(isString)
+  )
+}
+
+function isSameCorpusCaptureCorpusVerification(value: unknown): value is SameCorpusCaptureCorpusVerification {
+  if (!isJsonRecord(value)) {
+    return false
+  }
+  return (
+    typeof value.verified === 'boolean' &&
+    (value.method === 'bilig-benchmark-state' ||
+      value.method === 'google-sheets-xlsx-export' ||
+      value.method === 'microsoft-excel-web-source-xlsx') &&
+    typeof value.sheetName === 'string' &&
+    typeof value.materializedCells === 'number' &&
+    Array.isArray(value.checkedCells) &&
+    value.checkedCells.every(isSameCorpusCaptureVerifiedCell)
+  )
+}
+
+function isSameCorpusCaptureVerifiedCell(value: unknown): value is SameCorpusCaptureVerifiedCell {
+  return isJsonRecord(value) && typeof value.address === 'string' && typeof value.expected === 'string' && typeof value.actual === 'string'
+}
+
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string'
 }
 
 function looksLikeHtml(bytes: Uint8Array): boolean {
