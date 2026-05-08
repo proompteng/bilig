@@ -1,7 +1,7 @@
 # bilig
 
-> headless spreadsheet engine for node services, coding agents, local-first
-> workbook automation, and formula-backed business workflows.
+> headless spreadsheet engine for node services, workbook automation, and
+> formula-backed business workflows.
 
 site: https://proompteng.github.io/bilig/
 repository: https://github.com/proompteng/bilig
@@ -122,9 +122,19 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md
 - current small example issue: xlsx formula-cache roundtrip:
   https://github.com/proompteng/bilig/issues/134
-- current small example issue: json records to workpaper:
-  https://github.com/proompteng/bilig/issues/137
 - current small example issue: named-expression change:
   https://github.com/proompteng/bilig/issues/138
+- current small example issue: HTTP JSON summary:
+  https://github.com/proompteng/bilig/issues/141
+- current small example issue: JSON file input:
+  https://github.com/proompteng/bilig/issues/142
+- current small example issue: markdown report output:
+  https://github.com/proompteng/bilig/issues/143
+- current small example issue: formula diagnostics:
+  https://github.com/proompteng/bilig/issues/144
+- current small example issue: snapshot diff:
+  https://github.com/proompteng/bilig/issues/145
+- current small docs issue: first-time contributor command checklist:
+  https://github.com/proompteng/bilig/issues/146
 - good first issue search:
   https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22

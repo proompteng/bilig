@@ -186,12 +186,22 @@ for (const required of [
   'https://github.com/proompteng/bilig/issues/134',
   'https://github.com/proompteng/bilig/issues/138',
   'https://github.com/proompteng/bilig/issues/141',
+  'https://github.com/proompteng/bilig/issues/142',
+  'https://github.com/proompteng/bilig/issues/143',
+  'https://github.com/proompteng/bilig/issues/144',
+  'https://github.com/proompteng/bilig/issues/145',
+  'https://github.com/proompteng/bilig/issues/146',
 ]) {
   requireIncludes(starterIssues, required, 'docs/starter-issues.md')
+  requireIncludes(llms, required, 'docs/llms.txt')
 }
 
 if (starterIssues.includes('https://github.com/proompteng/bilig/issues/137')) {
   throw new Error('docs/starter-issues.md still links to closed starter issue #137')
+}
+
+if (llms.includes('https://github.com/proompteng/bilig/issues/137')) {
+  throw new Error('docs/llms.txt still links to closed starter issue #137')
 }
 
 const publicDocs = [

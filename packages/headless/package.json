@@ -1,7 +1,7 @@
 {
   "name": "@bilig/headless",
   "version": "0.1.95",
-  "description": "Headless spreadsheet engine and WorkPaper workbook facade for Node services, coding agents, and HyperFormula-style workflows.",
+  "description": "Headless spreadsheet engine for Node.js formulas, workbook JSON persistence, and service-side spreadsheet automation.",
   "keywords": [
     "agent",
     "agents",

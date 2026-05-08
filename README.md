@@ -7,11 +7,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 <p align="center">
-  <img src="docs/assets/github-social-preview.png" alt="bilig headless spreadsheet engine for Node services and coding agents" />
+  <img src="docs/assets/github-social-preview.png" alt="bilig headless spreadsheet engine for Node.js programs" />
 </p>
 
-**bilig is a headless spreadsheet engine for Node services, coding agents, and
-local-first workbook automation.**
+**bilig runs spreadsheet formulas from Node.js.** Build workbooks from arrays or
+JSON records, edit cells, recalculate formulas, and save the document without
+opening a spreadsheet UI.
 
 Project site: <https://proompteng.github.io/bilig/>
 
@@ -23,7 +24,7 @@ Project site: <https://proompteng.github.io/bilig/>
   [HyperFormula comparison](docs/hyperformula-alternative-headless-workpaper.md),
   [engine comparison](docs/headless-spreadsheet-engine-comparison.md), and
   [benchmark explainer](docs/what-workpaper-benchmark-proves.md).
-- **Build a Node or agent workflow**: start from the
+- **Build a Node workflow**: start from the
   [runnable WorkPaper example](examples/headless-workpaper),
   [JSON records input example](examples/headless-workpaper#json-records-input),
   [Node service recipe](docs/node-service-workpaper-recipe.md), or

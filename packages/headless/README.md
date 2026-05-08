@@ -6,14 +6,46 @@
 [![GitHub Repo stars](https://img.shields.io/github/stars/proompteng/bilig?style=social)](https://github.com/proompteng/bilig/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](../../LICENSE)
 
-`@bilig/headless` is the production-targeted WorkPaper workbook facade for
-`bilig`. It runs the `@bilig/core` spreadsheet engine without the browser UI and
-exposes HyperFormula-style workbook workflows for services, tests, agents, and
-server-side spreadsheet automation.
+`@bilig/headless` lets Node.js programs build workbooks, write formulas, read
+calculated cells, and save or restore the workbook as JSON. It is the `bilig`
+spreadsheet engine without the browser UI.
 
-Use it when you need a headless spreadsheet engine for Node services, coding
-agents, benchmark harnesses, persistence tests, formula-backed business logic,
-or local-first workbook automation.
+Use it for service-side spreadsheet calculations, deterministic tests around
+formula-backed business logic, local-first workbook state, and tool-calling
+workflows that need stable cell addresses.
+
+## Install
+
+Requires Node `24+` and ESM imports.
+
+```sh
+npm install @bilig/headless
+```
+
+Inside this monorepo:
+
+```sh
+pnpm install
+pnpm --filter @bilig/headless build
+```
+
+## Start Here
+
+- Run the [quickstart](#quickstart) for a one-file formula and persistence
+  smoke test.
+- Try the runnable examples:
+  [`examples/headless-workpaper`](../../examples/headless-workpaper) and
+  [`npm run json-records`](../../examples/headless-workpaper#json-records-input).
+- Build a small service from the
+  [Node service recipe](../../docs/node-service-workpaper-recipe.md).
+- Check the
+  [compatibility boundaries](../../docs/where-bilig-is-not-excel-compatible-yet.md)
+  before assuming full Excel parity.
+- Compare against other engines with the
+  [HyperFormula comparison](../../docs/hyperformula-alternative-headless-workpaper.md)
+  and [benchmark explainer](../../docs/what-workpaper-benchmark-proves.md).
+- Star or bookmark the project:
+  <https://github.com/proompteng/bilig/stargazers>.
 
 ## Production Status
 
@@ -65,21 +97,9 @@ Supported scope:
   workbook data with the helpers below, then register custom behavior in
   application code before restore.
 
-## Requirements
+## XLSX Import And Export
 
-- Node `24+`
-- ESM imports
-- `pnpm@10.32.1` for this monorepo
-
-## Install
-
-Published WorkPaper package:
-
-```sh
-pnpm add @bilig/headless
-```
-
-XLSX ingestion and export:
+XLSX ingestion and export are developed in this repository:
 
 ```sh
 git clone https://github.com/proompteng/bilig.git
@@ -93,7 +113,7 @@ being provisioned. Until that package is published on npm, use a repository
 checkout for XLSX import/export work instead of adding `@bilig/excel-import` as
 an external dependency.
 
-Repository:
+Repository links:
 
 - Website: <https://proompteng.github.io/bilig/>
 - GitHub: <https://github.com/proompteng/bilig>
@@ -135,13 +155,6 @@ Repository:
   <https://dev.to/gregkonush/why-agents-need-workbook-apis-instead-of-spreadsheet-screenshots-3d61>
 - DEV article source:
   [`docs/dev-to-workbook-apis-post.md`](../../docs/dev-to-workbook-apis-post.md)
-
-Inside this monorepo:
-
-```sh
-pnpm install
-pnpm --filter @bilig/headless build
-```
 
 ## Quickstart
 

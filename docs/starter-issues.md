@@ -9,6 +9,11 @@ Current starter tickets as of May 8, 2026:
 - [#134: docs(examples): add XLSX formula-cache roundtrip example](https://github.com/proompteng/bilig/issues/134)
 - [#138: docs(examples): add named-expression change WorkPaper example](https://github.com/proompteng/bilig/issues/138)
 - [#141: docs(examples): add HTTP JSON summary WorkPaper example](https://github.com/proompteng/bilig/issues/141)
+- [#142: docs(examples): add JSON file input WorkPaper example](https://github.com/proompteng/bilig/issues/142)
+- [#143: docs(examples): add markdown report WorkPaper output example](https://github.com/proompteng/bilig/issues/143)
+- [#144: docs(examples): add formula diagnostics WorkPaper example](https://github.com/proompteng/bilig/issues/144)
+- [#145: docs(examples): add snapshot diff WorkPaper example](https://github.com/proompteng/bilig/issues/145)
+- [#146: docs(readme): add first-time contributor command checklist](https://github.com/proompteng/bilig/issues/146)
 
 The list intentionally excludes closed issues and broad corpus/parity epics. Add
 new starter tickets only when the expected patch can stay small, has a clear
