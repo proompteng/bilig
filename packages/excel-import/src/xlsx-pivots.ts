@@ -1,4 +1,4 @@
-import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
+import { unzipSync, zipSync } from 'fflate'
 import { XMLParser } from 'fast-xml-parser'
 import * as XLSX from 'xlsx'
 
@@ -7,20 +7,36 @@ import type {
   LiteralInput,
   PivotAggregation,
   WorkbookDefinedNameSnapshot,
+  WorkbookPivotArtifactsSnapshot,
   WorkbookPivotSnapshot,
   WorkbookPivotValueSnapshot,
+  WorkbookSheetPivotArtifactsSnapshot,
   WorkbookSnapshot,
   WorkbookTableSnapshot,
 } from '@bilig/protocol'
-import { readXlsxZipEntries, type XlsxZipSource } from './xlsx-zip.js'
+import {
+  addContentTypeOverride,
+  addExportPreservedPivotArtifactsToXlsxBytes,
+  buildRelationshipsXml,
+  ensureRelationshipNamespace,
+  escapeXml,
+  nextRelationshipId,
+  officeRelationshipNamespace,
+  parseRelationships,
+  pivotCacheDefinitionContentType,
+  pivotCacheDefinitionRelationshipType,
+  pivotCacheRecordsContentType,
+  pivotCacheRecordsRelationshipType,
+  pivotTableContentType,
+  pivotTableRelationshipType,
+  readImportedPivotArtifacts,
+  resolveTargetPath,
+  setZipText,
+  spreadsheetNamespace,
+} from './xlsx-pivot-artifacts.js'
+import { getZipText, readXlsxZipEntries, type XlsxZipEntries, type XlsxZipSource } from './xlsx-zip.js'
 
-type ZipEntries = Record<string, Uint8Array>
-
-interface ParsedRelationship {
-  readonly id: string
-  readonly target: string
-  readonly type: string
-}
+type ZipEntries = XlsxZipEntries
 
 interface PivotCacheField {
   readonly name: string
@@ -41,6 +57,8 @@ interface ParsedPivotCache {
 export interface ImportedWorkbookPivots {
   readonly pivots: WorkbookPivotSnapshot[] | undefined
   readonly hasExternalPivotCaches: boolean
+  readonly artifacts: WorkbookPivotArtifactsSnapshot | undefined
+  readonly sheetArtifactsByName: Map<string, WorkbookSheetPivotArtifactsSnapshot>
 }
 
 const xmlParser = new XMLParser({
@@ -49,16 +67,6 @@ const xmlParser = new XMLParser({
   parseAttributeValue: false,
   removeNSPrefix: true,
 })
-
-const relationshipNamespace = 'http://schemas.openxmlformats.org/package/2006/relationships'
-const spreadsheetNamespace = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
-const officeRelationshipNamespace = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
-const pivotTableRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable'
-const pivotCacheDefinitionRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition'
-const pivotCacheRecordsRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords'
-const pivotTableContentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml'
-const pivotCacheDefinitionContentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml'
-const pivotCacheRecordsContentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -84,23 +92,6 @@ function numberAttribute(value: unknown): number | null {
   return Number.isFinite(number) ? number : null
 }
 
-function escapeXml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&apos;')
-}
-
-function normalizeZipPath(path: string): string {
-  return path.replace(/^\/+/, '')
-}
-
-function getZipText(zip: ZipEntries, path: string): string | null {
-  const file = zip[normalizeZipPath(path)]
-  return file ? strFromU8(file) : null
-}
-
-function setZipText(zip: ZipEntries, path: string, text: string): void {
-  zip[normalizeZipPath(path)] = strToU8(text)
-}
-
 function nextPartIndex(zip: ZipEntries, prefix: string, suffix: string): number {
   let next = 1
   for (const path of Object.keys(zip)) {
@@ -114,71 +105,6 @@ function nextPartIndex(zip: ZipEntries, prefix: string, suffix: string): number 
     }
   }
   return next
-}
-
-function parseRelationships(xml: string | null): ParsedRelationship[] {
-  if (!xml) {
-    return []
-  }
-  const parsed: unknown = xmlParser.parse(xml)
-  return asArray(recordChild(parsed, 'Relationships')?.['Relationship']).flatMap((entry) => {
-    if (!isRecord(entry) || typeof entry['Id'] !== 'string' || typeof entry['Target'] !== 'string' || typeof entry['Type'] !== 'string') {
-      return []
-    }
-    return [{ id: entry['Id'], target: entry['Target'], type: entry['Type'] }]
-  })
-}
-
-function nextRelationshipId(relationships: readonly ParsedRelationship[]): string {
-  let next = 1
-  for (const relationship of relationships) {
-    const match = /^rId(\d+)$/u.exec(relationship.id)
-    if (match) {
-      next = Math.max(next, Number(match[1]) + 1)
-    }
-  }
-  return `rId${String(next)}`
-}
-
-function buildRelationshipsXml(relationships: readonly ParsedRelationship[]): string {
-  return [
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-    `<Relationships xmlns="${relationshipNamespace}">`,
-    ...relationships.map(
-      (relationship) =>
-        `<Relationship Id="${escapeXml(relationship.id)}" Type="${escapeXml(relationship.type)}" Target="${escapeXml(
-          relationship.target,
-        )}"/>`,
-    ),
-    '</Relationships>',
-  ].join('')
-}
-
-function addContentTypeOverride(contentTypesXml: string, partName: string, contentType: string): string {
-  if (contentTypesXml.includes(`PartName="${partName}"`)) {
-    return contentTypesXml
-  }
-  return contentTypesXml.replace('</Types>', `<Override PartName="${partName}" ContentType="${contentType}"/></Types>`)
-}
-
-function resolveTargetPath(basePartPath: string, target: string): string {
-  const parts = basePartPath.split('/')
-  parts.pop()
-  for (const segment of target.split('/')) {
-    if (segment === '..') {
-      parts.pop()
-    } else if (segment !== '.' && segment.length > 0) {
-      parts.push(segment)
-    }
-  }
-  return parts.join('/')
-}
-
-function ensureRelationshipNamespace(xml: string): string {
-  if (/xmlns:r=/u.test(xml)) {
-    return xml
-  }
-  return xml.replace(/<([A-Za-z0-9:]+)\b([^>]*)>/u, `<$1$2 xmlns:r="${officeRelationshipNamespace}">`)
 }
 
 function absoluteAddress(address: string): string {
@@ -469,6 +395,9 @@ export function addExportPivotsToXlsxBytes(
   snapshot: WorkbookSnapshot,
   exportSheetNamesByOriginalName: ReadonlyMap<string, string>,
 ): Uint8Array {
+  if (snapshot.workbook.metadata?.pivotArtifacts) {
+    return addExportPreservedPivotArtifactsToXlsxBytes(bytes, snapshot)
+  }
   const pivots = snapshot.workbook.metadata?.pivots ?? []
   if (pivots.length === 0) {
     return bytes
@@ -770,9 +699,10 @@ export function readImportedWorkbookPivots(
   definedNames: readonly WorkbookDefinedNameSnapshot[] = [],
 ): ImportedWorkbookPivots {
   const zip = readXlsxZipEntries(source)
+  const { artifacts, sheetArtifactsByName } = readImportedPivotArtifacts(zip, sheetNames)
   const { caches, hasExternalPivotCaches } = parsePivotCaches(zip, tables, definedNames)
   if (caches.size === 0) {
-    return { pivots: undefined, hasExternalPivotCaches }
+    return { pivots: undefined, hasExternalPivotCaches, artifacts, sheetArtifactsByName }
   }
   const pivots: WorkbookPivotSnapshot[] = []
   sheetNames.forEach((sheetName, sheetIndex) => {
@@ -809,5 +739,7 @@ export function readImportedWorkbookPivots(
           )
         : undefined,
     hasExternalPivotCaches,
+    artifacts,
+    sheetArtifactsByName,
   }
 }

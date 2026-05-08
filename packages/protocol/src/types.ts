@@ -260,6 +260,29 @@ export interface WorkbookPivotSnapshot {
   cols: number
 }
 
+export interface WorkbookPackageRelationshipSnapshot {
+  id: string
+  type: string
+  target: string
+  targetMode?: string
+}
+
+export interface WorkbookPivotPackagePartSnapshot {
+  path: string
+  xml: string
+}
+
+export interface WorkbookPivotArtifactsSnapshot {
+  parts: WorkbookPivotPackagePartSnapshot[]
+  workbookPivotCachesXml?: string
+  workbookRelationships?: WorkbookPackageRelationshipSnapshot[]
+}
+
+export interface WorkbookSheetPivotArtifactsSnapshot {
+  relationships: WorkbookPackageRelationshipSnapshot[]
+  pivotTableDefinitionsXml?: string
+}
+
 export type WorkbookChartType = 'column' | 'bar' | 'line' | 'area' | 'pie' | 'scatter'
 export type WorkbookChartSeriesOrientation = 'rows' | 'columns'
 export type WorkbookChartLegendPosition = 'top' | 'right' | 'bottom' | 'left' | 'hidden'
@@ -791,6 +814,7 @@ export interface WorkbookMetadataSnapshot {
   tables?: WorkbookTableSnapshot[]
   spills?: WorkbookSpillSnapshot[]
   pivots?: WorkbookPivotSnapshot[]
+  pivotArtifacts?: WorkbookPivotArtifactsSnapshot
   charts?: WorkbookChartSnapshot[]
   images?: WorkbookImageSnapshot[]
   shapes?: WorkbookShapeSnapshot[]
@@ -827,6 +851,7 @@ export interface SheetMetadataSnapshot {
   sheetPr?: WorkbookSheetPrSnapshot
   ignoredErrors?: WorkbookIgnoredErrorsSnapshot
   sparklines?: WorkbookSparklinesSnapshot
+  pivotArtifacts?: WorkbookSheetPivotArtifactsSnapshot
   visibility?: WorkbookSheetVisibilitySnapshot
   cellMetadataRefs?: WorkbookCellMetadataReferenceSnapshot[]
 }

@@ -271,6 +271,9 @@ function withSheetMetadataFallback(
   if (fallback?.sparklines) {
     next.sparklines = fallback.sparklines
   }
+  if (fallback?.pivotArtifacts) {
+    next.pivotArtifacts = fallback.pivotArtifacts
+  }
   if (fallback?.merges) {
     next.merges = fallback.merges
   }

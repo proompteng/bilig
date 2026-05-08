@@ -24,6 +24,7 @@ interface ImportedSheetMetadataInput {
   readonly printerSettings?: SheetMetadataSnapshot['printerSettings']
   readonly ignoredErrors?: SheetMetadataSnapshot['ignoredErrors']
   readonly sparklines?: SheetMetadataSnapshot['sparklines']
+  readonly pivotArtifacts?: SheetMetadataSnapshot['pivotArtifacts']
   readonly cellMetadataRefs?: SheetMetadataSnapshot['cellMetadataRefs']
 }
 
@@ -52,6 +53,7 @@ export function buildImportedSheetMetadata(input: ImportedSheetMetadataInput): S
     ...(input.printerSettings ? { printerSettings: input.printerSettings } : {}),
     ...(input.ignoredErrors ? { ignoredErrors: input.ignoredErrors } : {}),
     ...(input.sparklines ? { sparklines: input.sparklines } : {}),
+    ...(input.pivotArtifacts ? { pivotArtifacts: input.pivotArtifacts } : {}),
     ...(input.cellMetadataRefs ? { cellMetadataRefs: input.cellMetadataRefs } : {}),
   }
   return Object.keys(metadata).length > 0 ? metadata : undefined

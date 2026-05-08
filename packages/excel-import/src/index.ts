@@ -741,6 +741,7 @@ function importSheetJsWorkbook(
     const importedSheetPr = importedSheetPropertiesBySheet.get(sheetName)
     const importedIgnoredErrors = importedIgnoredErrorsBySheet.get(sheetName)
     const importedSparklines = importedSparklinesBySheet.get(sheetName)
+    const importedPivotArtifacts = importedPivots?.sheetArtifactsByName.get(sheetName)
     const importedSheetVisibility = importedSheetVisibilitiesBySheet.get(sheetName)
     const merges = buildMergeEntries(sheetName, sheet['!merges'])
     const importedSheetProtection = importedSheetProtectionsBySheet.get(sheetName)
@@ -763,6 +764,7 @@ function importSheetJsWorkbook(
       sheetPr: importedSheetPr,
       ignoredErrors: importedIgnoredErrors,
       sparklines: importedSparklines,
+      pivotArtifacts: importedPivotArtifacts,
       visibility: importedSheetVisibility,
       merges,
       sheetProtection: importedSheetProtection,
@@ -801,6 +803,7 @@ function importSheetJsWorkbook(
     ...(importedTables ? { tables: importedTables } : {}),
     ...(importedArrayFormulaSpills.length > 0 ? { spills: importedArrayFormulaSpills } : {}),
     ...(importedPivots?.pivots ? { pivots: importedPivots.pivots } : {}),
+    ...(importedPivots?.artifacts ? { pivotArtifacts: importedPivots.artifacts } : {}),
     ...(importedCharts ? { charts: importedCharts } : {}),
     ...(importedCellMetadata?.workbookMetadata ? { cellMetadata: importedCellMetadata.workbookMetadata } : {}),
   }
