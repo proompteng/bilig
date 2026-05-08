@@ -15,12 +15,15 @@ import type {
   CellVerticalAlignment,
   LiteralInput,
   WorkbookAxisEntrySnapshot,
+  WorkbookCommentThreadSnapshot,
+  WorkbookLegacyCommentVmlSnapshot,
   WorkbookMetadataSnapshot,
   WorkbookSnapshot,
 } from '@bilig/protocol'
 import { readImportedArrayFormulaSpills } from './xlsx-array-formulas.js'
 import { readImportedWorkbookCalculationSettings } from './xlsx-calculation-settings.js'
 import { readImportedWorkbookCharts } from './xlsx-charts.js'
+import { legacyCommentThreadSignature, readImportedWorkbookLegacyCommentVml, type ImportedLegacyCommentVml } from './xlsx-comment-vml.js'
 import { readImportedSheetComments } from './xlsx-comments.js'
 import { readImportedWorkbookConditionalFormats } from './xlsx-conditional-formats.js'
 import { readImportedDefinedNames } from './xlsx-defined-names.js'
@@ -611,6 +614,19 @@ function readImportedMacroCodeNames(workbook: XLSX.WorkBook): PreservedVbaProjec
   }
 }
 
+function buildImportedLegacyCommentVmlSnapshot(
+  imported: ImportedLegacyCommentVml | undefined,
+  commentThreads: readonly WorkbookCommentThreadSnapshot[],
+): WorkbookLegacyCommentVmlSnapshot | undefined {
+  if (!imported) {
+    return undefined
+  }
+  return {
+    ...imported,
+    commentSignature: legacyCommentThreadSignature(commentThreads),
+  }
+}
+
 function addWorkbookWarnings(workbook: XLSX.WorkBook, warnings: string[], ignoredDefinedNameCount: number): void {
   if (workbook.vbaraw) {
     warnings.push('Macros were preserved but not executed during XLSX import.')
@@ -665,6 +681,7 @@ function importSheetJsWorkbook(
   const importedCharts = workbookZip ? readImportedWorkbookCharts(workbookZip, workbook.SheetNames) : undefined
   const importedPivots = workbookZip ? readImportedWorkbookPivots(workbookZip, workbook.SheetNames) : undefined
   const importedTables = workbookZip ? readImportedWorkbookTables(workbookZip, workbook.SheetNames) : undefined
+  const importedLegacyCommentVmlBySheet = workbookZip ? readImportedWorkbookLegacyCommentVml(workbookZip, workbook.SheetNames) : new Map()
   const importedFiltersBySheet = workbookZip ? readImportedWorkbookFilters(workbookZip, workbook.SheetNames) : new Map()
   const importedFreezePanesBySheet = workbookZip ? readImportedWorkbookFreezePanes(workbookZip, workbook.SheetNames) : new Map()
   const importedSheetTabColorsBySheet = workbookZip ? readImportedWorkbookSheetTabColors(workbookZip, workbook.SheetNames) : new Map()
@@ -706,6 +723,9 @@ function importSheetJsWorkbook(
       ignoredCommentsSeen = true
       warnings.push('Some cell comments were ignored during XLSX import.')
     }
+    const importedLegacyCommentVml = importedComments.commentThreads
+      ? buildImportedLegacyCommentVmlSnapshot(importedLegacyCommentVmlBySheet.get(sheetName), importedComments.commentThreads)
+      : undefined
     const importedArrayFormulaSheetSpills = readImportedArrayFormulaSpills(sheetName, sheet)
     if (importedArrayFormulaSheetSpills) {
       importedArrayFormulaSpills.push(...importedArrayFormulaSheetSpills)
@@ -849,7 +869,8 @@ function importSheetJsWorkbook(
       importedFilters ||
       importedValidations ||
       importedConditionalFormats ||
-      importedComments.commentThreads
+      importedComments.commentThreads ||
+      importedLegacyCommentVml
         ? {
             ...(rows ? { rows } : {}),
             ...(columns ? { columns } : {}),
@@ -867,6 +888,7 @@ function importSheetJsWorkbook(
             ...(importedValidations ? { validations: importedValidations } : {}),
             ...(importedConditionalFormats ? { conditionalFormats: importedConditionalFormats } : {}),
             ...(importedComments.commentThreads ? { commentThreads: importedComments.commentThreads } : {}),
+            ...(importedLegacyCommentVml ? { legacyCommentVml: importedLegacyCommentVml } : {}),
           }
         : undefined
 

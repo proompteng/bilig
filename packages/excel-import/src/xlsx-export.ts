@@ -11,6 +11,7 @@ import type {
 } from '@bilig/protocol'
 import { addExportCalculationSettingsToXlsxBytes } from './xlsx-calculation-settings.js'
 import { addExportChartsToXlsxBytes } from './xlsx-charts.js'
+import { addExportLegacyCommentVmlToXlsxBytes } from './xlsx-comment-vml.js'
 import { addExportCommentsToWorksheet } from './xlsx-comments.js'
 import { addExportConditionalFormatsToXlsxBytes } from './xlsx-conditional-formats.js'
 import { buildExportDefinedNames } from './xlsx-defined-names.js'
@@ -866,5 +867,6 @@ export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
   )
   const styledBytes = preserveSnapshotStyles(enrichedBytes, snapshot)
   const formattedBytes = preserveSnapshotNumberFormats(styledBytes, exportSheetFormats)
-  return addExportWorksheetDimensionsToXlsxBytes(formattedBytes, snapshot)
+  const dimensionedBytes = addExportWorksheetDimensionsToXlsxBytes(formattedBytes, snapshot)
+  return addExportLegacyCommentVmlToXlsxBytes(dimensionedBytes, snapshot)
 }

@@ -718,6 +718,12 @@ export interface WorkbookNoteSnapshot {
   text: string
 }
 
+export interface WorkbookLegacyCommentVmlSnapshot {
+  relationshipTarget: string
+  vmlXml: string
+  commentSignature: string
+}
+
 export interface WorkbookMetadataSnapshot {
   properties?: WorkbookPropertySnapshot[]
   definedNames?: WorkbookDefinedNameSnapshot[]
@@ -753,6 +759,7 @@ export interface SheetMetadataSnapshot {
   protectedRanges?: WorkbookRangeProtectionSnapshot[]
   commentThreads?: WorkbookCommentThreadSnapshot[]
   notes?: WorkbookNoteSnapshot[]
+  legacyCommentVml?: WorkbookLegacyCommentVmlSnapshot
 }
 
 export interface WorkbookSnapshot {
