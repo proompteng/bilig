@@ -287,6 +287,7 @@ export function validatePublicWorkbookCorpusResumePlan(plan: PublicWorkbookCorpu
   if (plan.phases.fetchAdditionalArtifacts.totalWorkItems !== plan.currentState.missingCachedArtifactCount) {
     findings.push('fetch phase does not match missing cached artifact count')
   }
+  validateFetchPhaseTrancheLimit(plan, findings)
   const finalCommands = plan.phases.finalEvidenceRefresh.commands
   for (const requiredCommand of [
     'pnpm public-workbook-corpus:completion-audit:check -- --require-complete',
@@ -426,6 +427,7 @@ function buildFetchPhase(args: Parameters<typeof buildPublicWorkbookCorpusResume
     return notNeededPhase('cached artifacts already reached the target workbook count')
   }
   const batchSize = normalizedBatchSize(args.fetchBatchSize)
+  const nextFetchLimit = Math.min(args.fetchLimit, args.status.cachedArtifactCount + batchSize)
   const reason = args.fetchPlan.targetReachableFromKnownCandidates
     ? 'known candidate sources can be fetched to fill the remaining artifact target'
     : 'candidate source discovery must run before fetch can fill the remaining artifact target'
@@ -445,7 +447,7 @@ function buildFetchPhase(args: Parameters<typeof buildPublicWorkbookCorpusResume
         '--cache-dir',
         commandPath(args.cacheDir, args.displayRootDir),
         '--limit',
-        String(args.fetchLimit),
+        String(nextFetchLimit),
       ]),
       guardedCommand(args.stopMarkerActive, [
         'pnpm',
@@ -456,7 +458,7 @@ function buildFetchPhase(args: Parameters<typeof buildPublicWorkbookCorpusResume
         '--cache-dir',
         commandPath(args.cacheDir, args.displayRootDir),
         '--limit',
-        String(args.fetchLimit),
+        String(nextFetchLimit),
         '--fetch-batch-size',
         String(batchSize),
       ]),
@@ -597,6 +599,24 @@ function validatePhase(name: string, phase: ResumePlanPhase, stopMarkerActive: b
   }
 }
 
+function validateFetchPhaseTrancheLimit(plan: PublicWorkbookCorpusResumePlan, findings: string[]): void {
+  const phase = plan.phases.fetchAdditionalArtifacts
+  if (phase.totalWorkItems === 0) {
+    return
+  }
+  const maximumNextFetchLimit = plan.currentState.cachedArtifactCount + phase.batchSize
+  for (const mutatingCommand of phase.commands.filter((commandText) => commandText.includes('public-workbook-corpus:fetch --'))) {
+    const limit = commandLimit(mutatingCommand)
+    if (limit !== null && limit > maximumNextFetchLimit) {
+      findings.push(
+        `fetchAdditionalArtifacts mutating command limit ${String(limit)} exceeds one fetch tranche ending at ${String(
+          maximumNextFetchLimit,
+        )}`,
+      )
+    }
+  }
+}
+
 function isCorpusMutatingCommand(value: string): boolean {
   return [
     'public-workbook-corpus:verify-missing --',
@@ -605,6 +625,11 @@ function isCorpusMutatingCommand(value: string): boolean {
     'public-workbook-corpus:fetch --',
     'public-workbook-corpus:verify --',
   ].some((needle) => value.includes(needle))
+}
+
+function commandLimit(commandText: string): number | null {
+  const match = /(?:^|\s)--limit\s+(\d+)(?:\s|$)/u.exec(commandText)
+  return match ? Number.parseInt(match[1] ?? '', 10) : null
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

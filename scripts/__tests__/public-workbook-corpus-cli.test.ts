@@ -395,6 +395,11 @@ describe('public workbook corpus CLI resource guards', () => {
           totalWorkItems: 4_372,
           batchSize: 6,
           batchCount: 729,
+          commands: expect.arrayContaining([
+            expect.stringContaining('public-workbook-corpus:fetch:plan'),
+            expect.stringContaining('--limit 5634'),
+            expect.stringContaining('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1 pnpm public-workbook-corpus:fetch'),
+          ]),
         },
         finalEvidenceRefresh: {
           status: 'blocked-by-stop-marker',
@@ -412,6 +417,8 @@ describe('public workbook corpus CLI resource guards', () => {
     expect(plan.phases.verifyMissingCachedArtifacts.commands[0]).toContain(
       '--scorecard packages/benchmarks/baselines/public-workbook-corpus-scorecard.json',
     )
+    expect(plan.phases.fetchAdditionalArtifacts.commands[1]).toContain('--limit 5634')
+    expect(plan.phases.fetchAdditionalArtifacts.commands[1]).toContain('--fetch-batch-size 6')
     expect(validatePublicWorkbookCorpusResumePlan(plan)).toEqual([])
   })
 
@@ -530,14 +537,15 @@ describe('public workbook corpus CLI resource guards', () => {
       phases: {
         ...plan.phases,
         fetchAdditionalArtifacts: Object.assign({}, plan.phases.fetchAdditionalArtifacts, {
-          commands: ['pnpm public-workbook-corpus:fetch -- --limit 10000'],
+          commands: ['pnpm public-workbook-corpus:fetch -- --limit 10006'],
         }),
       },
     }
 
     expect(validatePublicWorkbookCorpusResumePlan(invalidPlan)).toEqual(
       expect.arrayContaining([
-        'fetchAdditionalArtifacts mutating command is missing the explicit stop-marker override: pnpm public-workbook-corpus:fetch -- --limit 10000',
+        'fetchAdditionalArtifacts mutating command is missing the explicit stop-marker override: pnpm public-workbook-corpus:fetch -- --limit 10006',
+        'fetchAdditionalArtifacts mutating command limit 10006 exceeds one fetch tranche ending at 10005',
       ]),
     )
   })
