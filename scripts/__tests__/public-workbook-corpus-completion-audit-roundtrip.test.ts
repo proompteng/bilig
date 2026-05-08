@@ -73,6 +73,43 @@ describe('public workbook corpus completion audit round-trip evidence', () => {
     })
     expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
   })
+
+  it('does not treat explicit round-trip skip evidence as a round-trip failure', () => {
+    const artifactA = workbookArtifact('workbook-a')
+    const artifactB = workbookArtifact('workbook-b')
+    const audit = buildPublicWorkbookCorpusCompletionAudit({
+      generatedAt: '2026-05-08T00:00:00.000Z',
+      hyperformulaSecondaryCorpus: hyperFormulaSecondaryCorpusFixture(),
+      manifest: manifestWithArtifacts([artifactA, artifactB], 2),
+      recordedCases: [baseSupportedCase(artifactA), skippedRoundTripFailureCase(artifactB)],
+      status: statusFixture({
+        targetWorkbookCount: 2,
+        sourceCount: 2,
+        cachedArtifactCount: 2,
+        scorecardCaseCount: 2,
+        checkpointCaseCount: 0,
+        recordedManifestArtifactCount: 2,
+        missingManifestArtifactCount: 0,
+        recordedPassedCaseCount: 2,
+        recordedUnsupportedCaseCount: 0,
+        scorecardCoversManifest: true,
+        targetComplete: true,
+        gaps: [],
+      }),
+      stopMarkerActive: false,
+    })
+
+    expect(requirement(audit.checklist, 'roundtrip-supported-workbooks')).toMatchObject({
+      passed: true,
+      gaps: [],
+      evidence: expect.arrayContaining([
+        'supported round-trip passed cases: 1',
+        'round-trip skipped cases: 1',
+        'round-trip failures among recorded cases: 0',
+      ]),
+    })
+    expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
+  })
 })
 
 function requirement(
@@ -103,7 +140,8 @@ function manifestWithArtifacts(artifacts: readonly PublicWorkbookArtifact[], tar
 }
 
 function workbookArtifact(id: string): PublicWorkbookArtifact {
-  const sha256 = 'a'.repeat(64)
+  const hashNibble = id.endsWith('b') ? 'b' : 'a'
+  const sha256 = hashNibble.repeat(64)
   return {
     id,
     sourceId: `source-${id}`,
@@ -183,6 +221,17 @@ function skippedRoundTripCase(artifact: PublicWorkbookArtifact): PublicWorkbookC
       `sha256=${artifact.sha256}`,
       'Round-trip projection skipped because external workbook links are not recalculated during XLSX import.',
     ],
+  }
+}
+
+function skippedRoundTripFailureCase(artifact: PublicWorkbookArtifact): PublicWorkbookCorpusCase {
+  const baseCase = skippedRoundTripCase(artifact)
+  return {
+    ...baseCase,
+    validation: {
+      ...baseCase.validation,
+      roundTripPassed: false,
+    },
   }
 }
 

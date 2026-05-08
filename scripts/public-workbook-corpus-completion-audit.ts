@@ -877,8 +877,9 @@ function buildAuditState(
     recordedStructuralSmokeRunCount: recordedCases.filter((entry) => entry.validation.structuralSmokePassed !== null).length,
     recordedRoundTripPassedCount: recordedCases.filter((entry) => isSupportedRoundTripSuccess(entry)).length,
     recordedRoundTripSkippedCount: recordedCases.filter((entry) => hasRoundTripSkippedEvidence(entry)).length,
-    recordedRoundTripFailureCount: recordedCases.filter((entry) => !entry.validation.roundTripPassed && entry.status !== 'unsupported')
-      .length,
+    recordedRoundTripFailureCount: recordedCases.filter(
+      (entry) => !entry.validation.roundTripPassed && entry.status !== 'unsupported' && !hasRoundTripSkippedEvidence(entry),
+    ).length,
   }
 }
 
