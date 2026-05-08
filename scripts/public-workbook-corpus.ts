@@ -285,9 +285,12 @@ async function main(): Promise<void> {
         limit: readNumberArg('--limit', 10_000),
         sampleLimit: readNumberArg('--sample-limit', 20),
       })
+      const stopMarkerActive = existsSync(corpusRunStopMarkerPath)
+      const needsDiscovery = !plan.targetReachableFromKnownCandidates
       process.stdout.write(
         `${JSON.stringify(
           {
+            stopMarker: publicWorkbookCorpusPlanStopMarker(stopMarkerActive),
             targetArtifactCount: plan.targetArtifactCount,
             cachedArtifactCount: plan.cachedArtifactCount,
             sourceCount: plan.sourceCount,
@@ -299,13 +302,25 @@ async function main(): Promise<void> {
             recommendedDiscoveryPlanCommand: plan.targetReachableFromKnownCandidates
               ? null
               : `pnpm public-workbook-corpus:discover:plan -- --limit ${String(plan.recommendedDiscoveryLimit)}`,
-            recommendedDiscoveryCommand: plan.targetReachableFromKnownCandidates
-              ? null
-              : formatPublicWorkbookCorpusDiscoverCommand({
-                  cacheDir,
-                  limit: plan.recommendedDiscoveryLimit,
-                  manifestPath,
-                }),
+            recommendedDiscoveryCommand:
+              !needsDiscovery || stopMarkerActive
+                ? null
+                : formatPublicWorkbookCorpusDiscoverCommand({
+                    cacheDir,
+                    limit: plan.recommendedDiscoveryLimit,
+                    manifestPath,
+                  }),
+            blockedCommands:
+              needsDiscovery && stopMarkerActive
+                ? {
+                    discover: formatPublicWorkbookCorpusDiscoverCommand({
+                      cacheDir,
+                      limit: plan.recommendedDiscoveryLimit,
+                      manifestPath,
+                      stopMarkerActive: true,
+                    }),
+                  }
+                : {},
             targetReachableFromKnownCandidates: plan.targetReachableFromKnownCandidates,
             sampledCandidateSources: plan.sampledCandidateSources.map((source) => ({
               id: source.id,
@@ -426,9 +441,12 @@ async function main(): Promise<void> {
       limit: readNumberArg('--limit', targetWorkbookCount),
       sampleLimit: 0,
     })
+    const stopMarkerActive = existsSync(corpusRunStopMarkerPath)
+    const needsDiscovery = !plan.targetReachableFromKnownCandidates
     process.stdout.write(
       `${JSON.stringify(
         {
+          stopMarker: publicWorkbookCorpusPlanStopMarker(stopMarkerActive),
           sourceCount: plan.sourceCount,
           targetArtifactCount: plan.targetArtifactCount,
           cachedArtifactCount: plan.cachedArtifactCount,
@@ -437,13 +455,25 @@ async function main(): Promise<void> {
           candidateSourceDeficitCount: plan.candidateSourceDeficitCount,
           minimumAdditionalSourceCount: plan.minimumAdditionalSourceCount,
           recommendedDiscoveryLimit: plan.recommendedDiscoveryLimit,
-          recommendedDiscoveryCommand: plan.targetReachableFromKnownCandidates
-            ? null
-            : formatPublicWorkbookCorpusDiscoverCommand({
-                cacheDir,
-                limit: plan.recommendedDiscoveryLimit,
-                manifestPath,
-              }),
+          recommendedDiscoveryCommand:
+            !needsDiscovery || stopMarkerActive
+              ? null
+              : formatPublicWorkbookCorpusDiscoverCommand({
+                  cacheDir,
+                  limit: plan.recommendedDiscoveryLimit,
+                  manifestPath,
+                }),
+          blockedCommands:
+            needsDiscovery && stopMarkerActive
+              ? {
+                  discover: formatPublicWorkbookCorpusDiscoverCommand({
+                    cacheDir,
+                    limit: plan.recommendedDiscoveryLimit,
+                    manifestPath,
+                    stopMarkerActive: true,
+                  }),
+                }
+              : {},
           targetReachableFromKnownCandidates: plan.targetReachableFromKnownCandidates,
         },
         null,
@@ -759,8 +789,9 @@ function formatPublicWorkbookCorpusDiscoverCommand(args: {
   readonly cacheDir: string
   readonly limit: number
   readonly manifestPath: string
+  readonly stopMarkerActive?: boolean
 }): string {
-  return [
+  const parts = [
     'pnpm',
     'public-workbook-corpus:discover',
     '--',
@@ -771,8 +802,24 @@ function formatPublicWorkbookCorpusDiscoverCommand(args: {
     '--limit',
     String(args.limit),
   ]
-    .map(shellQuote)
-    .join(' ')
+  if (args.stopMarkerActive !== true) {
+    return parts.map(shellQuote).join(' ')
+  }
+  return `${publicCorpusStopMarkerOverrideEnvVar}=1 ${[...parts, publicCorpusStopMarkerOverrideFlag].map(shellQuote).join(' ')}`
+}
+
+function publicWorkbookCorpusPlanStopMarker(active: boolean): {
+  readonly active: boolean
+  readonly requiresExplicitResume: boolean
+  readonly overrideFlag: string
+  readonly overrideEnvVar: string
+} {
+  return {
+    active,
+    requiresExplicitResume: active,
+    overrideFlag: publicCorpusStopMarkerOverrideFlag,
+    overrideEnvVar: publicCorpusStopMarkerOverrideEnvVar,
+  }
 }
 
 interface PublicWorkbookLinkInput {

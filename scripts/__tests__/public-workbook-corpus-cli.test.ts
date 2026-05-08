@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 
 import { buildPublicWorkbookCorpusScorecard, createEmptyPublicWorkbookManifest } from '../public-workbook-corpus.ts'
 import { formatPublicCorpusStopMarkerPathForMessage } from '../public-workbook-corpus-cli.ts'
+import { asRecord } from '../public-workbook-corpus-json.ts'
 import { buildPublicWorkbookCorpusResumePlan, validatePublicWorkbookCorpusResumePlan } from '../public-workbook-corpus-resume-plan.ts'
 import { publicWorkbookImportWarningClassifierEvidence } from '../public-workbook-corpus-evidence.ts'
 import { buildPublicWorkbookCorpusStatus } from '../public-workbook-corpus-status.ts'
@@ -226,19 +227,38 @@ describe('public workbook corpus CLI resource guards', () => {
     const artifactB = workbookArtifact('workbook-b')
     const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-cli-fetch-plan-'))
     const manifestPath = join(dir, 'manifest.json')
+    const inactiveStopMarkerPath = join(dir, 'missing-stop.md')
     const manifest = {
       ...manifestWithArtifacts([artifactA, artifactB]),
       artifacts: [artifactA],
     }
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 
-    const result = spawnSync('bun', [corpusScriptPath(), 'fetch', '--dry-run', '--manifest', manifestPath, '--limit', '2'], {
-      encoding: 'utf8',
-    })
+    const result = spawnSync(
+      'bun',
+      [
+        corpusScriptPath(),
+        'fetch',
+        '--dry-run',
+        '--manifest',
+        manifestPath,
+        '--limit',
+        '2',
+        '--corpus-run-stop-marker',
+        inactiveStopMarkerPath,
+      ],
+      {
+        encoding: 'utf8',
+      },
+    )
     const plan: unknown = JSON.parse(result.stdout)
 
     expect(result.status).toBe(0)
     expect(plan).toMatchObject({
+      stopMarker: {
+        active: false,
+        requiresExplicitResume: false,
+      },
       targetArtifactCount: 2,
       cachedArtifactCount: 1,
       sourceCount: 2,
@@ -249,6 +269,7 @@ describe('public workbook corpus CLI resource guards', () => {
       recommendedDiscoveryLimit: 2,
       recommendedDiscoveryPlanCommand: null,
       recommendedDiscoveryCommand: null,
+      blockedCommands: {},
       targetReachableFromKnownCandidates: true,
       sampledCandidateSources: [
         {
@@ -293,6 +314,7 @@ describe('public workbook corpus CLI resource guards', () => {
     const artifactB = workbookArtifact('workbook-b')
     const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-cli-discover-plan-'))
     const manifestPath = join(dir, 'manifest.json')
+    const inactiveStopMarkerPath = join(dir, 'missing-stop.md')
     const manifest = {
       ...manifestWithArtifacts([artifactA, artifactB]),
       targetWorkbookCount: 4,
@@ -300,13 +322,21 @@ describe('public workbook corpus CLI resource guards', () => {
     }
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 
-    const result = spawnSync('bun', [corpusScriptPath(), 'discover-plan', '--manifest', manifestPath, '--limit', '4'], {
-      encoding: 'utf8',
-    })
+    const result = spawnSync(
+      'bun',
+      [corpusScriptPath(), 'discover-plan', '--manifest', manifestPath, '--limit', '4', '--corpus-run-stop-marker', inactiveStopMarkerPath],
+      {
+        encoding: 'utf8',
+      },
+    )
     const plan: unknown = JSON.parse(result.stdout)
 
     expect(result.status).toBe(0)
     expect(plan).toMatchObject({
+      stopMarker: {
+        active: false,
+        requiresExplicitResume: false,
+      },
       sourceCount: 2,
       targetArtifactCount: 4,
       cachedArtifactCount: 1,
@@ -316,8 +346,50 @@ describe('public workbook corpus CLI resource guards', () => {
       minimumAdditionalSourceCount: 2,
       recommendedDiscoveryLimit: 4,
       recommendedDiscoveryCommand: expect.stringContaining('pnpm public-workbook-corpus:discover --'),
+      blockedCommands: {},
       targetReachableFromKnownCandidates: false,
     })
+  })
+
+  it('keeps mutating discovery commands blocked in fetch plans while the stop marker is active', () => {
+    const artifactA = workbookArtifact('workbook-a')
+    const artifactB = workbookArtifact('workbook-b')
+    const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-cli-fetch-plan-paused-'))
+    const manifestPath = join(dir, 'manifest.json')
+    const stopMarkerPath = join(dir, 'stop.md')
+    const manifest = {
+      ...manifestWithArtifacts([artifactA, artifactB]),
+      targetWorkbookCount: 4,
+      artifacts: [artifactA],
+    }
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+    writeFileSync(stopMarkerPath, '# stop\n')
+
+    const result = spawnSync(
+      'bun',
+      [corpusScriptPath(), 'fetch', '--dry-run', '--manifest', manifestPath, '--limit', '4', '--corpus-run-stop-marker', stopMarkerPath],
+      {
+        encoding: 'utf8',
+      },
+    )
+    const plan = asRecord(JSON.parse(result.stdout))
+    const blockedCommands = asRecord(plan['blockedCommands'])
+
+    expect(result.status).toBe(0)
+    expect(plan).toMatchObject({
+      stopMarker: {
+        active: true,
+        requiresExplicitResume: true,
+        overrideFlag: '--allow-active-stop-marker',
+        overrideEnvVar: 'BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE',
+      },
+      recommendedDiscoveryPlanCommand: 'pnpm public-workbook-corpus:discover:plan -- --limit 4',
+      recommendedDiscoveryCommand: null,
+      targetReachableFromKnownCandidates: false,
+    })
+    expect(blockedCommands['discover']).toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
+    expect(blockedCommands['discover']).toContain('public-workbook-corpus:discover')
+    expect(blockedCommands['discover']).toContain('--allow-active-stop-marker')
   })
 
   it('builds a stop-marker-aware bounded resume plan for the remaining corpus evidence', () => {
