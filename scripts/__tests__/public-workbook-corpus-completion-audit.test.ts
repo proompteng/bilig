@@ -1247,6 +1247,8 @@ function statusFixture(input: {
       (input.recordedUnsupportedCaseCount ?? 0) -
       Math.min(input.recordedUnsupportedCaseCount ?? 0, input.staleRecordedVerificationCount ?? 0),
     staleRecordedUnsupportedCaseCount: Math.min(input.recordedUnsupportedCaseCount ?? 0, input.staleRecordedVerificationCount ?? 0),
+    currentUnsupportedClassifications: [],
+    staleUnsupportedClassifications: [],
     recordedFailedCaseCount: input.recordedFailedCaseCount ?? 0,
     recordedErrorCaseCount: input.recordedErrorCaseCount ?? 0,
     recordedCoversManifest: input.recordedManifestArtifactCount >= input.cachedArtifactCount,

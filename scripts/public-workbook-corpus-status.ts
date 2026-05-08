@@ -30,6 +30,8 @@ export interface PublicWorkbookCorpusStatus {
   readonly recordedUnsupportedCaseCount: number
   readonly currentRecordedUnsupportedCaseCount: number
   readonly staleRecordedUnsupportedCaseCount: number
+  readonly currentUnsupportedClassifications: readonly PublicWorkbookCorpusUnsupportedClassificationCount[]
+  readonly staleUnsupportedClassifications: readonly PublicWorkbookCorpusUnsupportedClassificationCount[]
   readonly recordedFailedCaseCount: number
   readonly recordedErrorCaseCount: number
   readonly recordedCoversManifest: boolean
@@ -57,6 +59,11 @@ export interface MissingManifestArtifactSummary {
 export interface StaleRecordedVerificationSummary extends MissingManifestArtifactSummary {
   readonly reason: PublicWorkbookCorpusEvidenceRefreshReason
   readonly reasons: readonly PublicWorkbookCorpusEvidenceRefreshReason[]
+}
+
+export interface PublicWorkbookCorpusUnsupportedClassificationCount {
+  readonly classification: string
+  readonly count: number
 }
 
 const missingManifestArtifactSampleLimit = 20
@@ -177,8 +184,10 @@ export function buildPublicWorkbookCorpusStatus(args: {
     : recordedCases.filter(publicWorkbookCorpusCaseNeedsEvidenceRefresh).length
   const recordedPassedCaseCount = recordedCases.filter((entry) => entry.status === 'passed').length
   const recordedUnsupportedCases = recordedCases.filter((entry) => entry.status === 'unsupported')
-  const staleRecordedUnsupportedCaseCount = recordedUnsupportedCases.filter(publicWorkbookCorpusCaseNeedsEvidenceRefresh).length
-  const currentRecordedUnsupportedCaseCount = recordedUnsupportedCases.length - staleRecordedUnsupportedCaseCount
+  const staleRecordedUnsupportedCases = recordedUnsupportedCases.filter(publicWorkbookCorpusCaseNeedsEvidenceRefresh)
+  const currentRecordedUnsupportedCases = recordedUnsupportedCases.filter((entry) => !publicWorkbookCorpusCaseNeedsEvidenceRefresh(entry))
+  const staleRecordedUnsupportedCaseCount = staleRecordedUnsupportedCases.length
+  const currentRecordedUnsupportedCaseCount = currentRecordedUnsupportedCases.length
   const recordedUnsupportedCaseCount = recordedUnsupportedCases.length
   const recordedFailedCaseCount = recordedCases.filter((entry) => entry.status === 'failed').length
   const recordedErrorCaseCount = recordedCases.filter((entry) => entry.status === 'error').length
@@ -258,6 +267,8 @@ export function buildPublicWorkbookCorpusStatus(args: {
     recordedUnsupportedCaseCount,
     currentRecordedUnsupportedCaseCount,
     staleRecordedUnsupportedCaseCount,
+    currentUnsupportedClassifications: buildUnsupportedClassificationCounts(currentRecordedUnsupportedCases),
+    staleUnsupportedClassifications: buildUnsupportedClassificationCounts(staleRecordedUnsupportedCases),
     recordedFailedCaseCount,
     recordedErrorCaseCount,
     recordedCoversManifest,
@@ -274,6 +285,20 @@ export function buildPublicWorkbookCorpusStatus(args: {
     targetComplete,
     gaps,
   }
+}
+
+function buildUnsupportedClassificationCounts(
+  cases: readonly PublicWorkbookCorpusCase[],
+): PublicWorkbookCorpusUnsupportedClassificationCount[] {
+  const counts = new Map<string, number>()
+  for (const entry of cases) {
+    for (const classification of entry.unsupportedFeatureClassifications) {
+      counts.set(classification, (counts.get(classification) ?? 0) + 1)
+    }
+  }
+  return [...counts.entries()]
+    .map(([classification, count]) => ({ classification, count }))
+    .toSorted((left, right) => right.count - left.count || left.classification.localeCompare(right.classification))
 }
 
 function scorecardHealthGaps(scorecard: PublicWorkbookCorpusScorecard | null, cachedArtifactCount: number): string[] {

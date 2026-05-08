@@ -243,6 +243,35 @@ describe('bilig dominance status', () => {
     expect(status.publicWorkbookCorpus.corpusRunStopMarkerOverrideFlag).toBe('--allow-active-stop-marker')
   })
 
+  it('surfaces current and stale unsupported public corpus evidence counts', () => {
+    const status = buildBiligDominanceStatus({
+      input: buildFixtureInput(),
+      financialCorpusStatus: completeFinancialCorpusStatus(),
+      publicWorkbookCorpusStatus: {
+        ...incompletePublicWorkbookCorpusStatus(),
+        recordedUnsupportedCaseCount: 2_054,
+        currentRecordedUnsupportedCaseCount: 58,
+        staleRecordedUnsupportedCaseCount: 1_996,
+        currentUnsupportedClassifications: [{ classification: 'xlsx.publicCorpus.resourceLimit:rss>1536MiB', count: 43 }],
+        staleUnsupportedClassifications: [
+          { classification: 'xlsx.import.warning:Some defined names were ignored during XLSX import.', count: 1_926 },
+        ],
+      },
+      stopMarkerActive: true,
+      stopMarkerPath: '.agent-coordination/stop.md',
+    })
+
+    expect(status.publicWorkbookCorpus).toMatchObject({
+      recordedUnsupportedCaseCount: 2_054,
+      currentRecordedUnsupportedCaseCount: 58,
+      staleRecordedUnsupportedCaseCount: 1_996,
+      currentUnsupportedClassifications: [{ classification: 'xlsx.publicCorpus.resourceLimit:rss>1536MiB', count: 43 }],
+      staleUnsupportedClassifications: [
+        { classification: 'xlsx.import.warning:Some defined names were ignored during XLSX import.', count: 1_926 },
+      ],
+    })
+  })
+
   it('separates stop-marker-blocked financial corpus runs from runnable plan commands', () => {
     const status = buildBiligDominanceStatus({
       input: buildFixtureInput(),
@@ -340,6 +369,8 @@ function completePublicWorkbookCorpusStatus(): PublicWorkbookCorpusStatus {
     recordedUnsupportedCaseCount: 0,
     currentRecordedUnsupportedCaseCount: 0,
     staleRecordedUnsupportedCaseCount: 0,
+    currentUnsupportedClassifications: [],
+    staleUnsupportedClassifications: [],
     recordedFailedCaseCount: 0,
     recordedErrorCaseCount: 0,
     recordedCoversManifest: true,

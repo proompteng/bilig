@@ -315,6 +315,8 @@ function statusFixture(input: {
     recordedUnsupportedCaseCount: input.recordedUnsupportedCaseCount,
     currentRecordedUnsupportedCaseCount: input.recordedUnsupportedCaseCount,
     staleRecordedUnsupportedCaseCount: 0,
+    currentUnsupportedClassifications: [],
+    staleUnsupportedClassifications: [],
     recordedFailedCaseCount: 0,
     recordedErrorCaseCount: 0,
     recordedCoversManifest: input.recordedManifestArtifactCount >= input.cachedArtifactCount,

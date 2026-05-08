@@ -358,6 +358,8 @@ function publicWorkbookCorpusStatusFixture(overrides: Partial<PublicWorkbookCorp
     recordedUnsupportedCaseCount: 0,
     currentRecordedUnsupportedCaseCount: 0,
     staleRecordedUnsupportedCaseCount: 0,
+    currentUnsupportedClassifications: [],
+    staleUnsupportedClassifications: [],
     recordedFailedCaseCount: 0,
     recordedErrorCaseCount: 0,
     recordedCoversManifest: true,

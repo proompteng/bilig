@@ -51,6 +51,11 @@ export interface BiligDominanceStatus {
     readonly missingCachedArtifactCount: number
     readonly recordedManifestArtifactCount: number
     readonly missingManifestArtifactCount: number
+    readonly recordedUnsupportedCaseCount: number
+    readonly currentRecordedUnsupportedCaseCount: number
+    readonly staleRecordedUnsupportedCaseCount: number
+    readonly currentUnsupportedClassifications: PublicWorkbookCorpusStatus['currentUnsupportedClassifications']
+    readonly staleUnsupportedClassifications: PublicWorkbookCorpusStatus['staleUnsupportedClassifications']
     readonly financialWorkbookTargetCount: number | null
     readonly financialSourceCount: number | null
     readonly financialCachedArtifactCount: number | null
@@ -344,6 +349,11 @@ export function buildBiligDominanceStatus(args: {
       ),
       recordedManifestArtifactCount: args.publicWorkbookCorpusStatus.recordedManifestArtifactCount,
       missingManifestArtifactCount: args.publicWorkbookCorpusStatus.missingManifestArtifactCount,
+      recordedUnsupportedCaseCount: args.publicWorkbookCorpusStatus.recordedUnsupportedCaseCount,
+      currentRecordedUnsupportedCaseCount: args.publicWorkbookCorpusStatus.currentRecordedUnsupportedCaseCount,
+      staleRecordedUnsupportedCaseCount: args.publicWorkbookCorpusStatus.staleRecordedUnsupportedCaseCount,
+      currentUnsupportedClassifications: args.publicWorkbookCorpusStatus.currentUnsupportedClassifications,
+      staleUnsupportedClassifications: args.publicWorkbookCorpusStatus.staleUnsupportedClassifications,
       financialWorkbookTargetCount: args.financialCorpusStatus?.targetWorkbookCount ?? null,
       financialSourceCount: args.financialCorpusStatus?.sourceCount ?? null,
       financialCachedArtifactCount: args.financialCorpusStatus?.cachedArtifactCount ?? null,

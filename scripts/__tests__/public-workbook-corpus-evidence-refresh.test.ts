@@ -40,6 +40,12 @@ describe('public workbook corpus evidence refresh reasons', () => {
     expect(status.recordedUnsupportedCaseCount).toBe(2)
     expect(status.currentRecordedUnsupportedCaseCount).toBe(1)
     expect(status.staleRecordedUnsupportedCaseCount).toBe(1)
+    expect(status.currentUnsupportedClassifications).toEqual([
+      { classification: 'xlsx.import.warning:Some defined names were ignored during XLSX import.', count: 1 },
+    ])
+    expect(status.staleUnsupportedClassifications).toEqual([
+      { classification: 'xlsx.import.warning:Some defined names were ignored during XLSX import.', count: 1 },
+    ])
     expect(status.staleRecordedVerificationSample).toEqual([
       expect.objectContaining({
         id: artifactA.id,
