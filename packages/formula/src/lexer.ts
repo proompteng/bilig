@@ -7,9 +7,12 @@ export type TokenKind =
   | 'lbracket'
   | 'rbracket'
   | 'hash'
+  | 'lbrace'
+  | 'rbrace'
   | 'lparen'
   | 'rparen'
   | 'comma'
+  | 'semicolon'
   | 'colon'
   | 'bang'
   | 'plus'
@@ -140,9 +143,12 @@ export function lexFormula(input: string): Token[] {
       '[': 'lbracket',
       ']': 'rbracket',
       '#': 'hash',
+      '{': 'lbrace',
+      '}': 'rbrace',
       '(': 'lparen',
       ')': 'rparen',
       ',': 'comma',
+      ';': 'semicolon',
       ':': 'colon',
       '!': 'bang',
       '+': 'plus',

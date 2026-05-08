@@ -29,7 +29,8 @@ function hasNonDefaultCalculationSettings(calculationSettings: WorkbookCalculati
     calculationSettings.iterateCount !== undefined ||
     calculationSettings.iterateDelta !== undefined ||
     calculationSettings.fullCalcOnLoad !== undefined ||
-    calculationSettings.concurrentCalc !== undefined
+    calculationSettings.concurrentCalc !== undefined ||
+    calculationSettings.dateSystem === '1904'
   )
 }
 

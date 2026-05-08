@@ -91,6 +91,8 @@ function formulaNodeHasUnavailableCall(node: FormulaNode, definedNames: Readonly
     case 'ColumnRef':
     case 'RangeRef':
       return false
+    case 'ArrayConstant':
+      return node.rows.some((row) => row.some((entry) => formulaNodeHasUnavailableCall(entry, definedNames, localNames)))
     case 'UnaryExpr':
       return formulaNodeHasUnavailableCall(node.argument, definedNames, localNames)
     case 'BinaryExpr':

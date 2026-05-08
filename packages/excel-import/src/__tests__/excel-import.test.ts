@@ -17,8 +17,12 @@ import {
 import { SpreadsheetEngine } from '@bilig/core'
 import {
   CSV_CONTENT_TYPE,
+  EXCEL_WORKBOOK_IMPORT_CONTENT_TYPES,
   InvalidXlsxZipContainerError,
+  LEGACY_XLS_CONTENT_TYPE,
+  WORKBOOK_IMPORT_CONTENT_TYPES,
   XLSB_CONTENT_TYPE,
+  XLSM_CONTENT_TYPE,
   XLSX_CONTENT_TYPE,
   exportXlsx,
   importCsv,
@@ -122,6 +126,19 @@ function buildBinaryWorkbook(): Uint8Array {
   XLSX.utils.book_append_sheet(workbook, sheet, 'Sheet1')
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['notes']]), 'Sheet2')
   return XLSX.write(workbook, { bookType: 'xlsb', type: 'buffer' })
+}
+
+function buildLegacyWorkbook(): Uint8Array {
+  const workbook = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['Department', 'Amount'],
+    ['Operations', 1250],
+    ['Finance', 1800],
+  ])
+  sheet.C2 = { t: 'n', f: 'B2+B3', v: 3050 }
+  sheet['!ref'] = 'A1:C3'
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Salary')
+  return XLSX.write(workbook, { bookType: 'xls', type: 'buffer' })
 }
 
 function buildMacroEnabledWorkbook(): Uint8Array {
@@ -877,6 +894,47 @@ describe('excel import', () => {
     expect(imported.preview.contentType).toBe(XLSB_CONTENT_TYPE)
     expect(imported.workbookName).toBe('dispatch')
     expect(imported.sheetNames).toEqual(['Sheet1', 'Sheet2'])
+  })
+
+  it('dispatches legacy Excel workbooks by XLS content type', () => {
+    expect(EXCEL_WORKBOOK_IMPORT_CONTENT_TYPES).toContain(LEGACY_XLS_CONTENT_TYPE)
+    expect(WORKBOOK_IMPORT_CONTENT_TYPES).toContain(LEGACY_XLS_CONTENT_TYPE)
+
+    const imported = importWorkbookFile(buildLegacyWorkbook(), 'legacy-salary.xls', 'application/vnd.ms-excel; charset=binary')
+
+    expect(imported.preview.contentType).toBe(LEGACY_XLS_CONTENT_TYPE)
+    expect(imported.workbookName).toBe('legacy-salary')
+    expect(imported.sheetNames).toEqual(['Salary'])
+    expect(imported.snapshot.sheets[0]?.cells).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ address: 'A2', value: 'Operations' }),
+        expect.objectContaining({ address: 'B3', value: 1800 }),
+        expect.objectContaining({ address: 'C2', value: 3050 }),
+      ]),
+    )
+  })
+
+  it('dispatches macro-enabled Excel workbooks by standard XLSM content type', () => {
+    expect(EXCEL_WORKBOOK_IMPORT_CONTENT_TYPES).toContain(XLSM_CONTENT_TYPE)
+    expect(WORKBOOK_IMPORT_CONTENT_TYPES).toContain(XLSM_CONTENT_TYPE)
+
+    const imported = importWorkbookFile(
+      buildMacroEnabledWorkbook(),
+      'Macro Workbook.xlsm',
+      'application/vnd.ms-excel.sheet.macroEnabled.12; charset=binary',
+    )
+
+    expect(imported.preview.contentType).toBe(XLSM_CONTENT_TYPE)
+    expect(imported.workbookName).toBe('Macro Workbook')
+    expect(imported.warnings).toContain('Macros were preserved but not executed during XLSX import.')
+    expect(imported.snapshot.workbook.metadata?.macroPayloads).toEqual([
+      expect.objectContaining({
+        kind: 'vbaProject',
+        dataBase64: 'AQIDBA==',
+        byteLength: 4,
+        preservedWithoutExecution: true,
+      }),
+    ])
   })
 
   it('rejects corrupt zip-backed xlsx packages before parsing', () => {

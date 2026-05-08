@@ -42,6 +42,7 @@ function referenceOperandFromNode(node: FormulaNode): ReferenceOperand | undefin
     case 'NameRef':
     case 'NumberLiteral':
     case 'OmittedArgument':
+    case 'ArrayConstant':
     case 'SpillRef':
     case 'StringLiteral':
     case 'StructuredRef':
@@ -236,6 +237,13 @@ function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
     case 'OmittedArgument':
       plan.push({ opcode: 'push-omitted' })
       return
+    case 'ArrayConstant': {
+      const rows = node.rows.length
+      const cols = node.rows[0]?.length ?? 0
+      node.rows.forEach((row) => row.forEach((entry) => lowerNode(entry, plan)))
+      plan.push({ opcode: 'make-array', rows, cols })
+      return
+    }
     case 'NameRef':
       plan.push({ opcode: 'push-name', name: node.name })
       return

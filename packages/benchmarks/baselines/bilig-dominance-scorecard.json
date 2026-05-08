@@ -18,7 +18,10 @@
       "Security controls must pass with no uncovered generated controls.",
       "Operator workflow must preserve one-command verification and prevent unverifiable blanket claims."
     ],
-    "unmetRequirements": ["ui-responsiveness: live UI browser evidence is not a same-corpus 10x proof against incumbents"],
+    "unmetRequirements": [
+      "calculation-correctness: Office-listed formula breadth is 99.6%, not 100%; tracked formula breadth is 99.6%, not 100%",
+      "ui-responsiveness: live UI browser evidence is not a same-corpus 10x proof against incumbents"
+    ],
     "workloadSpecificTenXWins": [
       {
         "workload": "rebuild-config-toggle",
@@ -36,20 +39,23 @@
   },
   "completionAudit": {
     "allCriteriaPassed": false,
-    "unmetRequirements": ["ui-responsiveness: live UI browser evidence is not a same-corpus 10x proof against incumbents"],
+    "unmetRequirements": [
+      "calculation-correctness: Office-listed formula breadth is 99.6%, not 100%; tracked formula breadth is 99.6%, not 100%",
+      "ui-responsiveness: live UI browser evidence is not a same-corpus 10x proof against incumbents"
+    ],
     "criteria": [
       {
         "id": "calculation-correctness",
         "requirement": "Calculation correctness must cover the committed formula surface and match live Sheets and Excel required cases.",
-        "passed": true,
+        "passed": false,
         "evidence": [
-          "508/508 Office-listed functions are production-routed",
+          "506/508 Office-listed functions are production-routed",
           "300/300 canonical formula rows are production-routed",
           "300/300 canonical fixtures are covered by the calculation semantics scorecard",
           "36/36 live Microsoft Excel calculation cases match",
           "36/36 live Google Sheets calculation cases match"
         ],
-        "gaps": []
+        "gaps": ["Office-listed formula breadth is 99.6%, not 100%", "tracked formula breadth is 99.6%, not 100%"]
       },
       {
         "id": "recalculation-speed",
@@ -311,8 +317,8 @@
     "microsoftExcelLiveStructuralPassed": true,
     "microsoftExcelLiveStructuralTenXMeanAndP95CaseCount": 6,
     "microsoftExcelLiveStructuralVersion": "16.108.2",
-    "formulaOfficeListedBreadthPercent": 100,
-    "formulaTrackedBreadthPercent": 100,
+    "formulaOfficeListedBreadthPercent": 99.6,
+    "formulaTrackedBreadthPercent": 99.6,
     "importExportCoveredFeatures": [
       "csv.import",
       "csv.preview",
@@ -409,11 +415,11 @@
       "title": "Calculation Correctness",
       "objectiveCategory": "calculation correctness",
       "target": "Excel-compatible semantics on the supported workbook and formula surface, with oracle-backed production routing.",
-      "status": "repo-proved-lead",
+      "status": "partial-repo-evidence",
       "currentEvidence": [
         "canonical formula closure is 300/300 (100%)",
-        "Office-listed formula breadth is 508/508 (100%)",
-        "tracked formula breadth is 525/525 (100%)",
+        "Office-listed formula breadth is 506/508 (99.6%)",
+        "tracked formula breadth is 523/525 (99.6%)",
         "strategic canonical rows are production-routed; open canonical rows: 0",
         "committed calculation semantics scorecard covers 300/300 canonical fixtures and 10/10 workbook-semantics fixtures",
         "live Microsoft Excel calculation scorecard passes 36/36 required cases on Excel 16.108.2",
@@ -436,7 +442,7 @@
         "pnpm calculation:google-sheets-live:check",
         "pnpm test:correctness:formula"
       ],
-      "blockers": []
+      "blockers": ["2 Office-listed functions are still missing from the runtime inventory"]
     },
     {
       "id": "recalculation-speed",

@@ -164,6 +164,13 @@ function rewriteNodeForStructuralTransform(
     case 'NameRef':
     case 'StructuredRef':
       return node
+    case 'ArrayConstant':
+      return {
+        ...node,
+        rows: node.rows.map((row) =>
+          row.map((entry) => rewriteNodeForStructuralTransform(entry, ownerSheetName, targetSheetName, transform)),
+        ),
+      }
     case 'CellRef':
       return rewriteCellLikeNode(node, ownerSheetName, targetSheetName, transform)
     case 'SpillRef':
@@ -220,6 +227,16 @@ function nodeStructuralShapeEqual(left: FormulaNode, right: FormulaNode): boolea
       return right.kind === 'ErrorLiteral' && left.code === right.code
     case 'OmittedArgument':
       return true
+    case 'ArrayConstant':
+      return (
+        right.kind === 'ArrayConstant' &&
+        left.rows.length === right.rows.length &&
+        left.rows.every(
+          (row, rowIndex) =>
+            row.length === right.rows[rowIndex]!.length &&
+            row.every((entry, colIndex) => nodeStructuralShapeEqual(entry, right.rows[rowIndex]![colIndex]!)),
+        )
+      )
     case 'NameRef':
       return right.kind === 'NameRef' && left.name === right.name
     case 'StructuredRef':
@@ -596,6 +613,7 @@ function rewriteJsPlanInstruction(
     case 'push-error':
     case 'push-name':
     case 'push-omitted':
+    case 'make-array':
     case 'unary':
     case 'binary':
     case 'invoke':

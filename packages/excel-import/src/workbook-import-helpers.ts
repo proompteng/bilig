@@ -13,7 +13,7 @@ export function normalizeWorkbookName(fileName: string): string {
   if (trimmed.length === 0) {
     return 'Imported workbook'
   }
-  return trimmed.replace(/\.(xlsx|xlsm|xlsb|csv)$/i, '') || 'Imported workbook'
+  return trimmed.replace(/\.(xlsx|xlsm|xlsb|xls|csv)$/i, '') || 'Imported workbook'
 }
 
 export function normalizeCsvSheetName(workbookName: string): string {

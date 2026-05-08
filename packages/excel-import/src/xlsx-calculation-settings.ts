@@ -110,6 +110,10 @@ function buildWorkbookCalcPr(settings: WorkbookCalculationSettingsSnapshot): str
   return attributes.length > 0 ? `<calcPr${attributes}/>` : null
 }
 
+function hasNonDefaultDateSystem(settings: WorkbookCalculationSettingsSnapshot): boolean {
+  return settings.dateSystem === '1904'
+}
+
 function normalizeZipPath(path: string): string {
   return path.replace(/^\/+/, '')
 }
@@ -141,11 +145,28 @@ function insertWorkbookCalcPr(workbookXml: string, calcPrXml: string): string {
   return `${workbookXml.slice(0, insertIndex)}${calcPrXml}${workbookXml.slice(insertIndex)}`
 }
 
+function upsertWorkbookPrDateSystem(workbookXml: string, dateSystem: WorkbookCalculationSettingsSnapshot['dateSystem']): string {
+  if (dateSystem !== '1904') {
+    return workbookXml.replace(/<workbookPr\b([^>]*)\sdate1904="(?:1|true)"([^>]*)\/>/iu, '<workbookPr$1$2/>')
+  }
+  if (/<workbookPr\b/u.test(workbookXml)) {
+    return workbookXml.replace(/<workbookPr\b([^>]*)\/>/u, (_match: string, attributes: string) =>
+      /\sdate1904="/u.test(attributes)
+        ? `<workbookPr${attributes.replace(/\sdate1904="[^"]*"/u, ' date1904="1"')}/>`
+        : `<workbookPr${attributes} date1904="1"/>`,
+    )
+  }
+  const sheetsIndex = workbookXml.search(/<sheets\b/u)
+  if (sheetsIndex < 0) {
+    return workbookXml
+  }
+  return `${workbookXml.slice(0, sheetsIndex)}<workbookPr date1904="1"/>${workbookXml.slice(sheetsIndex)}`
+}
+
 export function addExportCalculationSettingsToXlsxBytes(bytes: Uint8Array, snapshot: WorkbookSnapshot): Uint8Array {
-  const calcPrXml = snapshot.workbook.metadata?.calculationSettings
-    ? buildWorkbookCalcPr(snapshot.workbook.metadata.calculationSettings)
-    : null
-  if (!calcPrXml) {
+  const settings = snapshot.workbook.metadata?.calculationSettings
+  const calcPrXml = settings ? buildWorkbookCalcPr(settings) : null
+  if (!settings || (!calcPrXml && !hasNonDefaultDateSystem(settings))) {
     return bytes
   }
 
@@ -154,7 +175,11 @@ export function addExportCalculationSettingsToXlsxBytes(bytes: Uint8Array, snaps
   if (!workbookXml) {
     return bytes
   }
-  setZipText(zip, 'xl/workbook.xml', insertWorkbookCalcPr(workbookXml, calcPrXml))
+  let nextWorkbookXml = hasNonDefaultDateSystem(settings) ? upsertWorkbookPrDateSystem(workbookXml, settings.dateSystem) : workbookXml
+  if (calcPrXml) {
+    nextWorkbookXml = insertWorkbookCalcPr(nextWorkbookXml, calcPrXml)
+  }
+  setZipText(zip, 'xl/workbook.xml', nextWorkbookXml)
   return zipSync(zip)
 }
 
@@ -165,26 +190,30 @@ export function readImportedWorkbookCalculationSettings(source: XlsxZipSource): 
     return undefined
   }
   const parsed: unknown = xmlParser.parse(workbookXml)
-  const calcPr = recordChild(recordChild(parsed, 'workbook'), 'calcPr')
-  if (!calcPr) {
+  const workbook = recordChild(parsed, 'workbook')
+  const workbookPr = recordChild(workbook, 'workbookPr')
+  const calcPr = recordChild(workbook, 'calcPr')
+  const dateSystem = booleanAttributeValue(workbookPr?.['date1904']) === true ? '1904' : undefined
+  if (!calcPr && !dateSystem) {
     return undefined
   }
-  const mode = calcPr['calcMode'] === 'manual' ? 'manual' : 'automatic'
-  const iterate = booleanAttributeValue(calcPr['iterate'])
-  const iterateCount = finiteIntegerAttributeValue(calcPr['iterateCount'])
-  const iterateDelta = finiteNumericStringAttributeValue(calcPr['iterateDelta'])
-  const fullCalcOnLoad = booleanAttributeValue(calcPr['fullCalcOnLoad'])
-  const concurrentCalc = booleanAttributeValue(calcPr['concurrentCalc'])
+  const mode = calcPr?.['calcMode'] === 'manual' ? 'manual' : 'automatic'
+  const iterate = booleanAttributeValue(calcPr?.['iterate'])
+  const iterateCount = finiteIntegerAttributeValue(calcPr?.['iterateCount'])
+  const iterateDelta = finiteNumericStringAttributeValue(calcPr?.['iterateDelta'])
+  const fullCalcOnLoad = booleanAttributeValue(calcPr?.['fullCalcOnLoad'])
+  const concurrentCalc = booleanAttributeValue(calcPr?.['concurrentCalc'])
   const settings: WorkbookCalculationSettingsSnapshot = {
     mode,
     compatibilityMode: 'excel-modern',
+    ...(dateSystem ? { dateSystem } : {}),
     ...(iterate !== undefined ? { iterate } : {}),
     ...(iterateCount !== undefined ? { iterateCount } : {}),
     ...(iterateDelta !== undefined ? { iterateDelta } : {}),
     ...(fullCalcOnLoad !== undefined ? { fullCalcOnLoad } : {}),
     ...(concurrentCalc !== undefined ? { concurrentCalc } : {}),
   }
-  return hasSemanticCalculationSettings(settings) ? settings : undefined
+  return hasSemanticCalculationSettings(settings) || hasNonDefaultDateSystem(settings) ? settings : undefined
 }
 
 export function readImportedWorkbookCalculationWarnings(source: XlsxZipSource): string[] {

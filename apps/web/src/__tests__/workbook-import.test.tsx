@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { WorkbookLoadedResponse } from '@bilig/agent-api'
-import { CSV_CONTENT_TYPE, XLSB_CONTENT_TYPE, XLSX_CONTENT_TYPE } from '@bilig/agent-api'
+import { CSV_CONTENT_TYPE, LEGACY_XLS_CONTENT_TYPE, XLSB_CONTENT_TYPE, XLSM_CONTENT_TYPE, XLSX_CONTENT_TYPE } from '@bilig/agent-api'
 import type { ImportedWorkbookPreview } from '@bilig/excel-import'
 import type { ToastT, ToastToDismiss } from 'sonner'
 import { toast } from 'sonner'
@@ -99,10 +99,12 @@ afterEach(() => {
 })
 
 describe('workbook import', () => {
-  it('classifies supported csv, xlsx, and xlsb workbook files', () => {
+  it('classifies supported csv and Excel workbook files', () => {
     expect(resolveWorkbookImportContentType(new File(['alpha'], 'metrics.csv', { type: CSV_CONTENT_TYPE }))).toBe(CSV_CONTENT_TYPE)
     expect(resolveWorkbookImportContentType(new File(['alpha'], 'model.xlsx', { type: XLSX_CONTENT_TYPE }))).toBe(XLSX_CONTENT_TYPE)
+    expect(resolveWorkbookImportContentType(new File(['alpha'], 'model.xlsm', { type: '' }))).toBe(XLSM_CONTENT_TYPE)
     expect(resolveWorkbookImportContentType(new File(['alpha'], 'model.xlsb', { type: '' }))).toBe(XLSB_CONTENT_TYPE)
+    expect(resolveWorkbookImportContentType(new File(['alpha'], 'model.xls', { type: '' }))).toBe(LEGACY_XLS_CONTENT_TYPE)
     expect(resolveWorkbookImportContentType(new File(['alpha'], 'metrics.upload', { type: 'text/csv; charset=utf-8' }))).toBe(
       CSV_CONTENT_TYPE,
     )
@@ -114,6 +116,9 @@ describe('workbook import', () => {
         new File(['alpha'], 'model.upload', { type: 'application/vnd.ms-excel.sheet.binary.macroEnabled.12' }),
       ),
     ).toBe(XLSB_CONTENT_TYPE)
+    expect(resolveWorkbookImportContentType(new File(['alpha'], 'model.upload', { type: 'application/vnd.ms-excel' }))).toBe(
+      LEGACY_XLS_CONTENT_TYPE,
+    )
     expect(resolveWorkbookImportContentType(new File(['alpha'], 'notes.txt'))).toBeNull()
   })
 

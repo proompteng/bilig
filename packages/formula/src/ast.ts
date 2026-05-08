@@ -4,6 +4,7 @@ export type FormulaNode =
   | StringLiteralNode
   | ErrorLiteralNode
   | OmittedArgumentNode
+  | ArrayConstantNode
   | NameRefNode
   | StructuredRefNode
   | CellRefNode
@@ -38,6 +39,11 @@ export interface ErrorLiteralNode {
 
 export interface OmittedArgumentNode {
   kind: 'OmittedArgument'
+}
+
+export interface ArrayConstantNode {
+  kind: 'ArrayConstant'
+  rows: FormulaNode[][]
 }
 
 export interface NameRefNode {

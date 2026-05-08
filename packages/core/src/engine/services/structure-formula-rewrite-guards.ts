@@ -52,6 +52,8 @@ export function isStructurallyStableSimpleFormulaNode(node: CompiledFormula['opt
     case 'ErrorLiteral':
     case 'CellRef':
       return true
+    case 'ArrayConstant':
+      return node.rows.every((row) => row.every(isStructurallyStableSimpleFormulaNode))
     case 'UnaryExpr':
       return isStructurallyStableSimpleFormulaNode(node.argument)
     case 'BinaryExpr':

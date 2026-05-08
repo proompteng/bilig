@@ -4,10 +4,13 @@ export interface ExcelDateParts {
   day: number
 }
 
+export type ExcelDateSystem = '1900' | '1904'
+
 export const MS_PER_DAY = 86_400_000
 
 const EXCEL_EPOCH_UTC_MS = Date.UTC(1899, 11, 31)
 const EXCEL_LEAP_BUG_CUTOFF_UTC_MS = Date.UTC(1900, 2, 1)
+const EXCEL_1904_EPOCH_UTC_MS = Date.UTC(1904, 0, 1)
 
 export function isLeapYear(year: number): boolean {
   return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
@@ -39,12 +42,24 @@ function normalizeMonth(year: number, month: number): { year: number; month: num
   return { year: normalizedYear, month: normalizedMonth }
 }
 
-export function excelSerialToDateParts(serial: number): ExcelDateParts | undefined {
+export function excelSerialToDateParts(serial: number, dateSystem: ExcelDateSystem = '1900'): ExcelDateParts | undefined {
   if (!Number.isFinite(serial)) {
     return undefined
   }
 
   const whole = floorDateSerial(serial)
+  if (dateSystem === '1904') {
+    const date = new Date(EXCEL_1904_EPOCH_UTC_MS + whole * MS_PER_DAY)
+    if (Number.isNaN(date.getTime())) {
+      return undefined
+    }
+    return {
+      year: date.getUTCFullYear(),
+      month: date.getUTCMonth() + 1,
+      day: date.getUTCDate(),
+    }
+  }
+
   if (whole === 60) {
     return { year: 1900, month: 2, day: 29 }
   }
@@ -62,7 +77,7 @@ export function excelSerialToDateParts(serial: number): ExcelDateParts | undefin
   }
 }
 
-export function excelDatePartsToSerial(year: number, month: number, day: number): number | undefined {
+export function excelDatePartsToSerial(year: number, month: number, day: number, dateSystem: ExcelDateSystem = '1900'): number | undefined {
   if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
     return undefined
   }
@@ -79,7 +94,7 @@ export function excelDatePartsToSerial(year: number, month: number, day: number)
     return undefined
   }
 
-  if (adjustedYear === 1900 && adjustedMonth === 2 && adjustedDay === 29) {
+  if (dateSystem === '1900' && adjustedYear === 1900 && adjustedMonth === 2 && adjustedDay === 29) {
     return 60
   }
 
@@ -88,11 +103,19 @@ export function excelDatePartsToSerial(year: number, month: number, day: number)
     return undefined
   }
 
-  return utcDateToExcelSerial(normalized)
+  return utcDateToExcelSerial(normalized, dateSystem)
 }
 
-export function utcDateToExcelSerial(date: Date): number {
+export function utcDateToExcelSerial(date: Date, dateSystem: ExcelDateSystem = '1900'): number {
   const midnightUtcMs = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+  if (dateSystem === '1904') {
+    const daySerial = (midnightUtcMs - EXCEL_1904_EPOCH_UTC_MS) / MS_PER_DAY
+    const dayFraction =
+      (date.getUTCHours() * 3_600_000 + date.getUTCMinutes() * 60_000 + date.getUTCSeconds() * 1_000 + date.getUTCMilliseconds()) /
+      MS_PER_DAY
+    return daySerial + dayFraction
+  }
+
   let daySerial = (midnightUtcMs - EXCEL_EPOCH_UTC_MS) / MS_PER_DAY
   if (midnightUtcMs >= EXCEL_LEAP_BUG_CUTOFF_UTC_MS) {
     daySerial += 1
@@ -104,8 +127,27 @@ export function utcDateToExcelSerial(date: Date): number {
   return daySerial + dayFraction
 }
 
-export function addMonthsToExcelDate(serial: number, offsetMonths: number): number | undefined {
-  const start = excelSerialToDateParts(serial)
+export function excelSerialWeekdayIndex(serial: number, dateSystem: ExcelDateSystem = '1900'): number | undefined {
+  if (!Number.isFinite(serial)) {
+    return undefined
+  }
+  const whole = floorDateSerial(serial)
+  if (whole < 0) {
+    return undefined
+  }
+  if (dateSystem === '1900') {
+    const adjustedWhole = whole < 60 ? whole : whole - 1
+    return ((adjustedWhole % 7) + 7) % 7
+  }
+  const parts = excelSerialToDateParts(serial, dateSystem)
+  if (!parts) {
+    return undefined
+  }
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay()
+}
+
+export function addMonthsToExcelDate(serial: number, offsetMonths: number, dateSystem: ExcelDateSystem = '1900'): number | undefined {
+  const start = excelSerialToDateParts(serial, dateSystem)
   if (!start || !Number.isFinite(offsetMonths)) {
     return undefined
   }
@@ -117,15 +159,15 @@ export function addMonthsToExcelDate(serial: number, offsetMonths: number): numb
     return undefined
   }
 
-  if (shifted.year === 1900 && shifted.month === 2 && day === 29) {
+  if (dateSystem === '1900' && shifted.year === 1900 && shifted.month === 2 && day === 29) {
     return 60
   }
 
-  return excelDatePartsToSerial(shifted.year, shifted.month, day)
+  return excelDatePartsToSerial(shifted.year, shifted.month, day, dateSystem)
 }
 
-export function endOfMonthExcelDate(serial: number, offsetMonths: number): number | undefined {
-  const start = excelSerialToDateParts(serial)
+export function endOfMonthExcelDate(serial: number, offsetMonths: number, dateSystem: ExcelDateSystem = '1900'): number | undefined {
+  const start = excelSerialToDateParts(serial, dateSystem)
   if (!start || !Number.isFinite(offsetMonths)) {
     return undefined
   }
@@ -137,14 +179,19 @@ export function endOfMonthExcelDate(serial: number, offsetMonths: number): numbe
     return undefined
   }
 
-  if (isExcelLeapBugDate({ year: shifted.year, month: shifted.month, day })) {
+  if (dateSystem === '1900' && isExcelLeapBugDate({ year: shifted.year, month: shifted.month, day })) {
     return 60
   }
 
-  return excelDatePartsToSerial(shifted.year, shifted.month, day)
+  return excelDatePartsToSerial(shifted.year, shifted.month, day, dateSystem)
 }
 
-export function yearFracByBasis(startSerial: number, endSerial: number, basis: number): number | undefined {
+export function yearFracByBasis(
+  startSerial: number,
+  endSerial: number,
+  basis: number,
+  dateSystem: ExcelDateSystem = '1900',
+): number | undefined {
   if (!isValidYearfracBasis(basis)) {
     return undefined
   }
@@ -155,8 +202,8 @@ export function yearFracByBasis(startSerial: number, endSerial: number, basis: n
     ;[start, end] = [end, start]
   }
 
-  const startParts = excelSerialToDateParts(start)
-  const endParts = excelSerialToDateParts(end)
+  const startParts = excelSerialToDateParts(start, dateSystem)
+  const endParts = excelSerialToDateParts(end, dateSystem)
   if (startParts === undefined || endParts === undefined) {
     return undefined
   }

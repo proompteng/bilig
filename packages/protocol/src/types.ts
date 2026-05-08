@@ -345,10 +345,12 @@ export interface WorkbookSheetFormatPrSnapshot {
 }
 
 export type WorkbookCalculationMode = 'automatic' | 'manual'
+export type WorkbookDateSystem = '1900' | '1904'
 
 export interface WorkbookCalculationSettingsSnapshot {
   mode: WorkbookCalculationMode
   compatibilityMode?: CompatibilityMode
+  dateSystem?: WorkbookDateSystem
   iterate?: boolean | null
   iterateCount?: number | null
   iterateDelta?: string | null
@@ -729,6 +731,8 @@ export interface WorkbookHyperlinkSnapshot {
 export interface WorkbookLegacyCommentVmlSnapshot {
   relationshipTarget: string
   vmlXml: string
+  commentsRelationshipTarget?: string
+  commentsXml?: string
   commentSignature: string
 }
 

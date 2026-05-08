@@ -106,6 +106,7 @@ export function createEngineFormulaEvaluationService(args: {
     const sheet = args.state.workbook.getSheet(sheetName)
     return sheet ? readCellValueByIndex(sheet.logical.getVisibleCell(row, col)) : errorValue(ErrorCode.Ref)
   }
+  const workbookDateSystem = () => args.state.workbook.getCalculationSettings().dateSystem ?? '1900'
 
   const directVectorLookupContext = {
     state: args.state,
@@ -683,6 +684,7 @@ export function createEngineFormulaEvaluationService(args: {
     const evaluationContext: EvaluationContext = {
       sheetName,
       currentAddress: address,
+      dateSystem: workbookDateSystem(),
       resolveCell: (targetSheetName, targetAddress) =>
         evaluateCellWithReferenceReplacements(targetSheetName, targetAddress, replacements, visiting),
       resolveRange: (targetSheetName, start, end, refKind) => readRangeValues(targetSheetName, start, end, refKind, replacements, visiting),
@@ -855,6 +857,7 @@ export function createEngineFormulaEvaluationService(args: {
     const evaluationContext: EvaluationContext = {
       sheetName,
       currentAddress: args.state.workbook.getAddress(cellIndex),
+      dateSystem: workbookDateSystem(),
       resolveCell: (targetSheetName: string, address: string) => readCellValue(targetSheetName, address),
       resolveRange: (targetSheetName: string, start: string, end: string, refKind: 'cells' | 'rows' | 'cols') =>
         readRangeValues(targetSheetName, start, end, refKind),

@@ -216,6 +216,8 @@ function translateNode(node: FormulaNode, rowDelta: number, colDelta: number): F
     case 'NameRef':
     case 'StructuredRef':
       return node
+    case 'ArrayConstant':
+      return { ...node, rows: node.rows.map((row) => row.map((entry) => translateNode(entry, rowDelta, colDelta))) }
     case 'CellRef':
       return {
         ...node,
@@ -322,6 +324,7 @@ function translateJsPlanInstruction(instruction: JsPlanInstruction, rowDelta: nu
     case 'push-error':
     case 'push-name':
     case 'push-omitted':
+    case 'make-array':
     case 'unary':
     case 'binary':
     case 'invoke':
@@ -410,6 +413,7 @@ function translateJsPlanInstructionWithoutAst(
     case 'push-error':
     case 'push-name':
     case 'push-omitted':
+    case 'make-array':
     case 'unary':
     case 'binary':
     case 'invoke':

@@ -61,6 +61,7 @@ function isTextLiteralLike(node: FormulaNode): boolean {
     case 'CallExpr':
       return node.callee.toUpperCase() === 'CONCAT' && node.args.every(isTextLiteralLike)
     case 'BooleanLiteral':
+    case 'ArrayConstant':
     case 'CellRef':
     case 'ColumnRef':
     case 'ErrorLiteral':

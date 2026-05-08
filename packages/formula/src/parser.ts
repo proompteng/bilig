@@ -95,6 +95,9 @@ function assertNoStandaloneAxisRefs(node: FormulaNode): void {
     case 'CellRef':
     case 'RangeRef':
       return
+    case 'ArrayConstant':
+      node.rows.forEach((row) => row.forEach(assertNoStandaloneAxisRefs))
+      return
     case 'ColumnRef':
     case 'RowRef':
       throw new Error('Row and column references must appear inside a range')
@@ -288,6 +291,7 @@ export function parseFormula(source: string): FormulaNode {
       case 'StructuredRef':
       case 'SpillRef':
       case 'RangeRef':
+      case 'ArrayConstant':
         return undefined
       case 'NameRef':
         return maybeParseReferenceValue(node.name)
@@ -335,6 +339,8 @@ export function parseFormula(source: string): FormulaNode {
         operator: token.kind === 'plus' ? '+' : '-',
         argument: parseExpression(PRECEDENCE['caret']),
       } satisfies UnaryExprNode
+    } else if (token.kind === 'lbrace') {
+      result = parseArrayConstant()
     } else if (token.kind === 'lparen') {
       eat('lparen')
       result = parseExpression()
@@ -403,6 +409,30 @@ export function parseFormula(source: string): FormulaNode {
     }
 
     return result
+  }
+
+  function parseArrayConstant(): FormulaNode {
+    eat('lbrace')
+    const rows: FormulaNode[][] = []
+    while (current().kind !== 'rbrace') {
+      const row: FormulaNode[] = [parseExpression()]
+      while (current().kind === 'comma') {
+        eat('comma')
+        row.push(parseExpression())
+      }
+      rows.push(row)
+      if (current().kind !== 'semicolon') {
+        break
+      }
+      eat('semicolon')
+    }
+    eat('rbrace')
+
+    const columnCount = rows[0]?.length ?? 0
+    if (columnCount === 0 || rows.some((row) => row.length !== columnCount)) {
+      throw new Error('Array constants must be rectangular')
+    }
+    return { kind: 'ArrayConstant', rows }
   }
 
   function parseExpression(minPrecedence = 0): FormulaNode {

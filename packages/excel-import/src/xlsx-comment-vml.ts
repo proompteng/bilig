@@ -13,10 +13,14 @@ interface ParsedRelationship {
 export interface ImportedLegacyCommentVml {
   readonly relationshipTarget: string
   readonly vmlXml: string
+  readonly commentsRelationshipTarget?: string
+  readonly commentsXml?: string
 }
 
 const relationshipNamespace = 'http://schemas.openxmlformats.org/package/2006/relationships'
 const officeRelationshipNamespace = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+const commentsRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments'
+const commentsContentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml'
 const vmlDrawingRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing'
 const vmlDrawingContentType = 'application/vnd.openxmlformats-officedocument.vmlDrawing'
 
@@ -46,6 +50,10 @@ function setZipText(zip: XlsxZipEntries, path: string, text: string): void {
 function readAttribute(xml: string, attributeName: string): string | null {
   const match = new RegExp(`\\s${attributeName}=(["'])([\\s\\S]*?)\\1`, 'u').exec(xml)
   return match?.[2] ?? null
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
 }
 
 function parseRelationships(xml: string | null): ParsedRelationship[] {
@@ -165,9 +173,8 @@ export function readImportedWorkbookLegacyCommentVml(
     if (!relationshipId) {
       return
     }
-    const relationship = parseRelationships(getZipText(zip, readSheetRelationshipPath(sheetIndex))).find(
-      (entry) => entry.id === relationshipId && entry.type === vmlDrawingRelationshipType,
-    )
+    const relationships = parseRelationships(getZipText(zip, readSheetRelationshipPath(sheetIndex)))
+    const relationship = relationships.find((entry) => entry.id === relationshipId && entry.type === vmlDrawingRelationshipType)
     if (!relationship) {
       return
     }
@@ -175,9 +182,17 @@ export function readImportedWorkbookLegacyCommentVml(
     if (!vmlXml || !isLegacyCommentVmlXml(vmlXml)) {
       return
     }
+    const commentsRelationship = relationships.find((entry) => entry.type === commentsRelationshipType)
+    const commentsXml = commentsRelationship ? getZipText(zip, resolveTargetPath(sheetPath, commentsRelationship.target)) : null
     legacyCommentVmlBySheet.set(sheetName, {
       relationshipTarget: relationship.target,
       vmlXml,
+      ...(commentsRelationship && commentsXml
+        ? {
+            commentsRelationshipTarget: commentsRelationship.target,
+            commentsXml,
+          }
+        : {}),
     })
   })
 
@@ -221,6 +236,21 @@ function addVmlContentTypeDefault(contentTypesXml: string | null): string | null
   return contentTypesXml.replace('</Types>', `<Default Extension="vml" ContentType="${vmlDrawingContentType}"/></Types>`)
 }
 
+function addContentTypeOverride(contentTypesXml: string | null, partPath: string, contentType: string): string | null {
+  if (!contentTypesXml) {
+    return null
+  }
+  const partName = partPath.startsWith('/') ? partPath : `/${partPath}`
+  const escapedPartName = escapeRegExp(partName)
+  if (new RegExp(`<Override\\b[^>]*\\bPartName=(["'])${escapedPartName}\\1`, 'u').test(contentTypesXml)) {
+    return contentTypesXml
+  }
+  return contentTypesXml.replace(
+    '</Types>',
+    `<Override PartName="${escapeXml(partName)}" ContentType="${escapeXml(contentType)}"/></Types>`,
+  )
+}
+
 function preserveLegacyCommentVmlForSheet(input: {
   zip: XlsxZipEntries
   sheet: WorkbookSnapshot['sheets'][number]
@@ -243,29 +273,62 @@ function preserveLegacyCommentVmlForSheet(input: {
   const existingRelationship = existingRelationshipId
     ? relationships.find((entry) => entry.id === existingRelationshipId && entry.type === vmlDrawingRelationshipType)
     : undefined
+  let relationshipsChanged = false
+  let changed = false
+  let sheetXmlToWrite: string | null = null
+  let contentTypesXml = getZipText(input.zip, '[Content_Types].xml')
 
   if (existingRelationship) {
     setZipText(input.zip, resolveTargetPath(sheetPath, existingRelationship.target), input.preserved.vmlXml)
-    return true
+    changed = true
+  } else {
+    const relationshipId = nextRelationshipId(relationships)
+    const vmlDrawingIndex = nextPartIndex(input.zip, 'xl/drawings/vmlDrawing', '.vml')
+    const vmlPath = `xl/drawings/vmlDrawing${String(vmlDrawingIndex)}.vml`
+    relationships.push({
+      id: relationshipId,
+      type: vmlDrawingRelationshipType,
+      target: `../drawings/vmlDrawing${String(vmlDrawingIndex)}.vml`,
+    })
+    setZipText(input.zip, vmlPath, input.preserved.vmlXml)
+    sheetXmlToWrite = insertLegacyDrawing(sheetXml, relationshipId)
+    contentTypesXml = addVmlContentTypeDefault(contentTypesXml)
+    relationshipsChanged = true
+    changed = true
   }
 
-  const relationshipId = nextRelationshipId(relationships)
-  const vmlDrawingIndex = nextPartIndex(input.zip, 'xl/drawings/vmlDrawing', '.vml')
-  const vmlPath = `xl/drawings/vmlDrawing${String(vmlDrawingIndex)}.vml`
-  relationships.push({
-    id: relationshipId,
-    type: vmlDrawingRelationshipType,
-    target: `../drawings/vmlDrawing${String(vmlDrawingIndex)}.vml`,
-  })
-  setZipText(input.zip, vmlPath, input.preserved.vmlXml)
-  setZipText(input.zip, sheetRelsPath, buildRelationshipsXml(relationships))
-  setZipText(input.zip, sheetPath, insertLegacyDrawing(sheetXml, relationshipId))
+  if (input.preserved.commentsXml) {
+    const commentsRelationship = relationships.find((entry) => entry.type === commentsRelationshipType)
+    if (commentsRelationship) {
+      setZipText(input.zip, resolveTargetPath(sheetPath, commentsRelationship.target), input.preserved.commentsXml)
+      changed = true
+    } else {
+      const relationshipId = nextRelationshipId(relationships)
+      const commentsTarget =
+        input.preserved.commentsRelationshipTarget ?? `../comments${String(nextPartIndex(input.zip, 'xl/comments', '.xml'))}.xml`
+      const commentsPath = resolveTargetPath(sheetPath, commentsTarget)
+      relationships.push({
+        id: relationshipId,
+        type: commentsRelationshipType,
+        target: commentsTarget,
+      })
+      setZipText(input.zip, commentsPath, input.preserved.commentsXml)
+      contentTypesXml = addContentTypeOverride(contentTypesXml, commentsPath, commentsContentType)
+      relationshipsChanged = true
+      changed = true
+    }
+  }
 
-  const contentTypesXml = addVmlContentTypeDefault(getZipText(input.zip, '[Content_Types].xml'))
+  if (relationshipsChanged) {
+    setZipText(input.zip, sheetRelsPath, buildRelationshipsXml(relationships))
+  }
+  if (sheetXmlToWrite) {
+    setZipText(input.zip, sheetPath, sheetXmlToWrite)
+  }
   if (contentTypesXml) {
     setZipText(input.zip, '[Content_Types].xml', contentTypesXml)
   }
-  return true
+  return changed
 }
 
 export function addExportLegacyCommentVmlToXlsxBytes(bytes: Uint8Array, snapshot: WorkbookSnapshot): Uint8Array {

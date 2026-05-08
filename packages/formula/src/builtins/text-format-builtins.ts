@@ -1,5 +1,5 @@
 import { ErrorCode, ValueTag, formatGeneralNumberValue, type CellValue } from '@bilig/protocol'
-import { excelSerialToDateParts } from './datetime.js'
+import { excelSerialToDateParts, excelSerialWeekdayIndex, type ExcelDateSystem } from './excel-date.js'
 import type { TextBuiltin } from './text.js'
 
 interface TextFormatBuiltinDeps {
@@ -11,6 +11,7 @@ interface TextFormatBuiltinDeps {
   coerceNumber: (value: CellValue) => number | undefined
   coerceInteger: (value: CellValue | undefined, defaultValue: number) => number | CellValue
   isErrorValue: (value: number | CellValue) => value is CellValue
+  dateSystem?: ExcelDateSystem
 }
 
 function valueToTextResult(deps: TextFormatBuiltinDeps, value: CellValue, format: number): CellValue {
@@ -188,18 +189,6 @@ function excelSecondOfDay(serial: number): number | undefined {
   return seconds
 }
 
-function excelWeekdayIndex(serial: number): number | undefined {
-  if (!Number.isFinite(serial)) {
-    return undefined
-  }
-  const whole = Math.floor(serial)
-  if (whole < 0) {
-    return undefined
-  }
-  const adjustedWhole = whole < 60 ? whole : whole - 1
-  return ((adjustedWhole % 7) + 7) % 7
-}
-
 function isDateTimeFormat(section: string): boolean {
   const cleaned = stripFormatDecorations(section).toUpperCase()
   return cleaned.includes('AM/PM') || cleaned.includes('A/P') || /[YDSH]/.test(cleaned) || /(^|[^0#?])M+([^0#?]|$)/.test(cleaned)
@@ -303,9 +292,9 @@ function formatAmPmToken(token: string, hour: number): string {
   return isPm ? 'PM' : 'AM'
 }
 
-function formatDateTimeSectionValue(serial: number, section: string): string | undefined {
-  const dateParts = excelSerialToDateParts(serial)
-  const weekdayIndex = excelWeekdayIndex(serial)
+function formatDateTimeSectionValue(serial: number, section: string, dateSystem: ExcelDateSystem): string | undefined {
+  const dateParts = excelSerialToDateParts(serial, dateSystem)
+  const weekdayIndex = excelSerialWeekdayIndex(serial, dateSystem)
   const secondOfDay = excelSecondOfDay(serial)
   if (!dateParts || weekdayIndex === undefined || secondOfDay === undefined) {
     return undefined
@@ -440,7 +429,7 @@ function formatTextBuiltinValue(deps: TextFormatBuiltinDeps, value: CellValue, f
     return deps.error(ErrorCode.Value)
   }
   if (isDateTimeFormat(section)) {
-    const formatted = formatDateTimeSectionValue(numeric, section)
+    const formatted = formatDateTimeSectionValue(numeric, section, deps.dateSystem ?? '1900')
     return formatted === undefined ? deps.error(ErrorCode.Value) : deps.stringResult(formatted)
   }
   return deps.stringResult(formatNumericSectionValue(numeric, section, autoNegative))

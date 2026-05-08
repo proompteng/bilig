@@ -8,10 +8,12 @@ import {
   endOfMonthExcelDate,
   excelDatePartsToSerial,
   excelSerialToDateParts,
+  excelSerialWeekdayIndex,
   floorDateSerial,
   isValidYearfracBasis,
   utcDateToExcelSerial,
   yearFracByBasis,
+  type ExcelDateSystem,
   type ExcelDateParts,
 } from './excel-date.js'
 import { createBlockedBuiltinMap, datetimePlaceholderBuiltinNames } from './placeholder.js'
@@ -20,9 +22,10 @@ export {
   endOfMonthExcelDate,
   excelDatePartsToSerial,
   excelSerialToDateParts,
+  excelSerialWeekdayIndex,
   utcDateToExcelSerial,
 } from './excel-date.js'
-export type { ExcelDateParts } from './excel-date.js'
+export type { ExcelDateParts, ExcelDateSystem } from './excel-date.js'
 
 export type Builtin = (...args: CellValue[]) => CellValue
 export type DateTimeProvider = () => Date
@@ -30,7 +33,7 @@ export type RandomProvider = () => number
 
 const SECONDS_PER_DAY = 86_400
 
-function parseDateValueFromText(raw: string): number | undefined {
+function parseDateValueFromText(raw: string, dateSystem: ExcelDateSystem): number | undefined {
   const trimmed = raw.trim()
   if (trimmed === '') {
     return undefined
@@ -39,10 +42,10 @@ function parseDateValueFromText(raw: string): number | undefined {
   if (Number.isNaN(parsed.getTime())) {
     return undefined
   }
-  return Math.floor(utcDateToExcelSerial(parsed))
+  return Math.floor(utcDateToExcelSerial(parsed, dateSystem))
 }
 
-function createDays360Builtin(): Builtin {
+function createDays360Builtin(dateSystem: ExcelDateSystem = '1900'): Builtin {
   return (...args) => {
     const error = firstError(args)
     if (error) {
@@ -65,8 +68,8 @@ function createDays360Builtin(): Builtin {
     if (typeof endSerial !== 'number') {
       return endSerial
     }
-    const startParts = excelSerialToDateParts(startSerial)
-    const endParts = excelSerialToDateParts(endSerial)
+    const startParts = excelSerialToDateParts(startSerial, dateSystem)
+    const endParts = excelSerialToDateParts(endSerial, dateSystem)
     if (!startParts || !endParts) {
       return valueError()
     }
@@ -94,7 +97,7 @@ function createDays360Builtin(): Builtin {
   }
 }
 
-function createIsoWeeknumBuiltin(): Builtin {
+function createIsoWeeknumBuiltin(dateSystem: ExcelDateSystem = '1900'): Builtin {
   return (...args) => {
     const error = firstError(args)
     if (error) {
@@ -109,7 +112,7 @@ function createIsoWeeknumBuiltin(): Builtin {
       return serial
     }
 
-    const parts = excelSerialToDateParts(serial)
+    const parts = excelSerialToDateParts(serial, dateSystem)
     if (parts === undefined) {
       return valueError()
     }
@@ -192,7 +195,7 @@ function createTimeValueBuiltin(): Builtin {
   }
 }
 
-function createYearfracBuiltin(): Builtin {
+function createYearfracBuiltin(dateSystem: ExcelDateSystem = '1900'): Builtin {
   return (...args) => {
     const error = firstError(args)
     if (error) {
@@ -209,7 +212,7 @@ function createYearfracBuiltin(): Builtin {
       return valueError()
     }
 
-    const fraction = yearFracByBasis(startSerial, endSerial, basis)
+    const fraction = yearFracByBasis(startSerial, endSerial, basis, dateSystem)
     return fraction === undefined ? valueError() : numberResult(fraction)
   }
 }
@@ -223,12 +226,12 @@ function normalizeSecondOfDay(serial: number): number | undefined {
   return Math.floor(normalizedFraction * SECONDS_PER_DAY + 1e-9) % SECONDS_PER_DAY
 }
 
-function datedifValue(startSerial: number, endSerial: number, unit: string): number | undefined {
+function datedifValue(startSerial: number, endSerial: number, unit: string, dateSystem: ExcelDateSystem): number | undefined {
   if (startSerial > endSerial) {
     return undefined
   }
-  const start = excelSerialToDateParts(startSerial)
-  const end = excelSerialToDateParts(endSerial)
+  const start = excelSerialToDateParts(startSerial, dateSystem)
+  const end = excelSerialToDateParts(endSerial, dateSystem)
   if (!start || !end) {
     return undefined
   }
@@ -247,10 +250,10 @@ function datedifValue(startSerial: number, endSerial: number, unit: string): num
       return ((totalMonths % 12) + 12) % 12
     case 'YD': {
       let comparisonYear = end.year
-      let comparison = excelDatePartsToSerial(comparisonYear, start.month, start.day)
+      let comparison = excelDatePartsToSerial(comparisonYear, start.month, start.day, dateSystem)
       if (comparison === undefined || comparison > endSerial) {
         comparisonYear -= 1
-        comparison = excelDatePartsToSerial(comparisonYear, start.month, start.day)
+        comparison = excelDatePartsToSerial(comparisonYear, start.month, start.day, dateSystem)
       }
       return comparison === undefined ? undefined : Math.trunc(endSerial) - Math.trunc(comparison)
     }
@@ -278,7 +281,7 @@ function normalizeTimeSerial(hours: number, minutes: number, seconds: number): n
   return (((totalSeconds % SECONDS_PER_DAY) + SECONDS_PER_DAY) % SECONDS_PER_DAY) / SECONDS_PER_DAY
 }
 
-export function createDateBuiltin(): Builtin {
+export function createDateBuiltin(dateSystem: ExcelDateSystem = '1900'): Builtin {
   return (...args) => {
     const error = firstError(args)
     if (error) {
@@ -295,12 +298,12 @@ export function createDateBuiltin(): Builtin {
     if (typeof month !== 'number') return month
     if (typeof day !== 'number') return day
 
-    const serial = excelDatePartsToSerial(year, month, day)
+    const serial = excelDatePartsToSerial(year, month, day, dateSystem)
     return serial === undefined ? valueError() : numberResult(serial)
   }
 }
 
-export function createDateValueBuiltin(): Builtin {
+export function createDateValueBuiltin(dateSystem: ExcelDateSystem = '1900'): Builtin {
   return (dateText) => {
     if (dateText === undefined) {
       return valueError()
@@ -320,7 +323,7 @@ export function createDateValueBuiltin(): Builtin {
       return valueError()
     }
 
-    const serial = parseDateValueFromText(text)
+    const serial = parseDateValueFromText(text, dateSystem)
     return serial === undefined ? valueError() : numberResult(serial)
   }
 }
@@ -334,7 +337,7 @@ function toNumberValueDateValue(value: CellValue): number | undefined {
   return Number.isFinite(truncated) ? truncated : undefined
 }
 
-function createDatePartBuiltin(part: keyof ExcelDateParts): Builtin {
+function createDatePartBuiltin(part: keyof ExcelDateParts, dateSystem: ExcelDateSystem = '1900'): Builtin {
   return (value) => {
     const error = firstError([value])
     if (error) {
@@ -346,7 +349,7 @@ function createDatePartBuiltin(part: keyof ExcelDateParts): Builtin {
       return valueError()
     }
 
-    const parts = excelSerialToDateParts(serial)
+    const parts = excelSerialToDateParts(serial, dateSystem)
     return parts ? numberResult(parts[part]) : valueError()
   }
 }
@@ -404,7 +407,7 @@ function createTimePartBuiltin(part: 'hour' | 'minute' | 'second'): Builtin {
   }
 }
 
-function createWeekdayBuiltin(): Builtin {
+function createWeekdayBuiltin(dateSystem: ExcelDateSystem = '1900'): Builtin {
   return (...args) => {
     const error = firstError(args)
     if (error) {
@@ -418,9 +421,11 @@ function createWeekdayBuiltin(): Builtin {
       return valueError()
     }
 
-    const whole = floorDateSerial(serial)
-    const adjustedWhole = whole < 60 ? whole : whole - 1
-    const sundayOne = (((adjustedWhole % 7) + 7) % 7) + 1
+    const weekdayIndex = excelSerialWeekdayIndex(serial, dateSystem)
+    if (weekdayIndex === undefined) {
+      return valueError()
+    }
+    const sundayOne = weekdayIndex + 1
     if (args.length === 1) {
       return numberResult(sundayOne)
     }
@@ -473,7 +478,7 @@ function createDaysBuiltin(): Builtin {
   }
 }
 
-function createWeeknumBuiltin(): Builtin {
+function createWeeknumBuiltin(dateSystem: ExcelDateSystem = '1900'): Builtin {
   return (...args) => {
     const error = firstError(args)
     if (error) {
@@ -493,7 +498,7 @@ function createWeeknumBuiltin(): Builtin {
       return returnType
     }
 
-    const dateParts = excelSerialToDateParts(serial)
+    const dateParts = excelSerialToDateParts(serial, dateSystem)
     if (!dateParts) {
       return valueError()
     }
@@ -517,13 +522,15 @@ function createWeeknumBuiltin(): Builtin {
       return valueError()
     }
 
-    const serialJan1 = excelDatePartsToSerial(dateParts.year, 1, 1)
+    const serialJan1 = excelDatePartsToSerial(dateParts.year, 1, 1, dateSystem)
     if (serialJan1 === undefined) {
       return valueError()
     }
 
-    const adjustedJan1 = serialJan1 < 60 ? Math.floor(serialJan1) : Math.floor(serialJan1) - 1
-    const jan1Weekday = ((adjustedJan1 % 7) + 7) % 7
+    const jan1Weekday = excelSerialWeekdayIndex(serialJan1, dateSystem)
+    if (jan1Weekday === undefined) {
+      return valueError()
+    }
     const shift = (jan1Weekday - weekStartDay + 7) % 7
 
     let dayOfYear = dateParts.day
@@ -535,17 +542,13 @@ function createWeeknumBuiltin(): Builtin {
   }
 }
 
-function isWeekendSerial(serial: number): boolean {
-  const whole = floorDateSerial(serial)
-  const adjustedWhole = whole < 60 ? whole : whole - 1
-  const dow = ((adjustedWhole % 7) + 7) % 7
+function isWeekendSerial(serial: number, dateSystem: ExcelDateSystem): boolean {
+  const dow = excelSerialWeekdayIndex(serial, dateSystem)
   return dow === 0 || dow === 6
 }
 
-function weekendSerialDay(serial: number): number {
-  const whole = floorDateSerial(serial)
-  const adjustedWhole = whole < 60 ? whole : whole - 1
-  return ((adjustedWhole % 7) + 7) % 7
+function weekendSerialDay(serial: number, dateSystem: ExcelDateSystem): number | undefined {
+  return excelSerialWeekdayIndex(serial, dateSystem)
 }
 
 function weekendMaskFromCode(code: number): Set<number> | undefined {
@@ -618,8 +621,9 @@ function normalizeHolidayDateSet(holidays: readonly CellValue[] | undefined): Se
   return set
 }
 
-function isWeekendWithMask(serial: number, weekendDays: ReadonlySet<number>): boolean {
-  return weekendDays.has(weekendSerialDay(serial))
+function isWeekendWithMask(serial: number, weekendDays: ReadonlySet<number>, dateSystem: ExcelDateSystem): boolean {
+  const day = weekendSerialDay(serial, dateSystem)
+  return day === undefined || weekendDays.has(day)
 }
 
 function offsetWorkday(start: number, offset: number, isWorkday: (serial: number) => boolean): number {
@@ -635,7 +639,7 @@ function offsetWorkday(start: number, offset: number, isWorkday: (serial: number
   return cursor
 }
 
-function createWorkdayBuiltin(): Builtin {
+function createWorkdayBuiltin(dateSystem: ExcelDateSystem = '1900'): Builtin {
   return (...args) => {
     const error = firstError(args)
     if (error) {
@@ -659,12 +663,12 @@ function createWorkdayBuiltin(): Builtin {
       return holidays
     }
 
-    const isWorkday = (value: number): boolean => !isWeekendSerial(value) && !holidays.has(Math.trunc(value))
+    const isWorkday = (value: number): boolean => !isWeekendSerial(value, dateSystem) && !holidays.has(Math.trunc(value))
     return numberResult(offsetWorkday(start, offset, isWorkday))
   }
 }
 
-function createNetworkdaysBuiltin(): Builtin {
+function createNetworkdaysBuiltin(dateSystem: ExcelDateSystem = '1900'): Builtin {
   return (...args) => {
     const error = firstError(args)
     if (error) {
@@ -688,7 +692,7 @@ function createNetworkdaysBuiltin(): Builtin {
       return holidays
     }
 
-    const isWorkday = (value: number): boolean => !isWeekendSerial(value) && !holidays.has(Math.trunc(value))
+    const isWorkday = (value: number): boolean => !isWeekendSerial(value, dateSystem) && !holidays.has(Math.trunc(value))
     const step = start <= end ? 1 : -1
     let count = 0
     for (let cursor = Math.trunc(start); ; cursor += step) {
@@ -703,7 +707,7 @@ function createNetworkdaysBuiltin(): Builtin {
   }
 }
 
-function createWorkdayIntlBuiltin(): Builtin {
+function createWorkdayIntlBuiltin(dateSystem: ExcelDateSystem = '1900'): Builtin {
   return (...args) => {
     const error = firstError(args)
     if (error) {
@@ -732,12 +736,12 @@ function createWorkdayIntlBuiltin(): Builtin {
       return holidays
     }
 
-    const isWorkday = (value: number): boolean => !isWeekendWithMask(value, weekendDays) && !holidays.has(Math.trunc(value))
+    const isWorkday = (value: number): boolean => !isWeekendWithMask(value, weekendDays, dateSystem) && !holidays.has(Math.trunc(value))
     return numberResult(offsetWorkday(start, offset, isWorkday))
   }
 }
 
-function createNetworkdaysIntlBuiltin(): Builtin {
+function createNetworkdaysIntlBuiltin(dateSystem: ExcelDateSystem = '1900'): Builtin {
   return (...args) => {
     const error = firstError(args)
     if (error) {
@@ -766,7 +770,7 @@ function createNetworkdaysIntlBuiltin(): Builtin {
       return holidays
     }
 
-    const isWorkday = (value: number): boolean => !isWeekendWithMask(value, weekendDays) && !holidays.has(Math.trunc(value))
+    const isWorkday = (value: number): boolean => !isWeekendWithMask(value, weekendDays, dateSystem) && !holidays.has(Math.trunc(value))
     const step = start <= end ? 1 : -1
     let count = 0
     for (let cursor = Math.trunc(start); ; cursor += step) {
@@ -781,7 +785,7 @@ function createNetworkdaysIntlBuiltin(): Builtin {
   }
 }
 
-export function createTodayBuiltin(now: DateTimeProvider = () => new Date()): Builtin {
+export function createTodayBuiltin(now: DateTimeProvider = () => new Date(), dateSystem: ExcelDateSystem = '1900'): Builtin {
   return (...args) => {
     const error = firstError(args)
     if (error) {
@@ -790,11 +794,11 @@ export function createTodayBuiltin(now: DateTimeProvider = () => new Date()): Bu
     if (args.length > 0) {
       return valueError()
     }
-    return numberResult(Math.floor(utcDateToExcelSerial(now())))
+    return numberResult(Math.floor(utcDateToExcelSerial(now(), dateSystem)))
   }
 }
 
-export function createNowBuiltin(now: DateTimeProvider = () => new Date()): Builtin {
+export function createNowBuiltin(now: DateTimeProvider = () => new Date(), dateSystem: ExcelDateSystem = '1900'): Builtin {
   return (...args) => {
     const error = firstError(args)
     if (error) {
@@ -803,7 +807,7 @@ export function createNowBuiltin(now: DateTimeProvider = () => new Date()): Buil
     if (args.length > 0) {
       return valueError()
     }
-    return numberResult(utcDateToExcelSerial(now()))
+    return numberResult(utcDateToExcelSerial(now(), dateSystem))
   }
 }
 
@@ -827,7 +831,7 @@ export function createRandBuiltin(random: RandomProvider = () => Math.random()):
   }
 }
 
-export function createEdateBuiltin(): Builtin {
+export function createEdateBuiltin(dateSystem: ExcelDateSystem = '1900'): Builtin {
   return (startDate, months) => {
     const error = firstError([startDate, months])
     if (error) {
@@ -843,12 +847,12 @@ export function createEdateBuiltin(): Builtin {
       return monthOffset
     }
 
-    const serial = addMonthsToExcelDate(startSerial, monthOffset)
+    const serial = addMonthsToExcelDate(startSerial, monthOffset, dateSystem)
     return serial === undefined ? valueError() : numberResult(serial)
   }
 }
 
-export function createEomonthBuiltin(): Builtin {
+export function createEomonthBuiltin(dateSystem: ExcelDateSystem = '1900'): Builtin {
   return (startDate, months) => {
     const error = firstError([startDate, months])
     if (error) {
@@ -864,12 +868,12 @@ export function createEomonthBuiltin(): Builtin {
       return monthOffset
     }
 
-    const serial = endOfMonthExcelDate(startSerial, monthOffset)
+    const serial = endOfMonthExcelDate(startSerial, monthOffset, dateSystem)
     return serial === undefined ? valueError() : numberResult(serial)
   }
 }
 
-export function createDatedifBuiltin(): Builtin {
+export function createDatedifBuiltin(dateSystem: ExcelDateSystem = '1900'): Builtin {
   return (...args) => {
     const error = firstError(args)
     if (error) {
@@ -884,39 +888,43 @@ export function createDatedifBuiltin(): Builtin {
     if (typeof startSerial !== 'number' || typeof endSerial !== 'number' || !unit) {
       return valueError()
     }
-    const value = datedifValue(startSerial, endSerial, unit)
+    const value = datedifValue(startSerial, endSerial, unit, dateSystem)
     return value === undefined ? valueError() : numberResult(value)
   }
 }
 
 const datetimePlaceholderBuiltins = createBlockedBuiltinMap(datetimePlaceholderBuiltinNames)
 
-export const datetimeBuiltins: Record<string, Builtin> = {
-  DATE: createDateBuiltin(),
-  DATEVALUE: createDateValueBuiltin(),
-  YEAR: createDatePartBuiltin('year'),
-  MONTH: createDatePartBuiltin('month'),
-  DAY: createDatePartBuiltin('day'),
-  TIME: createTimeBuiltin(),
-  HOUR: createTimePartBuiltin('hour'),
-  MINUTE: createTimePartBuiltin('minute'),
-  SECOND: createTimePartBuiltin('second'),
-  WEEKDAY: createWeekdayBuiltin(),
-  DAYS: createDaysBuiltin(),
-  WEEKNUM: createWeeknumBuiltin(),
-  DAYS360: createDays360Builtin(),
-  ISOWEEKNUM: createIsoWeeknumBuiltin(),
-  TIMEVALUE: createTimeValueBuiltin(),
-  YEARFRAC: createYearfracBuiltin(),
-  WORKDAY: createWorkdayBuiltin(),
-  'WORKDAY.INTL': createWorkdayIntlBuiltin(),
-  NETWORKDAYS: createNetworkdaysBuiltin(),
-  'NETWORKDAYS.INTL': createNetworkdaysIntlBuiltin(),
-  TODAY: createTodayBuiltin(),
-  NOW: createNowBuiltin(),
-  RAND: createRandBuiltin(),
-  EDATE: createEdateBuiltin(),
-  EOMONTH: createEomonthBuiltin(),
-  DATEDIF: createDatedifBuiltin(),
-  ...datetimePlaceholderBuiltins,
+export function createDateTimeBuiltins(dateSystem: ExcelDateSystem = '1900'): Record<string, Builtin> {
+  return {
+    DATE: createDateBuiltin(dateSystem),
+    DATEVALUE: createDateValueBuiltin(dateSystem),
+    YEAR: createDatePartBuiltin('year', dateSystem),
+    MONTH: createDatePartBuiltin('month', dateSystem),
+    DAY: createDatePartBuiltin('day', dateSystem),
+    TIME: createTimeBuiltin(),
+    HOUR: createTimePartBuiltin('hour'),
+    MINUTE: createTimePartBuiltin('minute'),
+    SECOND: createTimePartBuiltin('second'),
+    WEEKDAY: createWeekdayBuiltin(dateSystem),
+    DAYS: createDaysBuiltin(),
+    WEEKNUM: createWeeknumBuiltin(dateSystem),
+    DAYS360: createDays360Builtin(dateSystem),
+    ISOWEEKNUM: createIsoWeeknumBuiltin(dateSystem),
+    TIMEVALUE: createTimeValueBuiltin(),
+    YEARFRAC: createYearfracBuiltin(dateSystem),
+    WORKDAY: createWorkdayBuiltin(dateSystem),
+    'WORKDAY.INTL': createWorkdayIntlBuiltin(dateSystem),
+    NETWORKDAYS: createNetworkdaysBuiltin(dateSystem),
+    'NETWORKDAYS.INTL': createNetworkdaysIntlBuiltin(dateSystem),
+    TODAY: createTodayBuiltin(() => new Date(), dateSystem),
+    NOW: createNowBuiltin(() => new Date(), dateSystem),
+    RAND: createRandBuiltin(),
+    EDATE: createEdateBuiltin(dateSystem),
+    EOMONTH: createEomonthBuiltin(dateSystem),
+    DATEDIF: createDatedifBuiltin(dateSystem),
+    ...datetimePlaceholderBuiltins,
+  }
 }
+
+export const datetimeBuiltins: Record<string, Builtin> = createDateTimeBuiltins()

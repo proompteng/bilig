@@ -412,11 +412,13 @@ export function projectWorkbookToSnapshot(value: unknown, documentId: string) {
   }
   if ((calculationMode === 'automatic' || calculationMode === 'manual') && isCompatibilityMode(compatibilityMode)) {
     workbookMetadataSnapshot.calculationSettings = {
+      ...baseSnapshot.workbook.metadata?.calculationSettings,
       mode: calculationMode,
       compatibilityMode,
     }
   } else if (calculationMode === 'automatic' || calculationMode === 'manual') {
     workbookMetadataSnapshot.calculationSettings = {
+      ...baseSnapshot.workbook.metadata?.calculationSettings,
       mode: calculationMode,
     }
   }

@@ -90,6 +90,8 @@ export function collectIndexedExactLookupCandidates(node: FormulaNode): IndexedE
       return [...collectIndexedExactLookupCandidates(node.left), ...collectIndexedExactLookupCandidates(node.right)]
     case 'InvokeExpr':
       return [...collectIndexedExactLookupCandidates(node.callee), ...node.args.flatMap(collectIndexedExactLookupCandidates)]
+    case 'ArrayConstant':
+      return node.rows.flatMap((row) => row.flatMap(collectIndexedExactLookupCandidates))
     case 'BooleanLiteral':
     case 'CellRef':
     case 'ColumnRef':
@@ -152,6 +154,8 @@ export function collectDirectApproximateLookupCandidates(node: FormulaNode): Dir
       return [...collectDirectApproximateLookupCandidates(node.left), ...collectDirectApproximateLookupCandidates(node.right)]
     case 'InvokeExpr':
       return [...collectDirectApproximateLookupCandidates(node.callee), ...node.args.flatMap(collectDirectApproximateLookupCandidates)]
+    case 'ArrayConstant':
+      return node.rows.flatMap((row) => row.flatMap(collectDirectApproximateLookupCandidates))
     case 'BooleanLiteral':
     case 'CellRef':
     case 'ColumnRef':

@@ -211,6 +211,8 @@ function emitNode(node: FormulaNode, state: CompilerState): void {
     case 'ErrorLiteral':
       state.program.push(encodeInstruction(Opcode.PushError, node.code))
       return
+    case 'ArrayConstant':
+      throw new Error('Array constants are not supported on the wasm fast path')
     case 'OmittedArgument':
       throw new Error('Omitted arguments are not supported on the wasm fast path')
     case 'NameRef':
@@ -392,6 +394,10 @@ function computeMaxStackDepth(plan: readonly JsPlanInstruction[]): number {
       case 'push-cell':
       case 'push-range':
       case 'push-lambda':
+        current += 1
+        break
+      case 'make-array':
+        current -= instruction.rows * instruction.cols
         current += 1
         break
       case 'lookup-exact-match':
@@ -668,6 +674,9 @@ function collectParsedDependencyReferencesFromAst(ast: FormulaNode): Map<string,
       case 'SpillRef':
       case 'RowRef':
       case 'ColumnRef':
+        return
+      case 'ArrayConstant':
+        node.rows.forEach((row) => row.forEach(collect))
         return
       case 'CellRef': {
         const reference = node.sheetName ? `${node.sheetName}!${node.ref}` : node.ref

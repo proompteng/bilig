@@ -1,6 +1,8 @@
 import {
   CSV_CONTENT_TYPE,
+  LEGACY_XLS_CONTENT_TYPE,
   XLSB_CONTENT_TYPE,
+  XLSM_CONTENT_TYPE,
   XLSX_CONTENT_TYPE,
   decodeAgentFrame,
   encodeAgentFrame,
@@ -90,8 +92,14 @@ export function resolveWorkbookImportContentType(file: Pick<File, 'name' | 'type
   if (normalizedType === XLSX_CONTENT_TYPE || normalizedName.endsWith('.xlsx')) {
     return XLSX_CONTENT_TYPE
   }
+  if (normalizedType === XLSM_CONTENT_TYPE || normalizedName.endsWith('.xlsm')) {
+    return XLSM_CONTENT_TYPE
+  }
   if (normalizedType === XLSB_CONTENT_TYPE || normalizedName.endsWith('.xlsb')) {
     return XLSB_CONTENT_TYPE
+  }
+  if (normalizedType === LEGACY_XLS_CONTENT_TYPE || normalizedName.endsWith('.xls')) {
+    return LEGACY_XLS_CONTENT_TYPE
   }
   if (normalizedType === CSV_CONTENT_TYPE || normalizedName.endsWith('.csv')) {
     return CSV_CONTENT_TYPE

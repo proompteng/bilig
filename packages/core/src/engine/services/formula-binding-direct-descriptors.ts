@@ -135,6 +135,8 @@ function staticCellValue(node: FormulaNode | undefined): CellValue | undefined {
         return { tag: ValueTag.Number, value: -node.argument.value }
       }
       return undefined
+    case 'ArrayConstant':
+      return undefined
     case 'CellRef':
     case 'CallExpr':
     case 'BinaryExpr':

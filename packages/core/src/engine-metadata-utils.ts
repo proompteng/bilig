@@ -290,6 +290,7 @@ function formulaNodeToReferenceOperand(input: FormulaNode): ReferenceOperand | u
     case 'NameRef':
     case 'NumberLiteral':
     case 'OmittedArgument':
+    case 'ArrayConstant':
     case 'SpillRef':
     case 'StringLiteral':
     case 'StructuredRef':
@@ -376,6 +377,23 @@ export function resolveMetadataReferencesInAst(
     case 'ColumnRef':
     case 'RangeRef':
       return { node, fullyResolved: true, substituted: false }
+    case 'ArrayConstant': {
+      let fullyResolved = true
+      let substituted = false
+      const rows = node.rows.map((row) =>
+        row.map((entry) => {
+          const resolved = resolveMetadataReferencesInAst(entry, context, activeNames, valueContext)
+          fullyResolved = fullyResolved && resolved.fullyResolved
+          substituted = substituted || resolved.substituted
+          return resolved.node
+        }),
+      )
+      return {
+        node: substituted ? { ...node, rows } : node,
+        fullyResolved,
+        substituted,
+      }
+    }
     case 'NameRef': {
       const normalized = normalizeDefinedName(node.name)
       if (activeNames.has(normalized)) {

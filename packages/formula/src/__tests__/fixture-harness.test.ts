@@ -268,6 +268,11 @@ function resolveFixtureMetadataReferences(
     case 'RangeRef':
     case 'SpillRef':
       return node
+    case 'ArrayConstant':
+      return {
+        ...node,
+        rows: node.rows.map((row) => row.map((entry) => resolveFixtureMetadataReferences(entry, fixture, defaultSheetName, activeNames))),
+      }
     case 'NameRef': {
       const normalized = node.name.trim().toUpperCase()
       if (activeNames.has(normalized)) {

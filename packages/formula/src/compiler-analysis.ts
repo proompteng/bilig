@@ -23,6 +23,8 @@ export function producesSpillResult(node: FormulaNode): boolean {
     case 'ColumnRef':
     case 'InvokeExpr':
       return false
+    case 'ArrayConstant':
+      return true
     case 'RangeRef':
       return true
     case 'UnaryExpr':
@@ -92,6 +94,13 @@ export function analyzeVolatileMetadata(node: FormulaNode): VolatileMetadata {
     case 'ColumnRef':
     case 'RangeRef':
       return { volatile: false, randCallCount: 0 }
+    case 'ArrayConstant': {
+      const children = node.rows.flatMap((row) => row.map(analyzeVolatileMetadata))
+      return {
+        volatile: children.some((child) => child.volatile),
+        randCallCount: children.reduce((sum, child) => sum + child.randCallCount, 0),
+      }
+    }
     case 'UnaryExpr':
       return analyzeVolatileMetadata(node.argument)
     case 'BinaryExpr': {

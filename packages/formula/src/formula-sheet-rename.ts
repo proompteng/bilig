@@ -196,6 +196,8 @@ function renameNodeSheetReferences(node: FormulaNode, oldSheetName: string, newS
     case 'NameRef':
     case 'StructuredRef':
       return node
+    case 'ArrayConstant':
+      return { ...node, rows: node.rows.map((row) => row.map((entry) => renameNodeSheetReferences(entry, oldSheetName, newSheetName))) }
     case 'CellRef':
     case 'SpillRef':
     case 'RowRef':
@@ -376,6 +378,7 @@ function renameJsPlanSheetReferences(plan: readonly JsPlanInstruction[], oldShee
       case 'push-number':
       case 'push-omitted':
       case 'push-string':
+      case 'make-array':
       case 'return':
       case 'unary':
         return instruction

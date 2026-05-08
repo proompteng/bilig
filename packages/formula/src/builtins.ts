@@ -24,14 +24,14 @@ import { createMathBuiltins } from './builtins/math-builtins.js'
 import { createRadixBuiltins } from './builtins/radix.js'
 import { populationVariance, sampleVariance } from './builtins/statistics.js'
 import { createStatisticalBuiltins } from './builtins/statistical-builtins.js'
-import { datetimeBuiltins } from './builtins/datetime.js'
+import { createDateTimeBuiltins, datetimeBuiltins, type ExcelDateSystem } from './builtins/datetime.js'
 import { convertBuiltin, euroconvertBuiltin } from './builtins/convert.js'
 import { logicalBuiltins } from './builtins/logical.js'
 import { lookupBuiltins } from './builtins/lookup.js'
 import { createBlockedBuiltinMap, scalarPlaceholderBuiltinNames } from './builtins/placeholder.js'
 import { getExternalScalarFunction, hasExternalFunction } from './external-function-adapter.js'
 import type { ArrayValue, EvaluationResult } from './runtime-values.js'
-import { textBuiltins } from './builtins/text.js'
+import { createTextBuiltins, textBuiltins } from './builtins/text.js'
 
 type Builtin = (...args: CellValue[]) => EvaluationResult
 
@@ -744,6 +744,20 @@ const builtins: Record<string, Builtin> = {
   ...datetimeBuiltins,
 }
 
+const dateSystemBuiltinCache = new Map<ExcelDateSystem, Record<string, Builtin>>()
+
+function dateSystemBuiltins(dateSystem: ExcelDateSystem): Record<string, Builtin> {
+  let cached = dateSystemBuiltinCache.get(dateSystem)
+  if (!cached) {
+    cached = {
+      ...createTextBuiltins({ dateSystem }),
+      ...createDateTimeBuiltins(dateSystem),
+    }
+    dateSystemBuiltinCache.set(dateSystem, cached)
+  }
+  return cached
+}
+
 const builtinIdByName = new Map(BUILTINS.map((builtin) => [builtin.name.toUpperCase(), builtin.id]))
 builtinIdByName.set('USE.THE.COUNTIF', BuiltinId.Countif)
 builtinIdByName.set('FORECAST.LINEAR', BuiltinId.Forecast)
@@ -751,6 +765,11 @@ builtinIdByName.set('FORECAST.LINEAR', BuiltinId.Forecast)
 export function getBuiltin(name: string): Builtin | undefined {
   const normalized = normalizeBuiltinLookupName(name)
   return builtins[normalized] ?? getExternalScalarFunction(normalized)
+}
+
+export function getDateSystemBuiltin(name: string, dateSystem: ExcelDateSystem): Builtin | undefined {
+  const normalized = normalizeBuiltinLookupName(name)
+  return dateSystem === '1900' ? getBuiltin(normalized) : (dateSystemBuiltins(dateSystem)[normalized] ?? getBuiltin(normalized))
 }
 
 export function hasBuiltin(name: string): boolean {

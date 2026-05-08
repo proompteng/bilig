@@ -39,6 +39,8 @@ function isStaticNode(node: FormulaNode): boolean {
     case 'StringLiteral':
     case 'ErrorLiteral':
       return true
+    case 'ArrayConstant':
+      return node.rows.every((row) => row.every(isStaticNode))
     case 'OmittedArgument':
       return false
     case 'NameRef':
@@ -202,6 +204,8 @@ function cloneFormulaNode(node: FormulaNode): FormulaNode {
     case 'OmittedArgument':
     case 'NameRef':
       return { ...node }
+    case 'ArrayConstant':
+      return { ...node, rows: node.rows.map((row) => row.map(cloneFormulaNode)) }
     case 'StructuredRef':
       return { ...node }
     case 'CellRef':
@@ -244,6 +248,8 @@ function substituteNames(node: FormulaNode, replacements: ReadonlyMap<string, Fo
     case 'ColumnRef':
     case 'RangeRef':
       return cloneFormulaNode(node)
+    case 'ArrayConstant':
+      return { ...node, rows: node.rows.map((row) => row.map((entry) => substituteNames(entry, replacements, shadowed))) }
     case 'NameRef': {
       const key = normalizeName(node.name)
       if (shadowed.has(key)) {
@@ -466,6 +472,8 @@ export function optimizeFormula(node: FormulaNode): FormulaNode {
     case 'ColumnRef':
     case 'RangeRef':
       return node
+    case 'ArrayConstant':
+      return { ...node, rows: node.rows.map((row) => row.map(optimizeFormula)) }
     case 'UnaryExpr': {
       const argument = optimizeFormula(node.argument)
       if (node.operator === '+') {

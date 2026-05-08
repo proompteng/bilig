@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import {
   CSV_CONTENT_TYPE,
+  LEGACY_XLS_CONTENT_TYPE,
   decodeAgentFrame,
   decodeStdioMessages,
   encodeAgentFrame,
   encodeStdioMessage,
   normalizeWorkbookImportContentType,
   XLSB_CONTENT_TYPE,
+  XLSM_CONTENT_TYPE,
   XLSX_CONTENT_TYPE,
 } from '../index.js'
 
@@ -117,7 +119,9 @@ describe('agent api', () => {
     expect(normalizeWorkbookImportContentType('TEXT/CSV')).toBe(CSV_CONTENT_TYPE)
     expect(normalizeWorkbookImportContentType(`${XLSX_CONTENT_TYPE}; charset=binary`)).toBe(XLSX_CONTENT_TYPE)
     expect(normalizeWorkbookImportContentType(XLSX_CONTENT_TYPE.toUpperCase())).toBe(XLSX_CONTENT_TYPE)
+    expect(normalizeWorkbookImportContentType('application/vnd.ms-excel.sheet.macroEnabled.12')).toBe(XLSM_CONTENT_TYPE)
     expect(normalizeWorkbookImportContentType('application/vnd.ms-excel.sheet.binary.macroEnabled.12')).toBe(XLSB_CONTENT_TYPE)
+    expect(normalizeWorkbookImportContentType('application/vnd.ms-excel; charset=binary')).toBe(LEGACY_XLS_CONTENT_TYPE)
     expect(normalizeWorkbookImportContentType('application/octet-stream')).toBeNull()
   })
 })

@@ -271,7 +271,7 @@ try {
 
   allCompleted.push(
     ...(await runSequential('static package build prerequisites', [
-      skipBrowserGates ? pnpm('wasm build', 'wasm:build') : appRuntimeDependencyBuild,
+      skipBrowserGates ? pnpm('wasm build', '--filter', '@bilig/wasm-kernel', 'build') : appRuntimeDependencyBuild,
       ...(skipBrowserGates ? [] : [pnpm('playwright chromium install', 'exec', 'playwright', 'install', 'chromium')]),
     ])),
   )
@@ -287,7 +287,9 @@ try {
       ])),
     )
   } else {
-    allCompleted.push(...(await runStage('focused correctness checks', parallelFocusedCorrectnessLanes)))
+    // Keep Vitest lanes serialized locally; running four pnpm/vitest processes concurrently is prone to child-process
+    // termination before assertion output on constrained machines.
+    allCompleted.push(...(await runSequential('focused correctness checks', parallelFocusedCorrectnessLanes)))
     allCompleted.push(...(await runSequential('corpus correctness benchmark', [corpusCorrectnessLane])))
     if (!skipBrowserGates) {
       allCompleted.push(...(await runStage('browser smoke setup', [browserWebBundleBuild])))

@@ -1,4 +1,5 @@
 import type { CellValue, ErrorCode } from '@bilig/protocol'
+import type { ExcelDateSystem } from './builtins/datetime.js'
 import type { LookupBuiltin } from './builtins/lookup.js'
 import type { ArrayValue, EvaluationResult } from './runtime-values.js'
 
@@ -58,6 +59,7 @@ export interface EvaluationContext {
   listSheetNames?: () => string[]
   resolveBuiltin?: (name: string) => ((...args: CellValue[]) => EvaluationResult) | undefined
   resolveLookupBuiltin?: (name: string) => LookupBuiltin | undefined
+  dateSystem?: ExcelDateSystem
 }
 
 export type ExactVectorMatchResult = { handled: false } | { handled: true; position: number | undefined }
@@ -80,6 +82,7 @@ export type JsPlanInstruction =
   | { opcode: 'push-string'; value: string }
   | { opcode: 'push-error'; code: ErrorCode }
   | { opcode: 'push-omitted' }
+  | { opcode: 'make-array'; rows: number; cols: number }
   | { opcode: 'push-name'; name: string }
   | { opcode: 'push-cell'; sheetName?: string; address: string }
   | {

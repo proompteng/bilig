@@ -1,6 +1,12 @@
 import { useId } from 'react'
 import { Upload } from 'lucide-react'
-import { CSV_CONTENT_TYPE, XLSB_CONTENT_TYPE, type WorkbookImportContentType } from '@bilig/agent-api'
+import {
+  CSV_CONTENT_TYPE,
+  LEGACY_XLS_CONTENT_TYPE,
+  XLSB_CONTENT_TYPE,
+  XLSM_CONTENT_TYPE,
+  type WorkbookImportContentType,
+} from '@bilig/agent-api'
 import type { ImportedWorkbookPreview } from '@bilig/excel-import'
 import { cn } from './cn.js'
 import { workbookAlertClass, workbookButtonClass, workbookPillClass, workbookSurfaceClass } from './workbook-shell-chrome.js'
@@ -21,6 +27,12 @@ function formatImportType(contentType: WorkbookImportContentType): string {
   }
   if (contentType === XLSB_CONTENT_TYPE) {
     return 'XLSB'
+  }
+  if (contentType === XLSM_CONTENT_TYPE) {
+    return 'XLSM'
+  }
+  if (contentType === LEGACY_XLS_CONTENT_TYPE) {
+    return 'XLS'
   }
   return 'XLSX'
 }
@@ -157,7 +169,7 @@ export function WorkbookImportPanel(props: {
                   <span className="truncate">{props.stagedPreview?.fileName ?? 'File'}</span>
                 </div>
                 <input
-                  accept=".csv,.xlsx,.xlsb,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.binary.macroEnabled.12"
+                  accept=".csv,.xls,.xlsx,.xlsm,.xlsb,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel.sheet.binary.macroEnabled.12"
                   className="sr-only"
                   data-testid="workbook-import-file"
                   disabled={!props.enabled || props.isPreviewing || props.isImporting}

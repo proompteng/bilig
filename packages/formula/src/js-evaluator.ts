@@ -1,7 +1,7 @@
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import type { FormulaNode } from './ast.js'
 import { parseRangeAddress } from './addressing.js'
-import { getBuiltin, normalizeBuiltinLookupName } from './builtins.js'
+import { getBuiltin, getDateSystemBuiltin, normalizeBuiltinLookupName } from './builtins.js'
 import { getLookupBuiltin, type RangeBuiltinArgument } from './builtins/lookup.js'
 import { evaluateArraySpecialCall } from './js-evaluator-array-special-calls.js'
 import { emptyValue, error, numberValue, stringValue } from './js-evaluator-cell-values.js'
@@ -62,6 +62,14 @@ export type {
 } from './js-evaluator-types.js'
 export { lowerToPlan } from './js-plan-lowering.js'
 
+function resolveBuiltinForContext(name: string, context: EvaluationContext): ((...args: CellValue[]) => EvaluationResult) | undefined {
+  const override = context.resolveBuiltin?.(name)
+  if (override) {
+    return override
+  }
+  return context.dateSystem ? getDateSystemBuiltin(name, context.dateSystem) : getBuiltin(name)
+}
+
 function aggregateRangeSubset(
   functionArg: StackValue,
   subset: readonly CellValue[],
@@ -90,7 +98,7 @@ function aggregateRangeSubset(
     }
     return numberValue(0)
   }
-  const builtin = context.resolveBuiltin?.(name) ?? getBuiltin(name)
+  const builtin = resolveBuiltinForContext(name, context)
   if (!builtin) {
     return error(ErrorCode.Name)
   }
@@ -336,6 +344,15 @@ function executePlan(
       case 'push-omitted':
         stack.push({ kind: 'omitted', source: 'argument' })
         break
+      case 'make-array': {
+        const values = Array<CellValue>(instruction.rows * instruction.cols)
+        for (let index = values.length - 1; index >= 0; index -= 1) {
+          const scalar = isSingleCellValue(popArgument(stack))
+          values[index] = scalar ?? error(ErrorCode.Value)
+        }
+        stack.push(makeArrayStack(instruction.rows, instruction.cols, values))
+        break
+      }
       case 'push-cell':
         {
           const value = context.resolveCell(instruction.sheetName ?? context.sheetName, instruction.address)
@@ -579,7 +596,7 @@ function executePlan(
           break
         }
 
-        const builtin = context.resolveBuiltin?.(instruction.callee) ?? getBuiltin(instruction.callee)
+        const builtin = resolveBuiltinForContext(instruction.callee, context)
         if (!builtin) {
           stack.push({ kind: 'scalar', value: error(ErrorCode.Name) })
           break

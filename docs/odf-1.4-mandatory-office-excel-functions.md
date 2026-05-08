@@ -19,8 +19,8 @@
 - Office-only (not in ODF 1.4 mandatory): **450**
 
 ## Current code coverage snapshot
-- Registered in codebase: **525**
-- Not yet registered in codebase: **0**
+- Registered in codebase: **523**
+- Not yet registered in codebase: **2**
 - Placeholder-backed registrations: **0**
 - The "Implemented in codebase" column reflects runtime registration, including blocked placeholder registrations.
 
@@ -143,7 +143,7 @@
 | CUMPRINC | Placeholder (blocked) | Yes | Yes |
 | DATE | Not in ODF 1.4 mandatory | Yes | Yes |
 | DATEDIF | Not in ODF 1.4 mandatory | Yes | Yes |
-| DATEVALUE | Placeholder (blocked) | Yes | Yes |
+| DATEVALUE | Placeholder (blocked) | Yes | No |
 | DAVERAGE | Not in ODF 1.4 mandatory | Yes | Yes |
 | DAY | Not in ODF 1.4 mandatory | Yes | Yes |
 | DAYS | Placeholder (blocked) | Yes | Yes |
@@ -179,7 +179,7 @@
 | DVARP | Not in ODF 1.4 mandatory | Yes | Yes |
 | EDATE | Implemented | Yes | Yes |
 | EFFECT | Placeholder (blocked) | Yes | Yes |
-| ENCODEURL | Not in ODF 1.4 mandatory | Yes | Yes |
+| ENCODEURL | Not in ODF 1.4 mandatory | Yes | No |
 | EOMONTH | Implemented | Yes | Yes |
 | ERF | Placeholder (blocked) | Yes | Yes |
 | ERF.PRECISE | Not in ODF 1.4 mandatory | Yes | Yes |

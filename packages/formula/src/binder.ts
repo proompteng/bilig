@@ -196,6 +196,9 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
       case 'ErrorLiteral':
       case 'OmittedArgument':
         break
+      case 'ArrayConstant':
+        node.rows.forEach((row) => row.forEach((entry) => collectDeps(entry, localNames)))
+        break
       case 'NameRef':
         if (!localNames.has(node.name)) {
           symbolicNames.add(node.name)
@@ -290,6 +293,8 @@ export function bindFormula(ast: FormulaNode): BoundFormula {
       case 'StringLiteral':
       case 'ErrorLiteral':
         return true
+      case 'ArrayConstant':
+        return false
       case 'OmittedArgument':
         return false
       case 'NameRef':

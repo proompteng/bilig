@@ -3,6 +3,7 @@ import { createBlockedBuiltinMap, textPlaceholderBuiltinNames } from './placehol
 import { createTextCoreBuiltins } from './text-core-builtins.js'
 import { createTextFormatBuiltins } from './text-format-builtins.js'
 import { createTextSearchBuiltins } from './text-search-builtins.js'
+import type { ExcelDateSystem } from './excel-date.js'
 import type { EvaluationResult } from '../runtime-values.js'
 
 export type TextBuiltin = (...args: CellValue[]) => EvaluationResult
@@ -330,250 +331,256 @@ function charCodeFromArgument(value: CellValue | undefined): number | CellValue 
 }
 
 const textPlaceholderBuiltins = createBlockedBuiltinMap(textPlaceholderBuiltinNames)
-const textCoreBuiltins = createTextCoreBuiltins({
-  error,
-  stringResult,
-  booleanResult,
-  firstError,
-  coerceText,
-  coerceNumber,
-})
-const textFormatBuiltins = createTextFormatBuiltins({
-  error,
-  stringResult,
-  numberResult,
-  firstError,
-  coerceText,
-  coerceNumber,
-  coerceInteger,
-  isErrorValue,
-})
-const textSearchBuiltins = createTextSearchBuiltins({
-  error,
-  stringResult,
-  numberResult,
-  booleanResult,
-  firstError,
-  coerceText,
-  coerceNumber,
-  coerceBoolean,
-  coerceInteger,
-  coercePositiveStart,
-  isErrorValue,
-  utf8Bytes,
-  findSubBytes,
-  bytePositionToCharPosition,
-  charPositionToBytePosition,
-})
 
-export const textBuiltins: Record<string, TextBuiltin> = {
-  LEN: (...args) => {
-    const existingError = firstError(args)
-    if (existingError) {
-      return existingError
-    }
-    const [value] = args
-    if (value === undefined) {
-      return error(ErrorCode.Value)
-    }
-    return numberResult(coerceText(value).length)
-  },
-  LENB: (...args) => {
-    const existingError = firstError(args)
-    if (existingError) {
-      return existingError
-    }
-    const [value] = args
-    if (value === undefined) {
-      return error(ErrorCode.Value)
-    }
-    return numberResult(utf8Bytes(coerceText(value)).length)
-  },
-  CHAR: (...args) => {
-    const [codeValue] = args
-    const codePoint = charCodeFromArgument(codeValue)
-    if (isErrorValue(codePoint)) {
-      return codePoint
-    }
-    return stringResult(String.fromCodePoint(codePoint))
-  },
-  CODE: (...args) => {
-    const [textValue] = args
-    if (textValue === undefined) {
-      return error(ErrorCode.Value)
-    }
-    const text = coerceText(textValue)
-    if (text.length === 0) {
-      return error(ErrorCode.Value)
-    }
-    const codePoint = text.codePointAt(0)
-    return codePoint === undefined ? error(ErrorCode.Value) : numberResult(codePoint)
-  },
-  UNICODE: (...args) => {
-    const [textValue] = args
-    if (textValue === undefined) {
-      return error(ErrorCode.Value)
-    }
-    const text = coerceText(textValue)
-    if (text.length === 0) {
-      return error(ErrorCode.Value)
-    }
-    const codePoint = text.codePointAt(0)
-    return codePoint === undefined ? error(ErrorCode.Value) : numberResult(codePoint)
-  },
-  UNICHAR: (...args) => {
-    const [codeValue] = args
-    if (codeValue === undefined) {
-      return error(ErrorCode.Value)
-    }
-    const code = coerceNumber(codeValue)
-    if (code === undefined) {
-      return error(ErrorCode.Value)
-    }
-    const integerCode = Math.trunc(code)
-    if (!Number.isFinite(integerCode) || integerCode < 0 || integerCode > 0x10ffff) {
-      return error(ErrorCode.Value)
-    }
-    return stringResult(String.fromCodePoint(integerCode))
-  },
-  ...textCoreBuiltins,
-  ...textFormatBuiltins,
-  ...textSearchBuiltins,
-  LEFT: (...args) => {
-    const existingError = firstError(args)
-    if (existingError) {
-      return existingError
-    }
-    const [textValue, countValue] = args
-    if (textValue === undefined) {
-      return error(ErrorCode.Value)
-    }
-    const count = coerceLength(countValue, 1)
-    if (isErrorValue(count)) {
-      return count
-    }
-    return stringResult(coerceText(textValue).slice(0, count))
-  },
-  RIGHT: (...args) => {
-    const existingError = firstError(args)
-    if (existingError) {
-      return existingError
-    }
-    const [textValue, countValue] = args
-    if (textValue === undefined) {
-      return error(ErrorCode.Value)
-    }
-    const count = coerceLength(countValue, 1)
-    if (isErrorValue(count)) {
-      return count
-    }
-    const text = coerceText(textValue)
-    return stringResult(count === 0 ? '' : text.slice(-count))
-  },
-  MID: (...args) => {
-    const existingError = firstError(args)
-    if (existingError) {
-      return existingError
-    }
-    const [textValue, startValue, countValue] = args
-    if (textValue === undefined || startValue === undefined || countValue === undefined) {
-      return error(ErrorCode.Value)
-    }
-    const start = coercePositiveStart(startValue, 1)
-    if (isErrorValue(start)) {
-      return start
-    }
-    const count = coerceLength(countValue, 0)
-    if (isErrorValue(count)) {
-      return count
-    }
-    const text = coerceText(textValue)
-    return stringResult(text.slice(start - 1, start - 1 + count))
-  },
-  ENCODEURL: (...args) => {
-    const existingError = firstError(args)
-    if (existingError) {
-      return existingError
-    }
-    const [value] = args
-    if (value === undefined) {
-      return error(ErrorCode.Value)
-    }
-    return stringResult(encodeURI(coerceText(value)))
-  },
-  LEFTB: (...args) => {
-    const existingError = firstError(args)
-    if (existingError) {
-      return existingError
-    }
-    const [textValue, countValue] = args
-    if (textValue === undefined) {
-      return error(ErrorCode.Value)
-    }
-    const count = coerceLength(countValue, 1)
-    if (isErrorValue(count)) {
-      return count
-    }
-    return stringResult(leftBytes(coerceText(textValue), count))
-  },
-  MIDB: (...args) => {
-    const existingError = firstError(args)
-    if (existingError) {
-      return existingError
-    }
-    const [textValue, startValue, countValue] = args
-    if (textValue === undefined || startValue === undefined || countValue === undefined) {
-      return error(ErrorCode.Value)
-    }
-    const start = coercePositiveStart(startValue, 1)
-    if (isErrorValue(start)) {
-      return start
-    }
-    const count = coerceLength(countValue, 0)
-    if (isErrorValue(count)) {
-      return count
-    }
-    return stringResult(midBytes(coerceText(textValue), start, count))
-  },
-  RIGHTB: (...args) => {
-    const existingError = firstError(args)
-    if (existingError) {
-      return existingError
-    }
-    const [textValue, countValue] = args
-    if (textValue === undefined) {
-      return error(ErrorCode.Value)
-    }
-    const count = coerceLength(countValue, 1)
-    if (isErrorValue(count)) {
-      return count
-    }
-    return stringResult(rightBytes(coerceText(textValue), count))
-  },
-  REPLACE: createReplaceBuiltin(),
-  REPLACEB: (...args) => {
-    const existingError = firstError(args)
-    if (existingError) {
-      return existingError
-    }
-    const [textValue, startValue, countValue, replacementValue] = args
-    if (textValue === undefined || startValue === undefined || countValue === undefined || replacementValue === undefined) {
-      return error(ErrorCode.Value)
-    }
-    const start = coercePositiveStart(startValue, 1)
-    if (isErrorValue(start)) {
-      return start
-    }
-    const count = coerceLength(countValue, 0)
-    if (isErrorValue(count)) {
-      return count
-    }
-    return stringResult(replaceBytes(coerceText(textValue), start, count, coerceText(replacementValue)))
-  },
-  SUBSTITUTE: createSubstituteBuiltin(),
-  REPT: createReptBuiltin(),
-  ...textPlaceholderBuiltins,
+export function createTextBuiltins(options: { readonly dateSystem?: ExcelDateSystem } = {}): Record<string, TextBuiltin> {
+  const textCoreBuiltins = createTextCoreBuiltins({
+    error,
+    stringResult,
+    booleanResult,
+    firstError,
+    coerceText,
+    coerceNumber,
+  })
+  const textFormatBuiltins = createTextFormatBuiltins({
+    error,
+    stringResult,
+    numberResult,
+    firstError,
+    coerceText,
+    coerceNumber,
+    coerceInteger,
+    isErrorValue,
+    ...(options.dateSystem ? { dateSystem: options.dateSystem } : {}),
+  })
+  const textSearchBuiltins = createTextSearchBuiltins({
+    error,
+    stringResult,
+    numberResult,
+    booleanResult,
+    firstError,
+    coerceText,
+    coerceNumber,
+    coerceBoolean,
+    coerceInteger,
+    coercePositiveStart,
+    isErrorValue,
+    utf8Bytes,
+    findSubBytes,
+    bytePositionToCharPosition,
+    charPositionToBytePosition,
+  })
+
+  return {
+    LEN: (...args) => {
+      const existingError = firstError(args)
+      if (existingError) {
+        return existingError
+      }
+      const [value] = args
+      if (value === undefined) {
+        return error(ErrorCode.Value)
+      }
+      return numberResult(coerceText(value).length)
+    },
+    LENB: (...args) => {
+      const existingError = firstError(args)
+      if (existingError) {
+        return existingError
+      }
+      const [value] = args
+      if (value === undefined) {
+        return error(ErrorCode.Value)
+      }
+      return numberResult(utf8Bytes(coerceText(value)).length)
+    },
+    CHAR: (...args) => {
+      const [codeValue] = args
+      const codePoint = charCodeFromArgument(codeValue)
+      if (isErrorValue(codePoint)) {
+        return codePoint
+      }
+      return stringResult(String.fromCodePoint(codePoint))
+    },
+    CODE: (...args) => {
+      const [textValue] = args
+      if (textValue === undefined) {
+        return error(ErrorCode.Value)
+      }
+      const text = coerceText(textValue)
+      if (text.length === 0) {
+        return error(ErrorCode.Value)
+      }
+      const codePoint = text.codePointAt(0)
+      return codePoint === undefined ? error(ErrorCode.Value) : numberResult(codePoint)
+    },
+    UNICODE: (...args) => {
+      const [textValue] = args
+      if (textValue === undefined) {
+        return error(ErrorCode.Value)
+      }
+      const text = coerceText(textValue)
+      if (text.length === 0) {
+        return error(ErrorCode.Value)
+      }
+      const codePoint = text.codePointAt(0)
+      return codePoint === undefined ? error(ErrorCode.Value) : numberResult(codePoint)
+    },
+    UNICHAR: (...args) => {
+      const [codeValue] = args
+      if (codeValue === undefined) {
+        return error(ErrorCode.Value)
+      }
+      const code = coerceNumber(codeValue)
+      if (code === undefined) {
+        return error(ErrorCode.Value)
+      }
+      const integerCode = Math.trunc(code)
+      if (!Number.isFinite(integerCode) || integerCode < 0 || integerCode > 0x10ffff) {
+        return error(ErrorCode.Value)
+      }
+      return stringResult(String.fromCodePoint(integerCode))
+    },
+    ...textCoreBuiltins,
+    ...textFormatBuiltins,
+    ...textSearchBuiltins,
+    LEFT: (...args) => {
+      const existingError = firstError(args)
+      if (existingError) {
+        return existingError
+      }
+      const [textValue, countValue] = args
+      if (textValue === undefined) {
+        return error(ErrorCode.Value)
+      }
+      const count = coerceLength(countValue, 1)
+      if (isErrorValue(count)) {
+        return count
+      }
+      return stringResult(coerceText(textValue).slice(0, count))
+    },
+    RIGHT: (...args) => {
+      const existingError = firstError(args)
+      if (existingError) {
+        return existingError
+      }
+      const [textValue, countValue] = args
+      if (textValue === undefined) {
+        return error(ErrorCode.Value)
+      }
+      const count = coerceLength(countValue, 1)
+      if (isErrorValue(count)) {
+        return count
+      }
+      const text = coerceText(textValue)
+      return stringResult(count === 0 ? '' : text.slice(-count))
+    },
+    MID: (...args) => {
+      const existingError = firstError(args)
+      if (existingError) {
+        return existingError
+      }
+      const [textValue, startValue, countValue] = args
+      if (textValue === undefined || startValue === undefined || countValue === undefined) {
+        return error(ErrorCode.Value)
+      }
+      const start = coercePositiveStart(startValue, 1)
+      if (isErrorValue(start)) {
+        return start
+      }
+      const count = coerceLength(countValue, 0)
+      if (isErrorValue(count)) {
+        return count
+      }
+      const text = coerceText(textValue)
+      return stringResult(text.slice(start - 1, start - 1 + count))
+    },
+    ENCODEURL: (...args) => {
+      const existingError = firstError(args)
+      if (existingError) {
+        return existingError
+      }
+      const [value] = args
+      if (value === undefined) {
+        return error(ErrorCode.Value)
+      }
+      return stringResult(encodeURI(coerceText(value)))
+    },
+    LEFTB: (...args) => {
+      const existingError = firstError(args)
+      if (existingError) {
+        return existingError
+      }
+      const [textValue, countValue] = args
+      if (textValue === undefined) {
+        return error(ErrorCode.Value)
+      }
+      const count = coerceLength(countValue, 1)
+      if (isErrorValue(count)) {
+        return count
+      }
+      return stringResult(leftBytes(coerceText(textValue), count))
+    },
+    MIDB: (...args) => {
+      const existingError = firstError(args)
+      if (existingError) {
+        return existingError
+      }
+      const [textValue, startValue, countValue] = args
+      if (textValue === undefined || startValue === undefined || countValue === undefined) {
+        return error(ErrorCode.Value)
+      }
+      const start = coercePositiveStart(startValue, 1)
+      if (isErrorValue(start)) {
+        return start
+      }
+      const count = coerceLength(countValue, 0)
+      if (isErrorValue(count)) {
+        return count
+      }
+      return stringResult(midBytes(coerceText(textValue), start, count))
+    },
+    RIGHTB: (...args) => {
+      const existingError = firstError(args)
+      if (existingError) {
+        return existingError
+      }
+      const [textValue, countValue] = args
+      if (textValue === undefined) {
+        return error(ErrorCode.Value)
+      }
+      const count = coerceLength(countValue, 1)
+      if (isErrorValue(count)) {
+        return count
+      }
+      return stringResult(rightBytes(coerceText(textValue), count))
+    },
+    REPLACE: createReplaceBuiltin(),
+    REPLACEB: (...args) => {
+      const existingError = firstError(args)
+      if (existingError) {
+        return existingError
+      }
+      const [textValue, startValue, countValue, replacementValue] = args
+      if (textValue === undefined || startValue === undefined || countValue === undefined || replacementValue === undefined) {
+        return error(ErrorCode.Value)
+      }
+      const start = coercePositiveStart(startValue, 1)
+      if (isErrorValue(start)) {
+        return start
+      }
+      const count = coerceLength(countValue, 0)
+      if (isErrorValue(count)) {
+        return count
+      }
+      return stringResult(replaceBytes(coerceText(textValue), start, count, coerceText(replacementValue)))
+    },
+    SUBSTITUTE: createSubstituteBuiltin(),
+    REPT: createReptBuiltin(),
+    ...textPlaceholderBuiltins,
+  }
 }
+
+export const textBuiltins: Record<string, TextBuiltin> = createTextBuiltins()
 
 export function getTextBuiltin(name: string): TextBuiltin | undefined {
   return textBuiltins[name.toUpperCase()]

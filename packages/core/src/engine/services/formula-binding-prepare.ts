@@ -1,4 +1,4 @@
-import type { CompiledFormula } from '@bilig/formula'
+import { formulaContainsDateSystemSensitiveBuiltin, type CompiledFormula } from '@bilig/formula'
 import { FormulaMode, Opcode } from '@bilig/protocol'
 import { resolveRuntimeDirectLookupBinding } from '../direct-vector-lookup.js'
 import {
@@ -35,6 +35,10 @@ function normalizeMetadataCellAliasMode(compiled: ParsedCompiledFormula): Parsed
   return shouldEvaluateMetadataCellAliasInJs(compiled) ? { ...compiled, mode: FormulaMode.JsOnly } : compiled
 }
 
+function shouldEvaluateWorkbookDateSystemInJs(compiled: ParsedCompiledFormula, dateSystem: string | undefined): boolean {
+  return dateSystem === '1904' && formulaContainsDateSystemSensitiveBuiltin(compiled.ast)
+}
+
 export interface PreparedFormulaBinding {
   readonly compiled: ParsedCompiledFormula
   readonly dependencies: MaterializedDependencies
@@ -69,19 +73,30 @@ export function prepareFormulaBindingFromCompiled(args: {
 }): PreparedFormulaBinding {
   const serviceArgs = args.serviceArgs
   const ownerSheetId = serviceArgs.state.workbook.getSheet(args.ownerSheetName)?.id
-  const compiled = normalizeMetadataCellAliasMode(args.normalizeLookupCompileMode(args.compiledInput))
+  const workbookDateSystem = serviceArgs.state.workbook.getCalculationSettings().dateSystem
+  const requiresWorkbookDateSystemJs = shouldEvaluateWorkbookDateSystemInJs(args.compiledInput, workbookDateSystem)
+  const compiled = normalizeMetadataCellAliasMode(
+    requiresWorkbookDateSystemJs
+      ? { ...args.normalizeLookupCompileMode(args.compiledInput), mode: FormulaMode.JsOnly }
+      : args.normalizeLookupCompileMode(args.compiledInput),
+  )
   const hasLookupInstruction = hasLookupPlanInstruction(compiled.jsPlan)
-  const directLookupBinding = hasLookupInstruction ? resolveRuntimeDirectLookupBinding(compiled.jsPlan, args.ownerSheetName) : undefined
-  const directScalar = buildDirectScalarDescriptor({
-    compiled,
-    ownerSheetName: args.ownerSheetName,
-    ownerSheetId,
-    workbook: serviceArgs.state.workbook,
-    ensureCellTracked: serviceArgs.ensureCellTracked,
-    ensureCellTrackedByCoords: serviceArgs.ensureCellTrackedByCoords,
-  })
+  const directLookupBinding =
+    !requiresWorkbookDateSystemJs && hasLookupInstruction
+      ? resolveRuntimeDirectLookupBinding(compiled.jsPlan, args.ownerSheetName)
+      : undefined
+  const directScalar = requiresWorkbookDateSystemJs
+    ? undefined
+    : buildDirectScalarDescriptor({
+        compiled,
+        ownerSheetName: args.ownerSheetName,
+        ownerSheetId,
+        workbook: serviceArgs.state.workbook,
+        ensureCellTracked: serviceArgs.ensureCellTracked,
+        ensureCellTrackedByCoords: serviceArgs.ensureCellTrackedByCoords,
+      })
   const directAggregateCandidate =
-    directScalar === undefined
+    directScalar === undefined && !requiresWorkbookDateSystemJs
       ? buildDirectAggregateDescriptor({
           compiled,
           ownerSheetName: args.ownerSheetName,
@@ -92,7 +107,7 @@ export function prepareFormulaBindingFromCompiled(args: {
     ? undefined
     : directAggregateCandidate
   const directCriteria =
-    directScalar === undefined
+    directScalar === undefined && !requiresWorkbookDateSystemJs
       ? buildDirectCriteriaDescriptor({
           compiled,
           ownerSheetName: args.ownerSheetName,

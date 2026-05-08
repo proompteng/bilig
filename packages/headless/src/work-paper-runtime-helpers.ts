@@ -225,6 +225,11 @@ export function transformFormulaNode(node: FormulaNode, transform: (current: For
     case 'StringLiteral':
     case 'StructuredRef':
       return current
+    case 'ArrayConstant':
+      return {
+        ...current,
+        rows: current.rows.map((row) => row.map((entry) => transformFormulaNode(entry, transform))),
+      }
     case 'UnaryExpr':
       return {
         ...current,
@@ -271,6 +276,9 @@ export function collectFormulaNameRefs(node: FormulaNode, output: Set<string>): 
     case 'StringLiteral':
     case 'StructuredRef':
       return
+    case 'ArrayConstant':
+      node.rows.forEach((row) => row.forEach((entry) => collectFormulaNameRefs(entry, output)))
+      return
     case 'UnaryExpr':
       collectFormulaNameRefs(node.argument, output)
       return
@@ -312,6 +320,8 @@ export function formulaHasRelativeReferences(node: FormulaNode): boolean {
     case 'StringLiteral':
     case 'StructuredRef':
       return false
+    case 'ArrayConstant':
+      return node.rows.some((row) => row.some(formulaHasRelativeReferences))
     case 'CellRef':
     case 'SpillRef':
       return !isAbsoluteCellReference(node.ref)

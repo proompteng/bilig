@@ -50,6 +50,8 @@ export function serializeFormula(node: FormulaNode, parentPrecedence = 0, parent
       return ERROR_LITERAL_TEXT[node.code] ?? '#ERROR!'
     case 'OmittedArgument':
       return ''
+    case 'ArrayConstant':
+      return `{${node.rows.map((row) => row.map((entry) => serializeFormula(entry)).join(',')).join(';')}}`
     case 'NameRef':
       return node.name
     case 'StructuredRef':

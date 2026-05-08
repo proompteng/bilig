@@ -54,6 +54,16 @@ import {
   toLiteralInput,
   type ImportedWorkbookSheetPreview,
 } from './workbook-import-helpers.js'
+import {
+  CSV_CONTENT_TYPE,
+  LEGACY_XLS_CONTENT_TYPE,
+  XLSB_CONTENT_TYPE,
+  XLSM_CONTENT_TYPE,
+  XLSX_CONTENT_TYPE,
+  normalizeWorkbookImportContentType,
+  type ExcelWorkbookImportContentType,
+} from './workbook-import-content-types.js'
+import { createWorkbookPreview, type ImportedWorkbookPreview } from './workbook-import-preview.js'
 import { readImportedExternalLinkCaches, translateImportedFormulaExternalReferences } from './xlsx-external-references.js'
 import { translateImportedFormulaStructuredReferences } from './xlsx-formula-translation.js'
 import { readImportedSheetHyperlinks } from './xlsx-hyperlinks.js'
@@ -72,22 +82,18 @@ export { exportXlsx } from './xlsx-export.js'
 export { manualCalculationModeWarning, precisionAsDisplayedCalculationWarning } from './xlsx-calculation-settings.js'
 export { externalWorkbookReferencesWarning, volatileFormulasWarning } from './xlsx-import-warnings.js'
 export type { ImportedWorkbookSheetPreview } from './workbook-import-helpers.js'
-
-export const XLSX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-export const XLSB_CONTENT_TYPE = 'application/vnd.ms-excel.sheet.binary.macroenabled.12'
-export const CSV_CONTENT_TYPE = 'text/csv'
-export const EXCEL_WORKBOOK_IMPORT_CONTENT_TYPES = [XLSX_CONTENT_TYPE, XLSB_CONTENT_TYPE] as const
-export type ExcelWorkbookImportContentType = (typeof EXCEL_WORKBOOK_IMPORT_CONTENT_TYPES)[number]
-export const WORKBOOK_IMPORT_CONTENT_TYPES = [...EXCEL_WORKBOOK_IMPORT_CONTENT_TYPES, CSV_CONTENT_TYPE] as const
-export type WorkbookImportContentType = (typeof WORKBOOK_IMPORT_CONTENT_TYPES)[number]
-
-export function normalizeWorkbookImportContentType(contentType: string): WorkbookImportContentType | null {
-  const mediaType = contentType.split(';', 1)[0]?.trim().toLowerCase() ?? ''
-  if (mediaType === XLSX_CONTENT_TYPE || mediaType === XLSB_CONTENT_TYPE || mediaType === CSV_CONTENT_TYPE) {
-    return mediaType
-  }
-  return null
-}
+export type { ImportedWorkbookPreview } from './workbook-import-preview.js'
+export {
+  CSV_CONTENT_TYPE,
+  EXCEL_WORKBOOK_IMPORT_CONTENT_TYPES,
+  LEGACY_XLS_CONTENT_TYPE,
+  WORKBOOK_IMPORT_CONTENT_TYPES,
+  XLSB_CONTENT_TYPE,
+  XLSM_CONTENT_TYPE,
+  XLSX_CONTENT_TYPE,
+  normalizeWorkbookImportContentType,
+} from './workbook-import-content-types.js'
+export type { ExcelWorkbookImportContentType, WorkbookImportContentType } from './workbook-import-content-types.js'
 
 const largeWorkbookStyleCandidateThreshold = 100_000
 const xlsxWorksheetXmlPathPattern = /^xl\/worksheets\/[^/]+\.xml$/u
@@ -108,16 +114,6 @@ export interface ImportedWorkbook {
   sheetNames: string[]
   warnings: string[]
   preview: ImportedWorkbookPreview
-}
-
-export interface ImportedWorkbookPreview {
-  fileName: string
-  contentType: WorkbookImportContentType
-  fileSizeBytes: number
-  workbookName: string
-  sheetCount: number
-  sheets: readonly ImportedWorkbookSheetPreview[]
-  warnings: readonly string[]
 }
 
 export type CsvImportOptions = CsvParseOptions
@@ -166,25 +162,6 @@ function stripStyleOnlyBlankCellsForSheetJs(data: Uint8Array, zip: Unzipped): Ui
     changed = true
   }
   return changed ? zipSync(zip) : data
-}
-
-function createWorkbookPreview(input: {
-  contentType: WorkbookImportContentType
-  fileName: string
-  fileSizeBytes: number
-  workbookName: string
-  sheets: readonly ImportedWorkbookSheetPreview[]
-  warnings: readonly string[]
-}): ImportedWorkbookPreview {
-  return {
-    fileName: input.fileName,
-    contentType: input.contentType,
-    fileSizeBytes: input.fileSizeBytes,
-    workbookName: input.workbookName,
-    sheetCount: input.sheets.length,
-    sheets: input.sheets,
-    warnings: [...input.warnings],
-  }
 }
 
 function normalizeRgbColor(value: unknown): string | null {
@@ -868,9 +845,20 @@ export function importXlsx(bytes: Uint8Array | ArrayBuffer, fileName: string): I
   return importSheetJsWorkbook(data, fileName, XLSX_CONTENT_TYPE, workbookZip)
 }
 
+export function importXlsm(bytes: Uint8Array | ArrayBuffer, fileName: string): ImportedWorkbook {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+  const workbookZip = readValidXlsxZipContainer(data)
+  return importSheetJsWorkbook(data, fileName, XLSM_CONTENT_TYPE, workbookZip)
+}
+
 export function importXlsb(bytes: Uint8Array | ArrayBuffer, fileName: string): ImportedWorkbook {
   const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
   return importSheetJsWorkbook(data, fileName, XLSB_CONTENT_TYPE, null)
+}
+
+export function importXls(bytes: Uint8Array | ArrayBuffer, fileName: string): ImportedWorkbook {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+  return importSheetJsWorkbook(data, fileName, LEGACY_XLS_CONTENT_TYPE, null)
 }
 
 export function importCsv(text: string, fileName: string, options: CsvImportOptions = {}): ImportedWorkbook {
@@ -954,8 +942,14 @@ export function importWorkbookFile(
   if (normalizedContentType === XLSX_CONTENT_TYPE) {
     return importXlsx(bytes, fileName)
   }
+  if (normalizedContentType === XLSM_CONTENT_TYPE) {
+    return importXlsm(bytes, fileName)
+  }
   if (normalizedContentType === XLSB_CONTENT_TYPE) {
     return importXlsb(bytes, fileName)
+  }
+  if (normalizedContentType === LEGACY_XLS_CONTENT_TYPE) {
+    return importXls(bytes, fileName)
   }
   if (normalizedContentType === CSV_CONTENT_TYPE) {
     const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)

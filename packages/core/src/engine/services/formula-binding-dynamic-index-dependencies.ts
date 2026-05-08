@@ -340,6 +340,9 @@ export function formulaMayNeedDynamicIndexDependencyPlan(compiled: ParsedCompile
         visit(node.callee)
         node.args.forEach(visit)
         return
+      case 'ArrayConstant':
+        node.rows.forEach((row) => row.forEach(visit))
+        return
       case 'BooleanLiteral':
       case 'CellRef':
       case 'ColumnRef':
@@ -384,6 +387,8 @@ function evaluateScalar(args: {
     case 'ErrorLiteral':
       return errorValue(node.code as ErrorCode)
     case 'OmittedArgument':
+      return undefined
+    case 'ArrayConstant':
       return undefined
     case 'CellRef':
       return readCellValue({ ...args, node })
