@@ -110,5 +110,9 @@ including its p95 caveat.
 
 - starter issues:
   https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md
+- current small example issue: xlsx formula-cache roundtrip:
+  https://github.com/proompteng/bilig/issues/134
+- current small example issue: json records to workpaper:
+  https://github.com/proompteng/bilig/issues/137
 - good first issue search:
   https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22

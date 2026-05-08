@@ -545,8 +545,9 @@ contributions are usually:
 
 The shortest public on-ramp is the
 [`starter issues`](docs/starter-issues.md) queue. Current starter issues are
-scoped around import/export fidelity, formula parity, and reduced workbook
-fixtures.
+scoped around small runnable examples with explicit acceptance commands, so a
+first contribution can improve the public WorkPaper evaluation path without
+understanding the whole engine.
 
 Please keep changes small, tested, and tied to the package that owns the
 behavior.
