@@ -427,7 +427,7 @@ function fastStyleAlignmentXml(style: CellStyleRecord): string {
     return ''
   }
   const attributes = [
-    alignment.horizontal && alignment.horizontal !== 'general' ? `horizontal="${alignment.horizontal}"` : null,
+    alignment.horizontal ? `horizontal="${alignment.horizontal}"` : null,
     alignment.vertical ? `vertical="${alignment.vertical === 'middle' ? 'center' : alignment.vertical}"` : null,
     alignment.wrap === true ? 'wrapText="1"' : null,
     alignment.indent !== undefined && alignment.indent >= 0 ? `indent="${String(alignment.indent)}"` : null,

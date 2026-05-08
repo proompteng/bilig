@@ -702,7 +702,7 @@ function exportColor(value: string): XLSXStyle.CellStyleColor | undefined {
 
 function exportAlignment(alignment: CellStyleAlignmentSnapshot): ExportCellAlignment {
   return {
-    ...(alignment.horizontal && alignment.horizontal !== 'general' ? { horizontal: alignment.horizontal } : {}),
+    ...(alignment.horizontal ? { horizontal: alignment.horizontal } : {}),
     ...(alignment.vertical ? { vertical: alignment.vertical === 'middle' ? 'center' : alignment.vertical } : {}),
     ...(alignment.wrap === true ? { wrapText: true } : {}),
     ...(alignment.indent !== undefined && alignment.indent >= 0 ? { indent: alignment.indent } : {}),
