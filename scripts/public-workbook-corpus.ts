@@ -302,6 +302,8 @@ async function main(): Promise<void> {
   }
   if (command === 'fetch') {
     if (readFlagArg('--dry-run') || readFlagArg('--list')) {
+      const fetchBatchSize = process.argv.includes('--fetch-batch-size') ? readNumberArg('--fetch-batch-size', defaultFetchBatchSize) : null
+      const fetchScriptName = readStringArg('--fetch-script-name', 'public-workbook-corpus:fetch')
       const plan = planPublicWorkbookCorpusFetch({
         manifest: readManifest(manifestPath),
         limit: readNumberArg('--limit', 10_000),
@@ -313,8 +315,10 @@ async function main(): Promise<void> {
         plan.remainingArtifactSlots > 0 && plan.candidateSourceCount > 0 && plan.targetReachableFromKnownCandidates
           ? splitPublicWorkbookCorpusFetchCommand({
               cacheDir,
+              fetchBatchSize,
               limit: plan.targetArtifactCount,
               manifestPath,
+              scriptName: fetchScriptName,
               stopMarkerActive,
             })
           : null

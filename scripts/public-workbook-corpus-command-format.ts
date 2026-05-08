@@ -43,13 +43,15 @@ export function formatPublicWorkbookCorpusDiscoverCommand(args: {
 
 export function splitPublicWorkbookCorpusFetchCommand(args: {
   readonly cacheDir: string
+  readonly fetchBatchSize?: number | null
   readonly limit: number
   readonly manifestPath: string
+  readonly scriptName?: string
   readonly stopMarkerActive: boolean
 }): SplitPublicWorkbookCorpusCommand {
   const parts = [
     'pnpm',
-    'public-workbook-corpus:fetch',
+    args.scriptName ?? 'public-workbook-corpus:fetch',
     '--',
     '--manifest',
     formatCommandPath(args.manifestPath),
@@ -57,6 +59,7 @@ export function splitPublicWorkbookCorpusFetchCommand(args: {
     formatCommandPath(args.cacheDir),
     '--limit',
     String(args.limit),
+    ...(args.fetchBatchSize ? ['--fetch-batch-size', String(args.fetchBatchSize)] : []),
   ]
   return splitStopMarkerCommand(parts, args.stopMarkerActive)
 }

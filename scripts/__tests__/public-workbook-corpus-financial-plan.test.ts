@@ -284,7 +284,7 @@ describe('public workbook financial corpus plan CLI', () => {
     expect(scripts['public-workbook-corpus:discover-financial:plan']).toBe('bun scripts/public-workbook-corpus-financial-plan.ts')
     expect(scripts['public-workbook-corpus:discover-financial:check']).toBe('bun scripts/public-workbook-corpus-financial-plan.ts --check')
     expect(scripts['public-workbook-corpus:fetch-financial:plan']).toBe(
-      'bun scripts/public-workbook-corpus.ts fetch --dry-run --manifest .cache/public-workbook-corpus-financial/manifest.json --cache-dir .cache/public-workbook-corpus-financial --limit 5000 --sample-limit 20',
+      'bun scripts/public-workbook-corpus.ts fetch --dry-run --manifest .cache/public-workbook-corpus-financial/manifest.json --cache-dir .cache/public-workbook-corpus-financial --limit 5000 --sample-limit 20 --fetch-script-name public-workbook-corpus:fetch-financial --fetch-batch-size 6',
     )
     expect(scripts['public-workbook-corpus:fetch-financial']).toBe(
       'bun scripts/public-workbook-corpus.ts fetch --manifest .cache/public-workbook-corpus-financial/manifest.json --cache-dir .cache/public-workbook-corpus-financial --limit 5000 --fetch-batch-size 6 --max-bytes 52428800',

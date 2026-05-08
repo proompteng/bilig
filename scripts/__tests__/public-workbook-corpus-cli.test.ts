@@ -436,6 +436,51 @@ describe('public workbook corpus CLI resource guards', () => {
     expect(blockedCommands['fetch']).toContain('--allow-active-stop-marker')
   })
 
+  it('preserves financial fetch script and batch size in stopped dry-run plans', () => {
+    const artifactA = workbookArtifact('workbook-a')
+    const artifactB = workbookArtifact('workbook-b')
+    const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-cli-financial-fetch-plan-paused-'))
+    const manifestPath = join(dir, 'manifest.json')
+    const stopMarkerPath = join(dir, 'stop.md')
+    const manifest = {
+      ...manifestWithArtifacts([artifactA, artifactB]),
+      targetWorkbookCount: 2,
+      artifacts: [artifactA],
+    }
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+    writeFileSync(stopMarkerPath, '# stop\n')
+
+    const result = spawnSync(
+      'bun',
+      [
+        corpusScriptPath(),
+        'fetch',
+        '--dry-run',
+        '--manifest',
+        manifestPath,
+        '--limit',
+        '2',
+        '--fetch-script-name',
+        'public-workbook-corpus:fetch-financial',
+        '--fetch-batch-size',
+        '6',
+        '--corpus-run-stop-marker',
+        stopMarkerPath,
+      ],
+      {
+        encoding: 'utf8',
+      },
+    )
+    const plan = asRecord(JSON.parse(result.stdout))
+    const blockedCommands = asRecord(plan['blockedCommands'])
+
+    expect(result.status).toBe(0)
+    expect(blockedCommands['fetch']).toContain('BILIG_ALLOW_PUBLIC_CORPUS_STOP_MARKER_OVERRIDE=1')
+    expect(blockedCommands['fetch']).toContain('public-workbook-corpus:fetch-financial')
+    expect(blockedCommands['fetch']).toContain('--fetch-batch-size 6')
+    expect(blockedCommands['fetch']).toContain('--allow-active-stop-marker')
+  })
+
   it('builds a stop-marker-aware bounded resume plan for the remaining corpus evidence', () => {
     const plan = buildPublicWorkbookCorpusResumePlan(
       resumePlanArgs({
