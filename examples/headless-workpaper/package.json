@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "agent:verify": "node agent-writeback-verification.mjs",
+    "json-records": "node json-records-input.mjs",
     "persistence": "node persistence-roundtrip.mjs",
     "scenarios": "node revenue-scenarios.mjs",
     "start": "node revenue-plan.mjs"

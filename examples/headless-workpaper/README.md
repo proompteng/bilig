@@ -181,3 +181,25 @@ Expected output:
   "totalQ1": 480
 }
 ```
+
+## JSON Records Input
+
+Run the JSON records example when you want to see how to map service or API
+payload records into the row-array shape expected by
+`WorkPaper.buildFromSheets()`, add formula-backed summary cells, and validate
+the computed output:
+
+```sh
+npm run json-records
+```
+
+Expected output:
+
+```json
+{
+  "sourceRecords": 3,
+  "totalPipeline": 58200,
+  "westOpportunities": 20,
+  "verified": true
+}
+```
