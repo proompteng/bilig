@@ -72,22 +72,25 @@ Supported scope:
 
 ## Install
 
-Published package:
+Published WorkPaper package:
 
 ```sh
 pnpm add @bilig/headless
 ```
 
-For XLSX ingestion:
+XLSX ingestion and export:
 
 ```sh
-pnpm add @bilig/headless
+git clone https://github.com/proompteng/bilig.git
+cd bilig
+pnpm install
+pnpm --filter @bilig/excel-import build
 ```
 
 `@bilig/excel-import` lives in this monorepo, but its npm package name is still
-being provisioned. Until that package is published on npm, use the repository
-XLSX verifier and import/export tests from a checkout instead of adding
-`@bilig/excel-import` as an external dependency.
+being provisioned. Until that package is published on npm, use a repository
+checkout for XLSX import/export work instead of adding `@bilig/excel-import` as
+an external dependency.
 
 Repository:
 
