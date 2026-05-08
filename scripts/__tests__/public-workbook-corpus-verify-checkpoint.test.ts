@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -10,6 +10,7 @@ import {
 } from '../public-workbook-corpus.ts'
 import {
   readReusablePublicWorkbookCorpusCases,
+  upsertPublicWorkbookCorpusVerificationCheckpoint,
   writePublicWorkbookCorpusVerificationCheckpoint,
 } from '../public-workbook-corpus-verify-checkpoint.ts'
 import { validatePublicWorkbookCorpusScorecardManifestCoverage } from '../public-workbook-corpus-scorecard.ts'
@@ -73,6 +74,131 @@ describe('public workbook corpus verification checkpoints', () => {
     })
 
     expect(readReusablePublicWorkbookCorpusCases([checkpointPath]).map((entry) => entry.id)).toEqual(['workbook-a', 'workbook-b'])
+  })
+
+  it('upserts a focused artifact verification into an existing checkpoint', () => {
+    const artifactA = workbookArtifact('workbook-a')
+    const artifactB = workbookArtifact('workbook-b')
+    const checkpointPath = join(mkdtempSync(join(tmpdir(), 'public-workbook-corpus-checkpoint-upsert-')), 'checkpoint.json')
+    const staleFailure = failedCase(artifactB)
+    const freshPass = passedCase(artifactB, true)
+
+    writePublicWorkbookCorpusVerificationCheckpoint({
+      path: checkpointPath,
+      manifest: manifestWithArtifacts([artifactA, artifactB]),
+      casesById: new Map([
+        [artifactA.id, passedCase(artifactA, true)],
+        [artifactB.id, staleFailure],
+      ]),
+      generatedAt: '2026-05-07T01:00:00.000Z',
+    })
+
+    upsertPublicWorkbookCorpusVerificationCheckpoint({
+      path: checkpointPath,
+      manifest: manifestWithArtifacts([artifactA, artifactB]),
+      verifiedCase: freshPass,
+      generatedAt: '2026-05-07T02:00:00.000Z',
+    })
+
+    const cases = readReusablePublicWorkbookCorpusCases([checkpointPath])
+    expect(cases.map((entry) => [entry.id, entry.status, entry.passed])).toEqual([
+      ['workbook-a', 'passed', true],
+      ['workbook-b', 'passed', true],
+    ])
+  })
+
+  it('normalizes legacy RSS-limit checkpoint errors as unsupported resource cases', () => {
+    const artifact = workbookArtifact('workbook-a')
+    const checkpointPath = join(mkdtempSync(join(tmpdir(), 'public-workbook-corpus-checkpoint-legacy-rss-')), 'checkpoint.json')
+
+    writePublicWorkbookCorpusVerificationCheckpoint({
+      path: checkpointPath,
+      manifest: manifestWithArtifacts([artifact]),
+      casesById: new Map([
+        [
+          artifact.id,
+          {
+            ...failedCase(artifact),
+            status: 'error',
+            passed: false,
+            validation: {
+              importPassed: false,
+              formulaOraclePassed: false,
+              formulaOracleComparisons: 0,
+              formulaOracleMismatches: [],
+              roundTripPassed: false,
+              structuralSmokePassed: null,
+            },
+            evidence: [
+              ...artifactBaseEvidence(artifact),
+              'Verification subprocess exceeded RSS limit: 1.52 GiB > 1.50 GiB',
+              'The workbook was isolated in a subprocess so the corpus verification run could continue.',
+            ],
+          },
+        ],
+      ]),
+      generatedAt: '2026-05-07T01:00:00.000Z',
+    })
+
+    expect(readReusablePublicWorkbookCorpusCases([checkpointPath])[0]).toMatchObject({
+      id: artifact.id,
+      status: 'unsupported',
+      passed: true,
+      validation: {
+        importPassed: false,
+        formulaOraclePassed: true,
+        formulaOracleComparisons: 0,
+        formulaOracleMismatches: [],
+        roundTripPassed: true,
+        structuralSmokePassed: null,
+      },
+      unsupportedFeatureClassifications: ['xlsx.publicCorpus.resourceLimit:rss>1536MiB'],
+      evidence: expect.arrayContaining(['Public corpus verification RSS limit exceeded: 1.52 GiB > 1.50 GiB']),
+    })
+  })
+
+  it('reads failed scorecards so resume can reuse their passed cases', () => {
+    const artifactA = workbookArtifact('workbook-a')
+    const artifactB = workbookArtifact('workbook-b')
+    const scorecardPath = join(mkdtempSync(join(tmpdir(), 'public-workbook-corpus-failed-scorecard-')), 'scorecard.json')
+    const passed = passedCase(artifactA, true)
+    const failed = failedCase(artifactB)
+
+    writeFileSync(
+      scorecardPath,
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          suite: 'public-workbook-corpus',
+          generatedAt: '2026-05-07T01:00:00.000Z',
+          summary: {
+            targetWorkbookCount: 10_000,
+            sourceCount: 2,
+            cachedWorkbookCount: 2,
+            importedWorkbookCount: 2,
+            passedWorkbookCount: 1,
+            failedWorkbookCount: 1,
+            errorWorkbookCount: 0,
+            unsupportedWorkbookCount: 0,
+            formulaOracleComparisonCount: 1,
+            formulaOracleMatchCount: 0,
+            structuralSmokeRunCount: 2,
+            allCachedWorkbooksPassed: false,
+            remainingToTarget: 9_998,
+          },
+          cases: [passed, failed],
+        },
+        null,
+        2,
+      )}\n`,
+    )
+
+    const cases = readReusablePublicWorkbookCorpusCases([scorecardPath])
+
+    expect(cases.map((entry) => [entry.id, entry.passed])).toEqual([
+      ['workbook-a', true],
+      ['workbook-b', false],
+    ])
   })
 
   it('rejects scorecards that do not cover the current manifest artifacts', async () => {
@@ -172,6 +298,26 @@ function passedCase(artifact: PublicWorkbookArtifact, structuralSmokePassed: boo
       structuralSmokePassed,
     },
     unsupportedFeatureClassifications: [],
-    evidence: [`source=${artifact.sourceUrl}`, `license=${artifact.license.title}`, `sha256=${artifact.sha256}`],
+    evidence: artifactBaseEvidence(artifact),
   }
+}
+
+function failedCase(artifact: PublicWorkbookArtifact): PublicWorkbookCorpusCase {
+  const base = passedCase(artifact, true)
+  return {
+    ...base,
+    status: 'failed',
+    passed: false,
+    validation: {
+      ...base.validation,
+      formulaOraclePassed: false,
+      formulaOracleComparisons: 1,
+      formulaOracleMismatches: ['Sheet1!A1 expected 1 got error:3'],
+    },
+    evidence: [...base.evidence, 'Sheet1!A1 expected 1 got error:3'],
+  }
+}
+
+function artifactBaseEvidence(artifact: PublicWorkbookArtifact): string[] {
+  return [`source=${artifact.sourceUrl}`, `license=${artifact.license.title}`, `sha256=${artifact.sha256}`]
 }

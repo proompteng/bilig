@@ -20,15 +20,61 @@ const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const publicWorkbookCorpusScriptPath = fileURLToPath(new URL('./public-workbook-corpus.ts', import.meta.url))
 
 export const defaultDownloadTimeoutMs = 60_000
+export const defaultFetchBatchSize = 6
+export const defaultFetchConcurrency = 1
 export const defaultFingerprintTimeoutMs = 180_000
 export const defaultFingerprintMaxRssBytes = 1024 * 1024 * 1024
 const noop = (): void => undefined
+
+export interface PublicWorkbookCorpusFetchPlan {
+  readonly targetArtifactCount: number
+  readonly cachedArtifactCount: number
+  readonly sourceCount: number
+  readonly remainingArtifactSlots: number
+  readonly candidateSourceCount: number
+  readonly candidateSourceDeficitCount: number
+  readonly minimumAdditionalSourceCount: number
+  readonly recommendedDiscoveryLimit: number
+  readonly targetReachableFromKnownCandidates: boolean
+  readonly sampledCandidateSources: readonly PublicWorkbookSource[]
+}
+
+export function planPublicWorkbookCorpusFetch(args: {
+  readonly manifest: PublicWorkbookManifest
+  readonly limit: number
+  readonly sampleLimit?: number
+}): PublicWorkbookCorpusFetchPlan {
+  validatePublicWorkbookManifest(args.manifest)
+  const targetArtifactCount = Math.min(args.limit, args.manifest.targetWorkbookCount)
+  const remainingArtifactSlots = Math.max(0, targetArtifactCount - args.manifest.artifacts.length)
+  const existingSourceIds = new Set(args.manifest.artifacts.map((artifact) => artifact.sourceId))
+  const existingDownloadUrls = new Set(args.manifest.artifacts.map((artifact) => normalizeSourceUrl(artifact.downloadUrl)))
+  const candidateSources = dedupeCandidateSources(
+    args.manifest.sources.filter(
+      (source) => !existingSourceIds.has(source.id) && !existingDownloadUrls.has(normalizeSourceUrl(source.downloadUrl)),
+    ),
+  )
+  return {
+    targetArtifactCount,
+    cachedArtifactCount: args.manifest.artifacts.length,
+    sourceCount: args.manifest.sources.length,
+    remainingArtifactSlots,
+    candidateSourceCount: candidateSources.length,
+    candidateSourceDeficitCount: Math.max(0, remainingArtifactSlots - candidateSources.length),
+    minimumAdditionalSourceCount: Math.max(0, remainingArtifactSlots - candidateSources.length),
+    recommendedDiscoveryLimit: args.manifest.sources.length + Math.max(0, remainingArtifactSlots - candidateSources.length),
+    targetReachableFromKnownCandidates: candidateSources.length >= remainingArtifactSlots,
+    sampledCandidateSources: candidateSources.slice(0, Math.max(0, Math.trunc(args.sampleLimit ?? 20))),
+  }
+}
 
 export async function fetchPublicWorkbookArtifacts(args: FetchCorpusArgs): Promise<PublicWorkbookManifest> {
   validatePublicWorkbookManifest(args.manifest)
   const fetchedAt = args.fetchedAt ?? new Date().toISOString()
   const maxBytes = args.maxBytes ?? 50 * 1024 * 1024
   const downloadTimeoutMs = args.downloadTimeoutMs ?? defaultDownloadTimeoutMs
+  const fetchBatchSize = Math.max(1, Math.trunc(args.fetchBatchSize ?? defaultFetchBatchSize))
+  const fetchConcurrency = Math.max(1, Math.trunc(args.fetchConcurrency ?? defaultFetchConcurrency))
   const fingerprintTimeoutMs = args.fingerprintTimeoutMs ?? defaultFingerprintTimeoutMs
   const fingerprintMaxRssBytes = args.fingerprintMaxRssBytes ?? defaultFingerprintMaxRssBytes
   const isolatedFingerprinting = args.isolatedFingerprinting === true
@@ -45,21 +91,25 @@ export async function fetchPublicWorkbookArtifacts(args: FetchCorpusArgs): Promi
       artifacts,
     }
   }
-  const existingSourceIds = new Set(artifacts.map((artifact) => artifact.sourceId))
-  const existingDownloadUrls = new Set(artifacts.map((artifact) => normalizeSourceUrl(artifact.downloadUrl)))
-  const candidateSources = dedupeCandidateSources(
-    args.manifest.sources.filter(
-      (source) => !existingSourceIds.has(source.id) && !existingDownloadUrls.has(normalizeSourceUrl(source.downloadUrl)),
-    ),
-  )
+  const candidateSources = planPublicWorkbookCorpusFetch({
+    manifest: args.manifest,
+    limit: args.limit,
+    sampleLimit: Number.MAX_SAFE_INTEGER,
+  }).sampledCandidateSources
+  const allowedSourceIds = args.sourceIds ? new Set(args.sourceIds) : null
+  const selectedCandidateSources = allowedSourceIds
+    ? candidateSources.filter((source) => allowedSourceIds.has(source.id))
+    : candidateSources
   await fetchArtifactsFromCandidateSources({
-    candidateSources,
+    candidateSources: selectedCandidateSources,
     artifacts,
     cacheDir: args.cacheDir,
     fetchedAt,
     knownFingerprints,
     knownHashes,
     downloadTimeoutMs,
+    fetchBatchSize,
+    fetchConcurrency,
     fingerprintTimeoutMs,
     fingerprintMaxRssBytes,
     fingerprintRssCheckIntervalMs: args.fingerprintRssCheckIntervalMs,
@@ -84,6 +134,8 @@ async function fetchArtifactsFromCandidateSources(args: {
   readonly knownFingerprints: Set<string>
   readonly knownHashes: Set<string>
   readonly downloadTimeoutMs: number
+  readonly fetchBatchSize: number
+  readonly fetchConcurrency: number
   readonly fingerprintTimeoutMs: number
   readonly fingerprintMaxRssBytes: number
   readonly fingerprintRssCheckIntervalMs?: number
@@ -99,9 +151,12 @@ async function fetchArtifactsFromCandidateSources(args: {
     return
   }
   const remainingArtifactSlots = args.targetArtifactCount - args.artifacts.length
-  const batchSize = Math.min(args.candidateSources.length - startIndex, Math.max(24, Math.min(remainingArtifactSlots * 3, 240)))
+  const batchSize = Math.min(
+    args.candidateSources.length - startIndex,
+    Math.max(args.fetchConcurrency, Math.min(args.fetchBatchSize, remainingArtifactSlots * 3)),
+  )
   const batch = args.candidateSources.slice(startIndex, startIndex + batchSize)
-  const downloadResults = await mapWithConcurrency(batch, 6, (source) =>
+  const downloadResults = await mapWithConcurrency(batch, args.fetchConcurrency, (source) =>
     downloadWorkbookCandidate(source, {
       downloadTimeoutMs: args.downloadTimeoutMs,
       fingerprintTimeoutMs: args.fingerprintTimeoutMs,

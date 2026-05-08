@@ -26,6 +26,9 @@ const workbookCalcPrTailElements = [
   'extLst',
 ] as const
 
+export const precisionAsDisplayedCalculationWarning = 'Precision-as-displayed calculation is not supported during XLSX import.'
+export const manualCalculationModeWarning = 'Manual calculation mode is preserved during XLSX import; cached formula values may be stale.'
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -182,4 +185,18 @@ export function readImportedWorkbookCalculationSettings(source: XlsxZipSource): 
     ...(concurrentCalc !== undefined ? { concurrentCalc } : {}),
   }
   return hasSemanticCalculationSettings(settings) ? settings : undefined
+}
+
+export function readImportedWorkbookCalculationWarnings(source: XlsxZipSource): string[] {
+  const zip = readXlsxZipEntries(source)
+  const workbookXml = getZipText(zip, 'xl/workbook.xml')
+  if (!workbookXml) {
+    return []
+  }
+  const parsed: unknown = xmlParser.parse(workbookXml)
+  const calcPr = recordChild(recordChild(parsed, 'workbook'), 'calcPr')
+  return [
+    ...(calcPr?.['calcMode'] === 'manual' ? [manualCalculationModeWarning] : []),
+    ...(calcPr?.['fullPrecision'] === '0' ? [precisionAsDisplayedCalculationWarning] : []),
+  ]
 }

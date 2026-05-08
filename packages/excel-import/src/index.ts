@@ -14,14 +14,14 @@ import type {
   CellStyleRecord,
   CellVerticalAlignment,
   LiteralInput,
-  WorkbookAxisEntrySnapshot,
   WorkbookCommentThreadSnapshot,
   WorkbookLegacyCommentVmlSnapshot,
   WorkbookMetadataSnapshot,
   WorkbookSnapshot,
 } from '@bilig/protocol'
 import { readImportedArrayFormulaSpills } from './xlsx-array-formulas.js'
-import { readImportedWorkbookCalculationSettings } from './xlsx-calculation-settings.js'
+import { buildColumnEntries, buildRowEntries } from './xlsx-axis-entries.js'
+import { readImportedWorkbookCalculationSettings, readImportedWorkbookCalculationWarnings } from './xlsx-calculation-settings.js'
 import { buildImportedCellMetadataReferenceSnapshots, readImportedWorkbookCellMetadata } from './xlsx-cell-metadata.js'
 import { readImportedWorkbookCharts } from './xlsx-charts.js'
 import { legacyCommentThreadSignature, readImportedWorkbookLegacyCommentVml, type ImportedLegacyCommentVml } from './xlsx-comment-vml.js'
@@ -58,10 +58,19 @@ import { readImportedExternalLinkCaches, translateImportedFormulaExternalReferen
 import { translateImportedFormulaStructuredReferences } from './xlsx-formula-translation.js'
 import { readImportedSheetHyperlinks } from './xlsx-hyperlinks.js'
 import { buildImportedSheetMetadata } from './xlsx-import-sheet-metadata.js'
+import {
+  externalWorkbookReferencesWarning,
+  formulaReferencesExternalWorkbook,
+  formulaReferencesVolatileFunction,
+  volatileFormulasWarning,
+  workbookDefinedNamesReferenceExternalWorkbook,
+} from './xlsx-import-warnings.js'
 import { createPreservedVbaProjectPayload, type PreservedVbaProjectCodeNames } from './xlsx-macros.js'
 import { worksheetCellAt, worksheetCellEntries, worksheetCellEntriesAtAddresses, worksheetCellRecords } from './xlsx-worksheet-cells.js'
 
 export { exportXlsx } from './xlsx-export.js'
+export { manualCalculationModeWarning, precisionAsDisplayedCalculationWarning } from './xlsx-calculation-settings.js'
+export { externalWorkbookReferencesWarning, volatileFormulasWarning } from './xlsx-import-warnings.js'
 export type { ImportedWorkbookSheetPreview } from './workbook-import-helpers.js'
 
 export const XLSX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -124,18 +133,6 @@ export class InvalidXlsxZipContainerError extends Error {
   }
 }
 
-interface SheetColumnInfo {
-  index: number
-  size: number | null
-  hidden: boolean
-}
-
-interface SheetRowInfo {
-  index: number
-  size: number | null
-  hidden: boolean
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -188,98 +185,6 @@ function createWorkbookPreview(input: {
     sheets: input.sheets,
     warnings: [...input.warnings],
   }
-}
-
-function toPixelSize(value: number | undefined, unit: 'pt' | 'ch'): number | null {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
-    return null
-  }
-  if (unit === 'pt') {
-    return Math.round((value * 96) / 72)
-  }
-  return Math.round(value * 8 + 5)
-}
-
-function toPositivePixelSize(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.round(value) : null
-}
-
-function buildColumnEntries(columns: unknown[] | undefined): WorkbookAxisEntrySnapshot[] | undefined {
-  if (!Array.isArray(columns) || columns.length === 0) {
-    return undefined
-  }
-  const entries: SheetColumnInfo[] = []
-  columns.forEach((entry, index) => {
-    if (!isRecord(entry)) {
-      return
-    }
-    const size =
-      typeof entry['wpx'] === 'number'
-        ? toPositivePixelSize(entry['wpx'])
-        : typeof entry['wch'] === 'number'
-          ? toPixelSize(entry['wch'], 'ch')
-          : null
-    const hidden = entry['hidden'] === true
-    if (size === null && !hidden) {
-      return
-    }
-    entries.push({ index, size, hidden })
-  })
-  if (entries.length === 0) {
-    return undefined
-  }
-  return entries.map(({ index, size, hidden }) => {
-    const snapshot: WorkbookAxisEntrySnapshot = {
-      id: `col:${index}`,
-      index,
-    }
-    if (size !== null) {
-      snapshot.size = size
-    }
-    if (hidden) {
-      snapshot.hidden = true
-    }
-    return snapshot
-  })
-}
-
-function buildRowEntries(rows: unknown[] | undefined): WorkbookAxisEntrySnapshot[] | undefined {
-  if (!Array.isArray(rows) || rows.length === 0) {
-    return undefined
-  }
-  const entries: SheetRowInfo[] = []
-  rows.forEach((entry, index) => {
-    if (!isRecord(entry)) {
-      return
-    }
-    const size =
-      typeof entry['hpx'] === 'number'
-        ? toPositivePixelSize(entry['hpx'])
-        : typeof entry['hpt'] === 'number'
-          ? toPixelSize(entry['hpt'], 'pt')
-          : null
-    const hidden = entry['hidden'] === true
-    if (size === null && !hidden) {
-      return
-    }
-    entries.push({ index, size, hidden })
-  })
-  if (entries.length === 0) {
-    return undefined
-  }
-  return entries.map(({ index, size, hidden }) => {
-    const snapshot: WorkbookAxisEntrySnapshot = {
-      id: `row:${index}`,
-      index,
-    }
-    if (size !== null) {
-      snapshot.size = size
-    }
-    if (hidden) {
-      snapshot.hidden = true
-    }
-    return snapshot
-  })
 }
 
 function normalizeRgbColor(value: unknown): string | null {
@@ -672,6 +577,9 @@ function importSheetJsWorkbook(
   const warnings: string[] = []
   const importedDefinedNames = readImportedDefinedNames(workbook)
   addWorkbookWarnings(workbook, warnings, importedDefinedNames.ignoredCount)
+  if (workbookDefinedNamesReferenceExternalWorkbook(workbook)) {
+    warnings.push(externalWorkbookReferencesWarning)
+  }
   const styleCandidates = collectStyleCandidateAddresses(workbook, workbook.SheetNames, largeWorkbookStyleCandidateThreshold)
   const importedWorkbookStyles =
     styleCandidates.count === 0 || styleCandidates.count > largeWorkbookStyleCandidateThreshold
@@ -682,6 +590,9 @@ function importSheetJsWorkbook(
   const importedWorkbookSheetDimensions = readImportedWorkbookSheetDimensions(workbook, workbook.SheetNames)
   const importedWorkbookProperties = workbookZip ? readImportedWorkbookProperties(workbookZip) : undefined
   const importedCalculationSettings = workbookZip ? readImportedWorkbookCalculationSettings(workbookZip) : undefined
+  if (workbookZip) {
+    warnings.push(...readImportedWorkbookCalculationWarnings(workbookZip))
+  }
   const importedMacroPayload = toUint8Array(workbook.vbaraw)
   const importedMacroCodeNames = importedMacroPayload ? readImportedMacroCodeNames(workbook) : undefined
   const importedCellMetadata = workbookZip ? readImportedWorkbookCellMetadata(workbookZip, workbook.SheetNames) : undefined
@@ -705,6 +616,8 @@ function importSheetJsWorkbook(
   const importedExternalLinkCaches = workbookZip ? readImportedExternalLinkCaches(workbookZip) : new Map()
 
   let ignoredCommentsSeen = false
+  let externalWorkbookReferenceWarningSeen = warnings.includes(externalWorkbookReferencesWarning)
+  let volatileFormulaWarningSeen = false
   const styleCatalog = new Map<string, CellStyleRecord>()
   const importedArrayFormulaSpills: NonNullable<WorkbookMetadataSnapshot['spills']> = []
   const previewSheets: ImportedWorkbookSheetPreview[] = []
@@ -795,9 +708,20 @@ function importSheetJsWorkbook(
       const nextCell: WorkbookSnapshot['sheets'][number]['cells'][number] = { address }
       const formula = cell['f']
       if (typeof formula === 'string' && formula.trim().length > 0) {
-        const externalReferenceFormula = translateImportedFormulaExternalReferences(formula, importedExternalLinkCaches).formula
+        const externalReferenceTranslation = translateImportedFormulaExternalReferences(formula, importedExternalLinkCaches)
+        if (
+          !externalWorkbookReferenceWarningSeen &&
+          (externalReferenceTranslation.unresolvedCount > 0 || formulaReferencesExternalWorkbook(externalReferenceTranslation.formula))
+        ) {
+          externalWorkbookReferenceWarningSeen = true
+          warnings.push(externalWorkbookReferencesWarning)
+        }
+        if (!volatileFormulaWarningSeen && formulaReferencesVolatileFunction(formula)) {
+          volatileFormulaWarningSeen = true
+          warnings.push(volatileFormulasWarning)
+        }
         nextCell.formula = translateImportedFormulaStructuredReferences({
-          formula: externalReferenceFormula,
+          formula: externalReferenceTranslation.formula,
           ownerSheetName: sheetName,
           ownerAddress: address,
           tables: importedTables,

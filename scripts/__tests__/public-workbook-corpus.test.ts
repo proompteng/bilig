@@ -5,6 +5,12 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as XLSX from 'xlsx'
 
+import {
+  externalWorkbookReferencesWarning,
+  manualCalculationModeWarning,
+  volatileFormulasWarning,
+} from '../../packages/excel-import/src/index.js'
+import { addExportCalculationSettingsToXlsxBytes } from '../../packages/excel-import/src/xlsx-calculation-settings.js'
 import type { WorkbookSnapshot } from '../../packages/protocol/src/types.js'
 import {
   buildPublicWorkbookCorpusScorecard,
@@ -166,6 +172,183 @@ describe('public workbook corpus', () => {
     })
     expect(scorecard.cases[0]?.unsupportedFeatureClassifications).toEqual([])
     validatePublicWorkbookCorpusScorecard(scorecard)
+  })
+
+  it('classifies external workbook formula references as unsupported instead of oracle failures', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-external-formula-'))
+    mkdirSync(join(cacheDir, 'files'), { recursive: true })
+    const workbookBytes = buildExternalWorkbookReferenceBytes()
+    const sha256 = await sha256Hex(workbookBytes)
+    writeFileSync(join(cacheDir, 'files', `${sha256}.xlsx`), workbookBytes)
+    const license = {
+      spdxId: 'CC-BY-4.0',
+      title: 'Creative Commons Attribution 4.0 International',
+      evidenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    }
+    const manifest: PublicWorkbookManifest = {
+      ...createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'),
+      sources: [
+        {
+          id: 'source-external-formula',
+          kind: 'direct-url',
+          sourceUrl: 'https://example.com/external-formula.xlsx',
+          downloadUrl: 'https://example.com/external-formula.xlsx',
+          fileName: 'external-formula.xlsx',
+          discoveredAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+      ],
+      artifacts: [
+        {
+          id: `workbook-${sha256.slice(0, 16)}`,
+          sourceId: 'source-external-formula',
+          sourceUrl: 'https://example.com/external-formula.xlsx',
+          downloadUrl: 'https://example.com/external-formula.xlsx',
+          fileName: 'external-formula.xlsx',
+          cachePath: `files/${sha256}.xlsx`,
+          sha256,
+          byteSize: workbookBytes.byteLength,
+          workbookFingerprint: 'external-formula-fingerprint',
+          fetchedAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+      ],
+    }
+
+    const scorecard = await buildPublicWorkbookCorpusScorecard({
+      manifest,
+      cacheDir,
+      generatedAt: '2026-05-07T01:00:00.000Z',
+    })
+
+    expect(scorecard.summary.allCachedWorkbooksPassed).toBe(true)
+    expect(scorecard.summary.formulaOracleComparisonCount).toBe(0)
+    expect(scorecard.cases[0]).toMatchObject({
+      status: 'unsupported',
+      passed: true,
+      featureCounts: { formulaCellCount: 1, warningCount: 1 },
+      validation: { formulaOraclePassed: true, formulaOracleComparisons: 0 },
+      unsupportedFeatureClassifications: [`xlsx.import.warning:${externalWorkbookReferencesWarning}`],
+    })
+    expect(scorecard.cases[0]?.evidence).toEqual(
+      expect.arrayContaining(['Round-trip projection skipped because external workbook links are not recalculated during XLSX import.']),
+    )
+  })
+
+  it('classifies manual calculation cached formula values as unsupported instead of oracle failures', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-manual-calculation-'))
+    mkdirSync(join(cacheDir, 'files'), { recursive: true })
+    const workbookBytes = buildManualCalculationWorkbookBytes()
+    const sha256 = await sha256Hex(workbookBytes)
+    writeFileSync(join(cacheDir, 'files', `${sha256}.xlsx`), workbookBytes)
+    const license = {
+      spdxId: 'CC-BY-4.0',
+      title: 'Creative Commons Attribution 4.0 International',
+      evidenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    }
+    const manifest: PublicWorkbookManifest = {
+      ...createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'),
+      sources: [
+        {
+          id: 'source-manual-calculation',
+          kind: 'direct-url',
+          sourceUrl: 'https://example.com/manual-calculation.xlsx',
+          downloadUrl: 'https://example.com/manual-calculation.xlsx',
+          fileName: 'manual-calculation.xlsx',
+          discoveredAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+      ],
+      artifacts: [
+        {
+          id: `workbook-${sha256.slice(0, 16)}`,
+          sourceId: 'source-manual-calculation',
+          sourceUrl: 'https://example.com/manual-calculation.xlsx',
+          downloadUrl: 'https://example.com/manual-calculation.xlsx',
+          fileName: 'manual-calculation.xlsx',
+          cachePath: `files/${sha256}.xlsx`,
+          sha256,
+          byteSize: workbookBytes.byteLength,
+          workbookFingerprint: 'manual-calculation-fingerprint',
+          fetchedAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+      ],
+    }
+
+    const scorecard = await buildPublicWorkbookCorpusScorecard({
+      manifest,
+      cacheDir,
+      generatedAt: '2026-05-07T01:00:00.000Z',
+    })
+
+    expect(scorecard.summary.allCachedWorkbooksPassed).toBe(true)
+    expect(scorecard.summary.formulaOracleComparisonCount).toBe(0)
+    expect(scorecard.cases[0]).toMatchObject({
+      status: 'unsupported',
+      passed: true,
+      featureCounts: { formulaCellCount: 1, warningCount: 1 },
+      validation: { formulaOraclePassed: true, formulaOracleComparisons: 0, roundTripPassed: true },
+      unsupportedFeatureClassifications: [`xlsx.import.warning:${manualCalculationModeWarning}`],
+    })
+  })
+
+  it('classifies volatile cached formula values as unsupported instead of oracle failures', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-volatile-formula-'))
+    mkdirSync(join(cacheDir, 'files'), { recursive: true })
+    const workbookBytes = buildVolatileFormulaWorkbookBytes()
+    const sha256 = await sha256Hex(workbookBytes)
+    writeFileSync(join(cacheDir, 'files', `${sha256}.xlsx`), workbookBytes)
+    const license = {
+      spdxId: 'CC-BY-4.0',
+      title: 'Creative Commons Attribution 4.0 International',
+      evidenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    }
+    const manifest: PublicWorkbookManifest = {
+      ...createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'),
+      sources: [
+        {
+          id: 'source-volatile-formula',
+          kind: 'direct-url',
+          sourceUrl: 'https://example.com/volatile-formula.xlsx',
+          downloadUrl: 'https://example.com/volatile-formula.xlsx',
+          fileName: 'volatile-formula.xlsx',
+          discoveredAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+      ],
+      artifacts: [
+        {
+          id: `workbook-${sha256.slice(0, 16)}`,
+          sourceId: 'source-volatile-formula',
+          sourceUrl: 'https://example.com/volatile-formula.xlsx',
+          downloadUrl: 'https://example.com/volatile-formula.xlsx',
+          fileName: 'volatile-formula.xlsx',
+          cachePath: `files/${sha256}.xlsx`,
+          sha256,
+          byteSize: workbookBytes.byteLength,
+          workbookFingerprint: 'volatile-formula-fingerprint',
+          fetchedAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+      ],
+    }
+
+    const scorecard = await buildPublicWorkbookCorpusScorecard({
+      manifest,
+      cacheDir,
+      generatedAt: '2026-05-07T01:00:00.000Z',
+    })
+
+    expect(scorecard.summary.allCachedWorkbooksPassed).toBe(true)
+    expect(scorecard.summary.formulaOracleComparisonCount).toBe(0)
+    expect(scorecard.cases[0]).toMatchObject({
+      status: 'unsupported',
+      passed: true,
+      featureCounts: { formulaCellCount: 1, warningCount: 1 },
+      validation: { formulaOraclePassed: true, formulaOracleComparisons: 0, roundTripPassed: true },
+      unsupportedFeatureClassifications: [`xlsx.import.warning:${volatileFormulasWarning}`],
+    })
   })
 
   it('classifies oversized workbook verification as an explicit unsupported resource case', async () => {
@@ -532,7 +715,56 @@ describe('public workbook corpus', () => {
     })
 
     expect(fetched.artifacts).toHaveLength(2)
-    expect(fetchMock).toHaveBeenCalledTimes(24)
+    expect(fetchMock).toHaveBeenCalledTimes(6)
+  })
+
+  it('honors explicit fetch concurrency limits', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-fetch-concurrency-'))
+    const workbookBytes = buildWorkbookBytes('Concurrency')
+    let inFlightFetches = 0
+    let maxInFlightFetches = 0
+    const fetchMock = vi.fn(async () => {
+      inFlightFetches += 1
+      maxInFlightFetches = Math.max(maxInFlightFetches, inFlightFetches)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      inFlightFetches -= 1
+      return new Response(workbookBytes, {
+        headers: {
+          'content-length': String(workbookBytes.byteLength),
+        },
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const license = {
+      spdxId: 'CC-BY-4.0',
+      title: 'Creative Commons Attribution 4.0 International',
+      evidenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    }
+    const manifest: PublicWorkbookManifest = {
+      ...createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'),
+      sources: Array.from({ length: 8 }, (_, index) => ({
+        id: `source-concurrency-${String(index)}`,
+        kind: 'direct-url',
+        sourceUrl: `https://example.com/concurrency-${String(index)}.xlsx`,
+        downloadUrl: `https://example.com/concurrency-${String(index)}.xlsx`,
+        fileName: `concurrency-${String(index)}.xlsx`,
+        discoveredAt: '2026-05-07T00:00:00.000Z',
+        license,
+      })),
+    }
+
+    await fetchPublicWorkbookArtifacts({
+      manifest,
+      cacheDir,
+      limit: 1,
+      fetchedAt: '2026-05-07T01:00:00.000Z',
+      fetchBatchSize: 4,
+      fetchConcurrency: 2,
+    })
+
+    expect(maxInFlightFetches).toBeLessThanOrEqual(2)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
   it('dedupes candidate download URLs before fetching artifacts', async () => {
@@ -990,10 +1222,12 @@ describe('public workbook corpus', () => {
 
     expect(spawnMock.mock.calls[0]?.[1]).toEqual(expect.arrayContaining(['verify-artifact-worker', '--verify-max-rss-mb', '1']))
     expect(verificationChild.kill).toHaveBeenCalledWith('SIGTERM')
-    expect(scorecard.cases[0]?.status).toBe('error')
+    expect(scorecard.cases[0]?.status).toBe('unsupported')
+    expect(scorecard.cases[0]?.passed).toBe(true)
+    expect(scorecard.cases[0]?.unsupportedFeatureClassifications).toEqual(['xlsx.publicCorpus.resourceLimit:rss>1MiB'])
     expect(scorecard.cases[0]?.evidence).toEqual(
       expect.arrayContaining([
-        'Verification subprocess exceeded RSS limit: 2.0 MiB > 1.0 MiB',
+        'Public corpus verification RSS limit exceeded: 2.0 MiB > 1.0 MiB',
         'The workbook was isolated in a subprocess so the corpus verification run could continue.',
       ]),
     )
@@ -1034,6 +1268,51 @@ function buildWorkbookBytes(summarySheetName = 'Summary'): Uint8Array {
   workbook.Workbook = {
     Names: [{ Name: 'ProfitCell', Ref: `${summarySheetName}!$B$4` }],
   }
+  return XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' })
+}
+
+function buildExternalWorkbookReferenceBytes(): Uint8Array {
+  const workbook = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['Key', 'Value'],
+    ['A', null],
+  ])
+  sheet.B2 = { t: 'n', f: "VLOOKUP(A2,'[1]Lookup'!$A$1:$B$2,2,FALSE)", v: 12 }
+  sheet['!ref'] = 'A1:B2'
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Summary')
+  return XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' })
+}
+
+function buildManualCalculationWorkbookBytes(): Uint8Array {
+  const workbook = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['Input', 'Value'],
+    ['A', 1],
+    ['B', 2],
+    ['Total', null],
+  ])
+  sheet.B4 = { t: 'n', f: 'B2+B3', v: 99 }
+  sheet['!ref'] = 'A1:B4'
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Summary')
+  return addExportCalculationSettingsToXlsxBytes(XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }), {
+    version: 1,
+    workbook: {
+      name: 'manual-calculation',
+      metadata: { calculationSettings: { mode: 'manual', compatibilityMode: 'excel-modern' } },
+    },
+    sheets: [],
+  })
+}
+
+function buildVolatileFormulaWorkbookBytes(): Uint8Array {
+  const workbook = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['Metric', 'Value'],
+    ['Report Date', null],
+  ])
+  sheet.B2 = { t: 'n', f: 'TODAY()', v: 43073 }
+  sheet['!ref'] = 'A1:B2'
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Summary')
   return XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' })
 }
 

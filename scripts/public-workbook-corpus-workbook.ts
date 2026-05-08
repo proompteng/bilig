@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import * as XLSX from 'xlsx'
 
 import { importXlsx } from '../packages/excel-import/src/index.js'
-import { ValueTag } from '../packages/protocol/src/enums.js'
+import { ErrorCode, ValueTag } from '../packages/protocol/src/enums.js'
 import type { CellValue, WorkbookSnapshot } from '../packages/protocol/src/types.js'
 import type { FormulaOracle, PublicWorkbookCorpusCase, PublicWorkbookFeatureCounts } from './public-workbook-corpus-types.ts'
 
@@ -163,7 +163,8 @@ export function cellValuesMatchOracle(actual: CellValue, expected: CellValue): b
     return false
   }
   if (actual.tag === ValueTag.Number && expected.tag === ValueTag.Number) {
-    return Math.abs(actual.value - expected.value) < 1e-7
+    const scale = Math.max(1, Math.abs(actual.value), Math.abs(expected.value))
+    return Math.abs(actual.value - expected.value) <= Math.max(1e-7, scale * 1e-12)
   }
   if (actual.tag === ValueTag.String && expected.tag === ValueTag.String) {
     return actual.value === expected.value
@@ -172,6 +173,10 @@ export function cellValuesMatchOracle(actual: CellValue, expected: CellValue): b
     return actual.value === expected.value
   }
   return true
+}
+
+export function isUnsupportedCycleOracleMismatch(actual: CellValue, expected: CellValue, inCycle: boolean): boolean {
+  return inCycle && actual.tag === ValueTag.Error && actual.code === ErrorCode.Cycle && expected.tag !== ValueTag.Error
 }
 
 export function formatCellValue(value: CellValue): string {

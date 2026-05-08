@@ -1,16 +1,11 @@
 #!/usr/bin/env bun
 
-import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathToFileURL } from 'node:url'
 
-import { SpreadsheetEngine } from '../packages/core/src/engine.js'
-import { exportXlsx, importXlsx } from '../packages/excel-import/src/index.js'
-import type { WorkbookSnapshot } from '../packages/protocol/src/types.js'
 import {
   createEmptyPublicWorkbookManifest,
-  parsePublicWorkbookCorpusCase,
   parsePublicWorkbookCorpusScorecardJson,
   parsePublicWorkbookManifestJson,
   validatePublicWorkbookManifest,
@@ -18,73 +13,65 @@ import {
 import { defaultCkanPortalBases, discoverCkanWorkbookSources, discoverFinancialCkanQueries } from './public-workbook-corpus-discovery.ts'
 import {
   defaultDownloadTimeoutMs,
+  defaultFetchBatchSize,
+  defaultFetchConcurrency,
   defaultFingerprintMaxRssBytes,
   defaultFingerprintTimeoutMs,
   fetchPublicWorkbookArtifacts,
-  fingerprintWorkbookFileIsolated,
+  planPublicWorkbookCorpusFetch,
 } from './public-workbook-corpus-fetch.ts'
-import { inspectWorkbookFootprintIsolated, type PublicWorkbookCorpusWorkerOptions } from './public-workbook-corpus-footprint.ts'
 import { withPublicWorkbookCorpusCacheLock } from './public-workbook-corpus-lock.ts'
 import {
-  defaultSelfRssCheckIntervalMs,
-  formatByteSize,
-  startChildRssWatchdog,
-  startSelfRssGuard,
-  terminateChildProcess,
-} from './public-workbook-corpus-process.ts'
-import { roundTripSemanticsDigest } from './public-workbook-corpus-roundtrip.ts'
-import {
-  buildPublicWorkbookCorpusScorecardFromCases,
-  validatePublicWorkbookCorpusScorecard,
-  validatePublicWorkbookCorpusScorecardManifestCoverage,
-} from './public-workbook-corpus-scorecard.ts'
+  indexPublicWorkbookCorpusCases,
+  listMissingPublicWorkbookArtifacts,
+  publicWorkbookCorpusCaseMatchesArtifact,
+  selectMissingPublicWorkbookArtifacts,
+} from './public-workbook-corpus-missing.ts'
+import { addPublicWorkbookLinkSource } from './public-workbook-corpus-links.ts'
+import { defaultSelfRssCheckIntervalMs, startSelfRssGuard } from './public-workbook-corpus-process.ts'
+import { buildPublicWorkbookCorpusScorecardFromCases, validatePublicWorkbookCorpusScorecard } from './public-workbook-corpus-scorecard.ts'
+import { writePublicWorkbookCorpusCheck, writePublicWorkbookCorpusStatus } from './public-workbook-corpus-status.ts'
 import { defaultFinancialWorkbookQueries } from './public-workbook-corpus-topics.ts'
 import {
-  indexReusablePublicWorkbookCorpusCases,
   readReusablePublicWorkbookCorpusCases,
+  upsertPublicWorkbookCorpusVerificationCheckpoint,
   writePublicWorkbookCorpusVerificationCheckpoint,
 } from './public-workbook-corpus-verify-checkpoint.ts'
+import { sha256HexSync } from './public-workbook-corpus-workbook.ts'
 import {
-  cellValuesMatchOracle,
-  countWorkbookFeatures,
-  emptyFeatureCounts,
-  extractFormulaOracles,
-  fingerprintWorkbookBytes,
-  formatCellValue,
-  inspectWorkbookFootprint,
-  sha256HexSync,
-  workbookMetadata,
-} from './public-workbook-corpus-workbook.ts'
-import type {
-  BuildScorecardArgs,
-  FormulaOracle,
-  FormulaOracleValidationResult,
-  PublicWorkbookArtifact,
-  PublicWorkbookCaseStatus,
-  PublicWorkbookCorpusCase,
-  PublicWorkbookCorpusScorecard,
-  PublicWorkbookFeatureCounts,
-  PublicWorkbookManifest,
-  PublicWorkbookValidationSummary,
-} from './public-workbook-corpus-types.ts'
+  writeFingerprintArtifactResult,
+  writeFingerprintArtifactWorkerResult,
+  writeFootprintWorkerResult,
+} from './public-workbook-corpus-worker-commands.ts'
+import type { PublicWorkbookArtifact, PublicWorkbookCorpusCase, PublicWorkbookManifest } from './public-workbook-corpus-types.ts'
+import {
+  buildPublicWorkbookCorpusScorecard,
+  capVerifyMaxRssBytes,
+  defaultVerifyConcurrency,
+  defaultVerifyMaxCellCount,
+  defaultVerifyMaxRssBytes,
+  defaultVerifyTimeoutMs,
+  verifyCachedWorkbookArtifact,
+  verifyCachedWorkbookArtifactIsolated,
+} from './public-workbook-corpus-verify.ts'
 import { formatJsonForRepo } from './scorecard-format.ts'
 import {
+  assertPublicCorpusRunNotStopped,
+  publicCorpusStopMarkerOverrideEnvVar,
+  publicCorpusStopMarkerOverrideFlag,
   readDebugOnlyFlagArg,
+  readFetchRunArgs,
   readFlagArg,
   readMegabytesArg,
   readNumberArg,
   readRepeatedStringArg,
   readStringArg,
   readVerifyConcurrencyArg,
+  readVerifyMissingLimitArg,
 } from './public-workbook-corpus-cli.ts'
 
-declare const Bun:
-  | {
-      gc(force?: boolean): void
-    }
-  | undefined
-
 export {
+  buildPublicWorkbookCorpusScorecard,
   createEmptyPublicWorkbookManifest,
   discoverCkanWorkbookSources,
   parsePublicWorkbookCorpusScorecardJson,
@@ -107,514 +94,13 @@ export type {
 } from './public-workbook-corpus-types.ts'
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
-const publicWorkbookCorpusScriptPath = fileURLToPath(import.meta.url)
 const defaultCacheDir = join(rootDir, '.cache', 'public-workbook-corpus')
 const defaultManifestPath = join(defaultCacheDir, 'manifest.json')
 const defaultScorecardPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'public-workbook-corpus-scorecard.json')
-const defaultVerifyTimeoutMs = 180_000
-const defaultVerifyConcurrency = 1
-const defaultVerifyMaxRssBytes = 1536 * 1024 * 1024
-const defaultVerifyMaxCellCount = 1_500_000
-const isolatedFootprintByteThreshold = 1_000_000
-const noop = (): void => undefined
+const defaultCorpusRunStopMarkerPath = join(rootDir, '.agent-coordination', '20260507T074946Z-codex-stop-interactive-corpus-runs.md')
 
 export async function sha256Hex(bytes: Uint8Array): Promise<string> {
   return sha256HexSync(bytes)
-}
-
-export async function buildPublicWorkbookCorpusScorecard(args: BuildScorecardArgs): Promise<PublicWorkbookCorpusScorecard> {
-  validatePublicWorkbookManifest(args.manifest)
-  const structuralSmokeSampleLimit = args.structuralSmokeSampleLimit ?? 50
-  const verifyConcurrency = Math.max(1, Math.trunc(args.verifyConcurrency ?? defaultVerifyConcurrency))
-  const verificationManifestPath = args.manifestPath
-  const isolatedVerification = args.isolatedVerification === true && verificationManifestPath !== undefined
-  const verifyTimeoutMs = Math.max(1, Math.trunc(args.verifyTimeoutMs ?? defaultVerifyTimeoutMs))
-  const verifyMaxRssBytes = capVerifyMaxRssBytes(Math.max(1, Math.trunc(args.verifyMaxRssBytes ?? defaultVerifyMaxRssBytes)))
-  const verifyMaxCellCount = Math.max(1, Math.trunc(args.verifyMaxCellCount ?? defaultVerifyMaxCellCount))
-  const verifyRssCheckIntervalMs = Math.max(100, Math.trunc(args.verifyRssCheckIntervalMs ?? 250))
-  const reusableCasesById = indexReusablePublicWorkbookCorpusCases({
-    manifest: args.manifest,
-    cases: args.reusableCases ?? [],
-    structuralSmokeSampleLimit,
-  })
-  let completedCount = 0
-  const reportVerifiedCase = (verifiedCase: PublicWorkbookCorpusCase): PublicWorkbookCorpusCase => {
-    completedCount += 1
-    args.onCaseVerified?.({
-      completedCount,
-      totalCount: args.manifest.artifacts.length,
-      latestCase: verifiedCase,
-    })
-    return verifiedCase
-  }
-  const cases = await mapWithConcurrency(args.manifest.artifacts, verifyConcurrency, (artifact, index) => {
-    const reusableCase = reusableCasesById.get(artifact.id)
-    if (reusableCase) {
-      return Promise.resolve(reportVerifiedCase(reusableCase))
-    }
-    const runStructuralSmoke = index < structuralSmokeSampleLimit
-    const verifiedCasePromise =
-      isolatedVerification && verificationManifestPath
-        ? verifyCachedWorkbookArtifactIsolated({
-            artifact,
-            cacheDir: args.cacheDir,
-            manifestPath: verificationManifestPath,
-            runStructuralSmoke,
-            timeoutMs: verifyTimeoutMs,
-            maxRssBytes: verifyMaxRssBytes,
-            maxCellCount: verifyMaxCellCount,
-            rssCheckIntervalMs: verifyRssCheckIntervalMs,
-          })
-        : verifyCachedWorkbookArtifact(artifact, args.cacheDir, runStructuralSmoke, verifyMaxCellCount, {
-            timeoutMs: verifyTimeoutMs,
-            maxRssBytes: verifyMaxRssBytes,
-            rssCheckIntervalMs: verifyRssCheckIntervalMs,
-          })
-    return verifiedCasePromise.then(reportVerifiedCase)
-  })
-  return buildPublicWorkbookCorpusScorecardFromCases({
-    manifest: args.manifest,
-    generatedAt: args.generatedAt,
-    cases,
-  })
-}
-
-function verifyCachedWorkbookArtifactIsolated(args: {
-  readonly artifact: PublicWorkbookArtifact
-  readonly cacheDir: string
-  readonly manifestPath: string
-  readonly runStructuralSmoke: boolean
-  readonly timeoutMs: number
-  readonly maxRssBytes: number
-  readonly maxCellCount: number
-  readonly rssCheckIntervalMs?: number
-}): Promise<PublicWorkbookCorpusCase> {
-  const baseEvidence = artifactBaseEvidence(args.artifact)
-  return new Promise<PublicWorkbookCorpusCase>((resolvePromise) => {
-    const childArgs = [
-      publicWorkbookCorpusScriptPath,
-      'verify-artifact-worker',
-      '--manifest',
-      args.manifestPath,
-      '--cache-dir',
-      args.cacheDir,
-      '--artifact-id',
-      args.artifact.id,
-      '--verify-max-rss-mb',
-      String(Math.ceil(args.maxRssBytes / 1024 / 1024)),
-      '--verify-max-cells',
-      String(args.maxCellCount),
-      ...(args.runStructuralSmoke ? ['--structural-smoke'] : []),
-    ]
-    const child = spawn(process.execPath, childArgs, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    let stdout = ''
-    let stderr = ''
-    let timer: ReturnType<typeof setTimeout>
-    let stopRssWatchdog = noop
-    const finish = createOneShotResolver(resolvePromise, () => {
-      clearTimeout(timer)
-      stopRssWatchdog()
-    })
-    const terminateChild = (signal: 'SIGTERM' | 'SIGKILL'): void => {
-      terminateChildProcess(child, signal)
-    }
-    stopRssWatchdog = startChildRssWatchdog(child, {
-      maxRssBytes: args.maxRssBytes,
-      intervalMs: args.rssCheckIntervalMs,
-      onLimitExceeded: (rssBytes) => {
-        terminateChild('SIGTERM')
-        const forceKillTimer = setTimeout(() => terminateChild('SIGKILL'), 5_000)
-        forceKillTimer.unref()
-        finish(
-          failedCase(args.artifact, 'error', baseEvidence, [
-            `Verification subprocess exceeded RSS limit: ${formatByteSize(rssBytes)} > ${formatByteSize(args.maxRssBytes)}`,
-            'The workbook was isolated in a subprocess so the corpus verification run could continue.',
-          ]),
-        )
-      },
-    })
-    timer = setTimeout(() => {
-      terminateChild('SIGTERM')
-      const forceKillTimer = setTimeout(() => terminateChild('SIGKILL'), 5_000)
-      forceKillTimer.unref()
-      finish(
-        failedCase(args.artifact, 'error', baseEvidence, [
-          `Verification timed out after ${String(args.timeoutMs)}ms`,
-          'The workbook was isolated in a subprocess so the corpus verification run could continue.',
-        ]),
-      )
-    }, args.timeoutMs)
-    child.stdout.setEncoding('utf8')
-    child.stderr.setEncoding('utf8')
-    child.stdout.on('data', (chunk: string) => {
-      stdout += chunk
-    })
-    child.stderr.on('data', (chunk: string) => {
-      stderr += chunk
-    })
-    child.on('error', (error) => {
-      finish(failedCase(args.artifact, 'error', baseEvidence, [`Verification subprocess failed to start: ${error.message}`]))
-    })
-    child.on('close', (code, signal) => {
-      if (code !== 0) {
-        const failureDetails = compactProcessOutput(stderr || stdout)
-        finish(
-          failedCase(args.artifact, 'error', baseEvidence, [
-            `Verification subprocess exited with ${signal ? `signal ${signal}` : `code ${String(code)}`}`,
-            ...(failureDetails ? [failureDetails] : []),
-          ]),
-        )
-        return
-      }
-      try {
-        const parsed: unknown = JSON.parse(stdout)
-        finish(parsePublicWorkbookCorpusCase(parsed))
-      } catch (error) {
-        const details = compactProcessOutput(stderr || stdout)
-        finish(
-          failedCase(args.artifact, 'error', baseEvidence, [
-            `Verification subprocess returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
-            ...(details ? [details] : []),
-          ]),
-        )
-      }
-    })
-  })
-}
-
-function createOneShotResolver<T>(resolveValue: (value: T) => void, cleanup: () => void): (value: T) => void {
-  let settled = false
-  return (value) => {
-    if (settled) {
-      return
-    }
-    settled = true
-    cleanup()
-    resolveValue(value)
-  }
-}
-
-async function verifyCachedWorkbookArtifact(
-  artifact: PublicWorkbookArtifact,
-  cacheDir: string,
-  runStructuralSmoke: boolean,
-  maxCellCount: number,
-  workerOptions: PublicWorkbookCorpusWorkerOptions,
-): Promise<PublicWorkbookCorpusCase> {
-  const cachePath = join(cacheDir, artifact.cachePath)
-  const baseEvidence = artifactBaseEvidence(artifact)
-  if (!existsSync(cachePath)) {
-    return failedCase(artifact, 'error', baseEvidence, [`Missing cached workbook file: ${artifact.cachePath}`])
-  }
-  try {
-    const bytes = readFileSync(cachePath)
-    const actualHash = sha256HexSync(bytes)
-    if (actualHash !== artifact.sha256) {
-      return failedCase(artifact, 'failed', baseEvidence, [
-        `Cached workbook hash mismatch: expected ${artifact.sha256}, received ${actualHash}`,
-      ])
-    }
-    const footprint =
-      bytes.byteLength >= isolatedFootprintByteThreshold
-        ? await inspectWorkbookFootprintIsolated({
-            bytes,
-            fileName: artifact.fileName,
-            scriptPath: publicWorkbookCorpusScriptPath,
-            options: workerOptions,
-          })
-        : inspectWorkbookFootprint(bytes, artifact.fileName)
-    if (!footprint) {
-      return failedCase(artifact, 'error', baseEvidence, [
-        'Workbook footprint subprocess did not return a valid footprint.',
-        'The workbook was isolated in a subprocess so the corpus verification run could continue.',
-      ])
-    }
-    if (footprint.featureCounts.cellCount > maxCellCount) {
-      return unsupportedResourceLimitCase(artifact, baseEvidence, footprint, maxCellCount)
-    }
-    collectGarbage()
-    const imported = importXlsx(bytes, artifact.fileName)
-    const featureCounts = countWorkbookFeatures(imported.snapshot, imported.warnings)
-    const metadata = workbookMetadata(imported.snapshot)
-    const formulaOracleValidation =
-      footprint.featureCounts.formulaCellCount === 0
-        ? { comparisons: 0, mismatches: [] }
-        : await validateFormulaOracles(imported.snapshot, bytes)
-    collectGarbage()
-    const structuralSmokePassed = runStructuralSmoke ? runStructuralSmokeOps(imported.snapshot) : null
-    const unsupportedFeatureClassifications = classifyUnsupportedFeatures(imported.snapshot, imported.warnings)
-    const roundTripPassed = roundTripsSupportedSemantics(detachImportedWorkbookSnapshot(imported))
-    const validation: PublicWorkbookValidationSummary = {
-      importPassed: true,
-      formulaOraclePassed: formulaOracleValidation.mismatches.length === 0,
-      formulaOracleComparisons: formulaOracleValidation.comparisons,
-      formulaOracleMismatches: formulaOracleValidation.mismatches,
-      roundTripPassed,
-      structuralSmokePassed,
-    }
-    const passed =
-      validation.importPassed &&
-      validation.formulaOraclePassed &&
-      validation.roundTripPassed &&
-      (validation.structuralSmokePassed === null || validation.structuralSmokePassed)
-    const status: PublicWorkbookCaseStatus = passed ? (unsupportedFeatureClassifications.length > 0 ? 'unsupported' : 'passed') : 'failed'
-    return {
-      id: artifact.id,
-      sourceId: artifact.sourceId,
-      sourceUrl: artifact.sourceUrl,
-      fileName: artifact.fileName,
-      sha256: artifact.sha256,
-      byteSize: artifact.byteSize,
-      license: artifact.license,
-      status,
-      passed,
-      featureCounts,
-      workbookMetadata: metadata,
-      validation,
-      unsupportedFeatureClassifications,
-      evidence: [
-        ...baseEvidence,
-        `sheets=${String(featureCounts.sheetCount)}`,
-        `cells=${String(featureCounts.cellCount)}`,
-        `formulas=${String(featureCounts.formulaCellCount)}`,
-        ...validationEvidence(validation),
-      ],
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    return failedCase(artifact, 'error', baseEvidence, [message])
-  }
-}
-
-function artifactBaseEvidence(artifact: PublicWorkbookArtifact): string[] {
-  return [
-    `source=${artifact.sourceUrl}`,
-    `license=${artifact.license.title}`,
-    `sha256=${artifact.sha256}`,
-    ...(artifact.topicEvidence ?? []).map((entry) => `topic=${entry}`),
-  ]
-}
-
-async function validateFormulaOracles(snapshot: WorkbookSnapshot, bytes: Uint8Array): Promise<FormulaOracleValidationResult> {
-  try {
-    const formulaOracles = extractFormulaOracles(bytes)
-    return {
-      comparisons: formulaOracles.length,
-      mismatches: await compareFormulaOracles(snapshot, formulaOracles),
-    }
-  } catch (error) {
-    return {
-      comparisons: 0,
-      mismatches: [`Formula oracle check failed: ${error instanceof Error ? error.message : String(error)}`],
-    }
-  }
-}
-
-function validationEvidence(validation: PublicWorkbookValidationSummary): string[] {
-  const evidence: string[] = []
-  if (!validation.formulaOraclePassed) {
-    evidence.push(...validation.formulaOracleMismatches.slice(0, 25))
-  }
-  if (!validation.roundTripPassed) {
-    evidence.push('Round-trip projection failed')
-  }
-  if (validation.structuralSmokePassed === false) {
-    evidence.push('Structural smoke operations failed')
-  }
-  return evidence
-}
-
-function failedCase(
-  artifact: PublicWorkbookArtifact,
-  status: 'failed' | 'error',
-  evidence: readonly string[],
-  errors: readonly string[],
-): PublicWorkbookCorpusCase {
-  return {
-    id: artifact.id,
-    sourceId: artifact.sourceId,
-    sourceUrl: artifact.sourceUrl,
-    fileName: artifact.fileName,
-    sha256: artifact.sha256,
-    byteSize: artifact.byteSize,
-    license: artifact.license,
-    status,
-    passed: false,
-    featureCounts: emptyFeatureCounts(),
-    workbookMetadata: { workbookName: artifact.fileName, sheetNames: [], dimensions: [] },
-    validation: {
-      importPassed: false,
-      formulaOraclePassed: false,
-      formulaOracleComparisons: 0,
-      formulaOracleMismatches: [],
-      roundTripPassed: false,
-      structuralSmokePassed: null,
-    },
-    unsupportedFeatureClassifications: [],
-    evidence: [...evidence, ...errors],
-  }
-}
-
-function unsupportedResourceLimitCase(
-  artifact: PublicWorkbookArtifact,
-  evidence: readonly string[],
-  footprint: ReturnType<typeof inspectWorkbookFootprint>,
-  maxCellCount: number,
-): PublicWorkbookCorpusCase {
-  return {
-    id: artifact.id,
-    sourceId: artifact.sourceId,
-    sourceUrl: artifact.sourceUrl,
-    fileName: artifact.fileName,
-    sha256: artifact.sha256,
-    byteSize: artifact.byteSize,
-    license: artifact.license,
-    status: 'unsupported',
-    passed: true,
-    featureCounts: footprint.featureCounts,
-    workbookMetadata: footprint.workbookMetadata,
-    validation: {
-      importPassed: false,
-      formulaOraclePassed: true,
-      formulaOracleComparisons: 0,
-      formulaOracleMismatches: [],
-      roundTripPassed: true,
-      structuralSmokePassed: null,
-    },
-    unsupportedFeatureClassifications: [`xlsx.publicCorpus.resourceLimit:cellCount>${String(maxCellCount)}`],
-    evidence: [
-      ...evidence,
-      `cells=${String(footprint.featureCounts.cellCount)}`,
-      `Public corpus verification cell-count limit exceeded: ${String(footprint.featureCounts.cellCount)} > ${String(maxCellCount)}`,
-    ],
-  }
-}
-
-async function compareFormulaOracles(snapshot: WorkbookSnapshot, oracles: readonly FormulaOracle[]): Promise<string[]> {
-  if (oracles.length === 0) {
-    return []
-  }
-  const engine = new SpreadsheetEngine({
-    workbookName: snapshot.workbook.name,
-    replicaId: `public-corpus-${stableId(snapshot.workbook.name)}`,
-  })
-  await engine.ready()
-  engine.importSnapshot(snapshot)
-  engine.recalculateNow()
-  const mismatches: string[] = []
-  for (const oracle of oracles) {
-    const actual = engine.getCellValue(oracle.sheetName, oracle.address)
-    if (!cellValuesMatchOracle(actual, oracle.expected)) {
-      mismatches.push(`${oracle.sheetName}!${oracle.address} expected ${formatCellValue(oracle.expected)} got ${formatCellValue(actual)}`)
-    }
-  }
-  return mismatches
-}
-
-function roundTripsSupportedSemantics(snapshot: WorkbookSnapshot): boolean {
-  try {
-    const workbookName = snapshot.workbook.name
-    const expectedDigest = roundTripSemanticsDigest(snapshot)
-    collectGarbage()
-    const exported = exportXlsx(snapshot)
-    snapshot = createDetachedWorkbookSnapshot(workbookName)
-    collectGarbage()
-    const actualDigest = roundTripSemanticsDigest(importXlsx(exported, `${workbookName}.xlsx`).snapshot)
-    return actualDigest === expectedDigest
-  } catch {
-    return false
-  }
-}
-
-function detachImportedWorkbookSnapshot(imported: ReturnType<typeof importXlsx>): WorkbookSnapshot {
-  const snapshot = imported.snapshot
-  imported.snapshot = createDetachedWorkbookSnapshot(snapshot.workbook.name)
-  collectGarbage()
-  return snapshot
-}
-
-function createDetachedWorkbookSnapshot(workbookName: string): WorkbookSnapshot {
-  return {
-    version: 1,
-    workbook: { name: workbookName },
-    sheets: [],
-  }
-}
-
-function collectGarbage(): void {
-  if (typeof Bun !== 'undefined' && typeof Bun.gc === 'function') {
-    Bun.gc(true)
-    return
-  }
-  const gc = Reflect.get(globalThis, 'gc')
-  if (typeof gc === 'function') {
-    gc()
-  }
-}
-
-function runStructuralSmokeOps(snapshot: WorkbookSnapshot): boolean | null {
-  try {
-    const sheetName = findStructuralSmokeSheetName(snapshot)
-    if (!sheetName) {
-      return null
-    }
-    const engine = new SpreadsheetEngine({ workbookName: `${snapshot.workbook.name}-structural-smoke` })
-    engine.importSnapshot(structuredClone(snapshot))
-    engine.insertRows(sheetName, 0, 1)
-    engine.deleteRows(sheetName, 0, 1)
-    engine.recalculateNow()
-    return true
-  } catch {
-    return false
-  }
-}
-
-function findStructuralSmokeSheetName(snapshot: WorkbookSnapshot): string | null {
-  const sheet = snapshot.sheets.find((entry) => !entry.metadata?.sheetProtection && (entry.metadata?.protectedRanges?.length ?? 0) === 0)
-  return sheet?.name ?? null
-}
-
-function classifyUnsupportedFeatures(snapshot: WorkbookSnapshot, warnings: readonly string[]): string[] {
-  const classifications = new Set<string>()
-  if ((snapshot.workbook.metadata?.macroPayloads?.length ?? 0) > 0) {
-    classifications.add('xlsx.macros.execution.declined')
-  }
-  for (const warning of warnings) {
-    classifications.add(`xlsx.import.warning:${warning}`)
-  }
-  return [...classifications].toSorted()
-}
-
-function stableId(value: string): string {
-  return sha256HexSync(Buffer.from(value)).slice(0, 16)
-}
-
-async function mapWithConcurrency<T, R>(
-  items: readonly T[],
-  concurrency: number,
-  mapper: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = []
-  let nextIndex = 0
-  const workerCount = Math.min(Math.max(1, concurrency), items.length)
-  const runNext = async (): Promise<void> => {
-    const index = nextIndex
-    nextIndex += 1
-    if (index >= items.length) {
-      return
-    }
-    results[index] = await mapper(items[index], index)
-    await runNext()
-  }
-  await Promise.all(Array.from({ length: workerCount }, () => runNext()))
-  return results
-}
-
-function compactProcessOutput(value: string): string | null {
-  const compacted = value.replaceAll(rootDir, '<repo>').replace(/\s+/gu, ' ').trim()
-  return compacted.length > 0 ? compacted.slice(0, 1_000) : null
 }
 
 function readManifest(path: string): PublicWorkbookManifest {
@@ -624,24 +110,15 @@ function readManifest(path: string): PublicWorkbookManifest {
 
 function writeJson(path: string, value: unknown, tempPrefix: string): void {
   mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(
-    path,
-    formatJsonForRepo({
-      rootDir,
-      serializedJson: `${JSON.stringify(value, null, 2)}\n`,
-      tempPrefix,
-    }),
-  )
+  writeFileSync(path, serializeJsonForRepo(value, tempPrefix))
 }
 
-function capVerifyMaxRssBytes(value: number): number {
-  const normalizedValue = Math.max(1, Math.trunc(value))
-  if (normalizedValue > defaultVerifyMaxRssBytes) {
-    throw new Error(
-      `Public workbook corpus verification RSS limits above ${String(Math.ceil(defaultVerifyMaxRssBytes / 1024 / 1024))} MiB are disabled because workbook workers can hang interactive hosts.`,
-    )
-  }
-  return normalizedValue
+function serializeJsonForRepo(value: unknown, tempPrefix: string): string {
+  return formatJsonForRepo({
+    rootDir,
+    serializedJson: `${JSON.stringify(value, null, 2)}\n`,
+    tempPrefix,
+  })
 }
 
 function readOrCreateManifest(path: string, targetWorkbookCount = 10_000): PublicWorkbookManifest {
@@ -655,10 +132,99 @@ async function main(): Promise<void> {
   const scorecardPath = resolve(readStringArg('--scorecard', defaultScorecardPath))
   const verifyCheckpointPath = resolve(readStringArg('--verify-checkpoint', join(cacheDir, 'verification-checkpoint.json')))
   const targetWorkbookCount = readNumberArg('--target-workbook-count', 10_000)
+  const corpusRunStopMarkerPath = resolve(readStringArg('--corpus-run-stop-marker', defaultCorpusRunStopMarkerPath))
   if (command === 'init') {
     await withPublicWorkbookCorpusCacheLock(cacheDir, 'init', async () => {
       writeJson(manifestPath, createEmptyPublicWorkbookManifest(undefined, targetWorkbookCount), 'public-workbook-corpus-manifest')
     })
+    return
+  }
+  if (command === 'link-plan') {
+    const linkInput = readPublicWorkbookLinkInput(command)
+    const manifest = readOrCreateManifest(manifestPath, targetWorkbookCount)
+    const result = addPublicWorkbookLinkSourceFromInput(manifest, linkInput)
+    const recordedCases = readReusablePublicWorkbookCorpusCases([scorecardPath, verifyCheckpointPath])
+    const recordedCaseIds = new Set(recordedCases.map((entry) => entry.id))
+    const sourceArtifacts = manifest.artifacts.filter((artifact) => artifact.sourceId === result.source.id)
+    const unverifiedArtifactIds = sourceArtifacts.filter((artifact) => !recordedCaseIds.has(artifact.id)).map((artifact) => artifact.id)
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          mode: 'plan',
+          sourceAlreadyKnown: !result.added,
+          source: result.source,
+          sourceCountBefore: manifest.sources.length,
+          sourceCountAfter: result.manifest.sources.length,
+          artifactIds: sourceArtifacts.map((artifact) => artifact.id),
+          recordedCaseIds: sourceArtifacts.filter((artifact) => recordedCaseIds.has(artifact.id)).map((artifact) => artifact.id),
+          unverifiedArtifactIds,
+          commands: {
+            addLink: formatPublicWorkbookCorpusAddLinkCommand({ linkInput, manifestPath }),
+            fetchSource: formatPublicWorkbookCorpusFetchSourceCommand({
+              cacheDir,
+              manifestPath,
+              sourceId: result.source.id,
+              stopMarkerActive: existsSync(corpusRunStopMarkerPath),
+            }),
+            verifyArtifacts: unverifiedArtifactIds.map((artifactId) =>
+              formatPublicWorkbookCorpusVerifyArtifactCommand({
+                artifactId,
+                cacheDir,
+                manifestPath,
+                verifyCheckpointPath,
+              }),
+            ),
+            status: formatPublicWorkbookCorpusStatusCommand({ cacheDir, manifestPath, scorecardPath, verifyCheckpointPath }),
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    )
+    return
+  }
+  if (command === 'add-link') {
+    const linkInput = readPublicWorkbookLinkInput(command)
+    const addSource = (manifest: PublicWorkbookManifest) => addPublicWorkbookLinkSourceFromInput(manifest, linkInput)
+    if (readFlagArg('--dry-run') || readFlagArg('--list')) {
+      const manifest = readOrCreateManifest(manifestPath, targetWorkbookCount)
+      const result = addSource(manifest)
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            mode: 'dry-run',
+            added: result.added,
+            sourceCountBefore: manifest.sources.length,
+            sourceCountAfter: result.manifest.sources.length,
+            source: result.source,
+            nextFetchSourceCommand: formatPublicWorkbookCorpusFetchSourceCommand({
+              cacheDir,
+              manifestPath,
+              sourceId: result.source.id,
+              stopMarkerActive: existsSync(corpusRunStopMarkerPath),
+            }),
+            nextPlanCommand: formatPublicWorkbookCorpusLinkPlanCommand({ linkInput, manifestPath, scorecardPath, verifyCheckpointPath }),
+          },
+          null,
+          2,
+        )}\n`,
+      )
+      return
+    }
+    const result = await withPublicWorkbookCorpusCacheLock(cacheDir, 'add-link', async () => {
+      const added = addSource(readOrCreateManifest(manifestPath, targetWorkbookCount))
+      writeJson(manifestPath, added.manifest, 'public-workbook-corpus-manifest')
+      return added
+    })
+    console.log(`${result.added ? 'Added' : 'Reused'} public workbook source ${result.source.id}`)
+    console.log(
+      formatPublicWorkbookCorpusFetchSourceCommand({
+        cacheDir,
+        manifestPath,
+        sourceId: result.source.id,
+        stopMarkerActive: existsSync(corpusRunStopMarkerPath),
+      }),
+    )
     return
   }
   if (command === 'discover-ckan') {
@@ -701,17 +267,59 @@ async function main(): Promise<void> {
     return
   }
   if (command === 'fetch') {
-    const inProcessFingerprinting = readDebugOnlyFlagArg(
-      '--in-process-fingerprint',
-      'BILIG_ALLOW_IN_PROCESS_PUBLIC_CORPUS_FINGERPRINT',
-      'it can retain workbook fingerprinting memory across large fetch runs',
-    )
+    if (readFlagArg('--dry-run') || readFlagArg('--list')) {
+      const plan = planPublicWorkbookCorpusFetch({
+        manifest: readManifest(manifestPath),
+        limit: readNumberArg('--limit', 10_000),
+        sampleLimit: readNumberArg('--sample-limit', 20),
+      })
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            targetArtifactCount: plan.targetArtifactCount,
+            cachedArtifactCount: plan.cachedArtifactCount,
+            sourceCount: plan.sourceCount,
+            remainingArtifactSlots: plan.remainingArtifactSlots,
+            candidateSourceCount: plan.candidateSourceCount,
+            candidateSourceDeficitCount: plan.candidateSourceDeficitCount,
+            minimumAdditionalSourceCount: plan.minimumAdditionalSourceCount,
+            recommendedDiscoveryLimit: plan.recommendedDiscoveryLimit,
+            recommendedDiscoveryPlanCommand: `pnpm public-workbook-corpus:discover:plan -- --limit ${String(plan.recommendedDiscoveryLimit)}`,
+            recommendedDiscoveryCommand: formatPublicWorkbookCorpusDiscoverCommand({
+              cacheDir,
+              limit: plan.recommendedDiscoveryLimit,
+              manifestPath,
+            }),
+            targetReachableFromKnownCandidates: plan.targetReachableFromKnownCandidates,
+            sampledCandidateSources: plan.sampledCandidateSources.map((source) => ({
+              id: source.id,
+              kind: source.kind,
+              fileName: source.fileName,
+              sourceUrl: source.sourceUrl,
+              downloadUrl: source.downloadUrl,
+            })),
+          },
+          null,
+          2,
+        )}\n`,
+      )
+      return
+    }
+    const { inProcessFingerprinting, ...fetchRunArgs } = readFetchRunArgs({
+      batchSize: defaultFetchBatchSize,
+      concurrency: defaultFetchConcurrency,
+    })
+    assertPublicCorpusRunNotStopped({
+      commandName: 'public-workbook-corpus fetch',
+      stopMarkerPath: corpusRunStopMarkerPath,
+    })
     const manifest = await withPublicWorkbookCorpusCacheLock(cacheDir, 'fetch', async () => {
       const fetchedManifest = await fetchPublicWorkbookArtifacts({
         manifest: readManifest(manifestPath),
         cacheDir,
         limit: readNumberArg('--limit', 10_000),
         downloadTimeoutMs: readNumberArg('--download-timeout-ms', defaultDownloadTimeoutMs),
+        ...fetchRunArgs,
         fingerprintTimeoutMs: readNumberArg('--fingerprint-timeout-ms', defaultFingerprintTimeoutMs),
         fingerprintMaxRssBytes: readMegabytesArg('--fingerprint-max-rss-mb', defaultFingerprintMaxRssBytes),
         isolatedFingerprinting: !inProcessFingerprinting,
@@ -727,55 +335,121 @@ async function main(): Promise<void> {
     console.log(`Cached ${String(manifest.artifacts.length)} public workbook artifacts`)
     return
   }
-  if (command === 'fingerprint-artifact') {
-    const rawFilePath = readStringArg('--file', '')
-    if (!rawFilePath) {
-      throw new Error('Expected --file for fingerprint-artifact')
+  if (command === 'fetch-source') {
+    const sourceId = readStringArg('--source-id', '')
+    if (!sourceId) {
+      throw new Error('Expected --source-id for fetch-source')
     }
-    const workbookFingerprint = await fingerprintWorkbookFileIsolated(
-      resolve(rawFilePath),
-      readStringArg('--file-name', 'workbook.xlsx'),
-      readNumberArg('--fingerprint-timeout-ms', defaultFingerprintTimeoutMs),
-      {
-        maxRssBytes: readMegabytesArg('--fingerprint-max-rss-mb', defaultFingerprintMaxRssBytes),
-        rssCheckIntervalMs: 250,
-      },
+    assertPublicCorpusRunNotStopped({
+      commandName: 'public-workbook-corpus fetch-source',
+      stopMarkerPath: corpusRunStopMarkerPath,
+    })
+    const { inProcessFingerprinting, ...fetchRunArgs } = readFetchRunArgs({
+      batchSize: 1,
+      concurrency: 1,
+    })
+    const result = await withPublicWorkbookCorpusCacheLock(cacheDir, 'fetch-source', async () => {
+      const manifest = readManifest(manifestPath)
+      if (!manifest.sources.some((source) => source.id === sourceId)) {
+        throw new Error(`Manifest does not contain public workbook source ${sourceId}`)
+      }
+      const beforeArtifactIds = new Set(manifest.artifacts.map((artifact) => artifact.id))
+      const fetchedManifest = await fetchPublicWorkbookArtifacts({
+        manifest,
+        cacheDir,
+        limit: manifest.artifacts.length + 1,
+        downloadTimeoutMs: readNumberArg('--download-timeout-ms', defaultDownloadTimeoutMs),
+        ...fetchRunArgs,
+        fingerprintTimeoutMs: readNumberArg('--fingerprint-timeout-ms', defaultFingerprintTimeoutMs),
+        fingerprintMaxRssBytes: readMegabytesArg('--fingerprint-max-rss-mb', defaultFingerprintMaxRssBytes),
+        isolatedFingerprinting: !inProcessFingerprinting,
+        maxBytes: readNumberArg('--max-bytes', 50 * 1024 * 1024),
+        sourceIds: [sourceId],
+        onArtifactsCommitted: (checkpointManifest) => {
+          writeJson(manifestPath, checkpointManifest, 'public-workbook-corpus-manifest')
+        },
+      })
+      writeJson(manifestPath, fetchedManifest, 'public-workbook-corpus-manifest')
+      return {
+        artifactCountBefore: manifest.artifacts.length,
+        artifactCountAfter: fetchedManifest.artifacts.length,
+        fetchedArtifactIds: fetchedManifest.artifacts
+          .filter((artifact) => !beforeArtifactIds.has(artifact.id))
+          .map((artifact) => artifact.id),
+      }
+    })
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          sourceId,
+          ...result,
+          nextVerifyArtifactCommands: result.fetchedArtifactIds.map((artifactId) =>
+            formatPublicWorkbookCorpusVerifyArtifactCommand({
+              artifactId,
+              cacheDir,
+              manifestPath,
+              verifyCheckpointPath,
+            }),
+          ),
+        },
+        null,
+        2,
+      )}\n`,
     )
-    process.stdout.write(`${JSON.stringify({ workbookFingerprint })}\n`)
+    return
+  }
+  if (command === 'discover-plan') {
+    const plan = planPublicWorkbookCorpusFetch({
+      manifest: readOrCreateManifest(manifestPath, targetWorkbookCount),
+      limit: readNumberArg('--limit', targetWorkbookCount),
+      sampleLimit: 0,
+    })
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          sourceCount: plan.sourceCount,
+          targetArtifactCount: plan.targetArtifactCount,
+          cachedArtifactCount: plan.cachedArtifactCount,
+          remainingArtifactSlots: plan.remainingArtifactSlots,
+          candidateSourceCount: plan.candidateSourceCount,
+          candidateSourceDeficitCount: plan.candidateSourceDeficitCount,
+          minimumAdditionalSourceCount: plan.minimumAdditionalSourceCount,
+          recommendedDiscoveryLimit: plan.recommendedDiscoveryLimit,
+          recommendedDiscoveryCommand: formatPublicWorkbookCorpusDiscoverCommand({
+            cacheDir,
+            limit: plan.recommendedDiscoveryLimit,
+            manifestPath,
+          }),
+          targetReachableFromKnownCandidates: plan.targetReachableFromKnownCandidates,
+        },
+        null,
+        2,
+      )}\n`,
+    )
+    return
+  }
+  if (command === 'fingerprint-artifact') {
+    await writeFingerprintArtifactResult({
+      filePath: readStringArg('--file', ''),
+      fileName: readStringArg('--file-name', 'workbook.xlsx'),
+      fingerprintTimeoutMs: readNumberArg('--fingerprint-timeout-ms', defaultFingerprintTimeoutMs),
+      fingerprintMaxRssBytes: readMegabytesArg('--fingerprint-max-rss-mb', defaultFingerprintMaxRssBytes),
+    })
     return
   }
   if (command === 'fingerprint-artifact-worker') {
-    const stopSelfRssGuard = startSelfRssGuard(
-      readMegabytesArg('--fingerprint-max-rss-mb', defaultFingerprintMaxRssBytes),
-      'Workbook fingerprinting worker',
-    )
-    const rawFilePath = readStringArg('--file', '')
-    try {
-      if (!rawFilePath) {
-        throw new Error('Expected --file for fingerprint-artifact-worker')
-      }
-      const filePath = resolve(rawFilePath)
-      const fileName = readStringArg('--file-name', 'workbook.xlsx')
-      const workbookFingerprint = fingerprintWorkbookBytes(readFileSync(filePath), fileName)
-      process.stdout.write(`${JSON.stringify({ workbookFingerprint })}\n`)
-    } finally {
-      stopSelfRssGuard()
-    }
+    writeFingerprintArtifactWorkerResult({
+      filePath: readStringArg('--file', ''),
+      fileName: readStringArg('--file-name', 'workbook.xlsx'),
+      fingerprintMaxRssBytes: readMegabytesArg('--fingerprint-max-rss-mb', defaultFingerprintMaxRssBytes),
+    })
     return
   }
   if (command === 'footprint-worker') {
-    const stopSelfRssGuard = startSelfRssGuard(
-      capVerifyMaxRssBytes(readMegabytesArg('--verify-max-rss-mb', defaultVerifyMaxRssBytes)),
-      'Workbook footprint worker',
-    )
-    try {
-      const bytes = readFileSync(0)
-      const fileName = readStringArg('--file-name', 'workbook.xlsx')
-      const footprint = inspectWorkbookFootprint(bytes, fileName)
-      process.stdout.write(`${JSON.stringify({ footprint })}\n`)
-    } finally {
-      stopSelfRssGuard()
-    }
+    writeFootprintWorkerResult({
+      fileName: readStringArg('--file-name', 'workbook.xlsx'),
+      verifyMaxRssBytes: capVerifyMaxRssBytes(readMegabytesArg('--verify-max-rss-mb', defaultVerifyMaxRssBytes)),
+    })
     return
   }
   if (command === 'verify-artifact') {
@@ -798,14 +472,21 @@ async function main(): Promise<void> {
       maxCellCount: readNumberArg('--verify-max-cells', defaultVerifyMaxCellCount),
       rssCheckIntervalMs: 250,
     })
+    if (readFlagArg('--update-verify-checkpoint')) {
+      await withPublicWorkbookCorpusCacheLock(cacheDir, 'verify-artifact-checkpoint', async () => {
+        upsertPublicWorkbookCorpusVerificationCheckpoint({
+          path: verifyCheckpointPath,
+          manifest,
+          verifiedCase: result,
+        })
+      })
+    }
     process.stdout.write(`${JSON.stringify(result)}\n`)
     return
   }
   if (command === 'verify-artifact-worker') {
-    const stopSelfRssGuard = startSelfRssGuard(
-      capVerifyMaxRssBytes(readMegabytesArg('--verify-max-rss-mb', defaultVerifyMaxRssBytes)),
-      'Workbook verification worker',
-    )
+    const verifyMaxRssBytes = capVerifyMaxRssBytes(readMegabytesArg('--verify-max-rss-mb', defaultVerifyMaxRssBytes))
+    const stopSelfRssGuard = startSelfRssGuard(verifyMaxRssBytes, 'Workbook verification worker')
     const artifactId = readStringArg('--artifact-id', '')
     try {
       if (!artifactId) {
@@ -823,7 +504,7 @@ async function main(): Promise<void> {
         readNumberArg('--verify-max-cells', defaultVerifyMaxCellCount),
         {
           timeoutMs: readNumberArg('--verify-timeout-ms', defaultVerifyTimeoutMs),
-          maxRssBytes: capVerifyMaxRssBytes(readMegabytesArg('--verify-max-rss-mb', defaultVerifyMaxRssBytes)),
+          maxRssBytes: verifyMaxRssBytes,
           rssCheckIntervalMs: defaultSelfRssCheckIntervalMs,
         },
       )
@@ -841,6 +522,10 @@ async function main(): Promise<void> {
     )
     const verifyConcurrency = readVerifyConcurrencyArg(defaultVerifyConcurrency)
     const verifyMaxRssBytes = capVerifyMaxRssBytes(readMegabytesArg('--verify-max-rss-mb', defaultVerifyMaxRssBytes))
+    assertPublicCorpusRunNotStopped({
+      commandName: 'public-workbook-corpus verify',
+      stopMarkerPath: corpusRunStopMarkerPath,
+    })
     const scorecard = await withPublicWorkbookCorpusCacheLock(cacheDir, 'verify', async () => {
       const manifest = readManifest(manifestPath)
       const checkpointInterval = readNumberArg('--verify-checkpoint-interval', 10)
@@ -905,22 +590,362 @@ async function main(): Promise<void> {
     )
     return
   }
-  if (command === 'check') {
-    const parsed: unknown = JSON.parse(readFileSync(scorecardPath, 'utf8'))
-    const scorecard = parsePublicWorkbookCorpusScorecardJson(parsed)
-    if (!readFlagArg('--skip-manifest-check') && existsSync(manifestPath)) {
-      validatePublicWorkbookCorpusScorecardManifestCoverage({
-        scorecard,
-        manifest: readManifest(manifestPath),
+  if (command === 'verify-missing') {
+    const dryRun = readFlagArg('--dry-run') || readFlagArg('--list')
+    const limit = readVerifyMissingLimitArg(1, dryRun)
+    if (dryRun) {
+      const manifest = readManifest(manifestPath)
+      const recordedCases = readReusablePublicWorkbookCorpusCases([scorecardPath, verifyCheckpointPath])
+      const missingArtifacts = listMissingPublicWorkbookArtifacts({ manifest, cases: recordedCases })
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            totalMissingArtifactCount: missingArtifacts.length,
+            selectedArtifactCount: Math.min(limit, missingArtifacts.length),
+            artifacts: missingArtifacts.slice(0, limit).map((artifact) => ({
+              id: artifact.id,
+              fileName: artifact.fileName,
+              byteSize: artifact.byteSize,
+              sourceUrl: artifact.sourceUrl,
+              cachePath: artifact.cachePath,
+            })),
+          },
+          null,
+          2,
+        )}\n`,
+      )
+      return
+    }
+    const inProcessVerification = readDebugOnlyFlagArg(
+      '--in-process',
+      'BILIG_ALLOW_IN_PROCESS_PUBLIC_CORPUS_VERIFY',
+      'it can retain workbook verification memory across large corpus runs',
+    )
+    const verifyConcurrency = readVerifyConcurrencyArg(defaultVerifyConcurrency)
+    const verifyMaxRssBytes = capVerifyMaxRssBytes(readMegabytesArg('--verify-max-rss-mb', defaultVerifyMaxRssBytes))
+    assertPublicCorpusRunNotStopped({
+      commandName: 'public-workbook-corpus verify-missing',
+      stopMarkerPath: corpusRunStopMarkerPath,
+    })
+    const verifiedCount = await withPublicWorkbookCorpusCacheLock(cacheDir, 'verify-missing', async () => {
+      const manifest = readManifest(manifestPath)
+      const recordedCases = readReusablePublicWorkbookCorpusCases([scorecardPath, verifyCheckpointPath])
+      const missingArtifacts = selectMissingPublicWorkbookArtifacts({ manifest, cases: recordedCases, limit })
+      if (missingArtifacts.length === 0) {
+        return 0
+      }
+      const checkpointCasesById = indexPublicWorkbookCorpusCases(recordedCases)
+      const missingScorecard = await buildPublicWorkbookCorpusScorecard({
+        manifest: { ...manifest, artifacts: missingArtifacts },
+        cacheDir,
+        manifestPath,
+        isolatedVerification: !inProcessVerification,
+        structuralSmokeSampleLimit: 0,
+        verifyConcurrency,
+        verifyTimeoutMs: readNumberArg('--verify-timeout-ms', defaultVerifyTimeoutMs),
+        verifyMaxRssBytes,
+        verifyMaxCellCount: readNumberArg('--verify-max-cells', defaultVerifyMaxCellCount),
+        reusableCases: [],
+        onCaseVerified: (progress) => {
+          checkpointCasesById.set(progress.latestCase.id, progress.latestCase)
+          writePublicWorkbookCorpusVerificationCheckpoint({
+            path: verifyCheckpointPath,
+            manifest,
+            casesById: checkpointCasesById,
+          })
+          console.error(
+            `Public workbook corpus verified missing ${String(progress.completedCount)}/${String(progress.totalCount)}; latest=${progress.latestCase.id}; status=${progress.latestCase.status}`,
+          )
+        },
       })
+      return missingScorecard.cases.length
+    })
+    console.log(`Verified ${String(verifiedCount)} missing public workbook cases into ${verifyCheckpointPath}`)
+    return
+  }
+  if (command === 'refresh-scorecard-from-checkpoint') {
+    const manifest = readManifest(manifestPath)
+    const recordedCases = readReusablePublicWorkbookCorpusCases([scorecardPath, verifyCheckpointPath])
+    const refreshed = buildPublicWorkbookCorpusScorecardFromCases({
+      manifest: selectManifestArtifactsWithRecordedCases(manifest, recordedCases),
+      cases: selectRecordedCasesInManifestOrder(manifest.artifacts, recordedCases),
+      generatedAt: existingScorecardGeneratedAt(scorecardPath),
+    })
+    validatePublicWorkbookCorpusScorecard(refreshed)
+    const serialized = serializeJsonForRepo(refreshed, 'public-workbook-corpus-scorecard')
+    const summary = {
+      mode: readFlagArg('--check') ? 'check' : readFlagArg('--dry-run') ? 'dry-run' : 'write',
+      outputPath: scorecardPath,
+      targetWorkbookCount: refreshed.summary.targetWorkbookCount,
+      sourceCount: refreshed.summary.sourceCount,
+      cachedWorkbookCount: refreshed.summary.cachedWorkbookCount,
+      passedWorkbookCount: refreshed.summary.passedWorkbookCount,
+      formulaOracleComparisonCount: refreshed.summary.formulaOracleComparisonCount,
+      remainingToTarget: refreshed.summary.remainingToTarget,
     }
-    if (process.argv.includes('--require-target') && scorecard.summary.remainingToTarget > 0) {
-      throw new Error(`Public workbook corpus target incomplete: ${String(scorecard.summary.remainingToTarget)} remaining`)
+    if (refreshed.cases.length === 0) {
+      throw new Error('No reusable checkpoint cases match the current public workbook manifest')
     }
-    console.log(`Checked public workbook corpus scorecard with ${String(scorecard.summary.cachedWorkbookCount)} cached workbooks`)
+    if (readFlagArg('--check')) {
+      const existing = existsSync(scorecardPath) ? readFileSync(scorecardPath, 'utf8') : ''
+      if (existing !== serialized) {
+        throw new Error(
+          `Public workbook corpus scorecard is stale: ${String(
+            refreshed.summary.cachedWorkbookCount,
+          )} checkpoint-backed cases are available for ${scorecardPath}`,
+        )
+      }
+      process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`)
+      return
+    }
+    if (!readFlagArg('--dry-run')) {
+      mkdirSync(dirname(scorecardPath), { recursive: true })
+      writeFileSync(scorecardPath, serialized)
+    }
+    process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`)
+    return
+  }
+  if (command === 'check') {
+    writePublicWorkbookCorpusCheck({
+      manifestPath,
+      scorecardPath,
+      cacheDir,
+      verifyCheckpointPath,
+      skipManifestCheck: readFlagArg('--skip-manifest-check'),
+      requireTarget: readFlagArg('--require-target'),
+      corpusRunStopMarkerPath,
+    })
+    return
+  }
+  if (command === 'status') {
+    writePublicWorkbookCorpusStatus({
+      manifestPath,
+      scorecardPath,
+      cacheDir,
+      verifyCheckpointPath,
+      requireTarget: readFlagArg('--require-target'),
+      corpusRunStopMarkerPath,
+    })
     return
   }
   throw new Error(`Unknown public workbook corpus command: ${command}`)
+}
+
+function selectManifestArtifactsWithRecordedCases(
+  manifest: PublicWorkbookManifest,
+  recordedCases: readonly PublicWorkbookCorpusCase[],
+): PublicWorkbookManifest {
+  return {
+    ...manifest,
+    artifacts: selectRecordedArtifactsInManifestOrder(manifest.artifacts, recordedCases),
+  }
+}
+
+function existingScorecardGeneratedAt(scorecardPath: string): string | undefined {
+  if (!existsSync(scorecardPath)) {
+    return undefined
+  }
+  const parsed: unknown = JSON.parse(readFileSync(scorecardPath, 'utf8'))
+  if (typeof parsed !== 'object' || parsed === null) {
+    return undefined
+  }
+  const generatedAt = Reflect.get(parsed, 'generatedAt')
+  return typeof generatedAt === 'string' && generatedAt.trim().length > 0 ? generatedAt : undefined
+}
+
+function selectRecordedArtifactsInManifestOrder(
+  artifacts: readonly PublicWorkbookArtifact[],
+  recordedCases: readonly PublicWorkbookCorpusCase[],
+): PublicWorkbookArtifact[] {
+  const casesById = indexPublicWorkbookCorpusCases(recordedCases)
+  return artifacts.filter((artifact) => {
+    const recordedCase = casesById.get(artifact.id)
+    return recordedCase?.passed === true && publicWorkbookCorpusCaseMatchesArtifact(recordedCase, artifact)
+  })
+}
+
+function selectRecordedCasesInManifestOrder(
+  artifacts: readonly PublicWorkbookArtifact[],
+  recordedCases: readonly PublicWorkbookCorpusCase[],
+): PublicWorkbookCorpusCase[] {
+  const casesById = indexPublicWorkbookCorpusCases(recordedCases)
+  return artifacts.flatMap((artifact) => {
+    const recordedCase = casesById.get(artifact.id)
+    return recordedCase?.passed === true && publicWorkbookCorpusCaseMatchesArtifact(recordedCase, artifact) ? [recordedCase] : []
+  })
+}
+
+function formatPublicWorkbookCorpusDiscoverCommand(args: {
+  readonly cacheDir: string
+  readonly limit: number
+  readonly manifestPath: string
+}): string {
+  return [
+    'pnpm',
+    'public-workbook-corpus:discover',
+    '--',
+    '--manifest',
+    args.manifestPath,
+    '--cache-dir',
+    args.cacheDir,
+    '--limit',
+    String(args.limit),
+  ]
+    .map(shellQuote)
+    .join(' ')
+}
+
+interface PublicWorkbookLinkInput {
+  readonly sourceUrl: string
+  readonly downloadUrl: string
+  readonly fileName: string
+  readonly licenseTitle: string
+  readonly licenseUrl: string
+  readonly licenseSpdxId: string | null
+}
+
+function readPublicWorkbookLinkInput(commandName: string): PublicWorkbookLinkInput {
+  const sourceUrl = readStringArg('--source-url', readStringArg('--url', ''))
+  if (!sourceUrl) {
+    throw new Error(`Expected --source-url for ${commandName}`)
+  }
+  return {
+    sourceUrl,
+    downloadUrl: readStringArg('--download-url', ''),
+    fileName: readStringArg('--file-name', ''),
+    licenseTitle: readStringArg('--license-title', ''),
+    licenseUrl: readStringArg('--license-url', ''),
+    licenseSpdxId: readStringArg('--license-spdx', '') || null,
+  }
+}
+
+function addPublicWorkbookLinkSourceFromInput(manifest: PublicWorkbookManifest, input: PublicWorkbookLinkInput) {
+  return addPublicWorkbookLinkSource({
+    manifest,
+    sourceUrl: input.sourceUrl,
+    downloadUrl: input.downloadUrl,
+    fileName: input.fileName,
+    licenseTitle: input.licenseTitle,
+    licenseUrl: input.licenseUrl,
+    licenseSpdxId: input.licenseSpdxId,
+  })
+}
+
+function formatPublicWorkbookCorpusAddLinkCommand(args: {
+  readonly linkInput: PublicWorkbookLinkInput
+  readonly manifestPath: string
+}): string {
+  return linkCommandParts('public-workbook-corpus:add-link', args.linkInput, args.manifestPath).map(shellQuote).join(' ')
+}
+
+function formatPublicWorkbookCorpusLinkPlanCommand(args: {
+  readonly linkInput: PublicWorkbookLinkInput
+  readonly manifestPath: string
+  readonly scorecardPath: string
+  readonly verifyCheckpointPath: string
+}): string {
+  return [
+    ...linkCommandParts('public-workbook-corpus:link-plan', args.linkInput, args.manifestPath),
+    '--scorecard',
+    args.scorecardPath,
+    '--verify-checkpoint',
+    args.verifyCheckpointPath,
+  ]
+    .map(shellQuote)
+    .join(' ')
+}
+
+function linkCommandParts(scriptName: string, input: PublicWorkbookLinkInput, manifestPath: string): string[] {
+  return [
+    'pnpm',
+    scriptName,
+    '--',
+    '--manifest',
+    manifestPath,
+    '--source-url',
+    input.sourceUrl,
+    ...(input.downloadUrl ? ['--download-url', input.downloadUrl] : []),
+    ...(input.fileName ? ['--file-name', input.fileName] : []),
+    '--license-title',
+    input.licenseTitle,
+    '--license-url',
+    input.licenseUrl,
+    ...(input.licenseSpdxId ? ['--license-spdx', input.licenseSpdxId] : []),
+  ]
+}
+
+function formatPublicWorkbookCorpusFetchSourceCommand(args: {
+  readonly cacheDir: string
+  readonly manifestPath: string
+  readonly sourceId: string
+  readonly stopMarkerActive: boolean
+}): string {
+  const parts = [
+    'pnpm',
+    'public-workbook-corpus:fetch-source',
+    '--',
+    '--manifest',
+    args.manifestPath,
+    '--cache-dir',
+    args.cacheDir,
+    '--source-id',
+    args.sourceId,
+  ]
+  if (!args.stopMarkerActive) {
+    return parts.map(shellQuote).join(' ')
+  }
+  return `${publicCorpusStopMarkerOverrideEnvVar}=1 ${[...parts, publicCorpusStopMarkerOverrideFlag].map(shellQuote).join(' ')}`
+}
+
+export function formatPublicWorkbookCorpusVerifyArtifactCommand(args: {
+  readonly artifactId: string
+  readonly cacheDir: string
+  readonly manifestPath: string
+  readonly verifyCheckpointPath: string
+}): string {
+  return [
+    'pnpm',
+    'public-workbook-corpus:verify-artifact',
+    '--',
+    '--manifest',
+    args.manifestPath,
+    '--cache-dir',
+    args.cacheDir,
+    '--verify-checkpoint',
+    args.verifyCheckpointPath,
+    '--artifact-id',
+    args.artifactId,
+    '--update-verify-checkpoint',
+  ]
+    .map(shellQuote)
+    .join(' ')
+}
+
+function formatPublicWorkbookCorpusStatusCommand(args: {
+  readonly cacheDir: string
+  readonly manifestPath: string
+  readonly scorecardPath: string
+  readonly verifyCheckpointPath: string
+}): string {
+  return [
+    'pnpm',
+    'public-workbook-corpus:status',
+    '--',
+    '--manifest',
+    args.manifestPath,
+    '--scorecard',
+    args.scorecardPath,
+    '--verify-checkpoint',
+    args.verifyCheckpointPath,
+    '--cache-dir',
+    args.cacheDir,
+  ]
+    .map(shellQuote)
+    .join(' ')
+}
+
+function shellQuote(value: string): string {
+  return /^[A-Za-z0-9_./:=@+-]+$/u.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

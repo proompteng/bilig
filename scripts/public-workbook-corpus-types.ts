@@ -171,11 +171,14 @@ export interface FetchCorpusArgs {
   readonly fetchedAt?: string
   readonly maxBytes?: number
   readonly downloadTimeoutMs?: number
+  readonly fetchBatchSize?: number
+  readonly fetchConcurrency?: number
   readonly fingerprintTimeoutMs?: number
   readonly fingerprintMaxRssBytes?: number
   readonly fingerprintRssCheckIntervalMs?: number
   readonly isolatedFingerprinting?: boolean
   readonly onArtifactsCommitted?: (manifest: PublicWorkbookManifest) => void | Promise<void>
+  readonly sourceIds?: readonly string[]
 }
 
 export interface CkanPageRequest {

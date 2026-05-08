@@ -1,0 +1,314 @@
+import { existsSync, readFileSync } from 'node:fs'
+
+import { parsePublicWorkbookCorpusScorecardJson, parsePublicWorkbookManifestJson } from './public-workbook-corpus-json.ts'
+import { publicCorpusStopMarkerOverrideEnvVar, publicCorpusStopMarkerOverrideFlag } from './public-workbook-corpus-cli.ts'
+import { readReusablePublicWorkbookCorpusCases } from './public-workbook-corpus-verify-checkpoint.ts'
+import type {
+  PublicWorkbookArtifact,
+  PublicWorkbookCorpusCase,
+  PublicWorkbookCorpusScorecard,
+  PublicWorkbookManifest,
+} from './public-workbook-corpus-types.ts'
+
+export interface PublicWorkbookCorpusStatus {
+  readonly targetWorkbookCount: number
+  readonly sourceCount: number
+  readonly cachedArtifactCount: number
+  readonly scorecardCaseCount: number
+  readonly checkpointCaseCount: number
+  readonly recordedManifestArtifactCount: number
+  readonly missingManifestArtifactCount: number
+  readonly recordedPassedCaseCount: number
+  readonly recordedUnsupportedCaseCount: number
+  readonly recordedFailedCaseCount: number
+  readonly recordedErrorCaseCount: number
+  readonly recordedCoversManifest: boolean
+  readonly recordedAllCasesPassed: boolean
+  readonly missingManifestArtifactSample: readonly MissingManifestArtifactSummary[]
+  readonly nextMissingVerificationCommand: string | null
+  readonly nextMissingVerificationPlanCommand: string | null
+  readonly scorecardCoversManifest: boolean
+  readonly targetComplete: boolean
+  readonly gaps: readonly string[]
+}
+
+export interface MissingManifestArtifactSummary {
+  readonly id: string
+  readonly fileName: string
+  readonly byteSize: number
+  readonly sourceUrl: string
+}
+
+const missingManifestArtifactSampleLimit = 20
+
+export function writePublicWorkbookCorpusCheck(args: {
+  readonly manifestPath: string
+  readonly scorecardPath: string
+  readonly cacheDir: string
+  readonly verifyCheckpointPath: string
+  readonly skipManifestCheck: boolean
+  readonly requireTarget: boolean
+  readonly corpusRunStopMarkerPath?: string
+}): void {
+  if (!args.skipManifestCheck && existsSync(args.manifestPath)) {
+    const status = readPublicWorkbookCorpusStatus(args)
+    const blockingGaps = publicWorkbookCorpusVerificationBlockingGaps(status)
+    if (blockingGaps.length > 0) {
+      const nextCommand = status.nextMissingVerificationCommand ? `; next command: ${status.nextMissingVerificationCommand}` : ''
+      throw new Error(`Public workbook corpus verification incomplete: ${blockingGaps.join('; ')}${nextCommand}`)
+    }
+    if (args.requireTarget && status.cachedArtifactCount < status.targetWorkbookCount) {
+      throw new Error(`Public workbook corpus target incomplete: ${status.gaps.join('; ')}`)
+    }
+    console.log(
+      `Checked public workbook corpus with ${String(status.recordedManifestArtifactCount)}/${String(
+        status.cachedArtifactCount,
+      )} recorded cached workbooks`,
+    )
+    return
+  }
+  const scorecard = parsePublicWorkbookCorpusScorecardJson(JSON.parse(readFileSync(args.scorecardPath, 'utf8')))
+  if (args.requireTarget && scorecard.summary.remainingToTarget > 0) {
+    throw new Error(`Public workbook corpus target incomplete: ${String(scorecard.summary.remainingToTarget)} remaining`)
+  }
+  console.log(`Checked public workbook corpus scorecard with ${String(scorecard.summary.cachedWorkbookCount)} cached workbooks`)
+}
+
+export function writePublicWorkbookCorpusStatus(args: {
+  readonly manifestPath: string
+  readonly scorecardPath: string
+  readonly cacheDir: string
+  readonly verifyCheckpointPath: string
+  readonly requireTarget: boolean
+  readonly corpusRunStopMarkerPath?: string
+}): void {
+  const status = readPublicWorkbookCorpusStatus(args)
+  process.stdout.write(`${JSON.stringify(status, null, 2)}\n`)
+  if (args.requireTarget && !status.targetComplete) {
+    throw new Error(`Public workbook corpus target incomplete: ${status.gaps.join('; ')}`)
+  }
+}
+
+export function readPublicWorkbookCorpusStatus(args: {
+  readonly manifestPath: string
+  readonly scorecardPath: string
+  readonly cacheDir: string
+  readonly verifyCheckpointPath: string
+  readonly corpusRunStopMarkerPath?: string
+}): PublicWorkbookCorpusStatus {
+  const manifest = existsSync(args.manifestPath)
+    ? parsePublicWorkbookManifestJson(JSON.parse(readFileSync(args.manifestPath, 'utf8')))
+    : null
+  const scorecard = existsSync(args.scorecardPath)
+    ? parsePublicWorkbookCorpusScorecardJson(JSON.parse(readFileSync(args.scorecardPath, 'utf8')))
+    : null
+  const checkpointCases = readReusablePublicWorkbookCorpusCases([args.verifyCheckpointPath])
+  return buildPublicWorkbookCorpusStatus({
+    manifest,
+    scorecard,
+    checkpointCases,
+    commandPaths: {
+      manifestPath: args.manifestPath,
+      scorecardPath: args.scorecardPath,
+      cacheDir: args.cacheDir,
+      verifyCheckpointPath: args.verifyCheckpointPath,
+      stopMarkerActive: args.corpusRunStopMarkerPath ? existsSync(args.corpusRunStopMarkerPath) : false,
+    },
+  })
+}
+
+export function buildPublicWorkbookCorpusStatus(args: {
+  readonly manifest: PublicWorkbookManifest | null
+  readonly scorecard: PublicWorkbookCorpusScorecard | null
+  readonly checkpointCases: readonly PublicWorkbookCorpusCase[]
+  readonly commandPaths?: PublicWorkbookCorpusCommandPaths
+}): PublicWorkbookCorpusStatus {
+  const targetWorkbookCount = args.manifest?.targetWorkbookCount ?? args.scorecard?.summary.targetWorkbookCount ?? 10_000
+  const sourceCount = args.manifest?.sources.length ?? args.scorecard?.summary.sourceCount ?? 0
+  const cachedArtifactCount = args.manifest?.artifacts.length ?? args.scorecard?.summary.cachedWorkbookCount ?? 0
+  const scorecardCaseCount = args.scorecard?.cases.length ?? 0
+  const checkpointCaseCount = args.checkpointCases.length
+  const recordedCases = args.manifest
+    ? manifestRecordedCases(args.manifest, [...(args.scorecard?.cases ?? []), ...args.checkpointCases])
+    : [...(args.scorecard?.cases ?? []), ...args.checkpointCases]
+  const recordedManifestArtifactCount = args.manifest ? recordedCases.length : Math.max(scorecardCaseCount, checkpointCaseCount)
+  const missingManifestArtifactCount = Math.max(0, cachedArtifactCount - recordedManifestArtifactCount)
+  const recordedPassedCaseCount = recordedCases.filter((entry) => entry.status === 'passed').length
+  const recordedUnsupportedCaseCount = recordedCases.filter((entry) => entry.status === 'unsupported').length
+  const recordedFailedCaseCount = recordedCases.filter((entry) => entry.status === 'failed').length
+  const recordedErrorCaseCount = recordedCases.filter((entry) => entry.status === 'error').length
+  const recordedCoversManifest = recordedManifestArtifactCount >= cachedArtifactCount
+  const recordedAllCasesPassed = recordedCases.every((entry) => entry.passed)
+  const missingManifestArtifactSample = args.manifest
+    ? manifestMissingArtifactSample(args.manifest, [...(args.scorecard?.cases ?? []), ...args.checkpointCases])
+    : []
+  const nextMissingVerificationCommand =
+    missingManifestArtifactCount > 0 && args.commandPaths
+      ? formatPublicWorkbookCorpusVerifyMissingCommand(args.commandPaths, 'verify')
+      : null
+  const nextMissingVerificationPlanCommand =
+    missingManifestArtifactCount > 0 && args.commandPaths ? formatPublicWorkbookCorpusVerifyMissingCommand(args.commandPaths, 'plan') : null
+  const scorecardCoversManifest =
+    args.manifest && args.scorecard ? scorecardMatchesManifest(args.scorecard, args.manifest) : scorecardCaseCount >= cachedArtifactCount
+  const targetComplete =
+    cachedArtifactCount >= targetWorkbookCount &&
+    recordedCoversManifest &&
+    recordedAllCasesPassed &&
+    recordedFailedCaseCount === 0 &&
+    recordedErrorCaseCount === 0
+  const gaps = [
+    ...(sourceCount >= targetWorkbookCount
+      ? []
+      : [`discovered sources below target: ${String(sourceCount)}/${String(targetWorkbookCount)}`]),
+    ...(cachedArtifactCount >= targetWorkbookCount
+      ? []
+      : [`cached artifacts below target: ${String(cachedArtifactCount)}/${String(targetWorkbookCount)}`]),
+    ...(scorecardCoversManifest
+      ? []
+      : [`scorecard cases do not cover manifest artifacts: ${String(scorecardCaseCount)}/${String(cachedArtifactCount)}`]),
+    ...(recordedManifestArtifactCount >= cachedArtifactCount
+      ? []
+      : [`recorded verification cases below cached artifacts: ${String(recordedManifestArtifactCount)}/${String(cachedArtifactCount)}`]),
+    ...(recordedFailedCaseCount === 0 ? [] : [`recorded failed cases: ${String(recordedFailedCaseCount)}`]),
+    ...(recordedErrorCaseCount === 0 ? [] : [`recorded error cases: ${String(recordedErrorCaseCount)}`]),
+    ...(args.scorecard && args.scorecard.summary.allCachedWorkbooksPassed
+      ? []
+      : ['scorecard is missing or has non-passing cached workbooks']),
+  ]
+  return {
+    targetWorkbookCount,
+    sourceCount,
+    cachedArtifactCount,
+    scorecardCaseCount,
+    checkpointCaseCount,
+    recordedManifestArtifactCount,
+    missingManifestArtifactCount,
+    recordedPassedCaseCount,
+    recordedUnsupportedCaseCount,
+    recordedFailedCaseCount,
+    recordedErrorCaseCount,
+    recordedCoversManifest,
+    recordedAllCasesPassed,
+    missingManifestArtifactSample,
+    nextMissingVerificationCommand,
+    nextMissingVerificationPlanCommand,
+    scorecardCoversManifest,
+    targetComplete,
+    gaps,
+  }
+}
+
+function publicWorkbookCorpusVerificationBlockingGaps(status: PublicWorkbookCorpusStatus): string[] {
+  return [
+    ...(status.recordedManifestArtifactCount >= status.cachedArtifactCount
+      ? []
+      : [
+          `recorded verification cases below cached artifacts: ${String(status.recordedManifestArtifactCount)}/${String(
+            status.cachedArtifactCount,
+          )}`,
+        ]),
+    ...(status.recordedFailedCaseCount === 0 ? [] : [`recorded failed cases: ${String(status.recordedFailedCaseCount)}`]),
+    ...(status.recordedErrorCaseCount === 0 ? [] : [`recorded error cases: ${String(status.recordedErrorCaseCount)}`]),
+    ...(status.recordedAllCasesPassed ? [] : ['recorded verification contains non-passing cases']),
+  ]
+}
+
+interface PublicWorkbookCorpusCommandPaths {
+  readonly manifestPath: string
+  readonly scorecardPath: string
+  readonly cacheDir: string
+  readonly verifyCheckpointPath: string
+  readonly stopMarkerActive?: boolean
+}
+
+function formatPublicWorkbookCorpusVerifyMissingCommand(paths: PublicWorkbookCorpusCommandPaths, mode: 'plan' | 'verify'): string {
+  const script = mode === 'plan' ? 'public-workbook-corpus:verify-missing:plan' : 'public-workbook-corpus:verify-missing'
+  const args =
+    mode === 'plan'
+      ? [
+          '--manifest',
+          paths.manifestPath,
+          '--scorecard',
+          paths.scorecardPath,
+          '--verify-checkpoint',
+          paths.verifyCheckpointPath,
+          '--cache-dir',
+          paths.cacheDir,
+        ]
+      : [
+          '--manifest',
+          paths.manifestPath,
+          '--scorecard',
+          paths.scorecardPath,
+          '--verify-checkpoint',
+          paths.verifyCheckpointPath,
+          '--cache-dir',
+          paths.cacheDir,
+          '--limit',
+          '1',
+        ]
+  const command = ['pnpm', script, '--', ...args]
+  if (mode === 'verify' && paths.stopMarkerActive === true) {
+    return `${publicCorpusStopMarkerOverrideEnvVar}=1 ${[...command, publicCorpusStopMarkerOverrideFlag].map(shellQuote).join(' ')}`
+  }
+  return command.map(shellQuote).join(' ')
+}
+
+function shellQuote(value: string): string {
+  return /^[A-Za-z0-9_./:=@+-]+$/u.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`
+}
+
+function manifestRecordedCases(manifest: PublicWorkbookManifest, cases: readonly PublicWorkbookCorpusCase[]): PublicWorkbookCorpusCase[] {
+  const casesById = new Map(cases.map((entry) => [entry.id, entry]))
+  return manifest.artifacts.flatMap((artifact) => {
+    const entry = casesById.get(artifact.id)
+    return entry && caseMatchesArtifact(entry, artifact) ? [entry] : []
+  })
+}
+
+function manifestMissingArtifactSample(
+  manifest: PublicWorkbookManifest,
+  cases: readonly PublicWorkbookCorpusCase[],
+): MissingManifestArtifactSummary[] {
+  const casesById = new Map(cases.map((entry) => [entry.id, entry]))
+  return manifest.artifacts
+    .flatMap((artifact) => {
+      const entry = casesById.get(artifact.id)
+      if (entry && caseMatchesArtifact(entry, artifact)) {
+        return []
+      }
+      return [
+        {
+          id: artifact.id,
+          fileName: artifact.fileName,
+          byteSize: artifact.byteSize,
+          sourceUrl: artifact.sourceUrl,
+        },
+      ]
+    })
+    .slice(0, missingManifestArtifactSampleLimit)
+}
+
+function scorecardMatchesManifest(scorecard: PublicWorkbookCorpusScorecard, manifest: PublicWorkbookManifest): boolean {
+  return (
+    scorecard.summary.targetWorkbookCount === manifest.targetWorkbookCount &&
+    scorecard.summary.sourceCount === manifest.sources.length &&
+    scorecard.summary.cachedWorkbookCount === manifest.artifacts.length &&
+    scorecard.cases.length === manifest.artifacts.length &&
+    manifest.artifacts.every((artifact, index) => {
+      const entry = scorecard.cases[index]
+      return entry ? caseMatchesArtifact(entry, artifact) : false
+    })
+  )
+}
+
+function caseMatchesArtifact(entry: PublicWorkbookCorpusCase, artifact: PublicWorkbookArtifact): boolean {
+  return (
+    entry.id === artifact.id &&
+    entry.sourceId === artifact.sourceId &&
+    entry.sourceUrl === artifact.sourceUrl &&
+    entry.fileName === artifact.fileName &&
+    entry.sha256 === artifact.sha256 &&
+    entry.byteSize === artifact.byteSize
+  )
+}
