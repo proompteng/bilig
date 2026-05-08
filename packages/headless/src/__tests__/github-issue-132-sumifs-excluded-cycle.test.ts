@@ -1,4 +1,4 @@
-import { ValueTag, type CellValue } from '@bilig/protocol'
+import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import { describe, expect, it } from 'vitest'
 
 import { WorkPaper } from '../index.js'
@@ -72,4 +72,41 @@ describe('GitHub issue #132 SUMIFS excluded criteria cycle', () => {
 
     workbook.dispose()
   })
+
+  it.each([false, true])(
+    'refreshes compacted horizontal dependencies when a criteria cell starts or stops selecting a formula cell with useColumnIndex=%s',
+    (useColumnIndex) => {
+      const workbook = issueWorkbook('=SUMIFS(B1:C1,B2:C2,"include")', useColumnIndex)
+      const sheet = workbook.getSheetId('Sheet1')
+
+      expect(cellValue(workbook, 'Sheet1!A1')).toEqual({
+        tag: ValueTag.Number,
+        value: 10,
+      })
+
+      workbook.setCellContents({ sheet, row: 1, col: 1 }, 'include')
+
+      expect(cellValue(workbook, 'Sheet1!A1')).toEqual({
+        tag: ValueTag.Error,
+        code: ErrorCode.Cycle,
+      })
+      expect(cellValue(workbook, 'Sheet1!B1')).toEqual({
+        tag: ValueTag.Error,
+        code: ErrorCode.Cycle,
+      })
+
+      workbook.setCellContents({ sheet, row: 1, col: 1 }, 'exclude')
+
+      expect(cellValue(workbook, 'Sheet1!A1')).toEqual({
+        tag: ValueTag.Number,
+        value: 10,
+      })
+      expect(cellValue(workbook, 'Sheet1!B1')).toEqual({
+        tag: ValueTag.Number,
+        value: 10,
+      })
+
+      workbook.dispose()
+    },
+  )
 })

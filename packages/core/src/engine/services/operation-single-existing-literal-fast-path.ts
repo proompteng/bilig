@@ -189,6 +189,7 @@ interface OperationSingleExistingLiteralFastPathArgs {
   readonly tryApplyDirectScalarDeltas: (collection: DirectFormulaIndexCollection, collectChanged?: boolean) => U32 | undefined
   readonly tryApplyDirectFormulaDeltas: (collection: DirectFormulaIndexCollection, collectChanged?: boolean) => U32 | undefined
   readonly countPostRecalcDirectFormulaMetric: (cellIndex: number, counts: DirectFormulaMetricCounts) => void
+  readonly hasDynamicFormulaDependents: (cellIndex: number) => boolean
 }
 
 export function createOperationSingleExistingLiteralFastPath(args: OperationSingleExistingLiteralFastPathArgs): {
@@ -231,6 +232,7 @@ export function createOperationSingleExistingLiteralFastPath(args: OperationSing
     tryApplyDirectScalarDeltas,
     tryApplyDirectFormulaDeltas,
     countPostRecalcDirectFormulaMetric,
+    hasDynamicFormulaDependents,
   } = args
 
   const tryApplySingleExistingDirectLiteralMutation = (
@@ -304,6 +306,9 @@ export function createOperationSingleExistingLiteralFastPath(args: OperationSing
       return true
     }
     if (existingIndex === -1 || !canFastPathLiteralOverwrite(existingIndex)) {
+      return false
+    }
+    if (hasDynamicFormulaDependents(existingIndex)) {
       return false
     }
     const oldNumber = directScalarCellNumericValue(existingIndex)
@@ -678,6 +683,9 @@ export function createOperationSingleExistingLiteralFastPath(args: OperationSing
           cellStore.cols[existingIndex] !== request.col ||
           !canFastPathLiteralOverwrite(existingIndex)))
     ) {
+      return null
+    }
+    if (hasDynamicFormulaDependents(existingIndex)) {
       return null
     }
     const oldNumber = trustedExistingNumericLiteral

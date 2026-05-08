@@ -8,8 +8,10 @@ import {
   hasOperationCycleMembers,
   markOperationCycleMemberInputsChanged,
   normalizeOperationHistoryDependencyPlaceholder,
+  collectOperationDynamicFormulaDependents,
   pruneOperationCellIfOrphaned,
   refreshDependentRangesAndRebindOperationFormulaDependents,
+  rebindOperationDynamicFormulaDependents,
 } from './operation-cell-lifecycle-helpers.js'
 import type { DirectFormulaIndexCollection } from './direct-formula-index-collection.js'
 import {
@@ -209,6 +211,22 @@ export function createEngineOperationService(args: CreateEngineOperationServiceA
       cellStore: args.state.workbook.cellStore,
     })
   }
+
+  const rebindDynamicFormulaDependents = (cellIndex: number, formulaChangedCount: number): number =>
+    rebindOperationDynamicFormulaDependents({
+      cellIndex,
+      formulaChangedCount,
+      formulas: args.state.formulas,
+      collectFormulaDependents: args.collectFormulaDependents,
+      rebindFormulaCells: args.rebindFormulaCells,
+    })
+
+  const hasDynamicFormulaDependents = (cellIndex: number): boolean =>
+    collectOperationDynamicFormulaDependents({
+      cellIndex,
+      formulas: args.state.formulas,
+      collectFormulaDependents: args.collectFormulaDependents,
+    }).length > 0
 
   const {
     readDirectScalarCellNumber,
@@ -645,6 +663,7 @@ export function createEngineOperationService(args: CreateEngineOperationServiceA
       tryApplyDirectScalarDeltas,
       tryApplyDirectFormulaDeltas,
       countPostRecalcDirectFormulaMetric: (cellIndex, counts) => countPostRecalcDirectFormulaMetric(cellIndex, counts),
+      hasDynamicFormulaDependents,
     })
 
   const countPostRecalcDirectFormulaMetric = (cellIndex: number, counts: DirectFormulaMetricCounts): void => {
@@ -696,6 +715,7 @@ export function createEngineOperationService(args: CreateEngineOperationServiceA
     markDirectScalarDeltaClosure,
     collectAffectedDirectRangeDependents,
     tryApplyFormulaReplacementAsDirectScalarDeltaRoot,
+    rebindDynamicFormulaDependents,
     refreshDependentRangesAndRebindFormulaDependents,
     pruneCellIfOrphaned,
     normalizeHistoryDependencyPlaceholder,
@@ -741,6 +761,7 @@ export function createEngineOperationService(args: CreateEngineOperationServiceA
     markDirectScalarDeltaClosure,
     markPostRecalcDirectScalarNumericDependents,
     markPostRecalcDirectLookupCurrentDependentsFromNumeric,
+    rebindDynamicFormulaDependents,
     directScalarCellNumericValue,
     tryApplyFormulaReplacementAsDirectScalarDeltaRoot,
     markCycleMemberInputsChanged,

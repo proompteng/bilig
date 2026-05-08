@@ -4,17 +4,32 @@ import { makeCellEntity, makeRangeEntity } from '../entity-ids.js'
 import { createEngineCounters } from '../perf/engine-counters.js'
 import { StringPool } from '../string-pool.js'
 import {
+  hasOperationCompactedRangeDependencies,
   hasOperationCycleMembers,
   markOperationCycleMemberInputsChanged,
   normalizeOperationHistoryDependencyPlaceholder,
   pruneOperationCellIfOrphaned,
+  rebindOperationDynamicFormulaDependents,
   refreshDependentRangesAndRebindOperationFormulaDependents,
 } from '../engine/services/operation-cell-lifecycle-helpers.js'
+import type { RuntimeFormula } from '../engine/runtime-state.js'
 
 function createCellStoreWithEmptyCell(): CellStore {
   const cellStore = new CellStore()
   cellStore.allocate(1, 0, 0)
   return cellStore
+}
+
+type FormulaRangeDependencyShape = Pick<RuntimeFormula, 'rangeDependencies' | 'graphRangeDependencies'>
+
+function formulaWithRangeDependencies(
+  rangeDependencies: readonly number[],
+  graphRangeDependencies: readonly number[],
+): FormulaRangeDependencyShape {
+  return {
+    rangeDependencies: Uint32Array.from(rangeDependencies),
+    graphRangeDependencies: Uint32Array.from(graphRangeDependencies),
+  }
 }
 
 describe('operation cell lifecycle helpers', () => {
@@ -114,5 +129,32 @@ describe('operation cell lifecycle helpers', () => {
     expect(result).toBe(4)
     expect(refreshed).toEqual([[3, 5]])
     expect(rebound).toEqual([{ formulas: [11, 13], formulaChangedCount: 2 }])
+  })
+
+  it('detects and rebinds value-sensitive compacted range dependents', () => {
+    const stableFormula = formulaWithRangeDependencies([3, 5], [3, 5])
+    const dynamicFormula = formulaWithRangeDependencies([3, 5], [3])
+    const formulas = new Map<number, FormulaRangeDependencyShape>([
+      [11, stableFormula],
+      [13, dynamicFormula],
+    ])
+    const rebound: { formulas: number[]; formulaChangedCount: number }[] = []
+
+    expect(hasOperationCompactedRangeDependencies(stableFormula)).toBe(false)
+    expect(hasOperationCompactedRangeDependencies(dynamicFormula)).toBe(true)
+
+    const result = rebindOperationDynamicFormulaDependents({
+      cellIndex: 7,
+      formulaChangedCount: 4,
+      formulas,
+      collectFormulaDependents: () => Uint32Array.of(7, 11, 13),
+      rebindFormulaCells(candidates, formulaChangedCount) {
+        rebound.push({ formulas: [...candidates], formulaChangedCount })
+        return formulaChangedCount + candidates.length
+      },
+    })
+
+    expect(result).toBe(5)
+    expect(rebound).toEqual([{ formulas: [13], formulaChangedCount: 4 }])
   })
 })

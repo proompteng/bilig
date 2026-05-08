@@ -93,6 +93,7 @@ interface CreateOperationCellMutationApplierArgs {
     readonly postRecalcDirectFormulaIndices: DirectFormulaIndexCollection
     readonly postRecalcDirectFormulaMetrics: DirectFormulaMetricCounts
   }) => boolean
+  readonly rebindDynamicFormulaDependents: (cellIndex: number, formulaChangedCount: number) => number
   readonly markCycleMemberInputsChanged: OperationCellCycleInputMarker
   readonly hasCycleMembersNow: () => boolean
   readonly canSkipDirtyTraversalForChangedInputs: OperationCellDirtyTraversalSkip
@@ -128,6 +129,7 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
     markDirectScalarDeltaClosure,
     markPostRecalcDirectScalarNumericDependents,
     markPostRecalcDirectLookupCurrentDependentsFromNumeric,
+    rebindDynamicFormulaDependents,
     directScalarCellNumericValue,
     tryApplyFormulaReplacementAsDirectScalarDeltaRoot,
     markCycleMemberInputsChanged,
@@ -190,6 +192,11 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
     const trackExplicitChanges = !isRestore && requiresChangedSet
     let hadCycleMembersBefore: boolean | undefined
     const hadCycleMembersBeforeNow = (): boolean => (hadCycleMembersBefore ??= hasCycleMembersNow())
+    const rebindValueSensitiveFormulaDependents = (cellIndex: number): void => {
+      const reboundCount = formulaChangedCount
+      formulaChangedCount = rebindDynamicFormulaDependents(cellIndex, formulaChangedCount)
+      topologyChanged = topologyChanged || formulaChangedCount !== reboundCount
+    }
     const reservedNewCells = potentialNewCells ?? refs.length
     args.state.workbook.cellStore.ensureCapacity(args.state.workbook.cellStore.size + reservedNewCells)
     args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.size + reservedNewCells + 1)
@@ -293,6 +300,9 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
               if (canFastOverwriteExisting) {
                 writeLiteralToCellStore(args.state.workbook.cellStore, existingIndex, mutation.value, args.state.strings)
                 args.state.workbook.notifyCellValueWritten(existingIndex)
+                if (!isRestore) {
+                  rebindValueSensitiveFormulaDependents(existingIndex)
+                }
                 if (needsLookupOwnerInvalidation) {
                   queueHandledLookupInvalidation(
                     sheetId,
@@ -398,6 +408,9 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
               }
               writeLiteralToCellStore(args.state.workbook.cellStore, cellIndex, mutation.value, args.state.strings)
               args.state.workbook.notifyCellValueWritten(cellIndex)
+              if (!isRestore) {
+                rebindValueSensitiveFormulaDependents(cellIndex)
+              }
               const newValue =
                 needsLookupValueRead || !directDependentsHandled ? literalToValue(mutation.value, args.state.strings) : undefined
               if (!isRestore && !directDependentsHandled && newValue) {
@@ -568,6 +581,9 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
                 args.state.workbook.cellStore.setValue(existingIndex, emptyValue())
                 args.state.workbook.notifyCellValueWritten(existingIndex)
                 if (!isRestore) {
+                  rebindValueSensitiveFormulaDependents(existingIndex)
+                }
+                if (!isRestore) {
                   const nextValue = emptyValue()
                   const directDependentsHandled = markPostRecalcDirectFormulaDependents(
                     existingIndex,
@@ -654,6 +670,9 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
               }
               args.state.workbook.cellStore.setValue(existingIndex, emptyValue())
               args.state.workbook.notifyCellValueWritten(existingIndex)
+              if (!isRestore) {
+                rebindValueSensitiveFormulaDependents(existingIndex)
+              }
               if (!isRestore) {
                 const nextValue = emptyValue()
                 const directDependentsHandled = markPostRecalcDirectFormulaDependents(

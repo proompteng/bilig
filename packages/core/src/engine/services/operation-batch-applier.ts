@@ -66,6 +66,7 @@ interface CreateOperationBatchApplierArgs {
     readonly postRecalcDirectFormulaIndices: DirectFormulaIndexCollection
     readonly postRecalcDirectFormulaMetrics: DirectFormulaMetricCounts
   }) => boolean
+  readonly rebindDynamicFormulaDependents: (cellIndex: number, formulaChangedCount: number) => number
   readonly refreshDependentRangesAndRebindFormulaDependents: (cellIndex: number, formulaChangedCount: number) => number
   readonly pruneCellIfOrphaned: (cellIndex: number) => void
   readonly normalizeHistoryDependencyPlaceholder: (cellIndex: number, source: MutationSource) => void
@@ -97,6 +98,7 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
     markDirectScalarDeltaClosure,
     collectAffectedDirectRangeDependents,
     tryApplyFormulaReplacementAsDirectScalarDeltaRoot,
+    rebindDynamicFormulaDependents,
     refreshDependentRangesAndRebindFormulaDependents,
     pruneCellIfOrphaned,
     normalizeHistoryDependencyPlaceholder,
@@ -154,6 +156,11 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
     const exactLookupImpactCaches: ExactLookupImpactCaches = new Map()
     const clearLookupImpactCaches = (): void => {
       exactLookupImpactCaches.clear()
+    }
+    const rebindValueSensitiveFormulaDependents = (cellIndex: number): void => {
+      const reboundCount = formulaChangedCount
+      formulaChangedCount = rebindDynamicFormulaDependents(cellIndex, formulaChangedCount)
+      topologyChanged = topologyChanged || formulaChangedCount !== reboundCount
     }
 
     const reservedNewCells = potentialNewCells ?? args.estimatePotentialNewCells(batch.ops)
@@ -396,6 +403,9 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
                 (args.state.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.AuthoredBlank
             }
             args.state.workbook.notifyCellValueWritten(cellIndex)
+            if (!isRestore) {
+              rebindValueSensitiveFormulaDependents(cellIndex)
+            }
             if (needsLookupValueRead) {
               const formulaChangedCountBeforeLookupNotes = formulaChangedCount
               const newValue = literalToValue(op.value, args.state.strings)
@@ -644,6 +654,9 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
             topologyChanged = removedFormula || topologyChanged
             args.state.workbook.cellStore.setValue(cellIndex, emptyValue())
             args.state.workbook.notifyCellValueWritten(cellIndex)
+            if (!isRestore) {
+              rebindValueSensitiveFormulaDependents(cellIndex)
+            }
             if (!isRestore) {
               const nextValue = emptyValue()
               const directDependentsHandled = markPostRecalcDirectFormulaDependents(

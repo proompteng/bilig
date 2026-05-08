@@ -4,10 +4,15 @@ import { CellFlags, type CellStore } from '../../cell-store.js'
 import { entityPayload, isRangeEntity, makeCellEntity } from '../../entity-ids.js'
 import { addEngineCounter, type EngineCounters } from '../../perf/engine-counters.js'
 import type { StringPool } from '../../string-pool.js'
+import type { RuntimeFormula } from '../runtime-state.js'
 
 type OperationMutationSource = 'local' | 'remote' | 'restore' | 'undo' | 'redo'
 
 type OperationFormulaDependentsReader = (entityId: EntityId) => Uint32Array
+type OperationFormulaDependencyShape = Pick<RuntimeFormula, 'rangeDependencies' | 'graphRangeDependencies'>
+type OperationFormulaReader = {
+  readonly get: (cellIndex: number) => OperationFormulaDependencyShape | undefined
+}
 
 export function pruneOperationCellIfOrphaned(input: {
   readonly workbook: { readonly pruneCellIfEmpty: (cellIndex: number) => void }
@@ -90,6 +95,56 @@ export function hasOperationCycleMembers(input: {
     }
   })
   return found
+}
+
+export function hasOperationCompactedRangeDependencies(formula: OperationFormulaDependencyShape): boolean {
+  if (formula.rangeDependencies.length === 0) {
+    return false
+  }
+  if (formula.graphRangeDependencies.length === 0) {
+    return true
+  }
+  const graphRanges = new Set<number>()
+  for (let index = 0; index < formula.graphRangeDependencies.length; index += 1) {
+    graphRanges.add(formula.graphRangeDependencies[index]!)
+  }
+  for (let index = 0; index < formula.rangeDependencies.length; index += 1) {
+    if (!graphRanges.has(formula.rangeDependencies[index]!)) {
+      return true
+    }
+  }
+  return false
+}
+
+export function collectOperationDynamicFormulaDependents(input: {
+  readonly cellIndex: number
+  readonly formulas: OperationFormulaReader
+  readonly collectFormulaDependents: OperationFormulaDependentsReader
+}): number[] {
+  const dependents = input.collectFormulaDependents(makeCellEntity(input.cellIndex))
+  const dynamicDependents: number[] = []
+  for (let index = 0; index < dependents.length; index += 1) {
+    const formulaCellIndex = dependents[index]!
+    if (formulaCellIndex === input.cellIndex) {
+      continue
+    }
+    const formula = input.formulas.get(formulaCellIndex)
+    if (formula && hasOperationCompactedRangeDependencies(formula)) {
+      dynamicDependents.push(formulaCellIndex)
+    }
+  }
+  return dynamicDependents
+}
+
+export function rebindOperationDynamicFormulaDependents(input: {
+  readonly cellIndex: number
+  readonly formulaChangedCount: number
+  readonly formulas: OperationFormulaReader
+  readonly collectFormulaDependents: OperationFormulaDependentsReader
+  readonly rebindFormulaCells: (formulas: readonly number[], formulaChangedCount: number) => number
+}): number {
+  const dynamicDependents = collectOperationDynamicFormulaDependents(input)
+  return dynamicDependents.length === 0 ? input.formulaChangedCount : input.rebindFormulaCells(dynamicDependents, input.formulaChangedCount)
 }
 
 export function refreshDependentRangesAndRebindOperationFormulaDependents(input: {
