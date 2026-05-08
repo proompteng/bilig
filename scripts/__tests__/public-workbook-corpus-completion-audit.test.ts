@@ -118,6 +118,38 @@ describe('public workbook corpus completion audit', () => {
     expect(validatePublicWorkbookCorpusCompletionAudit(audit, { requireComplete: true })).toEqual([])
   })
 
+  it('fails the download target when cached spreadsheets do not prioritize xlsx files', () => {
+    const artifactA = workbookArtifactWithExtension('workbook-a', 'xls')
+    const artifactB = workbookArtifactWithExtension('workbook-b', 'xlsm')
+    const audit = buildPublicWorkbookCorpusCompletionAudit({
+      generatedAt: '2026-05-08T00:00:00.000Z',
+      hyperformulaSecondaryCorpus: hyperFormulaSecondaryCorpusFixture(),
+      manifest: manifestWithArtifacts([artifactA, artifactB], 2),
+      recordedCases: [passedCase(artifactA, 1), passedCase(artifactB, 1)],
+      status: statusFixture({
+        targetWorkbookCount: 2,
+        sourceCount: 2,
+        cachedArtifactCount: 2,
+        scorecardCaseCount: 2,
+        checkpointCaseCount: 0,
+        recordedManifestArtifactCount: 2,
+        missingManifestArtifactCount: 0,
+        recordedPassedCaseCount: 2,
+        scorecardCoversManifest: true,
+        targetComplete: true,
+        gaps: [],
+      }),
+      stopMarkerActive: false,
+    })
+
+    expect(requirement(audit.checklist, 'download-10000-public-spreadsheets')).toMatchObject({
+      passed: false,
+      gaps: expect.arrayContaining(['no .xlsx artifacts cached', '.xlsx artifacts are not the majority: 0/2']),
+      evidence: expect.arrayContaining(['.xlsx cached artifacts: 0', 'non-.xlsx cached artifacts: 2']),
+    })
+    expect(validatePublicWorkbookCorpusCompletionAudit(audit)).toEqual([])
+  })
+
   it('fails the financial workbook lane when a recorded financial case is non-passing', () => {
     const artifactA = financialWorkbookArtifact('workbook-a')
     const artifactB = financialWorkbookArtifact('workbook-b')
@@ -731,6 +763,17 @@ function financialWorkbookArtifact(id: string): PublicWorkbookArtifact {
   return {
     ...workbookArtifact(id),
     topicEvidence: ['financial:fileName'],
+  }
+}
+
+function workbookArtifactWithExtension(id: string, extension: string): PublicWorkbookArtifact {
+  const artifact = workbookArtifact(id)
+  return {
+    ...artifact,
+    sourceUrl: `https://example.com/${id}.${extension}`,
+    downloadUrl: `https://example.com/${id}.${extension}`,
+    fileName: `${id}.${extension}`,
+    cachePath: `files/${artifact.sha256}.${extension}`,
   }
 }
 

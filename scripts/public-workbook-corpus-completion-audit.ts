@@ -280,15 +280,27 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
       promptRequirement: 'Download 10,000 legally usable public spreadsheet files, prioritizing .xlsx.',
       passed:
         context.currentState.sourceCount >= context.currentState.targetWorkbookCount &&
-        context.currentState.cachedArtifactCount >= context.currentState.targetWorkbookCount,
+        context.currentState.cachedArtifactCount >= context.currentState.targetWorkbookCount &&
+        context.currentState.xlsxArtifactCount > 0 &&
+        context.currentState.xlsxArtifactCount >= context.currentState.nonXlsxArtifactCount,
       evidence: [
         `target workbooks: ${String(context.currentState.targetWorkbookCount)}`,
         `discovered sources: ${String(context.currentState.sourceCount)}`,
         `cached artifacts: ${String(context.currentState.cachedArtifactCount)}`,
+        `.xlsx cached artifacts: ${String(context.currentState.xlsxArtifactCount)}`,
+        `non-.xlsx cached artifacts: ${String(context.currentState.nonXlsxArtifactCount)}`,
       ],
       gaps: [
         ...countGap(context.currentState.sourceCount, context.currentState.targetWorkbookCount, 'discovered sources below target'),
         ...countGap(context.currentState.cachedArtifactCount, context.currentState.targetWorkbookCount, 'cached artifacts below target'),
+        ...(context.currentState.xlsxArtifactCount > 0 ? [] : ['no .xlsx artifacts cached']),
+        ...(context.currentState.xlsxArtifactCount >= context.currentState.nonXlsxArtifactCount
+          ? []
+          : [
+              `.xlsx artifacts are not the majority: ${String(context.currentState.xlsxArtifactCount)}/${String(
+                context.currentState.cachedArtifactCount,
+              )}`,
+            ]),
       ],
     }),
   (context) =>
@@ -787,6 +799,8 @@ function buildAuditState(
     cachedArtifactCount: status.cachedArtifactCount,
     financialSourceCount: financialSources.length,
     financialCachedArtifactCount: financialArtifacts.length,
+    xlsxArtifactCount: (manifest?.artifacts ?? []).filter((entry) => isXlsxArtifact(entry.fileName, entry.cachePath)).length,
+    nonXlsxArtifactCount: (manifest?.artifacts ?? []).filter((entry) => !isXlsxArtifact(entry.fileName, entry.cachePath)).length,
     scorecardCaseCount: status.scorecardCaseCount,
     checkpointCaseCount: status.checkpointCaseCount,
     recordedManifestArtifactCount: status.recordedManifestArtifactCount,
@@ -811,6 +825,11 @@ function buildAuditState(
       .length,
   }
 }
+
+function isXlsxArtifact(fileName: string, cachePath: string): boolean {
+  return fileName.toLowerCase().endsWith('.xlsx') || cachePath.toLowerCase().endsWith('.xlsx')
+}
+
 function readRecordedCases(args: {
   readonly manifest: PublicWorkbookManifest | null
   readonly scorecardPath: string

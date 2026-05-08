@@ -26,6 +26,8 @@ export interface PublicWorkbookCorpusAuditState {
   readonly cachedArtifactCount: number
   readonly financialSourceCount: number
   readonly financialCachedArtifactCount: number
+  readonly xlsxArtifactCount: number
+  readonly nonXlsxArtifactCount: number
   readonly scorecardCaseCount: number
   readonly checkpointCaseCount: number
   readonly recordedManifestArtifactCount: number
