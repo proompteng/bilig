@@ -134,11 +134,18 @@ export function parseCsvCellInput(raw: string, options: CsvParseOptions = {}): C
   if (normalized === 'TRUE' || normalized === 'FALSE') {
     return { value: normalized === 'TRUE' }
   }
+  if (isLeadingZeroIntegerIdentifier(normalized)) {
+    return { value: raw }
+  }
   const accountingNumber = parseAccountingNumberInput(normalized, options.decimalSeparator ?? '.')
   if (accountingNumber !== null) {
     return { value: accountingNumber }
   }
   return { value: raw }
+}
+
+function isLeadingZeroIntegerIdentifier(normalized: string): boolean {
+  return /^0\d+$/u.test(normalized)
 }
 
 function detectCsvDelimiter(csv: string): CsvDelimiter {

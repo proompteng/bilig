@@ -50,4 +50,6 @@ const imported = importCsv('Account;Amount\n4000;125,50', 'ledger.csv', {
 
 CSV import auto-detects comma, semicolon, and tab delimiters. Semicolon and tab
 exports that contain decimal-comma values are parsed as locale accounting CSV by
-default; pass explicit options when the source format is known.
+default; pass explicit options when the source format is known. Integer-looking
+fields with leading zeros are kept as text so account numbers, routing numbers,
+invoice IDs, and similar identifiers are not silently changed.

@@ -88,7 +88,8 @@ describe('csv helpers', () => {
     expect(parseCsvCellInput('TRUE')).toEqual({ value: true })
     expect(parseCsvCellInput('FALSE')).toEqual({ value: false })
     expect(parseCsvCellInput(' -12.5 ')).toEqual({ value: -12.5 })
-    expect(parseCsvCellInput('001')).toEqual({ value: 1 })
+    expect(parseCsvCellInput('001')).toEqual({ value: '001' })
+    expect(parseCsvCellInput('0')).toEqual({ value: 0 })
     expect(parseCsvCellInput('hello')).toEqual({ value: 'hello' })
   })
 
