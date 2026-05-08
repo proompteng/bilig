@@ -15,7 +15,7 @@ import { readJsonObject } from '../json-scorecard-helpers.ts'
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 
 describe('UI responsiveness live browser scorecard', () => {
-  it('validates the checked-in direct incumbent browser timing artifact', () => {
+  it('validates the checked-in browser timing artifact', () => {
     const scorecard = parseUiResponsivenessLiveBrowserScorecard(
       readJsonObject(resolve(repoRoot, 'packages/benchmarks/baselines/ui-responsiveness-live-browser-scorecard.json')),
     )
@@ -29,12 +29,20 @@ describe('UI responsiveness live browser scorecard', () => {
     expect(scorecard.cases.map((entry) => entry.id)).toEqual(['google-sheets-public-grid-scroll', 'microsoft-excel-web-public-xlsx-scroll'])
     expect(scorecard.cases.every((entry) => entry.sampleCount >= 3 && entry.limitations.length > 0)).toBe(true)
     expect(scorecard.sameCorpusProof).toMatchObject({
-      captured: false,
-      evidenceKind: 'not-captured',
+      captured: true,
+      evidenceKind: 'same-corpus-browser-capture',
       requiredProductCount: 3,
-      requiredCaseCount: 0,
+      requiredCaseCount: 1,
       tenXMeanAndP95CaseCount: 0,
-      cases: [],
+      coveredCorpusCaseIds: ['wide-mixed-250k'],
+    })
+    expect(scorecard.sameCorpusProof.cases).toHaveLength(1)
+    expect(scorecard.sameCorpusProof.cases[0]).toMatchObject({
+      corpusCaseId: 'wide-mixed-250k',
+      workload: 'visible-scroll-response',
+      passed: false,
+      tenXMeanAndP95AgainstGoogleSheets: false,
+      tenXMeanAndP95AgainstMicrosoftExcelWeb: false,
     })
     validateUiResponsivenessLiveBrowserScorecard(scorecard)
   })
