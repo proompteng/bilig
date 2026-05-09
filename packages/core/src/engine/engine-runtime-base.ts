@@ -317,6 +317,7 @@ export abstract class SpreadsheetEngineRuntimeBase {
         now: () => new Date(),
         random: () => Math.random(),
         performanceNow: () => performance.now(),
+        forEachFormulaDependencyCell: (cellIndex, fn) => this.runtime.traversal.forEachFormulaDependencyCellNow(cellIndex, fn),
       },
       pivot: {
         state: {

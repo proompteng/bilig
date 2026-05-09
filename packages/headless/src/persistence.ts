@@ -4,6 +4,7 @@ import { WorkPaperPersistenceError } from './work-paper-errors.js'
 import type {
   RawCellContent,
   SerializedWorkPaperNamedExpression,
+  WorkPaperCalculationSettings,
   WorkPaperChooseAddressMappingPolicy,
   WorkPaperConfig,
   WorkPaperContextValue,
@@ -16,6 +17,7 @@ export const PERSISTABLE_WORK_PAPER_CONFIG_KEYS = [
   'accentSensitive',
   'caseSensitive',
   'caseFirst',
+  'calculationSettings',
   'chooseAddressMappingPolicy',
   'context',
   'currencySymbol',
@@ -142,6 +144,25 @@ function isChooseAddressMappingPolicy(value: unknown): value is WorkPaperChooseA
   return isRecord(value) && (value['mode'] === 'dense' || value['mode'] === 'sparse')
 }
 
+function isCalculationSettings(value: unknown): value is WorkPaperCalculationSettings {
+  return (
+    isRecord(value) &&
+    (value['mode'] === undefined || value['mode'] === 'automatic' || value['mode'] === 'manual') &&
+    (value['compatibilityMode'] === undefined ||
+      value['compatibilityMode'] === 'excel-modern' ||
+      value['compatibilityMode'] === 'odf-1.4') &&
+    (value['dateSystem'] === undefined || value['dateSystem'] === '1900' || value['dateSystem'] === '1904') &&
+    (value['iterate'] === undefined || value['iterate'] === null || typeof value['iterate'] === 'boolean') &&
+    (value['iterateCount'] === undefined || value['iterateCount'] === null || isPositiveJsonInteger(value['iterateCount'])) &&
+    (value['iterateDelta'] === undefined ||
+      value['iterateDelta'] === null ||
+      (typeof value['iterateDelta'] === 'string' && Number.isFinite(Number(value['iterateDelta'])))) &&
+    (value['fullPrecision'] === undefined || value['fullPrecision'] === null || typeof value['fullPrecision'] === 'boolean') &&
+    (value['fullCalcOnLoad'] === undefined || value['fullCalcOnLoad'] === null || typeof value['fullCalcOnLoad'] === 'boolean') &&
+    (value['concurrentCalc'] === undefined || value['concurrentCalc'] === null || typeof value['concurrentCalc'] === 'boolean')
+  )
+}
+
 function isStringArray(value: unknown): value is string[] {
   return isDenseArray(value) && value.every((item) => typeof item === 'string')
 }
@@ -176,6 +197,8 @@ function isPersistableConfigEntry(key: string, entry: unknown): boolean {
       return typeof entry === 'boolean'
     case 'caseFirst':
       return entry === 'upper' || entry === 'lower' || entry === 'false'
+    case 'calculationSettings':
+      return isCalculationSettings(entry)
     case 'chooseAddressMappingPolicy':
       return isChooseAddressMappingPolicy(entry)
     case 'context':

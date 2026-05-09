@@ -1567,6 +1567,152 @@ describe('WorkPaper', () => {
     expect(workbook.getNamedExpressionValue('Rate')).toEqual(beforeRateValue)
   })
 
+  it('exposes calculation settings through the public runtime surface and keeps persisted config in sync', () => {
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Sheet1: [[1, '=A1+1']],
+      },
+      {
+        calculationSettings: { iterate: true, iterateCount: 10, iterateDelta: '0.1' },
+      },
+    )
+
+    expect(workbook.getCalculationSettings()).toEqual({
+      mode: 'automatic',
+      compatibilityMode: 'excel-modern',
+      iterate: true,
+      iterateCount: 10,
+      iterateDelta: '0.1',
+    })
+    expect(workbook.getConfig().calculationSettings).toEqual({
+      iterate: true,
+      iterateCount: 10,
+      iterateDelta: '0.1',
+    })
+
+    workbook.setCalculationSettings({ iterate: true, iterateCount: 25, iterateDelta: '0.001' })
+
+    expect(workbook.getCalculationSettings()).toEqual({
+      mode: 'automatic',
+      compatibilityMode: 'excel-modern',
+      iterate: true,
+      iterateCount: 25,
+      iterateDelta: '0.001',
+    })
+    expect(workbook.getConfig().calculationSettings).toEqual({
+      iterate: true,
+      iterateCount: 25,
+      iterateDelta: '0.001',
+    })
+    expect(exportWorkPaperDocument(workbook).config?.calculationSettings).toEqual({
+      iterate: true,
+      iterateCount: 25,
+      iterateDelta: '0.001',
+    })
+  })
+
+  it('reapplies config calculation settings after snapshot imports', () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: {
+        name: 'Iterative Snapshot',
+        metadata: {
+          calculationSettings: {
+            mode: 'automatic',
+            compatibilityMode: 'excel-modern',
+            iterate: false,
+          },
+        },
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'Revolver',
+          order: 0,
+          cells: [
+            { address: 'A1', value: 'Metric' },
+            { address: 'B1', value: 'Value' },
+            { address: 'A2', value: 'Opening debt' },
+            { address: 'B2', value: 100000 },
+            { address: 'A3', value: 'Interest rate' },
+            { address: 'B3', value: 0.1 },
+            { address: 'A4', value: 'Cash available for debt service' },
+            { address: 'B4', value: 5000 },
+            { address: 'A5', value: 'Interest expense' },
+            { address: 'B5', formula: '=B6*B3' },
+            { address: 'A6', value: 'Ending debt' },
+            { address: 'B6', formula: '=B2+B5-B4' },
+          ],
+        },
+      ],
+    }
+
+    const workbook = WorkPaper.buildFromSnapshot(snapshot, {
+      maxColumns: 8,
+      maxRows: 32,
+      useColumnIndex: true,
+      calculationSettings: { iterate: true, iterateCount: 100, iterateDelta: '0.0000000001' },
+    })
+    const sheetId = workbook.getSheetId('Revolver')!
+
+    expect(workbook.getCalculationSettings()).toEqual({
+      mode: 'automatic',
+      compatibilityMode: 'excel-modern',
+      iterate: true,
+      iterateCount: 100,
+      iterateDelta: '0.0000000001',
+    })
+    expect(workbook.getCellValue(cell(sheetId, 4, 1))).toMatchObject({ tag: ValueTag.Number })
+    expect(workbook.getCellValue(cell(sheetId, 4, 1)).value).toBeCloseTo(10555.555555555555, 10)
+    expect(workbook.getCellValue(cell(sheetId, 5, 1))).toMatchObject({ tag: ValueTag.Number })
+    expect(workbook.getCellValue(cell(sheetId, 5, 1)).value).toBeCloseTo(105555.55555555555, 10)
+    workbook.dispose()
+  })
+
+  it('preserves rebuilt calculation settings across snapshot-reuse config updates', () => {
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Revolver: [
+          ['Metric', 'Value'],
+          ['Opening debt', 100000],
+          ['Interest rate', 0.1],
+          ['Cash available for debt service', 5000],
+          ['Interest expense', '=B6*B3'],
+          ['Ending debt', '=B2+B5-B4'],
+        ],
+      },
+      {
+        maxColumns: 8,
+        maxRows: 32,
+        useColumnIndex: true,
+        calculationSettings: { iterate: false },
+      },
+    )
+    const sheetId = workbook.getSheetId('Revolver')!
+
+    expect(workbook.getCellValue(cell(sheetId, 4, 1))).toEqual({ tag: ValueTag.Error, code: ErrorCode.Cycle })
+    expect(workbook.getCellValue(cell(sheetId, 5, 1))).toEqual({ tag: ValueTag.Error, code: ErrorCode.Cycle })
+
+    workbook.updateConfig({
+      maxColumns: 8,
+      maxRows: 32,
+      useColumnIndex: true,
+      calculationSettings: { iterate: true, iterateCount: 100, iterateDelta: '0.0000000001' },
+    })
+
+    expect(workbook.getCalculationSettings()).toEqual({
+      mode: 'automatic',
+      compatibilityMode: 'excel-modern',
+      iterate: true,
+      iterateCount: 100,
+      iterateDelta: '0.0000000001',
+    })
+    expect(workbook.getCellValue(cell(sheetId, 4, 1))).toMatchObject({ tag: ValueTag.Number })
+    expect(workbook.getCellValue(cell(sheetId, 4, 1)).value).toBeCloseTo(10555.555555555555, 10)
+    expect(workbook.getCellValue(cell(sheetId, 5, 1))).toMatchObject({ tag: ValueTag.Number })
+    expect(workbook.getCellValue(cell(sheetId, 5, 1)).value).toBeCloseTo(105555.55555555555, 10)
+  })
+
   it('preserves undo history across runtime-only config toggles', () => {
     const workbook = WorkPaper.buildFromSheets(
       {

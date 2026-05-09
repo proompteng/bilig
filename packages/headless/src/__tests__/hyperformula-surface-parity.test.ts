@@ -8,6 +8,7 @@ import {
 
 const ALLOWED_BILIG_INSTANCE_METHODS = [
   'dispose',
+  'getCalculationSettings',
   'getCellDisplayValue',
   'getCellFormulaDiagnostics',
   'getPerformanceCounters',
@@ -15,11 +16,12 @@ const ALLOWED_BILIG_INSTANCE_METHODS = [
   'onDetailed',
   'onceDetailed',
   'resetPerformanceCounters',
+  'setCalculationSettings',
   'transaction',
 ] as const
 const ALLOWED_BILIG_INSTANCE_ACCESSORS = ['internals'] as const
 const ALLOWED_BILIG_STATIC_METHODS = ['buildFromSnapshot'] as const
-const ALLOWED_BILIG_CONFIG_KEYS = ['evaluationTimeoutMs'] as const
+const ALLOWED_BILIG_CONFIG_KEYS = ['calculationSettings', 'evaluationTimeoutMs'] as const
 
 describe('WorkPaper HyperFormula snapshot parity', () => {
   it('matches the checked-in HyperFormula class surface snapshot', () => {

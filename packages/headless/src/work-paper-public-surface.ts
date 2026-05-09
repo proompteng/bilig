@@ -1,6 +1,6 @@
 import type { SpreadsheetEngine } from '@bilig/core'
 import { formatCellDisplayValue } from '@bilig/protocol'
-import type { CellValue } from '@bilig/protocol'
+import type { CellValue, WorkbookCalculationSettingsSnapshot } from '@bilig/protocol'
 import { checkWorkPaperLicenseKeyValidity, cloneConfig, DEFAULT_CONFIG } from './work-paper-config.js'
 import { numberToWorkPaperDate, numberToWorkPaperDateTime, numberToWorkPaperTime } from './work-paper-date-time.js'
 import type { WorkPaperEmitter } from './work-paper-emitter.js'
@@ -51,6 +51,7 @@ import type {
   WorkPaperFormulaDiagnostic,
   WorkPaperColumnSearchAdapter,
   WorkPaperConfig,
+  WorkPaperCalculationSettings,
   WorkPaperDateTime,
   WorkPaperDependencyGraphAdapter,
   WorkPaperEvaluatorAdapter,
@@ -86,6 +87,7 @@ export abstract class WorkPaperPublicSurface extends WorkPaperCapabilitySurface 
   protected abstract config: WorkPaperConfig
 
   protected abstract assertNotDisposed(): void
+  protected abstract applyCalculationSettings(settings: WorkPaperCalculationSettings): void
   protected abstract createScratchWorkbook(config: WorkPaperConfig): {
     readonly engine: SpreadsheetEngine
     readonly registerNamedExpression: (expression: SerializedWorkPaperNamedExpression) => void
@@ -181,6 +183,16 @@ export abstract class WorkPaperPublicSurface extends WorkPaperCapabilitySurface 
 
   getConfig(): WorkPaperConfig {
     return cloneConfig(this.config)
+  }
+
+  getCalculationSettings(): WorkbookCalculationSettingsSnapshot {
+    this.assertNotDisposed()
+    return structuredClone(this.engine.getCalculationSettings())
+  }
+
+  setCalculationSettings(settings: WorkPaperCalculationSettings): void {
+    this.assertNotDisposed()
+    this.applyCalculationSettings(settings)
   }
 
   get graph(): WorkPaperGraphAdapter {

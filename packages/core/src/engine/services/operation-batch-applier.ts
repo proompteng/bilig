@@ -4,7 +4,7 @@ import { FormulaMode, type CellRangeRef, type CellValue } from '@bilig/protocol'
 import { batchOpOrder, compareOpOrder, markBatchApplied, type OpOrder } from '../../replica-state.js'
 import { CellFlags } from '../../cell-store.js'
 import { emptyValue, literalToValue, writeLiteralToCellStore } from '../../engine-value-utils.js'
-import { tableDependencyKey } from '../../engine-metadata-utils.js'
+import { calculationSettingsEqual, normalizeWorkbookCalculationSettings, tableDependencyKey } from '../../engine-metadata-utils.js'
 import { normalizeDefinedName } from '../../workbook-store.js'
 import type { PreparedCellAddress } from '../runtime-state.js'
 import { withOptionalLookupStringIds } from './direct-lookup-helpers.js'
@@ -198,7 +198,21 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
             setEntityVersionForOp(op, order)
             break
           case 'setCalculationSettings':
-            args.state.workbook.setCalculationSettings(op.settings)
+            const previousCalculationSettings = args.state.workbook.getCalculationSettings()
+            const nextCalculationSettings = normalizeWorkbookCalculationSettings(op.settings, previousCalculationSettings)
+            if (calculationSettingsEqual(previousCalculationSettings, nextCalculationSettings)) {
+              break
+            }
+            args.state.workbook.setCalculationSettings(nextCalculationSettings)
+            if (previousCalculationSettings.dateSystem !== nextCalculationSettings.dateSystem) {
+              const reboundCount = formulaChangedCount
+              formulaChangedCount = args.rebindFormulaCells([...args.state.formulas.keys()], formulaChangedCount)
+              topologyChanged = topologyChanged || formulaChangedCount !== reboundCount
+            } else {
+              args.state.formulas.forEach((_formula, cellIndex) => {
+                formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount)
+              })
+            }
             setEntityVersionForOp(op, order)
             break
           case 'setVolatileContext':

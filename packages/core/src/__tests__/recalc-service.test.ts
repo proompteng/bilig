@@ -1,6 +1,6 @@
 import { Effect } from 'effect'
 import { describe, expect, it, vi } from 'vitest'
-import { FormulaMode, ValueTag } from '@bilig/protocol'
+import { ErrorCode, FormulaMode, ValueTag } from '@bilig/protocol'
 import { utcDateToExcelSerial } from '@bilig/formula'
 import { SpreadsheetEngine } from '../engine.js'
 import type { EngineRecalcService } from '../engine/services/recalc-service.js'
@@ -138,5 +138,49 @@ describe('EngineRecalcService', () => {
     engine.updateRowMetadata('Sheet1', 1, 1, null, false)
 
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 6 })
+  })
+
+  it('converges iterative circular formulas through the recalc service boundary', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'recalc-iterative-cycle' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCalculationSettings({ iterate: true, iterateCount: 100, iterateDelta: '0.0000000001' })
+
+    engine.setCellValue('Sheet1', 'B2', 100000)
+    engine.setCellValue('Sheet1', 'B3', 0.1)
+    engine.setCellValue('Sheet1', 'B4', 5000)
+    engine.setCellFormula('Sheet1', 'B5', 'B6*B3')
+    engine.setCellFormula('Sheet1', 'B6', 'B2+B5-B4')
+
+    const changed = Effect.runSync(getRecalcService(engine).recalculateNow())
+    const b5Index = engine.workbook.getCellIndex('Sheet1', 'B5')
+    const b6Index = engine.workbook.getCellIndex('Sheet1', 'B6')
+
+    expect(changed).toContain(b5Index)
+    expect(changed).toContain(b6Index)
+    expect(engine.getCellValue('Sheet1', 'B5').tag).toBe(ValueTag.Number)
+    expect(engine.getCellValue('Sheet1', 'B5')).toMatchObject({ tag: ValueTag.Number })
+    expect(engine.getCellValue('Sheet1', 'B5').value).toBeCloseTo(10555.555555555555, 10)
+    expect(engine.getCellValue('Sheet1', 'B6').tag).toBe(ValueTag.Number)
+    expect(engine.getCellValue('Sheet1', 'B6')).toMatchObject({ tag: ValueTag.Number })
+    expect(engine.getCellValue('Sheet1', 'B6').value).toBeCloseTo(105555.55555555555, 10)
+  })
+
+  it('keeps non-iterative circular formulas as cycle errors through the recalc service boundary', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'recalc-non-iterative-cycle' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    engine.setCellFormula('Sheet1', 'A1', 'B1+1')
+    engine.setCellFormula('Sheet1', 'B1', 'A1+1')
+
+    const changed = Effect.runSync(getRecalcService(engine).recalculateNow())
+    const a1Index = engine.workbook.getCellIndex('Sheet1', 'A1')
+    const b1Index = engine.workbook.getCellIndex('Sheet1', 'B1')
+
+    expect(changed).toContain(a1Index)
+    expect(changed).toContain(b1Index)
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Error, code: ErrorCode.Cycle })
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Error, code: ErrorCode.Cycle })
   })
 })

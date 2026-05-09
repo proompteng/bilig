@@ -605,6 +605,7 @@ export function createEngineServiceRuntime(args: {
     evaluateDirectLookupFormula: (cellIndex) => evaluation.evaluateDirectLookupFormulaNow(cellIndex),
     evaluateUnsupportedFormula: (cellIndex) => runEngineEffect(evaluation.evaluateUnsupportedFormula(cellIndex)),
     materializePivot: (pivotRecord) => requireService(pivot, 'pivot').materializePivotNow(pivotRecord),
+    forEachFormulaDependencyCell: (cellIndex, fn) => traversal.forEachFormulaDependencyCellNow(cellIndex, fn),
   })
   formulaInitialization = createEngineFormulaInitializationService({
     state: args.state,

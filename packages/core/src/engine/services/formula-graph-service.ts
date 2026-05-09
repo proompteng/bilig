@@ -182,6 +182,7 @@ export function createEngineFormulaGraphService(args: {
   }
 
   const detectCyclesNow = (): void => {
+    const iterationEnabled = args.state.workbook.getCalculationSettings().iterate === true
     const result = args.cycleDetector.detect(
       args.state.formulas.keys(),
       args.state.workbook.cellStore.size + 1,
@@ -198,6 +199,9 @@ export function createEngineFormulaGraphService(args: {
       const cellIndex = result.cycleMembers[index]!
       args.state.workbook.cellStore.flags[cellIndex] = (args.state.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.InCycle
       args.state.workbook.cellStore.cycleGroupIds[cellIndex] = result.cycleGroups[cellIndex] ?? -1
+      if (iterationEnabled) {
+        continue
+      }
       args.state.workbook.cellStore.setValue(cellIndex, errorValue(ErrorCode.Cycle))
       args.notifyCellValueWritten(cellIndex)
     }

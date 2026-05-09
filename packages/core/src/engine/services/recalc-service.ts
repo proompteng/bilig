@@ -11,15 +11,18 @@ import {
 } from '@bilig/protocol'
 import { makeCellKey } from '../../workbook-store.js'
 import { CellFlags } from '../../cell-store.js'
-import { errorValue } from '../../engine-value-utils.js'
+import { areCellValuesEqual, emptyValue, errorValue } from '../../engine-value-utils.js'
 import type { EngineRuntimeState, RecalcVolatileState, RuntimeFormula, SpillMaterialization, U32 } from '../runtime-state.js'
 import { EngineRecalcError } from '../errors.js'
 import type { WorkbookPivotRecord } from '../../workbook-store.js'
 import { parseCellAddress, utcDateToExcelSerial } from '@bilig/formula'
 import type { EngineDirtyFrontierSchedulerService } from './dirty-frontier-scheduler-service.js'
 import type { EnginePatch } from '../../patches/patch-types.js'
+import { buildCycleEvaluationNodes, type CycleEvaluationNode } from './recalc-cycle-evaluation.js'
 
 const TRACKED_CELL_PATCH_LIMIT = 64
+const DEFAULT_ITERATION_COUNT = 100
+const DEFAULT_ITERATION_DELTA = 0.001
 
 export interface DirtyRegion {
   readonly sheetName: string
@@ -143,6 +146,7 @@ export function createEngineRecalcService(args: {
   readonly evaluateDirectLookupFormula: (cellIndex: number) => number[] | undefined
   readonly evaluateUnsupportedFormula: (cellIndex: number) => number[]
   readonly materializePivot: (pivot: WorkbookPivotRecord) => number[]
+  readonly forEachFormulaDependencyCell: (cellIndex: number, fn: (dependencyCellIndex: number) => void) => void
 }): EngineRecalcService {
   const captureTrackedPatchesForCells = (changed: readonly number[] | U32): readonly EnginePatch[] | undefined =>
     changed.length <= TRACKED_CELL_PATCH_LIMIT
@@ -250,6 +254,16 @@ export function createEngineRecalcService(args: {
       let jsCount = 0
       let pendingKernelSyncCount = deferredKernelSyncCount
       const volatileState = createRecalcVolatileState(args.now)
+      const calculationSettings = args.state.workbook.getCalculationSettings()
+      const iterationEnabled = calculationSettings.iterate === true
+      const rawIterationCount = calculationSettings.iterateCount
+      const iterationCount: number =
+        typeof rawIterationCount === 'number' && Number.isSafeInteger(rawIterationCount) && rawIterationCount > 0
+          ? rawIterationCount
+          : DEFAULT_ITERATION_COUNT
+      const parsedIterationDelta =
+        typeof calculationSettings.iterateDelta === 'string' ? Number(calculationSettings.iterateDelta) : Number.NaN
+      const iterationDelta: number = Number.isFinite(parsedIterationDelta) ? Math.abs(parsedIterationDelta) : DEFAULT_ITERATION_DELTA
       let wasmProgramFlushed = false
       const ensureWasmProgramFlushed = (): void => {
         if (wasmProgramFlushed) {
@@ -378,23 +392,72 @@ export function createEngineRecalcService(args: {
           pendingKernelSync[pendingKernelSyncCount] = cellIndex
           pendingKernelSyncCount += 1
         }
-        const hasCycleDependency = (formula: RuntimeFormula): boolean => {
-          for (let dependencyIndex = 0; dependencyIndex < formula.dependencyIndices.length; dependencyIndex += 1) {
-            const dependencyCellIndex = formula.dependencyIndices[dependencyIndex]!
-            if (((args.state.workbook.cellStore.flags[dependencyCellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
-              return true
-            }
+        const noteQueuedSpillChanges = (changedCellIndices: readonly number[]): void => {
+          noteSpillChanges(changedCellIndices)
+          for (let spillIndex = 0; spillIndex < changedCellIndices.length; spillIndex += 1) {
+            queueKernelSync(changedCellIndices[spillIndex]!)
           }
-          return false
         }
-        const materializeCycleDependentError = (cellIndex: number): void => {
-          const spillChanges = args.clearOwnedSpill(cellIndex)
-          args.state.workbook.cellStore.setValue(cellIndex, errorValue(ErrorCode.Cycle))
-          queueKernelSync(cellIndex)
-          noteSpillChanges(spillChanges)
-          for (let spillIndex = 0; spillIndex < spillChanges.length; spillIndex += 1) {
-            queueKernelSync(spillChanges[spillIndex]!)
+        const flushPendingWasmBatch = (): void => {
+          wasmCount += flushWasmBatch(wasmBatchCount, wasmBatchHasVolatile, wasmBatchRandCount)
+          wasmBatchCount = 0
+          wasmBatchHasVolatile = false
+          wasmBatchRandCount = 0
+        }
+        const readStoredValue = (cellIndex: number): CellValue =>
+          args.state.workbook.cellStore.getValue(cellIndex, (id) => (id === 0 ? '' : args.state.strings.get(id)))
+        const clearDerivedFormulaFlags = (cellIndex: number): boolean => {
+          const currentFlags = args.state.workbook.cellStore.flags[cellIndex] ?? 0
+          const nextFlags = currentFlags & ~(CellFlags.SpillChild | CellFlags.PivotOutput)
+          if (nextFlags === currentFlags) {
+            return false
           }
+          args.state.workbook.cellStore.flags[cellIndex] = nextFlags
+          return true
+        }
+        const hasCycleDependency = (cellIndex: number): boolean => {
+          let found = false
+          args.forEachFormulaDependencyCell(cellIndex, (dependencyCellIndex) => {
+            if (!found && ((args.state.workbook.cellStore.flags[dependencyCellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
+              found = true
+            }
+          })
+          return found
+        }
+        const materializeCycleFormulaError = (cellIndex: number): void => {
+          const beforeValue = readStoredValue(cellIndex)
+          const spillChanges = args.clearOwnedSpill(cellIndex)
+          const flagsChanged = clearDerivedFormulaFlags(cellIndex)
+          const nextValue = errorValue(ErrorCode.Cycle)
+          if (!flagsChanged && spillChanges.length === 0 && areCellValuesEqual(beforeValue, nextValue)) {
+            return
+          }
+          args.state.workbook.cellStore.setValue(cellIndex, nextValue)
+          args.state.workbook.notifyCellValueWritten(cellIndex)
+          queueKernelSync(cellIndex)
+          noteQueuedSpillChanges(spillChanges)
+        }
+        const seedCycleFormulaCell = (cellIndex: number): void => {
+          const currentValue = readStoredValue(cellIndex)
+          if (currentValue.tag !== ValueTag.Error || currentValue.code !== ErrorCode.Cycle) {
+            return
+          }
+          const spillChanges = args.clearOwnedSpill(cellIndex)
+          clearDerivedFormulaFlags(cellIndex)
+          args.state.workbook.cellStore.setValue(cellIndex, emptyValue())
+          args.state.workbook.notifyCellValueWritten(cellIndex)
+          queueKernelSync(cellIndex)
+          noteQueuedSpillChanges(spillChanges)
+        }
+        const cycleIterationDrift = (beforeValue: CellValue, afterValue: CellValue): number => {
+          if (beforeValue.tag === ValueTag.Number && afterValue.tag === ValueTag.Number) {
+            if (Object.is(beforeValue.value, afterValue.value)) {
+              return 0
+            }
+            const drift = Math.abs(afterValue.value - beforeValue.value)
+            return Number.isFinite(drift) ? drift : Number.POSITIVE_INFINITY
+          }
+          return areCellValuesEqual(beforeValue, afterValue) ? 0 : Number.POSITIVE_INFINITY
         }
         const evaluateWasmSpillFormula = (cellIndex: number, formula: RuntimeFormula): number => {
           ensureWasmProgramFlushed()
@@ -438,27 +501,28 @@ export function createEngineRecalcService(args: {
             spillMaterialization.ownerValue.tag === ValueTag.String ? args.state.strings.intern(spillMaterialization.ownerValue.value) : 0,
           )
           queueKernelSync(cellIndex)
-          for (let spillIndex = 0; spillIndex < spillMaterialization.changedCellIndices.length; spillIndex += 1) {
-            queueKernelSync(spillMaterialization.changedCellIndices[spillIndex]!)
-          }
-          noteSpillChanges(spillMaterialization.changedCellIndices)
+          noteQueuedSpillChanges(spillMaterialization.changedCellIndices)
           return 1
         }
 
-        for (let index = 0; index < orderedCount; index += 1) {
-          args.checkEvaluationBudget()
-          const cellIndex = ordered[index]!
-          const formula = args.state.formulas.get(cellIndex)
-          if (!formula) {
-            continue
-          }
-          if (((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
-            continue
-          }
-          if (hasCycleDependency(formula)) {
+        const evaluateFormulaCell = (
+          cellIndex: number,
+          formula: RuntimeFormula,
+          options: {
+            readonly allowCycleDependencyError: boolean
+            readonly treatCycleFormulaAsError: boolean
+            readonly forceJs: boolean
+          },
+        ): void => {
+          if (options.treatCycleFormulaAsError && ((args.state.workbook.cellStore.flags[cellIndex] ?? 0) & CellFlags.InCycle) !== 0) {
             jsCount += 1
-            materializeCycleDependentError(cellIndex)
-            continue
+            materializeCycleFormulaError(cellIndex)
+            return
+          }
+          if (options.allowCycleDependencyError && hasCycleDependency(cellIndex)) {
+            jsCount += 1
+            materializeCycleFormulaError(cellIndex)
+            return
           }
           if (
             formula.directLookup !== undefined ||
@@ -466,12 +530,7 @@ export function createEngineRecalcService(args: {
             formula.directScalar !== undefined ||
             formula.directCriteria !== undefined
           ) {
-            if (wasmBatchCount > 0) {
-              wasmCount += flushWasmBatch(wasmBatchCount, wasmBatchHasVolatile, wasmBatchRandCount)
-              wasmBatchCount = 0
-              wasmBatchHasVolatile = false
-              wasmBatchRandCount = 0
-            }
+            flushPendingWasmBatch()
             args.checkEvaluationBudget()
             const directLookupChanges = args.evaluateDirectLookupFormula(cellIndex)
             args.checkEvaluationBudget()
@@ -487,39 +546,114 @@ export function createEngineRecalcService(args: {
               ) {
                 jsCount += 1
               }
-              noteSpillChanges(directLookupChanges)
+              noteQueuedSpillChanges(directLookupChanges)
               queueKernelSync(cellIndex)
-              continue
+              return
             }
           }
-          if (formula.compiled.mode === FormulaMode.WasmFastPath && args.state.wasm.ready) {
+          if (!options.forceJs && formula.compiled.mode === FormulaMode.WasmFastPath && args.state.wasm.ready) {
             if (formula.compiled.producesSpill) {
-              wasmCount += flushWasmBatch(wasmBatchCount, wasmBatchHasVolatile, wasmBatchRandCount)
-              wasmBatchCount = 0
-              wasmBatchHasVolatile = false
-              wasmBatchRandCount = 0
+              flushPendingWasmBatch()
               wasmCount += evaluateWasmSpillFormula(cellIndex, formula)
-              continue
+              return
             }
             wasmBatch[wasmBatchCount] = cellIndex
             wasmBatchCount += 1
             wasmBatchHasVolatile = wasmBatchHasVolatile || formula.compiled.volatile
             wasmBatchRandCount += formula.compiled.randCallCount
-            continue
+            return
           }
-          wasmCount += flushWasmBatch(wasmBatchCount, wasmBatchHasVolatile, wasmBatchRandCount)
-          wasmBatchCount = 0
-          wasmBatchHasVolatile = false
-          wasmBatchRandCount = 0
+          flushPendingWasmBatch()
           jsCount += 1
           args.checkEvaluationBudget()
           const spillChanges = args.evaluateUnsupportedFormula(cellIndex)
           args.checkEvaluationBudget()
-          noteSpillChanges(spillChanges)
+          noteQueuedSpillChanges(spillChanges)
           queueKernelSync(cellIndex)
         }
+        const evaluateCycleNode = (node: CycleEvaluationNode): void => {
+          for (let formulaIndex = 0; formulaIndex < node.formulaCellIndices.length; formulaIndex += 1) {
+            seedCycleFormulaCell(node.formulaCellIndices[formulaIndex]!)
+          }
+          const previousValues = node.formulaCellIndices.map((cellIndex) => readStoredValue(cellIndex))
+          for (let iterationIndex = 0; iterationIndex < iterationCount; iterationIndex += 1) {
+            args.checkEvaluationBudget()
+            for (let formulaIndex = 0; formulaIndex < node.formulaCellIndices.length; formulaIndex += 1) {
+              const cellIndex = node.formulaCellIndices[formulaIndex]!
+              const formula = args.state.formulas.get(cellIndex)
+              if (!formula) {
+                continue
+              }
+              evaluateFormulaCell(cellIndex, formula, {
+                allowCycleDependencyError: false,
+                treatCycleFormulaAsError: false,
+                forceJs: true,
+              })
+            }
 
-        wasmCount += flushWasmBatch(wasmBatchCount, wasmBatchHasVolatile, wasmBatchRandCount)
+            let converged = true
+            for (let formulaIndex = 0; formulaIndex < node.formulaCellIndices.length; formulaIndex += 1) {
+              const cellIndex = node.formulaCellIndices[formulaIndex]!
+              const currentValue = readStoredValue(cellIndex)
+              if (cycleIterationDrift(previousValues[formulaIndex]!, currentValue) > iterationDelta) {
+                converged = false
+              }
+              previousValues[formulaIndex] = currentValue
+            }
+            if (converged) {
+              break
+            }
+          }
+        }
+        const cycleEvaluationNodes = iterationEnabled
+          ? buildCycleEvaluationNodes({
+              ordered,
+              orderedCount,
+              formulas: args.state.formulas,
+              cycleGroupIds: args.state.workbook.cellStore.cycleGroupIds,
+              forEachFormulaDependencyCell: args.forEachFormulaDependencyCell,
+            })
+          : undefined
+
+        if (cycleEvaluationNodes) {
+          for (let nodeIndex = 0; nodeIndex < cycleEvaluationNodes.length; nodeIndex += 1) {
+            args.checkEvaluationBudget()
+            const node = cycleEvaluationNodes[nodeIndex]!
+            if (node.kind === 'cycle') {
+              flushPendingWasmBatch()
+              evaluateCycleNode(node)
+              continue
+            }
+            for (let formulaIndex = 0; formulaIndex < node.formulaCellIndices.length; formulaIndex += 1) {
+              const cellIndex = node.formulaCellIndices[formulaIndex]!
+              const formula = args.state.formulas.get(cellIndex)
+              if (!formula) {
+                continue
+              }
+              evaluateFormulaCell(cellIndex, formula, {
+                allowCycleDependencyError: false,
+                treatCycleFormulaAsError: false,
+                forceJs: false,
+              })
+            }
+          }
+        } else {
+          for (let index = 0; index < orderedCount; index += 1) {
+            args.checkEvaluationBudget()
+            const cellIndex = ordered[index]!
+            const formula = args.state.formulas.get(cellIndex)
+            if (!formula) {
+              continue
+            }
+            evaluateFormulaCell(cellIndex, formula, {
+              allowCycleDependencyError: !iterationEnabled,
+              treatCycleFormulaAsError: !iterationEnabled,
+              forceJs: false,
+            })
+          }
+        }
+
+        flushPendingWasmBatch()
         args.setDeferredKernelSyncCount(pendingKernelSyncCount)
         deferredKernelSyncCount = pendingKernelSyncCount
 

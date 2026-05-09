@@ -11,6 +11,7 @@ import {
   canApplyRuntimeOnlyWorkPaperConfigUpdate,
   canReuseWorkPaperSnapshotRebuild,
   DEFAULT_CONFIG,
+  normalizeConfiguredWorkPaperCalculationSettings,
   validateWorkPaperConfig,
   WORKPAPER_CONFIG_KEYS,
 } from './work-paper-config.js'
@@ -376,6 +377,17 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
     this.rebuildWithConfig(merged)
   }
 
+  protected applyCalculationSettings(settings: WorkPaperConfig['calculationSettings']): void {
+    this.captureChanges(undefined, () => {
+      const normalized = normalizeConfiguredWorkPaperCalculationSettings(settings, this.engine.getCalculationSettings())
+      this.engine.setCalculationSettings(normalized ?? this.engine.getCalculationSettings())
+      this.config = {
+        ...this.config,
+        ...(settings === undefined ? { calculationSettings: undefined } : { calculationSettings: structuredClone(settings) }),
+      }
+    })
+  }
+
   transaction(operations: () => void): WorkPaperChange[] {
     this.assertNotDisposed()
     if (this.shouldSuppressEvents()) {
@@ -684,6 +696,13 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
     this.engineEvents.withCaptureDisabled(() => {
       if (snapshot) {
         this.engine.importSnapshot(snapshot)
+        const calculationSettings = normalizeConfiguredWorkPaperCalculationSettings(
+          this.config.calculationSettings,
+          this.engine.getCalculationSettings(),
+        )
+        if (calculationSettings !== undefined) {
+          this.engine.setCalculationSettings(calculationSettings)
+        }
       } else {
         try {
           initializeWorkPaperFromSheets({
@@ -808,12 +827,17 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
 }
 
 function createWorkPaperEngine(config: WorkPaperConfig): SpreadsheetEngine {
-  return new SpreadsheetEngine({
+  const engine = new SpreadsheetEngine({
     workbookName: 'Workbook',
     trackReplicaVersions: false,
     ...(config.useColumnIndex !== undefined ? { useColumnIndex: config.useColumnIndex } : {}),
     ...(config.evaluationTimeoutMs !== undefined ? { evaluationTimeoutMs: config.evaluationTimeoutMs } : {}),
   })
+  const calculationSettings = normalizeConfiguredWorkPaperCalculationSettings(config.calculationSettings)
+  if (calculationSettings !== undefined) {
+    engine.setCalculationSettings(calculationSettings)
+  }
+  return engine
 }
 
 function cloneWorkPaperHistoryRecords(records: readonly WorkPaperHistoryRecord[]): WorkPaperHistoryRecord[] {

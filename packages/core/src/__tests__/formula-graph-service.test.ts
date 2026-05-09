@@ -164,4 +164,33 @@ describe('EngineFormulaGraphService', () => {
       code: ErrorCode.Cycle,
     })
   })
+
+  it('preserves seeded values for cycle members when iterative calculation is enabled', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'graph-cycle-iterative' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCalculationSettings({ iterate: true, iterateCount: 10, iterateDelta: '0.1' })
+    engine.setCellFormula('Sheet1', 'A1', 'B1+1')
+    engine.setCellFormula('Sheet1', 'B1', 'A1+1')
+
+    const a1Index = engine.workbook.getCellIndex('Sheet1', 'A1')
+    const b1Index = engine.workbook.getCellIndex('Sheet1', 'B1')
+
+    expect(a1Index).toBeDefined()
+    expect(b1Index).toBeDefined()
+
+    engine.workbook.cellStore.flags[a1Index!] &= ~CellFlags.InCycle
+    engine.workbook.cellStore.flags[b1Index!] &= ~CellFlags.InCycle
+    engine.workbook.cellStore.cycleGroupIds[a1Index!] = -1
+    engine.workbook.cellStore.cycleGroupIds[b1Index!] = -1
+    engine.workbook.cellStore.setValue(a1Index!, { tag: ValueTag.Number, value: 10 })
+    engine.workbook.cellStore.setValue(b1Index!, { tag: ValueTag.Number, value: 11 })
+
+    Effect.runSync(getGraphService(engine).detectCycles())
+
+    expect((engine.workbook.cellStore.flags[a1Index!] & CellFlags.InCycle) !== 0).toBe(true)
+    expect((engine.workbook.cellStore.flags[b1Index!] & CellFlags.InCycle) !== 0).toBe(true)
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Number, value: 10 })
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 11 })
+  })
 })

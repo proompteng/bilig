@@ -1,4 +1,12 @@
-import type { CellValue, ErrorCode, LiteralInput, RecalcMetrics } from '@bilig/protocol'
+import type {
+  CellValue,
+  CompatibilityMode,
+  ErrorCode,
+  LiteralInput,
+  RecalcMetrics,
+  WorkbookCalculationMode,
+  WorkbookDateSystem,
+} from '@bilig/protocol'
 import type { EvaluationResult } from '@bilig/formula'
 import type { EngineCounters } from '@bilig/core'
 
@@ -141,10 +149,23 @@ export interface WorkPaperLanguagePackage {
 
 export type WorkPaperLicenseKeyValidityState = 'valid' | 'invalid' | 'expired' | 'missing'
 
+export interface WorkPaperCalculationSettings {
+  mode?: WorkbookCalculationMode
+  compatibilityMode?: CompatibilityMode
+  dateSystem?: WorkbookDateSystem
+  iterate?: boolean | null
+  iterateCount?: number | null
+  iterateDelta?: string | null
+  fullPrecision?: boolean | null
+  fullCalcOnLoad?: boolean | null
+  concurrentCalc?: boolean | null
+}
+
 export interface WorkPaperConfig {
   accentSensitive?: boolean
   caseSensitive?: boolean
   caseFirst?: 'upper' | 'lower' | 'false'
+  calculationSettings?: WorkPaperCalculationSettings | undefined
   chooseAddressMappingPolicy?: WorkPaperChooseAddressMappingPolicy | undefined
   context?: WorkPaperContextValue | undefined
   currencySymbol?: string[]

@@ -8,6 +8,7 @@ import {
   clonePluginDefinition,
   DEFAULT_CONFIG,
   functionPluginIds,
+  normalizeConfiguredWorkPaperCalculationSettings,
   validateWorkPaperConfig,
   WORKPAPER_CONFIG_KEYS,
   WORKPAPER_PUBLIC_ERROR_NAMES,
@@ -41,6 +42,7 @@ describe('work paper config helpers', () => {
     const originalPlugin = plugin('plugin-b')
     const config = cloneConfig({
       ...DEFAULT_CONFIG,
+      calculationSettings: { iterate: true, iterateCount: 32, iterateDelta: '0.01' },
       chooseAddressMappingPolicy: { mode: 'dense' },
       context: { nested: { value: 1 } },
       currencySymbol: ['$', 'EUR'],
@@ -51,7 +53,9 @@ describe('work paper config helpers', () => {
     })
 
     expect(config).not.toBe(DEFAULT_CONFIG)
+    expect(config.calculationSettings).toEqual({ iterate: true, iterateCount: 32, iterateDelta: '0.01' })
     expect(config.chooseAddressMappingPolicy).toEqual({ mode: 'dense' })
+    expect(config.calculationSettings).not.toBe(DEFAULT_CONFIG.calculationSettings)
     expect(config.chooseAddressMappingPolicy).not.toBe(DEFAULT_CONFIG.chooseAddressMappingPolicy)
     expect(config.context).toEqual({ nested: { value: 1 } })
     expect(config.currencySymbol).toEqual(['$', 'EUR'])
@@ -79,13 +83,54 @@ describe('work paper config helpers', () => {
     Reflect.set(invalidDecimalConfig, 'decimalSeparator', ':')
     const invalidCallbackConfig: WorkPaperConfig = {}
     Reflect.set(invalidCallbackConfig, 'parseDateTime', 'nope')
+    const invalidCalculationSettingsConfig: WorkPaperConfig = {
+      calculationSettings: {
+        iterateCount: 0,
+      },
+    }
 
     expect(() => validateWorkPaperConfig({ maxRows: 0 })).toThrow(WorkPaperConfigValueTooSmallError)
     expect(() => validateWorkPaperConfig({ maxRows: MAX_ROWS + 1 })).toThrow(WorkPaperConfigValueTooBigError)
     expect(() => validateWorkPaperConfig(invalidDecimalConfig)).toThrow(WorkPaperExpectedOneOfValuesError)
     expect(() => validateWorkPaperConfig(invalidCallbackConfig)).toThrow(WorkPaperExpectedValueOfTypeError)
+    expect(() => validateWorkPaperConfig(invalidCalculationSettingsConfig)).toThrow(WorkPaperConfigValueTooSmallError)
     expect(() => validateWorkPaperConfig({ context: () => undefined })).toThrow(WorkPaperExpectedValueOfTypeError)
+    expect(() =>
+      validateWorkPaperConfig({
+        calculationSettings: {
+          mode: 'manual',
+          compatibilityMode: 'odf-1.4',
+          dateSystem: '1904',
+          iterate: true,
+          iterateCount: 50,
+          iterateDelta: '0.001',
+          fullPrecision: false,
+          fullCalcOnLoad: true,
+          concurrentCalc: false,
+        },
+      }),
+    ).not.toThrow()
     expect(() => validateWorkPaperConfig({ chooseAddressMappingPolicy: { mode: 'sparse' } })).not.toThrow()
+  })
+
+  it('normalizes configured calculation settings against workbook defaults', () => {
+    expect(normalizeConfiguredWorkPaperCalculationSettings({ iterate: true })).toEqual({
+      mode: 'automatic',
+      compatibilityMode: 'excel-modern',
+      iterate: true,
+    })
+    expect(
+      normalizeConfiguredWorkPaperCalculationSettings(
+        { iterateCount: 250, iterateDelta: '0.0001' },
+        { mode: 'manual', compatibilityMode: 'odf-1.4', iterate: true },
+      ),
+    ).toEqual({
+      mode: 'manual',
+      compatibilityMode: 'odf-1.4',
+      iterate: true,
+      iterateCount: 250,
+      iterateDelta: '0.0001',
+    })
   })
 
   it('reports license states and sorted plugin ids', () => {
@@ -111,6 +156,7 @@ describe('work paper config helpers', () => {
   })
 
   it('keeps runtime config and public error allowlists visible', () => {
+    expect(WORKPAPER_CONFIG_KEYS).toContain('calculationSettings')
     expect(WORKPAPER_CONFIG_KEYS).toContain('functionPlugins')
     expect(WORKPAPER_CONFIG_KEYS).toContain('maxRows')
     expect(WORKPAPER_PUBLIC_ERROR_NAMES.has('WorkPaperOperationError')).toBe(true)

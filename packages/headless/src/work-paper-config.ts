@@ -1,16 +1,23 @@
-import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
+import { MAX_COLS, MAX_ROWS, type WorkbookCalculationSettingsSnapshot } from '@bilig/protocol'
+import { normalizeWorkbookCalculationSettings } from '@bilig/core'
 import {
   WorkPaperConfigValueTooBigError,
   WorkPaperConfigValueTooSmallError,
   WorkPaperExpectedOneOfValuesError,
   WorkPaperExpectedValueOfTypeError,
 } from './work-paper-errors.js'
-import type { WorkPaperConfig, WorkPaperFunctionPluginDefinition, WorkPaperLicenseKeyValidityState } from './work-paper-types.js'
+import type {
+  WorkPaperCalculationSettings,
+  WorkPaperConfig,
+  WorkPaperFunctionPluginDefinition,
+  WorkPaperLicenseKeyValidityState,
+} from './work-paper-types.js'
 
 export const DEFAULT_CONFIG: Readonly<WorkPaperConfig> = Object.freeze({
   accentSensitive: false,
   caseSensitive: false,
   caseFirst: 'false',
+  calculationSettings: undefined,
   chooseAddressMappingPolicy: undefined,
   context: undefined,
   currencySymbol: ['$'],
@@ -53,6 +60,7 @@ export const WORKPAPER_CONFIG_KEYS = [
   'accentSensitive',
   'caseSensitive',
   'caseFirst',
+  'calculationSettings',
   'chooseAddressMappingPolicy',
   'context',
   'currencySymbol',
@@ -148,6 +156,9 @@ export function cloneConfig(config: WorkPaperConfig): WorkPaperConfig {
   const cloned: WorkPaperConfig = {
     ...config,
   }
+  if (config.calculationSettings !== undefined) {
+    cloned.calculationSettings = { ...config.calculationSettings }
+  }
   if (config.chooseAddressMappingPolicy !== undefined) {
     cloned.chooseAddressMappingPolicy = { ...config.chooseAddressMappingPolicy }
   }
@@ -170,6 +181,57 @@ export function cloneConfig(config: WorkPaperConfig): WorkPaperConfig {
     cloned.timeFormats = [...config.timeFormats]
   }
   return cloned
+}
+
+export function normalizeConfiguredWorkPaperCalculationSettings(
+  settings: WorkPaperCalculationSettings | undefined,
+  base?: WorkbookCalculationSettingsSnapshot,
+): WorkbookCalculationSettingsSnapshot | undefined {
+  if (settings === undefined) {
+    return undefined
+  }
+  return normalizeWorkbookCalculationSettings(settings, base)
+}
+
+function validateWorkPaperCalculationSettings(settings: WorkPaperCalculationSettings): void {
+  if (settings.mode !== undefined && settings.mode !== 'automatic' && settings.mode !== 'manual') {
+    throw new WorkPaperExpectedOneOfValuesError('"automatic", "manual"', 'calculationSettings.mode')
+  }
+  if (
+    settings.compatibilityMode !== undefined &&
+    settings.compatibilityMode !== 'excel-modern' &&
+    settings.compatibilityMode !== 'odf-1.4'
+  ) {
+    throw new WorkPaperExpectedOneOfValuesError('"excel-modern", "odf-1.4"', 'calculationSettings.compatibilityMode')
+  }
+  if (settings.dateSystem !== undefined && settings.dateSystem !== '1900' && settings.dateSystem !== '1904') {
+    throw new WorkPaperExpectedOneOfValuesError('"1900", "1904"', 'calculationSettings.dateSystem')
+  }
+  if (settings.iterate !== undefined && settings.iterate !== null && typeof settings.iterate !== 'boolean') {
+    throw new WorkPaperExpectedValueOfTypeError('boolean', 'calculationSettings.iterate')
+  }
+  if (settings.iterateCount !== undefined && settings.iterateCount !== null) {
+    if (!Number.isSafeInteger(settings.iterateCount)) {
+      throw new WorkPaperExpectedValueOfTypeError('safe integer', 'calculationSettings.iterateCount')
+    }
+    if (settings.iterateCount < 1) {
+      throw new WorkPaperConfigValueTooSmallError('calculationSettings.iterateCount', 1)
+    }
+  }
+  if (settings.iterateDelta !== undefined && settings.iterateDelta !== null) {
+    if (typeof settings.iterateDelta !== 'string' || !Number.isFinite(Number(settings.iterateDelta))) {
+      throw new WorkPaperExpectedValueOfTypeError('finite numeric string', 'calculationSettings.iterateDelta')
+    }
+  }
+  if (settings.fullPrecision !== undefined && settings.fullPrecision !== null && typeof settings.fullPrecision !== 'boolean') {
+    throw new WorkPaperExpectedValueOfTypeError('boolean', 'calculationSettings.fullPrecision')
+  }
+  if (settings.fullCalcOnLoad !== undefined && settings.fullCalcOnLoad !== null && typeof settings.fullCalcOnLoad !== 'boolean') {
+    throw new WorkPaperExpectedValueOfTypeError('boolean', 'calculationSettings.fullCalcOnLoad')
+  }
+  if (settings.concurrentCalc !== undefined && settings.concurrentCalc !== null && typeof settings.concurrentCalc !== 'boolean') {
+    throw new WorkPaperExpectedValueOfTypeError('boolean', 'calculationSettings.concurrentCalc')
+  }
 }
 
 export function checkWorkPaperLicenseKeyValidity(licenseKey: string | undefined): WorkPaperLicenseKeyValidityState {
@@ -212,6 +274,16 @@ export function validateWorkPaperConfig(config: WorkPaperConfig): void {
   }
   if (config.caseFirst !== undefined && config.caseFirst !== 'upper' && config.caseFirst !== 'lower' && config.caseFirst !== 'false') {
     throw new WorkPaperExpectedOneOfValuesError('"upper", "lower", "false"', 'caseFirst')
+  }
+  if (config.calculationSettings !== undefined) {
+    if (
+      typeof config.calculationSettings !== 'object' ||
+      config.calculationSettings === null ||
+      Array.isArray(config.calculationSettings)
+    ) {
+      throw new WorkPaperExpectedValueOfTypeError('object', 'calculationSettings')
+    }
+    validateWorkPaperCalculationSettings(config.calculationSettings)
   }
   if (
     config.chooseAddressMappingPolicy !== undefined &&

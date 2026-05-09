@@ -4296,6 +4296,31 @@ describe('SpreadsheetEngine', () => {
     engine.setCalculationSettings({ mode: 'automatic' })
     expect(outbound).toEqual([])
 
+    engine.setCalculationSettings({ iterate: true, iterateCount: 32, iterateDelta: '0.01' })
+    expect(outbound.at(-1)?.ops).toEqual([
+      {
+        kind: 'setCalculationSettings',
+        settings: {
+          mode: 'automatic',
+          compatibilityMode: 'excel-modern',
+          iterate: true,
+          iterateCount: 32,
+          iterateDelta: '0.01',
+        },
+      },
+    ])
+    expect(engine.getCalculationSettings()).toEqual({
+      mode: 'automatic',
+      compatibilityMode: 'excel-modern',
+      iterate: true,
+      iterateCount: 32,
+      iterateDelta: '0.01',
+    })
+    outbound.splice(0)
+
+    engine.setCalculationSettings({ iterate: true, iterateCount: 32, iterateDelta: '0.01' })
+    expect(outbound).toEqual([])
+
     const table = {
       name: 'Sales',
       sheetName: 'Sheet1',
@@ -6060,7 +6085,7 @@ describe('SpreadsheetEngine', () => {
     engine.setCellValue('Sheet1', 'C1', 1_835_115_565)
     engine.setCellValue('Sheet1', 'D1', -24)
     engine.setCellFormula('Sheet1', 'A2', 'SUM(B1:E2)')
-    engine.setCellFormula('Sheet1', 'B2', 'IF(E2>0,"text:yes","text:no")')
+    engine.setCellFormula('Sheet1', 'B2', 'IF(E2+0>0,"text:yes","text:no")')
 
     expect(engine.getCellValue('Sheet1', 'A2')).toEqual({
       tag: ValueTag.Number,

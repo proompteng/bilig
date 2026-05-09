@@ -42,7 +42,7 @@ import type {
   EngineExistingNumericCellMutationResult,
   EngineFormulaSourceRef,
 } from './cell-mutations-at.js'
-import { definedNameValuesEqual } from './engine-metadata-utils.js'
+import { calculationSettingsEqual, definedNameValuesEqual, normalizeWorkbookCalculationSettings } from './engine-metadata-utils.js'
 import { buildFormatClearOps, buildFormatPatchOps, buildStyleClearOps, buildStylePatchOps } from './engine-range-format-ops.js'
 import { selectCellSnapshot, selectMetrics, selectSelectionState, selectViewportCells } from './selectors.js'
 import {
@@ -369,8 +369,8 @@ export class SpreadsheetEngine extends SpreadsheetEngineRuntimeBase {
 
   setCalculationSettings(settings: WorkbookCalculationSettingsSnapshot): void {
     const current = this.workbook.getCalculationSettings()
-    const nextSettings = { compatibilityMode: 'excel-modern' as const, ...settings }
-    if (current.mode === nextSettings.mode && current.compatibilityMode === nextSettings.compatibilityMode) {
+    const nextSettings = normalizeWorkbookCalculationSettings(settings, current)
+    if (calculationSettingsEqual(current, nextSettings)) {
       return
     }
     this.executeLocalTransaction([{ kind: 'setCalculationSettings', settings: nextSettings }])

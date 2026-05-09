@@ -1,4 +1,10 @@
-import { ErrorCode, type CellValue, type LiteralInput, type WorkbookDefinedNameValueSnapshot } from '@bilig/protocol'
+import {
+  ErrorCode,
+  type CellValue,
+  type LiteralInput,
+  type WorkbookCalculationSettingsSnapshot,
+  type WorkbookDefinedNameValueSnapshot,
+} from '@bilig/protocol'
 import { parseCellAddress, parseFormula, renameFormulaSheetReferences, type FormulaNode, type ReferenceOperand } from '@bilig/formula'
 import type { StringPool } from './string-pool.js'
 import { errorValue, literalToValue } from './engine-value-utils.js'
@@ -214,6 +220,66 @@ function maybeImplicitIntersectRangeName(node: FormulaNode, valueContext: Metada
     callee: 'SINGLE',
     args: [node],
   }
+}
+
+function hasOwnCalculationSetting<Key extends keyof WorkbookCalculationSettingsSnapshot>(
+  settings: Partial<WorkbookCalculationSettingsSnapshot>,
+  key: Key,
+): boolean {
+  return Object.hasOwn(settings, key)
+}
+
+export function normalizeWorkbookCalculationSettings(
+  settings: Partial<WorkbookCalculationSettingsSnapshot>,
+  base?: WorkbookCalculationSettingsSnapshot,
+): WorkbookCalculationSettingsSnapshot {
+  const normalized: WorkbookCalculationSettingsSnapshot = {
+    mode: settings.mode ?? base?.mode ?? 'automatic',
+    compatibilityMode: settings.compatibilityMode ?? base?.compatibilityMode ?? 'excel-modern',
+  }
+  const dateSystem = hasOwnCalculationSetting(settings, 'dateSystem') ? settings.dateSystem : base?.dateSystem
+  if (dateSystem !== undefined) {
+    normalized.dateSystem = dateSystem
+  }
+  const iterate = hasOwnCalculationSetting(settings, 'iterate') ? settings.iterate : base?.iterate
+  if (iterate !== undefined) {
+    normalized.iterate = iterate
+  }
+  const iterateCount = hasOwnCalculationSetting(settings, 'iterateCount') ? settings.iterateCount : base?.iterateCount
+  if (iterateCount !== undefined) {
+    normalized.iterateCount = iterateCount
+  }
+  const iterateDelta = hasOwnCalculationSetting(settings, 'iterateDelta') ? settings.iterateDelta : base?.iterateDelta
+  if (iterateDelta !== undefined) {
+    normalized.iterateDelta = iterateDelta
+  }
+  const fullPrecision = hasOwnCalculationSetting(settings, 'fullPrecision') ? settings.fullPrecision : base?.fullPrecision
+  if (fullPrecision !== undefined) {
+    normalized.fullPrecision = fullPrecision
+  }
+  const fullCalcOnLoad = hasOwnCalculationSetting(settings, 'fullCalcOnLoad') ? settings.fullCalcOnLoad : base?.fullCalcOnLoad
+  if (fullCalcOnLoad !== undefined) {
+    normalized.fullCalcOnLoad = fullCalcOnLoad
+  }
+  const concurrentCalc = hasOwnCalculationSetting(settings, 'concurrentCalc') ? settings.concurrentCalc : base?.concurrentCalc
+  if (concurrentCalc !== undefined) {
+    normalized.concurrentCalc = concurrentCalc
+  }
+  return normalized
+}
+
+export function calculationSettingsEqual(left: WorkbookCalculationSettingsSnapshot, right: WorkbookCalculationSettingsSnapshot): boolean {
+  return (
+    left.mode === right.mode &&
+    (left.compatibilityMode ?? 'excel-modern') === (right.compatibilityMode ?? 'excel-modern') &&
+    left.dateSystem === right.dateSystem &&
+    left.iterate === right.iterate &&
+    left.iterateCount === right.iterateCount &&
+    left.iterateDelta === right.iterateDelta &&
+    left.fullPrecision === right.fullPrecision &&
+    left.fullCalcOnLoad === right.fullCalcOnLoad &&
+    left.concurrentCalc === right.concurrentCalc
+  )
 }
 
 export function definedNameValuesEqual(left: WorkbookDefinedNameValueSnapshot, right: WorkbookDefinedNameValueSnapshot): boolean {

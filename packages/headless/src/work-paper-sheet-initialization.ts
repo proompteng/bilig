@@ -1,6 +1,7 @@
 import { readRuntimeImage, readRuntimeSnapshot, type EngineFormulaSourceRef, type SpreadsheetEngine } from '@bilig/core'
 import type { WorkbookSnapshot } from '@bilig/protocol'
 import { loadInitialLiteralSheet, prepareInitialMixedSheetLoad } from './initial-sheet-load.js'
+import { normalizeConfiguredWorkPaperCalculationSettings } from './work-paper-config.js'
 import {
   inspectRuntimeSnapshotSheetDimensionsWithinLimits,
   inspectSheetWithinLimits,
@@ -50,6 +51,7 @@ export function initializeWorkPaperFromSheets(args: {
   args.withEngineEventCaptureDisabled(() => {
     if (runtimeSnapshot && runtimeSnapshotMatchesSheets) {
       args.engine.importSnapshot(runtimeSnapshot)
+      reapplyConfiguredCalculationSettings(args.engine, args.config)
     } else {
       const sheetIds = sheetEntries.map(([sheetName]) => args.engine.createSheetForInitialization(sheetName))
       args.namedExpressions.forEach((expression) => {
@@ -127,6 +129,7 @@ export function initializeWorkPaperFromSnapshot(args: {
 
   args.withEngineEventCaptureDisabled(() => {
     args.engine.importSnapshot(args.snapshot)
+    reapplyConfiguredCalculationSettings(args.engine, args.config)
     for (let index = 0; index < args.snapshot.sheets.length; index += 1) {
       const snapshotSheet = args.snapshot.sheets[index]!
       const sheetId = args.requireSheetId(snapshotSheet.name)
@@ -137,6 +140,13 @@ export function initializeWorkPaperFromSnapshot(args: {
   })
   args.clearHistoryStacks()
   args.resetChangeTrackingCaches()
+}
+
+function reapplyConfiguredCalculationSettings(engine: SpreadsheetEngine, config: WorkPaperConfig): void {
+  const calculationSettings = normalizeConfiguredWorkPaperCalculationSettings(config.calculationSettings, engine.getCalculationSettings())
+  if (calculationSettings !== undefined) {
+    engine.setCalculationSettings(calculationSettings)
+  }
 }
 
 function inspectWorkPaperInitialSheets(args: {
