@@ -15,6 +15,7 @@ language: typescript
 - https://dev.to/gregkonush/why-agents-need-workbook-apis-instead-of-spreadsheet-screenshots-3d61
 - https://github.com/proompteng/bilig/tree/main/packages/headless#readme
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper
+- https://proompteng.github.io/bilig/node-spreadsheet-formula-engine.html
 - https://proompteng.github.io/bilig/workbook-automation-examples-node.html
 - https://proompteng.github.io/bilig/why-agents-need-workbook-apis.html
 - https://proompteng.github.io/bilig/agent-workpaper-tool-calling-recipe.html
@@ -32,6 +33,7 @@ language: typescript
 - https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md
 - https://github.com/proompteng/bilig/discussions
 - https://github.com/proompteng/bilig/discussions/157
+- https://github.com/proompteng/bilig/blob/main/docs/node-spreadsheet-formula-engine.md
 - https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md
 - https://github.com/proompteng/bilig/blob/main/docs/serverless-workpaper-api-route.md
 - https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md
@@ -93,6 +95,9 @@ npm run agent:verify
 - workbook APIs for agents:
   https://proompteng.github.io/bilig/why-agents-need-workbook-apis.html
   https://github.com/proompteng/bilig/blob/main/docs/why-agents-need-workbook-apis.md
+- node spreadsheet formula engine:
+  https://proompteng.github.io/bilig/node-spreadsheet-formula-engine.html
+  https://github.com/proompteng/bilig/blob/main/docs/node-spreadsheet-formula-engine.md
 - node service recipe:
   https://proompteng.github.io/bilig/node-service-workpaper-recipe.html
   https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md
