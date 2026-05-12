@@ -186,8 +186,6 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/188
 - current small docs issue: object-storage WorkPaper persistence recipe:
   https://github.com/proompteng/bilig/issues/189
-- current small docs issue: Vercel AI SDK WorkPaper tool wrapper:
-  https://github.com/proompteng/bilig/issues/190
 - good first issue search:
   https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22
 - first-timers-only issue search:

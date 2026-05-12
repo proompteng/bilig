@@ -182,6 +182,64 @@ summary changed as expected:
 `serializedBytes` will vary as the document schema evolves. Treat it as a
 positive persistence check, not a stable snapshot value.
 
+## Vercel AI SDK Tool Wrapper
+
+Vercel AI SDK users can expose the same WorkPaper operations through an
+AI-SDK-shaped `tools` object. This repository does not need the AI SDK as a
+dependency; the snippet is for applications that already use `ai` and want a
+familiar `tool()` wrapper:
+
+```js
+import { tool } from 'ai'
+import { z } from 'zod'
+
+export const workPaperTools = {
+  readWorkPaperSummary: tool({
+    description:
+      'Read computed WorkPaper summary values and serialized inputs for a small range.',
+    inputSchema: z.object({
+      range: z
+        .string()
+        .default('Summary!A1:B3')
+        .describe('A small A1 range, including the sheet name.'),
+    }),
+    execute: async ({ range = 'Summary!A1:B3' }) => tools.readSummary(range),
+  }),
+
+  setWorkPaperInputCell: tool({
+    description:
+      'Set one validated WorkPaper input cell and return before/after formula readback.',
+    inputSchema: z.object({
+      sheetName: z.string().describe('Target sheet name, for example Revenue.'),
+      address: z.string().describe('A1 cell address inside the target sheet.'),
+      value: z
+        .union([z.string(), z.number(), z.boolean(), z.null()])
+        .describe('Literal cell value. Use a separate formula tool for formulas.'),
+    }),
+    execute: async ({ sheetName, address, value }) => {
+      const result = tools.setInputCell({ sheetName, address, value })
+
+      if (
+        !result.checks.currentMrrChanged ||
+        !result.checks.nextMonthMrrChanged
+      ) {
+        throw new Error(
+          `WorkPaper edit did not change the dependent summary: ${JSON.stringify(result.checks)}`,
+        )
+      }
+
+      return result
+    },
+  }),
+}
+```
+
+Pass `workPaperTools` to `generateText()` or `streamText()` from your AI SDK
+application. Keep the model-facing result structured: the mutating tool should
+return `editedCell`, `before`, `after`, and `checks` so the next model step can
+explain exactly what changed. Persist the serialized workbook only after these
+computed readback checks pass.
+
 ## LangChain Tool Wrapper
 
 LangChain users can wrap the same SDK-neutral WorkPaper functions without adding

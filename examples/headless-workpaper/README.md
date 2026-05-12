@@ -93,8 +93,8 @@ restored summary, and serialized byte count.
 
 For agent frameworks, the
 [`WorkPaper tool-calling recipe`](../../docs/agent-workpaper-tool-calling-recipe.md)
-also shows a LangChain-style wrapper that keeps the same validation and computed
-readback contract.
+also shows Vercel AI SDK and LangChain-style wrappers that keep the same
+validation and computed readback contract.
 
 ## Agent Writeback Verification
 
