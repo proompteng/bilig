@@ -430,6 +430,53 @@ curl -s -X POST http://localhost:3000/api/workpaper/revenue \
 If the Hono app is deployed to a worker or serverless runtime, pair this adapter
 with the durable storage variant above instead of relying on module memory.
 
+## SvelteKit Adapter
+
+SvelteKit route handlers already receive a web-standard `Request`, so the
+adapter should stay as small as the Hono and Next.js variants. Keep the
+WorkPaper logic in a shared module such as `src/lib/server/workpaper-route.js`,
+then call it from the route files.
+
+Create `src/routes/api/workpaper/summary/+server.js`:
+
+```js
+import { handleWorkPaperRequest } from '$lib/server/workpaper-route.js'
+
+export async function GET({ request }) {
+  return handleWorkPaperRequest(request)
+}
+```
+
+Create `src/routes/api/workpaper/revenue/+server.js`:
+
+```js
+import { handleWorkPaperRequest } from '$lib/server/workpaper-route.js'
+
+export async function POST({ request }) {
+  return handleWorkPaperRequest(request)
+}
+```
+
+The shared module should keep the `@bilig/headless` imports, `state`,
+`handleWorkPaperRequest()`, and the workbook helpers from the standalone route
+recipe. Omit the local `createServer()` adapter and the `toWebRequest()`
+translation helper because SvelteKit already hands your route a Fetch
+`Request`.
+
+The route path stays the same:
+
+```sh
+curl -s http://localhost:5173/api/workpaper/summary
+curl -s -X POST http://localhost:5173/api/workpaper/revenue \
+  -H 'content-type: application/json' \
+  -d '{"records":[{"region":"West","customers":20,"arpa":1200},{"region":"East","customers":30,"arpa":250},{"region":"Central","customers":18,"arpa":300},{"region":"North","customers":65,"arpa":180}]}'
+```
+
+Keep the framework files thin. The workbook route should still load the
+serialized WorkPaper document, apply the accepted edit, recalculate formulas,
+persist the next JSON document, and return summary proof through the shared
+handler instead of duplicating those details in each SvelteKit endpoint.
+
 ## Validation
 
 For the standalone recipe:
