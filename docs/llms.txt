@@ -113,6 +113,8 @@ npm run agent:verify
   https://github.com/proompteng/bilig/discussions
 - feedback discussion for agent and service workflow input:
   https://github.com/proompteng/bilig/discussions/157
+- serverless route feedback discussion:
+  https://github.com/proompteng/bilig/discussions/167
 - older agent API shape discussion:
   https://github.com/proompteng/bilig/discussions/115
 - community launch and growth pack:

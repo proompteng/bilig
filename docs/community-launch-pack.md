@@ -265,6 +265,9 @@ output you need to trust.
 Live workflow-feedback thread:
 <https://github.com/proompteng/bilig/discussions/157>
 
+Live serverless-route feedback thread:
+<https://github.com/proompteng/bilig/discussions/167>
+
 ## Weekly Operating Cadence
 
 Every week until `1,000` stars:
