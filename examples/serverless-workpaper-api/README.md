@@ -94,6 +94,9 @@ module memory.
   `Request`, then return a Lambda proxy response.
 - In Azure Functions, adapt the HTTP trigger request into a web-standard
   `Request`, then return an HTTP response object.
+- In Netlify Functions, return `handleWorkPaperRequest(request)` from the
+  default export, or use the Lambda-compatible adapter for named `handler`
+  functions.
 - Replace the in-memory `state.workbookJson` with your durable store when the
   workbook needs to survive cold starts or multiple instances.
 

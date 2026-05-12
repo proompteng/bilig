@@ -184,8 +184,6 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/162
 - current small docs issue: coding-agent workbook automation recipe:
   https://github.com/proompteng/bilig/issues/163
-- current small docs issue: Netlify Functions adapter:
-  https://github.com/proompteng/bilig/issues/178
 - current small docs issue: Hapi route adapter:
   https://github.com/proompteng/bilig/issues/179
 - current small docs issue: Cloudflare Pages Functions adapter:

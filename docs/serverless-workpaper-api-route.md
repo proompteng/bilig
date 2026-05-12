@@ -904,6 +904,83 @@ Use the durable storage variant above for deployed function apps. Module memory
 is not a reliable workbook store across cold starts, scale-out instances, or
 regional deployments.
 
+## Netlify Functions Adapter
+
+Netlify's current Functions runtime passes a web-standard `Request` into the
+default export and expects a `Response` back. Put the shared WorkPaper route in a
+module such as `workpaper-route.js`, then keep the function file as a direct
+pass-through.
+
+Create `netlify/functions/workpaper.mjs`:
+
+```js
+import { handleWorkPaperRequest } from './workpaper-route.js'
+
+export default async function workpaper(request) {
+  return handleWorkPaperRequest(request)
+}
+
+export const config = {
+  path: ['/api/workpaper/summary', '/api/workpaper/revenue'],
+}
+```
+
+If your Netlify project is using the Lambda-compatible named `handler` export,
+adapt the event into a `Request` and convert the `Response` back into a function
+result:
+
+```js
+import { handleWorkPaperRequest } from './workpaper-route.js'
+
+export async function handler(event) {
+  const response = await handleWorkPaperRequest(toWebRequest(event))
+  return toNetlifyResult(response)
+}
+
+function toWebRequest(event) {
+  const headers = new Headers(event.headers ?? {})
+  const protocol = headers.get('x-forwarded-proto') ?? 'https'
+  const host = headers.get('host') ?? 'localhost'
+  const path = event.rawUrl ?? event.path ?? '/api/workpaper/summary'
+  const body = event.body === undefined || event.body === null
+    ? undefined
+    : event.isBase64Encoded
+      ? Buffer.from(event.body, 'base64')
+      : event.body
+
+  return new Request(new URL(path, `${protocol}://${host}`), {
+    method: event.httpMethod ?? 'GET',
+    headers,
+    body:
+      event.httpMethod === 'GET' || event.httpMethod === 'HEAD'
+        ? undefined
+        : body,
+  })
+}
+
+async function toNetlifyResult(response) {
+  return {
+    statusCode: response.status,
+    headers: Object.fromEntries(response.headers),
+    body: Buffer.from(await response.arrayBuffer()).toString('utf8'),
+    isBase64Encoded: false,
+  }
+}
+```
+
+The same route paths apply when `netlify dev` is running locally:
+
+```sh
+curl -s http://localhost:8888/api/workpaper/summary
+curl -s -X POST http://localhost:8888/api/workpaper/revenue \
+  -H 'content-type: application/json' \
+  -d '{"records":[{"region":"West","customers":20,"arpa":1200},{"region":"East","customers":30,"arpa":250},{"region":"Central","customers":18,"arpa":300},{"region":"North","customers":65,"arpa":180}]}'
+```
+
+Use the durable storage variant above for deployed Netlify Functions. Function
+instances can be short-lived or scaled out, so module memory is only appropriate
+for a local smoke test.
+
 ## Validation
 
 For the standalone recipe:
