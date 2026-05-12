@@ -28,6 +28,11 @@ Current starter tickets as of May 12, 2026:
 - [#210: docs(examples): add support SLA breach summary example](https://github.com/proompteng/bilig/issues/210)
 - [#211: docs(examples): add weighted sales pipeline forecast example](https://github.com/proompteng/bilig/issues/211)
 - [#212: docs(examples): add headcount capacity forecast example](https://github.com/proompteng/bilig/issues/212)
+- [#217: docs(examples): add loan amortization WorkPaper example](https://github.com/proompteng/bilig/issues/217)
+- [#218: docs(examples): add cohort retention WorkPaper example](https://github.com/proompteng/bilig/issues/218)
+- [#219: docs(examples): add commission payout WorkPaper example](https://github.com/proompteng/bilig/issues/219)
+- [#220: docs(examples): add cash runway WorkPaper example](https://github.com/proompteng/bilig/issues/220)
+- [#221: docs(examples): add currency sensitivity WorkPaper example](https://github.com/proompteng/bilig/issues/221)
 
 The list intentionally excludes closed issues and broad corpus/parity epics. Add
 new starter tickets only when the expected patch can stay small, has a clear
