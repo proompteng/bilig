@@ -568,6 +568,78 @@ trust as you normally would before relying on `req.protocol` for absolute URLs.
 For non-JSON payloads, preserve the raw request body in `toWebRequest()` instead
 of serializing `req.body`.
 
+## AWS Lambda Function URL Adapter
+
+Lambda Function URLs use the API Gateway payload format version 2.0. Keep the
+Lambda handler small: convert the event into a web-standard `Request`, run the
+shared WorkPaper handler, then return a Lambda proxy response.
+
+```js
+import { handleWorkPaperRequest } from './workpaper-route.js'
+
+export async function handler(event) {
+  const response = await handleWorkPaperRequest(toWebRequest(event))
+  return toLambdaResult(response)
+}
+
+function toWebRequest(event) {
+  const headers = new Headers()
+
+  for (const [name, value] of Object.entries(event.headers ?? {})) {
+    if (value !== undefined) {
+      headers.set(name, String(value))
+    }
+  }
+
+  const method = event.requestContext?.http?.method ?? event.httpMethod ?? 'GET'
+  const protocol = headers.get('x-forwarded-proto') ?? 'https'
+  const host = event.requestContext?.domainName ?? headers.get('host') ?? 'localhost'
+  const path = event.rawPath ?? event.path ?? '/'
+  const query =
+    event.rawQueryString === undefined || event.rawQueryString === ''
+      ? ''
+      : `?${event.rawQueryString}`
+  const body =
+    event.body === undefined || event.body === null
+      ? undefined
+      : event.isBase64Encoded
+        ? Buffer.from(event.body, 'base64')
+        : event.body
+
+  return new Request(new URL(`${path}${query}`, `${protocol}://${host}`), {
+    method,
+    headers,
+    body: method === 'GET' || method === 'HEAD' ? undefined : body,
+  })
+}
+
+async function toLambdaResult(response) {
+  return {
+    statusCode: response.status,
+    headers: Object.fromEntries(response.headers),
+    body: Buffer.from(await response.arrayBuffer()).toString('utf8'),
+    isBase64Encoded: false,
+  }
+}
+```
+
+This example returns UTF-8 JSON, so `isBase64Encoded` stays `false`. If you add a
+binary export route later, base64-encode that route's response body and set
+`isBase64Encoded: true`.
+
+The same route paths apply behind the function URL:
+
+```sh
+curl -s https://example.lambda-url.us-east-1.on.aws/api/workpaper/summary
+curl -s -X POST https://example.lambda-url.us-east-1.on.aws/api/workpaper/revenue \
+  -H 'content-type: application/json' \
+  -d '{"records":[{"region":"West","customers":20,"arpa":1200},{"region":"East","customers":30,"arpa":250},{"region":"Central","customers":18,"arpa":300},{"region":"North","customers":65,"arpa":180}]}'
+```
+
+Pair the Lambda handler with the durable storage variant above. Module memory is
+not a reliable persistence boundary across Lambda cold starts, concurrent
+instances, or redeploys.
+
 ## Validation
 
 For the standalone recipe:

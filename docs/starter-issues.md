@@ -29,10 +29,10 @@ Current starter tickets as of May 12, 2026:
 - [#160: docs(headless): add WorkPaper API read/write cheat sheet](https://github.com/proompteng/bilig/issues/160)
 - [#162: docs(benchmarks): add WorkPaper benchmark reproduction notes](https://github.com/proompteng/bilig/issues/162)
 - [#163: docs(agent): add coding-agent workbook automation recipe](https://github.com/proompteng/bilig/issues/163)
-- [#171: docs(serverless): add AWS Lambda function URL adapter](https://github.com/proompteng/bilig/issues/171)
 - [#172: docs(serverless): add Deno Deploy adapter](https://github.com/proompteng/bilig/issues/172)
 - [#173: docs(serverless): add SvelteKit endpoint adapter](https://github.com/proompteng/bilig/issues/173)
 - [#174: docs(serverless): add Koa route adapter](https://github.com/proompteng/bilig/issues/174)
+- [#175: docs(serverless): add Bun.serve adapter](https://github.com/proompteng/bilig/issues/175)
 
 The list intentionally excludes closed issues and broad corpus/parity epics. Add
 new starter tickets only when the expected patch can stay small, has a clear
