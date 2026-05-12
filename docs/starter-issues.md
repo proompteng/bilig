@@ -29,13 +29,13 @@ Current starter tickets as of May 12, 2026:
 - [#160: docs(headless): add WorkPaper API read/write cheat sheet](https://github.com/proompteng/bilig/issues/160)
 - [#162: docs(benchmarks): add WorkPaper benchmark reproduction notes](https://github.com/proompteng/bilig/issues/162)
 - [#163: docs(agent): add coding-agent workbook automation recipe](https://github.com/proompteng/bilig/issues/163)
-- [#179: docs(serverless): add Hapi route adapter](https://github.com/proompteng/bilig/issues/179)
 - [#180: docs(serverless): add Cloudflare Pages Functions adapter](https://github.com/proompteng/bilig/issues/180)
 - [#181: docs(serverless): add Remix resource route adapter](https://github.com/proompteng/bilig/issues/181)
 - [#182: docs(serverless): add Nitro event handler adapter](https://github.com/proompteng/bilig/issues/182)
 - [#183: docs(serverless): add NestJS controller adapter](https://github.com/proompteng/bilig/issues/183)
 - [#184: docs(serverless): add Elysia route adapter](https://github.com/proompteng/bilig/issues/184)
 - [#185: docs(serverless): add Vercel Function adapter](https://github.com/proompteng/bilig/issues/185)
+- [#186: docs(serverless): add Firebase Functions HTTPS adapter](https://github.com/proompteng/bilig/issues/186)
 
 The list intentionally excludes closed issues and broad corpus/parity epics. Add
 new starter tickets only when the expected patch can stay small, has a clear

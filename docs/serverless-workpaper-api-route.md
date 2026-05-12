@@ -769,6 +769,98 @@ curl -s -X POST http://localhost:3000/api/workpaper/revenue \
 Use the durable storage variant above when the Koa service runs in more than one
 process, container, or serverless instance.
 
+## Hapi Adapter
+
+Hapi route handlers receive a framework request plus the response toolkit `h`.
+Keep the WorkPaper handler framework-agnostic by translating the Hapi request
+into a web-standard `Request`, then translate the returned `Response` through
+`h.response()`.
+
+```js
+import Hapi from '@hapi/hapi'
+import { handleWorkPaperRequest } from './workpaper-route.js'
+
+const server = Hapi.server({ port: 3000 })
+
+server.route([
+  {
+    method: 'GET',
+    path: '/api/workpaper/summary',
+    handler: runWorkPaperRoute,
+  },
+  {
+    method: 'POST',
+    path: '/api/workpaper/revenue',
+    handler: runWorkPaperRoute,
+  },
+])
+
+async function runWorkPaperRoute(request, h) {
+  const response = await handleWorkPaperRequest(toWebRequest(request))
+  return writeWebResponse(h, response)
+}
+
+function toWebRequest(request) {
+  const protocol = request.headers['x-forwarded-proto'] ?? 'http'
+  const host = request.headers.host ?? request.info.host ?? 'localhost:3000'
+  const path = request.raw.req.url ?? request.url?.href ?? request.path
+  const headers = new Headers()
+
+  for (const [name, value] of Object.entries(request.headers)) {
+    if (Array.isArray(value)) {
+      headers.set(name, value.join(', '))
+    } else if (value !== undefined) {
+      headers.set(name, String(value))
+    }
+  }
+
+  return new Request(new URL(path, `${protocol}://${host}`), {
+    method: request.method,
+    headers,
+    body:
+      request.method === 'GET' || request.method === 'HEAD'
+        ? undefined
+        : normalizePayload(request.payload),
+  })
+}
+
+function normalizePayload(payload) {
+  if (payload === undefined || payload === null) {
+    return undefined
+  }
+
+  if (typeof payload === 'string' || payload instanceof Uint8Array) {
+    return payload
+  }
+
+  return JSON.stringify(payload)
+}
+
+async function writeWebResponse(h, response) {
+  const reply = h.response(Buffer.from(await response.arrayBuffer())).code(response.status)
+  response.headers.forEach((value, name) => reply.header(name, value))
+  return reply
+}
+
+await server.start()
+```
+
+This adapter assumes Hapi parses JSON payloads before the handler runs. If a
+route needs the exact raw request stream, configure that route's Hapi payload
+options for raw input and pass the raw payload through `normalizePayload()`.
+
+The same smoke calls apply when the Hapi server is running locally:
+
+```sh
+curl -s http://localhost:3000/api/workpaper/summary
+curl -s -X POST http://localhost:3000/api/workpaper/revenue \
+  -H 'content-type: application/json' \
+  -d '{"records":[{"region":"West","customers":20,"arpa":1200},{"region":"East","customers":30,"arpa":250},{"region":"Central","customers":18,"arpa":300},{"region":"North","customers":65,"arpa":180}]}'
+```
+
+Use the durable storage variant above when the Hapi service runs in more than
+one process, container, or serverless instance.
+
 ## AWS Lambda Function URL Adapter
 
 Lambda Function URLs use the API Gateway payload format version 2.0. Keep the

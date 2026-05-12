@@ -90,6 +90,8 @@ module memory.
   write the returned `Response` through `res`.
 - In Koa, adapt `ctx` into a web-standard `Request`, then write status, headers,
   and body back to the Koa context.
+- In Hapi, adapt the framework request into a web-standard `Request`, then
+  return the shared response through `h.response()`.
 - In an AWS Lambda Function URL handler, adapt the event into a web-standard
   `Request`, then return a Lambda proxy response.
 - In Azure Functions, adapt the HTTP trigger request into a web-standard
