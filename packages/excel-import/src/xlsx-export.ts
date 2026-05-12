@@ -36,6 +36,7 @@ import { addExportTablesToXlsxBytes } from './xlsx-tables.js'
 import { addExportThreadedCommentArtifactsToXlsxBytes } from './xlsx-threaded-comment-artifacts.js'
 import { addExportThemeArtifactToXlsxBytes } from './xlsx-theme-artifacts.js'
 import { addExportDataValidationsToXlsxBytes } from './xlsx-validations.js'
+import { addExportViewStateToXlsxBytes } from './xlsx-view-state.js'
 import { addExportWorkbookProtectionToXlsxBytes } from './xlsx-workbook-protection.js'
 import { addExportWorkbookPropertiesToXlsxBytes } from './xlsx-workbook-properties.js'
 import { addExportIgnoredErrorsToXlsxBytes } from './xlsx-ignored-errors.js'
@@ -902,11 +903,14 @@ export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
             addExportFiltersToXlsxBytes(
               addExportProtectedRangesToXlsxBytes(
                 addExportSheetProtectionsToXlsxBytes(
-                  addExportFreezePanesToXlsxBytes(
-                    addExportWorksheetPropertiesToXlsxBytes(
-                      addExportSheetTabColorsToXlsxBytes(
-                        addExportCalculationSettingsToXlsxBytes(
-                          addExportWorkbookProtectionToXlsxBytes(addExportWorkbookPropertiesToXlsxBytes(bytes, snapshot), snapshot),
+                  addExportViewStateToXlsxBytes(
+                    addExportFreezePanesToXlsxBytes(
+                      addExportWorksheetPropertiesToXlsxBytes(
+                        addExportSheetTabColorsToXlsxBytes(
+                          addExportCalculationSettingsToXlsxBytes(
+                            addExportWorkbookProtectionToXlsxBytes(addExportWorkbookPropertiesToXlsxBytes(bytes, snapshot), snapshot),
+                            snapshot,
+                          ),
                           snapshot,
                         ),
                         snapshot,

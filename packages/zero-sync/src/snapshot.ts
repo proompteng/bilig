@@ -306,6 +306,9 @@ function withSheetMetadataFallback(
   if (fallback?.threadedCommentArtifacts) {
     next.threadedCommentArtifacts = fallback.threadedCommentArtifacts
   }
+  if (fallback?.viewState) {
+    next.viewState = fallback.viewState
+  }
   if (fallback?.merges) {
     next.merges = fallback.merges
   }

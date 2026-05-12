@@ -850,6 +850,14 @@ export interface WorkbookSheetRichTextArtifactsSnapshot {
   cells: WorkbookRichTextCellSnapshot[]
 }
 
+export interface WorkbookViewStateSnapshot {
+  bookViewsXml: string
+}
+
+export interface WorkbookSheetViewStateSnapshot {
+  sheetViewsXml: string
+}
+
 export interface WorkbookMetadataSnapshot {
   properties?: WorkbookPropertySnapshot[]
   documentPropertyArtifacts?: WorkbookDocumentPropertiesArtifactsSnapshot
@@ -865,6 +873,7 @@ export interface WorkbookMetadataSnapshot {
   controlArtifacts?: WorkbookControlArtifactsSnapshot
   dataModelArtifacts?: WorkbookDataModelArtifactsSnapshot
   threadedCommentArtifacts?: WorkbookThreadedCommentArtifactsSnapshot
+  viewState?: WorkbookViewStateSnapshot
   charts?: WorkbookChartSnapshot[]
   images?: WorkbookImageSnapshot[]
   shapes?: WorkbookShapeSnapshot[]
@@ -913,6 +922,7 @@ export interface SheetMetadataSnapshot {
   cellMetadataRefs?: WorkbookCellMetadataReferenceSnapshot[]
   richTextArtifacts?: WorkbookSheetRichTextArtifactsSnapshot
   threadedCommentArtifacts?: WorkbookSheetThreadedCommentArtifactsSnapshot
+  viewState?: WorkbookSheetViewStateSnapshot
 }
 
 export interface WorkbookSnapshot {

@@ -44,6 +44,7 @@ import { readImportedWorkbookSheetTabColors } from './xlsx-tab-colors.js'
 import { readImportedWorkbookTables } from './xlsx-tables.js'
 import { readImportedWorkbookThreadedCommentArtifacts } from './xlsx-threaded-comment-artifacts.js'
 import { readImportedWorkbookDataValidations } from './xlsx-validations.js'
+import { readImportedWorkbookViewState } from './xlsx-view-state.js'
 import { readImportedWorkbookProtection } from './xlsx-workbook-protection.js'
 import { readImportedWorkbookDocumentPropertiesArtifacts, readImportedWorkbookProperties } from './xlsx-workbook-properties.js'
 import {
@@ -323,6 +324,7 @@ function importSheetJsWorkbook(
   const importedThreadedCommentArtifacts = workbookZip
     ? readImportedWorkbookThreadedCommentArtifacts(workbookZip, workbook.SheetNames)
     : undefined
+  const importedViewState = workbookZip ? readImportedWorkbookViewState(workbookZip, workbook.SheetNames) : undefined
 
   let ignoredCommentsSeen = false
   let externalWorkbookReferenceWarningSeen = warnings.includes(externalWorkbookReferencesWarning)
@@ -514,6 +516,7 @@ function importSheetJsWorkbook(
     const importedCellMetadataRefs = buildImportedCellMetadataReferenceSnapshots(importedCellMetadata?.refsBySheet.get(sheetName), cells)
     const importedRichTextArtifacts = importedRichTextArtifactsBySheet.get(sheetName)
     const importedThreadedCommentArtifactsForSheet = importedThreadedCommentArtifacts?.sheetArtifactsByName.get(sheetName)
+    const importedViewStateForSheet = importedViewState?.sheetViewStateByName.get(sheetName)
     const metadata = buildImportedSheetMetadata({
       rows,
       columns,
@@ -548,6 +551,7 @@ function importSheetJsWorkbook(
       cellMetadataRefs: importedCellMetadataRefs,
       richTextArtifacts: importedRichTextArtifacts,
       threadedCommentArtifacts: importedThreadedCommentArtifactsForSheet,
+      viewState: importedViewStateForSheet,
     })
 
     return {
@@ -581,6 +585,7 @@ function importSheetJsWorkbook(
     controlArtifacts: importedControlArtifacts?.artifacts,
     dataModelArtifacts: importedDataModelArtifacts,
     threadedCommentArtifacts: importedThreadedCommentArtifacts?.artifacts,
+    viewState: importedViewState?.workbookViewState,
     charts: importedCharts,
     styleArtifacts: importedStyleArtifacts.workbookArtifacts,
     cellMetadata: importedCellMetadata?.workbookMetadata,
