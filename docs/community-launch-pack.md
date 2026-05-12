@@ -23,18 +23,19 @@ Latest public snapshot on May 8, 2026:
 - Contributor funnel: `18` open `good first issue`, `18` open
   `first-timers-only`, and `18` open `help wanted` issues
 
-Latest execution snapshot on May 12, 2026 at `21:05:33Z`:
+Latest execution snapshot on May 12, 2026 at `22:23:50Z`:
 
 - GitHub surface: public repo, `24` stars, `4` forks, `31` open issues
-- npm surface: `@bilig/headless@0.11.18`, MIT, TypeScript types, npm API
+- npm surface: `@bilig/headless@0.11.25`, MIT, TypeScript types, npm API
   downloads: `13,427` last week and `24,931` last month
-- Contributor funnel: `21` open `good first issue`, `21` open
-  `first-timers-only`, and `21` open `help wanted` issues
-- Starter funnel refresh: five new first-timer example issues, `#201` through
-  `#205`, cover invoice totals, budget variance, subscription MRR, quote
-  approval, and fulfillment capacity workflows
-- Discussion activity: `4` GitHub Discussions, with `#157` updated most
-  recently and focused on which Node workbook workflow to prove next
+- Contributor funnel: `22` open `good first issue`, `22` open
+  `first-timers-only`, and `22` open `help wanted` issues
+- Starter funnel refresh: six current first-timer example issues, `#207`
+  through `#212`, cover inventory reorder points, accounts receivable aging,
+  usage-based billing tiers, support SLA breach summaries, weighted sales
+  pipeline forecasts, and headcount capacity forecasts
+- Discussion activity: `5` GitHub Discussions, including the five-example
+  show-and-tell thread and the workflow-feedback thread
 - External activity: `1` open external issue, `22` external issues opened in
   the last seven days, and `4` external pull requests opened in the last seven
   days
@@ -303,10 +304,11 @@ Capture the baseline before and after each distribution push:
 pnpm community:growth:snapshot
 ```
 
-Set `GITHUB_TOKEN` or `GH_TOKEN` with repository traffic access to include
-recent discussion activity, views, clones, popular referrers, and popular paths.
-Without a token, the snapshot still records public GitHub stars, forks, open
-issues, package version, and npm download windows.
+Set `GITHUB_TOKEN` or `GH_TOKEN` with repository traffic access, or run with an
+authenticated `gh` CLI session, to include recent discussion activity, views,
+clones, popular referrers, and popular paths. Without either authenticated
+source, the snapshot still records public GitHub stars, forks, open issues,
+package version, and npm download windows.
 
 ## Anti-Spam Rules
 
