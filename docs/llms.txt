@@ -182,8 +182,6 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/162
 - current small docs issue: coding-agent workbook automation recipe:
   https://github.com/proompteng/bilig/issues/163
-- current small docs issue: Nitro event handler adapter:
-  https://github.com/proompteng/bilig/issues/182
 - current small docs issue: NestJS controller adapter:
   https://github.com/proompteng/bilig/issues/183
 - current small docs issue: Elysia route adapter:

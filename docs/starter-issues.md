@@ -28,7 +28,6 @@ Current starter tickets as of May 12, 2026:
 - [#160: docs(headless): add WorkPaper API read/write cheat sheet](https://github.com/proompteng/bilig/issues/160)
 - [#162: docs(benchmarks): add WorkPaper benchmark reproduction notes](https://github.com/proompteng/bilig/issues/162)
 - [#163: docs(agent): add coding-agent workbook automation recipe](https://github.com/proompteng/bilig/issues/163)
-- [#182: docs(serverless): add Nitro event handler adapter](https://github.com/proompteng/bilig/issues/182)
 - [#183: docs(serverless): add NestJS controller adapter](https://github.com/proompteng/bilig/issues/183)
 - [#184: docs(serverless): add Elysia route adapter](https://github.com/proompteng/bilig/issues/184)
 - [#185: docs(serverless): add Vercel Function adapter](https://github.com/proompteng/bilig/issues/185)

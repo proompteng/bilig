@@ -266,6 +266,8 @@ Keep the exported `handleWorkPaperRequest()` function as the stable boundary:
   `onRequestPost()`.
 - In Remix resource routes, return it from a `loader()` for `GET` and an
   `action()` for `POST`.
+- In Nitro, wrap it with H3's `fromWebHandler()` and export that from
+  method-specific route files.
 - In Hono, Fastify, or Express, adapt the framework request into a web-standard
   `Request`, then return or write the `Response`.
 - Persist `state.workbookJson` in your durable store instead of module memory
@@ -629,6 +631,55 @@ shared handler returns the `Response` directly.
 Use the durable storage variant above for deployed Remix apps. Module memory is
 fine for a local smoke test, but it is not a durable workbook store across
 server restarts, serverless cold starts, or multiple app instances.
+
+## Nitro Event Handler Adapter
+
+Nitro maps files in `api/` or `routes/` to H3 route handlers. H3 can return a
+web-standard `Response`, and its `fromWebHandler()` helper converts a
+`Request => Response` function into an event handler, so the WorkPaper route can
+stay framework-agnostic.
+
+Create `workpaper-route.js` from the shared route code above:
+
+- keep the `@bilig/headless` imports
+- keep `state`, `handleWorkPaperRequest()`, and every workbook helper
+- omit `createServer()`, `toWebRequest()`, and the local Node adapter block
+
+Then create `routes/api/workpaper/summary.get.js`:
+
+```js
+import { fromWebHandler } from 'h3'
+import { handleWorkPaperRequest } from '../../../workpaper-route.js'
+
+export default fromWebHandler((request) => handleWorkPaperRequest(request))
+```
+
+Create `routes/api/workpaper/revenue.post.js`:
+
+```js
+import { fromWebHandler } from 'h3'
+import { handleWorkPaperRequest } from '../../../workpaper-route.js'
+
+export default fromWebHandler((request) => handleWorkPaperRequest(request))
+```
+
+Nitro's method suffixes keep the route intent visible:
+
+```sh
+curl -s http://localhost:3000/api/workpaper/summary
+curl -s -X POST http://localhost:3000/api/workpaper/revenue \
+  -H 'content-type: application/json' \
+  -d '{"records":[{"region":"West","customers":20,"arpa":1200},{"region":"East","customers":30,"arpa":250},{"region":"Central","customers":18,"arpa":300},{"region":"North","customers":65,"arpa":180}]}'
+```
+
+For Nuxt projects, put the same files under `server/routes/api/workpaper/`.
+For a standalone Nitro project, `routes/api/...` keeps the `/api/...` path clear
+even on platforms that reserve a top-level `api/` directory.
+
+Use the durable storage variant above for deployed Nitro services. Module
+memory is acceptable for the local smoke test only; real workbook state should
+come from a database, object store, KV binding, or Nitro storage mount before
+reads and be saved after accepted mutations.
 
 ## Bun.serve Adapter
 

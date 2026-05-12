@@ -86,6 +86,8 @@ module memory.
   `GET` and `POST` handlers.
 - In Remix, return `handleWorkPaperRequest(request)` from resource-route
   `loader` and `action` functions.
+- In Nitro, export an H3 `fromWebHandler()` wrapper from method-specific route
+  files.
 - In Bun, return `handleWorkPaperRequest(request)` from the `Bun.serve()`
   `fetch` handler.
 - In Fastify, adapt the framework request into a web-standard `Request`, then

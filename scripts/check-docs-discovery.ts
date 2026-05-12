@@ -287,7 +287,6 @@ for (const required of [
   'https://github.com/proompteng/bilig/issues/160',
   'https://github.com/proompteng/bilig/issues/162',
   'https://github.com/proompteng/bilig/issues/163',
-  'https://github.com/proompteng/bilig/issues/182',
   'https://github.com/proompteng/bilig/issues/183',
   'https://github.com/proompteng/bilig/issues/184',
   'https://github.com/proompteng/bilig/issues/185',
@@ -317,6 +316,7 @@ for (const closedIssue of [
   '179',
   '180',
   '181',
+  '182',
 ]) {
   if (starterIssues.includes(`https://github.com/proompteng/bilig/issues/${closedIssue}`)) {
     throw new Error(`docs/starter-issues.md still links to closed starter issue #${closedIssue}`)
