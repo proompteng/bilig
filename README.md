@@ -28,8 +28,9 @@ Project site: <https://proompteng.github.io/bilig/>
 - **Build a Node workflow**: start from the
   [runnable WorkPaper example](examples/headless-workpaper),
   [JSON records input example](examples/headless-workpaper#json-records-input),
+  [serverless API route example](examples/serverless-workpaper-api),
   [Node service recipe](docs/node-service-workpaper-recipe.md), or
-  [serverless API route recipe](docs/serverless-workpaper-api-route.md).
+  [serverless route walkthrough](docs/serverless-workpaper-api-route.md).
 - **Wire a coding-agent tool**: use the
   [agent tool-calling recipe](docs/agent-workpaper-tool-calling-recipe.md).
 - **Contribute a small patch**: pick a scoped
@@ -179,6 +180,36 @@ Expected proof from `npm run agent:verify` includes:
     "formulasPersisted": true,
     "restoredMatchesAfter": true
   }
+}
+```
+
+The serverless route example gives HTTP and agent-tool evaluators a runnable
+JSON boundary:
+
+```bash
+git clone https://github.com/proompteng/bilig.git
+cd bilig/examples/serverless-workpaper-api
+npm install
+npm run smoke
+```
+
+Expected proof from `npm run smoke` includes:
+
+```json
+{
+  "edit": {
+    "records": 4,
+    "after": {
+      "totalRevenue": 48600,
+      "westCustomers": 20,
+      "largestDeal": 24000
+    },
+    "checks": {
+      "totalRevenueChanged": true,
+      "formulasPersisted": true
+    }
+  },
+  "verified": true
 }
 ```
 

@@ -36,6 +36,9 @@ pnpm --filter @bilig/headless build
 - Try the runnable examples:
   [`examples/headless-workpaper`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper) and
   [`npm run json-records`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input).
+- Run the
+  [serverless WorkPaper API example](https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api)
+  when the workbook belongs behind an HTTP or agent-tool boundary.
 - Build a small service from the
   [Node service recipe](https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md).
 - Put the same workbook boundary behind a
@@ -132,6 +135,8 @@ Repository links:
   [`examples/headless-workpaper`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper)
 - JSON records input example:
   [`npm run json-records`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input)
+- serverless API route example:
+  [`examples/serverless-workpaper-api`](https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api)
 - Node service recipe:
   [`docs/node-service-workpaper-recipe.md`](https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md)
 - serverless API route recipe:

@@ -1,33 +1,7 @@
-# Serverless WorkPaper API Route
-
-This recipe shows how to put `@bilig/headless` behind a small API route using
-web-standard `Request` and `Response` objects. Use it when a serverless
-function, route handler, queue worker, or coding-agent tool needs spreadsheet
-formulas without keeping a browser grid open.
-
-For a clone-and-run copy of this route, start with
-[`examples/serverless-workpaper-api`](../examples/serverless-workpaper-api).
-
-The example also includes a tiny Node adapter so you can run it locally before
-moving the route into Vercel, Cloudflare Workers, Fastify, Hono, or another HTTP
-surface.
-
-## Setup
-
-```sh
-mkdir bilig-serverless-workpaper
-cd bilig-serverless-workpaper
-npm init -y
-npm pkg set type=module
-npm pkg set scripts.start="node route.mjs"
-npm install @bilig/headless
-```
-
-Create `route.mjs`:
-
-```js
 import { createServer } from 'node:http'
 import { Readable } from 'node:stream'
+import { pathToFileURL } from 'node:url'
+
 import {
   WorkPaper,
   createWorkPaperFromDocument,
@@ -52,8 +26,14 @@ export async function handleWorkPaperRequest(request) {
   }
 
   if (request.method === 'POST' && url.pathname === '/api/workpaper/revenue') {
-    const body = await request.json()
-    const records = normalizeRevenueRecords(body.records)
+    let records
+    try {
+      const body = await request.json()
+      records = normalizeRevenueRecords(body.records)
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : String(error) }, 400)
+    }
+
     const before = readSummary(loadWorkbook())
     const workbook = buildRevenueWorkbook(records)
     const after = readSummary(workbook)
@@ -177,7 +157,7 @@ function json(payload, status = 200) {
   })
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
   createServer(async (incoming, outgoing) => {
     try {
       const request = toWebRequest(incoming)
@@ -213,130 +193,3 @@ function toWebRequest(incoming) {
     duplex: 'half',
   })
 }
-```
-
-Run it:
-
-```sh
-npm start
-```
-
-From another terminal:
-
-```sh
-curl -s http://localhost:8787/api/workpaper/summary
-curl -s -X POST http://localhost:8787/api/workpaper/revenue \
-  -H 'content-type: application/json' \
-  -d '{"records":[{"region":"West","customers":20,"arpa":1200},{"region":"East","customers":30,"arpa":250},{"region":"Central","customers":18,"arpa":300},{"region":"North","customers":65,"arpa":180}]}'
-curl -s http://localhost:8787/api/workpaper/summary
-```
-
-The edit response should include formula readback and persistence checks:
-
-```json
-{
-  "before": {
-    "totalRevenue": 36900,
-    "westCustomers": 20,
-    "largestDeal": 24000
-  },
-  "after": {
-    "totalRevenue": 48600,
-    "westCustomers": 20,
-    "largestDeal": 24000
-  },
-  "checks": {
-    "totalRevenueChanged": true,
-    "formulasPersisted": true,
-    "serializedBytes": 1195
-  }
-}
-```
-
-`serializedBytes` can change as the persisted document schema evolves. Treat it
-as a positive persistence signal, not a golden value.
-
-## Moving Into A Framework
-
-Keep the exported `handleWorkPaperRequest()` function as the stable boundary:
-
-- In a Vercel or Next.js route handler, call it from `GET()` and `POST()`.
-- In Cloudflare Workers, call it from `fetch(request)`.
-- In Hono, Fastify, or Express, adapt the framework request into a web-standard
-  `Request`, then return or write the `Response`.
-- Persist `state.workbookJson` in your durable store instead of module memory
-  when the route needs to survive cold starts and multiple instances.
-
-The important part is not the framework. The route accepts JSON records, writes
-them into a workbook, recalculates formulas, persists the document, and returns
-computed values that prove the write took effect.
-
-## Next.js App Router Adapter
-
-For a Next.js App Router project, keep the WorkPaper code in a shared module and
-make the route files thin.
-
-Create `app/api/workpaper/workpaper-route.js` from the shared route code above:
-
-- keep the `@bilig/headless` imports
-- keep `state`, `handleWorkPaperRequest()`, and every workbook helper
-- omit `createServer()`, `toWebRequest()`, and the `if (import.meta.url === ...)`
-  local Node adapter block
-
-Then create `app/api/workpaper/summary/route.js`:
-
-```js
-import { handleWorkPaperRequest } from '../workpaper-route.js'
-
-export const dynamic = 'force-dynamic'
-export const runtime = 'nodejs'
-
-export async function GET(request) {
-  return handleWorkPaperRequest(request)
-}
-```
-
-Create `app/api/workpaper/revenue/route.js`:
-
-```js
-import { handleWorkPaperRequest } from '../workpaper-route.js'
-
-export const dynamic = 'force-dynamic'
-export const runtime = 'nodejs'
-
-export async function POST(request) {
-  return handleWorkPaperRequest(request)
-}
-```
-
-The route path stays the same as the standalone recipe:
-
-```sh
-curl -s http://localhost:3000/api/workpaper/summary
-curl -s -X POST http://localhost:3000/api/workpaper/revenue \
-  -H 'content-type: application/json' \
-  -d '{"records":[{"region":"West","customers":20,"arpa":1200},{"region":"East","customers":30,"arpa":250},{"region":"Central","customers":18,"arpa":300},{"region":"North","customers":65,"arpa":180}]}'
-```
-
-Do not put the workbook helpers into both route files. The adapter should stay
-small; the shared handler is what keeps formula evaluation, persistence, and
-readback behavior identical between local Node, Next.js, and other web-standard
-route surfaces.
-
-## Validation
-
-For the standalone recipe:
-
-```sh
-npm start
-curl -s -X POST http://localhost:8787/api/workpaper/revenue \
-  -H 'content-type: application/json' \
-  -d '{"records":[{"region":"West","customers":20,"arpa":1200},{"region":"East","customers":30,"arpa":250},{"region":"Central","customers":18,"arpa":300},{"region":"North","customers":65,"arpa":180}]}'
-```
-
-For a documentation patch in this repository:
-
-```sh
-pnpm docs:discovery:check
-pnpm run ci
-```

@@ -172,6 +172,11 @@ for (const expectedUrl of expectedSitemapUrls) {
 }
 
 await Promise.all(sourceFilesToVerify.map((sourceFile) => requirePublishedSource(join(docsRoot, sourceFile))))
+await Promise.all(
+  ['README.md', 'package.json', 'route.mjs', 'smoke.mjs'].map((sourceFile) =>
+    requireFile(join(repoRoot, 'examples', 'serverless-workpaper-api', sourceFile)),
+  ),
+)
 
 for (const url of actualSitemapUrls) {
   if (!url.startsWith(siteRoot)) {
@@ -185,6 +190,7 @@ for (const required of [
   'npm run agent:tool-call',
   'npm run agent:verify',
   'https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input',
+  'https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api',
   'https://github.com/proompteng/bilig/discussions',
   'https://github.com/proompteng/bilig/discussions/157',
   'https://github.com/proompteng/bilig/discussions/167',
@@ -221,6 +227,15 @@ for (const [path, content] of [
   ['docs/llms.txt', llms],
 ] as const) {
   requireIncludes(content, 'https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only', path)
+}
+
+for (const [path, content] of [
+  ['README.md', readme],
+  ['packages/headless/README.md', headlessReadme],
+  ['docs/index.html', index],
+  ['docs/llms.txt', llms],
+] as const) {
+  requireIncludes(content, 'examples/serverless-workpaper-api', path)
 }
 
 for (const [path, content] of [
@@ -273,15 +288,15 @@ for (const required of [
   'https://github.com/proompteng/bilig/issues/160',
   'https://github.com/proompteng/bilig/issues/162',
   'https://github.com/proompteng/bilig/issues/163',
-  'https://github.com/proompteng/bilig/issues/164',
   'https://github.com/proompteng/bilig/issues/165',
   'https://github.com/proompteng/bilig/issues/166',
+  'https://github.com/proompteng/bilig/issues/168',
 ]) {
   requireIncludes(starterIssues, required, 'docs/starter-issues.md')
   requireIncludes(llms, required, 'docs/llms.txt')
 }
 
-for (const closedIssue of ['137', '161']) {
+for (const closedIssue of ['137', '161', '164']) {
   if (starterIssues.includes(`https://github.com/proompteng/bilig/issues/${closedIssue}`)) {
     throw new Error(`docs/starter-issues.md still links to closed starter issue #${closedIssue}`)
   }

@@ -127,6 +127,7 @@ For each high-intent workflow, keep the example small enough to paste:
 
 - revenue model with formulas and restore
 - JSON records to WorkPaper
+- serverless JSON route to WorkPaper
 - CSV-shaped input to WorkPaper
 - agent writeback and verification
 - named-expression update

@@ -16,6 +16,7 @@ language: typescript
 - https://github.com/proompteng/bilig/tree/main/packages/headless#readme
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input
+- https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api
 - https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md
 - https://github.com/proompteng/bilig/discussions
 - https://github.com/proompteng/bilig/discussions/157
@@ -87,6 +88,8 @@ npm run agent:verify
   https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md
 - json records input example:
   https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input
+- serverless API route example:
+  https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api
 - unsupported formula troubleshooting:
   https://github.com/proompteng/bilig/blob/main/docs/unsupported-formula-troubleshooting-recipe.md
 - workpaper tool-calling recipe for agents:
@@ -181,12 +184,12 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/162
 - current small docs issue: coding-agent workbook automation recipe:
   https://github.com/proompteng/bilig/issues/163
-- current small docs issue: Next.js route handler adapter:
-  https://github.com/proompteng/bilig/issues/164
 - current small docs issue: Cloudflare Worker fetch adapter:
   https://github.com/proompteng/bilig/issues/165
 - current small docs issue: durable JSON persistence variant:
   https://github.com/proompteng/bilig/issues/166
+- current small docs issue: Hono route adapter:
+  https://github.com/proompteng/bilig/issues/168
 - good first issue search:
   https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22
 - first-timers-only issue search:

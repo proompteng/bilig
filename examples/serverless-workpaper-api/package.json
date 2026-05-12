@@ -1,0 +1,13 @@
+{
+  "name": "bilig-serverless-workpaper-api-example",
+  "private": true,
+  "description": "Runnable serverless-style API route example for @bilig/headless.",
+  "type": "module",
+  "scripts": {
+    "smoke": "node smoke.mjs",
+    "start": "node route.mjs"
+  },
+  "dependencies": {
+    "@bilig/headless": "latest"
+  }
+}
