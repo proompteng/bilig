@@ -268,7 +268,7 @@ Expected output:
 Run the CSV shaped input example when you want to see how to load a simple array or CSV-shaped data into a WorkPaper, add a formula-backed summary cell, and read back the result:
 
 ```sh
-node csv-shaped-input.mjs
+npm run csv-shaped
 ```
 
 Expected output:

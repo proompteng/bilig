@@ -6,6 +6,7 @@
   "scripts": {
     "agent:tool-call": "node agent-tool-call-loop.mjs",
     "agent:verify": "node agent-writeback-verification.mjs",
+    "csv-shaped": "node csv-shaped-input.mjs",
     "http-json-summary": "node http-json-summary.mjs",
     "json-records": "node json-records-input.mjs",
     "named-expression": "node named-expression-update.mjs",

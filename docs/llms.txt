@@ -150,8 +150,6 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/145
 - current small docs issue: first-time contributor command checklist:
   https://github.com/proompteng/bilig/issues/146
-- current small example issue: CSV-shaped input npm script:
-  https://github.com/proompteng/bilig/issues/147
 - current small example issue: range readback:
   https://github.com/proompteng/bilig/issues/148
 - current small example issue: sheet inspection:
