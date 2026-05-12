@@ -7,7 +7,6 @@ search indexing.
 Current starter tickets as of May 12, 2026:
 
 - [#134: docs(examples): add XLSX formula-cache roundtrip example](https://github.com/proompteng/bilig/issues/134)
-- [#152: test(docs): guard package README links for npm readers](https://github.com/proompteng/bilig/issues/152)
 - [#153: docs(agent): add WorkPaper tool result contract table](https://github.com/proompteng/bilig/issues/153)
 - [#154: docs(comparison): add headless engine use-case chooser](https://github.com/proompteng/bilig/issues/154)
 - [#155: docs(troubleshooting): add formula diagnostic output examples](https://github.com/proompteng/bilig/issues/155)

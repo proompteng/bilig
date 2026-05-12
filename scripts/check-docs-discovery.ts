@@ -64,6 +64,12 @@ function requireIncludes(haystack: string, needle: string, context: string): voi
   }
 }
 
+function requireNotIncludes(haystack: string, needle: string, context: string): void {
+  if (haystack.includes(needle)) {
+    throw new Error(`${context} must not include ${needle}`)
+  }
+}
+
 async function requireFile(path: string): Promise<void> {
   const info = await stat(path)
   if (!info.isFile()) {
@@ -273,7 +279,6 @@ for (const [path, content] of [
 
 for (const required of [
   'https://github.com/proompteng/bilig/issues/134',
-  'https://github.com/proompteng/bilig/issues/152',
   'https://github.com/proompteng/bilig/issues/153',
   'https://github.com/proompteng/bilig/issues/154',
   'https://github.com/proompteng/bilig/issues/155',
@@ -309,6 +314,7 @@ for (const closedIssue of [
   '149',
   '150',
   '151',
+  '152',
   '160',
   '161',
   '164',
@@ -360,6 +366,10 @@ for (const [path, content] of publicDocs) {
       throw new Error(`${path} points users at unpublished npm package command: ${blockedSnippet}`)
     }
   }
+}
+
+for (const blockedLink of ['](../../docs/', '](../../examples/', '](../../LICENSE)']) {
+  requireNotIncludes(headlessReadme, blockedLink, 'packages/headless/README.md')
 }
 
 console.log(

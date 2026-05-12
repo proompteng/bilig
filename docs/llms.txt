@@ -140,8 +140,6 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md
 - current small example issue: xlsx formula-cache roundtrip:
   https://github.com/proompteng/bilig/issues/134
-- current small docs issue: package README npm link guard:
-  https://github.com/proompteng/bilig/issues/152
 - current small docs issue: WorkPaper agent tool result contract:
   https://github.com/proompteng/bilig/issues/153
 - current small docs issue: headless engine use-case chooser:
