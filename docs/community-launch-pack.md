@@ -25,14 +25,16 @@ Latest public snapshot on May 8, 2026:
 
 Latest execution snapshot on May 12, 2026:
 
-- GitHub surface: public repo, `24` stars, `2` forks, `46` open issues
-- npm surface: `@bilig/headless@0.11.10`, MIT, TypeScript types, npm API
+- GitHub surface: public repo, `24` stars, `3` forks, `47` open issues
+- npm surface: `@bilig/headless@0.11.12`, MIT, TypeScript types, npm API
   downloads: `13,427` last week and `24,931` last month
-- Contributor funnel: `27` open `good first issue`, `27` open
-  `first-timers-only`, and `27` open `help wanted` issues
+- Contributor funnel: `31` open `good first issue`, `31` open
+  `first-timers-only`, and `31` open `help wanted` issues
 - GitHub traffic: `393` views from `159` uniques, `18,287` clones from
   `1,907` uniques, with visible referrers from Hacker News, X, Google,
   the project site, Reddit, and LibHunt
+- Top visible repository paths: overview, issues, pull requests,
+  `examples/headless-workpaper`, Discussions, contributors, and stargazers
 
 ## Goal Text
 
