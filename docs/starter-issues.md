@@ -22,7 +22,6 @@ Current starter tickets as of May 12, 2026:
 - [#197: docs(headless): add WorkPaper persistence decision table](https://github.com/proompteng/bilig/issues/197)
 - [#198: docs(contributor): add first issue local verification matrix](https://github.com/proompteng/bilig/issues/198)
 - [#199: test(docs): check headless example README scripts exist](https://github.com/proompteng/bilig/issues/199)
-- [#200: docs(examples): add npm package install sanity example](https://github.com/proompteng/bilig/issues/200)
 
 The list intentionally excludes closed issues and broad corpus/parity epics. Add
 new starter tickets only when the expected patch can stay small, has a clear

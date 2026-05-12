@@ -170,8 +170,6 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/198
 - current small docs issue: headless example README script guard:
   https://github.com/proompteng/bilig/issues/199
-- current small example issue: npm package install sanity:
-  https://github.com/proompteng/bilig/issues/200
 - good first issue search:
   https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22
 - first-timers-only issue search:

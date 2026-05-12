@@ -294,7 +294,6 @@ for (const required of [
   'https://github.com/proompteng/bilig/issues/197',
   'https://github.com/proompteng/bilig/issues/198',
   'https://github.com/proompteng/bilig/issues/199',
-  'https://github.com/proompteng/bilig/issues/200',
 ]) {
   requireIncludes(starterIssues, required, 'docs/starter-issues.md')
   requireIncludes(llms, required, 'docs/llms.txt')
@@ -315,6 +314,7 @@ for (const closedIssue of [
   '150',
   '151',
   '152',
+  '200',
   '160',
   '161',
   '164',
@@ -370,6 +370,16 @@ for (const [path, content] of publicDocs) {
 
 for (const blockedLink of ['](../../docs/', '](../../examples/', '](../../LICENSE)']) {
   requireNotIncludes(headlessReadme, blockedLink, 'packages/headless/README.md')
+}
+
+for (const required of [
+  '## Clean npm Sanity Check',
+  'mkdir bilig-headless-sanity',
+  'node --input-type=module',
+  "import { WorkPaper } from '@bilig/headless'",
+  'console.log({ revenue: cell.value, verified: true })',
+]) {
+  requireIncludes(headlessReadme, required, 'packages/headless/README.md')
 }
 
 console.log(

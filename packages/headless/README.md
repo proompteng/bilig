@@ -22,6 +22,46 @@ Requires Node `24+` and ESM imports.
 npm install @bilig/headless
 ```
 
+## Clean npm Sanity Check
+
+Run this from an empty directory when you want to verify the published package
+before cloning the repository:
+
+```sh
+mkdir bilig-headless-sanity
+cd bilig-headless-sanity
+npm init -y
+npm install @bilig/headless
+node --input-type=module <<'EOF'
+import { WorkPaper } from '@bilig/headless'
+
+const workbook = WorkPaper.buildFromSheets({
+  Revenue: [
+    ['Units', 'Price', 'Revenue'],
+    [7, 6, '=A2*B2'],
+  ],
+})
+
+const sheet = workbook.getSheetId('Revenue')
+if (sheet === undefined) {
+  throw new Error('Revenue sheet was not created')
+}
+
+const cell = workbook.getCellValue({ sheet, row: 1, col: 2 })
+if (typeof cell !== 'object' || cell === null || cell.value !== 42) {
+  throw new Error(`unexpected formula readback: ${JSON.stringify(cell)}`)
+}
+
+console.log({ revenue: cell.value, verified: true })
+EOF
+```
+
+Expected output:
+
+```json
+{ "revenue": 42, "verified": true }
+```
+
 Inside this monorepo:
 
 ```sh
@@ -31,7 +71,8 @@ pnpm --filter @bilig/headless build
 
 ## Start Here
 
-- Run the [quickstart](#quickstart) for a one-file formula and persistence
+- Run the [clean npm sanity check](#clean-npm-sanity-check) before cloning, or
+  the [quickstart](#quickstart) for a one-file formula and persistence
   smoke test.
 - Try the runnable examples:
   [`examples/headless-workpaper`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper) and
