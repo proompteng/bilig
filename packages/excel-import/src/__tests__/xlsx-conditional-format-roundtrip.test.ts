@@ -26,6 +26,24 @@ describe('xlsx conditional format roundtrip', () => {
     expect(exportedStylesXml).toContain('<color theme="5" tint="-0.249977111117893"/>')
     expect(exportedStylesXml).toContain('<border><bottom style="double"><color indexed="64"/></bottom></border>')
   })
+
+  it('preserves imported advanced visual conditional-format rules as artifacts', () => {
+    const source = buildAdvancedConditionalFormattingWorkbook()
+
+    const imported = importXlsx(source, 'advanced-conditional-formats.xlsx')
+
+    expect(imported.warnings).toEqual([])
+    expect(imported.snapshot.sheets[0]?.metadata?.conditionalFormats).toBeUndefined()
+    expect(imported.snapshot.sheets[0]?.metadata?.conditionalFormatArtifacts?.xml).toContain('type="dataBar"')
+    expect(imported.snapshot.sheets[0]?.metadata?.conditionalFormatArtifacts?.xml).toContain('type="colorScale"')
+    expect(imported.snapshot.sheets[0]?.metadata?.conditionalFormatArtifacts?.xml).toContain('type="iconSet"')
+
+    const exportedSheetXml = strFromU8(unzipSync(exportXlsx(imported.snapshot))['xl/worksheets/sheet1.xml'] ?? new Uint8Array())
+    expect(exportedSheetXml).toContain('<cfRule type="dataBar" priority="1">')
+    expect(exportedSheetXml).toContain('<cfRule type="colorScale" priority="2">')
+    expect(exportedSheetXml).toContain('<cfRule type="iconSet" priority="3">')
+    expect(exportedSheetXml.match(/<conditionalFormatting\b/gu)).toHaveLength(3)
+  })
 })
 
 function buildConditionalFormattingWorkbook(): Uint8Array {
@@ -36,6 +54,20 @@ function buildConditionalFormattingWorkbook(): Uint8Array {
   const zip = unzipSync(XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }))
   zip['xl/worksheets/sheet1.xml'] = strToU8(conditionalFormattingWorksheetXml)
   zip['xl/styles.xml'] = strToU8(conditionalFormattingStylesXml)
+  return zipSync(zip)
+}
+
+function buildAdvancedConditionalFormattingWorkbook(): Uint8Array {
+  const workbook = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([
+    [10, 20, 30],
+    [20, 40, 60],
+    [30, 60, 90],
+  ])
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Dashboard')
+
+  const zip = unzipSync(XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }))
+  zip['xl/worksheets/sheet1.xml'] = strToU8(advancedConditionalFormattingWorksheetXml)
   return zipSync(zip)
 }
 
@@ -69,4 +101,33 @@ const conditionalFormattingStylesXml = [
   '</dxfs>',
   '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>',
   '</styleSheet>',
+].join('')
+
+const advancedConditionalFormattingWorksheetXml = [
+  '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+  '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+  '<dimension ref="A1:C3"/>',
+  '<sheetData>',
+  '<row r="1"><c r="A1"><v>10</v></c><c r="B1"><v>20</v></c><c r="C1"><v>30</v></c></row>',
+  '<row r="2"><c r="A2"><v>20</v></c><c r="B2"><v>40</v></c><c r="C2"><v>60</v></c></row>',
+  '<row r="3"><c r="A3"><v>30</v></c><c r="B3"><v>60</v></c><c r="C3"><v>90</v></c></row>',
+  '</sheetData>',
+  '<conditionalFormatting sqref="A1:A3">',
+  '<cfRule type="dataBar" priority="1">',
+  '<dataBar><cfvo type="min"/><cfvo type="max"/><color rgb="FF63C384"/></dataBar>',
+  '</cfRule>',
+  '</conditionalFormatting>',
+  '<conditionalFormatting sqref="B1:B3">',
+  '<cfRule type="colorScale" priority="2">',
+  '<colorScale><cfvo type="min"/><cfvo type="percentile" val="50"/><cfvo type="max"/>',
+  '<color rgb="FFF8696B"/><color rgb="FFFFEB84"/><color rgb="FF63BE7B"/></colorScale>',
+  '</cfRule>',
+  '</conditionalFormatting>',
+  '<conditionalFormatting sqref="C1:C3">',
+  '<cfRule type="iconSet" priority="3">',
+  '<iconSet iconSet="3TrafficLights1"><cfvo type="percent" val="0"/><cfvo type="percent" val="33"/>',
+  '<cfvo type="percent" val="67"/></iconSet>',
+  '</cfRule>',
+  '</conditionalFormatting>',
+  '</worksheet>',
 ].join('')
