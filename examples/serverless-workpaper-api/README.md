@@ -78,8 +78,10 @@ module memory.
   `POST()`.
 - In a Cloudflare Worker, call it from `fetch(request)`.
 - In Hono, pass `c.req.raw` directly to the shared handler.
-- In Fastify or Express, adapt the framework request into a web-standard
-  `Request`, then return or write the `Response`.
+- In Fastify, adapt the framework request into a web-standard `Request`, then
+  write the returned `Response` through `reply`.
+- In Express, adapt the framework request into a web-standard `Request`, then
+  write the returned `Response` through `res`.
 - Replace the in-memory `state.workbookJson` with your durable store when the
   workbook needs to survive cold starts or multiple instances.
 

@@ -430,6 +430,72 @@ curl -s -X POST http://localhost:3000/api/workpaper/revenue \
 If the Hono app is deployed to a worker or serverless runtime, pair this adapter
 with the durable storage variant above instead of relying on module memory.
 
+## Fastify Adapter
+
+Fastify uses its own `request` and `reply` objects, so keep the adapter focused
+on translating those objects to and from the web-standard boundary. The WorkPaper
+handler should still own the route paths, formula writes, persistence, and
+readback checks.
+
+```js
+import { handleWorkPaperRequest } from './workpaper-route.js'
+
+fastify.get('/api/workpaper/summary', async (request, reply) => {
+  return writeWebResponse(reply, await handleWorkPaperRequest(toWebRequest(request)))
+})
+
+fastify.post('/api/workpaper/revenue', async (request, reply) => {
+  return writeWebResponse(reply, await handleWorkPaperRequest(toWebRequest(request)))
+})
+
+function toWebRequest(request) {
+  const protocol = request.protocol ?? 'http'
+  const host = request.hostname ?? request.headers.host ?? 'localhost:3000'
+  const url = new URL(request.url, `${protocol}://${host}`)
+  const headers = new Headers()
+
+  for (const [name, value] of Object.entries(request.headers)) {
+    if (Array.isArray(value)) {
+      headers.set(name, value.join(', '))
+    } else if (value !== undefined) {
+      headers.set(name, String(value))
+    }
+  }
+
+  return new Request(url, {
+    method: request.method,
+    headers,
+    body:
+      request.method === 'GET' || request.method === 'HEAD'
+        ? undefined
+        : JSON.stringify(request.body ?? {}),
+  })
+}
+
+async function writeWebResponse(reply, response) {
+  response.headers.forEach((value, name) => reply.header(name, value))
+  reply.code(response.status)
+  return reply.send(Buffer.from(await response.arrayBuffer()))
+}
+```
+
+This adapter assumes Fastify parsed the JSON body before the handler runs. If a
+route accepts raw uploads or non-JSON payloads, preserve the raw body in
+`toWebRequest()` instead of serializing `request.body`.
+
+The same smoke calls apply when the Fastify app is running locally:
+
+```sh
+curl -s http://localhost:3000/api/workpaper/summary
+curl -s -X POST http://localhost:3000/api/workpaper/revenue \
+  -H 'content-type: application/json' \
+  -d '{"records":[{"region":"West","customers":20,"arpa":1200},{"region":"East","customers":30,"arpa":250},{"region":"Central","customers":18,"arpa":300},{"region":"North","customers":65,"arpa":180}]}'
+```
+
+Use the durable storage variant above when the app runs in multiple Node
+processes, serverless instances, or any deployment where module memory is not a
+safe source of truth.
+
 ## Validation
 
 For the standalone recipe:
