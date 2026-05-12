@@ -140,8 +140,6 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md
 - current small example issue: xlsx formula-cache roundtrip:
   https://github.com/proompteng/bilig/issues/134
-- current small example issue: snapshot diff:
-  https://github.com/proompteng/bilig/issues/145
 - current small docs issue: first-time contributor command checklist:
   https://github.com/proompteng/bilig/issues/146
 - current small example issue: range readback:

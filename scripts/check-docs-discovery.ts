@@ -266,7 +266,6 @@ for (const [path, content] of [
 
 for (const required of [
   'https://github.com/proompteng/bilig/issues/134',
-  'https://github.com/proompteng/bilig/issues/145',
   'https://github.com/proompteng/bilig/issues/146',
   'https://github.com/proompteng/bilig/issues/148',
   'https://github.com/proompteng/bilig/issues/149',
@@ -301,6 +300,7 @@ for (const closedIssue of [
   '142',
   '143',
   '144',
+  '145',
   '147',
   '160',
   '161',

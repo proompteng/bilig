@@ -43,6 +43,8 @@ pnpm --filter @bilig/headless build
   for structured formula error handling, or
   [`npm run markdown-report`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#markdown-report-output)
   for a calculated Markdown table, or
+  [`npm run snapshot-diff`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#snapshot-diff)
+  for before/after persisted-state comparison, or
   [`npm run http-json-summary`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#http-json-summary)
   for a no-framework Node HTTP boundary.
 - Run the
@@ -148,6 +150,8 @@ Repository links:
   [`npm run formula-diagnostics`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#formula-diagnostics)
 - Markdown report output example:
   [`npm run markdown-report`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#markdown-report-output)
+- Snapshot diff example:
+  [`npm run snapshot-diff`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#snapshot-diff)
 - serverless API route example:
   [`examples/serverless-workpaper-api`](https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api)
 - Node service recipe:

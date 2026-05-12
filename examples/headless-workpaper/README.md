@@ -395,6 +395,43 @@ Generated report:
 | Target gap            | $10,400 |
 ```
 
+## Snapshot Diff
+
+Run the snapshot diff example when a service or agent needs to show how a
+programmatic edit changed both persisted workbook input and dependent summary
+values. It exports the WorkPaper document before and after a cell edit, compares
+the edited input cell, reads formula-backed summary values, verifies the exact
+diff, and prints a compact JSON result:
+
+```sh
+npm run snapshot-diff
+```
+
+Expected output:
+
+```json
+{
+  "verified": true,
+  "changedCell": "Revenue!B2",
+  "beforeSerializedInput": 12000,
+  "afterSerializedInput": 15000,
+  "changedSummaryValues": {
+    "before": {
+      "netMrr": 14200,
+      "annualizedArr": 170400
+    },
+    "after": {
+      "netMrr": 17200,
+      "annualizedArr": 206400
+    }
+  },
+  "documentBytes": {
+    "before": 1058,
+    "after": 1058
+  }
+}
+```
+
 ## HTTP JSON Summary
 
 Run the HTTP JSON summary example when you want the same record-to-WorkPaper

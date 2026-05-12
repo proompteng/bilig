@@ -193,6 +193,62 @@ export function parseNodeMarkdownReportOutput(output: string): {
   }
 }
 
+export function parseNodeSnapshotDiffOutput(output: string): {
+  afterSerializedInput: number
+  beforeSerializedInput: number
+  changedCell: string
+  changedSummaryValues: {
+    after: {
+      annualizedArr: number
+      netMrr: number
+    }
+    before: {
+      annualizedArr: number
+      netMrr: number
+    }
+  }
+  documentBytes: {
+    after: number
+    before: number
+  }
+  verified: boolean
+} {
+  const parsed = parseJsonRecord(output, 'node snapshot diff output')
+  const changedSummaryValues = parseRecordValue(parsed.changedSummaryValues, 'node snapshot diff changed summary values')
+  const before = parseSnapshotDiffSummary(changedSummaryValues.before, 'node snapshot diff before summary')
+  const after = parseSnapshotDiffSummary(changedSummaryValues.after, 'node snapshot diff after summary')
+  const documentBytes = parseRecordValue(parsed.documentBytes, 'node snapshot diff document bytes')
+
+  if (
+    parsed.verified !== true ||
+    parsed.changedCell !== 'Revenue!B2' ||
+    parsed.beforeSerializedInput !== 12000 ||
+    parsed.afterSerializedInput !== 15000 ||
+    before.netMrr !== 14200 ||
+    before.annualizedArr !== 170400 ||
+    after.netMrr !== 17200 ||
+    after.annualizedArr !== 206400 ||
+    typeof documentBytes.before !== 'number' ||
+    documentBytes.before <= 0 ||
+    typeof documentBytes.after !== 'number' ||
+    documentBytes.after <= 0
+  ) {
+    throw new Error(`Unexpected node snapshot diff output: ${output}`)
+  }
+
+  return {
+    afterSerializedInput: parsed.afterSerializedInput,
+    beforeSerializedInput: parsed.beforeSerializedInput,
+    changedCell: parsed.changedCell,
+    changedSummaryValues: { after, before },
+    documentBytes: {
+      after: documentBytes.after,
+      before: documentBytes.before,
+    },
+    verified: parsed.verified,
+  }
+}
+
 function parseFormulaDiagnostics(value: unknown): {
   code: string
   errorText: string
@@ -222,6 +278,23 @@ function parseFormulaDiagnostics(value: unknown): {
       references,
     }
   })
+}
+
+function parseSnapshotDiffSummary(
+  value: unknown,
+  context: string,
+): {
+  annualizedArr: number
+  netMrr: number
+} {
+  const parsed = parseRecordValue(value, context)
+  if (typeof parsed.netMrr !== 'number' || typeof parsed.annualizedArr !== 'number') {
+    throw new Error(`Unexpected ${context}: ${JSON.stringify(value)}`)
+  }
+  return {
+    annualizedArr: parsed.annualizedArr,
+    netMrr: parsed.netMrr,
+  }
 }
 
 export function parseNodeSnapshotImportOutput(output: string): {

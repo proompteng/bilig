@@ -15,6 +15,7 @@
     "named-expression": "node named-expression-update.mjs",
     "persistence": "node persistence-roundtrip.mjs",
     "scenarios": "node revenue-scenarios.mjs",
+    "snapshot-diff": "node snapshot-diff.mjs",
     "start": "node revenue-plan.mjs"
   },
   "dependencies": {
