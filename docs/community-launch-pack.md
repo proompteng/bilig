@@ -23,10 +23,10 @@ Latest public snapshot on May 8, 2026:
 - Contributor funnel: `18` open `good first issue`, `18` open
   `first-timers-only`, and `18` open `help wanted` issues
 
-Latest execution snapshot on May 12, 2026 at `22:53:16Z`:
+Latest execution snapshot on May 12, 2026 at `23:09:01Z`:
 
-- GitHub surface: public repo, `24` stars, `4` forks, `30` open issues
-- npm surface: `@bilig/headless@0.11.27`, MIT, TypeScript types, npm API
+- GitHub surface: public repo, `24` stars, `4` forks, `29` open issues
+- npm surface: `@bilig/headless@0.11.28`, MIT, TypeScript types, npm API
   downloads: `13,427` last week and `24,931` last month
 - Contributor funnel: `27` open `good first issue`, `27` open
   `first-timers-only`, and `27` open `help wanted` issues
