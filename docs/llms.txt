@@ -185,6 +185,18 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/198
 - current small docs issue: headless example README script guard:
   https://github.com/proompteng/bilig/issues/199
+- current small example issue: inventory reorder point:
+  https://github.com/proompteng/bilig/issues/207
+- current small example issue: accounts receivable aging:
+  https://github.com/proompteng/bilig/issues/208
+- current small example issue: usage-based billing tier:
+  https://github.com/proompteng/bilig/issues/209
+- current small example issue: support SLA breach summary:
+  https://github.com/proompteng/bilig/issues/210
+- current small example issue: weighted sales pipeline forecast:
+  https://github.com/proompteng/bilig/issues/211
+- current small example issue: headcount capacity forecast:
+  https://github.com/proompteng/bilig/issues/212
 - good first issue search:
   https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22
 - first-timers-only issue search:

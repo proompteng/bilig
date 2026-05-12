@@ -22,6 +22,12 @@ Current starter tickets as of May 12, 2026:
 - [#197: docs(headless): add WorkPaper persistence decision table](https://github.com/proompteng/bilig/issues/197)
 - [#198: docs(contributor): add first issue local verification matrix](https://github.com/proompteng/bilig/issues/198)
 - [#199: test(docs): check headless example README scripts exist](https://github.com/proompteng/bilig/issues/199)
+- [#207: docs(examples): add inventory reorder point WorkPaper example](https://github.com/proompteng/bilig/issues/207)
+- [#208: docs(examples): add accounts receivable aging WorkPaper example](https://github.com/proompteng/bilig/issues/208)
+- [#209: docs(examples): add usage-based billing tier WorkPaper example](https://github.com/proompteng/bilig/issues/209)
+- [#210: docs(examples): add support SLA breach summary example](https://github.com/proompteng/bilig/issues/210)
+- [#211: docs(examples): add weighted sales pipeline forecast example](https://github.com/proompteng/bilig/issues/211)
+- [#212: docs(examples): add headcount capacity forecast example](https://github.com/proompteng/bilig/issues/212)
 
 The list intentionally excludes closed issues and broad corpus/parity epics. Add
 new starter tickets only when the expected patch can stay small, has a clear

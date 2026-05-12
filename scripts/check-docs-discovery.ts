@@ -311,6 +311,12 @@ for (const required of [
   'https://github.com/proompteng/bilig/issues/197',
   'https://github.com/proompteng/bilig/issues/198',
   'https://github.com/proompteng/bilig/issues/199',
+  'https://github.com/proompteng/bilig/issues/207',
+  'https://github.com/proompteng/bilig/issues/208',
+  'https://github.com/proompteng/bilig/issues/209',
+  'https://github.com/proompteng/bilig/issues/210',
+  'https://github.com/proompteng/bilig/issues/211',
+  'https://github.com/proompteng/bilig/issues/212',
 ]) {
   requireIncludes(starterIssues, required, 'docs/starter-issues.md')
   requireIncludes(llms, required, 'docs/llms.txt')
