@@ -418,6 +418,27 @@ describe('lookup builtins', () => {
     expect(VLOOKUP(text('a'), table, num(3), bool(false))).toEqual(err(ErrorCode.Value))
   })
 
+  it('coerces blank lookup return cells to zero', () => {
+    const LOOKUP = getLookupBuiltin('LOOKUP')!
+    const VLOOKUP = getLookupBuiltin('VLOOKUP')!
+    const HLOOKUP = getLookupBuiltin('HLOOKUP')!
+    const XLOOKUP = getLookupBuiltin('XLOOKUP')!
+    const blank: CellValue = { tag: ValueTag.Empty }
+
+    expect(LOOKUP(text('b'), cellRange([text('a'), text('b'), text('c')], 3, 1), cellRange([num(10), blank, num(30)], 3, 1))).toEqual(
+      num(0),
+    )
+    expect(VLOOKUP(text('b'), cellRange([text('a'), num(10), text('b'), blank, text('c'), num(30)], 3, 2), num(2), bool(false))).toEqual(
+      num(0),
+    )
+    expect(HLOOKUP(text('b'), cellRange([text('a'), text('b'), text('c'), num(10), blank, num(30)], 2, 3), num(2), bool(false))).toEqual(
+      num(0),
+    )
+    expect(XLOOKUP(text('b'), cellRange([text('a'), text('b'), text('c')], 3, 1), cellRange([num(10), blank, num(30)], 3, 1))).toEqual(
+      num(0),
+    )
+  })
+
   it('supports exact XLOOKUP and conditional aggregates', () => {
     const XLOOKUP = getLookupBuiltin('XLOOKUP')!
     const XMATCH = getLookupBuiltin('XMATCH')!

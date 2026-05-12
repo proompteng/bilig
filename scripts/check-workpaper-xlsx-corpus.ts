@@ -41,6 +41,7 @@ import {
   type WorkPaperXlsxCorpusCliOptions,
   type WorkPaperXlsxCorpusInternalCliOptions,
 } from './workpaper-xlsx-corpus-cli.ts'
+import { markVolatileDependentFormulaCells } from './workpaper-xlsx-volatile-dependencies.ts'
 
 const defaultEvaluationTimeoutMs = 30_000
 const childProcessTimeoutPaddingMs = 1_000
@@ -330,7 +331,7 @@ function prepareWorkbook(filePath: string, skippedByReason: Record<WorkPaperXlsx
     bookVBA: true,
   })
   const sheets: Record<string, WorkPaperSheet> = {}
-  const formulaCells: FormulaCellRecord[] = []
+  let formulaCells: FormulaCellRecord[] = []
   let maxRows = 1
   let maxColumns = 1
 
@@ -368,6 +369,8 @@ function prepareWorkbook(filePath: string, skippedByReason: Record<WorkPaperXlsx
 
     sheets[sheetName] = rows
   }
+
+  formulaCells = markVolatileDependentFormulaCells(formulaCells, skippedByReason)
 
   return {
     sheets: formulaCells.length === 0 ? sheets : attachRuntimeSnapshot(sheets, importXlsx(workbookBytes, basename(filePath)).snapshot),

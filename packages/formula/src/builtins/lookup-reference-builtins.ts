@@ -90,6 +90,10 @@ function getVectorValue(range: RangeBuiltinArgument, index: number, deps: Lookup
   return range.rows === 1 ? deps.getRangeValue(range, 0, index) : deps.getRangeValue(range, index, 0)
 }
 
+function coerceLookupReturnValue(value: CellValue, deps: LookupReferenceBuiltinDeps): CellValue {
+  return value.tag === ValueTag.Empty ? deps.numberResult(0) : value
+}
+
 interface XlookupReturnShape {
   rows: number
   cols: number
@@ -113,7 +117,10 @@ function buildXlookupReturnShape(
     return {
       rows: 1,
       cols: returnRange.cols,
-      getValues: (matchedIndex) => Array.from({ length: returnRange.cols }, (_, col) => deps.getRangeValue(returnRange, matchedIndex, col)),
+      getValues: (matchedIndex) =>
+        Array.from({ length: returnRange.cols }, (_, col) =>
+          coerceLookupReturnValue(deps.getRangeValue(returnRange, matchedIndex, col), deps),
+        ),
     }
   }
 
@@ -123,7 +130,10 @@ function buildXlookupReturnShape(
   return {
     rows: returnRange.rows,
     cols: 1,
-    getValues: (matchedIndex) => Array.from({ length: returnRange.rows }, (_, row) => deps.getRangeValue(returnRange, row, matchedIndex)),
+    getValues: (matchedIndex) =>
+      Array.from({ length: returnRange.rows }, (_, row) =>
+        coerceLookupReturnValue(deps.getRangeValue(returnRange, row, matchedIndex), deps),
+      ),
   }
 }
 
@@ -329,7 +339,8 @@ export function createLookupReferenceBuiltins(deps: LookupReferenceBuiltinDeps):
       }
 
       const resultIndex = position - 1
-      return resultRangeOrError.values[resultIndex] ?? deps.errorValue(ErrorCode.NA)
+      const result = resultRangeOrError.values[resultIndex]
+      return result === undefined ? deps.errorValue(ErrorCode.NA) : coerceLookupReturnValue(result, deps)
     },
     VLOOKUP: (lookupValue, tableArray, colIndexValue, rangeLookupValue = { tag: ValueTag.Boolean, value: true }) => {
       if (lookupValue === undefined || tableArray === undefined || colIndexValue === undefined) {
@@ -382,7 +393,7 @@ export function createLookupReferenceBuiltins(deps: LookupReferenceBuiltinDeps):
       if (matchedRow === -1) {
         return deps.errorValue(ErrorCode.NA)
       }
-      return deps.getRangeValue(tableArray, matchedRow, colIndex - 1)
+      return coerceLookupReturnValue(deps.getRangeValue(tableArray, matchedRow, colIndex - 1), deps)
     },
     HLOOKUP: (lookupValue, tableArray, rowIndexValue, rangeLookupValue = { tag: ValueTag.Boolean, value: true }) => {
       if (lookupValue === undefined || tableArray === undefined || rowIndexValue === undefined) {
@@ -435,7 +446,7 @@ export function createLookupReferenceBuiltins(deps: LookupReferenceBuiltinDeps):
       if (matchedCol === -1) {
         return deps.errorValue(ErrorCode.NA)
       }
-      return deps.getRangeValue(tableArray, rowIndex - 1, matchedCol)
+      return coerceLookupReturnValue(deps.getRangeValue(tableArray, rowIndex - 1, matchedCol), deps)
     },
     XLOOKUP: (
       lookupValue,

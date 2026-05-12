@@ -49,4 +49,49 @@ describe('engine defined-name implicit intersection', () => {
     engine.setCellValue('Main', 'D51', -1)
     expect(engine.getCellValue('Main', 'D54')).toEqual({ tag: ValueTag.Number, value: 30 })
   })
+
+  it('intersects row-vector lookup names and treats matched blanks as zero', async () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: {
+        name: 'defined-name-lookup-blank-return',
+        metadata: {
+          definedNames: [
+            { name: 'KeyRate_last', value: { kind: 'range-ref', sheetName: 'Main', startAddress: 'B1', endAddress: 'D1' } },
+            { name: 'tbl_last', value: { kind: 'range-ref', sheetName: 'Main', startAddress: 'B4', endAddress: 'F6' } },
+          ],
+        },
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'Main',
+          order: 0,
+          cells: [
+            { address: 'B1', value: 1 },
+            { address: 'C1', value: 2 },
+            { address: 'D1', value: 3 },
+            { address: 'B4', value: 1 },
+            { address: 'F4', value: 10 },
+            { address: 'B5', value: 2 },
+            { address: 'B6', value: 3 },
+            { address: 'F6', value: 30 },
+            { address: 'C10', formula: 'VLOOKUP(KeyRate_last,tbl_last,5,0)' },
+          ],
+        },
+      ],
+    }
+
+    const engine = new SpreadsheetEngine({ workbookName: 'defined-name-lookup-blank-return' })
+    await engine.ready()
+    engine.importSnapshot(snapshot)
+
+    expect(engine.getCellValue('Main', 'C10')).toEqual({ tag: ValueTag.Number, value: 0 })
+
+    engine.setCellValue('Main', 'F5', 42)
+    expect(engine.getCellValue('Main', 'C10')).toEqual({ tag: ValueTag.Number, value: 42 })
+
+    engine.setCellValue('Main', 'C1', 3)
+    expect(engine.getCellValue('Main', 'C10')).toEqual({ tag: ValueTag.Number, value: 30 })
+  })
 })

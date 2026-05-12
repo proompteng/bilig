@@ -9,7 +9,7 @@ import * as XLSX from 'xlsx'
 import { runWorkPaperXlsxCorpus, runWorkPaperXlsxCorpusInChildProcesses } from '../check-workpaper-xlsx-corpus.ts'
 
 describe('WorkPaper XLSX corpus verifier', () => {
-  it('keeps a checked-in issue #8 XLSX compatibility corpus green', () => {
+  it('keeps a checked-in XLSX compatibility corpus green', () => {
     const result = runWorkPaperXlsxCorpus([checkedInCorpusDir()])
 
     expect(result.summary).toMatchObject({
@@ -246,6 +246,41 @@ describe('WorkPaper XLSX corpus verifier', () => {
         'missing-cached-result': 1,
         'unsupported-cached-result-type': 0,
         'volatile-or-environment-dependent-formula': 1,
+      })
+    })
+  })
+
+  it('skips cached formulas that transitively depend on volatile formulas', () => {
+    withTempCorpus((corpusDir) => {
+      const workbook = XLSX.utils.book_new()
+      const sheet = XLSX.utils.aoa_to_sheet([
+        [null, null, null],
+        [2, null, null],
+      ])
+      sheet.A1 = { t: 'n', f: 'RAND()', v: 0.25 }
+      sheet.B1 = { t: 'n', f: 'A1:A2*2', F: 'B1:B2', v: 0.5 }
+      sheet.C1 = { t: 'n', f: 'B1+1', v: 1.5 }
+      sheet['!ref'] = 'A1:C2'
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Sheet1')
+      writeWorkbook(join(corpusDir, 'volatile-dependents.xlsx'), workbook)
+
+      const result = runWorkPaperXlsxCorpus([corpusDir])
+
+      expect(result.summary).toMatchObject({
+        totalFiles: 1,
+        filesProcessed: 1,
+        ok: 1,
+        formulaCells: 3,
+        comparableFormulaCells: 0,
+        matchingFormulaCells: 0,
+        mismatchedFormulaCells: 0,
+        skippedFormulaCells: 3,
+        matchRate: 1,
+      })
+      expect(result.skippedByReason).toEqual({
+        'missing-cached-result': 0,
+        'unsupported-cached-result-type': 0,
+        'volatile-or-environment-dependent-formula': 3,
       })
     })
   })
