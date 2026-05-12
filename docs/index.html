@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>bilig - Headless Spreadsheet Engine for Node.js and Agents</title>
+    <title>bilig - Headless Spreadsheet Engine for Node.js Services and Agents</title>
     <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
     <link rel="canonical" href="https://proompteng.github.io/bilig/" />
     <link rel="sitemap" type="application/xml" href="https://proompteng.github.io/bilig/sitemap.xml" />
@@ -11,19 +11,19 @@
     <link rel="preload" as="image" href="https://proompteng.github.io/bilig/assets/bilig-hero-workbook-api.png?v=2026-05-08-2" />
     <meta
       name="description"
-      content="@bilig/headless is a TypeScript spreadsheet engine for Node.js services and agents that need formulas, workbook edits, readback, and JSON persistence without a browser grid."
+      content="@bilig/headless is a TypeScript spreadsheet engine for Node.js services and agents that need formulas, verified edits, and durable workbook persistence."
     />
     <meta
       name="keywords"
-      content="headless spreadsheet engine, Node spreadsheet engine, TypeScript formula engine, spreadsheet engine for agents, workbook automation, HyperFormula alternative, formula evaluation in Node"
+      content="headless spreadsheet engine, Node spreadsheet engine, TypeScript formula engine, spreadsheet engine for agents, workbook automation, HyperFormula alternative, formula evaluation in Node, SQLite spreadsheet persistence, Postgres workbook persistence, serverless spreadsheet API"
     />
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="theme-color" content="#f6f8fa" />
     <meta property="og:site_name" content="bilig" />
-    <meta property="og:title" content="bilig - Headless Spreadsheet Engine for Node.js and Agents" />
+    <meta property="og:title" content="bilig - Headless Spreadsheet Engine for Node.js Services and Agents" />
     <meta
       property="og:description"
-      content="Build a workbook from arrays or JSON records, recalculate formulas, read values, and persist the result from TypeScript."
+      content="Build WorkPaper documents from TypeScript, recalculate formulas, verify writeback, and persist state in JSON, SQLite, Postgres, or object storage."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://proompteng.github.io/bilig/" />
@@ -32,8 +32,11 @@
     <meta property="og:image:width" content="1280" />
     <meta property="og:image:height" content="640" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="bilig - Headless Spreadsheet Engine for Node.js and Agents" />
-    <meta name="twitter:description" content="Spreadsheet formulas, workbook edits, and JSON persistence for Node.js programs." />
+    <meta name="twitter:title" content="bilig - Headless Spreadsheet Engine for Node.js Services and Agents" />
+    <meta
+      name="twitter:description"
+      content="Spreadsheet formulas, verified edits, and durable WorkPaper persistence for Node.js programs."
+    />
     <meta name="twitter:image" content="https://proompteng.github.io/bilig/assets/github-social-preview.png?v=2026-05-08-2" />
     <meta name="twitter:image:alt" content="bilig headless spreadsheet engine workbook and TypeScript code preview" />
     <script type="application/ld+json">
@@ -41,7 +44,7 @@
         "@context": "https://schema.org",
         "@type": "SoftwareSourceCode",
         "name": "bilig",
-        "description": "TypeScript headless spreadsheet engine for Node.js programs and agents that need formulas, workbook edits, readback, and JSON persistence without a spreadsheet UI.",
+        "description": "TypeScript headless spreadsheet engine for Node.js programs and agents that need formulas, workbook edits, readback, and durable persistence without a spreadsheet UI.",
         "codeRepository": "https://github.com/proompteng/bilig",
         "license": "https://github.com/proompteng/bilig/blob/main/LICENSE",
         "programmingLanguage": "TypeScript",
@@ -58,6 +61,7 @@
           "Formula evaluation and readback",
           "Structural row and column edits",
           "JSON workbook persistence",
+          "SQLite, Postgres, and object storage persistence recipes",
           "Serverless API route integration",
           "Agent write verification"
         ],
@@ -95,6 +99,14 @@
             "acceptedAnswer": {
               "@type": "Answer",
               "text": "No. It focuses on programmatic workbook workflows. The compatibility notes document the Excel behavior that is not complete yet."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I persist WorkPaper state?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Use the WorkPaper document boundary. The persistence guide shows JSON serialization plus SQLite, Postgres, and object-storage adapters."
             }
           },
           {
@@ -632,9 +644,9 @@
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-content">
           <p class="label">@bilig/headless</p>
-          <h1 id="hero-title">Run spreadsheet formulas in Node.js. No browser grid.</h1>
+          <h1 id="hero-title">Run spreadsheet formulas in Node.js. Keep the workbook state.</h1>
           <p class="lede">
-            Use a real workbook model when a service, script, or coding agent needs formulas, edits, calculated values, and saved state.
+            Use a real workbook model when a service, script, or coding agent needs formulas, edits, calculated values, and durable state.
           </p>
           <div class="proof-strip" aria-label="project facts">
             <div>
@@ -646,8 +658,8 @@
               <span>turn JSON-shaped service data into sheets, summary formulas, and readback checks.</span>
             </div>
             <div>
-              <strong>honest limits</strong>
-              <span>compatibility notes call out what is not Excel-complete yet.</span>
+              <strong>durable storage</strong>
+              <span>persist WorkPaper JSON in SQLite, Postgres, object storage, or your service database.</span>
             </div>
           </div>
           <div class="actions">
@@ -655,8 +667,11 @@
             <a class="button" href="https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api">
               Build an API route
             </a>
-            <a class="button" href="https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input">
-              Run the JSON example
+            <a
+              class="button"
+              href="https://github.com/proompteng/bilig/blob/main/docs/persisting-formula-backed-workpaper-documents-in-node.md"
+            >
+              Persist workbook state
             </a>
             <a class="button" href="https://github.com/proompteng/bilig/stargazers">Star on GitHub</a>
             <a class="button" href="https://github.com/proompteng/bilig">Read the source</a>
@@ -669,7 +684,7 @@
           <div class="section-head">
             <h2 id="why-title">A workbook model for backend code.</h2>
             <p>
-              Tables are fine until the job needs ranges, formulas, structural edits, and saved workbook state. bilig exposes those pieces
+              Tables are fine until the job needs ranges, formulas, structural edits, and durable workbook state. bilig exposes those pieces
               as TypeScript.
             </p>
           </div>
@@ -806,7 +821,7 @@ console.log({ before, after, sheets: restored.getSheetNames(), bytes: saved.leng
               <ul>
                 <li>Node services, scripts, and tool-calling workflows.</li>
                 <li>Formula-backed business logic that needs deterministic readback.</li>
-                <li>Saved workbook documents that should round-trip as JSON.</li>
+                <li>Saved workbook documents that should round-trip through JSON, SQLite, Postgres, or object storage.</li>
                 <li>Not a finished Excel clone; start with the compatibility docs when parity matters.</li>
               </ul>
             </article>
@@ -816,7 +831,10 @@ console.log({ before, after, sheets: restored.getSheetNames(), bytes: saved.leng
         <section id="proof" aria-labelledby="proof-title">
           <div class="section-head">
             <h2 id="proof-title">Proof beats a pitch.</h2>
-            <p>The repo has runnable examples, comparison notes, benchmark caveats, and small issues for first-time contributors.</p>
+            <p>
+              The repo has runnable examples, persistence recipes, comparison notes, benchmark caveats, and small issues for first-time
+              contributors.
+            </p>
           </div>
           <div class="proof">
             <div class="metric-list">
@@ -835,6 +853,7 @@ console.log({ before, after, sheets: restored.getSheetNames(), bytes: saved.leng
                 <li>Runnable package example</li>
                 <li>JSON-records example for service payloads</li>
                 <li>Package readme with install commands</li>
+                <li>SQLite, Postgres, and object-storage persistence recipes</li>
                 <li>Compatibility notes before making Excel-parity assumptions</li>
                 <li>Benchmark explainer with the measured claim and caveat</li>
                 <li><a href="https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md">starter issues</a> for small patches</li>
@@ -855,6 +874,12 @@ console.log({ before, after, sheets: restored.getSheetNames(), bytes: saved.leng
             <article class="card">
               <h3>Is it a complete Excel clone?</h3>
               <p>No. It targets programmatic workbook workflows, and the compatibility docs call out the gaps.</p>
+            </article>
+            <article class="card">
+              <h3>How do I persist state?</h3>
+              <p>
+                Serialize the WorkPaper document and store it behind a small adapter. The docs show SQLite, Postgres, and object storage.
+              </p>
             </article>
             <article class="card">
               <h3>When is it a good fit?</h3>
@@ -911,7 +936,7 @@ console.log({ before, after, sheets: restored.getSheetNames(), bytes: saved.leng
                 </li>
                 <li>
                   <a href="https://github.com/proompteng/bilig/blob/main/docs/persisting-formula-backed-workpaper-documents-in-node.md">
-                    persistence article
+                    persistence recipes
                   </a>
                 </li>
                 <li>

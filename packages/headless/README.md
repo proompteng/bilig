@@ -35,7 +35,10 @@ pnpm --filter @bilig/headless build
   smoke test.
 - Try the runnable examples:
   [`examples/headless-workpaper`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper) and
-  [`npm run json-records`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input).
+  [`npm run json-records`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input)
+  for in-process records, or
+  [`npm run http-json-summary`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#http-json-summary)
+  for a no-framework Node HTTP boundary.
 - Run the
   [serverless WorkPaper API example](https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api)
   when the workbook belongs behind an HTTP or agent-tool boundary.
@@ -259,6 +262,7 @@ restores the workbook, and verifies the final result.
 cd examples/headless-workpaper
 npm install
 npm start
+npm run http-json-summary
 npm run agent:tool-call
 ```
 

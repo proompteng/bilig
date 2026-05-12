@@ -7,7 +7,6 @@ search indexing.
 Current starter tickets as of May 12, 2026:
 
 - [#134: docs(examples): add XLSX formula-cache roundtrip example](https://github.com/proompteng/bilig/issues/134)
-- [#141: docs(examples): add HTTP JSON summary WorkPaper example](https://github.com/proompteng/bilig/issues/141)
 - [#142: docs(examples): add JSON file input WorkPaper example](https://github.com/proompteng/bilig/issues/142)
 - [#143: docs(examples): add markdown report WorkPaper output example](https://github.com/proompteng/bilig/issues/143)
 - [#144: docs(examples): add formula diagnostics WorkPaper example](https://github.com/proompteng/bilig/issues/144)

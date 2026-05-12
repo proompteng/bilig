@@ -57,6 +57,42 @@ export function parseNodeSmokeOutput(output: string): {
   }
 }
 
+export function parseNodeHttpJsonSummaryOutput(output: string): {
+  computed: {
+    committedMrr: number
+    largestOpportunityMrr: number
+    weightedPipelineMrr: number
+    westSeats: number
+  }
+  sourceRecords: number
+  verified: boolean
+} {
+  const parsed = parseJsonRecord(output, 'node HTTP JSON summary output')
+  const computed = parseRecordValue(parsed.computed, 'node HTTP JSON summary computed output')
+
+  if (
+    parsed.verified !== true ||
+    parsed.sourceRecords !== 3 ||
+    computed.committedMrr !== 39600 ||
+    computed.weightedPipelineMrr !== 43400 ||
+    computed.westSeats !== 27 ||
+    computed.largestOpportunityMrr !== 21600
+  ) {
+    throw new Error(`Unexpected node HTTP JSON summary output: ${output}`)
+  }
+
+  return {
+    computed: {
+      committedMrr: computed.committedMrr,
+      largestOpportunityMrr: computed.largestOpportunityMrr,
+      weightedPipelineMrr: computed.weightedPipelineMrr,
+      westSeats: computed.westSeats,
+    },
+    sourceRecords: parsed.sourceRecords,
+    verified: parsed.verified,
+  }
+}
+
 export function parseNodeSnapshotImportOutput(output: string): {
   currencyLabel: string
   firstPeriod: number

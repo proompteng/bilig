@@ -258,9 +258,7 @@ Expected output:
     "after": 25,
     "restored": 25
   },
-  "persistedNamedExpressions": [
-    "GrowthRatePercent"
-  ],
+  "persistedNamedExpressions": ["GrowthRatePercent"],
   "restoredMatchesAfter": true
 }
 ```
@@ -303,16 +301,34 @@ Expected output:
     "westSeats": 27,
     "largestOpportunityMrr": 21600
   },
-  "serializedFirstDataRow": [
-    "Acme Manufacturing",
-    "West",
-    "Committed",
-    12,
-    1800,
-    1,
-    "=D2*E2",
-    "=G2*F2"
-  ],
+  "serializedFirstDataRow": ["Acme Manufacturing", "West", "Committed", 12, 1800, 1, "=D2*E2", "=G2*F2"],
   "verified": true
+}
+```
+
+## HTTP JSON Summary
+
+Run the HTTP JSON summary example when you want the same record-to-WorkPaper
+pattern behind a tiny Node service boundary. The script starts a local
+`node:http` server on an ephemeral port, posts opportunity records with
+`fetch`, builds a WorkPaper from the posted JSON, reads formula-backed summary
+cells, verifies the exact response, prints the response, and closes the server:
+
+```sh
+npm run http-json-summary
+```
+
+Expected output:
+
+```json
+{
+  "verified": true,
+  "sourceRecords": 3,
+  "computed": {
+    "committedMrr": 39600,
+    "weightedPipelineMrr": 43400,
+    "westSeats": 27,
+    "largestOpportunityMrr": 21600
+  }
 }
 ```

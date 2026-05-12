@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path'
 import { assertAlignedVersions, loadRuntimePackages, type RuntimePackageManifest } from './runtime-package-set.ts'
 import {
   parseJsonRecord,
+  parseNodeHttpJsonSummaryOutput,
   parseNodeAgentToolCallOutput,
   parseNodeAgentVerificationOutput,
   parseNodePersistenceOutput,
@@ -146,11 +147,22 @@ function runNodeSmoke(
     totalValue: number
     translatedStructuredRefs: boolean
   }
+  httpJsonSummary: {
+    computed: {
+      committedMrr: number
+      largestOpportunityMrr: number
+      weightedPipelineMrr: number
+      westSeats: number
+    }
+    sourceRecords: number
+    verified: boolean
+  }
 } {
   mkdirSync(projectDir, { recursive: true })
   copyFileSync(join(headlessExampleDir, 'package.json'), join(projectDir, 'package.json'))
   copyFileSync(join(headlessExampleDir, 'agent-tool-call-loop.mjs'), join(projectDir, 'agent-tool-call-loop.mjs'))
   copyFileSync(join(headlessExampleDir, 'agent-writeback-verification.mjs'), join(projectDir, 'agent-writeback-verification.mjs'))
+  copyFileSync(join(headlessExampleDir, 'http-json-summary.mjs'), join(projectDir, 'http-json-summary.mjs'))
   copyFileSync(join(headlessExampleDir, 'revenue-plan.mjs'), join(projectDir, 'revenue-plan.mjs'))
   copyFileSync(join(headlessExampleDir, 'persistence-roundtrip.mjs'), join(projectDir, 'persistence-roundtrip.mjs'))
   copyFileSync(join(headlessExampleDir, 'revenue-scenarios.mjs'), join(projectDir, 'revenue-scenarios.mjs'))
@@ -250,12 +262,14 @@ function runNodeSmoke(
   const agentVerification = parseNodeAgentVerificationOutput(
     runTextCommand('node', ['agent-writeback-verification.mjs'], { cwd: projectDir }),
   )
+  const httpJsonSummary = parseNodeHttpJsonSummaryOutput(runTextCommand('node', ['http-json-summary.mjs'], { cwd: projectDir }))
   const snapshotImport = parseNodeSnapshotImportOutput(runTextCommand('node', ['snapshot-import.mjs'], { cwd: projectDir }))
   const xlsxImport = parseNodeXlsxImportOutput(runTextCommand('node', ['xlsx-import.mjs'], { cwd: projectDir }))
 
   return {
     agentToolCall,
     agentVerification,
+    httpJsonSummary,
     persistence,
     projectDir,
     scenarios,

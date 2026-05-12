@@ -140,7 +140,7 @@ requireIncludes(
 )
 requireIncludes(index, '"@type": "SoftwareSourceCode"', 'docs/index.html')
 requireIncludes(index, '"codeRepository": "https://github.com/proompteng/bilig"', 'docs/index.html')
-requireIncludes(index, '<title>bilig - Headless Spreadsheet Engine for Node.js and Agents</title>', 'docs/index.html')
+requireIncludes(index, '<title>bilig - Headless Spreadsheet Engine for Node.js Services and Agents</title>', 'docs/index.html')
 requireIncludes(index, '<meta name="robots" content="index, follow, max-image-preview:large" />', 'docs/index.html')
 requireIncludes(index, '<link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />', 'docs/index.html')
 requireIncludes(index, 'bilig-hero-workbook-api.png?v=2026-05-08-2', 'docs/index.html')
@@ -266,7 +266,6 @@ for (const [path, content] of [
 
 for (const required of [
   'https://github.com/proompteng/bilig/issues/134',
-  'https://github.com/proompteng/bilig/issues/141',
   'https://github.com/proompteng/bilig/issues/142',
   'https://github.com/proompteng/bilig/issues/143',
   'https://github.com/proompteng/bilig/issues/144',
@@ -294,6 +293,7 @@ for (const required of [
 for (const closedIssue of [
   '137',
   '138',
+  '141',
   '160',
   '161',
   '164',
