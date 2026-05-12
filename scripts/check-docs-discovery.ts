@@ -326,7 +326,7 @@ for (const [path, content] of [
   ['docs/workbook-automation-examples-node.md', await readFile(join(docsRoot, 'workbook-automation-examples-node.md'), 'utf8')],
   ['docs/dev-to-workbook-apis-post.md', await readFile(join(docsRoot, 'dev-to-workbook-apis-post.md'), 'utf8')],
 ] as const) {
-  requireIncludes(content, 'image: https://proompteng.github.io/bilig/assets/github-social-preview.png?v=2026-05-08-2', path)
+  requireIncludes(content, 'image: /assets/github-social-preview.png', path)
 }
 
 for (const [path, content] of [

@@ -5,7 +5,7 @@ description: Wrap @bilig/headless workbook reads, writes, formula readback, and 
 tags: ai agents, tool calling, node, spreadsheet, typescript
 canonical_url: https://proompteng.github.io/bilig/agent-workpaper-tool-calling-recipe.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
-image: https://proompteng.github.io/bilig/assets/github-social-preview.png?v=2026-05-08-2
+image: /assets/github-social-preview.png
 ---
 
 # WorkPaper Tool-Calling Recipe For Agents

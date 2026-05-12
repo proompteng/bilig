@@ -5,7 +5,7 @@ description: A runnable @bilig/headless loop where an agent writes one workbook 
 tags: ai agents, tool calling, node, spreadsheet, workpaper
 canonical_url: https://proompteng.github.io/bilig/agent-spreadsheet-tool-call-loop.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
-image: https://proompteng.github.io/bilig/assets/github-social-preview.png?v=2026-05-08-2
+image: /assets/github-social-preview.png
 ---
 
 # Agent Spreadsheet Tool Call Loop

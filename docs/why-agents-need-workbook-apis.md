@@ -5,7 +5,7 @@ description: Why coding agents should edit workbook formulas through a Node.js W
 tags: ai agents, spreadsheet, node, workpaper, typescript
 canonical_url: https://proompteng.github.io/bilig/why-agents-need-workbook-apis.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
-image: https://proompteng.github.io/bilig/assets/github-social-preview.png?v=2026-05-08-2
+image: /assets/github-social-preview.png
 ---
 
 # Why Agents Need Workbook APIs, Not Spreadsheet Screenshots

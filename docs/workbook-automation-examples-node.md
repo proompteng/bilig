@@ -5,7 +5,7 @@ description: Runnable WorkPaper examples for invoice totals, budget variance ale
 tags: typescript, node, spreadsheet, opensource
 canonical_url: https://proompteng.github.io/bilig/workbook-automation-examples-node.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
-image: https://proompteng.github.io/bilig/assets/github-social-preview.png?v=2026-05-08-2
+image: /assets/github-social-preview.png
 ---
 
 # Five Node.js workbook automation examples

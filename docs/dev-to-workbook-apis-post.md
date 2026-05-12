@@ -5,7 +5,7 @@ description: A practical case for treating spreadsheet state as an API boundary 
 tags: typescript, node, opensource, ai
 canonical_url: https://proompteng.github.io/bilig/dev-to-workbook-apis-post.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
-image: https://proompteng.github.io/bilig/assets/github-social-preview.png?v=2026-05-08-2
+image: /assets/github-social-preview.png
 ---
 
 spreadsheets are still one of the most common ways teams encode business logic.
