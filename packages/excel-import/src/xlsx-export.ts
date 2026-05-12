@@ -7,10 +7,10 @@ import type {
   WorkbookAxisEntrySnapshot,
   WorkbookMacroPayloadSnapshot,
   WorkbookMergeRangeSnapshot,
-  WorkbookSheetCellStyleIndexSnapshot,
   WorkbookSnapshot,
 } from '@bilig/protocol'
 import { addExportCellMetadataToXlsxBytes } from './xlsx-cell-metadata.js'
+import { addMissingBlankCells, addMissingFormattedCells } from './xlsx-cell-insertion.js'
 import { addExportCalculationSettingsToXlsxBytes } from './xlsx-calculation-settings.js'
 import { addExportChartsToXlsxBytes } from './xlsx-charts.js'
 import { addExportLegacyCommentVmlToXlsxBytes } from './xlsx-comment-vml.js'
@@ -256,29 +256,6 @@ function buildSheetCellFormats(
     formats.set(address, format)
   }
   return formats
-}
-
-function addMissingFormattedCells(sheetXml: string, cells: readonly { readonly address: string; readonly styleIndex: number }[]): string {
-  let output = sheetXml
-  const byRow = new Map<number, string[]>()
-  for (const cell of cells) {
-    const rowNumber = XLSX.utils.decode_cell(cell.address).r + 1
-    const cellXml = `<c r="${cell.address}" s="${String(cell.styleIndex)}" t="z"></c>`
-    byRow.set(rowNumber, [...(byRow.get(rowNumber) ?? []), cellXml])
-  }
-  for (const [rowNumber, rowCells] of byRow) {
-    const rowPattern = new RegExp(`<row\\b(?=[^>]*\\br="${String(rowNumber)}")[^>]*(?:/>|>[\\s\\S]*?</row>)`, 'u')
-    if (rowPattern.test(output)) {
-      output = output.replace(rowPattern, (rowXml) =>
-        rowXml.endsWith('/>')
-          ? rowXml.replace(/\/>$/u, `>${rowCells.join('')}</row>`)
-          : rowXml.replace('</row>', `${rowCells.join('')}</row>`),
-      )
-    } else {
-      output = output.replace('</sheetData>', `<row r="${String(rowNumber)}">${rowCells.join('')}</row></sheetData>`)
-    }
-  }
-  return output
 }
 
 function applyNumberFormatsToSheetXml(
@@ -584,17 +561,27 @@ function applyStyleIndexesToSheetXml(
   return missingCells.length > 0 ? addMissingFormattedCells(output, missingCells) : output
 }
 
-function applyStyleArtifactIndexesToSheetXml(sheetXml: string, cellStyleIndexes: readonly WorkbookSheetCellStyleIndexSnapshot[]): string {
-  if (cellStyleIndexes.length === 0) {
+function applyStyleArtifactIndexesToSheetXml(
+  sheetXml: string,
+  styleArtifacts: NonNullable<WorkbookSnapshot['sheets'][number]['metadata']>['styleArtifacts'],
+): string {
+  const cellStyleIndexes = styleArtifacts?.cellStyleIndexes ?? []
+  const blankCellAddresses = styleArtifacts?.blankCellAddresses ?? []
+  if (cellStyleIndexes.length === 0 && blankCellAddresses.length === 0) {
     return sheetXml
   }
   const stylesByAddress = new Map(cellStyleIndexes.map((entry) => [entry.address, entry.styleIndex]))
   const handledAddresses = new Set<string>()
+  const presentAddresses = new Set<string>()
   let output = sheetXml.replace(/<c\b[^>]*(?:\/>|>[\s\S]*?<\/c>)/gu, (cellXml) => {
     const openingTag = /<c\b[^>]*(?:\/>|>)/u.exec(cellXml)?.[0]
     const address = openingTag ? /\br="([^"]+)"/u.exec(openingTag)?.[1] : undefined
     const styleIndex = address ? stylesByAddress.get(address) : undefined
-    if (!openingTag || !address || styleIndex === undefined) {
+    if (!openingTag || !address) {
+      return cellXml
+    }
+    presentAddresses.add(address)
+    if (styleIndex === undefined) {
       return cellXml
     }
     handledAddresses.add(address)
@@ -603,7 +590,11 @@ function applyStyleArtifactIndexesToSheetXml(sheetXml: string, cellStyleIndexes:
   const missingCells = [...stylesByAddress.entries()]
     .filter(([address]) => !handledAddresses.has(address))
     .map(([address, styleIndex]) => ({ address, styleIndex }))
-  return missingCells.length > 0 ? addMissingFormattedCells(output, missingCells) : output
+  if (missingCells.length > 0) {
+    output = addMissingFormattedCells(output, missingCells)
+  }
+  const missingBlankCellAddresses = blankCellAddresses.filter((address) => !handledAddresses.has(address) && !presentAddresses.has(address))
+  return missingBlankCellAddresses.length > 0 ? addMissingBlankCells(output, missingBlankCellAddresses) : output
 }
 
 function preserveSnapshotStyles(bytes: Uint8Array, snapshot: WorkbookSnapshot): Uint8Array {
@@ -645,14 +636,14 @@ function addExportStyleArtifactsToXlsxBytes(bytes: Uint8Array, snapshot: Workboo
   snapshot.sheets
     .toSorted((left, right) => left.order - right.order)
     .forEach((sheet, sheetIndex) => {
-      const cellStyleIndexes = sheet.metadata?.styleArtifacts?.cellStyleIndexes ?? []
-      if (cellStyleIndexes.length === 0) {
+      const styleArtifacts = sheet.metadata?.styleArtifacts
+      if (!styleArtifacts || (styleArtifacts.cellStyleIndexes.length === 0 && (styleArtifacts.blankCellAddresses?.length ?? 0) === 0)) {
         return
       }
       const sheetPath = `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`
       const sheetXml = getZipText(zip, sheetPath)
       if (sheetXml) {
-        setZipText(zip, sheetPath, applyStyleArtifactIndexesToSheetXml(sheetXml, cellStyleIndexes))
+        setZipText(zip, sheetPath, applyStyleArtifactIndexesToSheetXml(sheetXml, styleArtifacts))
       }
     })
   return zipSync(zip)
@@ -707,6 +698,12 @@ function inferExportWorksheetRange(sheet: WorkbookSnapshot['sheets'][number]): s
   for (const formatRange of sheet.metadata?.formatRanges ?? []) {
     bounds = updateWorksheetBounds(bounds, formatRange.range.startAddress)
     bounds = updateWorksheetBounds(bounds, formatRange.range.endAddress)
+  }
+  for (const cellStyleIndex of sheet.metadata?.styleArtifacts?.cellStyleIndexes ?? []) {
+    bounds = updateWorksheetBounds(bounds, cellStyleIndex.address)
+  }
+  for (const address of sheet.metadata?.styleArtifacts?.blankCellAddresses ?? []) {
+    bounds = updateWorksheetBounds(bounds, address)
   }
   return bounds ? XLSX.utils.encode_range(bounds) : undefined
 }

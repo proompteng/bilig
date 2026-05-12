@@ -271,6 +271,7 @@ export interface WorkbookSheetCellStyleIndexSnapshot {
 
 export interface WorkbookSheetStyleArtifactsSnapshot {
   cellStyleIndexes: WorkbookSheetCellStyleIndexSnapshot[]
+  blankCellAddresses?: string[]
 }
 
 export interface WorkbookPackageRelationshipSnapshot {

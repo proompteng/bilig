@@ -35,6 +35,17 @@ describe('xlsx cell style roundtrip', () => {
     expect(readRowAttributes(exported, 2)).toMatchObject(readRowAttributes(source, 2))
     expect(readColumnStyleNumberFormat(exported, 1)).toBe(readColumnStyleNumberFormat(source, 1))
     expect(readRowStyleNumberFormat(exported, 1)).toBe(readRowStyleNumberFormat(source, 1))
+    expect(readCellXml(exported, 'xl/worksheets/sheet1.xml!A3')).toBeDefined()
+    expect(readCellXml(exported, 'xl/worksheets/sheet1.xml!B2')).toBeDefined()
+  })
+
+  it('preserves style-only blank cells on otherwise empty imported worksheets', () => {
+    const source = buildStyleOnlyBlankCellWorkbook()
+
+    const exported = exportXlsx(importXlsx(source, 'style-only-blank-cells.xlsx').snapshot)
+
+    expect(readCellStyleParts(exported, 'xl/worksheets/sheet1.xml!A2')).toEqual(readCellStyleParts(source, 'xl/worksheets/sheet1.xml!A2'))
+    expect(readCellStyleParts(exported, 'xl/worksheets/sheet1.xml!B2')).toEqual(readCellStyleParts(source, 'xl/worksheets/sheet1.xml!B2'))
   })
 })
 
@@ -126,9 +137,28 @@ function buildAxisStyleReferenceWorkbook(): Uint8Array {
     .replace(/\s+s="[^"]*"/u, '')
     .replace(/<sheetData\b/u, '<cols><col min="1" max="1" width="20" customWidth="1" style="1" customFormat="1"/></cols><sheetData')
     .replace(/<row\b(?=[^>]*\br="1")[^>]*>/u, (tag) => `${tag.slice(0, -1)} s="1" customFormat="1">`)
-    .replace(/<\/sheetData>/u, '<row r="2" customFormat="1"/></sheetData>')
+    .replace(
+      /<\/sheetData>/u,
+      '<row r="2" s="1" customFormat="1"><c r="B2"/></row><row r="3"><c r="A3"/></row><row r="4" customFormat="1"/></sheetData>',
+    )
   zip['xl/worksheets/sheet1.xml'] = strToU8(sheetXml)
   return zipSync(zip)
+}
+
+function buildStyleOnlyBlankCellWorkbook(): Uint8Array {
+  const zip = unzipSync(exportXlsx(buildStyledWorkbook()))
+  zip['xl/styles.xml'] = strToU8(axisStyleReferenceStylesXml)
+  const sheetXml = strFromU8(zip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())
+    .replace(/<dimension\b[^>]*\/>/u, '<dimension ref="A2:B2"/>')
+    .replace(/<sheetData\b[^>]*>[\s\S]*?<\/sheetData>/u, '<sheetData><row r="2"><c r="A2" s="1"/><c r="B2" s="1"/></row></sheetData>')
+  zip['xl/worksheets/sheet1.xml'] = strToU8(sheetXml)
+  return zipSync(zip)
+}
+
+function readCellXml(bytes: Uint8Array, cellRef: string): string | undefined {
+  const [sheetPath, address] = cellRef.split('!')
+  const sheetXml = strFromU8(unzipSync(bytes)[sheetPath ?? ''] ?? new Uint8Array())
+  return new RegExp(`<c\\b(?=[^>]*\\br="${address ?? ''}")[^>]*(?:\\/>|>[\\s\\S]*?<\\/c>)`, 'u').exec(sheetXml)?.[0]
 }
 
 function readCellStyleParts(bytes: Uint8Array, cellRef: string): { border: string; fill: string; font: string } {

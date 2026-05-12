@@ -477,11 +477,73 @@ function parseSheetStyleIndexes(sheetXml: string, candidateAddresses?: ReadonlyS
   return output
 }
 
+function parseColumnStyleRanges(sheetXml: string): Array<{ start: number; end: number }> {
+  return [...sheetXml.matchAll(/<col\b[^>]*\/?>/gu)].flatMap((match) => {
+    const columnTag = match[0]
+    if (readXmlNonNegativeIntegerAttribute(columnTag, 'style') === null) {
+      return []
+    }
+    const min = readXmlPositiveIntegerAttribute(columnTag, 'min')
+    const max = readXmlPositiveIntegerAttribute(columnTag, 'max') ?? min
+    if (min === null || max === null || max < min) {
+      return []
+    }
+    return [{ start: min - 1, end: max - 1 }]
+  })
+}
+
+function columnHasStyle(columnStyleRanges: readonly { start: number; end: number }[], columnIndex: number): boolean {
+  return columnStyleRanges.some((range) => columnIndex >= range.start && columnIndex <= range.end)
+}
+
+function isBlankCellXml(cellXml: string, openingTag: string): boolean {
+  if (openingTag.endsWith('/>')) {
+    return true
+  }
+  return !/<(?:v|f|is)\b/u.test(cellXml.slice(openingTag.length, -'</c>'.length))
+}
+
 function parseSheetCellStyleIndexArtifacts(sheetXml: string): WorkbookSheetStyleArtifactsSnapshot | undefined {
-  const cellStyleIndexes = [...parseSheetStyleIndexes(sheetXml).entries()]
-    .map(([address, styleIndex]) => ({ address, styleIndex }))
-    .filter((entry) => Number.isSafeInteger(entry.styleIndex) && entry.styleIndex >= 0)
-  return cellStyleIndexes.length > 0 ? { cellStyleIndexes } : undefined
+  const cellStyleIndexes: WorkbookSheetStyleArtifactsSnapshot['cellStyleIndexes'] = []
+  const blankCellAddresses: string[] = []
+  const columnStyleRanges = parseColumnStyleRanges(sheetXml)
+  for (const rowMatch of sheetXml.matchAll(/<row\b[^>]*(?:\/>|>[\s\S]*?<\/row>)/gu)) {
+    const rowXml = rowMatch[0]
+    const rowTag = /^<row\b[^>]*(?:\/>|>)/u.exec(rowXml)?.[0]
+    if (!rowTag) {
+      continue
+    }
+    const rowHasStyle = readXmlNonNegativeIntegerAttribute(rowTag, 's') !== null
+    for (const cellMatch of rowXml.matchAll(/<c\b[^>]*(?:\/>|>[\s\S]*?<\/c>)/gu)) {
+      const cellXml = cellMatch[0]
+      const cellTag = /^<c\b[^>]*(?:\/>|>)/u.exec(cellXml)?.[0]
+      if (!cellTag) {
+        continue
+      }
+      const address = readXmlAttribute(cellTag, 'r')
+      if (!address) {
+        continue
+      }
+      const styleIndex = readXmlNonNegativeIntegerAttribute(cellTag, 's')
+      if (styleIndex !== null) {
+        cellStyleIndexes.push({ address, styleIndex })
+        continue
+      }
+      if (!isBlankCellXml(cellXml, cellTag)) {
+        continue
+      }
+      const columnIndex = XLSX.utils.decode_cell(address).c
+      if (rowHasStyle || columnHasStyle(columnStyleRanges, columnIndex)) {
+        blankCellAddresses.push(address)
+      }
+    }
+  }
+  return cellStyleIndexes.length > 0 || blankCellAddresses.length > 0
+    ? {
+        cellStyleIndexes,
+        ...(blankCellAddresses.length > 0 ? { blankCellAddresses } : {}),
+      }
+    : undefined
 }
 
 function parseSheetFormatPr(sheetXml: string): WorkbookSheetFormatPrSnapshot | undefined {
