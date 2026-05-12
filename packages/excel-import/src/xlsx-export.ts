@@ -46,6 +46,7 @@ import { decodePreservedVbaProjectPayload } from './xlsx-macros.js'
 import { addExportPrinterSettingsToXlsxBytes } from './xlsx-printer-settings.js'
 import { addExportWorksheetPropertiesToXlsxBytes } from './xlsx-sheet-properties.js'
 import { applyExportSheetVisibilitiesToWorkbook } from './xlsx-sheet-visibility.js'
+import { addExportSlicerConnectionArtifactsToXlsxBytes } from './xlsx-slicer-connection-artifacts.js'
 import { addExportSparklinesToXlsxBytes } from './xlsx-sparklines.js'
 import { addExportHyperlinksToWorksheet, hasExportHyperlinks } from './xlsx-hyperlinks.js'
 import {
@@ -955,7 +956,8 @@ export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
   const arrayFormulaBytes = addExportArrayFormulasToXlsxBytes(dataTableFormulaBytes, snapshot)
   const dataModelArtifactBytes = addExportDataModelArtifactsToXlsxBytes(arrayFormulaBytes, snapshot)
   const externalLinkArtifactBytes = addExportExternalLinkArtifactsToXlsxBytes(dataModelArtifactBytes, snapshot)
-  const threadedCommentArtifactBytes = addExportThreadedCommentArtifactsToXlsxBytes(externalLinkArtifactBytes, snapshot)
+  const slicerConnectionArtifactBytes = addExportSlicerConnectionArtifactsToXlsxBytes(externalLinkArtifactBytes, snapshot)
+  const threadedCommentArtifactBytes = addExportThreadedCommentArtifactsToXlsxBytes(slicerConnectionArtifactBytes, snapshot)
   const richTextArtifactBytes = addExportRichTextArtifactsToXlsxBytes(threadedCommentArtifactBytes, snapshot)
   const printPageSetupBytes = addExportPrintPageSetupToXlsxBytes(
     addExportLegacyCommentVmlToXlsxBytes(richTextArtifactBytes, snapshot),

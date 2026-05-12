@@ -18,6 +18,7 @@ interface ImportedWorkbookMetadataInput {
   readonly controlArtifacts?: WorkbookMetadataSnapshot['controlArtifacts']
   readonly dataModelArtifacts?: WorkbookMetadataSnapshot['dataModelArtifacts']
   readonly externalLinkArtifacts?: WorkbookMetadataSnapshot['externalLinkArtifacts']
+  readonly slicerConnectionArtifacts?: WorkbookMetadataSnapshot['slicerConnectionArtifacts']
   readonly threadedCommentArtifacts?: WorkbookMetadataSnapshot['threadedCommentArtifacts']
   readonly viewState?: WorkbookMetadataSnapshot['viewState']
   readonly charts?: WorkbookMetadataSnapshot['charts']
@@ -44,6 +45,7 @@ export function buildImportedWorkbookMetadata(input: ImportedWorkbookMetadataInp
     ...(input.controlArtifacts ? { controlArtifacts: input.controlArtifacts } : {}),
     ...(input.dataModelArtifacts ? { dataModelArtifacts: input.dataModelArtifacts } : {}),
     ...(input.externalLinkArtifacts ? { externalLinkArtifacts: input.externalLinkArtifacts } : {}),
+    ...(input.slicerConnectionArtifacts ? { slicerConnectionArtifacts: input.slicerConnectionArtifacts } : {}),
     ...(input.threadedCommentArtifacts ? { threadedCommentArtifacts: input.threadedCommentArtifacts } : {}),
     ...(input.viewState ? { viewState: input.viewState } : {}),
     ...(input.charts ? { charts: input.charts } : {}),

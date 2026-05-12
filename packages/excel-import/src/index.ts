@@ -37,6 +37,7 @@ import { readImportedWorkbookRichTextArtifacts } from './xlsx-rich-text-artifact
 import { readImportedWorkbookSheetProperties } from './xlsx-sheet-properties.js'
 import { readImportedWorkbookSheetProtections } from './xlsx-sheet-protection.js'
 import { readImportedWorkbookSheetVisibilities } from './xlsx-sheet-visibility.js'
+import { readImportedWorkbookSlicerConnectionArtifacts } from './xlsx-slicer-connection-artifacts.js'
 import { readImportedWorkbookSorts } from './xlsx-sorts.js'
 import { readImportedWorkbookSparklines } from './xlsx-sparklines.js'
 import { stripStyleOnlyBlankCellsForSheetJs } from './xlsx-style-only-blank-cells.js'
@@ -294,6 +295,9 @@ function importSheetJsWorkbook(
   const importedControlArtifacts = workbookZip ? readImportedWorkbookControlArtifacts(workbookZip, workbook.SheetNames) : undefined
   const importedDataModelArtifacts = workbookZip ? readImportedWorkbookDataModelArtifacts(workbookZip) : undefined
   const importedExternalLinkArtifacts = workbookZip ? readImportedWorkbookExternalLinkArtifacts(workbookZip) : undefined
+  const importedSlicerConnectionArtifacts = workbookZip
+    ? readImportedWorkbookSlicerConnectionArtifacts(workbookZip, workbook.SheetNames)
+    : undefined
   const importedArrayFormulasBySheet = workbookZip ? readImportedWorkbookArrayFormulas(workbookZip, workbook.SheetNames) : new Map()
   const importedDataTableFormulasBySheet = workbookZip ? readImportedWorkbookDataTableFormulas(workbookZip, workbook.SheetNames) : new Map()
   const importedPivots = workbookZip
@@ -591,6 +595,7 @@ function importSheetJsWorkbook(
     controlArtifacts: importedControlArtifacts?.artifacts,
     dataModelArtifacts: importedDataModelArtifacts,
     externalLinkArtifacts: importedExternalLinkArtifacts,
+    slicerConnectionArtifacts: importedSlicerConnectionArtifacts,
     threadedCommentArtifacts: importedThreadedCommentArtifacts?.artifacts,
     viewState: importedViewState?.workbookViewState,
     charts: importedCharts,

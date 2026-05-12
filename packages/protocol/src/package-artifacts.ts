@@ -84,6 +84,21 @@ export interface WorkbookExternalLinkArtifactsSnapshot {
   contentTypeOverrides?: WorkbookContentTypeOverrideSnapshot[]
 }
 
+export interface WorkbookSlicerConnectionSheetArtifactsSnapshot {
+  sheetName: string
+  sheetSlicerListExtXml?: string
+  relationships?: WorkbookPackageRelationshipSnapshot[]
+}
+
+export interface WorkbookSlicerConnectionArtifactsSnapshot {
+  parts: WorkbookPreservedPackagePartSnapshot[]
+  workbookSlicerCachesExtXml?: string
+  workbookRelationships?: WorkbookPackageRelationshipSnapshot[]
+  sheetArtifacts?: WorkbookSlicerConnectionSheetArtifactsSnapshot[]
+  contentTypeDefaults?: WorkbookContentTypeDefaultSnapshot[]
+  contentTypeOverrides?: WorkbookContentTypeOverrideSnapshot[]
+}
+
 export interface WorkbookThreadedCommentArtifactsSnapshot {
   parts: WorkbookPreservedPackagePartSnapshot[]
   workbookRelationships?: WorkbookPackageRelationshipSnapshot[]

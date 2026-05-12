@@ -11,6 +11,7 @@ import type {
   WorkbookSheetControlArtifactsSnapshot,
   WorkbookSheetDrawingArtifactsSnapshot,
   WorkbookSheetThreadedCommentArtifactsSnapshot,
+  WorkbookSlicerConnectionArtifactsSnapshot,
   WorkbookStyleArtifactsSnapshot,
   WorkbookThreadedCommentArtifactsSnapshot,
 } from './package-artifacts.js'
@@ -904,6 +905,7 @@ export interface WorkbookMetadataSnapshot {
   controlArtifacts?: WorkbookControlArtifactsSnapshot
   dataModelArtifacts?: WorkbookDataModelArtifactsSnapshot
   externalLinkArtifacts?: WorkbookExternalLinkArtifactsSnapshot
+  slicerConnectionArtifacts?: WorkbookSlicerConnectionArtifactsSnapshot
   threadedCommentArtifacts?: WorkbookThreadedCommentArtifactsSnapshot
   viewState?: WorkbookViewStateSnapshot
   charts?: WorkbookChartSnapshot[]
