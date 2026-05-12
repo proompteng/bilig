@@ -45,6 +45,7 @@ packages through `pnpm workpaper:smoke:external`.
 | Agent tool call loop    | `npm run agent:tool-call`     | read, edit, verify, serialize, restore       |
 | Agent writeback check   | `npm run agent:verify`        | exact input edits and formula preservation   |
 | Budget variance alerts  | `npm run budget-variance`     | budget, actuals, variance, alert formulas    |
+| Subscription MRR        | `npm run subscription-mrr`    | churn, expansion, ending MRR forecast        |
 | Revenue scenarios       | `npm run scenarios`           | multi-sheet formulas and planning edits      |
 | Persistence round trip  | `npm run persistence`         | save, restore, edit, and export              |
 | Named expression update | `npm run named-expression`    | workbook-scoped names and dependent formulas |
@@ -214,6 +215,40 @@ Expected output:
   },
   "persistedSheets": ["Pipeline", "Summary", "Scenarios"],
   "serializedBytes": 1594
+}
+```
+
+## Subscription MRR Forecast
+
+Run the subscription MRR example when you want a compact service-side forecast
+for plan price, churn, expansion, new customers, and ending recurring revenue:
+
+```sh
+npm run subscription-mrr
+```
+
+Expected output:
+
+```json
+{
+  "months": 4,
+  "startingMrr": 5880,
+  "endingMrr": 9604.03,
+  "endingCustomers": 181.48,
+  "netExpansionMrr": 711.41,
+  "fourMonthNetMrr": 33044.9,
+  "mrrDelta": 3724.03,
+  "firstForecastRow": [
+    "January",
+    18,
+    "=Assumptions!B2",
+    "=C2*Assumptions!B4",
+    "=C2-D2+B2",
+    "=E2*Assumptions!B3",
+    "=F2*Assumptions!B5",
+    "=F2+G2"
+  ],
+  "verified": true
 }
 ```
 

@@ -30,6 +30,7 @@ Project site: <https://proompteng.github.io/bilig/>
   [JSON records input example](examples/headless-workpaper#json-records-input),
   [invoice totals example](examples/headless-workpaper#invoice-totals),
   [budget variance example](examples/headless-workpaper#budget-variance-alerts),
+  [subscription MRR example](examples/headless-workpaper#subscription-mrr-forecast),
   [serverless API route example](examples/serverless-workpaper-api),
   [Node service recipe](docs/node-service-workpaper-recipe.md), or
   [serverless route walkthrough](docs/serverless-workpaper-api-route.md).
@@ -333,6 +334,11 @@ For reporting and finance automation, the runnable example includes
 [`npm run budget-variance`](examples/headless-workpaper#budget-variance-alerts).
 It compares budget and actual rows, calculates dollar and percent variance, and
 flags rows that need review with a formula-backed alert.
+
+For subscription revenue forecasting, the runnable example includes
+[`npm run subscription-mrr`](examples/headless-workpaper#subscription-mrr-forecast).
+It models starting customers, churn, expansion, and new customers, then prints
+starting MRR, ending MRR, net expansion MRR, and verified formula readback.
 
 For formula errors, see
 [`docs/unsupported-formula-troubleshooting-recipe.md`](docs/unsupported-formula-troubleshooting-recipe.md).

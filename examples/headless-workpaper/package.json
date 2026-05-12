@@ -20,7 +20,8 @@
     "scenarios": "node revenue-scenarios.mjs",
     "sheet-inspection": "node sheet-inspection.mjs",
     "snapshot-diff": "node snapshot-diff.mjs",
-    "start": "node revenue-plan.mjs"
+    "start": "node revenue-plan.mjs",
+    "subscription-mrr": "node subscription-mrr-forecast.mjs"
   },
   "dependencies": {
     "@bilig/headless": "latest"

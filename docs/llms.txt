@@ -18,6 +18,7 @@ language: typescript
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#invoice-totals
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#budget-variance-alerts
+- https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#subscription-mrr-forecast
 - https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api
 - https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md
 - https://github.com/proompteng/bilig/discussions
@@ -94,6 +95,8 @@ npm run agent:verify
   https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#invoice-totals
 - budget variance alerts example:
   https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#budget-variance-alerts
+- subscription MRR forecast example:
+  https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#subscription-mrr-forecast
 - serverless API route example:
   https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api
 - unsupported formula troubleshooting:
@@ -176,8 +179,6 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/198
 - current small docs issue: headless example README script guard:
   https://github.com/proompteng/bilig/issues/199
-- current small example issue: subscription MRR forecast:
-  https://github.com/proompteng/bilig/issues/203
 - current small example issue: quote approval threshold:
   https://github.com/proompteng/bilig/issues/204
 - current small example issue: fulfillment capacity plan:
