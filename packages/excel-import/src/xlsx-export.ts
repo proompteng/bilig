@@ -33,6 +33,7 @@ import { addExportSheetProtectionsToXlsxBytes } from './xlsx-sheet-protection.js
 import { addExportSortsToXlsxBytes } from './xlsx-sorts.js'
 import { addExportSheetTabColorsToXlsxBytes } from './xlsx-tab-colors.js'
 import { addExportTablesToXlsxBytes } from './xlsx-tables.js'
+import { addExportThreadedCommentArtifactsToXlsxBytes } from './xlsx-threaded-comment-artifacts.js'
 import { addExportThemeArtifactToXlsxBytes } from './xlsx-theme-artifacts.js'
 import { addExportDataValidationsToXlsxBytes } from './xlsx-validations.js'
 import { addExportWorkbookProtectionToXlsxBytes } from './xlsx-workbook-protection.js'
@@ -947,7 +948,8 @@ export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
   const dataTableFormulaBytes = addExportDataTableFormulasToXlsxBytes(controlArtifactBytes, snapshot)
   const arrayFormulaBytes = addExportArrayFormulasToXlsxBytes(dataTableFormulaBytes, snapshot)
   const dataModelArtifactBytes = addExportDataModelArtifactsToXlsxBytes(arrayFormulaBytes, snapshot)
-  const richTextArtifactBytes = addExportRichTextArtifactsToXlsxBytes(dataModelArtifactBytes, snapshot)
+  const threadedCommentArtifactBytes = addExportThreadedCommentArtifactsToXlsxBytes(dataModelArtifactBytes, snapshot)
+  const richTextArtifactBytes = addExportRichTextArtifactsToXlsxBytes(threadedCommentArtifactBytes, snapshot)
   return addExportCellMetadataToXlsxBytes(
     addExportPrinterSettingsToXlsxBytes(addExportLegacyCommentVmlToXlsxBytes(richTextArtifactBytes, snapshot), snapshot),
     snapshot,

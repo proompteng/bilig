@@ -303,6 +303,9 @@ function withSheetMetadataFallback(
   if (fallback?.richTextArtifacts) {
     next.richTextArtifacts = fallback.richTextArtifacts
   }
+  if (fallback?.threadedCommentArtifacts) {
+    next.threadedCommentArtifacts = fallback.threadedCommentArtifacts
+  }
   if (fallback?.merges) {
     next.merges = fallback.merges
   }

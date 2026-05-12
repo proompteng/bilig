@@ -42,6 +42,7 @@ import { mergeStyleRuns, styleRunsToRanges, type HorizontalStyleRun, type Rectan
 import { readImportedWorkbookFileStyles, readImportedWorkbookSheetDimensions, readImportedWorkbookStyleArtifacts } from './xlsx-styles.js'
 import { readImportedWorkbookSheetTabColors } from './xlsx-tab-colors.js'
 import { readImportedWorkbookTables } from './xlsx-tables.js'
+import { readImportedWorkbookThreadedCommentArtifacts } from './xlsx-threaded-comment-artifacts.js'
 import { readImportedWorkbookDataValidations } from './xlsx-validations.js'
 import { readImportedWorkbookProtection } from './xlsx-workbook-protection.js'
 import { readImportedWorkbookDocumentPropertiesArtifacts, readImportedWorkbookProperties } from './xlsx-workbook-properties.js'
@@ -319,6 +320,9 @@ function importSheetJsWorkbook(
     : new Map()
   const importedExternalLinkCaches = workbookZip ? readImportedExternalLinkCaches(workbookZip) : new Map()
   const importedRichTextArtifactsBySheet = workbookZip ? readImportedWorkbookRichTextArtifacts(workbookZip, workbook.SheetNames) : new Map()
+  const importedThreadedCommentArtifacts = workbookZip
+    ? readImportedWorkbookThreadedCommentArtifacts(workbookZip, workbook.SheetNames)
+    : undefined
 
   let ignoredCommentsSeen = false
   let externalWorkbookReferenceWarningSeen = warnings.includes(externalWorkbookReferencesWarning)
@@ -509,6 +513,7 @@ function importSheetJsWorkbook(
     const importedPrinterSettings = importedPrinterSettingsBySheet.get(sheetName)
     const importedCellMetadataRefs = buildImportedCellMetadataReferenceSnapshots(importedCellMetadata?.refsBySheet.get(sheetName), cells)
     const importedRichTextArtifacts = importedRichTextArtifactsBySheet.get(sheetName)
+    const importedThreadedCommentArtifactsForSheet = importedThreadedCommentArtifacts?.sheetArtifactsByName.get(sheetName)
     const metadata = buildImportedSheetMetadata({
       rows,
       columns,
@@ -542,6 +547,7 @@ function importSheetJsWorkbook(
       printerSettings: importedPrinterSettings,
       cellMetadataRefs: importedCellMetadataRefs,
       richTextArtifacts: importedRichTextArtifacts,
+      threadedCommentArtifacts: importedThreadedCommentArtifactsForSheet,
     })
 
     return {
@@ -574,6 +580,7 @@ function importSheetJsWorkbook(
     chartSheetArtifacts: importedChartArtifacts?.chartSheetArtifacts,
     controlArtifacts: importedControlArtifacts?.artifacts,
     dataModelArtifacts: importedDataModelArtifacts,
+    threadedCommentArtifacts: importedThreadedCommentArtifacts?.artifacts,
     charts: importedCharts,
     styleArtifacts: importedStyleArtifacts.workbookArtifacts,
     cellMetadata: importedCellMetadata?.workbookMetadata,

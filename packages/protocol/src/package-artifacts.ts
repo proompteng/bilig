@@ -76,6 +76,17 @@ export interface WorkbookDataModelArtifactsSnapshot {
   contentTypeOverrides?: WorkbookContentTypeOverrideSnapshot[]
 }
 
+export interface WorkbookThreadedCommentArtifactsSnapshot {
+  parts: WorkbookPreservedPackagePartSnapshot[]
+  workbookRelationships?: WorkbookPackageRelationshipSnapshot[]
+  contentTypeDefaults?: WorkbookContentTypeDefaultSnapshot[]
+  contentTypeOverrides?: WorkbookContentTypeOverrideSnapshot[]
+}
+
+export interface WorkbookSheetThreadedCommentArtifactsSnapshot {
+  relationships: WorkbookPackageRelationshipSnapshot[]
+}
+
 export interface WorkbookSheetArrayFormulaSnapshot {
   address: string
   formulaXml: string

@@ -9,7 +9,9 @@ import type {
   WorkbookSheetDataTableFormulasSnapshot,
   WorkbookSheetControlArtifactsSnapshot,
   WorkbookSheetDrawingArtifactsSnapshot,
+  WorkbookSheetThreadedCommentArtifactsSnapshot,
   WorkbookStyleArtifactsSnapshot,
+  WorkbookThreadedCommentArtifactsSnapshot,
 } from './package-artifacts.js'
 
 export type CellIndex = number
@@ -862,6 +864,7 @@ export interface WorkbookMetadataSnapshot {
   chartSheetArtifacts?: WorkbookChartSheetArtifactsSnapshot[]
   controlArtifacts?: WorkbookControlArtifactsSnapshot
   dataModelArtifacts?: WorkbookDataModelArtifactsSnapshot
+  threadedCommentArtifacts?: WorkbookThreadedCommentArtifactsSnapshot
   charts?: WorkbookChartSnapshot[]
   images?: WorkbookImageSnapshot[]
   shapes?: WorkbookShapeSnapshot[]
@@ -909,6 +912,7 @@ export interface SheetMetadataSnapshot {
   visibility?: WorkbookSheetVisibilitySnapshot
   cellMetadataRefs?: WorkbookCellMetadataReferenceSnapshot[]
   richTextArtifacts?: WorkbookSheetRichTextArtifactsSnapshot
+  threadedCommentArtifacts?: WorkbookSheetThreadedCommentArtifactsSnapshot
 }
 
 export interface WorkbookSnapshot {
