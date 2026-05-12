@@ -4,7 +4,6 @@ import { FormulaMode, ErrorCode } from '@bilig/protocol'
 import { CellFlags } from '../../cell-store.js'
 import type { EdgeSlice } from '../../edge-arena.js'
 import { entityPayload, isRangeEntity, makeCellEntity, makeRangeEntity } from '../../entity-ids.js'
-import { growUint32 } from '../../engine-buffer-utils.js'
 import { tableDependencyKey } from '../../engine-metadata-utils.js'
 import { errorValue } from '../../engine-value-utils.js'
 import { addEngineCounter } from '../../perf/engine-counters.js'
@@ -63,6 +62,7 @@ import { canRetainUnmanagedCompiledPlan, formulaBindingErrorMessage, makeUnmanag
 import { normalizeFormulaBindingLookupCompileMode } from './formula-binding-lookup-mode.js'
 import { primeFormulaBindingLookupCandidates } from './formula-binding-lookup-primer.js'
 import { directAggregateContainsFormulaOwnerCell } from './formula-binding-direct-aggregate-owner.js'
+import { ensureFormulaBindingDependencyBuildCapacity } from './formula-binding-dependency-build-capacity.js'
 import type {
   BindPreparedFormulaOptions,
   CreateEngineFormulaBindingServiceArgs,
@@ -141,29 +141,7 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
     dependencyCapacity: number,
     symbolicRefCapacity = 0,
     symbolicRangeCapacity = 0,
-  ): void => {
-    if (cellCapacity > args.getDependencyBuildSeen().length) {
-      args.setDependencyBuildSeen(growUint32(args.getDependencyBuildSeen(), cellCapacity))
-    }
-    if (cellCapacity > args.getDependencyBuildCells().length) {
-      args.setDependencyBuildCells(growUint32(args.getDependencyBuildCells(), cellCapacity))
-    }
-    if (dependencyCapacity > args.getDependencyBuildEntities().length) {
-      args.setDependencyBuildEntities(growUint32(args.getDependencyBuildEntities(), dependencyCapacity))
-    }
-    if (dependencyCapacity > args.getDependencyBuildRanges().length) {
-      args.setDependencyBuildRanges(growUint32(args.getDependencyBuildRanges(), dependencyCapacity))
-    }
-    if (dependencyCapacity > args.getDependencyBuildNewRanges().length) {
-      args.setDependencyBuildNewRanges(growUint32(args.getDependencyBuildNewRanges(), dependencyCapacity))
-    }
-    if (symbolicRefCapacity > args.getSymbolicRefBindings().length) {
-      args.setSymbolicRefBindings(growUint32(args.getSymbolicRefBindings(), symbolicRefCapacity))
-    }
-    if (symbolicRangeCapacity > args.getSymbolicRangeBindings().length) {
-      args.setSymbolicRangeBindings(growUint32(args.getSymbolicRangeBindings(), symbolicRangeCapacity))
-    }
-  }
+  ): void => ensureFormulaBindingDependencyBuildCapacity(args, cellCapacity, dependencyCapacity, symbolicRefCapacity, symbolicRangeCapacity)
 
   const pendingInitialFormulaCells = createPendingInitialFormulaCellTracker({
     getCellCapacity: () => args.state.workbook.cellStore.capacity,
