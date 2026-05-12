@@ -274,6 +274,9 @@ output you need to trust.
 Live workflow-feedback thread:
 <https://github.com/proompteng/bilig/discussions/157>
 
+Live five-example show-and-tell thread:
+<https://github.com/proompteng/bilig/discussions/213>
+
 Live serverless-route feedback thread:
 <https://github.com/proompteng/bilig/discussions/167>
 

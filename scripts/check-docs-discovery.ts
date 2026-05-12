@@ -287,6 +287,14 @@ for (const [path, content] of [
 }
 
 for (const [path, content] of [
+  ['README.md', readme],
+  ['docs/community-launch-pack.md', await readFile(join(docsRoot, 'community-launch-pack.md'), 'utf8')],
+  ['docs/llms.txt', llms],
+] as const) {
+  requireIncludes(content, 'https://github.com/proompteng/bilig/discussions/213', path)
+}
+
+for (const [path, content] of [
   ['docs/index.html', index],
   ['docs/community-launch-pack.md', await readFile(join(docsRoot, 'community-launch-pack.md'), 'utf8')],
   ['docs/llms.txt', llms],

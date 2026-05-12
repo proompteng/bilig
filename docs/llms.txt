@@ -131,6 +131,8 @@ npm run agent:verify
   https://github.com/proompteng/bilig/discussions
 - feedback discussion for agent and service workflow input:
   https://github.com/proompteng/bilig/discussions/157
+- show-and-tell discussion for five runnable node workbook automation examples:
+  https://github.com/proompteng/bilig/discussions/213
 - serverless route feedback discussion:
   https://github.com/proompteng/bilig/discussions/167
 - older agent API shape discussion:

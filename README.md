@@ -442,6 +442,9 @@ For workflow feedback from people building Node services or agent tools, use
 the GitHub discussion:
 <https://github.com/proompteng/bilig/discussions/157>.
 
+For the five runnable service-workflow examples as one shareable thread, see:
+<https://github.com/proompteng/bilig/discussions/213>.
+
 For the first technical adoption article, see
 [`docs/why-agents-need-workbook-apis.md`](docs/why-agents-need-workbook-apis.md).
 It explains why agents should operate on workbook APIs instead of spreadsheet
