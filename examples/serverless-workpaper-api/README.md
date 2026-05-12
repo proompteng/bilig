@@ -81,6 +81,10 @@ module memory.
 - In a Cloudflare Worker, call it from `fetch(request)`.
 - In Cloudflare Pages Functions, call it from small `onRequestGet()` and
   `onRequestPost()` files under `/functions`.
+- In a Supabase Edge Function, call it from `Deno.serve()` in
+  `supabase/functions/workpaper/index.ts`; if the public URL includes
+  `/functions/v1/workpaper/api/workpaper/...`, strip the leading `workpaper`
+  function segment before passing the request to the shared handler.
 - In Hono, pass `c.req.raw` directly to the shared handler.
 - In Deno, return `handleWorkPaperRequest(request)` from `Deno.serve()` or a
   `fetch` default export.

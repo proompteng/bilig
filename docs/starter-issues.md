@@ -32,7 +32,6 @@ Current starter tickets as of May 12, 2026:
 - [#189: docs(storage): add object-storage WorkPaper persistence recipe](https://github.com/proompteng/bilig/issues/189)
 - [#190: docs(agent): add Vercel AI SDK WorkPaper tool wrapper recipe](https://github.com/proompteng/bilig/issues/190)
 - [#191: docs(agent): add LangChain WorkPaper tool wrapper recipe](https://github.com/proompteng/bilig/issues/191)
-- [#192: docs(serverless): add Supabase Edge Function adapter](https://github.com/proompteng/bilig/issues/192)
 
 The list intentionally excludes closed issues and broad corpus/parity epics. Add
 new starter tickets only when the expected patch can stay small, has a clear

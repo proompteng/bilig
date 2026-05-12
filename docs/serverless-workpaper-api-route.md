@@ -9,8 +9,8 @@ For a clone-and-run copy of this route, start with
 [`examples/serverless-workpaper-api`](../examples/serverless-workpaper-api).
 
 The example also includes a tiny Node adapter so you can run it locally before
-moving the route into Vercel Functions, Cloudflare Workers, Fastify, Hono, or
-another HTTP surface.
+moving the route into Vercel Functions, Cloudflare Workers, Supabase Edge
+Functions, Fastify, Hono, or another HTTP surface.
 
 ## Setup
 
@@ -265,6 +265,8 @@ Keep the exported `handleWorkPaperRequest()` function as the stable boundary:
 - In Cloudflare Workers, call it from `fetch(request)`.
 - In Cloudflare Pages Functions, call it from `onRequestGet()` and
   `onRequestPost()`.
+- In Supabase Edge Functions, call it from `Deno.serve()` and strip the function
+  name prefix before handing the request to the shared route.
 - In Remix resource routes, return it from a `loader()` for `GET` and an
   `action()` for `POST`.
 - In Nitro, wrap it with H3's `fromWebHandler()` and export that from
@@ -633,6 +635,66 @@ curl -s -X POST http://localhost:8000/api/workpaper/revenue \
 Use the durable storage variant above for deployed Deno services. Module memory
 is fine for the local smoke test, but it is not a durable workbook store across
 deploys, isolates, or concurrent service instances.
+
+## Supabase Edge Function Adapter
+
+Supabase Edge Functions run on Deno and receive Fetch `Request` objects, so the
+shared WorkPaper handler can stay the route boundary. Put the shared route in
+`supabase/functions/workpaper/workpaper-route.ts`:
+
+- keep the `@bilig/headless` imports, using Deno's npm specifier:
+  `npm:@bilig/headless`
+- keep `state`, `handleWorkPaperRequest()`, and every workbook helper
+- omit `createServer()`, `toWebRequest()`, and the local Node adapter block
+
+Then create `supabase/functions/workpaper/index.ts`:
+
+```ts
+import { handleWorkPaperRequest } from './workpaper-route.ts'
+
+Deno.serve((request) => {
+  return handleWorkPaperRequest(toWorkPaperRouteRequest(request))
+})
+
+function toWorkPaperRouteRequest(request: Request): Request {
+  const url = new URL(request.url)
+  url.pathname = stripFunctionNamePrefix(url.pathname, 'workpaper')
+
+  return new Request(url.toString(), {
+    method: request.method,
+    headers: request.headers,
+    body:
+      request.method === 'GET' || request.method === 'HEAD'
+        ? undefined
+        : request.body,
+  })
+}
+
+function stripFunctionNamePrefix(pathname: string, functionName: string): string {
+  const prefix = `/${functionName}`
+  return pathname === prefix || pathname.startsWith(`${prefix}/`)
+    ? pathname.slice(prefix.length) || '/'
+    : pathname
+}
+```
+
+When the function is called directly, include the function name before the
+WorkPaper route path:
+
+```sh
+curl -s https://PROJECT.supabase.co/functions/v1/workpaper/api/workpaper/summary \
+  -H 'apikey: SUPABASE_PUBLISHABLE_KEY'
+curl -s -X POST https://PROJECT.supabase.co/functions/v1/workpaper/api/workpaper/revenue \
+  -H 'apikey: SUPABASE_PUBLISHABLE_KEY' \
+  -H 'content-type: application/json' \
+  -d '{"records":[{"region":"West","customers":20,"arpa":1200},{"region":"East","customers":30,"arpa":250},{"region":"Central","customers":18,"arpa":300},{"region":"North","customers":65,"arpa":180}]}'
+```
+
+Keep Supabase auth, CORS, rate limits, and durable storage at the function edge
+or behind the `createWorkPaperRequestHandler(storage)` boundary. Module memory
+is fine for a local smoke test, but deployed Supabase functions should load and
+save the serialized WorkPaper document through Postgres, Storage, or another
+durable service before returning formula readback.
 
 ## SvelteKit Endpoint Adapter
 
