@@ -92,6 +92,8 @@ module memory.
   and body back to the Koa context.
 - In an AWS Lambda Function URL handler, adapt the event into a web-standard
   `Request`, then return a Lambda proxy response.
+- In Azure Functions, adapt the HTTP trigger request into a web-standard
+  `Request`, then return an HTTP response object.
 - Replace the in-memory `state.workbookJson` with your durable store when the
   workbook needs to survive cold starts or multiple instances.
 

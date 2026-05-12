@@ -841,6 +841,69 @@ Pair the Lambda handler with the durable storage variant above. Module memory is
 not a reliable persistence boundary across Lambda cold starts, concurrent
 instances, or redeploys.
 
+## Azure Functions HTTP Adapter
+
+Azure Functions' Node.js v4 model registers HTTP functions with `app.http()`.
+The function handler receives an `HttpRequest` with a full URL, method, headers,
+and body readers, then returns an HTTP response object. Keep the adapter thin and
+let the shared WorkPaper handler own the route behavior.
+
+```js
+import { app } from '@azure/functions'
+import { handleWorkPaperRequest } from './workpaper-route.js'
+
+app.http('workpaperSummary', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  route: 'workpaper/summary',
+  handler: runWorkPaperRoute,
+})
+
+app.http('workpaperRevenue', {
+  methods: ['POST'],
+  authLevel: 'anonymous',
+  route: 'workpaper/revenue',
+  handler: runWorkPaperRoute,
+})
+
+async function runWorkPaperRoute(request) {
+  const response = await handleWorkPaperRequest(await toWebRequest(request))
+  return toAzureResponse(response)
+}
+
+async function toWebRequest(request) {
+  return new Request(request.url, {
+    method: request.method,
+    headers: request.headers,
+    body:
+      request.method === 'GET' || request.method === 'HEAD'
+        ? undefined
+        : await request.arrayBuffer(),
+  })
+}
+
+async function toAzureResponse(response) {
+  return {
+    status: response.status,
+    headers: Object.fromEntries(response.headers),
+    body: Buffer.from(await response.arrayBuffer()),
+  }
+}
+```
+
+The local Azure Functions route prefix usually includes `/api`:
+
+```sh
+curl -s http://localhost:7071/api/workpaper/summary
+curl -s -X POST http://localhost:7071/api/workpaper/revenue \
+  -H 'content-type: application/json' \
+  -d '{"records":[{"region":"West","customers":20,"arpa":1200},{"region":"East","customers":30,"arpa":250},{"region":"Central","customers":18,"arpa":300},{"region":"North","customers":65,"arpa":180}]}'
+```
+
+Use the durable storage variant above for deployed function apps. Module memory
+is not a reliable workbook store across cold starts, scale-out instances, or
+regional deployments.
+
 ## Validation
 
 For the standalone recipe:

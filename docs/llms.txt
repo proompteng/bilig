@@ -184,14 +184,22 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/162
 - current small docs issue: coding-agent workbook automation recipe:
   https://github.com/proompteng/bilig/issues/163
-- current small docs issue: Azure Functions HTTP adapter:
-  https://github.com/proompteng/bilig/issues/176
 - current small docs issue: Netlify Functions adapter:
   https://github.com/proompteng/bilig/issues/178
 - current small docs issue: Hapi route adapter:
   https://github.com/proompteng/bilig/issues/179
 - current small docs issue: Cloudflare Pages Functions adapter:
   https://github.com/proompteng/bilig/issues/180
+- current small docs issue: Remix resource route adapter:
+  https://github.com/proompteng/bilig/issues/181
+- current small docs issue: Nitro event handler adapter:
+  https://github.com/proompteng/bilig/issues/182
+- current small docs issue: NestJS controller adapter:
+  https://github.com/proompteng/bilig/issues/183
+- current small docs issue: Elysia route adapter:
+  https://github.com/proompteng/bilig/issues/184
+- current small docs issue: Vercel Function adapter:
+  https://github.com/proompteng/bilig/issues/185
 - good first issue search:
   https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22
 - first-timers-only issue search:
