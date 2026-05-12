@@ -92,6 +92,7 @@ Pick the path that matches the job:
 - Compare engines before adopting:
   [SheetJS and ExcelJS comparison](https://github.com/proompteng/bilig/blob/main/docs/sheetjs-exceljs-alternative-formula-workbook-api.md),
   [HyperFormula comparison](https://github.com/proompteng/bilig/blob/main/docs/hyperformula-alternative-headless-workpaper.md),
+  [headless spreadsheet engine comparison](https://github.com/proompteng/bilig/blob/main/docs/headless-spreadsheet-engine-comparison.md),
   and
   [benchmark explainer](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md).
 
@@ -239,6 +240,8 @@ Repository links:
   [`docs/hyperformula-alternative-headless-workpaper.md`](https://github.com/proompteng/bilig/blob/main/docs/hyperformula-alternative-headless-workpaper.md)
 - SheetJS and ExcelJS comparison:
   [`docs/sheetjs-exceljs-alternative-formula-workbook-api.md`](https://github.com/proompteng/bilig/blob/main/docs/sheetjs-exceljs-alternative-formula-workbook-api.md)
+- broader headless spreadsheet engine comparison:
+  [`docs/headless-spreadsheet-engine-comparison.md`](https://github.com/proompteng/bilig/blob/main/docs/headless-spreadsheet-engine-comparison.md)
 - local benchmark walkthrough:
   [`docs/local-workpaper-benchmark-walkthrough.md`](https://github.com/proompteng/bilig/blob/main/docs/local-workpaper-benchmark-walkthrough.md)
 - XLOOKUP exact fixture walkthrough:
