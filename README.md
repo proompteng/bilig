@@ -29,6 +29,7 @@ Project site: <https://proompteng.github.io/bilig/>
   [runnable WorkPaper example](examples/headless-workpaper),
   [JSON records input example](examples/headless-workpaper#json-records-input),
   [invoice totals example](examples/headless-workpaper#invoice-totals),
+  [budget variance example](examples/headless-workpaper#budget-variance-alerts),
   [serverless API route example](examples/serverless-workpaper-api),
   [Node service recipe](docs/node-service-workpaper-recipe.md), or
   [serverless route walkthrough](docs/serverless-workpaper-api-route.md).
@@ -327,6 +328,11 @@ For billing-style service payloads, the runnable example includes
 [`npm run invoice-totals`](examples/headless-workpaper#invoice-totals). It
 calculates line-item totals, subtotal, tax, and grand total formulas, then
 validates exact computed and serialized formula readback.
+
+For reporting and finance automation, the runnable example includes
+[`npm run budget-variance`](examples/headless-workpaper#budget-variance-alerts).
+It compares budget and actual rows, calculates dollar and percent variance, and
+flags rows that need review with a formula-backed alert.
 
 For formula errors, see
 [`docs/unsupported-formula-troubleshooting-recipe.md`](docs/unsupported-formula-troubleshooting-recipe.md).

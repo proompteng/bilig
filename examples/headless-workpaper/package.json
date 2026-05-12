@@ -6,6 +6,7 @@
   "scripts": {
     "agent:tool-call": "node agent-tool-call-loop.mjs",
     "agent:verify": "node agent-writeback-verification.mjs",
+    "budget-variance": "node budget-variance-alerts.mjs",
     "csv-shaped": "node csv-shaped-input.mjs",
     "formula-diagnostics": "node formula-diagnostics.mjs",
     "http-json-summary": "node http-json-summary.mjs",

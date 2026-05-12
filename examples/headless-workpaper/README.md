@@ -44,6 +44,7 @@ packages through `pnpm workpaper:smoke:external`.
 | Quick revenue workbook  | `npm start`                   | formulas, named expressions, persistence     |
 | Agent tool call loop    | `npm run agent:tool-call`     | read, edit, verify, serialize, restore       |
 | Agent writeback check   | `npm run agent:verify`        | exact input edits and formula preservation   |
+| Budget variance alerts  | `npm run budget-variance`     | budget, actuals, variance, alert formulas    |
 | Revenue scenarios       | `npm run scenarios`           | multi-sheet formulas and planning edits      |
 | Persistence round trip  | `npm run persistence`         | save, restore, edit, and export              |
 | Named expression update | `npm run named-expression`    | workbook-scoped names and dependent formulas |
@@ -213,6 +214,38 @@ Expected output:
   },
   "persistedSheets": ["Pipeline", "Summary", "Scenarios"],
   "serializedBytes": 1594
+}
+```
+
+## Budget Variance Alerts
+
+Run the budget variance example when you want a compact service-side reporting
+workflow. It compares budget and actual rows, calculates dollar variance,
+variance percent, and an alert formula for rows that are more than 10 percent
+over budget:
+
+```sh
+npm run budget-variance
+```
+
+Expected output:
+
+```json
+{
+  "rows": 4,
+  "flaggedDepartment": "Marketing",
+  "varianceAmount": 7500,
+  "variancePercent": 0.15,
+  "summary": {
+    "totalBudget": 185000,
+    "totalActual": 196600,
+    "totalVariance": 11600,
+    "largestOverage": 7500,
+    "largestVariancePercent": 0.15,
+    "reviewCount": 1
+  },
+  "firstVarianceRow": ["Marketing", 50000, 57500, "=C2-B2", "=D2/B2", "=IF(E2>0.1,\"Review\",\"OK\")"],
+  "verified": true
 }
 ```
 
