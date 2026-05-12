@@ -9,6 +9,7 @@ import type {
   WorkbookMergeRangeSnapshot,
   WorkbookSnapshot,
 } from '@bilig/protocol'
+import { addExportArrayFormulasToXlsxBytes } from './xlsx-array-formulas.js'
 import { addExportCellMetadataToXlsxBytes } from './xlsx-cell-metadata.js'
 import { addMissingBlankCells, addMissingFormattedCells } from './xlsx-cell-insertion.js'
 import { addExportCalculationSettingsToXlsxBytes } from './xlsx-calculation-settings.js'
@@ -944,7 +945,8 @@ export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
   const sparklineBytes = addExportSparklinesToXlsxBytes(ignoredErrorsBytes, snapshot)
   const controlArtifactBytes = addExportControlArtifactsToXlsxBytes(sparklineBytes, snapshot)
   const dataTableFormulaBytes = addExportDataTableFormulasToXlsxBytes(controlArtifactBytes, snapshot)
-  const dataModelArtifactBytes = addExportDataModelArtifactsToXlsxBytes(dataTableFormulaBytes, snapshot)
+  const arrayFormulaBytes = addExportArrayFormulasToXlsxBytes(dataTableFormulaBytes, snapshot)
+  const dataModelArtifactBytes = addExportDataModelArtifactsToXlsxBytes(arrayFormulaBytes, snapshot)
   return addExportCellMetadataToXlsxBytes(
     addExportPrinterSettingsToXlsxBytes(addExportLegacyCommentVmlToXlsxBytes(dataModelArtifactBytes, snapshot), snapshot),
     snapshot,

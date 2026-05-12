@@ -10,7 +10,7 @@ import type {
   WorkbookMetadataSnapshot,
   WorkbookSnapshot,
 } from '@bilig/protocol'
-import { readImportedArrayFormulaSpills } from './xlsx-array-formulas.js'
+import { readImportedArrayFormulaSpills, readImportedWorkbookArrayFormulas } from './xlsx-array-formulas.js'
 import { buildColumnEntries, buildRowEntries } from './xlsx-axis-entries.js'
 import { readImportedWorkbookCalculationSettings, readImportedWorkbookCalculationWarnings } from './xlsx-calculation-settings.js'
 import { buildImportedCellMetadataReferenceSnapshots, readImportedWorkbookCellMetadata } from './xlsx-cell-metadata.js'
@@ -286,6 +286,7 @@ function importSheetJsWorkbook(
   const importedDrawingArtifacts = workbookZip ? readImportedWorkbookDrawingArtifacts(workbookZip, workbook.SheetNames) : undefined
   const importedControlArtifacts = workbookZip ? readImportedWorkbookControlArtifacts(workbookZip, workbook.SheetNames) : undefined
   const importedDataModelArtifacts = workbookZip ? readImportedWorkbookDataModelArtifacts(workbookZip) : undefined
+  const importedArrayFormulasBySheet = workbookZip ? readImportedWorkbookArrayFormulas(workbookZip, workbook.SheetNames) : new Map()
   const importedDataTableFormulasBySheet = workbookZip ? readImportedWorkbookDataTableFormulas(workbookZip, workbook.SheetNames) : new Map()
   const importedPivots = workbookZip
     ? readImportedWorkbookPivots(workbookZip, workbook.SheetNames, importedTables, importedDefinedNames.definedNames)
@@ -490,6 +491,7 @@ function importSheetJsWorkbook(
     const importedPivotArtifacts = importedPivots?.sheetArtifactsByName.get(sheetName)
     const importedDrawingArtifactsForSheet = importedDrawingArtifacts?.sheetArtifactsByName.get(sheetName)
     const importedControlArtifactsForSheet = importedControlArtifacts?.sheetArtifactsByName.get(sheetName)
+    const importedArrayFormulasForSheet = importedArrayFormulasBySheet.get(sheetName)
     const importedDataTableFormulasForSheet = importedDataTableFormulasBySheet.get(sheetName)
     const importedSheetVisibility = importedSheetVisibilitiesBySheet.get(sheetName)
     const merges = buildMergeEntries(sheetName, sheet['!merges'])
@@ -518,6 +520,7 @@ function importSheetJsWorkbook(
       pivotArtifacts: importedPivotArtifacts,
       drawingArtifacts: importedDrawingArtifactsForSheet,
       controlArtifacts: importedControlArtifactsForSheet,
+      arrayFormulas: importedArrayFormulasForSheet,
       dataTableFormulas: importedDataTableFormulasForSheet,
       visibility: importedSheetVisibility,
       merges,
