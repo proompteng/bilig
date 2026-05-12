@@ -1,5 +1,7 @@
+import { execFile } from 'node:child_process'
 import { writeFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
+import { promisify } from 'node:util'
 
 export interface CommunityGrowthSnapshot {
   readonly capturedAt: string
@@ -108,9 +110,21 @@ export interface CommunityGrowthSnapshotOptions {
   readonly packageName?: string
   readonly maintainerLogin?: string
   readonly githubToken?: string
+  readonly githubCliApiJson?: GitHubCliApiJson | false
   readonly now?: Date
   readonly fetchImpl?: typeof fetch
 }
+
+export interface GitHubCliApiOptions {
+  readonly fields?: readonly GitHubCliApiField[]
+}
+
+export interface GitHubCliApiField {
+  readonly name: string
+  readonly value: string
+}
+
+export type GitHubCliApiJson = (endpoint: string, options?: GitHubCliApiOptions) => Promise<unknown>
 
 interface CliOptions {
   readonly owner: string
@@ -124,6 +138,39 @@ const defaultOwner = 'proompteng'
 const defaultRepo = 'bilig'
 const defaultPackageName = '@bilig/headless'
 const defaultMaintainerLogin = 'gregkonush'
+const execFileAsync = promisify(execFile)
+const githubCliMaxBufferBytes = 4 * 1024 * 1024
+
+async function runGitHubCliApiJson(endpoint: string, options: GitHubCliApiOptions = {}): Promise<unknown> {
+  const args = ['api', endpoint]
+
+  for (const field of options.fields ?? []) {
+    args.push('-f', `${field.name}=${field.value}`)
+  }
+
+  let stdout = ''
+  try {
+    const result = await execFileAsync('gh', args, {
+      encoding: 'utf8',
+      maxBuffer: githubCliMaxBufferBytes,
+    })
+    stdout = String(result.stdout)
+  } catch {
+    return undefined
+  }
+
+  const trimmed = stdout.trim()
+  if (trimmed === '') {
+    return undefined
+  }
+
+  try {
+    return JSON.parse(trimmed) as unknown
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`gh api ${endpoint} returned invalid JSON: ${message}`, { cause: error })
+  }
+}
 
 function asRecord(value: unknown, context: string): Record<string, unknown> {
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
@@ -232,6 +279,50 @@ async function fetchTrafficJson(fetchImpl: typeof fetch, url: string, githubToke
   }
 
   return await response.json()
+}
+
+function githubGraphqlCliFields(query: string, variables: Record<string, unknown>): readonly GitHubCliApiField[] {
+  const fields: GitHubCliApiField[] = [
+    {
+      name: 'query',
+      value: query,
+    },
+  ]
+
+  for (const [name, value] of Object.entries(variables)) {
+    if (typeof value !== 'string') {
+      throw new Error(`GitHub GraphQL CLI variable ${name} was not a string`)
+    }
+    fields.push({
+      name,
+      value,
+    })
+  }
+
+  return fields
+}
+
+async function collectGitHubGraphqlJson(
+  fetchImpl: typeof fetch,
+  githubToken: string | undefined,
+  githubCliApiJson: GitHubCliApiJson | undefined,
+  query: string,
+  variables: Record<string, unknown>,
+): Promise<unknown> {
+  if (githubToken !== undefined && githubToken.trim() !== '') {
+    const result = await fetchGitHubGraphqlJson(fetchImpl, githubToken, query, variables)
+    if (result !== undefined) {
+      return result
+    }
+  }
+
+  if (githubCliApiJson === undefined) {
+    return undefined
+  }
+
+  return await githubCliApiJson('graphql', {
+    fields: githubGraphqlCliFields(query, variables),
+  })
 }
 
 function parseGitHubRepoMetrics(value: unknown): GitHubRepoGrowthMetrics {
@@ -380,13 +471,14 @@ async function collectContributorFunnel(
   repo: string,
   maintainerLogin: string,
   githubToken: string | undefined,
+  githubCliApiJson: GitHubCliApiJson | undefined,
   now: Date,
 ): Promise<ContributorFunnelMetrics> {
   const repoQualifier = `repo:${owner}/${repo}`
   const externalQualifier = `-author:${maintainerLogin}`
   const since = dateOnly(daysBefore(now, 7))
 
-  if (githubToken !== undefined && githubToken.trim() !== '') {
+  if ((githubToken !== undefined && githubToken.trim() !== '') || githubCliApiJson !== undefined) {
     const query = `
       query CommunityGrowthContributorFunnel(
         $goodFirst: String!
@@ -424,7 +516,7 @@ async function collectContributorFunnel(
         }
       }
     `
-    const result = await fetchGitHubGraphqlJson(fetchImpl, githubToken, query, {
+    const result = await collectGitHubGraphqlJson(fetchImpl, githubToken, githubCliApiJson, query, {
       goodFirst: `${repoQualifier} is:issue is:open label:"good first issue"`,
       firstTimers: `${repoQualifier} is:issue is:open label:first-timers-only`,
       helpWanted: `${repoQualifier} is:issue is:open label:"help wanted"`,
@@ -477,26 +569,37 @@ async function collectGitHubTraffic(
   owner: string,
   repo: string,
   githubToken: string | undefined,
+  githubCliApiJson: GitHubCliApiJson | undefined,
 ): Promise<GitHubTrafficSnapshot> {
-  if (githubToken === undefined || githubToken.trim() === '') {
-    return {
-      available: false,
-      reason: 'Set GITHUB_TOKEN or GH_TOKEN with repository traffic access to collect views, clones, referrers, and paths.',
+  const baseUrl = `https://api.github.com/repos/${owner}/${repo}/traffic`
+  const baseEndpoint = `repos/${owner}/${repo}/traffic`
+  const collectTrafficJson = async (path: string): Promise<unknown> => {
+    if (githubToken !== undefined && githubToken.trim() !== '') {
+      const result = await fetchTrafficJson(fetchImpl, `${baseUrl}/${path}`, githubToken)
+      if (result !== undefined) {
+        return result
+      }
     }
+
+    if (githubCliApiJson === undefined) {
+      return undefined
+    }
+
+    return await githubCliApiJson(`${baseEndpoint}/${path}`)
   }
 
-  const baseUrl = `https://api.github.com/repos/${owner}/${repo}/traffic`
   const [views, clones, referrers, paths] = await Promise.all([
-    fetchTrafficJson(fetchImpl, `${baseUrl}/views`, githubToken),
-    fetchTrafficJson(fetchImpl, `${baseUrl}/clones`, githubToken),
-    fetchTrafficJson(fetchImpl, `${baseUrl}/popular/referrers`, githubToken),
-    fetchTrafficJson(fetchImpl, `${baseUrl}/popular/paths`, githubToken),
+    collectTrafficJson('views'),
+    collectTrafficJson('clones'),
+    collectTrafficJson('popular/referrers'),
+    collectTrafficJson('popular/paths'),
   ])
 
   if (views === undefined || clones === undefined || referrers === undefined || paths === undefined) {
     return {
       available: false,
-      reason: 'GitHub traffic API was unavailable for this token or repository.',
+      reason:
+        'Set GITHUB_TOKEN or GH_TOKEN with repository traffic access, or authenticate gh CLI as a repository collaborator, to collect views, clones, referrers, and paths.',
     }
   }
 
@@ -514,14 +617,8 @@ async function collectGitHubDiscussionActivity(
   owner: string,
   repo: string,
   githubToken: string | undefined,
+  githubCliApiJson: GitHubCliApiJson | undefined,
 ): Promise<GitHubDiscussionActivitySnapshot> {
-  if (githubToken === undefined || githubToken.trim() === '') {
-    return {
-      available: false,
-      reason: 'Set GITHUB_TOKEN or GH_TOKEN to collect recent GitHub discussion activity.',
-    }
-  }
-
   const query = `
     query CommunityGrowthDiscussions($owner: String!, $repo: String!) {
       repository(owner: $owner, name: $repo) {
@@ -544,7 +641,7 @@ async function collectGitHubDiscussionActivity(
       }
     }
   `
-  const result = await fetchGitHubGraphqlJson(fetchImpl, githubToken, query, {
+  const result = await collectGitHubGraphqlJson(fetchImpl, githubToken, githubCliApiJson, query, {
     owner,
     repo,
   })
@@ -552,7 +649,7 @@ async function collectGitHubDiscussionActivity(
   if (result === undefined) {
     return {
       available: false,
-      reason: 'GitHub Discussions GraphQL API was unavailable for this token.',
+      reason: 'Set GITHUB_TOKEN or GH_TOKEN, or authenticate gh CLI, to collect recent GitHub discussion activity.',
     }
   }
 
@@ -566,6 +663,7 @@ export async function collectCommunityGrowthSnapshot(options: CommunityGrowthSna
   const maintainerLogin = options.maintainerLogin ?? defaultMaintainerLogin
   const fetchImpl = options.fetchImpl ?? fetch
   const githubToken = options.githubToken ?? process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN
+  const githubCliApiJson = options.githubCliApiJson === false ? undefined : (options.githubCliApiJson ?? runGitHubCliApiJson)
   const now = options.now ?? new Date()
   const encodedPackageName = encodeURIComponent(packageName)
 
@@ -580,9 +678,9 @@ export async function collectCommunityGrowthSnapshot(options: CommunityGrowthSna
     fetchJson(fetchImpl, `https://api.npmjs.org/downloads/point/last-month/${encodedPackageName}`).then((value) =>
       parseDownloadWindow(value, 'npm last-month downloads'),
     ),
-    collectContributorFunnel(fetchImpl, owner, repo, maintainerLogin, githubToken, now),
-    collectGitHubDiscussionActivity(fetchImpl, owner, repo, githubToken),
-    collectGitHubTraffic(fetchImpl, owner, repo, githubToken),
+    collectContributorFunnel(fetchImpl, owner, repo, maintainerLogin, githubToken, githubCliApiJson, now),
+    collectGitHubDiscussionActivity(fetchImpl, owner, repo, githubToken, githubCliApiJson),
+    collectGitHubTraffic(fetchImpl, owner, repo, githubToken, githubCliApiJson),
   ])
 
   return {

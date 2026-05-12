@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { collectCommunityGrowthSnapshot } from '../community-growth-snapshot.ts'
+import { collectCommunityGrowthSnapshot, type GitHubCliApiJson } from '../community-growth-snapshot.ts'
 
 function responseJson(value: unknown): Response {
   return Response.json(value)
@@ -62,10 +62,16 @@ function growthSearchResponse(url: string): Response | undefined {
   if (query === 'repo:proompteng/bilig is:pr is:open -author:gregkonush') {
     return responseJson({ total_count: 1 })
   }
-  if (query === 'repo:proompteng/bilig is:issue created:>=2026-05-01 -author:gregkonush') {
+  if (
+    query === 'repo:proompteng/bilig is:issue created:>=2026-05-01 -author:gregkonush' ||
+    query === 'repo:proompteng/bilig is:issue created:>=2026-05-05 -author:gregkonush'
+  ) {
     return responseJson({ total_count: 2 })
   }
-  if (query === 'repo:proompteng/bilig is:pr created:>=2026-05-01 -author:gregkonush') {
+  if (
+    query === 'repo:proompteng/bilig is:pr created:>=2026-05-01 -author:gregkonush' ||
+    query === 'repo:proompteng/bilig is:pr created:>=2026-05-05 -author:gregkonush'
+  ) {
     return responseJson({ total_count: 1 })
   }
 
@@ -73,7 +79,7 @@ function growthSearchResponse(url: string): Response | undefined {
 }
 
 describe('community growth snapshot', () => {
-  it('collects public GitHub and npm metrics without traffic when no token is configured', async () => {
+  it('collects public GitHub and npm metrics without traffic when no token or gh CLI is configured', async () => {
     const calls: string[] = []
     const fetchImpl = async (input: string | URL | Request): Promise<Response> => {
       const url = fetchInputUrl(input)
@@ -135,6 +141,7 @@ describe('community growth snapshot', () => {
     const snapshot = await collectCommunityGrowthSnapshot({
       fetchImpl: fetchImpl as typeof fetch,
       githubToken: '',
+      githubCliApiJson: false,
       now: new Date('2026-05-08T06:00:00.000Z'),
     })
 
@@ -177,6 +184,237 @@ describe('community growth snapshot', () => {
     })
     expect(calls).not.toContain('https://api.github.com/repos/proompteng/bilig/traffic/views')
     expect(calls).not.toContain('https://api.github.com/graphql')
+  })
+
+  it('uses authenticated gh CLI fallback for discussion and traffic metrics when no token is configured', async () => {
+    const calls: string[] = []
+    const cliCalls: Array<{ readonly endpoint: string; readonly fields: readonly string[] }> = []
+    const fetchImpl = async (input: string | URL | Request): Promise<Response> => {
+      const url = fetchInputUrl(input)
+      calls.push(url)
+
+      if (url === 'https://api.github.com/repos/proompteng/bilig') {
+        return responseJson({
+          full_name: 'proompteng/bilig',
+          html_url: 'https://github.com/proompteng/bilig',
+          description: 'Headless spreadsheet engine',
+          stargazers_count: 24,
+          forks_count: 4,
+          subscribers_count: 1,
+          open_issues_count: 29,
+          default_branch: 'main',
+        })
+      }
+
+      if (url === 'https://registry.npmjs.org/%40bilig%2Fheadless') {
+        return responseJson({
+          name: '@bilig/headless',
+          description: 'Headless spreadsheet engine',
+          license: 'MIT',
+          'dist-tags': {
+            latest: '0.11.24',
+          },
+          time: {
+            modified: '2026-05-12T05:53:15.971Z',
+          },
+        })
+      }
+
+      if (url === 'https://api.npmjs.org/downloads/point/last-week/%40bilig%2Fheadless') {
+        return responseJson({ downloads: 13427, start: '2026-05-05', end: '2026-05-11' })
+      }
+
+      if (url === 'https://api.npmjs.org/downloads/point/last-month/%40bilig%2Fheadless') {
+        return responseJson({ downloads: 24931, start: '2026-04-12', end: '2026-05-11' })
+      }
+
+      const searchResponse = growthSearchResponse(url)
+      if (searchResponse !== undefined) {
+        return searchResponse
+      }
+
+      throw new Error(`unexpected fetch ${url}`)
+    }
+    const githubCliApiJson: GitHubCliApiJson = async (endpoint, options) => {
+      cliCalls.push({
+        endpoint,
+        fields: (options?.fields ?? []).map((field) => field.name),
+      })
+
+      if (endpoint === 'repos/proompteng/bilig/traffic/views') {
+        return { count: 393, uniques: 159 }
+      }
+      if (endpoint === 'repos/proompteng/bilig/traffic/clones') {
+        return { count: 18287, uniques: 1907 }
+      }
+      if (endpoint === 'repos/proompteng/bilig/traffic/popular/referrers') {
+        return [{ referrer: 'news.ycombinator.com', count: 51, uniques: 36 }]
+      }
+      if (endpoint === 'repos/proompteng/bilig/traffic/popular/paths') {
+        return [{ path: '/proompteng/bilig', title: 'bilig', count: 199, uniques: 145 }]
+      }
+      if (endpoint === 'graphql') {
+        const query = options?.fields?.find((field) => field.name === 'query')?.value ?? ''
+        if (query.includes('CommunityGrowthContributorFunnel')) {
+          return {
+            data: {
+              goodFirst: {
+                issueCount: 22,
+              },
+              firstTimers: {
+                issueCount: 22,
+              },
+              helpWanted: {
+                issueCount: 22,
+              },
+              openPullRequests: {
+                issueCount: 0,
+              },
+              externalOpenIssues: {
+                issueCount: 1,
+              },
+              externalOpenPullRequests: {
+                issueCount: 0,
+              },
+              externalRecentIssues: {
+                issueCount: 22,
+              },
+              externalRecentPullRequests: {
+                issueCount: 5,
+              },
+            },
+          }
+        }
+
+        if (!query.includes('CommunityGrowthDiscussions')) {
+          throw new Error(`unexpected gh GraphQL query ${query}`)
+        }
+
+        return {
+          data: {
+            repository: {
+              discussions: {
+                totalCount: 4,
+                nodes: [
+                  {
+                    number: 213,
+                    title: 'Five Node workbook automation examples',
+                    url: 'https://github.com/proompteng/bilig/discussions/213',
+                    category: {
+                      name: 'Show and tell',
+                    },
+                    createdAt: '2026-05-12T21:46:51Z',
+                    updatedAt: '2026-05-12T22:10:00Z',
+                    comments: {
+                      totalCount: 1,
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        }
+      }
+
+      throw new Error(`unexpected gh api ${endpoint}`)
+    }
+
+    const snapshot = await collectCommunityGrowthSnapshot({
+      fetchImpl: fetchImpl as typeof fetch,
+      githubToken: '',
+      githubCliApiJson,
+      now: new Date('2026-05-12T22:14:21.495Z'),
+    })
+
+    expect(calls).not.toContain('https://api.github.com/repos/proompteng/bilig/traffic/views')
+    expect(calls).not.toContain('https://api.github.com/graphql')
+    expect(cliCalls).toEqual([
+      {
+        endpoint: 'graphql',
+        fields: [
+          'query',
+          'goodFirst',
+          'firstTimers',
+          'helpWanted',
+          'openPullRequests',
+          'externalOpenIssues',
+          'externalOpenPullRequests',
+          'externalRecentIssues',
+          'externalRecentPullRequests',
+        ],
+      },
+      {
+        endpoint: 'graphql',
+        fields: ['query', 'owner', 'repo'],
+      },
+      {
+        endpoint: 'repos/proompteng/bilig/traffic/views',
+        fields: [],
+      },
+      {
+        endpoint: 'repos/proompteng/bilig/traffic/clones',
+        fields: [],
+      },
+      {
+        endpoint: 'repos/proompteng/bilig/traffic/popular/referrers',
+        fields: [],
+      },
+      {
+        endpoint: 'repos/proompteng/bilig/traffic/popular/paths',
+        fields: [],
+      },
+    ])
+    expect(snapshot.contributorFunnel).toEqual({
+      openGoodFirstIssueCount: 22,
+      openFirstTimersOnlyIssueCount: 22,
+      openHelpWantedIssueCount: 22,
+      openPullRequestCount: 0,
+      externalOpenIssueCount: 1,
+      externalOpenPullRequestCount: 0,
+      externalIssuesOpenedLastSevenDays: 22,
+      externalPullRequestsOpenedLastSevenDays: 5,
+    })
+    expect(snapshot.discussionActivity).toEqual({
+      available: true,
+      totalCount: 4,
+      recent: [
+        {
+          number: 213,
+          title: 'Five Node workbook automation examples',
+          url: 'https://github.com/proompteng/bilig/discussions/213',
+          category: 'Show and tell',
+          createdAt: '2026-05-12T21:46:51Z',
+          updatedAt: '2026-05-12T22:10:00Z',
+          commentCount: 1,
+        },
+      ],
+    })
+    expect(snapshot.traffic).toEqual({
+      available: true,
+      views: {
+        count: 393,
+        uniques: 159,
+      },
+      clones: {
+        count: 18287,
+        uniques: 1907,
+      },
+      referrers: [
+        {
+          referrer: 'news.ycombinator.com',
+          count: 51,
+          uniques: 36,
+        },
+      ],
+      paths: [
+        {
+          path: '/proompteng/bilig',
+          title: 'bilig',
+          count: 199,
+          uniques: 145,
+        },
+      ],
+    })
   })
 
   it('collects GitHub discussion and traffic metrics when a token is provided', async () => {
