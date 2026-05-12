@@ -39,27 +39,28 @@ packages through `pnpm workpaper:smoke:external`.
 
 ## Command Index
 
-| Use case                | Command                       | What it proves                               |
-| ----------------------- | ----------------------------- | -------------------------------------------- |
-| Quick revenue workbook  | `npm start`                   | formulas, named expressions, persistence     |
-| Agent tool call loop    | `npm run agent:tool-call`     | read, edit, verify, serialize, restore       |
-| Agent writeback check   | `npm run agent:verify`        | exact input edits and formula preservation   |
-| Budget variance alerts  | `npm run budget-variance`     | budget, actuals, variance, alert formulas    |
-| Quote approval          | `npm run quote-approval`      | quote total, discount, approval threshold    |
-| Subscription MRR        | `npm run subscription-mrr`    | churn, expansion, ending MRR forecast        |
-| Revenue scenarios       | `npm run scenarios`           | multi-sheet formulas and planning edits      |
-| Persistence round trip  | `npm run persistence`         | save, restore, edit, and export              |
-| Named expression update | `npm run named-expression`    | workbook-scoped names and dependent formulas |
-| CSV-shaped input        | `npm run csv-shaped`          | array-shaped data plus formula summary       |
-| Invoice totals          | `npm run invoice-totals`      | line items, subtotal, tax, total             |
-| JSON records input      | `npm run json-records`        | API records to formula-backed workbook       |
-| JSON file input         | `npm run json-file`           | disk JSON records to verified summary        |
-| Formula diagnostics     | `npm run formula-diagnostics` | display errors and structured diagnostics    |
-| Markdown report output  | `npm run markdown-report`     | calculated plain-text report generation      |
-| Snapshot diff           | `npm run snapshot-diff`       | persisted before/after input and outputs     |
-| Range readback          | `npm run range-readback`      | computed values and serialized formulas      |
-| Sheet inspection        | `npm run sheet-inspection`    | restored sheet names, IDs, and dimensions    |
-| HTTP JSON summary       | `npm run http-json-summary`   | no-framework Node HTTP service boundary      |
+| Use case                | Command                        | What it proves                               |
+| ----------------------- | ------------------------------ | -------------------------------------------- |
+| Quick revenue workbook  | `npm start`                    | formulas, named expressions, persistence     |
+| Agent tool call loop    | `npm run agent:tool-call`      | read, edit, verify, serialize, restore       |
+| Agent writeback check   | `npm run agent:verify`         | exact input edits and formula preservation   |
+| Budget variance alerts  | `npm run budget-variance`      | budget, actuals, variance, alert formulas    |
+| Fulfillment capacity    | `npm run fulfillment-capacity` | orders, labor hours, capacity gap            |
+| Quote approval          | `npm run quote-approval`       | quote total, discount, approval threshold    |
+| Subscription MRR        | `npm run subscription-mrr`     | churn, expansion, ending MRR forecast        |
+| Revenue scenarios       | `npm run scenarios`            | multi-sheet formulas and planning edits      |
+| Persistence round trip  | `npm run persistence`          | save, restore, edit, and export              |
+| Named expression update | `npm run named-expression`     | workbook-scoped names and dependent formulas |
+| CSV-shaped input        | `npm run csv-shaped`           | array-shaped data plus formula summary       |
+| Invoice totals          | `npm run invoice-totals`       | line items, subtotal, tax, total             |
+| JSON records input      | `npm run json-records`         | API records to formula-backed workbook       |
+| JSON file input         | `npm run json-file`            | disk JSON records to verified summary        |
+| Formula diagnostics     | `npm run formula-diagnostics`  | display errors and structured diagnostics    |
+| Markdown report output  | `npm run markdown-report`      | calculated plain-text report generation      |
+| Snapshot diff           | `npm run snapshot-diff`        | persisted before/after input and outputs     |
+| Range readback          | `npm run range-readback`       | computed values and serialized formulas      |
+| Sheet inspection        | `npm run sheet-inspection`     | restored sheet names, IDs, and dimensions    |
+| HTTP JSON summary       | `npm run http-json-summary`    | no-framework Node HTTP service boundary      |
 
 ## Agent Tool Call Loop
 
@@ -277,6 +278,34 @@ Expected output:
   "approvalRequired": "Review",
   "reviewedSku": "SETUP",
   "firstQuoteRow": ["PRO-ANNUAL", 12, 240, 0.1, "=B2*C2", "=E2*D2", "=E2-F2", "=IF(D2>0.2,\"Review\",\"OK\")"],
+  "verified": true
+}
+```
+
+## Fulfillment Capacity Plan
+
+Run the fulfillment capacity example when you want a compact operations
+workflow that compares forecast order volume with available labor hours and
+reports the capacity gap:
+
+```sh
+npm run fulfillment-capacity
+```
+
+Expected output:
+
+```json
+{
+  "days": 4,
+  "forecastOrders": 2020,
+  "requiredHours": 61.0318,
+  "availableHours": 60,
+  "capacityGap": -1.0318,
+  "status": "Short",
+  "shortDays": 2,
+  "largestDailyShortfall": -1.5667,
+  "bottleneckDay": "Thursday",
+  "firstCapacityRow": ["Monday", 420, 1.8, 55, 14, "=B2*C2/D2", "=E2-F2", "=IF(G2<0,\"Short\",\"Ready\")"],
   "verified": true
 }
 ```

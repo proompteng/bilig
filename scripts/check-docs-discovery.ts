@@ -198,6 +198,7 @@ for (const required of [
   'https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input',
   'https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#invoice-totals',
   'https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#budget-variance-alerts',
+  'https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#fulfillment-capacity-plan',
   'https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#quote-approval-threshold',
   'https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#subscription-mrr-forecast',
   'https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api',
@@ -262,6 +263,7 @@ for (const [path, content] of [
 ] as const) {
   requireIncludes(content, 'examples/headless-workpaper#invoice-totals', path)
   requireIncludes(content, 'examples/headless-workpaper#budget-variance-alerts', path)
+  requireIncludes(content, 'examples/headless-workpaper#fulfillment-capacity-plan', path)
   requireIncludes(content, 'examples/headless-workpaper#quote-approval-threshold', path)
   requireIncludes(content, 'examples/headless-workpaper#subscription-mrr-forecast', path)
 }
@@ -309,7 +311,6 @@ for (const required of [
   'https://github.com/proompteng/bilig/issues/197',
   'https://github.com/proompteng/bilig/issues/198',
   'https://github.com/proompteng/bilig/issues/199',
-  'https://github.com/proompteng/bilig/issues/205',
 ]) {
   requireIncludes(starterIssues, required, 'docs/starter-issues.md')
   requireIncludes(llms, required, 'docs/llms.txt')
@@ -335,6 +336,7 @@ for (const closedIssue of [
   '202',
   '203',
   '204',
+  '205',
   '160',
   '161',
   '164',
@@ -397,6 +399,8 @@ requireIncludes(headlessExampleReadme, 'npm run invoice-totals', 'examples/headl
 requireIncludes(headlessExampleReadme, '## Invoice Totals', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, 'npm run budget-variance', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, '## Budget Variance Alerts', 'examples/headless-workpaper/README.md')
+requireIncludes(headlessExampleReadme, 'npm run fulfillment-capacity', 'examples/headless-workpaper/README.md')
+requireIncludes(headlessExampleReadme, '## Fulfillment Capacity Plan', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, 'npm run quote-approval', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, '## Quote Approval Threshold', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, 'npm run subscription-mrr', 'examples/headless-workpaper/README.md')
@@ -405,6 +409,8 @@ requireIncludes(headlessReadme, 'npm run invoice-totals', 'packages/headless/REA
 requireIncludes(headlessReadme, '#invoice-totals', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'npm run budget-variance', 'packages/headless/README.md')
 requireIncludes(headlessReadme, '#budget-variance-alerts', 'packages/headless/README.md')
+requireIncludes(headlessReadme, 'npm run fulfillment-capacity', 'packages/headless/README.md')
+requireIncludes(headlessReadme, '#fulfillment-capacity-plan', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'npm run quote-approval', 'packages/headless/README.md')
 requireIncludes(headlessReadme, '#quote-approval-threshold', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'npm run subscription-mrr', 'packages/headless/README.md')

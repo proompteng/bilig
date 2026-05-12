@@ -18,6 +18,7 @@ language: typescript
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#invoice-totals
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#budget-variance-alerts
+- https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#fulfillment-capacity-plan
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#quote-approval-threshold
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#subscription-mrr-forecast
 - https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api
@@ -96,6 +97,8 @@ npm run agent:verify
   https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#invoice-totals
 - budget variance alerts example:
   https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#budget-variance-alerts
+- fulfillment capacity plan example:
+  https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#fulfillment-capacity-plan
 - quote approval threshold example:
   https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#quote-approval-threshold
 - subscription MRR forecast example:
@@ -182,8 +185,6 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/198
 - current small docs issue: headless example README script guard:
   https://github.com/proompteng/bilig/issues/199
-- current small example issue: fulfillment capacity plan:
-  https://github.com/proompteng/bilig/issues/205
 - good first issue search:
   https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22
 - first-timers-only issue search:

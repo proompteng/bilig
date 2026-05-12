@@ -9,6 +9,7 @@
     "budget-variance": "node budget-variance-alerts.mjs",
     "csv-shaped": "node csv-shaped-input.mjs",
     "formula-diagnostics": "node formula-diagnostics.mjs",
+    "fulfillment-capacity": "node fulfillment-capacity-plan.mjs",
     "http-json-summary": "node http-json-summary.mjs",
     "invoice-totals": "node invoice-totals.mjs",
     "json-file": "node json-file-input.mjs",

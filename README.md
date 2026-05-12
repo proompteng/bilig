@@ -30,6 +30,7 @@ Project site: <https://proompteng.github.io/bilig/>
   [JSON records input example](examples/headless-workpaper#json-records-input),
   [invoice totals example](examples/headless-workpaper#invoice-totals),
   [budget variance example](examples/headless-workpaper#budget-variance-alerts),
+  [fulfillment capacity example](examples/headless-workpaper#fulfillment-capacity-plan),
   [quote approval example](examples/headless-workpaper#quote-approval-threshold),
   [subscription MRR example](examples/headless-workpaper#subscription-mrr-forecast),
   [serverless API route example](examples/serverless-workpaper-api),
@@ -345,6 +346,11 @@ For sales-ops quote workflows, the runnable example includes
 [`npm run quote-approval`](examples/headless-workpaper#quote-approval-threshold).
 It calculates list total, discount amount, quote total, max line discount, and
 an approval flag from formula-backed quote rows.
+
+For operations planning, the runnable example includes
+[`npm run fulfillment-capacity`](examples/headless-workpaper#fulfillment-capacity-plan).
+It compares forecast order volume with available labor hours, calculates
+required hours, capacity gap, short days, and a formula-backed status.
 
 For formula errors, see
 [`docs/unsupported-formula-troubleshooting-recipe.md`](docs/unsupported-formula-troubleshooting-recipe.md).
