@@ -662,6 +662,82 @@ trust as you normally would before relying on `req.protocol` for absolute URLs.
 For non-JSON payloads, preserve the raw request body in `toWebRequest()` instead
 of serializing `req.body`.
 
+## Koa Adapter
+
+Koa middleware receives a `ctx` object, but the shared WorkPaper route still only
+needs a web-standard `Request`. Mount the adapter before any middleware that
+consumes the request body, then let Koa own the final response fields.
+
+```js
+import { Readable } from 'node:stream'
+import Koa from 'koa'
+import { handleWorkPaperRequest } from './workpaper-route.js'
+
+const app = new Koa()
+
+app.use(async (ctx, next) => {
+  if (!isWorkPaperRoute(ctx)) {
+    return next()
+  }
+
+  const response = await handleWorkPaperRequest(toWebRequest(ctx))
+  await writeWebResponse(ctx, response)
+})
+
+function isWorkPaperRoute(ctx) {
+  return (
+    (ctx.method === 'GET' && ctx.path === '/api/workpaper/summary') ||
+    (ctx.method === 'POST' && ctx.path === '/api/workpaper/revenue')
+  )
+}
+
+function toWebRequest(ctx) {
+  const headers = new Headers()
+
+  for (const [name, value] of Object.entries(ctx.headers)) {
+    if (Array.isArray(value)) {
+      headers.set(name, value.join(', '))
+    } else if (value !== undefined) {
+      headers.set(name, String(value))
+    }
+  }
+
+  return new Request(new URL(ctx.originalUrl ?? ctx.url, ctx.origin), {
+    method: ctx.method,
+    headers,
+    body:
+      ctx.method === 'GET' || ctx.method === 'HEAD'
+        ? undefined
+        : Readable.toWeb(ctx.req),
+    duplex: 'half',
+  })
+}
+
+async function writeWebResponse(ctx, response) {
+  response.headers.forEach((value, name) => ctx.set(name, value))
+  ctx.status = response.status
+  ctx.body = Buffer.from(await response.arrayBuffer())
+}
+
+app.listen(3000)
+```
+
+If another Koa middleware has already parsed the JSON body, replace
+`Readable.toWeb(ctx.req)` with `JSON.stringify(ctx.request.body ?? {})` and keep
+the same method, URL, and header mapping.
+
+The same smoke calls apply when the Koa app is running locally:
+
+```sh
+curl -s http://localhost:3000/api/workpaper/summary
+curl -s -X POST http://localhost:3000/api/workpaper/revenue \
+  -H 'content-type: application/json' \
+  -d '{"records":[{"region":"West","customers":20,"arpa":1200},{"region":"East","customers":30,"arpa":250},{"region":"Central","customers":18,"arpa":300},{"region":"North","customers":65,"arpa":180}]}'
+```
+
+Use the durable storage variant above when the Koa service runs in more than one
+process, container, or serverless instance.
+
 ## AWS Lambda Function URL Adapter
 
 Lambda Function URLs use the API Gateway payload format version 2.0. Keep the

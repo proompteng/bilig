@@ -29,10 +29,10 @@ Current starter tickets as of May 12, 2026:
 - [#160: docs(headless): add WorkPaper API read/write cheat sheet](https://github.com/proompteng/bilig/issues/160)
 - [#162: docs(benchmarks): add WorkPaper benchmark reproduction notes](https://github.com/proompteng/bilig/issues/162)
 - [#163: docs(agent): add coding-agent workbook automation recipe](https://github.com/proompteng/bilig/issues/163)
-- [#174: docs(serverless): add Koa route adapter](https://github.com/proompteng/bilig/issues/174)
 - [#175: docs(serverless): add Bun.serve adapter](https://github.com/proompteng/bilig/issues/175)
 - [#176: docs(serverless): add Azure Functions HTTP adapter](https://github.com/proompteng/bilig/issues/176)
 - [#178: docs(serverless): add Netlify Functions adapter](https://github.com/proompteng/bilig/issues/178)
+- [#179: docs(serverless): add Hapi route adapter](https://github.com/proompteng/bilig/issues/179)
 
 The list intentionally excludes closed issues and broad corpus/parity epics. Add
 new starter tickets only when the expected patch can stay small, has a clear

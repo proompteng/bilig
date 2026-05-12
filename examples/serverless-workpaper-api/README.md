@@ -86,6 +86,8 @@ module memory.
   write the returned `Response` through `reply`.
 - In Express, adapt the framework request into a web-standard `Request`, then
   write the returned `Response` through `res`.
+- In Koa, adapt `ctx` into a web-standard `Request`, then write status, headers,
+  and body back to the Koa context.
 - In an AWS Lambda Function URL handler, adapt the event into a web-standard
   `Request`, then return a Lambda proxy response.
 - Replace the in-memory `state.workbookJson` with your durable store when the
