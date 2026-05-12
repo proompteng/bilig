@@ -496,6 +496,78 @@ Use the durable storage variant above when the app runs in multiple Node
 processes, serverless instances, or any deployment where module memory is not a
 safe source of truth.
 
+## Express Adapter
+
+Express apps need the same thin translation layer as Fastify. Parse JSON before
+the route, convert the incoming request into the shared web-standard shape, then
+copy the returned `Response` back to Express.
+
+```js
+import express from 'express'
+import { handleWorkPaperRequest } from './workpaper-route.js'
+
+const app = express()
+
+app.use(express.json())
+app.get('/api/workpaper/summary', runWorkPaperRoute)
+app.post('/api/workpaper/revenue', runWorkPaperRoute)
+
+async function runWorkPaperRoute(req, res, next) {
+  try {
+    const response = await handleWorkPaperRequest(toWebRequest(req))
+    await writeWebResponse(res, response)
+  } catch (error) {
+    next(error)
+  }
+}
+
+function toWebRequest(req) {
+  const protocol = req.protocol ?? 'http'
+  const host = req.get('host') ?? req.headers.host ?? 'localhost:3000'
+  const url = new URL(req.originalUrl ?? req.url, `${protocol}://${host}`)
+  const headers = new Headers()
+
+  for (const [name, value] of Object.entries(req.headers)) {
+    if (Array.isArray(value)) {
+      headers.set(name, value.join(', '))
+    } else if (value !== undefined) {
+      headers.set(name, String(value))
+    }
+  }
+
+  return new Request(url, {
+    method: req.method,
+    headers,
+    body:
+      req.method === 'GET' || req.method === 'HEAD'
+        ? undefined
+        : JSON.stringify(req.body ?? {}),
+  })
+}
+
+async function writeWebResponse(res, response) {
+  response.headers.forEach((value, name) => res.setHeader(name, value))
+  res.status(response.status).send(Buffer.from(await response.arrayBuffer()))
+}
+```
+
+Keep `runWorkPaperRoute()` pointed at both routes. The shared handler still
+decides which workbook operation runs from the request method and pathname.
+
+The same smoke calls apply when the Express app is running locally:
+
+```sh
+curl -s http://localhost:3000/api/workpaper/summary
+curl -s -X POST http://localhost:3000/api/workpaper/revenue \
+  -H 'content-type: application/json' \
+  -d '{"records":[{"region":"West","customers":20,"arpa":1200},{"region":"East","customers":30,"arpa":250},{"region":"Central","customers":18,"arpa":300},{"region":"North","customers":65,"arpa":180}]}'
+```
+
+If the Express service runs behind a reverse proxy, configure Express proxy
+trust as you normally would before relying on `req.protocol` for absolute URLs.
+For non-JSON payloads, preserve the raw request body in `toWebRequest()` instead
+of serializing `req.body`.
+
 ## Validation
 
 For the standalone recipe:

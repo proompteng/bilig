@@ -184,14 +184,14 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/162
 - current small docs issue: coding-agent workbook automation recipe:
   https://github.com/proompteng/bilig/issues/163
-- current small docs issue: Express route adapter:
-  https://github.com/proompteng/bilig/issues/170
 - current small docs issue: AWS Lambda function URL adapter:
   https://github.com/proompteng/bilig/issues/171
 - current small docs issue: Deno Deploy adapter:
   https://github.com/proompteng/bilig/issues/172
 - current small docs issue: SvelteKit endpoint adapter:
   https://github.com/proompteng/bilig/issues/173
+- current small docs issue: Koa route adapter:
+  https://github.com/proompteng/bilig/issues/174
 - good first issue search:
   https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22
 - first-timers-only issue search:
