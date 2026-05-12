@@ -475,6 +475,55 @@ Use the durable storage variant above for deployed Deno services. Module memory
 is fine for the local smoke test, but it is not a durable workbook store across
 deploys, isolates, or concurrent service instances.
 
+## SvelteKit Endpoint Adapter
+
+SvelteKit `+server.js` handlers receive a request event and return a web-standard
+`Response`. Put the shared WorkPaper route in a server-only module, then keep
+each endpoint file as a pass-through.
+
+Create `src/lib/server/workpaper-route.js` from the shared route code above:
+
+- keep the `@bilig/headless` imports
+- keep `state`, `handleWorkPaperRequest()`, and every workbook helper
+- omit `createServer()`, `toWebRequest()`, and the local Node adapter block
+
+Then create `src/routes/api/workpaper/summary/+server.js`:
+
+```js
+import { handleWorkPaperRequest } from '$lib/server/workpaper-route.js'
+
+export const prerender = false
+
+export function GET({ request }) {
+  return handleWorkPaperRequest(request)
+}
+```
+
+Create `src/routes/api/workpaper/revenue/+server.js`:
+
+```js
+import { handleWorkPaperRequest } from '$lib/server/workpaper-route.js'
+
+export const prerender = false
+
+export function POST({ request }) {
+  return handleWorkPaperRequest(request)
+}
+```
+
+The same route paths apply when the SvelteKit app is running locally:
+
+```sh
+curl -s http://localhost:5173/api/workpaper/summary
+curl -s -X POST http://localhost:5173/api/workpaper/revenue \
+  -H 'content-type: application/json' \
+  -d '{"records":[{"region":"West","customers":20,"arpa":1200},{"region":"East","customers":30,"arpa":250},{"region":"Central","customers":18,"arpa":300},{"region":"North","customers":65,"arpa":180}]}'
+```
+
+Keep the route files thin. The shared handler is what preserves identical
+formula evaluation, persisted document shape, and readback checks between the
+standalone Node server, SvelteKit, and other serverless surfaces.
+
 ## Fastify Adapter
 
 Fastify uses its own `request` and `reply` objects, so keep the adapter focused

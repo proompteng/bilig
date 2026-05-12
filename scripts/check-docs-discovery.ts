@@ -288,16 +288,16 @@ for (const required of [
   'https://github.com/proompteng/bilig/issues/160',
   'https://github.com/proompteng/bilig/issues/162',
   'https://github.com/proompteng/bilig/issues/163',
-  'https://github.com/proompteng/bilig/issues/173',
   'https://github.com/proompteng/bilig/issues/174',
   'https://github.com/proompteng/bilig/issues/175',
   'https://github.com/proompteng/bilig/issues/176',
+  'https://github.com/proompteng/bilig/issues/178',
 ]) {
   requireIncludes(starterIssues, required, 'docs/starter-issues.md')
   requireIncludes(llms, required, 'docs/llms.txt')
 }
 
-for (const closedIssue of ['137', '161', '164', '165', '166', '168', '169', '170', '171', '172']) {
+for (const closedIssue of ['137', '161', '164', '165', '166', '168', '169', '170', '171', '172', '173']) {
   if (starterIssues.includes(`https://github.com/proompteng/bilig/issues/${closedIssue}`)) {
     throw new Error(`docs/starter-issues.md still links to closed starter issue #${closedIssue}`)
   }
