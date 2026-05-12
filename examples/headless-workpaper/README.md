@@ -45,6 +45,7 @@ packages through `pnpm workpaper:smoke:external`.
 | Agent tool call loop    | `npm run agent:tool-call`     | read, edit, verify, serialize, restore       |
 | Agent writeback check   | `npm run agent:verify`        | exact input edits and formula preservation   |
 | Revenue scenarios       | `npm run scenarios`           | multi-sheet formulas and planning edits      |
+| Subscription MRR        | `npm run subscription-mrr`    | recurring revenue forecast assumptions       |
 | Persistence round trip  | `npm run persistence`         | save, restore, edit, and export              |
 | Named expression update | `npm run named-expression`    | workbook-scoped names and dependent formulas |
 | CSV-shaped input        | `npm run csv-shaped`          | array-shaped data plus formula summary       |
@@ -212,6 +213,41 @@ Expected output:
   },
   "persistedSheets": ["Pipeline", "Summary", "Scenarios"],
   "serializedBytes": 1594
+}
+```
+
+## Subscription MRR Forecast
+
+Run the subscription forecast when you want a compact recurring-revenue model
+with starting customers, churn, expansion, new-customer assumptions, formula
+readback, and persistence verification:
+
+```sh
+npm run subscription-mrr
+```
+
+Expected output:
+
+```json
+{
+  "beforeUpdate": {
+    "startingMrr": 9480,
+    "endingMrr": 14235.8,
+    "netExpansionMrr": 4755.8,
+    "endingCustomers": 170,
+    "runRateArr": 170829.6
+  },
+  "afterUpdate": {
+    "startingMrr": 9480,
+    "endingMrr": 14905.72,
+    "netExpansionMrr": 5425.72,
+    "endingCustomers": 178,
+    "runRateArr": 178868.64
+  },
+  "persistedSheets": ["Assumptions", "Forecast", "Summary"],
+  "serializedBytes": 1885,
+  "formulasVerified": true,
+  "verified": true
 }
 ```
 

@@ -18,6 +18,7 @@
     "scenarios": "node revenue-scenarios.mjs",
     "sheet-inspection": "node sheet-inspection.mjs",
     "snapshot-diff": "node snapshot-diff.mjs",
+    "subscription-mrr": "node subscription-mrr-forecast.mjs",
     "start": "node revenue-plan.mjs"
   },
   "dependencies": {
