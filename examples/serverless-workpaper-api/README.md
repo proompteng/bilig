@@ -77,6 +77,8 @@ module memory.
 - In a Next.js app route, call `handleWorkPaperRequest()` from `GET()` and
   `POST()`.
 - In a Cloudflare Worker, call it from `fetch(request)`.
+- In Cloudflare Pages Functions, call it from small `onRequestGet()` and
+  `onRequestPost()` files under `/functions`.
 - In Hono, pass `c.req.raw` directly to the shared handler.
 - In Deno, return `handleWorkPaperRequest(request)` from `Deno.serve()` or a
   `fetch` default export.

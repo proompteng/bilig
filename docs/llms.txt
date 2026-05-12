@@ -182,8 +182,6 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/162
 - current small docs issue: coding-agent workbook automation recipe:
   https://github.com/proompteng/bilig/issues/163
-- current small docs issue: Cloudflare Pages Functions adapter:
-  https://github.com/proompteng/bilig/issues/180
 - current small docs issue: Remix resource route adapter:
   https://github.com/proompteng/bilig/issues/181
 - current small docs issue: Nitro event handler adapter:
