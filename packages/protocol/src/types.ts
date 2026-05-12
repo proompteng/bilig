@@ -1,4 +1,9 @@
 import { ErrorCode, type FormulaMode, type ValueTag } from './enums.js'
+import type {
+  WorkbookDocumentPropertiesArtifactsSnapshot,
+  WorkbookPackageRelationshipSnapshot,
+  WorkbookStyleArtifactsSnapshot,
+} from './package-artifacts.js'
 
 export type CellIndex = number
 export type FormulaId = number
@@ -260,18 +265,6 @@ export interface WorkbookPivotSnapshot {
   cols: number
 }
 
-export interface WorkbookStyleArtifactsSnapshot {
-  stylesXml: string
-  theme?: WorkbookThemeArtifactSnapshot
-}
-
-export interface WorkbookThemeArtifactSnapshot {
-  path: string
-  xml: string
-  relationship: WorkbookPackageRelationshipSnapshot
-  contentType?: string
-}
-
 export interface WorkbookSheetCellStyleIndexSnapshot {
   address: string
   styleIndex: number
@@ -280,13 +273,6 @@ export interface WorkbookSheetCellStyleIndexSnapshot {
 export interface WorkbookSheetStyleArtifactsSnapshot {
   cellStyleIndexes: WorkbookSheetCellStyleIndexSnapshot[]
   blankCellAddresses?: string[]
-}
-
-export interface WorkbookPackageRelationshipSnapshot {
-  id: string
-  type: string
-  target: string
-  targetMode?: string
 }
 
 export interface WorkbookPivotPackagePartSnapshot {
@@ -866,6 +852,7 @@ export interface WorkbookCellMetadataReferenceSnapshot {
 
 export interface WorkbookMetadataSnapshot {
   properties?: WorkbookPropertySnapshot[]
+  documentPropertyArtifacts?: WorkbookDocumentPropertiesArtifactsSnapshot
   workbookProtection?: WorkbookProtectionSnapshot
   definedNames?: WorkbookDefinedNameSnapshot[]
   tables?: WorkbookTableSnapshot[]
