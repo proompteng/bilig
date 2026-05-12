@@ -185,6 +185,98 @@ document only after verification passes. If multiple writers can update the
 same key, use your provider's ETag, generation, or conditional-write support so
 one request cannot silently overwrite another accepted workbook version.
 
+## Postgres Adapter
+
+For API services that already use Postgres, store the serialized WorkPaper
+document in one row and keep the workbook runtime in application code. A
+`jsonb` column gives Postgres JSON validation and lets you inspect metadata when
+needed; a `text` column is also fine if the service treats the document as fully
+opaque bytes.
+
+```sql
+create table workpaper_documents (
+  id text primary key,
+  workbook_json jsonb not null,
+  updated_at timestamptz not null default now()
+);
+```
+
+The storage adapter still has the same two-function shape:
+
+```ts
+import {
+  WorkPaper,
+  exportWorkPaperDocument,
+  parseWorkPaperDocument,
+  serializeWorkPaperDocument,
+} from '@bilig/headless'
+
+const documentId = 'revenue-plan'
+
+export function createPostgresWorkPaperStorage(db) {
+  return {
+    async loadWorkbookJson() {
+      const result = await db.query(
+        `
+          select workbook_json::text as workbook_json
+          from workpaper_documents
+          where id = $1
+        `,
+        [documentId],
+      )
+
+      const stored = result.rows[0]?.workbook_json
+      if (stored === undefined) {
+        return createInitialWorkbookJson()
+      }
+
+      parseWorkPaperDocument(stored)
+      return stored
+    },
+
+    async saveWorkbookJson(workbookJson) {
+      parseWorkPaperDocument(workbookJson)
+
+      await db.query(
+        `
+          insert into workpaper_documents (id, workbook_json, updated_at)
+          values ($1, $2::jsonb, now())
+          on conflict (id) do update
+            set workbook_json = excluded.workbook_json,
+                updated_at = now()
+        `,
+        [documentId, workbookJson],
+      )
+    },
+  }
+}
+
+function createInitialWorkbookJson() {
+  const workbook = WorkPaper.buildFromSheets({
+    Plan: [
+      ['Month', 'Bookings', 'Churn', 'Net MRR'],
+      ['January', 12000, 800, '=B2-C2'],
+    ],
+    Summary: [
+      ['Metric', 'Value'],
+      ['Net MRR', '=Plan!D2'],
+    ],
+  })
+
+  return serializeWorkPaperDocument(
+    exportWorkPaperDocument(workbook, { includeConfig: true }),
+  )
+}
+```
+
+The service request should load the current document, restore the WorkPaper,
+apply one accepted mutation, verify computed readback, serialize the next
+document, and then write it back. If more than one writer can update the same
+workbook, run that sequence inside a transaction and lock the row with
+`select ... for update`, or add a version column and reject stale writes. The
+database row should not be updated before the WorkPaper edit and verification
+readback have both succeeded.
+
 ## Notes For Services And Agents
 
 Keep persistence at the workbook-document boundary:

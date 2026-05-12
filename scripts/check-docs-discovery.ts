@@ -287,7 +287,6 @@ for (const required of [
   'https://github.com/proompteng/bilig/issues/162',
   'https://github.com/proompteng/bilig/issues/163',
   'https://github.com/proompteng/bilig/issues/187',
-  'https://github.com/proompteng/bilig/issues/188',
 ]) {
   requireIncludes(starterIssues, required, 'docs/starter-issues.md')
   requireIncludes(llms, required, 'docs/llms.txt')
@@ -319,6 +318,7 @@ for (const closedIssue of [
   '184',
   '185',
   '186',
+  '188',
   '189',
   '190',
   '191',
