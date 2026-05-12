@@ -29,6 +29,8 @@ Project site: <https://proompteng.github.io/bilig/>
   [runnable WorkPaper example](examples/headless-workpaper),
   [JSON records input example](examples/headless-workpaper#json-records-input),
   [Node service recipe](docs/node-service-workpaper-recipe.md), or
+  [serverless API route recipe](docs/serverless-workpaper-api-route.md).
+- **Wire a coding-agent tool**: use the
   [agent tool-calling recipe](docs/agent-workpaper-tool-calling-recipe.md).
 - **Contribute a small patch**: pick a scoped
   [`good first issue`](docs/starter-issues.md).

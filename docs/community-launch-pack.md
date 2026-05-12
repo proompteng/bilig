@@ -25,7 +25,7 @@ Latest public snapshot on May 8, 2026:
 
 Latest execution snapshot on May 12, 2026:
 
-- GitHub surface: public repo, `24` stars, `2` forks, `47` open issues
+- GitHub surface: public repo, `24` stars, `2` forks, `46` open issues
 - npm surface: `@bilig/headless@0.11.10`, MIT, TypeScript types, npm API
   downloads: `13,427` last week and `24,931` last month
 - Contributor funnel: `27` open `good first issue`, `27` open

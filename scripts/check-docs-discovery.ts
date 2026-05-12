@@ -12,6 +12,7 @@ const expectedSitemapUrls = [
   `${siteRoot}agent-workpaper-tool-calling-recipe.html`,
   `${siteRoot}agent-spreadsheet-tool-call-loop.html`,
   `${siteRoot}node-service-workpaper-recipe.html`,
+  `${siteRoot}serverless-workpaper-api-route.html`,
   `${siteRoot}csv-shaped-workpaper-input-recipe.html`,
   `${siteRoot}unsupported-formula-troubleshooting-recipe.html`,
   `${siteRoot}local-workpaper-benchmark-walkthrough.html`,
@@ -37,6 +38,7 @@ const sourceFilesByUrl = new Map<string, string>([
   [`${siteRoot}agent-workpaper-tool-calling-recipe.html`, 'agent-workpaper-tool-calling-recipe.md'],
   [`${siteRoot}agent-spreadsheet-tool-call-loop.html`, 'agent-spreadsheet-tool-call-loop.md'],
   [`${siteRoot}node-service-workpaper-recipe.html`, 'node-service-workpaper-recipe.md'],
+  [`${siteRoot}serverless-workpaper-api-route.html`, 'serverless-workpaper-api-route.md'],
   [`${siteRoot}csv-shaped-workpaper-input-recipe.html`, 'csv-shaped-workpaper-input-recipe.md'],
   [`${siteRoot}unsupported-formula-troubleshooting-recipe.html`, 'unsupported-formula-troubleshooting-recipe.md'],
   [`${siteRoot}local-workpaper-benchmark-walkthrough.html`, 'local-workpaper-benchmark-walkthrough.md'],
@@ -188,6 +190,7 @@ for (const required of [
   'https://github.com/proompteng/bilig/discussions/115',
   'https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md',
   'https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md',
+  'https://github.com/proompteng/bilig/blob/main/docs/serverless-workpaper-api-route.md',
   'https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md',
   'https://github.com/proompteng/bilig/blob/main/docs/unsupported-formula-troubleshooting-recipe.md',
   'https://github.com/proompteng/bilig/blob/main/docs/agent-workpaper-tool-calling-recipe.md',
@@ -256,17 +259,27 @@ for (const required of [
   'https://github.com/proompteng/bilig/issues/154',
   'https://github.com/proompteng/bilig/issues/155',
   'https://github.com/proompteng/bilig/issues/156',
+  'https://github.com/proompteng/bilig/issues/158',
+  'https://github.com/proompteng/bilig/issues/159',
+  'https://github.com/proompteng/bilig/issues/160',
+  'https://github.com/proompteng/bilig/issues/162',
+  'https://github.com/proompteng/bilig/issues/163',
+  'https://github.com/proompteng/bilig/issues/164',
+  'https://github.com/proompteng/bilig/issues/165',
+  'https://github.com/proompteng/bilig/issues/166',
 ]) {
   requireIncludes(starterIssues, required, 'docs/starter-issues.md')
   requireIncludes(llms, required, 'docs/llms.txt')
 }
 
-if (starterIssues.includes('https://github.com/proompteng/bilig/issues/137')) {
-  throw new Error('docs/starter-issues.md still links to closed starter issue #137')
-}
+for (const closedIssue of ['137', '161']) {
+  if (starterIssues.includes(`https://github.com/proompteng/bilig/issues/${closedIssue}`)) {
+    throw new Error(`docs/starter-issues.md still links to closed starter issue #${closedIssue}`)
+  }
 
-if (llms.includes('https://github.com/proompteng/bilig/issues/137')) {
-  throw new Error('docs/llms.txt still links to closed starter issue #137')
+  if (llms.includes(`https://github.com/proompteng/bilig/issues/${closedIssue}`)) {
+    throw new Error(`docs/llms.txt still links to closed starter issue #${closedIssue}`)
+  }
 }
 
 const publicDocs = [

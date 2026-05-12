@@ -20,6 +20,7 @@ language: typescript
 - https://github.com/proompteng/bilig/discussions
 - https://github.com/proompteng/bilig/discussions/157
 - https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md
+- https://github.com/proompteng/bilig/blob/main/docs/serverless-workpaper-api-route.md
 - https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md
 - https://github.com/proompteng/bilig/blob/main/docs/unsupported-formula-troubleshooting-recipe.md
 - https://github.com/proompteng/bilig/blob/main/docs/agent-workpaper-tool-calling-recipe.md
@@ -80,6 +81,8 @@ npm run agent:verify
   https://github.com/proompteng/bilig/blob/main/docs/why-agents-need-workbook-apis.md
 - node service recipe:
   https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md
+- serverless API route recipe:
+  https://github.com/proompteng/bilig/blob/main/docs/serverless-workpaper-api-route.md
 - csv-shaped input recipe:
   https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md
 - json records input example:
@@ -166,6 +169,22 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/155
 - current small docs issue: first PR description template:
   https://github.com/proompteng/bilig/issues/156
+- current small docs issue: fuzz replay walkthrough:
+  https://github.com/proompteng/bilig/issues/158
+- current small docs issue: CSV delimiter autodetection:
+  https://github.com/proompteng/bilig/issues/159
+- current small docs issue: WorkPaper API read/write cheat sheet:
+  https://github.com/proompteng/bilig/issues/160
+- current small docs issue: WorkPaper benchmark reproduction notes:
+  https://github.com/proompteng/bilig/issues/162
+- current small docs issue: coding-agent workbook automation recipe:
+  https://github.com/proompteng/bilig/issues/163
+- current small docs issue: Next.js route handler adapter:
+  https://github.com/proompteng/bilig/issues/164
+- current small docs issue: Cloudflare Worker fetch adapter:
+  https://github.com/proompteng/bilig/issues/165
+- current small docs issue: durable JSON persistence variant:
+  https://github.com/proompteng/bilig/issues/166
 - good first issue search:
   https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22
 - first-timers-only issue search:

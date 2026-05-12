@@ -4,7 +4,7 @@ This page is the stable contributor on-ramp for small public `bilig` tasks. It
 links directly to current scoped issues instead of relying on GitHub issue
 search indexing.
 
-Current starter tickets as of May 8, 2026:
+Current starter tickets as of May 12, 2026:
 
 - [#134: docs(examples): add XLSX formula-cache roundtrip example](https://github.com/proompteng/bilig/issues/134)
 - [#138: docs(examples): add named-expression change WorkPaper example](https://github.com/proompteng/bilig/issues/138)
@@ -24,6 +24,14 @@ Current starter tickets as of May 8, 2026:
 - [#154: docs(comparison): add headless engine use-case chooser](https://github.com/proompteng/bilig/issues/154)
 - [#155: docs(troubleshooting): add formula diagnostic output examples](https://github.com/proompteng/bilig/issues/155)
 - [#156: docs(contributor): add first PR description template](https://github.com/proompteng/bilig/issues/156)
+- [#158: docs(contributor): add fuzz replay walkthrough](https://github.com/proompteng/bilig/issues/158)
+- [#159: docs(troubleshooting): document CSV delimiter autodetection](https://github.com/proompteng/bilig/issues/159)
+- [#160: docs(headless): add WorkPaper API read/write cheat sheet](https://github.com/proompteng/bilig/issues/160)
+- [#162: docs(benchmarks): add WorkPaper benchmark reproduction notes](https://github.com/proompteng/bilig/issues/162)
+- [#163: docs(agent): add coding-agent workbook automation recipe](https://github.com/proompteng/bilig/issues/163)
+- [#164: docs(serverless): add Next.js route handler adapter](https://github.com/proompteng/bilig/issues/164)
+- [#165: docs(serverless): add Cloudflare Worker fetch adapter](https://github.com/proompteng/bilig/issues/165)
+- [#166: docs(serverless): add durable JSON persistence variant](https://github.com/proompteng/bilig/issues/166)
 
 The list intentionally excludes closed issues and broad corpus/parity epics. Add
 new starter tickets only when the expected patch can stay small, has a clear

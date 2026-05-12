@@ -38,6 +38,8 @@ pnpm --filter @bilig/headless build
   [`npm run json-records`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input).
 - Build a small service from the
   [Node service recipe](https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md).
+- Put the same workbook boundary behind a
+  [serverless API route](https://github.com/proompteng/bilig/blob/main/docs/serverless-workpaper-api-route.md).
 - Check the
   [compatibility boundaries](https://github.com/proompteng/bilig/blob/main/docs/where-bilig-is-not-excel-compatible-yet.md)
   before assuming full Excel parity.
@@ -132,6 +134,8 @@ Repository links:
   [`npm run json-records`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input)
 - Node service recipe:
   [`docs/node-service-workpaper-recipe.md`](https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md)
+- serverless API route recipe:
+  [`docs/serverless-workpaper-api-route.md`](https://github.com/proompteng/bilig/blob/main/docs/serverless-workpaper-api-route.md)
 - CSV-shaped input recipe:
   [`docs/csv-shaped-workpaper-input-recipe.md`](https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md)
 - unsupported formula troubleshooting:
