@@ -48,12 +48,18 @@ network service to answer `tools/list` and `tools/call`.
 | Glama                 | Live                               | <https://glama.ai/mcp/servers/proompteng/bilig>                                                       |
 | mcp.so                | Submitted for maintainer review    | <https://github.com/chatmcp/mcpso/issues/2295>                                                        |
 | Cline MCP Marketplace | Submitted for maintainer review    | <https://github.com/cline/mcp-marketplace/issues/1557>                                                |
+| mcpserver.cc          | Submitted for maintainer review    | <https://mcpserver.cc/en?q=bilig>                                                                     |
 | PulseMCP              | Not indexed yet as of May 13, 2026 | <https://www.pulsemcp.com/servers?search=bilig&q=bilig>                                               |
 
 PulseMCP says server listings are ingested from the official MCP Registry daily
 and processed weekly. The Bilig WorkPaper registry entry is already live, so the
 right next step is to let that import run, then contact PulseMCP only if the
 server still does not appear after their stated review window.
+
+The `mcpserver.cc` submission was accepted for review on May 13, 2026 with
+submission UUID `bcdce4e1-3b05-4be2-b611-2a2abb8baf79`. Search still returned no
+published Bilig result immediately after submission, so treat that directory as
+pending until the listing appears.
 
 ## Verify The Registry Entry
 

@@ -262,6 +262,8 @@ npm run agent:verify
   https://github.com/tolkonepiu/best-of-mcp-servers/pull/192
 - external first-time-contributor directory submission:
   https://github.com/MunGell/awesome-for-beginners/pull/2012
+- external MCP directory submission:
+  https://mcpserver.cc/en?q=bilig
 - older agent API shape discussion:
   https://github.com/proompteng/bilig/discussions/115
 - community launch and growth pack:

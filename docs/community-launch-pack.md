@@ -165,6 +165,11 @@ issue pass:
   issue is open with the GitHub repository, 400px logo, public npm command, and
   verified `tools/list` plus `set_workpaper_input_cell` readback proof:
   <https://github.com/cline/mcp-marketplace/issues/1557>
+- External MCP directory surface: `mcpserver.cc` accepted the public Bilig
+  WorkPaper submission for maintainer review with submission UUID
+  `bcdce4e1-3b05-4be2-b611-2a2abb8baf79`. Immediate search for `bilig` still
+  returned no published result:
+  <https://mcpserver.cc/en?q=bilig>
 - External MCP directory follow-up: PulseMCP currently returns `0` results for
   `bilig` in Atlas, and its submit page says server submissions are ingested
   from the official MCP Registry. The next action is to let the fresh official

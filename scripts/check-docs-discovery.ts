@@ -562,6 +562,8 @@ for (const required of [
   'https://glama.ai/mcp/servers/proompteng/bilig',
   'https://github.com/chatmcp/mcpso/issues/2295',
   'https://github.com/cline/mcp-marketplace/issues/1557',
+  'https://mcpserver.cc/en?q=bilig',
+  'bcdce4e1-3b05-4be2-b611-2a2abb8baf79',
   'Not indexed yet as of May 13, 2026',
   'https://www.pulsemcp.com/servers?search=bilig&q=bilig',
   'marked `@bilig/headless@0.14.0` as the',
