@@ -120,6 +120,10 @@ issue pass:
   project now has a scoped issue for adding `@bilig/headless` as a headless
   WorkPaper target for formula, edit/readback, memory, and persistence lanes:
   <https://github.com/zhangming1978/js-spreadsheet-benchmark/issues/1>
+- External MCP ranking surface: the best-of-mcp-servers listing pull request is
+  open, mergeable, and passing `yamllint` with the `@bilig/headless` npm
+  package attached to the `proompteng/bilig` project entry:
+  <https://github.com/tolkonepiu/best-of-mcp-servers/pull/192>
 - External MCP directory surface: the TensorBlock awesome-mcp-servers listing
   pull request is open and awaiting maintainer review:
   <https://github.com/TensorBlock/awesome-mcp-servers/pull/536>

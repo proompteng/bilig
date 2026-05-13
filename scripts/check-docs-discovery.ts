@@ -642,11 +642,13 @@ for (const required of [
   'https://proompteng.github.io/bilig/mcp-spreadsheet-server-directory.html',
   'https://github.com/krzysztofspilka/JSpreadsheets/pull/50',
   'https://github.com/zhangming1978/js-spreadsheet-benchmark/issues/1',
+  'https://github.com/tolkonepiu/best-of-mcp-servers/pull/192',
 ]) {
   requireIncludes(communityLaunchPack, required, 'docs/community-launch-pack.md')
 }
 requireIncludes(llms, 'https://github.com/krzysztofspilka/JSpreadsheets/pull/50', 'docs/llms.txt')
 requireIncludes(llms, 'https://github.com/zhangming1978/js-spreadsheet-benchmark/issues/1', 'docs/llms.txt')
+requireIncludes(llms, 'https://github.com/tolkonepiu/best-of-mcp-servers/pull/192', 'docs/llms.txt')
 requireIncludes(
   aiSdkLangChainDoc,
   'https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling',

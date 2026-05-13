@@ -246,6 +246,8 @@ npm run agent:verify
   https://github.com/krzysztofspilka/JSpreadsheets/pull/50
 - external JavaScript spreadsheet benchmark adapter request:
   https://github.com/zhangming1978/js-spreadsheet-benchmark/issues/1
+- external MCP ranking list submission:
+  https://github.com/tolkonepiu/best-of-mcp-servers/pull/192
 - older agent API shape discussion:
   https://github.com/proompteng/bilig/discussions/115
 - community launch and growth pack:
