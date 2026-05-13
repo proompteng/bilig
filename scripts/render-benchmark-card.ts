@@ -10,6 +10,7 @@ const cardHeight = 720
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const artifactPath = join(repoRoot, 'packages', 'benchmarks', 'baselines', 'workpaper-vs-hyperformula.json')
 const outputPath = join(repoRoot, 'docs', 'assets', 'workpaper-benchmark-card.png')
+const svgOutputPath = join(repoRoot, 'docs', 'assets', 'workpaper-benchmark-card.svg')
 const checkMode = process.argv.includes('--check')
 
 interface LaneScorecard {
@@ -210,29 +211,47 @@ function execFileBuffer(file: string, args: readonly string[]): Promise<Buffer> 
   })
 }
 
-async function renderCard(): Promise<Buffer> {
-  const summary = await readBenchmarkSummary()
+async function renderPng(svg: string): Promise<Buffer> {
   const tempRoot = await mkdtemp(join(tmpdir(), 'bilig-benchmark-card-'))
   const svgPath = join(tempRoot, 'benchmark-card.svg')
 
   try {
-    await writeFile(svgPath, buildSvg(summary))
+    await writeFile(svgPath, svg)
     return await execFileBuffer('rsvg-convert', ['--format=png', '--width', String(cardWidth), '--height', String(cardHeight), svgPath])
   } finally {
     await rm(tempRoot, { recursive: true, force: true })
   }
 }
 
-const image = await renderCard()
+function validatePngDimensions(image: Buffer, expectedWidth: number, expectedHeight: number, context: string): void {
+  const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  if (image.length < 24 || !image.subarray(0, pngSignature.length).equals(pngSignature)) {
+    throw new Error(`${context} is not a PNG file`)
+  }
+
+  const actualWidth = image.readUInt32BE(16)
+  const actualHeight = image.readUInt32BE(20)
+  if (actualWidth !== expectedWidth || actualHeight !== expectedHeight) {
+    throw new Error(
+      `${context} must be ${expectedWidth.toString()}x${expectedHeight.toString()}, got ${actualWidth.toString()}x${actualHeight.toString()}`,
+    )
+  }
+}
+
+const svg = buildSvg(await readBenchmarkSummary())
 
 if (checkMode) {
-  const existing = await readFile(outputPath)
-  if (!existing.equals(image)) {
-    throw new Error(`${outputPath} is stale. Run pnpm docs:benchmark-card:generate.`)
+  const existingSvg = await readFile(svgOutputPath, 'utf8')
+  if (existingSvg !== svg) {
+    throw new Error(`${svgOutputPath} is stale. Run pnpm docs:benchmark-card:generate.`)
   }
-  console.log(`benchmark card is current: ${outputPath}`)
+  validatePngDimensions(await readFile(outputPath), cardWidth, cardHeight, outputPath)
+  console.log(`benchmark card source is current: ${svgOutputPath}`)
+  console.log(`benchmark card PNG dimensions are current: ${outputPath}`)
 } else {
   await mkdir(dirname(outputPath), { recursive: true })
-  await writeFile(outputPath, image)
+  await writeFile(svgOutputPath, svg)
+  await writeFile(outputPath, await renderPng(svg))
+  console.log(`wrote ${svgOutputPath}`)
   console.log(`wrote ${outputPath}`)
 }
