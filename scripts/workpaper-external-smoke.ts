@@ -13,7 +13,6 @@ import {
   parseNodeAgentVerificationOutput,
   parseNodeJsonFileOutput,
   parseNodeMarkdownReportOutput,
-  parseNodeMcpStdioErrorOutput,
   parseNodeMcpStdioOutput,
   parseNodePersistenceOutput,
   parseNodeRangeReadbackOutput,
@@ -28,6 +27,7 @@ import {
   type RevenueScenarioSummary,
 } from './workpaper-external-smoke-parsers.ts'
 import { writeXlsxImportScript } from './workpaper-external-smoke-fixtures.ts'
+import { parseNodeMcpStdioErrorOutput } from './workpaper-external-smoke-mcp-parsers.ts'
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const packDir = join(rootDir, 'build', 'npm-packages-runtime-smoke')
