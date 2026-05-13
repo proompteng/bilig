@@ -50,6 +50,52 @@ The package carries `mcpName: io.github.proompteng/bilig-workpaper` and a
 matching `server.json`, which is the metadata shape expected by MCP registries
 for npm-hosted stdio servers.
 
+## Vercel AI SDK MCP Client Recipe
+
+If your agent loop already uses the Vercel AI SDK, keep the MCP client thin and
+let the WorkPaper server own the spreadsheet reads and writes:
+
+```js
+import { createMCPClient } from '@ai-sdk/mcp'
+import { Experimental_StdioMCPTransport } from '@ai-sdk/mcp/mcp-stdio'
+import { generateText } from 'ai'
+
+const client = await createMCPClient({
+  transport: new Experimental_StdioMCPTransport({
+    command: 'npm exec --package @bilig/headless -- bilig-workpaper-mcp',
+  }),
+})
+
+try {
+  const tools = await client.tools()
+  const { text } = await generateText({
+    model: 'your-model',
+    tools,
+    prompt: [
+      'Read the WorkPaper summary with read_workpaper_summary for Summary!A1:B5.',
+      'Then set Inputs!B3 to 0.4 with set_workpaper_input_cell.',
+      'Return editedCell plus the before and after expectedArr values.',
+    ].join('\n'),
+  })
+
+  console.log(text)
+} finally {
+  await client.close()
+}
+```
+
+The server command is `bilig-workpaper-mcp`; the `npm exec --package
+@bilig/headless -- bilig-workpaper-mcp` wrapper only resolves the published npm
+package for a clean checkout. The two tool calls prove the useful workflow: read
+a formula-backed summary, set one input cell, and return computed before/after
+readback.
+
+Verify the docs links and discovery metadata after editing this page:
+
+```sh
+pnpm docs:discovery:check
+```
+
 The script implements two JSON-RPC methods shaped around the MCP tool model:
 
 - `tools/list` returns `read_workpaper_summary` and
