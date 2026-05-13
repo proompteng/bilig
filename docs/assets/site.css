@@ -319,16 +319,24 @@ pre,
 
 .hero-facts {
   display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
-  width: 100%;
-  gap: 12px;
+  width: min(100%, 420px);
+  border-top: 1px solid rgba(255, 250, 240, 0.22);
+  border-bottom: 1px solid rgba(255, 250, 240, 0.14);
   color: #beb2a1;
 }
 
 .hero-fact {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.42fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
   min-width: 0;
-  border-top: 1px solid rgba(255, 250, 240, 0.22);
-  padding: 14px 14px 0 0;
+  border-bottom: 1px solid rgba(255, 250, 240, 0.1);
+  padding: 13px 0;
+}
+
+.hero-fact:last-child {
+  border-bottom: 0;
 }
 
 .hero-fact strong,
@@ -343,7 +351,6 @@ pre,
 }
 
 .hero-fact span {
-  margin-top: 4px;
   font-size: 12px;
   line-height: 1.45;
 }
@@ -747,12 +754,8 @@ footer {
   }
 
   .hero-fact {
-    border-bottom: 1px solid rgba(255, 250, 240, 0.16);
-    padding: 14px 0;
-  }
-
-  .hero-fact:last-child {
-    border-bottom: 0;
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 
   .install-command code {
