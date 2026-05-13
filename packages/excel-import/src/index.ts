@@ -70,7 +70,7 @@ import {
 } from './workbook-import-content-types.js'
 import { createWorkbookPreview, type ImportedWorkbookPreview } from './workbook-import-preview.js'
 import { readImportedExternalLinkCaches, translateImportedFormulaExternalReferences } from './xlsx-external-references.js'
-import { translateImportedFormulaStructuredReferences } from './xlsx-formula-translation.js'
+import { normalizeImportedFormulaSource, translateImportedFormulaStructuredReferences } from './xlsx-formula-translation.js'
 import { readImportedSheetHyperlinks } from './xlsx-hyperlinks.js'
 import { collectStyleCandidateAddresses, internImportedStyle, readImportedXlsxCellStyle } from './xlsx-import-cell-styles.js'
 import { buildImportedSheetMetadata } from './xlsx-import-sheet-metadata.js'
@@ -439,8 +439,9 @@ function importSheetJsWorkbook(
       const formula = cell['f']
       const xmlTextValue = importedWorksheetTextValues?.get(address)
       if (typeof formula === 'string' && formula.trim().length > 0) {
+        const normalizedFormula = normalizeImportedFormulaSource(formula)
         formulaCellSeen = true
-        const externalReferenceTranslation = translateImportedFormulaExternalReferences(formula, importedExternalLinkCaches)
+        const externalReferenceTranslation = translateImportedFormulaExternalReferences(normalizedFormula, importedExternalLinkCaches)
         if (
           !externalWorkbookReferenceWarningSeen &&
           (externalReferenceTranslation.unresolvedCount > 0 || formulaReferencesExternalWorkbook(externalReferenceTranslation.formula))
@@ -448,7 +449,7 @@ function importSheetJsWorkbook(
           externalWorkbookReferenceWarningSeen = true
           warnings.push(externalWorkbookReferencesWarning)
         }
-        if (!volatileFormulaWarningSeen && formulaReferencesVolatileFunction(formula)) {
+        if (!volatileFormulaWarningSeen && formulaReferencesVolatileFunction(normalizedFormula)) {
           volatileFormulaWarningSeen = true
           warnings.push(volatileFormulasWarning)
         }
@@ -507,7 +508,7 @@ function importSheetJsWorkbook(
           }
           const formula = cell['f']
           if (typeof formula === 'string' && formula.trim().length > 0) {
-            return `=${formula}`
+            return `=${normalizeImportedFormulaSource(formula)}`
           }
           const address = XLSX.utils.encode_cell({ r: row, c: col })
           return toDisplayText(readImportedLiteralCellValue(cell) ?? importedWorksheetTextValues?.get(address))

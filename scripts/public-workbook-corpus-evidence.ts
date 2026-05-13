@@ -3,12 +3,15 @@ import type { PublicWorkbookCorpusCase } from './public-workbook-corpus-types.ts
 export const publicWorkbookImportWarningClassifierEvidence = 'import-warning-classifier=2026-05-08-full-precision-formula-aware'
 export const publicWorkbookPivotClassifierEvidence = 'pivot-classifier=2026-05-08-external-cache-warning'
 export const publicWorkbookResourceLimitClassifierEvidence = 'resource-limit-classifier=2026-05-08-isolated-worker-footprint-aware'
+export const publicWorkbookFormulaOracleCacheClassifierEvidence =
+  'formula-oracle-cache-classifier=2026-05-12-independent-recalculation-cross-check'
 
 export type PublicWorkbookCorpusEvidenceRefreshReason =
   | 'missing-used-range-evidence'
   | 'missing-import-warning-classifier-evidence'
   | 'missing-pivot-classifier-evidence'
   | 'missing-resource-limit-classifier-evidence'
+  | 'missing-formula-oracle-cache-classifier-evidence'
 
 export function publicWorkbookCorpusCaseNeedsEvidenceRefresh(entry: PublicWorkbookCorpusCase): boolean {
   return publicWorkbookCorpusCaseEvidenceRefreshReasons(entry).length > 0
@@ -29,6 +32,9 @@ export function publicWorkbookCorpusCaseEvidenceRefreshReasons(
   }
   if (hasResourceLimitUnsupportedClassification(entry) && !hasCurrentResourceLimitClassifierEvidence(entry)) {
     reasons.push('missing-resource-limit-classifier-evidence')
+  }
+  if (hasFormulaOracleCacheUnsupportedClassification(entry) && !hasCurrentFormulaOracleCacheClassifierEvidence(entry)) {
+    reasons.push('missing-formula-oracle-cache-classifier-evidence')
   }
   return reasons
 }
@@ -71,12 +77,20 @@ export function hasResourceLimitUnsupportedClassifications(classifications: read
   return classifications.some((classification) => classification.startsWith('xlsx.publicCorpus.resourceLimit:'))
 }
 
+export function hasFormulaOracleCacheUnsupportedClassifications(classifications: readonly string[]): boolean {
+  return classifications.some((classification) => classification.startsWith('xlsx.publicCorpus.formulaOracleCache:'))
+}
+
 function hasPivotUnsupportedClassification(entry: PublicWorkbookCorpusCase): boolean {
   return hasPivotUnsupportedClassifications(entry.unsupportedFeatureClassifications)
 }
 
 function hasResourceLimitUnsupportedClassification(entry: PublicWorkbookCorpusCase): boolean {
   return hasResourceLimitUnsupportedClassifications(entry.unsupportedFeatureClassifications)
+}
+
+function hasFormulaOracleCacheUnsupportedClassification(entry: PublicWorkbookCorpusCase): boolean {
+  return hasFormulaOracleCacheUnsupportedClassifications(entry.unsupportedFeatureClassifications)
 }
 
 function hasCurrentImportWarningClassifierEvidence(entry: PublicWorkbookCorpusCase): boolean {
@@ -89,4 +103,8 @@ function hasCurrentPivotClassifierEvidence(entry: PublicWorkbookCorpusCase): boo
 
 function hasCurrentResourceLimitClassifierEvidence(entry: PublicWorkbookCorpusCase): boolean {
   return entry.evidence.includes(publicWorkbookResourceLimitClassifierEvidence)
+}
+
+function hasCurrentFormulaOracleCacheClassifierEvidence(entry: PublicWorkbookCorpusCase): boolean {
+  return entry.evidence.includes(publicWorkbookFormulaOracleCacheClassifierEvidence)
 }

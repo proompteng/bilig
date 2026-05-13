@@ -26,6 +26,7 @@ import {
   type PublicWorkbookSource,
 } from '../public-workbook-corpus.ts'
 import {
+  publicWorkbookFormulaOracleCacheClassifierEvidence,
   publicWorkbookImportWarningClassifierEvidence,
   publicWorkbookResourceLimitClassifierEvidence,
 } from '../public-workbook-corpus-evidence.ts'
@@ -35,6 +36,7 @@ import {
   classifyUnsupportedFeatures,
   externalPivotCacheUnsupportedClassification,
   rawPivotPartUnsupportedClassification,
+  staleFormulaCacheUnsupportedClassification,
 } from '../public-workbook-corpus-verify.ts'
 
 const spawnMock = vi.hoisted(() => vi.fn())
@@ -477,6 +479,47 @@ describe('public workbook corpus', () => {
       validation: { formulaOraclePassed: true, formulaOracleComparisons: 0, roundTripPassed: true },
       unsupportedFeatureClassifications: [`xlsx.import.warning:${volatileFormulasWarning}`],
     })
+  })
+
+  it('classifies stale cached formula values after independent recalculation agrees', async () => {
+    const scorecard = await buildSingleWorkbookScorecard({
+      cacheDirPrefix: 'public-workbook-corpus-stale-cache-',
+      fileName: 'stale-cache.xlsx',
+      sourceId: 'source-stale-cache',
+      workbookBytes: buildStaleFormulaCacheWorkbookBytes(),
+    })
+
+    expect(scorecard.summary.allCachedWorkbooksPassed).toBe(true)
+    expect(scorecard.summary.formulaOracleComparisonCount).toBe(1)
+    expect(scorecard.cases[0]).toMatchObject({
+      status: 'unsupported',
+      passed: true,
+      featureCounts: { formulaCellCount: 1, warningCount: 0 },
+      validation: { formulaOraclePassed: true, formulaOracleComparisons: 1, formulaOracleMismatches: [], roundTripPassed: true },
+      unsupportedFeatureClassifications: [staleFormulaCacheUnsupportedClassification],
+    })
+    expect(scorecard.cases[0]?.evidence).toEqual(
+      expect.arrayContaining([publicWorkbookFormulaOracleCacheClassifierEvidence, 'independent-recalc=Summary!B2 cached 6 recalculated 9']),
+    )
+  })
+
+  it('keeps formula oracle failures when independent recalculation cannot confirm a stale cache', async () => {
+    const scorecard = await buildSingleWorkbookScorecard({
+      cacheDirPrefix: 'public-workbook-corpus-unconfirmed-cache-',
+      fileName: 'unconfirmed-cache.xlsx',
+      sourceId: 'source-unconfirmed-cache',
+      workbookBytes: buildUnconfirmedFormulaCacheWorkbookBytes(),
+    })
+
+    expect(scorecard.summary.allCachedWorkbooksPassed).toBe(false)
+    expect(scorecard.cases[0]).toMatchObject({
+      status: 'failed',
+      passed: false,
+      validation: { formulaOraclePassed: false, formulaOracleComparisons: 1 },
+      unsupportedFeatureClassifications: [],
+    })
+    expect(scorecard.cases[0]?.validation.formulaOracleMismatches).toHaveLength(1)
+    expect(scorecard.cases[0]?.evidence).not.toContain(publicWorkbookFormulaOracleCacheClassifierEvidence)
   })
 
   it('classifies oversized workbook verification as an explicit unsupported resource case', async () => {
@@ -1535,6 +1578,59 @@ describe('public workbook corpus', () => {
   })
 })
 
+async function buildSingleWorkbookScorecard(args: {
+  readonly cacheDirPrefix: string
+  readonly fileName: string
+  readonly sourceId: string
+  readonly workbookBytes: Uint8Array
+}) {
+  const cacheDir = mkdtempSync(join(tmpdir(), args.cacheDirPrefix))
+  mkdirSync(join(cacheDir, 'files'), { recursive: true })
+  const sha256 = await sha256Hex(args.workbookBytes)
+  writeFileSync(join(cacheDir, 'files', `${sha256}.xlsx`), args.workbookBytes)
+  const license = {
+    spdxId: 'CC-BY-4.0',
+    title: 'Creative Commons Attribution 4.0 International',
+    evidenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+  }
+  const sourceUrl = `https://example.com/${args.fileName}`
+  const manifest: PublicWorkbookManifest = {
+    ...createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'),
+    sources: [
+      {
+        id: args.sourceId,
+        kind: 'direct-url',
+        sourceUrl,
+        downloadUrl: sourceUrl,
+        fileName: args.fileName,
+        discoveredAt: '2026-05-07T00:00:00.000Z',
+        license,
+      },
+    ],
+    artifacts: [
+      {
+        id: `workbook-${sha256.slice(0, 16)}`,
+        sourceId: args.sourceId,
+        sourceUrl,
+        downloadUrl: sourceUrl,
+        fileName: args.fileName,
+        cachePath: `files/${sha256}.xlsx`,
+        sha256,
+        byteSize: args.workbookBytes.byteLength,
+        workbookFingerprint: `${args.sourceId}-fingerprint`,
+        fetchedAt: '2026-05-07T00:00:00.000Z',
+        license,
+      },
+    ],
+  }
+
+  return buildPublicWorkbookCorpusScorecard({
+    manifest,
+    cacheDir,
+    generatedAt: '2026-05-07T01:00:00.000Z',
+  })
+}
+
 function buildWorkbookBytes(summarySheetName = 'Summary'): Uint8Array {
   const workbook = XLSX.utils.book_new()
   const summary = XLSX.utils.aoa_to_sheet([
@@ -1616,6 +1712,30 @@ function buildVolatileFormulaWorkbookBytes(): Uint8Array {
     ['Report Date', null],
   ])
   sheet.B2 = { t: 'n', f: 'TODAY()', v: 43073 }
+  sheet['!ref'] = 'A1:B2'
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Summary')
+  return XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' })
+}
+
+function buildStaleFormulaCacheWorkbookBytes(): Uint8Array {
+  const workbook = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['Text', 'Word Count'],
+    ['one two three four five six seven eight nine', null],
+  ])
+  sheet.B2 = { t: 'n', f: 'LEN(TRIM(A2))-LEN(SUBSTITUTE(A2," ",""))+1', v: 6 }
+  sheet['!ref'] = 'A1:B2'
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Summary')
+  return XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' })
+}
+
+function buildUnconfirmedFormulaCacheWorkbookBytes(): Uint8Array {
+  const workbook = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['Value', 'Result'],
+    [42, null],
+  ])
+  sheet.B2 = { t: 'n', f: 'UNKNOWNFUNC(A2)', v: 99 }
   sheet['!ref'] = 'A1:B2'
   XLSX.utils.book_append_sheet(workbook, sheet, 'Summary')
   return XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' })

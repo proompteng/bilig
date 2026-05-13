@@ -17,6 +17,14 @@ interface StructuredReferenceRewriteContext {
   readonly tables: readonly WorkbookTableSnapshot[] | undefined
 }
 
+const namespacedSpreadsheetFormulaPattern = /^(?:msoxl|of):=/iu
+
+export function normalizeImportedFormulaSource(formula: string): string {
+  const trimmed = formula.trim()
+  const prefix = namespacedSpreadsheetFormulaPattern.exec(trimmed)
+  return prefix ? trimmed.slice(prefix[0].length) : formula
+}
+
 function isIdentifierStart(character: string): boolean {
   return /[A-Za-z_]/u.test(character)
 }

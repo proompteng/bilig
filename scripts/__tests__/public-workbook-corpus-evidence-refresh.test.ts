@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createEmptyPublicWorkbookManifest } from '../public-workbook-corpus.ts'
 import {
+  publicWorkbookFormulaOracleCacheClassifierEvidence,
   publicWorkbookImportWarningClassifierEvidence,
   publicWorkbookPivotClassifierEvidence,
   publicWorkbookResourceLimitClassifierEvidence,
@@ -117,6 +118,24 @@ describe('public workbook corpus evidence refresh reasons', () => {
     expect(status.currentRecordedUnsupportedCaseCount).toBe(1)
     expect(status.staleRecordedUnsupportedCaseCount).toBe(1)
     expect(status.staleRecordedVerificationSample[0]?.reasons).toEqual(['missing-resource-limit-classifier-evidence'])
+  })
+
+  it('marks formula-oracle cache classifier evidence stale after independent recalculation support changes', () => {
+    const staleArtifact = workbookArtifact('workbook-a')
+    const currentArtifact = workbookArtifact('workbook-b')
+    const status = buildPublicWorkbookCorpusStatus({
+      manifest: manifestWithArtifacts([staleArtifact, currentArtifact]),
+      scorecard: emptyScorecard(),
+      checkpointCases: [
+        formulaOracleCacheUnsupportedCase(staleArtifact, { hasCurrentClassifierEvidence: false }),
+        formulaOracleCacheUnsupportedCase(currentArtifact, { hasCurrentClassifierEvidence: true }),
+      ],
+    })
+
+    expect(status.staleRecordedVerificationCount).toBe(1)
+    expect(status.currentRecordedUnsupportedCaseCount).toBe(1)
+    expect(status.staleRecordedUnsupportedCaseCount).toBe(1)
+    expect(status.staleRecordedVerificationSample[0]?.reasons).toEqual(['missing-formula-oracle-cache-classifier-evidence'])
   })
 
   it('keeps all stale reasons in verify-stale dry-run output', () => {
@@ -407,6 +426,69 @@ function resourceLimitUnsupportedCase(
       `license=${artifact.license.title}`,
       `sha256=${artifact.sha256}`,
       ...(options.hasCurrentClassifierEvidence ? [publicWorkbookResourceLimitClassifierEvidence] : []),
+    ],
+  }
+}
+
+function formulaOracleCacheUnsupportedCase(
+  artifact: PublicWorkbookArtifact,
+  options: {
+    readonly hasCurrentClassifierEvidence: boolean
+  },
+): PublicWorkbookCorpusCase {
+  return {
+    id: artifact.id,
+    sourceId: artifact.sourceId,
+    sourceUrl: artifact.sourceUrl,
+    fileName: artifact.fileName,
+    sha256: artifact.sha256,
+    byteSize: artifact.byteSize,
+    license: artifact.license,
+    status: 'unsupported',
+    passed: true,
+    featureCounts: {
+      sheetCount: 1,
+      cellCount: 2,
+      formulaCellCount: 1,
+      valueCellCount: 2,
+      definedNameCount: 0,
+      tableCount: 0,
+      chartCount: 0,
+      pivotCount: 0,
+      mergeCount: 0,
+      styleRangeCount: 0,
+      conditionalFormatCount: 0,
+      dataValidationCount: 0,
+      macroPayloadCount: 0,
+      warningCount: 0,
+    },
+    workbookMetadata: {
+      workbookName: artifact.fileName,
+      sheetNames: ['Sheet1'],
+      dimensions: [
+        {
+          sheetName: 'Sheet1',
+          rowCount: 1,
+          columnCount: 2,
+          nonEmptyCellCount: 2,
+          usedRange: { startRow: 0, startColumn: 0, endRow: 0, endColumn: 1 },
+        },
+      ],
+    },
+    validation: {
+      importPassed: true,
+      formulaOraclePassed: true,
+      formulaOracleComparisons: 1,
+      formulaOracleMismatches: [],
+      roundTripPassed: true,
+      structuralSmokePassed: true,
+    },
+    unsupportedFeatureClassifications: ['xlsx.publicCorpus.formulaOracleCache:independentRecalcMatched'],
+    evidence: [
+      `source=${artifact.sourceUrl}`,
+      `license=${artifact.license.title}`,
+      `sha256=${artifact.sha256}`,
+      ...(options.hasCurrentClassifierEvidence ? [publicWorkbookFormulaOracleCacheClassifierEvidence] : []),
     ],
   }
 }

@@ -141,6 +141,16 @@ function buildLegacyWorkbook(): Uint8Array {
   return XLSX.write(workbook, { bookType: 'xls', type: 'buffer' })
 }
 
+function buildNamespacedFormulaWorkbook(): Uint8Array {
+  const workbook = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([[1], [2]])
+  sheet.A3 = { t: 'n', f: 'msoxl:=SUM(A1:A2)', v: 3 }
+  sheet.B3 = { t: 'n', f: 'of:=SUM(A1:A2)', v: 3 }
+  sheet['!ref'] = 'A1:B3'
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Expenses')
+  return XLSX.write(workbook, { bookType: 'ods', type: 'buffer' })
+}
+
 function buildMacroEnabledWorkbook(): Uint8Array {
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['safe value']]), 'Sheet1')
@@ -912,6 +922,28 @@ describe('excel import', () => {
         expect.objectContaining({ address: 'C2', value: 3050 }),
       ]),
     )
+  })
+
+  it('imports namespaced spreadsheet formulas as executable formulas', async () => {
+    const imported = importWorkbookFile(buildNamespacedFormulaWorkbook(), 'legacy-expenses.xls', 'application/vnd.ms-excel')
+    const importedCells = imported.snapshot.sheets[0]?.cells
+
+    expect(imported.preview.contentType).toBe(LEGACY_XLS_CONTENT_TYPE)
+    expect(imported.preview.sheets[0]?.previewRows[2]).toEqual(['=SUM(A1:A2)', '=SUM(A1:A2)'])
+    expect(importedCells).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ address: 'A3', formula: 'SUM(A1:A2)', value: 3 }),
+        expect.objectContaining({ address: 'B3', formula: 'SUM(A1:A2)', value: 3 }),
+      ]),
+    )
+
+    const engine = new SpreadsheetEngine({ workbookName: 'namespaced-formula-import' })
+    await engine.ready()
+    engine.importSnapshot(imported.snapshot)
+    engine.recalculateNow()
+
+    expect(engine.getCellValue('Expenses', 'A3')).toEqual({ tag: ValueTag.Number, value: 3 })
+    expect(engine.getCellValue('Expenses', 'B3')).toEqual({ tag: ValueTag.Number, value: 3 })
   })
 
   it('dispatches macro-enabled Excel workbooks by standard XLSM content type', () => {

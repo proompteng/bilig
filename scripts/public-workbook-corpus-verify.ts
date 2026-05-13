@@ -2,8 +2,10 @@ import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { HyperFormula, type CellValue as HyperFormulaCellValue, type RawCellContent } from 'hyperformula'
 
 import { SpreadsheetEngine } from '../packages/core/src/engine.js'
+import { parseCellAddress } from '../packages/formula/src/addressing.js'
 import {
   exportXlsx,
   externalPivotCachesWarning,
@@ -13,12 +15,15 @@ import {
   precisionAsDisplayedCalculationWarning,
   volatileFormulasWarning,
 } from '../packages/excel-import/src/index.js'
-import type { WorkbookSnapshot } from '../packages/protocol/src/types.js'
+import { ValueTag } from '../packages/protocol/src/enums.js'
+import type { CellValue, LiteralInput, WorkbookSnapshot } from '../packages/protocol/src/types.js'
 import { parsePublicWorkbookCorpusCase, validatePublicWorkbookManifest } from './public-workbook-corpus-json.ts'
 import {
   hasImportWarningUnsupportedClassifications,
+  hasFormulaOracleCacheUnsupportedClassifications,
   hasPivotUnsupportedClassifications,
   publicWorkbookImportWarningClassifierEvidence,
+  publicWorkbookFormulaOracleCacheClassifierEvidence,
   publicWorkbookPivotClassifierEvidence,
   publicWorkbookResourceLimitClassifierEvidence,
 } from './public-workbook-corpus-evidence.ts'
@@ -70,6 +75,25 @@ const externalWorkbookRoundTripSkipEvidence =
   'Round-trip projection skipped because external workbook links are not recalculated during XLSX import.'
 export const rawPivotPartUnsupportedClassification = 'xlsx.pivots.rawPartNotSemanticallyImported'
 export const externalPivotCacheUnsupportedClassification = 'xlsx.pivots.externalCacheNotSemanticallyImported'
+export const staleFormulaCacheUnsupportedClassification = 'xlsx.publicCorpus.formulaOracleCache:independentRecalcMatched'
+
+interface FormulaOracleMismatchDetail {
+  readonly sheetName: string
+  readonly address: string
+  readonly expected: CellValue
+  readonly actual: CellValue
+  readonly message: string
+}
+
+interface DetailedFormulaOracleValidationResult extends FormulaOracleValidationResult {
+  readonly mismatchDetails: readonly FormulaOracleMismatchDetail[]
+}
+
+interface UnsupportedFormulaOracleCacheClassification {
+  readonly unsupported: boolean
+  readonly classifications: readonly string[]
+  readonly evidence: readonly string[]
+}
 
 export async function buildPublicWorkbookCorpusScorecard(args: BuildScorecardArgs): Promise<PublicWorkbookCorpusScorecard> {
   validatePublicWorkbookManifest(args.manifest)
@@ -278,21 +302,27 @@ export async function verifyCachedWorkbookArtifact(
     const metadata = workbookMetadata(imported.snapshot)
     const formulaOracleValidation =
       footprint.featureCounts.formulaCellCount === 0 || hasFormulaOracleBlockingWarning(imported.warnings)
-        ? { comparisons: 0, mismatches: [] }
+        ? { comparisons: 0, mismatches: [], mismatchDetails: [] }
         : await validateFormulaOracles(imported.snapshot, bytes)
     const unsupportedFormulaOracleWarning = hasUnsupportedPrecisionAsDisplayedOracleWarning(imported.warnings, formulaOracleValidation)
+    const unsupportedFormulaOracleCache = unsupportedFormulaOracleWarning
+      ? emptyUnsupportedFormulaOracleCacheClassification()
+      : classifyUnsupportedFormulaOracleCache(imported.snapshot, formulaOracleValidation)
     collectGarbage()
     const structuralSmokePassed = runStructuralSmoke ? runStructuralSmokeOps(imported.snapshot) : null
     const unsupportedFeatureClassifications = classifyUnsupportedFeatures(imported.snapshot, imported.warnings, featureCounts, {
       supportedImportWarnings: supportedFormulaOracleImportWarnings(imported.warnings, formulaOracleValidation),
+      extraClassifications: unsupportedFormulaOracleCache.classifications,
     })
     const roundTripSkipEvidence = roundTripValidationSkipEvidence(imported.warnings)
     const roundTripPassed = roundTripSkipEvidence ? true : roundTripsSupportedSemantics(detachImportedWorkbookSnapshot(imported))
+    const formulaOraclePassed =
+      unsupportedFormulaOracleWarning || unsupportedFormulaOracleCache.unsupported || formulaOracleValidation.mismatches.length === 0
     const validation: PublicWorkbookValidationSummary = {
       importPassed: true,
-      formulaOraclePassed: unsupportedFormulaOracleWarning || formulaOracleValidation.mismatches.length === 0,
+      formulaOraclePassed,
       formulaOracleComparisons: formulaOracleValidation.comparisons,
-      formulaOracleMismatches: unsupportedFormulaOracleWarning ? [] : formulaOracleValidation.mismatches,
+      formulaOracleMismatches: formulaOraclePassed ? [] : formulaOracleValidation.mismatches,
       roundTripPassed,
       structuralSmokePassed,
     }
@@ -326,6 +356,9 @@ export async function verifyCachedWorkbookArtifact(
           ? [publicWorkbookImportWarningClassifierEvidence]
           : []),
         ...(hasPivotUnsupportedClassifications(unsupportedFeatureClassifications) ? [publicWorkbookPivotClassifierEvidence] : []),
+        ...(hasFormulaOracleCacheUnsupportedClassifications(unsupportedFeatureClassifications)
+          ? [publicWorkbookFormulaOracleCacheClassifierEvidence, ...unsupportedFormulaOracleCache.evidence]
+          : []),
         ...(roundTripSkipEvidence ? [roundTripSkipEvidence] : []),
         ...validationEvidence(validation),
       ],
@@ -367,18 +400,64 @@ function artifactBaseEvidence(artifact: PublicWorkbookArtifact): string[] {
   ]
 }
 
-async function validateFormulaOracles(snapshot: WorkbookSnapshot, bytes: Uint8Array): Promise<FormulaOracleValidationResult> {
+async function validateFormulaOracles(snapshot: WorkbookSnapshot, bytes: Uint8Array): Promise<DetailedFormulaOracleValidationResult> {
   try {
     const formulaOracles = extractFormulaOracles(bytes)
+    const mismatchDetails = await compareFormulaOracles(snapshot, formulaOracles)
     return {
       comparisons: formulaOracles.length,
-      mismatches: await compareFormulaOracles(snapshot, formulaOracles),
+      mismatches: mismatchDetails.map((mismatch) => mismatch.message),
+      mismatchDetails,
     }
   } catch (error) {
     return {
       comparisons: 0,
       mismatches: [`Formula oracle check failed: ${error instanceof Error ? error.message : String(error)}`],
+      mismatchDetails: [],
     }
+  }
+}
+
+function emptyUnsupportedFormulaOracleCacheClassification(): UnsupportedFormulaOracleCacheClassification {
+  return { unsupported: false, classifications: [], evidence: [] }
+}
+
+function classifyUnsupportedFormulaOracleCache(
+  snapshot: WorkbookSnapshot,
+  validation: DetailedFormulaOracleValidationResult,
+): UnsupportedFormulaOracleCacheClassification {
+  if (validation.mismatchDetails.length === 0 || validation.mismatchDetails.length !== validation.mismatches.length) {
+    return emptyUnsupportedFormulaOracleCacheClassification()
+  }
+  const independentValues = recalculateWorkbookWithHyperFormula(snapshot, validation.mismatchDetails)
+  if (!independentValues) {
+    return emptyUnsupportedFormulaOracleCacheClassification()
+  }
+  const independentlyConfirmedMismatches = validation.mismatchDetails.filter((mismatch) => {
+    const independent = independentValues.get(formulaOracleCellKey(mismatch.sheetName, mismatch.address))
+    return (
+      independent !== undefined &&
+      cellValuesMatchOracle(independent, mismatch.actual) &&
+      !cellValuesMatchOracle(independent, mismatch.expected)
+    )
+  })
+  if (independentlyConfirmedMismatches.length !== validation.mismatchDetails.length) {
+    return emptyUnsupportedFormulaOracleCacheClassification()
+  }
+  return {
+    unsupported: true,
+    classifications: [staleFormulaCacheUnsupportedClassification],
+    evidence: [
+      `Stale cached formula values detected by independent recalculation cross-check: ${String(independentlyConfirmedMismatches.length)} mismatches.`,
+      ...independentlyConfirmedMismatches
+        .slice(0, 25)
+        .map(
+          (mismatch) =>
+            `independent-recalc=${mismatch.sheetName}!${mismatch.address} cached ${formatCellValue(mismatch.expected)} recalculated ${formatCellValue(
+              mismatch.actual,
+            )}`,
+        ),
+    ],
   }
 }
 
@@ -521,7 +600,10 @@ function unsupportedRssLimitCase(
   }
 }
 
-async function compareFormulaOracles(snapshot: WorkbookSnapshot, oracles: readonly FormulaOracle[]): Promise<string[]> {
+async function compareFormulaOracles(
+  snapshot: WorkbookSnapshot,
+  oracles: readonly FormulaOracle[],
+): Promise<FormulaOracleMismatchDetail[]> {
   if (oracles.length === 0) {
     return []
   }
@@ -532,7 +614,7 @@ async function compareFormulaOracles(snapshot: WorkbookSnapshot, oracles: readon
   await engine.ready()
   engine.importSnapshot(snapshot)
   engine.recalculateNow()
-  const mismatches: string[] = []
+  const mismatches: FormulaOracleMismatchDetail[] = []
   for (const oracle of oracles) {
     const actual = engine.getCellValue(oracle.sheetName, oracle.address)
     if (!cellValuesMatchOracle(actual, oracle.expected)) {
@@ -540,10 +622,86 @@ async function compareFormulaOracles(snapshot: WorkbookSnapshot, oracles: readon
       if (isUnsupportedCycleOracleMismatch(actual, oracle.expected, explanation.inCycle)) {
         continue
       }
-      mismatches.push(`${oracle.sheetName}!${oracle.address} expected ${formatCellValue(oracle.expected)} got ${formatCellValue(actual)}`)
+      const message = `${oracle.sheetName}!${oracle.address} expected ${formatCellValue(oracle.expected)} got ${formatCellValue(actual)}`
+      mismatches.push({ sheetName: oracle.sheetName, address: oracle.address, expected: oracle.expected, actual, message })
     }
   }
   return mismatches
+}
+
+function recalculateWorkbookWithHyperFormula(
+  snapshot: WorkbookSnapshot,
+  mismatches: readonly FormulaOracleMismatchDetail[],
+): Map<string, CellValue> | null {
+  let hyperFormula: HyperFormula | null = null
+  try {
+    hyperFormula = HyperFormula.buildFromSheets(buildHyperFormulaSheets(snapshot), { licenseKey: 'gpl-v3' })
+    const independentValues = new Map<string, CellValue>()
+    for (const mismatch of mismatches) {
+      const sheetId = hyperFormula.getSheetId(mismatch.sheetName)
+      if (sheetId === undefined) {
+        return null
+      }
+      const address = parseCellAddress(mismatch.address, mismatch.sheetName)
+      const independentValue = cellValueFromHyperFormula(hyperFormula.getCellValue({ sheet: sheetId, row: address.row, col: address.col }))
+      if (!independentValue) {
+        return null
+      }
+      independentValues.set(formulaOracleCellKey(mismatch.sheetName, mismatch.address), independentValue)
+    }
+    return independentValues
+  } catch {
+    return null
+  } finally {
+    hyperFormula?.destroy()
+  }
+}
+
+function buildHyperFormulaSheets(snapshot: WorkbookSnapshot): Record<string, RawCellContent[][]> {
+  const sheets: Record<string, RawCellContent[][]> = {}
+  for (const sheet of snapshot.sheets) {
+    const rows: RawCellContent[][] = []
+    let maxRow = -1
+    let maxCol = -1
+    for (const cell of sheet.cells) {
+      const address = parseCellAddress(cell.address, sheet.name)
+      const row = rows[address.row] ?? []
+      row[address.col] = cell.formula !== undefined ? `=${cell.formula}` : rawCellContentFromLiteralInput(cell.value)
+      rows[address.row] = row
+      maxRow = Math.max(maxRow, address.row)
+      maxCol = Math.max(maxCol, address.col)
+    }
+    for (let rowIndex = 0; rowIndex <= maxRow; rowIndex += 1) {
+      const row = rows[rowIndex] ?? []
+      for (let colIndex = 0; colIndex <= maxCol; colIndex += 1) {
+        row[colIndex] ??= null
+      }
+      rows[rowIndex] = row
+    }
+    sheets[sheet.name] = rows
+  }
+  return sheets
+}
+
+function rawCellContentFromLiteralInput(value: LiteralInput | undefined): RawCellContent {
+  return value ?? null
+}
+
+function cellValueFromHyperFormula(value: HyperFormulaCellValue): CellValue | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? { tag: ValueTag.Number, value } : null
+  }
+  if (typeof value === 'string') {
+    return { tag: ValueTag.String, value, stringId: 0 }
+  }
+  if (typeof value === 'boolean') {
+    return { tag: ValueTag.Boolean, value }
+  }
+  return value === null ? { tag: ValueTag.Empty } : null
+}
+
+function formulaOracleCellKey(sheetName: string, address: string): string {
+  return `${sheetName}\u0000${address}`
 }
 
 function roundTripsSupportedSemantics(snapshot: WorkbookSnapshot): boolean {
@@ -623,7 +781,7 @@ export function classifyUnsupportedFeatures(
   snapshot: WorkbookSnapshot,
   warnings: readonly string[],
   featureCounts: PublicWorkbookFeatureCounts = countWorkbookFeatures(snapshot, warnings),
-  options: { readonly supportedImportWarnings?: readonly string[] } = {},
+  options: { readonly supportedImportWarnings?: readonly string[]; readonly extraClassifications?: readonly string[] } = {},
 ): string[] {
   const classifications = new Set<string>()
   const supportedImportWarnings = new Set(options.supportedImportWarnings ?? [])
@@ -640,6 +798,9 @@ export function classifyUnsupportedFeatures(
       continue
     }
     classifications.add(`xlsx.import.warning:${warning}`)
+  }
+  for (const classification of options.extraClassifications ?? []) {
+    classifications.add(classification)
   }
   return [...classifications].toSorted()
 }
