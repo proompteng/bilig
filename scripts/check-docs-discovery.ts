@@ -15,6 +15,7 @@ const expectedSitemapUrls = [
   `${siteRoot}agent-spreadsheet-tool-call-loop.html`,
   `${siteRoot}node-service-workpaper-recipe.html`,
   `${siteRoot}node-spreadsheet-formula-engine.html`,
+  `${siteRoot}evaluate-excel-formulas-in-node-typescript.html`,
   `${siteRoot}try-bilig-headless-in-node.html`,
   `${siteRoot}workbook-automation-examples-node.html`,
   `${siteRoot}serverless-workpaper-api-route.html`,
@@ -47,6 +48,7 @@ const sourceFilesByUrl = new Map<string, string>([
   [`${siteRoot}agent-spreadsheet-tool-call-loop.html`, 'agent-spreadsheet-tool-call-loop.md'],
   [`${siteRoot}node-service-workpaper-recipe.html`, 'node-service-workpaper-recipe.md'],
   [`${siteRoot}node-spreadsheet-formula-engine.html`, 'node-spreadsheet-formula-engine.md'],
+  [`${siteRoot}evaluate-excel-formulas-in-node-typescript.html`, 'evaluate-excel-formulas-in-node-typescript.md'],
   [`${siteRoot}try-bilig-headless-in-node.html`, 'try-bilig-headless-in-node.md'],
   [`${siteRoot}workbook-automation-examples-node.html`, 'workbook-automation-examples-node.md'],
   [`${siteRoot}serverless-workpaper-api-route.html`, 'serverless-workpaper-api-route.md'],
@@ -241,6 +243,7 @@ for (const required of [
   './agent-spreadsheet-tool-call-loop.html',
   './node-service-workpaper-recipe.html',
   './node-spreadsheet-formula-engine.html',
+  './evaluate-excel-formulas-in-node-typescript.html',
   './try-bilig-headless-in-node.html',
   './serverless-workpaper-api-route.html',
   './persisting-formula-backed-workpaper-documents-in-node.html',
@@ -338,7 +341,9 @@ for (const required of [
   'https://github.com/proompteng/bilig/discussions/115',
   'https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md',
   'https://proompteng.github.io/bilig/node-spreadsheet-formula-engine.html',
+  'https://proompteng.github.io/bilig/evaluate-excel-formulas-in-node-typescript.html',
   'https://github.com/proompteng/bilig/blob/main/docs/node-spreadsheet-formula-engine.md',
+  'https://github.com/proompteng/bilig/blob/main/docs/evaluate-excel-formulas-in-node-typescript.md',
   'https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md',
   'https://github.com/proompteng/bilig/blob/main/docs/serverless-workpaper-api-route.md',
   'https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md',
@@ -408,6 +413,11 @@ requireIncludes(starterIssues, 'https://github.com/proompteng/bilig/pull/271', '
 requireNotIncludes(starterIssues, 'https://github.com/proompteng/bilig/pull/251', 'docs/starter-issues.md')
 requireIncludes(contributing, 'new-contributor-guide.md#first-time-command-checklist', 'CONTRIBUTING.md')
 requireIncludes(llms, '45 open first-timers-only issues, 39 generally available, 6 already in review', 'docs/llms.txt')
+requireIncludes(
+  await readFile(join(docsRoot, 'evaluate-excel-formulas-in-node-typescript.md'), 'utf8'),
+  'npx tsx eval-node-formulas.ts',
+  'docs/evaluate-excel-formulas-in-node-typescript.md',
+)
 
 for (const [path, content] of [
   ['README.md', readme],

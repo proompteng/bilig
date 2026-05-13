@@ -67,6 +67,10 @@ Latest public execution snapshot on May 13, 2026 after the landing-page pass:
 - Site conversion surface: homepage now leads with a live WorkPaper demo,
   bundled webfonts, split product-demo CSS, and an npm-only smoke-test path at
   <https://proompteng.github.io/bilig/try-bilig-headless-in-node.html>
+- Search-intent surface: a TypeScript-first "evaluate Excel formulas in
+  Node.js" page now targets the exact formula-evaluation query with a runnable
+  smoke test, readback, and persisted restore proof:
+  <https://proompteng.github.io/bilig/evaluate-excel-formulas-in-node-typescript.html>
 - Distribution surface: GitHub Discussion `#270` now points backend and agent
   developers at the npm-only TypeScript smoke test:
   <https://github.com/proompteng/bilig/discussions/270>

@@ -16,6 +16,7 @@ language: typescript
 - https://github.com/proompteng/bilig/tree/main/packages/headless#readme
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper
 - https://proompteng.github.io/bilig/node-spreadsheet-formula-engine.html
+- https://proompteng.github.io/bilig/evaluate-excel-formulas-in-node-typescript.html
 - https://proompteng.github.io/bilig/try-bilig-headless-in-node.html
 - https://proompteng.github.io/bilig/workbook-automation-examples-node.html
 - https://proompteng.github.io/bilig/why-agents-need-workbook-apis.html
@@ -40,6 +41,7 @@ language: typescript
 - https://github.com/proompteng/bilig/discussions
 - https://github.com/proompteng/bilig/discussions/157
 - https://github.com/proompteng/bilig/blob/main/docs/node-spreadsheet-formula-engine.md
+- https://github.com/proompteng/bilig/blob/main/docs/evaluate-excel-formulas-in-node-typescript.md
 - https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md
 - https://github.com/proompteng/bilig/blob/main/docs/serverless-workpaper-api-route.md
 - https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md
@@ -109,6 +111,9 @@ npm run agent:verify
 - node spreadsheet formula engine:
   https://proompteng.github.io/bilig/node-spreadsheet-formula-engine.html
   https://github.com/proompteng/bilig/blob/main/docs/node-spreadsheet-formula-engine.md
+- evaluate Excel formulas in Node.js with TypeScript:
+  https://proompteng.github.io/bilig/evaluate-excel-formulas-in-node-typescript.html
+  https://github.com/proompteng/bilig/blob/main/docs/evaluate-excel-formulas-in-node-typescript.md
 - npm-only smoke test:
   https://proompteng.github.io/bilig/try-bilig-headless-in-node.html
   https://github.com/proompteng/bilig/blob/main/docs/try-bilig-headless-in-node.md

@@ -44,13 +44,13 @@ repo so you can find it again:
 
 ## Start Here
 
-| Job                       | Start with                                                                                                                                                                                                                                      |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Prove the npm package     | [`@bilig/headless` in 90 seconds](#try-biligheadless-in-90-seconds) and the [npm-only smoke test page](docs/try-bilig-headless-in-node.md)                                                                                                      |
-| Build a Node workflow     | [five runnable workbook automation examples](docs/workbook-automation-examples-node.md), [Node spreadsheet formula engine guide](docs/node-spreadsheet-formula-engine.md), and the [Node service recipe](docs/node-service-workpaper-recipe.md) |
-| Wire an agent or MCP tool | [agent tool-calling recipe](docs/agent-workpaper-tool-calling-recipe.md) and [MCP spreadsheet tool server guide](docs/mcp-workpaper-tool-server.md)                                                                                             |
-| Compare alternatives      | [headless engine comparison](docs/headless-spreadsheet-engine-comparison.md), [HyperFormula comparison](docs/hyperformula-alternative-headless-workpaper.md)                                                                                    |
-| Contribute                | [starter issues](docs/starter-issues.md), [GitHub Discussions](https://github.com/proompteng/bilig/discussions), and [CONTRIBUTING.md](CONTRIBUTING.md)                                                                                         |
+| Job                       | Start with                                                                                                                                                                                                                                                                                                                                |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prove the npm package     | [`@bilig/headless` in 90 seconds](#try-biligheadless-in-90-seconds) and the [npm-only smoke test page](docs/try-bilig-headless-in-node.md)                                                                                                                                                                                                |
+| Build a Node workflow     | [five runnable workbook automation examples](docs/workbook-automation-examples-node.md), [evaluate Excel formulas in Node.js](docs/evaluate-excel-formulas-in-node-typescript.md), [Node spreadsheet formula engine guide](docs/node-spreadsheet-formula-engine.md), and the [Node service recipe](docs/node-service-workpaper-recipe.md) |
+| Wire an agent or MCP tool | [agent tool-calling recipe](docs/agent-workpaper-tool-calling-recipe.md) and [MCP spreadsheet tool server guide](docs/mcp-workpaper-tool-server.md)                                                                                                                                                                                       |
+| Compare alternatives      | [headless engine comparison](docs/headless-spreadsheet-engine-comparison.md), [HyperFormula comparison](docs/hyperformula-alternative-headless-workpaper.md)                                                                                                                                                                              |
+| Contribute                | [starter issues](docs/starter-issues.md), [GitHub Discussions](https://github.com/proompteng/bilig/discussions), and [CONTRIBUTING.md](CONTRIBUTING.md)                                                                                                                                                                                   |
 
 Useful direct paths:
 
@@ -70,6 +70,7 @@ Useful direct paths:
   `npm run agent:mcp-stdio`, or
   `npm exec --package @bilig/headless -- bilig-workpaper-mcp`.
 - SEO comparison pages:
+  [evaluate Excel formulas in Node.js](docs/evaluate-excel-formulas-in-node-typescript.md),
   [Node spreadsheet formula engine](docs/node-spreadsheet-formula-engine.md),
   [SheetJS and ExcelJS alternative](docs/sheetjs-exceljs-alternative-formula-workbook-api.md),
   [headless engine comparison](docs/headless-spreadsheet-engine-comparison.md),
