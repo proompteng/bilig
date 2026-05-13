@@ -117,6 +117,46 @@ function extractSitemapUrls(sitemap: string): string[] {
   return [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1] ?? '')
 }
 
+function extractNpmRunScripts(readme: string): string[] {
+  const scripts = new Set<string>()
+
+  // Match the command form used throughout the headless example README,
+  // including optional npm flags such as `npm run --silent script-name`.
+  for (const match of readme.matchAll(/\bnpm\s+run(?:\s+--[\w-]+)*\s+([\w:-]+)/g)) {
+    const script = match[1]
+    if (script !== undefined) {
+      scripts.add(script)
+    }
+  }
+
+  return [...scripts].toSorted()
+}
+
+function getPackageScripts(packageJson: string, context: string): Record<string, unknown> {
+  const manifest: unknown = JSON.parse(packageJson)
+
+  if (typeof manifest !== 'object' || manifest === null || !('scripts' in manifest)) {
+    throw new Error(`${context} is missing a scripts object`)
+  }
+
+  const { scripts } = manifest
+  if (typeof scripts !== 'object' || scripts === null || Array.isArray(scripts)) {
+    throw new Error(`${context} scripts must be an object`)
+  }
+
+  return scripts
+}
+
+function requireDocumentedScriptsExist(readme: string, packageJson: string, context: string): void {
+  const scripts = getPackageScripts(packageJson, 'examples/headless-workpaper/package.json')
+
+  for (const documentedScript of extractNpmRunScripts(readme)) {
+    if (!(documentedScript in scripts)) {
+      throw new Error(`${context} documents missing package.json script: npm run ${documentedScript}`)
+    }
+  }
+}
+
 const [
   readme,
   contributing,
@@ -627,6 +667,7 @@ const [headlessExampleReadme, headlessExamplePackage, headlessPackageManifest, h
 await requireFile(join(repoRoot, 'examples', 'headless-workpaper', 'agent-framework-adapters.mjs'))
 await requireFile(join(repoRoot, 'examples', 'headless-workpaper', 'mcp-tool-server.ts'))
 await requireFile(join(repoRoot, 'examples', 'headless-workpaper', 'mcp-stdio-server.ts'))
+requireDocumentedScriptsExist(headlessExampleReadme, headlessExamplePackage, 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, 'npm run invoice-totals', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, '## Invoice Totals', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, 'npm run budget-variance', 'examples/headless-workpaper/README.md')
