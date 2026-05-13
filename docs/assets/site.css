@@ -559,31 +559,37 @@ h2 {
 }
 
 .proof-section {
-  background: #f5f7f2;
+  background: #eef3ec;
+}
+
+.proof-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1.28fr);
+  gap: clamp(36px, 6vw, 76px);
+  align-items: start;
 }
 
 .proof-intro {
   display: grid;
-  max-width: 760px;
-  margin-bottom: 34px;
+  max-width: 500px;
   gap: 12px;
 }
 
 .proof-intro h2 {
   margin-top: 0;
-  max-width: 720px;
+  max-width: 480px;
   font-size: clamp(34px, 4.2vw, 58px);
 }
 
 .proof-intro p:not(.kicker) {
-  max-width: 680px;
+  max-width: 460px;
   color: var(--ink-muted);
   font-size: 18px;
   line-height: 1.5;
 }
 
 .proof-board {
-  border-top: 1px solid var(--line-strong);
+  border-top: 2px solid var(--ink);
   border-bottom: 1px solid var(--line-strong);
 }
 
@@ -816,8 +822,18 @@ footer {
 
   .section-head,
   .install-grid,
-  .path-grid {
+  .path-grid,
+  .proof-layout {
     grid-template-columns: 1fr;
+  }
+
+  .proof-intro {
+    max-width: 680px;
+  }
+
+  .proof-intro h2,
+  .proof-intro p:not(.kicker) {
+    max-width: 620px;
   }
 
   .proof-row {
