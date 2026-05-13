@@ -247,7 +247,7 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md
 - community growth snapshot:
   https://github.com/proompteng/bilig/blob/main/docs/community-growth-snapshot.md
-- current starter queue snapshot: 70 open first-timers-only issues, 63 generally available, 7 already in review.
+- current starter queue snapshot: 74 open first-timers-only issues, 66 generally available, 8 already in review.
 - current small example issue: xlsx formula-cache roundtrip:
   https://github.com/proompteng/bilig/issues/134
 - current small docs issue: WorkPaper agent tool result contract:
@@ -332,7 +332,7 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/292
 - current small docs issue: Continue MCP config for WorkPaper:
   https://github.com/proompteng/bilig/issues/293
-- current small docs issue: Cline MCP config for WorkPaper:
+- current small docs issue in review: Cline MCP config for WorkPaper:
   https://github.com/proompteng/bilig/issues/294
 - current small docs issue: Windows install notes for the Claude Desktop MCPB bundle:
   https://github.com/proompteng/bilig/issues/296
@@ -340,6 +340,14 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/297
 - current small docs issue: MCPB bundle server verification transcript:
   https://github.com/proompteng/bilig/issues/298
+- current small example issue: AdonisJS WorkPaper controller smoke:
+  https://github.com/proompteng/bilig/issues/299
+- current small example issue: tRPC WorkPaper procedure smoke:
+  https://github.com/proompteng/bilig/issues/300
+- current small storage issue: Drizzle WorkPaper JSON persistence recipe:
+  https://github.com/proompteng/bilig/issues/301
+- current small storage issue: Kysely WorkPaper JSON persistence recipe:
+  https://github.com/proompteng/bilig/issues/302
 - current small docs issue: downstream GitHub Actions smoke snippet:
   https://github.com/proompteng/bilig/issues/248
 - current small example issue: AWS Lambda Function URL WorkPaper adapter note:

@@ -6,9 +6,9 @@ search indexing.
 
 Current starter queue as of May 13, 2026:
 
-- 70 open `first-timers-only` issues.
-- 63 issues are generally available for a new contributor to claim.
-- 7 issues already have active pull requests; comment before duplicating one of
+- 74 open `first-timers-only` issues.
+- 66 issues are generally available for a new contributor to claim.
+- 8 issues already have active pull requests; comment before duplicating one of
   those patches.
 
 ## Available Starter Picks
@@ -27,7 +27,6 @@ Current starter queue as of May 13, 2026:
 - [#290: docs(mcp): add Codex MCP config for WorkPaper](https://github.com/proompteng/bilig/issues/290)
 - [#292: docs(mcp): add Zed MCP config for WorkPaper](https://github.com/proompteng/bilig/issues/292)
 - [#293: docs(mcp): add Continue MCP config for WorkPaper](https://github.com/proompteng/bilig/issues/293)
-- [#294: docs(mcp): add Cline MCP config for WorkPaper](https://github.com/proompteng/bilig/issues/294)
 - [#296: docs(mcpb): add Windows install notes for the Claude Desktop bundle](https://github.com/proompteng/bilig/issues/296)
 - [#297: docs(mcpb): add a Claude Desktop MCPB troubleshooting table](https://github.com/proompteng/bilig/issues/297)
 - [#298: docs(mcpb): add a copy-paste verification transcript for the bundle server](https://github.com/proompteng/bilig/issues/298)
@@ -55,6 +54,13 @@ Current starter queue as of May 13, 2026:
 - [#280: docs(examples): add Netlify Function WorkPaper route smoke](https://github.com/proompteng/bilig/issues/280)
 - [#281: docs(examples): add Cloudflare D1 WorkPaper persistence smoke](https://github.com/proompteng/bilig/issues/281)
 - [#286: docs(examples): add Nuxt Nitro WorkPaper route smoke](https://github.com/proompteng/bilig/issues/286)
+- [#299: docs(examples): add AdonisJS WorkPaper controller smoke](https://github.com/proompteng/bilig/issues/299)
+- [#300: docs(examples): add tRPC WorkPaper procedure smoke](https://github.com/proompteng/bilig/issues/300)
+
+### Storage And Persistence Recipes
+
+- [#301: docs(storage): add Drizzle WorkPaper JSON persistence recipe](https://github.com/proompteng/bilig/issues/301)
+- [#302: docs(storage): add Kysely WorkPaper JSON persistence recipe](https://github.com/proompteng/bilig/issues/302)
 
 ### Example Recipes
 
@@ -101,6 +107,7 @@ Pick one only after checking the PR thread or asking whether the scope is free.
 
 - [#231: test(examples): cover MCP stdio JSON-RPC error responses](https://github.com/proompteng/bilig/issues/231) via [PR #237](https://github.com/proompteng/bilig/pull/237)
 - [#282: docs(mcp): add Claude Desktop config for the published WorkPaper server](https://github.com/proompteng/bilig/issues/282) via [PR #291](https://github.com/proompteng/bilig/pull/291)
+- [#294: docs(mcp): add Cline MCP config for WorkPaper](https://github.com/proompteng/bilig/issues/294) via [PR #295](https://github.com/proompteng/bilig/pull/295)
 - [#257: docs(examples): add a runnable Hono WorkPaper route smoke](https://github.com/proompteng/bilig/issues/257) via [PR #264](https://github.com/proompteng/bilig/pull/264)
 - [#258: docs(examples): add Cloudflare KV WorkPaper persistence snippet](https://github.com/proompteng/bilig/issues/258) via [PR #263](https://github.com/proompteng/bilig/pull/263)
 - [#259: docs(service): add Prisma-backed WorkPaper JSON persistence recipe](https://github.com/proompteng/bilig/issues/259) via [PR #262](https://github.com/proompteng/bilig/pull/262)
