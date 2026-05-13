@@ -13,6 +13,7 @@ const expectedSitemapUrls = [
   `${siteRoot}vercel-ai-sdk-langchain-spreadsheet-tool.html`,
   `${siteRoot}mcp-workpaper-tool-server.html`,
   `${siteRoot}mcp-client-setup.html`,
+  `${siteRoot}claude-desktop-mcpb-workpaper.html`,
   `${siteRoot}agent-spreadsheet-tool-call-loop.html`,
   `${siteRoot}node-service-workpaper-recipe.html`,
   `${siteRoot}server-side-spreadsheet-automation-node.html`,
@@ -48,6 +49,7 @@ const sourceFilesByUrl = new Map<string, string>([
   [`${siteRoot}vercel-ai-sdk-langchain-spreadsheet-tool.html`, 'vercel-ai-sdk-langchain-spreadsheet-tool.md'],
   [`${siteRoot}mcp-workpaper-tool-server.html`, 'mcp-workpaper-tool-server.md'],
   [`${siteRoot}mcp-client-setup.html`, 'mcp-client-setup.md'],
+  [`${siteRoot}claude-desktop-mcpb-workpaper.html`, 'claude-desktop-mcpb-workpaper.md'],
   [`${siteRoot}agent-spreadsheet-tool-call-loop.html`, 'agent-spreadsheet-tool-call-loop.md'],
   [`${siteRoot}node-service-workpaper-recipe.html`, 'node-service-workpaper-recipe.md'],
   [`${siteRoot}server-side-spreadsheet-automation-node.html`, 'server-side-spreadsheet-automation-node.md'],
@@ -168,11 +170,13 @@ function requireDocumentedScriptsExist(readme: string, packageJson: string, cont
 const [
   readme,
   contributing,
+  rootPackageJson,
   index,
   siteCss,
   robots,
   sitemap,
   llms,
+  communityLaunchPack,
   starterIssues,
   newContributorGuide,
   headlessReadme,
@@ -188,11 +192,13 @@ const [
 ] = await Promise.all([
   readFile(join(repoRoot, 'README.md'), 'utf8'),
   readFile(join(repoRoot, 'CONTRIBUTING.md'), 'utf8'),
+  readFile(join(repoRoot, 'package.json'), 'utf8'),
   readFile(join(docsRoot, 'index.html'), 'utf8'),
   readFile(join(docsRoot, 'assets', 'site.css'), 'utf8'),
   readFile(join(docsRoot, 'robots.txt'), 'utf8'),
   readFile(join(docsRoot, 'sitemap.xml'), 'utf8'),
   readFile(join(docsRoot, 'llms.txt'), 'utf8'),
+  readFile(join(docsRoot, 'community-launch-pack.md'), 'utf8'),
   readFile(join(docsRoot, 'starter-issues.md'), 'utf8'),
   readFile(join(docsRoot, 'new-contributor-guide.md'), 'utf8'),
   readFile(join(repoRoot, 'packages', 'headless', 'README.md'), 'utf8'),
@@ -235,7 +241,7 @@ requireIncludes(index, 'Revenue.workpaper', 'docs/index.html')
 requireIncludes(index, 'Build a workbook in Node, change inputs through code', 'docs/index.html')
 requireIncludes(index, '<strong>Examples ship as real .ts files.</strong>', 'docs/index.html')
 requireIncludes(index, '<strong>67 scoped starter issues are open.</strong>', 'docs/index.html')
-requireIncludes(index, '<strong>0.13.26</strong>', 'docs/index.html')
+requireIncludes(index, '<strong>0.13.27</strong>', 'docs/index.html')
 requireIncludes(index, '<span>Open first-timer issues</span>', 'docs/index.html')
 requireIncludes(index, '<strong>67</strong>', 'docs/index.html')
 requireNotIncludes(index, '<strong>40 starter tasks</strong>', 'docs/index.html')
@@ -249,6 +255,7 @@ for (const required of [
   './vercel-ai-sdk-langchain-spreadsheet-tool.html',
   './mcp-workpaper-tool-server.html',
   './mcp-client-setup.html',
+  './claude-desktop-mcpb-workpaper.html',
   './agent-spreadsheet-tool-call-loop.html',
   './node-service-workpaper-recipe.html',
   './server-side-spreadsheet-automation-node.html',
@@ -293,6 +300,7 @@ await Promise.all(
     requireFile(join(repoRoot, 'examples', 'serverless-workpaper-api', sourceFile)),
   ),
 )
+await requireFile(join(repoRoot, 'scripts', 'build-workpaper-mcpb.ts'))
 await Promise.all(
   ['github-social-preview.png', 'workpaper-benchmark-card.png'].map((sourceFile) => requireFile(join(docsRoot, 'assets', sourceFile))),
 )
@@ -332,6 +340,8 @@ for (const required of [
   'https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html',
   'https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html',
   'https://proompteng.github.io/bilig/mcp-client-setup.html',
+  'https://proompteng.github.io/bilig/claude-desktop-mcpb-workpaper.html',
+  'https://github.com/proompteng/bilig/blob/main/docs/claude-desktop-mcpb-workpaper.md',
   'https://proompteng.github.io/bilig/agent-workpaper-tool-calling-recipe.html',
   'https://proompteng.github.io/bilig/agent-spreadsheet-tool-call-loop.html',
   'https://proompteng.github.io/bilig/node-service-workpaper-recipe.html',
@@ -365,6 +375,7 @@ for (const required of [
   'https://github.com/proompteng/bilig/blob/main/docs/vercel-ai-sdk-langchain-spreadsheet-tool.md',
   'https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-server.md',
   'https://github.com/proompteng/bilig/blob/main/docs/mcp-client-setup.md',
+  'pnpm mcpb:workpaper:build',
   'https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-tool-server.ts',
   'https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-stdio-server.ts',
   'https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/agent-framework-adapters.ts',
@@ -404,7 +415,7 @@ for (const [path, content] of [
   requireIncludes(content, '## Current Public Proof', path)
   requireIncludes(content, 'https://proompteng.github.io/bilig/community-growth-snapshot.html', path)
   requireIncludes(content, 'https://github.com/proompteng/bilig/stargazers', path)
-  requireIncludes(content, '`11` forks', path)
+  requireIncludes(content, '`12` forks', path)
   requireIncludes(content, '15,592` npm downloads in the', path)
   requireIncludes(content, '`67` open', path)
   requireIncludes(content, '`good first issue` tickets', path)
@@ -466,15 +477,23 @@ for (const [path, content] of [
   requireIncludes(content, 'workbook-automation-examples-node', path)
 }
 
-const [whyAgentsDoc, agentToolCallingDoc, aiSdkLangChainDoc, mcpWorkPaperToolServerDoc, mcpClientSetupDoc, agentToolCallLoopDoc] =
-  await Promise.all([
-    readFile(join(docsRoot, 'why-agents-need-workbook-apis.md'), 'utf8'),
-    readFile(join(docsRoot, 'agent-workpaper-tool-calling-recipe.md'), 'utf8'),
-    readFile(join(docsRoot, 'vercel-ai-sdk-langchain-spreadsheet-tool.md'), 'utf8'),
-    readFile(join(docsRoot, 'mcp-workpaper-tool-server.md'), 'utf8'),
-    readFile(join(docsRoot, 'mcp-client-setup.md'), 'utf8'),
-    readFile(join(docsRoot, 'agent-spreadsheet-tool-call-loop.md'), 'utf8'),
-  ])
+const [
+  whyAgentsDoc,
+  agentToolCallingDoc,
+  aiSdkLangChainDoc,
+  mcpWorkPaperToolServerDoc,
+  mcpClientSetupDoc,
+  claudeDesktopMcpbDoc,
+  agentToolCallLoopDoc,
+] = await Promise.all([
+  readFile(join(docsRoot, 'why-agents-need-workbook-apis.md'), 'utf8'),
+  readFile(join(docsRoot, 'agent-workpaper-tool-calling-recipe.md'), 'utf8'),
+  readFile(join(docsRoot, 'vercel-ai-sdk-langchain-spreadsheet-tool.md'), 'utf8'),
+  readFile(join(docsRoot, 'mcp-workpaper-tool-server.md'), 'utf8'),
+  readFile(join(docsRoot, 'mcp-client-setup.md'), 'utf8'),
+  readFile(join(docsRoot, 'claude-desktop-mcpb-workpaper.md'), 'utf8'),
+  readFile(join(docsRoot, 'agent-spreadsheet-tool-call-loop.md'), 'utf8'),
+])
 requireIncludes(
   whyAgentsDoc,
   'description: Why coding agents should edit workbook formulas through a Node.js WorkPaper API',
@@ -522,6 +541,8 @@ requireIncludes(
 )
 for (const required of [
   'npm exec --package @bilig/headless -- bilig-workpaper-mcp',
+  'pnpm mcpb:workpaper:build',
+  'claude-desktop-mcpb-workpaper.md',
   'claude mcp add-json bilig-workpaper',
   '.cursor/mcp.json',
   '.vscode/mcp.json',
@@ -530,6 +551,29 @@ for (const required of [
   'https://platform.openai.com/docs/docs-mcp',
 ]) {
   requireIncludes(mcpClientSetupDoc, required, 'docs/mcp-client-setup.md')
+}
+requireIncludes(rootPackageJson, '"mcpb:workpaper:build": "tsx scripts/build-workpaper-mcpb.ts"', 'package.json')
+for (const required of [
+  'description: Build a Claude Desktop MCPB bundle for the published @bilig/headless WorkPaper MCP server',
+  'pnpm mcpb:workpaper:build',
+  'build/mcpb/bilig-workpaper.mcpb',
+  'open build/mcpb/bilig-workpaper.mcpb',
+  'read_workpaper_summary',
+  'set_workpaper_input_cell',
+  '"entry_point": "server/index.js"',
+  'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper',
+]) {
+  requireIncludes(claudeDesktopMcpbDoc, required, 'docs/claude-desktop-mcpb-workpaper.md')
+}
+for (const required of [
+  'Latest MCPB execution snapshot on May 13, 2026 after the Claude Desktop bundle',
+  'https://proompteng.github.io/bilig/claude-desktop-mcpb-workpaper.html',
+  'pnpm mcpb:workpaper:build -- --package-version 0.13.27',
+  '`0.13.27` marked as latest',
+  'read_workpaper_summary',
+  'set_workpaper_input_cell',
+]) {
+  requireIncludes(communityLaunchPack, required, 'docs/community-launch-pack.md')
 }
 requireIncludes(
   aiSdkLangChainDoc,
@@ -552,6 +596,7 @@ for (const [path, content] of [
   ['docs/vercel-ai-sdk-langchain-spreadsheet-tool.md', aiSdkLangChainDoc],
   ['docs/mcp-workpaper-tool-server.md', mcpWorkPaperToolServerDoc],
   ['docs/mcp-client-setup.md', mcpClientSetupDoc],
+  ['docs/claude-desktop-mcpb-workpaper.md', claudeDesktopMcpbDoc],
   ['docs/agent-spreadsheet-tool-call-loop.md', agentToolCallLoopDoc],
   ['docs/workbook-automation-examples-node.md', await readFile(join(docsRoot, 'workbook-automation-examples-node.md'), 'utf8')],
   ['docs/server-side-spreadsheet-automation-node.md', await readFile(join(docsRoot, 'server-side-spreadsheet-automation-node.md'), 'utf8')],
@@ -602,6 +647,7 @@ for (const [path, content] of [
   requireIncludes(content, 'vercel-ai-sdk-langchain-spreadsheet-tool', path)
   requireIncludes(content, 'mcp-workpaper-tool-server', path)
   requireIncludes(content, 'mcp-client-setup', path)
+  requireIncludes(content, 'claude-desktop-mcpb-workpaper', path)
   requireIncludes(content, 'examples/headless-workpaper#budget-variance-alerts', path)
   requireIncludes(content, 'examples/headless-workpaper#fulfillment-capacity-plan', path)
   requireIncludes(content, 'examples/headless-workpaper#quote-approval-threshold', path)

@@ -88,6 +88,21 @@ Restart Claude Desktop after editing the config. If the client shows the server
 but the tools are missing, run the protocol smoke test above in a terminal first
 so you know whether the issue is the client config or the npm server command.
 
+### Claude Desktop MCPB bundle
+
+If you prefer a local Claude Desktop bundle, build the MCPB package from this
+repository:
+
+```sh
+pnpm mcpb:workpaper:build
+open build/mcpb/bilig-workpaper.mcpb
+```
+
+The bundle installs the same published `@bilig/headless` stdio server, but
+ships the package and its production dependencies inside the `.mcpb` file. See
+the [Claude Desktop MCPB guide](claude-desktop-mcpb-workpaper.md) for the
+manifest shape and verification prompt.
+
 ## Cursor
 
 For a project-local setup, create `.cursor/mcp.json`:

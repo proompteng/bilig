@@ -117,6 +117,7 @@
     "docs:launch-demo:generate": "tsx scripts/render-launch-demo.ts",
     "docs:launch-demo:check": "tsx scripts/render-launch-demo.ts --check",
     "docs:discovery:check": "tsx scripts/check-docs-discovery.ts",
+    "mcpb:workpaper:build": "tsx scripts/build-workpaper-mcpb.ts",
     "community:growth:snapshot": "tsx scripts/community-growth-snapshot.ts",
     "community:growth:snapshot:markdown": "tsx scripts/community-growth-snapshot.ts --format markdown --output docs/community-growth-snapshot.md",
     "sheet:agent": "bun scripts/spreadsheet-agent.ts",

@@ -31,7 +31,7 @@ Project site: <https://proompteng.github.io/bilig/>
 
 - Live growth snapshot:
   <https://proompteng.github.io/bilig/community-growth-snapshot.html>
-- Latest checked-in snapshot: `24` GitHub stars, `11` forks, `15,592` npm downloads in the
+- Latest checked-in snapshot: `24` GitHub stars, `12` forks, `15,592` npm downloads in the
   last week, `23,240` npm downloads in the last 30 days, `67` open
   `good first issue` tickets, `8` GitHub Discussions, and `455` recent
   repository views.
@@ -52,7 +52,7 @@ repo so you can find it again:
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Prove the npm package     | [`@bilig/headless` in 90 seconds](#try-biligheadless-in-90-seconds) and the [npm-only smoke test page](docs/try-bilig-headless-in-node.md)                                                                                                                                                                                                     |
 | Build a Node workflow     | [server-side spreadsheet automation](docs/server-side-spreadsheet-automation-node.md), [five runnable workbook automation examples](docs/workbook-automation-examples-node.md), [evaluate Excel formulas in Node.js](docs/evaluate-excel-formulas-in-node-typescript.md), and the [Node service recipe](docs/node-service-workpaper-recipe.md) |
-| Wire an agent or MCP tool | [agent tool-calling recipe](docs/agent-workpaper-tool-calling-recipe.md), [MCP spreadsheet tool server guide](docs/mcp-workpaper-tool-server.md), and [MCP client setup](docs/mcp-client-setup.md)                                                                                                                                             |
+| Wire an agent or MCP tool | [agent tool-calling recipe](docs/agent-workpaper-tool-calling-recipe.md), [MCP spreadsheet tool server guide](docs/mcp-workpaper-tool-server.md), [MCP client setup](docs/mcp-client-setup.md), and [Claude Desktop MCPB bundle](docs/claude-desktop-mcpb-workpaper.md)                                                                        |
 | Compare alternatives      | [headless engine comparison](docs/headless-spreadsheet-engine-comparison.md), [HyperFormula comparison](docs/hyperformula-alternative-headless-workpaper.md)                                                                                                                                                                                   |
 | Contribute                | [starter issues](docs/starter-issues.md), [GitHub Discussions](https://github.com/proompteng/bilig/discussions), and [CONTRIBUTING.md](CONTRIBUTING.md)                                                                                                                                                                                        |
 
@@ -71,9 +71,11 @@ Useful direct paths:
   [MCP tool server shape](examples/headless-workpaper#mcp-tool-server-shape), and
   [MCP server guide](docs/mcp-workpaper-tool-server.md). Use
   [MCP client setup](docs/mcp-client-setup.md) for Claude, Cursor, VS Code,
-  and Codex configs. Run
+  and Codex configs, or build the
+  [Claude Desktop MCPB bundle](docs/claude-desktop-mcpb-workpaper.md). Run
   `npm run agent:framework-adapters`, `npm run agent:mcp-tools`,
   `npm run agent:mcp-stdio`, or
+  `pnpm mcpb:workpaper:build`, or
   `npm exec --package @bilig/headless -- bilig-workpaper-mcp`.
 - SEO comparison pages:
   [evaluate Excel formulas in Node.js](docs/evaluate-excel-formulas-in-node-typescript.md),
@@ -420,6 +422,10 @@ The package-level stdio binary is `bilig-workpaper-mcp`, runnable with
 It is published in the official MCP Registry as
 `io.github.proompteng/bilig-workpaper`:
 <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper>.
+For Claude Desktop bundle installs, build
+`build/mcpb/bilig-workpaper.mcpb` with `pnpm mcpb:workpaper:build`; the
+[MCPB guide](docs/claude-desktop-mcpb-workpaper.md) documents the manifest and
+verification prompt.
 
 Quickstart:
 

@@ -32,7 +32,7 @@ validated WorkPaper model once data is in workbook form.
 
 - Live growth snapshot:
   <https://proompteng.github.io/bilig/community-growth-snapshot.html>
-- Latest checked-in snapshot: `24` GitHub stars, `11` forks, `15,592` npm downloads in the
+- Latest checked-in snapshot: `24` GitHub stars, `12` forks, `15,592` npm downloads in the
   last week, `23,240` npm downloads in the last 30 days, `67` open
   `good first issue` tickets, `8` GitHub Discussions, and `455` recent
   repository views.
@@ -155,15 +155,15 @@ pnpm --filter @bilig/headless build
 
 ## Start Here
 
-| Job                          | Start with                                                                                                                                                                                                                                                                                                                                                                   |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Prove the package from npm   | [clean npm sanity check](#clean-npm-sanity-check)                                                                                                                                                                                                                                                                                                                            |
-| Decide if the backend fits   | [evaluate Excel formulas in Node.js](https://proompteng.github.io/bilig/evaluate-excel-formulas-in-node-typescript.html), [Node.js spreadsheet formula engine guide](https://proompteng.github.io/bilig/node-spreadsheet-formula-engine.html), and [compatibility boundaries](https://github.com/proompteng/bilig/blob/main/docs/where-bilig-is-not-excel-compatible-yet.md) |
-| Test formula edits and state | [quickstart](#quickstart) and [persistence round trip](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#persistence-round-trip)                                                                                                                                                                                                                     |
-| Build from service data      | [`npm run json-records`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input), [workbook-automation-examples-node guide](https://proompteng.github.io/bilig/workbook-automation-examples-node.html), [Node service recipe](https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md)                     |
-| Wrap agent tools             | [`npm run agent:tool-call`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#agent-tool-call-loop), [framework adapter guide](https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html)                                                                                                                                     |
-| Expose MCP tools             | [`npm run agent:mcp-tools`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#mcp-tool-server-shape), [MCP server guide](https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html), [MCP client setup](https://proompteng.github.io/bilig/mcp-client-setup.html)                                                                            |
-| Compare engines              | [headless engine comparison](https://github.com/proompteng/bilig/blob/main/docs/headless-spreadsheet-engine-comparison.md), [HyperFormula comparison](https://github.com/proompteng/bilig/blob/main/docs/hyperformula-alternative-headless-workpaper.md)                                                                                                                     |
+| Job                          | Start with                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Prove the package from npm   | [clean npm sanity check](#clean-npm-sanity-check)                                                                                                                                                                                                                                                                                                                                                      |
+| Decide if the backend fits   | [evaluate Excel formulas in Node.js](https://proompteng.github.io/bilig/evaluate-excel-formulas-in-node-typescript.html), [Node.js spreadsheet formula engine guide](https://proompteng.github.io/bilig/node-spreadsheet-formula-engine.html), and [compatibility boundaries](https://github.com/proompteng/bilig/blob/main/docs/where-bilig-is-not-excel-compatible-yet.md)                           |
+| Test formula edits and state | [quickstart](#quickstart) and [persistence round trip](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#persistence-round-trip)                                                                                                                                                                                                                                               |
+| Build from service data      | [`npm run json-records`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input), [workbook-automation-examples-node guide](https://proompteng.github.io/bilig/workbook-automation-examples-node.html), [Node service recipe](https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md)                                               |
+| Wrap agent tools             | [`npm run agent:tool-call`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#agent-tool-call-loop), [framework adapter guide](https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html)                                                                                                                                                               |
+| Expose MCP tools             | [`npm run agent:mcp-tools`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#mcp-tool-server-shape), [MCP server guide](https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html), [MCP client setup](https://proompteng.github.io/bilig/mcp-client-setup.html), [Claude Desktop MCPB bundle](https://proompteng.github.io/bilig/claude-desktop-mcpb-workpaper.html) |
+| Compare engines              | [headless engine comparison](https://github.com/proompteng/bilig/blob/main/docs/headless-spreadsheet-engine-comparison.md), [HyperFormula comparison](https://github.com/proompteng/bilig/blob/main/docs/hyperformula-alternative-headless-workpaper.md)                                                                                                                                               |
 
 Run the packaged MCP stdio server with
 `npm exec --package @bilig/headless -- bilig-workpaper-mcp`. The published MCP
@@ -172,6 +172,10 @@ Registry entry is
 Use the
 [MCP client setup guide](https://proompteng.github.io/bilig/mcp-client-setup.html)
 for Claude, Cursor, VS Code, and Codex config snippets.
+For Claude Desktop bundle installs, build
+`build/mcpb/bilig-workpaper.mcpb` with `pnpm mcpb:workpaper:build`; the
+[MCPB guide](https://proompteng.github.io/bilig/claude-desktop-mcpb-workpaper.html)
+documents the manifest and verification prompt.
 
 Star or bookmark the project: <https://github.com/proompteng/bilig>.
 
@@ -475,6 +479,8 @@ readiness checklist:
   `mcpName: io.github.proompteng/bilig-workpaper`.
 - `pnpm publish:runtime:check` passes against the runtime packages.
 - `pnpm workpaper:smoke:external` passes against packed local runtime packages.
+- `pnpm mcpb:workpaper:build` creates `build/mcpb/bilig-workpaper.mcpb` from
+  the published npm package when you want a Claude Desktop bundle.
 
 Passing the checklist means the package metadata and smoke checks are ready for
 registry submission; it does not mean this package version has already been
