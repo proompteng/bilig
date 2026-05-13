@@ -1,6 +1,6 @@
 # Community Growth Snapshot
 
-Captured at: `2026-05-13T03:08:58.348Z`
+Captured at: `2026-05-13T03:39:57.977Z`
 
 This snapshot tracks the public signals for the `@bilig/headless` growth loop: GitHub conversion, npm demand, contributor on-ramp health, discussion activity, and traffic quality.
 
@@ -8,16 +8,16 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 
 - Repository: [proompteng/bilig](https://github.com/proompteng/bilig)
 - Stars: 24 / 1,000 (976 remaining)
-- Forks: 8
+- Forks: 9
 - Watchers: 0
-- Open issues: 42
+- Open issues: 47
 - Default branch: `main`
 
 ## npm
 
-- Package: `@bilig/headless@0.13.0`
+- Package: `@bilig/headless@0.13.3`
 - License: `MIT`
-- Modified: `2026-05-13T03:06:28.456Z`
+- Modified: `2026-05-13T03:38:15.860Z`
 - Downloads last week: 13,427 (2026-05-05 to 2026-05-11)
 - Downloads last month: 24,931 (2026-04-12 to 2026-05-11)
 
@@ -26,11 +26,11 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 - Open good first issues: 37
 - Open first-timers-only issues: 37
 - Open help wanted issues: 37
-- Open pull requests: 4
+- Open pull requests: 9
 - External open issues: 1
-- External open pull requests: 4
+- External open pull requests: 9
 - External issues opened in the last 7 days: 25
-- External pull requests opened in the last 7 days: 10
+- External pull requests opened in the last 7 days: 15
 
 ## Discussions
 
@@ -54,3 +54,4 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 - If downloads or clones rise without stars, improve README and npm star/bookmark conversion after proof blocks.
 - If traffic comes from a channel but discussions stay quiet, switch from launch copy to a specific workflow-feedback ask.
 - If the starter queue drops below three current issues, open scoped example tasks before the next distribution push.
+
