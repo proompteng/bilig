@@ -323,18 +323,23 @@ pre,
   width: 100%;
   align-self: end;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(22px, 4vw, 56px);
+  gap: 0;
   border-top: 1px solid rgba(255, 250, 240, 0.28);
   margin-top: clamp(10px, 1.5svh, 18px);
-  padding-top: 18px;
+  padding-top: 0;
 }
 
 .hero-proof-item {
   display: grid;
   align-content: start;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
-  padding: 0;
+  padding: 18px clamp(18px, 2vw, 28px) 0 0;
+}
+
+.hero-proof-item + .hero-proof-item {
+  border-left: 1px solid rgba(255, 250, 240, 0.16);
+  padding-left: clamp(22px, 2.5vw, 36px);
 }
 
 .hero-proof-item span,
@@ -715,7 +720,7 @@ footer {
   }
 
   .hero-proof-list {
-    gap: 22px;
+    gap: 0;
   }
 }
 
@@ -754,16 +759,18 @@ footer {
 @media (max-width: 860px) {
   .hero-proof-list {
     grid-template-columns: 1fr;
-    gap: 14px;
+    gap: 0;
   }
 
   .hero-proof-item {
-    max-width: 520px;
-    padding-top: 14px;
+    max-width: none;
+    padding: 14px 0;
   }
 
   .hero-proof-item + .hero-proof-item {
+    border-left: 0;
     border-top: 1px solid rgba(255, 250, 240, 0.08);
+    padding-left: 0;
   }
 }
 
