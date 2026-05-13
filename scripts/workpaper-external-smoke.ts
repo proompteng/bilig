@@ -13,6 +13,7 @@ import {
   parseNodeAgentVerificationOutput,
   parseNodeJsonFileOutput,
   parseNodeMarkdownReportOutput,
+  parseNodeMcpStdioErrorOutput,
   parseNodeMcpStdioOutput,
   parseNodePersistenceOutput,
   parseNodeRangeReadbackOutput,
@@ -190,6 +191,42 @@ function runNodeSmoke(
   markdownReport: {
     report: string
     verified: boolean
+  }
+  mcpStdio: {
+    editedCell: string
+    initialized: boolean
+    toolNames: string[]
+    verified: {
+      expectedArrChanged: boolean
+      formulasPersisted: boolean
+      newValue: number
+      previousValue: number
+      restoredMatchesAfter: boolean
+      serializedBytes: number
+    }
+  }
+  packageMcpStdio: {
+    editedCell: string
+    initialized: boolean
+    toolNames: string[]
+    verified: {
+      expectedArrChanged: boolean
+      formulasPersisted: boolean
+      newValue: number
+      previousValue: number
+      restoredMatchesAfter: boolean
+      serializedBytes: number
+    }
+  }
+  mcpStdioErrors: {
+    invalidJson: {
+      code: number
+      id: null
+    }
+    invalidRequest: {
+      code: number
+      id: null
+    }
   }
   rangeReadback: {
     range: string
@@ -372,6 +409,16 @@ function runNodeSmoke(
     ),
     { expectedServerName: 'bilig-headless-workpaper' },
   )
+  const mcpStdioErrors = parseNodeMcpStdioErrorOutput(
+    runTextCommand(
+      'sh',
+      [
+        '-c',
+        ["printf '%s\\n'", "'{not-json'", '\'{"jsonrpc":"2.0","id":4,"params":{}}\'', '|', 'npm run --silent agent:mcp-stdio'].join(' '),
+      ],
+      { cwd: projectDir },
+    ),
+  )
   const agentVerification = parseNodeAgentVerificationOutput(
     runTextCommand('npm', ['run', '--silent', 'agent:verify'], { cwd: projectDir }),
   )
@@ -401,6 +448,7 @@ function runNodeSmoke(
     jsonFile,
     markdownReport,
     mcpStdio,
+    mcpStdioErrors,
     packageMcpStdio,
     persistence,
     projectDir,
