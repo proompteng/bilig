@@ -1,10 +1,8 @@
 #!/usr/bin/env bun
 
-import { gzipSync } from 'node:zlib'
+import { measureGzipBytes } from './release-check-helpers.ts'
 import { readdir, readFile } from 'node:fs/promises'
 import { basename, resolve } from 'node:path'
-
-const gzipOptions = { level: 9 } as const
 
 const budgets = {
   mainJsGzipBytes: 350 * 1024,
@@ -53,7 +51,7 @@ async function measureAsset(file) {
   return {
     file,
     rawBytes: bytes.byteLength,
-    gzipBytes: gzipSync(bytes, gzipOptions).byteLength,
+    gzipBytes: measureGzipBytes(bytes),
   }
 }
 
@@ -144,7 +142,7 @@ const indexHtmlBytes = new Uint8Array(await readFile(indexHtml))
 const indexHtmlMeasurement = {
   file: indexHtml,
   rawBytes: indexHtmlBytes.byteLength,
-  gzipBytes: gzipSync(indexHtmlBytes, gzipOptions).byteLength,
+  gzipBytes: measureGzipBytes(indexHtmlBytes),
 }
 const startupRefs = parseStartupAssetReferences(await Bun.file(indexHtml).text())
 const startupCssFiles = [...new Set(startupRefs.stylesheetRefs)]
