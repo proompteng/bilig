@@ -153,6 +153,40 @@ describe('XLSX round-trip semantics', () => {
     })
   })
 
+  it('keeps rich text containing dollar apostrophe literals', () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'rich-text-dollar-apostrophe' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Data',
+          order: 0,
+          cells: [{ address: 'A1', value: "$'000" }],
+          metadata: {
+            richTextArtifacts: {
+              cells: [
+                {
+                  address: 'A1',
+                  text: "$'000",
+                  storage: 'sharedString',
+                  xml: `<si><r><rPr><b/></rPr><t>$'000</t></r></si>`,
+                },
+              ],
+            },
+          },
+        },
+      ],
+    }
+
+    const exported = exportXlsx(snapshot)
+    const sharedStringsXml = strFromU8(unzipSync(exported)['xl/sharedStrings.xml'] ?? new Uint8Array())
+    const imported = importXlsx(exported, 'rich-text-dollar-apostrophe.xlsx')
+
+    expect(sharedStringsXml).toContain(`<t>$'000</t>`)
+    expect(imported.snapshot.sheets[0]?.cells.find((cell) => cell.address === 'A1')).toEqual({ address: 'A1', value: "$'000" })
+  })
+
   it('keeps earlier text values when duplicate blank cell XML follows them', () => {
     const snapshot: WorkbookSnapshot = {
       version: 1,

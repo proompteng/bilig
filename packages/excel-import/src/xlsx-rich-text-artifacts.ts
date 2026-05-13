@@ -251,7 +251,7 @@ function appendSharedStringItems(sharedStringsXml: string | null, items: readonl
   const baseXml =
     sharedStringsXml ??
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="0" uniqueCount="0"></sst>'
-  const withItems = baseXml.includes('</sst>') ? baseXml.replace('</sst>', `${items.join('')}</sst>`) : baseXml
+  const withItems = baseXml.includes('</sst>') ? baseXml.replace('</sst>', () => `${items.join('')}</sst>`) : baseXml
   return updateSharedStringCounts(withItems)
 }
 
