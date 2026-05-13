@@ -93,9 +93,9 @@ and tool invocation through `tools/call`, with input schemas on each tool:
 ## Files To Inspect
 
 - MCP-style adapter script:
-  [`examples/headless-workpaper/mcp-tool-server.mjs`](../examples/headless-workpaper/mcp-tool-server.mjs)
+  [`examples/headless-workpaper/mcp-tool-server.mjs`](https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-tool-server.mjs)
 - example README:
-  [`examples/headless-workpaper/README.md#mcp-tool-server-shape`](../examples/headless-workpaper/README.md#mcp-tool-server-shape)
+  [`examples/headless-workpaper/README.md#mcp-tool-server-shape`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#mcp-tool-server-shape)
 - SDK-neutral tool-calling recipe:
   [`docs/agent-workpaper-tool-calling-recipe.md`](agent-workpaper-tool-calling-recipe.md)
 - Vercel AI SDK and LangChain wrappers:
