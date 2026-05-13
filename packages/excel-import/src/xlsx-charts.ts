@@ -561,30 +561,74 @@ function inferSeriesOrientation(series: readonly ChartSeriesRefs[]): WorkbookCha
   return undefined
 }
 
-function inferFirstRowAsHeaders(source: CellRangeRef, series: readonly ChartSeriesRefs[]): boolean | undefined {
+function rangeWithinSource(source: CellRangeRef, range: CellRangeRef): boolean {
   const sourceStart = XLSX.utils.decode_cell(source.startAddress)
-  return series.some((entry) => {
-    if (!entry.name) {
-      return false
-    }
-    const name = XLSX.utils.decode_cell(entry.name.startAddress)
-    return name.r === sourceStart.r
-  })
-    ? true
-    : undefined
+  const sourceEnd = XLSX.utils.decode_cell(source.endAddress)
+  const rangeStart = XLSX.utils.decode_cell(range.startAddress)
+  const rangeEnd = XLSX.utils.decode_cell(range.endAddress)
+  return (
+    range.sheetName === source.sheetName &&
+    rangeStart.r >= sourceStart.r &&
+    rangeEnd.r <= sourceEnd.r &&
+    rangeStart.c >= sourceStart.c &&
+    rangeEnd.c <= sourceEnd.c
+  )
 }
 
-function inferFirstColumnAsLabels(source: CellRangeRef, series: readonly ChartSeriesRefs[]): boolean | undefined {
+function isTopRowHeaderRange(source: CellRangeRef, range: CellRangeRef): boolean {
+  if (!rangeWithinSource(source, range)) {
+    return false
+  }
   const sourceStart = XLSX.utils.decode_cell(source.startAddress)
-  return series.some((entry) => {
-    if (!entry.category) {
-      return false
+  const sourceEnd = XLSX.utils.decode_cell(source.endAddress)
+  const rangeStart = XLSX.utils.decode_cell(range.startAddress)
+  const rangeEnd = XLSX.utils.decode_cell(range.endAddress)
+  return sourceStart.r < sourceEnd.r && rangeStart.r === sourceStart.r && rangeEnd.r === sourceStart.r
+}
+
+function isFirstColumnLabelRange(source: CellRangeRef, range: CellRangeRef): boolean {
+  if (!rangeWithinSource(source, range)) {
+    return false
+  }
+  const sourceStart = XLSX.utils.decode_cell(source.startAddress)
+  const sourceEnd = XLSX.utils.decode_cell(source.endAddress)
+  const rangeStart = XLSX.utils.decode_cell(range.startAddress)
+  const rangeEnd = XLSX.utils.decode_cell(range.endAddress)
+  return sourceStart.c < sourceEnd.c && rangeStart.c === sourceStart.c && rangeEnd.c === sourceStart.c
+}
+
+function inferFirstRowAsHeaders(
+  source: CellRangeRef,
+  series: readonly ChartSeriesRefs[],
+  orientation: WorkbookChartSeriesOrientation | undefined,
+): boolean | undefined {
+  const candidates = series.flatMap((entry) => {
+    if (orientation === 'rows') {
+      return entry.category ? [entry.category] : []
     }
-    const category = XLSX.utils.decode_cell(entry.category.startAddress)
-    return category.c === sourceStart.c
+    if (orientation === 'columns') {
+      return entry.name ? [entry.name] : []
+    }
+    return [entry.name, entry.category].filter((range): range is CellRangeRef => Boolean(range))
   })
-    ? true
-    : undefined
+  return candidates.some((range) => isTopRowHeaderRange(source, range)) ? true : undefined
+}
+
+function inferFirstColumnAsLabels(
+  source: CellRangeRef,
+  series: readonly ChartSeriesRefs[],
+  orientation: WorkbookChartSeriesOrientation | undefined,
+): boolean | undefined {
+  const candidates = series.flatMap((entry) => {
+    if (orientation === 'rows') {
+      return entry.name ? [entry.name] : []
+    }
+    if (orientation === 'columns') {
+      return entry.category ? [entry.category] : []
+    }
+    return [entry.name, entry.category].filter((range): range is CellRangeRef => Boolean(range))
+  })
+  return candidates.some((range) => isFirstColumnLabelRange(source, range)) ? true : undefined
 }
 
 function textValues(value: unknown): string[] {
@@ -663,8 +707,8 @@ function parseChartXml(chartXml: string): {
     chartType: typedChart.type,
     source,
     ...(seriesOrientation !== undefined ? { seriesOrientation } : {}),
-    ...(inferFirstRowAsHeaders(source, series) ? { firstRowAsHeaders: true } : {}),
-    ...(inferFirstColumnAsLabels(source, series) ? { firstColumnAsLabels: true } : {}),
+    ...(inferFirstRowAsHeaders(source, series, seriesOrientation) ? { firstRowAsHeaders: true } : {}),
+    ...(inferFirstColumnAsLabels(source, series, seriesOrientation) ? { firstColumnAsLabels: true } : {}),
     ...(title !== undefined ? { title } : {}),
     ...(legendPosition !== undefined ? { legendPosition } : {}),
   }

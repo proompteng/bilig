@@ -85,9 +85,67 @@ describe('xlsx chart artifacts roundtrip', () => {
         address: 'E1',
         source: { sheetName: 'Data', startAddress: 'A1', endAddress: 'B3' },
         chartType: 'line',
+        firstRowAsHeaders: true,
+        firstColumnAsLabels: true,
       },
     ])
     expect(imported.snapshot.workbook.metadata?.charts?.[0]?.legendPosition).toBeUndefined()
+  })
+
+  it('does not infer chart headers or labels from reused whole-series ranges', () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: {
+        name: 'Shared Range Chart',
+        metadata: {
+          charts: [
+            {
+              id: 'same-range-chart',
+              sheetName: 'Data',
+              address: 'C1',
+              source: { sheetName: 'Data', startAddress: 'A1', endAddress: 'A3' },
+              chartType: 'column',
+              seriesOrientation: 'columns',
+              rows: 8,
+              cols: 4,
+            },
+          ],
+        },
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'Data',
+          order: 0,
+          cells: [
+            { address: 'A1', value: '2023' },
+            { address: 'A2', value: 10 },
+            { address: 'A3', value: 12 },
+          ],
+        },
+      ],
+    }
+    const zip = unzipSync(exportXlsx(snapshot))
+    const formula = '&apos;Data&apos;!$A$1:$A$3'
+    const fullRangeStringReference = `<c:strRef><c:f>${formula}</c:f></c:strRef>`
+    const fullRangeNumberReference = `<c:numRef><c:f>${formula}</c:f></c:numRef>`
+    zip['xl/charts/chart1.xml'] = strToU8(
+      strFromU8(zip['xl/charts/chart1.xml'] ?? new Uint8Array()).replace(
+        `<c:val>${fullRangeNumberReference}</c:val>`,
+        `<c:tx>${fullRangeStringReference}</c:tx><c:cat>${fullRangeStringReference}</c:cat><c:val>${fullRangeNumberReference}</c:val>`,
+      ),
+    )
+
+    const imported = importXlsx(zipSync(zip), 'same-range-chart.xlsx')
+    const [chart] = imported.snapshot.workbook.metadata?.charts ?? []
+
+    expect(chart).toMatchObject({
+      id: 'same-range-chart',
+      source: { sheetName: 'Data', startAddress: 'A1', endAddress: 'A3' },
+      seriesOrientation: 'columns',
+    })
+    expect(chart?.firstRowAsHeaders).toBeUndefined()
+    expect(chart?.firstColumnAsLabels).toBeUndefined()
   })
 })
 
