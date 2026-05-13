@@ -39,7 +39,7 @@ Latest execution snapshot on May 13, 2026 at `03:08:58Z`:
   through `#233` and `#238` through `#240` add a small MCP starter track for
   contributors who prefer agent tool-server docs, client recipes, and tests to
   business examples.
-- Discussion activity: `7` GitHub Discussions, including the MCP spreadsheet
+- Discussion activity: `8` GitHub Discussions, including the MCP spreadsheet
   tool-server show-and-tell thread, the AI SDK/LangChain WorkPaper agent
   announcement, the five-example show-and-tell thread, and the workflow-feedback
   thread
@@ -52,8 +52,8 @@ Latest execution snapshot on May 13, 2026 at `03:08:58Z`:
 - MCP discovery is live in the official registry as
   `io.github.proompteng/bilig-workpaper`, backed by `@bilig/headless` stdio
   package metadata and the packaged `bilig-workpaper-mcp` binary.
-- External activity: `1` open external issue, `4` open external pull requests,
-  `25` external issues opened in the last seven days, and `10` external pull
+- External activity: `1` open external issue, `6` open external pull requests,
+  `25` external issues opened in the last seven days, and `24` external pull
   requests opened in the last seven days
 - Token-backed traffic: `393` views from `159` unique visitors and `18,287`
   clones from `1,907` unique cloners; top referrers include GitHub, Hacker
@@ -61,7 +61,7 @@ Latest execution snapshot on May 13, 2026 at `03:08:58Z`:
 
 Latest public execution snapshot on May 13, 2026 after the landing-page pass:
 
-- GitHub surface: public repo, `24` stars, `9` forks, Forgejo and GitHub
+- GitHub surface: public repo, `24` stars, `10` forks, Forgejo and GitHub
   mirrors synced on `main`
 - Contributor funnel: `45` open `first-timers-only` issues
 - Site conversion surface: homepage now leads with a live WorkPaper demo,
@@ -99,6 +99,14 @@ issue pass:
 - External MCP directory surface: the abordage awesome-mcp listing pull request
   is open with the repository entry in `repositories.yaml`:
   <https://github.com/abordage/awesome-mcp/pull/36>
+- Official MCP Registry surface: the published `io.github.proompteng/bilig-workpaper`
+  entry was refreshed to `@bilig/headless@0.13.19` with the existing Publish MCP
+  Registry workflow:
+  <https://github.com/proompteng/bilig/actions/runs/25793817006>
+- External MCP directory surface: `mcp.directory` accepted the public server
+  submission for review with repository `https://github.com/proompteng/bilig`,
+  npm package `@bilig/headless`, and the WorkPaper persistence/readback
+  description.
 
 ## Goal Text
 
