@@ -322,6 +322,33 @@ the absolute path to your checkout:
 }
 ```
 
+### Claude Desktop Config (Published Package)
+
+Use this when you want Claude Desktop to launch the published WorkPaper MCP
+server instead of a local checkout path:
+
+```json
+{
+  "mcpServers": {
+    "bilig-workpaper": {
+      "command": "npm",
+      "args": ["exec", "--yes", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp"]
+    }
+  }
+}
+```
+
+Smoke prompt (tool names expected by this server are
+`read_workpaper_summary` and `set_workpaper_input_cell`):
+
+```text
+Call read_workpaper_summary for Summary!A1:B5, then call set_workpaper_input_cell on Inputs!B3 with value 0.4.
+Return editedCell plus before/after expectedArr.
+```
+
+Reference guide: [`docs/mcp-workpaper-tool-server.md`](../../docs/mcp-workpaper-tool-server.md)
+Official MCP Registry entry: <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper>
+
 ## Agent Writeback Verification
 
 Run the agent verification demo when you want a small artifact for the claim
