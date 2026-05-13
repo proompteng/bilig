@@ -245,7 +245,9 @@ function lowerNode(node: FormulaNode, plan: JsPlanInstruction[]): void {
       return
     }
     case 'NameRef':
-      plan.push({ opcode: 'push-name', name: node.name })
+      plan.push(
+        node.sheetName ? { opcode: 'push-name', name: node.name, sheetName: node.sheetName } : { opcode: 'push-name', name: node.name },
+      )
       return
     case 'StructuredRef':
     case 'SpillRef':

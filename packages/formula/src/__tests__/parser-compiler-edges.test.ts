@@ -121,6 +121,15 @@ describe('formula parser/compiler edges', () => {
     ])
   })
 
+  it('parses sheet-qualified legacy names that look like modern column references', () => {
+    const ast = parseFormula("'Table 1'!IDX")
+    expect(ast).toEqual({ kind: 'NameRef', name: 'IDX', sheetName: 'Table 1' })
+
+    const compiled = compileFormula("'Table 1'!IDX")
+    expect(compiled.symbolicNames).toEqual(['IDX'])
+    expect(compiled.jsPlan).toEqual([{ opcode: 'push-name', name: 'IDX', sheetName: 'Table 1' }, { opcode: 'return' }])
+  })
+
   it('parses and lowers omitted call arguments', () => {
     expect(parseFormula('INDEX(A1:F1<>0,)')).toEqual({
       kind: 'CallExpr',

@@ -86,7 +86,7 @@ export function buildRelativeFormulaTemplateAstKey(node: FormulaNode, ownerRow: 
         .map((row) => row.map((entry) => buildRelativeFormulaTemplateAstKey(entry, ownerRow, ownerCol)).join(','))
         .join(';')}`
     case 'NameRef':
-      return `name:${node.name}`
+      return `name:${templateSheetKey(node.sheetName)}:${node.name}`
     case 'StructuredRef':
       return `table:${node.tableName}[${node.columnName}]`
     case 'CellRef':

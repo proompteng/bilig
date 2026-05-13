@@ -87,7 +87,7 @@ function unquoteFormulaSheetName(sheetName: string): string {
 }
 
 export interface MetadataResolutionContext {
-  resolveName: (name: string) => WorkbookDefinedNameValueSnapshot | undefined
+  resolveName: (name: string, scopeSheetName?: string) => WorkbookDefinedNameValueSnapshot | undefined
   resolveStructuredReference: (tableName: string, columnName: string) => FormulaNode | undefined
   resolveSpillReference: (sheetName: string | undefined, address: string) => FormulaNode | undefined
 }
@@ -469,7 +469,7 @@ export function resolveMetadataReferencesInAst(
           substituted: true,
         }
       }
-      const literal = context.resolveName(node.name)
+      const literal = context.resolveName(node.name, node.sheetName)
       const replacement =
         literal === undefined
           ? ({ kind: 'ErrorLiteral', code: ErrorCode.Name } satisfies FormulaNode)

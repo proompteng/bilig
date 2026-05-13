@@ -691,15 +691,15 @@ export function createEngineFormulaEvaluationService(args: {
       resolveCell: (targetSheetName, targetAddress) =>
         evaluateCellWithReferenceReplacements(targetSheetName, targetAddress, replacements, visiting),
       resolveRange: (targetSheetName, start, end, refKind) => readRangeValues(targetSheetName, start, end, refKind, replacements, visiting),
-      resolveName: (name: string) => {
-        const definedName = args.state.workbook.getDefinedName(name, sheetName)
+      resolveName: (name: string, scopeSheetName?: string) => {
+        const definedName = args.state.workbook.getDefinedName(name, scopeSheetName ?? sheetName)
         if (!definedName) {
           return errorValue(ErrorCode.Name)
         }
         return definedNameValueToCellValue(definedName.value, args.state.strings)
       },
-      resolveNameReference: (name: string) => {
-        const definedName = args.state.workbook.getDefinedName(name, sheetName)
+      resolveNameReference: (name: string, scopeSheetName?: string) => {
+        const definedName = args.state.workbook.getDefinedName(name, scopeSheetName ?? sheetName)
         return definedName ? definedNameValueToReferenceOperand(definedName.value) : undefined
       },
       resolveFormula: (targetSheetName: string, targetAddress: string) => {
@@ -865,15 +865,15 @@ export function createEngineFormulaEvaluationService(args: {
       resolveCell: (targetSheetName: string, address: string) => readCellValue(targetSheetName, address),
       resolveRange: (targetSheetName: string, start: string, end: string, refKind: 'cells' | 'rows' | 'cols') =>
         readRangeValues(targetSheetName, start, end, refKind),
-      resolveName: (name: string) => {
-        const definedName = args.state.workbook.getDefinedName(name, sheetName)
+      resolveName: (name: string, scopeSheetName?: string) => {
+        const definedName = args.state.workbook.getDefinedName(name, scopeSheetName ?? sheetName)
         if (!definedName) {
           return errorValue(ErrorCode.Name)
         }
         return definedNameValueToCellValue(definedName.value, args.state.strings)
       },
-      resolveNameReference: (name: string) => {
-        const definedName = args.state.workbook.getDefinedName(name, sheetName)
+      resolveNameReference: (name: string, scopeSheetName?: string) => {
+        const definedName = args.state.workbook.getDefinedName(name, scopeSheetName ?? sheetName)
         return definedName ? definedNameValueToReferenceOperand(definedName.value) : undefined
       },
       resolveFormula: (targetSheetName: string, address: string) => {

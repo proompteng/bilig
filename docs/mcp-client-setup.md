@@ -129,6 +129,32 @@ Open the Command Palette and run `MCP: List Servers` to start, stop, or inspect
 the server. VS Code also supports `code --add-mcp` for user-level setup; the
 workspace file is easier to review in a repository.
 
+## Cline
+
+For [Cline](https://github.com/cline/cline), add the Bilig WorkPaper stdio server to `cline_mcp_settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "bilig-workpaper": {
+      "command": "npm",
+      "args": ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp"],
+      "env": {},
+      "disabled": false
+    }
+  }
+}
+```
+
+Open the MCP Servers icon in the Cline sidebar, configure servers, and confirm the server is enabled. Then ask Cline to list Bilig WorkPaper tools and run the same smoke test used by other clients:
+
+```text
+List the Bilig WorkPaper tools.
+Then read the sample WorkPaper summary, set the input cell that controls
+conversion rate to 0.4, and report the before/after expected ARR plus the
+persistence checks.
+```
+
 ## Codex
 
 For Codex CLI or the Codex IDE extension, add this to `~/.codex/config.toml`:

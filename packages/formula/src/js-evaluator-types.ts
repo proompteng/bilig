@@ -9,8 +9,8 @@ export interface EvaluationContext {
   currentAddress?: string
   resolveCell: (sheetName: string, address: string) => CellValue
   resolveRange: (sheetName: string, start: string, end: string, refKind: 'cells' | 'rows' | 'cols') => CellValue[]
-  resolveName?: (name: string) => CellValue
-  resolveNameReference?: (name: string) => ReferenceOperand | undefined
+  resolveName?: (name: string, sheetName?: string) => CellValue
+  resolveNameReference?: (name: string, sheetName?: string) => ReferenceOperand | undefined
   resolveFormula?: (sheetName: string, address: string) => string | undefined
   resolvePivotData?: (request: {
     dataField: string
@@ -84,7 +84,7 @@ export type JsPlanInstruction =
   | { opcode: 'push-error'; code: ErrorCode }
   | { opcode: 'push-omitted' }
   | { opcode: 'make-array'; rows: number; cols: number }
-  | { opcode: 'push-name'; name: string }
+  | { opcode: 'push-name'; name: string; sheetName?: string }
   | { opcode: 'push-cell'; sheetName?: string; address: string }
   | {
       opcode: 'push-range'

@@ -315,6 +315,7 @@ describe('Workpaper formula regressions', () => {
           definedNames: [
             { name: 'LocalBonus', scopeSheetName: 'Local', value: { kind: 'cell-ref', sheetName: 'Local', address: 'A1' } },
             { name: 'LocalRevenue', scopeSheetName: 'Local', value: { kind: 'cell-ref', sheetName: 'Local', address: 'B1' } },
+            { name: 'IDX', scopeSheetName: 'Local', value: { kind: 'cell-ref', sheetName: 'Local', address: 'A1' } },
             { name: 'LocalBonus', value: { kind: 'formula', formula: '=#REF!' } },
           ],
         },
@@ -334,6 +335,7 @@ describe('Workpaper formula regressions', () => {
             { address: 'A1', value: 7 },
             { address: 'B1', value: 10 },
             { address: 'C1', formula: 'LocalBonus*LocalRevenue' },
+            { address: 'D1', formula: "'Local'!IDX" },
           ],
         },
       ],
@@ -343,6 +345,7 @@ describe('Workpaper formula regressions', () => {
     const localId = workbook.getSheetId('Local')!
 
     expectNumber(cellValue(workbook, 'Local', 0, 2), 70)
+    expectNumber(cellValue(workbook, 'Local', 0, 3), 7)
     expect(workbook.getCellFormula({ sheet: localId, row: 0, col: 2 })).toBe('=LocalBonus*LocalRevenue')
   })
 
