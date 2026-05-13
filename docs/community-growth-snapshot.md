@@ -1,6 +1,6 @@
 # Community Growth Snapshot
 
-Captured at: `2026-05-13T09:55:23.654Z`
+Captured at: `2026-05-13T10:14:40.998Z`
 
 This snapshot tracks the public signals for the `@bilig/headless` growth loop: GitHub conversion, npm demand, contributor on-ramp health, discussion activity, and traffic quality.
 
@@ -10,14 +10,14 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 - Stars: 24 / 1,000 (976 remaining)
 - Forks: 10
 - Watchers: 0
-- Open issues: 56
+- Open issues: 62
 - Default branch: `main`
 
 ## npm
 
-- Package: `@bilig/headless@0.13.18`
+- Package: `@bilig/headless@0.13.19`
 - License: `MIT`
-- Modified: `2026-05-13T09:55:07.493Z`
+- Modified: `2026-05-13T10:14:11.266Z`
 - Downloads last week: 15,592 (2026-05-06 to 2026-05-12)
 - Downloads last month: 23,240 (2026-04-13 to 2026-05-12)
 

@@ -78,9 +78,9 @@ Latest public execution snapshot on May 13, 2026 after the landing-page pass:
 Latest starter-queue execution snapshot on May 13, 2026 after the adapter smoke
 issue pass:
 
-- GitHub surface: `24` stars, `10` forks, `56` open issues, and `6` open pull
+- GitHub surface: `24` stars, `10` forks, `62` open issues, and `6` open pull
   requests.
-- npm surface: `@bilig/headless@0.13.18`, with `15,592` downloads last week
+- npm surface: `@bilig/headless@0.13.19`, with `15,592` downloads last week
   and `23,240` downloads in the last 30 days.
 - Contributor funnel: `55` open `good first issue`, `55` open
   `first-timers-only`, and `55` open `help wanted` issues.
@@ -93,6 +93,12 @@ issue pass:
 - External contributor-directory surface: the Good First Issue CLI listing pull
   request is open, mergeable, and passing its security checks:
   <https://github.com/cutenode/good-first-issue/pull/1088>
+- External MCP directory surface: the TensorBlock awesome-mcp-servers listing
+  pull request is open and awaiting maintainer review:
+  <https://github.com/TensorBlock/awesome-mcp-servers/pull/536>
+- External MCP directory surface: the abordage awesome-mcp listing pull request
+  is open with the repository entry in `repositories.yaml`:
+  <https://github.com/abordage/awesome-mcp/pull/36>
 
 ## Goal Text
 
