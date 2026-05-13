@@ -567,6 +567,12 @@ h2 {
   margin-bottom: 40px;
 }
 
+.proof-head h2 {
+  max-width: 620px;
+  font-size: clamp(34px, 4.1vw, 54px);
+  line-height: 1.02;
+}
+
 .proof-layout {
   display: grid;
   grid-template-columns: minmax(0, 0.96fr) minmax(340px, 0.5fr);

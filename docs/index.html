@@ -122,7 +122,7 @@
       }
     </script>
     <link rel="stylesheet" href="./assets/fonts.css?v=2026-05-13-1" />
-    <link rel="stylesheet" href="./assets/site.css?v=2026-05-13-16" />
+    <link rel="stylesheet" href="./assets/site.css?v=2026-05-13-17" />
     <link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-13-1" />
   </head>
   <body>
@@ -174,8 +174,8 @@
               <strong>@bilig/headless is published on npm.</strong>
             </div>
             <div class="hero-proof-item">
-              <span>Proof</span>
-              <strong>46/46 mean-latency rows, with benchmark caveats linked.</strong>
+              <span>Benchmark</span>
+              <strong>Checked-in run: 46/46 comparable mean-latency rows.</strong>
             </div>
             <div class="hero-proof-item">
               <span>Contribute</span>
@@ -494,11 +494,11 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
           <div class="section-head proof-head">
             <div>
               <p class="kicker">Benchmark</p>
-              <h2 id="proof-title">Fast where the benchmark says so. Clear where it does not.</h2>
+              <h2 id="proof-title">See the file. Rerun the command.</h2>
             </div>
             <p>
-              The checked-in artifact has WorkPaper ahead on all 46 comparable mean-latency rows. The p95 caveat is there too: one lookup
-              workload trails HyperFormula by 4.3%.
+              The current checked-in run has WorkPaper ahead on 46 comparable mean-latency rows. One p95 lookup case is slower than
+              HyperFormula. Both numbers are linked here.
             </p>
           </div>
 
@@ -509,9 +509,9 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
                 <strong>checked in</strong>
               </div>
               <div class="receipt-claim">
-                <span>Comparable mean-latency rows</span>
+                <span>Current checked-in run</span>
                 <strong>46 / 46</strong>
-                <p>Mean latency wins on the comparable suite. Rerun the command before using the number in your own docs.</p>
+                <p>WorkPaper is faster on every comparable mean-latency row in this artifact. Quote it only after rerunning the command.</p>
               </div>
               <div class="receipt-command" aria-label="Benchmark command">
                 <span>$</span>
@@ -535,16 +535,16 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
             <div class="proof-sidebar">
               <div class="proof-links" aria-label="Evidence links">
                 <a href="./what-workpaper-benchmark-proves.html">
-                  <span>Benchmark notes</span>
-                  <strong>Artifact summary, caveat, and rerun instructions.</strong>
+                  <span>What was measured</span>
+                  <strong>The artifact, the caveat, and the rerun command.</strong>
                 </a>
                 <a href="./where-bilig-is-not-excel-compatible-yet.html">
-                  <span>Compatibility gaps</span>
+                  <span>Known gaps</span>
                   <strong>Excel behavior that is still missing.</strong>
                 </a>
                 <a href="https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only">
-                  <span>Starter queue</span>
-                  <strong>Small docs, examples, and integration tasks for first PRs.</strong>
+                  <span>First PRs</span>
+                  <strong>Small docs, examples, and integration tasks.</strong>
                 </a>
               </div>
             </div>
@@ -557,9 +557,9 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
           <div class="section-head">
             <div>
               <p class="kicker">Pick a path</p>
-              <h2 id="learn-title">Start with the page that matches your job.</h2>
+              <h2 id="learn-title">Pick the closest starting point.</h2>
             </div>
-            <p>Quick trial, service integration, agent tool, compatibility check, or comparison.</p>
+            <p>Smoke test, service route, agent tool, compatibility notes, or comparison.</p>
           </div>
 
           <div class="row-list">
@@ -601,7 +601,7 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
             <a class="path-link" href="./where-bilig-is-not-excel-compatible-yet.html">
               <span>limits</span>
               <strong>Where bilig is not Excel-compatible yet</strong>
-              <em>Known gaps are documented in public before they become surprises.</em>
+              <em>Known missing Excel behavior, listed before you hit it.</em>
             </a>
           </div>
         </div>
@@ -612,9 +612,9 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
           <div class="section-head">
             <div>
               <p class="kicker">Docs</p>
-              <h2 id="docs-title">Everything public, including the rough edges.</h2>
+              <h2 id="docs-title">Docs, examples, issues.</h2>
             </div>
-            <p>Examples, benchmarks, compatibility notes, discussion threads, and first issues.</p>
+            <p>Examples, benchmarks, compatibility notes, discussions, and first PRs.</p>
           </div>
 
           <div class="docs-grid">
@@ -728,8 +728,8 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
       <section class="final" aria-labelledby="final-title">
         <div class="wrap">
           <div>
-            <h2 id="final-title">Try the package before you trust the page.</h2>
-            <p>Run the TypeScript smoke test. If it matches your case, star the repo or take a starter issue.</p>
+            <h2 id="final-title">Install it. Change one cell. Check the total.</h2>
+            <p>If the TypeScript smoke test matches your case, star the repo or take a starter issue.</p>
           </div>
           <div class="final-actions">
             <a class="button primary" href="https://www.npmjs.com/package/@bilig/headless">Install</a>
