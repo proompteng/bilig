@@ -13,6 +13,7 @@ const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '',
   parseAttributeValue: false,
+  trimValues: false,
   removeNSPrefix: true,
 })
 

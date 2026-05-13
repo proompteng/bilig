@@ -32,6 +32,13 @@ describe('xlsx cell style roundtrip', () => {
     expect(readAppliedStyle(imported.snapshot, 'Second', 'A1')).toBeUndefined()
   })
 
+  it('reads imported cell styles for relationship mapped sheets with trailing spaces', () => {
+    const imported = importXlsx(buildTrailingSpaceRelationshipMappedStyleWorkbook(), 'trailing-space-relationship-mapped-styles.xlsx')
+
+    expect(readAppliedStyle(imported.snapshot, 'First ', 'A1')).toMatchObject(expectedHeaderStyle)
+    expect(readAppliedStyle(imported.snapshot, 'Second', 'A1')).toBeUndefined()
+  })
+
   it('preserves row and column default style indexes for unchanged imported cells', () => {
     const source = buildAxisStyleReferenceWorkbook()
 
@@ -219,6 +226,36 @@ function buildRelationshipMappedStyleWorkbook(): Uint8Array {
   return zipSync(reordered)
 }
 
+function buildTrailingSpaceRelationshipMappedStyleWorkbook(): Uint8Array {
+  const zip = unzipSync(exportXlsx(buildTwoSheetWorkbookWithTrailingSpaceName()))
+  zip['xl/styles.xml'] = strToU8(headerStyleReferenceStylesXml)
+  const firstSheetXml = strFromU8(zip['xl/worksheets/sheet1.xml'] ?? new Uint8Array()).replace(/<c\b(?=[^>]*\br="A1")[^>]*>/u, (tag) =>
+    setXmlAttribute(tag, 's', '1'),
+  )
+  const secondSheetXml = strFromU8(zip['xl/worksheets/sheet2.xml'] ?? new Uint8Array())
+  const relationshipsXml = strFromU8(zip['xl/_rels/workbook.xml.rels'] ?? new Uint8Array())
+    .replace(/<Relationship\b(?=[^>]*\bId="rId1")[^>]*\/>/u, (tag) => setXmlAttribute(tag, 'Target', 'worksheets/sheet7.xml'))
+    .replace(/<Relationship\b(?=[^>]*\bId="rId2")[^>]*\/>/u, (tag) => setXmlAttribute(tag, 'Target', 'worksheets/sheet1.xml'))
+  zip['xl/_rels/workbook.xml.rels'] = strToU8(relationshipsXml)
+  delete zip['xl/worksheets/sheet2.xml']
+  zip['xl/worksheets/sheet1.xml'] = strToU8(secondSheetXml)
+  zip['xl/worksheets/sheet7.xml'] = strToU8(firstSheetXml)
+
+  const reordered: Record<string, Uint8Array> = {}
+  for (const path of ['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet7.xml']) {
+    const entry = zip[path]
+    if (entry) {
+      reordered[path] = entry
+    }
+  }
+  for (const [path, entry] of Object.entries(zip)) {
+    if (!(path in reordered)) {
+      reordered[path] = entry
+    }
+  }
+  return zipSync(reordered)
+}
+
 function buildTwoSheetWorkbook(): WorkbookSnapshot {
   return {
     version: 1,
@@ -227,6 +264,27 @@ function buildTwoSheetWorkbook(): WorkbookSnapshot {
       {
         id: 1,
         name: 'First',
+        order: 0,
+        cells: [{ address: 'A1', value: 'Styled' }],
+      },
+      {
+        id: 2,
+        name: 'Second',
+        order: 1,
+        cells: [{ address: 'A1', value: 'Plain' }],
+      },
+    ],
+  }
+}
+
+function buildTwoSheetWorkbookWithTrailingSpaceName(): WorkbookSnapshot {
+  return {
+    version: 1,
+    workbook: { name: 'Relationship mapped trailing styles' },
+    sheets: [
+      {
+        id: 1,
+        name: 'First ',
         order: 0,
         cells: [{ address: 'A1', value: 'Styled' }],
       },
