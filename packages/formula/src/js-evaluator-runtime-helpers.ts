@@ -5,6 +5,7 @@ import type { MatrixValue } from './group-pivot-evaluator.js'
 import { excelPower } from './excel-power.js'
 import { emptyValue, error, numberValue } from './js-evaluator-cell-values.js'
 import type { JsPlanInstruction, StackValue } from './js-evaluator-types.js'
+import { parseNumericText } from './numeric-text.js'
 import type { EvaluationResult, RangeLikeValue } from './runtime-values.js'
 
 type BinaryOperator = Extract<JsPlanInstruction, { opcode: 'binary' }>['operator']
@@ -31,8 +32,7 @@ export function toArithmeticNumber(value: CellValue): number | undefined {
     if (trimmed === '') {
       return 0
     }
-    const parsed = Number(trimmed)
-    return Number.isFinite(parsed) ? parsed : undefined
+    return parseNumericText(trimmed)
   }
   return toNumber(value)
 }

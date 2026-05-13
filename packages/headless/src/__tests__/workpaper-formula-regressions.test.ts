@@ -173,6 +173,18 @@ describe('Workpaper formula regressions', () => {
     expectNumber(cellValue(workbook, 'Data', 1, 1), 300)
   })
 
+  it.each([false, true])('coerces comma-grouped numeric text in arithmetic with useColumnIndex=%s', (useColumnIndex) => {
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Data: [['61,111', '72,522', '=B1/A1', '=(POWER(B1/A1,0.3333333333)-1)*100']],
+      },
+      { maxRows: 20, maxColumns: 8, useColumnIndex },
+    )
+
+    expectNumberClose(cellValue(workbook, 'Data', 0, 2), 72522 / 61111)
+    expectNumberClose(cellValue(workbook, 'Data', 0, 3), 5.872571270499272)
+  })
+
   it('treats blank-reference formulas as numeric zero', () => {
     const workbook = WorkPaper.buildFromSheets(
       {

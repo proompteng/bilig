@@ -1,4 +1,5 @@
 import { ValueTag, type CellValue } from '@bilig/protocol'
+import { parseNumericText } from '@bilig/formula'
 import type { RuntimeDirectScalarDescriptor, RuntimeDirectScalarOperand } from '../runtime-state.js'
 
 export const ROW_PAIR_LEFT_PLUS_RIGHT = 1
@@ -39,8 +40,9 @@ export function directScalarValueNumber(value: CellValue): number | undefined {
     case ValueTag.Empty:
       return 0
     case ValueTag.Error:
-    case ValueTag.String:
       return undefined
+    case ValueTag.String:
+      return value.value.trim() === '' ? 0 : parseNumericText(value.value)
   }
 }
 

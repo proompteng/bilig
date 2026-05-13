@@ -72,6 +72,32 @@ describe('formula builtins and JS evaluator', () => {
     expect(evaluateAst(parseFormula('SUM(A2)'), context)).toEqual({ tag: ValueTag.Number, value: 0 })
   })
 
+  it('coerces comma-grouped numeric text in arithmetic expressions', () => {
+    const context = {
+      sheetName: 'Sheet1',
+      resolveCell: (_sheetName: string, address: string): CellValue => {
+        if (address === 'A1') {
+          return { tag: ValueTag.String, value: '61,111', stringId: 1 }
+        }
+        if (address === 'B1') {
+          return { tag: ValueTag.String, value: '72,522', stringId: 2 }
+        }
+        return { tag: ValueTag.Empty }
+      },
+      resolveRange: (): CellValue[] => [],
+    }
+
+    expect(evaluateAst(parseFormula('B1/A1'), context)).toEqual({
+      tag: ValueTag.Number,
+      value: 72522 / 61111,
+    })
+    const cagr = evaluateAst(parseFormula('(POWER(B1/A1,0.3333333333)-1)*100'), context)
+    expect(cagr.tag).toBe(ValueTag.Number)
+    if (cagr.tag === ValueTag.Number) {
+      expect(cagr.value).toBeCloseTo(5.872571270499272, 12)
+    }
+  })
+
   it('treats omitted SUM arguments as empty values instead of errors', () => {
     expect(
       evaluateAst(parseFormula('SUM(2,3,)'), {

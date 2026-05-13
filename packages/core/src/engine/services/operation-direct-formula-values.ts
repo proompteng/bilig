@@ -1,4 +1,5 @@
 import { ErrorCode, ValueTag } from '@bilig/protocol'
+import { parseNumericText } from '@bilig/formula'
 import { CellFlags } from '../../cell-store.js'
 import type { EngineRuntimeState, RuntimeDirectScalarDescriptor, RuntimeDirectScalarOperand } from '../runtime-state.js'
 import { directScalarCellNumber, directScalarValueNumber } from './direct-scalar-helpers.js'
@@ -10,6 +11,12 @@ export function createOperationDirectFormulaValues(args: { readonly state: Pick<
 
   const directScalarCellNumericValue = (cellIndex: number | undefined): number | undefined =>
     directScalarCellNumber(args.state.workbook.cellStore, cellIndex)
+
+  const readCellTextNumber = (cellIndex: number): number | undefined => {
+    const stringId = args.state.workbook.cellStore.stringIds[cellIndex] ?? 0
+    const text = args.state.strings.get(stringId)
+    return text.trim() === '' ? 0 : parseNumericText(text)
+  }
 
   const directScalarCurrentResultMatchesCell = (cellIndex: number, result: DirectScalarCurrentOperand): boolean => {
     const cellStore = args.state.workbook.cellStore
@@ -108,8 +115,10 @@ export function createOperationDirectFormulaValues(args: { readonly state: Pick<
             return { kind: 'number', value: 0 }
           case ValueTag.Error:
             return { kind: 'error', code: (cellStore.errors[operand.cellIndex] as ErrorCode | undefined) ?? ErrorCode.None }
-          case ValueTag.String:
-            return { kind: 'error', code: ErrorCode.Value }
+          case ValueTag.String: {
+            const numeric = readCellTextNumber(operand.cellIndex)
+            return numeric === undefined ? { kind: 'error', code: ErrorCode.Value } : { kind: 'number', value: numeric }
+          }
         }
       }
     }
@@ -186,8 +195,10 @@ export function createOperationDirectFormulaValues(args: { readonly state: Pick<
               return { kind: 'number', value: 0 }
             case ValueTag.Error:
               return { kind: 'error', code: (cellStore.errors[operand.cellIndex] as ErrorCode | undefined) ?? ErrorCode.None }
-            case ValueTag.String:
-              return { kind: 'error', code: ErrorCode.Value }
+            case ValueTag.String: {
+              const numeric = readCellTextNumber(operand.cellIndex)
+              return numeric === undefined ? { kind: 'error', code: ErrorCode.Value } : { kind: 'number', value: numeric }
+            }
           }
         }
       }

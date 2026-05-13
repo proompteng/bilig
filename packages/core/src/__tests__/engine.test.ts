@@ -3789,6 +3789,28 @@ describe('SpreadsheetEngine', () => {
     expect(engine.getLastMetrics()).toMatchObject({ wasmFormulaCount: 1, jsFormulaCount: 0 })
   })
 
+  it('coerces comma-grouped numeric cell text in direct arithmetic and JS formulas', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'spec' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', '61,111')
+    engine.setCellValue('Sheet1', 'B1', '72,522')
+
+    engine.setCellFormula('Sheet1', 'C1', 'B1/A1')
+    expect(engine.getCellValue('Sheet1', 'C1')).toMatchObject({
+      tag: ValueTag.Number,
+      value: 72522 / 61111,
+    })
+
+    engine.setCellFormula('Sheet1', 'D1', '(POWER(B1/A1,0.3333333333)-1)*100')
+    const cagr = engine.getCellValue('Sheet1', 'D1')
+    expect(cagr.tag).toBe(ValueTag.Number)
+    if (cagr.tag !== ValueTag.Number) {
+      throw new Error(`Expected numeric CAGR, received ${JSON.stringify(cagr)}`)
+    }
+    expect(cagr.value).toBeCloseTo(5.872571270499272, 12)
+  })
+
   it('uses the wasm fast path for exact-parity rounding builtins', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'spec' })
     await engine.ready()

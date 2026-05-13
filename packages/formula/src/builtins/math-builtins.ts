@@ -3,6 +3,7 @@ import type { CellValue } from '@bilig/protocol'
 import { besselIValue, besselJValue, besselKValue, besselYValue } from './distributions.js'
 import { collectNumericArgs } from './numeric.js'
 import { excelPower } from '../excel-power.js'
+import { parseNumericText } from '../numeric-text.js'
 import type { EvaluationResult } from '../runtime-values.js'
 
 type Builtin = (...args: CellValue[]) => EvaluationResult
@@ -44,8 +45,7 @@ function toIntegerFunctionNumber(value: CellValue): number | undefined {
     if (trimmed.length === 0) {
       return undefined
     }
-    const numeric = Number(trimmed)
-    return Number.isFinite(numeric) ? numeric : undefined
+    return parseNumericText(trimmed)
   }
   switch (value.tag) {
     case ValueTag.Number:

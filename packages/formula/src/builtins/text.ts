@@ -4,6 +4,7 @@ import { createTextCoreBuiltins } from './text-core-builtins.js'
 import { createTextFormatBuiltins } from './text-format-builtins.js'
 import { createTextSearchBuiltins } from './text-search-builtins.js'
 import type { ExcelDateSystem } from './excel-date.js'
+import { parseNumericText } from '../numeric-text.js'
 import type { EvaluationResult } from '../runtime-values.js'
 
 export type TextBuiltin = (...args: CellValue[]) => EvaluationResult
@@ -135,8 +136,7 @@ function coerceNumber(value: CellValue): number | undefined {
       if (trimmed === '') {
         return 0
       }
-      const parsed = Number(trimmed)
-      return Number.isFinite(parsed) ? parsed : undefined
+      return parseNumericText(trimmed)
     }
     case ValueTag.Error:
       return undefined

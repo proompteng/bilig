@@ -1,5 +1,6 @@
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import { createBlockedBuiltinMap, logicalPlaceholderBuiltinNames } from './placeholder.js'
+import { parseNumericText } from '../numeric-text.js'
 
 export type LogicalBuiltin = (...args: CellValue[]) => CellValue
 
@@ -76,8 +77,7 @@ function coerceNumberLike(value: CellValue): number | undefined {
       if (trimmed === '') {
         return 0
       }
-      const parsed = Number(trimmed)
-      return Number.isFinite(parsed) ? parsed : undefined
+      return parseNumericText(trimmed)
     }
     case ValueTag.Error:
     default:

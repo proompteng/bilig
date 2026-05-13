@@ -1,4 +1,5 @@
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
+import { parseNumericText } from '@bilig/formula'
 import type { RuntimeDirectScalarOperand, RuntimeFormula } from '../runtime-state.js'
 import { directErrorResult, directNumberResult } from './formula-evaluation-helpers.js'
 
@@ -30,8 +31,14 @@ function coerceDirectScalarNumeric(
       return { kind: 'number', value: 0 }
     case ValueTag.Error:
       return { kind: 'error', code: value.code }
-    case ValueTag.String:
-      return { kind: 'error', code: ErrorCode.Value }
+    case ValueTag.String: {
+      const trimmed = value.value.trim()
+      if (trimmed === '') {
+        return { kind: 'number', value: 0 }
+      }
+      const numeric = parseNumericText(trimmed)
+      return numeric === undefined ? { kind: 'error', code: ErrorCode.Value } : { kind: 'number', value: numeric }
+    }
     default:
       return undefined
   }
