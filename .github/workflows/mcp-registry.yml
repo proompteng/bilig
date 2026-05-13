@@ -1,0 +1,121 @@
+name: Publish MCP Registry
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_version:
+        description: "Published @bilig/headless version to register, or latest"
+        default: "latest"
+        required: true
+        type: string
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: publish-mcp-registry
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.11.1"
+
+      - name: Resolve package version
+        id: package
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_PACKAGE_VERSION: ${{ inputs.package_version }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+
+          version="${INPUT_PACKAGE_VERSION:-latest}"
+          if [[ "${EVENT_NAME}" == "release" ]]; then
+            if [[ "${RELEASE_TAG}" =~ ^libraries-v(.+)$ ]]; then
+              version="${BASH_REMATCH[1]}"
+            else
+              echo "Skipping non-runtime release tag: ${RELEASE_TAG}" >> "$GITHUB_STEP_SUMMARY"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Registering @bilig/headless@${version}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download package metadata
+        if: steps.package.outputs.skip != 'true'
+        env:
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          rm -rf build/mcp-registry
+          mkdir -p build/mcp-registry
+          npm pack "@bilig/headless@${PACKAGE_VERSION}" --pack-destination build/mcp-registry
+          tarball="$(find build/mcp-registry -maxdepth 1 -name '*.tgz' -print -quit)"
+          test -n "${tarball}"
+          tar -xzf "${tarball}" -C build/mcp-registry
+
+      - name: Validate MCP registry metadata
+        if: steps.package.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+
+          node <<'NODE'
+          const fs = require("node:fs");
+          const manifest = JSON.parse(fs.readFileSync("build/mcp-registry/package/package.json", "utf8"));
+          const server = JSON.parse(fs.readFileSync("build/mcp-registry/package/server.json", "utf8"));
+          const npmPackage = Array.isArray(server.packages)
+            ? server.packages.find((entry) => entry.registryType === "npm" && entry.identifier === manifest.name)
+            : undefined;
+
+          const failures = [];
+          if (manifest.name !== "@bilig/headless") failures.push(`unexpected package: ${manifest.name}`);
+          if (manifest.mcpName !== "io.github.proompteng/bilig-workpaper") failures.push(`unexpected mcpName: ${manifest.mcpName}`);
+          if (server.name !== manifest.mcpName) failures.push(`server name mismatch: ${server.name} !== ${manifest.mcpName}`);
+          if (server.version !== manifest.version) failures.push(`server version mismatch: ${server.version} !== ${manifest.version}`);
+          if (!npmPackage) failures.push("missing npm package entry");
+          if (npmPackage && npmPackage.version !== manifest.version) {
+            failures.push(`npm package version mismatch: ${npmPackage.version} !== ${manifest.version}`);
+          }
+          if (npmPackage && npmPackage.transport?.type !== "stdio") {
+            failures.push(`unexpected MCP transport: ${npmPackage.transport?.type}`);
+          }
+
+          if (failures.length > 0) {
+            throw new Error(`Invalid MCP registry metadata:\n- ${failures.join("\n- ")}`);
+          }
+
+          console.log(JSON.stringify({
+            package: `${manifest.name}@${manifest.version}`,
+            mcpName: manifest.mcpName,
+            serverVersion: server.version,
+          }, null, 2));
+          NODE
+
+      - name: Install mcp-publisher
+        if: steps.package.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to MCP Registry
+        if: steps.package.outputs.skip != 'true'
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish MCP server
+        if: steps.package.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          cd build/mcp-registry/package
+          ../../../mcp-publisher publish
