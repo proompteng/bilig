@@ -326,12 +326,12 @@ function parsePublicWorkbookMetadata(value: unknown): PublicWorkbookCorpusCase['
   const record = asRecord(value)
   return {
     workbookName: readRequiredString(record, 'workbookName'),
-    sheetNames: readStringArray(record, 'sheetNames'),
+    sheetNames: readSheetNameArray(record, 'sheetNames'),
     dimensions: readRequiredArray(record, 'dimensions').map((dimension) => {
       const dimensionRecord = asRecord(dimension)
       const usedRange = parseOptionalUsedRange(dimensionRecord['usedRange'])
       const parsedDimension: PublicWorkbookCorpusCase['workbookMetadata']['dimensions'][number] = {
-        sheetName: readRequiredString(dimensionRecord, 'sheetName'),
+        sheetName: readRequiredSheetName(dimensionRecord, 'sheetName'),
         rowCount: readRequiredInteger(dimensionRecord, 'rowCount'),
         columnCount: readRequiredInteger(dimensionRecord, 'columnCount'),
         nonEmptyCellCount: readRequiredInteger(dimensionRecord, 'nonEmptyCellCount'),
@@ -412,6 +412,14 @@ function readRequiredString(value: Record<string, unknown>, key: string): string
   return result
 }
 
+function readRequiredSheetName(value: Record<string, unknown>, key: string): string {
+  const fieldValue = value[key]
+  if (typeof fieldValue !== 'string' || fieldValue.length === 0) {
+    throw new Error(`Expected ${key} to be a non-empty sheet name`)
+  }
+  return fieldValue
+}
+
 function readOptionalString(value: Record<string, unknown>, key: string): string | undefined {
   return readString(value, key) ?? undefined
 }
@@ -478,6 +486,15 @@ function readStringArray(value: Record<string, unknown>, key: string): string[] 
   return readRequiredArray(value, key).map((entry, index) => {
     if (typeof entry !== 'string') {
       throw new Error(`Expected ${key}[${String(index)}] to be a string`)
+    }
+    return entry
+  })
+}
+
+function readSheetNameArray(value: Record<string, unknown>, key: string): string[] {
+  return readRequiredArray(value, key).map((entry, index) => {
+    if (typeof entry !== 'string' || entry.length === 0) {
+      throw new Error(`Expected ${key}[${String(index)}] to be a non-empty sheet name`)
     }
     return entry
   })

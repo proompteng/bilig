@@ -767,11 +767,9 @@ function normalizeExportSheetName(name: string, order: number, usedNames: Set<st
   for (const character of invalidExportSheetNameCharacters) {
     sanitized = sanitized.split(character).join(' ')
   }
-  const baseName = sanitized.trim().length > 0 ? sanitized : `Sheet${order + 1}`
+  const baseName = sanitized.length > 0 ? sanitized : `Sheet${order + 1}`
   let candidate = baseName.slice(0, 31)
-  if (candidate.trim().length === 0) {
-    candidate = sanitized.trim().slice(0, 31) || `Sheet${order + 1}`
-  }
+  candidate = candidate.length > 0 ? candidate : `Sheet${order + 1}`
   let suffix = 1
   while (usedNames.has(candidate)) {
     const suffixText = ` ${String(suffix)}`

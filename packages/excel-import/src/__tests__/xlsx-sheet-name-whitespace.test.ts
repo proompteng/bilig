@@ -56,4 +56,34 @@ describe('XLSX sheet-name whitespace export', () => {
     const countrySheet = roundTripped.snapshot.sheets.find((sheet) => sheet.name === 'Country ERP ')
     expect(countrySheet?.metadata?.merges).toEqual([{ sheetName: 'Country ERP ', startAddress: 'A226', endAddress: 'C226' }])
   })
+
+  it('preserves whitespace-only sheet names across export round trips', () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'whitespace-only-sheet' },
+      sheets: [
+        {
+          id: 'blank-named-sheet',
+          name: ' ',
+          order: 0,
+          cells: [{ address: 'A1', value: 'Visible data' }],
+          metadata: {
+            merges: [{ sheetName: ' ', startAddress: 'A3', endAddress: 'B3' }],
+          },
+        },
+      ],
+    }
+
+    const exported = exportXlsx(snapshot)
+    const rawWorkbook = XLSX.read(exported, { type: 'array', cellFormula: true })
+    const workbookXml = strFromU8(unzipSync(exported)['xl/workbook.xml'] ?? new Uint8Array())
+    const roundTripped = importXlsx(exported, 'whitespace-only-sheet.xlsx')
+
+    expect(rawWorkbook.SheetNames).toEqual([' '])
+    expect(rawWorkbook.SheetNames).not.toContain('Sheet1')
+    expect(workbookXml).toContain('<sheet name=" "')
+    expect(roundTripped.snapshot.sheets[0]?.name).toBe(' ')
+    expect(roundTripped.snapshot.sheets[0]?.cells).toEqual([{ address: 'A1', value: 'Visible data' }])
+    expect(roundTripped.snapshot.sheets[0]?.metadata?.merges).toEqual([{ sheetName: ' ', startAddress: 'A3', endAddress: 'B3' }])
+  })
 })
