@@ -62,27 +62,33 @@ describe('xlsx cell style roundtrip', () => {
     expect(readCellStyleParts(exported, 'xl/worksheets/sheet1.xml!B2')).toEqual(readCellStyleParts(source, 'xl/worksheets/sheet1.xml!B2'))
   })
 
+  it('exports inserted formatted blank cells as style-only blank cells', () => {
+    const exported = exportXlsx(buildBlankFormattedCellWorkbook())
+    const cellXml = readCellXml(exported, 'xl/worksheets/sheet1.xml!B2')
+
+    expect(cellXml).toMatch(/^<c\b(?=[^>]*\br="B2")(?=[^>]*\bs="\d+")[^>]*\/>$/u)
+    expect(cellXml).not.toContain('t="z"')
+  })
+
   it('imports self-closing formatted blank cells as blank format cells', () => {
-    const source: WorkbookSnapshot = {
-      version: 1,
-      workbook: { name: 'self-closing-blank-format' },
-      sheets: [
-        {
-          id: 1,
-          name: 'Data',
-          order: 0,
-          cells: [
-            { address: 'A1', value: 'Total' },
-            { address: 'B2', format: 'dd/mm/yyyy;@' },
-          ],
-        },
-      ],
-    }
-    const zip = unzipSync(exportXlsx(source))
+    const zip = unzipSync(exportXlsx(buildBlankFormattedCellWorkbook()))
     const sheetXml = strFromU8(zip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())
-    zip['xl/worksheets/sheet1.xml'] = strToU8(sheetXml.replace(/<c r="B2" s="([^"]+)" t="z"><\/c>/u, '<c r="B2" s="$1"/>'))
 
     const imported = importXlsx(zipSync(zip), 'self-closing-blank-format.xlsx')
+
+    expect(imported.snapshot.sheets[0]?.cells.find((cell) => cell.address === 'B2')).toEqual({
+      address: 'B2',
+      format: 'dd/mm/yyyy;@',
+    })
+    expect(sheetXml).toMatch(/<c\b(?=[^>]*\br="B2")(?=[^>]*\bs="\d+")[^>]*\/>/u)
+  })
+
+  it('imports explicit empty formatted blank cells as blank format cells', () => {
+    const zip = unzipSync(exportXlsx(buildBlankFormattedCellWorkbook()))
+    const sheetXml = strFromU8(zip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())
+    zip['xl/worksheets/sheet1.xml'] = strToU8(sheetXml.replace(/<c r="B2" s="([^"]+)"\/>/u, '<c r="B2" s="$1" t="z"></c>'))
+
+    const imported = importXlsx(zipSync(zip), 'empty-blank-format.xlsx')
 
     expect(imported.snapshot.sheets[0]?.cells.find((cell) => cell.address === 'B2')).toEqual({
       address: 'B2',
@@ -210,6 +216,24 @@ function buildStyledWorkbook(): WorkbookSnapshot {
             },
           ],
         },
+      },
+    ],
+  }
+}
+
+function buildBlankFormattedCellWorkbook(): WorkbookSnapshot {
+  return {
+    version: 1,
+    workbook: { name: 'blank-format' },
+    sheets: [
+      {
+        id: 1,
+        name: 'Data',
+        order: 0,
+        cells: [
+          { address: 'A1', value: 'Total' },
+          { address: 'B2', format: 'dd/mm/yyyy;@' },
+        ],
       },
     ],
   }

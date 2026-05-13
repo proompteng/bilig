@@ -67,7 +67,7 @@ export function addMissingFormattedCells(
       const address = escapeXmlAttribute(cell.address)
       return {
         address: cell.address,
-        xml: `<c r="${address}" s="${String(cell.styleIndex)}" t="z"></c>`,
+        xml: `<c r="${address}" s="${String(cell.styleIndex)}"/>`,
       }
     }),
   )
