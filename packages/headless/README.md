@@ -119,6 +119,8 @@ Pick the path that matches the job:
   [MCP spreadsheet tool server guide](https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html).
 - Run the packaged MCP stdio server:
   `npm exec --package @bilig/headless -- bilig-workpaper-mcp`.
+- Discover the published MCP Registry entry:
+  [`io.github.proompteng/bilig-workpaper`](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper).
 - Put WorkPaper behind HTTP:
   [`examples/serverless-workpaper-api`](https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api).
 - Compare engines before adopting:
@@ -419,8 +421,8 @@ npm exec --package @bilig/headless -- bilig-workpaper-mcp
 ```
 
 Its package metadata includes `mcpName: io.github.proompteng/bilig-workpaper`
-and `server.json`, so the server can be published to MCP registries after the
-runtime package version is released.
+and `server.json`, and the server is published in the official MCP Registry:
+<https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper>.
 
 For a framework-neutral recipe that wraps WorkPaper operations as agent-callable
 tools, see

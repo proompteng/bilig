@@ -49,6 +49,9 @@ Latest execution snapshot on May 13, 2026 at `03:08:58Z`:
 - npm discovery metadata now includes exact agent search terms such as
   `agent-spreadsheet`, `spreadsheet-agent`, `workbook-agent`, `llm`, `mcp`, and
   `model-context-protocol`.
+- MCP discovery is live in the official registry as
+  `io.github.proompteng/bilig-workpaper`, backed by `@bilig/headless` stdio
+  package metadata and the packaged `bilig-workpaper-mcp` binary.
 - External activity: `1` open external issue, `4` open external pull requests,
   `25` external issues opened in the last seven days, and `10` external pull
   requests opened in the last seven days

@@ -370,6 +370,11 @@ requireIncludes(mcpWorkPaperToolServerDoc, 'npm run agent:mcp-tools', 'docs/mcp-
 requireIncludes(mcpWorkPaperToolServerDoc, 'npm run --silent agent:mcp-stdio', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(mcpWorkPaperToolServerDoc, 'npm exec --package @bilig/headless -- bilig-workpaper-mcp', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(mcpWorkPaperToolServerDoc, 'io.github.proompteng/bilig-workpaper', 'docs/mcp-workpaper-tool-server.md')
+requireIncludes(
+  mcpWorkPaperToolServerDoc,
+  'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper',
+  'docs/mcp-workpaper-tool-server.md',
+)
 requireIncludes(mcpWorkPaperToolServerDoc, 'tools/list', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(mcpWorkPaperToolServerDoc, 'tools/call', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(
@@ -442,6 +447,7 @@ for (const [path, content] of [
   requireIncludes(content, 'npm run agent:mcp-tools', path)
   requireIncludes(content, 'npm run agent:mcp-stdio', path)
   requireIncludes(content, 'npm exec --package @bilig/headless -- bilig-workpaper-mcp', path)
+  requireIncludes(content, 'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper', path)
   requireIncludes(content, 'vercel-ai-sdk-langchain-spreadsheet-tool', path)
   requireIncludes(content, 'mcp-workpaper-tool-server', path)
   requireIncludes(content, 'examples/headless-workpaper#budget-variance-alerts', path)

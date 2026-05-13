@@ -61,6 +61,8 @@ bookmark the repo after you see the verification output:
   run the
   [Vercel AI SDK / LangChain adapter example](examples/headless-workpaper#agent-framework-adapters)
   and [MCP tool server example](examples/headless-workpaper#mcp-tool-server-shape).
+  The published MCP Registry entry is
+  [`io.github.proompteng/bilig-workpaper`](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper).
 - **Contribute a small patch**: pick a scoped
   [`good first issue`](docs/starter-issues.md).
 - **Ask a question or share a workflow**: use
@@ -406,6 +408,9 @@ input edit with structured computed readback. Run `npm run agent:mcp-stdio`
 when you want the same tools over newline-delimited JSON-RPC stdio.
 The package-level stdio binary is `bilig-workpaper-mcp`, runnable with
 `npm exec --package @bilig/headless -- bilig-workpaper-mcp`.
+It is published in the official MCP Registry as
+`io.github.proompteng/bilig-workpaper`:
+<https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper>.
 
 Quickstart:
 

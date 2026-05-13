@@ -157,6 +157,8 @@ npm run agent:verify
   npm exec --package @bilig/headless -- bilig-workpaper-mcp
   mcpName: io.github.proompteng/bilig-workpaper
   https://github.com/proompteng/bilig/blob/main/packages/headless/server.json
+- official MCP Registry entry:
+  https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper
 - agent spreadsheet tool-call loop:
   https://proompteng.github.io/bilig/agent-spreadsheet-tool-call-loop.html
   https://github.com/proompteng/bilig/blob/main/docs/agent-spreadsheet-tool-call-loop.md

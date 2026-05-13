@@ -47,8 +47,9 @@ npm exec --package @bilig/headless -- bilig-workpaper-mcp
 ```
 
 The package carries `mcpName: io.github.proompteng/bilig-workpaper` and a
-matching `server.json`, which is the metadata shape expected by MCP registries
-for npm-hosted stdio servers.
+matching `server.json`. It is published in the official MCP Registry as
+`io.github.proompteng/bilig-workpaper`:
+<https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper>.
 
 The script implements two JSON-RPC methods shaped around the MCP tool model:
 
@@ -117,6 +118,8 @@ and tool invocation through `tools/call`, with input schemas on each tool:
   [`examples/headless-workpaper/mcp-tool-server.ts`](https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-tool-server.ts)
 - stdio adapter script:
   [`examples/headless-workpaper/mcp-stdio-server.ts`](https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-stdio-server.ts)
+- official MCP Registry entry:
+  [`io.github.proompteng/bilig-workpaper`](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper)
 - example README:
   [`examples/headless-workpaper/README.md#mcp-tool-server-shape`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#mcp-tool-server-shape)
 - SDK-neutral tool-calling recipe:
