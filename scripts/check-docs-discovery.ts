@@ -244,7 +244,7 @@ requireIncludes(index, 'Build a workbook in Node, change inputs through code', '
 requireIncludes(index, '<strong>Examples ship as real .ts files.</strong>', 'docs/index.html')
 requireIncludes(index, '<span>Good first issues</span>', 'docs/index.html')
 requireIncludes(index, '<strong>70 small tasks are ready.</strong>', 'docs/index.html')
-requireIncludes(index, '<strong>0.13.28</strong>', 'docs/index.html')
+requireIncludes(index, '<strong>npm latest</strong>', 'docs/index.html')
 requireIncludes(index, '<span>Open first-timer issues</span>', 'docs/index.html')
 requireIncludes(index, '<strong>70</strong>', 'docs/index.html')
 requireNotIncludes(index, '<strong>40 starter tasks</strong>', 'docs/index.html')
@@ -577,6 +577,8 @@ requireIncludes(rootPackageJson, '"mcpb:workpaper:build": "tsx scripts/build-wor
 for (const required of [
   'description: Build a Claude Desktop MCPB bundle for the published @bilig/headless WorkPaper MCP server',
   'pnpm mcpb:workpaper:build',
+  'BILIG_HEADLESS_VERSION=$(npm view @bilig/headless version)',
+  'pnpm mcpb:workpaper:build -- --package-version "$BILIG_HEADLESS_VERSION"',
   'build/mcpb/bilig-workpaper.mcpb',
   'open build/mcpb/bilig-workpaper.mcpb',
   'read_workpaper_summary',

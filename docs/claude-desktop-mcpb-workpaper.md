@@ -31,10 +31,12 @@ packs:
 build/mcpb/bilig-workpaper.mcpb
 ```
 
-For a reproducible build, pin the package version:
+For a reproducible build, pin the version you intend to ship. This keeps the
+guide from baking a stale version into copy-paste setup commands:
 
 ```sh
-pnpm mcpb:workpaper:build -- --package-version 0.13.28
+BILIG_HEADLESS_VERSION=$(npm view @bilig/headless version)
+pnpm mcpb:workpaper:build -- --package-version "$BILIG_HEADLESS_VERSION"
 ```
 
 ## Install in Claude Desktop
