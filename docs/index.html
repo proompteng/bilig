@@ -122,7 +122,7 @@
       }
     </script>
     <link rel="stylesheet" href="./assets/fonts.css?v=2026-05-13-1" />
-    <link rel="stylesheet" href="./assets/site.css?v=2026-05-13-14" />
+    <link rel="stylesheet" href="./assets/site.css?v=2026-05-13-15" />
     <link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-13-1" />
   </head>
   <body>
@@ -495,59 +495,62 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
         </div>
       </section>
 
-      <section id="proof" class="section" aria-labelledby="proof-title">
+      <section id="proof" class="section proof-section" aria-labelledby="proof-title">
         <div class="wrap">
-          <div class="section-head">
+          <div class="section-head proof-head">
             <div>
-              <p class="kicker">Evidence</p>
-              <h2 id="proof-title">Run the benchmark before you depend on it.</h2>
+              <p class="kicker">Benchmarks</p>
+              <h2 id="proof-title">One claim, with the caveat beside it.</h2>
             </div>
             <p>
-              The scorecard is checked into the repo, including the p95 caveat. Compatibility limits and starter issues stay linked from the
-              same place so the rough edges are not hidden.
+              bilig currently claims 46/46 mean-latency wins on the comparable WorkPaper suite. The p95 holdout and Excel compatibility gaps
+              are linked in the same place, so you can decide whether it fits your workload.
             </p>
           </div>
 
           <div class="proof-layout">
-            <a class="benchmark-image" href="./what-workpaper-benchmark-proves.html" aria-label="Open the WorkPaper benchmark write-up">
-              <img
-                src="./assets/workpaper-benchmark-card.png"
-                alt="WorkPaper benchmark evidence card showing 46 out of 46 comparable mean wins with a visible p95 caveat"
-                width="1280"
-                height="720"
-              />
-            </a>
-            <div class="proof-sidebar">
-              <div class="metric-grid" aria-label="Public project numbers">
-                <div class="metric">
-                  <span>npm</span>
-                  <strong>0.14.0 latest</strong>
-                </div>
-                <div class="metric">
-                  <span>Mean wins</span>
-                  <strong>46 of 46</strong>
-                </div>
-                <div class="metric">
-                  <span>Starter issues</span>
-                  <strong>77 open</strong>
-                </div>
-                <div class="metric">
-                  <span>Stars</span>
-                  <strong>24</strong>
-                </div>
+            <div class="benchmark-receipt" aria-label="Benchmark receipt">
+              <div class="receipt-topline">
+                <span>packages/benchmarks/baselines/workpaper-vs-hyperformula.json</span>
+                <strong>checked in</strong>
               </div>
+              <div class="receipt-claim">
+                <span>Comparable mean-latency rows</span>
+                <strong>46 / 46</strong>
+                <p>WorkPaper wins the current HyperFormula-style comparable suite on mean latency. That is the whole claim.</p>
+              </div>
+              <div class="receipt-command" aria-label="Benchmark command">
+                <span>$</span>
+                <code>pnpm workpaper:bench:competitive:check</code>
+              </div>
+              <dl class="receipt-facts">
+                <div>
+                  <dt>Package</dt>
+                  <dd>@bilig/headless 0.14.0</dd>
+                </div>
+                <div>
+                  <dt>p95 aggregate</dt>
+                  <dd>0.536x WorkPaper / HyperFormula</dd>
+                </div>
+                <div>
+                  <dt>p95 holdout</dt>
+                  <dd>lookup-approximate-duplicates at 1.043x</dd>
+                </div>
+              </dl>
+            </div>
+            <div class="proof-sidebar">
               <div class="proof-links" aria-label="Evidence links">
                 <a href="./what-workpaper-benchmark-proves.html">
-                  <span>Benchmark write-up</span>
-                  <strong>what passed, what lost, and how to rerun it</strong>
+                  <span>Benchmark notes</span>
+                  <strong>Read the artifact summary, caveat, and rerun instructions.</strong>
                 </a>
                 <a href="./where-bilig-is-not-excel-compatible-yet.html">
-                  <span>Compatibility limits</span>
-                  <strong>known Excel behavior that is not finished yet</strong>
+                  <span>Compatibility gaps</span>
+                  <strong>See which Excel behavior is still missing before you swap engines.</strong>
                 </a>
                 <a href="https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only">
                   <span>Starter queue</span>
-                  <strong>small docs and example tasks kept open for new contributors</strong>
+                  <strong>Pick up one of 77 small docs, examples, or integration tasks.</strong>
                 </a>
               </div>
             </div>

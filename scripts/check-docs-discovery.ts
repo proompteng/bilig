@@ -234,7 +234,7 @@ requireIncludes(index, '<title>bilig - Headless Spreadsheet Engine for Node.js S
 requireIncludes(index, '<meta name="robots" content="index, follow, max-image-preview:large" />', 'docs/index.html')
 requireIncludes(index, '<link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />', 'docs/index.html')
 requireIncludes(index, '<link rel="stylesheet" href="./assets/fonts.css?v=2026-05-13-1" />', 'docs/index.html')
-requireIncludes(index, '<link rel="stylesheet" href="./assets/site.css?v=2026-05-13-14" />', 'docs/index.html')
+requireIncludes(index, '<link rel="stylesheet" href="./assets/site.css?v=2026-05-13-15" />', 'docs/index.html')
 requireIncludes(index, '<link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-13-1" />', 'docs/index.html')
 requireNotIncludes(index, 'bilig-hero-workbook-api.png?v=2026-05-08-2', 'docs/index.html')
 requireNotIncludes(siteCss, 'bilig-hero-workbook-api.png?v=2026-05-08-2', 'docs/assets/site.css')
@@ -248,15 +248,20 @@ requireIncludes(index, '<span>Typed examples</span>', 'docs/index.html')
 requireIncludes(index, '<strong>Every guide links to runnable .ts files.</strong>', 'docs/index.html')
 requireIncludes(index, '<span>Starter issues</span>', 'docs/index.html')
 requireIncludes(index, '<strong>77 small tasks are ready for first-time contributors.</strong>', 'docs/index.html')
-requireIncludes(index, 'Run the benchmark before you depend on it.', 'docs/index.html')
-requireIncludes(index, 'Compatibility limits and starter issues stay linked from the', 'docs/index.html')
-requireIncludes(index, 'aria-label="Public project numbers"', 'docs/index.html')
-requireIncludes(index, '<span>npm</span>', 'docs/index.html')
-requireIncludes(index, '<strong>0.14.0 latest</strong>', 'docs/index.html')
-requireIncludes(index, 'what passed, what lost, and how to rerun it', 'docs/index.html')
-requireIncludes(index, 'known Excel behavior that is not finished yet', 'docs/index.html')
-requireIncludes(index, '<span>Starter issues</span>', 'docs/index.html')
-requireIncludes(index, '<strong>77 open</strong>', 'docs/index.html')
+requireIncludes(index, 'One claim, with the caveat beside it.', 'docs/index.html')
+requireIncludes(index, 'bilig currently claims 46/46 mean-latency wins on the comparable WorkPaper suite.', 'docs/index.html')
+requireIncludes(index, 'That is the whole claim.', 'docs/index.html')
+requireIncludes(index, 'packages/benchmarks/baselines/workpaper-vs-hyperformula.json', 'docs/index.html')
+requireIncludes(index, 'pnpm workpaper:bench:competitive:check', 'docs/index.html')
+requireIncludes(index, '<dd>@bilig/headless 0.14.0</dd>', 'docs/index.html')
+requireIncludes(index, '<dd>0.536x WorkPaper / HyperFormula</dd>', 'docs/index.html')
+requireIncludes(index, '<dd>lookup-approximate-duplicates at 1.043x</dd>', 'docs/index.html')
+requireIncludes(index, 'Read the artifact summary, caveat, and rerun instructions.', 'docs/index.html')
+requireIncludes(index, 'Pick up one of 77 small docs, examples, or integration tasks.', 'docs/index.html')
+requireNotIncludes(index, 'Run the benchmark before you depend on it.', 'docs/index.html')
+requireNotIncludes(index, 'Public project numbers', 'docs/index.html')
+requireNotIncludes(index, '<span>Stars</span>', 'docs/index.html')
+requireNotIncludes(index, '<strong>24</strong>', 'docs/index.html')
 requireNotIncludes(index, 'No trust-me homepage claims', 'docs/index.html')
 requireNotIncludes(index, 'The benchmark is public. So are the gaps.', 'docs/index.html')
 requireNotIncludes(index, 'Public project signals', 'docs/index.html')
@@ -744,7 +749,6 @@ for (const [path, content] of [
 for (const [path, content] of [
   ['README.md', readme],
   ['packages/headless/README.md', headlessReadme],
-  ['docs/index.html', index],
   ['docs/llms.txt', llms],
   ['docs/what-workpaper-benchmark-proves.md', await readFile(join(docsRoot, 'what-workpaper-benchmark-proves.md'), 'utf8')],
 ] as const) {
