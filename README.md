@@ -31,7 +31,7 @@ Project site: <https://proompteng.github.io/bilig/>
 - Live growth snapshot:
   <https://proompteng.github.io/bilig/community-growth-snapshot.html>
 - Latest checked-in snapshot: `24` GitHub stars, `13,427` npm downloads in the
-  last week, `24,931` npm downloads in the last 30 days, `35` open
+  last week, `24,931` npm downloads in the last 30 days, `40` open
   `good first issue` tickets, `7` GitHub Discussions, and `393` recent
   repository views.
 - Benchmark evidence:

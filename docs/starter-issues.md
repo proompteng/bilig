@@ -6,8 +6,8 @@ search indexing.
 
 Current starter queue as of May 13, 2026:
 
-- 35 open `first-timers-only` issues.
-- 29 issues are generally available for a new contributor to claim.
+- 40 open `first-timers-only` issues.
+- 34 issues are generally available for a new contributor to claim.
 - 6 issues already have active pull requests; comment before duplicating one of
   those patches.
 
@@ -38,13 +38,17 @@ Current starter queue as of May 13, 2026:
 - [#221: docs(examples): add currency sensitivity WorkPaper example](https://github.com/proompteng/bilig/issues/221)
 - [#222: docs(examples): add payroll accrual WorkPaper example](https://github.com/proompteng/bilig/issues/222)
 - [#223: docs(examples): add deferred revenue roll-forward WorkPaper example](https://github.com/proompteng/bilig/issues/223)
+- [#257: docs(examples): add a runnable Hono WorkPaper route smoke](https://github.com/proompteng/bilig/issues/257)
+- [#258: docs(examples): add Cloudflare KV WorkPaper persistence snippet](https://github.com/proompteng/bilig/issues/258)
+- [#260: docs(examples): add Fastify WorkPaper route smoke snippet](https://github.com/proompteng/bilig/issues/260)
 
 ### Contributor Docs
 
 - [#156: docs(contributor): add first PR description template](https://github.com/proompteng/bilig/issues/156)
 - [#158: docs(contributor): add fuzz replay walkthrough](https://github.com/proompteng/bilig/issues/158)
 - [#198: docs(contributor): add first issue local verification matrix](https://github.com/proompteng/bilig/issues/198)
-- [#246: docs(contributor): refresh starter issue index with current first-timer queue](https://github.com/proompteng/bilig/issues/246)
+- [#255: docs(serverless): explain TypeScript local import suffixes](https://github.com/proompteng/bilig/issues/255)
+- [#256: test(docs): enforce public snippets stay TypeScript-first](https://github.com/proompteng/bilig/issues/256)
 
 ### Headless Package, Benchmarks, And Troubleshooting
 
@@ -53,6 +57,7 @@ Current starter queue as of May 13, 2026:
 - [#159: docs(troubleshooting): document CSV delimiter autodetection](https://github.com/proompteng/bilig/issues/159)
 - [#162: docs(benchmarks): add WorkPaper benchmark reproduction notes](https://github.com/proompteng/bilig/issues/162)
 - [#197: docs(headless): add WorkPaper persistence decision table](https://github.com/proompteng/bilig/issues/197)
+- [#259: docs(service): add Prisma-backed WorkPaper JSON persistence recipe](https://github.com/proompteng/bilig/issues/259)
 
 ## Already In Review
 

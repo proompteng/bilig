@@ -350,7 +350,7 @@ for (const [path, content] of [
   requireIncludes(content, 'https://proompteng.github.io/bilig/community-growth-snapshot.html', path)
   requireIncludes(content, 'https://github.com/proompteng/bilig/stargazers', path)
   requireIncludes(content, '13,427` npm downloads in the', path)
-  requireIncludes(content, '`35` open', path)
+  requireIncludes(content, '`40` open', path)
   requireIncludes(content, '`good first issue` tickets', path)
 }
 
@@ -550,7 +550,7 @@ for (const [path, content] of [
 
 const currentStarterIssueNumbers = [
   134, 153, 154, 155, 156, 158, 159, 162, 163, 193, 194, 195, 196, 197, 198, 207, 208, 209, 210, 211, 212, 217, 218, 219, 220, 221, 222,
-  223, 231, 233, 246, 247, 248, 249, 250,
+  223, 231, 233, 247, 248, 249, 250, 255, 256, 257, 258, 259, 260,
 ]
 
 for (const required of currentStarterIssueNumbers.map((issueNumber) => `https://github.com/proompteng/bilig/issues/${issueNumber}`)) {
@@ -583,6 +583,7 @@ for (const closedIssue of [
   '205',
   '228',
   '229',
+  '246',
   '160',
   '161',
   '164',
