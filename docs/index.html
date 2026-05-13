@@ -122,7 +122,7 @@
       }
     </script>
     <link rel="stylesheet" href="./assets/fonts.css?v=2026-05-13-1" />
-    <link rel="stylesheet" href="./assets/site.css?v=2026-05-13-18" />
+    <link rel="stylesheet" href="./assets/site.css?v=2026-05-13-19" />
     <link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-13-1" />
   </head>
   <body>
@@ -175,11 +175,11 @@
             </div>
             <div class="hero-proof-item">
               <span>Benchmark</span>
-              <strong>Checked-in run: 46/46 comparable mean-latency rows.</strong>
+              <strong>Checked-in run: 46 comparable mean rows, plus the named p95 loss.</strong>
             </div>
             <div class="hero-proof-item">
               <span>Contribute</span>
-              <strong>83 first-timers-only issues are open.</strong>
+              <strong>83 starter issues are open and scoped for first PRs.</strong>
             </div>
           </div>
         </div>
@@ -494,61 +494,66 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
           <div class="section-head proof-head">
             <div>
               <p class="kicker">Benchmarks</p>
-              <h2 id="proof-title">One checked-in run. Keep the caveat with it.</h2>
+              <h2 id="proof-title">The benchmark is in the repo.</h2>
             </div>
             <p>
-              The current artifact has WorkPaper faster on 46 comparable mean-latency rows against HyperFormula. It also has one slower p95
-              lookup case. Rerun the script before you use the number.
+              Before you compare bilig with HyperFormula, open the artifact. It shows the wins, the command, and the row where p95 loses.
             </p>
           </div>
 
           <div class="proof-layout">
-            <div class="benchmark-ledger" aria-label="Benchmark details">
-              <div class="ledger-topline">
-                <span>Benchmark file</span>
-                <code>packages/benchmarks/baselines/workpaper-vs-hyperformula.json</code>
-              </div>
-              <dl class="ledger-rows">
-                <div>
-                  <dt>Mean latency rows</dt>
-                  <dd>46/46</dd>
-                  <p>Comparable rows where WorkPaper is faster in the checked-in artifact.</p>
-                </div>
-                <div>
-                  <dt>p95 aggregate ratio</dt>
-                  <dd>0.536x WorkPaper / HyperFormula</dd>
-                  <p>Lower is better. This is the aggregate p95 ratio from the same run.</p>
-                </div>
-                <div>
-                  <dt>p95 loss</dt>
-                  <dd>lookup duplicates at 1.043x</dd>
-                  <p>The exact row is <code>lookup-approximate-duplicates</code>. That case is slower, so the caveat stays on the page.</p>
-                </div>
-                <div>
-                  <dt>Package under test</dt>
-                  <dd>@bilig/headless 0.14.0</dd>
-                  <p>Use the latest published package for your own run.</p>
-                </div>
-              </dl>
-              <div class="ledger-command" aria-label="Benchmark command">
-                <span>run locally</span>
-                <code>pnpm workpaper:bench:competitive:check</code>
-              </div>
+            <div class="benchmark-table-wrap" aria-label="Benchmark details">
+              <table class="benchmark-table">
+                <caption>
+                  Current checked artifact
+                </caption>
+                <tbody>
+                  <tr>
+                    <th scope="row">Baseline</th>
+                    <td><code>workpaper-vs-hyperformula.json</code></td>
+                    <td>The source file is <code>packages/benchmarks/baselines/workpaper-vs-hyperformula.json</code>.</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Mean rows</th>
+                    <td><strong>46 / 46</strong></td>
+                    <td>WorkPaper was faster on every comparable mean-latency row in the checked-in run.</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">p95 aggregate</th>
+                    <td><strong>0.536x</strong></td>
+                    <td>Aggregate p95 ratio versus HyperFormula. Lower is faster.</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Known loss</th>
+                    <td><code>lookup-approximate-duplicates</code></td>
+                    <td>This row loses at p95: 1.043x. It stays in the docs.</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Package</th>
+                    <td><code>@bilig/headless 0.14.0</code></td>
+                    <td>The published package used by the current public artifact.</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
             <aside class="proof-notes" aria-label="Benchmark notes">
-              <p>Read before quoting it</p>
+              <h3>Rerun it before you quote it.</h3>
+              <div class="proof-command" aria-label="Benchmark command">
+                <span>command</span>
+                <code>pnpm workpaper:bench:competitive:check</code>
+              </div>
               <div class="proof-links" aria-label="Benchmark evidence links">
                 <a href="./what-workpaper-benchmark-proves.html">
-                  <span>Benchmark notes</span>
-                  <strong>What the artifact measures and what it leaves out.</strong>
+                  <span>benchmark notes</span>
+                  <strong>What was measured, and what was not.</strong>
                 </a>
                 <a href="./where-bilig-is-not-excel-compatible-yet.html">
-                  <span>Compatibility gaps</span>
-                  <strong>Excel behavior that bilig does not cover yet.</strong>
+                  <span>compatibility</span>
+                  <strong>Excel behavior bilig does not cover yet.</strong>
                 </a>
                 <a href="https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only">
-                  <span>First PRs</span>
-                  <strong>Small docs, examples, and integration tasks that are open now.</strong>
+                  <span>first PRs</span>
+                  <strong>Small docs and examples work that is open now.</strong>
                 </a>
               </div>
             </aside>

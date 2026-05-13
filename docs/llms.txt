@@ -242,6 +242,8 @@ npm run agent:verify
   https://github.com/proompteng/bilig/discussions/307
 - javascript spreadsheet library guide discussion:
   https://github.com/proompteng/bilig/discussions/308
+- external JavaScript spreadsheet directory submission:
+  https://github.com/krzysztofspilka/JSpreadsheets/pull/50
 - older agent API shape discussion:
   https://github.com/proompteng/bilig/discussions/115
 - community launch and growth pack:

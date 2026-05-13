@@ -112,6 +112,10 @@ issue pass:
 - External contributor-directory surface: the Good First Issue CLI listing pull
   request is open, mergeable, and passing its security checks:
   <https://github.com/cutenode/good-first-issue/pull/1088>
+- External JavaScript spreadsheet directory surface: the JSpreadsheets listing
+  pull request is open, mergeable, and adds the Bilig headless WorkPaper engine
+  to `source/projects/bilig.md`:
+  <https://github.com/krzysztofspilka/JSpreadsheets/pull/50>
 - External MCP directory surface: the TensorBlock awesome-mcp-servers listing
   pull request is open and awaiting maintainer review:
   <https://github.com/TensorBlock/awesome-mcp-servers/pull/536>

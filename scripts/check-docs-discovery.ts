@@ -200,11 +200,11 @@ requireIncludes(index, '<title>bilig - Spreadsheet Formulas for Node.js Services
 requireIncludes(index, '<meta name="robots" content="index, follow, max-image-preview:large" />', 'docs/index.html')
 requireIncludes(index, '<link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />', 'docs/index.html')
 requireIncludes(index, '<link rel="stylesheet" href="./assets/fonts.css?v=2026-05-13-1" />', 'docs/index.html')
-requireIncludes(index, '<link rel="stylesheet" href="./assets/site.css?v=2026-05-13-18" />', 'docs/index.html')
+requireIncludes(index, '<link rel="stylesheet" href="./assets/site.css?v=2026-05-13-19" />', 'docs/index.html')
 requireIncludes(index, '<link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-13-1" />', 'docs/index.html')
 requireNotIncludes(index, 'bilig-hero-workbook-api.png?v=2026-05-08-2', 'docs/index.html')
 requireNotIncludes(siteCss, 'bilig-hero-workbook-api.png?v=2026-05-08-2', 'docs/assets/site.css')
-requireIncludes(siteCss, "'Bilig Condensed', 'Bilig Sans'", 'docs/assets/site.css')
+requireIncludes(siteCss, "--font-display: 'Bilig Sans'", 'docs/assets/site.css')
 requireIncludes(siteCss, 'max-width: 470px;', 'docs/assets/site.css')
 requireIncludes(siteCss, 'grid-template-columns: minmax(100px, 0.34fr) minmax(0, 1fr);', 'docs/assets/site.css')
 requireIncludes(siteCss, 'border-bottom: 1px solid rgba(255, 250, 240, 0.14);', 'docs/assets/site.css')
@@ -214,20 +214,20 @@ requireIncludes(index, 'When a feature still depends on formulas, build a WorkPa
 requireIncludes(index, '<span>Install</span>', 'docs/index.html')
 requireIncludes(index, '<strong>@bilig/headless is published on npm.</strong>', 'docs/index.html')
 requireIncludes(index, '<span>Contribute</span>', 'docs/index.html')
-requireIncludes(index, '<strong>83 first-timers-only issues are open.</strong>', 'docs/index.html')
-requireIncludes(index, 'Checked-in run: 46/46 comparable mean-latency rows.', 'docs/index.html')
-requireIncludes(index, 'One checked-in run. Keep the caveat with it.', 'docs/index.html')
-requireIncludes(index, 'It also has one', 'docs/index.html')
-requireIncludes(index, 'Rerun the script before you use the number.', 'docs/index.html')
+requireIncludes(index, '<strong>83 starter issues are open and scoped for first PRs.</strong>', 'docs/index.html')
+requireIncludes(index, 'Checked-in run: 46 comparable mean rows, plus the named p95 loss.', 'docs/index.html')
+requireIncludes(index, 'The benchmark is in the repo.', 'docs/index.html')
+requireIncludes(index, 'It shows the wins, the command, and the row where p95 loses.', 'docs/index.html')
+requireIncludes(index, 'Rerun it before you quote it.', 'docs/index.html')
 requireIncludes(index, 'packages/benchmarks/baselines/workpaper-vs-hyperformula.json', 'docs/index.html')
 requireIncludes(index, 'pnpm workpaper:bench:competitive:check', 'docs/index.html')
-requireIncludes(index, '<dd>46/46</dd>', 'docs/index.html')
-requireIncludes(index, '<dd>0.536x WorkPaper / HyperFormula</dd>', 'docs/index.html')
-requireIncludes(index, '<dd>lookup duplicates at 1.043x</dd>', 'docs/index.html')
+requireIncludes(index, '<strong>46 / 46</strong>', 'docs/index.html')
+requireIncludes(index, '<strong>0.536x</strong>', 'docs/index.html')
+requireIncludes(index, 'This row loses at p95: 1.043x.', 'docs/index.html')
 requireIncludes(index, '<code>lookup-approximate-duplicates</code>', 'docs/index.html')
-requireIncludes(index, '<dd>@bilig/headless 0.14.0</dd>', 'docs/index.html')
-requireIncludes(index, 'What the artifact measures and what it leaves out.', 'docs/index.html')
-requireIncludes(index, 'Small docs, examples, and integration tasks that are open now.', 'docs/index.html')
+requireIncludes(index, '<code>@bilig/headless 0.14.0</code>', 'docs/index.html')
+requireIncludes(index, 'What was measured, and what was not.', 'docs/index.html')
+requireIncludes(index, 'Small docs and examples work that is open now.', 'docs/index.html')
 requireIncludes(index, 'Pick the closest starting point.', 'docs/index.html')
 requireIncludes(index, 'Known missing Excel behavior, listed before you hit it.', 'docs/index.html')
 requireIncludes(index, 'Docs, examples, issues.', 'docs/index.html')
@@ -640,9 +640,11 @@ for (const required of [
   'Latest PulseMCP verification snapshot on May 13, 2026 after the directory',
   'https://www.pulsemcp.com/servers?search=bilig&q=bilig',
   'https://proompteng.github.io/bilig/mcp-spreadsheet-server-directory.html',
+  'https://github.com/krzysztofspilka/JSpreadsheets/pull/50',
 ]) {
   requireIncludes(communityLaunchPack, required, 'docs/community-launch-pack.md')
 }
+requireIncludes(llms, 'https://github.com/krzysztofspilka/JSpreadsheets/pull/50', 'docs/llms.txt')
 requireIncludes(
   aiSdkLangChainDoc,
   'https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling',
