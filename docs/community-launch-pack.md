@@ -177,6 +177,19 @@ pass:
   `initialize` and `tools/list`, including `read_workpaper_summary` and
   `set_workpaper_input_cell`.
 
+Latest PulseMCP verification snapshot on May 13, 2026 after the directory
+status pass:
+
+- Atlas search on <https://www.pulsemcp.com/servers?search=bilig&q=bilig>
+  returned `0` servers for `bilig`.
+- PulseMCP's submit page says server submissions are ingested from the official
+  MCP Registry daily and processed weekly; if a listed official-registry server
+  still does not appear after a week, maintainers should email
+  `hello@pulsemcp.com`.
+- The public Bilig docs now have an MCP directory status page that distinguishes
+  live listings from pending reviews:
+  <https://proompteng.github.io/bilig/mcp-spreadsheet-server-directory.html>.
+
 ## Goal Text
 
 Grow `proompteng/bilig` from `8` to `1,000` legitimate GitHub stars by making

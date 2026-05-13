@@ -55,6 +55,11 @@ If you already know which client you want to use, start with the
 [MCP client setup guide](mcp-client-setup.md) for Claude, Cursor, VS Code, and
 Codex config snippets.
 
+If you are checking a directory listing or preparing one, use the
+[MCP spreadsheet server directory status page](mcp-spreadsheet-server-directory.md)
+for the canonical npm command, official Registry proof, Glama listing, and
+pending directory-review status.
+
 Before submitting the server to an MCP registry, verify this repo-specific
 readiness checklist:
 

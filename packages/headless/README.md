@@ -41,7 +41,10 @@ validated WorkPaper model once data is in workbook form.
   with the p95 caveat documented instead of hidden.
 - MCP discovery: listed in the
   [official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper)
-  and on [Glama](https://glama.ai/mcp/servers/proompteng/bilig).
+  and on [Glama](https://glama.ai/mcp/servers/proompteng/bilig); the
+  [directory status page](https://proompteng.github.io/bilig/mcp-spreadsheet-server-directory.html)
+  tracks the npm command and pending directory reviews without claiming listings
+  early.
 
 If the sanity check below saves you a workbook automation spike, star the repo
 so you can find it again:

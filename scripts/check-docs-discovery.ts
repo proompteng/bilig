@@ -12,6 +12,7 @@ const expectedSitemapUrls = [
   `${siteRoot}agent-workpaper-tool-calling-recipe.html`,
   `${siteRoot}vercel-ai-sdk-langchain-spreadsheet-tool.html`,
   `${siteRoot}mcp-workpaper-tool-server.html`,
+  `${siteRoot}mcp-spreadsheet-server-directory.html`,
   `${siteRoot}mcp-client-setup.html`,
   `${siteRoot}claude-desktop-mcpb-workpaper.html`,
   `${siteRoot}agent-spreadsheet-tool-call-loop.html`,
@@ -49,6 +50,7 @@ const sourceFilesByUrl = new Map<string, string>([
   [`${siteRoot}agent-workpaper-tool-calling-recipe.html`, 'agent-workpaper-tool-calling-recipe.md'],
   [`${siteRoot}vercel-ai-sdk-langchain-spreadsheet-tool.html`, 'vercel-ai-sdk-langchain-spreadsheet-tool.md'],
   [`${siteRoot}mcp-workpaper-tool-server.html`, 'mcp-workpaper-tool-server.md'],
+  [`${siteRoot}mcp-spreadsheet-server-directory.html`, 'mcp-spreadsheet-server-directory.md'],
   [`${siteRoot}mcp-client-setup.html`, 'mcp-client-setup.md'],
   [`${siteRoot}claude-desktop-mcpb-workpaper.html`, 'claude-desktop-mcpb-workpaper.md'],
   [`${siteRoot}agent-spreadsheet-tool-call-loop.html`, 'agent-spreadsheet-tool-call-loop.md'],
@@ -259,6 +261,7 @@ for (const required of [
   './agent-workpaper-tool-calling-recipe.html',
   './vercel-ai-sdk-langchain-spreadsheet-tool.html',
   './mcp-workpaper-tool-server.html',
+  './mcp-spreadsheet-server-directory.html',
   './mcp-client-setup.html',
   './claude-desktop-mcpb-workpaper.html',
   './agent-spreadsheet-tool-call-loop.html',
@@ -345,6 +348,7 @@ for (const required of [
   'https://proompteng.github.io/bilig/try-bilig-headless-in-node.html',
   'https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html',
   'https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html',
+  'https://proompteng.github.io/bilig/mcp-spreadsheet-server-directory.html',
   'https://proompteng.github.io/bilig/mcp-client-setup.html',
   'https://proompteng.github.io/bilig/claude-desktop-mcpb-workpaper.html',
   'https://github.com/proompteng/bilig/blob/main/docs/claude-desktop-mcpb-workpaper.md',
@@ -383,6 +387,7 @@ for (const required of [
   'https://github.com/proompteng/bilig/blob/main/docs/agent-workpaper-tool-calling-recipe.md',
   'https://github.com/proompteng/bilig/blob/main/docs/vercel-ai-sdk-langchain-spreadsheet-tool.md',
   'https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-server.md',
+  'https://github.com/proompteng/bilig/blob/main/docs/mcp-spreadsheet-server-directory.md',
   'https://github.com/proompteng/bilig/blob/main/docs/mcp-client-setup.md',
   'pnpm mcpb:workpaper:build',
   'https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-tool-server.ts',
@@ -499,6 +504,7 @@ const [
   agentToolCallingDoc,
   aiSdkLangChainDoc,
   mcpWorkPaperToolServerDoc,
+  mcpSpreadsheetServerDirectoryDoc,
   mcpClientSetupDoc,
   claudeDesktopMcpbDoc,
   agentToolCallLoopDoc,
@@ -507,6 +513,7 @@ const [
   readFile(join(docsRoot, 'agent-workpaper-tool-calling-recipe.md'), 'utf8'),
   readFile(join(docsRoot, 'vercel-ai-sdk-langchain-spreadsheet-tool.md'), 'utf8'),
   readFile(join(docsRoot, 'mcp-workpaper-tool-server.md'), 'utf8'),
+  readFile(join(docsRoot, 'mcp-spreadsheet-server-directory.md'), 'utf8'),
   readFile(join(docsRoot, 'mcp-client-setup.md'), 'utf8'),
   readFile(join(docsRoot, 'claude-desktop-mcpb-workpaper.md'), 'utf8'),
   readFile(join(docsRoot, 'agent-spreadsheet-tool-call-loop.md'), 'utf8'),
@@ -562,6 +569,21 @@ requireIncludes(
 )
 requireIncludes(mcpWorkPaperToolServerDoc, 'https://github.com/proompteng/bilig/discussions/230', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(mcpWorkPaperToolServerDoc, 'mcp-client-setup.md', 'docs/mcp-workpaper-tool-server.md')
+for (const required of [
+  'description: Live directory and install status for the Bilig WorkPaper MCP server',
+  'npm exec --package @bilig/headless -- bilig-workpaper-mcp',
+  'io.github.proompteng/bilig-workpaper',
+  'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper',
+  'https://glama.ai/mcp/servers/proompteng/bilig',
+  'https://github.com/chatmcp/mcpso/issues/2295',
+  'https://github.com/cline/mcp-marketplace/issues/1557',
+  'Not indexed yet as of May 13, 2026',
+  'https://www.pulsemcp.com/servers?search=bilig&q=bilig',
+  'read_workpaper_summary',
+  'set_workpaper_input_cell',
+]) {
+  requireIncludes(mcpSpreadsheetServerDirectoryDoc, required, 'docs/mcp-spreadsheet-server-directory.md')
+}
 requireIncludes(
   mcpClientSetupDoc,
   'description: Copy-paste MCP client configuration for running the published @bilig/headless WorkPaper stdio server from Claude, Cursor, VS Code, and Codex.',
@@ -602,6 +624,9 @@ for (const required of [
   '`0.13.28` marked as latest',
   'read_workpaper_summary',
   'set_workpaper_input_cell',
+  'Latest PulseMCP verification snapshot on May 13, 2026 after the directory',
+  'https://www.pulsemcp.com/servers?search=bilig&q=bilig',
+  'https://proompteng.github.io/bilig/mcp-spreadsheet-server-directory.html',
 ]) {
   requireIncludes(communityLaunchPack, required, 'docs/community-launch-pack.md')
 }
@@ -625,6 +650,7 @@ for (const [path, content] of [
   ['docs/agent-workpaper-tool-calling-recipe.md', agentToolCallingDoc],
   ['docs/vercel-ai-sdk-langchain-spreadsheet-tool.md', aiSdkLangChainDoc],
   ['docs/mcp-workpaper-tool-server.md', mcpWorkPaperToolServerDoc],
+  ['docs/mcp-spreadsheet-server-directory.md', mcpSpreadsheetServerDirectoryDoc],
   ['docs/mcp-client-setup.md', mcpClientSetupDoc],
   ['docs/claude-desktop-mcpb-workpaper.md', claudeDesktopMcpbDoc],
   ['docs/agent-spreadsheet-tool-call-loop.md', agentToolCallLoopDoc],
@@ -661,6 +687,7 @@ for (const [path, content] of [
   requireIncludes(content, 'server-side-spreadsheet-automation-node', path)
   requireIncludes(content, 'examples/serverless-workpaper-api', path)
   requireIncludes(content, 'node-framework-workpaper-adapters', path)
+  requireIncludes(content, 'mcp-spreadsheet-server-directory', path)
 }
 
 for (const [path, content] of [
@@ -678,6 +705,7 @@ for (const [path, content] of [
   requireIncludes(content, 'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper', path)
   requireIncludes(content, 'vercel-ai-sdk-langchain-spreadsheet-tool', path)
   requireIncludes(content, 'mcp-workpaper-tool-server', path)
+  requireIncludes(content, 'mcp-spreadsheet-server-directory', path)
   requireIncludes(content, 'mcp-client-setup', path)
   requireIncludes(content, 'claude-desktop-mcpb-workpaper', path)
   requireIncludes(content, 'examples/headless-workpaper#budget-variance-alerts', path)

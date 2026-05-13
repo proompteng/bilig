@@ -40,7 +40,9 @@ Project site: <https://proompteng.github.io/bilig/>
   with the p95 caveat documented instead of hidden.
 - MCP discovery: listed in the
   [official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper)
-  and on [Glama](https://glama.ai/mcp/servers/proompteng/bilig).
+  and on [Glama](https://glama.ai/mcp/servers/proompteng/bilig); the
+  [directory status page](docs/mcp-spreadsheet-server-directory.md) tracks the
+  npm command and pending directory reviews without claiming listings early.
 
 If the 90-second check below saves you a workbook automation spike, star the
 repo so you can find it again:
@@ -52,7 +54,7 @@ repo so you can find it again:
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Prove the npm package     | [`@bilig/headless` in 90 seconds](#try-biligheadless-in-90-seconds) and the [npm-only smoke test page](docs/try-bilig-headless-in-node.md)                                                                                                                                                                                                                                                                      |
 | Build a Node workflow     | [server-side spreadsheet automation](docs/server-side-spreadsheet-automation-node.md), [five runnable workbook automation examples](docs/workbook-automation-examples-node.md), [framework adapters](docs/node-framework-workpaper-adapters.md), [evaluate Excel formulas in Node.js](docs/evaluate-excel-formulas-in-node-typescript.md), and the [Node service recipe](docs/node-service-workpaper-recipe.md) |
-| Wire an agent or MCP tool | [agent tool-calling recipe](docs/agent-workpaper-tool-calling-recipe.md), [MCP spreadsheet tool server guide](docs/mcp-workpaper-tool-server.md), [MCP client setup](docs/mcp-client-setup.md), and [Claude Desktop MCPB bundle](docs/claude-desktop-mcpb-workpaper.md)                                                                                                                                         |
+| Wire an agent or MCP tool | [agent tool-calling recipe](docs/agent-workpaper-tool-calling-recipe.md), [MCP spreadsheet tool server guide](docs/mcp-workpaper-tool-server.md), [MCP directory status](docs/mcp-spreadsheet-server-directory.md), [MCP client setup](docs/mcp-client-setup.md), and [Claude Desktop MCPB bundle](docs/claude-desktop-mcpb-workpaper.md)                                                                       |
 | Compare alternatives      | [headless engine comparison](docs/headless-spreadsheet-engine-comparison.md), [HyperFormula comparison](docs/hyperformula-alternative-headless-workpaper.md)                                                                                                                                                                                                                                                    |
 | Contribute                | [starter issues](docs/starter-issues.md), [GitHub Discussions](https://github.com/proompteng/bilig/discussions), and [CONTRIBUTING.md](CONTRIBUTING.md)                                                                                                                                                                                                                                                         |
 
@@ -71,7 +73,9 @@ Useful direct paths:
   [Vercel AI SDK / LangChain guide](docs/vercel-ai-sdk-langchain-spreadsheet-tool.md),
   [framework adapters](examples/headless-workpaper#agent-framework-adapters),
   [MCP tool server shape](examples/headless-workpaper#mcp-tool-server-shape), and
-  [MCP server guide](docs/mcp-workpaper-tool-server.md). Use
+  [MCP server guide](docs/mcp-workpaper-tool-server.md). Check the
+  [MCP directory status page](docs/mcp-spreadsheet-server-directory.md) when
+  a directory listing needs the canonical npm command or registry proof. Use
   [MCP client setup](docs/mcp-client-setup.md) for Claude, Cursor, VS Code,
   and Codex configs, or build the
   [Claude Desktop MCPB bundle](docs/claude-desktop-mcpb-workpaper.md). Run

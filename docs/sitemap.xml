@@ -31,6 +31,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://proompteng.github.io/bilig/mcp-spreadsheet-server-directory.html</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://proompteng.github.io/bilig/mcp-client-setup.html</loc>
     <lastmod>2026-05-13</lastmod>
     <changefreq>monthly</changefreq>
