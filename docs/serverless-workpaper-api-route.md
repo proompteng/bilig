@@ -6,7 +6,7 @@ function, route handler, queue worker, or coding-agent tool needs spreadsheet
 formulas without keeping a browser grid open.
 
 For a clone-and-run copy of this route, start with
-[`examples/serverless-workpaper-api`](../examples/serverless-workpaper-api).
+[`examples/serverless-workpaper-api`](https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api).
 
 The example also includes a tiny Node adapter so you can run it locally before
 moving the route into Vercel Functions, Cloudflare Workers, Supabase Edge

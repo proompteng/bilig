@@ -15,10 +15,10 @@ spreadsheet logic behind one web-standard `Request -> Response` handler, then
 adapt the framework edge around it.
 
 The runnable example is in
-[`examples/serverless-workpaper-api`](../examples/serverless-workpaper-api). It
-builds a small revenue workbook, writes records into a `Revenue` sheet, reads
-summary formulas, saves the WorkPaper document JSON, and verifies that the
-computed total survives the framework boundary.
+[`examples/serverless-workpaper-api`](https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api).
+It builds a small revenue workbook, writes records into a `Revenue` sheet,
+reads summary formulas, saves the WorkPaper document JSON, and verifies that
+the computed total survives the framework boundary.
 
 ## Run the adapter smoke
 
@@ -144,8 +144,8 @@ The adapter should do only four things:
   cold starts or multiple instances
 
 The workbook logic stays in
-[`route.ts`](../examples/serverless-workpaper-api/route.ts). The adapters live
-in
-[`framework-adapters.ts`](../examples/serverless-workpaper-api/framework-adapters.ts).
+[`route.ts`](https://github.com/proompteng/bilig/blob/main/examples/serverless-workpaper-api/route.ts).
+The adapters live in
+[`framework-adapters.ts`](https://github.com/proompteng/bilig/blob/main/examples/serverless-workpaper-api/framework-adapters.ts).
 Run `npm run smoke` and `npm run framework-adapters` before moving the handler
 into your own service.
