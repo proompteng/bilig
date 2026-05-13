@@ -776,7 +776,7 @@ export function parseNodeMcpStdioErrorOutput(output: string): {
   }
   invalidRequest: {
     code: number
-    id: number
+    id: null
   }
 } {
   const responses = output
@@ -784,8 +784,8 @@ export function parseNodeMcpStdioErrorOutput(output: string): {
     .filter((line) => line.trim().length > 0)
     .map((line, index) => parseJsonRecord(line, `node MCP stdio error response ${index + 1}`))
 
-  const invalidJsonResponse = requireJsonRpcErrorResponse(responses, null, -32700, 'node MCP stdio invalid JSON response')
-  const invalidRequestResponse = requireJsonRpcErrorResponse(responses, 4, -32600, 'node MCP stdio invalid request response')
+  const invalidJsonResponse = requireJsonRpcErrorResponseAt(responses, 0, null, -32700, 'node MCP stdio invalid JSON response')
+  const invalidRequestResponse = requireJsonRpcErrorResponseAt(responses, 1, null, -32700, 'node MCP stdio invalid request response')
 
   return {
     invalidJson: {
@@ -794,7 +794,7 @@ export function parseNodeMcpStdioErrorOutput(output: string): {
     },
     invalidRequest: {
       code: Number(parseRecordValue(invalidRequestResponse.error, 'node MCP stdio invalid request error').code),
-      id: 4,
+      id: null,
     },
   }
 }
@@ -807,14 +807,15 @@ function requireJsonRpcResponse(responses: Record<string, unknown>[], id: number
   return response
 }
 
-function requireJsonRpcErrorResponse(
+function requireJsonRpcErrorResponseAt(
   responses: Record<string, unknown>[],
+  index: number,
   id: number | null,
   code: number,
   context: string,
 ): Record<string, unknown> {
-  const response = responses.find((entry) => entry.id === id)
-  if (response === undefined || response.jsonrpc !== '2.0') {
+  const response = responses[index]
+  if (response === undefined || response.id !== id || response.jsonrpc !== '2.0') {
     throw new Error(`Missing ${context}: ${JSON.stringify(responses)}`)
   }
 

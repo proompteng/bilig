@@ -225,7 +225,7 @@ function runNodeSmoke(
     }
     invalidRequest: {
       code: number
-      id: number
+      id: null
     }
   }
   rangeReadback: {
