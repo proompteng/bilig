@@ -80,7 +80,7 @@ issue pass:
 
 - GitHub surface: `24` stars, `10` forks, `56` open issues, and `6` open pull
   requests.
-- npm surface: `@bilig/headless@0.13.19`, with `15,592` downloads last week
+- npm surface: `@bilig/headless@0.13.20`, with `15,592` downloads last week
   and `23,240` downloads in the last 30 days.
 - Contributor funnel: `55` open `good first issue`, `55` open
   `first-timers-only`, and `55` open `help wanted` issues.
@@ -99,10 +99,13 @@ issue pass:
 - External MCP directory surface: the abordage awesome-mcp listing pull request
   is open with the repository entry in `repositories.yaml`:
   <https://github.com/abordage/awesome-mcp/pull/36>
+- External MCP directory surface: the punkpeye awesome-mcp-servers listing pull
+  request is open, mergeable, and passing its submission check:
+  <https://github.com/punkpeye/awesome-mcp-servers/pull/6291>
 - Official MCP Registry surface: the published `io.github.proompteng/bilig-workpaper`
-  entry was refreshed to `@bilig/headless@0.13.19` with the existing Publish MCP
+  entry was refreshed to `@bilig/headless@0.13.20` with the existing Publish MCP
   Registry workflow:
-  <https://github.com/proompteng/bilig/actions/runs/25793817006>
+  <https://github.com/proompteng/bilig/actions/runs/25794238560>
 - External MCP directory surface: `mcp.directory` accepted the public server
   submission for review with repository `https://github.com/proompteng/bilig`,
   npm package `@bilig/headless`, and the WorkPaper persistence/readback
