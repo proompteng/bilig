@@ -1330,6 +1330,48 @@ describe('excel import', () => {
     expect(sheetXml).toContain('<pane xSplit="2" ySplit="3" topLeftCell="I32" activePane="bottomRight" state="frozen"/>')
   })
 
+  it('preserves unicode table names across XLSX export', () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: {
+        name: 'unicode-table-name',
+        metadata: {
+          tables: [
+            {
+              name: 'Données_FR',
+              sheetName: 'Données - FR',
+              startAddress: 'A1',
+              endAddress: 'B2',
+              columnNames: ['MESURE', 'CATÉGORIE'],
+              headerRow: true,
+              totalsRow: false,
+            },
+          ],
+        },
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'Données - FR',
+          order: 0,
+          cells: [
+            { address: 'A1', value: 'MESURE' },
+            { address: 'B1', value: 'CATÉGORIE' },
+            { address: 'A2', value: 'Taxes' },
+            { address: 'B2', value: 'Fédéral' },
+          ],
+        },
+      ],
+    }
+
+    const exported = exportXlsx(snapshot)
+    const exportedZip = unzipSync(exported)
+    const imported = importXlsx(exported, 'unicode-table-name.xlsx')
+
+    expect(strFromU8(exportedZip['xl/tables/table1.xml'] ?? new Uint8Array())).toContain('displayName="Données_FR"')
+    expect(imported.snapshot.workbook.metadata?.tables?.[0]?.name).toBe('Données_FR')
+  })
+
   it('preserves worksheet tab colors on import and export', () => {
     const snapshot: WorkbookSnapshot = {
       version: 1,

@@ -192,8 +192,8 @@ function addWorksheetTablePart(sheetXml: string, relationshipId: string): string
 function tableDisplayName(name: string, fallbackIndex: number): string {
   const sanitized = name
     .trim()
-    .replace(/[^A-Za-z0-9_.]/g, '_')
-    .replace(/^[^A-Za-z_]+/u, '')
+    .replace(/[^\p{L}\p{N}_.]/gu, '_')
+    .replace(/^[^\p{L}_]+/u, '')
   return sanitized.length > 0 ? sanitized : `Table${String(fallbackIndex)}`
 }
 
