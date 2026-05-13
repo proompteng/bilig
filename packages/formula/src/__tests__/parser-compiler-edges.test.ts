@@ -68,6 +68,11 @@ describe('formula parser/compiler edges', () => {
       kind: 'ErrorLiteral',
       code: ErrorCode.Div0,
     })
+
+    expect(parseFormula("'Deleted Sheet'!#REF!")).toEqual({
+      kind: 'ErrorLiteral',
+      code: ErrorCode.Ref,
+    })
   })
 
   it('rejects standalone axis refs and malformed ranges', () => {

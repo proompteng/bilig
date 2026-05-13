@@ -3,6 +3,7 @@ import type {
   CallExprNode,
   CellRefNode,
   ColumnRefNode,
+  ErrorLiteralNode,
   FormulaNode,
   InvokeExprNode,
   NameRefNode,
@@ -174,6 +175,15 @@ export function parseFormula(source: string): FormulaNode {
     throw new Error(`Unsupported reference '${ref}'`)
   }
 
+  function parseErrorLiteral(): ErrorLiteralNode {
+    const token = eat('error')
+    const code = ERROR_LITERAL_CODES[token.value.toUpperCase()]
+    if (code === undefined) {
+      throw new Error(`Unsupported error literal '${token.value}'`)
+    }
+    return { kind: 'ErrorLiteral', code }
+  }
+
   function parseIdentifierValue(identifier: string): CellRefNode | ColumnRefNode | RowRefNode | NameRefNode {
     const referenceValue = maybeParseReferenceValue(identifier)
     return referenceValue?.kind === 'CellRef' ? referenceValue : ({ kind: 'NameRef', name: identifier } satisfies NameRefNode)
@@ -235,6 +245,10 @@ export function parseFormula(source: string): FormulaNode {
       return { kind: 'RowRef', ref: token.value, sheetName }
     }
     throw new Error(`Expected a sheet-qualified reference, received ${token.kind}`)
+  }
+
+  function parseSheetQualifiedValue(sheetName: string): CellRefNode | ColumnRefNode | RowRefNode | ErrorLiteralNode {
+    return current().kind === 'error' ? parseErrorLiteral() : parseSheetQualifiedReference(sheetName)
   }
 
   function maybeParseSheetRangeQualifiedReference(sheetName: string): RangeRefNode | undefined {
@@ -315,12 +329,7 @@ export function parseFormula(source: string): FormulaNode {
       eat('string')
       result = { kind: 'StringLiteral', value: token.value }
     } else if (token.kind === 'error') {
-      eat('error')
-      const code = ERROR_LITERAL_CODES[token.value.toUpperCase()]
-      if (code === undefined) {
-        throw new Error(`Unsupported error literal '${token.value}'`)
-      }
-      result = { kind: 'ErrorLiteral', code }
+      result = parseErrorLiteral()
     } else if (token.kind === 'quotedIdentifier') {
       const first = eat('quotedIdentifier').value
       const sheetRange = maybeParseSheetRangeQualifiedReference(first)
@@ -328,7 +337,7 @@ export function parseFormula(source: string): FormulaNode {
         result = sheetRange
       } else if (current().kind === 'bang') {
         eat('bang')
-        result = parseSheetQualifiedReference(first)
+        result = parseSheetQualifiedValue(first)
       } else {
         result = { kind: 'StringLiteral', value: first }
       }
@@ -353,7 +362,7 @@ export function parseFormula(source: string): FormulaNode {
         result = sheetRange
       } else if (current().kind === 'bang') {
         eat('bang')
-        result = parseSheetQualifiedReference(first)
+        result = parseSheetQualifiedValue(first)
       } else if (current().kind === 'lparen') {
         result = {
           kind: 'CallExpr',

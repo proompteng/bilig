@@ -349,6 +349,18 @@ describe('EngineFormulaEvaluationService', () => {
     })
   })
 
+  it('allows IFERROR to catch sheet-qualified broken references', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'evaluation-qualified-broken-ref-iferror' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.createSheet('Data')
+
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellFormula('Sheet1', 'A2', 'IFERROR(IF(Data!#REF!=A1,"Pass","Check"),"Error")')
+
+    expect(engine.getCellValue('Sheet1', 'A2')).toEqual({ tag: ValueTag.String, value: 'Error', stringId: expect.any(Number) })
+  })
+
   it('wraps workbook access failures from structured, spill, and multiple-operations helpers', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'evaluation-error-wrappers' })
     await engine.ready()
