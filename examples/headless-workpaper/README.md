@@ -243,6 +243,15 @@ JSON-RPC response per line to stdout. It supports `initialize`,
 `notifications/initialized`, `tools/list`, and `tools/call` without adding a
 transport package or MCP SDK dependency.
 
+### MCP Stdio Troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| `Parse error` response | Make sure each stdin line is valid JSON before it reaches the server. |
+| No response appears | End each JSON-RPC message with a newline; the server waits for newline-delimited input. |
+| Notification has no output | `notifications/initialized` is intentionally one-way and does not produce a JSON-RPC response. |
+| `Invalid params` or tool error | Check that `tools/call` includes a supported `name` and the required `arguments` for that tool. |
+
 ## Agent Writeback Verification
 
 Run the agent verification demo when you want a small artifact for the claim
