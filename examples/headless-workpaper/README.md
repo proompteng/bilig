@@ -243,6 +243,35 @@ JSON-RPC response per line to stdout. It supports `initialize`,
 `notifications/initialized`, `tools/list`, and `tools/call` without adding a
 transport package or MCP SDK dependency.
 
+### Local MCP Client Config
+
+From a clean checkout, install the example dependencies first:
+
+```sh
+cd examples/headless-workpaper
+npm install
+```
+
+Then point your local MCP client at the stdio entrypoint. Replace the path with
+the absolute path to your checkout:
+
+```json
+{
+  "mcpServers": {
+    "bilig-workpaper": {
+      "command": "npm",
+      "args": [
+        "--prefix",
+        "/absolute/path/to/bilig/examples/headless-workpaper",
+        "run",
+        "--silent",
+        "agent:mcp-stdio"
+      ]
+    }
+  }
+}
+```
+
 ## Agent Writeback Verification
 
 Run the agent verification demo when you want a small artifact for the claim
