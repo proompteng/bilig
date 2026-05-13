@@ -220,7 +220,7 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md
 - community growth snapshot:
   https://github.com/proompteng/bilig/blob/main/docs/community-growth-snapshot.md
-- current starter queue snapshot: 40 open first-timers-only issues, 34 generally available, 6 already in review.
+- current starter queue snapshot: 45 open first-timers-only issues, 39 generally available, 6 already in review.
 - current small example issue: xlsx formula-cache roundtrip:
   https://github.com/proompteng/bilig/issues/134
 - current small docs issue: WorkPaper agent tool result contract:
@@ -279,28 +279,38 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/223
 - current small test issue in review: MCP stdio JSON-RPC error responses:
   https://github.com/proompteng/bilig/issues/231
-- current small docs issue in review: MCP stdio output transcript:
+- current small docs issue: MCP stdio output transcript:
   https://github.com/proompteng/bilig/issues/233
+- current small docs issue: OpenAI WorkPaper tool-calling recipe:
+  https://github.com/proompteng/bilig/issues/247
+- current small docs issue: downstream GitHub Actions smoke snippet:
+  https://github.com/proompteng/bilig/issues/248
+- current small example issue: AWS Lambda Function URL WorkPaper adapter note:
+  https://github.com/proompteng/bilig/issues/249
+- current small docs issue: package-size and cold-start evaluation note:
+  https://github.com/proompteng/bilig/issues/250
 - current small docs issue: TypeScript local import suffix note:
   https://github.com/proompteng/bilig/issues/255
 - current small test issue: TypeScript-first public snippet guard:
   https://github.com/proompteng/bilig/issues/256
-- current small example issue: runnable Hono WorkPaper route smoke:
+- current small example issue in review: runnable Hono WorkPaper route smoke:
   https://github.com/proompteng/bilig/issues/257
-- current small example issue: Cloudflare KV WorkPaper persistence snippet:
+- current small example issue in review: Cloudflare KV WorkPaper persistence snippet:
   https://github.com/proompteng/bilig/issues/258
-- current small service issue: Prisma-backed WorkPaper JSON persistence recipe:
+- current small service issue in review: Prisma-backed WorkPaper JSON persistence recipe:
   https://github.com/proompteng/bilig/issues/259
-- current small example issue: Fastify WorkPaper route smoke snippet:
+- current small example issue in review: Fastify WorkPaper route smoke snippet:
   https://github.com/proompteng/bilig/issues/260
-- current small docs issue in review: OpenAI WorkPaper tool-calling recipe:
-  https://github.com/proompteng/bilig/issues/247
-- current small docs issue in review: downstream GitHub Actions smoke snippet:
-  https://github.com/proompteng/bilig/issues/248
-- current small example issue in review: AWS Lambda Function URL WorkPaper adapter note:
-  https://github.com/proompteng/bilig/issues/249
-- current small docs issue in review: package-size and cold-start evaluation note:
-  https://github.com/proompteng/bilig/issues/250
+- current small docs issue: ESM troubleshooting for the npm smoke test:
+  https://github.com/proompteng/bilig/issues/265
+- current small docs issue in review: Docker smoke test for clean Node 24 runs:
+  https://github.com/proompteng/bilig/issues/266
+- current small example issue: Vitest assertions for the WorkPaper readback smoke:
+  https://github.com/proompteng/bilig/issues/267
+- current small example issue: CSV records to WorkPaper smoke test:
+  https://github.com/proompteng/bilig/issues/268
+- current small docs issue: package-manager variants for the smoke test:
+  https://github.com/proompteng/bilig/issues/269
 - good first issue search:
   https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22
 - first-timers-only issue search:
