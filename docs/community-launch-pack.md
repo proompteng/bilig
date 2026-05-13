@@ -78,12 +78,12 @@ Latest public execution snapshot on May 13, 2026 after the landing-page pass:
 Latest starter-queue execution snapshot on May 13, 2026 after the adapter smoke
 issue pass:
 
-- GitHub surface: `24` stars, `10` forks, `56` open issues, and `6` open pull
+- GitHub surface: `24` stars, `10` forks, `61` open issues, and `6` open pull
   requests.
 - npm surface: `@bilig/headless@0.13.21`, with `15,592` downloads last week
   and `23,240` downloads in the last 30 days.
-- Contributor funnel: `55` open `good first issue`, `55` open
-  `first-timers-only`, and `55` open `help wanted` issues.
+- Contributor funnel: `60` open `good first issue`, `60` open
+  `first-timers-only`, and `60` open `help wanted` issues.
 - New starter issues `#272` through `#281` cover NestJS, Express, Supabase Edge
   Functions, Deno Deploy, Next.js Route Handlers, Bun.serve, SvelteKit, Remix,
   Netlify Functions, and Cloudflare D1 WorkPaper smoke examples.
@@ -130,6 +130,11 @@ issue pass:
   issue is open with the GitHub repository, 400px logo, public npm command, and
   verified `tools/list` plus `set_workpaper_input_cell` readback proof:
   <https://github.com/cline/mcp-marketplace/issues/1557>
+- External MCP directory follow-up: PulseMCP currently returns `0` results for
+  `bilig` in Atlas, and its submit page says server submissions are ingested
+  from the official MCP Registry. The next action is to let the fresh official
+  registry entry propagate, then email `hello@pulsemcp.com` only if it remains
+  missing after the daily ingest window.
 
 ## Goal Text
 
