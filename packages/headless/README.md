@@ -422,6 +422,21 @@ Its package metadata includes `mcpName: io.github.proompteng/bilig-workpaper`
 and `server.json`, so the server can be published to MCP registries after the
 runtime package version is released.
 
+Before submitting the server to an MCP registry, verify this repo-specific
+readiness checklist:
+
+- `packages/headless/server.json` exists and describes the packaged stdio
+  server.
+- `packages/headless/package.json` exposes `bilig-workpaper-mcp` in `bin`.
+- `packages/headless/package.json` includes
+  `mcpName: io.github.proompteng/bilig-workpaper`.
+- `pnpm publish:runtime:check` passes against the runtime packages.
+- `pnpm workpaper:smoke:external` passes against packed local runtime packages.
+
+Passing the checklist means the package metadata and smoke checks are ready for
+registry submission; it does not mean this package version has already been
+published.
+
 For a framework-neutral recipe that wraps WorkPaper operations as agent-callable
 tools, see
 [`docs/agent-workpaper-tool-calling-recipe.md`](https://github.com/proompteng/bilig/blob/main/docs/agent-workpaper-tool-calling-recipe.md).

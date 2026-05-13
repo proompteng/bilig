@@ -50,6 +50,21 @@ The package carries `mcpName: io.github.proompteng/bilig-workpaper` and a
 matching `server.json`, which is the metadata shape expected by MCP registries
 for npm-hosted stdio servers.
 
+Before submitting the server to an MCP registry, verify this repo-specific
+readiness checklist:
+
+- `packages/headless/server.json` exists and describes the packaged stdio
+  server.
+- `packages/headless/package.json` exposes `bilig-workpaper-mcp` in `bin`.
+- `packages/headless/package.json` includes
+  `mcpName: io.github.proompteng/bilig-workpaper`.
+- `pnpm publish:runtime:check` passes against the runtime packages.
+- `pnpm workpaper:smoke:external` passes against packed local runtime packages.
+
+Passing the checklist means the repository metadata and smoke checks are ready
+for registry submission; it does not mean the package has already been
+published.
+
 The script implements two JSON-RPC methods shaped around the MCP tool model:
 
 - `tools/list` returns `read_workpaper_summary` and
