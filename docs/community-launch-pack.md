@@ -80,7 +80,7 @@ issue pass:
 
 - GitHub surface: `24` stars, `10` forks, `56` open issues, and `6` open pull
   requests.
-- npm surface: `@bilig/headless@0.13.20`, with `15,592` downloads last week
+- npm surface: `@bilig/headless@0.13.21`, with `15,592` downloads last week
   and `23,240` downloads in the last 30 days.
 - Contributor funnel: `55` open `good first issue`, `55` open
   `first-timers-only`, and `55` open `help wanted` issues.
@@ -107,9 +107,9 @@ issue pass:
   <https://glama.ai/mcp/servers/proompteng/bilig>. The score badge was added to
   the punkpeye PR, replacing the `missing-glama` label with `has-glama`.
 - Official MCP Registry surface: the published `io.github.proompteng/bilig-workpaper`
-  entry was refreshed to `@bilig/headless@0.13.20` with the existing Publish MCP
+  entry was refreshed to `@bilig/headless@0.13.21` with the existing Publish MCP
   Registry workflow:
-  <https://github.com/proompteng/bilig/actions/runs/25794238560>
+  <https://github.com/proompteng/bilig/actions/runs/25794844239>
 - External MCP directory surface: `mcp.directory` accepted the public server
   submission for review with repository `https://github.com/proompteng/bilig`,
   npm package `@bilig/headless`, and the WorkPaper persistence/readback
