@@ -117,6 +117,14 @@ Official docs for the framework shapes:
   <https://developers.cloudflare.com/agents/api-reference/agents-api/>
   <https://developers.cloudflare.com/agents/api-reference/agent-tools/>
 
+Framework-specific WorkPaper pages:
+
+- [Mastra WorkPaper spreadsheet tool](mastra-workpaper-spreadsheet-tool.md)
+- [LlamaIndex.TS WorkPaper spreadsheet tool](llamaindex-workpaper-spreadsheet-tool.md)
+- [LangGraph.js WorkPaper ToolNode spreadsheet tool](langgraph-workpaper-toolnode-spreadsheet.md)
+- [CopilotKit WorkPaper spreadsheet action](copilotkit-workpaper-spreadsheet-action.md)
+- [Cloudflare Agents WorkPaper spreadsheet tool](cloudflare-agents-workpaper-spreadsheet-tool.md)
+
 ## Files To Inspect
 
 - adapter script:

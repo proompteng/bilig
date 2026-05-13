@@ -71,13 +71,19 @@ Useful direct paths:
   when the route is moving into an existing service.
 - Agent and MCP adapters:
   [agent framework guide](docs/vercel-ai-sdk-langchain-spreadsheet-tool.md),
+  framework-specific notes for
+  [Mastra](docs/mastra-workpaper-spreadsheet-tool.md),
+  [LlamaIndex.TS](docs/llamaindex-workpaper-spreadsheet-tool.md),
+  [LangGraph.js](docs/langgraph-workpaper-toolnode-spreadsheet.md),
+  [CopilotKit](docs/copilotkit-workpaper-spreadsheet-action.md), and
+  [Cloudflare Agents](docs/cloudflare-agents-workpaper-spreadsheet-tool.md),
   [framework adapters](examples/headless-workpaper#agent-framework-adapters),
   [MCP tool server shape](examples/headless-workpaper#mcp-tool-server-shape), and
   [MCP server guide](docs/mcp-workpaper-tool-server.md). Check the
   [MCP directory status page](docs/mcp-spreadsheet-server-directory.md) when
   a directory listing needs the canonical npm command or registry proof. Use
   [MCP client setup](docs/mcp-client-setup.md) for Claude, Cursor, VS Code,
-  and Codex configs, or build the
+  Cline, and Codex configs, or build the
   [Claude Desktop MCPB bundle](docs/claude-desktop-mcpb-workpaper.md). Run
   `npm run agent:framework-adapters`, `npm run agent:mcp-tools`,
   `npm run agent:mcp-stdio`, or

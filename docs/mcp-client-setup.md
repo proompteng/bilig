@@ -1,8 +1,8 @@
 ---
 title: MCP client setup for Bilig WorkPaper
 published: true
-description: Copy-paste MCP client configuration for running the published @bilig/headless WorkPaper stdio server from Claude, Cursor, VS Code, and Codex.
-tags: mcp, claude, cursor, vscode, codex, spreadsheet
+description: Copy-paste MCP client configuration for running the published @bilig/headless WorkPaper stdio server from Claude, Cursor, VS Code, Cline, and Codex.
+tags: mcp, claude, cursor, vscode, cline, codex, spreadsheet
 canonical_url: https://proompteng.github.io/bilig/mcp-client-setup.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
 image: /assets/github-social-preview.png
@@ -144,6 +144,36 @@ Open the Command Palette and run `MCP: List Servers` to start, stop, or inspect
 the server. VS Code also supports `code --add-mcp` for user-level setup; the
 workspace file is easier to review in a repository.
 
+## Cline
+
+Cline can run the published WorkPaper server as a local stdio MCP server. For
+the IDE extension, open the MCP Servers icon, choose Configure, and add this
+entry under `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "bilig-workpaper": {
+      "command": "npm",
+      "args": ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp"],
+      "env": {},
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
+```
+
+For Cline CLI, put the same `mcpServers` object in `~/.cline/mcp.json`. Keep
+`autoApprove` empty until you have reviewed the read and write tools. Then ask
+Cline:
+
+```text
+List the Bilig WorkPaper tools.
+Read Summary!A1:B5, set Inputs!B3 to 0.4, and return the edited cell,
+the before/after expected ARR, and the persistence checks.
+```
+
 ## Codex
 
 For Codex CLI or the Codex IDE extension, add this to `~/.codex/config.toml`:
@@ -193,6 +223,8 @@ new value, before/after computed values, and persistence proof.
   <https://docs.cursor.com/advanced/model-context-protocol>
 - VS Code MCP configuration:
   <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration>
+- Cline MCP configuration:
+  <https://docs.cline.bot/mcp/mcp-overview>
 - OpenAI Docs MCP setup for Codex, VS Code, and Cursor:
   <https://platform.openai.com/docs/docs-mcp>
 

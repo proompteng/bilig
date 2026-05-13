@@ -533,6 +533,21 @@ Latest JavaScript-library comparison starter snapshot on May 13, 2026:
   `good first issue`, and `help wanted` issues, with `80` generally available
   and `8` already in review.
 
+Latest agent-framework search-intent snapshot on May 13, 2026:
+
+- Five framework-specific WorkPaper tool pages now target people searching for
+  spreadsheet tools inside Mastra, LlamaIndex.TS, LangGraph.js, CopilotKit, and
+  Cloudflare Agents:
+  <https://proompteng.github.io/bilig/mastra-workpaper-spreadsheet-tool.html>,
+  <https://proompteng.github.io/bilig/llamaindex-workpaper-spreadsheet-tool.html>,
+  <https://proompteng.github.io/bilig/langgraph-workpaper-toolnode-spreadsheet.html>,
+  <https://proompteng.github.io/bilig/copilotkit-workpaper-spreadsheet-action.html>,
+  and
+  <https://proompteng.github.io/bilig/cloudflare-agents-workpaper-spreadsheet-tool.html>.
+- Each page points to the same checked `npm run agent:framework-adapters`
+  example so the SEO surface is tied to verified formula readback, JSON
+  persistence, and restored-workbook proof instead of framework-name stuffing.
+
 Set `GITHUB_TOKEN` or `GH_TOKEN` with repository traffic access, or run with an
 authenticated `gh` CLI session, to include recent discussion activity, views,
 clones, popular referrers, and popular paths. Without either authenticated

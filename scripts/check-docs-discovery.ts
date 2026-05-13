@@ -1,50 +1,13 @@
 import { readFile, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { agentFrameworkDocRequirements, agentFrameworkLlmsRequiredLinks } from './check-docs-discovery-agent-pages.ts'
 import { communityLaunchPackRequiredLinks, llmsExternalSurfaceLinks } from './check-docs-discovery-growth-links.ts'
+import { docsSiteSources } from './check-docs-discovery-site-sources.ts'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const docsRoot = join(repoRoot, 'docs')
 const siteRoot = 'https://proompteng.github.io/bilig/'
-
-const docsSiteSources = [
-  ['', 'index.html'],
-  ['why-agents-need-workbook-apis.html', 'why-agents-need-workbook-apis.md'],
-  ['agent-workpaper-tool-calling-recipe.html', 'agent-workpaper-tool-calling-recipe.md'],
-  ['vercel-ai-sdk-langchain-spreadsheet-tool.html', 'vercel-ai-sdk-langchain-spreadsheet-tool.md'],
-  ['mcp-workpaper-tool-server.html', 'mcp-workpaper-tool-server.md'],
-  ['mcp-spreadsheet-server-directory.html', 'mcp-spreadsheet-server-directory.md'],
-  ['mcp-client-setup.html', 'mcp-client-setup.md'],
-  ['claude-desktop-mcpb-workpaper.html', 'claude-desktop-mcpb-workpaper.md'],
-  ['agent-spreadsheet-tool-call-loop.html', 'agent-spreadsheet-tool-call-loop.md'],
-  ['node-service-workpaper-recipe.html', 'node-service-workpaper-recipe.md'],
-  ['server-side-spreadsheet-automation-node.html', 'server-side-spreadsheet-automation-node.md'],
-  ['node-spreadsheet-formula-engine.html', 'node-spreadsheet-formula-engine.md'],
-  ['evaluate-excel-formulas-in-node-typescript.html', 'evaluate-excel-formulas-in-node-typescript.md'],
-  ['try-bilig-headless-in-node.html', 'try-bilig-headless-in-node.md'],
-  ['workbook-automation-examples-node.html', 'workbook-automation-examples-node.md'],
-  ['serverless-workpaper-api-route.html', 'serverless-workpaper-api-route.md'],
-  ['node-framework-workpaper-adapters.html', 'node-framework-workpaper-adapters.md'],
-  ['csv-shaped-workpaper-input-recipe.html', 'csv-shaped-workpaper-input-recipe.md'],
-  ['unsupported-formula-troubleshooting-recipe.html', 'unsupported-formula-troubleshooting-recipe.md'],
-  ['local-workpaper-benchmark-walkthrough.html', 'local-workpaper-benchmark-walkthrough.md'],
-  ['building-a-revenue-model-with-headless-workpaper.html', 'building-a-revenue-model-with-headless-workpaper.md'],
-  ['persisting-formula-backed-workpaper-documents-in-node.html', 'persisting-formula-backed-workpaper-documents-in-node.md'],
-  ['what-workpaper-benchmark-proves.html', 'what-workpaper-benchmark-proves.md'],
-  ['hyperformula-alternative-headless-workpaper.html', 'hyperformula-alternative-headless-workpaper.md'],
-  ['headless-spreadsheet-engine-comparison.html', 'headless-spreadsheet-engine-comparison.md'],
-  ['javascript-spreadsheet-library-headless-node.html', 'javascript-spreadsheet-library-headless-node.md'],
-  ['sheetjs-exceljs-alternative-formula-workbook-api.html', 'sheetjs-exceljs-alternative-formula-workbook-api.md'],
-  ['where-bilig-is-not-excel-compatible-yet.html', 'where-bilig-is-not-excel-compatible-yet.md'],
-  ['xlsx-corpus-verifier-walkthrough.html', 'xlsx-corpus-verifier-walkthrough.md'],
-  ['formula-edge-xlookup-exact-fixture.html', 'formula-edge-xlookup-exact-fixture.md'],
-  ['formula-edge-sumifs-paired-criteria-fixture.html', 'formula-edge-sumifs-paired-criteria-fixture.md'],
-  ['formula-edge-groupby-spill-fixture.html', 'formula-edge-groupby-spill-fixture.md'],
-  ['starter-issues.html', 'starter-issues.md'],
-  ['community-launch-pack.html', 'community-launch-pack.md'],
-  ['community-growth-snapshot.html', 'community-growth-snapshot.md'],
-  ['llms.txt', 'llms.txt'],
-] as const
 
 const expectedSitemapUrls = docsSiteSources.map(([urlPath]) => `${siteRoot}${urlPath}`)
 const sourceFilesByUrl = new Map<string, string>(docsSiteSources.map(([urlPath, sourceFile]) => [`${siteRoot}${urlPath}`, sourceFile]))
@@ -414,6 +377,9 @@ for (const required of [
 ]) {
   requireIncludes(llms, required, 'docs/llms.txt')
 }
+for (const required of agentFrameworkLlmsRequiredLinks) {
+  requireIncludes(llms, required, 'docs/llms.txt')
+}
 
 for (const [path, content] of [
   ['README.md', readme],
@@ -552,6 +518,18 @@ requireIncludes(aiSdkLangChainDoc, 'LlamaIndex.TS tools', 'docs/vercel-ai-sdk-la
 requireIncludes(aiSdkLangChainDoc, 'LangGraph.js `ToolNode`', 'docs/vercel-ai-sdk-langchain-spreadsheet-tool.md')
 requireIncludes(aiSdkLangChainDoc, 'CopilotKit `useCopilotAction`', 'docs/vercel-ai-sdk-langchain-spreadsheet-tool.md')
 requireIncludes(aiSdkLangChainDoc, 'Cloudflare Agents API and agent tools', 'docs/vercel-ai-sdk-langchain-spreadsheet-tool.md')
+const agentFrameworkDocs = await Promise.all(
+  agentFrameworkDocRequirements.map(async ({ path, includes }) => ({
+    path,
+    includes,
+    content: await readFile(join(repoRoot, path), 'utf8'),
+  })),
+)
+for (const { path, includes, content } of agentFrameworkDocs) {
+  for (const required of includes) {
+    requireIncludes(content, required, path)
+  }
+}
 requireIncludes(
   mcpWorkPaperToolServerDoc,
   'description: Expose @bilig/headless workbook reads, verified edits, formula contracts, and persistence checks through MCP-style tools/list and tools/call handlers',
@@ -604,7 +582,7 @@ for (const required of [
 }
 requireIncludes(
   mcpClientSetupDoc,
-  'description: Copy-paste MCP client configuration for running the published @bilig/headless WorkPaper stdio server from Claude, Cursor, VS Code, and Codex.',
+  'description: Copy-paste MCP client configuration for running the published @bilig/headless WorkPaper stdio server from Claude, Cursor, VS Code, Cline, and Codex.',
   'docs/mcp-client-setup.md',
 )
 for (const required of [
@@ -614,8 +592,11 @@ for (const required of [
   'claude mcp add-json bilig-workpaper',
   '.cursor/mcp.json',
   '.vscode/mcp.json',
+  '~/.cline/mcp.json',
+  '"autoApprove": []',
   '[mcp_servers.bilig-workpaper]',
   'https://code.visualstudio.com/docs/copilot/reference/mcp-configuration',
+  'https://docs.cline.bot/mcp/mcp-overview',
   'https://platform.openai.com/docs/docs-mcp',
 ]) {
   requireIncludes(mcpClientSetupDoc, required, 'docs/mcp-client-setup.md')

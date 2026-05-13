@@ -25,6 +25,36 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://proompteng.github.io/bilig/mastra-workpaper-spreadsheet-tool.html</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.78</priority>
+  </url>
+  <url>
+    <loc>https://proompteng.github.io/bilig/llamaindex-workpaper-spreadsheet-tool.html</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.78</priority>
+  </url>
+  <url>
+    <loc>https://proompteng.github.io/bilig/langgraph-workpaper-toolnode-spreadsheet.html</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.78</priority>
+  </url>
+  <url>
+    <loc>https://proompteng.github.io/bilig/copilotkit-workpaper-spreadsheet-action.html</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.78</priority>
+  </url>
+  <url>
+    <loc>https://proompteng.github.io/bilig/cloudflare-agents-workpaper-spreadsheet-tool.html</loc>
+    <lastmod>2026-05-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.78</priority>
+  </url>
+  <url>
     <loc>https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html</loc>
     <lastmod>2026-05-13</lastmod>
     <changefreq>monthly</changefreq>

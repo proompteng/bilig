@@ -330,6 +330,50 @@ Verify this docs recipe from the repo root with:
 pnpm docs:discovery:check
 ```
 
+### Published Package MCP Client Config
+
+Use this when you want an MCP client to start the published WorkPaper server,
+not the copy from your local checkout.
+
+Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "bilig-workpaper": {
+      "type": "stdio",
+      "command": "npm",
+      "args": ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp"],
+      "env": {}
+    }
+  }
+}
+```
+
+Cline:
+
+```json
+{
+  "mcpServers": {
+    "bilig-workpaper": {
+      "command": "npm",
+      "args": ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp"],
+      "env": {},
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
+```
+
+After the client shows the tools, use the same small writeback check:
+
+```text
+Call read_workpaper_summary for Summary!A1:B5.
+Then call set_workpaper_input_cell on Inputs!B3 with value 0.4.
+Return editedCell, before.expectedArr, after.expectedArr, and checks.
+```
+
 ### MCP Stdio Troubleshooting
 
 | Symptom                        | What to check                                                                                   |

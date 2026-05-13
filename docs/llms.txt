@@ -23,6 +23,11 @@ language: typescript
 - https://proompteng.github.io/bilig/server-side-spreadsheet-automation-node.html
 - https://proompteng.github.io/bilig/why-agents-need-workbook-apis.html
 - https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html
+- https://proompteng.github.io/bilig/mastra-workpaper-spreadsheet-tool.html
+- https://proompteng.github.io/bilig/llamaindex-workpaper-spreadsheet-tool.html
+- https://proompteng.github.io/bilig/langgraph-workpaper-toolnode-spreadsheet.html
+- https://proompteng.github.io/bilig/copilotkit-workpaper-spreadsheet-action.html
+- https://proompteng.github.io/bilig/cloudflare-agents-workpaper-spreadsheet-tool.html
 - https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html
 - https://proompteng.github.io/bilig/mcp-client-setup.html
 - https://proompteng.github.io/bilig/claude-desktop-mcpb-workpaper.html
@@ -168,6 +173,12 @@ npm run agent:verify
 - agent framework spreadsheet tool guide:
   https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html
   https://github.com/proompteng/bilig/blob/main/docs/vercel-ai-sdk-langchain-spreadsheet-tool.md
+- framework-specific spreadsheet tool pages:
+  https://proompteng.github.io/bilig/mastra-workpaper-spreadsheet-tool.html
+  https://proompteng.github.io/bilig/llamaindex-workpaper-spreadsheet-tool.html
+  https://proompteng.github.io/bilig/langgraph-workpaper-toolnode-spreadsheet.html
+  https://proompteng.github.io/bilig/copilotkit-workpaper-spreadsheet-action.html
+  https://proompteng.github.io/bilig/cloudflare-agents-workpaper-spreadsheet-tool.html
 - runnable AI SDK, LangChain, Mastra, LlamaIndex.TS, LangGraph.js, CopilotKit,
   and Cloudflare Agents adapter example:
   https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/agent-framework-adapters.ts
@@ -179,7 +190,7 @@ npm run agent:verify
   https://github.com/proompteng/bilig/blob/main/docs/mcp-spreadsheet-server-directory.md
   npm exec --package @bilig/headless -- bilig-workpaper-mcp
   PulseMCP not indexed yet as of May 13, 2026
-- MCP client setup for Claude, Cursor, VS Code, and Codex:
+- MCP client setup for Claude, Cursor, VS Code, Cline, and Codex:
   https://proompteng.github.io/bilig/mcp-client-setup.html
   https://github.com/proompteng/bilig/blob/main/docs/mcp-client-setup.md
 - Claude Desktop MCPB bundle guide:
