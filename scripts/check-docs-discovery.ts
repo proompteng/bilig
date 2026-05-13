@@ -420,8 +420,11 @@ requireIncludes(starterIssues, '#278: docs(examples): add SvelteKit WorkPaper ro
 requireIncludes(starterIssues, '#281: docs(examples): add Cloudflare D1 WorkPaper persistence smoke', 'docs/starter-issues.md')
 requireIncludes(starterIssues, '#286: docs(examples): add Nuxt Nitro WorkPaper route smoke', 'docs/starter-issues.md')
 requireIncludes(starterIssues, '#292: docs(mcp): add Zed MCP config for WorkPaper', 'docs/starter-issues.md')
+requireIncludes(starterIssues, '#293: docs(mcp): add Continue MCP config for WorkPaper', 'docs/starter-issues.md')
+requireIncludes(starterIssues, '#294: docs(mcp): add Cline MCP config for WorkPaper', 'docs/starter-issues.md')
 requireIncludes(starterIssues, '#266: docs(try): add a Docker smoke test for clean Node 24 runs', 'docs/starter-issues.md')
 requireIncludes(starterIssues, 'https://github.com/proompteng/bilig/pull/271', 'docs/starter-issues.md')
+requireIncludes(starterIssues, 'https://github.com/proompteng/bilig/pull/291', 'docs/starter-issues.md')
 requireNotIncludes(starterIssues, 'https://github.com/proompteng/bilig/pull/251', 'docs/starter-issues.md')
 requireIncludes(contributing, 'new-contributor-guide.md#first-time-command-checklist', 'CONTRIBUTING.md')
 requireIncludes(llms, '67 open first-timers-only issues, 60 generally available, 7 already in review', 'docs/llms.txt')
@@ -644,7 +647,7 @@ for (const [path, content] of [
 const currentStarterIssueNumbers = [
   134, 153, 154, 155, 156, 158, 159, 162, 163, 193, 194, 195, 196, 197, 198, 207, 208, 209, 210, 211, 212, 217, 218, 219, 220, 221, 222,
   223, 231, 233, 247, 248, 249, 250, 255, 256, 257, 258, 259, 260, 265, 266, 267, 268, 269, 272, 273, 274, 275, 276, 277, 278, 279, 280,
-  281, 288, 289, 290,
+  281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 292, 293, 294,
 ]
 
 for (const required of currentStarterIssueNumbers.map((issueNumber) => `https://github.com/proompteng/bilig/issues/${issueNumber}`)) {
