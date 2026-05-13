@@ -122,7 +122,7 @@
       }
     </script>
     <link rel="stylesheet" href="./assets/fonts.css?v=2026-05-13-1" />
-    <link rel="stylesheet" href="./assets/site.css?v=2026-05-13-17" />
+    <link rel="stylesheet" href="./assets/site.css?v=2026-05-13-18" />
     <link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-13-1" />
   </head>
   <body>
@@ -493,61 +493,65 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
         <div class="wrap">
           <div class="section-head proof-head">
             <div>
-              <p class="kicker">Benchmark</p>
-              <h2 id="proof-title">See the file. Rerun the command.</h2>
+              <p class="kicker">Benchmarks</p>
+              <h2 id="proof-title">One checked-in run. Keep the caveat with it.</h2>
             </div>
             <p>
-              The current checked-in run has WorkPaper ahead on 46 comparable mean-latency rows. One p95 lookup case is slower than
-              HyperFormula. Both numbers are linked here.
+              The current artifact has WorkPaper faster on 46 comparable mean-latency rows against HyperFormula. It also has one slower p95
+              lookup case. Rerun the script before you use the number.
             </p>
           </div>
 
           <div class="proof-layout">
-            <div class="benchmark-receipt" aria-label="Benchmark receipt">
-              <div class="receipt-topline">
-                <span>packages/benchmarks/baselines/workpaper-vs-hyperformula.json</span>
-                <strong>checked in</strong>
+            <div class="benchmark-ledger" aria-label="Benchmark details">
+              <div class="ledger-topline">
+                <span>Benchmark file</span>
+                <code>packages/benchmarks/baselines/workpaper-vs-hyperformula.json</code>
               </div>
-              <div class="receipt-claim">
-                <span>Current checked-in run</span>
-                <strong>46 / 46</strong>
-                <p>WorkPaper is faster on every comparable mean-latency row in this artifact. Quote it only after rerunning the command.</p>
-              </div>
-              <div class="receipt-command" aria-label="Benchmark command">
-                <span>$</span>
-                <code>pnpm workpaper:bench:competitive:check</code>
-              </div>
-              <dl class="receipt-facts">
+              <dl class="ledger-rows">
                 <div>
-                  <dt>Package</dt>
-                  <dd>@bilig/headless 0.14.0</dd>
+                  <dt>Mean latency rows</dt>
+                  <dd>46/46</dd>
+                  <p>Comparable rows where WorkPaper is faster in the checked-in artifact.</p>
                 </div>
                 <div>
-                  <dt>p95 aggregate</dt>
+                  <dt>p95 aggregate ratio</dt>
                   <dd>0.536x WorkPaper / HyperFormula</dd>
+                  <p>Lower is better. This is the aggregate p95 ratio from the same run.</p>
                 </div>
                 <div>
-                  <dt>p95 holdout</dt>
-                  <dd>lookup-approximate-duplicates at 1.043x</dd>
+                  <dt>p95 loss</dt>
+                  <dd>lookup duplicates at 1.043x</dd>
+                  <p>The exact row is <code>lookup-approximate-duplicates</code>. That case is slower, so the caveat stays on the page.</p>
+                </div>
+                <div>
+                  <dt>Package under test</dt>
+                  <dd>@bilig/headless 0.14.0</dd>
+                  <p>Use the latest published package for your own run.</p>
                 </div>
               </dl>
+              <div class="ledger-command" aria-label="Benchmark command">
+                <span>run locally</span>
+                <code>pnpm workpaper:bench:competitive:check</code>
+              </div>
             </div>
-            <div class="proof-sidebar">
-              <div class="proof-links" aria-label="Evidence links">
+            <aside class="proof-notes" aria-label="Benchmark notes">
+              <p>Read before quoting it</p>
+              <div class="proof-links" aria-label="Benchmark evidence links">
                 <a href="./what-workpaper-benchmark-proves.html">
-                  <span>What was measured</span>
-                  <strong>The artifact, the caveat, and the rerun command.</strong>
+                  <span>Benchmark notes</span>
+                  <strong>What the artifact measures and what it leaves out.</strong>
                 </a>
                 <a href="./where-bilig-is-not-excel-compatible-yet.html">
-                  <span>Known gaps</span>
-                  <strong>Excel behavior that is still missing.</strong>
+                  <span>Compatibility gaps</span>
+                  <strong>Excel behavior that bilig does not cover yet.</strong>
                 </a>
                 <a href="https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only">
                   <span>First PRs</span>
-                  <strong>Small docs, examples, and integration tasks.</strong>
+                  <strong>Small docs, examples, and integration tasks that are open now.</strong>
                 </a>
               </div>
-            </div>
+            </aside>
           </div>
         </div>
       </section>
