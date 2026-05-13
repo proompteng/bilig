@@ -70,6 +70,26 @@ describe('js evaluator', () => {
     ).toEqual(num(5))
   })
 
+  it('lifts ROUND over range arguments before aggregation', () => {
+    const rangeContext = {
+      ...context,
+      resolveRange: (_sheetName: string, start: string, end: string): CellValue[] => {
+        if (start === 'A1' && end === 'B2') {
+          return [num(1.24), num(2.25), num(3.26), num(4.44)]
+        }
+        return []
+      },
+    }
+
+    expect(evaluatePlan(lowerToPlan(parseFormula('SUM(ROUND(A1:B2,1))')), rangeContext)).toEqual(num(11.2))
+    expect(evaluatePlanResult(lowerToPlan(parseFormula('ROUND(A1:B2,1)')), rangeContext)).toEqual({
+      kind: 'array',
+      rows: 2,
+      cols: 2,
+      values: [num(1.2), num(2.3), num(3.3), num(4.4)],
+    })
+  })
+
   it('evaluates direct plans for ranges, jumps, and fallback stack handling', () => {
     expect(
       evaluatePlan(

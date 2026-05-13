@@ -232,6 +232,7 @@ const arrayLiftedScalarBuiltinArities = new Map<string, number>([
   ['ISREF', 1],
   ['ISTEXT', 1],
   ['NOT', 1],
+  ['ROUND', 2],
 ])
 
 function evaluateArrayLiftedScalarBuiltin(

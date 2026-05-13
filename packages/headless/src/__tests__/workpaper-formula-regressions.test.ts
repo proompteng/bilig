@@ -643,6 +643,17 @@ describe('Workpaper formula regressions', () => {
     expectNumber(cellValue(workbook, 'Summary', 0, 0), 1.24)
   })
 
+  it('sums rounded range members using Excel array semantics', () => {
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Summary: [[1.24], [2.25], [3.26], [4.44], ['=SUM(ROUND(A1:A4,1))']],
+      },
+      { maxRows: 8, maxColumns: 4, useColumnIndex: true },
+    )
+
+    expectNumberClose(cellValue(workbook, 'Summary', 4, 0), 11.2)
+  })
+
   it('matches Excel cached results for rounded AVERAGE ranges with blanks and text', () => {
     const rows = Array.from({ length: 316 }, () => Array.from<TestCell>({ length: 13 }).fill(null))
     const numericValues = [12.5, 24, 18.75, 20.25, 19.04]
