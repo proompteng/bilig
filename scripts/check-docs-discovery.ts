@@ -326,6 +326,7 @@ for (const required of [
   'https://github.com/proompteng/bilig/discussions/157',
   'https://github.com/proompteng/bilig/discussions/167',
   'https://github.com/proompteng/bilig/discussions/230',
+  'https://github.com/proompteng/bilig/discussions/270',
   'https://github.com/proompteng/bilig/discussions/115',
   'https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md',
   'https://proompteng.github.io/bilig/node-spreadsheet-formula-engine.html',
@@ -377,7 +378,7 @@ for (const [path, content] of [
   requireIncludes(content, 'https://proompteng.github.io/bilig/community-growth-snapshot.html', path)
   requireIncludes(content, 'https://github.com/proompteng/bilig/stargazers', path)
   requireIncludes(content, '13,427` npm downloads in the', path)
-  requireIncludes(content, '`40` open', path)
+  requireIncludes(content, '`45` open', path)
   requireIncludes(content, '`good first issue` tickets', path)
 }
 

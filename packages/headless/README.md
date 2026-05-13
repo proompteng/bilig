@@ -32,8 +32,8 @@ validated WorkPaper model once data is in workbook form.
 - Live growth snapshot:
   <https://proompteng.github.io/bilig/community-growth-snapshot.html>
 - Latest checked-in snapshot: `24` GitHub stars, `13,427` npm downloads in the
-  last week, `24,931` npm downloads in the last 30 days, `40` open
-  `good first issue` tickets, `7` GitHub Discussions, and `393` recent
+  last week, `24,931` npm downloads in the last 30 days, `45` open
+  `good first issue` tickets, `8` GitHub Discussions, and `393` recent
   repository views.
 - Benchmark evidence:
   [`46/46` comparable WorkPaper mean wins](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md),

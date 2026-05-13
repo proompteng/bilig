@@ -192,6 +192,8 @@ npm run agent:verify
   https://github.com/proompteng/bilig/discussions/213
 - show-and-tell discussion for MCP spreadsheet tool server feedback:
   https://github.com/proompteng/bilig/discussions/230
+- show-and-tell discussion for the npm-only TypeScript smoke test:
+  https://github.com/proompteng/bilig/discussions/270
 - serverless route feedback discussion:
   https://github.com/proompteng/bilig/discussions/167
 - older agent API shape discussion:

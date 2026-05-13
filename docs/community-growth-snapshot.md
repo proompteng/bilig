@@ -1,6 +1,6 @@
 # Community Growth Snapshot
 
-Captured at: `2026-05-13T06:14:15.231Z`
+Captured at: `2026-05-13T08:06:56.643Z`
 
 This snapshot tracks the public signals for the `@bilig/headless` growth loop: GitHub conversion, npm demand, contributor on-ramp health, discussion activity, and traffic quality.
 
@@ -10,22 +10,22 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 - Stars: 24 / 1,000 (976 remaining)
 - Forks: 9
 - Watchers: 0
-- Open issues: 51
+- Open issues: 56
 - Default branch: `main`
 
 ## npm
 
-- Package: `@bilig/headless@0.13.9`
+- Package: `@bilig/headless@0.13.14`
 - License: `MIT`
-- Modified: `2026-05-13T06:12:43.002Z`
+- Modified: `2026-05-13T07:50:00.036Z`
 - Downloads last week: 13,427 (2026-05-05 to 2026-05-11)
 - Downloads last month: 24,931 (2026-04-12 to 2026-05-11)
 
 ## Contributor Funnel
 
-- Open good first issues: 40
-- Open first-timers-only issues: 40
-- Open help wanted issues: 40
+- Open good first issues: 45
+- Open first-timers-only issues: 45
+- Open help wanted issues: 45
 - Open pull requests: 10
 - External open issues: 1
 - External open pull requests: 10
@@ -34,12 +34,12 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 
 ## Discussions
 
-- Total discussions: 7
+- Total discussions: 8
+- #270 [Show and tell: try @bilig/headless from npm in an empty Node project](https://github.com/proompteng/bilig/discussions/270) (Show and tell, 0 comments)
+- #167 [Show and tell: serverless WorkPaper API route recipe](https://github.com/proompteng/bilig/discussions/167) (Show and tell, 2 comments)
 - #230 [Show and tell: MCP spreadsheet tool server for WorkPaper agents](https://github.com/proompteng/bilig/discussions/230) (Show and tell, 0 comments)
 - #226 [Vercel AI SDK and LangChain spreadsheet tools for WorkPaper agents](https://github.com/proompteng/bilig/discussions/226) (Announcements, 0 comments)
 - #213 [Show and tell: five runnable Node workbook automation examples](https://github.com/proompteng/bilig/discussions/213) (Show and tell, 1 comment)
-- #157 [Which Node workbook automation workflow should @bilig/headless prove next?](https://github.com/proompteng/bilig/discussions/157) (Ideas, 7 comments)
-- #167 [Show and tell: serverless WorkPaper API route recipe](https://github.com/proompteng/bilig/discussions/167) (Show and tell, 1 comment)
 
 ## Traffic
 

@@ -63,10 +63,13 @@ Latest public execution snapshot on May 13, 2026 after the landing-page pass:
 
 - GitHub surface: public repo, `24` stars, `9` forks, Forgejo and GitHub
   mirrors synced on `main`
-- Contributor funnel: `40` open `first-timers-only` issues
+- Contributor funnel: `45` open `first-timers-only` issues
 - Site conversion surface: homepage now leads with a live WorkPaper demo,
   bundled webfonts, split product-demo CSS, and an npm-only smoke-test path at
   <https://proompteng.github.io/bilig/try-bilig-headless-in-node.html>
+- Distribution surface: GitHub Discussion `#270` now points backend and agent
+  developers at the npm-only TypeScript smoke test:
+  <https://github.com/proompteng/bilig/discussions/270>
 
 ## Goal Text
 
