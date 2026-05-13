@@ -47,6 +47,14 @@ describe('xlsx cell style roundtrip', () => {
     expect(readCellStyleParts(exported, 'xl/worksheets/sheet1.xml!A2')).toEqual(readCellStyleParts(source, 'xl/worksheets/sheet1.xml!A2'))
     expect(readCellStyleParts(exported, 'xl/worksheets/sheet1.xml!B2')).toEqual(readCellStyleParts(source, 'xl/worksheets/sheet1.xml!B2'))
   })
+
+  it('keeps semantic style ranges valid when raw style artifacts are restored', () => {
+    const exported = exportXlsx(buildPartiallyIndexedStyleArtifactWorkbook())
+    const imported = importXlsx(exported, 'partial-style-artifacts.xlsx')
+
+    expect(readAppliedStyle(imported.snapshot, 'Report', 'B1')).toMatchObject(expectedHeaderStyle)
+    expect(readAppliedStyle(imported.snapshot, 'Report', 'C1')).toMatchObject(expectedHeaderStyle)
+  })
 })
 
 const expectedVisibleStyle = {
@@ -62,6 +70,17 @@ const expectedVisibleStyle = {
     right: { style: 'solid', weight: 'thin', color: '#808080' },
     bottom: { style: 'solid', weight: 'thin', color: '#808080' },
     left: { style: 'solid', weight: 'thin', color: '#808080' },
+  },
+} satisfies Partial<CellStyleRecord>
+
+const expectedHeaderStyle = {
+  font: { bold: true },
+  alignment: { horizontal: 'center', vertical: 'middle' },
+  borders: {
+    top: { style: 'solid', weight: 'thin', color: '#000000' },
+    right: { style: 'solid', weight: 'thin', color: '#000000' },
+    bottom: { style: 'solid', weight: 'thin', color: '#000000' },
+    left: { style: 'solid', weight: 'thin', color: '#000000' },
   },
 } satisfies Partial<CellStyleRecord>
 
@@ -122,6 +141,40 @@ function readFirstAppliedStyle(snapshot: WorkbookSnapshot): CellStyleRecord | un
   return snapshot.workbook.metadata?.styles?.find((style) => style.id === styleRange?.styleId)
 }
 
+function readAppliedStyle(snapshot: WorkbookSnapshot, sheetName: string, address: string): CellStyleRecord | undefined {
+  const sheet = snapshot.sheets.find((entry) => entry.name === sheetName)
+  const styleRange = sheet?.metadata?.styleRanges?.find(
+    (entry) => entry.range.sheetName === sheetName && rangeContainsAddress(entry.range.startAddress, entry.range.endAddress, address),
+  )
+  return snapshot.workbook.metadata?.styles?.find((style) => style.id === styleRange?.styleId)
+}
+
+function rangeContainsAddress(startAddress: string, endAddress: string, address: string): boolean {
+  const start = parseA1Address(startAddress)
+  const end = parseA1Address(endAddress)
+  const target = parseA1Address(address)
+  return (
+    target.row >= Math.min(start.row, end.row) &&
+    target.row <= Math.max(start.row, end.row) &&
+    target.col >= Math.min(start.col, end.col) &&
+    target.col <= Math.max(start.col, end.col)
+  )
+}
+
+function parseA1Address(address: string): { readonly row: number; readonly col: number } {
+  const match = /^([A-Z]+)([1-9][0-9]*)$/u.exec(address)
+  if (!match) {
+    throw new Error(`Invalid A1 address: ${address}`)
+  }
+  const letters = match[1]
+  let col = 0
+  for (let index = 0; index < letters.length; index += 1) {
+    col = col * 26 + letters.charCodeAt(index) - 64
+  }
+  col -= 1
+  return { row: Number(match[2]) - 1, col }
+}
+
 function buildRawStyleReferenceWorkbook(): Uint8Array {
   const zip = unzipSync(exportXlsx(buildStyledWorkbook()))
   zip['xl/styles.xml'] = strToU8(rawStyleReferenceStylesXml)
@@ -153,6 +206,55 @@ function buildStyleOnlyBlankCellWorkbook(): Uint8Array {
     .replace(/<sheetData\b[^>]*>[\s\S]*?<\/sheetData>/u, '<sheetData><row r="2"><c r="A2" s="1"/><c r="B2" s="1"/></row></sheetData>')
   zip['xl/worksheets/sheet1.xml'] = strToU8(sheetXml)
   return zipSync(zip)
+}
+
+function buildPartiallyIndexedStyleArtifactWorkbook(): WorkbookSnapshot {
+  return {
+    version: 1,
+    workbook: {
+      name: 'Partial style artifacts',
+      metadata: {
+        styles: [
+          {
+            id: 'header-style',
+            font: { bold: true },
+            alignment: { horizontal: 'center', vertical: 'middle' },
+            borders: {
+              top: { style: 'solid', weight: 'thin', color: '#000000' },
+              right: { style: 'solid', weight: 'thin', color: '#000000' },
+              bottom: { style: 'solid', weight: 'thin', color: '#000000' },
+              left: { style: 'solid', weight: 'thin', color: '#000000' },
+            },
+          },
+        ],
+        styleArtifacts: {
+          stylesXml: headerStyleReferenceStylesXml,
+        },
+      },
+    },
+    sheets: [
+      {
+        id: 1,
+        name: 'Report',
+        order: 0,
+        cells: [
+          { address: 'B1', value: 'Current' },
+          { address: 'C1', value: 'Prior' },
+        ],
+        metadata: {
+          styleRanges: [
+            {
+              range: { sheetName: 'Report', startAddress: 'B1', endAddress: 'C1' },
+              styleId: 'header-style',
+            },
+          ],
+          styleArtifacts: {
+            cellStyleIndexes: [{ address: 'C1', styleIndex: 1 }],
+          },
+        },
+      },
+    ],
+  }
 }
 
 function readCellXml(bytes: Uint8Array, cellRef: string): string | undefined {
@@ -297,6 +399,18 @@ const axisStyleReferenceStylesXml = [
   '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color indexed="64"/></left><right style="thin"><color theme="0"/></right><top style="thin"><color theme="0"/></top><bottom style="thin"><color indexed="64"/></bottom><diagonal/></border></borders>',
   '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>',
   '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="164" fontId="1" fillId="2" borderId="1" xfId="0" applyNumberFormat="1"/></cellXfs>',
+  '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>',
+  '</styleSheet>',
+].join('')
+
+const headerStyleReferenceStylesXml = [
+  '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+  '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+  '<fonts count="2"><font><sz val="11"/><name val="Aptos"/></font><font><b/></font></fonts>',
+  '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>',
+  '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top style="thin"><color rgb="FF000000"/></top><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border></borders>',
+  '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>',
+  '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf></cellXfs>',
   '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>',
   '</styleSheet>',
 ].join('')

@@ -538,6 +538,10 @@ function applyStyleIndexesToSheetXml(
   styleIndexById: ReadonlyMap<string, number>,
 ): string {
   const stylesByAddress = new Map<string, number>()
+  const rawStyleArtifactAddresses = new Set([
+    ...(sheet.metadata?.styleArtifacts?.cellStyleIndexes ?? []).map((entry) => entry.address),
+    ...(sheet.metadata?.styleArtifacts?.blankCellAddresses ?? []),
+  ])
   for (const styleRange of sheet.metadata?.styleRanges ?? []) {
     if (styleRange.range.sheetName !== sheet.name) {
       continue
@@ -549,7 +553,10 @@ function applyStyleIndexesToSheetXml(
     const range = decodeExportRange(styleRange.range.startAddress, styleRange.range.endAddress)
     for (let row = range.s.r; row <= range.e.r; row += 1) {
       for (let col = range.s.c; col <= range.e.c; col += 1) {
-        stylesByAddress.set(XLSX.utils.encode_cell({ r: row, c: col }), styleIndex)
+        const address = XLSX.utils.encode_cell({ r: row, c: col })
+        if (!rawStyleArtifactAddresses.has(address)) {
+          stylesByAddress.set(address, styleIndex)
+        }
       }
     }
   }
@@ -943,10 +950,10 @@ export function exportXlsx(snapshot: WorkbookSnapshot): Uint8Array {
   )
   const chartArtifactBytes = addExportChartArtifactsToXlsxBytes(pivotBytes, snapshot)
   const enrichedBytes = addExportChartsToXlsxBytes(chartArtifactBytes, snapshot, exportSheetNamesByOriginalName)
-  const styledBytes = preserveSnapshotStyles(enrichedBytes, snapshot)
+  const artifactStyledBytes = addExportStyleArtifactsToXlsxBytes(enrichedBytes, snapshot)
+  const styledBytes = preserveSnapshotStyles(artifactStyledBytes, snapshot)
   const formattedBytes = preserveSnapshotNumberFormats(styledBytes, exportSheetFormats)
-  const styleArtifactBytes = addExportStyleArtifactsToXlsxBytes(formattedBytes, snapshot)
-  const themeArtifactBytes = addExportThemeArtifactToXlsxBytes(styleArtifactBytes, snapshot)
+  const themeArtifactBytes = addExportThemeArtifactToXlsxBytes(formattedBytes, snapshot)
   const dimensionedBytes = addExportWorksheetDimensionsToXlsxBytes(themeArtifactBytes, snapshot)
   const drawingArtifactBytes = addExportDrawingArtifactsToXlsxBytes(dimensionedBytes, snapshot)
   const ignoredErrorsBytes = addExportIgnoredErrorsToXlsxBytes(drawingArtifactBytes, snapshot)
