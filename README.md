@@ -56,9 +56,11 @@ bookmark the repo after you see the verification output:
   [serverless route walkthrough](docs/serverless-workpaper-api-route.md).
 - **Wire a coding-agent tool**: use the
   [Vercel AI SDK / LangChain spreadsheet tool guide](docs/vercel-ai-sdk-langchain-spreadsheet-tool.md),
+  [MCP spreadsheet tool server guide](docs/mcp-workpaper-tool-server.md),
   [agent tool-calling recipe](docs/agent-workpaper-tool-calling-recipe.md), or
   run the
-  [Vercel AI SDK / LangChain adapter example](examples/headless-workpaper#agent-framework-adapters).
+  [Vercel AI SDK / LangChain adapter example](examples/headless-workpaper#agent-framework-adapters)
+  and [MCP tool server example](examples/headless-workpaper#mcp-tool-server-shape).
 - **Contribute a small patch**: pick a scoped
   [`good first issue`](docs/starter-issues.md).
 - **Ask a question or share a workflow**: use
@@ -392,6 +394,10 @@ For Vercel AI SDK and LangChain-shaped wrappers, run
 `npm run agent:framework-adapters`. The example keeps the same validated
 WorkPaper read/write functions and exposes thin framework adapter shapes
 without adding either framework as a dependency.
+
+For an MCP-style shape, run `npm run agent:mcp-tools`. It returns a
+dependency-free `tools/list` response, a `tools/call` read, and a verified
+input edit with structured computed readback.
 
 Quickstart:
 

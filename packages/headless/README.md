@@ -106,6 +106,10 @@ Pick the path that matches the job:
   [`npm run agent:framework-adapters`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#agent-framework-adapters).
 - Map WorkPaper tools to Vercel AI SDK and LangChain:
   [framework adapter guide](https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html).
+- Expose WorkPaper through an MCP-style tool server shape:
+  [`npm run agent:mcp-tools`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#mcp-tool-server-shape)
+  and the
+  [MCP spreadsheet tool server guide](https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html).
 - Put WorkPaper behind HTTP:
   [`examples/serverless-workpaper-api`](https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api).
 - Compare engines before adopting:
@@ -137,6 +141,7 @@ The full example catalog lives in
 | Verify an agent writeback            | `npm run agent:verify`             | [Agent writeback verification](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#agent-writeback-verification) |
 | Wrap WorkPaper operations as tools   | `npm run agent:tool-call`          | [Agent tool call loop](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#agent-tool-call-loop)                 |
 | Adapt tools to agent frameworks      | `npm run agent:framework-adapters` | [Agent framework adapters](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#agent-framework-adapters)         |
+| Expose MCP-style tools               | `npm run agent:mcp-tools`          | [MCP tool server shape](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#mcp-tool-server-shape)               |
 | Flag budget variance rows            | `npm run budget-variance`          | [Budget variance alerts](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#budget-variance-alerts)             |
 | Check fulfillment capacity           | `npm run fulfillment-capacity`     | [Fulfillment capacity plan](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#fulfillment-capacity-plan)       |
 | Check quote approval threshold       | `npm run quote-approval`           | [Quote approval threshold](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#quote-approval-threshold)         |
@@ -390,6 +395,10 @@ persistence bytes, and restored readback equality.
 `npm run agent:framework-adapters` maps the same validated WorkPaper operations
 into Vercel AI SDK and LangChain-style tool objects without adding either
 framework as an example dependency.
+
+`npm run agent:mcp-tools` exposes the same operations through dependency-free
+MCP-style `tools/list` and `tools/call` JSON-RPC responses with JSON Schema
+inputs and structured formula readback.
 
 For a framework-neutral recipe that wraps WorkPaper operations as agent-callable
 tools, see

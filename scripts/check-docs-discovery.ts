@@ -11,6 +11,7 @@ const expectedSitemapUrls = [
   `${siteRoot}why-agents-need-workbook-apis.html`,
   `${siteRoot}agent-workpaper-tool-calling-recipe.html`,
   `${siteRoot}vercel-ai-sdk-langchain-spreadsheet-tool.html`,
+  `${siteRoot}mcp-workpaper-tool-server.html`,
   `${siteRoot}agent-spreadsheet-tool-call-loop.html`,
   `${siteRoot}node-service-workpaper-recipe.html`,
   `${siteRoot}node-spreadsheet-formula-engine.html`,
@@ -41,6 +42,7 @@ const sourceFilesByUrl = new Map<string, string>([
   [`${siteRoot}why-agents-need-workbook-apis.html`, 'why-agents-need-workbook-apis.md'],
   [`${siteRoot}agent-workpaper-tool-calling-recipe.html`, 'agent-workpaper-tool-calling-recipe.md'],
   [`${siteRoot}vercel-ai-sdk-langchain-spreadsheet-tool.html`, 'vercel-ai-sdk-langchain-spreadsheet-tool.md'],
+  [`${siteRoot}mcp-workpaper-tool-server.html`, 'mcp-workpaper-tool-server.md'],
   [`${siteRoot}agent-spreadsheet-tool-call-loop.html`, 'agent-spreadsheet-tool-call-loop.md'],
   [`${siteRoot}node-service-workpaper-recipe.html`, 'node-service-workpaper-recipe.md'],
   [`${siteRoot}node-spreadsheet-formula-engine.html`, 'node-spreadsheet-formula-engine.md'],
@@ -179,6 +181,7 @@ for (const required of [
   './why-agents-need-workbook-apis.html',
   './agent-workpaper-tool-calling-recipe.html',
   './vercel-ai-sdk-langchain-spreadsheet-tool.html',
+  './mcp-workpaper-tool-server.html',
   './agent-spreadsheet-tool-call-loop.html',
   './node-service-workpaper-recipe.html',
   './node-spreadsheet-formula-engine.html',
@@ -239,6 +242,7 @@ for (const required of [
   'https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input',
   'https://proompteng.github.io/bilig/why-agents-need-workbook-apis.html',
   'https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html',
+  'https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html',
   'https://proompteng.github.io/bilig/agent-workpaper-tool-calling-recipe.html',
   'https://proompteng.github.io/bilig/agent-spreadsheet-tool-call-loop.html',
   'https://proompteng.github.io/bilig/node-service-workpaper-recipe.html',
@@ -264,6 +268,8 @@ for (const required of [
   'https://github.com/proompteng/bilig/blob/main/docs/unsupported-formula-troubleshooting-recipe.md',
   'https://github.com/proompteng/bilig/blob/main/docs/agent-workpaper-tool-calling-recipe.md',
   'https://github.com/proompteng/bilig/blob/main/docs/vercel-ai-sdk-langchain-spreadsheet-tool.md',
+  'https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-server.md',
+  'https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-tool-server.mjs',
   'https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/agent-framework-adapters.mjs',
   'https://github.com/proompteng/bilig/blob/main/docs/agent-spreadsheet-tool-call-loop.md',
   'https://github.com/proompteng/bilig/blob/main/docs/local-workpaper-benchmark-walkthrough.md',
@@ -328,10 +334,11 @@ for (const [path, content] of [
   requireIncludes(content, 'workbook-automation-examples-node', path)
 }
 
-const [whyAgentsDoc, agentToolCallingDoc, aiSdkLangChainDoc, agentToolCallLoopDoc] = await Promise.all([
+const [whyAgentsDoc, agentToolCallingDoc, aiSdkLangChainDoc, mcpWorkPaperToolServerDoc, agentToolCallLoopDoc] = await Promise.all([
   readFile(join(docsRoot, 'why-agents-need-workbook-apis.md'), 'utf8'),
   readFile(join(docsRoot, 'agent-workpaper-tool-calling-recipe.md'), 'utf8'),
   readFile(join(docsRoot, 'vercel-ai-sdk-langchain-spreadsheet-tool.md'), 'utf8'),
+  readFile(join(docsRoot, 'mcp-workpaper-tool-server.md'), 'utf8'),
   readFile(join(docsRoot, 'agent-spreadsheet-tool-call-loop.md'), 'utf8'),
 ])
 requireIncludes(
@@ -352,6 +359,19 @@ requireIncludes(
 )
 requireIncludes(aiSdkLangChainDoc, 'npm run agent:framework-adapters', 'docs/vercel-ai-sdk-langchain-spreadsheet-tool.md')
 requireIncludes(
+  mcpWorkPaperToolServerDoc,
+  'description: Expose @bilig/headless workbook reads, verified edits, formula contracts, and persistence checks through MCP-style tools/list and tools/call handlers',
+  'docs/mcp-workpaper-tool-server.md',
+)
+requireIncludes(mcpWorkPaperToolServerDoc, 'npm run agent:mcp-tools', 'docs/mcp-workpaper-tool-server.md')
+requireIncludes(mcpWorkPaperToolServerDoc, 'tools/list', 'docs/mcp-workpaper-tool-server.md')
+requireIncludes(mcpWorkPaperToolServerDoc, 'tools/call', 'docs/mcp-workpaper-tool-server.md')
+requireIncludes(
+  mcpWorkPaperToolServerDoc,
+  'https://modelcontextprotocol.io/specification/2025-06-18/server/tools',
+  'docs/mcp-workpaper-tool-server.md',
+)
+requireIncludes(
   aiSdkLangChainDoc,
   'https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling',
   'docs/vercel-ai-sdk-langchain-spreadsheet-tool.md',
@@ -370,6 +390,7 @@ for (const [path, content] of [
   ['docs/why-agents-need-workbook-apis.md', whyAgentsDoc],
   ['docs/agent-workpaper-tool-calling-recipe.md', agentToolCallingDoc],
   ['docs/vercel-ai-sdk-langchain-spreadsheet-tool.md', aiSdkLangChainDoc],
+  ['docs/mcp-workpaper-tool-server.md', mcpWorkPaperToolServerDoc],
   ['docs/agent-spreadsheet-tool-call-loop.md', agentToolCallLoopDoc],
   ['docs/workbook-automation-examples-node.md', await readFile(join(docsRoot, 'workbook-automation-examples-node.md'), 'utf8')],
   ['docs/dev-to-workbook-apis-post.md', await readFile(join(docsRoot, 'dev-to-workbook-apis-post.md'), 'utf8')],
@@ -409,8 +430,11 @@ for (const [path, content] of [
 ] as const) {
   requireIncludes(content, 'examples/headless-workpaper#invoice-totals', path)
   requireIncludes(content, 'examples/headless-workpaper#agent-framework-adapters', path)
+  requireIncludes(content, 'examples/headless-workpaper#mcp-tool-server-shape', path)
   requireIncludes(content, 'npm run agent:framework-adapters', path)
+  requireIncludes(content, 'npm run agent:mcp-tools', path)
   requireIncludes(content, 'vercel-ai-sdk-langchain-spreadsheet-tool', path)
+  requireIncludes(content, 'mcp-workpaper-tool-server', path)
   requireIncludes(content, 'examples/headless-workpaper#budget-variance-alerts', path)
   requireIncludes(content, 'examples/headless-workpaper#fulfillment-capacity-plan', path)
   requireIncludes(content, 'examples/headless-workpaper#quote-approval-threshold', path)
@@ -580,6 +604,7 @@ const [headlessExampleReadme, headlessExamplePackage] = await Promise.all([
   readFile(join(repoRoot, 'examples', 'headless-workpaper', 'package.json'), 'utf8'),
 ])
 await requireFile(join(repoRoot, 'examples', 'headless-workpaper', 'agent-framework-adapters.mjs'))
+await requireFile(join(repoRoot, 'examples', 'headless-workpaper', 'mcp-tool-server.mjs'))
 requireIncludes(headlessExampleReadme, 'npm run invoice-totals', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, '## Invoice Totals', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, 'npm run budget-variance', 'examples/headless-workpaper/README.md')
@@ -592,11 +617,14 @@ requireIncludes(headlessExampleReadme, 'npm run subscription-mrr', 'examples/hea
 requireIncludes(headlessExampleReadme, '## Subscription MRR Forecast', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, 'npm run agent:framework-adapters', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, '## Agent Framework Adapters', 'examples/headless-workpaper/README.md')
+requireIncludes(headlessExampleReadme, 'npm run agent:mcp-tools', 'examples/headless-workpaper/README.md')
+requireIncludes(headlessExampleReadme, '## MCP Tool Server Shape', 'examples/headless-workpaper/README.md')
 requireIncludes(
   headlessExamplePackage,
   '"agent:framework-adapters": "node agent-framework-adapters.mjs"',
   'examples/headless-workpaper/package.json',
 )
+requireIncludes(headlessExamplePackage, '"agent:mcp-tools": "node mcp-tool-server.mjs"', 'examples/headless-workpaper/package.json')
 requireIncludes(headlessReadme, 'npm run invoice-totals', 'packages/headless/README.md')
 requireIncludes(headlessReadme, '#invoice-totals', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'npm run budget-variance', 'packages/headless/README.md')

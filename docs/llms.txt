@@ -19,12 +19,14 @@ language: typescript
 - https://proompteng.github.io/bilig/workbook-automation-examples-node.html
 - https://proompteng.github.io/bilig/why-agents-need-workbook-apis.html
 - https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html
+- https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html
 - https://proompteng.github.io/bilig/agent-workpaper-tool-calling-recipe.html
 - https://proompteng.github.io/bilig/agent-spreadsheet-tool-call-loop.html
 - https://proompteng.github.io/bilig/node-service-workpaper-recipe.html
 - https://proompteng.github.io/bilig/serverless-workpaper-api-route.html
 - https://github.com/proompteng/bilig/blob/main/docs/workbook-automation-examples-node.md
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#agent-framework-adapters
+- https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#mcp-tool-server-shape
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#invoice-totals
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#budget-variance-alerts
@@ -42,6 +44,7 @@ language: typescript
 - https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md
 - https://github.com/proompteng/bilig/blob/main/docs/unsupported-formula-troubleshooting-recipe.md
 - https://github.com/proompteng/bilig/blob/main/docs/agent-workpaper-tool-calling-recipe.md
+- https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-server.md
 - https://github.com/proompteng/bilig/blob/main/docs/agent-spreadsheet-tool-call-loop.md
 - https://github.com/proompteng/bilig/blob/main/docs/local-workpaper-benchmark-walkthrough.md
 - https://github.com/proompteng/bilig/blob/main/docs/headless-spreadsheet-engine-comparison.md
@@ -138,6 +141,12 @@ npm run agent:verify
   https://github.com/proompteng/bilig/blob/main/docs/vercel-ai-sdk-langchain-spreadsheet-tool.md
 - runnable Vercel AI SDK and LangChain-shaped agent adapter example:
   https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/agent-framework-adapters.mjs
+- MCP spreadsheet tool server guide:
+  https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html
+  https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-server.md
+- runnable MCP-style WorkPaper tool server example:
+  npm run agent:mcp-tools
+  https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-tool-server.mjs
 - agent spreadsheet tool-call loop:
   https://proompteng.github.io/bilig/agent-spreadsheet-tool-call-loop.html
   https://github.com/proompteng/bilig/blob/main/docs/agent-spreadsheet-tool-call-loop.md

@@ -240,6 +240,7 @@ function runNodeSmoke(
   copyFileSync(join(headlessExampleDir, 'http-json-summary.mjs'), join(projectDir, 'http-json-summary.mjs'))
   copyFileSync(join(headlessExampleDir, 'json-file-input.mjs'), join(projectDir, 'json-file-input.mjs'))
   copyFileSync(join(headlessExampleDir, 'markdown-report.mjs'), join(projectDir, 'markdown-report.mjs'))
+  copyFileSync(join(headlessExampleDir, 'mcp-tool-server.mjs'), join(projectDir, 'mcp-tool-server.mjs'))
   copyFileSync(join(headlessExampleDir, 'fixtures', 'opportunities.json'), join(projectDir, 'fixtures', 'opportunities.json'))
   copyFileSync(join(headlessExampleDir, 'revenue-plan.mjs'), join(projectDir, 'revenue-plan.mjs'))
   copyFileSync(join(headlessExampleDir, 'persistence-roundtrip.mjs'), join(projectDir, 'persistence-roundtrip.mjs'))
@@ -341,6 +342,7 @@ function runNodeSmoke(
   const scenarios = parseNodeRevenueScenarioOutput(runTextCommand('node', ['revenue-scenarios.mjs'], { cwd: projectDir }))
   const agentToolCall = parseNodeAgentToolCallOutput(runTextCommand('node', ['agent-tool-call-loop.mjs'], { cwd: projectDir }))
   runTextCommand('node', ['agent-framework-adapters.mjs'], { cwd: projectDir })
+  runTextCommand('node', ['mcp-tool-server.mjs'], { cwd: projectDir })
   const agentVerification = parseNodeAgentVerificationOutput(
     runTextCommand('node', ['agent-writeback-verification.mjs'], { cwd: projectDir }),
   )

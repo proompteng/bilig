@@ -44,6 +44,7 @@ packages through `pnpm workpaper:smoke:external`.
 | Quick revenue workbook   | `npm start`                        | formulas, named expressions, persistence     |
 | Agent tool call loop     | `npm run agent:tool-call`          | read, edit, verify, serialize, restore       |
 | Agent framework adapters | `npm run agent:framework-adapters` | Vercel AI SDK and LangChain-shaped wrappers  |
+| MCP tool server shape    | `npm run agent:mcp-tools`          | `tools/list`, `tools/call`, verified edits   |
 | Agent writeback check    | `npm run agent:verify`             | exact input edits and formula preservation   |
 | Budget variance alerts   | `npm run budget-variance`          | budget, actuals, variance, alert formulas    |
 | Fulfillment capacity     | `npm run fulfillment-capacity`     | orders, labor hours, capacity gap            |
@@ -176,6 +177,52 @@ Expected output:
 
 The actual output also includes the read results, formula contracts, restored
 summary, and serialized byte counts.
+
+## MCP Tool Server Shape
+
+Run this when you want an MCP-style tool surface without pulling in an MCP SDK
+or transport dependency:
+
+```sh
+npm run agent:mcp-tools
+```
+
+The script exposes the same WorkPaper functions through two JSON-RPC methods:
+
+- `tools/list` returns `read_workpaper_summary` and
+  `set_workpaper_input_cell` with JSON Schema input definitions.
+- `tools/call` runs the selected tool and returns both text content and
+  structured output for computed readback.
+
+Expected write output:
+
+```json
+{
+  "editedCell": "Inputs!B3",
+  "before": {
+    "expectedCustomers": 5,
+    "expectedArr": 60000,
+    "expansionArr": 66000,
+    "targetGap": -34000
+  },
+  "after": {
+    "expectedCustomers": 8,
+    "expectedArr": 96000,
+    "expansionArr": 105600,
+    "targetGap": 5600
+  },
+  "checks": {
+    "previousValue": 0.25,
+    "newValue": 0.4,
+    "formulasPersisted": true,
+    "restoredMatchesAfter": true,
+    "expectedArrChanged": true
+  }
+}
+```
+
+The actual output also includes the `tools/list` response, read response,
+formula contracts, restored summary, and serialized byte count.
 
 ## Agent Writeback Verification
 
