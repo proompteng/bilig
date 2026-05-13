@@ -216,6 +216,7 @@ requireIncludes(index, '<link rel="icon" type="image/svg+xml" href="./assets/fav
 requireIncludes(index, '<link rel="stylesheet" href="./assets/fonts.css?v=2026-05-13-1" />', 'docs/index.html')
 requireIncludes(index, '<link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-13-1" />', 'docs/index.html')
 requireIncludes(index, 'bilig-hero-workbook-api.png?v=2026-05-08-2', 'docs/index.html')
+requireIncludes(index, 'Revenue.workpaper', 'docs/index.html')
 requireIncludes(index, '"downloadUrl": "https://www.npmjs.com/package/@bilig/headless"', 'docs/index.html')
 requireIncludes(index, '"applicationCategory": "DeveloperApplication"', 'docs/index.html')
 requireIncludes(index, '"@type": "FAQPage"', 'docs/index.html')

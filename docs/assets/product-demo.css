@@ -1,10 +1,14 @@
 .hero-media {
   justify-self: end;
+  min-width: 0;
   width: min(100%, 820px);
+  max-width: 100%;
 }
 
 .product-frame {
   overflow: hidden;
+  width: 100%;
+  max-width: 100%;
   border: 1px solid rgba(255, 250, 240, 0.24);
   border-radius: 6px;
   background: #16130f;
@@ -14,6 +18,7 @@
 
 .product-demo {
   display: grid;
+  min-width: 0;
   min-height: 420px;
   background: linear-gradient(135deg, rgba(51, 209, 122, 0.08), transparent 36%), linear-gradient(90deg, #f7f4ec 0 54%, #10151a 54% 100%);
 }
