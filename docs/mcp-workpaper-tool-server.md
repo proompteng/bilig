@@ -101,6 +101,14 @@ and tool invocation through `tools/call`, with input schemas on each tool:
 - Vercel AI SDK and LangChain wrappers:
   [`docs/vercel-ai-sdk-langchain-spreadsheet-tool.md`](vercel-ai-sdk-langchain-spreadsheet-tool.md)
 
+## Feedback Thread
+
+Use the
+[MCP spreadsheet tool server discussion](https://github.com/proompteng/bilig/discussions/230)
+for adapter feedback. The open questions are deliberately concrete: stdio,
+HTTP/SSE, or SDK adapter next; which spreadsheet workflow should be proven
+next; and which structured fields every write tool should return.
+
 ## When This Is A Good Fit
 
 Use this pattern when an agent needs to edit a forecast, pricing workbook,

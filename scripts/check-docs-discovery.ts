@@ -258,6 +258,7 @@ for (const required of [
   'https://github.com/proompteng/bilig/discussions',
   'https://github.com/proompteng/bilig/discussions/157',
   'https://github.com/proompteng/bilig/discussions/167',
+  'https://github.com/proompteng/bilig/discussions/230',
   'https://github.com/proompteng/bilig/discussions/115',
   'https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md',
   'https://proompteng.github.io/bilig/node-spreadsheet-formula-engine.html',
@@ -371,6 +372,7 @@ requireIncludes(
   'https://modelcontextprotocol.io/specification/2025-06-18/server/tools',
   'docs/mcp-workpaper-tool-server.md',
 )
+requireIncludes(mcpWorkPaperToolServerDoc, 'https://github.com/proompteng/bilig/discussions/230', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(
   aiSdkLangChainDoc,
   'https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling',
@@ -475,6 +477,13 @@ for (const [path, content] of [
   ['docs/llms.txt', llms],
 ] as const) {
   requireIncludes(content, 'https://github.com/proompteng/bilig/discussions/213', path)
+}
+
+for (const [path, content] of [
+  ['docs/mcp-workpaper-tool-server.md', mcpWorkPaperToolServerDoc],
+  ['docs/llms.txt', llms],
+] as const) {
+  requireIncludes(content, 'https://github.com/proompteng/bilig/discussions/230', path)
 }
 
 for (const [path, content] of [
