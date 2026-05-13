@@ -23,10 +23,10 @@ Latest public snapshot on May 8, 2026:
 - Contributor funnel: `18` open `good first issue`, `18` open
   `first-timers-only`, and `18` open `help wanted` issues
 
-Latest execution snapshot on May 13, 2026 at `00:13:38Z`:
+Latest execution snapshot on May 13, 2026 at `01:01:05Z`:
 
-- GitHub surface: public repo, `24` stars, `4` forks, `31` open issues
-- npm surface: `@bilig/headless@0.11.29`, MIT, TypeScript types, npm API
+- GitHub surface: public repo, `24` stars, `5` forks, `32` open issues
+- npm surface: `@bilig/headless@0.11.30`, MIT, TypeScript types, npm API
   downloads: `13,427` last week and `24,931` last month
 - Contributor funnel: `30` open `good first issue`, `29` open
   `first-timers-only`, and `30` open `help wanted` issues
@@ -38,11 +38,15 @@ Latest execution snapshot on May 13, 2026 at `00:13:38Z`:
   sensitivity, payroll accrual, and deferred revenue workflows. Issue `#224`
   adds a small CI release-check test task for contributors who prefer tests to
   docs examples.
-- Discussion activity: `5` GitHub Discussions, including the five-example
-  show-and-tell thread and the workflow-feedback thread
-- External activity: `1` open external issue, `25` external issues opened in
-  the last seven days, and `5` external pull requests opened in the last seven
-  days
+- Discussion activity: `6` GitHub Discussions, including the AI SDK/LangChain
+  WorkPaper agent announcement, the five-example show-and-tell thread, and the
+  workflow-feedback thread
+- Discovery metadata: GitHub topics now include `agent-tools`, `coding-agents`,
+  `langchain`, `vercel-ai-sdk`, and `xlsx` alongside the spreadsheet-engine and
+  workbook-automation topics.
+- External activity: `1` open external issue, `1` open external pull request,
+  `25` external issues opened in the last seven days, and `6` external pull
+  requests opened in the last seven days
 - Token-backed traffic: `393` views from `159` unique visitors and `18,287`
   clones from `1,907` unique cloners; top referrers include GitHub, Hacker
   News, X, Google, the project site, Kagi, Teams, Reddit, Slack, and LibHunt

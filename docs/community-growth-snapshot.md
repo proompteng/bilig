@@ -1,6 +1,6 @@
 # Community Growth Snapshot
 
-Captured at: `2026-05-13T00:13:38.592Z`
+Captured at: `2026-05-13T01:01:05.709Z`
 
 This snapshot tracks the public signals for the `@bilig/headless` growth loop: GitHub conversion, npm demand, contributor on-ramp health, discussion activity, and traffic quality.
 
@@ -8,16 +8,16 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 
 - Repository: [proompteng/bilig](https://github.com/proompteng/bilig)
 - Stars: 24 / 1,000 (976 remaining)
-- Forks: 4
+- Forks: 5
 - Watchers: 0
-- Open issues: 31
+- Open issues: 32
 - Default branch: `main`
 
 ## npm
 
-- Package: `@bilig/headless@0.11.29`
+- Package: `@bilig/headless@0.11.30`
 - License: `MIT`
-- Modified: `2026-05-12T23:35:50.132Z`
+- Modified: `2026-05-13T00:56:08.180Z`
 - Downloads last week: 13,427 (2026-05-05 to 2026-05-11)
 - Downloads last month: 24,931 (2026-04-12 to 2026-05-11)
 
@@ -26,20 +26,20 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 - Open good first issues: 30
 - Open first-timers-only issues: 29
 - Open help wanted issues: 30
-- Open pull requests: 0
+- Open pull requests: 1
 - External open issues: 1
-- External open pull requests: 0
+- External open pull requests: 1
 - External issues opened in the last 7 days: 25
-- External pull requests opened in the last 7 days: 5
+- External pull requests opened in the last 7 days: 6
 
 ## Discussions
 
-- Total discussions: 5
+- Total discussions: 6
+- #226 [Vercel AI SDK and LangChain spreadsheet tools for WorkPaper agents](https://github.com/proompteng/bilig/discussions/226) (Announcements, 0 comments)
 - #213 [Show and tell: five runnable Node workbook automation examples](https://github.com/proompteng/bilig/discussions/213) (Show and tell, 1 comment)
 - #157 [Which Node workbook automation workflow should @bilig/headless prove next?](https://github.com/proompteng/bilig/discussions/157) (Ideas, 7 comments)
 - #167 [Show and tell: serverless WorkPaper API route recipe](https://github.com/proompteng/bilig/discussions/167) (Show and tell, 1 comment)
 - #115 [what should a headless spreadsheet engine expose for agents?](https://github.com/proompteng/bilig/discussions/115) (Ideas, 13 comments)
-- #18 [Bilig headless WorkPaper launch: spreadsheet engine for agents and Node services](https://github.com/proompteng/bilig/discussions/18) (Announcements, 11 comments)
 
 ## Traffic
 
