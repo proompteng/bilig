@@ -183,14 +183,94 @@
 
         <figure class="hero-media" aria-label="Workbook and TypeScript visual">
           <div class="product-frame">
-            <img
-              src="./assets/bilig-hero-workbook-api.png?v=2026-05-08-2"
-              alt="Workbook grid beside TypeScript code for the bilig headless WorkPaper API"
-              width="1600"
-              height="900"
-            />
+            <div
+              class="product-demo"
+              role="img"
+              aria-label="A WorkPaper revenue sheet beside TypeScript code that edits a cell and reads the recalculated total"
+            >
+              <div class="demo-titlebar">
+                <span>Revenue.workpaper</span>
+                <strong>after edit</strong>
+              </div>
+              <div class="demo-body">
+                <div class="sheet-pane" aria-hidden="true">
+                  <div class="formula-bar"><span>D2</span><code>=B2*C2</code></div>
+                  <table class="sheet-table">
+                    <thead>
+                      <tr>
+                        <th></th>
+                        <th>A</th>
+                        <th>B</th>
+                        <th>C</th>
+                        <th>D</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <th>1</th>
+                        <td>Region</td>
+                        <td>Customers</td>
+                        <td>ARPA</td>
+                        <td>Revenue</td>
+                      </tr>
+                      <tr>
+                        <th>2</th>
+                        <td>West</td>
+                        <td class="selected">32</td>
+                        <td>1200</td>
+                        <td class="formula">38,400</td>
+                      </tr>
+                      <tr>
+                        <th>3</th>
+                        <td>East</td>
+                        <td>30</td>
+                        <td>250</td>
+                        <td>7,500</td>
+                      </tr>
+                      <tr>
+                        <th>4</th>
+                        <td>Central</td>
+                        <td>18</td>
+                        <td>300</td>
+                        <td>5,400</td>
+                      </tr>
+                      <tr>
+                        <th>5</th>
+                        <td>Total</td>
+                        <td></td>
+                        <td></td>
+                        <td class="total">51,300</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="code-pane" aria-hidden="true">
+                  <div class="code-head"><span>eval.ts</span><strong>TypeScript</strong></div>
+                  <pre><code><span class="kw">const</span> revenue = workbook.getSheetId(<span class="str">"Revenue"</span>);
+workbook.setCellContents(
+  { sheet: revenue, row: <span class="num">1</span>, col: <span class="num">1</span> },
+  <span class="num">32</span>,
+);
+
+<span class="kw">const</span> total = workbook.getCellValue({
+  sheet: summary,
+  row: <span class="num">1</span>,
+  col: <span class="num">1</span>,
+});
+
+save(serializeWorkPaperDocument(
+  exportWorkPaperDocument(workbook)
+));</code></pre>
+                </div>
+              </div>
+              <div class="demo-readout">
+                <span>before <strong>36,900</strong></span>
+                <span>after <strong>51,300</strong></span>
+                <span>restored <strong>true</strong></span>
+              </div>
+            </div>
             <figcaption class="frame-caption">
-              <span>The workbook is data plus formulas. The code edits it and reads the result.</span>
+              <span>The workbook is data plus formulas. The code edits B2 and reads the new total.</span>
               <strong>no UI required</strong>
             </figcaption>
           </div>

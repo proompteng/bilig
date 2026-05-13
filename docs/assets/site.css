@@ -170,7 +170,7 @@ pre,
   min-height: clamp(620px, 86svh, 740px);
   border-bottom: 1px solid #2f2920;
   background:
-    linear-gradient(90deg, rgba(17, 16, 12, 0.98), rgba(17, 16, 12, 0.82) 48%, rgba(17, 16, 12, 0.28) 100%),
+    linear-gradient(90deg, rgba(17, 16, 12, 0.98), rgba(17, 16, 12, 0.9) 58%, rgba(24, 28, 19, 0.78) 100%),
     url('./assets/bilig-hero-workbook-api.png?v=2026-05-08-2') right center / auto 100% no-repeat,
     var(--charcoal);
   color: var(--cream);
@@ -372,16 +372,195 @@ pre,
   overflow: hidden;
   border: 1px solid rgba(255, 250, 240, 0.24);
   border-radius: 6px;
-  background: #eef2f5;
+  background: #16130f;
   box-shadow: var(--shadow);
   animation: enter-media 520ms ease both;
 }
 
-.product-frame img {
+.product-demo {
+  display: grid;
+  min-height: 420px;
+  background: linear-gradient(135deg, rgba(51, 209, 122, 0.08), transparent 36%), linear-gradient(90deg, #f7f4ec 0 54%, #10151a 54% 100%);
+}
+
+.demo-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(17, 16, 12, 0.12);
+  background: rgba(255, 253, 246, 0.88);
+  padding: 12px 16px;
+  color: #4f574d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.demo-titlebar strong {
+  color: var(--green-deep);
+}
+
+.demo-body {
+  display: grid;
+  grid-template-columns: 54% 46%;
+  min-height: 300px;
+}
+
+.sheet-pane {
+  min-width: 0;
+  padding: 22px 22px 18px;
+}
+
+.formula-bar {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  margin-bottom: 12px;
+  border: 1px solid #d8ded3;
+  background: #fffdf8;
+  color: #6a7266;
+  font-size: 12px;
+}
+
+.formula-bar span,
+.formula-bar code {
+  padding: 8px 10px;
+}
+
+.formula-bar span {
+  border-right: 1px solid #d8ded3;
+  color: var(--green-deep);
+  font-weight: 700;
+}
+
+.formula-bar code {
+  color: var(--green-deep);
+}
+
+.sheet-table {
   width: 100%;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-  object-position: center right;
+  border-collapse: collapse;
+  background: #fffdf8;
+  color: #20251e;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet-table th,
+.sheet-table td {
+  border: 1px solid #dbe2d7;
+  padding: 9px 10px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sheet-table thead th,
+.sheet-table tbody th {
+  background: #edf1ea;
+  color: #758071;
+  font-weight: 600;
+  text-align: center;
+}
+
+.sheet-table td:first-of-type {
+  text-align: left;
+}
+
+.sheet-table .selected {
+  position: relative;
+  background: #dcefe5;
+  color: var(--green-deep);
+  font-weight: 700;
+}
+
+.sheet-table .selected::after {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--green-deep);
+  content: '';
+}
+
+.sheet-table .formula,
+.sheet-table .total {
+  color: var(--green-deep);
+  font-weight: 700;
+}
+
+.sheet-table .total {
+  background: #eef5ee;
+}
+
+.code-pane {
+  min-width: 0;
+  border-left: 1px solid rgba(255, 250, 240, 0.14);
+  background: #10151a;
+  color: #e9f2e7;
+}
+
+.code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 250, 240, 0.13);
+  background: #151d22;
+  padding: 12px 14px;
+  color: #b9c3b3;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.code-head strong {
+  color: #f0d287;
+}
+
+.code-pane pre {
+  overflow: hidden;
+  padding: 18px 16px;
+  font-size: 12px;
+  line-height: 1.62;
+  white-space: pre-wrap;
+}
+
+.code-pane .kw {
+  color: #8cc8ff;
+}
+
+.code-pane .str {
+  color: #92eca9;
+}
+
+.code-pane .num {
+  color: #f0d287;
+}
+
+.demo-readout {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid rgba(255, 250, 240, 0.14);
+  background: #181510;
+  color: #bdb4a4;
+  font-size: 12px;
+}
+
+.demo-readout span {
+  border-right: 1px solid rgba(255, 250, 240, 0.14);
+  padding: 13px 16px;
+}
+
+.demo-readout span:last-child {
+  border-right: 0;
+}
+
+.demo-readout strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--green);
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .frame-caption {
@@ -758,6 +937,19 @@ footer {
     width: 100%;
   }
 
+  .product-demo {
+    min-height: auto;
+  }
+
+  .demo-body {
+    grid-template-columns: 1fr;
+  }
+
+  .code-pane {
+    border-top: 1px solid rgba(255, 250, 240, 0.14);
+    border-left: 0;
+  }
+
   .section-head,
   .install-grid,
   .path-grid,
@@ -826,5 +1018,37 @@ footer {
 
   .frame-caption {
     grid-template-columns: 1fr;
+  }
+
+  .sheet-pane {
+    overflow-x: auto;
+    padding: 16px;
+  }
+
+  .sheet-table {
+    min-width: 520px;
+    font-size: 11px;
+  }
+
+  .sheet-table th,
+  .sheet-table td {
+    padding: 7px 8px;
+  }
+
+  .code-pane pre {
+    font-size: 11px;
+  }
+
+  .demo-readout {
+    grid-template-columns: 1fr;
+  }
+
+  .demo-readout span {
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 250, 240, 0.14);
+  }
+
+  .demo-readout span:last-child {
+    border-bottom: 0;
   }
 }
