@@ -271,6 +271,7 @@ for (const required of [
   'https://github.com/proompteng/bilig/blob/main/docs/vercel-ai-sdk-langchain-spreadsheet-tool.md',
   'https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-server.md',
   'https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-tool-server.mjs',
+  'https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-stdio-server.mjs',
   'https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/agent-framework-adapters.mjs',
   'https://github.com/proompteng/bilig/blob/main/docs/agent-spreadsheet-tool-call-loop.md',
   'https://github.com/proompteng/bilig/blob/main/docs/local-workpaper-benchmark-walkthrough.md',
@@ -366,6 +367,7 @@ requireIncludes(
   'docs/mcp-workpaper-tool-server.md',
 )
 requireIncludes(mcpWorkPaperToolServerDoc, 'npm run agent:mcp-tools', 'docs/mcp-workpaper-tool-server.md')
+requireIncludes(mcpWorkPaperToolServerDoc, 'npm run --silent agent:mcp-stdio', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(mcpWorkPaperToolServerDoc, 'tools/list', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(mcpWorkPaperToolServerDoc, 'tools/call', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(
@@ -436,6 +438,7 @@ for (const [path, content] of [
   requireIncludes(content, 'examples/headless-workpaper#mcp-tool-server-shape', path)
   requireIncludes(content, 'npm run agent:framework-adapters', path)
   requireIncludes(content, 'npm run agent:mcp-tools', path)
+  requireIncludes(content, 'npm run agent:mcp-stdio', path)
   requireIncludes(content, 'vercel-ai-sdk-langchain-spreadsheet-tool', path)
   requireIncludes(content, 'mcp-workpaper-tool-server', path)
   requireIncludes(content, 'examples/headless-workpaper#budget-variance-alerts', path)
@@ -525,7 +528,6 @@ for (const required of [
   'https://github.com/proompteng/bilig/issues/221',
   'https://github.com/proompteng/bilig/issues/222',
   'https://github.com/proompteng/bilig/issues/223',
-  'https://github.com/proompteng/bilig/issues/227',
   'https://github.com/proompteng/bilig/issues/228',
   'https://github.com/proompteng/bilig/issues/229',
 ]) {
@@ -584,6 +586,7 @@ for (const closedIssue of [
   '190',
   '191',
   '192',
+  '227',
 ]) {
   if (starterIssues.includes(`https://github.com/proompteng/bilig/issues/${closedIssue}`)) {
     throw new Error(`docs/starter-issues.md still links to closed starter issue #${closedIssue}`)
@@ -618,6 +621,7 @@ const [headlessExampleReadme, headlessExamplePackage] = await Promise.all([
 ])
 await requireFile(join(repoRoot, 'examples', 'headless-workpaper', 'agent-framework-adapters.mjs'))
 await requireFile(join(repoRoot, 'examples', 'headless-workpaper', 'mcp-tool-server.mjs'))
+await requireFile(join(repoRoot, 'examples', 'headless-workpaper', 'mcp-stdio-server.mjs'))
 requireIncludes(headlessExampleReadme, 'npm run invoice-totals', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, '## Invoice Totals', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, 'npm run budget-variance', 'examples/headless-workpaper/README.md')
@@ -631,13 +635,16 @@ requireIncludes(headlessExampleReadme, '## Subscription MRR Forecast', 'examples
 requireIncludes(headlessExampleReadme, 'npm run agent:framework-adapters', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, '## Agent Framework Adapters', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, 'npm run agent:mcp-tools', 'examples/headless-workpaper/README.md')
+requireIncludes(headlessExampleReadme, 'npm run agent:mcp-stdio', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, '## MCP Tool Server Shape', 'examples/headless-workpaper/README.md')
+requireIncludes(headlessExampleReadme, '## MCP Stdio Server', 'examples/headless-workpaper/README.md')
 requireIncludes(
   headlessExamplePackage,
   '"agent:framework-adapters": "node agent-framework-adapters.mjs"',
   'examples/headless-workpaper/package.json',
 )
 requireIncludes(headlessExamplePackage, '"agent:mcp-tools": "node mcp-tool-server.mjs"', 'examples/headless-workpaper/package.json')
+requireIncludes(headlessExamplePackage, '"agent:mcp-stdio": "node mcp-stdio-server.mjs"', 'examples/headless-workpaper/package.json')
 requireIncludes(headlessReadme, 'npm run invoice-totals', 'packages/headless/README.md')
 requireIncludes(headlessReadme, '#invoice-totals', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'npm run budget-variance', 'packages/headless/README.md')

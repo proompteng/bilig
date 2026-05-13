@@ -397,7 +397,8 @@ without adding either framework as a dependency.
 
 For an MCP-style shape, run `npm run agent:mcp-tools`. It returns a
 dependency-free `tools/list` response, a `tools/call` read, and a verified
-input edit with structured computed readback.
+input edit with structured computed readback. Run `npm run agent:mcp-stdio`
+when you want the same tools over newline-delimited JSON-RPC stdio.
 
 Quickstart:
 

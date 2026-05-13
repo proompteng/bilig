@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "agent:framework-adapters": "node agent-framework-adapters.mjs",
+    "agent:mcp-stdio": "node mcp-stdio-server.mjs",
     "agent:mcp-tools": "node mcp-tool-server.mjs",
     "agent:tool-call": "node agent-tool-call-loop.mjs",
     "agent:verify": "node agent-writeback-verification.mjs",

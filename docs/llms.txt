@@ -149,6 +149,9 @@ npm run agent:verify
 - runnable MCP-style WorkPaper tool server example:
   npm run agent:mcp-tools
   https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-tool-server.mjs
+- local MCP stdio WorkPaper tool server example:
+  npm run agent:mcp-stdio
+  https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-stdio-server.mjs
 - agent spreadsheet tool-call loop:
   https://proompteng.github.io/bilig/agent-spreadsheet-tool-call-loop.html
   https://github.com/proompteng/bilig/blob/main/docs/agent-spreadsheet-tool-call-loop.md
@@ -262,8 +265,6 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/222
 - current small example issue: deferred revenue roll-forward:
   https://github.com/proompteng/bilig/issues/223
-- current small docs issue: MCP stdio wrapper for the WorkPaper tool server:
-  https://github.com/proompteng/bilig/issues/227
 - current small docs issue: local MCP client config snippet:
   https://github.com/proompteng/bilig/issues/228
 - current small test issue: MCP tool server structured output contract:

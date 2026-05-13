@@ -693,6 +693,99 @@ export function parseNodeAgentToolCallOutput(output: string): AgentToolCallSumma
   }
 }
 
+export function parseNodeMcpStdioOutput(output: string): {
+  editedCell: string
+  initialized: boolean
+  toolNames: string[]
+  verified: {
+    expectedArrChanged: boolean
+    formulasPersisted: boolean
+    newValue: number
+    previousValue: number
+    restoredMatchesAfter: boolean
+    serializedBytes: number
+  }
+} {
+  const responses = output
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .map((line, index) => parseJsonRecord(line, `node MCP stdio response ${index + 1}`))
+
+  const initializeResponse = requireJsonRpcResponse(responses, 1, 'node MCP stdio initialize response')
+  const listResponse = requireJsonRpcResponse(responses, 2, 'node MCP stdio tools/list response')
+  const writeResponse = requireJsonRpcResponse(responses, 3, 'node MCP stdio tools/call response')
+  const initializeResult = parseRecordValue(initializeResponse.result, 'node MCP stdio initialize result')
+  const listResult = parseRecordValue(listResponse.result, 'node MCP stdio tools/list result')
+  const writeResult = parseRecordValue(writeResponse.result, 'node MCP stdio tools/call result')
+  const structuredContent = parseRecordValue(writeResult.structuredContent, 'node MCP stdio structured content')
+  const before = parseAgentToolCallProjection(structuredContent.before, 'node MCP stdio before output')
+  const after = parseAgentToolCallProjection(structuredContent.after, 'node MCP stdio after output')
+  const restored = parseAgentToolCallProjection(structuredContent.restored, 'node MCP stdio restored output')
+  const checks = parseRecordValue(structuredContent.checks, 'node MCP stdio checks')
+  const tools = parseToolList(listResult.tools)
+
+  if (
+    initializeResult.protocolVersion !== '2025-06-18' ||
+    parseRecordValue(initializeResult.serverInfo, 'node MCP stdio server info').name !== 'bilig-headless-workpaper-example' ||
+    !sameJson(tools, ['read_workpaper_summary', 'set_workpaper_input_cell']) ||
+    writeResult.isError !== false ||
+    structuredContent.editedCell !== 'Inputs!B3' ||
+    before.expectedCustomers !== 5 ||
+    before.expectedArr !== 60000 ||
+    before.expansionArr !== 66000 ||
+    before.targetGap !== -34000 ||
+    after.expectedCustomers !== 8 ||
+    after.expectedArr !== 96000 ||
+    after.expansionArr !== 105600 ||
+    after.targetGap !== 5600 ||
+    !sameJson(restored, after) ||
+    checks.previousValue !== 0.25 ||
+    checks.newValue !== 0.4 ||
+    checks.formulasPersisted !== true ||
+    checks.restoredMatchesAfter !== true ||
+    checks.expectedArrChanged !== true ||
+    typeof checks.serializedBytes !== 'number' ||
+    checks.serializedBytes <= 0
+  ) {
+    throw new Error(`Unexpected node MCP stdio output: ${output}`)
+  }
+
+  return {
+    editedCell: structuredContent.editedCell,
+    initialized: true,
+    toolNames: tools,
+    verified: {
+      expectedArrChanged: checks.expectedArrChanged,
+      formulasPersisted: checks.formulasPersisted,
+      newValue: checks.newValue,
+      previousValue: checks.previousValue,
+      restoredMatchesAfter: checks.restoredMatchesAfter,
+      serializedBytes: checks.serializedBytes,
+    },
+  }
+}
+
+function requireJsonRpcResponse(responses: Record<string, unknown>[], id: number, context: string): Record<string, unknown> {
+  const response = responses.find((entry) => entry.id === id)
+  if (response === undefined || response.jsonrpc !== '2.0') {
+    throw new Error(`Missing ${context}: ${JSON.stringify(responses)}`)
+  }
+  return response
+}
+
+function parseToolList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`Expected MCP tools to be an array: ${JSON.stringify(value)}`)
+  }
+  return value.map((entry, index) => {
+    const tool = parseRecordValue(entry, `MCP tool ${index + 1}`)
+    if (typeof tool.name !== 'string') {
+      throw new Error(`Unexpected MCP tool: ${JSON.stringify(entry)}`)
+    }
+    return tool.name
+  })
+}
+
 function parseAgentToolCallProjection(value: unknown, context: string): AgentToolCallProjection {
   const parsed = parseRecordValue(value, context)
   if (

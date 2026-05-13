@@ -399,8 +399,9 @@ framework as an example dependency.
 `npm run agent:mcp-tools` exposes the same operations through dependency-free
 MCP-style `tools/list` and `tools/call` JSON-RPC responses with JSON Schema
 inputs and structured formula readback.
-The `mcp` keyword points to this runnable local adapter: no hosted service, no
-API key, and no agent framework dependency.
+`npm run agent:mcp-stdio` puts the same handlers behind newline-delimited
+JSON-RPC over stdin/stdout. The `mcp` keyword points to these runnable local
+adapters: no hosted service, no API key, and no agent framework dependency.
 
 For a framework-neutral recipe that wraps WorkPaper operations as agent-callable
 tools, see

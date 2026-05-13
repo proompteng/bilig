@@ -45,6 +45,7 @@ packages through `pnpm workpaper:smoke:external`.
 | Agent tool call loop     | `npm run agent:tool-call`          | read, edit, verify, serialize, restore       |
 | Agent framework adapters | `npm run agent:framework-adapters` | Vercel AI SDK and LangChain-shaped wrappers  |
 | MCP tool server shape    | `npm run agent:mcp-tools`          | `tools/list`, `tools/call`, verified edits   |
+| MCP stdio server         | `npm run agent:mcp-stdio`          | newline-delimited JSON-RPC over stdin/stdout |
 | Agent writeback check    | `npm run agent:verify`             | exact input edits and formula preservation   |
 | Budget variance alerts   | `npm run budget-variance`          | budget, actuals, variance, alert formulas    |
 | Fulfillment capacity     | `npm run fulfillment-capacity`     | orders, labor hours, capacity gap            |
@@ -223,6 +224,24 @@ Expected write output:
 
 The actual output also includes the `tools/list` response, read response,
 formula contracts, restored summary, and serialized byte count.
+
+## MCP Stdio Server
+
+Run this when you want the same tools behind a local stdio transport:
+
+```sh
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize"}' \
+  '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"set_workpaper_input_cell","arguments":{"sheetName":"Inputs","address":"B3","value":0.4}}}' |
+  npm run --silent agent:mcp-stdio
+```
+
+The server reads newline-delimited JSON-RPC requests from stdin and writes one
+JSON-RPC response per line to stdout. It supports `initialize`,
+`notifications/initialized`, `tools/list`, and `tools/call` without adding a
+transport package or MCP SDK dependency.
 
 ## Agent Writeback Verification
 

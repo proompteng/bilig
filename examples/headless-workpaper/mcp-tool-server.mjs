@@ -1,3 +1,5 @@
+import { pathToFileURL } from 'node:url'
+
 import {
   WorkPaper,
   createWorkPaperFromDocument,
@@ -6,43 +8,48 @@ import {
   serializeWorkPaperDocument,
 } from '@bilig/headless'
 
-const server = createMcpWorkPaperToolServer(buildWorkbook())
-
-const output = {
-  capabilities: server.capabilities,
-  listResponse: server.handleJsonRpc({
-    jsonrpc: '2.0',
-    id: 1,
-    method: 'tools/list',
-  }),
-  readResponse: server.handleJsonRpc({
-    jsonrpc: '2.0',
-    id: 2,
-    method: 'tools/call',
-    params: {
-      name: 'read_workpaper_summary',
-      arguments: {
-        range: 'Summary!A1:B5',
-      },
-    },
-  }),
-  writeResponse: server.handleJsonRpc({
-    jsonrpc: '2.0',
-    id: 3,
-    method: 'tools/call',
-    params: {
-      name: 'set_workpaper_input_cell',
-      arguments: {
-        sheetName: 'Inputs',
-        address: 'B3',
-        value: 0.4,
-      },
-    },
-  }),
+if (isMainModule()) {
+  const output = createMcpDemoOutput()
+  assertOutput(output)
+  console.log(JSON.stringify(output, null, 2))
 }
 
-assertOutput(output)
-console.log(JSON.stringify(output, null, 2))
+function createMcpDemoOutput() {
+  const server = createMcpWorkPaperToolServer(buildWorkbook())
+
+  return {
+    capabilities: server.capabilities,
+    listResponse: server.handleJsonRpc({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/list',
+    }),
+    readResponse: server.handleJsonRpc({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: {
+        name: 'read_workpaper_summary',
+        arguments: {
+          range: 'Summary!A1:B5',
+        },
+      },
+    }),
+    writeResponse: server.handleJsonRpc({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'set_workpaper_input_cell',
+        arguments: {
+          sheetName: 'Inputs',
+          address: 'B3',
+          value: 0.4,
+        },
+      },
+    }),
+  }
+}
 
 function buildWorkbook() {
   return WorkPaper.buildFromSheets({
@@ -332,3 +339,9 @@ function assertOutput(actual) {
     throw new Error(`Unexpected MCP adapter result: ${JSON.stringify(actual)}`)
   }
 }
+
+function isMainModule() {
+  return process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href
+}
+
+export { assertOutput, buildWorkbook, createMcpDemoOutput, createMcpWorkPaperToolServer }

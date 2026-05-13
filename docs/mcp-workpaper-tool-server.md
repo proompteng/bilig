@@ -29,6 +29,17 @@ npm install
 npm run agent:mcp-tools
 ```
 
+For a local stdio transport, pipe newline-delimited JSON-RPC requests into the
+stdio entrypoint:
+
+```sh
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize"}' \
+  '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' |
+  npm run --silent agent:mcp-stdio
+```
+
 The script implements two JSON-RPC methods shaped around the MCP tool model:
 
 - `tools/list` returns `read_workpaper_summary` and
@@ -94,6 +105,8 @@ and tool invocation through `tools/call`, with input schemas on each tool:
 
 - MCP-style adapter script:
   [`examples/headless-workpaper/mcp-tool-server.mjs`](https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-tool-server.mjs)
+- stdio adapter script:
+  [`examples/headless-workpaper/mcp-stdio-server.mjs`](https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-stdio-server.mjs)
 - example README:
   [`examples/headless-workpaper/README.md#mcp-tool-server-shape`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#mcp-tool-server-shape)
 - SDK-neutral tool-calling recipe:
