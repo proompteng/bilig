@@ -59,6 +59,15 @@ Latest execution snapshot on May 13, 2026 at `03:08:58Z`:
   clones from `1,907` unique cloners; top referrers include GitHub, Hacker
   News, X, Google, the project site, Kagi, Teams, Reddit, Slack, and LibHunt
 
+Latest public execution snapshot on May 13, 2026 after the landing-page pass:
+
+- GitHub surface: public repo, `24` stars, `9` forks, Forgejo and GitHub
+  mirrors synced on `main`
+- Contributor funnel: `40` open `first-timers-only` issues
+- Site conversion surface: homepage now leads with a live WorkPaper demo,
+  bundled webfonts, split product-demo CSS, and an npm-only smoke-test path at
+  <https://proompteng.github.io/bilig/try-bilig-headless-in-node.html>
+
 ## Goal Text
 
 Grow `proompteng/bilig` from `8` to `1,000` legitimate GitHub stars by making
@@ -243,6 +252,33 @@ verification without opening a browser grid.
 
 If you have used HyperFormula, ExcelJS, or SheetJS for this kind of automation:
 what would block you from trying a WorkPaper-style API?
+```
+
+### Hacker News Submission After The Try-It Page
+
+Use this only when the linked page is live and the submitter is ready to answer
+technical questions in the thread.
+
+Title:
+
+```text
+Show HN: bilig, a headless spreadsheet engine for Node services
+```
+
+URL:
+
+```text
+https://proompteng.github.io/bilig/try-bilig-headless-in-node.html
+```
+
+First comment:
+
+```text
+I maintain this project. The linked page is the shortest way to judge it: it starts from an empty Node directory, installs @bilig/headless from npm, builds a two-sheet WorkPaper, edits an input cell, reads the recalculated value, serializes the workbook as JSON, restores it, and checks the value again.
+
+The package is aimed at backend and agent workflows where spreadsheet formulas are business logic but opening a browser grid is the wrong boundary. It is not a full Excel clone, and the compatibility gaps are documented publicly.
+
+Useful feedback would be specific: which formula families, import/export paths, or persistence shapes would block you from trying a headless workbook engine in a real service?
 ```
 
 ### Reddit / Community Post

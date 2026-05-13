@@ -16,6 +16,7 @@ language: typescript
 - https://github.com/proompteng/bilig/tree/main/packages/headless#readme
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper
 - https://proompteng.github.io/bilig/node-spreadsheet-formula-engine.html
+- https://proompteng.github.io/bilig/try-bilig-headless-in-node.html
 - https://proompteng.github.io/bilig/workbook-automation-examples-node.html
 - https://proompteng.github.io/bilig/why-agents-need-workbook-apis.html
 - https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html
@@ -108,6 +109,9 @@ npm run agent:verify
 - node spreadsheet formula engine:
   https://proompteng.github.io/bilig/node-spreadsheet-formula-engine.html
   https://github.com/proompteng/bilig/blob/main/docs/node-spreadsheet-formula-engine.md
+- npm-only smoke test:
+  https://proompteng.github.io/bilig/try-bilig-headless-in-node.html
+  https://github.com/proompteng/bilig/blob/main/docs/try-bilig-headless-in-node.md
 - node service recipe:
   https://proompteng.github.io/bilig/node-service-workpaper-recipe.html
   https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md

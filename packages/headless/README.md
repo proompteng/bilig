@@ -51,6 +51,9 @@ Requires Node `24+` and ESM imports.
 npm install @bilig/headless
 ```
 
+For a copy-paste evaluation from an empty directory, use the
+[npm-only smoke test](https://proompteng.github.io/bilig/try-bilig-headless-in-node.html).
+
 ## Clean npm Sanity Check
 
 Run this from an empty directory when you want to verify the published package
