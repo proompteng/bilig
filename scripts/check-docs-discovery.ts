@@ -317,6 +317,7 @@ requireIncludes(newContributorGuide, 'pnpm docs:discovery:check', 'docs/new-cont
 requireIncludes(newContributorGuide, 'pnpm format:check', 'docs/new-contributor-guide.md')
 requireIncludes(newContributorGuide, 'pnpm lint', 'docs/new-contributor-guide.md')
 requireIncludes(starterIssues, 'new-contributor-guide.md#first-time-command-checklist', 'docs/starter-issues.md')
+requireIncludes(starterIssues, 'https://github.com/proompteng/bilig/blob/main/CONTRIBUTING.md', 'docs/starter-issues.md')
 requireIncludes(contributing, 'new-contributor-guide.md#first-time-command-checklist', 'CONTRIBUTING.md')
 
 for (const [path, content] of [

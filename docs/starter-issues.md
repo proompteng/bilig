@@ -99,6 +99,7 @@ make progress without learning the whole workbook runtime. Add
 `first-timers-only` only when the issue can be completed from the issue body and
 linked docs without maintainer-only context.
 
-Before opening a PR, read [`CONTRIBUTING.md`](../CONTRIBUTING.md) and run the
-smallest relevant local check first. If the change touches package behavior,
-run `pnpm run ci` before asking for review.
+Before opening a PR, read
+[`CONTRIBUTING.md`](https://github.com/proompteng/bilig/blob/main/CONTRIBUTING.md)
+and run the smallest relevant local check first. If the change touches package
+behavior, run `pnpm run ci` before asking for review.
