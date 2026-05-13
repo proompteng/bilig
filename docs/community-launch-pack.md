@@ -23,21 +23,22 @@ Latest public snapshot on May 8, 2026:
 - Contributor funnel: `18` open `good first issue`, `18` open
   `first-timers-only`, and `18` open `help wanted` issues
 
-Latest execution snapshot on May 13, 2026 at `01:51:42Z`:
+Latest execution snapshot on May 13, 2026 at `03:08:58Z`:
 
-- GitHub surface: public repo, `24` stars, `5` forks, `33` open issues
-- npm surface: `@bilig/headless@0.11.34`, MIT, TypeScript types, npm API
+- GitHub surface: public repo, `24` stars, `8` forks, `42` open issues
+- npm surface: `@bilig/headless@0.13.0`, MIT, TypeScript types, npm API
   downloads: `13,427` last week and `24,931` last month
-- Contributor funnel: `32` open `good first issue`, `32` open
-  `first-timers-only`, and `32` open `help wanted` issues
+- Contributor funnel: `37` open `good first issue`, `37` open
+  `first-timers-only`, and `37` open `help wanted` issues
 - Starter funnel refresh: fourteen current first-timer example issues, `#207`
   through `#212` and `#217` through `#223`, cover inventory reorder points,
   accounts receivable aging, usage-based billing tiers, support SLA breach
   summaries, weighted sales pipeline forecasts, headcount capacity forecasts,
   loan amortization, cohort retention, commission payout, cash runway, currency
   sensitivity, payroll accrual, and deferred revenue workflows. Issues `#227`
-  through `#229` add a small MCP starter track for contributors who prefer agent
-  tool-server docs and tests to business examples.
+  through `#233` and `#238` through `#240` add a small MCP starter track for
+  contributors who prefer agent tool-server docs, client recipes, and tests to
+  business examples.
 - Discussion activity: `7` GitHub Discussions, including the MCP spreadsheet
   tool-server show-and-tell thread, the AI SDK/LangChain WorkPaper agent
   announcement, the five-example show-and-tell thread, and the workflow-feedback
@@ -48,8 +49,8 @@ Latest execution snapshot on May 13, 2026 at `01:51:42Z`:
 - npm discovery metadata now includes exact agent search terms such as
   `agent-spreadsheet`, `spreadsheet-agent`, `workbook-agent`, `llm`, `mcp`, and
   `model-context-protocol`.
-- External activity: `1` open external issue, `0` open external pull request,
-  `25` external issues opened in the last seven days, and `6` external pull
+- External activity: `1` open external issue, `4` open external pull requests,
+  `25` external issues opened in the last seven days, and `10` external pull
   requests opened in the last seven days
 - Token-backed traffic: `393` views from `159` unique visitors and `18,287`
   clones from `1,907` unique cloners; top referrers include GitHub, Hacker

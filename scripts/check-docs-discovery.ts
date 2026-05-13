@@ -310,7 +310,7 @@ for (const [path, content] of [
   requireIncludes(content, 'https://proompteng.github.io/bilig/community-growth-snapshot.html', path)
   requireIncludes(content, 'https://github.com/proompteng/bilig/stargazers', path)
   requireIncludes(content, '13,427` npm downloads in the', path)
-  requireIncludes(content, '`32` open `good first issue` tickets', path)
+  requireIncludes(content, '`37` open `good first issue` tickets', path)
 }
 
 requireIncludes(newContributorGuide, '## First-Time Command Checklist', 'docs/new-contributor-guide.md')
