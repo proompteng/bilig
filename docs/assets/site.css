@@ -13,7 +13,7 @@
   --green-deep: #116242;
   --shadow: 0 28px 90px rgba(17, 16, 12, 0.22);
   --font-body: 'Bilig Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-display: 'Bilig Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Bilig Condensed', 'Bilig Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'Bilig Mono', ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
 }
 
@@ -323,22 +323,18 @@ pre,
   width: 100%;
   align-self: end;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  border: 1px solid rgba(255, 250, 240, 0.16);
-  background: rgba(255, 250, 240, 0.035);
-  margin-top: clamp(8px, 1.5svh, 18px);
+  gap: clamp(22px, 4vw, 56px);
+  border-top: 1px solid rgba(255, 250, 240, 0.28);
+  margin-top: clamp(10px, 1.5svh, 18px);
+  padding-top: 18px;
 }
 
 .hero-proof-item {
   display: grid;
-  align-content: center;
-  gap: 8px;
+  align-content: start;
+  gap: 5px;
   min-width: 0;
-  min-height: 104px;
-  padding: 24px clamp(24px, 3vw, 36px);
-}
-
-.hero-proof-item + .hero-proof-item {
-  border-left: 1px solid rgba(255, 250, 240, 0.12);
+  padding: 0;
 }
 
 .hero-proof-item span,
@@ -348,18 +344,18 @@ pre,
 }
 
 .hero-proof-item span {
-  color: #948a7c;
+  color: #f1e7d7;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .hero-proof-item strong {
-  color: #fff8ee;
-  font-size: clamp(15px, 1.2vw, 17px);
-  font-weight: 600;
-  line-height: 1.42;
+  color: #bfb4a6;
+  font-size: clamp(14px, 1vw, 15px);
+  font-weight: 500;
+  line-height: 1.38;
   text-wrap: pretty;
 }
 
@@ -719,7 +715,7 @@ footer {
   }
 
   .hero-proof-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 22px;
   }
 }
 
@@ -758,16 +754,16 @@ footer {
 @media (max-width: 860px) {
   .hero-proof-list {
     grid-template-columns: 1fr;
+    gap: 14px;
   }
 
   .hero-proof-item {
-    min-height: auto;
-    padding: 18px 22px;
+    max-width: 520px;
+    padding-top: 14px;
   }
 
   .hero-proof-item + .hero-proof-item {
     border-top: 1px solid rgba(255, 250, 240, 0.08);
-    border-left: 0;
   }
 }
 
@@ -778,10 +774,6 @@ footer {
 
   .docs-grid {
     grid-template-columns: 1fr;
-  }
-
-  .hero-proof-item {
-    padding: 16px 18px;
   }
 
   .install-command code {
