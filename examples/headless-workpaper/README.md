@@ -814,3 +814,8 @@ Expected output:
   }
 }
 ```
+
+
+## add a copy-paste MCP stdio output transcript
+
+Added per issue [#233](https://github.com/proompteng/bilig/issues/233).
