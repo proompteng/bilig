@@ -13,6 +13,7 @@ Run it outside the monorepo with the published package:
 ```sh
 npm install
 npm run smoke
+npm run framework-adapters
 ```
 
 Expected smoke output:
@@ -71,6 +72,66 @@ The lower-level `createWorkPaperRequestHandler(storage)` helper accepts
 shape when the serialized WorkPaper document should live in a database, object
 store, KV namespace, Durable Object, or another durable service instead of
 module memory.
+
+## Framework Adapters
+
+Run the adapter smoke when you want copyable TypeScript wrappers for common
+Node service frameworks:
+
+```sh
+npm run framework-adapters
+```
+
+The script exercises the same WorkPaper route through Fetch-style handlers,
+Hono-style `context.req.raw`, Express-style `(req, res, next)`, and
+Fastify-style `(request, reply)` adapters. It writes the revenue update through
+the Express wrapper, reads the persisted workbook through the Fastify wrapper,
+and prints `verified: true` only after the calculated summary matches.
+
+Expected output:
+
+```json
+{
+  "adapters": ["fetch", "hono", "express", "fastify"],
+  "before": {
+    "fetch": {
+      "totalRevenue": 36900,
+      "westCustomers": 20,
+      "largestDeal": 24000
+    },
+    "hono": {
+      "totalRevenue": 36900,
+      "westCustomers": 20,
+      "largestDeal": 24000
+    }
+  },
+  "express": {
+    "status": 200,
+    "edit": {
+      "records": 4,
+      "after": {
+        "totalRevenue": 48600,
+        "westCustomers": 20,
+        "largestDeal": 24000
+      },
+      "checks": {
+        "totalRevenueChanged": true,
+        "formulasPersisted": true,
+        "serializedBytes": 1195
+      }
+    }
+  },
+  "fastify": {
+    "status": 200,
+    "summary": {
+      "totalRevenue": 48600,
+      "westCustomers": 20,
+      "largestDeal": 24000
+    }
+  },
+  "verified": true
+}
+```
 
 ## Moving Into A Real Route
 

@@ -4,6 +4,7 @@
   "description": "Runnable serverless-style API route example for @bilig/headless.",
   "type": "module",
   "scripts": {
+    "framework-adapters": "tsx framework-adapters.ts",
     "smoke": "tsx smoke.ts",
     "start": "tsx route.ts",
     "typecheck": "tsc --noEmit"

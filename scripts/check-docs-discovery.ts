@@ -22,6 +22,7 @@ const expectedSitemapUrls = [
   `${siteRoot}try-bilig-headless-in-node.html`,
   `${siteRoot}workbook-automation-examples-node.html`,
   `${siteRoot}serverless-workpaper-api-route.html`,
+  `${siteRoot}node-framework-workpaper-adapters.html`,
   `${siteRoot}csv-shaped-workpaper-input-recipe.html`,
   `${siteRoot}unsupported-formula-troubleshooting-recipe.html`,
   `${siteRoot}local-workpaper-benchmark-walkthrough.html`,
@@ -58,6 +59,7 @@ const sourceFilesByUrl = new Map<string, string>([
   [`${siteRoot}try-bilig-headless-in-node.html`, 'try-bilig-headless-in-node.md'],
   [`${siteRoot}workbook-automation-examples-node.html`, 'workbook-automation-examples-node.md'],
   [`${siteRoot}serverless-workpaper-api-route.html`, 'serverless-workpaper-api-route.md'],
+  [`${siteRoot}node-framework-workpaper-adapters.html`, 'node-framework-workpaper-adapters.md'],
   [`${siteRoot}csv-shaped-workpaper-input-recipe.html`, 'csv-shaped-workpaper-input-recipe.md'],
   [`${siteRoot}unsupported-formula-troubleshooting-recipe.html`, 'unsupported-formula-troubleshooting-recipe.md'],
   [`${siteRoot}local-workpaper-benchmark-walkthrough.html`, 'local-workpaper-benchmark-walkthrough.md'],
@@ -264,6 +266,7 @@ for (const required of [
   './evaluate-excel-formulas-in-node-typescript.html',
   './try-bilig-headless-in-node.html',
   './serverless-workpaper-api-route.html',
+  './node-framework-workpaper-adapters.html',
   './persisting-formula-backed-workpaper-documents-in-node.html',
   './building-a-revenue-model-with-headless-workpaper.html',
   './headless-spreadsheet-engine-comparison.html',
@@ -348,6 +351,7 @@ for (const required of [
   'https://proompteng.github.io/bilig/node-service-workpaper-recipe.html',
   'https://proompteng.github.io/bilig/server-side-spreadsheet-automation-node.html',
   'https://proompteng.github.io/bilig/serverless-workpaper-api-route.html',
+  'https://proompteng.github.io/bilig/node-framework-workpaper-adapters.html',
   'https://proompteng.github.io/bilig/workbook-automation-examples-node.html',
   'https://github.com/proompteng/bilig/blob/main/docs/workbook-automation-examples-node.md',
   'https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#invoice-totals',
@@ -356,6 +360,7 @@ for (const required of [
   'https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#quote-approval-threshold',
   'https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#subscription-mrr-forecast',
   'https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api',
+  'https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api#framework-adapters',
   'https://github.com/proompteng/bilig/discussions',
   'https://github.com/proompteng/bilig/discussions/157',
   'https://github.com/proompteng/bilig/discussions/167',
@@ -370,6 +375,7 @@ for (const required of [
   'https://github.com/proompteng/bilig/blob/main/docs/server-side-spreadsheet-automation-node.md',
   'https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md',
   'https://github.com/proompteng/bilig/blob/main/docs/serverless-workpaper-api-route.md',
+  'https://github.com/proompteng/bilig/blob/main/docs/node-framework-workpaper-adapters.md',
   'https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md',
   'https://github.com/proompteng/bilig/blob/main/docs/unsupported-formula-troubleshooting-recipe.md',
   'https://github.com/proompteng/bilig/blob/main/docs/agent-workpaper-tool-calling-recipe.md',
@@ -615,6 +621,7 @@ for (const [path, content] of [
   ['docs/agent-spreadsheet-tool-call-loop.md', agentToolCallLoopDoc],
   ['docs/workbook-automation-examples-node.md', await readFile(join(docsRoot, 'workbook-automation-examples-node.md'), 'utf8')],
   ['docs/server-side-spreadsheet-automation-node.md', await readFile(join(docsRoot, 'server-side-spreadsheet-automation-node.md'), 'utf8')],
+  ['docs/node-framework-workpaper-adapters.md', await readFile(join(docsRoot, 'node-framework-workpaper-adapters.md'), 'utf8')],
   ['docs/dev-to-workbook-apis-post.md', await readFile(join(docsRoot, 'dev-to-workbook-apis-post.md'), 'utf8')],
 ] as const) {
   requireIncludes(content, 'image: /assets/github-social-preview.png', path)
@@ -644,6 +651,7 @@ for (const [path, content] of [
   requireIncludes(content, 'node-spreadsheet-formula-engine', path)
   requireIncludes(content, 'server-side-spreadsheet-automation-node', path)
   requireIncludes(content, 'examples/serverless-workpaper-api', path)
+  requireIncludes(content, 'node-framework-workpaper-adapters', path)
 }
 
 for (const [path, content] of [
@@ -850,6 +858,18 @@ requireIncludes(
 )
 requireIncludes(headlessExamplePackage, '"agent:mcp-tools": "tsx mcp-tool-server.ts"', 'examples/headless-workpaper/package.json')
 requireIncludes(headlessExamplePackage, '"agent:mcp-stdio": "tsx mcp-stdio-server.ts"', 'examples/headless-workpaper/package.json')
+await requireFile(join(repoRoot, 'examples', 'serverless-workpaper-api', 'framework-adapters.ts'))
+const [serverlessExampleReadme, serverlessExamplePackage] = await Promise.all([
+  readFile(join(repoRoot, 'examples', 'serverless-workpaper-api', 'README.md'), 'utf8'),
+  readFile(join(repoRoot, 'examples', 'serverless-workpaper-api', 'package.json'), 'utf8'),
+])
+requireIncludes(serverlessExampleReadme, 'npm run framework-adapters', 'examples/serverless-workpaper-api/README.md')
+requireIncludes(serverlessExampleReadme, '## Framework Adapters', 'examples/serverless-workpaper-api/README.md')
+requireIncludes(
+  serverlessExamplePackage,
+  '"framework-adapters": "tsx framework-adapters.ts"',
+  'examples/serverless-workpaper-api/package.json',
+)
 requireIncludes(headlessPackageManifest, '"mcpName": "io.github.proompteng/bilig-workpaper"', 'packages/headless/package.json')
 requireIncludes(headlessPackageManifest, '"bilig-workpaper-mcp": "./dist/work-paper-mcp-stdio-bin.js"', 'packages/headless/package.json')
 requireIncludes(headlessServerJson, '"name": "io.github.proompteng/bilig-workpaper"', 'packages/headless/server.json')
@@ -864,6 +884,8 @@ requireIncludes(headlessReadme, 'npm run quote-approval', 'packages/headless/REA
 requireIncludes(headlessReadme, '#quote-approval-threshold', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'npm run subscription-mrr', 'packages/headless/README.md')
 requireIncludes(headlessReadme, '#subscription-mrr-forecast', 'packages/headless/README.md')
+requireIncludes(headlessReadme, 'npm run framework-adapters', 'packages/headless/README.md')
+requireIncludes(headlessReadme, 'node-framework-workpaper-adapters.html', 'packages/headless/README.md')
 
 for (const required of [
   '## Clean npm Sanity Check',

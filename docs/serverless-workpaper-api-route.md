@@ -12,6 +12,10 @@ The example also includes a tiny Node adapter so you can run it locally before
 moving the route into Vercel Functions, Cloudflare Workers, Supabase Edge
 Functions, Fastify, Hono, or another HTTP surface.
 
+If the route is going into an existing Node service, use the runnable
+[`Express, Fastify, and Hono adapter guide`](./node-framework-workpaper-adapters.md)
+with `npm run framework-adapters`.
+
 ## Setup
 
 ```sh

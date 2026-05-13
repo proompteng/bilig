@@ -29,6 +29,7 @@ language: typescript
 - https://proompteng.github.io/bilig/agent-spreadsheet-tool-call-loop.html
 - https://proompteng.github.io/bilig/node-service-workpaper-recipe.html
 - https://proompteng.github.io/bilig/serverless-workpaper-api-route.html
+- https://proompteng.github.io/bilig/node-framework-workpaper-adapters.html
 - https://github.com/proompteng/bilig/blob/main/docs/workbook-automation-examples-node.md
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#agent-framework-adapters
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#mcp-tool-server-shape
@@ -39,6 +40,7 @@ language: typescript
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#quote-approval-threshold
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#subscription-mrr-forecast
 - https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api
+- https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api#framework-adapters
 - https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md
 - https://github.com/proompteng/bilig/blob/main/docs/community-growth-snapshot.md
 - https://github.com/proompteng/bilig/discussions
@@ -48,6 +50,7 @@ language: typescript
 - https://github.com/proompteng/bilig/blob/main/docs/server-side-spreadsheet-automation-node.md
 - https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md
 - https://github.com/proompteng/bilig/blob/main/docs/serverless-workpaper-api-route.md
+- https://github.com/proompteng/bilig/blob/main/docs/node-framework-workpaper-adapters.md
 - https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md
 - https://github.com/proompteng/bilig/blob/main/docs/unsupported-formula-troubleshooting-recipe.md
 - https://github.com/proompteng/bilig/blob/main/docs/agent-workpaper-tool-calling-recipe.md
@@ -130,6 +133,9 @@ npm run agent:verify
 - serverless API route recipe:
   https://proompteng.github.io/bilig/serverless-workpaper-api-route.html
   https://github.com/proompteng/bilig/blob/main/docs/serverless-workpaper-api-route.md
+- Express, Fastify, and Hono WorkPaper adapters:
+  https://proompteng.github.io/bilig/node-framework-workpaper-adapters.html
+  https://github.com/proompteng/bilig/blob/main/docs/node-framework-workpaper-adapters.md
 - csv-shaped input recipe:
   https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md
 - json records input example:
@@ -146,6 +152,8 @@ npm run agent:verify
   https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#subscription-mrr-forecast
 - serverless API route example:
   https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api
+- framework adapter example:
+  https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api#framework-adapters
 - five Node workbook automation examples:
   https://proompteng.github.io/bilig/workbook-automation-examples-node.html
 - unsupported formula troubleshooting:
