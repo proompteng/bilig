@@ -92,6 +92,57 @@ describe('xlsx chart artifacts roundtrip', () => {
     expect(imported.snapshot.workbook.metadata?.charts?.[0]?.legendPosition).toBeUndefined()
   })
 
+  it('does not infer scatter chart first-column labels from fallback x values', () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: {
+        name: 'Scatter Chart Workbook',
+        metadata: {
+          charts: [
+            {
+              id: 'scatter-chart',
+              sheetName: 'Data',
+              address: 'F1',
+              source: { sheetName: 'Data', startAddress: 'B1', endAddress: 'D2' },
+              chartType: 'scatter',
+              seriesOrientation: 'columns',
+              firstRowAsHeaders: true,
+              rows: 8,
+              cols: 6,
+            },
+          ],
+        },
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'Data',
+          order: 0,
+          cells: [
+            { address: 'B1', value: 'Low' },
+            { address: 'C1', value: 'Base' },
+            { address: 'D1', value: 'High' },
+            { address: 'B2', value: 10 },
+            { address: 'C2', value: 20 },
+            { address: 'D2', value: 30 },
+          ],
+        },
+      ],
+    }
+
+    const imported = importXlsx(exportXlsx(snapshot), 'scatter-chart-workbook.xlsx')
+    const [chart] = imported.snapshot.workbook.metadata?.charts ?? []
+
+    expect(chart).toMatchObject({
+      id: 'scatter-chart',
+      source: { sheetName: 'Data', startAddress: 'B1', endAddress: 'D2' },
+      chartType: 'scatter',
+      seriesOrientation: 'columns',
+      firstRowAsHeaders: true,
+    })
+    expect(chart?.firstColumnAsLabels).toBeUndefined()
+  })
+
   it('does not infer chart headers or labels from reused whole-series ranges', () => {
     const snapshot: WorkbookSnapshot = {
       version: 1,

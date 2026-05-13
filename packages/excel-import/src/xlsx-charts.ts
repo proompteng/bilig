@@ -597,6 +597,20 @@ function isFirstColumnLabelRange(source: CellRangeRef, range: CellRangeRef): boo
   return sourceStart.c < sourceEnd.c && rangeStart.c === sourceStart.c && rangeEnd.c === sourceStart.c
 }
 
+function rangeEquals(left: CellRangeRef | undefined, right: CellRangeRef | undefined): boolean {
+  return (
+    left !== undefined &&
+    right !== undefined &&
+    left.sheetName === right.sheetName &&
+    left.startAddress === right.startAddress &&
+    left.endAddress === right.endAddress
+  )
+}
+
+function nonValueSeriesRange(range: CellRangeRef | undefined, series: ChartSeriesRefs): CellRangeRef[] {
+  return range && !rangeEquals(range, series.value) ? [range] : []
+}
+
 function inferFirstRowAsHeaders(
   source: CellRangeRef,
   series: readonly ChartSeriesRefs[],
@@ -604,12 +618,12 @@ function inferFirstRowAsHeaders(
 ): boolean | undefined {
   const candidates = series.flatMap((entry) => {
     if (orientation === 'rows') {
-      return entry.category ? [entry.category] : []
+      return nonValueSeriesRange(entry.category, entry)
     }
     if (orientation === 'columns') {
-      return entry.name ? [entry.name] : []
+      return nonValueSeriesRange(entry.name, entry)
     }
-    return [entry.name, entry.category].filter((range): range is CellRangeRef => Boolean(range))
+    return [...nonValueSeriesRange(entry.name, entry), ...nonValueSeriesRange(entry.category, entry)]
   })
   return candidates.some((range) => isTopRowHeaderRange(source, range)) ? true : undefined
 }
@@ -621,12 +635,12 @@ function inferFirstColumnAsLabels(
 ): boolean | undefined {
   const candidates = series.flatMap((entry) => {
     if (orientation === 'rows') {
-      return entry.name ? [entry.name] : []
+      return nonValueSeriesRange(entry.name, entry)
     }
     if (orientation === 'columns') {
-      return entry.category ? [entry.category] : []
+      return nonValueSeriesRange(entry.category, entry)
     }
-    return [entry.name, entry.category].filter((range): range is CellRangeRef => Boolean(range))
+    return [...nonValueSeriesRange(entry.name, entry), ...nonValueSeriesRange(entry.category, entry)]
   })
   return candidates.some((range) => isFirstColumnLabelRange(source, range)) ? true : undefined
 }
