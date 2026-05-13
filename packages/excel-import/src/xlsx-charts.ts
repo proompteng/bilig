@@ -151,7 +151,7 @@ function legendPositionValue(position: WorkbookChartLegendPosition | undefined):
     case 'hidden':
       return null
     case undefined:
-      return 'r'
+      return null
     default:
       return 'r'
   }

@@ -2,6 +2,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
 
+import type { WorkbookSnapshot } from '@bilig/protocol'
 import { exportXlsx, importXlsx } from '../index.js'
 
 const relationshipNamespace = 'http://schemas.openxmlformats.org/package/2006/relationships'
@@ -33,6 +34,59 @@ describe('xlsx chart artifacts roundtrip', () => {
     expect(chartPackageMetrics(exported)).toEqual(chartPackageMetrics(source))
     expect(readZipText(exported, 'xl/chartsheets/sheet1.xml')).toBe(chartSheetXml)
     expect(readZipText(exported, 'xl/charts/chart1.xml')).toBe(chartXml)
+  })
+
+  it('does not add a default legend to charts without one', () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: {
+        name: 'Chart Workbook',
+        metadata: {
+          charts: [
+            {
+              id: 'sales-chart',
+              sheetName: 'Data',
+              address: 'E1',
+              source: { sheetName: 'Data', startAddress: 'A1', endAddress: 'B3' },
+              chartType: 'line',
+              seriesOrientation: 'columns',
+              firstRowAsHeaders: true,
+              firstColumnAsLabels: true,
+              rows: 12,
+              cols: 6,
+            },
+          ],
+        },
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'Data',
+          order: 0,
+          cells: [
+            { address: 'A1', value: 'Month' },
+            { address: 'B1', value: 'Revenue' },
+            { address: 'A2', value: 'Jan' },
+            { address: 'B2', value: 10 },
+            { address: 'A3', value: 'Feb' },
+            { address: 'B3', value: 12 },
+          ],
+        },
+      ],
+    }
+
+    const imported = importXlsx(exportXlsx(snapshot), 'chart-workbook.xlsx')
+
+    expect(imported.snapshot.workbook.metadata?.charts).toMatchObject([
+      {
+        id: 'sales-chart',
+        sheetName: 'Data',
+        address: 'E1',
+        source: { sheetName: 'Data', startAddress: 'A1', endAddress: 'B3' },
+        chartType: 'line',
+      },
+    ])
+    expect(imported.snapshot.workbook.metadata?.charts?.[0]?.legendPosition).toBeUndefined()
   })
 })
 
