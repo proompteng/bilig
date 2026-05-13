@@ -219,17 +219,17 @@ requireIncludes(index, '"codeRepository": "https://github.com/proompteng/bilig"'
 requireIncludes(index, '<title>bilig - Headless Spreadsheet Engine for Node.js Services and Agents</title>', 'docs/index.html')
 requireIncludes(index, '<meta name="robots" content="index, follow, max-image-preview:large" />', 'docs/index.html')
 requireIncludes(index, '<link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />', 'docs/index.html')
-requireIncludes(index, '<link rel="stylesheet" href="./assets/site.css?v=2026-05-13-5" />', 'docs/index.html')
+requireIncludes(index, '<link rel="stylesheet" href="./assets/site.css?v=2026-05-13-6" />', 'docs/index.html')
 requireIncludes(index, '<link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-13-1" />', 'docs/index.html')
 requireNotIncludes(index, './assets/fonts.css', 'docs/index.html')
 requireNotIncludes(index, 'bilig-hero-workbook-api.png?v=2026-05-08-2', 'docs/index.html')
 requireNotIncludes(siteCss, 'bilig-hero-workbook-api.png?v=2026-05-08-2', 'docs/assets/site.css')
 requireIncludes(index, 'Revenue.workpaper', 'docs/index.html')
 requireIncludes(index, 'Build a workbook in Node, change inputs through code', 'docs/index.html')
-requireIncludes(index, '<strong>51 starter tasks</strong>', 'docs/index.html')
+requireIncludes(index, '<strong>55 small starter issues are open.</strong>', 'docs/index.html')
 requireIncludes(index, '<strong>0.13.18</strong>', 'docs/index.html')
 requireIncludes(index, '<span>Open first-timer issues</span>', 'docs/index.html')
-requireIncludes(index, '<strong>51</strong>', 'docs/index.html')
+requireIncludes(index, '<strong>55</strong>', 'docs/index.html')
 requireNotIncludes(index, '<strong>40 starter tasks</strong>', 'docs/index.html')
 requireNotIncludes(index, '<strong>0.13.9</strong>', 'docs/index.html')
 requireIncludes(index, '"downloadUrl": "https://www.npmjs.com/package/@bilig/headless"', 'docs/index.html')
@@ -392,7 +392,7 @@ for (const [path, content] of [
   requireIncludes(content, 'https://github.com/proompteng/bilig/stargazers', path)
   requireIncludes(content, '`10` forks', path)
   requireIncludes(content, '15,592` npm downloads in the', path)
-  requireIncludes(content, '`51` open', path)
+  requireIncludes(content, '`55` open', path)
   requireIncludes(content, '`good first issue` tickets', path)
 }
 
@@ -402,21 +402,24 @@ requireIncludes(newContributorGuide, 'pnpm format:check', 'docs/new-contributor-
 requireIncludes(newContributorGuide, 'pnpm lint', 'docs/new-contributor-guide.md')
 requireIncludes(starterIssues, 'new-contributor-guide.md#first-time-command-checklist', 'docs/starter-issues.md')
 requireIncludes(starterIssues, 'https://github.com/proompteng/bilig/blob/main/CONTRIBUTING.md', 'docs/starter-issues.md')
-requireIncludes(starterIssues, '51 open `first-timers-only` issues.', 'docs/starter-issues.md')
-requireIncludes(starterIssues, '45 issues are generally available for a new contributor to claim.', 'docs/starter-issues.md')
+requireIncludes(starterIssues, '55 open `first-timers-only` issues.', 'docs/starter-issues.md')
+requireIncludes(starterIssues, '49 issues are generally available for a new contributor to claim.', 'docs/starter-issues.md')
 requireIncludes(starterIssues, '### npm Smoke Test Improvements', 'docs/starter-issues.md')
 requireIncludes(starterIssues, 'https://github.com/proompteng/bilig/issues/265', 'docs/starter-issues.md')
 requireIncludes(starterIssues, 'https://github.com/proompteng/bilig/issues/269', 'docs/starter-issues.md')
 requireIncludes(starterIssues, '#269: docs(headless): add package-manager variants for the smoke test', 'docs/starter-issues.md')
 requireIncludes(starterIssues, '#272: docs(examples): add NestJS WorkPaper controller smoke', 'docs/starter-issues.md')
 requireIncludes(starterIssues, '#277: docs(examples): add Bun.serve WorkPaper route smoke', 'docs/starter-issues.md')
+requireIncludes(starterIssues, '#278: docs(examples): add SvelteKit WorkPaper route smoke', 'docs/starter-issues.md')
+requireIncludes(starterIssues, '#281: docs(examples): add Cloudflare D1 WorkPaper persistence smoke', 'docs/starter-issues.md')
 requireIncludes(starterIssues, '#266: docs(try): add a Docker smoke test for clean Node 24 runs', 'docs/starter-issues.md')
 requireIncludes(starterIssues, 'https://github.com/proompteng/bilig/pull/271', 'docs/starter-issues.md')
 requireNotIncludes(starterIssues, 'https://github.com/proompteng/bilig/pull/251', 'docs/starter-issues.md')
 requireIncludes(contributing, 'new-contributor-guide.md#first-time-command-checklist', 'CONTRIBUTING.md')
-requireIncludes(llms, '51 open first-timers-only issues, 45 generally available, 6 already in review', 'docs/llms.txt')
+requireIncludes(llms, '55 open first-timers-only issues, 49 generally available, 6 already in review', 'docs/llms.txt')
 requireIncludes(llms, 'https://github.com/proompteng/bilig/issues/272', 'docs/llms.txt')
 requireIncludes(llms, 'https://github.com/proompteng/bilig/issues/277', 'docs/llms.txt')
+requireIncludes(llms, 'https://github.com/proompteng/bilig/issues/281', 'docs/llms.txt')
 requireIncludes(
   await readFile(join(docsRoot, 'evaluate-excel-formulas-in-node-typescript.md'), 'utf8'),
   'npx tsx eval-node-formulas.ts',
@@ -611,7 +614,8 @@ for (const [path, content] of [
 
 const currentStarterIssueNumbers = [
   134, 153, 154, 155, 156, 158, 159, 162, 163, 193, 194, 195, 196, 197, 198, 207, 208, 209, 210, 211, 212, 217, 218, 219, 220, 221, 222,
-  223, 231, 233, 247, 248, 249, 250, 255, 256, 257, 258, 259, 260, 265, 266, 267, 268, 269,
+  223, 231, 233, 247, 248, 249, 250, 255, 256, 257, 258, 259, 260, 265, 266, 267, 268, 269, 272, 273, 274, 275, 276, 277, 278, 279, 280,
+  281,
 ]
 
 for (const required of currentStarterIssueNumbers.map((issueNumber) => `https://github.com/proompteng/bilig/issues/${issueNumber}`)) {

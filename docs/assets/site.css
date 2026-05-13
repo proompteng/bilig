@@ -317,42 +317,46 @@ pre,
   color: var(--cream);
 }
 
-.hero-facts {
+.hero-evidence {
   display: grid;
   width: 100%;
-  max-width: 520px;
+  max-width: 560px;
   border-top: 1px solid rgba(255, 250, 240, 0.18);
   border-bottom: 1px solid rgba(255, 250, 240, 0.13);
-  color: #beb2a1;
 }
 
-.hero-fact {
+.hero-evidence-row {
   display: grid;
-  grid-template-columns: 142px minmax(0, 1fr);
-  gap: 24px;
-  align-items: start;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 22px;
+  align-items: baseline;
   min-width: 0;
-  padding: 11px 0;
+  padding: 12px 0;
 }
 
-.hero-fact + .hero-fact {
+.hero-evidence-row + .hero-evidence-row {
   border-top: 1px solid rgba(255, 250, 240, 0.08);
 }
 
-.hero-fact strong,
-.hero-fact span {
+.hero-evidence-row span,
+.hero-evidence-row strong {
   display: block;
+  min-width: 0;
 }
 
-.hero-fact strong {
+.hero-evidence-row span {
+  color: #948a7c;
+  font-size: 11px;
+  font-weight: 720;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.hero-evidence-row strong {
   color: #fff8ee;
   font-size: 14px;
-  line-height: 1.28;
-}
-
-.hero-fact span {
-  font-size: 13px;
-  line-height: 1.5;
+  font-weight: 650;
+  line-height: 1.42;
 }
 
 main {
@@ -710,7 +714,7 @@ footer {
     max-width: 620px;
   }
 
-  .hero-facts {
+  .hero-evidence {
     max-width: 620px;
   }
 }
@@ -756,7 +760,7 @@ footer {
     grid-template-columns: 1fr;
   }
 
-  .hero-fact {
+  .hero-evidence-row {
     grid-template-columns: 1fr;
     gap: 4px;
     padding: 12px 0;

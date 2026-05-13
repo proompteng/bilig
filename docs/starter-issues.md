@@ -6,8 +6,8 @@ search indexing.
 
 Current starter queue as of May 13, 2026:
 
-- 51 open `first-timers-only` issues.
-- 45 issues are generally available for a new contributor to claim.
+- 55 open `first-timers-only` issues.
+- 49 issues are generally available for a new contributor to claim.
 - 6 issues already have active pull requests; comment before duplicating one of
   those patches.
 
@@ -37,6 +37,10 @@ Current starter queue as of May 13, 2026:
 - [#275: docs(examples): add Deno Deploy WorkPaper route smoke](https://github.com/proompteng/bilig/issues/275)
 - [#276: docs(examples): add Next.js route handler WorkPaper smoke](https://github.com/proompteng/bilig/issues/276)
 - [#277: docs(examples): add Bun.serve WorkPaper route smoke](https://github.com/proompteng/bilig/issues/277)
+- [#278: docs(examples): add SvelteKit WorkPaper route smoke](https://github.com/proompteng/bilig/issues/278)
+- [#279: docs(examples): add Remix resource route WorkPaper smoke](https://github.com/proompteng/bilig/issues/279)
+- [#280: docs(examples): add Netlify Function WorkPaper route smoke](https://github.com/proompteng/bilig/issues/280)
+- [#281: docs(examples): add Cloudflare D1 WorkPaper persistence smoke](https://github.com/proompteng/bilig/issues/281)
 
 ### Example Recipes
 

@@ -10,7 +10,7 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 - Stars: 24 / 1,000 (976 remaining)
 - Forks: 10
 - Watchers: 0
-- Open issues: 58
+- Open issues: 56
 - Default branch: `main`
 
 ## npm
@@ -23,9 +23,9 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 
 ## Contributor Funnel
 
-- Open good first issues: 51
-- Open first-timers-only issues: 51
-- Open help wanted issues: 51
+- Open good first issues: 55
+- Open first-timers-only issues: 55
+- Open help wanted issues: 55
 - Open pull requests: 6
 - External open issues: 1
 - External open pull requests: 6

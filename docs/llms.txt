@@ -225,7 +225,7 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md
 - community growth snapshot:
   https://github.com/proompteng/bilig/blob/main/docs/community-growth-snapshot.md
-- current starter queue snapshot: 51 open first-timers-only issues, 45 generally available, 6 already in review.
+- current starter queue snapshot: 55 open first-timers-only issues, 49 generally available, 6 already in review.
 - current small example issue: xlsx formula-cache roundtrip:
   https://github.com/proompteng/bilig/issues/134
 - current small docs issue: WorkPaper agent tool result contract:
@@ -328,6 +328,14 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/276
 - current small example issue: Bun.serve WorkPaper route smoke:
   https://github.com/proompteng/bilig/issues/277
+- current small example issue: SvelteKit WorkPaper route smoke:
+  https://github.com/proompteng/bilig/issues/278
+- current small example issue: Remix resource route WorkPaper smoke:
+  https://github.com/proompteng/bilig/issues/279
+- current small example issue: Netlify Function WorkPaper route smoke:
+  https://github.com/proompteng/bilig/issues/280
+- current small example issue: Cloudflare D1 WorkPaper persistence smoke:
+  https://github.com/proompteng/bilig/issues/281
 - good first issue search:
   https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22
 - first-timers-only issue search:
