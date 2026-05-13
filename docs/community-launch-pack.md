@@ -114,6 +114,10 @@ issue pass:
   submission for review with repository `https://github.com/proompteng/bilig`,
   npm package `@bilig/headless`, and the WorkPaper persistence/readback
   description.
+- External MCP directory surface: the mcp.so maintainer repository submission
+  issue is open with the npm command, official registry name, tool list, and
+  public package verification:
+  <https://github.com/chatmcp/mcpso/issues/2295>
 - External MCP marketplace surface: the Cline MCP Marketplace server submission
   issue is open with the GitHub repository, 400px logo, public npm command, and
   verified `tools/list` plus `set_workpaper_input_cell` readback proof:
