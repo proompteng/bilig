@@ -18,6 +18,7 @@ language: typescript
 - https://proompteng.github.io/bilig/node-spreadsheet-formula-engine.html
 - https://proompteng.github.io/bilig/workbook-automation-examples-node.html
 - https://proompteng.github.io/bilig/why-agents-need-workbook-apis.html
+- https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html
 - https://proompteng.github.io/bilig/agent-workpaper-tool-calling-recipe.html
 - https://proompteng.github.io/bilig/agent-spreadsheet-tool-call-loop.html
 - https://proompteng.github.io/bilig/node-service-workpaper-recipe.html
@@ -132,6 +133,9 @@ npm run agent:verify
 - workpaper tool-calling recipe for agents:
   https://proompteng.github.io/bilig/agent-workpaper-tool-calling-recipe.html
   https://github.com/proompteng/bilig/blob/main/docs/agent-workpaper-tool-calling-recipe.md
+- Vercel AI SDK and LangChain spreadsheet tool guide:
+  https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html
+  https://github.com/proompteng/bilig/blob/main/docs/vercel-ai-sdk-langchain-spreadsheet-tool.md
 - runnable Vercel AI SDK and LangChain-shaped agent adapter example:
   https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/agent-framework-adapters.mjs
 - agent spreadsheet tool-call loop:

@@ -10,6 +10,7 @@ const expectedSitemapUrls = [
   siteRoot,
   `${siteRoot}why-agents-need-workbook-apis.html`,
   `${siteRoot}agent-workpaper-tool-calling-recipe.html`,
+  `${siteRoot}vercel-ai-sdk-langchain-spreadsheet-tool.html`,
   `${siteRoot}agent-spreadsheet-tool-call-loop.html`,
   `${siteRoot}node-service-workpaper-recipe.html`,
   `${siteRoot}node-spreadsheet-formula-engine.html`,
@@ -39,6 +40,7 @@ const sourceFilesByUrl = new Map<string, string>([
   [siteRoot, 'index.html'],
   [`${siteRoot}why-agents-need-workbook-apis.html`, 'why-agents-need-workbook-apis.md'],
   [`${siteRoot}agent-workpaper-tool-calling-recipe.html`, 'agent-workpaper-tool-calling-recipe.md'],
+  [`${siteRoot}vercel-ai-sdk-langchain-spreadsheet-tool.html`, 'vercel-ai-sdk-langchain-spreadsheet-tool.md'],
   [`${siteRoot}agent-spreadsheet-tool-call-loop.html`, 'agent-spreadsheet-tool-call-loop.md'],
   [`${siteRoot}node-service-workpaper-recipe.html`, 'node-service-workpaper-recipe.md'],
   [`${siteRoot}node-spreadsheet-formula-engine.html`, 'node-spreadsheet-formula-engine.md'],
@@ -176,6 +178,7 @@ requireIncludes(index, '"@type": "FAQPage"', 'docs/index.html')
 for (const required of [
   './why-agents-need-workbook-apis.html',
   './agent-workpaper-tool-calling-recipe.html',
+  './vercel-ai-sdk-langchain-spreadsheet-tool.html',
   './agent-spreadsheet-tool-call-loop.html',
   './node-service-workpaper-recipe.html',
   './node-spreadsheet-formula-engine.html',
@@ -235,6 +238,7 @@ for (const required of [
   'npm run agent:verify',
   'https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input',
   'https://proompteng.github.io/bilig/why-agents-need-workbook-apis.html',
+  'https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html',
   'https://proompteng.github.io/bilig/agent-workpaper-tool-calling-recipe.html',
   'https://proompteng.github.io/bilig/agent-spreadsheet-tool-call-loop.html',
   'https://proompteng.github.io/bilig/node-service-workpaper-recipe.html',
@@ -259,6 +263,7 @@ for (const required of [
   'https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md',
   'https://github.com/proompteng/bilig/blob/main/docs/unsupported-formula-troubleshooting-recipe.md',
   'https://github.com/proompteng/bilig/blob/main/docs/agent-workpaper-tool-calling-recipe.md',
+  'https://github.com/proompteng/bilig/blob/main/docs/vercel-ai-sdk-langchain-spreadsheet-tool.md',
   'https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/agent-framework-adapters.mjs',
   'https://github.com/proompteng/bilig/blob/main/docs/agent-spreadsheet-tool-call-loop.md',
   'https://github.com/proompteng/bilig/blob/main/docs/local-workpaper-benchmark-walkthrough.md',
@@ -323,9 +328,10 @@ for (const [path, content] of [
   requireIncludes(content, 'workbook-automation-examples-node', path)
 }
 
-const [whyAgentsDoc, agentToolCallingDoc, agentToolCallLoopDoc] = await Promise.all([
+const [whyAgentsDoc, agentToolCallingDoc, aiSdkLangChainDoc, agentToolCallLoopDoc] = await Promise.all([
   readFile(join(docsRoot, 'why-agents-need-workbook-apis.md'), 'utf8'),
   readFile(join(docsRoot, 'agent-workpaper-tool-calling-recipe.md'), 'utf8'),
+  readFile(join(docsRoot, 'vercel-ai-sdk-langchain-spreadsheet-tool.md'), 'utf8'),
   readFile(join(docsRoot, 'agent-spreadsheet-tool-call-loop.md'), 'utf8'),
 ])
 requireIncludes(
@@ -340,6 +346,22 @@ requireIncludes(
 )
 requireIncludes(agentToolCallingDoc, 'npm run agent:framework-adapters', 'docs/agent-workpaper-tool-calling-recipe.md')
 requireIncludes(
+  aiSdkLangChainDoc,
+  'description: Wrap @bilig/headless WorkPaper reads, verified edits, formula contracts, and persistence checks as Vercel AI SDK and LangChain-style tools',
+  'docs/vercel-ai-sdk-langchain-spreadsheet-tool.md',
+)
+requireIncludes(aiSdkLangChainDoc, 'npm run agent:framework-adapters', 'docs/vercel-ai-sdk-langchain-spreadsheet-tool.md')
+requireIncludes(
+  aiSdkLangChainDoc,
+  'https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling',
+  'docs/vercel-ai-sdk-langchain-spreadsheet-tool.md',
+)
+requireIncludes(
+  aiSdkLangChainDoc,
+  'https://docs.langchain.com/oss/javascript/langchain/tools',
+  'docs/vercel-ai-sdk-langchain-spreadsheet-tool.md',
+)
+requireIncludes(
   agentToolCallLoopDoc,
   'description: A runnable @bilig/headless loop where an agent writes one workbook input',
   'docs/agent-spreadsheet-tool-call-loop.md',
@@ -347,6 +369,7 @@ requireIncludes(
 for (const [path, content] of [
   ['docs/why-agents-need-workbook-apis.md', whyAgentsDoc],
   ['docs/agent-workpaper-tool-calling-recipe.md', agentToolCallingDoc],
+  ['docs/vercel-ai-sdk-langchain-spreadsheet-tool.md', aiSdkLangChainDoc],
   ['docs/agent-spreadsheet-tool-call-loop.md', agentToolCallLoopDoc],
   ['docs/workbook-automation-examples-node.md', await readFile(join(docsRoot, 'workbook-automation-examples-node.md'), 'utf8')],
   ['docs/dev-to-workbook-apis-post.md', await readFile(join(docsRoot, 'dev-to-workbook-apis-post.md'), 'utf8')],
@@ -387,6 +410,7 @@ for (const [path, content] of [
   requireIncludes(content, 'examples/headless-workpaper#invoice-totals', path)
   requireIncludes(content, 'examples/headless-workpaper#agent-framework-adapters', path)
   requireIncludes(content, 'npm run agent:framework-adapters', path)
+  requireIncludes(content, 'vercel-ai-sdk-langchain-spreadsheet-tool', path)
   requireIncludes(content, 'examples/headless-workpaper#budget-variance-alerts', path)
   requireIncludes(content, 'examples/headless-workpaper#fulfillment-capacity-plan', path)
   requireIncludes(content, 'examples/headless-workpaper#quote-approval-threshold', path)

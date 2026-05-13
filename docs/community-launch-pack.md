@@ -97,6 +97,8 @@ make:
 - `headless spreadsheet engine for Node`
 - `HyperFormula alternative`
 - `spreadsheet engine for agents`
+- `Vercel AI SDK spreadsheet tool`
+- `LangChain spreadsheet tool`
 - `evaluate Excel formulas in Node`
 - `persist formula backed workbook JSON`
 - `server side spreadsheet automation`

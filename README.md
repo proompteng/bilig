@@ -55,7 +55,8 @@ bookmark the repo after you see the verification output:
   [Node service recipe](docs/node-service-workpaper-recipe.md), or
   [serverless route walkthrough](docs/serverless-workpaper-api-route.md).
 - **Wire a coding-agent tool**: use the
-  [agent tool-calling recipe](docs/agent-workpaper-tool-calling-recipe.md) or
+  [Vercel AI SDK / LangChain spreadsheet tool guide](docs/vercel-ai-sdk-langchain-spreadsheet-tool.md),
+  [agent tool-calling recipe](docs/agent-workpaper-tool-calling-recipe.md), or
   run the
   [Vercel AI SDK / LangChain adapter example](examples/headless-workpaper#agent-framework-adapters).
 - **Contribute a small patch**: pick a scoped

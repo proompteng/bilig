@@ -104,6 +104,8 @@ Pick the path that matches the job:
   [`npm run agent:tool-call`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#agent-tool-call-loop).
 - Adapt the same WorkPaper tools to agent frameworks:
   [`npm run agent:framework-adapters`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#agent-framework-adapters).
+- Map WorkPaper tools to Vercel AI SDK and LangChain:
+  [framework adapter guide](https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html).
 - Put WorkPaper behind HTTP:
   [`examples/serverless-workpaper-api`](https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api).
 - Compare engines before adopting:
