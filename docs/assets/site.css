@@ -319,25 +319,32 @@ pre,
 
 .hero-facts {
   display: grid;
-  width: min(100%, 420px);
-  gap: 0;
+  width: 100%;
+  max-width: 440px;
+  gap: 12px;
   border-top: 1px solid rgba(255, 250, 240, 0.18);
-  border-bottom: 1px solid rgba(255, 250, 240, 0.12);
+  padding-top: 16px;
   color: #beb2a1;
 }
 
 .hero-fact {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(136px, 0.44fr) minmax(0, 1fr);
-  gap: 22px;
+  grid-template-columns: minmax(130px, 0.38fr) minmax(0, 1fr);
+  gap: 20px;
   align-items: start;
   min-width: 0;
-  border-bottom: 1px solid rgba(255, 250, 240, 0.1);
-  padding: 15px 0;
+  padding-left: 14px;
 }
 
-.hero-fact:last-child {
-  border-bottom: 0;
+.hero-fact::before {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  width: 2px;
+  background: rgba(51, 209, 122, 0.58);
+  content: '';
 }
 
 .hero-fact strong,
@@ -757,7 +764,7 @@ footer {
   .hero-fact {
     grid-template-columns: 1fr;
     gap: 5px;
-    padding: 14px 0;
+    padding-left: 13px;
   }
 
   .install-command code {
