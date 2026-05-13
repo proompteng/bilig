@@ -114,6 +114,10 @@ issue pass:
 - External contributor-directory surface: the Good First Issue CLI listing pull
   request is open, mergeable, and passing its security checks:
   <https://github.com/cutenode/good-first-issue/pull/1088>
+- External first-time-contributor directory surface: the Awesome for Beginners
+  listing pull request is open, mergeable, and adds Bilig to the TypeScript
+  projects list with the `first-timers-only` label:
+  <https://github.com/MunGell/awesome-for-beginners/pull/2012>
 - External JavaScript spreadsheet directory surface: the JSpreadsheets listing
   pull request is open, mergeable, and adds the Bilig headless WorkPaper engine
   to `source/projects/bilig.md`:

@@ -260,6 +260,8 @@ npm run agent:verify
   https://github.com/zhangming1978/js-spreadsheet-benchmark/issues/1
 - external MCP ranking list submission:
   https://github.com/tolkonepiu/best-of-mcp-servers/pull/192
+- external first-time-contributor directory submission:
+  https://github.com/MunGell/awesome-for-beginners/pull/2012
 - older agent API shape discussion:
   https://github.com/proompteng/bilig/discussions/115
 - community launch and growth pack:
