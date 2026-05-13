@@ -66,6 +66,30 @@ function packConstants(constantsByProgram: number[][]): {
   }
 }
 
+function packStrings(values: string[]): {
+  offsets: Uint32Array
+  lengths: Uint32Array
+  data: Uint16Array
+} {
+  const offsets: number[] = []
+  const lengths: number[] = []
+  const data: number[] = []
+  let offset = 0
+  for (const value of values) {
+    offsets.push(offset)
+    lengths.push(value.length)
+    for (const char of value) {
+      data.push(char.charCodeAt(0))
+    }
+    offset += value.length
+  }
+  return {
+    offsets: Uint32Array.from(offsets),
+    lengths: Uint32Array.from(lengths),
+    data: Uint16Array.from(data),
+  }
+}
+
 function cellIndex(row: number, col: number, width: number): number {
   return row * width + col
 }
@@ -74,8 +98,9 @@ describe('wasm kernel scalar math dispatch', () => {
   it('keeps rounding and core scalar math dispatch stable across refactors', async () => {
     const kernel = await createKernel()
     const width = 32
-    kernel.init(96, 1, 8, 1, 1)
-    kernel.uploadStrings(Uint32Array.from([0]), Uint32Array.from([3]), Uint16Array.from([98, 97, 100]))
+    kernel.init(96, 3, 8, 1, 1)
+    const strings = packStrings(['bad', '0008', '41CA00300'])
+    kernel.uploadStrings(strings.offsets, strings.lengths, strings.data)
     kernel.writeCells(new Uint8Array(96), new Float64Array(96), new Uint32Array(96), new Uint16Array(96))
 
     const packed = packPrograms([
@@ -92,12 +117,14 @@ describe('wasm kernel scalar math dispatch', () => {
       [encodePushNumber(0), encodePushNumber(1), encodeCall(BuiltinId.Trunc, 2), encodeRet()],
       [encodePushString(0), encodeCall(BuiltinId.Round, 1), encodeRet()],
       [encodePushNumber(0), encodePushNumber(1), encodeCall(BuiltinId.Mround, 2), encodeRet()],
+      [encodePushString(1), encodeCall(BuiltinId.Int, 1), encodeRet()],
+      [encodePushString(2), encodePushNumber(0), encodeCall(BuiltinId.Right, 2), encodeCall(BuiltinId.Int, 1), encodeRet()],
     ])
     kernel.uploadPrograms(
       packed.programs,
       packed.offsets,
       packed.lengths,
-      Uint32Array.from(Array.from({ length: 13 }, (_, index) => cellIndex(1, index, width))),
+      Uint32Array.from(Array.from({ length: 15 }, (_, index) => cellIndex(1, index, width))),
     )
     const constants = packConstants([
       [-3.5],
@@ -113,9 +140,11 @@ describe('wasm kernel scalar math dispatch', () => {
       [-1.29, 1],
       [],
       [10, 3],
+      [],
+      [4],
     ])
     kernel.uploadConstants(constants.constants, constants.offsets, constants.lengths)
-    kernel.evalBatch(Uint32Array.from(Array.from({ length: 13 }, (_, index) => cellIndex(1, index, width))))
+    kernel.evalBatch(Uint32Array.from(Array.from({ length: 15 }, (_, index) => cellIndex(1, index, width))))
 
     expect(kernel.readNumbers()[cellIndex(1, 0, width)]).toBe(3.5)
     expect(kernel.readNumbers()[cellIndex(1, 1, width)]).toBeCloseTo(1.23, 12)
@@ -131,6 +160,8 @@ describe('wasm kernel scalar math dispatch', () => {
     expect(kernel.readTags()[cellIndex(1, 11, width)]).toBe(ValueTag.Error)
     expect(kernel.readErrors()[cellIndex(1, 11, width)]).toBe(ErrorCode.Value)
     expect(kernel.readNumbers()[cellIndex(1, 12, width)]).toBe(9)
+    expect(kernel.readNumbers()[cellIndex(1, 13, width)]).toBe(8)
+    expect(kernel.readNumbers()[cellIndex(1, 14, width)]).toBe(300)
   })
 
   it('keeps trigonometric and transcendental dispatch stable across refactors', async () => {

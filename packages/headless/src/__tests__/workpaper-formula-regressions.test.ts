@@ -158,6 +158,21 @@ describe('Workpaper formula regressions', () => {
     expectNumber(cellValue(workbook, 'Summary', 3, 1), 38)
   })
 
+  it.each([false, true])('coerces numeric text results into INT with useColumnIndex=%s', (useColumnIndex) => {
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Data: [
+          ['41CA00008', '=INT(RIGHT(A1,4))'],
+          ['44CA00300', '=INT(RIGHT(A2,4))'],
+        ],
+      },
+      { maxRows: 20, maxColumns: 8, useColumnIndex },
+    )
+
+    expectNumber(cellValue(workbook, 'Data', 0, 1), 8)
+    expectNumber(cellValue(workbook, 'Data', 1, 1), 300)
+  })
+
   it('treats blank-reference formulas as numeric zero', () => {
     const workbook = WorkPaper.buildFromSheets(
       {

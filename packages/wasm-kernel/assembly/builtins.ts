@@ -525,7 +525,21 @@ export function applyBuiltin(
     return formatConvertResult
   }
 
-  const scalarMathResult = tryApplyScalarMathBuiltin(builtinId, argc, base, rangeIndexStack, valueStack, tagStack, kindStack)
+  const scalarMathResult = tryApplyScalarMathBuiltin(
+    builtinId,
+    argc,
+    base,
+    rangeIndexStack,
+    valueStack,
+    tagStack,
+    kindStack,
+    stringOffsets,
+    stringLengths,
+    stringData,
+    outputStringOffsets,
+    outputStringLengths,
+    outputStringData,
+  )
   if (scalarMathResult >= 0) {
     return scalarMathResult
   }

@@ -4,6 +4,7 @@ import { toNumberExact, toNumberOrZero } from './operands'
 import { besselIValue, besselJValue, besselKValue, besselYValue } from './distributions'
 import { STACK_KIND_SCALAR, writeResult } from './result-io'
 import { excelPower } from './vm-core-helpers'
+import { coerceScalarNumberLikeText } from './text-special'
 
 function writeScalarMathError(
   base: i32,
@@ -35,6 +36,12 @@ export function tryApplyScalarMathBuiltin(
   valueStack: Float64Array,
   tagStack: Uint8Array,
   kindStack: Uint8Array,
+  stringOffsets: Uint32Array,
+  stringLengths: Uint32Array,
+  stringData: Uint16Array,
+  outputStringOffsets: Uint32Array,
+  outputStringLengths: Uint32Array,
+  outputStringData: Uint16Array,
 ): i32 {
   if (
     (builtinId == BuiltinId.Besseli ||
@@ -202,7 +209,16 @@ export function tryApplyScalarMathBuiltin(
   }
 
   if (builtinId == BuiltinId.Int && argc == 1) {
-    const numeric = toNumberExact(tagStack[base], valueStack[base])
+    const numeric = coerceScalarNumberLikeText(
+      tagStack[base],
+      valueStack[base],
+      stringOffsets,
+      stringLengths,
+      stringData,
+      outputStringOffsets,
+      outputStringLengths,
+      outputStringData,
+    )
     return isNaN(numeric)
       ? writeScalarMathError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
       : writeScalarMathNumber(base, Math.floor(numeric), rangeIndexStack, valueStack, tagStack, kindStack)

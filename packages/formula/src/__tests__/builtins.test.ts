@@ -465,6 +465,10 @@ describe('formula builtins', () => {
       tag: ValueTag.Number,
       value: -4,
     })
+    expect(getBuiltin('INT')?.({ tag: ValueTag.String, value: '0008', stringId: 1 })).toEqual({
+      tag: ValueTag.Number,
+      value: 8,
+    })
     expect(getBuiltin('ROUND')?.({ tag: ValueTag.Number, value: 3.6 })).toEqual({
       tag: ValueTag.Number,
       value: 4,

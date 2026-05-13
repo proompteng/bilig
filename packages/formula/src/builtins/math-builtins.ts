@@ -38,6 +38,27 @@ function div0Error(): EvaluationResult {
   return { tag: ValueTag.Error, code: ErrorCode.Div0 }
 }
 
+function toIntegerFunctionNumber(value: CellValue): number | undefined {
+  if (value.tag === ValueTag.String) {
+    const trimmed = value.value.trim()
+    if (trimmed.length === 0) {
+      return undefined
+    }
+    const numeric = Number(trimmed)
+    return Number.isFinite(numeric) ? numeric : undefined
+  }
+  switch (value.tag) {
+    case ValueTag.Number:
+      return value.value
+    case ValueTag.Boolean:
+      return value.value ? 1 : 0
+    case ValueTag.Empty:
+      return 0
+    case ValueTag.Error:
+      return undefined
+  }
+}
+
 export function createMathBuiltins({
   toNumber,
   toBitwiseUnsigned,
@@ -338,7 +359,7 @@ export function createMathBuiltins({
       return Number.isFinite(result) ? numberResult(result) : numError()
     },
     INT: (value) => {
-      const numberValue = toNumber(value)
+      const numberValue = toIntegerFunctionNumber(value)
       if (numberValue === undefined) {
         return valueError()
       }
