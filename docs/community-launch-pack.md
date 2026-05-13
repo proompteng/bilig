@@ -78,26 +78,28 @@ Latest public execution snapshot on May 13, 2026 after the landing-page pass:
 Latest starter-queue execution snapshot on May 13, 2026 after the adapter smoke
 issue pass:
 
-- GitHub surface: `24` stars, `12` forks, `68` open issues, and `8` open pull
+- GitHub surface: `24` stars, `12` forks, `92` open issues, and `0` open pull
   requests.
-- npm surface: `@bilig/headless@0.14.0`, with `15,592` downloads last week
+- npm surface: `@bilig/headless@0.14.1`, with `15,592` downloads last week
   and `23,240` downloads in the last 30 days.
-- Contributor funnel: `70` open `good first issue`, `70` open
-  `first-timers-only`, and `70` open `help wanted` issues.
+- Contributor funnel: `89` open `good first issue`, `89` open
+  `first-timers-only`, and `89` open `help wanted` issues.
 - New starter issues `#272` through `#281` cover NestJS, Express, Supabase Edge
   Functions, Deno Deploy, Next.js Route Handlers, Bun.serve, SvelteKit, Remix,
   Netlify Functions, and Cloudflare D1 WorkPaper smoke examples.
-- New MCP-client starter issues `#282` through `#286` cover Claude Desktop,
-  Cursor, Windsurf, MCP Inspector, and Nuxt/Nitro WorkPaper setup or smoke
-  recipes for contributors who want small docs-only first PRs tied directly to
-  agent-client adoption.
+- Current MCP-client starter issues cover Cursor, Windsurf, MCP Inspector, VS
+  Code, Claude Code, Codex, Zed, Continue, and MCPB setup notes. The completed
+  Claude Desktop and Cline setup tasks closed `#282` and `#294`.
 - New registry-proof starter issue `#287` asks a first-time contributor to add
   a copy-pasteable official MCP Registry API verification snippet to the
   WorkPaper docs.
 - New agent-client starter issues `#288` through `#290` cover VS Code, Claude
   Code, and Codex MCP setup for the published WorkPaper stdio server.
-- New editor-client starter issues `#292` through `#294` cover Zed, Continue,
-  and Cline MCP setup for the published WorkPaper stdio server.
+- Current editor-client starter issues `#292` and `#293` cover Zed and Continue
+  MCP setup for the published WorkPaper stdio server; Cline setup closed as
+  `#294`.
+- New framework and storage starter issues `#330` through `#333` cover Koa,
+  Elysia, MongoDB persistence, and Univer boundary notes.
 - New search-intent page targets server-side spreadsheet automation in Node.js
   with a TypeScript smoke test, service boundary notes, and links into the
   maintained examples:
@@ -535,9 +537,9 @@ Latest JavaScript-library comparison starter snapshot on May 13, 2026:
   Cloudflare Agents persistence notes for the same framework pages.
 - Starter issues `#328` and `#329` cover social preview contributor guidance
   and OpenGraph cache-busting notes for public distribution work.
-- The public growth snapshot now records `90` open `first-timers-only`,
-  `good first issue`, and `help wanted` issues, with `82` generally available
-  and `8` already in review.
+- The public growth snapshot now records `89` open `first-timers-only`,
+  `good first issue`, and `help wanted` issues, with `89` generally available
+  and `0` already in review.
 
 Latest agent-framework search-intent snapshot on May 13, 2026:
 

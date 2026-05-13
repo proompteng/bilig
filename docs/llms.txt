@@ -290,8 +290,6 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/134
 - current small docs issue: WorkPaper agent tool result contract:
   https://github.com/proompteng/bilig/issues/153
-- current small docs issue: headless engine use-case chooser:
-  https://github.com/proompteng/bilig/issues/154
 - current small docs issue: formula diagnostic output examples:
   https://github.com/proompteng/bilig/issues/155
 - current small docs issue: first PR description template:
@@ -432,6 +430,10 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/280
 - current small example issue: Cloudflare D1 WorkPaper persistence smoke:
   https://github.com/proompteng/bilig/issues/281
+- current small example issue: Koa WorkPaper route smoke:
+  https://github.com/proompteng/bilig/issues/330
+- current small example issue: Elysia WorkPaper route smoke:
+  https://github.com/proompteng/bilig/issues/331
 - current small comparison issue: Handsontable grid boundary note:
   https://github.com/proompteng/bilig/issues/309
 - current small comparison issue: AG Grid boundary note:
@@ -444,6 +446,8 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/313
 - current small comparison issue: Formula.js boundary examples:
   https://github.com/proompteng/bilig/issues/314
+- current small comparison issue: Univer spreadsheet UI boundary note:
+  https://github.com/proompteng/bilig/issues/333
 - current small agent issue: Mastra WorkPaper verification transcript:
   https://github.com/proompteng/bilig/issues/323
 - current small agent issue: LlamaIndex.TS WorkPaper verification transcript:
@@ -458,6 +462,8 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/328
 - current small site issue: OpenGraph cache-bust note:
   https://github.com/proompteng/bilig/issues/329
+- current small storage issue: MongoDB WorkPaper JSON persistence recipe:
+  https://github.com/proompteng/bilig/issues/332
 - good first issue search:
   https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22
 - first-timers-only issue search:

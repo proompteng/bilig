@@ -6,8 +6,8 @@ search indexing.
 
 Current starter queue as of May 13, 2026:
 
-- 86 open `first-timers-only` issues.
-- 86 issues are generally available for a new contributor to claim.
+- 89 open `first-timers-only` issues.
+- 89 issues are generally available for a new contributor to claim.
 - 0 issues already have active pull requests.
 
 ## Available Starter Picks
@@ -61,6 +61,8 @@ Current starter queue as of May 13, 2026:
 - [#286: docs(examples): add Nuxt Nitro WorkPaper route smoke](https://github.com/proompteng/bilig/issues/286)
 - [#299: docs(examples): add AdonisJS WorkPaper controller smoke](https://github.com/proompteng/bilig/issues/299)
 - [#300: docs(examples): add tRPC WorkPaper procedure smoke](https://github.com/proompteng/bilig/issues/300)
+- [#330: docs(examples): add Koa WorkPaper route smoke](https://github.com/proompteng/bilig/issues/330)
+- [#331: docs(examples): add Elysia WorkPaper route smoke](https://github.com/proompteng/bilig/issues/331)
 
 ### Storage And Persistence Recipes
 
@@ -72,6 +74,7 @@ Current starter queue as of May 13, 2026:
 - [#304: docs(storage): add Neon Postgres WorkPaper persistence recipe](https://github.com/proompteng/bilig/issues/304)
 - [#305: docs(storage): add Cloudflare R2 WorkPaper persistence recipe](https://github.com/proompteng/bilig/issues/305)
 - [#306: docs(storage): add AWS S3 WorkPaper persistence recipe](https://github.com/proompteng/bilig/issues/306)
+- [#332: docs(storage): add MongoDB WorkPaper JSON persistence recipe](https://github.com/proompteng/bilig/issues/332)
 
 ### Example Recipes
 
@@ -117,13 +120,13 @@ Current starter queue as of May 13, 2026:
 
 ### JavaScript Library Comparison Starters
 
-- [#154: docs(comparison): add headless engine use-case chooser](https://github.com/proompteng/bilig/issues/154)
 - [#309: docs(comparison): add Handsontable grid boundary note](https://github.com/proompteng/bilig/issues/309)
 - [#310: docs(comparison): add AG Grid boundary note](https://github.com/proompteng/bilig/issues/310)
 - [#311: docs(comparison): add SheetJS handoff recipe note](https://github.com/proompteng/bilig/issues/311)
 - [#312: docs(comparison): add ExcelJS handoff recipe note](https://github.com/proompteng/bilig/issues/312)
 - [#313: docs(comparison): add HyperFormula migration checklist](https://github.com/proompteng/bilig/issues/313)
 - [#314: docs(comparison): add Formula.js boundary examples](https://github.com/proompteng/bilig/issues/314)
+- [#333: docs(comparison): add Univer spreadsheet UI boundary note](https://github.com/proompteng/bilig/issues/333)
 
 ## Already In Review
 

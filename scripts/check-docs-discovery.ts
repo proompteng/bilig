@@ -390,8 +390,8 @@ requireIncludes(newContributorGuide, 'pnpm format:check', 'docs/new-contributor-
 requireIncludes(newContributorGuide, 'pnpm lint', 'docs/new-contributor-guide.md')
 requireIncludes(starterIssues, 'new-contributor-guide.md#first-time-command-checklist', 'docs/starter-issues.md')
 requireIncludes(starterIssues, 'https://github.com/proompteng/bilig/blob/main/CONTRIBUTING.md', 'docs/starter-issues.md')
-requireIncludes(starterIssues, '86 open `first-timers-only` issues.', 'docs/starter-issues.md')
-requireIncludes(starterIssues, '86 issues are generally available for a new contributor to claim.', 'docs/starter-issues.md')
+requireIncludes(starterIssues, '89 open `first-timers-only` issues.', 'docs/starter-issues.md')
+requireIncludes(starterIssues, '89 issues are generally available for a new contributor to claim.', 'docs/starter-issues.md')
 requireIncludes(starterIssues, '0 issues already have active pull requests.', 'docs/starter-issues.md')
 requireIncludes(starterIssues, '### npm Smoke Test Improvements', 'docs/starter-issues.md')
 requireIncludes(starterIssues, '### JavaScript Library Comparison Starters', 'docs/starter-issues.md')
@@ -423,7 +423,10 @@ requireIncludes(starterIssues, '#303: docs(storage): add Upstash Redis WorkPaper
 requireIncludes(starterIssues, '#304: docs(storage): add Neon Postgres WorkPaper persistence recipe', 'docs/starter-issues.md')
 requireIncludes(starterIssues, '#305: docs(storage): add Cloudflare R2 WorkPaper persistence recipe', 'docs/starter-issues.md')
 requireIncludes(starterIssues, '#306: docs(storage): add AWS S3 WorkPaper persistence recipe', 'docs/starter-issues.md')
-requireIncludes(starterIssues, '#154: docs(comparison): add headless engine use-case chooser', 'docs/starter-issues.md')
+requireIncludes(starterIssues, '#330: docs(examples): add Koa WorkPaper route smoke', 'docs/starter-issues.md')
+requireIncludes(starterIssues, '#331: docs(examples): add Elysia WorkPaper route smoke', 'docs/starter-issues.md')
+requireIncludes(starterIssues, '#332: docs(storage): add MongoDB WorkPaper JSON persistence recipe', 'docs/starter-issues.md')
+requireIncludes(starterIssues, '#333: docs(comparison): add Univer spreadsheet UI boundary note', 'docs/starter-issues.md')
 requireIncludes(starterIssues, '#257: docs(examples): add a runnable Hono WorkPaper route smoke', 'docs/starter-issues.md')
 requireIncludes(starterIssues, '#258: docs(examples): add Cloudflare KV WorkPaper persistence snippet', 'docs/starter-issues.md')
 requireIncludes(starterIssues, '#259: docs(service): add Prisma-backed WorkPaper JSON persistence recipe', 'docs/starter-issues.md')
@@ -764,10 +767,10 @@ for (const [url, docKeys] of discussionDocChecks) {
 }
 
 const currentStarterIssueNumbers = [
-  134, 153, 154, 155, 156, 158, 159, 162, 163, 193, 194, 195, 196, 197, 198, 207, 208, 209, 210, 211, 212, 217, 218, 219, 220, 221, 222,
-  223, 233, 247, 248, 249, 250, 255, 256, 257, 258, 259, 260, 265, 267, 268, 269, 272, 273, 274, 275, 277, 278, 279, 280, 281, 283, 284,
-  285, 286, 287, 288, 289, 290, 292, 293, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 309, 310, 311, 312, 313, 314, 323, 324,
-  325, 326, 327, 328, 329,
+  134, 153, 155, 156, 158, 159, 162, 163, 193, 194, 195, 196, 197, 198, 207, 208, 209, 210, 211, 212, 217, 218, 219, 220, 221, 222, 223,
+  233, 247, 248, 249, 250, 255, 256, 257, 258, 259, 260, 265, 267, 268, 269, 272, 273, 274, 275, 277, 278, 279, 280, 281, 283, 284, 285,
+  286, 287, 288, 289, 290, 292, 293, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 309, 310, 311, 312, 313, 314, 323, 324, 325,
+  326, 327, 328, 329, 330, 331, 332, 333,
 ]
 
 for (const required of currentStarterIssueNumbers.map((issueNumber) => `https://github.com/proompteng/bilig/issues/${issueNumber}`)) {
@@ -790,6 +793,7 @@ for (const closedIssue of [
   '150',
   '151',
   '152',
+  '154',
   '224',
   '231',
   '199',
