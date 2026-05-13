@@ -2,6 +2,8 @@ import { spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+import { validateStagedMcpServerMetadata } from './runtime-package-mcp-metadata.ts'
+
 const textDecoder = new TextDecoder()
 
 export function validateStagedRuntimePackageVersion(packageName: string, stagedPackageDir: string, expectedVersion: string): void {
@@ -19,6 +21,7 @@ export function validateStagedRuntimePackageVersion(packageName: string, stagedP
     '}',
   ].join('\n')
   runCommand('node', ['--input-type=module', '--eval', script])
+  validateStagedMcpServerMetadata(packageName, stagedPackageDir, expectedVersion)
 }
 
 function runCommand(command: string, args: string[]): void {

@@ -13,6 +13,7 @@ import {
   parseBooleanEnv,
   type RuntimePackagePublishedVersion,
 } from './runtime-package-set.ts'
+import { syncStagedMcpServerMetadata } from './runtime-package-mcp-metadata.ts'
 import { validateStagedRuntimePackageVersion } from './runtime-package-publish-validation.ts'
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
@@ -55,6 +56,7 @@ try {
     manifest.version = targetVersion
     rewriteInternalDependencyRanges(manifest, internalPackageNames, targetVersion)
     writeFileSync(packageJsonPath, `${JSON.stringify(manifest, null, 2)}\n`)
+    syncStagedMcpServerMetadata(runtimePackage.name, stagedPackageDir, targetVersion)
     validateStagedRuntimePackageVersion(runtimePackage.name, stagedPackageDir, targetVersion)
 
     runCommand('npm', ['pack', '--pack-destination', packDir], {
