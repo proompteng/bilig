@@ -116,6 +116,10 @@ issue pass:
   pull request is open, mergeable, and adds the Bilig headless WorkPaper engine
   to `source/projects/bilig.md`:
   <https://github.com/krzysztofspilka/JSpreadsheets/pull/50>
+- External JavaScript spreadsheet benchmark surface: the js-spreadsheet-benchmark
+  project now has a scoped issue for adding `@bilig/headless` as a headless
+  WorkPaper target for formula, edit/readback, memory, and persistence lanes:
+  <https://github.com/zhangming1978/js-spreadsheet-benchmark/issues/1>
 - External MCP directory surface: the TensorBlock awesome-mcp-servers listing
   pull request is open and awaiting maintainer review:
   <https://github.com/TensorBlock/awesome-mcp-servers/pull/536>
@@ -519,8 +523,10 @@ Latest JavaScript-library comparison starter snapshot on May 13, 2026:
 - Starter issues `#309` through `#314` now cover Handsontable, AG Grid,
   SheetJS, ExcelJS, HyperFormula, and Formula.js boundary notes for the
   JavaScript spreadsheet library guide.
-- The public growth snapshot now records `83` open `first-timers-only`,
-  `good first issue`, and `help wanted` issues, with `75` generally available
+- Starter issues `#315` through `#319` now cover Mastra, LlamaIndex.TS,
+  LangGraph.js, CopilotKit, and Cloudflare Agents WorkPaper tool recipes.
+- The public growth snapshot now records `88` open `first-timers-only`,
+  `good first issue`, and `help wanted` issues, with `80` generally available
   and `8` already in review.
 
 Set `GITHUB_TOKEN` or `GH_TOKEN` with repository traffic access, or run with an

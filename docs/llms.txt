@@ -244,6 +244,8 @@ npm run agent:verify
   https://github.com/proompteng/bilig/discussions/308
 - external JavaScript spreadsheet directory submission:
   https://github.com/krzysztofspilka/JSpreadsheets/pull/50
+- external JavaScript spreadsheet benchmark adapter request:
+  https://github.com/zhangming1978/js-spreadsheet-benchmark/issues/1
 - older agent API shape discussion:
   https://github.com/proompteng/bilig/discussions/115
 - community launch and growth pack:
@@ -268,7 +270,7 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md
 - community growth snapshot:
   https://github.com/proompteng/bilig/blob/main/docs/community-growth-snapshot.md
-- current starter queue snapshot: 83 open first-timers-only issues, 75 generally available, 8 already in review.
+- current starter queue snapshot: 88 open first-timers-only issues, 80 generally available, 8 already in review.
 - current small example issue: xlsx formula-cache roundtrip:
   https://github.com/proompteng/bilig/issues/134
 - current small docs issue: WorkPaper agent tool result contract:
@@ -435,6 +437,16 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/313
 - current small comparison issue: Formula.js boundary examples:
   https://github.com/proompteng/bilig/issues/314
+- current small agent issue: Mastra WorkPaper tool recipe:
+  https://github.com/proompteng/bilig/issues/315
+- current small agent issue: LlamaIndex.TS WorkPaper tool recipe:
+  https://github.com/proompteng/bilig/issues/316
+- current small agent issue: LangGraph.js WorkPaper tool node recipe:
+  https://github.com/proompteng/bilig/issues/317
+- current small agent issue: CopilotKit WorkPaper action recipe:
+  https://github.com/proompteng/bilig/issues/318
+- current small agent issue: Cloudflare Agents WorkPaper tool recipe:
+  https://github.com/proompteng/bilig/issues/319
 - good first issue search:
   https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22
 - first-timers-only issue search:

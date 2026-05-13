@@ -6,8 +6,8 @@ search indexing.
 
 Current starter queue as of May 13, 2026:
 
-- 83 open `first-timers-only` issues.
-- 75 issues are generally available for a new contributor to claim.
+- 88 open `first-timers-only` issues.
+- 80 issues are generally available for a new contributor to claim.
 - 8 issues already have active pull requests; comment before duplicating one of
   those patches.
 
@@ -18,6 +18,11 @@ Current starter queue as of May 13, 2026:
 - [#153: docs(agent): add WorkPaper tool result contract table](https://github.com/proompteng/bilig/issues/153)
 - [#163: docs(agent): add coding-agent workbook automation recipe](https://github.com/proompteng/bilig/issues/163)
 - [#247: docs(agent): add OpenAI WorkPaper tool-calling recipe](https://github.com/proompteng/bilig/issues/247)
+- [#315: docs(agent): add Mastra WorkPaper tool recipe](https://github.com/proompteng/bilig/issues/315)
+- [#316: docs(agent): add LlamaIndex.TS WorkPaper tool recipe](https://github.com/proompteng/bilig/issues/316)
+- [#317: docs(agent): add LangGraph.js WorkPaper tool node recipe](https://github.com/proompteng/bilig/issues/317)
+- [#318: docs(agent): add CopilotKit WorkPaper action recipe](https://github.com/proompteng/bilig/issues/318)
+- [#319: docs(agent): add Cloudflare Agents WorkPaper tool recipe](https://github.com/proompteng/bilig/issues/319)
 - [#283: docs(mcp): add Cursor MCP config for the WorkPaper stdio server](https://github.com/proompteng/bilig/issues/283)
 - [#284: docs(mcp): add Windsurf MCP config for local WorkPaper testing](https://github.com/proompteng/bilig/issues/284)
 - [#285: docs(mcp): add MCP Inspector smoke-test transcript for the WorkPaper server](https://github.com/proompteng/bilig/issues/285)

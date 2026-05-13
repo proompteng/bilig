@@ -1,6 +1,6 @@
 # Community Growth Snapshot
 
-Captured at: `2026-05-13T17:49:27.331Z`
+Captured at: `2026-05-13T18:41:49.460Z`
 
 This snapshot tracks the public signals for the `@bilig/headless` growth loop: GitHub conversion, npm demand, contributor on-ramp health, discussion activity, and traffic quality.
 
@@ -10,7 +10,7 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 - Stars: 24 / 1,000 (976 remaining)
 - Forks: 12
 - Watchers: 0
-- Open issues: 83
+- Open issues: 88
 - Default branch: `main`
 
 ## npm
@@ -23,9 +23,9 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 
 ## Contributor Funnel
 
-- Open good first issues: 83
-- Open first-timers-only issues: 83
-- Open help wanted issues: 83
+- Open good first issues: 88
+- Open first-timers-only issues: 88
+- Open help wanted issues: 88
 - Open pull requests: 8
 - External open issues: 0
 - External open pull requests: 8
