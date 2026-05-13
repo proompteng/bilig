@@ -122,7 +122,7 @@
       }
     </script>
     <link rel="stylesheet" href="./assets/fonts.css?v=2026-05-13-1" />
-    <link rel="stylesheet" href="./assets/site.css?v=2026-05-13-20" />
+    <link rel="stylesheet" href="./assets/site.css?v=2026-05-13-22" />
     <link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-13-1" />
   </head>
   <body>
@@ -171,15 +171,15 @@
           <div class="hero-proof-list" aria-label="Public proof points">
             <div class="hero-proof-item">
               <span>Install</span>
-              <strong>@bilig/headless is published on npm.</strong>
+              <strong>The headless package is public on npm.</strong>
             </div>
             <div class="hero-proof-item">
               <span>Benchmark</span>
-              <strong>Checked-in run: 46 comparable mean rows, plus the named p95 loss.</strong>
+              <strong>The benchmark command and JSON artifact are in the repo.</strong>
             </div>
             <div class="hero-proof-item">
               <span>Contribute</span>
-              <strong>88 starter issues are open and scoped for first PRs.</strong>
+              <strong>88 small issues are open for first pull requests.</strong>
             </div>
           </div>
         </div>
@@ -454,8 +454,8 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
               </a>
               <a class="path-link" href="./vercel-ai-sdk-langchain-spreadsheet-tool.html">
                 <span>adapters</span>
-                <strong>Vercel AI SDK and LangChain spreadsheet tools</strong>
-                <em>Framework-shaped wrappers around the same WorkPaper calls.</em>
+                <strong>Agent framework spreadsheet tools</strong>
+                <em>AI SDK, LangChain, Mastra, LlamaIndex.TS, LangGraph.js, CopilotKit, and Cloudflare Agents wrappers.</em>
               </a>
               <a class="path-link" href="./mcp-workpaper-tool-server.html">
                 <span>mcp</span>
@@ -493,73 +493,62 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
         <div class="wrap">
           <div class="section-head proof-head">
             <div>
-              <p class="kicker">Benchmark</p>
-              <h2 id="proof-title">Run the benchmark, including the row where it loses.</h2>
+              <p class="kicker">Proof</p>
+              <h2 id="proof-title">Run the benchmark yourself.</h2>
             </div>
             <p>
-              Here is the exact claim: in the checked HyperFormula comparison, WorkPaper wins every comparable mean row. It does not win
-              everything. The p95 miss is listed below.
+              Current checked run: 46 of 46 comparable mean-latency rows are faster than the HyperFormula comparison. One p95 row is slower.
+              The command and source file are below.
             </p>
           </div>
 
           <div class="proof-layout">
-            <div class="benchmark-table-wrap" aria-label="Benchmark details">
-              <table class="benchmark-table">
-                <caption>
-                  Checked artifact
-                </caption>
-                <tbody>
-                  <tr>
-                    <th scope="row">Artifact</th>
-                    <td><code>workpaper-vs-hyperformula.json</code></td>
-                    <td><code>packages/benchmarks/baselines/workpaper-vs-hyperformula.json</code></td>
-                  </tr>
-                  <tr>
-                    <th scope="row">Command</th>
-                    <td><code>pnpm workpaper:bench:competitive:check</code></td>
-                    <td>Run this from the repo before you repeat the number.</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">Mean rows</th>
-                    <td><strong>46 / 46</strong></td>
-                    <td>WorkPaper is faster on every comparable mean row in this run.</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">p95</th>
-                    <td><strong>0.536x</strong></td>
-                    <td>Aggregate ratio in this run. Lower is faster.</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">Bad row</th>
-                    <td><code>lookup-approximate-duplicates</code></td>
-                    <td>This p95 row is slower: 1.043x.</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">Package</th>
-                    <td><code>@bilig/headless 0.14.0</code></td>
-                    <td>Package used for the checked artifact.</td>
-                  </tr>
-                </tbody>
-              </table>
+            <div class="proof-ledger" aria-label="Benchmark details">
+              <div class="proof-run">
+                <span>Run</span>
+                <code>pnpm workpaper:bench:competitive:check</code>
+                <p>Same command used to check the public artifact.</p>
+              </div>
+              <dl class="proof-stats">
+                <div>
+                  <dt>Mean rows</dt>
+                  <dd>46 of 46</dd>
+                  <p>Faster on every comparable mean-latency row in this run.</p>
+                </div>
+                <div>
+                  <dt>p95 ratio</dt>
+                  <dd>0.536x</dd>
+                  <p>Aggregate p95 ratio. Lower is faster.</p>
+                </div>
+                <div>
+                  <dt>Known miss</dt>
+                  <dd><code>lookup-approximate-duplicates</code></dd>
+                  <p>That p95 row is slower at 1.043x.</p>
+                </div>
+              </dl>
+              <div class="proof-artifact">
+                <span>Artifact</span>
+                <code>packages/benchmarks/baselines/workpaper-vs-hyperformula.json</code>
+              </div>
             </div>
             <aside class="proof-notes" aria-label="Benchmark notes">
-              <h3>Check the workload before you use the number.</h3>
-              <div class="proof-command" aria-label="Benchmark command">
-                <span>what this claim is</span>
-                <p>This is a repo benchmark. It is not a promise that every spreadsheet is faster.</p>
-              </div>
+              <h3>Do not use this as a blanket speed claim.</h3>
+              <p>
+                This is one repo benchmark. The workload, exclusions, and compatibility gaps are linked here so the tradeoff is visible
+                before adoption.
+              </p>
               <div class="proof-links" aria-label="Benchmark evidence links">
                 <a href="./what-workpaper-benchmark-proves.html">
-                  <span>benchmark notes</span>
-                  <strong>Workloads, caveats, and exclusions.</strong>
+                  <span>Benchmark notes</span>
+                  <strong>Workloads, caveats, and exclusions</strong>
                 </a>
                 <a href="./where-bilig-is-not-excel-compatible-yet.html">
-                  <span>compatibility</span>
-                  <strong>Missing Excel behavior.</strong>
+                  <span>Compatibility</span>
+                  <strong>Missing Excel behavior</strong>
                 </a>
                 <a href="https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only">
-                  <span>first PRs</span>
-                  <strong>Small TypeScript examples ready for first PRs.</strong>
+                  <span>First PRs</span>
+                  <strong>Small TypeScript tasks for contributors</strong>
                 </a>
               </div>
             </aside>
@@ -677,7 +666,7 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
                 <li><a href="./why-agents-need-workbook-apis.html">why agents need workbook APIs</a></li>
                 <li><a href="./agent-workpaper-tool-calling-recipe.html">agent tool-calling recipe</a></li>
                 <li><a href="./agent-spreadsheet-tool-call-loop.html">agent spreadsheet tool-call loop</a></li>
-                <li><a href="./vercel-ai-sdk-langchain-spreadsheet-tool.html">Vercel AI SDK and LangChain tools</a></li>
+                <li><a href="./vercel-ai-sdk-langchain-spreadsheet-tool.html">Agent framework tools</a></li>
                 <li><a href="./mcp-workpaper-tool-server.html">MCP spreadsheet tool server</a></li>
                 <li><a href="./mcp-spreadsheet-server-directory.html">MCP directory status</a></li>
                 <li><a href="./mcp-client-setup.html">MCP client setup</a></li>

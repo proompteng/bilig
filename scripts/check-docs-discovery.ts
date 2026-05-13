@@ -1,6 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { communityLaunchPackRequiredLinks, llmsExternalSurfaceLinks } from './check-docs-discovery-growth-links.ts'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const docsRoot = join(repoRoot, 'docs')
@@ -200,11 +201,11 @@ requireIncludes(index, '<title>bilig - Spreadsheet Formulas for Node.js Services
 requireIncludes(index, '<meta name="robots" content="index, follow, max-image-preview:large" />', 'docs/index.html')
 requireIncludes(index, '<link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />', 'docs/index.html')
 requireIncludes(index, '<link rel="stylesheet" href="./assets/fonts.css?v=2026-05-13-1" />', 'docs/index.html')
-requireIncludes(index, '<link rel="stylesheet" href="./assets/site.css?v=2026-05-13-20" />', 'docs/index.html')
+requireIncludes(index, '<link rel="stylesheet" href="./assets/site.css?v=2026-05-13-22" />', 'docs/index.html')
 requireIncludes(index, '<link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-13-1" />', 'docs/index.html')
 requireNotIncludes(index, 'bilig-hero-workbook-api.png?v=2026-05-08-2', 'docs/index.html')
 requireNotIncludes(siteCss, 'bilig-hero-workbook-api.png?v=2026-05-08-2', 'docs/assets/site.css')
-requireIncludes(siteCss, "--font-display: 'Bilig Sans'", 'docs/assets/site.css')
+requireIncludes(siteCss, '--font-display: ui-sans-serif, -apple-system', 'docs/assets/site.css')
 requireIncludes(siteCss, 'max-width: 470px;', 'docs/assets/site.css')
 requireIncludes(siteCss, 'grid-template-columns: minmax(100px, 0.34fr) minmax(0, 1fr);', 'docs/assets/site.css')
 requireIncludes(siteCss, 'border-bottom: 1px solid rgba(255, 250, 240, 0.14);', 'docs/assets/site.css')
@@ -212,22 +213,21 @@ requireNotIncludes(siteCss, 'border-left: 1px solid rgba(255, 250, 240, 0.16);',
 requireIncludes(index, 'Revenue.workpaper', 'docs/index.html')
 requireIncludes(index, 'When a feature still depends on formulas, build a WorkPaper in TypeScript', 'docs/index.html')
 requireIncludes(index, '<span>Install</span>', 'docs/index.html')
-requireIncludes(index, '<strong>@bilig/headless is published on npm.</strong>', 'docs/index.html')
+requireIncludes(index, '<strong>The headless package is public on npm.</strong>', 'docs/index.html')
 requireIncludes(index, '<span>Contribute</span>', 'docs/index.html')
-requireIncludes(index, '<strong>88 starter issues are open and scoped for first PRs.</strong>', 'docs/index.html')
-requireIncludes(index, 'Checked-in run: 46 comparable mean rows, plus the named p95 loss.', 'docs/index.html')
-requireIncludes(index, 'Run the benchmark, including the row where it loses.', 'docs/index.html')
-requireIncludes(index, 'Here is the exact claim', 'docs/index.html')
-requireIncludes(index, 'Check the workload before you use the number.', 'docs/index.html')
+requireIncludes(index, '<strong>88 small issues are open for first pull requests.</strong>', 'docs/index.html')
+requireIncludes(index, 'The benchmark command and JSON artifact are in the repo.', 'docs/index.html')
+requireIncludes(index, 'Run the benchmark yourself.', 'docs/index.html')
+requireIncludes(index, '46 of 46 comparable mean-latency rows are faster', 'docs/index.html')
+requireIncludes(index, 'Do not use this as a blanket speed claim.', 'docs/index.html')
 requireIncludes(index, 'packages/benchmarks/baselines/workpaper-vs-hyperformula.json', 'docs/index.html')
 requireIncludes(index, 'pnpm workpaper:bench:competitive:check', 'docs/index.html')
-requireIncludes(index, '<strong>46 / 46</strong>', 'docs/index.html')
-requireIncludes(index, '<strong>0.536x</strong>', 'docs/index.html')
-requireIncludes(index, 'This p95 row is slower: 1.043x.', 'docs/index.html')
+requireIncludes(index, '<dd>46 of 46</dd>', 'docs/index.html')
+requireIncludes(index, '<dd>0.536x</dd>', 'docs/index.html')
+requireIncludes(index, 'That p95 row is slower at 1.043x.', 'docs/index.html')
 requireIncludes(index, '<code>lookup-approximate-duplicates</code>', 'docs/index.html')
-requireIncludes(index, '<code>@bilig/headless 0.14.0</code>', 'docs/index.html')
-requireIncludes(index, 'Workloads, caveats, and exclusions.', 'docs/index.html')
-requireIncludes(index, 'Small TypeScript examples ready for first PRs.', 'docs/index.html')
+requireIncludes(index, 'Workloads, caveats, and exclusions', 'docs/index.html')
+requireIncludes(index, 'Small TypeScript tasks for contributors', 'docs/index.html')
 requireIncludes(index, 'Pick the closest starting point.', 'docs/index.html')
 requireIncludes(index, 'Known missing Excel behavior, listed before you hit it.', 'docs/index.html')
 requireIncludes(index, 'Docs, examples, issues.', 'docs/index.html')
@@ -543,10 +543,15 @@ requireIncludes(
 requireIncludes(agentToolCallingDoc, 'npm run agent:framework-adapters', 'docs/agent-workpaper-tool-calling-recipe.md')
 requireIncludes(
   aiSdkLangChainDoc,
-  'description: Wrap @bilig/headless WorkPaper reads, verified edits, formula contracts, and persistence checks as Vercel AI SDK and LangChain-style tools',
+  'description: Wrap @bilig/headless WorkPaper reads, verified edits, formula contracts, and persistence checks as AI SDK, LangChain, Mastra, LlamaIndex.TS, LangGraph.js, CopilotKit, and Cloudflare Agents tools',
   'docs/vercel-ai-sdk-langchain-spreadsheet-tool.md',
 )
 requireIncludes(aiSdkLangChainDoc, 'npm run agent:framework-adapters', 'docs/vercel-ai-sdk-langchain-spreadsheet-tool.md')
+requireIncludes(aiSdkLangChainDoc, 'Mastra `createTool()`', 'docs/vercel-ai-sdk-langchain-spreadsheet-tool.md')
+requireIncludes(aiSdkLangChainDoc, 'LlamaIndex.TS tools', 'docs/vercel-ai-sdk-langchain-spreadsheet-tool.md')
+requireIncludes(aiSdkLangChainDoc, 'LangGraph.js `ToolNode`', 'docs/vercel-ai-sdk-langchain-spreadsheet-tool.md')
+requireIncludes(aiSdkLangChainDoc, 'CopilotKit `useCopilotAction`', 'docs/vercel-ai-sdk-langchain-spreadsheet-tool.md')
+requireIncludes(aiSdkLangChainDoc, 'Cloudflare Agents API and agent tools', 'docs/vercel-ai-sdk-langchain-spreadsheet-tool.md')
 requireIncludes(
   mcpWorkPaperToolServerDoc,
   'description: Expose @bilig/headless workbook reads, verified edits, formula contracts, and persistence checks through MCP-style tools/list and tools/call handlers',
@@ -630,25 +635,12 @@ for (const required of [
 ]) {
   requireIncludes(claudeDesktopMcpbDoc, required, 'docs/claude-desktop-mcpb-workpaper.md')
 }
-for (const required of [
-  'Latest MCPB execution snapshot on May 13, 2026 after the Claude Desktop bundle',
-  'https://proompteng.github.io/bilig/claude-desktop-mcpb-workpaper.html',
-  'pnpm mcpb:workpaper:build -- --package-version 0.14.0',
-  '`0.14.0` marked as latest',
-  'read_workpaper_summary',
-  'set_workpaper_input_cell',
-  'Latest PulseMCP verification snapshot on May 13, 2026 after the directory',
-  'https://www.pulsemcp.com/servers?search=bilig&q=bilig',
-  'https://proompteng.github.io/bilig/mcp-spreadsheet-server-directory.html',
-  'https://github.com/krzysztofspilka/JSpreadsheets/pull/50',
-  'https://github.com/zhangming1978/js-spreadsheet-benchmark/issues/1',
-  'https://github.com/tolkonepiu/best-of-mcp-servers/pull/192',
-]) {
+for (const required of communityLaunchPackRequiredLinks) {
   requireIncludes(communityLaunchPack, required, 'docs/community-launch-pack.md')
 }
-requireIncludes(llms, 'https://github.com/krzysztofspilka/JSpreadsheets/pull/50', 'docs/llms.txt')
-requireIncludes(llms, 'https://github.com/zhangming1978/js-spreadsheet-benchmark/issues/1', 'docs/llms.txt')
-requireIncludes(llms, 'https://github.com/tolkonepiu/best-of-mcp-servers/pull/192', 'docs/llms.txt')
+for (const required of llmsExternalSurfaceLinks) {
+  requireIncludes(llms, required, 'docs/llms.txt')
+}
 requireIncludes(
   aiSdkLangChainDoc,
   'https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling',

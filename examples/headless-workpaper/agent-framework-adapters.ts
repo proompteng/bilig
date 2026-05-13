@@ -5,6 +5,7 @@ import {
   parseWorkPaperDocument,
   serializeWorkPaperDocument,
 } from '@bilig/headless'
+import { z } from 'zod'
 
 type WorkPaperInstance = ReturnType<typeof WorkPaper.buildFromSheets>
 type CellAddress = NonNullable<ReturnType<WorkPaperInstance['simpleCellAddressFromString']>>
@@ -17,25 +18,121 @@ type ReadSummaryArgs = {
   range?: string
 }
 type WorkPaperToolSet = ReturnType<typeof createWorkPaperTools>
+type WorkPaperReadResult = ReturnType<WorkPaperToolSet['readWorkPaperSummary']>
 type WorkPaperWriteResult = ReturnType<WorkPaperToolSet['setWorkPaperInputCell']>
 type LangChainReadTool = {
   name: 'read_workpaper_summary'
   description: string
-  schema: Record<string, string>
+  schema: typeof readSummaryInputSchema
   invoke(args?: ReadSummaryArgs): ReturnType<WorkPaperToolSet['readWorkPaperSummary']>
 }
 type LangChainWriteTool = {
   name: 'set_workpaper_input_cell'
   description: string
-  schema: Record<string, string>
+  schema: typeof setInputCellInputSchema
   invoke(args: SetInputCellArgs): WorkPaperWriteResult
 }
 type LangChainTool = LangChainReadTool | LangChainWriteTool
+type LlamaIndexTool =
+  | {
+      name: 'read_workpaper_summary'
+      description: string
+      parameters: typeof readSummaryInputSchema
+      call(args?: ReadSummaryArgs): WorkPaperReadResult
+    }
+  | {
+      name: 'set_workpaper_input_cell'
+      description: string
+      parameters: typeof setInputCellInputSchema
+      call(args: SetInputCellArgs): WorkPaperWriteResult
+    }
+type CopilotKitAction =
+  | {
+      name: 'readWorkPaperSummary'
+      description: string
+      parameters: CopilotKitParameter[]
+      handler(args?: ReadSummaryArgs): WorkPaperReadResult
+    }
+  | {
+      name: 'setWorkPaperInputCell'
+      description: string
+      parameters: CopilotKitParameter[]
+      handler(args: SetInputCellArgs): WorkPaperWriteResult
+    }
+type CopilotKitParameter = {
+  name: string
+  type: 'string' | 'number' | 'boolean'
+  description: string
+  required?: boolean
+}
+type LangGraphToolMessage = {
+  type: 'tool'
+  name: LangChainTool['name']
+  tool_call_id: string
+  content: string
+  result: WorkPaperReadResult | WorkPaperWriteResult
+}
+type LangGraphToolNode = {
+  nodeName: 'tools'
+  tools: LangChainTool[]
+  invoke(input: { messages: Array<{ tool_calls?: LangGraphToolCall[] }> }): { messages: LangGraphToolMessage[] }
+}
+type LangGraphToolCall =
+  | {
+      id: string
+      name: 'read_workpaper_summary'
+      args: ReadSummaryArgs
+    }
+  | {
+      id: string
+      name: 'set_workpaper_input_cell'
+      args: SetInputCellArgs
+    }
+
+const readSummaryInputSchema = z.object({
+  range: z.string().default('Summary!A1:B5'),
+})
+
+const setInputCellInputSchema = z.object({
+  sheetName: z.literal('Inputs'),
+  address: z.string().regex(/^[A-Z]+[1-9][0-9]*$/),
+  value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+})
+
+const workPaperSummaryOutputSchema = z
+  .object({
+    range: z.string(),
+    values: z.array(z.array(z.unknown())),
+    serialized: z.array(z.array(z.unknown())),
+  })
+  .passthrough()
+
+const workPaperWriteOutputSchema = z
+  .object({
+    editedCell: z.string(),
+    checks: z.object({
+      formulasPersisted: z.boolean(),
+      restoredMatchesAfter: z.boolean(),
+      expectedArrChanged: z.boolean(),
+      serializedBytes: z.number(),
+    }),
+  })
+  .passthrough()
 
 const aiSdkWorkbook = buildWorkbook()
 const langChainWorkbook = buildWorkbook()
+const mastraWorkbook = buildWorkbook()
+const llamaIndexWorkbook = buildWorkbook()
+const langGraphWorkbook = buildWorkbook()
+const copilotKitWorkbook = buildWorkbook()
+const cloudflareAgentsWorkbook = buildWorkbook()
 const aiSdkTools = createAiSdkTools(createWorkPaperTools(aiSdkWorkbook))
 const langChainTools = createLangChainTools(createWorkPaperTools(langChainWorkbook))
+const mastraTools = createMastraTools(createWorkPaperTools(mastraWorkbook))
+const llamaIndexTools = createLlamaIndexTools(createWorkPaperTools(llamaIndexWorkbook))
+const langGraphToolNode = createLangGraphToolNode(createWorkPaperTools(langGraphWorkbook))
+const copilotKitActions = createCopilotKitActions(createWorkPaperTools(copilotKitWorkbook))
+const cloudflareAgentTools = createCloudflareAgentTools(createWorkPaperTools(cloudflareAgentsWorkbook))
 
 const output = {
   aiSdk: {
@@ -55,6 +152,80 @@ const output = {
       range: 'Summary!A1:B5',
     }),
     writeResult: requireTool(langChainTools, 'set_workpaper_input_cell').invoke({
+      sheetName: 'Inputs',
+      address: 'B3',
+      value: 0.4,
+    }),
+  },
+  mastra: {
+    toolIds: [mastraTools.readWorkPaperSummary.id, mastraTools.setWorkPaperInputCell.id],
+    readResult: mastraTools.readWorkPaperSummary.execute({
+      context: {
+        range: 'Summary!A1:B5',
+      },
+    }),
+    writeResult: mastraTools.setWorkPaperInputCell.execute({
+      context: {
+        sheetName: 'Inputs',
+        address: 'B3',
+        value: 0.4,
+      },
+    }),
+  },
+  llamaIndex: {
+    toolNames: llamaIndexTools.map((tool) => tool.name),
+    readResult: requireLlamaIndexTool(llamaIndexTools, 'read_workpaper_summary').call({
+      range: 'Summary!A1:B5',
+    }),
+    writeResult: requireLlamaIndexTool(llamaIndexTools, 'set_workpaper_input_cell').call({
+      sheetName: 'Inputs',
+      address: 'B3',
+      value: 0.4,
+    }),
+  },
+  langGraph: {
+    nodeName: langGraphToolNode.nodeName,
+    toolNames: langGraphToolNode.tools.map((tool) => tool.name),
+    writeResult: requireWorkPaperWriteResult(
+      requireLangGraphToolMessage(
+        langGraphToolNode.invoke({
+          messages: [
+            {
+              tool_calls: [
+                {
+                  id: 'call_set_input_b3',
+                  name: 'set_workpaper_input_cell',
+                  args: {
+                    sheetName: 'Inputs',
+                    address: 'B3',
+                    value: 0.4,
+                  },
+                },
+              ],
+            },
+          ],
+        }).messages,
+        'call_set_input_b3',
+      ).result,
+    ),
+  },
+  copilotKit: {
+    actionNames: copilotKitActions.map((action) => action.name),
+    readResult: requireCopilotKitAction(copilotKitActions, 'readWorkPaperSummary').handler({
+      range: 'Summary!A1:B5',
+    }),
+    writeResult: requireCopilotKitAction(copilotKitActions, 'setWorkPaperInputCell').handler({
+      sheetName: 'Inputs',
+      address: 'B3',
+      value: 0.4,
+    }),
+  },
+  cloudflareAgents: {
+    toolNames: Object.keys(cloudflareAgentTools),
+    readResult: cloudflareAgentTools.readWorkPaperSummary.execute({
+      range: 'Summary!A1:B5',
+    }),
+    writeResult: cloudflareAgentTools.setWorkPaperInputCell.execute({
       sheetName: 'Inputs',
       address: 'B3',
       value: 0.4,
@@ -131,26 +302,165 @@ function createLangChainTools(workPaperTools: WorkPaperToolSet): LangChainTool[]
     {
       name: 'read_workpaper_summary',
       description: 'Read computed WorkPaper summary values for a small range.',
-      schema: {
-        range: 'string',
-      },
+      schema: readSummaryInputSchema,
       invoke({ range = 'Summary!A1:B5' }: ReadSummaryArgs = {}) {
-        return workPaperTools.readWorkPaperSummary(range)
+        return workPaperTools.readWorkPaperSummary(readSummaryInputSchema.parse({ range }).range)
       },
     },
     {
       name: 'set_workpaper_input_cell',
       description: 'Set one validated WorkPaper input cell and return formula readback.',
-      schema: {
-        sheetName: 'string',
-        address: 'string',
-        value: 'string | number | boolean | null',
-      },
+      schema: setInputCellInputSchema,
       invoke(args: SetInputCellArgs) {
-        return workPaperTools.setWorkPaperInputCell(args)
+        return workPaperTools.setWorkPaperInputCell(setInputCellInputSchema.parse(args))
       },
     },
   ]
+}
+
+function createMastraTools(workPaperTools: WorkPaperToolSet) {
+  return {
+    readWorkPaperSummary: {
+      id: 'read-workpaper-summary',
+      description: 'Read computed WorkPaper summary values for a small range.',
+      inputSchema: readSummaryInputSchema,
+      outputSchema: workPaperSummaryOutputSchema,
+      execute({ context }: { context?: ReadSummaryArgs } = {}) {
+        return workPaperTools.readWorkPaperSummary(readSummaryInputSchema.parse(context ?? {}).range)
+      },
+    },
+    setWorkPaperInputCell: {
+      id: 'set-workpaper-input-cell',
+      description: 'Set one validated WorkPaper input cell and return formula readback.',
+      inputSchema: setInputCellInputSchema,
+      outputSchema: workPaperWriteOutputSchema,
+      execute({ context }: { context: SetInputCellArgs }) {
+        return workPaperTools.setWorkPaperInputCell(setInputCellInputSchema.parse(context))
+      },
+    },
+  }
+}
+
+function createLlamaIndexTools(workPaperTools: WorkPaperToolSet): LlamaIndexTool[] {
+  return [
+    {
+      name: 'read_workpaper_summary',
+      description: 'Read computed WorkPaper summary values for a small range.',
+      parameters: readSummaryInputSchema,
+      call(args: ReadSummaryArgs = {}) {
+        return workPaperTools.readWorkPaperSummary(readSummaryInputSchema.parse(args).range)
+      },
+    },
+    {
+      name: 'set_workpaper_input_cell',
+      description: 'Set one validated WorkPaper input cell and return formula readback.',
+      parameters: setInputCellInputSchema,
+      call(args: SetInputCellArgs) {
+        return workPaperTools.setWorkPaperInputCell(setInputCellInputSchema.parse(args))
+      },
+    },
+  ]
+}
+
+function createLangGraphToolNode(workPaperTools: WorkPaperToolSet): LangGraphToolNode {
+  const tools = createLangChainTools(workPaperTools)
+  return {
+    nodeName: 'tools',
+    tools,
+    invoke(input) {
+      const lastMessage = input.messages[input.messages.length - 1]
+      const toolCalls = lastMessage?.tool_calls ?? []
+      return {
+        messages: toolCalls.map((toolCall) => {
+          if (toolCall.name === 'read_workpaper_summary') {
+            const tool = requireTool(tools, 'read_workpaper_summary')
+            const result = tool.invoke(toolCall.args)
+            return {
+              type: 'tool',
+              name: tool.name,
+              tool_call_id: toolCall.id,
+              content: JSON.stringify(result),
+              result,
+            }
+          }
+          const tool = requireTool(tools, 'set_workpaper_input_cell')
+          const result = tool.invoke(toolCall.args)
+          return {
+            type: 'tool',
+            name: tool.name,
+            tool_call_id: toolCall.id,
+            content: JSON.stringify(result),
+            result,
+          }
+        }),
+      }
+    },
+  }
+}
+
+function createCopilotKitActions(workPaperTools: WorkPaperToolSet): CopilotKitAction[] {
+  return [
+    {
+      name: 'readWorkPaperSummary',
+      description: 'Read computed WorkPaper summary values for a small range.',
+      parameters: [
+        {
+          name: 'range',
+          type: 'string',
+          description: 'A1-style summary range such as Summary!A1:B5.',
+        },
+      ],
+      handler(args: ReadSummaryArgs = {}) {
+        return workPaperTools.readWorkPaperSummary(readSummaryInputSchema.parse(args).range)
+      },
+    },
+    {
+      name: 'setWorkPaperInputCell',
+      description: 'Set one validated WorkPaper input cell and return formula readback.',
+      parameters: [
+        {
+          name: 'sheetName',
+          type: 'string',
+          description: 'The editable sheet. This example allows Inputs only.',
+          required: true,
+        },
+        {
+          name: 'address',
+          type: 'string',
+          description: 'A1-style input address such as B3.',
+          required: true,
+        },
+        {
+          name: 'value',
+          type: 'number',
+          description: 'The replacement value for the input cell.',
+          required: true,
+        },
+      ],
+      handler(args: SetInputCellArgs) {
+        return workPaperTools.setWorkPaperInputCell(setInputCellInputSchema.parse(args))
+      },
+    },
+  ]
+}
+
+function createCloudflareAgentTools(workPaperTools: WorkPaperToolSet) {
+  return {
+    readWorkPaperSummary: {
+      description: 'Read computed WorkPaper summary values inside a Cloudflare Agent turn.',
+      inputSchema: readSummaryInputSchema,
+      execute(args: ReadSummaryArgs = {}) {
+        return workPaperTools.readWorkPaperSummary(readSummaryInputSchema.parse(args).range)
+      },
+    },
+    setWorkPaperInputCell: {
+      description: 'Set one validated WorkPaper input cell inside a Cloudflare Agent turn.',
+      inputSchema: setInputCellInputSchema,
+      execute(args: SetInputCellArgs) {
+        return workPaperTools.setWorkPaperInputCell(setInputCellInputSchema.parse(args))
+      },
+    },
+  }
 }
 
 function createWorkPaperTools(workbook: WorkPaperInstance) {
@@ -212,12 +522,60 @@ function createWorkPaperTools(workbook: WorkPaperInstance) {
 
 function requireTool(tools: LangChainTool[], name: 'read_workpaper_summary'): LangChainReadTool
 function requireTool(tools: LangChainTool[], name: 'set_workpaper_input_cell'): LangChainWriteTool
+function requireTool(tools: LangChainTool[], name: LangChainTool['name']): LangChainTool
 function requireTool(tools: LangChainTool[], name: LangChainTool['name']): LangChainTool {
   const tool = tools.find((candidate) => candidate.name === name)
   if (tool === undefined) {
     throw new Error(`Missing framework tool: ${name}`)
   }
   return tool
+}
+
+function requireLlamaIndexTool(
+  tools: LlamaIndexTool[],
+  name: 'read_workpaper_summary',
+): Extract<LlamaIndexTool, { name: 'read_workpaper_summary' }>
+function requireLlamaIndexTool(
+  tools: LlamaIndexTool[],
+  name: 'set_workpaper_input_cell',
+): Extract<LlamaIndexTool, { name: 'set_workpaper_input_cell' }>
+function requireLlamaIndexTool(tools: LlamaIndexTool[], name: LlamaIndexTool['name']): LlamaIndexTool {
+  const tool = tools.find((candidate) => candidate.name === name)
+  if (tool === undefined) {
+    throw new Error(`Missing LlamaIndex tool: ${name}`)
+  }
+  return tool
+}
+
+function requireCopilotKitAction(
+  actions: CopilotKitAction[],
+  name: 'readWorkPaperSummary',
+): Extract<CopilotKitAction, { name: 'readWorkPaperSummary' }>
+function requireCopilotKitAction(
+  actions: CopilotKitAction[],
+  name: 'setWorkPaperInputCell',
+): Extract<CopilotKitAction, { name: 'setWorkPaperInputCell' }>
+function requireCopilotKitAction(actions: CopilotKitAction[], name: CopilotKitAction['name']): CopilotKitAction {
+  const action = actions.find((candidate) => candidate.name === name)
+  if (action === undefined) {
+    throw new Error(`Missing CopilotKit action: ${name}`)
+  }
+  return action
+}
+
+function requireLangGraphToolMessage(messages: LangGraphToolMessage[], toolCallId: string): LangGraphToolMessage {
+  const message = messages.find((candidate) => candidate.tool_call_id === toolCallId)
+  if (message === undefined) {
+    throw new Error(`Missing LangGraph tool message: ${toolCallId}`)
+  }
+  return message
+}
+
+function requireWorkPaperWriteResult(result: WorkPaperReadResult | WorkPaperWriteResult): WorkPaperWriteResult {
+  if (!('editedCell' in result)) {
+    throw new Error(`Expected WorkPaper write result, received ${JSON.stringify(result)}`)
+  }
+  return result
 }
 
 function requireSheet(workpaper: WorkPaperInstance, sheetName: string): number {
@@ -308,6 +666,11 @@ function assertOutput(actual: typeof output): void {
   const writeResults: [string, WorkPaperWriteResult][] = [
     ['aiSdk', actual.aiSdk.writeResult],
     ['langChain', actual.langChain.writeResult],
+    ['mastra', actual.mastra.writeResult],
+    ['llamaIndex', actual.llamaIndex.writeResult],
+    ['langGraph', actual.langGraph.writeResult],
+    ['copilotKit', actual.copilotKit.writeResult],
+    ['cloudflareAgents', actual.cloudflareAgents.writeResult],
   ]
 
   for (const [framework, result] of writeResults) {

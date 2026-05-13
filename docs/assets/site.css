@@ -12,9 +12,9 @@
   --green: #33d17a;
   --green-deep: #116242;
   --shadow: 0 28px 90px rgba(17, 16, 12, 0.22);
-  --font-body: 'Bilig Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
-  --font-display: 'Bilig Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
-  --font-mono: 'Bilig Mono', ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  --font-body: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+  --font-display: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  --font-mono: 'SFMono-Regular', ui-monospace, Consolas, 'Liberation Mono', Menlo, monospace;
 }
 
 * {
@@ -578,82 +578,107 @@ h2 {
 
 .proof-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.34fr);
-  gap: clamp(30px, 4.6vw, 58px);
+  grid-template-columns: minmax(0, 0.92fr) minmax(300px, 0.38fr);
+  gap: clamp(34px, 5vw, 64px);
   align-items: start;
 }
 
-.benchmark-table-wrap {
-  overflow-x: auto;
+.proof-ledger {
+  display: grid;
+  gap: 0;
   border-top: 1px solid var(--line-strong);
   border-bottom: 1px solid var(--line-strong);
-  background: rgba(255, 253, 246, 0.42);
 }
 
-.benchmark-table {
-  width: 100%;
-  min-width: 660px;
-  border-collapse: collapse;
+.proof-run,
+.proof-artifact {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 18px;
+  padding: 18px 0;
 }
 
-.benchmark-table caption {
-  padding: 16px 0 15px;
-  color: var(--ink-soft);
-  font-size: 12px;
-  font-weight: 700;
-  text-align: left;
-  text-transform: uppercase;
+.proof-run {
+  border-bottom: 1px solid var(--line);
 }
 
-.benchmark-table th,
-.benchmark-table td {
-  border-top: 1px solid var(--line);
-  padding: 17px 18px;
-  text-align: left;
-  vertical-align: top;
-}
-
-.benchmark-table tbody tr:first-child th,
-.benchmark-table tbody tr:first-child td {
-  border-top: 0;
-}
-
-.benchmark-table th {
-  width: 132px;
-  color: var(--ink-soft);
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.benchmark-table td {
+.proof-run p {
+  grid-column: 2;
+  max-width: 430px;
   color: var(--ink-muted);
-  font-size: 15px;
-  line-height: 1.45;
+  font-size: 14px;
 }
 
-.benchmark-table td:nth-child(2) {
-  width: 288px;
-  color: var(--ink);
+.proof-run span,
+.proof-artifact span,
+.proof-stats dt,
+.proof-links span {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
-.benchmark-table strong {
-  color: var(--ink);
-  font-size: 26px;
-  line-height: 1;
-}
-
-.benchmark-table code,
-.proof-command code {
+.proof-run code,
+.proof-artifact code,
+.proof-stats code {
   overflow-wrap: break-word;
   word-break: normal;
   color: var(--ink);
   font-size: 13px;
 }
 
+.proof-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.proof-stats div {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  padding: 20px 22px 22px;
+}
+
+.proof-stats div:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.proof-stats div:nth-child(3) {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--line);
+  border-left: 0;
+  padding-left: 0;
+}
+
+.proof-stats dt {
+  margin: 0;
+}
+
+.proof-stats dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.proof-stats p {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 14px;
+  line-height: 1.42;
+}
+
 .proof-notes {
   display: grid;
-  gap: 18px;
+  gap: 16px;
   border-top: 1px solid var(--line-strong);
   padding-top: 18px;
 }
@@ -666,25 +691,10 @@ h2 {
   line-height: 1.22;
 }
 
-.proof-command {
-  display: grid;
-  gap: 8px;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 18px;
-}
-
-.proof-command p {
+.proof-notes p {
   color: var(--ink-muted);
   font-size: 15px;
   line-height: 1.45;
-}
-
-.proof-command span,
-.proof-links span {
-  color: var(--ink-soft);
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
 }
 
 .proof-links {
@@ -846,6 +856,20 @@ footer {
     grid-template-columns: 1fr;
   }
 
+  .proof-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .proof-stats div {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+    padding: 18px 0;
+  }
+
+  .proof-stats div:first-child {
+    border-top: 0;
+  }
+
   .work-row {
     grid-template-columns: 104px minmax(0, 1fr);
   }
@@ -900,6 +924,16 @@ footer {
 
   .section-head {
     gap: 22px;
+  }
+
+  .proof-run,
+  .proof-artifact {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .proof-run p {
+    grid-column: 1;
   }
 
   .docs-grid {

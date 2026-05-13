@@ -31,7 +31,8 @@
     "typecheck:mcp": "tsc --noEmit"
   },
   "dependencies": {
-    "@bilig/headless": "latest"
+    "@bilig/headless": "latest",
+    "zod": "4.3.6"
   },
   "devDependencies": {
     "@types/node": "25.5.0",

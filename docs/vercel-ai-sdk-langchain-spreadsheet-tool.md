@@ -1,17 +1,18 @@
 ---
-title: Vercel AI SDK and LangChain spreadsheet tools
+title: Agent framework spreadsheet tools
 published: true
-description: Wrap @bilig/headless WorkPaper reads, verified edits, formula contracts, and persistence checks as Vercel AI SDK and LangChain-style tools.
-tags: vercel ai sdk, langchain, tool calling, spreadsheet, node
+description: Wrap @bilig/headless WorkPaper reads, verified edits, formula contracts, and persistence checks as AI SDK, LangChain, Mastra, LlamaIndex.TS, LangGraph.js, CopilotKit, and Cloudflare Agents tools.
+tags: vercel ai sdk, langchain, mastra, llamaindex, langgraph, copilotkit, cloudflare agents, spreadsheet, node
 canonical_url: https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
 image: /assets/github-social-preview.png
 ---
 
-# Vercel AI SDK and LangChain Spreadsheet Tools
+# Agent Framework Spreadsheet Tools
 
-This page is for agent builders who already have a Vercel AI SDK or LangChain
-loop and need a spreadsheet tool that can do more than return a screenshot.
+This page is for agent builders who already have an AI SDK, LangChain,
+Mastra, LlamaIndex.TS, LangGraph.js, CopilotKit, or Cloudflare Agents loop and
+need a spreadsheet tool that can do more than return a screenshot.
 
 `@bilig/headless` gives the agent a WorkPaper object: sheets, addresses,
 formulas, computed readback, and JSON persistence. The framework wrapper should
@@ -29,17 +30,22 @@ npm install
 npm run agent:framework-adapters
 ```
 
-The script builds the same workbook twice and exposes the same operations in
-two familiar shapes:
+The script builds the same workbook once per adapter family and exposes the
+same operations in the shapes those frameworks expect:
 
 - `readWorkPaperSummary` and `setWorkPaperInputCell` for an AI SDK-style tool
   map with `inputSchema` and `execute`
 - `read_workpaper_summary` and `set_workpaper_input_cell` for a
   LangChain-style tool list with `schema` and `invoke`
+- Mastra-style `createTool({ id, inputSchema, outputSchema, execute })`
+- LlamaIndex.TS `tool(fn, { parameters })` / `FunctionTool` style functions
+- LangGraph.js `ToolNode`-style dispatch over LangChain tools
+- CopilotKit `useCopilotAction({ parameters, handler })` action objects
+- Cloudflare Agents `AIChatAgent` / `streamText({ tools })` style tools
 
-The example does not install either framework. That is deliberate. It keeps the
-WorkPaper contract visible and avoids hiding workbook logic behind framework
-setup.
+The example installs `zod` for real schemas, but it does not install the agent
+frameworks. That is deliberate. It keeps the WorkPaper contract visible and
+avoids hiding workbook logic behind framework setup.
 
 ## What A Passing Run Proves
 
@@ -86,9 +92,10 @@ Keep the adapter boring:
 4. Serialize and restore the WorkPaper document.
 5. Return formula contracts and restored readback in the tool result.
 
-The AI SDK wrapper can then expose those functions with `inputSchema` and
-`execute`. The LangChain wrapper can expose the same functions with `schema`
-and `invoke`. The workbook behavior should not care which framework called it.
+The framework wrapper can then expose those functions with the local tool shape:
+`inputSchema` and `execute`, `schema` and `invoke`, `parameters` and `handler`,
+or a ToolNode-style dispatch wrapper. The workbook behavior should not care
+which framework called it.
 
 Official docs for the framework shapes:
 
@@ -98,6 +105,17 @@ Official docs for the framework shapes:
   <https://ai-sdk.dev/docs/reference/ai-sdk-core/tool>
 - LangChain JavaScript tools:
   <https://docs.langchain.com/oss/javascript/langchain/tools>
+- Mastra `createTool()`:
+  <https://mastra.ai/reference/tools/create-tool>
+- LlamaIndex.TS tools:
+  <https://developers.llamaindex.ai/typescript/framework/modules/agents/tool/>
+- LangGraph.js `ToolNode`:
+  <https://langchain-ai.github.io/langgraphjs/reference/classes/langgraph.prebuilt.ToolNode.html>
+- CopilotKit `useCopilotAction`:
+  <https://docs.copilotkit.ai/reference/hooks/useCopilotAction>
+- Cloudflare Agents API and agent tools:
+  <https://developers.cloudflare.com/agents/api-reference/agents-api/>
+  <https://developers.cloudflare.com/agents/api-reference/agent-tools/>
 
 ## Files To Inspect
 

@@ -70,7 +70,7 @@ Useful direct paths:
   [Express, Fastify, and Hono adapters](docs/node-framework-workpaper-adapters.md)
   when the route is moving into an existing service.
 - Agent and MCP adapters:
-  [Vercel AI SDK / LangChain guide](docs/vercel-ai-sdk-langchain-spreadsheet-tool.md),
+  [agent framework guide](docs/vercel-ai-sdk-langchain-spreadsheet-tool.md),
   [framework adapters](examples/headless-workpaper#agent-framework-adapters),
   [MCP tool server shape](examples/headless-workpaper#mcp-tool-server-shape), and
   [MCP server guide](docs/mcp-workpaper-tool-server.md). Check the
@@ -421,10 +421,11 @@ For a tool-calling shape closer to agent SDKs, run `npm run agent:tool-call`.
 It returns a compact tool call, before/after computed values, formula
 contracts, persistence proof, and round-trip verification.
 
-For Vercel AI SDK and LangChain-shaped wrappers, run
+For agent framework wrapper shapes, run
 `npm run agent:framework-adapters`. The example keeps the same validated
 WorkPaper read/write functions and exposes thin framework adapter shapes
-without adding either framework as a dependency.
+for AI SDK, LangChain, Mastra, LlamaIndex.TS, LangGraph.js, CopilotKit, and
+Cloudflare Agents.
 
 For an MCP-style shape, run `npm run agent:mcp-tools`. It returns a
 dependency-free `tools/list` response, a `tools/call` read, and a verified
