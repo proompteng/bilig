@@ -28,27 +28,28 @@ validated WorkPaper model once data is in workbook form.
 | Persisting a workbook document after code changes cells or formulas    | Office macros, COM automation, or desktop Excel integration |
 | Tests that need deterministic spreadsheet state instead of screenshots | One-off arithmetic where a workbook model adds no value     |
 
-## Current Public Proof
+## Proof You Can Reproduce
 
-- Live growth snapshot:
-  <https://proompteng.github.io/bilig/community-growth-snapshot.html>
-- Latest checked-in snapshot: `24` GitHub stars, `12` forks, `15,592` npm downloads in the
-  last week, `23,240` npm downloads in the last 30 days, `88` open
-  `good first issue` tickets, `10` GitHub Discussions, and `455` recent
-  repository views.
-- Benchmark evidence:
-  [`46/46` comparable WorkPaper mean wins](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md),
-  with the p95 caveat documented instead of hidden.
-- MCP discovery: listed in the
+- Run the clean TypeScript sanity check below. It edits one input, restores the
+  saved JSON document, and verifies the dependent formula result.
+- Run `pnpm workpaper:bench:competitive:check` from the repository. The
+  checked-in artifact shows
+  [`46/46` comparable WorkPaper mean wins](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md)
+  and names the slower p95 row: `lookup-approximate-duplicates` at `1.043x`.
+- Read the
+  [compatibility limits](https://github.com/proompteng/bilig/blob/main/docs/where-bilig-is-not-excel-compatible-yet.md)
+  before importing real Excel workbooks.
+- Track public signals in the
+  [growth snapshot](https://proompteng.github.io/bilig/community-growth-snapshot.html):
+  stars, npm downloads, starter issues, Discussions, traffic, and clones.
+- The WorkPaper MCP server is listed in the
   [official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper)
-  and on [Glama](https://glama.ai/mcp/servers/proompteng/bilig); the
+  and on [Glama](https://glama.ai/mcp/servers/proompteng/bilig). The
   [directory status page](https://proompteng.github.io/bilig/mcp-spreadsheet-server-directory.html)
-  tracks the npm command and pending directory reviews without claiming listings
-  early.
+  keeps the npm command and directory evidence in one place.
 
-If the sanity check below saves you a workbook automation spike, star the repo
-so you can find it again:
-<https://github.com/proompteng/bilig/stargazers>.
+If the sanity check matches a problem you have, star the repo so you can find it
+again: <https://github.com/proompteng/bilig/stargazers>.
 
 ## Install
 

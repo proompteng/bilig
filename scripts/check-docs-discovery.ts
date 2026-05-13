@@ -331,16 +331,24 @@ for (const [path, content] of [
   ['README.md', readme],
   ['packages/headless/README.md', headlessReadme],
 ] as const) {
-  requireIncludes(content, '## Current Public Proof', path)
+  requireIncludes(content, '## Proof You Can Reproduce', path)
   requireIncludes(content, 'https://proompteng.github.io/bilig/community-growth-snapshot.html', path)
   requireIncludes(content, 'https://github.com/proompteng/bilig/stargazers', path)
-  requireIncludes(content, '`12` forks', path)
-  requireIncludes(content, '15,592` npm downloads in the', path)
-  requireIncludes(content, '`88` open', path)
-  requireIncludes(content, '`10` GitHub Discussions', path)
-  requireIncludes(content, '`good first issue` tickets', path)
+  requireIncludes(content, 'edits one input, restores the', path)
+  requireIncludes(content, 'saved JSON document, and verifies the dependent formula result.', path)
+  requireIncludes(content, 'pnpm workpaper:bench:competitive:check', path)
+  requireIncludes(content, 'lookup-approximate-duplicates', path)
+  requireIncludes(content, '1.043x', path)
+  requireIncludes(content, 'compatibility limits', path)
+  requireIncludes(content, 'stars, npm downloads, starter issues, Discussions, traffic, and clones.', path)
   requireIncludes(content, 'https://github.com/proompteng/bilig/discussions/307', path)
   requireIncludes(content, 'https://github.com/proompteng/bilig/discussions/308', path)
+  requireNotIncludes(content, '## Current Public Proof', path)
+  requireNotIncludes(content, 'Latest checked-in snapshot', path)
+  requireNotIncludes(content, '`12` forks', path)
+  requireNotIncludes(content, '15,592` npm downloads in the', path)
+  requireNotIncludes(content, '`10` GitHub Discussions', path)
+  requireNotIncludes(content, 'repository views.', path)
 }
 
 requireIncludes(newContributorGuide, '## First-Time Command Checklist', 'docs/new-contributor-guide.md')
