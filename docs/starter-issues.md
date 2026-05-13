@@ -6,8 +6,8 @@ search indexing.
 
 Current starter queue as of May 13, 2026:
 
-- 55 open `first-timers-only` issues.
-- 49 issues are generally available for a new contributor to claim.
+- 61 open `first-timers-only` issues.
+- 55 issues are generally available for a new contributor to claim.
 - 6 issues already have active pull requests; comment before duplicating one of
   those patches.
 
