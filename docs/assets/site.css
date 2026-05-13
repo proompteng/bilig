@@ -578,6 +578,11 @@ h2 {
   height: auto;
 }
 
+.proof-sidebar {
+  display: grid;
+  gap: 24px;
+}
+
 .metric-grid {
   display: grid;
   border-top: 1px solid var(--line);
@@ -598,9 +603,41 @@ h2 {
 
 .metric strong {
   font-family: var(--font-display);
-  font-size: 27px;
+  font-size: 26px;
   font-weight: 700;
   line-height: 1;
+  text-align: right;
+}
+
+.proof-links {
+  display: grid;
+  border-top: 1px solid var(--line);
+}
+
+.proof-links a {
+  display: grid;
+  gap: 5px;
+  border-bottom: 1px solid var(--line);
+  padding: 15px 0;
+  text-decoration: none;
+}
+
+.proof-links span {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.proof-links strong {
+  color: var(--ink-muted);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.36;
+}
+
+.proof-links a:hover strong {
+  color: var(--green-deep);
 }
 
 .docs-grid {
@@ -793,6 +830,10 @@ footer {
   .metric {
     grid-template-columns: 1fr;
     gap: 6px;
+  }
+
+  .metric strong {
+    text-align: left;
   }
 
   .work-row p {
