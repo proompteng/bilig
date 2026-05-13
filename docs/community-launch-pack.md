@@ -78,12 +78,12 @@ Latest public execution snapshot on May 13, 2026 after the landing-page pass:
 Latest starter-queue execution snapshot on May 13, 2026 after the adapter smoke
 issue pass:
 
-- GitHub surface: `24` stars, `10` forks, `61` open issues, and `6` open pull
+- GitHub surface: `24` stars, `10` forks, `68` open issues, and `6` open pull
   requests.
 - npm surface: `@bilig/headless@0.13.21`, with `15,592` downloads last week
   and `23,240` downloads in the last 30 days.
-- Contributor funnel: `60` open `good first issue`, `60` open
-  `first-timers-only`, and `60` open `help wanted` issues.
+- Contributor funnel: `61` open `good first issue`, `61` open
+  `first-timers-only`, and `61` open `help wanted` issues.
 - New starter issues `#272` through `#281` cover NestJS, Express, Supabase Edge
   Functions, Deno Deploy, Next.js Route Handlers, Bun.serve, SvelteKit, Remix,
   Netlify Functions, and Cloudflare D1 WorkPaper smoke examples.
@@ -91,6 +91,9 @@ issue pass:
   Cursor, Windsurf, MCP Inspector, and Nuxt/Nitro WorkPaper setup or smoke
   recipes for contributors who want small docs-only first PRs tied directly to
   agent-client adoption.
+- New registry-proof starter issue `#287` asks a first-time contributor to add
+  a copy-pasteable official MCP Registry API verification snippet to the
+  WorkPaper docs.
 - README and npm conversion surface: the GitHub README and package README now
   expose the Glama score badge, link the official MCP Registry and Glama pages,
   and make the npm sanity check prove formula readback after edit, JSON save,
@@ -118,6 +121,8 @@ issue pass:
   entry was refreshed to `@bilig/headless@0.13.21` with the existing Publish MCP
   Registry workflow:
   <https://github.com/proompteng/bilig/actions/runs/25794844239>
+  Live API verification on 2026-05-13 returned 5 matching registry entries,
+  with `0.13.21` marked as latest.
 - External MCP directory surface: `mcp.directory` accepted the public server
   submission for review with repository `https://github.com/proompteng/bilig`,
   npm package `@bilig/headless`, and the WorkPaper persistence/readback
@@ -135,6 +140,10 @@ issue pass:
   from the official MCP Registry. The next action is to let the fresh official
   registry entry propagate, then email `hello@pulsemcp.com` only if it remains
   missing after the daily ingest window.
+- External MCP directory follow-up: mcpservers.org submission form is staged in
+  Atlas with public project data and category `Productivity`. The remaining
+  steps are entering a contact email and clicking Submit, both held for
+  action-time confirmation.
 
 ## Goal Text
 
