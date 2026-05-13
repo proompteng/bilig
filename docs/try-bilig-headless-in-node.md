@@ -109,6 +109,38 @@ Expected output:
 The exact byte count can change between package versions. The important part is
 that `verified` is `true` and `afterRestore` matches `after`.
 
+## Try it in Docker (optional)
+
+> **Note:** pnpm is the primary recommended path. This section is for
+> evaluators who prefer not to change their local Node version.
+
+After completing the **Run it** step above you will have an `eval.ts` file
+inside `bilig-headless-eval/`. Mount that directory into an official Node 24
+container and run the same script:
+
+```sh
+docker run --rm \
+  -v "$(pwd)":/eval \
+  -w /eval \
+  node:24-slim \
+  bash -c "npm install --silent && npx tsx eval.ts"
+```
+
+Expected output (same as above — `verified` must be `true`):
+
+```json
+{
+  "before": 24000,
+  "after": 38400,
+  "afterRestore": 38400,
+  "bytes": 1000,
+  "verified": true
+}
+```
+
+No repo clone is needed. The container installs dependencies from npm and exits
+cleanly after printing the result.
+
 ## What this proves
 
 - multi-sheet workbook creation from plain arrays
