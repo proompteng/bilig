@@ -308,7 +308,7 @@ for (const [path, content] of [
   requireIncludes(content, 'https://proompteng.github.io/bilig/community-growth-snapshot.html', path)
   requireIncludes(content, 'https://github.com/proompteng/bilig/stargazers', path)
   requireIncludes(content, '13,427` npm downloads in the', path)
-  requireIncludes(content, '`30` open `good first issue` tickets', path)
+  requireIncludes(content, '`32` open `good first issue` tickets', path)
 }
 
 requireIncludes(newContributorGuide, '## First-Time Command Checklist', 'docs/new-contributor-guide.md')
@@ -515,7 +515,9 @@ for (const required of [
   'https://github.com/proompteng/bilig/issues/221',
   'https://github.com/proompteng/bilig/issues/222',
   'https://github.com/proompteng/bilig/issues/223',
-  'https://github.com/proompteng/bilig/issues/224',
+  'https://github.com/proompteng/bilig/issues/227',
+  'https://github.com/proompteng/bilig/issues/228',
+  'https://github.com/proompteng/bilig/issues/229',
 ]) {
   requireIncludes(starterIssues, required, 'docs/starter-issues.md')
   requireIncludes(llms, required, 'docs/llms.txt')
@@ -536,6 +538,7 @@ for (const closedIssue of [
   '150',
   '151',
   '152',
+  '224',
   '200',
   '201',
   '202',

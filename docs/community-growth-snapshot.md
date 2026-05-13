@@ -1,6 +1,6 @@
 # Community Growth Snapshot
 
-Captured at: `2026-05-13T01:50:03.328Z`
+Captured at: `2026-05-13T01:51:42.194Z`
 
 This snapshot tracks the public signals for the `@bilig/headless` growth loop: GitHub conversion, npm demand, contributor on-ramp health, discussion activity, and traffic quality.
 
@@ -54,3 +54,4 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 - If downloads or clones rise without stars, improve README and npm star/bookmark conversion after proof blocks.
 - If traffic comes from a channel but discussions stay quiet, switch from launch copy to a specific workflow-feedback ask.
 - If the starter queue drops below three current issues, open scoped example tasks before the next distribution push.
+

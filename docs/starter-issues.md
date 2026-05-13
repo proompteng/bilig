@@ -35,7 +35,9 @@ Current starter tickets as of May 13, 2026:
 - [#221: docs(examples): add currency sensitivity WorkPaper example](https://github.com/proompteng/bilig/issues/221)
 - [#222: docs(examples): add payroll accrual WorkPaper example](https://github.com/proompteng/bilig/issues/222)
 - [#223: docs(examples): add deferred revenue roll-forward WorkPaper example](https://github.com/proompteng/bilig/issues/223)
-- [#224: test(ci): cover deterministic gzip measurement in release check](https://github.com/proompteng/bilig/issues/224)
+- [#227: docs(mcp): add a stdio wrapper for the WorkPaper tool server](https://github.com/proompteng/bilig/issues/227)
+- [#228: docs(mcp): add a local MCP client config snippet](https://github.com/proompteng/bilig/issues/228)
+- [#229: test(examples): lock the MCP tool server structured output contract](https://github.com/proompteng/bilig/issues/229)
 
 The list intentionally excludes closed issues and broad corpus/parity epics. Add
 new starter tickets only when the expected patch can stay small, has a clear
