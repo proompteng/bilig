@@ -24,6 +24,7 @@ describe('xlsx chart artifacts roundtrip', () => {
     expect(imported.snapshot.workbook.metadata?.chartSheetArtifacts).toEqual([
       { name: 'Revenue Chart', relationshipTarget: 'chartsheets/sheet1.xml', sheetId: 2 },
     ])
+    expect(imported.snapshot.sheets.find((sheet) => sheet.name === 'Revenue Chart')?.cells).toEqual([])
     expect(imported.snapshot.workbook.metadata?.chartArtifacts?.parts.map((part) => part.path).toSorted()).toEqual([
       'xl/charts/chart1.xml',
       'xl/chartsheets/_rels/sheet1.xml.rels',

@@ -407,6 +407,7 @@ function importSheetJsWorkbook(
     ? readImportedWorkbookThreadedCommentArtifacts(workbookZip, workbook.SheetNames)
     : undefined
   const importedViewState = workbookZip ? readImportedWorkbookViewState(workbookZip, workbook.SheetNames) : undefined
+  const chartSheetNames = new Set((importedChartArtifacts?.chartSheetArtifacts ?? []).map((artifact) => artifact.name))
 
   let ignoredCommentsSeen = false
   let externalWorkbookReferenceWarningSeen = warnings.includes(externalWorkbookReferencesWarning)
@@ -416,7 +417,7 @@ function importSheetJsWorkbook(
   const importedArrayFormulaSpills: NonNullable<WorkbookMetadataSnapshot['spills']> = []
   const previewSheets: ImportedWorkbookSheetPreview[] = []
   const sheets = workbook.SheetNames.map((sheetName, order) => {
-    const sheet = workbook.Sheets[sheetName]
+    const sheet = chartSheetNames.has(sheetName) ? undefined : workbook.Sheets[sheetName]
     if (!sheet) {
       previewSheets.push(
         createSheetPreview({
