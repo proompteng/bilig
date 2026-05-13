@@ -193,9 +193,13 @@ function renameNodeSheetReferences(node: FormulaNode, oldSheetName: string, newS
     case 'StringLiteral':
     case 'ErrorLiteral':
     case 'OmittedArgument':
-    case 'NameRef':
     case 'StructuredRef':
       return node
+    case 'NameRef':
+      return {
+        ...node,
+        ...(node.sheetName === oldSheetName ? { sheetName: newSheetName } : {}),
+      }
     case 'ArrayConstant':
       return { ...node, rows: node.rows.map((row) => row.map((entry) => renameNodeSheetReferences(entry, oldSheetName, newSheetName))) }
     case 'CellRef':
@@ -358,6 +362,8 @@ function renameJsPlanSheetReferences(plan: readonly JsPlanInstruction[], oldShee
       }
       case 'push-lambda':
         return { ...instruction, body: renameJsPlanSheetReferences(instruction.body, oldSheetName, newSheetName) }
+      case 'push-name':
+        return instruction.sheetName === oldSheetName ? { ...instruction, sheetName: newSheetName } : instruction
       case 'call':
         return instruction.argRefs
           ? {
@@ -374,7 +380,6 @@ function renameJsPlanSheetReferences(plan: readonly JsPlanInstruction[], oldShee
       case 'jump-if-false':
       case 'push-boolean':
       case 'push-error':
-      case 'push-name':
       case 'push-number':
       case 'push-omitted':
       case 'push-string':

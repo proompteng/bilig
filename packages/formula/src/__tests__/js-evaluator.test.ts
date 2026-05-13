@@ -40,6 +40,18 @@ describe('js evaluator', () => {
     expect(evaluatePlan(lowerToPlan(parseFormula('T(1)')), context)).toEqual(empty())
   })
 
+  it('resolves sheet-qualified defined names through the target sheet scope', () => {
+    expect(
+      evaluatePlan(lowerToPlan(parseFormula("'Table 1'!IDX")), {
+        ...context,
+        resolveName: (name: string, sheetName?: string): CellValue =>
+          name === 'IDX' && sheetName === 'Table 1'
+            ? { tag: ValueTag.String, value: 'Table 1 title', stringId: 0 }
+            : { tag: ValueTag.Error, code: ErrorCode.Name },
+      }),
+    ).toEqual({ tag: ValueTag.String, value: 'Table 1 title', stringId: 0 })
+  })
+
   it('does not compare numeric zero as equal to an empty string', () => {
     expect(evaluatePlan(lowerToPlan(parseFormula('0=""')), context)).toEqual({ tag: ValueTag.Boolean, value: false })
     expect(evaluatePlan(lowerToPlan(parseFormula('0<>""')), context)).toEqual({ tag: ValueTag.Boolean, value: true })

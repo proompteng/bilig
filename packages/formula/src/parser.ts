@@ -14,7 +14,7 @@ import type {
   StructuredRefNode,
   UnaryExprNode,
 } from './ast.js'
-import { isCellReferenceText, isColumnReferenceText, isRowReferenceText } from './addressing.js'
+import { columnToIndex, isCellReferenceText, isColumnReferenceText, isRowReferenceText } from './addressing.js'
 import { normalizeFormulaFunctionName } from './function-name-normalization.js'
 import { lexFormula, type Token } from './lexer.js'
 import { ErrorCode } from '@bilig/protocol'
@@ -45,6 +45,8 @@ const ERROR_LITERAL_CODES: Record<string, ErrorCode> = {
   '#SPILL!': ErrorCode.Spill,
   '#BLOCKED!': ErrorCode.Blocked,
 }
+
+const LAST_LEGACY_XLS_COLUMN_INDEX = columnToIndex('IV')
 
 function isSheetNameToken(token: Token): token is Token & { kind: 'identifier' | 'quotedIdentifier' } {
   return token.kind === 'identifier' || token.kind === 'quotedIdentifier'
@@ -247,8 +249,23 @@ export function parseFormula(source: string): FormulaNode {
     throw new Error(`Expected a sheet-qualified reference, received ${token.kind}`)
   }
 
-  function parseSheetQualifiedValue(sheetName: string): CellRefNode | ColumnRefNode | RowRefNode | ErrorLiteralNode {
-    return current().kind === 'error' ? parseErrorLiteral() : parseSheetQualifiedReference(sheetName)
+  function parseSheetQualifiedValue(sheetName: string): CellRefNode | ColumnRefNode | RowRefNode | NameRefNode | ErrorLiteralNode {
+    if (current().kind === 'error') {
+      return parseErrorLiteral()
+    }
+    const token = current()
+    if (token.kind === 'identifier') {
+      eat('identifier')
+      const reference = maybeParseReferenceValue(token.value, sheetName)
+      if (reference?.kind === 'CellRef' || reference?.kind === 'RowRef' || (reference !== undefined && current().kind === 'colon')) {
+        return reference
+      }
+      if (reference?.kind === 'ColumnRef' && columnToIndex(reference.ref.replaceAll('$', '')) <= LAST_LEGACY_XLS_COLUMN_INDEX) {
+        return reference
+      }
+      return { kind: 'NameRef', name: token.value, sheetName }
+    }
+    return parseSheetQualifiedReference(sheetName)
   }
 
   function maybeParseSheetRangeQualifiedReference(sheetName: string): RangeRefNode | undefined {

@@ -387,7 +387,7 @@ function executePlan(
               ? cloneStackValue(scopedValue)
               : {
                   kind: 'scalar',
-                  value: context.resolveName?.(instruction.name) ?? error(ErrorCode.Name),
+                  value: context.resolveName?.(instruction.name, instruction.sheetName) ?? error(ErrorCode.Name),
                 },
           )
         }

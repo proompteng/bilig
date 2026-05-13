@@ -49,6 +49,7 @@ export interface ArrayConstantNode {
 export interface NameRefNode {
   kind: 'NameRef'
   name: string
+  sheetName?: string
 }
 
 export interface StructuredRefNode {

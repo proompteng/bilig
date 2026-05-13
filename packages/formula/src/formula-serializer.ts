@@ -54,7 +54,7 @@ export function serializeFormula(node: FormulaNode, parentPrecedence = 0, parent
     case 'ArrayConstant':
       return `{${node.rows.map((row) => row.map((entry) => serializeFormula(entry)).join(',')).join(';')}}`
     case 'NameRef':
-      return node.name
+      return `${formatSheetPrefix(node.sheetName)}${node.name}`
     case 'StructuredRef':
       return `${node.tableName}[${node.columnName}]`
     case 'CellRef':
