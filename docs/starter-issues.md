@@ -6,8 +6,8 @@ search indexing.
 
 Current starter queue as of May 13, 2026:
 
-- 77 open `first-timers-only` issues.
-- 69 issues are generally available for a new contributor to claim.
+- 83 open `first-timers-only` issues.
+- 75 issues are generally available for a new contributor to claim.
 - 8 issues already have active pull requests; comment before duplicating one of
   those patches.
 
@@ -102,6 +102,15 @@ Current starter queue as of May 13, 2026:
 - [#162: docs(benchmarks): add WorkPaper benchmark reproduction notes](https://github.com/proompteng/bilig/issues/162)
 - [#197: docs(headless): add WorkPaper persistence decision table](https://github.com/proompteng/bilig/issues/197)
 - [#250: docs(headless): add package-size and cold-start evaluation note](https://github.com/proompteng/bilig/issues/250)
+
+### JavaScript Library Comparison Starters
+
+- [#309: docs(comparison): add Handsontable grid boundary note](https://github.com/proompteng/bilig/issues/309)
+- [#310: docs(comparison): add AG Grid boundary note](https://github.com/proompteng/bilig/issues/310)
+- [#311: docs(comparison): add SheetJS handoff recipe note](https://github.com/proompteng/bilig/issues/311)
+- [#312: docs(comparison): add ExcelJS handoff recipe note](https://github.com/proompteng/bilig/issues/312)
+- [#313: docs(comparison): add HyperFormula migration checklist](https://github.com/proompteng/bilig/issues/313)
+- [#314: docs(comparison): add Formula.js boundary examples](https://github.com/proompteng/bilig/issues/314)
 
 ## Already In Review
 

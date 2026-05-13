@@ -266,7 +266,7 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md
 - community growth snapshot:
   https://github.com/proompteng/bilig/blob/main/docs/community-growth-snapshot.md
-- current starter queue snapshot: 77 open first-timers-only issues, 69 generally available, 8 already in review.
+- current starter queue snapshot: 83 open first-timers-only issues, 75 generally available, 8 already in review.
 - current small example issue: xlsx formula-cache roundtrip:
   https://github.com/proompteng/bilig/issues/134
 - current small docs issue: WorkPaper agent tool result contract:
@@ -421,6 +421,18 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/280
 - current small example issue: Cloudflare D1 WorkPaper persistence smoke:
   https://github.com/proompteng/bilig/issues/281
+- current small comparison issue: Handsontable grid boundary note:
+  https://github.com/proompteng/bilig/issues/309
+- current small comparison issue: AG Grid boundary note:
+  https://github.com/proompteng/bilig/issues/310
+- current small comparison issue: SheetJS handoff recipe note:
+  https://github.com/proompteng/bilig/issues/311
+- current small comparison issue: ExcelJS handoff recipe note:
+  https://github.com/proompteng/bilig/issues/312
+- current small comparison issue: HyperFormula migration checklist:
+  https://github.com/proompteng/bilig/issues/313
+- current small comparison issue: Formula.js boundary examples:
+  https://github.com/proompteng/bilig/issues/314
 - good first issue search:
   https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22
 - first-timers-only issue search:

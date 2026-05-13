@@ -510,6 +510,15 @@ pnpm community:growth:snapshot:markdown
 Current checked-in snapshot:
 [`docs/community-growth-snapshot.md`](community-growth-snapshot.md).
 
+Latest JavaScript-library comparison starter snapshot on May 13, 2026:
+
+- Starter issues `#309` through `#314` now cover Handsontable, AG Grid,
+  SheetJS, ExcelJS, HyperFormula, and Formula.js boundary notes for the
+  JavaScript spreadsheet library guide.
+- The public growth snapshot now records `83` open `first-timers-only`,
+  `good first issue`, and `help wanted` issues, with `75` generally available
+  and `8` already in review.
+
 Set `GITHUB_TOKEN` or `GH_TOKEN` with repository traffic access, or run with an
 authenticated `gh` CLI session, to include recent discussion activity, views,
 clones, popular referrers, and popular paths. Without either authenticated
