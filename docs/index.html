@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>bilig - Spreadsheet Formulas for Node.js Services and Agent Tools</title>
+    <title>bilig - Spreadsheet Formulas for TypeScript Services</title>
     <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
     <link rel="canonical" href="https://proompteng.github.io/bilig/" />
     <link rel="sitemap" type="application/xml" href="https://proompteng.github.io/bilig/sitemap.xml" />
@@ -17,9 +17,9 @@
       content="headless spreadsheet engine, Node spreadsheet engine, TypeScript formula engine, spreadsheet engine for agents, workbook automation, HyperFormula alternative, formula evaluation in Node, SQLite spreadsheet persistence, Postgres workbook persistence, serverless spreadsheet API"
     />
     <meta name="robots" content="index, follow, max-image-preview:large" />
-    <meta name="theme-color" content="#12100c" />
+    <meta name="theme-color" content="#151713" />
     <meta property="og:site_name" content="bilig" />
-    <meta property="og:title" content="bilig - Spreadsheet Formulas for Node.js Services and Agent Tools" />
+    <meta property="og:title" content="bilig - Spreadsheet Formulas for TypeScript Services" />
     <meta
       property="og:description"
       content="Create WorkPaper documents in TypeScript, write inputs through an API, read calculated cells, and persist workbook state."
@@ -31,7 +31,7 @@
     <meta property="og:image:width" content="1280" />
     <meta property="og:image:height" content="640" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="bilig - Spreadsheet Formulas for Node.js Services and Agent Tools" />
+    <meta name="twitter:title" content="bilig - Spreadsheet Formulas for TypeScript Services" />
     <meta
       name="twitter:description"
       content="Spreadsheet formulas, API writes, calculated readback, and WorkPaper JSON persistence for TypeScript programs."
@@ -122,8 +122,8 @@
       }
     </script>
     <link rel="stylesheet" href="./assets/fonts.css?v=2026-05-13-1" />
-    <link rel="stylesheet" href="./assets/site.css?v=2026-05-13-24" />
-    <link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-13-1" />
+    <link rel="stylesheet" href="./assets/site.css?v=2026-05-13-26" />
+    <link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-13-3" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -136,7 +136,7 @@
         <nav class="nav" aria-label="Primary">
           <a href="#install">Install</a>
           <a href="#mcp">MCP</a>
-          <a href="#proof">Proof</a>
+          <a href="#proof">Benchmark</a>
           <a href="#docs">Docs</a>
           <a href="https://www.npmjs.com/package/@bilig/headless">npm</a>
           <a href="https://github.com/proompteng/bilig/stargazers">Star</a>
@@ -151,11 +151,11 @@
           <p class="eyebrow" translate="no">@bilig/headless</p>
           <h1 id="hero-title" class="hero-title">
             <strong translate="no">bilig</strong>
-            <span>Spreadsheet logic for Node services.</span>
+            <span>Spreadsheet formulas in TypeScript.</span>
           </h1>
           <p class="lede">
-            When a feature still depends on formulas, build a WorkPaper in TypeScript, write the inputs, read the result, and save the
-            workbook as JSON.
+            Use it for pricing calculators, budget checks, imports, payouts, and agent tools when the formula should stay in a workbook.
+            Build the sheet, edit the input, read the cell, save JSON.
           </p>
           <div class="install-command" aria-label="Install command">
             <span class="mono">$</span>
@@ -163,33 +163,31 @@
           </div>
           <div class="hero-actions">
             <a class="button primary" href="https://www.npmjs.com/package/@bilig/headless">Install from npm</a>
-            <a class="button dark" href="#install">Run eval.ts</a>
-            <a class="button dark" href="https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only"
-              >Open starter issues</a
-            >
+            <a class="button" href="#install">Run eval.ts</a>
+            <a class="button dark" href="https://github.com/proompteng/bilig">Star on GitHub</a>
           </div>
-          <div class="hero-proof-list" aria-label="Public proof points">
-            <div class="hero-proof-item">
-              <span>Install</span>
-              <strong>The headless package is public on npm.</strong>
+          <div class="hero-notes" aria-label="Project status">
+            <div class="hero-note">
+              <strong>Typed examples</strong>
+              <span>Examples are `.ts` files with real imports.</span>
             </div>
-            <div class="hero-proof-item">
-              <span>Benchmark</span>
-              <strong>Run the benchmark from the repo.</strong>
+            <div class="hero-note">
+              <strong>Write, then read</strong>
+              <span>Change B2 and read the dependent total.</span>
             </div>
-            <div class="hero-proof-item">
-              <span>Contribute</span>
-              <strong>90 small issues are open for first pull requests.</strong>
+            <div class="hero-note">
+              <strong>90 starter issues</strong>
+              <span>Small first PRs are kept open.</span>
             </div>
           </div>
         </div>
 
-        <figure class="hero-media" aria-label="Workbook and TypeScript visual">
+        <figure class="hero-media" aria-label="WorkPaper TypeScript artifact">
           <div class="product-frame">
             <div
               class="product-demo"
               role="img"
-              aria-label="A WorkPaper revenue sheet beside TypeScript code that edits a cell and reads the recalculated total"
+              aria-label="A revenue WorkPaper beside TypeScript code that edits a cell and reads the recalculated total"
             >
               <div class="demo-titlebar">
                 <span>Revenue.workpaper</span>
@@ -212,7 +210,7 @@
                       <tr>
                         <th>1</th>
                         <td>Region</td>
-                        <td>Customers</td>
+                        <td>Cust.</td>
                         <td>ARPA</td>
                         <td>Revenue</td>
                       </tr>
@@ -255,15 +253,9 @@ workbook.setCellContents(
   <span class="num">32</span>,
 );
 
-<span class="kw">const</span> total = workbook.getCellValue({
-  sheet: summary,
-  row: <span class="num">1</span>,
-  col: <span class="num">1</span>,
-});
-
-save(serializeWorkPaperDocument(
-  exportWorkPaperDocument(workbook)
-));</code></pre>
+<span class="kw">const</span> total = workbook.getCellValue(
+  { sheet: summary, row: <span class="num">1</span>, col: <span class="num">1</span> },
+);</code></pre>
                 </div>
               </div>
               <div class="demo-readout">
@@ -273,7 +265,7 @@ save(serializeWorkPaperDocument(
               </div>
             </div>
             <figcaption class="frame-caption">
-              <span>A WorkPaper is data and formulas. Set B2 to 32, read the recalculated total, save JSON.</span>
+              <span>The workbook is data plus formulas. The code edits it and reads the result.</span>
               <strong>no UI required</strong>
             </figcaption>
           </div>
@@ -286,35 +278,35 @@ save(serializeWorkPaperDocument(
         <div class="wrap">
           <div class="section-head">
             <div>
-              <p class="kicker">Use it when</p>
-              <h2 id="why-title">Your spreadsheet is already part of the product.</h2>
+              <p class="kicker">When it fits</p>
+              <h2 id="why-title">Use a workbook when formulas are the clearest source of truth.</h2>
             </div>
             <p>
-              Quotes, budgets, commissions, and imports often start as spreadsheet models. bilig is for the point where that model has to
-              run in a service or an agent tool.
+              Most spreadsheet packages either parse files or draw grids. bilig is for backend code that needs a small workbook object with
+              formulas, edits, readback, and persistence.
             </p>
           </div>
 
           <div class="row-list">
             <div class="work-row">
-              <span class="step">01 / model</span>
-              <h3>Start with arrays, JSON records, or workbook data.</h3>
-              <p>Use formulas where a formula is still the clearest way to express the rule.</p>
+              <span class="step">01 / create</span>
+              <h3>Build sheets from arrays, JSON records, or restored state.</h3>
+              <p>Use formulas where the rule is easier to review as a formula than as scattered application code.</p>
             </div>
             <div class="work-row">
               <span class="step">02 / edit</span>
-              <h3>Write the cell you intend to change.</h3>
-              <p>No screen scraping and no invisible browser session sitting behind the API.</p>
+              <h3>Write the input cell directly.</h3>
+              <p>No hidden browser, no screen scraping, no pretending a rendered table is the source of truth.</p>
             </div>
             <div class="work-row">
-              <span class="step">03 / check</span>
-              <h3>Read the value after recalculation.</h3>
-              <p>Return the number your code actually observed.</p>
+              <span class="step">03 / read</span>
+              <h3>Recalculate and read the cell your service needs.</h3>
+              <p>Return the value observed by the workbook, not a duplicate implementation of the same formula.</p>
             </div>
             <div class="work-row">
-              <span class="step">04 / keep</span>
-              <h3>Persist the WorkPaper document.</h3>
-              <p>Store the workbook as JSON and restore the same formulas later.</p>
+              <span class="step">04 / save</span>
+              <h3>Persist the WorkPaper document as JSON.</h3>
+              <p>Restore the workbook later with formulas and sheet structure still intact.</p>
             </div>
           </div>
         </div>
@@ -324,10 +316,10 @@ save(serializeWorkPaperDocument(
         <div class="wrap">
           <div class="section-head">
             <div>
-              <p class="kicker">90-second check</p>
-              <h2 id="install-title">Paste eval.ts and see if it fits.</h2>
+              <p class="kicker">Install</p>
+              <h2 id="install-title">Run the smoke test in a clean folder.</h2>
             </div>
-            <p>The smoke test changes West customers from 20 to 32, serializes the workbook, restores it, and checks the same total.</p>
+            <p>It changes West customers from 20 to 32, serializes the workbook, restores it, and checks the recalculated total.</p>
           </div>
 
           <div class="install-grid">
@@ -347,7 +339,7 @@ npm install -D tsx typescript @types/node
 npx tsx eval.ts</code></pre>
               </div>
               <p>
-                More examples live in
+                More TypeScript examples live in
                 <a href="https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper">examples/headless-workpaper</a>
                 and
                 <a href="https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api"
@@ -419,10 +411,10 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
         <div class="wrap">
           <div class="section-head">
             <div>
-              <p class="kicker">Services and tools</p>
-              <h2 id="mcp-title">Put WorkPaper behind a route, a job, or an agent tool.</h2>
+              <p class="kicker">Where it runs</p>
+              <h2 id="mcp-title">Use the same WorkPaper in services, routes, jobs, and agent tools.</h2>
             </div>
-            <p>The transport is ordinary TypeScript. Keep the workbook calls in one place and wrap them only where you need them.</p>
+            <p>The package is plain TypeScript. Wrap the workbook calls in the transport your product already uses.</p>
           </div>
 
           <div class="path-grid">
@@ -440,17 +432,17 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
               <a class="path-link" href="./serverless-workpaper-api-route.html">
                 <span>route</span>
                 <strong>Serverless WorkPaper API route</strong>
-                <em>The same shape in a deployable route.</em>
+                <em>The same edit-read-save loop inside a deployable endpoint.</em>
               </a>
               <a class="path-link" href="./node-framework-workpaper-adapters.html">
                 <span>frameworks</span>
                 <strong>Express, Fastify, and Hono adapters</strong>
-                <em>Use the same WorkPaper route inside existing Node services.</em>
+                <em>Keep framework glue small and leave formula work in the WorkPaper.</em>
               </a>
               <a class="path-link" href="./agent-workpaper-tool-calling-recipe.html">
                 <span>agent</span>
                 <strong>Agent tool-calling recipe</strong>
-                <em>Expose reads, writes, formulas, and persistence as tools.</em>
+                <em>Expose workbook reads, writes, formulas, and persistence as tools.</em>
               </a>
               <a class="path-link" href="./vercel-ai-sdk-langchain-spreadsheet-tool.html">
                 <span>adapters</span>
@@ -493,47 +485,47 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
         <div class="wrap">
           <div class="proof-layout">
             <div class="proof-intro">
-              <p class="kicker">Benchmarks</p>
-              <h2 id="proof-title">Speed claims are cheap. Run the benchmark.</h2>
-              <p>The current run is checked in: 46 of 46 comparable mean rows ahead of HyperFormula, plus the p95 row where bilig loses.</p>
+              <p class="kicker">Benchmark</p>
+              <h2 id="proof-title">Before you quote the number, run it.</h2>
+              <p>The result, baseline JSON, and p95 caveat are all in the repo.</p>
             </div>
 
             <div class="proof-board" aria-label="Benchmark evidence">
               <div class="proof-command">
-                <span>reproduce</span>
+                <span>command</span>
                 <code>pnpm workpaper:bench:competitive:check</code>
               </div>
 
               <dl class="proof-ledger">
                 <div class="proof-row">
-                  <dt>Mean rows</dt>
-                  <dd>46 / 46 ahead</dd>
-                  <p>Comparable rows only, measured by mean latency.</p>
+                  <dt>Result</dt>
+                  <dd>46 / 46</dd>
+                  <p>WorkPaper is lower on mean latency across the comparable rows in the current suite.</p>
                 </div>
                 <div class="proof-row proof-row-code">
-                  <dt>Baseline</dt>
+                  <dt>Artifact</dt>
                   <dd><code>packages/benchmarks/baselines/workpaper-vs-hyperformula.json</code></dd>
-                  <p>The JSON changes in review when the benchmark moves.</p>
+                  <p>This is the file CI checks, so benchmark drift shows up as a normal diff.</p>
                 </div>
                 <div class="proof-row proof-row-code">
-                  <dt>Slow tail</dt>
+                  <dt>Caveat</dt>
                   <dd><code>lookup-approximate-duplicates</code> p95 1.043x</dd>
-                  <p>If this row looks like your workload, test locally before quoting the headline number.</p>
+                  <p>The approximate-lookup duplicate case is slower at p95. Treat that as relevant if it matches your workload.</p>
                 </div>
               </dl>
 
               <div class="proof-links" aria-label="Benchmark evidence links">
                 <a href="./what-workpaper-benchmark-proves.html">
-                  <span>Benchmark notes</span>
-                  <strong>Coverage and caveats</strong>
+                  <span>Notes</span>
+                  <strong>How to read the benchmark</strong>
                 </a>
                 <a href="./where-bilig-is-not-excel-compatible-yet.html">
-                  <span>Compatibility</span>
-                  <strong>Missing Excel behavior</strong>
+                  <span>Limits</span>
+                  <strong>Compatibility gaps</strong>
                 </a>
                 <a href="https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only">
-                  <span>First PRs</span>
-                  <strong>Small TypeScript tasks</strong>
+                  <span>Contribute</span>
+                  <strong>Starter TypeScript tasks</strong>
                 </a>
               </div>
             </div>
@@ -545,10 +537,10 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
         <div class="wrap">
           <div class="section-head">
             <div>
-              <p class="kicker">Shortest path</p>
-              <h2 id="learn-title">Start from the job you need done.</h2>
+              <p class="kicker">Start here</p>
+              <h2 id="learn-title">Pick the page closest to your use case.</h2>
             </div>
-            <p>Each route points to a runnable TypeScript example, a compatibility note, or a small contributor task.</p>
+            <p>Each page has a runnable TypeScript example, a compatibility note, or a small contributor task.</p>
           </div>
 
           <div class="row-list">
@@ -579,8 +571,8 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
             </a>
             <a class="path-link" href="https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only">
               <span>contribute</span>
-              <strong>Take a small issue that improves the public examples.</strong>
-              <em>Most starter tasks are docs, examples, or adapter notes with a focused test path.</em>
+              <strong>Take a starter issue that improves the examples.</strong>
+              <em>Most of the queue is docs, examples, adapters, or focused test coverage.</em>
             </a>
           </div>
         </div>
@@ -591,9 +583,9 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
           <div class="section-head">
             <div>
               <p class="kicker">Reference</p>
-              <h2 id="docs-title">Open the page for the thing you are building.</h2>
+              <h2 id="docs-title">Docs are grouped by the decision you are making.</h2>
             </div>
-            <p>The docs stay split by job so you can evaluate the package without reading a launch essay first.</p>
+            <p>Skip the tour. Open the package, service, agent, or comparison page you actually need.</p>
           </div>
 
           <div class="docs-grid">
@@ -603,7 +595,7 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
                 <li><a href="https://www.npmjs.com/package/@bilig/headless">npm package</a></li>
                 <li><a href="./try-bilig-headless-in-node.html">npm-only smoke test</a></li>
                 <li><a href="https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper">TypeScript examples</a></li>
-                <li><a href="./workbook-automation-examples-node.html">workbook-automation-examples-node</a></li>
+                <li><a href="./workbook-automation-examples-node.html">workbook automation examples</a></li>
                 <li>
                   <a href="https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input"
                     >JSON records input</a
@@ -713,8 +705,8 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
       <section class="final" aria-labelledby="final-title">
         <div class="wrap">
           <div>
-            <h2 id="final-title">Install it. Change one cell. Check the total.</h2>
-            <p>If the TypeScript smoke test matches your case, star the repo or take a starter issue.</p>
+            <h2 id="final-title">Install it, edit one cell, check the total.</h2>
+            <p>If the smoke test matches a workflow you own, star the repo or take one starter issue.</p>
           </div>
           <div class="final-actions">
             <a class="button primary" href="https://www.npmjs.com/package/@bilig/headless">Install</a>
