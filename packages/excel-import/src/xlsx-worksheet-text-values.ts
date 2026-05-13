@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx'
 
+import { toLiteralInput } from './workbook-import-helpers.js'
 import { getZipText, readXlsxZipEntries, type XlsxZipSource } from './xlsx-zip.js'
 
 interface SharedStringEntry {
@@ -44,6 +45,22 @@ function decodeXmlText(value: string): string {
   })
 }
 
+function decodeExcelEscapedText(value: string): string {
+  const escapedUnderscore = '\uE000'
+  return value
+    .replace(/_x005F_/giu, escapedUnderscore)
+    .replace(/_x([0-9a-fA-F]{4})_/gu, (_match, code: string) => {
+      const codePoint = Number.parseInt(code, 16)
+      return isValidXmlCodePoint(codePoint) ? String.fromCodePoint(codePoint) : ''
+    })
+    .replaceAll(escapedUnderscore, '_')
+}
+
+function normalizeWorksheetText(value: string): string {
+  const literal = toLiteralInput(decodeExcelEscapedText(value))
+  return typeof literal === 'string' ? literal : value
+}
+
 function isValidXmlCodePoint(value: number): boolean {
   return Number.isInteger(value) && value >= 0 && value <= 0x10ffff
 }
@@ -60,9 +77,10 @@ function normalizeAddress(address: string): string | null {
 }
 
 function stringItemText(xml: string): string {
-  return [...xml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?t\b[^>]*>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?t>/gu)]
+  const text = [...xml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?t\b[^>]*>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?t>/gu)]
     .map((match) => decodeXmlText(match[1] ?? ''))
     .join('')
+  return normalizeWorksheetText(text)
 }
 
 function readElementText(xml: string, elementName: 'v'): string | null {
@@ -111,7 +129,7 @@ function readCellTextValue(cellXml: string, sharedStrings: readonly SharedString
   }
   if (cellType === 'str') {
     const value = readElementText(cellXml, 'v')
-    return value === null ? null : decodeXmlText(value)
+    return value === null ? null : normalizeWorksheetText(decodeXmlText(value))
   }
   return null
 }

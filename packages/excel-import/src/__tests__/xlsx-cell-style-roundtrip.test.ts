@@ -62,6 +62,78 @@ describe('xlsx cell style roundtrip', () => {
     expect(readCellStyleParts(exported, 'xl/worksheets/sheet1.xml!B2')).toEqual(readCellStyleParts(source, 'xl/worksheets/sheet1.xml!B2'))
   })
 
+  it('imports self-closing formatted blank cells as blank format cells', () => {
+    const source: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'self-closing-blank-format' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Data',
+          order: 0,
+          cells: [
+            { address: 'A1', value: 'Total' },
+            { address: 'B2', format: 'dd/mm/yyyy;@' },
+          ],
+        },
+      ],
+    }
+    const zip = unzipSync(exportXlsx(source))
+    const sheetXml = strFromU8(zip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())
+    zip['xl/worksheets/sheet1.xml'] = strToU8(sheetXml.replace(/<c r="B2" s="([^"]+)" t="z"><\/c>/u, '<c r="B2" s="$1"/>'))
+
+    const imported = importXlsx(zipSync(zip), 'self-closing-blank-format.xlsx')
+
+    expect(imported.snapshot.sheets[0]?.cells.find((cell) => cell.address === 'B2')).toEqual({
+      address: 'B2',
+      format: 'dd/mm/yyyy;@',
+    })
+  })
+
+  it('keeps literal numeric entity text across export round trips', () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'literal-entity-text' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Data',
+          order: 0,
+          cells: [{ address: 'A1', value: 'RIS maintenance &#8211; year 5' }],
+        },
+      ],
+    }
+
+    const imported = importXlsx(exportXlsx(snapshot), 'literal-entity-text.xlsx')
+
+    expect(imported.snapshot.sheets[0]?.cells.find((cell) => cell.address === 'A1')).toEqual({
+      address: 'A1',
+      value: 'RIS maintenance &#8211; year 5',
+    })
+  })
+
+  it('keeps multiline text normalized across export round trips', () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'multiline-text-roundtrip' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Data',
+          order: 0,
+          cells: [{ address: 'A1', value: 'Line 1\r\nLine 2\r\nLine 3' }],
+        },
+      ],
+    }
+
+    const imported = importXlsx(exportXlsx(snapshot), 'multiline-text-roundtrip.xlsx')
+
+    expect(imported.snapshot.sheets[0]?.cells.find((cell) => cell.address === 'A1')).toEqual({
+      address: 'A1',
+      value: 'Line 1\nLine 2\nLine 3',
+    })
+  })
+
   it('keeps semantic style ranges valid when raw style artifacts are restored', () => {
     const exported = exportXlsx(buildPartiallyIndexedStyleArtifactWorkbook())
     const imported = importXlsx(exported, 'partial-style-artifacts.xlsx')

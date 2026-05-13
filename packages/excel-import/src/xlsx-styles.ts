@@ -113,6 +113,10 @@ function getFileText(files: unknown, path: string): string | null {
   return null
 }
 
+function getPackageText(files: unknown, sourceZip: XlsxZipSource | null, path: string): string | null {
+  return sourceZip ? getZipEntryText(readXlsxZipEntries(sourceZip), path) : getFileText(files, path)
+}
+
 function workbookRecord(workbook: XLSX.WorkBook): Record<string, unknown> | null {
   const value: unknown = workbook
   return isRecord(value) ? value : null
@@ -751,10 +755,12 @@ export function readImportedWorkbookFileStyles(
   workbook: XLSX.WorkBook,
   sheetNames: readonly string[],
   options: ImportedWorkbookFileStylesOptions = {},
+  source?: XlsxZipSource,
 ): Map<string, Map<string, ImportedCellStyle>> {
   const files = workbookFiles(workbook)
+  const sourceZip = source ? readXlsxZipEntries(source) : null
   const stylePath = workbookStylePath(workbook)
-  const styleXml = stylePath ? getFileText(files, stylePath) : null
+  const styleXml = stylePath ? getPackageText(files, sourceZip, stylePath) : null
   if (!styleXml) {
     return new Map()
   }
@@ -772,7 +778,7 @@ export function readImportedWorkbookFileStyles(
       return
     }
     const sheetPath = workbookSheetPath(sheetPathsByName, fallbackSheetPaths, sheetName, index)
-    const sheetXml = sheetPath ? getFileText(files, sheetPath) : null
+    const sheetXml = sheetPath ? getPackageText(files, sourceZip, sheetPath) : null
     if (!sheetXml) {
       return
     }

@@ -34,6 +34,7 @@ import { readImportedWorkbookPrintPageSetup } from './xlsx-print-page-setup.js'
 import { readImportedWorkbookPrinterSettings } from './xlsx-printer-settings.js'
 import { readImportedWorkbookProtectedRanges } from './xlsx-protected-ranges.js'
 import { readImportedWorkbookRichTextArtifacts } from './xlsx-rich-text-artifacts.js'
+import { readImportedWorkbookFileNumberFormats } from './xlsx-number-formats.js'
 import { readImportedWorkbookSheetProperties } from './xlsx-sheet-properties.js'
 import { readImportedWorkbookSheetProtections } from './xlsx-sheet-protection.js'
 import { readImportedWorkbookSheetVisibilities } from './xlsx-sheet-visibility.js'
@@ -197,6 +198,51 @@ function readImportedLiteralCellValue(cell: Record<string, unknown>): LiteralInp
   return toLiteralInput(cell['v'])
 }
 
+function compareCellAddresses(left: string, right: string): number {
+  const leftCell = XLSX.utils.decode_cell(left)
+  const rightCell = XLSX.utils.decode_cell(right)
+  return leftCell.r - rightCell.r || leftCell.c - rightCell.c
+}
+
+function addCandidateAddress(addressesBySheet: Map<string, Set<string>>, sheetName: string, address: string): boolean {
+  const addresses = addressesBySheet.get(sheetName) ?? new Set<string>()
+  const previousSize = addresses.size
+  addresses.add(address)
+  if (addresses.size > previousSize) {
+    addressesBySheet.set(sheetName, addresses)
+    return true
+  }
+  return false
+}
+
+function addStyleArtifactCandidateAddresses(
+  candidates: ReturnType<typeof collectStyleCandidateAddresses>,
+  importedStyleArtifacts: ReturnType<typeof readImportedWorkbookStyleArtifacts>,
+  maxCandidateCount: number,
+): ReturnType<typeof collectStyleCandidateAddresses> {
+  let count = candidates.count
+  const addressesBySheet = new Map([...candidates.addressesBySheet].map(([sheetName, addresses]) => [sheetName, new Set(addresses)]))
+  for (const [sheetName, artifacts] of importedStyleArtifacts.sheetArtifactsByName) {
+    for (const entry of artifacts.cellStyleIndexes) {
+      if (addCandidateAddress(addressesBySheet, sheetName, entry.address)) {
+        count += 1
+      }
+      if (count > maxCandidateCount) {
+        return candidates
+      }
+    }
+    for (const address of artifacts.blankCellAddresses ?? []) {
+      if (addCandidateAddress(addressesBySheet, sheetName, address)) {
+        count += 1
+      }
+      if (count > maxCandidateCount) {
+        return candidates
+      }
+    }
+  }
+  return { addressesBySheet, count }
+}
+
 function readImportedMacroCodeNames(workbook: XLSX.WorkBook): PreservedVbaProjectCodeNames {
   const workbookMetadata = isRecord(workbook.Workbook) ? workbook.Workbook : undefined
   const workbookProperties = isRecord(workbookMetadata?.['WBProps']) ? workbookMetadata['WBProps'] : undefined
@@ -275,15 +321,36 @@ function importSheetJsWorkbook(
   if (workbookDefinedNamesReferenceExternalWorkbook(workbook)) {
     warnings.push(externalWorkbookReferencesWarning)
   }
-  const styleCandidates = collectStyleCandidateAddresses(workbook, workbook.SheetNames, largeWorkbookStyleCandidateThreshold)
+  const styleArtifactSource = contentType === XLSX_CONTENT_TYPE || contentType === XLSM_CONTENT_TYPE ? data : undefined
+  const importedStyleArtifacts = readImportedWorkbookStyleArtifacts(workbook, workbook.SheetNames, styleArtifactSource)
+  const baseStyleCandidates = collectStyleCandidateAddresses(workbook, workbook.SheetNames, largeWorkbookStyleCandidateThreshold)
+  const styleCandidates = addStyleArtifactCandidateAddresses(
+    baseStyleCandidates,
+    importedStyleArtifacts,
+    largeWorkbookStyleCandidateThreshold,
+  )
   const importedWorkbookStyles =
     styleCandidates.count === 0 || styleCandidates.count > largeWorkbookStyleCandidateThreshold
       ? new Map<string, Map<string, Omit<CellStyleRecord, 'id'>>>()
-      : readImportedWorkbookFileStyles(workbook, workbook.SheetNames, {
-          styleCandidateAddressesBySheet: styleCandidates.addressesBySheet,
-        })
-  const styleArtifactSource = contentType === XLSX_CONTENT_TYPE || contentType === XLSM_CONTENT_TYPE ? data : undefined
-  const importedStyleArtifacts = readImportedWorkbookStyleArtifacts(workbook, workbook.SheetNames, styleArtifactSource)
+      : readImportedWorkbookFileStyles(
+          workbook,
+          workbook.SheetNames,
+          {
+            styleCandidateAddressesBySheet: styleCandidates.addressesBySheet,
+          },
+          styleArtifactSource,
+        )
+  const importedWorkbookNumberFormats =
+    styleCandidates.count === 0 || styleCandidates.count > largeWorkbookStyleCandidateThreshold
+      ? new Map<string, Map<string, string>>()
+      : readImportedWorkbookFileNumberFormats(
+          workbook,
+          workbook.SheetNames,
+          {
+            formatCandidateAddressesBySheet: styleCandidates.addressesBySheet,
+          },
+          styleArtifactSource,
+        )
   const importedWorkbookSheetDimensions = readImportedWorkbookSheetDimensions(workbook, workbook.SheetNames)
   const importedWorkbookProperties = workbookZip ? readImportedWorkbookProperties(workbookZip) : undefined
   const importedWorkbookDocumentProperties = workbookZip ? readImportedWorkbookDocumentPropertiesArtifacts(workbookZip) : undefined
@@ -390,6 +457,7 @@ function importSheetJsWorkbook(
     let activeStyleRun: HorizontalStyleRun | null = null
     let activeStyleRowRuns: HorizontalStyleRun[] = []
     const importedStylesByAddress = importedWorkbookStyles.get(sheetName)
+    const importedFormatsByAddress = importedWorkbookNumberFormats.get(sheetName)
     const flushActiveStyleRun = () => {
       if (activeStyleRun) {
         activeStyleRowRuns.push(activeStyleRun)
@@ -459,21 +527,17 @@ function importSheetJsWorkbook(
           ownerAddress: address,
           tables: importedTables,
         })
-        const cachedLiteral = readImportedLiteralCellValue(cell)
+        const cachedLiteral = xmlTextValue ?? readImportedLiteralCellValue(cell)
         if (cachedLiteral !== undefined) {
           nextCell.value = cachedLiteral
-        } else if (xmlTextValue !== undefined) {
-          nextCell.value = xmlTextValue
         }
       } else {
-        const literal = readImportedLiteralCellValue(cell)
+        const literal = xmlTextValue ?? readImportedLiteralCellValue(cell)
         if (literal !== undefined) {
           nextCell.value = literal
-        } else if (xmlTextValue !== undefined) {
-          nextCell.value = xmlTextValue
         }
       }
-      const importedFormat = readImportedNumberFormat(cell['z'])
+      const importedFormat = readImportedNumberFormat(cell['z']) ?? importedFormatsByAddress?.get(address)
       if (importedFormat !== undefined) {
         nextCell.format = importedFormat
       }
@@ -485,6 +549,23 @@ function importSheetJsWorkbook(
       }
       if (nextCell.value !== undefined || nextCell.formula !== undefined || nextCell.format !== undefined) {
         cells.push(nextCell)
+      }
+    }
+    const missingStyledAddresses = new Set([...(importedStylesByAddress?.keys() ?? []), ...(importedFormatsByAddress?.keys() ?? [])])
+    for (const missingAddress of [...missingStyledAddresses]
+      .filter((candidateAddress) => !seenCellAddresses.has(candidateAddress))
+      .toSorted(compareCellAddresses)) {
+      const decoded = XLSX.utils.decode_cell(missingAddress)
+      seenCellAddresses.add(missingAddress)
+      const importedStyle = importedStylesByAddress?.get(missingAddress)
+      if (importedStyle) {
+        addStyleCell(decoded.r, decoded.c, internImportedStyle(importedStyle, styleCatalog))
+      } else if (activeStyleRow === decoded.r) {
+        flushActiveStyleRun()
+      }
+      const importedFormat = importedFormatsByAddress?.get(missingAddress)
+      if (importedFormat !== undefined) {
+        cells.push({ address: missingAddress, format: importedFormat })
       }
     }
     for (const [address, value] of importedWorksheetTextValues ?? []) {
