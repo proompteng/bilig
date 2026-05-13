@@ -23,10 +23,10 @@ Latest public snapshot on May 8, 2026:
 - Contributor funnel: `18` open `good first issue`, `18` open
   `first-timers-only`, and `18` open `help wanted` issues
 
-Latest execution snapshot on May 13, 2026 at `01:01:05Z`:
+Latest execution snapshot on May 13, 2026 at `01:14:46Z`:
 
 - GitHub surface: public repo, `24` stars, `5` forks, `32` open issues
-- npm surface: `@bilig/headless@0.11.30`, MIT, TypeScript types, npm API
+- npm surface: `@bilig/headless@0.11.32`, MIT, TypeScript types, npm API
   downloads: `13,427` last week and `24,931` last month
 - Contributor funnel: `30` open `good first issue`, `29` open
   `first-timers-only`, and `30` open `help wanted` issues
@@ -44,6 +44,9 @@ Latest execution snapshot on May 13, 2026 at `01:01:05Z`:
 - Discovery metadata: GitHub topics now include `agent-tools`, `coding-agents`,
   `langchain`, `vercel-ai-sdk`, and `xlsx` alongside the spreadsheet-engine and
   workbook-automation topics.
+- npm discovery metadata now includes exact agent search terms such as
+  `agent-spreadsheet`, `spreadsheet-agent`, `workbook-agent`, `llm`, `mcp`, and
+  `model-context-protocol`.
 - External activity: `1` open external issue, `1` open external pull request,
   `25` external issues opened in the last seven days, and `6` external pull
   requests opened in the last seven days
