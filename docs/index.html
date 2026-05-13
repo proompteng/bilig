@@ -497,8 +497,8 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
               <h2 id="proof-title">Run the benchmark, including the row where it loses.</h2>
             </div>
             <p>
-              The checked result is narrow and public: WorkPaper wins the comparable mean rows in this suite, and the p95 miss stays listed
-              next to the claim.
+              Here is the exact claim: in the checked HyperFormula comparison, WorkPaper wins every comparable mean row. It does not win
+              everything. The p95 miss is listed below.
             </p>
           </div>
 
@@ -517,36 +517,36 @@ console.log({ before, after, bytes: saved.length, verified: before === <span cla
                   <tr>
                     <th scope="row">Command</th>
                     <td><code>pnpm workpaper:bench:competitive:check</code></td>
-                    <td>Re-runs the public comparison before release.</td>
+                    <td>Run this from the repo before you repeat the number.</td>
                   </tr>
                   <tr>
                     <th scope="row">Mean rows</th>
                     <td><strong>46 / 46</strong></td>
-                    <td>Comparable rows faster than HyperFormula in the checked run.</td>
+                    <td>WorkPaper is faster on every comparable mean row in this run.</td>
                   </tr>
                   <tr>
                     <th scope="row">p95</th>
                     <td><strong>0.536x</strong></td>
-                    <td>Aggregate ratio versus HyperFormula. Lower is faster.</td>
+                    <td>Aggregate ratio in this run. Lower is faster.</td>
                   </tr>
                   <tr>
                     <th scope="row">Bad row</th>
                     <td><code>lookup-approximate-duplicates</code></td>
-                    <td>p95 is 1.043x here, so this case stays called out.</td>
+                    <td>This p95 row is slower: 1.043x.</td>
                   </tr>
                   <tr>
                     <th scope="row">Package</th>
                     <td><code>@bilig/headless 0.14.0</code></td>
-                    <td>Published package used by this artifact.</td>
+                    <td>Package used for the checked artifact.</td>
                   </tr>
                 </tbody>
               </table>
             </div>
             <aside class="proof-notes" aria-label="Benchmark notes">
-              <h3>Check the exact workload before you use the number.</h3>
+              <h3>Check the workload before you use the number.</h3>
               <div class="proof-command" aria-label="Benchmark command">
                 <span>what this claim is</span>
-                <p>A repo benchmark, not a general promise that every spreadsheet workload is faster.</p>
+                <p>This is a repo benchmark. It is not a promise that every spreadsheet is faster.</p>
               </div>
               <div class="proof-links" aria-label="Benchmark evidence links">
                 <a href="./what-workpaper-benchmark-proves.html">
