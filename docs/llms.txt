@@ -222,6 +222,22 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/211
 - current small example issue: headcount capacity forecast:
   https://github.com/proompteng/bilig/issues/212
+- current small example issue: loan amortization:
+  https://github.com/proompteng/bilig/issues/217
+- current small example issue: cohort retention:
+  https://github.com/proompteng/bilig/issues/218
+- current small example issue: commission payout:
+  https://github.com/proompteng/bilig/issues/219
+- current small example issue: cash runway:
+  https://github.com/proompteng/bilig/issues/220
+- current small example issue: currency sensitivity:
+  https://github.com/proompteng/bilig/issues/221
+- current small example issue: payroll accrual:
+  https://github.com/proompteng/bilig/issues/222
+- current small example issue: deferred revenue roll-forward:
+  https://github.com/proompteng/bilig/issues/223
+- current small test issue: deterministic gzip release-check coverage:
+  https://github.com/proompteng/bilig/issues/224
 - good first issue search:
   https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22
 - first-timers-only issue search:

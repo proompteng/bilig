@@ -23,19 +23,21 @@ Latest public snapshot on May 8, 2026:
 - Contributor funnel: `18` open `good first issue`, `18` open
   `first-timers-only`, and `18` open `help wanted` issues
 
-Latest execution snapshot on May 12, 2026 at `23:09:01Z`:
+Latest execution snapshot on May 13, 2026 at `00:04:40Z`:
 
 - GitHub surface: public repo, `24` stars, `4` forks, `29` open issues
-- npm surface: `@bilig/headless@0.11.28`, MIT, TypeScript types, npm API
+- npm surface: `@bilig/headless@0.11.29`, MIT, TypeScript types, npm API
   downloads: `13,427` last week and `24,931` last month
-- Contributor funnel: `27` open `good first issue`, `27` open
-  `first-timers-only`, and `27` open `help wanted` issues
-- Starter funnel refresh: eleven current first-timer example issues, `#207`
-  through `#212` and `#217` through `#221`, cover inventory reorder points,
+- Contributor funnel: `30` open `good first issue`, `29` open
+  `first-timers-only`, and `30` open `help wanted` issues
+- Starter funnel refresh: fourteen current first-timer example issues, `#207`
+  through `#212` and `#217` through `#223`, cover inventory reorder points,
   accounts receivable aging, usage-based billing tiers, support SLA breach
   summaries, weighted sales pipeline forecasts, headcount capacity forecasts,
-  loan amortization, cohort retention, commission payout, cash runway, and
-  currency sensitivity workflows
+  loan amortization, cohort retention, commission payout, cash runway, currency
+  sensitivity, payroll accrual, and deferred revenue workflows. Issue `#224`
+  adds a small CI release-check test task for contributors who prefer tests to
+  docs examples.
 - Discussion activity: `5` GitHub Discussions, including the five-example
   show-and-tell thread and the workflow-feedback thread
 - External activity: `3` open external issues, `25` external issues opened in

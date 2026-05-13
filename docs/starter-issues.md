@@ -4,7 +4,7 @@ This page is the stable contributor on-ramp for small public `bilig` tasks. It
 links directly to current scoped issues instead of relying on GitHub issue
 search indexing.
 
-Current starter tickets as of May 12, 2026:
+Current starter tickets as of May 13, 2026:
 
 - [#134: docs(examples): add XLSX formula-cache roundtrip example](https://github.com/proompteng/bilig/issues/134)
 - [#153: docs(agent): add WorkPaper tool result contract table](https://github.com/proompteng/bilig/issues/153)
@@ -33,6 +33,9 @@ Current starter tickets as of May 12, 2026:
 - [#219: docs(examples): add commission payout WorkPaper example](https://github.com/proompteng/bilig/issues/219)
 - [#220: docs(examples): add cash runway WorkPaper example](https://github.com/proompteng/bilig/issues/220)
 - [#221: docs(examples): add currency sensitivity WorkPaper example](https://github.com/proompteng/bilig/issues/221)
+- [#222: docs(examples): add payroll accrual WorkPaper example](https://github.com/proompteng/bilig/issues/222)
+- [#223: docs(examples): add deferred revenue roll-forward WorkPaper example](https://github.com/proompteng/bilig/issues/223)
+- [#224: test(ci): cover deterministic gzip measurement in release check](https://github.com/proompteng/bilig/issues/224)
 
 The list intentionally excludes closed issues and broad corpus/parity epics. Add
 new starter tickets only when the expected patch can stay small, has a clear
