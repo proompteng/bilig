@@ -12,6 +12,7 @@ const expectedSitemapUrls = [
   `${siteRoot}agent-workpaper-tool-calling-recipe.html`,
   `${siteRoot}vercel-ai-sdk-langchain-spreadsheet-tool.html`,
   `${siteRoot}mcp-workpaper-tool-server.html`,
+  `${siteRoot}mcp-client-setup.html`,
   `${siteRoot}agent-spreadsheet-tool-call-loop.html`,
   `${siteRoot}node-service-workpaper-recipe.html`,
   `${siteRoot}node-spreadsheet-formula-engine.html`,
@@ -45,6 +46,7 @@ const sourceFilesByUrl = new Map<string, string>([
   [`${siteRoot}agent-workpaper-tool-calling-recipe.html`, 'agent-workpaper-tool-calling-recipe.md'],
   [`${siteRoot}vercel-ai-sdk-langchain-spreadsheet-tool.html`, 'vercel-ai-sdk-langchain-spreadsheet-tool.md'],
   [`${siteRoot}mcp-workpaper-tool-server.html`, 'mcp-workpaper-tool-server.md'],
+  [`${siteRoot}mcp-client-setup.html`, 'mcp-client-setup.md'],
   [`${siteRoot}agent-spreadsheet-tool-call-loop.html`, 'agent-spreadsheet-tool-call-loop.md'],
   [`${siteRoot}node-service-workpaper-recipe.html`, 'node-service-workpaper-recipe.md'],
   [`${siteRoot}node-spreadsheet-formula-engine.html`, 'node-spreadsheet-formula-engine.md'],
@@ -220,7 +222,7 @@ requireIncludes(index, '<title>bilig - Headless Spreadsheet Engine for Node.js S
 requireIncludes(index, '<meta name="robots" content="index, follow, max-image-preview:large" />', 'docs/index.html')
 requireIncludes(index, '<link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />', 'docs/index.html')
 requireIncludes(index, '<link rel="stylesheet" href="./assets/fonts.css?v=2026-05-13-1" />', 'docs/index.html')
-requireIncludes(index, '<link rel="stylesheet" href="./assets/site.css?v=2026-05-13-8" />', 'docs/index.html')
+requireIncludes(index, '<link rel="stylesheet" href="./assets/site.css?v=2026-05-13-9" />', 'docs/index.html')
 requireIncludes(index, '<link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-13-1" />', 'docs/index.html')
 requireNotIncludes(index, 'bilig-hero-workbook-api.png?v=2026-05-08-2', 'docs/index.html')
 requireNotIncludes(siteCss, 'bilig-hero-workbook-api.png?v=2026-05-08-2', 'docs/assets/site.css')
@@ -228,7 +230,7 @@ requireIncludes(index, 'Revenue.workpaper', 'docs/index.html')
 requireIncludes(index, 'Build a workbook in Node, change inputs through code', 'docs/index.html')
 requireIncludes(index, '<strong>Checked .ts files, not pseudocode.</strong>', 'docs/index.html')
 requireIncludes(index, '<strong>Small tasks for first PRs are open now.</strong>', 'docs/index.html')
-requireIncludes(index, '<strong>0.13.19</strong>', 'docs/index.html')
+requireIncludes(index, '<strong>0.13.23</strong>', 'docs/index.html')
 requireIncludes(index, '<span>Open first-timer issues</span>', 'docs/index.html')
 requireIncludes(index, '<strong>64</strong>', 'docs/index.html')
 requireNotIncludes(index, '<strong>40 starter tasks</strong>', 'docs/index.html')
@@ -241,6 +243,7 @@ for (const required of [
   './agent-workpaper-tool-calling-recipe.html',
   './vercel-ai-sdk-langchain-spreadsheet-tool.html',
   './mcp-workpaper-tool-server.html',
+  './mcp-client-setup.html',
   './agent-spreadsheet-tool-call-loop.html',
   './node-service-workpaper-recipe.html',
   './node-spreadsheet-formula-engine.html',
@@ -322,6 +325,7 @@ for (const required of [
   'https://proompteng.github.io/bilig/try-bilig-headless-in-node.html',
   'https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html',
   'https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html',
+  'https://proompteng.github.io/bilig/mcp-client-setup.html',
   'https://proompteng.github.io/bilig/agent-workpaper-tool-calling-recipe.html',
   'https://proompteng.github.io/bilig/agent-spreadsheet-tool-call-loop.html',
   'https://proompteng.github.io/bilig/node-service-workpaper-recipe.html',
@@ -352,6 +356,7 @@ for (const required of [
   'https://github.com/proompteng/bilig/blob/main/docs/agent-workpaper-tool-calling-recipe.md',
   'https://github.com/proompteng/bilig/blob/main/docs/vercel-ai-sdk-langchain-spreadsheet-tool.md',
   'https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-server.md',
+  'https://github.com/proompteng/bilig/blob/main/docs/mcp-client-setup.md',
   'https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-tool-server.ts',
   'https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-stdio-server.ts',
   'https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/agent-framework-adapters.ts',
@@ -443,13 +448,15 @@ for (const [path, content] of [
   requireIncludes(content, 'workbook-automation-examples-node', path)
 }
 
-const [whyAgentsDoc, agentToolCallingDoc, aiSdkLangChainDoc, mcpWorkPaperToolServerDoc, agentToolCallLoopDoc] = await Promise.all([
-  readFile(join(docsRoot, 'why-agents-need-workbook-apis.md'), 'utf8'),
-  readFile(join(docsRoot, 'agent-workpaper-tool-calling-recipe.md'), 'utf8'),
-  readFile(join(docsRoot, 'vercel-ai-sdk-langchain-spreadsheet-tool.md'), 'utf8'),
-  readFile(join(docsRoot, 'mcp-workpaper-tool-server.md'), 'utf8'),
-  readFile(join(docsRoot, 'agent-spreadsheet-tool-call-loop.md'), 'utf8'),
-])
+const [whyAgentsDoc, agentToolCallingDoc, aiSdkLangChainDoc, mcpWorkPaperToolServerDoc, mcpClientSetupDoc, agentToolCallLoopDoc] =
+  await Promise.all([
+    readFile(join(docsRoot, 'why-agents-need-workbook-apis.md'), 'utf8'),
+    readFile(join(docsRoot, 'agent-workpaper-tool-calling-recipe.md'), 'utf8'),
+    readFile(join(docsRoot, 'vercel-ai-sdk-langchain-spreadsheet-tool.md'), 'utf8'),
+    readFile(join(docsRoot, 'mcp-workpaper-tool-server.md'), 'utf8'),
+    readFile(join(docsRoot, 'mcp-client-setup.md'), 'utf8'),
+    readFile(join(docsRoot, 'agent-spreadsheet-tool-call-loop.md'), 'utf8'),
+  ])
 requireIncludes(
   whyAgentsDoc,
   'description: Why coding agents should edit workbook formulas through a Node.js WorkPaper API',
@@ -489,6 +496,23 @@ requireIncludes(
   'docs/mcp-workpaper-tool-server.md',
 )
 requireIncludes(mcpWorkPaperToolServerDoc, 'https://github.com/proompteng/bilig/discussions/230', 'docs/mcp-workpaper-tool-server.md')
+requireIncludes(mcpWorkPaperToolServerDoc, 'mcp-client-setup.md', 'docs/mcp-workpaper-tool-server.md')
+requireIncludes(
+  mcpClientSetupDoc,
+  'description: Copy-paste MCP client configuration for running the published @bilig/headless WorkPaper stdio server from Claude, Cursor, VS Code, and Codex.',
+  'docs/mcp-client-setup.md',
+)
+for (const required of [
+  'npm exec --package @bilig/headless -- bilig-workpaper-mcp',
+  'claude mcp add-json bilig-workpaper',
+  '.cursor/mcp.json',
+  '.vscode/mcp.json',
+  '[mcp_servers.bilig-workpaper]',
+  'https://code.visualstudio.com/docs/copilot/reference/mcp-configuration',
+  'https://platform.openai.com/docs/docs-mcp',
+]) {
+  requireIncludes(mcpClientSetupDoc, required, 'docs/mcp-client-setup.md')
+}
 requireIncludes(
   aiSdkLangChainDoc,
   'https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling',
@@ -509,6 +533,7 @@ for (const [path, content] of [
   ['docs/agent-workpaper-tool-calling-recipe.md', agentToolCallingDoc],
   ['docs/vercel-ai-sdk-langchain-spreadsheet-tool.md', aiSdkLangChainDoc],
   ['docs/mcp-workpaper-tool-server.md', mcpWorkPaperToolServerDoc],
+  ['docs/mcp-client-setup.md', mcpClientSetupDoc],
   ['docs/agent-spreadsheet-tool-call-loop.md', agentToolCallLoopDoc],
   ['docs/workbook-automation-examples-node.md', await readFile(join(docsRoot, 'workbook-automation-examples-node.md'), 'utf8')],
   ['docs/dev-to-workbook-apis-post.md', await readFile(join(docsRoot, 'dev-to-workbook-apis-post.md'), 'utf8')],
@@ -556,6 +581,7 @@ for (const [path, content] of [
   requireIncludes(content, 'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper', path)
   requireIncludes(content, 'vercel-ai-sdk-langchain-spreadsheet-tool', path)
   requireIncludes(content, 'mcp-workpaper-tool-server', path)
+  requireIncludes(content, 'mcp-client-setup', path)
   requireIncludes(content, 'examples/headless-workpaper#budget-variance-alerts', path)
   requireIncludes(content, 'examples/headless-workpaper#fulfillment-capacity-plan', path)
   requireIncludes(content, 'examples/headless-workpaper#quote-approval-threshold', path)

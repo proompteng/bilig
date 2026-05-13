@@ -146,6 +146,16 @@ issue pass:
   Atlas with public project data and category `Productivity`. The remaining
   steps are entering a contact email and clicking Submit, both held for
   action-time confirmation.
+- External MCP directory follow-up: MCP Server Spot submission form is staged
+  in Atlas with public project data, `Development` category, `Tools` feature,
+  `Database` icon, Claude Desktop/Cursor/VS Code compatibility, TypeScript,
+  stdio transport, npm command, and docs/repo/package links. The remaining
+  step is clicking Submit, held for action-time confirmation.
+- External MCP directory follow-up: the `appcypher/awesome-mcp-servers`
+  repository has pull requests and issues disabled by the owner. The
+  `gregkonush:codex/add-bilig-workpaper` fork branch contains the one-line
+  Bilig WorkPaper addition, but GitHub rejects pull request creation because
+  the upstream repository disabled PRs.
 
 ## Goal Text
 

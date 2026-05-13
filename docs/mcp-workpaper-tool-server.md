@@ -51,6 +51,10 @@ matching `server.json`. It is published in the official MCP Registry as
 `io.github.proompteng/bilig-workpaper`:
 <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper>.
 
+If you already know which client you want to use, start with the
+[MCP client setup guide](mcp-client-setup.md) for Claude, Cursor, VS Code, and
+Codex config snippets.
+
 Before submitting the server to an MCP registry, verify this repo-specific
 readiness checklist:
 

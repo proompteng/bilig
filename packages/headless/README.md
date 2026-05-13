@@ -162,13 +162,16 @@ pnpm --filter @bilig/headless build
 | Test formula edits and state | [quickstart](#quickstart) and [persistence round trip](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#persistence-round-trip)                                                                                                                                                                                                                     |
 | Build from service data      | [`npm run json-records`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input), [workbook-automation-examples-node guide](https://proompteng.github.io/bilig/workbook-automation-examples-node.html), [Node service recipe](https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md)                     |
 | Wrap agent tools             | [`npm run agent:tool-call`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#agent-tool-call-loop), [framework adapter guide](https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html)                                                                                                                                     |
-| Expose MCP tools             | [`npm run agent:mcp-tools`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#mcp-tool-server-shape), [MCP server guide](https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html)                                                                                                                                                          |
+| Expose MCP tools             | [`npm run agent:mcp-tools`](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#mcp-tool-server-shape), [MCP server guide](https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html), [MCP client setup](https://proompteng.github.io/bilig/mcp-client-setup.html)                                                                            |
 | Compare engines              | [headless engine comparison](https://github.com/proompteng/bilig/blob/main/docs/headless-spreadsheet-engine-comparison.md), [HyperFormula comparison](https://github.com/proompteng/bilig/blob/main/docs/hyperformula-alternative-headless-workpaper.md)                                                                                                                     |
 
 Run the packaged MCP stdio server with
 `npm exec --package @bilig/headless -- bilig-workpaper-mcp`. The published MCP
 Registry entry is
 [`io.github.proompteng/bilig-workpaper`](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper).
+Use the
+[MCP client setup guide](https://proompteng.github.io/bilig/mcp-client-setup.html)
+for Claude, Cursor, VS Code, and Codex config snippets.
 
 Star or bookmark the project: <https://github.com/proompteng/bilig>.
 
@@ -456,6 +459,9 @@ npm exec --package @bilig/headless -- bilig-workpaper-mcp
 Its package metadata includes `mcpName: io.github.proompteng/bilig-workpaper`
 and `server.json`, and the server is published in the official MCP Registry:
 <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper>.
+
+For copy-paste client configs, use the
+[MCP client setup guide](https://proompteng.github.io/bilig/mcp-client-setup.html).
 
 Before submitting the server to an MCP registry, verify this repo-specific
 readiness checklist:

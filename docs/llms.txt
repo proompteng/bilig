@@ -22,6 +22,7 @@ language: typescript
 - https://proompteng.github.io/bilig/why-agents-need-workbook-apis.html
 - https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html
 - https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html
+- https://proompteng.github.io/bilig/mcp-client-setup.html
 - https://proompteng.github.io/bilig/agent-workpaper-tool-calling-recipe.html
 - https://proompteng.github.io/bilig/agent-spreadsheet-tool-call-loop.html
 - https://proompteng.github.io/bilig/node-service-workpaper-recipe.html
@@ -154,6 +155,9 @@ npm run agent:verify
 - MCP spreadsheet tool server guide:
   https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html
   https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-server.md
+- MCP client setup for Claude, Cursor, VS Code, and Codex:
+  https://proompteng.github.io/bilig/mcp-client-setup.html
+  https://github.com/proompteng/bilig/blob/main/docs/mcp-client-setup.md
 - MCP spreadsheet tool server feedback discussion:
   https://github.com/proompteng/bilig/discussions/230
 - runnable MCP-style WorkPaper tool server example:
