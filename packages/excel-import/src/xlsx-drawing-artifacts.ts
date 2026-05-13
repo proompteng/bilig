@@ -283,6 +283,51 @@ function preservedPartText(partsByPath: ReadonlyMap<string, Uint8Array>, path: s
   return bytes ? strFromU8(bytes) : null
 }
 
+function worksheetDrawingTarget(drawingIndex: number): string {
+  return `../drawings/drawing${String(drawingIndex)}.xml`
+}
+
+function nextAvailableWorksheetDrawingTarget(input: {
+  readonly zip: XlsxZipEntries
+  readonly usedDrawingPaths: ReadonlySet<string>
+  readonly reservedDrawingPaths: ReadonlySet<string>
+}): string {
+  for (let drawingIndex = 1; drawingIndex < Number.MAX_SAFE_INTEGER; drawingIndex += 1) {
+    const target = worksheetDrawingTarget(drawingIndex)
+    const drawingPath = normalizeZipPath(`xl/drawings/drawing${String(drawingIndex)}.xml`)
+    if (!input.zip[drawingPath] && !input.usedDrawingPaths.has(drawingPath) && !input.reservedDrawingPaths.has(drawingPath)) {
+      return target
+    }
+  }
+  throw new Error('Unable to allocate XLSX drawing part')
+}
+
+function worksheetDrawingPaths(zip: XlsxZipEntries, sheets: readonly WorkbookSnapshot['sheets'][number][]): Set<string> {
+  const paths = new Set<string>()
+  sheets
+    .toSorted((left, right) => left.order - right.order)
+    .forEach((_sheet, sheetIndex) => {
+      const sheetPath = `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`
+      const sheetRelationships = parseRelationships(getZipText(zip, `xl/worksheets/_rels/sheet${String(sheetIndex + 1)}.xml.rels`))
+      const drawingRelationship = sheetRelationships.find((relationship) => relationship.type === worksheetDrawingRelationshipType)
+      if (drawingRelationship) {
+        paths.add(normalizeZipPath(resolveTargetPath(sheetPath, drawingRelationship.target)))
+      }
+    })
+  return paths
+}
+
+function reservedDrawingArtifactPaths(sheets: readonly WorkbookSnapshot['sheets'][number][]): Set<string> {
+  const paths = new Set<string>()
+  for (const sheet of sheets) {
+    const relationshipTarget = sheet.metadata?.drawingArtifacts?.relationshipTarget
+    if (relationshipTarget) {
+      paths.add(normalizeZipPath(resolveTargetPath('xl/worksheets/sheet1.xml', relationshipTarget)))
+    }
+  }
+  return paths
+}
+
 function mergedDrawingResult(input: {
   readonly currentDrawingXml: string | null
   readonly preservedDrawingXml: string
@@ -418,6 +463,8 @@ export function addExportDrawingArtifactsToXlsxBytes(bytes: Uint8Array, snapshot
   const partsByPath = preservedPartsByPath(workbookArtifacts.parts)
   const preservedDrawingPartPaths = new Set<string>()
   const copiedPartPaths = new Set<string>()
+  const reservedDrawingPaths = reservedDrawingArtifactPaths(sheetsWithDrawingArtifacts)
+  const usedDrawingPaths = worksheetDrawingPaths(zip, snapshot.sheets)
   let changed = false
 
   snapshot.sheets
@@ -450,10 +497,14 @@ export function addExportDrawingArtifactsToXlsxBytes(bytes: Uint8Array, snapshot
       let nextSheetXml = sheetXml
 
       if (!drawingRelationship) {
+        const drawingTarget =
+          zip[preservedDrawingPath] || usedDrawingPaths.has(preservedDrawingPath)
+            ? nextAvailableWorksheetDrawingTarget({ zip, usedDrawingPaths, reservedDrawingPaths })
+            : sheetDrawingArtifacts.relationshipTarget
         drawingRelationship = {
           id: nextRelationshipId(sheetRelationships),
           type: worksheetDrawingRelationshipType,
-          target: sheetDrawingArtifacts.relationshipTarget,
+          target: drawingTarget,
         }
         sheetRelationships.push(drawingRelationship)
         relationshipsChanged = true
@@ -461,6 +512,7 @@ export function addExportDrawingArtifactsToXlsxBytes(bytes: Uint8Array, snapshot
       }
 
       const drawingPath = normalizeZipPath(resolveTargetPath(sheetPath, drawingRelationship.target))
+      usedDrawingPaths.add(drawingPath)
       const currentDrawingRelationshipsPath = drawingRelationshipsPath(drawingPath)
       const currentDrawingXml = getZipText(zip, drawingPath)
       const currentDrawingRelationships = parseRelationships(getZipText(zip, currentDrawingRelationshipsPath))

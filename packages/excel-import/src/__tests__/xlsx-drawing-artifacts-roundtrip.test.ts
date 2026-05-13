@@ -2,9 +2,11 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
 
+import type { WorkbookPreservedPackagePartSnapshot, WorkbookSnapshot } from '@bilig/protocol'
 import { exportXlsx, importXlsx } from '../index.js'
 
 const worksheetDrawingRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing'
+const chartRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart'
 const imageRelationshipType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image'
 const drawingContentType = 'application/vnd.openxmlformats-officedocument.drawing+xml'
 const imageContentType = 'image/png'
@@ -34,7 +36,134 @@ describe('worksheet drawing artifacts roundtrip', () => {
     expect(strFromU8(unzipSync(exported)['xl/drawings/drawing2.xml'] ?? new Uint8Array())).toContain('<xdr:cxnSp')
     expect([...readZipBytes(exported, 'xl/media/image1.png')]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
   })
+
+  it('keeps preserved drawings separate from generated chart drawings', () => {
+    const exported = exportXlsx(buildSnapshotWithImageArtifactAndGeneratedChart())
+    const exportedZip = unzipSync(exported)
+    const imported = importXlsx(exported, 'drawing-chart-collision.xlsx')
+    const coverRelationshipsXml = strFromU8(exportedZip['xl/worksheets/_rels/sheet1.xml.rels'] ?? new Uint8Array())
+    const chartRelationshipsXml = strFromU8(exportedZip['xl/worksheets/_rels/sheet2.xml.rels'] ?? new Uint8Array())
+    const coverDrawingTarget = relationshipTargetWithType(coverRelationshipsXml, worksheetDrawingRelationshipType)
+    const chartDrawingTarget = relationshipTargetWithType(chartRelationshipsXml, worksheetDrawingRelationshipType)
+
+    expect(coverDrawingTarget).not.toBe(chartDrawingTarget)
+    expect(strFromU8(exportedZip['xl/drawings/drawing1.xml'] ?? new Uint8Array())).toContain('<c:chart ')
+    expect(strFromU8(exportedZip['xl/drawings/drawing1.xml'] ?? new Uint8Array())).not.toContain('<xdr:pic>')
+    expect(strFromU8(exportedZip['xl/drawings/drawing2.xml'] ?? new Uint8Array())).toContain('<xdr:pic>')
+    expect(strFromU8(exportedZip['xl/drawings/drawing2.xml'] ?? new Uint8Array())).not.toContain('<c:chart ')
+    expect(
+      relationshipsWithType(strFromU8(exportedZip['xl/drawings/_rels/drawing1.xml.rels'] ?? new Uint8Array()), chartRelationshipType),
+    ).toHaveLength(1)
+    expect(
+      relationshipsWithType(strFromU8(exportedZip['xl/drawings/_rels/drawing2.xml.rels'] ?? new Uint8Array()), imageRelationshipType),
+    ).toHaveLength(1)
+    expect(imported.snapshot.workbook.metadata?.charts).toEqual([
+      expect.objectContaining({
+        id: 'Chart 1',
+        sheetName: 'Chart',
+      }),
+    ])
+  })
 })
+
+function buildSnapshotWithImageArtifactAndGeneratedChart(): WorkbookSnapshot {
+  const drawingXml = [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">',
+    '<xdr:twoCellAnchor editAs="oneCell">',
+    '<xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>',
+    '<xdr:to><xdr:col>2</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>3</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>',
+    '<xdr:pic>',
+    '<xdr:nvPicPr><xdr:cNvPr id="3" name="Picture 1"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr>',
+    '<xdr:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>',
+    '<xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>',
+    '</xdr:pic>',
+    '<xdr:clientData/>',
+    '</xdr:twoCellAnchor>',
+    '</xdr:wsDr>',
+  ].join('')
+  const drawingRelationshipsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${relationshipNamespace}"><Relationship Id="rId1" Type="${imageRelationshipType}" Target="../media/image1.png"/></Relationships>`
+  const imageBytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10])
+
+  return {
+    version: 1,
+    workbook: {
+      name: 'drawing-chart-collision',
+      metadata: {
+        charts: [
+          {
+            id: 'Chart 1',
+            sheetName: 'Chart',
+            address: 'E2',
+            source: { sheetName: 'Chart', startAddress: 'A1', endAddress: 'B3' },
+            chartType: 'line',
+            rows: 8,
+            cols: 5,
+            seriesOrientation: 'columns',
+            firstRowAsHeaders: true,
+            firstColumnAsLabels: true,
+          },
+        ],
+        drawingArtifacts: {
+          parts: [
+            encodedPart('xl/drawings/drawing1.xml', drawingXml),
+            encodedPart('xl/drawings/_rels/drawing1.xml.rels', drawingRelationshipsXml),
+            encodedPart('xl/media/image1.png', imageBytes),
+          ],
+          contentTypeDefaults: [{ extension: 'png', contentType: imageContentType }],
+          contentTypeOverrides: [{ partName: '/xl/drawings/drawing1.xml', contentType: drawingContentType }],
+        },
+      },
+    },
+    sheets: [
+      {
+        id: 1,
+        name: 'Cover',
+        order: 0,
+        metadata: {
+          drawingArtifacts: { relationshipTarget: '../drawings/drawing1.xml' },
+        },
+        cells: [{ address: 'A1', value: 'logo' }],
+      },
+      {
+        id: 2,
+        name: 'Chart',
+        order: 1,
+        cells: [
+          { address: 'A1', value: 'Year' },
+          { address: 'B1', value: 'Files' },
+          { address: 'A2', value: '2024' },
+          { address: 'B2', value: 12 },
+          { address: 'A3', value: '2025' },
+          { address: 'B3', value: 15 },
+        ],
+      },
+    ],
+  }
+}
+
+function encodedPart(path: string, value: string | Uint8Array): WorkbookPreservedPackagePartSnapshot {
+  const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : value
+  return {
+    path,
+    storage: 'base64',
+    dataBase64: Buffer.from(bytes).toString('base64'),
+    byteLength: bytes.byteLength,
+  }
+}
+
+function relationshipTargetWithType(xml: string, relationshipType: string): string | undefined {
+  return [...xml.matchAll(/<Relationship\b([^>]*)\/?>/gu)]
+    .map((match) => match[1] ?? '')
+    .find((attributes) => attributes.includes(`Type="${relationshipType}"`))
+    ?.match(/\bTarget="([^"]+)"/u)?.[1]
+}
+
+function relationshipsWithType(xml: string, relationshipType: string): string[] {
+  return [...xml.matchAll(/<Relationship\b([^>]*)\/?>/gu)]
+    .map((match) => match[1] ?? '')
+    .filter((attributes) => attributes.includes(`Type="${relationshipType}"`))
+}
 
 function buildWorkbookWithEmbeddedImageAndShape(): Uint8Array {
   const workbook = XLSX.utils.book_new()
