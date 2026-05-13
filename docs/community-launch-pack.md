@@ -75,6 +75,22 @@ Latest public execution snapshot on May 13, 2026 after the landing-page pass:
   developers at the npm-only TypeScript smoke test:
   <https://github.com/proompteng/bilig/discussions/270>
 
+Latest starter-queue execution snapshot on May 13, 2026 after the adapter smoke
+issue pass:
+
+- GitHub surface: `24` stars, `10` forks, `58` open issues, and `6` open pull
+  requests.
+- npm surface: `@bilig/headless@0.13.16`, with `15,592` downloads last week
+  and `23,240` downloads in the last 30 days.
+- Contributor funnel: `51` open `good first issue`, `51` open
+  `first-timers-only`, and `51` open `help wanted` issues.
+- New starter issues `#272` through `#277` cover NestJS, Express, Supabase Edge
+  Functions, Deno Deploy, Next.js Route Handlers, and Bun.serve WorkPaper route
+  smoke examples.
+- External contributor-directory surface: the Up For Grabs listing pull request
+  is open and passing its project checks:
+  <https://github.com/up-for-grabs/up-for-grabs.net/pull/5790>
+
 ## Goal Text
 
 Grow `proompteng/bilig` from `8` to `1,000` legitimate GitHub stars by making

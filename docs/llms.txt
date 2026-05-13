@@ -225,7 +225,7 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md
 - community growth snapshot:
   https://github.com/proompteng/bilig/blob/main/docs/community-growth-snapshot.md
-- current starter queue snapshot: 45 open first-timers-only issues, 39 generally available, 6 already in review.
+- current starter queue snapshot: 51 open first-timers-only issues, 45 generally available, 6 already in review.
 - current small example issue: xlsx formula-cache roundtrip:
   https://github.com/proompteng/bilig/issues/134
 - current small docs issue: WorkPaper agent tool result contract:
@@ -316,6 +316,18 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/268
 - current small docs issue: package-manager variants for the smoke test:
   https://github.com/proompteng/bilig/issues/269
+- current small example issue: NestJS WorkPaper controller smoke:
+  https://github.com/proompteng/bilig/issues/272
+- current small example issue: Express WorkPaper route smoke:
+  https://github.com/proompteng/bilig/issues/273
+- current small example issue: Supabase Edge Function WorkPaper smoke:
+  https://github.com/proompteng/bilig/issues/274
+- current small example issue: Deno Deploy WorkPaper route smoke:
+  https://github.com/proompteng/bilig/issues/275
+- current small example issue: Next.js route handler WorkPaper smoke:
+  https://github.com/proompteng/bilig/issues/276
+- current small example issue: Bun.serve WorkPaper route smoke:
+  https://github.com/proompteng/bilig/issues/277
 - good first issue search:
   https://github.com/proompteng/bilig/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22
 - first-timers-only issue search:

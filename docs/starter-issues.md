@@ -6,8 +6,8 @@ search indexing.
 
 Current starter queue as of May 13, 2026:
 
-- 45 open `first-timers-only` issues.
-- 39 issues are generally available for a new contributor to claim.
+- 51 open `first-timers-only` issues.
+- 45 issues are generally available for a new contributor to claim.
 - 6 issues already have active pull requests; comment before duplicating one of
   those patches.
 
@@ -31,6 +31,12 @@ Current starter queue as of May 13, 2026:
 - [#248: docs(service): add downstream GitHub Actions smoke snippet](https://github.com/proompteng/bilig/issues/248)
 - [#249: docs(examples): add AWS Lambda Function URL WorkPaper adapter note](https://github.com/proompteng/bilig/issues/249)
 - [#255: docs(serverless): explain TypeScript local import suffixes](https://github.com/proompteng/bilig/issues/255)
+- [#272: docs(examples): add NestJS WorkPaper controller smoke](https://github.com/proompteng/bilig/issues/272)
+- [#273: docs(examples): add Express WorkPaper route smoke](https://github.com/proompteng/bilig/issues/273)
+- [#274: docs(examples): add Supabase Edge Function WorkPaper smoke](https://github.com/proompteng/bilig/issues/274)
+- [#275: docs(examples): add Deno Deploy WorkPaper route smoke](https://github.com/proompteng/bilig/issues/275)
+- [#276: docs(examples): add Next.js route handler WorkPaper smoke](https://github.com/proompteng/bilig/issues/276)
+- [#277: docs(examples): add Bun.serve WorkPaper route smoke](https://github.com/proompteng/bilig/issues/277)
 
 ### Example Recipes
 
