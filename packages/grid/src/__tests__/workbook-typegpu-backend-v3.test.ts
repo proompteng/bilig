@@ -261,6 +261,70 @@ describe('workbook typegpu backend v3 tile path', () => {
     expect(onTileMiss).toHaveBeenCalledWith(tile.tileId)
   })
 
+  test('uploads full V3 atlas refreshes through the native WebGPU copy path', () => {
+    const copyExternalImageToTexture = vi.fn()
+    const atlasTexture = {
+      createView: vi.fn(),
+      destroy: vi.fn(),
+      write: vi.fn(),
+    }
+    const rawTexture = {
+      createView: vi.fn(),
+      depthOrArrayLayers: 1,
+      destroy: vi.fn(),
+      dimension: '2d',
+      format: 'rgba8unorm',
+      height: 1,
+      label: '',
+      usage: 0,
+      width: 1,
+    } satisfies GPUTexture
+    const createTexture = vi.fn(() => ({
+      $usage: vi.fn(() => atlasTexture),
+    }))
+    const artifacts = {
+      atlasHeight: 0,
+      atlasTexture: null,
+      atlasVersion: -1,
+      atlasWidth: 0,
+      device: {
+        queue: {
+          copyExternalImageToTexture,
+        },
+      },
+      root: {
+        createTexture,
+        unwrap: vi.fn(() => rawTexture),
+      },
+    } satisfies TypeGpuAtlasResourceArtifacts
+    const atlasCanvas = document.createElement('canvas')
+    const atlas = {
+      drainDirtyPages: vi.fn(() => []),
+      getCanvas: () => atlasCanvas,
+      getSize: () => ({ height: 1024, width: 1024 }),
+      getVersion: () => 1,
+    }
+
+    syncTypeGpuAtlasResources(artifacts, atlas)
+
+    expect(createTexture).toHaveBeenCalled()
+    expect(atlasTexture.write).not.toHaveBeenCalled()
+    expect(copyExternalImageToTexture).toHaveBeenCalledWith(
+      {
+        source: atlasCanvas,
+      },
+      {
+        origin: { x: 0, y: 0 },
+        texture: rawTexture,
+      },
+      {
+        height: 1024,
+        width: 1024,
+      },
+    )
+    expect(artifacts.atlasVersion).toBe(1)
+  })
+
   test('uploads V3 atlas dirty pages without rewriting the whole atlas texture', () => {
     const copyExternalImageToTexture = vi.fn()
     const atlasTexture = {

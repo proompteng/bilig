@@ -23,6 +23,17 @@ test('web app paints deep querystring-selected cell content in the visible grid'
   await formulaInput.fill('Month 1')
   await formulaInput.press('Enter')
   await expect(formulaInput).toHaveValue('Month 1')
+  await expect
+    .poll(readRendererSurfaceState(page), {
+      message: 'TypeGPU should stay visible after its frame is presented; the Canvas2D fallback must not mask the grid',
+      timeout: 5_000,
+    })
+    .toMatchObject({
+      fallbackMounted: false,
+      textOverlayMounted: true,
+      typeGpuMode: 'typegpu-v3',
+      typeGpuOpacity: '1',
+    })
 
   await expect
     .poll(() => countDarkInteriorPixelsInCell(page, 3, 52), {
@@ -31,6 +42,26 @@ test('web app paints deep querystring-selected cell content in the visible grid'
     })
     .toBeGreaterThan(12)
 })
+
+function readRendererSurfaceState(page: Page): () => Promise<{
+  readonly fallbackMounted: boolean
+  readonly textOverlayMounted: boolean
+  readonly typeGpuMode: string | null
+  readonly typeGpuOpacity: string | null
+}> {
+  return async () =>
+    await page.evaluate(() => {
+      const typeGpu = document.querySelector('[data-testid="grid-pane-renderer"]')
+      const fallback = document.querySelector('[data-testid="grid-pane-renderer-fallback"]')
+      const textOverlay = document.querySelector('[data-testid="grid-pane-text-overlay"]')
+      return {
+        fallbackMounted: fallback instanceof HTMLCanvasElement,
+        textOverlayMounted: textOverlay instanceof HTMLElement,
+        typeGpuMode: typeGpu instanceof HTMLCanvasElement ? typeGpu.getAttribute('data-renderer-mode') : null,
+        typeGpuOpacity: typeGpu instanceof HTMLElement ? getComputedStyle(typeGpu).opacity : null,
+      }
+    })
+}
 
 async function countDarkInteriorPixelsInCell(page: Page, columnIndex: number, rowIndex: number): Promise<number> {
   const gridLocator = page.getByTestId('sheet-grid')

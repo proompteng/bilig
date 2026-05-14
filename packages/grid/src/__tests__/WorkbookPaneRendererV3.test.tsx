@@ -144,7 +144,7 @@ describe('WorkbookPaneRendererV3', () => {
     })
   })
 
-  test('keeps a canvas proof layer for visible panes even after TypeGPU reports a frame', () => {
+  test('keeps the Canvas2D proof layer only until TypeGPU reports a visible frame', () => {
     expect(
       shouldMountWorkbookCanvasProofLayerV3({
         backendStatus: 'ready',
@@ -160,7 +160,7 @@ describe('WorkbookPaneRendererV3', () => {
         headerPaneCount: 1,
         tilePaneCount: 1,
       }),
-    ).toBe(true)
+    ).toBe(false)
     expect(
       shouldMountWorkbookCanvasProofLayerV3({
         backendStatus: 'ready',

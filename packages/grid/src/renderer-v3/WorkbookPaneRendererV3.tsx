@@ -4,6 +4,7 @@ import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { GridCameraStore } from '../runtime/gridCameraStore.js'
 import type { WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 import { WorkbookPaneCanvasFallbackV3 } from './WorkbookPaneCanvasFallbackV3.js'
+import { WorkbookPaneTextOverlayV3 } from './WorkbookPaneTextOverlayV3.js'
 export { TYPEGPU_V3_ACTIVE_RESOURCE_DEFER_MS, GridDrawSchedulerV3, shouldDeferTypeGpuV3PreloadSync } from './draw-scheduler.js'
 export { resolveTypeGpuV3DrawScrollSnapshot } from './workbook-pane-renderer-runtime.js'
 import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
@@ -152,6 +153,17 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
           style={{ backgroundColor: 'transparent', contain: 'strict', height: '100%', opacity: typeGpuCanvasOpacity, width: '100%' }}
         />
       ) : null}
+      {showTypeGpuCanvas && !showCanvasFallback ? (
+        <WorkbookPaneTextOverlayV3
+          active={active}
+          cameraStore={cameraStore}
+          geometry={geometry}
+          headerPanes={headerPanes}
+          host={host}
+          scrollTransformStore={scrollTransformStore}
+          tilePanes={tilePanes}
+        />
+      ) : null}
     </>
   )
 })
@@ -167,8 +179,6 @@ export function shouldMountWorkbookCanvasProofLayerV3(input: {
   if (input.enableCanvasFallback || input.backendStatus !== 'ready') {
     return true
   }
-  if (input.tilePaneCount <= 0 && input.headerPaneCount <= 0 && (input.overlayRectCount ?? 0) <= 0) {
-    return false
-  }
-  return true
+  const hasVisiblePaneContent = input.tilePaneCount > 0 || input.headerPaneCount > 0 || (input.overlayRectCount ?? 0) > 0
+  return hasVisiblePaneContent && input.frameProofStatus !== 'presented'
 }

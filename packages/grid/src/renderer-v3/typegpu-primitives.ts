@@ -490,7 +490,7 @@ export function syncTypeGpuAtlasResources(
     artifacts.atlasWidth = nextSize.width
     artifacts.atlasHeight = nextSize.height
     atlas.drainDirtyPages?.()
-    artifacts.atlasTexture?.write(atlasCanvas)
+    uploadFullAtlasTexture(artifacts, atlasCanvas, nextSize.width, nextSize.height)
     noteTypeGpuAtlasUpload(nextSize.width * nextSize.height * 4)
     artifacts.atlasVersion = nextVersion
     return
@@ -498,7 +498,7 @@ export function syncTypeGpuAtlasResources(
 
   const dirtyPages = atlas.drainDirtyPages?.()
   if (!dirtyPages) {
-    artifacts.atlasTexture?.write(atlasCanvas)
+    uploadFullAtlasTexture(artifacts, atlasCanvas, nextSize.width, nextSize.height)
     noteTypeGpuAtlasUpload(nextSize.width * nextSize.height * 4)
     artifacts.atlasVersion = nextVersion
     return
@@ -517,6 +517,29 @@ function createAtlasTexture(root: TypeGpuAtlasResourceArtifacts['root'], width: 
       size: [width, height],
     })
     .$usage('sampled', 'render') as AtlasTexture
+}
+
+function uploadFullAtlasTexture(
+  artifacts: TypeGpuAtlasResourceArtifacts,
+  atlasCanvas: HTMLCanvasElement | OffscreenCanvas,
+  width: number,
+  height: number,
+): void {
+  if (!artifacts.atlasTexture || width <= 0 || height <= 0) {
+    return
+  }
+  const texture = artifacts.root.unwrap(artifacts.atlasTexture)
+  artifacts.device.queue.copyExternalImageToTexture(
+    { source: atlasCanvas },
+    {
+      origin: { x: 0, y: 0 },
+      texture,
+    },
+    {
+      height,
+      width,
+    },
+  )
 }
 
 function uploadAtlasDirtyPages(
