@@ -2379,4 +2379,35 @@ describe('WorkbookWorkerRuntime', () => {
     expect(third.sheets[0]?.cells).toContainEqual(expect.objectContaining({ address: 'A1', value: 42 }))
     expect(fourth).toBe(third)
   })
+
+  it('installs benchmark corpora inside the worker runtime without returning large snapshots', async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    })
+    await runtime.bootstrap({
+      documentId: 'benchmark-doc',
+      replicaId: 'browser:test',
+      persistState: false,
+    })
+
+    const result = await runtime.installBenchmarkCorpus('dense-mixed-100k')
+
+    expect(result).toEqual({
+      id: 'dense-mixed-100k',
+      materializedCellCount: 100_000,
+      primaryViewport: {
+        sheetName: 'Grid',
+        rowStart: 0,
+        rowEnd: 39,
+        colStart: 0,
+        colEnd: 1,
+      },
+    })
+    expect(Object.keys(result)).not.toContain('snapshot')
+    expect(runtime.getRuntimeState().sheetNames).toEqual(['Grid'])
+    expect(runtime.getCell('Grid', 'A1').value).toEqual({
+      tag: ValueTag.Number,
+      value: 1,
+    })
+  })
 })

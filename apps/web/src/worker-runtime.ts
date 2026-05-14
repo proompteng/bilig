@@ -34,6 +34,7 @@ import {
   type ViewportPatch,
   type ViewportPatchSubscription,
 } from '@bilig/worker-transport'
+import type { WorkbookBenchmarkCorpusId, WorkbookBenchmarkCorpusViewport } from '../../../packages/benchmarks/src/workbook-corpus.js'
 import type { PendingWorkbookMutation, PendingWorkbookMutationInput } from './workbook-sync.js'
 import { WorkerRuntimeMutationJournal } from './worker-runtime-mutation-journal.js'
 import {
@@ -129,6 +130,12 @@ export interface InstallAuthoritativeSnapshotInput {
   readonly snapshot: WorkbookSnapshot
   readonly authoritativeRevision: number
   readonly mode: 'bootstrap' | 'reconcile'
+}
+
+export interface InstallBenchmarkCorpusResult {
+  readonly id: WorkbookBenchmarkCorpusId
+  readonly materializedCellCount: number
+  readonly primaryViewport: WorkbookBenchmarkCorpusViewport
 }
 
 const DEFERRED_PROJECTION_ENGINE_MIN_CELL_COUNT = 100_000
@@ -349,6 +356,20 @@ export class WorkbookWorkerRuntime {
       throw new Error('Invalid authoritative snapshot install mode')
     }
     return this.installAuthoritativeSnapshotInternal(snapshot, authoritativeRevision, mode)
+  }
+
+  async installBenchmarkCorpus(corpusId: string): Promise<InstallBenchmarkCorpusResult> {
+    const benchmarks = await import('../../../packages/benchmarks/src/workbook-corpus.js')
+    if (!benchmarks.isWorkbookBenchmarkCorpusId(corpusId)) {
+      throw new Error(`Unknown benchmark corpus ${corpusId}`)
+    }
+    const corpus = benchmarks.buildWorkbookBenchmarkCorpus(corpusId)
+    await this.installAuthoritativeSnapshotInternal(corpus.snapshot, 0, 'bootstrap')
+    return {
+      id: corpus.id,
+      materializedCellCount: corpus.materializedCellCount,
+      primaryViewport: corpus.primaryViewport,
+    }
   }
 
   private async installAuthoritativeSnapshotInternal(

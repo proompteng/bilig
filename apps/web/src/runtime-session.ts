@@ -11,7 +11,12 @@ import {
   type Viewport,
   type WorkbookSnapshot,
 } from '@bilig/protocol'
-import type { InstallAuthoritativeSnapshotInput, WorkbookWorkerBootstrapResult, WorkbookWorkerStateSnapshot } from './worker-runtime.js'
+import type {
+  InstallAuthoritativeSnapshotInput,
+  InstallBenchmarkCorpusResult,
+  WorkbookWorkerBootstrapResult,
+  WorkbookWorkerStateSnapshot,
+} from './worker-runtime.js'
 import type { WorkbookPerfSession } from './perf/workbook-perf.js'
 import { ProjectedViewportStore } from './projected-viewport-store.js'
 import { ZeroWorkbookRevisionSync, type WorkbookRevisionState } from './runtime-zero-revision-sync.js'
@@ -164,6 +169,36 @@ function isInstallAuthoritativeSnapshotInput(value: unknown): value is InstallAu
     isWorkbookSnapshot(value['snapshot']) &&
     typeof value['authoritativeRevision'] === 'number' &&
     (value['mode'] === 'bootstrap' || value['mode'] === 'reconcile')
+  )
+}
+
+function isBenchmarkCorpusViewport(value: unknown): value is InstallBenchmarkCorpusResult['primaryViewport'] {
+  if (!isRecord(value)) {
+    return false
+  }
+  return (
+    typeof value['sheetName'] === 'string' &&
+    typeof value['rowStart'] === 'number' &&
+    Number.isInteger(value['rowStart']) &&
+    typeof value['rowEnd'] === 'number' &&
+    Number.isInteger(value['rowEnd']) &&
+    typeof value['colStart'] === 'number' &&
+    Number.isInteger(value['colStart']) &&
+    typeof value['colEnd'] === 'number' &&
+    Number.isInteger(value['colEnd'])
+  )
+}
+
+function isInstallBenchmarkCorpusResult(value: unknown): value is InstallBenchmarkCorpusResult {
+  if (!isRecord(value)) {
+    return false
+  }
+  return (
+    typeof value['id'] === 'string' &&
+    typeof value['materializedCellCount'] === 'number' &&
+    Number.isInteger(value['materializedCellCount']) &&
+    value['materializedCellCount'] > 0 &&
+    isBenchmarkCorpusViewport(value['primaryViewport'])
   )
 }
 
@@ -650,10 +685,16 @@ export async function createWorkerRuntimeSessionController(
         if (method === 'installAuthoritativeSnapshot' && !isInstallAuthoritativeSnapshotInput(args[0])) {
           throw new Error('installAuthoritativeSnapshot requires a valid authoritative snapshot input')
         }
-        if (method === 'installAuthoritativeSnapshot') {
+        if (method === 'installBenchmarkCorpus' && typeof args[0] !== 'string') {
+          throw new Error('installBenchmarkCorpus requires a benchmark corpus id')
+        }
+        if (method === 'installAuthoritativeSnapshot' || method === 'installBenchmarkCorpus') {
           viewportStore.resetProjectionState()
         }
         const result = await client.invoke(method, ...args)
+        if (method === 'installBenchmarkCorpus' && !isInstallBenchmarkCorpusResult(result)) {
+          throw new Error('installBenchmarkCorpus returned an unexpected payload')
+        }
         if (method === 'enqueuePendingMutation') {
           queueRuntimeStateRefresh()
         } else if (method === 'markPendingMutationSubmitted') {
@@ -662,7 +703,7 @@ export async function createWorkerRuntimeSessionController(
         } else if (method === 'markPendingMutationFailed' || method === 'retryPendingMutation') {
           await refreshRuntimeState()
         }
-        if (method === 'renderCommit' || method === 'installAuthoritativeSnapshot') {
+        if (method === 'renderCommit' || method === 'installAuthoritativeSnapshot' || method === 'installBenchmarkCorpus') {
           await refreshRuntimeState()
         }
         return result
