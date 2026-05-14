@@ -124,12 +124,14 @@ export function validateSameCorpusScenarioProof(
   }
   if (
     proof.screenshotProof.captured !== expected.screenshotProof.captured ||
+    JSON.stringify(proof.screenshotProof.requiredProducts) !== JSON.stringify(expected.screenshotProof.requiredProducts) ||
     JSON.stringify(proof.screenshotProof.missingProducts) !== JSON.stringify(expected.screenshotProof.missingProducts)
   ) {
     throw new Error(`UI responsiveness same-corpus screenshot proof is stale: ${caseId}`)
   }
   if (
     proof.pixelGridProof.captured !== expected.pixelGridProof.captured ||
+    JSON.stringify(proof.pixelGridProof.requiredProducts) !== JSON.stringify(expected.pixelGridProof.requiredProducts) ||
     JSON.stringify(proof.pixelGridProof.missingProducts) !== JSON.stringify(expected.pixelGridProof.missingProducts)
   ) {
     throw new Error(`UI responsiveness same-corpus pixel grid proof is stale: ${caseId}`)

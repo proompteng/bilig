@@ -224,6 +224,34 @@ describe('UI responsiveness live browser scorecard', () => {
 
     expect(() => validateUiResponsivenessLiveBrowserScorecard(staleScorecard)).toThrow('UI responsiveness same-corpus ratio is stale')
   })
+
+  it('rejects stale same-corpus visual proof required-product metadata', () => {
+    const scorecard = parseUiResponsivenessLiveBrowserScorecard(
+      readJsonObject(resolve(repoRoot, 'packages/benchmarks/baselines/ui-responsiveness-live-browser-scorecard.json')),
+    )
+    const proof = buildSameCorpusProof(buildSameCorpusCapture())
+    const staleScorecard: UiResponsivenessLiveBrowserScorecard = {
+      ...scorecard,
+      sameCorpusProof: {
+        ...proof,
+        cases: proof.cases.map((entry, index) =>
+          index === 0
+            ? Object.assign({}, entry, {
+                scenarioProof: Object.assign({}, entry.scenarioProof, {
+                  screenshotProof: Object.assign({}, entry.scenarioProof.screenshotProof, {
+                    requiredProducts: ['bilig', 'google-sheets'],
+                  }),
+                }),
+              })
+            : entry,
+        ),
+      },
+    }
+
+    expect(() => validateUiResponsivenessLiveBrowserScorecard(staleScorecard)).toThrow(
+      'UI responsiveness same-corpus screenshot proof is stale',
+    )
+  })
 })
 
 function buildSameCorpusCapture(
@@ -292,16 +320,17 @@ function sameCorpusScenarioProof(workload: UiResponsivenessSameCorpusWorkload) {
     p95Ratio: 0.06,
     screenshotProof: {
       captured: true,
-      requiredProducts: ['bilig', 'google-sheets'],
+      requiredProducts: ['bilig', 'google-sheets', 'microsoft-excel-web'],
       artifactPaths: [
         `tmp/same-corpus-wide-mixed-250k-${workload}/bilig-sample-1.png`,
         `tmp/same-corpus-wide-mixed-250k-${workload}/google-sheets-sample-1.png`,
+        `tmp/same-corpus-wide-mixed-250k-${workload}/microsoft-excel-web-sample-1.png`,
       ],
       missingProducts: [],
     },
     pixelGridProof: {
       captured: true,
-      requiredProducts: ['bilig', 'google-sheets'],
+      requiredProducts: ['bilig', 'google-sheets', 'microsoft-excel-web'],
       products: [
         {
           product: 'bilig',
@@ -318,6 +347,14 @@ function sameCorpusScenarioProof(workload: UiResponsivenessSameCorpusWorkload) {
           viewportPixelWidth: 1440,
           viewportPixelHeight: 900,
           evidence: ['selector=.grid-scrollable-wrapper'],
+        },
+        {
+          product: 'microsoft-excel-web',
+          captured: true,
+          method: 'excel-web-visible-grid',
+          viewportPixelWidth: 1440,
+          viewportPixelHeight: 900,
+          evidence: ['selector=.ewr-grdcontarea-grid'],
         },
       ],
       missingProducts: [],
