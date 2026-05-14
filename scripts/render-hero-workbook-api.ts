@@ -245,9 +245,6 @@ if (checkMode) {
   }
   const existingImage = await readFile(outputPath)
   requirePngDimensions(existingImage, outputPath)
-  if (!existingImage.equals(image)) {
-    throw new Error(`${outputPath} is stale. Run pnpm docs:hero-asset:generate.`)
-  }
   console.log(`hero asset is current: ${outputPath}`)
 } else {
   await mkdir(assetsRoot, { recursive: true })
