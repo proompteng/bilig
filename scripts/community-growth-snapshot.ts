@@ -44,6 +44,8 @@ export interface NpmDownloadWindow {
 export interface ContributorFunnelMetrics {
   readonly openGoodFirstIssueCount: number
   readonly openFirstTimersOnlyIssueCount: number
+  readonly openDocumentationStarterIssueCount: number
+  readonly openNonDocumentationStarterIssueCount: number
   readonly openHelpWantedIssueCount: number
   readonly openPullRequestCount: number
   readonly externalOpenIssueCount: number
@@ -438,6 +440,8 @@ function parseContributorFunnelGraphql(value: unknown): ContributorFunnelMetrics
   return {
     openGoodFirstIssueCount: graphqlSearchCount(data, 'goodFirst'),
     openFirstTimersOnlyIssueCount: graphqlSearchCount(data, 'firstTimers'),
+    openDocumentationStarterIssueCount: graphqlSearchCount(data, 'documentationStarters'),
+    openNonDocumentationStarterIssueCount: graphqlSearchCount(data, 'nonDocumentationStarters'),
     openHelpWantedIssueCount: graphqlSearchCount(data, 'helpWanted'),
     openPullRequestCount: graphqlSearchCount(data, 'openPullRequests'),
     externalOpenIssueCount: graphqlSearchCount(data, 'externalOpenIssues'),
@@ -485,6 +489,8 @@ async function collectContributorFunnel(
       query CommunityGrowthContributorFunnel(
         $goodFirst: String!
         $firstTimers: String!
+        $documentationStarters: String!
+        $nonDocumentationStarters: String!
         $helpWanted: String!
         $openPullRequests: String!
         $externalOpenIssues: String!
@@ -496,6 +502,12 @@ async function collectContributorFunnel(
           issueCount
         }
         firstTimers: search(type: ISSUE, query: $firstTimers, first: 0) {
+          issueCount
+        }
+        documentationStarters: search(type: ISSUE, query: $documentationStarters, first: 0) {
+          issueCount
+        }
+        nonDocumentationStarters: search(type: ISSUE, query: $nonDocumentationStarters, first: 0) {
           issueCount
         }
         helpWanted: search(type: ISSUE, query: $helpWanted, first: 0) {
@@ -521,6 +533,8 @@ async function collectContributorFunnel(
     const result = await collectGitHubGraphqlJson(fetchImpl, githubToken, githubCliApiJson, query, {
       goodFirst: `${repoQualifier} is:issue is:open label:"good first issue"`,
       firstTimers: `${repoQualifier} is:issue is:open label:first-timers-only`,
+      documentationStarters: `${repoQualifier} is:issue is:open label:first-timers-only label:documentation`,
+      nonDocumentationStarters: `${repoQualifier} is:issue is:open label:first-timers-only -label:documentation`,
       helpWanted: `${repoQualifier} is:issue is:open label:"help wanted"`,
       openPullRequests: `${repoQualifier} is:pr is:open`,
       externalOpenIssues: `${repoQualifier} is:issue is:open ${externalQualifier}`,
@@ -537,6 +551,8 @@ async function collectContributorFunnel(
   const [
     openGoodFirstIssueCount,
     openFirstTimersOnlyIssueCount,
+    openDocumentationStarterIssueCount,
+    openNonDocumentationStarterIssueCount,
     openHelpWantedIssueCount,
     openPullRequestCount,
     externalOpenIssueCount,
@@ -546,6 +562,8 @@ async function collectContributorFunnel(
   ] = await Promise.all([
     fetchIssueSearchCount(fetchImpl, githubToken, `${repoQualifier} is:issue is:open label:"good first issue"`),
     fetchIssueSearchCount(fetchImpl, githubToken, `${repoQualifier} is:issue is:open label:first-timers-only`),
+    fetchIssueSearchCount(fetchImpl, githubToken, `${repoQualifier} is:issue is:open label:first-timers-only label:documentation`),
+    fetchIssueSearchCount(fetchImpl, githubToken, `${repoQualifier} is:issue is:open label:first-timers-only -label:documentation`),
     fetchIssueSearchCount(fetchImpl, githubToken, `${repoQualifier} is:issue is:open label:"help wanted"`),
     fetchIssueSearchCount(fetchImpl, githubToken, `${repoQualifier} is:pr is:open`),
     fetchIssueSearchCount(fetchImpl, githubToken, `${repoQualifier} is:issue is:open ${externalQualifier}`),
@@ -557,6 +575,8 @@ async function collectContributorFunnel(
   return {
     openGoodFirstIssueCount,
     openFirstTimersOnlyIssueCount,
+    openDocumentationStarterIssueCount,
+    openNonDocumentationStarterIssueCount,
     openHelpWantedIssueCount,
     openPullRequestCount,
     externalOpenIssueCount,
@@ -790,6 +810,8 @@ export function renderCommunityGrowthSnapshotMarkdown(snapshot: CommunityGrowthS
     '',
     `- Open good first issues: ${formatCount(snapshot.contributorFunnel.openGoodFirstIssueCount)}`,
     `- Open first-timers-only issues: ${formatCount(snapshot.contributorFunnel.openFirstTimersOnlyIssueCount)}`,
+    `- Documentation starter issues: ${formatCount(snapshot.contributorFunnel.openDocumentationStarterIssueCount)}`,
+    `- Non-documentation starter issues: ${formatCount(snapshot.contributorFunnel.openNonDocumentationStarterIssueCount)}`,
     `- Open help wanted issues: ${formatCount(snapshot.contributorFunnel.openHelpWantedIssueCount)}`,
     `- Open pull requests: ${formatCount(snapshot.contributorFunnel.openPullRequestCount)}`,
     `- External open issues: ${formatCount(snapshot.contributorFunnel.externalOpenIssueCount)}`,

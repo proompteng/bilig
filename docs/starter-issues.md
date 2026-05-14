@@ -6,11 +6,20 @@ search indexing.
 
 Current starter queue as of May 14, 2026:
 
-- 100 open `first-timers-only` issues.
-- 100 issues are generally available for a new contributor to claim.
-- 0 issues already have active pull requests.
+- 105 open `first-timers-only` issues.
+- 101 issues are generally available for a new contributor to claim.
+- 5 starter issues are code or test tasks rather than docs-only tasks.
+- 4 open starter issues already have active pull requests.
 
 ## Available Starter Picks
+
+### Code And Test Starters
+
+- [#360: test(headless): cover display-value readback after JSON restore](https://github.com/proompteng/bilig/issues/360)
+- [#361: test(headless): cover range readback after an input edit](https://github.com/proompteng/bilig/issues/361)
+- [#362: test(examples): guard the headless README command index against missing scripts](https://github.com/proompteng/bilig/issues/362)
+- [#363: test(examples): add invalid-request proof to the HTTP JSON summary smoke](https://github.com/proompteng/bilig/issues/363)
+- [#364: test(core): add quoted semicolon CSV fixture](https://github.com/proompteng/bilig/issues/364)
 
 ### Agent And Tooling Docs
 
@@ -24,7 +33,6 @@ Current starter queue as of May 14, 2026:
 - [#334: docs(agent): add OpenAI Responses streaming tool-call transcript](https://github.com/proompteng/bilig/issues/334)
 - [#358: docs(agent): add AI SDK onStepFinish WorkPaper transcript](https://github.com/proompteng/bilig/issues/358)
 - [#359: docs(agent): add Anthropic tool-use WorkPaper transcript](https://github.com/proompteng/bilig/issues/359)
-- [#344: docs(agent): add LangChain.js structured tool WorkPaper smoke](https://github.com/proompteng/bilig/issues/344)
 - [#283: docs(mcp): add Cursor MCP config for the WorkPaper stdio server](https://github.com/proompteng/bilig/issues/283)
 - [#284: docs(mcp): add Windsurf MCP config for local WorkPaper testing](https://github.com/proompteng/bilig/issues/284)
 - [#285: docs(mcp): add MCP Inspector smoke-test transcript for the WorkPaper server](https://github.com/proompteng/bilig/issues/285)
@@ -71,8 +79,6 @@ Current starter queue as of May 14, 2026:
 - [#338: docs(examples): add TanStack Start server function WorkPaper smoke](https://github.com/proompteng/bilig/issues/338)
 - [#339: docs(examples): add Qwik City WorkPaper route smoke](https://github.com/proompteng/bilig/issues/339)
 - [#342: docs(examples): add Next.js Server Action validation-error smoke](https://github.com/proompteng/bilig/issues/342)
-- [#345: docs(examples): add Next.js Route Handler WorkPaper JSON smoke](https://github.com/proompteng/bilig/issues/345)
-- [#346: docs(examples): add Vercel Function WorkPaper route smoke](https://github.com/proompteng/bilig/issues/346)
 
 ### Storage And Persistence Recipes
 
@@ -85,7 +91,6 @@ Current starter queue as of May 14, 2026:
 - [#305: docs(storage): add Cloudflare R2 WorkPaper persistence recipe](https://github.com/proompteng/bilig/issues/305)
 - [#306: docs(storage): add AWS S3 WorkPaper persistence recipe](https://github.com/proompteng/bilig/issues/306)
 - [#332: docs(storage): add MongoDB WorkPaper JSON persistence recipe](https://github.com/proompteng/bilig/issues/332)
-- [#347: docs(storage): add plain node-postgres WorkPaper JSON persistence recipe](https://github.com/proompteng/bilig/issues/347)
 
 ### Example Recipes
 
@@ -141,8 +146,12 @@ Current starter queue as of May 14, 2026:
 
 ## Already In Review
 
-No starter issues currently have active pull requests. If that changes, move
-the issue here until the PR lands or closes.
+- [#344: docs(agent): add LangChain.js structured tool WorkPaper smoke](https://github.com/proompteng/bilig/issues/344) is covered by [PR #351](https://github.com/proompteng/bilig/pull/351).
+- [#345: docs(examples): add Next.js Route Handler WorkPaper JSON smoke](https://github.com/proompteng/bilig/issues/345) is covered by [PR #353](https://github.com/proompteng/bilig/pull/353).
+- [#346: docs(examples): add Vercel Function WorkPaper route smoke](https://github.com/proompteng/bilig/issues/346) is covered by [PR #352](https://github.com/proompteng/bilig/pull/352).
+- [#347: docs(storage): add plain node-postgres WorkPaper JSON persistence recipe](https://github.com/proompteng/bilig/issues/347) is covered by [PR #349](https://github.com/proompteng/bilig/pull/349).
+
+Keep active starter work here until the PR lands or closes.
 
 The list intentionally excludes closed issues and broad corpus/parity epics. Add
 new starter tickets only when the expected patch can stay small, has a clear

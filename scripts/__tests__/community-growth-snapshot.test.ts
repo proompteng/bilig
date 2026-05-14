@@ -54,6 +54,12 @@ function growthSearchResponse(url: string): Response | undefined {
   if (query === 'repo:proompteng/bilig is:issue is:open label:first-timers-only') {
     return responseJson({ total_count: 5 })
   }
+  if (query === 'repo:proompteng/bilig is:issue is:open label:first-timers-only label:documentation') {
+    return responseJson({ total_count: 4 })
+  }
+  if (query === 'repo:proompteng/bilig is:issue is:open label:first-timers-only -label:documentation') {
+    return responseJson({ total_count: 1 })
+  }
   if (query === 'repo:proompteng/bilig is:issue is:open label:"help wanted"') {
     return responseJson({ total_count: 8 })
   }
@@ -172,6 +178,8 @@ describe('community growth snapshot', () => {
       contributorFunnel: {
         openGoodFirstIssueCount: 8,
         openFirstTimersOnlyIssueCount: 5,
+        openDocumentationStarterIssueCount: 4,
+        openNonDocumentationStarterIssueCount: 1,
         openHelpWantedIssueCount: 8,
         openPullRequestCount: 2,
         externalOpenIssueCount: 3,
@@ -268,6 +276,12 @@ describe('community growth snapshot', () => {
               firstTimers: {
                 issueCount: 22,
               },
+              documentationStarters: {
+                issueCount: 20,
+              },
+              nonDocumentationStarters: {
+                issueCount: 2,
+              },
               helpWanted: {
                 issueCount: 22,
               },
@@ -339,6 +353,8 @@ describe('community growth snapshot', () => {
           'query',
           'goodFirst',
           'firstTimers',
+          'documentationStarters',
+          'nonDocumentationStarters',
           'helpWanted',
           'openPullRequests',
           'externalOpenIssues',
@@ -371,6 +387,8 @@ describe('community growth snapshot', () => {
     expect(snapshot.contributorFunnel).toEqual({
       openGoodFirstIssueCount: 22,
       openFirstTimersOnlyIssueCount: 22,
+      openDocumentationStarterIssueCount: 20,
+      openNonDocumentationStarterIssueCount: 2,
       openHelpWantedIssueCount: 22,
       openPullRequestCount: 0,
       externalOpenIssueCount: 1,
@@ -488,6 +506,12 @@ describe('community growth snapshot', () => {
               firstTimers: {
                 issueCount: 5,
               },
+              documentationStarters: {
+                issueCount: 4,
+              },
+              nonDocumentationStarters: {
+                issueCount: 1,
+              },
               helpWanted: {
                 issueCount: 8,
               },
@@ -552,6 +576,8 @@ describe('community growth snapshot', () => {
     expect(snapshot.contributorFunnel).toEqual({
       openGoodFirstIssueCount: 8,
       openFirstTimersOnlyIssueCount: 5,
+      openDocumentationStarterIssueCount: 4,
+      openNonDocumentationStarterIssueCount: 1,
       openHelpWantedIssueCount: 8,
       openPullRequestCount: 2,
       externalOpenIssueCount: 3,
@@ -637,6 +663,8 @@ describe('community growth snapshot', () => {
       contributorFunnel: {
         openGoodFirstIssueCount: 22,
         openFirstTimersOnlyIssueCount: 22,
+        openDocumentationStarterIssueCount: 20,
+        openNonDocumentationStarterIssueCount: 2,
         openHelpWantedIssueCount: 22,
         openPullRequestCount: 0,
         externalOpenIssueCount: 1,
@@ -691,6 +719,7 @@ describe('community growth snapshot', () => {
     expect(markdown).toContain('- Stars: 24 / 1,000 (976 remaining)')
     expect(markdown).toContain('- Downloads last week: 13,427 (2026-05-05 to 2026-05-11)')
     expect(markdown).toContain('- Open good first issues: 22')
+    expect(markdown).toContain('- Non-documentation starter issues: 2')
     expect(markdown).toContain(
       '- #213 [Five Node workbook automation examples](https://github.com/proompteng/bilig/discussions/213) (Show and tell, 1 comment)',
     )
