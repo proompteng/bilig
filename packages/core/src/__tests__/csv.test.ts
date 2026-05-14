@@ -81,6 +81,10 @@ describe('csv helpers', () => {
       ['Account', 'Amount', 'Tax'],
       ['4000', '125,50', '20,08'],
     ])
+    expect(parseCsv('Name;Description;Amount\nFoo;"contains;semicolon";125,50')).toEqual([
+      ['Name', 'Description', 'Amount'],
+      ['Foo', 'contains;semicolon', '125,50'],
+    ])
   })
 
   it('parses CSV cell inputs into formulas, booleans, numbers, raw strings, or empties', () => {
