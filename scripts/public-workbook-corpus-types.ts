@@ -45,6 +45,11 @@ export interface PublicWorkbookManifest {
   readonly generatedAt: string
   readonly sources: readonly PublicWorkbookSource[]
   readonly artifacts: readonly PublicWorkbookArtifact[]
+  readonly fetchState?: PublicWorkbookFetchState
+}
+
+export interface PublicWorkbookFetchState {
+  readonly exhaustedSourceIds: readonly string[]
 }
 
 export interface PublicWorkbookFeatureCounts {

@@ -64,6 +64,16 @@ export function validatePublicWorkbookManifest(manifest: PublicWorkbookManifest)
       throw new Error(`Public workbook source ${source.id} is not a spreadsheet candidate`)
     }
   }
+  const exhaustedSourceIds = new Set<string>()
+  for (const sourceId of manifest.fetchState?.exhaustedSourceIds ?? []) {
+    if (exhaustedSourceIds.has(sourceId)) {
+      throw new Error(`Duplicate exhausted public workbook source id: ${sourceId}`)
+    }
+    exhaustedSourceIds.add(sourceId)
+    if (!sourceIds.has(sourceId)) {
+      throw new Error(`Exhausted public workbook source ${sourceId} is not in the manifest`)
+    }
+  }
   const artifactIds = new Set<string>()
   const hashes = new Set<string>()
   const fingerprints = new Set<string>()
@@ -94,6 +104,7 @@ export function validatePublicWorkbookManifest(manifest: PublicWorkbookManifest)
 
 export function parsePublicWorkbookManifestJson(value: unknown): PublicWorkbookManifest {
   const record = asRecord(value)
+  const fetchState = parsePublicWorkbookFetchState(record['fetchState'])
   const manifest: PublicWorkbookManifest = {
     schemaVersion: readExpectedNumber(record, 'schemaVersion', 1),
     corpus: readExpectedString(record, 'corpus', 'public-workbook-corpus'),
@@ -101,6 +112,7 @@ export function parsePublicWorkbookManifestJson(value: unknown): PublicWorkbookM
     generatedAt: readRequiredString(record, 'generatedAt'),
     sources: readRequiredArray(record, 'sources').map(parsePublicWorkbookSource),
     artifacts: readRequiredArray(record, 'artifacts').map(parsePublicWorkbookArtifact),
+    ...(fetchState ? { fetchState } : {}),
   }
   validatePublicWorkbookManifest(manifest)
   return manifest
@@ -252,6 +264,16 @@ function validatePublicWorkbookCorpusScorecard(scorecard: PublicWorkbookCorpusSc
   }
   if (!scorecard.summary.allCachedWorkbooksPassed) {
     throw new Error('Public workbook corpus scorecard has cached workbooks that did not pass')
+  }
+}
+
+function parsePublicWorkbookFetchState(value: unknown): PublicWorkbookManifest['fetchState'] | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  const record = asRecord(value)
+  return {
+    exhaustedSourceIds: readStringArray(record, 'exhaustedSourceIds'),
   }
 }
 

@@ -20,6 +20,7 @@ import {
   createEmptyPublicWorkbookManifest,
   fetchPublicWorkbookArtifacts,
   discoverCkanWorkbookSources,
+  parsePublicWorkbookManifestJson,
   sha256Hex,
   validatePublicWorkbookCorpusScorecard,
   validatePublicWorkbookManifest,
@@ -78,6 +79,45 @@ describe('public workbook corpus', () => {
     expect(() => validatePublicWorkbookManifest(withMissingLicense)).toThrow(
       'Public workbook source source-missing-license is missing usable license evidence',
     )
+  })
+
+  it('validates persisted fetch state against manifest sources', () => {
+    const manifest: PublicWorkbookManifest = {
+      ...createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'),
+      sources: [
+        {
+          id: 'source-1',
+          kind: 'direct-url',
+          sourceUrl: 'https://example.com/workbook.xlsx',
+          downloadUrl: 'https://example.com/workbook.xlsx',
+          fileName: 'workbook.xlsx',
+          discoveredAt: '2026-05-07T00:00:00.000Z',
+          license: {
+            spdxId: 'CC-BY-4.0',
+            title: 'Creative Commons Attribution 4.0 International',
+            evidenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+          },
+        },
+      ],
+      fetchState: {
+        exhaustedSourceIds: ['source-1'],
+      },
+    }
+
+    validatePublicWorkbookManifest(manifest)
+    expect(parsePublicWorkbookManifestJson(manifest).fetchState?.exhaustedSourceIds).toEqual(['source-1'])
+    expect(() =>
+      validatePublicWorkbookManifest({
+        ...manifest,
+        fetchState: { exhaustedSourceIds: ['source-1', 'source-1'] },
+      }),
+    ).toThrow('Duplicate exhausted public workbook source id: source-1')
+    expect(() =>
+      validatePublicWorkbookManifest({
+        ...manifest,
+        fetchState: { exhaustedSourceIds: ['source-missing'] },
+      }),
+    ).toThrow('Exhausted public workbook source source-missing is not in the manifest')
   })
 
   it('supports focused corpus slices with a custom target workbook count', async () => {
@@ -1161,6 +1201,99 @@ describe('public workbook corpus', () => {
     expect(checkpoints).toEqual([1, 2, 3, 4])
     expect(gcMock).toHaveBeenCalledTimes(4)
     expect(gcMock).toHaveBeenCalledWith(true)
+  })
+
+  it('persists exhausted duplicate sources so resumed fetches do not retry them', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-fetch-resume-'))
+    const workbookA = buildWorkbookBytes('Duplicate')
+    const workbookB = buildWorkbookBytes('Fresh')
+    const workbookC = buildWorkbookBytes('Later')
+    const fetchMock = vi.fn(async (url: string) => {
+      const bytes = url.includes('later') ? workbookC : url.includes('fresh') ? workbookB : workbookA
+      return new Response(bytes, {
+        headers: {
+          'content-length': String(bytes.byteLength),
+        },
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const license = {
+      spdxId: 'CC-BY-4.0',
+      title: 'Creative Commons Attribution 4.0 International',
+      evidenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    }
+    const manifest: PublicWorkbookManifest = {
+      ...createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'),
+      sources: [
+        {
+          id: 'source-original',
+          kind: 'direct-url',
+          sourceUrl: 'https://example.com/original.xlsx',
+          downloadUrl: 'https://example.com/original.xlsx',
+          fileName: 'original.xlsx',
+          discoveredAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+        {
+          id: 'source-duplicate',
+          kind: 'direct-url',
+          sourceUrl: 'https://example.com/duplicate.xlsx',
+          downloadUrl: 'https://example.com/duplicate.xlsx',
+          fileName: 'duplicate.xlsx',
+          discoveredAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+        {
+          id: 'source-fresh',
+          kind: 'direct-url',
+          sourceUrl: 'https://example.com/fresh.xlsx',
+          downloadUrl: 'https://example.com/fresh.xlsx',
+          fileName: 'fresh.xlsx',
+          discoveredAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+        {
+          id: 'source-later',
+          kind: 'direct-url',
+          sourceUrl: 'https://example.com/later.xlsx',
+          downloadUrl: 'https://example.com/later.xlsx',
+          fileName: 'later.xlsx',
+          discoveredAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+      ],
+    }
+
+    const firstFetch = await fetchPublicWorkbookArtifacts({
+      manifest,
+      cacheDir,
+      limit: 1,
+      fetchedAt: '2026-05-07T01:00:00.000Z',
+      fetchBatchSize: 1,
+    })
+    const secondFetch = await fetchPublicWorkbookArtifacts({
+      manifest: firstFetch,
+      cacheDir,
+      limit: 2,
+      fetchedAt: '2026-05-07T02:00:00.000Z',
+      fetchBatchSize: 1,
+    })
+
+    expect(secondFetch.artifacts.map((artifact) => artifact.sourceId)).toEqual(['source-original', 'source-fresh'])
+    expect(secondFetch.fetchState?.exhaustedSourceIds).toEqual(['source-original', 'source-duplicate', 'source-fresh'])
+
+    fetchMock.mockClear()
+    const thirdFetch = await fetchPublicWorkbookArtifacts({
+      manifest: secondFetch,
+      cacheDir,
+      limit: 3,
+      fetchedAt: '2026-05-07T03:00:00.000Z',
+      fetchBatchSize: 1,
+    })
+
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual(['https://example.com/later.xlsx'])
+    expect(thirdFetch.artifacts.map((artifact) => artifact.sourceId)).toEqual(['source-original', 'source-fresh', 'source-later'])
   })
 
   it('times out stalled workbook response bodies during fetch', async () => {

@@ -48,12 +48,16 @@ export function planPublicWorkbookCorpusFetch(args: {
   validatePublicWorkbookManifest(args.manifest)
   const targetArtifactCount = Math.min(args.limit, args.manifest.targetWorkbookCount)
   const remainingArtifactSlots = Math.max(0, targetArtifactCount - args.manifest.artifacts.length)
+  const exhaustedSourceIds = new Set(args.manifest.fetchState?.exhaustedSourceIds ?? [])
   const existingSourceIds = new Set(args.manifest.artifacts.map((artifact) => artifact.sourceId))
   const existingDownloadUrls = new Set(args.manifest.artifacts.map((artifact) => normalizeSourceUrl(artifact.downloadUrl)))
   const candidateSources = prioritizeCandidateSources(
     dedupeCandidateSources(
       args.manifest.sources.filter(
-        (source) => !existingSourceIds.has(source.id) && !existingDownloadUrls.has(normalizeSourceUrl(source.downloadUrl)),
+        (source) =>
+          !exhaustedSourceIds.has(source.id) &&
+          !existingSourceIds.has(source.id) &&
+          !existingDownloadUrls.has(normalizeSourceUrl(source.downloadUrl)),
       ),
     ),
   )
@@ -82,6 +86,7 @@ export async function fetchPublicWorkbookArtifacts(args: FetchCorpusArgs): Promi
   const fingerprintMaxRssBytes = args.fingerprintMaxRssBytes ?? defaultFingerprintMaxRssBytes
   const isolatedFingerprinting = args.isolatedFingerprinting === true
   const artifacts: PublicWorkbookArtifact[] = [...args.manifest.artifacts]
+  const exhaustedSourceIds = new Set(args.manifest.fetchState?.exhaustedSourceIds ?? [])
   const knownHashes = new Set(artifacts.map((artifact) => artifact.sha256))
   const knownFingerprints = new Set(artifacts.map((artifact) => artifact.workbookFingerprint))
   mkdirSync(join(args.cacheDir, 'files'), { recursive: true })
@@ -119,6 +124,7 @@ export async function fetchPublicWorkbookArtifacts(args: FetchCorpusArgs): Promi
     isolatedFingerprinting,
     maxBytes,
     onArtifactsCommitted: args.onArtifactsCommitted,
+    exhaustedSourceIds,
     targetArtifactCount,
     sourceManifest: args.manifest,
   })
@@ -126,6 +132,7 @@ export async function fetchPublicWorkbookArtifacts(args: FetchCorpusArgs): Promi
     ...args.manifest,
     generatedAt: fetchedAt,
     artifacts,
+    ...fetchStateForManifest(args.manifest, exhaustedSourceIds),
   }
 }
 
@@ -145,6 +152,7 @@ async function fetchArtifactsFromCandidateSources(args: {
   readonly isolatedFingerprinting: boolean
   readonly maxBytes: number
   readonly onArtifactsCommitted?: (manifest: PublicWorkbookManifest) => void | Promise<void>
+  readonly exhaustedSourceIds: Set<string>
   readonly sourceManifest: PublicWorkbookManifest
   readonly targetArtifactCount: number
 }): Promise<void> {
@@ -168,17 +176,30 @@ async function fetchArtifactsFromCandidateSources(args: {
       }),
     )
     let committedArtifactCount = 0
+    let exhaustedSourceCount = 0
     for (const result of downloadResults) {
       if (args.artifacts.length >= args.targetArtifactCount) {
         break
       }
       if (result.error || !result.bytes || !result.sha256 || !result.workbookFingerprint) {
+        if (!args.exhaustedSourceIds.has(result.source.id)) {
+          args.exhaustedSourceIds.add(result.source.id)
+          exhaustedSourceCount += 1
+        }
         continue
       }
       if (args.knownHashes.has(result.sha256)) {
+        if (!args.exhaustedSourceIds.has(result.source.id)) {
+          args.exhaustedSourceIds.add(result.source.id)
+          exhaustedSourceCount += 1
+        }
         continue
       }
       if (args.knownFingerprints.has(result.workbookFingerprint)) {
+        if (!args.exhaustedSourceIds.has(result.source.id)) {
+          args.exhaustedSourceIds.add(result.source.id)
+          exhaustedSourceCount += 1
+        }
         continue
       }
       const source = result.source
@@ -203,19 +224,32 @@ async function fetchArtifactsFromCandidateSources(args: {
         license: source.license,
         ...(source.topicEvidence ? { topicEvidence: source.topicEvidence } : {}),
       })
+      if (!args.exhaustedSourceIds.has(source.id)) {
+        args.exhaustedSourceIds.add(source.id)
+        exhaustedSourceCount += 1
+      }
       committedArtifactCount += 1
     }
-    if (committedArtifactCount > 0) {
+    if (committedArtifactCount > 0 || exhaustedSourceCount > 0) {
       // oxlint-disable-next-line eslint(no-await-in-loop) -- Checkpoint each bounded batch before continuing the long corpus fetch.
       await args.onArtifactsCommitted?.({
         ...args.sourceManifest,
         generatedAt: args.fetchedAt,
         artifacts: [...args.artifacts],
+        ...fetchStateForManifest(args.sourceManifest, args.exhaustedSourceIds),
       })
     }
     releaseFetchBatchMemory()
     startIndex += batchSize
   }
+}
+
+function fetchStateForManifest(
+  manifest: PublicWorkbookManifest,
+  exhaustedSourceIds: ReadonlySet<string>,
+): Pick<PublicWorkbookManifest, 'fetchState'> | Record<string, never> {
+  const orderedExhaustedSourceIds = manifest.sources.map((source) => source.id).filter((sourceId) => exhaustedSourceIds.has(sourceId))
+  return orderedExhaustedSourceIds.length > 0 ? { fetchState: { exhaustedSourceIds: orderedExhaustedSourceIds } } : {}
 }
 
 function dedupeCandidateSources(sources: readonly PublicWorkbookSource[]): PublicWorkbookSource[] {
