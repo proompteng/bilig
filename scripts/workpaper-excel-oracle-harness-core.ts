@@ -19,6 +19,7 @@ export type NormalizedFormulaValue =
 export interface FormulaComparisonInput {
   readonly actualBiligValue?: NormalizedFormulaValue
   readonly embeddedCacheValue?: NormalizedFormulaValue
+  readonly excelOracleFormula?: string
   readonly excelOracleValue?: NormalizedFormulaValue
   readonly formula: string
   readonly parserFailed?: boolean
@@ -95,6 +96,9 @@ export function classifyFormulaComparison(input: FormulaComparisonInput): Formul
   if (input.volatile || volatileFormulaPattern.test(input.formula)) {
     return 'volatile_skipped'
   }
+  if (input.excelOracleFormula !== undefined && !formulaSourcesEquivalentForOracle(input.formula, input.excelOracleFormula)) {
+    return 'missing_excel_oracle'
+  }
   if (input.excelOracleValue === undefined || input.actualBiligValue === undefined) {
     return 'missing_excel_oracle'
   }
@@ -113,6 +117,19 @@ export function classifyFormulaComparison(input: FormulaComparisonInput): Formul
     return 'cache_fresh_bilig_mismatches_excel'
   }
   return 'bilig_mismatches_excel'
+}
+
+export function formulaSourcesEquivalentForOracle(sourceFormula: string, oracleFormula: string): boolean {
+  return canonicalFormulaForOracleComparison(sourceFormula) === canonicalFormulaForOracleComparison(oracleFormula)
+}
+
+function canonicalFormulaForOracleComparison(formula: string): string {
+  const trimmed = formula.trim()
+  const withoutEquals = trimmed.startsWith('=') ? trimmed.slice(1) : trimmed
+  return withoutEquals
+    .replace(/\b_xlfn\._xlws\./giu, '')
+    .replace(/\b_xlfn\./giu, '')
+    .replace(/\s+/gu, '')
 }
 
 export function buildReportSummary(report: Pick<OracleHarnessReport, 'workbooks'>): OracleHarnessSummary {
@@ -203,7 +220,7 @@ export function reproNotesFor(classification: FormulaComparisonClassification): 
     case 'cache_stale_bilig_matches_excel':
       return 'Embedded cache was stale, but Bilig matched fresh Excel. Treat any cache-only mismatch as a false positive.'
     case 'missing_excel_oracle':
-      return 'No fresh Excel oracle was available. This cell is diagnostic only.'
+      return 'No usable fresh Excel oracle was available. This cell is diagnostic only.'
     case 'parser_failure':
       return 'Workbook import or parser setup failed before an authoritative formula comparison could run.'
     case 'timeout_failure':

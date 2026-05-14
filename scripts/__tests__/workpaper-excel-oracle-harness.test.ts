@@ -58,4 +58,28 @@ describe('WorkPaper Excel oracle harness classifier', () => {
       }),
     ).toBe('missing_excel_oracle')
   })
+
+  it('rejects an Excel oracle value when Excel rewrites the formula as an unsupported UDF', () => {
+    expect(
+      classifyFormulaComparison({
+        actualBiligValue: { kind: 'string', value: '2026-04-01' },
+        embeddedCacheValue: { kind: 'string', value: '2026-04-01' },
+        excelOracleFormula: 'IFERROR(_xludf.XLOOKUP(C14,Bank!$D$2:$D$31,Bank!$B$2:$B$31,"",0),"")',
+        excelOracleValue: { kind: 'string', value: '' },
+        formula: 'IFERROR(XLOOKUP(C14,Bank!$D$2:$D$31,Bank!$B$2:$B$31,"",0),"")',
+      }),
+    ).toBe('missing_excel_oracle')
+  })
+
+  it('accepts Excel compatibility prefixes when comparing oracle formulas', () => {
+    expect(
+      classifyFormulaComparison({
+        actualBiligValue: numberValue(20),
+        embeddedCacheValue: numberValue(20),
+        excelOracleFormula: '_xlfn.XLOOKUP(2,A2:A4,B2:B4)',
+        excelOracleValue: numberValue(20),
+        formula: 'XLOOKUP(2,A2:A4,B2:B4)',
+      }),
+    ).toBe('bilig_matches_excel')
+  })
 })

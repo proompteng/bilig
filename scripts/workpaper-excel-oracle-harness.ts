@@ -19,6 +19,7 @@ import {
   formatNormalizedValue,
   formatNullableRate,
   formulaFamilies,
+  formulaSourcesEquivalentForOracle,
   normalizedValuesEqual,
   reproNotesFor,
   sanitizeErrorMessage,
@@ -60,6 +61,11 @@ interface PreparedWorkbook {
   readonly maxColumns: number
   readonly maxRows: number
   readonly sheets: WorkPaperSheets
+}
+
+interface FormulaOracleCell {
+  readonly formula: string
+  readonly value?: NormalizedFormulaValue
 }
 
 interface HarnessOptions {
@@ -186,7 +192,7 @@ function evaluateWorkbookAgainstOracle(args: {
   let prepared: PreparedWorkbook | undefined
   try {
     prepared = prepareWorkbook(args.filePath)
-    const oracleCells = args.oraclePath ? readFormulaCacheMap(args.oraclePath) : new Map<string, NormalizedFormulaValue>()
+    const oracleCells = args.oraclePath ? readFormulaOracleCellMap(args.oraclePath) : new Map<string, FormulaOracleCell>()
     const workbook = WorkPaper.buildFromSheets(prepared.sheets, workPaperConfigFor(prepared, args.options))
     try {
       const comparisons = compareFormulaCells({ id, oracleCells, prepared, sampleLimit: args.options.sampleLimit, workbook })
@@ -225,7 +231,7 @@ function evaluateWorkbookAgainstOracle(args: {
 
 function compareFormulaCells(args: {
   readonly id: string
-  readonly oracleCells: ReadonlyMap<string, NormalizedFormulaValue>
+  readonly oracleCells: ReadonlyMap<string, FormulaOracleCell>
   readonly prepared: PreparedWorkbook
   readonly sampleLimit: number
   readonly workbook: WorkPaper
@@ -237,10 +243,13 @@ function compareFormulaCells(args: {
       sheetId === undefined
         ? ({ kind: 'error', value: 'missing-sheet' } satisfies NormalizedFormulaValue)
         : normalizeCellValue(args.workbook.getCellValue({ sheet: sheetId, row: cell.row, col: cell.col }))
-    const excelOracleValue = args.oracleCells.get(formulaCellKey(cell.sheetName, cell.address))
+    const excelOracleCell = args.oracleCells.get(formulaCellKey(cell.sheetName, cell.address))
+    const excelOracleValue =
+      excelOracleCell && formulaSourcesEquivalentForOracle(cell.formula, excelOracleCell.formula) ? excelOracleCell.value : undefined
     const classification = classifyFormulaComparison({
       actualBiligValue,
       embeddedCacheValue: cell.cachedValue,
+      excelOracleFormula: excelOracleCell?.formula,
       excelOracleValue,
       formula: cell.formula,
       volatile: cell.volatile,
@@ -354,14 +363,14 @@ function prepareWorkbook(filePath: string): PreparedWorkbook {
 
 type NormalizedCellContent = WorkPaperSheet[number][number]
 
-function readFormulaCacheMap(filePath: string): Map<string, NormalizedFormulaValue> {
+function readFormulaOracleCellMap(filePath: string): Map<string, FormulaOracleCell> {
   const workbook = XLSX.read(readFileSync(filePath), {
     type: 'buffer',
     cellFormula: true,
     cellText: false,
     cellDates: false,
   })
-  const values = new Map<string, NormalizedFormulaValue>()
+  const values = new Map<string, FormulaOracleCell>()
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName]
     if (!sheet?.['!ref']) {
@@ -372,11 +381,12 @@ function readFormulaCacheMap(filePath: string): Map<string, NormalizedFormulaVal
       for (let col = range.s.c; col <= range.e.c; col += 1) {
         const address = XLSX.utils.encode_cell({ r: row, c: col })
         const cell = sheet[address]
-        if (cell && formulaText(cell)) {
-          const cached = cachedFormulaValue(cell)
-          if (cached) {
-            values.set(formulaCellKey(sheetName, address), cached)
-          }
+        const formula = cell ? formulaText(cell) : null
+        if (cell && formula) {
+          values.set(formulaCellKey(sheetName, address), {
+            formula,
+            value: cachedFormulaValue(cell),
+          })
         }
       }
     }
