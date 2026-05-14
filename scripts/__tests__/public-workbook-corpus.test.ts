@@ -24,6 +24,7 @@ import {
   sha256Hex,
   validatePublicWorkbookCorpusScorecard,
   validatePublicWorkbookManifest,
+  type PublicWorkbookCorpusFetchCheckpointProgress,
   type PublicWorkbookManifest,
   type PublicWorkbookSource,
 } from '../public-workbook-corpus.ts'
@@ -1175,6 +1176,136 @@ describe('public workbook corpus', () => {
     })
 
     expect(checkpoints).toEqual([1])
+  })
+
+  it('reports checkpoint progress when fetch sources are exhausted without new artifacts', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-fetch-progress-'))
+    const workbookBytes = buildWorkbookBytes('DuplicateProgress')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(workbookBytes, { headers: { 'content-length': String(workbookBytes.byteLength) } })),
+    )
+
+    const license = {
+      spdxId: 'CC-BY-4.0',
+      title: 'Creative Commons Attribution 4.0 International',
+      evidenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    }
+    const manifest: PublicWorkbookManifest = {
+      ...createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'),
+      sources: [
+        {
+          id: 'source-progress-a',
+          kind: 'direct-url',
+          sourceUrl: 'https://example.com/progress-a.xlsx',
+          downloadUrl: 'https://example.com/progress-a.xlsx',
+          fileName: 'progress-a.xlsx',
+          discoveredAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+        {
+          id: 'source-progress-b',
+          kind: 'direct-url',
+          sourceUrl: 'https://example.com/progress-b.xlsx',
+          downloadUrl: 'https://example.com/progress-b.xlsx',
+          fileName: 'progress-b.xlsx',
+          discoveredAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+      ],
+    }
+    const progress: PublicWorkbookCorpusFetchCheckpointProgress[] = []
+
+    const fetched = await fetchPublicWorkbookArtifacts({
+      manifest,
+      cacheDir,
+      limit: 2,
+      fetchedAt: '2026-05-07T01:00:00.000Z',
+      fetchBatchSize: 1,
+      onArtifactsCommitted: (_checkpointManifest, checkpointProgress) => progress.push(checkpointProgress),
+    })
+
+    expect(fetched.artifacts).toHaveLength(1)
+    expect(progress).toEqual([
+      {
+        artifactCount: 1,
+        exhaustedSourceCount: 1,
+        committedArtifactCount: 1,
+        exhaustedSourceDelta: 1,
+        failedSourceCount: 0,
+        duplicateHashSourceCount: 0,
+        duplicateFingerprintSourceCount: 0,
+        failedSourceSamples: [],
+      },
+      {
+        artifactCount: 1,
+        exhaustedSourceCount: 2,
+        committedArtifactCount: 0,
+        exhaustedSourceDelta: 1,
+        failedSourceCount: 0,
+        duplicateHashSourceCount: 1,
+        duplicateFingerprintSourceCount: 0,
+        failedSourceSamples: [],
+      },
+    ])
+  })
+
+  it('includes bounded fetch failure samples in checkpoint progress', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-fetch-failure-progress-'))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('missing', { status: 404 })),
+    )
+
+    const license = {
+      spdxId: 'CC-BY-4.0',
+      title: 'Creative Commons Attribution 4.0 International',
+      evidenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    }
+    const manifest: PublicWorkbookManifest = {
+      ...createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'),
+      sources: [
+        {
+          id: 'source-failure-progress',
+          kind: 'direct-url',
+          sourceUrl: 'https://example.com/missing.xlsx',
+          downloadUrl: 'https://example.com/missing.xlsx',
+          fileName: 'missing.xlsx',
+          discoveredAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+      ],
+    }
+    const progress: PublicWorkbookCorpusFetchCheckpointProgress[] = []
+
+    const fetched = await fetchPublicWorkbookArtifacts({
+      manifest,
+      cacheDir,
+      limit: 1,
+      fetchedAt: '2026-05-07T01:00:00.000Z',
+      fetchBatchSize: 1,
+      onArtifactsCommitted: (_checkpointManifest, checkpointProgress) => progress.push(checkpointProgress),
+    })
+
+    expect(fetched.artifacts).toHaveLength(0)
+    expect(progress).toEqual([
+      {
+        artifactCount: 0,
+        exhaustedSourceCount: 1,
+        committedArtifactCount: 0,
+        exhaustedSourceDelta: 1,
+        failedSourceCount: 1,
+        duplicateHashSourceCount: 0,
+        duplicateFingerprintSourceCount: 0,
+        failedSourceSamples: [
+          {
+            sourceId: 'source-failure-progress',
+            fileName: 'missing.xlsx',
+            error: 'Unable to download https://example.com/missing.xlsx: HTTP 404',
+          },
+        ],
+      },
+    ])
   })
 
   it('fetches multi-batch corpus tranches without retaining prior batch results', async () => {

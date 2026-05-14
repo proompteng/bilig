@@ -10,6 +10,8 @@ import { formatByteSize, startChildRssWatchdog, terminateChildProcess } from './
 import type {
   FetchCorpusArgs,
   PublicWorkbookArtifact,
+  PublicWorkbookCorpusFetchCheckpointProgress,
+  PublicWorkbookCorpusFetchFailureSample,
   PublicWorkbookManifest,
   PublicWorkbookSource,
   WorkbookDownloadResult,
@@ -151,7 +153,10 @@ async function fetchArtifactsFromCandidateSources(args: {
   readonly fingerprintRssCheckIntervalMs?: number
   readonly isolatedFingerprinting: boolean
   readonly maxBytes: number
-  readonly onArtifactsCommitted?: (manifest: PublicWorkbookManifest) => void | Promise<void>
+  readonly onArtifactsCommitted?: (
+    manifest: PublicWorkbookManifest,
+    progress: PublicWorkbookCorpusFetchCheckpointProgress,
+  ) => void | Promise<void>
   readonly exhaustedSourceIds: Set<string>
   readonly sourceManifest: PublicWorkbookManifest
   readonly targetArtifactCount: number
@@ -177,11 +182,23 @@ async function fetchArtifactsFromCandidateSources(args: {
     )
     let committedArtifactCount = 0
     let exhaustedSourceCount = 0
+    let failedSourceCount = 0
+    let duplicateHashSourceCount = 0
+    let duplicateFingerprintSourceCount = 0
+    const failedSourceSamples: PublicWorkbookCorpusFetchFailureSample[] = []
     for (const result of downloadResults) {
       if (args.artifacts.length >= args.targetArtifactCount) {
         break
       }
       if (result.error || !result.bytes || !result.sha256 || !result.workbookFingerprint) {
+        failedSourceCount += 1
+        if (failedSourceSamples.length < 3) {
+          failedSourceSamples.push({
+            sourceId: result.source.id,
+            fileName: result.source.fileName,
+            error: result.error ?? 'download result was missing workbook bytes, hash, or fingerprint',
+          })
+        }
         if (!args.exhaustedSourceIds.has(result.source.id)) {
           args.exhaustedSourceIds.add(result.source.id)
           exhaustedSourceCount += 1
@@ -189,6 +206,7 @@ async function fetchArtifactsFromCandidateSources(args: {
         continue
       }
       if (args.knownHashes.has(result.sha256)) {
+        duplicateHashSourceCount += 1
         if (!args.exhaustedSourceIds.has(result.source.id)) {
           args.exhaustedSourceIds.add(result.source.id)
           exhaustedSourceCount += 1
@@ -196,6 +214,7 @@ async function fetchArtifactsFromCandidateSources(args: {
         continue
       }
       if (args.knownFingerprints.has(result.workbookFingerprint)) {
+        duplicateFingerprintSourceCount += 1
         if (!args.exhaustedSourceIds.has(result.source.id)) {
           args.exhaustedSourceIds.add(result.source.id)
           exhaustedSourceCount += 1
@@ -232,12 +251,24 @@ async function fetchArtifactsFromCandidateSources(args: {
     }
     if (committedArtifactCount > 0 || exhaustedSourceCount > 0) {
       // oxlint-disable-next-line eslint(no-await-in-loop) -- Checkpoint each bounded batch before continuing the long corpus fetch.
-      await args.onArtifactsCommitted?.({
-        ...args.sourceManifest,
-        generatedAt: args.fetchedAt,
-        artifacts: [...args.artifacts],
-        ...fetchStateForManifest(args.sourceManifest, args.exhaustedSourceIds),
-      })
+      await args.onArtifactsCommitted?.(
+        {
+          ...args.sourceManifest,
+          generatedAt: args.fetchedAt,
+          artifacts: [...args.artifacts],
+          ...fetchStateForManifest(args.sourceManifest, args.exhaustedSourceIds),
+        },
+        {
+          artifactCount: args.artifacts.length,
+          exhaustedSourceCount: args.exhaustedSourceIds.size,
+          committedArtifactCount,
+          exhaustedSourceDelta: exhaustedSourceCount,
+          failedSourceCount,
+          duplicateHashSourceCount,
+          duplicateFingerprintSourceCount,
+          failedSourceSamples,
+        },
+      )
     }
     releaseFetchBatchMemory()
     startIndex += batchSize

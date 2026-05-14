@@ -43,7 +43,12 @@ import {
   writeFingerprintArtifactWorkerResult,
   writeFootprintWorkerResult,
 } from './public-workbook-corpus-worker-commands.ts'
-import type { PublicWorkbookArtifact, PublicWorkbookCorpusCase, PublicWorkbookManifest } from './public-workbook-corpus-types.ts'
+import type {
+  PublicWorkbookArtifact,
+  PublicWorkbookCorpusCase,
+  PublicWorkbookCorpusFetchCheckpointProgress,
+  PublicWorkbookManifest,
+} from './public-workbook-corpus-types.ts'
 import {
   buildPublicWorkbookCorpusScorecard,
   capVerifyMaxRssBytes,
@@ -96,6 +101,7 @@ export type {
   PublicWorkbookArtifact,
   PublicWorkbookCaseStatus,
   PublicWorkbookCorpusCase,
+  PublicWorkbookCorpusFetchCheckpointProgress,
   PublicWorkbookCorpusScorecard,
   PublicWorkbookFeatureCounts,
   PublicWorkbookLicenseEvidence,
@@ -406,9 +412,9 @@ async function main(): Promise<void> {
           fingerprintMaxRssBytes: readMegabytesArg('--fingerprint-max-rss-mb', defaultFingerprintMaxRssBytes),
           isolatedFingerprinting: !inProcessFingerprinting,
           maxBytes: readNumberArg('--max-bytes', 50 * 1024 * 1024),
-          onArtifactsCommitted: (checkpointManifest) => {
+          onArtifactsCommitted: (checkpointManifest, progress) => {
             writeJson(manifestPath, checkpointManifest, 'public-workbook-corpus-manifest')
-            console.error(`Cached ${String(checkpointManifest.artifacts.length)} public workbook artifacts`)
+            console.error(formatFetchCheckpointProgress(progress))
           },
         })
         writeJson(manifestPath, fetchedManifest, 'public-workbook-corpus-manifest')
@@ -815,6 +821,26 @@ async function main(): Promise<void> {
     return
   }
   throw new Error(`Unknown public workbook corpus command: ${command}`)
+}
+
+function formatFetchCheckpointProgress(progress: PublicWorkbookCorpusFetchCheckpointProgress): string {
+  const parts = [
+    `Cached ${String(progress.artifactCount)} public workbook artifacts`,
+    `exhausted ${String(progress.exhaustedSourceCount)} sources`,
+    `+${String(progress.exhaustedSourceDelta)} exhausted this batch`,
+    `${String(progress.committedArtifactCount)} committed`,
+    `${String(progress.failedSourceCount)} failed`,
+    `${String(progress.duplicateHashSourceCount)} duplicate hashes`,
+    `${String(progress.duplicateFingerprintSourceCount)} duplicate fingerprints`,
+  ]
+  if (progress.failedSourceSamples.length > 0) {
+    parts.push(`failure samples: ${progress.failedSourceSamples.map(formatFetchFailureSample).join(' | ')}`)
+  }
+  return parts.join('; ')
+}
+
+function formatFetchFailureSample(sample: PublicWorkbookCorpusFetchCheckpointProgress['failedSourceSamples'][number]): string {
+  return `${sample.sourceId} ${sample.fileName}: ${sample.error.replace(/\s+/gu, ' ').slice(0, 240)}`
 }
 
 function selectManifestArtifactsWithRecordedCases(

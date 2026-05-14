@@ -188,8 +188,28 @@ export interface FetchCorpusArgs {
   readonly fingerprintMaxRssBytes?: number
   readonly fingerprintRssCheckIntervalMs?: number
   readonly isolatedFingerprinting?: boolean
-  readonly onArtifactsCommitted?: (manifest: PublicWorkbookManifest) => void | Promise<void>
+  readonly onArtifactsCommitted?: (
+    manifest: PublicWorkbookManifest,
+    progress: PublicWorkbookCorpusFetchCheckpointProgress,
+  ) => void | Promise<void>
   readonly sourceIds?: readonly string[]
+}
+
+export interface PublicWorkbookCorpusFetchCheckpointProgress {
+  readonly artifactCount: number
+  readonly exhaustedSourceCount: number
+  readonly committedArtifactCount: number
+  readonly exhaustedSourceDelta: number
+  readonly failedSourceCount: number
+  readonly duplicateHashSourceCount: number
+  readonly duplicateFingerprintSourceCount: number
+  readonly failedSourceSamples: readonly PublicWorkbookCorpusFetchFailureSample[]
+}
+
+export interface PublicWorkbookCorpusFetchFailureSample {
+  readonly sourceId: string
+  readonly fileName: string
+  readonly error: string
 }
 
 export interface CkanPageRequest {
