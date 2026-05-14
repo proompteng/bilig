@@ -13,6 +13,19 @@ describe('bilig dominance scorecard', () => {
     const scorecard = buildBiligDominanceScorecard(buildFixtureInput())
 
     expect(scorecard.goalStatus).toBe('active-not-achieved')
+    expect(scorecard.overallGoogleSheets10xStatus).toMatchObject({
+      passed: false,
+      status: 'blocked',
+      unmetRequirements: [
+        'ui-responsiveness: live UI browser evidence is not a same-corpus 10x proof against Google Sheets with rendered-grid proof',
+      ],
+    })
+    expect(scorecard.overallGoogleSheets10xStatus.categories.map((entry) => entry.id)).toEqual([
+      'recalculation-speed',
+      'structural-edit-performance',
+      'large-workbook-scale',
+      'ui-responsiveness',
+    ])
     expect(scorecard.claimPolicy.blanketTenXClaimAllowed).toBe(false)
     expect(scorecard.claimPolicy.unmetRequirements).toEqual(
       expect.arrayContaining([

@@ -106,6 +106,7 @@ export interface BiligDominanceScorecard {
   schemaVersion: 1
   objective: string
   goalStatus: DominanceGoalStatus
+  overallGoogleSheets10xStatus: OverallGoogleSheets10xStatus
   claimPolicy: {
     blanketTenXClaimAllowed: boolean
     requiredForBlanketTenXClaim: string[]
@@ -234,6 +235,23 @@ export interface DominanceCompletionAudit {
 }
 
 export interface DominanceCompletionCriterion {
+  id: string
+  requirement: string
+  passed: boolean
+  evidence: string[]
+  gaps: string[]
+}
+
+export interface OverallGoogleSheets10xStatus {
+  passed: boolean
+  status: 'passed' | 'blocked'
+  requirement: string
+  categories: OverallGoogleSheets10xCategoryStatus[]
+  unmetRequirements: string[]
+  evidenceArtifacts: string[]
+}
+
+export interface OverallGoogleSheets10xCategoryStatus {
   id: string
   requirement: string
   passed: boolean

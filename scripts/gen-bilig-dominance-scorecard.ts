@@ -12,6 +12,7 @@ import type {
   CompetitiveResult,
   LargeWorkbookSloMeasurement,
   LargeWorkbookSloScorecard,
+  OverallGoogleSheets10xStatus,
 } from './bilig-dominance-scorecard-types.ts'
 import {
   familyWinSummary,
@@ -164,14 +165,22 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
     structuralDirectTargetsTenXPassed,
     uiResponsivenessLiveBrowserPassed,
   })
+  const overallGoogleSheets10xStatus = buildOverallGoogleSheets10xStatus(input, {
+    googleSheetsLargeWorkbookTenXPassed,
+    googleSheetsRecalculationTenXPassed,
+    googleSheetsStructuralTenXPassed,
+    uiResponsivenessLiveBrowserPassed,
+    uiSameCorpusTenXGap,
+  })
 
   return {
     schemaVersion: 1,
     objective:
       'Make bilig decisively better than Google Sheets and Microsoft Excel, targeting at least 10x superiority across major spreadsheet/workbook categories.',
     goalStatus: completionAudit.allCriteriaPassed ? 'achieved' : 'active-not-achieved',
+    overallGoogleSheets10xStatus,
     claimPolicy: {
-      blanketTenXClaimAllowed: completionAudit.allCriteriaPassed,
+      blanketTenXClaimAllowed: completionAudit.allCriteriaPassed && overallGoogleSheets10xStatus.passed,
       requiredForBlanketTenXClaim: completionAudit.criteria.map((entry) => entry.requirement),
       unmetRequirements: completionAudit.unmetRequirements,
       workloadSpecificTenXWins: tenXWorkloads,
@@ -832,6 +841,94 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
         checkCommands: ['pnpm dominance:check', 'pnpm run ci'],
         blockers: operatorWorkflowBlockers,
       },
+    ],
+  }
+}
+
+function buildOverallGoogleSheets10xStatus(
+  input: BuildScorecardInput,
+  signals: {
+    readonly googleSheetsLargeWorkbookTenXPassed: boolean
+    readonly googleSheetsRecalculationTenXPassed: boolean
+    readonly googleSheetsStructuralTenXPassed: boolean
+    readonly uiResponsivenessLiveBrowserPassed: boolean
+    readonly uiSameCorpusTenXGap: boolean
+  },
+): OverallGoogleSheets10xStatus {
+  const categories = [
+    {
+      id: 'recalculation-speed',
+      requirement: 'Every claimed recalculation workload must prove at least 10x better mean and p95 than live Google Sheets.',
+      passed: signals.googleSheetsRecalculationTenXPassed,
+      evidence: [
+        `Google Sheets recalculation 10x cases: ${String(input.googleSheetsLiveRecalculationScorecard.summary.tenXMeanAndP95CaseCount)}/${String(
+          input.googleSheetsLiveRecalculationScorecard.summary.requiredCaseCount,
+        )}`,
+        `evidence kind: ${input.googleSheetsLiveRecalculationScorecard.source.evidenceKind}`,
+      ],
+      gaps: signals.googleSheetsRecalculationTenXPassed
+        ? []
+        : ['live Google Sheets recalculation scorecard is not 10x for every required case'],
+    },
+    {
+      id: 'structural-edit-performance',
+      requirement: 'Every claimed structural-edit workload must prove at least 10x better mean and p95 than live Google Sheets.',
+      passed: signals.googleSheetsStructuralTenXPassed,
+      evidence: [
+        `Google Sheets structural 10x cases: ${String(input.googleSheetsLiveStructuralScorecard.summary.tenXMeanAndP95CaseCount)}/${String(
+          input.googleSheetsLiveStructuralScorecard.summary.requiredCaseCount,
+        )}`,
+        `evidence kind: ${input.googleSheetsLiveStructuralScorecard.source.evidenceKind}`,
+      ],
+      gaps: signals.googleSheetsStructuralTenXPassed ? [] : ['live Google Sheets structural scorecard is not 10x for every required case'],
+    },
+    {
+      id: 'large-workbook-scale',
+      requirement: 'Every claimed large-workbook workload must prove at least 10x better mean and p95 than live Google Sheets.',
+      passed: signals.googleSheetsLargeWorkbookTenXPassed,
+      evidence: [
+        `Google Sheets large-workbook 10x cases: ${String(
+          input.googleSheetsLiveLargeWorkbookScorecard.summary.tenXMeanAndP95CaseCount,
+        )}/${String(input.googleSheetsLiveLargeWorkbookScorecard.summary.requiredCaseCount)}`,
+        `evidence kind: ${input.googleSheetsLiveLargeWorkbookScorecard.source.evidenceKind}`,
+      ],
+      gaps: signals.googleSheetsLargeWorkbookTenXPassed
+        ? []
+        : ['live Google Sheets large-workbook scorecard is not 10x for every required case'],
+    },
+    {
+      id: 'ui-responsiveness',
+      requirement:
+        'Claimed UI responsiveness must have live same-corpus browser proof against Google Sheets with 10x better mean and p95 plus rendered-grid proof.',
+      passed: signals.uiResponsivenessLiveBrowserPassed && !signals.uiSameCorpusTenXGap,
+      evidence: [
+        `direct live browser timing passed: ${String(signals.uiResponsivenessLiveBrowserPassed)}`,
+        `same-corpus capture kind: ${input.uiResponsivenessLiveBrowserScorecard.sameCorpusProof.evidenceKind}`,
+        `same-corpus UI 10x cases: ${String(
+          input.uiResponsivenessLiveBrowserScorecard.sameCorpusProof.tenXMeanAndP95CaseCount,
+        )}/${String(input.uiResponsivenessLiveBrowserScorecard.sameCorpusProof.requiredCaseCount)}`,
+      ],
+      gaps: [
+        ...(signals.uiResponsivenessLiveBrowserPassed ? [] : ['live incumbent browser timing scorecard is not passing']),
+        ...(signals.uiSameCorpusTenXGap
+          ? ['live UI browser evidence is not a same-corpus 10x proof against Google Sheets with rendered-grid proof']
+          : []),
+      ],
+    },
+  ] satisfies OverallGoogleSheets10xStatus['categories']
+  const unmetRequirements = categories.filter((entry) => !entry.passed).map((entry) => `${entry.id}: ${entry.gaps.join('; ')}`)
+  return {
+    passed: unmetRequirements.length === 0,
+    status: unmetRequirements.length === 0 ? 'passed' : 'blocked',
+    requirement:
+      'A broad Google Sheets 10x claim is allowed only when every claimed performance category has checked-in live Google Sheets evidence and every required mean and p95 ratio is at least 10x better.',
+    categories,
+    unmetRequirements,
+    evidenceArtifacts: [
+      input.googleSheetsLiveRecalculationScorecardPath,
+      input.googleSheetsLiveStructuralScorecardPath,
+      input.googleSheetsLiveLargeWorkbookScorecardPath,
+      input.uiResponsivenessLiveBrowserScorecardPath,
     ],
   }
 }

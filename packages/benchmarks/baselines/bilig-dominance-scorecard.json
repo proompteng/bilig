@@ -2,6 +2,59 @@
   "schemaVersion": 1,
   "objective": "Make bilig decisively better than Google Sheets and Microsoft Excel, targeting at least 10x superiority across major spreadsheet/workbook categories.",
   "goalStatus": "active-not-achieved",
+  "overallGoogleSheets10xStatus": {
+    "passed": false,
+    "status": "blocked",
+    "requirement": "A broad Google Sheets 10x claim is allowed only when every claimed performance category has checked-in live Google Sheets evidence and every required mean and p95 ratio is at least 10x better.",
+    "categories": [
+      {
+        "id": "recalculation-speed",
+        "requirement": "Every claimed recalculation workload must prove at least 10x better mean and p95 than live Google Sheets.",
+        "passed": true,
+        "evidence": [
+          "Google Sheets recalculation 10x cases: 4/4",
+          "evidence kind: live-google-sheets-native-conversion-via-google-drive-connector"
+        ],
+        "gaps": []
+      },
+      {
+        "id": "structural-edit-performance",
+        "requirement": "Every claimed structural-edit workload must prove at least 10x better mean and p95 than live Google Sheets.",
+        "passed": true,
+        "evidence": [
+          "Google Sheets structural 10x cases: 6/6",
+          "evidence kind: live-google-sheets-native-conversion-via-google-drive-connector"
+        ],
+        "gaps": []
+      },
+      {
+        "id": "large-workbook-scale",
+        "requirement": "Every claimed large-workbook workload must prove at least 10x better mean and p95 than live Google Sheets.",
+        "passed": true,
+        "evidence": [
+          "Google Sheets large-workbook 10x cases: 2/2",
+          "evidence kind: live-google-sheets-native-conversion-via-google-drive-connector"
+        ],
+        "gaps": []
+      },
+      {
+        "id": "ui-responsiveness",
+        "requirement": "Claimed UI responsiveness must have live same-corpus browser proof against Google Sheets with 10x better mean and p95 plus rendered-grid proof.",
+        "passed": false,
+        "evidence": ["direct live browser timing passed: true", "same-corpus capture kind: not-captured", "same-corpus UI 10x cases: 0/0"],
+        "gaps": ["live UI browser evidence is not a same-corpus 10x proof against Google Sheets with rendered-grid proof"]
+      }
+    ],
+    "unmetRequirements": [
+      "ui-responsiveness: live UI browser evidence is not a same-corpus 10x proof against Google Sheets with rendered-grid proof"
+    ],
+    "evidenceArtifacts": [
+      "packages/benchmarks/baselines/google-sheets-live-recalculation-scorecard.json",
+      "packages/benchmarks/baselines/google-sheets-live-structural-scorecard.json",
+      "packages/benchmarks/baselines/google-sheets-live-large-workbook-scorecard.json",
+      "packages/benchmarks/baselines/ui-responsiveness-live-browser-scorecard.json"
+    ]
+  },
   "claimPolicy": {
     "blanketTenXClaimAllowed": false,
     "requiredForBlanketTenXClaim": [

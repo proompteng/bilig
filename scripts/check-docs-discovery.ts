@@ -1,8 +1,18 @@
-import { readFile, stat } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { agentFrameworkDocRequirements, agentFrameworkLlmsRequiredLinks } from './check-docs-discovery-agent-pages.ts'
 import { requireAiSdkDiscovery } from './check-docs-discovery-ai-sdk.ts'
+import {
+  extractSitemapUrls,
+  requireDocumentedScriptsExist,
+  requireFile,
+  requireIncludes,
+  requireNoUnsupportedGoogleSheetsTenXClaims,
+  requireNotIncludes,
+  requirePackageKeywords,
+  requirePublishedSource,
+} from './check-docs-discovery-core.ts'
 import { requireHomepageDiscovery } from './check-docs-discovery-homepage.ts'
 import { productHuntLaunchAssetFiles, requireGrowthSurfaceDiscovery } from './check-docs-discovery-launch-kit.ts'
 import { requireNpmEvalDiscovery } from './check-docs-discovery-npm-eval.ts'
@@ -17,114 +27,6 @@ const siteRoot = 'https://proompteng.github.io/bilig/'
 
 const expectedSitemapUrls = docsSiteSources.map(([urlPath]) => `${siteRoot}${urlPath}`)
 const sourceFilesByUrl = new Map<string, string>(docsSiteSources.map(([urlPath, sourceFile]) => [`${siteRoot}${urlPath}`, sourceFile]))
-
-function requireIncludes(haystack: string, needle: string, context: string): void {
-  if (!haystack.includes(needle)) {
-    throw new Error(`${context} is missing ${needle}`)
-  }
-}
-
-function requireNotIncludes(haystack: string, needle: string, context: string): void {
-  if (haystack.includes(needle)) {
-    throw new Error(`${context} must not include ${needle}`)
-  }
-}
-
-async function requireFile(path: string): Promise<void> {
-  const info = await stat(path)
-  if (!info.isFile()) {
-    throw new Error(`${path} is not a file`)
-  }
-}
-
-function getFrontMatter(content: string): string | undefined {
-  if (!content.startsWith('---\n')) {
-    return undefined
-  }
-
-  const end = content.indexOf('\n---', 4)
-  if (end === -1) {
-    return undefined
-  }
-
-  return content.slice(4, end)
-}
-
-async function requirePublishedSource(path: string): Promise<void> {
-  await requireFile(path)
-
-  if (!path.endsWith('.md')) {
-    return
-  }
-
-  const frontMatter = getFrontMatter(await readFile(path, 'utf8'))
-  if (frontMatter !== undefined && /^published:\s*false\s*$/m.test(frontMatter)) {
-    throw new Error(`${path} is listed in the sitemap but has published: false`)
-  }
-}
-
-function extractSitemapUrls(sitemap: string): string[] {
-  return [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1] ?? '')
-}
-
-function extractNpmRunScripts(readme: string): string[] {
-  const scripts = new Set<string>()
-
-  // Match the command form used throughout the headless example README,
-  // including optional npm flags such as `npm run --silent script-name`.
-  for (const match of readme.matchAll(/\bnpm\s+run(?:\s+--[\w-]+)*\s+([\w:-]+)/g)) {
-    const script = match[1]
-    if (script !== undefined) {
-      scripts.add(script)
-    }
-  }
-
-  return [...scripts].toSorted()
-}
-
-function getPackageScripts(packageJson: string, context: string): Record<string, unknown> {
-  const manifest: unknown = JSON.parse(packageJson)
-
-  if (typeof manifest !== 'object' || manifest === null || !('scripts' in manifest)) {
-    throw new Error(`${context} is missing a scripts object`)
-  }
-
-  const { scripts } = manifest
-  if (typeof scripts !== 'object' || scripts === null || Array.isArray(scripts)) {
-    throw new Error(`${context} scripts must be an object`)
-  }
-
-  return scripts
-}
-
-function requirePackageKeywords(packageJson: string, requiredKeywords: readonly string[], context: string): void {
-  const manifest: unknown = JSON.parse(packageJson)
-
-  if (typeof manifest !== 'object' || manifest === null || !('keywords' in manifest)) {
-    throw new Error(`${context} is missing a keywords array`)
-  }
-
-  const { keywords } = manifest
-  if (!Array.isArray(keywords) || !keywords.every((keyword) => typeof keyword === 'string')) {
-    throw new Error(`${context} keywords must be an array of strings`)
-  }
-
-  for (const requiredKeyword of requiredKeywords) {
-    if (!keywords.includes(requiredKeyword)) {
-      throw new Error(`${context} is missing discovery keyword: ${requiredKeyword}`)
-    }
-  }
-}
-
-function requireDocumentedScriptsExist(readme: string, packageJson: string, context: string): void {
-  const scripts = getPackageScripts(packageJson, 'examples/headless-workpaper/package.json')
-
-  for (const documentedScript of extractNpmRunScripts(readme)) {
-    if (!(documentedScript in scripts)) {
-      throw new Error(`${context} documents missing package.json script: npm run ${documentedScript}`)
-    }
-  }
-}
 
 const [
   readme,
@@ -151,6 +53,7 @@ const [
   qaDiscussionTemplate,
   showAndTellDiscussionTemplate,
   pullRequestTemplate,
+  dominanceScorecard,
 ] = await Promise.all([
   readFile(join(repoRoot, 'README.md'), 'utf8'),
   readFile(join(repoRoot, 'CONTRIBUTING.md'), 'utf8'),
@@ -176,6 +79,7 @@ const [
   readFile(join(repoRoot, '.github', 'DISCUSSION_TEMPLATE', 'q-a.yml'), 'utf8'),
   readFile(join(repoRoot, '.github', 'DISCUSSION_TEMPLATE', 'show-and-tell.yml'), 'utf8'),
   readFile(join(repoRoot, '.github', 'PULL_REQUEST_TEMPLATE.md'), 'utf8'),
+  readFile(join(repoRoot, 'packages', 'benchmarks', 'baselines', 'bilig-dominance-scorecard.json'), 'utf8'),
 ])
 
 const [headlessSpreadsheetEngineComparison, sheetjsExceljsAlternativeFormulaWorkbookApi, hyperformulaAlternativeHeadlessWorkpaper] =
@@ -186,6 +90,11 @@ const [headlessSpreadsheetEngineComparison, sheetjsExceljsAlternativeFormulaWork
   ])
 
 requireHomepageDiscovery(index, siteCss, productCss)
+requireNoUnsupportedGoogleSheetsTenXClaims(dominanceScorecard, {
+  'README.md': readme,
+  'docs/index.html': index,
+  'packages/headless/README.md': headlessReadme,
+})
 requirePackageKeywords(
   headlessPackageJson,
   ['calculation', 'compute', 'excel', 'headless-spreadsheet', 'node-spreadsheet', 'sheet', 'spreadsheet-engine', 'worksheet'],
