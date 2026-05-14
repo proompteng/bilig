@@ -16,6 +16,34 @@ function formatFailedPendingMutationMessage(input: { failureMessage: string }): 
 
 const persistenceBannerButtonClass =
   'inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text)] transition-colors hover:bg-[var(--wb-surface)]/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1'
+const missingSheetActionClass =
+  'inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text)] shadow-[var(--wb-shadow-sm)] transition-colors hover:border-[var(--wb-border-strong)] hover:bg-[var(--wb-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1'
+
+function MissingSheetState(props: {
+  readonly availableSheets: readonly string[]
+  readonly requestedSheetName: string
+  readonly onSelectSheet: (sheetName: string) => void
+}) {
+  return (
+    <div className="flex h-full min-h-0 items-center justify-center bg-[var(--wb-surface)] px-6" data-testid="missing-sheet-state">
+      <div className="max-w-lg rounded-[var(--wb-radius-panel)] border border-[var(--wb-border)] bg-[var(--wb-surface-subtle)] p-5 shadow-[var(--wb-shadow-sm)]">
+        <div className="text-[13px] font-semibold text-[var(--wb-text)]">Sheet not found</div>
+        <div className="mt-2 text-[12px] leading-5 text-[var(--wb-text-muted)]">
+          Requested sheet <span className="font-medium text-[var(--wb-text)]">{props.requestedSheetName}</span> is not in this workbook.
+        </div>
+        {props.availableSheets.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {props.availableSheets.map((sheetName) => (
+              <button className={missingSheetActionClass} key={sheetName} onClick={() => props.onSelectSheet(sheetName)} type="button">
+                Open {sheetName}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
 
 export function WorkerWorkbookApp(props: { config: BiligRuntimeConfig; connectionState: ZeroConnectionState; zero?: ZeroClient }) {
   const runtimeConfig = useMemo(() => resolveRuntimeConfig(props.config), [props.config])
@@ -163,6 +191,8 @@ function WorkerWorkbookAppInner({
   )
   const visibleSelection = app.visibleSelection ?? app.selection
   const visibleSelectedCell = app.visibleSelectedCell ?? app.selectedCell
+  const missingVisibleSheet =
+    app.workbookReady && app.workerHandle && app.sheetNames.length > 0 && !app.sheetNames.includes(visibleSelection.sheetName)
 
   return (
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-[var(--wb-app-bg)] text-[var(--wb-text)]">
@@ -223,7 +253,13 @@ function WorkerWorkbookAppInner({
       <div className="relative flex min-h-0 flex-1">
         <WorkbookToastRegion toasts={toasts} />
         <div className="min-h-0 min-w-0 flex-1">
-          {app.workbookReady && app.workerHandle ? (
+          {missingVisibleSheet ? (
+            <MissingSheetState
+              availableSheets={app.sheetNames}
+              requestedSheetName={visibleSelection.sheetName}
+              onSelectSheet={(sheetName) => app.selectAddress(sheetName, 'A1')}
+            />
+          ) : app.workbookReady && app.workerHandle ? (
             <Profiler
               id="workbook-shell"
               onRender={() => {

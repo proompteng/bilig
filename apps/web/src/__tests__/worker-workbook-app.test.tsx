@@ -60,6 +60,7 @@ describe('WorkerWorkbookApp', () => {
   afterEach(() => {
     toast.dismiss()
     vi.clearAllMocks()
+    latestWorkbookViewProps.current = null
     document.body.innerHTML = ''
   })
 
@@ -552,6 +553,149 @@ describe('WorkerWorkbookApp', () => {
     })
   })
 
+  it('renders a typed missing-sheet state instead of an empty workbook grid', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const selectAddress = vi.fn()
+    useWorkerWorkbookAppState.mockReturnValue({
+      agentError: null,
+      approvePersistenceTransfer: vi.fn(),
+      autofitColumn: vi.fn(),
+      beginEditing: vi.fn(),
+      canRedo: false,
+      canUndo: false,
+      cancelEditor: vi.fn(),
+      changeCount: 0,
+      changesPanel: null,
+      clearAgentError: vi.fn(),
+      clearImportError: vi.fn(),
+      clearRuntimeError: vi.fn(),
+      clearSelectedCell: vi.fn(),
+      columnWidths: {},
+      commitEditor: vi.fn(),
+      copySelectionRange: vi.fn(),
+      createSheet: vi.fn(),
+      definedNames: [],
+      deleteSheet: vi.fn(),
+      dismissPersistenceTransferRequest: vi.fn(),
+      editorConflictBanner: null,
+      editorSelectionBehavior: 'select-all',
+      failedPendingMutation: null,
+      fillSelectionRange: vi.fn(),
+      freezeCols: 0,
+      freezeRows: 0,
+      getCellEditorSeed: vi.fn(),
+      handleEditorChange: vi.fn(),
+      handleSelectionChange: vi.fn(),
+      handleVisibleViewportChange: vi.fn(),
+      hiddenColumns: {},
+      hiddenRows: {},
+      importError: null,
+      importPanel: null,
+      importToggle: null,
+      invokeColumnVisibilityMutation: vi.fn(),
+      invokeColumnWidthMutation: vi.fn(),
+      invokeDeleteColumnsMutation: vi.fn(),
+      invokeDeleteRowsMutation: vi.fn(),
+      invokeInsertColumnsMutation: vi.fn(),
+      invokeInsertRowsMutation: vi.fn(),
+      invokeRowHeightMutation: vi.fn(),
+      invokeRowVisibilityMutation: vi.fn(),
+      invokeSetFreezePaneMutation: vi.fn(),
+      isEditing: false,
+      isEditingCell: false,
+      localPersistenceMode: 'persistent',
+      localPersistenceBanner: null,
+      moveSelectionRange: vi.fn(),
+      pasteIntoSelection: vi.fn(),
+      pendingTransferRequest: null,
+      previewRanges: [],
+      redoLatestChange: vi.fn(),
+      remoteSyncAvailable: true,
+      renameSheet: vi.fn(),
+      reportRuntimeError: vi.fn(),
+      requestPersistenceTransfer: vi.fn(),
+      requestPersistenceTransferBanner: null,
+      resolvedValue: '',
+      retryFailedPendingMutation: vi.fn(),
+      ribbon: null,
+      rowHeights: {},
+      runtimeError: null,
+      runtimeReady: true,
+      selection: { sheetName: 'Missing Sheet', address: 'E46' },
+      selectionSnapshot: {
+        sheetName: 'Missing Sheet',
+        address: 'E46',
+        kind: 'cell',
+        range: {
+          startAddress: 'E46',
+          endAddress: 'E46',
+        },
+      },
+      selectAddress,
+      selectSelectionSnapshot: vi.fn(),
+      selectedCell: { sheetName: 'Missing Sheet', address: 'E46' },
+      setSidePanelWidth: vi.fn(),
+      sheetIdsByName: { 'Prepaid Template': 1, Sheet1: 2 },
+      sheetNames: ['Prepaid Template', 'Sheet1'],
+      sheetOrdinalsByName: { 'Prepaid Template': 0, Sheet1: 1 },
+      sidePanel: null,
+      sidePanelId: undefined,
+      sidePanelWidth: undefined,
+      statusModeLabel: 'Live',
+      toggleBooleanCell: vi.fn(),
+      toolbarTrailingContent: null,
+      transferRequested: false,
+      undoLatestChange: vi.fn(),
+      visibleEditorValue: '',
+      visibleSelectedCell: { sheetName: 'Missing Sheet', address: 'E46' },
+      visibleSelection: { sheetName: 'Missing Sheet', address: 'E46' },
+      workbookReady: true,
+      workerHandle: {
+        viewportStore: {},
+      },
+      writesAllowed: true,
+      zeroConfigured: true,
+    })
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <WorkerWorkbookApp
+          config={{
+            currentUserId: 'guest:test',
+            defaultDocumentId: 'doc-1',
+            persistState: true,
+            zeroCacheUrl: 'http://127.0.0.1:4848',
+          }}
+          connectionState={{ name: 'connected' }}
+        />,
+      )
+    })
+
+    expect(host.querySelector("[data-testid='missing-sheet-state']")?.textContent).toContain('Missing Sheet')
+    expect(latestWorkbookViewProps.current).toBeNull()
+
+    const prepaidButton = [...host.querySelectorAll('button')].find((button) => button.textContent === 'Open Prepaid Template')
+    expect(prepaidButton).toBeInstanceOf(HTMLButtonElement)
+    if (!(prepaidButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected missing-sheet recovery button')
+    }
+
+    await act(async () => {
+      prepaidButton.click()
+    })
+
+    expect(selectAddress).toHaveBeenCalledWith('Prepaid Template', 'A1')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
   it('returns row and column delete promises to the workbook view context-menu handlers', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -641,9 +785,9 @@ describe('WorkerWorkbookApp', () => {
       selectSelectionSnapshot: vi.fn(),
       selectedCell: { sheetName: 'Sheet1', address: 'A1' },
       setSidePanelWidth: vi.fn(),
-      sheetIdsByName: { Sheet1: 1 },
-      sheetNames: ['Sheet1'],
-      sheetOrdinalsByName: { Sheet1: 0 },
+      sheetIdsByName: { Sheet1: 1, Sheet2: 2 },
+      sheetNames: ['Sheet1', 'Sheet2'],
+      sheetOrdinalsByName: { Sheet1: 0, Sheet2: 1 },
       sidePanel: null,
       sidePanelId: undefined,
       sidePanelWidth: undefined,
