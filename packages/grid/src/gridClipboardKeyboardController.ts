@@ -15,7 +15,7 @@ import {
   isClipboardShortcut,
   isClearCellKey,
   isHandledGridKey,
-  isNavigationKey,
+  isNavigationShortcut,
   isPrintableKey,
   normalizeKeyboardKey,
 } from './gridKeyboard.js'
@@ -451,13 +451,10 @@ function isWorkbookChromeGridShortcut(event: Pick<GridKeyboardEventLike, 'altKey
   return (
     isClearCellKey(event) ||
     isClipboardShortcut(event) ||
-    isNavigationKey(event.key) ||
+    isNavigationShortcut(event) ||
     (hasPrimaryModifier && !event.altKey && normalizedKey === 'a') ||
-    event.key === 'F2' ||
-    event.key === 'Home' ||
-    event.key === 'End' ||
-    event.key === 'PageUp' ||
-    event.key === 'PageDown'
+    (!event.altKey && !hasPrimaryModifier && !event.shiftKey && event.key === 'F2') ||
+    (!event.altKey && (event.key === 'Home' || event.key === 'End' || event.key === 'PageUp' || event.key === 'PageDown'))
   )
 }
 
@@ -467,10 +464,10 @@ export function shouldHandleGridSurfaceKey(
   return (
     isPrintableKey(event) ||
     isClipboardShortcut(event) ||
-    isNavigationKey(event.key) ||
-    event.key === 'Enter' ||
-    event.key === 'Tab' ||
-    event.key === 'F2' ||
+    isNavigationShortcut(event) ||
+    (event.key === 'Enter' && !event.altKey && !event.ctrlKey && !event.metaKey) ||
+    (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey) ||
+    (event.key === 'F2' && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) ||
     isClearCellKey(event)
   )
 }

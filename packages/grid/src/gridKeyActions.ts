@@ -96,13 +96,13 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
 
   if (isEditingCell) {
     if (!editorInputFocused) {
-      if (event.key === 'Enter') {
+      if (event.key === 'Enter' && !event.altKey && !event.ctrlKey && !event.metaKey) {
         return { kind: 'commit-edit', movement: [0, event.shiftKey ? -1 : 1] }
       }
-      if (event.key === 'Tab') {
+      if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey) {
         return { kind: 'commit-edit', movement: [event.shiftKey ? -1 : 1, 0] }
       }
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !event.altKey && !event.ctrlKey && !event.metaKey) {
         return { kind: 'cancel-edit' }
       }
       if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
@@ -112,7 +112,7 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
     return { kind: 'none' }
   }
 
-  if (event.key === 'F2') {
+  if (event.key === 'F2' && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
     return { kind: 'begin-edit', selectionBehavior: 'caret-end', pendingTypeSeed: null }
   }
 
@@ -135,7 +135,7 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
     return { kind: 'select-row', col: activeCell[0], row: activeCell[1] }
   }
 
-  if (event.key === 'Home') {
+  if (event.key === 'Home' && !event.altKey) {
     const nextCell = hasPrimaryModifier ? ([0, 0] as Item) : ([0, activeCell[1]] as Item)
     if (event.shiftKey) {
       return {
@@ -147,7 +147,7 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
     return { kind: 'move-selection', cell: nextCell }
   }
 
-  if (event.key === 'End') {
+  if (event.key === 'End' && !event.altKey) {
     const nextCell = hasPrimaryModifier ? ([MAX_COLS - 1, MAX_ROWS - 1] as Item) : ([MAX_COLS - 1, activeCell[1]] as Item)
     if (event.shiftKey) {
       return {
@@ -159,7 +159,7 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
     return { kind: 'move-selection', cell: nextCell }
   }
 
-  if (event.key === 'PageUp' || event.key === 'PageDown') {
+  if ((event.key === 'PageUp' || event.key === 'PageDown') && !event.altKey) {
     const nextCell = clampCell([activeCell[0], activeCell[1] + (event.key === 'PageDown' ? PAGE_JUMP_ROWS : -PAGE_JUMP_ROWS)])
     if (event.shiftKey) {
       return {
@@ -171,21 +171,21 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
     return { kind: 'move-selection', cell: nextCell }
   }
 
-  if (event.key === 'Enter') {
+  if (event.key === 'Enter' && !event.altKey && !event.ctrlKey && !event.metaKey) {
     return {
       kind: 'move-selection',
       cell: clampCell([activeCell[0], activeCell[1] + (event.shiftKey ? -1 : 1)]),
     }
   }
 
-  if (event.key === 'Tab') {
+  if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey) {
     return {
       kind: 'move-selection',
       cell: clampCell([activeCell[0] + (event.shiftKey ? -1 : 1), activeCell[1]]),
     }
   }
 
-  if (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+  if ((event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !event.altKey) {
     const delta: Item =
       event.key === 'ArrowUp' ? [0, -1] : event.key === 'ArrowDown' ? [0, 1] : event.key === 'ArrowLeft' ? [-1, 0] : [1, 0]
     const nextCell = hasPrimaryModifier

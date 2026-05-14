@@ -25,7 +25,7 @@ describe('gridKeyboardCapture', () => {
     expect(event.stopPropagation).toHaveBeenCalledTimes(1)
   })
 
-  it('should ignore unhandled keys after resetting pointer state', () => {
+  it('should ignore unhandled keys without resetting pointer state', () => {
     // Arrange
     const event = createKeyboardEvent({ key: 'F13', code: 'F13' })
     const handleGridKey = vi.fn()
@@ -41,7 +41,7 @@ describe('gridKeyboardCapture', () => {
     })
 
     // Assert
-    expect(resetPointerInteraction).toHaveBeenCalledTimes(1)
+    expect(resetPointerInteraction).not.toHaveBeenCalled()
     expect(openHeaderContextMenuFromKeyboard).not.toHaveBeenCalled()
     expect(handleGridKey).not.toHaveBeenCalled()
     expect(event.preventDefault).not.toHaveBeenCalled()
@@ -94,7 +94,7 @@ describe('gridKeyboardCapture', () => {
     expect(event.stopPropagation).toHaveBeenCalledTimes(1)
   })
 
-  it('should not claim modified delete key combinations', () => {
+  it('should not claim modified delete key combinations or mutate pointer state', () => {
     // Arrange
     const handleGridKey = vi.fn()
     const openHeaderContextMenuFromKeyboard = vi.fn(() => false)
@@ -117,7 +117,42 @@ describe('gridKeyboardCapture', () => {
     }
 
     // Assert
-    expect(resetPointerInteraction).toHaveBeenCalledTimes(events.length)
+    expect(resetPointerInteraction).not.toHaveBeenCalled()
+    expect(openHeaderContextMenuFromKeyboard).not.toHaveBeenCalled()
+    expect(handleGridKey).not.toHaveBeenCalled()
+    for (const event of events) {
+      expect(event.preventDefault).not.toHaveBeenCalled()
+      expect(event.stopPropagation).not.toHaveBeenCalled()
+    }
+  })
+
+  it('should not claim alt-modified browser navigation shortcuts', () => {
+    // Arrange
+    const handleGridKey = vi.fn()
+    const openHeaderContextMenuFromKeyboard = vi.fn(() => false)
+    const resetPointerInteraction = vi.fn()
+    const events = [
+      createKeyboardEvent({ key: 'ArrowLeft', code: 'ArrowLeft', altKey: true }),
+      createKeyboardEvent({ key: 'ArrowRight', code: 'ArrowRight', altKey: true }),
+      createKeyboardEvent({ key: 'Home', code: 'Home', altKey: true }),
+      createKeyboardEvent({ key: 'PageDown', code: 'PageDown', altKey: true }),
+      createKeyboardEvent({ key: 'Enter', code: 'Enter', altKey: true }),
+      createKeyboardEvent({ key: 'a', code: 'KeyA', ctrlKey: true, altKey: true }),
+      createKeyboardEvent({ key: ' ', code: 'Space', ctrlKey: true, altKey: true }),
+    ]
+
+    // Act
+    for (const event of events) {
+      handleWorkbookGridKeyDownCapture({
+        event,
+        handleGridKey,
+        openHeaderContextMenuFromKeyboard,
+        resetPointerInteraction,
+      })
+    }
+
+    // Assert
+    expect(resetPointerInteraction).not.toHaveBeenCalled()
     expect(openHeaderContextMenuFromKeyboard).not.toHaveBeenCalled()
     expect(handleGridKey).not.toHaveBeenCalled()
     for (const event of events) {

@@ -314,4 +314,52 @@ describe('gridKeyActions', () => {
       ).toEqual({ kind: 'none' })
     }
   })
+
+  test('does not claim unadvertised modified navigation and edit shortcuts', () => {
+    for (const event of [
+      { key: 'ArrowLeft', ctrlKey: false, metaKey: false, altKey: true },
+      { key: 'ArrowRight', ctrlKey: false, metaKey: false, altKey: true },
+      { key: 'Home', ctrlKey: false, metaKey: false, altKey: true },
+      { key: 'End', ctrlKey: false, metaKey: false, altKey: true },
+      { key: 'PageDown', ctrlKey: false, metaKey: false, altKey: true },
+      { key: 'Enter', ctrlKey: true, metaKey: false, altKey: false },
+      { key: 'Tab', ctrlKey: false, metaKey: true, altKey: false },
+      { key: 'F2', ctrlKey: false, metaKey: false, altKey: true },
+    ] as const) {
+      expect(
+        resolveGridKeyAction({
+          event,
+          isEditingCell: false,
+          editorValue: '',
+          editorInputFocused: false,
+          pendingTypeSeed: null,
+          selectedCell: [1, 1],
+          currentSelectionCell: [1, 1],
+          currentRangeAnchor: [1, 1],
+        }),
+      ).toEqual({ kind: 'none' })
+    }
+  })
+
+  test('does not commit edit mode for modified Enter or Tab before the editor input owns focus', () => {
+    for (const event of [
+      { key: 'Enter', ctrlKey: false, metaKey: false, altKey: true },
+      { key: 'Enter', ctrlKey: true, metaKey: false, altKey: false },
+      { key: 'Tab', ctrlKey: false, metaKey: true, altKey: false },
+      { key: 'Escape', ctrlKey: false, metaKey: false, altKey: true },
+    ] as const) {
+      expect(
+        resolveGridKeyAction({
+          event,
+          isEditingCell: true,
+          editorValue: 'draft',
+          editorInputFocused: false,
+          pendingTypeSeed: null,
+          selectedCell: [1, 1],
+          currentSelectionCell: [1, 1],
+          currentRangeAnchor: [1, 1],
+        }),
+      ).toEqual({ kind: 'none' })
+    }
+  })
 })

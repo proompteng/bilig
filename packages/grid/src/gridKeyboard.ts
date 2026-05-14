@@ -49,6 +49,14 @@ export function isNavigationKey(key: string): boolean {
   return key === 'ArrowUp' || key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight'
 }
 
+export function isNavigationShortcut(
+  event: GridKeyboardModifierState & {
+    shiftKey?: boolean
+  },
+): boolean {
+  return isNavigationKey(event.key) && !event.altKey
+}
+
 export function isClipboardShortcut(event: GridKeyboardModifierState): boolean {
   if (!(event.ctrlKey || event.metaKey) || event.altKey) {
     return false
@@ -78,17 +86,14 @@ export function isHandledGridKey(
   return (
     isPrintableKey(event) ||
     isClipboardShortcut(event) ||
-    isNavigationKey(event.key) ||
-    (hasPrimaryModifier && event.key.toLowerCase() === 'a') ||
-    (event.key === ' ' && (hasPrimaryModifier || event.shiftKey)) ||
-    event.key === 'Enter' ||
-    event.key === 'Tab' ||
-    event.key === 'Escape' ||
-    event.key === 'F2' ||
+    isNavigationShortcut(event) ||
+    (hasPrimaryModifier && !event.altKey && event.key.toLowerCase() === 'a') ||
+    (event.key === ' ' && !event.altKey && (hasPrimaryModifier || event.shiftKey)) ||
+    (event.key === 'Enter' && !event.altKey && !hasPrimaryModifier) ||
+    (event.key === 'Tab' && !event.altKey && !hasPrimaryModifier) ||
+    (event.key === 'Escape' && !event.altKey && !hasPrimaryModifier) ||
+    (event.key === 'F2' && !event.altKey && !hasPrimaryModifier && !event.shiftKey) ||
     isClearCellKey(event) ||
-    event.key === 'Home' ||
-    event.key === 'End' ||
-    event.key === 'PageUp' ||
-    event.key === 'PageDown'
+    ((event.key === 'Home' || event.key === 'End' || event.key === 'PageUp' || event.key === 'PageDown') && !event.altKey)
   )
 }

@@ -589,6 +589,16 @@ describe('gridClipboardKeyboardController', () => {
       ),
     ).toBe(true)
     expect(
+      shouldHandleGridWindowKey(
+        { altKey: true, ctrlKey: false, key: 'ArrowLeft', metaKey: false, shiftKey: false },
+        toolbarButton,
+        gridHost,
+      ),
+    ).toBe(false)
+    expect(
+      shouldHandleGridWindowKey({ altKey: true, ctrlKey: false, key: 'Delete', metaKey: false, shiftKey: false }, toolbarButton, gridHost),
+    ).toBe(false)
+    expect(
       shouldHandleGridWindowKey({ altKey: false, ctrlKey: false, key: 'Enter', metaKey: false, shiftKey: false }, toolbarButton, gridHost),
     ).toBe(false)
     expect(
@@ -769,6 +779,15 @@ describe('gridClipboardKeyboardController', () => {
         altKey: false,
         ctrlKey: false,
         key: 'Shift',
+        metaKey: false,
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldHandleGridSurfaceKey({
+        altKey: true,
+        ctrlKey: false,
+        key: 'ArrowLeft',
         metaKey: false,
       }),
     ).toBe(false)
