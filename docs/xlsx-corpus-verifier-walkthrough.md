@@ -167,4 +167,4 @@ Open an issue with the smallest workbook or fixture you can share:
 ## Related Public Notes
 
 - [`docs/where-bilig-is-not-excel-compatible-yet.md`](where-bilig-is-not-excel-compatible-yet.md)
-- [`packages/headless/README.md`](../packages/headless/README.md)
+- [`packages/headless/README.md`](https://github.com/proompteng/bilig/blob/main/packages/headless/README.md)

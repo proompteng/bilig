@@ -13,6 +13,7 @@ export function requireXlsxCorpusVerifierDiscovery(content: string): void {
     'Turn A Miss Into A Contribution',
     'https://github.com/proompteng/bilig/issues/new/choose',
     'https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only',
+    'https://github.com/proompteng/bilig/blob/main/packages/headless/README.md',
   ] as const) {
     requireIncludes(content, required, 'docs/xlsx-corpus-verifier-walkthrough.md')
   }
