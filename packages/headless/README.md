@@ -147,6 +147,7 @@ The full example catalog lives in
 | Wrap WorkPaper operations as tools   | `npm run agent:tool-call`            | [Agent tool call loop](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#agent-tool-call-loop)                     |
 | Wire OpenAI Responses function calls | `npm run agent:openai-responses`     | [OpenAI Responses tool wrapper](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#openai-responses-tool-wrapper)   |
 | Run AI SDK generateText tools        | `npm run agent:ai-sdk-generate-text` | [AI SDK generateText tool smoke](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#ai-sdk-generatetext-tool-smoke) |
+| Run AI SDK streamText tools          | `npm run agent:ai-sdk-stream-text`   | [AI SDK streamText tool smoke](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#ai-sdk-streamtext-tool-smoke)     |
 | Adapt tools to agent frameworks      | `npm run agent:framework-adapters`   | [Agent framework adapters](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#agent-framework-adapters)             |
 | Expose MCP-style tools               | `npm run agent:mcp-tools`            | [MCP tool server shape](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#mcp-tool-server-shape)                   |
 | Flag budget variance rows            | `npm run budget-variance`            | [Budget variance alerts](https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#budget-variance-alerts)                 |
@@ -408,6 +409,7 @@ npm start
 npm run http-json-summary
 npm run agent:tool-call
 npm run agent:ai-sdk-generate-text
+npm run agent:ai-sdk-stream-text
 npm run agent:framework-adapters
 ```
 
@@ -436,6 +438,9 @@ and `tool()` APIs with a deterministic `ai/test` model. It proves the model can
 call WorkPaper read/write tools and receive structured computed readback. The
 runnable TypeScript file is
 [`examples/headless-workpaper/ai-sdk-generate-text-tool-smoke.ts`](https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/ai-sdk-generate-text-tool-smoke.ts).
+`npm run agent:ai-sdk-stream-text` does the same for `streamText()`: streamed
+tool-call chunks, tool results, and streamed final text, with the same
+WorkPaper formula and restore checks underneath.
 
 `npm run agent:mcp-tools` exposes the same operations through dependency-free
 MCP-style `tools/list` and `tools/call` JSON-RPC responses with JSON Schema

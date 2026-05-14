@@ -109,6 +109,7 @@ npm start
 npm run agent:tool-call
 npm run agent:openai-responses
 npm run agent:ai-sdk-generate-text
+npm run agent:ai-sdk-stream-text
 npm run agent:framework-adapters
 npm run agent:verify
 ```
@@ -205,6 +206,8 @@ npm run agent:verify
   https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/agent-framework-adapters.ts
 - runnable AI SDK generateText WorkPaper tool smoke:
   https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/ai-sdk-generate-text-tool-smoke.ts
+- runnable AI SDK streamText WorkPaper tool smoke:
+  https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/ai-sdk-stream-text-tool-smoke.ts
 - MCP spreadsheet tool server guide:
   https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html
   https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-server.md

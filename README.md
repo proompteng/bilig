@@ -91,6 +91,7 @@ Useful direct paths:
   [Claude Desktop MCPB bundle](docs/claude-desktop-mcpb-workpaper.md). Run
   `npm run agent:openai-responses`,
   `npm run agent:ai-sdk-generate-text`,
+  `npm run agent:ai-sdk-stream-text`,
   `npm run agent:framework-adapters`, `npm run agent:mcp-tools`,
   `npm run agent:mcp-stdio`, or
   `pnpm mcpb:workpaper:build`, or
@@ -155,6 +156,7 @@ npm start
 npm run agent:tool-call
 npm run agent:openai-responses
 npm run agent:ai-sdk-generate-text
+npm run agent:ai-sdk-stream-text
 npm run agent:framework-adapters
 npm run agent:verify
 ```
@@ -396,6 +398,9 @@ For the Vercel AI SDK shape on its own, run
 `tool()` APIs with a deterministic `ai/test` model, then verifies the same
 WorkPaper edit and restore checks in
 [`examples/headless-workpaper/ai-sdk-generate-text-tool-smoke.ts`](examples/headless-workpaper/ai-sdk-generate-text-tool-smoke.ts).
+Run `npm run agent:ai-sdk-stream-text` for the matching `streamText()` path:
+the mock model streams tool calls and final text while the WorkPaper read,
+write, recalculation, and restore checks stay real TypeScript.
 
 For an MCP-style shape, run `npm run agent:mcp-tools`. It returns a
 dependency-free `tools/list` response, a `tools/call` read, and a verified

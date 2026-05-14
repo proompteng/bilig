@@ -34,6 +34,9 @@ AI SDK or LangChain into this repository, run
 If you want the real AI SDK loop, run `npm run agent:ai-sdk-generate-text`.
 That script calls `generateText()` and `tool()` from `ai`, using `ai/test` as a
 deterministic provider so no API key is needed.
+For the streaming path, run `npm run agent:ai-sdk-stream-text`. That script
+calls `streamText()` from `ai`, streams tool-call chunks and final text, and
+keeps the WorkPaper read/write verification in ordinary TypeScript.
 
 If your app calls OpenAI directly, start with the
 [Responses API function-calling guide](https://developers.openai.com/api/docs/guides/function-calling)
@@ -425,6 +428,14 @@ For the actual AI SDK `generateText()` loop, use
 ```sh
 cd examples/headless-workpaper
 npm run agent:ai-sdk-generate-text
+```
+
+For the actual AI SDK `streamText()` loop, use
+[`examples/headless-workpaper/ai-sdk-stream-text-tool-smoke.ts`](../examples/headless-workpaper/ai-sdk-stream-text-tool-smoke.ts):
+
+```sh
+cd examples/headless-workpaper
+npm run agent:ai-sdk-stream-text
 ```
 
 ## LangChain Tool Wrapper

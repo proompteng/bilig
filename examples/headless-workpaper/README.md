@@ -45,6 +45,7 @@ packages through `pnpm workpaper:smoke:external`.
 | Agent tool call loop     | `npm run agent:tool-call`          | read, edit, verify, serialize, restore                                                                            |
 | OpenAI Responses wrapper | `npm run agent:openai-responses`   | `function_call` dispatch, `function_call_output`, verified WorkPaper readback                                     |
 | AI SDK generateText      | `npm run agent:ai-sdk-generate-text` | real `generateText()` and `tool()` calls with verified WorkPaper readback                                         |
+| AI SDK streamText        | `npm run agent:ai-sdk-stream-text` | real `streamText()` and streamed tool calls with verified WorkPaper readback                                      |
 | Agent framework adapters | `npm run agent:framework-adapters` | TypeScript wrappers for AI SDK, LangChain, Mastra, LlamaIndex.TS, LangGraph.js, CopilotKit, and Cloudflare Agents |
 | MCP tool server shape    | `npm run agent:mcp-tools`          | `tools/list`, `tools/call`, verified edits                                                                        |
 | MCP stdio server         | `npm run agent:mcp-stdio`          | newline-delimited JSON-RPC over stdin/stdout                                                                      |
@@ -231,6 +232,44 @@ Expected proof:
 Use [`ai-sdk-generate-text-tool-smoke.ts`](ai-sdk-generate-text-tool-smoke.ts)
 when you want a copyable TypeScript file that proves the AI SDK can call the
 WorkPaper tools and receive structured results.
+
+## AI SDK StreamText Tool Smoke
+
+Run this when your app uses the Vercel AI SDK streaming path and you want the
+same WorkPaper read/write proof:
+
+```sh
+npm run agent:ai-sdk-stream-text
+```
+
+The script imports `streamText`, `stepCountIs`, and `simulateReadableStream`
+from `ai`. It uses `MockLanguageModelV3` from `ai/test`, so the example stays
+provider-free. The model stream emits tool calls, the AI SDK executes the
+WorkPaper tools, and the final answer is streamed as text deltas.
+
+Expected proof:
+
+```json
+{
+  "apiShape": "AI SDK streamText -> tool -> execute",
+  "modelStreamCallCount": 2,
+  "streamChunkTypes": ["tool-call", "tool-result", "tool-call", "tool-result", "text-delta", "text-delta"],
+  "toolNames": ["readWorkPaperSummary", "setWorkPaperInputCell"],
+  "writeResult": {
+    "editedCell": "Inputs!B3",
+    "before": { "expectedArr": 60000, "targetGap": -34000 },
+    "after": { "expectedArr": 96000, "targetGap": 5600 },
+    "checks": {
+      "formulasPersisted": true,
+      "restoredMatchesAfter": true,
+      "expectedArrChanged": true
+    }
+  }
+}
+```
+
+Use [`ai-sdk-stream-text-tool-smoke.ts`](ai-sdk-stream-text-tool-smoke.ts)
+when you want a copyable TypeScript file for the AI SDK streaming loop.
 
 ## Agent Framework Adapters
 

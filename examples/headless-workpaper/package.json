@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "agent:ai-sdk-generate-text": "tsx ai-sdk-generate-text-tool-smoke.ts",
+    "agent:ai-sdk-stream-text": "tsx ai-sdk-stream-text-tool-smoke.ts",
     "agent:framework-adapters": "tsx agent-framework-adapters.ts",
     "agent:mcp-stdio": "tsx mcp-stdio-server.ts",
     "agent:mcp-tools": "tsx mcp-tool-server.ts",

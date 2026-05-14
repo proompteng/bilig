@@ -61,6 +61,48 @@ Passing output includes:
 Inspect the runnable file here:
 [`examples/headless-workpaper/ai-sdk-generate-text-tool-smoke.ts`](../examples/headless-workpaper/ai-sdk-generate-text-tool-smoke.ts).
 
+## Real AI SDK `streamText()` Smoke
+
+Use this command when your agent path streams model output:
+
+```sh
+git clone https://github.com/proompteng/bilig.git
+cd bilig/examples/headless-workpaper
+npm install
+npm run agent:ai-sdk-stream-text
+```
+
+The smoke test uses the real `streamText()` API, `tool()` wrappers, and
+`simulateReadableStream()` from `ai`. The deterministic `MockLanguageModelV3`
+streams two WorkPaper tool calls, the AI SDK executes those tools, and the
+second model step streams the final answer. The WorkPaper behavior is the same
+as the `generateText()` smoke: read `Summary!A1:B5`, write
+`Inputs!B3 = 0.4`, recalculate, serialize, restore, and verify the restored
+summary.
+
+Passing output includes:
+
+```json
+{
+  "apiShape": "AI SDK streamText -> tool -> execute",
+  "modelStreamCallCount": 2,
+  "streamChunkTypes": ["tool-call", "tool-result", "tool-call", "tool-result", "text-delta", "text-delta"],
+  "writeResult": {
+    "editedCell": "Inputs!B3",
+    "before": { "expectedArr": 60000, "targetGap": -34000 },
+    "after": { "expectedArr": 96000, "targetGap": 5600 },
+    "checks": {
+      "formulasPersisted": true,
+      "restoredMatchesAfter": true,
+      "expectedArrChanged": true
+    }
+  }
+}
+```
+
+Inspect the runnable file here:
+[`examples/headless-workpaper/ai-sdk-stream-text-tool-smoke.ts`](../examples/headless-workpaper/ai-sdk-stream-text-tool-smoke.ts).
+
 ## Runnable Adapter Example
 
 Run the dependency-free adapter example from a clean checkout:
@@ -145,6 +187,8 @@ Official docs for the framework shapes:
   <https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling>
 - AI SDK `tool` reference:
   <https://ai-sdk.dev/docs/reference/ai-sdk-core/tool>
+- AI SDK `streamText` reference:
+  <https://ai-sdk.dev/docs/reference/ai-sdk-core/stream-text>
 - LangChain JavaScript tools:
   <https://docs.langchain.com/oss/javascript/langchain/tools>
 - Mastra `createTool()`:
