@@ -13,6 +13,7 @@ import {
 } from './ci-local-resource-guard.ts'
 import { buildBiligDominanceScorecard } from './gen-bilig-dominance-scorecard.ts'
 import type { UiResponsivenessSameCorpusWorkload } from './gen-ui-responsiveness-live-browser-scorecard.ts'
+import { requiredUiResponsivenessSameCorpusWorkloads } from './ui-responsiveness-same-corpus-workloads.ts'
 import {
   parseSameCorpusPublicAccessCheckJson,
   type SameCorpusPublicAccessCheck,
@@ -180,7 +181,7 @@ const defaultUiSameCorpusId: WorkbookBenchmarkCorpusId = 'wide-mixed-250k'
 const defaultUiSameCorpusPublicAccessCheckPath = join(rootDir, '.cache', 'ui-responsiveness', 'same-corpus-public-access-check.json')
 const uiSameCorpusGoogleSheetsUrlEnvVar = 'BILIG_UI_SAME_CORPUS_GOOGLE_SHEETS_URL'
 const publicWorkbookCorpusFetchBatchSize = 6
-const requiredUiSameCorpusWorkloads = ['visible-scroll-response'] as const satisfies readonly UiResponsivenessSameCorpusWorkload[]
+const requiredUiSameCorpusWorkloads = requiredUiResponsivenessSameCorpusWorkloads
 
 function main(): void {
   process.stdout.write(`${JSON.stringify(buildBiligDominanceStatusFromArgs(), null, 2)}\n`)
@@ -564,10 +565,13 @@ function buildUiSameCorpusStatus(
   const coveredWorkloads = new Set(proof.cases.map((entry) => entry.workload))
   const missingRequiredWorkloads = requiredUiSameCorpusWorkloads.filter((workload) => !coveredWorkloads.has(workload))
   const requiredProofCases = proof.cases.filter((entry) => requiredUiSameCorpusWorkloads.includes(entry.workload))
-  const casesMissingScrollEventEvidence = requiredProofCases
+  const scrollEvidenceRequiredProofCases = requiredProofCases.filter((entry) =>
+    uiSameCorpusWorkloadRequiresScrollEventEvidence(entry.workload),
+  )
+  const casesMissingScrollEventEvidence = scrollEvidenceRequiredProofCases
     .filter((entry) => !uiSameCorpusCaseHasScrollEventEvidence(entry))
     .map((entry) => entry.id)
-  const scrollEventEvidenceCaseCount = Math.max(0, requiredProofCases.length - casesMissingScrollEventEvidence.length)
+  const scrollEventEvidenceCaseCount = Math.max(0, scrollEvidenceRequiredProofCases.length - casesMissingScrollEventEvidence.length)
   const tenXRequirementSatisfied = uiSameCorpusTenXRequirementSatisfied(proof, missingRequiredWorkloads, casesMissingScrollEventEvidence)
   const googleSheetsUrlArgument = args.googleSheetsUrl ?? '<google-sheets-url>'
   const browserCaptureGuard = buildBrowserCaptureGuardStatus(args.localCiResourceGuardStatus)
@@ -752,6 +756,10 @@ function uiSameCorpusCaseHasScrollEventEvidence(
     Boolean(entry.googleSheets.scrollMovementPx) &&
     Boolean(entry.microsoftExcelWeb.scrollMovementPx)
   )
+}
+
+function uiSameCorpusWorkloadRequiresScrollEventEvidence(workload: UiResponsivenessSameCorpusWorkload): boolean {
+  return workload === 'scroll-vertical' || workload === 'scroll-horizontal' || workload === 'wide-sheet-navigation'
 }
 
 function uiSameCorpusFixtureStatus(corpusCaseId: WorkbookBenchmarkCorpusId): BiligDominanceStatus['uiSameCorpus']['fixture'] {

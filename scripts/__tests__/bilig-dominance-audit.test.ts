@@ -10,7 +10,10 @@ import type {
 } from '../gen-ui-responsiveness-live-browser-scorecard.ts'
 import { buildBiligDominanceScorecard } from '../gen-bilig-dominance-scorecard.ts'
 import type { PublicWorkbookCorpusStatus } from '../public-workbook-corpus-status.ts'
+import { requiredUiResponsivenessSameCorpusWorkloads } from '../ui-responsiveness-same-corpus-workloads.ts'
 import { buildFixtureInput } from './bilig-dominance-scorecard.fixture.ts'
+
+const requiredUiSameCorpusWorkloadList = requiredUiResponsivenessSameCorpusWorkloads.join(', ')
 
 describe('bilig dominance prompt-to-artifact audit', () => {
   it('maps every objective criterion to evidence artifacts, check commands, and live blockers', () => {
@@ -129,22 +132,22 @@ describe('bilig dominance prompt-to-artifact audit', () => {
       passed: false,
       liveBlockers: [
         'same-corpus UI browser capture has not been recorded',
-        'same-corpus UI proof missing required workloads: visible-scroll-response',
+        `same-corpus UI proof missing required workloads: ${requiredUiSameCorpusWorkloadList}`,
         'same-corpus UI proof missing inputs: googleSheetsUrlForUploadedSameCorpusWorkbook',
         'same-corpus UI browser capture paused by local resource guard: .agent-coordination/20260508T092619Z-codex-memory-pressure-stop.md',
       ],
       gaps: [
         'live UI browser evidence is not a same-corpus 10x proof against incumbents',
         'same-corpus UI browser capture has not been recorded',
-        'same-corpus UI proof missing required workloads: visible-scroll-response',
+        `same-corpus UI proof missing required workloads: ${requiredUiSameCorpusWorkloadList}`,
         'same-corpus UI proof missing inputs: googleSheetsUrlForUploadedSameCorpusWorkbook',
         'same-corpus UI browser capture paused by local resource guard: .agent-coordination/20260508T092619Z-codex-memory-pressure-stop.md',
       ],
       evidence: expect.arrayContaining([
         'live same-corpus UI proof captured: false',
         'live same-corpus UI 10x cases: 0/0',
-        'live same-corpus UI required workloads: visible-scroll-response',
-        'live same-corpus UI missing required workloads: visible-scroll-response',
+        `live same-corpus UI required workloads: ${requiredUiSameCorpusWorkloadList}`,
+        `live same-corpus UI missing required workloads: ${requiredUiSameCorpusWorkloadList}`,
         'live same-corpus UI missing inputs: googleSheetsUrlForUploadedSameCorpusWorkbook',
         'live same-corpus UI browser capture guard active: true',
       ]),
@@ -176,17 +179,20 @@ describe('bilig dominance prompt-to-artifact audit', () => {
     expect(audit.liveUiSameCorpus).toMatchObject({
       captured: true,
       scrollEventEvidenceCaseCount: 0,
-      casesMissingScrollEventEvidence: ['same-corpus-wide-mixed-250k-visible-scroll-response'],
+      casesMissingScrollEventEvidence: ['same-corpus-wide-mixed-250k-scroll-vertical'],
     })
     expect(uiItem).toMatchObject({
       passed: false,
       liveBlockers: expect.arrayContaining([
-        'same-corpus UI proof missing scroll-event evidence: same-corpus-wide-mixed-250k-visible-scroll-response',
+        `same-corpus UI proof missing required workloads: ${requiredUiResponsivenessSameCorpusWorkloads
+          .filter((workload) => workload !== 'scroll-vertical')
+          .join(', ')}`,
+        'same-corpus UI proof missing scroll-event evidence: same-corpus-wide-mixed-250k-scroll-vertical',
         'same-corpus UI proof has 0/1 required 10x cases',
       ]),
       evidence: expect.arrayContaining([
         'live same-corpus UI scroll-event evidence cases: 0/1',
-        'live same-corpus UI cases missing scroll-event evidence: same-corpus-wide-mixed-250k-visible-scroll-response',
+        'live same-corpus UI cases missing scroll-event evidence: same-corpus-wide-mixed-250k-scroll-vertical',
       ]),
     })
     expect(validateBiligDominancePromptArtifactAudit(audit)).toEqual([])
@@ -394,10 +400,10 @@ function legacyOperationOnlySameCorpusProof(): UiResponsivenessSameCorpusProof {
     limitations: [],
     cases: [
       {
-        id: 'same-corpus-wide-mixed-250k-visible-scroll-response',
+        id: 'same-corpus-wide-mixed-250k-scroll-vertical',
         corpusCaseId: 'wide-mixed-250k',
         materializedCells: 250_000,
-        workload: 'visible-scroll-response',
+        workload: 'scroll-vertical',
         sampleCount: 3,
         bilig,
         googleSheets,

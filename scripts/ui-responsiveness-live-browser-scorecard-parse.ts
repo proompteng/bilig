@@ -30,6 +30,7 @@ import type {
   SameCorpusScenarioProof,
   SameCorpusScreenshotProof,
 } from './ui-responsiveness-same-corpus-proof.ts'
+import { isUiResponsivenessSameCorpusWorkload } from './ui-responsiveness-same-corpus-workloads.ts'
 
 export function parseUiResponsivenessLiveBrowserScorecard(value: Record<string, unknown>): UiResponsivenessLiveBrowserScorecard {
   const host = objectField(value, 'host')
@@ -352,7 +353,7 @@ function parseSameCorpusPixelGridMethod(value: string): SameCorpusProductPixelGr
 }
 
 function parseSameCorpusWorkload(value: string): UiResponsivenessSameCorpusWorkload {
-  if (value === 'visible-scroll-response' || value === 'visible-edit-commit') {
+  if (isUiResponsivenessSameCorpusWorkload(value)) {
     return value
   }
   throw new Error(`Unexpected UI responsiveness same-corpus workload: ${value}`)

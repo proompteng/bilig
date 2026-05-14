@@ -12,12 +12,16 @@ import { parseSameCorpusCapture, parseUiResponsivenessLiveBrowserScorecard } fro
 import { formatJsonForRepo } from './scorecard-format.ts'
 import type { SameCorpusScenarioProof } from './ui-responsiveness-same-corpus-proof.ts'
 import { validateSameCorpusScenarioProof } from './ui-responsiveness-same-corpus-proof.ts'
+import {
+  requiredUiResponsivenessSameCorpusWorkloads,
+  type UiResponsivenessSameCorpusWorkload,
+} from './ui-responsiveness-same-corpus-workloads.ts'
 
 export { parseSameCorpusCapture, parseUiResponsivenessLiveBrowserScorecard } from './ui-responsiveness-live-browser-scorecard-parse.ts'
+export type { UiResponsivenessSameCorpusWorkload } from './ui-responsiveness-same-corpus-workloads.ts'
 
 export type UiResponsivenessLiveBrowserVendor = 'google-sheets' | 'microsoft-excel-web'
 export type UiResponsivenessSameCorpusProduct = 'bilig' | 'google-sheets' | 'microsoft-excel-web'
-export type UiResponsivenessSameCorpusWorkload = 'visible-scroll-response' | 'visible-edit-commit'
 
 export interface UiResponsivenessLiveBrowserCase {
   readonly id: string
@@ -181,7 +185,7 @@ export interface SameCorpusCaptureCorpusVerification {
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const outputPath = join(rootDir, 'packages', 'benchmarks', 'baselines', 'ui-responsiveness-live-browser-scorecard.json')
 const sampleCount = 3
-const requiredSameCorpusWorkloads = ['visible-scroll-response'] as const satisfies readonly UiResponsivenessSameCorpusWorkload[]
+const requiredSameCorpusWorkloads = requiredUiResponsivenessSameCorpusWorkloads
 const viewport = { width: 1440, height: 900 } as const
 const microsoftExcelSourceWorkbook =
   'https://github.com/fileformat-blog-gists/SampleFiles/raw/main/Spreadsheet-File-Formats/XLSX/Pivot-Tables-and-Charts.xlsx'
@@ -394,7 +398,11 @@ function validateSameCorpusCapture(capture: SameCorpusCapture): void {
     const hasAnyScrollEventSamples = [entry.bilig, entry.googleSheets, entry.microsoftExcelWeb].some(
       (measurement) => measurement.scrollEventResponseMsSamples !== undefined || measurement.scrollMovementPxSamples !== undefined,
     )
-    const requiresScrollEventSamples = entry.workload === 'visible-scroll-response' || hasAnyScrollEventSamples
+    const requiresScrollEventSamples =
+      entry.workload === 'scroll-vertical' ||
+      entry.workload === 'scroll-horizontal' ||
+      entry.workload === 'wide-sheet-navigation' ||
+      hasAnyScrollEventSamples
     for (const measurement of [entry.bilig, entry.googleSheets, entry.microsoftExcelWeb]) {
       if (
         measurement.operationResponseMsSamples.length < capture.sampleCount ||
@@ -663,7 +671,7 @@ function validateSameCorpusCase(entry: UiResponsivenessSameCorpusCase): void {
   validateSameCorpusMeasurement(entry.googleSheets, 'google-sheets', entry.id)
   validateSameCorpusMeasurement(entry.microsoftExcelWeb, 'microsoft-excel-web', entry.id)
   if (
-    entry.workload === 'visible-scroll-response' &&
+    (entry.workload === 'scroll-vertical' || entry.workload === 'scroll-horizontal' || entry.workload === 'wide-sheet-navigation') &&
     ![entry.bilig, entry.googleSheets, entry.microsoftExcelWeb].every((measurement) => hasSameCorpusScrollEvidence(measurement))
   ) {
     throw new Error(`UI responsiveness same-corpus proof is missing scroll-event evidence for ${entry.id}`)

@@ -84,7 +84,7 @@ async function main(): Promise<void> {
         outputPath: args.outputPath,
         corpusCaseId: args.corpusId,
         sampleCount: args.sampleCount,
-        workload: 'visible-scroll-response',
+        workload: 'scroll-vertical',
       },
       null,
       2,

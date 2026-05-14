@@ -1,5 +1,6 @@
 import type { BuildScorecardInput, DominanceCompletionAudit, DominanceCompletionCriterion } from './bilig-dominance-scorecard-types.ts'
 import type { UiResponsivenessLiveBrowserScorecard } from './gen-ui-responsiveness-live-browser-scorecard.ts'
+import { requiredUiResponsivenessSameCorpusWorkloads } from './ui-responsiveness-same-corpus-workloads.ts'
 
 export interface CompletionAuditSignals {
   readonly calculationSemanticsPassed: boolean
@@ -199,7 +200,9 @@ export function hasUiResponsivenessSameCorpusTenXGap(scorecard: UiResponsiveness
     scorecard.sameCorpusProof.requiredCaseCount === 0 ||
     scorecard.sameCorpusProof.cases.length !== scorecard.sameCorpusProof.requiredCaseCount ||
     scorecard.sameCorpusProof.tenXMeanAndP95CaseCount !== scorecard.sameCorpusProof.requiredCaseCount ||
-    !scorecard.sameCorpusProof.cases.some((entry) => entry.workload === 'visible-scroll-response') ||
+    requiredUiResponsivenessSameCorpusWorkloads.some(
+      (workload) => !scorecard.sameCorpusProof.cases.some((entry) => entry.workload === workload),
+    ) ||
     scorecard.sameCorpusProof.cases.some((entry) => !entry.passed)
   ) {
     return true

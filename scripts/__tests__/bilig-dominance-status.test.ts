@@ -7,6 +7,7 @@ import type { PublicWorkbookCorpusFinancialPlan } from '../public-workbook-corpu
 import type { PublicWorkbookCorpusFeatureWitnessPlan } from '../public-workbook-corpus-feature-witness-plan.ts'
 import type { PublicWorkbookCorpusStatus } from '../public-workbook-corpus-status.ts'
 import type { SameCorpusPublicAccessCheck } from '../ui-responsiveness-same-corpus-public-access-check.ts'
+import { requiredUiResponsivenessSameCorpusWorkloads } from '../ui-responsiveness-same-corpus-workloads.ts'
 import { buildFixtureInput } from './bilig-dominance-scorecard.fixture.ts'
 
 describe('bilig dominance status', () => {
@@ -22,8 +23,8 @@ describe('bilig dominance status', () => {
     expect(status.uiSameCorpus).toMatchObject({
       captured: false,
       evidenceKind: 'not-captured',
-      requiredWorkloads: ['visible-scroll-response'],
-      missingRequiredWorkloads: ['visible-scroll-response'],
+      requiredWorkloads: [...requiredUiResponsivenessSameCorpusWorkloads],
+      missingRequiredWorkloads: [...requiredUiResponsivenessSameCorpusWorkloads],
       googleSheetsUrl: null,
       googleSheetsUrlSource: 'missing',
       googleSheetsUrlEnvVar: 'BILIG_UI_SAME_CORPUS_GOOGLE_SHEETS_URL',
@@ -175,11 +176,11 @@ describe('bilig dominance status', () => {
     expect(status.uiSameCorpus).toMatchObject({
       captured: true,
       evidenceKind: 'same-corpus-browser-capture',
-      requiredCaseCount: 1,
+      requiredCaseCount: requiredUiResponsivenessSameCorpusWorkloads.length,
       tenXMeanAndP95CaseCount: 0,
       tenXRequirementSatisfied: false,
       missingRequiredWorkloads: [],
-      scrollEventEvidenceCaseCount: 1,
+      scrollEventEvidenceCaseCount: 3,
       casesMissingScrollEventEvidence: [],
       missingInputs: ['googleSheetsUrlForUploadedSameCorpusWorkbook'],
     })
@@ -583,45 +584,46 @@ function failingSameCorpusCapture(): SameCorpusCapture {
     suite: 'ui-responsiveness-same-corpus-capture',
     sampleCount: 3,
     limitations: [],
-    cases: [
-      {
-        id: 'same-corpus-wide-mixed-250k-visible-scroll-response',
-        corpusCaseId: 'wide-mixed-250k',
-        materializedCells: 250_000,
-        workload: 'visible-scroll-response',
-        scenarioProof: sameCorpusScenarioProof(200, 100),
-        bilig: {
-          product: 'bilig',
-          source: 'e2e/tests/web-shell-scroll-performance.pw.ts',
-          operationResponseMsSamples: [200, 200, 200],
-          postOperationFrameMsSamples: [12, 12, 12],
-          scrollEventResponseMsSamples: [200, 200, 200],
-          scrollMovementPxSamples: [720, 720, 720],
-          corpusVerification: sameCorpusVerification('bilig-benchmark-state'),
-          limitations: [],
-        },
-        googleSheets: {
-          product: 'google-sheets',
-          source: 'https://docs.google.com/spreadsheets/d/sameCorpusSheet/edit',
-          operationResponseMsSamples: [100, 100, 100],
-          postOperationFrameMsSamples: [16, 16, 16],
-          scrollEventResponseMsSamples: [100, 100, 100],
-          scrollMovementPxSamples: [720, 720, 720],
-          corpusVerification: sameCorpusVerification('google-sheets-xlsx-export'),
-          limitations: [],
-        },
-        microsoftExcelWeb: {
-          product: 'microsoft-excel-web',
-          source: 'https://view.officeapps.live.com/op/view.aspx?src=sameCorpusWorkbook',
-          operationResponseMsSamples: [100, 100, 100],
-          postOperationFrameMsSamples: [16, 16, 16],
-          scrollEventResponseMsSamples: [100, 100, 100],
-          scrollMovementPxSamples: [720, 720, 720],
-          corpusVerification: sameCorpusVerification('microsoft-excel-web-source-xlsx'),
-          limitations: [],
-        },
+    cases: requiredUiResponsivenessSameCorpusWorkloads.map((workload) => ({
+      id: `same-corpus-wide-mixed-250k-${workload}`,
+      corpusCaseId: 'wide-mixed-250k',
+      materializedCells: 250_000,
+      workload,
+      scenarioProof: sameCorpusScenarioProof(200, 100),
+      bilig: {
+        product: 'bilig',
+        source: 'e2e/tests/web-shell-scroll-performance.pw.ts',
+        operationResponseMsSamples: [200, 200, 200],
+        postOperationFrameMsSamples: [12, 12, 12],
+        ...(workload === 'scroll-vertical' || workload === 'scroll-horizontal' || workload === 'wide-sheet-navigation'
+          ? { scrollEventResponseMsSamples: [200, 200, 200], scrollMovementPxSamples: [720, 720, 720] }
+          : {}),
+        corpusVerification: sameCorpusVerification('bilig-benchmark-state'),
+        limitations: [],
       },
-    ],
+      googleSheets: {
+        product: 'google-sheets',
+        source: 'https://docs.google.com/spreadsheets/d/sameCorpusSheet/edit',
+        operationResponseMsSamples: [100, 100, 100],
+        postOperationFrameMsSamples: [16, 16, 16],
+        ...(workload === 'scroll-vertical' || workload === 'scroll-horizontal' || workload === 'wide-sheet-navigation'
+          ? { scrollEventResponseMsSamples: [100, 100, 100], scrollMovementPxSamples: [720, 720, 720] }
+          : {}),
+        corpusVerification: sameCorpusVerification('google-sheets-xlsx-export'),
+        limitations: [],
+      },
+      microsoftExcelWeb: {
+        product: 'microsoft-excel-web',
+        source: 'https://view.officeapps.live.com/op/view.aspx?src=sameCorpusWorkbook',
+        operationResponseMsSamples: [100, 100, 100],
+        postOperationFrameMsSamples: [16, 16, 16],
+        ...(workload === 'scroll-vertical' || workload === 'scroll-horizontal' || workload === 'wide-sheet-navigation'
+          ? { scrollEventResponseMsSamples: [100, 100, 100], scrollMovementPxSamples: [720, 720, 720] }
+          : {}),
+        corpusVerification: sameCorpusVerification('microsoft-excel-web-source-xlsx'),
+        limitations: [],
+      },
+    })),
   }
 }
 

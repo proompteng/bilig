@@ -104,7 +104,7 @@ export async function saveStorageState(args: SaveStorageStateArgs): Promise<void
 export async function captureSameCorpusUiResponsiveness(args: CaptureArgs): Promise<SameCorpusCapture> {
   const corpus = buildWorkbookBenchmarkCorpus(args.corpusId)
   const browser = await chromium.launch({ headless: args.headless })
-  const caseId = `same-corpus-${args.corpusId}-visible-scroll-response`
+  const caseId = `same-corpus-${args.corpusId}-scroll-vertical`
   const visualProofs: SameCorpusProductVisualProof[] = []
   try {
     const { bilig, googleSheets, microsoftExcelWeb } = await collectSameCorpusProductMeasurements(args, (product, url) =>
@@ -120,14 +120,14 @@ export async function captureSameCorpusUiResponsiveness(args: CaptureArgs): Prom
       sampleCount: args.sampleCount,
       limitations: [
         'Caller must supply Google Sheets and Microsoft Excel Web URLs for the same exported Bilig benchmark corpus.',
-        'This capture measures browser-visible scroll response; edit latency must be captured by a separate same-corpus workload.',
+        'This capture currently measures the vertical scroll workload only; the dominance gate requires the full same-corpus UI workload suite.',
       ],
       cases: [
         {
           id: caseId,
           corpusCaseId: args.corpusId,
           materializedCells: corpus.materializedCellCount,
-          workload: 'visible-scroll-response',
+          workload: 'scroll-vertical',
           scenarioProof,
           bilig,
           googleSheets,
