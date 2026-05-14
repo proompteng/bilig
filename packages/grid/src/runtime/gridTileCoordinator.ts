@@ -89,7 +89,13 @@ export class GridTileCoordinator<Packet = unknown, Resources = unknown> {
 
     input.visibleTileKeys.forEach((key) => {
       const exact = this.residency.getExact(key)
-      if (exact && exact.state === 'ready' && !visibleDirty.has(key)) {
+      if (exact && exact.state === 'ready') {
+        if (visibleDirty.has(key)) {
+          staleHits.push(key)
+          staleLookupCount += 1
+          staleLookupScannedEntries += 1
+          return
+        }
         exactHits.push(key)
         return
       }

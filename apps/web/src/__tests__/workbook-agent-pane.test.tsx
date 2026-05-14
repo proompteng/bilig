@@ -395,6 +395,48 @@ function VolatileRenderedContextHarness() {
   )
 }
 
+function VolatileRenderedBatchContextHarness() {
+  const [batchId, setBatchId] = useState(11)
+  const previewCommandBundle = useCallback(async () => createPreviewSummary(), [])
+  const getContext = useCallback(
+    () => ({
+      ...createDefaultWorkflowContext(),
+      rendered: {
+        capturedAtUnixMs: Date.now(),
+        capturedRevision: 7,
+        batchId,
+        selection: null,
+        visibleRange: null,
+      },
+    }),
+    [batchId],
+  )
+
+  const { agentPanel } = useWorkbookAgentPane({
+    currentUserId: 'alex@example.com',
+    documentId: 'doc-1',
+    enabled: true,
+    getContext,
+    activeContextLabel: 'Sheet1!A1',
+    previewCommandBundle,
+  })
+
+  return (
+    <div>
+      <button
+        data-testid="advance-render-batch"
+        type="button"
+        onClick={() => {
+          setBatchId((current) => current + 1)
+        }}
+      >
+        {batchId}
+      </button>
+      {agentPanel}
+    </div>
+  )
+}
+
 beforeEach(() => {
   vi.stubGlobal('EventSource', MockEventSource)
   window.sessionStorage.clear()
@@ -2301,6 +2343,82 @@ describe('workbook agent pane', () => {
       await forceInertRender()
       await forceInertRender()
       await forceInertRender()
+
+      expect(contextCalls()).toHaveLength(1)
+      expect(requestBody(contextCalls()[0]?.[1])).toMatchObject({
+        context: {
+          rendered: {
+            capturedRevision: 7,
+            batchId: 11,
+          },
+        },
+      })
+    } finally {
+      await act(async () => {
+        root.unmount()
+      })
+    }
+  })
+
+  it('does not resync workbook context only because the rendered batch id changes', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    window.sessionStorage.setItem(
+      'bilig:workbook-agent:doc-1',
+      JSON.stringify({
+        threadId: 'thr-1',
+      }),
+    )
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET') {
+        return new Response(JSON.stringify(createSnapshot({ threadId: 'thr-1' })), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (url.endsWith('/chat/threads/thr-1/context') && requestMethod(init) === 'POST') {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const contextCalls = () =>
+      fetchSpy.mock.calls.filter(
+        ([input, init]) => requestUrl(input).endsWith('/chat/threads/thr-1/context') && requestMethod(init) === 'POST',
+      )
+
+    try {
+      await act(async () => {
+        root.render(<VolatileRenderedBatchContextHarness />)
+      })
+
+      await act(async () => {
+        await Promise.resolve()
+        await new Promise((resolve) => setTimeout(resolve, 200))
+      })
+
+      expect(contextCalls()).toHaveLength(1)
+
+      const advanceBatch = async () => {
+        await act(async () => {
+          host.querySelector("[data-testid='advance-render-batch']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+        })
+        await act(async () => {
+          await Promise.resolve()
+          await new Promise((resolve) => setTimeout(resolve, 200))
+        })
+      }
+
+      await advanceBatch()
+      await advanceBatch()
+      await advanceBatch()
 
       expect(contextCalls()).toHaveLength(1)
       expect(requestBody(contextCalls()[0]?.[1])).toMatchObject({

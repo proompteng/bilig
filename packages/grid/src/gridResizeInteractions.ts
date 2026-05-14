@@ -16,8 +16,16 @@ interface ResizePointerEventLike extends PointerEventLike {
 }
 
 interface PointerListenerTarget {
-  addEventListener(type: 'pointermove' | 'pointerup', listener: (event: PointerEventLike) => void, useCapture: boolean): void
-  removeEventListener(type: 'pointermove' | 'pointerup', listener: (event: PointerEventLike) => void, useCapture: boolean): void
+  addEventListener(
+    type: 'pointermove' | 'pointerup' | 'pointercancel',
+    listener: (event: PointerEventLike) => void,
+    useCapture: boolean,
+  ): void
+  removeEventListener(
+    type: 'pointermove' | 'pointerup' | 'pointercancel',
+    listener: (event: PointerEventLike) => void,
+    useCapture: boolean,
+  ): void
 }
 
 type ResizeCleanup = ((event?: PointerEventLike) => void) | null
@@ -271,8 +279,20 @@ function installGridResizeLifecycle(input: {
   deactivate: () => void
   preview: (event: PointerEventLike) => void
   commitOrClear: () => void
+  cancelOrClear: () => void
 }): void {
-  const { activate, cleanupRef, commitOrClear, deactivate, finishResize, listenerTarget, preview, refreshHoverState, startResize } = input
+  const {
+    activate,
+    cancelOrClear,
+    cleanupRef,
+    commitOrClear,
+    deactivate,
+    finishResize,
+    listenerTarget,
+    preview,
+    refreshHoverState,
+    startResize,
+  } = input
   cleanupRef.current?.()
   startResize()
   activate()
@@ -284,6 +304,7 @@ function installGridResizeLifecycle(input: {
   const cleanup = (nativeEvent?: PointerEventLike) => {
     listenerTarget.removeEventListener('pointermove', handlePointerMove, true)
     listenerTarget.removeEventListener('pointerup', handlePointerUp, true)
+    listenerTarget.removeEventListener('pointercancel', handlePointerCancel, true)
     cleanupRef.current = null
     deactivate()
     finishResize()
@@ -297,9 +318,18 @@ function installGridResizeLifecycle(input: {
     cleanup(nativeEvent)
   }
 
-  cleanupRef.current = cleanup
+  const handlePointerCancel = (nativeEvent: PointerEventLike) => {
+    cancelOrClear()
+    cleanup(nativeEvent)
+  }
+
+  cleanupRef.current = () => {
+    cancelOrClear()
+    cleanup()
+  }
   listenerTarget.addEventListener('pointermove', handlePointerMove, true)
   listenerTarget.addEventListener('pointerup', handlePointerUp, true)
+  listenerTarget.addEventListener('pointercancel', handlePointerCancel, true)
 }
 
 export function beginWorkbookGridColumnResize(input: {
@@ -353,8 +383,10 @@ export function beginWorkbookGridColumnResize(input: {
         clearColumnResizePreview(columnIndex)
       } else {
         commitColumnWidth(columnIndex, finalWidth)
+        clearColumnResizePreview(columnIndex)
       }
     },
+    cancelOrClear: () => clearColumnResizePreview(columnIndex),
   })
 }
 
@@ -409,7 +441,9 @@ export function beginWorkbookGridRowResize(input: {
         clearRowResizePreview(rowIndex)
       } else {
         commitRowHeight(rowIndex, finalHeight)
+        clearRowResizePreview(rowIndex)
       }
     },
+    cancelOrClear: () => clearRowResizePreview(rowIndex),
   })
 }

@@ -92,10 +92,10 @@ describe('GridTileCoordinator', () => {
 
     expect(coordinator.reconcileInterest(interest)).toEqual({
       exactHits: [exact.key],
-      staleHits: [dirty.key, missing],
-      misses: [],
+      staleHits: [dirty.key],
+      misses: [missing],
       staleLookupCount: 2,
-      staleLookupScannedEntries: 6,
+      staleLookupScannedEntries: 1,
       visibleMarkedTiles: 2,
       visibleDirtyTileKeys: [dirty.key],
       warmDirtyTileKeys: [],

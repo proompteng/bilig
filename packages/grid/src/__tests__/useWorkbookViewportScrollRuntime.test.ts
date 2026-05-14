@@ -224,4 +224,67 @@ describe('WorkbookViewportScrollRuntime', () => {
       y: 8,
     })
   })
+
+  it('rechecks selected-cell visibility when the viewport resizes without changing selection', () => {
+    const metrics = getGridMetrics()
+    const columnAxis = createGridAxisWorldIndexFromRecords({
+      axisLength: MAX_COLS,
+      defaultSize: metrics.columnWidth,
+    })
+    const rowAxis = createGridAxisWorldIndexFromRecords({
+      axisLength: MAX_ROWS,
+      defaultSize: metrics.rowHeight,
+    })
+    const gridRuntimeHost = new GridRuntimeHost({
+      columnCount: MAX_COLS,
+      defaultColumnWidth: metrics.columnWidth,
+      defaultRowHeight: metrics.rowHeight,
+      gridMetrics: metrics,
+      rowCount: MAX_ROWS,
+      viewportHeight: 700,
+      viewportWidth: 640,
+    })
+    const scrollViewport = document.createElement('div')
+    Object.defineProperty(scrollViewport, 'clientWidth', { configurable: true, value: 640 })
+    Object.defineProperty(scrollViewport, 'clientHeight', { configurable: true, value: 700 })
+    scrollViewport.scrollTop = 600
+    const scrollTransformStore = new WorkbookGridScrollStore()
+    const liveVisibleRegionRef = { current: region({ x: 0, y: 0 }) }
+    const runtime = new WorkbookViewportScrollRuntime()
+    const input = {
+      columnAxis,
+      freezeCols: 0,
+      freezeRows: 0,
+      gridCameraStore: new GridCameraStore(),
+      gridMetrics: metrics,
+      gridRuntimeHost,
+      hostElement: scrollViewport,
+      liveVisibleRegionRef,
+      requiresLiveViewportState: false,
+      rowAxis,
+      scrollTransformRef: { current: scrollTransformStore.getSnapshot() },
+      scrollTransformStore,
+      scrollViewportRef: { current: scrollViewport },
+      selectedCell: [3, 53] as const,
+      setVisibleRegion: vi.fn(),
+      sheetName: 'Sheet1',
+      sortedColumnWidthOverrides: [],
+      sortedRowHeightOverrides: [],
+      syncRuntimeAxes: vi.fn(),
+      viewport: { colEnd: 11, colStart: 0, rowEnd: 80, rowStart: 30 },
+    }
+
+    runtime.updateInput(input)
+    runtime.autoScrollSelectionIntoView()
+    expect(scrollViewport.scrollTop).toBe(600)
+
+    Object.defineProperty(scrollViewport, 'clientHeight', { configurable: true, value: 160 })
+    runtime.updateInput({
+      ...input,
+      viewport: { colEnd: 11, colStart: 0, rowEnd: 60, rowStart: 30 },
+    })
+    runtime.autoScrollSelectionIntoView()
+
+    expect(scrollViewport.scrollTop).toBeGreaterThan(600)
+  })
 })

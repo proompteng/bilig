@@ -27,7 +27,7 @@ function createCellSnapshot(value: TestCellValue, styleId: string | undefined = 
 
 type TestCellSnapshot = ReturnType<typeof createCellSnapshot>
 const CELL_FONT_FAMILY = getResolvedCellFontFamily()
-const HEADER_FONT = `500 11px ${CELL_FONT_FAMILY}`
+const HEADER_FONT = `600 11px ${CELL_FONT_FAMILY}`
 const HEADER_SELECTED_COLOR = workbookThemeColors.accent
 const HEADER_DRAG_COLOR = workbookThemeColors.accentDark
 const HEADER_HOVER_COLOR = workbookThemeColors.text
@@ -609,7 +609,7 @@ describe('gridTextScene', () => {
       align: 'center',
       wrap: false,
       color: HEADER_SELECTED_COLOR,
-      font: `500 20px ${CELL_FONT_FAMILY}`,
+      font: `600 20px ${CELL_FONT_FAMILY}`,
       fontSize: 20,
       underline: false,
       strike: false,
@@ -627,7 +627,7 @@ describe('gridTextScene', () => {
       align: 'right',
       wrap: false,
       color: HEADER_SELECTED_COLOR,
-      font: `500 20px ${CELL_FONT_FAMILY}`,
+      font: `600 20px ${CELL_FONT_FAMILY}`,
       fontSize: 20,
       underline: false,
       strike: false,

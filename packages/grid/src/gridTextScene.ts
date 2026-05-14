@@ -70,7 +70,7 @@ const DEFAULT_HEADER_FONT_SIZE = 11
 const MERGED_DISPLAY_FALLBACK_SCAN_CELL_LIMIT = 2048
 
 function buildHeaderFont(fontSize: number): string {
-  return `500 ${fontSize}px ${getResolvedCellFontFamily()}`
+  return `600 ${fontSize}px ${getResolvedCellFontFamily()}`
 }
 
 export function buildGridTextScene({

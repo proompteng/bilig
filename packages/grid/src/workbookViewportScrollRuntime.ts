@@ -9,7 +9,7 @@ import type { Item } from './gridTypes.js'
 import type { GridCameraStore } from './runtime/gridCameraStore.js'
 import type { GridRuntimeHost } from './runtime/gridRuntimeHost.js'
 import { viewportFromVisibleRegion } from './useGridCameraState.js'
-import { hasSelectionTargetChanged, resolveResidentViewport } from './workbookGridViewport.js'
+import { resolveResidentViewport } from './workbookGridViewport.js'
 import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from './workbookGridScrollStore.js'
 
 type MutableRef<T> = {
@@ -91,7 +91,7 @@ function shouldNotifyWorkbookVisibleViewportChange(input: {
 }
 
 export class WorkbookViewportScrollRuntime {
-  private autoScrollSelection: { sheetName: string; col: number; row: number } | null = null
+  private autoScrollSelection: WorkbookAutoScrollSelectionTarget | null = null
   private input: WorkbookViewportScrollRuntimeInput | null = null
   private lastNotifiedViewport: Viewport | null = null
   private restoredViewportToken: number | null = null
@@ -232,16 +232,23 @@ export class WorkbookViewportScrollRuntime {
     if (!input || !scrollViewport) {
       return
     }
+    input.syncRuntimeAxes()
+    const axisSnapshot = input.gridRuntimeHost.snapshot()
     const nextAutoScrollSelection = {
       sheetName: input.sheetName,
       col: input.selectedCell[0],
       row: input.selectedCell[1],
+      freezeCols: input.freezeCols,
+      freezeRows: input.freezeRows,
+      viewportWidth: scrollViewport.clientWidth,
+      viewportHeight: scrollViewport.clientHeight,
+      axisSeqX: axisSnapshot.axisSeqX,
+      axisSeqY: axisSnapshot.axisSeqY,
     }
-    if (!hasSelectionTargetChanged(this.autoScrollSelection, nextAutoScrollSelection)) {
+    if (!hasAutoScrollSelectionTargetChanged(this.autoScrollSelection, nextAutoScrollSelection)) {
       return
     }
     this.autoScrollSelection = nextAutoScrollSelection
-    input.syncRuntimeAxes()
     const nextScrollPosition = input.gridRuntimeHost.resolveScrollForCellIntoView({
       cell: input.selectedCell,
       freezeCols: input.freezeCols,
@@ -290,4 +297,34 @@ export class WorkbookViewportScrollRuntime {
     window.cancelAnimationFrame(this.scrollSyncFrame)
     this.scrollSyncFrame = null
   }
+}
+
+interface WorkbookAutoScrollSelectionTarget {
+  readonly sheetName: string
+  readonly col: number
+  readonly row: number
+  readonly freezeCols: number
+  readonly freezeRows: number
+  readonly viewportWidth: number
+  readonly viewportHeight: number
+  readonly axisSeqX: number
+  readonly axisSeqY: number
+}
+
+function hasAutoScrollSelectionTargetChanged(
+  previous: WorkbookAutoScrollSelectionTarget | null,
+  next: WorkbookAutoScrollSelectionTarget,
+): boolean {
+  return (
+    previous === null ||
+    previous.sheetName !== next.sheetName ||
+    previous.col !== next.col ||
+    previous.row !== next.row ||
+    previous.freezeCols !== next.freezeCols ||
+    previous.freezeRows !== next.freezeRows ||
+    previous.viewportWidth !== next.viewportWidth ||
+    previous.viewportHeight !== next.viewportHeight ||
+    previous.axisSeqX !== next.axisSeqX ||
+    previous.axisSeqY !== next.axisSeqY
+  )
 }

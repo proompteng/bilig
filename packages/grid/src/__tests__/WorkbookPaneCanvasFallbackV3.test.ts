@@ -12,6 +12,7 @@ import type { DynamicGridOverlayBatchV3 } from '../renderer-v3/dynamic-overlay-b
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from '../renderer-v3/render-tile-pane-state.js'
 import { WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
+import { WORKBOOK_FONT_SANS } from '../workbookTheme.js'
 
 function createCanvasContextMock(): {
   readonly context: CanvasTextRunContext
@@ -148,6 +149,29 @@ describe('WorkbookPaneCanvasFallbackV3', () => {
     ])
 
     expect(lineTo).toHaveBeenCalledWith(96, 38)
+  })
+
+  test('uses the workbook font stack when a V3 text run does not carry a font', () => {
+    const { context, fillText } = createCanvasContextMock()
+
+    drawTextRuns(context, [
+      {
+        clipHeight: 22,
+        clipWidth: 120,
+        clipX: 0,
+        clipY: 0,
+        font: '',
+        fontSize: 13,
+        height: 22,
+        text: 'Expense Recognized',
+        width: 120,
+        x: 0,
+        y: 0,
+      },
+    ])
+
+    expect(fillText).toHaveBeenCalled()
+    expect(context.font).toBe(`400 13px ${WORKBOOK_FONT_SANS}`)
   })
 
   test('builds fallback overlay and scroll offsets from the live camera store', () => {

@@ -11,6 +11,7 @@ import {
   parseTextFontSize,
   type GlyphAtlasLike,
 } from './line-text-layout.js'
+import { WORKBOOK_FONT_SANS } from '../workbookTheme.js'
 
 export interface TextQuadRun {
   readonly text: string
@@ -598,7 +599,7 @@ function resolveRunFontKey(run: TextQuadRun): FontKey {
   const rawWeight = weightMatch?.[1]?.toLowerCase()
   const weight = rawWeight === 'bold' ? 700 : rawWeight === 'normal' || rawWeight === undefined ? 400 : Number(rawWeight)
   const sizeMatch = font.match(/\b\d+(?:\.\d+)?px\s+(.+)$/i)
-  const family = sizeMatch?.[1]?.trim() || 'sans-serif'
+  const family = sizeMatch?.[1]?.trim() || WORKBOOK_FONT_SANS
   return {
     dprBucket: 1,
     family,

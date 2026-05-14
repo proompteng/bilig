@@ -96,7 +96,7 @@ function buildWorkbookHeaderGpuSceneV3(input: WorkbookHeaderPaneInputV3): GridGp
 export function buildWorkbookHeaderTextSceneV3(input: WorkbookHeaderPaneInputV3): GridTextScene {
   const items: GridTextItem[] = []
   const headerFontSize = DEFAULT_HEADER_FONT_SIZE
-  const headerFont = `500 ${headerFontSize}px ${getResolvedCellFontFamily()}`
+  const headerFont = `600 ${headerFontSize}px ${getResolvedCellFontFamily()}`
   const hasFrozenAxes = input.freezeRows > 0 || input.freezeCols > 0
   const visibleColumns = hasFrozenAxes
     ? collectVisibleColumnBounds(input.residentHeaderItems, input.getHeaderCellLocalBounds, input.gridMetrics)

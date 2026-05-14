@@ -208,7 +208,7 @@ export function cellStyleToThemeOverride(style: CellStyleRecord | undefined, opt
   return {
     ...(textSurfaceEnabled || style.font?.color ? { textDark: textSurfaceEnabled ? TRANSPARENT_TEXT : style.font.color } : {}),
     ...(fontStyleParts.length > 0 ? { baseFontStyle: fontStyleParts.join(' ') } : {}),
-    fontFamily: getResolvedCellFontFamily(),
+    fontFamily: getResolvedCellFontFamily(style),
   }
 }
 
@@ -231,8 +231,9 @@ function resolveContentAlign(snapshot: Pick<CellSnapshot, 'value' | 'format'>, s
   }
 }
 
-export function getResolvedCellFontFamily(): string {
-  return DEFAULT_FONT_FALLBACK
+export function getResolvedCellFontFamily(style?: Pick<CellStyleRecord, 'font'>): string {
+  const family = resolveFontFamilyToken(style?.font?.family)
+  return family ? `${family}, ${DEFAULT_FONT_FALLBACK}` : DEFAULT_FONT_FALLBACK
 }
 
 function resolveRenderCellKind(snapshot: Pick<CellSnapshot, 'value'>): RenderCellSnapshot['kind'] {
@@ -257,6 +258,35 @@ function resolveCanvasFont(style: CellStyleRecord | undefined): string {
   }
   fontParts.push(style?.font?.bold ? '700' : '400')
   fontParts.push(`${style?.font?.size ?? 13}px`)
-  fontParts.push(getResolvedCellFontFamily())
+  fontParts.push(getResolvedCellFontFamily(style))
   return fontParts.join(' ')
+}
+
+const CSS_GENERIC_FONT_FAMILIES = new Set([
+  'serif',
+  'sans-serif',
+  'monospace',
+  'cursive',
+  'fantasy',
+  'system-ui',
+  'ui-serif',
+  'ui-sans-serif',
+  'ui-monospace',
+])
+
+function resolveFontFamilyToken(family: string | null | undefined): string | null {
+  const trimmed = family?.trim()
+  if (!trimmed) {
+    return null
+  }
+  if (trimmed.includes(',') || trimmed.startsWith('"') || trimmed.startsWith("'")) {
+    return trimmed
+  }
+  if (CSS_GENERIC_FONT_FAMILIES.has(trimmed.toLowerCase())) {
+    return trimmed
+  }
+  if (/^[A-Za-z0-9_-]+$/.test(trimmed)) {
+    return trimmed
+  }
+  return `"${trimmed.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
 }

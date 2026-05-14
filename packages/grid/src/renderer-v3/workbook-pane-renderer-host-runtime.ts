@@ -26,7 +26,6 @@ export interface WorkbookPaneRendererHostPropsV3 {
 }
 
 export interface WorkbookPaneRendererHostRuntimeOptionsV3 {
-  readonly onSurfaceBackendStatusChange?: ((status: WorkbookPaneSurfaceBackendStatusV3) => void) | undefined
   readonly rendererRuntime?: WorkbookPaneRendererRuntimeV3 | undefined
   readonly surfaceRuntime?: WorkbookPaneSurfaceRuntimeV3 | undefined
 }
@@ -47,16 +46,15 @@ const EMPTY_HOST_PROPS: WorkbookPaneRendererHostPropsV3 = Object.freeze({
 export class WorkbookPaneRendererHostRuntimeV3 {
   private canvas: HTMLCanvasElement | null = null
   private disposed = false
+  private readonly backendStatusListeners = new Set<() => void>()
   private props: WorkbookPaneRendererHostPropsV3 = EMPTY_HOST_PROPS
   private readonly rendererRuntime: WorkbookPaneRendererRuntimeV3
-  private readonly onSurfaceBackendStatusChange: ((status: WorkbookPaneSurfaceBackendStatusV3) => void) | null
   private surfaceBackendStatus: WorkbookPaneSurfaceBackendStatusV3
   private surfaceSnapshot: WorkbookPaneSurfaceSnapshotV3 = EMPTY_WORKBOOK_PANE_SURFACE_SNAPSHOT_V3
   private readonly surfaceRuntime: WorkbookPaneSurfaceRuntimeV3
   private readonly unsubscribeSurface: () => void
 
   constructor(options: WorkbookPaneRendererHostRuntimeOptionsV3 = {}) {
-    this.onSurfaceBackendStatusChange = options.onSurfaceBackendStatusChange ?? null
     this.rendererRuntime = options.rendererRuntime ?? new WorkbookPaneRendererRuntimeV3()
     this.surfaceRuntime = options.surfaceRuntime ?? new WorkbookPaneSurfaceRuntimeV3()
     this.surfaceBackendStatus = this.surfaceRuntime.getSnapshot().backendStatus
@@ -64,11 +62,23 @@ export class WorkbookPaneRendererHostRuntimeV3 {
       this.surfaceSnapshot = snapshot
       if (this.surfaceBackendStatus !== snapshot.backendStatus) {
         this.surfaceBackendStatus = snapshot.backendStatus
-        this.onSurfaceBackendStatusChange?.(snapshot.backendStatus)
+        this.emitBackendStatus()
       }
       this.applyRendererState()
       this.requestRenderDraw()
     })
+  }
+
+  readonly getBackendStatusSnapshot = (): WorkbookPaneSurfaceBackendStatusV3 => this.surfaceBackendStatus
+
+  readonly subscribeBackendStatus = (listener: () => void): (() => void) => {
+    if (this.disposed) {
+      return () => {}
+    }
+    this.backendStatusListeners.add(listener)
+    return () => {
+      this.backendStatusListeners.delete(listener)
+    }
   }
 
   updateProps(props: WorkbookPaneRendererHostPropsV3): void {
@@ -97,6 +107,7 @@ export class WorkbookPaneRendererHostRuntimeV3 {
     }
     this.disposed = true
     this.unsubscribeSurface()
+    this.backendStatusListeners.clear()
     const canvas = this.canvas
     this.canvas = null
     this.surfaceRuntime.dispose()
@@ -126,6 +137,10 @@ export class WorkbookPaneRendererHostRuntimeV3 {
 
   private requestRenderDraw(): void {
     this.rendererRuntime.requestDraw()
+  }
+
+  private emitBackendStatus(): void {
+    this.backendStatusListeners.forEach((listener) => listener())
   }
 
   private syncCanvasTarget(): void {

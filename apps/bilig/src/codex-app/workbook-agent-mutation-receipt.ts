@@ -8,7 +8,7 @@ import type {
   WorkbookAgentWriteCellInput,
 } from '@bilig/agent-api'
 import { formatAddress, parseCellAddress } from '@bilig/formula'
-import type { CellRangeRef, LiteralInput } from '@bilig/protocol'
+import { buildCellNumberFormatCode, type CellRangeRef, type CellStylePatch, type LiteralInput } from '@bilig/protocol'
 import type { WorkbookAgentUiContext } from '@bilig/contracts'
 import type { SessionIdentity } from '../http/session.js'
 import type { ZeroSyncService } from '../zero/service.js'
@@ -157,6 +157,23 @@ function valuesEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right)
 }
 
+function patchValueMatches(actual: unknown, expected: unknown): boolean {
+  if (expected === null) {
+    return actual === null || actual === undefined
+  }
+  if (isRecord(expected)) {
+    if (!isRecord(actual)) {
+      return false
+    }
+    return Object.entries(expected).every(([key, value]) => patchValueMatches(actual[key], value))
+  }
+  return valuesEqual(actual, expected)
+}
+
+function styleMatchesPatch(style: Record<string, unknown>, patch: CellStylePatch): boolean {
+  return Object.entries(patch).every(([key, value]) => patchValueMatches(style[key], value))
+}
+
 function isFormulaWriteCellInput(value: WorkbookAgentWriteCellInput): value is { readonly formula: string } {
   return typeof value === 'object' && value !== null && 'formula' in value && typeof value.formula === 'string'
 }
@@ -237,6 +254,126 @@ function authoritativeRowsByAddress(readbacks: readonly unknown[]): Map<string, 
     })
   })
   return cells
+}
+
+function authoritativeStylesById(readbacks: readonly unknown[]): Map<string, Record<string, unknown>> {
+  const styles = new Map<string, Record<string, unknown>>()
+  readbacks.forEach((readback) => {
+    if (!isRecord(readback) || !Array.isArray(readback['styles'])) {
+      return
+    }
+    readback['styles'].forEach((style) => {
+      if (isRecord(style) && typeof style['id'] === 'string') {
+        styles.set(style['id'], style)
+      }
+    })
+  })
+  return styles
+}
+
+function authoritativeNumberFormatsById(readbacks: readonly unknown[]): Map<string, Record<string, unknown>> {
+  const numberFormats = new Map<string, Record<string, unknown>>()
+  readbacks.forEach((readback) => {
+    if (!isRecord(readback) || !Array.isArray(readback['numberFormats'])) {
+      return
+    }
+    readback['numberFormats'].forEach((numberFormat) => {
+      if (isRecord(numberFormat) && typeof numberFormat['id'] === 'string') {
+        numberFormats.set(numberFormat['id'], numberFormat)
+      }
+    })
+  })
+  return numberFormats
+}
+
+function collectFormatCommandMismatches(input: {
+  readonly commands: readonly WorkbookAgentCommand[]
+  readonly readbacks: readonly unknown[]
+}): {
+  readonly matched: boolean | null
+  readonly mismatches: readonly WorkbookVerificationMismatch[]
+  readonly incompleteReason: string | null
+} {
+  const formatCommands = input.commands.filter(
+    (command): command is Extract<WorkbookAgentCommand, { kind: 'formatRange' }> => command.kind === 'formatRange',
+  )
+  if (formatCommands.length === 0) {
+    return { matched: null, mismatches: [], incompleteReason: null }
+  }
+  const cells = authoritativeRowsByAddress(input.readbacks)
+  const styles = authoritativeStylesById(input.readbacks)
+  const numberFormats = authoritativeNumberFormatsById(input.readbacks)
+  const mismatches: WorkbookVerificationMismatch[] = []
+  let comparableCount = 0
+  formatCommands.forEach((command) => {
+    const start = parseCellAddress(command.range.startAddress, command.range.sheetName)
+    const end = parseCellAddress(command.range.endAddress, command.range.sheetName)
+    const rowStart = Math.min(start.row, end.row)
+    const rowEnd = Math.max(start.row, end.row)
+    const colStart = Math.min(start.col, end.col)
+    const colEnd = Math.max(start.col, end.col)
+    for (let row = rowStart; row <= rowEnd; row += 1) {
+      for (let col = colStart; col <= colEnd; col += 1) {
+        const address = formatAddress(row, col)
+        const cell = cells.get(`${command.range.sheetName}!${address}`)
+        if (!cell) {
+          mismatches.push({
+            sheetName: command.range.sheetName,
+            address,
+            field: 'cell',
+            expected: 'authoritative cell present',
+            actual: null,
+            source: 'authoritative',
+          })
+          continue
+        }
+        if (command.patch !== undefined) {
+          comparableCount += 1
+          const styleId = typeof cell['styleId'] === 'string' ? cell['styleId'] : null
+          const style = styleId ? (styles.get(styleId) ?? null) : null
+          if (!style || !styleMatchesPatch(style, command.patch)) {
+            mismatches.push({
+              sheetName: command.range.sheetName,
+              address,
+              field: 'style',
+              expected: command.patch,
+              actual: style,
+              source: 'authoritative',
+            })
+          }
+        }
+        if (command.numberFormat !== undefined) {
+          comparableCount += 1
+          const numberFormatId = typeof cell['numberFormatId'] === 'string' ? cell['numberFormatId'] : null
+          const numberFormat = numberFormatId ? (numberFormats.get(numberFormatId) ?? null) : null
+          const expectedCode = buildCellNumberFormatCode(command.numberFormat)
+          const actualCode = typeof numberFormat?.['code'] === 'string' ? numberFormat['code'] : null
+          if (actualCode !== expectedCode) {
+            mismatches.push({
+              sheetName: command.range.sheetName,
+              address,
+              field: 'numberFormat',
+              expected: expectedCode,
+              actual: actualCode,
+              source: 'authoritative',
+            })
+          }
+        }
+      }
+    }
+  })
+  if (comparableCount === 0) {
+    return {
+      matched: null,
+      mismatches,
+      incompleteReason: 'No style or number-format expectations were available for authoritative comparison.',
+    }
+  }
+  return {
+    matched: mismatches.length === 0,
+    mismatches,
+    incompleteReason: mismatches.length === 0 ? null : 'Authoritative readback did not match formatting expectations.',
+  }
 }
 
 function collectComparablePreviewMismatches(input: {
@@ -369,12 +506,31 @@ async function buildAuthoritativeReadback(input: {
         : (input.executionRecord?.preview?.cellDiffs ?? []),
     readbacks,
   })
+  const formatComparison = collectFormatCommandMismatches({
+    commands: input.bundle.commands,
+    readbacks,
+  })
+  const mismatches = [...comparison.mismatches, ...formatComparison.mismatches]
+  const matched =
+    comparison.matched === false || formatComparison.matched === false
+      ? false
+      : comparison.matched === true || formatComparison.matched === true
+        ? true
+        : null
+  const incompleteReason =
+    mismatches.length > 0
+      ? comparison.matched === false
+        ? comparison.incompleteReason
+        : (formatComparison.incompleteReason ?? comparison.incompleteReason)
+      : matched === true
+        ? null
+        : (formatComparison.incompleteReason ?? comparison.incompleteReason)
   return {
     requested: true,
-    matched: comparison.matched,
+    matched,
     ranges: readbacks,
-    mismatches: comparison.mismatches,
-    incompleteReason: comparison.incompleteReason,
+    mismatches,
+    incompleteReason,
   }
 }
 
@@ -517,10 +673,16 @@ async function buildMutationReceipt(input: {
   if (executionRecord && !undo.available) {
     warnings.push(undo.reasonUnavailable ?? 'Undo status is unavailable.')
   }
+  const hasAppliedProof =
+    executionRecord !== null &&
+    authoritativeReadback.requested &&
+    authoritativeReadback.matched === true &&
+    renderedReadback.requested &&
+    renderedReadback.matched === true
   return {
     toolName: input.toolName,
     status: executionRecord
-      ? renderedReadback.matched === true || !renderedReadback.requested
+      ? hasAppliedProof
         ? 'applied'
         : 'verification_incomplete'
       : input.normalized.disposition === 'queuedForTurnApply'

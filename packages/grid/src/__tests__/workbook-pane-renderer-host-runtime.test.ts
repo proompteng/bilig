@@ -159,6 +159,44 @@ describe('WorkbookPaneRendererHostRuntimeV3', () => {
     expect(canvas.height).toBe(0)
   })
 
+  test('publishes backend status changes for the React shell without callback wiring', async () => {
+    const backend = {}
+    const runtime = new WorkbookPaneRendererHostRuntimeV3({
+      rendererRuntime: new WorkbookPaneRendererRuntimeV3(vi.fn<WorkbookPaneFrameDrawerV3>()),
+      surfaceRuntime: new WorkbookPaneSurfaceRuntimeV3({
+        createBackend: vi.fn(async () => backend),
+        createResizeObserver: () => null,
+        destroyBackend: vi.fn(),
+        syncSurface: vi.fn(),
+      }),
+    })
+    const statuses: string[] = []
+    const unsubscribe = runtime.subscribeBackendStatus(() => {
+      statuses.push(runtime.getBackendStatusSnapshot())
+    })
+
+    runtime.updateProps({
+      active: true,
+      cameraStore: null,
+      geometry: null,
+      headerPanes: [],
+      host: createHost(640, 360),
+      overlay: null,
+      overlayBuilder: null,
+      preloadTilePanes: [],
+      scrollTransformStore: null,
+      tilePanes: [],
+    })
+    runtime.setCanvas(document.createElement('canvas'))
+    await Promise.resolve()
+
+    expect(statuses).toContain('initializing')
+    expect(statuses).toContain('ready')
+
+    unsubscribe()
+    runtime.dispose()
+  })
+
   test('detaches the WebGPU surface when the pane becomes inactive', async () => {
     const backend = {}
     const destroyBackend = vi.fn()

@@ -76,7 +76,7 @@ describe('render tile pane builder', () => {
     expect(pane.tile.version.values).toBe(16)
   })
 
-  it('keeps resident body panes mounted while marking only visible body tiles drawable', () => {
+  it('keeps resident body panes mounted and drawable so scroll-window edges never blank', () => {
     const gridMetrics = getGridMetrics()
     const tiles = [
       createTile({ tileId: 101, rowTile: 0, colTile: 0, rowStart: 0, rowEnd: 31, colStart: 0, colEnd: 127 }),
@@ -102,8 +102,14 @@ describe('render tile pane builder', () => {
     })
 
     expect(panes).toHaveLength(6)
-    expect(panes.find((pane) => pane.paneId === 'body')?.drawVisible).toBe(false)
-    expect(panes.filter((pane) => pane.drawVisible !== false).map((pane) => pane.paneId)).toEqual(['body:2:1'])
+    expect(panes.filter((pane) => pane.drawVisible !== false).map((pane) => pane.paneId)).toEqual([
+      'body',
+      'body:0:1',
+      'body:1:0',
+      'body:1:1',
+      'body:2:0',
+      'body:2:1',
+    ])
     expect(panes.find((pane) => pane.paneId === 'body')?.surfaceSize).toEqual({
       height: gridMetrics.rowHeight * 96,
       width: gridMetrics.columnWidth * 256,

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import type { GridGeometrySnapshot } from '../gridGeometry.js'
 import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { GridCameraStore } from '../runtime/gridCameraStore.js'
@@ -9,11 +9,6 @@ export { resolveTypeGpuV3DrawScrollSnapshot } from './workbook-pane-renderer-run
 import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
 import { WorkbookPaneRendererHostRuntimeV3 } from './workbook-pane-renderer-host-runtime.js'
-import type { WorkbookPaneSurfaceBackendStatusV3 } from './workbook-pane-surface-runtime.js'
-
-function resolveInitialBackendStatus(): WorkbookPaneSurfaceBackendStatusV3 {
-  return typeof navigator === 'undefined' || !('gpu' in navigator) ? 'unavailable' : 'idle'
-}
 
 export interface WorkbookPaneRendererV3Props {
   readonly active: boolean
@@ -42,15 +37,17 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   scrollTransformStore = null,
   tilePanes,
 }: WorkbookPaneRendererV3Props) {
-  const [backendStatus, setBackendStatus] = useState<WorkbookPaneSurfaceBackendStatusV3>(resolveInitialBackendStatus)
   const hostRuntimeRef = useRef<WorkbookPaneRendererHostRuntimeV3 | null>(null)
   const hostRuntimeLifetimeRef = useRef(0)
   if (!hostRuntimeRef.current) {
-    hostRuntimeRef.current = new WorkbookPaneRendererHostRuntimeV3({
-      onSurfaceBackendStatusChange: setBackendStatus,
-    })
+    hostRuntimeRef.current = new WorkbookPaneRendererHostRuntimeV3()
   }
   const hostRuntime = hostRuntimeRef.current
+  const backendStatus = useSyncExternalStore(
+    hostRuntime.subscribeBackendStatus,
+    hostRuntime.getBackendStatusSnapshot,
+    hostRuntime.getBackendStatusSnapshot,
+  )
 
   const setCanvasRef = useCallback(
     (canvas: HTMLCanvasElement | null) => {

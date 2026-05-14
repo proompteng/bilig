@@ -9,7 +9,7 @@ const DEFAULT_HOVER_STATE: GridHoverState = { cell: null, header: null, cursor: 
 const RANGE_MOVE_HOVER_STATE: GridHoverState = { cell: null, header: null, cursor: 'grab' }
 const RANGE_MOVE_DRAG_HOVER_STATE: GridHoverState = { cell: null, header: null, cursor: 'grabbing' }
 
-function resolveGridInteractionHoverState(input: {
+interface GridPointerResolutionInput {
   readonly clientX: number
   readonly clientY: number
   readonly visibleRegion: VisibleRegionState
@@ -45,7 +45,9 @@ function resolveGridInteractionHoverState(input: {
     region?: VisibleRegionState,
     geometry?: GridGeometrySnapshot | null,
   ) => Item | null
-}): GridHoverState {
+}
+
+function resolveResizeOrHeaderHoverState(input: GridPointerResolutionInput): GridHoverState | null {
   const resizeTarget = input.resolveColumnResizeTargetAtPointer(
     input.clientX,
     input.clientY,
@@ -73,6 +75,14 @@ function resolveGridInteractionHoverState(input: {
   const header = input.resolveHeaderSelectionAtPointer(input.clientX, input.clientY, input.visibleRegion, input.geometry)
   if (header) {
     return { cell: null, header, cursor: 'pointer' }
+  }
+  return null
+}
+
+function resolveGridInteractionHoverState(input: GridPointerResolutionInput): GridHoverState {
+  const resizeOrHeader = resolveResizeOrHeaderHoverState(input)
+  if (resizeOrHeader) {
+    return resizeOrHeader
   }
 
   const cell = input.resolvePointerCell(input.clientX, input.clientY, input.visibleRegion, input.geometry)
@@ -137,6 +147,23 @@ export function resolveWorkbookGridHoverState(input: {
   const geometry = input.resolvePointerGeometry(visibleRegion)
   if (!geometry) {
     return DEFAULT_HOVER_STATE
+  }
+
+  const resizeOrHeader = resolveResizeOrHeaderHoverState({
+    clientX: input.clientX,
+    clientY: input.clientY,
+    columnWidths: input.columnWidths,
+    geometry,
+    gridMetrics: input.gridMetrics,
+    resolveColumnResizeTargetAtPointer: input.resolveColumnResizeTargetAtPointer,
+    resolveHeaderSelectionAtPointer: input.resolveHeaderSelectionAtPointer,
+    resolvePointerCell: input.resolvePointerCell,
+    resolveRowResizeTargetAtPointer: input.resolveRowResizeTargetAtPointer,
+    rowHeights: input.rowHeights,
+    visibleRegion,
+  })
+  if (resizeOrHeader) {
+    return resizeOrHeader
   }
 
   const rangeMoveAnchorCell =

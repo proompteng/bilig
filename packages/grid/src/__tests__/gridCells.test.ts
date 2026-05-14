@@ -89,13 +89,13 @@ describe('gridCells', () => {
     const fontAndFillStyle: CellStyleRecord = {
       id: 'style-font-fill',
       fill: { backgroundColor: '#ea9999' },
-      font: { color: '#202124', family: 'Roboto', size: 12 },
+      font: { color: '#202124', family: 'Fira Sans', size: 12 },
     }
 
     expect(cellStyleToThemeOverride(fontAndFillStyle)).toEqual({
       textDark: '#202124',
       baseFontStyle: '400 12px',
-      fontFamily: WORKBOOK_FONT_SANS,
+      fontFamily: `"Fira Sans", ${WORKBOOK_FONT_SANS}`,
     })
   })
 

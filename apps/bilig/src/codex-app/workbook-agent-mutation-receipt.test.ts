@@ -194,6 +194,8 @@ function createRenderedContext(input: {
   readonly address: string
   readonly value: string | null
   readonly capturedRevision: number
+  readonly styleId?: string | null
+  readonly numberFormatId?: string | null
 }): WorkbookAgentUiContext {
   return {
     selection: {
@@ -238,8 +240,8 @@ function createRenderedContext(input: {
                     },
               formula: null,
               displayFormat: input.value,
-              styleId: null,
-              numberFormatId: null,
+              styleId: input.styleId ?? null,
+              numberFormatId: input.numberFormatId ?? null,
               style: null,
             },
           ],
@@ -448,6 +450,159 @@ describe('workbook agent mutation receipt helpers', () => {
     const payload = appliedPayloadSchema.parse(parsePayload(result))
     expect(payload.mutationReceipt.renderedReadback.incompleteReason).toContain('No browser-rendered context')
     expect(payload.mutationReceipt.warnings).toContain('No browser-rendered context was attached to this tool call.')
+  })
+
+  it('does not report applied when authoritative readback disagrees with the claimed write', async () => {
+    const engine = await createEngine()
+    engine.setCellValue('Sheet1', 'B2', 'Different committed value')
+    const command: WorkbookAgentCommand = {
+      kind: 'writeRange',
+      sheetName: 'Sheet1',
+      startAddress: 'B2',
+      values: [['Claimed value']],
+    }
+    const bundle = createBundle(command, 'bundle-authoritative-mismatch')
+    const { zeroSyncService } = createZeroSyncHarness(engine, {
+      headRevision: 2,
+      calculatedRevision: 2,
+    })
+
+    const result = await stageWorkbookAgentCommandResult(
+      {
+        documentId: 'doc-1',
+        session: { userID: 'alex@example.com', roles: ['editor'] },
+        uiContext: createRenderedContext({
+          address: 'B2',
+          value: 'Different committed value',
+          capturedRevision: 2,
+        }),
+        zeroSyncService,
+        stageCommand: async () => ({
+          bundle,
+          executionRecord: createExecutionRecord({
+            bundle,
+            appliedRevision: 2,
+            afterInput: 'Claimed value',
+          }),
+        }),
+      },
+      command,
+      'writeRange',
+    )
+
+    const payload = z
+      .object({
+        applied: z.literal(true),
+        status: z.literal('verification_incomplete'),
+        mutationReceipt: z.object({
+          status: z.literal('verification_incomplete'),
+          authoritativeReadback: z.object({
+            requested: z.literal(true),
+            matched: z.literal(false),
+            incompleteReason: z.string(),
+          }),
+          renderedReadback: z.object({
+            requested: z.literal(true),
+            matched: z.literal(true),
+          }),
+          warnings: z.array(z.string()),
+        }),
+      })
+      .parse(parsePayload(result))
+    expect(payload.mutationReceipt.authoritativeReadback.incompleteReason).toContain('Authoritative readback did not match')
+    expect(payload.mutationReceipt.warnings).toContain('Authoritative readback did not match preview expectations.')
+  })
+
+  it('reports applied for format mutations when authoritative and rendered proof agree', async () => {
+    const engine = await createEngine()
+    const command: WorkbookAgentCommand = {
+      kind: 'formatRange',
+      range: {
+        sheetName: 'Sheet1',
+        startAddress: 'B2',
+        endAddress: 'B2',
+      },
+      patch: {
+        font: {
+          bold: true,
+        },
+      },
+    }
+    const bundle = createBundle(command, 'bundle-format-needs-proof')
+    const undoBundle = applyWorkbookAgentCommandBundleWithUndoCapture(engine, bundle)
+    const committedCell = engine.getCell('Sheet1', 'B2')
+    expect(committedCell.styleId).toBeTruthy()
+    const { zeroSyncService } = createZeroSyncHarness(engine, {
+      headRevision: 2,
+      calculatedRevision: 2,
+      changes: [
+        {
+          revision: 2,
+          actorUserId: 'alex@example.com',
+          clientMutationId: null,
+          eventKind: 'applyAgentCommandBundle',
+          summary: 'Format cells in Sheet1!B2',
+          sheetId: null,
+          sheetName: 'Sheet1',
+          anchorAddress: 'B2',
+          range: {
+            sheetName: 'Sheet1',
+            startAddress: 'B2',
+            endAddress: 'B2',
+          },
+          undoBundle,
+          revertedByRevision: null,
+          revertsRevision: null,
+          createdAtUnixMs: 2,
+        },
+      ],
+    })
+
+    const result = await stageWorkbookAgentCommandResult(
+      {
+        documentId: 'doc-1',
+        session: { userID: 'alex@example.com', roles: ['editor'] },
+        uiContext: createRenderedContext({
+          address: 'B2',
+          value: 'Before',
+          capturedRevision: 2,
+          styleId: committedCell.styleId ?? null,
+        }),
+        zeroSyncService,
+        stageCommand: async () => ({
+          bundle,
+          executionRecord: createExecutionRecord({
+            bundle,
+            appliedRevision: 2,
+            afterInput: null,
+            includePreviewDiff: false,
+          }),
+        }),
+      },
+      command,
+      'formatRange',
+    )
+
+    const payload = z
+      .object({
+        applied: z.literal(true),
+        status: z.literal('applied'),
+        mutationReceipt: z.object({
+          status: z.literal('applied'),
+          authoritativeReadback: z.object({
+            requested: z.literal(true),
+            matched: z.literal(true),
+            incompleteReason: z.null(),
+          }),
+          renderedReadback: z.object({
+            requested: z.literal(true),
+            matched: z.literal(true),
+          }),
+          warnings: z.array(z.string()),
+        }),
+      })
+      .parse(parsePayload(result))
+    expect(payload.mutationReceipt.warnings).toEqual([])
   })
 
   it('builds verification reports with matching rendered readback and optional audits disabled', async () => {

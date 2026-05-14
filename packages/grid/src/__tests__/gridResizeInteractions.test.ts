@@ -18,7 +18,11 @@ describe('gridResizeInteractions', () => {
     const startResize = vi.fn()
     const finishResize = vi.fn()
     const setActiveResizeColumn = vi.fn()
-    const previewColumnWidth = vi.fn()
+    let previewedColumnWidth: number | null = null
+    const previewColumnWidth = vi.fn((_columnIndex: number, width: number) => {
+      previewedColumnWidth = width
+    })
+    const getPreviewColumnWidth = vi.fn(() => previewedColumnWidth)
     const clearColumnResizePreview = vi.fn()
     const commitColumnWidth = vi.fn()
     const refreshHoverState = vi.fn()
@@ -32,6 +36,7 @@ describe('gridResizeInteractions', () => {
       refreshHoverState,
       setActiveResizeColumn,
       previewColumnWidth,
+      getPreviewColumnWidth,
       clearColumnResizePreview,
       commitColumnWidth,
       columnIndex: 3,
@@ -62,7 +67,11 @@ describe('gridResizeInteractions', () => {
     const startResize = vi.fn()
     const finishResize = vi.fn()
     const setActiveResizeRow = vi.fn()
-    const previewRowHeight = vi.fn()
+    let previewedRowHeight: number | null = null
+    const previewRowHeight = vi.fn((_rowIndex: number, height: number) => {
+      previewedRowHeight = height
+    })
+    const getPreviewRowHeight = vi.fn(() => previewedRowHeight)
     const clearRowResizePreview = vi.fn()
     const commitRowHeight = vi.fn()
     const refreshHoverState = vi.fn()
@@ -76,6 +85,7 @@ describe('gridResizeInteractions', () => {
       refreshHoverState,
       setActiveResizeRow,
       previewRowHeight,
+      getPreviewRowHeight,
       clearRowResizePreview,
       commitRowHeight,
       rowIndex: 5,
@@ -115,6 +125,7 @@ describe('gridResizeInteractions', () => {
       refreshHoverState: vi.fn(),
       setActiveResizeColumn: vi.fn(),
       previewColumnWidth: vi.fn(),
+      getPreviewColumnWidth: vi.fn(() => null),
       clearColumnResizePreview: vi.fn(),
       commitColumnWidth: vi.fn(),
       columnIndex: 1,
@@ -135,6 +146,11 @@ describe('gridResizeInteractions', () => {
     }
     const finishResize = vi.fn()
     const setActiveResizeColumn = vi.fn()
+    let previewedColumnWidth: number | null = null
+    const previewColumnWidth = vi.fn((_columnIndex: number, width: number) => {
+      previewedColumnWidth = width
+    })
+    const getPreviewColumnWidth = vi.fn(() => previewedColumnWidth)
     const clearColumnResizePreview = vi.fn()
     const commitColumnWidth = vi.fn()
     const refreshHoverState = vi.fn()
@@ -146,7 +162,8 @@ describe('gridResizeInteractions', () => {
       finishResize,
       refreshHoverState,
       setActiveResizeColumn,
-      previewColumnWidth: vi.fn(),
+      previewColumnWidth,
+      getPreviewColumnWidth,
       clearColumnResizePreview,
       commitColumnWidth,
       columnIndex: 3,

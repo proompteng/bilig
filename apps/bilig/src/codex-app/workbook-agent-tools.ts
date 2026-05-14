@@ -394,6 +394,8 @@ export async function handleWorkbookAgentToolCall(
           renderedReadback: report.renderedReadback,
           formulaIssues: report.formulaIssues,
           invariants: report.invariants,
+          requireTargetRange: true,
+          targetRangeCount: ranges.length,
         })
         return textToolResult(
           stringifyJson({

@@ -50,7 +50,7 @@ export function buildFixedRenderTilePaneStates(input: {
   bodyTiles.forEach((tile, index) => {
     panes.push(
       buildPlacementPane({
-        drawVisible: intersects(tile.bounds, input.visibleViewport),
+        drawVisible: true,
         frame: bodyFrame,
         id: index === 0 ? 'body' : `body:${tile.coord.rowTile}:${tile.coord.colTile}`,
         reference: bodyReference.bounds,

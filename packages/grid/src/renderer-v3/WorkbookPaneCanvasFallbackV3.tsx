@@ -3,6 +3,7 @@ import type { GridGeometrySnapshot } from '../gridGeometry.js'
 import type { GridHeaderPaneState } from '../gridHeaderPanes.js'
 import type { GridCameraStore } from '../runtime/gridCameraStore.js'
 import type { WorkbookGridScrollSnapshot, WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
+import { WORKBOOK_FONT_SANS } from '../workbookTheme.js'
 import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
 import type { TextQuadRun } from './line-text-quad-buffer.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
@@ -102,7 +103,7 @@ export function drawTextRuns(context: CanvasTextRunContext, textRuns: readonly T
     context.rect(clipX, clipY, clipWidth, clipHeight)
     context.clip()
     context.fillStyle = run.color ?? '#111827'
-    context.font = run.font ?? `${run.fontSize ?? 12}px system-ui, sans-serif`
+    context.font = run.font?.trim() ? run.font : `400 ${run.fontSize ?? 12}px ${WORKBOOK_FONT_SANS}`
     context.textBaseline = 'middle'
     context.textAlign = run.align ?? 'left'
     const textX = run.align === 'right' ? run.x + width - 6 : run.align === 'center' ? run.x + width / 2 : run.x + 6

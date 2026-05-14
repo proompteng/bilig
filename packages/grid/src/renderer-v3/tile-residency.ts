@@ -164,7 +164,11 @@ export class TileResidencyV3<Packet = unknown, Resources = unknown> {
         readonly excludeKey?: TileKey53 | undefined
       },
   ): TileEntryV3<Packet, Resources> | null {
-    const compatibilityKey = this.resolveCompatibilityKey(input)
+    const compatibilityKey = this.findCompatibilityKey(input)
+    if (compatibilityKey === null) {
+      this.lastStaleScanCount = 0
+      return null
+    }
     const bucket = this.compatibilityBuckets.get(compatibilityKey)
     let scanned = 0
     let match: TileEntryV3<Packet, Resources> | null = null
@@ -304,6 +308,26 @@ export class TileResidencyV3<Packet = unknown, Resources = unknown> {
       if (!child) {
         child = { key: this.nextCompatibilityKey++, children: new Map() }
         node.children.set(value, child)
+      }
+      node = child
+    }
+    return node.key
+  }
+
+  private findCompatibilityKey(input: TileKeyFields & Pick<TileRevisionTupleV3, 'axisSeqX' | 'axisSeqY' | 'freezeSeq'>): number | null {
+    let node = this.compatibilityRoot
+    for (const value of [
+      input.sheetOrdinal,
+      input.rowTile,
+      input.colTile,
+      input.dprBucket,
+      input.axisSeqX,
+      input.axisSeqY,
+      input.freezeSeq,
+    ]) {
+      const child = node.children.get(value)
+      if (!child) {
+        return null
       }
       node = child
     }

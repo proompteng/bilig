@@ -1,4 +1,4 @@
-export const WORKBOOK_FONT_SANS = '"IBM Plex Sans","Inter","SF Pro Text","SF Pro Display","Segoe UI","Helvetica Neue",Arial,sans-serif'
+export const WORKBOOK_FONT_SANS = '"Aptos", "Calibri", Arial, "SF Pro Text", "Segoe UI", sans-serif'
 
 export const workbookThemeColors = {
   accent: '#21563a',

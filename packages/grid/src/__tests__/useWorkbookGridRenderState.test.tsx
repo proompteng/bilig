@@ -6,6 +6,7 @@ import { ValueTag, VIEWPORT_TILE_COLUMN_COUNT, VIEWPORT_TILE_ROW_COUNT, type Cel
 import { packTileKey53 } from '../renderer-v3/tile-key.js'
 import { DirtyMaskV3, type WorkbookDeltaBatchLikeV3 } from '../renderer-v3/tile-damage-index.js'
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
+import { GRID_RECT_INSTANCE_FLOAT_COUNT_V3 } from '../renderer-v3/rect-instance-buffer.js'
 import { useWorkbookGridRenderState } from '../useWorkbookGridRenderState.js'
 
 function createEmptySnapshot(sheetName: string, address: string): CellSnapshot {
@@ -41,6 +42,7 @@ function createRenderTile(input: {
 }): GridRenderTile {
   const rowStart = input.rowTile * VIEWPORT_TILE_ROW_COUNT
   const colStart = input.colTile * VIEWPORT_TILE_COLUMN_COUNT
+  const rectCount = VIEWPORT_TILE_ROW_COUNT + VIEWPORT_TILE_COLUMN_COUNT
   return {
     bounds: {
       rowStart,
@@ -58,8 +60,8 @@ function createRenderTile(input: {
     },
     lastBatchId: 3,
     lastCameraSeq: 5,
-    rectCount: 0,
-    rectInstances: new Float32Array(20),
+    rectCount,
+    rectInstances: createCompleteGridRectInstances(rectCount),
     textCount: 0,
     textMetrics: new Float32Array(8),
     textRuns: [],
@@ -78,6 +80,19 @@ function createRenderTile(input: {
       values: 16,
     },
   }
+}
+
+function createCompleteGridRectInstances(rectCount: number): Float32Array {
+  const instances = new Float32Array(rectCount * GRID_RECT_INSTANCE_FLOAT_COUNT_V3)
+  for (let index = 0; index < rectCount; index += 1) {
+    const offset = index * GRID_RECT_INSTANCE_FLOAT_COUNT_V3
+    const isVertical = index % 2 === 0
+    instances[offset + 2] = isVertical ? 1 : 104
+    instances[offset + 3] = isVertical ? 22 : 1
+    instances[offset + 11] = 1
+    instances[offset + 13] = 1
+  }
+  return instances
 }
 
 describe('useWorkbookGridRenderState viewport residency', () => {
@@ -291,13 +306,14 @@ describe('useWorkbookGridRenderState viewport residency', () => {
       }),
       expect.any(Function),
     )
-    expect(latestRenderState?.renderTilePanes.some((pane) => pane.paneId === 'body')).toBe(false)
+    expect(latestRenderState?.renderTilePanes.some((pane) => pane.paneId === 'body')).toBe(true)
     const readiness = scrollPerf.noteRendererTileReadiness.mock.calls.at(-1)?.[0]
     expect(readiness).toMatchObject({
-      exactHits: 0,
+      exactHits: expect.any(Number),
+      misses: 0,
       staleHits: 0,
     })
-    expect(readiness?.misses).toBeGreaterThan(0)
+    expect(readiness?.exactHits).toBeGreaterThan(0)
 
     await act(async () => {
       root.unmount()

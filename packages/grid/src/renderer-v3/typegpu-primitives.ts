@@ -78,11 +78,12 @@ const rectVertex = typegpuCore.vertexFn({
   out: {
     position: d.builtin.position,
     color: d.location(0, d.vec4f),
-    panePixel: d.location(1, d.vec2f),
+    clipSpacePixel: d.location(1, d.vec2f),
     clip: d.location(2, d.vec4f),
   },
 })`{
   let localPixel = in.quad * in.rectSize;
+  let clipSpacePixel = in.rectOrigin + localPixel;
   let panePixel = in.rectOrigin + surface.scrollOffset + localPixel;
   let screenPixel = surface.origin + panePixel;
   let ndc = vec2f(
@@ -106,7 +107,7 @@ const rectVertex = typegpuCore.vertexFn({
   return Out(
     vec4f(ndc, 0.0, 1.0),
     color,
-    panePixel,
+    clipSpacePixel,
     in.clipRect,
   );
 }`.$uses({
@@ -116,16 +117,16 @@ const rectVertex = typegpuCore.vertexFn({
 const rectFragment = typegpuCore.fragmentFn({
   in: {
     color: d.location(0, d.vec4f),
-    panePixel: d.location(1, d.vec2f),
+    clipSpacePixel: d.location(1, d.vec2f),
     clip: d.location(2, d.vec4f),
   },
   out: d.location(0, d.vec4f),
 })`{
   if (
-    in.panePixel.x < in.clip.x ||
-    in.panePixel.y < in.clip.y ||
-    in.panePixel.x > in.clip.z ||
-    in.panePixel.y > in.clip.w
+    in.clipSpacePixel.x < in.clip.x ||
+    in.clipSpacePixel.y < in.clip.y ||
+    in.clipSpacePixel.x > in.clip.z ||
+    in.clipSpacePixel.y > in.clip.w
   ) {
     discard;
   }
