@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useActorRef, useSelector } from '@xstate/react'
 import { isWorkbookAgentCommandBundle, isWorkbookAgentPreviewSummary, type WorkbookAgentCommandBundle } from '@bilig/agent-api'
 import { parseCellAddress } from '@bilig/formula'
@@ -157,7 +157,7 @@ export function useWorkerWorkbookAppState(input: {
     runtimeActorRef.send({ type: 'error.clear' })
   }, [runtimeActorRef])
   const {
-    invokeMutation,
+    invokeMutation: invokeWorkbookMutation,
     invokeColumnVisibilityMutation,
     invokeColumnWidthMutation,
     invokeRowHeightMutation,
@@ -172,6 +172,16 @@ export function useWorkerWorkbookAppState(input: {
     zeroRef,
     reportRuntimeError,
   })
+  const [localMutationEpoch, setLocalMutationEpoch] = useState(0)
+  const localMutationEpochRef = useRef(0)
+  const invokeMutation: typeof invokeWorkbookMutation = useCallback(
+    async (method, ...args) => {
+      localMutationEpochRef.current += 1
+      setLocalMutationEpoch((epoch) => epoch + 1)
+      await invokeWorkbookMutation(method, ...args)
+    },
+    [invokeWorkbookMutation],
+  )
   const {
     columnWidths,
     rowHeights,
@@ -336,6 +346,12 @@ export function useWorkerWorkbookAppState(input: {
     sheetNames,
     zero: zeroSource,
     enabled: runtimeReady && zeroConfigured,
+    pendingMutationSummary: runtimeState?.pendingMutationSummary,
+    localMutationEpoch,
+    localMutationEpochRef,
+    onHistoryMutationApplied: async () => {
+      await runtimeController?.invoke('refreshAuthoritativeEvents')
+    },
     onJump: (sheetName, address) => {
       selectAddress(sheetName, address)
     },

@@ -5,9 +5,13 @@ export function resolveResizeGuideColumn(input: {
   readonly cursor: string
   readonly header: HeaderSelection | null
 }): number | null {
-  void input.cursor
-  void input.header
-  return input.activeResizeColumn
+  if (input.activeResizeColumn !== null) {
+    return input.activeResizeColumn
+  }
+  if (input.cursor === 'col-resize' && input.header?.kind === 'column') {
+    return input.header.index
+  }
+  return null
 }
 
 export function resolveResizeGuideRow(input: {
@@ -15,7 +19,11 @@ export function resolveResizeGuideRow(input: {
   readonly cursor: string
   readonly header: HeaderSelection | null
 }): number | null {
-  void input.cursor
-  void input.header
-  return input.activeResizeRow
+  if (input.activeResizeRow !== null) {
+    return input.activeResizeRow
+  }
+  if (input.cursor === 'row-resize' && input.header?.kind === 'row') {
+    return input.header.index
+  }
+  return null
 }

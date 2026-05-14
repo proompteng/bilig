@@ -11,12 +11,14 @@ import {
   WorkbookPaneRendererV3,
   resolveTypeGpuV3DrawScrollSnapshot,
   shouldMountWorkbookCanvasProofLayerV3,
+  shouldMountWorkbookTextOverlayV3,
   shouldDeferTypeGpuV3PreloadSync,
 } from '../renderer-v3/WorkbookPaneRendererV3.js'
 import { GridDrawSchedulerV3 } from '../renderer-v3/draw-scheduler.js'
 import { GridRenderLoop } from '../renderer-v3/gridRenderLoop.js'
 import type { GridRenderTile } from '../renderer-v3/render-tile-source.js'
 import type { WorkbookRenderTilePaneState } from '../renderer-v3/render-tile-pane-state.js'
+import { DirtyMaskV3 } from '../renderer-v3/tile-damage-index.js'
 import { WorkbookPaneRendererRuntimeV3, type WorkbookPaneFrameDrawerV3 } from '../renderer-v3/workbook-pane-renderer-runtime.js'
 import { WorkbookGridScrollStore } from '../workbookGridScrollStore.js'
 
@@ -176,6 +178,51 @@ describe('WorkbookPaneRendererV3', () => {
         tilePaneCount: 0,
       }),
     ).toBe(true)
+  })
+
+  test('mounts the DOM text overlay only for pending local text damage after TypeGPU presents', () => {
+    expect(
+      shouldMountWorkbookTextOverlayV3({
+        backendStatus: 'ready',
+        frameProofStatus: 'presented',
+        showCanvasFallback: false,
+        tilePanes: [createTilePane()],
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldMountWorkbookTextOverlayV3({
+        backendStatus: 'ready',
+        frameProofStatus: 'presented',
+        showCanvasFallback: false,
+        tilePanes: [
+          {
+            ...createTilePane(),
+            tile: {
+              ...createTilePane().tile,
+              dirtyMasks: new Uint32Array([DirtyMaskV3.Value | DirtyMaskV3.Text]),
+            },
+          },
+        ],
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldMountWorkbookTextOverlayV3({
+        backendStatus: 'ready',
+        frameProofStatus: 'presented',
+        showCanvasFallback: false,
+        tilePanes: [
+          {
+            ...createTilePane(),
+            tile: {
+              ...createTilePane().tile,
+              dirtyMasks: new Uint32Array([DirtyMaskV3.Style | DirtyMaskV3.Rect]),
+            },
+          },
+        ],
+      }),
+    ).toBe(false)
   })
 
   test('derives draw scroll from live scroll and the current V3 body tile viewport', () => {

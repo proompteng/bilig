@@ -297,6 +297,46 @@ describe('WorkbookToolbar', () => {
     })
   })
 
+  it('routes native browser history input events to workbook undo and redo', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const invokeMutation = vi.fn(async () => {})
+    const onRedo = vi.fn()
+    const onUndo = vi.fn()
+    const selectionRangeRef: MutableRefObject<CellRangeRef> = {
+      current: {
+        sheetName: 'Sheet1',
+        startAddress: 'A1',
+        endAddress: 'A1',
+      },
+    }
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <ToolbarHookHarness invokeMutation={invokeMutation} onRedo={onRedo} onUndo={onUndo} selectionRangeRef={selectionRangeRef} />,
+      )
+    })
+
+    await act(async () => {
+      const undoEvent = new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'historyUndo' })
+      const redoEvent = new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'historyRedo' })
+      window.dispatchEvent(undoEvent)
+      window.dispatchEvent(redoEvent)
+      expect(undoEvent.defaultPrevented).toBe(true)
+      expect(redoEvent.defaultPrevented).toBe(true)
+    })
+
+    expect(onUndo).toHaveBeenCalledTimes(1)
+    expect(onRedo).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
   it('derives clear visible save states for saved, saving, local-only, offline, and sync issues', () => {
     expect(
       deriveWorkbookStatusPresentation({

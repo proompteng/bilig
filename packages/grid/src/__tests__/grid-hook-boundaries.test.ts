@@ -45,9 +45,11 @@ describe('grid hook boundary helpers', () => {
         isFillHandleDragging: false,
       }),
     ).toBe(false)
-    expect(resolveResizeGuideColumn({ activeResizeColumn: null, cursor: 'col-resize', header: { kind: 'column', index: 4 } })).toBeNull()
+    expect(resolveResizeGuideColumn({ activeResizeColumn: null, cursor: 'col-resize', header: { kind: 'column', index: 4 } })).toBe(4)
+    expect(resolveResizeGuideColumn({ activeResizeColumn: null, cursor: 'cell', header: { kind: 'column', index: 4 } })).toBeNull()
     expect(resolveResizeGuideColumn({ activeResizeColumn: 4, cursor: 'col-resize', header: { kind: 'column', index: 4 } })).toBe(4)
-    expect(resolveResizeGuideRow({ activeResizeRow: null, cursor: 'row-resize', header: { kind: 'row', index: 6 } })).toBeNull()
+    expect(resolveResizeGuideRow({ activeResizeRow: null, cursor: 'row-resize', header: { kind: 'row', index: 6 } })).toBe(6)
+    expect(resolveResizeGuideRow({ activeResizeRow: null, cursor: 'cell', header: { kind: 'row', index: 6 } })).toBeNull()
     expect(resolveResizeGuideRow({ activeResizeRow: 6, cursor: 'row-resize', header: { kind: 'row', index: 6 } })).toBe(6)
     expect(sameBounds({ x: 1, y: 2, width: 3, height: 4 }, { x: 1, y: 2, width: 3, height: 4 })).toBe(true)
     expect(

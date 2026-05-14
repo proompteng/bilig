@@ -1133,6 +1133,29 @@ for (const key of ['Delete', 'Backspace'] as const) {
   })
 }
 
+test('web app restores a keyboard clear through undo and redo history controls', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-clear-undo-redo-shortcuts')
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
+  await waitForWorkbookReady(page)
+
+  const formulaInput = page.getByTestId('formula-input')
+
+  await clickProductCell(page, 3, 11)
+  await formulaInput.fill('delete-undo-redo')
+  await formulaInput.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!D12')
+  await expect(formulaInput).toHaveValue('delete-undo-redo')
+
+  await page.keyboard.press('Delete')
+  await expect(formulaInput).toHaveValue('')
+
+  await page.getByRole('button', { name: 'Undo' }).click()
+  await expect(formulaInput).toHaveValue('delete-undo-redo')
+
+  await page.getByRole('button', { name: 'Redo' }).click()
+  await expect(formulaInput).toHaveValue('')
+})
+
 test('web app ignores modified delete keys instead of clearing the grid selection', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-modified-delete-ignored')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)

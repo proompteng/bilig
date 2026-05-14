@@ -11,6 +11,7 @@ import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
 import { WorkbookPaneRendererHostRuntimeV3 } from './workbook-pane-renderer-host-runtime.js'
 import type { WorkbookPaneSurfaceBackendStatusV3 } from './workbook-pane-surface-runtime.js'
+import { DirtyMaskV3 } from './tile-damage-index.js'
 
 export interface WorkbookPaneRendererV3Props {
   readonly active: boolean
@@ -118,6 +119,12 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   })
   const showTypeGpuCanvas = backendStatus !== 'unavailable'
   const typeGpuCanvasOpacity = showCanvasFallback ? 0 : 1
+  const showTextOverlay = shouldMountWorkbookTextOverlayV3({
+    backendStatus,
+    frameProofStatus,
+    showCanvasFallback,
+    tilePanes,
+  })
 
   return (
     <>
@@ -153,7 +160,7 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
           style={{ backgroundColor: 'transparent', contain: 'strict', height: '100%', opacity: typeGpuCanvasOpacity, width: '100%' }}
         />
       ) : null}
-      {showTypeGpuCanvas && !showCanvasFallback ? (
+      {showTypeGpuCanvas && showTextOverlay ? (
         <WorkbookPaneTextOverlayV3
           active={active}
           cameraStore={cameraStore}
@@ -181,4 +188,27 @@ export function shouldMountWorkbookCanvasProofLayerV3(input: {
   }
   const hasVisiblePaneContent = input.tilePaneCount > 0 || input.headerPaneCount > 0 || (input.overlayRectCount ?? 0) > 0
   return hasVisiblePaneContent && input.frameProofStatus !== 'presented'
+}
+
+export function shouldMountWorkbookTextOverlayV3(input: {
+  readonly backendStatus: WorkbookPaneSurfaceBackendStatusV3
+  readonly frameProofStatus?: 'idle' | 'pending' | 'presented' | undefined
+  readonly showCanvasFallback: boolean
+  readonly tilePanes: readonly WorkbookRenderTilePaneState[]
+}): boolean {
+  if (input.showCanvasFallback || input.backendStatus !== 'ready' || input.frameProofStatus !== 'presented') {
+    return false
+  }
+  return input.tilePanes.some((pane) => {
+    const dirtyMasks = pane.tile.dirtyMasks
+    if (!dirtyMasks || dirtyMasks.length === 0) {
+      return false
+    }
+    for (const mask of dirtyMasks) {
+      if ((mask & (DirtyMaskV3.Value | DirtyMaskV3.Text | DirtyMaskV3.AxisX | DirtyMaskV3.AxisY)) !== 0) {
+        return true
+      }
+    }
+    return false
+  })
 }

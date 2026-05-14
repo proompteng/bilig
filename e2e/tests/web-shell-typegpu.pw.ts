@@ -124,6 +124,7 @@ test('main workbook shell mounts typegpu-v3 as the only grid renderer', async ({
   await expect(page.getByTestId('grid-pane-renderer')).toHaveAttribute('data-renderer-mode', 'typegpu-v3')
   await expect(page.getByTestId('grid-pane-renderer')).toHaveAttribute('data-pane-renderer', 'workbook-pane-renderer-v3')
   await expect(page.locator('[data-pane-renderer="workbook-pane-renderer"]')).toHaveCount(0)
+  await expect(page.getByTestId('grid-pane-text-overlay')).toHaveCount(0)
 })
 
 test('@browser-webgpu @browser-serial main workbook shell grid renders and updates through typegpu', async ({ page }, testInfo) => {

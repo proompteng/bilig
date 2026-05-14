@@ -176,6 +176,7 @@ export function FormulaBar({
               aria-expanded={showAutocomplete ? 'true' : 'false'}
               aria-label="Formula"
               className={formulaInputClass()}
+              data-formula-editing={isEditing ? 'true' : 'false'}
               data-testid="formula-input"
               id="formula-input"
               placeholder="Value or =formula"
@@ -214,6 +215,9 @@ export function FormulaBar({
                 }
               }}
               onKeyDown={(event) => {
+                if (!isEditing && (event.metaKey || event.ctrlKey) && !event.altKey) {
+                  return
+                }
                 event.stopPropagation()
                 if (event.key === 'Enter' && event.altKey) {
                   return

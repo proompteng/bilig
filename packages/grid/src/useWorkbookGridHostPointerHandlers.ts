@@ -34,7 +34,7 @@ function resetGridHoverState(current: GridHoverState): GridHoverState {
 }
 
 function toGridResizeCursorHoverState(next: GridHoverState): GridHoverState {
-  return { cell: null, header: null, cursor: next.cursor }
+  return { cell: null, header: next.header, cursor: next.cursor }
 }
 
 function isFillHandleTarget(target: EventTarget | null): boolean {

@@ -6,6 +6,7 @@ import { WorkbookGridContextMenu } from './WorkbookGridContextMenu.js'
 import { createGridSelection } from './gridSelection.js'
 import { WorkbookPaneRendererV3 } from './renderer-v3/WorkbookPaneRendererV3.js'
 import { buildDynamicGridOverlayBatchV3 } from './renderer-v3/dynamic-overlay-batch.js'
+import { resolveResizeGuideColumn, resolveResizeGuideRow } from './useGridResizeState.js'
 import { useWorkbookGridInteractions } from './useWorkbookGridInteractions.js'
 import { useWorkbookGridRenderState } from './useWorkbookGridRenderState.js'
 import type { WorkbookGridSurfaceProps } from './workbookGridSurfaceTypes.js'
@@ -142,8 +143,18 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
   const isRangeMoveDragging = renderState.isRangeMoveDragging
   const activePreviewColumnWidth = activeResizeColumn === null ? null : getPreviewColumnWidth(activeResizeColumn)
   const activePreviewRowHeight = activeResizeRow === null ? null : getPreviewRowHeight(activeResizeRow)
-  const resizeGuideColumn = activePreviewColumnWidth === null ? null : activeResizeColumn
-  const resizeGuideRow = activePreviewRowHeight === null ? null : activeResizeRow
+  const resizeGuideColumn = resolveResizeGuideColumn({
+    activeResizeColumn,
+    cursor: renderState.hoverState.cursor,
+    header: renderState.hoverState.header,
+  })
+  const resizeGuideRow = resolveResizeGuideRow({
+    activeResizeRow,
+    cursor: renderState.hoverState.cursor,
+    header: renderState.hoverState.header,
+  })
+  const resizeGuideColumnWidth = resizeGuideColumn === activeResizeColumn ? activePreviewColumnWidth : null
+  const resizeGuideRowHeight = resizeGuideRow === activeResizeRow ? activePreviewRowHeight : null
   const selectedCellCol = renderState.selectedCell.col
   const selectedCellRow = renderState.selectedCell.row
   const v2Geometry = useMemo(() => (renderHostElement ? getLiveGeometrySnapshot() : null), [getLiveGeometrySnapshot, renderHostElement])
@@ -196,15 +207,13 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
           fillPreviewRange === null &&
           !isRangeMoveDragging,
         resizeGuideColumn,
-        resizeGuideColumnWidth: activePreviewColumnWidth,
+        resizeGuideColumnWidth,
         resizeGuideRow,
-        resizeGuideRowHeight: activePreviewRowHeight,
+        resizeGuideRowHeight,
       })
     },
     [
       activeHeaderDrag,
-      activePreviewColumnWidth,
-      activePreviewRowHeight,
       displayGridSelection,
       displaySelectionRange,
       fillPreviewRange,
@@ -212,7 +221,9 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
       isRangeMoveDragging,
       previewRects,
       resizeGuideColumn,
+      resizeGuideColumnWidth,
       resizeGuideRow,
+      resizeGuideRowHeight,
       selectedCellCol,
       selectedCellRow,
     ],

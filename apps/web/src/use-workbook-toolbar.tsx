@@ -70,6 +70,25 @@ function patchValueMatches<T extends string | number | boolean>(actual: T | unde
   return actual === expected
 }
 
+function shouldKeepWorkbookShortcutInsideTextEntry(target: EventTarget | null): boolean {
+  if (!isTextEntryTarget(target)) {
+    return false
+  }
+  return !(
+    target instanceof HTMLInputElement &&
+    target.dataset['testid'] === 'formula-input' &&
+    target.dataset['formulaEditing'] === 'false'
+  )
+}
+
+function queueWorkbookHistoryShortcut(callback: () => void): void {
+  if (typeof queueMicrotask === 'function') {
+    queueMicrotask(callback)
+    return
+  }
+  setTimeout(callback, 0)
+}
+
 function fillPatchMatches(selectedStyle: CellStyleRecord | undefined, patch: CellStyleFillPatch | null | undefined): boolean {
   return !patch || patchValueMatches(selectedStyle?.fill?.backgroundColor, patch.backgroundColor)
 }
@@ -550,8 +569,33 @@ export function useWorkbookToolbar(input: {
   }
 
   useEffect(() => {
+    const handleWindowHistoryInput = (event: InputEvent) => {
+      if (event.defaultPrevented) {
+        return
+      }
+      if (shouldKeepWorkbookShortcutInsideTextEntry(event.target)) {
+        return
+      }
+      if (event.inputType !== 'historyUndo' && event.inputType !== 'historyRedo') {
+        return
+      }
+      const shortcutState = shortcutStateRef.current
+      if (!shortcutState.writesAllowed) {
+        return
+      }
+      if (event.inputType === 'historyUndo') {
+        event.preventDefault()
+        queueWorkbookHistoryShortcut(shortcutState.onUndo)
+        return
+      }
+      if (event.inputType === 'historyRedo') {
+        event.preventDefault()
+        queueWorkbookHistoryShortcut(shortcutState.onRedo)
+      }
+    }
+
     const handleWindowShortcut = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isTextEntryTarget(event.target) || event.altKey) {
+      if (event.defaultPrevented || shouldKeepWorkbookShortcutInsideTextEntry(event.target) || event.altKey) {
         return
       }
 
@@ -564,12 +608,12 @@ export function useWorkbookToolbar(input: {
       const normalizedKey = event.key.toLowerCase()
       if (!event.shiftKey && normalizedKey === 'z') {
         event.preventDefault()
-        shortcutState.onUndo()
+        queueWorkbookHistoryShortcut(shortcutState.onUndo)
         return
       }
       if ((event.shiftKey && normalizedKey === 'z') || (!event.metaKey && event.ctrlKey && !event.shiftKey && normalizedKey === 'y')) {
         event.preventDefault()
-        shortcutState.onRedo()
+        queueWorkbookHistoryShortcut(shortcutState.onRedo)
         return
       }
       if (!event.shiftKey && normalizedKey === 'b') {
@@ -628,9 +672,13 @@ export function useWorkbookToolbar(input: {
       }
     }
 
+    window.addEventListener('beforeinput', handleWindowHistoryInput, true)
     window.addEventListener('keydown', handleWindowShortcut, true)
+    document.addEventListener('keydown', handleWindowShortcut)
     return () => {
+      window.removeEventListener('beforeinput', handleWindowHistoryInput, true)
       window.removeEventListener('keydown', handleWindowShortcut, true)
+      document.removeEventListener('keydown', handleWindowShortcut)
     }
   }, [])
 

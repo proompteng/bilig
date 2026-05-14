@@ -1,8 +1,10 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { mutators } from '@bilig/zero-sync'
 import { WorkbookChangesPanel } from './WorkbookChangesPanel.js'
 import { useWorkbookChanges, type ZeroWorkbookChangeQuerySource } from './use-workbook-changes.js'
 import { selectWorkbookHistoryState } from './workbook-changes-model.js'
+
+const QUEUED_HISTORY_SHORTCUT_TIMEOUT_MS = 10_000
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -26,9 +28,29 @@ export function useWorkbookChangesPane(input: {
   readonly sheetNames: readonly string[]
   readonly zero: ZeroWorkbookChangeSource
   readonly enabled: boolean
+  readonly pendingMutationSummary?:
+    | {
+        readonly activeCount: number
+        readonly failedCount: number
+      }
+    | undefined
+  readonly localMutationEpoch?: number | undefined
+  readonly localMutationEpochRef?: { readonly current: number } | undefined
+  readonly onHistoryMutationApplied?: (() => void | Promise<void>) | undefined
   readonly onJump: (sheetName: string, address: string) => void
 }) {
-  const { currentUserId, documentId, enabled, onJump, sheetNames, zero } = input
+  const {
+    currentUserId,
+    documentId,
+    enabled,
+    localMutationEpoch = 0,
+    localMutationEpochRef: externalLocalMutationEpochRef,
+    onHistoryMutationApplied,
+    onJump,
+    pendingMutationSummary,
+    sheetNames,
+    zero,
+  } = input
   const changes = useWorkbookChanges({
     documentId,
     sheetNames,
@@ -38,13 +60,25 @@ export function useWorkbookChangesPane(input: {
   const [isUndoPending, setIsUndoPending] = useState(false)
   const [isRedoPending, setIsRedoPending] = useState(false)
   const [pendingRevertRevision, setPendingRevertRevision] = useState<number | null>(null)
+  const [queuedHistoryShortcut, setQueuedHistoryShortcut] = useState<'undo' | 'redo' | null>(null)
   const changeCount = changes.entries.length
   const historyState = useMemo(() => selectWorkbookHistoryState({ rows: changes.rows, currentUserId }), [changes.rows, currentUserId])
+  const hasActivePendingMutation = (pendingMutationSummary?.activeCount ?? 0) > 0
+  const localMutationEpochRef = useRef(localMutationEpoch)
+  const [historyReadyEpoch, setHistoryReadyEpoch] = useState(localMutationEpoch)
+  localMutationEpochRef.current = localMutationEpoch
+  const historyRevisionSignature = `${changeCount}:${historyState.undoRevision ?? 'none'}:${historyState.redoRevision ?? 'none'}`
+  const hasUnmaterializedLocalMutation = localMutationEpoch > historyReadyEpoch
+  const readLocalMutationEpoch = useCallback(
+    () => externalLocalMutationEpochRef?.current ?? localMutationEpochRef.current,
+    [externalLocalMutationEpochRef],
+  )
 
-  const undoLatestChange = useCallback(() => {
-    if (!enabled || isUndoPending || historyState.undoRevision === null) {
-      return
-    }
+  useEffect(() => {
+    setHistoryReadyEpoch(readLocalMutationEpoch())
+  }, [historyRevisionSignature, readLocalMutationEpoch])
+
+  const runUndoLatestChange = useCallback(() => {
     setIsUndoPending(true)
     const observer = observeZeroMutationResult(
       zero.mutate(
@@ -56,16 +90,14 @@ export function useWorkbookChangesPane(input: {
     void (async () => {
       try {
         await (observer ?? Promise.resolve())
+        await onHistoryMutationApplied?.()
       } finally {
         setIsUndoPending(false)
       }
     })()
-  }, [documentId, enabled, historyState.undoRevision, isUndoPending, zero])
+  }, [documentId, onHistoryMutationApplied, zero])
 
-  const redoLatestChange = useCallback(() => {
-    if (!enabled || isRedoPending || historyState.redoRevision === null) {
-      return
-    }
+  const runRedoLatestChange = useCallback(() => {
     setIsRedoPending(true)
     const observer = observeZeroMutationResult(
       zero.mutate(
@@ -77,11 +109,95 @@ export function useWorkbookChangesPane(input: {
     void (async () => {
       try {
         await (observer ?? Promise.resolve())
+        await onHistoryMutationApplied?.()
       } finally {
         setIsRedoPending(false)
       }
     })()
-  }, [documentId, enabled, historyState.redoRevision, isRedoPending, zero])
+  }, [documentId, onHistoryMutationApplied, zero])
+
+  const undoLatestChange = useCallback(() => {
+    if (!enabled || isUndoPending) {
+      return
+    }
+    const hasLiveUnmaterializedLocalMutation = readLocalMutationEpoch() > historyReadyEpoch
+    if (historyState.undoRevision === null || hasLiveUnmaterializedLocalMutation) {
+      if (hasActivePendingMutation || hasLiveUnmaterializedLocalMutation) {
+        setQueuedHistoryShortcut('undo')
+      }
+      return
+    }
+    setQueuedHistoryShortcut(null)
+    runUndoLatestChange()
+  }, [
+    enabled,
+    hasActivePendingMutation,
+    historyReadyEpoch,
+    historyState.undoRevision,
+    isUndoPending,
+    readLocalMutationEpoch,
+    runUndoLatestChange,
+  ])
+
+  const redoLatestChange = useCallback(() => {
+    if (!enabled || isRedoPending) {
+      return
+    }
+    const hasLiveUnmaterializedLocalMutation = readLocalMutationEpoch() > historyReadyEpoch
+    if (historyState.redoRevision === null || hasLiveUnmaterializedLocalMutation) {
+      if (hasActivePendingMutation || hasLiveUnmaterializedLocalMutation) {
+        setQueuedHistoryShortcut('redo')
+      }
+      return
+    }
+    setQueuedHistoryShortcut(null)
+    runRedoLatestChange()
+  }, [
+    enabled,
+    hasActivePendingMutation,
+    historyReadyEpoch,
+    historyState.redoRevision,
+    isRedoPending,
+    readLocalMutationEpoch,
+    runRedoLatestChange,
+  ])
+
+  useEffect(() => {
+    if (queuedHistoryShortcut === null) {
+      return
+    }
+    const timeout = window.setTimeout(() => setQueuedHistoryShortcut(null), QUEUED_HISTORY_SHORTCUT_TIMEOUT_MS)
+    return () => window.clearTimeout(timeout)
+  }, [queuedHistoryShortcut])
+
+  useEffect(() => {
+    if (!enabled || queuedHistoryShortcut === null || hasUnmaterializedLocalMutation) {
+      return
+    }
+    if (queuedHistoryShortcut === 'undo') {
+      if (historyState.undoRevision !== null && !isUndoPending) {
+        setQueuedHistoryShortcut(null)
+        runUndoLatestChange()
+        return
+      }
+      return
+    }
+    if (historyState.redoRevision !== null && !isRedoPending) {
+      setQueuedHistoryShortcut(null)
+      runRedoLatestChange()
+      return
+    }
+  }, [
+    enabled,
+    historyState.redoRevision,
+    historyState.undoRevision,
+    hasUnmaterializedLocalMutation,
+    isRedoPending,
+    isUndoPending,
+    queuedHistoryShortcut,
+    runRedoLatestChange,
+    runUndoLatestChange,
+  ])
 
   const revertChangeRevision = useCallback(
     (revision: number) => {

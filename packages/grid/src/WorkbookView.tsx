@@ -308,9 +308,14 @@ export function WorkbookView({
   )
 
   const requestGridFocus = React.useCallback(() => {
-    const focusGrid = gridFocusApiRef.current
-    if (focusGrid) {
-      focusGrid()
+    const focusCurrentGrid = () => {
+      gridFocusApiRef.current?.()
+    }
+    if (gridFocusApiRef.current) {
+      focusCurrentGrid()
+      if (typeof window !== 'undefined') {
+        window.requestAnimationFrame(focusCurrentGrid)
+      }
       return
     }
     flushSync(() => {
