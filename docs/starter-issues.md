@@ -6,10 +6,10 @@ search indexing.
 
 Current starter queue as of May 14, 2026:
 
-- 105 open `first-timers-only` issues.
-- 101 issues are generally available for a new contributor to claim.
-- 5 starter issues are code or test tasks rather than docs-only tasks.
-- 4 open starter issues already have active pull requests.
+- 111 open `first-timers-only` issues.
+- 106 issues are generally available for a new contributor to claim.
+- 10 starter issues are code or test tasks rather than docs-only tasks.
+- 5 open starter issues already have active pull requests.
 
 ## Available Starter Picks
 
@@ -19,7 +19,12 @@ Current starter queue as of May 14, 2026:
 - [#361: test(headless): cover range readback after an input edit](https://github.com/proompteng/bilig/issues/361)
 - [#362: test(examples): guard the headless README command index against missing scripts](https://github.com/proompteng/bilig/issues/362)
 - [#363: test(examples): add invalid-request proof to the HTTP JSON summary smoke](https://github.com/proompteng/bilig/issues/363)
-- [#364: test(core): add quoted semicolon CSV fixture](https://github.com/proompteng/bilig/issues/364)
+- [#366: test(headless): cover changed named expressions after WorkPaper restore](https://github.com/proompteng/bilig/issues/366)
+- [#367: test(headless): cover dense sheet range read with sparse values](https://github.com/proompteng/bilig/issues/367)
+- [#368: test(headless): cover two-column formula tiling in fill ranges](https://github.com/proompteng/bilig/issues/368)
+- [#369: test(headless): cover tab-indented formula prefix detection](https://github.com/proompteng/bilig/issues/369)
+- [#370: test(examples): add malformed CSV fixture check to the csv-shaped smoke](https://github.com/proompteng/bilig/issues/370)
+- [#371: test(examples): add deterministic markdown-report output test](https://github.com/proompteng/bilig/issues/371)
 
 ### Agent And Tooling Docs
 
@@ -150,6 +155,7 @@ Current starter queue as of May 14, 2026:
 - [#345: docs(examples): add Next.js Route Handler WorkPaper JSON smoke](https://github.com/proompteng/bilig/issues/345) is covered by [PR #353](https://github.com/proompteng/bilig/pull/353).
 - [#346: docs(examples): add Vercel Function WorkPaper route smoke](https://github.com/proompteng/bilig/issues/346) is covered by [PR #352](https://github.com/proompteng/bilig/pull/352).
 - [#347: docs(storage): add plain node-postgres WorkPaper JSON persistence recipe](https://github.com/proompteng/bilig/issues/347) is covered by [PR #349](https://github.com/proompteng/bilig/pull/349).
+- [#364: test(core): add quoted semicolon CSV fixture](https://github.com/proompteng/bilig/issues/364) is covered by [PR #365](https://github.com/proompteng/bilig/pull/365).
 
 Keep active starter work here until the PR lands or closes.
 

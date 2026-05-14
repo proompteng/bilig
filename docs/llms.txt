@@ -524,6 +524,30 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/334
 - current small agent issue: Vercel AI SDK streamText WorkPaper tool smoke:
   https://github.com/proompteng/bilig/issues/358
+- current small agent issue: Anthropic tool-use WorkPaper transcript:
+  https://github.com/proompteng/bilig/issues/359
+- current small test issue: display-value readback after JSON restore:
+  https://github.com/proompteng/bilig/issues/360
+- current small test issue: range readback after an input edit:
+  https://github.com/proompteng/bilig/issues/361
+- current small test issue: headless README command index guard:
+  https://github.com/proompteng/bilig/issues/362
+- current small test issue: HTTP JSON summary invalid-request proof:
+  https://github.com/proompteng/bilig/issues/363
+- current small test issue in review: quoted semicolon CSV fixture:
+  https://github.com/proompteng/bilig/issues/364
+- current small test issue: named expression restore coverage:
+  https://github.com/proompteng/bilig/issues/366
+- current small test issue: dense sheet range sparse values:
+  https://github.com/proompteng/bilig/issues/367
+- current small test issue: two-column fill-range formula tiling:
+  https://github.com/proompteng/bilig/issues/368
+- current small test issue: tab-indented formula prefix detection:
+  https://github.com/proompteng/bilig/issues/369
+- current small test issue: malformed CSV-shaped input fixture:
+  https://github.com/proompteng/bilig/issues/370
+- current small test issue: markdown-report deterministic output:
+  https://github.com/proompteng/bilig/issues/371
 - current small agent issue: LangChain.js structured tool WorkPaper smoke:
   https://github.com/proompteng/bilig/issues/344
 - current small mcp issue: Docker healthcheck for the WorkPaper MCP stdio server:
