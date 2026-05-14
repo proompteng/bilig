@@ -24,6 +24,7 @@ const expectedExpandedBenchmarkWorkloads: ExpandedComparativeBenchmarkWorkload[]
   'build-many-sheets',
   'rebuild-and-recalculate',
   'rebuild-config-toggle',
+  'rebuild-config-toggle-large',
   'rebuild-runtime-from-snapshot',
   'sheet-rename-dependencies',
   'named-expression-change',

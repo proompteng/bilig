@@ -1,19 +1,22 @@
-import { BLOCK_COLS, BLOCK_ROWS, type SpreadsheetEngine } from '@bilig/core'
+import { BLOCK_COLS, BLOCK_ROWS, type SheetRecord, type SpreadsheetEngine } from '@bilig/core'
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import type { WorkPaperCellRange } from './work-paper-types.js'
 
 const EMPTY_CELL_VALUE: CellValue = Object.freeze({ tag: ValueTag.Empty })
-const FAST_PHYSICAL_RANGE_AREA_LIMIT = 262_144
+const FAST_RANGE_AREA_LIMIT = 262_144
 
-export function readFastPhysicalRangeValues(engine: SpreadsheetEngine, range: WorkPaperCellRange): CellValue[][] | undefined {
+export function readFastRangeValues(engine: SpreadsheetEngine, range: WorkPaperCellRange): CellValue[][] | undefined {
   const sheet = engine.workbook.getSheetById(range.start.sheet)
-  if (!sheet || sheet.structureVersion !== 1) {
+  if (!sheet) {
     return undefined
   }
   const height = range.end.row - range.start.row + 1
   const width = range.end.col - range.start.col + 1
-  if (height <= 0 || width <= 0 || height * width > FAST_PHYSICAL_RANGE_AREA_LIMIT) {
+  if (height <= 0 || width <= 0 || height * width > FAST_RANGE_AREA_LIMIT) {
     return undefined
+  }
+  if (sheet.structureVersion !== 1) {
+    return readFastLogicalRangeValues(engine, sheet, range, height, width)
   }
 
   const rows: CellValue[][] = []
@@ -23,12 +26,7 @@ export function readFastPhysicalRangeValues(engine: SpreadsheetEngine, range: Wo
     row.length = width
     rows[rowOffset] = row
   }
-  const cellStore = engine.workbook.cellStore
-  const cellTags = cellStore.tags
-  const cellNumbers = cellStore.numbers
-  const cellStringIds = cellStore.stringIds
-  const cellErrors = cellStore.errors
-  const strings = engine.strings
+  const readCellValue = createFastCellValueReader(engine)
   let filledCells = 0
   const blockRowStart = Math.floor(range.start.row / BLOCK_ROWS)
   const blockRowEnd = Math.floor(range.end.row / BLOCK_ROWS)
@@ -56,36 +54,7 @@ export function readFastPhysicalRangeValues(engine: SpreadsheetEngine, range: Wo
           }
           const cellIndex = encodedCellIndex - 1
           const outputCol = absoluteBlockCol + localCol - range.start.col
-          switch ((cellTags[cellIndex] as ValueTag | undefined) ?? ValueTag.Empty) {
-            case ValueTag.Number:
-              row[outputCol] = { tag: ValueTag.Number, value: cellNumbers[cellIndex] ?? 0 }
-              break
-            case ValueTag.Boolean:
-              row[outputCol] = {
-                tag: ValueTag.Boolean,
-                value: (cellNumbers[cellIndex] ?? 0) !== 0,
-              }
-              break
-            case ValueTag.String: {
-              const stringId = cellStringIds[cellIndex] ?? 0
-              row[outputCol] = {
-                tag: ValueTag.String,
-                value: stringId === 0 ? '' : strings.get(stringId),
-                stringId,
-              }
-              break
-            }
-            case ValueTag.Error:
-              row[outputCol] = {
-                tag: ValueTag.Error,
-                code: (cellErrors[cellIndex] as ErrorCode | undefined) ?? ErrorCode.None,
-              }
-              break
-            case ValueTag.Empty:
-            default:
-              row[outputCol] = EMPTY_CELL_VALUE
-              break
-          }
+          row[outputCol] = readCellValue(cellIndex)
           filledCells += 1
         }
       }
@@ -100,4 +69,63 @@ export function readFastPhysicalRangeValues(engine: SpreadsheetEngine, range: Wo
     }
   }
   return rows
+}
+
+function readFastLogicalRangeValues(
+  engine: SpreadsheetEngine,
+  sheet: SheetRecord,
+  range: WorkPaperCellRange,
+  height: number,
+  width: number,
+): CellValue[][] {
+  const readCellValue = createFastCellValueReader(engine)
+  const rows: CellValue[][] = []
+  rows.length = height
+  for (let rowOffset = 0; rowOffset < height; rowOffset += 1) {
+    const row: CellValue[] = []
+    row.length = width
+    rows[rowOffset] = row
+    const visibleRow = range.start.row + rowOffset
+    for (let colOffset = 0; colOffset < width; colOffset += 1) {
+      const cellIndex = sheet.grid.get(visibleRow, range.start.col + colOffset)
+      row[colOffset] = cellIndex === -1 ? EMPTY_CELL_VALUE : readCellValue(cellIndex)
+    }
+  }
+  return rows
+}
+
+function createFastCellValueReader(engine: SpreadsheetEngine): (cellIndex: number) => CellValue {
+  const cellStore = engine.workbook.cellStore
+  const cellTags = cellStore.tags
+  const cellNumbers = cellStore.numbers
+  const cellStringIds = cellStore.stringIds
+  const cellErrors = cellStore.errors
+  const strings = engine.strings
+  return (cellIndex: number): CellValue => {
+    switch ((cellTags[cellIndex] as ValueTag | undefined) ?? ValueTag.Empty) {
+      case ValueTag.Number:
+        return { tag: ValueTag.Number, value: cellNumbers[cellIndex] ?? 0 }
+      case ValueTag.Boolean:
+        return {
+          tag: ValueTag.Boolean,
+          value: (cellNumbers[cellIndex] ?? 0) !== 0,
+        }
+      case ValueTag.String: {
+        const stringId = cellStringIds[cellIndex] ?? 0
+        return {
+          tag: ValueTag.String,
+          value: stringId === 0 ? '' : strings.get(stringId),
+          stringId,
+        }
+      }
+      case ValueTag.Error:
+        return {
+          tag: ValueTag.Error,
+          code: (cellErrors[cellIndex] as ErrorCode | undefined) ?? ErrorCode.None,
+        }
+      case ValueTag.Empty:
+      default:
+        return EMPTY_CELL_VALUE
+    }
+  }
 }

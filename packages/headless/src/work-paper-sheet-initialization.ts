@@ -7,7 +7,6 @@ import {
   inspectSheetWithinLimits,
   runtimeSnapshotMatchesSheetEntries,
   workbookSnapshotSheetHasDynamicSpillFormula,
-  workPaperSheetHasDynamicSpillFormula,
   type WorkPaperSheetInspection,
 } from './work-paper-sheet-inspection.js'
 import type { SerializedWorkPaperNamedExpression, WorkPaperConfig, WorkPaperSheetDimensions, WorkPaperSheets } from './work-paper-types.js'
@@ -174,7 +173,7 @@ function inspectWorkPaperInitialSheets(args: {
           })
           return {
             hasFormula: false,
-            hasDynamicSpillFormula: workPaperSheetHasDynamicSpillFormula(sheet),
+            hasDynamicSpillFormula: workbookSnapshotSheetHasDynamicSpillFormula(snapshotSheet),
             dimensions,
             materializedCellCount: runtimeSheetCells?.cellCount ?? 0,
             maxColumnCount: dimensions.width,

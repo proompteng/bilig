@@ -1,7 +1,7 @@
-import type { EngineCellMutationRef, SheetRecord } from '@bilig/core'
-import type { CellRangeRef, LiteralInput, WorkbookSnapshot } from '@bilig/protocol'
+import { CellFlags, type EngineCellMutationRef, type SheetRecord } from '@bilig/core'
+import type { CellRangeRef, CellValue, LiteralInput, WorkbookSnapshot } from '@bilig/protocol'
 import { formatAddress } from '@bilig/formula'
-import { assertRange, isCellRange } from './work-paper-runtime-helpers.js'
+import { assertRange, isCellRange, valuesEqual } from './work-paper-runtime-helpers.js'
 import { formatTrackedA1, sourceRangeRef } from './work-paper-address-format.js'
 import {
   clearWorkPaperHistoryStacks,
@@ -69,6 +69,8 @@ import type {
 import { WorkPaperPublicSurface } from './work-paper-public-surface.js'
 
 type NamedExpressionValueSnapshot = WorkPaperNamedExpressionValueSnapshot
+type RebuildValueSnapshot = Map<number, CellValue>
+const FORMULA_REBUILD_VALUE_FLAGS = CellFlags.HasFormula | CellFlags.SpillChild | CellFlags.PivotOutput
 export const EMPTY_NAMED_EXPRESSION_VALUES: NamedExpressionValueSnapshot = new Map()
 
 export abstract class WorkPaperRuntimeSurface extends WorkPaperPublicSurface {
@@ -119,6 +121,29 @@ export abstract class WorkPaperRuntimeSurface extends WorkPaperPublicSurface {
         throw new WorkPaperOperationError(this.messageOf(error, 'Recalculation failed'))
       }
       return []
+    }
+    if (this.canUseTrackedMutationFastPath()) {
+      const beforeFormulaValues = this.captureFormulaResultValueSnapshot()
+      this.engineEvents.drain()
+      try {
+        this.engineEvents.withRetainedIndices(() => {
+          this.engine.recalculateNow()
+          this.sheetDimensionCache.invalidateAll()
+        })
+      } catch (error) {
+        throw new WorkPaperOperationError(this.messageOf(error, 'Recalculation failed'))
+      }
+      const shouldEmitValuesUpdated = this.emitter.hasListeners('valuesUpdated')
+      const changes = this.filterUnchangedRebuildChanges(
+        this.computeTrackedChangesWithoutVisibilityCache(this.engineEvents.drain(), {
+          preferLazyPublicChanges: false,
+        }),
+        beforeFormulaValues,
+      )
+      if (changes.length > 0 && shouldEmitValuesUpdated) {
+        this.emitter.emitDetailed({ eventName: 'valuesUpdated', payload: { changes } })
+      }
+      return changes
     }
     const beforeVisibility = this.ensureVisibilityCache()
     const beforeNames = this.namedExpressions.size > 0 ? this.ensureNamedExpressionValueCache() : EMPTY_NAMED_EXPRESSION_VALUES
@@ -520,6 +545,40 @@ export abstract class WorkPaperRuntimeSurface extends WorkPaperPublicSurface {
       sheets: this.listSheetRecords(),
       cellStore: this.engine.workbook.cellStore,
       strings: this.engine.strings,
+    })
+  }
+
+  protected captureFormulaResultValueSnapshot(): RebuildValueSnapshot {
+    const snapshot: RebuildValueSnapshot = new Map()
+    const cellStore = this.engine.workbook.cellStore
+    this.listSheetRecords().forEach((sheet) => {
+      sheet.grid.forEachCellEntry((cellIndex) => {
+        if (((cellStore.flags[cellIndex] ?? 0) & FORMULA_REBUILD_VALUE_FLAGS) === 0) {
+          return
+        }
+        snapshot.set(
+          cellIndex,
+          cellStore.getValue(cellIndex, (id) => this.engine.strings.get(id)),
+        )
+      })
+    })
+    return snapshot
+  }
+
+  protected filterUnchangedRebuildChanges(changes: WorkPaperChange[], beforeFormulaValues: RebuildValueSnapshot): WorkPaperChange[] {
+    if (changes.length === 0 || beforeFormulaValues.size === 0) {
+      return changes
+    }
+    return changes.filter((change) => {
+      if (change.kind !== 'cell') {
+        return true
+      }
+      const cellIndex = this.engine.workbook.getCellIndexAt(change.address.sheet, change.address.row, change.address.col)
+      if (cellIndex === undefined) {
+        return true
+      }
+      const beforeValue = beforeFormulaValues.get(cellIndex)
+      return beforeValue === undefined || !valuesEqual(beforeValue, change.newValue)
     })
   }
 

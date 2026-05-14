@@ -35,6 +35,7 @@ describe('work paper sheet inspection', () => {
     expect(inspectSheetDimensionsWithinLimits('Sheet1', sheet, {})).toEqual({ width: 3, height: 3 })
     expect(inspectSheetWithinLimits('Sheet1', sheet, {})).toEqual({
       hasFormula: true,
+      hasDynamicSpillFormula: false,
       dimensions: { width: 3, height: 3 },
       materializedCellCount: 3,
       maxColumnCount: 3,

@@ -1,7 +1,7 @@
 import type { SheetRecord, SpreadsheetEngine } from '@bilig/core'
 import { ValueTag, type CellValue } from '@bilig/protocol'
 import { parseFormula } from '@bilig/formula'
-import { readFastPhysicalRangeValues } from './fast-range-read.js'
+import { readFastRangeValues } from './fast-range-read.js'
 import { readTrackedRuntimeCellValue } from './work-paper-tracked-event-helpers.js'
 import { stripLeadingEquals } from './work-paper-runtime-helpers.js'
 import {
@@ -66,7 +66,7 @@ export function readWorkPaperRangeValues(args: {
   readonly range: WorkPaperCellRange
   readonly rangeRef: () => Parameters<SpreadsheetEngine['getRangeValues']>[0]
 }): CellValue[][] {
-  const fastValues = readFastPhysicalRangeValues(args.engine, args.range)
+  const fastValues = readFastRangeValues(args.engine, args.range)
   return fastValues ?? args.engine.getRangeValues(args.rangeRef())
 }
 

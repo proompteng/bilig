@@ -762,6 +762,39 @@ describe('WorkPaper', () => {
     getRangeValues.mockRestore()
   })
 
+  it('keeps structurally edited dense range reads on the headless fast path', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: [
+        [1, 2, 3],
+        [4, 5, 6],
+      ],
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+    workbook.removeColumns(sheetId, [1, 1])
+    const engine = Reflect.get(workbook, 'engine')
+    const getRangeValues = vi.spyOn(engine, 'getRangeValues').mockImplementation(() => {
+      throw new Error('logical range reads should use the headless fast path')
+    })
+
+    const values = workbook.getRangeValues({
+      start: cell(sheetId, 0, 0),
+      end: cell(sheetId, 1, 1),
+    })
+
+    expect(values).toEqual([
+      [
+        { tag: ValueTag.Number, value: 1 },
+        { tag: ValueTag.Number, value: 3 },
+      ],
+      [
+        { tag: ValueTag.Number, value: 4 },
+        { tag: ValueTag.Number, value: 6 },
+      ],
+    ])
+    expect(getRangeValues).not.toHaveBeenCalled()
+    getRangeValues.mockRestore()
+  })
+
   it('uses initialized sheet dimensions without scanning existing-cell batch grids', () => {
     const workbook = WorkPaper.buildFromArray([
       [1, 2],
