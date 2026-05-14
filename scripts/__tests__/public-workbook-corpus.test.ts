@@ -994,6 +994,51 @@ describe('public workbook corpus', () => {
     expect(fetchMock).toHaveBeenCalledTimes(6)
   })
 
+  it('avoids a forced user-agent on workbook downloads', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-fetch-user-agent-'))
+    const workbookBytes = buildWorkbookBytes('UserAgent')
+    const fetchMock = vi.fn(async () => {
+      return new Response(workbookBytes, {
+        headers: {
+          'content-length': String(workbookBytes.byteLength),
+        },
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const license = {
+      spdxId: 'CC-BY-4.0',
+      title: 'Creative Commons Attribution 4.0 International',
+      evidenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    }
+    const manifest: PublicWorkbookManifest = {
+      ...createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'),
+      sources: [
+        {
+          id: 'source-user-agent',
+          kind: 'direct-url',
+          sourceUrl: 'https://example.com/workbook.xlsx',
+          downloadUrl: 'https://example.com/workbook.xlsx',
+          fileName: 'workbook.xlsx',
+          discoveredAt: '2026-05-07T00:00:00.000Z',
+          license,
+        },
+      ],
+    }
+
+    await fetchPublicWorkbookArtifacts({
+      manifest,
+      cacheDir,
+      limit: 1,
+      fetchedAt: '2026-05-07T01:00:00.000Z',
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toEqual({
+      accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,*/*',
+    })
+  })
+
   it('honors explicit fetch concurrency limits', async () => {
     const cacheDir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-fetch-concurrency-'))
     const workbookBytes = buildWorkbookBytes('Concurrency')

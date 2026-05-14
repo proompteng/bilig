@@ -552,7 +552,6 @@ async function downloadWorkbookBytes(url: string, maxBytes: number, timeoutMs: n
     url,
     {
       headers: {
-        'user-agent': 'bilig-public-workbook-corpus/1.0',
         accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,*/*',
       },
     },
