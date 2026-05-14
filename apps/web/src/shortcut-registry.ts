@@ -153,6 +153,14 @@ const WORKBOOK_SHORTCUTS: readonly WorkbookShortcutEntry[] = [
     keywords: ['border'],
   },
   {
+    id: 'clear-formatting',
+    label: 'Clear formatting',
+    category: 'Formatting',
+    mac: '⌘\\',
+    windows: 'Ctrl+\\',
+    keywords: ['clear style'],
+  },
+  {
     id: 'move-selection',
     label: 'Move selection',
     category: 'Navigation',

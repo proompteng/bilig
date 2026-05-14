@@ -430,14 +430,35 @@ export function shouldHandleGridWindowKey(
 
   const withinGridHost = Boolean(activeElement && host?.contains(activeElement))
   const onDocumentBody = activeElement === document.body || activeElement === document.documentElement || activeElement === null
+  const workbookScope = host?.closest('[data-workbook-keyboard-scope="true"]') ?? null
+  const withinWorkbookChrome = Boolean(activeElement && workbookScope?.contains(activeElement))
   if (withinGridHost) {
     return isHandledGridKey(event)
+  }
+  if (withinWorkbookChrome) {
+    return isWorkbookChromeGridShortcut(event)
   }
   if (!onDocumentBody) {
     return false
   }
 
   return isHandledGridKey(event)
+}
+
+function isWorkbookChromeGridShortcut(event: Pick<GridKeyboardEventLike, 'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'>): boolean {
+  const hasPrimaryModifier = event.ctrlKey || event.metaKey
+  const normalizedKey = event.key.toLowerCase()
+  return (
+    isClearCellKey(event) ||
+    isClipboardShortcut(event) ||
+    isNavigationKey(event.key) ||
+    (hasPrimaryModifier && !event.altKey && normalizedKey === 'a') ||
+    event.key === 'F2' ||
+    event.key === 'Home' ||
+    event.key === 'End' ||
+    event.key === 'PageUp' ||
+    event.key === 'PageDown'
+  )
 }
 
 export function shouldHandleGridSurfaceKey(

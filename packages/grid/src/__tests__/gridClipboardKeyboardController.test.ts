@@ -565,6 +565,88 @@ describe('gridClipboardKeyboardController', () => {
     })
   })
 
+  test('routes high-confidence grid shortcuts from workbook chrome without stealing button activation keys', () => {
+    document.body.innerHTML = ''
+    const scope = document.createElement('section')
+    scope.dataset['workbookKeyboardScope'] = 'true'
+    const gridHost = document.createElement('div')
+    const toolbarButton = document.createElement('button')
+    scope.append(gridHost, toolbarButton)
+    document.body.append(scope)
+    toolbarButton.focus()
+
+    expect(
+      shouldHandleGridWindowKey({ altKey: false, ctrlKey: false, key: 'Delete', metaKey: false, shiftKey: false }, toolbarButton, gridHost),
+    ).toBe(true)
+    expect(
+      shouldHandleGridWindowKey({ altKey: false, ctrlKey: true, key: 'c', metaKey: false, shiftKey: false }, toolbarButton, gridHost),
+    ).toBe(true)
+    expect(
+      shouldHandleGridWindowKey(
+        { altKey: false, ctrlKey: false, key: 'ArrowDown', metaKey: false, shiftKey: false },
+        toolbarButton,
+        gridHost,
+      ),
+    ).toBe(true)
+    expect(
+      shouldHandleGridWindowKey({ altKey: false, ctrlKey: false, key: 'Enter', metaKey: false, shiftKey: false }, toolbarButton, gridHost),
+    ).toBe(false)
+    expect(
+      shouldHandleGridWindowKey({ altKey: false, ctrlKey: false, key: ' ', metaKey: false, shiftKey: false }, toolbarButton, gridHost),
+    ).toBe(false)
+    expect(
+      shouldHandleGridWindowKey({ altKey: false, ctrlKey: false, key: 'x', metaKey: false, shiftKey: false }, toolbarButton, gridHost),
+    ).toBe(false)
+  })
+
+  test('clears the latest selection when Delete is pressed from workbook chrome', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    document.body.innerHTML = ''
+    const beginSelectedEdit = vi.fn()
+    const onClearCell = vi.fn()
+    const setGridSelection = vi.fn()
+    const onSelectionChange = vi.fn()
+    const scope = document.createElement('section')
+    scope.dataset['workbookKeyboardScope'] = 'true'
+    const toolbarButton = document.createElement('button')
+    const host = document.createElement('div')
+    scope.append(toolbarButton, host)
+    document.body.append(scope)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        createElement(KeyboardHandlerHarness, {
+          beginSelectedEdit,
+          getGridSelection: () => createGridSelection(4, 8),
+          onClearCell,
+          onSelectionChange,
+          setGridSelection,
+        }),
+      )
+    })
+
+    toolbarButton.focus()
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Delete' }))
+    })
+
+    expect(onClearCell).toHaveBeenCalledWith({
+      address: 'E9',
+      kind: 'cell',
+      range: { startAddress: 'E9', endAddress: 'E9' },
+      sheetName: 'Sheet1',
+    })
+    expect(beginSelectedEdit).not.toHaveBeenCalled()
+    expect(setGridSelection).not.toHaveBeenCalled()
+    expect(onSelectionChange).not.toHaveBeenCalled()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
   test('does not route modified delete keys into the grid', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

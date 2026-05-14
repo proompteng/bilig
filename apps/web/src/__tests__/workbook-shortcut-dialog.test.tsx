@@ -172,11 +172,13 @@ describe('workbook shortcut dialog', () => {
     expect(getWorkbookShortcutLabel('undo', 'MacIntel')).toBe('⌘Z')
     expect(getWorkbookShortcutLabel('undo', 'Win32')).toBe('Ctrl+Z')
     expect(getWorkbookShortcutLabel('clear-selection', 'Win32')).toBe('Delete / Backspace')
+    expect(getWorkbookShortcutLabel('clear-formatting', 'Win32')).toBe('Ctrl+\\')
   })
 
   it('splits shortcuts into readable keycap parts', () => {
     expect(getWorkbookShortcutParts('undo', 'MacIntel')).toEqual(['⌘', 'Z'])
     expect(getWorkbookShortcutParts('format-currency', 'MacIntel')).toEqual(['⇧', '⌘', '4'])
+    expect(getWorkbookShortcutParts('clear-formatting', 'MacIntel')).toEqual(['⌘', '\\'])
     expect(getWorkbookShortcutParts('undo', 'Win32')).toEqual(['Ctrl', 'Z'])
   })
 })

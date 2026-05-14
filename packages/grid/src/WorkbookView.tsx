@@ -319,7 +319,11 @@ export function WorkbookView({
   }, [])
 
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--wb-surface)] font-sans" data-testid="workbook-shell">
+    <section
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--wb-surface)] font-sans"
+      data-testid="workbook-shell"
+      data-workbook-keyboard-scope="true"
+    >
       {ribbon ? (
         <Profiler id="workbook-ribbon" onRender={() => noteSurfaceCommit('ribbon')}>
           <div className="shrink-0 bg-[var(--wb-surface)]">{ribbon}</div>
