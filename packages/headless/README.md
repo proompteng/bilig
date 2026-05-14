@@ -130,6 +130,10 @@ pnpm --filter @bilig/headless build
 - Read the
   [compatibility limits](https://github.com/proompteng/bilig/blob/main/docs/where-bilig-is-not-excel-compatible-yet.md)
   before importing real Excel workbooks.
+- For XLSX accuracy audits, use the
+  [Excel oracle harness](https://github.com/proompteng/bilig/blob/main/docs/xlsx-corpus-verifier-walkthrough.md#run-the-excel-oracle-harness).
+  It separates import success, timeouts, stale cached formula values, and fresh
+  Microsoft Excel recalculation results.
 - Track public signals in the
   [growth snapshot](https://proompteng.github.io/bilig/community-growth-snapshot.html):
   stars, npm downloads, starter issues, Discussions, traffic, and clones.
@@ -241,14 +245,14 @@ Supported scope:
   Use `WorkPaper.buildFromSnapshot()` for imported workbook snapshots so Excel
   defined names, tables, and translated formulas stay attached to the runtime
   model.
-- XLSX cached-result parity investigations are covered by the repository
-  verifier, not by the published package surface. Use
-  `pnpm workpaper:xlsx-corpus:check -- <xlsx-file-or-directory>` for external
-  corpora, and `pnpm workpaper:xlsx-corpus:fixtures:check` for the checked-in
-  issue #8 reduction corpus. The verifier compares deterministic cached formula
-  results and skips volatile or environment-dependent formulas such as `NOW()`
-  and `CELL("filename")`; unsupported deterministic formulas remain visible as
-  mismatches instead of being silently accepted.
+- XLSX cached-result parity is a cache diagnostic, not an accuracy verdict. Use
+  `pnpm workpaper:xlsx-corpus:check -- <xlsx-file-or-directory>` for quick
+  cached-value triage, and use
+  `pnpm workpaper:xlsx-oracle -- prepare-oracle <input-dir> <output-dir>`
+  followed by `pnpm workpaper:xlsx-oracle -- evaluate-oracle <original-dir>
+<recalculated-dir> <output-dir>` before calling a mismatch a correctness bug.
+  The oracle harness compares against a Microsoft Excel recalculated copy and
+  marks missing Excel automation as `missing_excel_oracle`.
 - Custom function plugins and callback hooks are runtime registrations. Persist
   workbook data with the helpers below, then register custom behavior in
   application code before restore.
@@ -823,8 +827,8 @@ pnpm workpaper:bench:competitive:check
 Do not change benchmark definitions, scoring, sampling, or workload sizes to hide
 losses.
 
-For XLSX compatibility investigations with cached formula results, run the
-corpus verifier against real workbook files:
+For XLSX cache diagnostics, run the corpus verifier against real workbook
+files:
 
 ```sh
 pnpm workpaper:xlsx-corpus:check -- /path/to/xlsx-corpus
@@ -837,6 +841,22 @@ results. It reports `totalFiles`, `failedTimeouts`, `comparableFormulaCells`,
 and actionable mismatch samples. Missing cached results and volatile or
 environment-dependent formulas such as `NOW()` and `CELL()` are counted as
 skipped instead of silently treated as parity evidence.
+
+For XLSX formula accuracy, do not treat those embedded cached values as truth.
+Prepare a fresh Excel oracle and evaluate against the recalculated copy:
+
+```sh
+OUT=.cache/excel-oracle-evaluation
+pnpm workpaper:xlsx-oracle -- prepare-oracle /path/to/xlsx-corpus "$OUT"
+pnpm workpaper:xlsx-oracle -- evaluate-cache /path/to/xlsx-corpus "$OUT"
+pnpm workpaper:xlsx-oracle -- evaluate-oracle /path/to/xlsx-corpus "$OUT/recalculated" "$OUT"
+pnpm workpaper:xlsx-oracle -- summarize "$OUT"
+```
+
+`evaluate-cache` writes `cache-diagnostic.json` and stays non-authoritative.
+`evaluate-oracle` writes `excel-oracle-report.json`, and `summarize` writes
+`summary.md`. If Microsoft Excel is unavailable, cells are classified as
+`missing_excel_oracle` instead of being promoted to bugs.
 
 ## Compatibility Notes
 

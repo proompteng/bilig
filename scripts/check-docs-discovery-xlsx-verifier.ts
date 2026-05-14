@@ -8,6 +8,11 @@ export function requireXlsxCorpusVerifierDiscovery(content: string): void {
   for (const required of [
     'not on a vague',
     'Run It Against Your Files',
+    'Run The Excel Oracle Harness',
+    'pnpm workpaper:xlsx-oracle -- prepare-oracle /path/to/workbooks "$OUT"',
+    'cache-diagnostic.json',
+    'excel-oracle-report.json',
+    'missing_excel_oracle',
     'Put It In CI',
     'pnpm workpaper:xlsx-corpus:check -- /path/to/workbooks',
     'Turn A Miss Into A Contribution',

@@ -305,6 +305,8 @@ for (const [path, content] of [
   requireIncludes(content, 'lookup-approximate-duplicates', path)
   requireIncludes(content, '1.043x', path)
   requireIncludes(content, 'compatibility limits', path)
+  requireIncludes(content, 'Excel oracle harness', path)
+  requireIncludes(content, 'stale cached formula values', path)
   requireIncludes(content, 'stars, npm downloads, starter issues, Discussions, traffic, and clones.', path)
   requireIncludes(content, 'https://github.com/proompteng/bilig/discussions/307', path)
   requireIncludes(content, 'https://github.com/proompteng/bilig/discussions/308', path)

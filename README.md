@@ -105,6 +105,10 @@ console.log({ revenue, savedBytes: saved.length })
   and names the slower p95 row: `lookup-approximate-duplicates` at `1.043x`.
 - Read the [compatibility limits](docs/where-bilig-is-not-excel-compatible-yet.md)
   before importing real Excel workbooks.
+- For XLSX accuracy audits, use the
+  [Excel oracle harness](docs/xlsx-corpus-verifier-walkthrough.md#run-the-excel-oracle-harness).
+  It separates import success, timeouts, stale cached formula values, and fresh
+  Microsoft Excel recalculation results.
 - Track public signals in the
   [growth snapshot](https://proompteng.github.io/bilig/community-growth-snapshot.html):
   stars, npm downloads, starter issues, Discussions, traffic, and clones.
@@ -125,7 +129,7 @@ it again: <https://github.com/proompteng/bilig/stargazers>.
 | Build a Node workflow     | [server-side spreadsheet automation](docs/server-side-spreadsheet-automation-node.md), [five runnable workbook automation examples](docs/workbook-automation-examples-node.md), [framework adapters](docs/node-framework-workpaper-adapters.md), [evaluate Excel formulas in Node.js](docs/evaluate-excel-formulas-in-node-typescript.md), and the [Node service recipe](docs/node-service-workpaper-recipe.md) |
 | Wire an agent or MCP tool | [agent tool-calling recipe](docs/agent-workpaper-tool-calling-recipe.md), [MCP spreadsheet tool server guide](docs/mcp-workpaper-tool-server.md), [MCP directory status](docs/mcp-spreadsheet-server-directory.md), [MCP client setup](docs/mcp-client-setup.md), and [Claude Desktop MCPB bundle](docs/claude-desktop-mcpb-workpaper.md)                                                                       |
 | Compare alternatives      | [JavaScript spreadsheet library guide](docs/javascript-spreadsheet-library-headless-node.md), [headless engine comparison](docs/headless-spreadsheet-engine-comparison.md), [HyperFormula comparison](docs/hyperformula-alternative-headless-workpaper.md)                                                                                                                                                      |
-| Contribute                | [starter issues](docs/starter-issues.md), [first-timers-only issues](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only), [GitHub Discussions](https://github.com/proompteng/bilig/discussions), and [CONTRIBUTING.md](CONTRIBUTING.md)                                                                                                                                                                                     |
+| Contribute                | [starter issues](docs/starter-issues.md), [first-timers-only issues](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only), [GitHub Discussions](https://github.com/proompteng/bilig/discussions), and [CONTRIBUTING.md](CONTRIBUTING.md)                                                                                                                         |
 
 Useful direct paths:
 
@@ -614,8 +618,12 @@ For the current Excel-compatibility boundaries, see
 It names the macro, formula, XLSX corpus, and UI-claim gaps without treating
 the project as a complete Excel clone.
 
-For a short guide to interpreting XLSX cached-result corpus reports, see
+For a short guide to interpreting XLSX cache diagnostics and fresh Excel-oracle
+accuracy reports, see
 [`docs/xlsx-corpus-verifier-walkthrough.md`](docs/xlsx-corpus-verifier-walkthrough.md).
+It explains why embedded cached formula values are not an accuracy verdict and
+how to generate `cache-diagnostic.json`, `excel-oracle-report.json`, and
+`summary.md`.
 
 For a formula-edge fixture walkthrough covering the exact-match `XLOOKUP` path,
 see
