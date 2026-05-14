@@ -58,7 +58,7 @@ export function requireHomepageDiscovery(index: string, siteCss: string): void {
       'More TypeScript examples live in',
       'Use it from the place that already owns the workflow.',
       'Node route, queue worker, CLI, or MCP server: load the workbook',
-      'Benchmark proof, caveat included.',
+      'The benchmark artifact includes the caveat.',
       "It compares WorkPaper with HyperFormula on the repo's headless formula workloads.",
       'It is useful evidence, not a promise about',
       'every Excel file, every formula, or the browser grid.',
