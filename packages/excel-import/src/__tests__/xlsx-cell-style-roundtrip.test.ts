@@ -1,6 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 
+import { SpreadsheetEngine } from '@bilig/core'
 import type { CellStyleRecord, WorkbookSnapshot } from '@bilig/protocol'
 import { exportXlsx, importXlsx } from '../index.js'
 
@@ -51,6 +52,30 @@ describe('xlsx cell style roundtrip', () => {
     expect(readRowStyleNumberFormat(exported, 1)).toBe(readRowStyleNumberFormat(source, 1))
     expect(readCellXml(exported, 'xl/worksheets/sheet1.xml!A3')).toBeDefined()
     expect(readCellXml(exported, 'xl/worksheets/sheet1.xml!B2')).toBeDefined()
+  })
+
+  it('keeps repeated row style metadata compact while preserving export fidelity', () => {
+    const source = buildRepeatedRowStyleMetadataWorkbook()
+
+    const imported = importXlsx(source, 'repeated-row-style-metadata.xlsx')
+    const metadata = imported.snapshot.sheets[0]?.metadata
+
+    expect(metadata?.rows).toBeUndefined()
+    expect(metadata?.rowMetadata).toEqual([
+      {
+        start: 0,
+        count: repeatedRowStyleMetadataCount,
+        styleIndex: 1,
+        customFormat: true,
+      },
+    ])
+
+    const engine = new SpreadsheetEngine({ workbookName: 'repeated-row-style-metadata' })
+    expect(() => engine.importSnapshot(imported.snapshot)).not.toThrow()
+
+    const exported = exportXlsx(imported.snapshot)
+    expect(readRowAttributes(exported, 1)).toEqual({ style: '1', customFormat: '1' })
+    expect(readRowAttributes(exported, repeatedRowStyleMetadataCount)).toEqual({ style: '1', customFormat: '1' })
   })
 
   it('preserves style-only blank cells on otherwise empty imported worksheets', () => {
@@ -439,6 +464,7 @@ function buildStyleOnlyBlankCellWorkbook(): Uint8Array {
 }
 
 const manyStyleOnlyBlankCellRowCount = 6_000
+const repeatedRowStyleMetadataCount = 6_000
 
 function buildManyStyleOnlyBlankCellsWorkbook(): Uint8Array {
   const zip = unzipSync(exportXlsx(buildStyledWorkbook()))
@@ -451,6 +477,21 @@ function buildManyStyleOnlyBlankCellsWorkbook(): Uint8Array {
   }).join('')
   const sheetXml = strFromU8(zip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())
     .replace(/<dimension\b[^>]*\/>/u, `<dimension ref="A1:B${String(manyStyleOnlyBlankCellRowCount)}"/>`)
+    .replace(/<sheetData\b[^>]*>[\s\S]*?<\/sheetData>/u, `<sheetData>${rows}</sheetData>`)
+  zip['xl/worksheets/sheet1.xml'] = strToU8(sheetXml)
+  return zipSync(zip)
+}
+
+function buildRepeatedRowStyleMetadataWorkbook(): Uint8Array {
+  const zip = unzipSync(exportXlsx(buildStyledWorkbook()))
+  zip['xl/styles.xml'] = strToU8(axisStyleReferenceStylesXml)
+  const rows = Array.from({ length: repeatedRowStyleMetadataCount }, (_entry, index) => {
+    const rowNumber = index + 1
+    const cellXml = rowNumber === 1 ? '<c r="A1"><v>1</v></c>' : ''
+    return `<row r="${String(rowNumber)}" s="1" customFormat="1">${cellXml}</row>`
+  }).join('')
+  const sheetXml = strFromU8(zip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())
+    .replace(/<dimension\b[^>]*\/>/u, `<dimension ref="A1:A${String(repeatedRowStyleMetadataCount)}"/>`)
     .replace(/<sheetData\b[^>]*>[\s\S]*?<\/sheetData>/u, `<sheetData>${rows}</sheetData>`)
   zip['xl/worksheets/sheet1.xml'] = strToU8(sheetXml)
   return zipSync(zip)

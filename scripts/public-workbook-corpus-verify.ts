@@ -331,15 +331,18 @@ export async function verifyCachedWorkbookArtifact(
       ? emptyUnsupportedFormulaOracleCacheClassification()
       : classifyUnsupportedFormulaOracleCache(imported.snapshot, formulaOracleValidation)
     collectGarbage()
-    workerOptions.onPhase?.('structural-smoke')
-    const structuralSmokePassed = runStructuralSmoke ? runStructuralSmokeOps(imported.snapshot) : null
     const unsupportedFeatureClassifications = classifyUnsupportedFeatures(imported.snapshot, imported.warnings, featureCounts, {
       supportedImportWarnings: supportedFormulaOracleImportWarnings(imported.warnings, formulaOracleValidation),
       extraClassifications: unsupportedFormulaOracleCache.classifications,
     })
     const roundTripSkipEvidence = roundTripValidationSkipEvidence(imported.warnings)
+    const structuralSmokeSnapshot = imported.snapshot
     workerOptions.onPhase?.('round-trip')
     const roundTripPassed = roundTripSkipEvidence ? true : roundTripsSupportedSemantics(detachImportedWorkbookSnapshot(imported))
+    collectGarbage()
+    workerOptions.onPhase?.('structural-smoke')
+    const structuralSmokePassed = runStructuralSmoke ? runStructuralSmokeOps(structuralSmokeSnapshot) : null
+    collectGarbage()
     const formulaOraclePassed =
       unsupportedFormulaOracleWarning || unsupportedFormulaOracleCache.unsupported || formulaOracleValidation.mismatches.length === 0
     const validation: PublicWorkbookValidationSummary = {

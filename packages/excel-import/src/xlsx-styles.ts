@@ -652,6 +652,34 @@ function parseSheetColumnEntries(sheetXml: string): {
   }
 }
 
+function rowMetadataValuesMatch(left: WorkbookAxisMetadataSnapshot, right: WorkbookAxisMetadataSnapshot): boolean {
+  return (
+    left.size === right.size &&
+    left.hidden === right.hidden &&
+    left.xlsxHeight === right.xlsxHeight &&
+    left.styleIndex === right.styleIndex &&
+    left.customFormat === right.customFormat &&
+    left.customHeight === right.customHeight &&
+    left.outlineLevel === right.outlineLevel &&
+    left.collapsed === right.collapsed &&
+    left.thickTop === right.thickTop &&
+    left.thickBottom === right.thickBottom
+  )
+}
+
+function coalesceRowMetadata(records: readonly WorkbookAxisMetadataSnapshot[]): WorkbookAxisMetadataSnapshot[] {
+  const coalesced: WorkbookAxisMetadataSnapshot[] = []
+  for (const record of records) {
+    const previous = coalesced[coalesced.length - 1]
+    if (previous && previous.start + previous.count === record.start && rowMetadataValuesMatch(previous, record)) {
+      coalesced[coalesced.length - 1] = { ...previous, count: previous.count + record.count }
+      continue
+    }
+    coalesced.push({ ...record })
+  }
+  return coalesced
+}
+
 function parseSheetRowEntries(sheetXml: string): { entries?: WorkbookAxisEntrySnapshot[]; metadata?: WorkbookAxisMetadataSnapshot[] } {
   const entries: WorkbookAxisEntrySnapshot[] = []
   const metadata: WorkbookAxisMetadataSnapshot[] = []
@@ -685,12 +713,14 @@ function parseSheetRowEntries(sheetXml: string): { entries?: WorkbookAxisEntrySn
     ) {
       continue
     }
-    entries.push({
-      id: `row:${String(index)}`,
-      index,
-      ...(size !== null && size > 0 ? { size } : {}),
-      ...(hidden === true ? { hidden: true } : {}),
-    })
+    if (size !== null || hidden === true) {
+      entries.push({
+        id: `row:${String(index)}`,
+        index,
+        ...(size !== null && size > 0 ? { size } : {}),
+        ...(hidden === true ? { hidden: true } : {}),
+      })
+    }
     metadata.push({
       start: index,
       count: 1,
@@ -706,9 +736,10 @@ function parseSheetRowEntries(sheetXml: string): { entries?: WorkbookAxisEntrySn
       ...(thickBottom !== null ? { thickBottom } : {}),
     })
   }
+  const coalescedMetadata = coalesceRowMetadata(metadata)
   return {
     ...(entries.length > 0 ? { entries } : {}),
-    ...(metadata.length > 0 ? { metadata } : {}),
+    ...(coalescedMetadata.length > 0 ? { metadata: coalescedMetadata } : {}),
   }
 }
 

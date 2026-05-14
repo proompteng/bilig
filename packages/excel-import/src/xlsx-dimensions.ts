@@ -124,54 +124,48 @@ function hasExactColumnGeometry(column: WorkbookAxisMetadataSnapshot): boolean {
   )
 }
 
+function expandExportRowMetadataRecord(row: WorkbookAxisMetadataSnapshot): ExportRowMetadata[] {
+  if (
+    !Number.isSafeInteger(row.start) ||
+    row.start < 0 ||
+    !Number.isSafeInteger(row.count) ||
+    row.count <= 0 ||
+    !hasExactRowGeometry(row)
+  ) {
+    return []
+  }
+  const xlsxHeight = finitePositiveNumber(row.xlsxHeight ?? undefined)
+  const size = finitePositiveNumber(row.size ?? undefined)
+  const hidden = optionalBoolean(row.hidden)
+  const styleIndex = finiteNonNegativeInteger(row.styleIndex ?? undefined)
+  const customFormat = optionalBoolean(row.customFormat)
+  const customHeight = optionalBoolean(row.customHeight)
+  const outlineLevel = finiteNonNegativeInteger(row.outlineLevel ?? undefined)
+  const collapsed = optionalBoolean(row.collapsed)
+  const thickTop = optionalBoolean(row.thickTop)
+  const thickBottom = optionalBoolean(row.thickBottom)
+  return Array.from({ length: row.count }, (_entry, offset) => ({
+    rowNumber: row.start + offset + 1,
+    ...(size !== undefined ? { size } : {}),
+    ...(hidden !== undefined ? { hidden } : {}),
+    ...(styleIndex !== undefined ? { styleIndex } : {}),
+    ...(xlsxHeight !== undefined ? { xlsxHeight } : {}),
+    ...(customFormat !== undefined ? { customFormat } : {}),
+    ...(customHeight !== undefined ? { customHeight } : {}),
+    ...(outlineLevel !== undefined ? { outlineLevel } : {}),
+    ...(collapsed !== undefined ? { collapsed } : {}),
+    ...(thickTop !== undefined ? { thickTop } : {}),
+    ...(thickBottom !== undefined ? { thickBottom } : {}),
+    exact: true,
+  }))
+}
+
 function normalizeExportRowMetadata(
   rows: readonly WorkbookAxisEntrySnapshot[] | undefined,
   rowMetadata: readonly WorkbookAxisMetadataSnapshot[] | undefined,
 ): ExportRowMetadata[] {
   const exactRows =
-    rowMetadata
-      ?.flatMap((row) => {
-        if (!Number.isSafeInteger(row.start) || row.start < 0 || row.count !== 1 || !hasExactRowGeometry(row)) {
-          return []
-        }
-        const xlsxHeight = finitePositiveNumber(row.xlsxHeight ?? undefined)
-        const size = finitePositiveNumber(row.size ?? undefined)
-        const hidden = optionalBoolean(row.hidden)
-        const styleIndex = finiteNonNegativeInteger(row.styleIndex ?? undefined)
-        const customFormat = optionalBoolean(row.customFormat)
-        const customHeight = optionalBoolean(row.customHeight)
-        const outlineLevel = finiteNonNegativeInteger(row.outlineLevel ?? undefined)
-        const collapsed = optionalBoolean(row.collapsed)
-        const thickTop = optionalBoolean(row.thickTop)
-        const thickBottom = optionalBoolean(row.thickBottom)
-        if (
-          xlsxHeight === undefined &&
-          size === undefined &&
-          row.hidden !== true &&
-          row.hidden !== false &&
-          styleIndex === undefined &&
-          customFormat === undefined &&
-          !hasExactRowGeometry(row)
-        ) {
-          return []
-        }
-        const normalized: ExportRowMetadata = {
-          rowNumber: row.start + 1,
-          ...(size !== undefined ? { size } : {}),
-          ...(hidden !== undefined ? { hidden } : {}),
-          ...(styleIndex !== undefined ? { styleIndex } : {}),
-          ...(xlsxHeight !== undefined ? { xlsxHeight } : {}),
-          ...(customFormat !== undefined ? { customFormat } : {}),
-          ...(customHeight !== undefined ? { customHeight } : {}),
-          ...(outlineLevel !== undefined ? { outlineLevel } : {}),
-          ...(collapsed !== undefined ? { collapsed } : {}),
-          ...(thickTop !== undefined ? { thickTop } : {}),
-          ...(thickBottom !== undefined ? { thickBottom } : {}),
-          exact: true,
-        }
-        return [normalized]
-      })
-      .toSorted((left, right) => left.rowNumber - right.rowNumber) ?? []
+    rowMetadata?.flatMap((row) => expandExportRowMetadataRecord(row)).toSorted((left, right) => left.rowNumber - right.rowNumber) ?? []
   if (!rows || rows.length === 0) {
     return exactRows
   }
