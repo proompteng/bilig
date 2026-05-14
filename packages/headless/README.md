@@ -19,38 +19,6 @@ It is not Excel desktop automation and it is not a visual grid. XLSX import and
 export live in the repository import/export packages; this package executes the
 validated WorkPaper model once data is in workbook form.
 
-## Best Fit
-
-| Use it for                                                             | Do not use it for                                           |
-| ---------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Formula-backed calculations in Node services and serverless routes     | Manual spreadsheet editing                                  |
-| Agent tools that write workbook inputs and return verified readback    | Browser grid rendering by itself                            |
-| Persisting a workbook document after code changes cells or formulas    | Office macros, COM automation, or desktop Excel integration |
-| Tests that need deterministic spreadsheet state instead of screenshots | One-off arithmetic where a workbook model adds no value     |
-
-## Proof You Can Reproduce
-
-- Run the clean TypeScript sanity check below. It edits one input, restores the
-  saved JSON document, and verifies the dependent formula result.
-- Run `pnpm workpaper:bench:competitive:check` from the repository. The
-  checked-in artifact shows
-  [`46/46` comparable WorkPaper mean wins](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md)
-  and names the slower p95 row: `lookup-approximate-duplicates` at `1.043x`.
-- Read the
-  [compatibility limits](https://github.com/proompteng/bilig/blob/main/docs/where-bilig-is-not-excel-compatible-yet.md)
-  before importing real Excel workbooks.
-- Track public signals in the
-  [growth snapshot](https://proompteng.github.io/bilig/community-growth-snapshot.html):
-  stars, npm downloads, starter issues, Discussions, traffic, and clones.
-- The WorkPaper MCP server is listed in the
-  [official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper)
-  and on [Glama](https://glama.ai/mcp/servers/proompteng/bilig). The
-  [directory status page](https://proompteng.github.io/bilig/mcp-spreadsheet-server-directory.html)
-  keeps the npm command and directory evidence in one place.
-
-If the sanity check matches a problem you have, star the repo so you can find it
-again: <https://github.com/proompteng/bilig/stargazers>.
-
 ## Install
 
 Requires Node `24+` and ESM imports.
@@ -106,6 +74,38 @@ Inside this monorepo:
 pnpm install
 pnpm --filter @bilig/headless build
 ```
+
+## Best Fit
+
+| Use it for                                                             | Do not use it for                                           |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Formula-backed calculations in Node services and serverless routes     | Manual spreadsheet editing                                  |
+| Agent tools that write workbook inputs and return verified readback    | Browser grid rendering by itself                            |
+| Persisting a workbook document after code changes cells or formulas    | Office macros, COM automation, or desktop Excel integration |
+| Tests that need deterministic spreadsheet state instead of screenshots | One-off arithmetic where a workbook model adds no value     |
+
+## Proof You Can Reproduce
+
+- The clean TypeScript sanity check above edits one input, restores the saved
+  JSON document, and verifies the dependent formula result.
+- Run `pnpm workpaper:bench:competitive:check` from the repository. The
+  checked-in artifact shows
+  [`46/46` comparable WorkPaper mean wins](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md)
+  and names the slower p95 row: `lookup-approximate-duplicates` at `1.043x`.
+- Read the
+  [compatibility limits](https://github.com/proompteng/bilig/blob/main/docs/where-bilig-is-not-excel-compatible-yet.md)
+  before importing real Excel workbooks.
+- Track public signals in the
+  [growth snapshot](https://proompteng.github.io/bilig/community-growth-snapshot.html):
+  stars, npm downloads, starter issues, Discussions, traffic, and clones.
+- The WorkPaper MCP server is listed in the
+  [official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper)
+  and on [Glama](https://glama.ai/mcp/servers/proompteng/bilig). The
+  [directory status page](https://proompteng.github.io/bilig/mcp-spreadsheet-server-directory.html)
+  keeps the npm command and directory evidence in one place.
+
+If the sanity check matches a problem you have, star the repo so you can find it
+again: <https://github.com/proompteng/bilig/stargazers>.
 
 ## Start Here
 

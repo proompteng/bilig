@@ -18,6 +18,41 @@ recalculate the same way every run.
 
 Project site: <https://proompteng.github.io/bilig/>
 
+## Try `@bilig/headless` in 90 seconds
+
+The fastest evaluation path uses the published npm package only. It builds a
+formula-backed workbook, applies an edit, persists the document, restores it,
+and throws if formula readback does not survive the round trip.
+
+```bash
+mkdir bilig-headless-eval
+cd bilig-headless-eval
+npm init -y
+npm pkg set type=module
+npm install @bilig/headless
+npm install -D tsx typescript @types/node
+curl -fsSLo eval.ts https://proompteng.github.io/bilig/npm-eval.ts
+npx tsx eval.ts
+```
+
+Expected output:
+
+```json
+{
+  "before": 24000,
+  "after": 38400,
+  "afterRestore": 38400,
+  "sheets": ["Inputs", "Summary"],
+  "bytes": 1000,
+  "verified": true
+}
+```
+
+The TypeScript file is maintained in
+[`examples/headless-workpaper/npm-eval.ts`](examples/headless-workpaper/npm-eval.ts).
+The exact byte count can change between package versions; `verified: true` and
+matching `after`/`afterRestore` values are the check.
+
 ## When It Fits
 
 | Good fit                                                                  | Use something else when                                                    |
@@ -29,8 +64,8 @@ Project site: <https://proompteng.github.io/bilig/>
 
 ## Proof You Can Reproduce
 
-- Run the 90-second TypeScript check below. It edits one input, restores the
-  saved JSON document, and verifies the dependent formula result.
+- The 90-second TypeScript check above edits one input, restores the saved JSON
+  document, and verifies the dependent formula result.
 - Run `pnpm workpaper:bench:competitive:check`. The checked-in artifact shows
   [`46/46` comparable WorkPaper mean wins](docs/what-workpaper-benchmark-proves.md)
   and names the slower p95 row: `lookup-approximate-duplicates` at `1.043x`.
@@ -111,40 +146,7 @@ Useful direct paths:
 The published MCP Registry entry is
 [`io.github.proompteng/bilig-workpaper`](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper).
 
-## Try `@bilig/headless` in 90 seconds
-
-The fastest evaluation path uses the published npm package only. It builds a
-formula-backed workbook, applies an edit, persists the document, restores it,
-and throws if formula readback does not survive the round trip.
-
-```bash
-mkdir bilig-headless-eval
-cd bilig-headless-eval
-npm init -y
-npm pkg set type=module
-npm install @bilig/headless
-npm install -D tsx typescript @types/node
-curl -fsSLo eval.ts https://proompteng.github.io/bilig/npm-eval.ts
-npx tsx eval.ts
-```
-
-Expected output:
-
-```json
-{
-  "before": 24000,
-  "after": 38400,
-  "afterRestore": 38400,
-  "sheets": ["Inputs", "Summary"],
-  "bytes": 1000,
-  "verified": true
-}
-```
-
-The TypeScript file is maintained in
-[`examples/headless-workpaper/npm-eval.ts`](examples/headless-workpaper/npm-eval.ts).
-The exact byte count can change between package versions; `verified: true` and
-matching `after`/`afterRestore` values are the check.
+## Maintained Examples
 
 The maintained repository example adds agent-style writeback verification:
 
