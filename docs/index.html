@@ -121,7 +121,7 @@
         ]
       }
     </script>
-    <link rel="stylesheet" href="./assets/site.css?v=2026-05-14-1" />
+    <link rel="stylesheet" href="./assets/site.css?v=2026-05-14-2" />
     <link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-13-4" />
   </head>
   <body>
@@ -175,7 +175,7 @@
               <span>Change an input cell and read the dependent total.</span>
             </div>
             <div class="hero-note">
-              <strong>89 starter issues</strong>
+              <strong>93 starter issues</strong>
               <span>Small docs, examples, adapters, and tests.</span>
             </div>
           </div>
@@ -484,46 +484,46 @@ function readNumber(cell: unknown): number {
           <div class="proof-layout">
             <div class="proof-intro">
               <p class="kicker">Benchmark</p>
-              <h2 id="proof-title">The benchmark artifact includes the caveat.</h2>
+              <h2 id="proof-title">46/46 on mean latency. One p95 case is slower.</h2>
               <p>
-                It compares WorkPaper with HyperFormula on the repo's headless formula workloads. It is useful evidence, not a promise about
-                every Excel file, every formula, or the browser grid.
+                That is the current WorkPaper vs HyperFormula file in the repo. It covers shared headless formula workloads, not Excel
+                compatibility, browser rendering, or your own workbook.
               </p>
             </div>
 
             <div class="proof-board" aria-label="Benchmark evidence">
               <div class="proof-board-head">
-                <span>WorkPaper vs HyperFormula</span>
-                <strong>mean latency</strong>
+                <span>workpaper-vs-hyperformula.json</span>
+                <strong>checked in</strong>
               </div>
 
               <div class="proof-result">
-                <span class="proof-label">latest artifact</span>
+                <span class="proof-label">current run</span>
                 <strong>46/46</strong>
                 <p>
-                  WorkPaper has the lower mean latency on every comparable row. One lookup workload is slower at p95 by
-                  <code>1.043x</code>, so the caveat stays visible.
+                  Lower mean latency on every comparable workload. Approximate lookup with duplicates is slower at p95:
+                  <code>1.043x</code>. Benchmark that case before you use the headline.
                 </p>
               </div>
 
               <dl class="proof-facts">
                 <div class="proof-fact proof-command">
-                  <dt>Run locally</dt>
+                  <dt>Run it</dt>
                   <dd><code>pnpm workpaper:bench:competitive:check</code></dd>
                 </div>
                 <div class="proof-fact proof-row-code">
-                  <dt>Artifact</dt>
+                  <dt>File</dt>
                   <dd>
                     <code>packages/benchmarks/baselines/<wbr />workpaper-vs-hyperformula.json</code>
                   </dd>
                 </div>
                 <div class="proof-fact">
-                  <dt>Covers</dt>
-                  <dd>Headless formula workloads that both engines can run.</dd>
+                  <dt>Scope</dt>
+                  <dd>Mean latency on the shared headless formula suite.</dd>
                 </div>
                 <div class="proof-fact">
-                  <dt>Does not cover</dt>
-                  <dd>Browser rendering speed, full Excel compatibility, or arbitrary customer workbooks.</dd>
+                  <dt>Not covered</dt>
+                  <dd>That every Excel file, browser grid, or customer workbook is faster.</dd>
                 </div>
               </dl>
 
