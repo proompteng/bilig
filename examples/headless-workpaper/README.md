@@ -243,7 +243,8 @@ Expected output:
 The script uses real `zod` schemas and one WorkPaper tool implementation, then
 adapts it to:
 
-- AI SDK-style `execute({ ... })` tools
+- AI SDK-style `execute({ ... })` tools, matching the `tools` object you would
+  pass to `generateText()` in a Vercel AI SDK app
 - OpenAI Responses API `function_call` and `function_call_output` messages
 - LangChain `tool(..., { schema })` / LangGraph `ToolNode` shapes
 - Mastra `createTool({ id, inputSchema, outputSchema, execute })`

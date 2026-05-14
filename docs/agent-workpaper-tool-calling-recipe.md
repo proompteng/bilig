@@ -392,10 +392,30 @@ export const workPaperTools = {
 ```
 
 Pass `workPaperTools` to `generateText()` or `streamText()` from your AI SDK
-application. Keep the model-facing result structured: the mutating tool should
-return `editedCell`, `before`, `after`, and `checks` so the next model step can
-explain exactly what changed. Persist the serialized workbook only after these
-computed readback checks pass.
+application. A minimal `generateText()` smoke should make the model call the
+read tool, then the write tool, and then answer from the returned JSON:
+
+```ts
+import { generateText } from 'ai'
+
+const { text } = await generateText({
+  model: 'your-model',
+  tools: workPaperTools,
+  prompt: [
+    'Read Summary!A1:B3 with readWorkPaperSummary.',
+    'Set Revenue!B3 to 25 with setWorkPaperInputCell.',
+    'Return editedCell, before.currentMrr, after.currentMrr, and checks as JSON.',
+  ].join('\n'),
+})
+
+console.log(text)
+```
+
+Keep the model-facing result structured: the mutating tool should return
+`editedCell`, `before`, `after`, and `checks` so the next model step can explain
+exactly what changed. Persist the serialized workbook only after these computed
+readback checks pass. For this repository's dependency-free local verification
+path, run `npm run agent:framework-adapters` in `examples/headless-workpaper`.
 
 For a dependency-free runnable version of this shape, use
 [`examples/headless-workpaper/agent-framework-adapters.ts`](../examples/headless-workpaper/agent-framework-adapters.ts):

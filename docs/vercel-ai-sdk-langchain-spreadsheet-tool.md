@@ -47,6 +47,78 @@ The example installs `zod` for real schemas, but it does not install the agent
 frameworks. That is deliberate. It keeps the WorkPaper contract visible and
 avoids hiding workbook logic behind framework setup.
 
+## AI SDK `generateText()` Smoke
+
+In an app that already uses the Vercel AI SDK, pass the WorkPaper tool map to
+`generateText()` and force the answer to cite the structured tool result rather
+than guessing from prose. The local repository check for the same read/write
+contract remains dependency-free: run `npm run agent:framework-adapters` in
+`examples/headless-workpaper` before wiring a real model.
+
+```ts
+import { generateText, tool } from 'ai'
+import { z } from 'zod'
+
+const workPaperTools = {
+  readWorkPaperSummary: tool({
+    description: 'Read computed WorkPaper summary values for a small range.',
+    inputSchema: z.object({
+      range: z.string().default('Summary!A1:B5'),
+    }),
+    execute: async ({ range = 'Summary!A1:B5' }) => tools.readWorkPaperSummary(range),
+  }),
+  setWorkPaperInputCell: tool({
+    description: 'Set one validated WorkPaper input cell and return formula readback.',
+    inputSchema: z.object({
+      sheetName: z.literal('Inputs'),
+      address: z.string().regex(/^[A-Z]+[1-9][0-9]*$/),
+      value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+    }),
+    execute: async ({ sheetName, address, value }) => {
+      const result = tools.setWorkPaperInputCell({ sheetName, address, value })
+
+      if (!result.checks.formulasPersisted || !result.checks.restoredMatchesAfter) {
+        throw new Error(`WorkPaper writeback failed verification: ${JSON.stringify(result.checks)}`)
+      }
+
+      return result
+    },
+  }),
+}
+
+const { text } = await generateText({
+  model: 'your-model',
+  tools: workPaperTools,
+  prompt: [
+    'Read Summary!A1:B5 with readWorkPaperSummary.',
+    'Set Inputs!B3 to 0.4 with setWorkPaperInputCell.',
+    'Return editedCell, before.expectedArr, after.expectedArr, and checks as JSON.',
+  ].join('\n'),
+})
+
+console.log(text)
+```
+
+The write tool output should stay structured and copyable through the model
+turn:
+
+```json
+{
+  "editedCell": "Inputs!B3",
+  "before": {
+    "expectedArr": 60000
+  },
+  "after": {
+    "expectedArr": 96000
+  },
+  "checks": {
+    "formulasPersisted": true,
+    "restoredMatchesAfter": true,
+    "expectedArrChanged": true
+  }
+}
+```
+
 ## What A Passing Run Proves
 
 The mutating tool edits `Inputs!B3` and then verifies the dependent summary
