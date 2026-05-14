@@ -159,7 +159,9 @@ export interface BiligDominanceStatus {
     readonly nextGoogleSheetsUploadInstruction: string | null
     readonly nextMicrosoftExcelWebUploadInstruction: string | null
     readonly nextPreflightCommand: string | null
+    readonly nextAuthenticatedPreflightCommand: string | null
     readonly nextCaptureCommand: string | null
+    readonly nextAuthenticatedCaptureCommand: string | null
     readonly blockedCommands: readonly string[]
     readonly browserCaptureGuard: {
       readonly active: boolean
@@ -643,6 +645,22 @@ function buildUiSameCorpusStatus(
   ]
     .map(shellQuote)
     .join(' ')
+  const nextAuthenticatedPreflightCommand = [
+    'pnpm',
+    'ui:same-corpus:capture',
+    '--',
+    '--preflight',
+    '--google-sheets-url',
+    googleSheetsUrlArgument,
+    '--microsoft-excel-web-url',
+    microsoftExcelWebUrlArgument,
+    '--google-sheets-storage-state',
+    '.cache/ui-responsiveness/google-sheets-storage-state.json',
+    '--microsoft-excel-web-storage-state',
+    '.cache/ui-responsiveness/microsoft-excel-web-storage-state.json',
+  ]
+    .map(shellQuote)
+    .join(' ')
   const nextCaptureCommand = [
     'pnpm',
     'ui:same-corpus:capture',
@@ -653,6 +671,23 @@ function buildUiSameCorpusStatus(
     googleSheetsUrlArgument,
     '--microsoft-excel-web-url',
     microsoftExcelWebUrlArgument,
+  ]
+    .map(shellQuote)
+    .join(' ')
+  const nextAuthenticatedCaptureCommand = [
+    'pnpm',
+    'ui:same-corpus:capture',
+    '--',
+    '--output',
+    '.cache/ui-responsiveness/same-corpus-capture.json',
+    '--google-sheets-url',
+    googleSheetsUrlArgument,
+    '--microsoft-excel-web-url',
+    microsoftExcelWebUrlArgument,
+    '--google-sheets-storage-state',
+    '.cache/ui-responsiveness/google-sheets-storage-state.json',
+    '--microsoft-excel-web-storage-state',
+    '.cache/ui-responsiveness/microsoft-excel-web-storage-state.json',
   ]
     .map(shellQuote)
     .join(' ')
@@ -697,13 +732,17 @@ function buildUiSameCorpusStatus(
     nextGoogleSheetsUploadInstruction,
     nextMicrosoftExcelWebUploadInstruction,
     nextPreflightCommand: browserCaptureGuard.active ? null : nextPreflightCommand,
+    nextAuthenticatedPreflightCommand: browserCaptureGuard.active ? null : nextAuthenticatedPreflightCommand,
     nextCaptureCommand: browserCaptureGuard.active ? null : nextCaptureCommand,
+    nextAuthenticatedCaptureCommand: browserCaptureGuard.active ? null : nextAuthenticatedCaptureCommand,
     blockedCommands: browserCaptureGuard.active
       ? [
           nextGoogleSheetsStorageStateCommand,
           nextMicrosoftExcelWebStorageStateCommand,
           nextPreflightCommand,
+          nextAuthenticatedPreflightCommand,
           nextCaptureCommand,
+          nextAuthenticatedCaptureCommand,
           nextScorecardGenerateCommand,
         ].map(localCiResourceGuardOverrideCommand)
       : [],

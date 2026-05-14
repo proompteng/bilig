@@ -60,9 +60,18 @@ describe('bilig dominance status', () => {
     expect(status.uiSameCorpus.nextPreflightCommand).toContain('--google-sheets-url')
     expect(status.uiSameCorpus.nextPreflightCommand).toContain('<google-sheets-url>')
     expect(status.uiSameCorpus.nextPreflightCommand).toContain('<microsoft-excel-web-editable-url>')
+    expect(status.uiSameCorpus.nextAuthenticatedPreflightCommand).toContain('--google-sheets-storage-state')
+    expect(status.uiSameCorpus.nextAuthenticatedPreflightCommand).toContain('.cache/ui-responsiveness/google-sheets-storage-state.json')
+    expect(status.uiSameCorpus.nextAuthenticatedPreflightCommand).toContain('--microsoft-excel-web-storage-state')
+    expect(status.uiSameCorpus.nextAuthenticatedPreflightCommand).toContain(
+      '.cache/ui-responsiveness/microsoft-excel-web-storage-state.json',
+    )
     expect(status.uiSameCorpus.nextCaptureCommand).toContain('.cache/ui-responsiveness/same-corpus-capture.json')
     expect(status.uiSameCorpus.nextCaptureCommand).toContain('<microsoft-excel-web-editable-url>')
     expect(status.uiSameCorpus.nextCaptureCommand).not.toContain('view.officeapps.live.com/op/view.aspx')
+    expect(status.uiSameCorpus.nextAuthenticatedCaptureCommand).toContain('.cache/ui-responsiveness/same-corpus-capture.json')
+    expect(status.uiSameCorpus.nextAuthenticatedCaptureCommand).toContain('--google-sheets-storage-state')
+    expect(status.uiSameCorpus.nextAuthenticatedCaptureCommand).toContain('--microsoft-excel-web-storage-state')
     expect(status.uiSameCorpus.nextGoogleSheetsStorageStateCommand).toContain('.cache/ui-responsiveness/google-sheets-storage-state.json')
     expect(status.uiSameCorpus.nextGoogleSheetsStorageStateCommand).toContain('<google-sheets-url>')
     expect(status.uiSameCorpus.nextMicrosoftExcelWebStorageStateCommand).toContain(
@@ -94,12 +103,16 @@ describe('bilig dominance status', () => {
     expect(status.uiSameCorpus.nextPreflightCommand).toContain(microsoftExcelWebUrl)
     expect(status.uiSameCorpus.nextPreflightCommand).not.toContain('<google-sheets-url>')
     expect(status.uiSameCorpus.nextPreflightCommand).not.toContain('<microsoft-excel-web-editable-url>')
+    expect(status.uiSameCorpus.nextAuthenticatedPreflightCommand).toContain(googleSheetsUrl)
+    expect(status.uiSameCorpus.nextAuthenticatedPreflightCommand).toContain(microsoftExcelWebUrl)
     expect(status.uiSameCorpus.nextPublicAccessCheckCommand).toContain(googleSheetsUrl)
     expect(status.uiSameCorpus.nextPublicAccessCheckCommand).not.toContain('<google-sheets-url>')
     expect(status.uiSameCorpus.nextGoogleSheetsStorageStateCommand).toContain(googleSheetsUrl)
     expect(status.uiSameCorpus.nextMicrosoftExcelWebStorageStateCommand).toContain(microsoftExcelWebUrl)
     expect(status.uiSameCorpus.nextCaptureCommand).toContain(googleSheetsUrl)
     expect(status.uiSameCorpus.nextCaptureCommand).toContain(microsoftExcelWebUrl)
+    expect(status.uiSameCorpus.nextAuthenticatedCaptureCommand).toContain(googleSheetsUrl)
+    expect(status.uiSameCorpus.nextAuthenticatedCaptureCommand).toContain(microsoftExcelWebUrl)
     expect(status.uiSameCorpus.nextCaptureCommand).not.toContain('<google-sheets-url>')
     expect(status.uiSameCorpus.nextCaptureCommand).not.toContain('<microsoft-excel-web-editable-url>')
   })
@@ -123,6 +136,8 @@ describe('bilig dominance status', () => {
     expect(status.uiSameCorpus.nextPreflightCommand).toContain(googleSheetsUrl)
     expect(status.uiSameCorpus.nextPreflightCommand).not.toContain('<google-sheets-url>')
     expect(status.uiSameCorpus.nextPreflightCommand).toContain('<microsoft-excel-web-editable-url>')
+    expect(status.uiSameCorpus.nextAuthenticatedPreflightCommand).toContain(googleSheetsUrl)
+    expect(status.uiSameCorpus.nextAuthenticatedPreflightCommand).toContain('<microsoft-excel-web-editable-url>')
     expect(status.uiSameCorpus.nextGoogleSheetsStorageStateCommand).toContain(googleSheetsUrl)
     expect(status.uiSameCorpus.nextMicrosoftExcelWebStorageStateCommand).toContain('<microsoft-excel-web-editable-url>')
     expect(status.uiSameCorpus.nextPublicAccessCheckCommand).toContain(
@@ -161,7 +176,9 @@ describe('bilig dominance status', () => {
       nextCaptureRequiresOverride: true,
     })
     expect(status.uiSameCorpus.nextPreflightCommand).toBeNull()
+    expect(status.uiSameCorpus.nextAuthenticatedPreflightCommand).toBeNull()
     expect(status.uiSameCorpus.nextCaptureCommand).toBeNull()
+    expect(status.uiSameCorpus.nextAuthenticatedCaptureCommand).toBeNull()
     expect(status.uiSameCorpus.nextScorecardGenerateCommand).toBeNull()
     expect(status.uiSameCorpus.nextGoogleSheetsStorageStateCommand).toBeNull()
     expect(status.uiSameCorpus.nextMicrosoftExcelWebStorageStateCommand).toBeNull()
@@ -173,9 +190,11 @@ describe('bilig dominance status', () => {
         'BILIG_ALLOW_LOCAL_CI_RESOURCE_GUARD=1 pnpm ui:same-corpus:capture -- --save-storage-state .cache/ui-responsiveness/microsoft-excel-web-storage-state.json',
       ),
       expect.stringContaining('BILIG_ALLOW_LOCAL_CI_RESOURCE_GUARD=1 pnpm ui:same-corpus:capture -- --preflight'),
+      expect.stringContaining('--google-sheets-storage-state .cache/ui-responsiveness/google-sheets-storage-state.json'),
       expect.stringContaining(
         'BILIG_ALLOW_LOCAL_CI_RESOURCE_GUARD=1 pnpm ui:same-corpus:capture -- --output .cache/ui-responsiveness/same-corpus-capture.json',
       ),
+      expect.stringContaining('--microsoft-excel-web-storage-state .cache/ui-responsiveness/microsoft-excel-web-storage-state.json'),
       expect.stringContaining(
         'BILIG_ALLOW_LOCAL_CI_RESOURCE_GUARD=1 pnpm ui:browser-live:generate -- --capture .cache/ui-responsiveness/same-corpus-capture.json',
       ),
