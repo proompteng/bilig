@@ -2,10 +2,12 @@
   justify-self: end;
   min-width: 0;
   width: 100%;
+  max-width: 650px;
 }
 
 .product-frame {
   overflow: hidden;
+  max-width: 100%;
   border: 1px solid #cbd1c5;
   border-radius: 4px;
   background: var(--paper);
@@ -16,6 +18,7 @@
 .product-demo {
   display: grid;
   min-width: 0;
+  max-width: 100%;
   background: var(--paper);
 }
 
@@ -47,14 +50,14 @@
 
 .demo-body {
   display: grid;
-  grid-template-columns: minmax(250px, 0.95fr) minmax(240px, 0.74fr);
+  grid-template-columns: minmax(240px, 0.95fr) minmax(230px, 0.74fr);
   min-width: 0;
 }
 
 .sheet-pane {
   min-width: 0;
   overflow: hidden;
-  padding: 20px;
+  padding: clamp(16px, 2.2vw, 20px);
 }
 
 .formula-bar {
@@ -166,7 +169,7 @@
 .code-pane pre {
   overflow: hidden;
   padding: 16px 14px;
-  font-size: 11px;
+  font-size: 10.5px;
   line-height: 1.64;
   white-space: pre-wrap;
 }
@@ -218,24 +221,31 @@
   padding: 13px 16px;
   color: #ded8cb;
   font-size: 13px;
+  line-height: 1.45;
 }
 
 @media (max-width: 1080px) {
   .hero-media {
     justify-self: stretch;
+    max-width: 760px;
   }
 }
 
-@media (max-width: 780px) {
-  .demo-body,
-  .demo-readout,
-  .frame-caption {
+@media (max-width: 660px) {
+  .demo-body {
     grid-template-columns: 1fr;
   }
 
   .code-pane {
     border-top: 1px solid var(--line);
     border-left: 0;
+  }
+}
+
+@media (max-width: 780px) {
+  .demo-readout,
+  .frame-caption {
+    grid-template-columns: 1fr;
   }
 
   .demo-readout span {

@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>bilig - Workbook Formulas for TypeScript Services</title>
+    <title>bilig - Spreadsheet Models for TypeScript</title>
     <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
     <link rel="canonical" href="https://proompteng.github.io/bilig/" />
     <link rel="sitemap" type="application/xml" href="https://proompteng.github.io/bilig/sitemap.xml" />
     <link rel="alternate" type="text/plain" href="https://proompteng.github.io/bilig/llms.txt" title="llms.txt" />
     <meta
       name="description"
-      content="@bilig/headless runs spreadsheet formulas in TypeScript services and agent tools, with API writes, calculated readback, and JSON workbook persistence."
+      content="bilig runs workbook formulas from TypeScript: build a WorkPaper, write inputs, read calculated cells, and save JSON state for services or agent tools."
     />
     <meta
       name="keywords"
@@ -19,10 +19,10 @@
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="theme-color" content="#151713" />
     <meta property="og:site_name" content="bilig" />
-    <meta property="og:title" content="bilig - Workbook Formulas for TypeScript Services" />
+    <meta property="og:title" content="bilig - Spreadsheet Models for TypeScript" />
     <meta
       property="og:description"
-      content="Create WorkPaper documents in TypeScript, write inputs through an API, read calculated cells, and persist workbook state."
+      content="Build a WorkPaper in TypeScript, write inputs, read calculated cells, and persist the workbook as JSON."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://proompteng.github.io/bilig/" />
@@ -31,10 +31,10 @@
     <meta property="og:image:width" content="1280" />
     <meta property="og:image:height" content="640" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="bilig - Workbook Formulas for TypeScript Services" />
+    <meta name="twitter:title" content="bilig - Spreadsheet Models for TypeScript" />
     <meta
       name="twitter:description"
-      content="Spreadsheet formulas, API writes, calculated readback, and WorkPaper JSON persistence for TypeScript programs."
+      content="Workbook formulas, typed writes, calculated readback, and WorkPaper JSON persistence for TypeScript programs."
     />
     <meta name="twitter:image" content="https://proompteng.github.io/bilig/assets/github-social-preview.png?v=2026-05-08-2" />
     <meta name="twitter:image:alt" content="bilig headless spreadsheet engine workbook and TypeScript code preview" />
@@ -43,7 +43,7 @@
         "@context": "https://schema.org",
         "@type": "SoftwareSourceCode",
         "name": "bilig",
-        "description": "TypeScript headless spreadsheet engine for Node.js programs and agents that need formulas, workbook edits, readback, and durable persistence without a spreadsheet UI.",
+        "description": "TypeScript library for running spreadsheet-style workbook models in Node.js services and agent tools.",
         "codeRepository": "https://github.com/proompteng/bilig",
         "license": "https://github.com/proompteng/bilig/blob/main/LICENSE",
         "programmingLanguage": "TypeScript",
@@ -121,8 +121,9 @@
         ]
       }
     </script>
-    <link rel="stylesheet" href="./assets/site.css?v=2026-05-14-2" />
-    <link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-13-4" />
+    <link rel="stylesheet" href="./assets/fonts.css?v=2026-05-14-1" />
+    <link rel="stylesheet" href="./assets/site.css?v=2026-05-14-3" />
+    <link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-14-1" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -150,11 +151,11 @@
           <p class="eyebrow" translate="no">@bilig/headless</p>
           <h1 id="hero-title" class="hero-title">
             <strong translate="no">bilig</strong>
-            <span>Workbook formulas for TypeScript services.</span>
+            <span>Run spreadsheet models from TypeScript.</span>
           </h1>
           <p class="lede">
-            Keep a calculation as cells and formulas when that is the clearest model. Your code edits inputs, recalculates, reads values,
-            and saves the workbook as JSON.
+            Use cells and formulas when that is the simplest way to describe the work. Your service changes inputs, reads the calculated
+            cells, and saves the workbook as JSON.
           </p>
           <div class="install-command" aria-label="Install command">
             <span class="mono">$</span>
@@ -162,21 +163,21 @@
           </div>
           <div class="hero-actions">
             <a class="button primary" href="https://www.npmjs.com/package/@bilig/headless">Install from npm</a>
-            <a class="button" href="#install">Run eval.ts</a>
-            <a class="button dark" href="https://github.com/proompteng/bilig">Star on GitHub</a>
+            <a class="button" href="#install">Run the smoke test</a>
+            <a class="button dark" href="https://github.com/proompteng/bilig">View GitHub</a>
           </div>
           <div class="hero-notes" aria-label="Project status">
             <div class="hero-note">
-              <strong>TypeScript examples</strong>
-              <span>Copy the `.ts` files and run them.</span>
+              <strong>Real TypeScript</strong>
+              <span>Examples are `.ts` files with package imports.</span>
             </div>
             <div class="hero-note">
-              <strong>Write, then read</strong>
-              <span>Change an input cell and read the dependent total.</span>
+              <strong>Write and read</strong>
+              <span>Change one input and inspect the dependent total.</span>
             </div>
             <div class="hero-note">
               <strong>93 starter issues</strong>
-              <span>Small docs, examples, adapters, and tests.</span>
+              <span>Small docs, examples, adapters, and tests are kept open.</span>
             </div>
           </div>
         </div>
@@ -264,8 +265,8 @@ workbook.setCellContents(
               </div>
             </div>
             <figcaption class="frame-caption">
-              <span>One workbook object. TypeScript changes it and reads the value it produced.</span>
-              <strong>headless</strong>
+              <span>A WorkPaper keeps the data, formulas, and saved state together.</span>
+              <strong>no browser required</strong>
             </figcaption>
           </div>
         </figure>
@@ -277,35 +278,35 @@ workbook.setCellContents(
         <div class="wrap">
           <div class="section-head">
             <div>
-              <p class="kicker">Where it belongs</p>
-              <h2 id="why-title">Use a workbook when the formula is the thing you ship.</h2>
+              <p class="kicker">The job</p>
+              <h2 id="why-title">Use it when a spreadsheet is the model, not the interface.</h2>
             </div>
             <p>
-              If a model is already easier to review in rows and formulas, keep that shape. Run it from Node instead of rebuilding the same
-              logic as hidden service code.
+              Pricing tables, budget checks, imports, payouts, and agent tools often start as rows and formulas. Keep that shape, then run
+              it from Node.
             </p>
           </div>
 
           <div class="row-list">
             <div class="work-row">
               <span class="step">01 / create</span>
-              <h3>Load a saved model.</h3>
-              <p>Start from arrays, service records, or a WorkPaper JSON document.</p>
+              <h3>Build the workbook.</h3>
+              <p>Start from arrays, service records, CSV-shaped data, or saved WorkPaper JSON.</p>
             </div>
             <div class="work-row">
               <span class="step">02 / edit</span>
-              <h3>Change the input.</h3>
+              <h3>Write the input.</h3>
               <p>Update the quote quantity, budget assumption, payout rate, or imported value.</p>
             </div>
             <div class="work-row">
               <span class="step">03 / read</span>
-              <h3>Read the calculated cell.</h3>
-              <p>The workbook recalculates, then your service reads the value it needs.</p>
+              <h3>Read the output cell.</h3>
+              <p>The workbook recalculates before the service uses the value.</p>
             </div>
             <div class="work-row">
               <span class="step">04 / save</span>
-              <h3>Persist the document.</h3>
-              <p>Save formulas, sheets, and config as JSON between runs.</p>
+              <h3>Save the state.</h3>
+              <p>Persist formulas, sheets, and config as JSON between runs.</p>
             </div>
           </div>
         </div>
@@ -316,9 +317,9 @@ workbook.setCellContents(
           <div class="section-head">
             <div>
               <p class="kicker">Install</p>
-              <h2 id="install-title">Run this before reading more.</h2>
+              <h2 id="install-title">Run the smoke test before you trust the docs.</h2>
             </div>
-            <p>The smoke test changes one customer count, restores the saved document, and checks the recalculated total.</p>
+            <p>It changes a customer count, restores the saved document, and checks that the recalculated total survived the round trip.</p>
           </div>
 
           <div class="install-grid">
@@ -410,9 +411,9 @@ function readNumber(cell: unknown): number {
           <div class="section-head">
             <div>
               <p class="kicker">Where it runs</p>
-              <h2 id="mcp-title">Use it from the place that already owns the workflow.</h2>
+              <h2 id="mcp-title">Put the workbook behind the workflow that needs the answer.</h2>
             </div>
-            <p>Node route, queue worker, CLI, or MCP server: load the workbook, edit cells, read results, save state.</p>
+            <p>Route handler, queue worker, CLI, or MCP server: load the workbook, edit cells, read results, save state.</p>
           </div>
 
           <div class="path-grid">
@@ -484,46 +485,46 @@ function readNumber(cell: unknown): number {
           <div class="proof-layout">
             <div class="proof-intro">
               <p class="kicker">Benchmark</p>
-              <h2 id="proof-title">46/46 on mean latency. One p95 case is slower.</h2>
+              <h2 id="proof-title">The benchmark claim is narrow on purpose.</h2>
               <p>
-                That is the current WorkPaper vs HyperFormula file in the repo. It covers shared headless formula workloads, not Excel
-                compatibility, browser rendering, or your own workbook.
+                The checked-in WorkPaper vs HyperFormula artifact says bilig is faster on mean latency across the comparable headless
+                workloads. It does not say every spreadsheet, p95 row, or Excel file is faster.
               </p>
             </div>
 
             <div class="proof-board" aria-label="Benchmark evidence">
               <div class="proof-board-head">
                 <span>workpaper-vs-hyperformula.json</span>
-                <strong>checked in</strong>
+                <strong>current baseline</strong>
               </div>
 
               <div class="proof-result">
-                <span class="proof-label">current run</span>
+                <span class="proof-label">mean latency</span>
                 <strong>46/46</strong>
                 <p>
-                  Lower mean latency on every comparable workload. Approximate lookup with duplicates is slower at p95:
-                  <code>1.043x</code>. Benchmark that case before you use the headline.
+                  Lower mean latency on every comparable workload in the current artifact. The approximate-lookup duplicate case is slower
+                  at p95: <code>1.043x</code>.
                 </p>
               </div>
 
               <dl class="proof-facts">
                 <div class="proof-fact proof-command">
-                  <dt>Run it</dt>
+                  <dt>Command</dt>
                   <dd><code>pnpm workpaper:bench:competitive:check</code></dd>
                 </div>
                 <div class="proof-fact proof-row-code">
-                  <dt>File</dt>
+                  <dt>Artifact</dt>
                   <dd>
                     <code>packages/benchmarks/baselines/<wbr />workpaper-vs-hyperformula.json</code>
                   </dd>
                 </div>
                 <div class="proof-fact">
-                  <dt>Scope</dt>
-                  <dd>Mean latency on the shared headless formula suite.</dd>
+                  <dt>Caveat</dt>
+                  <dd>Mean latency is green for the suite; one p95 row is not.</dd>
                 </div>
                 <div class="proof-fact">
-                  <dt>Not covered</dt>
-                  <dd>That every Excel file, browser grid, or customer workbook is faster.</dd>
+                  <dt>Out of scope</dt>
+                  <dd>Browser grid performance, Excel compatibility, and your own workbook shape.</dd>
                 </div>
               </dl>
 
@@ -551,9 +552,11 @@ function readNumber(cell: unknown): number {
           <div class="section-head">
             <div>
               <p class="kicker">Start here</p>
-              <h2 id="learn-title">Choose the path that matches your job.</h2>
+              <h2 id="learn-title">Start where you already are.</h2>
             </div>
-            <p>Start with npm, a service route, an agent tool, or the engine comparison. Do not read the whole docs tree first.</p>
+            <p>
+              Try the package, drop it behind a service route, expose it as an agent tool, or compare it with the usual spreadsheet stack.
+            </p>
           </div>
 
           <div class="row-list">
@@ -596,9 +599,9 @@ function readNumber(cell: unknown): number {
           <div class="section-head">
             <div>
               <p class="kicker">Reference</p>
-              <h2 id="docs-title">Docs grouped by the work in front of you.</h2>
+              <h2 id="docs-title">Reference by job, not by package name.</h2>
             </div>
-            <p>Open the install path, service recipe, agent adapter, or comparison page you need right now.</p>
+            <p>Open the install path, service recipe, agent adapter, or comparison page that matches what you are building.</p>
           </div>
 
           <div class="docs-grid">
@@ -720,7 +723,7 @@ function readNumber(cell: unknown): number {
         <div class="wrap">
           <div>
             <h2 id="final-title">Run it on one calculation you care about.</h2>
-            <p>If the smoke test fits, star the repo or take one of the starter issues.</p>
+            <p>If the smoke test matches your workflow, star the repo or take one of the starter issues.</p>
           </div>
           <div class="final-actions">
             <a class="button primary" href="https://www.npmjs.com/package/@bilig/headless">Install</a>
