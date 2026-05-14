@@ -41,6 +41,7 @@ import {
   rawPivotPartUnsupportedClassification,
   staleFormulaCacheUnsupportedClassification,
 } from '../public-workbook-corpus-verify.ts'
+import { writeFingerprintArtifactWorkerResult } from '../public-workbook-corpus-worker-commands.ts'
 
 const spawnMock = vi.hoisted(() => vi.fn())
 
@@ -1593,6 +1594,29 @@ describe('public workbook corpus', () => {
     expect(killSpy).toHaveBeenCalledWith(-24_682, 'SIGTERM')
     expect(child.kill).not.toHaveBeenCalled()
     expect(exitSpy).toHaveBeenCalledWith(143)
+  })
+
+  it('reports invalid XLSX fingerprint worker failures without source excerpts', () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-fingerprint-worker-error-'))
+    const invalidWorkbookPath = join(cacheDir, 'invalid.xlsx')
+    writeFileSync(invalidWorkbookPath, 'not an xlsx zip')
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const previousExitCode = process.exitCode
+    process.exitCode = undefined
+    try {
+      writeFingerprintArtifactWorkerResult({
+        filePath: invalidWorkbookPath,
+        fileName: 'invalid.xlsx',
+        fingerprintMaxRssBytes: 1024 * 1024 * 1024,
+      })
+
+      expect(process.exitCode).toBe(1)
+      expect(stdoutSpy).not.toHaveBeenCalled()
+      expect(stderrSpy).toHaveBeenCalledWith('InvalidXlsxZipContainerError: Invalid or corrupt XLSX zip container\n')
+    } finally {
+      process.exitCode = previousExitCode
+    }
   })
 
   it('skips malformed CKAN resource URLs during workbook discovery', async () => {

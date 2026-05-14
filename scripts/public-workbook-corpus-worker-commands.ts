@@ -33,9 +33,19 @@ export function writeFingerprintArtifactWorkerResult(args: {
     }
     const workbookFingerprint = fingerprintWorkbookBytes(readFileSync(resolve(args.filePath)), args.fileName)
     process.stdout.write(`${JSON.stringify({ workbookFingerprint })}\n`)
+  } catch (error) {
+    process.stderr.write(`${formatWorkerError(error)}\n`)
+    process.exitCode = 1
   } finally {
     stopSelfRssGuard()
   }
+}
+
+function formatWorkerError(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`
+  }
+  return String(error)
 }
 
 export function writeFootprintWorkerResult(args: { readonly fileName: string; readonly verifyMaxRssBytes: number }): void {
