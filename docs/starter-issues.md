@@ -6,8 +6,8 @@ search indexing.
 
 Current starter queue as of May 14, 2026:
 
-- 92 open `first-timers-only` issues.
-- 92 issues are generally available for a new contributor to claim.
+- 93 open `first-timers-only` issues.
+- 93 issues are generally available for a new contributor to claim.
 - 0 issues already have active pull requests.
 
 ## Available Starter Picks
@@ -66,6 +66,7 @@ Current starter queue as of May 14, 2026:
 - [#337: docs(examples): add Astro endpoint WorkPaper smoke](https://github.com/proompteng/bilig/issues/337)
 - [#338: docs(examples): add TanStack Start server function WorkPaper smoke](https://github.com/proompteng/bilig/issues/338)
 - [#339: docs(examples): add Qwik City WorkPaper route smoke](https://github.com/proompteng/bilig/issues/339)
+- [#341: docs(examples): add Next.js Server Action FormData smoke](https://github.com/proompteng/bilig/issues/341)
 
 ### Storage And Persistence Recipes
 
