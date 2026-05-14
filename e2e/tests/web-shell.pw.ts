@@ -1028,25 +1028,27 @@ for (const key of ['Delete', 'Backspace'] as const) {
   })
 }
 
-test('web app clears the selected cell with Delete after name-box navigation', async ({ page }) => {
-  const documentId = createTestDocumentId('playwright-delete-after-name-box')
-  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
-  await waitForWorkbookReady(page)
+for (const key of ['Delete', 'Backspace'] as const) {
+  test(`web app clears the selected cell with ${key.toLowerCase()} after name-box navigation`, async ({ page }) => {
+    const documentId = createTestDocumentId(`playwright-${key.toLowerCase()}-after-name-box`)
+    await page.goto(`/?document=${encodeURIComponent(documentId)}`)
+    await waitForWorkbookReady(page)
 
-  const formulaInput = page.getByTestId('formula-input')
-  const nameBox = page.getByTestId('name-box')
+    const formulaInput = page.getByTestId('formula-input')
+    const nameBox = page.getByTestId('name-box')
 
-  await clickProductCell(page, 1, 1)
-  await formulaInput.fill('delete-after-name-box')
-  await formulaInput.press('Enter')
+    await clickProductCell(page, 1, 1)
+    await formulaInput.fill(`${key.toLowerCase()}-after-name-box`)
+    await formulaInput.press('Enter')
 
-  await nameBox.fill('B2')
-  await nameBox.press('Enter')
-  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
+    await nameBox.fill('B2')
+    await nameBox.press('Enter')
+    await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
 
-  await page.keyboard.press('Delete')
-  await expect(formulaInput).toHaveValue('')
-})
+    await page.keyboard.press(key)
+    await expect(formulaInput).toHaveValue('')
+  })
+}
 
 for (const key of ['Delete', 'Backspace'] as const) {
   test(`web app keeps ${key.toLowerCase()} scoped to the formula input while editing`, async ({ page }) => {
@@ -1105,35 +1107,66 @@ test('web app ignores modified delete keys instead of clearing the grid selectio
   await assertModifiedDeleteIgnored('Shift+Delete')
 })
 
-test('web app clears the querystring-selected cell with Delete after page load', async ({ page }) => {
-  const documentId = createTestDocumentId('playwright-delete-querystring-selection')
+for (const key of ['Delete', 'Backspace'] as const) {
+  test(`web app clears the querystring-selected cell with ${key.toLowerCase()} after page load`, async ({ page }) => {
+    const documentId = createTestDocumentId(`playwright-${key.toLowerCase()}-querystring-selection`)
+    await page.goto(`/?document=${encodeURIComponent(documentId)}`)
+    await waitForWorkbookReady(page)
+
+    const formulaInput = page.getByTestId('formula-input')
+    const nameBox = page.getByTestId('name-box')
+
+    await nameBox.fill('F39')
+    await nameBox.press('Enter')
+    await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!F39')
+    await formulaInput.fill('stale-persisted-querystring-selection')
+    await formulaInput.press('Enter')
+
+    await page.goto(`/?document=${encodeURIComponent(documentId)}&sheet=Sheet1&cell=C12`)
+    await waitForWorkbookReady(page)
+    await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C12')
+    await expect(page.getByTestId('name-box')).toHaveValue('C12')
+
+    await formulaInput.fill(`${key.toLowerCase()}-after-querystring-load`)
+    await formulaInput.press('Enter')
+
+    await page.goto(`/?document=${encodeURIComponent(documentId)}&sheet=Sheet1&cell=C12`)
+    await waitForWorkbookReady(page)
+    await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C12')
+    await expect(page.getByTestId('name-box')).toHaveValue('C12')
+
+    await page.keyboard.press(key)
+    await expect(page.getByTestId('formula-input')).toHaveValue('')
+  })
+}
+
+test('web app keeps delete keys scoped to the in-cell editor while editing', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-delete-keys-cell-editor-scope')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
 
+  const grid = page.getByTestId('sheet-grid')
   const formulaInput = page.getByTestId('formula-input')
-  const nameBox = page.getByTestId('name-box')
 
-  await nameBox.fill('F39')
-  await nameBox.press('Enter')
-  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!F39')
-  await formulaInput.fill('stale-persisted-querystring-selection')
-  await formulaInput.press('Enter')
+  await clickProductCell(page, 2, 2)
+  await grid.press('a')
+  const editor = page.getByTestId('cell-editor-input')
+  await expect(editor).toBeVisible()
+  await page.keyboard.type('bcd')
+  await expect(editor).toHaveValue('abcd')
 
-  await page.goto(`/?document=${encodeURIComponent(documentId)}&sheet=Sheet1&cell=C12`)
-  await waitForWorkbookReady(page)
-  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C12')
-  await expect(page.getByTestId('name-box')).toHaveValue('C12')
+  await editor.press('Backspace')
+  await expect(editor).toHaveValue('abc')
 
-  await formulaInput.fill('delete-after-querystring-load')
-  await formulaInput.press('Enter')
+  await editor.press('Home')
+  await editor.press('Delete')
+  await expect(editor).toHaveValue('bc')
 
-  await page.goto(`/?document=${encodeURIComponent(documentId)}&sheet=Sheet1&cell=C12`)
-  await waitForWorkbookReady(page)
-  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C12')
-  await expect(page.getByTestId('name-box')).toHaveValue('C12')
+  await editor.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C4')
 
-  await page.keyboard.press('Delete')
-  await expect(page.getByTestId('formula-input')).toHaveValue('')
+  await clickProductCell(page, 2, 2)
+  await expect(formulaInput).toHaveValue('bc')
 })
 
 test('web app clears the clicked cell after a prior name-box selection changes pending app selection', async ({ page }) => {
