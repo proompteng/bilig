@@ -18,7 +18,8 @@ with `npm run framework-adapters`.
 
 For a copyable Next.js App Router boundary, the same example ships a runnable
 `npm run next-route-handler` smoke that exports `GET()` and `POST()` around the
-shared WorkPaper handler.
+shared WorkPaper handler. For a plain Vercel Function boundary, use
+`npm run vercel-function` or the example-level `npm run test` proof.
 
 ## Setup
 
@@ -507,6 +508,25 @@ Use the modern web handler form for new Vercel Functions. The Node-style bridge
 exists only for older projects where Vercel has already handed you a
 request/response pair. In either form, keep durable workbook storage behind the
 `createWorkPaperRequestHandler(storage)` boundary before deploying.
+
+The repository example includes this as a runnable TypeScript smoke so the
+adapter is more than documentation:
+
+```sh
+cd examples/serverless-workpaper-api
+npm install
+npm run vercel-function
+```
+
+The smoke calls the exported `GET()`, `POST()`, and `default.fetch()` entrypoints,
+then prints `verified: true` only when the response proves that formula output
+recalculated to `totalRevenue: 48600` and the serialized WorkPaper document
+still contains formulas. The example-level acceptance command is:
+
+```sh
+cd examples/serverless-workpaper-api
+npm run test
+```
 
 ## Cloudflare Worker Adapter
 
@@ -1656,6 +1676,6 @@ curl -s -X POST http://localhost:8787/api/workpaper/revenue \
 For a documentation patch in this repository:
 
 ```sh
+cd examples/serverless-workpaper-api && npm run test
 pnpm docs:discovery:check
-pnpm run ci
 ```

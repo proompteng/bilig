@@ -12,7 +12,7 @@ Run it outside the monorepo with the published package:
 
 ```sh
 npm install
-npm run smoke
+npm run test
 npm run next-route-handler
 npm run next-server-action
 npm run next-server-action-formdata
@@ -76,6 +76,61 @@ The lower-level `createWorkPaperRequestHandler(storage)` helper accepts
 shape when the serialized WorkPaper document should live in a database, object
 store, KV namespace, Durable Object, or another durable service instead of
 module memory.
+
+## Vercel Function Smoke
+
+Run the Vercel Function-shaped smoke when you want a copyable `/api` function
+boundary for a deployed Node runtime:
+
+```sh
+npm run vercel-function
+```
+
+The script exports web-standard `GET(request)` and `POST(request)` handlers,
+plus a `default.fetch(request)` entrypoint for single-file Vercel Functions.
+Each entrypoint delegates to the shared WorkPaper request handler, writes a
+revenue update, reads the saved workbook again, and prints `verified: true`
+only after the formula totals recalculate and the persisted document still
+contains formulas.
+
+Expected output:
+
+```json
+{
+  "route": "Vercel Function",
+  "entrypoints": ["GET", "POST", "default.fetch"],
+  "before": {
+    "largestDeal": 24000,
+    "totalRevenue": 36900,
+    "westCustomers": 20
+  },
+  "edit": {
+    "records": 4,
+    "after": {
+      "largestDeal": 24000,
+      "totalRevenue": 48600,
+      "westCustomers": 20
+    },
+    "checks": {
+      "formulasPersisted": true,
+      "serializedBytes": 1195,
+      "totalRevenueChanged": true
+    }
+  },
+  "after": {
+    "largestDeal": 24000,
+    "totalRevenue": 48600,
+    "westCustomers": 20
+  },
+  "verified": true
+}
+```
+
+Run the focused proof used by this example with:
+
+```sh
+npm run test
+```
 
 ## Next.js App Router Smoke
 
@@ -362,7 +417,7 @@ Expected output shape:
   `'use server'` action functions like `readRevenueSummaryAction()` and
   `updateRevenueRecordsAction()`.
 - In a Vercel Function, export small web-standard `GET()` and `POST()` handlers
-  from files under `/api`.
+  from files under `/api`; the runnable `vercel-function.ts` smoke shows the deployed Node function shape.
 - In a Cloudflare Worker, call it from `fetch(request)`.
 - In Cloudflare Pages Functions, call it from small `onRequestGet()` and
   `onRequestPost()` files under `/functions`.

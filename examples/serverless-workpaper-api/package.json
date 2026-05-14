@@ -11,7 +11,9 @@
     "persistence-adapters": "tsx persistence-adapters.ts",
     "smoke": "tsx smoke.ts",
     "start": "tsx route.ts",
-    "typecheck": "tsc --noEmit"
+    "test": "npm run smoke && npm run vercel-function",
+    "typecheck": "tsc --noEmit",
+    "vercel-function": "tsx vercel-function.ts"
   },
   "dependencies": {
     "@bilig/headless": "latest"
