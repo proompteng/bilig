@@ -15,6 +15,7 @@ npm install
 npm run smoke
 npm run next-route-handler
 npm run next-server-action
+npm run next-server-action-formdata
 npm run framework-adapters
 npm run persistence-adapters
 ```
@@ -145,6 +146,61 @@ Expected output:
 ```json
 {
   "action": "Next.js Server Action",
+  "before": {
+    "largestDeal": 24000,
+    "totalRevenue": 36900,
+    "westCustomers": 20
+  },
+  "edit": {
+    "before": {
+      "largestDeal": 24000,
+      "totalRevenue": 36900,
+      "westCustomers": 20
+    },
+    "after": {
+      "largestDeal": 24000,
+      "totalRevenue": 48600,
+      "westCustomers": 20
+    },
+    "checks": {
+      "formulasPersisted": true,
+      "serializedBytes": 1195,
+      "totalRevenueChanged": true
+    },
+    "records": 4
+  },
+  "after": {
+    "largestDeal": 24000,
+    "totalRevenue": 48600,
+    "westCustomers": 20
+  },
+  "verified": true
+}
+```
+
+## Next.js Server Action FormData Smoke
+
+Run the FormData-shaped Server Action smoke when a form submission should feed
+typed records into WorkPaper formulas:
+
+```sh
+npm run next-server-action-formdata
+```
+
+The script exports `updateRevenueRecordsFromFormDataAction(formData)`, parses
+repeated `region`, `customers`, and `arpa` fields into revenue records, calls
+the shared WorkPaper request handler, and prints `verified: true` only after
+the formulas recalculate and the saved document still contains formulas.
+
+Expected output:
+
+```json
+{
+  "action": "Next.js Server Action FormData",
+  "input": {
+    "fields": ["region", "customers", "arpa"],
+    "records": 4
+  },
   "before": {
     "largestDeal": 24000,
     "totalRevenue": 36900,

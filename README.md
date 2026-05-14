@@ -70,7 +70,8 @@ Useful direct paths:
   [Express, Fastify, and Hono adapters](docs/node-framework-workpaper-adapters.md)
   when the route is moving into an existing service. Use
   `npm run next-server-action` when the mutation starts from a Next.js Server
-  Action.
+  Action, or `npm run next-server-action-formdata` when the mutation starts
+  from a form submission.
 - Agent and MCP adapters:
   [agent framework guide](docs/vercel-ai-sdk-langchain-spreadsheet-tool.md),
   framework-specific notes for

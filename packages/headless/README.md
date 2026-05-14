@@ -261,6 +261,8 @@ Repository links:
   [`npm run next-route-handler`](https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api#nextjs-app-router-smoke)
 - Next.js Server Action smoke:
   [`npm run next-server-action`](https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api#nextjs-server-action-smoke)
+- Next.js Server Action FormData smoke:
+  [`npm run next-server-action-formdata`](https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api#nextjs-server-action-formdata-smoke)
 - Express, Fastify, and Hono API adapters:
   [`npm run framework-adapters`](https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api#framework-adapters)
 - Postgres JSONB, Redis/KV, and object-storage persistence adapters:

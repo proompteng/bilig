@@ -7,6 +7,7 @@
     "framework-adapters": "tsx framework-adapters.ts",
     "next-route-handler": "tsx next-route-handler.ts",
     "next-server-action": "tsx next-server-action.ts",
+    "next-server-action-formdata": "tsx next-server-action-formdata.ts",
     "persistence-adapters": "tsx persistence-adapters.ts",
     "smoke": "tsx smoke.ts",
     "start": "tsx route.ts",

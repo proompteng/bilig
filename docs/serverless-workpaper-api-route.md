@@ -384,6 +384,37 @@ WorkPaper handler or route module. The smoke test prints `verified: true` only
 after the action reads the original summary, writes the revenue records, reads
 the recalculated summary, and confirms formulas survived the saved document.
 
+## Next.js Server Action FormData Adapter
+
+Use the FormData variant when a server-side form should update a WorkPaper
+without a client-side JSON adapter:
+
+```sh
+cd examples/serverless-workpaper-api
+npm install
+npm run next-server-action-formdata
+```
+
+The example accepts repeated fields from a form submission:
+
+```ts
+export async function updateRevenueRecordsFromFormDataAction(formData) {
+  'use server'
+
+  const records = readRevenueRecordsFromFormData(formData)
+  return requestJson('/api/workpaper/revenue', parseEditResponse, {
+    body: JSON.stringify({ records }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  })
+}
+```
+
+Each `region`, `customers`, and `arpa` field becomes one typed revenue record.
+The smoke output includes `action: "Next.js Server Action FormData"` and
+`verified: true` only after formula readback and saved-document formula
+persistence both pass.
+
 ## Vercel Function Adapter
 
 Plain Vercel Functions can use the same web-standard `Request` and `Response`
