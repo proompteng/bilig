@@ -11,7 +11,14 @@ import {
 import type { GridSelection, GridSelectionSnapshot, Item } from './gridTypes.js'
 import { parseClipboardContent, parseClipboardPlainText } from './gridClipboard.js'
 import { cellToEditorSeed } from './gridCells.js'
-import { isClipboardShortcut, isHandledGridKey, isNavigationKey, isPrintableKey, normalizeKeyboardKey } from './gridKeyboard.js'
+import {
+  isClipboardShortcut,
+  isDeleteKey,
+  isHandledGridKey,
+  isNavigationKey,
+  isPrintableKey,
+  normalizeKeyboardKey,
+} from './gridKeyboard.js'
 import { resolveGridKeyAction } from './gridKeyActions.js'
 import { buildInternalClipboardRange, matchesInternalClipboardPaste, type InternalClipboardRange } from './gridInternalClipboard.js'
 import type { GridEngineLike } from './grid-engine.js'
@@ -239,6 +246,10 @@ export function handleGridKey({
   })
 
   if (action.kind === 'none') {
+    if (!isEditingCell && isDeleteKey(event.key)) {
+      event.preventDefault()
+      event.cancel?.()
+    }
     return
   }
 
@@ -429,7 +440,9 @@ export function shouldHandleGridWindowKey(
   return isHandledGridKey(event)
 }
 
-export function shouldHandleGridSurfaceKey(event: Pick<GridKeyboardEventLike, 'altKey' | 'ctrlKey' | 'key' | 'metaKey'>): boolean {
+export function shouldHandleGridSurfaceKey(
+  event: Pick<GridKeyboardEventLike, 'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'>,
+): boolean {
   return (
     isPrintableKey(event) ||
     isClipboardShortcut(event) ||
@@ -437,8 +450,7 @@ export function shouldHandleGridSurfaceKey(event: Pick<GridKeyboardEventLike, 'a
     event.key === 'Enter' ||
     event.key === 'Tab' ||
     event.key === 'F2' ||
-    event.key === 'Backspace' ||
-    event.key === 'Delete'
+    isDeleteKey(event.key)
   )
 }
 

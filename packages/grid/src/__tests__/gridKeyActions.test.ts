@@ -288,4 +288,30 @@ describe('gridKeyActions', () => {
       pendingTypeSeed: '17',
     })
   })
+
+  test('does not clear cells for modified delete key combinations', () => {
+    for (const event of [
+      { key: 'Delete', ctrlKey: true, metaKey: false, altKey: false },
+      { key: 'Delete', ctrlKey: false, metaKey: true, altKey: false },
+      { key: 'Delete', ctrlKey: false, metaKey: false, altKey: true },
+      { key: 'Delete', ctrlKey: false, metaKey: false, altKey: false, shiftKey: true },
+      { key: 'Backspace', ctrlKey: true, metaKey: false, altKey: false },
+      { key: 'Backspace', ctrlKey: false, metaKey: true, altKey: false },
+      { key: 'Backspace', ctrlKey: false, metaKey: false, altKey: true },
+      { key: 'Backspace', ctrlKey: false, metaKey: false, altKey: false, shiftKey: true },
+    ] as const) {
+      expect(
+        resolveGridKeyAction({
+          event,
+          isEditingCell: false,
+          editorValue: '',
+          editorInputFocused: false,
+          pendingTypeSeed: null,
+          selectedCell: [1, 1],
+          currentSelectionCell: [1, 1],
+          currentRangeAnchor: [1, 1],
+        }),
+      ).toEqual({ kind: 'none' })
+    }
+  })
 })

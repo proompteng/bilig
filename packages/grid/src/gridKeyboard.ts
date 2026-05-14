@@ -57,6 +57,18 @@ export function isClipboardShortcut(event: GridKeyboardModifierState): boolean {
   return normalizedKey === 'c' || normalizedKey === 'x' || normalizedKey === 'v'
 }
 
+export function isDeleteKey(key: string): boolean {
+  return key === 'Backspace' || key === 'Delete'
+}
+
+export function isClearCellKey(
+  event: GridKeyboardModifierState & {
+    shiftKey?: boolean
+  },
+): boolean {
+  return isDeleteKey(event.key) && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
+}
+
 export function isHandledGridKey(
   event: GridKeyboardModifierState & {
     shiftKey?: boolean
@@ -73,8 +85,7 @@ export function isHandledGridKey(
     event.key === 'Tab' ||
     event.key === 'Escape' ||
     event.key === 'F2' ||
-    event.key === 'Backspace' ||
-    event.key === 'Delete' ||
+    isDeleteKey(event.key) ||
     event.key === 'Home' ||
     event.key === 'End' ||
     event.key === 'PageUp' ||

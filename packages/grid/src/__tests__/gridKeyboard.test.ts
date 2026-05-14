@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest'
 import {
+  isClearCellKey,
   isClipboardShortcut,
+  isDeleteKey,
   isHandledGridKey,
   isNavigationKey,
   isNumericEditorSeed,
@@ -25,6 +27,7 @@ describe('gridKeyboard', () => {
     expect(isClipboardShortcut({ altKey: false, ctrlKey: true, key: 'c', metaKey: false })).toBe(true)
     expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: 'F2', metaKey: false })).toBe(true)
     expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: 'Escape', metaKey: false })).toBe(true)
+    expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: 'Delete', metaKey: false })).toBe(true)
     expect(
       isHandledGridKey({
         altKey: false,
@@ -61,6 +64,20 @@ describe('gridKeyboard', () => {
         shiftKey: false,
       }),
     ).toBe(true)
+  })
+
+  test('only treats unmodified delete keys as grid clear commands', () => {
+    expect(isDeleteKey('Delete')).toBe(true)
+    expect(isDeleteKey('Backspace')).toBe(true)
+    expect(isDeleteKey('Escape')).toBe(false)
+    expect(isClearCellKey({ altKey: false, ctrlKey: false, key: 'Delete', metaKey: false })).toBe(true)
+    expect(isClearCellKey({ altKey: false, ctrlKey: false, key: 'Backspace', metaKey: false })).toBe(true)
+    expect(isClearCellKey({ altKey: true, ctrlKey: false, key: 'Delete', metaKey: false })).toBe(false)
+    expect(isClearCellKey({ altKey: false, ctrlKey: true, key: 'Backspace', metaKey: false })).toBe(false)
+    expect(isClearCellKey({ altKey: false, ctrlKey: false, key: 'Backspace', metaKey: true })).toBe(false)
+    expect(isClearCellKey({ altKey: false, ctrlKey: false, key: 'Delete', metaKey: false, shiftKey: true })).toBe(false)
+    expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: 'Delete', metaKey: true })).toBe(true)
+    expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: 'Backspace', metaKey: true })).toBe(true)
   })
 
   test('detects numeric editor seeds', () => {

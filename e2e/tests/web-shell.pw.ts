@@ -1076,6 +1076,35 @@ for (const key of ['Delete', 'Backspace'] as const) {
   })
 }
 
+test('web app ignores modified delete keys instead of clearing the grid selection', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-modified-delete-ignored')
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
+  await waitForWorkbookReady(page)
+
+  const grid = page.getByTestId('sheet-grid')
+  const formulaInput = page.getByTestId('formula-input')
+
+  await clickProductCell(page, 2, 2)
+  await formulaInput.fill('keep-modified-delete')
+  await formulaInput.press('Enter')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C3')
+  await expect(formulaInput).toHaveValue('keep-modified-delete')
+  await clickProductCell(page, 2, 2)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C3')
+  await expect(formulaInput).toHaveValue('keep-modified-delete')
+
+  const assertModifiedDeleteIgnored = async (key: string) => {
+    await grid.press(key)
+    await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C3')
+    await expect(formulaInput).toHaveValue('keep-modified-delete')
+  }
+
+  await assertModifiedDeleteIgnored(`${PRIMARY_MODIFIER}+Backspace`)
+  await assertModifiedDeleteIgnored(`${PRIMARY_MODIFIER}+Delete`)
+  await assertModifiedDeleteIgnored('Alt+Backspace')
+  await assertModifiedDeleteIgnored('Shift+Delete')
+})
+
 test('web app clears the querystring-selected cell with Delete after page load', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-delete-querystring-selection')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)

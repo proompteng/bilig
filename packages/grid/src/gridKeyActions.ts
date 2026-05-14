@@ -1,5 +1,6 @@
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import { clampCell } from './gridSelection.js'
+import { isClearCellKey } from './gridKeyboard.js'
 import type { Item, Rectangle } from './gridTypes.js'
 
 export type GridEditSelectionBehavior = 'select-all' | 'caret-end'
@@ -205,7 +206,7 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
     return { kind: 'move-selection', cell: nextCell }
   }
 
-  if (event.key === 'Backspace' || event.key === 'Delete') {
+  if (isClearCellKey(event)) {
     return { kind: 'clear-cell', pendingTypeSeed: null }
   }
 
