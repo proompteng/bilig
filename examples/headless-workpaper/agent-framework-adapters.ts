@@ -156,6 +156,7 @@ const cloudflareAgentsWorkbook = buildWorkbook()
 const aiSdkTools = createAiSdkTools(createWorkPaperTools(aiSdkWorkbook))
 const openAiResponsesTools = createOpenAiResponsesTools(createWorkPaperTools(openAiResponsesWorkbook))
 const langChainTools = createLangChainTools(createWorkPaperTools(langChainWorkbook))
+const langChainStructuredToolSmoke = runLangChainStructuredToolSmoke(langChainTools)
 const mastraTools = createMastraTools(createWorkPaperTools(mastraWorkbook))
 const llamaIndexTools = createLlamaIndexTools(createWorkPaperTools(llamaIndexWorkbook))
 const langGraphToolNode = createLangGraphToolNode(createWorkPaperTools(langGraphWorkbook))
@@ -175,17 +176,7 @@ const output = {
     }),
   },
   openAiResponses: runOpenAiResponsesToolLoop(openAiResponsesTools),
-  langChain: {
-    toolNames: langChainTools.map((tool) => tool.name),
-    readResult: requireTool(langChainTools, 'read_workpaper_summary').invoke({
-      range: 'Summary!A1:B5',
-    }),
-    writeResult: requireTool(langChainTools, 'set_workpaper_input_cell').invoke({
-      sheetName: 'Inputs',
-      address: 'B3',
-      value: 0.4,
-    }),
-  },
+  langChain: langChainStructuredToolSmoke,
   mastra: {
     toolIds: [mastraTools.readWorkPaperSummary.id, mastraTools.setWorkPaperInputCell.id],
     readResult: mastraTools.readWorkPaperSummary.execute({
@@ -414,6 +405,24 @@ function runOpenAiResponsesToolLoop(adapter: OpenAiResponsesAdapter) {
     toolOutputTypes: toolOutputs.map((item) => item.type),
     readResult: requireWorkPaperReadResult(readResult),
     writeResult: requireWorkPaperWriteResult(writeResult),
+  }
+}
+
+function runLangChainStructuredToolSmoke(tools: LangChainTool[]) {
+  const readResult = requireTool(tools, 'read_workpaper_summary').invoke({
+    range: 'Summary!A1:B5',
+  })
+  const writeResult = requireTool(tools, 'set_workpaper_input_cell').invoke({
+    sheetName: 'Inputs',
+    address: 'B3',
+    value: 0.4,
+  })
+
+  return {
+    toolNames: tools.map((tool) => tool.name),
+    structuredFields: ['editedCell', 'before', 'after', 'checks'],
+    readResult,
+    writeResult,
   }
 }
 

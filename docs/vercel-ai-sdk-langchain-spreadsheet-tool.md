@@ -82,6 +82,42 @@ cell, returns before and after computed values, preserves formula contracts,
 serializes the workbook, restores it, and proves the restored output still
 matches the post-write state.
 
+## LangChain.js Structured Tool Smoke
+
+The runnable adapter includes a LangChain-shaped smoke that keeps the tool
+output structured. The model can decide to call the tools, but the WorkPaper
+functions return JSON evidence instead of prose:
+
+```ts
+const tools = createLangChainTools(createWorkPaperTools(workbook))
+
+const readResult = requireTool(tools, 'read_workpaper_summary').invoke({
+  range: 'Summary!A1:B5',
+})
+
+const writeResult = requireTool(tools, 'set_workpaper_input_cell').invoke({
+  sheetName: 'Inputs',
+  address: 'B3',
+  value: 0.4,
+})
+
+return {
+  readResult,
+  writeResult: {
+    editedCell: writeResult.editedCell,
+    before: writeResult.before,
+    after: writeResult.after,
+    checks: writeResult.checks,
+  },
+}
+```
+
+Those four fields are the important LangChain.js contract: `editedCell` says
+what changed, `before` and `after` prove the dependent formulas recalculated,
+and `checks` records persistence and restored-readback assertions. Keep that
+shape as the tool return value; do not collapse it into a sentence like
+"spreadsheet updated successfully."
+
 ## Adapter Boundary
 
 Keep the adapter boring:
