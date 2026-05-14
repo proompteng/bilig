@@ -147,7 +147,7 @@ function buildScenarioProof(args: {
   readonly googleSheetsTiming: NumericSummary
   readonly visualProofs: readonly SameCorpusProductVisualProof[]
 }): SameCorpusScenarioProof {
-  const requiredProducts = ['bilig', 'google-sheets'] as const satisfies readonly UiResponsivenessSameCorpusProduct[]
+  const requiredProducts = ['bilig', 'google-sheets', 'microsoft-excel-web'] as const satisfies readonly UiResponsivenessSameCorpusProduct[]
   const screenshotProducts = new Set(
     args.visualProofs.filter((entry) => entry.screenshotCaptured && entry.screenshotPath).map((entry) => entry.product),
   )

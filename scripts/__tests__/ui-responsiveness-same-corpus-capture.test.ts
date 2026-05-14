@@ -16,6 +16,7 @@ import {
   verifyXlsxCorpusFingerprint,
 } from '../capture-ui-responsiveness-same-corpus.ts'
 import { requiredUiResponsivenessSameCorpusWorkloads } from '../ui-responsiveness-same-corpus-workloads.ts'
+import { buildCaptureScenarioProof, type SameCorpusProductVisualProof } from '../ui-responsiveness-same-corpus-proof.ts'
 import { sameCorpusChromiumLaunchOptions } from '../ui-responsiveness-same-corpus-page-utils.ts'
 import { incumbentEditableWorkloadBlocker } from '../ui-responsiveness-same-corpus-workload-runner.ts'
 
@@ -271,6 +272,28 @@ describe('same-corpus UI responsiveness capture CLI', () => {
     ])
   })
 
+  it('requires visual proof for Bilig, Google Sheets, and Excel Web in each same-corpus scenario', () => {
+    const proof = buildCaptureScenarioProof({
+      bilig: sameCorpusCaptureMeasurement('bilig', 'bilig-benchmark-state'),
+      googleSheets: sameCorpusCaptureMeasurement('google-sheets', 'google-sheets-xlsx-export'),
+      visualProofs: [
+        sameCorpusVisualProof('bilig', 'typegpu-visible-canvas'),
+        sameCorpusVisualProof('google-sheets', 'google-sheets-visible-grid'),
+      ],
+    })
+
+    expect(proof.screenshotProof).toMatchObject({
+      captured: false,
+      requiredProducts: ['bilig', 'google-sheets', 'microsoft-excel-web'],
+      missingProducts: ['microsoft-excel-web'],
+    })
+    expect(proof.pixelGridProof).toMatchObject({
+      captured: false,
+      requiredProducts: ['bilig', 'google-sheets', 'microsoft-excel-web'],
+      missingProducts: ['microsoft-excel-web'],
+    })
+  })
+
   it('rejects read-only incumbent edit surfaces before timing same-corpus edits', () => {
     expect(
       incumbentEditableWorkloadBlocker(
@@ -358,3 +381,46 @@ describe('same-corpus UI responsiveness capture CLI', () => {
     ).toThrow('Unexpected workbook benchmark corpus id: tiny-demo')
   })
 })
+
+function sameCorpusCaptureMeasurement(product: 'bilig' | 'google-sheets', method: 'bilig-benchmark-state' | 'google-sheets-xlsx-export') {
+  return {
+    product,
+    source: product === 'bilig' ? 'http://127.0.0.1:5173/?benchmarkCorpus=wide-mixed-250k' : 'https://example.com/sheet',
+    operationResponseMsSamples: [10, 11, 12],
+    postOperationFrameMsSamples: [8, 9, 10],
+    corpusVerification: {
+      verified: true,
+      method,
+      sheetName: 'WideGrid',
+      materializedCells: 250_000,
+      checkedCells:
+        product === 'bilig'
+          ? []
+          : [
+              { address: 'A1', expected: 'metric-1', actual: 'metric-1' },
+              { address: 'B1', expected: 'metric-2', actual: 'metric-2' },
+              { address: 'F2', expected: 'note-1-5', actual: 'note-1-5' },
+            ],
+    },
+    limitations: [],
+  }
+}
+
+function sameCorpusVisualProof(
+  product: SameCorpusProductVisualProof['product'],
+  method: SameCorpusProductVisualProof['pixelGridProof']['method'],
+): SameCorpusProductVisualProof {
+  return {
+    product,
+    screenshotPath: `tmp/${product}-sample-1.png`,
+    screenshotCaptured: true,
+    pixelGridProof: {
+      product,
+      captured: true,
+      method,
+      viewportPixelWidth: 1440,
+      viewportPixelHeight: 900,
+      evidence: ['test visual proof'],
+    },
+  }
+}

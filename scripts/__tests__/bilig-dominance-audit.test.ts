@@ -434,13 +434,13 @@ function sameCorpusScenarioProof(biligMs: number, googleMs: number) {
     p95Ratio: biligMs / googleMs,
     screenshotProof: {
       captured: true,
-      requiredProducts: ['bilig', 'google-sheets'],
-      artifactPaths: ['tmp/bilig-sample-1.png', 'tmp/google-sheets-sample-1.png'],
+      requiredProducts: ['bilig', 'google-sheets', 'microsoft-excel-web'],
+      artifactPaths: ['tmp/bilig-sample-1.png', 'tmp/google-sheets-sample-1.png', 'tmp/microsoft-excel-web-sample-1.png'],
       missingProducts: [],
     },
     pixelGridProof: {
       captured: true,
-      requiredProducts: ['bilig', 'google-sheets'],
+      requiredProducts: ['bilig', 'google-sheets', 'microsoft-excel-web'],
       products: [
         {
           product: 'bilig',
@@ -457,6 +457,14 @@ function sameCorpusScenarioProof(biligMs: number, googleMs: number) {
           viewportPixelWidth: 1440,
           viewportPixelHeight: 900,
           evidence: ['selector=.grid-scrollable-wrapper'],
+        },
+        {
+          product: 'microsoft-excel-web',
+          captured: true,
+          method: 'excel-web-visible-grid',
+          viewportPixelWidth: 1440,
+          viewportPixelHeight: 900,
+          evidence: ['selector=.ewr-grdcontarea-grid'],
         },
       ],
       missingProducts: [],
