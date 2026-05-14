@@ -44,7 +44,7 @@
         "evidence": [
           "direct live browser timing passed: true",
           "same-corpus capture kind: same-corpus-browser-capture",
-          "same-corpus UI 10x cases: 0/9"
+          "same-corpus UI 10x cases: 3/9"
         ],
         "gaps": ["live UI browser evidence is not a same-corpus 10x proof against Google Sheets with rendered-grid proof"]
       }
@@ -616,18 +616,18 @@
         "external UI responsiveness comparison dimensions pass: true",
         "live incumbent browser timing scorecard passes: true",
         "same-corpus UI 10x proof captured: true",
-        "same-corpus UI 10x cases: 0/9",
-        "google-sheets: open-public-workbook-and-scroll-viewport scrollResponseMs.p95 126.07404200000019ms and postScrollFrameMs.p95 9.900000000000091ms (3 samples, public-comment-only)",
-        "microsoft-excel-web: open-public-workbook-and-scroll-viewport scrollResponseMs.p95 102.41204199999993ms and postScrollFrameMs.p95 10.300000000000182ms (3 samples, public-office-web-viewer)",
-        "wide-mixed-250k: open-workbook bilig p95 ratio 12.369282592461186 vs Google Sheets and undefined vs Excel Web",
-        "wide-mixed-250k: select-cell bilig p95 ratio 14.594034581781965 vs Google Sheets and undefined vs Excel Web",
-        "wide-mixed-250k: edit-visible-cell bilig p95 ratio 53.8162579930384 vs Google Sheets and undefined vs Excel Web",
-        "wide-mixed-250k: scroll-vertical bilig p95 ratio 2.3779717905763675 vs Google Sheets and undefined vs Excel Web",
-        "wide-mixed-250k: scroll-horizontal bilig p95 ratio 3.939538502893478 vs Google Sheets and undefined vs Excel Web",
-        "wide-mixed-250k: jump-deep-row bilig p95 ratio 2.866292939503542 vs Google Sheets and undefined vs Excel Web",
-        "wide-mixed-250k: formula-edit bilig p95 ratio 13.817092336522583 vs Google Sheets and undefined vs Excel Web",
-        "wide-mixed-250k: fill-format-change bilig p95 ratio 8.338053537835359 vs Google Sheets and undefined vs Excel Web",
-        "wide-mixed-250k: wide-sheet-navigation bilig p95 ratio 17.265025581813678 vs Google Sheets and undefined vs Excel Web",
+        "same-corpus UI 10x cases: 3/9",
+        "google-sheets: open-public-workbook-and-scroll-viewport scrollResponseMs.p95 130.40370799999982ms and postScrollFrameMs.p95 9.300000000000182ms (3 samples, public-comment-only)",
+        "microsoft-excel-web: open-public-workbook-and-scroll-viewport scrollResponseMs.p95 115.86187499999869ms and postScrollFrameMs.p95 9.300000000000182ms (3 samples, public-office-web-viewer)",
+        "wide-mixed-250k: open-workbook bilig p95 ratio 1.8242878750138747 vs Google Sheets and undefined vs Excel Web",
+        "wide-mixed-250k: select-cell bilig p95 ratio 15.41105854113669 vs Google Sheets and undefined vs Excel Web",
+        "wide-mixed-250k: edit-visible-cell bilig p95 ratio 6.99245579821288 vs Google Sheets and undefined vs Excel Web",
+        "wide-mixed-250k: scroll-vertical bilig p95 ratio 0.3795194360262815 vs Google Sheets and undefined vs Excel Web",
+        "wide-mixed-250k: scroll-horizontal bilig p95 ratio 1.0848106541981617 vs Google Sheets and undefined vs Excel Web",
+        "wide-mixed-250k: jump-deep-row bilig p95 ratio 21.33108305923669 vs Google Sheets and undefined vs Excel Web",
+        "wide-mixed-250k: formula-edit bilig p95 ratio 6.0512957307395006 vs Google Sheets and undefined vs Excel Web",
+        "wide-mixed-250k: fill-format-change bilig p95 ratio 5.012837653257029 vs Google Sheets and undefined vs Excel Web",
+        "wide-mixed-250k: wide-sheet-navigation bilig p95 ratio 0.9101903474431454 vs Google Sheets and undefined vs Excel Web",
         "headedWide250kVisibleEditCommit: mutationToVisibleMs.p95 budget 50ms on 250000 materialized cells via pnpm test:browser:full"
       ],
       "evidenceArtifacts": [

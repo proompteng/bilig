@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "suite": "ui-responsiveness-live-browser-timing",
-  "generatedAt": "2026-05-14T13:22:35.242Z",
+  "generatedAt": "2026-05-14T16:46:27.157Z",
   "host": {
     "arch": "arm64",
     "platform": "darwin"
@@ -43,48 +43,48 @@
       "workload": "open-public-workbook-and-scroll-viewport",
       "sampleCount": 3,
       "loadToReadyMs": {
-        "samples": [2915.2146250000005, 2947.179083, 3433.299833],
-        "min": 2915.2146250000005,
-        "median": 2947.179083,
-        "p95": 3433.299833,
-        "max": 3433.299833,
-        "mean": 3098.5645136666667,
-        "standardDeviation": 237.0530631886735,
-        "relativeStandardDeviation": 0.07650415608360474,
-        "standardError": 136.862649844206,
+        "samples": [3025.16125, 3186.1940829999994, 3534.685792],
+        "min": 3025.16125,
+        "median": 3186.1940829999994,
+        "p95": 3534.685792,
+        "max": 3534.685792,
+        "mean": 3248.680375,
+        "standardDeviation": 212.6534226403915,
+        "relativeStandardDeviation": 0.06545840097931811,
+        "standardError": 122.7755108055253,
         "confidence95": {
-          "low": 2830.313719972023,
-          "high": 3366.8153073613103
+          "low": 3008.0403738211703,
+          "high": 3489.3203761788295
         }
       },
       "scrollResponseMs": {
-        "samples": [123.74074999999993, 124.57741699999951, 126.07404200000019],
-        "min": 123.74074999999993,
-        "median": 124.57741699999951,
-        "p95": 126.07404200000019,
-        "max": 126.07404200000019,
-        "mean": 124.79740299999987,
-        "standardDeviation": 0.9651798690618653,
-        "relativeStandardDeviation": 0.007733973991925667,
-        "standardError": 0.5572468572192757,
+        "samples": [124.38045799999963, 126.60458299999937, 130.40370799999982],
+        "min": 124.38045799999963,
+        "median": 126.60458299999937,
+        "p95": 130.40370799999982,
+        "max": 130.40370799999982,
+        "mean": 127.12958299999961,
+        "standardDeviation": 2.486845912747814,
+        "relativeStandardDeviation": 0.019561504522104988,
+        "standardError": 1.435781157158071,
         "confidence95": {
-          "low": 123.7051991598501,
-          "high": 125.88960684014965
+          "low": 124.31545193196979,
+          "high": 129.94371406802944
         }
       },
       "postScrollFrameMs": {
-        "samples": [8.899999999999636, 9.599999999999909, 9.900000000000091],
-        "min": 8.899999999999636,
-        "median": 9.599999999999909,
-        "p95": 9.900000000000091,
-        "max": 9.900000000000091,
-        "mean": 9.466666666666546,
-        "standardDeviation": 0.4189935029994036,
-        "relativeStandardDeviation": 0.04425987707740235,
-        "standardError": 0.24190601174540993,
+        "samples": [8.400000000000091, 8.5, 9.300000000000182],
+        "min": 8.400000000000091,
+        "median": 8.5,
+        "p95": 9.300000000000182,
+        "max": 9.300000000000182,
+        "mean": 8.733333333333425,
+        "standardDeviation": 0.4027681991198793,
+        "relativeStandardDeviation": 0.04611849608242845,
+        "standardError": 0.23253832818288314,
         "confidence95": {
-          "low": 8.992530883645543,
-          "high": 9.94080244968755
+          "low": 8.277558210094973,
+          "high": 9.189108456571876
         }
       },
       "passed": true,
@@ -104,48 +104,48 @@
       "workload": "open-public-workbook-and-scroll-viewport",
       "sampleCount": 3,
       "loadToReadyMs": {
-        "samples": [5060.8008329999975, 5062.990542000001, 5071.541499999999],
-        "min": 5060.8008329999975,
-        "median": 5062.990542000001,
-        "p95": 5071.541499999999,
-        "max": 5071.541499999999,
-        "mean": 5065.110958333333,
-        "standardDeviation": 4.63412026683426,
-        "relativeStandardDeviation": 0.0009149099210176257,
-        "standardError": 2.6755105835138604,
+        "samples": [6671.994875, 6882.200000000001, 7202.702874999999],
+        "min": 6671.994875,
+        "median": 6882.200000000001,
+        "p95": 7202.702874999999,
+        "max": 7202.702874999999,
+        "mean": 6918.965916666667,
+        "standardDeviation": 218.21479446828658,
+        "relativeStandardDeviation": 0.03153864278224619,
+        "standardError": 125.98637032742413,
         "confidence95": {
-          "low": 5059.866957589646,
-          "high": 5070.35495907702
+          "low": 6672.032630824916,
+          "high": 7165.899202508418
         }
       },
       "scrollResponseMs": {
-        "samples": [94.36341700000048, 98.3557499999988, 102.41204199999993],
-        "min": 94.36341700000048,
-        "median": 98.3557499999988,
-        "p95": 102.41204199999993,
-        "max": 102.41204199999993,
-        "mean": 98.3770696666664,
-        "standardDeviation": 3.2858719790231365,
-        "relativeStandardDeviation": 0.033400791364865234,
-        "standardError": 1.8970990716116563,
+        "samples": [97.58212500000081, 100.81541700000162, 115.86187499999869],
+        "min": 97.58212500000081,
+        "median": 100.81541700000162,
+        "p95": 115.86187499999869,
+        "max": 115.86187499999869,
+        "mean": 104.75313900000037,
+        "standardDeviation": 7.9651974626103375,
+        "relativeStandardDeviation": 0.07603779264896596,
+        "standardError": 4.598708899186603,
         "confidence95": {
-          "low": 94.65875548630756,
-          "high": 102.09538384702525
+          "low": 95.73966955759464,
+          "high": 113.76660844240611
         }
       },
       "postScrollFrameMs": {
-        "samples": [9.699999999999818, 9.699999999999818, 10.300000000000182],
-        "min": 9.699999999999818,
-        "median": 9.699999999999818,
-        "p95": 10.300000000000182,
-        "max": 10.300000000000182,
-        "mean": 9.89999999999994,
-        "standardDeviation": 0.2828427124747905,
-        "relativeStandardDeviation": 0.028569970957049717,
-        "standardError": 0.16329931618564422,
+        "samples": [9.099999999999454, 9.199999999999818, 9.300000000000182],
+        "min": 9.099999999999454,
+        "median": 9.199999999999818,
+        "p95": 9.300000000000182,
+        "max": 9.300000000000182,
+        "mean": 9.199999999999818,
+        "standardDeviation": 0.08164965809306965,
+        "relativeStandardDeviation": 0.008874962836203398,
+        "standardError": 0.04714045207927467,
         "confidence95": {
-          "low": 9.579933340276078,
-          "high": 10.220066659723802
+          "low": 9.10760471392444,
+          "high": 9.292395286075196
         }
       },
       "passed": true,
@@ -160,7 +160,7 @@
     "evidenceKind": "same-corpus-browser-capture",
     "requiredProductCount": 2,
     "requiredCaseCount": 9,
-    "tenXMeanAndP95CaseCount": 0,
+    "tenXMeanAndP95CaseCount": 3,
     "coveredCorpusCaseIds": ["wide-mixed-250k"],
     "limitations": [
       "Caller must supply a Google Sheets URL for the same exported Bilig benchmark corpus.",
@@ -178,33 +178,33 @@
           "product": "bilig",
           "source": "http://127.0.0.1:5173/?benchmarkCorpus=wide-mixed-250k",
           "operationResponseMs": {
-            "samples": [10581.8195, 10766.887917000002, 30967.326166],
-            "min": 10581.8195,
-            "median": 10766.887917000002,
-            "p95": 30967.326166,
-            "max": 30967.326166,
-            "mean": 17438.677861,
-            "standardDeviation": 9566.497314413715,
-            "relativeStandardDeviation": 0.5485792782380772,
-            "standardError": 5523.219799678591,
+            "samples": [4977.450000000001, 5084.864540999999, 5129.532875],
+            "min": 4977.450000000001,
+            "median": 5084.864540999999,
+            "p95": 5129.532875,
+            "max": 5129.532875,
+            "mean": 5063.949138666667,
+            "standardDeviation": 63.82471181885701,
+            "relativeStandardDeviation": 0.012603742666274488,
+            "standardError": 36.849214549567385,
             "confidence95": {
-              "low": 6613.1670536299625,
-              "high": 28264.188668370036
+              "low": 4991.724678149515,
+              "high": 5136.173599183819
             }
           },
           "postOperationFrameMs": {
-            "samples": [9.104999999999563, 9.515000000001237, 199.75500000000102],
-            "min": 9.104999999999563,
-            "median": 9.515000000001237,
-            "p95": 199.75500000000102,
-            "max": 199.75500000000102,
-            "mean": 72.79166666666727,
-            "standardDeviation": 89.77678999731653,
-            "relativeStandardDeviation": 1.2333388436952368,
-            "standardError": 51.8326538719312,
+            "samples": [9.400000000000546, 9.570000000000618, 10.235000000000582],
+            "min": 9.400000000000546,
+            "median": 9.570000000000618,
+            "p95": 10.235000000000582,
+            "max": 10.235000000000582,
+            "mean": 9.735000000000582,
+            "standardDeviation": 0.3603008002581604,
+            "relativeStandardDeviation": 0.037010868028571016,
+            "standardError": 0.2080197640182865,
             "confidence95": {
-              "low": -28.800334922317887,
-              "high": 174.38366825565242
+              "low": 9.32728126252474,
+              "high": 10.142718737476423
             }
           },
           "corpusVerification": {
@@ -220,33 +220,33 @@
           "product": "google-sheets",
           "source": "https://docs.google.com/spreadsheets/d/1o0qSHUht9gl7YVN9yBX7fEbQ1ns4sb-HG2aytBtdWxc/edit?usp=drivesdk",
           "operationResponseMs": {
-            "samples": [2384.5463339999988, 2484.273334000005, 2503.566875000004],
-            "min": 2384.5463339999988,
-            "median": 2484.273334000005,
-            "p95": 2503.566875000004,
-            "max": 2503.566875000004,
-            "mean": 2457.4621810000026,
-            "standardDeviation": 52.15745864767339,
-            "relativeStandardDeviation": 0.021224114475059477,
-            "standardError": 30.113122790481007,
+            "samples": [2698.485334000001, 2802.995874999997, 2811.8001250000016],
+            "min": 2698.485334000001,
+            "median": 2802.995874999997,
+            "p95": 2811.8001250000016,
+            "max": 2811.8001250000016,
+            "mean": 2771.093778,
+            "standardDeviation": 51.46758403494623,
+            "relativeStandardDeviation": 0.018573021398103774,
+            "standardError": 29.71482349711589,
             "confidence95": {
-              "low": 2398.44046033066,
-              "high": 2516.4839016693454
+              "low": 2712.852723945653,
+              "high": 2829.334832054347
             }
           },
           "postOperationFrameMs": {
-            "samples": [9.299999999999727, 9.699999999999818, 13.50000003576315],
-            "min": 9.299999999999727,
-            "median": 9.699999999999818,
-            "p95": 13.50000003576315,
-            "max": 13.50000003576315,
-            "mean": 10.833333345254232,
-            "standardDeviation": 1.8926759590066053,
-            "relativeStandardDeviation": 0.17470854986990053,
-            "standardError": 1.0927369744211968,
+            "samples": [9.300000000000182, 10.300000000000182, 10.400000000000091],
+            "min": 9.300000000000182,
+            "median": 10.300000000000182,
+            "p95": 10.400000000000091,
+            "max": 10.400000000000091,
+            "mean": 10.000000000000151,
+            "standardDeviation": 0.4966554808583536,
+            "relativeStandardDeviation": 0.04966554808583461,
+            "standardError": 0.28674417556807347,
             "confidence95": {
-              "low": 8.691568875388686,
-              "high": 12.975097815119778
+              "low": 9.437981415886727,
+              "high": 10.562018584113575
             }
           },
           "corpusVerification": {
@@ -286,16 +286,16 @@
             "Google Sheets timing requires the supplied URL to be browser-accessible and loaded with the same benchmark corpus."
           ]
         },
-        "biligToGoogleSheetsMeanRatio": 7.096214133355968,
-        "biligToGoogleSheetsP95Ratio": 12.369282592461186,
+        "biligToGoogleSheetsMeanRatio": 1.8274188982234678,
+        "biligToGoogleSheetsP95Ratio": 1.8242878750138747,
         "tenXMeanAndP95Metric": "operationResponseMs",
         "scenarioProof": {
-          "biligMeanMs": 17438.677861,
-          "biligP95Ms": 30967.326166,
-          "googleMeanMs": 2457.4621810000026,
-          "googleP95Ms": 2503.566875000004,
-          "meanRatio": 7.096214133355968,
-          "p95Ratio": 12.369282592461186,
+          "biligMeanMs": 5063.949138666667,
+          "biligP95Ms": 5129.532875,
+          "googleMeanMs": 2771.093778,
+          "googleP95Ms": 2811.8001250000016,
+          "meanRatio": 1.8274188982234678,
+          "p95Ratio": 1.8242878750138747,
           "screenshotProof": {
             "captured": true,
             "requiredProducts": ["bilig", "google-sheets"],
@@ -335,7 +335,7 @@
             "missingProducts": []
           }
         },
-        "postOperationFrameGuardrailPassed": false,
+        "postOperationFrameGuardrailPassed": true,
         "tenXMeanAndP95AgainstGoogleSheets": false,
         "passed": false
       },
@@ -349,33 +349,33 @@
           "product": "bilig",
           "source": "http://127.0.0.1:5173/?benchmarkCorpus=wide-mixed-250k",
           "operationResponseMs": {
-            "samples": [150.3773749999964, 208.3497500000085, 232.34129199999734],
-            "min": 150.3773749999964,
-            "median": 208.3497500000085,
-            "p95": 232.34129199999734,
-            "max": 232.34129199999734,
-            "mean": 197.0228056666674,
-            "standardDeviation": 34.406837241491374,
-            "relativeStandardDeviation": 0.17463377970417548,
-            "standardError": 19.864796743338687,
+            "samples": [168.68624999999884, 172.8322079999998, 173.35129199999938],
+            "min": 168.68624999999884,
+            "median": 172.8322079999998,
+            "p95": 173.35129199999938,
+            "max": 173.35129199999938,
+            "mean": 171.62324999999933,
+            "standardDeviation": 2.087556594005874,
+            "relativeStandardDeviation": 0.012163600176583779,
+            "standardError": 1.2052513614978697,
             "confidence95": {
-              "low": 158.0878040497236,
-              "high": 235.95780728361123
+              "low": 169.26095733146352,
+              "high": 173.98554266853515
             }
           },
           "postOperationFrameMs": {
-            "samples": [10.319999999999709, 102.72700000238365, 110.02099994754826],
-            "min": 10.319999999999709,
-            "median": 102.72700000238365,
-            "p95": 110.02099994754826,
-            "max": 110.02099994754826,
-            "mean": 74.35599998331054,
-            "standardDeviation": 45.37809735395079,
-            "relativeStandardDeviation": 0.6102815827120348,
-            "standardError": 26.199056722616536,
+            "samples": [108.68000000000029, 110.25000004530011, 113.96999999999935],
+            "min": 108.68000000000029,
+            "median": 110.25000004530011,
+            "p95": 113.96999999999935,
+            "max": 113.96999999999935,
+            "mean": 110.96666668176658,
+            "standardDeviation": 2.218292631862866,
+            "relativeStandardDeviation": 0.01999062149198867,
+            "standardError": 1.280731848147389,
             "confidence95": {
-              "low": 23.00584880698213,
-              "high": 125.70615115963895
+              "low": 108.4564322593977,
+              "high": 113.47690110413546
             }
           },
           "corpusVerification": {
@@ -391,33 +391,33 @@
           "product": "google-sheets",
           "source": "https://docs.google.com/spreadsheets/d/1o0qSHUht9gl7YVN9yBX7fEbQ1ns4sb-HG2aytBtdWxc/edit?usp=drivesdk",
           "operationResponseMs": {
-            "samples": [9.101874999993015, 10.270834000009927, 15.920291999995243],
-            "min": 9.101874999993015,
-            "median": 10.270834000009927,
-            "p95": 15.920291999995243,
-            "max": 15.920291999995243,
-            "mean": 11.764333666666062,
-            "standardDeviation": 2.9772032219524793,
-            "relativeStandardDeviation": 0.25307028058786774,
-            "standardError": 1.7188890816264852,
+            "samples": [9.700541999998677, 10.346334000001661, 11.248500000001513],
+            "min": 9.700541999998677,
+            "median": 10.346334000001661,
+            "p95": 11.248500000001513,
+            "max": 11.248500000001513,
+            "mean": 10.431792000000618,
+            "standardDeviation": 0.6348337287647643,
+            "relativeStandardDeviation": 0.06085567357599986,
+            "standardError": 0.36652142419299055,
             "confidence95": {
-              "low": 8.39531106667815,
-              "high": 15.133356266653973
+              "low": 9.713410008582356,
+              "high": 11.15017399141888
             }
           },
           "postOperationFrameMs": {
-            "samples": [9.399999999999636, 10.200000000000273, 10.399999999999636],
-            "min": 9.399999999999636,
-            "median": 10.200000000000273,
-            "p95": 10.399999999999636,
-            "max": 10.399999999999636,
-            "mean": 9.999999999999849,
-            "standardDeviation": 0.4320493798939556,
-            "relativeStandardDeviation": 0.04320493798939621,
-            "standardError": 0.24944382578498617,
+            "samples": [10.900000000000546, 14.299999999999727, 17.600000000000364],
+            "min": 10.900000000000546,
+            "median": 14.299999999999727,
+            "p95": 17.600000000000364,
+            "max": 17.600000000000364,
+            "mean": 14.266666666666879,
+            "standardDeviation": 2.735365098523742,
+            "relativeStandardDeviation": 0.19173119849465195,
+            "standardError": 1.5792637759645896,
             "confidence95": {
-              "low": 9.511090101461276,
-              "high": 10.488909898538422
+              "low": 11.171309665776283,
+              "high": 17.362023667557473
             }
           },
           "corpusVerification": {
@@ -457,16 +457,16 @@
             "Google Sheets timing requires the supplied URL to be browser-accessible and loaded with the same benchmark corpus."
           ]
         },
-        "biligToGoogleSheetsMeanRatio": 16.747468343653537,
-        "biligToGoogleSheetsP95Ratio": 14.594034581781965,
+        "biligToGoogleSheetsMeanRatio": 16.451943251934967,
+        "biligToGoogleSheetsP95Ratio": 15.41105854113669,
         "tenXMeanAndP95Metric": "operationResponseMs",
         "scenarioProof": {
-          "biligMeanMs": 197.0228056666674,
-          "biligP95Ms": 232.34129199999734,
-          "googleMeanMs": 11.764333666666062,
-          "googleP95Ms": 15.920291999995243,
-          "meanRatio": 16.747468343653537,
-          "p95Ratio": 14.594034581781965,
+          "biligMeanMs": 171.62324999999933,
+          "biligP95Ms": 173.35129199999938,
+          "googleMeanMs": 10.431792000000618,
+          "googleP95Ms": 11.248500000001513,
+          "meanRatio": 16.451943251934967,
+          "p95Ratio": 15.41105854113669,
           "screenshotProof": {
             "captured": true,
             "requiredProducts": ["bilig", "google-sheets"],
@@ -520,33 +520,33 @@
           "product": "bilig",
           "source": "http://127.0.0.1:5173/?benchmarkCorpus=wide-mixed-250k",
           "operationResponseMs": {
-            "samples": [2941.722458000004, 3302.503792000003, 3304.1567919999943],
-            "min": 2941.722458000004,
-            "median": 3302.503792000003,
-            "p95": 3304.1567919999943,
-            "max": 3304.1567919999943,
-            "mean": 3182.794347333334,
-            "standardDeviation": 170.46490346951373,
-            "relativeStandardDeviation": 0.05355825255010136,
-            "standardError": 98.41795790550732,
+            "samples": [451.6284169999999, 460.9219579999917, 747.9410419999913],
+            "min": 451.6284169999999,
+            "median": 460.9219579999917,
+            "p95": 747.9410419999913,
+            "max": 747.9410419999913,
+            "mean": 553.4971389999943,
+            "standardDeviation": 137.54494062301674,
+            "relativeStandardDeviation": 0.24850162888198446,
+            "standardError": 79.41160849436982,
             "confidence95": {
-              "low": 2989.8951498385395,
-              "high": 3375.6935448281283
+              "low": 397.85038635102944,
+              "high": 709.1438916489591
             }
           },
           "postOperationFrameMs": {
-            "samples": [124.22000000000116, 283.02499999999964, 639.8340000023854],
-            "min": 124.22000000000116,
-            "median": 283.02499999999964,
-            "p95": 639.8340000023854,
-            "max": 639.8340000023854,
-            "mean": 349.02633333412876,
-            "standardDeviation": 215.6101130142505,
-            "relativeStandardDeviation": 0.6177474087831742,
-            "standardError": 124.48255678878316,
+            "samples": [109.11499999999978, 141.04500000000007, 142.60999999999967],
+            "min": 109.11499999999978,
+            "median": 141.04500000000007,
+            "p95": 142.60999999999967,
+            "max": 142.60999999999967,
+            "mean": 130.92333333333318,
+            "standardDeviation": 15.43405019933383,
+            "relativeStandardDeviation": 0.11788616899967296,
+            "standardError": 8.910853037271584,
             "confidence95": {
-              "low": 105.04052202811377,
-              "high": 593.0121446401438
+              "low": 113.45806138028087,
+              "high": 148.38860528638548
             }
           },
           "corpusVerification": {
@@ -562,33 +562,33 @@
           "product": "google-sheets",
           "source": "https://docs.google.com/spreadsheets/d/1o0qSHUht9gl7YVN9yBX7fEbQ1ns4sb-HG2aytBtdWxc/edit?usp=drivesdk",
           "operationResponseMs": {
-            "samples": [59.464833000005456, 60.60866600001464, 61.39700000002631],
-            "min": 59.464833000005456,
-            "median": 60.60866600001464,
-            "p95": 61.39700000002631,
-            "max": 61.39700000002631,
-            "mean": 60.4901663333488,
-            "standardDeviation": 0.7932418535109926,
-            "relativeStandardDeviation": 0.013113567073689313,
-            "standardError": 0.4579783976570493,
+            "samples": [68.13116599999194, 71.93741699999373, 106.96399999999267],
+            "min": 68.13116599999194,
+            "median": 71.93741699999373,
+            "p95": 106.96399999999267,
+            "max": 106.96399999999267,
+            "mean": 82.34419433332612,
+            "standardDeviation": 17.47804355884021,
+            "relativeStandardDeviation": 0.21225593012774846,
+            "standardError": 10.0909531536044,
             "confidence95": {
-              "low": 59.59252867394099,
-              "high": 61.387803992756616
+              "low": 62.5659261522615,
+              "high": 102.12246251439073
             }
           },
           "postOperationFrameMs": {
-            "samples": [8.799999999999727, 9.299999999999727, 9.300000000000182],
-            "min": 8.799999999999727,
+            "samples": [9.200000000000273, 9.299999999999727, 9.399999999999636],
+            "min": 9.200000000000273,
             "median": 9.299999999999727,
-            "p95": 9.300000000000182,
-            "max": 9.300000000000182,
-            "mean": 9.133333333333212,
-            "standardDeviation": 0.235702260395623,
-            "relativeStandardDeviation": 0.025806816831637897,
-            "standardError": 0.1360827634880162,
+            "p95": 9.399999999999636,
+            "max": 9.399999999999636,
+            "mean": 9.299999999999878,
+            "standardDeviation": 0.08164965809251269,
+            "relativeStandardDeviation": 0.008779533128227286,
+            "standardError": 0.047140452078953114,
             "confidence95": {
-              "low": 8.866611116896701,
-              "high": 9.400055549769723
+              "low": 9.20760471392513,
+              "high": 9.392395286074626
             }
           },
           "corpusVerification": {
@@ -628,16 +628,16 @@
             "Google Sheets timing requires the supplied URL to be browser-accessible and loaded with the same benchmark corpus."
           ]
         },
-        "biligToGoogleSheetsMeanRatio": 52.61672334960384,
-        "biligToGoogleSheetsP95Ratio": 53.8162579930384,
+        "biligToGoogleSheetsMeanRatio": 6.721750616193526,
+        "biligToGoogleSheetsP95Ratio": 6.99245579821288,
         "tenXMeanAndP95Metric": "operationResponseMs",
         "scenarioProof": {
-          "biligMeanMs": 3182.794347333334,
-          "biligP95Ms": 3304.1567919999943,
-          "googleMeanMs": 60.4901663333488,
-          "googleP95Ms": 61.39700000002631,
-          "meanRatio": 52.61672334960384,
-          "p95Ratio": 53.8162579930384,
+          "biligMeanMs": 553.4971389999943,
+          "biligP95Ms": 747.9410419999913,
+          "googleMeanMs": 82.34419433332612,
+          "googleP95Ms": 106.96399999999267,
+          "meanRatio": 6.721750616193526,
+          "p95Ratio": 6.99245579821288,
           "screenshotProof": {
             "captured": true,
             "requiredProducts": ["bilig", "google-sheets"],
@@ -691,48 +691,48 @@
           "product": "bilig",
           "source": "http://127.0.0.1:5173/?benchmarkCorpus=wide-mixed-250k",
           "operationResponseMs": {
-            "samples": [25.407082999998238, 26.218708000000333, 217.14925000001676],
-            "min": 25.407082999998238,
-            "median": 26.218708000000333,
-            "p95": 217.14925000001676,
-            "max": 217.14925000001676,
-            "mean": 89.59168033333845,
-            "standardDeviation": 90.1974311098983,
-            "relativeStandardDeviation": 1.00676123914973,
-            "standardError": 52.07551113151251,
+            "samples": [20.164999999993597, 23.608416000002762, 36.917499999995925],
+            "min": 20.164999999993597,
+            "median": 23.608416000002762,
+            "p95": 36.917499999995925,
+            "max": 36.917499999995925,
+            "mean": 26.89697199999743,
+            "standardDeviation": 7.223688553933519,
+            "relativeStandardDeviation": 0.2685688394193298,
+            "standardError": 4.170598531155536,
             "confidence95": {
-              "low": -12.47632148442608,
-              "high": 191.65968215110297
+              "low": 18.72259887893258,
+              "high": 35.07134512106228
             }
           },
           "postOperationFrameMs": {
-            "samples": [8.75499999999738, 9.229999999999563, 9.284999999999854],
-            "min": 8.75499999999738,
-            "median": 9.229999999999563,
-            "p95": 9.284999999999854,
-            "max": 9.284999999999854,
-            "mean": 9.089999999998932,
-            "standardDeviation": 0.23794257010293887,
-            "relativeStandardDeviation": 0.026176300341360488,
-            "standardError": 0.13737620690060318,
+            "samples": [8.924999999999272, 9.125, 9.325000000000728],
+            "min": 8.924999999999272,
+            "median": 9.125,
+            "p95": 9.325000000000728,
+            "max": 9.325000000000728,
+            "mean": 9.125,
+            "standardDeviation": 0.1632993161861393,
+            "relativeStandardDeviation": 0.01789581547245362,
+            "standardError": 0.09428090415854934,
             "confidence95": {
-              "low": 8.82074263447375,
-              "high": 9.359257365524115
+              "low": 8.940209427849243,
+              "high": 9.309790572150757
             }
           },
           "scrollEventResponseMs": {
-            "samples": [3.459999978542328, 3.5, 107.77500003576279],
-            "min": 3.459999978542328,
-            "median": 3.5,
-            "p95": 107.77500003576279,
-            "max": 107.77500003576279,
-            "mean": 38.24500000476837,
-            "standardDeviation": 49.16513722976877,
-            "relativeStandardDeviation": 1.2855311079523828,
-            "standardError": 28.38550521435189,
+            "samples": [0.3149999976158142, 0.3149999976158142, 0.32499998807907104],
+            "min": 0.3149999976158142,
+            "median": 0.3149999976158142,
+            "p95": 0.32499998807907104,
+            "max": 0.32499998807907104,
+            "mean": 0.31833332777023315,
+            "standardDeviation": 0.004714040712246475,
+            "relativeStandardDeviation": 0.014808505114013631,
+            "standardError": 0.002721652674186358,
             "confidence95": {
-              "low": -17.390590215361335,
-              "high": 93.88059022489807
+              "low": 0.3129988885288279,
+              "high": 0.3236677670116384
             }
           },
           "scrollMovementPx": {
@@ -763,48 +763,48 @@
           "product": "google-sheets",
           "source": "https://docs.google.com/spreadsheets/d/1o0qSHUht9gl7YVN9yBX7fEbQ1ns4sb-HG2aytBtdWxc/edit?usp=drivesdk",
           "operationResponseMs": {
-            "samples": [82.68616699997801, 90.29179200000362, 91.31699999998091],
-            "min": 82.68616699997801,
-            "median": 90.29179200000362,
-            "p95": 91.31699999998091,
-            "max": 91.31699999998091,
-            "mean": 88.09831966665418,
-            "standardDeviation": 3.8497887583919743,
-            "relativeStandardDeviation": 0.04369877624180324,
-            "standardError": 2.2226765759808016,
+            "samples": [88.96233300000313, 91.99066599999787, 97.27433300000848],
+            "min": 88.96233300000313,
+            "median": 91.99066599999787,
+            "p95": 97.27433300000848,
+            "max": 97.27433300000848,
+            "mean": 92.74244400000316,
+            "standardDeviation": 3.434745368630327,
+            "relativeStandardDeviation": 0.037035312209695595,
+            "standardError": 1.9830511631765397,
             "confidence95": {
-              "low": 83.74187357773181,
-              "high": 92.45476575557655
+              "low": 88.85566372017715,
+              "high": 96.62922427982917
             }
           },
           "postOperationFrameMs": {
-            "samples": [8.400000000000091, 8.699999999999818, 9.099999999999454],
-            "min": 8.400000000000091,
-            "median": 8.699999999999818,
-            "p95": 9.099999999999454,
-            "max": 9.099999999999454,
-            "mean": 8.733333333333121,
-            "standardDeviation": 0.2867441755678268,
-            "relativeStandardDeviation": 0.03283330254593516,
-            "standardError": 0.16555182695264212,
+            "samples": [9.200000000000273, 9.299999999999272, 9.300000000000182],
+            "min": 9.200000000000273,
+            "median": 9.299999999999272,
+            "p95": 9.300000000000182,
+            "max": 9.300000000000182,
+            "mean": 9.266666666666575,
+            "standardDeviation": 0.04714045207884592,
+            "relativeStandardDeviation": 0.0050870991451992505,
+            "standardError": 0.02721655269744235,
             "confidence95": {
-              "low": 8.408851752505942,
-              "high": 9.0578149141603
+              "low": 9.213322223379588,
+              "high": 9.320011109953562
             }
           },
           "scrollEventResponseMs": {
-            "samples": [67.39999997615814, 67.89999997615814, 68.30000001192093],
-            "min": 67.39999997615814,
-            "median": 67.89999997615814,
-            "p95": 68.30000001192093,
-            "max": 68.30000001192093,
-            "mean": 67.86666665474574,
-            "standardDeviation": 0.36817871460342133,
-            "relativeStandardDeviation": 0.005425030176838301,
-            "standardError": 0.21256807998617572,
+            "samples": [71.20000004768372, 72.59999996423721, 75.89999997615814],
+            "min": 71.20000004768372,
+            "median": 72.59999996423721,
+            "p95": 75.89999997615814,
+            "max": 75.89999997615814,
+            "mean": 73.2333333293597,
+            "standardDeviation": 1.970335537490662,
+            "relativeStandardDeviation": 0.02690490037684441,
+            "standardError": 1.1375737529641197,
             "confidence95": {
-              "low": 67.45003321797284,
-              "high": 68.28330009151864
+              "low": 71.00368877355002,
+              "high": 75.46297788516937
             }
           },
           "scrollMovementPx": {
@@ -859,19 +859,19 @@
             "Google Sheets timing requires the supplied URL to be browser-accessible and loaded with the same benchmark corpus."
           ]
         },
-        "biligToGoogleSheetsMeanRatio": 1.0169510686734415,
-        "biligToGoogleSheetsP95Ratio": 2.3779717905763675,
-        "biligToGoogleSheetsScrollEventMeanRatio": 0.5635314343539222,
-        "biligToGoogleSheetsScrollEventP95Ratio": 1.5779648611559587,
+        "biligToGoogleSheetsMeanRatio": 0.2900179339677151,
+        "biligToGoogleSheetsP95Ratio": 0.3795194360262815,
+        "biligToGoogleSheetsScrollEventMeanRatio": 0.00434683651962912,
+        "biligToGoogleSheetsScrollEventP95Ratio": 0.004281949778407914,
         "tenXMeanAndP95Metric": "scrollEventResponseMs",
         "scrollMovementGuardrailPassed": true,
         "scenarioProof": {
-          "biligMeanMs": 38.24500000476837,
-          "biligP95Ms": 107.77500003576279,
-          "googleMeanMs": 67.86666665474574,
-          "googleP95Ms": 68.30000001192093,
-          "meanRatio": 0.5635314343539222,
-          "p95Ratio": 1.5779648611559587,
+          "biligMeanMs": 0.31833332777023315,
+          "biligP95Ms": 0.32499998807907104,
+          "googleMeanMs": 73.2333333293597,
+          "googleP95Ms": 75.89999997615814,
+          "meanRatio": 0.00434683651962912,
+          "p95Ratio": 0.004281949778407914,
           "screenshotProof": {
             "captured": true,
             "requiredProducts": ["bilig", "google-sheets"],
@@ -912,8 +912,8 @@
           }
         },
         "postOperationFrameGuardrailPassed": true,
-        "tenXMeanAndP95AgainstGoogleSheets": false,
-        "passed": false
+        "tenXMeanAndP95AgainstGoogleSheets": true,
+        "passed": true
       },
       {
         "id": "same-corpus-wide-mixed-250k-scroll-horizontal",
@@ -925,48 +925,48 @@
           "product": "bilig",
           "source": "http://127.0.0.1:5173/?benchmarkCorpus=wide-mixed-250k",
           "operationResponseMs": {
-            "samples": [19.46637500001816, 23.03074999997625, 126.31375000003027],
-            "min": 19.46637500001816,
-            "median": 23.03074999997625,
-            "p95": 126.31375000003027,
-            "max": 126.31375000003027,
-            "mean": 56.27029166667489,
-            "standardDeviation": 49.54957607459052,
-            "relativeStandardDeviation": 0.8805636972366254,
-            "standardError": 28.607461084896677,
+            "samples": [21.72433299999102, 22.691167000011774, 31.723208000010345],
+            "min": 21.72433299999102,
+            "median": 22.691167000011774,
+            "p95": 31.723208000010345,
+            "max": 31.723208000010345,
+            "mean": 25.379569333337713,
+            "standardDeviation": 4.502962406081663,
+            "relativeStandardDeviation": 0.17742469728068747,
+            "standardError": 2.599786557302013,
             "confidence95": {
-              "low": 0.19966794027740775,
-              "high": 112.34091539307238
+              "low": 20.283987681025767,
+              "high": 30.47515098564966
             }
           },
           "postOperationFrameMs": {
-            "samples": [8.93999999999869, 9.00499999999738, 187.38700003576378],
-            "min": 8.93999999999869,
-            "median": 9.00499999999738,
-            "p95": 187.38700003576378,
-            "max": 187.38700003576378,
-            "mean": 68.44400001191995,
-            "standardDeviation": 84.105406077747,
-            "relativeStandardDeviation": 1.2288207302773,
-            "standardError": 48.558278839290026,
+            "samples": [9.324999999999818, 9.325000000000728, 9.329999999999927],
+            "min": 9.324999999999818,
+            "median": 9.325000000000728,
+            "p95": 9.329999999999927,
+            "max": 9.329999999999927,
+            "mean": 9.326666666666824,
+            "standardDeviation": 0.002357022603792237,
+            "relativeStandardDeviation": 0.00025271864944162225,
+            "standardError": 0.0013608276347854807,
             "confidence95": {
-              "low": -26.730226513088496,
-              "high": 163.6182265369284
+              "low": 9.323999444502645,
+              "high": 9.329333888831004
             }
           },
           "scrollEventResponseMs": {
-            "samples": [3.225000023841858, 3.2299999594688416, 66.49000000953674],
-            "min": 3.225000023841858,
-            "median": 3.2299999594688416,
-            "p95": 66.49000000953674,
-            "max": 66.49000000953674,
-            "mean": 24.314999997615814,
-            "standardDeviation": 29.822228574828618,
-            "relativeStandardDeviation": 1.226495109099437,
-            "standardError": 17.217871695511853,
+            "samples": [0.3149999976158142, 0.3149999976158142, 0.32499998807907104],
+            "min": 0.3149999976158142,
+            "median": 0.3149999976158142,
+            "p95": 0.32499998807907104,
+            "max": 0.32499998807907104,
+            "mean": 0.31833332777023315,
+            "standardDeviation": 0.004714040712246475,
+            "relativeStandardDeviation": 0.014808505114013631,
+            "standardError": 0.002721652674186358,
             "confidence95": {
-              "low": -9.43202852558742,
-              "high": 58.06202852081905
+              "low": 0.3129988885288279,
+              "high": 0.3236677670116384
             }
           },
           "scrollMovementPx": {
@@ -997,48 +997,48 @@
           "product": "google-sheets",
           "source": "https://docs.google.com/spreadsheets/d/1o0qSHUht9gl7YVN9yBX7fEbQ1ns4sb-HG2aytBtdWxc/edit?usp=drivesdk",
           "operationResponseMs": {
-            "samples": [28.005541999998968, 31.273665999993682, 32.06308300001547],
-            "min": 28.005541999998968,
-            "median": 31.273665999993682,
-            "p95": 32.06308300001547,
-            "max": 32.06308300001547,
-            "mean": 30.44743033333604,
-            "standardDeviation": 1.7564943826357893,
-            "relativeStandardDeviation": 0.05768941297856104,
-            "standardError": 1.0141125046448385,
+            "samples": [26.8130410000158, 26.855541999975685, 29.243083000008482],
+            "min": 26.8130410000158,
+            "median": 26.855541999975685,
+            "p95": 29.243083000008482,
+            "max": 29.243083000008482,
+            "mean": 27.63722199999999,
+            "standardDeviation": 1.1356477585532718,
+            "relativeStandardDeviation": 0.04109124131771537,
+            "standardError": 0.6556665391053267,
             "confidence95": {
-              "low": 28.459769824232158,
-              "high": 32.43509084243993
+              "low": 26.35211558335355,
+              "high": 28.92232841664643
             }
           },
           "postOperationFrameMs": {
-            "samples": [9.099999999999454, 9.200000000000273, 9.300000000000182],
-            "min": 9.099999999999454,
-            "median": 9.200000000000273,
-            "p95": 9.300000000000182,
-            "max": 9.300000000000182,
-            "mean": 9.199999999999969,
-            "standardDeviation": 0.08164965809306965,
-            "relativeStandardDeviation": 0.008874962836203253,
-            "standardError": 0.04714045207927467,
+            "samples": [8.900000000000091, 9.199999999999818, 9.199999999999818],
+            "min": 8.900000000000091,
+            "median": 9.199999999999818,
+            "p95": 9.199999999999818,
+            "max": 9.199999999999818,
+            "mean": 9.099999999999909,
+            "standardDeviation": 0.14142135623718088,
+            "relativeStandardDeviation": 0.01554080837771234,
+            "standardError": 0.08164965809269835,
             "confidence95": {
-              "low": 9.10760471392459,
-              "high": 9.292395286075347
+              "low": 8.93996667013822,
+              "high": 9.260033329861598
             }
           },
           "scrollEventResponseMs": {
-            "samples": [7.300000011920929, 7.5, 8.399999976158142],
-            "min": 7.300000011920929,
-            "median": 7.5,
-            "p95": 8.399999976158142,
-            "max": 8.399999976158142,
-            "mean": 7.733333329359691,
-            "standardDeviation": 0.4784233218068324,
-            "relativeStandardDeviation": 0.06186508474818907,
-            "standardError": 0.27621783363176966,
+            "samples": [7.200000047683716, 8.199999988079071, 11.199999988079071],
+            "min": 7.200000047683716,
+            "median": 8.199999988079071,
+            "p95": 11.199999988079071,
+            "max": 11.199999988079071,
+            "mean": 8.866666674613953,
+            "standardDeviation": 1.6996731517152075,
+            "relativeStandardDeviation": 0.19169246054794428,
+            "standardError": 0.9813067516771548,
             "confidence95": {
-              "low": 7.191946375441422,
-              "high": 8.27472028327796
+              "low": 6.943305441326729,
+              "high": 10.790027907901177
             }
           },
           "scrollMovementPx": {
@@ -1093,19 +1093,19 @@
             "Google Sheets timing requires the supplied URL to be browser-accessible and loaded with the same benchmark corpus."
           ]
         },
-        "biligToGoogleSheetsMeanRatio": 1.8481129951077062,
-        "biligToGoogleSheetsP95Ratio": 3.939538502893478,
-        "biligToGoogleSheetsScrollEventMeanRatio": 3.144181035790043,
-        "biligToGoogleSheetsScrollEventP95Ratio": 7.915476214078143,
+        "biligToGoogleSheetsMeanRatio": 0.9183111578051413,
+        "biligToGoogleSheetsP95Ratio": 1.0848106541981617,
+        "biligToGoogleSheetsScrollEventMeanRatio": 0.035902254979500864,
+        "biligToGoogleSheetsScrollEventP95Ratio": 0.02901785610937418,
         "tenXMeanAndP95Metric": "scrollEventResponseMs",
         "scrollMovementGuardrailPassed": true,
         "scenarioProof": {
-          "biligMeanMs": 24.314999997615814,
-          "biligP95Ms": 66.49000000953674,
-          "googleMeanMs": 7.733333329359691,
-          "googleP95Ms": 8.399999976158142,
-          "meanRatio": 3.144181035790043,
-          "p95Ratio": 7.915476214078143,
+          "biligMeanMs": 0.31833332777023315,
+          "biligP95Ms": 0.32499998807907104,
+          "googleMeanMs": 8.866666674613953,
+          "googleP95Ms": 11.199999988079071,
+          "meanRatio": 0.035902254979500864,
+          "p95Ratio": 0.02901785610937418,
           "screenshotProof": {
             "captured": true,
             "requiredProducts": ["bilig", "google-sheets"],
@@ -1145,9 +1145,9 @@
             "missingProducts": []
           }
         },
-        "postOperationFrameGuardrailPassed": false,
-        "tenXMeanAndP95AgainstGoogleSheets": false,
-        "passed": false
+        "postOperationFrameGuardrailPassed": true,
+        "tenXMeanAndP95AgainstGoogleSheets": true,
+        "passed": true
       },
       {
         "id": "same-corpus-wide-mixed-250k-jump-deep-row",
@@ -1159,33 +1159,33 @@
           "product": "bilig",
           "source": "http://127.0.0.1:5173/?benchmarkCorpus=wide-mixed-250k",
           "operationResponseMs": {
-            "samples": [321.9887919999892, 325.11408400000073, 340.1087079999852],
-            "min": 321.9887919999892,
-            "median": 325.11408400000073,
-            "p95": 340.1087079999852,
-            "max": 340.1087079999852,
-            "mean": 329.0705279999917,
-            "standardDeviation": 7.908768374638632,
-            "relativeStandardDeviation": 0.024033657534468816,
-            "standardError": 4.566129550056013,
+            "samples": [223.73983400000725, 229.5466670000169, 232.6447909999988],
+            "min": 223.73983400000725,
+            "median": 229.5466670000169,
+            "p95": 232.6447909999988,
+            "max": 232.6447909999988,
+            "mean": 228.64376400000765,
+            "standardDeviation": 3.6910694171647975,
+            "relativeStandardDeviation": 0.016143319864016382,
+            "standardError": 2.131039921597691,
             "confidence95": {
-              "low": 320.12091408188195,
-              "high": 338.0201419181015
+              "low": 224.46692575367618,
+              "high": 232.82060224633912
             }
           },
           "postOperationFrameMs": {
-            "samples": [102.66100000476763, 114.75200000238328, 115.12199996662093],
-            "min": 102.66100000476763,
-            "median": 114.75200000238328,
-            "p95": 115.12199996662093,
-            "max": 115.12199996662093,
-            "mean": 110.84499999125728,
-            "standardDeviation": 5.7889329372248985,
-            "relativeStandardDeviation": 0.05222547645524373,
-            "standardError": 3.342241989627486,
+            "samples": [108.32999999999993, 116.17000000000007, 141.67000000000007],
+            "min": 108.32999999999993,
+            "median": 116.17000000000007,
+            "p95": 141.67000000000007,
+            "max": 141.67000000000007,
+            "mean": 122.05666666666669,
+            "standardDeviation": 14.233259952972482,
+            "relativeStandardDeviation": 0.1166119011904783,
+            "standardError": 8.217576465294583,
             "confidence95": {
-              "low": 104.29420569158741,
-              "high": 117.39579429092716
+              "low": 105.95021679468931,
+              "high": 138.16311653864406
             }
           },
           "corpusVerification": {
@@ -1201,33 +1201,33 @@
           "product": "google-sheets",
           "source": "https://docs.google.com/spreadsheets/d/1o0qSHUht9gl7YVN9yBX7fEbQ1ns4sb-HG2aytBtdWxc/edit?usp=drivesdk",
           "operationResponseMs": {
-            "samples": [8.745457999990322, 18.83120900002541, 118.65804200002458],
-            "min": 8.745457999990322,
-            "median": 18.83120900002541,
-            "p95": 118.65804200002458,
-            "max": 118.65804200002458,
-            "mean": 48.74490300001344,
-            "standardDeviation": 49.60722962724174,
-            "relativeStandardDeviation": 1.0176906009481252,
-            "standardError": 28.6407473790396,
+            "samples": [8.505082999996375, 10.752416999981506, 10.906374999991385],
+            "min": 8.505082999996375,
+            "median": 10.752416999981506,
+            "p95": 10.906374999991385,
+            "max": 10.906374999991385,
+            "mean": 10.054624999989755,
+            "standardDeviation": 1.0974929229078954,
+            "relativeStandardDeviation": 0.10915304378920283,
+            "standardError": 0.6336378344745827,
             "confidence95": {
-              "low": -7.390961862904177,
-              "high": 104.88076786293105
+              "low": 8.812694844419573,
+              "high": 11.296555155559938
             }
           },
           "postOperationFrameMs": {
-            "samples": [9, 41.69999999999982, 83.30000000000018],
-            "min": 9,
-            "median": 41.69999999999982,
-            "p95": 83.30000000000018,
-            "max": 83.30000000000018,
-            "mean": 44.666666666666664,
-            "standardDeviation": 30.405299245727335,
-            "relativeStandardDeviation": 0.6807156547550897,
-            "standardError": 17.554507704311803,
+            "samples": [50, 50.09999999999991, 50.80000000000018],
+            "min": 50,
+            "median": 50.09999999999991,
+            "p95": 50.80000000000018,
+            "max": 50.80000000000018,
+            "mean": 50.30000000000003,
+            "standardDeviation": 0.3559026084011459,
+            "relativeStandardDeviation": 0.007075598576563532,
+            "standardError": 0.20548046676569157,
             "confidence95": {
-              "low": 10.259831566215531,
-              "high": 79.07350176711779
+              "low": 49.89725828513928,
+              "high": 50.702741714860785
             }
           },
           "corpusVerification": {
@@ -1267,16 +1267,16 @@
             "Google Sheets timing requires the supplied URL to be browser-accessible and loaded with the same benchmark corpus."
           ]
         },
-        "biligToGoogleSheetsMeanRatio": 6.750870506397376,
-        "biligToGoogleSheetsP95Ratio": 2.866292939503542,
+        "biligToGoogleSheetsMeanRatio": 22.740158285390116,
+        "biligToGoogleSheetsP95Ratio": 21.33108305923669,
         "tenXMeanAndP95Metric": "operationResponseMs",
         "scenarioProof": {
-          "biligMeanMs": 329.0705279999917,
-          "biligP95Ms": 340.1087079999852,
-          "googleMeanMs": 48.74490300001344,
-          "googleP95Ms": 118.65804200002458,
-          "meanRatio": 6.750870506397376,
-          "p95Ratio": 2.866292939503542,
+          "biligMeanMs": 228.64376400000765,
+          "biligP95Ms": 232.6447909999988,
+          "googleMeanMs": 10.054624999989755,
+          "googleP95Ms": 10.906374999991385,
+          "meanRatio": 22.740158285390116,
+          "p95Ratio": 21.33108305923669,
           "screenshotProof": {
             "captured": true,
             "requiredProducts": ["bilig", "google-sheets"],
@@ -1330,33 +1330,33 @@
           "product": "bilig",
           "source": "http://127.0.0.1:5173/?benchmarkCorpus=wide-mixed-250k",
           "operationResponseMs": {
-            "samples": [725.6056669999962, 861.3700410000165, 967.9644590000389],
-            "min": 725.6056669999962,
-            "median": 861.3700410000165,
-            "p95": 967.9644590000389,
-            "max": 967.9644590000389,
-            "mean": 851.6467223333506,
-            "standardDeviation": 99.18115818827064,
-            "relativeStandardDeviation": 0.11645809886584554,
-            "standardError": 57.262268378536916,
+            "samples": [463.34720799999195, 487.54999999998836, 491.7043340000091],
+            "min": 463.34720799999195,
+            "median": 487.54999999998836,
+            "p95": 491.7043340000091,
+            "max": 491.7043340000091,
+            "mean": 480.86718066666316,
+            "standardDeviation": 12.504044796961004,
+            "relativeStandardDeviation": 0.02600311541250473,
+            "standardError": 7.2192136294845755,
             "confidence95": {
-              "low": 739.4126763114182,
-              "high": 963.880768355283
+              "low": 466.71752195287337,
+              "high": 495.01683938045295
             }
           },
           "postOperationFrameMs": {
-            "samples": [192.14599996900506, 199.97999999999956, 316.7000000000007],
-            "min": 192.14599996900506,
-            "median": 199.97999999999956,
-            "p95": 316.7000000000007,
-            "max": 316.7000000000007,
-            "mean": 236.27533332300177,
-            "standardDeviation": 56.9586876411386,
-            "relativeStandardDeviation": 0.24106912405990705,
-            "standardError": 32.88511364229918,
+            "samples": [116.75500000000011, 125.0649999999996, 131.63800000238462],
+            "min": 116.75500000000011,
+            "median": 125.0649999999996,
+            "p95": 131.63800000238462,
+            "max": 131.63800000238462,
+            "mean": 124.48600000079477,
+            "standardDeviation": 6.089737433696886,
+            "relativeStandardDeviation": 0.04891905462186918,
+            "standardError": 3.515911546639038,
             "confidence95": {
-              "low": 171.82051058409536,
-              "high": 300.7301560619082
+              "low": 117.59481336938227,
+              "high": 131.3771866322073
             }
           },
           "corpusVerification": {
@@ -1372,33 +1372,33 @@
           "product": "google-sheets",
           "source": "https://docs.google.com/spreadsheets/d/1o0qSHUht9gl7YVN9yBX7fEbQ1ns4sb-HG2aytBtdWxc/edit?usp=drivesdk",
           "operationResponseMs": {
-            "samples": [66.06412500003353, 68.22179199999664, 70.05558300000848],
-            "min": 66.06412500003353,
-            "median": 68.22179199999664,
-            "p95": 70.05558300000848,
-            "max": 70.05558300000848,
-            "mean": 68.11383333334622,
-            "standardDeviation": 1.6312930549454157,
-            "relativeStandardDeviation": 0.023949511796846557,
-            "standardError": 0.9418274843999027,
+            "samples": [80.703125, 81.08170899999095, 81.256040999986],
+            "min": 80.703125,
+            "median": 81.08170899999095,
+            "p95": 81.256040999986,
+            "max": 81.256040999986,
+            "mean": 81.01362499999232,
+            "standardDeviation": 0.2308038114243202,
+            "relativeStandardDeviation": 0.0028489505490507565,
+            "standardError": 0.1332546426558229,
             "confidence95": {
-              "low": 66.26785146392241,
-              "high": 69.95981520277003
+              "low": 80.7524459003869,
+              "high": 81.27480409959773
             }
           },
           "postOperationFrameMs": {
-            "samples": [8.699999999999818, 9, 9.099999999999909],
-            "min": 8.699999999999818,
-            "median": 9,
-            "p95": 9.099999999999909,
-            "max": 9.099999999999909,
-            "mean": 8.933333333333243,
-            "standardDeviation": 0.169967317119813,
-            "relativeStandardDeviation": 0.019026192214904633,
-            "standardError": 0.09813067629256253,
+            "samples": [8.900000000000091, 9.199999999999818, 9.300000000000182],
+            "min": 8.900000000000091,
+            "median": 9.199999999999818,
+            "p95": 9.300000000000182,
+            "max": 9.300000000000182,
+            "mean": 9.133333333333363,
+            "standardDeviation": 0.16996731711975355,
+            "relativeStandardDeviation": 0.018609560268586095,
+            "standardError": 0.09813067629252821,
             "confidence95": {
-              "low": 8.74099720779982,
-              "high": 9.125669458866666
+              "low": 8.940997207800008,
+              "high": 9.325669458866718
             }
           },
           "corpusVerification": {
@@ -1438,16 +1438,16 @@
             "Google Sheets timing requires the supplied URL to be browser-accessible and loaded with the same benchmark corpus."
           ]
         },
-        "biligToGoogleSheetsMeanRatio": 12.503285759376183,
-        "biligToGoogleSheetsP95Ratio": 13.817092336522583,
+        "biligToGoogleSheetsMeanRatio": 5.9356334279167084,
+        "biligToGoogleSheetsP95Ratio": 6.0512957307395006,
         "tenXMeanAndP95Metric": "operationResponseMs",
         "scenarioProof": {
-          "biligMeanMs": 851.6467223333506,
-          "biligP95Ms": 967.9644590000389,
-          "googleMeanMs": 68.11383333334622,
-          "googleP95Ms": 70.05558300000848,
-          "meanRatio": 12.503285759376183,
-          "p95Ratio": 13.817092336522583,
+          "biligMeanMs": 480.86718066666316,
+          "biligP95Ms": 491.7043340000091,
+          "googleMeanMs": 81.01362499999232,
+          "googleP95Ms": 81.256040999986,
+          "meanRatio": 5.9356334279167084,
+          "p95Ratio": 6.0512957307395006,
           "screenshotProof": {
             "captured": true,
             "requiredProducts": ["bilig", "google-sheets"],
@@ -1501,33 +1501,33 @@
           "product": "bilig",
           "source": "http://127.0.0.1:5173/?benchmarkCorpus=wide-mixed-250k",
           "operationResponseMs": {
-            "samples": [155.27245799999218, 170.70100000000093, 247.74545799999032],
-            "min": 155.27245799999218,
-            "median": 170.70100000000093,
-            "p95": 247.74545799999032,
-            "max": 247.74545799999032,
-            "mean": 191.23963866666114,
-            "standardDeviation": 40.44906831197011,
-            "relativeStandardDeviation": 0.21150985535208297,
-            "standardError": 23.353280478385503,
+            "samples": [149.38487499998882, 155.87608399998862, 157.769249999983],
+            "min": 149.38487499998882,
+            "median": 155.87608399998862,
+            "p95": 157.769249999983,
+            "max": 157.769249999983,
+            "mean": 154.3434029999868,
+            "standardDeviation": 3.590382460681754,
+            "relativeStandardDeviation": 0.023262299462725084,
+            "standardError": 2.072908280168322,
             "confidence95": {
-              "low": 145.46720892902556,
-              "high": 237.0120684042967
+              "low": 150.28050277085688,
+              "high": 158.40630322911673
             }
           },
           "postOperationFrameMs": {
-            "samples": [10.315000000002328, 109.20499999999993, 111.37699996423544],
-            "min": 10.315000000002328,
-            "median": 109.20499999999993,
-            "p95": 111.37699996423544,
-            "max": 111.37699996423544,
-            "mean": 76.9656666547459,
-            "standardDeviation": 47.137479214898406,
-            "relativeStandardDeviation": 0.6124481377696452,
-            "standardError": 27.214836313641985,
+            "samples": [132.61499999999978, 374.83500000000004, 466.6800000000003],
+            "min": 132.61499999999978,
+            "median": 374.83500000000004,
+            "p95": 466.6800000000003,
+            "max": 466.6800000000003,
+            "mean": 324.71000000000004,
+            "standardDeviation": 140.91189392666632,
+            "relativeStandardDeviation": 0.4339622861219744,
+            "standardError": 81.3555198905808,
             "confidence95": {
-              "low": 23.624587480007612,
-              "high": 130.30674582948419
+              "low": 165.2531810144617,
+              "high": 484.1668189855384
             }
           },
           "corpusVerification": {
@@ -1543,33 +1543,33 @@
           "product": "google-sheets",
           "source": "https://docs.google.com/spreadsheets/d/1o0qSHUht9gl7YVN9yBX7fEbQ1ns4sb-HG2aytBtdWxc/edit?usp=drivesdk",
           "operationResponseMs": {
-            "samples": [27.465458999969997, 27.738708000048064, 29.712625000043772],
-            "min": 27.465458999969997,
-            "median": 27.738708000048064,
-            "p95": 29.712625000043772,
-            "max": 29.712625000043772,
-            "mean": 28.305597333353944,
-            "standardDeviation": 1.0011531335195039,
-            "relativeStandardDeviation": 0.035369440246356985,
-            "standardError": 0.578016031137523,
+            "samples": [30.24145899998257, 31.29920900001889, 31.4730419999687],
+            "min": 30.24145899998257,
+            "median": 31.29920900001889,
+            "p95": 31.4730419999687,
+            "max": 31.4730419999687,
+            "mean": 31.004569999990053,
+            "standardDeviation": 0.5442476622011982,
+            "relativeStandardDeviation": 0.017553788431878683,
+            "standardError": 0.31422153427768634,
             "confidence95": {
-              "low": 27.1726859123244,
-              "high": 29.438508754383488
+              "low": 30.388695792805787,
+              "high": 31.62044420717432
             }
           },
           "postOperationFrameMs": {
-            "samples": [8.400000000000091, 9.5, 10.300000000000182],
-            "min": 8.400000000000091,
-            "median": 9.5,
-            "p95": 10.300000000000182,
-            "max": 10.300000000000182,
-            "mean": 9.400000000000091,
-            "standardDeviation": 0.7788880963698926,
-            "relativeStandardDeviation": 0.08286043578403034,
-            "standardError": 0.44969125210775274,
+            "samples": [8.899999999999636, 9.399999999999636, 9.400000000000091],
+            "min": 8.899999999999636,
+            "median": 9.399999999999636,
+            "p95": 9.400000000000091,
+            "max": 9.400000000000091,
+            "mean": 9.233333333333121,
+            "standardDeviation": 0.235702260395623,
+            "relativeStandardDeviation": 0.02552732062046517,
+            "standardError": 0.1360827634880162,
             "confidence95": {
-              "low": 8.518605145868896,
-              "high": 10.281394854131285
+              "low": 8.96661111689661,
+              "high": 9.500055549769632
             }
           },
           "corpusVerification": {
@@ -1609,16 +1609,16 @@
             "Google Sheets timing requires the supplied URL to be browser-accessible and loaded with the same benchmark corpus."
           ]
         },
-        "biligToGoogleSheetsMeanRatio": 6.756248116386281,
-        "biligToGoogleSheetsP95Ratio": 8.338053537835359,
+        "biligToGoogleSheetsMeanRatio": 4.978085585448736,
+        "biligToGoogleSheetsP95Ratio": 5.012837653257029,
         "tenXMeanAndP95Metric": "operationResponseMs",
         "scenarioProof": {
-          "biligMeanMs": 191.23963866666114,
-          "biligP95Ms": 247.74545799999032,
-          "googleMeanMs": 28.305597333353944,
-          "googleP95Ms": 29.712625000043772,
-          "meanRatio": 6.756248116386281,
-          "p95Ratio": 8.338053537835359,
+          "biligMeanMs": 154.3434029999868,
+          "biligP95Ms": 157.769249999983,
+          "googleMeanMs": 31.004569999990053,
+          "googleP95Ms": 31.4730419999687,
+          "meanRatio": 4.978085585448736,
+          "p95Ratio": 5.012837653257029,
           "screenshotProof": {
             "captured": true,
             "requiredProducts": ["bilig", "google-sheets"],
@@ -1672,48 +1672,48 @@
           "product": "bilig",
           "source": "http://127.0.0.1:5173/?benchmarkCorpus=wide-mixed-250k",
           "operationResponseMs": {
-            "samples": [148.5061669999268, 399.4054999999935, 576.6935839999933],
-            "min": 148.5061669999268,
-            "median": 399.4054999999935,
-            "p95": 576.6935839999933,
-            "max": 576.6935839999933,
-            "mean": 374.8684169999712,
-            "standardDeviation": 175.66571919588202,
-            "relativeStandardDeviation": 0.46860634619932656,
-            "standardError": 101.4206502651317,
+            "samples": [19.200124999973923, 22.85924999997951, 24.490832999988925],
+            "min": 19.200124999973923,
+            "median": 22.85924999997951,
+            "p95": 24.490832999988925,
+            "max": 24.490832999988925,
+            "mean": 22.183402666647453,
+            "standardDeviation": 2.2121595781550547,
+            "relativeStandardDeviation": 0.09972138230538531,
+            "standardError": 1.2771909279382299,
             "confidence95": {
-              "low": 176.08394248031308,
-              "high": 573.6528915196293
+              "low": 19.68010844788852,
+              "high": 24.686696885406384
             }
           },
           "postOperationFrameMs": {
-            "samples": [9.654999999998836, 9.715000000000146, 98.89999999999964],
-            "min": 9.654999999998836,
-            "median": 9.715000000000146,
-            "p95": 98.89999999999964,
-            "max": 98.89999999999964,
-            "mean": 39.42333333333287,
-            "standardDeviation": 42.056361455657274,
-            "relativeStandardDeviation": 1.0667885716324792,
-            "standardError": 24.28125160755993,
+            "samples": [8.600000000000364, 9.180000000000291, 9.205000000000837],
+            "min": 8.600000000000364,
+            "median": 9.180000000000291,
+            "p95": 9.205000000000837,
+            "max": 9.205000000000837,
+            "mean": 8.995000000000497,
+            "standardDeviation": 0.2794935896701817,
+            "relativeStandardDeviation": 0.03107210557756156,
+            "standardError": 0.1613656992328542,
             "confidence95": {
-              "low": -8.167919817484595,
-              "high": 87.01458648415033
+              "low": 8.678723229504103,
+              "high": 9.31127677049689
             }
           },
           "scrollEventResponseMs": {
-            "samples": [66.33999997377396, 71.67499995231628, 105.62000000476837],
-            "min": 66.33999997377396,
-            "median": 71.67499995231628,
-            "p95": 105.62000000476837,
-            "max": 105.62000000476837,
-            "mean": 81.21166664361954,
-            "standardDeviation": 17.396179835325725,
-            "relativeStandardDeviation": 0.21420789098769802,
-            "standardError": 10.043689110796448,
+            "samples": [0.2900000214576721, 0.3050000071525574, 0.3149999976158142],
+            "min": 0.2900000214576721,
+            "median": 0.3050000071525574,
+            "p95": 0.3149999976158142,
+            "max": 0.3149999976158142,
+            "mean": 0.3033333420753479,
+            "standardDeviation": 0.010274013540209443,
+            "relativeStandardDeviation": 0.033870373332244436,
+            "standardError": 0.005931704483097783,
             "confidence95": {
-              "low": 61.526035986458496,
-              "high": 100.89729730078058
+              "low": 0.29170720128847627,
+              "high": 0.31495948286221953
             }
           },
           "scrollMovementPx": {
@@ -1744,48 +1744,48 @@
           "product": "google-sheets",
           "source": "https://docs.google.com/spreadsheets/d/1o0qSHUht9gl7YVN9yBX7fEbQ1ns4sb-HG2aytBtdWxc/edit?usp=drivesdk",
           "operationResponseMs": {
-            "samples": [24.537917000008747, 33.226332999998704, 33.40241700003389],
-            "min": 24.537917000008747,
-            "median": 33.226332999998704,
-            "p95": 33.40241700003389,
-            "max": 33.40241700003389,
-            "mean": 30.38888900001378,
-            "standardDeviation": 4.137886449416681,
-            "relativeStandardDeviation": 0.1361644530477835,
-            "standardError": 2.3890098554468255,
+            "samples": [24.261249999981374, 24.80016699997941, 26.90737499995157],
+            "min": 24.261249999981374,
+            "median": 24.80016699997941,
+            "p95": 26.90737499995157,
+            "max": 26.90737499995157,
+            "mean": 25.32293066663745,
+            "standardDeviation": 1.141769319156352,
+            "relativeStandardDeviation": 0.045088356248615985,
+            "standardError": 0.6592008237673757,
             "confidence95": {
-              "low": 25.706429683338,
-              "high": 35.07134831668956
+              "low": 24.030897052053394,
+              "high": 26.614964281221507
             }
           },
           "postOperationFrameMs": {
-            "samples": [9.199999999999818, 10.199999999999818, 10.300000000000182],
-            "min": 9.199999999999818,
-            "median": 10.199999999999818,
-            "p95": 10.300000000000182,
-            "max": 10.300000000000182,
-            "mean": 9.89999999999994,
-            "standardDeviation": 0.4966554808584756,
-            "relativeStandardDeviation": 0.050167220288735215,
-            "standardError": 0.2867441755681439,
+            "samples": [9, 9.299999999999272, 9.300000000000182],
+            "min": 9,
+            "median": 9.299999999999272,
+            "p95": 9.300000000000182,
+            "max": 9.300000000000182,
+            "mean": 9.199999999999818,
+            "standardDeviation": 0.14142135623718088,
+            "relativeStandardDeviation": 0.015371886547519965,
+            "standardError": 0.08164965809269835,
             "confidence95": {
-              "low": 9.337981415886379,
-              "high": 10.462018584113501
+              "low": 9.03996667013813,
+              "high": 9.360033329861507
             }
           },
           "scrollEventResponseMs": {
-            "samples": [7.399999976158142, 8.200000047683716, 8.5],
-            "min": 7.399999976158142,
-            "median": 8.200000047683716,
+            "samples": [8, 8, 8.5],
+            "min": 8,
+            "median": 8,
             "p95": 8.5,
             "max": 8.5,
-            "mean": 8.033333341280619,
-            "standardDeviation": 0.46427962578634585,
-            "relativeStandardDeviation": 0.057794144231581655,
-            "standardError": 0.2680519669270055,
+            "mean": 8.166666666666666,
+            "standardDeviation": 0.23570226039551584,
+            "relativeStandardDeviation": 0.02886150127292031,
+            "standardError": 0.13608276348795434,
             "confidence95": {
-              "low": 7.507951486103688,
-              "high": 8.55871519645755
+              "low": 7.899944450230276,
+              "high": 8.433388883103056
             }
           },
           "scrollMovementPx": {
@@ -1840,19 +1840,19 @@
             "Google Sheets timing requires the supplied URL to be browser-accessible and loaded with the same benchmark corpus."
           ]
         },
-        "biligToGoogleSheetsMeanRatio": 12.335706547212082,
-        "biligToGoogleSheetsP95Ratio": 17.265025581813678,
-        "biligToGoogleSheetsScrollEventMeanRatio": 10.109336086715073,
-        "biligToGoogleSheetsScrollEventP95Ratio": 12.42588235350216,
+        "biligToGoogleSheetsMeanRatio": 0.8760203532000238,
+        "biligToGoogleSheetsP95Ratio": 0.9101903474431454,
+        "biligToGoogleSheetsScrollEventMeanRatio": 0.03714285821330791,
+        "biligToGoogleSheetsScrollEventP95Ratio": 0.03705882324891932,
         "tenXMeanAndP95Metric": "scrollEventResponseMs",
         "scrollMovementGuardrailPassed": true,
         "scenarioProof": {
-          "biligMeanMs": 81.21166664361954,
-          "biligP95Ms": 105.62000000476837,
-          "googleMeanMs": 8.033333341280619,
+          "biligMeanMs": 0.3033333420753479,
+          "biligP95Ms": 0.3149999976158142,
+          "googleMeanMs": 8.166666666666666,
           "googleP95Ms": 8.5,
-          "meanRatio": 10.109336086715073,
-          "p95Ratio": 12.42588235350216,
+          "meanRatio": 0.03714285821330791,
+          "p95Ratio": 0.03705882324891932,
           "screenshotProof": {
             "captured": true,
             "requiredProducts": ["bilig", "google-sheets"],
@@ -1892,9 +1892,9 @@
             "missingProducts": []
           }
         },
-        "postOperationFrameGuardrailPassed": false,
-        "tenXMeanAndP95AgainstGoogleSheets": false,
-        "passed": false
+        "postOperationFrameGuardrailPassed": true,
+        "tenXMeanAndP95AgainstGoogleSheets": true,
+        "passed": true
       }
     ]
   }
