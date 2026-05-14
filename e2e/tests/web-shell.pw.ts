@@ -1078,6 +1078,29 @@ for (const key of ['Delete', 'Backspace'] as const) {
   })
 }
 
+for (const key of ['Delete', 'Backspace'] as const) {
+  test(`web app routes ${key.toLowerCase()} to the grid after committing the formula input with enter`, async ({ page }) => {
+    const documentId = createTestDocumentId(`playwright-${key.toLowerCase()}-after-formula-enter`)
+    await page.goto(`/?document=${encodeURIComponent(documentId)}`)
+    await waitForWorkbookReady(page)
+
+    const formulaInput = page.getByTestId('formula-input')
+
+    await clickProductCell(page, 2, 11)
+    await formulaInput.fill(`${key.toLowerCase()}-after-formula-enter`)
+    await formulaInput.press('Enter')
+    await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C12')
+    await expect(formulaInput).toHaveValue(`${key.toLowerCase()}-after-formula-enter`)
+
+    await page.keyboard.press(key)
+    await expect(formulaInput).toHaveValue('')
+
+    await formulaInput.fill('second-edit-still-works')
+    await formulaInput.press('Enter')
+    await expect(formulaInput).toHaveValue('second-edit-still-works')
+  })
+}
+
 test('web app ignores modified delete keys instead of clearing the grid selection', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-modified-delete-ignored')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)

@@ -14,6 +14,7 @@ function FormulaBarHarness(props: {
   selectionLabel?: string
   onAddressCommitResult?: (next: string) => boolean
   onAddressCommitSuccess?: () => void
+  onFormulaCommitSuccess?: () => void
 }) {
   const [value, setValue] = useState(props.initialValue)
   const [isEditing, setIsEditing] = useState(props.initialEditing ?? true)
@@ -24,6 +25,7 @@ function FormulaBarHarness(props: {
       isEditing={isEditing}
       onAddressCommit={(next) => props.onAddressCommitResult?.(next) ?? true}
       onAddressCommitSuccess={props.onAddressCommitSuccess}
+      onFormulaCommitSuccess={props.onFormulaCommitSuccess}
       onBeginEdit={(seed) => {
         if (seed !== undefined) {
           setValue(seed)
@@ -325,6 +327,43 @@ describe('FormulaBar', () => {
     expect(onAddressCommitSuccess).toHaveBeenCalledTimes(1)
     expect(nameBox.getAttribute('aria-invalid')).toBeNull()
     expect(document.activeElement).not.toBe(nameBox)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('returns keyboard ownership to the grid after committing the formula field with Enter', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const onFormulaCommitSuccess = vi.fn()
+
+    await act(async () => {
+      root.render(<FormulaBarHarness initialEditing initialValue="draft" onFormulaCommitSuccess={onFormulaCommitSuccess} />)
+    })
+
+    const formulaInput = host.querySelector<HTMLInputElement>("[data-testid='formula-input']")
+    expect(formulaInput).not.toBeNull()
+    if (!formulaInput) {
+      throw new Error('Expected formula input')
+    }
+
+    formulaInput.focus()
+    await act(async () => {
+      formulaInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+
+    expect(onFormulaCommitSuccess).toHaveBeenCalledTimes(1)
+    expect(document.activeElement).not.toBe(formulaInput)
+
+    await act(async () => {
+      formulaInput.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
+    })
+
+    expect(onFormulaCommitSuccess).toHaveBeenCalledTimes(1)
 
     await act(async () => {
       root.unmount()

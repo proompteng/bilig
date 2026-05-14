@@ -307,6 +307,17 @@ export function WorkbookView({
     [engine, selectionLabel, selectionSnapshot],
   )
 
+  const requestGridFocus = React.useCallback(() => {
+    const focusGrid = gridFocusApiRef.current
+    if (focusGrid) {
+      focusGrid()
+      return
+    }
+    flushSync(() => {
+      setGridFocusRequestToken((current) => current + 1)
+    })
+  }, [])
+
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--wb-surface)] font-sans" data-testid="workbook-shell">
       {ribbon ? (
@@ -322,19 +333,11 @@ export function WorkbookView({
             isEditing={isEditing}
             onBeginEdit={onBeginFormulaEdit}
             onAddressCommit={onAddressCommit}
-            onAddressCommitSuccess={() => {
-              const focusGrid = gridFocusApiRef.current
-              if (focusGrid) {
-                focusGrid()
-                return
-              }
-              flushSync(() => {
-                setGridFocusRequestToken((current) => current + 1)
-              })
-            }}
+            onAddressCommitSuccess={requestGridFocus}
             onCancel={onCancelEdit}
             onChange={onEditorChange}
             onCommit={(valueOverride) => onCommitEdit(undefined, valueOverride)}
+            onFormulaCommitSuccess={requestGridFocus}
             resolvedValue={resolvedValue}
             selectionLabel={selectionLabel}
             sheetName={sheetName}

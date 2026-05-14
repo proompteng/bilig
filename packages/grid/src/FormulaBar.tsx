@@ -18,6 +18,7 @@ interface FormulaBarProps {
   onBeginEdit(this: void, seed?: string): void
   onAddressCommit(this: void, next: string): boolean
   onAddressCommitSuccess?: (() => void) | undefined
+  onFormulaCommitSuccess?: (() => void) | undefined
   onChange(this: void, next: string): void
   onCommit(this: void, valueOverride?: string): void
   onCancel(this: void): void
@@ -34,6 +35,7 @@ export function FormulaBar({
   onBeginEdit,
   onAddressCommit,
   onAddressCommitSuccess,
+  onFormulaCommitSuccess,
   onChange,
   onCommit,
   onCancel,
@@ -114,12 +116,19 @@ export function FormulaBar({
     : null
   const selectionStatus = `${sheetName}!${selectionLabel ?? address}`
 
-  const requestCommit = () => {
+  const requestCommit = (options?: { returnFocusToGrid?: boolean }) => {
     if (commitRequestedRef.current) {
+      if (options?.returnFocusToGrid) {
+        onFormulaCommitSuccess?.()
+      }
       return
     }
     commitRequestedRef.current = true
     onCommit(inputRef.current?.value ?? value)
+    if (options?.returnFocusToGrid) {
+      inputRef.current?.blur()
+      onFormulaCommitSuccess?.()
+    }
   }
 
   const commitSuggestion = (suggestion: FormulaSuggestion) => {
@@ -226,7 +235,7 @@ export function FormulaBar({
                 }
                 if (event.key === 'Enter') {
                   event.preventDefault()
-                  requestCommit()
+                  requestCommit({ returnFocusToGrid: true })
                   return
                 }
                 if (event.key === 'Escape') {
