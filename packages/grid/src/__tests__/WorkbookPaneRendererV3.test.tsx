@@ -9,6 +9,8 @@ import { GridCameraStore } from '../runtime/gridCameraStore.js'
 import {
   TYPEGPU_V3_ACTIVE_RESOURCE_DEFER_MS,
   WorkbookPaneRendererV3,
+  resolveWorkbookPaneTileSceneCameraSeqV3,
+  resolveWorkbookPaneTileSceneRevisionV3,
   resolveTypeGpuV3DrawScrollSnapshot,
   shouldMountWorkbookCanvasProofLayerV3,
   shouldMountWorkbookTextOverlayV3,
@@ -223,6 +225,23 @@ describe('WorkbookPaneRendererV3', () => {
         ],
       }),
     ).toBe(false)
+  })
+
+  test('resolves visible tile-scene revision counters from rendered panes', () => {
+    const firstPane = createTilePane()
+    const secondPane = {
+      ...createTilePane(32),
+      tile: {
+        ...createTilePane(32).tile,
+        lastBatchId: 9,
+        lastCameraSeq: 13,
+      },
+    }
+
+    expect(resolveWorkbookPaneTileSceneRevisionV3([firstPane, secondPane])).toBe(9)
+    expect(resolveWorkbookPaneTileSceneCameraSeqV3([firstPane, secondPane])).toBe(13)
+    expect(resolveWorkbookPaneTileSceneRevisionV3([])).toBeNull()
+    expect(resolveWorkbookPaneTileSceneCameraSeqV3([])).toBeNull()
   })
 
   test('derives draw scroll from live scroll and the current V3 body tile viewport', () => {

@@ -152,6 +152,26 @@ describe('ProjectedViewportStore', () => {
     expect(cache.getCell('Sheet1', 'D5').styleId).toBeUndefined()
   })
 
+  it('exposes authoritative, projected, and tile-scene render revisions for visible proof checks', () => {
+    const cache = new ProjectedViewportStore()
+
+    cache.applyViewportPatch({
+      ...createPatch(),
+      authoritativeRevision: 17,
+      metrics: {
+        ...TEST_METRICS,
+        batchId: 23,
+      },
+    })
+
+    expect(cache.getRenderRevisionSnapshot()).toEqual({
+      authoritativeRevision: 17,
+      projectedRevision: 23,
+      tileSceneCameraSeq: null,
+      tileSceneRevision: null,
+    })
+  })
+
   it('accepts partial reset-empty patches that clear newer local input after structural deletes', () => {
     const cache = new ProjectedViewportStore()
 

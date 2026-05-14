@@ -125,6 +125,10 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
     showCanvasFallback,
     tilePanes,
   })
+  const tileSceneRevision = resolveWorkbookPaneTileSceneRevisionV3(tilePanes)
+  const tileSceneCameraSeq = resolveWorkbookPaneTileSceneCameraSeqV3(tilePanes)
+  const visibleRenderRevision = frameProofStatus === 'presented' ? tileSceneRevision : null
+  const visibleRenderCameraSeq = frameProofStatus === 'presented' ? tileSceneCameraSeq : null
 
   return (
     <>
@@ -155,7 +159,11 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
           data-v3-frame-proof-status={frameProofStatus}
           data-v3-header-pane-count={headerPanes.length}
           data-v3-preload-pane-count={preloadTilePanes.length}
+          data-v3-tile-scene-camera-seq={tileSceneCameraSeq ?? ''}
+          data-v3-tile-scene-revision={tileSceneRevision ?? ''}
           data-v3-tile-pane-count={tilePanes.length}
+          data-v3-visible-render-camera-seq={visibleRenderCameraSeq ?? ''}
+          data-v3-visible-render-revision={visibleRenderRevision ?? ''}
           ref={setCanvasRef}
           style={{ backgroundColor: 'transparent', contain: 'strict', height: '100%', opacity: typeGpuCanvasOpacity, width: '100%' }}
         />
@@ -211,4 +219,27 @@ export function shouldMountWorkbookTextOverlayV3(input: {
     }
     return false
   })
+}
+
+export function resolveWorkbookPaneTileSceneRevisionV3(tilePanes: readonly WorkbookRenderTilePaneState[]): number | null {
+  return maxTilePaneField(tilePanes, (pane) => pane.tile.lastBatchId)
+}
+
+export function resolveWorkbookPaneTileSceneCameraSeqV3(tilePanes: readonly WorkbookRenderTilePaneState[]): number | null {
+  return maxTilePaneField(tilePanes, (pane) => pane.tile.lastCameraSeq)
+}
+
+function maxTilePaneField(
+  tilePanes: readonly WorkbookRenderTilePaneState[],
+  readValue: (pane: WorkbookRenderTilePaneState) => number,
+): number | null {
+  let result: number | null = null
+  for (const pane of tilePanes) {
+    const value = readValue(pane)
+    if (!Number.isFinite(value)) {
+      continue
+    }
+    result = result === null ? value : Math.max(result, value)
+  }
+  return result
 }

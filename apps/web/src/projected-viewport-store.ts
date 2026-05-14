@@ -1,4 +1,4 @@
-import type { GridEngineLike } from '@bilig/grid'
+import type { GridEngineLike, GridRenderRevisionSnapshot } from '@bilig/grid'
 import { parseCellAddress } from '@bilig/formula'
 import {
   MAX_COLS,
@@ -190,6 +190,15 @@ export class ProjectedViewportStore implements GridEngineLike {
 
   getLastAuthoritativeRevision(): number | null {
     return this.lastAuthoritativeRevision
+  }
+
+  getRenderRevisionSnapshot(): GridRenderRevisionSnapshot {
+    return {
+      authoritativeRevision: this.lastAuthoritativeRevision,
+      projectedRevision: this.lastBatchId,
+      tileSceneCameraSeq: this.tileSceneStore?.getLastCameraSeq() ?? null,
+      tileSceneRevision: this.tileSceneStore?.getLastBatchId() ?? null,
+    }
   }
 
   setCellSnapshot(snapshot: CellSnapshot, options: { force?: boolean } = {}): void {

@@ -34,6 +34,16 @@ test('web app paints deep querystring-selected cell content in the visible grid'
       typeGpuMode: 'typegpu-v3',
       typeGpuOpacity: '1',
     })
+  await expect
+    .poll(readRenderRevisionState(page), {
+      message: 'visible grid proof should expose projected, tile-scene, and visible TypeGPU render revisions',
+      timeout: 5_000,
+    })
+    .toMatchObject({
+      projectedRevisionPresent: true,
+      tileSceneRevisionPresent: true,
+      visibleRenderRevisionPresent: true,
+    })
 
   await expect
     .poll(() => countDarkInteriorPixelsInCell(page, 3, 52), {
@@ -51,6 +61,26 @@ test('web app paints deep querystring-selected cell content in the visible grid'
     })
     .toBeLessThan(6)
 })
+
+function readRenderRevisionState(page: Page): () => Promise<{
+  readonly projectedRevisionPresent: boolean
+  readonly tileSceneRevisionPresent: boolean
+  readonly visibleRenderRevisionPresent: boolean
+}> {
+  return async () =>
+    await page.evaluate(() => {
+      const grid = document.querySelector('[data-testid="sheet-grid"]')
+      const typeGpu = document.querySelector('[data-testid="grid-pane-renderer"]')
+      const projectedRevision = grid?.getAttribute('data-render-projected-revision') ?? ''
+      const tileSceneRevision = typeGpu?.getAttribute('data-v3-tile-scene-revision') ?? ''
+      const visibleRenderRevision = typeGpu?.getAttribute('data-v3-visible-render-revision') ?? ''
+      return {
+        projectedRevisionPresent: projectedRevision.length > 0,
+        tileSceneRevisionPresent: tileSceneRevision.length > 0,
+        visibleRenderRevisionPresent: visibleRenderRevision.length > 0,
+      }
+    })
+}
 
 function readRendererSurfaceState(page: Page): () => Promise<{
   readonly fallbackMounted: boolean

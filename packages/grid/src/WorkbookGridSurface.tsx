@@ -43,6 +43,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
     onRowHeightChange: props.onRowHeightChange,
     restoreViewportTarget: props.restoreViewportTarget,
   })
+  const renderRevisionSnapshot = props.engine.getRenderRevisionSnapshot?.()
   const interactions = useWorkbookGridInteractions({
     engine: props.engine,
     sheetName: props.sheetName,
@@ -236,6 +237,10 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
         data-column-width-overrides={renderState.columnWidthOverridesAttr}
         data-default-column-width={renderState.gridMetrics.columnWidth}
         data-default-row-height={renderState.gridMetrics.rowHeight}
+        data-render-authoritative-revision={renderRevisionSnapshot?.authoritativeRevision ?? ''}
+        data-render-projected-revision={renderRevisionSnapshot?.projectedRevision ?? ''}
+        data-render-tile-scene-camera-seq={renderRevisionSnapshot?.tileSceneCameraSeq ?? ''}
+        data-render-tile-scene-revision={renderRevisionSnapshot?.tileSceneRevision ?? ''}
         data-row-height-overrides={renderState.rowHeightOverridesAttr}
         data-testid="sheet-grid"
         aria-label={`${props.sheetName} worksheet grid`}
