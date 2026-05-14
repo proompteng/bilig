@@ -313,6 +313,17 @@ Latest conversion-feedback action on May 14, 2026:
   gaps:
   <https://github.com/proompteng/bilig/discussions/157#discussioncomment-16920401>
 
+Latest contributor-funnel action on May 14, 2026:
+
+- GitHub traffic shows people checking the issue queue, but the repository had
+  `0` open pull requests and `106` first-time starter issues to scan.
+- A pinned issue now gives first-time visitors a short map of current code/test,
+  examples, agent, and MCP starter picks:
+  <https://github.com/proompteng/bilig/issues/372>.
+- The issue is intentionally a navigation surface, not a fake contribution
+  request: it points contributors at existing scoped tasks and asks them to
+  comment on the target issue before opening a PR.
+
 Latest HN conversion signal on May 14, 2026:
 
 - The checked-in public growth snapshot records `news.ycombinator.com` as a top

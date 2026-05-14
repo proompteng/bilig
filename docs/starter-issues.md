@@ -6,6 +6,9 @@ search indexing.
 
 Current starter queue as of May 14, 2026:
 
+- Pinned contributor map:
+  [#372](https://github.com/proompteng/bilig/issues/372) groups current code,
+  docs, agent, and MCP starter picks for people opening the issue queue cold.
 - 106 open `first-timers-only` issues.
 - 106 issues are generally available for a new contributor to claim.
 - 10 starter issues are code or test tasks rather than docs-only tasks.

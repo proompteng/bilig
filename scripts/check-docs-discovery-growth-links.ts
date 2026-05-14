@@ -6,6 +6,7 @@ export const communityLaunchPackRequiredLinks = [
   'https://github.com/proompteng/bilig/actions/runs/25868014475',
   'https://github.com/proompteng/bilig/discussions/230#discussioncomment-16920242',
   'https://github.com/proompteng/bilig/discussions/157#discussioncomment-16920401',
+  'https://github.com/proompteng/bilig/issues/372',
   'read_workpaper_summary',
   'set_workpaper_input_cell',
   'Latest PulseMCP verification snapshot on May 13, 2026 after the directory',
