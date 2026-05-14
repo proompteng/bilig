@@ -11,23 +11,27 @@
   <img src="docs/assets/bilig-hero-workbook-api.png" alt="bilig workbook grid showing an edited input cell and recalculated formula result" />
 </p>
 
-**bilig runs workbook-shaped calculations inside TypeScript services.**
+**bilig gives TypeScript code a workbook it can edit, calculate, and save.**
 
-Use it when a spreadsheet is the clearest way to describe the model, but the
-model needs to run in code: pricing rules, budget checks, payout models, import
-validation, agent tools, queue workers, and serverless routes.
+Use it when the clearest model is still a spreadsheet, but the runtime is a
+Node service, queue worker, serverless route, test, or coding-agent tool. The
+main package is [`@bilig/headless`](https://www.npmjs.com/package/@bilig/headless):
+it gives you a `WorkPaper` object, not a browser grid.
 
-The package most people want first is
-[`@bilig/headless`](https://www.npmjs.com/package/@bilig/headless). It gives
-TypeScript a `WorkPaper`: build sheets, edit cells, recalculate formulas, read
-the result, and persist the same workbook model as JSON.
+The loop is small: create sheets, write cells, recalculate formulas, read the
+value that came out, and persist the workbook as JSON. That is useful for
+pricing rules, budget checks, payout models, import validation, and agent tools
+that need real readback after an edit.
+
+It is not trying to replace Excel's UI. It is the headless runtime you put
+behind product code when formulas are the clearest way to explain the logic.
 
 Project site: <https://proompteng.github.io/bilig/>
 
 ## Try It In 90 Seconds
 
 This uses the published npm package. It builds a workbook, changes one input,
-restores the saved document, and fails if the formula result does not survive
+restores the saved document, and fails if the calculated result does not survive
 the round trip.
 
 ```sh
@@ -61,11 +65,15 @@ matching `after`/`afterRestore` values are the check.
 
 ## TypeScript API Shape
 
-The core loop is deliberately small: build a workbook, write an input, read the
-calculated value, save the workbook state.
+Most integrations are just this: build a workbook, write an input, read the
+calculated value, and save the workbook state.
 
 ```ts
-import { WorkPaper, exportWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/headless'
+import {
+  WorkPaper,
+  exportWorkPaperDocument,
+  serializeWorkPaperDocument,
+} from '@bilig/headless'
 
 const workbook = WorkPaper.buildFromSheets({
   Inputs: [
@@ -88,32 +96,39 @@ if (inputs === undefined || summary === undefined) {
 workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, 32)
 
 const revenue = workbook.getCellDisplayValue({ sheet: summary, row: 1, col: 1 })
-const saved = serializeWorkPaperDocument(exportWorkPaperDocument(workbook, { includeConfig: true }))
+const saved = serializeWorkPaperDocument(
+  exportWorkPaperDocument(workbook, { includeConfig: true }),
+)
 
 console.log({ revenue, savedBytes: saved.length })
 ```
 
 ## When To Reach For It
 
-- Use it when a Node service owns a workbook-shaped calculation.
-- Use it when an agent needs narrow tools such as `readRange` and
-  `setInputCell`, not screenshots.
-- Use it when tests need deterministic spreadsheet state and calculated
-  readback.
-- Do not use it as a visual spreadsheet grid, Office macro host, or desktop
-  Excel automation layer.
-- Do not treat embedded XLSX cached formula values as truth. Use the Excel
-  oracle workflow when accuracy matters.
+Use `@bilig/headless` when:
+
+- a Node service owns a workbook-shaped calculation;
+- an agent needs tools such as `readRange` and `setInputCell`, with computed
+  before/after values instead of screenshots;
+- tests need deterministic spreadsheet state and formula readback;
+- a workflow needs to save the edited workbook as JSON and restore it later.
+
+Use something else when you need a visual spreadsheet grid, Office macros,
+desktop Excel automation, or a one-off arithmetic helper. Do not treat embedded
+XLSX cached formula values as truth; use the Excel oracle workflow when accuracy
+matters.
 
 ## Start Here
 
-- Prove the package:
+Pick the path closest to what you are building.
+
+- If you are evaluating the npm package:
   [90-second npm eval](#try-it-in-90-seconds) and
   [npm-only smoke test](docs/try-bilig-headless-in-node.md).
-- Read the package contract:
+- If you are writing code against the API:
   [packages/headless/README.md](packages/headless/README.md) and the
   [WorkPaper read/write cheat sheet](packages/headless/README.md#workpaper-readwrite-cheat-sheet).
-- Build a service workflow:
+- If you are putting workbook logic in a service:
   [Node service recipe](docs/node-service-workpaper-recipe.md),
   [server-side spreadsheet automation](docs/server-side-spreadsheet-automation-node.md),
   [Node spreadsheet formula engine](docs/node-spreadsheet-formula-engine.md),
@@ -124,7 +139,7 @@ console.log({ revenue, savedBytes: saved.length })
   run `npm run next-route-handler`, `npm run next-server-action`,
   `npm run next-server-action-formdata`, `npm run framework-adapters`, and
   `npm run persistence-adapters` from that example.
-- Wrap an agent or MCP tool:
+- If an agent needs workbook tools:
   [agent tool-calling recipe](docs/agent-workpaper-tool-calling-recipe.md),
   [OpenAI Responses tools](docs/openai-responses-workpaper-tool-call.md),
   [AI SDK and LangChain adapters](docs/vercel-ai-sdk-langchain-spreadsheet-tool.md),
@@ -134,14 +149,14 @@ console.log({ revenue, savedBytes: saved.length })
   [MCP directory status](docs/mcp-spreadsheet-server-directory.md),
   [MCP client setup](docs/mcp-client-setup.md), and
   [Claude Desktop MCPB bundle](docs/claude-desktop-mcpb-workpaper.md).
-- Compare the spreadsheet stack:
+- If you are comparing libraries:
   [evaluate Excel formulas in Node.js](docs/evaluate-excel-formulas-in-node-typescript.md),
   [Google Sheets API boundary](docs/google-sheets-api-alternative-node-workpaper.md),
   [docs/javascript-spreadsheet-library-headless-node.md](docs/javascript-spreadsheet-library-headless-node.md),
   [docs/sheetjs-exceljs-alternative-formula-workbook-api.md](docs/sheetjs-exceljs-alternative-formula-workbook-api.md),
   [headless engine comparison](docs/headless-spreadsheet-engine-comparison.md), and
   [HyperFormula notes](docs/hyperformula-alternative-headless-workpaper.md).
-- Contribute:
+- If you want a first contribution:
   [starter issues](docs/starter-issues.md),
   [first-timers-only issues](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only),
   [GitHub Discussions](https://github.com/proompteng/bilig/discussions), and

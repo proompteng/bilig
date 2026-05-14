@@ -7,22 +7,22 @@
 [![MCP server score](https://glama.ai/mcp/servers/proompteng/bilig/badges/score.svg)](https://glama.ai/mcp/servers/proompteng/bilig)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/proompteng/bilig/blob/main/LICENSE)
 
-`@bilig/headless` is a workbook runtime for TypeScript services.
+`@bilig/headless` gives Node.js code a workbook it can edit, calculate, and
+save.
 
-Use it when the calculation is easiest to explain as sheets, cells, and
-formulas, but the place it needs to run is a Node service, queue worker,
-serverless route, test, or agent tool. Your code owns a `WorkPaper`: build
-sheets, edit cells, recalculate formulas, read the result, and persist the same
-workbook model as JSON.
+Use it when the clearest model is still sheets, cells, and formulas, but the
+runtime is a service, queue worker, serverless route, test, or agent tool.
+Your code owns a `WorkPaper`: build sheets, write inputs, recalculate formulas,
+read the value that came out, and persist the same workbook model as JSON.
 
-For humans, that keeps the business logic reviewable. For agents, it gives the
-model narrow tools such as `readRange` and `setInputCell` instead of asking it
-to infer workbook state from screenshots.
+For product teams, that keeps spreadsheet-shaped business logic reviewable
+without shipping a spreadsheet UI. For coding agents, it gives the model narrow
+tools such as `readRange` and `setInputCell` instead of asking it to infer state
+from screenshots.
 
-This package is not a browser spreadsheet grid. It is not desktop Excel
-automation. XLSX import/export lives in the companion import package; this
-package executes the validated WorkPaper model once your data is in workbook
-form.
+This package is not a browser grid, desktop Excel automation, or an XLSX parser.
+XLSX import/export lives in `@bilig/excel-import`; this package runs the
+validated WorkPaper model after your data is already in workbook form.
 
 ## Install
 
@@ -42,10 +42,14 @@ and the
 ## TypeScript API Shape
 
 Most integrations are this loop: create a workbook, write an input, read the
-calculated cell, save the workbook state.
+calculated cell, and save the workbook state.
 
 ```ts
-import { WorkPaper, exportWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/headless'
+import {
+  WorkPaper,
+  exportWorkPaperDocument,
+  serializeWorkPaperDocument,
+} from '@bilig/headless'
 
 const workbook = WorkPaper.buildFromSheets({
   Inputs: [
@@ -68,7 +72,9 @@ if (inputs === undefined || summary === undefined) {
 workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, 32)
 
 const revenue = workbook.getCellDisplayValue({ sheet: summary, row: 1, col: 1 })
-const saved = serializeWorkPaperDocument(exportWorkPaperDocument(workbook, { includeConfig: true }))
+const saved = serializeWorkPaperDocument(
+  exportWorkPaperDocument(workbook, { includeConfig: true }),
+)
 
 console.log({ revenue, savedBytes: saved.length })
 ```
