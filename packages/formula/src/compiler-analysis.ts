@@ -3,6 +3,43 @@ import { rewriteSpecialCall } from './special-call-rewrites.js'
 
 const VOLATILE_BUILTINS = new Set(['TODAY', 'NOW', 'RAND', 'RANDBETWEEN', 'RANDARRAY', 'OFFSET', 'INDIRECT', 'SUBTOTAL'])
 
+export const FORMULA_SPILL_PRODUCING_FUNCTION_NAMES = [
+  'SEQUENCE',
+  'EXPAND',
+  'LINEST',
+  'LOGEST',
+  'OFFSET',
+  'TAKE',
+  'DROP',
+  'CHOOSECOLS',
+  'CHOOSEROWS',
+  'SORT',
+  'SORTBY',
+  'TOCOL',
+  'TOROW',
+  'WRAPROWS',
+  'WRAPCOLS',
+  'FILTER',
+  'UNIQUE',
+  'FREQUENCY',
+  'MODE.MULT',
+  'TEXTSPLIT',
+  'TRIMRANGE',
+  'GROUPBY',
+  'PIVOTBY',
+  'MAKEARRAY',
+  'MAP',
+  'SCAN',
+  'BYROW',
+  'BYCOL',
+  'RANDARRAY',
+  'MUNIT',
+  'MINVERSE',
+  'MMULT',
+] as const
+
+const SPILL_PRODUCING_BUILTINS = new Set<string>(FORMULA_SPILL_PRODUCING_FUNCTION_NAMES)
+
 export interface VolatileMetadata {
   volatile: boolean
   randCallCount: number
@@ -42,40 +79,7 @@ export function producesSpillResult(node: FormulaNode): boolean {
         }
         return producesSpillResult(shapeArg)
       }
-      return [
-        'SEQUENCE',
-        'EXPAND',
-        'LINEST',
-        'LOGEST',
-        'OFFSET',
-        'TAKE',
-        'DROP',
-        'CHOOSECOLS',
-        'CHOOSEROWS',
-        'SORT',
-        'SORTBY',
-        'TOCOL',
-        'TOROW',
-        'WRAPROWS',
-        'WRAPCOLS',
-        'FILTER',
-        'UNIQUE',
-        'FREQUENCY',
-        'MODE.MULT',
-        'TEXTSPLIT',
-        'TRIMRANGE',
-        'GROUPBY',
-        'PIVOTBY',
-        'MAKEARRAY',
-        'MAP',
-        'SCAN',
-        'BYROW',
-        'BYCOL',
-        'RANDARRAY',
-        'MUNIT',
-        'MINVERSE',
-        'MMULT',
-      ].includes(node.callee.toUpperCase())
+      return SPILL_PRODUCING_BUILTINS.has(node.callee.toUpperCase())
   }
 }
 

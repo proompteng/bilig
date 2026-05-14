@@ -1,5 +1,5 @@
 import { MAX_COLS, MAX_ROWS, ValueTag, type CellValue, type WorkbookSnapshot } from '@bilig/protocol'
-import { compileFormula, parseCellAddress } from '@bilig/formula'
+import { FORMULA_SPILL_PRODUCING_FUNCTION_NAMES, compileFormula, parseCellAddress } from '@bilig/formula'
 import { WorkPaperSheetSizeLimitExceededError, WorkPaperUnableToParseError } from './work-paper-errors.js'
 import { isBlankRawCellContent } from './work-paper-runtime-helpers.js'
 import type {
@@ -11,41 +11,6 @@ import type {
   WorkPaperSheet,
   WorkPaperSheetDimensions,
 } from './work-paper-types.js'
-
-const SPILL_PRODUCING_FUNCTION_NAMES = [
-  'SEQUENCE',
-  'EXPAND',
-  'LINEST',
-  'LOGEST',
-  'OFFSET',
-  'TAKE',
-  'DROP',
-  'CHOOSECOLS',
-  'CHOOSEROWS',
-  'SORT',
-  'SORTBY',
-  'TOCOL',
-  'TOROW',
-  'WRAPROWS',
-  'WRAPCOLS',
-  'FILTER',
-  'UNIQUE',
-  'FREQUENCY',
-  'MODE.MULT',
-  'TEXTSPLIT',
-  'TRIMRANGE',
-  'GROUPBY',
-  'PIVOTBY',
-  'MAKEARRAY',
-  'MAP',
-  'SCAN',
-  'BYROW',
-  'BYCOL',
-  'RANDARRAY',
-  'MUNIT',
-  'MINVERSE',
-  'MMULT',
-] as const
 
 const SCALAR_RANGE_FUNCTION_RE =
   /^(?:_XLFN\.)?(?:_XLWS\.)?(?:SUM|COUNT|COUNTA|COUNTBLANK|MIN|MAX|AVERAGE|AVG|SUMIF|COUNTIF|SUMIFS|COUNTIFS|ABS)\(.*\)(?:[+\-*/]\d+(?:\.\d+)?)?$/
@@ -244,7 +209,7 @@ function isDefinitelyScalarFormulaShape(formula: string): boolean {
   if (normalized.length === 0 || normalized.includes('{') || normalized.includes('#')) {
     return false
   }
-  if (SPILL_PRODUCING_FUNCTION_NAMES.some((name) => normalized.includes(`${name}(`))) {
+  if (FORMULA_SPILL_PRODUCING_FUNCTION_NAMES.some((name) => normalized.includes(`${name}(`))) {
     return false
   }
   return SIMPLE_SCALAR_EXPRESSION_RE.test(normalized) || SCALAR_RANGE_FUNCTION_RE.test(normalized)

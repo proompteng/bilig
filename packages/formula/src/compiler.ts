@@ -25,6 +25,7 @@ export type {
   ParsedDependencyReference,
   ParsedRangeReferenceInfo,
 } from './compiler-types.js'
+export { FORMULA_SPILL_PRODUCING_FUNCTION_NAMES } from './compiler-analysis.js'
 
 function encodeInstruction(opcode: Opcode, operand = 0): number {
   return (opcode << 24) | (operand & 0x00ff_ffff)
