@@ -88,6 +88,40 @@ export const POST = handleWorkPaperRequest
 That shape works directly in Fetch-style runtimes and is easy to wrap in
 frameworks that use their own request and response objects.
 
+## Next.js Route Handler JSON
+
+For App Router endpoints that accept JSON, keep the Next-specific file thin and
+return web-standard `Response` objects. The runnable example proves the route
+can parse JSON, update an input cell, read back a dependent formula, and reload
+the persisted WorkPaper document:
+
+```sh
+cd examples/serverless-workpaper-api
+npm install
+npm run test
+```
+
+The copyable route shape is:
+
+```ts
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
+export async function POST(request: Request) {
+  const { customers } = await request.json()
+  const result = updateRevenueInputCell(Number(customers))
+
+  return Response.json({
+    input: { cell: 'Inputs!B2', customers: result.customers },
+    formulaReadback: { cell: 'Summary!B2', revenue: result.revenue },
+    persistence: result.persistence,
+  })
+}
+```
+
+Use this for Next.js route handlers; use the generic adapters below when the
+framework gives you Express, Fastify, Hono, or another request wrapper.
+
 ## Express
 
 ```ts

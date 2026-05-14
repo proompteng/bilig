@@ -295,57 +295,88 @@ The important part is not the framework. The route accepts JSON records, writes
 them into a workbook, recalculates formulas, persists the document, and returns
 computed values that prove the write took effect.
 
-## Next.js App Router Adapter
+## Next.js App Router JSON Route Handler
 
-For a Next.js App Router project, keep the WorkPaper code in a shared module and
-make the route files thin.
-
-Create `app/api/workpaper/workpaper-route.ts` from the shared route code above:
-
-- keep the `@bilig/headless` imports
-- keep `state`, `handleWorkPaperRequest()`, and every workbook helper
-- omit `createServer()`, `toWebRequest()`, and the `if (import.meta.url === ...)`
-  local Node adapter block
-
-Then create `app/api/workpaper/summary/route.ts`:
-
-```ts
-import { handleWorkPaperRequest } from '../workpaper-route.ts'
-
-export const dynamic = 'force-dynamic'
-export const runtime = 'nodejs'
-
-export async function GET(request) {
-  return handleWorkPaperRequest(request)
-}
-```
-
-Create `app/api/workpaper/revenue/route.ts`:
-
-```ts
-import { handleWorkPaperRequest } from '../workpaper-route.ts'
-
-export const dynamic = 'force-dynamic'
-export const runtime = 'nodejs'
-
-export async function POST(request) {
-  return handleWorkPaperRequest(request)
-}
-```
-
-The route path stays the same as the standalone recipe:
+Use this shape when a client, agent, or server component posts JSON to a
+Next.js App Router endpoint and expects a deterministic formula readback. The
+runnable example keeps this dependency-free and does not require a running Next
+app for the smoke proof:
 
 ```sh
-curl -s http://localhost:3000/api/workpaper/summary
-curl -s -X POST http://localhost:3000/api/workpaper/revenue \
-  -H 'content-type: application/json' \
-  -d '{"records":[{"region":"West","customers":20,"arpa":1200},{"region":"East","customers":30,"arpa":250},{"region":"Central","customers":18,"arpa":300},{"region":"North","customers":65,"arpa":180}]}'
+cd examples/serverless-workpaper-api
+npm install
+npm run next-route-handler
+# or the focused example test
+npm run test
 ```
 
-Do not put the workbook helpers into both route files. The adapter should stay
-small; the shared handler is what keeps formula evaluation, persistence, and
-readback behavior identical between local Node, Next.js, and other web-standard
-route surfaces.
+The example exports route constants and methods matching an
+`app/api/workpaper/model/route.ts` file:
+
+```ts
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
+export async function POST(request: Request): Promise<Response> {
+  const { customers } = await request.json()
+  const workbook = loadWorkbook()
+  const inputs = requireSheet(workbook, 'Inputs')
+
+  workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, Number(customers))
+
+  const after = readRevenueModel(workbook)
+  const workbookJson = serializeWorkbook(workbook)
+  state.workbookJson = workbookJson
+  const persisted = readRevenueModel(loadWorkbook())
+
+  return Response.json({
+    input: { cell: 'Inputs!B2', customers: after.customers },
+    formulaReadback: { cell: 'Summary!B2', revenue: after.revenue },
+    persistence: {
+      formulasPersisted: workbookJson.includes('=Inputs!B2*Inputs!B3'),
+      inputPersisted: persisted.customers === after.customers,
+      persistedRevenue: persisted.revenue,
+      serializedBytes: Buffer.byteLength(workbookJson, 'utf8'),
+    },
+  })
+}
+```
+
+The route accepts JSON such as:
+
+```sh
+curl -s -X POST http://localhost:3000/api/workpaper/model \
+  -H 'content-type: application/json' \
+  -d '{"customers":65}'
+```
+
+The smoke updates `Inputs!B2`, reads back the dependent `Summary!B2` revenue
+formula, serializes the WorkPaper document JSON, reloads it, and checks that the
+input value and formula result survived persistence:
+
+```json
+{
+  "input": {
+    "cell": "Inputs!B2",
+    "customers": 65
+  },
+  "formulaReadback": {
+    "cell": "Summary!B2",
+    "revenue": 78000
+  },
+  "persistence": {
+    "formulasPersisted": true,
+    "inputPersisted": true,
+    "persistedRevenue": 78000,
+    "serializedBytes": 989
+  }
+}
+```
+
+Keep workbook construction, parsing, serialization, and durable storage in a
+shared module. The Next.js `route.ts` file should stay framework-specific: parse
+the web `Request`, call the WorkPaper helper, and return a deterministic JSON
+`Response`.
 
 ## Next.js Server Action Adapter
 

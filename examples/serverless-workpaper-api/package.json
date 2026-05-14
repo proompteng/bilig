@@ -4,6 +4,7 @@
   "description": "Runnable serverless-style API route example for @bilig/headless.",
   "type": "module",
   "scripts": {
+    "test": "npm run next-route-handler",
     "framework-adapters": "tsx framework-adapters.ts",
     "next-route-handler": "tsx next-route-handler.ts",
     "next-server-action": "tsx next-server-action.ts",

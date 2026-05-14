@@ -79,52 +79,66 @@ module memory.
 
 ## Next.js App Router Smoke
 
-Run the Next.js-shaped route handler smoke when you want a copyable App Router
-boundary without adding a full Next app to this example:
+Run the Next.js-shaped Route Handler smoke when you want a copyable App Router
+boundary that accepts JSON and updates one WorkPaper input cell without adding a
+full Next app to this example:
 
 ```sh
 npm run next-route-handler
+# or run the focused example test
+npm run test
 ```
 
-The script exports the same route constants a Next.js route file expects,
-delegates `GET()` and `POST()` to the shared WorkPaper request handler, sends a
-summary read, sends a revenue write, reads the summary again, and prints
-`verified: true` only after the formulas recalculate and the saved document
-still contains formulas.
+The script exports the same route constants a Next.js `route.ts` file expects,
+including `runtime = 'nodejs'` and `dynamic = 'force-dynamic'`. Its `POST()`
+handler parses `{ "customers": 65 }`, writes that value into `Inputs!B2`, reads
+back the dependent `Summary!B2` revenue formula, persists the WorkPaper document
+JSON, and reloads it to prove both the input and formula survived.
 
 Expected output:
 
 ```json
 {
-  "route": "Next.js App Router",
+  "route": "Next.js Route Handler JSON",
   "runtime": "nodejs",
   "dynamic": "force-dynamic",
   "before": {
-    "largestDeal": 24000,
-    "totalRevenue": 36900,
-    "westCustomers": 20
+    "arpa": 1200,
+    "customers": 20,
+    "revenue": 24000
   },
   "edit": {
-    "records": 4,
-    "after": {
-      "largestDeal": 24000,
-      "totalRevenue": 48600,
-      "westCustomers": 20
+    "input": {
+      "cell": "Inputs!B2",
+      "customers": 65
     },
-    "checks": {
+    "before": {
+      "arpa": 1200,
+      "customers": 20,
+      "revenue": 24000
+    },
+    "formulaReadback": {
+      "cell": "Summary!B2",
+      "revenue": 78000
+    },
+    "persistence": {
       "formulasPersisted": true,
-      "serializedBytes": 1195,
-      "totalRevenueChanged": true
+      "inputPersisted": true,
+      "persistedRevenue": 78000,
+      "serializedBytes": 989
     }
   },
   "after": {
-    "largestDeal": 24000,
-    "totalRevenue": 48600,
-    "westCustomers": 20
+    "arpa": 1200,
+    "customers": 65,
+    "revenue": 78000
   },
   "verified": true
 }
 ```
+
+`serializedBytes` can change as the persisted document schema evolves. Treat it
+as a positive persistence signal, not a golden value.
 
 ## Next.js Server Action Smoke
 
