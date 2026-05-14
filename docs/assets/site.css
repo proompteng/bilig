@@ -547,12 +547,25 @@ h2 {
   text-transform: uppercase;
 }
 
+.proof-board-head span,
+.proof-board-head strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .proof-result {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: clamp(20px, 4vw, 42px);
+  align-items: center;
   border-bottom: 1px solid var(--line);
   padding: clamp(24px, 3.5vw, 36px) clamp(22px, 3vw, 32px);
+}
+
+.proof-metric {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
 }
 
 .proof-result strong {
@@ -564,10 +577,12 @@ h2 {
   font-weight: 700;
   letter-spacing: 0;
   line-height: 0.9;
+  white-space: nowrap;
 }
 
 .proof-result p {
-  max-width: 54ch;
+  min-width: 0;
+  max-width: 42ch;
   color: var(--muted);
   font-size: 16px;
   line-height: 1.58;
@@ -795,8 +810,6 @@ footer {
   }
 
   .proof-result p {
-    grid-column: 1;
-    grid-row: auto;
     max-width: none;
   }
 
