@@ -268,6 +268,8 @@ npm run agent:verify
   https://github.com/tolkonepiu/best-of-mcp-servers/pull/192
 - external MCP directory list submission:
   https://github.com/YuzeHao2023/Awesome-MCP-Servers/pull/244
+- external MCP registry package submission:
+  https://github.com/toolsdk-ai/toolsdk-mcp-registry/pull/309
 - external first-time-contributor directory submission:
   https://github.com/MunGell/awesome-for-beginners/pull/2012
 - external MCP directory submission:

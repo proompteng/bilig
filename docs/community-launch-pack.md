@@ -144,6 +144,10 @@ issue pass:
   pull request is open with the Bilig WorkPaper MCP entry in the Development
   Tools category:
   <https://github.com/YuzeHao2023/Awesome-MCP-Servers/pull/244>
+- External MCP registry surface: the ToolSDK MCP Registry package pull request
+  is open with a `packages/developer-tools/bilig-workpaper-mcp.json` entry for
+  `@bilig/headless` and the `bilig-workpaper-mcp` stdio binary:
+  <https://github.com/toolsdk-ai/toolsdk-mcp-registry/pull/309>
 - External MCP directory surface: Glama published the Bilig WorkPaper server at
   <https://glama.ai/mcp/servers/proompteng/bilig>. The score badge was added to
   the punkpeye PR, replacing the `missing-glama` label with `has-glama`.
