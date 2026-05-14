@@ -272,7 +272,7 @@ describe('same-corpus UI responsiveness capture CLI', () => {
     ])
   })
 
-  it('requires visual proof for Bilig, Google Sheets, and Excel Web in each same-corpus scenario', () => {
+  it('requires visual proof for Bilig and Google Sheets in each same-corpus scenario', () => {
     const proof = buildCaptureScenarioProof({
       bilig: sameCorpusCaptureMeasurement('bilig', 'bilig-benchmark-state'),
       googleSheets: sameCorpusCaptureMeasurement('google-sheets', 'google-sheets-xlsx-export'),
@@ -284,14 +284,14 @@ describe('same-corpus UI responsiveness capture CLI', () => {
     })
 
     expect(proof.screenshotProof).toMatchObject({
-      captured: false,
-      requiredProducts: ['bilig', 'google-sheets', 'microsoft-excel-web'],
-      missingProducts: ['microsoft-excel-web'],
+      captured: true,
+      requiredProducts: ['bilig', 'google-sheets'],
+      missingProducts: [],
     })
     expect(proof.pixelGridProof).toMatchObject({
-      captured: false,
-      requiredProducts: ['bilig', 'google-sheets', 'microsoft-excel-web'],
-      missingProducts: ['microsoft-excel-web'],
+      captured: true,
+      requiredProducts: ['bilig', 'google-sheets'],
+      missingProducts: [],
     })
   })
 

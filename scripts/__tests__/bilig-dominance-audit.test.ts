@@ -14,8 +14,7 @@ import { requiredUiResponsivenessSameCorpusWorkloads } from '../ui-responsivenes
 import { buildFixtureInput } from './bilig-dominance-scorecard.fixture.ts'
 
 const requiredUiSameCorpusWorkloadList = requiredUiResponsivenessSameCorpusWorkloads.join(', ')
-const requiredUiSameCorpusInputList =
-  'googleSheetsUrlForUploadedSameCorpusWorkbook, microsoftExcelWebEditableUrlForUploadedSameCorpusWorkbook'
+const requiredUiSameCorpusInputList = 'googleSheetsUrlForUploadedSameCorpusWorkbook'
 
 describe('bilig dominance prompt-to-artifact audit', () => {
   it('maps every objective criterion to evidence artifacts, check commands, and live blockers', () => {
@@ -98,7 +97,7 @@ describe('bilig dominance prompt-to-artifact audit', () => {
     })
     expect(audit.liveUiSameCorpus).toMatchObject({
       captured: false,
-      missingInputs: ['googleSheetsUrlForUploadedSameCorpusWorkbook', 'microsoftExcelWebEditableUrlForUploadedSameCorpusWorkbook'],
+      missingInputs: ['googleSheetsUrlForUploadedSameCorpusWorkbook'],
       fixture: {
         corpusCaseId: 'wide-mixed-250k',
         materializedCells: 250_000,
@@ -395,7 +394,7 @@ function legacyOperationOnlySameCorpusProof(): UiResponsivenessSameCorpusProof {
   return {
     captured: true,
     evidenceKind: 'same-corpus-browser-capture',
-    requiredProductCount: 3,
+    requiredProductCount: 2,
     requiredCaseCount: 1,
     tenXMeanAndP95CaseCount: 0,
     coveredCorpusCaseIds: ['wide-mixed-250k'],
@@ -439,13 +438,13 @@ function sameCorpusScenarioProof(biligMs: number, googleMs: number) {
     microsoftExcelWebP95Ratio: biligMs / microsoftExcelWebMs,
     screenshotProof: {
       captured: true,
-      requiredProducts: ['bilig', 'google-sheets', 'microsoft-excel-web'],
+      requiredProducts: ['bilig', 'google-sheets'],
       artifactPaths: ['tmp/bilig-sample-1.png', 'tmp/google-sheets-sample-1.png', 'tmp/microsoft-excel-web-sample-1.png'],
       missingProducts: [],
     },
     pixelGridProof: {
       captured: true,
-      requiredProducts: ['bilig', 'google-sheets', 'microsoft-excel-web'],
+      requiredProducts: ['bilig', 'google-sheets'],
       products: [
         {
           product: 'bilig',

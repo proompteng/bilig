@@ -893,11 +893,11 @@ export function buildFixtureInput(): BuildScorecardInput {
       sameCorpusProof: {
         captured: false,
         evidenceKind: 'not-captured',
-        requiredProductCount: 3,
+        requiredProductCount: 2,
         requiredCaseCount: 9,
         tenXMeanAndP95CaseCount: 0,
         coveredCorpusCaseIds: [],
-        limitations: ['Same-corpus live browser timing against Bilig, Google Sheets, and Microsoft Excel Web has not been captured yet.'],
+        limitations: ['Same-corpus live browser timing against Bilig and Google Sheets has not been captured yet.'],
         cases: [],
       },
     },

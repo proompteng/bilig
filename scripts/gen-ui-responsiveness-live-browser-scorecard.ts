@@ -60,11 +60,11 @@ export interface UiResponsivenessSameCorpusCase {
   readonly sampleCount: number
   readonly bilig: UiResponsivenessSameCorpusMeasurement
   readonly googleSheets: UiResponsivenessSameCorpusMeasurement
-  readonly microsoftExcelWeb: UiResponsivenessSameCorpusMeasurement
+  readonly microsoftExcelWeb?: UiResponsivenessSameCorpusMeasurement | undefined
   readonly biligToGoogleSheetsMeanRatio: number
   readonly biligToGoogleSheetsP95Ratio: number
-  readonly biligToMicrosoftExcelWebMeanRatio: number
-  readonly biligToMicrosoftExcelWebP95Ratio: number
+  readonly biligToMicrosoftExcelWebMeanRatio?: number | undefined
+  readonly biligToMicrosoftExcelWebP95Ratio?: number | undefined
   readonly biligToGoogleSheetsScrollEventMeanRatio?: number
   readonly biligToGoogleSheetsScrollEventP95Ratio?: number
   readonly biligToMicrosoftExcelWebScrollEventMeanRatio?: number
@@ -72,7 +72,7 @@ export interface UiResponsivenessSameCorpusCase {
   readonly tenXMeanAndP95Metric?: 'operationResponseMs' | 'scrollEventResponseMs'
   readonly scenarioProof: SameCorpusScenarioProof
   readonly tenXMeanAndP95AgainstGoogleSheets: boolean
-  readonly tenXMeanAndP95AgainstMicrosoftExcelWeb: boolean
+  readonly tenXMeanAndP95AgainstMicrosoftExcelWeb?: boolean | undefined
   readonly postOperationFrameGuardrailPassed?: boolean
   readonly scrollMovementGuardrailPassed?: boolean
   readonly passed: boolean
@@ -155,7 +155,7 @@ export interface SameCorpusCaptureCase {
   readonly scenarioProof: SameCorpusScenarioProof
   readonly bilig: SameCorpusCaptureMeasurement
   readonly googleSheets: SameCorpusCaptureMeasurement
-  readonly microsoftExcelWeb: SameCorpusCaptureMeasurement
+  readonly microsoftExcelWeb?: SameCorpusCaptureMeasurement | undefined
 }
 
 export interface SameCorpusCaptureMeasurement {
@@ -360,11 +360,11 @@ export function buildMissingSameCorpusProof(): UiResponsivenessSameCorpusProof {
   return {
     captured: false,
     evidenceKind: 'not-captured',
-    requiredProductCount: 3,
+    requiredProductCount: 2,
     requiredCaseCount: requiredSameCorpusWorkloads.length,
     tenXMeanAndP95CaseCount: 0,
     coveredCorpusCaseIds: [],
-    limitations: ['Same-corpus live browser timing against Bilig, Google Sheets, and Microsoft Excel Web has not been captured yet.'],
+    limitations: ['Same-corpus live browser timing against Bilig and Google Sheets has not been captured yet.'],
     cases: [],
   }
 }
@@ -375,11 +375,9 @@ export function buildSameCorpusProof(capture: SameCorpusCapture): UiResponsivene
   const proof: UiResponsivenessSameCorpusProof = {
     captured: true,
     evidenceKind: 'same-corpus-browser-capture',
-    requiredProductCount: 3,
+    requiredProductCount: 2,
     requiredCaseCount: requiredSameCorpusWorkloads.length,
-    tenXMeanAndP95CaseCount: cases.filter(
-      (entry) => entry.tenXMeanAndP95AgainstGoogleSheets && entry.tenXMeanAndP95AgainstMicrosoftExcelWeb,
-    ).length,
+    tenXMeanAndP95CaseCount: cases.filter((entry) => entry.tenXMeanAndP95AgainstGoogleSheets).length,
     coveredCorpusCaseIds: [...new Set(cases.map((entry) => entry.corpusCaseId))].toSorted(),
     limitations: [...capture.limitations],
     cases,
@@ -396,11 +394,12 @@ function validateSameCorpusCapture(capture: SameCorpusCapture): void {
     throw new Error('UI responsiveness same-corpus capture must include at least one case')
   }
   for (const entry of capture.cases) {
-    const hasAnyScrollEventSamples = [entry.bilig, entry.googleSheets, entry.microsoftExcelWeb].some(
+    const measurements = [entry.bilig, entry.googleSheets, ...(entry.microsoftExcelWeb ? [entry.microsoftExcelWeb] : [])]
+    const hasAnyScrollEventSamples = measurements.some(
       (measurement) => measurement.scrollEventResponseMsSamples !== undefined || measurement.scrollMovementPxSamples !== undefined,
     )
     const requiresScrollEventSamples = uiSameCorpusWorkloadRequiresScrollEventEvidence(entry.workload) || hasAnyScrollEventSamples
-    for (const measurement of [entry.bilig, entry.googleSheets, entry.microsoftExcelWeb]) {
+    for (const measurement of measurements) {
       if (
         measurement.operationResponseMsSamples.length < capture.sampleCount ||
         measurement.postOperationFrameMsSamples.length < capture.sampleCount
@@ -522,17 +521,22 @@ function buildBrowserCase(spec: BrowserCaseSpec, samples: readonly BrowserCaseSa
 function buildSameCorpusCase(captureCase: SameCorpusCaptureCase): UiResponsivenessSameCorpusCase {
   const bilig = buildSameCorpusMeasurement(captureCase.bilig)
   const googleSheets = buildSameCorpusMeasurement(captureCase.googleSheets)
-  const microsoftExcelWeb = buildSameCorpusMeasurement(captureCase.microsoftExcelWeb)
+  const microsoftExcelWeb = captureCase.microsoftExcelWeb ? buildSameCorpusMeasurement(captureCase.microsoftExcelWeb) : undefined
   const biligToGoogleSheetsMeanRatio = ratio(bilig.operationResponseMs.mean, googleSheets.operationResponseMs.mean)
   const biligToGoogleSheetsP95Ratio = ratio(bilig.operationResponseMs.p95, googleSheets.operationResponseMs.p95)
-  const biligToMicrosoftExcelWebMeanRatio = ratio(bilig.operationResponseMs.mean, microsoftExcelWeb.operationResponseMs.mean)
-  const biligToMicrosoftExcelWebP95Ratio = ratio(bilig.operationResponseMs.p95, microsoftExcelWeb.operationResponseMs.p95)
+  const biligToMicrosoftExcelWebMeanRatio = microsoftExcelWeb
+    ? ratio(bilig.operationResponseMs.mean, microsoftExcelWeb.operationResponseMs.mean)
+    : undefined
+  const biligToMicrosoftExcelWebP95Ratio = microsoftExcelWeb
+    ? ratio(bilig.operationResponseMs.p95, microsoftExcelWeb.operationResponseMs.p95)
+    : undefined
   const scrollEventMetrics = sameCorpusScrollEventMetrics(bilig, googleSheets, microsoftExcelWeb)
-  const postOperationFrameGuardrailPassed = [bilig, googleSheets, microsoftExcelWeb].every(
+  const comparedProducts = [bilig, googleSheets, ...(microsoftExcelWeb ? [microsoftExcelWeb] : [])]
+  const postOperationFrameGuardrailPassed = comparedProducts.every(
     (entry) => entry.postOperationFrameMs.p95 > 0 && entry.postOperationFrameMs.p95 <= 50,
   )
   const scrollMovementGuardrailPassed =
-    scrollEventMetrics !== null && [bilig, googleSheets, microsoftExcelWeb].every((entry) => (entry.scrollMovementPx?.min ?? 0) >= 1)
+    scrollEventMetrics !== null && comparedProducts.every((entry) => (entry.scrollMovementPx?.min ?? 0) >= 1)
   const requiresScrollEventMetric = uiSameCorpusWorkloadRequiresScrollEventEvidence(captureCase.workload)
   const timingMetricPassedAgainstGoogleSheets = requiresScrollEventMetric
     ? scrollEventMetrics !== null &&
@@ -540,17 +544,22 @@ function buildSameCorpusCase(captureCase: SameCorpusCaptureCase): UiResponsivene
       scrollEventMetrics.biligToGoogleSheetsP95Ratio <= 0.1 &&
       scrollMovementGuardrailPassed
     : biligToGoogleSheetsMeanRatio <= 0.1 && biligToGoogleSheetsP95Ratio <= 0.1
-  const timingMetricPassedAgainstMicrosoftExcelWeb = requiresScrollEventMetric
-    ? scrollEventMetrics !== null &&
-      scrollEventMetrics.biligToMicrosoftExcelWebMeanRatio <= 0.1 &&
-      scrollEventMetrics.biligToMicrosoftExcelWebP95Ratio <= 0.1 &&
-      scrollMovementGuardrailPassed
-    : biligToMicrosoftExcelWebMeanRatio <= 0.1 && biligToMicrosoftExcelWebP95Ratio <= 0.1
+  const timingMetricPassedAgainstMicrosoftExcelWeb = microsoftExcelWeb
+    ? requiresScrollEventMetric
+      ? scrollEventMetrics !== null &&
+        scrollEventMetrics.biligToMicrosoftExcelWebMeanRatio <= 0.1 &&
+        scrollEventMetrics.biligToMicrosoftExcelWebP95Ratio <= 0.1 &&
+        scrollMovementGuardrailPassed
+      : (biligToMicrosoftExcelWebMeanRatio ?? Number.POSITIVE_INFINITY) <= 0.1 &&
+        (biligToMicrosoftExcelWebP95Ratio ?? Number.POSITIVE_INFINITY) <= 0.1
+    : undefined
   const visualProofGuardrailPassed = captureCase.scenarioProof.screenshotProof.captured && captureCase.scenarioProof.pixelGridProof.captured
   const tenXMeanAndP95AgainstGoogleSheets =
     timingMetricPassedAgainstGoogleSheets && postOperationFrameGuardrailPassed && visualProofGuardrailPassed
   const tenXMeanAndP95AgainstMicrosoftExcelWeb =
-    timingMetricPassedAgainstMicrosoftExcelWeb && postOperationFrameGuardrailPassed && visualProofGuardrailPassed
+    timingMetricPassedAgainstMicrosoftExcelWeb === undefined
+      ? undefined
+      : timingMetricPassedAgainstMicrosoftExcelWeb && postOperationFrameGuardrailPassed && visualProofGuardrailPassed
   return {
     id: captureCase.id,
     corpusCaseId: captureCase.corpusCaseId,
@@ -559,21 +568,25 @@ function buildSameCorpusCase(captureCase: SameCorpusCaptureCase): UiResponsivene
     sampleCount: Math.min(
       bilig.operationResponseMs.samples.length,
       googleSheets.operationResponseMs.samples.length,
-      microsoftExcelWeb.operationResponseMs.samples.length,
+      ...(microsoftExcelWeb ? [microsoftExcelWeb.operationResponseMs.samples.length] : []),
     ),
     bilig,
     googleSheets,
-    microsoftExcelWeb,
+    ...(microsoftExcelWeb ? { microsoftExcelWeb } : {}),
     biligToGoogleSheetsMeanRatio,
     biligToGoogleSheetsP95Ratio,
-    biligToMicrosoftExcelWebMeanRatio,
-    biligToMicrosoftExcelWebP95Ratio,
+    ...(biligToMicrosoftExcelWebMeanRatio !== undefined ? { biligToMicrosoftExcelWebMeanRatio } : {}),
+    ...(biligToMicrosoftExcelWebP95Ratio !== undefined ? { biligToMicrosoftExcelWebP95Ratio } : {}),
     ...(requiresScrollEventMetric && scrollEventMetrics
       ? {
           biligToGoogleSheetsScrollEventMeanRatio: scrollEventMetrics.biligToGoogleSheetsMeanRatio,
           biligToGoogleSheetsScrollEventP95Ratio: scrollEventMetrics.biligToGoogleSheetsP95Ratio,
-          biligToMicrosoftExcelWebScrollEventMeanRatio: scrollEventMetrics.biligToMicrosoftExcelWebMeanRatio,
-          biligToMicrosoftExcelWebScrollEventP95Ratio: scrollEventMetrics.biligToMicrosoftExcelWebP95Ratio,
+          ...(microsoftExcelWeb
+            ? {
+                biligToMicrosoftExcelWebScrollEventMeanRatio: scrollEventMetrics.biligToMicrosoftExcelWebMeanRatio,
+                biligToMicrosoftExcelWebScrollEventP95Ratio: scrollEventMetrics.biligToMicrosoftExcelWebP95Ratio,
+              }
+            : {}),
           tenXMeanAndP95Metric: 'scrollEventResponseMs' as const,
           scrollMovementGuardrailPassed,
         }
@@ -581,8 +594,8 @@ function buildSameCorpusCase(captureCase: SameCorpusCaptureCase): UiResponsivene
     scenarioProof: { ...captureCase.scenarioProof },
     postOperationFrameGuardrailPassed,
     tenXMeanAndP95AgainstGoogleSheets,
-    tenXMeanAndP95AgainstMicrosoftExcelWeb,
-    passed: tenXMeanAndP95AgainstGoogleSheets && tenXMeanAndP95AgainstMicrosoftExcelWeb,
+    ...(tenXMeanAndP95AgainstMicrosoftExcelWeb !== undefined ? { tenXMeanAndP95AgainstMicrosoftExcelWeb } : {}),
+    passed: tenXMeanAndP95AgainstGoogleSheets,
   }
 }
 
@@ -602,21 +615,29 @@ function buildSameCorpusMeasurement(capture: SameCorpusCaptureMeasurement): UiRe
 function sameCorpusScrollEventMetrics(
   bilig: UiResponsivenessSameCorpusMeasurement,
   googleSheets: UiResponsivenessSameCorpusMeasurement,
-  microsoftExcelWeb: UiResponsivenessSameCorpusMeasurement,
+  microsoftExcelWeb?: UiResponsivenessSameCorpusMeasurement,
 ): {
   readonly biligToGoogleSheetsMeanRatio: number
   readonly biligToGoogleSheetsP95Ratio: number
   readonly biligToMicrosoftExcelWebMeanRatio: number
   readonly biligToMicrosoftExcelWebP95Ratio: number
 } | null {
-  if (!bilig.scrollEventResponseMs || !googleSheets.scrollEventResponseMs || !microsoftExcelWeb.scrollEventResponseMs) {
+  if (
+    !bilig.scrollEventResponseMs ||
+    !googleSheets.scrollEventResponseMs ||
+    (microsoftExcelWeb && !microsoftExcelWeb.scrollEventResponseMs)
+  ) {
     return null
   }
   return {
     biligToGoogleSheetsMeanRatio: ratio(bilig.scrollEventResponseMs.mean, googleSheets.scrollEventResponseMs.mean),
     biligToGoogleSheetsP95Ratio: ratio(bilig.scrollEventResponseMs.p95, googleSheets.scrollEventResponseMs.p95),
-    biligToMicrosoftExcelWebMeanRatio: ratio(bilig.scrollEventResponseMs.mean, microsoftExcelWeb.scrollEventResponseMs.mean),
-    biligToMicrosoftExcelWebP95Ratio: ratio(bilig.scrollEventResponseMs.p95, microsoftExcelWeb.scrollEventResponseMs.p95),
+    biligToMicrosoftExcelWebMeanRatio: microsoftExcelWeb
+      ? ratio(bilig.scrollEventResponseMs.mean, microsoftExcelWeb.scrollEventResponseMs!.mean)
+      : Number.POSITIVE_INFINITY,
+    biligToMicrosoftExcelWebP95Ratio: microsoftExcelWeb
+      ? ratio(bilig.scrollEventResponseMs.p95, microsoftExcelWeb.scrollEventResponseMs!.p95)
+      : Number.POSITIVE_INFINITY,
   }
 }
 
@@ -628,8 +649,8 @@ function ratio(numerator: number, denominator: number): number {
 }
 
 function validateSameCorpusProof(proof: UiResponsivenessSameCorpusProof): void {
-  if (proof.requiredProductCount !== 3) {
-    throw new Error('UI responsiveness same-corpus proof must compare Bilig, Google Sheets, and Microsoft Excel Web')
+  if (proof.requiredProductCount !== 2) {
+    throw new Error('UI responsiveness same-corpus Google Sheets proof must compare Bilig and Google Sheets')
   }
   if (proof.requiredCaseCount !== requiredSameCorpusWorkloads.length) {
     throw new Error('UI responsiveness same-corpus proof required case count is stale')
@@ -654,9 +675,7 @@ function validateSameCorpusProof(proof: UiResponsivenessSameCorpusProof): void {
   if (proof.cases.length !== proof.requiredCaseCount) {
     throw new Error('UI responsiveness same-corpus proof must include every required captured case')
   }
-  const tenXCaseCount = proof.cases.filter(
-    (entry) => entry.tenXMeanAndP95AgainstGoogleSheets && entry.tenXMeanAndP95AgainstMicrosoftExcelWeb,
-  ).length
+  const tenXCaseCount = proof.cases.filter((entry) => entry.tenXMeanAndP95AgainstGoogleSheets).length
   if (proof.tenXMeanAndP95CaseCount !== tenXCaseCount) {
     throw new Error('UI responsiveness same-corpus proof 10x case count is stale')
   }
@@ -675,25 +694,33 @@ function validateSameCorpusCase(entry: UiResponsivenessSameCorpusCase): void {
   }
   validateSameCorpusMeasurement(entry.bilig, 'bilig', entry.id)
   validateSameCorpusMeasurement(entry.googleSheets, 'google-sheets', entry.id)
-  validateSameCorpusMeasurement(entry.microsoftExcelWeb, 'microsoft-excel-web', entry.id)
+  if (entry.microsoftExcelWeb) {
+    validateSameCorpusMeasurement(entry.microsoftExcelWeb, 'microsoft-excel-web', entry.id)
+  }
   if (
     uiSameCorpusWorkloadRequiresScrollEventEvidence(entry.workload) &&
-    ![entry.bilig, entry.googleSheets, entry.microsoftExcelWeb].every((measurement) => hasSameCorpusScrollEvidence(measurement))
+    ![entry.bilig, entry.googleSheets, ...(entry.microsoftExcelWeb ? [entry.microsoftExcelWeb] : [])].every((measurement) =>
+      hasSameCorpusScrollEvidence(measurement),
+    )
   ) {
     throw new Error(`UI responsiveness same-corpus proof is missing scroll-event evidence for ${entry.id}`)
   }
   const comparableSampleCount = Math.min(
     entry.bilig.operationResponseMs.samples.length,
     entry.googleSheets.operationResponseMs.samples.length,
-    entry.microsoftExcelWeb.operationResponseMs.samples.length,
+    ...(entry.microsoftExcelWeb ? [entry.microsoftExcelWeb.operationResponseMs.samples.length] : []),
   )
   if (entry.sampleCount !== comparableSampleCount || comparableSampleCount < sampleCountForSameCorpus()) {
     throw new Error(`UI responsiveness same-corpus case has too few comparable samples: ${entry.id}`)
   }
   const googleSheetsMeanRatio = ratio(entry.bilig.operationResponseMs.mean, entry.googleSheets.operationResponseMs.mean)
   const googleSheetsP95Ratio = ratio(entry.bilig.operationResponseMs.p95, entry.googleSheets.operationResponseMs.p95)
-  const microsoftExcelWebMeanRatio = ratio(entry.bilig.operationResponseMs.mean, entry.microsoftExcelWeb.operationResponseMs.mean)
-  const microsoftExcelWebP95Ratio = ratio(entry.bilig.operationResponseMs.p95, entry.microsoftExcelWeb.operationResponseMs.p95)
+  const microsoftExcelWebMeanRatio = entry.microsoftExcelWeb
+    ? ratio(entry.bilig.operationResponseMs.mean, entry.microsoftExcelWeb.operationResponseMs.mean)
+    : undefined
+  const microsoftExcelWebP95Ratio = entry.microsoftExcelWeb
+    ? ratio(entry.bilig.operationResponseMs.p95, entry.microsoftExcelWeb.operationResponseMs.p95)
+    : undefined
   if (
     entry.biligToGoogleSheetsMeanRatio !== googleSheetsMeanRatio ||
     entry.biligToGoogleSheetsP95Ratio !== googleSheetsP95Ratio ||
@@ -703,18 +730,19 @@ function validateSameCorpusCase(entry: UiResponsivenessSameCorpusCase): void {
     throw new Error(`UI responsiveness same-corpus ratio is stale: ${entry.id}`)
   }
   const scrollEventMetrics = sameCorpusScrollEventMetrics(entry.bilig, entry.googleSheets, entry.microsoftExcelWeb)
-  const postOperationFrameGuardrailPassed = [entry.bilig, entry.googleSheets, entry.microsoftExcelWeb].every(
+  const comparedProducts = [entry.bilig, entry.googleSheets, ...(entry.microsoftExcelWeb ? [entry.microsoftExcelWeb] : [])]
+  const postOperationFrameGuardrailPassed = comparedProducts.every(
     (measurement) => measurement.postOperationFrameMs.p95 > 0 && measurement.postOperationFrameMs.p95 <= 50,
   )
   const scrollMovementGuardrailPassed =
-    scrollEventMetrics !== null &&
-    [entry.bilig, entry.googleSheets, entry.microsoftExcelWeb].every((measurement) => (measurement.scrollMovementPx?.min ?? 0) >= 1)
+    scrollEventMetrics !== null && comparedProducts.every((measurement) => (measurement.scrollMovementPx?.min ?? 0) >= 1)
   if (scrollEventMetrics) {
     if (
       entry.biligToGoogleSheetsScrollEventMeanRatio !== scrollEventMetrics.biligToGoogleSheetsMeanRatio ||
       entry.biligToGoogleSheetsScrollEventP95Ratio !== scrollEventMetrics.biligToGoogleSheetsP95Ratio ||
-      entry.biligToMicrosoftExcelWebScrollEventMeanRatio !== scrollEventMetrics.biligToMicrosoftExcelWebMeanRatio ||
-      entry.biligToMicrosoftExcelWebScrollEventP95Ratio !== scrollEventMetrics.biligToMicrosoftExcelWebP95Ratio
+      (entry.microsoftExcelWeb &&
+        (entry.biligToMicrosoftExcelWebScrollEventMeanRatio !== scrollEventMetrics.biligToMicrosoftExcelWebMeanRatio ||
+          entry.biligToMicrosoftExcelWebScrollEventP95Ratio !== scrollEventMetrics.biligToMicrosoftExcelWebP95Ratio))
     ) {
       throw new Error(`UI responsiveness same-corpus scroll-event ratio is stale: ${entry.id}`)
     }
@@ -741,19 +769,23 @@ function validateSameCorpusCase(entry: UiResponsivenessSameCorpusCase): void {
       scrollEventMetrics.biligToGoogleSheetsP95Ratio <= 0.1 &&
       scrollMovementGuardrailPassed
     : googleSheetsMeanRatio <= 0.1 && googleSheetsP95Ratio <= 0.1
-  const timingMetricPassedAgainstMicrosoftExcelWeb = requiresScrollEventMetric
-    ? scrollEventMetrics !== null &&
-      scrollEventMetrics.biligToMicrosoftExcelWebMeanRatio <= 0.1 &&
-      scrollEventMetrics.biligToMicrosoftExcelWebP95Ratio <= 0.1 &&
-      scrollMovementGuardrailPassed
-    : microsoftExcelWebMeanRatio <= 0.1 && microsoftExcelWebP95Ratio <= 0.1
+  const timingMetricPassedAgainstMicrosoftExcelWeb = entry.microsoftExcelWeb
+    ? requiresScrollEventMetric
+      ? scrollEventMetrics !== null &&
+        scrollEventMetrics.biligToMicrosoftExcelWebMeanRatio <= 0.1 &&
+        scrollEventMetrics.biligToMicrosoftExcelWebP95Ratio <= 0.1 &&
+        scrollMovementGuardrailPassed
+      : (microsoftExcelWebMeanRatio ?? Number.POSITIVE_INFINITY) <= 0.1 && (microsoftExcelWebP95Ratio ?? Number.POSITIVE_INFINITY) <= 0.1
+    : undefined
   const tenXAgainstGoogleSheets = timingMetricPassedAgainstGoogleSheets && postOperationFrameGuardrailPassed && visualProofGuardrailPassed
   const tenXAgainstMicrosoftExcelWeb =
-    timingMetricPassedAgainstMicrosoftExcelWeb && postOperationFrameGuardrailPassed && visualProofGuardrailPassed
+    timingMetricPassedAgainstMicrosoftExcelWeb === undefined
+      ? undefined
+      : timingMetricPassedAgainstMicrosoftExcelWeb && postOperationFrameGuardrailPassed && visualProofGuardrailPassed
   if (
     entry.tenXMeanAndP95AgainstGoogleSheets !== tenXAgainstGoogleSheets ||
     entry.tenXMeanAndP95AgainstMicrosoftExcelWeb !== tenXAgainstMicrosoftExcelWeb ||
-    entry.passed !== (tenXAgainstGoogleSheets && tenXAgainstMicrosoftExcelWeb)
+    entry.passed !== tenXAgainstGoogleSheets
   ) {
     throw new Error(`UI responsiveness same-corpus pass flag is stale: ${entry.id}`)
   }

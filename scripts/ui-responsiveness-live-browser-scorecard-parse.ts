@@ -117,6 +117,11 @@ function parseSameCorpusProof(value: Record<string, unknown>): UiResponsivenessS
 
 function parseSameCorpusCase(value: unknown): UiResponsivenessSameCorpusCase {
   const record = asObject(value, 'UI responsiveness same-corpus case')
+  const microsoftExcelWeb = Object.hasOwn(record, 'microsoftExcelWeb')
+    ? parseSameCorpusMeasurement(objectField(record, 'microsoftExcelWeb'))
+    : undefined
+  const biligToMicrosoftExcelWebMeanRatio = optionalNumberField(record, 'biligToMicrosoftExcelWebMeanRatio')
+  const biligToMicrosoftExcelWebP95Ratio = optionalNumberField(record, 'biligToMicrosoftExcelWebP95Ratio')
   const biligToGoogleSheetsScrollEventMeanRatio = optionalNumberField(record, 'biligToGoogleSheetsScrollEventMeanRatio')
   const biligToGoogleSheetsScrollEventP95Ratio = optionalNumberField(record, 'biligToGoogleSheetsScrollEventP95Ratio')
   const biligToMicrosoftExcelWebScrollEventMeanRatio = optionalNumberField(record, 'biligToMicrosoftExcelWebScrollEventMeanRatio')
@@ -132,11 +137,11 @@ function parseSameCorpusCase(value: unknown): UiResponsivenessSameCorpusCase {
     sampleCount: numberField(record, 'sampleCount'),
     bilig: parseSameCorpusMeasurement(objectField(record, 'bilig')),
     googleSheets: parseSameCorpusMeasurement(objectField(record, 'googleSheets')),
-    microsoftExcelWeb: parseSameCorpusMeasurement(objectField(record, 'microsoftExcelWeb')),
+    ...(microsoftExcelWeb ? { microsoftExcelWeb } : {}),
     biligToGoogleSheetsMeanRatio: numberField(record, 'biligToGoogleSheetsMeanRatio'),
     biligToGoogleSheetsP95Ratio: numberField(record, 'biligToGoogleSheetsP95Ratio'),
-    biligToMicrosoftExcelWebMeanRatio: numberField(record, 'biligToMicrosoftExcelWebMeanRatio'),
-    biligToMicrosoftExcelWebP95Ratio: numberField(record, 'biligToMicrosoftExcelWebP95Ratio'),
+    ...(biligToMicrosoftExcelWebMeanRatio !== undefined ? { biligToMicrosoftExcelWebMeanRatio } : {}),
+    ...(biligToMicrosoftExcelWebP95Ratio !== undefined ? { biligToMicrosoftExcelWebP95Ratio } : {}),
     ...(biligToGoogleSheetsScrollEventMeanRatio !== undefined ? { biligToGoogleSheetsScrollEventMeanRatio } : {}),
     ...(biligToGoogleSheetsScrollEventP95Ratio !== undefined ? { biligToGoogleSheetsScrollEventP95Ratio } : {}),
     ...(biligToMicrosoftExcelWebScrollEventMeanRatio !== undefined ? { biligToMicrosoftExcelWebScrollEventMeanRatio } : {}),
@@ -144,7 +149,9 @@ function parseSameCorpusCase(value: unknown): UiResponsivenessSameCorpusCase {
     ...(tenXMeanAndP95Metric ? { tenXMeanAndP95Metric } : {}),
     scenarioProof: parseSameCorpusScenarioProof(objectField(record, 'scenarioProof')),
     tenXMeanAndP95AgainstGoogleSheets: booleanField(record, 'tenXMeanAndP95AgainstGoogleSheets'),
-    tenXMeanAndP95AgainstMicrosoftExcelWeb: booleanField(record, 'tenXMeanAndP95AgainstMicrosoftExcelWeb'),
+    ...(Object.hasOwn(record, 'tenXMeanAndP95AgainstMicrosoftExcelWeb')
+      ? { tenXMeanAndP95AgainstMicrosoftExcelWeb: booleanField(record, 'tenXMeanAndP95AgainstMicrosoftExcelWeb') }
+      : {}),
     ...(postOperationFrameGuardrailPassed !== undefined ? { postOperationFrameGuardrailPassed } : {}),
     ...(scrollMovementGuardrailPassed !== undefined ? { scrollMovementGuardrailPassed } : {}),
     passed: booleanField(record, 'passed'),
@@ -168,6 +175,9 @@ function parseSameCorpusMeasurement(value: Record<string, unknown>): UiResponsiv
 
 function parseSameCorpusCaptureCase(value: unknown): SameCorpusCaptureCase {
   const record = asObject(value, 'UI responsiveness same-corpus capture case')
+  const microsoftExcelWeb = Object.hasOwn(record, 'microsoftExcelWeb')
+    ? parseSameCorpusCaptureMeasurement(objectField(record, 'microsoftExcelWeb'), 'microsoft-excel-web')
+    : undefined
   return {
     id: stringField(record, 'id'),
     corpusCaseId: stringField(record, 'corpusCaseId'),
@@ -176,7 +186,7 @@ function parseSameCorpusCaptureCase(value: unknown): SameCorpusCaptureCase {
     scenarioProof: parseSameCorpusScenarioProof(objectField(record, 'scenarioProof')),
     bilig: parseSameCorpusCaptureMeasurement(objectField(record, 'bilig'), 'bilig'),
     googleSheets: parseSameCorpusCaptureMeasurement(objectField(record, 'googleSheets'), 'google-sheets'),
-    microsoftExcelWeb: parseSameCorpusCaptureMeasurement(objectField(record, 'microsoftExcelWeb'), 'microsoft-excel-web'),
+    ...(microsoftExcelWeb ? { microsoftExcelWeb } : {}),
   }
 }
 
@@ -215,17 +225,21 @@ function parseSameCorpusVerification(value: Record<string, unknown>): SameCorpus
 }
 
 function parseSameCorpusScenarioProof(value: Record<string, unknown>): SameCorpusScenarioProof {
+  const microsoftExcelWebMeanMs = optionalNumberField(value, 'microsoftExcelWebMeanMs')
+  const microsoftExcelWebP95Ms = optionalNumberField(value, 'microsoftExcelWebP95Ms')
+  const microsoftExcelWebMeanRatio = optionalNumberField(value, 'microsoftExcelWebMeanRatio')
+  const microsoftExcelWebP95Ratio = optionalNumberField(value, 'microsoftExcelWebP95Ratio')
   return {
     biligMeanMs: numberField(value, 'biligMeanMs'),
     biligP95Ms: numberField(value, 'biligP95Ms'),
     googleMeanMs: numberField(value, 'googleMeanMs'),
     googleP95Ms: numberField(value, 'googleP95Ms'),
-    microsoftExcelWebMeanMs: numberField(value, 'microsoftExcelWebMeanMs'),
-    microsoftExcelWebP95Ms: numberField(value, 'microsoftExcelWebP95Ms'),
+    ...(microsoftExcelWebMeanMs !== undefined ? { microsoftExcelWebMeanMs } : {}),
+    ...(microsoftExcelWebP95Ms !== undefined ? { microsoftExcelWebP95Ms } : {}),
     meanRatio: numberField(value, 'meanRatio'),
     p95Ratio: numberField(value, 'p95Ratio'),
-    microsoftExcelWebMeanRatio: numberField(value, 'microsoftExcelWebMeanRatio'),
-    microsoftExcelWebP95Ratio: numberField(value, 'microsoftExcelWebP95Ratio'),
+    ...(microsoftExcelWebMeanRatio !== undefined ? { microsoftExcelWebMeanRatio } : {}),
+    ...(microsoftExcelWebP95Ratio !== undefined ? { microsoftExcelWebP95Ratio } : {}),
     screenshotProof: parseSameCorpusScreenshotProof(objectField(value, 'screenshotProof')),
     pixelGridProof: parseSameCorpusPixelGridProof(objectField(value, 'pixelGridProof')),
   }

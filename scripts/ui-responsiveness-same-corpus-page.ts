@@ -71,13 +71,13 @@ interface SameCorpusPreflight {
 interface SameCorpusProductMeasurementUrls {
   readonly biligUrl: string
   readonly googleSheetsUrl: string
-  readonly microsoftExcelWebUrl: string
+  readonly microsoftExcelWebUrl: string | null
 }
 
 interface SameCorpusProductMeasurements {
   readonly bilig: SameCorpusCaptureMeasurement
   readonly googleSheets: SameCorpusCaptureMeasurement
-  readonly microsoftExcelWeb: SameCorpusCaptureMeasurement
+  readonly microsoftExcelWeb?: SameCorpusCaptureMeasurement | undefined
 }
 
 type SameCorpusProductMeasure = (
@@ -133,7 +133,8 @@ export async function captureSameCorpusUiResponsiveness(args: CaptureArgs): Prom
       suite: 'ui-responsiveness-same-corpus-capture',
       sampleCount: args.sampleCount,
       limitations: [
-        'Caller must supply Google Sheets and Microsoft Excel Web URLs for the same exported Bilig benchmark corpus.',
+        'Caller must supply a Google Sheets URL for the same exported Bilig benchmark corpus.',
+        'Microsoft Excel Web can be supplied as an additional incumbent comparison, but it is not required for the Google Sheets 10x claim.',
         'Edit and format workloads require the supplied incumbent URLs to allow browser-driven editing in the authenticated context.',
       ],
       cases,
@@ -173,7 +174,7 @@ async function captureSameCorpusWorkloadCases(
     scenarioProof,
     bilig,
     googleSheets,
-    microsoftExcelWeb,
+    ...(microsoftExcelWeb ? { microsoftExcelWeb } : {}),
   })
   return await captureSameCorpusWorkloadCases(browser, corpus, args, workloadIndex + 1, cases)
 }
@@ -187,6 +188,9 @@ export async function collectSameCorpusProductMeasurements(
   assertSameCorpusProductMeasurement('bilig', urls.biligUrl, bilig, workload)
   const googleSheets = await measure('google-sheets', urls.googleSheetsUrl, workload)
   assertSameCorpusProductMeasurement('google-sheets', urls.googleSheetsUrl, googleSheets, workload)
+  if (!urls.microsoftExcelWebUrl) {
+    return { bilig, googleSheets }
+  }
   const microsoftExcelWeb = await measure('microsoft-excel-web', urls.microsoftExcelWebUrl, workload)
   assertSameCorpusProductMeasurement('microsoft-excel-web', urls.microsoftExcelWebUrl, microsoftExcelWeb, workload)
   return { bilig, googleSheets, microsoftExcelWeb }

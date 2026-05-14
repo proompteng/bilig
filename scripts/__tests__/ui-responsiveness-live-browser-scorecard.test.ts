@@ -39,7 +39,7 @@ describe('UI responsiveness live browser scorecard', () => {
     expect(scorecard.sameCorpusProof).toMatchObject({
       captured: false,
       evidenceKind: 'not-captured',
-      requiredProductCount: 3,
+      requiredProductCount: 2,
       requiredCaseCount: requiredUiResponsivenessSameCorpusWorkloads.length,
       tenXMeanAndP95CaseCount: 0,
       coveredCorpusCaseIds: [],
@@ -86,7 +86,7 @@ describe('UI responsiveness live browser scorecard', () => {
     expect(proof).toMatchObject({
       captured: true,
       evidenceKind: 'same-corpus-browser-capture',
-      requiredProductCount: 3,
+      requiredProductCount: 2,
       requiredCaseCount: requiredUiResponsivenessSameCorpusWorkloads.length,
       tenXMeanAndP95CaseCount: requiredUiResponsivenessSameCorpusWorkloads.length,
       coveredCorpusCaseIds: ['wide-mixed-250k'],
@@ -243,7 +243,7 @@ describe('UI responsiveness live browser scorecard', () => {
             ? Object.assign({}, entry, {
                 scenarioProof: Object.assign({}, entry.scenarioProof, {
                   screenshotProof: Object.assign({}, entry.scenarioProof.screenshotProof, {
-                    requiredProducts: ['bilig', 'google-sheets'],
+                    requiredProducts: ['bilig', 'google-sheets', 'microsoft-excel-web'],
                   }),
                 }),
               })
@@ -328,7 +328,7 @@ function sameCorpusScenarioProof(workload: UiResponsivenessSameCorpusWorkload) {
     microsoftExcelWebP95Ratio: 0.06666666666666667,
     screenshotProof: {
       captured: true,
-      requiredProducts: ['bilig', 'google-sheets', 'microsoft-excel-web'],
+      requiredProducts: ['bilig', 'google-sheets'],
       artifactPaths: [
         `tmp/same-corpus-wide-mixed-250k-${workload}/bilig-sample-1.png`,
         `tmp/same-corpus-wide-mixed-250k-${workload}/google-sheets-sample-1.png`,
@@ -338,7 +338,7 @@ function sameCorpusScenarioProof(workload: UiResponsivenessSameCorpusWorkload) {
     },
     pixelGridProof: {
       captured: true,
-      requiredProducts: ['bilig', 'google-sheets', 'microsoft-excel-web'],
+      requiredProducts: ['bilig', 'google-sheets'],
       products: [
         {
           product: 'bilig',

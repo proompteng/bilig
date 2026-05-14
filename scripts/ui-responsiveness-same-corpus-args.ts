@@ -12,7 +12,7 @@ export interface CaptureArgs {
   readonly googleSheetsUrl: string
   readonly googleSheetsStorageStatePath: string | null
   readonly headless: boolean
-  readonly microsoftExcelWebUrl: string
+  readonly microsoftExcelWebUrl: string | null
   readonly microsoftExcelWebStorageStatePath: string | null
   readonly outputPath: string
   readonly readyTimeoutMs: number
@@ -117,14 +117,14 @@ export function parseCaptureArgs(argv: readonly string[]): CaptureArgs {
   const outputPath = argumentValue(argv, '--output')
   const googleSheetsUrl = argumentValue(argv, '--google-sheets-url')
   const microsoftExcelWebUrl = argumentValue(argv, '--microsoft-excel-web-url')
-  if (!outputPath || !googleSheetsUrl || !microsoftExcelWebUrl) {
+  if (!outputPath || !googleSheetsUrl) {
     throw new Error(
       [
         'Missing required arguments.',
         'Usage: bun scripts/capture-ui-responsiveness-same-corpus.ts',
         '  --output <capture.json>',
         '  --google-sheets-url <same-corpus-google-sheets-url>',
-        '  --microsoft-excel-web-url <same-corpus-excel-web-url>',
+        '  [--microsoft-excel-web-url <same-corpus-excel-web-url>]',
         '  or: --emit-xlsx <directory>',
         '  [--bilig-url <local-bilig-url>] [--corpus wide-mixed-250k] [--samples 3] [--delta-x 0] [--delta-y 720] [--headed]',
         '  [--storage-state <state.json>]',

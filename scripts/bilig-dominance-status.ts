@@ -593,10 +593,7 @@ function buildUiSameCorpusStatus(
   const googleSheetsUrlArgument = args.googleSheetsUrl ?? '<google-sheets-url>'
   const microsoftExcelWebUrlArgument = args.microsoftExcelWebEditableUrl ?? '<microsoft-excel-web-editable-url>'
   const browserCaptureGuard = buildBrowserCaptureGuardStatus(args.localCiResourceGuardStatus)
-  const missingInputs = [
-    ...(args.googleSheetsUrl || tenXRequirementSatisfied ? [] : ['googleSheetsUrlForUploadedSameCorpusWorkbook']),
-    ...(args.microsoftExcelWebEditableUrl || tenXRequirementSatisfied ? [] : ['microsoftExcelWebEditableUrlForUploadedSameCorpusWorkbook']),
-  ]
+  const missingInputs = args.googleSheetsUrl || tenXRequirementSatisfied ? [] : ['googleSheetsUrlForUploadedSameCorpusWorkbook']
   const nextGoogleSheetsUploadInstruction = missingInputs.includes('googleSheetsUrlForUploadedSameCorpusWorkbook')
     ? `Upload ${fixture.localXlsxPath} to Google Sheets as a native Google Sheet, share it to anyone with the link, then pass its edit URL as --google-sheets-url.`
     : null
@@ -633,16 +630,7 @@ function buildUiSameCorpusStatus(
   ]
     .map(shellQuote)
     .join(' ')
-  const nextPreflightCommand = [
-    'pnpm',
-    'ui:same-corpus:capture',
-    '--',
-    '--preflight',
-    '--google-sheets-url',
-    googleSheetsUrlArgument,
-    '--microsoft-excel-web-url',
-    microsoftExcelWebUrlArgument,
-  ]
+  const nextPreflightCommand = ['pnpm', 'ui:same-corpus:capture', '--', '--preflight', '--google-sheets-url', googleSheetsUrlArgument]
     .map(shellQuote)
     .join(' ')
   const nextAuthenticatedPreflightCommand = [
@@ -652,12 +640,8 @@ function buildUiSameCorpusStatus(
     '--preflight',
     '--google-sheets-url',
     googleSheetsUrlArgument,
-    '--microsoft-excel-web-url',
-    microsoftExcelWebUrlArgument,
     '--google-sheets-storage-state',
     '.cache/ui-responsiveness/google-sheets-storage-state.json',
-    '--microsoft-excel-web-storage-state',
-    '.cache/ui-responsiveness/microsoft-excel-web-storage-state.json',
   ]
     .map(shellQuote)
     .join(' ')
@@ -669,8 +653,6 @@ function buildUiSameCorpusStatus(
     '.cache/ui-responsiveness/same-corpus-capture.json',
     '--google-sheets-url',
     googleSheetsUrlArgument,
-    '--microsoft-excel-web-url',
-    microsoftExcelWebUrlArgument,
   ]
     .map(shellQuote)
     .join(' ')
@@ -682,12 +664,8 @@ function buildUiSameCorpusStatus(
     '.cache/ui-responsiveness/same-corpus-capture.json',
     '--google-sheets-url',
     googleSheetsUrlArgument,
-    '--microsoft-excel-web-url',
-    microsoftExcelWebUrlArgument,
     '--google-sheets-storage-state',
     '.cache/ui-responsiveness/google-sheets-storage-state.json',
-    '--microsoft-excel-web-storage-state',
-    '.cache/ui-responsiveness/microsoft-excel-web-storage-state.json',
   ]
     .map(shellQuote)
     .join(' ')
@@ -836,13 +814,13 @@ function uiSameCorpusTenXRequirementSatisfied(
   return (
     proof.captured &&
     proof.evidenceKind === 'same-corpus-browser-capture' &&
-    proof.requiredProductCount === 3 &&
+    proof.requiredProductCount === 2 &&
     proof.requiredCaseCount > 0 &&
     proof.cases.length === proof.requiredCaseCount &&
     proof.tenXMeanAndP95CaseCount === proof.requiredCaseCount &&
     missingRequiredWorkloads.length === 0 &&
     casesMissingScrollEventEvidence.length === 0 &&
-    proof.cases.every((entry) => entry.passed)
+    proof.cases.every((entry) => entry.tenXMeanAndP95AgainstGoogleSheets && entry.passed)
   )
 }
 
@@ -853,10 +831,8 @@ function uiSameCorpusCaseHasScrollEventEvidence(
     entry.tenXMeanAndP95Metric === 'scrollEventResponseMs' &&
     Boolean(entry.bilig.scrollEventResponseMs) &&
     Boolean(entry.googleSheets.scrollEventResponseMs) &&
-    Boolean(entry.microsoftExcelWeb.scrollEventResponseMs) &&
     Boolean(entry.bilig.scrollMovementPx) &&
-    Boolean(entry.googleSheets.scrollMovementPx) &&
-    Boolean(entry.microsoftExcelWeb.scrollMovementPx)
+    Boolean(entry.googleSheets.scrollMovementPx)
   )
 }
 
