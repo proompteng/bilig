@@ -325,6 +325,21 @@ test('web app maps clicks in the upper half of a cell to that same visible cell'
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C5')
 })
 
+test('web app maps pointer selection exactly after large vertical and horizontal scroll', async ({ page }) => {
+  await page.setViewportSize({ width: 1166, height: 820 })
+  await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('large-scroll-selection-hit-test'))}`)
+  await waitForWorkbookReady(page)
+
+  await selectAddress(page, formatGridAddress(100_000, 500))
+  const scroll = await readProductViewportScroll(page)
+  expect(scroll.scrollLeft).toBeGreaterThanOrEqual(PRODUCT_COLUMN_WIDTH * 490)
+  expect(scroll.scrollTop).toBeGreaterThanOrEqual(PRODUCT_ROW_HEIGHT * 99_000)
+
+  const expectedAddress = await clickVisibleScrolledBodyCell(page, 2, 3)
+  await expect(page.getByTestId('name-box')).toHaveValue(expectedAddress)
+  await expect(page.getByTestId('status-selection')).toHaveText(`Sheet1!${expectedAddress}`)
+})
+
 test('web app supports column resize without breaking hit testing', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-column-resize-hit-test')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
@@ -473,6 +488,64 @@ async function getGridScrollTop(page: Page): Promise<number> {
     }
     return viewport.scrollTop
   })
+}
+
+async function readProductViewportScroll(page: Page): Promise<{
+  readonly scrollLeft: number
+  readonly scrollTop: number
+}> {
+  await settleWorkbookScrollPerf(page, 8)
+  return await page.getByTestId('grid-scroll-viewport').evaluate((node) => {
+    if (!(node instanceof HTMLDivElement)) {
+      throw new Error('grid scroll viewport is not an HTMLDivElement')
+    }
+    return {
+      scrollLeft: node.scrollLeft,
+      scrollTop: node.scrollTop,
+    }
+  })
+}
+
+async function clickVisibleScrolledBodyCell(page: Page, visibleColumnOffset: number, visibleRowOffset: number): Promise<string> {
+  const gridLocator = page.getByTestId('sheet-grid')
+  await expect(gridLocator).toBeVisible()
+  const scroll = await page.getByTestId('grid-scroll-viewport').evaluate((node) => {
+    if (!(node instanceof HTMLDivElement)) {
+      throw new Error('grid scroll viewport is not an HTMLDivElement')
+    }
+    return {
+      scrollLeft: node.scrollLeft,
+      scrollTop: node.scrollTop,
+    }
+  })
+  const bodyX = visibleColumnOffset * PRODUCT_COLUMN_WIDTH + Math.floor(PRODUCT_COLUMN_WIDTH / 2)
+  const bodyY = visibleRowOffset * PRODUCT_ROW_HEIGHT + Math.floor(PRODUCT_ROW_HEIGHT / 2)
+  const expectedColumnIndex = Math.floor((scroll.scrollLeft + bodyX) / PRODUCT_COLUMN_WIDTH)
+  const expectedRowIndex = Math.floor((scroll.scrollTop + bodyY) / PRODUCT_ROW_HEIGHT)
+
+  await gridLocator.click({
+    position: {
+      x: PRODUCT_ROW_MARKER_WIDTH + bodyX,
+      y: PRODUCT_HEADER_HEIGHT + bodyY,
+    },
+  })
+
+  return formatGridAddress(expectedRowIndex, expectedColumnIndex)
+}
+
+function formatGridAddress(rowIndex: number, columnIndex: number): string {
+  return `${formatColumnLabel(columnIndex)}${String(rowIndex + 1)}`
+}
+
+function formatColumnLabel(columnIndex: number): string {
+  let remaining = columnIndex + 1
+  let label = ''
+  while (remaining > 0) {
+    const next = (remaining - 1) % 26
+    label = String.fromCharCode(65 + next) + label
+    remaining = Math.floor((remaining - 1) / 26)
+  }
+  return label
 }
 
 async function rightClickProductRowHeader(page: Page, rowIndex: number): Promise<void> {
