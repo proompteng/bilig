@@ -169,8 +169,8 @@
 .code-pane pre {
   overflow: hidden;
   padding: 16px 14px;
-  font-size: 10.5px;
-  line-height: 1.64;
+  font-size: 11px;
+  line-height: 1.6;
   white-space: pre-wrap;
 }
 
