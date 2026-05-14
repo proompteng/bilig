@@ -134,8 +134,11 @@ issue pass:
   package attached to the `proompteng/bilig` project entry:
   <https://github.com/tolkonepiu/best-of-mcp-servers/pull/192>
 - External MCP directory surface: the TensorBlock awesome-mcp-servers listing
-  pull request is open and awaiting maintainer review:
-  <https://github.com/TensorBlock/awesome-mcp-servers/pull/536>
+  pull request had a maintainer request to mirror the README entry into the
+  matching category docs file. The branch now adds Bilig WorkPaper to both
+  `README.md` and `docs/data-analysis--business-intelligence.md`, with a
+  re-review comment posted:
+  <https://github.com/TensorBlock/awesome-mcp-servers/pull/536#issuecomment-4454308656>
 - External MCP directory surface: the abordage awesome-mcp listing pull request
   is open with the repository entry in `repositories.yaml`:
   <https://github.com/abordage/awesome-mcp/pull/36>
