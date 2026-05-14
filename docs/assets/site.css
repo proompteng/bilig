@@ -555,9 +555,9 @@ h2 {
 
 .proof-result {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: clamp(20px, 4vw, 42px);
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
   border-bottom: 1px solid var(--line);
   padding: clamp(24px, 3.5vw, 36px) clamp(22px, 3vw, 32px);
 }
@@ -565,14 +565,14 @@ h2 {
 .proof-metric {
   display: grid;
   min-width: 0;
-  gap: 8px;
+  gap: 10px;
 }
 
 .proof-result strong {
   display: block;
   max-width: 100%;
   color: var(--accent);
-  font-size: clamp(48px, 7vw, 72px);
+  font-size: clamp(58px, 8vw, 84px);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   letter-spacing: 0;
@@ -582,7 +582,7 @@ h2 {
 
 .proof-result p {
   min-width: 0;
-  max-width: 42ch;
+  max-width: 58ch;
   color: var(--muted);
   font-size: 16px;
   line-height: 1.58;

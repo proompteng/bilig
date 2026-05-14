@@ -122,7 +122,7 @@
       }
     </script>
     <link rel="stylesheet" href="./assets/fonts.css?v=2026-05-14-1" />
-    <link rel="stylesheet" href="./assets/site.css?v=2026-05-14-6" />
+    <link rel="stylesheet" href="./assets/site.css?v=2026-05-14-7" />
     <link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-14-1" />
   </head>
   <body>
@@ -490,10 +490,10 @@ function readNumber(cell: unknown): number {
           <div class="proof-layout">
             <div class="proof-intro">
               <p class="kicker">Benchmark</p>
-              <h2 id="proof-title">The number is public. So is the caveat.</h2>
+              <h2 id="proof-title">46 mean wins. One p95 miss.</h2>
               <p>
-                The current WorkPaper vs HyperFormula artifact has WorkPaper ahead on mean latency for every comparable headless workload.
-                One approximate-lookup duplicate case is slower at p95, and that stays visible.
+                This is the current checked-in WorkPaper vs HyperFormula run. It is useful evidence, with the caveat kept beside the number
+                instead of buried below it.
               </p>
             </div>
 
@@ -508,10 +508,7 @@ function readNumber(cell: unknown): number {
                   <span class="proof-label">mean latency</span>
                   <strong>46/46</strong>
                 </div>
-                <p>
-                  Every comparable mean-latency row in the checked-in artifact is green. Treat that as a benchmark result, not a blanket
-                  promise for every workbook.
-                </p>
+                <p>Every comparable mean row is green in this artifact. That does not make every workbook, p95 row, or UI path faster.</p>
               </div>
 
               <dl class="proof-facts">
