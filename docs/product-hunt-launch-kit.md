@@ -88,6 +88,29 @@ Video:
 
 <video controls src="assets/product-hunt-demo.webm" title="bilig Product Hunt launch demo"></video>
 
+The WebM is for this docs page and social previews. Product Hunt accepts video
+as a YouTube link, so upload the demo to YouTube first if the launch needs
+video in the Product Hunt gallery.
+
+## Product Hunt Fit Check
+
+These checks follow Product Hunt's own launch prep guidance:
+<https://www.producthunt.com/launch/preparing-for-launch> and
+<https://www.producthunt.com/launch/>.
+
+- Availability: the npm smoke test is public and runnable before launch:
+  <https://proompteng.github.io/bilig/try-bilig-headless-in-node.html>.
+- Account: submit from a personal maker account, not a company account.
+- Timing: a Product Hunt launch day starts at midnight PST.
+- Ask: invite people to check it out and leave feedback. Do not ask for
+  upvotes.
+- Tagline: `53 / 60` characters.
+- Description: `214 / 500` characters.
+- Thumbnail: `240x240`, 8.6 KB, below Product Hunt's 2 MB image limit.
+- Gallery images: `1270x760`, all below Product Hunt's 5 MB image limit.
+- Video: use a YouTube link in Product Hunt. The local
+  `assets/product-hunt-demo.webm` is not the launch-form video field.
+
 ## Proof To Lead With
 
 - The smoke test installs from npm and does not clone the monorepo.
@@ -102,9 +125,13 @@ Video:
 ## Launch Checklist
 
 1. Link to the npm smoke test, not only the repository.
-2. Upload the thumbnail, three gallery images, and the WebM demo.
-3. Pin the first comment above.
-4. Stay online to answer questions about Excel compatibility, XLSX import,
+2. Upload the thumbnail and three gallery images.
+3. Use a YouTube link only if the demo has been uploaded there; otherwise omit
+   video from the Product Hunt form.
+4. Submit from a personal maker account.
+5. Pin the first comment above.
+6. Ask for feedback, not upvotes.
+7. Stay online to answer questions about Excel compatibility, XLSX import,
    MCP setup, and benchmark scope.
-5. If somebody asks for a missing workflow, turn it into a small
+8. If somebody asks for a missing workflow, turn it into a small
    `first-timers-only` issue or a focused example.

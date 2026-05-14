@@ -14,6 +14,17 @@ const productHuntLaunchKitRequiredText = [
   'what-workpaper-benchmark-proves.html',
   'where-bilig-is-not-excel-compatible-yet.html',
   'mcp-client-setup.html',
+  'Product Hunt Fit Check',
+  'https://www.producthunt.com/launch/preparing-for-launch',
+  'https://www.producthunt.com/launch/',
+  'personal maker account',
+  'midnight PST',
+  'Do not ask for\n  upvotes.',
+  '53 / 60',
+  '214 / 500',
+  '240x240',
+  '1270x760',
+  'YouTube link',
 ] as const
 
 export const productHuntLaunchAssetFiles = [

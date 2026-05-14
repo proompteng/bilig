@@ -308,6 +308,11 @@ Latest Product Hunt launch surface on May 14, 2026:
 - It keeps the tagline, short description, first comment, proof links, thumbnail,
   gallery images, WebM demo, and launch checklist together so the next launch
   action can use the real assets instead of rewriting copy in a browser form.
+- The launch kit also records the Product Hunt-specific guardrails: submit from
+  a personal maker account, ask for feedback instead of upvotes, keep the
+  tagline at `53 / 60` characters, keep the description at `214 / 500`
+  characters, use `240x240` thumbnail art, use `1270x760` gallery images, and
+  use a YouTube link if video is added to the Product Hunt form.
 
 ## Goal Text
 
