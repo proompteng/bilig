@@ -485,10 +485,11 @@ function classifyUnsupportedFormulaOracleCache(
   }
 }
 
-function hasFormulaOracleBlockingWarning(warnings: readonly string[]): boolean {
+export function hasFormulaOracleBlockingWarning(warnings: readonly string[]): boolean {
   return warnings.some(
     (warning) =>
       warning === externalWorkbookReferencesWarning ||
+      warning === externalPivotCachesWarning ||
       warning === macroExecutionDeclinedWarning ||
       warning === manualCalculationModeWarning ||
       warning === volatileFormulasWarning,

@@ -38,6 +38,7 @@ import { roundTripSemanticsDigest } from '../public-workbook-corpus-roundtrip.ts
 import {
   classifyUnsupportedFeatures,
   externalPivotCacheUnsupportedClassification,
+  hasFormulaOracleBlockingWarning,
   rawPivotPartUnsupportedClassification,
   staleFormulaCacheUnsupportedClassification,
 } from '../public-workbook-corpus-verify.ts'
@@ -280,6 +281,16 @@ describe('public workbook corpus', () => {
     )
 
     expect(classifications).toEqual([`xlsx.import.warning:${externalPivotCachesWarning}`, externalPivotCacheUnsupportedClassification])
+  })
+
+  it('blocks formula-oracle comparisons for warnings that make cached values unreliable', () => {
+    expect(hasFormulaOracleBlockingWarning([externalPivotCachesWarning])).toBe(true)
+    expect(hasFormulaOracleBlockingWarning([externalWorkbookReferencesWarning])).toBe(true)
+    expect(hasFormulaOracleBlockingWarning([macroExecutionDeclinedWarning])).toBe(true)
+    expect(hasFormulaOracleBlockingWarning([manualCalculationModeWarning])).toBe(true)
+    expect(hasFormulaOracleBlockingWarning([volatileFormulasWarning])).toBe(true)
+    expect(hasFormulaOracleBlockingWarning([precisionAsDisplayedCalculationWarning])).toBe(false)
+    expect(hasFormulaOracleBlockingWarning(['unrelated warning'])).toBe(false)
   })
 
   it('classifies external workbook formula references as unsupported instead of oracle failures', async () => {
