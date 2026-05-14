@@ -14,6 +14,7 @@
     "agent:verify": "tsx agent-writeback-verification.ts",
     "budget-variance": "tsx budget-variance-alerts.ts",
     "csv-shaped": "tsx csv-shaped-input.ts",
+    "csv-shaped:malformed": "tsx csv-shaped-input.ts --malformed-smoke",
     "formula-diagnostics": "tsx formula-diagnostics.ts",
     "fulfillment-capacity": "tsx fulfillment-capacity-plan.ts",
     "http-json-summary": "tsx http-json-summary.ts",
