@@ -291,6 +291,11 @@ describe('WorkPaper', () => {
     workbook.setCellContents(cell(importsId, 6, 2), 2013)
 
     expect(workbook.getCellValue(cell(importsId, 6, 3))).toEqual({ tag: ValueTag.Number, value: 2 })
+
+    const exported = workbook.exportSnapshot()
+    expect(exported.workbook.metadata?.definedNames).toEqual(snapshot.workbook.metadata?.definedNames)
+    expect(exported.workbook.metadata?.tables).toEqual(snapshot.workbook.metadata?.tables)
+    expect(exported.sheets.find((sheet) => sheet.name === 'Imports')?.cells).toContainEqual({ address: 'C7', value: 2013 })
     workbook.dispose()
   })
 

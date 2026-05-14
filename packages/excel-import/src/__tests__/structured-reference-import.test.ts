@@ -99,6 +99,76 @@ describe('structured reference XLSX import', () => {
     expect(engine.getCellValue('Imports', 'F10')).toEqual({ tag: ValueTag.Number, value: 225 })
   })
 
+  it('translates whole-table structured references into data-body ranges', async () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: {
+        name: 'Structured Lookup Panel',
+        metadata: {
+          tables: [
+            {
+              name: 'Data_Origin_Table',
+              sheetName: 'Panel',
+              startAddress: 'A10',
+              endAddress: 'B12',
+              columnNames: ['Origin', 'Code'],
+              headerRow: true,
+              totalsRow: false,
+            },
+            {
+              name: 'Data_Quality_Table',
+              sheetName: 'Panel',
+              startAddress: 'A15',
+              endAddress: 'B17',
+              columnNames: ['Quality', 'Code'],
+              headerRow: true,
+              totalsRow: false,
+            },
+          ],
+        },
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'Panel',
+          order: 0,
+          cells: [
+            { address: 'B2', formula: 'CONCATENATE(C8,C13," ",)' },
+            { address: 'B8', value: 'Public' },
+            { address: 'C8', formula: 'IFERROR(VLOOKUP(B8,Data_Origin_Table[],2,FALSE),"X")' },
+            { address: 'B13', value: 'Not calculated / not applicable' },
+            { address: 'C13', formula: 'IFERROR(VLOOKUP(B13,Data_Quality_Table[],2,FALSE),"X")' },
+            { address: 'A10', value: 'Origin' },
+            { address: 'B10', value: 'Code' },
+            { address: 'A11', value: 'Public' },
+            { address: 'B11', value: 'PUB-' },
+            { address: 'A12', value: 'Private' },
+            { address: 'B12', value: 'PRI-' },
+            { address: 'A15', value: 'Quality' },
+            { address: 'B15', value: 'Code' },
+            { address: 'A16', value: 'Not calculated / not applicable' },
+            { address: 'A17', value: 'High' },
+            { address: 'B17', value: 'H-' },
+          ],
+        },
+      ],
+    }
+
+    const imported = importXlsx(exportXlsx(snapshot), 'structured-lookup-panel.xlsx')
+    const panel = imported.snapshot.sheets.find((sheet) => sheet.name === 'Panel')
+
+    expect(panel?.cells.find((cell) => cell.address === 'C8')?.formula).toBe('IFERROR(VLOOKUP(B8,\'Panel\'!A11:B12,2,FALSE),"X")')
+    expect(panel?.cells.find((cell) => cell.address === 'C13')?.formula).toBe('IFERROR(VLOOKUP(B13,\'Panel\'!A16:B17,2,FALSE),"X")')
+
+    const engine = new SpreadsheetEngine({ workbookName: 'structured-lookup-panel' })
+    await engine.ready()
+    engine.importSnapshot(imported.snapshot)
+
+    expect(engine.getCellValue('Panel', 'C8')).toMatchObject({ tag: ValueTag.String, value: 'PUB-' })
+    expect(engine.getCellValue('Panel', 'C13')).toEqual({ tag: ValueTag.Number, value: 0 })
+    expect(engine.getCellValue('Panel', 'B2')).toMatchObject({ tag: ValueTag.String, value: 'PUB-0 ' })
+  })
+
   it('preserves lowercase defined names and named ranges used by simulation formulas', async () => {
     const snapshot: WorkbookSnapshot = {
       version: 1,

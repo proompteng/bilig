@@ -78,6 +78,7 @@ const macroRoundTripSkipEvidence = 'Round-trip projection skipped because macro 
 export const rawPivotPartUnsupportedClassification = 'xlsx.pivots.rawPartNotSemanticallyImported'
 export const externalPivotCacheUnsupportedClassification = 'xlsx.pivots.externalCacheNotSemanticallyImported'
 export const staleFormulaCacheUnsupportedClassification = 'xlsx.publicCorpus.formulaOracleCache:independentRecalcMatched'
+const verificationWorkerPhasePrefix = 'bilig-public-workbook-verify-phase='
 
 interface FormulaOracleMismatchDetail {
   readonly sheetName: string
@@ -187,6 +188,9 @@ export function verifyCachedWorkbookArtifactIsolated(args: {
     })
     let stdout = ''
     let stderr = ''
+    let stderrRemainder = ''
+    let latestWorkerPhase = 'startup'
+    let peakRssBytes = 0
     let timer: ReturnType<typeof setTimeout>
     let stopRssWatchdog = noop
     const finish = createOneShotResolver(resolvePromise, () => {
@@ -199,12 +203,17 @@ export function verifyCachedWorkbookArtifactIsolated(args: {
     stopRssWatchdog = startChildRssWatchdog(child, {
       maxRssBytes: args.maxRssBytes,
       intervalMs: args.rssCheckIntervalMs,
+      onSample: (rssBytes) => {
+        peakRssBytes = Math.max(peakRssBytes, rssBytes)
+      },
       onLimitExceeded: (rssBytes) => {
         terminateChild('SIGTERM')
         const forceKillTimer = setTimeout(() => terminateChild('SIGKILL'), 5_000)
         forceKillTimer.unref()
         finish(
           unsupportedRssLimitCase(args.artifact, baseEvidence, rssBytes, args.maxRssBytes, [
+            `rss-limit-phase=${latestWorkerPhase}`,
+            `peak-rss=${formatByteSize(Math.max(peakRssBytes, rssBytes))}`,
             'The workbook was isolated in a subprocess so the corpus verification run could continue.',
           ]),
         )
@@ -228,6 +237,13 @@ export function verifyCachedWorkbookArtifactIsolated(args: {
     })
     child.stderr.on('data', (chunk: string) => {
       stderr += chunk
+      const lines = `${stderrRemainder}${chunk}`.split(/\r?\n/u)
+      stderrRemainder = lines.pop() ?? ''
+      for (const line of lines) {
+        if (line.startsWith(verificationWorkerPhasePrefix)) {
+          latestWorkerPhase = line.slice(verificationWorkerPhasePrefix.length)
+        }
+      }
     })
     child.on('error', (error) => {
       finish(failedCase(args.artifact, 'error', baseEvidence, [`Verification subprocess failed to start: ${error.message}`]))
@@ -272,6 +288,7 @@ export async function verifyCachedWorkbookArtifact(
     return failedCase(artifact, 'error', baseEvidence, [`Missing cached workbook file: ${artifact.cachePath}`])
   }
   try {
+    workerOptions.onPhase?.('read-cache')
     const bytes = readFileSync(cachePath)
     const actualHash = sha256HexSync(bytes)
     if (actualHash !== artifact.sha256) {
@@ -279,6 +296,7 @@ export async function verifyCachedWorkbookArtifact(
         `Cached workbook hash mismatch: expected ${artifact.sha256}, received ${actualHash}`,
       ])
     }
+    workerOptions.onPhase?.('inspect-footprint')
     const footprint =
       bytes.byteLength >= isolatedFootprintByteThreshold
         ? await inspectWorkbookFootprintIsolated({
@@ -298,10 +316,12 @@ export async function verifyCachedWorkbookArtifact(
       return unsupportedResourceLimitCase(artifact, baseEvidence, footprint, maxCellCount)
     }
     collectGarbage()
+    workerOptions.onPhase?.('import-xlsx')
     const imported = importXlsx(bytes, artifact.fileName)
     const importedFeatureCounts = countWorkbookFeatures(imported.snapshot, imported.warnings)
     const featureCounts = mergeImportedAndFootprintFeatureCounts(importedFeatureCounts, footprint.featureCounts)
     const metadata = workbookMetadata(imported.snapshot)
+    workerOptions.onPhase?.('formula-oracle')
     const formulaOracleValidation =
       footprint.featureCounts.formulaCellCount === 0 || hasFormulaOracleBlockingWarning(imported.warnings)
         ? { comparisons: 0, mismatches: [], mismatchDetails: [] }
@@ -311,12 +331,14 @@ export async function verifyCachedWorkbookArtifact(
       ? emptyUnsupportedFormulaOracleCacheClassification()
       : classifyUnsupportedFormulaOracleCache(imported.snapshot, formulaOracleValidation)
     collectGarbage()
+    workerOptions.onPhase?.('structural-smoke')
     const structuralSmokePassed = runStructuralSmoke ? runStructuralSmokeOps(imported.snapshot) : null
     const unsupportedFeatureClassifications = classifyUnsupportedFeatures(imported.snapshot, imported.warnings, featureCounts, {
       supportedImportWarnings: supportedFormulaOracleImportWarnings(imported.warnings, formulaOracleValidation),
       extraClassifications: unsupportedFormulaOracleCache.classifications,
     })
     const roundTripSkipEvidence = roundTripValidationSkipEvidence(imported.warnings)
+    workerOptions.onPhase?.('round-trip')
     const roundTripPassed = roundTripSkipEvidence ? true : roundTripsSupportedSemantics(detachImportedWorkbookSnapshot(imported))
     const formulaOraclePassed =
       unsupportedFormulaOracleWarning || unsupportedFormulaOracleCache.unsupported || formulaOracleValidation.mismatches.length === 0
@@ -843,6 +865,12 @@ async function mapWithConcurrency<T, R>(
 }
 
 function compactProcessOutput(value: string): string | null {
-  const compacted = value.replaceAll(rootDir, '<repo>').replace(/\s+/gu, ' ').trim()
+  const compacted = value
+    .split(/\r?\n/u)
+    .filter((line) => !line.startsWith(verificationWorkerPhasePrefix))
+    .join('\n')
+    .replaceAll(rootDir, '<repo>')
+    .replace(/\s+/gu, ' ')
+    .trim()
   return compacted.length > 0 ? compacted.slice(0, 1_000) : null
 }

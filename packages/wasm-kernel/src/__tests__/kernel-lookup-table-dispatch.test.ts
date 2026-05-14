@@ -145,4 +145,66 @@ describe('wasm kernel lookup table dispatch', () => {
     expect(kernel.readNumbers()[cellIndex(1, 4, width)]).toBe(6)
     expect(kernel.readNumbers()[cellIndex(1, 5, width)]).toBe(6)
   })
+
+  it('coerces blank VLOOKUP and HLOOKUP return cells to zero', async () => {
+    const kernel = await createKernel()
+    const width = 8
+    kernel.init(32, 0, 2, 2, 4)
+
+    const cellTags = new Uint8Array(32)
+    const cellNumbers = new Float64Array(32)
+    cellTags[0] = ValueTag.Number
+    cellNumbers[0] = 1
+    cellTags[1] = ValueTag.Number
+    cellNumbers[1] = 10
+    cellTags[2] = ValueTag.Number
+    cellNumbers[2] = 2
+    cellTags[8] = ValueTag.Number
+    cellNumbers[8] = 1
+    cellTags[9] = ValueTag.Number
+    cellNumbers[9] = 2
+    cellTags[16] = ValueTag.Number
+    cellNumbers[16] = 10
+    kernel.writeCells(cellTags, cellNumbers, new Uint32Array(32), new Uint16Array(32))
+
+    kernel.uploadRangeMembers(Uint32Array.from([0, 1, 2, 3, 8, 9, 16, 17]), Uint32Array.from([0, 4]), Uint32Array.from([4, 4]))
+    kernel.uploadRangeShapes(Uint32Array.from([2, 2]), Uint32Array.from([2, 2]))
+
+    const packed = packPrograms([
+      [
+        encodePushNumber(0),
+        encodePushRange(0),
+        encodePushNumber(0),
+        encodePushBoolean(false),
+        encodeCall(BuiltinId.Vlookup, 4),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushRange(1),
+        encodePushNumber(0),
+        encodePushBoolean(false),
+        encodeCall(BuiltinId.Hlookup, 4),
+        encodeRet(),
+      ],
+    ])
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([cellIndex(3, 0, width), cellIndex(3, 1, width)]),
+    )
+    const constants = packConstants([
+      [2, 2],
+      [2, 2],
+    ])
+    kernel.uploadConstants(constants.constants, constants.offsets, constants.lengths)
+
+    kernel.evalBatch(Uint32Array.from([cellIndex(3, 0, width), cellIndex(3, 1, width)]))
+
+    expect(kernel.readTags()[cellIndex(3, 0, width)]).toBe(ValueTag.Number)
+    expect(kernel.readNumbers()[cellIndex(3, 0, width)]).toBe(0)
+    expect(kernel.readTags()[cellIndex(3, 1, width)]).toBe(ValueTag.Number)
+    expect(kernel.readNumbers()[cellIndex(3, 1, width)]).toBe(0)
+  })
 })

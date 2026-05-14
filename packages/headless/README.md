@@ -216,19 +216,41 @@ Supported scope:
 
 ## XLSX Import And Export
 
-XLSX ingestion and export are developed in this repository:
+Use `@bilig/excel-import` with `@bilig/headless` for XLSX import, WorkPaper
+calculation, edits, and XLSX export from published npm packages:
 
 ```sh
-git clone https://github.com/proompteng/bilig.git
-cd bilig
-pnpm install
-pnpm --filter @bilig/excel-import build
+pnpm add @bilig/headless @bilig/excel-import
 ```
 
-`@bilig/excel-import` lives in this monorepo, but its npm package name is still
-being provisioned. Until that package is published on npm, use a repository
-checkout for XLSX import/export work instead of adding `@bilig/excel-import` as
-an external dependency.
+```ts
+import { readFileSync, writeFileSync } from 'node:fs'
+import { WorkPaper } from '@bilig/headless'
+import { exportXlsx, importXlsx } from '@bilig/excel-import'
+
+const imported = importXlsx(new Uint8Array(readFileSync('model.xlsx')), 'model.xlsx')
+const workbook = WorkPaper.buildFromSnapshot(imported.snapshot, {
+  evaluationTimeoutMs: 30_000,
+  useColumnIndex: true,
+})
+
+const firstSheetName = imported.snapshot.sheets[0]?.name
+const firstSheet = firstSheetName === undefined ? undefined : workbook.getSheetId(firstSheetName)
+if (firstSheet === undefined) throw new Error('Workbook has no sheets')
+
+workbook.setCellContents({ sheet: firstSheet, row: 1, col: 1 }, 150_000)
+const displayValue = workbook.getCellDisplayValue({ sheet: firstSheet, row: 1, col: 1 })
+
+writeFileSync('model-edited.xlsx', exportXlsx(workbook.exportSnapshot()))
+workbook.dispose()
+
+console.log({ displayValue })
+```
+
+`WorkPaper.buildFromSnapshot()` preserves imported XLSX metadata such as
+defined names, tables, hidden sheets, and translated structured references. Use
+`workbook.exportSnapshot()` with `exportXlsx()` when exporting a WorkPaper after
+edits.
 
 Repository links:
 

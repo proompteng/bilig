@@ -4,12 +4,15 @@ CSV/XLSX-to-`WorkbookSnapshot` import helpers and supported-subset XLSX export h
 
 ## Package Status
 
-This package is part of the `bilig` monorepo runtime package set, but the
-`@bilig/excel-import` npm name is not provisioned yet. Use it from a repository
-checkout for now. The external npm install path will be documented here after
-the package is published.
+This package is part of the published `bilig` runtime npm package set. Install
+it with `@bilig/headless` when a Node project needs XLSX import, WorkPaper
+calculation, and XLSX export from the same public package path.
 
-From the repository:
+```sh
+pnpm add @bilig/headless @bilig/excel-import
+```
+
+Repository development:
 
 ```sh
 pnpm install
@@ -20,22 +23,34 @@ pnpm exec vitest run packages/excel-import/src/__tests__/excel-import.test.ts
 ## XLSX To WorkPaper
 
 ```ts
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { WorkPaper } from '@bilig/headless'
-import { importXlsx } from '@bilig/excel-import'
+import { exportXlsx, importXlsx } from '@bilig/excel-import'
 
 const imported = importXlsx(new Uint8Array(readFileSync('model.xlsx')), 'model.xlsx')
-
 const workbook = WorkPaper.buildFromSnapshot(imported.snapshot, {
   evaluationTimeoutMs: 30_000,
   useColumnIndex: true,
 })
+
+const firstSheetName = imported.snapshot.sheets[0]?.name
+const firstSheet = firstSheetName === undefined ? undefined : workbook.getSheetId(firstSheetName)
+if (firstSheet === undefined) throw new Error('Workbook has no sheets')
+
+workbook.setCellContents({ sheet: firstSheet, row: 1, col: 1 }, 150_000)
+const recalculated = workbook.getCellDisplayValue({ sheet: firstSheet, row: 1, col: 1 })
+
+writeFileSync('model-edited.xlsx', exportXlsx(workbook.exportSnapshot()))
+workbook.dispose()
+
+console.log({ recalculated })
 ```
 
 Use `WorkPaper.buildFromSnapshot()` for imported XLSX files. It preserves the
 workbook metadata that Excel formulas need, including defined names, table
 metadata, and structured-reference translations. `WorkPaper.buildFromSheets()`
-is intentionally metadata-free.
+is intentionally metadata-free. Use `workbook.exportSnapshot()` with
+`exportXlsx()` when exporting a WorkPaper after edits.
 
 Literal Excel error cells such as `#N/A`, `#DIV/0!`, `#REF!`, and `#VALUE!`
 are imported as their display text instead of SheetJS numeric error codes.

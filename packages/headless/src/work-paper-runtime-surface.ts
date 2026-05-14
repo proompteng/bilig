@@ -1,5 +1,5 @@
 import type { EngineCellMutationRef, SheetRecord } from '@bilig/core'
-import type { CellRangeRef, LiteralInput } from '@bilig/protocol'
+import type { CellRangeRef, LiteralInput, WorkbookSnapshot } from '@bilig/protocol'
 import { formatAddress } from '@bilig/formula'
 import { assertRange, isCellRange } from './work-paper-runtime-helpers.js'
 import { formatTrackedA1, sourceRangeRef } from './work-paper-address-format.js'
@@ -100,6 +100,12 @@ export abstract class WorkPaperRuntimeSurface extends WorkPaperPublicSurface {
       evaluationSuspended: this.evaluationSuspended,
       lastMetrics: structuredClone(this.engine.getLastMetrics()),
     }
+  }
+
+  exportSnapshot(): WorkbookSnapshot {
+    this.assertNotDisposed()
+    this.engineEvents.materializePendingLazyChanges()
+    return structuredClone(this.engine.exportSnapshot())
   }
 
   rebuildAndRecalculate(): WorkPaperChange[] {

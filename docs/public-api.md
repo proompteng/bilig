@@ -10,10 +10,10 @@
 
 ## Stable packages
 
-`@bilig/headless` is the current external npm adoption path. The other package
-surfaces listed here are stable repository package boundaries; not every package
-name is provisioned on npm yet. In particular, `@bilig/excel-import` is still a
-repository package until its npm package name is configured.
+`@bilig/headless` and `@bilig/excel-import` are the current external npm
+adoption path for WorkPaper calculation and Excel workbook import/export. The
+other package surfaces listed here are stable repository package boundaries; not
+every package name is provisioned on npm yet.
 
 - `@bilig/core`
 - `@bilig/headless`
@@ -100,8 +100,7 @@ of `@bilig/core`:
 
 ## Excel Import Surface
 
-`@bilig/excel-import` exposes the repository CSV/XLSX boundary for WorkPaper
-consumers. It is not yet published as an npm package:
+`@bilig/excel-import` exposes the CSV/XLSX boundary for WorkPaper consumers:
 
 - `importXlsx(bytes, fileName)`
 - `importCsv(text, fileName, options?)`
@@ -113,10 +112,34 @@ consumers. It is not yet published as an npm package:
 CSV import auto-detects comma, semicolon, and tab delimiters. For locale-specific
 accounting exports, pass `{ delimiter: ";", decimalSeparator: "," }`.
 
+```sh
+pnpm add @bilig/headless @bilig/excel-import
+```
+
+```ts
+import { readFileSync, writeFileSync } from 'node:fs'
+import { WorkPaper } from '@bilig/headless'
+import { exportXlsx, importXlsx } from '@bilig/excel-import'
+
+const imported = importXlsx(new Uint8Array(readFileSync('model.xlsx')), 'model.xlsx')
+const workbook = WorkPaper.buildFromSnapshot(imported.snapshot, {
+  useColumnIndex: true,
+})
+
+const firstSheetName = imported.snapshot.sheets[0]?.name
+const firstSheet = firstSheetName === undefined ? undefined : workbook.getSheetId(firstSheetName)
+if (firstSheet === undefined) throw new Error('Workbook has no sheets')
+
+workbook.setCellContents({ sheet: firstSheet, row: 1, col: 1 }, 150_000)
+writeFileSync('model-edited.xlsx', exportXlsx(workbook.exportSnapshot()))
+workbook.dispose()
+```
+
 Use `importXlsx(...).snapshot` with `WorkPaper.buildFromSnapshot()` when a
 consumer needs Excel workbook metadata such as defined names, tables, and
 translated structured references. `WorkPaper.buildFromSheets()` remains a
-metadata-free array/sheet constructor.
+metadata-free array/sheet constructor. Use `workbook.exportSnapshot()` with
+`exportXlsx()` to write an edited WorkPaper back to XLSX.
 
 ### Core types added in the current tranche
 

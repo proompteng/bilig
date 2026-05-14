@@ -156,9 +156,13 @@ function runNodeSmoke(
   }
   xlsxImport: {
     currencyLabel: string
+    editedTotalValue: number
+    exportedBytes: number
     headerPeriod: number
     heightFeet: number
     firstPeriod: number
+    roundTripSheetNames: string[]
+    roundTripTotalValue: number
     secondPeriod: number
     totalValue: number
     translatedStructuredRefs: boolean

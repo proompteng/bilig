@@ -13,14 +13,13 @@ export const RUNTIME_PACKAGE_DIRS = [
 
 export type RuntimePackageDir = (typeof RUNTIME_PACKAGE_DIRS)[number]
 
-// Keep unprovisioned runtime packages in the aligned build/check set without
-// blocking releases of packages that already have npm publishing configured.
 export const RUNTIME_NPM_PACKAGE_DIRS = [
   'packages/protocol',
   'packages/workbook-domain',
   'packages/wasm-kernel',
   'packages/formula',
   'packages/core',
+  'packages/excel-import',
   'packages/headless',
 ] as const satisfies readonly RuntimePackageDir[]
 

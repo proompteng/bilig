@@ -10,6 +10,7 @@ export interface PublicWorkbookCorpusWorkerOptions {
   readonly timeoutMs: number
   readonly maxRssBytes: number
   readonly rssCheckIntervalMs: number
+  readonly onPhase?: (phase: string) => void
 }
 
 export function inspectWorkbookFootprintIsolated(args: {

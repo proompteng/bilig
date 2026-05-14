@@ -62,6 +62,25 @@ describe('xlsx cell style roundtrip', () => {
     expect(readCellStyleParts(exported, 'xl/worksheets/sheet1.xml!B2')).toEqual(readCellStyleParts(source, 'xl/worksheets/sheet1.xml!B2'))
   })
 
+  it('exports many imported style-only blank cells with bounded memory', () => {
+    const imported = importXlsx(buildManyStyleOnlyBlankCellsWorkbook(), 'many-style-only-blank-cells.xlsx')
+    collectGarbage()
+    const beforeRss = process.memoryUsage().rss
+    const start = performance.now()
+
+    const exported = exportXlsx(imported.snapshot)
+    const durationMs = performance.now() - start
+    collectGarbage()
+    const rssDelta = process.memoryUsage().rss - beforeRss
+
+    expect(imported.snapshot.sheets[0]?.cells).toHaveLength(manyStyleOnlyBlankCellRowCount * 2)
+    expect(readCellXml(exported, `xl/worksheets/sheet1.xml!B${String(manyStyleOnlyBlankCellRowCount)}`)).toMatch(
+      /^<c\b(?=[^>]*\br="B6000")(?=[^>]*\bs="\d+")[^>]*\/>$/u,
+    )
+    expect(durationMs).toBeLessThan(3_000 * readBenchmarkTolerance())
+    expect(rssDelta).toBeLessThan(512 * 1024 * 1024)
+  }, 15_000)
+
   it('exports inserted formatted blank cells as style-only blank cells', () => {
     const exported = exportXlsx(buildBlankFormattedCellWorkbook())
     const cellXml = readCellXml(exported, 'xl/worksheets/sheet1.xml!B2')
@@ -419,6 +438,24 @@ function buildStyleOnlyBlankCellWorkbook(): Uint8Array {
   return zipSync(zip)
 }
 
+const manyStyleOnlyBlankCellRowCount = 6_000
+
+function buildManyStyleOnlyBlankCellsWorkbook(): Uint8Array {
+  const zip = unzipSync(exportXlsx(buildStyledWorkbook()))
+  zip['xl/styles.xml'] = strToU8(axisStyleReferenceStylesXml)
+  const rows = Array.from({ length: manyStyleOnlyBlankCellRowCount }, (_entry, index) => {
+    const rowNumber = index + 1
+    return `<row r="${String(rowNumber)}"><c r="A${String(rowNumber)}" s="1"><v>${String(rowNumber)}</v></c><c r="B${String(
+      rowNumber,
+    )}" s="1"/></row>`
+  }).join('')
+  const sheetXml = strFromU8(zip['xl/worksheets/sheet1.xml'] ?? new Uint8Array())
+    .replace(/<dimension\b[^>]*\/>/u, `<dimension ref="A1:B${String(manyStyleOnlyBlankCellRowCount)}"/>`)
+    .replace(/<sheetData\b[^>]*>[\s\S]*?<\/sheetData>/u, `<sheetData>${rows}</sheetData>`)
+  zip['xl/worksheets/sheet1.xml'] = strToU8(sheetXml)
+  return zipSync(zip)
+}
+
 function buildPartiallyIndexedStyleArtifactWorkbook(): WorkbookSnapshot {
   return {
     version: 1,
@@ -580,6 +617,35 @@ function firstTag(xml: string, tag: string): string {
 
 function readXmlAttribute(xml: string, name: string): string | undefined {
   return new RegExp(`\\b${name}="([^"]*)"`, 'u').exec(xml)?.[1]
+}
+
+function collectGarbage(): void {
+  const bunValue = Reflect.get(globalThis, 'Bun')
+  if (isRecord(bunValue) && isGarbageCollector(bunValue['gc'])) {
+    bunValue['gc'](true)
+    return
+  }
+  const nodeGc = Reflect.get(globalThis, 'gc')
+  if (isGarbageCollector(nodeGc)) {
+    nodeGc()
+  }
+}
+
+function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isGarbageCollector(value: unknown): value is (force?: boolean) => void {
+  return typeof value === 'function'
+}
+
+function readBenchmarkTolerance(): number {
+  const raw = process.env.BILIG_BENCH_TOLERANCE
+  if (!raw) {
+    return 1
+  }
+  const tolerance = Number(raw)
+  return Number.isFinite(tolerance) && tolerance > 0 ? tolerance : 1
 }
 
 function setXmlAttribute(xml: string, name: string, value: string): string {

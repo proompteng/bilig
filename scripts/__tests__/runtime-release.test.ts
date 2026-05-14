@@ -97,7 +97,7 @@ describe('runtime release helpers', () => {
     const publishedVersions = [
       { packageName: '@bilig/protocol', version: '0.10.1' },
       { packageName: '@bilig/core', version: '0.10.1' },
-      { packageName: '@bilig/excel-import', version: null },
+      { packageName: '@bilig/future-runtime', version: null },
       { packageName: '@bilig/headless', version: '0.10.0' },
     ]
 
@@ -113,7 +113,7 @@ describe('runtime release helpers', () => {
         [
           { packageName: '@bilig/protocol', version: '0.10.0' },
           { packageName: '@bilig/core', version: '0.10.0' },
-          { packageName: '@bilig/excel-import', version: null },
+          { packageName: '@bilig/future-runtime', version: null },
           { packageName: '@bilig/headless', version: '0.10.0' },
         ],
         { allowPartialPublishedSet: false },
@@ -125,16 +125,16 @@ describe('runtime release helpers', () => {
     expect(
       missingPublishedRuntimePackageNames([
         { packageName: '@bilig/protocol', version: '0.10.1' },
-        { packageName: '@bilig/excel-import', version: null },
+        { packageName: '@bilig/future-runtime', version: null },
         { packageName: '@bilig/headless', version: '0.10.0' },
       ]),
-    ).toEqual(['@bilig/excel-import'])
+    ).toEqual(['@bilig/future-runtime'])
   })
 
   it('blocks automatic publishing when runtime package names are not provisioned on npm', () => {
     const publishedVersions = [
       { packageName: '@bilig/protocol', version: '0.10.1' },
-      { packageName: '@bilig/excel-import', version: null },
+      { packageName: '@bilig/future-runtime', version: null },
       { packageName: '@bilig/headless', version: '0.10.0' },
     ]
 
@@ -146,8 +146,8 @@ describe('runtime release helpers', () => {
       }),
     ).toEqual({
       publishAllowed: false,
-      missingPackageNames: ['@bilig/excel-import'],
-      reason: 'npm package name(s) are not provisioned: @bilig/excel-import',
+      missingPackageNames: ['@bilig/future-runtime'],
+      reason: 'npm package name(s) are not provisioned: @bilig/future-runtime',
     })
 
     expect(
@@ -159,9 +159,9 @@ describe('runtime release helpers', () => {
     ).toBe(true)
   })
 
-  it('keeps the Excel importer aligned without publishing it before npm provisioning', () => {
+  it('publishes the Excel importer with the runtime npm package set', () => {
     expect(RUNTIME_PACKAGE_DIRS).toContain('packages/excel-import')
-    expect(RUNTIME_NPM_PACKAGE_DIRS).not.toContain('packages/excel-import')
+    expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/excel-import')
     expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/headless')
   })
 

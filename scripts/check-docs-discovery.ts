@@ -809,11 +809,9 @@ const publicDocs = [
 ] as const
 
 for (const [path, content] of publicDocs) {
-  for (const blockedSnippet of ['pnpm add @bilig/headless @bilig/excel-import', 'pnpm add @bilig/excel-import']) {
-    if (content.includes(blockedSnippet)) {
-      throw new Error(`${path} points users at unpublished npm package command: ${blockedSnippet}`)
-    }
-  }
+  requireIncludes(content, 'pnpm add @bilig/headless @bilig/excel-import', path)
+  requireIncludes(content, "import { exportXlsx, importXlsx } from '@bilig/excel-import'", path)
+  requireIncludes(content, 'workbook.exportSnapshot()', path)
 }
 
 for (const blockedLink of ['](../../docs/', '](../../examples/', '](../../LICENSE)']) {

@@ -8,6 +8,7 @@ interface WatchableChildProcess {
 export interface ChildRssWatchdogOptions {
   readonly maxRssBytes: number
   readonly intervalMs?: number
+  readonly onSample?: (rssBytes: number) => void
   readonly onLimitExceeded: (rssBytes: number) => void
 }
 
@@ -45,6 +46,7 @@ export function startChildRssWatchdog(child: WatchableChildProcess, options: Chi
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | undefined
   let checking = false
+  let peakRssBytes = 0
 
   const schedule = (): void => {
     if (stopped) {
@@ -64,6 +66,10 @@ export function startChildRssWatchdog(child: WatchableChildProcess, options: Chi
     checking = true
     try {
       const rssBytes = await readProcessRssBytes(pid)
+      if (rssBytes !== null) {
+        peakRssBytes = Math.max(peakRssBytes, rssBytes)
+        options.onSample?.(peakRssBytes)
+      }
       if (rssBytes !== null && rssBytes > options.maxRssBytes) {
         options.onLimitExceeded(rssBytes)
         return

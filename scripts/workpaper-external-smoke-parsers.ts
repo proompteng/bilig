@@ -403,27 +403,41 @@ export function parseNodeSnapshotImportOutput(output: string): {
 
 export function parseNodeXlsxImportOutput(output: string): {
   currencyLabel: string
+  editedTotalValue: number
+  exportedBytes: number
   headerPeriod: number
   heightFeet: number
   firstPeriod: number
+  roundTripSheetNames: string[]
+  roundTripTotalValue: number
   secondPeriod: number
   totalValue: number
   translatedStructuredRefs: boolean
 } {
   const parsed = parseJsonRecord(output, 'node XLSX import output')
   const currencyLabel = parsed.currencyLabel
+  const editedTotalValue = parsed.editedTotalValue
+  const exportedBytes = parsed.exportedBytes
   const headerPeriod = parsed.headerPeriod
   const heightFeet = parsed.heightFeet
   const firstPeriod = parsed.firstPeriod
+  const roundTripSheetNames = parsed.roundTripSheetNames
+  const roundTripTotalValue = parsed.roundTripTotalValue
   const secondPeriod = parsed.secondPeriod
   const totalValue = parsed.totalValue
   const translatedStructuredRefs = parsed.translatedStructuredRefs
   if (
     currencyLabel !== 'USD  000s' ||
+    editedTotalValue !== 300 ||
+    typeof exportedBytes !== 'number' ||
+    exportedBytes <= 0 ||
     headerPeriod !== 1 ||
     typeof heightFeet !== 'number' ||
     Math.abs(heightFeet - (5 + 7 / 12)) > 1e-12 ||
     firstPeriod !== 0 ||
+    !isStringArray(roundTripSheetNames) ||
+    !sameJson(roundTripSheetNames, ['Constants', 'Imports', 'PlayerData']) ||
+    roundTripTotalValue !== 300 ||
     secondPeriod !== 1 ||
     totalValue !== 225 ||
     translatedStructuredRefs !== true
@@ -432,9 +446,13 @@ export function parseNodeXlsxImportOutput(output: string): {
   }
   return {
     currencyLabel,
+    editedTotalValue,
+    exportedBytes,
     headerPeriod,
     heightFeet,
     firstPeriod,
+    roundTripSheetNames,
+    roundTripTotalValue,
     secondPeriod,
     totalValue,
     translatedStructuredRefs,

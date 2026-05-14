@@ -190,6 +190,10 @@ function parseStructuredReferenceToken(
 }
 
 function parseStructuredReferenceParts(text: string): StructuredReferenceParts | undefined {
+  if (text.trim().length === 0) {
+    return {}
+  }
+
   const items = splitStructuredReferenceTopLevel(text.trim(), ',')
   if (!items) {
     return undefined

@@ -1573,6 +1573,7 @@ describe('public workbook corpus', () => {
       verifyRssCheckIntervalMs: 100,
     })
 
+    verificationChild.stderr.emit('data', 'bilig-public-workbook-verify-phase=round-trip\n')
     await vi.advanceTimersByTimeAsync(100)
     psChild.stdout.emit('data', '2048\n')
     psChild.emit('close', 0, null)
@@ -1590,6 +1591,8 @@ describe('public workbook corpus', () => {
       expect.arrayContaining([
         publicWorkbookResourceLimitClassifierEvidence,
         'Public corpus verification RSS limit exceeded: 2.0 MiB > 1.0 MiB',
+        'rss-limit-phase=round-trip',
+        'peak-rss=2.0 MiB',
         'The workbook was isolated in a subprocess so the corpus verification run could continue.',
       ]),
     )

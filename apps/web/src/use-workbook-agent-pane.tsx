@@ -46,51 +46,16 @@ import {
   resolveWorkbookAgentReviewOwnerUserId,
   resolvePrimaryWorkbookAgentReviewItem,
 } from './workbook-agent-review-state.js'
+import {
+  formatWorkbookAgentContextLabel,
+  normalizeWorkbookAgentErrorMessage,
+  readAppliedRevision,
+  readMessageEventData,
+  stringifyWorkbookAgentContextSyncKey,
+} from './workbook-agent-pane-helpers.js'
 
 interface WorkbookAgentLiveSession {
   threadId: string
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
-function readMessageEventData(event: Event): string | null {
-  return event instanceof MessageEvent && typeof event.data === 'string' ? event.data : null
-}
-
-function formatWorkbookAgentContextLabel(context: WorkbookAgentUiContext): string {
-  const selectionRange = context.selection.range
-  const address =
-    selectionRange && selectionRange.startAddress !== selectionRange.endAddress
-      ? `${selectionRange.startAddress}:${selectionRange.endAddress}`
-      : context.selection.address
-  return `${context.selection.sheetName}!${address}`
-}
-
-function stringifyWorkbookAgentContextSyncKey(context: WorkbookAgentUiContext): string {
-  const rendered = context.rendered
-  return JSON.stringify({
-    selection: context.selection,
-    viewport: context.viewport,
-    rendered:
-      rendered === undefined
-        ? null
-        : {
-            capturedRevision: rendered.capturedRevision ?? null,
-            batchId: rendered.batchId,
-            selection: rendered.selection,
-            visibleRange: rendered.visibleRange,
-          },
-  })
-}
-
-function readAppliedRevision(record: unknown): number | null {
-  if (!isRecord(record)) {
-    return null
-  }
-  const revision = record['appliedRevision']
-  return typeof revision === 'number' && Number.isInteger(revision) && revision >= 0 ? revision : null
 }
 
 function createTextEntryFromDelta(event: Extract<WorkbookAgentStreamEvent, { type: 'entryTextDelta' }>) {
@@ -181,16 +146,6 @@ function updateSnapshotFromToolOutputDelta(
       return matched ? nextEntries : [...nextEntries, createToolEntryFromOutputDelta(event)]
     })(),
   }
-}
-
-function normalizeWorkbookAgentErrorMessage(error: string): string {
-  if (error.includes('thread/start.dynamicTools requires experimentalApi capability')) {
-    return 'Retry in a moment.'
-  }
-  if (error.includes('Invalid Codex initialize response')) {
-    return 'Retry in a moment.'
-  }
-  return error
 }
 
 export function useWorkbookAgentPane(input: {

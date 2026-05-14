@@ -25,6 +25,35 @@ function writeLookupError(
   return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, error, rangeIndexStack, valueStack, tagStack, kindStack)
 }
 
+function writeLookupReturnValue(
+  base: i32,
+  memberIndex: u32,
+  rangeIndexStack: Uint32Array,
+  valueStack: Float64Array,
+  tagStack: Uint8Array,
+  kindStack: Uint8Array,
+  cellTags: Uint8Array,
+  cellNumbers: Float64Array,
+  cellStringIds: Uint32Array,
+  cellErrors: Uint16Array,
+): i32 {
+  if (cellTags[memberIndex] == ValueTag.Empty) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, 0, rangeIndexStack, valueStack, tagStack, kindStack)
+  }
+  return writeMemberResult(
+    base,
+    memberIndex,
+    rangeIndexStack,
+    valueStack,
+    tagStack,
+    kindStack,
+    cellTags,
+    cellNumbers,
+    cellStringIds,
+    cellErrors,
+  )
+}
+
 export function tryApplyLookupTableBuiltin(
   builtinId: i32,
   argc: i32,
@@ -194,7 +223,7 @@ export function tryApplyLookupTableBuiltin(
     if (resultMemberIndex == 0xffffffff) {
       return writeLookupError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
     }
-    return writeMemberResult(
+    return writeLookupReturnValue(
       base,
       resultMemberIndex,
       rangeIndexStack,
@@ -289,7 +318,7 @@ export function tryApplyLookupTableBuiltin(
     if (resultMemberIndex == 0xffffffff) {
       return writeLookupError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
     }
-    return writeMemberResult(
+    return writeLookupReturnValue(
       base,
       resultMemberIndex,
       rangeIndexStack,

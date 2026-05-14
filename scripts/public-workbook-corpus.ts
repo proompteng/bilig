@@ -640,6 +640,9 @@ async function main(): Promise<void> {
           timeoutMs: readNumberArg('--verify-timeout-ms', defaultVerifyTimeoutMs),
           maxRssBytes: verifyMaxRssBytes,
           rssCheckIntervalMs: defaultSelfRssCheckIntervalMs,
+          onPhase: (phase) => {
+            process.stderr.write(`bilig-public-workbook-verify-phase=${phase}\n`)
+          },
         },
       )
       process.stdout.write(`${JSON.stringify(result)}\n`)
