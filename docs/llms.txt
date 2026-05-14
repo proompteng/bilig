@@ -148,6 +148,9 @@ npm run agent:verify
 - serverless API route recipe:
   https://proompteng.github.io/bilig/serverless-workpaper-api-route.html
   https://github.com/proompteng/bilig/blob/main/docs/serverless-workpaper-api-route.md
+- Next.js Server Action WorkPaper smoke:
+  npm run next-server-action
+  https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api#nextjs-server-action-smoke
 - Express, Fastify, and Hono WorkPaper adapters:
   https://proompteng.github.io/bilig/node-framework-workpaper-adapters.html
   https://github.com/proompteng/bilig/blob/main/docs/node-framework-workpaper-adapters.md

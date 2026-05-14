@@ -14,6 +14,7 @@ Run it outside the monorepo with the published package:
 npm install
 npm run smoke
 npm run next-route-handler
+npm run next-server-action
 npm run framework-adapters
 npm run persistence-adapters
 ```
@@ -114,6 +115,58 @@ Expected output:
       "serializedBytes": 1195,
       "totalRevenueChanged": true
     }
+  },
+  "after": {
+    "largestDeal": 24000,
+    "totalRevenue": 48600,
+    "westCustomers": 20
+  },
+  "verified": true
+}
+```
+
+## Next.js Server Action Smoke
+
+Run the Server Action-shaped smoke when a form or mutation should call
+WorkPaper logic directly instead of going through a route handler:
+
+```sh
+npm run next-server-action
+```
+
+The script exports dependency-free `readRevenueSummaryAction()` and
+`updateRevenueRecordsAction()` functions with the same `'use server'` boundary a
+Next.js app would use. The actions call the shared WorkPaper request handler,
+send a revenue update, read the summary again, and print `verified: true` only
+after formulas recalculate and the saved document still contains formulas.
+
+Expected output:
+
+```json
+{
+  "action": "Next.js Server Action",
+  "before": {
+    "largestDeal": 24000,
+    "totalRevenue": 36900,
+    "westCustomers": 20
+  },
+  "edit": {
+    "before": {
+      "largestDeal": 24000,
+      "totalRevenue": 36900,
+      "westCustomers": 20
+    },
+    "after": {
+      "largestDeal": 24000,
+      "totalRevenue": 48600,
+      "westCustomers": 20
+    },
+    "checks": {
+      "formulasPersisted": true,
+      "serializedBytes": 1195,
+      "totalRevenueChanged": true
+    },
+    "records": 4
   },
   "after": {
     "largestDeal": 24000,
@@ -249,6 +302,9 @@ Expected output shape:
 
 - In a Next.js app route, call `handleWorkPaperRequest()` from `GET()` and
   `POST()`.
+- In a Next.js Server Action, call the shared WorkPaper handler from small
+  `'use server'` action functions like `readRevenueSummaryAction()` and
+  `updateRevenueRecordsAction()`.
 - In a Vercel Function, export small web-standard `GET()` and `POST()` handlers
   from files under `/api`.
 - In a Cloudflare Worker, call it from `fetch(request)`.

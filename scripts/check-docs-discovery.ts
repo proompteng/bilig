@@ -850,6 +850,7 @@ requireIncludes(headlessExamplePackage, '"agent:mcp-tools": "tsx mcp-tool-server
 requireIncludes(headlessExamplePackage, '"agent:mcp-stdio": "tsx mcp-stdio-server.ts"', 'examples/headless-workpaper/package.json')
 await requireFile(join(repoRoot, 'examples', 'serverless-workpaper-api', 'framework-adapters.ts'))
 await requireFile(join(repoRoot, 'examples', 'serverless-workpaper-api', 'next-route-handler.ts'))
+await requireFile(join(repoRoot, 'examples', 'serverless-workpaper-api', 'next-server-action.ts'))
 await requireFile(join(repoRoot, 'examples', 'serverless-workpaper-api', 'persistence-adapters.ts'))
 const [serverlessExampleReadme, serverlessExamplePackage] = await Promise.all([
   readFile(join(repoRoot, 'examples', 'serverless-workpaper-api', 'README.md'), 'utf8'),
@@ -860,6 +861,13 @@ const persistenceDoc = await readFile(join(docsRoot, 'persisting-formula-backed-
 requireIncludes(serverlessExampleReadme, 'npm run next-route-handler', 'examples/serverless-workpaper-api/README.md')
 requireIncludes(serverlessExampleReadme, '## Next.js App Router Smoke', 'examples/serverless-workpaper-api/README.md')
 requireIncludes(serverlessWorkPaperApiRouteDoc, 'npm run next-route-handler', 'docs/serverless-workpaper-api-route.md')
+requireIncludes(serverlessExampleReadme, 'npm run next-server-action', 'examples/serverless-workpaper-api/README.md')
+requireIncludes(serverlessExampleReadme, '## Next.js Server Action Smoke', 'examples/serverless-workpaper-api/README.md')
+requireIncludes(serverlessWorkPaperApiRouteDoc, 'npm run next-server-action', 'docs/serverless-workpaper-api-route.md')
+requireIncludes(serverlessWorkPaperApiRouteDoc, '## Next.js Server Action Adapter', 'docs/serverless-workpaper-api-route.md')
+requireIncludes(llms, 'Next.js Server Action WorkPaper smoke', 'docs/llms.txt')
+requireIncludes(llms, 'npm run next-server-action', 'docs/llms.txt')
+requireIncludes(readme, 'npm run next-server-action', 'README.md')
 requireIncludes(serverlessExampleReadme, 'npm run framework-adapters', 'examples/serverless-workpaper-api/README.md')
 requireIncludes(serverlessExampleReadme, '## Framework Adapters', 'examples/serverless-workpaper-api/README.md')
 requireIncludes(serverlessExampleReadme, 'npm run persistence-adapters', 'examples/serverless-workpaper-api/README.md')
@@ -876,6 +884,11 @@ requireIncludes(persistenceDoc, 'Redis or string-KV adapter', 'docs/persisting-f
 requireIncludes(
   serverlessExamplePackage,
   '"next-route-handler": "tsx next-route-handler.ts"',
+  'examples/serverless-workpaper-api/package.json',
+)
+requireIncludes(
+  serverlessExamplePackage,
+  '"next-server-action": "tsx next-server-action.ts"',
   'examples/serverless-workpaper-api/package.json',
 )
 requireIncludes(
@@ -903,6 +916,8 @@ requireIncludes(headlessReadme, '#quote-approval-threshold', 'packages/headless/
 requireIncludes(headlessReadme, 'npm run subscription-mrr', 'packages/headless/README.md')
 requireIncludes(headlessReadme, '#subscription-mrr-forecast', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'npm run next-route-handler', 'packages/headless/README.md')
+requireIncludes(headlessReadme, 'npm run next-server-action', 'packages/headless/README.md')
+requireIncludes(headlessReadme, '#nextjs-server-action-smoke', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'npm run framework-adapters', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'npm run persistence-adapters', 'packages/headless/README.md')
 requireIncludes(headlessReadme, '#persistence-adapters', 'packages/headless/README.md')

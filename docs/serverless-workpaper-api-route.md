@@ -347,6 +347,43 @@ small; the shared handler is what keeps formula evaluation, persistence, and
 readback behavior identical between local Node, Next.js, and other web-standard
 route surfaces.
 
+## Next.js Server Action Adapter
+
+Use a Server Action when a form or mutation should update a WorkPaper directly
+from the server-side action instead of posting through an API route. The
+repository example keeps this dependency-free and runnable:
+
+```sh
+cd examples/serverless-workpaper-api
+npm install
+npm run next-server-action
+```
+
+The example exports small action functions:
+
+```ts
+export async function readRevenueSummaryAction() {
+  'use server'
+
+  return requestJson('/api/workpaper/summary', parseSummaryResponse)
+}
+
+export async function updateRevenueRecordsAction(records) {
+  'use server'
+
+  return requestJson('/api/workpaper/revenue', parseEditResponse, {
+    body: JSON.stringify({ records }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  })
+}
+```
+
+In a real Next.js app, keep `requestJson()` as a tiny wrapper around the shared
+WorkPaper handler or route module. The smoke test prints `verified: true` only
+after the action reads the original summary, writes the revenue records, reads
+the recalculated summary, and confirms formulas survived the saved document.
+
 ## Vercel Function Adapter
 
 Plain Vercel Functions can use the same web-standard `Request` and `Response`
