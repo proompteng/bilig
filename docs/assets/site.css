@@ -353,7 +353,6 @@ h2 {
 .section-head p,
 .work-row p,
 .path-link em,
-.proof-row p,
 .docs-column a,
 .final p {
   color: var(--muted);
@@ -496,97 +495,118 @@ h2 {
 }
 
 .proof-section {
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  background: #f5f5ef;
+  background: #f6f7f1;
 }
 
 .proof-layout {
-  grid-template-columns: minmax(280px, 0.5fr) minmax(0, 0.95fr);
-  gap: clamp(32px, 5vw, 68px);
-  align-items: start;
+  grid-template-columns: minmax(300px, 0.55fr) minmax(0, 0.9fr);
+  gap: clamp(34px, 6vw, 78px);
+  align-items: center;
 }
 
 .proof-intro {
   display: grid;
-  gap: 15px;
-  max-width: 540px;
+  gap: 17px;
+  max-width: 560px;
 }
 
 .proof-intro h2 {
   margin-top: 0;
-  font-size: clamp(36px, 4vw, 54px);
-  line-height: 1.04;
+  font-size: clamp(34px, 4vw, 50px);
+  line-height: 1.06;
 }
 
 .proof-intro p:not(.kicker) {
   color: var(--muted);
-  font-size: 18px;
-  line-height: 1.55;
+  font-size: 17px;
+  line-height: 1.6;
 }
 
 .proof-board {
   overflow: hidden;
-  border: 1px solid var(--line-strong);
-  background: var(--paper);
-  box-shadow: 0 16px 38px rgba(27, 31, 24, 0.08);
+  border-top: 2px solid var(--ink);
+  border-bottom: 1px solid var(--line-strong);
+  background: rgba(255, 254, 250, 0.72);
+  padding: 0 clamp(20px, 3vw, 30px);
 }
 
-.proof-summary {
-  display: grid;
-  grid-template-columns: 1fr;
+.proof-board-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
   border-bottom: 1px solid var(--line);
+  padding: 16px 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .proof-result {
   display: grid;
-  gap: 10px;
-  background: var(--dark);
-  padding: clamp(22px, 3vw, 30px);
-  color: #f6f1e7;
+  grid-template-columns: minmax(156px, auto) minmax(0, 1fr);
+  gap: 18px clamp(22px, 4vw, 42px);
+  align-items: end;
+  border-bottom: 1px solid var(--line);
+  padding: clamp(24px, 3.5vw, 36px) 0;
 }
 
 .proof-result strong {
-  color: var(--accent-bright);
-  font-size: clamp(50px, 7vw, 78px);
+  color: var(--accent);
+  font-size: clamp(56px, 8vw, 88px);
   font-variant-numeric: tabular-nums;
   font-weight: 800;
   letter-spacing: 0;
-  line-height: 0.95;
+  line-height: 0.9;
 }
 
 .proof-result p {
-  max-width: 360px;
-  color: #d8d3c7;
-  font-size: 15px;
-}
-
-.proof-command {
-  display: grid;
-  grid-template-columns: 112px minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-  min-width: 0;
-  padding: clamp(22px, 3vw, 30px);
-}
-
-.proof-command span {
+  max-width: 430px;
   color: var(--muted);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
-.proof-row {
+.proof-label {
+  grid-column: 1 / -1;
+}
+
+.proof-facts {
   display: grid;
-  grid-template-columns: 116px minmax(0, 0.66fr) minmax(230px, 0.48fr);
-  gap: clamp(16px, 2.5vw, 30px);
-  align-items: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.proof-fact {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
   border-bottom: 1px solid var(--line);
-  padding: 20px clamp(22px, 3vw, 30px);
+  padding: 18px 22px 18px 0;
+}
+
+.proof-fact:nth-child(odd) {
+  border-right: 1px solid var(--line);
+}
+
+.proof-fact:nth-child(even) {
+  padding-left: 22px;
+}
+
+.proof-fact:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.proof-fact dt {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .proof-command code,
-.proof-row code {
+.proof-fact code {
   overflow-wrap: break-word;
   word-break: normal;
   color: var(--ink);
@@ -597,27 +617,28 @@ h2 {
   display: block;
   max-width: 100%;
   border: 1px solid var(--line);
-  background: rgba(255, 254, 250, 0.68);
+  background: #fffefa;
   padding: 10px 12px;
   overflow-wrap: anywhere;
   white-space: normal;
 }
 
-.proof-row dd {
+.proof-fact dd {
   color: var(--ink);
-  font-size: clamp(20px, 2.3vw, 27px);
+  font-size: clamp(16px, 1.7vw, 20px);
   font-weight: 700;
-  line-height: 1.12;
+  line-height: 1.3;
 }
 
 .proof-row-code dd {
-  font-size: clamp(14px, 1.55vw, 18px);
+  font-size: clamp(13px, 1.45vw, 16px);
   line-height: 1.35;
 }
 
 .proof-links {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--line);
 }
 
 .proof-links a {
@@ -625,7 +646,7 @@ h2 {
   gap: 6px;
   min-width: 0;
   border-left: 1px solid var(--line);
-  padding: 18px clamp(18px, 2.4vw, 24px);
+  padding: 17px clamp(16px, 2.4vw, 22px);
   text-decoration: none;
 }
 
@@ -762,12 +783,19 @@ footer {
     gap: 7px;
   }
 
-  .proof-summary {
+  .proof-result,
+  .proof-facts {
     grid-template-columns: 1fr;
   }
 
-  .proof-command {
-    grid-template-columns: 1fr;
+  .proof-fact,
+  .proof-fact:nth-child(even),
+  .proof-fact:nth-child(odd),
+  .proof-fact:nth-last-child(-n + 2) {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding-left: 0;
+    padding-right: 0;
   }
 
   .proof-links a,

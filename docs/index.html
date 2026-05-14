@@ -121,7 +121,7 @@
         ]
       }
     </script>
-    <link rel="stylesheet" href="./assets/site.css?v=2026-05-13-28" />
+    <link rel="stylesheet" href="./assets/site.css?v=2026-05-13-29" />
     <link rel="stylesheet" href="./assets/product-demo.css?v=2026-05-13-4" />
   </head>
   <body>
@@ -484,58 +484,58 @@ function readNumber(cell: unknown): number {
           <div class="proof-layout">
             <div class="proof-intro">
               <p class="kicker">Benchmark</p>
-              <h2 id="proof-title">46/46 mean wins. One p95 row is slower.</h2>
+              <h2 id="proof-title">Fast on the checked-in suite. Test your own workbook.</h2>
               <p>
-                The current WorkPaper vs HyperFormula artifact puts WorkPaper ahead on mean latency for this suite. Use it for comparable
-                headless workloads, not as a general speed claim.
+                The benchmark is intentionally narrow: WorkPaper versus HyperFormula-style headless workloads. The command, baseline JSON,
+                and p95 caveat live in the repo.
               </p>
             </div>
 
             <div class="proof-board" aria-label="Benchmark evidence">
-              <div class="proof-summary">
-                <div class="proof-result">
-                  <span class="proof-label">Current checked-in result</span>
-                  <strong>46 / 46</strong>
-                  <p>Lower mean latency on every comparable row in the current artifact.</p>
-                </div>
-                <div class="proof-command">
-                  <span>Run it locally</span>
-                  <code>pnpm workpaper:bench:competitive:check</code>
-                </div>
+              <div class="proof-board-head">
+                <span>WorkPaper vs HyperFormula</span>
+                <strong>mean latency</strong>
               </div>
 
-              <dl class="proof-ledger">
-                <div class="proof-row">
-                  <dt>Scope</dt>
-                  <dd>Comparable headless workloads</dd>
-                  <p>No UI-performance claim. No Excel-compatibility claim.</p>
+              <div class="proof-result">
+                <span class="proof-label">Current artifact</span>
+                <strong>46/46</strong>
+                <p>WorkPaper is faster on mean latency for every comparable row in the current run.</p>
+              </div>
+
+              <dl class="proof-facts">
+                <div class="proof-fact proof-command">
+                  <dt>Run</dt>
+                  <dd><code>pnpm workpaper:bench:competitive:check</code></dd>
                 </div>
-                <div class="proof-row proof-row-code">
-                  <dt>Artifact</dt>
+                <div class="proof-fact proof-row-code">
+                  <dt>Source</dt>
                   <dd>
                     <code>packages/benchmarks/baselines/<wbr />workpaper-vs-hyperformula.json</code>
                   </dd>
-                  <p>Committed JSON, not a screenshot. Benchmark changes show up as normal diffs.</p>
                 </div>
-                <div class="proof-row proof-row-code">
+                <div class="proof-fact">
                   <dt>Caveat</dt>
-                  <dd><code>lookup-approximate-duplicates</code></dd>
-                  <p>p95 is 1.043x slower. If your workbook relies on approximate lookups with duplicates, test it first.</p>
+                  <dd><code>lookup-approximate-duplicates</code> is slower at p95: 1.043x.</dd>
+                </div>
+                <div class="proof-fact">
+                  <dt>Not measured</dt>
+                  <dd>Browser grid speed, Excel compatibility, or every possible workbook.</dd>
                 </div>
               </dl>
 
               <div class="proof-links" aria-label="Benchmark evidence links">
                 <a href="./what-workpaper-benchmark-proves.html">
-                  <span>Benchmark notes</span>
-                  <strong>Read what the numbers mean</strong>
+                  <span>Notes</span>
+                  <strong>What the benchmark says</strong>
                 </a>
                 <a href="./where-bilig-is-not-excel-compatible-yet.html">
-                  <span>Compatibility</span>
-                  <strong>Check the Excel gaps</strong>
+                  <span>Limits</span>
+                  <strong>Known Excel gaps</strong>
                 </a>
                 <a href="https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only">
                   <span>Contribute</span>
-                  <strong>Good first issues</strong>
+                  <strong>Starter issues</strong>
                 </a>
               </div>
             </div>
