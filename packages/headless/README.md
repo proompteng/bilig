@@ -412,9 +412,10 @@ outputs survived the round trip.
 persistence bytes, and restored readback equality.
 
 `npm run agent:framework-adapters` maps the same validated WorkPaper operations
-into AI SDK, LangChain, Mastra, LlamaIndex.TS, LangGraph.js, CopilotKit, and
-Cloudflare Agents tool shapes. The example verifies the same write and readback
-contract for each wrapper without adding those agent frameworks as dependencies.
+into OpenAI Responses API, AI SDK, LangChain, Mastra, LlamaIndex.TS,
+LangGraph.js, CopilotKit, and Cloudflare Agents tool shapes. The example
+verifies the same write and readback contract for each wrapper without adding
+those agent frameworks as dependencies.
 
 `npm run agent:mcp-tools` exposes the same operations through dependency-free
 MCP-style `tools/list` and `tools/call` JSON-RPC responses with JSON Schema

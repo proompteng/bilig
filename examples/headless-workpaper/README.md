@@ -149,8 +149,8 @@ restored summary, and serialized byte count.
 For agent frameworks, the
 [`WorkPaper tool-calling recipe`](../../docs/agent-workpaper-tool-calling-recipe.md)
 also links to wrappers that keep the same validation and computed readback
-contract across AI SDK, LangChain, Mastra, LlamaIndex.TS, LangGraph.js,
-CopilotKit, and Cloudflare Agents.
+contract across the OpenAI Responses API, AI SDK, LangChain, Mastra,
+LlamaIndex.TS, LangGraph.js, CopilotKit, and Cloudflare Agents.
 
 ## Agent Framework Adapters
 
@@ -184,6 +184,18 @@ Expected output:
       "checks": {
         "previousValue": 0.25,
         "newValue": 0.4,
+        "formulasPersisted": true,
+        "restoredMatchesAfter": true,
+        "expectedArrChanged": true
+      }
+    }
+  },
+  "openAiResponses": {
+    "toolNames": ["read_workpaper_summary", "set_workpaper_input_cell"],
+    "toolOutputTypes": ["function_call_output", "function_call_output"],
+    "writeResult": {
+      "editedCell": "Inputs!B3",
+      "checks": {
         "formulasPersisted": true,
         "restoredMatchesAfter": true,
         "expectedArrChanged": true
@@ -232,6 +244,7 @@ The script uses real `zod` schemas and one WorkPaper tool implementation, then
 adapts it to:
 
 - AI SDK-style `execute({ ... })` tools
+- OpenAI Responses API `function_call` and `function_call_output` messages
 - LangChain `tool(..., { schema })` / LangGraph `ToolNode` shapes
 - Mastra `createTool({ id, inputSchema, outputSchema, execute })`
 - LlamaIndex.TS `tool(fn, { parameters })` / `FunctionTool` shapes

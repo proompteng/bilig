@@ -29,6 +29,10 @@ For a runnable external example, use
 AI SDK or LangChain into this repository, run
 `npm run agent:framework-adapters`.
 
+If your app calls OpenAI directly, start with the
+[Responses API function-calling guide](https://developers.openai.com/api/docs/guides/function-calling)
+and keep the WorkPaper functions below as your application-side tool handlers.
+
 ## Tool Contract
 
 Expose a small, boring tool surface first:
@@ -202,6 +206,142 @@ summary changed as expected:
 
 `serializedBytes` will vary as the document schema evolves. Treat it as a
 positive persistence check, not a stable snapshot value.
+
+## OpenAI Responses API Tool Wrapper
+
+OpenAI function tools should stay thin. The model chooses a tool call; your
+Node process parses the arguments, runs the WorkPaper function, and sends the
+structured result back as a `function_call_output`. Do not ask the model to
+modify workbook JSON by hand.
+
+The official Responses API function-calling flow preserves the model output,
+executes every `function_call`, appends `function_call_output` items, and sends
+that input back to the model. The WorkPaper-specific part is the dispatcher:
+
+```ts
+import OpenAI from 'openai'
+
+type OpenAiToolResult = ReturnType<typeof tools.readSummary> | ReturnType<typeof tools.setInputCell>
+
+type OpenAiWorkPaperCall = {
+  name: string
+  arguments: string
+}
+
+const openai = new OpenAI()
+
+const openAiWorkPaperTools = [
+  {
+    type: 'function',
+    name: 'read_workpaper_summary',
+    description: 'Read computed WorkPaper summary values and serialized inputs for a small A1 range.',
+    parameters: {
+      type: 'object',
+      properties: {
+        range: {
+          type: 'string',
+          description: 'A small A1 range including the sheet name.',
+          default: 'Summary!A1:B3',
+        },
+      },
+      required: ['range'],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+  {
+    type: 'function',
+    name: 'set_workpaper_input_cell',
+    description: 'Set one validated WorkPaper input cell and return before/after formula readback.',
+    parameters: {
+      type: 'object',
+      properties: {
+        sheetName: {
+          type: 'string',
+          description: 'Target sheet name, for example Revenue.',
+        },
+        address: {
+          type: 'string',
+          description: 'A1 address inside the target sheet, for example B3.',
+        },
+        value: {
+          type: ['string', 'number', 'boolean', 'null'],
+          description: 'Literal input value. Use a separate tool for formulas.',
+        },
+      },
+      required: ['sheetName', 'address', 'value'],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+] as const
+
+const input: Array<Record<string, unknown>> = [
+  {
+    role: 'user',
+    content: 'Set Sales customers to 25, then tell me the current MRR and next month MRR.',
+  },
+]
+
+let response = await openai.responses.create({
+  model: process.env.OPENAI_MODEL ?? 'gpt-5',
+  tools: openAiWorkPaperTools,
+  input,
+})
+
+input.push(...response.output)
+
+for (const item of response.output) {
+  if (item.type !== 'function_call') {
+    continue
+  }
+
+  const result = dispatchOpenAiWorkPaperCall({
+    name: item.name,
+    arguments: item.arguments,
+  })
+
+  input.push({
+    type: 'function_call_output',
+    call_id: item.call_id,
+    output: JSON.stringify(result),
+  })
+}
+
+response = await openai.responses.create({
+  model: process.env.OPENAI_MODEL ?? 'gpt-5',
+  instructions: 'Answer from WorkPaper tool output only. Mention the edited cell and computed readback.',
+  tools: openAiWorkPaperTools,
+  input,
+})
+
+console.log(response.output_text)
+
+function dispatchOpenAiWorkPaperCall(call: OpenAiWorkPaperCall): OpenAiToolResult {
+  if (call.name === 'read_workpaper_summary') {
+    const args = JSON.parse(call.arguments) as { range?: string }
+    return tools.readSummary(args.range ?? 'Summary!A1:B3')
+  }
+
+  if (call.name === 'set_workpaper_input_cell') {
+    const args = JSON.parse(call.arguments) as SetInputCellArgs
+    const result = tools.setInputCell(args)
+
+    if (!result.checks.currentMrrChanged || !result.checks.nextMonthMrrChanged) {
+      throw new Error(`WorkPaper edit did not change the dependent summary: ${JSON.stringify(result.checks)}`)
+    }
+
+    return result
+  }
+
+  throw new Error(`unknown WorkPaper tool: ${call.name}`)
+}
+```
+
+The object returned to OpenAI should be the same object you would log in a local
+smoke test: `editedCell`, `before`, `after`, and `checks`. That makes the final
+assistant message explain the workbook change from computed readback instead of
+from a guess.
 
 ## Vercel AI SDK Tool Wrapper
 

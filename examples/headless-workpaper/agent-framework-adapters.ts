@@ -20,6 +20,32 @@ type ReadSummaryArgs = {
 type WorkPaperToolSet = ReturnType<typeof createWorkPaperTools>
 type WorkPaperReadResult = ReturnType<WorkPaperToolSet['readWorkPaperSummary']>
 type WorkPaperWriteResult = ReturnType<WorkPaperToolSet['setWorkPaperInputCell']>
+type OpenAiResponsesAdapter = ReturnType<typeof createOpenAiResponsesTools>
+type OpenAiFunctionTool = {
+  type: 'function'
+  name: 'read_workpaper_summary' | 'set_workpaper_input_cell'
+  description: string
+  parameters: Record<string, unknown>
+  strict: true
+}
+type OpenAiFunctionCall =
+  | {
+      type: 'function_call'
+      call_id: string
+      name: 'read_workpaper_summary'
+      arguments: string
+    }
+  | {
+      type: 'function_call'
+      call_id: string
+      name: 'set_workpaper_input_cell'
+      arguments: string
+    }
+type OpenAiFunctionCallOutput = {
+  type: 'function_call_output'
+  call_id: string
+  output: string
+}
 type LangChainReadTool = {
   name: 'read_workpaper_summary'
   description: string
@@ -120,6 +146,7 @@ const workPaperWriteOutputSchema = z
   .passthrough()
 
 const aiSdkWorkbook = buildWorkbook()
+const openAiResponsesWorkbook = buildWorkbook()
 const langChainWorkbook = buildWorkbook()
 const mastraWorkbook = buildWorkbook()
 const llamaIndexWorkbook = buildWorkbook()
@@ -127,6 +154,7 @@ const langGraphWorkbook = buildWorkbook()
 const copilotKitWorkbook = buildWorkbook()
 const cloudflareAgentsWorkbook = buildWorkbook()
 const aiSdkTools = createAiSdkTools(createWorkPaperTools(aiSdkWorkbook))
+const openAiResponsesTools = createOpenAiResponsesTools(createWorkPaperTools(openAiResponsesWorkbook))
 const langChainTools = createLangChainTools(createWorkPaperTools(langChainWorkbook))
 const mastraTools = createMastraTools(createWorkPaperTools(mastraWorkbook))
 const llamaIndexTools = createLlamaIndexTools(createWorkPaperTools(llamaIndexWorkbook))
@@ -146,6 +174,7 @@ const output = {
       value: 0.4,
     }),
   },
+  openAiResponses: runOpenAiResponsesToolLoop(openAiResponsesTools),
   langChain: {
     toolNames: langChainTools.map((tool) => tool.name),
     readResult: requireTool(langChainTools, 'read_workpaper_summary').invoke({
@@ -294,6 +323,97 @@ function createAiSdkTools(workPaperTools: WorkPaperToolSet) {
         return workPaperTools.setWorkPaperInputCell(args)
       },
     },
+  }
+}
+
+function createOpenAiResponsesTools(workPaperTools: WorkPaperToolSet) {
+  const functionTools: OpenAiFunctionTool[] = [
+    {
+      type: 'function',
+      name: 'read_workpaper_summary',
+      description: 'Read computed WorkPaper summary values for a small range.',
+      parameters: {
+        type: 'object',
+        required: ['range'],
+        properties: {
+          range: {
+            type: 'string',
+            default: 'Summary!A1:B5',
+          },
+        },
+        additionalProperties: false,
+      },
+      strict: true,
+    },
+    {
+      type: 'function',
+      name: 'set_workpaper_input_cell',
+      description: 'Set one validated WorkPaper input cell and return formula readback.',
+      parameters: {
+        type: 'object',
+        required: ['sheetName', 'address', 'value'],
+        properties: {
+          sheetName: {
+            type: 'string',
+          },
+          address: {
+            type: 'string',
+          },
+          value: {
+            type: ['string', 'number', 'boolean', 'null'],
+          },
+        },
+        additionalProperties: false,
+      },
+      strict: true,
+    },
+  ]
+
+  return {
+    tools: functionTools,
+    dispatch(call: OpenAiFunctionCall): WorkPaperReadResult | WorkPaperWriteResult {
+      if (call.name === 'read_workpaper_summary') {
+        const args = readSummaryInputSchema.parse(JSON.parse(call.arguments))
+        return workPaperTools.readWorkPaperSummary(args.range)
+      }
+
+      const args = setInputCellInputSchema.parse(JSON.parse(call.arguments))
+      return workPaperTools.setWorkPaperInputCell(args)
+    },
+  }
+}
+
+function runOpenAiResponsesToolLoop(adapter: OpenAiResponsesAdapter) {
+  const functionCalls: OpenAiFunctionCall[] = [
+    {
+      type: 'function_call',
+      call_id: 'call_read_summary',
+      name: 'read_workpaper_summary',
+      arguments: JSON.stringify({ range: 'Summary!A1:B5' }),
+    },
+    {
+      type: 'function_call',
+      call_id: 'call_set_input_b3',
+      name: 'set_workpaper_input_cell',
+      arguments: JSON.stringify({
+        sheetName: 'Inputs',
+        address: 'B3',
+        value: 0.4,
+      }),
+    },
+  ]
+  const [readResult, writeResult] = functionCalls.map((call) => adapter.dispatch(call))
+  const toolOutputs: OpenAiFunctionCallOutput[] = functionCalls.map((call, index) => ({
+    type: 'function_call_output',
+    call_id: call.call_id,
+    output: JSON.stringify(index === 0 ? readResult : writeResult),
+  }))
+
+  return {
+    toolNames: adapter.tools.map((tool) => tool.name),
+    toolOutputTypes: toolOutputs.map((item) => item.type),
+    readResult: requireWorkPaperReadResult(readResult),
+    writeResult: requireWorkPaperWriteResult(writeResult),
   }
 }
 
@@ -578,6 +698,13 @@ function requireWorkPaperWriteResult(result: WorkPaperReadResult | WorkPaperWrit
   return result
 }
 
+function requireWorkPaperReadResult(result: WorkPaperReadResult | WorkPaperWriteResult): WorkPaperReadResult {
+  if ('editedCell' in result) {
+    throw new Error(`Expected WorkPaper read result, received ${JSON.stringify(result)}`)
+  }
+  return result
+}
+
 function requireSheet(workpaper: WorkPaperInstance, sheetName: string): number {
   const sheetId = workpaper.getSheetId(sheetName)
   if (sheetId === undefined) {
@@ -665,6 +792,7 @@ function assertOutput(actual: typeof output): void {
 
   const writeResults: [string, WorkPaperWriteResult][] = [
     ['aiSdk', actual.aiSdk.writeResult],
+    ['openAiResponses', actual.openAiResponses.writeResult],
     ['langChain', actual.langChain.writeResult],
     ['mastra', actual.mastra.writeResult],
     ['llamaIndex', actual.llamaIndex.writeResult],

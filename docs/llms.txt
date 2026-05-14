@@ -356,8 +356,6 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/223
 - current small docs issue: MCP stdio output transcript:
   https://github.com/proompteng/bilig/issues/233
-- current small docs issue: OpenAI WorkPaper tool-calling recipe:
-  https://github.com/proompteng/bilig/issues/247
 - current small docs issue: Cursor MCP config for the WorkPaper stdio server:
   https://github.com/proompteng/bilig/issues/283
 - current small docs issue: Windsurf MCP config for local WorkPaper testing:
@@ -472,6 +470,8 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/326
 - current small agent issue: Cloudflare Agents WorkPaper state persistence note:
   https://github.com/proompteng/bilig/issues/327
+- current small agent issue: OpenAI Responses streaming tool-call transcript:
+  https://github.com/proompteng/bilig/issues/334
 - current small site issue: social preview checklist:
   https://github.com/proompteng/bilig/issues/328
 - current small site issue: OpenGraph cache-bust note:

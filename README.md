@@ -495,7 +495,8 @@ screenshots.
 For a concrete framework-neutral agent tool loop, see
 [`docs/agent-workpaper-tool-calling-recipe.md`](docs/agent-workpaper-tool-calling-recipe.md).
 It wraps WorkPaper reads, validated writes, computed before/after checks, and
-persistence into a small tool surface.
+persistence into a small tool surface, including an OpenAI Responses API
+function-calling wrapper.
 
 For the persistence-focused follow-up article and runnable example, see
 [`docs/persisting-formula-backed-workpaper-documents-in-node.md`](docs/persisting-formula-backed-workpaper-documents-in-node.md)

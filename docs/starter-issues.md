@@ -16,12 +16,12 @@ Current starter queue as of May 13, 2026:
 
 - [#153: docs(agent): add WorkPaper tool result contract table](https://github.com/proompteng/bilig/issues/153)
 - [#163: docs(agent): add coding-agent workbook automation recipe](https://github.com/proompteng/bilig/issues/163)
-- [#247: docs(agent): add OpenAI WorkPaper tool-calling recipe](https://github.com/proompteng/bilig/issues/247)
 - [#323: docs(agent): add Mastra WorkPaper verification transcript](https://github.com/proompteng/bilig/issues/323)
 - [#324: docs(agent): add LlamaIndex.TS WorkPaper verification transcript](https://github.com/proompteng/bilig/issues/324)
 - [#325: docs(agent): add LangGraph.js ToolNode state handoff note](https://github.com/proompteng/bilig/issues/325)
 - [#326: docs(agent): add CopilotKit WorkPaper action UI result note](https://github.com/proompteng/bilig/issues/326)
 - [#327: docs(agent): add Cloudflare Agents WorkPaper state persistence note](https://github.com/proompteng/bilig/issues/327)
+- [#334: docs(agent): add OpenAI Responses streaming tool-call transcript](https://github.com/proompteng/bilig/issues/334)
 - [#283: docs(mcp): add Cursor MCP config for the WorkPaper stdio server](https://github.com/proompteng/bilig/issues/283)
 - [#284: docs(mcp): add Windsurf MCP config for local WorkPaper testing](https://github.com/proompteng/bilig/issues/284)
 - [#285: docs(mcp): add MCP Inspector smoke-test transcript for the WorkPaper server](https://github.com/proompteng/bilig/issues/285)
