@@ -894,7 +894,7 @@ export function buildFixtureInput(): BuildScorecardInput {
         captured: false,
         evidenceKind: 'not-captured',
         requiredProductCount: 3,
-        requiredCaseCount: 0,
+        requiredCaseCount: 9,
         tenXMeanAndP95CaseCount: 0,
         coveredCorpusCaseIds: [],
         limitations: ['Same-corpus live browser timing against Bilig, Google Sheets, and Microsoft Excel Web has not been captured yet.'],

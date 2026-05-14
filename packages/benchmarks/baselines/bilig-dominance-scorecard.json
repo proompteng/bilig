@@ -41,7 +41,7 @@
         "id": "ui-responsiveness",
         "requirement": "Claimed UI responsiveness must have live same-corpus browser proof against Google Sheets with 10x better mean and p95 plus rendered-grid proof.",
         "passed": false,
-        "evidence": ["direct live browser timing passed: true", "same-corpus capture kind: not-captured", "same-corpus UI 10x cases: 0/0"],
+        "evidence": ["direct live browser timing passed: true", "same-corpus capture kind: not-captured", "same-corpus UI 10x cases: 0/9"],
         "gaps": ["live UI browser evidence is not a same-corpus 10x proof against Google Sheets with rendered-grid proof"]
       }
     ],
@@ -612,7 +612,7 @@
         "external UI responsiveness comparison dimensions pass: true",
         "live incumbent browser timing scorecard passes: true",
         "same-corpus UI 10x proof captured: false",
-        "same-corpus UI 10x cases: 0/0",
+        "same-corpus UI 10x cases: 0/9",
         "google-sheets: open-public-workbook-and-scroll-viewport scrollResponseMs.p95 142.9385829999992ms and postScrollFrameMs.p95 9ms (3 samples, public-comment-only)",
         "microsoft-excel-web: open-public-workbook-and-scroll-viewport scrollResponseMs.p95 100.50479099999939ms and postScrollFrameMs.p95 11.199999999999818ms (3 samples, public-office-web-viewer)",
         "headedWide250kVisibleEditCommit: mutationToVisibleMs.p95 budget 50ms on 250000 materialized cells via pnpm test:browser:full"

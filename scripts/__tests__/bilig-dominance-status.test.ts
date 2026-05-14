@@ -23,6 +23,8 @@ describe('bilig dominance status', () => {
     expect(status.uiSameCorpus).toMatchObject({
       captured: false,
       evidenceKind: 'not-captured',
+      requiredCaseCount: requiredUiResponsivenessSameCorpusWorkloads.length,
+      tenXMeanAndP95CaseCount: 0,
       requiredWorkloads: [...requiredUiResponsivenessSameCorpusWorkloads],
       missingRequiredWorkloads: [...requiredUiResponsivenessSameCorpusWorkloads],
       googleSheetsUrl: null,

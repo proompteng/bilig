@@ -147,7 +147,7 @@ describe('bilig dominance prompt-to-artifact audit', () => {
       ],
       evidence: expect.arrayContaining([
         'live same-corpus UI proof captured: false',
-        'live same-corpus UI 10x cases: 0/0',
+        `live same-corpus UI 10x cases: 0/${String(requiredUiResponsivenessSameCorpusWorkloads.length)}`,
         `live same-corpus UI required workloads: ${requiredUiSameCorpusWorkloadList}`,
         `live same-corpus UI missing required workloads: ${requiredUiSameCorpusWorkloadList}`,
         `live same-corpus UI missing inputs: ${requiredUiSameCorpusInputList}`,

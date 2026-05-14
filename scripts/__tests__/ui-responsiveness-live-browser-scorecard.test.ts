@@ -40,7 +40,7 @@ describe('UI responsiveness live browser scorecard', () => {
       captured: false,
       evidenceKind: 'not-captured',
       requiredProductCount: 3,
-      requiredCaseCount: 0,
+      requiredCaseCount: requiredUiResponsivenessSameCorpusWorkloads.length,
       tenXMeanAndP95CaseCount: 0,
       coveredCorpusCaseIds: [],
     })

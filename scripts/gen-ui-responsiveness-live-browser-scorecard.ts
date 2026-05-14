@@ -361,7 +361,7 @@ export function buildMissingSameCorpusProof(): UiResponsivenessSameCorpusProof {
     captured: false,
     evidenceKind: 'not-captured',
     requiredProductCount: 3,
-    requiredCaseCount: 0,
+    requiredCaseCount: requiredSameCorpusWorkloads.length,
     tenXMeanAndP95CaseCount: 0,
     coveredCorpusCaseIds: [],
     limitations: ['Same-corpus live browser timing against Bilig, Google Sheets, and Microsoft Excel Web has not been captured yet.'],
@@ -376,7 +376,7 @@ export function buildSameCorpusProof(capture: SameCorpusCapture): UiResponsivene
     captured: true,
     evidenceKind: 'same-corpus-browser-capture',
     requiredProductCount: 3,
-    requiredCaseCount: capture.cases.length,
+    requiredCaseCount: requiredSameCorpusWorkloads.length,
     tenXMeanAndP95CaseCount: cases.filter(
       (entry) => entry.tenXMeanAndP95AgainstGoogleSheets && entry.tenXMeanAndP95AgainstMicrosoftExcelWeb,
     ).length,
@@ -631,8 +631,11 @@ function validateSameCorpusProof(proof: UiResponsivenessSameCorpusProof): void {
   if (proof.requiredProductCount !== 3) {
     throw new Error('UI responsiveness same-corpus proof must compare Bilig, Google Sheets, and Microsoft Excel Web')
   }
+  if (proof.requiredCaseCount !== requiredSameCorpusWorkloads.length) {
+    throw new Error('UI responsiveness same-corpus proof required case count is stale')
+  }
   if (!proof.captured) {
-    if (proof.evidenceKind !== 'not-captured' || proof.cases.length !== 0 || proof.requiredCaseCount !== 0) {
+    if (proof.evidenceKind !== 'not-captured' || proof.cases.length !== 0) {
       throw new Error('UI responsiveness same-corpus proof has stale not-captured metadata')
     }
     if (proof.limitations.length === 0) {
@@ -643,13 +646,13 @@ function validateSameCorpusProof(proof: UiResponsivenessSameCorpusProof): void {
   if (proof.evidenceKind !== 'same-corpus-browser-capture') {
     throw new Error('UI responsiveness same-corpus proof has stale capture metadata')
   }
-  if (proof.requiredCaseCount === 0 || proof.cases.length !== proof.requiredCaseCount) {
-    throw new Error('UI responsiveness same-corpus proof must include every required captured case')
-  }
   for (const workload of requiredSameCorpusWorkloads) {
     if (!proof.cases.some((entry) => entry.workload === workload)) {
       throw new Error(`UI responsiveness same-corpus proof is missing required workload: ${workload}`)
     }
+  }
+  if (proof.cases.length !== proof.requiredCaseCount) {
+    throw new Error('UI responsiveness same-corpus proof must include every required captured case')
   }
   const tenXCaseCount = proof.cases.filter(
     (entry) => entry.tenXMeanAndP95AgainstGoogleSheets && entry.tenXMeanAndP95AgainstMicrosoftExcelWeb,
