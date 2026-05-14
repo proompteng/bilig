@@ -3,17 +3,19 @@
 Status: public verifier walkthrough for `@bilig/headless`
 
 `bilig` should earn trust on real workbooks, not on a vague
-Excel-compatible badge. The WorkPaper XLSX corpus verifier is the quickest way
-to check a directory of workbook files against the cached formula results that
-Excel or another spreadsheet app already wrote into those files.
+Excel-compatible badge. The original WorkPaper XLSX corpus verifier is useful,
+but it compares against cached formula results embedded in workbook files.
+Those cached values can be stale.
 
-It answers one narrow question:
+Treat that checker as a cache diagnostic. It answers one narrow question:
 
 > when a workbook file contains cached formula results, does `bilig` calculate
 > the comparable formula cells to the same values?
 
-It is not a blanket Excel-compatibility claim. It is a way to turn real workbook
-files into concrete matched, skipped, or mismatched evidence.
+It is not an accuracy verdict. A Bilig correctness bug needs a fresh
+recalculation oracle: open the workbook in Microsoft Excel, force recalculation,
+save a recalculated copy, and compare Bilig against that recalculated copy's
+formula results.
 
 Use it when you are deciding whether a workbook model can move into a Node.js
 service, checking an upgrade before release, or preparing a small reproduction
@@ -56,6 +58,33 @@ The current checked-in reduction corpus returns:
 That means the fixture has `14` formula cells, all `14` had comparable cached
 results, and all `14` matched.
 
+## Run The Excel Oracle Harness
+
+Use the durable harness when you need an accuracy report instead of a cache
+diagnostic:
+
+```sh
+OUT=.cache/excel-oracle-evaluation
+pnpm workpaper:xlsx-oracle -- prepare-oracle /path/to/workbooks "$OUT"
+pnpm workpaper:xlsx-oracle -- evaluate-cache /path/to/workbooks "$OUT"
+pnpm workpaper:xlsx-oracle -- evaluate-oracle /path/to/workbooks "$OUT/recalculated" "$OUT"
+pnpm workpaper:xlsx-oracle -- summarize "$OUT"
+```
+
+The commands write derived files under the output folder:
+
+- `cache-diagnostic.json`: Bilig compared with embedded XLSX cached values,
+  explicitly non-authoritative
+- `excel-oracle-report.json`: Bilig compared with fresh Excel-recalculated
+  formula results
+- `summary.md`: human-readable counts and sanitized true-mismatch samples
+- `github-issues/`: optional sanitized drafts, written only for true
+  Excel-oracle mismatches
+
+If Microsoft Excel automation is unavailable, `prepare-oracle` records that and
+`evaluate-oracle` marks cells as `missing_excel_oracle`. Cache-only mismatches
+stay diagnostic; they are not promoted to correctness bugs.
+
 ## Run It Against Your Files
 
 Put the files you care about in a local directory and point the verifier at it:
@@ -69,9 +98,10 @@ workbooks, `bilig` can preserve macro payload metadata through import/export
 paths, but it does not execute native macro code.
 
 Start with workbooks that have been opened and saved by Excel, Google Sheets, or
-LibreOffice. The cached results in the file are the comparison target. If a file
-has formulas but no cached results, the verifier will say that instead of
-pretending it proved compatibility.
+LibreOffice if you only need cache diagnostics. For accuracy, use the Excel
+oracle harness and compare against the recalculated output folder. If a file has
+formulas but no fresh Excel oracle, the harness says `missing_excel_oracle`
+instead of pretending it proved compatibility.
 
 ## Put It In CI
 
@@ -103,7 +133,10 @@ calculated a different result.
 `skippedFormulaCells` is the number of formula cells excluded from direct
 comparison. Skips are not successes. They are explicit exclusions.
 
-`matchRate` is `matchingFormulaCells / comparableFormulaCells`.
+`matchRate` in the cache checker is `matchingFormulaCells /
+comparableFormulaCells`. In the Excel oracle harness, the primary metric is
+`Bilig vs fresh Excel match rate`; embedded-cache freshness is reported
+separately.
 
 ## Skips Are Evidence Boundaries
 
@@ -126,16 +159,19 @@ comparable-cell count and a high match rate.
 
 ## Mismatches Are Reproduction Seeds
 
-When `mismatches` is non-empty, treat the report as a debugging input:
+When cache-only `mismatches` is non-empty, treat the report as a debugging
+input, not an accuracy verdict:
 
 - keep the workbook file or reduce it to a smaller fixture
-- record the sheet, address, formula, cached result, and calculated result
+- refresh the workbook through the Excel oracle harness
+- record the sheet, address, formula, fresh Excel result, and Bilig result
 - add a focused regression test or canonical fixture
 - link the mismatch in a GitHub issue
 
-The goal is not to hide mismatches. The goal is to turn them into small,
-reproducible compatibility work. A good report includes the command you ran, the
-summary block, and one reduced workbook if the original file is private.
+Only open a correctness issue when a fresh Excel expected value, Bilig actual
+value, formula text, and repro notes are present. The goal is not to hide
+mismatches. The goal is to turn them into small, reproducible compatibility
+work.
 
 ## Share A Useful Result
 

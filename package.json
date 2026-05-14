@@ -169,6 +169,7 @@
     "workpaper:xlsx-corpus:fixtures:generate": "bun scripts/gen-workpaper-xlsx-corpus-fixtures.ts",
     "workpaper:xlsx-corpus:fixtures:check": "bun scripts/gen-workpaper-xlsx-corpus-fixtures.ts --check && pnpm workpaper:xlsx-corpus:check -- packages/headless/fixtures/xlsx-corpus",
     "workpaper:xlsx-corpus:check": "bun scripts/check-workpaper-xlsx-corpus.ts",
+    "workpaper:xlsx-oracle": "bun scripts/workpaper-excel-oracle-harness.ts",
     "workpaper:smoke:external": "bun scripts/workpaper-external-smoke.ts",
     "publish:check": "bun scripts/clean-package-builds.ts && pnpm build && bun scripts/check-package-publish.ts",
     "publish:runtime:plan": "bun scripts/plan-runtime-release.ts",
