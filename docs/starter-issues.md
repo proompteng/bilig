@@ -10,9 +10,9 @@ Current starter queue as of May 14, 2026:
   [#372](https://github.com/proompteng/bilig/issues/372) groups current code,
   docs, agent, and MCP starter picks for people opening the issue queue cold.
 - 108 open `first-timers-only` issues.
-- 108 issues are generally available for a new contributor to claim.
-- 10 starter issues are code or test tasks rather than docs-only tasks.
-- 0 open starter issues currently have active pull requests.
+- 107 issues are currently available for a new contributor to claim.
+- 10 starter issues are code or test tasks; 9 are not under active review.
+- 1 open starter issue currently has an active pull request.
 
 ## Available Starter Picks
 
@@ -26,7 +26,6 @@ Current starter queue as of May 14, 2026:
 - [#367: test(headless): cover dense sheet range read with sparse values](https://github.com/proompteng/bilig/issues/367)
 - [#368: test(headless): cover two-column formula tiling in fill ranges](https://github.com/proompteng/bilig/issues/368)
 - [#369: test(headless): cover tab-indented formula prefix detection](https://github.com/proompteng/bilig/issues/369)
-- [#370: test(examples): add malformed CSV fixture check to the csv-shaped smoke](https://github.com/proompteng/bilig/issues/370)
 - [#371: test(examples): add deterministic markdown-report output test](https://github.com/proompteng/bilig/issues/371)
 
 ### Agent And Tooling Docs
@@ -156,9 +155,9 @@ Current starter queue as of May 14, 2026:
 
 ## Currently In Review
 
-No starter issues currently have open pull requests. When a contributor opens a
-PR for one of these tickets, move the issue into this section until the PR lands
-or closes.
+- [#370: test(examples): add malformed CSV fixture check to the csv-shaped smoke](https://github.com/proompteng/bilig/issues/370)
+  has [PR #373](https://github.com/proompteng/bilig/pull/373) open. Wait for
+  that review to finish before claiming the same task.
 
 The list intentionally excludes closed issues and broad corpus/parity epics. Add
 new starter tickets only when the expected patch can stay small, has a clear

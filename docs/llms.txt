@@ -548,8 +548,9 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/368
 - current small test issue: tab-indented formula prefix detection:
   https://github.com/proompteng/bilig/issues/369
-- current small test issue: malformed CSV-shaped input fixture:
+- starter issue currently in review: malformed CSV-shaped input fixture:
   https://github.com/proompteng/bilig/issues/370
+  https://github.com/proompteng/bilig/pull/373
 - current small test issue: markdown-report deterministic output:
   https://github.com/proompteng/bilig/issues/371
 - current small mcp issue: Docker healthcheck for the WorkPaper MCP stdio server:
