@@ -212,7 +212,7 @@ describe('bilig dominance status', () => {
     )
   })
 
-  it('keeps asking for the Google Sheets URL when captured same-corpus proof is not 10x', () => {
+  it('reuses verified checked-in capture URLs when same-corpus proof is not 10x', () => {
     const fixtureInput = buildFixtureInput()
     const status = buildBiligDominanceStatus({
       input: {
@@ -237,12 +237,96 @@ describe('bilig dominance status', () => {
       missingRequiredWorkloads: [],
       scrollEventEvidenceCaseCount: 3,
       casesMissingScrollEventEvidence: [],
+      googleSheetsUrl: 'https://docs.google.com/spreadsheets/d/sameCorpusSheet/edit',
+      googleSheetsUrlSource: 'checked-in-capture',
+      missingInputs: [],
+    })
+    expect(status.uiSameCorpus.nextPreflightCommand).toContain('https://docs.google.com/spreadsheets/d/sameCorpusSheet/edit')
+    expect(status.uiSameCorpus.nextPreflightCommand).not.toContain('<microsoft-excel-web-editable-url>')
+    expect(status.uiSameCorpus.nextPreflightCommand).not.toContain('<google-sheets-url>')
+    expect(status.uiSameCorpus.nextCaptureCommand).toContain('https://docs.google.com/spreadsheets/d/sameCorpusSheet/edit')
+    expect(status.uiSameCorpus.nextCaptureCommand).not.toContain('<microsoft-excel-web-editable-url>')
+    expect(status.uiSameCorpus.nextCaptureCommand).not.toContain('<google-sheets-url>')
+    expect(status.uiSameCorpus.nextGoogleSheetsUploadInstruction).toBeNull()
+  })
+
+  it('keeps asking for the Google Sheets URL when checked-in capture sources are inconsistent', () => {
+    const fixtureInput = buildFixtureInput()
+    const status = buildBiligDominanceStatus({
+      input: {
+        ...fixtureInput,
+        uiResponsivenessLiveBrowserScorecard: {
+          ...fixtureInput.uiResponsivenessLiveBrowserScorecard,
+          sameCorpusProof: buildSameCorpusProof(
+            failingSameCorpusCapture({
+              firstGoogleSheetsSource: 'https://docs.google.com/spreadsheets/d/differentSameCorpusSheet/edit',
+            }),
+          ),
+        },
+      },
+      financialCorpusStatus: completeFinancialCorpusStatus(),
+      publicWorkbookCorpusStatus: completePublicWorkbookCorpusStatus(),
+      stopMarkerActive: false,
+      stopMarkerPath: '/repo/.agent-coordination/stop.md',
+    })
+
+    expect(status.uiSameCorpus).toMatchObject({
+      captured: true,
+      evidenceKind: 'same-corpus-browser-capture',
+      tenXRequirementSatisfied: false,
+      googleSheetsUrl: null,
+      googleSheetsUrlSource: 'missing',
       missingInputs: ['googleSheetsUrlForUploadedSameCorpusWorkbook'],
     })
     expect(status.uiSameCorpus.nextPreflightCommand).toContain('<google-sheets-url>')
-    expect(status.uiSameCorpus.nextPreflightCommand).not.toContain('<microsoft-excel-web-editable-url>')
     expect(status.uiSameCorpus.nextCaptureCommand).toContain('<google-sheets-url>')
-    expect(status.uiSameCorpus.nextCaptureCommand).not.toContain('<microsoft-excel-web-editable-url>')
+  })
+
+  it('keeps asking for the Google Sheets URL when checked-in capture source is not verified', () => {
+    const fixtureInput = buildFixtureInput()
+    const checkedInProof = buildSameCorpusProof(failingSameCorpusCapture())
+    const casesWithUnverifiedGoogleSheetsProof = [...checkedInProof.cases]
+    const firstCase = casesWithUnverifiedGoogleSheetsProof[0]
+    if (!firstCase) {
+      throw new Error('Expected failing same-corpus capture fixture to include at least one case')
+    }
+    casesWithUnverifiedGoogleSheetsProof[0] = {
+      ...firstCase,
+      googleSheets: {
+        ...firstCase.googleSheets,
+        corpusVerification: {
+          ...firstCase.googleSheets.corpusVerification,
+          verified: false,
+        },
+      },
+    }
+    const status = buildBiligDominanceStatus({
+      input: {
+        ...fixtureInput,
+        uiResponsivenessLiveBrowserScorecard: {
+          ...fixtureInput.uiResponsivenessLiveBrowserScorecard,
+          sameCorpusProof: {
+            ...checkedInProof,
+            cases: casesWithUnverifiedGoogleSheetsProof,
+          },
+        },
+      },
+      financialCorpusStatus: completeFinancialCorpusStatus(),
+      publicWorkbookCorpusStatus: completePublicWorkbookCorpusStatus(),
+      stopMarkerActive: false,
+      stopMarkerPath: '/repo/.agent-coordination/stop.md',
+    })
+
+    expect(status.uiSameCorpus).toMatchObject({
+      captured: true,
+      evidenceKind: 'same-corpus-browser-capture',
+      tenXRequirementSatisfied: false,
+      googleSheetsUrl: null,
+      googleSheetsUrlSource: 'missing',
+      missingInputs: ['googleSheetsUrlForUploadedSameCorpusWorkbook'],
+    })
+    expect(status.uiSameCorpus.nextPreflightCommand).toContain('<google-sheets-url>')
+    expect(status.uiSameCorpus.nextCaptureCommand).toContain('<google-sheets-url>')
   })
 
   it('surfaces financial workbook corpus blockers in dominance status', () => {
@@ -635,13 +719,20 @@ function sameCorpusPublicAccessCheckFixture(googleSheetsUrl: string): SameCorpus
   }
 }
 
-function failingSameCorpusCapture(): SameCorpusCapture {
+function failingSameCorpusCapture(
+  args: {
+    readonly firstGoogleSheetsSource?: string
+    readonly firstGoogleSheetsVerification?: SameCorpusCapture['cases'][number]['googleSheets']['corpusVerification']
+  } = {},
+): SameCorpusCapture {
+  const defaultGoogleSheetsSource = 'https://docs.google.com/spreadsheets/d/sameCorpusSheet/edit'
+  const defaultGoogleSheetsVerification = sameCorpusVerification('google-sheets-xlsx-export')
   return {
     schemaVersion: 1,
     suite: 'ui-responsiveness-same-corpus-capture',
     sampleCount: 3,
     limitations: [],
-    cases: requiredUiResponsivenessSameCorpusWorkloads.map((workload) => ({
+    cases: requiredUiResponsivenessSameCorpusWorkloads.map((workload, index) => ({
       id: `same-corpus-wide-mixed-250k-${workload}`,
       corpusCaseId: 'wide-mixed-250k',
       materializedCells: 250_000,
@@ -660,13 +751,14 @@ function failingSameCorpusCapture(): SameCorpusCapture {
       },
       googleSheets: {
         product: 'google-sheets',
-        source: 'https://docs.google.com/spreadsheets/d/sameCorpusSheet/edit',
+        source: index === 0 ? (args.firstGoogleSheetsSource ?? defaultGoogleSheetsSource) : defaultGoogleSheetsSource,
         operationResponseMsSamples: [100, 100, 100],
         postOperationFrameMsSamples: [16, 16, 16],
         ...(workload === 'scroll-vertical' || workload === 'scroll-horizontal' || workload === 'wide-sheet-navigation'
           ? { scrollEventResponseMsSamples: [100, 100, 100], scrollMovementPxSamples: [720, 720, 720] }
           : {}),
-        corpusVerification: sameCorpusVerification('google-sheets-xlsx-export'),
+        corpusVerification:
+          index === 0 ? (args.firstGoogleSheetsVerification ?? defaultGoogleSheetsVerification) : defaultGoogleSheetsVerification,
         limitations: [],
       },
       microsoftExcelWeb: {

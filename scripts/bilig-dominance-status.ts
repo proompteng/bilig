@@ -176,7 +176,7 @@ export interface BiligDominanceStatus {
   }
 }
 
-type UiSameCorpusGoogleSheetsUrlSource = 'argument-or-environment' | 'public-access-check' | 'missing'
+type UiSameCorpusGoogleSheetsUrlSource = 'argument-or-environment' | 'public-access-check' | 'checked-in-capture' | 'missing'
 
 const defaultCacheDir = join(rootDir, '.cache', 'public-workbook-corpus')
 const defaultManifestPath = join(defaultCacheDir, 'manifest.json')
@@ -413,6 +413,7 @@ export function buildBiligDominanceStatus(args: {
         corpusCaseId: defaultUiSameCorpusId,
         explicitGoogleSheetsUrl: args.uiSameCorpusGoogleSheetsUrl ?? null,
         publicAccessCheck: args.uiSameCorpusPublicAccessCheck ?? null,
+        sameCorpusProof: args.input.uiResponsivenessLiveBrowserScorecard.sameCorpusProof,
       }),
     }),
   }
@@ -768,6 +769,7 @@ function resolveUiSameCorpusGoogleSheetsUrl(args: {
   readonly corpusCaseId: WorkbookBenchmarkCorpusId
   readonly explicitGoogleSheetsUrl: string | null
   readonly publicAccessCheck: SameCorpusPublicAccessCheck | null
+  readonly sameCorpusProof: BuildScorecardInput['uiResponsivenessLiveBrowserScorecard']['sameCorpusProof']
 }): {
   readonly googleSheetsUrl: string | null
   readonly googleSheetsUrlSource: UiSameCorpusGoogleSheetsUrlSource
@@ -783,6 +785,13 @@ function resolveUiSameCorpusGoogleSheetsUrl(args: {
     return {
       googleSheetsUrl: verifiedPublicAccessUrl,
       googleSheetsUrlSource: 'public-access-check',
+    }
+  }
+  const verifiedCheckedInCaptureUrl = verifiedGoogleSheetsUrlFromSameCorpusProof(args.sameCorpusProof, args.corpusCaseId)
+  if (verifiedCheckedInCaptureUrl) {
+    return {
+      googleSheetsUrl: verifiedCheckedInCaptureUrl,
+      googleSheetsUrlSource: 'checked-in-capture',
     }
   }
   return {
@@ -804,6 +813,38 @@ function verifiedGoogleSheetsUrlFromPublicAccessCheck(
   }
   const product = check.products.find((entry) => entry.product === 'google-sheets')
   return product?.corpusVerification.verified ? product.source : null
+}
+
+function verifiedGoogleSheetsUrlFromSameCorpusProof(
+  proof: BuildScorecardInput['uiResponsivenessLiveBrowserScorecard']['sameCorpusProof'],
+  corpusCaseId: WorkbookBenchmarkCorpusId,
+): string | null {
+  if (!proof.captured || proof.evidenceKind !== 'same-corpus-browser-capture' || !proof.coveredCorpusCaseIds.includes(corpusCaseId)) {
+    return null
+  }
+  const corpus = buildWorkbookBenchmarkCorpus(corpusCaseId)
+  const corpusCases = proof.cases.filter((entry) => entry.corpusCaseId === corpusCaseId)
+  if (corpusCases.length === 0) {
+    return null
+  }
+  let url: string | null = null
+  for (const entry of corpusCases) {
+    const googleSheets = entry.googleSheets
+    const source = googleSheets.source.trim()
+    if (
+      source.length === 0 ||
+      !googleSheets.corpusVerification.verified ||
+      googleSheets.corpusVerification.method !== 'google-sheets-xlsx-export' ||
+      googleSheets.corpusVerification.materializedCells !== corpus.materializedCellCount
+    ) {
+      return null
+    }
+    if (url !== null && url !== source) {
+      return null
+    }
+    url = source
+  }
+  return url
 }
 
 function uiSameCorpusTenXRequirementSatisfied(
