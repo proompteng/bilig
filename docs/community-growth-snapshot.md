@@ -1,6 +1,6 @@
 # Community Growth Snapshot
 
-Captured at: `2026-05-14T01:03:58.305Z`
+Captured at: `2026-05-14T01:22:36.547Z`
 
 This snapshot tracks the public signals for the `@bilig/headless` growth loop: GitHub conversion, npm demand, contributor on-ramp health, discussion activity, and traffic quality.
 
@@ -34,12 +34,12 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 
 ## Discussions
 
-- Total discussions: 11
+- Total discussions: 12
+- #340 [What would make the WorkPaper benchmark unfair?](https://github.com/proompteng/bilig/discussions/340) (Ideas, 0 comments)
 - #335 [Show and tell: OpenAI Responses tool calls for WorkPaper spreadsheets](https://github.com/proompteng/bilig/discussions/335) (Show and tell, 0 comments)
 - #226 [Vercel AI SDK and LangChain spreadsheet tools for WorkPaper agents](https://github.com/proompteng/bilig/discussions/226) (Announcements, 1 comment)
 - #308 [How to choose a JavaScript spreadsheet library for Node services](https://github.com/proompteng/bilig/discussions/308) (Announcements, 0 comments)
 - #230 [Show and tell: MCP spreadsheet tool server for WorkPaper agents](https://github.com/proompteng/bilig/discussions/230) (Show and tell, 2 comments)
-- #307 [Show and tell: Postgres, Redis, and object storage adapters for WorkPaper persistence](https://github.com/proompteng/bilig/discussions/307) (Show and tell, 0 comments)
 
 ## Traffic
 

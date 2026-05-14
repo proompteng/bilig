@@ -255,7 +255,10 @@ Postgres/Redis/object-storage adapter pass:
   WorkPaper tool-call wrapper needs streaming `function_call_output`, richer
   write readback, or different audit fields:
   <https://github.com/proompteng/bilig/discussions/335>
-- The public growth snapshot now records `11` GitHub Discussions and keeps the
+- GitHub Discussion `#340` now asks benchmark skeptics what would make the
+  WorkPaper vs HyperFormula comparison unfair, too synthetic, or too narrow:
+  <https://github.com/proompteng/bilig/discussions/340>
+- The public growth snapshot now records `12` GitHub Discussions and keeps the
   active feedback loops visible beside stars, npm demand, contributor
   queue health, and traffic.
 
@@ -328,7 +331,8 @@ The `46/46` WorkPaper mean-win claim should become small, quotable artifacts:
   [`docs/assets/workpaper-benchmark-card.png`](assets/workpaper-benchmark-card.png)
 - one short post explaining the p95 caveat honestly
 - one "run this benchmark locally" post
-- one "what would make this benchmark unfair?" discussion prompt
+- one "what would make this benchmark unfair?" discussion prompt:
+  <https://github.com/proompteng/bilig/discussions/340>
 
 The hack is to invite skeptics into the measurement instead of only announcing
 a win. Spreadsheet-engine users trust reproducible evidence more than launch

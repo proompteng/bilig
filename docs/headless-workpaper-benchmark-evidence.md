@@ -101,3 +101,7 @@ pnpm workpaper:bench:competitive:check
 Do not change workload sizes, sampling, scoring, or definitions to preserve a
 claim. If a rerun moves a row red, update the artifact, update this note, and
 fix the production engine path rather than hiding the loss.
+
+If a workload family is missing, a row looks too synthetic, or the p95 wording
+is still too broad, use the public benchmark critique thread:
+<https://github.com/proompteng/bilig/discussions/340>.

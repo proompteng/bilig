@@ -262,6 +262,8 @@ npm run agent:verify
   https://github.com/proompteng/bilig/discussions/308
 - OpenAI Responses tool-call discussion:
   https://github.com/proompteng/bilig/discussions/335
+- benchmark critique discussion:
+  https://github.com/proompteng/bilig/discussions/340
 - external JavaScript spreadsheet directory submission:
   https://github.com/krzysztofspilka/JSpreadsheets/pull/50
 - external JavaScript spreadsheet benchmark adapter request:

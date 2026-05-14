@@ -179,6 +179,9 @@ Current release posture:
 - The shareable benchmark explainer states what the scorecard proves and what
   it does not:
   [`docs/what-workpaper-benchmark-proves.md`](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md).
+- The public benchmark critique thread asks what would make the comparison
+  unfair, too synthetic, or too narrow:
+  <https://github.com/proompteng/bilig/discussions/340>.
 - Recently fixed and hardened P1 risks are covered by regression tests:
   - `updateConfig()` now applies `useColumnIndex` correctly when a rebuild-only
     config key changes in the same update.
@@ -256,6 +259,8 @@ Repository links:
   [`examples/serverless-workpaper-api`](https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api)
 - Next.js App Router smoke:
   [`npm run next-route-handler`](https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api#nextjs-app-router-smoke)
+- Next.js Server Action smoke:
+  [`npm run next-server-action`](https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api#nextjs-server-action-smoke)
 - Express, Fastify, and Hono API adapters:
   [`npm run framework-adapters`](https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api#framework-adapters)
 - Postgres JSONB, Redis/KV, and object-storage persistence adapters:
@@ -266,6 +271,8 @@ Repository links:
   <https://github.com/proompteng/bilig/discussions/308>
 - OpenAI Responses tool-call feedback:
   <https://github.com/proompteng/bilig/discussions/335>
+- benchmark critique:
+  <https://github.com/proompteng/bilig/discussions/340>
 - server-side spreadsheet automation:
   [`docs/server-side-spreadsheet-automation-node.md`](https://github.com/proompteng/bilig/blob/main/docs/server-side-spreadsheet-automation-node.md)
 - Node service recipe:

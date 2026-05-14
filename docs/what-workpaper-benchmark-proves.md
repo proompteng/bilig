@@ -82,6 +82,7 @@ For the benchmark evidence, start with:
 - [`docs/headless-workpaper-benchmark-evidence.md`](headless-workpaper-benchmark-evidence.md)
 - [`packages/benchmarks/baselines/workpaper-vs-hyperformula.json`](../packages/benchmarks/baselines/workpaper-vs-hyperformula.json)
 - [`docs/assets/workpaper-benchmark-card.png`](assets/workpaper-benchmark-card.png)
+- [benchmark critique discussion](https://github.com/proompteng/bilig/discussions/340)
 
 For the API surface, run the published package or maintained example:
 

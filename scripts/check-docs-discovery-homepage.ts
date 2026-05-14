@@ -77,6 +77,7 @@ export function requireHomepageDiscovery(index: string, siteCss: string): void {
       'Benchmark notes',
       'Compatibility gaps',
       'Starter issues',
+      'benchmark critique',
       'Choose the path that matches your job.',
       'Start with npm, a service route, an agent tool, or the engine comparison.',
       'Take a starter issue that improves the examples.',

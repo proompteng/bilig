@@ -68,7 +68,9 @@ Useful direct paths:
   [subscription MRR](examples/headless-workpaper#subscription-mrr-forecast), and
   [serverless API route](examples/serverless-workpaper-api). Use
   [Express, Fastify, and Hono adapters](docs/node-framework-workpaper-adapters.md)
-  when the route is moving into an existing service.
+  when the route is moving into an existing service. Use
+  `npm run next-server-action` when the mutation starts from a Next.js Server
+  Action.
 - Agent and MCP adapters:
   [agent framework guide](docs/vercel-ai-sdk-langchain-spreadsheet-tool.md),
   framework-specific notes for
@@ -488,6 +490,9 @@ For the five runnable service-workflow examples as one shareable thread, see:
 For OpenAI Responses API tool-call feedback, use:
 <https://github.com/proompteng/bilig/discussions/335>.
 
+For benchmark critique, use:
+<https://github.com/proompteng/bilig/discussions/340>.
+
 For the search-friendly version with commands and current output snippets, see
 [`docs/workbook-automation-examples-node.md`](docs/workbook-automation-examples-node.md).
 
@@ -670,6 +675,9 @@ Current public evidence:
 - `docs/headless-workpaper-benchmark-evidence.md` explains what is measured,
   what is excluded, and why this is a mean-win claim rather than a blanket p95
   guarantee.
+- `https://github.com/proompteng/bilig/discussions/340` is the public critique
+  thread for suspicious rows, missing workloads, p95 wording, and fairness
+  questions.
 
 Start here:
 
