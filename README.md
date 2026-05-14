@@ -136,7 +136,7 @@ Useful direct paths:
   [quote approval](examples/headless-workpaper#quote-approval-threshold),
   [subscription MRR](examples/headless-workpaper#subscription-mrr-forecast), and
   [serverless API route](examples/serverless-workpaper-api). Use
-  [Express, Fastify, and Hono adapters](docs/node-framework-workpaper-adapters.md)
+  [Express, Fastify, Hono, Hapi, and AdonisJS adapters](docs/node-framework-workpaper-adapters.md)
   when the route is moving into an existing service. Use
   `npm run next-server-action` when the mutation starts from a Next.js Server
   Action, or `npm run next-server-action-formdata` when the mutation starts

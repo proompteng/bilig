@@ -10,10 +10,10 @@ For a clone-and-run copy of this route, start with
 
 The example also includes a tiny Node adapter so you can run it locally before
 moving the route into Vercel Functions, Cloudflare Workers, Supabase Edge
-Functions, Fastify, Hono, or another HTTP surface.
+Functions, Fastify, Hono, Hapi, AdonisJS, or another HTTP surface.
 
 If the route is going into an existing Node service, use the runnable
-[`Express, Fastify, and Hono adapter guide`](./node-framework-workpaper-adapters.md)
+[`Express, Fastify, Hono, Hapi, and AdonisJS adapter guide`](./node-framework-workpaper-adapters.md)
 with `npm run framework-adapters`.
 
 For a copyable Next.js App Router boundary, the same example ships a runnable

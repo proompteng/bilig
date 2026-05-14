@@ -161,7 +161,7 @@ npm run agent:verify
 - Next.js Server Action FormData WorkPaper smoke:
   npm run next-server-action-formdata
   https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api#nextjs-server-action-formdata-smoke
-- Express, Fastify, and Hono WorkPaper adapters:
+- Express, Fastify, Hono, Hapi, and AdonisJS WorkPaper adapters:
   https://proompteng.github.io/bilig/node-framework-workpaper-adapters.html
   https://github.com/proompteng/bilig/blob/main/docs/node-framework-workpaper-adapters.md
 - csv-shaped input recipe:
@@ -452,8 +452,8 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/issues/250
 - current small docs issue: TypeScript local import suffix note:
   https://github.com/proompteng/bilig/issues/255
-- current small example issue: AdonisJS WorkPaper route smoke:
-  https://github.com/proompteng/bilig/issues/377
+- current small example issue: Oak WorkPaper route smoke:
+  https://github.com/proompteng/bilig/issues/380
 - current small storage issue: Turso WorkPaper JSON persistence recipe:
   https://github.com/proompteng/bilig/issues/375
 - current small agent issue: Firebase Genkit WorkPaper tool recipe:

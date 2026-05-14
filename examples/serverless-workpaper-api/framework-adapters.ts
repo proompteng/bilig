@@ -39,6 +39,26 @@ export type FastifyLikeReply = {
   send(payload: unknown): unknown
 }
 
+export type AdonisLikeRequest = {
+  body(): unknown
+  headers(): HeaderBag
+  method(): string
+  url(includeQueryString?: boolean): string
+}
+
+export type AdonisLikeResponse = {
+  body?: unknown
+  header(name: string, value: string): AdonisLikeResponse
+  send(payload: unknown): unknown
+  status(code: number): AdonisLikeResponse
+  statusCode?: number
+}
+
+export type AdonisLikeHttpContext = {
+  request: AdonisLikeRequest
+  response: AdonisLikeResponse
+}
+
 export type HapiLikeRequest = {
   headers: HeaderBag
   info?: {
@@ -107,6 +127,28 @@ export function createFastifyWorkPaperHandler(handler: WorkPaperRequestHandler =
   }
 }
 
+export function createAdonisWorkPaperHandler(handler: WorkPaperRequestHandler = handleWorkPaperRequest) {
+  return async ({ request, response }: AdonisLikeHttpContext): Promise<unknown> => {
+    return writeAdonisResponse(response, await handler(createWebRequestFromAdonis(request)))
+  }
+}
+
+export function createAdonisWorkPaperRoutes(handler: WorkPaperRequestHandler = handleWorkPaperRequest) {
+  const routeHandler = createAdonisWorkPaperHandler(handler)
+  return [
+    {
+      method: 'GET',
+      path: '/api/workpaper/summary',
+      handler: routeHandler,
+    },
+    {
+      method: 'POST',
+      path: '/api/workpaper/revenue',
+      handler: routeHandler,
+    },
+  ] as const
+}
+
 export function createHapiWorkPaperRoutes(handler: WorkPaperRequestHandler = handleWorkPaperRequest) {
   return [
     {
@@ -130,6 +172,7 @@ export async function createFrameworkAdapterDemoOutput() {
   const honoHandler = createHonoWorkPaperHandler(handler)
   const expressHandler = createExpressWorkPaperHandler(handler)
   const fastifyHandler = createFastifyWorkPaperHandler(handler)
+  const adonisRoutes = createAdonisWorkPaperRoutes(createWorkPaperRequestHandler(createInMemoryWorkbookStorage()))
   const hapiRoutes = createHapiWorkPaperRoutes(createWorkPaperRequestHandler(createInMemoryWorkbookStorage()))
 
   const fetchBefore = await readJsonResponse(fetchHandlers.GET(createWebRequest('GET', '/api/workpaper/summary')), 'fetch before')
@@ -141,6 +184,16 @@ export async function createFrameworkAdapterDemoOutput() {
     }),
     'hono before',
   )
+  const adonisBeforeContext = createMockAdonisContext('GET', '/api/workpaper/summary')
+  await adonisRoutes[0].handler(adonisBeforeContext)
+  const adonisBefore = readAdonisContextResponse(adonisBeforeContext, 'adonis before')
+
+  const adonisEditContext = createMockAdonisContext('POST', '/api/workpaper/revenue', {
+    records: updatedRevenueRecords,
+  })
+  await adonisRoutes[1].handler(adonisEditContext)
+  const adonisEdit = readAdonisContextResponse(adonisEditContext, 'adonis edit')
+
   const hapiBeforeResponse = createMockHapiToolkit()
   const hapiBefore = await readHapiRouteResponse(
     hapiRoutes[0].handler(
@@ -204,11 +257,20 @@ export async function createFrameworkAdapterDemoOutput() {
   const fastifyAfter = readJsonRecord(fastifyReply.payload, 'fastify after body')
 
   const output = {
-    adapters: ['fetch', 'hono', 'hapi', 'express', 'fastify'],
+    adapters: ['fetch', 'hono', 'adonis', 'hapi', 'express', 'fastify'],
     before: {
       fetch: readSummary(readJsonRecord(fetchBefore.summary, 'fetch summary')),
       hono: readSummary(readJsonRecord(honoBefore.summary, 'hono summary')),
+      adonis: readSummary(readJsonRecord(adonisBefore.summary, 'adonis summary')),
       hapi: readSummary(readJsonRecord(hapiBefore.summary, 'hapi summary')),
+    },
+    adonis: {
+      status: adonisEditContext.response.statusCode ?? 0,
+      edit: {
+        records: readNumber(adonisEdit.records, 'adonis edit records'),
+        after: readSummary(readJsonRecord(adonisEdit.after, 'adonis edit after')),
+        checks: readChecks(readJsonRecord(adonisEdit.checks, 'adonis edit checks')),
+      },
     },
     hapi: {
       status: hapiEditResponse.responseObject?.statusCode ?? 0,
@@ -260,6 +322,12 @@ function createWebRequestFromFastify(request: FastifyLikeRequest): Request {
     headers: request.headers,
     host: request.hostname,
     protocol: request.protocol,
+  })
+}
+
+function createWebRequestFromAdonis(request: AdonisLikeRequest): Request {
+  return createWebRequest(request.method(), request.url(true), request.body(), {
+    headers: request.headers(),
   })
 }
 
@@ -338,6 +406,15 @@ async function writeFastifyResponse(reply: FastifyLikeReply, webResponse: Respon
   return reply.code(webResponse.status).send(readResponsePayload(body, webResponse.headers))
 }
 
+async function writeAdonisResponse(adonisResponse: AdonisLikeResponse, webResponse: Response): Promise<unknown> {
+  for (const [name, value] of webResponse.headers) {
+    adonisResponse.header(name, value)
+  }
+
+  const body = await webResponse.text()
+  return adonisResponse.status(webResponse.status).send(readResponsePayload(body, webResponse.headers))
+}
+
 async function writeHapiResponse(h: HapiLikeResponseToolkit, webResponsePromise: Promise<Response> | Response): Promise<HapiLikeResponse> {
   const webResponse = await webResponsePromise
   const body = await webResponse.text()
@@ -404,6 +481,50 @@ function createMockFastifyReply() {
   return reply
 }
 
+function createMockAdonisContext(method: string, path: string, body?: unknown) {
+  const response = createMockAdonisResponse()
+  return {
+    request: {
+      body() {
+        return body
+      },
+      headers() {
+        return {
+          host: 'localhost:8787',
+        }
+      },
+      method() {
+        return method
+      },
+      url() {
+        return path
+      },
+    },
+    response,
+  }
+}
+
+function createMockAdonisResponse(): AdonisLikeResponse {
+  const response = {
+    body: undefined as unknown,
+    headers: new Map<string, string>(),
+    statusCode: 200,
+    header(name: string, value: string) {
+      response.headers.set(name.toLowerCase(), value)
+      return response
+    },
+    send(payload: unknown) {
+      response.body = payload
+      return payload
+    },
+    status(code: number) {
+      response.statusCode = code
+      return response
+    },
+  }
+  return response
+}
+
 function createMockHapiToolkit() {
   const toolkit = {
     responseObject: undefined as
@@ -432,6 +553,13 @@ function createMockHapiToolkit() {
     },
   }
   return toolkit
+}
+
+function readAdonisContextResponse(context: { response: AdonisLikeResponse }, label: string): JsonRecord {
+  if (context.response.statusCode !== 200) {
+    throw new Error(`${label} failed: ${context.response.statusCode} ${JSON.stringify(context.response.body)}`)
+  }
+  return readJsonRecord(context.response.body, label)
 }
 
 async function readHapiRouteResponse(responsePromise: Promise<HapiLikeResponse>, label: string): Promise<JsonRecord> {
@@ -501,15 +629,22 @@ function assertOutput(output: Awaited<ReturnType<typeof createFrameworkAdapterDe
   if (
     JSON.stringify(output.before.fetch) !== JSON.stringify(expectedBefore) ||
     JSON.stringify(output.before.hono) !== JSON.stringify(expectedBefore) ||
+    JSON.stringify(output.before.adonis) !== JSON.stringify(expectedBefore) ||
     JSON.stringify(output.before.hapi) !== JSON.stringify(expectedBefore) ||
+    JSON.stringify(output.adonis.edit.after) !== JSON.stringify(expectedAfter) ||
     JSON.stringify(output.hapi.edit.after) !== JSON.stringify(expectedAfter) ||
     JSON.stringify(output.express.edit.after) !== JSON.stringify(expectedAfter) ||
     JSON.stringify(output.fastify.summary) !== JSON.stringify(expectedAfter) ||
+    output.adonis.status !== 200 ||
     output.hapi.status !== 200 ||
     output.express.status !== 200 ||
     output.fastify.status !== 200 ||
+    output.adonis.edit.records !== 4 ||
     output.hapi.edit.records !== 4 ||
     output.express.edit.records !== 4 ||
+    !output.adonis.edit.checks.totalRevenueChanged ||
+    !output.adonis.edit.checks.formulasPersisted ||
+    output.adonis.edit.checks.serializedBytes <= 0 ||
     !output.hapi.edit.checks.totalRevenueChanged ||
     !output.hapi.edit.checks.formulasPersisted ||
     output.hapi.edit.checks.serializedBytes <= 0 ||

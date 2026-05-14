@@ -312,17 +312,17 @@ npm run framework-adapters
 ```
 
 The script exercises the same WorkPaper route through Fetch-style handlers,
-Hono-style `context.req.raw`, Hapi-style `request` plus `h.response()`,
+Hono-style `context.req.raw`, AdonisJS-style `HttpContext`, Hapi-style `request` plus `h.response()`,
 Express-style `(req, res, next)`, and Fastify-style `(request, reply)` adapters.
-It reads the summary and writes the revenue update through the Hapi routes,
-keeps the existing Express and Fastify wrappers covered, and prints
+It reads the summary and writes the revenue update through the AdonisJS and Hapi
+routes, keeps the existing Express and Fastify wrappers covered, and prints
 `verified: true` only after the calculated summary matches.
 
 Expected output:
 
 ```json
 {
-  "adapters": ["fetch", "hono", "hapi", "express", "fastify"],
+  "adapters": ["fetch", "hono", "adonis", "hapi", "express", "fastify"],
   "before": {
     "fetch": {
       "totalRevenue": 36900,
@@ -334,10 +334,31 @@ Expected output:
       "westCustomers": 20,
       "largestDeal": 24000
     },
+    "adonis": {
+      "totalRevenue": 36900,
+      "westCustomers": 20,
+      "largestDeal": 24000
+    },
     "hapi": {
       "totalRevenue": 36900,
       "westCustomers": 20,
       "largestDeal": 24000
+    }
+  },
+  "adonis": {
+    "status": 200,
+    "edit": {
+      "records": 4,
+      "after": {
+        "totalRevenue": 48600,
+        "westCustomers": 20,
+        "largestDeal": 24000
+      },
+      "checks": {
+        "totalRevenueChanged": true,
+        "formulasPersisted": true,
+        "serializedBytes": 1195
+      }
     }
   },
   "hapi": {
@@ -482,6 +503,10 @@ Expected output shape:
   write the returned `Response` through `res`.
 - In Koa, adapt `ctx` into a web-standard `Request`, then write status, headers,
   and body back to the Koa context.
+- In AdonisJS, adapt the `HttpContext` request into a web-standard `Request`,
+  then write status, headers, and body back through `ctx.response`. The
+  `framework-adapters.ts` smoke includes both `/api/workpaper/summary` and
+  `/api/workpaper/revenue` AdonisJS routes.
 - In Hapi, adapt the framework request into a web-standard `Request`, then
   return the shared response through `h.response()`. The
   `framework-adapters.ts` smoke includes both `/api/workpaper/summary` and
