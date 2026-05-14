@@ -99,7 +99,7 @@ Use the official Registry API when you need a machine-checkable proof:
 
 ```sh
 curl -fsSL \
-  'https://registry.modelcontextprotocol.io/v0/servers?search=io.github.proompteng%2Fbilig-workpaper'
+  'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper'
 ```
 
 A useful result includes:
@@ -109,10 +109,10 @@ A useful result includes:
 - `transport.type: stdio`
 - `repository.url: https://github.com/proompteng/bilig`
 
-Latest checked result on May 14, 2026: the official Registry API returned 10
-matching Bilig WorkPaper entries and marked `@bilig/headless@0.14.2` as the
+Latest checked result on May 14, 2026: the official Registry API returned 11
+matching Bilig WorkPaper entries and marked `@bilig/headless@0.14.5` as the
 latest server package. The refresh was published by the repository workflow run
-at <https://github.com/proompteng/bilig/actions/runs/25850256208>.
+at <https://github.com/proompteng/bilig/actions/runs/25868014475>.
 
 The package itself carries the matching `mcpName` field. That is the ownership
 signal the registry uses for npm package validation.

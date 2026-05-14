@@ -181,6 +181,16 @@ issue pass:
   concrete ask about named inputs, range validation, or storage-backed
   save/restore proof:
   <https://github.com/proompteng/bilig/discussions/230#discussioncomment-16916374>
+- Official MCP Registry refresh on May 14, 2026: the existing Publish MCP
+  Registry workflow registered `@bilig/headless@0.14.5`, and the live Registry
+  API returned 11 matching `io.github.proompteng/bilig-workpaper` entries with
+  `0.14.5` marked as latest:
+  <https://github.com/proompteng/bilig/actions/runs/25868014475>
+- GitHub Discussion `#230` has a May 14 maintainer update for MCP users with
+  the `0.14.5` registry proof, the unchanged npm stdio install command, and a
+  concrete ask about named input schemas, range-level validation errors, or
+  storage-backed save/restore across multiple tool calls:
+  <https://github.com/proompteng/bilig/discussions/230#discussioncomment-16920242>
 - External MCP directory surface: `mcp.directory` accepted the public server
   submission for review with repository `https://github.com/proompteng/bilig`,
   npm package `@bilig/headless`, and the WorkPaper persistence/readback
@@ -274,9 +284,9 @@ Postgres/Redis/object-storage adapter pass:
 
 Latest README conversion snapshot on May 14, 2026:
 
-- GitHub surface: `24` stars, `12` forks, `100` open issues, and `100` open
+- GitHub surface: `23` stars, `13` forks, `106` open issues, and `106` open
   `good first issue`, `first-timers-only`, and `help wanted` issues.
-- npm surface: `@bilig/headless@0.14.2`, with `15,592` downloads last week and
+- npm surface: `@bilig/headless@0.14.5`, with `15,592` downloads last week and
   `23,240` downloads in the last 30 days.
 - README and npm README conversion surface: both now put the empty-directory
   npm evaluation before fit tables, proof notes, and navigation links. The
