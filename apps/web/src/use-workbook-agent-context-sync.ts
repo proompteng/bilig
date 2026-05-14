@@ -18,8 +18,6 @@ function stringifyWorkbookAgentImmediateContextKey(context: WorkbookAgentUiConte
   return JSON.stringify({
     selection: context.selection,
     viewport: context.viewport,
-    renderedSelection: context.rendered?.selection ?? null,
-    renderedVisibleRange: context.rendered?.visibleRange ?? null,
   })
 }
 

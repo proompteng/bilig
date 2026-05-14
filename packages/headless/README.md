@@ -45,11 +45,7 @@ Most integrations are this loop: create a workbook, write an input, read the
 calculated cell, and save the workbook state.
 
 ```ts
-import {
-  WorkPaper,
-  exportWorkPaperDocument,
-  serializeWorkPaperDocument,
-} from '@bilig/headless'
+import { WorkPaper, exportWorkPaperDocument, serializeWorkPaperDocument } from '@bilig/headless'
 
 const workbook = WorkPaper.buildFromSheets({
   Inputs: [
@@ -72,9 +68,7 @@ if (inputs === undefined || summary === undefined) {
 workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, 32)
 
 const revenue = workbook.getCellDisplayValue({ sheet: summary, row: 1, col: 1 })
-const saved = serializeWorkPaperDocument(
-  exportWorkPaperDocument(workbook, { includeConfig: true }),
-)
+const saved = serializeWorkPaperDocument(exportWorkPaperDocument(workbook, { includeConfig: true }))
 
 console.log({ revenue, savedBytes: saved.length })
 ```

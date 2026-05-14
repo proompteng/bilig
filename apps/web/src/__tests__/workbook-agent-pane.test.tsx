@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { isWorkbookAgentCommandBundle, toWorkbookAgentReviewQueueItem, type WorkbookAgentCommandBundle } from '@bilig/agent-api'
+import { ValueTag } from '@bilig/protocol'
 import { WorkbookToastRegion } from '../WorkbookToastRegion.js'
 import { clearWorkbookAgentPreviewCache } from '../workbook-agent-preview-cache.js'
 import { useWorkbookAgentPane } from '../use-workbook-agent-pane.js'
@@ -473,6 +474,76 @@ function RapidRenderedRevisionContextHarness() {
         }}
       >
         {capturedRevision}
+      </button>
+      {agentPanel}
+    </div>
+  )
+}
+
+function RapidRenderedRangeContextHarness() {
+  const [renderedVersion, setRenderedVersion] = useState(0)
+  const previewCommandBundle = useCallback(async () => createPreviewSummary(), [])
+  const getContext = useCallback(
+    () => ({
+      ...createDefaultWorkflowContext(),
+      rendered: {
+        capturedAtUnixMs: Date.now(),
+        capturedRevision: 20 + renderedVersion,
+        batchId: 20 + renderedVersion,
+        selection: null,
+        visibleRange: {
+          range: {
+            sheetName: 'Sheet1',
+            startAddress: 'A1',
+            endAddress: 'A1',
+          },
+          rowCount: 1,
+          columnCount: 1,
+          cellCount: 1,
+          truncated: false,
+          rows: [
+            [
+              {
+                address: 'A1',
+                input: `rendered-${renderedVersion}`,
+                value: {
+                  tag: ValueTag.String,
+                  value: `rendered-${renderedVersion}`,
+                  stringId: renderedVersion,
+                },
+                formula: null,
+                displayFormat: null,
+                styleId: null,
+                numberFormatId: null,
+                style: null,
+              },
+            ],
+          ],
+        },
+      },
+    }),
+    [renderedVersion],
+  )
+
+  const { agentPanel } = useWorkbookAgentPane({
+    currentUserId: 'alex@example.com',
+    documentId: 'doc-1',
+    enabled: true,
+    getContext,
+    activeContextLabel: 'Sheet1!A1',
+    previewCommandBundle,
+  })
+
+  return (
+    <div>
+      <button
+        data-testid="advance-rendered-range"
+        type="button"
+        onClick={() => {
+          setRenderedVersion((current) => current + 1)
+        }}
+      >
+        {renderedVersion}
       </button>
       {agentPanel}
     </div>
@@ -2549,6 +2620,91 @@ describe('workbook agent pane', () => {
         context: {
           rendered: {
             capturedRevision: 12,
+          },
+        },
+      })
+    } finally {
+      await act(async () => {
+        root.unmount()
+      })
+    }
+  })
+
+  it('does not treat rendered range churn as immediate context and flood sync requests', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    window.sessionStorage.setItem(
+      'bilig:workbook-agent:doc-1',
+      JSON.stringify({
+        threadId: 'thr-1',
+      }),
+    )
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET') {
+        return new Response(JSON.stringify(createSnapshot({ threadId: 'thr-1' })), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (url.endsWith('/chat/threads/thr-1/context') && requestMethod(init) === 'POST') {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const contextCalls = () =>
+      fetchSpy.mock.calls.filter(
+        ([input, init]) => requestUrl(input).endsWith('/chat/threads/thr-1/context') && requestMethod(init) === 'POST',
+      )
+
+    try {
+      await act(async () => {
+        root.render(<RapidRenderedRangeContextHarness />)
+      })
+
+      await act(async () => {
+        await Promise.resolve()
+        await new Promise((resolve) => setTimeout(resolve, 220))
+      })
+
+      expect(contextCalls()).toHaveLength(1)
+
+      const advanceRenderedRange = async () => {
+        await act(async () => {
+          host.querySelector("[data-testid='advance-rendered-range']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+        })
+        await act(async () => {
+          await Promise.resolve()
+          await new Promise((resolve) => setTimeout(resolve, 200))
+        })
+      }
+
+      await advanceRenderedRange()
+      await advanceRenderedRange()
+      await advanceRenderedRange()
+
+      expect(contextCalls()).toHaveLength(1)
+
+      await act(async () => {
+        await Promise.resolve()
+        await new Promise((resolve) => setTimeout(resolve, 500))
+      })
+
+      expect(contextCalls()).toHaveLength(2)
+      expect(requestBody(contextCalls()[1]?.[1])).toMatchObject({
+        context: {
+          rendered: {
+            capturedRevision: 23,
+            visibleRange: {
+              rows: [[expect.objectContaining({ input: 'rendered-3' })]],
+            },
           },
         },
       })
