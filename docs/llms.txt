@@ -23,6 +23,7 @@ language: typescript
 - https://proompteng.github.io/bilig/npm-eval.ts
 - https://proompteng.github.io/bilig/workbook-automation-examples-node.html
 - https://proompteng.github.io/bilig/server-side-spreadsheet-automation-node.html
+- https://proompteng.github.io/bilig/google-sheets-api-alternative-node-workpaper.html
 - https://proompteng.github.io/bilig/why-agents-need-workbook-apis.html
 - https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html
 - https://proompteng.github.io/bilig/mastra-workpaper-spreadsheet-tool.html
@@ -59,6 +60,7 @@ language: typescript
 - https://github.com/proompteng/bilig/blob/main/docs/node-spreadsheet-formula-engine.md
 - https://github.com/proompteng/bilig/blob/main/docs/evaluate-excel-formulas-in-node-typescript.md
 - https://github.com/proompteng/bilig/blob/main/docs/server-side-spreadsheet-automation-node.md
+- https://github.com/proompteng/bilig/blob/main/docs/google-sheets-api-alternative-node-workpaper.md
 - https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md
 - https://github.com/proompteng/bilig/blob/main/docs/serverless-workpaper-api-route.md
 - https://github.com/proompteng/bilig/blob/main/docs/node-framework-workpaper-adapters.md
@@ -149,6 +151,9 @@ npm run agent:verify
 - server-side spreadsheet automation in Node.js:
   https://proompteng.github.io/bilig/server-side-spreadsheet-automation-node.html
   https://github.com/proompteng/bilig/blob/main/docs/server-side-spreadsheet-automation-node.md
+- Google Sheets API boundary for local Node workbook execution:
+  https://proompteng.github.io/bilig/google-sheets-api-alternative-node-workpaper.html
+  https://github.com/proompteng/bilig/blob/main/docs/google-sheets-api-alternative-node-workpaper.md
 - npm-only smoke test:
   https://proompteng.github.io/bilig/try-bilig-headless-in-node.html
   https://github.com/proompteng/bilig/blob/main/docs/try-bilig-headless-in-node.md

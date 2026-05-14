@@ -16,6 +16,7 @@ export const docsSiteSources = [
   ['agent-spreadsheet-tool-call-loop.html', 'agent-spreadsheet-tool-call-loop.md'],
   ['node-service-workpaper-recipe.html', 'node-service-workpaper-recipe.md'],
   ['server-side-spreadsheet-automation-node.html', 'server-side-spreadsheet-automation-node.md'],
+  ['google-sheets-api-alternative-node-workpaper.html', 'google-sheets-api-alternative-node-workpaper.md'],
   ['node-spreadsheet-formula-engine.html', 'node-spreadsheet-formula-engine.md'],
   ['evaluate-excel-formulas-in-node-typescript.html', 'evaluate-excel-formulas-in-node-typescript.md'],
   ['try-bilig-headless-in-node.html', 'try-bilig-headless-in-node.md'],

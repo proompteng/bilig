@@ -90,12 +90,14 @@ const [headlessSpreadsheetEngineComparison, sheetjsExceljsAlternativeFormulaWork
     readFile(join(docsRoot, 'sheetjs-exceljs-alternative-formula-workbook-api.md'), 'utf8'),
     readFile(join(docsRoot, 'hyperformula-alternative-headless-workpaper.md'), 'utf8'),
   ])
+const googleSheetsApiBoundaryDoc = await readFile(join(docsRoot, 'google-sheets-api-alternative-node-workpaper.md'), 'utf8')
 
 requireHomepageDiscovery(index, siteCss, productCss)
 await requireTypeScriptFirstPublicSnippets(repoRoot)
 requireNoUnsupportedGoogleSheetsTenXClaims(dominanceScorecard, {
   'README.md': readme,
   'docs/index.html': index,
+  'docs/google-sheets-api-alternative-node-workpaper.md': googleSheetsApiBoundaryDoc,
   'packages/headless/README.md': headlessReadme,
 })
 requirePackageKeywords(
@@ -117,6 +119,7 @@ for (const required of [
   './agent-spreadsheet-tool-call-loop.html',
   './node-service-workpaper-recipe.html',
   './server-side-spreadsheet-automation-node.html',
+  './google-sheets-api-alternative-node-workpaper.html',
   './node-spreadsheet-formula-engine.html',
   './evaluate-excel-formulas-in-node-typescript.html',
   './try-bilig-headless-in-node.html',
@@ -211,6 +214,7 @@ for (const required of [
   'https://proompteng.github.io/bilig/agent-spreadsheet-tool-call-loop.html',
   'https://proompteng.github.io/bilig/node-service-workpaper-recipe.html',
   'https://proompteng.github.io/bilig/server-side-spreadsheet-automation-node.html',
+  'https://proompteng.github.io/bilig/google-sheets-api-alternative-node-workpaper.html',
   'https://proompteng.github.io/bilig/serverless-workpaper-api-route.html',
   'https://proompteng.github.io/bilig/node-framework-workpaper-adapters.html',
   'https://proompteng.github.io/bilig/workbook-automation-examples-node.html',
@@ -238,6 +242,7 @@ for (const required of [
   'https://github.com/proompteng/bilig/blob/main/docs/node-spreadsheet-formula-engine.md',
   'https://github.com/proompteng/bilig/blob/main/docs/evaluate-excel-formulas-in-node-typescript.md',
   'https://github.com/proompteng/bilig/blob/main/docs/server-side-spreadsheet-automation-node.md',
+  'https://github.com/proompteng/bilig/blob/main/docs/google-sheets-api-alternative-node-workpaper.md',
   'https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md',
   'https://github.com/proompteng/bilig/blob/main/docs/serverless-workpaper-api-route.md',
   'https://github.com/proompteng/bilig/blob/main/docs/node-framework-workpaper-adapters.md',
@@ -428,6 +433,22 @@ requireIncludes(
   'npx tsx eval.ts',
   'docs/server-side-spreadsheet-automation-node.md',
 )
+for (const required of [
+  'title: Google Sheets API alternative for local Node workbook execution',
+  'That is the boundary. `bilig` is not trying to replace Google Sheets.',
+  'npm install @bilig/headless',
+  'npx tsx eval.ts',
+  '"verified": true',
+  'https://developers.google.com/workspace/sheets/api/guides/concepts',
+  'https://developers.google.com/workspace/sheets/api/guides/values',
+] as const) {
+  requireIncludes(googleSheetsApiBoundaryDoc, required, 'docs/google-sheets-api-alternative-node-workpaper.md')
+}
+requireIncludes(readme, 'Google Sheets API boundary', 'README.md')
+requireIncludes(headlessReadme, 'Google Sheets API boundary', 'packages/headless/README.md')
+requireIncludes(index, './google-sheets-api-alternative-node-workpaper.html', 'docs/index.html')
+requireIncludes(llms, 'https://proompteng.github.io/bilig/google-sheets-api-alternative-node-workpaper.html', 'docs/llms.txt')
+requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/google-sheets-api-alternative-node-workpaper.md', 'docs/llms.txt')
 
 requireXlsxCorpusVerifierDiscovery(await readFile(join(docsRoot, 'xlsx-corpus-verifier-walkthrough.md'), 'utf8'))
 requireIncludes(index, './xlsx-corpus-verifier-walkthrough.html', 'docs/index.html')
@@ -633,6 +654,7 @@ for (const [path, content] of [
   ['docs/agent-spreadsheet-tool-call-loop.md', agentToolCallLoopDoc],
   ['docs/workbook-automation-examples-node.md', await readFile(join(docsRoot, 'workbook-automation-examples-node.md'), 'utf8')],
   ['docs/server-side-spreadsheet-automation-node.md', await readFile(join(docsRoot, 'server-side-spreadsheet-automation-node.md'), 'utf8')],
+  ['docs/google-sheets-api-alternative-node-workpaper.md', googleSheetsApiBoundaryDoc],
   ['docs/node-framework-workpaper-adapters.md', await readFile(join(docsRoot, 'node-framework-workpaper-adapters.md'), 'utf8')],
   ['docs/dev-to-workbook-apis-post.md', await readFile(join(docsRoot, 'dev-to-workbook-apis-post.md'), 'utf8')],
 ] as const) {
@@ -662,6 +684,7 @@ for (const [path, content] of [
 ] as const) {
   requireIncludes(content, 'node-spreadsheet-formula-engine', path)
   requireIncludes(content, 'server-side-spreadsheet-automation-node', path)
+  requireIncludes(content, 'google-sheets-api-alternative-node-workpaper', path)
   requireIncludes(content, 'examples/serverless-workpaper-api', path)
   requireIncludes(content, 'node-framework-workpaper-adapters', path)
   requireIncludes(content, 'mcp-spreadsheet-server-directory', path)

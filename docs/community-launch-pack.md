@@ -426,6 +426,21 @@ Latest technical-content action on May 14, 2026:
   <https://proompteng.github.io/bilig/why-agents-need-workbook-apis.html> and
   <https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md>.
 
+Latest search-intent boundary action on May 14, 2026:
+
+- A new Google Sheets API boundary page targets backend developers who are
+  deciding whether their workflow needs a hosted collaborative spreadsheet or a
+  local WorkPaper owned by a Node service.
+- The page does not claim that `bilig` replaces Google Sheets. It says to use
+  Google Sheets API when sharing, permissions, spreadsheet IDs, and a durable
+  Google Workspace URL are the product.
+- The same page gives an empty-directory TypeScript smoke test for the local
+  WorkPaper case: install `@bilig/headless`, build workbook state, edit one
+  input, read a recalculated value, save JSON, restore it, and verify the
+  restored value.
+- Public page:
+  <https://proompteng.github.io/bilig/google-sheets-api-alternative-node-workpaper.html>.
+
 Latest homepage polish action on May 14, 2026:
 
 - The homepage first viewport now leads with the plain product category
