@@ -9,8 +9,8 @@ Current starter queue as of May 14, 2026:
 - Pinned contributor map:
   [#372](https://github.com/proompteng/bilig/issues/372) groups current code,
   docs, agent, and MCP starter picks for people opening the issue queue cold.
-- 108 open `first-timers-only` issues.
-- 107 issues are currently available for a new contributor to claim.
+- 109 open `first-timers-only` issues.
+- 108 issues are currently available for a new contributor to claim.
 - 10 starter issues are code or test tasks; 9 are not under active review.
 - 1 open starter issue currently has an active pull request.
 
@@ -142,6 +142,7 @@ Current starter queue as of May 14, 2026:
 - [#162: docs(benchmarks): add WorkPaper benchmark reproduction notes](https://github.com/proompteng/bilig/issues/162)
 - [#197: docs(headless): add WorkPaper persistence decision table](https://github.com/proompteng/bilig/issues/197)
 - [#250: docs(headless): add package-size and cold-start evaluation note](https://github.com/proompteng/bilig/issues/250)
+- [#383: docs(xlsx): add a sanitized Excel oracle summary sample](https://github.com/proompteng/bilig/issues/383)
 
 ### JavaScript Library Comparison Starters
 

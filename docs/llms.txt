@@ -557,6 +557,8 @@ including its p95 caveat.
   https://github.com/proompteng/bilig/pull/373
 - current small test issue: markdown-report deterministic output:
   https://github.com/proompteng/bilig/issues/371
+- current small xlsx docs issue: sanitized Excel oracle summary sample:
+  https://github.com/proompteng/bilig/issues/383
 - current small mcp issue: Docker healthcheck for the WorkPaper MCP stdio server:
   https://github.com/proompteng/bilig/issues/348
 - current small site issue: social preview checklist:

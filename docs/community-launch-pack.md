@@ -391,6 +391,11 @@ Latest XLSX oracle feedback action on May 14, 2026:
   recalculation oracles, cache-only diagnostics, and CI-safe private workbook
   reports:
   <https://github.com/proompteng/bilig/discussions/382>.
+- Starter issue `#383` turns that feedback thread into a small first-time
+  contribution: add a sanitized sample `summary.md` or issue draft so evaluators
+  can see the safe report shape before running the oracle harness on private
+  workbooks:
+  <https://github.com/proompteng/bilig/issues/383>.
 - The stale-cache walkthrough now points readers at that feedback thread so the
   public accuracy framework can be challenged without turning stale embedded
   workbook caches into fake wins or fake bugs:
