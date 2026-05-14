@@ -100,9 +100,9 @@ issue pass:
   `#294`.
 - New framework and storage starter issues `#330` through `#333` cover Koa,
   Elysia, MongoDB persistence, and Univer boundary notes.
-- New framework starter issues `#336` through `#339` cover Next.js Server
-  Actions, Astro endpoints, TanStack Start server functions, and Qwik City
-  route smoke examples for WorkPaper.
+- Next.js Server Action starter issue `#336` shipped; current framework starter
+  issues `#337` through `#339` cover Astro endpoints, TanStack Start server
+  functions, and Qwik City route smoke examples for WorkPaper.
 - New search-intent page targets server-side spreadsheet automation in Node.js
   with a TypeScript smoke test, service boundary notes, and links into the
   maintained examples:

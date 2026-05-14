@@ -4,10 +4,10 @@ This page is the stable contributor on-ramp for small public `bilig` tasks. It
 links directly to current scoped issues instead of relying on GitHub issue
 search indexing.
 
-Current starter queue as of May 13, 2026:
+Current starter queue as of May 14, 2026:
 
-- 93 open `first-timers-only` issues.
-- 93 issues are generally available for a new contributor to claim.
+- 92 open `first-timers-only` issues.
+- 92 issues are generally available for a new contributor to claim.
 - 0 issues already have active pull requests.
 
 ## Available Starter Picks
@@ -63,7 +63,6 @@ Current starter queue as of May 13, 2026:
 - [#300: docs(examples): add tRPC WorkPaper procedure smoke](https://github.com/proompteng/bilig/issues/300)
 - [#330: docs(examples): add Koa WorkPaper route smoke](https://github.com/proompteng/bilig/issues/330)
 - [#331: docs(examples): add Elysia WorkPaper route smoke](https://github.com/proompteng/bilig/issues/331)
-- [#336: docs(examples): add Next.js Server Action WorkPaper smoke](https://github.com/proompteng/bilig/issues/336)
 - [#337: docs(examples): add Astro endpoint WorkPaper smoke](https://github.com/proompteng/bilig/issues/337)
 - [#338: docs(examples): add TanStack Start server function WorkPaper smoke](https://github.com/proompteng/bilig/issues/338)
 - [#339: docs(examples): add Qwik City WorkPaper route smoke](https://github.com/proompteng/bilig/issues/339)
