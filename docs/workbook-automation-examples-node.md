@@ -113,6 +113,16 @@ agent trace, or service log. Current example outputs include these checks.
 }
 ```
 
+## Plain Postgres persistence
+
+If one of these automation scripts needs durable workbook state in a Node
+service, the [WorkPaper Node service recipe](node-service-workpaper-recipe.md#plain-node-postgres-pg-json-persistence)
+includes a low-level `pg` path for teams that are not using Prisma, Drizzle, or
+Kysely. It shows the `workpaper_documents` table, parameterized save/load SQL,
+and a restore verification check with
+`createWorkPaperFromDocument(parseWorkPaperDocument(saved))` before accepting
+stored JSON as valid.
+
 ## Why this matters
 
 Most backend spreadsheet automation examples stop at printing a table. These

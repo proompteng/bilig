@@ -228,10 +228,148 @@ as a positive persistence signal, not a golden value.
   [Postgres adapter](persisting-formula-backed-workpaper-documents-in-node.md#postgres-adapter)
   show the same `loadWorkbookJson()` / `saveWorkbookJson()` boundary against a
   database table.
+- If your service uses Postgres directly without Prisma, Drizzle, or Kysely,
+  use the low-level [`pg` recipe](#plain-node-postgres-pg-json-persistence)
+  below. It keeps storage as parameterized SQL plus serialized WorkPaper JSON.
 - Return computed values after every controlled edit. A successful HTTP status
   only proves the route ran; readback proves the workbook recalculated.
 - Use public `@bilig/headless` exports only. Do not import from this monorepo's
   internal `src/` or `dist/` paths in a consumer service.
+
+
+## Plain node-postgres (`pg`) JSON persistence
+
+Use this path when the service already owns a `pg` `Pool` or `Client` and you
+do not want an ORM or query builder. The WorkPaper document remains an opaque
+serialized JSON string in application code; Postgres only stores and returns it.
+
+Install `pg` and its TypeScript declarations alongside `@bilig/headless`:
+
+```sh
+npm install pg
+npm install --save-dev @types/pg
+```
+
+Create one row per persisted workbook:
+
+```sql
+create table if not exists workpaper_documents (
+  id text primary key,
+  workbook_json jsonb not null,
+  updated_at timestamptz not null default now()
+);
+```
+
+Save and load with parameterized SQL. The calls to `parseWorkPaperDocument()`
+validate both inbound JSON before saving and stored JSON after loading:
+
+```ts
+import { Pool } from 'pg'
+import {
+  WorkPaper,
+  createWorkPaperFromDocument,
+  exportWorkPaperDocument,
+  parseWorkPaperDocument,
+  serializeWorkPaperDocument,
+} from '@bilig/headless'
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+const documentId = 'revenue-plan'
+
+export async function saveWorkPaperJson(id: string, workbookJson: string) {
+  parseWorkPaperDocument(workbookJson)
+
+  await pool.query(
+    `
+      insert into workpaper_documents (id, workbook_json, updated_at)
+      values ($1, $2::jsonb, now())
+      on conflict (id) do update
+        set workbook_json = excluded.workbook_json,
+            updated_at = now()
+    `,
+    [id, workbookJson],
+  )
+}
+
+export async function loadWorkPaperJson(id: string) {
+  const result = await pool.query<{ workbook_json: string }>(
+    `
+      select workbook_json::text as workbook_json
+      from workpaper_documents
+      where id = $1
+    `,
+    [id],
+  )
+
+  const workbookJson = result.rows[0]?.workbook_json
+  if (workbookJson === undefined) {
+    return undefined
+  }
+
+  parseWorkPaperDocument(workbookJson)
+  return workbookJson
+}
+```
+
+Restore the saved JSON through the WorkPaper document helpers, then read a
+computed value before accepting the round trip as valid:
+
+```ts
+function createInitialWorkbook() {
+  return WorkPaper.buildFromSheets({
+    Assumptions: [
+      ['Metric', 'Value'],
+      ['Customers', 40],
+      ['ARPA', 240],
+    ],
+    Summary: [
+      ['Metric', 'Value'],
+      ['Gross MRR', '=Assumptions!B2*Assumptions!B3'],
+    ],
+  })
+}
+
+function serializeWorkbook(workbook: WorkPaper) {
+  return serializeWorkPaperDocument(
+    exportWorkPaperDocument(workbook, { includeConfig: true }),
+  )
+}
+
+async function saveLoadAndVerify() {
+  const workbook = createInitialWorkbook()
+  const summarySheet = workbook.getSheetId('Summary')
+  if (summarySheet === undefined) {
+    throw new Error('missing Summary sheet')
+  }
+
+  const expected = workbook.getCellValue({ sheet: summarySheet, row: 1, col: 1 })
+  await saveWorkPaperJson(documentId, serializeWorkbook(workbook))
+
+  const saved = await loadWorkPaperJson(documentId)
+  if (saved === undefined) {
+    throw new Error(`missing WorkPaper document: ${documentId}`)
+  }
+
+  const restored = createWorkPaperFromDocument(parseWorkPaperDocument(saved))
+  const restoredSummary = restored.getSheetId('Summary')
+  if (restoredSummary === undefined) {
+    throw new Error('restored workbook is missing Summary sheet')
+  }
+
+  const afterRestore = restored.getCellValue({ sheet: restoredSummary, row: 1, col: 1 })
+  if (JSON.stringify(afterRestore) !== JSON.stringify(expected)) {
+    throw new Error('restored WorkPaper formula readback did not match')
+  }
+
+  return { verified: true, afterRestore }
+}
+```
+
+For multi-writer services, wrap the load, WorkPaper mutation, readback
+verification, and save in one transaction and lock the row with
+`select ... for update`, or add an explicit version column and reject stale
+writes. Do not update `workpaper_documents` until the restored or mutated
+WorkPaper has produced the computed readback you expect.
 
 ## Validation
 
