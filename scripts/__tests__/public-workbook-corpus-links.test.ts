@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -13,6 +14,7 @@ import {
   parsePublicWorkbookManifestJson,
   validatePublicWorkbookManifest,
 } from '../public-workbook-corpus.ts'
+import { asRecord } from '../public-workbook-corpus-json.ts'
 import { addPublicWorkbookLinkSource } from '../public-workbook-corpus-links.ts'
 import type { PublicWorkbookArtifact, PublicWorkbookManifest, PublicWorkbookSource } from '../public-workbook-corpus-types.ts'
 
@@ -454,6 +456,75 @@ describe('public workbook corpus shared links', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://example.com/b.xlsx')
     expect(fetched.artifacts).toHaveLength(1)
     expect(fetched.artifacts[0]?.sourceId).toBe('source-b')
+  })
+
+  it('prints fetch-source checkpoint progress when the selected source fails', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-fetch-source-progress-'))
+    const manifestPath = join(cacheDir, 'manifest.json')
+    const server = createServer((_request, response) => {
+      response.writeHead(404, { 'content-type': 'text/plain' })
+      response.end('missing')
+    })
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, '127.0.0.1', () => resolve())
+    })
+    try {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        throw new Error('Expected local HTTP server address')
+      }
+      const url = `http://127.0.0.1:${String(address.port)}/missing.xlsx`
+      const manifest: PublicWorkbookManifest = {
+        ...createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'),
+        sources: [directSource('source-missing', url)],
+      }
+      writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+
+      const result = spawnSync(
+        'bun',
+        [
+          corpusScriptPath(),
+          'fetch-source',
+          '--manifest',
+          manifestPath,
+          '--cache-dir',
+          cacheDir,
+          '--source-id',
+          'source-missing',
+          '--download-timeout-ms',
+          '1000',
+        ],
+        { encoding: 'utf8' },
+      )
+      const output = asRecord(JSON.parse(result.stdout) as unknown)
+      const checkpointProgress = output['checkpointProgress']
+      expect(Array.isArray(checkpointProgress)).toBe(true)
+      const firstProgress = asRecord(checkpointProgress[0])
+      const failedSourceSamples = firstProgress['failedSourceSamples']
+      expect(Array.isArray(failedSourceSamples)).toBe(true)
+
+      expect(result.status).toBe(0)
+      expect(firstProgress).toMatchObject({
+        artifactCount: 0,
+        exhaustedSourceCount: 1,
+        failedSourceCount: 1,
+      })
+      expect(asRecord(failedSourceSamples[0])).toMatchObject({
+        sourceId: 'source-missing',
+        error: 'Request timed out after 1000ms',
+      })
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error)
+            return
+          }
+          resolve()
+        })
+      })
+    }
   })
 
   it('formats the one-artifact checkpoint verification command for fetched shared links', () => {

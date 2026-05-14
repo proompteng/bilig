@@ -446,6 +446,7 @@ async function main(): Promise<void> {
     let result: {
       readonly artifactCountBefore: number
       readonly artifactCountAfter: number
+      readonly checkpointProgress: readonly PublicWorkbookCorpusFetchCheckpointProgress[]
       readonly fetchedArtifactIds: readonly string[]
     }
     try {
@@ -455,6 +456,7 @@ async function main(): Promise<void> {
           throw new Error(`Manifest does not contain public workbook source ${sourceId}`)
         }
         const beforeArtifactIds = new Set(manifest.artifacts.map((artifact) => artifact.id))
+        const checkpointProgress: PublicWorkbookCorpusFetchCheckpointProgress[] = []
         const fetchedManifest = await fetchPublicWorkbookArtifacts({
           manifest,
           cacheDir,
@@ -466,14 +468,16 @@ async function main(): Promise<void> {
           isolatedFingerprinting: !inProcessFingerprinting,
           maxBytes: readNumberArg('--max-bytes', 50 * 1024 * 1024),
           sourceIds: [sourceId],
-          onArtifactsCommitted: (checkpointManifest) => {
+          onArtifactsCommitted: (checkpointManifest, progress) => {
             writeJson(manifestPath, checkpointManifest, 'public-workbook-corpus-manifest')
+            checkpointProgress.push(progress)
           },
         })
         writeJson(manifestPath, fetchedManifest, 'public-workbook-corpus-manifest')
         return {
           artifactCountBefore: manifest.artifacts.length,
           artifactCountAfter: fetchedManifest.artifacts.length,
+          checkpointProgress,
           fetchedArtifactIds: fetchedManifest.artifacts
             .filter((artifact) => !beforeArtifactIds.has(artifact.id))
             .map((artifact) => artifact.id),
