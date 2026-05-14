@@ -62,13 +62,18 @@ export function CellEditorOverlay({
   onCancel,
   style,
 }: CellEditorOverlayProps) {
+  const targetAddress = targetSelection.address
+  const targetSheetName = targetSelection.sheetName
   const overlayRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const completionRef = useRef<'idle' | 'commit' | 'cancel'>('idle')
   const blurArmedRef = useRef(false)
   const pendingBlurCommitRef = useRef<number | null>(null)
+  const pendingParentSyncRef = useRef<number | null>(null)
+  const pendingParentSyncValueRef = useRef(value)
   const targetSelectionRef = useRef(targetSelection)
   const [isCompleting, setIsCompleting] = useState(false)
+  const [draftValue, setDraftValue] = useState(value)
   const MAX_EDITOR_HEIGHT = 220
 
   const cancelPendingBlurCommit = () => {
@@ -78,6 +83,32 @@ export function CellEditorOverlay({
     }
     pendingBlurCommitRef.current = null
     window.cancelAnimationFrame(pendingFrame)
+  }
+
+  const cancelPendingParentSync = () => {
+    const pendingFrame = pendingParentSyncRef.current
+    if (pendingFrame === null) {
+      return
+    }
+    pendingParentSyncRef.current = null
+    window.cancelAnimationFrame(pendingFrame)
+  }
+
+  const flushParentSync = (nextValue = pendingParentSyncValueRef.current) => {
+    cancelPendingParentSync()
+    onChange(nextValue)
+  }
+
+  const updateDraftValue = (nextValue: string) => {
+    pendingParentSyncValueRef.current = nextValue
+    setDraftValue(nextValue)
+    if (pendingParentSyncRef.current !== null) {
+      return
+    }
+    pendingParentSyncRef.current = window.requestAnimationFrame(() => {
+      pendingParentSyncRef.current = null
+      onChange(pendingParentSyncValueRef.current)
+    })
   }
 
   const beginCompletion = (nextState: 'commit' | 'cancel') => {
@@ -105,6 +136,16 @@ export function CellEditorOverlay({
   }, [selectionBehavior, value.length])
 
   useEffect(() => cancelPendingBlurCommit, [])
+  useEffect(() => cancelPendingParentSync, [])
+
+  useEffect(() => {
+    targetSelectionRef.current = {
+      address: targetAddress,
+      sheetName: targetSheetName,
+    }
+    pendingParentSyncValueRef.current = value
+    setDraftValue(value)
+  }, [targetAddress, targetSheetName, value])
 
   useEffect(() => {
     const textarea = inputRef.current
@@ -115,21 +156,23 @@ export function CellEditorOverlay({
     const measuredHeight = Math.min(Math.max(textarea.scrollHeight, fontSize + 16), MAX_EDITOR_HEIGHT)
     textarea.style.height = `${measuredHeight}px`
     textarea.style.overflowY = textarea.scrollHeight > MAX_EDITOR_HEIGHT ? 'auto' : 'hidden'
-  }, [fontSize, value])
+  }, [draftValue, fontSize])
 
   const commit = (movement?: EditMovement) => {
     if (movement) {
       cancelPendingBlurCommit()
     }
+    const nextValue = inputRef.current?.value ?? draftValue
+    flushParentSync(nextValue)
     if (completionRef.current !== 'idle') {
       if (movement && completionRef.current === 'commit') {
-        onCommit(movement, inputRef.current?.value ?? value, targetSelectionRef.current)
+        onCommit(movement, nextValue, targetSelectionRef.current)
       }
       return
     }
     cancelPendingBlurCommit()
     beginCompletion('commit')
-    onCommit(movement, inputRef.current?.value ?? value, targetSelectionRef.current)
+    onCommit(movement, nextValue, targetSelectionRef.current)
   }
 
   const commitAfterBlur = () => {
@@ -173,18 +216,20 @@ export function CellEditorOverlay({
           textAlign,
           textDecorationLine: underline ? 'underline' : undefined,
         }}
-        value={value}
+        value={draftValue}
         onBlur={commitAfterBlur}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => updateDraftValue(event.target.value)}
         onKeyDown={(event) => {
           const normalizedNumpadKey = normalizeNumpadKey(event.key, event.code)
           if (normalizedNumpadKey !== null && event.key !== normalizedNumpadKey) {
             event.preventDefault()
             const input = event.currentTarget
-            const selectionStart = input.selectionStart ?? value.length
-            const selectionEnd = input.selectionEnd ?? value.length
-            const nextValue = `${value.slice(0, selectionStart)}${normalizedNumpadKey}${value.slice(selectionEnd)}`
-            onChange(nextValue)
+            const currentValue = input.value
+            const selectionStart = input.selectionStart ?? currentValue.length
+            const selectionEnd = input.selectionEnd ?? currentValue.length
+            const nextValue = `${currentValue.slice(0, selectionStart)}${normalizedNumpadKey}${currentValue.slice(selectionEnd)}`
+            input.value = nextValue
+            updateDraftValue(nextValue)
             window.requestAnimationFrame(() => {
               const caretPosition = selectionStart + normalizedNumpadKey.length
               inputRef.current?.setSelectionRange(caretPosition, caretPosition)
@@ -194,10 +239,12 @@ export function CellEditorOverlay({
           if (!event.nativeEvent.isComposing && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
             event.preventDefault()
             const input = event.currentTarget
-            const selectionStart = input.selectionStart ?? value.length
-            const selectionEnd = input.selectionEnd ?? value.length
-            const nextValue = `${value.slice(0, selectionStart)}${event.key}${value.slice(selectionEnd)}`
-            onChange(nextValue)
+            const currentValue = input.value
+            const selectionStart = input.selectionStart ?? currentValue.length
+            const selectionEnd = input.selectionEnd ?? currentValue.length
+            const nextValue = `${currentValue.slice(0, selectionStart)}${event.key}${currentValue.slice(selectionEnd)}`
+            input.value = nextValue
+            updateDraftValue(nextValue)
             window.requestAnimationFrame(() => {
               const caretPosition = selectionStart + event.key.length
               inputRef.current?.setSelectionRange(caretPosition, caretPosition)

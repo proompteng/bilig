@@ -9,6 +9,8 @@ import { deriveWorkbookStatusPresentation, useWorkbookToolbar } from '../use-wor
 
 function ToolbarHookHarness(props: {
   readonly invokeMutation: (method: string, ...args: unknown[]) => Promise<void>
+  readonly onRedo?: (() => void) | undefined
+  readonly onUndo?: (() => void) | undefined
   readonly selectionRangeRef: MutableRefObject<CellRangeRef>
   readonly selectedStyle?: CellStyleRecord | undefined
   readonly writesAllowed?: boolean | undefined
@@ -36,14 +38,14 @@ function ToolbarHookHarness(props: {
     onHideCurrentRow: () => {},
     onHorizontalAlignmentChange: () => {},
     onNumberFormatChange: () => {},
-    onRedo: () => {},
+    onRedo: props.onRedo ?? (() => {}),
     onTextColorReset: () => {},
     onTextColorSelect: () => {},
     onToggleBold: () => {},
     onToggleItalic: () => {},
     onToggleUnderline: () => {},
     onToggleWrap: () => {},
-    onUndo: () => {},
+    onUndo: props.onUndo ?? (() => {}),
     onUnhideCurrentColumn: () => {},
     onUnhideCurrentRow: () => {},
     remoteSyncAvailable: true,
@@ -97,6 +99,16 @@ function setScrollGeometry(
   })
 }
 
+function dispatchWorkbookShortcut(init: KeyboardEventInit & { readonly key: string }) {
+  const event = new KeyboardEvent('keydown', {
+    bubbles: true,
+    cancelable: true,
+    ...init,
+  })
+  window.dispatchEvent(event)
+  return event
+}
+
 describe('WorkbookToolbar', () => {
   it('shows shortcut formatting state optimistically while the mutation is still pending', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -145,6 +157,141 @@ describe('WorkbookToolbar', () => {
     await act(async () => {
       resolveMutation?.()
     })
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('routes supported workbook toolbar shortcuts to the active selection', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const invokeMutation = vi.fn(async () => {})
+    const onRedo = vi.fn()
+    const onUndo = vi.fn()
+    const selectionRangeRef: MutableRefObject<CellRangeRef> = {
+      current: {
+        sheetName: 'Sheet1',
+        startAddress: 'B2',
+        endAddress: 'D5',
+      },
+    }
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const selectionRange = selectionRangeRef.current
+
+    await act(async () => {
+      root.render(
+        <ToolbarHookHarness invokeMutation={invokeMutation} onRedo={onRedo} onUndo={onUndo} selectionRangeRef={selectionRangeRef} />,
+      )
+    })
+
+    await act(async () => {
+      dispatchWorkbookShortcut({ key: 'z', metaKey: true })
+      dispatchWorkbookShortcut({ key: 'z', metaKey: true, shiftKey: true })
+      dispatchWorkbookShortcut({ key: 'y', ctrlKey: true })
+    })
+
+    expect(onUndo).toHaveBeenCalledTimes(1)
+    expect(onRedo).toHaveBeenCalledTimes(2)
+
+    const shortcutCases: readonly {
+      readonly event: KeyboardEventInit & { readonly key: string }
+      readonly calls: readonly unknown[][]
+    }[] = [
+      {
+        event: { key: 'b', metaKey: true },
+        calls: [['setRangeStyle', selectionRange, { font: { bold: true } }]],
+      },
+      {
+        event: { key: 'i', metaKey: true },
+        calls: [['setRangeStyle', selectionRange, { font: { italic: true } }]],
+      },
+      {
+        event: { key: 'u', metaKey: true },
+        calls: [['setRangeStyle', selectionRange, { font: { underline: true } }]],
+      },
+      {
+        event: { code: 'Digit1', key: '!', metaKey: true, shiftKey: true },
+        calls: [['setRangeNumberFormat', selectionRange, { kind: 'number', decimals: 2, useGrouping: true }]],
+      },
+      {
+        event: { code: 'Digit4', key: '$', metaKey: true, shiftKey: true },
+        calls: [
+          [
+            'setRangeNumberFormat',
+            selectionRange,
+            {
+              kind: 'currency',
+              currency: 'USD',
+              decimals: 2,
+              useGrouping: true,
+              negativeStyle: 'minus',
+              zeroStyle: 'zero',
+            },
+          ],
+        ],
+      },
+      {
+        event: { code: 'Digit5', key: '%', metaKey: true, shiftKey: true },
+        calls: [['setRangeNumberFormat', selectionRange, { kind: 'percent', decimals: 2 }]],
+      },
+      {
+        event: { key: 'l', metaKey: true, shiftKey: true },
+        calls: [['setRangeStyle', selectionRange, { alignment: { horizontal: 'left' } }]],
+      },
+      {
+        event: { key: 'e', metaKey: true, shiftKey: true },
+        calls: [['setRangeStyle', selectionRange, { alignment: { horizontal: 'center' } }]],
+      },
+      {
+        event: { key: 'r', metaKey: true, shiftKey: true },
+        calls: [['setRangeStyle', selectionRange, { alignment: { horizontal: 'right' } }]],
+      },
+      {
+        event: { code: 'Backslash', key: '\\', metaKey: true },
+        calls: [['clearRangeStyle', selectionRange, undefined]],
+      },
+    ]
+
+    for (const shortcutCase of shortcutCases) {
+      invokeMutation.mockClear()
+      act(() => {
+        const event = dispatchWorkbookShortcut(shortcutCase.event)
+        expect(event.defaultPrevented).toBe(true)
+      })
+      expect(invokeMutation.mock.calls).toEqual(shortcutCase.calls)
+    }
+
+    invokeMutation.mockClear()
+    await act(async () => {
+      const event = dispatchWorkbookShortcut({ code: 'Digit7', key: '&', metaKey: true, shiftKey: true })
+      expect(event.defaultPrevented).toBe(true)
+    })
+    expect(invokeMutation.mock.calls).toEqual([
+      ['clearRangeStyle', selectionRange, ['borderTop', 'borderRight', 'borderBottom', 'borderLeft']],
+      [
+        'setRangeStyle',
+        { sheetName: 'Sheet1', startAddress: 'B2', endAddress: 'D2' },
+        { borders: { top: { color: '#111827', style: 'solid', weight: 'thin' } } },
+      ],
+      [
+        'setRangeStyle',
+        { sheetName: 'Sheet1', startAddress: 'B5', endAddress: 'D5' },
+        { borders: { bottom: { color: '#111827', style: 'solid', weight: 'thin' } } },
+      ],
+      [
+        'setRangeStyle',
+        { sheetName: 'Sheet1', startAddress: 'B2', endAddress: 'B5' },
+        { borders: { left: { color: '#111827', style: 'solid', weight: 'thin' } } },
+      ],
+      [
+        'setRangeStyle',
+        { sheetName: 'Sheet1', startAddress: 'D2', endAddress: 'D5' },
+        { borders: { right: { color: '#111827', style: 'solid', weight: 'thin' } } },
+      ],
+    ])
+
     await act(async () => {
       root.unmount()
     })
