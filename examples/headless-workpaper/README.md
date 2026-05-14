@@ -66,6 +66,12 @@ packages through `pnpm workpaper:smoke:external`.
 | Sheet inspection         | `npm run sheet-inspection`         | restored sheet names, IDs, and dimensions                                                                         |
 | HTTP JSON summary        | `npm run http-json-summary`        | no-framework Node HTTP service boundary                                                                           |
 
+For durable service storage, see the docs recipe for
+[plain node-postgres (`pg`) WorkPaper JSON persistence](../../docs/node-service-workpaper-recipe.md#plain-node-postgres-pg-json-persistence).
+It is the low-level Postgres path for teams not using Prisma, Drizzle, or
+Kysely, and includes save/load SQL plus restored WorkPaper readback
+verification.
+
 ## npm Package Eval
 
 Run this when you want the smallest maintained TypeScript file for checking the
