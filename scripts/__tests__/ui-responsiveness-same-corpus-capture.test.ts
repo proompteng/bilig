@@ -18,7 +18,7 @@ import {
 import { requiredUiResponsivenessSameCorpusWorkloads } from '../ui-responsiveness-same-corpus-workloads.ts'
 import { buildCaptureScenarioProof, type SameCorpusProductVisualProof } from '../ui-responsiveness-same-corpus-proof.ts'
 import { sameCorpusChromiumLaunchOptions } from '../ui-responsiveness-same-corpus-page-utils.ts'
-import { incumbentEditableWorkloadBlocker } from '../ui-responsiveness-same-corpus-workload-runner.ts'
+import { incumbentEditableWorkloadBlocker, sameCorpusKeyboardOperations } from '../ui-responsiveness-same-corpus-workload-runner.ts'
 
 describe('same-corpus UI responsiveness capture CLI', () => {
   it('builds a default Bilig benchmark URL from the selected corpus', () => {
@@ -269,6 +269,20 @@ describe('same-corpus UI responsiveness capture CLI', () => {
       'formula-edit',
       'fill-format-change',
       'wide-sheet-navigation',
+    ])
+  })
+
+  it('uses grid keyboard parity for same-corpus non-scroll Bilig workloads', () => {
+    expect(sameCorpusKeyboardOperations('bilig', 'select-cell', 0, 'darwin')).toEqual([{ kind: 'press', key: 'ArrowRight' }])
+    expect(sameCorpusKeyboardOperations('bilig', 'jump-deep-row', 0, 'darwin')).toEqual([{ kind: 'press', key: 'Meta+ArrowDown' }])
+    expect(sameCorpusKeyboardOperations('bilig', 'fill-format-change', 0, 'linux')).toEqual([{ kind: 'press', key: 'Control+B' }])
+    expect(sameCorpusKeyboardOperations('bilig', 'formula-edit', 1, 'darwin')).toEqual([
+      { kind: 'type', text: '=2+1' },
+      { kind: 'press', key: 'Enter' },
+    ])
+    expect(sameCorpusKeyboardOperations('google-sheets', 'edit-visible-cell', 2, 'darwin')).toEqual([
+      { kind: 'type', text: 'google-sheets-same-corpus-3' },
+      { kind: 'press', key: 'Enter' },
     ])
   })
 

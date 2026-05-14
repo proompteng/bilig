@@ -37,14 +37,15 @@ describe('UI responsiveness live browser scorecard', () => {
     expect(scorecard.cases.map((entry) => entry.id)).toEqual(['google-sheets-public-grid-scroll', 'microsoft-excel-web-public-xlsx-scroll'])
     expect(scorecard.cases.every((entry) => entry.sampleCount >= 3 && entry.limitations.length > 0)).toBe(true)
     expect(scorecard.sameCorpusProof).toMatchObject({
-      captured: false,
-      evidenceKind: 'not-captured',
+      captured: true,
+      evidenceKind: 'same-corpus-browser-capture',
       requiredProductCount: 2,
       requiredCaseCount: requiredUiResponsivenessSameCorpusWorkloads.length,
       tenXMeanAndP95CaseCount: 0,
-      coveredCorpusCaseIds: [],
+      coveredCorpusCaseIds: ['wide-mixed-250k'],
     })
-    expect(scorecard.sameCorpusProof.cases).toHaveLength(0)
+    expect(scorecard.sameCorpusProof.cases.map((entry) => entry.workload)).toEqual(requiredUiResponsivenessSameCorpusWorkloads)
+    expect(scorecard.sameCorpusProof.cases.every((entry) => !entry.tenXMeanAndP95AgainstGoogleSheets)).toBe(true)
     validateUiResponsivenessLiveBrowserScorecard(scorecard)
   })
 

@@ -29,6 +29,8 @@ type NonScrollWorkload = Exclude<
   'open-workbook' | 'scroll-vertical' | 'scroll-horizontal' | 'wide-sheet-navigation'
 >
 
+type SameCorpusKeyboardOperation = { kind: 'press'; key: string } | { kind: 'type'; text: string }
+
 export async function measureProductWorkload(args: {
   readonly page: Page
   readonly product: UiResponsivenessSameCorpusProduct
@@ -81,60 +83,53 @@ async function performProductUiOperation(
   workload: NonScrollWorkload,
   sampleIndex: number,
 ): Promise<void> {
-  if (product === 'bilig') {
-    await performBiligUiOperation(page, workload, sampleIndex)
-    return
+  if (product !== 'bilig') {
+    await assertIncumbentEditableForWorkload(page, product, workload)
   }
-  await performIncumbentUiOperation(page, product, workload, sampleIndex)
+  await performSameCorpusKeyboardOperations(page, sameCorpusKeyboardOperations(product, workload, sampleIndex))
 }
 
-async function performBiligUiOperation(page: Page, workload: NonScrollWorkload, sampleIndex: number): Promise<void> {
-  const nameBox = page.getByTestId('name-box')
-  const formulaInput = page.getByTestId('formula-input')
-  if (workload === 'select-cell') {
-    await nameBox.fill('C12')
-    await nameBox.press('Enter')
-    return
-  }
-  if (workload === 'jump-deep-row') {
-    await nameBox.fill('A2000')
-    await nameBox.press('Enter')
-    return
-  }
-  if (workload === 'fill-format-change') {
-    await nameBox.fill('D12')
-    await nameBox.press('Enter')
-    await page.getByLabel('Bold').click()
-    return
-  }
-  await nameBox.fill(workload === 'formula-edit' ? 'E12' : 'D12')
-  await nameBox.press('Enter')
-  await formulaInput.fill(workload === 'formula-edit' ? `=${String(sampleIndex + 1)}+1` : `same-corpus-${String(sampleIndex + 1)}`)
-  await formulaInput.press('Enter')
-}
-
-async function performIncumbentUiOperation(
-  page: Page,
-  product: Exclude<UiResponsivenessSameCorpusProduct, 'bilig'>,
+export function sameCorpusKeyboardOperations(
+  product: UiResponsivenessSameCorpusProduct,
   workload: NonScrollWorkload,
   sampleIndex: number,
-): Promise<void> {
+  platform: NodeJS.Platform = process.platform,
+): readonly SameCorpusKeyboardOperation[] {
   if (workload === 'select-cell') {
-    await page.keyboard.press('ArrowRight')
-    return
+    return [{ kind: 'press', key: 'ArrowRight' }]
   }
   if (workload === 'jump-deep-row') {
-    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowDown' : 'Control+ArrowDown')
-    return
+    return [{ kind: 'press', key: primaryShortcut('ArrowDown', platform) }]
   }
-  await assertIncumbentEditableForWorkload(page, product, workload)
   if (workload === 'fill-format-change') {
-    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+B' : 'Control+B')
-    return
+    return [{ kind: 'press', key: primaryShortcut('B', platform) }]
   }
   const value = workload === 'formula-edit' ? `=${String(sampleIndex + 1)}+1` : `${product}-same-corpus-${String(sampleIndex + 1)}`
-  await page.keyboard.type(value)
-  await page.keyboard.press('Enter')
+  return [
+    { kind: 'type', text: value },
+    { kind: 'press', key: 'Enter' },
+  ]
+}
+
+function primaryShortcut(key: string, platform: NodeJS.Platform): string {
+  return platform === 'darwin' ? `Meta+${key}` : `Control+${key}`
+}
+
+async function performSameCorpusKeyboardOperations(
+  page: Page,
+  operations: readonly SameCorpusKeyboardOperation[],
+  index = 0,
+): Promise<void> {
+  const operation = operations[index]
+  if (!operation) {
+    return
+  }
+  if (operation.kind === 'type') {
+    await page.keyboard.type(operation.text)
+  } else {
+    await page.keyboard.press(operation.key)
+  }
+  await performSameCorpusKeyboardOperations(page, operations, index + 1)
 }
 
 async function assertIncumbentEditableForWorkload(
