@@ -110,10 +110,10 @@ describe('CellEditorOverlay', () => {
     })
   })
 
-  it('keeps typed draft text local until the next frame', async () => {
+  it('keeps typed draft text local until the debounced parent sync', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-    const mockFrames = installMockAnimationFrames()
+    vi.useFakeTimers()
     const onChange = vi.fn()
     const host = document.createElement('div')
     document.body.appendChild(host)
@@ -150,7 +150,13 @@ describe('CellEditorOverlay', () => {
       expect(onChange).not.toHaveBeenCalled()
 
       await act(async () => {
-        mockFrames.flushAnimationFrames()
+        vi.advanceTimersByTime(79)
+      })
+
+      expect(onChange).not.toHaveBeenCalled()
+
+      await act(async () => {
+        vi.advanceTimersByTime(1)
       })
 
       expect(onChange).toHaveBeenCalledTimes(1)
@@ -159,14 +165,14 @@ describe('CellEditorOverlay', () => {
       await act(async () => {
         root.unmount()
       })
-      mockFrames.restore()
+      vi.useRealTimers()
     }
   })
 
   it('flushes local draft text before committing', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-    const mockFrames = installMockAnimationFrames()
+    vi.useFakeTimers()
     const onChange = vi.fn()
     const onCommit = vi.fn()
     const host = document.createElement('div')
@@ -207,14 +213,14 @@ describe('CellEditorOverlay', () => {
       await act(async () => {
         root.unmount()
       })
-      mockFrames.restore()
+      vi.useRealTimers()
     }
   })
 
-  it('keeps delete and backspace edits in the local draft before the next frame', async () => {
+  it('keeps delete and backspace edits in the local draft before the debounced parent sync', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-    const mockFrames = installMockAnimationFrames()
+    vi.useFakeTimers()
     const onChange = vi.fn()
     const onCommit = vi.fn()
     const host = document.createElement('div')
@@ -267,7 +273,7 @@ describe('CellEditorOverlay', () => {
       await act(async () => {
         root.unmount()
       })
-      mockFrames.restore()
+      vi.useRealTimers()
     }
   })
 

@@ -27,6 +27,8 @@ function normalizeNumpadKey(key: string, code: string): string | null {
   return key.length === 1 ? key : null
 }
 
+const PARENT_SYNC_DEBOUNCE_MS = 80
+
 interface CellEditorOverlayProps {
   label: string
   value: string
@@ -86,12 +88,12 @@ export function CellEditorOverlay({
   }
 
   const cancelPendingParentSync = () => {
-    const pendingFrame = pendingParentSyncRef.current
-    if (pendingFrame === null) {
+    const pendingTimer = pendingParentSyncRef.current
+    if (pendingTimer === null) {
       return
     }
     pendingParentSyncRef.current = null
-    window.cancelAnimationFrame(pendingFrame)
+    window.clearTimeout(pendingTimer)
   }
 
   const flushParentSync = (nextValue = pendingParentSyncValueRef.current) => {
@@ -105,10 +107,10 @@ export function CellEditorOverlay({
     if (pendingParentSyncRef.current !== null) {
       return
     }
-    pendingParentSyncRef.current = window.requestAnimationFrame(() => {
+    pendingParentSyncRef.current = window.setTimeout(() => {
       pendingParentSyncRef.current = null
       onChange(pendingParentSyncValueRef.current)
-    })
+    }, PARENT_SYNC_DEBOUNCE_MS)
   }
 
   const beginCompletion = (nextState: 'commit' | 'cancel') => {
@@ -139,6 +141,7 @@ export function CellEditorOverlay({
   useEffect(() => cancelPendingParentSync, [])
 
   useEffect(() => {
+    cancelPendingParentSync()
     targetSelectionRef.current = {
       address: targetAddress,
       sheetName: targetSheetName,
