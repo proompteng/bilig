@@ -26,10 +26,10 @@ as useful evidence, but they do not satisfy broad coverage alone.
 
 Current checked-in metadata:
 
-- generated at `2026-05-15T00:47:34.378Z`
+- generated at `2026-05-15T03:13:53.107Z`
 - host: macOS `arm64`, Node `v24.3.0`
 - benchmark sampling: `5` measured samples after `2` warmup samples
-- WorkPaper package: `@bilig/headless`
+- WorkPaper package: `@bilig/headless` `0.14.20`
 - comparison engine: HyperFormula `3.2.0`, local checkout commit
   `9a510a2acb97c3d3490f9e3b9e961a1c4a98b9ad`, GPL-v3 license key
 - scalar formula comparison engine: TrueCalc `0.6.4`, `7` comparable scalar
@@ -46,33 +46,34 @@ directly comparable workbook-wide headless spreadsheet-engine workloads:
 
 | Lane    | Comparable Workloads | WorkPaper Mean Wins | HyperFormula Mean Wins |
 | ------- | -------------------: | ------------------: | ---------------------: |
-| Overall |                 `46` |                `37` |                    `9` |
+| Overall |                 `46` |                `38` |                    `8` |
 | Public  |                 `38` |                `31` |                    `7` |
-| Holdout |                  `8` |                 `6` |                    `2` |
+| Holdout |                  `8` |                 `7` |                    `1` |
 
-The overall directional mean-ratio geomean is `0.7467698660786287`. The overall
-directional p95-ratio geomean is `0.7937759427159495`. Ratios below `1.0` mean
+The overall directional mean-ratio geomean is `0.6948435060111573`. The overall
+directional p95-ratio geomean is `0.6990622429958057`. Ratios below `1.0` mean
 WorkPaper is faster for that metric.
 
-The current worst mean and p95 row is `structural-insert-columns`, with a mean
-ratio of `3.417955774615391` and a p95 ratio of `3.409873090688779`. The
-headless leadership scorecard currently records `34/46` workloads winning both
+The current worst mean row is `single-formula-edit-recalc`, with a mean ratio of
+`1.9570808756278426`. The current worst p95 row is `build-mixed-content`, with
+a p95 ratio of `1.9733059237192512`. The headless leadership scorecard
+currently records `31/46` workloads winning both
 mean and p95 against HyperFormula.
 
 It is also not a blanket "fastest against every formula evaluator" claim. The
 TrueCalc scalar lane currently reports `0/7` WorkPaper mean+p95 wins, with a
-directional mean-ratio geomean of `14.665052659844388`. That lane is intentionally
+directional mean-ratio geomean of `8.22680126570977`. That lane is intentionally
 kept in the leadership scorecard as a blocker map, not as marketing copy.
 
 The xlsx-calc lane is a direct workbook-wide recalculation comparison for the
 formula families both engines can evaluate equivalently. It currently reports
 `4/4` WorkPaper mean+p95 wins with a directional mean-ratio geomean of
-`0.10232646615444607`, but it covers only `4/46` eligible workload rows, so the
+`0.06596283813950932`, but it covers only `4/46` eligible workload rows, so the
 scorecard treats it as partial coverage rather than proof of blanket leadership.
 
 ## How To Read The p95 Caveat
 
-The `37/46` count is about mean latency: for each winning comparable workload
+The `38/46` count is about mean latency: for each winning comparable workload
 row, WorkPaper's average measured time is lower than HyperFormula's average
 measured time. Mean wins are useful because they summarize the normal cost of
 each workload, but they do not prove every slower tail sample has been

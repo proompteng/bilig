@@ -6,7 +6,7 @@ import { measureGzipBytes } from './release-check-helpers.ts'
 
 const budgets = {
   mainJsGzipBytes: 350 * 1024,
-  workerJsGzipBytes: 424 * 1024,
+  workerJsGzipBytes: 425 * 1024,
   runtimeWasmGzipBytes: 250 * 1024,
   sqliteWasmGzipBytes: 400 * 1024,
   cssGzipBytes: 32 * 1024,

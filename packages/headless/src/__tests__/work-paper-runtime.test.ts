@@ -385,6 +385,44 @@ describe('WorkPaper', () => {
     captureVisibilitySnapshot.mockRestore()
   })
 
+  it('uses direct changed-cell payloads for existing string leaf formula edits', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: [['foo', '=CONCATENATE(A1,"-bar")']],
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+    expect(hasCaptureVisibilitySnapshot(workbook)).toBe(true)
+    if (!hasCaptureVisibilitySnapshot(workbook)) {
+      throw new Error('Expected work paper runtime to expose captureVisibilitySnapshot in tests')
+    }
+    const captureVisibilitySnapshot = vi.spyOn(workbook, 'captureVisibilitySnapshot').mockImplementation(() => {
+      throw new Error('string leaf edits should not rebuild visibility snapshots')
+    })
+
+    workbook.resetPerformanceCounters()
+    const changes = workbook.setCellContents(cell(sheetId, 0, 0), 'baz')
+
+    expect(changes).toEqual([
+      {
+        kind: 'cell',
+        address: cell(sheetId, 0, 0),
+        sheetName: 'Bench',
+        a1: 'A1',
+        newValue: expect.objectContaining({ tag: ValueTag.String, value: 'baz' }),
+      },
+      {
+        kind: 'cell',
+        address: cell(sheetId, 0, 1),
+        sheetName: 'Bench',
+        a1: 'B1',
+        newValue: expect.objectContaining({ tag: ValueTag.String, value: 'baz-bar' }),
+      },
+    ])
+    expect(workbook.getCellValue(cell(sheetId, 0, 1))).toMatchObject({ tag: ValueTag.String, value: 'baz-bar' })
+    expect(workbook.getPerformanceCounters().changedCellPayloadsBuilt).toBe(0)
+    expect(workbook.getPerformanceCounters().directFormulaKernelSyncOnlyRecalcSkips).toBe(1)
+    captureVisibilitySnapshot.mockRestore()
+  })
+
   it('uses tracked patch payloads without exposing internal cell indices', () => {
     const workbook = WorkPaper.buildFromSheets({
       Bench: [[1, '=A1*2']],

@@ -771,6 +771,7 @@ export function createEngineServiceRuntime(args: {
     applyCellMutationsAtBatchNow: (refs, batch, source, potentialNewCells) =>
       operations.applyCellMutationsAtNow(refs, batch, source, potentialNewCells),
     applyExistingNumericCellMutationAtNow: (request) => operations.applyExistingNumericCellMutationAtNow(request),
+    applyExistingLiteralCellMutationAtNow: (request) => operations.applyExistingLiteralCellMutationAtNow(request),
     hasExternallyVisibleLocalMutationObservers: () =>
       args.state.events.hasListeners() ||
       args.state.events.hasTrackedListeners() ||

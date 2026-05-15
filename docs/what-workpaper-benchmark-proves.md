@@ -6,32 +6,33 @@ This page is the short, shareable version of the WorkPaper benchmark claim. It
 turns the checked-in artifact into a plain-English evaluation guide without
 inflating what the benchmark can prove.
 
-![WorkPaper benchmark card showing 46 out of 46 comparable mean wins and the visible p95 caveat](assets/workpaper-benchmark-card.png)
+![WorkPaper benchmark card showing current comparable mean wins and the visible p95 caveat](assets/workpaper-benchmark-card.png)
 
 ## The Claim
 
 The current checked-in WorkPaper-vs-HyperFormula artifact records WorkPaper
-`46/46` mean-latency wins on scorecard-eligible comparable workloads:
+`38/46` mean-latency wins on scorecard-eligible comparable workloads. This is a
+scoped lead with visible holdouts, not a blanket fastest-engine claim:
 
 | Lane    | Comparable Workloads | WorkPaper Mean Wins | HyperFormula Mean Wins |
 | ------- | -------------------: | ------------------: | ---------------------: |
-| Overall |                 `46` |                `46` |                    `0` |
-| Public  |                 `38` |                `38` |                    `0` |
-| Holdout |                  `8` |                 `8` |                    `0` |
+| Overall |                 `46` |                `38` |                    `8` |
+| Public  |                 `38` |                `31` |                    `7` |
+| Holdout |                  `8` |                 `7` |                    `1` |
 
 The artifact is
 [`packages/benchmarks/baselines/workpaper-vs-hyperformula.json`](../packages/benchmarks/baselines/workpaper-vs-hyperformula.json),
-generated at `2026-05-08T15:00:27.603Z`.
+generated at `2026-05-15T03:13:53.107Z`.
 
-The overall directional mean-ratio geomean is `0.521767150331573`, and the
-overall directional p95-ratio geomean is `0.5359737705859149`. Ratios below
+The overall directional mean-ratio geomean is `0.6948435060111573`, and the
+overall directional p95-ratio geomean is `0.6990622429958057`. Ratios below
 `1.0` mean WorkPaper is faster on that metric.
 
 ## What It Proves
 
-It proves that the checked-in WorkPaper runtime is faster on mean latency across
-the current scorecard of directly comparable headless spreadsheet-engine
-workloads.
+It proves that the checked-in WorkPaper runtime is faster on mean latency for
+most rows in the current scorecard of directly comparable headless
+spreadsheet-engine workloads, with an aggregate mean and p95 geomean lead.
 
 The covered families include workbook build and rebuild paths, runtime restore
 from snapshot, sheet lifecycle, named expressions, dirty execution, batch edits,
@@ -52,10 +53,11 @@ It does not prove that bilig is a complete Excel clone.
 It does not prove full formula parity with Excel, Google Sheets, or
 HyperFormula.
 
-It does not prove that every p95 row is faster. The known p95 holdout is
-`lookup-approximate-duplicates`, where the current WorkPaper-to-HyperFormula
-p95 ratio is `1.043096403103571`. The honest claim is `46/46` mean wins plus an
-overall p95 geomean lead, not "faster on every p95 row."
+It does not prove that every p95 row is faster. The current headless leadership
+scorecard records `31/46` workloads winning both mean and p95. The worst p95
+holdout is `build-mixed-content`, where the current WorkPaper-to-HyperFormula
+p95 ratio is `1.9733059237192512`. The honest claim is `38/46` mean wins plus
+an overall p95 geomean lead, not "faster on every row."
 
 It does not prove that browser-grid rendering, import/export, collaboration, or
 every user workload is faster. This benchmark is about the headless WorkPaper
@@ -100,13 +102,13 @@ npm start
 
 Short:
 
-> bilig's WorkPaper benchmark currently records `46/46` mean wins against
+> bilig's WorkPaper benchmark currently records `38/46` mean wins against
 > HyperFormula-style headless workloads, with the p95 caveat documented instead
 > of hidden.
 
 Reply-sized:
 
 > the useful part is the audit trail: a checked-in benchmark artifact, a verify
-> command, and an explicit p95 caveat. the claim is `46/46` mean wins for the
+> command, and an explicit p95 caveat. the claim is `38/46` mean wins for the
 > current comparable headless WorkPaper workloads, not "we are faster at
 > everything."

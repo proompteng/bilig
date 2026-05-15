@@ -42,12 +42,13 @@ export interface ApplyPostRecalcDirectFormulaChangesArgs {
   readonly collection: DirectFormulaIndexCollection
   readonly recalculated: U32
   readonly didRunRecalc: boolean
+  readonly captureChanged?: boolean
   readonly metrics: DirectFormulaMetricCounts
   readonly applyDirectFormulaCurrentResult: (cellIndex: number, result: DirectScalarCurrentOperand) => boolean
   readonly applyDirectFormulaNumericDelta: (cellIndex: number, delta: number) => boolean
   readonly applyDirectScalarCurrentValue: (cellIndex: number, directScalar: RuntimeDirectScalarDescriptor) => boolean
-  readonly tryApplyDirectScalarDeltas: (collection: DirectFormulaIndexCollection) => U32 | undefined
-  readonly tryApplyDirectFormulaDeltas: (collection: DirectFormulaIndexCollection) => U32 | undefined
+  readonly tryApplyDirectScalarDeltas: (collection: DirectFormulaIndexCollection, captureChanged?: boolean) => U32 | undefined
+  readonly tryApplyDirectFormulaDeltas: (collection: DirectFormulaIndexCollection, captureChanged?: boolean) => U32 | undefined
   readonly countPostRecalcDirectFormulaMetric: (cellIndex: number, counts: DirectFormulaMetricCounts) => void
   readonly evaluateDirectFormula: (cellIndex: number) => readonly number[] | undefined
 }
@@ -56,19 +57,20 @@ export function applyPostRecalcDirectFormulaChanges(args: ApplyPostRecalcDirectF
   if (args.collection.size === 0) {
     return args.recalculated
   }
-  const constantScalarChanged = !args.didRunRecalc ? args.tryApplyDirectScalarDeltas(args.collection) : undefined
+  const captureChanged = args.captureChanged ?? true
+  const constantScalarChanged = !args.didRunRecalc ? args.tryApplyDirectScalarDeltas(args.collection, captureChanged) : undefined
   if (constantScalarChanged !== undefined) {
     return mergeChangedCellIndices(args.recalculated, constantScalarChanged)
   }
-  const directDeltaChanged = !args.didRunRecalc ? args.tryApplyDirectFormulaDeltas(args.collection) : undefined
+  const directDeltaChanged = !args.didRunRecalc ? args.tryApplyDirectFormulaDeltas(args.collection, captureChanged) : undefined
   if (directDeltaChanged !== undefined) {
     return mergeChangedCellIndices(args.recalculated, directDeltaChanged)
   }
-  const singleDirectChanged = tryApplySinglePostRecalcDirectFormula(args)
+  const singleDirectChanged = tryApplySinglePostRecalcDirectFormula(args, captureChanged)
   if (singleDirectChanged !== undefined) {
     return mergeChangedCellIndices(args.recalculated, singleDirectChanged)
   }
-  return applyDirectFormulaFallbacks(args)
+  return applyDirectFormulaFallbacks(args, captureChanged)
 }
 
 export function countOperationPostRecalcDirectFormulaMetric(input: {
@@ -128,8 +130,8 @@ export function tryApplySinglePostRecalcDirectFormula(
   return undefined
 }
 
-function applyDirectFormulaFallbacks(args: ApplyPostRecalcDirectFormulaChangesArgs): U32 {
-  const postRecalcChanged = new Uint32Array(args.collection.size)
+function applyDirectFormulaFallbacks(args: ApplyPostRecalcDirectFormulaChangesArgs, captureChanged: boolean): U32 {
+  const postRecalcChanged = captureChanged ? new Uint32Array(args.collection.size) : EMPTY_CHANGED_CELLS
   let postRecalcChangedCount = 0
   let postRecalcExtraChanged: number[] | undefined
   let directAggregateDeltaApplicationCount = 0
@@ -141,7 +143,9 @@ function applyDirectFormulaFallbacks(args: ApplyPostRecalcDirectFormulaChangesAr
       }
       const currentResult = args.collection.getCurrentResultAt(directIndex)
       if (!args.didRunRecalc && currentResult !== undefined && args.applyDirectFormulaCurrentResult(cellIndex, currentResult)) {
-        postRecalcChanged[postRecalcChangedCount++] = cellIndex
+        if (captureChanged) {
+          postRecalcChanged[postRecalcChangedCount++] = cellIndex
+        }
         return
       }
       const delta = args.collection.getDeltaAt(directIndex)
@@ -153,7 +157,9 @@ function applyDirectFormulaFallbacks(args: ApplyPostRecalcDirectFormulaChangesAr
         if (formula?.directScalar !== undefined) {
           directScalarDeltaApplicationCount += 1
         }
-        postRecalcChanged[postRecalcChangedCount++] = cellIndex
+        if (captureChanged) {
+          postRecalcChanged[postRecalcChangedCount++] = cellIndex
+        }
         return
       }
       const formula = args.state.formulas.get(cellIndex)
@@ -164,13 +170,17 @@ function applyDirectFormulaFallbacks(args: ApplyPostRecalcDirectFormulaChangesAr
         args.applyDirectScalarCurrentValue(cellIndex, formula.directScalar)
       ) {
         args.countPostRecalcDirectFormulaMetric(cellIndex, args.metrics)
-        postRecalcChanged[postRecalcChangedCount++] = cellIndex
+        if (captureChanged) {
+          postRecalcChanged[postRecalcChangedCount++] = cellIndex
+        }
         return
       }
       args.countPostRecalcDirectFormulaMetric(cellIndex, args.metrics)
       const changedCellIndices = args.evaluateDirectFormula(cellIndex)
-      postRecalcChanged[postRecalcChangedCount++] = cellIndex
-      if (changedCellIndices) {
+      if (captureChanged) {
+        postRecalcChanged[postRecalcChangedCount++] = cellIndex
+      }
+      if (captureChanged && changedCellIndices) {
         postRecalcExtraChanged ??= []
         for (let index = 0; index < changedCellIndices.length; index += 1) {
           postRecalcExtraChanged.push(changedCellIndices[index]!)
@@ -183,6 +193,9 @@ function applyDirectFormulaFallbacks(args: ApplyPostRecalcDirectFormulaChangesAr
   }
   if (directScalarDeltaApplicationCount > 0) {
     addEngineCounter(args.state.counters, 'directScalarDeltaApplications', directScalarDeltaApplicationCount)
+  }
+  if (!captureChanged) {
+    return EMPTY_CHANGED_CELLS
   }
   const directChanged = postRecalcChanged.subarray(0, postRecalcChangedCount)
   return postRecalcExtraChanged && postRecalcExtraChanged.length > 0

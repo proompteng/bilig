@@ -1,6 +1,6 @@
 import { Effect } from 'effect'
 import { describe, expect, it, vi } from 'vitest'
-import { ErrorCode, ValueTag } from '@bilig/protocol'
+import { ErrorCode, ValueTag, type RecalcMetrics } from '@bilig/protocol'
 import { compileCriteriaMatcher, indexToColumn } from '@bilig/formula'
 import { createBatch } from '../replica-state.js'
 import { SpreadsheetEngine } from '../engine.js'
@@ -62,6 +62,11 @@ function getRuntimeState(engine: SpreadsheetEngine): {
 function expectBatch<Batch>(batch: Batch | undefined): Batch {
   expect(batch).toBeDefined()
   return batch
+}
+
+function expectSingleLeafFormulaFastPath(metrics: RecalcMetrics): void {
+  expect(metrics.dirtyFormulaCount).toBe(0)
+  expect(metrics.jsFormulaCount + metrics.wasmFormulaCount).toBe(1)
 }
 
 function lookupTestString(id: number): string {
@@ -445,6 +450,37 @@ describe('EngineOperationService', () => {
     expect(changedIndices[0]).toBe(formulaCellIndex)
     expect(changedIndices).toContain(engine.workbook.getCellIndex('Sheet1', `${indexToColumn(2 + downstreamCount)}1`))
     unsubscribe()
+  })
+
+  it('keeps no-listener formula replacement direct deltas off changed-cell materialization', async () => {
+    const downstreamCount = 12
+    const engine = new SpreadsheetEngine({ workbookName: 'operation-formula-rewrite-no-listener-direct-delta-root' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellValue('Sheet1', 'B1', 2)
+    engine.setCellFormula('Sheet1', 'C1', 'A1+B1')
+    for (let offset = 1; offset <= downstreamCount; offset += 1) {
+      const col = 2 + offset
+      engine.setCellFormula('Sheet1', `${indexToColumn(col)}1`, `${indexToColumn(col - 1)}1+1`)
+    }
+
+    engine.resetPerformanceCounters()
+    engine.setCellFormula('Sheet1', 'C1', 'A1*B1')
+
+    expect(engine.getCellValue('Sheet1', 'C1')).toEqual({ tag: ValueTag.Number, value: 2 })
+    expect(engine.getCellValue('Sheet1', `${indexToColumn(2 + downstreamCount)}1`)).toEqual({
+      tag: ValueTag.Number,
+      value: 2 + downstreamCount,
+    })
+    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0 })
+    expect(engine.getPerformanceCounters()).toMatchObject({
+      formulasParsed: 1,
+      formulasBound: 1,
+      directScalarDeltaApplications: downstreamCount,
+      directScalarDeltaOnlyRecalcSkips: 1,
+      changedCellPayloadsBuilt: 0,
+    })
   })
 
   it('treats batched clears of already-empty tracked dependency cells as no-ops', async () => {
@@ -1201,7 +1237,7 @@ describe('EngineOperationService', () => {
       explicitChangedCount: 1,
     })
     expect(engine.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 141 })
-    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 1 })
+    expectSingleLeafFormulaFastPath(engine.getLastMetrics())
     expect(engine.getPerformanceCounters().directFormulaKernelSyncOnlyRecalcSkips).toBe(1)
   })
 
@@ -1235,7 +1271,7 @@ describe('EngineOperationService', () => {
       explicitChangedCount: 1,
     })
     expect(engine.getCellValue('Sheet1', 'B1')).toMatchObject({ tag: ValueTag.String, value: 'yes' })
-    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 1 })
+    expectSingleLeafFormulaFastPath(engine.getLastMetrics())
     expect(engine.getPerformanceCounters().directFormulaKernelSyncOnlyRecalcSkips).toBe(1)
   })
 
@@ -1263,7 +1299,7 @@ describe('EngineOperationService', () => {
     engine.setCellValue('Sheet1', 'A1', 'beta')
 
     expect(engine.getCellValue('Sheet1', 'B1')).toMatchObject({ tag: ValueTag.String, value: 'beta-north' })
-    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 1 })
+    expectSingleLeafFormulaFastPath(engine.getLastMetrics())
     expect(engine.getPerformanceCounters().directFormulaKernelSyncOnlyRecalcSkips).toBe(1)
     expect(tracked).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -1277,7 +1313,7 @@ describe('EngineOperationService', () => {
     engine.setCellValue('Sheet1', 'A2', 'delta')
 
     expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 10 })
-    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 1 })
+    expectSingleLeafFormulaFastPath(engine.getLastMetrics())
     expect(engine.getPerformanceCounters().directFormulaKernelSyncOnlyRecalcSkips).toBe(1)
     expect(tracked).toHaveBeenLastCalledWith(
       expect.objectContaining({

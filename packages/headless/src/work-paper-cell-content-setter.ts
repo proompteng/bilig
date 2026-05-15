@@ -44,6 +44,12 @@ export interface WorkPaperSetCellContentsRuntime {
     readonly cellIndex: number
     readonly value: number
   }) => WorkPaperChange[] | null
+  readonly trySetExistingLiteralCellContentsWithTrackedFastPath: (args: {
+    readonly sheet: SheetRecord
+    readonly address: WorkPaperCellAddress
+    readonly cellIndex: number
+    readonly value: Exclude<RawCellContent, null>
+  }) => WorkPaperChange[] | null
   readonly flushPendingBatchOps: () => void
   readonly rewriteFormulaForStorage: (formula: string, ownerSheetId: number) => string
   readonly applyCellMutationRefs: (refs: readonly EngineCellMutationRef[], options: WorkPaperCellMutationApplyOptions) => void
@@ -94,6 +100,17 @@ export function setWorkPaperCellContents(
     }
     if (typeof content === 'number' && visibleCellIndex !== undefined) {
       const fastPathChanges = runtime.trySetExistingNumericCellContentsWithTrackedFastPath({
+        sheet,
+        address,
+        cellIndex: visibleCellIndex,
+        value: content,
+      })
+      if (fastPathChanges !== null) {
+        return fastPathChanges
+      }
+    }
+    if (content !== null && !isFormulaContent(content) && typeof content !== 'number' && visibleCellIndex !== undefined) {
+      const fastPathChanges = runtime.trySetExistingLiteralCellContentsWithTrackedFastPath({
         sheet,
         address,
         cellIndex: visibleCellIndex,

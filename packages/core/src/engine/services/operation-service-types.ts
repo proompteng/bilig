@@ -4,6 +4,7 @@ import type { CellRangeRef, CellValue, EngineChangedCell, SelectionState } from 
 import type { EdgeSlice } from '../../edge-arena.js'
 import type {
   EngineCellMutationRef,
+  EngineExistingLiteralCellMutationRef,
   EngineExistingNumericCellMutationRef,
   EngineExistingNumericCellMutationResult,
 } from '../../cell-mutations-at.js'
@@ -62,6 +63,9 @@ export interface EngineOperationService {
   ) => void
   readonly applyExistingNumericCellMutationAtNow: (
     request: EngineExistingNumericCellMutationRef,
+  ) => EngineExistingNumericCellMutationResult | null
+  readonly applyExistingLiteralCellMutationAtNow: (
+    request: EngineExistingLiteralCellMutationRef,
   ) => EngineExistingNumericCellMutationResult | null
   readonly applyDerivedOp: (op: OperationDerivedOp) => Effect.Effect<number[], EngineMutationError>
 }

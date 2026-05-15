@@ -10,6 +10,7 @@ import {
   cloneCellMutationRef,
   countPotentialNewCellsForMutationRefs,
   type EngineCellMutationRef,
+  type EngineExistingLiteralCellMutationRef,
   type EngineExistingNumericCellMutationRef,
   type EngineExistingNumericCellMutationResult,
 } from '../../cell-mutations-at.js'
@@ -103,6 +104,9 @@ export function createEngineMutationService(args: {
   ) => void
   readonly applyExistingNumericCellMutationAtNow?: (
     request: EngineExistingNumericCellMutationRef,
+  ) => EngineExistingNumericCellMutationResult | null
+  readonly applyExistingLiteralCellMutationAtNow?: (
+    request: EngineExistingLiteralCellMutationRef,
   ) => EngineExistingNumericCellMutationResult | null
   readonly hasExternallyVisibleLocalMutationObservers?: () => boolean
 }): EngineMutationService {
@@ -628,6 +632,53 @@ export function createEngineMutationService(args: {
     return result
   }
 
+  const executeLocalExistingLiteralCellMutationAtNow = (
+    request: EngineExistingLiteralCellMutationRef,
+    options: {
+      returnUndoOps?: boolean
+    } = {},
+  ): EngineExistingNumericCellMutationResult | null => {
+    if (typeof request.value === 'number') {
+      return executeLocalExistingNumericCellMutationAtNow(
+        {
+          sheetId: request.sheetId,
+          row: request.row,
+          col: request.col,
+          cellIndex: request.cellIndex,
+          value: request.value,
+          ...(request.emitTracked === undefined ? {} : { emitTracked: request.emitTracked }),
+        },
+        options,
+      )
+    }
+    if (options.returnUndoOps !== false || shouldCreateLocalBatch()) {
+      return null
+    }
+    const ref: EngineCellMutationRef = {
+      sheetId: request.sheetId,
+      cellIndex: request.cellIndex,
+      mutation: {
+        kind: 'setCellValue',
+        row: request.row,
+        col: request.col,
+        value: request.value,
+      },
+    }
+    const inverse = createLazyInverseCellMutationRecord([ref])
+    const result = args.applyExistingLiteralCellMutationAtNow?.(request)
+    if (!result) {
+      return null
+    }
+    if (args.state.getTransactionReplayDepth() === 0) {
+      args.state.undoStack.push({
+        forward: createLazyCellMutationTransactionRecord([ref], 0),
+        inverse,
+      })
+      args.state.redoStack.length = 0
+    }
+    return result
+  }
+
   const applyCellMutationsAtNow = (
     refs: readonly EngineCellMutationRef[],
     options: {
@@ -737,6 +788,9 @@ export function createEngineMutationService(args: {
     },
     executeLocalExistingNumericCellMutationAtNow(request, options = {}) {
       return executeLocalExistingNumericCellMutationAtNow(request, options)
+    },
+    executeLocalExistingLiteralCellMutationAtNow(request, options = {}) {
+      return executeLocalExistingLiteralCellMutationAtNow(request, options)
     },
     applyCellMutationsAtNow(refs, options = {}) {
       return applyCellMutationsAtNow(refs, options)

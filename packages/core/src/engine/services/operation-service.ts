@@ -493,7 +493,7 @@ export function createEngineOperationService(args: CreateEngineOperationServiceA
     formulaCellIndex: number
     value: LiteralInput
     hasTrackedEventListeners: boolean
-  }): boolean =>
+  }): EngineExistingNumericCellMutationResult | null =>
     tryApplyFormulaLeafExistingLiteralMutationWithArgs(
       {
         state: args.state,
@@ -667,7 +667,7 @@ export function createEngineOperationService(args: CreateEngineOperationServiceA
     invalidateSortedLookupColumn: args.invalidateSortedLookupColumn,
   })
 
-  const { tryApplySingleExistingDirectLiteralMutation, applyExistingNumericCellMutationAtNow } =
+  const { tryApplySingleExistingDirectLiteralMutation, applyExistingNumericCellMutationAtNow, applyExistingLiteralCellMutationAtNow } =
     createOperationSingleExistingLiteralFastPath({
       state: args.state,
       hasVolatileFormulas: args.hasVolatileFormulas,
@@ -889,6 +889,7 @@ export function createEngineOperationService(args: CreateEngineOperationServiceA
     },
     applyCellMutationsAtNow,
     applyExistingNumericCellMutationAtNow,
+    applyExistingLiteralCellMutationAtNow,
     applyDerivedOp(op) {
       return Effect.try({
         try: () => applyDerivedOpNow(op),

@@ -516,7 +516,9 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
               const compileStarted = isRestore ? 0 : performance.now()
               try {
                 const changedTopology = args.bindFormula(cellIndex, sheetName, mutation.formula)
-                args.invalidateAggregateColumn({ sheetName, col: mutation.col })
+                if (hasAggregateDependents) {
+                  args.invalidateAggregateColumn({ sheetName, col: mutation.col })
+                }
                 if (!isRestore) {
                   compileMs += performance.now() - compileStarted
                 }
@@ -538,11 +540,13 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
                   formulaChangedCount = args.markFormulaChanged(cellIndex, formulaChangedCount)
                 }
                 topologyChanged = topologyChanged || changedTopology
-                const aggregateDependents = collectAffectedDirectRangeDependents({
-                  sheetName,
-                  row: mutation.row,
-                  col: mutation.col,
-                }).filter((candidate) => candidate !== cellIndex)
+                const aggregateDependents = hasAggregateDependents
+                  ? collectAffectedDirectRangeDependents({
+                      sheetName,
+                      row: mutation.row,
+                      col: mutation.col,
+                    }).filter((candidate) => candidate !== cellIndex)
+                  : []
                 if (aggregateDependents.length > 0) {
                   formulaChangedCount = args.rebindFormulaCells(aggregateDependents, formulaChangedCount)
                   for (let index = 0; index < aggregateDependents.length; index += 1) {

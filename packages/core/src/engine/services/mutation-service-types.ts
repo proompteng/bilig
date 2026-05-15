@@ -3,6 +3,7 @@ import type { CellRangeRef, LiteralInput } from '@bilig/protocol'
 import type { EngineOp } from '@bilig/workbook-domain'
 import type {
   EngineCellMutationRef,
+  EngineExistingLiteralCellMutationRef,
   EngineExistingNumericCellMutationRef,
   EngineExistingNumericCellMutationResult,
 } from '../../cell-mutations-at.js'
@@ -31,6 +32,12 @@ export interface EngineMutationService {
   ) => readonly EngineOp[] | null
   readonly executeLocalExistingNumericCellMutationAtNow: (
     request: EngineExistingNumericCellMutationRef,
+    options?: {
+      returnUndoOps?: boolean
+    },
+  ) => EngineExistingNumericCellMutationResult | null
+  readonly executeLocalExistingLiteralCellMutationAtNow: (
+    request: EngineExistingLiteralCellMutationRef,
     options?: {
       returnUndoOps?: boolean
     },

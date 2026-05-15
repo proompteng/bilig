@@ -93,6 +93,10 @@ export function finalizeOperationRecalcAndEvents(input: FinalizeOperationRecalcA
 
   const hasActiveFormulas = input.serviceArgs.state.formulas.size > 0
   const hasActivePivots = input.serviceArgs.state.workbook.hasPivots()
+  const hasGeneralEventListeners = input.serviceArgs.state.events.hasListeners()
+  const hasTrackedEventListeners = input.serviceArgs.state.events.hasTrackedListeners()
+  const hasWatchedCellListeners = input.serviceArgs.state.events.hasCellListeners()
+  const requiresChangedSet = hasGeneralEventListeners || hasTrackedEventListeners || hasWatchedCellListeners
   const hasRecalcWork =
     changedInputCount > 0 ||
     formulaChangedCount > 0 ||
@@ -210,6 +214,7 @@ export function finalizeOperationRecalcAndEvents(input: FinalizeOperationRecalcA
         collection: input.postRecalcDirectFormulaIndices,
         recalculated,
         didRunRecalc,
+        captureChanged: requiresChangedSet || hasActivePivots || shouldRefreshPivots,
         metrics: input.postRecalcDirectFormulaMetrics,
         ...input.directFormulaCallbacks,
         evaluateDirectFormula: input.serviceArgs.evaluateDirectFormula,
@@ -225,10 +230,6 @@ export function finalizeOperationRecalcAndEvents(input: FinalizeOperationRecalcA
     }
   }
 
-  const hasGeneralEventListeners = input.serviceArgs.state.events.hasListeners()
-  const hasTrackedEventListeners = input.serviceArgs.state.events.hasTrackedListeners()
-  const hasWatchedCellListeners = input.serviceArgs.state.events.hasCellListeners()
-  const requiresChangedSet = hasGeneralEventListeners || hasTrackedEventListeners || hasWatchedCellListeners
   const invalidation = input.isRestore || input.sheetDeleted || input.structuralInvalidation ? 'full' : 'cells'
 
   finalizeOperationMutationEvents({

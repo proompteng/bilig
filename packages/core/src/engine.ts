@@ -38,13 +38,13 @@ import { formatAddress } from '@bilig/formula'
 import type { EngineOp, EngineOpBatch } from '@bilig/workbook-domain'
 import type {
   EngineCellMutationRef,
+  EngineExistingLiteralCellMutationRef,
   EngineExistingNumericCellMutationRef,
   EngineExistingNumericCellMutationResult,
   EngineFormulaSourceRef,
 } from './cell-mutations-at.js'
 import { calculationSettingsEqual, definedNameValuesEqual, normalizeWorkbookCalculationSettings } from './engine-metadata-utils.js'
 import { buildFormatClearOps, buildFormatPatchOps, buildStyleClearOps, buildStylePatchOps } from './engine-range-format-ops.js'
-import { selectCellSnapshot, selectMetrics, selectSelectionState, selectViewportCells } from './selectors.js'
 import {
   normalizeDefinedName,
   type WorkbookAxisMetadataRecord,
@@ -99,6 +99,7 @@ export type {
   EngineSyncClientConnection,
   SpreadsheetEngineOptions,
 } from './engine/runtime-state.js'
+export { selectors } from './engine-selectors.js'
 
 export class SpreadsheetEngine extends SpreadsheetEngineRuntimeBase {
   async ready(): Promise<void> {
@@ -264,6 +265,10 @@ export class SpreadsheetEngine extends SpreadsheetEngineRuntimeBase {
 
   tryApplyExistingNumericCellMutationAt(request: EngineExistingNumericCellMutationRef): EngineExistingNumericCellMutationResult | null {
     return this.runtime.mutation.executeLocalExistingNumericCellMutationAtNow(request, { returnUndoOps: false })
+  }
+
+  tryApplyExistingLiteralCellMutationAt(request: EngineExistingLiteralCellMutationRef): EngineExistingNumericCellMutationResult | null {
+    return this.runtime.mutation.executeLocalExistingLiteralCellMutationAtNow(request, { returnUndoOps: false })
   }
 
   initializeCellFormulasAt(refs: readonly EngineCellMutationRef[], potentialNewCells?: number): void {
@@ -989,11 +994,4 @@ export class SpreadsheetEngine extends SpreadsheetEngineRuntimeBase {
   ): readonly EngineOp[] | null {
     return this.runtime.mutation.applyOpsNow(ops, options)
   }
-}
-
-export const selectors = {
-  selectCellSnapshot,
-  selectMetrics,
-  selectSelectionState,
-  selectViewportCells,
 }

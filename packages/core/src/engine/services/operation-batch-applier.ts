@@ -543,9 +543,12 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
               changedInputCount = args.markSpillRootsChanged(args.clearOwnedSpill(cellIndex), changedInputCount)
             }
             const compileStarted = isRestore ? 0 : performance.now()
+            const hasFormulaColumnAggregateDependents = sheetId !== undefined && hasTrackedDirectRangeDependents(sheetId, parsedAddress.col)
             try {
               const changedTopology = args.bindFormula(cellIndex, op.sheetName, op.formula)
-              args.invalidateAggregateColumn({ sheetName: op.sheetName, col: parsedAddress.col })
+              if (hasFormulaColumnAggregateDependents) {
+                args.invalidateAggregateColumn({ sheetName: op.sheetName, col: parsedAddress.col })
+              }
               clearLookupImpactCaches()
               if (!isRestore) {
                 compileMs += performance.now() - compileStarted
@@ -556,7 +559,7 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
                 sheetId !== undefined &&
                 !hasTrackedExactLookupDependents(sheetId, parsedAddress.col) &&
                 !hasTrackedSortedLookupDependents(sheetId, parsedAddress.col) &&
-                !hasTrackedDirectRangeDependents(sheetId, parsedAddress.col) &&
+                !hasFormulaColumnAggregateDependents &&
                 tryApplyFormulaReplacementAsDirectScalarDeltaRoot({
                   cellIndex,
                   oldNumber: oldFormulaNumber,
@@ -572,11 +575,13 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
                 formulaChangedCount = refreshDependentRangesAndRebindFormulaDependents(cellIndex, formulaChangedCount)
                 topologyChanged = true
               }
-              const aggregateDependents = collectAffectedDirectRangeDependents({
-                sheetName: op.sheetName,
-                row: parsedAddress.row,
-                col: parsedAddress.col,
-              }).filter((candidate) => candidate !== cellIndex)
+              const aggregateDependents = hasFormulaColumnAggregateDependents
+                ? collectAffectedDirectRangeDependents({
+                    sheetName: op.sheetName,
+                    row: parsedAddress.row,
+                    col: parsedAddress.col,
+                  }).filter((candidate) => candidate !== cellIndex)
+                : []
               if (aggregateDependents.length > 0) {
                 formulaChangedCount = args.rebindFormulaCells(aggregateDependents, formulaChangedCount)
                 for (let index = 0; index < aggregateDependents.length; index += 1) {

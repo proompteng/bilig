@@ -348,7 +348,7 @@ export function tryBuildDirectExistingNumericTrackedChanges(input: {
   readonly cellIndex: number
   readonly isPhysicalSheet: boolean
   readonly sheetName: string
-  readonly value: number
+  readonly value: LiteralInput
   readonly cellStore: WorkPaperTrackedAddressedCellStore
   readonly strings: WorkPaperTrackedStringPool
   readonly trackedA1: (row: number, col: number) => string
@@ -365,7 +365,7 @@ export function tryBuildDirectExistingNumericTrackedChanges(input: {
     address: { sheet: address.sheet, row: address.row, col: address.col },
     sheetName,
     a1: trackedA1(address.row, address.col),
-    newValue: { tag: ValueTag.Number, value },
+    newValue: scalarValueFromLiteral(value),
   }
   if (changedCellCount === 1) {
     return [literalChange]

@@ -12,6 +12,7 @@ import {
 import { setWorkPaperCellContents, type WorkPaperSetCellContentsRuntime } from './work-paper-cell-content-setter.js'
 import type { applyWorkPaperCellMutationRefs, WorkPaperCellMutationApplyRuntime } from './work-paper-cell-mutation-refs.js'
 import {
+  trySetExistingLiteralWorkPaperCellContentsWithTrackedFastPath,
   trySetExistingNumericWorkPaperCellContentsWithTrackedFastPath,
   type WorkPaperExistingNumericFastPathRuntime,
 } from './work-paper-existing-numeric-fast-path.js'
@@ -308,6 +309,8 @@ export function createWorkPaperRuntimeAdapters(args: CreateWorkPaperRuntimeAdapt
     enqueueDeferredBatchLiteral: args.enqueueDeferredBatchLiteral,
     trySetExistingNumericCellContentsWithTrackedFastPath: (request) =>
       trySetExistingNumericWorkPaperCellContentsWithTrackedFastPath(existingNumericFastPathRuntime, request),
+    trySetExistingLiteralCellContentsWithTrackedFastPath: (request) =>
+      trySetExistingLiteralWorkPaperCellContentsWithTrackedFastPath(existingNumericFastPathRuntime, request),
     flushPendingBatchOps: args.flushPendingBatchOps,
     rewriteFormulaForStorage: args.rewriteFormulaForStorage,
     applyCellMutationRefs: args.applyCellMutationRefs,

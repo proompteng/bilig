@@ -2,6 +2,7 @@ import { ValueTag, type CellValue, type EngineEvent, type LiteralInput } from '@
 import type { EngineOpBatch } from '@bilig/workbook-domain'
 import type {
   EngineCellMutationRef,
+  EngineExistingLiteralCellMutationRef,
   EngineExistingNumericCellMutationRef,
   EngineExistingNumericCellMutationResult,
 } from '../../cell-mutations-at.js'
@@ -116,7 +117,7 @@ interface OperationSingleExistingLiteralFastPathArgs {
     readonly formulaCellIndex: number
     readonly value: LiteralInput
     readonly hasTrackedEventListeners: boolean
-  }) => boolean
+  }) => EngineExistingNumericCellMutationResult | null
   readonly planExactLookupNumericColumnWrite: (
     sheetId: number,
     col: number,
@@ -214,6 +215,9 @@ export function createOperationSingleExistingLiteralFastPath(args: OperationSing
   ) => boolean
   readonly applyExistingNumericCellMutationAtNow: (
     request: EngineExistingNumericCellMutationRef,
+  ) => EngineExistingNumericCellMutationResult | null
+  readonly applyExistingLiteralCellMutationAtNow: (
+    request: EngineExistingLiteralCellMutationRef,
   ) => EngineExistingNumericCellMutationResult | null
 } {
   const {
@@ -331,17 +335,16 @@ export function createOperationSingleExistingLiteralFastPath(args: OperationSing
     const oldNumber = directScalarCellNumericValue(existingIndex)
     const newNumber = directScalarLiteralNumericValue(mutation.value)
     if (oldNumber === undefined || newNumber === undefined) {
-      return (
-        !hasAggregateDependents &&
-        !hasExactLookupDependents &&
-        !hasSortedLookupDependents &&
-        tryApplyFormulaLeafExistingLiteralMutation({
-          existingIndex,
-          formulaCellIndex: singleExistingCellDependent,
-          value: mutation.value,
-          hasTrackedEventListeners,
-        })
-      )
+      const formulaLeafResult =
+        !hasAggregateDependents && !hasExactLookupDependents && !hasSortedLookupDependents
+          ? tryApplyFormulaLeafExistingLiteralMutation({
+              existingIndex,
+              formulaCellIndex: singleExistingCellDependent,
+              value: mutation.value,
+              hasTrackedEventListeners,
+            })
+          : null
+      return formulaLeafResult !== null
     }
 
     if (
@@ -870,5 +873,55 @@ export function createOperationSingleExistingLiteralFastPath(args: OperationSing
     return null
   }
 
-  return { tryApplySingleExistingDirectLiteralMutation, applyExistingNumericCellMutationAtNow }
+  const applyExistingLiteralCellMutationAtNow = (
+    request: EngineExistingLiteralCellMutationRef,
+  ): EngineExistingNumericCellMutationResult | null => {
+    if (typeof request.value === 'number') {
+      return applyExistingNumericCellMutationAtNow({
+        sheetId: request.sheetId,
+        row: request.row,
+        col: request.col,
+        cellIndex: request.cellIndex,
+        value: request.value,
+        ...(request.emitTracked === undefined ? {} : { emitTracked: request.emitTracked }),
+      })
+    }
+    if (
+      args.state.workbook.hasPivots() ||
+      args.state.events.hasListeners() ||
+      args.state.events.hasCellListeners() ||
+      args.hasVolatileFormulas?.()
+    ) {
+      return null
+    }
+    const sheet = args.state.workbook.getSheetById(request.sheetId)
+    const cellStore = args.state.workbook.cellStore
+    const existingIndex = request.cellIndex
+    if (
+      !sheet ||
+      sheet.structureVersion !== 1 ||
+      cellStore.sheetIds[existingIndex] !== request.sheetId ||
+      cellStore.rows[existingIndex] !== request.row ||
+      cellStore.cols[existingIndex] !== request.col ||
+      !canFastPathLiteralOverwrite(existingIndex) ||
+      hasDynamicFormulaDependents(existingIndex)
+    ) {
+      return null
+    }
+    if (
+      hasTrackedDirectRangeDependents(request.sheetId, request.col) ||
+      hasTrackedExactLookupDependents(request.sheetId, request.col) ||
+      hasTrackedSortedLookupDependents(request.sheetId, request.col)
+    ) {
+      return null
+    }
+    return tryApplyFormulaLeafExistingLiteralMutation({
+      existingIndex,
+      formulaCellIndex: args.getSingleEntityDependent(makeCellEntity(existingIndex)),
+      value: request.value,
+      hasTrackedEventListeners: request.emitTracked !== false && args.state.events.hasTrackedListeners(),
+    })
+  }
+
+  return { tryApplySingleExistingDirectLiteralMutation, applyExistingNumericCellMutationAtNow, applyExistingLiteralCellMutationAtNow }
 }

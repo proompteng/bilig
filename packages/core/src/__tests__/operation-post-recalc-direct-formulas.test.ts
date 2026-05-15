@@ -95,7 +95,7 @@ describe('operation post-recalc direct formula helpers', () => {
     )
 
     expect(Array.from(changed)).toEqual([1, 2, 3])
-    expect(tryApplyDirectFormulaDeltas).toHaveBeenCalledWith(collection)
+    expect(tryApplyDirectFormulaDeltas).toHaveBeenCalledWith(collection, true)
     expect(evaluateDirectFormula).not.toHaveBeenCalled()
   })
 

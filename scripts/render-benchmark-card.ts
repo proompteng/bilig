@@ -110,6 +110,7 @@ function buildSvg(summary: BenchmarkSummary): string {
   const meanRatio = formatRatio(summary.overall.directionalMeanRatioGeomean)
   const p95Ratio = formatRatio(summary.overall.directionalP95RatioGeomean)
   const caveatRatio = formatRatio(summary.overall.worstWorkpaperToHyperFormulaP95Ratio)
+  const headlineWins = `${summary.overall.workpaperWins.toString()}/${summary.overall.comparableCount.toString()}`
 
   return String.raw`<svg xmlns="http://www.w3.org/2000/svg" width="${cardWidth}" height="${cardHeight}" viewBox="0 0 ${cardWidth} ${cardHeight}">
   <defs>
@@ -151,7 +152,7 @@ function buildSvg(summary: BenchmarkSummary): string {
   </g>
 
   <text x="64" y="182" fill="#147a4b" font-family="Inter, Arial, Helvetica, sans-serif" font-size="28" font-weight="820">WorkPaper benchmark evidence</text>
-  <text x="64" y="252" fill="#111820" font-family="Inter, Arial, Helvetica, sans-serif" font-size="86" font-weight="830" letter-spacing="0">46/46</text>
+  <text x="64" y="252" fill="#111820" font-family="Inter, Arial, Helvetica, sans-serif" font-size="86" font-weight="830" letter-spacing="0">${headlineWins}</text>
   <text x="66" y="310" fill="#111820" font-family="Inter, Arial, Helvetica, sans-serif" font-size="48" font-weight="800" letter-spacing="0">mean wins</text>
   <text x="66" y="354" fill="#526273" font-family="Inter, Arial, Helvetica, sans-serif" font-size="26" font-weight="650">Comparable HyperFormula-style workloads</text>
 
