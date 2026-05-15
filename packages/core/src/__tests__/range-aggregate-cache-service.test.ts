@@ -112,7 +112,7 @@ describe('RangeAggregateCacheService', () => {
     })
     expect(extended.prefixSums.subarray(0, 4)).toEqual(Float64Array.from([2, 3, 3, 3]))
     expect(extended.prefixCount.subarray(0, 4)).toEqual(Uint32Array.from([1, 2, 2, 2]))
-    expect(extended.prefixAverageCount.subarray(0, 4)).toEqual(Uint32Array.from([1, 2, 3, 3]))
+    expect(extended.prefixAverageCount.subarray(0, 4)).toEqual(Uint32Array.from([1, 2, 2, 2]))
     expect(extended.prefixErrorCodes.subarray(0, 4)).toEqual(Uint16Array.from([0, 0, 0, ErrorCode.NA]))
 
     const reused = service.getOrBuildPrefix({

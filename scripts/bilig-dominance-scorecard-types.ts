@@ -73,6 +73,7 @@ export interface CompetitiveFamilySummary {
   family: string
   hyperformulaWins: number
   scorecardEligible: boolean
+  workloads?: string[]
   workpaperWins: number
   worstMeanRatioWorkload: string | null
   worstP95RatioWorkload: string | null

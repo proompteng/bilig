@@ -54,7 +54,9 @@
     "@bilig/protocol": "workspace:*"
   },
   "devDependencies": {
-    "hyperformula": "3.2.0"
+    "@truecalc/core": "0.6.4",
+    "hyperformula": "3.2.0",
+    "xlsx-calc": "0.9.2"
   },
   "engines": {
     "node": ">=24.0.0"

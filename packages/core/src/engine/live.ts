@@ -238,6 +238,7 @@ type EngineOperationRuntimeConfig = Omit<
   | 'detectCycles'
   | 'recalculate'
   | 'evaluateDirectFormula'
+  | 'evaluateFormulaCell'
   | 'reconcilePivotOutputs'
 >
 
@@ -736,6 +737,7 @@ export function createEngineServiceRuntime(args: {
     recalculate: (changedRoots, kernelSyncRoots) => requireService(recalc, 'recalc').recalculateNowSync(changedRoots, kernelSyncRoots),
     deferKernelSync: deferKernelSyncNow,
     evaluateDirectFormula: (cellIndex: number) => evaluation.evaluateDirectLookupFormulaNow(cellIndex),
+    evaluateFormulaCell: (cellIndex: number) => runEngineEffect(evaluation.evaluateUnsupportedFormula(cellIndex)),
     exactLookup,
     sortedLookup,
     reconcilePivotOutputs: (baseChanged, forceAllPivots) =>

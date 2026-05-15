@@ -7,49 +7,76 @@ artifacts instead of README copy alone.
 
 ## Current Artifact
 
-The decision artifact is
+The primary workbook-wide decision artifact is
 `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`.
+
+The additional scalar formula-engine comparison artifact is
+`packages/benchmarks/baselines/workpaper-vs-truecalc.json`.
+
+The additional limited workbook-wide comparison artifact is
+`packages/benchmarks/baselines/workpaper-vs-xlsx-calc.json`.
+
+The goal-tracking scorecard for broad headless-engine performance leadership is
+`packages/benchmarks/baselines/headless-performance-leadership-scorecard.json`.
+It intentionally stays `active-not-achieved` until the checked-in evidence covers
+at least two workbook-wide direct headless spreadsheet engines across the full
+eligible workload set and every comparable workload wins both mean and p95
+latency. Scalar formula-engine lanes and partial workbook-wide lanes are tracked
+as useful evidence, but they do not satisfy broad coverage alone.
 
 Current checked-in metadata:
 
-- generated at `2026-05-08T15:00:27.603Z`
+- generated at `2026-05-15T00:47:34.378Z`
 - host: macOS `arm64`, Node `v24.3.0`
 - benchmark sampling: `5` measured samples after `2` warmup samples
 - WorkPaper package: `@bilig/headless`
 - comparison engine: HyperFormula `3.2.0`, local checkout commit
   `9a510a2acb97c3d3490f9e3b9e961a1c4a98b9ad`, GPL-v3 license key
+- scalar formula comparison engine: TrueCalc `0.6.4`, `7` comparable scalar
+  workloads via `@truecalc/core`
+- limited workbook-wide comparison engine: xlsx-calc `0.9.2`, `4` comparable
+  recalculation workloads covering aggregate, exact lookup, approximate lookup,
+  and formula-chain families
 
 ## What The Claim Is
 
-The current scorecard claim is a mean-latency claim across directly comparable
-headless spreadsheet-engine workloads:
+The current scorecard is not a blanket performance-leadership claim. A fresh
+checked-in run shows WorkPaper leading HyperFormula on most, but not all,
+directly comparable workbook-wide headless spreadsheet-engine workloads:
 
 | Lane    | Comparable Workloads | WorkPaper Mean Wins | HyperFormula Mean Wins |
 | ------- | -------------------: | ------------------: | ---------------------: |
-| Overall |                 `46` |                `46` |                    `0` |
-| Public  |                 `38` |                `38` |                    `0` |
-| Holdout |                  `8` |                 `8` |                    `0` |
+| Overall |                 `46` |                `37` |                    `9` |
+| Public  |                 `38` |                `31` |                    `7` |
+| Holdout |                  `8` |                 `6` |                    `2` |
 
-The overall directional mean-ratio geomean is `0.521767150331573`. The overall
-directional p95-ratio geomean is `0.5359737705859149`. Ratios below `1.0` mean
+The overall directional mean-ratio geomean is `0.7467698660786287`. The overall
+directional p95-ratio geomean is `0.7937759427159495`. Ratios below `1.0` mean
 WorkPaper is faster for that metric.
 
-The closest overall mean win is `lookup-approximate-duplicates` at
-`0.9108460643406784`. The closest public-lane mean win is
-`build-mixed-content` at `0.9017762124360226`.
+The current worst mean and p95 row is `structural-insert-columns`, with a mean
+ratio of `3.417955774615391` and a p95 ratio of `3.409873090688779`. The
+headless leadership scorecard currently records `34/46` workloads winning both
+mean and p95 against HyperFormula.
 
-This is not a blanket "faster on every p95 row" claim. The current worst p95
-ratio is `1.043096403103571` on `lookup-approximate-duplicates`, so the honest
-public claim is `46/46` mean wins with an overall p95 geomean lead and one known
-p95 holdout that still needs margin work.
+It is also not a blanket "fastest against every formula evaluator" claim. The
+TrueCalc scalar lane currently reports `0/7` WorkPaper mean+p95 wins, with a
+directional mean-ratio geomean of `14.665052659844388`. That lane is intentionally
+kept in the leadership scorecard as a blocker map, not as marketing copy.
+
+The xlsx-calc lane is a direct workbook-wide recalculation comparison for the
+formula families both engines can evaluate equivalently. It currently reports
+`4/4` WorkPaper mean+p95 wins with a directional mean-ratio geomean of
+`0.10232646615444607`, but it covers only `4/46` eligible workload rows, so the
+scorecard treats it as partial coverage rather than proof of blanket leadership.
 
 ## How To Read The p95 Caveat
 
-The `46/46` count is about mean latency: for each comparable workload row,
-WorkPaper's average measured time is lower than HyperFormula's average measured
-time. Mean wins are useful for the headline because they summarize the normal
-cost of each workload, but they do not prove every slower tail sample has been
-eliminated.
+The `37/46` count is about mean latency: for each winning comparable workload
+row, WorkPaper's average measured time is lower than HyperFormula's average
+measured time. Mean wins are useful because they summarize the normal cost of
+each workload, but they do not prove every slower tail sample has been
+eliminated, and the current scorecard does not yet win every mean row.
 
 Each p95 row asks a different question: "near the slow end of this workload's
 sample set, which engine was faster?" A single row can lose on p95 even when its
@@ -59,9 +86,9 @@ moving the average enough to flip the mean result.
 The p95 geomean is an aggregate across the per-workload p95 ratios. It can stay
 below `1.0` while one individual p95 row is above `1.0`, because the aggregate
 is balanced by the other p95 rows where WorkPaper has enough margin. Read the
-current result as: WorkPaper wins every comparable mean row and leads the
-overall p95 aggregate, but the repo is not claiming "faster on every p95 row"
-until the known p95 holdout is fixed.
+current result as: WorkPaper leads the overall mean and p95 aggregate, but the
+repo is not claiming "faster on every row" until the mean and p95 holdouts are
+fixed.
 
 ## What Is Measured
 
@@ -88,6 +115,9 @@ shape:
 
 ```bash
 pnpm workpaper:bench:competitive:check
+pnpm workpaper:bench:truecalc:check
+pnpm workpaper:bench:xlsx-calc:check
+pnpm headless:performance:check
 ```
 
 Regenerate timing evidence only when intentionally refreshing the benchmark
@@ -96,6 +126,10 @@ artifact:
 ```bash
 pnpm workpaper:bench:competitive:generate
 pnpm workpaper:bench:competitive:check
+pnpm workpaper:bench:truecalc:generate
+pnpm workpaper:bench:truecalc:check
+pnpm workpaper:bench:xlsx-calc:generate
+pnpm workpaper:bench:xlsx-calc:check
 ```
 
 Do not change workload sizes, sampling, scoring, or definitions to preserve a

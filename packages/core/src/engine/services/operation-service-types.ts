@@ -71,6 +71,7 @@ export interface CreateEngineOperationServiceArgs {
     EngineRuntimeState,
     | 'workbook'
     | 'strings'
+    | 'wasm'
     | 'events'
     | 'formulas'
     | 'counters'
@@ -155,6 +156,7 @@ export interface CreateEngineOperationServiceArgs {
   readonly recalculate: (changedRoots: readonly number[] | U32, kernelSyncRoots?: readonly number[] | U32) => U32
   readonly deferKernelSync: (cellIndices: readonly number[] | U32) => void
   readonly evaluateDirectFormula: (cellIndex: number) => readonly number[] | undefined
+  readonly evaluateFormulaCell: (cellIndex: number) => readonly number[]
   readonly exactLookup: Pick<ExactColumnIndexService, 'findPreparedVectorMatch'>
   readonly sortedLookup: Pick<SortedColumnSearchService, 'findPreparedVectorMatch'>
   readonly reconcilePivotOutputs: (baseChanged: U32, forceAllPivots?: boolean) => U32

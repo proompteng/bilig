@@ -56,10 +56,6 @@ export function applyPostRecalcDirectFormulaChanges(args: ApplyPostRecalcDirectF
   if (args.collection.size === 0) {
     return args.recalculated
   }
-  const singleDirectChanged = tryApplySinglePostRecalcDirectFormula(args)
-  if (singleDirectChanged !== undefined) {
-    return mergeChangedCellIndices(args.recalculated, singleDirectChanged)
-  }
   const constantScalarChanged = !args.didRunRecalc ? args.tryApplyDirectScalarDeltas(args.collection) : undefined
   if (constantScalarChanged !== undefined) {
     return mergeChangedCellIndices(args.recalculated, constantScalarChanged)
@@ -67,6 +63,10 @@ export function applyPostRecalcDirectFormulaChanges(args: ApplyPostRecalcDirectF
   const directDeltaChanged = !args.didRunRecalc ? args.tryApplyDirectFormulaDeltas(args.collection) : undefined
   if (directDeltaChanged !== undefined) {
     return mergeChangedCellIndices(args.recalculated, directDeltaChanged)
+  }
+  const singleDirectChanged = tryApplySinglePostRecalcDirectFormula(args)
+  if (singleDirectChanged !== undefined) {
+    return mergeChangedCellIndices(args.recalculated, singleDirectChanged)
   }
   return applyDirectFormulaFallbacks(args)
 }

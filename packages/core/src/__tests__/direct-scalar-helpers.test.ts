@@ -123,7 +123,10 @@ describe('direct scalar helpers', () => {
     expect(directScalarValueNumber({ tag: ValueTag.Boolean, value: true })).toBe(1)
     expect(directScalarValueNumber({ tag: ValueTag.Boolean, value: false })).toBe(0)
     expect(directScalarValueNumber({ tag: ValueTag.Empty })).toBe(0)
-    expect(directScalarValueNumber({ tag: ValueTag.String, value: '1' })).toBeUndefined()
+    expect(directScalarValueNumber({ tag: ValueTag.String, value: '1' })).toBe(1)
+    expect(directScalarValueNumber({ tag: ValueTag.String, value: '61,111' })).toBe(61111)
+    expect(directScalarValueNumber({ tag: ValueTag.String, value: '' })).toBe(0)
+    expect(directScalarValueNumber({ tag: ValueTag.String, value: 'not numeric' })).toBeUndefined()
     expect(directScalarValueNumber({ tag: ValueTag.Error, code: ErrorCode.VALUE })).toBeUndefined()
 
     const cellStore = {

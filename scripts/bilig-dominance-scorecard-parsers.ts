@@ -81,7 +81,7 @@ export function parseCompetitiveArtifact(value: Record<string, unknown>): Compet
 
 function parseCompetitiveFamily(value: unknown): CompetitiveFamilySummary {
   const family = asObject(value, 'competitive family')
-  return {
+  const parsed: CompetitiveFamilySummary = {
     comparableCount: numberField(family, 'comparableCount'),
     family: stringField(family, 'family'),
     hyperformulaWins: numberField(family, 'hyperformulaWins'),
@@ -92,6 +92,10 @@ function parseCompetitiveFamily(value: unknown): CompetitiveFamilySummary {
     worstWorkpaperToHyperFormulaMeanRatio: optionalNumberField(family, 'worstWorkpaperToHyperFormulaMeanRatio'),
     worstWorkpaperToHyperFormulaP95Ratio: optionalNumberField(family, 'worstWorkpaperToHyperFormulaP95Ratio'),
   }
+  if ('workloads' in family) {
+    parsed.workloads = stringArrayField(family, 'workloads')
+  }
+  return parsed
 }
 
 function parseCompetitiveResult(value: unknown): CompetitiveResult {

@@ -48,7 +48,7 @@ describe('work paper sheet inspection', () => {
     const compileSpy = vi.spyOn(formula, 'compileFormula')
     try {
       const sheet: WorkPaperSheet = [
-        [1, 2, '=A1+B1', '=SUM(A1:A1)+1'],
+        [1, 2, '=a1 + b1', '= sum ( A1:A1 ) + 1'],
         [3, 4, '=A2*B2+5', '=COUNTIFS(A1:A2,">0")'],
         [5, 6, '=ABS(A3)', '=MAX(A1:A3)'],
       ]

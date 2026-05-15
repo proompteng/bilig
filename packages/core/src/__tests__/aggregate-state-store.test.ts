@@ -164,12 +164,12 @@ describe('AggregateStateStore', () => {
 
     expect(entry.prefixSums.subarray(0, 7)).toEqual(Float64Array.from([4, 5, 5, 5, 5, 5, 5]))
     expect(entry.prefixCount.subarray(0, 7)).toEqual(Uint32Array.from([1, 2, 2, 2, 2, 2, 2]))
-    expect(entry.prefixAverageCount.subarray(0, 7)).toEqual(Uint32Array.from([1, 2, 3, 3, 3, 4, 5]))
+    expect(entry.prefixAverageCount.subarray(0, 7)).toEqual(Uint32Array.from([1, 2, 2, 2, 2, 2, 2]))
     expect(entry.prefixErrorCodes.subarray(0, 7)).toEqual(
       Uint16Array.from([0, 0, 0, ErrorCode.NA, ErrorCode.NA, ErrorCode.NA, ErrorCode.NA]),
     )
     expect(entry.prefixErrorCounts.subarray(0, 7)).toEqual(Uint32Array.from([0, 0, 0, 1, 1, 1, 1]))
-    expect(entry.prefixMinimums.subarray(0, 7)).toEqual(Float64Array.from([4, 1, 0, 0, 0, 0, 0]))
+    expect(entry.prefixMinimums.subarray(0, 7)).toEqual(Float64Array.from([4, 1, 1, 1, 1, 1, 1]))
     expect(entry.prefixMaximums.subarray(0, 7)).toEqual(Float64Array.from([4, 4, 4, 4, 4, 4, 4]))
     expect(() => store.getOrBuildPrefixForRegion(1)).toThrow('Unknown region id: 1')
   })

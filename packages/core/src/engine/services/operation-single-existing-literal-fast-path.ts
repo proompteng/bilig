@@ -103,6 +103,14 @@ interface OperationSingleExistingLiteralFastPathArgs {
     readonly oldNumber: number
     readonly hasTrackedEventListeners: boolean
   }) => EngineExistingNumericCellMutationResult | null
+  readonly tryApplyTrustedFormulaLeafExistingNumericMutation: (request: {
+    readonly existingIndex: number
+    readonly formulaCellIndex: number
+    readonly sheet: SheetRecord
+    readonly col: number
+    readonly value: number
+    readonly hasTrackedEventListeners: boolean
+  }) => EngineExistingNumericCellMutationResult | null
   readonly planExactLookupNumericColumnWrite: (
     sheetId: number,
     col: number,
@@ -214,6 +222,7 @@ export function createOperationSingleExistingLiteralFastPath(args: OperationSing
     directScalarCellNumericValue,
     tryApplyTrustedSingleRangeDirectAggregateExistingNumericMutation,
     tryApplyTrustedDirectScalarClosureExistingNumericMutation,
+    tryApplyTrustedFormulaLeafExistingNumericMutation,
     tryApplySingleDirectAggregateLiteralMutationFastPath,
     planExactLookupNumericColumnWrite,
     planApproximateLookupNumericColumnWrite,
@@ -598,6 +607,8 @@ export function createOperationSingleExistingLiteralFastPath(args: OperationSing
           addEngineCounter(args.state.counters, 'directFormulaKernelSyncOnlyRecalcSkips')
         }
         const directChanged =
+          tryApplyDirectScalarDeltas(postRecalcDirectFormulaIndices, hasTrackedEventListeners) ??
+          tryApplyDirectFormulaDeltas(postRecalcDirectFormulaIndices, hasTrackedEventListeners) ??
           tryApplySinglePostRecalcDirectFormula(
             {
               state: args.state,
@@ -614,9 +625,7 @@ export function createOperationSingleExistingLiteralFastPath(args: OperationSing
               evaluateDirectFormula: args.evaluateDirectFormula,
             },
             hasTrackedEventListeners,
-          ) ??
-          tryApplyDirectScalarDeltas(postRecalcDirectFormulaIndices, hasTrackedEventListeners) ??
-          tryApplyDirectFormulaDeltas(postRecalcDirectFormulaIndices, hasTrackedEventListeners)
+          )
         if (directChanged === undefined) {
           throw new Error('Failed to apply single direct literal mutation fast path')
         }
@@ -741,6 +750,17 @@ export function createOperationSingleExistingLiteralFastPath(args: OperationSing
       })
       if (scalarClosureResult) {
         return scalarClosureResult
+      }
+      const formulaLeafResult = tryApplyTrustedFormulaLeafExistingNumericMutation({
+        existingIndex,
+        formulaCellIndex: singleExistingCellDependent,
+        sheet,
+        col: request.col,
+        value: request.value,
+        hasTrackedEventListeners,
+      })
+      if (formulaLeafResult) {
+        return formulaLeafResult
       }
     }
     if (!hasAggregateDependents && (hasExactLookupDependents || hasSortedLookupDependents) && singleExistingCellDependent === -1) {

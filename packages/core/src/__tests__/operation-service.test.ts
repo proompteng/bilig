@@ -1165,6 +1165,80 @@ describe('EngineOperationService', () => {
     unsubscribe()
   })
 
+  it('returns typed changed cells for trusted existing numeric leaf formula mutations', async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: 'operation-existing-numeric-leaf-formula',
+      trackReplicaVersions: false,
+    })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 100)
+    engine.setCellValue('Sheet1', 'B1', 20)
+    engine.setCellFormula('Sheet1', 'D1', 'A1+B1*2')
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+    const inputIndex = engine.workbook.getCellIndex('Sheet1', 'A1')!
+    const formulaIndex = engine.workbook.getCellIndex('Sheet1', 'D1')!
+
+    engine.resetPerformanceCounters()
+    const result = engine.tryApplyExistingNumericCellMutationAt({
+      sheetId,
+      row: 0,
+      col: 0,
+      cellIndex: inputIndex,
+      value: 101,
+      emitTracked: false,
+      trustedExistingNumericLiteral: true,
+      oldNumericValue: 100,
+    })
+
+    expect(result).toEqual({
+      firstChangedCellIndex: inputIndex,
+      secondChangedCellIndex: formulaIndex,
+      secondChangedRow: 0,
+      secondChangedCol: 3,
+      secondChangedNumericValue: 141,
+      changedCellCount: 2,
+      explicitChangedCount: 1,
+    })
+    expect(engine.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 141 })
+    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 1 })
+    expect(engine.getPerformanceCounters().directFormulaKernelSyncOnlyRecalcSkips).toBe(1)
+  })
+
+  it('omits unchanged trusted leaf formulas from compact numeric mutation results', async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: 'operation-existing-numeric-unchanged-leaf-formula',
+      trackReplicaVersions: false,
+    })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellFormula('Sheet1', 'B1', 'IF(A1>0,"yes","no")')
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+    const inputIndex = engine.workbook.getCellIndex('Sheet1', 'A1')!
+
+    engine.resetPerformanceCounters()
+    const result = engine.tryApplyExistingNumericCellMutationAt({
+      sheetId,
+      row: 0,
+      col: 0,
+      cellIndex: inputIndex,
+      value: 2,
+      emitTracked: false,
+      trustedExistingNumericLiteral: true,
+      oldNumericValue: 1,
+    })
+
+    expect(result).toEqual({
+      firstChangedCellIndex: inputIndex,
+      changedCellCount: 1,
+      explicitChangedCount: 1,
+    })
+    expect(engine.getCellValue('Sheet1', 'B1')).toMatchObject({ tag: ValueTag.String, value: 'yes' })
+    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 1 })
+    expect(engine.getPerformanceCounters().directFormulaKernelSyncOnlyRecalcSkips).toBe(1)
+  })
+
   it('rejects trusted direct aggregate numeric mutations when lookup dependents share the input column', async () => {
     const engine = new SpreadsheetEngine({
       workbookName: 'operation-existing-numeric-aggregate-lookup-guard',

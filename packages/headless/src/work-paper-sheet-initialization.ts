@@ -89,7 +89,7 @@ export function initializeWorkPaperFromSheetEntries(args: {
       args.namedExpressions.forEach((expression) => {
         args.upsertNamedExpression(expression, { duringInitialization: true })
       })
-      const initialFormulaRefs: EngineFormulaSourceRef[] = []
+      let initialFormulaRefs: EngineFormulaSourceRef[] | undefined
       let initialFormulaPotentialNewCells = 0
       for (let index = 0; index < sheetEntries.length; index += 1) {
         const [, sheet] = sheetEntries[index]!
@@ -110,10 +110,20 @@ export function initializeWorkPaperFromSheetEntries(args: {
           rewriteFormula: rewriteInitialFormula,
           inspection: inspected,
         })
-        initialFormulaRefs.push(...prepared.formulaRefs)
+        if (prepared.formulaRefs.length > 0) {
+          if (initialFormulaRefs === undefined) {
+            initialFormulaRefs = prepared.formulaRefs
+          } else {
+            const startIndex = initialFormulaRefs.length
+            initialFormulaRefs.length = startIndex + prepared.formulaRefs.length
+            for (let refIndex = 0; refIndex < prepared.formulaRefs.length; refIndex += 1) {
+              initialFormulaRefs[startIndex + refIndex] = prepared.formulaRefs[refIndex]!
+            }
+          }
+        }
         initialFormulaPotentialNewCells += prepared.potentialNewCells
       }
-      if (initialFormulaRefs.length > 0) {
+      if (initialFormulaRefs !== undefined && initialFormulaRefs.length > 0) {
         args.engine.initializeFormulaSourcesAtNow(initialFormulaRefs, initialFormulaPotentialNewCells)
       }
     }

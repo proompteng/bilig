@@ -15,6 +15,7 @@ import type {
 const SCALAR_RANGE_FUNCTION_RE =
   /^(?:_XLFN\.)?(?:_XLWS\.)?(?:SUM|COUNT|COUNTA|COUNTBLANK|MIN|MAX|AVERAGE|AVG|SUMIF|COUNTIF|SUMIFS|COUNTIFS|ABS)\(.*\)(?:[+\-*/]\d+(?:\.\d+)?)?$/
 const SIMPLE_SCALAR_EXPRESSION_RE = /^\$?[A-Z]+\$?\d+(?:[+\-*/](?:\$?[A-Z]+\$?\d+|\d+(?:\.\d+)?))*$/
+const FORMULA_SPILL_PRODUCING_FUNCTION_MARKERS = FORMULA_SPILL_PRODUCING_FUNCTION_NAMES.map((name) => `${name}(`)
 
 export interface WorkPaperSheetInspection {
   readonly hasFormula: boolean
@@ -205,14 +206,31 @@ function formulaMayResizeDynamically(value: string): boolean {
 }
 
 function isDefinitelyScalarFormulaShape(formula: string): boolean {
-  const normalized = formula.replace(/\s+/g, '').toUpperCase()
+  const normalized = normalizeScalarFormulaShape(formula)
   if (normalized.length === 0 || normalized.includes('{') || normalized.includes('#')) {
     return false
   }
-  if (FORMULA_SPILL_PRODUCING_FUNCTION_NAMES.some((name) => normalized.includes(`${name}(`))) {
+  if (SIMPLE_SCALAR_EXPRESSION_RE.test(normalized)) {
+    return true
+  }
+  if (normalized.includes('(') && FORMULA_SPILL_PRODUCING_FUNCTION_MARKERS.some((marker) => normalized.includes(marker))) {
     return false
   }
-  return SIMPLE_SCALAR_EXPRESSION_RE.test(normalized) || SCALAR_RANGE_FUNCTION_RE.test(normalized)
+  return SCALAR_RANGE_FUNCTION_RE.test(normalized)
+}
+
+function normalizeScalarFormulaShape(formula: string): string {
+  for (let index = 0; index < formula.length; index += 1) {
+    const charCode = formula.charCodeAt(index)
+    if ((charCode >= 97 && charCode <= 122) || isScalarFormulaWhitespace(charCode)) {
+      return formula.replace(/\s+/g, '').toUpperCase()
+    }
+  }
+  return formula
+}
+
+function isScalarFormulaWhitespace(charCode: number): boolean {
+  return charCode === 32 || charCode === 9 || charCode === 10 || charCode === 11 || charCode === 12 || charCode === 13
 }
 
 function stripFormulaPrefix(value: string): string {

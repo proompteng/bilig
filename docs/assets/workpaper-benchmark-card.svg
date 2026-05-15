@@ -47,21 +47,21 @@
   </g>
   <g transform="translate(88 428)">
   <text x="0" y="0" fill="#526273" font-family="Inter, Arial, Helvetica, sans-serif" font-size="24" font-weight="760">Overall</text>
-  <text x="438" y="0" text-anchor="end" fill="#111820" font-family="Inter, Arial, Helvetica, sans-serif" font-size="25" font-weight="820">46/46</text>
+  <text x="438" y="0" text-anchor="end" fill="#111820" font-family="Inter, Arial, Helvetica, sans-serif" font-size="25" font-weight="820">36/46</text>
   <rect x="0" y="16" width="460" height="22" rx="8" fill="#e6edf3"/>
-  <rect x="0" y="16" width="460.00" height="22" rx="8" fill="#147a4b"/>
+  <rect x="0" y="16" width="360.00" height="22" rx="8" fill="#147a4b"/>
 </g>
   <g transform="translate(88 508)">
   <text x="0" y="0" fill="#526273" font-family="Inter, Arial, Helvetica, sans-serif" font-size="24" font-weight="760">Public</text>
-  <text x="438" y="0" text-anchor="end" fill="#111820" font-family="Inter, Arial, Helvetica, sans-serif" font-size="25" font-weight="820">38/38</text>
+  <text x="438" y="0" text-anchor="end" fill="#111820" font-family="Inter, Arial, Helvetica, sans-serif" font-size="25" font-weight="820">29/38</text>
   <rect x="0" y="16" width="460" height="22" rx="8" fill="#e6edf3"/>
-  <rect x="0" y="16" width="460.00" height="22" rx="8" fill="#147a4b"/>
+  <rect x="0" y="16" width="351.05" height="22" rx="8" fill="#147a4b"/>
 </g>
   <g transform="translate(88 588)">
   <text x="0" y="0" fill="#526273" font-family="Inter, Arial, Helvetica, sans-serif" font-size="24" font-weight="760">Holdout</text>
-  <text x="438" y="0" text-anchor="end" fill="#111820" font-family="Inter, Arial, Helvetica, sans-serif" font-size="25" font-weight="820">8/8</text>
+  <text x="438" y="0" text-anchor="end" fill="#111820" font-family="Inter, Arial, Helvetica, sans-serif" font-size="25" font-weight="820">7/8</text>
   <rect x="0" y="16" width="460" height="22" rx="8" fill="#e6edf3"/>
-  <rect x="0" y="16" width="460.00" height="22" rx="8" fill="#147a4b"/>
+  <rect x="0" y="16" width="402.50" height="22" rx="8" fill="#147a4b"/>
 </g>
 
   <g filter="url(#shadow)">
@@ -71,22 +71,22 @@
 
   <g transform="translate(710 196)">
     <rect x="0" y="0" width="462" height="116" rx="18" fill="#ffffff" fill-opacity="0.08" stroke="#36506a"/>
-    <text x="28" y="43" fill="#ffffff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="34" font-weight="840">Mean 0.522x</text>
-    <text x="28" y="82" fill="#7ed894" font-family="Inter, Arial, Helvetica, sans-serif" font-size="24" font-weight="780">48% lower than HyperFormula</text>
+    <text x="28" y="43" fill="#ffffff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="34" font-weight="840">Mean 0.668x</text>
+    <text x="28" y="82" fill="#7ed894" font-family="Inter, Arial, Helvetica, sans-serif" font-size="24" font-weight="780">33% lower than HyperFormula</text>
   </g>
 
   <g transform="translate(710 340)">
     <rect x="0" y="0" width="462" height="116" rx="18" fill="#ffffff" fill-opacity="0.08" stroke="#36506a"/>
-    <text x="28" y="43" fill="#ffffff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="34" font-weight="840">p95 0.536x</text>
-    <text x="28" y="82" fill="#7ed894" font-family="Inter, Arial, Helvetica, sans-serif" font-size="24" font-weight="780">46% lower geomean lead</text>
+    <text x="28" y="43" fill="#ffffff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="34" font-weight="840">p95 0.628x</text>
+    <text x="28" y="82" fill="#7ed894" font-family="Inter, Arial, Helvetica, sans-serif" font-size="24" font-weight="780">37% lower geomean lead</text>
   </g>
 
   <g transform="translate(710 490)">
     <rect x="0" y="0" width="462" height="92" rx="18" fill="#f4d991" fill-opacity="0.14" stroke="#8a6a23"/>
     <text x="28" y="35" fill="#f3d98b" font-family="Inter, Arial, Helvetica, sans-serif" font-size="22" font-weight="820">Visible caveat</text>
-    <text x="28" y="66" fill="#ffffff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="21" font-weight="650">lookup-approximate-duplicates p95: 1.043x</text>
+    <text x="28" y="66" fill="#ffffff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="21" font-weight="650">lookup-with-column-index-after-column-write p95: 1.884x</text>
   </g>
 
   <text x="64" y="686" fill="#526273" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="20">pnpm workpaper:bench:competitive:check</text>
-  <text x="1216" y="686" text-anchor="end" fill="#526273" font-family="Inter, Arial, Helvetica, sans-serif" font-size="18" font-weight="650">artifact 2026-05-08</text>
+  <text x="1216" y="686" text-anchor="end" fill="#526273" font-family="Inter, Arial, Helvetica, sans-serif" font-size="18" font-weight="650">artifact 2026-05-15</text>
 </svg>

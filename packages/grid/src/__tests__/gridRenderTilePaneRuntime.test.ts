@@ -1792,6 +1792,102 @@ describe('GridRenderTilePaneRuntime', () => {
     ).toBe(true)
   })
 
+  it('caches visible text freshness for clean remote tiles across selection-only resolves', () => {
+    const runtime = new GridRenderTilePaneRuntime()
+    const host = createHost()
+    const tileId = host.viewportTileKeys({
+      dprBucket: 1,
+      sheetOrdinal: 7,
+      viewport: { colEnd: 127, colStart: 0, rowEnd: 31, rowStart: 0 },
+    })[0]
+    if (tileId === undefined) {
+      throw new Error('Expected a visible render tile key for the test viewport')
+    }
+    const remoteTileWithMatchingText: GridRenderTile = {
+      ...createRenderTile(tileId),
+      textCount: 1,
+      textRuns: [
+        {
+          align: 'left',
+          clipHeight: 20,
+          clipWidth: 120,
+          clipX: 0,
+          clipY: 280,
+          color: '#000000',
+          col: 0,
+          font: '12px sans-serif',
+          fontSize: 12,
+          height: 20,
+          row: 14,
+          strike: false,
+          text: 'Amortization Schedule Examples',
+          underline: false,
+          width: 120,
+          wrap: false,
+          x: 0,
+          y: 280,
+        },
+      ],
+    }
+    let getCellCallCount = 0
+    const engineWithMatchingVisibleText: GridEngineLike = {
+      getCell: (_sheetName, address) => {
+        getCellCallCount += 1
+        return address === 'A15' ? createStringCellSnapshot('A15', 'Amortization Schedule Examples') : createEmptyCellSnapshot(address)
+      },
+      getCellStyle: () => undefined,
+      subscribeCells: () => () => {},
+      workbook: {
+        getSheet: () => undefined,
+      },
+    }
+    const renderTileSource = createRenderTileSource([remoteTileWithMatchingText])
+    const visibleViewport = { colEnd: 10, colStart: 0, rowEnd: 34, rowStart: 3 }
+
+    const initial = runtime.resolve(
+      createInput({
+        engine: engineWithMatchingVisibleText,
+        gridRuntimeHost: host,
+        renderTileSource,
+        selectedCell: [1, 1],
+        selectedCellSnapshot: createEmptyCellSnapshot('B2'),
+        visibleViewport,
+      }),
+    )
+    const callsAfterInitialResolve = getCellCallCount
+
+    expect(initial.residentBodyPane?.tile).toBe(remoteTileWithMatchingText)
+    expect(callsAfterInitialResolve).toBeGreaterThan(0)
+
+    const selectionOnly = runtime.resolve(
+      createInput({
+        engine: engineWithMatchingVisibleText,
+        gridRuntimeHost: host,
+        renderTileSource,
+        selectedCell: [2, 2],
+        selectedCellSnapshot: createEmptyCellSnapshot('C3'),
+        visibleViewport,
+      }),
+    )
+
+    expect(selectionOnly.residentBodyPane?.tile).toBe(remoteTileWithMatchingText)
+    expect(getCellCallCount).toBe(callsAfterInitialResolve)
+
+    runtime.resolve(
+      createInput({
+        engine: engineWithMatchingVisibleText,
+        gridRuntimeHost: host,
+        renderTileSource,
+        sceneRevision: 2,
+        selectedCell: [3, 3],
+        selectedCellSnapshot: createEmptyCellSnapshot('D4'),
+        visibleViewport,
+      }),
+    )
+
+    expect(getCellCallCount).toBeGreaterThan(callsAfterInitialResolve)
+  })
+
   it('reuses remote static rect buffers for text-only local dirty tiles', () => {
     const runtime = new GridRenderTilePaneRuntime()
     const host = createHost()
