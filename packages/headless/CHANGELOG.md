@@ -4,6 +4,17 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.14.14
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.14.13
+- Manual override: no
+
+### Fixes
+
+- fix(assistant): throttle rendered context sync (92edb870)
+- fix(headless): publish xlsx subpath (5c6f6b76)
+
 ## 0.1.95
 
 - Release type: patch

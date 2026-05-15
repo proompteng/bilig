@@ -3,7 +3,8 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
-import { loadRuntimePackages, parseStableSemver } from './runtime-package-set.ts'
+import { parseStableSemver } from './runtime-package-set.ts'
+import { syncRuntimePackageVersions } from './sync-runtime-package-versions.ts'
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const args = new Map<string, string | true>()
@@ -27,14 +28,7 @@ const notesFile = readRequiredStringArg('notes-file')
 parseStableSemver(version)
 
 const notesMarkdown = readFileSync(resolve(rootDir, notesFile), 'utf8').trim()
-const runtimePackages = loadRuntimePackages(rootDir)
-
-for (const runtimePackage of runtimePackages) {
-  const packageJsonPath = join(rootDir, runtimePackage.dir, 'package.json')
-  const manifest = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
-  manifest.version = version
-  writeFileSync(packageJsonPath, `${JSON.stringify(manifest, null, 2)}\n`)
-}
+const syncResult = syncRuntimePackageVersions({ rootDir, version })
 
 const changelogPath = join(rootDir, 'packages/headless/CHANGELOG.md')
 const existingChangelog = readFileSync(changelogPath, 'utf8')
@@ -50,7 +44,8 @@ console.log(
   JSON.stringify(
     {
       version,
-      updatedPackages: runtimePackages.map((runtimePackage) => runtimePackage.name),
+      updatedPackages: syncResult.updatedPackages,
+      updatedFiles: [...syncResult.updatedFiles, changelogPath],
       changelogPath,
       runtimeVersionSource: 'packages/headless/package.json',
     },

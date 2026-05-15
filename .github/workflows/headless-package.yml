@@ -33,6 +33,7 @@ on:
       - "scripts/publish-runtime-package-set.ts"
       - "scripts/runtime-package-set.ts"
       - "scripts/runtime-release.ts"
+      - "scripts/sync-runtime-package-versions.ts"
       - "scripts/sync-runtime-release-metadata.ts"
       - "scripts/workpaper-external-smoke.ts"
       - "scripts/workpaper-surface-contract.ts"
@@ -508,6 +509,65 @@ jobs:
           console.log(`Repository runtime package manifest baseline v${versions[0]}`);
           NODE
 
+      - name: Sync and commit runtime release metadata
+        env:
+          TARGET_VERSION: ${{ needs.plan_release.outputs.target_version }}
+          DRY_RUN: ${{ needs.plan_release.outputs.dry_run }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${TARGET_VERSION}" ]]; then
+            echo "Target runtime package version is required" >&2
+            exit 1
+          fi
+
+          bun scripts/sync-runtime-release-metadata.ts \
+            --version "${TARGET_VERSION}" \
+            --notes-file build/runtime-release-notes.md
+
+          release_paths=(
+            packages/protocol/package.json
+            packages/workbook-domain/package.json
+            packages/wasm-kernel/package.json
+            packages/formula/package.json
+            packages/core/package.json
+            packages/excel-import/package.json
+            packages/headless/package.json
+            packages/headless/server.json
+            packages/headless/CHANGELOG.md
+          )
+
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            git diff --stat -- "${release_paths[@]}" || true
+            exit 0
+          fi
+
+          if git diff --quiet -- "${release_paths[@]}"; then
+            echo "Runtime release metadata is already at ${TARGET_VERSION}"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${release_paths[@]}"
+          git commit -m "chore(release): runtime packages v${TARGET_VERSION}"
+          git push origin HEAD:main
+          git push github HEAD:main
+
+          git fetch --force origin main
+          git fetch --force github main
+
+          head_sha="$(git rev-parse HEAD)"
+          origin_sha="$(git rev-parse origin/main)"
+          github_sha="$(git rev-parse github/main)"
+
+          echo "Release metadata SHA: ${head_sha}"
+          echo "Forgejo main: ${origin_sha}"
+          echo "GitHub main: ${github_sha}"
+
+          test "${origin_sha}" = "${head_sha}"
+          test "${github_sha}" = "${head_sha}"
+
       - name: Build runtime package chain
         run: |
           set -euo pipefail
@@ -589,7 +649,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git tag -a "${TAG_NAME}" -m "Libraries v${TARGET_VERSION}" "${GITHUB_SHA}"
+          git tag -a "${TAG_NAME}" -m "Libraries v${TARGET_VERSION}" HEAD
           git push origin "refs/tags/${TAG_NAME}"
 
           if git ls-remote --exit-code --tags github "refs/tags/${TAG_NAME}" >/dev/null 2>&1; then

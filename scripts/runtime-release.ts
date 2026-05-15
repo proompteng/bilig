@@ -12,6 +12,8 @@ export const RUNTIME_AFFECTING_PATH_PATTERNS = [
   'packages/headless/**',
   'scripts/runtime-package-set.ts',
   'scripts/publish-runtime-package-set.ts',
+  'scripts/sync-runtime-package-versions.ts',
+  'scripts/sync-runtime-release-metadata.ts',
   'scripts/check-package-publish.ts',
   'scripts/gen-formula-dominance-snapshot.ts',
   'scripts/gen-bilig-dominance-scorecard.ts',

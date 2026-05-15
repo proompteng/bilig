@@ -191,6 +191,16 @@ describe('runtime release helpers', () => {
     expect(isRuntimeAffectingPath('packages/core/src/index.ts')).toBe(true)
     expect(isRuntimeAffectingPath('packages/excel-import/src/index.ts')).toBe(true)
     expect(isRuntimeAffectingPath('scripts/publish-runtime-package-set.ts')).toBe(true)
+    expect(isRuntimeAffectingPath('scripts/sync-runtime-package-versions.ts')).toBe(true)
+    expect(isRuntimeAffectingPath('scripts/sync-runtime-release-metadata.ts')).toBe(true)
     expect(isRuntimeAffectingPath('apps/web/src/App.tsx')).toBe(false)
+  })
+
+  it('requires committed runtime package versions before staging npm packages', () => {
+    const source = readFileSync(resolve(repoRoot, 'scripts/publish-runtime-package-set.ts'), 'utf8')
+
+    expect(source).toContain('Repository runtime package manifests must be committed')
+    expect(source).toContain('manifest.version !== targetVersion')
+    expect(source).not.toContain('manifest.version = targetVersion')
   })
 })

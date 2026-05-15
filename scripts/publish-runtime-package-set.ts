@@ -9,6 +9,7 @@ import {
   formatRuntimePackagePublishedVersions,
   loadRuntimeNpmPackages,
   loadRuntimePackages,
+  parseStableSemver,
   planRuntimePackagePublishProvisioning,
   parseBooleanEnv,
   type RuntimePackagePublishedVersion,
@@ -27,9 +28,15 @@ const targetVersion = process.env.TARGET_VERSION?.trim()
 if (!targetVersion) {
   throw new Error('TARGET_VERSION is required')
 }
+parseStableSemver(targetVersion)
 
 const allRuntimePackages = loadRuntimePackages(rootDir)
-assertAlignedVersions(allRuntimePackages)
+const repositoryVersion = assertAlignedVersions(allRuntimePackages)
+if (repositoryVersion !== targetVersion) {
+  throw new Error(
+    `Repository runtime package manifests must be committed at ${targetVersion} before publishing (found ${repositoryVersion}). Run bun scripts/sync-runtime-package-versions.ts --version ${targetVersion} and commit the result.`,
+  )
+}
 const runtimePackages = loadRuntimeNpmPackages(rootDir)
 
 const currentPublishedRuntimeVersions = readPublishedRuntimePackageVersions(runtimePackages.map((runtimePackage) => runtimePackage.name))
@@ -53,7 +60,9 @@ try {
 
     const packageJsonPath = join(stagedPackageDir, 'package.json')
     const manifest = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
-    manifest.version = targetVersion
+    if (manifest.version !== targetVersion) {
+      throw new Error(`Staged ${runtimePackage.name} package.json must already be ${targetVersion}, found ${String(manifest.version)}`)
+    }
     rewriteInternalDependencyRanges(manifest, internalPackageNames, targetVersion)
     writeFileSync(packageJsonPath, `${JSON.stringify(manifest, null, 2)}\n`)
     syncStagedMcpServerMetadata(runtimePackage.name, stagedPackageDir, targetVersion)
