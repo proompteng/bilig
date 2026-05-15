@@ -55,7 +55,10 @@ import {
   tryApplyTrustedSingleRangeDirectAggregateExistingNumericMutation as tryApplyTrustedSingleRangeDirectAggregateExistingNumericMutationWithArgs,
 } from './operation-direct-aggregate-literal-fast-path.js'
 import { tryApplyTrustedDirectScalarClosureExistingNumericMutation as tryApplyTrustedDirectScalarClosureExistingNumericMutationWithArgs } from './operation-direct-scalar-closure-fast-path.js'
-import { tryApplyTrustedFormulaLeafExistingNumericMutation as tryApplyTrustedFormulaLeafExistingNumericMutationWithArgs } from './operation-formula-leaf-existing-numeric-fast-path.js'
+import {
+  tryApplyFormulaLeafExistingLiteralMutation as tryApplyFormulaLeafExistingLiteralMutationWithArgs,
+  tryApplyTrustedFormulaLeafExistingNumericMutation as tryApplyTrustedFormulaLeafExistingNumericMutationWithArgs,
+} from './operation-formula-leaf-existing-numeric-fast-path.js'
 import { createOperationDirectScalarBatchFastPaths } from './operation-direct-scalar-batch-fast-paths.js'
 import { tryApplySingleDirectScalarLiteralMutationWithoutEvents as tryApplySingleDirectScalarLiteralMutationWithoutEventsWithArgs } from './operation-direct-scalar-literal-fast-path.js'
 import { tryApplySingleDirectFormulaLiteralMutationWithoutEvents as tryApplySingleDirectFormulaLiteralMutationWithoutEventsWithArgs } from './operation-direct-formula-literal-fast-path.js'
@@ -485,6 +488,24 @@ export function createEngineOperationService(args: CreateEngineOperationServiceA
       request,
     )
 
+  const tryApplyFormulaLeafExistingLiteralMutation = (request: {
+    existingIndex: number
+    formulaCellIndex: number
+    value: LiteralInput
+    hasTrackedEventListeners: boolean
+  }): boolean =>
+    tryApplyFormulaLeafExistingLiteralMutationWithArgs(
+      {
+        state: args.state,
+        getSingleEntityDependent: args.getSingleEntityDependent,
+        writeFastPathLiteralToExistingCell,
+        evaluateFormulaCell: args.evaluateFormulaCell,
+        deferSingleCellKernelSync,
+        makeSingleLiteralSkipMetrics,
+      },
+      request,
+    )
+
   const tryApplySingleDirectScalarLiteralMutationWithoutEvents = (request: {
     existingIndex: number
     value: LiteralInput
@@ -667,6 +688,7 @@ export function createEngineOperationService(args: CreateEngineOperationServiceA
       tryApplyTrustedSingleRangeDirectAggregateExistingNumericMutation,
       tryApplyTrustedDirectScalarClosureExistingNumericMutation,
       tryApplyTrustedFormulaLeafExistingNumericMutation,
+      tryApplyFormulaLeafExistingLiteralMutation,
       tryApplySingleDirectAggregateLiteralMutationFastPath,
       planExactLookupNumericColumnWrite,
       planApproximateLookupNumericColumnWrite,

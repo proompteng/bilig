@@ -1,5 +1,5 @@
 import { getBuiltin, parseNumericText, type FormulaNode } from '@bilig/formula'
-import { ErrorCode, type CellValue, FormulaMode, type RecalcMetrics, ValueTag } from '@bilig/protocol'
+import { ErrorCode, type CellValue, FormulaMode, type LiteralInput, type RecalcMetrics, ValueTag } from '@bilig/protocol'
 import { CellFlags } from '../../cell-store.js'
 import type { EngineExistingNumericCellMutationResult } from '../../cell-mutations-at.js'
 import { makeCellEntity } from '../../entity-ids.js'
@@ -20,6 +20,13 @@ export interface OperationTrustedFormulaLeafExistingNumericMutationRequest {
   readonly hasTrackedEventListeners: boolean
 }
 
+export interface OperationFormulaLeafExistingLiteralMutationRequest {
+  readonly existingIndex: number
+  readonly formulaCellIndex: number
+  readonly value: LiteralInput
+  readonly hasTrackedEventListeners: boolean
+}
+
 export interface OperationFormulaLeafExistingNumericFastPathArgs {
   readonly state: Pick<
     CreateEngineOperationServiceArgs['state'],
@@ -27,6 +34,15 @@ export interface OperationFormulaLeafExistingNumericFastPathArgs {
   >
   readonly getSingleEntityDependent: (entityId: number) => number
   readonly writeTrustedExistingNumericLiteralToCell: (existingIndex: number, sheet: SheetRecord, col: number, value: number) => void
+  readonly evaluateFormulaCell: (formulaCellIndex: number) => readonly number[]
+  readonly deferSingleCellKernelSync: (cellIndex: number) => void
+  readonly makeSingleLiteralSkipMetrics: () => RecalcMetrics
+}
+
+export interface OperationFormulaLeafExistingLiteralFastPathArgs {
+  readonly state: OperationFormulaLeafExistingNumericFastPathArgs['state']
+  readonly getSingleEntityDependent: (entityId: number) => number
+  readonly writeFastPathLiteralToExistingCell: (existingIndex: number, value: LiteralInput) => void
   readonly evaluateFormulaCell: (formulaCellIndex: number) => readonly number[]
   readonly deferSingleCellKernelSync: (cellIndex: number) => void
   readonly makeSingleLiteralSkipMetrics: () => RecalcMetrics
@@ -100,6 +116,82 @@ export function tryApplyTrustedFormulaLeafExistingNumericMutation(
     })
   }
   return result
+}
+
+export function tryApplyFormulaLeafExistingLiteralMutation(
+  args: OperationFormulaLeafExistingLiteralFastPathArgs,
+  request: OperationFormulaLeafExistingLiteralMutationRequest,
+): boolean {
+  const formula = getApplicableFormulaLeaf(args, request.formulaCellIndex)
+  if (!formula) {
+    return false
+  }
+
+  const beforeFormulaValue = readFormulaCellValue(args, request.formulaCellIndex)
+  args.writeFastPathLiteralToExistingCell(request.existingIndex, request.value)
+  const evaluatedByWasm = evaluateFormulaLeafAfterInputWrite(args, request.existingIndex, request.formulaCellIndex, formula)
+  const afterFormulaValue = readFormulaCellValue(args, request.formulaCellIndex)
+  const formulaChanged = !cellValuesEqual(beforeFormulaValue, afterFormulaValue)
+  addEngineCounter(args.state.counters, 'directFormulaKernelSyncOnlyRecalcSkips')
+  args.deferSingleCellKernelSync(request.existingIndex)
+  const lastMetrics = {
+    ...args.makeSingleLiteralSkipMetrics(),
+    wasmFormulaCount: evaluatedByWasm ? 1 : 0,
+    jsFormulaCount: evaluatedByWasm ? 0 : 1,
+  }
+  args.state.setLastMetrics(lastMetrics)
+  if (request.hasTrackedEventListeners) {
+    const changedCellIndices = formulaChanged
+      ? Uint32Array.of(request.existingIndex, request.formulaCellIndex)
+      : Uint32Array.of(request.existingIndex)
+    emitOperationTrackedCellsBatch({
+      events: args.state.events,
+      changedCellIndices,
+      metrics: lastMetrics,
+    })
+  }
+  return true
+}
+
+function getApplicableFormulaLeaf(
+  args: Pick<OperationFormulaLeafExistingNumericFastPathArgs, 'state' | 'getSingleEntityDependent'>,
+  formulaCellIndex: number,
+): RuntimeFormula | undefined {
+  if (formulaCellIndex < 0 || args.getSingleEntityDependent(makeCellEntity(formulaCellIndex)) !== -1) {
+    return undefined
+  }
+  const formula = args.state.formulas.get(formulaCellIndex)
+  if (
+    !formula ||
+    formula.directLookup !== undefined ||
+    formula.directAggregate !== undefined ||
+    formula.directCriteria !== undefined ||
+    formula.directScalar !== undefined ||
+    formula.compiled.volatile ||
+    formula.compiled.producesSpill ||
+    ((args.state.workbook.cellStore.flags[formulaCellIndex] ?? 0) & CellFlags.InCycle) !== 0
+  ) {
+    return undefined
+  }
+  return formula
+}
+
+function evaluateFormulaLeafAfterInputWrite(
+  args: Pick<OperationFormulaLeafExistingNumericFastPathArgs, 'state' | 'evaluateFormulaCell'>,
+  existingIndex: number,
+  formulaCellIndex: number,
+  formula: RuntimeFormula,
+): boolean {
+  const inlineResult = tryEvaluateLeafFormulaInline(args, formula)
+  if (inlineResult !== undefined) {
+    writeFormulaLeafValue(args, formulaCellIndex, inlineResult)
+    return false
+  }
+  const evaluatedByWasm = tryEvaluateLeafFormulaWithWasm(args, existingIndex, formulaCellIndex, formula)
+  if (!evaluatedByWasm) {
+    args.evaluateFormulaCell(formulaCellIndex)
+  }
+  return evaluatedByWasm
 }
 
 function tryEvaluateLeafFormulaInline(

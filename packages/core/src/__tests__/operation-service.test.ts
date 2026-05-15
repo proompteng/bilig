@@ -1239,6 +1239,55 @@ describe('EngineOperationService', () => {
     expect(engine.getPerformanceCounters().directFormulaKernelSyncOnlyRecalcSkips).toBe(1)
   })
 
+  it('updates existing string leaf formulas without dirty traversal', async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: 'operation-existing-string-leaf-formula',
+      trackReplicaVersions: false,
+    })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 'alpha')
+    engine.setCellValue('Sheet1', 'C1', 'north')
+    engine.setCellFormula('Sheet1', 'B1', 'CONCATENATE(A1,"-",C1)')
+    engine.setCellValue('Sheet1', 'A2', 'charlie')
+    engine.setCellValue('Sheet1', 'C2', 'north')
+    engine.setCellFormula('Sheet1', 'B2', 'LEN(A2)+LEN(C2)')
+    const tracked = vi.fn()
+    const unsubscribe = engine.events.subscribeTracked(tracked)
+    const concatInputIndex = engine.workbook.getCellIndex('Sheet1', 'A1')!
+    const concatFormulaIndex = engine.workbook.getCellIndex('Sheet1', 'B1')!
+    const lengthInputIndex = engine.workbook.getCellIndex('Sheet1', 'A2')!
+    const lengthFormulaIndex = engine.workbook.getCellIndex('Sheet1', 'B2')!
+
+    engine.resetPerformanceCounters()
+    engine.setCellValue('Sheet1', 'A1', 'beta')
+
+    expect(engine.getCellValue('Sheet1', 'B1')).toMatchObject({ tag: ValueTag.String, value: 'beta-north' })
+    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 1 })
+    expect(engine.getPerformanceCounters().directFormulaKernelSyncOnlyRecalcSkips).toBe(1)
+    expect(tracked).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        changedCellIndices: new Uint32Array([concatInputIndex, concatFormulaIndex]),
+        explicitChangedCount: 1,
+      }),
+    )
+
+    tracked.mockClear()
+    engine.resetPerformanceCounters()
+    engine.setCellValue('Sheet1', 'A2', 'delta')
+
+    expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 10 })
+    expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0, wasmFormulaCount: 0, jsFormulaCount: 1 })
+    expect(engine.getPerformanceCounters().directFormulaKernelSyncOnlyRecalcSkips).toBe(1)
+    expect(tracked).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        changedCellIndices: new Uint32Array([lengthInputIndex, lengthFormulaIndex]),
+        explicitChangedCount: 1,
+      }),
+    )
+    unsubscribe()
+  })
+
   it('rejects trusted direct aggregate numeric mutations when lookup dependents share the input column', async () => {
     const engine = new SpreadsheetEngine({
       workbookName: 'operation-existing-numeric-aggregate-lookup-guard',

@@ -111,6 +111,12 @@ interface OperationSingleExistingLiteralFastPathArgs {
     readonly value: number
     readonly hasTrackedEventListeners: boolean
   }) => EngineExistingNumericCellMutationResult | null
+  readonly tryApplyFormulaLeafExistingLiteralMutation: (request: {
+    readonly existingIndex: number
+    readonly formulaCellIndex: number
+    readonly value: LiteralInput
+    readonly hasTrackedEventListeners: boolean
+  }) => boolean
   readonly planExactLookupNumericColumnWrite: (
     sheetId: number,
     col: number,
@@ -223,6 +229,7 @@ export function createOperationSingleExistingLiteralFastPath(args: OperationSing
     tryApplyTrustedSingleRangeDirectAggregateExistingNumericMutation,
     tryApplyTrustedDirectScalarClosureExistingNumericMutation,
     tryApplyTrustedFormulaLeafExistingNumericMutation,
+    tryApplyFormulaLeafExistingLiteralMutation,
     tryApplySingleDirectAggregateLiteralMutationFastPath,
     planExactLookupNumericColumnWrite,
     planApproximateLookupNumericColumnWrite,
@@ -320,13 +327,23 @@ export function createOperationSingleExistingLiteralFastPath(args: OperationSing
     if (hasDynamicFormulaDependents(existingIndex)) {
       return false
     }
+    const singleExistingCellDependent = args.getSingleEntityDependent(makeCellEntity(existingIndex))
     const oldNumber = directScalarCellNumericValue(existingIndex)
     const newNumber = directScalarLiteralNumericValue(mutation.value)
     if (oldNumber === undefined || newNumber === undefined) {
-      return false
+      return (
+        !hasAggregateDependents &&
+        !hasExactLookupDependents &&
+        !hasSortedLookupDependents &&
+        tryApplyFormulaLeafExistingLiteralMutation({
+          existingIndex,
+          formulaCellIndex: singleExistingCellDependent,
+          value: mutation.value,
+          hasTrackedEventListeners,
+        })
+      )
     }
 
-    const singleExistingCellDependent = args.getSingleEntityDependent(makeCellEntity(existingIndex))
     if (
       hasAggregateDependents &&
       !hasExactLookupDependents &&
