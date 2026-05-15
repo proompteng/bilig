@@ -39,24 +39,24 @@ describe('workbook range records', () => {
   })
 
   it('finds the most recently applied matching record', () => {
-    const record = findWorkbookRangeRecord<TestRangeRecord>(
-      [
-        {
-          range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'C3' },
-          id: 'style-a',
-        },
-        {
-          range: { sheetName: 'Sheet1', startAddress: 'B2', endAddress: 'C3' },
-          id: 'style-b',
-        },
-      ],
-      1,
-      1,
-    )
+    const records: TestRangeRecord[] = [
+      {
+        range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'C3' },
+        id: 'style-a',
+      },
+      {
+        range: { sheetName: 'Sheet1', startAddress: 'B2', endAddress: 'C3' },
+        id: 'style-b',
+      },
+    ]
+    const record = findWorkbookRangeRecord<TestRangeRecord>(records, 1, 1)
 
     expect(record).toEqual({
       range: { sheetName: 'Sheet1', startAddress: 'B2', endAddress: 'C3' },
       id: 'style-b',
     })
+    expect(findWorkbookRangeRecord<TestRangeRecord>(records, 0, 0)?.id).toBe('style-a')
+    expect(records[0]?.range).not.toHaveProperty('startRow')
+    expect(records[1]?.range).not.toHaveProperty('endCol')
   })
 })

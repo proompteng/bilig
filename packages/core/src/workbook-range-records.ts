@@ -12,6 +12,12 @@ export type NormalizedWorkbookRangeRef = CellRangeRef & {
   endCol: number
 }
 
+type NormalizedWorkbookRangeRecord = NormalizedWorkbookRangeRef & {
+  recordIndex: number
+}
+
+const normalizedRecordsByRangeArray = new WeakMap<readonly WorkbookRangeRecord[], readonly NormalizedWorkbookRangeRecord[]>()
+
 export function cloneWorkbookRangeRecords<RecordType extends WorkbookRangeRecord>(
   records: readonly RecordType[],
   cloneRecord: (range: CellRangeRef, record: RecordType) => RecordType,
@@ -49,18 +55,27 @@ export function findWorkbookRangeRecord<RecordType extends WorkbookRangeRecord>(
   row: number,
   col: number,
 ): RecordType | undefined {
-  for (let index = records.length - 1; index >= 0; index -= 1) {
-    const record = records[index]!
-    if (workbookRangeContainsCell(record.range, row, col)) {
-      return record
+  const normalizedRecords = getNormalizedWorkbookRangeRecords(records)
+  for (let index = normalizedRecords.length - 1; index >= 0; index -= 1) {
+    const normalized = normalizedRecords[index]!
+    if (normalized.startRow <= row && normalized.endRow >= row && normalized.startCol <= col && normalized.endCol >= col) {
+      return records[normalized.recordIndex]!
     }
   }
   return undefined
 }
 
-function workbookRangeContainsCell(range: CellRangeRef, row: number, col: number): boolean {
-  const { startRow, endRow, startCol, endCol } = normalizeWorkbookRangeRef(range)
-  return row >= startRow && row <= endRow && col >= startCol && col <= endCol
+function getNormalizedWorkbookRangeRecords(records: readonly WorkbookRangeRecord[]): readonly NormalizedWorkbookRangeRecord[] {
+  const cached = normalizedRecordsByRangeArray.get(records)
+  if (cached && cached.length === records.length) {
+    return cached
+  }
+  const normalizedRecords = records.map((record, recordIndex) => ({
+    ...normalizeWorkbookRangeRef(record.range),
+    recordIndex,
+  }))
+  normalizedRecordsByRangeArray.set(records, normalizedRecords)
+  return normalizedRecords
 }
 
 function normalizeWorkbookRangeRef(range: CellRangeRef): NormalizedWorkbookRangeRef {
