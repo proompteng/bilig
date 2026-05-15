@@ -7,26 +7,25 @@
 [![MCP server score](https://glama.ai/mcp/servers/proompteng/bilig/badges/score.svg)](https://glama.ai/mcp/servers/proompteng/bilig)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-<p align="center">
-  <img src="docs/assets/bilig-hero-workbook-api.png" alt="bilig workbook grid showing an edited input cell and recalculated formula result" />
-</p>
+**Formulas for TypeScript services.**
 
-**bilig gives TypeScript code a workbook it can edit, calculate, and save.**
+Use [`@bilig/headless`](https://www.npmjs.com/package/@bilig/headless) when a
+calculation is easiest to review as cells and formulas, but it has to run in a
+Node service, queue worker, serverless route, test, or coding-agent tool.
 
-Use it when the clearest model is still a spreadsheet, but the runtime is a
-Node service, queue worker, serverless route, test, or coding-agent tool. The
-main package is [`@bilig/headless`](https://www.npmjs.com/package/@bilig/headless):
-it gives you a `WorkPaper` object, not a browser grid.
+It gives you a `WorkPaper`: build sheets, write inputs, recalculate, read the
+cell value, and save the workbook as JSON. No browser grid is involved.
 
-The loop is small: create sheets, write cells, recalculate formulas, read the
-value that came out, and persist the workbook as JSON. That is useful for
-pricing rules, budget checks, payout models, import validation, and agent tools
-that need real readback after an edit.
-
-It is not trying to replace Excel's UI. It is the headless runtime you put
-behind product code when formulas are the clearest way to explain the logic.
+Good fits: pricing rules, budget checks, payout models, import validation, and
+agent tools that need read-after-write proof. Bad fits: manual spreadsheet
+editing, Office macros, desktop Excel automation, or one-off arithmetic where a
+workbook would be ceremony.
 
 Project site: <https://proompteng.github.io/bilig/>
+
+<p align="center">
+  <img src="docs/assets/github-social-preview.png" alt="bilig headless workbook runtime for formulas in TypeScript" />
+</p>
 
 ## Try It In 90 Seconds
 

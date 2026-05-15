@@ -7,22 +7,21 @@
 [![MCP server score](https://glama.ai/mcp/servers/proompteng/bilig/badges/score.svg)](https://glama.ai/mcp/servers/proompteng/bilig)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/proompteng/bilig/blob/main/LICENSE)
 
-`@bilig/headless` gives Node.js code a workbook it can edit, calculate, and
-save.
+`@bilig/headless` is a workbook runtime for Node.js services and agent tools.
 
-Use it when the clearest model is still sheets, cells, and formulas, but the
-runtime is a service, queue worker, serverless route, test, or agent tool.
-Your code owns a `WorkPaper`: build sheets, write inputs, recalculate formulas,
-read the value that came out, and persist the same workbook model as JSON.
+Use it when the calculation is easiest to understand as sheets, cells, and
+formulas, but the execution belongs in TypeScript. Your code owns a
+`WorkPaper`: build sheets, write inputs, recalculate formulas, read the cell
+value, and save the workbook as JSON.
 
-For product teams, that keeps spreadsheet-shaped business logic reviewable
-without shipping a spreadsheet UI. For coding agents, it gives the model narrow
-tools such as `readRange` and `setInputCell` instead of asking it to infer state
-from screenshots.
+Product code gets reviewable workbook-shaped logic without shipping a
+spreadsheet UI. Coding agents get narrow tools such as `readRange` and
+`setInputCell` instead of guessing state from screenshots.
 
-This package is not a browser grid or desktop Excel automation. XLSX
-import/export is available from the `@bilig/headless/xlsx` subpath for Node.js
-services that need real workbook ingestion around the same WorkPaper model.
+This package is not a browser grid, desktop Excel automation, or a source of
+truth for stale XLSX cached formula values. XLSX import/export is available from
+the `@bilig/headless/xlsx` subpath for services that need workbook ingestion
+around the same WorkPaper model.
 
 ## Install
 
