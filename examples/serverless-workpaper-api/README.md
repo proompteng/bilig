@@ -16,6 +16,7 @@ npm run test
 npm run next-route-handler
 npm run next-server-action
 npm run next-server-action-formdata
+npm run next-server-action-validation
 npm run framework-adapters
 npm run persistence-adapters
 ```
@@ -298,6 +299,50 @@ Expected output:
     "totalRevenue": 48600,
     "westCustomers": 20
   },
+  "verified": true
+}
+```
+
+## Next.js Server Action Validation Smoke
+
+Run the validation-error Server Action smoke when a form action should reject
+bad input before mutating WorkPaper state:
+
+```sh
+npm run next-server-action-validation
+```
+
+The script submits a FormData payload with a negative `customers` value through
+the same Server Action parser used by the FormData smoke. It catches the
+validation error, reads the summary again, and prints `unchanged: true` only
+when the workbook summary is identical before and after the rejected action.
+
+Expected output:
+
+```json
+{
+  "action": "Next.js Server Action FormData validation",
+  "rejectedInput": {
+    "fields": ["region", "customers", "arpa"],
+    "records": 1,
+    "shape": {
+      "region": ["West"],
+      "customers": ["-1"],
+      "arpa": ["1200"]
+    }
+  },
+  "validationError": "record 1 customers must be a non-negative number",
+  "summaryBefore": {
+    "largestDeal": 24000,
+    "totalRevenue": 36900,
+    "westCustomers": 20
+  },
+  "summaryAfter": {
+    "largestDeal": 24000,
+    "totalRevenue": 36900,
+    "westCustomers": 20
+  },
+  "unchanged": true,
   "verified": true
 }
 ```
