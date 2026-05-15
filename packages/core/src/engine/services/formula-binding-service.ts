@@ -58,12 +58,14 @@ import { installFreshFormulaBindingNow } from './formula-binding-install.js'
 import { createFormulaBindingSheetRenameHandler } from './formula-binding-sheet-rename.js'
 import { createFormulaBindingRebinds } from './formula-binding-rebind.js'
 import { rebuildDeferredFormulaFamilyIndex } from './formula-family-index-rebuild.js'
-import { materializeDeferredFormulaFamilyRunMembers, type DeferredInitialFormulaFamilyRun } from './formula-initialization-family-runs.js'
+import type { DeferredInitialFormulaFamilyRun } from './formula-initialization-family-runs.js'
 import { canRetainUnmanagedCompiledPlan, formulaBindingErrorMessage, makeUnmanagedCompiledPlan } from './formula-binding-plan-helpers.js'
 import { normalizeFormulaBindingLookupCompileMode } from './formula-binding-lookup-mode.js'
 import { primeFormulaBindingLookupCandidates } from './formula-binding-lookup-primer.js'
 import { directAggregateContainsFormulaOwnerCell } from './formula-binding-direct-aggregate-owner.js'
 import { ensureFormulaBindingDependencyBuildCapacity } from './formula-binding-dependency-build-capacity.js'
+import { registerDeferredFormulaFamilyIndexRunsNow } from './formula-binding-deferred-family-runs.js'
+import { updateVolatileFormulaIndexEntry } from './formula-binding-volatile-index.js'
 import type {
   BindPreparedFormulaOptions,
   CreateEngineFormulaBindingServiceArgs,
@@ -108,42 +110,16 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
     formulaFamilyIndexNeedsRebuild = false
   }
 
-  const registerDeferredFormulaFamilyIndexRunsNow = (runs: readonly DeferredInitialFormulaFamilyRun[]): void => {
-    args.formulaFamilies.clear()
-    formulaFamilyShapeKeyCache.clear()
-    runs.forEach((run) => {
-      const step = run.cellIndices.length <= 1 ? 1 : run.step
-      if (
-        run.ordered &&
-        step > 0 &&
-        args.formulaFamilies.registerFreshUniformRun({
-          sheetId: run.sheetId,
-          templateId: run.templateId,
-          shapeKey: run.shapeKey,
-          axis: run.axis,
-          fixedIndex: run.fixedIndex,
-          start: run.start,
-          step,
-          cellIndices: run.cellIndices,
-        })
-      ) {
-        return
-      }
-      args.formulaFamilies.registerFormulaRun({
-        sheetId: run.sheetId,
-        templateId: run.templateId,
-        shapeKey: run.shapeKey,
-        members: materializeDeferredFormulaFamilyRunMembers(run),
-      })
-    })
-  }
-
   const ensureFormulaFamilyIndexNow = (): void => {
     if (!formulaFamilyIndexNeedsRebuild) {
       return
     }
     if (deferredFormulaFamilyIndexRuns) {
-      registerDeferredFormulaFamilyIndexRunsNow(deferredFormulaFamilyIndexRuns)
+      registerDeferredFormulaFamilyIndexRunsNow({
+        formulaFamilies: args.formulaFamilies,
+        formulaFamilyShapeKeyCache,
+        runs: deferredFormulaFamilyIndexRuns,
+      })
       deferredFormulaFamilyIndexRuns = undefined
     } else {
       rebuildDeferredFormulaFamilyIndex({
@@ -155,16 +131,8 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
     formulaFamilyIndexNeedsRebuild = false
   }
 
-  const updateVolatileFormulaIndex = (cellIndex: number, formula: RuntimeFormula | undefined): void => {
-    if (!args.volatileFormulaCells) {
-      return
-    }
-    if (formula?.compiled.volatile) {
-      args.volatileFormulaCells.add(cellIndex)
-      return
-    }
-    args.volatileFormulaCells.delete(cellIndex)
-  }
+  const updateVolatileFormulaIndex = (cellIndex: number, formula: RuntimeFormula | undefined): void =>
+    updateVolatileFormulaIndexEntry(args.volatileFormulaCells, cellIndex, formula)
 
   const trackFormulaSheetIndexes = (
     cellIndex: number,
