@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.14.25
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.14.24
+- Manual override: yes
+
+## Internal runtime changes
+- docs(readme): tighten headless positioning (09d12302)
+
 ## 0.14.24
 
 - Release type: patch
