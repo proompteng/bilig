@@ -492,6 +492,33 @@ export function buildDirectCriteriaDescriptor(args: {
     }
   }
 
+  const buildSimpleIndexMatchCriteriaDescriptor = (node: DirectCriteriaCallNode): RuntimeDirectCriteriaDescriptor | undefined => {
+    const aggregateRange = resolveDirectCriteriaRange(node.args[0], args.ownerSheetName)
+    const rowLookup = node.args[1]
+    const columnLookup = node.args[2]
+    if (
+      !aggregateRange ||
+      node.args.length < 2 ||
+      node.args.length > 3 ||
+      (columnLookup !== undefined && !isStaticNumber(columnLookup, 1)) ||
+      rowLookup?.kind !== 'CallExpr' ||
+      rowLookup.callee.trim().toUpperCase() !== 'MATCH' ||
+      rowLookup.args.length !== 3 ||
+      !isStaticNumber(rowLookup.args[2], 0)
+    ) {
+      return undefined
+    }
+    const criteriaPair = pair(rowLookup.args[1], rowLookup.args[0])
+    if (!criteriaPair || criteriaPair.range.length !== aggregateRange.length) {
+      return undefined
+    }
+    return {
+      aggregateKind: 'first',
+      aggregateRange: withRangeRegion(aggregateRange),
+      criteriaPairs: [criteriaPair],
+    }
+  }
+
   const buildDescriptorForNode = (node: FormulaNode): RuntimeDirectCriteriaDescriptor | undefined => {
     if (node.kind !== 'CallExpr') {
       return undefined
@@ -533,7 +560,7 @@ export function buildDirectCriteriaDescriptor(args: {
     }
 
     if (callee === 'INDEX') {
-      return buildIndexMatchCriteriaDescriptor(node)
+      return buildSimpleIndexMatchCriteriaDescriptor(node) ?? buildIndexMatchCriteriaDescriptor(node)
     }
 
     if (callee === 'COUNTIF') {

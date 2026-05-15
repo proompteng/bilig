@@ -1,0 +1,107 @@
+import { describe, expect, it } from 'vitest'
+import { ErrorCode, ValueTag } from '@bilig/protocol'
+
+import { WorkPaper, type WorkPaperCellAddress } from '../index.js'
+
+function cell(sheet: number, row: number, col: number): WorkPaperCellAddress {
+  return { sheet, row, col }
+}
+
+function cellChanges(changes: Array<{ kind: string; a1?: string }>): Set<string> {
+  return new Set(changes.flatMap((change) => (change.kind === 'cell' && change.a1 ? [change.a1] : [])))
+}
+
+describe('WorkPaper INDEX/MATCH direct path', () => {
+  it('updates exact INDEX/MATCH operands without rebinding dynamic range dependencies', () => {
+    const rowCount = 128
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Bench: [
+          ['Key', 'Value', '', 'key-2', `=INDEX(B2:B${rowCount + 1},MATCH(D1,A2:A${rowCount + 1},0))`],
+          ...Array.from({ length: rowCount }, (_, index) => [`key-${index + 1}`, (index + 1) * 10]),
+        ],
+      },
+      { useColumnIndex: true },
+    )
+    const sheetId = workbook.getSheetId('Bench')!
+
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Number, value: 20 })
+
+    workbook.resetPerformanceCounters()
+    const lookupChanges = workbook.setCellContents(cell(sheetId, 0, 3), 'key-99')
+
+    expect(cellChanges(lookupChanges)).toEqual(new Set(['D1', 'E1']))
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Number, value: 990 })
+    expect(workbook.getStats().lastMetrics).toMatchObject({
+      dirtyFormulaCount: 0,
+      jsFormulaCount: 0,
+      wasmFormulaCount: 0,
+    })
+    expect(workbook.getPerformanceCounters()).toMatchObject({
+      cycleFormulaScans: 0,
+      formulasBound: 0,
+      topoRepairs: 0,
+    })
+
+    workbook.resetPerformanceCounters()
+    const selectedValueChanges = workbook.setCellContents(cell(sheetId, 99, 1), 12_345)
+
+    expect(cellChanges(selectedValueChanges)).toEqual(new Set(['B100', 'E1']))
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Number, value: 12_345 })
+    expect(workbook.getPerformanceCounters()).toMatchObject({
+      formulasBound: 0,
+      topoRepairs: 0,
+    })
+  })
+
+  it('preserves first-match and missing-match INDEX/MATCH semantics on the direct path', () => {
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Bench: [
+          ['Key', 'Value', '', 'dup', '=INDEX(B2:B6,MATCH(D1,A2:A6,0))'],
+          ['alpha', 10],
+          ['dup', 20],
+          ['beta', 30],
+          ['dup', 40],
+          ['gamma', 50],
+        ],
+      },
+      { useColumnIndex: true },
+    )
+    const sheetId = workbook.getSheetId('Bench')!
+
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Number, value: 20 })
+
+    workbook.resetPerformanceCounters()
+    const firstMatchChanges = workbook.setCellContents(cell(sheetId, 2, 1), 2_000)
+
+    expect(cellChanges(firstMatchChanges)).toEqual(new Set(['B3', 'E1']))
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Number, value: 2_000 })
+    expect(workbook.getStats().lastMetrics).toMatchObject({
+      dirtyFormulaCount: 0,
+      jsFormulaCount: 0,
+      wasmFormulaCount: 0,
+    })
+
+    workbook.resetPerformanceCounters()
+    const laterDuplicateChanges = workbook.setCellContents(cell(sheetId, 4, 1), 4_000)
+
+    expect(cellChanges(laterDuplicateChanges)).toEqual(new Set(['B5', 'E1']))
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Number, value: 2_000 })
+    expect(workbook.getStats().lastMetrics).toMatchObject({
+      dirtyFormulaCount: 0,
+      jsFormulaCount: 0,
+      wasmFormulaCount: 0,
+    })
+
+    workbook.resetPerformanceCounters()
+    const missingLookupChanges = workbook.setCellContents(cell(sheetId, 0, 3), 'missing')
+
+    expect(cellChanges(missingLookupChanges)).toEqual(new Set(['D1', 'E1']))
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Error, code: ErrorCode.NA })
+    expect(workbook.getPerformanceCounters()).toMatchObject({
+      formulasBound: 0,
+      topoRepairs: 0,
+    })
+  })
+})
