@@ -1,6 +1,6 @@
 {
   "name": "@bilig/headless",
-  "version": "0.14.18",
+  "version": "0.14.19",
   "description": "Headless spreadsheet engine for Node.js formulas, XLSX import/export, agent tools, workbook JSON persistence, and service-side spreadsheet automation.",
   "keywords": [
     "agent",
