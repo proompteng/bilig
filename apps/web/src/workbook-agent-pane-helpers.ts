@@ -1,7 +1,37 @@
 import type { WorkbookAgentUiContext } from '@bilig/contracts'
+import { ValueTag } from '@bilig/protocol'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+type RenderedContext = NonNullable<WorkbookAgentUiContext['rendered']>
+type RenderedRange = RenderedContext['visibleRange']
+
+function normalizeRenderedValueForContextSyncKey(value: unknown): unknown {
+  if (!isRecord(value) || value['tag'] !== ValueTag.String) {
+    return value
+  }
+  return {
+    tag: value['tag'],
+    value: value['value'],
+    stringId: 0,
+  }
+}
+
+function normalizeRenderedRangeForContextSyncKey(range: RenderedRange): RenderedRange {
+  if (range === null) {
+    return null
+  }
+  return {
+    ...range,
+    rows: range.rows.map((row) =>
+      row.map((cell) => ({
+        ...cell,
+        value: normalizeRenderedValueForContextSyncKey(cell.value),
+      })),
+    ),
+  }
 }
 
 export function readMessageEventData(event: Event): string | null {
@@ -27,8 +57,8 @@ export function stringifyWorkbookAgentContextSyncKey(context: WorkbookAgentUiCon
         ? null
         : {
             capturedRevision: rendered.capturedRevision ?? null,
-            selection: rendered.selection,
-            visibleRange: rendered.visibleRange,
+            selection: normalizeRenderedRangeForContextSyncKey(rendered.selection),
+            visibleRange: normalizeRenderedRangeForContextSyncKey(rendered.visibleRange),
           },
   })
 }

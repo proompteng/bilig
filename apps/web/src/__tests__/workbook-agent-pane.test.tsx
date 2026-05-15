@@ -594,6 +594,76 @@ function RapidRenderedRangeContextHarness() {
   )
 }
 
+function VolatileRenderedStringIdContextHarness() {
+  const [stringId, setStringId] = useState(1)
+  const previewCommandBundle = useCallback(async () => createPreviewSummary(), [])
+  const getContext = useCallback(
+    () => ({
+      ...createDefaultWorkflowContext(),
+      rendered: {
+        capturedAtUnixMs: Date.now(),
+        capturedRevision: 7,
+        batchId: 11,
+        selection: null,
+        visibleRange: {
+          range: {
+            sheetName: 'Sheet1',
+            startAddress: 'A1',
+            endAddress: 'A1',
+          },
+          rowCount: 1,
+          columnCount: 1,
+          cellCount: 1,
+          truncated: false,
+          rows: [
+            [
+              {
+                address: 'A1',
+                input: 'same visible value',
+                value: {
+                  tag: ValueTag.String,
+                  value: 'same visible value',
+                  stringId,
+                },
+                formula: null,
+                displayFormat: null,
+                styleId: null,
+                numberFormatId: null,
+                style: null,
+              },
+            ],
+          ],
+        },
+      },
+    }),
+    [stringId],
+  )
+
+  const { agentPanel } = useWorkbookAgentPane({
+    currentUserId: 'alex@example.com',
+    documentId: 'doc-1',
+    enabled: true,
+    getContext,
+    activeContextLabel: 'Sheet1!A1',
+    previewCommandBundle,
+  })
+
+  return (
+    <div>
+      <button
+        data-testid="advance-string-id"
+        type="button"
+        onClick={() => {
+          setStringId((current) => current + 1)
+        }}
+      >
+        {stringId}
+      </button>
+      {agentPanel}
+    </div>
+  )
+}
+
 beforeEach(() => {
   vi.stubGlobal('EventSource', MockEventSource)
   window.sessionStorage.clear()
@@ -2850,6 +2920,79 @@ describe('workbook agent pane', () => {
           },
         },
       })
+    } finally {
+      await act(async () => {
+        root.unmount()
+      })
+    }
+  })
+
+  it('does not resync workbook context only because rendered string intern ids change', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    window.sessionStorage.setItem(
+      'bilig:workbook-agent:doc-1',
+      JSON.stringify({
+        threadId: 'thr-1',
+      }),
+    )
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      if (url.endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET') {
+        return new Response(JSON.stringify(createSnapshot({ threadId: 'thr-1' })), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (url.endsWith('/chat/threads/thr-1/context') && requestMethod(init) === 'POST') {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      throw new Error(`Unexpected fetch to ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const contextCalls = () =>
+      fetchSpy.mock.calls.filter(
+        ([input, init]) => requestUrl(input).endsWith('/chat/threads/thr-1/context') && requestMethod(init) === 'POST',
+      )
+
+    try {
+      await act(async () => {
+        root.render(<VolatileRenderedStringIdContextHarness />)
+      })
+
+      await act(async () => {
+        await Promise.resolve()
+        await new Promise((resolve) => setTimeout(resolve, 220))
+      })
+
+      expect(contextCalls()).toHaveLength(1)
+
+      const advanceStringId = async () => {
+        await act(async () => {
+          host.querySelector("[data-testid='advance-string-id']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+        })
+        await act(async () => {
+          await Promise.resolve()
+          await new Promise((resolve) => setTimeout(resolve, 220))
+        })
+      }
+
+      await advanceStringId()
+      await advanceStringId()
+      await advanceStringId()
+
+      await act(async () => {
+        await Promise.resolve()
+        await new Promise((resolve) => setTimeout(resolve, 900))
+      })
+
+      expect(contextCalls()).toHaveLength(1)
     } finally {
       await act(async () => {
         root.unmount()
