@@ -547,6 +547,11 @@ jobs:
             exit 0
           fi
 
+          # The release metadata commit runs repository git hooks. Type-aware lint
+          # resolves @bilig/protocol through package exports, so a clean runner
+          # needs protocol dist built after the version sync and before pushing.
+          pnpm --filter @bilig/protocol build
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "${release_paths[@]}"
