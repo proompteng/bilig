@@ -4,6 +4,32 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.14.20
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.14.14
+- Manual override: no
+
+## Fixes
+- fix(headless): resolve real workbook import regressions (5ca9d46a)
+- fix(ci): keep workbook worker release budget green (9f2dbfe5)
+- fix(headless): restore dynamic spills from documents (2c57d688)
+- perf(workbook): harden headless engine leadership gates (b0e399e9)
+- fix(core): support literal leaf formula fast path (ebc51a7d)
+- fix(ci): build protocol before release metadata push (1694f56f)
+- fix(ci): tolerate mirrored github release push (ae7bcdce)
+- fix(workbook): stabilize grid editing (a561edf4)
+- fix(headless): bulk restore imported axis metadata (255f1a4a)
+
+## Internal runtime changes
+- chore(release): align runtime package versions (08e090c1)
+- refactor(headless): split corpus verification helpers (0ffadc1b)
+- chore(release): runtime packages v0.14.15 (073d1933)
+- chore(release): runtime packages v0.14.16 (fa683aaa)
+- chore(release): runtime packages v0.14.17 (1625a1e8)
+- chore(release): runtime packages v0.14.18 (b7e712fd)
+- chore(release): runtime packages v0.14.19 (f8805b43)
+
 ## 0.14.19
 
 - Release type: patch
