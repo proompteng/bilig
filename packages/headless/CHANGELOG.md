@@ -11,6 +11,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: yes
 
 ## Internal runtime changes
+
 - docs(readme): tighten headless positioning (09d12302)
 
 ## 0.14.24
@@ -20,9 +21,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(headless): fast path exact index match (7ea2aaf1)
 
 ## Internal runtime changes
+
 - docs(site): rebuild landing hero (9ccc2f13)
 - test(bench): broaden headless competitive workloads (a9b3d5d8)
 

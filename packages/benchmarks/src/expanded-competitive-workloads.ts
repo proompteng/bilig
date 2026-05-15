@@ -6,6 +6,7 @@ export type ExpandedComparativeBenchmarkWorkload =
   | 'build-parser-cache-mixed-templates'
   | 'build-parser-cache-unique-formulas'
   | 'build-many-sheets'
+  | 'build-cross-sheet-dashboard'
   | 'rebuild-and-recalculate'
   | 'rebuild-config-toggle'
   | 'rebuild-config-toggle-large'
@@ -14,6 +15,7 @@ export type ExpandedComparativeBenchmarkWorkload =
   | 'named-expression-change'
   | 'cross-sheet-scalar-recalc'
   | 'cross-sheet-aggregate-recalc'
+  | 'cross-sheet-dashboard-recalc'
   | 'single-edit-recalc'
   | 'single-edit-chain'
   | 'single-edit-fanout'
@@ -23,10 +25,12 @@ export type ExpandedComparativeBenchmarkWorkload =
   | 'batch-edit-single-column'
   | 'batch-edit-multi-column'
   | 'batch-edit-rectangular-block'
+  | 'batch-clear-rectangular-block'
   | 'batch-edit-single-column-with-undo'
   | 'batch-suspended-single-column'
   | 'batch-suspended-multi-column'
   | 'structural-insert-rows'
+  | 'structural-append-formula-rows'
   | 'structural-delete-rows'
   | 'structural-move-rows'
   | 'structural-insert-columns'
@@ -35,6 +39,7 @@ export type ExpandedComparativeBenchmarkWorkload =
   | 'range-read'
   | 'range-read-dense'
   | 'range-read-sparse-wide'
+  | 'range-read-formula-grid'
   | 'aggregate-2d-ranges'
   | 'aggregate-overlapping-ranges'
   | 'aggregate-overlapping-sliding-window'
@@ -66,6 +71,7 @@ export const EXPANDED_COMPARATIVE_WORKLOADS = [
   'build-parser-cache-mixed-templates',
   'build-parser-cache-unique-formulas',
   'build-many-sheets',
+  'build-cross-sheet-dashboard',
   'rebuild-and-recalculate',
   'rebuild-config-toggle',
   'rebuild-config-toggle-large',
@@ -74,6 +80,7 @@ export const EXPANDED_COMPARATIVE_WORKLOADS = [
   'named-expression-change',
   'cross-sheet-scalar-recalc',
   'cross-sheet-aggregate-recalc',
+  'cross-sheet-dashboard-recalc',
   'single-edit-recalc',
   'single-edit-chain',
   'single-edit-fanout',
@@ -83,10 +90,12 @@ export const EXPANDED_COMPARATIVE_WORKLOADS = [
   'batch-edit-single-column',
   'batch-edit-multi-column',
   'batch-edit-rectangular-block',
+  'batch-clear-rectangular-block',
   'batch-edit-single-column-with-undo',
   'batch-suspended-single-column',
   'batch-suspended-multi-column',
   'structural-insert-rows',
+  'structural-append-formula-rows',
   'structural-delete-rows',
   'structural-move-rows',
   'structural-insert-columns',
@@ -95,6 +104,7 @@ export const EXPANDED_COMPARATIVE_WORKLOADS = [
   'range-read',
   'range-read-dense',
   'range-read-sparse-wide',
+  'range-read-formula-grid',
   'aggregate-2d-ranges',
   'aggregate-overlapping-ranges',
   'aggregate-overlapping-sliding-window',
@@ -129,6 +139,7 @@ export const EXPANDED_COMPARATIVE_WORKLOAD_SCORECARD_LANE = {
   'build-parser-cache-mixed-templates': 'public',
   'build-parser-cache-unique-formulas': 'holdout',
   'build-many-sheets': 'public',
+  'build-cross-sheet-dashboard': 'holdout',
   'rebuild-and-recalculate': 'public',
   'rebuild-config-toggle': 'public',
   'rebuild-config-toggle-large': 'public',
@@ -137,6 +148,7 @@ export const EXPANDED_COMPARATIVE_WORKLOAD_SCORECARD_LANE = {
   'named-expression-change': 'holdout',
   'cross-sheet-scalar-recalc': 'public',
   'cross-sheet-aggregate-recalc': 'holdout',
+  'cross-sheet-dashboard-recalc': 'holdout',
   'single-edit-recalc': 'public',
   'single-edit-chain': 'public',
   'single-edit-fanout': 'public',
@@ -146,10 +158,12 @@ export const EXPANDED_COMPARATIVE_WORKLOAD_SCORECARD_LANE = {
   'batch-edit-single-column': 'public',
   'batch-edit-multi-column': 'public',
   'batch-edit-rectangular-block': 'holdout',
+  'batch-clear-rectangular-block': 'holdout',
   'batch-edit-single-column-with-undo': 'public',
   'batch-suspended-single-column': 'public',
   'batch-suspended-multi-column': 'public',
   'structural-insert-rows': 'public',
+  'structural-append-formula-rows': 'holdout',
   'structural-delete-rows': 'public',
   'structural-move-rows': 'public',
   'structural-insert-columns': 'public',
@@ -158,6 +172,7 @@ export const EXPANDED_COMPARATIVE_WORKLOAD_SCORECARD_LANE = {
   'range-read': 'public',
   'range-read-dense': 'public',
   'range-read-sparse-wide': 'holdout',
+  'range-read-formula-grid': 'holdout',
   'aggregate-2d-ranges': 'holdout',
   'aggregate-overlapping-ranges': 'public',
   'aggregate-overlapping-sliding-window': 'public',

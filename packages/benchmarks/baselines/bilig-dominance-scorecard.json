@@ -79,20 +79,14 @@
     "workloadSpecificTenXWins": [
       {
         "workload": "rebuild-config-toggle",
-        "meanRatio": 0.0053779357430669035,
-        "p95Ratio": 0.005642995929705832,
+        "meanRatio": 0.006013279279530739,
+        "p95Ratio": 0.00841966779749615,
         "comparisonTarget": "HyperFormula"
       },
       {
         "workload": "rebuild-config-toggle-large",
-        "meanRatio": 0.0016235685804600814,
-        "p95Ratio": 0.001956993248064977,
-        "comparisonTarget": "HyperFormula"
-      },
-      {
-        "workload": "structural-move-columns",
-        "meanRatio": 0.09519390906568492,
-        "p95Ratio": 0.09799307100826606,
+        "meanRatio": 0.0012103439201717715,
+        "p95Ratio": 0.0011879145673375253,
         "comparisonTarget": "HyperFormula"
       }
     ]
@@ -233,7 +227,7 @@
     "securityPostureScorecard": "packages/benchmarks/baselines/security-posture-scorecard.json",
     "workpaperCompetitiveBenchmark": {
       "path": "packages/benchmarks/baselines/workpaper-vs-hyperformula.json",
-      "generatedAt": "2026-05-15T04:12:59.633Z",
+      "generatedAt": "2026-05-15T04:50:54.698Z",
       "hyperFormulaVersion": "3.2.0",
       "hyperFormulaCommit": "9a510a2acb97c3d3490f9e3b9e961a1c4a98b9ad"
     }
@@ -459,12 +453,12 @@
     ],
     "securityPosturePassed": true,
     "securityUncoveredControls": [],
-    "hyperFormulaComparableWorkloads": 52,
-    "hyperFormulaMeanGeomeanRatio": 0.6932039785913319,
-    "hyperFormulaP95GeomeanRatio": 0.6813733746297745,
-    "hyperFormulaWins": 11,
-    "tenXMeanAndP95WorkloadCountAgainstHyperFormula": 3,
-    "workpaperWins": 41
+    "hyperFormulaComparableWorkloads": 57,
+    "hyperFormulaMeanGeomeanRatio": 0.8311872424646048,
+    "hyperFormulaP95GeomeanRatio": 0.8420979778877948,
+    "hyperFormulaWins": 18,
+    "tenXMeanAndP95WorkloadCountAgainstHyperFormula": 2,
+    "workpaperWins": 39
   },
   "categories": [
     {
@@ -508,10 +502,10 @@
       "target": "10x mean and p95 wins on named recalculation workloads against each comparison target.",
       "status": "repo-proved-lead",
       "currentEvidence": [
-        "dirty-execution: WorkPaper 3/5, HyperFormula 2/5; worst mean ratio 1.9837712057000922 on single-formula-edit-recalc; worst p95 ratio 1.9650787072146731 on single-formula-edit-recalc",
-        "batch-edit: WorkPaper 5/7, HyperFormula 2/7; worst mean ratio 3.4570106786137815 on batch-edit-rectangular-block; worst p95 ratio 3.264901992901549 on batch-edit-rectangular-block",
-        "rebuild: WorkPaper 1/1, HyperFormula 0/1; worst mean ratio 0.24216698589867267 on rebuild-and-recalculate; worst p95 ratio 0.24221347085136388 on rebuild-and-recalculate",
-        "HyperFormula proxy scorecard is tracked separately: 41/52 WorkPaper wins",
+        "dirty-execution: WorkPaper 2/5, HyperFormula 3/5; worst mean ratio 1.8900792045015353 on single-formula-edit-recalc; worst p95 ratio 1.6165061117891986 on single-formula-edit-recalc",
+        "batch-edit: WorkPaper 6/8, HyperFormula 2/8; worst mean ratio 3.7235301869147657 on batch-edit-rectangular-block; worst p95 ratio 3.4689501500901976 on batch-edit-rectangular-block",
+        "rebuild: WorkPaper 1/1, HyperFormula 0/1; worst mean ratio 0.33599594542437466 on rebuild-and-recalculate; worst p95 ratio 0.5109105763977861 on rebuild-and-recalculate",
+        "HyperFormula proxy scorecard is tracked separately: 39/57 WorkPaper wins",
         "live Microsoft Excel recalculation scorecard passes 4/4 required cases on Excel 16.108.2",
         "live Microsoft Excel recalculation workloads with 10x mean+p95 wins: 4/4",
         "live Google Sheets recalculation scorecard passes 4/4 required cases via native Google Sheets conversion",
@@ -537,8 +531,8 @@
       "target": "10x mean and p95 wins for insert/delete/move rows and columns at workbook scale.",
       "status": "repo-proved-lead",
       "currentEvidence": [
-        "structural-rows: WorkPaper 3/3, HyperFormula 0/3; worst mean ratio 0.7971304060958854 on structural-delete-rows; worst p95 ratio 0.6758612538527379 on structural-delete-rows",
-        "structural-columns: WorkPaper 2/3, HyperFormula 1/3; worst mean ratio 1.5155746170151627 on structural-insert-columns; worst p95 ratio 1.7906611456295902 on structural-insert-columns",
+        "structural-rows: WorkPaper 3/4, HyperFormula 1/4; worst mean ratio 8.68972004624074 on structural-append-formula-rows; worst p95 ratio 7.898149017335088 on structural-append-formula-rows",
+        "structural-columns: WorkPaper 2/3, HyperFormula 1/3; worst mean ratio 1.7449901237440846 on structural-insert-columns; worst p95 ratio 1.8417342935224905 on structural-insert-columns",
         "live Microsoft Excel structural scorecard passes 6/6 required cases on Excel 16.108.2",
         "live Microsoft Excel structural operations with 10x mean+p95 wins: 6/6",
         "live Google Sheets structural scorecard passes 6/6 required cases via native Google Sheets conversion",
@@ -565,7 +559,7 @@
       "currentEvidence": [
         "local-first worker architecture and OPFS/SQLite model are documented",
         "range-read and build families have HyperFormula comparison evidence",
-        "range-read: WorkPaper 3/3, HyperFormula 0/3; worst mean ratio 0.26956103437717216 on range-read; worst p95 ratio 0.2681852836227751 on range-read",
+        "range-read: WorkPaper 4/4, HyperFormula 0/4; worst mean ratio 0.4640598568161105 on range-read-formula-grid; worst p95 ratio 0.575231486451154 on range-read-formula-grid",
         "large-workbook SLO artifact covers 100000, 250000 materialized-cell sessions",
         "load100k: elapsedMs.p95 160.93233300000003ms against 1500ms SLO (5 samples)",
         "load250k: elapsedMs.p95 446.558541ms against 1500ms SLO (3 samples)",

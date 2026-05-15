@@ -105,15 +105,25 @@ import {
 } from './benchmark-workpaper-vs-hyperformula-expanded-additional-workloads.js'
 import {
   measureHyperFormulaCrossSheetAggregateSample,
+  measureHyperFormulaCrossSheetDashboardBuildSample,
+  measureHyperFormulaCrossSheetDashboardRecalcSample,
   measureHyperFormulaCrossSheetScalarFanoutSample,
   measureHyperFormulaIndexMatchExactSample,
   measureHyperFormulaIndexReferenceSample,
+  measureHyperFormulaAppendFormulaRowsSample,
+  measureHyperFormulaBatchClearRectangularBlockSample,
+  measureHyperFormulaFormulaGridRangeReadSample,
   measureHyperFormulaRectangularBatchEditSample,
   measureHyperFormulaSparseWideRangeReadSample,
   measureWorkPaperCrossSheetAggregateSample,
+  measureWorkPaperCrossSheetDashboardBuildSample,
+  measureWorkPaperCrossSheetDashboardRecalcSample,
   measureWorkPaperCrossSheetScalarFanoutSample,
   measureWorkPaperIndexMatchExactSample,
   measureWorkPaperIndexReferenceSample,
+  measureWorkPaperAppendFormulaRowsSample,
+  measureWorkPaperBatchClearRectangularBlockSample,
+  measureWorkPaperFormulaGridRangeReadSample,
   measureWorkPaperRectangularBatchEditSample,
   measureWorkPaperSparseWideRangeReadSample,
 } from './benchmark-workpaper-vs-hyperformula-expanded-workbook-shape-workloads.js'
@@ -240,6 +250,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       () => measureHyperFormulaManySheetsBuildSample(8, 120, 12),
     ),
     runComparableScenario(
+      'build-cross-sheet-dashboard',
+      { sheetCount: 4, rowsPerSheet: 500, summaryFormulas: 12 },
+      runtimeOptions,
+      () => measureWorkPaperCrossSheetDashboardBuildSample(4, 500),
+      () => measureHyperFormulaCrossSheetDashboardBuildSample(4, 500),
+    ),
+    runComparableScenario(
       'rebuild-and-recalculate',
       { cols: 6, rows: 1_500 },
       runtimeOptions,
@@ -294,6 +311,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       runtimeOptions,
       () => measureWorkPaperCrossSheetAggregateSample(1_500),
       () => measureHyperFormulaCrossSheetAggregateSample(1_500),
+    ),
+    runComparableScenario(
+      'cross-sheet-dashboard-recalc',
+      { sheetCount: 4, rowsPerSheet: 1_000, summaryFormulas: 12, mutation: 'Data1!B1' },
+      runtimeOptions,
+      () => measureWorkPaperCrossSheetDashboardRecalcSample(4, 1_000),
+      () => measureHyperFormulaCrossSheetDashboardRecalcSample(4, 1_000),
     ),
     runComparableScenario(
       'single-edit-recalc',
@@ -359,6 +383,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       () => measureHyperFormulaRectangularBatchEditSample(64, 12),
     ),
     runComparableScenario(
+      'batch-clear-rectangular-block',
+      { rowCount: 64, inputCols: 12, editCount: 64 * 12 },
+      runtimeOptions,
+      () => measureWorkPaperBatchClearRectangularBlockSample(64, 12),
+      () => measureHyperFormulaBatchClearRectangularBlockSample(64, 12),
+    ),
+    runComparableScenario(
       'batch-edit-single-column-with-undo',
       { editCount: 500, includesUndo: true },
       runtimeOptions,
@@ -385,6 +416,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       runtimeOptions,
       () => measureWorkPaperStructuralInsertRowsSample(1_500),
       () => measureHyperFormulaStructuralInsertRowsSample(1_500),
+    ),
+    runComparableScenario(
+      'structural-append-formula-rows',
+      { rowCount: 750, appendCount: 250, inputCols: 6 },
+      runtimeOptions,
+      () => measureWorkPaperAppendFormulaRowsSample(750, 6, 250),
+      () => measureHyperFormulaAppendFormulaRowsSample(750, 6, 250),
     ),
     runComparableScenario(
       'structural-delete-rows',
@@ -441,6 +479,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       runtimeOptions,
       () => measureWorkPaperSparseWideRangeReadSample(128, 96),
       () => measureHyperFormulaSparseWideRangeReadSample(128, 96),
+    ),
+    runComparableScenario(
+      'range-read-formula-grid',
+      { rows: 256, inputCols: 4, formulaCols: 8, requestedCells: 256 * 8 },
+      runtimeOptions,
+      () => measureWorkPaperFormulaGridRangeReadSample(256, 4, 8),
+      () => measureHyperFormulaFormulaGridRangeReadSample(256, 4, 8),
     ),
     runComparableScenario(
       'aggregate-2d-ranges',

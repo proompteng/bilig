@@ -192,17 +192,74 @@ export function buildCrossSheetAggregateSheets(rowCount: number): Record<string,
   }
 }
 
-export function buildRectangularBlockFormulaSheet(rowCount: number, inputCols: number): WorkPaperSheet {
+export function buildCrossSheetDashboardSheets(sheetCount: number, rowCount: number): Record<string, WorkPaperSheet> {
+  if (sheetCount <= 0) {
+    throw new Error('cross-sheet dashboard benchmark requires at least one source sheet')
+  }
+  if (rowCount <= 0) {
+    throw new Error('cross-sheet dashboard benchmark requires at least one source row')
+  }
+  const sheets: Record<string, WorkPaperSheet> = {}
+  for (let sheetIndex = 0; sheetIndex < sheetCount; sheetIndex += 1) {
+    const sheetNumber = sheetIndex + 1
+    sheets[`Data${sheetNumber}`] = Array.from({ length: rowCount }, (_, rowIndex) => {
+      const rowNumber = rowIndex + 1
+      return [rowNumber, sheetNumber * rowNumber]
+    })
+  }
+  sheets['Summary'] = Array.from({ length: sheetCount }, (_, sheetIndex) => {
+    const sourceName = `Data${sheetIndex + 1}`
+    return [
+      `=SUM(${sourceName}!A1:A${rowCount})`,
+      `=SUM(${sourceName}!B1:B${rowCount})`,
+      `=${sourceName}!A${rowCount}+${sourceName}!B${rowCount}`,
+    ]
+  })
+  return sheets
+}
+
+export function buildRectangularBlockFormulaRows(rowCount: number, inputCols: number, startRowNumber = 1): WorkPaperSheet {
   if (inputCols <= 0) {
     throw new Error('rectangular block benchmark requires at least one input column')
   }
   const lastInputColumn = columnLabel(inputCols - 1)
   return Array.from({ length: rowCount }, (_, index) => {
-    const rowNumber = index + 1
+    const rowNumber = startRowNumber + index
     return [
       ...Array.from({ length: inputCols }, (_value, colIndex) => rowNumber * (colIndex + 1)),
       `=SUM(A${rowNumber}:${lastInputColumn}${rowNumber})`,
     ]
+  })
+}
+
+export function buildRectangularBlockFormulaSheet(rowCount: number, inputCols: number): WorkPaperSheet {
+  return buildRectangularBlockFormulaRows(rowCount, inputCols)
+}
+
+export function buildFormulaGridSheet(rowCount: number, inputCols: number, formulaCols: number): WorkPaperSheet {
+  if (inputCols < 2) {
+    throw new Error('formula grid benchmark requires at least two input columns')
+  }
+  if (formulaCols <= 0) {
+    throw new Error('formula grid benchmark requires at least one formula column')
+  }
+  const lastInputColumn = columnLabel(inputCols - 1)
+  return Array.from({ length: rowCount }, (_, index) => {
+    const rowNumber = index + 1
+    const inputs = Array.from({ length: inputCols }, (_value, colIndex) => rowNumber * (colIndex + 1))
+    const formulas = Array.from({ length: formulaCols }, (_value, formulaIndex) => {
+      switch (formulaIndex % 4) {
+        case 0:
+          return `=A${rowNumber}+B${rowNumber}`
+        case 1:
+          return `=SUM(A${rowNumber}:${lastInputColumn}${rowNumber})`
+        case 2:
+          return `=A${rowNumber}*B${rowNumber}`
+        default:
+          return `=SUM(A${rowNumber}:B${rowNumber})+${formulaIndex}`
+      }
+    })
+    return [...inputs, ...formulas]
   })
 }
 

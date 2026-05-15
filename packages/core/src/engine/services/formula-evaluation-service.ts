@@ -32,6 +32,7 @@ import {
   tryEvaluateDirectCriteriaTransformShortCircuit,
 } from './formula-evaluation-direct-criteria-transforms.js'
 import { tryEvaluateDirectVectorLookup } from './formula-evaluation-direct-lookup.js'
+import { tryEvaluateDirectIndexExactMatch, tryEvaluateDirectIndexOffset } from './formula-evaluation-direct-index.js'
 import { tryEvaluateDirectScalar } from './formula-evaluation-direct-scalar.js'
 import {
   cellValueCriteriaString,
@@ -46,12 +47,9 @@ import {
 } from './formula-evaluation-helpers.js'
 import { readRuntimeDirectCriteriaOperandValue } from './direct-criteria-operands.js'
 import type { EngineFormulaEvaluationService } from './formula-evaluation-service-types.js'
-
 export type { EngineFormulaEvaluationService } from './formula-evaluation-service-types.js'
-
 const DIRECT_AGGREGATE_SCAN_MAX_LENGTH = 64
 const DIRECT_AGGREGATE_PREFIX_MIN_LENGTH = 16
-
 export function createEngineFormulaEvaluationService(args: {
   readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings' | 'formulas' | 'counters' | 'getUseColumnIndex'>
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService
@@ -71,7 +69,6 @@ export function createEngineFormulaEvaluationService(args: {
 }): EngineFormulaEvaluationService {
   const emptyChangedCellIndices: number[] = []
   const directCriteriaAggregateCache = new Map<string, CellValue>()
-
   const readCellValue = (sheetName: string, address: string): CellValue => {
     if (!args.state.workbook.getSheet(sheetName)) {
       return errorValue(ErrorCode.Ref)
@@ -79,14 +76,12 @@ export function createEngineFormulaEvaluationService(args: {
     const parsed = parseCellAddress(address, sheetName)
     return readCellValueAt(sheetName, parsed.row, parsed.col)
   }
-
   const readCellValueByIndex = (cellIndex: number | undefined): CellValue => {
     if (cellIndex === undefined) {
       return emptyValue()
     }
     return args.state.workbook.cellStore.getValue(cellIndex, (stringId) => (stringId === 0 ? '' : args.state.strings.get(stringId)))
   }
-
   const readCellValueAt = (sheetName: string, row: number, col: number): CellValue => {
     const sheet = args.state.workbook.getSheet(sheetName)
     return sheet ? readCellValueByIndex(sheet.logical.getVisibleCell(row, col)) : errorValue(ErrorCode.Ref)
@@ -99,7 +94,6 @@ export function createEngineFormulaEvaluationService(args: {
     sortedLookup: args.sortedLookup,
     readCellValueByIndex,
   }
-
   const readRectangularRangeValues = (
     sheetName: string,
     bounds: {
@@ -227,7 +221,6 @@ export function createEngineFormulaEvaluationService(args: {
     }
     return []
   }
-
   const createRowHiddenResolver = (): ((sheetName: string, rowIndex: number) => boolean) => {
     const hiddenRowsBySheet = new Map<string, Set<number>>()
     return (sheetName, rowIndex) => {
@@ -255,7 +248,6 @@ export function createEngineFormulaEvaluationService(args: {
       return hiddenRows.has(rowIndex)
     }
   }
-
   const resolveIndexedExactMatch = (lookupValue: CellValue, range: RangeBuiltinArgument): number | undefined => {
     if (!args.state.getUseColumnIndex() || range.refKind !== 'cells' || range.cols !== 1) {
       return undefined
@@ -272,11 +264,9 @@ export function createEngineFormulaEvaluationService(args: {
     })
     return result.handled ? result.position : undefined
   }
-
   const lookupBuiltinResolver = createLookupBuiltinResolver({
     resolveIndexedExactMatch,
   })
-
   const resolveExactVectorMatch = (
     _formula: RuntimeFormula,
     request: {
@@ -293,7 +283,6 @@ export function createEngineFormulaEvaluationService(args: {
   ) => {
     return args.exactLookup.findVectorMatch(request)
   }
-
   const resolveApproximateVectorMatch = (
     _formula: RuntimeFormula,
     request: {
@@ -310,7 +299,6 @@ export function createEngineFormulaEvaluationService(args: {
   ) => {
     return args.sortedLookup.findVectorMatch(request)
   }
-
   const readDirectCriteriaOperandValue = (operand: RuntimeDirectCriteriaOperand): CellValue => {
     return readRuntimeDirectCriteriaOperandValue({
       operand,
@@ -318,16 +306,21 @@ export function createEngineFormulaEvaluationService(args: {
       stringifyCriteriaValue: cellValueCriteriaString,
     })
   }
-
   const tryEvaluateDirectCriteriaAggregate = (formula: RuntimeFormula): CellValue | undefined => {
     const directCriteria = formula.directCriteria
     if (!directCriteria) return undefined
-
     const transformShortCircuit = tryEvaluateDirectCriteriaTransformShortCircuit(readCellValueByIndex, formula)
     if (transformShortCircuit) {
       return transformShortCircuit
     }
-
+    const directIndexOffsetResult = tryEvaluateDirectIndexOffset({
+      directCriteria,
+      runtimeColumnStore: args.runtimeColumnStore,
+      readCellValueByIndex,
+    })
+    if (directIndexOffsetResult !== undefined) {
+      return applyDirectCriteriaResultTransforms(readCellValueByIndex, formula, directIndexOffsetResult)
+    }
     const resolvedPairs = directCriteria.criteriaPairs.map((pair) => ({
       range: pair.range,
       criteria: readDirectCriteriaOperandValue(pair.criterion),
@@ -335,6 +328,18 @@ export function createEngineFormulaEvaluationService(args: {
     const criterionError = resolvedPairs.find((pair) => pair.criteria.tag === ValueTag.Error)?.criteria
     if (criterionError) {
       return criterionError
+    }
+    const directIndexExactMatchResult =
+      resolvedPairs.length === 1
+        ? tryEvaluateDirectIndexExactMatch({
+            directCriteria,
+            exactLookup: args.exactLookup,
+            runtimeColumnStore: args.runtimeColumnStore,
+            lookupValue: resolvedPairs[0]!.criteria,
+          })
+        : undefined
+    if (directIndexExactMatchResult !== undefined) {
+      return applyDirectCriteriaResultTransforms(readCellValueByIndex, formula, directIndexExactMatchResult)
     }
 
     const matches = args.criterionCache.getOrBuildMatchingRows({

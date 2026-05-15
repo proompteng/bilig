@@ -64,6 +64,13 @@ export function directCriteriaTouchesPoint(
       return true
     }
   }
+  if (
+    request.inputCellIndex !== undefined &&
+    directCriteria.offsetOperand?.kind === 'cell' &&
+    directCriteria.offsetOperand.cellIndex === request.inputCellIndex
+  ) {
+    return true
+  }
   return directCriteria.criteriaPairs.some((pair) => {
     if (
       pair.range.sheetName === request.sheetName &&

@@ -553,7 +553,7 @@ export function createFormulaBindingDependencyMaterializer(
     }
     ensureDependencyBuildCapacity(
       args.state.workbook.cellStore.size + 1,
-      compiled.symbolicRefs.length + directCriteria.criteriaPairs.length + 1,
+      compiled.symbolicRefs.length + directCriteria.criteriaPairs.length + (directCriteria.offsetOperand === undefined ? 0 : 1) + 1,
       compiled.symbolicRefs.length + 1,
       1,
     )
@@ -578,6 +578,11 @@ export function createFormulaBindingDependencyMaterializer(
     }
     const appendOperand = (operand: RuntimeDirectCriteriaOperand): void => {
       if (operand.kind !== 'literal') {
+        appendCellIndex(operand.cellIndex)
+      }
+    }
+    const appendOffsetOperand = (operand: RuntimeDirectScalarOperand | undefined): void => {
+      if (operand?.kind === 'cell') {
         appendCellIndex(operand.cellIndex)
       }
     }
@@ -611,6 +616,7 @@ export function createFormulaBindingDependencyMaterializer(
     }
 
     appendRange(directCriteria.aggregateRange)
+    appendOffsetOperand(directCriteria.offsetOperand)
     for (let index = 0; index < directCriteria.criteriaPairs.length; index += 1) {
       const pair = directCriteria.criteriaPairs[index]!
       appendOperand(pair.criterion)

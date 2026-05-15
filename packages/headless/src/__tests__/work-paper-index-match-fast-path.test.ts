@@ -105,3 +105,89 @@ describe('WorkPaper INDEX/MATCH direct path', () => {
     })
   })
 })
+
+describe('WorkPaper INDEX reference direct path', () => {
+  it('updates row-index operands without rebinding dynamic INDEX range dependencies', () => {
+    const rowCount = 128
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: [
+        ['Key', 'Value', '', 2, `=INDEX(A2:B${rowCount + 1},D1,2)`],
+        ...Array.from({ length: rowCount }, (_, index) => [index + 1, (index + 1) * 10]),
+      ],
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Number, value: 20 })
+
+    workbook.resetPerformanceCounters()
+    const rowSelectorChanges = workbook.setCellContents(cell(sheetId, 0, 3), rowCount - 1)
+
+    expect(cellChanges(rowSelectorChanges)).toEqual(new Set(['D1', 'E1']))
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Number, value: (rowCount - 1) * 10 })
+    expect(workbook.getStats().lastMetrics).toMatchObject({
+      dirtyFormulaCount: 0,
+      jsFormulaCount: 0,
+      wasmFormulaCount: 0,
+    })
+    expect(workbook.getPerformanceCounters()).toMatchObject({
+      cycleFormulaScans: 0,
+      formulasBound: 0,
+      topoRepairs: 0,
+    })
+
+    workbook.resetPerformanceCounters()
+    const selectedValueChanges = workbook.setCellContents(cell(sheetId, rowCount - 1, 1), 98_765)
+
+    expect(cellChanges(selectedValueChanges)).toEqual(new Set([`B${rowCount}`, 'E1']))
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Number, value: 98_765 })
+    expect(workbook.getPerformanceCounters()).toMatchObject({
+      formulasBound: 0,
+      topoRepairs: 0,
+    })
+  })
+
+  it('preserves INDEX reference scalar value and error semantics on the direct path', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: [
+        ['Key', 'Value', '', 2, '=INDEX(A2:B5,D1,2)'],
+        [1, 'one'],
+        [2, 'two'],
+        [3, 'three'],
+        [4, 'four'],
+      ],
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toMatchObject({ tag: ValueTag.String, value: 'two' })
+
+    workbook.resetPerformanceCounters()
+    const textResultChanges = workbook.setCellContents(cell(sheetId, 0, 3), 4)
+
+    expect(cellChanges(textResultChanges)).toEqual(new Set(['D1', 'E1']))
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toMatchObject({ tag: ValueTag.String, value: 'four' })
+    expect(workbook.getPerformanceCounters()).toMatchObject({
+      formulasBound: 0,
+      topoRepairs: 0,
+    })
+
+    workbook.resetPerformanceCounters()
+    const outOfRangeChanges = workbook.setCellContents(cell(sheetId, 0, 3), 5)
+
+    expect(cellChanges(outOfRangeChanges)).toEqual(new Set(['D1', 'E1']))
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Error, code: ErrorCode.Ref })
+    expect(workbook.getPerformanceCounters()).toMatchObject({
+      formulasBound: 0,
+      topoRepairs: 0,
+    })
+
+    workbook.resetPerformanceCounters()
+    const nonNumericChanges = workbook.setCellContents(cell(sheetId, 0, 3), 'bad')
+
+    expect(cellChanges(nonNumericChanges)).toEqual(new Set(['D1', 'E1']))
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Error, code: ErrorCode.Value })
+    expect(workbook.getPerformanceCounters()).toMatchObject({
+      formulasBound: 0,
+      topoRepairs: 0,
+    })
+  })
+})

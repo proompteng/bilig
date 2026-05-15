@@ -4,6 +4,7 @@ import type {
   RuntimeDirectCriteriaDescriptor,
   RuntimeDirectLookupDescriptor,
   RuntimeDirectScalarDescriptor,
+  RuntimeDirectScalarOperand,
   RuntimeFormula,
 } from '../runtime-state.js'
 
@@ -107,6 +108,22 @@ export function directCriteriaOperandEqual(
   return right.kind === 'literal' && JSON.stringify(left.value) === JSON.stringify(right.value)
 }
 
+function directScalarOperandEqual(left: RuntimeDirectScalarOperand | undefined, right: RuntimeDirectScalarOperand | undefined): boolean {
+  if (left === right) {
+    return true
+  }
+  if (!left || !right || left.kind !== right.kind) {
+    return false
+  }
+  if (left.kind === 'cell') {
+    return right.kind === 'cell' && left.cellIndex === right.cellIndex
+  }
+  if (left.kind === 'error') {
+    return right.kind === 'error' && left.code === right.code
+  }
+  return right.kind === 'literal-number' && Object.is(left.value, right.value)
+}
+
 function directCriteriaResultTransformsEqual(
   left: RuntimeDirectCriteriaDescriptor['resultTransforms'],
   right: RuntimeDirectCriteriaDescriptor['resultTransforms'],
@@ -158,6 +175,9 @@ export function directCriteriaStructureEqual(
   if (left.aggregateKind !== right.aggregateKind) {
     return false
   }
+  if (left.firstMatchMode !== right.firstMatchMode) {
+    return false
+  }
   const leftRange = left.aggregateRange
   const rightRange = right.aggregateRange
   if (
@@ -171,6 +191,9 @@ export function directCriteriaStructureEqual(
     return false
   }
   if (left.criteriaPairs.length !== right.criteriaPairs.length) {
+    return false
+  }
+  if (!directScalarOperandEqual(left.offsetOperand, right.offsetOperand)) {
     return false
   }
   if (!directCriteriaResultTransformsEqual(left.resultTransforms, right.resultTransforms)) {

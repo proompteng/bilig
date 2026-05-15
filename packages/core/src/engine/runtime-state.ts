@@ -251,6 +251,8 @@ export type RuntimeDirectCriteriaResultTransform =
 export interface RuntimeDirectCriteriaDescriptor {
   readonly aggregateKind: 'count' | 'sum' | 'average' | 'min' | 'max' | 'first'
   readonly aggregateRange: RuntimeDirectCriteriaRange | undefined
+  readonly offsetOperand?: RuntimeDirectScalarOperand
+  readonly firstMatchMode?: 'exact-lookup'
   readonly criteriaPairs: readonly RuntimeDirectCriteriaPair[]
   readonly resultTransforms?: readonly RuntimeDirectCriteriaResultTransform[]
 }

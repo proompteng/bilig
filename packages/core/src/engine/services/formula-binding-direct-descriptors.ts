@@ -18,6 +18,7 @@ import type {
   RuntimeDirectCriteriaDescriptor,
   RuntimeDirectCriteriaResultTransform,
   RuntimeDirectLookupDescriptor,
+  RuntimeDirectScalarOperand,
 } from '../runtime-state.js'
 import type { RegionGraph } from '../../deps/region-graph.js'
 import type { ExactColumnIndexService } from './exact-column-index-service.js'
@@ -419,6 +420,27 @@ export function buildDirectCriteriaDescriptor(args: {
     }),
   })
 
+  const resolveIndexOffsetOperand = (node: FormulaNode | undefined): RuntimeDirectScalarOperand | undefined => {
+    if (!node) {
+      return undefined
+    }
+    const literal = staticCellValue(node)
+    if (literal?.tag === ValueTag.Number) {
+      return { kind: 'literal-number', value: literal.value }
+    }
+    if (node.kind !== 'CellRef') {
+      return undefined
+    }
+    const sheetName = node.sheetName ?? args.ownerSheetName
+    if (!args.workbook.getSheet(sheetName)) {
+      return undefined
+    }
+    return {
+      kind: 'cell',
+      cellIndex: args.ensureCellTracked(sheetName, node.ref),
+    }
+  }
+
   const pair = (
     rangeNode: FormulaNode | undefined,
     criterionNode: FormulaNode | undefined,
@@ -515,7 +537,60 @@ export function buildDirectCriteriaDescriptor(args: {
     return {
       aggregateKind: 'first',
       aggregateRange: withRangeRegion(aggregateRange),
+      firstMatchMode: 'exact-lookup',
       criteriaPairs: [criteriaPair],
+    }
+  }
+
+  const buildIndexReferenceCriteriaDescriptor = (node: DirectCriteriaCallNode): RuntimeDirectCriteriaDescriptor | undefined => {
+    if (node.args.length < 2 || node.args.length > 3) {
+      return undefined
+    }
+    const rangeNode = node.args[0]
+    if (!rangeNode || rangeNode.kind !== 'RangeRef' || rangeNode.refKind !== 'cells' || rangeNode.sheetEndName !== undefined) {
+      return undefined
+    }
+    const parsedRange = parseRangeAddress(`${rangeNode.start}:${rangeNode.end}`, rangeNode.sheetName ?? args.ownerSheetName)
+    if (parsedRange.kind !== 'cells') {
+      return undefined
+    }
+    const sheetName = parsedRange.sheetName ?? rangeNode.sheetName ?? args.ownerSheetName
+    if (!args.workbook.getSheet(sheetName)) {
+      return undefined
+    }
+    const rowStart = parsedRange.start.row
+    const rowEnd = parsedRange.end.row
+    const colStart = parsedRange.start.col
+    const colEnd = parsedRange.end.col
+    const colCount = colEnd - colStart + 1
+    const columnLookup = node.args[2]
+    const columnValue = staticCellValue(columnLookup)
+    const columnOffset =
+      columnLookup === undefined
+        ? colCount === 1
+          ? 1
+          : undefined
+        : columnValue?.tag === ValueTag.Number
+          ? Math.trunc(columnValue.value)
+          : undefined
+    if (columnOffset === undefined || columnOffset < 1 || columnOffset > colCount) {
+      return undefined
+    }
+    const offsetOperand = resolveIndexOffsetOperand(node.args[1])
+    if (!offsetOperand) {
+      return undefined
+    }
+    return {
+      aggregateKind: 'first',
+      aggregateRange: withRangeRegion({
+        sheetName,
+        rowStart,
+        rowEnd,
+        col: colStart + columnOffset - 1,
+        length: rowEnd - rowStart + 1,
+      }),
+      offsetOperand,
+      criteriaPairs: [],
     }
   }
 
@@ -560,7 +635,11 @@ export function buildDirectCriteriaDescriptor(args: {
     }
 
     if (callee === 'INDEX') {
-      return buildSimpleIndexMatchCriteriaDescriptor(node) ?? buildIndexMatchCriteriaDescriptor(node)
+      return (
+        buildIndexReferenceCriteriaDescriptor(node) ??
+        buildSimpleIndexMatchCriteriaDescriptor(node) ??
+        buildIndexMatchCriteriaDescriptor(node)
+      )
     }
 
     if (callee === 'COUNTIF') {
