@@ -118,6 +118,16 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['@sqlite.org/sqlite-wasm'],
   },
+  worker: {
+    format: 'es',
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: codeSplittingGroups,
+        },
+      },
+    },
+  },
   build: {
     // Keep the startup shell bounded to the entry module and shell CSS. The
     // heavy workbook and sync chunks still load through the module graph, but

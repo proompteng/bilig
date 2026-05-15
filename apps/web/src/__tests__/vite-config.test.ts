@@ -6,4 +6,9 @@ describe('web vite config', () => {
     expect(webViteConfig.server?.headers).toEqual(crossOriginIsolationHeaders)
     expect(webViteConfig.preview?.headers).toEqual(crossOriginIsolationHeaders)
   })
+
+  it('keeps worker-only dynamic imports in split module worker chunks', () => {
+    expect(webViteConfig.worker?.format).toBe('es')
+    expect(webViteConfig.worker?.rolldownOptions?.output).toEqual(webViteConfig.build?.rolldownOptions?.output)
+  })
 })
