@@ -3,6 +3,7 @@ import type {
   CellValue,
   LiteralInput,
   WorkbookAxisEntrySnapshot,
+  WorkbookAxisMetadataSnapshot,
   WorkbookCalculationSettingsSnapshot,
   WorkbookChartSnapshot,
   WorkbookDefinedNameValueSnapshot,
@@ -28,7 +29,8 @@ import type { FormulaTemplateResolution, FormulaTemplateSnapshot } from '../form
 import { collectDefinedFormulaNames, formulaShouldUseCachedUnsupportedFunctionValue } from './unsupported-formula-cache.js'
 import type { LogicalCellLocation } from '../storage/cell-page-store.js'
 import type { StringPool } from '../string-pool.js'
-import type { SheetRecord, WorkbookStore } from '../workbook-store.js'
+import { axisGeometryKeys, syncAxisMetadataBucket } from '../workbook-axis-records.js'
+import type { SheetRecord, WorkbookAxisEntryRecord, WorkbookAxisMetadataRecord, WorkbookStore } from '../workbook-store.js'
 
 type WorkbookSnapshotCell = WorkbookSnapshot['sheets'][number]['cells'][number]
 
@@ -400,18 +402,17 @@ function restoreSheetMetadata(args: { readonly workbook: WorkbookStore; readonly
   sheet.metadata?.columns?.forEach((entry) => {
     workbook.insertColumns(sheet.name, entry.index, 1, [cloneAxisEntry(entry)])
   })
-  sheet.metadata?.rowMetadata?.forEach((record) => {
-    workbook.setRowMetadata(sheet.name, record.start, record.count, record.size ?? null, record.hidden ?? null, cloneAxisGeometry(record))
+  restoreAxisMetadata({
+    workbook,
+    sheetName: sheet.name,
+    axis: 'row',
+    records: sheet.metadata?.rowMetadata ?? [],
   })
-  sheet.metadata?.columnMetadata?.forEach((record) => {
-    workbook.setColumnMetadata(
-      sheet.name,
-      record.start,
-      record.count,
-      record.size ?? null,
-      record.hidden ?? null,
-      cloneAxisGeometry(record),
-    )
+  restoreAxisMetadata({
+    workbook,
+    sheetName: sheet.name,
+    axis: 'column',
+    records: sheet.metadata?.columnMetadata ?? [],
   })
   if (sheet.metadata?.sheetFormatPr) {
     workbook.setSheetFormatPr(sheet.name, sheet.metadata.sheetFormatPr)
@@ -461,6 +462,54 @@ function restoreSheetMetadata(args: { readonly workbook: WorkbookStore; readonly
   sheet.metadata?.notes?.forEach((note) => {
     workbook.setNote(structuredClone(note))
   })
+}
+
+function restoreAxisMetadata(args: {
+  readonly workbook: WorkbookStore
+  readonly sheetName: string
+  readonly axis: 'row' | 'column'
+  readonly records: readonly WorkbookAxisMetadataSnapshot[]
+}): void {
+  if (args.records.length === 0) {
+    return
+  }
+  const sheet = args.workbook.getSheet(args.sheetName)
+  if (!sheet) {
+    return
+  }
+  const entries = args.axis === 'row' ? sheet.rowAxis : sheet.columnAxis
+  for (const record of args.records) {
+    if (record.count <= 0) {
+      continue
+    }
+    if (args.axis === 'row') {
+      args.workbook.materializeRowAxisEntries(args.sheetName, record.start, record.count)
+    } else {
+      args.workbook.materializeColumnAxisEntries(args.sheetName, record.start, record.count)
+    }
+    for (let offset = 0; offset < record.count; offset += 1) {
+      const entry = entries[record.start + offset]
+      if (entry) {
+        applyAxisMetadataRecord(entry, record)
+      }
+    }
+  }
+  const bucket: Map<string, WorkbookAxisMetadataRecord> =
+    args.axis === 'row' ? args.workbook.metadata.rowMetadata : args.workbook.metadata.columnMetadata
+  syncAxisMetadataBucket(bucket, args.sheetName, entries)
+}
+
+function applyAxisMetadataRecord(entry: WorkbookAxisEntryRecord, record: WorkbookAxisMetadataSnapshot): void {
+  entry.size = record.size ?? null
+  entry.hidden = record.hidden ?? null
+  for (const key of axisGeometryKeys) {
+    const value = record[key]
+    if (value === undefined) {
+      delete entry[key]
+    } else {
+      Object.assign(entry, { [key]: value })
+    }
+  }
 }
 
 function cloneAxisEntry(entry: WorkbookAxisEntrySnapshot): WorkbookAxisEntrySnapshot {

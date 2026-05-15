@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import * as formula from '@bilig/formula'
 import { readRuntimeImage, readRuntimeSnapshot, SpreadsheetEngine, WorkbookStore } from '@bilig/core'
-import { ValueTag } from '@bilig/protocol'
+import { ValueTag, type WorkbookSnapshot } from '@bilig/protocol'
 import { WorkPaper } from '../index.js'
 import { WorkPaperSheetSizeLimitExceededError } from '../work-paper-errors.js'
 
@@ -207,6 +207,70 @@ describe('initial mixed sheet load', () => {
       tag: ValueTag.Number,
       value: 6,
     })
+  })
+
+  it('restores value-only snapshots with dense column metadata without per-range metadata writes', () => {
+    const setColumnMetadataSpy = vi.spyOn(WorkbookStore.prototype, 'setColumnMetadata')
+    try {
+      const columnCount = 512
+      const metadataPassCount = 3
+      const snapshot: WorkbookSnapshot = {
+        version: 1,
+        workbook: { name: 'Imported value-only workbook' },
+        sheets: [
+          {
+            id: 1,
+            name: 'Imported',
+            order: 0,
+            metadata: {
+              columns: Array.from({ length: columnCount }, (_, index) => ({
+                id: `column-${index + 1}`,
+                index,
+              })),
+              columnMetadata: Array.from({ length: columnCount * metadataPassCount }, (_, index) => {
+                const start = index % columnCount
+                return {
+                  start,
+                  count: 1,
+                  size: 80 + Math.floor(index / columnCount),
+                  hidden: start % 97 === 0,
+                  customWidth: true,
+                  styleIndex: start % 11,
+                }
+              }),
+            },
+            cells: Array.from({ length: 64 }, (_, index) => ({
+              address: formula.formatAddress(Math.floor(index / 16), index % 16),
+              value: index,
+            })),
+          },
+        ],
+      }
+
+      const workbook = WorkPaper.buildFromSnapshot(snapshot, {
+        evaluationTimeoutMs: 1_000,
+        useColumnIndex: true,
+      })
+      const sheetId = workbook.getSheetId('Imported')!
+      const restoredColumnMetadata = workbook.exportSnapshot().sheets[0]?.metadata?.columnMetadata ?? []
+
+      expect(setColumnMetadataSpy).not.toHaveBeenCalled()
+      expect(workbook.getCellValue({ sheet: sheetId, row: 0, col: 0 })).toEqual({
+        tag: ValueTag.Number,
+        value: 0,
+      })
+      expect(restoredColumnMetadata).toContainEqual({
+        start: 511,
+        count: 1,
+        size: 82,
+        hidden: false,
+        customWidth: true,
+        styleIndex: 5,
+      })
+      workbook.dispose()
+    } finally {
+      setColumnMetadataSpy.mockRestore()
+    }
   })
 
   it('rejects oversized sheets before importing compatible runtime snapshots', () => {
