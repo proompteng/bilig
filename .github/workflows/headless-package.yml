@@ -557,7 +557,13 @@ jobs:
           git add "${release_paths[@]}"
           git commit -m "chore(release): runtime packages v${TARGET_VERSION}"
           git push origin HEAD:main
-          git push github HEAD:main
+
+          git fetch --force github main
+          if [[ "$(git rev-parse github/main)" == "$(git rev-parse HEAD)" ]]; then
+            echo "GitHub main already mirrors release metadata SHA"
+          else
+            git push github HEAD:main
+          fi
 
           git fetch --force origin main
           git fetch --force github main
