@@ -1,6 +1,5 @@
 ---
 title: Do not trust stale XLSX cached formula values
-Cached XLSX values should be treated as diagnostic information only and may become stale over time. A cache mismatch alone should not be considered a real formula correctness bug unless verified through fresh Excel recalculation.
 published: true
 description: A TypeScript harness for separating XLSX import success, cache diagnostics, timeouts, and real formula accuracy against fresh Microsoft Excel recalculation.
 tags: typescript, node, excel, xlsx, spreadsheet, testing
@@ -10,6 +9,9 @@ image: /assets/github-social-preview.png
 ---
 
 # Do not trust stale XLSX cached formula values
+
+Cached XLSX values should be treated as diagnostic information only and may become stale over time. A cache mismatch alone should not be considered a real formula correctness bug unless verified through fresh Excel recalculation.
+
 
 An `.xlsx` file can contain formula text and a cached result from the last app
 that saved it. That cached result is convenient for previewing a workbook
