@@ -260,7 +260,7 @@ npm run agent:verify
 - runnable service persistence adapters:
   npm run persistence-adapters
   https://github.com/proompteng/bilig/blob/main/examples/serverless-workpaper-api/persistence-adapters.ts
-  Postgres JSONB, Redis/KV, and object storage all restore through the same WorkPaper request handler
+  Postgres JSONB, SQLite, Redis/KV, and object storage all restore through the same WorkPaper request handler
 - revenue model walkthrough:
   https://proompteng.github.io/bilig/building-a-revenue-model-with-headless-workpaper.html
   https://github.com/proompteng/bilig/blob/main/docs/building-a-revenue-model-with-headless-workpaper.md

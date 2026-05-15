@@ -89,13 +89,33 @@ export async function requireServerlessWorkPaperApiDiscovery({
   requireIncludes(serverlessExampleReadme, '## Persistence Adapters', 'examples/serverless-workpaper-api/README.md')
   requireIncludes(serverlessExampleReadme, 'Postgres JSONB', 'examples/serverless-workpaper-api/README.md')
   requireIncludes(
+    serverlessExampleReadme,
+    'SQLite, using parameterized SQL and a workbook id.',
+    'examples/serverless-workpaper-api/README.md',
+  )
+  requireIncludes(serverlessExampleReadme, 'not an XLSX file cache', 'examples/serverless-workpaper-api/README.md')
+  requireIncludes(
+    serverlessExampleReadme,
+    '"adapters": ["postgres-jsonb", "sqlite", "redis", "object-storage"]',
+    'examples/serverless-workpaper-api/README.md',
+  )
+  requireIncludes(serverlessExampleReadme, '"sqlite": {', 'examples/serverless-workpaper-api/README.md')
+  requireIncludes(
+    await readFile(join(repoRoot, 'examples', 'serverless-workpaper-api', 'persistence-adapters.ts'), 'utf8'),
+    'createSQLiteWorkPaperStorage',
+    'examples/serverless-workpaper-api/persistence-adapters.ts',
+  )
+  requireIncludes(
     persistenceDoc,
     'examples/serverless-workpaper-api/persistence-adapters.ts',
     'docs/persisting-formula-backed-workpaper-documents-in-node.md',
   )
   requireIncludes(persistenceDoc, 'npm run persistence-adapters', 'docs/persisting-formula-backed-workpaper-documents-in-node.md')
   requireIncludes(persistenceDoc, 'Postgres JSONB', 'docs/persisting-formula-backed-workpaper-documents-in-node.md')
+  requireIncludes(persistenceDoc, 'SQLite adapter', 'docs/persisting-formula-backed-workpaper-documents-in-node.md')
+  requireIncludes(persistenceDoc, 'XLSX file cache', 'docs/persisting-formula-backed-workpaper-documents-in-node.md')
   requireIncludes(persistenceDoc, 'Redis or string-KV adapter', 'docs/persisting-formula-backed-workpaper-documents-in-node.md')
+  requireIncludes(llms, 'Postgres JSONB, SQLite, Redis/KV, and object storage', 'docs/llms.txt')
 
   requireIncludes(
     serverlessExamplePackage,

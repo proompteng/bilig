@@ -131,6 +131,8 @@ The source is
 It runs the real `createWorkPaperRequestHandler(storage)` boundary through:
 
 - a Postgres JSONB adapter with a `query(sql, values)` client shape
+- a SQLite adapter that stores serialized WorkPaper JSON by workbook id with
+  parameterized SQL
 - a Redis or string-KV adapter with `get(key)` and `set(key, value)`
 - an object-storage adapter with text load and save functions
 
@@ -138,7 +140,8 @@ Each adapter starts empty, loads the initial WorkPaper document, accepts a
 revenue edit, saves the serialized workbook JSON, creates a fresh handler, and
 then reads the restored workbook back. The script only prints `verified: true`
 after the cold read returns the recalculated total and the saved document still
-contains formulas.
+contains formulas. The durable value is the WorkPaper document state JSON, not
+an XLSX file cache.
 
 ## Object Storage Adapter
 

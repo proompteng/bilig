@@ -435,11 +435,12 @@ memory:
 npm run persistence-adapters
 ```
 
-The script exercises the same WorkPaper request handler through three typed
+The script exercises the same WorkPaper request handler through four typed
 storage adapters:
 
 - Postgres JSONB, using a `query(sql, values)` client shape compatible with
   `pg`-style clients.
+- SQLite, using parameterized SQL and a workbook id.
 - Redis or another string KV store, using `get(key)` and `set(key, value)`.
 - Object storage such as S3, R2, GCS, or Azure Blob, using small text load and
   save functions.
@@ -447,19 +448,28 @@ storage adapters:
 Each adapter starts from an empty store, handles a summary read, accepts the
 revenue write, creates a fresh handler, then reads the restored workbook from
 the saved document. `verified: true` means formulas survived persistence and
-the cold read returned the recalculated total.
+the cold read returned the recalculated total. These adapters persist the
+serialized WorkPaper document state, not an XLSX file cache.
 
 Expected output shape:
 
 ```json
 {
-  "adapters": ["postgres-jsonb", "redis", "object-storage"],
+  "adapters": ["postgres-jsonb", "sqlite", "redis", "object-storage"],
   "postgres": {
     "before": {
       "totalRevenue": 36900,
       "westCustomers": 20,
       "largestDeal": 24000
     },
+    "after": {
+      "totalRevenue": 48600,
+      "westCustomers": 20,
+      "largestDeal": 24000
+    },
+    "verified": true
+  },
+  "sqlite": {
     "after": {
       "totalRevenue": 48600,
       "westCustomers": 20,
