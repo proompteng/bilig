@@ -897,13 +897,6 @@ than hand-coded arithmetic:
 npm run csv-shaped
 ```
 
-Run the malformed CSV smoke to confirm bad input fails before a workbook is
-created:
-
-```sh
-npm run csv-shaped:malformed
-```
-
 Expected output:
 
 ```json
@@ -915,6 +908,22 @@ Expected output:
     "largestDeal": 24000
   },
   "serializedFirstDataRow": ["West", 20, 1200, "=B2*C2"],
+  "verified": true
+}
+```
+
+Run the malformed CSV smoke to confirm bad input fails before a workbook is
+created:
+
+```sh
+npm run csv-shaped:malformed
+```
+
+Expected output:
+
+```json
+{
+  "malformedCsvError": "expected 3 CSV fields on data row 3, received 2",
   "verified": true
 }
 ```
