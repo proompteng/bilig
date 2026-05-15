@@ -21,7 +21,7 @@ const ALLOWED_BILIG_INSTANCE_METHODS = [
   'transaction',
 ] as const
 const ALLOWED_BILIG_INSTANCE_ACCESSORS = ['internals'] as const
-const ALLOWED_BILIG_STATIC_METHODS = ['buildFromSnapshot'] as const
+const ALLOWED_BILIG_STATIC_METHODS = ['buildFromSheetEntries', 'buildFromSnapshot'] as const
 const ALLOWED_BILIG_CONFIG_KEYS = ['calculationSettings', 'evaluationTimeoutMs'] as const
 
 describe('WorkPaper HyperFormula snapshot parity', () => {

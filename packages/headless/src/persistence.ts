@@ -1,6 +1,7 @@
 import type { LiteralInput } from '@bilig/protocol'
 import { WorkPaper } from './work-paper.js'
 import { WorkPaperPersistenceError } from './work-paper-errors.js'
+import { isFormulaContent } from './work-paper-runtime-helpers.js'
 import type {
   RawCellContent,
   SerializedWorkPaperNamedExpression,
@@ -362,7 +363,7 @@ export function exportWorkPaperDocument(workbook: WorkPaper, options: { includeC
     }
     return {
       name,
-      content: workbook.getSheetSerialized(sheetId),
+      content: serializeSheetContentForDocument(workbook, sheetId),
     } satisfies PersistedWorkPaperSheet
   })
   const namedExpressions = workbook.getAllNamedExpressionsSerialized().map((expression) => serializeNamedExpression(workbook, expression))
@@ -375,6 +376,20 @@ export function exportWorkPaperDocument(workbook: WorkPaper, options: { includeC
     document.config = pickPersistableWorkPaperConfig(workbook.getConfig())
   }
   return document
+}
+
+function serializeSheetContentForDocument(workbook: WorkPaper, sheetId: number): RawCellContent[][] {
+  return workbook
+    .getSheetSerialized(sheetId)
+    .map((row, rowIndex) =>
+      row.map((cellContent, colIndex) =>
+        cellContent !== null &&
+        !isFormulaContent(cellContent) &&
+        workbook.isCellPartOfArray({ sheet: sheetId, row: rowIndex, col: colIndex })
+          ? null
+          : cellContent,
+      ),
+    )
 }
 
 /**
