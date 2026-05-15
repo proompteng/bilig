@@ -104,6 +104,20 @@ import {
   measureWorkPaperSuspendedBatchSingleColumnEditSample,
 } from './benchmark-workpaper-vs-hyperformula-expanded-additional-workloads.js'
 import {
+  measureHyperFormulaCrossSheetAggregateSample,
+  measureHyperFormulaCrossSheetScalarFanoutSample,
+  measureHyperFormulaIndexMatchExactSample,
+  measureHyperFormulaIndexReferenceSample,
+  measureHyperFormulaRectangularBatchEditSample,
+  measureHyperFormulaSparseWideRangeReadSample,
+  measureWorkPaperCrossSheetAggregateSample,
+  measureWorkPaperCrossSheetScalarFanoutSample,
+  measureWorkPaperIndexMatchExactSample,
+  measureWorkPaperIndexReferenceSample,
+  measureWorkPaperRectangularBatchEditSample,
+  measureWorkPaperSparseWideRangeReadSample,
+} from './benchmark-workpaper-vs-hyperformula-expanded-workbook-shape-workloads.js'
+import {
   measureWorkPaperDynamicArraySortSample,
   measureWorkPaperDynamicArrayUniqueSample,
   measureWorkPaperReverseSearchLookupSample,
@@ -268,6 +282,20 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       () => measureHyperFormulaNamedExpressionChangeSample(),
     ),
     runComparableScenario(
+      'cross-sheet-scalar-recalc',
+      { sheets: 2, rowCount: 1_500, dependents: 1_500, mutation: 'Data!A1' },
+      runtimeOptions,
+      () => measureWorkPaperCrossSheetScalarFanoutSample(1_500),
+      () => measureHyperFormulaCrossSheetScalarFanoutSample(1_500),
+    ),
+    runComparableScenario(
+      'cross-sheet-aggregate-recalc',
+      { sheets: 2, rowCount: 1_500, functionName: 'SUM', mutation: 'Data!A1' },
+      runtimeOptions,
+      () => measureWorkPaperCrossSheetAggregateSample(1_500),
+      () => measureHyperFormulaCrossSheetAggregateSample(1_500),
+    ),
+    runComparableScenario(
       'single-edit-recalc',
       { downstreamCount: 2_000 },
       runtimeOptions,
@@ -322,6 +350,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       runtimeOptions,
       () => measureWorkPaperBatchMultiColumnEditSample(250),
       () => measureHyperFormulaBatchMultiColumnEditSample(250),
+    ),
+    runComparableScenario(
+      'batch-edit-rectangular-block',
+      { rowCount: 64, inputCols: 12, editCount: 64 * 12 },
+      runtimeOptions,
+      () => measureWorkPaperRectangularBatchEditSample(64, 12),
+      () => measureHyperFormulaRectangularBatchEditSample(64, 12),
     ),
     runComparableScenario(
       'batch-edit-single-column-with-undo',
@@ -401,6 +436,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       () => measureHyperFormulaRangeReadSample(240, 24),
     ),
     runComparableScenario(
+      'range-read-sparse-wide',
+      { cols: 96, rows: 128, populatedCellsPerRow: 3, requestedCells: 128 * 96 },
+      runtimeOptions,
+      () => measureWorkPaperSparseWideRangeReadSample(128, 96),
+      () => measureHyperFormulaSparseWideRangeReadSample(128, 96),
+    ),
+    runComparableScenario(
       'aggregate-2d-ranges',
       { rowCount: 1_500, functionName: 'SUM', rangeShape: 'growing-2d' },
       runtimeOptions,
@@ -462,6 +504,20 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       runtimeOptions,
       () => measureWorkPaperLookupSample(5_000, true),
       () => measureHyperFormulaLookupSample(5_000, true),
+    ),
+    runComparableScenario(
+      'lookup-index-match-exact',
+      { rowCount: 5_000, functionName: 'INDEX+MATCH', matchMode: 'exact' },
+      runtimeOptions,
+      () => measureWorkPaperIndexMatchExactSample(5_000),
+      () => measureHyperFormulaIndexMatchExactSample(5_000),
+    ),
+    runComparableScenario(
+      'lookup-index-reference',
+      { rowCount: 5_000, functionName: 'INDEX', lookupShape: '2d-table-row-index' },
+      runtimeOptions,
+      () => measureWorkPaperIndexReferenceSample(5_000),
+      () => measureHyperFormulaIndexReferenceSample(5_000),
     ),
     runComparableScenario(
       'lookup-with-column-index-after-column-write',

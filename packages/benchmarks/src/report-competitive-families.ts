@@ -13,6 +13,7 @@ export type ExpandedCompetitiveFamily =
   | 'config-toggle'
   | 'sheet-lifecycle'
   | 'named-expression'
+  | 'cross-sheet'
   | 'dirty-execution'
   | 'batch-edit'
   | 'structural-rows'
@@ -36,6 +37,7 @@ export const EXPANDED_COMPARATIVE_FAMILY_ORDER = [
   'config-toggle',
   'sheet-lifecycle',
   'named-expression',
+  'cross-sheet',
   'dirty-execution',
   'batch-edit',
   'structural-rows',
@@ -63,6 +65,7 @@ const EXPANDED_COMPARATIVE_FAMILY_METADATA = {
   },
   'sheet-lifecycle': { scorecardEligible: true },
   'named-expression': { scorecardEligible: true },
+  'cross-sheet': { scorecardEligible: true },
   'dirty-execution': { scorecardEligible: true },
   'batch-edit': { scorecardEligible: true },
   'structural-rows': { scorecardEligible: true },
@@ -98,6 +101,7 @@ export const EXPANDED_COMPARATIVE_FAMILY_GROUPS = {
   'config-toggle': ['rebuild-config-toggle', 'rebuild-config-toggle-large'],
   'sheet-lifecycle': ['sheet-rename-dependencies'],
   'named-expression': ['named-expression-change'],
+  'cross-sheet': ['cross-sheet-scalar-recalc', 'cross-sheet-aggregate-recalc'],
   'dirty-execution': [
     'single-edit-recalc',
     'single-edit-chain',
@@ -109,13 +113,14 @@ export const EXPANDED_COMPARATIVE_FAMILY_GROUPS = {
     'batch-edit-recalc',
     'batch-edit-single-column',
     'batch-edit-multi-column',
+    'batch-edit-rectangular-block',
     'batch-edit-single-column-with-undo',
     'batch-suspended-single-column',
     'batch-suspended-multi-column',
   ],
   'structural-rows': ['structural-insert-rows', 'structural-delete-rows', 'structural-move-rows'],
   'structural-columns': ['structural-insert-columns', 'structural-delete-columns', 'structural-move-columns'],
-  'range-read': ['range-read', 'range-read-dense'],
+  'range-read': ['range-read', 'range-read-dense', 'range-read-sparse-wide'],
   'aggregate-2d': ['aggregate-2d-ranges'],
   'overlapping-aggregate': ['aggregate-overlapping-ranges'],
   'sliding-window-aggregate': ['aggregate-overlapping-sliding-window'],
@@ -125,7 +130,7 @@ export const EXPANDED_COMPARATIVE_FAMILY_GROUPS = {
     'conditional-aggregation-shared-criteria',
     'conditional-aggregation-mixed-criteria',
   ],
-  'lookup-exact': ['lookup-no-column-index', 'lookup-with-column-index'],
+  'lookup-exact': ['lookup-no-column-index', 'lookup-with-column-index', 'lookup-index-match-exact', 'lookup-index-reference'],
   'lookup-after-write': ['lookup-with-column-index-after-column-write', 'lookup-with-column-index-after-batch-write'],
   'lookup-approximate': ['lookup-approximate-sorted', 'lookup-approximate-descending', 'lookup-approximate-duplicates'],
   'lookup-approximate-after-write': ['lookup-approximate-sorted-after-column-write'],
@@ -197,6 +202,7 @@ export function groupExpandedCompetitiveBenchmarkResultsByFamily(
     'config-toggle': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'config-toggle'),
     'sheet-lifecycle': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'sheet-lifecycle'),
     'named-expression': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'named-expression'),
+    'cross-sheet': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'cross-sheet'),
     'dirty-execution': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'dirty-execution'),
     'batch-edit': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'batch-edit'),
     'structural-rows': results.filter((result) => getExpandedCompetitiveFamily(result.workload) === 'structural-rows'),

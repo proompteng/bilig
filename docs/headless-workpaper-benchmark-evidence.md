@@ -26,10 +26,10 @@ as useful evidence, but they do not satisfy broad coverage alone.
 
 Current checked-in metadata:
 
-- generated at `2026-05-15T03:13:53.107Z`
+- generated at `2026-05-15T04:04:38.038Z`
 - host: macOS `arm64`, Node `v24.3.0`
 - benchmark sampling: `5` measured samples after `2` warmup samples
-- WorkPaper package: `@bilig/headless` `0.14.20`
+- WorkPaper package: `@bilig/headless` `0.14.23`
 - comparison engine: HyperFormula `3.2.0`, local checkout commit
   `9a510a2acb97c3d3490f9e3b9e961a1c4a98b9ad`, GPL-v3 license key
 - scalar formula comparison engine: TrueCalc `0.6.4`, `7` comparable scalar
@@ -46,34 +46,34 @@ directly comparable workbook-wide headless spreadsheet-engine workloads:
 
 | Lane    | Comparable Workloads | WorkPaper Mean Wins | HyperFormula Mean Wins |
 | ------- | -------------------: | ------------------: | ---------------------: |
-| Overall |                 `46` |                `38` |                    `8` |
-| Public  |                 `38` |                `31` |                    `7` |
-| Holdout |                  `8` |                 `7` |                    `1` |
+| Overall |                 `52` |                `37` |                   `15` |
+| Public  |                 `40` |                `30` |                   `10` |
+| Holdout |                 `12` |                 `7` |                    `5` |
 
-The overall directional mean-ratio geomean is `0.6948435060111573`. The overall
-directional p95-ratio geomean is `0.6990622429958057`. Ratios below `1.0` mean
+The overall directional mean-ratio geomean is `0.7489873822783492`. The overall
+directional p95-ratio geomean is `0.7354308040905896`. Ratios below `1.0` mean
 WorkPaper is faster for that metric.
 
-The current worst mean row is `single-formula-edit-recalc`, with a mean ratio of
-`1.9570808756278426`. The current worst p95 row is `build-mixed-content`, with
-a p95 ratio of `1.9733059237192512`. The headless leadership scorecard
-currently records `31/46` workloads winning both
+The current worst mean row is `batch-edit-rectangular-block`, with a mean ratio
+of `3.4510620466850503`. The current worst p95 row is
+`batch-edit-rectangular-block`, with a p95 ratio of `3.777197275754674`. The
+headless leadership scorecard currently records `35/52` workloads winning both
 mean and p95 against HyperFormula.
 
 It is also not a blanket "fastest against every formula evaluator" claim. The
 TrueCalc scalar lane currently reports `0/7` WorkPaper mean+p95 wins, with a
-directional mean-ratio geomean of `8.22680126570977`. That lane is intentionally
+directional mean-ratio geomean of `7.3614239793924945`. That lane is intentionally
 kept in the leadership scorecard as a blocker map, not as marketing copy.
 
 The xlsx-calc lane is a direct workbook-wide recalculation comparison for the
 formula families both engines can evaluate equivalently. It currently reports
 `4/4` WorkPaper mean+p95 wins with a directional mean-ratio geomean of
-`0.06596283813950932`, but it covers only `4/46` eligible workload rows, so the
+`0.06616269364464407`, but it covers only `4/52` eligible workload rows, so the
 scorecard treats it as partial coverage rather than proof of blanket leadership.
 
 ## How To Read The p95 Caveat
 
-The `38/46` count is about mean latency: for each winning comparable workload
+The `37/52` count is about mean latency: for each winning comparable workload
 row, WorkPaper's average measured time is lower than HyperFormula's average
 measured time. Mean wins are useful because they summarize the normal cost of
 each workload, but they do not prove every slower tail sample has been
@@ -98,13 +98,15 @@ Scorecard-eligible families cover:
 - workbook build and rebuild paths
 - runtime restore from snapshot
 - sheet lifecycle and named-expression changes
+- cross-sheet scalar and aggregate recalculation
 - dirty execution after single edits, chains, fanout, mixed frontiers, and
   formula edits
 - batch edits, suspended batches, and undo-including batches
 - structural row and column inserts, deletes, and moves
-- range reads
+- dense and sparse range reads
 - 2D, overlapping, sliding-window, and conditional aggregation
-- exact lookup, approximate lookup, after-write lookup, and text lookup
+- exact lookup, INDEX/MATCH, INDEX reference, approximate lookup, after-write
+  lookup, and text lookup
 
 The scorecard excludes the `config-toggle` control family and `dynamic-array`
 leadership-only family from the directly comparable win count.

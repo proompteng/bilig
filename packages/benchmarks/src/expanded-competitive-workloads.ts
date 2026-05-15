@@ -12,6 +12,8 @@ export type ExpandedComparativeBenchmarkWorkload =
   | 'rebuild-runtime-from-snapshot'
   | 'sheet-rename-dependencies'
   | 'named-expression-change'
+  | 'cross-sheet-scalar-recalc'
+  | 'cross-sheet-aggregate-recalc'
   | 'single-edit-recalc'
   | 'single-edit-chain'
   | 'single-edit-fanout'
@@ -20,6 +22,7 @@ export type ExpandedComparativeBenchmarkWorkload =
   | 'batch-edit-recalc'
   | 'batch-edit-single-column'
   | 'batch-edit-multi-column'
+  | 'batch-edit-rectangular-block'
   | 'batch-edit-single-column-with-undo'
   | 'batch-suspended-single-column'
   | 'batch-suspended-multi-column'
@@ -31,6 +34,7 @@ export type ExpandedComparativeBenchmarkWorkload =
   | 'structural-move-columns'
   | 'range-read'
   | 'range-read-dense'
+  | 'range-read-sparse-wide'
   | 'aggregate-2d-ranges'
   | 'aggregate-overlapping-ranges'
   | 'aggregate-overlapping-sliding-window'
@@ -40,6 +44,8 @@ export type ExpandedComparativeBenchmarkWorkload =
   | 'conditional-aggregation-mixed-criteria'
   | 'lookup-no-column-index'
   | 'lookup-with-column-index'
+  | 'lookup-index-match-exact'
+  | 'lookup-index-reference'
   | 'lookup-with-column-index-after-column-write'
   | 'lookup-with-column-index-after-batch-write'
   | 'lookup-approximate-sorted'
@@ -66,6 +72,8 @@ export const EXPANDED_COMPARATIVE_WORKLOADS = [
   'rebuild-runtime-from-snapshot',
   'sheet-rename-dependencies',
   'named-expression-change',
+  'cross-sheet-scalar-recalc',
+  'cross-sheet-aggregate-recalc',
   'single-edit-recalc',
   'single-edit-chain',
   'single-edit-fanout',
@@ -74,6 +82,7 @@ export const EXPANDED_COMPARATIVE_WORKLOADS = [
   'batch-edit-recalc',
   'batch-edit-single-column',
   'batch-edit-multi-column',
+  'batch-edit-rectangular-block',
   'batch-edit-single-column-with-undo',
   'batch-suspended-single-column',
   'batch-suspended-multi-column',
@@ -85,6 +94,7 @@ export const EXPANDED_COMPARATIVE_WORKLOADS = [
   'structural-move-columns',
   'range-read',
   'range-read-dense',
+  'range-read-sparse-wide',
   'aggregate-2d-ranges',
   'aggregate-overlapping-ranges',
   'aggregate-overlapping-sliding-window',
@@ -94,6 +104,8 @@ export const EXPANDED_COMPARATIVE_WORKLOADS = [
   'conditional-aggregation-mixed-criteria',
   'lookup-no-column-index',
   'lookup-with-column-index',
+  'lookup-index-match-exact',
+  'lookup-index-reference',
   'lookup-with-column-index-after-column-write',
   'lookup-with-column-index-after-batch-write',
   'lookup-approximate-sorted',
@@ -123,6 +135,8 @@ export const EXPANDED_COMPARATIVE_WORKLOAD_SCORECARD_LANE = {
   'rebuild-runtime-from-snapshot': 'public',
   'sheet-rename-dependencies': 'holdout',
   'named-expression-change': 'holdout',
+  'cross-sheet-scalar-recalc': 'public',
+  'cross-sheet-aggregate-recalc': 'holdout',
   'single-edit-recalc': 'public',
   'single-edit-chain': 'public',
   'single-edit-fanout': 'public',
@@ -131,6 +145,7 @@ export const EXPANDED_COMPARATIVE_WORKLOAD_SCORECARD_LANE = {
   'batch-edit-recalc': 'public',
   'batch-edit-single-column': 'public',
   'batch-edit-multi-column': 'public',
+  'batch-edit-rectangular-block': 'holdout',
   'batch-edit-single-column-with-undo': 'public',
   'batch-suspended-single-column': 'public',
   'batch-suspended-multi-column': 'public',
@@ -142,6 +157,7 @@ export const EXPANDED_COMPARATIVE_WORKLOAD_SCORECARD_LANE = {
   'structural-move-columns': 'public',
   'range-read': 'public',
   'range-read-dense': 'public',
+  'range-read-sparse-wide': 'holdout',
   'aggregate-2d-ranges': 'holdout',
   'aggregate-overlapping-ranges': 'public',
   'aggregate-overlapping-sliding-window': 'public',
@@ -151,6 +167,8 @@ export const EXPANDED_COMPARATIVE_WORKLOAD_SCORECARD_LANE = {
   'conditional-aggregation-mixed-criteria': 'holdout',
   'lookup-no-column-index': 'public',
   'lookup-with-column-index': 'public',
+  'lookup-index-match-exact': 'public',
+  'lookup-index-reference': 'holdout',
   'lookup-with-column-index-after-column-write': 'public',
   'lookup-with-column-index-after-batch-write': 'public',
   'lookup-approximate-sorted': 'public',

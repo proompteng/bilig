@@ -36,6 +36,20 @@ import {
   measureWorkPaperStructuralMoveRowsSample,
 } from '../benchmark-workpaper-vs-hyperformula-expanded-additional-workloads.js'
 import {
+  measureHyperFormulaCrossSheetAggregateSample,
+  measureHyperFormulaCrossSheetScalarFanoutSample,
+  measureHyperFormulaIndexMatchExactSample,
+  measureHyperFormulaIndexReferenceSample,
+  measureHyperFormulaRectangularBatchEditSample,
+  measureHyperFormulaSparseWideRangeReadSample,
+  measureWorkPaperCrossSheetAggregateSample,
+  measureWorkPaperCrossSheetScalarFanoutSample,
+  measureWorkPaperIndexMatchExactSample,
+  measureWorkPaperIndexReferenceSample,
+  measureWorkPaperRectangularBatchEditSample,
+  measureWorkPaperSparseWideRangeReadSample,
+} from '../benchmark-workpaper-vs-hyperformula-expanded-workbook-shape-workloads.js'
+import {
   EXPANDED_COMPARATIVE_FAMILY_GROUPS,
   EXPANDED_COMPARATIVE_FAMILY_ORDER,
   EXPANDED_COMPARATIVE_WORKLOAD_FAMILY,
@@ -58,6 +72,8 @@ const expectedExpandedWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
   'rebuild-runtime-from-snapshot',
   'sheet-rename-dependencies',
   'named-expression-change',
+  'cross-sheet-scalar-recalc',
+  'cross-sheet-aggregate-recalc',
   'single-edit-recalc',
   'single-edit-chain',
   'single-edit-fanout',
@@ -66,6 +82,7 @@ const expectedExpandedWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
   'batch-edit-recalc',
   'batch-edit-single-column',
   'batch-edit-multi-column',
+  'batch-edit-rectangular-block',
   'batch-edit-single-column-with-undo',
   'batch-suspended-single-column',
   'batch-suspended-multi-column',
@@ -77,6 +94,7 @@ const expectedExpandedWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
   'structural-move-columns',
   'range-read',
   'range-read-dense',
+  'range-read-sparse-wide',
   'aggregate-2d-ranges',
   'aggregate-overlapping-ranges',
   'aggregate-overlapping-sliding-window',
@@ -86,6 +104,8 @@ const expectedExpandedWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
   'conditional-aggregation-mixed-criteria',
   'lookup-no-column-index',
   'lookup-with-column-index',
+  'lookup-index-match-exact',
+  'lookup-index-reference',
   'lookup-with-column-index-after-column-write',
   'lookup-with-column-index-after-batch-write',
   'lookup-approximate-sorted',
@@ -139,6 +159,7 @@ function familyEligibility(family: ExpandedCompetitiveFamily): { scorecardEligib
         : { scorecardEligible: true, exclusionReason: null }
     case 'sheet-lifecycle':
     case 'named-expression':
+    case 'cross-sheet':
     case 'dirty-execution':
     case 'batch-edit':
     case 'structural-rows':
@@ -347,6 +368,10 @@ describe('expanded comparative benchmark workloads', () => {
       [measureWorkPaperParserCacheUniqueFormulaSample(32), measureHyperFormulaParserCacheUniqueFormulaSample(32)],
       [measureWorkPaperSheetRenameDependencySample(), measureHyperFormulaSheetRenameDependencySample()],
       [measureWorkPaperNamedExpressionChangeSample(), measureHyperFormulaNamedExpressionChangeSample()],
+      [measureWorkPaperCrossSheetScalarFanoutSample(32), measureHyperFormulaCrossSheetScalarFanoutSample(32)],
+      [measureWorkPaperCrossSheetAggregateSample(32), measureHyperFormulaCrossSheetAggregateSample(32)],
+      [measureWorkPaperRectangularBatchEditSample(8, 4), measureHyperFormulaRectangularBatchEditSample(8, 4)],
+      [measureWorkPaperSparseWideRangeReadSample(8, 8), measureHyperFormulaSparseWideRangeReadSample(8, 8)],
       [measureWorkPaper2dAggregateSample(32), measureHyperFormula2dAggregateSample(32)],
       [
         measureWorkPaperConditionalAggregationSharedCriteriaSample(32, 4),
@@ -358,6 +383,8 @@ describe('expanded comparative benchmark workloads', () => {
       ],
       [measureWorkPaperApproximateLookupDescendingSample(32), measureHyperFormulaApproximateLookupDescendingSample(32)],
       [measureWorkPaperApproximateLookupDuplicateSample(32), measureHyperFormulaApproximateLookupDuplicateSample(32)],
+      [measureWorkPaperIndexMatchExactSample(32), measureHyperFormulaIndexMatchExactSample(32)],
+      [measureWorkPaperIndexReferenceSample(32), measureHyperFormulaIndexReferenceSample(32)],
     ]
 
     for (const [workpaper, hyperformula] of samplePairs) {

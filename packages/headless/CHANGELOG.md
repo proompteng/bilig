@@ -11,6 +11,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(core): cache normalized range lookups (0ca9a7c0)
 
 ## 0.14.22
@@ -20,6 +21,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(headless): compact initial formula load refs (65f3d446)
 
 ## 0.14.21
@@ -29,6 +31,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(workbook): harden headless mutation fast paths (0a806e6c)
 
 ## 0.14.20
@@ -38,6 +41,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(headless): resolve real workbook import regressions (5ca9d46a)
 - fix(ci): keep workbook worker release budget green (9f2dbfe5)
 - fix(headless): restore dynamic spills from documents (2c57d688)
@@ -49,6 +53,7 @@ This package is released as part of the aligned bilig library package set.
 - fix(headless): bulk restore imported axis metadata (255f1a4a)
 
 ## Internal runtime changes
+
 - chore(release): align runtime package versions (08e090c1)
 - refactor(headless): split corpus verification helpers (0ffadc1b)
 - chore(release): runtime packages v0.14.15 (073d1933)
@@ -64,6 +69,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(headless): resolve real workbook import regressions (5ca9d46a)
 - fix(ci): keep workbook worker release budget green (9f2dbfe5)
 - fix(headless): restore dynamic spills from documents (2c57d688)
@@ -75,6 +81,7 @@ This package is released as part of the aligned bilig library package set.
 - fix(headless): bulk restore imported axis metadata (255f1a4a)
 
 ## Internal runtime changes
+
 - chore(release): align runtime package versions (08e090c1)
 - refactor(headless): split corpus verification helpers (0ffadc1b)
 - chore(release): runtime packages v0.14.15 (073d1933)
@@ -89,6 +96,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(headless): resolve real workbook import regressions (5ca9d46a)
 - fix(ci): keep workbook worker release budget green (9f2dbfe5)
 - fix(headless): restore dynamic spills from documents (2c57d688)
@@ -100,6 +108,7 @@ This package is released as part of the aligned bilig library package set.
 - fix(headless): bulk restore imported axis metadata (255f1a4a)
 
 ## Internal runtime changes
+
 - chore(release): align runtime package versions (08e090c1)
 - refactor(headless): split corpus verification helpers (0ffadc1b)
 - chore(release): runtime packages v0.14.15 (073d1933)
@@ -113,6 +122,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(headless): resolve real workbook import regressions (5ca9d46a)
 - fix(ci): keep workbook worker release budget green (9f2dbfe5)
 - fix(headless): restore dynamic spills from documents (2c57d688)
@@ -122,6 +132,7 @@ This package is released as part of the aligned bilig library package set.
 - fix(ci): tolerate mirrored github release push (ae7bcdce)
 
 ## Internal runtime changes
+
 - chore(release): align runtime package versions (08e090c1)
 - refactor(headless): split corpus verification helpers (0ffadc1b)
 - chore(release): runtime packages v0.14.15 (073d1933)
@@ -134,6 +145,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(headless): resolve real workbook import regressions (5ca9d46a)
 - fix(ci): keep workbook worker release budget green (9f2dbfe5)
 - fix(headless): restore dynamic spills from documents (2c57d688)
@@ -143,6 +155,7 @@ This package is released as part of the aligned bilig library package set.
 - fix(ci): tolerate mirrored github release push (ae7bcdce)
 
 ## Internal runtime changes
+
 - chore(release): align runtime package versions (08e090c1)
 - refactor(headless): split corpus verification helpers (0ffadc1b)
 - chore(release): runtime packages v0.14.15 (073d1933)
@@ -154,6 +167,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(headless): resolve real workbook import regressions (5ca9d46a)
 - fix(ci): keep workbook worker release budget green (9f2dbfe5)
 - fix(headless): restore dynamic spills from documents (2c57d688)
@@ -162,6 +176,7 @@ This package is released as part of the aligned bilig library package set.
 - fix(ci): build protocol before release metadata push (1694f56f)
 
 ## Internal runtime changes
+
 - chore(release): align runtime package versions (08e090c1)
 - refactor(headless): split corpus verification helpers (0ffadc1b)
 

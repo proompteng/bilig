@@ -172,6 +172,73 @@ export function buildNamedExpressionBenchSheet(): WorkPaperSheet {
   return [[1, '=Rate+1', '=Rate*2'], [2]]
 }
 
+export function buildCrossSheetScalarFanoutSheets(rowCount: number): Record<string, WorkPaperSheet> {
+  return {
+    Data: Array.from({ length: rowCount }, (_, index) => [index + 1, (index + 1) * 10]),
+    Summary: Array.from({ length: rowCount }, (_, index) => {
+      const rowNumber = index + 1
+      return [`=Data!$A$1+Data!B${rowNumber}`]
+    }),
+  }
+}
+
+export function buildCrossSheetAggregateSheets(rowCount: number): Record<string, WorkPaperSheet> {
+  return {
+    Data: Array.from({ length: rowCount }, (_, index) => [index + 1]),
+    Summary: Array.from({ length: rowCount }, (_, index) => {
+      const rowNumber = index + 1
+      return [`=SUM(Data!A1:A${rowNumber})`]
+    }),
+  }
+}
+
+export function buildRectangularBlockFormulaSheet(rowCount: number, inputCols: number): WorkPaperSheet {
+  if (inputCols <= 0) {
+    throw new Error('rectangular block benchmark requires at least one input column')
+  }
+  const lastInputColumn = columnLabel(inputCols - 1)
+  return Array.from({ length: rowCount }, (_, index) => {
+    const rowNumber = index + 1
+    return [
+      ...Array.from({ length: inputCols }, (_value, colIndex) => rowNumber * (colIndex + 1)),
+      `=SUM(A${rowNumber}:${lastInputColumn}${rowNumber})`,
+    ]
+  })
+}
+
+export function buildSparseWideSheet(rowCount: number, colCount: number): WorkPaperSheet {
+  if (colCount < 3) {
+    throw new Error('sparse wide benchmark requires at least three columns')
+  }
+  const middleCol = Math.floor(colCount / 2)
+  return Array.from({ length: rowCount }, (_, index) => {
+    const rowNumber = index + 1
+    const row: Array<number | string | null> = Array.from({ length: colCount }, () => null)
+    row[0] = rowNumber
+    row[middleCol] = rowNumber * 10
+    row[colCount - 1] = `edge-${rowNumber}`
+    return row
+  })
+}
+
+export function buildIndexMatchExactSheet(rowCount: number): WorkPaperSheet {
+  const rows: Array<Array<number | string>> = [['Key', 'Value', '', textLookupKey(Math.floor(rowCount / 2)), '']]
+  for (let index = 1; index <= rowCount; index += 1) {
+    rows.push([textLookupKey(index), index * 10])
+  }
+  rows[0]![4] = `=INDEX(B2:B${rowCount + 1},MATCH(D1,A2:A${rowCount + 1},0))`
+  return rows
+}
+
+export function buildIndexReferenceSheet(rowCount: number): WorkPaperSheet {
+  const rows: Array<Array<number | string>> = [['Key', 'Value', '', Math.floor(rowCount / 2), '']]
+  for (let index = 1; index <= rowCount; index += 1) {
+    rows.push([index, index * 10])
+  }
+  rows[0]![4] = `=INDEX(A2:B${rowCount + 1},D1,2)`
+  return rows
+}
+
 export function buildLookupSearchModeReverseSheet(rowCount: number): WorkPaperSheet {
   const target = Math.floor(rowCount / 2)
   const rows: Array<Array<number | string>> = [['Key', 'Value', '', target, '']]
