@@ -46,7 +46,7 @@ packages through `pnpm workpaper:smoke:external`.
 | OpenAI Responses wrapper | `npm run agent:openai-responses`   | `function_call` dispatch, `function_call_output`, verified WorkPaper readback                                     |
 | AI SDK generateText      | `npm run agent:ai-sdk-generate-text` | real `generateText()` and `tool()` calls with verified WorkPaper readback                                         |
 | AI SDK streamText        | `npm run agent:ai-sdk-stream-text` | real `streamText()` and streamed tool calls with verified WorkPaper readback                                      |
-| Agent framework adapters | `npm run agent:framework-adapters` | TypeScript wrappers for AI SDK, LangChain, Mastra, LlamaIndex.TS, LangGraph.js, CopilotKit, and Cloudflare Agents |
+| Agent framework adapters | `npm run agent:framework-adapters` | TypeScript wrappers for AI SDK, LangChain, Mastra, LlamaIndex.TS, LangGraph.js, CopilotKit, Cloudflare Agents, and CrewAI |
 | MCP tool server shape    | `npm run agent:mcp-tools`          | `tools/list`, `tools/call`, verified edits                                                                        |
 | MCP stdio server         | `npm run agent:mcp-stdio`          | newline-delimited JSON-RPC over stdin/stdout                                                                      |
 | npm package eval         | `npm run npm-eval`                 | the same `.ts` file used by the npm-only smoke test                                                               |
@@ -159,7 +159,7 @@ For agent frameworks, the
 [`WorkPaper tool-calling recipe`](../../docs/agent-workpaper-tool-calling-recipe.md)
 also links to wrappers that keep the same validation and computed readback
 contract across the OpenAI Responses API, AI SDK, LangChain, Mastra,
-LlamaIndex.TS, LangGraph.js, CopilotKit, and Cloudflare Agents.
+LlamaIndex.TS, LangGraph.js, CopilotKit, Cloudflare Agents, and CrewAI.
 
 ## OpenAI Responses Tool Wrapper
 
@@ -361,6 +361,14 @@ Expected output:
   },
   "cloudflareAgents": {
     "toolNames": ["readWorkPaperSummary", "setWorkPaperInputCell"]
+  },
+  "crewAi": {
+    "toolNames": ["read_workpaper_summary", "set_workpaper_input_cell"],
+    "contract": {
+      "inputPayload": "validated JSON args",
+      "formulaReadback": "before/after computed Summary values",
+      "errorShape": "{ ok: false, error: string }"
+    }
   }
 }
 ```
@@ -375,6 +383,7 @@ adapts it to:
 - LlamaIndex.TS `tool(fn, { parameters })` / `FunctionTool` shapes
 - CopilotKit `useCopilotAction({ parameters, handler })` actions
 - Cloudflare Agents `AIChatAgent` / `streamText({ tools })` style tools
+- CrewAI-style JSON tool contracts for a TypeScript service boundary
 
 The actual output also includes read results, formula contracts, restored
 summary, and serialized byte counts for every write path.

@@ -114,6 +114,19 @@ type LangGraphToolCall =
       name: 'set_workpaper_input_cell'
       args: SetInputCellArgs
     }
+type CrewAiTool =
+  | {
+      name: 'read_workpaper_summary'
+      description: string
+      argsSchema: typeof readSummaryInputSchema
+      run(args?: ReadSummaryArgs): WorkPaperReadResult
+    }
+  | {
+      name: 'set_workpaper_input_cell'
+      description: string
+      argsSchema: typeof setInputCellInputSchema
+      run(args: SetInputCellArgs): WorkPaperWriteResult
+    }
 
 const readSummaryInputSchema = z.object({
   range: z.string().default('Summary!A1:B5'),
@@ -153,6 +166,7 @@ const llamaIndexWorkbook = buildWorkbook()
 const langGraphWorkbook = buildWorkbook()
 const copilotKitWorkbook = buildWorkbook()
 const cloudflareAgentsWorkbook = buildWorkbook()
+const crewAiWorkbook = buildWorkbook()
 const aiSdkTools = createAiSdkTools(createWorkPaperTools(aiSdkWorkbook))
 const openAiResponsesTools = createOpenAiResponsesTools(createWorkPaperTools(openAiResponsesWorkbook))
 const langChainTools = createLangChainTools(createWorkPaperTools(langChainWorkbook))
@@ -162,6 +176,7 @@ const llamaIndexTools = createLlamaIndexTools(createWorkPaperTools(llamaIndexWor
 const langGraphToolNode = createLangGraphToolNode(createWorkPaperTools(langGraphWorkbook))
 const copilotKitActions = createCopilotKitActions(createWorkPaperTools(copilotKitWorkbook))
 const cloudflareAgentTools = createCloudflareAgentTools(createWorkPaperTools(cloudflareAgentsWorkbook))
+const crewAiTools = createCrewAiTools(createWorkPaperTools(crewAiWorkbook))
 
 const output = {
   aiSdk: {
@@ -250,6 +265,21 @@ const output = {
       address: 'B3',
       value: 0.4,
     }),
+  },
+  crewAi: {
+    toolNames: crewAiTools.map((tool) => tool.name),
+    contract: {
+      inputPayload: 'validated JSON args',
+      formulaReadback: 'before/after computed Summary values',
+      errorShape: '{ ok: false, error: string }',
+    },
+    writeResult: requireWorkPaperWriteResult(
+      requireCrewAiTool(crewAiTools, 'set_workpaper_input_cell').run({
+        sheetName: 'Inputs',
+        address: 'B3',
+        value: 0.4,
+      }),
+    ),
   },
 }
 
@@ -592,6 +622,27 @@ function createCloudflareAgentTools(workPaperTools: WorkPaperToolSet) {
   }
 }
 
+function createCrewAiTools(workPaperTools: WorkPaperToolSet): CrewAiTool[] {
+  return [
+    {
+      name: 'read_workpaper_summary',
+      description: 'Read computed WorkPaper summary values for a CrewAI tool call.',
+      argsSchema: readSummaryInputSchema,
+      run(args: ReadSummaryArgs = {}) {
+        return workPaperTools.readWorkPaperSummary(readSummaryInputSchema.parse(args).range)
+      },
+    },
+    {
+      name: 'set_workpaper_input_cell',
+      description: 'Set one validated WorkPaper input cell and return formula readback.',
+      argsSchema: setInputCellInputSchema,
+      run(args: SetInputCellArgs) {
+        return workPaperTools.setWorkPaperInputCell(setInputCellInputSchema.parse(args))
+      },
+    },
+  ]
+}
+
 function createWorkPaperTools(workbook: WorkPaperInstance) {
   const summarySheet = requireSheet(workbook, 'Summary')
 
@@ -690,6 +741,16 @@ function requireCopilotKitAction(actions: CopilotKitAction[], name: CopilotKitAc
     throw new Error(`Missing CopilotKit action: ${name}`)
   }
   return action
+}
+
+function requireCrewAiTool(tools: CrewAiTool[], name: 'read_workpaper_summary'): Extract<CrewAiTool, { name: 'read_workpaper_summary' }>
+function requireCrewAiTool(tools: CrewAiTool[], name: 'set_workpaper_input_cell'): Extract<CrewAiTool, { name: 'set_workpaper_input_cell' }>
+function requireCrewAiTool(tools: CrewAiTool[], name: CrewAiTool['name']): CrewAiTool {
+  const tool = tools.find((candidate) => candidate.name === name)
+  if (tool === undefined) {
+    throw new Error(`Missing CrewAI tool: ${name}`)
+  }
+  return tool
 }
 
 function requireLangGraphToolMessage(messages: LangGraphToolMessage[], toolCallId: string): LangGraphToolMessage {
@@ -808,6 +869,7 @@ function assertOutput(actual: typeof output): void {
     ['langGraph', actual.langGraph.writeResult],
     ['copilotKit', actual.copilotKit.writeResult],
     ['cloudflareAgents', actual.cloudflareAgents.writeResult],
+    ['crewAi', actual.crewAi.writeResult],
   ]
 
   for (const [framework, result] of writeResults) {

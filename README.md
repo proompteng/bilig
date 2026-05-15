@@ -137,6 +137,7 @@ Pick the path closest to what you are building.
   [agent tool-calling recipe](docs/agent-workpaper-tool-calling-recipe.md),
   [OpenAI Responses tools](docs/openai-responses-workpaper-tool-call.md),
   [AI SDK and LangChain adapters](docs/vercel-ai-sdk-langchain-spreadsheet-tool.md),
+  [CrewAI adapter](docs/crewai-workpaper-spreadsheet-tool.md),
   [agent framework adapters](examples/headless-workpaper#agent-framework-adapters),
   [MCP server guide](docs/mcp-workpaper-tool-server.md),
   [MCP tool server shape](examples/headless-workpaper#mcp-tool-server-shape),

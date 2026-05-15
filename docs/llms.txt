@@ -31,6 +31,7 @@ language: typescript
 - https://proompteng.github.io/bilig/langgraph-workpaper-toolnode-spreadsheet.html
 - https://proompteng.github.io/bilig/copilotkit-workpaper-spreadsheet-action.html
 - https://proompteng.github.io/bilig/cloudflare-agents-workpaper-spreadsheet-tool.html
+- https://proompteng.github.io/bilig/crewai-workpaper-spreadsheet-tool.html
 - https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html
 - https://proompteng.github.io/bilig/mcp-client-setup.html
 - https://proompteng.github.io/bilig/claude-desktop-mcpb-workpaper.html
@@ -214,8 +215,9 @@ npm run agent:verify
   https://proompteng.github.io/bilig/langgraph-workpaper-toolnode-spreadsheet.html
   https://proompteng.github.io/bilig/copilotkit-workpaper-spreadsheet-action.html
   https://proompteng.github.io/bilig/cloudflare-agents-workpaper-spreadsheet-tool.html
+  https://proompteng.github.io/bilig/crewai-workpaper-spreadsheet-tool.html
 - runnable AI SDK, LangChain, Mastra, LlamaIndex.TS, LangGraph.js, CopilotKit,
-  and Cloudflare Agents adapter example:
+  Cloudflare Agents, and CrewAI adapter example:
   https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/agent-framework-adapters.ts
 - runnable AI SDK generateText WorkPaper tool smoke:
   https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/ai-sdk-generate-text-tool-smoke.ts

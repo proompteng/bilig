@@ -30,7 +30,10 @@ For a runnable external example, use
 For a smaller writeback-only proof, run
 `npm run agent:verify`. For framework-shaped wrappers that do not pull Vercel
 AI SDK or LangChain into this repository, run
-`npm run agent:framework-adapters`.
+`npm run agent:framework-adapters`. For a CrewAI interop shape, use the
+[CrewAI WorkPaper spreadsheet tool](crewai-workpaper-spreadsheet-tool.md)
+recipe; it keeps the WorkPaper code in TypeScript and exposes a small JSON
+contract to the agent workflow.
 If you want the real AI SDK loop, run `npm run agent:ai-sdk-generate-text`.
 That script calls `generateText()` and `tool()` from `ai`, using `ai/test` as a
 deterministic provider so no API key is needed.

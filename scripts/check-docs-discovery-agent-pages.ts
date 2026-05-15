@@ -4,6 +4,7 @@ export const agentFrameworkLlmsRequiredLinks = [
   'https://proompteng.github.io/bilig/langgraph-workpaper-toolnode-spreadsheet.html',
   'https://proompteng.github.io/bilig/copilotkit-workpaper-spreadsheet-action.html',
   'https://proompteng.github.io/bilig/cloudflare-agents-workpaper-spreadsheet-tool.html',
+  'https://proompteng.github.io/bilig/crewai-workpaper-spreadsheet-tool.html',
 ] as const
 
 export const agentFrameworkDocRequirements = [
@@ -26,5 +27,9 @@ export const agentFrameworkDocRequirements = [
   {
     path: 'docs/cloudflare-agents-workpaper-spreadsheet-tool.md',
     includes: ['Cloudflare Agents WorkPaper spreadsheet tool', 'agentTool', 'npm run agent:framework-adapters'],
+  },
+  {
+    path: 'docs/crewai-workpaper-spreadsheet-tool.md',
+    includes: ['CrewAI WorkPaper spreadsheet tool', 'JSON contract', 'npm run agent:framework-adapters'],
   },
 ] as const
