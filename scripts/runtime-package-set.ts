@@ -19,6 +19,7 @@ export const RUNTIME_NPM_PACKAGE_DIRS = [
   'packages/wasm-kernel',
   'packages/formula',
   'packages/core',
+  'packages/excel-import',
   'packages/headless',
 ] as const satisfies readonly RuntimePackageDir[]
 

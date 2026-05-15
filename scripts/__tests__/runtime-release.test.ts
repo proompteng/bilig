@@ -159,9 +159,9 @@ describe('runtime release helpers', () => {
     ).toBe(true)
   })
 
-  it('keeps the Excel importer runtime-affecting without publishing it before npm provisioning', () => {
+  it('publishes the Excel importer with the runtime npm package set', () => {
     expect(RUNTIME_PACKAGE_DIRS).toContain('packages/excel-import')
-    expect(RUNTIME_NPM_PACKAGE_DIRS).not.toContain('packages/excel-import')
+    expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/excel-import')
     expect(RUNTIME_NPM_PACKAGE_DIRS).toContain('packages/headless')
   })
 

@@ -12,7 +12,13 @@ describe('xlsx pivot import', () => {
     const exportedBytes = exportXlsx(imported.snapshot)
 
     expect(imported.warnings).toEqual([])
-    expect(imported.snapshot.workbook.metadata?.pivots).toBeUndefined()
+    expect(imported.snapshot.workbook.metadata?.pivots).toEqual([
+      expect.objectContaining({
+        name: 'SalesByRegion',
+        sheetName: 'Pivot',
+        address: 'A1',
+      }),
+    ])
     expect(imported.snapshot.workbook.metadata?.pivotArtifacts?.parts.length).toBeGreaterThan(0)
     expect(pivotPackageMetrics(exportedBytes)).toEqual(pivotPackageMetrics(sourceBytes))
     expect(sheetRelationshipsXml(exportedBytes, 2)).toContain(
@@ -398,6 +404,16 @@ describe('xlsx pivot import', () => {
 
     expect(imported.warnings).toContain(externalPivotCachesWarning)
     expect(imported.snapshot.workbook.metadata?.pivots).toBeUndefined()
+    expect(imported.snapshot.workbook.metadata?.unsupportedPivots).toEqual([
+      expect.objectContaining({
+        kind: 'external-cache',
+        cacheId: 1,
+        sourceType: 'external',
+        sheetName: 'Pivot',
+        address: 'A1',
+        name: 'SalesByRegion',
+      }),
+    ])
   })
 })
 

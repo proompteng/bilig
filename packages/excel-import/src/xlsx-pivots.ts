@@ -13,6 +13,7 @@ import type {
   WorkbookSheetPivotArtifactsSnapshot,
   WorkbookSnapshot,
   WorkbookTableSnapshot,
+  WorkbookUnsupportedPivotSnapshot,
 } from '@bilig/protocol'
 import {
   addContentTypeOverride,
@@ -56,6 +57,7 @@ interface ParsedPivotCache {
 
 export interface ImportedWorkbookPivots {
   readonly pivots: WorkbookPivotSnapshot[] | undefined
+  readonly unsupportedPivots: WorkbookUnsupportedPivotSnapshot[] | undefined
   readonly hasExternalPivotCaches: boolean
   readonly artifacts: WorkbookPivotArtifactsSnapshot | undefined
   readonly sheetArtifactsByName: Map<string, WorkbookSheetPivotArtifactsSnapshot>
@@ -547,10 +549,10 @@ function parsePivotCacheDefinition(
   return fields.length > 0 ? { cacheId, source, fields } : null
 }
 
-function pivotCacheDefinitionHasExternalSource(xml: string): boolean {
+function pivotCacheDefinitionSourceType(xml: string): string | null {
   const parsed: unknown = xmlParser.parse(xml)
   const cacheSource = recordChild(recordChild(parsed, 'pivotCacheDefinition'), 'cacheSource')
-  return cacheSource?.['type'] === 'external'
+  return typeof cacheSource?.['type'] === 'string' ? cacheSource['type'] : null
 }
 
 function sourceRangeForName(
@@ -602,23 +604,39 @@ function parsePivotCaches(
   zip: ZipEntries,
   tables: readonly WorkbookTableSnapshot[],
   definedNames: readonly WorkbookDefinedNameSnapshot[],
-): { readonly caches: Map<number, ParsedPivotCache>; readonly hasExternalPivotCaches: boolean } {
+): {
+  readonly caches: Map<number, ParsedPivotCache>
+  readonly hasExternalPivotCaches: boolean
+  readonly unsupportedCaches: Map<number, WorkbookUnsupportedPivotSnapshot>
+} {
   const cacheDefinitions = readWorkbookPivotCaches(zip)
   const tablesByName = new Map(tables.map((table) => [table.name.toLocaleLowerCase('en-US'), table]))
   const definedNamesByName = new Map(
     definedNames.map((definedName) => [definedNameKey(definedName.name, definedName.scopeSheetName), definedName]),
   )
   const output = new Map<number, ParsedPivotCache>()
+  const unsupportedCaches = new Map<number, WorkbookUnsupportedPivotSnapshot>()
   let hasExternalPivotCaches = false
   for (const [cacheId, path] of cacheDefinitions.entries()) {
     const xml = getZipText(zip, path) ?? ''
-    hasExternalPivotCaches ||= pivotCacheDefinitionHasExternalSource(xml)
+    const sourceType = pivotCacheDefinitionSourceType(xml)
+    const hasExternalSource = sourceType === 'external'
+    hasExternalPivotCaches ||= hasExternalSource
+    if (hasExternalSource) {
+      unsupportedCaches.set(cacheId, {
+        kind: 'external-cache',
+        cacheId,
+        sourceType,
+        packagePart: path,
+        reason: 'External pivot cache is preserved as raw XLSX package parts but is not semantically imported.',
+      })
+    }
     const parsed = parsePivotCacheDefinition(cacheId, xml, tablesByName, definedNamesByName)
     if (parsed) {
       output.set(cacheId, parsed)
     }
   }
-  return { caches: output, hasExternalPivotCaches }
+  return { caches: output, hasExternalPivotCaches, unsupportedCaches }
 }
 
 function aggregationFromSubtotal(value: unknown): PivotAggregation | null {
@@ -692,6 +710,40 @@ function parsePivotTableXml(sheetName: string, xml: string, caches: ReadonlyMap<
   }
 }
 
+function parseUnsupportedPivotTableXml(
+  sheetName: string,
+  xml: string,
+  pivotPath: string,
+  unsupportedCaches: ReadonlyMap<number, WorkbookUnsupportedPivotSnapshot>,
+): WorkbookUnsupportedPivotSnapshot | null {
+  const parsed: unknown = xmlParser.parse(xml)
+  const definition = recordChild(parsed, 'pivotTableDefinition')
+  const cacheId = numberAttribute(definition?.['cacheId'])
+  if (!definition || cacheId === null) {
+    return null
+  }
+  const cached = unsupportedCaches.get(cacheId)
+  const locationRefValue = recordChild(definition, 'location')?.['ref']
+  const locationRef = typeof locationRefValue === 'string' ? parseRangeRef(sheetName, locationRefValue) : null
+  const name = typeof definition['name'] === 'string' && definition['name'].trim().length > 0 ? definition['name'].trim() : undefined
+  if (cached) {
+    return {
+      ...cached,
+      ...(locationRef ? { sheetName, address: locationRef.startAddress } : { sheetName }),
+      ...(name ? { name } : {}),
+      packagePart: pivotPath,
+    }
+  }
+  return {
+    kind: 'raw-part',
+    cacheId,
+    ...(locationRef ? { sheetName, address: locationRef.startAddress } : { sheetName }),
+    ...(name ? { name } : {}),
+    packagePart: pivotPath,
+    reason: 'Pivot table package parts are preserved but could not be projected into the semantic pivot model.',
+  }
+}
+
 export function readImportedWorkbookPivots(
   source: XlsxZipSource,
   sheetNames: readonly string[],
@@ -700,34 +752,40 @@ export function readImportedWorkbookPivots(
 ): ImportedWorkbookPivots {
   const zip = readXlsxZipEntries(source)
   const { artifacts, sheetArtifactsByName } = readImportedPivotArtifacts(zip, sheetNames)
-  const { caches, hasExternalPivotCaches } = parsePivotCaches(zip, tables, definedNames)
-  if (caches.size === 0) {
-    return { pivots: undefined, hasExternalPivotCaches, artifacts, sheetArtifactsByName }
-  }
+  const { caches, hasExternalPivotCaches, unsupportedCaches } = parsePivotCaches(zip, tables, definedNames)
   const pivots: WorkbookPivotSnapshot[] = []
+  const unsupportedPivots: WorkbookUnsupportedPivotSnapshot[] = []
   sheetNames.forEach((sheetName, sheetIndex) => {
     const sheetPath = `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`
     const sheetXml = getZipText(zip, sheetPath)
-    if (!sheetXml || !/<pivotTableDefinition\b/u.test(sheetXml)) {
+    if (!sheetXml) {
       return
     }
     const sheetRelationships = parseRelationships(getZipText(zip, `xl/worksheets/_rels/sheet${String(sheetIndex + 1)}.xml.rels`))
     const parsedSheet: unknown = xmlParser.parse(sheetXml)
     const pivotRefs = asArray(recordChild(parsedSheet, 'worksheet')?.['pivotTableDefinition'])
-    pivotRefs.forEach((entry) => {
-      if (!isRecord(entry) || typeof entry['id'] !== 'string') {
-        return
-      }
-      const relationship = sheetRelationships.find(
-        (candidate) => candidate.id === entry['id'] && candidate.type === pivotTableRelationshipType,
-      )
-      if (!relationship) {
-        return
-      }
+    const pivotRelationships =
+      pivotRefs.length > 0
+        ? pivotRefs.flatMap((entry) => {
+            if (!isRecord(entry) || typeof entry['id'] !== 'string') {
+              return []
+            }
+            const relationship = sheetRelationships.find(
+              (candidate) => candidate.id === entry['id'] && candidate.type === pivotTableRelationshipType,
+            )
+            return relationship ? [relationship] : []
+          })
+        : sheetRelationships.filter((relationship) => relationship.type === pivotTableRelationshipType)
+    pivotRelationships.forEach((relationship) => {
       const pivotPath = resolveTargetPath(sheetPath, relationship.target)
       const pivot = parsePivotTableXml(sheetName, getZipText(zip, pivotPath) ?? '', caches)
       if (pivot) {
         pivots.push(pivot)
+        return
+      }
+      const unsupportedPivot = parseUnsupportedPivotTableXml(sheetName, getZipText(zip, pivotPath) ?? '', pivotPath, unsupportedCaches)
+      if (unsupportedPivot) {
+        unsupportedPivots.push(unsupportedPivot)
       }
     })
   })
@@ -736,6 +794,14 @@ export function readImportedWorkbookPivots(
       pivots.length > 0
         ? pivots.toSorted((left, right) =>
             `${left.sheetName}:${left.address}:${left.name}`.localeCompare(`${right.sheetName}:${right.address}:${right.name}`),
+          )
+        : undefined,
+    unsupportedPivots:
+      unsupportedPivots.length > 0
+        ? unsupportedPivots.toSorted((left, right) =>
+            `${left.sheetName ?? ''}:${left.address ?? ''}:${left.name ?? ''}:${String(left.cacheId ?? '')}`.localeCompare(
+              `${right.sheetName ?? ''}:${right.address ?? ''}:${right.name ?? ''}:${String(right.cacheId ?? '')}`,
+            ),
           )
         : undefined,
     hasExternalPivotCaches,

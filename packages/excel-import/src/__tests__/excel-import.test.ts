@@ -387,7 +387,20 @@ describe('excel import', () => {
     const formulaCell = imported.snapshot.sheets[0]?.cells.find((cell) => cell.address === 'A1')
 
     expect(formulaCell?.formula).toBe('2+3')
-    expect(imported.warnings).toEqual([])
+    expect(imported.warnings).toEqual([externalWorkbookReferencesWarning])
+    expect(imported.snapshot.workbook.metadata?.unsupportedFormulaDependencies).toEqual([
+      {
+        kind: 'external-workbook-reference',
+        sheetName: 'Report',
+        address: 'A1',
+        formula: "'[1]External Data'!A1+'[1]External Data'!A2",
+        importedFormula: '2+3',
+        resolvedExternalReferenceCount: 2,
+        unresolvedExternalReferenceCount: 0,
+        reason:
+          'Formula depends on an external workbook reference; cached linked values are preserved but linked workbooks are not recalculated during import.',
+      },
+    ])
 
     const engine = new SpreadsheetEngine({ workbookName: 'external-link-cache-import' })
     await engine.ready()
@@ -404,6 +417,17 @@ describe('excel import', () => {
     expect(formulaCell?.formula).toBe('GETPIVOTDATA("Amount",\'[1]External Pivot\'!$G$3,"Region","East")')
     expect(formulaCell?.value).toBe(15)
     expect(imported.warnings).toContain(externalWorkbookReferencesWarning)
+    expect(imported.snapshot.workbook.metadata?.unsupportedFormulaDependencies).toEqual([
+      expect.objectContaining({
+        kind: 'external-workbook-reference',
+        sheetName: 'Report',
+        address: 'A1',
+        formula: 'GETPIVOTDATA("Amount",\'[1]External Pivot\'!$G$3,"Region","East")',
+        importedFormula: 'GETPIVOTDATA("Amount",\'[1]External Pivot\'!$G$3,"Region","East")',
+        resolvedExternalReferenceCount: 0,
+        unresolvedExternalReferenceCount: 0,
+      }),
+    ])
   })
 
   it('retains cached values for imported formula cells that use unavailable add-in functions', () => {

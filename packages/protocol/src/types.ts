@@ -5,7 +5,6 @@ import type {
   WorkbookControlArtifactsSnapshot,
   WorkbookDrawingArtifactsSnapshot,
   WorkbookExternalLinkArtifactsSnapshot,
-  WorkbookPackageRelationshipSnapshot,
   WorkbookSheetArrayFormulasSnapshot,
   WorkbookSheetDataTableFormulasSnapshot,
   WorkbookSheetControlArtifactsSnapshot,
@@ -15,6 +14,23 @@ import type {
   WorkbookStyleArtifactsSnapshot,
   WorkbookThreadedCommentArtifactsSnapshot,
 } from './package-artifacts.js'
+import type {
+  WorkbookPivotArtifactsSnapshot,
+  WorkbookPivotSnapshot,
+  WorkbookSheetPivotArtifactsSnapshot,
+  WorkbookUnsupportedFormulaDependencySnapshot,
+  WorkbookUnsupportedPivotSnapshot,
+} from './workbook-pivot-types.js'
+export type {
+  PivotAggregation,
+  WorkbookPivotArtifactsSnapshot,
+  WorkbookPivotPackagePartSnapshot,
+  WorkbookPivotSnapshot,
+  WorkbookPivotValueSnapshot,
+  WorkbookSheetPivotArtifactsSnapshot,
+  WorkbookUnsupportedFormulaDependencySnapshot,
+  WorkbookUnsupportedPivotSnapshot,
+} from './workbook-pivot-types.js'
 
 export type CellIndex = number
 export type FormulaId = number
@@ -257,25 +273,6 @@ export interface WorkbookSpillSnapshot {
   cols: number
 }
 
-export type PivotAggregation = 'sum' | 'count'
-
-export interface WorkbookPivotValueSnapshot {
-  sourceColumn: string
-  summarizeBy: PivotAggregation
-  outputLabel?: string
-}
-
-export interface WorkbookPivotSnapshot {
-  name: string
-  sheetName: string
-  address: string
-  source: CellRangeRef
-  groupBy: string[]
-  values: WorkbookPivotValueSnapshot[]
-  rows: number
-  cols: number
-}
-
 export interface WorkbookSheetCellStyleIndexSnapshot {
   address: string
   styleIndex: number
@@ -284,22 +281,6 @@ export interface WorkbookSheetCellStyleIndexSnapshot {
 export interface WorkbookSheetStyleArtifactsSnapshot {
   cellStyleIndexes: WorkbookSheetCellStyleIndexSnapshot[]
   blankCellAddresses?: string[]
-}
-
-export interface WorkbookPivotPackagePartSnapshot {
-  path: string
-  xml: string
-}
-
-export interface WorkbookPivotArtifactsSnapshot {
-  parts: WorkbookPivotPackagePartSnapshot[]
-  workbookPivotCachesXml?: string
-  workbookRelationships?: WorkbookPackageRelationshipSnapshot[]
-}
-
-export interface WorkbookSheetPivotArtifactsSnapshot {
-  relationships: WorkbookPackageRelationshipSnapshot[]
-  pivotTableDefinitionsXml?: string
 }
 
 export type WorkbookChartType = 'column' | 'bar' | 'line' | 'area' | 'pie' | 'scatter'
@@ -898,6 +879,8 @@ export interface WorkbookMetadataSnapshot {
   tables?: WorkbookTableSnapshot[]
   spills?: WorkbookSpillSnapshot[]
   pivots?: WorkbookPivotSnapshot[]
+  unsupportedFormulaDependencies?: WorkbookUnsupportedFormulaDependencySnapshot[]
+  unsupportedPivots?: WorkbookUnsupportedPivotSnapshot[]
   pivotArtifacts?: WorkbookPivotArtifactsSnapshot
   drawingArtifacts?: WorkbookDrawingArtifactsSnapshot
   chartArtifacts?: WorkbookDrawingArtifactsSnapshot

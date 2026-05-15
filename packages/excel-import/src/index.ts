@@ -425,6 +425,7 @@ function importSheetJsWorkbook(
   let volatileFormulaWarningSeen = false
   let formulaCellSeen = false
   const styleCatalog = new Map<string, CellStyleRecord>()
+  const unsupportedFormulaDependencies: NonNullable<WorkbookMetadataSnapshot['unsupportedFormulaDependencies']> = []
   const importedArrayFormulaSpills: NonNullable<WorkbookMetadataSnapshot['spills']> = []
   const previewSheets: ImportedWorkbookSheetPreview[] = []
   const sheets = workbook.SheetNames.map((sheetName, order) => {
@@ -523,10 +524,11 @@ function importSheetJsWorkbook(
         const normalizedFormula = normalizeImportedFormulaSource(formula)
         formulaCellSeen = true
         const externalReferenceTranslation = translateImportedFormulaExternalReferences(normalizedFormula, importedExternalLinkCaches)
-        if (
-          !externalWorkbookReferenceWarningSeen &&
-          (externalReferenceTranslation.unresolvedCount > 0 || formulaReferencesExternalWorkbook(externalReferenceTranslation.formula))
-        ) {
+        const hasExternalWorkbookDependency =
+          externalReferenceTranslation.resolvedCount > 0 ||
+          externalReferenceTranslation.unresolvedCount > 0 ||
+          formulaReferencesExternalWorkbook(externalReferenceTranslation.formula)
+        if (!externalWorkbookReferenceWarningSeen && hasExternalWorkbookDependency) {
           externalWorkbookReferenceWarningSeen = true
           warnings.push(externalWorkbookReferencesWarning)
         }
@@ -540,6 +542,19 @@ function importSheetJsWorkbook(
           ownerAddress: address,
           tables: importedTables,
         })
+        if (hasExternalWorkbookDependency) {
+          unsupportedFormulaDependencies.push({
+            kind: 'external-workbook-reference',
+            sheetName,
+            address,
+            formula: normalizedFormula,
+            importedFormula: nextCell.formula,
+            resolvedExternalReferenceCount: externalReferenceTranslation.resolvedCount,
+            unresolvedExternalReferenceCount: externalReferenceTranslation.unresolvedCount,
+            reason:
+              'Formula depends on an external workbook reference; cached linked values are preserved but linked workbooks are not recalculated during import.',
+          })
+        }
         const cachedLiteral = xmlTextValue ?? readImportedLiteralCellValue(cell)
         if (cachedLiteral !== undefined) {
           nextCell.value = cachedLiteral
@@ -704,6 +719,13 @@ function importSheetJsWorkbook(
     tables: importedTables,
     spills: importedArrayFormulaSpills.length > 0 ? importedArrayFormulaSpills : undefined,
     pivots: importedPivots?.pivots,
+    unsupportedFormulaDependencies:
+      unsupportedFormulaDependencies.length > 0
+        ? unsupportedFormulaDependencies.toSorted((left, right) =>
+            `${left.sheetName}:${left.address}`.localeCompare(`${right.sheetName}:${right.address}`),
+          )
+        : undefined,
+    unsupportedPivots: importedPivots?.unsupportedPivots,
     pivotArtifacts: importedPivots?.artifacts,
     drawingArtifacts: importedDrawingArtifacts?.artifacts,
     chartArtifacts: importedChartArtifacts?.artifacts,

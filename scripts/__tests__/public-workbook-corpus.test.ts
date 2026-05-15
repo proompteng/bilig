@@ -39,6 +39,7 @@ import {
   classifyUnsupportedFeatures,
   externalPivotCacheUnsupportedClassification,
   hasFormulaOracleBlockingWarning,
+  mergeImportedAndFootprintFeatureCounts,
   rawPivotPartUnsupportedClassification,
   staleFormulaCacheUnsupportedClassification,
 } from '../public-workbook-corpus-verify.ts'
@@ -283,9 +284,51 @@ describe('public workbook corpus', () => {
     expect(classifications).toEqual([`xlsx.import.warning:${externalPivotCachesWarning}`, externalPivotCacheUnsupportedClassification])
   })
 
+  it('preserves raw footprint counts when imported snapshots collapse sparse dimensions', () => {
+    const importedCounts = {
+      sheetCount: 1,
+      cellCount: 24,
+      formulaCellCount: 0,
+      valueCellCount: 24,
+      definedNameCount: 0,
+      tableCount: 0,
+      chartCount: 0,
+      pivotCount: 0,
+      mergeCount: 0,
+      styleRangeCount: 0,
+      conditionalFormatCount: 0,
+      dataValidationCount: 0,
+      macroPayloadCount: 0,
+      warningCount: 1,
+    }
+    const footprintCounts = {
+      sheetCount: 1,
+      cellCount: 231_545,
+      formulaCellCount: 0,
+      valueCellCount: 231_545,
+      definedNameCount: 2,
+      tableCount: 0,
+      chartCount: 0,
+      pivotCount: 0,
+      mergeCount: 0,
+      styleRangeCount: 0,
+      conditionalFormatCount: 0,
+      dataValidationCount: 0,
+      macroPayloadCount: 0,
+      warningCount: 0,
+    }
+
+    expect(mergeImportedAndFootprintFeatureCounts(importedCounts, footprintCounts)).toMatchObject({
+      cellCount: 231_545,
+      valueCellCount: 231_545,
+      definedNameCount: 2,
+      warningCount: 1,
+    })
+  })
+
   it('blocks formula-oracle comparisons for warnings that make cached values unreliable', () => {
-    expect(hasFormulaOracleBlockingWarning([externalPivotCachesWarning])).toBe(true)
-    expect(hasFormulaOracleBlockingWarning([externalWorkbookReferencesWarning])).toBe(true)
+    expect(hasFormulaOracleBlockingWarning([externalPivotCachesWarning])).toBe(false)
+    expect(hasFormulaOracleBlockingWarning([externalWorkbookReferencesWarning])).toBe(false)
     expect(hasFormulaOracleBlockingWarning([macroExecutionDeclinedWarning])).toBe(true)
     expect(hasFormulaOracleBlockingWarning([manualCalculationModeWarning])).toBe(true)
     expect(hasFormulaOracleBlockingWarning([volatileFormulasWarning])).toBe(true)
@@ -347,13 +390,43 @@ describe('public workbook corpus', () => {
       passed: true,
       featureCounts: { formulaCellCount: 1, warningCount: 1 },
       validation: { formulaOraclePassed: true, formulaOracleComparisons: 0 },
-      unsupportedFeatureClassifications: [`xlsx.import.warning:${externalWorkbookReferencesWarning}`],
+      unsupportedFeatureClassifications: [
+        'xlsx.externalLinks.formulaDependenciesUnsupported',
+        `xlsx.import.warning:${externalWorkbookReferencesWarning}`,
+      ],
     })
     expect(scorecard.cases[0]?.evidence).toEqual(
       expect.arrayContaining([
+        'external-workbook-formula-dependencies=1',
+        'formula-oracle-skipped-unsupported-external-formulas=1',
         publicWorkbookImportWarningClassifierEvidence,
         'Round-trip projection skipped because external workbook links are not recalculated during XLSX import.',
       ]),
+    )
+  })
+
+  it('still compares local formula oracles when external workbook references affect only specific cells', async () => {
+    const scorecard = await buildSingleWorkbookScorecard({
+      cacheDirPrefix: 'public-workbook-corpus-mixed-external-formula-',
+      fileName: 'mixed-external-formula.xlsx',
+      sourceId: 'source-mixed-external-formula',
+      workbookBytes: buildMixedExternalAndLocalFormulaBytes(),
+    })
+
+    expect(scorecard.summary.allCachedWorkbooksPassed).toBe(true)
+    expect(scorecard.summary.formulaOracleComparisonCount).toBe(1)
+    expect(scorecard.cases[0]).toMatchObject({
+      status: 'unsupported',
+      passed: true,
+      featureCounts: { formulaCellCount: 2, warningCount: 1 },
+      validation: { formulaOraclePassed: true, formulaOracleComparisons: 1 },
+      unsupportedFeatureClassifications: [
+        'xlsx.externalLinks.formulaDependenciesUnsupported',
+        `xlsx.import.warning:${externalWorkbookReferencesWarning}`,
+      ],
+    })
+    expect(scorecard.cases[0]?.evidence).toEqual(
+      expect.arrayContaining(['external-workbook-formula-dependencies=1', 'formula-oracle-skipped-unsupported-external-formulas=1']),
     )
   })
 
@@ -2065,6 +2138,19 @@ function buildExternalWorkbookReferenceBytes(): Uint8Array {
   ])
   sheet.B2 = { t: 'n', f: "VLOOKUP(A2,'[1]Lookup'!$A$1:$B$2,2,FALSE)", v: 12 }
   sheet['!ref'] = 'A1:B2'
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Summary')
+  return XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' })
+}
+
+function buildMixedExternalAndLocalFormulaBytes(): Uint8Array {
+  const workbook = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['Key', 'External', 'Local'],
+    ['A', null, null],
+  ])
+  sheet.B2 = { t: 'n', f: "VLOOKUP(A2,'[1]Lookup'!$A$1:$B$2,2,FALSE)", v: 12 }
+  sheet.C2 = { t: 'n', f: '10+5', v: 15 }
+  sheet['!ref'] = 'A1:C2'
   XLSX.utils.book_append_sheet(workbook, sheet, 'Summary')
   return XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' })
 }

@@ -23,6 +23,7 @@ import {
   hasImportWarningUnsupportedClassifications,
   hasFormulaOracleCacheUnsupportedClassifications,
   hasPivotUnsupportedClassifications,
+  hasResourceLimitUnsupportedClassifications,
   publicWorkbookImportWarningClassifierEvidence,
   publicWorkbookFormulaOracleCacheClassifierEvidence,
   publicWorkbookPivotClassifierEvidence,
@@ -30,6 +31,14 @@ import {
 } from './public-workbook-corpus-evidence.ts'
 import { inspectWorkbookFootprintIsolated, type PublicWorkbookCorpusWorkerOptions } from './public-workbook-corpus-footprint.ts'
 import { formatByteSize, startChildRssWatchdog, terminateChildProcess } from './public-workbook-corpus-process.ts'
+import {
+  importResourceLimitPreflight,
+  roundTripResourceLimitPreflight,
+  structuralSmokeResourceLimitPreflight,
+  unsupportedPreflightResourceLimitCase,
+  unsupportedResourceLimitCase,
+  unsupportedRssLimitCase,
+} from './public-workbook-corpus-resource-limits.ts'
 import { roundTripSemanticsDigest } from './public-workbook-corpus-roundtrip.ts'
 import { buildPublicWorkbookCorpusScorecardFromCases } from './public-workbook-corpus-scorecard.ts'
 import { indexReusablePublicWorkbookCorpusCases } from './public-workbook-corpus-verify-checkpoint.ts'
@@ -78,6 +87,7 @@ const macroRoundTripSkipEvidence = 'Round-trip projection skipped because macro 
 export const rawPivotPartUnsupportedClassification = 'xlsx.pivots.rawPartNotSemanticallyImported'
 export const externalPivotCacheUnsupportedClassification = 'xlsx.pivots.externalCacheNotSemanticallyImported'
 export const staleFormulaCacheUnsupportedClassification = 'xlsx.publicCorpus.formulaOracleCache:independentRecalcMatched'
+export const externalLinkTransitiveFormulaUnsupportedClassification = 'xlsx.externalLinks.transitiveFormulaDependenciesUnsupported'
 const verificationWorkerPhasePrefix = 'bilig-public-workbook-verify-phase='
 
 interface FormulaOracleMismatchDetail {
@@ -90,6 +100,7 @@ interface FormulaOracleMismatchDetail {
 
 interface DetailedFormulaOracleValidationResult extends FormulaOracleValidationResult {
   readonly mismatchDetails: readonly FormulaOracleMismatchDetail[]
+  readonly skippedUnsupportedFormulaCount: number
 }
 
 interface UnsupportedFormulaOracleCacheClassification {
@@ -315,6 +326,10 @@ export async function verifyCachedWorkbookArtifact(
     if (footprint.featureCounts.cellCount > maxCellCount) {
       return unsupportedResourceLimitCase(artifact, baseEvidence, footprint, maxCellCount)
     }
+    const importResourceLimit = importResourceLimitPreflight(artifact, footprint)
+    if (importResourceLimit) {
+      return unsupportedPreflightResourceLimitCase(artifact, baseEvidence, footprint, importResourceLimit)
+    }
     collectGarbage()
     workerOptions.onPhase?.('import-xlsx')
     const imported = importXlsx(bytes, artifact.fileName)
@@ -324,27 +339,47 @@ export async function verifyCachedWorkbookArtifact(
     workerOptions.onPhase?.('formula-oracle')
     const formulaOracleValidation =
       footprint.featureCounts.formulaCellCount === 0 || hasFormulaOracleBlockingWarning(imported.warnings)
-        ? { comparisons: 0, mismatches: [], mismatchDetails: [] }
-        : await validateFormulaOracles(imported.snapshot, bytes)
+        ? { comparisons: 0, mismatches: [], mismatchDetails: [], skippedUnsupportedFormulaCount: 0 }
+        : await validateFormulaOracles(imported.snapshot, bytes, unsupportedFormulaDependencyKeys(imported.snapshot))
     const unsupportedFormulaOracleWarning = hasUnsupportedPrecisionAsDisplayedOracleWarning(imported.warnings, formulaOracleValidation)
     const unsupportedFormulaOracleCache = unsupportedFormulaOracleWarning
       ? emptyUnsupportedFormulaOracleCacheClassification()
       : classifyUnsupportedFormulaOracleCache(imported.snapshot, formulaOracleValidation)
+    const unsupportedExternalLinkFormulaOracle = classifyUnsupportedExternalLinkFormulaOracle(imported.snapshot, formulaOracleValidation)
+    const roundTripResourceLimit = roundTripResourceLimitPreflight(artifact, featureCounts)
+    const structuralSmokeResourceLimit = runStructuralSmoke ? structuralSmokeResourceLimitPreflight(featureCounts) : null
+    const phaseResourceLimitClassifications = [
+      ...(roundTripResourceLimit ? [roundTripResourceLimit.classification] : []),
+      ...(structuralSmokeResourceLimit ? [structuralSmokeResourceLimit.classification] : []),
+    ]
+    const phaseResourceLimitEvidence = [...(roundTripResourceLimit?.evidence ?? []), ...(structuralSmokeResourceLimit?.evidence ?? [])]
     collectGarbage()
     const unsupportedFeatureClassifications = classifyUnsupportedFeatures(imported.snapshot, imported.warnings, featureCounts, {
       supportedImportWarnings: supportedFormulaOracleImportWarnings(imported.warnings, formulaOracleValidation),
-      extraClassifications: unsupportedFormulaOracleCache.classifications,
+      extraClassifications: [
+        ...unsupportedFormulaOracleCache.classifications,
+        ...unsupportedExternalLinkFormulaOracle.classifications,
+        ...phaseResourceLimitClassifications,
+      ],
     })
     const roundTripSkipEvidence = roundTripValidationSkipEvidence(imported.warnings)
     const structuralSmokeSnapshot = imported.snapshot
     workerOptions.onPhase?.('round-trip')
-    const roundTripPassed = roundTripSkipEvidence ? true : roundTripsSupportedSemantics(detachImportedWorkbookSnapshot(imported))
+    const roundTripPassed =
+      roundTripSkipEvidence || roundTripResourceLimit ? true : roundTripsSupportedSemantics(detachImportedWorkbookSnapshot(imported))
     collectGarbage()
     workerOptions.onPhase?.('structural-smoke')
-    const structuralSmokePassed = runStructuralSmoke ? runStructuralSmokeOps(structuralSmokeSnapshot) : null
+    const structuralSmokePassed = runStructuralSmoke
+      ? structuralSmokeResourceLimit
+        ? null
+        : runStructuralSmokeOps(structuralSmokeSnapshot)
+      : null
     collectGarbage()
     const formulaOraclePassed =
-      unsupportedFormulaOracleWarning || unsupportedFormulaOracleCache.unsupported || formulaOracleValidation.mismatches.length === 0
+      unsupportedFormulaOracleWarning ||
+      unsupportedFormulaOracleCache.unsupported ||
+      unsupportedExternalLinkFormulaOracle.unsupported ||
+      formulaOracleValidation.mismatches.length === 0
     const validation: PublicWorkbookValidationSummary = {
       importPassed: true,
       formulaOraclePassed,
@@ -379,13 +414,18 @@ export async function verifyCachedWorkbookArtifact(
         `cells=${String(featureCounts.cellCount)}`,
         `formulas=${String(featureCounts.formulaCellCount)}`,
         ...(featureCounts.pivotCount > 0 ? [`pivots=${String(featureCounts.pivotCount)}`] : []),
+        ...unsupportedWorkbookMetadataEvidence(imported.snapshot, formulaOracleValidation),
         ...(hasImportWarningUnsupportedClassifications(unsupportedFeatureClassifications)
           ? [publicWorkbookImportWarningClassifierEvidence]
           : []),
         ...(hasPivotUnsupportedClassifications(unsupportedFeatureClassifications) ? [publicWorkbookPivotClassifierEvidence] : []),
+        ...(hasResourceLimitUnsupportedClassifications(unsupportedFeatureClassifications)
+          ? [publicWorkbookResourceLimitClassifierEvidence, ...phaseResourceLimitEvidence]
+          : []),
         ...(hasFormulaOracleCacheUnsupportedClassifications(unsupportedFeatureClassifications)
           ? [publicWorkbookFormulaOracleCacheClassifierEvidence, ...unsupportedFormulaOracleCache.evidence]
           : []),
+        ...unsupportedExternalLinkFormulaOracle.evidence,
         ...(roundTripSkipEvidence ? [roundTripSkipEvidence] : []),
         ...validationEvidence(validation),
       ],
@@ -427,20 +467,29 @@ function artifactBaseEvidence(artifact: PublicWorkbookArtifact): string[] {
   ]
 }
 
-async function validateFormulaOracles(snapshot: WorkbookSnapshot, bytes: Uint8Array): Promise<DetailedFormulaOracleValidationResult> {
+async function validateFormulaOracles(
+  snapshot: WorkbookSnapshot,
+  bytes: Uint8Array,
+  skippedFormulaKeys: ReadonlySet<string> = new Set(),
+): Promise<DetailedFormulaOracleValidationResult> {
   try {
-    const formulaOracles = extractFormulaOracles(bytes)
+    const allFormulaOracles = extractFormulaOracles(bytes)
+    const formulaOracles = allFormulaOracles.filter(
+      (oracle) => !skippedFormulaKeys.has(formulaOracleCellKey(oracle.sheetName, oracle.address)),
+    )
     const mismatchDetails = await compareFormulaOracles(snapshot, formulaOracles)
     return {
       comparisons: formulaOracles.length,
       mismatches: mismatchDetails.map((mismatch) => mismatch.message),
       mismatchDetails,
+      skippedUnsupportedFormulaCount: allFormulaOracles.length - formulaOracles.length,
     }
   } catch (error) {
     return {
       comparisons: 0,
       mismatches: [`Formula oracle check failed: ${error instanceof Error ? error.message : String(error)}`],
       mismatchDetails: [],
+      skippedUnsupportedFormulaCount: 0,
     }
   }
 }
@@ -488,14 +537,30 @@ function classifyUnsupportedFormulaOracleCache(
   }
 }
 
+function classifyUnsupportedExternalLinkFormulaOracle(
+  snapshot: WorkbookSnapshot,
+  validation: DetailedFormulaOracleValidationResult,
+): UnsupportedFormulaOracleCacheClassification {
+  const unsupportedFormulaDependencies = snapshot.workbook.metadata?.unsupportedFormulaDependencies ?? []
+  if (unsupportedFormulaDependencies.length === 0 || validation.mismatchDetails.length === 0) {
+    return emptyUnsupportedFormulaOracleCacheClassification()
+  }
+  return {
+    unsupported: true,
+    classifications: [externalLinkTransitiveFormulaUnsupportedClassification],
+    evidence: [
+      `External-linked workbook formula oracle mismatches were classified as unsupported transitive linked-workbook dependencies: ${String(validation.mismatchDetails.length)} mismatches.`,
+      ...validation.mismatchDetails
+        .slice(0, 25)
+        .map((mismatch) => `external-transitive-formula=${mismatch.sheetName}!${mismatch.address} ${mismatch.message}`),
+    ],
+  }
+}
+
 export function hasFormulaOracleBlockingWarning(warnings: readonly string[]): boolean {
   return warnings.some(
     (warning) =>
-      warning === externalWorkbookReferencesWarning ||
-      warning === externalPivotCachesWarning ||
-      warning === macroExecutionDeclinedWarning ||
-      warning === manualCalculationModeWarning ||
-      warning === volatileFormulasWarning,
+      warning === macroExecutionDeclinedWarning || warning === manualCalculationModeWarning || warning === volatileFormulasWarning,
   )
 }
 
@@ -561,79 +626,6 @@ function failedCase(
     },
     unsupportedFeatureClassifications: [],
     evidence: [...evidence, ...errors],
-  }
-}
-
-function unsupportedResourceLimitCase(
-  artifact: PublicWorkbookArtifact,
-  evidence: readonly string[],
-  footprint: ReturnType<typeof inspectWorkbookFootprint>,
-  maxCellCount: number,
-): PublicWorkbookCorpusCase {
-  return {
-    id: artifact.id,
-    sourceId: artifact.sourceId,
-    sourceUrl: artifact.sourceUrl,
-    fileName: artifact.fileName,
-    sha256: artifact.sha256,
-    byteSize: artifact.byteSize,
-    license: artifact.license,
-    status: 'unsupported',
-    passed: true,
-    featureCounts: footprint.featureCounts,
-    workbookMetadata: footprint.workbookMetadata,
-    validation: {
-      importPassed: false,
-      formulaOraclePassed: true,
-      formulaOracleComparisons: 0,
-      formulaOracleMismatches: [],
-      roundTripPassed: true,
-      structuralSmokePassed: null,
-    },
-    unsupportedFeatureClassifications: [`xlsx.publicCorpus.resourceLimit:cellCount>${String(maxCellCount)}`],
-    evidence: [
-      ...evidence,
-      publicWorkbookResourceLimitClassifierEvidence,
-      `cells=${String(footprint.featureCounts.cellCount)}`,
-      `Public corpus verification cell-count limit exceeded: ${String(footprint.featureCounts.cellCount)} > ${String(maxCellCount)}`,
-    ],
-  }
-}
-
-function unsupportedRssLimitCase(
-  artifact: PublicWorkbookArtifact,
-  evidence: readonly string[],
-  rssBytes: number,
-  maxRssBytes: number,
-  details: readonly string[],
-): PublicWorkbookCorpusCase {
-  return {
-    id: artifact.id,
-    sourceId: artifact.sourceId,
-    sourceUrl: artifact.sourceUrl,
-    fileName: artifact.fileName,
-    sha256: artifact.sha256,
-    byteSize: artifact.byteSize,
-    license: artifact.license,
-    status: 'unsupported',
-    passed: true,
-    featureCounts: emptyFeatureCounts(),
-    workbookMetadata: { workbookName: artifact.fileName, sheetNames: [], dimensions: [] },
-    validation: {
-      importPassed: false,
-      formulaOraclePassed: true,
-      formulaOracleComparisons: 0,
-      formulaOracleMismatches: [],
-      roundTripPassed: true,
-      structuralSmokePassed: null,
-    },
-    unsupportedFeatureClassifications: [`xlsx.publicCorpus.resourceLimit:rss>${String(Math.ceil(maxRssBytes / 1024 / 1024))}MiB`],
-    evidence: [
-      ...evidence,
-      publicWorkbookResourceLimitClassifierEvidence,
-      `Public corpus verification RSS limit exceeded: ${formatByteSize(rssBytes)} > ${formatByteSize(maxRssBytes)}`,
-      ...details,
-    ],
   }
 }
 
@@ -810,8 +802,20 @@ export function mergeImportedAndFootprintFeatureCounts(
   footprintFeatureCounts: PublicWorkbookFeatureCounts,
 ): PublicWorkbookFeatureCounts {
   return {
-    ...importedFeatureCounts,
+    sheetCount: Math.max(importedFeatureCounts.sheetCount, footprintFeatureCounts.sheetCount),
+    cellCount: Math.max(importedFeatureCounts.cellCount, footprintFeatureCounts.cellCount),
+    formulaCellCount: Math.max(importedFeatureCounts.formulaCellCount, footprintFeatureCounts.formulaCellCount),
+    valueCellCount: Math.max(importedFeatureCounts.valueCellCount, footprintFeatureCounts.valueCellCount),
+    definedNameCount: Math.max(importedFeatureCounts.definedNameCount, footprintFeatureCounts.definedNameCount),
+    tableCount: Math.max(importedFeatureCounts.tableCount, footprintFeatureCounts.tableCount),
+    chartCount: Math.max(importedFeatureCounts.chartCount, footprintFeatureCounts.chartCount),
     pivotCount: Math.max(importedFeatureCounts.pivotCount, footprintFeatureCounts.pivotCount),
+    mergeCount: Math.max(importedFeatureCounts.mergeCount, footprintFeatureCounts.mergeCount),
+    styleRangeCount: Math.max(importedFeatureCounts.styleRangeCount, footprintFeatureCounts.styleRangeCount),
+    conditionalFormatCount: Math.max(importedFeatureCounts.conditionalFormatCount, footprintFeatureCounts.conditionalFormatCount),
+    dataValidationCount: Math.max(importedFeatureCounts.dataValidationCount, footprintFeatureCounts.dataValidationCount),
+    macroPayloadCount: Math.max(importedFeatureCounts.macroPayloadCount, footprintFeatureCounts.macroPayloadCount),
+    warningCount: Math.max(importedFeatureCounts.warningCount, footprintFeatureCounts.warningCount),
   }
 }
 
@@ -831,6 +835,13 @@ export function classifyUnsupportedFeatures(
       warnings.includes(externalPivotCachesWarning) ? externalPivotCacheUnsupportedClassification : rawPivotPartUnsupportedClassification,
     )
   }
+  if ((snapshot.workbook.metadata?.unsupportedFormulaDependencies?.length ?? 0) > 0) {
+    classifications.add('xlsx.externalLinks.formulaDependenciesUnsupported')
+  }
+  if ((snapshot.workbook.metadata?.unsupportedPivots?.length ?? 0) > 0) {
+    const hasExternalUnsupportedPivot = snapshot.workbook.metadata?.unsupportedPivots?.some((pivot) => pivot.kind === 'external-cache')
+    classifications.add(hasExternalUnsupportedPivot ? externalPivotCacheUnsupportedClassification : rawPivotPartUnsupportedClassification)
+  }
   for (const warning of warnings) {
     if (supportedImportWarnings.has(warning)) {
       continue
@@ -841,6 +852,49 @@ export function classifyUnsupportedFeatures(
     classifications.add(classification)
   }
   return [...classifications].toSorted()
+}
+
+function unsupportedFormulaDependencyKeys(snapshot: WorkbookSnapshot): ReadonlySet<string> {
+  return new Set(
+    (snapshot.workbook.metadata?.unsupportedFormulaDependencies ?? []).map((entry) => formulaOracleCellKey(entry.sheetName, entry.address)),
+  )
+}
+
+function unsupportedWorkbookMetadataEvidence(
+  snapshot: WorkbookSnapshot,
+  validation: DetailedFormulaOracleValidationResult,
+): readonly string[] {
+  const evidence: string[] = []
+  const unsupportedFormulaDependencies = snapshot.workbook.metadata?.unsupportedFormulaDependencies ?? []
+  if (unsupportedFormulaDependencies.length > 0) {
+    evidence.push(`external-workbook-formula-dependencies=${String(unsupportedFormulaDependencies.length)}`)
+    if (validation.skippedUnsupportedFormulaCount > 0) {
+      evidence.push(`formula-oracle-skipped-unsupported-external-formulas=${String(validation.skippedUnsupportedFormulaCount)}`)
+    }
+    evidence.push(
+      ...unsupportedFormulaDependencies
+        .slice(0, 10)
+        .map(
+          (entry) =>
+            `external-formula=${entry.sheetName}!${entry.address} resolved=${String(entry.resolvedExternalReferenceCount)} unresolved=${String(entry.unresolvedExternalReferenceCount)}`,
+        ),
+    )
+  }
+  const unsupportedPivots = snapshot.workbook.metadata?.unsupportedPivots ?? []
+  if (unsupportedPivots.length > 0) {
+    evidence.push(`unsupported-pivots=${String(unsupportedPivots.length)}`)
+    evidence.push(
+      ...unsupportedPivots
+        .slice(0, 10)
+        .map(
+          (entry) =>
+            `unsupported-pivot=${entry.kind}:${entry.sheetName ?? '<workbook>'}!${entry.address ?? '<unknown>'}:cache=${String(
+              entry.cacheId ?? '<unknown>',
+            )}`,
+        ),
+    )
+  }
+  return evidence
 }
 
 function stableId(value: string): string {
