@@ -13,10 +13,6 @@ const outputPath = join(assetsRoot, 'github-social-preview.png')
 const svgOutputPath = join(assetsRoot, 'github-social-preview.svg')
 const checkMode = process.argv.includes('--check')
 
-function escapeXml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
-}
-
 function fontFace(family: string, weight: number, data: Buffer): string {
   return String.raw`
     @font-face {
@@ -68,27 +64,6 @@ async function buildSvg(): Promise<string> {
   const sansBold = await readFile(join(assetsRoot, 'fonts', 'ibm-plex-sans-700.woff2'))
   const monoMedium = await readFile(join(assetsRoot, 'fonts', 'ibm-plex-mono-500.woff2'))
 
-  const codeLines = [
-    "import { WorkPaper } from '@bilig/headless';",
-    '',
-    'const workbook = WorkPaper.build({',
-    "  sheet: 'Revenue',",
-    '  rows: [',
-    "    ['West', 32, 1200, '=B2*C2'],",
-    "    ['East', 30, 250, '=B3*C3'],",
-    '  ],',
-    '});',
-    '',
-    'workbook.setCellContents(cell, 32);',
-    'const total = workbook.getCellValue(sum);',
-  ]
-  const code = codeLines
-    .map(
-      (line, index) =>
-        `<text x="958" y="${194 + index * 22}" class="mono" font-size="11" font-weight="500" fill="${line.startsWith('const') ? '#d8f5df' : '#d9d2c3'}">${escapeXml(line)}</text>`,
-    )
-    .join('\n')
-
   return String.raw`<svg xmlns="http://www.w3.org/2000/svg" width="${previewWidth}" height="${previewHeight}" viewBox="0 0 ${previewWidth} ${previewHeight}">
   <defs>
     <style>
@@ -106,113 +81,114 @@ async function buildSvg(): Promise<string> {
       }
     </style>
     <linearGradient id="page" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0" stop-color="#15140f"/>
-      <stop offset="1" stop-color="#202719"/>
+      <stop offset="0" stop-color="#070906"/>
+      <stop offset="0.55" stop-color="#10150f"/>
+      <stop offset="1" stop-color="#162216"/>
     </linearGradient>
+    <radialGradient id="glow" cx="72%" cy="35%" r="55%">
+      <stop offset="0" stop-color="#37ef91" stop-opacity="0.24"/>
+      <stop offset="0.52" stop-color="#17804e" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#050705" stop-opacity="0"/>
+    </radialGradient>
     <linearGradient id="sheet" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0" stop-color="#f7f5ef"/>
-      <stop offset="1" stop-color="#edf4ea"/>
+      <stop offset="0" stop-color="#fcfbf7"/>
+      <stop offset="1" stop-color="#eaf4eb"/>
     </linearGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="22" stdDeviation="28" flood-color="#000000" flood-opacity="0.28"/>
+    <linearGradient id="edge" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#9cb4a1"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" x2="1">
+      <stop offset="0" stop-color="#4ef4a0"/>
+      <stop offset="1" stop-color="#1da765"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="34" stdDeviation="32" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+    <filter id="chipShadow" x="-40%" y="-50%" width="180%" height="200%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000000" flood-opacity="0.35"/>
     </filter>
   </defs>
 
   <rect width="${previewWidth}" height="${previewHeight}" fill="url(#page)"/>
-  <g opacity="0.24" stroke="#4c493e" stroke-width="1">
-    <path d="M0 78 H1280"/>
-    <path d="M0 156 H1280"/>
-    <path d="M0 234 H1280"/>
-    <path d="M0 312 H1280"/>
-    <path d="M0 390 H1280"/>
-    <path d="M0 468 H1280"/>
-    <path d="M0 546 H1280"/>
-    <path d="M96 0 V640"/>
-    <path d="M192 0 V640"/>
-    <path d="M288 0 V640"/>
-    <path d="M384 0 V640"/>
-    <path d="M480 0 V640"/>
-    <path d="M576 0 V640"/>
-    <path d="M672 0 V640"/>
-    <path d="M768 0 V640"/>
-    <path d="M864 0 V640"/>
-    <path d="M960 0 V640"/>
-    <path d="M1056 0 V640"/>
-    <path d="M1152 0 V640"/>
+  <rect width="${previewWidth}" height="${previewHeight}" fill="url(#glow)"/>
+  <g opacity="0.18" stroke="#6a7164" stroke-width="1">
+    <path d="M0 80 H1280 M0 160 H1280 M0 240 H1280 M0 320 H1280 M0 400 H1280 M0 480 H1280 M0 560 H1280"/>
+    <path d="M96 0 V640 M192 0 V640 M288 0 V640 M384 0 V640 M480 0 V640 M576 0 V640 M672 0 V640 M768 0 V640 M864 0 V640 M960 0 V640 M1056 0 V640 M1152 0 V640"/>
   </g>
 
-  <g transform="translate(72 74)">
-    <rect x="0" y="0" width="58" height="58" rx="14" fill="#f5f0e6"/>
-    <rect x="14" y="14" width="12" height="12" rx="3" fill="#1f8a54"/>
-    <rect x="32" y="14" width="12" height="12" rx="3" fill="#1f8a54"/>
-    <rect x="14" y="32" width="12" height="12" rx="3" fill="#1f8a54"/>
-    <rect x="32" y="32" width="12" height="12" rx="3" fill="#1f8a54"/>
-    <text x="76" y="39" fill="#f5f0e6" font-size="34" font-weight="700">bilig</text>
+  <g transform="translate(74 70)">
+    <rect x="0" y="0" width="44" height="44" rx="11" fill="#eff4eb"/>
+    <rect x="11" y="11" width="9" height="9" rx="2" fill="#178553"/>
+    <rect x="24" y="11" width="9" height="9" rx="2" fill="#178553"/>
+    <rect x="11" y="24" width="9" height="9" rx="2" fill="#178553"/>
+    <rect x="24" y="24" width="9" height="9" rx="2" fill="#178553"/>
+    <text x="60" y="30" fill="#f4f1e8" font-size="26" font-weight="700">bilig</text>
   </g>
 
-  <text x="72" y="190" fill="#32d179" font-size="19" font-weight="700">@bilig/headless</text>
-  <text x="72" y="254" fill="#f5f0e6" font-size="50" font-weight="700">Spreadsheet formulas</text>
-  <text x="72" y="309" fill="#f5f0e6" font-size="50" font-weight="700">for TypeScript services</text>
-  <text x="72" y="360" fill="#cfc7b7" font-size="23" font-weight="400">Build a workbook, change cells, read the result,</text>
-  <text x="72" y="392" fill="#cfc7b7" font-size="23" font-weight="400">and persist the same model as JSON.</text>
-  <text x="72" y="424" fill="#cfc7b7" font-size="23" font-weight="400">No grid required.</text>
+  <text x="74" y="174" fill="#37df88" font-size="20" font-weight="700">@bilig/headless</text>
+  <text x="74" y="260" fill="#f4f1e8" font-size="72" font-weight="700">Formulas</text>
+  <text x="74" y="334" fill="#f4f1e8" font-size="72" font-weight="700">for TypeScript.</text>
+  <text x="78" y="397" fill="#c9d1c2" font-size="30" font-weight="400">Edit cells. Recalculate. Save JSON.</text>
 
-  <g transform="translate(72 462)">
-    <rect x="0" y="0" width="492" height="54" fill="#201f1a" stroke="#615b4e"/>
-    <rect x="0" y="0" width="58" height="54" fill="#25241f" stroke="#615b4e"/>
-    <text x="25" y="35" fill="#32d179" class="mono" font-size="21" font-weight="500">$</text>
-    <text x="78" y="35" fill="#f5f0e6" class="mono" font-size="21" font-weight="500">npm install @bilig/headless</text>
+  <g transform="translate(74 452)" filter="url(#chipShadow)">
+    <rect x="0" y="0" width="438" height="62" rx="0" fill="#151914" stroke="#5d675a"/>
+    <rect x="0" y="0" width="64" height="62" fill="#1b211b" stroke="#5d675a"/>
+    <text x="27" y="40" fill="#39e98f" class="mono" font-size="23" font-weight="500">$</text>
+    <text x="86" y="40" fill="#f4f1e8" class="mono" font-size="23" font-weight="500">npm i @bilig/headless</text>
   </g>
 
-  <g transform="translate(72 548)" fill="#cfc7b7">
-    <text x="0" y="0" fill="#f5f0e6" font-size="20" font-weight="700">TypeScript examples</text>
-    <text x="0" y="30" font-size="17" font-weight="400">real .ts files</text>
-    <path d="M188 -24 V38" stroke="#615b4e"/>
-    <text x="212" y="0" fill="#f5f0e6" font-size="20" font-weight="700">MCP ready</text>
-    <text x="212" y="30" font-size="17" font-weight="400">stdio server</text>
-    <path d="M354 -24 V38" stroke="#615b4e"/>
-    <text x="378" y="0" fill="#f5f0e6" font-size="20" font-weight="700">46/46 mean rows</text>
-    <text x="378" y="30" font-size="17" font-weight="400">checked benchmark</text>
+  <g transform="translate(74 558)" fill="#c9d1c2">
+    <text x="0" y="0" fill="#f4f1e8" font-size="20" font-weight="700">Node.js</text>
+    <path d="M92 -23 V28" stroke="#5d675a"/>
+    <text x="118" y="0" fill="#f4f1e8" font-size="20" font-weight="700">MCP</text>
+    <path d="M188 -23 V28" stroke="#5d675a"/>
+    <text x="214" y="0" fill="#f4f1e8" font-size="20" font-weight="700">XLSX import/export</text>
   </g>
 
-  <g filter="url(#shadow)">
-    <rect x="650" y="82" width="556" height="468" rx="16" fill="#12110e" stroke="#696154"/>
+  <g transform="translate(650 86) rotate(-7 282 232)" filter="url(#shadow)">
+    <path d="M44 42 H540 L590 430 H88 Z" fill="#0c1710" opacity="0.78"/>
+    <path d="M0 0 H502 L552 362 H48 Z" fill="url(#edge)" stroke="#cee0cf" stroke-width="2"/>
+    <path d="M36 40 H486 L520 314 H70 Z" fill="url(#sheet)" stroke="#d8e4d7" stroke-width="2"/>
+    <path d="M36 84 H492" stroke="#d6e2d6" stroke-width="2"/>
+    <path d="M92 40 L118 314 M204 40 L220 314 M316 40 L322 314 M428 40 L424 314" stroke="#d6e2d6" stroke-width="1.4"/>
+    <path d="M54 140 H502 M62 194 H510 M70 248 H518" stroke="#d6e2d6" stroke-width="1.4"/>
+    <path d="M207 141 H316 L322 193 H211 Z" fill="#b7f2cf"/>
+    <path d="M398 249 H518 L526 314 H406 Z" fill="#b7f2cf"/>
+    <text x="105" y="71" fill="#7b897a" font-size="19" font-weight="700">A</text>
+    <text x="218" y="71" fill="#7b897a" font-size="19" font-weight="700">B</text>
+    <text x="331" y="71" fill="#7b897a" font-size="19" font-weight="700">C</text>
+    <text x="445" y="71" fill="#7b897a" font-size="19" font-weight="700">D</text>
+    <text x="92" y="122" fill="#1d241e" font-size="23">Region</text>
+    <text x="208" y="122" fill="#1d241e" font-size="21">Customers</text>
+    <text x="348" y="122" fill="#1d241e" font-size="21">ARPA</text>
+    <text x="434" y="122" fill="#1d241e" font-size="21">Revenue</text>
+    <text x="96" y="175" fill="#1d241e" font-size="23">West</text>
+    <text x="254" y="175" fill="#15804f" font-size="24" font-weight="700">32</text>
+    <text x="349" y="175" fill="#1d241e" font-size="23">1200</text>
+    <text x="441" y="175" fill="#15804f" font-size="24" font-weight="700">38,400</text>
+    <text x="96" y="229" fill="#1d241e" font-size="23">East</text>
+    <text x="255" y="229" fill="#1d241e" font-size="23">30</text>
+    <text x="359" y="229" fill="#1d241e" font-size="23">250</text>
+    <text x="455" y="229" fill="#1d241e" font-size="23">7,500</text>
+    <text x="96" y="283" fill="#1d241e" font-size="23" font-weight="700">Total</text>
+    <text x="450" y="288" fill="#15804f" font-size="26" font-weight="700">51,300</text>
+    <path d="M260 154 C340 152 372 199 420 277" fill="none" stroke="url(#green)" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="260" cy="154" r="17" fill="url(#green)"/>
+    <circle cx="420" cy="277" r="18" fill="url(#green)"/>
+    <rect x="54" y="-54" width="392" height="46" rx="8" fill="#f8fbf6" stroke="#d8e4d7"/>
+    <rect x="74" y="-42" width="70" height="24" rx="5" fill="#eef5ed" stroke="#d8e4d7"/>
+    <text x="91" y="-24" class="mono" fill="#697667" font-size="14" font-weight="500">D5</text>
+    <text x="168" y="-24" class="mono" fill="#12824f" font-size="20" font-weight="500">=SUM(D2:D4)</text>
   </g>
-  <rect x="650" y="82" width="556" height="42" rx="16" fill="#252119"/>
-  <path d="M650 108 H1206" stroke="#696154"/>
-  <text x="672" y="109" fill="#d9d1c1" font-size="16" font-weight="700">Revenue.workpaper</text>
-  <text x="1042" y="109" fill="#d9d1c1" font-size="15" font-weight="700">verified readback</text>
 
-  <rect x="672" y="150" width="250" height="260" fill="url(#sheet)" stroke="#d1d8cd"/>
-  <rect x="672" y="150" width="250" height="43" fill="#e9f0e5" stroke="#d1d8cd"/>
-  <text x="698" y="177" fill="#687064" font-size="16" font-weight="700">A</text>
-  <text x="777" y="177" fill="#687064" font-size="16" font-weight="700">B</text>
-  <text x="856" y="177" fill="#687064" font-size="16" font-weight="700">C</text>
-  <path d="M748 150 V410 M828 150 V410 M672 236 H922 M672 279 H922 M672 322 H922 M672 365 H922" stroke="#d1d8cd"/>
-  <text x="690" y="222" fill="#1f201c" font-size="18">Region</text>
-  <text x="762" y="222" fill="#1f201c" font-size="18">ARPA</text>
-  <text x="843" y="222" fill="#1f201c" font-size="18">Revenue</text>
-  <text x="690" y="265" fill="#1f201c" font-size="19">West</text>
-  <text x="774" y="265" fill="#1f201c" font-size="19">1200</text>
-  <text x="846" y="265" fill="#12794a" font-size="19" font-weight="700">38,400</text>
-  <text x="690" y="308" fill="#1f201c" font-size="19">East</text>
-  <text x="786" y="308" fill="#1f201c" font-size="19">250</text>
-  <text x="858" y="308" fill="#1f201c" font-size="19">7,500</text>
-  <text x="690" y="351" fill="#1f201c" font-size="19">Total</text>
-  <text x="848" y="351" fill="#12794a" font-size="20" font-weight="700">51,300</text>
-
-  <rect x="944" y="150" width="240" height="260" rx="10" fill="#151f27" stroke="#354657"/>
-  <rect x="944" y="150" width="240" height="38" rx="10" fill="#1b2834"/>
-  <text x="962" y="175" fill="#8ab4f8" class="mono" font-size="14" font-weight="500">tool.ts</text>
-  ${code}
-
-  <g transform="translate(672 438)">
-    <text x="0" y="0" fill="#cfc7b7" font-size="19">after restore</text>
-    <text x="0" y="48" fill="#32d179" font-size="47" font-weight="700">51,300</text>
-    <text x="198" y="48" fill="#32d179" font-size="25" font-weight="700">verified</text>
+  <g transform="translate(1016 444)" filter="url(#chipShadow)">
+    <rect x="0" y="0" width="190" height="92" rx="12" fill="#0b1711" stroke="#284936"/>
+    <text x="22" y="35" fill="#c9d1c2" font-size="19">after restore</text>
+    <text x="22" y="72" fill="#39e98f" font-size="37" font-weight="700">51,300</text>
   </g>
 
-  <text x="1206" y="594" text-anchor="end" fill="#cfc7b7" font-size="19">github.com/proompteng/bilig</text>
+  <text x="1206" y="594" text-anchor="end" fill="#aeb9aa" font-size="18">github.com/proompteng/bilig</text>
 </svg>`
 }
 
