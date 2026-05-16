@@ -8,29 +8,46 @@ on:
     - cron: '26 11 * * 1'
   workflow_dispatch:
 
-permissions:
-  contents: read
-  actions: read
-  security-events: write
-  id-token: write
-
 jobs:
-  analysis:
-    name: scorecard-analysis
+  publish:
+    name: publish-scorecard
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Run OpenSSF Scorecard
+      - name: Publish OpenSSF Scorecard result
+        uses: ossf/scorecard-action@v2.4.3
+        with:
+          publish_results: true
+
+  code-scanning:
+    name: scorecard-code-scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run OpenSSF Scorecard SARIF
         uses: ossf/scorecard-action@v2.4.3
         with:
           results_file: scorecard-results.sarif
           results_format: sarif
-          publish_results: true
+          publish_results: false
 
       - name: Upload Scorecard SARIF artifact
         uses: actions/upload-artifact@v4
