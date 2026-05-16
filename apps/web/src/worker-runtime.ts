@@ -20,7 +20,7 @@ import {
   formatCellDisplayValue,
 } from '@bilig/protocol'
 import type { RenderTileDeltaSubscription, ViewportPatch, ViewportPatchSubscription } from '@bilig/worker-transport'
-import type { PendingWorkbookMutation, PendingWorkbookMutationInput } from './workbook-sync.js'
+import { isPendingWorkbookMutationList, type PendingWorkbookMutation, type PendingWorkbookMutationInput } from './workbook-sync.js'
 import { WorkerRuntimeMutationJournal } from './worker-runtime-mutation-journal.js'
 import {
   ensureAuthoritativeEngine,
@@ -143,12 +143,24 @@ export class WorkbookWorkerRuntime {
     this.projectionOverlayScope = null
     this.localPersistenceMode = 'ephemeral'
     this.authoritativeRevision = 0
+    const restoredJournalEntries = isPendingWorkbookMutationList(options.mutationJournalEntries) ? options.mutationJournalEntries : []
+    if (restoredJournalEntries.length > 0) {
+      this.mutationJournal.restoreFromBootstrap({
+        mutationJournalEntries: restoredJournalEntries,
+        nextPendingMutationSeq:
+          typeof options.nextPendingMutationSeq === 'number' &&
+          Number.isSafeInteger(options.nextPendingMutationSeq) &&
+          options.nextPendingMutationSeq > 0
+            ? options.nextPendingMutationSeq
+            : Math.max(...restoredJournalEntries.map((mutation) => mutation.localSeq), 0) + 1,
+      })
+    }
     const { engine, overlayScope } = await createProjectionEngineFromState({
       workbookName: options.documentId,
       replicaId: options.replicaId,
       snapshot: null,
       replica: null,
-      pendingMutations: [],
+      pendingMutations: this.mutationJournal.listPendingMutations(),
     })
     this.projectionOverlayScope = overlayScope
     this.installEngine(engine)

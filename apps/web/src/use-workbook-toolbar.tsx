@@ -115,11 +115,44 @@ function alignmentPatchMatches(selectedStyle: CellStyleRecord | undefined, patch
   )
 }
 
+function borderSidePatchMatches(
+  actual: NonNullable<CellStyleRecord['borders']>['top'] | undefined,
+  patch: NonNullable<CellStylePatch['borders']>['top'] | null | undefined,
+): boolean {
+  if (patch === undefined) {
+    return true
+  }
+  if (patch === null) {
+    return actual === undefined
+  }
+  return (
+    patchValueMatches(actual?.style, patch.style) &&
+    patchValueMatches(actual?.weight, patch.weight) &&
+    patchValueMatches(actual?.color, patch.color)
+  )
+}
+
+function borderPatchMatches(selectedStyle: CellStyleRecord | undefined, patch: CellStylePatch['borders'] | undefined): boolean {
+  if (patch === undefined) {
+    return true
+  }
+  if (patch === null) {
+    return !hasAnyBorder(selectedStyle)
+  }
+  return (
+    borderSidePatchMatches(selectedStyle?.borders?.top, patch.top) &&
+    borderSidePatchMatches(selectedStyle?.borders?.right, patch.right) &&
+    borderSidePatchMatches(selectedStyle?.borders?.bottom, patch.bottom) &&
+    borderSidePatchMatches(selectedStyle?.borders?.left, patch.left)
+  )
+}
+
 function selectedStyleMatchesPatch(selectedStyle: CellStyleRecord | undefined, patch: CellStylePatch): boolean {
   return (
     alignmentPatchMatches(selectedStyle, patch.alignment) &&
     fillPatchMatches(selectedStyle, patch.fill) &&
-    fontPatchMatches(selectedStyle, patch.font)
+    fontPatchMatches(selectedStyle, patch.font) &&
+    borderPatchMatches(selectedStyle, patch.borders)
   )
 }
 
@@ -213,15 +246,19 @@ function applyOptionalStyleField<T extends object, K extends keyof T>(target: T,
 
 function applyToolbarStylePatch(style: CellStyleRecord | undefined, patch: CellStylePatch): CellStyleRecord {
   const next = cloneStyleForToolbar(style)
-  const backgroundColor = patch.fill?.backgroundColor
-  if (backgroundColor !== undefined) {
+  if (patch.fill === null) {
+    delete next.fill
+  } else if (patch.fill !== undefined) {
+    const backgroundColor = patch.fill.backgroundColor
     if (backgroundColor === null) {
       delete next.fill
-    } else {
+    } else if (backgroundColor !== undefined) {
       next.fill = { backgroundColor }
     }
   }
-  if (patch.font) {
+  if (patch.font === null) {
+    delete next.font
+  } else if (patch.font) {
     const font = { ...next.font }
     applyOptionalStyleField(font, 'family', patch.font.family)
     applyOptionalStyleField(font, 'size', patch.font.size)
@@ -235,7 +272,9 @@ function applyToolbarStylePatch(style: CellStyleRecord | undefined, patch: CellS
       delete next.font
     }
   }
-  if (patch.alignment) {
+  if (patch.alignment === null) {
+    delete next.alignment
+  } else if (patch.alignment) {
     const alignment = { ...next.alignment }
     applyOptionalStyleField(alignment, 'horizontal', patch.alignment.horizontal)
     applyOptionalStyleField(alignment, 'vertical', patch.alignment.vertical)
@@ -247,7 +286,101 @@ function applyToolbarStylePatch(style: CellStyleRecord | undefined, patch: CellS
       delete next.alignment
     }
   }
+  if (patch.borders === null) {
+    delete next.borders
+  } else if (patch.borders) {
+    const borders = { ...next.borders }
+    applyBorderSideStylePatch(borders, 'top', patch.borders.top)
+    applyBorderSideStylePatch(borders, 'right', patch.borders.right)
+    applyBorderSideStylePatch(borders, 'bottom', patch.borders.bottom)
+    applyBorderSideStylePatch(borders, 'left', patch.borders.left)
+    if (Object.keys(borders).length > 0) {
+      next.borders = borders
+    } else {
+      delete next.borders
+    }
+  }
   return next
+}
+
+function applyBorderSideStylePatch(
+  borders: NonNullable<CellStyleRecord['borders']>,
+  side: keyof NonNullable<CellStyleRecord['borders']>,
+  patch: NonNullable<CellStylePatch['borders']>['top'] | null | undefined,
+): void {
+  if (patch === undefined) {
+    return
+  }
+  if (patch === null) {
+    delete borders[side]
+    return
+  }
+  const nextSide = {
+    ...(borders[side] ?? DEFAULT_BORDER_SIDE),
+  }
+  applyOptionalStyleField(nextSide, 'style', patch.style)
+  applyOptionalStyleField(nextSide, 'weight', patch.weight)
+  applyOptionalStyleField(nextSide, 'color', patch.color)
+  if (nextSide.style && nextSide.weight && nextSide.color) {
+    borders[side] = nextSide
+  } else {
+    delete borders[side]
+  }
+}
+
+function borderPresetOptimisticPatch(preset: BorderPreset): CellStylePatch {
+  switch (preset) {
+    case 'clear':
+      return { borders: null }
+    case 'all':
+    case 'outer':
+      return {
+        borders: {
+          top: DEFAULT_BORDER_SIDE,
+          right: DEFAULT_BORDER_SIDE,
+          bottom: DEFAULT_BORDER_SIDE,
+          left: DEFAULT_BORDER_SIDE,
+        },
+      }
+    case 'left':
+      return { borders: { left: DEFAULT_BORDER_SIDE } }
+    case 'top':
+      return { borders: { top: DEFAULT_BORDER_SIDE } }
+    case 'right':
+      return { borders: { right: DEFAULT_BORDER_SIDE } }
+    case 'bottom':
+      return { borders: { bottom: DEFAULT_BORDER_SIDE } }
+    default: {
+      const exhaustive: never = preset
+      return exhaustive
+    }
+  }
+}
+
+function clearStyleFieldsOptimisticPatch(fields?: readonly CellStyleField[]): CellStylePatch | null {
+  if (fields === undefined) {
+    return {
+      alignment: null,
+      borders: null,
+      fill: null,
+      font: null,
+    }
+  }
+  const fieldSet = new Set(fields)
+  const borders: NonNullable<CellStylePatch['borders']> = {}
+  if (fieldSet.has('borderTop')) {
+    borders.top = null
+  }
+  if (fieldSet.has('borderRight')) {
+    borders.right = null
+  }
+  if (fieldSet.has('borderBottom')) {
+    borders.bottom = null
+  }
+  if (fieldSet.has('borderLeft')) {
+    borders.left = null
+  }
+  return Object.keys(borders).length > 0 ? { borders } : null
 }
 
 export function useWorkbookToolbar(input: {
@@ -315,6 +448,7 @@ export function useWorkbookToolbar(input: {
   const [recentTextColors, setRecentTextColors] = useState<readonly string[]>([])
   const selectedRangeKey = cellRangeKey(selectionRangeRef.current)
   const [optimisticStyle, setOptimisticStyle] = useState<OptimisticToolbarStyle | null>(null)
+  const toolbarMutationQueueRef = useRef<Promise<void>>(Promise.resolve())
   const activeSelectedStyle = optimisticStyle?.rangeKey === selectedRangeKey ? optimisticStyle.style : selectedStyle
   const currentNumberFormat = parseCellNumberFormatCode(selectedCell.format)
   const selectedFontSize = String(activeSelectedStyle?.font?.size ?? 11)
@@ -337,6 +471,36 @@ export function useWorkbookToolbar(input: {
     () => (isPresetColor(currentTextColor) ? recentTextColors : mergeRecentCustomColors(recentTextColors, currentTextColor)),
     [currentTextColor, recentTextColors],
   )
+  const applyOptimisticStylePatch = useCallback(
+    (range: CellRangeRef, patch: CellStylePatch) => {
+      const rangeKey = cellRangeKey(range)
+      setOptimisticStyle((current) => ({
+        rangeKey,
+        patch: current?.rangeKey === rangeKey ? mergeToolbarStylePatch(current.patch, patch) : patch,
+        style: applyToolbarStylePatch(current?.rangeKey === rangeKey ? current.style : selectedStyle, patch),
+      }))
+      return rangeKey
+    },
+    [selectedStyle],
+  )
+  const enqueueToolbarMutation = useCallback((run: () => Promise<void>) => {
+    const next = (async () => {
+      try {
+        await toolbarMutationQueueRef.current
+      } catch {
+        // Keep later toolbar mutations ordered even if an earlier one failed.
+      }
+      await run()
+    })()
+    toolbarMutationQueueRef.current = (async () => {
+      try {
+        await next
+      } catch {
+        // The returned promise carries the failure to callers; the queue should keep moving.
+      }
+    })()
+    return next
+  }, [])
   const statusPresentation = deriveWorkbookStatusPresentation({
     connectionStateName,
     runtimeReady,
@@ -364,32 +528,36 @@ export function useWorkbookToolbar(input: {
   const applyRangeStyle = useCallback(
     async (patch: CellStylePatch) => {
       const range = selectionRangeRef.current
-      const rangeKey = cellRangeKey(range)
-      setOptimisticStyle((current) => ({
-        rangeKey,
-        patch: current?.rangeKey === rangeKey ? mergeToolbarStylePatch(current.patch, patch) : patch,
-        style: applyToolbarStylePatch(current?.rangeKey === rangeKey ? current.style : selectedStyle, patch),
-      }))
+      const rangeKey = applyOptimisticStylePatch(range, patch)
       try {
-        await invokeMutation('setRangeStyle', range, patch)
+        await enqueueToolbarMutation(() => invokeMutation('setRangeStyle', range, patch))
       } catch (error) {
         setOptimisticStyle((current) => (current?.rangeKey === rangeKey ? null : current))
         throw error
       }
     },
-    [invokeMutation, selectedStyle, selectionRangeRef],
+    [applyOptimisticStylePatch, enqueueToolbarMutation, invokeMutation, selectionRangeRef],
   )
 
   const clearRangeStyleFields = useCallback(
     async (fields?: CellStyleField[]) => {
       const range = selectionRangeRef.current
-      await invokeMutation('clearRangeStyle', range, fields)
-      if (fields !== undefined) {
-        return
+      const optimisticPatch = clearStyleFieldsOptimisticPatch(fields)
+      const rangeKey = optimisticPatch ? applyOptimisticStylePatch(range, optimisticPatch) : null
+      try {
+        await enqueueToolbarMutation(async () => {
+          await invokeMutation('clearRangeStyle', range, fields)
+          if (fields !== undefined) {
+            return
+          }
+          await invokeMutation('clearRangeNumberFormat', range)
+        })
+      } catch (error) {
+        setOptimisticStyle((current) => (current?.rangeKey === rangeKey ? null : current))
+        throw error
       }
-      await invokeMutation('clearRangeNumberFormat', range)
     },
-    [invokeMutation, selectionRangeRef],
+    [applyOptimisticStylePatch, enqueueToolbarMutation, invokeMutation, selectionRangeRef],
   )
 
   const applyFillColor = useCallback(
@@ -425,6 +593,7 @@ export function useWorkbookToolbar(input: {
   const applyBorderPreset = useCallback(
     async (preset: BorderPreset) => {
       const selectionRange = selectionRangeRef.current
+      const rangeKey = applyOptimisticStylePatch(selectionRange, borderPresetOptimisticPatch(preset))
       const { sheetName, startRow, endRow, startCol, endCol } = getNormalizedRangeBounds(selectionRange)
       const borderMutations: Array<readonly [CellRangeRef, CellStylePatch]> = []
       const queueBorders = (range: CellRangeRef, borders: NonNullable<CellStylePatch['borders']>) => {
@@ -480,12 +649,17 @@ export function useWorkbookToolbar(input: {
         }
       }
 
-      await Promise.all([
-        invokeMutation('clearRangeStyle', selectionRange, [...BORDER_CLEAR_FIELDS]),
-        ...borderMutations.map(([range, patch]) => invokeMutation('setRangeStyle', range, patch)),
-      ])
+      try {
+        await enqueueToolbarMutation(async () => {
+          await invokeMutation('clearRangeStyle', selectionRange, [...BORDER_CLEAR_FIELDS])
+          await Promise.all(borderMutations.map(([range, patch]) => invokeMutation('setRangeStyle', range, patch)))
+        })
+      } catch (error) {
+        setOptimisticStyle((current) => (current?.rangeKey === rangeKey ? null : current))
+        throw error
+      }
     },
-    [invokeMutation, selectionRangeRef],
+    [applyOptimisticStylePatch, enqueueToolbarMutation, invokeMutation, selectionRangeRef],
   )
 
   const setNumberFormatPreset = useCallback(
@@ -493,53 +667,63 @@ export function useWorkbookToolbar(input: {
       const selectionRange = selectionRangeRef.current
       switch (preset) {
         case 'general':
-          await invokeMutation('clearRangeNumberFormat', selectionRange)
+          await enqueueToolbarMutation(() => invokeMutation('clearRangeNumberFormat', selectionRange))
           return
         case 'number':
-          await invokeMutation('setRangeNumberFormat', selectionRange, {
-            kind: 'number',
-            decimals: 2,
-            useGrouping: true,
-          })
+          await enqueueToolbarMutation(() =>
+            invokeMutation('setRangeNumberFormat', selectionRange, {
+              kind: 'number',
+              decimals: 2,
+              useGrouping: true,
+            }),
+          )
           return
         case 'currency':
-          await invokeMutation('setRangeNumberFormat', selectionRange, {
-            kind: 'currency',
-            currency: 'USD',
-            decimals: 2,
-            useGrouping: true,
-            negativeStyle: 'minus',
-            zeroStyle: 'zero',
-          })
+          await enqueueToolbarMutation(() =>
+            invokeMutation('setRangeNumberFormat', selectionRange, {
+              kind: 'currency',
+              currency: 'USD',
+              decimals: 2,
+              useGrouping: true,
+              negativeStyle: 'minus',
+              zeroStyle: 'zero',
+            }),
+          )
           return
         case 'accounting':
-          await invokeMutation('setRangeNumberFormat', selectionRange, {
-            kind: 'accounting',
-            currency: 'USD',
-            decimals: 2,
-            useGrouping: true,
-            negativeStyle: 'parentheses',
-            zeroStyle: 'dash',
-          })
+          await enqueueToolbarMutation(() =>
+            invokeMutation('setRangeNumberFormat', selectionRange, {
+              kind: 'accounting',
+              currency: 'USD',
+              decimals: 2,
+              useGrouping: true,
+              negativeStyle: 'parentheses',
+              zeroStyle: 'dash',
+            }),
+          )
           return
         case 'percent':
-          await invokeMutation('setRangeNumberFormat', selectionRange, {
-            kind: 'percent',
-            decimals: 2,
-          })
+          await enqueueToolbarMutation(() =>
+            invokeMutation('setRangeNumberFormat', selectionRange, {
+              kind: 'percent',
+              decimals: 2,
+            }),
+          )
           return
         case 'date':
-          await invokeMutation('setRangeNumberFormat', selectionRange, {
-            kind: 'date',
-            dateStyle: 'short',
-          })
+          await enqueueToolbarMutation(() =>
+            invokeMutation('setRangeNumberFormat', selectionRange, {
+              kind: 'date',
+              dateStyle: 'short',
+            }),
+          )
           return
         case 'text':
-          await invokeMutation('setRangeNumberFormat', selectionRange, 'text')
+          await enqueueToolbarMutation(() => invokeMutation('setRangeNumberFormat', selectionRange, 'text'))
           return
       }
     },
-    [invokeMutation, selectionRangeRef],
+    [enqueueToolbarMutation, invokeMutation, selectionRangeRef],
   )
 
   const mergeSelectedCells = useCallback(async () => {

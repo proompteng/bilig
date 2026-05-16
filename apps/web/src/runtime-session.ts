@@ -17,6 +17,8 @@ import { isWorkerRuntimeStateSnapshot, normalizeWorkerRuntimeStateSnapshot } fro
 import type { WorkbookPerfSession } from './perf/workbook-perf.js'
 import { ProjectedViewportStore } from './projected-viewport-store.js'
 import { ZeroWorkbookRevisionSync, type WorkbookRevisionState } from './runtime-zero-revision-sync.js'
+import { loadPersistedWorkbookMutationJournal, persistWorkbookMutationJournal } from './workbook-local-mutation-journal-persistence.js'
+import { isPendingWorkbookMutationList } from './workbook-sync.js'
 
 export interface WorkerHandle {
   readonly viewportStore: ProjectedViewportStore
@@ -86,6 +88,15 @@ const EMPTY_METRICS: RecalcMetrics = {
 }
 const EMPTY_UNSUBSCRIBE = () => {}
 const BACKGROUND_RUNTIME_STATE_REFRESH_DELAY_MS = 96
+const MUTATION_JOURNAL_METHODS = new Set([
+  'enqueuePendingMutation',
+  'recordPendingMutationAttempt',
+  'markPendingMutationSubmitted',
+  'markPendingMutationFailed',
+  'retryPendingMutation',
+  'ackPendingMutation',
+  'installAuthoritativeSnapshot',
+])
 
 function createInitialRuntimeState(documentId: string): WorkbookWorkerStateSnapshot {
   return {
@@ -290,6 +301,7 @@ export async function createWorkerRuntimeSessionController(
   const handle: WorkerHandle = { viewportStore }
   const fetchImpl = input.fetchImpl ?? fetch
   const authoritativeSyncEnabled = input.authoritativeSyncEnabled ?? true
+  const restoredMutationJournal = input.persistState ? loadPersistedWorkbookMutationJournal(input.documentId) : null
   let currentSelection = input.initialSelection
   let currentRuntimeState = createInitialRuntimeState(input.documentId)
   viewportStore.setKnownSheets(currentRuntimeState.sheetNames)
@@ -419,6 +431,14 @@ export async function createWorkerRuntimeSessionController(
     })
   }
 
+  const persistMutationJournal = async (): Promise<void> => {
+    if (!input.persistState) {
+      return
+    }
+    const entries = await invokeWorkerMethod(client, 'listMutationJournalEntries', isPendingWorkbookMutationList)
+    persistWorkbookMutationJournal(input.documentId, entries)
+  }
+
   const applyAuthoritativeEventBatch = async (eventBatch: AuthoritativeWorkbookEventBatch): Promise<boolean> => {
     if (
       eventBatch.events.length === 0 ||
@@ -440,6 +460,7 @@ export async function createWorkerRuntimeSessionController(
     const publishedRuntimeState = publishRuntimeState(runtimeState)
     input.perfSession?.markFirstAuthoritativePatchVisible()
     await syncSelectionAfterRuntimeState(publishedRuntimeState)
+    await persistMutationJournal()
     return true
   }
 
@@ -543,6 +564,7 @@ export async function createWorkerRuntimeSessionController(
     requestedAuthoritativeRevision = Math.max(requestedAuthoritativeRevision, currentAuthoritativeRevision)
     const publishedRuntimeState = publishRuntimeState(runtimeState)
     await syncSelectionAfterRuntimeState(publishedRuntimeState)
+    await persistMutationJournal()
     return runAuthoritativeRebase()
   }
 
@@ -584,6 +606,12 @@ export async function createWorkerRuntimeSessionController(
       documentId: input.documentId,
       replicaId: input.replicaId,
       persistState: input.persistState,
+      ...(restoredMutationJournal
+        ? {
+            mutationJournalEntries: restoredMutationJournal.mutationJournalEntries,
+            nextPendingMutationSeq: restoredMutationJournal.nextPendingMutationSeq,
+          }
+        : {}),
     })
     const bootstrapRuntimeState = publishRuntimeState(bootstrap.runtimeState)
     input.perfSession?.noteBootstrapResult(bootstrap)
@@ -650,6 +678,7 @@ export async function createWorkerRuntimeSessionController(
       if (method === 'refreshAuthoritativeEvents') {
         const targetRevision = typeof args[0] === 'number' && Number.isInteger(args[0]) && args[0] >= 0 ? args[0] : null
         await refreshAuthoritativeEventsNow(targetRevision)
+        await persistMutationJournal()
         return undefined
       }
       try {
@@ -663,6 +692,9 @@ export async function createWorkerRuntimeSessionController(
           viewportStore.resetProjectionState()
         }
         const result = await client.invoke(method, ...args)
+        if (MUTATION_JOURNAL_METHODS.has(method)) {
+          await persistMutationJournal()
+        }
         if (method === 'installBenchmarkCorpus' && !isInstallBenchmarkCorpusResult(result)) {
           throw new Error('installBenchmarkCorpus returned an unexpected payload')
         }

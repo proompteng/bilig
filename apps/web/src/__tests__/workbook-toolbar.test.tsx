@@ -278,6 +278,9 @@ describe('WorkbookToolbar', () => {
       const event = dispatchWorkbookShortcut({ code: 'Digit7', key: '&', metaKey: true, shiftKey: true })
       expect(event.defaultPrevented).toBe(true)
     })
+    const borderTrigger = host.querySelector("[aria-label='Borders']")
+    expect(borderTrigger?.getAttribute('aria-pressed')).toBe('true')
+    expect(borderTrigger?.className).toContain('bg-[var(--wb-accent-soft)]')
     expect(invokeMutation.mock.calls).toEqual([
       ['clearRangeStyle', selectionRange, ['borderTop', 'borderRight', 'borderBottom', 'borderLeft']],
       [
@@ -300,6 +303,62 @@ describe('WorkbookToolbar', () => {
         { sheetName: 'Sheet1', startAddress: 'D2', endAddress: 'D5' },
         { borders: { right: { color: '#111827', style: 'solid', weight: 'thin' } } },
       ],
+    ])
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('serializes border shortcut clears before applying replacement borders', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    let resolveClear: (() => void) | undefined
+    const invokeMutation = vi.fn((method: string) => {
+      if (method === 'clearRangeStyle') {
+        return new Promise<void>((resolve) => {
+          resolveClear = resolve
+        })
+      }
+      return Promise.resolve()
+    })
+    const selectionRangeRef: MutableRefObject<CellRangeRef> = {
+      current: {
+        sheetName: 'Sheet1',
+        startAddress: 'A1',
+        endAddress: 'A1',
+      },
+    }
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<ToolbarHookHarness invokeMutation={invokeMutation} selectionRangeRef={selectionRangeRef} />)
+    })
+
+    await act(async () => {
+      const event = dispatchWorkbookShortcut({ code: 'Digit7', key: '&', metaKey: true, shiftKey: true })
+      expect(event.defaultPrevented).toBe(true)
+      await Promise.resolve()
+    })
+
+    expect(invokeMutation.mock.calls).toEqual([
+      ['clearRangeStyle', selectionRangeRef.current, ['borderTop', 'borderRight', 'borderBottom', 'borderLeft']],
+    ])
+    expect(host.querySelector("[aria-label='Borders']")?.getAttribute('aria-pressed')).toBe('true')
+
+    await act(async () => {
+      resolveClear?.()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(invokeMutation.mock.calls.slice(1)).toEqual([
+      ['setRangeStyle', selectionRangeRef.current, { borders: { top: { color: '#111827', style: 'solid', weight: 'thin' } } }],
+      ['setRangeStyle', selectionRangeRef.current, { borders: { bottom: { color: '#111827', style: 'solid', weight: 'thin' } } }],
+      ['setRangeStyle', selectionRangeRef.current, { borders: { left: { color: '#111827', style: 'solid', weight: 'thin' } } }],
+      ['setRangeStyle', selectionRangeRef.current, { borders: { right: { color: '#111827', style: 'solid', weight: 'thin' } } }],
     ])
 
     await act(async () => {

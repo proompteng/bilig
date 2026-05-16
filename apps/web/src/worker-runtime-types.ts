@@ -1,4 +1,5 @@
 import type { RecalcMetrics, SyncState, WorkbookDefinedNameSnapshot, WorkbookSnapshot } from '@bilig/protocol'
+import type { PendingWorkbookMutation } from './workbook-sync.js'
 import type { WorkbookBenchmarkCorpusId, WorkbookBenchmarkCorpusViewport } from './worker-runtime-benchmark-corpus.js'
 import type { WorkerRuntimeLocalHistoryState } from './worker-runtime-local-history.js'
 import type { WorkbookRuntimeSheetSnapshot } from './worker-runtime-state.js'
@@ -9,6 +10,8 @@ export interface WorkbookWorkerBootstrapOptions {
   documentId: string
   replicaId: string
   persistState: boolean
+  mutationJournalEntries?: readonly PendingWorkbookMutation[]
+  nextPendingMutationSeq?: number
 }
 
 export interface WorkbookWorkerStateSnapshot {

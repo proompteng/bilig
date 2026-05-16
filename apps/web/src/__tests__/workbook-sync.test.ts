@@ -281,6 +281,14 @@ describe('buildZeroWorkbookMutation', () => {
     )
     expect(
       isPendingWorkbookMutationInput(
+        createPendingMutation({
+          method: 'setRangeStyle',
+          args: [range, { borders: { top: { color: '#111827', style: 'solid', weight: 'thin' } } }],
+        }),
+      ),
+    ).toBe(true)
+    expect(
+      isPendingWorkbookMutationInput(
         createPendingMutation({ method: 'setRangeNumberFormat', args: [range, { kind: 'number', decimals: 2 }] }),
       ),
     ).toBe(true)

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { SpreadsheetEngine } from '@bilig/core'
 import { ValueTag, type WorkbookSnapshot } from '@bilig/protocol'
 import { decodeViewportPatch } from '@bilig/worker-transport'
+import type { PendingWorkbookMutation } from '../workbook-sync.js'
 import { WorkbookWorkerRuntime } from '../worker-runtime.js'
 
 function buildSnapshot(): WorkbookSnapshot {
@@ -16,6 +17,45 @@ function buildSnapshot(): WorkbookSnapshot {
           {
             address: 'A1',
             value: 42,
+          },
+        ],
+      },
+    ],
+  }
+}
+
+function buildPendingMutation(overrides: Partial<PendingWorkbookMutation> = {}): PendingWorkbookMutation {
+  return {
+    id: 'bootstrap-doc:pending:7',
+    localSeq: 7,
+    baseRevision: 2,
+    method: 'clearCell',
+    args: ['Sheet1', 'D10'],
+    enqueuedAtUnixMs: 100,
+    submittedAtUnixMs: null,
+    lastAttemptedAtUnixMs: null,
+    ackedAtUnixMs: null,
+    rebasedAtUnixMs: null,
+    failedAtUnixMs: null,
+    attemptCount: 0,
+    failureMessage: null,
+    status: 'local',
+    ...overrides,
+  }
+}
+
+function snapshotWithCell(address: string, value: string): WorkbookSnapshot {
+  return {
+    version: 1,
+    workbook: { name: 'bootstrap-doc' },
+    sheets: [
+      {
+        name: 'Sheet1',
+        order: 0,
+        cells: [
+          {
+            address,
+            value,
           },
         ],
       },
@@ -86,5 +126,32 @@ describe('worker runtime authoritative bootstrap', () => {
       tag: ValueTag.Number,
       value: 84,
     })
+  })
+
+  it('replays restored pending clears over stale authoritative bootstrap snapshots', async () => {
+    const runtime = new WorkbookWorkerRuntime()
+
+    await runtime.bootstrap({
+      documentId: 'bootstrap-doc',
+      replicaId: 'browser:test',
+      persistState: true,
+      mutationJournalEntries: [buildPendingMutation({ status: 'submitted', submittedAtUnixMs: 200 })],
+      nextPendingMutationSeq: 8,
+    })
+
+    await runtime.installAuthoritativeSnapshot({
+      snapshot: snapshotWithCell('D10', 'delete-clear-viewport-reload'),
+      authoritativeRevision: 3,
+      mode: 'bootstrap',
+    })
+
+    expect(runtime.getCell('Sheet1', 'D10').value).toEqual({ tag: ValueTag.Empty })
+    expect(runtime.listPendingMutations().map((mutation) => mutation.id)).toEqual(['bootstrap-doc:pending:7'])
+
+    const nextMutation = await runtime.enqueuePendingMutation({
+      method: 'setCellValue',
+      args: ['Sheet1', 'E10', 'after-reload'],
+    })
+    expect(nextMutation.id).toBe('bootstrap-doc:pending:8')
   })
 })

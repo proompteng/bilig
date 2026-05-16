@@ -43,6 +43,8 @@ const metrics: RecalcMetrics = {
   compileMs: 0,
 }
 
+const RANGE_VISUAL_DIRTY_MASK = DirtyMaskV3.Value | DirtyMaskV3.Style | DirtyMaskV3.Text | DirtyMaskV3.Rect | DirtyMaskV3.Border
+
 function createRangeInvalidationEvent(startAddress: string, endAddress = startAddress): EngineEvent {
   return {
     kind: 'batch',
@@ -154,7 +156,8 @@ describe('worker-runtime-render-tile-delta', () => {
     })
     expect(replacements[0]?.dirtyLocalRows).toEqual(new Uint32Array([1, 1]))
     expect(replacements[0]?.dirtyLocalCols).toEqual(new Uint32Array([1, 1]))
-    expect(replacements[0]?.dirtyMasks).toEqual(new Uint32Array([DirtyMaskV3.Value | DirtyMaskV3.Text]))
+    expect(replacements[0]?.dirtyMasks).toEqual(new Uint32Array([RANGE_VISUAL_DIRTY_MASK]))
+    expect(replacements[0]?.dirty.rectSpans).toEqual([{ offset: 129, length: 1 }])
   })
 
   it('materializes warm tile interest on initial and dirty event-driven batches', () => {
@@ -428,7 +431,7 @@ describe('worker-runtime-render-tile-delta', () => {
     expect(replacement?.kind === 'tileReplace' ? replacement.dirtyLocalRows : null).toEqual(new Uint32Array([0, 0, 0, 0]))
     expect(replacement?.kind === 'tileReplace' ? replacement.dirtyLocalCols : null).toEqual(new Uint32Array([1, 1, 0, 127]))
     expect(replacement?.kind === 'tileReplace' ? replacement.dirtyMasks : null).toEqual(
-      new Uint32Array([DirtyMaskV3.Value | DirtyMaskV3.Text, DirtyMaskV3.Text]),
+      new Uint32Array([RANGE_VISUAL_DIRTY_MASK, DirtyMaskV3.Text]),
     )
   })
 

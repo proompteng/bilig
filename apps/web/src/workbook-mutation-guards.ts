@@ -88,6 +88,7 @@ function isOptionalNullableEnumValue(value: unknown, values: ReadonlySet<string>
 
 function isCellBorderSidePatchValue(value: unknown): boolean {
   return (
+    value === undefined ||
     value === null ||
     (isRecord(value) &&
       isOptionalNullableEnumValue(value['style'], BORDER_STYLE_VALUES) &&
