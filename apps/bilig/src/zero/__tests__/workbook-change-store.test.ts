@@ -37,6 +37,55 @@ class FakeQueryable implements Queryable {
   }
 }
 
+class FakeTransactionClient extends FakeQueryable {
+  releaseCount = 0
+
+  release(): void {
+    this.releaseCount += 1
+  }
+}
+
+class FakeTransactionalQueryable implements Queryable {
+  readonly calls: RecordedQuery[] = []
+  readonly client: FakeTransactionClient
+  connectCount = 0
+
+  constructor(responders: readonly ((text: string, values: readonly unknown[] | undefined) => QueryResultRow[] | null)[] = []) {
+    this.client = new FakeTransactionClient(responders)
+  }
+
+  async query<T extends QueryResultRow = QueryResultRow>(text: string, values?: unknown[]): Promise<{ rows: T[] }> {
+    this.calls.push({ text, values })
+    return { rows: [] }
+  }
+
+  async connect(): Promise<FakeTransactionClient> {
+    this.connectCount += 1
+    return this.client
+  }
+}
+
+class ConcurrentHistoryQueryable extends FakeQueryable {
+  maxActiveInserts = 0
+  private activeInserts = 0
+
+  override async query<T extends QueryResultRow = QueryResultRow>(text: string, values?: unknown[]): Promise<{ rows: T[] }> {
+    const isWorkbookChangeInsert = text.includes('INSERT INTO workbook_change')
+    if (isWorkbookChangeInsert) {
+      this.activeInserts += 1
+      this.maxActiveInserts = Math.max(this.maxActiveInserts, this.activeInserts)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    try {
+      return await super.query<T>(text, values)
+    } finally {
+      if (isWorkbookChangeInsert) {
+        this.activeInserts -= 1
+      }
+    }
+  }
+}
+
 function latestQuery(queryable: FakeQueryable): RecordedQuery {
   const query = queryable.calls.at(-1)
   if (!query) {
@@ -450,6 +499,64 @@ describe('workbook-change-store', () => {
     ])
   })
 
+  it('backfills workbook_change rows sequentially so revert markers land after target rows', async () => {
+    const queryable = new ConcurrentHistoryQueryable([
+      (text) =>
+        text.includes('FROM workbook_event AS event')
+          ? [
+              {
+                workbookId: 'doc-1',
+                revision: 7,
+                actorUserId: 'sam@example.com',
+                clientMutationId: 'mutation-7',
+                payload: {
+                  kind: 'setCellValue',
+                  sheetName: 'Sheet1',
+                  address: 'B1',
+                  value: 1,
+                },
+                createdAtUnixMs: 987_000,
+              } satisfies QueryResultRow,
+              {
+                workbookId: 'doc-1',
+                revision: 8,
+                actorUserId: 'sam@example.com',
+                clientMutationId: 'mutation-8',
+                payload: {
+                  kind: 'revertChange',
+                  targetRevision: 7,
+                  targetSummary: 'Updated Sheet1!B1',
+                  sheetName: 'Sheet1',
+                  address: 'B1',
+                  range: {
+                    sheetName: 'Sheet1',
+                    startAddress: 'B1',
+                    endAddress: 'B1',
+                  },
+                  appliedBundle: {
+                    kind: 'engineOps',
+                    ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'B1' }],
+                  },
+                },
+                createdAtUnixMs: 987_100,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+      (text) => (text.includes('FROM sheets') ? [{ sheetId: 11, sheetName: 'Sheet1' } satisfies QueryResultRow] : null),
+    ])
+
+    await backfillWorkbookChanges(queryable)
+
+    const insertIndexes = queryable.calls
+      .map((call, index) => ({ call, index }))
+      .filter(({ call }) => call.text.includes('INSERT INTO workbook_change'))
+    const markerIndex = queryable.calls.findIndex((call) => call.text.includes('UPDATE workbook_change') && call.values?.[1] === 7)
+    expect(queryable.maxActiveInserts).toBe(1)
+    expect(insertIndexes.map(({ call }) => call.values?.[1])).toEqual([7, 8])
+    expect(markerIndex).toBeGreaterThan(insertIndexes[1]?.index ?? -1)
+    expect(queryable.calls[markerIndex]?.values).toEqual(['doc-1', 7, 8])
+  })
+
   it('skips invalid authoritative event revisions during workbook_change backfill', async () => {
     const queryable = new FakeQueryable([
       (text) =>
@@ -680,6 +787,71 @@ describe('workbook-change-store', () => {
     const updateQuery = latestQuery(queryable)
     expect(updateQuery.text).toContain('UPDATE workbook_change')
     expect(updateQuery.values).toEqual(['doc-1', 7, 8])
+  })
+
+  it('persists revert changes atomically when the queryable supports transactions', async () => {
+    const queryable = new FakeTransactionalQueryable([
+      (text) => (text.includes('FROM sheets') ? [{ sheetId: 4, sheetName: 'Sheet1' } satisfies QueryResultRow] : null),
+    ])
+
+    await appendWorkbookChange(queryable, {
+      documentId: 'doc-1',
+      revision: 8,
+      actorUserId: 'amy@example.com',
+      clientMutationId: 'mutation-8',
+      payload: {
+        kind: 'revertChange',
+        targetRevision: 7,
+        targetSummary: 'Filled Sheet1!B1:B2',
+        sheetName: 'Sheet1',
+        address: 'B1',
+        range: {
+          sheetName: 'Sheet1',
+          startAddress: 'B1',
+          endAddress: 'B2',
+        },
+        appliedBundle: {
+          kind: 'engineOps',
+          ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'B1' }],
+        },
+      },
+      undoBundle: null,
+      createdAtUnixMs: 456_789,
+    })
+
+    expect(queryable.connectCount).toBe(1)
+    expect(queryable.calls).toEqual([])
+    expect(queryable.client.releaseCount).toBe(1)
+    expect(queryable.client.calls[0]?.text).toBe('BEGIN')
+    expect(queryable.client.calls.at(-1)?.text).toBe('COMMIT')
+    expect(queryable.client.calls.some((call) => call.text.includes('INSERT INTO workbook_change'))).toBe(true)
+    expect(queryable.client.calls.some((call) => call.text.includes('UPDATE workbook_change') && call.values?.[2] === 8)).toBe(true)
+  })
+
+  it('does not wipe an existing revert marker during idempotent change upserts', async () => {
+    const queryable = new FakeQueryable([
+      (text) => (text.includes('FROM sheets') ? [{ sheetId: 4, sheetName: 'Sheet1' } satisfies QueryResultRow] : null),
+    ])
+
+    await appendWorkbookChange(queryable, {
+      documentId: 'doc-1',
+      revision: 7,
+      actorUserId: 'amy@example.com',
+      clientMutationId: 'mutation-7',
+      payload: {
+        kind: 'setCellValue',
+        sheetName: 'Sheet1',
+        address: 'B1',
+        value: 1,
+      },
+      undoBundle: null,
+      createdAtUnixMs: 456_000,
+    })
+
+    const insertQuery = queryable.calls.find((call) => call.text.includes('INSERT INTO workbook_change'))
+    expect(insertQuery?.text).toContain(
+      'reverted_by_revision = COALESCE(EXCLUDED.reverted_by_revision, workbook_change.reverted_by_revision)',
+    )
   })
 
   it('loads persisted undo metadata and revert markers for a workbook change row', async () => {

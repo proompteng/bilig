@@ -10,6 +10,7 @@ import type { QueryResultRow, Queryable } from './store.js'
 import { parseNonNegativeInteger, parsePositiveInteger } from './store-support.js'
 import { resolveWorkbookSheetRef } from './workbook-sheet-ref.js'
 import { selectLatestRedoableWorkbookChangeRevision, selectLatestUndoableWorkbookChangeRevision } from './workbook-history-selector.js'
+import { runQueryableTransaction, runSequentially } from './transaction-support.js'
 
 export type { WorkbookChangeRange } from '@bilig/zero-sync'
 export { buildWorkbookChangeDescriptor, type WorkbookChangeDescriptor } from './workbook-change-descriptor.js'
@@ -139,7 +140,7 @@ async function insertWorkbookChange(db: Queryable, row: WorkbookChangeInsertRow)
         anchor_address = EXCLUDED.anchor_address,
         range_json = EXCLUDED.range_json,
         undo_bundle_json = EXCLUDED.undo_bundle_json,
-        reverted_by_revision = EXCLUDED.reverted_by_revision,
+        reverted_by_revision = COALESCE(EXCLUDED.reverted_by_revision, workbook_change.reverted_by_revision),
         reverts_revision = EXCLUDED.reverts_revision,
         created_at = EXCLUDED.created_at
     `,
@@ -210,23 +211,25 @@ export async function ensureWorkbookChangeSchema(db: Queryable): Promise<void> {
 }
 
 export async function appendWorkbookChange(db: Queryable, input: AppendWorkbookChangeInput): Promise<void> {
-  await insertWorkbookChange(db, {
-    documentId: input.documentId,
-    revision: input.revision,
-    actorUserId: input.actorUserId,
-    clientMutationId: input.clientMutationId,
-    descriptor: buildWorkbookChangeDescriptor(input.payload),
-    undoBundle: input.undoBundle,
-    revertsRevision: input.payload.kind === 'revertChange' || input.payload.kind === 'redoChange' ? input.payload.targetRevision : null,
-    createdAtUnixMs: input.createdAtUnixMs,
-  })
-  if (input.payload.kind === 'revertChange' || input.payload.kind === 'redoChange') {
-    await markWorkbookChangeReverted(db, {
+  await runQueryableTransaction(db, async (transactionDb) => {
+    await insertWorkbookChange(transactionDb, {
       documentId: input.documentId,
-      revision: input.payload.targetRevision,
-      revertedByRevision: input.revision,
+      revision: input.revision,
+      actorUserId: input.actorUserId,
+      clientMutationId: input.clientMutationId,
+      descriptor: buildWorkbookChangeDescriptor(input.payload),
+      undoBundle: input.undoBundle,
+      revertsRevision: input.payload.kind === 'revertChange' || input.payload.kind === 'redoChange' ? input.payload.targetRevision : null,
+      createdAtUnixMs: input.createdAtUnixMs,
     })
-  }
+    if (input.payload.kind === 'revertChange' || input.payload.kind === 'redoChange') {
+      await markWorkbookChangeReverted(transactionDb, {
+        documentId: input.documentId,
+        revision: input.payload.targetRevision,
+        revertedByRevision: input.revision,
+      })
+    }
+  })
 }
 
 export async function loadWorkbookChange(db: Queryable, documentId: string, revision: number): Promise<WorkbookChangeRecord | null> {
@@ -410,7 +413,7 @@ export async function backfillWorkbookChanges(db: Queryable): Promise<void> {
     `,
   )
 
-  const inserts = result.rows.flatMap((row) => {
+  const inputs = result.rows.flatMap((row) => {
     const revision = parsePositiveInteger(row.revision)
     const createdAtUnixMs = parseNonNegativeInteger(row.createdAtUnixMs)
     if (
@@ -423,7 +426,7 @@ export async function backfillWorkbookChanges(db: Queryable): Promise<void> {
       return []
     }
     return [
-      appendWorkbookChange(db, {
+      {
         documentId: row.workbookId,
         revision,
         actorUserId: row.actorUserId,
@@ -431,8 +434,12 @@ export async function backfillWorkbookChanges(db: Queryable): Promise<void> {
         payload: row.payload,
         undoBundle: null,
         createdAtUnixMs,
-      }),
+      } satisfies AppendWorkbookChangeInput,
     ]
   })
-  await Promise.all(inserts)
+  await runQueryableTransaction(db, async (transactionDb) => {
+    await runSequentially(inputs, async (input) => {
+      await appendWorkbookChange(transactionDb, input)
+    })
+  })
 }
