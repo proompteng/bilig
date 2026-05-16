@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.16.11
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.16.10
+- Manual override: no
+
+## Fixes
+- fix(storage): sanitize local style projections (1662cbe5)
+
+## Internal runtime changes
+- docs(headless): align public evidence with runtime release (7b736fac)
+
 ## 0.16.10
 
 - Release type: patch
