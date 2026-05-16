@@ -56,8 +56,8 @@ export function nowIso(): string {
 }
 
 export function parseInteger(value: unknown): number {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return Math.trunc(value)
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) ? value : 0
   }
   if (typeof value === 'string') {
     const trimmed = value.trim()
