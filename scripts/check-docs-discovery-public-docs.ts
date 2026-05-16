@@ -46,6 +46,13 @@ export async function requireSharedPublicDocsDiscovery(args: {
     { path: 'packages/headless/README.md', content: args.headlessReadme },
   ] as const
   requireDocumentsInclude(primaryPublicDocs, [
+    '## Choose A Proof Path',
+    '| If you are evaluating... | Start here | What should be true before you star, watch, or adopt |',
+    '90-second Node quickstart',
+    'Quote approval WorkPaper API',
+    'MCP spreadsheet tool server',
+    'npm provenance',
+    'adoption blocker form',
     '## TypeScript API Shape',
     'WorkPaper.buildFromSheets({',
     "['Revenue', '=Inputs!B2*Inputs!B3']",

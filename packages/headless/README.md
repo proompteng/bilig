@@ -25,6 +25,16 @@ truth for stale XLSX cached formula values. XLSX import/export is available from
 the `@bilig/headless/xlsx` subpath for services that need workbook ingestion
 around the same WorkPaper model.
 
+## Choose A Proof Path
+
+| If you are evaluating... | Start here | What should be true before you star, watch, or adopt |
+| --- | --- | --- |
+| Published npm package | [90-second Node quickstart](https://proompteng.github.io/bilig/try-bilig-headless-in-node.html) | It edits one input, recalculates, persists JSON, restores, and prints `verified: true`. |
+| Backend service shape | [Quote approval WorkPaper API](https://proompteng.github.io/bilig/quote-approval-workpaper-api.html) | A realistic route-style workflow returns formula readback and `restoredMatchesAfter: true`. |
+| Agent or MCP tools | [MCP spreadsheet tool server](https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html) | Tool calls can write an input and return computed readback instead of screenshot claims. |
+| Trust and performance | [npm provenance](https://proompteng.github.io/bilig/npm-provenance-package-trust.html) and [benchmark evidence](https://proompteng.github.io/bilig/what-workpaper-benchmark-proves.html) | npm shows SLSA provenance, and benchmark claims match the checked artifact. |
+| Almost a fit | [adoption blocker form](https://github.com/proompteng/bilig/discussions/new?category=general) | Name the formula, import/export, persistence, framework, MCP, package, or benchmark gap. |
+
 ## Install
 
 Requires Node `22+` and ESM imports.
