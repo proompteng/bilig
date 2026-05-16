@@ -131,4 +131,15 @@ describe('TemplateBank', () => {
       }),
     )
   })
+
+  it('does not reuse simple template families for unsafe row references', () => {
+    const bank = createTemplateBank()
+    const unsafeRow = String(Number.MAX_SAFE_INTEGER + 1)
+
+    const scalar = bank.resolve('A1+1', 0, 0)
+    const aggregate = bank.resolve('SUM(A1:A1)', 0, 0)
+
+    expect(bank.resolveById(scalar.templateId, `A${unsafeRow}+1`, Number.MAX_SAFE_INTEGER, 0)).toBeUndefined()
+    expect(bank.resolveById(aggregate.templateId, `SUM(A1:A${unsafeRow})`, Number.MAX_SAFE_INTEGER, 0)).toBeUndefined()
+  })
 })

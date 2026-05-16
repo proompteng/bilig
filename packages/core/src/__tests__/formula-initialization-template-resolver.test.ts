@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createTemplateBank } from '../formula/template-bank.js'
+import {
+  tryBuildInitialPrefixSumTemplateKey,
+  tryBuildInitialSimpleRowRelativeBinaryTemplateKey,
+} from '../engine/services/formula-initialization-template-keys.js'
 import { createInitialTemplateFormulaResolver } from '../engine/services/formula-initialization-template-resolver.js'
 
 describe('initial template formula resolver', () => {
@@ -36,5 +40,12 @@ describe('initial template formula resolver', () => {
       callee: 'SUM',
       symbolicRangeIndex: 0,
     })
+  })
+
+  it('rejects unsafe row numbers in initial template shortcuts', () => {
+    const unsafeRow = String(Number.MAX_SAFE_INTEGER + 1)
+
+    expect(tryBuildInitialSimpleRowRelativeBinaryTemplateKey(`A${unsafeRow}+1`, Number.MAX_SAFE_INTEGER, 0)).toBeUndefined()
+    expect(tryBuildInitialPrefixSumTemplateKey(`SUM(A1:A${unsafeRow})`, Number.MAX_SAFE_INTEGER, 0)).toBeUndefined()
   })
 })

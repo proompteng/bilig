@@ -1,4 +1,5 @@
 import type { CompiledFormula, FormulaNode, ParsedDependencyReference, ParsedRangeReferenceInfo } from '@bilig/formula'
+import { parseA1RowNumber } from '../../formula/a1-row-number.js'
 import { buildFormulaFamilyShapeKey } from '../../formula/formula-family-deps.js'
 import type { FormulaTemplateResolution } from '../../formula/template-bank.js'
 import type { RuntimeFormula } from '../runtime-state.js'
@@ -41,16 +42,15 @@ function initialReadColumn(source: string, start: number): { readonly column: st
 
 function initialReadRowNumber(source: string, start: number): { readonly row: number; readonly next: number } | undefined {
   let next = start
-  let row = 0
   while (next < source.length) {
     const code = source.charCodeAt(next)
     if (code < 48 || code > 57) {
       break
     }
-    row = row * 10 + (code - 48)
     next += 1
   }
-  return next === start || row <= 0 ? undefined : { row, next }
+  const row = parseA1RowNumber(source.slice(start, next))
+  return row === undefined ? undefined : { row, next }
 }
 
 function initialReadNumberLiteral(source: string, start: number): { readonly text: string; readonly next: number } | undefined {
@@ -123,7 +123,11 @@ export function tryBuildInitialPrefixSumTemplateKey(
   ownerCol: number,
 ): InitialPrefixSumTemplateKey | undefined {
   const match = INITIAL_PREFIX_SUM_RE.exec(source)
-  if (!match || Number.parseInt(match[2]!, 10) !== ownerRow + 1) {
+  if (!match) {
+    return undefined
+  }
+  const endRow = parseA1RowNumber(match[2]!)
+  if (endRow === undefined || endRow !== ownerRow + 1) {
     return undefined
   }
   const rangeColumn = match[1]!

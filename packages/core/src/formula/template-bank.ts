@@ -10,6 +10,7 @@ import {
   type CompiledFormula,
 } from '@bilig/formula'
 import { addEngineCounter, type EngineCounters } from '../perf/engine-counters.js'
+import { parseA1RowIndex } from './a1-row-number.js'
 import { translateSimpleDirectAggregateFormula, tryCompileSimpleDirectAggregateFormula } from './simple-direct-aggregate-compile.js'
 import { translateSimpleDirectScalarFormula, tryCompileSimpleDirectScalarFormula } from './simple-direct-scalar-compile.js'
 
@@ -62,9 +63,13 @@ interface FormulaTemplateSourceKey {
 
 const SIMPLE_ROW_RELATIVE_BINARY_RE = /^=?([A-Z]+)([1-9]\d*)([+\-*/])(?:([A-Z]+)([1-9]\d*)|(\d+(?:\.\d+)?))(?:\+(\d+(?:\.\d+)?))?$/
 const SIMPLE_DIRECT_AGGREGATE_TEMPLATE_RE = /^=?(SUM|AVERAGE|AVG|COUNT|MIN|MAX)\s*\(\s*([A-Z]+)([1-9]\d*):([A-Z]+)([1-9]\d*)\s*\)$/i
+const SIMPLE_A1_ROW_TOKEN_RE = /(^|[^A-Z0-9_.$])\$?[A-Z]{1,3}\$?([1-9]\d*)(?=$|[^A-Z0-9_])/gi
 
 function relativeCellToken(columnText: string, rowText: string, ownerRow: number, ownerCol: number): string | undefined {
-  const row = Number(rowText) - 1
+  const row = parseA1RowIndex(rowText)
+  if (row === undefined) {
+    return undefined
+  }
   if (row !== ownerRow) {
     return undefined
   }
@@ -115,10 +120,10 @@ function tryBuildSimpleDirectAggregateTemplateKey(source: string, ownerRow: numb
   }
   const aggregateKind = directAggregateTemplateKind(match[1]!)
   const startCol = columnToIndex(match[2]!)
-  const startRow = Number(match[3]!) - 1
+  const startRow = parseA1RowIndex(match[3]!)
   const endCol = columnToIndex(match[4]!)
-  const endRow = Number(match[5]!) - 1
-  if (startCol < 0 || endCol < startCol || endRow < startRow) {
+  const endRow = parseA1RowIndex(match[5]!)
+  if (startRow === undefined || endRow === undefined || startCol < 0 || endCol < startCol || endRow < startRow) {
     return undefined
   }
   if (startCol === endCol && startRow === 0 && endRow === ownerRow) {
@@ -153,6 +158,17 @@ function directAggregateTemplateKind(callee: string): 'sum' | 'average' | 'count
     default:
       throw new Error(`Unsupported aggregate template callee: ${callee}`)
   }
+}
+
+function sourceHasUnsafeA1Row(source: string): boolean {
+  SIMPLE_A1_ROW_TOKEN_RE.lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = SIMPLE_A1_ROW_TOKEN_RE.exec(source)) !== null) {
+    if (parseA1RowIndex(match[2]!) === undefined) {
+      return true
+    }
+  }
+  return false
 }
 
 function translateTemplate(compiled: CompiledFormula, rowDelta: number, colDelta: number, source: string): CompiledFormula {
@@ -246,6 +262,12 @@ function resolveTrustedTemplateCompiled(
 }
 
 function resolveTemplateSourceKey(source: string, ownerRow: number, ownerCol: number): FormulaTemplateSourceKey {
+  if (sourceHasUnsafeA1Row(source)) {
+    return {
+      compiled: undefined,
+      templateKey: `unsafe-a1:${source}:r${ownerRow}:c${ownerCol}`,
+    }
+  }
   const simpleRowRelativeBinaryKey = tryBuildSimpleRowRelativeBinaryTemplateKey(source, ownerRow, ownerCol)
   if (simpleRowRelativeBinaryKey !== undefined) {
     return {
