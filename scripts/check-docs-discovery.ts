@@ -311,8 +311,8 @@ for (const required of [
   'Use HyperFormula first when you need a mature, broad formula engine',
   'Use SheetJS or ExcelJS first when the primary job is reading, writing, styling',
   'Use Google Sheets API first when a shared hosted spreadsheet',
-  'The current checked benchmark artifact records `48/57` comparable',
-  'structural-append-formula-rows',
+  'The current checked benchmark artifact records `46/57` comparable',
+  'lookup-with-column-index',
   'https://github.com/proompteng/bilig/stargazers',
   'https://github.com/proompteng/bilig/discussions/new?category=general',
   'adoption-blocker form',
@@ -453,7 +453,7 @@ requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/google
 const npmProvenancePackageTrustDoc = await readFile(join(docsRoot, 'npm-provenance-package-trust.md'), 'utf8')
 for (const required of [
   'title: Verify npm provenance for @bilig/headless',
-  'npm view @bilig/headless@0.16.15 version dist.attestations dist.signatures --json',
+  'npm view @bilig/headless@0.16.17 version dist.attestations dist.signatures --json',
   'npm audit signatures',
   'dist.attestations.provenance.predicateType',
   'npm publish ... --provenance',
