@@ -54,6 +54,20 @@ import {
 } from './workbook-agent-pane-helpers.js'
 import { updateSnapshotFromTextDelta, updateSnapshotFromToolOutputDelta } from './workbook-agent-stream-state.js'
 
+function decodeWorkbookAgentStreamEventPayload(payloadText: string) {
+  let payload: unknown
+  try {
+    payload = JSON.parse(payloadText) as unknown
+  } catch {
+    throw new Error('Assistant stream returned malformed event data.')
+  }
+  try {
+    return decodeUnknownSync(WorkbookAgentStreamEventSchema, payload)
+  } catch {
+    throw new Error('Assistant stream returned invalid event data.')
+  }
+}
+
 interface WorkbookAgentLiveSession {
   threadId: string
 }
@@ -353,7 +367,7 @@ export function useWorkbookAgentPane(input: {
           if (payloadText === null) {
             return
           }
-          const event = decodeUnknownSync(WorkbookAgentStreamEventSchema, JSON.parse(payloadText))
+          const event = decodeWorkbookAgentStreamEventPayload(payloadText)
           if (event.type === 'snapshot') {
             recoveringStreamRef.current = false
             persistSessionSnapshot(event.snapshot)

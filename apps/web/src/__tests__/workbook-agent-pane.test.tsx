@@ -55,6 +55,16 @@ class MockEventSource {
     })
   }
 
+  emitRaw(data: string): void {
+    this.listeners.get('message')?.forEach((listener) => {
+      listener(
+        new MessageEvent('message', {
+          data,
+        }),
+      )
+    })
+  }
+
   emitError(): void {
     this.listeners.get('error')?.forEach((listener) => {
       listener(new Event('error'))
@@ -2100,6 +2110,49 @@ describe('workbook agent pane', () => {
     })
 
     expect(host.querySelector("[data-testid='workbook-agent-panel']")?.textContent).toContain('Updated Sheet1')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('surfaces malformed assistant stream payloads with stable copy', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    window.sessionStorage.setItem(
+      'bilig:workbook-agent:doc-1',
+      JSON.stringify({
+        threadId: 'thr-1',
+      }),
+    )
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestUrl(input)
+        if (url.endsWith('/chat/threads/thr-1') && requestMethod(init) === 'GET') {
+          return new Response(JSON.stringify(createSnapshot()), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        }
+        return new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } })
+      }),
+    )
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<AgentHarness />)
+    })
+
+    await act(async () => {
+      MockEventSource.latest?.emitRaw('{')
+    })
+    await flushToasts()
+
+    expect(host.textContent).toContain('Assistant stream returned malformed event data.')
+    expect(host.textContent).not.toContain('SyntaxError')
 
     await act(async () => {
       root.unmount()
