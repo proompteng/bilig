@@ -8,6 +8,7 @@ import { hasUiResponsivenessSameCorpusTenXGap } from '../bilig-dominance-complet
 import {
   buildSameCorpusProof,
   assertUiResponsivenessLiveBrowserRunAllowed,
+  parseUiResponsivenessLiveBrowserCliArgs,
   parseUiResponsivenessLiveBrowserScorecard,
   validateUiResponsivenessLiveBrowserScorecard,
   type SameCorpusCapture,
@@ -49,6 +50,21 @@ describe('UI responsiveness live browser scorecard', () => {
     )
     expect(scorecard.sameCorpusProof.tenXMeanAndP95CaseCount).toBeGreaterThan(0)
     validateUiResponsivenessLiveBrowserScorecard(scorecard)
+  })
+
+  it('parses live browser scorecard CLI options', () => {
+    expect(parseUiResponsivenessLiveBrowserCliArgs(['--check', '--capture', 'tmp/same-corpus-capture.json'])).toEqual({
+      isCheckMode: true,
+      capturePath: 'tmp/same-corpus-capture.json',
+    })
+  })
+
+  it('rejects blank live browser capture paths', () => {
+    expect(() => parseUiResponsivenessLiveBrowserCliArgs(['--capture', '   '])).toThrow('Missing value after --capture')
+  })
+
+  it('rejects live browser capture paths that consume the next flag', () => {
+    expect(() => parseUiResponsivenessLiveBrowserCliArgs(['--capture', '--check'])).toThrow('Missing value after --capture')
   })
 
   it('rejects missing incumbent vendors', () => {

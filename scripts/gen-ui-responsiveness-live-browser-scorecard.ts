@@ -84,6 +84,11 @@ export interface UiResponsivenessLiveBrowserScorecard {
   readonly sameCorpusProof: UiResponsivenessSameCorpusProof
 }
 
+export interface UiResponsivenessLiveBrowserCliArgs {
+  readonly isCheckMode: boolean
+  readonly capturePath: string | null
+}
+
 interface BrowserCaseSpec {
   readonly id: string
   readonly vendor: UiResponsivenessLiveBrowserVendor
@@ -125,9 +130,8 @@ const caseSpecs = [
 ] as const satisfies readonly BrowserCaseSpec[]
 
 async function main(): Promise<void> {
-  const isCheckMode = process.argv.includes('--check')
-  const capturePath = argumentValue('--capture')
-  if (isCheckMode) {
+  const args = parseUiResponsivenessLiveBrowserCliArgs(process.argv.slice(2))
+  if (args.isCheckMode) {
     if (!existsSync(outputPath)) {
       throw new Error(
         `UI responsiveness live browser scorecard is missing. Run: bun scripts/gen-ui-responsiveness-live-browser-scorecard.ts`,
@@ -140,8 +144,8 @@ async function main(): Promise<void> {
   }
 
   assertUiResponsivenessLiveBrowserRunAllowed()
-  const sameCorpusProof = capturePath
-    ? buildSameCorpusProof(parseSameCorpusCapture(readJsonObject(resolve(capturePath))))
+  const sameCorpusProof = args.capturePath
+    ? buildSameCorpusProof(parseSameCorpusCapture(readJsonObject(resolve(args.capturePath))))
     : buildMissingSameCorpusProof()
   const scorecard = await buildUiResponsivenessLiveBrowserScorecard(new Date().toISOString(), sameCorpusProof)
   validateUiResponsivenessLiveBrowserScorecard(scorecard)
@@ -201,6 +205,13 @@ export function assertUiResponsivenessLiveBrowserRunAllowed(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): void {
   assertLocalCiResourceGuardAllowsRun(rootDirForGuard, env, { runLabel: 'UI responsiveness live browser scorecard generation' })
+}
+
+export function parseUiResponsivenessLiveBrowserCliArgs(argv: readonly string[]): UiResponsivenessLiveBrowserCliArgs {
+  return {
+    isCheckMode: argv.includes('--check'),
+    capturePath: argumentValue(argv, '--capture'),
+  }
 }
 
 async function measureBrowserCases(
@@ -384,13 +395,13 @@ function validateSummary(summary: NumericSummary, label: string): void {
   }
 }
 
-function argumentValue(name: string): string | null {
-  const index = process.argv.indexOf(name)
+function argumentValue(argv: readonly string[], name: string): string | null {
+  const index = argv.indexOf(name)
   if (index === -1) {
     return null
   }
-  const value = process.argv[index + 1]
-  if (!value) {
+  const value = argv[index + 1]
+  if (value === undefined || value.trim().length === 0 || value.startsWith('-')) {
     throw new Error(`Missing value after ${name}`)
   }
   return value
