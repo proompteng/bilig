@@ -19,6 +19,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
+function isSafeNonNegativeRevision(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
 function isLiveView<T>(value: unknown): value is LiveView<T> {
   return isRecord(value) && 'data' in value && typeof value['addListener'] === 'function' && typeof value['destroy'] === 'function'
 }
@@ -31,7 +35,10 @@ function assertLiveView<T>(value: unknown): LiveView<T> {
 }
 
 function normalizeWorkbookRevisionState(value: unknown): WorkbookRevisionState | null {
-  if (!isRecord(value) || typeof value['headRevision'] !== 'number' || typeof value['calculatedRevision'] !== 'number') {
+  if (!isRecord(value) || !isSafeNonNegativeRevision(value['headRevision']) || !isSafeNonNegativeRevision(value['calculatedRevision'])) {
+    return null
+  }
+  if (value['calculatedRevision'] > value['headRevision']) {
     return null
   }
   return {
