@@ -66,11 +66,11 @@ on:
         default: ''
 
 concurrency:
-  group: runtime-packages-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
-  # Push storms from concurrent agents make stale release runs consume the
-  # runtime package lane and then skip publishing after a newer main appears.
-  # Keep manual dispatches independent, but let the newest push own main.
-  cancel-in-progress: ${{ github.event_name == 'push' }}
+  # Isolate push runs by commit so a newer push cannot cancel an already-started
+  # trusted publish. The release alignment gate still prevents stale runs from
+  # publishing after main has moved.
+  group: runtime-packages-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.sha }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
