@@ -1,7 +1,7 @@
 import type { Zero } from '@rocicorp/zero'
 import { createWorkerEngineClient, type MessagePortLike } from '@bilig/worker-transport'
 import { parseCellAddress } from '@bilig/formula'
-import { isAuthoritativeWorkbookEventBatch, type AuthoritativeWorkbookEventBatch } from '@bilig/zero-sync'
+import { isAuthoritativeWorkbookEventBatchAfterRevision, type AuthoritativeWorkbookEventBatch } from '@bilig/zero-sync'
 import {
   isCellSnapshot,
   isWorkbookSnapshot,
@@ -178,7 +178,7 @@ async function loadAuthoritativeEventBatch(
     throw new Error(`Failed to load authoritative events (${response.status})`)
   }
   const parsed = await parseJsonResponse(response, 'Authoritative events')
-  if (!isAuthoritativeWorkbookEventBatch(parsed)) {
+  if (!isAuthoritativeWorkbookEventBatchAfterRevision(parsed, afterRevision)) {
     throw new Error('Authoritative event payload does not match the expected schema')
   }
   return parsed

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   isAuthoritativeWorkbookEventBatch,
+  isAuthoritativeWorkbookEventBatchAfterRevision,
   isAuthoritativeWorkbookEventRecord,
   isWorkbookChangeUndoBundle,
   isWorkbookEventPayload,
@@ -299,6 +300,20 @@ describe('workbook event guards', () => {
         events: [buildAuthoritativeCellEvent(3), buildAuthoritativeCellEvent(4)],
       }),
     ).toBe(true)
+  })
+
+  it('rejects authoritative event batches that do not match the requested after revision', () => {
+    const batch = {
+      afterRevision: 2,
+      headRevision: 4,
+      calculatedRevision: 4,
+      events: [buildAuthoritativeCellEvent(3), buildAuthoritativeCellEvent(4)],
+    }
+
+    expect(isAuthoritativeWorkbookEventBatchAfterRevision(batch, 2)).toBe(true)
+    expect(isAuthoritativeWorkbookEventBatchAfterRevision(batch, 1)).toBe(false)
+    expect(isAuthoritativeWorkbookEventBatchAfterRevision(batch, Number.NaN)).toBe(false)
+    expect(isAuthoritativeWorkbookEventBatchAfterRevision(batch, Number.MAX_SAFE_INTEGER + 1)).toBe(false)
   })
 
   it('rejects engine undo bundles with malformed engine ops', () => {

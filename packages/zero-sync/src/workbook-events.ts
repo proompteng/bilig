@@ -389,6 +389,13 @@ export function isAuthoritativeWorkbookEventBatch(value: unknown): value is Auth
   })
 }
 
+export function isAuthoritativeWorkbookEventBatchAfterRevision(
+  value: unknown,
+  afterRevision: unknown,
+): value is AuthoritativeWorkbookEventBatch {
+  return isSafeNonNegativeInteger(afterRevision) && isAuthoritativeWorkbookEventBatch(value) && value.afterRevision === afterRevision
+}
+
 function hasContiguousAuthoritativeEventRevisions(batch: AuthoritativeWorkbookEventBatch): boolean {
   if (batch.afterRevision > batch.headRevision || batch.calculatedRevision > batch.headRevision) {
     return false

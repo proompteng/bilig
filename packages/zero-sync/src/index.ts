@@ -68,6 +68,7 @@ export {
   isWorkbookEventKind,
   isWorkbookChangeUndoBundle,
   isAuthoritativeWorkbookEventBatch,
+  isAuthoritativeWorkbookEventBatchAfterRevision,
   isAuthoritativeWorkbookEventRecord,
   isWorkbookEventPayload,
   WORKBOOK_EVENT_KINDS,
