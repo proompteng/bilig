@@ -4,6 +4,20 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.16.23
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.16.22
+- Manual override: no
+
+## Fixes
+- perf(headless): speed up dense fresh cell allocation (4cd88da8)
+
+## Internal runtime changes
+- refactor(web): remove browser sqlite storage (031da20d)
+- docs(growth): make show hn copy less generic (61044fd9)
+- chore(release): refresh public evidence for 0.16.22 (185d2059)
+
 ## 0.16.22
 
 - Release type: patch
