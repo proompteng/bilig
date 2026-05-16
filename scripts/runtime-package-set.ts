@@ -83,16 +83,14 @@ export function parseBooleanEnv(value: string | undefined): boolean {
   switch (value) {
     case undefined:
     case '':
+    case '0':
     case 'false':
-    case 'False':
-    case 'FALSE':
       return false
+    case '1':
     case 'true':
-    case 'True':
-    case 'TRUE':
       return true
     default:
-      throw new Error(`Expected boolean environment value, received ${value}`)
+      throw new Error(`Expected boolean environment value "1", "true", "0", or "false", received ${value}`)
   }
 }
 

@@ -8,6 +8,7 @@ import {
   highestPublishedStableSemver,
   highestStableSemver,
   missingPublishedRuntimePackageNames,
+  parseBooleanEnv,
   planRuntimePackagePublishProvisioning,
   resolvePublishedRuntimePackageBaseline,
   RUNTIME_NPM_PACKAGE_DIRS,
@@ -169,6 +170,18 @@ describe('runtime release helpers', () => {
         dryRun: false,
       }).publishAllowed,
     ).toBe(true)
+  })
+
+  it('uses strict boolean parsing for runtime publish controls', () => {
+    expect(parseBooleanEnv(undefined)).toBe(false)
+    expect(parseBooleanEnv('')).toBe(false)
+    expect(parseBooleanEnv('0')).toBe(false)
+    expect(parseBooleanEnv('false')).toBe(false)
+    expect(parseBooleanEnv('1')).toBe(true)
+    expect(parseBooleanEnv('true')).toBe(true)
+
+    expect(() => parseBooleanEnv('TRUE')).toThrow('Expected boolean environment value "1", "true", "0", or "false", received TRUE')
+    expect(() => parseBooleanEnv('yes')).toThrow('Expected boolean environment value "1", "true", "0", or "false", received yes')
   })
 
   it('keeps the Excel importer runtime-affecting without requiring standalone npm publication', () => {
