@@ -528,6 +528,7 @@ describe('FormulaBar', () => {
 
     expect(onCommit).not.toHaveBeenCalled()
     expect(onChange).toHaveBeenCalledWith('alpha\n')
+    expect(input.value).toBe('alpha')
 
     await act(async () => {
       root.unmount()

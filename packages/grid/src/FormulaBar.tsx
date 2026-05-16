@@ -160,11 +160,9 @@ export function FormulaBar({
     if (!isEditing) {
       onBeginEdit(nextValue)
     }
-    input.value = nextValue
     pendingSelectionRef.current = { start: caretPosition, end: caretPosition }
     setFormulaCaret(caretPosition)
     onChange(nextValue)
-    input.setSelectionRange(caretPosition, caretPosition)
   }
 
   return (
