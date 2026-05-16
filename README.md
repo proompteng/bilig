@@ -7,7 +7,7 @@
 [![MCP server score](https://glama.ai/mcp/servers/proompteng/bilig/badges/score.svg)](https://glama.ai/mcp/servers/proompteng/bilig)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**Formulas for TypeScript services.**
+**Headless spreadsheet engine for Node services and agents.**
 
 Use [`@bilig/headless`](https://www.npmjs.com/package/@bilig/headless) when a
 calculation is easiest to review as cells and formulas, but it has to run in a
@@ -117,7 +117,7 @@ matters.
 
 Current checked npm footprint for `@bilig/headless@0.16.0`:
 
-- Pack dry run: `177 kB` tarball, `1.04 MB` unpacked, `211` package entries.
+- Pack dry run: `416 kB` tarball, `2.49 MB` unpacked, `420` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
   import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the
   `bilig-workpaper-mcp` binary wrapper.
@@ -129,50 +129,52 @@ Current checked npm footprint for `@bilig/headless@0.16.0`:
 
 ## Start Here
 
-Pick the path closest to what you are building.
+Use the shortest path that proves the package against a real job.
 
-- If you are evaluating the npm package:
-  [90-second npm eval](#try-it-in-90-seconds) and
-  [Node quickstart](docs/try-bilig-headless-in-node.md).
-- If you are writing code against the API:
-  [packages/headless/README.md](packages/headless/README.md) and the
-  [WorkPaper read/write cheat sheet](packages/headless/README.md#workpaper-readwrite-cheat-sheet).
-- If you are putting workbook logic in a service:
-  [Node service recipe](docs/node-service-workpaper-recipe.md),
-  [server-side spreadsheet automation](docs/server-side-spreadsheet-automation-node.md),
-  [Node spreadsheet formula engine](docs/node-spreadsheet-formula-engine.md),
-  [framework adapters](docs/node-framework-workpaper-adapters.md), and
-  [workbook automation examples](docs/workbook-automation-examples-node.md).
-  The runnable serverless boundary lives in
-  [examples/serverless-workpaper-api](examples/serverless-workpaper-api);
-  run `npm run quote-approval-api` first to see input JSON write
-  `Inputs!B2:B6`, formulas recalculate, WorkPaper JSON persist, and a restored
-  workbook return the same approval decision. Then run
-  `npm run next-route-handler`, `npm run next-server-action`,
-  `npm run next-server-action-formdata`, `npm run framework-adapters`, and
-  `npm run persistence-adapters` from that example.
-- If an agent needs workbook tools:
-  [agent tool-calling recipe](docs/agent-workpaper-tool-calling-recipe.md),
-  [OpenAI Responses tools](docs/openai-responses-workpaper-tool-call.md),
-  [AI SDK and LangChain adapters](docs/vercel-ai-sdk-langchain-spreadsheet-tool.md),
-  [agent framework adapters](examples/headless-workpaper#agent-framework-adapters),
-  [MCP server guide](docs/mcp-workpaper-tool-server.md),
-  [MCP tool server shape](examples/headless-workpaper#mcp-tool-server-shape),
-  [MCP directory status](docs/mcp-spreadsheet-server-directory.md),
-  [MCP client setup](docs/mcp-client-setup.md), and
-  [Claude Desktop MCPB bundle](docs/claude-desktop-mcpb-workpaper.md).
-- If you are comparing libraries:
-  [evaluate Excel formulas in Node.js](docs/evaluate-excel-formulas-in-node-typescript.md),
-  [Google Sheets API boundary](docs/google-sheets-api-alternative-node-workpaper.md),
-  [docs/javascript-spreadsheet-library-headless-node.md](docs/javascript-spreadsheet-library-headless-node.md),
-  [docs/sheetjs-exceljs-alternative-formula-workbook-api.md](docs/sheetjs-exceljs-alternative-formula-workbook-api.md),
-  [headless engine comparison](docs/headless-spreadsheet-engine-comparison.md), and
-  [HyperFormula notes](docs/hyperformula-alternative-headless-workpaper.md).
-- If you want a first contribution:
-  [starter issues](docs/starter-issues.md),
-  [first-timers-only issues](https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only),
-  [GitHub Discussions](https://github.com/proompteng/bilig/discussions), and
-  [CONTRIBUTING.md](CONTRIBUTING.md).
+1. Run the [90-second npm eval](#try-it-in-90-seconds) in a blank project.
+2. Run the flagship
+   [serverless WorkPaper API](examples/serverless-workpaper-api) example:
+   `npm run quote-approval-api`.
+3. If an agent needs workbook tools, start with the
+   [MCP server guide](docs/mcp-workpaper-tool-server.md).
+
+The rest of the docs are an index, not a prerequisite.
+
+For comparison and integration details, use the
+[Google Sheets API boundary](docs/google-sheets-api-alternative-node-workpaper.md),
+[workbook automation examples](docs/workbook-automation-examples-node.md),
+the [Node spreadsheet formula engine guide](docs/node-spreadsheet-formula-engine.md),
+[server-side spreadsheet automation](docs/server-side-spreadsheet-automation-node.md),
+[framework adapters](docs/node-framework-workpaper-adapters.md),
+[AI SDK and LangChain tools](docs/vercel-ai-sdk-langchain-spreadsheet-tool.md),
+the [MCP server guide](docs/mcp-workpaper-tool-server.md),
+[MCP directory status](docs/mcp-spreadsheet-server-directory.md),
+[MCP client setup](docs/mcp-client-setup.md),
+[Claude Desktop MCPB bundle](docs/claude-desktop-mcpb-workpaper.md),
+[JavaScript library comparison](docs/javascript-spreadsheet-library-headless-node.md),
+[SheetJS/ExcelJS boundary](docs/sheetjs-exceljs-alternative-formula-workbook-api.md),
+and [headless engine comparison](docs/headless-spreadsheet-engine-comparison.md).
+
+Useful deeper examples: [invoice totals](examples/headless-workpaper#invoice-totals),
+[budget variance alerts](examples/headless-workpaper#budget-variance-alerts),
+[fulfillment capacity plan](examples/headless-workpaper#fulfillment-capacity-plan),
+[quote approval threshold](examples/headless-workpaper#quote-approval-threshold),
+[subscription MRR forecast](examples/headless-workpaper#subscription-mrr-forecast),
+[agent framework adapters](examples/headless-workpaper#agent-framework-adapters),
+[MCP tool server shape](examples/headless-workpaper#mcp-tool-server-shape),
+and [serverless quote approval](examples/serverless-workpaper-api). Run
+`npm run quote-approval-api`, `npm run agent:framework-adapters`,
+`npm run agent:mcp-tools`, `npm run agent:mcp-stdio`, or
+`npm exec --package @bilig/headless -- bilig-workpaper-mcp` when that is the
+path you are evaluating.
+
+The serverless example also includes `npm run next-route-handler`,
+`npm run next-server-action`, `npm run next-server-action-formdata`,
+`npm run framework-adapters`, and `npm run persistence-adapters` for
+framework-specific boundary checks.
+
+The MCP server is also listed in the official registry:
+<https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper>.
 
 ## Examples You Can Run
 
