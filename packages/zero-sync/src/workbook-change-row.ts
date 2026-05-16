@@ -1,12 +1,17 @@
 import { normalizeWorkbookChangeRange, type WorkbookChangeRange } from './workbook-change-range.js'
-import { isWorkbookChangeUndoBundle, type WorkbookChangeUndoBundle } from './workbook-events.js'
+import {
+  isWorkbookChangeUndoBundle,
+  isWorkbookEventKind,
+  type WorkbookChangeUndoBundle,
+  type WorkbookEventKind,
+} from './workbook-events.js'
 import type { WorkbookHistoryRangeSource } from './workbook-history-state.js'
 
 export interface WorkbookChangeRowModel {
   readonly revision: number
   readonly actorUserId: string
   readonly clientMutationId: string | null
-  readonly eventKind: string
+  readonly eventKind: WorkbookEventKind
   readonly summary: string
   readonly sheetId: number | null
   readonly sheetName: string | null
@@ -54,7 +59,7 @@ export function normalizeWorkbookChangeRowModel(value: unknown): WorkbookChangeR
     revision === null ||
     createdAt === null ||
     typeof actorUserId !== 'string' ||
-    typeof eventKind !== 'string' ||
+    !isWorkbookEventKind(eventKind) ||
     typeof summary !== 'string'
   ) {
     return null

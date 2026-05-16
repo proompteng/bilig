@@ -193,6 +193,36 @@ describe('workbook-change-store', () => {
     })
   })
 
+  it('drops workbook change rows with event kinds outside the shared Zero event model', async () => {
+    const queryable = new FakeQueryable([
+      (text) =>
+        text.includes('FROM workbook_change')
+          ? [
+              {
+                revision: 18,
+                actorUserId: 'alex@example.com',
+                clientMutationId: 'mutation-18',
+                eventKind: 'legacyPatch',
+                summary: 'Legacy patch',
+                sheetId: 1,
+                sheetName: 'Sheet1',
+                anchorAddress: 'A1',
+                rangeJson: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+                undoBundleJson: {
+                  kind: 'engineOps',
+                  ops: [],
+                },
+                revertedByRevision: null,
+                revertsRevision: null,
+                createdAtUnixMs: 124_700,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ])
+
+    await expect(loadWorkbookChange(queryable, 'doc-1', 18)).resolves.toBeNull()
+  })
+
   it('records workbook changes with resolved sheet ids and serialized ranges', async () => {
     const queryable = new FakeQueryable([
       (text) => (text.includes('FROM sheets') ? [{ sheetId: 4, sheetName: 'Sheet1' } satisfies QueryResultRow] : null),

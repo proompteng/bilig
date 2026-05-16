@@ -5,6 +5,7 @@ import {
   workbookHistoryRangesOverlap,
   type WorkbookChangeUndoBundle,
   type WorkbookChangeRange,
+  type WorkbookEventKind,
 } from '@bilig/zero-sync'
 import { formatWorkbookCollaboratorLabel } from './workbook-presence-model.js'
 
@@ -12,7 +13,7 @@ export interface WorkbookChangeRow {
   readonly revision: number
   readonly actorUserId: string
   readonly clientMutationId: string | null
-  readonly eventKind: string
+  readonly eventKind: WorkbookEventKind
   readonly summary: string
   readonly sheetId: number | null
   readonly sheetName: string | null
@@ -30,7 +31,7 @@ export interface WorkbookChangeEntry {
   readonly actorUserId: string
   readonly actorLabel: string
   readonly clientMutationId: string | null
-  readonly eventKind: string
+  readonly eventKind: WorkbookEventKind
   readonly summary: string
   readonly sheetName: string | null
   readonly address: string | null

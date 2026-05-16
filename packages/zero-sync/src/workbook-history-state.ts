@@ -1,4 +1,4 @@
-import type { WorkbookChangeUndoBundle } from './workbook-events.js'
+import type { WorkbookChangeUndoBundle, WorkbookEventKind } from './workbook-events.js'
 import { parseCellAddress } from '@bilig/formula'
 import type { WorkbookChangeRange, WorkbookChangeRangeScope } from './workbook-change-range.js'
 import { normalizeWorkbookChangeRange } from './workbook-change-range.js'
@@ -15,7 +15,7 @@ export interface WorkbookHistoryRangeSource {
 export interface WorkbookHistoryStateRow {
   readonly revision: number
   readonly actorUserId: string
-  readonly eventKind: string
+  readonly eventKind: WorkbookEventKind
   readonly undoBundleJson: WorkbookChangeUndoBundle | null
   readonly revertedByRevision: number | null
   readonly revertsRevision: number | null
@@ -146,34 +146,29 @@ export function deriveWorkbookActorHistoryState(input: {
       continue
     }
     const stackEntry = { revision: row.revision, range }
-    switch (row.eventKind) {
-      case 'revertChange': {
-        undoStack = removeRevision(undoStack, row.revertsRevision)
-        if (row.undoBundleJson !== null && row.revertedByRevision === null) {
-          redoStack = pushUnique(redoStack, stackEntry)
-        } else {
-          redoStack = removeRevision(redoStack, row.revision)
-        }
-        break
+    if (row.eventKind === 'revertChange') {
+      undoStack = removeRevision(undoStack, row.revertsRevision)
+      if (row.undoBundleJson !== null && row.revertedByRevision === null) {
+        redoStack = pushUnique(redoStack, stackEntry)
+      } else {
+        redoStack = removeRevision(redoStack, row.revision)
       }
-      case 'redoChange': {
-        redoStack = removeRevision(redoStack, row.revertsRevision)
-        if (row.undoBundleJson !== null && row.revertedByRevision === null) {
-          undoStack = pushUnique(undoStack, stackEntry)
-        } else {
-          undoStack = removeRevision(undoStack, row.revision)
-        }
-        break
+      continue
+    }
+    if (row.eventKind === 'redoChange') {
+      redoStack = removeRevision(redoStack, row.revertsRevision)
+      if (row.undoBundleJson !== null && row.revertedByRevision === null) {
+        undoStack = pushUnique(undoStack, stackEntry)
+      } else {
+        undoStack = removeRevision(undoStack, row.revision)
       }
-      default: {
-        redoStack = []
-        if (row.undoBundleJson !== null && row.revertedByRevision === null) {
-          undoStack = pushUnique(undoStack, stackEntry)
-        } else {
-          undoStack = removeRevision(undoStack, row.revision)
-        }
-        break
-      }
+      continue
+    }
+    redoStack = []
+    if (row.undoBundleJson !== null && row.revertedByRevision === null) {
+      undoStack = pushUnique(undoStack, stackEntry)
+    } else {
+      undoStack = removeRevision(undoStack, row.revision)
     }
   }
 

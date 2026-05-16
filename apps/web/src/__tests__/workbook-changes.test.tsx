@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useWorkbookChangesPane } from '../use-workbook-changes-pane.js'
+import { normalizeWorkbookChangeRows } from '../workbook-changes-model.js'
 import type { ZeroWorkbookChangeSource } from '../use-workbook-changes-pane.js'
 
 interface MockZeroChangeHarness {
@@ -109,6 +110,31 @@ afterEach(() => {
 })
 
 describe('workbook changes', () => {
+  it('drops materialized rows with event kinds outside the shared Zero event model', () => {
+    expect(
+      normalizeWorkbookChangeRows([
+        {
+          revision: 12,
+          actorUserId: 'alex@example.com',
+          clientMutationId: 'mutation-12',
+          eventKind: 'legacyPatch',
+          summary: 'Legacy patch',
+          sheetId: 1,
+          sheetName: 'Sheet1',
+          anchorAddress: 'A1',
+          rangeJson: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+          undoBundleJson: {
+            kind: 'engineOps',
+            ops: [],
+          },
+          revertedByRevision: null,
+          revertsRevision: null,
+          createdAt: Date.parse('2026-04-06T13:44:00.000Z'),
+        },
+      ]),
+    ).toEqual([])
+  })
+
   it('renders authoritative change rows and jumps to available anchors', async () => {
     const changes = createMockZeroChangeHarness([
       {

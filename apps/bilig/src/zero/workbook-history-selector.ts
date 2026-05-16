@@ -3,12 +3,13 @@ import {
   workbookChangeRowHistoryRangeSource,
   type WorkbookChangeRange,
   type WorkbookChangeUndoBundle,
+  type WorkbookEventKind,
 } from '@bilig/zero-sync'
 
 interface WorkbookActorHistoryRecord {
   readonly revision: number
   readonly actorUserId: string
-  readonly eventKind: string
+  readonly eventKind: WorkbookEventKind
   readonly undoBundle: WorkbookChangeUndoBundle | null
   readonly revertedByRevision: number | null
   readonly revertsRevision: number | null

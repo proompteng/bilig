@@ -179,6 +179,40 @@ export type WorkbookEventPayload =
       appliedBundle: WorkbookChangeUndoBundle
     }
 
+export type WorkbookEventKind = WorkbookEventPayload['kind']
+
+export const WORKBOOK_EVENT_KINDS = [
+  'applyBatch',
+  'applyAgentCommandBundle',
+  'setCellValue',
+  'setCellFormula',
+  'clearCell',
+  'clearRange',
+  'renderCommit',
+  'fillRange',
+  'copyRange',
+  'moveRange',
+  'insertRows',
+  'deleteRows',
+  'insertColumns',
+  'deleteColumns',
+  'updateRowMetadata',
+  'updateColumnMetadata',
+  'updateColumnWidth',
+  'setFreezePane',
+  'mergeCells',
+  'unmergeCells',
+  'setRangeStyle',
+  'clearRangeStyle',
+  'setRangeNumberFormat',
+  'clearRangeNumberFormat',
+  'restoreVersion',
+  'revertChange',
+  'redoChange',
+] as const satisfies readonly WorkbookEventKind[]
+
+const WORKBOOK_EVENT_KIND_SET: ReadonlySet<string> = new Set(WORKBOOK_EVENT_KINDS)
+
 export interface WorkbookEventRecord {
   workbookId: string
   revision: number
@@ -235,8 +269,12 @@ export function isWorkbookChangeUndoBundle(value: unknown): value is WorkbookCha
   }
 }
 
+export function isWorkbookEventKind(value: unknown): value is WorkbookEventKind {
+  return typeof value === 'string' && WORKBOOK_EVENT_KIND_SET.has(value)
+}
+
 export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPayload {
-  if (!isRecord(value) || typeof value['kind'] !== 'string') {
+  if (!isRecord(value) || !isWorkbookEventKind(value['kind'])) {
     return false
   }
 

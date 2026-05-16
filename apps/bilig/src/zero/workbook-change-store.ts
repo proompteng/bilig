@@ -86,43 +86,11 @@ function normalizeWorkbookChangeRecord(row: WorkbookChangeSelectRow): WorkbookCh
   if (!model) {
     return null
   }
-  const eventKind = model.eventKind
-  if (
-    eventKind !== 'applyBatch' &&
-    eventKind !== 'applyAgentCommandBundle' &&
-    eventKind !== 'setCellValue' &&
-    eventKind !== 'setCellFormula' &&
-    eventKind !== 'clearCell' &&
-    eventKind !== 'clearRange' &&
-    eventKind !== 'renderCommit' &&
-    eventKind !== 'fillRange' &&
-    eventKind !== 'copyRange' &&
-    eventKind !== 'moveRange' &&
-    eventKind !== 'insertRows' &&
-    eventKind !== 'deleteRows' &&
-    eventKind !== 'insertColumns' &&
-    eventKind !== 'deleteColumns' &&
-    eventKind !== 'updateRowMetadata' &&
-    eventKind !== 'updateColumnMetadata' &&
-    eventKind !== 'updateColumnWidth' &&
-    eventKind !== 'setFreezePane' &&
-    eventKind !== 'mergeCells' &&
-    eventKind !== 'unmergeCells' &&
-    eventKind !== 'setRangeStyle' &&
-    eventKind !== 'clearRangeStyle' &&
-    eventKind !== 'setRangeNumberFormat' &&
-    eventKind !== 'clearRangeNumberFormat' &&
-    eventKind !== 'restoreVersion' &&
-    eventKind !== 'revertChange' &&
-    eventKind !== 'redoChange'
-  ) {
-    return null
-  }
   return {
     revision: model.revision,
     actorUserId: model.actorUserId,
     clientMutationId: model.clientMutationId,
-    eventKind,
+    eventKind: model.eventKind,
     summary: model.summary,
     sheetId: model.sheetId,
     sheetName: model.sheetName,
