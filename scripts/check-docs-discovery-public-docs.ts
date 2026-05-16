@@ -105,6 +105,15 @@ export async function requireSharedPublicDocsDiscovery(args: {
     ['https://github.com/proompteng/bilig/discussions/new?category=general', 'adoption blocker'],
   )
   requireDocumentsInclude(
+    [
+      { path: 'README.md', content: args.readme },
+      { path: 'packages/headless/README.md', content: args.headlessReadme },
+      { path: 'docs/index.html', content: args.index },
+      { path: 'docs/llms.txt', content: args.llms },
+    ],
+    ['https://github.com/proompteng/bilig/subscription', 'release'],
+  )
+  requireDocumentsInclude(
     await Promise.all(
       [
         'try-bilig-headless-in-node.md',

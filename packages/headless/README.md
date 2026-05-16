@@ -643,6 +643,7 @@ When the sanity check passes, these are the next useful pages.
 - GitHub: <https://github.com/proompteng/bilig>
 - npm: <https://www.npmjs.com/package/@bilig/headless>
 - Star or bookmark: <https://github.com/proompteng/bilig/stargazers>
+- Watch releases: <https://github.com/proompteng/bilig/subscription>
 - Security policy: <https://github.com/proompteng/bilig/blob/main/SECURITY.md>
 - Support policy: <https://github.com/proompteng/bilig/blob/main/SUPPORT.md>
 - Ask a workflow question: <https://github.com/proompteng/bilig/discussions/157>

@@ -329,6 +329,8 @@ npm run agent:verify
 - structured adoption blocker form for formula, xlsx, persistence, mcp,
   framework, package, benchmark, documentation, or example gaps:
   https://github.com/proompteng/bilig/discussions/new?category=general
+- watch release notifications for production evaluation:
+  https://github.com/proompteng/bilig/subscription
 - feedback discussion for agent and service workflow input:
   https://github.com/proompteng/bilig/discussions/157
 - show-and-tell discussion for five runnable node workbook automation examples:

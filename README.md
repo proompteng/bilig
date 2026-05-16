@@ -324,6 +324,9 @@ It is published in the official MCP Registry as
 
 If the 90-second check matches a problem you have, star or bookmark the repo:
 <https://github.com/proompteng/bilig/stargazers>.
+If you are evaluating `@bilig/headless` for production and want release
+notifications, watch releases:
+<https://github.com/proompteng/bilig/subscription>.
 
 ## XLSX Accuracy Policy
 
