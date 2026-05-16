@@ -290,7 +290,11 @@ export function normalizeWebSocket(candidate: unknown): NormalizedWebSocket {
 
 function firstHeaderValue(value: string | string[] | undefined): string | undefined {
   if (Array.isArray(value)) {
-    return value.find((entry) => entry.length > 0)
+    return value.map((entry) => entry.trim()).find((entry) => entry.length > 0)
   }
-  return typeof value === 'string' && value.length > 0 ? value : undefined
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
 }

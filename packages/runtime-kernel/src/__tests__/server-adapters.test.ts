@@ -55,6 +55,32 @@ describe('runtime-kernel server adapters', () => {
     ).toBe('https://sheet.example.com')
   })
 
+  it('ignores blank host headers when resolving request base urls', () => {
+    expect(
+      resolveRequestBaseUrl(
+        {
+          protocol: 'https',
+          headers: {
+            host: ['   ', ' sheet.example.com:443 '],
+          },
+        },
+        '127.0.0.1:4321',
+      ),
+    ).toBe('https://sheet.example.com:443')
+
+    expect(
+      resolveRequestBaseUrl(
+        {
+          protocol: 'http',
+          headers: {
+            host: '   ',
+          },
+        },
+        '127.0.0.1:4321',
+      ),
+    ).toBe('http://127.0.0.1:4321')
+  })
+
   it('converts websocket payloads into Uint8Array', () => {
     const bytes = toMessageBytes(Buffer.from([1, 2, 3]))
     expect([...bytes]).toEqual([1, 2, 3])
