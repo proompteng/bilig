@@ -65,73 +65,77 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
     return explicitAddresses !== undefined && explicitAddresses.has(formatMatrixPlanAddress(row, col))
   }
 
-  args.content.forEach((row, rowOffset) => {
-    row.forEach((raw, columnOffset) => {
-      const destination: WorkPaperCellAddress = {
-        sheet: args.target.sheet,
-        row: args.target.row + rowOffset,
-        col: args.target.col + columnOffset,
-      }
+  for (let rowOffset = 0; rowOffset < args.content.length; rowOffset += 1) {
+    const row = args.content[rowOffset]!
+    const destinationRow = args.target.row + rowOffset
+    for (let columnOffset = 0; columnOffset < row.length; columnOffset += 1) {
+      const raw = row[columnOffset]!
+      const destinationCol = args.target.col + columnOffset
 
       if (isBlankRawCellContent(raw)) {
         if (!args.skipNulls) {
-          maxClearRow = Math.max(maxClearRow, destination.row)
-          maxClearCol = Math.max(maxClearCol, destination.col)
+          maxClearRow = Math.max(maxClearRow, destinationRow)
+          maxClearCol = Math.max(maxClearCol, destinationCol)
           const ref = {
             sheetId: args.target.sheet,
-            mutation: { kind: 'clearCell', row: destination.row, col: destination.col },
+            mutation: { kind: 'clearCell', row: destinationRow, col: destinationCol },
           } satisfies MatrixMutationRef
-          if (shouldDeferLiteral(destination.row, destination.col) || shouldDeferLiteralAddress(destination.row, destination.col)) {
+          if (shouldDeferLiteral(destinationRow, destinationCol) || shouldDeferLiteralAddress(destinationRow, destinationCol)) {
             trailingLiteralRefs.push(ref)
           } else {
             leadingRefs.push(ref)
           }
         }
-        return
+        continue
       }
 
       potentialNewCells += 1
-      maxSetRow = Math.max(maxSetRow, destination.row)
-      maxSetCol = Math.max(maxSetCol, destination.col)
+      maxSetRow = Math.max(maxSetRow, destinationRow)
+      maxSetCol = Math.max(maxSetCol, destinationCol)
 
       if (isFormulaContent(raw)) {
         formulaPotentialNewCells += 1
+        const destination: WorkPaperCellAddress = {
+          sheet: args.target.sheet,
+          row: destinationRow,
+          col: destinationCol,
+        }
         const rewrittenFormula = args.rewriteFormula(raw, destination, rowOffset, columnOffset)
         hasDynamicFormula ||= workPaperFormulaMayResizeDynamically(rewrittenFormula)
-        const earliestFormulaRow = earliestFormulaRowByColumn[destination.col]
-        if (earliestFormulaRow === undefined || destination.row < earliestFormulaRow) {
-          earliestFormulaRowByColumn[destination.col] = destination.row
+        const earliestFormulaRow = earliestFormulaRowByColumn[destinationCol]
+        if (earliestFormulaRow === undefined || destinationRow < earliestFormulaRow) {
+          earliestFormulaRowByColumn[destinationCol] = destinationRow
         }
         formulaRefs.push({
           sheetId: args.target.sheet,
           mutation: {
             kind: 'setCellFormula',
-            row: destination.row,
-            col: destination.col,
+            row: destinationRow,
+            col: destinationCol,
             formula: rewrittenFormula,
           },
         })
-        return
+        continue
       }
 
       const ref = {
         sheetId: args.target.sheet,
         mutation: {
           kind: 'setCellValue',
-          row: destination.row,
-          col: destination.col,
+          row: destinationRow,
+          col: destinationCol,
           value: raw,
         },
       } satisfies MatrixMutationRef
-      if (shouldDeferLiteral(destination.row, destination.col) || shouldDeferLiteralAddress(destination.row, destination.col)) {
+      if (shouldDeferLiteral(destinationRow, destinationCol) || shouldDeferLiteralAddress(destinationRow, destinationCol)) {
         trailingLiteralPotentialNewCells += 1
         trailingLiteralRefs.push(ref)
       } else {
         leadingPotentialNewCells += 1
         leadingRefs.push(ref)
       }
-    })
-  })
+    }
+  }
 
   return {
     dimensionImpact: {
