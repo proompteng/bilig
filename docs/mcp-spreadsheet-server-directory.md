@@ -57,8 +57,8 @@ network service to answer `tools/list` and `tools/call`.
 | PulseMCP                        | Not indexed in public search on May 14, 2026 | <https://www.pulsemcp.com/servers?search=bilig&q=bilig>                                               |
 
 PulseMCP says server listings are ingested from the official MCP Registry daily
-and processed weekly. The Bilig WorkPaper registry entry is already live at
-`@bilig/headless@0.16.2`, so PulseMCP absence is a directory-ingest delay, not a
+and processed weekly. The Bilig WorkPaper registry entry is already live for
+the current `@bilig/headless` package line, so PulseMCP absence is a directory-ingest delay, not a
 missing package or server metadata problem. Starter issue
 [#384](https://github.com/proompteng/bilig/issues/384) tracks the next public
 verification pass.
@@ -112,8 +112,8 @@ A useful result includes:
 - `repository.url: https://github.com/proompteng/bilig`
 
 Latest checked result on May 16, 2026: the official Registry API returned one
-latest Bilig WorkPaper entry and marked `@bilig/headless@0.16.2` as the latest
-server package. The refresh was published by the repository workflow run at
+latest Bilig WorkPaper entry for the `@bilig/headless` server package line. The
+last documented refresh was published by the repository workflow run at
 <https://github.com/proompteng/bilig/actions/runs/25956395253>.
 
 The package itself carries the matching `mcpName` field. That is the ownership
