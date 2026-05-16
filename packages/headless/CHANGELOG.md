@@ -4,6 +4,21 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.16.5
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.16.4
+- Manual override: no
+
+## Fixes
+- fix(docs): refresh headless performance evidence (81271868)
+- perf(headless): streamline matrix dimension updates (91f9c619)
+
+## Internal runtime changes
+- chore(headless): refresh package footprint (71ce5c20)
+- docs(trust): surface security and support policies (970a8a7e)
+- docs(adoption): add production readiness checklist (29df03fd)
+
 ## 0.16.4
 
 - Release type: patch
