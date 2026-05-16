@@ -8,6 +8,7 @@ export type MatrixMutationRef = EngineCellMutationRef
 export interface MatrixMutationPlan {
   dimensionImpact: MatrixMutationDimensionImpact
   leadingRefs: MatrixMutationRef[]
+  leadingFreshNumericRefCount: number
   leadingPotentialNewCells: number
   formulaRefs: MatrixMutationRef[]
   formulaPotentialNewCells: number
@@ -44,6 +45,7 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
   const leadingRefs: MatrixMutationRef[] = []
   const formulaRefs: MatrixMutationRef[] = []
   const trailingLiteralRefs: MatrixMutationRef[] = []
+  let leadingFreshNumericRefCount = 0
   let leadingPotentialNewCells = 0
   let formulaPotentialNewCells = 0
   let potentialNewCells = 0
@@ -131,6 +133,9 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
         trailingLiteralPotentialNewCells += 1
         trailingLiteralRefs.push(ref)
       } else {
+        if (typeof raw === 'number' && !Object.is(raw, -0)) {
+          leadingFreshNumericRefCount += 1
+        }
         leadingPotentialNewCells += 1
         leadingRefs.push(ref)
       }
@@ -147,6 +152,7 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
       sheetId: args.target.sheet,
     },
     leadingRefs,
+    leadingFreshNumericRefCount,
     leadingPotentialNewCells,
     formulaRefs,
     formulaPotentialNewCells,
