@@ -25,7 +25,7 @@
     "directory": "packages/create-workpaper"
   },
   "bin": {
-    "create-bilig-workpaper": "./bin/create-bilig-workpaper.js"
+    "create-bilig-workpaper": "bin/create-bilig-workpaper.js"
   },
   "files": [
     "bin",

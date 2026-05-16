@@ -173,7 +173,7 @@ jobs:
             exit 0
           fi
 
-          publish_args=(packages/create-workpaper --tag "$npm_tag" --access public --provenance)
+          publish_args=(./packages/create-workpaper --tag "$npm_tag" --access public --provenance)
           if [ "$dry_run" = "true" ]; then
             publish_args+=(--dry-run)
           fi

@@ -77,7 +77,7 @@ function assertManifest(manifest: PackageManifest): string {
   assert(manifest.repository['directory'] === 'packages/create-workpaper', 'package repository.directory must be packages/create-workpaper')
 
   assert(isRecord(manifest.bin), 'package bin must be an object')
-  assert(manifest.bin['create-bilig-workpaper'] === './bin/create-bilig-workpaper.js', 'package bin must expose create-bilig-workpaper')
+  assert(manifest.bin['create-bilig-workpaper'] === 'bin/create-bilig-workpaper.js', 'package bin must expose create-bilig-workpaper')
 
   const files = stringArray(manifest.files)
   for (const included of ['bin', 'template', 'README.md']) {
