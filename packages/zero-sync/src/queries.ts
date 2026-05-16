@@ -15,6 +15,14 @@ export const workbookThreadArgsSchema = workbookQueryArgsSchema.extend({
   threadId: z.string().min(1),
 })
 
+const workbookViewerArgsSchema = workbookQueryArgsSchema.extend({
+  currentUserId: z.string().min(1),
+})
+
+const workbookThreadViewerArgsSchema = workbookThreadArgsSchema.extend({
+  currentUserId: z.string().min(1),
+})
+
 const workbookSheetArgsSchema = workbookQueryArgsSchema
   .extend({
     sheetId: safePositiveIntegerSchema.optional(),
@@ -154,6 +162,13 @@ const workbookChatThreadByWorkbook = defineUserQuery(workbookQueryArgsSchema, ({
     .orderBy('updatedAtUnixMs', 'desc'),
 )
 
+const visibleWorkbookChatThreadByWorkbook = defineQuery(workbookViewerArgsSchema, ({ args: { currentUserId, documentId } }) =>
+  zql.workbook_chat_thread
+    .where('workbookId', documentId)
+    .where((expression) => expression.or(expression.cmp('ownerUserId', currentUserId), expression.cmp('scope', 'shared')))
+    .orderBy('updatedAtUnixMs', 'desc'),
+)
+
 const workbookWorkflowRunByThread = defineUserQuery(workbookThreadArgsSchema, ({ args, ctx }) =>
   zql.workbook_workflow_run
     .where('workbookId', args.documentId)
@@ -161,6 +176,19 @@ const workbookWorkflowRunByThread = defineUserQuery(workbookThreadArgsSchema, ({
     .where((expression) =>
       expression.or(
         expression.cmp('startedByUserId', ctx.userID),
+        expression.exists('chatThreads', (threadQuery) => threadQuery.where('scope', 'shared')),
+      ),
+    )
+    .orderBy('updatedAtUnixMs', 'desc'),
+)
+
+const visibleWorkbookWorkflowRunByThread = defineQuery(workbookThreadViewerArgsSchema, ({ args }) =>
+  zql.workbook_workflow_run
+    .where('workbookId', args.documentId)
+    .where('threadId', args.threadId)
+    .where((expression) =>
+      expression.or(
+        expression.cmp('startedByUserId', args.currentUserId),
         expression.exists('chatThreads', (threadQuery) => threadQuery.where('scope', 'shared')),
       ),
     )
@@ -228,14 +256,18 @@ export const queries = defineQueries({
   },
   workbookChatThread: {
     byWorkbook: workbookChatThreadByWorkbook,
+    visibleByWorkbook: visibleWorkbookChatThreadByWorkbook,
   },
   workbookAgentThread: {
     byWorkbook: workbookChatThreadByWorkbook,
+    visibleByWorkbook: visibleWorkbookChatThreadByWorkbook,
   },
   workbookWorkflowRun: {
     byThread: workbookWorkflowRunByThread,
+    visibleByThread: visibleWorkbookWorkflowRunByThread,
   },
   workbookAgentWorkflowRun: {
     byThread: workbookWorkflowRunByThread,
+    visibleByThread: visibleWorkbookWorkflowRunByThread,
   },
 })

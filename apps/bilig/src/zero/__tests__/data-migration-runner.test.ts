@@ -11,6 +11,7 @@ import {
   type ZeroDataMigrationPool,
 } from '../data-migration-runner.js'
 import type { QueryResultRow } from '../store.js'
+import { runQueryableTransaction } from '../transaction-support.js'
 
 interface RecordedQuery {
   readonly text: string
@@ -49,6 +50,10 @@ class FakeMigrationPool implements ZeroDataMigrationPool {
   }
 }
 
+class FakeConnectedMigrationClient extends FakeMigrationClient {
+  readonly connect = vi.fn(async () => this)
+}
+
 describe('data migration runner', () => {
   it('runs pending migrations in order and records them in the ledger', async () => {
     const executed: string[] = []
@@ -84,6 +89,33 @@ describe('data migration runner', () => {
       'required-a',
       'cleanup-b',
     ])
+    expect(client.release).toHaveBeenCalledOnce()
+  })
+
+  it('does not reconnect an already connected migration client inside helper transactions', async () => {
+    const client = new FakeConnectedMigrationClient()
+    const pool = new FakeMigrationPool(client)
+    const migrations: readonly ZeroDataMigrationDefinition[] = [
+      {
+        name: 'nested-helper-transaction',
+        classification: 'required',
+        async run(db) {
+          await runQueryableTransaction(db, async (transactionDb) => {
+            await transactionDb.query('SELECT 1')
+          })
+        },
+      },
+    ]
+
+    const result = await runPendingZeroDataMigrations(pool, {
+      codeVersion: 'test-sha',
+      migrations,
+    })
+
+    expect(result.appliedThisRun).toEqual(['nested-helper-transaction'])
+    expect(client.connect).not.toHaveBeenCalled()
+    expect(client.calls.filter((call) => call.text === 'BEGIN')).toHaveLength(1)
+    expect(client.calls.filter((call) => call.text === 'COMMIT')).toHaveLength(1)
     expect(client.release).toHaveBeenCalledOnce()
   })
 

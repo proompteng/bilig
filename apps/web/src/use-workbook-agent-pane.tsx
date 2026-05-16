@@ -173,6 +173,7 @@ export function useWorkbookAgentPane(input: {
     enabled: enabled && zeroEnabled && Boolean(zero),
   })
   const zeroWorkflowRuns = useWorkbookAgentWorkflowRuns({
+    currentUserId,
     documentId,
     threadId: activeThreadId,
     zero: zeroSource,

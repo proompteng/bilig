@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest'
-import { workbookColumnTileArgsSchema, workbookRowTileArgsSchema, workbookTileArgsSchema } from '../queries.js'
+import { queries, workbookColumnTileArgsSchema, workbookRowTileArgsSchema, workbookTileArgsSchema } from '../queries.js'
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+type ExecutableZeroQuery = ((...args: readonly never[]) => unknown) & {
+  readonly fn: (input: { readonly args: unknown }) => unknown
+}
+
+function isExecutableZeroQuery(value: unknown): value is ExecutableZeroQuery {
+  return typeof value === 'function' && 'fn' in value && typeof value.fn === 'function'
+}
+
+function executeQueryRequestWithoutContext(request: unknown): unknown {
+  if (!isRecord(request) || !isExecutableZeroQuery(request['query'])) {
+    throw new Error('Expected a Zero query request')
+  }
+  return request['query'].fn({ args: request['args'] })
+}
 
 describe('zero sync query schemas', () => {
   it('accepts valid workbook tile ranges', () => {
@@ -107,5 +126,22 @@ describe('zero sync query schemas', () => {
         colEnd: 1,
       }).success,
     ).toBe(false)
+  })
+
+  it('exposes browser-safe workbook agent live queries without server user context', () => {
+    expect(() =>
+      executeQueryRequestWithoutContext(
+        queries.workbookChatThread.visibleByWorkbook({ documentId: 'doc-1', currentUserId: 'alex@example.com' }),
+      ),
+    ).not.toThrow()
+    expect(() =>
+      executeQueryRequestWithoutContext(
+        queries.workbookWorkflowRun.visibleByThread({
+          documentId: 'doc-1',
+          threadId: 'thr-1',
+          currentUserId: 'alex@example.com',
+        }),
+      ),
+    ).not.toThrow()
   })
 })

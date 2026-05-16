@@ -9,7 +9,7 @@ interface TransactionalQueryable extends Queryable {
 }
 
 function isTransactionalQueryable(db: Queryable): db is TransactionalQueryable {
-  return 'connect' in db && typeof db.connect === 'function'
+  return 'connect' in db && typeof db.connect === 'function' && !('release' in db && typeof db.release === 'function')
 }
 
 export async function runQueryableTransaction(db: Queryable, task: (transactionDb: Queryable) => Promise<void>): Promise<void> {

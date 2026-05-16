@@ -421,18 +421,16 @@ export function useWorkbookSync(input: {
           throw new Error('Unsupported workbook mutation')
       }
 
-      await runSerializedLocalMutationTask(async () => {
-        const rollbackOptimisticCell = applyOptimisticCellMutation(workerHandleRef.current?.viewportStore, mutation)
-        try {
-          await enqueuePendingMutation(mutation)
-          if (canAttemptRemoteSync(connectionStateRef.current)) {
-            scheduleAuthoritativeRefreshProbes()
-          }
-        } catch (error) {
-          rollbackOptimisticCell?.()
-          throw error
+      const rollbackOptimisticCell = applyOptimisticCellMutation(workerHandleRef.current?.viewportStore, mutation)
+      try {
+        await enqueuePendingMutation(mutation)
+        if (canAttemptRemoteSync(connectionStateRef.current)) {
+          scheduleAuthoritativeRefreshProbes()
         }
-      })
+      } catch (error) {
+        rollbackOptimisticCell?.()
+        throw error
+      }
       void (async () => {
         try {
           await runSerializedSyncTask(async () => {
@@ -450,7 +448,6 @@ export function useWorkbookSync(input: {
       drainPendingMutationsLocked,
       enqueuePendingMutation,
       reportRuntimeError,
-      runSerializedLocalMutationTask,
       runSerializedSyncTask,
       runtimeController,
       scheduleAuthoritativeRefreshProbes,

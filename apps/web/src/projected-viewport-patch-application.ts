@@ -89,6 +89,9 @@ export function shouldKeepCurrentSnapshot(
     if (incomingConfirmsOptimisticSnapshot(current, incoming)) {
       return false
     }
+    if (isClearCellSnapshot(current) && !isClearCellSnapshot(incoming)) {
+      return true
+    }
     return current.version > incoming.version
   }
 
@@ -152,14 +155,38 @@ function incomingConfirmsOptimisticSnapshot(current: CellSnapshot, incoming: Cel
 }
 
 export function prepareIncomingSnapshot(current: CellSnapshot, incoming: CellSnapshot): CellSnapshot {
+  return prepareIncomingSnapshotWithOptions(current, incoming)
+}
+
+function prepareIncomingSnapshotWithOptions(
+  current: CellSnapshot,
+  incoming: CellSnapshot,
+  options: { readonly releaseConfirmedOptimisticClear?: boolean } = {},
+): CellSnapshot {
   if (!isOptimisticCellSnapshot(current) || !incomingConfirmsOptimisticSnapshot(current, incoming)) {
     return incoming
+  }
+  if (
+    options.releaseConfirmedOptimisticClear === true &&
+    isClearCellSnapshot(current) &&
+    isClearCellSnapshot(incoming) &&
+    !isOptimisticCellSnapshot(incoming)
+  ) {
+    return {
+      ...incoming,
+      flags: incoming.flags & ~OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+      version: Math.max(current.version, incoming.version),
+    }
   }
   return {
     ...incoming,
     flags: incoming.flags | OPTIMISTIC_CELL_SNAPSHOT_FLAG,
     version: Math.max(current.version, incoming.version),
   }
+}
+
+function isClearCellSnapshot(snapshot: CellSnapshot): boolean {
+  return snapshot.formula === undefined && snapshot.input === undefined && snapshot.value.tag === ValueTag.Empty
 }
 
 function cellStyleSignature(style: CellStyleRecord): string {
@@ -307,6 +334,18 @@ export function applyProjectedViewportPatch(input: {
           continue
         }
         if (isOptimisticCellSnapshot(snapshot)) {
+          if (patch.authoritativeRevision !== undefined && isClearCellSnapshot(snapshot)) {
+            state.cellSnapshots.set(key, {
+              ...snapshot,
+              flags: snapshot.flags & ~OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+            })
+            changedKeys.add(key)
+            if (!damagedCellKeys.has(key)) {
+              const parsed = parseCellAddress(snapshot.address, snapshot.sheetName)
+              damage.push({ cell: [parsed.col, parsed.row] })
+              damagedCellKeys.add(key)
+            }
+          }
           continue
         }
         state.cellSnapshots.delete(key)
@@ -324,7 +363,11 @@ export function applyProjectedViewportPatch(input: {
   for (const cell of patch.cells) {
     const key = `${patch.viewport.sheetName}!${cell.snapshot.address}`
     const current = state.cellSnapshots.get(key)
-    const incoming = current ? prepareIncomingSnapshot(current, cell.snapshot) : cell.snapshot
+    const incoming = current
+      ? prepareIncomingSnapshotWithOptions(current, cell.snapshot, {
+          releaseConfirmedOptimisticClear: patch.authoritativeRevision !== undefined,
+        })
+      : cell.snapshot
     if (current) {
       const allowResetEmptyOverride =
         !patch.full &&

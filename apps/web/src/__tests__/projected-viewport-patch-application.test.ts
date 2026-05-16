@@ -456,6 +456,7 @@ describe('applyProjectedViewportPatch', () => {
     applyProjectedViewportPatch({
       state,
       patch: {
+        authoritativeRevision: 9,
         version: 9,
         full: false,
         freezeRows: 0,
@@ -514,6 +515,7 @@ describe('applyProjectedViewportPatch', () => {
     applyProjectedViewportPatch({
       state,
       patch: {
+        authoritativeRevision: 9,
         version: 9,
         full: false,
         freezeRows: 0,
@@ -553,6 +555,7 @@ describe('applyProjectedViewportPatch', () => {
     applyProjectedViewportPatch({
       state,
       patch: {
+        authoritativeRevision: 10,
         version: 10,
         full: false,
         freezeRows: 0,
@@ -592,12 +595,12 @@ describe('applyProjectedViewportPatch', () => {
 
     expect(state.cellSnapshots.get('Sheet1!B2')).toMatchObject({
       value: { tag: ValueTag.Empty },
-      flags: OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+      flags: 0,
       version: 8,
     })
   })
 
-  it('accepts newer non-empty patches over optimistic clears', () => {
+  it('keeps optimistic clears when newer non-empty patches arrive before clear confirmation', () => {
     const state = createPatchState()
     state.cellSnapshots.set('Sheet1!B2', {
       sheetName: 'Sheet1',
@@ -648,13 +651,165 @@ describe('applyProjectedViewportPatch', () => {
       },
     })
 
+    expect(state.cellSnapshots.get('Sheet1!B2')).toMatchObject({
+      sheetName: 'Sheet1',
+      address: 'B2',
+      value: { tag: ValueTag.Empty },
+      flags: OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+      version: 8,
+    })
+  })
+
+  it('releases optimistic clear protection after authoritative empty confirmation', () => {
+    const state = createPatchState()
+    state.cellSnapshots.set('Sheet1!B2', {
+      sheetName: 'Sheet1',
+      address: 'B2',
+      value: { tag: ValueTag.Empty },
+      flags: OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+      version: 8,
+    })
+    state.cellKeysBySheet.set('Sheet1', new Set(['Sheet1!B2']))
+
+    applyProjectedViewportPatch({
+      state,
+      patch: {
+        authoritativeRevision: 9,
+        version: 9,
+        full: false,
+        freezeRows: 0,
+        freezeCols: 0,
+        viewport: {
+          sheetName: 'Sheet1',
+          rowStart: 1,
+          rowEnd: 1,
+          colStart: 1,
+          colEnd: 1,
+        },
+        metrics: TEST_METRICS,
+        styles: [],
+        cells: [
+          {
+            row: 1,
+            col: 1,
+            snapshot: {
+              sheetName: 'Sheet1',
+              address: 'B2',
+              value: { tag: ValueTag.Empty },
+              flags: 0,
+              version: 9,
+            },
+            displayText: '',
+            copyText: '',
+            editorText: '',
+            formatId: 0,
+            styleId: 'style-0',
+          },
+        ],
+        columns: [],
+        rows: [],
+      },
+    })
+
     expect(state.cellSnapshots.get('Sheet1!B2')).toEqual({
       sheetName: 'Sheet1',
       address: 'B2',
-      input: 'new-authoritative-value',
-      value: { tag: ValueTag.String, value: 'new-authoritative-value', stringId: 1 },
+      value: { tag: ValueTag.Empty },
       flags: 0,
       version: 9,
+    })
+
+    applyProjectedViewportPatch({
+      state,
+      patch: {
+        authoritativeRevision: 10,
+        version: 10,
+        full: false,
+        freezeRows: 0,
+        freezeCols: 0,
+        viewport: {
+          sheetName: 'Sheet1',
+          rowStart: 1,
+          rowEnd: 1,
+          colStart: 1,
+          colEnd: 1,
+        },
+        metrics: TEST_METRICS,
+        styles: [],
+        cells: [
+          {
+            row: 1,
+            col: 1,
+            snapshot: {
+              sheetName: 'Sheet1',
+              address: 'B2',
+              input: 'new-after-confirmed-clear',
+              value: { tag: ValueTag.String, value: 'new-after-confirmed-clear', stringId: 1 },
+              flags: 0,
+              version: 10,
+            },
+            displayText: 'new-after-confirmed-clear',
+            copyText: 'new-after-confirmed-clear',
+            editorText: 'new-after-confirmed-clear',
+            formatId: 0,
+            styleId: 'style-0',
+          },
+        ],
+        columns: [],
+        rows: [],
+      },
+    })
+
+    expect(state.cellSnapshots.get('Sheet1!B2')).toEqual({
+      sheetName: 'Sheet1',
+      address: 'B2',
+      input: 'new-after-confirmed-clear',
+      value: { tag: ValueTag.String, value: 'new-after-confirmed-clear', stringId: 1 },
+      flags: 0,
+      version: 10,
+    })
+  })
+
+  it('releases optimistic clear protection when an authoritative full patch omits the cleared cell', () => {
+    const state = createPatchState()
+    state.cellSnapshots.set('Sheet1!B2', {
+      sheetName: 'Sheet1',
+      address: 'B2',
+      value: { tag: ValueTag.Empty },
+      flags: OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+      version: 8,
+    })
+    state.cellKeysBySheet.set('Sheet1', new Set(['Sheet1!B2']))
+
+    applyProjectedViewportPatch({
+      state,
+      patch: {
+        authoritativeRevision: 9,
+        version: 9,
+        full: true,
+        freezeRows: 0,
+        freezeCols: 0,
+        viewport: {
+          sheetName: 'Sheet1',
+          rowStart: 1,
+          rowEnd: 1,
+          colStart: 1,
+          colEnd: 1,
+        },
+        metrics: TEST_METRICS,
+        styles: [],
+        cells: [],
+        columns: [],
+        rows: [],
+      },
+    })
+
+    expect(state.cellSnapshots.get('Sheet1!B2')).toEqual({
+      sheetName: 'Sheet1',
+      address: 'B2',
+      value: { tag: ValueTag.Empty },
+      flags: 0,
+      version: 8,
     })
   })
 

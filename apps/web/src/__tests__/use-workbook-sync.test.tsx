@@ -380,6 +380,102 @@ describe('useWorkbookSync', () => {
     })
   })
 
+  it('does not hold a rapid follow-up clear behind a still-settling local enqueue', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    let resolveFirstMutation: ((mutation: PendingWorkbookMutation) => void) | null = null
+    const firstMutation = new Promise<PendingWorkbookMutation>((resolve) => {
+      resolveFirstMutation = resolve
+    })
+    let nextSeq = 1
+    let sync: ReturnType<typeof useWorkbookSync> | null = null
+    const runtimeController = {
+      invoke: vi.fn((method: string, input?: unknown) => {
+        if (method !== 'enqueuePendingMutation') {
+          throw new Error(`Unexpected runtime invoke: ${method}`)
+        }
+        if (!isPendingMutationInput(input)) {
+          throw new Error('Expected pending mutation input')
+        }
+        const mutation = {
+          ...createPendingMutation(),
+          id: `pending-${nextSeq}`,
+          localSeq: nextSeq,
+          method: input.method,
+          args: input.args,
+        }
+        nextSeq += 1
+        return mutation.localSeq === 1 ? firstMutation : Promise.resolve(mutation)
+      }),
+    }
+
+    function Harness() {
+      sync = useWorkbookSync({
+        documentId: 'doc-1',
+        connectionStateName: 'disconnected',
+        connectionStateRef: { current: 'disconnected' },
+        runtimeController,
+        workerHandleRef: { current: null },
+        zeroRef: {
+          current: {
+            mutate() {
+              throw new Error('Rapid local enqueue test should not attempt remote sync while disconnected')
+            },
+          },
+        },
+        reportRuntimeError: vi.fn(),
+      })
+      return null
+    }
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    await act(async () => {
+      root.render(<Harness />)
+    })
+    if (!sync) {
+      throw new Error('Expected useWorkbookSync harness to initialize')
+    }
+    const activeSync = sync
+
+    void activeSync.invokeMutation('setCellValue', 'Sheet1', 'D10', 'stale')
+    await vi.waitFor(() => {
+      expect(runtimeController.invoke).toHaveBeenCalledWith('enqueuePendingMutation', {
+        method: 'setCellValue',
+        args: ['Sheet1', 'D10', 'stale'],
+      })
+    })
+
+    void activeSync.invokeMutation('clearRange', {
+      sheetName: 'Sheet1',
+      startAddress: 'D10',
+      endAddress: 'D10',
+    })
+    await vi.waitFor(() => {
+      expect(runtimeController.invoke).toHaveBeenCalledWith('enqueuePendingMutation', {
+        method: 'clearRange',
+        args: [
+          {
+            sheetName: 'Sheet1',
+            startAddress: 'D10',
+            endAddress: 'D10',
+          },
+        ],
+      })
+    })
+
+    resolveFirstMutation?.({
+      ...createPendingMutation(),
+      id: 'pending-1',
+      localSeq: 1,
+      args: ['Sheet1', 'D10', 'stale'],
+    })
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
   it('does not probe authoritative events for local-only mutations while disconnected', async () => {
     vi.useFakeTimers()
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true

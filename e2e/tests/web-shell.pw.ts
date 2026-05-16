@@ -1174,6 +1174,47 @@ test('web app does not resurrect a keyboard-cleared cell after click-away', asyn
   await expect.poll(() => nativeTextRunsInclude(page, staleText)).toBe(false)
 })
 
+test('@browser-ci web app keeps deleted content cleared through viewport churn and reload', async ({ page }) => {
+  const staleText = 'delete-clear-viewport-reload'
+  const documentId = createTestDocumentId('playwright-delete-clear-viewport-reload')
+  await page.goto(`/?document=${encodeURIComponent(documentId)}&sheet=Sheet1&cell=D10`)
+  await waitForWorkbookReady(page)
+
+  const formulaInput = page.getByTestId('formula-input')
+
+  await clickProductCell(page, 3, 9)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!D10')
+  await formulaInput.fill(staleText)
+  await formulaInput.press('Enter')
+  await expect(formulaInput).toHaveValue(staleText)
+  await expect.poll(() => nativeTextRunsInclude(page, staleText)).toBe(true)
+
+  await page.keyboard.press('Delete')
+  await expect(formulaInput).toHaveValue('')
+  await expect.poll(() => nativeTextRunsInclude(page, staleText)).toBe(false)
+
+  await page.getByTestId('grid-scroll-viewport').evaluate((viewport) => {
+    viewport.scrollTop = 900
+    viewport.scrollLeft = 220
+    viewport.dispatchEvent(new Event('scroll', { bubbles: true }))
+  })
+  await expect.poll(() => nativeTextRunsInclude(page, staleText)).toBe(false)
+
+  await page.getByTestId('grid-scroll-viewport').evaluate((viewport) => {
+    viewport.scrollTop = 0
+    viewport.scrollLeft = 0
+    viewport.dispatchEvent(new Event('scroll', { bubbles: true }))
+  })
+  await expect.poll(() => nativeTextRunsInclude(page, staleText)).toBe(false)
+
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await waitForWorkbookReady(page)
+  await clickProductCell(page, 3, 9)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!D10')
+  await expect(formulaInput).toHaveValue('')
+  await expect.poll(() => nativeTextRunsInclude(page, staleText)).toBe(false)
+})
+
 test('web app keeps delayed in-cell typing anchored and exits cleanly on click-away', async ({ page }) => {
   await page.keyboard.up(PRIMARY_MODIFIER)
   await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-delayed-click-away-edit'))}`)
