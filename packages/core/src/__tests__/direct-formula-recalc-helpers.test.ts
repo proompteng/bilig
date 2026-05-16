@@ -71,7 +71,7 @@ describe('direct formula recalc helpers', () => {
 
   it('decides when direct post-recalc formulas can avoid the kernel', () => {
     const collection = new DirectFormulaIndexCollection()
-    collection.appendConstantDelta(new Uint32Array([1, 2]), 3, 'scalar')
+    collection.appendConstantDelta(new Uint32Array([1, 2]), 3)
 
     expect(hasCompleteDirectFormulaDeltas(collection)).toBe(true)
     expect(directFormulaChangesAreDisjointFromInputs(new Uint32Array([3, 4]), 2, collection)).toBe(true)
@@ -107,5 +107,36 @@ describe('direct formula recalc helpers', () => {
     )
     expect(counters.directAggregateDeltaOnlyRecalcSkips).toBe(1)
     expect(counters.directScalarDeltaOnlyRecalcSkips).toBe(1)
+  })
+
+  it('keeps direct scalar delta bookkeeping on the scalar-only path', () => {
+    const collection = new DirectFormulaIndexCollection()
+    collection.appendConstantDelta(new Uint32Array([1, 2, 3]), 3, 'scalar')
+
+    const counters = createEngineCounters()
+    countDirectFormulaDeltaSkip(
+      {
+        get() {
+          throw new Error('scalar-only delta skips should not scan formulas')
+        },
+      },
+      collection,
+      counters,
+    )
+
+    expect(counters.directAggregateDeltaOnlyRecalcSkips).toBe(0)
+    expect(counters.directScalarDeltaOnlyRecalcSkips).toBe(1)
+  })
+
+  it('checks small changed-input sets without materializing a large direct formula index', () => {
+    const collection = new DirectFormulaIndexCollection()
+    collection.appendConstantDelta(new Uint32Array(Array.from({ length: 64 }, (_value, index) => index + 10)), 1, 'scalar')
+
+    expect(directFormulaChangesAreDisjointFromInputs(new Uint32Array([1]), 1, collection)).toBe(true)
+    expect(Reflect.get(collection, 'indexByCell')).toBeUndefined()
+    expect(directFormulaChangesAreDisjointFromInputs(new Uint32Array([42]), 1, collection)).toBe(false)
+    expect(Reflect.get(collection, 'indexByCell')).toBeUndefined()
+    expect(collection.has(42)).toBe(true)
+    expect(Reflect.get(collection, 'indexByCell')).toBeUndefined()
   })
 })

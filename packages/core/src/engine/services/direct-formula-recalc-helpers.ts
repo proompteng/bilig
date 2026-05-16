@@ -106,12 +106,7 @@ export function directFormulaChangesAreDisjointFromInputs(
   changedInputCount: number,
   postRecalcDirectFormulaIndices: DirectFormulaIndexCollection,
 ): boolean {
-  for (let index = 0; index < changedInputCount; index += 1) {
-    if (postRecalcDirectFormulaIndices.has(changedInputArray[index]!)) {
-      return false
-    }
-  }
-  return true
+  return !postRecalcDirectFormulaIndices.hasAny(changedInputArray, changedInputCount)
 }
 
 export function countDirectFormulaDeltaSkip(
@@ -119,6 +114,10 @@ export function countDirectFormulaDeltaSkip(
   postRecalcDirectFormulaIndices: DirectFormulaIndexCollection,
   counters: EngineCounters,
 ): void {
+  if (postRecalcDirectFormulaIndices.hasCompleteScalarDeltas()) {
+    addEngineCounter(counters, 'directScalarDeltaOnlyRecalcSkips')
+    return
+  }
   let sawAggregate = false
   let sawScalar = false
   postRecalcDirectFormulaIndices.forEach((cellIndex) => {

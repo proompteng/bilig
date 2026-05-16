@@ -505,7 +505,7 @@ describe('operation-service internals', () => {
     expect(directCriteriaTouchesPoint(criteria, { sheetName: 'Other', row: 2, col: 0 })).toBe(false)
 
     const indexCollection = new DirectFormulaIndexCollection()
-    indexCollection.appendConstantDelta(new Uint32Array([1, 2]), 3, 'scalar')
+    indexCollection.appendConstantDelta(new Uint32Array([1, 2]), 3)
     expect(directFormulaChangesAreDisjointFromInputs(new Uint32Array([3, 4]), 2, indexCollection)).toBe(true)
     expect(directFormulaChangesAreDisjointFromInputs(new Uint32Array([1, 4]), 2, indexCollection)).toBe(false)
     expect(

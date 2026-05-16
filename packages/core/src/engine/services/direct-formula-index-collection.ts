@@ -36,6 +36,7 @@ export class DirectFormulaIndexCollection {
   private scalarDeltaCount = 0
   private constantDelta: number | undefined
   private validatedScalarDeltaSize = -1
+  private linearHasProbeCount = 0
 
   get size(): number {
     return this.sharedCellIndices?.length ?? this.cellIndices.length
@@ -67,6 +68,15 @@ export class DirectFormulaIndexCollection {
 
   has(cellIndex: number): boolean {
     if (!this.indexByCell && this.size > 16) {
+      if (this.sharedCellIndices !== undefined && this.linearHasProbeCount < 4) {
+        this.linearHasProbeCount += 1
+        for (let index = 0; index < this.sharedCellIndices.length; index += 1) {
+          if (this.sharedCellIndices[index] === cellIndex) {
+            return true
+          }
+        }
+        return false
+      }
       this.materializeIndexByCell()
     }
     if (this.indexByCell) {
@@ -74,6 +84,30 @@ export class DirectFormulaIndexCollection {
     }
     for (let index = 0; index < this.size; index += 1) {
       if (this.getCellIndexAt(index) === cellIndex) {
+        return true
+      }
+    }
+    return false
+  }
+
+  hasAny(cellIndices: readonly number[] | U32, count = cellIndices.length): boolean {
+    const length = Math.min(count, cellIndices.length)
+    if (length <= 0 || this.size === 0) {
+      return false
+    }
+    if (!this.indexByCell && (length <= 4 || this.size <= 16)) {
+      for (let inputIndex = 0; inputIndex < length; inputIndex += 1) {
+        const cellIndex = cellIndices[inputIndex]!
+        for (let collectionIndex = 0; collectionIndex < this.size; collectionIndex += 1) {
+          if (this.getCellIndexAt(collectionIndex) === cellIndex) {
+            return true
+          }
+        }
+      }
+      return false
+    }
+    for (let index = 0; index < length; index += 1) {
+      if (this.has(cellIndices[index]!)) {
         return true
       }
     }
