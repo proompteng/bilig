@@ -498,6 +498,41 @@ The smoke output includes `action: "Next.js Server Action FormData"` and
 `verified: true` only after formula readback and saved-document formula
 persistence both pass.
 
+## Next.js Server Action Validation Adapter
+
+Use the validation-error smoke when a Server Action should reject malformed
+form input before it reaches the WorkPaper mutation route:
+
+```sh
+cd examples/serverless-workpaper-api
+npm install
+npm run next-server-action-validation
+```
+
+The example submits a FormData payload with `customers: "-1"` through the same
+parser as the FormData action, catches the validation error, then reads the
+summary again. `unchanged: true` proves the rejected action did not mutate the
+persisted workbook state.
+
+```json
+{
+  "action": "Next.js Server Action FormData validation",
+  "validationError": "record 1 customers must be a non-negative number",
+  "summaryBefore": {
+    "largestDeal": 24000,
+    "totalRevenue": 36900,
+    "westCustomers": 20
+  },
+  "summaryAfter": {
+    "largestDeal": 24000,
+    "totalRevenue": 36900,
+    "westCustomers": 20
+  },
+  "unchanged": true,
+  "verified": true
+}
+```
+
 ## Vercel Function Adapter
 
 Plain Vercel Functions can use the same web-standard `Request` and `Response`

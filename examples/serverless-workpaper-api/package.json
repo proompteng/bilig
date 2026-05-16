@@ -9,6 +9,7 @@
     "next-route-handler": "tsx next-route-handler.ts",
     "next-server-action": "tsx next-server-action.ts",
     "next-server-action-formdata": "tsx next-server-action-formdata.ts",
+    "next-server-action-validation": "tsx next-server-action-validation.ts",
     "persistence-adapters": "tsx persistence-adapters.ts",
     "quote-approval-api": "tsx quote-approval-api.ts",
     "smoke": "tsx smoke.ts",

@@ -22,6 +22,7 @@ export async function requireServerlessWorkPaperApiDiscovery({
   await requireFile(join(repoRoot, 'examples', 'serverless-workpaper-api', 'next-route-handler.ts'))
   await requireFile(join(repoRoot, 'examples', 'serverless-workpaper-api', 'next-server-action.ts'))
   await requireFile(join(repoRoot, 'examples', 'serverless-workpaper-api', 'next-server-action-formdata.ts'))
+  await requireFile(join(repoRoot, 'examples', 'serverless-workpaper-api', 'next-server-action-validation.ts'))
   await requireFile(join(repoRoot, 'examples', 'serverless-workpaper-api', 'persistence-adapters.ts'))
 
   const [
@@ -57,6 +58,12 @@ export async function requireServerlessWorkPaperApiDiscovery({
   requireIncludes(llms, 'Next.js Server Action FormData WorkPaper smoke', 'docs/llms.txt')
   requireIncludes(llms, 'npm run next-server-action-formdata', 'docs/llms.txt')
   requireIncludes(readme, 'npm run next-server-action-formdata', 'README.md')
+  requireIncludes(serverlessExampleReadme, 'npm run next-server-action-validation', 'examples/serverless-workpaper-api/README.md')
+  requireIncludes(serverlessExampleReadme, '## Next.js Server Action Validation Smoke', 'examples/serverless-workpaper-api/README.md')
+  requireIncludes(serverlessWorkPaperApiRouteDoc, 'npm run next-server-action-validation', 'docs/serverless-workpaper-api-route.md')
+  requireIncludes(serverlessWorkPaperApiRouteDoc, '## Next.js Server Action Validation Adapter', 'docs/serverless-workpaper-api-route.md')
+  requireIncludes(llms, 'Next.js Server Action validation-error WorkPaper smoke', 'docs/llms.txt')
+  requireIncludes(llms, 'npm run next-server-action-validation', 'docs/llms.txt')
 
   requireIncludes(serverlessExampleReadme, 'npm run framework-adapters', 'examples/serverless-workpaper-api/README.md')
   requireIncludes(serverlessExampleReadme, '## Framework Adapters', 'examples/serverless-workpaper-api/README.md')
@@ -110,6 +117,11 @@ export async function requireServerlessWorkPaperApiDiscovery({
   requireIncludes(
     serverlessExamplePackage,
     '"next-server-action-formdata": "tsx next-server-action-formdata.ts"',
+    'examples/serverless-workpaper-api/package.json',
+  )
+  requireIncludes(
+    serverlessExamplePackage,
+    '"next-server-action-validation": "tsx next-server-action-validation.ts"',
     'examples/serverless-workpaper-api/package.json',
   )
   requireIncludes(
