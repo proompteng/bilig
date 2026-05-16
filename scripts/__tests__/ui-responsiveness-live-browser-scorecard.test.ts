@@ -41,11 +41,13 @@ describe('UI responsiveness live browser scorecard', () => {
       evidenceKind: 'same-corpus-browser-capture',
       requiredProductCount: 2,
       requiredCaseCount: requiredUiResponsivenessSameCorpusWorkloads.length,
-      tenXMeanAndP95CaseCount: 0,
       coveredCorpusCaseIds: ['wide-mixed-250k'],
     })
     expect(scorecard.sameCorpusProof.cases.map((entry) => entry.workload)).toEqual(requiredUiResponsivenessSameCorpusWorkloads)
-    expect(scorecard.sameCorpusProof.cases.every((entry) => !entry.tenXMeanAndP95AgainstGoogleSheets)).toBe(true)
+    expect(scorecard.sameCorpusProof.tenXMeanAndP95CaseCount).toBe(
+      scorecard.sameCorpusProof.cases.filter((entry) => entry.tenXMeanAndP95AgainstGoogleSheets).length,
+    )
+    expect(scorecard.sameCorpusProof.tenXMeanAndP95CaseCount).toBeGreaterThan(0)
     validateUiResponsivenessLiveBrowserScorecard(scorecard)
   })
 

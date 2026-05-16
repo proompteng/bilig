@@ -8,7 +8,7 @@ import type {
   SameCorpusCaptureMeasurement,
   UiResponsivenessSameCorpusMeasurement,
   UiResponsivenessSameCorpusProduct,
-} from './gen-ui-responsiveness-live-browser-scorecard.ts'
+} from './ui-responsiveness-same-corpus-scorecard-proof.ts'
 
 const rootDir = resolve(new URL('..', import.meta.url).pathname)
 
