@@ -4,7 +4,6 @@ import { ValueTag } from '@bilig/protocol'
 import type { AuthoritativeWorkbookEventRecord } from '@bilig/zero-sync'
 import { runScheduledProperty } from '@bilig/test-fuzz'
 import { WorkbookWorkerRuntime } from '../worker-runtime.js'
-import { createMemoryWorkbookLocalStoreFactory } from '@bilig/storage-browser'
 import { runtimeSyncTrackedAddresses } from './runtime-sync-fuzz-helpers.js'
 
 type RuntimeSyncMutationKey = 'alpha' | 'beta' | 'gamma'
@@ -33,9 +32,7 @@ describe('runtime sync scheduled fuzz', () => {
       suite: 'web/runtime-sync/scheduled-order-parity',
       arbitrary: fc.array(runtimeSyncScheduledActionArbitrary, { minLength: 4, maxLength: 12 }),
       predicate: async ({ scheduler, value: actions }) => {
-        const runtime = new WorkbookWorkerRuntime({
-          localStoreFactory: createMemoryWorkbookLocalStoreFactory(),
-        })
+        const runtime = new WorkbookWorkerRuntime()
         await runtime.bootstrap({
           documentId: 'runtime-sync-scheduled-fuzz',
           replicaId: 'browser:runtime-sync-scheduled-fuzz',

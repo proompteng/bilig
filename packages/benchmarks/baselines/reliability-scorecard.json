@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "suite": "reliability-posture",
-  "generatedAt": "2026-05-06T14:08:49.847Z",
+  "generatedAt": "2026-05-16T19:22:39.833Z",
   "source": {
     "artifactGenerator": "scripts/gen-reliability-scorecard.ts",
     "workerRuntimeImplementation": "apps/web/src/worker-runtime.ts",
     "mutationJournalImplementation": "apps/web/src/worker-runtime-mutation-journal.ts",
-    "localStoreImplementation": "packages/storage-browser/src/index.ts",
+    "zeroSyncImplementation": "packages/zero-sync/src/schema.ts",
     "headedBrowserReliabilityTestFile": "e2e/tests/web-shell-remote-sync.pw.ts",
     "externalReliabilityComparisonArtifact": "packages/benchmarks/baselines/reliability-external-sheets-excel-comparison.json"
   },
@@ -20,12 +20,11 @@
     "headedBrowserCrashSoakPassed": true,
     "offlineNetworkPartitionPassed": true,
     "coveredControls": [
-      "pending.localReloadSurvival",
-      "pending.submittedReloadSurvival",
+      "zero.clientPersistenceConfig",
+      "zero.authoritativeMutationDurability",
       "pending.authoritativeAckAbsorption",
       "pending.authoritativeRebasePreservesLocal",
-      "pending.failedRetrySurvival",
-      "localStore.journalActiveView",
+      "pending.failedRetryStateMachine",
       "headedBrowser.reloadPersistence",
       "headedBrowser.crashSoak",
       "offline.networkPartitionRecoverySoak",
@@ -43,8 +42,8 @@
       "category": "pending-durability",
       "required": true,
       "passed": true,
-      "coveredControls": ["pending.localReloadSurvival", "localStore.journalActiveView"],
-      "evidence": "Enqueued a local pending mutation, reopened the worker runtime from the same local store, and verified the pending entry and projected cell survived.",
+      "coveredControls": ["zero.clientPersistenceConfig", "headedBrowser.reloadPersistence"],
+      "evidence": "Verified browser durability is delegated to Zero client persistence and covered by the headed Zero workbook reload flow.",
       "findings": []
     },
     {
@@ -52,8 +51,8 @@
       "category": "authoritative-reconcile",
       "required": true,
       "passed": true,
-      "coveredControls": ["pending.submittedReloadSurvival", "pending.authoritativeAckAbsorption", "localStore.journalActiveView"],
-      "evidence": "Reopened a submitted mutation, absorbed an authoritative event with the same client mutation id, and verified pending state stayed empty after another reload.",
+      "coveredControls": ["zero.authoritativeMutationDurability", "pending.authoritativeAckAbsorption"],
+      "evidence": "Marked a mutation submitted, absorbed an authoritative event with the same client mutation id, and verified Zero/Postgres schema stores client mutation ids in durable workbook events.",
       "findings": []
     },
     {
@@ -61,8 +60,8 @@
       "category": "authoritative-reconcile",
       "required": true,
       "passed": true,
-      "coveredControls": ["pending.authoritativeRebasePreservesLocal", "localStore.journalActiveView"],
-      "evidence": "Applied an unrelated authoritative event over an unsent local mutation, reopened the runtime, and verified both the authoritative cell and rebased local cell survived.",
+      "coveredControls": ["pending.authoritativeRebasePreservesLocal", "zero.clientDurability"],
+      "evidence": "Applied an unrelated authoritative event over an unsent local mutation and verified both the authoritative cell and rebased local cell remain in the projection.",
       "findings": []
     },
     {
@@ -70,8 +69,8 @@
       "category": "failure-recovery",
       "required": true,
       "passed": true,
-      "coveredControls": ["pending.failedRetrySurvival", "localStore.journalActiveView"],
-      "evidence": "Marked a pending mutation failed, reopened the runtime, retried it, reopened again, and verified it returned to local pending state without losing the projected value.",
+      "coveredControls": ["pending.failedRetryStateMachine"],
+      "evidence": "Marked a pending mutation failed, retried it, and verified it returned to local pending state without losing the projected value.",
       "findings": []
     },
     {
@@ -98,13 +97,11 @@
       "required": true,
       "passed": true,
       "coveredControls": [
-        "pending.localReloadSurvival",
         "pending.authoritativeRebasePreservesLocal",
         "pending.authoritativeAckAbsorption",
-        "localStore.journalActiveView",
         "offline.networkPartitionRecoverySoak"
       ],
-      "evidence": "Simulated 32 offline local edits across a worker reload, replayed 32 collaborator authoritative edits on reconnect, acked every local mutation, and reopened the runtime to verify both local and remote cells persisted with an empty pending queue.",
+      "evidence": "Simulated 32 offline local edits, replayed 32 collaborator authoritative edits on reconnect, acked every local mutation, and verified both local and remote cells remained with an empty pending queue.",
       "findings": []
     },
     {

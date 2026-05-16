@@ -215,7 +215,7 @@ Exit bar:
 Primary owner surface:
 
 - [/Users/gregkonush/github.com/bilig3/apps/web/src](/Users/gregkonush/github.com/bilig3/apps/web/src)
-- [/Users/gregkonush/github.com/bilig3/packages/storage-browser/src](/Users/gregkonush/github.com/bilig3/packages/storage-browser/src)
+- [packages/zero-sync](/Users/gregkonush/github.com/bilig3/packages/zero-sync)
 
 Primary debt this removes:
 

@@ -32,7 +32,7 @@ describe('resolveRuntimeConfig', () => {
     })
   })
 
-  it('allows explicit document sessions to opt out of local persistence for browser QA', () => {
+  it('allows explicit document sessions to opt out of Zero client persistence for browser QA', () => {
     window.history.replaceState({}, '', '/?document=visual-smoke&persist=0')
 
     expect(resolveRuntimeConfig(BASE_CONFIG)).toMatchObject({

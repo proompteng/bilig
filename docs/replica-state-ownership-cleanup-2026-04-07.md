@@ -77,7 +77,7 @@ That shape is defined in `packages/core/src/engine.ts` and validated by `isEngin
 
 It currently crosses these boundaries:
 
-- worker local-store persistence in `apps/web/src/worker-runtime.ts` and `packages/storage-browser/src/workbook-local-store.ts`
+- worker sync state in `apps/web/src/worker-runtime.ts` and `packages/zero-sync`
 - worker engine bootstrap via `apps/web/src/worker-runtime-support.ts`
 - monolith local-session snapshot state in `apps/bilig/src/workbook-runtime/local-session-snapshot-store.ts`
 - monolith authoritative restore and backfill in `apps/bilig/src/zero/store.ts`
@@ -306,7 +306,7 @@ Validation gate:
 Validation gate:
 
 - targeted local session tests under `apps/bilig/src/workbook-runtime/*.test.ts`
-- worker runtime restore tests under `apps/web/src/__tests__/worker-runtime.test.ts`
+- worker runtime rehydrate tests under `apps/web/src/__tests__/worker-runtime-reconnect.test.ts`
 
 ### Phase 3: remove the package seam
 
@@ -339,8 +339,8 @@ Targeted suites:
 
 - `packages/core/src/__tests__/engine.test.ts`
 - `packages/core/src/__tests__/guards.test.ts`
-- `apps/web/src/__tests__/worker-runtime.test.ts`
-- `apps/web/src/__tests__/runtime-session.test.ts`
+- `apps/web/src/__tests__/worker-runtime-reconnect.test.ts`
+- `apps/web/src/__tests__/worker-runtime-authoritative-bootstrap.test.ts`
 - `apps/bilig/src/workbook-runtime/agent-routing.test.ts`
 - `apps/bilig/src/workbook-runtime/document-presence-session-store.test.ts`
 - `apps/bilig/src/workbook-runtime/document-session-manager.test.ts`

@@ -18,7 +18,6 @@
     { "path": "../../packages/grid" },
     { "path": "../../packages/protocol" },
     { "path": "../../packages/runtime-kernel" },
-    { "path": "../../packages/storage-browser" },
     { "path": "../../packages/worker-transport" },
     { "path": "../../packages/workbook-domain" },
     { "path": "../../packages/zero-sync" },

@@ -1,11 +1,7 @@
 import { formatAddress } from '@bilig/formula'
-import type { WorkbookLocalViewportBase } from '@bilig/storage-browser'
 import {
   ValueTag,
-  formulaLooksDateLike,
   formatCellDisplayValue,
-  isDateLikeHeaderValue,
-  isLikelyExcelDateSerialValue,
   type CellSnapshot,
   type CellStyleRecord,
   type EngineEvent,
@@ -72,22 +68,6 @@ function toEditorText(snapshot: CellSnapshot): string {
 
 function toDisplayText(snapshot: CellSnapshot): string {
   return formatCellDisplayValue(snapshot.value, snapshot.format)
-}
-
-function inferLocalProjectionFormat(
-  snapshot: CellSnapshot,
-  row: number,
-  col: number,
-  cellsByPosition: ReadonlyMap<string, CellSnapshot>,
-): string | undefined {
-  if (snapshot.format !== undefined || !isLikelyExcelDateSerialValue(snapshot.value)) {
-    return snapshot.format
-  }
-  if (formulaLooksDateLike(snapshot.formula)) {
-    return 'date:short'
-  }
-  const header = cellsByPosition.get(`${row - 1}:${col}`)
-  return header !== undefined && isDateLikeHeaderValue(header.value) ? 'date:short' : snapshot.format
 }
 
 function buildPatchedCellSignature(
@@ -274,88 +254,6 @@ export function buildViewportPatchFromEngine(input: {
     full,
     freezeRows: engine.getFreezePane(viewport.sheetName)?.rows ?? 0,
     freezeCols: engine.getFreezePane(viewport.sheetName)?.cols ?? 0,
-    viewport,
-    metrics: { ...metrics },
-    styles,
-    cells,
-    columns,
-    rows,
-    ...(merges !== undefined ? { merges } : {}),
-  }
-}
-
-export function buildViewportPatchFromLocalBase(input: {
-  readonly state: ViewportSubscriptionState
-  readonly metrics: RecalcMetrics
-  readonly authoritativeRevision: number
-  readonly base: WorkbookLocalViewportBase
-  readonly engine?: WorkerEngine | undefined
-  readonly getFormatId: (format: string | undefined) => number
-}): ViewportPatch {
-  const { state, metrics, base } = input
-  const viewport = state.subscription
-  state.lastCellSignatures.clear()
-  state.lastStyleSignatures.clear()
-
-  const styles = [...base.styles]
-  const cellsByPosition = new Map(base.cells.map((cell) => [`${cell.row}:${cell.col}`, cell.snapshot]))
-  styles.forEach((style) => {
-    state.knownStyleIds.add(style.id)
-    state.lastStyleSignatures.set(style.id, styleSignature(style))
-  })
-
-  const cells: ViewportPatchedCell[] = []
-  for (const cell of base.cells) {
-    const inferredFormat = inferLocalProjectionFormat(cell.snapshot, cell.row, cell.col, cellsByPosition)
-    const snapshot: CellSnapshot =
-      inferredFormat === undefined || inferredFormat === cell.snapshot.format ? cell.snapshot : { ...cell.snapshot, format: inferredFormat }
-    const editorText = toEditorText(snapshot)
-    const displayText = toDisplayText(snapshot)
-    const copyText = snapshot.formula ? editorText : displayText
-    const formatId = input.getFormatId(snapshot.format)
-    const styleId = snapshot.styleId ?? DEFAULT_STYLE_ID
-    cells.push({
-      row: cell.row,
-      col: cell.col,
-      snapshot,
-      displayText,
-      copyText,
-      editorText,
-      formatId,
-      styleId,
-    })
-    state.lastCellSignatures.set(
-      `${snapshot.sheetName}!${snapshot.address}`,
-      buildPatchedCellSignature(snapshot, displayText, copyText, editorText, formatId, styleId),
-    )
-  }
-
-  const { patches: columns, signatures: columnSignatures } = buildAxisPatches(
-    viewport.colStart,
-    viewport.colEnd,
-    indexAxisEntries(base.columnAxisEntries),
-    PRODUCT_COLUMN_WIDTH,
-    state.lastColumnSignatures,
-    true,
-  )
-  const { patches: rows, signatures: rowSignatures } = buildAxisPatches(
-    viewport.rowStart,
-    viewport.rowEnd,
-    indexAxisEntries(base.rowAxisEntries),
-    PRODUCT_ROW_HEIGHT,
-    state.lastRowSignatures,
-    true,
-  )
-  state.lastColumnSignatures = columnSignatures
-  state.lastRowSignatures = rowSignatures
-  const merges = collectViewportMergeRanges(input.engine, state, true)
-
-  return {
-    version: state.nextVersion++,
-    authoritativeRevision: input.authoritativeRevision,
-    full: true,
-    freezeRows: base.freezeRows,
-    freezeCols: base.freezeCols,
     viewport,
     metrics: { ...metrics },
     styles,

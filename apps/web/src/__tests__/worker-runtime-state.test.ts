@@ -34,7 +34,7 @@ describe('worker runtime state helpers', () => {
       ],
       metrics: EMPTY_RUNTIME_METRICS,
       syncState: 'local',
-      localPersistenceMode: 'persistent',
+      localPersistenceMode: 'ephemeral',
     })
 
     const publicState = withExternalSyncState(cachedState, 'syncing')
@@ -42,7 +42,7 @@ describe('worker runtime state helpers', () => {
     expect(publicState.syncState).toBe('syncing')
     expect(cachedState.syncState).toBe('local')
     expect(publicState.localHistoryState).toEqual({ canUndo: false, canRedo: false })
-    expect(publicState.localPersistenceMode).toBe('persistent')
+    expect(publicState.localPersistenceMode).toBe('ephemeral')
     expect(publicState.sheets).toEqual([{ id: 1, name: 'Sheet1', order: 0 }])
     expect(publicState.sheets).not.toBe(cachedState.sheets)
     expect(publicState.metrics).not.toBe(cachedState.metrics)
@@ -92,7 +92,7 @@ describe('worker runtime state helpers', () => {
           attemptCount: 2,
         },
       },
-      localPersistenceMode: 'persistent',
+      localPersistenceMode: 'ephemeral',
     })
 
     expect(state?.sheetNames).toEqual(['Actuals', 'Archive'])
@@ -226,7 +226,7 @@ describe('worker runtime state helpers', () => {
       localHistoryState: { canUndo: true, canRedo: false },
       authoritativeRevision: 12,
       pendingMutationSummary: { activeCount: 0, failedCount: 0, firstFailed: null },
-      localPersistenceMode: 'persistent',
+      localPersistenceMode: 'ephemeral',
     })
 
     expect(publicState.sheets).toEqual([
@@ -237,7 +237,7 @@ describe('worker runtime state helpers', () => {
     expect(publicState.syncState).toBe('syncing')
     expect(publicState.localHistoryState).toEqual({ canUndo: true, canRedo: false })
     expect(publicState.authoritativeRevision).toBe(12)
-    expect(publicState.localPersistenceMode).toBe('persistent')
+    expect(publicState.localPersistenceMode).toBe('ephemeral')
   })
 
   it('builds bootstrap runtime state with empty metrics and syncing status', () => {
@@ -245,7 +245,7 @@ describe('worker runtime state helpers', () => {
       buildWorkerRuntimeStateFromBootstrap({
         workbookName: 'Book',
         sheetNames: ['Sheet1'],
-        localPersistenceMode: 'follower',
+        localPersistenceMode: 'ephemeral',
       }),
     ).toEqual({
       workbookName: 'Book',
@@ -255,7 +255,7 @@ describe('worker runtime state helpers', () => {
       metrics: EMPTY_RUNTIME_METRICS,
       syncState: 'syncing',
       localHistoryState: { canUndo: false, canRedo: false },
-      localPersistenceMode: 'follower',
+      localPersistenceMode: 'ephemeral',
     })
   })
 })

@@ -27,7 +27,6 @@ package boundaries; not every package name is provisioned on npm yet.
 - `@bilig/binary-protocol`
 - `@bilig/worker-transport`
 - `@bilig/agent-api`
-- `@bilig/storage-browser`
 - `@bilig/storage-server`
 - `@bilig/excel-fixtures`
 

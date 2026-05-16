@@ -1,5 +1,4 @@
 import type { CommitOp, EngineReplicaSnapshot, SpreadsheetEngine } from '@bilig/core'
-import { isEngineReplicaSnapshot } from '@bilig/core'
 import {
   buildWorkbookAgentPreview,
   isWorkbookAgentCommandBundle,
@@ -7,15 +6,8 @@ import {
   type WorkbookAgentPreviewSummary,
 } from '@bilig/agent-api'
 import type { EngineOpBatch } from '@bilig/workbook-domain'
-import {
-  createOpfsWorkbookLocalStoreFactory,
-  type WorkbookLocalStore,
-  type WorkbookLocalStoreFactory,
-  type WorkbookStoredState,
-} from '@bilig/storage-browser'
 import type { AuthoritativeWorkbookEventRecord } from '@bilig/zero-sync'
 import {
-  isWorkbookSnapshot,
   type CellRangeRef,
   type CellNumberFormatInput,
   type CellStyleField,
@@ -34,19 +26,15 @@ import {
   ensureAuthoritativeEngine,
   installAuthoritativeEngineState,
   installRestoredAuthoritativeState,
-  readProjectedCellFromLocalStore,
   rebuildProjectionEngine,
   resolveAuthoritativeStateInput,
 } from './worker-runtime-engine-access.js'
-import { restoreBootstrapPersistence } from './worker-runtime-bootstrap-persistence.js'
-import { resolveProjectionOverlayScopeForPersist, WorkerRuntimePersistCoordinator } from './worker-runtime-persist-coordinator.js'
-import { acquireProjectionEngine, scheduleProjectionEngineMaterialization } from './worker-runtime-projection-engine.js'
+import { acquireProjectionEngine } from './worker-runtime-projection-engine.js'
 import { WorkerRuntimeProjectionCommands } from './worker-runtime-projection-commands.js'
 import { createProjectionEngineFromState } from './worker-runtime-engine-state.js'
 import {
   EMPTY_RUNTIME_METRICS,
   buildCachedWorkerRuntimeState,
-  buildWorkerRuntimeStateFromBootstrap,
   buildWorkerRuntimeStateFromEngine,
   cloneRuntimeMetrics,
   cloneWorkerRuntimeState,
@@ -69,28 +57,21 @@ import {
   createEmptyCellSnapshot,
   type ViewportPatchBroadcastReason,
 } from './worker-runtime-viewport-publisher.js'
-import { buildWorkbookLocalAuthoritativeDelta } from './worker-local-authoritative-delta.js'
 import {
   collectProjectionOverlayScopeFromEngineEvents,
   mergeProjectionOverlayScopes,
   type ProjectionOverlayScope,
 } from './worker-local-overlay.js'
-import {
-  buildPersistedWorkerState,
-  ingestAuthoritativeDeltaToLocalStore,
-  persistProjectionStateToLocalStore,
-} from './worker-runtime-local-persistence.js'
 import { exportWorkerRuntimeSnapshot } from './worker-runtime-export-snapshot.js'
 import { applyAuthoritativeWorkbookEvents } from './worker-runtime-authoritative-events.js'
 import { prepareAuthoritativeSnapshotProjection } from './worker-runtime-authoritative-snapshot.js'
-import {
-  DEFERRED_PROJECTION_ENGINE_MIN_CELL_COUNT,
-  type InstallAuthoritativeSnapshotInput,
-  type InstallBenchmarkCorpusResult,
-  type WorkbookPendingMutationSummarySnapshot,
-  type WorkbookWorkerBootstrapOptions,
-  type WorkbookWorkerBootstrapResult,
-  type WorkbookWorkerStateSnapshot,
+import type {
+  InstallAuthoritativeSnapshotInput,
+  InstallBenchmarkCorpusResult,
+  WorkbookPendingMutationSummarySnapshot,
+  WorkbookWorkerBootstrapOptions,
+  WorkbookWorkerBootstrapResult,
+  WorkbookWorkerStateSnapshot,
 } from './worker-runtime-types.js'
 export type {
   InstallAuthoritativeSnapshotInput,
@@ -101,80 +82,34 @@ export type {
   WorkbookWorkerBootstrapResult,
   WorkbookWorkerStateSnapshot,
 } from './worker-runtime-types.js'
-import { WorkerViewportTileStore } from './worker-viewport-tile-store.js'
 
 export class WorkbookWorkerRuntime {
   [method: string]: unknown
-  private readonly localStoreFactory: WorkbookLocalStoreFactory
-  private localStore: WorkbookLocalStore | null = null
   private engine: (SpreadsheetEngine & WorkerEngine) | null = null
   private projectionEnginePromise: Promise<SpreadsheetEngine & WorkerEngine> | null = null
   private projectionBuildVersion = 0
   private authoritativeEngine: SpreadsheetEngine | null = null
-  private authoritativeStateSource: 'none' | 'memory' | 'localStore' = 'none'
+  private authoritativeStateSource: 'none' | 'memory' = 'none'
   private bootstrapOptions: WorkbookWorkerBootstrapOptions | null = null
   private engineSubscription: (() => void) | null = null
   private externalSyncState: SyncState | null = null
   private runtimeStateCache: WorkbookWorkerStateSnapshot | null = null
   private authoritativeRevision = 0
-  private projectionMatchesLocalStore = false
   private projectionOverlayScope: ProjectionOverlayScope | null = null
-  private localPersistenceMode: 'persistent' | 'ephemeral' | 'follower' = 'ephemeral'
+  private localPersistenceMode = 'ephemeral' as const
   private readonly workbookDeltaPublisher = new WorkerRuntimeWorkbookDeltaPublisher()
   private readonly renderTileDeltaPublisher = new WorkerRuntimeRenderTileDeltaPublisher()
   private readonly snapshotCaches = new WorkerRuntimeSnapshotCaches()
-  private readonly viewportTileStore = new WorkerViewportTileStore()
   private readonly viewportPatchPublisher = new WorkerViewportPatchPublisher({
     buildPatch: (state, event, metrics, authoritativeRevision, sheetImpact) =>
       this.buildViewportPatch(state, event, metrics, authoritativeRevision, sheetImpact),
-    canReadLocalProjectionForViewport: () => this.canReadLocalProjectionForViewport(),
     getAuthoritativeRevision: () => this.authoritativeRevision,
     getCurrentMetrics: () => this.getCurrentMetrics(),
     getProjectionEngine: () => this.requireEngine(),
     hasProjectionEngine: () => this.engine !== null,
-    readLocalViewport: (sheetName, viewport) => {
-      if (!this.localStore) {
-        return null
-      }
-      return this.viewportTileStore.readViewport({
-        localStore: this.localStore,
-        sheetName,
-        viewport,
-      })
-    },
-    scheduleProjectionEngineMaterialization: () => this.scheduleProjectionEngineMaterialization(),
-  })
-  private readonly persistCoordinator: WorkerRuntimePersistCoordinator<
-    WorkbookLocalStore,
-    SpreadsheetEngine,
-    SpreadsheetEngine & WorkerEngine,
-    WorkbookStoredState
-  > = new WorkerRuntimePersistCoordinator({
-    canPersistState: () => this.canPersistState(),
-    getLocalStore: () => this.localStore,
-    getAuthoritativeEngine: () => this.getAuthoritativeEngineForPersist(),
-    getProjectionEngine: () => this.getProjectionEngine(),
-    buildPersistedState: ({ authoritativeEngine, projectionEngine }) =>
-      buildPersistedWorkerState({
-        snapshotCaches: this.snapshotCaches,
-        authoritativeEngine,
-        projectionEngine,
-        hasDedicatedAuthoritativeEngine: this.authoritativeEngine !== null,
-        authoritativeRevision: this.authoritativeRevision,
-        appliedPendingLocalSeq: this.mutationJournal.getAppliedPendingLocalSeq(),
-      }),
-    getProjectionOverlayScope: (): ProjectionOverlayScope | null =>
-      resolveProjectionOverlayScopeForPersist({
-        projectionOverlayScope: this.projectionOverlayScope,
-        pendingMutationCount: this.mutationJournal.getPendingMutationCount(),
-      }),
-    saveState: (input) => persistProjectionStateToLocalStore(input),
-    markProjectionMatchesLocalStore: () => {
-      this.projectionMatchesLocalStore = true
-    },
   })
   private readonly projectionCommands = new WorkerRuntimeProjectionCommands({
-    markProjectionDivergedFromLocalStore: () => this.markProjectionDivergedFromLocalStore(),
+    invalidateProjectionCache: () => this.invalidateProjectionCache(),
     getProjectionEngine: () => this.getProjectionEngine(),
     getCell: (sheetName, address) => this.getCell(sheetName, address),
     minColumnWidth: MIN_COLUMN_WIDTH,
@@ -186,19 +121,9 @@ export class WorkbookWorkerRuntime {
   private readonly mutationJournal: WorkerRuntimeMutationJournal = new WorkerRuntimeMutationJournal({
     getDocumentId: () => this.requireBootstrapOptions().documentId,
     getAuthoritativeRevision: () => this.authoritativeRevision,
-    getLocalStore: () => this.localStore,
     getProjectionEngine: () => this.getProjectionEngine(),
-    markProjectionDivergedFromLocalStore: () => this.markProjectionDivergedFromLocalStore(),
-    queuePersist: (): Promise<void> => this.persistCoordinator.queuePersist(),
+    invalidateProjectionCache: () => this.invalidateProjectionCache(),
   })
-
-  constructor(
-    options: {
-      localStoreFactory?: WorkbookLocalStoreFactory
-    } = {},
-  ) {
-    this.localStoreFactory = options.localStoreFactory ?? createOpfsWorkbookLocalStoreFactory()
-  }
 
   async ready(): Promise<void> {
     await (await this.getProjectionEngine()).ready()
@@ -215,72 +140,23 @@ export class WorkbookWorkerRuntime {
     this.runtimeStateCache = null
     this.snapshotCaches.reset()
     this.mutationJournal.reset()
-    this.projectionMatchesLocalStore = false
     this.projectionOverlayScope = null
-    let requiresAuthoritativeHydrate = false
-    const restoredPersistence = await restoreBootstrapPersistence({
-      persistState: options.persistState,
-      documentId: options.documentId,
-      localStoreFactory: this.localStoreFactory,
+    this.localPersistenceMode = 'ephemeral'
+    this.authoritativeRevision = 0
+    const { engine, overlayScope } = await createProjectionEngineFromState({
+      workbookName: options.documentId,
+      replicaId: options.replicaId,
+      snapshot: null,
+      replica: null,
+      pendingMutations: [],
     })
-    this.localPersistenceMode = restoredPersistence.localPersistenceMode
-    this.localStore = restoredPersistence.localStore
-    this.authoritativeRevision = restoredPersistence.authoritativeRevision
-    this.mutationJournal.restoreFromBootstrap({
-      mutationJournalEntries: restoredPersistence.mutationJournalEntries,
-      nextPendingMutationSeq: restoredPersistence.nextPendingMutationSeq,
-    })
-    const restoredFromPersistence = restoredPersistence.restoredFromPersistence
-    const restoredBootstrapState = restoredPersistence.restoredBootstrapState
-    let restoredState: WorkbookStoredState | null = null
-
-    const highestPendingLocalSeq = this.mutationJournal.getAppliedPendingLocalSeq()
-    if (restoredBootstrapState === null && this.mutationJournal.getPendingMutationCount() > 0) {
-      requiresAuthoritativeHydrate = true
-    }
-
-    const projectionMatchesRestoredLocalStore =
-      Boolean(this.localStore) &&
-      restoredBootstrapState !== null &&
-      restoredBootstrapState.appliedPendingLocalSeq === highestPendingLocalSeq
-    this.projectionMatchesLocalStore = projectionMatchesRestoredLocalStore
-
-    const shouldDeferProjectionEngineBootstrap =
-      projectionMatchesRestoredLocalStore &&
-      restoredBootstrapState !== null &&
-      restoredBootstrapState.materializedCellCount >= DEFERRED_PROJECTION_ENGINE_MIN_CELL_COUNT
-
-    if (shouldDeferProjectionEngineBootstrap && restoredBootstrapState !== null) {
-      this.authoritativeStateSource = 'localStore'
-      this.runtimeStateCache = buildWorkerRuntimeStateFromBootstrap({
-        ...restoredBootstrapState,
-        localPersistenceMode: this.localPersistenceMode,
-      })
-    } else {
-      restoredState = this.localStore ? await this.localStore.loadState() : null
-      const parsedRestoredSnapshot = isWorkbookSnapshot(restoredState?.snapshot) ? restoredState.snapshot : null
-      const parsedRestoredReplica = isEngineReplicaSnapshot(restoredState?.replica) ? restoredState.replica : null
-      if (parsedRestoredSnapshot || parsedRestoredReplica) {
-        this.installRestoredAuthoritativeState(parsedRestoredSnapshot, parsedRestoredReplica)
-      }
-      const { engine, overlayScope } = await createProjectionEngineFromState({
-        workbookName: options.documentId,
-        replicaId: options.replicaId,
-        snapshot: parsedRestoredSnapshot,
-        replica: parsedRestoredReplica,
-        pendingMutations: this.mutationJournal.listPendingMutations(),
-      })
-      this.projectionOverlayScope = overlayScope
-      this.installEngine(engine)
-      if (!requiresAuthoritativeHydrate && !projectionMatchesRestoredLocalStore) {
-        await this.persistCoordinator.queuePersist()
-      }
-    }
+    this.projectionOverlayScope = overlayScope
+    this.installEngine(engine)
 
     return {
       runtimeState: this.getRuntimeState(),
-      restoredFromPersistence,
-      requiresAuthoritativeHydrate,
+      restoredFromPersistence: false,
+      requiresAuthoritativeHydrate: true,
       localPersistenceMode: this.localPersistenceMode,
     }
   }
@@ -364,10 +240,7 @@ export class WorkbookWorkerRuntime {
   ): Promise<WorkbookWorkerStateSnapshot> {
     this.projectionOverlayScope = overlayScope
     this.installEngine(engine)
-    this.projectionMatchesLocalStore = false
-    this.viewportTileStore.reset()
     this.snapshotCaches.invalidateProjectionSnapshot()
-    await this.persistCoordinator.queuePersist()
     this.broadcastViewportPatches(null, engine.getLastMetrics(), 'authoritative-snapshot')
     return this.getRuntimeState()
   }
@@ -379,10 +252,7 @@ export class WorkbookWorkerRuntime {
     this.projectionBuildVersion += 1
     this.projectionEnginePromise = null
     const authoritativeEngine = await this.getAuthoritativeEngine()
-    const { authoritativeEngineEvents, absorbedMutationIds, payloads, previousSheets } = applyAuthoritativeWorkbookEvents(
-      authoritativeEngine,
-      events,
-    )
+    const { absorbedMutationIds } = applyAuthoritativeWorkbookEvents(authoritativeEngine, events)
     this.mutationJournal.ackAbsorbedMutations(absorbedMutationIds)
     this.authoritativeRevision = Math.max(this.authoritativeRevision, authoritativeRevision)
     this.snapshotCaches.invalidateAuthoritativeState()
@@ -393,46 +263,6 @@ export class WorkbookWorkerRuntime {
     this.projectionOverlayScope = overlayScope
     this.installEngine(engine)
     this.snapshotCaches.invalidateProjectionSnapshot()
-    const localStore = this.bootstrapOptions?.persistState ? this.localStore : null
-    if (localStore) {
-      const authoritativeDelta = buildWorkbookLocalAuthoritativeDelta({
-        engine: authoritativeEngine,
-        payloads,
-        engineEvents: authoritativeEngineEvents,
-        previousSheets,
-      })
-      const persisted = buildPersistedWorkerState({
-        snapshotCaches: this.snapshotCaches,
-        authoritativeEngine,
-        projectionEngine: engine,
-        hasDedicatedAuthoritativeEngine: this.authoritativeEngine !== null,
-        authoritativeRevision: this.authoritativeRevision,
-        appliedPendingLocalSeq: this.mutationJournal.getAppliedPendingLocalSeq(),
-      })
-      await ingestAuthoritativeDeltaToLocalStore({
-        localStore,
-        state: persisted,
-        authoritativeDelta,
-        authoritativeEngine,
-        projectionEngine: engine,
-        projectionOverlayScope: resolveProjectionOverlayScopeForPersist({
-          projectionOverlayScope: this.projectionOverlayScope,
-          pendingMutationCount: this.mutationJournal.getPendingMutationCount(),
-        }),
-        removePendingMutationIds: [...absorbedMutationIds],
-      })
-      this.projectionMatchesLocalStore = true
-      if (authoritativeDelta.replaceAll) {
-        this.viewportTileStore.reset()
-      } else {
-        authoritativeDelta.replacedSheetIds.forEach((sheetId) => {
-          this.viewportTileStore.invalidateSheet(sheetId)
-        })
-      }
-    } else {
-      this.projectionMatchesLocalStore = false
-      this.viewportTileStore.reset()
-    }
     this.broadcastViewportPatches(null, engine.getLastMetrics(), 'authoritative-events')
     return this.getRuntimeState()
   }
@@ -508,11 +338,6 @@ export class WorkbookWorkerRuntime {
   getCell(sheetName: string, address: string): CellSnapshot {
     const engine = this.engine
     if (!engine) {
-      const localCell = this.readProjectedCellFromLocalStore(sheetName, address)
-      if (localCell) {
-        this.scheduleProjectionEngineMaterialization()
-        return localCell
-      }
       return createEmptyCellSnapshot(sheetName, address)
     }
     if (!engine.workbook.getSheet(sheetName)) {
@@ -651,7 +476,6 @@ export class WorkbookWorkerRuntime {
     this.engineSubscription?.()
     this.engineSubscription = null
     this.projectionEnginePromise = null
-    this.persistCoordinator.reset()
     this.mutationJournal.reset()
     this.viewportPatchPublisher.reset()
     this.runtimeStateCache = null
@@ -660,11 +484,8 @@ export class WorkbookWorkerRuntime {
     this.renderTileDeltaPublisher.reset()
     this.authoritativeStateSource = 'none'
     this.authoritativeRevision = 0
-    this.projectionMatchesLocalStore = false
     this.projectionOverlayScope = null
-    this.viewportTileStore.reset()
-    this.localStore?.close()
-    this.localStore = null
+    this.localPersistenceMode = 'ephemeral'
     this.authoritativeEngine = null
     this.engine = null
   }
@@ -683,19 +504,9 @@ export class WorkbookWorkerRuntime {
     return this.engine
   }
 
-  private canPersistState(): boolean {
-    return Boolean(this.bootstrapOptions?.persistState && this.localStore)
-  }
-
-  private canReadLocalProjectionForViewport(): boolean {
-    return Boolean(this.localStore && this.projectionMatchesLocalStore)
-  }
-
-  private markProjectionDivergedFromLocalStore(): void {
+  private invalidateProjectionCache(): void {
     this.projectionBuildVersion += 1
     this.projectionEnginePromise = null
-    this.projectionMatchesLocalStore = false
-    this.viewportTileStore.reset()
   }
 
   private async markRemainingJournalMutationsRebased(rebasedAtUnixMs = Date.now()): Promise<void> {
@@ -735,8 +546,7 @@ export class WorkbookWorkerRuntime {
     return await applyWorkerRuntimeLocalHistoryChange(
       {
         getProjectionEngine: () => this.getProjectionEngine(),
-        markProjectionDivergedFromLocalStore: () => this.markProjectionDivergedFromLocalStore(),
-        queuePersist: () => this.persistCoordinator.queuePersist(),
+        invalidateProjectionCache: () => this.invalidateProjectionCache(),
         updateRuntimeStateFromEngine: (engine) => {
           this.updateRuntimeStateFromEngine(engine)
         },
@@ -751,22 +561,8 @@ export class WorkbookWorkerRuntime {
   }> {
     return await resolveAuthoritativeStateInput({
       authoritativeStateSource: this.authoritativeStateSource,
-      localStore: this.localStore,
       snapshotCaches: this.snapshotCaches,
       authoritativeEngine: this.authoritativeEngine,
-      installRestoredAuthoritativeState: (snapshot, replica) => {
-        this.installRestoredAuthoritativeState(snapshot, replica)
-      },
-    })
-  }
-
-  private readProjectedCellFromLocalStore(sheetName: string, address: string): CellSnapshot | null {
-    return readProjectedCellFromLocalStore({
-      canReadLocalProjectionForViewport: this.canReadLocalProjectionForViewport(),
-      localStore: this.localStore,
-      viewportTileStore: this.viewportTileStore,
-      sheetName,
-      address,
     })
   }
 
@@ -799,13 +595,6 @@ export class WorkbookWorkerRuntime {
     return engine
   }
 
-  private async getAuthoritativeEngineForPersist(): Promise<SpreadsheetEngine> {
-    if (!this.authoritativeEngine && this.mutationJournal.getPendingMutationCount() === 0) {
-      return await this.getProjectionEngine()
-    }
-    return await this.getAuthoritativeEngine()
-  }
-
   private async rebuildProjectionEngine(): Promise<{
     engine: SpreadsheetEngine
     overlayScope: ProjectionOverlayScope | null
@@ -835,28 +624,6 @@ export class WorkbookWorkerRuntime {
         this.projectionEnginePromise = promise
       },
       requireInstalledEngine: () => this.requireEngine(),
-    })
-  }
-
-  private scheduleProjectionEngineMaterialization(): void {
-    scheduleProjectionEngineMaterialization({
-      hasInstalledEngine: () => this.engine !== null,
-      hasProjectionEnginePromise: () => this.projectionEnginePromise !== null,
-      hasBootstrapOptions: () => this.bootstrapOptions !== null,
-      getProjectionBuildVersion: () => this.projectionBuildVersion,
-      getProjectionEngine: () => this.getProjectionEngine(),
-      onProjectionEngineMaterialized: () => {
-        if (this.engine) {
-          this.broadcastViewportPatches(null, this.getCurrentMetrics(), 'projection-materialized')
-        }
-      },
-      schedule: (callback) => {
-        if (typeof queueMicrotask === 'function') {
-          queueMicrotask(callback)
-          return
-        }
-        setTimeout(callback, 0)
-      },
     })
   }
 

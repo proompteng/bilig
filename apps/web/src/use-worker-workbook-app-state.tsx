@@ -18,7 +18,6 @@ import { createWorkbookPerfSession } from './perf/workbook-perf.js'
 import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
 import { registerRuntimeDisposalHandlers } from './runtime-disposal-handlers.js'
 import { isInstallBenchmarkCorpusResult } from './benchmark-corpus-result.js'
-import { useWorkbookLocalPersistenceHandoff } from './use-workbook-local-persistence-handoff.js'
 import { loadOrCreateWorkbookPresenceClientId } from './workbook-presence-client.js'
 import { useWorkerWorkbookAgentContext } from './use-worker-workbook-agent-context.js'
 import { useWorkerWorkbookGridState } from './use-worker-workbook-grid-state.js'
@@ -176,12 +175,6 @@ export function useWorkerWorkbookAppState(input: {
         type: 'session.error',
         message: error instanceof Error ? error.message : String(error),
       })
-    },
-    [runtimeActorRef],
-  )
-  const retryRuntime = useCallback(
-    (persistState: boolean) => {
-      runtimeActorRef.send({ type: 'retry', persistState })
     },
     [runtimeActorRef],
   )
@@ -459,19 +452,7 @@ export function useWorkerWorkbookAppState(input: {
   const selectedRange = selectionRangeRef.current
   const canUnmergeSelection = mergeRanges.some((mergeRange) => cellRangesIntersect(selectedRange, mergeRange))
   const failedPendingMutation = runtimeState?.pendingMutationSummary?.firstFailed ?? null
-  const localPersistenceMode = runtimeState?.localPersistenceMode ?? 'ephemeral'
   const runtimeSyncState = runtimeState?.syncState ?? (runtimeReady ? 'syncing' : 'local-only')
-  const {
-    approvePersistenceTransfer,
-    dismissPersistenceTransferRequest,
-    pendingTransferRequest,
-    requestPersistenceTransfer,
-    transferRequested,
-  } = useWorkbookLocalPersistenceHandoff({
-    documentId,
-    localPersistenceMode,
-    retryRuntime,
-  })
 
   const {
     agentError,
@@ -507,7 +488,6 @@ export function useWorkerWorkbookAppState(input: {
   const { ribbon, statusModeLabel } = useWorkbookToolbar({
     connectionStateName: connectionState.name,
     runtimeReady,
-    localPersistenceMode,
     pendingMutationSummary: runtimeState?.pendingMutationSummary,
     failedPendingMutation,
     remoteSyncAvailable,
@@ -659,7 +639,6 @@ export function useWorkerWorkbookAppState(input: {
     runtimeSyncState,
     retryFailedPendingMutation,
     getCellEditorSeed,
-    approvePersistenceTransfer,
     selectAddress,
     selectSelectionSnapshot,
     selectedCell,
@@ -668,7 +647,6 @@ export function useWorkerWorkbookAppState(input: {
     visibleSelectedCell,
     visibleSelection,
     sidePanelId,
-    dismissPersistenceTransferRequest,
     acknowledgeExternalSelectionSync,
     handleSelectionChange,
     setSidePanelWidth,
@@ -678,10 +656,6 @@ export function useWorkerWorkbookAppState(input: {
     sidePanel,
     sidePanelWidth,
     statusModeLabel,
-    localPersistenceMode,
-    pendingTransferRequest,
-    requestPersistenceTransfer,
-    transferRequested,
     toggleBooleanCell,
     visibleEditorValue,
     workbookReady,

@@ -46,12 +46,11 @@ describe('reliability scorecard', () => {
       ],
     })
     expect(scorecard.summary.coveredControls).toEqual([
-      'pending.localReloadSurvival',
-      'pending.submittedReloadSurvival',
+      'zero.clientPersistenceConfig',
+      'zero.authoritativeMutationDurability',
       'pending.authoritativeAckAbsorption',
       'pending.authoritativeRebasePreservesLocal',
-      'pending.failedRetrySurvival',
-      'localStore.journalActiveView',
+      'pending.failedRetryStateMachine',
       'headedBrowser.reloadPersistence',
       'headedBrowser.crashSoak',
       'offline.networkPartitionRecoverySoak',

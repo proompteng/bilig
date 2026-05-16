@@ -31,7 +31,6 @@ const DEFAULT_FUZZ_PATTERNS = [
   /^apps\/bilig\/src\/zero\/__tests__\/(projection|reconnect-replay|sync-relay|sync-relay-scheduled)\.fuzz\.test\.ts$/,
   /^apps\/web\/src\/__tests__\/(projected-viewport|runtime-sync|runtime-sync-scheduled|selection-command-parity|worker-workbook-app-model)\.fuzz\.test\.ts$/,
   /^packages\/worker-transport\/src\/__tests__\/.+\.fuzz\.test\.ts$/,
-  /^packages\/storage-browser\/src\/__tests__\/.+\.fuzz\.test\.ts$/,
 ]
 
 function listVitestFuzzFiles(): string[] {

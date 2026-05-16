@@ -1,4 +1,3 @@
-import type { WorkbookLocalStore } from '@bilig/storage-browser'
 import type { PendingWorkbookMutation, PendingWorkbookMutationInput } from './workbook-sync.js'
 import { isPendingWorkbookMutationInput } from './workbook-sync.js'
 import { clonePendingWorkbookMutation } from './workbook-mutation-journal.js'
@@ -20,8 +19,6 @@ import {
 } from './worker-runtime-pending-mutations.js'
 import type { WorkerEngine } from './worker-runtime-support.js'
 
-type PersistableMutationJournalStore = Pick<WorkbookLocalStore, 'appendPendingMutation' | 'updatePendingMutation'>
-
 export interface WorkerRuntimeMutationJournalBootstrapState {
   readonly mutationJournalEntries: readonly PendingWorkbookMutation[]
   readonly nextPendingMutationSeq: number
@@ -36,10 +33,8 @@ export class WorkerRuntimeMutationJournal {
     private readonly deps: {
       readonly getDocumentId: () => string
       readonly getAuthoritativeRevision: () => number
-      readonly getLocalStore: () => PersistableMutationJournalStore | null
       readonly getProjectionEngine: () => Promise<WorkerEngine>
-      readonly markProjectionDivergedFromLocalStore: () => void
-      readonly queuePersist: () => Promise<void>
+      readonly invalidateProjectionCache: () => void
       readonly now?: () => number
     },
   ) {}
@@ -89,13 +84,8 @@ export class WorkerRuntimeMutationJournal {
     })
     this.mutationJournalEntries.push(nextMutation)
     this.pendingMutations = syncPendingMutationsFromJournal(this.mutationJournalEntries)
-    this.deps.markProjectionDivergedFromLocalStore()
-    const localStore = this.deps.getLocalStore()
-    if (localStore) {
-      await localStore.appendPendingMutation(clonePendingWorkbookMutation(nextMutation))
-    }
+    this.deps.invalidateProjectionCache()
     applyPendingWorkbookMutationToEngine(await this.deps.getProjectionEngine(), nextMutation)
-    await this.deps.queuePersist()
     return clonePendingWorkbookMutation(nextMutation)
   }
 
@@ -109,7 +99,6 @@ export class WorkerRuntimeMutationJournal {
       return
     }
     this.updateState(result.mutationJournalEntries, result.pendingMutations)
-    await this.persistUpdatedMutation(result.updatedMutation)
   }
 
   async ackPendingMutation(id: string): Promise<void> {
@@ -122,11 +111,7 @@ export class WorkerRuntimeMutationJournal {
       return
     }
     this.updateState(result.mutationJournalEntries, result.pendingMutations)
-    this.deps.markProjectionDivergedFromLocalStore()
-    await this.persistUpdatedMutation(result.updatedMutation)
-    if (this.deps.getLocalStore()) {
-      await this.deps.queuePersist()
-    }
+    this.deps.invalidateProjectionCache()
   }
 
   async recordPendingMutationAttempt(id: string): Promise<void> {
@@ -139,7 +124,6 @@ export class WorkerRuntimeMutationJournal {
       return
     }
     this.updateState(result.mutationJournalEntries, result.pendingMutations)
-    await this.persistUpdatedMutation(result.updatedMutation)
   }
 
   async markPendingMutationFailed(id: string, failureMessage: string): Promise<void> {
@@ -153,11 +137,7 @@ export class WorkerRuntimeMutationJournal {
       return
     }
     this.updateState(result.mutationJournalEntries, result.pendingMutations)
-    this.deps.markProjectionDivergedFromLocalStore()
-    await this.persistUpdatedMutation(result.updatedMutation)
-    if (this.deps.getLocalStore()) {
-      await this.deps.queuePersist()
-    }
+    this.deps.invalidateProjectionCache()
   }
 
   async retryPendingMutation(id: string): Promise<void> {
@@ -169,11 +149,7 @@ export class WorkerRuntimeMutationJournal {
       return
     }
     this.updateState(result.mutationJournalEntries, result.pendingMutations)
-    this.deps.markProjectionDivergedFromLocalStore()
-    await this.persistUpdatedMutation(result.updatedMutation)
-    if (this.deps.getLocalStore()) {
-      await this.deps.queuePersist()
-    }
+    this.deps.invalidateProjectionCache()
   }
 
   ackAbsorbedMutations(absorbedMutationIds: ReadonlySet<string>): void {
@@ -191,13 +167,6 @@ export class WorkerRuntimeMutationJournal {
   async markRemainingJournalMutationsRebased(rebasedAtUnixMs = this.now()): Promise<void> {
     const nextState = markJournalMutationsRebased(this.mutationJournalEntries, rebasedAtUnixMs)
     this.updateState(nextState.mutationJournalEntries, nextState.pendingMutations)
-    const localStore = this.deps.getLocalStore()
-    if (!localStore) {
-      return
-    }
-    await Promise.all(
-      nextState.updatedMutations.map((mutation) => localStore.updatePendingMutation(clonePendingWorkbookMutation(mutation))),
-    )
   }
 
   private now(): number {
@@ -210,13 +179,5 @@ export class WorkerRuntimeMutationJournal {
   ): void {
     this.mutationJournalEntries = mutationJournalEntries.map(clonePendingWorkbookMutation)
     this.pendingMutations = pendingMutations.map(clonePendingWorkbookMutation)
-  }
-
-  private async persistUpdatedMutation(updatedMutation: PendingWorkbookMutation): Promise<void> {
-    const localStore = this.deps.getLocalStore()
-    if (!localStore) {
-      return
-    }
-    await localStore.updatePendingMutation(clonePendingWorkbookMutation(updatedMutation))
   }
 }

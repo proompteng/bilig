@@ -23,7 +23,6 @@
     "@bilig/grid": "workspace:*",
     "@bilig/protocol": "workspace:*",
     "@bilig/runtime-kernel": "workspace:*",
-    "@bilig/storage-browser": "workspace:*",
     "@bilig/workbook-domain": "workspace:*",
     "@bilig/worker-transport": "workspace:*",
     "@bilig/zero-sync": "workspace:*",

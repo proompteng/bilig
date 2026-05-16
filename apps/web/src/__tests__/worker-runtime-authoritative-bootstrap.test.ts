@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import { SpreadsheetEngine } from '@bilig/core'
-import { createMemoryWorkbookLocalStoreFactory } from '@bilig/storage-browser'
 import { ValueTag, type WorkbookSnapshot } from '@bilig/protocol'
 import { decodeViewportPatch } from '@bilig/worker-transport'
 import { WorkbookWorkerRuntime } from '../worker-runtime.js'
@@ -25,11 +24,9 @@ function buildSnapshot(): WorkbookSnapshot {
 }
 
 describe('worker runtime authoritative bootstrap', () => {
-  it('imports a bootstrap authoritative snapshot once and reuses projection state for persistence', async () => {
+  it('imports a bootstrap authoritative snapshot once for the projection state', async () => {
     const importSnapshot = vi.spyOn(SpreadsheetEngine.prototype, 'importSnapshot')
-    const runtime = new WorkbookWorkerRuntime({
-      localStoreFactory: createMemoryWorkbookLocalStoreFactory(),
-    })
+    const runtime = new WorkbookWorkerRuntime()
 
     await runtime.bootstrap({
       documentId: 'single-import-bootstrap-doc',

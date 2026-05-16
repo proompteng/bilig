@@ -19,7 +19,6 @@ import {
   type WorkbookAgentPreviewSummary,
 } from '@bilig/agent-api'
 import { ValueTag, type WorkbookSnapshot } from '@bilig/protocol'
-import { createMemoryWorkbookLocalStoreFactory } from '@bilig/storage-browser'
 import {
   createWorkPaperFromDocument,
   exportWorkPaperDocument,
@@ -302,9 +301,7 @@ function buildHeadlessServiceWorkflowControl(): AutomationControl {
 }
 
 async function buildWorkerRuntimePreviewControl(): Promise<AutomationControl> {
-  const runtime = new WorkbookWorkerRuntime({
-    localStoreFactory: createMemoryWorkbookLocalStoreFactory(),
-  })
+  const runtime = new WorkbookWorkerRuntime()
   await runtime.bootstrap({
     documentId: 'automation-worker-doc',
     replicaId: 'automation:worker',
@@ -358,7 +355,7 @@ async function buildWorkerRuntimePreviewControl(): Promise<AutomationControl> {
     passed: workerPreviewPassed,
     coveredControls: ['worker.runtimePreview'],
     evidence:
-      'Bootstrapped the browser worker runtime against an in-memory local store and previewed a workbook-agent bundle through the worker API.',
+      'Bootstrapped the browser worker runtime against an ephemeral projection engine and previewed a workbook-agent bundle through the worker API.',
     findings: workerPreviewPassed
       ? []
       : [`worker preview produced unexpected bundle or effect summary: ${JSON.stringify(preview.effectSummary)}`],

@@ -124,10 +124,7 @@ function isWorkbookWorkerBootstrapResult(value: unknown): value is WorkbookWorke
   return (
     typeof value['restoredFromPersistence'] === 'boolean' &&
     typeof value['requiresAuthoritativeHydrate'] === 'boolean' &&
-    (value['localPersistenceMode'] === undefined ||
-      value['localPersistenceMode'] === 'persistent' ||
-      value['localPersistenceMode'] === 'ephemeral' ||
-      value['localPersistenceMode'] === 'follower') &&
+    (value['localPersistenceMode'] === undefined || value['localPersistenceMode'] === 'ephemeral') &&
     isWorkbookWorkerStateSnapshot(value['runtimeState'])
   )
 }

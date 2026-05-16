@@ -189,7 +189,7 @@
         "requirement": "Reliability controls must pass with no uncovered generated controls.",
         "passed": true,
         "evidence": [
-          "covered controls: pending.localReloadSurvival, pending.submittedReloadSurvival, pending.authoritativeAckAbsorption, pending.authoritativeRebasePreservesLocal, pending.failedRetrySurvival, localStore.journalActiveView, headedBrowser.reloadPersistence, headedBrowser.crashSoak, offline.networkPartitionRecoverySoak, external.googleSheetsReliabilityDocs, external.microsoftExcelReliabilityDocs, external.sheetsExcelReliabilityComparison"
+          "covered controls: zero.clientPersistenceConfig, zero.authoritativeMutationDurability, pending.authoritativeAckAbsorption, pending.authoritativeRebasePreservesLocal, pending.failedRetryStateMachine, headedBrowser.reloadPersistence, headedBrowser.crashSoak, offline.networkPartitionRecoverySoak, external.googleSheetsReliabilityDocs, external.microsoftExcelReliabilityDocs, external.sheetsExcelReliabilityComparison"
         ],
         "gaps": []
       },
@@ -422,12 +422,11 @@
     "uiResponsivenessLiveBrowserPassed": true,
     "uiResponsivenessLiveBrowserVendors": ["google-sheets", "microsoft-excel-web"],
     "reliabilityCoveredControls": [
-      "pending.localReloadSurvival",
-      "pending.submittedReloadSurvival",
+      "zero.clientPersistenceConfig",
+      "zero.authoritativeMutationDurability",
       "pending.authoritativeAckAbsorption",
       "pending.authoritativeRebasePreservesLocal",
-      "pending.failedRetrySurvival",
-      "localStore.journalActiveView",
+      "pending.failedRetryStateMachine",
       "headedBrowser.reloadPersistence",
       "headedBrowser.crashSoak",
       "offline.networkPartitionRecoverySoak",
@@ -563,7 +562,7 @@
       "target": "Sub-second warm start, import, viewport, paste, sort, and filter behavior on 100k to 250k row workbooks.",
       "status": "repo-proved-lead",
       "currentEvidence": [
-        "local-first worker architecture and OPFS/SQLite model are documented",
+        "local-first worker architecture and Zero-backed sync model are documented",
         "range-read and build families have HyperFormula comparison evidence",
         "range-read: WorkPaper 6/6, HyperFormula 0/6; worst mean ratio 0.47369291672092667 on range-read-formula-grid; worst p95 ratio 0.5469381030607018 on range-read-formula-grid",
         "large-workbook SLO artifact covers 100000, 250000 materialized-cell sessions",
@@ -719,7 +718,7 @@
         "pnpm automation:check",
         "pnpm workpaper:parity:check",
         "pnpm workpaper:smoke:external",
-        "pnpm exec vitest run scripts/__tests__/automation-scorecard.test.ts packages/agent-api/src/__tests__/workbook-agent-bundles.test.ts packages/headless/src/__tests__/work-paper.test.ts apps/web/src/__tests__/worker-runtime.test.ts"
+        "pnpm exec vitest run scripts/__tests__/automation-scorecard.test.ts packages/agent-api/src/__tests__/workbook-agent-bundles.test.ts packages/headless/src/__tests__/work-paper.test.ts apps/web/src/__tests__/worker-runtime-authoritative-bootstrap.test.ts"
       ],
       "blockers": []
     },
@@ -792,12 +791,12 @@
       "status": "partial-repo-evidence",
       "currentEvidence": [
         "generated reliability scorecard passes required controls: true",
-        "covered reliability controls: pending.localReloadSurvival, pending.submittedReloadSurvival, pending.authoritativeAckAbsorption, pending.authoritativeRebasePreservesLocal, pending.failedRetrySurvival, localStore.journalActiveView, headedBrowser.reloadPersistence, headedBrowser.crashSoak, offline.networkPartitionRecoverySoak, external.googleSheetsReliabilityDocs, external.microsoftExcelReliabilityDocs, external.sheetsExcelReliabilityComparison",
+        "covered reliability controls: zero.clientPersistenceConfig, zero.authoritativeMutationDurability, pending.authoritativeAckAbsorption, pending.authoritativeRebasePreservesLocal, pending.failedRetryStateMachine, headedBrowser.reloadPersistence, headedBrowser.crashSoak, offline.networkPartitionRecoverySoak, external.googleSheetsReliabilityDocs, external.microsoftExcelReliabilityDocs, external.sheetsExcelReliabilityComparison",
         "uncovered reliability controls are explicitly disclosed: none",
         "external Google Sheets reliability evidence: official-docs-comparison-artifact",
         "external Microsoft Excel reliability evidence: official-docs-comparison-artifact",
-        "local pending-op journal and reconnect/rebase architecture are documented",
-        "runtime sync replay, fuzz, reconnect, and local persistence tests exist"
+        "Zero-backed durability and reconnect/rebase architecture are documented",
+        "runtime sync replay, fuzz, reconnect, and Zero sync tests exist"
       ],
       "evidenceArtifacts": [
         "packages/benchmarks/baselines/reliability-scorecard.json",
@@ -805,11 +804,11 @@
         "e2e/tests/web-shell-remote-sync.pw.ts",
         "docs/05-06-next-phase.md",
         "apps/web/src/__tests__/runtime-sync.fuzz.test.ts",
-        "apps/web/src/__tests__/worker-runtime.test.ts"
+        "apps/web/src/__tests__/worker-runtime-reconnect.test.ts"
       ],
       "checkCommands": [
         "pnpm reliability:check",
-        "pnpm exec vitest run apps/web/src/__tests__/worker-runtime.test.ts apps/web/src/__tests__/worker-runtime-local-persistence.test.ts apps/web/src/__tests__/worker-runtime-bootstrap-persistence.test.ts apps/web/src/__tests__/workbook-mutation-journal.test.ts",
+        "pnpm exec vitest run apps/web/src/__tests__/worker-runtime-reconnect.test.ts apps/web/src/__tests__/worker-runtime-authoritative-bootstrap.test.ts apps/web/src/__tests__/worker-runtime-mutation-journal.test.ts packages/zero-sync/src/__tests__/workbook-events.test.ts",
         "pnpm test:browser e2e/tests/web-shell-remote-sync.pw.ts -g \"restores persisted workbook state after a full reload\"",
         "pnpm test:fuzz:main",
         "pnpm test:correctness:browser",

@@ -95,7 +95,7 @@ interface ProjectionCommandEngine {
 export class WorkerRuntimeProjectionCommands {
   constructor(
     private readonly options: {
-      markProjectionDivergedFromLocalStore: () => void
+      invalidateProjectionCache: () => void
       getProjectionEngine: () => Promise<ProjectionCommandEngine>
       getCell: (sheetName: string, address: string) => CellSnapshot
       minColumnWidth: number
@@ -107,7 +107,7 @@ export class WorkerRuntimeProjectionCommands {
   ) {}
 
   private async withProjectionMutation<T>(run: (engine: ProjectionCommandEngine) => T): Promise<T> {
-    this.options.markProjectionDivergedFromLocalStore()
+    this.options.invalidateProjectionCache()
     return run(await this.options.getProjectionEngine())
   }
 

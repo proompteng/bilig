@@ -8,8 +8,7 @@ export interface WorkerRuntimeLocalHistoryState {
 
 export interface WorkerRuntimeLocalHistoryContext {
   readonly getProjectionEngine: () => Promise<SpreadsheetEngine & WorkerEngine>
-  readonly markProjectionDivergedFromLocalStore: () => void
-  readonly queuePersist: () => Promise<void>
+  readonly invalidateProjectionCache: () => void
   readonly updateRuntimeStateFromEngine: (engine: SpreadsheetEngine & WorkerEngine) => void
 }
 
@@ -36,8 +35,7 @@ export async function applyWorkerRuntimeLocalHistoryChange(
     return false
   }
 
-  context.markProjectionDivergedFromLocalStore()
-  await context.queuePersist()
+  context.invalidateProjectionCache()
   context.updateRuntimeStateFromEngine(engine)
   return true
 }

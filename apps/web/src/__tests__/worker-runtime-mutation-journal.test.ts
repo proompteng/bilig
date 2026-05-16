@@ -34,10 +34,8 @@ describe('worker runtime mutation journal', () => {
     const journal = new WorkerRuntimeMutationJournal({
       getDocumentId: () => 'doc',
       getAuthoritativeRevision: () => 0,
-      getLocalStore: () => null,
       getProjectionEngine: vi.fn(),
-      markProjectionDivergedFromLocalStore: vi.fn(),
-      queuePersist: vi.fn(async () => {}),
+      invalidateProjectionCache: vi.fn(),
       now: () => 500,
     })
 
@@ -60,20 +58,16 @@ describe('worker runtime mutation journal', () => {
     expect(journal.getAppliedPendingLocalSeq()).toBe(1)
   })
 
-  it('enqueues mutations, persists them, and replays them into the projection engine', async () => {
-    const appendPendingMutation = vi.fn(async () => {})
-    const queuePersist = vi.fn(async () => {})
-    const markProjectionDivergedFromLocalStore = vi.fn()
+  it('enqueues mutations and replays them into the projection engine', async () => {
+    const invalidateProjectionCache = vi.fn()
     const engine = {
       setCellValue: vi.fn(),
     }
     const journal = new WorkerRuntimeMutationJournal({
       getDocumentId: () => 'doc',
       getAuthoritativeRevision: () => 4,
-      getLocalStore: () => ({ appendPendingMutation, updatePendingMutation: vi.fn() }),
       getProjectionEngine: vi.fn(async () => engine),
-      markProjectionDivergedFromLocalStore,
-      queuePersist,
+      invalidateProjectionCache,
       now: () => 250,
     })
 
@@ -98,23 +92,17 @@ describe('worker runtime mutation journal', () => {
       failureMessage: null,
       status: 'local',
     })
-    expect(markProjectionDivergedFromLocalStore).toHaveBeenCalledTimes(1)
-    expect(appendPendingMutation).toHaveBeenCalledWith(mutation)
+    expect(invalidateProjectionCache).toHaveBeenCalledTimes(1)
     expect(engine.setCellValue).toHaveBeenCalledWith('Sheet1', 'A1', 17)
-    expect(queuePersist).toHaveBeenCalledTimes(1)
   })
 
-  it('queues persistence after acknowledging a persisted mutation', async () => {
-    const updatePendingMutation = vi.fn(async () => {})
-    const queuePersist = vi.fn(async () => {})
-    const markProjectionDivergedFromLocalStore = vi.fn()
+  it('removes acknowledged mutations from the active queue', async () => {
+    const invalidateProjectionCache = vi.fn()
     const journal = new WorkerRuntimeMutationJournal({
       getDocumentId: () => 'doc',
       getAuthoritativeRevision: () => 0,
-      getLocalStore: () => ({ appendPendingMutation: vi.fn(), updatePendingMutation }),
       getProjectionEngine: vi.fn(),
-      markProjectionDivergedFromLocalStore,
-      queuePersist,
+      invalidateProjectionCache,
       now: () => 800,
     })
     journal.restoreFromBootstrap({
@@ -124,27 +112,16 @@ describe('worker runtime mutation journal', () => {
 
     await journal.ackPendingMutation('doc:pending:1')
 
-    expect(markProjectionDivergedFromLocalStore).toHaveBeenCalledTimes(1)
-    expect(updatePendingMutation).toHaveBeenCalledWith(
-      buildMutation({
-        status: 'acked',
-        submittedAtUnixMs: 700,
-        ackedAtUnixMs: 800,
-      }),
-    )
-    expect(queuePersist).toHaveBeenCalledTimes(1)
+    expect(invalidateProjectionCache).toHaveBeenCalledTimes(1)
     expect(journal.listPendingMutations()).toEqual([])
   })
 
-  it('rebases only active mutations back into local persistence', async () => {
-    const updatePendingMutation = vi.fn(async () => {})
+  it('rebases only active mutations in memory', async () => {
     const journal = new WorkerRuntimeMutationJournal({
       getDocumentId: () => 'doc',
       getAuthoritativeRevision: () => 0,
-      getLocalStore: () => ({ appendPendingMutation: vi.fn(), updatePendingMutation }),
       getProjectionEngine: vi.fn(),
-      markProjectionDivergedFromLocalStore: vi.fn(),
-      queuePersist: vi.fn(async () => {}),
+      invalidateProjectionCache: vi.fn(),
       now: () => 900,
     })
     journal.restoreFromBootstrap({
@@ -162,13 +139,6 @@ describe('worker runtime mutation journal', () => {
 
     await journal.markRemainingJournalMutationsRebased(901)
 
-    expect(updatePendingMutation).toHaveBeenCalledTimes(1)
-    expect(updatePendingMutation).toHaveBeenCalledWith(
-      buildMutation({
-        status: 'rebased',
-        rebasedAtUnixMs: 901,
-      }),
-    )
     expect(journal.listPendingMutations()).toEqual([
       buildMutation({
         status: 'rebased',

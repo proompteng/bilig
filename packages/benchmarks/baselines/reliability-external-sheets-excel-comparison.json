@@ -175,7 +175,7 @@
         "microsoft-office-version-history"
       ],
       "biligEvidence": [
-        "The reliability scorecard exercises pending mutation durability, submitted mutation acknowledgment, failed retry persistence, and local store active-view journal behavior.",
+        "The reliability scorecard exercises Zero-backed browser persistence, submitted mutation acknowledgment, failed retry state, and authoritative reconnect/rebase behavior.",
         "The auditability scorecard separately proves preview/apply, undo, revert, and headed-browser change review flows."
       ],
       "googleSheetsEvidence": [

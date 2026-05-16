@@ -1,5 +1,4 @@
 import * as fc from 'fast-check'
-import { createMemoryWorkbookLocalStoreFactory } from '@bilig/storage-browser'
 import { ValueTag } from '@bilig/protocol'
 import type { AuthoritativeWorkbookEventRecord } from '@bilig/zero-sync'
 import { WorkbookWorkerRuntime } from '../worker-runtime.js'
@@ -46,9 +45,7 @@ export async function createRuntimeSyncHarness(): Promise<{
   runtime: WorkbookWorkerRuntime
   model: RuntimeSyncModel
 }> {
-  const runtime = new WorkbookWorkerRuntime({
-    localStoreFactory: createMemoryWorkbookLocalStoreFactory(),
-  })
+  const runtime = new WorkbookWorkerRuntime()
   await runtime.bootstrap({
     documentId: 'runtime-sync-fuzz',
     replicaId: 'browser:runtime-sync-fuzz',

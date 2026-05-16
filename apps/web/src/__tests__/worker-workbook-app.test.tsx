@@ -113,7 +113,7 @@ function createReadyWorkbookAppState(overrides: Record<string, unknown> = {}): R
     invokeSetFreezePaneMutation: vi.fn(),
     isEditing: false,
     isEditingCell: false,
-    localPersistenceMode: 'persistent',
+    localPersistenceMode: 'ephemeral',
     moveSelectionRange: vi.fn(),
     pasteIntoSelection: vi.fn(),
     pendingTransferRequest: null,
@@ -234,182 +234,6 @@ describe('WorkerWorkbookApp', () => {
     })
   })
 
-  it('keeps follower banner hidden while live multi-tab sync is available', async () => {
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-
-    const requestPersistenceTransfer = vi.fn()
-    useWorkerWorkbookAppState.mockReturnValue({
-      agentError: null,
-      clearAgentError: vi.fn(),
-      clearRuntimeError: vi.fn(),
-      editorConflictBanner: null,
-      failedPendingMutation: null,
-      approvePersistenceTransfer: vi.fn(),
-      dismissPersistenceTransferRequest: vi.fn(),
-      pendingTransferRequest: null,
-      requestPersistenceTransfer,
-      retryFailedPendingMutation: vi.fn(),
-      remoteSyncAvailable: true,
-      runtimeError: null,
-      runtimeReady: true,
-      localPersistenceMode: 'follower',
-      statusModeLabel: 'Live',
-      transferRequested: false,
-      workbookReady: false,
-      workerHandle: null,
-      zeroConfigured: true,
-    })
-
-    const host = document.createElement('div')
-    document.body.appendChild(host)
-    const root = createRoot(host)
-
-    await act(async () => {
-      root.render(
-        <WorkerWorkbookApp
-          config={{
-            currentUserId: 'guest:test',
-            defaultDocumentId: 'doc-1',
-            persistState: true,
-            zeroCacheUrl: 'http://127.0.0.1:4848',
-          }}
-          connectionState={{ name: 'connected' }}
-        />,
-      )
-    })
-
-    expect(host.textContent).not.toContain('Another tab is the local writer.')
-    expect(host.querySelector('button')?.textContent).not.toBe('Become writer')
-
-    await act(async () => {
-      root.unmount()
-    })
-  })
-
-  it('renders follower controls when local persistence is degraded', async () => {
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-
-    const requestPersistenceTransfer = vi.fn()
-    useWorkerWorkbookAppState.mockReturnValue({
-      agentError: null,
-      clearAgentError: vi.fn(),
-      clearRuntimeError: vi.fn(),
-      editorConflictBanner: null,
-      failedPendingMutation: null,
-      approvePersistenceTransfer: vi.fn(),
-      dismissPersistenceTransferRequest: vi.fn(),
-      pendingTransferRequest: null,
-      requestPersistenceTransfer,
-      retryFailedPendingMutation: vi.fn(),
-      remoteSyncAvailable: false,
-      runtimeError: null,
-      runtimeReady: true,
-      localPersistenceMode: 'follower',
-      statusModeLabel: 'Live',
-      transferRequested: false,
-      workbookReady: false,
-      workerHandle: null,
-      zeroConfigured: true,
-    })
-
-    const host = document.createElement('div')
-    document.body.appendChild(host)
-    const root = createRoot(host)
-
-    await act(async () => {
-      root.render(
-        <WorkerWorkbookApp
-          config={{
-            currentUserId: 'guest:test',
-            defaultDocumentId: 'doc-1',
-            persistState: true,
-            zeroCacheUrl: 'http://127.0.0.1:4848',
-          }}
-          connectionState={{ name: 'connected' }}
-        />,
-      )
-    })
-
-    expect(host.textContent).toContain('Another tab is the local writer.')
-    expect(host.textContent).toContain('Become writer')
-
-    await act(async () => {
-      host.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(requestPersistenceTransfer).toHaveBeenCalledTimes(1)
-
-    await act(async () => {
-      root.unmount()
-    })
-  })
-
-  it('renders writer transfer controls when another tab requests persistence handoff', async () => {
-    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-
-    const approvePersistenceTransfer = vi.fn()
-    const dismissPersistenceTransferRequest = vi.fn()
-    useWorkerWorkbookAppState.mockReturnValue({
-      agentError: null,
-      approvePersistenceTransfer,
-      clearAgentError: vi.fn(),
-      clearRuntimeError: vi.fn(),
-      dismissPersistenceTransferRequest,
-      editorConflictBanner: null,
-      failedPendingMutation: null,
-      pendingTransferRequest: {
-        requestId: 'req-1',
-        requesterTabId: 'tab:other',
-        requestedAtUnixMs: Date.now(),
-      },
-      requestPersistenceTransfer: vi.fn(),
-      retryFailedPendingMutation: vi.fn(),
-      remoteSyncAvailable: true,
-      runtimeError: null,
-      runtimeReady: true,
-      localPersistenceMode: 'persistent',
-      statusModeLabel: 'Live',
-      transferRequested: false,
-      workbookReady: false,
-      workerHandle: null,
-      zeroConfigured: true,
-    })
-
-    const host = document.createElement('div')
-    document.body.appendChild(host)
-    const root = createRoot(host)
-
-    await act(async () => {
-      root.render(
-        <WorkerWorkbookApp
-          config={{
-            currentUserId: 'guest:test',
-            defaultDocumentId: 'doc-1',
-            persistState: true,
-            zeroCacheUrl: 'http://127.0.0.1:4848',
-          }}
-          connectionState={{ name: 'connected' }}
-        />,
-      )
-    })
-
-    expect(host.textContent).toContain('Another tab wants writer ownership for local storage.')
-    const buttons = [...host.querySelectorAll('button')]
-    expect(buttons.map((button) => button.textContent)).toEqual(['Transfer writer', 'Stay writer'])
-
-    await act(async () => {
-      buttons[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      buttons[1]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(approvePersistenceTransfer).toHaveBeenCalledTimes(1)
-    expect(dismissPersistenceTransferRequest).toHaveBeenCalledTimes(1)
-
-    await act(async () => {
-      root.unmount()
-    })
-  })
-
   it('passes one authoritative selection-change callback into the workbook view', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -429,7 +253,7 @@ describe('WorkerWorkbookApp', () => {
       runtimeReady: true,
       workbookReady: true,
       zeroConfigured: true,
-      localPersistenceMode: 'persistent',
+      localPersistenceMode: 'ephemeral',
       statusModeLabel: 'Live',
       transferRequested: false,
       workerHandle: {
@@ -540,7 +364,7 @@ describe('WorkerWorkbookApp', () => {
       runtimeReady: true,
       workbookReady: true,
       zeroConfigured: true,
-      localPersistenceMode: 'persistent',
+      localPersistenceMode: 'ephemeral',
       statusModeLabel: 'Live',
       transferRequested: false,
       workerHandle: {
@@ -709,7 +533,7 @@ describe('WorkerWorkbookApp', () => {
       invokeSetFreezePaneMutation: vi.fn(),
       isEditing: false,
       isEditingCell: false,
-      localPersistenceMode: 'persistent',
+      localPersistenceMode: 'ephemeral',
       localPersistenceBanner: null,
       moveSelectionRange: vi.fn(),
       pasteIntoSelection: vi.fn(),
@@ -947,7 +771,7 @@ describe('WorkerWorkbookApp', () => {
       invokeSetFreezePaneMutation: vi.fn(),
       isEditing: false,
       isEditingCell: false,
-      localPersistenceMode: 'persistent',
+      localPersistenceMode: 'ephemeral',
       localPersistenceBanner: null,
       moveSelectionRange: vi.fn(),
       pasteIntoSelection: vi.fn(),

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "suite": "automation-api-extensibility",
-  "generatedAt": "2026-05-06T14:32:28.517Z",
+  "generatedAt": "2026-05-16T19:22:39.870Z",
   "source": {
     "artifactGenerator": "scripts/gen-automation-scorecard.ts",
     "commandBundleImplementation": "packages/agent-api/src/workbook-agent-bundles.ts",
@@ -63,7 +63,7 @@
       "required": true,
       "passed": true,
       "coveredControls": ["worker.runtimePreview"],
-      "evidence": "Bootstrapped the browser worker runtime against an in-memory local store and previewed a workbook-agent bundle through the worker API.",
+      "evidence": "Bootstrapped the browser worker runtime against an ephemeral projection engine and previewed a workbook-agent bundle through the worker API.",
       "findings": []
     },
     {
@@ -81,7 +81,7 @@
       "required": true,
       "passed": true,
       "coveredControls": ["automation.tenXWorkflowBenchmark"],
-      "evidence": "Executed a 200-row workflow as 5 typed semantic commands versus 1202 incumbent-style row-by-row script operations, for 240.4x fewer script-visible host calls. Semantic preview+apply took 43.282ms; the local script-style baseline took 89.136ms. Both paths produced Sheet1!D201=720.",
+      "evidence": "Executed a 200-row workflow as 5 typed semantic commands versus 1202 incumbent-style row-by-row script operations, for 240.4x fewer script-visible host calls. Semantic preview+apply took 52.365ms; the local script-style baseline took 97.571ms. Both paths produced Sheet1!D201=720.",
       "findings": []
     },
     {

@@ -1,17 +1,14 @@
-import type { WorkbookLocalViewportBase } from '@bilig/storage-browser'
-import { formatAddress } from '@bilig/formula'
 import { ValueTag, type CellSnapshot, type CellStyleRecord, type EngineEvent, type RecalcMetrics } from '@bilig/protocol'
 import { encodeViewportPatch, type ViewportPatch, type ViewportPatchSubscription } from '@bilig/worker-transport'
 import {
   normalizeViewport,
   viewportPatchMayBeImpacted,
-  mergeRangeIntersectsViewport,
   type SheetViewportImpact,
   type ViewportSubscriptionState,
   type WorkerEngine,
 } from './worker-runtime-support.js'
 import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
-import { DEFAULT_STYLE_ID, buildViewportPatchFromEngine, buildViewportPatchFromLocalBase } from './worker-runtime-viewport.js'
+import { DEFAULT_STYLE_ID, buildViewportPatchFromEngine } from './worker-runtime-viewport.js'
 
 export type ViewportPatchBroadcastReason =
   | 'authoritative-events'
@@ -19,101 +16,6 @@ export type ViewportPatchBroadcastReason =
   | 'pending-mutation'
   | 'projection-materialized'
   | 'state-change'
-
-function hasFormulaErrorCells(base: WorkbookLocalViewportBase): boolean {
-  return base.cells.some((cell) => cell.snapshot.formula !== undefined && cell.snapshot.value.tag === ValueTag.Error)
-}
-
-function hasUnresolvedFormulaCells(base: WorkbookLocalViewportBase): boolean {
-  return base.cells.some((cell) => cell.snapshot.formula !== undefined && cell.snapshot.value.tag === ValueTag.Empty)
-}
-
-function isMaterialViewportCell(snapshot: CellSnapshot): boolean {
-  return (
-    snapshot.value.tag !== ValueTag.Empty ||
-    snapshot.formula !== undefined ||
-    snapshot.input !== undefined ||
-    snapshot.format !== undefined ||
-    snapshot.styleId !== undefined ||
-    snapshot.numberFormatId !== undefined ||
-    snapshot.flags !== 0
-  )
-}
-
-function materialCellSignature(snapshot: CellSnapshot): string {
-  return [
-    snapshot.value.tag === ValueTag.Empty ? 'empty' : JSON.stringify(snapshot.value),
-    snapshot.formula ?? '',
-    snapshot.input ?? '',
-    snapshot.format ?? '',
-    snapshot.styleId ?? '',
-    snapshot.numberFormatId ?? '',
-    snapshot.flags,
-  ].join('|')
-}
-
-function localViewportBaseContainsProjectionEngineMaterialCells(
-  base: WorkbookLocalViewportBase,
-  engine: WorkerEngine,
-  viewport: ViewportPatchSubscription,
-): boolean {
-  const localCells = new Map<string, CellSnapshot>()
-  for (const cell of base.cells) {
-    if (isMaterialViewportCell(cell.snapshot)) {
-      localCells.set(cell.snapshot.address, cell.snapshot)
-    }
-  }
-
-  const engineCells = new Map<string, CellSnapshot>()
-  const hasSheet = engine.workbook.getSheet(viewport.sheetName) !== undefined
-  if (hasSheet) {
-    for (let row = viewport.rowStart; row <= viewport.rowEnd; row += 1) {
-      for (let col = viewport.colStart; col <= viewport.colEnd; col += 1) {
-        const address = formatAddress(row, col)
-        const snapshot = engine.getCell(viewport.sheetName, address)
-        if (isMaterialViewportCell(snapshot)) {
-          engineCells.set(address, snapshot)
-        }
-      }
-    }
-  }
-
-  for (const [address, engineSnapshot] of engineCells) {
-    const localSnapshot = localCells.get(address)
-    if (!localSnapshot || materialCellSignature(localSnapshot) !== materialCellSignature(engineSnapshot)) {
-      return false
-    }
-  }
-  return true
-}
-
-function localViewportBaseContainsProjectionEngineMaterialCellAddresses(
-  base: WorkbookLocalViewportBase,
-  engine: WorkerEngine,
-  viewport: ViewportPatchSubscription,
-): boolean {
-  const localAddresses = new Set<string>()
-  for (const cell of base.cells) {
-    if (isMaterialViewportCell(cell.snapshot)) {
-      localAddresses.add(cell.snapshot.address)
-    }
-  }
-
-  const hasSheet = engine.workbook.getSheet(viewport.sheetName) !== undefined
-  if (!hasSheet) {
-    return true
-  }
-  for (let row = viewport.rowStart; row <= viewport.rowEnd; row += 1) {
-    for (let col = viewport.colStart; col <= viewport.colEnd; col += 1) {
-      const address = formatAddress(row, col)
-      const snapshot = engine.getCell(viewport.sheetName, address)
-      if (isMaterialViewportCell(snapshot) && !localAddresses.has(address)) {
-        return false
-      }
-    }
-  }
-  return true
-}
 
 export function createEmptyCellSnapshot(sheetName: string, address: string): CellSnapshot {
   return {
@@ -141,13 +43,10 @@ export class WorkerViewportPatchPublisher {
         authoritativeRevision: number,
         sheetImpact: SheetViewportImpact | null,
       ) => ViewportPatch
-      canReadLocalProjectionForViewport: () => boolean
       getAuthoritativeRevision: () => number
       getCurrentMetrics: () => RecalcMetrics
       getProjectionEngine: () => WorkerEngine
       hasProjectionEngine: () => boolean
-      readLocalViewport: (sheetName: string, viewport: ViewportPatchSubscription) => WorkbookLocalViewportBase | null
-      scheduleProjectionEngineMaterialization: () => void
     },
   ) {}
 
@@ -174,14 +73,14 @@ export class WorkerViewportPatchPublisher {
       lastMergeSignatures: new Map<string, string>(),
     }
     if (subscription.initialPatch !== 'none') {
+      if (!this.options.hasProjectionEngine()) {
+        return () => {}
+      }
       listener(
         encodeViewportPatch(
           this.options.buildPatch(state, null, this.options.getCurrentMetrics(), this.options.getAuthoritativeRevision(), null),
         ),
       )
-    }
-    if (!this.options.hasProjectionEngine() && this.options.canReadLocalProjectionForViewport()) {
-      this.options.scheduleProjectionEngineMaterialization()
     }
     this.viewportSubscriptions.add(state)
     this.addViewportSubscription(state)
@@ -198,34 +97,6 @@ export class WorkerViewportPatchPublisher {
     authoritativeRevision: number = this.options.getAuthoritativeRevision(),
     sheetImpact: SheetViewportImpact | null = null,
   ): ViewportPatch {
-    if ((event === null || event.invalidation === 'full') && this.options.canReadLocalProjectionForViewport()) {
-      const localBase = this.options.readLocalViewport(state.subscription.sheetName, state.subscription)
-      if (localBase && (!this.options.hasProjectionEngine() || !hasFormulaErrorCells(localBase))) {
-        const projectionEngine = this.options.hasProjectionEngine() ? this.options.getProjectionEngine() : undefined
-        if (projectionEngine && !localViewportBaseContainsProjectionEngineMaterialCells(localBase, projectionEngine, state.subscription)) {
-          return buildViewportPatchFromEngine({
-            state,
-            event,
-            metrics,
-            authoritativeRevision,
-            sheetImpact,
-            engine: projectionEngine,
-            emptyCellSnapshot: (sheetName, address) => createEmptyCellSnapshot(sheetName, address),
-            getStyleRecord: (styleId) => this.getStyleRecord(styleId),
-            getFormatId: (format) => this.getFormatId(format),
-          })
-        }
-        return buildViewportPatchFromLocalBase({
-          state,
-          metrics,
-          authoritativeRevision,
-          base: localBase,
-          ...(projectionEngine ? { engine: projectionEngine } : {}),
-          getFormatId: (format) => this.getFormatId(format),
-        })
-      }
-    }
-
     return buildViewportPatchFromEngine({
       state,
       event,
@@ -248,9 +119,6 @@ export class WorkerViewportPatchPublisher {
     const metrics = input.metrics ?? this.options.getCurrentMetrics()
     const impactedSheets = input.impactsBySheet === null ? null : new Set(input.impactsBySheet.keys())
     for (const subscription of this.getViewportSubscriptionsForEvent(input.event, impactedSheets)) {
-      if (input.event === null && input.reason === 'projection-materialized' && this.canSkipProjectionMaterializedPatch(subscription)) {
-        continue
-      }
       const sheetImpact = input.impactsBySheet?.get(subscription.subscription.sheetName) ?? null
       if (input.event !== null && !viewportPatchMayBeImpacted(subscription.subscription, input.event, sheetImpact, impactedSheets)) {
         continue
@@ -264,34 +132,6 @@ export class WorkerViewportPatchPublisher {
       }
       subscription.listener(encodeViewportPatch(patch))
     }
-  }
-
-  private canSkipProjectionMaterializedPatch(state: ViewportSubscriptionState): boolean {
-    if (state.subscription.initialPatch === 'none') {
-      return true
-    }
-    if (state.nextVersion <= 1 || !this.options.hasProjectionEngine() || !this.options.canReadLocalProjectionForViewport()) {
-      return false
-    }
-    const localBase = this.options.readLocalViewport(state.subscription.sheetName, state.subscription)
-    if (!localBase) {
-      return false
-    }
-    const projectionEngine = this.options.getProjectionEngine()
-    if (!localViewportBaseContainsProjectionEngineMaterialCellAddresses(localBase, projectionEngine, state.subscription)) {
-      return false
-    }
-    if (hasUnresolvedFormulaCells(localBase)) {
-      return false
-    }
-    if (
-      projectionEngine
-        .listMergeRanges(state.subscription.sheetName)
-        .some((range) => mergeRangeIntersectsViewport(range, state.subscription))
-    ) {
-      return false
-    }
-    return !hasFormulaErrorCells(localBase)
   }
 
   private addViewportSubscription(state: ViewportSubscriptionState): void {

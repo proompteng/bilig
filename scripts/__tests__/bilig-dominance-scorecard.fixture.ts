@@ -693,7 +693,7 @@ export function buildFixtureInput(): BuildScorecardInput {
         artifactGenerator: 'scripts/gen-reliability-scorecard.ts',
         workerRuntimeImplementation: 'apps/web/src/worker-runtime.ts',
         mutationJournalImplementation: 'apps/web/src/worker-runtime-mutation-journal.ts',
-        localStoreImplementation: 'packages/storage-browser/src/index.ts',
+        zeroSyncImplementation: 'packages/zero-sync/src/schema.ts',
         headedBrowserReliabilityTestFile: 'e2e/tests/web-shell-remote-sync.pw.ts',
         externalReliabilityComparisonArtifact: 'packages/benchmarks/baselines/reliability-external-sheets-excel-comparison.json',
       },
@@ -708,7 +708,7 @@ export function buildFixtureInput(): BuildScorecardInput {
         offlineNetworkPartitionPassed: true,
         coveredControls: [
           'pending.localReloadSurvival',
-          'localStore.journalActiveView',
+          'zero.clientDurability',
           'headedBrowser.reloadPersistence',
           'headedBrowser.crashSoak',
           'offline.networkPartitionRecoverySoak',

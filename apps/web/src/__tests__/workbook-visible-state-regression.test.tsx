@@ -230,7 +230,7 @@ function createWorkbookAppState(overrides: Record<string, unknown> = {}): Record
     invokeSetFreezePaneMutation: vi.fn(),
     isEditing: false,
     isEditingCell: false,
-    localPersistenceMode: 'persistent',
+    localPersistenceMode: 'ephemeral',
     localPersistenceBanner: null,
     moveSelectionRange: vi.fn(),
     pasteIntoSelection: vi.fn(),

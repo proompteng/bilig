@@ -16,8 +16,6 @@ function formatFailedPendingMutationMessage(input: { failureMessage: string }): 
   return `A local change could not be synced. ${input.failureMessage}`
 }
 
-const persistenceBannerButtonClass =
-  'inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text)] transition-colors hover:bg-[var(--wb-surface)]/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1'
 const missingSheetActionClass =
   'inline-flex h-8 items-center rounded-[var(--wb-radius-control)] border border-[var(--wb-border)] bg-[var(--wb-surface)] px-3 text-[12px] font-medium text-[var(--wb-text)] shadow-[var(--wb-shadow-sm)] transition-colors hover:border-[var(--wb-border-strong)] hover:bg-[var(--wb-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--wb-accent-ring)] focus-visible:ring-offset-1'
 
@@ -149,7 +147,6 @@ function WorkerWorkbookAppInner({
       }
     })()
   }, [benchmarkCorpus, installBenchmarkCorpus, reportRuntimeError, runtimeReady])
-  const showFollowerPersistenceBanner = app.localPersistenceMode === 'follower' && (app.transferRequested || !app.remoteSyncAvailable)
   const reportAsyncError = useCallback(
     (task: Promise<unknown>): void => {
       void (async () => {
@@ -255,59 +252,6 @@ function WorkerWorkbookAppInner({
 
   return (
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-[var(--wb-app-bg)] text-[var(--wb-text)]">
-      {showFollowerPersistenceBanner ? (
-        <div className="border-b border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 text-sm text-[var(--wb-text-subtle)]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="max-w-[72ch]">
-              Another tab is the local writer.
-              {app.transferRequested ? (
-                <div className="mt-1 text-[12px] text-[var(--wb-text-muted)]">
-                  Writer handoff requested. This tab will retry as soon as the writer releases the local store.
-                </div>
-              ) : null}
-            </div>
-            <button
-              className={persistenceBannerButtonClass}
-              onClick={() => {
-                app.requestPersistenceTransfer()
-              }}
-              type="button"
-            >
-              {app.transferRequested ? 'Retry writer' : 'Become writer'}
-            </button>
-          </div>
-        </div>
-      ) : null}
-      {app.localPersistenceMode === 'persistent' && app.pendingTransferRequest ? (
-        <div className="border-b border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-3 py-2 text-sm text-[var(--wb-text-subtle)]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="max-w-[72ch]">
-              Another tab wants writer ownership for local storage. If you transfer it, this tab stays live but loses offline persistence
-              until it becomes the writer again.
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                className={persistenceBannerButtonClass}
-                onClick={() => {
-                  app.approvePersistenceTransfer()
-                }}
-                type="button"
-              >
-                Transfer writer
-              </button>
-              <button
-                className={persistenceBannerButtonClass}
-                onClick={() => {
-                  app.dismissPersistenceTransferRequest()
-                }}
-                type="button"
-              >
-                Stay writer
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
       {app.editorConflictBanner}
       <div className="relative flex min-h-0 flex-1">
         <WorkbookToastRegion toasts={toasts} />

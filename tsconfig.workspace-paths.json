@@ -19,7 +19,6 @@
       "@bilig/protocol": ["./packages/protocol/src/index.ts"],
       "@bilig/renderer": ["./packages/renderer/src/index.ts"],
       "@bilig/runtime-kernel": ["./packages/runtime-kernel/src/index.ts"],
-      "@bilig/storage-browser": ["./packages/storage-browser/src/index.ts"],
       "@bilig/storage-server": ["./packages/storage-server/src/index.ts"],
       "@bilig/test-fuzz": ["./packages/test-fuzz/src/index.ts"],
       "@bilig/wasm-kernel": ["./packages/wasm-kernel/src/index.ts"],

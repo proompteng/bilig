@@ -20,8 +20,8 @@ Already landed on `main`:
 - bounded Codex app-server pool with backpressure and turn quotas
 - server-side rollout flags plus allowlist-based canary controls for shared threads, workflow runner, auto-apply, and workflow families
 - Zero-backed durable thread summaries and workflow-run projections in the browser shell, with SSE kept for live deltas
-- follower-tab degradation messaging when another tab owns the persistent local store
-- deliberate writer-role transfer controls for follower tabs, including persistent-store handoff and runtime restart
+- Zero-backed browser persistence without a parallel workbook SQLite store
+- worker runtime restart paths that rehydrate from Zero/server authoritative state
 - internal observability snapshots for agent pool/session/review/workflow state via health and agent routes
 - current built-in durable workflows for workbook/sheet summary, recent changes, search, dependency trace, current-cell explain, formula diagnostics/repair/highlighting, header normalization, number-format normalization, whitespace normalization, formula fill-down cleanup, outlier highlighting, consistent header styling, current-sheet rollup, current-sheet review-tab creation, and a bounded set of structural previews
 
@@ -36,7 +36,7 @@ Explicitly deferred for now:
 
 ## Executive summary
 
-The next iteration should **not** be another topology rewrite. The repo already has the right backbone: a shipped `apps/bilig` monolith, a worker-first `apps/web` shell, OPFS-backed local persistence, Zero/Postgres-backed authoritative sync, and an embedded Codex-based workbook assistant.
+The next iteration should **not** be another topology rewrite. The repo already has the right backbone: a shipped `apps/bilig` monolith, a worker-first `apps/web` shell, OPFS-backed Zero client persistence, Zero/Postgres-backed authoritative sync, and an embedded Codex-based workbook assistant.
 
 The highest-leverage move now is to turn those pieces into one coherent product definition:
 
@@ -57,7 +57,7 @@ The current repo already contains the core building blocks we should preserve an
 
 - `apps/bilig` is the active monolith runtime and serves the web shell, sync routes, agent routes, and Zero ingress.
 - `apps/web` is already worker-first by default and mounts the worker-owned runtime path.
-- `packages/storage-browser` provides OPFS-backed SQLite browser persistence for local-first state, authoritative base tiles, projection overlays, and the pending mutation journal.
+- `packages/zero-sync` provides Zero-backed client state for local-first state, authoritative base tiles, projection overlays, and the pending mutation journal.
 - `apps/web/src/worker-runtime.ts` already supports local replay, authoritative reconcile, preview generation for agent command bundles, and crash-safe pending mutation persistence.
 - `apps/bilig/src/codex-app/workbook-agent-service.ts` already embeds a Codex app-server client in the monolith and stages workbook command bundles from chat tool calls.
 - `apps/web/src/use-workbook-agent-pane.tsx` and `apps/web/src/WorkbookAgentPanel.tsx` already ship a document-side chat panel with prompt submission, streaming updates, preview/apply, and execution replay.
@@ -89,7 +89,7 @@ This plan is intentionally anchored to the code that exists today.
 - The monolith validates preview/apply authoritatively in `apps/bilig/src/zero/service.ts`, including base-revision checks and preview-summary parity checks before commit.
 - The monolith already persists accepted execution records, chat timeline state, tool calls, pending bundles, and workflow runs.
 - The Codex transport is no longer a singleton client. `apps/bilig/src/codex-app/workbook-agent-service.ts` now uses a bounded pool with per-client queueing and service-level turn quotas.
-- Multi-tab browser-lock behavior is no longer follower-only. The web shell now exposes explicit writer transfer controls and runtime restart on local-store handoff.
+- Browser persistence ownership is delegated to Zero; the web shell no longer owns a parallel workbook handoff path.
 - Any proposed architecture change in this document must preserve those already-correct paths instead of replacing them with a parallel correctness model.
 
 ---
@@ -186,7 +186,7 @@ The worker keeps ownership of:
 - authoritative ingest/reconcile
 - preview generation
 - viewport patch publication
-- local persistence coordination
+- Zero client persistence coordination
 
 ### 3.5 Keep one migration path
 
@@ -277,7 +277,7 @@ This iteration should explicitly **not** try to do the following:
 ```text
 Browser UI shell
   -> Worker runtime
-      -> OPFS SQLite local store
+      -> Zero client state
       -> preview engine + mutation journal + viewport tile store
       -> local agent preview generation
   -> Monolith (apps/bilig)
@@ -314,7 +314,7 @@ The browser worker should own:
 - projection overlay and viewport patches
 - local preview rendering for agent bundles
 - reconnect/rebase behavior
-- local persistence of lightweight chat state and thread references
+- Zero client persistence of lightweight chat state and thread references
 
 The browser should **not** become the durable source of truth for shared chat history. Its job is:
 
@@ -640,17 +640,17 @@ The product remains within the published performance budgets while collaboration
 
 ### Why
 
-The OPFS-backed local store is a strength, but multi-tab and lease behavior must be a deliberate product surface rather than an incidental lock error.
+Zero client persistence is the browser durability layer; multi-tab and lease behavior must stay inside that integration rather than a parallel workbook database.
 
 ### Status on `main`
 
-This workstream is now mostly landed. The product has follower-tab behavior, degraded-mode messaging, and a deliberate writer transfer path for persistent local-store ownership.
+This workstream is now mostly landed. The product rehydrates the worker from Zero/server authoritative state and no longer owns a separate persistent workbook database.
 
 ### Remaining deliverables
 
 - continue polishing the writer lease / ownership model across tabs
 - keep offline banner and degraded-mode messaging from regressing as broader rollout and workflow breadth expand
-- keep local persistence of recent chat state and drafts stable as the browser shell evolves
+- keep Zero client persistence of recent chat state and drafts stable as the browser shell evolves
 
 ### Exit gate
 
@@ -878,7 +878,7 @@ Future production dashboards and alerts should cover:
 - preview generation latency
 - apply conflict / stale bundle / mismatch rate
 - Zero lag and authoritative event catch-up time
-- OPFS local store open failure / lock contention rate
+- Zero client persistence open failure / lock contention rate
 - reconnect/rebase latency
 
 ### 14.3 Rollout shape

@@ -1,8 +1,5 @@
 import type { EngineReplicaSnapshot, SpreadsheetEngine } from '@bilig/core'
-import { isEngineReplicaSnapshot } from '@bilig/core'
-import { parseCellAddress } from '@bilig/formula'
-import { isWorkbookSnapshot, type CellSnapshot, type WorkbookSnapshot } from '@bilig/protocol'
-import type { WorkbookLocalStore, WorkbookStoredState } from '@bilig/storage-browser'
+import type { WorkbookSnapshot } from '@bilig/protocol'
 import { createProjectionEngineFromState, createWorkbookEngineFromState } from './worker-runtime-engine-state.js'
 import type { ProjectionOverlayScope } from './worker-local-overlay.js'
 import type { PendingWorkbookMutation } from './workbook-sync.js'
@@ -22,28 +19,9 @@ interface AuthoritativeStateSnapshotCache {
   storeAuthoritativeReplica(replica: EngineReplicaSnapshot): EngineReplicaSnapshot
 }
 
-interface LocalStoreStateReader {
-  loadState(): Promise<WorkbookStoredState | null>
-}
-
 interface ExportableAuthoritativeEngine {
   exportSnapshot(): WorkbookSnapshot
   exportReplicaSnapshot(): EngineReplicaSnapshot
-}
-
-interface ViewportTileReader {
-  readViewport(input: {
-    localStore: Pick<WorkbookLocalStore, 'readViewportProjection'>
-    sheetName: string
-    viewport: {
-      rowStart: number
-      rowEnd: number
-      colStart: number
-      colEnd: number
-    }
-  }): {
-    readonly cells: readonly { readonly snapshot: CellSnapshot }[]
-  } | null
 }
 
 export function installAuthoritativeEngineState(
@@ -64,18 +42,10 @@ export function installRestoredAuthoritativeState(
 }
 
 export async function resolveAuthoritativeStateInput(args: {
-  authoritativeStateSource: 'none' | 'memory' | 'localStore'
-  localStore: LocalStoreStateReader | null
+  authoritativeStateSource: 'none' | 'memory'
   snapshotCaches: AuthoritativeStateSnapshotCache
   authoritativeEngine: ExportableAuthoritativeEngine | null
-  installRestoredAuthoritativeState: (snapshot: WorkbookSnapshot | null, replica: EngineReplicaSnapshot | null) => void
 }): Promise<WorkerRuntimeAuthoritativeStateInput> {
-  if (args.authoritativeStateSource === 'localStore') {
-    const restoredState = args.localStore ? await args.localStore.loadState() : null
-    const restoredSnapshot = isWorkbookSnapshot(restoredState?.snapshot) ? restoredState.snapshot : null
-    const restoredReplica = isEngineReplicaSnapshot(restoredState?.replica) ? restoredState.replica : null
-    args.installRestoredAuthoritativeState(restoredSnapshot, restoredReplica)
-  }
   return args.snapshotCaches.resolveAuthoritativeState({
     exportSnapshot: args.authoritativeEngine ? () => args.authoritativeEngine!.exportSnapshot() : null,
     exportReplica: args.authoritativeEngine ? () => args.authoritativeEngine!.exportReplicaSnapshot() : null,
@@ -125,29 +95,4 @@ export async function rebuildProjectionEngine(args: {
     replica: authoritativeState.replica,
     pendingMutations: args.pendingMutations,
   })
-}
-
-export function readProjectedCellFromLocalStore(args: {
-  canReadLocalProjectionForViewport: boolean
-  localStore: Pick<WorkbookLocalStore, 'readViewportProjection'> | null
-  viewportTileStore: ViewportTileReader
-  sheetName: string
-  address: string
-}): CellSnapshot | null {
-  if (!args.canReadLocalProjectionForViewport || !args.localStore) {
-    return null
-  }
-  const parsed = parseCellAddress(args.address, args.sheetName)
-  const localBase = args.viewportTileStore.readViewport({
-    localStore: args.localStore,
-    sheetName: args.sheetName,
-    viewport: {
-      rowStart: parsed.row,
-      rowEnd: parsed.row,
-      colStart: parsed.col,
-      colEnd: parsed.col,
-    },
-  })
-  const cell = localBase?.cells.find((entry) => entry.snapshot.address === args.address)
-  return cell ? structuredClone(cell.snapshot) : null
 }

@@ -31,7 +31,7 @@ function ToolbarHookHarness(props: {
     currentTextColor: '#111827',
     horizontalAlignment: null,
     invokeMutation: props.invokeMutation,
-    localPersistenceMode: 'persistent',
+    localPersistenceMode: 'ephemeral',
     onApplyBorderPreset: () => {},
     onClearStyle: () => {},
     onFillColorReset: () => {},
@@ -396,7 +396,7 @@ describe('WorkbookToolbar', () => {
       deriveWorkbookStatusPresentation({
         connectionStateName: 'connected',
         runtimeReady: true,
-        localPersistenceMode: 'persistent',
+        localPersistenceMode: 'ephemeral',
         pendingMutationSummary: { activeCount: 0, failedCount: 0 },
         remoteSyncAvailable: true,
         zeroConfigured: true,
@@ -429,7 +429,7 @@ describe('WorkbookToolbar', () => {
       deriveWorkbookStatusPresentation({
         connectionStateName: 'connecting',
         runtimeReady: true,
-        localPersistenceMode: 'persistent',
+        localPersistenceMode: 'ephemeral',
         pendingMutationSummary: { activeCount: 2, failedCount: 0 },
         remoteSyncAvailable: false,
         zeroConfigured: true,
@@ -445,7 +445,7 @@ describe('WorkbookToolbar', () => {
       deriveWorkbookStatusPresentation({
         connectionStateName: 'connecting',
         runtimeReady: true,
-        localPersistenceMode: 'persistent',
+        localPersistenceMode: 'ephemeral',
         pendingMutationSummary: { activeCount: 0, failedCount: 0 },
         remoteSyncAvailable: false,
         zeroConfigured: true,
@@ -461,7 +461,7 @@ describe('WorkbookToolbar', () => {
       deriveWorkbookStatusPresentation({
         connectionStateName: 'connected',
         runtimeReady: true,
-        localPersistenceMode: 'persistent',
+        localPersistenceMode: 'ephemeral',
         pendingMutationSummary: { activeCount: 0, failedCount: 0 },
         remoteSyncAvailable: true,
         zeroConfigured: false,
@@ -477,7 +477,7 @@ describe('WorkbookToolbar', () => {
       deriveWorkbookStatusPresentation({
         connectionStateName: 'disconnected',
         runtimeReady: true,
-        localPersistenceMode: 'persistent',
+        localPersistenceMode: 'ephemeral',
         pendingMutationSummary: { activeCount: 0, failedCount: 0 },
         remoteSyncAvailable: false,
         zeroConfigured: true,
@@ -493,7 +493,7 @@ describe('WorkbookToolbar', () => {
       deriveWorkbookStatusPresentation({
         connectionStateName: 'connected',
         runtimeReady: true,
-        localPersistenceMode: 'persistent',
+        localPersistenceMode: 'ephemeral',
         pendingMutationSummary: { activeCount: 0, failedCount: 1 },
         failedPendingMutation: { id: 'pending-1' },
         remoteSyncAvailable: true,

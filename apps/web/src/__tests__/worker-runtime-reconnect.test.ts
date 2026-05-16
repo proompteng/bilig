@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { createMemoryWorkbookLocalStoreFactory } from '@bilig/storage-browser'
 import { ValueTag } from '@bilig/protocol'
 import type { AuthoritativeWorkbookEventRecord } from '@bilig/zero-sync'
 import { WorkbookWorkerRuntime } from '../worker-runtime.js'
@@ -31,9 +30,7 @@ function expectNumberValue(runtime: WorkbookWorkerRuntime, address: string, valu
 
 describe('WorkbookWorkerRuntime reconnect rebase', () => {
   it('replays pending local mutations over authoritative drift and absorbs them on ack', async () => {
-    const runtime = new WorkbookWorkerRuntime({
-      localStoreFactory: createMemoryWorkbookLocalStoreFactory(),
-    })
+    const runtime = new WorkbookWorkerRuntime()
     await runtime.bootstrap({
       documentId: 'reconnect-doc',
       replicaId: 'browser:test',

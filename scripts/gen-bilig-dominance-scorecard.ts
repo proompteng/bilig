@@ -375,7 +375,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
         target: 'Sub-second warm start, import, viewport, paste, sort, and filter behavior on 100k to 250k row workbooks.',
         status: largeWorkbookDirectTargetsTenXPassed ? 'repo-proved-lead' : 'partial-repo-evidence',
         currentEvidence: [
-          'local-first worker architecture and OPFS/SQLite model are documented',
+          'local-first worker architecture and Zero-backed sync model are documented',
           'range-read and build families have HyperFormula comparison evidence',
           familyWinSummary(rangeRead),
           `large-workbook SLO artifact covers ${input.largeWorkbookSloScorecard.summary.coveredLargeWorkbookRows.join(', ')} materialized-cell sessions`,
@@ -564,7 +564,7 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           'pnpm automation:check',
           'pnpm workpaper:parity:check',
           'pnpm workpaper:smoke:external',
-          'pnpm exec vitest run scripts/__tests__/automation-scorecard.test.ts packages/agent-api/src/__tests__/workbook-agent-bundles.test.ts packages/headless/src/__tests__/work-paper.test.ts apps/web/src/__tests__/worker-runtime.test.ts',
+          'pnpm exec vitest run scripts/__tests__/automation-scorecard.test.ts packages/agent-api/src/__tests__/workbook-agent-bundles.test.ts packages/headless/src/__tests__/work-paper.test.ts apps/web/src/__tests__/worker-runtime-authoritative-bootstrap.test.ts',
         ],
         blockers:
           input.automationScorecard.summary.uncoveredControls.length > 0
@@ -665,8 +665,8 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           `uncovered reliability controls are explicitly disclosed: ${formatList(input.reliabilityScorecard.summary.uncoveredControls)}`,
           `external Google Sheets reliability evidence: ${input.reliabilityScorecard.summary.externalGoogleSheetsEvidence}`,
           `external Microsoft Excel reliability evidence: ${input.reliabilityScorecard.summary.externalMicrosoftExcelEvidence}`,
-          'local pending-op journal and reconnect/rebase architecture are documented',
-          'runtime sync replay, fuzz, reconnect, and local persistence tests exist',
+          'Zero-backed durability and reconnect/rebase architecture are documented',
+          'runtime sync replay, fuzz, reconnect, and Zero sync tests exist',
         ],
         evidenceArtifacts: [
           input.reliabilityScorecardPath,
@@ -674,11 +674,11 @@ export function buildBiligDominanceScorecard(input: BuildScorecardInput): BiligD
           'e2e/tests/web-shell-remote-sync.pw.ts',
           'docs/05-06-next-phase.md',
           'apps/web/src/__tests__/runtime-sync.fuzz.test.ts',
-          'apps/web/src/__tests__/worker-runtime.test.ts',
+          'apps/web/src/__tests__/worker-runtime-reconnect.test.ts',
         ],
         checkCommands: [
           'pnpm reliability:check',
-          'pnpm exec vitest run apps/web/src/__tests__/worker-runtime.test.ts apps/web/src/__tests__/worker-runtime-local-persistence.test.ts apps/web/src/__tests__/worker-runtime-bootstrap-persistence.test.ts apps/web/src/__tests__/workbook-mutation-journal.test.ts',
+          'pnpm exec vitest run apps/web/src/__tests__/worker-runtime-reconnect.test.ts apps/web/src/__tests__/worker-runtime-authoritative-bootstrap.test.ts apps/web/src/__tests__/worker-runtime-mutation-journal.test.ts packages/zero-sync/src/__tests__/workbook-events.test.ts',
           'pnpm test:browser e2e/tests/web-shell-remote-sync.pw.ts -g "restores persisted workbook state after a full reload"',
           'pnpm test:fuzz:main',
           'pnpm test:correctness:browser',

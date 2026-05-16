@@ -286,7 +286,7 @@ Do not let browser fuzz become the first line of defense for engine semantics.
 - `packages/formula`: parser/translation/evaluation truth
 - `apps/bilig`: sync/projection/server truth
 - `apps/web`: runtime/projection/browser truth
-- boundary packages like `worker-transport` and `storage-browser`: direct package-owned guarantees
+- boundary packages like `worker-transport` and `zero-sync`: direct package-owned guarantees
 
 ### Preferred lane shape
 

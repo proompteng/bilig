@@ -101,7 +101,6 @@ const codeSplittingGroups = [
       return includesAny(id, [
         '/packages/grid/',
         '/packages/renderer/',
-        '/packages/storage-browser/',
         '/packages/worker-transport/',
         '/packages/workbook-domain/',
         '/apps/web/src/WorkerWorkbookApp.tsx',
@@ -115,9 +114,6 @@ const codeSplittingGroups = [
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  optimizeDeps: {
-    exclude: ['@sqlite.org/sqlite-wasm'],
-  },
   worker: {
     format: 'es',
     rolldownOptions: {

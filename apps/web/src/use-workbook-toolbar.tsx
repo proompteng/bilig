@@ -137,7 +137,6 @@ export interface WorkbookStatusPresentation {
 export function deriveWorkbookStatusPresentation(input: {
   connectionStateName: ZeroConnectionState['name']
   runtimeReady: boolean
-  localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower' | undefined
   remoteSyncAvailable: boolean
   zeroConfigured: boolean
   zeroHealthReady: boolean
@@ -162,9 +161,6 @@ export function deriveWorkbookStatusPresentation(input: {
   }
   if ((input.pendingMutationSummary?.activeCount ?? 0) > 0) {
     return { modeLabel, syncLabel: 'Sync pending', tone: 'warning' }
-  }
-  if (input.localPersistenceMode === 'follower' && !input.remoteSyncAvailable) {
-    return { modeLabel, syncLabel: 'Read only', tone: 'warning' }
   }
   if (!input.zeroConfigured) {
     return { modeLabel, syncLabel: 'Local only', tone: 'warning' }
@@ -257,7 +253,6 @@ function applyToolbarStylePatch(style: CellStyleRecord | undefined, patch: CellS
 export function useWorkbookToolbar(input: {
   connectionStateName: ZeroConnectionState['name']
   runtimeReady: boolean
-  localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower' | undefined
   pendingMutationSummary?:
     | {
         readonly activeCount: number
@@ -291,7 +286,6 @@ export function useWorkbookToolbar(input: {
   const {
     connectionStateName,
     runtimeReady,
-    localPersistenceMode,
     pendingMutationSummary,
     failedPendingMutation,
     remoteSyncAvailable,
@@ -346,7 +340,6 @@ export function useWorkbookToolbar(input: {
   const statusPresentation = deriveWorkbookStatusPresentation({
     connectionStateName,
     runtimeReady,
-    localPersistenceMode,
     pendingMutationSummary,
     failedPendingMutation,
     remoteSyncAvailable,

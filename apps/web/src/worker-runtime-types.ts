@@ -21,7 +21,7 @@ export interface WorkbookWorkerStateSnapshot {
   localHistoryState: WorkerRuntimeLocalHistoryState
   authoritativeRevision?: number | undefined
   pendingMutationSummary?: WorkbookPendingMutationSummarySnapshot
-  localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
+  localPersistenceMode?: 'ephemeral'
 }
 
 export interface WorkbookFailedPendingMutationSnapshot {
@@ -41,7 +41,7 @@ export interface WorkbookWorkerBootstrapResult {
   runtimeState: WorkbookWorkerStateSnapshot
   restoredFromPersistence: boolean
   requiresAuthoritativeHydrate: boolean
-  localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
+  localPersistenceMode?: 'ephemeral'
 }
 
 export interface InstallAuthoritativeSnapshotInput {

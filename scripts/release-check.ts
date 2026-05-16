@@ -8,7 +8,6 @@ const budgets = {
   mainJsGzipBytes: 350 * 1024,
   workerJsGzipBytes: 425 * 1024,
   runtimeWasmGzipBytes: 250 * 1024,
-  sqliteWasmGzipBytes: 400 * 1024,
   cssGzipBytes: 32 * 1024,
   startupFontGzipBytes: 500 * 1024,
   startupShellGzipBytes: 520 * 1024,
@@ -98,13 +97,9 @@ function parseCssFontReferences(css) {
     .filter((reference) => /\.(woff2?|ttf|otf)$/i.test(reference))
 }
 
-function isSqliteWasmAsset(file) {
-  return basename(file).startsWith('sqlite3-')
-}
-
 function isWorkerJsAsset(file) {
   const name = basename(file)
-  return name.includes('.worker-') || name.startsWith('sqlite3-worker')
+  return name.includes('.worker-')
 }
 
 const { cssAssets, distDir, indexHtml, jsAssets, wasmAssets } = await findAssets()
@@ -125,19 +120,13 @@ if (workerJsMeasurements.length === 0) {
 const largestJs = mainJsMeasurements.reduce((largest, entry) => (entry.gzipBytes > largest.gzipBytes ? entry : largest))
 const largestWorkerJs = workerJsMeasurements.reduce((largest, entry) => (entry.gzipBytes > largest.gzipBytes ? entry : largest))
 const largestCss = cssMeasurements.reduce((largest, entry) => (entry.gzipBytes > largest.gzipBytes ? entry : largest))
-const runtimeWasmMeasurements = wasmMeasurements.filter((entry) => !isSqliteWasmAsset(entry.file))
-const sqliteWasmMeasurements = wasmMeasurements.filter((entry) => isSqliteWasmAsset(entry.file))
+const runtimeWasmMeasurements = wasmMeasurements
 
 if (runtimeWasmMeasurements.length === 0) {
   throw new Error('No first-party runtime WASM assets were found in apps/web/dist/assets')
 }
 
-if (sqliteWasmMeasurements.length === 0) {
-  throw new Error('No SQLite WASM assets were found in apps/web/dist/assets')
-}
-
 const largestRuntimeWasm = runtimeWasmMeasurements.reduce((largest, entry) => (entry.gzipBytes > largest.gzipBytes ? entry : largest))
-const largestSqliteWasm = sqliteWasmMeasurements.reduce((largest, entry) => (entry.gzipBytes > largest.gzipBytes ? entry : largest))
 const indexHtmlBytes = new Uint8Array(await readFile(indexHtml))
 const indexHtmlMeasurement = {
   file: indexHtml,
@@ -195,7 +184,6 @@ const startupShellGzipBytes =
 assertBudget('Main JavaScript gzip size', largestJs.gzipBytes, budgets.mainJsGzipBytes)
 assertBudget('Worker JavaScript gzip size', largestWorkerJs.gzipBytes, budgets.workerJsGzipBytes)
 assertBudget('Runtime WASM gzip size', largestRuntimeWasm.gzipBytes, budgets.runtimeWasmGzipBytes)
-assertBudget('SQLite WASM gzip size', largestSqliteWasm.gzipBytes, budgets.sqliteWasmGzipBytes)
 assertBudget('Largest CSS gzip size', largestCss.gzipBytes, budgets.cssGzipBytes)
 assertBudget('Startup font gzip size', startupFontGzipBytes, budgets.startupFontGzipBytes)
 assertBudget('Startup shell gzip size', startupShellGzipBytes, budgets.startupShellGzipBytes)
@@ -210,7 +198,6 @@ console.log(
       largestWorkerJs,
       largestCss,
       largestRuntimeWasm,
-      largestSqliteWasm,
       startupCssMeasurements,
       startupFontMeasurements,
       startupFontFileCount: startupFontMeasurements.length,

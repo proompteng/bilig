@@ -4,7 +4,6 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { ValueTag } from '@bilig/protocol'
-import { createMemoryWorkbookLocalStoreFactory } from '@bilig/storage-browser'
 import { createInMemoryDocumentPersistence } from '@bilig/storage-server'
 import { updatePresenceArgsSchema, type AuthoritativeWorkbookEventRecord } from '@bilig/zero-sync'
 import type { ViewportPatch } from '@bilig/worker-transport'
@@ -157,9 +156,7 @@ export async function buildCollaborationScorecard(generatedAt = new Date().toISO
 }
 
 async function buildWorkerSyncRebaseAckControl(): Promise<CollaborationControl> {
-  const runtime = new WorkbookWorkerRuntime({
-    localStoreFactory: createMemoryWorkbookLocalStoreFactory(),
-  })
+  const runtime = new WorkbookWorkerRuntime()
   await runtime.bootstrap({
     documentId: 'collaboration-sync-doc',
     replicaId: 'browser:self',
@@ -472,9 +469,7 @@ function buildHeadedBrowserMultiUserViewportSoakControl(): CollaborationControl 
 }
 
 async function buildLongRunningCollaborationConflictRateControl(): Promise<CollaborationControl> {
-  const runtime = new WorkbookWorkerRuntime({
-    localStoreFactory: createMemoryWorkbookLocalStoreFactory(),
-  })
+  const runtime = new WorkbookWorkerRuntime()
   await runtime.bootstrap({
     documentId: 'collaboration-long-running-doc',
     replicaId: 'browser:self',

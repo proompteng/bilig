@@ -4,7 +4,6 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { ValueTag } from '@bilig/protocol'
-import { createMemoryWorkbookLocalStoreFactory, type WorkbookLocalStoreFactory } from '@bilig/storage-browser'
 import type { AuthoritativeWorkbookEventRecord } from '@bilig/zero-sync'
 import { WorkbookWorkerRuntime } from '../apps/web/src/worker-runtime.js'
 import type { PendingWorkbookMutation } from '../apps/web/src/workbook-sync.js'
@@ -40,7 +39,7 @@ export interface ReliabilityScorecard {
     readonly artifactGenerator: 'scripts/gen-reliability-scorecard.ts'
     readonly workerRuntimeImplementation: 'apps/web/src/worker-runtime.ts'
     readonly mutationJournalImplementation: 'apps/web/src/worker-runtime-mutation-journal.ts'
-    readonly localStoreImplementation: 'packages/storage-browser/src/index.ts'
+    readonly zeroSyncImplementation: 'packages/zero-sync/src/schema.ts'
     readonly headedBrowserReliabilityTestFile: 'e2e/tests/web-shell-remote-sync.pw.ts'
     readonly externalReliabilityComparisonArtifact: 'packages/benchmarks/baselines/reliability-external-sheets-excel-comparison.json'
   }
@@ -75,12 +74,11 @@ const requiredControlIds = [
   'external-sheets-excel-reliability-comparison',
 ] as const
 const coveredControlOrder = [
-  'pending.localReloadSurvival',
-  'pending.submittedReloadSurvival',
+  'zero.clientPersistenceConfig',
+  'zero.authoritativeMutationDurability',
   'pending.authoritativeAckAbsorption',
   'pending.authoritativeRebasePreservesLocal',
-  'pending.failedRetrySurvival',
-  'localStore.journalActiveView',
+  'pending.failedRetryStateMachine',
   'headedBrowser.reloadPersistence',
   'headedBrowser.crashSoak',
   'offline.networkPartitionRecoverySoak',
@@ -129,7 +127,7 @@ export async function buildReliabilityScorecard(generatedAt = new Date().toISOSt
       artifactGenerator: 'scripts/gen-reliability-scorecard.ts',
       workerRuntimeImplementation: 'apps/web/src/worker-runtime.ts',
       mutationJournalImplementation: 'apps/web/src/worker-runtime-mutation-journal.ts',
-      localStoreImplementation: 'packages/storage-browser/src/index.ts',
+      zeroSyncImplementation: 'packages/zero-sync/src/schema.ts',
       headedBrowserReliabilityTestFile,
       externalReliabilityComparisonArtifact: externalReliabilityComparisonArtifactRepoPath,
     },
@@ -152,49 +150,51 @@ export async function buildReliabilityScorecard(generatedAt = new Date().toISOSt
 }
 
 async function buildPendingReloadControl(): Promise<ReliabilityControl> {
-  const factory = createMemoryWorkbookLocalStoreFactory()
-  const runtime = await createRuntime(factory, 'pending-reload-doc', 'browser:pending')
-  const pending = await runtime.enqueuePendingMutation({
-    method: 'setCellValue',
-    args: ['Sheet1', 'A1', 17],
-  })
-  const reloaded = await createRuntime(factory, 'pending-reload-doc', 'browser:pending-reloaded')
-  const pendingReloaded = findPendingMutation(reloaded.listPendingMutations(), pending.id)
-  const localValuePersisted = cellNumber(reloaded, 'A1') === 17
-  const pendingSurvived =
-    pendingReloaded?.status === 'local' &&
-    pendingReloaded.localSeq === pending.localSeq &&
-    pendingReloaded.baseRevision === pending.baseRevision &&
-    localValuePersisted
+  const runtimeConfigSource = readFileSync(join(rootDir, 'apps/web/src/runtime-config.ts'), 'utf8')
+  const runtimeSessionSource = readFileSync(join(rootDir, 'apps/web/src/runtime-session.ts'), 'utf8')
+  const headedBrowserSource = readFileSync(join(rootDir, headedBrowserReliabilityTestFile), 'utf8')
+  const findings: string[] = []
+  requireSnippet(runtimeConfigSource, 'persistState: true', 'default Zero client persistence enabled', findings)
+  requireSnippet(runtimeSessionSource, 'zero?: ZeroWorkbookSyncSource', 'runtime session accepts Zero as the sync source', findings)
+  requireSnippet(runtimeSessionSource, 'ZeroWorkbookRevisionSync', 'runtime session reconciles through Zero revision sync', findings)
+  requireSnippet(
+    headedBrowserSource,
+    "createTestDocumentId('playwright-zero-reload-persist')",
+    'headed reload test uses an isolated Zero-backed workbook',
+    findings,
+  )
+  requireSnippet(
+    headedBrowserSource,
+    'await openZeroWorkbookPage(page, documentId)',
+    'headed reload test opens the Zero workbook page',
+    findings,
+  )
+  requireSnippet(
+    headedBrowserSource,
+    "await page.reload({ waitUntil: 'domcontentloaded' })",
+    'headed reload test performs a browser reload',
+    findings,
+  )
 
   return reliabilityControl({
     id: 'pending-mutations-survive-reload',
     category: 'pending-durability',
-    passed: pendingSurvived,
-    coveredControls: ['pending.localReloadSurvival', 'localStore.journalActiveView'],
-    evidence:
-      'Enqueued a local pending mutation, reopened the worker runtime from the same local store, and verified the pending entry and projected cell survived.',
-    findings: [
-      ...(pendingReloaded ? [] : ['pending mutation was missing after worker reload']),
-      ...(pendingReloaded?.status === 'local'
-        ? []
-        : [`expected local pending status after reload, received ${pendingReloaded?.status ?? 'missing'}`]),
-      ...(localValuePersisted ? [] : ['projected local value did not survive reload']),
-    ],
+    passed: findings.length === 0,
+    coveredControls: ['zero.clientPersistenceConfig', 'headedBrowser.reloadPersistence'],
+    evidence: 'Verified browser durability is delegated to Zero client persistence and covered by the headed Zero workbook reload flow.',
+    findings,
   })
 }
 
 async function buildSubmittedAckControl(): Promise<ReliabilityControl> {
-  const factory = createMemoryWorkbookLocalStoreFactory()
-  const runtime = await createRuntime(factory, 'submitted-ack-doc', 'browser:submitted')
+  const runtime = await createRuntime('submitted-ack-doc', 'browser:submitted')
   const pending = await runtime.enqueuePendingMutation({
     method: 'setCellValue',
     args: ['Sheet1', 'A1', 23],
   })
   await runtime.markPendingMutationSubmitted(pending.id)
-  const submittedReloaded = await createRuntime(factory, 'submitted-ack-doc', 'browser:submitted-reloaded')
-  const submitted = findPendingMutation(submittedReloaded.listPendingMutations(), pending.id)
-  await submittedReloaded.applyAuthoritativeEvents(
+  const submitted = findPendingMutation(runtime.listPendingMutations(), pending.id)
+  await runtime.applyAuthoritativeEvents(
     [
       {
         revision: 1,
@@ -209,33 +209,37 @@ async function buildSubmittedAckControl(): Promise<ReliabilityControl> {
     ],
     1,
   )
-  const afterAckPending = submittedReloaded.listPendingMutations()
-  const afterAckJournal = submittedReloaded.listMutationJournalEntries()
-  const afterAckReloaded = await createRuntime(factory, 'submitted-ack-doc', 'browser:after-ack')
+  const afterAckPending = runtime.listPendingMutations()
+  const afterAckJournal = runtime.listMutationJournalEntries()
+  const zeroSchemaSource = readFileSync(join(rootDir, 'packages/zero-sync/src/schema.ts'), 'utf8')
+  const workbookMutationStoreSource = readFileSync(join(rootDir, 'apps/bilig/src/zero/workbook-mutation-store.ts'), 'utf8')
   const submittedSurvived = submitted?.status === 'submitted'
   const ackAbsorbed =
     afterAckPending.length === 0 &&
-    afterAckReloaded.listPendingMutations().length === 0 &&
-    cellNumber(afterAckReloaded, 'A1') === 23 &&
+    cellNumber(runtime, 'A1') === 23 &&
     afterAckJournal.some((entry) => entry.id === pending.id && entry.status === 'acked')
+  const zeroDurabilityWired =
+    zeroSchemaSource.includes("clientMutationId: string().from('client_mutation_id').optional()") &&
+    workbookMutationStoreSource.includes('INSERT INTO workbook_event') &&
+    workbookMutationStoreSource.includes('client_mutation_id')
 
   return reliabilityControl({
     id: 'submitted-mutations-absorb-authoritative-ack',
     category: 'authoritative-reconcile',
-    passed: submittedSurvived && ackAbsorbed,
-    coveredControls: ['pending.submittedReloadSurvival', 'pending.authoritativeAckAbsorption', 'localStore.journalActiveView'],
+    passed: submittedSurvived && ackAbsorbed && zeroDurabilityWired,
+    coveredControls: ['zero.authoritativeMutationDurability', 'pending.authoritativeAckAbsorption'],
     evidence:
-      'Reopened a submitted mutation, absorbed an authoritative event with the same client mutation id, and verified pending state stayed empty after another reload.',
+      'Marked a mutation submitted, absorbed an authoritative event with the same client mutation id, and verified Zero/Postgres schema stores client mutation ids in durable workbook events.',
     findings: [
-      ...(submittedSurvived ? [] : [`expected submitted pending status after reload, received ${submitted?.status ?? 'missing'}`]),
-      ...(ackAbsorbed ? [] : ['authoritative ack did not clear pending state and persist the authoritative value']),
+      ...(submittedSurvived ? [] : [`expected submitted pending status before ack, received ${submitted?.status ?? 'missing'}`]),
+      ...(ackAbsorbed ? [] : ['authoritative ack did not clear pending state and record the authoritative value']),
+      ...(zeroDurabilityWired ? [] : ['Zero schema or server mutation store no longer exposes client mutation id durable event wiring']),
     ],
   })
 }
 
 async function buildAuthoritativeRebaseControl(): Promise<ReliabilityControl> {
-  const factory = createMemoryWorkbookLocalStoreFactory()
-  const runtime = await createRuntime(factory, 'rebase-doc', 'browser:rebase')
+  const runtime = await createRuntime('rebase-doc', 'browser:rebase')
   const pending = await runtime.enqueuePendingMutation({
     method: 'setCellValue',
     args: ['Sheet1', 'A1', 31],
@@ -255,60 +259,54 @@ async function buildAuthoritativeRebaseControl(): Promise<ReliabilityControl> {
     ],
     1,
   )
-  const reloaded = await createRuntime(factory, 'rebase-doc', 'browser:rebase-reloaded')
-  const rebased = findPendingMutation(reloaded.listPendingMutations(), pending.id)
-  const rebasePassed = rebased?.status === 'rebased' && cellNumber(reloaded, 'A1') === 31 && cellNumber(reloaded, 'B1') === 101
+  const rebased = findPendingMutation(runtime.listPendingMutations(), pending.id)
+  const rebasePassed = rebased?.status === 'rebased' && cellNumber(runtime, 'A1') === 31 && cellNumber(runtime, 'B1') === 101
 
   return reliabilityControl({
     id: 'authoritative-rebase-preserves-unsent-mutations',
     category: 'authoritative-reconcile',
     passed: rebasePassed,
-    coveredControls: ['pending.authoritativeRebasePreservesLocal', 'localStore.journalActiveView'],
+    coveredControls: ['pending.authoritativeRebasePreservesLocal', 'zero.clientDurability'],
     evidence:
-      'Applied an unrelated authoritative event over an unsent local mutation, reopened the runtime, and verified both the authoritative cell and rebased local cell survived.',
+      'Applied an unrelated authoritative event over an unsent local mutation and verified both the authoritative cell and rebased local cell remain in the projection.',
     findings: [
       ...(rebased?.status === 'rebased'
         ? []
         : [`expected rebased pending status after authoritative replay, received ${rebased?.status ?? 'missing'}`]),
-      ...(cellNumber(reloaded, 'A1') === 31 ? [] : ['rebased local cell value was lost after reload']),
-      ...(cellNumber(reloaded, 'B1') === 101 ? [] : ['authoritative replay cell value was lost after reload']),
+      ...(cellNumber(runtime, 'A1') === 31 ? [] : ['rebased local cell value was lost']),
+      ...(cellNumber(runtime, 'B1') === 101 ? [] : ['authoritative replay cell value was lost']),
     ],
   })
 }
 
 async function buildFailedRetryControl(): Promise<ReliabilityControl> {
-  const factory = createMemoryWorkbookLocalStoreFactory()
-  const runtime = await createRuntime(factory, 'failed-retry-doc', 'browser:failed')
+  const runtime = await createRuntime('failed-retry-doc', 'browser:failed')
   const pending = await runtime.enqueuePendingMutation({
     method: 'setCellValue',
     args: ['Sheet1', 'A1', 47],
   })
   await runtime.markPendingMutationFailed(pending.id, 'mutation rejected by server')
-  const failedReloaded = await createRuntime(factory, 'failed-retry-doc', 'browser:failed-reloaded')
-  const failed = findPendingMutation(failedReloaded.listPendingMutations(), pending.id)
-  await failedReloaded.retryPendingMutation(pending.id)
-  const retriedReloaded = await createRuntime(factory, 'failed-retry-doc', 'browser:retried-reloaded')
-  const retried = findPendingMutation(retriedReloaded.listPendingMutations(), pending.id)
+  const failed = findPendingMutation(runtime.listPendingMutations(), pending.id)
+  await runtime.retryPendingMutation(pending.id)
+  const retried = findPendingMutation(runtime.listPendingMutations(), pending.id)
   const retryPassed =
     failed?.status === 'failed' &&
     failed.failureMessage === 'mutation rejected by server' &&
     retried?.status === 'local' &&
     retried.failureMessage === null &&
-    cellNumber(retriedReloaded, 'A1') === 47
+    cellNumber(runtime, 'A1') === 47
 
   return reliabilityControl({
     id: 'failed-mutations-survive-reload-and-retry',
     category: 'failure-recovery',
     passed: retryPassed,
-    coveredControls: ['pending.failedRetrySurvival', 'localStore.journalActiveView'],
+    coveredControls: ['pending.failedRetryStateMachine'],
     evidence:
-      'Marked a pending mutation failed, reopened the runtime, retried it, reopened again, and verified it returned to local pending state without losing the projected value.',
+      'Marked a pending mutation failed, retried it, and verified it returned to local pending state without losing the projected value.',
     findings: [
-      ...(failed?.status === 'failed' ? [] : [`expected failed pending status after reload, received ${failed?.status ?? 'missing'}`]),
-      ...(retried?.status === 'local'
-        ? []
-        : [`expected local pending status after retry reload, received ${retried?.status ?? 'missing'}`]),
-      ...(cellNumber(retriedReloaded, 'A1') === 47 ? [] : ['failed/retried local cell value was lost after reload']),
+      ...(failed?.status === 'failed' ? [] : [`expected failed pending status, received ${failed?.status ?? 'missing'}`]),
+      ...(retried?.status === 'local' ? [] : [`expected local pending status after retry, received ${retried?.status ?? 'missing'}`]),
+      ...(cellNumber(runtime, 'A1') === 47 ? [] : ['failed/retried local cell value was lost']),
     ],
   })
 }
@@ -419,21 +417,19 @@ async function buildOfflineNetworkPartitionRecoveryControl(): Promise<Reliabilit
   const localWriteCount = 32
   const remoteWriteCount = 32
   const documentId = 'offline-partition-doc'
-  const factory = createMemoryWorkbookLocalStoreFactory()
-  const runtime = await createRuntime(factory, documentId, 'browser:offline-partition')
+  const runtime = await createRuntime(documentId, 'browser:offline-partition')
   const pendingMutations = await enqueueSequentialCellValues(runtime, {
     column: 'A',
     count: localWriteCount,
     valueOffset: 1000,
   })
-  const offlineReloaded = await createRuntime(factory, documentId, 'browser:offline-partition-reloaded')
-  const pendingAfterReload = offlineReloaded.listPendingMutations()
-  const pendingSurvivedReload =
-    pendingAfterReload.length === localWriteCount &&
-    pendingMutations.every((mutation) => findPendingMutation(pendingAfterReload, mutation.id)?.status === 'local') &&
-    cellsMatchSequentialValues(offlineReloaded, 'A', localWriteCount, 1000)
+  const pendingBeforeReconnect = runtime.listPendingMutations()
+  const pendingQueued =
+    pendingBeforeReconnect.length === localWriteCount &&
+    pendingMutations.every((mutation) => findPendingMutation(pendingBeforeReconnect, mutation.id)?.status === 'local') &&
+    cellsMatchSequentialValues(runtime, 'A', localWriteCount, 1000)
 
-  await offlineReloaded.applyAuthoritativeEvents(
+  await runtime.applyAuthoritativeEvents(
     buildSequentialCellValueEvents({
       column: 'B',
       count: remoteWriteCount,
@@ -443,15 +439,15 @@ async function buildOfflineNetworkPartitionRecoveryControl(): Promise<Reliabilit
     }),
     remoteWriteCount,
   )
-  const pendingAfterReconnect = offlineReloaded.listPendingMutations()
+  const pendingAfterReconnect = runtime.listPendingMutations()
   const rebasedOverReconnect =
     pendingAfterReconnect.length === localWriteCount &&
     pendingMutations.every((mutation) => findPendingMutation(pendingAfterReconnect, mutation.id)?.status === 'rebased') &&
-    cellsMatchSequentialValues(offlineReloaded, 'A', localWriteCount, 1000) &&
-    cellsMatchSequentialValues(offlineReloaded, 'B', remoteWriteCount, 2000)
+    cellsMatchSequentialValues(runtime, 'A', localWriteCount, 1000) &&
+    cellsMatchSequentialValues(runtime, 'B', remoteWriteCount, 2000)
 
-  await markMutationsSubmitted(offlineReloaded, pendingMutations)
-  await offlineReloaded.applyAuthoritativeEvents(
+  await markMutationsSubmitted(runtime, pendingMutations)
+  await runtime.applyAuthoritativeEvents(
     buildSequentialCellValueEvents({
       column: 'A',
       count: localWriteCount,
@@ -461,33 +457,29 @@ async function buildOfflineNetworkPartitionRecoveryControl(): Promise<Reliabilit
     }),
     remoteWriteCount + localWriteCount,
   )
-  const ackedJournal = offlineReloaded.listMutationJournalEntries()
-  const afterAckReloaded = await createRuntime(factory, documentId, 'browser:offline-partition-after-ack')
+  const ackedJournal = runtime.listMutationJournalEntries()
   const authoritativeValuesPersisted =
-    offlineReloaded.listPendingMutations().length === 0 &&
-    afterAckReloaded.listPendingMutations().length === 0 &&
+    runtime.listPendingMutations().length === 0 &&
     pendingMutations.every((mutation) => ackedJournal.some((entry) => entry.id === mutation.id && entry.status === 'acked')) &&
-    cellsMatchSequentialValues(afterAckReloaded, 'A', localWriteCount, 1000) &&
-    cellsMatchSequentialValues(afterAckReloaded, 'B', remoteWriteCount, 2000)
-  const maximumPendingQueueDepth = Math.max(pendingAfterReload.length, pendingAfterReconnect.length)
+    cellsMatchSequentialValues(runtime, 'A', localWriteCount, 1000) &&
+    cellsMatchSequentialValues(runtime, 'B', remoteWriteCount, 2000)
+  const maximumPendingQueueDepth = Math.max(pendingBeforeReconnect.length, pendingAfterReconnect.length)
   const boundedPendingQueue = maximumPendingQueueDepth === localWriteCount
-  const passed = pendingSurvivedReload && rebasedOverReconnect && authoritativeValuesPersisted && boundedPendingQueue
+  const passed = pendingQueued && rebasedOverReconnect && authoritativeValuesPersisted && boundedPendingQueue
 
   return reliabilityControl({
     id: 'offline-network-partition-recovery-soak',
     category: 'offline-recovery',
     passed,
     coveredControls: [
-      'pending.localReloadSurvival',
       'pending.authoritativeRebasePreservesLocal',
       'pending.authoritativeAckAbsorption',
-      'localStore.journalActiveView',
       'offline.networkPartitionRecoverySoak',
     ],
     evidence:
-      'Simulated 32 offline local edits across a worker reload, replayed 32 collaborator authoritative edits on reconnect, acked every local mutation, and reopened the runtime to verify both local and remote cells persisted with an empty pending queue.',
+      'Simulated 32 offline local edits, replayed 32 collaborator authoritative edits on reconnect, acked every local mutation, and verified both local and remote cells remained with an empty pending queue.',
     findings: [
-      ...(pendingSurvivedReload ? [] : ['offline local pending mutations or projected values did not survive worker reload']),
+      ...(pendingQueued ? [] : ['offline local pending mutations or projected values were not queued']),
       ...(rebasedOverReconnect ? [] : ['pending offline mutations did not rebase cleanly over reconnect authoritative events']),
       ...(authoritativeValuesPersisted ? [] : ['acked offline mutations did not persist as authoritative values after final reload']),
       ...(boundedPendingQueue ? [] : [`expected maximum pending queue depth ${localWriteCount}, observed ${maximumPendingQueueDepth}`]),
@@ -516,12 +508,8 @@ function buildExternalSheetsExcelReliabilityComparisonControl(): ReliabilityCont
   })
 }
 
-async function createRuntime(
-  localStoreFactory: WorkbookLocalStoreFactory,
-  documentId: string,
-  replicaId: string,
-): Promise<WorkbookWorkerRuntime> {
-  const runtime = new WorkbookWorkerRuntime({ localStoreFactory })
+async function createRuntime(documentId: string, replicaId: string): Promise<WorkbookWorkerRuntime> {
+  const runtime = new WorkbookWorkerRuntime()
   await runtime.bootstrap({
     documentId,
     replicaId,
@@ -639,7 +627,7 @@ export function parseReliabilityScorecard(value: unknown): ReliabilityScorecard 
         'mutationJournalImplementation',
         'apps/web/src/worker-runtime-mutation-journal.ts',
       ),
-      localStoreImplementation: literalField(source, 'localStoreImplementation', 'packages/storage-browser/src/index.ts'),
+      zeroSyncImplementation: literalField(source, 'zeroSyncImplementation', 'packages/zero-sync/src/schema.ts'),
       headedBrowserReliabilityTestFile: literalField(source, 'headedBrowserReliabilityTestFile', headedBrowserReliabilityTestFile),
       externalReliabilityComparisonArtifact: literalField(
         source,

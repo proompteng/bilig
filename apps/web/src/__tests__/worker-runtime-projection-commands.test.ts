@@ -82,7 +82,7 @@ describe('worker runtime projection commands', () => {
       },
     }
     const commands = new WorkerRuntimeProjectionCommands({
-      markProjectionDivergedFromLocalStore() {
+      invalidateProjectionCache() {
         calls.push('mark')
       },
       async getProjectionEngine() {
@@ -108,12 +108,12 @@ describe('worker runtime projection commands', () => {
   })
 
   it('rejects invalid projected metadata sizes before marking divergence', async () => {
-    const markProjectionDivergedFromLocalStore = vi.fn()
+    const invalidateProjectionCache = vi.fn()
     const getProjectionEngine = vi.fn(async () => {
       throw new Error('Invalid projection sizes must not request the engine')
     })
     const commands = new WorkerRuntimeProjectionCommands({
-      markProjectionDivergedFromLocalStore,
+      invalidateProjectionCache,
       getProjectionEngine,
       getCell() {
         throw new Error('Invalid projection sizes must not read cells')
@@ -131,17 +131,17 @@ describe('worker runtime projection commands', () => {
     await expect(commands.updateColumnMetadata('Sheet1', 1, 1, Number.POSITIVE_INFINITY, null)).rejects.toThrow(
       'Invalid projected column width',
     )
-    expect(markProjectionDivergedFromLocalStore).not.toHaveBeenCalled()
+    expect(invalidateProjectionCache).not.toHaveBeenCalled()
     expect(getProjectionEngine).not.toHaveBeenCalled()
   })
 
   it('rejects invalid freeze pane counts before marking divergence', async () => {
-    const markProjectionDivergedFromLocalStore = vi.fn()
+    const invalidateProjectionCache = vi.fn()
     const getProjectionEngine = vi.fn(async () => {
       throw new Error('Invalid freeze panes must not request the engine')
     })
     const commands = new WorkerRuntimeProjectionCommands({
-      markProjectionDivergedFromLocalStore,
+      invalidateProjectionCache,
       getProjectionEngine,
       getCell() {
         throw new Error('Invalid freeze panes must not read cells')
@@ -157,14 +157,14 @@ describe('worker runtime projection commands', () => {
 
     await expect(commands.setFreezePane('Sheet1', 1.5, 0)).rejects.toThrow('Invalid projected freeze pane count')
     await expect(commands.setFreezePane('Sheet1', 1, Number.POSITIVE_INFINITY)).rejects.toThrow('Invalid projected freeze pane count')
-    expect(markProjectionDivergedFromLocalStore).not.toHaveBeenCalled()
+    expect(invalidateProjectionCache).not.toHaveBeenCalled()
     expect(getProjectionEngine).not.toHaveBeenCalled()
   })
 
   it('delegates autofit through normalized column width updates', async () => {
     const updateColumnMetadata = vi.fn()
     const commands = new WorkerRuntimeProjectionCommands({
-      markProjectionDivergedFromLocalStore: vi.fn(),
+      invalidateProjectionCache: vi.fn(),
       async getProjectionEngine() {
         return {
           workbook: {

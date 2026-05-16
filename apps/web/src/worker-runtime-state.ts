@@ -232,7 +232,7 @@ export function cloneWorkerRuntimeState(input: {
   localHistoryState?: WorkbookLocalHistoryStateLike | undefined
   authoritativeRevision?: number | undefined
   pendingMutationSummary?: WorkbookPendingMutationSummaryLike
-  localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
+  localPersistenceMode?: 'ephemeral'
 }): {
   workbookName: string
   sheets: WorkbookRuntimeSheetSnapshot[]
@@ -243,7 +243,7 @@ export function cloneWorkerRuntimeState(input: {
   localHistoryState: WorkbookLocalHistoryStateLike
   authoritativeRevision?: number | undefined
   pendingMutationSummary?: WorkbookPendingMutationSummaryLike
-  localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
+  localPersistenceMode?: 'ephemeral'
 } {
   const pendingMutationSummary = clonePendingMutationSummary(input.pendingMutationSummary)
   const sheets = cloneRuntimeSheets(input.sheets, input.sheetNames)
@@ -275,7 +275,7 @@ export function withExternalSyncState(
     localHistoryState?: WorkbookLocalHistoryStateLike | undefined
     authoritativeRevision?: number | undefined
     pendingMutationSummary?: WorkbookPendingMutationSummaryLike
-    localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
+    localPersistenceMode?: 'ephemeral'
   },
   externalSyncState: SyncState | null,
 ): {
@@ -288,7 +288,7 @@ export function withExternalSyncState(
   localHistoryState: WorkbookLocalHistoryStateLike
   authoritativeRevision?: number | undefined
   pendingMutationSummary?: WorkbookPendingMutationSummaryLike
-  localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
+  localPersistenceMode?: 'ephemeral'
 } {
   const nextState = cloneWorkerRuntimeState(state)
   nextState.syncState = externalSyncState ?? state.syncState
@@ -309,10 +309,7 @@ export function isWorkerRuntimeStateSnapshot(value: unknown): value is ReturnTyp
     typeof value['localHistoryState']['canRedo'] === 'boolean' &&
     (value['authoritativeRevision'] === undefined || isNonNegativeInteger(value['authoritativeRevision'])) &&
     (value['pendingMutationSummary'] === undefined || isPendingMutationSummarySnapshot(value['pendingMutationSummary'])) &&
-    (value['localPersistenceMode'] === undefined ||
-      value['localPersistenceMode'] === 'persistent' ||
-      value['localPersistenceMode'] === 'ephemeral' ||
-      value['localPersistenceMode'] === 'follower')
+    (value['localPersistenceMode'] === undefined || value['localPersistenceMode'] === 'ephemeral')
   )
 }
 
@@ -333,7 +330,7 @@ export function buildCachedWorkerRuntimeState(input: {
   localHistoryState: WorkbookLocalHistoryStateLike
   authoritativeRevision: number
   pendingMutationSummary: WorkbookPendingMutationSummaryLike
-  localPersistenceMode: 'persistent' | 'ephemeral' | 'follower'
+  localPersistenceMode: 'ephemeral'
 }) {
   return withExternalSyncState(
     {
@@ -353,7 +350,7 @@ export function buildWorkerRuntimeStateFromBootstrap(input: {
   sheetNames: readonly string[]
   definedNames?: readonly WorkbookDefinedNameSnapshot[]
   authoritativeRevision?: number | undefined
-  localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
+  localPersistenceMode?: 'ephemeral'
 }): {
   workbookName: string
   sheets: WorkbookRuntimeSheetSnapshot[]
@@ -364,7 +361,7 @@ export function buildWorkerRuntimeStateFromBootstrap(input: {
   localHistoryState: WorkbookLocalHistoryStateLike
   authoritativeRevision?: number | undefined
   pendingMutationSummary?: WorkbookPendingMutationSummaryLike
-  localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
+  localPersistenceMode?: 'ephemeral'
 } {
   const sheets = cloneRuntimeSheets(input.sheets, input.sheetNames)
   return {
@@ -390,7 +387,7 @@ export function buildWorkerRuntimeStateFromEngine(engine: SpreadsheetEngine & Wo
   localHistoryState: WorkbookLocalHistoryStateLike
   authoritativeRevision?: number | undefined
   pendingMutationSummary?: WorkbookPendingMutationSummaryLike
-  localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
+  localPersistenceMode?: 'ephemeral'
 } {
   const sheets = listOrderedSheets(engine.workbook)
   return {

@@ -14,7 +14,7 @@ function ToolbarHarness(props: {
   const { ribbon } = useWorkbookToolbar({
     connectionStateName: 'connected',
     runtimeReady: true,
-    localPersistenceMode: 'persistent',
+    localPersistenceMode: 'ephemeral',
     remoteSyncAvailable: true,
     zeroConfigured: true,
     zeroHealthReady: true,

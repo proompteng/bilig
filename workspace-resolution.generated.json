@@ -67,10 +67,6 @@
     "packageDir": "packages/runtime-kernel",
     "sourceEntry": "packages/runtime-kernel/src/index.ts"
   },
-  "@bilig/storage-browser": {
-    "packageDir": "packages/storage-browser",
-    "sourceEntry": "packages/storage-browser/src/index.ts"
-  },
   "@bilig/storage-server": {
     "packageDir": "packages/storage-server",
     "sourceEntry": "packages/storage-server/src/index.ts"

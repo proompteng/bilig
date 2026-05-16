@@ -1,5 +1,4 @@
 import { performance } from 'node:perf_hooks'
-import { SpreadsheetEngine } from '../packages/core/src/engine.js'
 import { formatAddress } from '../packages/formula/src/addressing.js'
 import {
   buildWorkbookBenchmarkCorpus,
@@ -7,14 +6,12 @@ import {
   type WorkbookBenchmarkCorpusFamily,
   type WorkbookBenchmarkCorpusId,
 } from '../packages/benchmarks/src/workbook-corpus.js'
-import { createMemoryWorkbookLocalStoreFactory } from '../packages/storage-browser/src/index.js'
 import { decodeViewportPatch } from '../packages/worker-transport/src/index.js'
 import { buildWorkbookSnapshot } from '../packages/benchmarks/src/generate-workbook.js'
 import { measureMemory, sampleMemory, type MemoryMeasurement } from '../packages/benchmarks/src/metrics.js'
 import type { AuthoritativeWorkbookEventRecord } from '../packages/zero-sync/src/index.js'
-import { buildWorkbookLocalAuthoritativeBase } from '../apps/web/src/worker-local-base.js'
-import { buildWorkbookLocalProjectionOverlay } from '../apps/web/src/worker-local-overlay.js'
 import { WorkbookWorkerRuntime } from '../apps/web/src/worker-runtime.js'
+import type { WorkbookSnapshot } from '../packages/protocol/src/index.js'
 
 interface WorkerWarmStartBenchmarkResult {
   scenario: 'worker-warm-start'
@@ -46,7 +43,7 @@ interface WorkerReconnectCatchUpBenchmarkResult {
 
 interface PersistedWorkerSeed {
   readonly documentId: string
-  readonly localStoreFactory: ReturnType<typeof createMemoryWorkbookLocalStoreFactory>
+  readonly snapshot: WorkbookSnapshot
   readonly materializedCells: number
   readonly corpusCaseId: WorkbookBenchmarkCorpusId | null
   readonly corpusFamily: WorkbookBenchmarkCorpusFamily | null
@@ -96,30 +93,9 @@ async function seedWorkerLocalStore(documentId: string, materializedCells: numbe
     colStart: 0,
     colEnd: 1,
   } as const
-  const localStoreFactory = createMemoryWorkbookLocalStoreFactory()
-  const seedEngine = new SpreadsheetEngine({ workbookName: documentId, replicaId: 'seed' })
-  await seedEngine.ready()
-  seedEngine.importSnapshot(buildWorkbookSnapshot(materializedCells))
-
-  const store = await localStoreFactory.open(documentId)
-  await store.persistProjectionState({
-    state: {
-      snapshot: seedEngine.exportSnapshot(),
-      replica: seedEngine.exportReplicaSnapshot(),
-      authoritativeRevision: 0,
-      appliedPendingLocalSeq: 0,
-    },
-    authoritativeBase: buildWorkbookLocalAuthoritativeBase(seedEngine),
-    projectionOverlay: buildWorkbookLocalProjectionOverlay({
-      authoritativeEngine: seedEngine,
-      projectionEngine: seedEngine,
-    }),
-  })
-  store.close()
-
   return {
     documentId,
-    localStoreFactory,
+    snapshot: buildWorkbookSnapshot(materializedCells),
     materializedCells,
     corpusCaseId: null,
     corpusFamily: null,
@@ -129,30 +105,9 @@ async function seedWorkerLocalStore(documentId: string, materializedCells: numbe
 
 async function seedWorkerLocalStoreFromCorpus(documentId: string, corpusId: WorkbookBenchmarkCorpusId): Promise<PersistedWorkerSeed> {
   const corpus = buildWorkbookBenchmarkCorpus(corpusId)
-  const localStoreFactory = createMemoryWorkbookLocalStoreFactory()
-  const seedEngine = new SpreadsheetEngine({ workbookName: documentId, replicaId: 'seed' })
-  await seedEngine.ready()
-  seedEngine.importSnapshot(corpus.snapshot)
-
-  const store = await localStoreFactory.open(documentId)
-  await store.persistProjectionState({
-    state: {
-      snapshot: seedEngine.exportSnapshot(),
-      replica: seedEngine.exportReplicaSnapshot(),
-      authoritativeRevision: 0,
-      appliedPendingLocalSeq: 0,
-    },
-    authoritativeBase: buildWorkbookLocalAuthoritativeBase(seedEngine),
-    projectionOverlay: buildWorkbookLocalProjectionOverlay({
-      authoritativeEngine: seedEngine,
-      projectionEngine: seedEngine,
-    }),
-  })
-  store.close()
-
   return {
     documentId,
-    localStoreFactory,
+    snapshot: corpus.snapshot,
     materializedCells: corpus.materializedCellCount,
     corpusCaseId: corpus.id,
     corpusFamily: corpus.family,
@@ -167,7 +122,7 @@ export async function runWorkerWarmStartBenchmark(
     typeof input === 'string'
       ? await seedWorkerLocalStoreFromCorpus(`worker-warm-start-${input}-${Date.now()}-${Math.random().toString(36).slice(2)}`, input)
       : await seedWorkerLocalStore(`worker-warm-start-${String(input)}-${Date.now()}-${Math.random().toString(36).slice(2)}`, input)
-  const runtime = new WorkbookWorkerRuntime({ localStoreFactory: seed.localStoreFactory })
+  const runtime = new WorkbookWorkerRuntime()
 
   const memoryBefore = sampleMemory()
   const started = performance.now()
@@ -175,6 +130,11 @@ export async function runWorkerWarmStartBenchmark(
     documentId: seed.documentId,
     replicaId: 'browser:test',
     persistState: true,
+  })
+  await runtime.installAuthoritativeSnapshot({
+    snapshot: seed.snapshot,
+    authoritativeRevision: 0,
+    mode: 'bootstrap',
   })
 
   let viewportCellCount = 0
@@ -200,12 +160,17 @@ export async function runWorkerWarmStartBenchmark(
 export async function runWorkerVisibleEditBenchmark(materializedCells = 10_000): Promise<WorkerVisibleEditBenchmarkResult> {
   const documentId = `worker-visible-edit-${materializedCells}-${Date.now()}-${Math.random().toString(36).slice(2)}`
   const seed = await seedWorkerLocalStore(documentId, materializedCells)
-  const runtime = new WorkbookWorkerRuntime({ localStoreFactory: seed.localStoreFactory })
+  const runtime = new WorkbookWorkerRuntime()
 
   await runtime.bootstrap({
     documentId,
     replicaId: 'browser:test',
     persistState: true,
+  })
+  await runtime.installAuthoritativeSnapshot({
+    snapshot: seed.snapshot,
+    authoritativeRevision: 0,
+    mode: 'bootstrap',
   })
 
   let firstPatch = true
@@ -261,12 +226,17 @@ export async function runWorkerReconnectCatchUpBenchmark(
 ): Promise<WorkerReconnectCatchUpBenchmarkResult> {
   const documentId = `worker-reconnect-${materializedCells}-${pendingMutationCount}-${Date.now()}-${Math.random().toString(36).slice(2)}`
   const seed = await seedWorkerLocalStore(documentId, materializedCells)
-  const runtime = new WorkbookWorkerRuntime({ localStoreFactory: seed.localStoreFactory })
+  const runtime = new WorkbookWorkerRuntime()
 
   await runtime.bootstrap({
     documentId,
     replicaId: 'browser:test',
     persistState: true,
+  })
+  await runtime.installAuthoritativeSnapshot({
+    snapshot: seed.snapshot,
+    authoritativeRevision: 0,
+    mode: 'bootstrap',
   })
 
   const pendingMutations = new Array<Awaited<ReturnType<typeof runtime.enqueuePendingMutation>>>()
