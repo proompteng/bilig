@@ -98,10 +98,19 @@ describe('browser test phases', () => {
       resolveBrowserTestPhases({
         playwrightArgs: [],
         env: {
-          BILIG_BROWSER_INCLUDE_PERF: 'treu',
+          BILIG_BROWSER_INCLUDE_PERF: 'TRUE',
         },
       }),
-    ).toThrow('BILIG_BROWSER_INCLUDE_PERF must be a boolean value, got treu')
+    ).toThrow('BILIG_BROWSER_INCLUDE_PERF must be "1", "true", "0", or "false" when set, got TRUE')
+
+    expect(() =>
+      resolveBrowserTestPhases({
+        playwrightArgs: [],
+        env: {
+          BILIG_BROWSER_CI_SMOKE: ' yes ',
+        },
+      }),
+    ).toThrow('BILIG_BROWSER_CI_SMOKE must be "1", "true", "0", or "false" when set, got  yes ')
   })
 
   it('rejects malformed browser worker counts instead of silently using the default', () => {
