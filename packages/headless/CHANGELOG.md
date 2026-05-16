@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.16.21
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.16.20
+- Manual override: no
+
+## Fixes
+- perf(headless): reuse matrix plan numeric shape (4c9fb63f)
+
+## Internal runtime changes
+- chore(release): refresh headless footprint evidence (c0586bb2)
+
 ## 0.16.20
 
 - Release type: patch
