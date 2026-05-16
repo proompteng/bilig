@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { listWorkbookThreadWorkflowRuns, upsertWorkbookWorkflowRun } from '../workbook-workflow-run-store.js'
+import {
+  ensureWorkbookWorkflowRunSchema,
+  listWorkbookThreadWorkflowRuns,
+  upsertWorkbookWorkflowRun,
+} from '../workbook-workflow-run-store.js'
 import type { QueryResultRow, Queryable } from '../store.js'
 
 interface RecordedQuery {
@@ -103,6 +107,40 @@ function createWorkflowRun() {
 }
 
 describe('workbook-workflow-run-store', () => {
+  it('migrates legacy workflow run rows with artifact snapshot columns', async () => {
+    const queryable = new FakeQueryable()
+
+    await ensureWorkbookWorkflowRunSchema(queryable)
+
+    const stepsColumnIndex = queryable.calls.findIndex((call) => call.text.includes('ADD COLUMN IF NOT EXISTS steps_json'))
+    const artifactColumnIndex = queryable.calls.findIndex((call) => call.text.includes('ADD COLUMN IF NOT EXISTS artifact_json'))
+    expect(stepsColumnIndex).toBeGreaterThan(-1)
+    expect(artifactColumnIndex).toBeGreaterThan(stepsColumnIndex)
+  })
+
+  it('backfills legacy durable artifact ownership before indexing workflow artifacts', async () => {
+    const queryable = new FakeQueryable()
+
+    await ensureWorkbookWorkflowRunSchema(queryable)
+
+    const workbookColumnIndex = queryable.calls.findIndex(
+      (call) => call.text.includes('ALTER TABLE workbook_workflow_artifact') && call.text.includes('ADD COLUMN IF NOT EXISTS workbook_id'),
+    )
+    const backfillIndex = queryable.calls.findIndex(
+      (call) =>
+        call.text.includes('UPDATE workbook_workflow_artifact AS artifact') && call.text.includes('FROM workbook_workflow_run AS run'),
+    )
+    const updatedAtColumnIndex = queryable.calls.findIndex(
+      (call) =>
+        call.text.includes('ALTER TABLE workbook_workflow_artifact') && call.text.includes('ADD COLUMN IF NOT EXISTS updated_at_unix_ms'),
+    )
+    const artifactIndex = queryable.calls.findIndex((call) => call.text.includes('workbook_workflow_artifact_run_idx'))
+    expect(workbookColumnIndex).toBeGreaterThan(-1)
+    expect(backfillIndex).toBeGreaterThan(workbookColumnIndex)
+    expect(updatedAtColumnIndex).toBeGreaterThan(backfillIndex)
+    expect(artifactIndex).toBeGreaterThan(updatedAtColumnIndex)
+  })
+
   it('persists workflow artifacts in durable rows', async () => {
     const queryable = new FakeQueryable()
 

@@ -364,6 +364,25 @@ export async function ensureWorkbookWorkflowRunSchema(db: Queryable): Promise<vo
       ADD COLUMN IF NOT EXISTS steps_json JSONB NOT NULL DEFAULT '[]'::jsonb
   `)
   await db.query(`
+    ALTER TABLE workbook_workflow_run
+      ADD COLUMN IF NOT EXISTS artifact_json JSONB
+  `)
+  await db.query(`
+    ALTER TABLE workbook_workflow_artifact
+      ADD COLUMN IF NOT EXISTS workbook_id TEXT
+  `)
+  await db.query(`
+    UPDATE workbook_workflow_artifact AS artifact
+    SET workbook_id = run.workbook_id
+    FROM workbook_workflow_run AS run
+    WHERE artifact.run_id = run.run_id
+      AND (artifact.workbook_id IS NULL OR artifact.workbook_id = '')
+  `)
+  await db.query(`
+    ALTER TABLE workbook_workflow_artifact
+      ADD COLUMN IF NOT EXISTS updated_at_unix_ms BIGINT NOT NULL DEFAULT 0
+  `)
+  await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_workflow_run_thread_updated_idx
       ON workbook_workflow_run (workbook_id, thread_id, updated_at_unix_ms DESC)
   `)
