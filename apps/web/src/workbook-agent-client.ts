@@ -24,9 +24,20 @@ function resolvePayloadMessage(payload: unknown, fallback: string): string {
   return isRecord(payload) && typeof payload['message'] === 'string' ? payload['message'] : fallback
 }
 
+async function readJsonPayload(response: Response): Promise<unknown> {
+  try {
+    return (await response.json()) as unknown
+  } catch {
+    if (!response.ok) {
+      return null
+    }
+    throw new Error('Workbook agent request returned malformed JSON')
+  }
+}
+
 async function fetchJson(input: RequestInfo | URL, init?: RequestInit): Promise<unknown> {
   const response = init ? await fetch(input, init) : await fetch(input)
-  const payload = (await response.json()) as unknown
+  const payload = await readJsonPayload(response)
   if (!response.ok) {
     throw new Error(resolvePayloadMessage(payload, `Workbook agent request failed with status ${response.status}`))
   }

@@ -91,6 +91,40 @@ describe('workbook agent client', () => {
     await expect(client.sendPrompt('thr-1', 'Continue working', createContext())).rejects.toThrow('Prompt rejected by server')
   })
 
+  it('surfaces fallback status when failed responses are not JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('service unavailable', {
+            status: 503,
+            headers: { 'content-type': 'text/plain' },
+          }),
+      ),
+    )
+
+    const client = createWorkbookAgentClient('doc-1')
+    await expect(client.sendPrompt('thr-1', 'Continue working', createContext())).rejects.toThrow(
+      'Workbook agent request failed with status 503',
+    )
+  })
+
+  it('surfaces malformed JSON for successful responses', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('{', {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    )
+
+    const client = createWorkbookAgentClient('doc-1')
+    await expect(client.loadThreadSnapshot('thr-1')).rejects.toThrow('Workbook agent request returned malformed JSON')
+  })
+
   it('rejects failed context sync responses instead of treating them as synced', async () => {
     vi.stubGlobal(
       'fetch',
