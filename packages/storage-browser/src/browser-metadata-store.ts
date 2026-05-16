@@ -21,6 +21,37 @@ function getLocalStorage(): Storage | null {
   }
 }
 
+function readLocalStorageItem(storage: Storage | null, key: string): string | null {
+  if (!storage) {
+    return null
+  }
+  try {
+    return storage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeLocalStorageItem(storage: Storage | null, key: string, value: string): boolean {
+  if (!storage) {
+    return false
+  }
+  try {
+    storage.setItem(key, value)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function removeLocalStorageItem(storage: Storage | null, key: string): void {
+  try {
+    storage?.removeItem(key)
+  } catch {
+    // Ignore storage cleanup failures and keep the IndexedDB fallback usable.
+  }
+}
+
 async function openDatabase(databaseName: string, storeName: string): Promise<IDBDatabase | null> {
   const scope = globalThis as typeof globalThis & { indexedDB?: IDBFactory }
   if (typeof scope.indexedDB === 'undefined') {
@@ -143,7 +174,7 @@ export function createBrowserMetadataStore(options: BrowserMetadataStoreOptions 
   return {
     async loadJson<T>(key: string, parser: (value: unknown) => T | null): Promise<T | null> {
       const storage = getLocalStorage()
-      const cachedValue = storage?.getItem(key) ?? null
+      const cachedValue = readLocalStorageItem(storage, key)
       if (cachedValue) {
         try {
           const parsed = parser(JSON.parse(cachedValue) as unknown)
@@ -151,9 +182,9 @@ export function createBrowserMetadataStore(options: BrowserMetadataStoreOptions 
             void writeToStore(databaseName, storeName, key, cachedValue)
             return parsed
           }
-          storage?.removeItem(key)
+          removeLocalStorageItem(storage, key)
         } catch {
-          storage?.removeItem(key)
+          removeLocalStorageItem(storage, key)
         }
       }
 
@@ -173,14 +204,13 @@ export function createBrowserMetadataStore(options: BrowserMetadataStoreOptions 
       const storage = getLocalStorage()
       const globalConsole = globalThis.console
       if (storage) {
-        try {
-          if (serialized.length <= WRITE_THROUGH_LOCALSTORAGE_LIMIT_BYTES) {
-            storage.setItem(key, serialized)
-          } else {
-            storage.removeItem(key)
+        if (serialized.length <= WRITE_THROUGH_LOCALSTORAGE_LIMIT_BYTES) {
+          const cached = writeLocalStorageItem(storage, key, serialized)
+          if (!cached) {
+            removeLocalStorageItem(storage, key)
           }
-        } catch {
-          storage.removeItem(key)
+        } else {
+          removeLocalStorageItem(storage, key)
         }
       }
 
@@ -197,7 +227,7 @@ export function createBrowserMetadataStore(options: BrowserMetadataStoreOptions 
     },
     async remove(key: string): Promise<void> {
       await removeFromStore(databaseName, storeName, key)
-      getLocalStorage()?.removeItem(key)
+      removeLocalStorageItem(getLocalStorage(), key)
     },
   }
 }
