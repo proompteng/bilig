@@ -45,6 +45,45 @@ class FakeQueryable implements Queryable, WorkbookChatThreadStoreConnection {
   }
 }
 
+class FakeTransactionClient implements Queryable {
+  readonly calls: RecordedQuery[] = []
+  releaseCount = 0
+
+  constructor(private readonly failOnText: string | null = null) {}
+
+  async query<T extends QueryResultRow = QueryResultRow>(text: string, values?: unknown[]): Promise<{ rows: T[] }> {
+    this.calls.push({ text, values })
+    if (this.failOnText && text.includes(this.failOnText)) {
+      throw new Error(`failed query: ${this.failOnText}`)
+    }
+    return { rows: [] }
+  }
+
+  release(): void {
+    this.releaseCount += 1
+  }
+}
+
+class FakeTransactionalQueryable implements Queryable {
+  readonly calls: RecordedQuery[] = []
+  readonly client: FakeTransactionClient
+  connectCount = 0
+
+  constructor(failOnText: string | null = null) {
+    this.client = new FakeTransactionClient(failOnText)
+  }
+
+  async query<T extends QueryResultRow = QueryResultRow>(text: string, values?: unknown[]): Promise<{ rows: T[] }> {
+    this.calls.push({ text, values })
+    return { rows: [] as T[] }
+  }
+
+  async connect(): Promise<FakeTransactionClient> {
+    this.connectCount += 1
+    return this.client
+  }
+}
+
 function createThreadState() {
   return {
     documentId: 'doc-1',
@@ -222,6 +261,35 @@ describe('workbook-chat-thread-store', () => {
     ).toBe(false)
   })
 
+  it('reconciles denormalized thread summaries from durable child tables during schema bootstrap', async () => {
+    const queryable = new FakeQueryable()
+
+    await ensureWorkbookChatThreadSchema(queryable)
+
+    const reviewTableIndex = queryable.calls.findIndex((call) =>
+      call.text.includes('CREATE TABLE IF NOT EXISTS workbook_review_queue_item'),
+    )
+    const reconcileIndex = queryable.calls.findIndex((call) => call.text.includes('WITH entry_stats AS'))
+    const indexIndex = queryable.calls.findIndex((call) =>
+      call.text.includes('CREATE INDEX IF NOT EXISTS workbook_chat_thread_document_actor_updated_idx'),
+    )
+    expect(reviewTableIndex).toBeGreaterThanOrEqual(0)
+    expect(reconcileIndex).toBeGreaterThan(reviewTableIndex)
+    expect(indexIndex).toBeGreaterThan(reconcileIndex)
+
+    const reconcileQuery = queryable.calls[reconcileIndex]?.text ?? ''
+    expect(reconcileQuery).toContain('FROM workbook_chat_item')
+    expect(reconcileQuery).toContain('FROM workbook_review_queue_item')
+    expect(reconcileQuery).toContain('COUNT(*)::bigint AS entry_count')
+    expect(reconcileQuery).toContain('COUNT(*)::bigint AS review_queue_item_count')
+    expect(reconcileQuery).toContain('ARRAY_AGG(text ORDER BY sort_order DESC, entry_id DESC)')
+    expect(reconcileQuery).toContain('btrim(text) <>')
+    expect(reconcileQuery).toContain('UPDATE workbook_chat_thread AS thread')
+    expect(reconcileQuery).toContain('IS DISTINCT FROM thread_stats.entry_count')
+    expect(reconcileQuery).toContain('IS DISTINCT FROM thread_stats.review_queue_item_count')
+    expect(reconcileQuery).toContain('IS DISTINCT FROM thread_stats.latest_entry_text')
+  })
+
   it('persists thread metadata, timeline items, and review queue rows', async () => {
     const queryable = new FakeQueryable()
     const state = createThreadState()
@@ -264,6 +332,36 @@ describe('workbook-chat-thread-store', () => {
     expect(toolInsert?.values?.[6]).toBe('read_workbook')
     expect(toolInsert?.values?.[8]).toBe('{"sheetName":"Sheet1"}')
     expect(toolInsert?.values?.[9]).toBe('{"summary":"Loaded workbook"}')
+  })
+
+  it('saves thread snapshots atomically when the queryable supports transactions', async () => {
+    const queryable = new FakeTransactionalQueryable()
+    const state = createThreadState()
+
+    await saveWorkbookAgentThreadState(queryable, state)
+
+    expect(queryable.connectCount).toBe(1)
+    expect(queryable.calls).toEqual([])
+    expect(queryable.client.releaseCount).toBe(1)
+    expect(queryable.client.calls[0]?.text).toBe('BEGIN')
+    expect(queryable.client.calls.at(-1)?.text).toBe('COMMIT')
+    expect(queryable.client.calls.some((call) => call.text.includes('INSERT INTO workbook_chat_thread'))).toBe(true)
+    expect(queryable.client.calls.some((call) => call.text.includes('DELETE FROM workbook_chat_item'))).toBe(true)
+    expect(queryable.client.calls.some((call) => call.text.includes('INSERT INTO workbook_review_queue_item'))).toBe(true)
+  })
+
+  it('rolls back the whole snapshot save when a transactional child write fails', async () => {
+    const queryable = new FakeTransactionalQueryable('INSERT INTO workbook_review_queue_item')
+
+    await expect(saveWorkbookAgentThreadState(queryable, createThreadState())).rejects.toThrow(
+      'failed query: INSERT INTO workbook_review_queue_item',
+    )
+
+    expect(queryable.connectCount).toBe(1)
+    expect(queryable.client.releaseCount).toBe(1)
+    expect(queryable.client.calls[0]?.text).toBe('BEGIN')
+    expect(queryable.client.calls.at(-1)?.text).toBe('ROLLBACK')
+    expect(queryable.client.calls.some((call) => call.text.includes('COMMIT'))).toBe(false)
   })
 
   it('dedupes duplicate entry ids before inserting durable chat items', async () => {

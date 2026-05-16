@@ -48,12 +48,49 @@ export interface WorkbookChatThreadStoreConnection extends Queryable {
   }): Promise<readonly ZeroWorkbookChatThreadRow[]>
 }
 
+interface TransactionClient extends Queryable {
+  release(): void
+}
+
+interface TransactionalQueryable extends Queryable {
+  connect(): Promise<TransactionClient>
+}
+
 export function createWorkbookChatThreadStoreConnection(db: Queryable & ZeroQueryRunner): WorkbookChatThreadStoreConnection {
   return {
     query: (text, values) => db.query(text, values),
     listWorkbookChatThreadRows: ({ actorUserId, documentId }) =>
       db.run(queries.workbookChatThread.byWorkbook.fn({ args: { documentId }, ctx: { userID: actorUserId } })),
   }
+}
+
+function isTransactionalQueryable(db: Queryable): db is TransactionalQueryable {
+  return 'connect' in db && typeof db.connect === 'function'
+}
+
+async function runAtomically(db: Queryable, task: (transactionDb: Queryable) => Promise<void>): Promise<void> {
+  if (!isTransactionalQueryable(db)) {
+    await task(db)
+    return
+  }
+  const client = await db.connect()
+  try {
+    await client.query('BEGIN')
+    await task(client)
+    await client.query('COMMIT')
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+async function runSequentially<T>(items: readonly T[], task: (item: T, index: number) => Promise<void>): Promise<void> {
+  await items.reduce<Promise<void>>(async (previous, item, index) => {
+    await previous
+    await task(item, index)
+  }, Promise.resolve())
 }
 
 function dedupeTimelineEntries(entries: readonly WorkbookAgentTimelineEntry[]): WorkbookAgentTimelineEntry[] {
@@ -225,6 +262,7 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       PRIMARY KEY (workbook_id, thread_id, actor_user_id, review_item_id)
     )
   `)
+  await reconcileWorkbookChatThreadSummaryColumns(db)
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_chat_thread_document_actor_updated_idx
       ON workbook_chat_thread (workbook_id, actor_user_id, updated_at_unix_ms DESC)
@@ -239,7 +277,71 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
   `)
 }
 
+async function reconcileWorkbookChatThreadSummaryColumns(db: Queryable): Promise<void> {
+  await db.query(`
+    WITH entry_stats AS (
+      SELECT
+        workbook_id,
+        thread_id,
+        actor_user_id,
+        COUNT(*)::bigint AS entry_count,
+        (ARRAY_AGG(text ORDER BY sort_order DESC, entry_id DESC) FILTER (
+          WHERE text IS NOT NULL AND btrim(text) <> ''
+        ))[1] AS latest_entry_text
+      FROM workbook_chat_item
+      GROUP BY workbook_id, thread_id, actor_user_id
+    ),
+    review_stats AS (
+      SELECT
+        workbook_id,
+        thread_id,
+        actor_user_id,
+        COUNT(*)::bigint AS review_queue_item_count
+      FROM workbook_review_queue_item
+      GROUP BY workbook_id, thread_id, actor_user_id
+    ),
+    thread_stats AS (
+      SELECT
+        thread.workbook_id,
+        thread.thread_id,
+        thread.actor_user_id,
+        COALESCE(entry_stats.entry_count, 0)::bigint AS entry_count,
+        COALESCE(review_stats.review_queue_item_count, 0)::bigint AS review_queue_item_count,
+        entry_stats.latest_entry_text
+      FROM workbook_chat_thread AS thread
+      LEFT JOIN entry_stats
+        ON entry_stats.workbook_id = thread.workbook_id
+        AND entry_stats.thread_id = thread.thread_id
+        AND entry_stats.actor_user_id = thread.actor_user_id
+      LEFT JOIN review_stats
+        ON review_stats.workbook_id = thread.workbook_id
+        AND review_stats.thread_id = thread.thread_id
+        AND review_stats.actor_user_id = thread.actor_user_id
+    )
+    UPDATE workbook_chat_thread AS thread
+    SET
+      entry_count = thread_stats.entry_count,
+      review_queue_item_count = thread_stats.review_queue_item_count,
+      latest_entry_text = thread_stats.latest_entry_text
+    FROM thread_stats
+    WHERE thread.workbook_id = thread_stats.workbook_id
+      AND thread.thread_id = thread_stats.thread_id
+      AND thread.actor_user_id = thread_stats.actor_user_id
+      AND (
+        thread.entry_count IS DISTINCT FROM thread_stats.entry_count
+        OR thread.review_queue_item_count IS DISTINCT FROM thread_stats.review_queue_item_count
+        OR thread.latest_entry_text IS DISTINCT FROM thread_stats.latest_entry_text
+      )
+  `)
+}
+
 export async function saveWorkbookAgentThreadState(db: Queryable, record: WorkbookAgentThreadStateRecord): Promise<void> {
+  await runAtomically(db, async (transactionDb) => {
+    await persistWorkbookAgentThreadState(transactionDb, record)
+  })
+}
+
+async function persistWorkbookAgentThreadState(db: Queryable, record: WorkbookAgentThreadStateRecord): Promise<void> {
   const persistedEntries = dedupeTimelineEntries(record.entries)
   const latestEntryText =
     [...persistedEntries].toReversed().find((entry) => typeof entry.text === 'string' && entry.text.trim().length > 0)?.text ?? null
@@ -295,10 +397,9 @@ export async function saveWorkbookAgentThreadState(db: Queryable, record: Workbo
     `,
     [record.documentId, record.threadId, record.actorUserId],
   )
-  await Promise.all(
-    persistedEntries.map(async (entry, index) => {
-      await db.query(
-        `
+  await runSequentially(persistedEntries, async (entry, index) => {
+    await db.query(
+      `
           INSERT INTO workbook_chat_item (
             workbook_id,
             thread_id,
@@ -333,27 +434,25 @@ export async function saveWorkbookAgentThreadState(db: Queryable, record: Workbo
             success = EXCLUDED.success,
             citations_json = EXCLUDED.citations_json
         `,
-        [
-          record.documentId,
-          record.threadId,
-          record.actorUserId,
-          entry.id,
-          index,
-          entry.turnId,
-          entry.kind,
-          entry.text,
-          entry.phase,
-          normalizeTimelineToolName(entry.toolName),
-          entry.toolStatus,
-          entry.argumentsText,
-          entry.outputText,
-          entry.success,
-          JSON.stringify(entry.citations),
-        ],
-      )
-      if (!hasToolCallState(entry)) {
-        return
-      }
+      [
+        record.documentId,
+        record.threadId,
+        record.actorUserId,
+        entry.id,
+        index,
+        entry.turnId,
+        entry.kind,
+        entry.text,
+        entry.phase,
+        normalizeTimelineToolName(entry.toolName),
+        entry.toolStatus,
+        entry.argumentsText,
+        entry.outputText,
+        entry.success,
+        JSON.stringify(entry.citations),
+      ],
+    )
+    if (hasToolCallState(entry)) {
       await db.query(
         `
           INSERT INTO workbook_chat_tool_call (
@@ -396,8 +495,8 @@ export async function saveWorkbookAgentThreadState(db: Queryable, record: Workbo
           entry.success,
         ],
       )
-    }),
-  )
+    }
+  })
   await db.query(
     `
       DELETE FROM workbook_review_queue_item
@@ -405,10 +504,9 @@ export async function saveWorkbookAgentThreadState(db: Queryable, record: Workbo
     `,
     [record.documentId, record.threadId, record.actorUserId],
   )
-  await Promise.all(
-    record.reviewQueueItems.map(async (reviewItem) => {
-      await db.query(
-        `
+  await runSequentially(record.reviewQueueItems, async (reviewItem) => {
+    await db.query(
+      `
           INSERT INTO workbook_review_queue_item (
             workbook_id,
             thread_id,
@@ -436,32 +534,31 @@ export async function saveWorkbookAgentThreadState(db: Queryable, record: Workbo
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18::jsonb, $19::jsonb, $20, $21::jsonb
           )
         `,
-        [
-          record.documentId,
-          record.threadId,
-          record.actorUserId,
-          reviewItem.id,
-          reviewItem.turnId,
-          reviewItem.goalText,
-          reviewItem.summary,
-          reviewItem.scope,
-          reviewItem.riskClass,
-          reviewItem.reviewMode,
-          reviewItem.ownerUserId,
-          reviewItem.status,
-          reviewItem.decidedByUserId,
-          reviewItem.decidedAtUnixMs,
-          reviewItem.baseRevision,
-          reviewItem.createdAtUnixMs,
-          JSON.stringify(reviewItem.context),
-          JSON.stringify(reviewItem.commands),
-          JSON.stringify(reviewItem.affectedRanges),
-          reviewItem.estimatedAffectedCells,
-          JSON.stringify(reviewItem.recommendations),
-        ],
-      )
-    }),
-  )
+      [
+        record.documentId,
+        record.threadId,
+        record.actorUserId,
+        reviewItem.id,
+        reviewItem.turnId,
+        reviewItem.goalText,
+        reviewItem.summary,
+        reviewItem.scope,
+        reviewItem.riskClass,
+        reviewItem.reviewMode,
+        reviewItem.ownerUserId,
+        reviewItem.status,
+        reviewItem.decidedByUserId,
+        reviewItem.decidedAtUnixMs,
+        reviewItem.baseRevision,
+        reviewItem.createdAtUnixMs,
+        JSON.stringify(reviewItem.context),
+        JSON.stringify(reviewItem.commands),
+        JSON.stringify(reviewItem.affectedRanges),
+        reviewItem.estimatedAffectedCells,
+        JSON.stringify(reviewItem.recommendations),
+      ],
+    )
+  })
 }
 
 export async function loadWorkbookAgentThreadState(
