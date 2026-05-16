@@ -101,6 +101,28 @@ describe('public workbook corpus CLI resource guards', () => {
     }
   })
 
+  it('rejects non-decimal values for shared count arguments', () => {
+    const originalArgv = process.argv
+    try {
+      process.argv = ['bun', corpusScriptPath(), 'fetch', '--limit', '1e3']
+
+      expect(() => readNumberArg('--limit', 10)).toThrow('Expected --limit to be a positive integer')
+    } finally {
+      process.argv = originalArgv
+    }
+  })
+
+  it('rejects unsafe integer values for shared count arguments', () => {
+    const originalArgv = process.argv
+    try {
+      process.argv = ['bun', corpusScriptPath(), 'fetch', '--limit', '9007199254740993']
+
+      expect(() => readNumberArg('--limit', 10)).toThrow('Expected --limit to be a positive integer')
+    } finally {
+      process.argv = originalArgv
+    }
+  })
+
   it('reads inline boolean flag values', () => {
     const originalArgv = process.argv
     try {
