@@ -141,6 +141,7 @@ export function prepareFormulaBindingFromCompiled(args: {
         ownerSheetName: args.ownerSheetName,
         workbook: serviceArgs.state.workbook,
         ensureCellTracked: serviceArgs.ensureCellTracked,
+        preferColumnIndex: serviceArgs.state.getUseColumnIndex(),
         exactLookup: serviceArgs.exactLookup,
         sortedLookup: serviceArgs.sortedLookup,
       })

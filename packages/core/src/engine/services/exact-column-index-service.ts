@@ -20,8 +20,27 @@ export interface ExactVectorMatchRequest {
 
 export type ExactVectorMatchResult = { handled: false } | { handled: true; position: number | undefined }
 
+export interface ExactUniformNumericVectorLookup {
+  readonly sheetName: string
+  readonly rowStart: number
+  readonly rowEnd: number
+  readonly col: number
+  readonly length: number
+  readonly columnVersion: number
+  readonly structureVersion: number
+  readonly sheetColumnVersions: Uint32Array
+  readonly uniformStart: number
+  readonly uniformStep: number
+}
+
 export interface ExactColumnIndexService {
   readonly primeColumnIndex: (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) => void
+  readonly prepareUniformNumericVectorLookup: (request: {
+    sheetName: string
+    rowStart: number
+    rowEnd: number
+    col: number
+  }) => ExactUniformNumericVectorLookup | undefined
   readonly prepareVectorLookup: (request: { sheetName: string; rowStart: number; rowEnd: number; col: number }) => PreparedExactVectorLookup
   readonly findPreparedVectorMatch: (request: {
     lookupValue: CellValue
@@ -459,6 +478,63 @@ export function createExactColumnIndexService(args: {
     return true
   }
 
+  const prepareUniformNumericVectorLookup = (request: {
+    sheetName: string
+    rowStart: number
+    rowEnd: number
+    col: number
+  }): ExactUniformNumericVectorLookup | undefined => {
+    const sheet = args.state.workbook.getSheet(request.sheetName)
+    if (!sheet || request.rowEnd < request.rowStart) {
+      return undefined
+    }
+    const length = request.rowEnd - request.rowStart + 1
+    if (length < 2) {
+      return undefined
+    }
+
+    const cellStore = args.state.workbook.cellStore
+    let uniformStart = 0
+    let previous = 0
+    let uniformStep = 0
+    for (let offset = 0; offset < length; offset += 1) {
+      const row = request.rowStart + offset
+      const cellIndex = sheet.structureVersion === 1 ? sheet.grid.getPhysical(row, request.col) : sheet.grid.get(row, request.col)
+      if (cellIndex < 0 || cellStore.tags[cellIndex] !== ValueTag.Number) {
+        return undefined
+      }
+      const value = normalizeExactLookupNumber(cellStore.numbers[cellIndex] ?? 0)
+      if (offset === 0) {
+        uniformStart = value
+        previous = value
+        continue
+      }
+      if (offset === 1) {
+        uniformStep = value - uniformStart
+        if (!Number.isFinite(uniformStep) || uniformStep === 0) {
+          return undefined
+        }
+      } else if (value - previous !== uniformStep) {
+        return undefined
+      }
+      previous = value
+    }
+
+    const versions = getCurrentColumnVersions(request.sheetName, request.col)
+    return {
+      sheetName: request.sheetName,
+      rowStart: request.rowStart,
+      rowEnd: request.rowEnd,
+      col: request.col,
+      length,
+      columnVersion: versions.columnVersion,
+      structureVersion: versions.structureVersion,
+      sheetColumnVersions: versions.sheetColumnVersions,
+      uniformStart,
+      uniformStep,
+    }
+  }
+
   const prepareVectorLookup = (request: {
     sheetName: string
     rowStart: number
@@ -646,6 +722,9 @@ export function createExactColumnIndexService(args: {
         return
       }
       ensureExactColumnIndex(request.sheetName, request.col, request.rowStart, request.rowEnd)
+    },
+    prepareUniformNumericVectorLookup(request) {
+      return prepareUniformNumericVectorLookup(request)
     },
     prepareVectorLookup(request) {
       return prepareVectorLookup(request)

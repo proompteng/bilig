@@ -723,7 +723,8 @@ export function buildDirectLookupDescriptor(args: {
   readonly ownerSheetName: string
   readonly workbook: Pick<EngineRuntimeState, 'workbook'>['workbook']
   readonly ensureCellTracked: (sheetName: string, address: string) => number
-  readonly exactLookup: Pick<ExactColumnIndexService, 'prepareVectorLookup'>
+  readonly preferColumnIndex: boolean
+  readonly exactLookup: Pick<ExactColumnIndexService, 'prepareUniformNumericVectorLookup' | 'prepareVectorLookup'>
   readonly sortedLookup: Pick<SortedColumnSearchService, 'prepareVectorLookup'>
 }): RuntimeDirectLookupDescriptor | undefined {
   const binding = resolveRuntimeDirectLookupBinding(args.compiled.jsPlan, args.ownerSheetName)
@@ -736,6 +737,32 @@ export function buildDirectLookupDescriptor(args: {
   }
   const operandCellIndex = args.ensureCellTracked(binding.operandSheetName, binding.operandAddress)
   if (binding.kind === 'exact') {
+    if (!args.preferColumnIndex) {
+      const uniform = args.exactLookup.prepareUniformNumericVectorLookup({
+        sheetName: binding.lookupSheetName,
+        rowStart: binding.rowStart,
+        rowEnd: binding.rowEnd,
+        col: binding.col,
+      })
+      if (uniform) {
+        return {
+          kind: 'exact-uniform-numeric',
+          operandCellIndex,
+          sheetName: binding.lookupSheetName,
+          sheetId: lookupSheet.id,
+          rowStart: binding.rowStart,
+          rowEnd: binding.rowEnd,
+          col: binding.col,
+          length: uniform.length,
+          columnVersion: uniform.columnVersion,
+          structureVersion: uniform.structureVersion,
+          sheetColumnVersions: uniform.sheetColumnVersions,
+          start: uniform.uniformStart,
+          step: uniform.uniformStep,
+          searchMode: binding.searchMode,
+        }
+      }
+    }
     const prepared = args.exactLookup.prepareVectorLookup({
       sheetName: binding.lookupSheetName,
       rowStart: binding.rowStart,

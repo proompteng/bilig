@@ -134,7 +134,7 @@ export interface CreateEngineFormulaBindingServiceArgs {
   readonly formulaFamilies: FormulaFamilyStore
   readonly volatileFormulaCells?: Set<number>
   readonly resolveTemplateForCell: (source: string, row: number, col: number) => FormulaTemplateResolution
-  readonly exactLookup: Pick<ExactColumnIndexService, 'primeColumnIndex' | 'prepareVectorLookup'>
+  readonly exactLookup: Pick<ExactColumnIndexService, 'primeColumnIndex' | 'prepareUniformNumericVectorLookup' | 'prepareVectorLookup'>
   readonly sortedLookup: Pick<SortedColumnSearchService, 'primeColumnIndex' | 'prepareVectorLookup'>
   readonly edgeArena: EdgeArena
   readonly programArena: Uint32Arena

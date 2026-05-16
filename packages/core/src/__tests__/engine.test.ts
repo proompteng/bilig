@@ -3359,6 +3359,29 @@ describe('SpreadsheetEngine', () => {
     expect(engine.getLastMetrics()).toMatchObject({ jsFormulaCount: 0, wasmFormulaCount: 0 })
   })
 
+  it('binds exact uniform MATCH without lookup-owner construction when column indexing is disabled', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'uniform-lookup-without-index', useColumnIndex: false })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellValue('Sheet1', 'A2', 2)
+    engine.setCellValue('Sheet1', 'A3', 3)
+    engine.setCellValue('Sheet1', 'D1', 2)
+
+    engine.resetPerformanceCounters()
+    engine.setCellFormula('Sheet1', 'E1', '=MATCH(D1,A1:A3,0)')
+
+    const formulaCellIndex = engine.workbook.getCellIndex('Sheet1', 'E1')
+    const runtimeFormula = formulaCellIndex === undefined ? undefined : readRuntimeFormula(engine, formulaCellIndex)
+    expect(runtimeFormula?.directLookup?.kind).toBe('exact-uniform-numeric')
+    expect(engine.getCellValue('Sheet1', 'E1')).toEqual({ tag: ValueTag.Number, value: 2 })
+    expect(engine.getPerformanceCounters()).toMatchObject({
+      columnOwnerBuilds: 0,
+      exactIndexBuilds: 0,
+      lookupOwnerBuilds: 0,
+    })
+  })
+
   it('caches exact indexed lookup impact across irrelevant coordinate batch writes', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'indexed-lookup-batch-impact', useColumnIndex: true })
     await engine.ready()
