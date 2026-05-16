@@ -26,6 +26,45 @@ class FakeQueryable implements Queryable {
   }
 }
 
+class FakeTransactionClient implements Queryable {
+  readonly calls: RecordedQuery[] = []
+  releaseCount = 0
+
+  constructor(private readonly failOnText: string | null = null) {}
+
+  async query<T extends QueryResultRow = QueryResultRow>(text: string, values?: unknown[]): Promise<{ rows: T[] }> {
+    this.calls.push({ text, values })
+    if (this.failOnText && text.includes(this.failOnText)) {
+      throw new Error(`failed query: ${this.failOnText}`)
+    }
+    return { rows: [] }
+  }
+
+  release(): void {
+    this.releaseCount += 1
+  }
+}
+
+class FakeTransactionalQueryable implements Queryable {
+  readonly calls: RecordedQuery[] = []
+  readonly client: FakeTransactionClient
+  connectCount = 0
+
+  constructor(failOnText: string | null = null) {
+    this.client = new FakeTransactionClient(failOnText)
+  }
+
+  async query<T extends QueryResultRow = QueryResultRow>(text: string, values?: unknown[]): Promise<{ rows: T[] }> {
+    this.calls.push({ text, values })
+    return { rows: [] as T[] }
+  }
+
+  async connect(): Promise<FakeTransactionClient> {
+    this.connectCount += 1
+    return this.client
+  }
+}
+
 function createWorkflowRun() {
   return {
     runId: 'workflow-1',
@@ -80,6 +119,44 @@ describe('workbook-workflow-run-store', () => {
       createWorkflowRun().steps.length,
     )
     expect(queryable.calls.find((call) => call.text.includes('INSERT INTO workbook_workflow_artifact'))).toBeDefined()
+  })
+
+  it('saves workflow run snapshots atomically when the queryable supports transactions', async () => {
+    const queryable = new FakeTransactionalQueryable()
+
+    await upsertWorkbookWorkflowRun(queryable, {
+      documentId: 'doc-1',
+      run: createWorkflowRun(),
+    })
+
+    expect(queryable.connectCount).toBe(1)
+    expect(queryable.calls).toEqual([])
+    expect(queryable.client.releaseCount).toBe(1)
+    expect(queryable.client.calls[0]?.text).toBe('BEGIN')
+    expect(queryable.client.calls.at(-1)?.text).toBe('COMMIT')
+    expect(queryable.client.calls.some((call) => call.text.includes('INSERT INTO workbook_workflow_run'))).toBe(true)
+    expect(queryable.client.calls.some((call) => call.text.includes('DELETE FROM workbook_workflow_step'))).toBe(true)
+    expect(queryable.client.calls.filter((call) => call.text.includes('INSERT INTO workbook_workflow_step'))).toHaveLength(
+      createWorkflowRun().steps.length,
+    )
+    expect(queryable.client.calls.some((call) => call.text.includes('INSERT INTO workbook_workflow_artifact'))).toBe(true)
+  })
+
+  it('rolls back workflow run snapshots when a transactional child write fails', async () => {
+    const queryable = new FakeTransactionalQueryable('INSERT INTO workbook_workflow_artifact')
+
+    await expect(
+      upsertWorkbookWorkflowRun(queryable, {
+        documentId: 'doc-1',
+        run: createWorkflowRun(),
+      }),
+    ).rejects.toThrow('failed query: INSERT INTO workbook_workflow_artifact')
+
+    expect(queryable.connectCount).toBe(1)
+    expect(queryable.client.releaseCount).toBe(1)
+    expect(queryable.client.calls[0]?.text).toBe('BEGIN')
+    expect(queryable.client.calls.at(-1)?.text).toBe('ROLLBACK')
+    expect(queryable.client.calls.some((call) => call.text.includes('COMMIT'))).toBe(false)
   })
 
   it('loads shared workflow runs for collaborator viewers', async () => {

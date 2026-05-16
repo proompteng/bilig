@@ -1,6 +1,7 @@
 import type { WorkbookAgentWorkflowArtifact, WorkbookAgentWorkflowRun, WorkbookAgentWorkflowStep } from '@bilig/contracts'
 import type { QueryResultRow, Queryable } from './store.js'
 import { parseNonNegativeInteger } from './store-support.js'
+import { runQueryableTransaction, runSequentially } from './transaction-support.js'
 
 interface WorkbookWorkflowRunRow extends QueryResultRow {
   readonly runId?: unknown
@@ -367,6 +368,18 @@ export async function upsertWorkbookWorkflowRun(
     run: WorkbookAgentWorkflowRun
   },
 ): Promise<void> {
+  await runQueryableTransaction(db, async (transactionDb) => {
+    await persistWorkbookWorkflowRun(transactionDb, input)
+  })
+}
+
+async function persistWorkbookWorkflowRun(
+  db: Queryable,
+  input: {
+    documentId: string
+    run: WorkbookAgentWorkflowRun
+  },
+): Promise<void> {
   await db.query(
     `
       INSERT INTO workbook_workflow_run (
@@ -429,10 +442,9 @@ export async function upsertWorkbookWorkflowRun(
     `,
     [input.documentId, input.run.runId],
   )
-  await Promise.all(
-    input.run.steps.map((step, stepOrder) =>
-      db.query(
-        `
+  await runSequentially(input.run.steps, async (step, stepOrder) => {
+    await db.query(
+      `
           INSERT INTO workbook_workflow_step (
             workbook_id,
             run_id,
@@ -445,10 +457,9 @@ export async function upsertWorkbookWorkflowRun(
           )
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         `,
-        [input.documentId, input.run.runId, step.stepId, stepOrder, step.label, step.status, step.summary, step.updatedAtUnixMs],
-      ),
-    ),
-  )
+      [input.documentId, input.run.runId, step.stepId, stepOrder, step.label, step.status, step.summary, step.updatedAtUnixMs],
+    )
+  })
   if (input.run.artifact) {
     await db.query(
       `

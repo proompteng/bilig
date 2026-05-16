@@ -7,6 +7,7 @@ import type {
 } from '@bilig/contracts'
 import { queries } from '@bilig/zero-sync'
 import type { Queryable, ZeroQueryRunner } from './store.js'
+import { runQueryableTransaction, runSequentially } from './transaction-support.js'
 import {
   defaultExecutionPolicyForScope,
   hasToolCallState,
@@ -48,49 +49,12 @@ export interface WorkbookChatThreadStoreConnection extends Queryable {
   }): Promise<readonly ZeroWorkbookChatThreadRow[]>
 }
 
-interface TransactionClient extends Queryable {
-  release(): void
-}
-
-interface TransactionalQueryable extends Queryable {
-  connect(): Promise<TransactionClient>
-}
-
 export function createWorkbookChatThreadStoreConnection(db: Queryable & ZeroQueryRunner): WorkbookChatThreadStoreConnection {
   return {
     query: (text, values) => db.query(text, values),
     listWorkbookChatThreadRows: ({ actorUserId, documentId }) =>
       db.run(queries.workbookChatThread.byWorkbook.fn({ args: { documentId }, ctx: { userID: actorUserId } })),
   }
-}
-
-function isTransactionalQueryable(db: Queryable): db is TransactionalQueryable {
-  return 'connect' in db && typeof db.connect === 'function'
-}
-
-async function runAtomically(db: Queryable, task: (transactionDb: Queryable) => Promise<void>): Promise<void> {
-  if (!isTransactionalQueryable(db)) {
-    await task(db)
-    return
-  }
-  const client = await db.connect()
-  try {
-    await client.query('BEGIN')
-    await task(client)
-    await client.query('COMMIT')
-  } catch (error) {
-    await client.query('ROLLBACK')
-    throw error
-  } finally {
-    client.release()
-  }
-}
-
-async function runSequentially<T>(items: readonly T[], task: (item: T, index: number) => Promise<void>): Promise<void> {
-  await items.reduce<Promise<void>>(async (previous, item, index) => {
-    await previous
-    await task(item, index)
-  }, Promise.resolve())
 }
 
 function dedupeTimelineEntries(entries: readonly WorkbookAgentTimelineEntry[]): WorkbookAgentTimelineEntry[] {
@@ -336,7 +300,7 @@ async function reconcileWorkbookChatThreadSummaryColumns(db: Queryable): Promise
 }
 
 export async function saveWorkbookAgentThreadState(db: Queryable, record: WorkbookAgentThreadStateRecord): Promise<void> {
-  await runAtomically(db, async (transactionDb) => {
+  await runQueryableTransaction(db, async (transactionDb) => {
     await persistWorkbookAgentThreadState(transactionDb, record)
   })
 }
