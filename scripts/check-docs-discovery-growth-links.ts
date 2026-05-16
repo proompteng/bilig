@@ -31,7 +31,11 @@ export const communityLaunchPackRequiredLinks = [
   'https://github.com/jmstfv/mcpserve/pull/19',
   'Latest conversion snapshot on May 16, 2026',
   '`@bilig/headless@0.16.11`',
-  '21,402` clones from `2,534` unique cloners',
+  '21,392` clones from `2,641` unique cloners',
+  'comment child `48045467` is dead',
+  'comment child `48052854` is flagged',
+  'JavaScript Weekly / Node Weekly Editorial Pitch',
+  'editor@cooperpress.com',
   'https://github.com/proompteng/bilig/actions/runs/25956395253',
 ] as const
 

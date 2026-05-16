@@ -357,18 +357,20 @@ Postgres/Redis/object-storage adapter pass:
 
 Latest conversion snapshot on May 16, 2026:
 
-- GitHub surface: `23` stars, `16` forks, `116` open issues, and `5` open
-  pull requests. The star gap is still `977`.
+- GitHub surface: `23` stars, `16` forks, `17` open issues, and `5` open pull
+  requests. The star gap is still `977`; GitHub also reports `0` actual
+  repository watchers/subscribers.
 - npm surface: `@bilig/headless@0.16.11`, with `12,568` downloads in the
-  latest weekly window and `27,080` downloads in the latest monthly window.
-- Traffic surface: GitHub reports `528` views from `178` unique visitors and
-  `21,402` clones from `2,534` unique cloners. The strongest referrers are
+  latest weekly window and `27,753` downloads in the latest monthly window.
+- Traffic surface: GitHub reports `565` views from `189` unique visitors and
+  `21,392` clones from `2,641` unique cloners. The strongest referrers are
   GitHub, Hacker News, X, the project site, Google, Kagi, Reddit, and
   goodfirstissues.com.
-- Contributor-funnel action: the public issue queue now has `9` open
-  `good first issue`, `first-timers-only`, and `help wanted` starter issues,
-  all non-documentation tasks. Documentation-only starter labels were removed
-  from the evaluator path.
+- Contributor-funnel action: the public issue queue now has `15` open
+  `good first issue`, `15` open `first-timers-only`, and `15` open
+  `help wanted` starter issues. Keep the public path focused on the highest
+  quality code/test/example tasks; do not rebuild the earlier oversized starter
+  queue.
 - Funnel read: cloning and npm demand are much stronger than stars. The public
   ask should stay concrete: try the npm smoke test, compare the compatibility
   limits, star/bookmark only if the workflow is relevant, and tell us what
@@ -395,7 +397,7 @@ Latest conversion snapshot on May 16, 2026:
 Latest star-spike research on May 16, 2026:
 
 - GitHub stargazer timestamps show that the jump was concentrated from May 7
-  through May 11, 2026: 3 stars on May 7, 6 on May 8, 1 on May 10, and 9 on
+  through May 11, 2026: 4 stars on May 7, 4 on May 8, 7 on May 10, and 6 on
   May 11, after only two earlier April stars.
 - GitHub traffic confirms the same window as the strongest visitor window:
   May 7 had `125` views from `64` unique visitors, and May 8 had `122` views
@@ -409,6 +411,11 @@ Latest star-spike research on May 16, 2026:
   comments and <https://news.ycombinator.com/item?id=48052832> at `3` points
   / `0` comments. The lesson is not that HN discussion worked; it is that even
   small HN exposure sent qualified evaluators.
+- The HN item API shows the first submission comment child `48045467` is dead
+  and the second submission comment child `48052854` is flagged. Treat this as
+  a launch-discipline failure mode: the linked page must be self-contained, and
+  any follow-up comment should be added only when the thread is visibly live and
+  the comment answers a real question or adds concrete proof.
 - The Reddit r/coolgithubprojects post had no public comments in the current
   page snapshot:
   <https://www.reddit.com/r/coolgithubprojects/comments/1t6jo3s/i_built_a_headless_spreadsheet_engine_for_node/>.
@@ -418,6 +425,10 @@ Latest star-spike research on May 16, 2026:
   concrete feedback ask, public npm package, and immediate README/docs
   conversion. The next loop should make the HN/X/MCP follow-up about one
   adoption blocker, not a general launch.
+- Timing discipline: do not submit another HN item on a weekend or immediately
+  after a flagged/dead attempt. Stage the artifact first, then submit during a
+  weekday US morning only if the linked page is materially new and the
+  maintainer is ready to answer technical questions.
 - Research alignment: GitHub's Open Source Guide says users become
   contributors because the project solves a problem for them, recommends one
   focal home URL, and warns against spamming broad communities. GitHub traffic
@@ -427,6 +438,11 @@ Latest star-spike research on May 16, 2026:
   permissions, package publishing, and maintenance as machine-checkable trust
   surfaces. Public red CI from stale runtime-package workflows is therefore a
   growth problem, not just an engineering nuisance.
+- Newsletter alignment: Cooperpress publishes JavaScript Weekly and Node
+  Weekly to large JavaScript/Node audiences and lists `editor@cooperpress.com`
+  as the editorial contact. Use this only after the proof page and npm README
+  are current; the pitch should be a short editorial suggestion, not a paid
+  sponsor request.
 
 Latest contributor-funnel action on May 14, 2026:
 
@@ -751,7 +767,10 @@ what would block you from trying a WorkPaper-style API?
 ### Hacker News Submission After The Formula Workbooks Page
 
 Use this only when the linked page is live and the submitter is ready to answer
-technical questions in the thread.
+technical questions in the thread. Do not add an immediate generic first
+comment; the last two HN child comments were dead or flagged. If the HN item
+stays live and someone asks for details, answer with the concrete proof,
+limitations, and maintainer disclosure in the thread.
 
 Title:
 
@@ -765,7 +784,8 @@ URL:
 https://proompteng.github.io/bilig/formula-workbooks-node-services-agent-tools.html
 ```
 
-First comment:
+Optional response comment, only after the thread is visibly live or someone asks
+for details:
 
 ```text
 I maintain this project. The linked page is the shortest decision page after the earlier Show HN: it starts with a production-shaped quote approval smoke, but also spells out the WorkPaper boundary, MCP file-backed mode, benchmark caveat, and when HyperFormula / SheetJS / ExcelJS / Google Sheets API are better fits.
@@ -775,6 +795,45 @@ The runnable proof starts from an empty Node directory, installs @bilig/headless
 The package is aimed at backend and agent workflows where spreadsheet formulas are business logic but opening a browser grid is the wrong boundary. It is not a full Excel clone, and the compatibility gaps are documented publicly.
 
 Useful feedback would be specific: which formula families, import/export paths, persistence shapes, or framework boundaries would block you from trying a headless workbook engine in a real service?
+```
+
+### JavaScript Weekly / Node Weekly Editorial Pitch
+
+Use email only after action-time confirmation because this contacts an external
+editorial inbox. Send to Cooperpress editorial, not the advertising form, and
+keep the link suggestion concise.
+
+Subject:
+
+```text
+Link suggestion: Formula workbooks for Node services
+```
+
+Body:
+
+```text
+Hi Cooperpress editors,
+
+I maintain Bilig, an MIT TypeScript library with a published Node package:
+https://www.npmjs.com/package/@bilig/headless
+
+The shortest decision page is here:
+https://proompteng.github.io/bilig/formula-workbooks-node-services-agent-tools.html
+
+It shows a runnable empty-directory Node proof for formula-backed WorkPaper
+documents: install @bilig/headless, write quote inputs into cells, recalculate
+net revenue / gross margin / approval decision, serialize the workbook JSON,
+restore it, and verify restoredMatchesAfter.
+
+This is aimed at backend services and coding-agent tools where spreadsheet
+formulas are business logic but opening Excel, Google Sheets, or a browser grid
+is the wrong runtime boundary. The page also includes benchmark caveats and
+explicit notes on when HyperFormula, SheetJS, ExcelJS, or Google Sheets API are
+better choices.
+
+If it is a fit for JavaScript Weekly or Node Weekly, I would appreciate a look.
+
+Greg
 ```
 
 ### Reddit / Community Post
