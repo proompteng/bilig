@@ -1,6 +1,37 @@
 import { describe, expect, it, vi } from 'vitest'
+import { zeroSchemaServerColumnNamesByTable } from '@bilig/zero-sync'
+import { ensureWorkbookChangeSchema } from '../workbook-change-store.js'
+import { ensureWorkbookChatThreadSchema } from '../workbook-chat-thread-store.js'
+import { ensureWorkbookPresenceSchema } from '../presence-store.js'
+import { ensureWorkbookWorkflowRunSchema } from '../workbook-workflow-run-store.js'
 import { ensureZeroSyncSchema } from '../zero-schema-store.js'
 import type { Queryable } from '../store.js'
+
+function collectBootstrappedColumns(calls: readonly string[]): Map<string, Set<string>> {
+  const columnsByTable = new Map<string, Set<string>>()
+  const ensureTable = (tableName: string) => {
+    const columns = columnsByTable.get(tableName) ?? new Set<string>()
+    columnsByTable.set(tableName, columns)
+    return columns
+  }
+  for (const text of calls) {
+    const createMatch = /CREATE TABLE IF NOT EXISTS\s+([a-z_]+)\s*\(([\s\S]*)\)\s*;?\s*$/iu.exec(text.trim())
+    if (createMatch) {
+      const [, tableName, body] = createMatch
+      const columns = ensureTable(tableName)
+      for (const line of body.split('\n')) {
+        const columnMatch = /^\s*([a-z_]+)\s+/iu.exec(line.trim())
+        if (columnMatch && columnMatch[1] !== 'PRIMARY' && columnMatch[1] !== 'FOREIGN' && columnMatch[1] !== 'UNIQUE') {
+          columns.add(columnMatch[1])
+        }
+      }
+    }
+    for (const [, tableName, columnName] of text.matchAll(/ALTER TABLE\s+([a-z_]+)[\s\S]*?ADD COLUMN IF NOT EXISTS\s+([a-z_]+)/giu)) {
+      ensureTable(tableName).add(columnName)
+    }
+  }
+  return columnsByTable
+}
 
 describe('zero schema store', () => {
   it('backfills and enforces workbook authority columns on legacy schemas', async () => {
@@ -82,5 +113,24 @@ describe('zero schema store', () => {
       query.mock.calls.some(([text]) => String(text).includes('UPDATE sheets SET sheet_id = sort_order + 1 WHERE sheet_id IS NULL')),
     ).toBe(false)
     expect(query.mock.calls.some(([text]) => String(text).includes('INSERT INTO workbook_snapshot'))).toBe(false)
+  })
+
+  it('bootstraps every shared Zero schema table and column', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] })
+    const db: Queryable = { query }
+
+    await ensureZeroSyncSchema(db)
+    await ensureWorkbookPresenceSchema(db)
+    await ensureWorkbookChangeSchema(db)
+    await ensureWorkbookChatThreadSchema(db)
+    await ensureWorkbookWorkflowRunSchema(db)
+
+    const columnsByTable = collectBootstrappedColumns(query.mock.calls.map(([text]) => String(text)))
+    expect([...columnsByTable.keys()].toSorted()).toEqual(expect.arrayContaining(Object.keys(zeroSchemaServerColumnNamesByTable)))
+    for (const [tableName, serverColumnNames] of Object.entries(zeroSchemaServerColumnNamesByTable)) {
+      const bootstrappedColumns = columnsByTable.get(tableName)
+      expect(bootstrappedColumns, `${tableName} is missing from schema bootstrap`).toBeDefined()
+      expect([...(bootstrappedColumns ?? [])].toSorted()).toEqual(expect.arrayContaining([...serverColumnNames]))
+    }
   })
 })

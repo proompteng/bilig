@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { schema } from '../schema'
+import { schema, zeroSchemaColumnNamesByTable, zeroSchemaServerColumnNamesByTable, zeroSchemaTableNames } from '../schema'
 
 describe('zero sync schema', () => {
+  it('exports replicated table metadata from the shared schema model', () => {
+    expect(zeroSchemaTableNames).toEqual(Object.keys(schema.tables))
+    expect(zeroSchemaColumnNamesByTable.workbooks).toEqual(Object.keys(schema.tables.workbooks.columns))
+    expect(zeroSchemaServerColumnNamesByTable.cell_styles).toEqual(['workbook_id', 'style_id', 'record_json', 'hash', 'created_at'])
+    expect(zeroSchemaColumnNamesByTable.workbook_workflow_run).toEqual(Object.keys(schema.tables.workbook_workflow_run.columns))
+  })
+
   it('maps workbooks.updated_at as a numeric timestamp', () => {
     expect(schema.tables.workbooks.columns.updatedAt.type).toBe('number')
     expect(schema.tables.workbooks.columns.updatedAt.serverName).toBe('updated_at')

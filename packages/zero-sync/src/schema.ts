@@ -249,6 +249,19 @@ export const schema = createSchema({
   ],
 })
 
+export const zeroSchemaTableNames = Object.keys(schema.tables)
+
+export const zeroSchemaColumnNamesByTable: Readonly<Record<string, readonly string[]>> = Object.fromEntries(
+  Object.entries(schema.tables).map(([tableName, tableSchema]) => [tableName, Object.keys(tableSchema.columns)]),
+)
+
+export const zeroSchemaServerColumnNamesByTable: Readonly<Record<string, readonly string[]>> = Object.fromEntries(
+  Object.entries(schema.tables).map(([tableName, tableSchema]) => [
+    tableName,
+    Object.entries(tableSchema.columns).map(([columnName, columnSchema]) => columnSchema.serverName ?? columnName),
+  ]),
+)
+
 export const sheetIdDependentTableNames = ['presence_coarse', 'workbook_change'] as const satisfies readonly (keyof typeof schema.tables)[]
 
 declare module '@rocicorp/zero' {

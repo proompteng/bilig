@@ -6,6 +6,7 @@ import {
   ZERO_PUBLICATION_TABLES,
 } from '../publication-store.js'
 import type { QueryResultRow, Queryable } from '../store.js'
+import { zeroSchemaTableNames } from '@bilig/zero-sync'
 
 interface RecordedQuery {
   readonly text: string
@@ -50,6 +51,10 @@ function latestQuery(queryable: FakeQueryable): RecordedQuery {
 }
 
 describe('publication-store', () => {
+  it('derives replicated tables from the shared Zero schema model', () => {
+    expect(ZERO_PUBLICATION_TABLES).toEqual(zeroSchemaTableNames)
+  })
+
   it('creates the publication with every replicated table when it is missing', async () => {
     const queryable = new FakeQueryable()
 

@@ -37,7 +37,13 @@ export {
   workbookTileArgsSchema,
 } from './queries.js'
 export { loadRuntimeConfig, parseRuntimeConfig, type BiligRuntimeConfig } from './runtime-config.js'
-export { schema, sheetIdDependentTableNames } from './schema.js'
+export {
+  schema,
+  sheetIdDependentTableNames,
+  zeroSchemaColumnNamesByTable,
+  zeroSchemaServerColumnNamesByTable,
+  zeroSchemaTableNames,
+} from './schema.js'
 export { zql } from './zql.js'
 export { createEmptyWorkbookSnapshot, projectWorkbookToSnapshot } from './snapshot.js'
 export {

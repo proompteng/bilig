@@ -1,22 +1,9 @@
+import { zeroSchemaTableNames } from '@bilig/zero-sync'
 import type { Queryable } from './store.js'
 
 export const DEFAULT_ZERO_PUBLICATION = 'zero_data_v2'
 
-export const ZERO_PUBLICATION_TABLES = [
-  'workbooks',
-  'sheets',
-  'cell_styles',
-  'cell_number_formats',
-  'cells',
-  'row_metadata',
-  'column_metadata',
-  'cell_eval',
-  'defined_names',
-  'presence_coarse',
-  'workbook_change',
-  'workbook_chat_thread',
-  'workbook_workflow_run',
-] as const
+export const ZERO_PUBLICATION_TABLES = zeroSchemaTableNames
 
 const POSTGRES_IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
 
