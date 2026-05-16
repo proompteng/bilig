@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ValueTag } from '../enums.js'
+import { ErrorCode, ValueTag } from '../enums.js'
 import { isCellRangeRef, isCellSnapshot, isLiteralInput, isWorkbookSnapshot } from '../guards.js'
 
 describe('protocol guards', () => {
@@ -33,14 +33,59 @@ describe('protocol guards', () => {
         version: 1,
       }),
     ).toBe(true)
+    expect(
+      isCellSnapshot({
+        sheetName: 'Sheet1',
+        address: 'B2',
+        value: { tag: ValueTag.String, value: 'ready', stringId: 0 },
+        flags: 0,
+        version: 1,
+      }),
+    ).toBe(true)
+    expect(
+      isCellSnapshot({
+        sheetName: 'Sheet1',
+        address: 'C3',
+        value: { tag: ValueTag.Error, code: ErrorCode.Ref },
+        flags: 0,
+        version: 1,
+      }),
+    ).toBe(true)
   })
 
-  it('rejects cell snapshots with an invalid value tag', () => {
+  it('rejects cell snapshots with malformed values', () => {
     expect(
       isCellSnapshot({
         sheetName: 'Sheet1',
         address: 'A1',
         value: { tag: 99, value: 7 },
+        flags: 0,
+        version: 1,
+      }),
+    ).toBe(false)
+    expect(
+      isCellSnapshot({
+        sheetName: 'Sheet1',
+        address: 'A1',
+        value: { tag: ValueTag.Number, value: Number.NaN },
+        flags: 0,
+        version: 1,
+      }),
+    ).toBe(false)
+    expect(
+      isCellSnapshot({
+        sheetName: 'Sheet1',
+        address: 'A1',
+        value: { tag: ValueTag.String, value: 'missing-id' },
+        flags: 0,
+        version: 1,
+      }),
+    ).toBe(false)
+    expect(
+      isCellSnapshot({
+        sheetName: 'Sheet1',
+        address: 'A1',
+        value: { tag: ValueTag.Error, code: 99 },
         flags: 0,
         version: 1,
       }),

@@ -1,4 +1,4 @@
-import { ValueTag } from './enums.js'
+import { ErrorCode, ValueTag } from './enums.js'
 import type { CellRangeRef, CellSnapshot, LiteralInput, WorkbookSnapshot } from './types.js'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -17,6 +17,38 @@ function isCellValueTag(value: unknown): value is ValueTag {
     value === ValueTag.String ||
     value === ValueTag.Error
   )
+}
+
+function isErrorCode(value: unknown): value is ErrorCode {
+  return (
+    value === ErrorCode.None ||
+    value === ErrorCode.Div0 ||
+    value === ErrorCode.Ref ||
+    value === ErrorCode.Value ||
+    value === ErrorCode.Name ||
+    value === ErrorCode.NA ||
+    value === ErrorCode.Cycle ||
+    value === ErrorCode.Spill ||
+    value === ErrorCode.Blocked
+  )
+}
+
+function isCellValue(value: unknown): boolean {
+  if (!isRecord(value) || !isCellValueTag(value['tag'])) {
+    return false
+  }
+  switch (value['tag']) {
+    case ValueTag.Empty:
+      return true
+    case ValueTag.Number:
+      return typeof value['value'] === 'number' && Number.isFinite(value['value'])
+    case ValueTag.Boolean:
+      return typeof value['value'] === 'boolean'
+    case ValueTag.String:
+      return typeof value['value'] === 'string' && isSafeNonNegativeInteger(value['stringId'])
+    case ValueTag.Error:
+      return isErrorCode(value['code'])
+  }
 }
 
 export function isLiteralInput(value: unknown): value is LiteralInput {
@@ -49,7 +81,6 @@ export function isCellSnapshot(value: unknown): value is CellSnapshot {
     typeof value['address'] === 'string' &&
     isSafeNonNegativeInteger(value['flags']) &&
     isSafeNonNegativeInteger(value['version']) &&
-    isRecord(value['value']) &&
-    isCellValueTag(value['value']['tag'])
+    isCellValue(value['value'])
   )
 }
