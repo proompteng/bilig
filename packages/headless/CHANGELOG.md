@@ -4,6 +4,22 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.17.1
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.17.0
+- Manual override: no
+
+## Fixes
+- perf(headless): fast path dense mixed sheet loads (66e8d5e4)
+- perf(headless): batch runtime snapshot column restores (d242a0f2)
+
+## Internal runtime changes
+- ci(create-workpaper): add npm publish gate (b24127b6)
+- docs(create-workpaper): avoid unpublished starter command (9435acfd)
+- docs(mcp): compare spreadsheet server choices (223a182f)
+- chore(headless): sharpen npm discovery keywords (72038f18)
+
 ## 0.17.0
 
 - Release type: minor
