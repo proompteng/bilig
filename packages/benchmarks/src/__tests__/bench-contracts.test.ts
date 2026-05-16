@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import {
   assertRangeAggregateRunsUseFastPath,
+  parseBenchToleranceMultiplier,
   runIsolatedEditBenchmark,
   runIsolatedRangeAggregateBenchmark,
 } from '../../../../scripts/bench-contracts.ts'
 
 describe('bench contracts runner', () => {
+  it('parses benchmark tolerance overrides without truncating malformed input', () => {
+    expect(parseBenchToleranceMultiplier(undefined, false)).toBe(1)
+    expect(parseBenchToleranceMultiplier(undefined, true)).toBe(1.5)
+    expect(parseBenchToleranceMultiplier('1.25', false)).toBe(1.25)
+    expect(() => parseBenchToleranceMultiplier('1abc', false)).toThrow('BILIG_BENCH_TOLERANCE must be a positive number, got 1abc')
+    expect(() => parseBenchToleranceMultiplier('0', false)).toThrow('BILIG_BENCH_TOLERANCE must be a positive number, got 0')
+  })
+
   it('runs isolated benchmarks through node and tsx', async () => {
     const result = await runIsolatedEditBenchmark(100)
 
