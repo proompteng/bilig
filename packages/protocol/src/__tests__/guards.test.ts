@@ -8,7 +8,17 @@ describe('protocol guards', () => {
       isWorkbookSnapshot({
         version: 1,
         workbook: { name: 'guarded' },
-        sheets: [],
+        sheets: [
+          {
+            id: 1,
+            name: 'Sheet1',
+            order: 0,
+            cells: [
+              { address: 'A1', row: 0, col: 0, value: 'ready' },
+              { address: 'B2', formula: 'A1', format: 'text' },
+            ],
+          },
+        ],
       }),
     ).toBe(true)
   })
@@ -21,6 +31,26 @@ describe('protocol guards', () => {
         sheets: [],
       }),
     ).toBe(false)
+  })
+
+  it('rejects workbook snapshots with malformed sheets or cells', () => {
+    const base = {
+      version: 1,
+      workbook: { name: 'guarded' },
+      sheets: [
+        {
+          id: 1,
+          name: 'Sheet1',
+          order: 0,
+          cells: [{ address: 'A1', value: 1 }],
+        },
+      ],
+    }
+
+    expect(isWorkbookSnapshot({ ...base, sheets: [{ ...base.sheets[0], order: 1.5 }] })).toBe(false)
+    expect(isWorkbookSnapshot({ ...base, sheets: [{ ...base.sheets[0], cells: [{ address: 'A1', value: Number.NaN }] }] })).toBe(false)
+    expect(isWorkbookSnapshot({ ...base, sheets: [{ ...base.sheets[0], cells: [{ address: 'A1', row: -1, value: 1 }] }] })).toBe(false)
+    expect(isWorkbookSnapshot({ ...base, sheets: [{ ...base.sheets[0], cells: [{ value: 1 }] }] })).toBe(false)
   })
 
   it('accepts cell snapshots with a valid value tag', () => {

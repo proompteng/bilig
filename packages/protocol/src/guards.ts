@@ -51,6 +51,29 @@ function isCellValue(value: unknown): boolean {
   }
 }
 
+function isWorkbookSnapshotCell(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value['address'] === 'string' &&
+    (value['row'] === undefined || isSafeNonNegativeInteger(value['row'])) &&
+    (value['col'] === undefined || isSafeNonNegativeInteger(value['col'])) &&
+    (value['value'] === undefined || isLiteralInput(value['value'])) &&
+    (value['formula'] === undefined || typeof value['formula'] === 'string') &&
+    (value['format'] === undefined || typeof value['format'] === 'string')
+  )
+}
+
+function isWorkbookSnapshotSheet(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    (value['id'] === undefined || isSafeNonNegativeInteger(value['id'])) &&
+    typeof value['name'] === 'string' &&
+    isSafeNonNegativeInteger(value['order']) &&
+    Array.isArray(value['cells']) &&
+    value['cells'].every((cell) => isWorkbookSnapshotCell(cell))
+  )
+}
+
 export function isLiteralInput(value: unknown): value is LiteralInput {
   return value === null || typeof value === 'boolean' || typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))
 }
@@ -70,7 +93,8 @@ export function isWorkbookSnapshot(value: unknown): value is WorkbookSnapshot {
     value['version'] === 1 &&
     isRecord(value['workbook']) &&
     typeof value['workbook']['name'] === 'string' &&
-    Array.isArray(value['sheets'])
+    Array.isArray(value['sheets']) &&
+    value['sheets'].every((sheet) => isWorkbookSnapshotSheet(sheet))
   )
 }
 
