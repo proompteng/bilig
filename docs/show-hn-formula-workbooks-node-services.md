@@ -10,16 +10,17 @@ image: /assets/github-social-preview.png
 
 # Show HN: Bilig runs small formula workbooks in Node
 
-I built Bilig because I kept running into the same awkward gap: the business
-logic was easiest to discuss as cells and formulas, but the actual service
-could not depend on a person opening a spreadsheet app.
+Bilig is a Node library for a boring thing I keep needing: put a small business
+model in cells and formulas, then run it from code without asking somebody to
+open Excel or Google Sheets.
 
-The use cases are not glamorous: quote checks, payout rules, import validators,
-small revenue models. Somebody wants to review the formulas. The backend still
-needs to write inputs, recalculate, read the answer, and keep a durable record
-of exactly what ran.
+The first targets are quote checks, payout rules, import validators, budget
+gates, and little revenue models. The finance/operator side wants formulas
+because they can read them. The service side needs a normal API path: write
+inputs, recalculate, read the result, save the state, and test the same thing
+later.
 
-That is the narrow thing Bilig is trying to do.
+That is all I am trying to make solid.
 
 ## Try the npm package
 
@@ -37,7 +38,7 @@ curl -fsSLo quickstart.ts https://proompteng.github.io/bilig/npm-eval.ts
 npx tsx quickstart.ts
 ```
 
-Expected shape:
+The output should look like this:
 
 ```json
 {
@@ -49,14 +50,14 @@ Expected shape:
 }
 ```
 
-The interesting line is `"verified": true`. The script changes an input cell,
-reads a recalculated value, serializes the WorkPaper JSON, restores it, and
-gets the same calculated value again.
+The main bit is `"verified": true`. The script changes an input, reads a
+formula result, serializes the workbook JSON, restores it, and gets the same
+answer again. That restore check is the part I care about for service code.
 
 ## What this is
 
-Bilig is a small workbook-state API for Node. The point is the full loop, not
-just `=A1+B1`:
+Bilig is a workbook-state API for Node. The point is not evaluating `=A1+B1`
+in isolation. It is the whole loop:
 
 - write typed inputs into known cells
 - recalculate dependent formulas
@@ -64,9 +65,9 @@ just `=A1+B1`:
 - save formulas and values as JSON
 - restore the workbook later and check the answer again
 
-The API is built around a `WorkPaper` object because I want the workbook state
-to be the artifact under test. A screenshot is not enough for this kind of
-workflow.
+The API is built around a `WorkPaper` object because the workbook state should
+be the artifact under test. Screenshots and cached XLSX values are too easy to
+fool yourself with.
 
 ## Current numbers
 
@@ -74,39 +75,39 @@ The checked benchmark artifact currently records `78/100` mean-latency wins on
 HyperFormula-style comparable workloads, with `74/100` workloads winning on
 both mean and p95.
 
-The caveat matters: `single-formula-edit-recalc` is slower at p95 by `2.608x`.
-Browser grid rendering is not part of this benchmark.
+The caveat is real: `single-formula-edit-recalc` is slower at p95 by `2.608x`.
+Browser grid rendering is not measured here.
 
 Read the benchmark note:
 [what the WorkPaper benchmark proves](what-workpaper-benchmark-proves.md).
 
 ## What this is not
 
-Bilig is not a finished Excel clone. It does not claim full Excel formula
-parity, chart fidelity, macro execution, collaborative editing, or
-faster p95 on every workload.
+Bilig is not Excel in Node. It does not run macros, preserve every workbook
+artifact, cover every Excel formula, do collaborative editing, or win every p95
+case.
 
 If you mainly need a mature broad formula engine, start with HyperFormula. If
 the problem is XLSX reading, writing, or styling, start with SheetJS or ExcelJS.
 If the product is a shared hosted spreadsheet, use Google Sheets.
 
-Use `@bilig/headless` when your Node code owns the workbook state and needs
-formula readback, persistence, and restore checks.
+Use `@bilig/headless` only when your Node code can own the workbook state and
+you need formula readback, persistence, and restore checks.
 
 ## What would help
 
-The feedback I care about is the kind that would make you reject it quickly:
+I am looking for rejection reasons, not compliments:
 
-- a formula family that is missing
+- a formula family that blocks a real workbook
 - a workbook shape that breaks the model
-- a Node runtime or deployment target where the package is annoying
-- an API shape that makes this hard to wire into a real service
-- a benchmark you would want before trusting it
+- a runtime or deployment target where the package is painful
+- an API shape that makes this awkward in a real service
+- a benchmark you would need before trusting it
 
 Open feedback here:
 <https://github.com/proompteng/bilig/discussions/new?category=general>.
 
-If this is a problem you might come back to, star or bookmark the repository:
+If this is a problem you might come back to, star or bookmark the repo:
 <https://github.com/proompteng/bilig/stargazers>.
 
 ## Shareable post
@@ -120,23 +121,24 @@ Show HN: Bilig runs small formula workbooks in Node
 Suggested short body:
 
 ```text
-I maintain Bilig. It is a small Node library for running formula-backed
-workbook state without opening Excel or Google Sheets.
+I maintain Bilig. It is a Node library for running small formula-backed
+workbooks without opening Excel or Google Sheets.
 
-The use case is fairly boring: quote checks, payout rules, import validators,
-small revenue models. People want to review those rules as cells and formulas,
-but the service still needs a real API path: write inputs, recalculate, read
-the result, save the state, and restore it later.
+The first targets are quote checks, payout rules, import validators, budget
+gates, and small revenue models. The formulas are useful because non-engineers
+can review them. The backend still needs a real API path: write inputs,
+recalculate, read the result, save the state, and test it again later.
 
 Bilig exposes that as a WorkPaper object. The quick npm check starts from an
-empty directory and proves the loop with the published package.
+empty directory, changes an input cell, reads the recalculated value, serializes
+the workbook JSON, restores it, and checks the same answer again.
 
-It is not an Excel clone. It does not run macros, preserve every XLSX artifact,
+It is not Excel in Node. It does not run macros, preserve every XLSX artifact,
 or claim full Excel compatibility. The current benchmark artifact says 78/100
-mean wins on HyperFormula-style comparable workloads, and the p95 misses are
+mean-latency wins on HyperFormula-style comparable workloads, and the p95 miss is
 called out on the page.
 
 I am looking for rejection reasons from people who have shipped spreadsheet-ish
-backend workflows: missing formulas, XLSX cases, API shape, runtime constraints,
-or the benchmark that would make you trust or reject it faster.
+backend workflows: missing formulas, XLSX cases, bad API shape, runtime pain, or
+the benchmark that would make you trust or reject it faster.
 ```
