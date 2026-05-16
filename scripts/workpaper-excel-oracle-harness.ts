@@ -33,6 +33,7 @@ import {
   type OracleHarnessReport,
   type WorkbookEvaluation,
 } from './workpaper-excel-oracle-harness-core.ts'
+import { resolveExcelOracleDisabled } from './workpaper-excel-oracle-config.ts'
 
 export { buildReportSummary, classifyFormulaComparison } from './workpaper-excel-oracle-harness-core.ts'
 export type {
@@ -684,7 +685,7 @@ function writeFile(path: string, value: string): void {
 }
 
 function isExcelAutomationAvailable(): boolean {
-  if (process.env['BILIG_EXCEL_ORACLE_DISABLE'] === '1') {
+  if (resolveExcelOracleDisabled(process.env)) {
     return false
   }
   if (process.platform === 'darwin') {
