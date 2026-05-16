@@ -179,8 +179,20 @@ describe('public workbook corpus CLI resource guards', () => {
     })
   })
 
+  it('rejects empty inline boolean flag values', () => {
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--dry-run='], () => {
+      expect(() => readFlagArg('--dry-run')).toThrow('Expected --dry-run to be true or false')
+    })
+  })
+
   it('rejects malformed separated boolean flag values', () => {
     withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--dry-run', 'maybe'], () => {
+      expect(() => readFlagArg('--dry-run')).toThrow('Expected --dry-run to be true or false')
+    })
+  })
+
+  it('rejects blank separated boolean flag values', () => {
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--dry-run', '   '], () => {
       expect(() => readFlagArg('--dry-run')).toThrow('Expected --dry-run to be true or false')
     })
   })
