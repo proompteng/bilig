@@ -137,9 +137,11 @@ Evaluate `@bilig/headless` when the core need is a Node WorkPaper object with
 agent-oriented writeback verification, persistence helpers, restored readback,
 history, and a narrow benchmark artifact tied to repository commands.
 
-Do not treat `bilig` as a complete HyperFormula replacement. `bilig` is early,
-does not claim full Excel formula parity, and keeps compatibility boundaries
-public.
+Do not treat `bilig` as a complete HyperFormula replacement. The current
+tracked Office formula inventory is production-routed, but `bilig` still keeps
+compatibility boundaries public: committed fixtures are evidence, not a promise
+that every Excel formula argument shape, locale/date edge case, volatile result,
+or arbitrary third-party workbook behaves exactly like desktop Excel.
 
 ## Where IronCalc Fits
 

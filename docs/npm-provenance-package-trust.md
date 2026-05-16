@@ -14,11 +14,11 @@ Production adoption starts before the first import. For a service runtime or
 agent tool, the package needs to be traceable to source, release CI, and a
 specific GitHub commit.
 
-`@bilig/headless@0.16.25` is published with npm registry signatures and SLSA
+`@bilig/headless@0.16.26` is published with npm registry signatures and SLSA
 provenance attestations. npm reports:
 
 ```sh
-npm view @bilig/headless@0.16.25 version dist.attestations dist.signatures --json
+npm view @bilig/headless@0.16.26 version dist.attestations dist.signatures --json
 ```
 
 The important signal is that `dist.attestations.provenance.predicateType` is
@@ -32,7 +32,7 @@ From a clean project:
 mkdir bilig-package-trust
 cd bilig-package-trust
 npm init -y
-npm install @bilig/headless@0.16.25
+npm install @bilig/headless@0.16.26
 npm audit signatures
 ```
 

@@ -65,10 +65,11 @@ validations, tables, charts, pivots, multi-sheet workbooks, and macro payload
 preservation. It does not turn charts and pivots into a promise of full desktop
 Excel interactivity.
 
-### Blanket formula parity
+### Universal formula-behavior parity
 
-The formula registry and fixture suite are broad, but the claim is still
-evidence-scoped.
+The formula registry and fixture suite are broad, and the current tracked
+Office formula inventory is production-routed. The formula-behavior claim is
+still evidence-scoped.
 
 The current formula semantics artifact proves the committed canonical fixtures
 and workbook semantics fixtures. It should not be read as "every Excel formula

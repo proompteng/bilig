@@ -38,7 +38,7 @@ For the broader engine choice, start with the
 | API orientation              | Spreadsheet-engine instance with formula evaluation and workbook operations          | WorkPaper object with formula evaluation, structural edits, persistence helpers, history, and readback              |
 | Agent workflow fit           | Possible, but the project is not specifically packaged around agent writeback proofs | First-class evaluation path includes an agent writeback demo with persistence and restored readback                 |
 | Benchmark claim in this repo | External comparison target                                                           | Checked-in WorkPaper-vs-HyperFormula artifact records `78/100` mean wins on scorecard-eligible comparable workloads |
-| Caveat                       | Strong default engine, with its own licensing and integration model                  | Not a finished Excel clone and not full Excel formula parity                                                        |
+| Caveat                       | Strong default engine, with its own licensing and integration model                  | Formula inventory is complete for the tracked Office surface, but arbitrary Excel edge cases remain evidence-scoped |
 
 ## What The Benchmark Says
 
@@ -106,7 +106,8 @@ values.
 ## When Not To Choose bilig First
 
 - You need a mature commercial support channel today.
-- You need broad Excel formula compatibility before adding reduced fixtures.
+- You need a mature engine with a longer compatibility history before adding
+  reduced fixtures for the exact Excel edge cases your workflow uses.
 - You need a library already centered around a visual spreadsheet component.
 - You need every XLSX feature preserved across import/export right now.
 

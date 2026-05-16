@@ -47,7 +47,7 @@ npm install @bilig/headless
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.16.25`:
+Current checked npm footprint for `@bilig/headless@0.16.26`:
 
 - Pack dry run: `422 kB` tarball, `2.52 MB` unpacked, `429` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
@@ -61,11 +61,11 @@ Current checked npm footprint for `@bilig/headless@0.16.25`:
 
 ## Published Package Trust
 
-`@bilig/headless@0.16.25` is published with npm registry signatures and SLSA
+`@bilig/headless@0.16.26` is published with npm registry signatures and SLSA
 provenance attestations. Check the package before adopting it in a service:
 
 ```sh
-npm view @bilig/headless@0.16.25 version dist.attestations dist.signatures --json
+npm view @bilig/headless@0.16.26 version dist.attestations dist.signatures --json
 npm audit signatures
 ```
 
@@ -606,8 +606,9 @@ this package:
    bounds, formulas, persistence, events, row/column moves, or sheet lifecycle.
 7. Run focused headless tests before broader gates.
 8. Preserve benchmark definitions and workload sizes.
-9. Document unsupported behavior honestly instead of implying full Excel
-   compatibility.
+9. Document edge-case behavior honestly: tracked formula names are routed, but
+   arbitrary Excel workbooks, host features, and locale/date argument edges
+   still need fixtures before production claims.
 
 ## Public Entry Points
 

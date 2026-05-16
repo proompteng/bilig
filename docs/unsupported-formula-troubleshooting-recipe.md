@@ -180,8 +180,10 @@ visible and gives the agent the exact cell/range it needs to fix.
 
 ## Boundaries
 
-This recipe does not claim full Excel formula parity. It shows the supported
-diagnostic workflow for visible formula errors in `@bilig/headless`.
+This recipe does not imply that tracked formula names are missing. It shows the
+diagnostic workflow for formula errors caused by workbook-specific references,
+external dependencies, argument shapes, locale/date edges, or unsupported host
+features in `@bilig/headless`.
 
 For the broader compatibility boundary, read
 [`docs/where-bilig-is-not-excel-compatible-yet.md`](where-bilig-is-not-excel-compatible-yet.md).

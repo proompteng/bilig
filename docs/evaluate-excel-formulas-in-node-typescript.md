@@ -24,9 +24,10 @@ That usually means one of these jobs:
 - a service needs to save workbook state as JSON and restore it later
 
 If the main job is styling or writing an `.xlsx` file, start with an XLSX
-library. If the main job is broad Excel formula compatibility, evaluate a mature
-formula engine first. If the job is a TypeScript workbook object with formulas,
-edits, readback, and persistence, try the WorkPaper path below.
+library. If the main job is a long tail of arbitrary Excel edge cases with no
+fixture-reduction step, evaluate a mature formula engine first. If the job is a
+TypeScript workbook object with formulas, edits, readback, and persistence, try
+the WorkPaper path below.
 
 ## Run a TypeScript formula smoke test
 

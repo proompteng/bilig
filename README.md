@@ -136,7 +136,7 @@ matters.
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.16.25`:
+Current checked npm footprint for `@bilig/headless@0.16.26`:
 
 - Pack dry run: `422 kB` tarball, `2.52 MB` unpacked, `429` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
@@ -150,11 +150,11 @@ Current checked npm footprint for `@bilig/headless@0.16.25`:
 
 ## Published Package Trust
 
-`@bilig/headless@0.16.25` is published with npm registry signatures and SLSA
+`@bilig/headless@0.16.26` is published with npm registry signatures and SLSA
 provenance attestations. Verify the package before adopting it:
 
 ```sh
-npm view @bilig/headless@0.16.25 version dist.attestations dist.signatures --json
+npm view @bilig/headless@0.16.26 version dist.attestations dist.signatures --json
 ```
 
 After installing, npm can verify the current dependency tree:
