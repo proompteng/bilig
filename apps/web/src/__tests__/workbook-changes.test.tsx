@@ -765,6 +765,227 @@ describe('workbook changes', () => {
     })
   })
 
+  it('does not undo visible history until the active workbook mutation is drained', async () => {
+    const changes = createMockZeroChangeHarness([
+      {
+        revision: 30,
+        actorUserId: 'alex@example.com',
+        clientMutationId: 'mutation-30',
+        eventKind: 'setCellValue',
+        summary: 'Updated Sheet1!D12',
+        sheetId: 1,
+        sheetName: 'Sheet1',
+        anchorAddress: 'D12',
+        rangeJson: { sheetName: 'Sheet1', startAddress: 'D12', endAddress: 'D12' },
+        undoBundleJson: {
+          kind: 'engineOps',
+          ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'D12' }],
+        },
+        revertedByRevision: null,
+        revertsRevision: null,
+        createdAt: Date.parse('2026-04-06T13:25:00.000Z'),
+      },
+    ])
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <ChangesHarness
+          currentUserId="alex@example.com"
+          documentId="doc-1"
+          enabled
+          onJump={() => {}}
+          pendingMutationSummary={{ activeCount: 1, failedCount: 0 }}
+          sheetNames={['Sheet1']}
+          zero={changes.zero}
+        />,
+      )
+    })
+
+    expect(host.querySelector("[data-testid='workbook-can-undo']")?.textContent).toBe('true')
+
+    await act(async () => {
+      host.querySelector("[data-testid='workbook-undo-latest']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(changes.mutations).toHaveLength(0)
+
+    await act(async () => {
+      root.render(
+        <ChangesHarness
+          currentUserId="alex@example.com"
+          documentId="doc-1"
+          enabled
+          onJump={() => {}}
+          pendingMutationSummary={{ activeCount: 0, failedCount: 0 }}
+          sheetNames={['Sheet1']}
+          zero={changes.zero}
+        />,
+      )
+    })
+
+    expect(changes.mutations).toHaveLength(1)
+    expect(getMutationName(changes.mutations[0])).toContain('undoLatestChange')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('does not redo visible history until the active workbook mutation is drained', async () => {
+    const changes = createMockZeroChangeHarness([
+      {
+        revision: 31,
+        actorUserId: 'alex@example.com',
+        clientMutationId: 'mutation-31',
+        eventKind: 'revertChange',
+        summary: 'Reverted r30: Updated Sheet1!D12',
+        sheetId: 1,
+        sheetName: 'Sheet1',
+        anchorAddress: 'D12',
+        rangeJson: { sheetName: 'Sheet1', startAddress: 'D12', endAddress: 'D12' },
+        undoBundleJson: {
+          kind: 'engineOps',
+          ops: [{ kind: 'setCellValue', sheetName: 'Sheet1', address: 'D12', value: 'redo-value' }],
+        },
+        revertedByRevision: null,
+        revertsRevision: 30,
+        createdAt: Date.parse('2026-04-06T13:30:00.000Z'),
+      },
+      {
+        revision: 30,
+        actorUserId: 'alex@example.com',
+        clientMutationId: 'mutation-30',
+        eventKind: 'setCellValue',
+        summary: 'Updated Sheet1!D12',
+        sheetId: 1,
+        sheetName: 'Sheet1',
+        anchorAddress: 'D12',
+        rangeJson: { sheetName: 'Sheet1', startAddress: 'D12', endAddress: 'D12' },
+        undoBundleJson: {
+          kind: 'engineOps',
+          ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'D12' }],
+        },
+        revertedByRevision: 31,
+        revertsRevision: null,
+        createdAt: Date.parse('2026-04-06T13:25:00.000Z'),
+      },
+    ])
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <ChangesHarness
+          currentUserId="alex@example.com"
+          documentId="doc-1"
+          enabled
+          onJump={() => {}}
+          pendingMutationSummary={{ activeCount: 1, failedCount: 0 }}
+          sheetNames={['Sheet1']}
+          zero={changes.zero}
+        />,
+      )
+    })
+
+    expect(host.querySelector("[data-testid='workbook-can-redo']")?.textContent).toBe('true')
+
+    await act(async () => {
+      host.querySelector("[data-testid='workbook-redo-latest']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(changes.mutations).toHaveLength(0)
+
+    await act(async () => {
+      root.render(
+        <ChangesHarness
+          currentUserId="alex@example.com"
+          documentId="doc-1"
+          enabled
+          onJump={() => {}}
+          pendingMutationSummary={{ activeCount: 0, failedCount: 0 }}
+          sheetNames={['Sheet1']}
+          zero={changes.zero}
+        />,
+      )
+    })
+
+    expect(changes.mutations).toHaveLength(1)
+    expect(getMutationName(changes.mutations[0])).toContain('redoLatestChange')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('retries authoritative refresh after a history undo mutation resolves', async () => {
+    vi.useFakeTimers()
+    try {
+      const changes = createMockZeroChangeHarness([
+        {
+          revision: 30,
+          actorUserId: 'alex@example.com',
+          clientMutationId: 'mutation-30',
+          eventKind: 'setCellValue',
+          summary: 'Updated Sheet1!D12',
+          sheetId: 1,
+          sheetName: 'Sheet1',
+          anchorAddress: 'D12',
+          rangeJson: { sheetName: 'Sheet1', startAddress: 'D12', endAddress: 'D12' },
+          undoBundleJson: {
+            kind: 'engineOps',
+            ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'D12' }],
+          },
+          revertedByRevision: null,
+          revertsRevision: null,
+          createdAt: Date.parse('2026-04-06T13:25:00.000Z'),
+        },
+      ])
+      const host = document.createElement('div')
+      document.body.appendChild(host)
+      const root = createRoot(host)
+      const onHistoryMutationApplied = vi.fn().mockResolvedValue(undefined)
+
+      await act(async () => {
+        root.render(
+          <ChangesHarness
+            currentUserId="alex@example.com"
+            documentId="doc-1"
+            enabled
+            onHistoryMutationApplied={onHistoryMutationApplied}
+            onJump={() => {}}
+            sheetNames={['Sheet1']}
+            zero={changes.zero}
+          />,
+        )
+      })
+
+      await act(async () => {
+        host.querySelector("[data-testid='workbook-undo-latest']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      })
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      expect(onHistoryMutationApplied).toHaveBeenCalledTimes(1)
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_000)
+      })
+
+      expect(onHistoryMutationApplied).toHaveBeenCalledTimes(4)
+
+      await act(async () => {
+        root.unmount()
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('does not undo stale history while a newer local mutation is not materialized yet', async () => {
     const changes = createMockZeroChangeHarness([
       {

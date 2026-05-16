@@ -5,6 +5,7 @@ import { useWorkbookChanges, type ZeroWorkbookChangeQuerySource } from './use-wo
 import { selectWorkbookHistoryState } from './workbook-changes-model.js'
 
 const QUEUED_HISTORY_SHORTCUT_TIMEOUT_MS = 10_000
+const HISTORY_REFRESH_PROBE_DELAYS_MS = [400, 1_200, 3_000] as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -61,6 +62,7 @@ export function useWorkbookChangesPane(input: {
   const [isRedoPending, setIsRedoPending] = useState(false)
   const [pendingRevertRevision, setPendingRevertRevision] = useState<number | null>(null)
   const [queuedHistoryShortcut, setQueuedHistoryShortcut] = useState<'undo' | 'redo' | null>(null)
+  const historyRefreshProbeRefs = useRef<number[]>([])
   const changeCount = changes.entries.length
   const historyState = useMemo(() => selectWorkbookHistoryState({ rows: changes.rows, currentUserId }), [changes.rows, currentUserId])
   const hasActivePendingMutation = (pendingMutationSummary?.activeCount ?? 0) > 0
@@ -78,6 +80,32 @@ export function useWorkbookChangesPane(input: {
     setHistoryReadyEpoch(readLocalMutationEpoch())
   }, [historyRevisionSignature, readLocalMutationEpoch])
 
+  useEffect(() => {
+    return () => {
+      historyRefreshProbeRefs.current.forEach((timer) => window.clearTimeout(timer))
+      historyRefreshProbeRefs.current = []
+    }
+  }, [])
+
+  const scheduleHistoryRefreshProbes = useCallback(() => {
+    if (!onHistoryMutationApplied) {
+      return
+    }
+    HISTORY_REFRESH_PROBE_DELAYS_MS.forEach((delayMs) => {
+      const timer = window.setTimeout(() => {
+        historyRefreshProbeRefs.current = historyRefreshProbeRefs.current.filter((entry) => entry !== timer)
+        void (async () => {
+          try {
+            await onHistoryMutationApplied()
+          } catch {
+            // The immediate history refresh surfaces failures; delayed probes are best-effort repair passes.
+          }
+        })()
+      }, delayMs)
+      historyRefreshProbeRefs.current.push(timer)
+    })
+  }, [onHistoryMutationApplied])
+
   const runUndoLatestChange = useCallback(() => {
     setIsUndoPending(true)
     const observer = observeZeroMutationResult(
@@ -91,11 +119,12 @@ export function useWorkbookChangesPane(input: {
       try {
         await (observer ?? Promise.resolve())
         await onHistoryMutationApplied?.()
+        scheduleHistoryRefreshProbes()
       } finally {
         setIsUndoPending(false)
       }
     })()
-  }, [documentId, onHistoryMutationApplied, zero])
+  }, [documentId, onHistoryMutationApplied, scheduleHistoryRefreshProbes, zero])
 
   const runRedoLatestChange = useCallback(() => {
     setIsRedoPending(true)
@@ -110,21 +139,23 @@ export function useWorkbookChangesPane(input: {
       try {
         await (observer ?? Promise.resolve())
         await onHistoryMutationApplied?.()
+        scheduleHistoryRefreshProbes()
       } finally {
         setIsRedoPending(false)
       }
     })()
-  }, [documentId, onHistoryMutationApplied, zero])
+  }, [documentId, onHistoryMutationApplied, scheduleHistoryRefreshProbes, zero])
 
   const undoLatestChange = useCallback(() => {
     if (!enabled || isUndoPending) {
       return
     }
     const hasLiveUnmaterializedLocalMutation = readLocalMutationEpoch() > historyReadyEpoch
-    if (historyState.undoRevision === null || hasLiveUnmaterializedLocalMutation) {
-      if (hasActivePendingMutation || hasLiveUnmaterializedLocalMutation) {
-        setQueuedHistoryShortcut('undo')
-      }
+    if (hasActivePendingMutation || hasLiveUnmaterializedLocalMutation) {
+      setQueuedHistoryShortcut('undo')
+      return
+    }
+    if (historyState.undoRevision === null) {
       return
     }
     setQueuedHistoryShortcut(null)
@@ -144,10 +175,11 @@ export function useWorkbookChangesPane(input: {
       return
     }
     const hasLiveUnmaterializedLocalMutation = readLocalMutationEpoch() > historyReadyEpoch
-    if (historyState.redoRevision === null || hasLiveUnmaterializedLocalMutation) {
-      if (hasActivePendingMutation || hasLiveUnmaterializedLocalMutation) {
-        setQueuedHistoryShortcut('redo')
-      }
+    if (hasActivePendingMutation || hasLiveUnmaterializedLocalMutation) {
+      setQueuedHistoryShortcut('redo')
+      return
+    }
+    if (historyState.redoRevision === null) {
       return
     }
     setQueuedHistoryShortcut(null)
@@ -171,7 +203,7 @@ export function useWorkbookChangesPane(input: {
   }, [queuedHistoryShortcut])
 
   useEffect(() => {
-    if (!enabled || queuedHistoryShortcut === null || hasUnmaterializedLocalMutation) {
+    if (!enabled || queuedHistoryShortcut === null || hasActivePendingMutation || hasUnmaterializedLocalMutation) {
       return
     }
     if (queuedHistoryShortcut === 'undo') {
@@ -189,6 +221,7 @@ export function useWorkbookChangesPane(input: {
     }
   }, [
     enabled,
+    hasActivePendingMutation,
     historyState.redoRevision,
     historyState.undoRevision,
     hasUnmaterializedLocalMutation,

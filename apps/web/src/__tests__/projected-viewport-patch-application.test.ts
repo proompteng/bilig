@@ -442,6 +442,67 @@ describe('applyProjectedViewportPatch', () => {
     })
   })
 
+  it('accepts authoritative empty patches over stale optimistic value snapshots', () => {
+    const state = createPatchState()
+    state.cellSnapshots.set('Sheet1!B2', {
+      sheetName: 'Sheet1',
+      address: 'B2',
+      input: 'deleted-by-history',
+      value: { tag: ValueTag.String, value: 'deleted-by-history', stringId: 1 },
+      flags: OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+      version: 8,
+    })
+    state.cellKeysBySheet.set('Sheet1', new Set(['Sheet1!B2']))
+
+    applyProjectedViewportPatch({
+      state,
+      patch: {
+        authoritativeRevision: 9,
+        version: 9,
+        full: false,
+        freezeRows: 0,
+        freezeCols: 0,
+        viewport: {
+          sheetName: 'Sheet1',
+          rowStart: 1,
+          rowEnd: 1,
+          colStart: 1,
+          colEnd: 1,
+        },
+        metrics: TEST_METRICS,
+        styles: [],
+        cells: [
+          {
+            row: 1,
+            col: 1,
+            snapshot: {
+              sheetName: 'Sheet1',
+              address: 'B2',
+              value: { tag: ValueTag.Empty },
+              flags: 0,
+              version: 0,
+            },
+            displayText: '',
+            copyText: '',
+            editorText: '',
+            formatId: 0,
+            styleId: 'style-0',
+          },
+        ],
+        columns: [],
+        rows: [],
+      },
+    })
+
+    expect(state.cellSnapshots.get('Sheet1!B2')).toEqual({
+      sheetName: 'Sheet1',
+      address: 'B2',
+      value: { tag: ValueTag.Empty },
+      flags: 0,
+      version: 0,
+    })
+  })
+
   it('keeps optimistic clear snapshots when lagging non-empty patches arrive', () => {
     const state = createPatchState()
     state.cellSnapshots.set('Sheet1!B2', {
@@ -912,6 +973,47 @@ describe('applyProjectedViewportPatch', () => {
       flags: OPTIMISTIC_CELL_SNAPSHOT_FLAG,
       version: 1,
     })
+  })
+
+  it('removes optimistic value snapshots when an authoritative full patch omits the cell', () => {
+    const state = createPatchState()
+    state.cellSnapshots.set('Sheet1!B2', {
+      sheetName: 'Sheet1',
+      address: 'B2',
+      input: 'undo-removed',
+      value: { tag: ValueTag.String, value: 'undo-removed', stringId: 1 },
+      flags: OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+      version: 1,
+    })
+    state.cellKeysBySheet.set('Sheet1', new Set(['Sheet1!B2']))
+
+    const result = applyProjectedViewportPatch({
+      state,
+      patch: {
+        authoritativeRevision: 2,
+        version: 2,
+        full: true,
+        freezeRows: 0,
+        freezeCols: 0,
+        viewport: {
+          sheetName: 'Sheet1',
+          rowStart: 1,
+          rowEnd: 1,
+          colStart: 1,
+          colEnd: 1,
+        },
+        metrics: TEST_METRICS,
+        styles: [],
+        cells: [],
+        columns: [],
+        rows: [],
+      },
+    })
+
+    expect(state.cellSnapshots.has('Sheet1!B2')).toBe(false)
+    expect(state.cellKeysBySheet.get('Sheet1')?.has('Sheet1!B2')).toBe(false)
+    expect(result.changedKeys.has('Sheet1!B2')).toBe(true)
+    expect(result.damage).toEqual([{ cell: [1, 1] }])
   })
 
   it('accepts matching value patches while preserving optimistic protection', () => {

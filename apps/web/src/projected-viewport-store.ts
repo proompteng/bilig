@@ -203,7 +203,7 @@ export class ProjectedViewportStore implements GridEngineLike {
     }
   }
 
-  setCellSnapshot(snapshot: CellSnapshot, options: { force?: boolean } = {}): void {
+  setCellSnapshot(snapshot: CellSnapshot, options: { force?: boolean; forceOptimistic?: boolean } = {}): void {
     if (this.cellCache.setCellSnapshot(snapshot, options)) {
       this.localRevision += 1
       this.emitLocalCellSnapshotDelta(snapshot)

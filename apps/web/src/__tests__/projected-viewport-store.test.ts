@@ -3,6 +3,7 @@ import { ValueTag, type RecalcMetrics } from '@bilig/protocol'
 import { encodeViewportPatch, type ViewportPatch, type WorkerEngineClient } from '@bilig/worker-transport'
 import { DEFAULT_MAX_CACHED_CELLS_PER_SHEET } from '../projected-viewport-cell-cache.js'
 import { ProjectedViewportStore } from '../projected-viewport-store.js'
+import { OPTIMISTIC_CELL_SNAPSHOT_FLAG } from '../workbook-optimistic-cell-flags.js'
 
 const TEST_METRICS: RecalcMetrics = {
   batchId: 0,
@@ -188,6 +189,38 @@ describe('ProjectedViewportStore', () => {
     })
 
     expect(cache.getRenderRevisionSnapshot().localRevision).toBe(1)
+  })
+
+  it('can force authoritative selected-cell hydration over stale optimistic input', () => {
+    const cache = new ProjectedViewportStore()
+
+    cache.setCellSnapshot({
+      sheetName: 'Sheet1',
+      address: 'D5',
+      flags: OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+      input: 'ghost-content',
+      value: { tag: ValueTag.String, value: 'ghost-content', stringId: 0 },
+      version: 8,
+    })
+
+    cache.setCellSnapshot(
+      {
+        sheetName: 'Sheet1',
+        address: 'D5',
+        flags: 0,
+        value: { tag: ValueTag.Empty },
+        version: 0,
+      },
+      { force: true, forceOptimistic: true },
+    )
+
+    expect(cache.getCell('Sheet1', 'D5')).toEqual({
+      sheetName: 'Sheet1',
+      address: 'D5',
+      flags: 0,
+      value: { tag: ValueTag.Empty },
+      version: 0,
+    })
   })
 
   it('accepts partial reset-empty patches that clear newer local input after structural deletes', () => {

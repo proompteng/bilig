@@ -157,7 +157,7 @@ export class ProjectedViewportCellCache {
     return this.cellStyles.get(styleId) ?? this.cellStyles.get(DEFAULT_STYLE_ID)
   }
 
-  setCellSnapshot(snapshot: CellSnapshot, options: { force?: boolean } = {}): boolean {
+  setCellSnapshot(snapshot: CellSnapshot, options: { force?: boolean; forceOptimistic?: boolean } = {}): boolean {
     const key = `${snapshot.sheetName}!${snapshot.address}`
     const current = this.cellSnapshots.get(key)
     const incoming = current ? prepareIncomingSnapshot(current, snapshot) : snapshot
@@ -166,7 +166,8 @@ export class ProjectedViewportCellCache {
       return false
     }
     if (current) {
-      const shouldProtectCurrent = options.force !== true || (current.flags & OPTIMISTIC_CELL_SNAPSHOT_FLAG) !== 0
+      const shouldProtectCurrent =
+        options.force !== true || ((current.flags & OPTIMISTIC_CELL_SNAPSHOT_FLAG) !== 0 && options.forceOptimistic !== true)
       if (shouldProtectCurrent && shouldKeepCurrentSnapshot(current, incoming, { allowResetEmptyOverride: false })) {
         return false
       }

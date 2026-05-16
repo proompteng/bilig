@@ -83,10 +83,13 @@ export function cellSnapshotSignature(snapshot: CellSnapshot): string {
 export function shouldKeepCurrentSnapshot(
   current: CellSnapshot,
   incoming: CellSnapshot,
-  options: { readonly allowResetEmptyOverride?: boolean } = {},
+  options: { readonly allowAuthoritativeClearOverride?: boolean; readonly allowResetEmptyOverride?: boolean } = {},
 ): boolean {
   if (isOptimisticCellSnapshot(current)) {
     if (incomingConfirmsOptimisticSnapshot(current, incoming)) {
+      return false
+    }
+    if (options.allowAuthoritativeClearOverride === true && isClearCellSnapshot(incoming) && !isClearCellSnapshot(current)) {
       return false
     }
     if (isClearCellSnapshot(current) && !isClearCellSnapshot(incoming)) {
@@ -345,6 +348,15 @@ export function applyProjectedViewportPatch(input: {
               damage.push({ cell: [parsed.col, parsed.row] })
               damagedCellKeys.add(key)
             }
+          } else if (patch.authoritativeRevision !== undefined && patch.authoritativeRevision > 0) {
+            state.cellSnapshots.delete(key)
+            sheetCellKeys.delete(key)
+            changedKeys.add(key)
+            if (!damagedCellKeys.has(key)) {
+              const parsed = parseCellAddress(snapshot.address, snapshot.sheetName)
+              damage.push({ cell: [parsed.col, parsed.row] })
+              damagedCellKeys.add(key)
+            }
           }
           continue
         }
@@ -373,7 +385,12 @@ export function applyProjectedViewportPatch(input: {
         !patch.full &&
         (patch.authoritativeRevision !== undefined ||
           (current.formula === undefined && current.input === undefined && current.value.tag !== ValueTag.Error))
-      if (shouldKeepCurrentSnapshot(current, incoming, { allowResetEmptyOverride })) {
+      if (
+        shouldKeepCurrentSnapshot(current, incoming, {
+          allowAuthoritativeClearOverride: patch.authoritativeRevision !== undefined,
+          allowResetEmptyOverride,
+        })
+      ) {
         continue
       }
       if (cellSnapshotSignature(current) === cellSnapshotSignature(incoming)) {

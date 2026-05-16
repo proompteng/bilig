@@ -353,16 +353,26 @@ export async function createWorkerRuntimeSessionController(
     })
   }
 
-  const applySelection = async (selection: WorkerRuntimeSelection): Promise<CellSnapshot> => {
-    currentSelection = selection
-    callbacks.onSelection(selection)
+  const hydrateSelectionCell = async (
+    selection: WorkerRuntimeSelection,
+    options: { readonly force?: boolean; readonly forceOptimistic?: boolean } = {},
+  ): Promise<CellSnapshot> => {
     const snapshot = await loadSelectionCellSnapshot(selection)
     const nextSnapshot = snapshot ?? emptyCellSnapshot(selection)
     viewportStore.setCellSnapshot(nextSnapshot, {
-      force: shouldForceSelectionHydration(viewportStore.peekCell(selection.sheetName, selection.address), nextSnapshot),
+      force:
+        options.force === true ||
+        shouldForceSelectionHydration(viewportStore.peekCell(selection.sheetName, selection.address), nextSnapshot),
+      forceOptimistic: options.forceOptimistic === true,
     })
     updateSelectionViewport(selection)
     return nextSnapshot
+  }
+
+  const applySelection = async (selection: WorkerRuntimeSelection): Promise<CellSnapshot> => {
+    currentSelection = selection
+    callbacks.onSelection(selection)
+    return hydrateSelectionCell(selection)
   }
 
   const loadSelectionCellSnapshot = async (selection: WorkerRuntimeSelection): Promise<CellSnapshot | null> => {
@@ -402,7 +412,11 @@ export async function createWorkerRuntimeSessionController(
       await applySelection(reconciledSelection)
       return
     }
-    updateSelectionViewport(reconciledSelection)
+    const hasActivePendingMutation = (runtimeState.pendingMutationSummary?.activeCount ?? 0) > 0
+    await hydrateSelectionCell(reconciledSelection, {
+      force: !hasActivePendingMutation,
+      forceOptimistic: !hasActivePendingMutation,
+    })
   }
 
   const applyAuthoritativeEventBatch = async (eventBatch: AuthoritativeWorkbookEventBatch): Promise<boolean> => {
