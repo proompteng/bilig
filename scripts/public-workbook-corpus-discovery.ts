@@ -10,7 +10,11 @@ import {
 } from './public-workbook-corpus-json.ts'
 import { defaultDownloadTimeoutMs } from './public-workbook-corpus-fetch.ts'
 import { fetchJsonWithTimeout } from './public-workbook-corpus-http.ts'
-import { financialWorkbookTopicEvidence } from './public-workbook-corpus-topics.ts'
+import {
+  financialWorkbookTopicEvidence,
+  recentWorkbookDateEvidence,
+  type PublicWorkbookRequiredTopic,
+} from './public-workbook-corpus-topics.ts'
 import { sha256HexSync } from './public-workbook-corpus-workbook.ts'
 import type {
   CkanPageRequest,
@@ -75,17 +79,14 @@ export async function discoverCkanWorkbookSources(args: DiscoverCkanArgs): Promi
           continue
         }
         const sourceUrl = readCkanDatasetUrl(page.portalBase, dataset)
-        const topicEvidence =
-          args.requiredTopic === 'financial-workpapers'
-            ? financialWorkbookTopicEvidence({
-                dataset,
-                resource: resourceRecord,
-                sourceUrl,
-                downloadUrl,
-                fileName,
-              })
-            : []
-        if (args.requiredTopic === 'financial-workpapers' && topicEvidence.length === 0) {
+        const topicEvidence = workbookTopicEvidence(args.requiredTopic, {
+          dataset,
+          resource: resourceRecord,
+          sourceUrl,
+          downloadUrl,
+          fileName,
+        })
+        if (args.requiredTopic && topicEvidence.length === 0) {
           continue
         }
         const key = `${downloadUrl}|${license.evidenceUrl ?? ''}`
@@ -132,6 +133,25 @@ export async function discoverCkanWorkbookSources(args: DiscoverCkanArgs): Promi
   }
 }
 
+function workbookTopicEvidence(
+  requiredTopic: PublicWorkbookRequiredTopic | undefined,
+  candidate: {
+    readonly dataset: Record<string, unknown>
+    readonly resource: Record<string, unknown>
+    readonly sourceUrl: string
+    readonly downloadUrl: string
+    readonly fileName: string
+  },
+): string[] {
+  if (requiredTopic === 'financial-workpapers') {
+    return financialWorkbookTopicEvidence(candidate)
+  }
+  if (requiredTopic === 'recent-2025-2026-workbooks') {
+    return recentWorkbookDateEvidence(candidate)
+  }
+  return []
+}
+
 export async function discoverFinancialCkanQueries(args: {
   readonly manifest: PublicWorkbookManifest
   readonly portalBases: readonly string[]
@@ -155,6 +175,35 @@ export async function discoverFinancialCkanQueries(args: {
   console.log(`Discovered ${String(discoveredManifest.sources.length)} financial workbook sources after query "${query}"`)
   args.onQueryDiscovered?.(discoveredManifest)
   return discoverFinancialCkanQueries({
+    ...args,
+    manifest: discoveredManifest,
+    queries: remainingQueries,
+  })
+}
+
+export async function discoverRecentComplexCkanQueries(args: {
+  readonly manifest: PublicWorkbookManifest
+  readonly portalBases: readonly string[]
+  readonly queries: readonly string[]
+  readonly limit: number
+  readonly rowsPerRequest: number
+  readonly onQueryDiscovered?: (manifest: PublicWorkbookManifest) => void
+}): Promise<PublicWorkbookManifest> {
+  const [query, ...remainingQueries] = args.queries
+  if (!query || args.manifest.sources.length >= args.limit) {
+    return args.manifest
+  }
+  const discoveredManifest = await discoverCkanWorkbookSources({
+    manifest: args.manifest,
+    portalBases: args.portalBases,
+    query,
+    limit: args.limit,
+    rowsPerRequest: args.rowsPerRequest,
+    requiredTopic: 'recent-2025-2026-workbooks',
+  })
+  console.log(`Discovered ${String(discoveredManifest.sources.length)} recent workbook sources after query "${query}"`)
+  args.onQueryDiscovered?.(discoveredManifest)
+  return discoverRecentComplexCkanQueries({
     ...args,
     manifest: discoveredManifest,
     queries: remainingQueries,

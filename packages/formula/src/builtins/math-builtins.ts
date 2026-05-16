@@ -14,7 +14,7 @@ interface MathBuiltinDeps {
   coerceShiftAmount: (value: CellValue | undefined) => number | undefined
   integerValue: (value: CellValue | undefined, fallback?: number) => number | undefined
   nonNegativeIntegerValue: (value: CellValue | undefined, fallback?: number) => number | undefined
-  firstError: (args: CellValue[]) => CellValue | undefined
+  firstError: (args: readonly (CellValue | undefined)[]) => CellValue | undefined
   numberResult: (value: number) => EvaluationResult
   valueError: () => EvaluationResult
   numError: () => EvaluationResult
@@ -366,6 +366,10 @@ export function createMathBuiltins({
       return numberResult(Math.floor(numberValue))
     },
     ROUNDUP: (value, digits) => {
+      const error = firstError([value, digits])
+      if (error) {
+        return error
+      }
       const numberValue = toNumber(value)
       const digitValue = digits === undefined ? 0 : toNumber(digits)
       if (numberValue === undefined || digitValue === undefined) {
@@ -374,6 +378,10 @@ export function createMathBuiltins({
       return numberResult(roundUpToDigits(numberValue, Math.trunc(digitValue)))
     },
     ROUNDDOWN: (value, digits) => {
+      const error = firstError([value, digits])
+      if (error) {
+        return error
+      }
       const numberValue = toNumber(value)
       const digitValue = digits === undefined ? 0 : toNumber(digits)
       if (numberValue === undefined || digitValue === undefined) {
@@ -382,6 +390,10 @@ export function createMathBuiltins({
       return numberResult(roundDownToDigits(numberValue, Math.trunc(digitValue)))
     },
     TRUNC: (value, digits) => {
+      const error = firstError([value, digits])
+      if (error) {
+        return error
+      }
       const numberValue = toNumber(value)
       const digitValue = digits === undefined ? 0 : toNumber(digits)
       if (numberValue === undefined || digitValue === undefined) {
@@ -453,6 +465,10 @@ export function createMathBuiltins({
       return numberResult(numbers.reduce((acc, value) => lcmPair(acc, value)))
     },
     MROUND: (value, multiple) => {
+      const error = firstError([value, multiple])
+      if (error) {
+        return error
+      }
       const numberValue = toNumber(value)
       const multipleValue = toNumber(multiple)
       if (numberValue === undefined || multipleValue === undefined || multipleValue === 0) {

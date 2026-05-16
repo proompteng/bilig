@@ -22,8 +22,15 @@ export function createNumericBuiltinHelpers({
   valueError,
   numericResultOrError,
 }: NumericBuiltinDependencies): NumericBuiltinHelpers {
+  const firstError = (args: readonly (CellValue | undefined)[]): CellValue | undefined =>
+    args.find((arg): arg is CellValue => arg?.tag === ValueTag.Error)
+
   return {
     roundWith: (value: CellValue, digits: CellValue | undefined): CellValue => {
+      const error = firstError([value, digits])
+      if (error) {
+        return error
+      }
       const numberValue = toNumber(value)
       const digitValue = digits === undefined ? 0 : toNumber(digits)
       if (numberValue === undefined || digitValue === undefined) {
@@ -32,6 +39,10 @@ export function createNumericBuiltinHelpers({
       return numberResult(roundToDigits(numberValue, Math.trunc(digitValue)))
     },
     floorWith: (value: CellValue, significance?: CellValue): CellValue => {
+      const error = firstError([value, significance])
+      if (error) {
+        return error
+      }
       const numberValue = toNumber(value)
       const significanceValue = significance === undefined ? 1 : toNumber(significance)
       if (numberValue === undefined || significanceValue === undefined) {
@@ -43,6 +54,10 @@ export function createNumericBuiltinHelpers({
       return numberResult(Math.floor(numberValue / significanceValue) * significanceValue)
     },
     ceilingWith: (value: CellValue, significance?: CellValue): CellValue => {
+      const error = firstError([value, significance])
+      if (error) {
+        return error
+      }
       const numberValue = toNumber(value)
       const significanceValue = significance === undefined ? 1 : toNumber(significance)
       if (numberValue === undefined || significanceValue === undefined) {
@@ -54,9 +69,16 @@ export function createNumericBuiltinHelpers({
       return numberResult(Math.ceil(numberValue / significanceValue) * significanceValue)
     },
     unaryMath: (value: CellValue, evaluate: (numeric: number) => number): CellValue => {
+      if (value.tag === ValueTag.Error) {
+        return value
+      }
       return numericResultOrError(evaluate(toNumber(value) ?? 0))
     },
     binaryMath: (left: CellValue, right: CellValue, evaluate: (left: number, right: number) => number): CellValue => {
+      const error = firstError([left, right])
+      if (error) {
+        return error
+      }
       return numericResultOrError(evaluate(toNumber(left) ?? 0, toNumber(right) ?? 0))
     },
   }

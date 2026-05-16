@@ -117,8 +117,8 @@ function numericResultOrError(value: number): CellValue {
   return Number.isFinite(value) ? numberResult(value) : valueError()
 }
 
-function firstError(args: CellValue[]): CellValue | undefined {
-  return args.find((arg) => arg.tag === ValueTag.Error)
+function firstError(args: readonly (CellValue | undefined)[]): CellValue | undefined {
+  return args.find((arg): arg is CellValue => arg?.tag === ValueTag.Error)
 }
 
 function coercePositiveInteger(value: CellValue | undefined, fallback: number): number | undefined {

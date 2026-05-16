@@ -266,6 +266,9 @@ function evaluateArrayLiftedScalarBuiltin(
 
 function evaluateUnary(operator: Extract<JsPlanInstruction, { opcode: 'unary' }>['operator'], value: StackValue): StackValue {
   const coerce = (cellValue: CellValue): CellValue => {
+    if (cellValue.tag === ValueTag.Error) {
+      return cellValue
+    }
     const numeric = toArithmeticNumber(cellValue)
     return numeric === undefined ? error(ErrorCode.Value) : numberValue(operator === '-' ? -numeric : numeric)
   }

@@ -1,6 +1,6 @@
 import { asRecordOrNull, readArray, readString } from './public-workbook-corpus-json.ts'
 
-export type PublicWorkbookRequiredTopic = 'financial-workpapers'
+export type PublicWorkbookRequiredTopic = 'financial-workpapers' | 'recent-2025-2026-workbooks'
 
 export const defaultFinancialWorkbookQueries = [
   'accounting',
@@ -35,6 +35,29 @@ export const defaultFinancialWorkbookQueries = [
   'workpaper',
   'work paper',
   'working paper',
+] as const
+
+export const defaultRecentComplexWorkbookQueries = [
+  '2026 budget',
+  '2026 finance',
+  '2026 financial',
+  '2026 spreadsheet',
+  '2026 workbook',
+  '2025 accounting',
+  '2025 annual report',
+  '2025 budget',
+  '2025 cash flow',
+  '2025 expenditure',
+  '2025 finance',
+  '2025 financial',
+  '2025 forecast',
+  '2025 ledger',
+  '2025 operating statement',
+  '2025 payroll',
+  '2025 procurement',
+  '2025 revenue',
+  '2025 spreadsheet',
+  '2025 workbook',
 ] as const
 
 interface FinancialTopicSourceCandidate {
@@ -91,6 +114,24 @@ export function financialWorkbookTopicEvidence(candidate: FinancialTopicSourceCa
   return evidence
 }
 
+export function recentWorkbookDateEvidence(candidate: FinancialTopicSourceCandidate): string[] {
+  const fields = collectRecentWorkbookDateFields(candidate)
+  const evidence: string[] = []
+  const seen = new Set<string>()
+  for (const field of fields) {
+    const years = recentYearsInText(field.value)
+    for (const year of years) {
+      const key = `recent-${String(year)}:${field.name}`
+      if (seen.has(key)) {
+        continue
+      }
+      seen.add(key)
+      evidence.push(key)
+    }
+  }
+  return evidence
+}
+
 function collectFinancialTopicFields(candidate: FinancialTopicSourceCandidate): { readonly name: string; readonly value: string }[] {
   return [
     ...collectRecordFields('dataset', candidate.dataset, ['title', 'name', 'notes', 'url']),
@@ -101,6 +142,25 @@ function collectFinancialTopicFields(candidate: FinancialTopicSourceCandidate): 
     { name: 'downloadUrl', value: candidate.downloadUrl },
     { name: 'fileName', value: candidate.fileName },
   ]
+}
+
+function collectRecentWorkbookDateFields(candidate: FinancialTopicSourceCandidate): { readonly name: string; readonly value: string }[] {
+  return [
+    ...collectRecordFields('resource', candidate.resource, ['url', 'filename']),
+    { name: 'downloadUrl', value: candidate.downloadUrl },
+    { name: 'fileName', value: candidate.fileName },
+  ]
+}
+
+function recentYearsInText(value: string): readonly number[] {
+  const years = new Set<number>()
+  if (/\b2025\b/u.test(value)) {
+    years.add(2025)
+  }
+  if (/\b2026\b/u.test(value)) {
+    years.add(2026)
+  }
+  return [...years]
 }
 
 function collectNamedCollectionFields(prefix: string, values: readonly unknown[]): { readonly name: string; readonly value: string }[] {

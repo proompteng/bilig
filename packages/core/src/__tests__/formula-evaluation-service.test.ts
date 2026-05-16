@@ -146,6 +146,23 @@ describe('EngineFormulaEvaluationService', () => {
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 4 })
   })
 
+  it('preserves explicit reference errors through numeric wrappers', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'evaluation-ref-error-numeric-wrapper' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellFormula('Sheet1', 'A1', 'ROUND(#REF!/1000,0)')
+    engine.setCellFormula('Sheet1', 'A2', '-#REF!')
+
+    expect(engine.getCellValue('Sheet1', 'A1')).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    })
+    expect(engine.getCellValue('Sheet1', 'A2')).toEqual({
+      tag: ValueTag.Error,
+      code: ErrorCode.Ref,
+    })
+  })
+
   it('syncs wasm inputs after direct scalar literal update shortcuts', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'evaluation-direct-scalar-kernel-sync' })
     await engine.ready()

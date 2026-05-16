@@ -485,6 +485,13 @@ describe('formula builtins', () => {
       tag: ValueTag.Number,
       value: 3.15,
     })
+    const refError = { tag: ValueTag.Error, code: ErrorCode.Ref } as const
+    expect(getBuiltin('ROUND')?.(refError, { tag: ValueTag.Number, value: 0 })).toEqual(refError)
+    expect(getBuiltin('ROUND')?.({ tag: ValueTag.Number, value: 3.145 }, refError)).toEqual(refError)
+    expect(getBuiltin('ROUNDUP')?.(refError, { tag: ValueTag.Number, value: 0 })).toEqual(refError)
+    expect(getBuiltin('ROUNDDOWN')?.(refError, { tag: ValueTag.Number, value: 0 })).toEqual(refError)
+    expect(getBuiltin('TRUNC')?.(refError, { tag: ValueTag.Number, value: 0 })).toEqual(refError)
+    expect(getBuiltin('MROUND')?.(refError, { tag: ValueTag.Number, value: 2 })).toEqual(refError)
     expect(getBuiltin('FLOOR')?.({ tag: ValueTag.Number, value: 3.6 })).toEqual({
       tag: ValueTag.Number,
       value: 3,

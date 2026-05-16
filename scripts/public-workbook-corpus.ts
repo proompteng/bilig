@@ -10,7 +10,12 @@ import {
   parsePublicWorkbookManifestJson,
   validatePublicWorkbookManifest,
 } from './public-workbook-corpus-json.ts'
-import { defaultCkanPortalBases, discoverCkanWorkbookSources, discoverFinancialCkanQueries } from './public-workbook-corpus-discovery.ts'
+import {
+  defaultCkanPortalBases,
+  discoverCkanWorkbookSources,
+  discoverFinancialCkanQueries,
+  discoverRecentComplexCkanQueries,
+} from './public-workbook-corpus-discovery.ts'
 import {
   defaultDownloadTimeoutMs,
   defaultFetchBatchSize,
@@ -31,7 +36,7 @@ import {
 } from './public-workbook-corpus-recorded-cases.ts'
 import { buildPublicWorkbookCorpusScorecardFromCases, validatePublicWorkbookCorpusScorecard } from './public-workbook-corpus-scorecard.ts'
 import { writePublicWorkbookCorpusCheck, writePublicWorkbookCorpusStatus } from './public-workbook-corpus-status.ts'
-import { defaultFinancialWorkbookQueries } from './public-workbook-corpus-topics.ts'
+import { defaultFinancialWorkbookQueries, defaultRecentComplexWorkbookQueries } from './public-workbook-corpus-topics.ts'
 import {
   runPublicWorkbookCorpusVerifyMissingCommand,
   runPublicWorkbookCorpusVerifyStaleCommand,
@@ -309,6 +314,28 @@ async function main(): Promise<void> {
       return discoveredManifest
     })
     console.log(`Discovered ${String(manifest.sources.length)} financial workbook sources`)
+    return
+  }
+  if (command === 'discover-recent-complex-ckan') {
+    const rowsPerRequest = readNumberArg('--rows-per-request', 100)
+    const queries = readRepeatedStringArg('--query')
+    assertPublicCorpusRunNotStopped({
+      commandName: 'public-workbook-corpus discover-recent-complex-ckan',
+      stopMarkerPath: corpusRunStopMarkerPath,
+    })
+    await withPublicWorkbookCorpusCacheLock(cacheDir, 'discover-recent-complex-ckan', async () => {
+      const manifest = await discoverRecentComplexCkanQueries({
+        manifest: readOrCreateManifest(manifestPath, targetWorkbookCount),
+        portalBases: readRepeatedStringArg('--portal').length > 0 ? readRepeatedStringArg('--portal') : defaultCkanPortalBases,
+        queries: queries.length > 0 ? queries : defaultRecentComplexWorkbookQueries,
+        limit: readNumberArg('--limit', targetWorkbookCount),
+        rowsPerRequest,
+        onQueryDiscovered: (partialManifest) => {
+          writeJson(manifestPath, partialManifest, 'public-workbook-corpus-manifest')
+        },
+      })
+      writeJson(manifestPath, manifest, 'public-workbook-corpus-manifest')
+    })
     return
   }
   if (command === 'fetch') {

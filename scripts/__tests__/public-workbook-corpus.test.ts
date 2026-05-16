@@ -1949,6 +1949,51 @@ describe('public workbook corpus', () => {
     expect(manifest.sources[0]?.topicEvidence).toEqual(expect.arrayContaining(['budget:dataset.title']))
   })
 
+  it('filters CKAN discovery to 2025-2026 workbook date evidence when requested', async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        result: {
+          results: [
+            {
+              id: 'dataset-2025-budget',
+              name: 'state-budget-2025',
+              title: 'State Budget Workbook',
+              metadata_modified: '2024-03-10T00:00:00',
+              license_id: 'CC-BY-4.0',
+              license_title: 'Creative Commons Attribution 4.0 International',
+              license_url: 'https://creativecommons.org/licenses/by/4.0/',
+              resources: [{ id: 'budget-resource', name: 'budget-2025.xlsx', url: 'https://example.com/budget-2025.xlsx' }],
+            },
+            {
+              id: 'dataset-old-budget',
+              name: 'state-budget',
+              title: 'State Budget Workbook',
+              metadata_modified: '2025-03-10T00:00:00',
+              license_id: 'CC-BY-4.0',
+              license_title: 'Creative Commons Attribution 4.0 International',
+              license_url: 'https://creativecommons.org/licenses/by/4.0/',
+              resources: [{ id: 'old-resource', name: 'old-budget.xlsx', url: 'https://example.com/old-budget.xlsx' }],
+            },
+          ],
+        },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const manifest = await discoverCkanWorkbookSources({
+      manifest: createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z', 500),
+      portalBases: ['https://example-ckan.test/api/3/action'],
+      query: 'budget',
+      limit: 500,
+      rowsPerRequest: 10,
+      discoveredAt: '2026-05-07T01:00:00.000Z',
+      requiredTopic: 'recent-2025-2026-workbooks',
+    })
+
+    expect(manifest.sources.map((source) => source.resourceId)).toEqual(['budget-resource'])
+    expect(manifest.sources[0]?.topicEvidence).toEqual(expect.arrayContaining(['recent-2025:downloadUrl', 'recent-2025:fileName']))
+  })
+
   it('surfaces isolated verification subprocess failures with stderr evidence', async () => {
     const fixture = createIsolatedVerificationFixture()
     const child = createMockChildProcess()

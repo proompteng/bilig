@@ -195,7 +195,7 @@ export interface DiscoverCkanArgs {
   readonly limit: number
   readonly rowsPerRequest: number
   readonly discoveredAt?: string
-  readonly requiredTopic?: 'financial-workpapers'
+  readonly requiredTopic?: 'financial-workpapers' | 'recent-2025-2026-workbooks'
 }
 
 export interface FetchCorpusArgs {
