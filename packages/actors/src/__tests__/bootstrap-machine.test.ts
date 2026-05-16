@@ -127,4 +127,53 @@ describe('@bilig/actors bootstrap machine', () => {
     expect(actor.getSnapshot().context.error).toBeNull()
     actor.stop()
   })
+
+  it('keeps recovering from a failed bootstrap when failed retry is configured', async () => {
+    let attempts = 0
+    let sawFailed = false
+    const machine = createBootstrapMachine<{ defaultDocumentId: string }, { authToken: string }>()
+    const actor = createActor(machine, {
+      input: {
+        autoRetryDelayMs: 1,
+        failedRetryDelayMs: 1,
+        maxAutoRetryAttempts: 1,
+        loadConfig: async () => {
+          attempts += 1
+          if (attempts < 3) {
+            throw new Error(`temporary failure ${attempts}`)
+          }
+          return { defaultDocumentId: 'bilig-demo' }
+        },
+        loadSession: async () => ({ authToken: 'token-123' }),
+      },
+    })
+
+    const done = new Promise<void>((resolve, reject) => {
+      const subscription = actor.subscribe((snapshot) => {
+        if (snapshot.matches('failed')) {
+          if (attempts <= 2) {
+            sawFailed = true
+            expect(snapshot.context.error).toBe('temporary failure 2')
+            return
+          }
+          subscription.unsubscribe()
+          reject(new Error(snapshot.context.error ?? 'failed retry did not recover'))
+          return
+        }
+        if (snapshot.matches('ready')) {
+          subscription.unsubscribe()
+          resolve()
+          return
+        }
+      })
+    })
+
+    actor.start()
+    await done
+
+    expect(sawFailed).toBe(true)
+    expect(attempts).toBe(3)
+    expect(actor.getSnapshot().context.error).toBeNull()
+    actor.stop()
+  })
 })

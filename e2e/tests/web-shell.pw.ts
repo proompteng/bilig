@@ -319,6 +319,30 @@ test('@browser-ci web app keeps click-away commits and keyboard clears stable', 
   await expect(resolvedValue).toHaveText('∅')
 })
 
+test('@browser-ci web app recovers after runtime config failures outlive the fast retry window', async ({ page }) => {
+  let runtimeConfigAttempts = 0
+  await page.route('**/runtime-config.json', async (route) => {
+    runtimeConfigAttempts += 1
+    if (runtimeConfigAttempts <= 5) {
+      await route.fulfill({
+        body: 'temporary runtime config failure',
+        contentType: 'text/plain',
+        status: 502,
+      })
+      return
+    }
+    await route.continue()
+  })
+
+  await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-runtime-config-recovery'))}&persist=0`)
+
+  await expect(page.getByTestId('worker-error')).toContainText('Failed to load runtime config (502)', { timeout: 6_000 })
+  await expect(page.getByTestId('formula-bar')).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByTestId('sheet-grid')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByTestId('worker-error')).toHaveCount(0)
+  expect(runtimeConfigAttempts).toBeGreaterThan(5)
+})
+
 test('@browser-ci web app keeps an editor clear after click-away selection', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-editor-clear-click-away')
   await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=A1`)

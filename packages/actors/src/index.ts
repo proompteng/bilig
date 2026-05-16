@@ -6,6 +6,7 @@ interface BootstrapContext<Config, Session> {
   readonly error: string | null
   readonly autoRetryAttempt: number
   readonly autoRetryDelayMs: number
+  readonly failedRetryDelayMs: number
   readonly maxAutoRetryAttempts: number
   readonly shouldLoadSession: boolean
   readonly loadConfig: () => Promise<Config>
@@ -17,6 +18,7 @@ export interface BootstrapMachineInput<Config, Session> {
   readonly loadConfig: () => Promise<Config>
   readonly loadSession: (config: Config) => Promise<Session>
   readonly autoRetryDelayMs?: number | undefined
+  readonly failedRetryDelayMs?: number | undefined
   readonly maxAutoRetryAttempts?: number | undefined
   readonly shouldLoadSession?: (config: Config) => boolean
 }
@@ -58,6 +60,7 @@ export function createBootstrapMachine<Config, Session>() {
     },
     delays: {
       autoRetryDelay: ({ context }: { context: BootstrapContext<Config, Session> }) => context.autoRetryDelayMs,
+      failedRetryDelay: ({ context }: { context: BootstrapContext<Config, Session> }) => context.failedRetryDelayMs,
     },
   }).createMachine({
     id: 'bootstrap',
@@ -68,6 +71,7 @@ export function createBootstrapMachine<Config, Session>() {
       error: null,
       autoRetryAttempt: 0,
       autoRetryDelayMs: normalizeNonNegativeFiniteInteger(input.autoRetryDelayMs, 750),
+      failedRetryDelayMs: normalizeNonNegativeFiniteInteger(input.failedRetryDelayMs, 0),
       maxAutoRetryAttempts: normalizeNonNegativeFiniteInteger(input.maxAutoRetryAttempts, 0),
       shouldLoadSession: true,
       loadConfig: input.loadConfig,
@@ -166,6 +170,19 @@ export function createBootstrapMachine<Config, Session>() {
         type: 'final',
       },
       failed: {
+        after: {
+          failedRetryDelay: {
+            guard: ({ context }: { context: BootstrapContext<Config, Session> }) => context.failedRetryDelayMs > 0,
+            target: 'loadingConfig',
+            actions: assign({
+              config: () => null,
+              session: () => null,
+              error: () => null,
+              autoRetryAttempt: () => 0,
+              shouldLoadSession: () => true,
+            }),
+          },
+        },
         on: {
           retry: {
             target: 'loadingConfig',

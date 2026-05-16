@@ -104,6 +104,7 @@ function BootstrapRoot() {
   const actorRef = useActorRef(bootstrapMachine, {
     input: {
       autoRetryDelayMs: 750,
+      failedRetryDelayMs: remoteSyncEnabled ? 5_000 : 0,
       maxAutoRetryAttempts: remoteSyncEnabled ? 3 : 0,
       loadConfig: async () => {
         if (!remoteSyncEnabled) {
