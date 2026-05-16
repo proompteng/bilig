@@ -36,6 +36,22 @@ describe('useZeroHealthReady', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('does not probe while Zero is still connecting', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<TestProbe connectionStateName="connecting" runtimeReady />)
+      await flushMicrotasks()
+    })
+
+    expect(host.querySelector("[data-testid='probe']")?.getAttribute('data-zero-health-ready')).toBe('false')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('becomes true after a successful keepalive probe', async () => {
     vi.stubGlobal(
       'fetch',
@@ -69,11 +85,51 @@ describe('useZeroHealthReady', () => {
     expect(host.querySelector("[data-testid='probe']")?.getAttribute('data-zero-health-ready')).toBe('false')
 
     await act(async () => {
-      vi.advanceTimersByTime(250)
+      vi.advanceTimersByTime(1_000)
       await flushMicrotasks()
     })
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(host.querySelector("[data-testid='probe']")?.getAttribute('data-zero-health-ready')).toBe('true')
+  })
+
+  it('backs off repeated failed keepalive probes', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn<() => Promise<Pick<Response, 'ok'>>>().mockResolvedValue({ ok: false })
+    vi.stubGlobal('fetch', fetchMock)
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<TestProbe connectionStateName="connected" runtimeReady />)
+      await flushMicrotasks()
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      vi.advanceTimersByTime(999)
+      await flushMicrotasks()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+      await flushMicrotasks()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      vi.advanceTimersByTime(1_999)
+      await flushMicrotasks()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+      await flushMicrotasks()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 })
