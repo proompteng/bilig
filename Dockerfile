@@ -1,6 +1,6 @@
 FROM oven/bun:1.3.10 AS bun
 
-FROM node:24-bookworm-slim AS build
+FROM node:26-bookworm-slim AS build
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="/usr/local/bin:$PNPM_HOME:$PATH"
@@ -24,7 +24,7 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm build
 RUN pnpm --filter @bilig/app deploy --prod --legacy /out/bilig
 
-FROM node:24-bookworm-slim AS bilig-runtime
+FROM node:26-bookworm-slim AS bilig-runtime
 
 ENV NODE_ENV="production"
 
