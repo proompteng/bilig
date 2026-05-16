@@ -313,8 +313,8 @@ for (const required of [
   'Use HyperFormula first when you need a mature, broad formula engine',
   'Use SheetJS or ExcelJS first when the primary job is reading, writing, styling',
   'Use Google Sheets API first when a shared hosted spreadsheet',
-  'The current checked benchmark artifact records `49/57` comparable',
-  'single-formula-edit-recalc',
+  'The current checked benchmark artifact records `46/57` comparable',
+  'structural-insert-columns',
   'https://github.com/proompteng/bilig/stargazers',
   'https://github.com/proompteng/bilig/discussions/new?category=general',
   'adoption-blocker form',
@@ -335,9 +335,9 @@ for (const required of [
   'title: Show HN proof for formula workbooks in Node services',
   'curl -fsSLo quickstart.ts https://proompteng.github.io/bilig/npm-eval.ts',
   '"verified": true',
-  '`49/57` mean-latency wins',
-  '`48/57` workloads winning',
-  '`single-formula-edit-recalc` is slower at',
+  '`46/57` mean-latency wins',
+  '`44/57` workloads winning',
+  '`structural-insert-columns` is slower at',
   'Show HN: Formula workbooks for Node services and agent tools',
   'https://github.com/proompteng/bilig/stargazers',
 ] as const) {
@@ -470,7 +470,7 @@ requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/google
 const npmProvenancePackageTrustDoc = await readFile(join(docsRoot, 'npm-provenance-package-trust.md'), 'utf8')
 for (const required of [
   'title: Verify npm provenance for @bilig/headless',
-  'npm view @bilig/headless@0.16.18 version dist.attestations dist.signatures --json',
+  'npm view @bilig/headless@0.16.19 version dist.attestations dist.signatures --json',
   'npm audit signatures',
   'dist.attestations.provenance.predicateType',
   'npm publish ... --provenance',

@@ -24,13 +24,14 @@ export const communityLaunchPackRequiredLinks = [
   'https://www.pulsemcp.com/servers?search=bilig&q=bilig',
   'https://proompteng.github.io/bilig/mcp-spreadsheet-server-directory.html',
   'https://github.com/krzysztofspilka/JSpreadsheets/pull/50',
+  'https://github.com/statico/jsgrids/pull/94',
   'https://github.com/zhangming1978/js-spreadsheet-benchmark/issues/1',
   'https://github.com/tolkonepiu/best-of-mcp-servers/pull/192',
   'https://github.com/MunGell/awesome-for-beginners/pull/2012',
   'https://github.com/ever-works/awesome-mcp-servers-data/pull/4',
   'https://github.com/jmstfv/mcpserve/pull/19',
   'Latest conversion snapshot on May 16, 2026',
-  '`@bilig/headless@0.16.18`',
+  '`@bilig/headless@0.16.19`',
   '21,392` clones from `2,641` unique cloners',
   'comment child `48045467` is dead',
   'comment child `48052854` is flagged',
@@ -41,6 +42,7 @@ export const communityLaunchPackRequiredLinks = [
 
 export const llmsExternalSurfaceLinks = [
   'https://github.com/krzysztofspilka/JSpreadsheets/pull/50',
+  'https://github.com/statico/jsgrids/pull/94',
   'https://github.com/zhangming1978/js-spreadsheet-benchmark/issues/1',
   'https://github.com/tolkonepiu/best-of-mcp-servers/pull/192',
   'https://github.com/MunGell/awesome-for-beginners/pull/2012',

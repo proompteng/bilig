@@ -119,9 +119,9 @@ and needs formula readback, persistence, and restore proof.
 
 ## Evidence and limits
 
-The current checked benchmark artifact records `49/57` comparable
+The current checked benchmark artifact records `46/57` comparable
 mean-latency wins against HyperFormula-style workloads. The caveat is public:
-`single-formula-edit-recalc` is slower at p95 by `2.024x`, and browser UI
+`structural-insert-columns` is slower at p95 by `1.715x`, and browser UI
 rendering is outside the benchmark.
 
 This page does not claim full Excel compatibility. It does not claim chart,

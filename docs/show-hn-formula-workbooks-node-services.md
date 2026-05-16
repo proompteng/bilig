@@ -65,12 +65,12 @@ formula evaluator.
 
 ## Evidence
 
-The checked benchmark artifact currently records `49/57` mean-latency wins
-against HyperFormula-style comparable workloads, and `48/57` workloads winning
+The checked benchmark artifact currently records `46/57` mean-latency wins
+against HyperFormula-style comparable workloads, and `44/57` workloads winning
 both mean and p95.
 
-The caveat is intentionally visible: `single-formula-edit-recalc` is slower at
-p95 by `2.024x`. Browser grid rendering is outside this benchmark.
+The caveat is intentionally visible: `structural-insert-columns` is slower at
+p95 by `1.715x`. Browser grid rendering is outside this benchmark.
 
 Read the benchmark note:
 [what the WorkPaper benchmark proves](what-workpaper-benchmark-proves.md).
@@ -124,9 +124,9 @@ The proof starts from an empty npm project, edits an input cell, reads the
 recalculated formula value, serializes WorkPaper JSON, restores it, and verifies
 the same output.
 
-It is not a finished Excel clone. The benchmark and caveats are public: 49/57
-mean-latency wins against HyperFormula-style comparable workloads, 48/57
-mean+p95 wins, and single-formula-edit-recalc is the visible p95 holdout.
+It is not a finished Excel clone. The benchmark and caveats are public: 46/57
+mean-latency wins against HyperFormula-style comparable workloads, 44/57
+mean+p95 wins, and structural-insert-columns is the visible p95 holdout.
 
 I am looking for concrete adoption blockers: which backend or agent workbook
 workflow would this need to support before you would try it?
