@@ -167,7 +167,9 @@ export class ProjectedViewportCellCache {
     }
     if (current) {
       const shouldProtectCurrent =
-        options.force !== true || ((current.flags & OPTIMISTIC_CELL_SNAPSHOT_FLAG) !== 0 && options.forceOptimistic !== true)
+        (current.flags & OPTIMISTIC_CELL_SNAPSHOT_FLAG) !== 0 && isOptimisticClearResurrection(current, incoming)
+          ? true
+          : options.force !== true || ((current.flags & OPTIMISTIC_CELL_SNAPSHOT_FLAG) !== 0 && options.forceOptimistic !== true)
       if (shouldProtectCurrent && shouldKeepCurrentSnapshot(current, incoming, { allowResetEmptyOverride: false })) {
         return false
       }
@@ -381,4 +383,12 @@ export class ProjectedViewportCellCache {
       version: 0,
     }
   }
+}
+
+function isClearCellSnapshot(snapshot: CellSnapshot): boolean {
+  return snapshot.formula === undefined && snapshot.input === undefined && snapshot.value.tag === ValueTag.Empty
+}
+
+function isOptimisticClearResurrection(current: CellSnapshot, incoming: CellSnapshot): boolean {
+  return isClearCellSnapshot(current) && !isClearCellSnapshot(incoming)
 }
