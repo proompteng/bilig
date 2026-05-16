@@ -10,6 +10,7 @@ describe('zero schema store', () => {
     await ensureZeroSyncSchema(db)
 
     expect(query.mock.calls.some(([text]) => String(text).includes('CREATE TABLE IF NOT EXISTS workbook_snapshot'))).toBe(true)
+    expect(query.mock.calls.some(([text]) => String(text).includes('workbook_event_workbook_client_mutation_idx'))).toBe(true)
     expect(
       query.mock.calls.some(([text]) => String(text).includes('UPDATE sheets SET sheet_id = sort_order + 1 WHERE sheet_id IS NULL')),
     ).toBe(false)

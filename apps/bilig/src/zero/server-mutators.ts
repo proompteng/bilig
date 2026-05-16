@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util'
 import type { SpreadsheetEngine } from '@bilig/core'
 import { applyWorkbookAgentCommandBundle } from '@bilig/agent-api'
 import type { EngineOp } from '@bilig/workbook-domain'
@@ -33,7 +34,11 @@ import type { WorkbookRuntimeManager } from '../workbook-runtime/runtime-manager
 import type { Queryable } from './store.js'
 import { acquireWorkbookMutationLock } from './workbook-runtime-store.js'
 import { ensureWorkbookDocumentExists } from './workbook-migration-store.js'
-import { persistWorkbookMutation } from './workbook-mutation-store.js'
+import {
+  loadAppliedWorkbookClientMutation,
+  persistWorkbookMutation,
+  type AppliedWorkbookClientMutation,
+} from './workbook-mutation-store.js'
 import { upsertWorkbookPresence } from './presence-store.js'
 import type { WorkbookChangeRange } from './workbook-change-store.js'
 import { loadLatestRedoableWorkbookChange, loadLatestUndoableWorkbookChange, loadWorkbookChange } from './workbook-change-store.js'
@@ -82,6 +87,15 @@ function toEngineUndoBundle(undoOps: readonly EngineOp[] | null): WorkbookChange
   }
 }
 
+function assertClientMutationReplayMatches(appliedMutation: AppliedWorkbookClientMutation, eventPayload: WorkbookEventPayload): void {
+  if (isDeepStrictEqual(appliedMutation.payload, eventPayload)) {
+    return
+  }
+  throw new Error(
+    `Client mutation ${appliedMutation.clientMutationId} for workbook ${appliedMutation.documentId} was already applied with a different payload`,
+  )
+}
+
 function captureEngineUndoBundle(engine: SpreadsheetEngine, mutate: (engine: SpreadsheetEngine) => void): WorkbookChangeUndoBundle | null {
   return toEngineUndoBundle(
     engine.captureUndoOps(() => {
@@ -122,6 +136,15 @@ async function commitWorkbookMutation(
   return await runtimeManager.runExclusive(documentId, async () => {
     const db = tx.dbTransaction.wrappedTransaction
     await acquireWorkbookMutationLock(db, documentId)
+    const appliedClientMutation = await loadAppliedWorkbookClientMutation(db, documentId, clientMutationId)
+    if (appliedClientMutation) {
+      assertClientMutationReplayMatches(appliedClientMutation, eventPayload)
+      return {
+        documentId,
+        revision: appliedClientMutation.revision,
+        updatedAt: appliedClientMutation.createdAt,
+      }
+    }
     const state = await runtimeManager.loadRuntime(db, documentId)
     try {
       const undoBundle = mutate(state.engine)
@@ -173,7 +196,6 @@ async function commitWorkbookHistoryMutation(input: {
   await runtimeManager.runExclusive(documentId, async () => {
     const db = serverTx.dbTransaction.wrappedTransaction
     await acquireWorkbookMutationLock(db, documentId)
-    const state = await runtimeManager.loadRuntime(db, documentId)
     const eventPayload: WorkbookEventPayload = {
       kind: eventKind,
       targetRevision: targetChange.revision,
@@ -183,6 +205,12 @@ async function commitWorkbookHistoryMutation(input: {
       ...(targetChange.range ? { range: targetChange.range } : {}),
       appliedBundle: targetChange.undoBundle,
     }
+    const appliedClientMutation = await loadAppliedWorkbookClientMutation(db, documentId, clientMutationId)
+    if (appliedClientMutation) {
+      assertClientMutationReplayMatches(appliedClientMutation, eventPayload)
+      return
+    }
+    const state = await runtimeManager.loadRuntime(db, documentId)
     try {
       const undoBundle = applyWorkbookChangeUndoBundle(state.engine, targetChange.undoBundle)
       const ownerUserId = resolveOwnerUserId(state, session)

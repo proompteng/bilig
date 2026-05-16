@@ -156,6 +156,11 @@ export async function ensureZeroSyncSchema(db: Queryable): Promise<void> {
       PRIMARY KEY (workbook_id, revision)
     );
   `)
+  await db.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS workbook_event_workbook_client_mutation_idx
+      ON workbook_event(workbook_id, client_mutation_id)
+      WHERE client_mutation_id IS NOT NULL;
+  `)
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS recalc_job (

@@ -11,7 +11,13 @@ import {
   buildWorkbookStyleRowsFromEngine,
   materializeCellEvalProjection,
 } from './projection.js'
-import { deriveDirtyRegions, type DirtyRegion, type WorkbookEventRecord } from '@bilig/zero-sync'
+import {
+  deriveDirtyRegions,
+  isWorkbookEventPayload,
+  type DirtyRegion,
+  type WorkbookEventPayload,
+  type WorkbookEventRecord,
+} from '@bilig/zero-sync'
 import {
   eventRequiresRecalc,
   isColumnMetadataEventPayload,
@@ -20,6 +26,7 @@ import {
   isRowMetadataEventPayload,
   isStyleRangeEventPayload,
   nowIso,
+  parseInteger,
 } from './store-support.js'
 import {
   applyAxisMetadataDiff,
@@ -75,6 +82,50 @@ async function appendWorkbookEvent(db: Queryable, event: WorkbookEventRecord): P
     `,
     [event.workbookId, event.revision, event.actorUserId, event.clientMutationId, JSON.stringify(event.payload), event.createdAt],
   )
+}
+
+export interface AppliedWorkbookClientMutation {
+  readonly documentId: string
+  readonly clientMutationId: string
+  readonly revision: number
+  readonly payload: WorkbookEventPayload
+  readonly createdAt: string
+}
+
+export async function loadAppliedWorkbookClientMutation(
+  db: Queryable,
+  documentId: string,
+  clientMutationId: string | undefined,
+): Promise<AppliedWorkbookClientMutation | null> {
+  if (clientMutationId === undefined) {
+    return null
+  }
+  const result = await db.query<{
+    revision: number | string | null
+    txn_json: unknown
+    created_at: string | Date | null
+  }>(
+    `
+      SELECT revision, txn_json, created_at
+        FROM workbook_event
+       WHERE workbook_id = $1
+         AND client_mutation_id = $2
+       ORDER BY revision ASC
+       LIMIT 1
+    `,
+    [documentId, clientMutationId],
+  )
+  const row = result.rows[0]
+  if (!row || !isWorkbookEventPayload(row.txn_json)) {
+    return null
+  }
+  return {
+    documentId,
+    clientMutationId,
+    revision: parseInteger(row.revision),
+    payload: row.txn_json,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : (row.created_at ?? ''),
+  }
 }
 
 async function supersedePendingRecalcJobs(db: Queryable, documentId: string, toRevision: number): Promise<void> {

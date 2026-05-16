@@ -60,7 +60,7 @@ vi.mock('../workbook-change-store.js', () => ({
   appendWorkbookChange: changeStoreFns.appendWorkbookChange,
 }))
 
-import { persistWorkbookMutation } from '../workbook-mutation-store.js'
+import { loadAppliedWorkbookClientMutation, persistWorkbookMutation } from '../workbook-mutation-store.js'
 import type { PersistWorkbookMutationOptions, Queryable } from '../store.js'
 
 function makeBaseOptions(overrides: Partial<PersistWorkbookMutationOptions> = {}): PersistWorkbookMutationOptions {
@@ -212,5 +212,34 @@ describe('workbook mutation store', () => {
     expect(storeFns.applyStyleDiff).toHaveBeenCalledOnce()
     expect(storeFns.persistCellSourceRange).toHaveBeenCalledOnce()
     expect(query.mock.calls.some(([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO recalc_job'))).toBe(false)
+  })
+
+  it('loads applied client mutations from the authoritative event stream', async () => {
+    const createdAt = new Date('2026-05-16T12:00:00.000Z')
+    const payload = {
+      kind: 'setCellValue',
+      sheetName: 'Sheet1',
+      address: 'A1',
+      value: 17,
+    }
+    const query = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          revision: '9',
+          txn_json: payload,
+          created_at: createdAt,
+        },
+      ],
+    })
+    const db: Queryable = { query }
+
+    await expect(loadAppliedWorkbookClientMutation(db, 'book-1', 'book-1:pending:9')).resolves.toEqual({
+      documentId: 'book-1',
+      clientMutationId: 'book-1:pending:9',
+      revision: 9,
+      payload,
+      createdAt: '2026-05-16T12:00:00.000Z',
+    })
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('client_mutation_id = $2'), ['book-1', 'book-1:pending:9'])
   })
 })
