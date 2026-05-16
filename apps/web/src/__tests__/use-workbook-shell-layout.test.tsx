@@ -165,6 +165,71 @@ describe('workbook shell layout', () => {
     })
   })
 
+  it('removes corrupt persisted layout after falling back to defaults', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    window.localStorage.setItem('bilig:workbook-shell-layout:doc-corrupt', '{')
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<ShellLayoutHarness documentId="doc-corrupt" />)
+    })
+
+    const state = host.querySelector("[data-testid='shell-layout-state']")
+    expect(state?.getAttribute('data-open')).toBe('false')
+    expect(state?.getAttribute('data-tab')).toBe('')
+    expect(state?.getAttribute('data-width')).toBe(String(DEFAULT_WORKBOOK_SIDE_PANEL_WIDTH))
+    expect(window.localStorage.getItem('bilig:workbook-shell-layout:doc-corrupt')).toBe(
+      JSON.stringify({
+        sidePanelOpen: false,
+        sidePanelWidth: DEFAULT_WORKBOOK_SIDE_PANEL_WIDTH,
+      }),
+    )
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('falls back when corrupt persisted layout cleanup fails', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem() {
+          return '{'
+        },
+        removeItem() {
+          throw new Error('storage denied')
+        },
+        setItem() {
+          throw new Error('storage denied')
+        },
+      },
+    })
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<ShellLayoutHarness documentId="doc-cleanup-denied" />)
+    })
+
+    const state = host.querySelector("[data-testid='shell-layout-state']")
+    expect(state?.getAttribute('data-open')).toBe('false')
+    expect(state?.getAttribute('data-tab')).toBe('')
+    expect(state?.getAttribute('data-width')).toBe(String(DEFAULT_WORKBOOK_SIDE_PANEL_WIDTH))
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
   it('uses a viewport-aware width clamp and starts closed on narrow windows', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

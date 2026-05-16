@@ -24,6 +24,14 @@ function storageKey(scope: string): string {
   return `${STORAGE_KEY_PREFIX}${scope}`
 }
 
+function removePersistedWorkbookShellLayout(scope: string): void {
+  try {
+    window.localStorage.removeItem(storageKey(scope))
+  } catch {
+    // Ignore storage cleanup failures and keep the shell usable.
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -83,6 +91,7 @@ function loadPersistedWorkbookShellLayout(
     const parsed = JSON.parse(raw) as unknown
     return normalizeStoredWorkbookShellLayout(parsed, availableTabs, defaultTab, defaultOpen)
   } catch {
+    removePersistedWorkbookShellLayout(scope)
     return normalizeStoredWorkbookShellLayout(null, availableTabs, defaultTab, defaultOpen)
   }
 }
