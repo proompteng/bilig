@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.16.19
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.16.18
+- Manual override: no
+
+## Fixes
+- perf(headless): streamline scalar formula cascades (085e7f5f)
+
+## Internal runtime changes
+- docs(growth): surface public review proof path (7a9d98df)
+
 ## 0.16.18
 
 - Release type: patch
