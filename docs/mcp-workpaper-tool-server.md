@@ -42,23 +42,19 @@ printf '%s\n' \
 
 ## Copy-Paste JSON-RPC Transcript
 
-Use this transcript when reviewing the server from an MCP client, directory
-submission, or HN-style launch thread. It shows the transport contract without
-requiring an SDK wrapper:
+Use the maintained transcript smoke when reviewing the server from an MCP
+client, directory submission, or HN-style launch thread:
 
 ```sh
 cd examples/headless-workpaper
 npm install
-printf '%s\n' \
-  '{"jsonrpc":"2.0","id":1,"method":"initialize"}' \
-  '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
-  '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
-  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"set_workpaper_input_cell","arguments":{"sheetName":"Inputs","address":"B3","value":0.4}}}' |
-  NODE_NO_WARNINGS=1 npm run --silent agent:mcp-stdio
+NODE_NO_WARNINGS=1 npm run --silent agent:mcp-transcript
 ```
 
-The important response is the `tools/call` result. A passing run returns
-structured content like this:
+The script starts the stdio server, sends `initialize`, `tools/list`, and
+`tools/call`, parses the JSON-RPC responses, asserts the formula readback, and
+prints a compact transcript summary. The important response is the `tools/call`
+result. A passing run returns structured content like this:
 
 ```json
 {
@@ -108,6 +104,18 @@ structured content like this:
 That single response proves the tool changed one input cell, recalculated
 dependent formulas, preserved the formulas through WorkPaper JSON
 serialization, restored the document, and returned machine-checkable readback.
+
+If you want the raw newline-delimited JSON-RPC request stream instead of the
+maintained transcript wrapper, use:
+
+```sh
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize"}' \
+  '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"set_workpaper_input_cell","arguments":{"sheetName":"Inputs","address":"B3","value":0.4}}}' |
+  NODE_NO_WARNINGS=1 npm run --silent agent:mcp-stdio
+```
 
 The npm package exposes the demo server as `bilig-workpaper-mcp` by default:
 

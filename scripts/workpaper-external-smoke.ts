@@ -14,6 +14,7 @@ import {
   parseNodeJsonFileOutput,
   parseNodeMarkdownReportOutput,
   parseNodeMcpStdioOutput,
+  parseNodeMcpTranscriptOutput,
   parseNodePersistenceOutput,
   parseNodeRangeReadbackOutput,
   parseNodeRevenueScenarioOutput,
@@ -24,6 +25,7 @@ import {
   parseNodeXlsxImportOutput,
   type AgentToolCallSummary,
   type AgentVerificationSummary,
+  type McpTranscriptSummary,
   type RevenueScenarioSummary,
 } from './workpaper-external-smoke-parsers.ts'
 import { writeXlsxImportScript } from './workpaper-external-smoke-fixtures.ts'
@@ -250,6 +252,7 @@ function runNodeSmoke(
       id: null
     }
   }
+  mcpTranscript: McpTranscriptSummary
   rangeReadback: {
     range: string
     serializedReadback: unknown[][]
@@ -432,6 +435,9 @@ function runNodeSmoke(
     ),
     { expectedServerName: 'bilig-headless-workpaper' },
   )
+  const mcpTranscript = parseNodeMcpTranscriptOutput(
+    runTextCommand('npm', ['run', '--silent', 'agent:mcp-transcript'], { cwd: projectDir }),
+  )
   const mcpStdioErrors = parseNodeMcpStdioErrorOutput(
     runTextCommand(
       'sh',
@@ -472,6 +478,7 @@ function runNodeSmoke(
     markdownReport,
     mcpStdio,
     mcpStdioErrors,
+    mcpTranscript,
     packageMcpStdio,
     persistence,
     projectDir,

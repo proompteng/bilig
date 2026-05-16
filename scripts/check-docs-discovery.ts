@@ -47,6 +47,7 @@ const [
   starterIssues,
   newContributorGuide,
   headlessPackageJson,
+  headlessExamplePackageJson,
   headlessReadme,
   excelImportReadme,
   publicApi,
@@ -73,6 +74,7 @@ const [
   readFile(join(docsRoot, 'starter-issues.md'), 'utf8'),
   readFile(join(docsRoot, 'new-contributor-guide.md'), 'utf8'),
   readFile(join(repoRoot, 'packages', 'headless', 'package.json'), 'utf8'),
+  readFile(join(repoRoot, 'examples', 'headless-workpaper', 'package.json'), 'utf8'),
   readFile(join(repoRoot, 'packages', 'headless', 'README.md'), 'utf8'),
   readFile(join(repoRoot, 'packages', 'excel-import', 'README.md'), 'utf8'),
   readFile(join(docsRoot, 'public-api.md'), 'utf8'),
@@ -509,9 +511,15 @@ requireIncludes(
 requireIncludes(mcpWorkPaperToolServerDoc, 'npm run agent:mcp-tools', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(mcpWorkPaperToolServerDoc, 'npm run --silent agent:mcp-stdio', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(mcpWorkPaperToolServerDoc, '## Copy-Paste JSON-RPC Transcript', 'docs/mcp-workpaper-tool-server.md')
-requireIncludes(mcpWorkPaperToolServerDoc, 'NODE_NO_WARNINGS=1 npm run --silent agent:mcp-stdio', 'docs/mcp-workpaper-tool-server.md')
+requireIncludes(mcpWorkPaperToolServerDoc, 'NODE_NO_WARNINGS=1 npm run --silent agent:mcp-transcript', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(mcpWorkPaperToolServerDoc, '"structuredContent": {', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(mcpWorkPaperToolServerDoc, '"restoredMatchesAfter": true', 'docs/mcp-workpaper-tool-server.md')
+requireIncludes(
+  headlessExamplePackageJson,
+  '"agent:mcp-transcript": "tsx mcp-stdio-transcript.ts"',
+  'examples/headless-workpaper/package.json',
+)
+requireIncludes(rootPackageJson, '"workpaper:smoke:external": "bun scripts/workpaper-external-smoke.ts"', 'package.json')
 requireIncludes(mcpWorkPaperToolServerDoc, 'npm exec --package @bilig/headless -- bilig-workpaper-mcp', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(
   mcpWorkPaperToolServerDoc,

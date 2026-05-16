@@ -176,7 +176,9 @@ npm run agent:verify
 - MCP JSON-RPC transcript for verified workbook write/readback:
   https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html
   https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-server.md
-  includes initialize, tools/list, tools/call, structuredContent, editedCell
+  run NODE_NO_WARNINGS=1 npm run --silent agent:mcp-transcript from
+  examples/headless-workpaper. It starts the stdio server, sends initialize,
+  tools/list, and tools/call, then verifies structuredContent, editedCell
   Inputs!B3, formulasPersisted, restoredMatchesAfter, and expectedArrChanged.
 - node spreadsheet formula engine:
   https://proompteng.github.io/bilig/node-spreadsheet-formula-engine.html

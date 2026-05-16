@@ -48,6 +48,7 @@ packages through `pnpm workpaper:smoke:external`.
 | AI SDK streamText        | `npm run agent:ai-sdk-stream-text`   | real `streamText()` and streamed tool calls with verified WorkPaper readback                                      |
 | Agent framework adapters | `npm run agent:framework-adapters`   | TypeScript wrappers for AI SDK, LangChain, Mastra, LlamaIndex.TS, LangGraph.js, CopilotKit, and Cloudflare Agents |
 | MCP tool server shape    | `npm run agent:mcp-tools`            | `tools/list`, `tools/call`, verified edits                                                                        |
+| MCP stdio transcript     | `npm run agent:mcp-transcript`       | starts stdio server, sends JSON-RPC, parses verified write/readback                                               |
 | MCP stdio server         | `npm run agent:mcp-stdio`            | newline-delimited JSON-RPC over stdin/stdout                                                                      |
 | npm package eval         | `npm run npm-eval`                   | the same `.ts` file used by the npm-only smoke test                                                               |
 | Agent writeback check    | `npm run agent:verify`               | exact input edits and formula preservation                                                                        |
@@ -433,7 +434,19 @@ formula contracts, restored summary, and serialized byte count.
 
 ## MCP Stdio Server
 
-Run this when you want the same tools behind a local stdio transport:
+Run this when you want a maintained proof transcript for the local stdio
+transport:
+
+```sh
+NODE_NO_WARNINGS=1 npm run --silent agent:mcp-transcript
+```
+
+The transcript script starts the stdio server, sends JSON-RPC requests, parses
+the responses, and prints only after the verified write/readback assertions
+pass.
+
+Use the raw transport directly when you want to inspect the newline-delimited
+JSON-RPC protocol:
 
 ```sh
 printf '%s\n' \

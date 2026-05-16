@@ -8,6 +8,7 @@
     "agent:ai-sdk-stream-text": "tsx ai-sdk-stream-text-tool-smoke.ts",
     "agent:framework-adapters": "tsx agent-framework-adapters.ts",
     "agent:mcp-stdio": "tsx mcp-stdio-server.ts",
+    "agent:mcp-transcript": "tsx mcp-stdio-transcript.ts",
     "agent:mcp-tools": "tsx mcp-tool-server.ts",
     "agent:openai-responses": "tsx openai-responses-tool-wrapper.ts",
     "agent:tool-call": "tsx agent-tool-call-loop.ts",

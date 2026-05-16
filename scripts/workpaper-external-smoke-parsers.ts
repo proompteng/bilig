@@ -4,9 +4,15 @@ export {
   parseNodeAgentToolCallOutput,
   parseNodeAgentVerificationOutput,
   parseNodeMcpStdioOutput,
+  parseNodeMcpTranscriptOutput,
   parseNodeRevenueScenarioOutput,
 } from './workpaper-agent-smoke-parsers.ts'
-export type { AgentToolCallSummary, AgentVerificationSummary, RevenueScenarioSummary } from './workpaper-agent-smoke-parsers.ts'
+export type {
+  AgentToolCallSummary,
+  AgentVerificationSummary,
+  McpTranscriptSummary,
+  RevenueScenarioSummary,
+} from './workpaper-agent-smoke-parsers.ts'
 export { parseJsonRecord } from './workpaper-external-smoke-parser-helpers.ts'
 
 export function parseNodeSmokeOutput(output: string): {

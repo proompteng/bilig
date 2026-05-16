@@ -193,7 +193,8 @@ Useful deeper examples: [invoice totals](examples/headless-workpaper#invoice-tot
 [MCP tool server shape](examples/headless-workpaper#mcp-tool-server-shape),
 and [serverless quote approval](examples/serverless-workpaper-api). Run
 `npm run quote-approval-api`, `npm run agent:framework-adapters`,
-`npm run agent:mcp-tools`, `npm run agent:mcp-stdio`, or
+`npm run agent:mcp-tools`, `npm run agent:mcp-transcript`,
+`npm run agent:mcp-stdio`, or
 `npm exec --package @bilig/headless -- bilig-workpaper-mcp` when that is the
 path you are evaluating.
 

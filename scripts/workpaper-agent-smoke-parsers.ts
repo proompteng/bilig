@@ -71,6 +71,19 @@ export type AgentToolCallSummary = {
   }
 }
 
+export type McpTranscriptSummary = {
+  requestCount: number
+  transport: 'stdio'
+  verified: {
+    editedCell: string
+    expectedArrChanged: boolean
+    formulasPersisted: boolean
+    initialized: boolean
+    listedTools: boolean
+    restoredMatchesAfter: boolean
+  }
+}
+
 type AgentToolCallProjection = {
   expectedArr: number
   expectedCustomers: number
@@ -271,6 +284,56 @@ export function parseNodeMcpStdioOutput(
       previousValue: checks.previousValue,
       restoredMatchesAfter: checks.restoredMatchesAfter,
       serializedBytes: checks.serializedBytes,
+    },
+  }
+}
+
+export function parseNodeMcpTranscriptOutput(output: string): McpTranscriptSummary {
+  const parsed = parseJsonRecord(output, 'node MCP transcript output')
+  const requestLines = parsed.requestLines
+  const responseSummary = parseRecordValue(parsed.responseSummary, 'node MCP transcript response summary')
+  const write = parseRecordValue(responseSummary.write, 'node MCP transcript write output')
+  const before = parseAgentToolCallProjection(write.before, 'node MCP transcript before output')
+  const after = parseAgentToolCallProjection(write.after, 'node MCP transcript after output')
+  const restored = parseAgentToolCallProjection(write.restored, 'node MCP transcript restored output')
+  const checks = parseRecordValue(write.checks, 'node MCP transcript checks')
+  const verified = parseRecordValue(parsed.verified, 'node MCP transcript verified output')
+
+  if (
+    parsed.transport !== 'stdio' ||
+    !isStringArray(requestLines) ||
+    requestLines.length !== 4 ||
+    responseSummary.protocolVersion !== '2025-06-18' ||
+    responseSummary.serverName !== 'bilig-headless-workpaper-example' ||
+    !sameJson(responseSummary.toolNames, ['read_workpaper_summary', 'set_workpaper_input_cell']) ||
+    write.editedCell !== 'Inputs!B3' ||
+    before.expectedCustomers !== 5 ||
+    before.expectedArr !== 60000 ||
+    after.expectedCustomers !== 8 ||
+    after.expectedArr !== 96000 ||
+    !sameJson(restored, after) ||
+    checks.previousValue !== 0.25 ||
+    checks.newValue !== 0.4 ||
+    verified.initialized !== true ||
+    verified.listedTools !== true ||
+    verified.editedCell !== 'Inputs!B3' ||
+    verified.formulasPersisted !== true ||
+    verified.restoredMatchesAfter !== true ||
+    verified.expectedArrChanged !== true
+  ) {
+    throw new Error(`Unexpected node MCP transcript output: ${output}`)
+  }
+
+  return {
+    requestCount: requestLines.length,
+    transport: 'stdio',
+    verified: {
+      editedCell: verified.editedCell,
+      expectedArrChanged: verified.expectedArrChanged,
+      formulasPersisted: verified.formulasPersisted,
+      initialized: verified.initialized,
+      listedTools: verified.listedTools,
+      restoredMatchesAfter: verified.restoredMatchesAfter,
     },
   }
 }
