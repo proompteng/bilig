@@ -4,7 +4,7 @@ const productHuntLaunchKitRequiredText = [
   'title: Product Hunt launch kit for bilig',
   'Workbook formulas for TypeScript services and agents.',
   'start from an empty Node project, install @bilig/headless, run eval.ts',
-  '39/57 comparable mean-latency rows are faster',
+  '41/57 comparable mean-latency rows are faster',
   'product-hunt-thumbnail.png',
   'product-hunt-gallery-01-workbook-api.png',
   'product-hunt-gallery-02-agent-readback.png',

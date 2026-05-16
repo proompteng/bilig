@@ -66,7 +66,7 @@ At the time of this walkthrough, that reports:
 
 ```json
 {
-  "generatedAt": "2026-05-16T02:51:59.190Z",
+  "generatedAt": "2026-05-16T03:00:53.477Z",
   "benchmark": {
     "sampleCount": 5,
     "warmupCount": 2
@@ -75,8 +75,8 @@ At the time of this walkthrough, that reports:
     "comparableCount": 57,
     "workpaperWins": 42,
     "hyperformulaWins": 15,
-    "directionalMeanRatioGeomean": 0.7472862203775282,
-    "directionalP95RatioGeomean": 0.758380911905582,
+    "directionalMeanRatioGeomean": 0.7329705059606954,
+    "directionalP95RatioGeomean": 0.7480495502999938,
     "worstP95RatioWorkload": "structural-append-formula-rows"
   }
 }

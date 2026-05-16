@@ -195,6 +195,50 @@ describe('operation-service dense mutation fast paths', () => {
     unsubscribeGeneral()
   })
 
+  it('applies dense rectangular row-sum aggregate batches without region queries', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'dense-rectangular-row-sum-fast-path' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    const rowCount = 12
+    const inputCols = 4
+    for (let row = 1; row <= rowCount; row += 1) {
+      for (let col = 0; col < inputCols; col += 1) {
+        engine.setCellValue('Sheet1', `${String.fromCharCode(65 + col)}${row}`, row * (col + 1))
+      }
+      engine.setCellFormula('Sheet1', `E${row}`, `SUM(A${row}:D${row})`)
+    }
+
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+    const refs: EngineCellMutationRef[] = []
+    for (let row = 0; row < rowCount; row += 1) {
+      for (let col = 0; col < inputCols; col += 1) {
+        refs.push({
+          sheetId,
+          cellIndex: engine.workbook.getCellIndex('Sheet1', `${String.fromCharCode(65 + col)}${row + 1}`),
+          mutation: { kind: 'setCellValue', row, col, value: (row + 1) * (col + 2) },
+        })
+      }
+    }
+
+    engine.resetPerformanceCounters()
+    const undoOps = engine.applyCellMutationsAt(refs, 0)
+
+    expect(undoOps).not.toBeNull()
+    expect(engine.getCellValue('Sheet1', 'E1')).toEqual({ tag: ValueTag.Number, value: 14 })
+    expect(engine.getCellValue('Sheet1', 'E12')).toEqual({ tag: ValueTag.Number, value: 168 })
+    expect(engine.getLastMetrics()).toMatchObject({
+      changedInputCount: rowCount * inputCols,
+      dirtyFormulaCount: 0,
+      jsFormulaCount: 0,
+      wasmFormulaCount: 0,
+    })
+    expect(engine.getPerformanceCounters().directAggregateDeltaApplications).toBe(rowCount)
+    expect(engine.getPerformanceCounters().directAggregateDeltaOnlyRecalcSkips).toBe(1)
+    expect(engine.getPerformanceCounters().regionQueryIndexBuilds).toBe(0)
+    expect(engine.getPerformanceCounters().directAggregateScanEvaluations).toBe(0)
+  })
+
   it('handles dense lookup-only numeric column coordinate batches', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'dense-lookup-fast-path', useColumnIndex: true })
     await engine.ready()
