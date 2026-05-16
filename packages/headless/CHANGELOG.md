@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.16.0
+
+- Release type: minor
+- Previous libraries tag: libraries-v0.15.1
+- Manual override: no
+
+## Features
+- feat(examples): add quote approval workpaper api (6b4dd7ea)
+
 ## 0.15.1
 
 - Release type: patch
