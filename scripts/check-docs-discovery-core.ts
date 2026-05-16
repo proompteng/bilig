@@ -1,9 +1,31 @@
 import { readFile, stat } from 'node:fs/promises'
 
 export function requireIncludes(haystack: string, needle: string, context: string): void {
-  if (!haystack.includes(needle)) {
+  if (haystack.includes(needle)) {
+    return
+  }
+  if (normalizeMarkdownTableRows(haystack).includes(normalizeMarkdownTableRows(needle))) {
+    return
+  }
+  {
     throw new Error(`${context} is missing ${needle}`)
   }
+}
+
+function normalizeMarkdownTableRows(value: string): string {
+  return value
+    .split('\n')
+    .map((line) => {
+      if (!/^\s*\|/u.test(line)) {
+        return line
+      }
+      return line
+        .trim()
+        .split('|')
+        .map((cell) => cell.trim())
+        .join(' | ')
+    })
+    .join('\n')
 }
 
 export function requireNotIncludes(haystack: string, needle: string, context: string): void {

@@ -8,11 +8,13 @@ type PublicBenchmarkEvidence = {
       readonly worstP95RatioWorkload: string
       readonly worstWorkpaperToHyperFormulaP95Ratio: number
     }
+    readonly meanAndP95WinCount: number
   }
 }
 
 export type BenchmarkDiscoveryEvidence = {
   readonly comparableCount: number
+  readonly meanAndP95Headline: string
   readonly meanWinHeadline: string
   readonly meanWinSentencePrefix: string
   readonly p95HoldoutWorkload: string
@@ -33,6 +35,7 @@ function readBenchmarkDiscoveryEvidence(): BenchmarkDiscoveryEvidence {
 
   return {
     comparableCount: overall.comparableCount,
+    meanAndP95Headline: `${evidence.workpaperVsHyperFormula.meanAndP95WinCount}/${overall.comparableCount}`,
     meanWinHeadline: `${overall.workpaperWins}/${overall.comparableCount}`,
     meanWinSentencePrefix: `${overall.workpaperWins} of ${overall.comparableCount}`,
     p95HoldoutWorkload: overall.worstP95RatioWorkload,
@@ -58,6 +61,7 @@ function isPublicBenchmarkEvidence(value: unknown): value is PublicBenchmarkEvid
   const { overall } = value.workpaperVsHyperFormula
   return (
     isRecord(overall) &&
+    Number.isFinite(value.workpaperVsHyperFormula.meanAndP95WinCount) &&
     Number.isFinite(overall.comparableCount) &&
     Number.isFinite(overall.workpaperWins) &&
     typeof overall.worstP95RatioWorkload === 'string' &&

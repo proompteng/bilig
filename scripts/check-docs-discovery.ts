@@ -15,6 +15,7 @@ import {
 import { requireSitemapPublishedSources } from './check-docs-discovery-sitemap.ts'
 import { requireHomepageDiscovery } from './check-docs-discovery-homepage.ts'
 import { productHuntLaunchAssetFiles, requireGrowthSurfaceDiscovery } from './check-docs-discovery-launch-kit.ts'
+import { getBenchmarkDiscoveryEvidence } from './check-docs-discovery-benchmark-evidence.ts'
 import { llmsExternalSurfaceLinks } from './check-docs-discovery-growth-links.ts'
 import { requireNpmEvalDiscovery } from './check-docs-discovery-npm-eval.ts'
 import { requireOpenAiResponsesDiscovery } from './check-docs-discovery-openai-responses.ts'
@@ -31,6 +32,7 @@ const siteRoot = 'https://proompteng.github.io/bilig/'
 
 const expectedSitemapUrls = docsSiteSources.map(([urlPath]) => `${siteRoot}${urlPath}`)
 const sourceFilesByUrl = new Map<string, string>(docsSiteSources.map(([urlPath, sourceFile]) => [`${siteRoot}${urlPath}`, sourceFile]))
+const benchmarkEvidence = getBenchmarkDiscoveryEvidence()
 
 const [
   readme,
@@ -314,8 +316,8 @@ for (const required of [
   'Use HyperFormula first when you need a mature, broad formula engine',
   'Use SheetJS or ExcelJS first when the primary job is reading, writing, styling',
   'Use Google Sheets API first when a shared hosted spreadsheet',
-  'The current checked benchmark artifact records `47/57` comparable',
-  'structural-append-formula-rows',
+  `The current checked benchmark artifact records \`${benchmarkEvidence.meanWinHeadline}\` comparable`,
+  benchmarkEvidence.p95HoldoutWorkload,
   'https://github.com/proompteng/bilig/stargazers',
   'https://github.com/proompteng/bilig/discussions/new?category=general',
   'adoption-blocker form',
@@ -337,9 +339,9 @@ for (const required of [
   '`@bilig/headless@0.16.21`',
   'curl -fsSLo quickstart.ts https://proompteng.github.io/bilig/npm-eval.ts',
   '"verified": true',
-  '`47/57` mean-latency wins',
-  '`45/57` workloads winning',
-  '`structural-append-formula-rows` is slower at',
+  `\`${benchmarkEvidence.meanWinHeadline}\` mean-latency wins`,
+  `\`${benchmarkEvidence.meanAndP95Headline}\` workloads winning`,
+  `\`${benchmarkEvidence.p95HoldoutWorkload}\` is slower at`,
   'Show HN: Formula workbooks for Node services and agent tools',
   'https://github.com/proompteng/bilig/stargazers',
 ] as const) {
