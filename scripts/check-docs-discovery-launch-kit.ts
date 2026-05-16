@@ -1,10 +1,10 @@
 import { communityLaunchPackRequiredLinks } from './check-docs-discovery-growth-links.ts'
+import { getBenchmarkDiscoveryEvidence } from './check-docs-discovery-benchmark-evidence.ts'
 
 const productHuntLaunchKitRequiredText = [
   'title: Product Hunt launch kit for bilig',
   'Workbook formulas for TypeScript services and agents.',
   'start from an empty Node project, install @bilig/headless, run eval.ts',
-  '47/57 comparable mean-latency rows are faster',
   'product-hunt-thumbnail.png',
   'product-hunt-gallery-01-workbook-api.png',
   'product-hunt-gallery-02-agent-readback.png',
@@ -39,7 +39,13 @@ export function requireProductHuntLaunchKitDiscovery(
   productHuntLaunchKit: string,
   requireIncludes: (haystack: string, needle: string, context: string) => void,
 ): void {
-  for (const required of productHuntLaunchKitRequiredText) {
+  const benchmarkEvidence = getBenchmarkDiscoveryEvidence()
+  const requiredText = [
+    ...productHuntLaunchKitRequiredText,
+    `${benchmarkEvidence.meanWinHeadline} comparable mean-latency rows are faster`,
+  ] as const
+
+  for (const required of requiredText) {
     requireIncludes(productHuntLaunchKit, required, 'docs/product-hunt-launch-kit.md')
   }
 }

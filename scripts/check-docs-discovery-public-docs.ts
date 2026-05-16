@@ -6,6 +6,7 @@ import {
   requireDocumentsNotInclude,
   requireIncludes,
 } from './check-docs-discovery-core.ts'
+import { getBenchmarkDiscoveryEvidence } from './check-docs-discovery-benchmark-evidence.ts'
 
 export async function requireSharedPublicDocsDiscovery(args: {
   readonly docsRoot: string
@@ -25,6 +26,8 @@ export async function requireSharedPublicDocsDiscovery(args: {
   readonly excelImportReadme: string
   readonly publicApi: string
 }): Promise<void> {
+  const benchmarkEvidence = getBenchmarkDiscoveryEvidence()
+
   requireDocumentsInclude(
     [
       { path: 'README.md', content: args.readme },
@@ -54,8 +57,8 @@ export async function requireSharedPublicDocsDiscovery(args: {
     'above edits one input',
     'verifies the dependent formula result.',
     'pnpm workpaper:bench:competitive:check',
-    'lookup-approximate-sorted',
-    '11.988x',
+    benchmarkEvidence.p95HoldoutWorkload,
+    benchmarkEvidence.p95HoldoutRatio,
     'compatibility limits',
     'Excel oracle harness',
     'stale cached formula values',

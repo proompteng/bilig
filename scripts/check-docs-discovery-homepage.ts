@@ -1,3 +1,5 @@
+import { getBenchmarkDiscoveryEvidence } from './check-docs-discovery-benchmark-evidence.ts'
+
 function requireIncludes(haystack: string, needle: string, context: string): void {
   if (!haystack.includes(needle)) {
     throw new Error(`${context} is missing ${needle}`)
@@ -23,6 +25,8 @@ function requireNoIncludes(haystack: string, needles: string[], context: string)
 }
 
 export function requireHomepageDiscovery(index: string, siteCss: string, productCss: string): void {
+  const benchmarkEvidence = getBenchmarkDiscoveryEvidence()
+
   requireAllIncludes(
     index,
     [
@@ -68,11 +72,11 @@ export function requireHomepageDiscovery(index: string, siteCss: string, product
       'current run',
       'comparable mean rows',
       'pnpm workpaper:bench:competitive:check',
-      '<strong>47/57</strong>',
-      '47 of 57 comparable mean-latency rows are faster in the checked file.',
-      'lookup-approximate-sorted is slower at p95:',
+      `<strong>${benchmarkEvidence.meanWinHeadline}</strong>`,
+      `${benchmarkEvidence.meanWinSentencePrefix} comparable mean-latency rows are faster in the checked file.`,
+      `${benchmarkEvidence.p95HoldoutWorkload} is slower at p95:`,
       'rendering is not part of this benchmark.',
-      '<code>11.988x</code>',
+      `<code>${benchmarkEvidence.p95HoldoutRatio}</code>`,
       'UI rendering, Excel file compatibility, and workbook shapes this suite does not cover.',
       'packages/benchmarks/baselines/<wbr />workpaper-vs-hyperformula.json',
       'Benchmark notes',
