@@ -257,9 +257,11 @@ npx tsx quickstart.ts</code></pre>
               <p>
                 More TypeScript examples live in
                 <a href="https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper">examples/headless-workpaper</a>
-                and
+                ,
                 <a href="https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api"
                   >examples/serverless-workpaper-api</a
+                >, and
+                <a href="https://github.com/proompteng/bilig/tree/main/examples/xlsx-recalculation-node">examples/xlsx-recalculation-node</a
                 >.
               </p>
             </div>
@@ -437,11 +439,11 @@ function readNumber(cell: unknown): number {
               <div class="proof-result">
                 <div class="proof-metric">
                   <span class="proof-label">comparable mean rows</span>
-                  <strong>49/57</strong>
+                  <strong>47/57</strong>
                 </div>
                 <p>
-                  49 of 57 comparable mean-latency rows are faster in the checked file. structural-insert-columns is slower at p95:
-                  <code>1.783x</code>. Browser UI rendering is not part of this benchmark.
+                  47 of 57 comparable mean-latency rows are faster in the checked file. structural-append-formula-rows is slower at p95:
+                  <code>2.244x</code>. Browser UI rendering is not part of this benchmark.
                 </p>
               </div>
 
@@ -458,7 +460,7 @@ function readNumber(cell: unknown): number {
                 </div>
                 <div class="proof-fact">
                   <dt>Caveat</dt>
-                  <dd>structural-insert-columns is slower at p95: <code>1.783x</code>.</dd>
+                  <dd>structural-append-formula-rows is slower at p95: <code>2.244x</code>.</dd>
                 </div>
                 <div class="proof-fact">
                   <dt>Out of scope</dt>
@@ -603,6 +605,11 @@ function readNumber(cell: unknown): number {
                 <li>
                   <a href="https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api#persistence-adapters"
                     >Postgres, Redis, and object storage adapters</a
+                  >
+                </li>
+                <li>
+                  <a href="https://github.com/proompteng/bilig/tree/main/examples/xlsx-recalculation-node"
+                    >XLSX formula recalculation in Node</a
                   >
                 </li>
               </ul>

@@ -11,9 +11,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(headless): reuse matrix plan numeric shape (4c9fb63f)
 
 ## Internal runtime changes
+
 - chore(release): refresh headless footprint evidence (c0586bb2)
 
 ## 0.16.20
@@ -23,9 +25,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(headless): trim scalar closure allocations (356f880b)
 
 ## Internal runtime changes
+
 - docs(growth): track jsgrids and refresh evidence (d8d71044)
 
 ## 0.16.19
@@ -35,9 +39,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(headless): streamline scalar formula cascades (085e7f5f)
 
 ## Internal runtime changes
+
 - docs(growth): surface public review proof path (7a9d98df)
 
 ## 0.16.18
@@ -47,9 +53,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(headless): split fresh matrix literals before formulas (6a3eb7d7)
 
 ## Internal runtime changes
+
 - chore(growth): refresh public evidence for 0.16.17 (bc14e116)
 
 ## 0.16.17
@@ -59,6 +67,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(headless): speed up structural aggregate row deletes (ee52d072)
 
 ## 0.16.16
@@ -68,9 +77,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(benchmarks): tolerate platform float drift (eb8f21d0)
 
 ## Internal runtime changes
+
 - chore(growth): refresh headless performance evidence (bf2013be)
 
 ## 0.16.15
@@ -80,9 +91,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(core): defer structural delete formula undo work (d7ef3fac)
 
 ## Internal runtime changes
+
 - docs(growth): refresh release evidence (25e2e4ed)
 - docs(growth): route overview evaluators to proof paths (a42f2da0)
 
@@ -93,9 +106,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(core): skip region probes for fresh aggregate rows (9762dc68)
 
 ## Internal runtime changes
+
 - docs(growth): refresh public release evidence (feba38f4)
 - docs(growth): surface adoption blocker intake (d983476a)
 - docs(growth): add release watch path (0b7080d1)
@@ -107,6 +122,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(core): reuse copied criteria formula results (f213cbf1)
 
 ## 0.16.12

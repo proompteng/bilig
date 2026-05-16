@@ -248,6 +248,7 @@ for (const required of [
   'https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#subscription-mrr-forecast',
   'https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api',
   'https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api#framework-adapters',
+  'https://github.com/proompteng/bilig/tree/main/examples/xlsx-recalculation-node',
   'https://github.com/proompteng/bilig/discussions',
   'https://github.com/proompteng/bilig/discussions/157',
   'https://github.com/proompteng/bilig/discussions/167',
@@ -313,8 +314,8 @@ for (const required of [
   'Use HyperFormula first when you need a mature, broad formula engine',
   'Use SheetJS or ExcelJS first when the primary job is reading, writing, styling',
   'Use Google Sheets API first when a shared hosted spreadsheet',
-  'The current checked benchmark artifact records `49/57` comparable',
-  'structural-insert-columns',
+  'The current checked benchmark artifact records `47/57` comparable',
+  'structural-append-formula-rows',
   'https://github.com/proompteng/bilig/stargazers',
   'https://github.com/proompteng/bilig/discussions/new?category=general',
   'adoption-blocker form',
@@ -333,12 +334,12 @@ requireIncludes(
 requireIncludes(communityLaunchPack, 'Hacker News Submission After The Formula Workbooks Page', 'docs/community-launch-pack.md')
 for (const required of [
   'title: Show HN proof for formula workbooks in Node services',
-  '`@bilig/headless@0.16.19`',
+  '`@bilig/headless@0.16.21`',
   'curl -fsSLo quickstart.ts https://proompteng.github.io/bilig/npm-eval.ts',
   '"verified": true',
-  '`49/57` mean-latency wins',
-  '`46/57` workloads winning',
-  '`structural-insert-columns` is slower at',
+  '`47/57` mean-latency wins',
+  '`45/57` workloads winning',
+  '`structural-append-formula-rows` is slower at',
   'Show HN: Formula workbooks for Node services and agent tools',
   'https://github.com/proompteng/bilig/stargazers',
 ] as const) {
@@ -471,7 +472,7 @@ requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/google
 const npmProvenancePackageTrustDoc = await readFile(join(docsRoot, 'npm-provenance-package-trust.md'), 'utf8')
 for (const required of [
   'title: Verify npm provenance for @bilig/headless',
-  'npm view @bilig/headless@0.16.19 version dist.attestations dist.signatures --json',
+  'npm view @bilig/headless@0.16.21 version dist.attestations dist.signatures --json',
   'npm audit signatures',
   'dist.attestations.provenance.predicateType',
   'npm publish ... --provenance',
@@ -489,6 +490,10 @@ requireIncludes(readme, 'uploaded to GitHub code scanning on every `main` update
 requireIncludes(headlessReadme, 'npm provenance and package trust guide', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'https://api.scorecard.dev/projects/github.com/proompteng/bilig/badge', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'uploaded to GitHub code scanning on every `main` update', 'packages/headless/README.md')
+requireIncludes(readme, 'examples/xlsx-recalculation-node', 'README.md')
+requireIncludes(headlessReadme, 'examples/xlsx-recalculation-node', 'packages/headless/README.md')
+requireIncludes(index, 'examples/xlsx-recalculation-node', 'docs/index.html')
+requireIncludes(llms, 'https://github.com/proompteng/bilig/tree/main/examples/xlsx-recalculation-node', 'docs/llms.txt')
 requireIncludes(index, './npm-provenance-package-trust.html', 'docs/index.html')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/npm-provenance-package-trust.html', 'docs/llms.txt')
 requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/npm-provenance-package-trust.md', 'docs/llms.txt')

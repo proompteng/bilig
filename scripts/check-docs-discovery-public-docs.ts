@@ -47,9 +47,10 @@ export async function requireSharedPublicDocsDiscovery(args: {
   ] as const
   requireDocumentsInclude(primaryPublicDocs, [
     '## Choose A Proof Path',
-    '| If you are evaluating... | Start here | What should be true before you star, watch, or adopt |',
+    'If you are evaluating...',
     '90-second Node quickstart',
     'Quote approval WorkPaper API',
+    'XLSX formula recalculation example',
     'MCP spreadsheet tool server',
     'npm provenance',
     'adoption blocker form',

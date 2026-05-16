@@ -136,9 +136,9 @@ matters.
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.16.20`:
+Current checked npm footprint for `@bilig/headless@0.16.21`:
 
-- Pack dry run: `421 kB` tarball, `2.51 MB` unpacked, `426` package entries.
+- Pack dry run: `422 kB` tarball, `2.52 MB` unpacked, `429` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
   import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the
   `bilig-workpaper-mcp` binary wrapper.
@@ -150,11 +150,11 @@ Current checked npm footprint for `@bilig/headless@0.16.20`:
 
 ## Published Package Trust
 
-`@bilig/headless@0.16.19` is published with npm registry signatures and SLSA
+`@bilig/headless@0.16.21` is published with npm registry signatures and SLSA
 provenance attestations. Verify the package before adopting it:
 
 ```sh
-npm view @bilig/headless@0.16.19 version dist.attestations dist.signatures --json
+npm view @bilig/headless@0.16.21 version dist.attestations dist.signatures --json
 ```
 
 After installing, npm can verify the current dependency tree:
@@ -177,7 +177,10 @@ Use the shortest path that proves the package against a real job.
 2. Run the flagship
    [serverless WorkPaper API](examples/serverless-workpaper-api) example:
    `npm run quote-approval-api`.
-3. If an agent needs workbook tools, start with the
+3. If the workflow starts with an XLSX file, run the
+   [XLSX formula recalculation in Node](examples/xlsx-recalculation-node):
+   `npm start`.
+4. If an agent needs workbook tools, start with the
    [MCP server guide](docs/mcp-workpaper-tool-server.md), including the
    copy-paste JSON-RPC transcript for verified write/readback.
 
@@ -210,6 +213,7 @@ Useful deeper examples: [invoice totals](examples/headless-workpaper#invoice-tot
 [subscription MRR forecast](examples/headless-workpaper#subscription-mrr-forecast),
 [agent framework adapters](examples/headless-workpaper#agent-framework-adapters),
 [MCP tool server shape](examples/headless-workpaper#mcp-tool-server-shape),
+[XLSX formula recalculation in Node](examples/xlsx-recalculation-node),
 and [serverless quote approval](examples/serverless-workpaper-api). Run
 `npm run quote-approval-api`, `npm run agent:framework-adapters`,
 `npm run agent:mcp-tools`, `npm run agent:mcp-transcript`,
@@ -302,6 +306,11 @@ It is published in the official MCP Registry as
   It starts from an empty Node directory, downloads one maintained TypeScript
   route smoke, writes quote inputs, recalculates an approval decision, persists
   JSON, and verifies restored readback.
+- For an XLSX formula recalculation example, run
+  [`examples/xlsx-recalculation-node`](examples/xlsx-recalculation-node). It
+  imports a generated XLSX pricing workbook, edits input cells, reads the
+  recalculated approval decision, exports XLSX, reimports it, and verifies the
+  formulas survived the round trip.
 - For a shorter public decision page, read
   [formula workbooks for Node services and agent tools](docs/formula-workbooks-node-services-agent-tools.md).
   It compresses the WorkPaper boundary, MCP file-backed mode, benchmark caveat,
@@ -311,8 +320,8 @@ It is published in the official MCP Registry as
   It keeps the empty npm-project command, `verified: true` output, benchmark
   caveat, known limits, and feedback ask together.
 - Run `pnpm workpaper:bench:competitive:check`. The checked-in artifact shows
-  [`49/57` comparable WorkPaper mean wins](docs/what-workpaper-benchmark-proves.md)
-  and names the worst p95 holdout: `structural-insert-columns` at `1.783x`.
+  [`47/57` comparable WorkPaper mean wins](docs/what-workpaper-benchmark-proves.md)
+  and names the worst p95 holdout: `structural-append-formula-rows` at `2.244x`.
 - The benchmark card is generated from that artifact:
   [`docs/assets/workpaper-benchmark-card.png`](docs/assets/workpaper-benchmark-card.png).
 - Read the [compatibility limits](docs/where-bilig-is-not-excel-compatible-yet.md)
