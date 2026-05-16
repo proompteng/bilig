@@ -319,6 +319,82 @@ describe('workbook-local-store projection', () => {
     }
   })
 
+  it('drops malformed persisted axis rows and omits invalid axis fields', async () => {
+    const sqlite3 = await sqlite3InitModule()
+    const db = new sqlite3.oo1.DB(':memory:', 'c')
+    try {
+      initializeWorkbookLocalStoreSchema(db)
+      writeWorkbookAuthoritativeBase(db, createBase({ sheetId: 7, sheetName: 'Sheet1', value: 11 }))
+
+      const insertRowAxis = db.prepare(
+        `
+          INSERT INTO authoritative_row_axis (
+            sheet_id,
+            sheet_name,
+            axis_index,
+            axis_id,
+            size,
+            hidden
+          )
+          VALUES (?, ?, ?, ?, ?, ?)
+        `,
+      )
+      const insertColumnAxis = db.prepare(
+        `
+          INSERT INTO authoritative_column_axis (
+            sheet_id,
+            sheet_name,
+            axis_index,
+            axis_id,
+            size,
+            hidden
+          )
+          VALUES (?, ?, ?, ?, ?, ?)
+        `,
+      )
+      try {
+        insertRowAxis.bind([7, 'Sheet1', 0, 'row-0', 24, 1])
+        insertRowAxis.step()
+        insertRowAxis.reset()
+        insertRowAxis.bind([7, 'Sheet1', 1.5, 'row-bad-index', 30, 1])
+        insertRowAxis.step()
+        insertRowAxis.reset()
+        insertRowAxis.bind([7, 'Sheet1', 2, 'row-invalid-fields', -10, 2])
+        insertRowAxis.step()
+
+        insertColumnAxis.bind([7, 'Sheet1', 0, 'col-0', 96, 0])
+        insertColumnAxis.step()
+        insertColumnAxis.reset()
+        insertColumnAxis.bind([7, 'Sheet1', 0.5, 'col-bad-index', 120, 1])
+        insertColumnAxis.step()
+        insertColumnAxis.reset()
+        insertColumnAxis.bind([7, 'Sheet1', 2, 'col-invalid-fields', -1, 2])
+        insertColumnAxis.step()
+      } finally {
+        insertRowAxis.finalize()
+        insertColumnAxis.finalize()
+      }
+
+      const projected = readWorkbookViewportProjection(db, 'Sheet1', {
+        rowStart: 0,
+        rowEnd: 2,
+        colStart: 0,
+        colEnd: 2,
+      })
+
+      expect(projected?.rowAxisEntries).toEqual([
+        { id: 'row-0', index: 0, size: 24, hidden: true },
+        { id: 'row-invalid-fields', index: 2 },
+      ])
+      expect(projected?.columnAxisEntries).toEqual([
+        { id: 'col-0', index: 0, size: 96, hidden: false },
+        { id: 'col-invalid-fields', index: 2 },
+      ])
+    } finally {
+      db.close()
+    }
+  })
+
   it('normalizes delta child rows to the canonical parent sheet name for each sheet id', async () => {
     const sqlite3 = await sqlite3InitModule()
     const db = new sqlite3.oo1.DB(':memory:', 'c')

@@ -142,18 +142,18 @@ function parseViewportCellFromRow(row: Record<string, SqlValue>): WorkbookLocalV
 function parseAxisEntrySnapshot(row: Record<string, SqlValue>): WorkbookAxisEntrySnapshot | null {
   const id = row['id']
   const entryIndex = row['entryIndex']
-  if (typeof id !== 'string' || typeof entryIndex !== 'number') {
+  if (typeof id !== 'string' || !isSafeNonNegativeInteger(entryIndex)) {
     return null
   }
   const entry: WorkbookAxisEntrySnapshot = {
     id,
     index: entryIndex,
   }
-  if (typeof row['size'] === 'number') {
+  if (isSafeNonNegativeInteger(row['size'])) {
     entry.size = row['size']
   }
-  if (typeof row['hidden'] === 'number') {
-    entry.hidden = row['hidden'] !== 0
+  if (row['hidden'] === 0 || row['hidden'] === 1) {
+    entry.hidden = row['hidden'] === 1
   } else if (typeof row['hidden'] === 'boolean') {
     entry.hidden = row['hidden']
   }
