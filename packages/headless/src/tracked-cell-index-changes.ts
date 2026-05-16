@@ -382,6 +382,13 @@ export function materializeTrackedIndexChangeSourcesWithMetadata(
   if (lazySameSheetChanges) {
     return lazySameSheetChanges
   }
+  const orderedLazySameSheetChanges = tryCreateOrderedLazySameSheetTrackedSourceChanges(engine, cellChangeSources, {
+    deferLazyDetach: options.deferLazyDetach === true,
+    preferLazyPublicChanges: options.lazy === true,
+  })
+  if (orderedLazySameSheetChanges) {
+    return orderedLazySameSheetChanges
+  }
   if (cellChangeSources.length === 1) {
     const source = cellChangeSources[0]!
     const materialized = materializeTrackedIndexChangesWithMetadata(
@@ -572,6 +579,68 @@ function tryCreateLazySameSheetTrackedSourceChanges(
     detachTrackedIndexChanges(changes)
   }
   return { changes, ordered: true, usedSortedDisjointFastPath: true }
+}
+
+function tryCreateOrderedLazySameSheetTrackedSourceChanges(
+  engine: SpreadsheetEngine,
+  sources: readonly TrackedIndexChangeSource[],
+  options: { readonly deferLazyDetach: boolean; readonly preferLazyPublicChanges: boolean },
+): MaterializedTrackedIndexChangeSources | null {
+  let totalLength = 0
+  for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
+    totalLength += sources[sourceIndex]!.changedCellIndices.length
+  }
+  if (!options.preferLazyPublicChanges && totalLength < LAZY_PUBLIC_CHANGE_SOURCE_THRESHOLD) {
+    return null
+  }
+
+  const workbook = engine.workbook
+  const cellStore = workbook.cellStore
+  let sheetId: number | undefined
+  let mustDetachBeforeReturn = false
+  const latestCellIndexByAddress = new Map<number, number>()
+  for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
+    const source = sources[sourceIndex]!
+    for (let index = 0; index < source.changedCellIndices.length; index += 1) {
+      const cellIndex = source.changedCellIndices[index]!
+      const sourceSheetId = cellStore.sheetIds[cellIndex]
+      if (sourceSheetId === undefined) {
+        return null
+      }
+      if (sheetId === undefined) {
+        sheetId = sourceSheetId
+        const sheet = workbook.getSheetById(sheetId)
+        mustDetachBeforeReturn = sheet !== undefined && sheet.structureVersion !== 1
+      } else if (sourceSheetId !== sheetId) {
+        return null
+      }
+      const row = cellStore.rows[cellIndex]
+      const col = cellStore.cols[cellIndex]
+      if (row === undefined || col === undefined) {
+        return null
+      }
+      latestCellIndexByAddress.set(makeCellKey(sourceSheetId, row, col), cellIndex)
+    }
+  }
+  if (sheetId === undefined) {
+    return { changes: [], ordered: true, usedSortedDisjointFastPath: true }
+  }
+
+  const orderedCellIndices = Uint32Array.from(latestCellIndexByAddress.values())
+  orderedCellIndices.sort((left, right) => compareTrackedPhysicalCellIndices(cellStore, left, right))
+  const sheet = workbook.getSheetById(sheetId)
+  const changes = createLazyPhysicalTrackedIndexChanges(
+    sheetId,
+    sheet?.name ?? workbook.getSheetNameById(sheetId),
+    cellStore,
+    engine,
+    orderedCellIndices,
+    formatTrackedAddress,
+  )
+  if (mustDetachBeforeReturn || !options.deferLazyDetach) {
+    detachTrackedIndexChanges(changes)
+  }
+  return { changes, ordered: true, usedSortedDisjointFastPath: false }
 }
 
 function orderedTrackedIndexSource(cellStore: TrackedCellStore, source: TrackedIndexChangeSource): OrderedTrackedIndexSource | null {

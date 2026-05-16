@@ -2,6 +2,7 @@ import { ValueTag } from '@bilig/protocol'
 import { describe, expect, it, vi } from 'vitest'
 
 import { WorkPaper, type WorkPaperCellAddress, type WorkPaperChange } from '../index.js'
+import { hasDeferredTrackedIndexChanges } from '../tracked-cell-index-changes.js'
 
 function cell(sheet: number, row: number, col: number): WorkPaperCellAddress {
   return { sheet, row, col }
@@ -31,6 +32,10 @@ function hasSheetDimensionCacheUpdater(value: unknown): value is TestSheetDimens
 
 function hasClearOwnedSpill(value: unknown): value is TestEngineRuntimeSupport {
   return typeof value === 'object' && value !== null && typeof Reflect.get(value, 'clearOwnedSpillNow') === 'function'
+}
+
+function isCellChangeArray(changes: WorkPaperChange[]): changes is Extract<WorkPaperChange, { kind: 'cell' }>[] {
+  return changes.every((change) => change.kind === 'cell')
 }
 
 function trackSheetDimensionCacheUpdates(workbook: WorkPaper): {
@@ -126,5 +131,40 @@ describe('work paper batched structural fast path', () => {
     expect(workbook.getCellValue(cell(sheetId, 2, 2))).toEqual({ tag: ValueTag.Number, value: 11 })
     workbook.undo()
     expect(workbook.getSheetDimensions(sheetId).height).toBe(2)
+  })
+
+  it('keeps large appended formula-row changes lazy after structural edits', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Data: [
+        [1, 2, '=SUM(A1:B1)'],
+        [3, 4, '=SUM(A2:B2)'],
+      ],
+    })
+    const sheetId = workbook.getSheetId('Data')!
+    const appendCount = 96
+    const rows = Array.from({ length: appendCount }, (_, index) => {
+      const rowNumber = index + 3
+      return [rowNumber, rowNumber * 2, `=SUM(A${rowNumber}:B${rowNumber})`]
+    })
+
+    const changes = workbook.batch(() => {
+      workbook.addRows(sheetId, 2, appendCount)
+      workbook.setCellContents(cell(sheetId, 2, 0), rows)
+    })
+
+    expect(changes).toHaveLength(appendCount * 3)
+    expect(isCellChangeArray(changes)).toBe(true)
+    if (!isCellChangeArray(changes)) {
+      throw new Error('Expected appended formula rows to emit only cell changes')
+    }
+    expect(hasDeferredTrackedIndexChanges(changes)).toBe(true)
+    expect(changes[0]).toMatchObject({
+      a1: 'A3',
+      newValue: { tag: ValueTag.Number, value: 3 },
+    })
+    expect(changes.at(-1)).toMatchObject({
+      a1: `C${appendCount + 2}`,
+      newValue: { tag: ValueTag.Number, value: (appendCount + 2) * 3 },
+    })
   })
 })

@@ -51,7 +51,7 @@
       "worstWorkpaperToHyperFormulaP95Ratio": 1.8085843429631043,
       "worstP95RatioWorkload": "structural-append-formula-rows"
     },
-    "meanAndP95WinCount": 45,
-    "p95HoldoutCount": 10
+    "meanAndP95WinCount": 44,
+    "p95HoldoutCount": 12
   }
 }

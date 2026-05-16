@@ -496,6 +496,52 @@ describe('materializeTrackedIndexChanges', () => {
     ])
   })
 
+  it('keeps overlapping same-sheet source changes lazy when callers prefer lazy public changes', () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'tracked-index-sources-overlap-lazy' })
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellValue('Sheet1', 'B1', 20)
+    engine.setCellValue('Sheet1', 'C1', 3)
+
+    const a1 = engine.workbook.getCellIndex('Sheet1', 'A1')
+    const b1 = engine.workbook.getCellIndex('Sheet1', 'B1')
+    const c1 = engine.workbook.getCellIndex('Sheet1', 'C1')
+    expect(a1).toBeDefined()
+    expect(b1).toBeDefined()
+    expect(c1).toBeDefined()
+
+    const result = materializeTrackedIndexChangeSourcesWithMetadata(
+      engine,
+      [
+        {
+          changedCellIndices: Uint32Array.of(c1!, a1!),
+          explicitChangedCount: 2,
+        },
+        {
+          changedCellIndices: Uint32Array.of(b1!, c1!),
+          explicitChangedCount: 2,
+        },
+      ],
+      { lazy: true },
+    )
+
+    expect(result).not.toBeNull()
+    expect(result?.usedSortedDisjointFastPath).toBe(false)
+    expect(result?.changes && hasDeferredTrackedIndexChanges(result.changes)).toBe(true)
+    expect(result?.changes.map((change) => [change.a1, change.newValue])).toEqual([
+      ['A1', { tag: ValueTag.Number, value: 1 }],
+      ['B1', { tag: ValueTag.Number, value: 20 }],
+      ['C1', { tag: ValueTag.Number, value: 3 }],
+    ])
+
+    engine.setCellValue('Sheet1', 'A1', 999)
+
+    expect(result?.changes[0]).toMatchObject({
+      a1: 'A1',
+      newValue: { tag: ValueTag.Number, value: 1 },
+    })
+  })
+
   it('keeps expanded benchmark workload definitions unchanged', () => {
     expect(EXPANDED_COMPARATIVE_WORKLOADS).toEqual(expectedExpandedBenchmarkWorkloads)
   })

@@ -58,7 +58,7 @@ WorkPaper is faster for that metric.
 The current worst mean row is `single-formula-edit-recalc`, with a mean ratio of
 `1.8215783776760899`. The current worst p95 row is `structural-append-formula-rows`,
 with a p95 ratio of `1.8085843429631043`. The headless leadership scorecard
-currently records `45/57` workloads winning both
+currently records `44/57` workloads winning both
 mean and p95 against HyperFormula.
 
 It is also not a blanket "fastest against every formula evaluator" claim. The
