@@ -6,6 +6,7 @@ import net from 'node:net'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { resolveDevAppServerMode, resolveDevWebServerMode } from './dev-web-local-config.js'
 import { canUsePort, resolvePreferredPort, resolvePreferredZeroPort, resolveRequestedOrAvailablePort } from './dev-web-local-ports.js'
 import { ensureWasmKernelArtifact } from './ensure-wasm-kernel.js'
 
@@ -20,8 +21,8 @@ const preferredPostgresPort = resolvePreferredPort(process.env['BILIG_DEV_POSTGR
 const preferredWebPort = resolvePreferredPort(process.env['BILIG_WEB_DEV_PORT'], 5173)
 const configuredZeroProxyUpstream = process.env['BILIG_ZERO_PROXY_UPSTREAM']
 const disableCompose = process.env['BILIG_DEV_DISABLE_COMPOSE'] === '1'
-const webServerMode = process.env['BILIG_DEV_WEB_SERVER_MODE'] === 'preview' ? 'preview' : 'dev'
-const appServerMode = process.env['BILIG_DEV_APP_SERVER_MODE'] === 'run' ? 'run' : 'watch'
+const webServerMode = resolveDevWebServerModeOrExit()
+const appServerMode = resolveDevAppServerModeOrExit()
 const skipAppRuntimeBuild = process.env['BILIG_DEV_APP_RUNTIME_BUILD'] === '0'
 const skipPreviewBuild = process.env['BILIG_DEV_WEB_PREVIEW_BUILD'] === '0'
 const preferredZeroPort = resolvePreferredZeroPort(process.env['BILIG_DEV_ZERO_PORT'], configuredZeroProxyUpstream, 4848)
@@ -32,6 +33,24 @@ const localProcessProbeTimeoutMs = 1_000
 let resolvedAppPort = String(preferredAppPort)
 let resolvedPostgresPort = String(preferredPostgresPort)
 let resolvedZeroPort = String(preferredZeroPort)
+
+function resolveDevWebServerModeOrExit(): ReturnType<typeof resolveDevWebServerMode> {
+  try {
+    return resolveDevWebServerMode(process.env)
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exit(1)
+  }
+}
+
+function resolveDevAppServerModeOrExit(): ReturnType<typeof resolveDevAppServerMode> {
+  try {
+    return resolveDevAppServerMode(process.env)
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exit(1)
+  }
+}
 
 interface DevChildProcess {
   readonly exited: Promise<number | null>
