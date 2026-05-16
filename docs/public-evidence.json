@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "package": {
+    "name": "@bilig/headless",
+    "version": "0.14.26",
+    "releasePleaseManifestVersion": "0.14.26",
+    "mcpServerVersion": "0.14.26",
+    "mcpPackageVersion": "0.14.26"
+  },
+  "workpaperVsHyperFormula": {
+    "artifactPath": "packages/benchmarks/baselines/workpaper-vs-hyperformula.json",
+    "generatedAt": "2026-05-16T02:12:30.841Z",
+    "sampleCount": 5,
+    "warmupCount": 2,
+    "workpaperPackageVersion": "0.14.26",
+    "hyperformulaVersion": "3.2.0",
+    "hyperformulaCommit": "9a510a2acb97c3d3490f9e3b9e961a1c4a98b9ad",
+    "overall": {
+      "lane": "overall",
+      "comparableCount": 57,
+      "workpaperWins": 42,
+      "hyperformulaWins": 15,
+      "directionalMeanRatioGeomean": 0.7553949494105464,
+      "directionalP95RatioGeomean": 0.7510834854399419,
+      "worstWorkpaperToHyperFormulaMeanRatio": 8.721360541863975,
+      "worstMeanRatioWorkload": "structural-append-formula-rows",
+      "worstWorkpaperToHyperFormulaP95Ratio": 8.72243346007912,
+      "worstP95RatioWorkload": "structural-append-formula-rows"
+    },
+    "publicLane": {
+      "lane": "public",
+      "comparableCount": 40,
+      "workpaperWins": 32,
+      "hyperformulaWins": 8,
+      "directionalMeanRatioGeomean": 0.6663891587075342,
+      "directionalP95RatioGeomean": 0.6575021136587269,
+      "worstWorkpaperToHyperFormulaMeanRatio": 2.1546572266984514,
+      "worstMeanRatioWorkload": "single-formula-edit-recalc",
+      "worstWorkpaperToHyperFormulaP95Ratio": 1.945606925978676,
+      "worstP95RatioWorkload": "single-formula-edit-recalc"
+    },
+    "holdout": {
+      "lane": "holdout",
+      "comparableCount": 17,
+      "workpaperWins": 10,
+      "hyperformulaWins": 7,
+      "directionalMeanRatioGeomean": 1.014571535825954,
+      "directionalP95RatioGeomean": 1.0272287761328909,
+      "worstWorkpaperToHyperFormulaMeanRatio": 8.721360541863975,
+      "worstMeanRatioWorkload": "structural-append-formula-rows",
+      "worstWorkpaperToHyperFormulaP95Ratio": 8.72243346007912,
+      "worstP95RatioWorkload": "structural-append-formula-rows"
+    },
+    "meanAndP95WinCount": 39,
+    "p95HoldoutCount": 17
+  }
+}

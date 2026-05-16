@@ -351,6 +351,7 @@ const generatedSourceChecks: readonly CiTask[] = [
   tsxScript('docs hero asset check', 'scripts/render-hero-workbook-api.ts', '--check'),
   tsxScript('docs social preview asset check', 'scripts/render-social-preview.ts', '--check'),
   tsxScript('docs benchmark card asset check', 'scripts/render-benchmark-card.ts', '--check'),
+  bunScript('public evidence check', 'scripts/sync-public-evidence.ts', '--check'),
   tsxScript('docs discovery check', 'scripts/check-docs-discovery.ts'),
 ]
 

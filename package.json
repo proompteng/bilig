@@ -115,6 +115,8 @@
     "docs:social-preview:check": "tsx scripts/render-social-preview.ts --check",
     "docs:benchmark-card:generate": "tsx scripts/render-benchmark-card.ts",
     "docs:benchmark-card:check": "tsx scripts/render-benchmark-card.ts --check",
+    "public:evidence:generate": "bun scripts/sync-public-evidence.ts",
+    "public:evidence:check": "bun scripts/sync-public-evidence.ts --check",
     "docs:launch-assets:generate": "tsx scripts/render-launch-assets.ts",
     "docs:launch-assets:check": "tsx scripts/render-launch-assets.ts --check",
     "docs:launch-demo:generate": "tsx scripts/render-launch-demo.ts",

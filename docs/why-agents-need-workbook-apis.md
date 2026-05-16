@@ -173,8 +173,8 @@ parity. It does not claim every benchmark p95 row is faster than HyperFormula.
 The current public claim is narrower: `@bilig/headless` exposes a WorkPaper API
 for programmatic workbook creation, formulas, structural operations,
 persistence, and checked-in benchmark evidence. The evidence note records
-WorkPaper `46/46` mean wins on scorecard-eligible comparable workloads against
-HyperFormula-style workloads, with the p95 nuance documented separately.
+WorkPaper `42/57` mean wins on scorecard-eligible comparable workloads against
+HyperFormula-style workloads, with the p95 holdouts documented separately.
 
 Read the benchmark note here:
 [`docs/headless-workpaper-benchmark-evidence.md`](headless-workpaper-benchmark-evidence.md).

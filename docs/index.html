@@ -414,8 +414,7 @@ function readNumber(cell: unknown): number {
               <p class="kicker">Benchmark</p>
               <h2 id="proof-title">The benchmark is public. So is the caveat.</h2>
               <p>
-                The checked JSON has bilig ahead on every comparable mean-latency row. One duplicate-lookup p95 row is slower, and it stays
-                on the page.
+                The checked JSON has bilig ahead on most comparable mean-latency rows. The worst p95 holdout is named beside the number.
               </p>
             </div>
 
@@ -428,11 +427,11 @@ function readNumber(cell: unknown): number {
               <div class="proof-result">
                 <div class="proof-metric">
                   <span class="proof-label">comparable mean rows</span>
-                  <strong>46/46</strong>
+                  <strong>42/57</strong>
                 </div>
                 <p>
-                  46 of 46 comparable mean-latency rows are faster in the checked file. One duplicate-lookup p95 row is slower. Browser UI
-                  rendering is not part of this benchmark.
+                  42 of 57 comparable mean-latency rows are faster in the checked file. The structural append row is slower at p95. Browser
+                  UI rendering is not part of this benchmark.
                 </p>
               </div>
 
@@ -449,7 +448,7 @@ function readNumber(cell: unknown): number {
                 </div>
                 <div class="proof-fact">
                   <dt>Caveat</dt>
-                  <dd>Duplicate-key approximate lookup is slower at p95: <code>1.043x</code>.</dd>
+                  <dd>structural-append-formula-rows is slower at p95: <code>8.722x</code>.</dd>
                 </div>
                 <div class="proof-fact">
                   <dt>Out of scope</dt>

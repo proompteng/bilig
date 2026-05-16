@@ -66,18 +66,18 @@ At the time of this walkthrough, that reports:
 
 ```json
 {
-  "generatedAt": "2026-05-06T14:54:57.091Z",
+  "generatedAt": "2026-05-16T02:12:30.841Z",
   "benchmark": {
     "sampleCount": 5,
     "warmupCount": 2
   },
   "scorecard": {
-    "comparableCount": 46,
-    "workpaperWins": 46,
-    "hyperformulaWins": 0,
-    "directionalMeanRatioGeomean": 0.521767150331573,
-    "directionalP95RatioGeomean": 0.5359737705859149,
-    "worstP95RatioWorkload": "lookup-approximate-duplicates"
+    "comparableCount": 57,
+    "workpaperWins": 42,
+    "hyperformulaWins": 15,
+    "directionalMeanRatioGeomean": 0.7553949494105464,
+    "directionalP95RatioGeomean": 0.7510834854399419,
+    "worstP95RatioWorkload": "structural-append-formula-rows"
   }
 }
 ```
