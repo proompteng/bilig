@@ -115,4 +115,29 @@ describe('import/export fidelity scorecard', () => {
       'Import/export fidelity scorecard is missing required case: xlsx-snapshot-roundtrip-dimensions-merges',
     )
   })
+
+  it('rejects artifacts whose summary feature coverage drifts from case evidence', async () => {
+    const scorecard = await buildImportExportFidelityScorecard('2026-05-06T08:00:00.000Z')
+    const missingFeatureScorecard = {
+      ...scorecard,
+      summary: {
+        ...scorecard.summary,
+        coveredFeatures: scorecard.summary.coveredFeatures.filter((feature) => feature !== 'xlsx.styles'),
+      },
+    }
+    const extraFeatureScorecard = {
+      ...scorecard,
+      summary: {
+        ...scorecard.summary,
+        coveredFeatures: [...scorecard.summary.coveredFeatures, 'xlsx.unbackedClaim'],
+      },
+    }
+
+    expect(() => validateImportExportFidelityScorecard(missingFeatureScorecard)).toThrow(
+      'Import/export fidelity scorecard summary is missing covered feature: xlsx.styles',
+    )
+    expect(() => validateImportExportFidelityScorecard(extraFeatureScorecard)).toThrow(
+      'Import/export fidelity scorecard summary reports uncovered feature: xlsx.unbackedClaim',
+    )
+  })
 })

@@ -213,6 +213,20 @@ async function assertPublicSurfaces(evidence: PublicEvidence): Promise<void> {
   const holdoutHeadline = headline(holdout)
   const meanAndP95Headline = `${benchmark.meanAndP95WinCount.toString()}/${overall.comparableCount.toString()}`
   const p95Ratio = ratio3(overall.worstWorkpaperToHyperFormulaP95Ratio)
+  const currentEvidenceTokens = new Set([
+    meanHeadline,
+    `${overall.workpaperWins.toString()} of ${overall.comparableCount.toString()}`,
+    publicHeadline,
+    holdoutHeadline,
+    meanAndP95Headline,
+    p95Ratio,
+    overall.directionalMeanRatioGeomean.toString(),
+    overall.directionalP95RatioGeomean.toString(),
+    overall.worstWorkpaperToHyperFormulaMeanRatio.toString(),
+    overall.worstWorkpaperToHyperFormulaP95Ratio.toString(),
+    benchmark.generatedAt,
+    `@bilig/headless\` \`${benchmark.workpaperPackageVersion}`,
+  ])
   const scannedPaths = [
     'README.md',
     'packages/headless/README.md',
@@ -290,18 +304,6 @@ async function assertPublicSurfaces(evidence: PublicEvidence): Promise<void> {
     '@bilig/headless` `0.14.23`',
     '@bilig/headless` `0.14.25`',
   ] as const
-  const currentEvidenceTokens = new Set([
-    meanHeadline,
-    publicHeadline,
-    holdoutHeadline,
-    meanAndP95Headline,
-    overall.directionalMeanRatioGeomean.toString(),
-    overall.directionalP95RatioGeomean.toString(),
-    overall.worstWorkpaperToHyperFormulaMeanRatio.toString(),
-    overall.worstWorkpaperToHyperFormulaP95Ratio.toString(),
-    benchmark.generatedAt,
-  ])
-
   const scannedContents = await Promise.all(scannedPaths.map(async (path) => [path, await readFile(join(repoRoot, path), 'utf8')] as const))
   for (const [path, content] of scannedContents) {
     for (const token of staleTokens) {

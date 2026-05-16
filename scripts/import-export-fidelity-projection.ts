@@ -2,6 +2,7 @@ import type {
   WorkbookChartSnapshot,
   WorkbookConditionalFormatSnapshot,
   WorkbookDataValidationSnapshot,
+  WorkbookFreezePaneSnapshot,
   WorkbookPivotSnapshot,
   WorkbookPivotValueSnapshot,
   WorkbookRangeProtectionSnapshot,
@@ -99,6 +100,37 @@ function projectSortSemantics(sort: WorkbookSortSnapshot): WorkbookSortSnapshot 
   return structuredClone(sort)
 }
 
+function defaultFreezePaneActivePane(freezePane: WorkbookFreezePaneSnapshot): string {
+  if (freezePane.rows > 0 && freezePane.cols > 0) {
+    return 'bottomRight'
+  }
+  return freezePane.rows > 0 ? 'bottomLeft' : 'topRight'
+}
+
+function defaultFreezePaneTopLeftCell(freezePane: WorkbookFreezePaneSnapshot): string {
+  let column = ''
+  let index = freezePane.cols
+  do {
+    const remainder = index % 26
+    column = String.fromCharCode(65 + remainder) + column
+    index = Math.floor(index / 26) - 1
+  } while (index >= 0)
+  return `${column}${String(freezePane.rows + 1)}`
+}
+
+function projectFreezePaneSemantics(freezePane: WorkbookFreezePaneSnapshot): WorkbookFreezePaneSnapshot {
+  return {
+    rows: freezePane.rows,
+    cols: freezePane.cols,
+    ...(freezePane.topLeftCell !== undefined && freezePane.topLeftCell !== defaultFreezePaneTopLeftCell(freezePane)
+      ? { topLeftCell: freezePane.topLeftCell }
+      : {}),
+    ...(freezePane.activePane !== undefined && freezePane.activePane !== defaultFreezePaneActivePane(freezePane)
+      ? { activePane: freezePane.activePane }
+      : {}),
+  }
+}
+
 function projectConditionalFormatSemantics(format: WorkbookConditionalFormatSnapshot) {
   return {
     range: format.range,
@@ -182,7 +214,9 @@ export function projectSupportedSnapshotSemantics(snapshot: WorkbookSnapshot) {
         ),
       ),
     freezePanes: snapshot.sheets
-      .flatMap((sheet) => (sheet.metadata?.freezePane ? [{ sheetName: sheet.name, freezePane: sheet.metadata.freezePane }] : []))
+      .flatMap((sheet) =>
+        sheet.metadata?.freezePane ? [{ sheetName: sheet.name, freezePane: projectFreezePaneSemantics(sheet.metadata.freezePane) }] : [],
+      )
       .toSorted((left, right) => left.sheetName.localeCompare(right.sheetName)),
     filters: snapshot.sheets
       .flatMap((sheet) => sheet.metadata?.filters ?? [])

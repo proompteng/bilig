@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "suite": "import-export-fidelity",
-  "generatedAt": "2026-05-07T18:33:43.553Z",
+  "generatedAt": "2026-05-16T08:29:08.588Z",
   "source": {
     "artifactGenerator": "scripts/gen-import-export-fidelity-scorecard.ts",
     "implementationPackage": "packages/excel-import",
@@ -233,7 +233,7 @@
       "passed": true,
       "coveredFeatures": ["xlsx.runtimeFeaturePolicyWarnings"],
       "missingFeatures": [],
-      "evidence": "Scorecard separates import/export compatibility from unsafe runtime execution surfaces: clean XLSX round trips have no warnings, while native macro execution is disclosed as a declined runtime feature."
+      "evidence": "Scorecard separates import/export compatibility from unsafe runtime execution surfaces: preserved manual calculation metadata emits the expected stale-cache warning, while native macro execution is disclosed as a declined runtime feature."
     },
     {
       "id": "external-sheets-excel-import-export-comparison",
