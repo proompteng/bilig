@@ -12,13 +12,14 @@ import {
 import { makeCellKey } from '../../workbook-store.js'
 import { CellFlags } from '../../cell-store.js'
 import { areCellValuesEqual, emptyValue, errorValue } from '../../engine-value-utils.js'
-import type { EngineRuntimeState, RecalcVolatileState, RuntimeFormula, SpillMaterialization, U32 } from '../runtime-state.js'
+import type { EngineRuntimeState, RuntimeFormula, SpillMaterialization, U32 } from '../runtime-state.js'
 import { EngineRecalcError } from '../errors.js'
 import type { WorkbookPivotRecord } from '../../workbook-store.js'
-import { parseCellAddress, utcDateToExcelSerial } from '@bilig/formula'
+import { parseCellAddress } from '@bilig/formula'
 import type { EngineDirtyFrontierSchedulerService } from './dirty-frontier-scheduler-service.js'
 import type { EnginePatch } from '../../patches/patch-types.js'
 import { buildCycleEvaluationNodes, type CycleEvaluationNode } from './recalc-cycle-evaluation.js'
+import { consumeVolatileRandomValues, createRecalcVolatileState, toOrderedUint32 } from './recalc-evaluation-state.js'
 
 const TRACKED_CELL_PATCH_LIMIT = 64
 const DEFAULT_ITERATION_COUNT = 100
@@ -55,42 +56,6 @@ export interface EngineRecalcService {
   ) => U32
   readonly recalculateNowSync: (changedRoots: readonly number[] | U32, kernelSyncRoots?: readonly number[] | U32) => U32
   readonly reconcilePivotOutputsNow: (baseChanged: U32, forceAllPivots?: boolean) => U32
-}
-
-function createRecalcVolatileState(now: () => Date): RecalcVolatileState {
-  return {
-    nowSerial: utcDateToExcelSerial(now()),
-    randomValues: [],
-    randomCursor: 0,
-  }
-}
-
-function ensureVolatileRandomValues(state: RecalcVolatileState, count: number, random: () => number): void {
-  const needed = state.randomCursor + count - state.randomValues.length
-  if (needed <= 0) {
-    return
-  }
-  for (let index = 0; index < needed; index += 1) {
-    state.randomValues.push(random())
-  }
-}
-
-function consumeVolatileRandomValues(state: RecalcVolatileState, count: number, random: () => number): Float64Array {
-  ensureVolatileRandomValues(state, count, random)
-  const values = state.randomValues.slice(state.randomCursor, state.randomCursor + count)
-  state.randomCursor += count
-  return Float64Array.from(values)
-}
-
-function toOrderedUint32(ordered: readonly number[] | U32, orderedCount: number): U32 {
-  if (ordered instanceof Uint32Array) {
-    return ordered
-  }
-  const next = new Uint32Array(orderedCount)
-  for (let index = 0; index < orderedCount; index += 1) {
-    next[index] = ordered[index] ?? 0
-  }
-  return next
 }
 
 export function createEngineRecalcService(args: {
