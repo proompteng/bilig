@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   appendWorkbookAgentCommandToBundle,
   buildWorkbookAgentExecutionRecord,
+  createWorkbookAgentCommandBundle,
+  isWorkbookAgentCommandBundle,
   projectWorkbookAgentBundle,
   type WorkbookAgentContextRef,
 } from '../workbook-agent-bundles.js'
@@ -699,5 +701,69 @@ describe('workbook agent bundle semantics', () => {
         values: [[2]],
       },
     ])
+  })
+
+  it('rejects shared review bundles with unsafe decision timestamps', () => {
+    const bundle = createWorkbookAgentCommandBundle({
+      documentId: 'doc-1',
+      threadId: 'thr-1',
+      turnId: 'turn-1',
+      goalText: 'Update a cell',
+      baseRevision: 3,
+      context: selectionContext,
+      commands: [
+        {
+          kind: 'writeRange',
+          sheetName: 'Sheet1',
+          startAddress: 'B2',
+          values: [[1]],
+        },
+      ],
+      now: 100,
+      sharedReview: {
+        ownerUserId: 'owner@example.com',
+        status: 'approved',
+        decidedByUserId: 'owner@example.com',
+        decidedAtUnixMs: 200,
+        recommendations: [
+          {
+            userId: 'reviewer@example.com',
+            decision: 'approved',
+            decidedAtUnixMs: 150,
+          },
+        ],
+      },
+    })
+
+    const sharedReview = bundle.sharedReview
+    if (!sharedReview) {
+      throw new Error('Expected shared review state')
+    }
+
+    expect(isWorkbookAgentCommandBundle(bundle)).toBe(true)
+    expect(
+      isWorkbookAgentCommandBundle({
+        ...bundle,
+        sharedReview: {
+          ...sharedReview,
+          decidedAtUnixMs: 200.5,
+        },
+      }),
+    ).toBe(false)
+    expect(
+      isWorkbookAgentCommandBundle({
+        ...bundle,
+        sharedReview: {
+          ...sharedReview,
+          recommendations: [
+            {
+              userId: 'reviewer@example.com',
+              decision: 'approved',
+              decidedAtUnixMs: Number.MAX_SAFE_INTEGER + 1,
+            },
+          ],
+        },
+      }),
+    ).toBe(false)
   })
 })
