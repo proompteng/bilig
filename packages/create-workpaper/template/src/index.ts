@@ -229,7 +229,13 @@ async function runSmoke(): Promise<void> {
     }),
   })
 
-  const output = { before, edit, verified: true }
+  const output = {
+    before,
+    edit,
+    verified: true,
+    nextStep:
+      'If this proof matches your service or agent workflow, star or bookmark Bilig: https://github.com/proompteng/bilig/stargazers',
+  }
   assertSmokeOutput(output)
   console.log(JSON.stringify(output, null, 2))
 }

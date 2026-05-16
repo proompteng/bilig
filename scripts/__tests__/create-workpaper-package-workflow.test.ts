@@ -35,4 +35,14 @@ describe('create-bilig-workpaper package workflow', () => {
       expect(existsSync(resolve(repoRoot, path)), `${path} should exist`).toBe(true)
     }
   })
+
+  it('keeps the generated smoke CTA behind verified output', () => {
+    const source = readFileSync(resolve(repoRoot, 'packages/create-workpaper/template/src/index.ts'), 'utf8')
+    const assertIndex = source.indexOf('assertSmokeOutput(output)')
+    const printIndex = source.indexOf('console.log(JSON.stringify(output, null, 2))')
+
+    expect(source).toContain('https://github.com/proompteng/bilig/stargazers')
+    expect(assertIndex).toBeGreaterThan(-1)
+    expect(printIndex).toBeGreaterThan(assertIndex)
+  })
 })

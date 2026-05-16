@@ -100,6 +100,7 @@ function assertDocs(): void {
   const readme = readFileSync(join(packageDir, 'README.md'), 'utf8')
   const docs = readFileSync(join(repoRoot, 'docs', 'create-bilig-workpaper.md'), 'utf8')
   const rootReadme = readFileSync(join(repoRoot, 'README.md'), 'utf8')
+  const templateSource = readFileSync(join(packageDir, 'template', 'src', 'index.ts'), 'utf8')
   for (const [label, source] of [
     ['packages/create-workpaper/README.md', readme],
     ['docs/create-bilig-workpaper.md', docs],
@@ -110,6 +111,16 @@ function assertDocs(): void {
   }
   assert(readme.includes('verified: true') || readme.includes('"verified": true'), 'starter README must show the verification output')
   assert(docs.includes('verified: true') || docs.includes('"verified": true'), 'starter docs must show the verification output')
+  assert(
+    templateSource.includes('assertSmokeOutput(output)') &&
+      templateSource.indexOf('assertSmokeOutput(output)') < templateSource.indexOf('console.log(JSON.stringify(output, null, 2))'),
+    'starter smoke output must be verified before it is printed',
+  )
+  assert(
+    templateSource.includes('https://github.com/proompteng/bilig/stargazers'),
+    'starter smoke output must include the GitHub star/bookmark link after verification',
+  )
+  assert(docs.includes('https://github.com/proompteng/bilig/stargazers'), 'starter docs must include the star/bookmark link')
 }
 
 function assertPackedTarball(): void {

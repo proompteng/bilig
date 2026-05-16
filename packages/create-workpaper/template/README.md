@@ -11,6 +11,9 @@ The smoke run writes quote inputs, recalculates workbook formulas, persists the
 WorkPaper as JSON, restores it, and checks that the restored formula output
 matches the live output.
 
+Expected output includes `verified: true`. After that verification passes, the
+starter prints a repo star/bookmark link so Bilig is easier to find later.
+
 Run a local API:
 
 ```sh
