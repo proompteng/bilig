@@ -6,7 +6,12 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { buildPublicWorkbookCorpusScorecard, createEmptyPublicWorkbookManifest } from '../public-workbook-corpus.ts'
-import { formatPublicCorpusStopMarkerPathForMessage, readRepeatedStringArg, readStringArg } from '../public-workbook-corpus-cli.ts'
+import {
+  formatPublicCorpusStopMarkerPathForMessage,
+  readNumberArg,
+  readRepeatedStringArg,
+  readStringArg,
+} from '../public-workbook-corpus-cli.ts'
 import { asRecord } from '../public-workbook-corpus-json.ts'
 import { buildPublicWorkbookCorpusResumePlan, validatePublicWorkbookCorpusResumePlan } from '../public-workbook-corpus-resume-plan.ts'
 import { publicWorkbookImportWarningClassifierEvidence } from '../public-workbook-corpus-evidence.ts'
@@ -35,6 +40,17 @@ describe('public workbook corpus CLI resource guards', () => {
       process.argv = ['bun', corpusScriptPath(), 'discover', '--query', 'budget', '--query', '--limit', '2']
 
       expect(() => readRepeatedStringArg('--query')).toThrow('Expected --query to have a value')
+    } finally {
+      process.argv = originalArgv
+    }
+  })
+
+  it('rejects fractional values for shared count arguments', () => {
+    const originalArgv = process.argv
+    try {
+      process.argv = ['bun', corpusScriptPath(), 'fetch', '--limit', '1.9']
+
+      expect(() => readNumberArg('--limit', 10)).toThrow('Expected --limit to be a positive integer')
     } finally {
       process.argv = originalArgv
     }

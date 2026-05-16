@@ -22,10 +22,10 @@ function readArgValueAt(name: string, index: number): string {
 export function readNumberArg(name: string, fallback: number): number {
   const raw = readStringArg(name, String(fallback))
   const parsed = Number(raw)
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`Expected ${name} to be a positive number`)
+  if (!Number.isFinite(parsed) || parsed <= 0 || !Number.isInteger(parsed)) {
+    throw new Error(`Expected ${name} to be a positive integer`)
   }
-  return Math.trunc(parsed)
+  return parsed
 }
 
 export function readMegabytesArg(name: string, fallbackBytes: number): number {
