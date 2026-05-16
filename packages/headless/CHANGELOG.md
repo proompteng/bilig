@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.16.17
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.16.16
+- Manual override: no
+
+## Fixes
+- perf(headless): speed up structural aggregate row deletes (ee52d072)
+
 ## 0.16.16
 
 - Release type: patch
