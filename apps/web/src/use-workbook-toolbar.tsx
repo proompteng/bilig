@@ -28,6 +28,8 @@ import {
 } from './workbook-toolbar-state.js'
 import { createRangeRef, getNormalizedRangeBounds, type ZeroConnectionState } from './worker-workbook-app-model.js'
 
+export { deriveWorkbookStatusPresentation } from './workbook-toolbar-state.js'
+
 export function useWorkbookToolbar(input: {
   connectionStateName: ZeroConnectionState['name']
   runtimeReady: boolean
@@ -93,7 +95,6 @@ export function useWorkbookToolbar(input: {
   const [recentTextColors, setRecentTextColors] = useState<readonly string[]>([])
   const selectedRangeKey = cellRangeKey(selectionRangeRef.current)
   const [optimisticStyle, setOptimisticStyle] = useState<OptimisticToolbarStyle | null>(null)
-  const toolbarMutationQueueRef = useRef<Promise<void>>(Promise.resolve())
   const activeSelectedStyle = optimisticStyle?.rangeKey === selectedRangeKey ? optimisticStyle.style : selectedStyle
   const currentNumberFormat = parseCellNumberFormatCode(selectedCell.format)
   const selectedFontSize = String(activeSelectedStyle?.font?.size ?? 11)
@@ -128,24 +129,7 @@ export function useWorkbookToolbar(input: {
     },
     [selectedStyle],
   )
-  const enqueueToolbarMutation = useCallback((run: () => Promise<void>) => {
-    const next = (async () => {
-      try {
-        await toolbarMutationQueueRef.current
-      } catch {
-        // Keep later toolbar mutations ordered even if an earlier one failed.
-      }
-      await run()
-    })()
-    toolbarMutationQueueRef.current = (async () => {
-      try {
-        await next
-      } catch {
-        // The returned promise carries the failure to callers; the queue should keep moving.
-      }
-    })()
-    return next
-  }, [])
+  const enqueueToolbarMutation = useCallback((run: () => Promise<void>) => run(), [])
   const statusPresentation = deriveWorkbookStatusPresentation({
     connectionStateName,
     runtimeReady,
