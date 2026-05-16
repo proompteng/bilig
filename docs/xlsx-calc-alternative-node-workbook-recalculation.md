@@ -1,7 +1,7 @@
 ---
 title: xlsx-calc alternative for Node workbook recalculation
 published: true
-description: Compare xlsx-calc and @bilig/headless for server-side XLSX formula recalculation, workbook readback, and auditable Node service workflows.
+description: When xlsx-calc is enough, when it is not, and how to test formula recalculation in a Node service without opening Excel.
 tags: typescript, node, xlsx, spreadsheet, formulas
 canonical_url: https://proompteng.github.io/bilig/xlsx-calc-alternative-node-workbook-recalculation.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
@@ -10,32 +10,31 @@ image: /assets/github-social-preview.png
 
 # xlsx-calc alternative for Node workbook recalculation
 
-This page is for Node developers who already found `xlsx-calc` while trying to
-refresh formulas inside an `.xlsx` workbook without opening Excel.
+You probably got here because you have an `.xlsx` file, you changed an input
+cell in Node, and now the cached formula result is wrong.
 
-`xlsx-calc` is a useful fit when you have a SheetJS-shaped workbook object and
-need a small formula calculator for supported formulas. Its README shows the
-core loop clearly: read a workbook with `xlsx`, edit a cell, call
-`XLSX_CALC(workbook)`, and read the updated values.
+`xlsx-calc` can be the right answer. If your workbook is already a SheetJS
+object and the formulas you use are in its supported set, the API is simple:
+edit cells, call `XLSX_CALC(workbook)`, read the values.
 
-Use `@bilig/headless` when the recalculated workbook is part of a backend
-decision path: pricing, payout approval, quote validation, import checks, agent
-tools, or any service that has to edit inputs, recalculate, verify readback, and
-persist or export the resulting workbook state.
+Use `@bilig/headless` when the spreadsheet is not just a file. The usual case
+is a backend decision path: quote approval, payout checks, import validation,
+or an agent tool that needs to write inputs, recalculate, read outputs, and
+save a state it can test again later.
 
 ## Quick choice
 
-| If you need | Start with |
+| You need | Start with |
 | --- | --- |
-| A small calculator over a SheetJS workbook object | `xlsx-calc` |
-| File parsing and writing across many spreadsheet formats | SheetJS |
-| Styling, rows, sheets, and workbook file manipulation | ExcelJS or SheetJS |
-| A formula-backed workbook object for Node services | `@bilig/headless` |
-| Recalculated readback before accepting a backend workflow | `@bilig/headless` |
-| JSON persistence plus optional XLSX import/export | `@bilig/headless` |
+| Recalculate a supported formula set on a SheetJS workbook object | `xlsx-calc` |
+| Read and write lots of spreadsheet file formats | SheetJS |
+| Build styled `.xlsx` files | ExcelJS or SheetJS |
+| Keep a formula workbook as service state | `@bilig/headless` |
+| Read recalculated outputs before accepting a request | `@bilig/headless` |
+| Persist JSON state and still import or export XLSX at the edge | `@bilig/headless` |
 
-This is not a takedown of `xlsx-calc`. The narrower point is that a backend
-service usually needs more than a formula pass over a file-shaped object.
+That is the whole distinction. `xlsx-calc` is a calculator over a workbook
+object. Bilig is a workbook runtime with import/export at the edges.
 
 ## Node service recalculation path
 
@@ -64,7 +63,7 @@ const edited = await exportXlsx(workbook);
 await writeFile("pricing-model-edited.xlsx", edited);
 ```
 
-For a maintained runnable version, use:
+The maintained example is small enough to inspect:
 
 ```sh
 git clone https://github.com/proompteng/bilig.git
@@ -73,7 +72,7 @@ npm install
 npm start
 ```
 
-The expected proof includes:
+It should end with checks like these:
 
 ```json
 {
@@ -84,11 +83,11 @@ The expected proof includes:
 }
 ```
 
-## Benchmark evidence
+## Measured Lane
 
-The checked-in limited `xlsx-calc` lane is intentionally small. It compares
-workbook-wide recalculation on four equivalent workloads: aggregate,
-exact-match lookup, approximate lookup, and formula-chain recalculation.
+There is a checked-in `xlsx-calc` comparison, but it is deliberately narrow.
+It covers four workbook-wide recalculation workloads: aggregate, exact-match
+lookup, approximate lookup, and formula-chain recalculation.
 
 Current artifact:
 [`packages/benchmarks/baselines/workpaper-vs-xlsx-calc.json`](https://github.com/proompteng/bilig/blob/main/packages/benchmarks/baselines/workpaper-vs-xlsx-calc.json)
@@ -109,25 +108,25 @@ Run the local check with:
 pnpm workpaper:bench:xlsx-calc:check
 ```
 
-Do not read this as "Bilig replaces every Excel runtime." Read it as "for the
-supported workbook-wide recalculation lane, Bilig has a measured path with
-auditable service semantics around it."
+That benchmark does not mean "Bilig replaces Excel." It only says that this
+particular Node recalculation lane is measured, checked in, and easy to rerun.
 
-## Production trust checks
+## What I Would Test
 
-Before moving a workbook-backed service into production, add gates for:
+For a production service, I would not ship this based on one happy-path example.
+I would add tests for:
 
 - exact input cells the service writes
 - exact output cells the service reads
 - exported XLSX reimport
 - formulas preserved after the round trip
 - unsupported formulas and compatibility limits
-- golden fixtures from real customer-shaped workbooks
+- fixtures that look like your real workbooks
 - stale cached values in source XLSX files
 
-If you mainly need to parse or write workbook files, keep using a file library.
-If the Node process must own the calculated answer before it acts, put the
-calculation path behind a WorkPaper adapter and test it like business logic.
+If the service mostly formats files, keep using a file library. If the service
+acts on the calculated result, put the cells behind a small adapter and test
+that adapter like business logic.
 
 ## Sources and related pages
 
@@ -140,6 +139,6 @@ calculation path behind a WorkPaper adapter and test it like business logic.
 - [Headless benchmark evidence](headless-workpaper-benchmark-evidence.md)
 - [Compatibility limits](where-bilig-is-not-excel-compatible-yet.md)
 
-If this helps you replace a fragile Excel-open step in a backend job, star the
-repository so the next Node developer can find it:
+If this saved you a spreadsheet-recalculation detour, star the repo so the next
+Node developer can find it:
 <https://github.com/proompteng/bilig/stargazers>.
