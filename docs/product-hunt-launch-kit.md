@@ -117,7 +117,7 @@ These checks follow Product Hunt's own launch prep guidance:
   `examples/headless-workpaper/npm-eval.ts`.
 - The output must show `verified: true` after save and restore.
 - The public benchmark page documents the narrow `47/57` comparable mean-row
-  claim and the slower structural-append p95 caveat.
+  claim and the slower structural-delete-rows p95 caveat.
 - The compatibility page says what is not Excel-compatible yet before a user
   tries to import a real workbook.
 

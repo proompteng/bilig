@@ -308,7 +308,7 @@ for (const required of [
   'Use SheetJS or ExcelJS first when the primary job is reading, writing, styling',
   'Use Google Sheets API first when a shared hosted spreadsheet',
   'The current checked benchmark artifact records `47/57` comparable',
-  'structural-append-formula-rows',
+  'structural-delete-rows',
   'https://github.com/proompteng/bilig/stargazers',
 ] as const) {
   requireIncludes(formulaWorkbooksProof, required, 'docs/formula-workbooks-node-services-agent-tools.md')
@@ -446,7 +446,7 @@ requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/google
 const npmProvenancePackageTrustDoc = await readFile(join(docsRoot, 'npm-provenance-package-trust.md'), 'utf8')
 for (const required of [
   'title: Verify npm provenance for @bilig/headless',
-  'npm view @bilig/headless@0.16.11 version dist.attestations dist.signatures --json',
+  'npm view @bilig/headless@0.16.13 version dist.attestations dist.signatures --json',
   'npm audit signatures',
   'dist.attestations.provenance.predicateType',
   'npm publish ... --provenance',

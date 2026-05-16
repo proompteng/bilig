@@ -17,15 +17,15 @@ scoped lead with visible holdouts, not a blanket fastest-engine claim:
 | Lane    | Comparable Workloads | WorkPaper Mean Wins | HyperFormula Mean Wins |
 | ------- | -------------------: | ------------------: | ---------------------: |
 | Overall |                 `57` |                `47` |                  `10` |
-| Public  |                 `40` |                `34` |                    `6` |
-| Holdout |                 `17` |                `13` |                    `4` |
+| Public  |                 `40` |                `34` |                   `6` |
+| Holdout |                 `17` |                `13` |                   `4` |
 
 The artifact is
 [`packages/benchmarks/baselines/workpaper-vs-hyperformula.json`](../packages/benchmarks/baselines/workpaper-vs-hyperformula.json),
-generated at `2026-05-16T13:39:02.931Z`.
+generated at `2026-05-16T14:25:30.856Z`.
 
-The overall directional mean-ratio geomean is `0.6282029957289024`, and the
-overall directional p95-ratio geomean is `0.654808118415383`. Ratios below
+The overall directional mean-ratio geomean is `0.6801549845886562`, and the
+overall directional p95-ratio geomean is `0.7125571100027479`. Ratios below
 `1.0` mean WorkPaper is faster on that metric.
 
 ## What It Proves
@@ -54,9 +54,9 @@ It does not prove full formula parity with Excel, Google Sheets, or
 HyperFormula.
 
 It does not prove that every p95 row is faster. The current headless leadership
-scorecard records `45/57` workloads winning both mean and p95. The worst p95
-holdout is `structural-append-formula-rows`, where the current WorkPaper-to-HyperFormula
-p95 ratio is `3.4143332252416543`. The honest claim is `47/57` mean wins plus an
+scorecard records `44/57` workloads winning both mean and p95. The worst p95
+holdout is `structural-delete-rows`, where the current WorkPaper-to-HyperFormula
+p95 ratio is `3.8061990057755852`. The honest claim is `47/57` mean wins plus an
 overall p95 geomean lead, not "faster on every row."
 
 It does not prove that browser-grid rendering, import/export, collaboration, or
