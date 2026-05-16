@@ -116,6 +116,38 @@ describe('RegionGraph', () => {
     expect(counters.regionQueryIndexBuilds).toBe(1)
   })
 
+  it('answers dirty point queries outside subscribed row bounds without building interval trees', () => {
+    const counters = createEngineCounters()
+    const workbook = new WorkbookStore('region-graph-out-of-bounds-query')
+    const sheet = workbook.createSheet('Sheet1')
+    const regionGraph = createRegionGraph({ workbook, counters })
+
+    const first = regionGraph.internSingleColumnRegion({
+      sheetName: 'Sheet1',
+      rowStart: 0,
+      rowEnd: 31,
+      col: 0,
+    })
+    const second = regionGraph.internSingleColumnRegion({
+      sheetName: 'Sheet1',
+      rowStart: 64,
+      rowEnd: 96,
+      col: 0,
+    })
+
+    regionGraph.replaceFormulaSubscriptions(10, [first])
+    regionGraph.replaceFormulaSubscriptions(20, [second])
+
+    expect([...regionGraph.collectFormulaDependentsForCell(sheet.id, 256, 0)]).toEqual([])
+    expect(regionGraph.collectSingleFormulaDependentForCell(sheet.id, 256, 0)).toBe(-1)
+    expect(counters.regionQueryIndexBuilds).toBe(0)
+
+    regionGraph.clearFormulaSubscriptions(20)
+    expect([...regionGraph.collectFormulaDependentsForCell(sheet.id, 64, 0)]).toEqual([])
+    expect(regionGraph.collectSingleFormulaDependentForCell(sheet.id, 64, 0)).toBe(-1)
+    expect(counters.regionQueryIndexBuilds).toBe(0)
+  })
+
   it('replaces a single formula region subscription without disturbing other subscribers', () => {
     const workbook = new WorkbookStore('region-graph-replace-single')
     const sheet = workbook.createSheet('Sheet1')

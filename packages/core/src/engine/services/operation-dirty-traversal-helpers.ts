@@ -128,6 +128,9 @@ export function canSkipOperationDirtyTraversalForChangedInputs(input: {
     ) {
       return false
     }
+    if (input.postRecalcDirectFormulaIndices.hasCoveredDirectRangeInput(cellIndex)) {
+      return true
+    }
     if (!input.access.hasTrackedDirectRangeDependents(sheetId, col)) {
       return !requireTrackedRangeDependents
     }

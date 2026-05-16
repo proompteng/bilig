@@ -115,6 +115,16 @@ export function applyWorkPaperMatrixContents(input: {
     }
     return applyOptions
   }
+  const updateSheetDimensionsAfterCellMutationRefs = input.updateSheetDimensionsAfterCellMutationRefs
+  const canUpdateDimensionsOnce =
+    updateSheetDimensionsAfterCellMutationRefs !== undefined && (phaseSource !== 'local' || input.isEvaluationSuspended?.() !== true)
+  const updateDimensionsOnce = (refs: readonly EngineCellMutationRef[]): void => {
+    if (input.updateSheetDimensionsAfterMatrixMutationImpact) {
+      input.updateSheetDimensionsAfterMatrixMutationImpact(dimensionImpact)
+    } else {
+      updateSheetDimensionsAfterCellMutationRefs?.(refs)
+    }
+  }
 
   if (formulaRefs.length === 0) {
     applyPlannedRefs(leadingRefs, createApplyOptions())
@@ -123,13 +133,18 @@ export function applyWorkPaperMatrixContents(input: {
 
   const canApplyFormulaMatrixInOnePass = trailingLiteralRefs.length === 0 && !dimensionImpact.hasDynamicFormula
   if (canApplyFormulaMatrixInOnePass) {
-    applyPlannedRefs(mergeMatrixMutationRefPhases(leadingRefs, formulaRefs, trailingLiteralRefs), createApplyOptions())
+    const mergedRefs = mergeMatrixMutationRefPhases(leadingRefs, formulaRefs, trailingLiteralRefs)
+    const applyOptions = createApplyOptions()
+    if (canUpdateDimensionsOnce) {
+      applyOptions.skipDimensionUpdate = true
+    }
+    applyPlannedRefs(mergedRefs, applyOptions)
+    if (canUpdateDimensionsOnce) {
+      updateDimensionsOnce(mergedRefs)
+    }
     return
   }
 
-  const updateSheetDimensionsAfterCellMutationRefs = input.updateSheetDimensionsAfterCellMutationRefs
-  const canUpdateDimensionsOnce =
-    updateSheetDimensionsAfterCellMutationRefs !== undefined && (phaseSource !== 'local' || input.isEvaluationSuspended?.() !== true)
   const createPhasedApplyOptions = (phasePotentialNewCells: number): WorkPaperCellMutationApplyOptions => {
     const phasedOptions = createApplyOptions(phasePotentialNewCells)
     if (canUpdateDimensionsOnce) {
@@ -142,11 +157,7 @@ export function applyWorkPaperMatrixContents(input: {
   applyPlannedRefs(formulaRefs, createPhasedApplyOptions(formulaPotentialNewCells))
   applyPlannedRefs(trailingLiteralRefs, createPhasedApplyOptions(trailingLiteralPotentialNewCells))
   if (canUpdateDimensionsOnce) {
-    if (input.updateSheetDimensionsAfterMatrixMutationImpact) {
-      input.updateSheetDimensionsAfterMatrixMutationImpact(dimensionImpact)
-    } else {
-      updateSheetDimensionsAfterCellMutationRefs(mergeMatrixMutationRefPhases(leadingRefs, formulaRefs, trailingLiteralRefs))
-    }
+    updateDimensionsOnce(mergeMatrixMutationRefPhases(leadingRefs, formulaRefs, trailingLiteralRefs))
   }
 }
 

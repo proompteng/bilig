@@ -26,9 +26,6 @@ import type { CreateEngineOperationServiceArgs, MutationSource } from './operati
 
 type OperationBatchDirectFormulaCallbacks = Parameters<typeof finalizeOperationRecalcAndEvents>[0]['directFormulaCallbacks']
 type OperationBatchDirtyTraversalSkip = Parameters<typeof finalizeOperationRecalcAndEvents>[0]['canSkipDirtyTraversalForChangedInputs']
-type OperationBatchChangedInputsNeedRegionQueryIndices = Parameters<
-  typeof finalizeOperationRecalcAndEvents
->[0]['changedInputsNeedRegionQueryIndices']
 type OperationBatchCycleInputMarker = Parameters<typeof finalizeOperationRecalcAndEvents>[0]['markCycleMemberInputsChanged']
 type OperationBatchDerivedOp<K extends EngineOp['kind']> = Extract<EngineOp, { kind: K }>
 
@@ -73,7 +70,6 @@ interface CreateOperationBatchApplierArgs {
   readonly markCycleMemberInputsChanged: OperationBatchCycleInputMarker
   readonly hasCycleMembersNow: () => boolean
   readonly canSkipDirtyTraversalForChangedInputs: OperationBatchDirtyTraversalSkip
-  readonly changedInputsNeedRegionQueryIndices: OperationBatchChangedInputsNeedRegionQueryIndices
   readonly directFormulaCallbacks: OperationBatchDirectFormulaCallbacks
   readonly applySpillRangeOp: (op: OperationBatchDerivedOp<'upsertSpillRange' | 'deleteSpillRange'>, order: OpOrder) => number[]
   readonly applyPivotUpsertOp: (op: OperationBatchDerivedOp<'upsertPivotTable'>, order: OpOrder) => number[]
@@ -105,7 +101,6 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
     markCycleMemberInputsChanged,
     hasCycleMembersNow,
     canSkipDirtyTraversalForChangedInputs,
-    changedInputsNeedRegionQueryIndices,
     directFormulaCallbacks: {
       applyDirectFormulaCurrentResult,
       applyDirectFormulaNumericDelta,
@@ -868,7 +863,6 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
       hadCycleMembersBeforeNow,
       markCycleMemberInputsChanged,
       canSkipDirtyTraversalForChangedInputs,
-      changedInputsNeedRegionQueryIndices,
       directFormulaCallbacks: {
         applyDirectFormulaCurrentResult,
         applyDirectFormulaNumericDelta,

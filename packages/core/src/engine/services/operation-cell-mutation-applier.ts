@@ -25,9 +25,6 @@ import { analyzeFreshDirectAggregateFormula, bindFreshTemplateFormula } from './
 type OperationCellMutationSource = Exclude<MutationSource, 'remote'>
 type OperationCellDirectFormulaCallbacks = Parameters<typeof finalizeOperationRecalcAndEvents>[0]['directFormulaCallbacks']
 type OperationCellDirtyTraversalSkip = Parameters<typeof finalizeOperationRecalcAndEvents>[0]['canSkipDirtyTraversalForChangedInputs']
-type OperationCellChangedInputsNeedRegionQueryIndices = Parameters<
-  typeof finalizeOperationRecalcAndEvents
->[0]['changedInputsNeedRegionQueryIndices']
 type OperationCellCycleInputMarker = Parameters<typeof finalizeOperationRecalcAndEvents>[0]['markCycleMemberInputsChanged']
 
 interface CreateOperationCellMutationApplierArgs {
@@ -98,7 +95,6 @@ interface CreateOperationCellMutationApplierArgs {
   readonly markCycleMemberInputsChanged: OperationCellCycleInputMarker
   readonly hasCycleMembersNow: () => boolean
   readonly canSkipDirtyTraversalForChangedInputs: OperationCellDirtyTraversalSkip
-  readonly changedInputsNeedRegionQueryIndices: OperationCellChangedInputsNeedRegionQueryIndices
   readonly directFormulaCallbacks: OperationCellDirectFormulaCallbacks
   readonly pruneCellIfOrphaned: (cellIndex: number) => void
   readonly normalizeHistoryDependencyPlaceholder: (cellIndex: number, source: MutationSource) => void
@@ -136,7 +132,6 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
     markCycleMemberInputsChanged,
     hasCycleMembersNow,
     canSkipDirtyTraversalForChangedInputs,
-    changedInputsNeedRegionQueryIndices,
     directFormulaCallbacks: {
       applyDirectFormulaCurrentResult,
       applyDirectFormulaNumericDelta,
@@ -846,7 +841,6 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
       hadCycleMembersBeforeNow,
       markCycleMemberInputsChanged,
       canSkipDirtyTraversalForChangedInputs,
-      changedInputsNeedRegionQueryIndices,
       directFormulaCallbacks: {
         applyDirectFormulaCurrentResult,
         applyDirectFormulaNumericDelta,

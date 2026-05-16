@@ -25,10 +25,7 @@ import { createOperationColumnDependencyTrackerService } from './operation-colum
 import { createOperationLookupDirtyMarkerService } from './operation-lookup-dirty-markers.js'
 import { createOperationDirectPostRecalcMarkers } from './operation-direct-post-recalc-markers.js'
 import { createOperationDerivedOpApplier } from './operation-derived-op-helpers.js'
-import {
-  canSkipOperationDirtyTraversalForChangedInputs,
-  operationChangedInputsNeedRegionQueryIndices,
-} from './operation-dirty-traversal-helpers.js'
+import { canSkipOperationDirtyTraversalForChangedInputs } from './operation-dirty-traversal-helpers.js'
 import { countOperationPostRecalcDirectFormulaMetric, type DirectFormulaMetricCounts } from './operation-post-recalc-direct-formulas.js'
 import {
   tryApplySingleDirectAggregateLiteralMutationFastPath as tryApplySingleDirectAggregateLiteralMutationFastPathWithArgs,
@@ -280,22 +277,6 @@ export function createEngineOperationService(args: CreateEngineOperationServiceA
         collectAffectedDirectRangeDependents,
         hasTrackedExactLookupDependents,
         hasTrackedSortedLookupDependents,
-        hasTrackedDirectRangeDependents,
-      },
-    })
-  }
-
-  const changedInputsNeedRegionQueryIndices = (
-    changedInputCellIndices: U32,
-    changedInputCount: number,
-    postRecalcDirectFormulaIndices?: DirectFormulaIndexCollection,
-  ): boolean => {
-    return operationChangedInputsNeedRegionQueryIndices({
-      changedInputCellIndices,
-      changedInputCount,
-      postRecalcDirectFormulaIndices,
-      access: {
-        workbook: args.state.workbook,
         hasTrackedDirectRangeDependents,
       },
     })
@@ -736,7 +717,6 @@ export function createEngineOperationService(args: CreateEngineOperationServiceA
     markCycleMemberInputsChanged,
     hasCycleMembersNow,
     canSkipDirtyTraversalForChangedInputs,
-    changedInputsNeedRegionQueryIndices,
     directFormulaCallbacks: {
       applyDirectFormulaCurrentResult,
       applyDirectFormulaNumericDelta,
@@ -781,7 +761,6 @@ export function createEngineOperationService(args: CreateEngineOperationServiceA
     markCycleMemberInputsChanged,
     hasCycleMembersNow,
     canSkipDirtyTraversalForChangedInputs,
-    changedInputsNeedRegionQueryIndices,
     directFormulaCallbacks: {
       applyDirectFormulaCurrentResult,
       applyDirectFormulaNumericDelta,

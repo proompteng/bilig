@@ -54,7 +54,7 @@ It does not prove full formula parity with Excel, Google Sheets, or
 HyperFormula.
 
 It does not prove that every p95 row is faster. The current headless leadership
-scorecard records `44/57` workloads winning both mean and p95. The worst p95
+scorecard records `45/57` workloads winning both mean and p95. The worst p95
 holdout is `structural-append-formula-rows`, where the current WorkPaper-to-HyperFormula
 p95 ratio is `3.4143332252416543`. The honest claim is `47/57` mean wins plus an
 overall p95 geomean lead, not "faster on every row."

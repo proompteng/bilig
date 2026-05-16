@@ -37,12 +37,6 @@ type OperationDirtyTraversalSkip = (
   },
 ) => boolean
 
-type OperationChangedInputsNeedRegionQueryIndices = (
-  changedInputCellIndices: U32,
-  changedInputCount: number,
-  postRecalcDirectFormulaIndices?: DirectFormulaIndexCollection,
-) => boolean
-
 export interface FinalizeOperationRecalcAndEventsArgs {
   readonly serviceArgs: CreateEngineOperationServiceArgs
   readonly isRestore: boolean
@@ -64,7 +58,6 @@ export interface FinalizeOperationRecalcAndEventsArgs {
   readonly hadCycleMembersBeforeNow: () => boolean
   readonly markCycleMemberInputsChanged: (changedInputCount: number) => number
   readonly canSkipDirtyTraversalForChangedInputs: OperationDirtyTraversalSkip
-  readonly changedInputsNeedRegionQueryIndices: OperationChangedInputsNeedRegionQueryIndices
   readonly directFormulaCallbacks: OperationPostRecalcDirectFormulaCallbacks
   readonly shouldMaterializeChangedCells?: (args: {
     readonly changedLength: number
@@ -159,9 +152,6 @@ export function finalizeOperationRecalcAndEvents(input: FinalizeOperationRecalcA
   ) {
     formulaChangedCount = input.serviceArgs.markVolatileFormulasChanged(formulaChangedCount)
     const changedInputArray = input.serviceArgs.getChangedInputBuffer().subarray(0, changedInputCount)
-    if (input.changedInputsNeedRegionQueryIndices(changedInputArray, changedInputCount, input.postRecalcDirectFormulaIndices)) {
-      input.serviceArgs.prepareRegionQueryIndices()
-    }
     const canUseKernelSyncOnlyRecalc =
       formulaChangedCount === 0 &&
       changedInputCount > 0 &&

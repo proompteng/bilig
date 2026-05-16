@@ -24,6 +24,8 @@ interface ColumnSubscriptionState {
   dirtyPointQueries: number
   orderedByRowStart: boolean
   lastRowStart: number
+  minRowStart: number
+  maxRowEnd: number
   pointImpactIndex: Array<number | undefined> | undefined
   pointImpactCellCount: number
   pointImpactDirty: boolean
@@ -360,6 +362,10 @@ function collectSingleDependentForRow(
   return singleDependent
 }
 
+function rowCanIntersectSubscriptions(subscriptions: ColumnSubscriptionState, row: number): boolean {
+  return subscriptions.regionIds.size > 0 && row >= subscriptions.minRowStart && row <= subscriptions.maxRowEnd
+}
+
 export function createRegionGraph(args: {
   readonly workbook: Pick<WorkbookStore, 'getSheet'>
   readonly counters?: EngineCounters
@@ -384,6 +390,8 @@ export function createRegionGraph(args: {
       dirtyPointQueries: 0,
       orderedByRowStart: true,
       lastRowStart: Number.NEGATIVE_INFINITY,
+      minRowStart: Number.POSITIVE_INFINITY,
+      maxRowEnd: Number.NEGATIVE_INFINITY,
       pointImpactIndex: undefined,
       pointImpactCellCount: 0,
       pointImpactDirty: false,
@@ -391,6 +399,19 @@ export function createRegionGraph(args: {
     }
     columnSubscriptions.set(key, created)
     return created
+  }
+
+  const recomputeColumnRowBounds = (subscriptions: ColumnSubscriptionState): void => {
+    subscriptions.minRowStart = Number.POSITIVE_INFINITY
+    subscriptions.maxRowEnd = Number.NEGATIVE_INFINITY
+    subscriptions.regionIds.forEach((regionId) => {
+      const region = nodeStore.get(regionId)
+      if (!region) {
+        return
+      }
+      subscriptions.minRowStart = Math.min(subscriptions.minRowStart, region.rowStart)
+      subscriptions.maxRowEnd = Math.max(subscriptions.maxRowEnd, region.rowEnd)
+    })
   }
 
   const markColumnDirty = (regionId: RegionId): void => {
@@ -403,6 +424,52 @@ export function createRegionGraph(args: {
     subscriptions.dirty = true
     subscriptions.dirtyPointQueries = 0
     dirtyColumns.add(key)
+  }
+
+  const rebuildPointImpactIndex = (subscriptions: ColumnSubscriptionState): boolean => {
+    if (subscriptions.pointImpactDisabled) {
+      return false
+    }
+    const nextIndex: Array<number | undefined> = []
+    let nextCellCount = 0
+    for (const regionId of subscriptions.regionIds) {
+      const region = nodeStore.get(regionId)
+      if (!region) {
+        continue
+      }
+      const regionLength = region.rowEnd - region.rowStart + 1
+      if (
+        regionLength <= 0 ||
+        region.rowEnd > POINT_IMPACT_MAX_ROW_INDEX ||
+        regionLength > POINT_IMPACT_MAX_REGION_LENGTH ||
+        nextCellCount + regionLength > POINT_IMPACT_MAX_CELLS
+      ) {
+        disablePointImpactIndex(subscriptions)
+        return false
+      }
+      const subscribers = regionSubscribers.get(regionId)
+      if (subscribers === undefined) {
+        continue
+      }
+      for (let row = region.rowStart; row <= region.rowEnd; row += 1) {
+        forEachRegionSubscriber(subscribers, (formulaCellIndex) => {
+          nextIndex[row] = mergePointImpactDependent(nextIndex[row], formulaCellIndex)
+        })
+      }
+      nextCellCount += regionLength
+    }
+    subscriptions.pointImpactIndex = nextIndex
+    subscriptions.pointImpactCellCount = nextCellCount
+    subscriptions.pointImpactDirty = false
+    return true
+  }
+
+  const collectSingleDependentFromPointImpact = (subscriptions: ColumnSubscriptionState, row: number): number | undefined => {
+    const indexed = collectSingleDependentFromPointImpactIndex(subscriptions, row)
+    if (indexed !== undefined) {
+      return indexed
+    }
+    return rebuildPointImpactIndex(subscriptions) ? collectSingleDependentFromPointImpactIndex(subscriptions, row) : undefined
   }
 
   const addRegionSubscription = (formulaCellIndex: number, regionId: RegionId): void => {
@@ -436,6 +503,8 @@ export function createRegionGraph(args: {
           subscriptions.orderedByRowStart = false
         }
         subscriptions.lastRowStart = Math.max(subscriptions.lastRowStart, region.rowStart)
+        subscriptions.minRowStart = Math.min(subscriptions.minRowStart, region.rowStart)
+        subscriptions.maxRowEnd = Math.max(subscriptions.maxRowEnd, region.rowEnd)
         subscriptions.regionIds.add(regionId)
         addSingleSubscriberPointImpacts(subscriptions, region, formulaCellIndex)
         markColumnDirty(regionId)
@@ -491,10 +560,14 @@ export function createRegionGraph(args: {
     if (subscriptions.regionIds.size === 0) {
       subscriptions.orderedByRowStart = true
       subscriptions.lastRowStart = Number.NEGATIVE_INFINITY
+      subscriptions.minRowStart = Number.POSITIVE_INFINITY
+      subscriptions.maxRowEnd = Number.NEGATIVE_INFINITY
       subscriptions.pointImpactIndex = undefined
       subscriptions.pointImpactCellCount = 0
       subscriptions.pointImpactDirty = false
       subscriptions.pointImpactDisabled = false
+    } else if (region.rowStart === subscriptions.minRowStart || region.rowEnd === subscriptions.maxRowEnd) {
+      recomputeColumnRowBounds(subscriptions)
     }
     markColumnDirty(regionId)
   }
@@ -617,6 +690,9 @@ export function createRegionGraph(args: {
     collectFormulaDependentsForCell(sheetId, row, col) {
       const matchingRegions: RegionId[] = []
       const subscriptions = getColumnSubscriptions(sheetId, col)
+      if (!rowCanIntersectSubscriptions(subscriptions, row)) {
+        return new Uint32Array()
+      }
       if (
         subscriptions.dirty &&
         subscriptions.dirtyPointQueries < DIRTY_LINEAR_POINT_QUERY_LIMIT &&
@@ -648,7 +724,10 @@ export function createRegionGraph(args: {
     },
     collectSingleFormulaDependentForCell(sheetId, row, col) {
       const subscriptions = getColumnSubscriptions(sheetId, col)
-      const indexedDependent = collectSingleDependentFromPointImpactIndex(subscriptions, row)
+      if (!rowCanIntersectSubscriptions(subscriptions, row)) {
+        return -1
+      }
+      const indexedDependent = collectSingleDependentFromPointImpact(subscriptions, row)
       if (indexedDependent !== undefined) {
         return indexedDependent
       }
