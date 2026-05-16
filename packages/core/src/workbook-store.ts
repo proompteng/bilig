@@ -95,6 +95,7 @@ import { WorkbookIdAllocator } from './workbook-id-allocator.js'
 import type { SheetRecord } from './workbook-sheet-record.js'
 import { WorkbookSheetRegistryStore } from './workbook-sheet-registry-store.js'
 import { WorkbookStructuralCellStore } from './workbook-structural-cell-store.js'
+import { WorkbookStructuralAxisOperations } from './workbook-structural-axis-operations.js'
 
 export { makeCellKey, makeLogicalCellKey } from './workbook-cell-key-index.js'
 export { normalizeDefinedName, normalizeWorkbookObjectName, imageKey, pivotKey, shapeKey } from './workbook-metadata-types.js'
@@ -153,6 +154,7 @@ export class WorkbookStore {
   private readonly axisEntryStore: WorkbookAxisEntryStore
   private readonly columnVersionStore: WorkbookColumnVersionStore
   private readonly structuralCellStore: WorkbookStructuralCellStore
+  private readonly structuralAxisOperations: WorkbookStructuralAxisOperations
   workbookName: string
 
   constructor(
@@ -200,6 +202,11 @@ export class WorkbookStore {
       cellKeyToIndex: this.cellKeyToIndex,
       getSheet: (sheetName) => this.getSheet(sheetName),
       createLogicalAxisId: (axis) => this.createLogicalAxisId(axis),
+    })
+    this.structuralAxisOperations = new WorkbookStructuralAxisOperations({
+      axisEntryStore: this.axisEntryStore,
+      getOrCreateSheet: (sheetName) => this.getOrCreateSheet(sheetName),
+      bumpSheetStructureVersion: (sheet) => this.bumpSheetStructureVersion(sheet),
     })
     this.cellStore.onSetValue = (index) => {
       this.notifyCellValueWritten(index)
@@ -570,41 +577,27 @@ export class WorkbookStore {
   }
 
   insertRows(sheetName: string, start: number, count: number, entries?: readonly WorkbookAxisEntrySnapshot[]): void {
-    const sheet = this.getOrCreateSheet(sheetName)
-    this.axisEntryStore.spliceAxisEntries(sheet, 'row', start, 0, count, entries)
-    this.bumpSheetStructureVersion(sheet)
+    this.structuralAxisOperations.insert('row', sheetName, start, count, entries)
   }
 
   deleteRows(sheetName: string, start: number, count: number): WorkbookAxisEntrySnapshot[] {
-    const sheet = this.getOrCreateSheet(sheetName)
-    const deleted = this.axisEntryStore.spliceAxisEntries(sheet, 'row', start, count, 0)
-    this.bumpSheetStructureVersion(sheet)
-    return deleted
+    return this.structuralAxisOperations.delete('row', sheetName, start, count)
   }
 
   moveRows(sheetName: string, start: number, count: number, target: number): void {
-    const sheet = this.getOrCreateSheet(sheetName)
-    this.axisEntryStore.moveAxisEntries(sheet, 'row', start, count, target)
-    this.bumpSheetStructureVersion(sheet)
+    this.structuralAxisOperations.move('row', sheetName, start, count, target)
   }
 
   insertColumns(sheetName: string, start: number, count: number, entries?: readonly WorkbookAxisEntrySnapshot[]): void {
-    const sheet = this.getOrCreateSheet(sheetName)
-    this.axisEntryStore.spliceAxisEntries(sheet, 'column', start, 0, count, entries)
-    this.bumpSheetStructureVersion(sheet)
+    this.structuralAxisOperations.insert('column', sheetName, start, count, entries)
   }
 
   deleteColumns(sheetName: string, start: number, count: number): WorkbookAxisEntrySnapshot[] {
-    const sheet = this.getOrCreateSheet(sheetName)
-    const deleted = this.axisEntryStore.spliceAxisEntries(sheet, 'column', start, count, 0)
-    this.bumpSheetStructureVersion(sheet)
-    return deleted
+    return this.structuralAxisOperations.delete('column', sheetName, start, count)
   }
 
   moveColumns(sheetName: string, start: number, count: number, target: number): void {
-    const sheet = this.getOrCreateSheet(sheetName)
-    this.axisEntryStore.moveAxisEntries(sheet, 'column', start, count, target)
-    this.bumpSheetStructureVersion(sheet)
+    this.structuralAxisOperations.move('column', sheetName, start, count, target)
   }
 
   setFreezePane(

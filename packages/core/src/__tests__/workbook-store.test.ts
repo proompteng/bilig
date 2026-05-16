@@ -610,6 +610,26 @@ describe('WorkbookStore', () => {
     expect(sheet.axisMap.snapshot('column', 0, 2)).toEqual(projectAxisEntryIds(workbook.snapshotColumnAxisEntries('Sheet1', 0, 2)))
   })
 
+  it('bumps sheet structure versions for every row and column structural edit', () => {
+    const workbook = new WorkbookStore('axis-structure-versioning')
+    const sheet = workbook.createSheet('Sheet1')
+
+    workbook.insertRows('Sheet1', 0, 1)
+    expect(sheet.structureVersion).toBe(2)
+    workbook.moveRows('Sheet1', 0, 1, 1)
+    expect(sheet.structureVersion).toBe(3)
+    workbook.deleteRows('Sheet1', 0, 1)
+    expect(sheet.structureVersion).toBe(4)
+    workbook.insertColumns('Sheet1', 0, 1)
+    expect(sheet.structureVersion).toBe(5)
+    workbook.moveColumns('Sheet1', 0, 1, 1)
+    expect(sheet.structureVersion).toBe(6)
+    workbook.deleteColumns('Sheet1', 0, 1)
+
+    expect(sheet.structureVersion).toBe(7)
+    expect(workbook.getSheetStructureVersion('Sheet1')).toBe(7)
+  })
+
   it('remaps only affected cells during structural column shifts', () => {
     const workbook = new WorkbookStore('remap-affected-columns')
     const strings = new StringPool()
