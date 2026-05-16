@@ -29,7 +29,7 @@ export function getBenchmarkDiscoveryEvidence(): BenchmarkDiscoveryEvidence {
 function readBenchmarkDiscoveryEvidence(): BenchmarkDiscoveryEvidence {
   const evidence = parsePublicBenchmarkEvidence(readFileSync(new URL('../docs/public-evidence.json', import.meta.url), 'utf8'))
   const overall = evidence.workpaperVsHyperFormula.overall
-  const p95HoldoutRatio = `${overall.worstWorkpaperToHyperFormulaP95Ratio.toFixed(3)}x`
+  const p95HoldoutRatio = `${overall.worstWorkpaperToHyperFormulaP95Ratio.toFixed(3).replace(/0+$/u, '').replace(/\.$/u, '')}x`
 
   return {
     comparableCount: overall.comparableCount,

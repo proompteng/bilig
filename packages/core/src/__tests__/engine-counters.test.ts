@@ -16,6 +16,7 @@ const oracleStructuralCounterKeys = [
   'structuralRemovedCells',
   'structuralUndoCapturedCells',
   'structuralUndoCapturedFormulas',
+  'structuralUndoFormulaDependencyScans',
   'structuralFormulaImpactCandidates',
   'structuralFormulaRebindInputs',
   'structuralRangeRetargets',

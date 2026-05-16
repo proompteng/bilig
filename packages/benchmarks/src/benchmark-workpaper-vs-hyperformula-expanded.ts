@@ -818,6 +818,7 @@ function summarizeEngineCounters(samples: readonly BenchmarkSample[]): EngineCou
     structuralRemovedCells: zeroSummary,
     structuralUndoCapturedCells: zeroSummary,
     structuralUndoCapturedFormulas: zeroSummary,
+    structuralUndoFormulaDependencyScans: zeroSummary,
     structuralFormulaImpactCandidates: zeroSummary,
     structuralFormulaRebindInputs: zeroSummary,
     structuralRangeRetargets: zeroSummary,

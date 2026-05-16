@@ -172,18 +172,6 @@ export function createMutationStructuralDeleteInverseHelpers(
         return
       }
       const ownerPositionAffected = ownerSheetName === sheetName && axisIndex !== undefined && axisIndex >= start + count
-      const dependencyPositionAffected =
-        !ownerPositionAffected &&
-        formula.compiled.deps.some((dependency) =>
-          dependencyTouchesStructuralDeleteSpan(dependency, ownerSheetName, sheetName, axis, start),
-        )
-      const metadataSensitive =
-        formula.compiled.symbolicNames.length > 0 ||
-        formula.compiled.symbolicTables.length > 0 ||
-        formula.compiled.symbolicSpills.length > 0
-      if (!ownerPositionAffected && !dependencyPositionAffected && !metadataSensitive) {
-        return
-      }
       if (
         options.skipRedundantDirectAggregateCaptures === true &&
         canRestoreDirectAggregateThroughStructuralInverse({
@@ -196,6 +184,22 @@ export function createMutationStructuralDeleteInverseHelpers(
           count,
         })
       ) {
+        return
+      }
+      let dependencyPositionAffected = false
+      if (!ownerPositionAffected) {
+        if (formula.compiled.deps.length > 0) {
+          addEngineCounter(args.state.counters, 'structuralUndoFormulaDependencyScans')
+        }
+        dependencyPositionAffected = formula.compiled.deps.some((dependency) =>
+          dependencyTouchesStructuralDeleteSpan(dependency, ownerSheetName, sheetName, axis, start),
+        )
+      }
+      const metadataSensitive =
+        formula.compiled.symbolicNames.length > 0 ||
+        formula.compiled.symbolicTables.length > 0 ||
+        formula.compiled.symbolicSpills.length > 0
+      if (!ownerPositionAffected && !dependencyPositionAffected && !metadataSensitive) {
         return
       }
       captured.push({

@@ -1104,6 +1104,7 @@ describe('EngineMutationService', () => {
     engine.deleteRows('Sheet1', 1, 1)
 
     expect(engine.getPerformanceCounters().structuralUndoCapturedFormulas).toBe(0)
+    expect(engine.getPerformanceCounters().structuralUndoFormulaDependencyScans).toBe(0)
 
     expect(engine.undo()).toBe(true)
 

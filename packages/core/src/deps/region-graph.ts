@@ -25,7 +25,9 @@ interface ColumnSubscriptionState {
   orderedByRowStart: boolean
   lastRowStart: number
   minRowStart: number
+  minRowStartCount: number
   maxRowEnd: number
+  maxRowEndCount: number
   pointImpactIndex: Array<number | undefined> | undefined
   pointImpactCellCount: number
   pointImpactDirty: boolean
@@ -366,6 +368,21 @@ function rowCanIntersectSubscriptions(subscriptions: ColumnSubscriptionState, ro
   return subscriptions.regionIds.size > 0 && row >= subscriptions.minRowStart && row <= subscriptions.maxRowEnd
 }
 
+function addColumnRegionBounds(subscriptions: ColumnSubscriptionState, region: SingleColumnRegionNode): void {
+  if (region.rowStart < subscriptions.minRowStart) {
+    subscriptions.minRowStart = region.rowStart
+    subscriptions.minRowStartCount = 1
+  } else if (region.rowStart === subscriptions.minRowStart) {
+    subscriptions.minRowStartCount += 1
+  }
+  if (region.rowEnd > subscriptions.maxRowEnd) {
+    subscriptions.maxRowEnd = region.rowEnd
+    subscriptions.maxRowEndCount = 1
+  } else if (region.rowEnd === subscriptions.maxRowEnd) {
+    subscriptions.maxRowEndCount += 1
+  }
+}
+
 export function createRegionGraph(args: {
   readonly workbook: Pick<WorkbookStore, 'getSheet'>
   readonly counters?: EngineCounters
@@ -391,7 +408,9 @@ export function createRegionGraph(args: {
       orderedByRowStart: true,
       lastRowStart: Number.NEGATIVE_INFINITY,
       minRowStart: Number.POSITIVE_INFINITY,
+      minRowStartCount: 0,
       maxRowEnd: Number.NEGATIVE_INFINITY,
+      maxRowEndCount: 0,
       pointImpactIndex: undefined,
       pointImpactCellCount: 0,
       pointImpactDirty: false,
@@ -403,14 +422,15 @@ export function createRegionGraph(args: {
 
   const recomputeColumnRowBounds = (subscriptions: ColumnSubscriptionState): void => {
     subscriptions.minRowStart = Number.POSITIVE_INFINITY
+    subscriptions.minRowStartCount = 0
     subscriptions.maxRowEnd = Number.NEGATIVE_INFINITY
+    subscriptions.maxRowEndCount = 0
     subscriptions.regionIds.forEach((regionId) => {
       const region = nodeStore.get(regionId)
       if (!region) {
         return
       }
-      subscriptions.minRowStart = Math.min(subscriptions.minRowStart, region.rowStart)
-      subscriptions.maxRowEnd = Math.max(subscriptions.maxRowEnd, region.rowEnd)
+      addColumnRegionBounds(subscriptions, region)
     })
   }
 
@@ -503,8 +523,7 @@ export function createRegionGraph(args: {
           subscriptions.orderedByRowStart = false
         }
         subscriptions.lastRowStart = Math.max(subscriptions.lastRowStart, region.rowStart)
-        subscriptions.minRowStart = Math.min(subscriptions.minRowStart, region.rowStart)
-        subscriptions.maxRowEnd = Math.max(subscriptions.maxRowEnd, region.rowEnd)
+        addColumnRegionBounds(subscriptions, region)
         subscriptions.regionIds.add(regionId)
         addSingleSubscriberPointImpacts(subscriptions, region, formulaCellIndex)
         markColumnDirty(regionId)
@@ -561,13 +580,26 @@ export function createRegionGraph(args: {
       subscriptions.orderedByRowStart = true
       subscriptions.lastRowStart = Number.NEGATIVE_INFINITY
       subscriptions.minRowStart = Number.POSITIVE_INFINITY
+      subscriptions.minRowStartCount = 0
       subscriptions.maxRowEnd = Number.NEGATIVE_INFINITY
+      subscriptions.maxRowEndCount = 0
       subscriptions.pointImpactIndex = undefined
       subscriptions.pointImpactCellCount = 0
       subscriptions.pointImpactDirty = false
       subscriptions.pointImpactDisabled = false
-    } else if (region.rowStart === subscriptions.minRowStart || region.rowEnd === subscriptions.maxRowEnd) {
-      recomputeColumnRowBounds(subscriptions)
+    } else {
+      let shouldRecomputeBounds = false
+      if (region.rowStart === subscriptions.minRowStart) {
+        subscriptions.minRowStartCount -= 1
+        shouldRecomputeBounds = subscriptions.minRowStartCount <= 0
+      }
+      if (region.rowEnd === subscriptions.maxRowEnd) {
+        subscriptions.maxRowEndCount -= 1
+        shouldRecomputeBounds = shouldRecomputeBounds || subscriptions.maxRowEndCount <= 0
+      }
+      if (shouldRecomputeBounds) {
+        recomputeColumnRowBounds(subscriptions)
+      }
     }
     markColumnDirty(regionId)
   }
