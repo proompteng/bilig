@@ -58,6 +58,55 @@ describe('worker runtime mutation journal', () => {
     expect(journal.getAppliedPendingLocalSeq()).toBe(1)
   })
 
+  it('restores submitted bootstrap entries as retryable pending mutations', () => {
+    const journal = new WorkerRuntimeMutationJournal({
+      getDocumentId: () => 'doc',
+      getAuthoritativeRevision: () => 0,
+      getProjectionEngine: vi.fn(),
+      invalidateProjectionCache: vi.fn(),
+      now: () => 500,
+    })
+
+    journal.restoreFromBootstrap({
+      mutationJournalEntries: [
+        buildMutation({
+          status: 'submitted',
+          submittedAtUnixMs: 400,
+          lastAttemptedAtUnixMs: 390,
+          attemptCount: 1,
+        }),
+        buildMutation({
+          id: 'doc:pending:2',
+          localSeq: 2,
+          status: 'submitted',
+          submittedAtUnixMs: 420,
+          lastAttemptedAtUnixMs: 410,
+          rebasedAtUnixMs: 405,
+          attemptCount: 1,
+        }),
+      ],
+      nextPendingMutationSeq: 3,
+    })
+
+    expect(journal.listPendingMutations()).toEqual([
+      buildMutation({
+        status: 'local',
+        submittedAtUnixMs: null,
+        lastAttemptedAtUnixMs: 390,
+        attemptCount: 1,
+      }),
+      buildMutation({
+        id: 'doc:pending:2',
+        localSeq: 2,
+        status: 'rebased',
+        submittedAtUnixMs: null,
+        lastAttemptedAtUnixMs: 410,
+        rebasedAtUnixMs: 405,
+        attemptCount: 1,
+      }),
+    ])
+  })
+
   it('enqueues mutations and replays them into the projection engine', async () => {
     const invalidateProjectionCache = vi.fn()
     const engine = {

@@ -80,6 +80,54 @@ describe('workbook local mutation journal persistence', () => {
     expect(removeItem).toHaveBeenCalledWith('bilig:workbook-local-mutation-journal:doc-1')
   })
 
+  it('restores in-flight submitted mutations as retryable local mutations after reload', () => {
+    persistWorkbookMutationJournal('doc-1', [
+      mutation({
+        status: 'submitted',
+        submittedAtUnixMs: 220,
+        lastAttemptedAtUnixMs: 210,
+        attemptCount: 1,
+      }),
+    ])
+
+    expect(loadPersistedWorkbookMutationJournal('doc-1')).toEqual({
+      mutationJournalEntries: [
+        mutation({
+          status: 'local',
+          submittedAtUnixMs: null,
+          lastAttemptedAtUnixMs: 210,
+          attemptCount: 1,
+        }),
+      ],
+      nextPendingMutationSeq: 2,
+    })
+  })
+
+  it('restores in-flight submitted rebased mutations as retryable rebased mutations after reload', () => {
+    persistWorkbookMutationJournal('doc-1', [
+      mutation({
+        status: 'submitted',
+        submittedAtUnixMs: 220,
+        lastAttemptedAtUnixMs: 210,
+        rebasedAtUnixMs: 205,
+        attemptCount: 1,
+      }),
+    ])
+
+    expect(loadPersistedWorkbookMutationJournal('doc-1')).toEqual({
+      mutationJournalEntries: [
+        mutation({
+          status: 'rebased',
+          submittedAtUnixMs: null,
+          lastAttemptedAtUnixMs: 210,
+          rebasedAtUnixMs: 205,
+          attemptCount: 1,
+        }),
+      ],
+      nextPendingMutationSeq: 2,
+    })
+  })
+
   it('drops corrupt stored journals instead of replaying unknown edits', () => {
     storage.setItem('bilig:workbook-local-mutation-journal:doc-1', '{"version":1,"documentId":"doc-1","mutationJournalEntries":[{}]}')
 

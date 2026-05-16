@@ -20,6 +20,17 @@ export function isPendingWorkbookMutationReadyForSubmission(mutation: PendingWor
   return (mutation.status === 'local' || mutation.status === 'rebased') && mutation.submittedAtUnixMs === null
 }
 
+export function normalizeRestoredPendingWorkbookMutation(mutation: PendingWorkbookMutation): PendingWorkbookMutation {
+  if (mutation.status !== 'submitted') {
+    return clonePendingWorkbookMutation(mutation)
+  }
+  return clonePendingWorkbookMutation({
+    ...mutation,
+    status: mutation.rebasedAtUnixMs === null ? 'local' : 'rebased',
+    submittedAtUnixMs: null,
+  })
+}
+
 function transitionMutation(
   transition: () => PendingWorkbookMutation,
 ): Effect.Effect<PendingWorkbookMutation, MutationJournalTransitionError> {

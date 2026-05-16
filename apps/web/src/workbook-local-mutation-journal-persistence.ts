@@ -1,3 +1,4 @@
+import { normalizeRestoredPendingWorkbookMutation } from './workbook-mutation-journal.js'
 import { isPendingWorkbookMutationList, type PendingWorkbookMutation } from './workbook-sync.js'
 
 const STORAGE_VERSION = 1
@@ -31,15 +32,8 @@ function resolveLocalStorage(): Storage | null {
   return candidate ?? null
 }
 
-function cloneMutation(mutation: PendingWorkbookMutation): PendingWorkbookMutation {
-  return {
-    ...mutation,
-    args: [...mutation.args],
-  }
-}
-
 function activeJournalEntries(entries: readonly PendingWorkbookMutation[]): PendingWorkbookMutation[] {
-  return entries.filter((mutation) => mutation.status !== 'acked').map(cloneMutation)
+  return entries.filter((mutation) => mutation.status !== 'acked').map(normalizeRestoredPendingWorkbookMutation)
 }
 
 function nextMutationSeq(entries: readonly PendingWorkbookMutation[]): number {

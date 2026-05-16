@@ -1,6 +1,6 @@
 import type { PendingWorkbookMutation, PendingWorkbookMutationInput } from './workbook-sync.js'
 import { isPendingWorkbookMutationInput } from './workbook-sync.js'
-import { clonePendingWorkbookMutation } from './workbook-mutation-journal.js'
+import { clonePendingWorkbookMutation, normalizeRestoredPendingWorkbookMutation } from './workbook-mutation-journal.js'
 import {
   ackAbsorbedMutations,
   ackMutationInJournal,
@@ -46,7 +46,7 @@ export class WorkerRuntimeMutationJournal {
   }
 
   restoreFromBootstrap(state: WorkerRuntimeMutationJournalBootstrapState): void {
-    this.mutationJournalEntries = state.mutationJournalEntries.map(clonePendingWorkbookMutation)
+    this.mutationJournalEntries = state.mutationJournalEntries.map(normalizeRestoredPendingWorkbookMutation)
     this.pendingMutations = syncPendingMutationsFromJournal(this.mutationJournalEntries)
     this.nextPendingMutationSeq = state.nextPendingMutationSeq
   }
