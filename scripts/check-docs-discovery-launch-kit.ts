@@ -1,4 +1,4 @@
-import { communityLaunchPackRequiredLinks, llmsExternalSurfaceLinks } from './check-docs-discovery-growth-links.ts'
+import { communityLaunchPackRequiredLinks } from './check-docs-discovery-growth-links.ts'
 
 const productHuntLaunchKitRequiredText = [
   'title: Product Hunt launch kit for bilig',
@@ -46,15 +46,12 @@ export function requireProductHuntLaunchKitDiscovery(
 
 export function requireGrowthSurfaceDiscovery(
   communityLaunchPack: string,
-  llms: string,
+  _llms: string,
   productHuntLaunchKit: string,
   requireIncludes: (haystack: string, needle: string, context: string) => void,
 ): void {
   for (const required of communityLaunchPackRequiredLinks) {
     requireIncludes(communityLaunchPack, required, 'docs/community-launch-pack.md')
-  }
-  for (const required of llmsExternalSurfaceLinks) {
-    requireIncludes(llms, required, 'docs/llms.txt')
   }
   requireProductHuntLaunchKitDiscovery(productHuntLaunchKit, requireIncludes)
 }

@@ -51,7 +51,6 @@ language: typescript
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#subscription-mrr-forecast
 - https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api
 - https://github.com/proompteng/bilig/tree/main/examples/serverless-workpaper-api#framework-adapters
-- https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md
 - https://github.com/proompteng/bilig/discussions
 - https://github.com/proompteng/bilig/discussions/157
 - https://github.com/proompteng/bilig/blob/main/docs/node-spreadsheet-formula-engine.md
@@ -277,24 +276,16 @@ npm run agent:verify
   https://github.com/proompteng/bilig/blob/main/docs/formula-edge-sumifs-paired-criteria-fixture.md
 - groupby spill fixture:
   https://github.com/proompteng/bilig/blob/main/docs/formula-edge-groupby-spill-fixture.md
-## launch and feedback
+## feedback
 
 - discussions:
   https://github.com/proompteng/bilig/discussions
 - feedback discussion for agent and service workflow input:
   https://github.com/proompteng/bilig/discussions/157
-- conversion-feedback comment after npm download and clone traffic review:
-  https://github.com/proompteng/bilig/discussions/157#discussioncomment-16920401
 - show-and-tell discussion for five runnable node workbook automation examples:
   https://github.com/proompteng/bilig/discussions/213
 - show-and-tell discussion for MCP spreadsheet tool server feedback:
   https://github.com/proompteng/bilig/discussions/230
-- MCP registry 0.14.5 refresh workflow:
-  https://github.com/proompteng/bilig/actions/runs/25868014475
-- MCP registry 0.14.5 feedback comment:
-  https://github.com/proompteng/bilig/discussions/230#discussioncomment-16920242
-- MCP registry 0.14.0 feedback comment:
-  https://github.com/proompteng/bilig/discussions/230#discussioncomment-16907632
 - show-and-tell discussion for the npm TypeScript quickstart:
   https://github.com/proompteng/bilig/discussions/270
 - serverless route feedback discussion:
@@ -309,30 +300,8 @@ npm run agent:verify
   https://github.com/proompteng/bilig/discussions/340
 - stale xlsx cache and excel oracle feedback discussion:
   https://github.com/proompteng/bilig/discussions/382
-- external JavaScript spreadsheet directory submission:
-  https://github.com/krzysztofspilka/JSpreadsheets/pull/50
-- external JavaScript spreadsheet benchmark adapter request:
-  https://github.com/zhangming1978/js-spreadsheet-benchmark/issues/1
-- external MCP ranking list submission:
-  https://github.com/tolkonepiu/best-of-mcp-servers/pull/192
-- external MCP directory list submission:
-  https://github.com/YuzeHao2023/Awesome-MCP-Servers/pull/244
-- external MCP registry package submission:
-  https://github.com/toolsdk-ai/toolsdk-mcp-registry/pull/309
-- external MCP source-data directory submission:
-  https://github.com/ever-works/awesome-mcp-servers-data/pull/4
-- external mcpserve.com directory submission:
-  https://github.com/jmstfv/mcpserve/pull/19
-- external first-time-contributor directory submission:
-  https://github.com/MunGell/awesome-for-beginners/pull/2012
-- external MCP directory submission:
-  https://mcpserver.cc/en?q=bilig
-- external AgentNDX MCP directory submission:
-  https://agentndx.ai/browse?q=bilig
 - older agent API shape discussion:
   https://github.com/proompteng/bilig/discussions/115
-- published dev article source:
-  https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md
 
 ## boundaries
 

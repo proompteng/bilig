@@ -15,6 +15,7 @@ import {
 } from './check-docs-discovery-core.ts'
 import { requireHomepageDiscovery } from './check-docs-discovery-homepage.ts'
 import { productHuntLaunchAssetFiles, requireGrowthSurfaceDiscovery } from './check-docs-discovery-launch-kit.ts'
+import { llmsExternalSurfaceLinks } from './check-docs-discovery-growth-links.ts'
 import { requireNpmEvalDiscovery } from './check-docs-discovery-npm-eval.ts'
 import { requireOpenAiResponsesDiscovery } from './check-docs-discovery-openai-responses.ts'
 import { requireServerlessWorkPaperApiDiscovery } from './check-docs-discovery-serverless.ts'
@@ -254,9 +255,7 @@ for (const required of [
   'https://github.com/proompteng/bilig/discussions/307',
   'https://github.com/proompteng/bilig/discussions/308',
   'https://github.com/proompteng/bilig/discussions/335',
-  'https://github.com/proompteng/bilig/discussions/230#discussioncomment-16907632',
   'https://github.com/proompteng/bilig/discussions/115',
-  'https://github.com/proompteng/bilig/blob/main/docs/dev-to-workbook-apis-post.md',
   'https://proompteng.github.io/bilig/node-spreadsheet-formula-engine.html',
   'https://proompteng.github.io/bilig/evaluate-excel-formulas-in-node-typescript.html',
   'https://github.com/proompteng/bilig/blob/main/docs/node-spreadsheet-formula-engine.md',
@@ -628,6 +627,12 @@ for (const required of [
   requireIncludes(claudeDesktopMcpbDoc, required, 'docs/claude-desktop-mcpb-workpaper.md')
 }
 requireGrowthSurfaceDiscovery(communityLaunchPack, llms, productHuntLaunchKit, requireIncludes)
+requireNotIncludes(llms, '## launch and feedback', 'docs/llms.txt')
+requireNotIncludes(llms, 'conversion-feedback comment after npm download and clone traffic review', 'docs/llms.txt')
+requireNotIncludes(llms, 'published dev article source', 'docs/llms.txt')
+for (const removedGrowthLink of llmsExternalSurfaceLinks) {
+  requireNotIncludes(llms, removedGrowthLink, 'docs/llms.txt')
+}
 requireIncludes(
   aiSdkLangChainDoc,
   'https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling',
