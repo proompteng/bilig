@@ -1,0 +1,64 @@
+title: "[adoption blocker] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when you tried or evaluated `@bilig/headless` and something would block real adoption.
+        Good reports are specific: the workflow, formula family, import/export shape, persistence requirement, agent tool contract, or benchmark proof you need.
+  - type: dropdown
+    id: blocker_type
+    attributes:
+      label: Blocker type
+      options:
+        - Formula coverage
+        - XLSX import / export behavior
+        - WorkPaper JSON persistence
+        - MCP or agent tool writeback
+        - Node service or framework adapter
+        - Package size, runtime, or deployment
+        - Benchmark or performance proof
+        - Documentation or example gap
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow you are evaluating
+      description: What are you trying to automate or prove?
+      placeholder: |
+        I am evaluating bilig for ...
+        The input data/workbook shape is ...
+        The expected computed output is ...
+    validations:
+      required: true
+  - type: textarea
+    id: blocker
+    attributes:
+      label: What blocks adoption?
+      description: Name the missing formula, API shape, runtime behavior, proof, or documentation gap.
+      placeholder: |
+        I would try this in production if ...
+        I cannot use it yet because ...
+    validations:
+      required: true
+  - type: textarea
+    id: current_evidence
+    attributes:
+      label: What did you already try?
+      description: Link the docs page, command, package version, example, or benchmark artifact you checked.
+      placeholder: |
+        package version:
+        command:
+        docs/example:
+        observed result:
+  - type: textarea
+    id: success_criteria
+    attributes:
+      label: What proof would unblock you?
+      description: Describe the smallest example, test, benchmark, transcript, or compatibility note that would make this credible.
+      placeholder: |
+        A useful proof would show ...
+        A passing example would print ...
+        A compatibility note should cover ...

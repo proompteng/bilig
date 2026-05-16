@@ -40,9 +40,9 @@ packages through `pnpm workpaper:smoke:external`.
 If this example matches a real Node service, agent tool, or workbook automation
 case, the best next action is specific: star or bookmark
 [`proompteng/bilig`](https://github.com/proompteng/bilig/stargazers), then use
-[Discussions](https://github.com/proompteng/bilig/discussions) to name the
-missing formula family, XLSX behavior, persistence shape, or agent writeback
-contract that would make adoption easier.
+[Discussions](https://github.com/proompteng/bilig/discussions/new?category=general)
+to name the missing formula family, XLSX behavior, persistence shape, or agent
+writeback contract that would make adoption easier.
 
 ## Choose A Proof Path
 
@@ -57,9 +57,9 @@ job you are evaluating:
 | Does this fit framework/server code?       | `npm run agent:framework-adapters` | You want wrapper shapes for AI SDK, LangChain, Mastra, LlamaIndex, and more.  |
 
 If none of those paths answers your question, open a
-[Discussion](https://github.com/proompteng/bilig/discussions) with the missing
-workflow. The most useful requests include an input shape, expected formula
-family, persistence requirement, or import/export constraint.
+[Discussion](https://github.com/proompteng/bilig/discussions/new?category=general)
+with the missing workflow. The most useful requests include an input shape,
+expected formula family, persistence requirement, or import/export constraint.
 
 ## Command Index
 

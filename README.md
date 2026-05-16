@@ -68,9 +68,9 @@ matching `after`/`afterRestore` values are the check.
 If that proof matches a service or agent workflow you maintain, the useful next
 step is concrete feedback: [star or bookmark the repo](https://github.com/proompteng/bilig/stargazers),
 then open or answer one adoption blocker in
-[Discussions](https://github.com/proompteng/bilig/discussions): formula
-coverage, stale XLSX cached values, persistence shape, MCP/agent writeback, or
-benchmark coverage.
+[Discussions](https://github.com/proompteng/bilig/discussions/new?category=general):
+formula coverage, stale XLSX cached values, persistence shape, MCP/agent
+writeback, or benchmark coverage.
 
 ## TypeScript API Shape
 

@@ -425,6 +425,9 @@ Latest star-spike research on May 16, 2026:
   concrete feedback ask, public npm package, and immediate README/example/docs
   conversion. The next loop should make the HN/X/MCP follow-up about one
   adoption blocker, not a general launch.
+- The post-proof CTA now routes adoption blockers to the `general` discussion
+  form so HN/X visitors are asked for blocker type, workflow, attempted proof,
+  and smallest unblocking evidence instead of leaving an unstructured comment.
 - Timing discipline: do not submit another HN item on a weekend or immediately
   after a flagged/dead attempt. Stage the artifact first, then submit during a
   weekday US morning only if the linked page is materially new and the
