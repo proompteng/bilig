@@ -6,7 +6,6 @@ import {
   type CellSnapshot,
   type CellValue,
   type EngineChangedCell,
-  type EngineEvent,
   type WorkbookSnapshot,
 } from '@bilig/protocol'
 import { makeCellKey } from '../../workbook-store.js'
@@ -20,9 +19,8 @@ import type { EngineDirtyFrontierSchedulerService } from './dirty-frontier-sched
 import type { EnginePatch } from '../../patches/patch-types.js'
 import { buildCycleEvaluationNodes, type CycleEvaluationNode } from './recalc-cycle-evaluation.js'
 import { consumeVolatileRandomValues, createRecalcVolatileState, toOrderedUint32 } from './recalc-evaluation-state.js'
+import { emitRecalcBatchEvents } from './recalc-event-emission.js'
 import { resolveRecalcIterationSettings } from './recalc-iteration-settings.js'
-
-const TRACKED_CELL_PATCH_LIMIT = 64
 
 export interface DirtyRegion {
   readonly sheetName: string
@@ -112,16 +110,6 @@ export function createEngineRecalcService(args: {
   readonly materializePivot: (pivot: WorkbookPivotRecord) => number[]
   readonly forEachFormulaDependencyCell: (cellIndex: number, fn: (dependencyCellIndex: number) => void) => void
 }): EngineRecalcService {
-  const captureTrackedPatchesForCells = (changed: readonly number[] | U32): readonly EnginePatch[] | undefined =>
-    changed.length <= TRACKED_CELL_PATCH_LIMIT
-      ? args.captureChangedPatches(changed, {
-          invalidation: 'cells',
-          invalidatedRanges: [],
-          invalidatedRows: [],
-          invalidatedColumns: [],
-        })
-      : undefined
-
   const shouldRefreshPivot = (pivot: WorkbookPivotRecord, changed: readonly number[] | U32): boolean => {
     const ownerSheet = args.state.workbook.getSheet(pivot.source.sheetName)
     if (!ownerSheet) {
@@ -762,34 +750,14 @@ export function createEngineRecalcService(args: {
           lastMetrics.batchId += 1
           lastMetrics.changedInputCount = formulaChangedCount
           args.state.setLastMetrics(lastMetrics)
-          const event: EngineEvent & {
-            explicitChangedCount: number
-          } = {
-            kind: 'batch',
-            invalidation: 'cells',
-            changedCellIndices: changed,
+          emitRecalcBatchEvents({
+            state: args.state,
+            changed,
             changedCells: args.captureChangedCells(changed),
-            invalidatedRanges: [],
-            invalidatedRows: [],
-            invalidatedColumns: [],
             metrics: lastMetrics,
             explicitChangedCount,
-          }
-          args.state.events.emit(event, changed, (cellIndex) => args.state.workbook.getQualifiedAddress(cellIndex))
-          if (args.state.events.hasTrackedListeners()) {
-            const patches = captureTrackedPatchesForCells(changed)
-            args.state.events.emitTracked({
-              kind: 'batch',
-              invalidation: 'cells',
-              changedCellIndices: changed,
-              ...(patches ? { patches } : {}),
-              invalidatedRanges: [],
-              invalidatedRows: [],
-              invalidatedColumns: [],
-              metrics: lastMetrics,
-              explicitChangedCount,
-            })
-          }
+            captureChangedPatches: args.captureChangedPatches,
+          })
           return Array.from(changed)
         },
         catch: (cause) =>
@@ -830,34 +798,14 @@ export function createEngineRecalcService(args: {
           lastMetrics.batchId += 1
           lastMetrics.changedInputCount = changedInputCount
           args.state.setLastMetrics(lastMetrics)
-          const event: EngineEvent & {
-            explicitChangedCount: number
-          } = {
-            kind: 'batch',
-            invalidation: 'cells',
-            changedCellIndices: changed,
+          emitRecalcBatchEvents({
+            state: args.state,
+            changed,
             changedCells: args.captureChangedCells(changed),
-            invalidatedRanges: [],
-            invalidatedRows: [],
-            invalidatedColumns: [],
             metrics: lastMetrics,
             explicitChangedCount,
-          }
-          args.state.events.emit(event, changed, (cellIndex) => args.state.workbook.getQualifiedAddress(cellIndex))
-          if (args.state.events.hasTrackedListeners()) {
-            const patches = captureTrackedPatchesForCells(changed)
-            args.state.events.emitTracked({
-              kind: 'batch',
-              invalidation: 'cells',
-              changedCellIndices: changed,
-              ...(patches ? { patches } : {}),
-              invalidatedRanges: [],
-              invalidatedRows: [],
-              invalidatedColumns: [],
-              metrics: lastMetrics,
-              explicitChangedCount,
-            })
-          }
+            captureChangedPatches: args.captureChangedPatches,
+          })
           return Array.from(changed)
         },
         catch: (cause) =>

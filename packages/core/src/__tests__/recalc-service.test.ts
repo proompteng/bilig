@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ErrorCode, FormulaMode, ValueTag } from '@bilig/protocol'
 import { utcDateToExcelSerial } from '@bilig/formula'
 import { SpreadsheetEngine } from '../engine.js'
+import type { EngineTrackedEvent } from '../events.js'
 import type { EngineRecalcService } from '../engine/services/recalc-service.js'
 import type { RuntimeFormula } from '../engine/runtime-state.js'
 
@@ -89,6 +90,35 @@ describe('EngineRecalcService', () => {
 
     expect(changed).toContain(b1Index)
     expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 50 })
+  })
+
+  it('emits tracked recalculation patches through the service event boundary', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'recalc-tracked-events' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 10)
+    engine.setCellFormula('Sheet1', 'B1', 'A1*2')
+
+    const tracked: EngineTrackedEvent[] = []
+    const unsubscribe = engine.events.subscribeTracked((event) => {
+      tracked.push(event)
+    })
+
+    const a1Index = engine.workbook.ensureCell('Sheet1', 'A1')
+    engine.workbook.cellStore.setValue(a1Index, { tag: ValueTag.Number, value: 30 })
+    const changed = Effect.runSync(
+      getRecalcService(engine).recalculateDirty([{ sheetName: 'Sheet1', rowStart: 0, rowEnd: 0, colStart: 0, colEnd: 0 }]),
+    )
+    unsubscribe()
+
+    expect(changed).toContain(engine.workbook.getCellIndex('Sheet1', 'B1'))
+    expect(tracked).toHaveLength(1)
+    expect(tracked[0]).toMatchObject({
+      kind: 'batch',
+      invalidation: 'cells',
+      explicitChangedCount: 1,
+    })
+    expect(tracked[0]?.patches?.length).toBeGreaterThan(0)
   })
 
   it('recalculates volatile formulas from the current clock and random inputs', async () => {
