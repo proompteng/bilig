@@ -1,4 +1,5 @@
 import type { WorkbookStore } from '../workbook-store.js'
+import { MAX_COLS } from '@bilig/protocol'
 import { addEngineCounter, type EngineCounters } from '../perf/engine-counters.js'
 import { createRegionNodeStore, type RegionId, type RegionNodeStore, type SingleColumnRegionNode } from './region-node-store.js'
 
@@ -59,8 +60,16 @@ export interface RegionGraph {
   readonly reset: () => void
 }
 
-function columnKey(sheetId: number, col: number): string {
-  return `${sheetId}\t${col}`
+function columnKey(sheetId: number, col: number): number {
+  return sheetId * MAX_COLS + col
+}
+
+function sheetIdFromColumnKey(key: number): number {
+  return Math.floor(key / MAX_COLS)
+}
+
+function colFromColumnKey(key: number): number {
+  return key % MAX_COLS
 }
 
 function buildIntervalTree(intervals: readonly IntervalRegionRef[]): IntervalTreeNode | undefined {
@@ -359,8 +368,8 @@ export function createRegionGraph(args: {
   const nodeStore = args.nodeStore ?? createRegionNodeStore()
   const regionSubscribers = new Map<RegionId, RegionSubscriberSubscription>()
   const formulaRegions = new Map<number, FormulaRegionSubscription>()
-  const columnSubscriptions = new Map<string, ColumnSubscriptionState>()
-  const dirtyColumns = new Set<string>()
+  const columnSubscriptions = new Map<number, ColumnSubscriptionState>()
+  const dirtyColumns = new Set<number>()
 
   const getColumnSubscriptions = (sheetId: number, col: number): ColumnSubscriptionState => {
     const key = columnKey(sheetId, col)
@@ -602,15 +611,7 @@ export function createRegionGraph(args: {
     },
     prepareQueryIndices() {
       dirtyColumns.forEach((key) => {
-        const [sheetIdText, colText] = key.split('\t')
-        if (sheetIdText === undefined || colText === undefined) {
-          return
-        }
-        const sheetId = Number(sheetIdText)
-        const col = Number(colText)
-        if (!Number.isNaN(sheetId) && !Number.isNaN(col)) {
-          ensureIntervalTree(sheetId, col)
-        }
+        ensureIntervalTree(sheetIdFromColumnKey(key), colFromColumnKey(key))
       })
     },
     collectFormulaDependentsForCell(sheetId, row, col) {

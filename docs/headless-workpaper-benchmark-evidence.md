@@ -26,7 +26,7 @@ as useful evidence, but they do not satisfy broad coverage alone.
 
 Current checked-in metadata:
 
-- generated at `2026-05-16T08:45:02.940Z`
+- generated at `2026-05-16T10:31:21.924Z`
 - host: macOS `arm64`, Node `v24.3.0`
 - benchmark sampling: `5` measured samples after `2` warmup samples
 - WorkPaper package: `@bilig/headless` `0.16.5`
@@ -48,17 +48,17 @@ current checked-in artifact records `47/57` mean-latency wins:
 | Lane    | Comparable Workloads | WorkPaper Mean Wins | HyperFormula Mean Wins |
 | ------- | -------------------: | ------------------: | ---------------------: |
 | Overall |                 `57` |                `47` |                   `10` |
-| Public  |                 `40` |                `34` |                    `6` |
-| Holdout |                 `17` |                `13` |                    `4` |
+| Public  |                 `40` |                `35` |                    `5` |
+| Holdout |                 `17` |                `12` |                    `5` |
 
-The overall directional mean-ratio geomean is `0.6319887671891113`. The overall
-directional p95-ratio geomean is `0.6221018246006674`. Ratios below `1.0` mean
+The overall directional mean-ratio geomean is `0.6064816590445588`. The overall
+directional p95-ratio geomean is `0.6043421030753694`. Ratios below `1.0` mean
 WorkPaper is faster for that metric.
 
-The current worst mean row is `lookup-approximate-sorted`, with a mean ratio of
-`3.609441001562808`. The current worst p95 row is `lookup-approximate-sorted`,
-with a p95 ratio of `11.988099928769168`. The headless leadership scorecard
-currently records `46/57` workloads winning both
+The current worst mean row is `single-formula-edit-recalc`, with a mean ratio of
+`1.9623293007875258`. The current worst p95 row is `single-formula-edit-recalc`,
+with a p95 ratio of `2.177254320985417`. The headless leadership scorecard
+currently records `45/57` workloads winning both
 mean and p95 against HyperFormula.
 
 It is also not a blanket "fastest against every formula evaluator" claim. The

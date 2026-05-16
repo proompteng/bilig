@@ -282,7 +282,7 @@ It is published in the official MCP Registry as
   JSON, and verifies restored readback.
 - Run `pnpm workpaper:bench:competitive:check`. The checked-in artifact shows
   [`47/57` comparable WorkPaper mean wins](docs/what-workpaper-benchmark-proves.md)
-  and names the worst p95 holdout: `lookup-approximate-sorted` at `11.988x`.
+  and names the worst p95 holdout: `single-formula-edit-recalc` at `2.177x`.
 - The benchmark card is generated from that artifact:
   [`docs/assets/workpaper-benchmark-card.png`](docs/assets/workpaper-benchmark-card.png).
 - Read the [compatibility limits](docs/where-bilig-is-not-excel-compatible-yet.md)

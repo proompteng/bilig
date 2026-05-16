@@ -22,23 +22,28 @@ export interface RegionNodeStore {
   readonly get: (regionId: RegionId) => SingleColumnRegionNode | undefined
 }
 
-function keyForSingleColumnRegion(args: {
-  readonly sheetId: number
-  readonly rowStart: number
-  readonly rowEnd: number
-  readonly col: number
-}): string {
-  return `${args.sheetId}\t${args.col}\t${args.rowStart}\t${args.rowEnd}`
-}
-
 export function createRegionNodeStore(): RegionNodeStore {
   const nodes: SingleColumnRegionNode[] = []
-  const byKey = new Map<string, RegionId>()
+  const bySheet = new Map<number, Map<number, Map<number, Map<number, RegionId>>>>()
 
   return {
     internSingleColumnRegion(args) {
-      const key = keyForSingleColumnRegion(args)
-      const existing = byKey.get(key)
+      let byCol = bySheet.get(args.sheetId)
+      if (!byCol) {
+        byCol = new Map()
+        bySheet.set(args.sheetId, byCol)
+      }
+      let byRowStart = byCol.get(args.col)
+      if (!byRowStart) {
+        byRowStart = new Map()
+        byCol.set(args.col, byRowStart)
+      }
+      let byRowEnd = byRowStart.get(args.rowStart)
+      if (!byRowEnd) {
+        byRowEnd = new Map()
+        byRowStart.set(args.rowStart, byRowEnd)
+      }
+      const existing = byRowEnd.get(args.rowEnd)
       if (existing !== undefined) {
         return existing
       }
@@ -54,7 +59,7 @@ export function createRegionNodeStore(): RegionNodeStore {
         length: args.rowEnd - args.rowStart + 1,
       }
       nodes.push(node)
-      byKey.set(key, id)
+      byRowEnd.set(args.rowEnd, id)
       return id
     },
     get(regionId) {

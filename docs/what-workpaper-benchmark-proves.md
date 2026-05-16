@@ -17,15 +17,15 @@ scoped lead with visible holdouts, not a blanket fastest-engine claim:
 | Lane    | Comparable Workloads | WorkPaper Mean Wins | HyperFormula Mean Wins |
 | ------- | -------------------: | ------------------: | ---------------------: |
 | Overall |                 `57` |                `47` |                   `10` |
-| Public  |                 `40` |                `34` |                    `6` |
-| Holdout |                 `17` |                `13` |                    `4` |
+| Public  |                 `40` |                `35` |                    `5` |
+| Holdout |                 `17` |                `12` |                    `5` |
 
 The artifact is
 [`packages/benchmarks/baselines/workpaper-vs-hyperformula.json`](../packages/benchmarks/baselines/workpaper-vs-hyperformula.json),
-generated at `2026-05-16T08:45:02.940Z`.
+generated at `2026-05-16T10:31:21.924Z`.
 
-The overall directional mean-ratio geomean is `0.6319887671891113`, and the
-overall directional p95-ratio geomean is `0.6221018246006674`. Ratios below
+The overall directional mean-ratio geomean is `0.6064816590445588`, and the
+overall directional p95-ratio geomean is `0.6043421030753694`. Ratios below
 `1.0` mean WorkPaper is faster on that metric.
 
 ## What It Proves
@@ -54,9 +54,9 @@ It does not prove full formula parity with Excel, Google Sheets, or
 HyperFormula.
 
 It does not prove that every p95 row is faster. The current headless leadership
-scorecard records `46/57` workloads winning both mean and p95. The worst p95
-holdout is `lookup-approximate-sorted`, where the current WorkPaper-to-HyperFormula
-p95 ratio is `11.988099928769168`. The honest claim is `47/57` mean wins plus an
+scorecard records `45/57` workloads winning both mean and p95. The worst p95
+holdout is `single-formula-edit-recalc`, where the current WorkPaper-to-HyperFormula
+p95 ratio is `2.177254320985417`. The honest claim is `47/57` mean wins plus an
 overall p95 geomean lead, not "faster on every row."
 
 It does not prove that browser-grid rendering, import/export, collaboration, or
