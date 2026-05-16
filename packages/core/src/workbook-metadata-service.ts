@@ -13,7 +13,6 @@ import {
   cloneMergeRangeRecord,
   cloneNoteRecord,
   clonePivotRecord,
-  clonePropertyRecord,
   cloneRangeProtectionRecord,
   cloneSheetProtectionRecord,
   cloneShapeRecord,
@@ -59,7 +58,6 @@ import {
   type WorkbookFreezePaneRecord,
   type WorkbookMetadataRecord,
   type WorkbookPivotRecord,
-  type WorkbookPropertyRecord,
   type WorkbookSortRecord,
   type WorkbookShapeRecord,
   type WorkbookSpillRecord,
@@ -70,9 +68,15 @@ import {
   assertMergeRangesDoNotOverlap,
   canonicalWorkbookFilterRange,
   metadataEffect,
-  normalizeMetadataKey,
   renameDataValidationSourceSheet,
 } from './workbook-metadata-service-helpers.js'
+import {
+  getWorkbookPropertyRecord,
+  getWorkbookProtectionRecord,
+  listWorkbookPropertyRecords,
+  setWorkbookPropertyRecord,
+  setWorkbookProtectionRecord,
+} from './workbook-metadata-workbook-records.js'
 
 export { WorkbookMetadataError, type WorkbookMetadataService } from './workbook-metadata-service-contract.js'
 
@@ -262,27 +266,19 @@ export function createWorkbookMetadataService(metadata: WorkbookMetadataRecord):
       return metadataEffect('Failed to reset workbook metadata', resetNow)
     },
     setWorkbookProperty(key, value) {
-      return metadataEffect('Failed to set workbook property', () => {
-        const trimmedKey = normalizeMetadataKey(key)
-        if (value === null) {
-          metadata.properties.delete(trimmedKey)
-          return undefined
-        }
-        const record: WorkbookPropertyRecord = { key: trimmedKey, value }
-        metadata.properties.set(trimmedKey, record)
-        return { ...record }
-      })
+      return metadataEffect('Failed to set workbook property', () => setWorkbookPropertyRecord(metadata, key, value))
     },
     getWorkbookProperty(key) {
-      return metadataEffect('Failed to get workbook property', () => {
-        const record = metadata.properties.get(normalizeMetadataKey(key))
-        return record ? { ...record } : undefined
-      })
+      return metadataEffect('Failed to get workbook property', () => getWorkbookPropertyRecord(metadata, key))
     },
     listWorkbookProperties() {
-      return metadataEffect('Failed to list workbook properties', () =>
-        [...metadata.properties.values()].toSorted((left, right) => left.key.localeCompare(right.key)).map(clonePropertyRecord),
-      )
+      return metadataEffect('Failed to list workbook properties', () => listWorkbookPropertyRecords(metadata))
+    },
+    setWorkbookProtection(record) {
+      return metadataEffect('Failed to set workbook protection metadata', () => setWorkbookProtectionRecord(metadata, record))
+    },
+    getWorkbookProtection() {
+      return metadataEffect('Failed to get workbook protection metadata', () => getWorkbookProtectionRecord(metadata))
     },
     setMacroPayload(record) {
       return metadataEffect('Failed to set macro payload metadata', () => {

@@ -310,6 +310,12 @@ describe('WorkbookMetadataService', () => {
 
   it('clones and normalizes sheet and range protection records on write and read', () => {
     const service = createService()
+    const workbookProtection = Effect.runSync(
+      service.setWorkbookProtection({
+        lockStructure: true,
+        lockWindows: false,
+      }),
+    )
     const sheet = Effect.runSync(
       service.setSheetProtection({
         sheetName: 'Sheet1',
@@ -327,9 +333,14 @@ describe('WorkbookMetadataService', () => {
         hideFormulas: true,
       }),
     )
+    workbookProtection.lockStructure = false
     sheet.hideFormulas = false
     range.range.startAddress = 'Z9'
 
+    expect(Effect.runSync(service.getWorkbookProtection())).toEqual({
+      lockStructure: true,
+      lockWindows: false,
+    })
     expect(Effect.runSync(service.getSheetProtection('Sheet1'))).toEqual({
       sheetName: 'Sheet1',
       hideFormulas: true,

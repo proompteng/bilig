@@ -14,6 +14,7 @@ import type {
   WorkbookMacroPayloadSnapshot,
   WorkbookNoteSnapshot,
   WorkbookPivotSnapshot,
+  WorkbookProtectionSnapshot,
   WorkbookRangeProtectionSnapshot,
   WorkbookShapeSnapshot,
   WorkbookSheetProtectionSnapshot,
@@ -36,6 +37,7 @@ import type {
   WorkbookNoteRecord,
   WorkbookPivotRecord,
   WorkbookPropertyRecord,
+  WorkbookProtectionRecord,
   WorkbookRangeProtectionRecord,
   WorkbookSheetProtectionRecord,
   WorkbookSheetTabColorRecord,
@@ -68,6 +70,8 @@ export interface WorkbookMetadataService {
   ) => Effect.Effect<WorkbookPropertyRecord | undefined, WorkbookMetadataError>
   readonly getWorkbookProperty: (key: string) => Effect.Effect<WorkbookPropertyRecord | undefined, WorkbookMetadataError>
   readonly listWorkbookProperties: () => Effect.Effect<WorkbookPropertyRecord[], WorkbookMetadataError>
+  readonly setWorkbookProtection: (record: WorkbookProtectionSnapshot) => Effect.Effect<WorkbookProtectionRecord, WorkbookMetadataError>
+  readonly getWorkbookProtection: () => Effect.Effect<WorkbookProtectionRecord | undefined, WorkbookMetadataError>
   readonly setMacroPayload: (record: WorkbookMacroPayloadSnapshot) => Effect.Effect<WorkbookMacroPayloadRecord, WorkbookMetadataError>
   readonly listMacroPayloads: () => Effect.Effect<WorkbookMacroPayloadRecord[], WorkbookMetadataError>
   readonly setCalculationSettings: (

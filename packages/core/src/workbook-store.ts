@@ -34,7 +34,6 @@ import { CellStore } from './cell-store.js'
 import type { StructuralTransaction } from './engine/structural-transaction.js'
 import type { EngineCounters } from './perf/engine-counters.js'
 import { createWorkbookMetadataService, runWorkbookMetadataEffect } from './workbook-metadata-service.js'
-import { cloneWorkbookProtectionRecord } from './workbook-metadata-records.js'
 import {
   createWorkbookMetadataRecord,
   type WorkbookAxisMetadataRecord,
@@ -414,13 +413,11 @@ export class WorkbookStore {
   }
 
   setWorkbookProtection(record: WorkbookProtectionSnapshot): WorkbookProtectionRecord {
-    const stored = cloneWorkbookProtectionRecord(record)
-    this.metadata.workbookProtection = stored
-    return cloneWorkbookProtectionRecord(stored)
+    return runWorkbookMetadataEffect(this.metadataService.setWorkbookProtection(record))
   }
 
   getWorkbookProtection(): WorkbookProtectionRecord | undefined {
-    return this.metadata.workbookProtection ? cloneWorkbookProtectionRecord(this.metadata.workbookProtection) : undefined
+    return runWorkbookMetadataEffect(this.metadataService.getWorkbookProtection())
   }
 
   setMacroPayload(record: WorkbookMacroPayloadSnapshot): WorkbookMacroPayloadRecord {
