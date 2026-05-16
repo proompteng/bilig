@@ -1,5 +1,5 @@
 import { Effect, Exit, Cause } from 'effect'
-import { ValueTag, type CellSnapshot, type EngineEvent, type WorkbookSnapshot } from '@bilig/protocol'
+import { ValueTag, type CellSnapshot, type WorkbookSnapshot } from '@bilig/protocol'
 import { CellFlags } from '../cell-store.js'
 import { createColumnIndexStore } from '../indexes/column-index-store.js'
 import type { EngineRuntimeState } from './runtime-state.js'
@@ -46,6 +46,7 @@ import { createEngineStructureService, type EngineStructureService } from './ser
 import { createEngineTraversalService, type EngineTraversalService } from './services/traversal-service.js'
 import { getRuntimeFormulaSource } from './runtime-formula-source.js'
 import { deferKernelSyncNow } from './services/live-kernel-sync-state.js'
+import { createEngineFullInvalidationService } from './services/full-invalidation-service.js'
 
 export interface EngineServiceRuntime {
   readonly cellState: EngineCellStateService
@@ -759,58 +760,7 @@ export function createEngineServiceRuntime(args: {
     state: args.state,
     executeTransaction: (transaction, source) => runEngineEffect(mutation.executeTransaction(transaction, source)),
   })
-  const emitFullSnapshotInvalidation = (options: { readonly incrementMetrics: boolean }): void => {
-    let metrics = args.state.getLastMetrics()
-    if (options.incrementMetrics) {
-      metrics = {
-        ...metrics,
-        batchId: metrics.batchId + 1,
-        changedInputCount: 0,
-        dirtyFormulaCount: 0,
-        wasmFormulaCount: 0,
-        jsFormulaCount: 0,
-        rangeNodeVisits: 0,
-        recalcMs: 0,
-        compileMs: 0,
-      }
-      args.state.setLastMetrics(metrics)
-    }
-
-    const hasGeneralEventListeners = args.state.events.hasListeners()
-    const hasTrackedEventListeners = args.state.events.hasTrackedListeners()
-    const hasWatchedCellListeners = args.state.events.hasCellListeners()
-    if (!hasGeneralEventListeners && !hasTrackedEventListeners && !hasWatchedCellListeners) {
-      return
-    }
-
-    const changedCellIndices = new Uint32Array()
-    const event: EngineEvent & { explicitChangedCount: number } = {
-      kind: 'batch',
-      invalidation: 'full',
-      changedCellIndices,
-      changedCells: [],
-      invalidatedRanges: [],
-      invalidatedRows: [],
-      invalidatedColumns: [],
-      metrics,
-      explicitChangedCount: 0,
-    }
-    if (hasGeneralEventListeners || hasWatchedCellListeners) {
-      args.state.events.emitAllWatched(event)
-    }
-    if (hasTrackedEventListeners) {
-      const patches = patchEmitter.captureChangedPatches(changedCellIndices, {
-        invalidation: 'full',
-        invalidatedRanges: [],
-        invalidatedRows: [],
-        invalidatedColumns: [],
-      })
-      args.state.events.emitTracked({
-        ...event,
-        ...(patches.length > 0 ? { patches } : {}),
-      })
-    }
-  }
+  const fullInvalidation = createEngineFullInvalidationService({ state: args.state, patchEmitter })
   pivot = createEnginePivotService({
     ...args.pivot,
     ensureCellTrackedByCoords: (sheetId, row, col) => support.ensureCellTrackedByCoordsNow(sheetId, row, col),
@@ -882,7 +832,7 @@ export function createEngineServiceRuntime(args: {
     initializeHydratedPreparedCellFormulasAt: (refs, potentialNewCells) =>
       requireService(formulaInitialization, 'formulaInitialization').initializeHydratedPreparedCellFormulasAtNow(refs, potentialNewCells),
     materializePivot: (pivotRecord) => requireService(pivot, 'pivot').materializePivotNow(pivotRecord),
-    emitFullInvalidation: emitFullSnapshotInvalidation,
+    emitFullInvalidation: fullInvalidation.emitFullSnapshotInvalidation,
   })
   const sync = createEngineReplicaSyncService({
     state: args.state,
