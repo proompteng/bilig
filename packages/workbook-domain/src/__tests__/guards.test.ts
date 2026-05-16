@@ -258,4 +258,24 @@ describe('workbook domain guards', () => {
     expect(isEngineOpBatch({ ...validBatch, clock: { counter: -1 } })).toBe(false)
     expect(isEngineOpBatch({ ...validBatch, clock: { counter: Number.MAX_SAFE_INTEGER + 1 } })).toBe(false)
   })
+
+  it('rejects unsafe structural workbook op coordinates', () => {
+    const unsafe = Number.MAX_SAFE_INTEGER + 1
+
+    expect(isEngineOp({ kind: 'insertRows', sheetName: 'Sheet1', start: 1.5, count: 1 })).toBe(false)
+    expect(isEngineOp({ kind: 'insertColumns', sheetName: 'Sheet1', start: 1, count: 0 })).toBe(false)
+    expect(isEngineOp({ kind: 'deleteColumns', sheetName: 'Sheet1', start: 0, count: unsafe })).toBe(false)
+    expect(isEngineOp({ kind: 'moveRows', sheetName: 'Sheet1', start: 0, count: 1, target: unsafe })).toBe(false)
+    expect(isEngineOp({ kind: 'updateRowMetadata', sheetName: 'Sheet1', start: 0, count: 1, size: 0, hidden: null })).toBe(false)
+    expect(isEngineOp({ kind: 'setFreezePane', sheetName: 'Sheet1', rows: 1.5, cols: 0 })).toBe(false)
+    expect(
+      isEngineOp({
+        kind: 'insertRows',
+        sheetName: 'Sheet1',
+        start: 0,
+        count: 1,
+        entries: [{ id: 'row-1', index: unsafe, size: 24, hidden: false }],
+      }),
+    ).toBe(false)
+  })
 })

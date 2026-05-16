@@ -33,6 +33,10 @@ function isSafeNonNegativeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
+function isSafePositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+}
+
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === 'string')
 }
@@ -47,6 +51,10 @@ function isOptionalNumber(value: unknown): value is number | undefined {
 
 function isOptionalNullableNumber(value: unknown): value is number | null | undefined {
   return value === undefined || value === null || isFiniteNumber(value)
+}
+
+function isOptionalNullableSafePositiveInteger(value: unknown): value is number | null | undefined {
+  return value === undefined || value === null || isSafePositiveInteger(value)
 }
 
 function isOptionalBoolean(value: unknown): value is boolean | undefined {
@@ -73,12 +81,16 @@ function hasSafeNonNegativeInteger(value: Record<string, unknown>, key: string):
   return isSafeNonNegativeInteger(value[key])
 }
 
+function hasSafePositiveInteger(value: Record<string, unknown>, key: string): boolean {
+  return isSafePositiveInteger(value[key])
+}
+
 function isWorkbookAxisEntry(value: unknown): boolean {
   return (
     isRecord(value) &&
     hasString(value, 'id') &&
-    hasFiniteNumber(value, 'index') &&
-    isOptionalNullableNumber(value['size']) &&
+    hasSafeNonNegativeInteger(value, 'index') &&
+    isOptionalNullableSafePositiveInteger(value['size']) &&
     isOptionalNullableBoolean(value['hidden'])
   )
 }
@@ -579,33 +591,33 @@ export function isWorkbookOp(value: unknown): value is WorkbookOp {
     case 'insertColumns':
       return (
         hasString(value, 'sheetName') &&
-        hasFiniteNumber(value, 'start') &&
-        hasFiniteNumber(value, 'count') &&
+        hasSafeNonNegativeInteger(value, 'start') &&
+        hasSafePositiveInteger(value, 'count') &&
         (value['entries'] === undefined ||
           (Array.isArray(value['entries']) && value['entries'].every((entry) => isWorkbookAxisEntry(entry))))
       )
     case 'deleteRows':
     case 'deleteColumns':
-      return hasString(value, 'sheetName') && hasFiniteNumber(value, 'start') && hasFiniteNumber(value, 'count')
+      return hasString(value, 'sheetName') && hasSafeNonNegativeInteger(value, 'start') && hasSafePositiveInteger(value, 'count')
     case 'moveRows':
     case 'moveColumns':
       return (
         hasString(value, 'sheetName') &&
-        hasFiniteNumber(value, 'start') &&
-        hasFiniteNumber(value, 'count') &&
-        hasFiniteNumber(value, 'target')
+        hasSafeNonNegativeInteger(value, 'start') &&
+        hasSafePositiveInteger(value, 'count') &&
+        hasSafeNonNegativeInteger(value, 'target')
       )
     case 'updateRowMetadata':
     case 'updateColumnMetadata':
       return (
         hasString(value, 'sheetName') &&
-        hasFiniteNumber(value, 'start') &&
-        hasFiniteNumber(value, 'count') &&
-        isOptionalNullableNumber(value['size']) &&
+        hasSafeNonNegativeInteger(value, 'start') &&
+        hasSafePositiveInteger(value, 'count') &&
+        isOptionalNullableSafePositiveInteger(value['size']) &&
         isOptionalNullableBoolean(value['hidden'])
       )
     case 'setFreezePane':
-      return hasString(value, 'sheetName') && hasFiniteNumber(value, 'rows') && hasFiniteNumber(value, 'cols')
+      return hasString(value, 'sheetName') && hasSafeNonNegativeInteger(value, 'rows') && hasSafeNonNegativeInteger(value, 'cols')
     case 'clearFreezePane':
       return hasString(value, 'sheetName')
     case 'mergeCells':
