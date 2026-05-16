@@ -269,6 +269,47 @@ describe('workbook domain guards', () => {
     expect(isEngineOp({ kind: 'upsertSheet', name: 'Sheet2', order: 1, id: unsafe })).toBe(false)
   })
 
+  it('rejects unsafe persisted metadata sequence fields', () => {
+    const unsafe = Number.MAX_SAFE_INTEGER + 1
+    const range = { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'B2' }
+
+    expect(
+      isEngineOp({
+        kind: 'upsertConditionalFormat',
+        format: {
+          id: 'cf-1',
+          range,
+          rule: { kind: 'textContains', text: 'late' },
+          style: {},
+          priority: unsafe,
+        },
+      }),
+    ).toBe(false)
+    expect(
+      isEngineOp({
+        kind: 'upsertCommentThread',
+        thread: {
+          threadId: 'thread-1',
+          sheetName: 'Sheet1',
+          address: 'A1',
+          comments: [{ id: 'comment-1', body: 'Check', createdAtUnixMs: 1.5 }],
+        },
+      }),
+    ).toBe(false)
+    expect(
+      isEngineOp({
+        kind: 'upsertCommentThread',
+        thread: {
+          threadId: 'thread-1',
+          sheetName: 'Sheet1',
+          address: 'A1',
+          comments: [{ id: 'comment-1', body: 'Check', createdAtUnixMs: 1 }],
+          resolvedAtUnixMs: -1,
+        },
+      }),
+    ).toBe(false)
+  })
+
   it('rejects unsafe structural workbook op coordinates', () => {
     const unsafe = Number.MAX_SAFE_INTEGER + 1
 

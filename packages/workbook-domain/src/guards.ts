@@ -53,6 +53,10 @@ function isOptionalSafePositiveInteger(value: unknown): value is number | undefi
   return value === undefined || isSafePositiveInteger(value)
 }
 
+function isOptionalSafeNonNegativeInteger(value: unknown): value is number | undefined {
+  return value === undefined || isSafeNonNegativeInteger(value)
+}
+
 function isOptionalNullableNumber(value: unknown): value is number | null | undefined {
   return value === undefined || value === null || isFiniteNumber(value)
 }
@@ -399,7 +403,7 @@ function isWorkbookConditionalFormat(value: unknown): boolean {
     isWorkbookConditionalFormatRule(value['rule']) &&
     isCellStylePatch(value['style']) &&
     isOptionalBoolean(value['stopIfTrue']) &&
-    isOptionalNumber(value['priority'])
+    isOptionalSafeNonNegativeInteger(value['priority'])
   )
 }
 
@@ -418,7 +422,7 @@ function isWorkbookCommentEntry(value: unknown): boolean {
     hasString(value, 'body') &&
     isOptionalString(value['authorUserId']) &&
     isOptionalString(value['authorDisplayName']) &&
-    isOptionalNumber(value['createdAtUnixMs'])
+    isOptionalSafeNonNegativeInteger(value['createdAtUnixMs'])
   )
 }
 
@@ -433,7 +437,7 @@ function isWorkbookCommentThread(value: unknown): boolean {
     value['comments'].every((entry) => isWorkbookCommentEntry(entry)) &&
     isOptionalBoolean(value['resolved']) &&
     isOptionalString(value['resolvedByUserId']) &&
-    isOptionalNumber(value['resolvedAtUnixMs'])
+    isOptionalSafeNonNegativeInteger(value['resolvedAtUnixMs'])
   )
 }
 
