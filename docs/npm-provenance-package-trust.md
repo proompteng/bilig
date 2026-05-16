@@ -80,6 +80,12 @@ API, exposed through the README badge, and uploaded as SARIF to GitHub code
 scanning so dependency evaluators can inspect repository posture separately
 from npm package provenance.
 
+The GitHub trust surface also includes CodeQL analysis for the
+JavaScript/TypeScript codebase and Dependabot version updates for npm, GitHub
+Actions, and the root Dockerfile. Those checks do not replace package
+provenance, but they make vulnerability discovery and dependency drift visible
+before a production adopter has to ask for it.
+
 ## What This Does Not Prove
 
 Package provenance does not prove that a workbook workflow is correct, complete,
