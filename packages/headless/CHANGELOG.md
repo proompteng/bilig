@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.16.16
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.16.15
+- Manual override: no
+
+## Fixes
+- fix(benchmarks): tolerate platform float drift (eb8f21d0)
+
+## Internal runtime changes
+- chore(growth): refresh headless performance evidence (bf2013be)
+
 ## 0.16.15
 
 - Release type: patch
