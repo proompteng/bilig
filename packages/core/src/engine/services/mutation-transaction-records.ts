@@ -7,7 +7,24 @@ import {
   type EngineExistingNumericCellMutationRef,
 } from '../../cell-mutations-at.js'
 import type { WorkbookStore } from '../../workbook-store.js'
-import type { TransactionRecord } from '../runtime-state.js'
+import type { PreparedCellAddress, TransactionRecord } from '../runtime-state.js'
+
+type OpsTransactionRecord = Extract<TransactionRecord, { kind: 'ops' }>
+
+export function createOpsTransactionRecord(
+  ops: EngineOp[],
+  potentialNewCells?: number,
+  preparedCellAddressesByOpIndex?: readonly (PreparedCellAddress | null)[],
+): OpsTransactionRecord {
+  const record: OpsTransactionRecord = { kind: 'ops', ops }
+  if (potentialNewCells !== undefined) {
+    record.potentialNewCells = potentialNewCells
+  }
+  if (preparedCellAddressesByOpIndex !== undefined) {
+    record.preparedCellAddressesByOpIndex = preparedCellAddressesByOpIndex
+  }
+  return record
+}
 
 export function createLazySingleOpTransactionRecord(op: EngineOp, potentialNewCells?: number): TransactionRecord {
   return potentialNewCells === undefined ? { kind: 'single-op', op } : { kind: 'single-op', op, potentialNewCells }

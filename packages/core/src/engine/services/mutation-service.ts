@@ -26,6 +26,7 @@ import {
   cloneTransactionRecordOps,
   createLazyCellMutationTransactionRecord,
   createLazySingleOpTransactionRecord,
+  createOpsTransactionRecord,
   createSingleExistingNumericCellMutationTransactionRecord,
   singleExistingNumericCellMutationRecordToRef,
   transactionRecordOps,
@@ -460,23 +461,7 @@ export function createEngineMutationService(args: {
       }
       return null
     }
-    const forward: TransactionRecord =
-      potentialNewCells === undefined
-        ? options.preparedCellAddressesByOpIndex
-          ? {
-              kind: 'ops',
-              ops,
-              preparedCellAddressesByOpIndex: options.preparedCellAddressesByOpIndex,
-            }
-          : { kind: 'ops', ops }
-        : options.preparedCellAddressesByOpIndex
-          ? {
-              kind: 'ops',
-              ops,
-              potentialNewCells,
-              preparedCellAddressesByOpIndex: options.preparedCellAddressesByOpIndex,
-            }
-          : { kind: 'ops', ops, potentialNewCells }
+    const forward = createOpsTransactionRecord(ops, potentialNewCells, options.preparedCellAddressesByOpIndex)
     const baseFastHistoryArgs: Parameters<typeof tryBuildFastMutationHistory>[0] =
       potentialNewCells === undefined
         ? {
@@ -512,22 +497,7 @@ export function createEngineMutationService(args: {
       args.state.undoStack.push({
         forward:
           fastHistory?.forward ??
-          (potentialNewCells === undefined
-            ? options.preparedCellAddressesByOpIndex
-              ? {
-                  kind: 'ops',
-                  ops: canonicalizeForwardOps(ops),
-                  preparedCellAddressesByOpIndex: options.preparedCellAddressesByOpIndex,
-                }
-              : { kind: 'ops', ops: canonicalizeForwardOps(ops) }
-            : options.preparedCellAddressesByOpIndex
-              ? {
-                  kind: 'ops',
-                  ops: canonicalizeForwardOps(ops),
-                  potentialNewCells,
-                  preparedCellAddressesByOpIndex: options.preparedCellAddressesByOpIndex,
-                }
-              : { kind: 'ops', ops: canonicalizeForwardOps(ops), potentialNewCells }),
+          createOpsTransactionRecord(canonicalizeForwardOps(ops), potentialNewCells, options.preparedCellAddressesByOpIndex),
         inverse,
       })
       args.state.redoStack.length = 0

@@ -7,6 +7,7 @@ import {
   createLazyMaterializedCellMutationTransactionRecord,
   createLazyRenderCommitTransactionRecord,
   createLazySingleOpTransactionRecord,
+  createOpsTransactionRecord,
   createSingleExistingNumericCellMutationTransactionRecord,
   singleExistingNumericCellMutationRecordToRef,
   transactionRecordOps,
@@ -26,6 +27,25 @@ describe('mutation transaction records', () => {
       kind: 'cell-mutations',
       refs: [{ sheetId: 1, mutation: { kind: 'setCellFormula', row: 0, col: 1, formula: 'A1+1' } }],
       potentialNewCells: 0,
+    })
+  })
+
+  it('creates op transaction records without losing zero potential cells or prepared addresses', () => {
+    const ops: EngineOp[] = [
+      { kind: 'setCellValue', sheetName: 'Sheet1', address: 'A1', value: 7 },
+      { kind: 'setCellFormula', sheetName: 'Sheet1', address: 'B1', formula: 'A1*2' },
+    ]
+    const prepared = [
+      { row: 0, col: 0 },
+      { row: 0, col: 1 },
+    ]
+
+    expect(createOpsTransactionRecord(ops)).toEqual({ kind: 'ops', ops })
+    expect(createOpsTransactionRecord(ops, 0, prepared)).toEqual({
+      kind: 'ops',
+      ops,
+      potentialNewCells: 0,
+      preparedCellAddressesByOpIndex: prepared,
     })
   })
 
