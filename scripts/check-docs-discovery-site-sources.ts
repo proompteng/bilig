@@ -5,6 +5,7 @@ export const docsSiteSources = [
   ['formula-workbooks-node-services-agent-tools.html', 'formula-workbooks-node-services-agent-tools.md'],
   ['headless-spreadsheet-engine-node-services-agents.html', 'headless-spreadsheet-engine-node-services-agents.md'],
   ['exceljs-formula-recalculation-node.html', 'exceljs-formula-recalculation-node.md'],
+  ['exceljs-shared-formula-recalculation-node.html', 'exceljs-shared-formula-recalculation-node.md'],
   ['xlsx-formula-recalculation-node.html', 'xlsx-formula-recalculation-node.md'],
   ['xlsx-calc-alternative-node-workbook-recalculation.html', 'xlsx-calc-alternative-node-workbook-recalculation.md'],
   ['why-agents-need-workbook-apis.html', 'why-agents-need-workbook-apis.md'],

@@ -44,13 +44,13 @@ If step 3 happens later in Excel, the backend never owned the decision.
 
 ## Decision table
 
-| Job | Better starting point |
-| --- | --- |
-| Generate an XLSX report with styles, sheets, tables, and formula strings | ExcelJS |
-| Open a file later in Excel and let Excel calculate formulas | ExcelJS |
-| Preserve formula records and cached values from an existing workbook | ExcelJS or SheetJS-style tooling |
+| Job                                                                        | Better starting point                       |
+| -------------------------------------------------------------------------- | ------------------------------------------- |
+| Generate an XLSX report with styles, sheets, tables, and formula strings   | ExcelJS                                     |
+| Open a file later in Excel and let Excel calculate formulas                | ExcelJS                                     |
+| Preserve formula records and cached values from an existing workbook       | ExcelJS or SheetJS-style tooling            |
 | Recalculate workbook formulas inside a Node.js request, job, or agent tool | A formula runtime such as `@bilig/headless` |
-| Persist formula-backed state as JSON and verify it after restore | `@bilig/headless` WorkPaper |
+| Persist formula-backed state as JSON and verify it after restore           | `@bilig/headless` WorkPaper                 |
 
 ## Minimal WorkPaper replacement for the recalculation step
 
@@ -74,69 +74,60 @@ import {
   exportWorkPaperDocument,
   parseWorkPaperDocument,
   serializeWorkPaperDocument,
-} from "@bilig/headless";
+} from '@bilig/headless'
 
 type NumericCell = {
-  value: number;
-};
+  value: number
+}
 
 function readNumber(cell: unknown, label: string): number {
-  if (
-    typeof cell === "object" &&
-    cell !== null &&
-    typeof (cell as NumericCell).value === "number"
-  ) {
-    return (cell as NumericCell).value;
+  if (typeof cell === 'object' && cell !== null && typeof (cell as NumericCell).value === 'number') {
+    return (cell as NumericCell).value
   }
 
-  throw new Error(`Expected ${label} to be numeric, got ${JSON.stringify(cell)}`);
+  throw new Error(`Expected ${label} to be numeric, got ${JSON.stringify(cell)}`)
 }
 
 const workbook = WorkPaper.buildFromSheets({
   Inputs: [
-    ["Metric", "Value"],
-    ["Units", 100],
-    ["Unit price", 49],
-    ["Discount", 0.1],
+    ['Metric', 'Value'],
+    ['Units', 100],
+    ['Unit price', 49],
+    ['Discount', 0.1],
   ],
   Quote: [
-    ["Metric", "Value"],
-    ["Net total", "=Inputs!B2*Inputs!B3*(1-Inputs!B4)"],
+    ['Metric', 'Value'],
+    ['Net total', '=Inputs!B2*Inputs!B3*(1-Inputs!B4)'],
   ],
-});
+})
 
-const inputs = workbook.getSheetId("Inputs");
-const quote = workbook.getSheetId("Quote");
+const inputs = workbook.getSheetId('Inputs')
+const quote = workbook.getSheetId('Quote')
 if (inputs === undefined || quote === undefined) {
-  throw new Error("Expected Inputs and Quote sheets");
+  throw new Error('Expected Inputs and Quote sheets')
 }
 
-const netTotalCell = { sheet: quote, row: 1, col: 1 };
-const before = readNumber(workbook.getCellValue(netTotalCell), "before");
+const netTotalCell = { sheet: quote, row: 1, col: 1 }
+const before = readNumber(workbook.getCellValue(netTotalCell), 'before')
 
-workbook.setCellContents({ sheet: inputs, row: 3, col: 1 }, 0.25);
-const after = readNumber(workbook.getCellValue(netTotalCell), "after");
+workbook.setCellContents({ sheet: inputs, row: 3, col: 1 }, 0.25)
+const after = readNumber(workbook.getCellValue(netTotalCell), 'after')
 
-const serialized = serializeWorkPaperDocument(
-  exportWorkPaperDocument(workbook, { includeConfig: true }),
-);
-const restored = createWorkPaperFromDocument(parseWorkPaperDocument(serialized));
-const restoredQuote = restored.getSheetId("Quote");
+const serialized = serializeWorkPaperDocument(exportWorkPaperDocument(workbook, { includeConfig: true }))
+const restored = createWorkPaperFromDocument(parseWorkPaperDocument(serialized))
+const restoredQuote = restored.getSheetId('Quote')
 if (restoredQuote === undefined) {
-  throw new Error("Expected restored Quote sheet");
+  throw new Error('Expected restored Quote sheet')
 }
 
-const afterRestore = readNumber(
-  restored.getCellValue({ sheet: restoredQuote, row: 1, col: 1 }),
-  "after restore",
-);
+const afterRestore = readNumber(restored.getCellValue({ sheet: restoredQuote, row: 1, col: 1 }), 'after restore')
 
 console.log({
   before,
   after,
   afterRestore,
   verified: before === 4410 && after === 3675 && afterRestore === after,
-});
+})
 ```
 
 Run it:
@@ -181,6 +172,7 @@ chart, pivot table, macro, or workbook artifact. Check the
 ## Related proof
 
 - [SheetJS and ExcelJS boundary](sheetjs-exceljs-alternative-formula-workbook-api.md)
+- [ExcelJS shared formulas and Node.js recalculation](exceljs-shared-formula-recalculation-node.md)
 - [Node spreadsheet formula engine](node-spreadsheet-formula-engine.md)
 - [Headless spreadsheet engine for Node services and agents](headless-spreadsheet-engine-node-services-agents.md)
 - [Persist formula-backed WorkPaper documents in Node](persisting-formula-backed-workpaper-documents-in-node.md)
@@ -189,4 +181,3 @@ chart, pivot table, macro, or workbook artifact. Check the
 If this saves you an ExcelJS recalculation workaround, star the repository so
 the project is easier for the next backend developer to find:
 <https://github.com/proompteng/bilig/stargazers>.
-

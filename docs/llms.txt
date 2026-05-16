@@ -22,6 +22,7 @@ openssf scorecard: https://scorecard.dev/viewer/?uri=github.com/proompteng/bilig
 - https://proompteng.github.io/bilig/xlsx-formula-recalculation-node.html
 - https://proompteng.github.io/bilig/xlsx-calc-alternative-node-workbook-recalculation.html
 - https://proompteng.github.io/bilig/exceljs-formula-recalculation-node.html
+- https://proompteng.github.io/bilig/exceljs-shared-formula-recalculation-node.html
 - https://github.com/proompteng/bilig/tree/main/packages/headless#readme
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper
 - https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/npm-eval.ts
@@ -180,6 +181,11 @@ npm run agent:verify
 - ExcelJS formula recalculation in Node.js:
   https://proompteng.github.io/bilig/exceljs-formula-recalculation-node.html
   https://github.com/proompteng/bilig/blob/main/docs/exceljs-formula-recalculation-node.md
+- ExcelJS shared formulas and Node.js recalculation:
+  https://proompteng.github.io/bilig/exceljs-shared-formula-recalculation-node.html
+  https://github.com/proompteng/bilig/blob/main/docs/exceljs-shared-formula-recalculation-node.md
+  documents the XLSX shared-formula expansion path before WorkPaper
+  recalculation, with links to the import implementation and regression test.
 - benchmark evidence:
   https://github.com/proompteng/bilig/blob/main/docs/headless-workpaper-benchmark-evidence.md
 - local benchmark walkthrough:

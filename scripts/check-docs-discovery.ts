@@ -515,13 +515,19 @@ requireIncludes(headlessReadme, 'https://api.scorecard.dev/projects/github.com/p
 requireIncludes(headlessReadme, 'uploaded to GitHub code scanning on every `main` update', 'packages/headless/README.md')
 requireIncludes(readme, 'examples/xlsx-recalculation-node', 'README.md')
 requireIncludes(readme, 'docs/xlsx-formula-recalculation-node.md', 'README.md')
+requireIncludes(readme, 'docs/exceljs-shared-formula-recalculation-node.md', 'README.md')
 requireIncludes(headlessReadme, 'examples/xlsx-recalculation-node', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'docs/xlsx-formula-recalculation-node.md', 'packages/headless/README.md')
+requireIncludes(headlessReadme, 'docs/exceljs-shared-formula-recalculation-node.md', 'packages/headless/README.md')
 requireIncludes(index, 'examples/xlsx-recalculation-node', 'docs/index.html')
 requireIncludes(index, './xlsx-formula-recalculation-node.html', 'docs/index.html')
+requireIncludes(index, './exceljs-shared-formula-recalculation-node.html', 'docs/index.html')
 requireIncludes(llms, 'https://github.com/proompteng/bilig/tree/main/examples/xlsx-recalculation-node', 'docs/llms.txt')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/xlsx-formula-recalculation-node.html', 'docs/llms.txt')
 requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/xlsx-formula-recalculation-node.md', 'docs/llms.txt')
+requireIncludes(llms, 'https://proompteng.github.io/bilig/exceljs-shared-formula-recalculation-node.html', 'docs/llms.txt')
+requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/exceljs-shared-formula-recalculation-node.md', 'docs/llms.txt')
+requireIncludes(llms, 'documents the XLSX shared-formula expansion path', 'docs/llms.txt')
 requireIncludes(index, './npm-provenance-package-trust.html', 'docs/index.html')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/npm-provenance-package-trust.html', 'docs/llms.txt')
 requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/npm-provenance-package-trust.md', 'docs/llms.txt')
@@ -797,7 +803,7 @@ for (const required of [
   'cd bilig/examples/xlsx-recalculation-node',
   '"exportedReimportMatchesAfter": true',
   '"formulasSurvivedXlsxRoundTrip": true',
-  'import { exportXlsx, importXlsx } from "@bilig/headless/xlsx";',
+  "import { exportXlsx, importXlsx } from '@bilig/headless/xlsx'",
   'Use ExcelJS or SheetJS first when the job is workbook-file manipulation',
   'Use `@bilig/headless` when the Node process must own the recalculated answer',
   'star the repository',

@@ -76,26 +76,26 @@ Use the XLSX subpath at the file boundary and the WorkPaper API for trusted
 calculation state:
 
 ```ts
-import { readFile, writeFile } from "node:fs/promises";
-import { exportXlsx, importXlsx } from "@bilig/headless/xlsx";
+import { readFile, writeFile } from 'node:fs/promises'
+import { exportXlsx, importXlsx } from '@bilig/headless/xlsx'
 
-const source = await readFile("pricing-model-source.xlsx");
-const workbook = await importXlsx(source);
+const source = await readFile('pricing-model-source.xlsx')
+const workbook = await importXlsx(source)
 
-const inputs = workbook.getSheetId("Inputs");
-const summary = workbook.getSheetId("Summary");
+const inputs = workbook.getSheetId('Inputs')
+const summary = workbook.getSheetId('Summary')
 if (inputs === undefined || summary === undefined) {
-  throw new Error("Expected Inputs and Summary sheets");
+  throw new Error('Expected Inputs and Summary sheets')
 }
 
-workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, 48);
-workbook.setCellContents({ sheet: inputs, row: 2, col: 1 }, 1250);
+workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, 48)
+workbook.setCellContents({ sheet: inputs, row: 2, col: 1 }, 1250)
 
-const decision = workbook.getCellValue({ sheet: summary, row: 6, col: 1 });
-const edited = await exportXlsx(workbook);
-await writeFile("pricing-model-edited.xlsx", edited);
+const decision = workbook.getCellValue({ sheet: summary, row: 6, col: 1 })
+const edited = await exportXlsx(workbook)
+await writeFile('pricing-model-edited.xlsx', edited)
 
-console.log({ decision });
+console.log({ decision })
 ```
 
 In production, keep a narrow adapter around this boundary. Your application
@@ -133,6 +133,7 @@ XLSX boundary around the parts it owns.
 
 - [Runnable XLSX recalculation example](https://github.com/proompteng/bilig/tree/main/examples/xlsx-recalculation-node)
 - [ExcelJS formula recalculation in Node.js](exceljs-formula-recalculation-node.md)
+- [ExcelJS shared formulas and Node.js recalculation](exceljs-shared-formula-recalculation-node.md)
 - [SheetJS and ExcelJS boundary](sheetjs-exceljs-alternative-formula-workbook-api.md)
 - [Stale XLSX cache and Excel oracle checks](xlsx-corpus-verifier-walkthrough.md)
 - [Compatibility limits](where-bilig-is-not-excel-compatible-yet.md)
