@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.16.12
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.16.11
+- Manual override: no
+
+## Fixes
+- perf(headless): trim append formula region work (1c2f1e0c)
+
+## Internal runtime changes
+- docs(headless): add formula workbook proof page (15030c53)
+
 ## 0.16.11
 
 - Release type: patch
