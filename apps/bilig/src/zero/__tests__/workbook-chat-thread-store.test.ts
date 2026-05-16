@@ -245,6 +245,27 @@ function createZeroThreadRow(state: ReturnType<typeof createThreadState>): ZeroW
 }
 
 describe('workbook-chat-thread-store', () => {
+  it('backfills shared thread visibility columns before deriving execution policy', async () => {
+    const queryable = new FakeQueryable()
+
+    await ensureWorkbookChatThreadSchema(queryable)
+
+    const scopeColumnIndex = queryable.calls.findIndex(
+      (call) => call.text.includes('ALTER TABLE workbook_chat_thread') && call.text.includes('ADD COLUMN IF NOT EXISTS scope'),
+    )
+    const scopeNotNullIndex = queryable.calls.findIndex((call) => call.text.includes('ALTER COLUMN scope SET NOT NULL'))
+    const updatedAtColumnIndex = queryable.calls.findIndex(
+      (call) => call.text.includes('ALTER TABLE workbook_chat_thread') && call.text.includes('ADD COLUMN IF NOT EXISTS updated_at_unix_ms'),
+    )
+    const updatedAtNotNullIndex = queryable.calls.findIndex((call) => call.text.includes('ALTER COLUMN updated_at_unix_ms SET NOT NULL'))
+    const executionPolicyBackfillIndex = queryable.calls.findIndex((call) => call.text.includes('SET execution_policy = CASE WHEN scope ='))
+    expect(scopeColumnIndex).toBeGreaterThan(-1)
+    expect(scopeNotNullIndex).toBeGreaterThan(scopeColumnIndex)
+    expect(updatedAtColumnIndex).toBeGreaterThan(-1)
+    expect(updatedAtNotNullIndex).toBeGreaterThan(updatedAtColumnIndex)
+    expect(executionPolicyBackfillIndex).toBeGreaterThan(scopeNotNullIndex)
+  })
+
   it('creates the review-queue schema without legacy pending-bundle compatibility paths', async () => {
     const queryable = new FakeQueryable()
 

@@ -6,7 +6,12 @@ import type {
   WorkbookAgentUiContext,
 } from '@bilig/contracts'
 import { queries } from '@bilig/zero-sync'
-import { addDefaultedColumnIfMissing, enforceDefaultedNotNullColumn } from './schema-upgrade.js'
+import {
+  addColumnIfMissing,
+  addDefaultedColumnIfMissing,
+  enforceDefaultedNotNullColumn,
+  ensureDefaultedNotNullColumn,
+} from './schema-upgrade.js'
 import type { Queryable, ZeroQueryRunner } from './store.js'
 import { runQueryableTransaction, runSequentially } from './transaction-support.js'
 import {
@@ -132,6 +137,23 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       PRIMARY KEY (workbook_id, thread_id, actor_user_id)
     )
   `)
+  await ensureDefaultedNotNullColumn(db, {
+    tableName: 'workbook_chat_thread',
+    columnName: 'scope',
+    dataType: 'TEXT',
+    defaultSql: "'private'",
+  })
+  await addColumnIfMissing(db, {
+    tableName: 'workbook_chat_thread',
+    columnName: 'context_json',
+    dataType: 'JSONB',
+  })
+  await ensureDefaultedNotNullColumn(db, {
+    tableName: 'workbook_chat_thread',
+    columnName: 'updated_at_unix_ms',
+    dataType: 'BIGINT',
+    defaultSql: '0',
+  })
   await db.query(`
     ALTER TABLE workbook_chat_thread
       ADD COLUMN IF NOT EXISTS execution_policy TEXT;
@@ -161,10 +183,7 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
     dataType: 'BIGINT',
     defaultSql: '0',
   })
-  await db.query(`
-    ALTER TABLE workbook_chat_thread
-      ADD COLUMN IF NOT EXISTS latest_entry_text TEXT;
-  `)
+  await addColumnIfMissing(db, { tableName: 'workbook_chat_thread', columnName: 'latest_entry_text', dataType: 'TEXT' })
   await db.query(`
     CREATE TABLE IF NOT EXISTS workbook_chat_item (
       workbook_id TEXT NOT NULL,
