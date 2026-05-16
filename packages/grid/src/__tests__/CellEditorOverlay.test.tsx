@@ -544,7 +544,7 @@ describe('CellEditorOverlay', () => {
     }
   })
 
-  it('hides editable text while a commit is completing to avoid duplicate grid text', async () => {
+  it('keeps editable text visible while a commit is completing to avoid blank click-away flashes', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     const onCommit = vi.fn()
@@ -581,7 +581,7 @@ describe('CellEditorOverlay', () => {
       expect(onCommit).toHaveBeenCalledTimes(1)
       expect(overlay?.dataset['completing']).toBe('true')
       expect(textarea.readOnly).toBe(true)
-      expect(textarea.style.opacity).toBe('0')
+      expect(textarea.style.opacity).toBe('')
     } finally {
       await act(async () => {
         root.unmount()
@@ -742,7 +742,7 @@ describe('CellEditorOverlay', () => {
       expect(onCommit).not.toHaveBeenCalled()
       expect(overlay?.dataset['completing']).toBe('true')
       expect(textarea?.readOnly).toBe(true)
-      expect(textarea?.style.opacity).toBe('0')
+      expect(textarea?.style.opacity).toBe('')
 
       await act(async () => {
         textarea?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))

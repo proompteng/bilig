@@ -342,7 +342,6 @@ export function CellEditorOverlay({
           font,
           fontSize,
           minHeight: '100%',
-          opacity: isCompleting ? 0 : undefined,
           MozOsxFontSmoothing: 'auto',
           textRendering: 'auto',
           textAlign,

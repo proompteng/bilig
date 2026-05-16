@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import {
   PRODUCT_HEADER_HEIGHT,
+  PRODUCT_ROW_MARKER_WIDTH,
   PRIMARY_MODIFIER,
   createTestDocumentId,
   getProductColumnLeft,
@@ -158,6 +159,7 @@ test('web app keeps the live cell editor above the native grid text layer', asyn
 
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
   await expect(page.getByTestId('cell-editor-input')).toHaveValue('editor-z-order')
+  await expect(page.getByTestId('cell-editor-input')).not.toHaveCSS('opacity', '0')
   await expect
     .poll(readEditorLayerState(page), {
       message: 'the active editor must sit above native rendered text to prevent double-text artifacts while typing or clicking away',
@@ -167,6 +169,20 @@ test('web app keeps the live cell editor above the native grid text layer', asyn
       editorAboveNativeText: true,
       editorMounted: true,
       nativeTextLayerMounted: true,
+    })
+
+  await clickVisibleGridBodySlot(page, 2, 1)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C2')
+  await expect(page.getByTestId('cell-editor-input')).toHaveCount(0)
+  await expect
+    .poll(readNativeTextLayerStabilityState(page, 'editor-z-order'), {
+      message: 'click-away commit must not blank row headers or lose the committed cell text from the native text layer',
+      timeout: 5_000,
+    })
+    .toMatchObject({
+      containsText: true,
+      declaredRunCountMatchesDom: true,
+      rowHeaderRunCountHealthy: true,
     })
 })
 
@@ -417,6 +433,42 @@ function readEditorLayerState(page: Page): () => Promise<{
         nativeTextLayerMounted: nativeTextLayer instanceof HTMLElement,
       }
     })
+}
+
+function readNativeTextLayerStabilityState(
+  page: Page,
+  expectedText: string,
+): () => Promise<{
+  readonly containsText: boolean
+  readonly declaredRunCountMatchesDom: boolean
+  readonly rowHeaderRunCount: number
+  readonly rowHeaderRunCountHealthy: boolean
+}> {
+  return async () =>
+    await page.evaluate(
+      ({ rowMarkerWidth, text }) => {
+        const nativeTextLayer = document.querySelector('[data-testid="grid-native-text-layer"]')
+        const grid = document.querySelector('[data-testid="sheet-grid"]')
+        const gridRect = grid instanceof HTMLElement ? grid.getBoundingClientRect() : null
+        const textRuns = [...document.querySelectorAll('[data-native-text-run]')]
+        const declaredRunCount =
+          nativeTextLayer instanceof HTMLElement ? Number(nativeTextLayer.getAttribute('data-v3-native-text-run-count') ?? '-1') : -1
+        const rowHeaderRunCount = textRuns.filter((run) => {
+          if (!gridRect || !/^\d+$/.test(run.textContent ?? '')) {
+            return false
+          }
+          const rect = run.getBoundingClientRect()
+          return rect.left >= gridRect.left && rect.right <= gridRect.left + rowMarkerWidth + 1
+        }).length
+        return {
+          containsText: textRuns.some((run) => run.textContent === text),
+          declaredRunCountMatchesDom: declaredRunCount === textRuns.length,
+          rowHeaderRunCount,
+          rowHeaderRunCountHealthy: rowHeaderRunCount >= 10,
+        }
+      },
+      { rowMarkerWidth: PRODUCT_ROW_MARKER_WIDTH, text: expectedText },
+    )
 }
 
 async function countDarkInteriorPixelsInCell(page: Page, columnIndex: number, rowIndex: number): Promise<number> {
