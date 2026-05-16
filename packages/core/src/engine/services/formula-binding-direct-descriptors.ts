@@ -9,20 +9,27 @@ import {
   parseFormula,
   parseRangeAddress,
 } from '@bilig/formula'
-import { MAX_ROWS, ValueTag, type CellValue } from '@bilig/protocol'
+import { ValueTag, type CellValue } from '@bilig/protocol'
 import { mapStructuralAxisInterval } from '../../engine-structural-utils.js'
 import { resolveRuntimeDirectLookupBinding } from '../direct-vector-lookup.js'
 import type {
   EngineRuntimeState,
   RuntimeDirectAggregateDescriptor,
   RuntimeDirectCriteriaDescriptor,
-  RuntimeDirectCriteriaResultTransform,
   RuntimeDirectLookupDescriptor,
   RuntimeDirectScalarOperand,
 } from '../runtime-state.js'
 import type { RegionGraph } from '../../deps/region-graph.js'
 import type { ExactColumnIndexService } from './exact-column-index-service.js'
 import type { SortedColumnSearchService } from './sorted-column-search-service.js'
+import {
+  appendDirectCriteriaResultTransform,
+  callName,
+  flattenCriteriaProduct,
+  resolveDirectCriteriaRange,
+  staticCellValue,
+  type DirectCriteriaResolvedRange,
+} from './formula-binding-direct-criteria-ast.js'
 
 export type ParsedCompiledFormula = CompiledFormula & {
   parsedDeps?: ParsedDependencyReference[]
@@ -119,90 +126,6 @@ export function rewriteDirectAggregateDescriptorForStructuralTransform(args: {
   }
 }
 
-function staticCellValue(node: FormulaNode | undefined): CellValue | undefined {
-  if (!node) {
-    return undefined
-  }
-  switch (node.kind) {
-    case 'BooleanLiteral':
-      return { tag: ValueTag.Boolean, value: node.value }
-    case 'ErrorLiteral':
-      return { tag: ValueTag.Error, code: node.code }
-    case 'NumberLiteral':
-      return { tag: ValueTag.Number, value: node.value }
-    case 'StringLiteral':
-      return { tag: ValueTag.String, value: node.value, stringId: 0 }
-    case 'UnaryExpr':
-      if (node.operator === '-' && node.argument.kind === 'NumberLiteral') {
-        return { tag: ValueTag.Number, value: -node.argument.value }
-      }
-      return undefined
-    case 'ArrayConstant':
-      return undefined
-    case 'CellRef':
-    case 'CallExpr':
-    case 'BinaryExpr':
-    case 'ColumnRef':
-    case 'InvokeExpr':
-    case 'NameRef':
-    case 'OmittedArgument':
-    case 'RangeRef':
-    case 'RowRef':
-    case 'SpillRef':
-    case 'StructuredRef':
-      return undefined
-  }
-}
-
-function flattenCriteriaProduct(node: FormulaNode): FormulaNode[] {
-  if (node.kind !== 'BinaryExpr' || node.operator !== '*') {
-    return [node]
-  }
-  return [...flattenCriteriaProduct(node.left), ...flattenCriteriaProduct(node.right)]
-}
-
-function resolveDirectCriteriaRange(
-  node: FormulaNode | undefined,
-  ownerSheetName: string,
-):
-  | {
-      sheetName: string
-      rowStart: number
-      rowEnd: number
-      col: number
-      length: number
-    }
-  | undefined {
-  if (!node || node.kind !== 'RangeRef' || node.sheetEndName !== undefined) {
-    return undefined
-  }
-  const parsed = parseRangeAddress(`${node.start}:${node.end}`, node.sheetName ?? ownerSheetName)
-  const sheetName = parsed.sheetName ?? node.sheetName ?? ownerSheetName
-  if (parsed.kind === 'cols') {
-    if (parsed.start.col !== parsed.end.col) {
-      return undefined
-    }
-    return {
-      sheetName,
-      rowStart: 0,
-      rowEnd: MAX_ROWS - 1,
-      col: parsed.start.col,
-      length: MAX_ROWS,
-    }
-  }
-  if (parsed.kind !== 'cells' || parsed.start.col !== parsed.end.col) {
-    return undefined
-  }
-  return {
-    sheetName,
-    rowStart: parsed.start.row,
-    rowEnd: parsed.end.row,
-    col: parsed.start.col,
-    length: parsed.end.row - parsed.start.row + 1,
-  }
-}
-
-type DirectCriteriaResolvedRange = NonNullable<ReturnType<typeof resolveDirectCriteriaRange>>
 type DirectCriteriaCallNode = Extract<FormulaNode, { readonly kind: 'CallExpr' }>
 type DirectCriteriaCellRefNode = Extract<FormulaNode, { readonly kind: 'CellRef' }>
 const DIRECT_CRITERIA_PLAN_CALLEES = new Set([
@@ -217,26 +140,12 @@ const DIRECT_CRITERIA_PLAN_CALLEES = new Set([
   'INDEX',
 ])
 
-function callName(node: FormulaNode | undefined): string | undefined {
-  return node?.kind === 'CallExpr' ? node.callee.trim().toUpperCase() : undefined
-}
-
 function mayContainDirectCriteriaPlanCall(compiled: ParsedCompiledFormula): boolean {
   return compiled.jsPlan.some((instruction) => {
     const opcode = Reflect.get(instruction, 'opcode')
     const callee = Reflect.get(instruction, 'callee')
     return opcode === 'call' && typeof callee === 'string' && DIRECT_CRITERIA_PLAN_CALLEES.has(callee.trim().toUpperCase())
   })
-}
-
-function appendDirectCriteriaResultTransform(
-  descriptor: RuntimeDirectCriteriaDescriptor,
-  transform: RuntimeDirectCriteriaResultTransform,
-): RuntimeDirectCriteriaDescriptor {
-  return {
-    ...descriptor,
-    resultTransforms: [...(descriptor.resultTransforms ?? []), transform],
-  }
 }
 
 export function buildDirectCriteriaDescriptor(args: {
