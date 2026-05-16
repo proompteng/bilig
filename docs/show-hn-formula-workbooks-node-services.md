@@ -69,8 +69,8 @@ The checked benchmark artifact currently records `46/57` mean-latency wins
 against HyperFormula-style comparable workloads, and `45/57` workloads winning
 both mean and p95.
 
-The caveat is intentionally visible: `lookup-with-column-index` is slower at
-p95 by `4.264x`. Browser grid rendering is outside this benchmark.
+The caveat is intentionally visible: `single-formula-edit-recalc` is slower at
+p95 by `1.91x`. Browser grid rendering is outside this benchmark.
 
 Read the benchmark note:
 [what the WorkPaper benchmark proves](what-workpaper-benchmark-proves.md).
@@ -126,7 +126,7 @@ the same output.
 
 It is not a finished Excel clone. The benchmark and caveats are public: 46/57
 mean-latency wins against HyperFormula-style comparable workloads, 45/57
-mean+p95 wins, and lookup-with-column-index is the visible p95 holdout.
+mean+p95 wins, and single-formula-edit-recalc is the visible p95 holdout.
 
 I am looking for concrete adoption blockers: which backend or agent workbook
 workflow would this need to support before you would try it?

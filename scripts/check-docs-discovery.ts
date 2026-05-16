@@ -314,7 +314,7 @@ for (const required of [
   'Use SheetJS or ExcelJS first when the primary job is reading, writing, styling',
   'Use Google Sheets API first when a shared hosted spreadsheet',
   'The current checked benchmark artifact records `46/57` comparable',
-  'lookup-with-column-index',
+  'single-formula-edit-recalc',
   'https://github.com/proompteng/bilig/stargazers',
   'https://github.com/proompteng/bilig/discussions/new?category=general',
   'adoption-blocker form',
@@ -337,7 +337,7 @@ for (const required of [
   '"verified": true',
   '`46/57` mean-latency wins',
   '`45/57` workloads winning',
-  '`lookup-with-column-index` is slower at',
+  '`single-formula-edit-recalc` is slower at',
   'Show HN: Formula workbooks for Node services and agent tools',
   'https://github.com/proompteng/bilig/stargazers',
 ] as const) {
@@ -470,7 +470,7 @@ requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/google
 const npmProvenancePackageTrustDoc = await readFile(join(docsRoot, 'npm-provenance-package-trust.md'), 'utf8')
 for (const required of [
   'title: Verify npm provenance for @bilig/headless',
-  'npm view @bilig/headless@0.16.17 version dist.attestations dist.signatures --json',
+  'npm view @bilig/headless@0.16.18 version dist.attestations dist.signatures --json',
   'npm audit signatures',
   'dist.attestations.provenance.predicateType',
   'npm publish ... --provenance',

@@ -360,7 +360,7 @@ Latest conversion snapshot on May 16, 2026:
 - GitHub surface: `23` stars, `16` forks, `17` open issues, and `5` open pull
   requests. The star gap is still `977`; GitHub also reports `0` actual
   repository watchers/subscribers.
-- npm surface: `@bilig/headless@0.16.17`, with `12,568` downloads in the
+- npm surface: `@bilig/headless@0.16.18`, with `12,568` downloads in the
   latest weekly window and `27,753` downloads in the latest monthly window.
 - Traffic surface: GitHub reports `565` views from `189` unique visitors and
   `21,392` clones from `2,641` unique cloners. The strongest referrers are
@@ -705,7 +705,7 @@ It edits an input, reads the recalculated value, saves WorkPaper JSON, restores
 it, and checks the value again.
 
 3/ Benchmark caveat is public too: 46/57 comparable mean-latency rows are faster
-in the checked file, lookup-with-column-index is the visible p95 holdout,
+in the checked file, single-formula-edit-recalc is the visible p95 holdout,
 and UI rendering is not part of the benchmark.
 
 4/ Question for people who automate spreadsheets from services or agents: what
@@ -743,7 +743,7 @@ https://github.com/proompteng/bilig/blob/main/docs/where-bilig-is-not-excel-comp
 
 The benchmark claim is intentionally narrow: the checked artifact has 46/57
 comparable mean-latency wins against HyperFormula-style workloads,
-lookup-with-column-index is the visible p95 holdout, and UI rendering is
+single-formula-edit-recalc is the visible p95 holdout, and UI rendering is
 not part of the benchmark.
 
 If you automate spreadsheets from Node, what workflow or formula family would

@@ -2,17 +2,17 @@
   "schemaVersion": 1,
   "package": {
     "name": "@bilig/headless",
-    "version": "0.16.17",
-    "releasePleaseManifestVersion": "0.16.17",
-    "mcpServerVersion": "0.16.17",
-    "mcpPackageVersion": "0.16.17"
+    "version": "0.16.18",
+    "releasePleaseManifestVersion": "0.16.18",
+    "mcpServerVersion": "0.16.18",
+    "mcpPackageVersion": "0.16.18"
   },
   "workpaperVsHyperFormula": {
     "artifactPath": "packages/benchmarks/baselines/workpaper-vs-hyperformula.json",
-    "generatedAt": "2026-05-16T16:32:08.120Z",
+    "generatedAt": "2026-05-16T16:55:18.786Z",
     "sampleCount": 5,
     "warmupCount": 2,
-    "workpaperPackageVersion": "0.16.17",
+    "workpaperPackageVersion": "0.16.18",
     "hyperformulaVersion": "3.2.0",
     "hyperformulaCommit": "9a510a2acb97c3d3490f9e3b9e961a1c4a98b9ad",
     "overall": {
@@ -20,38 +20,38 @@
       "comparableCount": 57,
       "workpaperWins": 46,
       "hyperformulaWins": 11,
-      "directionalMeanRatioGeomean": 0.6220656206288111,
-      "directionalP95RatioGeomean": 0.6375488247509379,
-      "worstWorkpaperToHyperFormulaMeanRatio": 1.7154495515436083,
+      "directionalMeanRatioGeomean": 0.6246787340506544,
+      "directionalP95RatioGeomean": 0.6287623104287117,
+      "worstWorkpaperToHyperFormulaMeanRatio": 1.981380567712471,
       "worstMeanRatioWorkload": "single-formula-edit-recalc",
-      "worstWorkpaperToHyperFormulaP95Ratio": 4.390108217591891,
-      "worstP95RatioWorkload": "lookup-with-column-index"
+      "worstWorkpaperToHyperFormulaP95Ratio": 1.9102883521188725,
+      "worstP95RatioWorkload": "single-formula-edit-recalc"
     },
     "publicLane": {
       "lane": "public",
       "comparableCount": 40,
       "workpaperWins": 33,
       "hyperformulaWins": 7,
-      "directionalMeanRatioGeomean": 0.6040187068121418,
-      "directionalP95RatioGeomean": 0.6288556534895148,
-      "worstWorkpaperToHyperFormulaMeanRatio": 1.7154495515436083,
+      "directionalMeanRatioGeomean": 0.6085705654714623,
+      "directionalP95RatioGeomean": 0.6067329510205706,
+      "worstWorkpaperToHyperFormulaMeanRatio": 1.981380567712471,
       "worstMeanRatioWorkload": "single-formula-edit-recalc",
-      "worstWorkpaperToHyperFormulaP95Ratio": 4.390108217591891,
-      "worstP95RatioWorkload": "lookup-with-column-index"
+      "worstWorkpaperToHyperFormulaP95Ratio": 1.9102883521188725,
+      "worstP95RatioWorkload": "single-formula-edit-recalc"
     },
     "holdout": {
       "lane": "holdout",
       "comparableCount": 17,
       "workpaperWins": 13,
       "hyperformulaWins": 4,
-      "directionalMeanRatioGeomean": 0.6666846578950822,
-      "directionalP95RatioGeomean": 0.6584803415299767,
-      "worstWorkpaperToHyperFormulaMeanRatio": 1.6531006668441435,
+      "directionalMeanRatioGeomean": 0.6642822845025234,
+      "directionalP95RatioGeomean": 0.683803024729911,
+      "worstWorkpaperToHyperFormulaMeanRatio": 1.6729447201970067,
       "worstMeanRatioWorkload": "structural-append-formula-rows",
-      "worstWorkpaperToHyperFormulaP95Ratio": 1.6599682193952585,
+      "worstWorkpaperToHyperFormulaP95Ratio": 1.7671825659814702,
       "worstP95RatioWorkload": "structural-append-formula-rows"
     },
     "meanAndP95WinCount": 45,
-    "p95HoldoutCount": 10
+    "p95HoldoutCount": 11
   }
 }

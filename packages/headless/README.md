@@ -32,6 +32,7 @@ around the same WorkPaper model.
 | Published npm package | [90-second Node quickstart](https://proompteng.github.io/bilig/try-bilig-headless-in-node.html) | It edits one input, recalculates, persists JSON, restores, and prints `verified: true`. |
 | Backend service shape | [Quote approval WorkPaper API](https://proompteng.github.io/bilig/quote-approval-workpaper-api.html) | A realistic route-style workflow returns formula readback and `restoredMatchesAfter: true`. |
 | Agent or MCP tools | [MCP spreadsheet tool server](https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html) | Tool calls can write an input and return computed readback instead of screenshot claims. |
+| Public technical review | [Show HN proof page](https://proompteng.github.io/bilig/show-hn-formula-workbooks-node-services.html) | One shareable page has the npm proof, benchmark caveat, known limits, and adoption-blocker ask. |
 | Trust and performance | [npm provenance](https://proompteng.github.io/bilig/npm-provenance-package-trust.html) and [benchmark evidence](https://proompteng.github.io/bilig/what-workpaper-benchmark-proves.html) | npm shows SLSA provenance, and benchmark claims match the checked artifact. |
 | Almost a fit | [adoption blocker form](https://github.com/proompteng/bilig/discussions/new?category=general) | Name the formula, import/export, persistence, framework, MCP, package, or benchmark gap. |
 
@@ -45,7 +46,7 @@ npm install @bilig/headless
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.16.17`:
+Current checked npm footprint for `@bilig/headless@0.16.18`:
 
 - Pack dry run: `421 kB` tarball, `2.51 MB` unpacked, `429` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
@@ -59,11 +60,11 @@ Current checked npm footprint for `@bilig/headless@0.16.17`:
 
 ## Published Package Trust
 
-`@bilig/headless@0.16.17` is published with npm registry signatures and SLSA
+`@bilig/headless@0.16.18` is published with npm registry signatures and SLSA
 provenance attestations. Check the package before adopting it in a service:
 
 ```sh
-npm view @bilig/headless@0.16.17 version dist.attestations dist.signatures --json
+npm view @bilig/headless@0.16.18 version dist.attestations dist.signatures --json
 npm audit signatures
 ```
 
@@ -472,13 +473,17 @@ pnpm workpaper:xlsx-corpus:check -- /path/to/xlsx-corpus
   [formula workbooks for Node services and agent tools](https://github.com/proompteng/bilig/blob/main/docs/formula-workbooks-node-services-agent-tools.md).
   It compresses the WorkPaper boundary, MCP file-backed mode, benchmark caveat,
   and alternative-tool guidance into one shareable evaluator path.
+- For HN, Lobsters, Reddit, or newsletter review, use the
+  [Show HN proof page](https://proompteng.github.io/bilig/show-hn-formula-workbooks-node-services.html).
+  It keeps the empty npm-project command, `verified: true` output, benchmark
+  caveat, known limits, and feedback ask together.
 - Auditing imported Excel files is a separate workflow. Cached formula values
   embedded in `.xlsx` files are useful for triage, but Bilig accuracy claims
   should be checked against a fresh Microsoft Excel recalculation.
 - Run `pnpm workpaper:bench:competitive:check` from the repository. The
   checked-in artifact shows
   [`46/57` comparable WorkPaper mean wins](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md)
-  and names the worst p95 holdout: `lookup-with-column-index` at `4.39x` (`4.39x` rounded).
+  and names the worst p95 holdout: `single-formula-edit-recalc` at `1.91x`.
 - The shareable benchmark card is generated from the checked-in artifact:
   [`workpaper-benchmark-card.png`](https://github.com/proompteng/bilig/blob/main/docs/assets/workpaper-benchmark-card.png).
 - Read the
