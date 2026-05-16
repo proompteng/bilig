@@ -118,9 +118,9 @@ matters.
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.16.5`:
+Current checked npm footprint for `@bilig/headless@0.16.6`:
 
-- Pack dry run: `418 kB` tarball, `2.50 MB` unpacked, `426` package entries.
+- Pack dry run: `419 kB` tarball, `2.50 MB` unpacked, `429` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
   import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the
   `bilig-workpaper-mcp` binary wrapper.
@@ -132,11 +132,11 @@ Current checked npm footprint for `@bilig/headless@0.16.5`:
 
 ## Published Package Trust
 
-`@bilig/headless@0.16.5` is published with npm registry signatures and SLSA
+`@bilig/headless@0.16.6` is published with npm registry signatures and SLSA
 provenance attestations. Verify the package before adopting it:
 
 ```sh
-npm view @bilig/headless@0.16.5 version dist.attestations dist.signatures --json
+npm view @bilig/headless@0.16.6 version dist.attestations dist.signatures --json
 ```
 
 After installing, npm can verify the current dependency tree:
@@ -284,8 +284,8 @@ It is published in the official MCP Registry as
   route smoke, writes quote inputs, recalculates an approval decision, persists
   JSON, and verifies restored readback.
 - Run `pnpm workpaper:bench:competitive:check`. The checked-in artifact shows
-  [`49/57` comparable WorkPaper mean wins](docs/what-workpaper-benchmark-proves.md)
-  and names the worst p95 holdout: `lookup-with-column-index` at `5.058x`.
+  [`47/57` comparable WorkPaper mean wins](docs/what-workpaper-benchmark-proves.md)
+  and names the worst p95 holdout: `single-formula-edit-recalc` at `1.826x`.
 - The benchmark card is generated from that artifact:
   [`docs/assets/workpaper-benchmark-card.png`](docs/assets/workpaper-benchmark-card.png).
 - Read the [compatibility limits](docs/where-bilig-is-not-excel-compatible-yet.md)

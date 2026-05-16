@@ -416,7 +416,7 @@ requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/google
 const npmProvenancePackageTrustDoc = await readFile(join(docsRoot, 'npm-provenance-package-trust.md'), 'utf8')
 for (const required of [
   'title: Verify npm provenance for @bilig/headless',
-  'npm view @bilig/headless@0.16.5 version dist.attestations dist.signatures --json',
+  'npm view @bilig/headless@0.16.6 version dist.attestations dist.signatures --json',
   'npm audit signatures',
   'dist.attestations.provenance.predicateType',
   'npm publish ... --provenance',
@@ -799,6 +799,7 @@ requireIncludes(headlessExampleReadme, 'npm run agent:framework-adapters', 'exam
 requireIncludes(headlessExampleReadme, '## Agent Framework Adapters', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, 'npm run agent:mcp-tools', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, 'npm run agent:mcp-stdio', 'examples/headless-workpaper/README.md')
+requireIncludes(headlessReadme, 'npm run --silent agent:mcp-transcript', 'packages/headless/README.md')
 requireIncludes(headlessExampleReadme, '## MCP Tool Server Shape', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, '## MCP Stdio Server', 'examples/headless-workpaper/README.md')
 requireIncludes(headlessExampleReadme, 'annotations.', 'examples/headless-workpaper/README.md')

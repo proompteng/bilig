@@ -35,9 +35,9 @@ npm install @bilig/headless
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.16.5`:
+Current checked npm footprint for `@bilig/headless@0.16.6`:
 
-- Pack dry run: `418 kB` tarball, `2.50 MB` unpacked, `426` package entries.
+- Pack dry run: `419 kB` tarball, `2.50 MB` unpacked, `429` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
   import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the
   `bilig-workpaper-mcp` binary wrapper.
@@ -49,11 +49,11 @@ Current checked npm footprint for `@bilig/headless@0.16.5`:
 
 ## Published Package Trust
 
-`@bilig/headless@0.16.5` is published with npm registry signatures and SLSA
+`@bilig/headless@0.16.6` is published with npm registry signatures and SLSA
 provenance attestations. Check the package before adopting it in a service:
 
 ```sh
-npm view @bilig/headless@0.16.5 version dist.attestations dist.signatures --json
+npm view @bilig/headless@0.16.6 version dist.attestations dist.signatures --json
 npm audit signatures
 ```
 
@@ -291,6 +291,11 @@ MCP examples:
 - `npm run agent:mcp-tools` returns dependency-free `tools/list` and
   `tools/call` JSON-RPC shapes:
   <https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#mcp-tool-server-shape>.
+- `NODE_NO_WARNINGS=1 npm run --silent agent:mcp-transcript` starts the
+  stdio server, sends `initialize`, `tools/list`, and a verified
+  `set_workpaper_input_cell` call, then asserts formula readback and JSON
+  persistence:
+  <https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-server.md#copy-paste-json-rpc-transcript>.
 - `npm run agent:mcp-stdio` runs the same handlers over newline-delimited
   stdio.
 - The package ships a stdio binary:
@@ -458,8 +463,8 @@ pnpm workpaper:xlsx-corpus:check -- /path/to/xlsx-corpus
   should be checked against a fresh Microsoft Excel recalculation.
 - Run `pnpm workpaper:bench:competitive:check` from the repository. The
   checked-in artifact shows
-  [`49/57` comparable WorkPaper mean wins](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md)
-  and names the worst p95 holdout: `lookup-with-column-index` at `5.058x`.
+  [`47/57` comparable WorkPaper mean wins](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md)
+  and names the worst p95 holdout: `single-formula-edit-recalc` at `1.826x`.
 - The shareable benchmark card is generated from the checked-in artifact:
   [`workpaper-benchmark-card.png`](https://github.com/proompteng/bilig/blob/main/docs/assets/workpaper-benchmark-card.png).
 - Read the
