@@ -191,6 +191,80 @@ describe('EngineStructureService', () => {
     expect(engine.getCellValue('Data', 'D1')).toMatchObject({ tag: 1, value: 33 })
   })
 
+  it('keeps table column metadata aligned when deleting a column inside the table', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structure-table-column-delete' })
+    await engine.ready()
+    engine.createSheet('Data')
+    engine.setRangeValues({ sheetName: 'Data', startAddress: 'A1', endAddress: 'C3' }, [
+      ['Region', 'Revenue', 'Margin'],
+      ['East', 10, 2],
+      ['West', 20, 3],
+    ])
+    engine.setTable({
+      name: 'Sales',
+      sheetName: 'Data',
+      startAddress: 'A1',
+      endAddress: 'C3',
+      columnNames: ['Region', 'Revenue', 'Margin'],
+      columns: [{ name: 'Region' }, { name: 'Revenue', totalsRowFunction: 'sum' }, { name: 'Margin', totalsRowFunction: 'average' }],
+      headerRow: true,
+      totalsRow: false,
+    })
+    engine.setCellFormula('Data', 'E1', 'SUM(Sales[Margin])')
+    const initialSnapshot = engine.exportSnapshot()
+
+    engine.deleteColumns('Data', 1, 1)
+
+    expect(engine.getTable('Sales')).toMatchObject({
+      startAddress: 'A1',
+      endAddress: 'B3',
+      columnNames: ['Region', 'Margin'],
+      columns: [{ name: 'Region' }, { name: 'Margin', totalsRowFunction: 'average' }],
+    })
+    expect(engine.getCell('Data', 'D1').formula).toBe('SUM(Sales[Margin])')
+    expect(engine.getCellValue('Data', 'D1')).toEqual({ tag: ValueTag.Number, value: 5 })
+    expect(engine.undo()).toBe(true)
+    expect(engine.exportSnapshot()).toEqual(initialSnapshot)
+  })
+
+  it('adds generated table column metadata when inserting inside the table', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'structure-table-column-insert' })
+    await engine.ready()
+    engine.createSheet('Data')
+    engine.setRangeValues({ sheetName: 'Data', startAddress: 'A1', endAddress: 'C3' }, [
+      ['Region', 'Revenue', 'Margin'],
+      ['East', 10, 2],
+      ['West', 20, 3],
+    ])
+    engine.setTable({
+      name: 'Sales',
+      sheetName: 'Data',
+      startAddress: 'A1',
+      endAddress: 'C3',
+      columnNames: ['Region', 'Revenue', 'Margin'],
+      columns: [{ name: 'Region' }, { name: 'Revenue', totalsRowFunction: 'sum' }, { name: 'Margin', totalsRowFunction: 'average' }],
+      headerRow: true,
+      totalsRow: false,
+    })
+    engine.setCellFormula('Data', 'E1', 'SUM(Sales[Margin])')
+
+    engine.insertColumns('Data', 1, 1)
+
+    expect(engine.getTable('Sales')).toMatchObject({
+      startAddress: 'A1',
+      endAddress: 'D3',
+      columnNames: ['Region', 'Column 2', 'Revenue', 'Margin'],
+      columns: [
+        { name: 'Region' },
+        { name: 'Column 2' },
+        { name: 'Revenue', totalsRowFunction: 'sum' },
+        { name: 'Margin', totalsRowFunction: 'average' },
+      ],
+    })
+    expect(engine.getCell('Data', 'F1').formula).toBe('SUM(Sales[Margin])')
+    expect(engine.getCellValue('Data', 'F1')).toEqual({ tag: ValueTag.Number, value: 5 })
+  })
+
   it('rewrites formulas and axis identities across column deletes and moves through the service', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'structure-delete-move-columns' })
     await engine.ready()

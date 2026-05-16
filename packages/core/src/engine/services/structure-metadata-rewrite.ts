@@ -8,7 +8,7 @@ import {
   type StructuralAxisTransform,
 } from '@bilig/formula'
 import { mapStructuralBoundary } from '../../engine-structural-utils.js'
-import { normalizeDefinedName } from '../../workbook-store.js'
+import { normalizeDefinedName, type WorkbookTableRecord } from '../../workbook-store.js'
 import type { CreateEngineStructureServiceArgs } from './structure-service-types.js'
 
 type StructureMetadataRewriteArgs = Pick<CreateEngineStructureServiceArgs, 'state' | 'clearOwnedPivot'>
@@ -128,14 +128,14 @@ export function rewriteWorkbookMetadataForStructuralTransform(
     if (table.sheetName !== sheetName) {
       return
     }
-    const range = rewriteMetadataRangeForStructuralTransform(table, transform)
-    if (!range) {
+    const nextTable = rewriteTableForStructuralTransform(table, transform)
+    if (!nextTable) {
       changedTableNames.add(table.name)
       workbook.deleteTable(table.name)
       return
     }
     changedTableNames.add(table.name)
-    workbook.setTable(range)
+    workbook.setTable(nextTable)
   })
   const rewrittenMergeRanges: CellRangeRef[] = []
   workbook.listMergeRanges(sheetName).forEach((merge) => {
@@ -354,6 +354,83 @@ function withRewrittenMetadataRange<T extends MetadataRangeLike>(range: T, rewri
     ...range,
     startAddress: rewritten.startAddress,
     endAddress: rewritten.endAddress,
+  }
+}
+
+function rewriteTableForStructuralTransform(
+  table: WorkbookTableRecord,
+  transform: StructuralAxisTransform,
+): WorkbookTableRecord | undefined {
+  const range = rewriteMetadataRangeForStructuralTransform(table, transform)
+  if (!range) {
+    return undefined
+  }
+  if (transform.axis !== 'column') {
+    return range
+  }
+  const previousStart = parseUnboundedMetadataCellAddress(table.startAddress)
+  const previousEnd = parseUnboundedMetadataCellAddress(table.endAddress)
+  const nextStart = parseUnboundedMetadataCellAddress(range.startAddress)
+  const nextEnd = parseUnboundedMetadataCellAddress(range.endAddress)
+  if (!previousStart || !previousEnd || !nextStart || !nextEnd) {
+    throw new Error('Invalid table metadata reference')
+  }
+  const previousStartCol = Math.min(previousStart[1], previousEnd[1])
+  const previousEndCol = Math.max(previousStart[1], previousEnd[1])
+  const nextStartCol = Math.min(nextStart[1], nextEnd[1])
+  const nextEndCol = Math.max(nextStart[1], nextEnd[1])
+  const previousWidth = previousEndCol - previousStartCol + 1
+  const nextWidth = nextEndCol - nextStartCol + 1
+  const nextColumnNames = Array.from({ length: nextWidth }, (_, index) => `Column ${String(index + 1)}`)
+  const nextColumns = table.columns ? nextColumnNames.map((name) => ({ name })) : undefined
+
+  for (let previousIndex = 0; previousIndex < previousWidth; previousIndex += 1) {
+    const mappedCol = mapTableColumnPointForStructuralTransform(previousStartCol + previousIndex, transform)
+    if (mappedCol === undefined || mappedCol < nextStartCol || mappedCol > nextEndCol) {
+      continue
+    }
+    const nextIndex = mappedCol - nextStartCol
+    const name = table.columnNames[previousIndex] ?? `Column ${String(previousIndex + 1)}`
+    nextColumnNames[nextIndex] = name
+    if (nextColumns) {
+      const previousColumn = table.columns?.[previousIndex]
+      nextColumns[nextIndex] = previousColumn ? { ...previousColumn, name } : { name }
+    }
+  }
+
+  return {
+    ...range,
+    columnNames: nextColumnNames,
+    ...(nextColumns ? { columns: nextColumns } : {}),
+  }
+}
+
+function mapTableColumnPointForStructuralTransform(index: number, transform: StructuralAxisTransform): number | undefined {
+  switch (transform.kind) {
+    case 'insert':
+      return index >= transform.start ? index + transform.count : index
+    case 'delete':
+      if (index < transform.start) {
+        return index
+      }
+      if (index >= transform.start + transform.count) {
+        return index - transform.count
+      }
+      return undefined
+    case 'move':
+      if (transform.target < transform.start) {
+        if (index >= transform.target && index < transform.start) {
+          return index + transform.count
+        }
+      } else if (transform.target > transform.start) {
+        if (index >= transform.start + transform.count && index < transform.target + transform.count) {
+          return index - transform.count
+        }
+      }
+      if (index >= transform.start && index < transform.start + transform.count) {
+        return transform.target + (index - transform.start)
+      }
+      return index
   }
 }
 

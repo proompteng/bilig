@@ -976,6 +976,35 @@ test('web app commits a cleared formula bar draft when clicking away', async ({ 
   await expect(formulaInput).toHaveValue('')
 })
 
+test('web app does not resurrect a keyboard-cleared cell after click-away', async ({ page }) => {
+  const staleText = 'delete-clear-click-away'
+  await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-delete-clear-click-away'))}`)
+  await waitForWorkbookReady(page)
+
+  const formulaInput = page.getByTestId('formula-input')
+
+  await clickProductCell(page, 3, 6)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!D7')
+  await formulaInput.fill(staleText)
+  await formulaInput.press('Enter')
+  await expect(formulaInput).toHaveValue(staleText)
+  await expect.poll(() => nativeTextRunsInclude(page, staleText)).toBe(true)
+
+  await page.keyboard.press('Delete')
+  await expect(formulaInput).toHaveValue('')
+  await expect.poll(() => nativeTextRunsInclude(page, staleText)).toBe(false)
+
+  await clickProductCell(page, 4, 6)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!E7')
+  await expect(formulaInput).toHaveValue('')
+  await expect.poll(() => nativeTextRunsInclude(page, staleText)).toBe(false)
+
+  await clickProductCell(page, 3, 6)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!D7')
+  await expect(formulaInput).toHaveValue('')
+  await expect.poll(() => nativeTextRunsInclude(page, staleText)).toBe(false)
+})
+
 test('web app keeps delayed in-cell typing anchored and exits cleanly on click-away', async ({ page }) => {
   await page.keyboard.up(PRIMARY_MODIFIER)
   await page.goto(`/?document=${encodeURIComponent(createTestDocumentId('playwright-delayed-click-away-edit'))}`)
