@@ -137,6 +137,41 @@ describe('public workbook corpus shared links', () => {
     expect(storedManifest.sources).toEqual([])
   })
 
+  it('rejects shared-link intake when --source-url is missing a value', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-add-link-missing-url-value-'))
+    const manifestPath = join(dir, 'manifest.json')
+    const inactiveStopMarkerPath = join(dir, 'not-stopped.md')
+    writeFileSync(manifestPath, `${JSON.stringify(createEmptyPublicWorkbookManifest('2026-05-07T00:00:00.000Z'), null, 2)}\n`)
+
+    const result = spawnSync(
+      'bun',
+      [
+        corpusScriptPath(),
+        'add-link',
+        '--dry-run',
+        '--manifest',
+        manifestPath,
+        '--cache-dir',
+        dir,
+        '--corpus-run-stop-marker',
+        inactiveStopMarkerPath,
+        '--source-url',
+        '--license-title',
+        license.licenseTitle,
+        '--license-url',
+        license.licenseUrl,
+        '--license-spdx',
+        license.licenseSpdxId,
+      ],
+      {
+        encoding: 'utf8',
+      },
+    )
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('Expected --source-url to have a value for add-link')
+  })
+
   it('plans the shared-link source lifecycle without mutating the manifest', () => {
     const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-link-plan-'))
     const manifestPath = join(dir, 'manifest.json')
