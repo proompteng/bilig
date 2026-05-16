@@ -177,6 +177,7 @@ export interface WorkbookToolbarProps {
   canHideCurrentRow: boolean
   canHideCurrentColumn: boolean
   canMergeSelection: boolean
+  canUnmergeSelection: boolean
   canUnhideCurrentRow: boolean
   canUnhideCurrentColumn: boolean
   onHideCurrentRow(this: void): void
@@ -222,6 +223,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
   canHideCurrentRow,
   canHideCurrentColumn,
   canMergeSelection,
+  canUnmergeSelection,
   canUnhideCurrentRow,
   canUnhideCurrentColumn,
   onHideCurrentRow,
@@ -274,7 +276,7 @@ export const WorkbookToolbar = memo(function WorkbookToolbar({
   }
   const structureActionAvailability = {
     mergeSelectedCells: canMergeSelection,
-    unmergeSelectedCells: true,
+    unmergeSelectedCells: canUnmergeSelection,
     hideCurrentRow: canHideCurrentRow,
     hideCurrentColumn: canHideCurrentColumn,
     unhideCurrentRow: canUnhideCurrentRow,

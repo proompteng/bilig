@@ -1,5 +1,5 @@
-import { useCallback, useSyncExternalStore } from 'react'
-import type { CellSnapshot } from '@bilig/protocol'
+import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import type { CellSnapshot, WorkbookMergeRangeSnapshot } from '@bilig/protocol'
 import type { WorkerRuntimeSelection } from './runtime-session.js'
 import {
   readViewportColumnWidths,
@@ -8,7 +8,9 @@ import {
   readViewportRowHeights,
 } from './worker-workbook-view-state.js'
 
-type SheetViewportChannel = 'columnWidths' | 'rowHeights' | 'hiddenColumns' | 'hiddenRows' | 'freeze'
+type SheetViewportChannel = 'columnWidths' | 'rowHeights' | 'hiddenColumns' | 'hiddenRows' | 'freeze' | 'merges'
+
+const EMPTY_MERGE_RANGES: readonly WorkbookMergeRangeSnapshot[] = Object.freeze([])
 
 type ViewportStoreLike = {
   subscribeSheetChannel(sheetName: string, channel: SheetViewportChannel, listener: () => void): () => void
@@ -20,6 +22,7 @@ type ViewportStoreLike = {
   getRowHeights(sheetName: string): Readonly<Record<number, number>>
   getHiddenColumns(sheetName: string): Readonly<Record<number, true>>
   getHiddenRows(sheetName: string): Readonly<Record<number, true>>
+  listMergeRanges(sheetName: string): readonly WorkbookMergeRangeSnapshot[]
   clearOptimisticCellFlagsForSheet?(sheetName: string): void
 }
 
@@ -28,6 +31,17 @@ type WorkerHandleLike = {
 }
 
 type StructuralMutationMethod = 'insertRows' | 'deleteRows' | 'insertColumns' | 'deleteColumns' | 'setFreezePane'
+
+function readMergeRangeSignature(workerHandle: WorkerHandleLike | null | undefined, sheetName: string): string {
+  const ranges = workerHandle?.viewportStore.listMergeRanges(sheetName)
+  if (!ranges || ranges.length === 0) {
+    return ''
+  }
+  return ranges
+    .map((range) => `${range.sheetName}:${range.startAddress}:${range.endAddress}`)
+    .toSorted()
+    .join('|')
+}
 
 export function useWorkerWorkbookGridState(input: {
   workerHandle: WorkerHandleLike | null | undefined
@@ -95,6 +109,23 @@ export function useWorkerWorkbookGridState(input: {
     () => workerHandle?.viewportStore.getFreezeCols(selection.sheetName) ?? 0,
   )
 
+  const mergeRangeSignature = useSyncExternalStore(
+    useCallback(
+      (listener: () => void) => workerHandle?.viewportStore.subscribeSheetChannel(selection.sheetName, 'merges', listener) ?? (() => {}),
+      [selection.sheetName, workerHandle],
+    ),
+    () => readMergeRangeSignature(workerHandle, selection.sheetName),
+    () => '',
+  )
+
+  const mergeRanges = useMemo(() => {
+    if (!workerHandle || mergeRangeSignature === '') {
+      return EMPTY_MERGE_RANGES
+    }
+    const ranges = workerHandle.viewportStore.listMergeRanges(selection.sheetName)
+    return ranges.length === 0 ? EMPTY_MERGE_RANGES : ranges
+  }, [mergeRangeSignature, selection.sheetName, workerHandle])
+
   const selectedCell = useSyncExternalStore(
     useCallback(
       (listener: () => void) => workerHandle?.viewportStore.subscribeCell(selection.sheetName, selection.address, listener) ?? (() => {}),
@@ -148,6 +179,7 @@ export function useWorkerWorkbookGridState(input: {
     hiddenRows,
     freezeRows,
     freezeCols,
+    mergeRanges,
     selectedCell,
     invokeInsertRowsMutation,
     invokeDeleteRowsMutation,

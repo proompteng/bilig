@@ -13,15 +13,18 @@ function ToolbarHookHarness(props: {
   readonly onUndo?: (() => void) | undefined
   readonly selectionRangeRef: MutableRefObject<CellRangeRef>
   readonly selectedStyle?: CellStyleRecord | undefined
+  readonly canHideCurrentRow?: boolean | undefined
+  readonly canUnmergeSelection?: boolean | undefined
   readonly writesAllowed?: boolean | undefined
 }) {
   const { ribbon } = useWorkbookToolbar({
     canHideCurrentColumn: false,
-    canHideCurrentRow: false,
+    canHideCurrentRow: props.canHideCurrentRow ?? false,
     canRedo: false,
     canUndo: false,
     canUnhideCurrentColumn: false,
     canUnhideCurrentRow: false,
+    canUnmergeSelection: props.canUnmergeSelection ?? false,
     connectionStateName: 'connected',
     currentFillColor: '#ffffff',
     currentNumberFormatKind: 'general',
@@ -544,6 +547,7 @@ describe('WorkbookToolbar', () => {
           canHideCurrentColumn={false}
           canHideCurrentRow
           canMergeSelection={false}
+          canUnmergeSelection={false}
           canRedo={false}
           canUndo={false}
           canUnhideCurrentColumn={false}
@@ -626,6 +630,7 @@ describe('WorkbookToolbar', () => {
           canHideCurrentColumn={false}
           canHideCurrentRow={false}
           canMergeSelection={false}
+          canUnmergeSelection={false}
           canRedo={false}
           canUndo={false}
           canUnhideCurrentColumn={false}
@@ -693,6 +698,7 @@ describe('WorkbookToolbar', () => {
           canHideCurrentColumn={false}
           canHideCurrentRow
           canMergeSelection={false}
+          canUnmergeSelection={false}
           canRedo
           canUndo
           canUnhideCurrentColumn={false}
@@ -768,6 +774,7 @@ describe('WorkbookToolbar', () => {
           canHideCurrentColumn={false}
           canHideCurrentRow={false}
           canMergeSelection={false}
+          canUnmergeSelection={false}
           canRedo={false}
           canUndo={false}
           canUnhideCurrentColumn={false}
@@ -898,6 +905,9 @@ describe('WorkbookToolbar', () => {
     })
     expect(document.querySelector("[aria-label='Merge cells']")).toBeNull()
     await act(async () => {
+      root.render(<ToolbarHookHarness canUnmergeSelection invokeMutation={invokeMutation} selectionRangeRef={selectionRangeRef} />)
+    })
+    await act(async () => {
       document.querySelector("[aria-label='Structure']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await act(async () => {
@@ -915,6 +925,43 @@ describe('WorkbookToolbar', () => {
       startAddress: 'B2',
       endAddress: 'D5',
     })
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('keeps unmerge disabled until the visible selection intersects a merged range', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const invokeMutation = vi.fn(async () => {})
+    const selectionRangeRef: MutableRefObject<CellRangeRef> = {
+      current: {
+        sheetName: 'Sheet1',
+        startAddress: 'A1',
+        endAddress: 'A1',
+      },
+    }
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<ToolbarHookHarness canHideCurrentRow invokeMutation={invokeMutation} selectionRangeRef={selectionRangeRef} />)
+    })
+
+    await act(async () => {
+      document.querySelector("[aria-label='Structure']")?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const unmergeButton = document.querySelector<HTMLButtonElement>("[aria-label='Unmerge cells']")
+    expect(unmergeButton).not.toBeNull()
+    expect(unmergeButton?.disabled).toBe(true)
+
+    await act(async () => {
+      unmergeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(invokeMutation).not.toHaveBeenCalledWith('unmergeCells', expect.anything())
 
     await act(async () => {
       root.unmount()
@@ -1210,6 +1257,7 @@ describe('WorkbookToolbar', () => {
           canHideCurrentColumn={false}
           canHideCurrentRow={false}
           canMergeSelection={false}
+          canUnmergeSelection={false}
           canRedo={false}
           canUndo={false}
           canUnhideCurrentColumn={false}
@@ -1277,6 +1325,7 @@ describe('WorkbookToolbar', () => {
           canHideCurrentColumn={false}
           canHideCurrentRow={false}
           canMergeSelection={false}
+          canUnmergeSelection={false}
           canRedo={false}
           canUndo={false}
           canUnhideCurrentColumn={false}

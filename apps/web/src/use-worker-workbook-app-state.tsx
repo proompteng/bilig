@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useActorRef, useSelector } from '@xstate/react'
 import { isWorkbookAgentCommandBundle, isWorkbookAgentPreviewSummary, type WorkbookAgentCommandBundle } from '@bilig/agent-api'
 import { parseCellAddress } from '@bilig/formula'
+import type { CellRangeRef, WorkbookMergeRangeSnapshot } from '@bilig/protocol'
 import { createWorkerRuntimeMachine, getWorkerRuntimeController, getWorkerRuntimeHandle } from './runtime-machine.js'
 import type { resolveRuntimeConfig } from './runtime-config.js'
 import type { ZeroClient } from './runtime-session.js'
@@ -33,6 +34,25 @@ function formatColumnName(columnIndex: number): string {
     value = Math.floor(value / 26) - 1
   } while (value >= 0)
   return columnName
+}
+
+function cellRangesIntersect(left: CellRangeRef, right: WorkbookMergeRangeSnapshot): boolean {
+  if (left.sheetName !== right.sheetName) {
+    return false
+  }
+  const leftStart = parseCellAddress(left.startAddress, left.sheetName)
+  const leftEnd = parseCellAddress(left.endAddress, left.sheetName)
+  const rightStart = parseCellAddress(right.startAddress, right.sheetName)
+  const rightEnd = parseCellAddress(right.endAddress, right.sheetName)
+  const leftMinRow = Math.min(leftStart.row, leftEnd.row)
+  const leftMaxRow = Math.max(leftStart.row, leftEnd.row)
+  const leftMinCol = Math.min(leftStart.col, leftEnd.col)
+  const leftMaxCol = Math.max(leftStart.col, leftEnd.col)
+  const rightMinRow = Math.min(rightStart.row, rightEnd.row)
+  const rightMaxRow = Math.max(rightStart.row, rightEnd.row)
+  const rightMinCol = Math.min(rightStart.col, rightEnd.col)
+  const rightMaxCol = Math.max(rightStart.col, rightEnd.col)
+  return leftMinRow <= rightMaxRow && leftMaxRow >= rightMinRow && leftMinCol <= rightMaxCol && leftMaxCol >= rightMinCol
 }
 
 interface LocalOnlyZeroSource {
@@ -201,6 +221,7 @@ export function useWorkerWorkbookAppState(input: {
     hiddenRows,
     freezeRows,
     freezeCols,
+    mergeRanges,
     selectedCell,
     invokeInsertRowsMutation: invokeInsertRowsMutationBase,
     invokeDeleteRowsMutation: invokeDeleteRowsMutationBase,
@@ -435,6 +456,8 @@ export function useWorkerWorkbookAppState(input: {
     () => parseCellAddress(visibleSelection.address, visibleSelection.sheetName),
     [visibleSelection.address, visibleSelection.sheetName],
   )
+  const selectedRange = selectionRangeRef.current
+  const canUnmergeSelection = mergeRanges.some((mergeRange) => cellRangesIntersect(selectedRange, mergeRange))
   const failedPendingMutation = runtimeState?.pendingMutationSummary?.firstFailed ?? null
   const localPersistenceMode = runtimeState?.localPersistenceMode ?? 'ephemeral'
   const runtimeSyncState = runtimeState?.syncState ?? (runtimeReady ? 'syncing' : 'local-only')
@@ -496,6 +519,7 @@ export function useWorkerWorkbookAppState(input: {
     canHideCurrentRow: hiddenRows[selectedPosition.row] !== true,
     canUnhideCurrentColumn: hiddenColumns[selectedPosition.col] === true,
     canUnhideCurrentRow: hiddenRows[selectedPosition.row] === true,
+    canUnmergeSelection,
     invokeMutation,
     onHideCurrentColumn: () => {
       void (async () => {

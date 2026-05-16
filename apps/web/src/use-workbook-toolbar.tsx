@@ -276,6 +276,7 @@ export function useWorkbookToolbar(input: {
   canHideCurrentColumn: boolean
   canUnhideCurrentRow: boolean
   canUnhideCurrentColumn: boolean
+  canUnmergeSelection: boolean
   onHideCurrentRow: () => void
   onHideCurrentColumn: () => void
   onUnhideCurrentRow: () => void
@@ -304,6 +305,7 @@ export function useWorkbookToolbar(input: {
     canHideCurrentColumn,
     canUnhideCurrentRow,
     canUnhideCurrentColumn,
+    canUnmergeSelection,
     onHideCurrentRow,
     onHideCurrentColumn,
     onUnhideCurrentRow,
@@ -555,8 +557,11 @@ export function useWorkbookToolbar(input: {
   }, [canMergeSelection, invokeMutation, selectionRangeRef])
 
   const unmergeSelectedCells = useCallback(async () => {
+    if (!canUnmergeSelection) {
+      return
+    }
     await invokeMutation('unmergeCells', selectionRangeRef.current)
-  }, [invokeMutation, selectionRangeRef])
+  }, [canUnmergeSelection, invokeMutation, selectionRangeRef])
 
   const shortcutStateRef = useRef({
     applyBorderPreset,
@@ -704,6 +709,7 @@ export function useWorkbookToolbar(input: {
         canHideCurrentColumn={canHideCurrentColumn}
         canHideCurrentRow={canHideCurrentRow}
         canMergeSelection={canMergeSelection}
+        canUnmergeSelection={canUnmergeSelection}
         canUnhideCurrentColumn={canUnhideCurrentColumn}
         canUnhideCurrentRow={canUnhideCurrentRow}
         canUndo={canUndo}
@@ -797,6 +803,7 @@ export function useWorkbookToolbar(input: {
       canHideCurrentColumn,
       canHideCurrentRow,
       canMergeSelection,
+      canUnmergeSelection,
       canUnhideCurrentColumn,
       canUnhideCurrentRow,
       canUndo,

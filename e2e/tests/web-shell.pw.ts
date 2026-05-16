@@ -319,6 +319,32 @@ test('@browser-ci web app keeps click-away commits and keyboard clears stable', 
   await expect(resolvedValue).toHaveText('∅')
 })
 
+test('@browser-ci web app gates unmerge on real merged-cell state', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-structure-unmerge-availability')
+  await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=A1`)
+  await waitForWorkbookReady(page)
+
+  const structureButton = page.getByRole('button', { name: 'Structure' })
+  const unmergeButton = page.getByRole('button', { exact: true, name: 'Unmerge cells' })
+
+  await clickProductCell(page, 0, 0)
+  await structureButton.click()
+  await expect(unmergeButton).toBeDisabled()
+  await page.keyboard.press('Escape')
+
+  await dragProductBodySelection(page, 1, 1, 2, 2)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:C3')
+  await structureButton.click()
+  await page.getByRole('button', { exact: true, name: 'Merge cells' }).click()
+
+  await structureButton.click()
+  await expect(unmergeButton).toBeEnabled()
+  await unmergeButton.click()
+
+  await structureButton.click()
+  await expect(unmergeButton).toBeDisabled()
+})
+
 test('web app preserves Alt+Enter multiline edits across commit, formula bar, and reopen', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-alt-enter-multiline-edit')
   await page.goto(`/?document=${encodeURIComponent(documentId)}&sheet=Sheet1&cell=A1`)

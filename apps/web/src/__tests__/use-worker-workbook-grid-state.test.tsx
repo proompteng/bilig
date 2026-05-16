@@ -2,7 +2,7 @@
 import { act, createElement, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ValueTag, type CellSnapshot } from '@bilig/protocol'
+import { ValueTag, type CellSnapshot, type WorkbookMergeRangeSnapshot } from '@bilig/protocol'
 import type { WorkerRuntimeSelection } from '../runtime-session.js'
 import { emptyCellSnapshot } from '../worker-workbook-app-model.js'
 import { useWorkerWorkbookGridState } from '../use-worker-workbook-grid-state.js'
@@ -70,6 +70,8 @@ describe('useWorkerWorkbookGridState', () => {
     viewportStore.setHiddenRows('Sheet1', sheet1HiddenRows)
     viewportStore.setFreeze('Sheet1', 2, 3)
     viewportStore.setCell(sheet1Cell)
+    const sheet1MergeRanges = [{ sheetName: 'Sheet1', startAddress: 'C4', endAddress: 'D4' }] as const
+    viewportStore.setMergeRanges('Sheet1', sheet1MergeRanges)
 
     const sheet2ColumnWidths = { 7: 240 } as const
     const sheet2RowHeights = { 8: 52 } as const
@@ -103,6 +105,7 @@ describe('useWorkerWorkbookGridState', () => {
     expect(capturedState?.hiddenRows).toBe(sheet1HiddenRows)
     expect(capturedState?.freezeRows).toBe(2)
     expect(capturedState?.freezeCols).toBe(3)
+    expect(capturedState?.mergeRanges).toBe(sheet1MergeRanges)
     expect(capturedState?.selectedCell).toBe(sheet1Cell)
 
     // Act
@@ -122,6 +125,7 @@ describe('useWorkerWorkbookGridState', () => {
     expect(capturedState?.hiddenRows).toBe(sheet2HiddenRows)
     expect(capturedState?.freezeRows).toBe(4)
     expect(capturedState?.freezeCols).toBe(1)
+    expect(capturedState?.mergeRanges).toEqual([])
     expect(capturedState?.selectedCell).toBe(sheet2Cell)
 
     await act(async () => {
@@ -174,10 +178,12 @@ describe('useWorkerWorkbookGridState', () => {
 
     // Act
     const nextColumnWidths = { 3: 180 } as const
+    const nextMergeRanges = [{ sheetName: 'Sheet1', startAddress: 'B2', endAddress: 'C3' }] as const
     const nextCell = createStringCellSnapshot('Sheet1', 'A1', 'after')
     await act(async () => {
       viewportStore.setColumnWidths('Sheet1', nextColumnWidths)
       viewportStore.setFreeze('Sheet1', 5, 2)
+      viewportStore.setMergeRanges('Sheet1', nextMergeRanges)
       viewportStore.setCell(nextCell)
     })
     const returnedInsertRowsTask = capturedState.invokeInsertRowsMutation('Sheet1', 2, 3)
@@ -190,6 +196,7 @@ describe('useWorkerWorkbookGridState', () => {
     expect(capturedState.columnWidths).toBe(nextColumnWidths)
     expect(capturedState.freezeRows).toBe(5)
     expect(capturedState.freezeCols).toBe(2)
+    expect(capturedState.mergeRanges).toBe(nextMergeRanges)
     expect(capturedState.selectedCell).toBe(nextCell)
     expect(viewportStore.clearOptimisticCellFlagsForSheet).toHaveBeenCalledTimes(4)
     expect(viewportStore.clearOptimisticCellFlagsForSheet).toHaveBeenNthCalledWith(1, 'Sheet1')
@@ -232,6 +239,7 @@ class TestViewportStore {
   private readonly hiddenRowsBySheet = new Map<string, Readonly<Record<number, true>>>()
   private readonly freezeRowsBySheet = new Map<string, number>()
   private readonly freezeColsBySheet = new Map<string, number>()
+  private readonly mergeRangesBySheet = new Map<string, readonly WorkbookMergeRangeSnapshot[]>()
   private readonly cells = new Map<string, CellSnapshot>()
   readonly clearOptimisticCellFlagsForSheet = vi.fn()
 
@@ -293,6 +301,10 @@ class TestViewportStore {
     return this.hiddenRowsBySheet.get(sheetName) ?? EMPTY_HIDDEN_AXES
   }
 
+  listMergeRanges(sheetName: string): readonly WorkbookMergeRangeSnapshot[] {
+    return this.mergeRangesBySheet.get(sheetName) ?? []
+  }
+
   setColumnWidths(sheetName: string, value: Readonly<Record<number, number>>): void {
     this.columnWidthsBySheet.set(sheetName, value)
     this.emitSheetChannel(sheetName, 'columnWidths')
@@ -317,6 +329,11 @@ class TestViewportStore {
     this.freezeRowsBySheet.set(sheetName, rows)
     this.freezeColsBySheet.set(sheetName, cols)
     this.emitSheetChannel(sheetName, 'freeze')
+  }
+
+  setMergeRanges(sheetName: string, ranges: readonly WorkbookMergeRangeSnapshot[]): void {
+    this.mergeRangesBySheet.set(sheetName, ranges)
+    this.emitSheetChannel(sheetName, 'merges')
   }
 
   setCell(snapshot: CellSnapshot): void {

@@ -26,6 +26,7 @@ function ToolbarHarness(props: {
     canHideCurrentColumn: false,
     canUnhideCurrentRow: false,
     canUnhideCurrentColumn: false,
+    canUnmergeSelection: false,
     onHideCurrentRow: () => {},
     onHideCurrentColumn: () => {},
     onUnhideCurrentRow: () => {},
