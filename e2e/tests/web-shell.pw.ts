@@ -264,6 +264,34 @@ test('web app supports type-to-replace and Enter or Tab commit movement', async 
   await expect(nameBox).toHaveValue('A2', { timeout: 15_000 })
 })
 
+test('web app preserves Alt+Enter multiline edits across commit, formula bar, and reopen', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-alt-enter-multiline-edit')
+  await page.goto(`/?document=${encodeURIComponent(documentId)}&sheet=Sheet1&cell=A1`)
+  await waitForWorkbookReady(page)
+
+  const formulaInput = page.getByTestId('formula-input')
+  const cellEditor = page.getByTestId('cell-editor-input')
+
+  await clickProductCell(page, 0, 0)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!A1')
+  await page.keyboard.type('alpha')
+  await expect(cellEditor).toBeVisible()
+  await expect(cellEditor).toHaveValue('alpha')
+
+  await cellEditor.press('Alt+Enter')
+  await page.keyboard.type('beta')
+  await expect(cellEditor).toHaveValue('alpha\nbeta')
+
+  await cellEditor.press('Enter')
+  await expect(cellEditor).toBeHidden()
+  await clickProductCell(page, 0, 0)
+  await expect(formulaInput).toHaveValue('alpha\nbeta')
+
+  await page.getByTestId('sheet-grid').press('F2')
+  await expect(cellEditor).toBeVisible()
+  await expect(cellEditor).toHaveValue('alpha\nbeta')
+})
+
 test('web app preserves multi-digit numeric type-to-replace input', async ({ page }) => {
   await page.goto('/')
   await waitForWorkbookReady(page)

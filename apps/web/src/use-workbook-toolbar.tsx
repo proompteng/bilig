@@ -75,7 +75,7 @@ function shouldKeepWorkbookShortcutInsideTextEntry(target: EventTarget | null): 
     return false
   }
   return !(
-    target instanceof HTMLInputElement &&
+    (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) &&
     target.dataset['testid'] === 'formula-input' &&
     target.dataset['formulaEditing'] === 'false'
   )

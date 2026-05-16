@@ -40,7 +40,7 @@ export function FormulaBar({
   onCommit,
   onCancel,
 }: FormulaBarProps) {
-  const inputRef = useRef<HTMLInputElement | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const nameBoxRef = useRef<HTMLInputElement | null>(null)
   const commitRequestedRef = useRef(false)
   const [isFormulaFocused, setIsFormulaFocused] = useState(false)
@@ -150,6 +150,23 @@ export function FormulaBar({
     onChange(next.value)
   }
 
+  const insertFormulaTextAtSelection = (input: HTMLTextAreaElement, text: string) => {
+    const currentValue = input.value
+    const selectionStart = input.selectionStart ?? currentValue.length
+    const selectionEnd = input.selectionEnd ?? currentValue.length
+    const nextValue = `${currentValue.slice(0, selectionStart)}${text}${currentValue.slice(selectionEnd)}`
+    const caretPosition = selectionStart + text.length
+    commitRequestedRef.current = false
+    if (!isEditing) {
+      onBeginEdit(nextValue)
+    }
+    input.value = nextValue
+    pendingSelectionRef.current = { start: caretPosition, end: caretPosition }
+    setFormulaCaret(caretPosition)
+    onChange(nextValue)
+    input.setSelectionRange(caretPosition, caretPosition)
+  }
+
   return (
     <div className={formulaBarRootClass()} data-testid="formula-bar">
       <NameBox
@@ -170,7 +187,7 @@ export function FormulaBar({
             <span aria-hidden="true" className={`${formulaFieldAddonClass()} w-8 sm:w-10`}>
               fx
             </span>
-            <input
+            <textarea
               aria-activedescendant={showAutocomplete ? `formula-autocomplete-option-${highlightedSuggestionIndex}` : undefined}
               aria-controls={showAutocomplete ? 'formula-autocomplete' : undefined}
               aria-expanded={showAutocomplete ? 'true' : 'false'}
@@ -182,7 +199,7 @@ export function FormulaBar({
               placeholder="Value or =formula"
               ref={inputRef}
               role="combobox"
-              type="text"
+              rows={1}
               value={value}
               onBlur={(event) => {
                 setIsFormulaFocused(false)
@@ -220,6 +237,8 @@ export function FormulaBar({
                 }
                 event.stopPropagation()
                 if (event.key === 'Enter' && event.altKey) {
+                  event.preventDefault()
+                  insertFormulaTextAtSelection(event.currentTarget, '\n')
                   return
                 }
                 if (showAutocomplete && event.key === 'ArrowDown') {

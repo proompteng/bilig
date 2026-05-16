@@ -227,7 +227,7 @@ describe('FormulaBar', () => {
       root.render(<FormulaBarHarness initialEditing initialValue="draft" selectionLabel="B2:D5" />)
     })
 
-    const formulaInput = host.querySelector<HTMLInputElement>("[data-testid='formula-input']")
+    const formulaInput = host.querySelector<HTMLTextAreaElement>("[data-testid='formula-input']")
     const nameBox = host.querySelector<HTMLInputElement>("[data-testid='name-box']")
     expect(formulaInput).not.toBeNull()
     expect(nameBox).not.toBeNull()
@@ -345,7 +345,7 @@ describe('FormulaBar', () => {
       root.render(<FormulaBarHarness initialEditing initialValue="draft" onFormulaCommitSuccess={onFormulaCommitSuccess} />)
     })
 
-    const formulaInput = host.querySelector<HTMLInputElement>("[data-testid='formula-input']")
+    const formulaInput = host.querySelector<HTMLTextAreaElement>("[data-testid='formula-input']")
     expect(formulaInput).not.toBeNull()
     if (!formulaInput) {
       throw new Error('Expected formula input')
@@ -430,7 +430,7 @@ describe('FormulaBar', () => {
     })
   })
 
-  it('keeps the formula bar as a compact single-line input without inline action buttons', async () => {
+  it('keeps the formula bar as a compact text field without inline action buttons', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     const host = document.createElement('div')
@@ -443,7 +443,7 @@ describe('FormulaBar', () => {
 
     const commitButton = host.querySelector<HTMLButtonElement>("[data-testid='formula-commit']")
     const cancelButton = host.querySelector<HTMLButtonElement>("[data-testid='formula-cancel']")
-    const input = host.querySelector<HTMLInputElement>("[data-testid='formula-input']")
+    const input = host.querySelector<HTMLTextAreaElement>("[data-testid='formula-input']")
     expect(commitButton).toBeNull()
     expect(cancelButton).toBeNull()
     expect(input).not.toBeNull()
@@ -452,9 +452,82 @@ describe('FormulaBar', () => {
       throw new Error('Expected formula input')
     }
 
-    expect(input.tagName).toBe('INPUT')
+    expect(input.tagName).toBe('TEXTAREA')
     dispatchTextControlValue(input, '=SUM(B2:B5)')
     expect(input.value).toBe('=SUM(B2:B5)')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('preserves multiline cell text in the formula field instead of flattening it', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(<FormulaBarHarness initialEditing={false} initialValue={'alpha\nbeta'} />)
+    })
+
+    const input = host.querySelector<HTMLTextAreaElement>("[data-testid='formula-input']")
+    expect(input).not.toBeNull()
+
+    if (!input) {
+      throw new Error('Expected formula input')
+    }
+
+    expect(input.tagName).toBe('TEXTAREA')
+    expect(input.value).toBe('alpha\nbeta')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('inserts a line break in the formula field with Alt+Enter instead of committing', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const onCommit = vi.fn()
+    const onChange = vi.fn()
+
+    await act(async () => {
+      root.render(
+        <FormulaBar
+          address="B2"
+          isEditing={true}
+          onAddressCommit={() => true}
+          onBeginEdit={() => {}}
+          onCancel={() => {}}
+          onChange={onChange}
+          onCommit={onCommit}
+          resolvedValue=""
+          sheetName="Sheet1"
+          value="alpha"
+        />,
+      )
+    })
+
+    const input = host.querySelector<HTMLTextAreaElement>("[data-testid='formula-input']")
+    expect(input).not.toBeNull()
+
+    if (!input) {
+      throw new Error('Expected formula input')
+    }
+
+    input.focus()
+    input.setSelectionRange(input.value.length, input.value.length)
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true, cancelable: true }))
+    })
+
+    expect(onCommit).not.toHaveBeenCalled()
+    expect(onChange).toHaveBeenCalledWith('alpha\n')
 
     await act(async () => {
       root.unmount()
@@ -488,7 +561,7 @@ describe('FormulaBar', () => {
       )
     })
 
-    const input = host.querySelector<HTMLInputElement>("[data-testid='formula-input']")
+    const input = host.querySelector<HTMLTextAreaElement>("[data-testid='formula-input']")
     expect(input).not.toBeNull()
     if (!input) {
       throw new Error('Expected formula input')
@@ -534,7 +607,7 @@ describe('FormulaBar', () => {
       )
     })
 
-    const input = host.querySelector<HTMLInputElement>("[data-testid='formula-input']")
+    const input = host.querySelector<HTMLTextAreaElement>("[data-testid='formula-input']")
     expect(input).not.toBeNull()
     if (!input) {
       throw new Error('Expected formula input')

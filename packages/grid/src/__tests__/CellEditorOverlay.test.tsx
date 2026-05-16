@@ -108,6 +108,7 @@ describe('CellEditorOverlay', () => {
 
     const textarea = host.querySelector<HTMLTextAreaElement>("[data-testid='cell-editor-input']")
     expect(textarea?.tagName).toBe('TEXTAREA')
+    textarea?.setSelectionRange(textarea.value.length, textarea.value.length)
 
     await act(async () => {
       textarea?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true }))
@@ -115,6 +116,7 @@ describe('CellEditorOverlay', () => {
 
     expect(onCommit).not.toHaveBeenCalled()
     expect(onCancel).not.toHaveBeenCalled()
+    expect(onChange).toHaveBeenCalledWith('line 1\n')
 
     await act(async () => {
       root.unmount()

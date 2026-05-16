@@ -24,7 +24,7 @@ export const formulaFieldAddonClass = cva(
 )
 
 export const formulaInputClass = cva(
-  'h-full min-w-0 flex-1 border-0 bg-transparent px-3 text-[12px] leading-4 text-[var(--wb-text)] outline-none placeholder:text-[var(--wb-text-subtle)]',
+  'wb-scrollbar-none block h-full min-w-0 flex-1 resize-none overflow-auto border-0 bg-transparent px-3 py-[7px] text-[12px] leading-4 text-[var(--wb-text)] outline-none placeholder:text-[var(--wb-text-subtle)]',
 )
 
 export const formulaStandaloneInputClass = cva(
