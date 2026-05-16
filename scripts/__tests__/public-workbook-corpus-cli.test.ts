@@ -26,255 +26,145 @@ import type { PublicWorkbookArtifact, PublicWorkbookCorpusCase, PublicWorkbookMa
 
 describe('public workbook corpus CLI resource guards', () => {
   it('rejects missing values for shared string arguments', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--manifest', '--dry-run']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--manifest', '--dry-run'], () => {
       expect(() => readStringArg('--manifest', 'fallback.json')).toThrow('Expected --manifest to have a value')
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('rejects empty separated values for shared string arguments', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--manifest', '']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--manifest', ''], () => {
       expect(() => readStringArg('--manifest', 'fallback.json')).toThrow('Expected --manifest to have a value')
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('rejects blank separated values for shared string arguments', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--manifest', '   ']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--manifest', '   '], () => {
       expect(() => readStringArg('--manifest', 'fallback.json')).toThrow('Expected --manifest to have a value')
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('rejects duplicate shared string arguments', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--manifest', 'first.json', '--manifest', 'second.json']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--manifest', 'first.json', '--manifest', 'second.json'], () => {
       expect(() => readStringArg('--manifest', 'fallback.json')).toThrow('Expected --manifest to be specified once')
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('reads inline shared string arguments', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--manifest=manifest.json']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--manifest=manifest.json'], () => {
       expect(readStringArg('--manifest', 'fallback.json')).toBe('manifest.json')
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('rejects empty inline shared string arguments', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--manifest=']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--manifest='], () => {
       expect(() => readStringArg('--manifest', 'fallback.json')).toThrow('Expected --manifest to have a value')
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('rejects blank inline shared string arguments', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--manifest=   ']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--manifest=   '], () => {
       expect(() => readStringArg('--manifest', 'fallback.json')).toThrow('Expected --manifest to have a value')
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('rejects missing values for repeated string arguments', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'discover', '--query', 'budget', '--query', '--limit', '2']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'discover', '--query', 'budget', '--query', '--limit', '2'], () => {
       expect(() => readRepeatedStringArg('--query')).toThrow('Expected --query to have a value')
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('rejects empty separated values for repeated string arguments', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'discover', '--query', '']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'discover', '--query', ''], () => {
       expect(() => readRepeatedStringArg('--query')).toThrow('Expected --query to have a value')
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('reads inline repeated string arguments', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'discover', '--query=budget', '--query=forecast']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'discover', '--query=budget', '--query=forecast'], () => {
       expect(readRepeatedStringArg('--query')).toEqual(['budget', 'forecast'])
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('rejects fractional values for shared count arguments', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--limit', '1.9']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--limit', '1.9'], () => {
       expect(() => readNumberArg('--limit', 10)).toThrow('Expected --limit to be a positive integer')
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('rejects non-decimal values for shared count arguments', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--limit', '1e3']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--limit', '1e3'], () => {
       expect(() => readNumberArg('--limit', 10)).toThrow('Expected --limit to be a positive integer')
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('rejects unsafe integer values for shared count arguments', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--limit', '9007199254740993']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--limit', '9007199254740993'], () => {
       expect(() => readNumberArg('--limit', 10)).toThrow('Expected --limit to be a positive integer')
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('rejects fractional values for shared MiB arguments', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--fetch-max-rss-mb', '1.5']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--fetch-max-rss-mb', '1.5'], () => {
       expect(() => readMegabytesArg('--fetch-max-rss-mb', 256 * 1024 * 1024)).toThrow(
         'Expected --fetch-max-rss-mb to be a positive integer number of MiB',
       )
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('rejects non-decimal values for shared MiB arguments', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--fetch-max-rss-mb', '1e3']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--fetch-max-rss-mb', '1e3'], () => {
       expect(() => readMegabytesArg('--fetch-max-rss-mb', 256 * 1024 * 1024)).toThrow(
         'Expected --fetch-max-rss-mb to be a positive integer number of MiB',
       )
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('rejects unsafe integer values for shared MiB arguments', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--fetch-max-rss-mb', '9007199254740993']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--fetch-max-rss-mb', '9007199254740993'], () => {
       expect(() => readMegabytesArg('--fetch-max-rss-mb', 256 * 1024 * 1024)).toThrow(
         'Expected --fetch-max-rss-mb to be a positive integer number of MiB',
       )
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('rejects MiB values that overflow safe byte counts', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--fetch-max-rss-mb', '8589934592']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--fetch-max-rss-mb', '8589934592'], () => {
       expect(() => readMegabytesArg('--fetch-max-rss-mb', 256 * 1024 * 1024)).toThrow(
         'Expected --fetch-max-rss-mb to be a positive integer number of MiB',
       )
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('reads inline boolean flag values', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--dry-run=false', '--list=true']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--dry-run=false', '--list=true'], () => {
       expect(readFlagArg('--dry-run')).toBe(false)
       expect(readFlagArg('--list')).toBe(true)
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('reads separated boolean flag values', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--dry-run', 'false', '--list', 'true']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--dry-run', 'false', '--list', 'true'], () => {
       expect(readFlagArg('--dry-run')).toBe(false)
       expect(readFlagArg('--list')).toBe(true)
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('rejects malformed inline boolean flag values', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--dry-run=maybe']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--dry-run=maybe'], () => {
       expect(() => readFlagArg('--dry-run')).toThrow('Expected --dry-run to be true or false')
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('rejects malformed separated boolean flag values', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--dry-run', 'maybe']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--dry-run', 'maybe'], () => {
       expect(() => readFlagArg('--dry-run')).toThrow('Expected --dry-run to be true or false')
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('rejects duplicate boolean flags', () => {
-    const originalArgv = process.argv
-    try {
-      process.argv = ['bun', corpusScriptPath(), 'fetch', '--dry-run', '--dry-run=false']
-
+    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--dry-run', '--dry-run=false'], () => {
       expect(() => readFlagArg('--dry-run')).toThrow('Expected --dry-run to be specified once')
-    } finally {
-      process.argv = originalArgv
-    }
+    })
   })
 
   it('refuses to reinitialize an existing manifest unless forced', () => {
@@ -2075,6 +1965,16 @@ function stringArrayField(value: Record<string, unknown>, key: string): readonly
 
 function corpusScriptPath(): string {
   return join(dirname(fileURLToPath(import.meta.url)), '../public-workbook-corpus.ts')
+}
+
+function withProcessArgv(argv: string[], run: () => void): void {
+  const originalArgv = process.argv
+  try {
+    process.argv = argv
+    run()
+  } finally {
+    process.argv = originalArgv
+  }
 }
 
 function resumePlanScriptPath(): string {
