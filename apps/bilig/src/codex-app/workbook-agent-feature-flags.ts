@@ -17,14 +17,13 @@ function parseBooleanEnv(value: string | undefined, fallback: boolean, name: str
   if (value === undefined || value.length === 0) {
     return fallback
   }
-  const normalized = value.trim().toLowerCase()
-  if (normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on') {
+  if (value === 'true' || value === '1') {
     return true
   }
-  if (normalized === 'false' || normalized === '0' || normalized === 'no' || normalized === 'off') {
+  if (value === 'false' || value === '0') {
     return false
   }
-  throw new Error(`${name} must be a boolean value, got ${value}`)
+  throw new Error(`${name} must be "1", "true", "0", or "false" when set, got ${value}`)
 }
 
 function parseCsvEnv(value: string | undefined): string[] {

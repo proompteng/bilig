@@ -37,9 +37,15 @@ describe('workbook agent feature flags', () => {
   it('rejects malformed boolean feature flags instead of silently using defaults', () => {
     expect(() =>
       resolveWorkbookAgentFeatureFlags({
-        BILIG_AGENT_AUTO_APPLY_LOW_RISK_ENABLED: 'treu',
+        BILIG_AGENT_AUTO_APPLY_LOW_RISK_ENABLED: 'yes',
       } as NodeJS.ProcessEnv),
-    ).toThrow('BILIG_AGENT_AUTO_APPLY_LOW_RISK_ENABLED must be a boolean value, got treu')
+    ).toThrow('BILIG_AGENT_AUTO_APPLY_LOW_RISK_ENABLED must be "1", "true", "0", or "false" when set, got yes')
+
+    expect(() =>
+      resolveWorkbookAgentFeatureFlags({
+        BILIG_AGENT_WORKFLOW_RUNNER_ENABLED: 'off',
+      } as NodeJS.ProcessEnv),
+    ).toThrow('BILIG_AGENT_WORKFLOW_RUNNER_ENABLED must be "1", "true", "0", or "false" when set, got off')
   })
 
   it('checks rollout allowlists by user or document', () => {
