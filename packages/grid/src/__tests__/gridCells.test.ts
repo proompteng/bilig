@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { ErrorCode, ValueTag, type CellSnapshot, type CellStyleRecord } from '@bilig/protocol'
 import { GridCellKind, cellStyleToThemeOverride, cellToEditorSeed, snapshotToGridCell, snapshotToRenderCell } from '../gridCells.js'
-import { WORKBOOK_FONT_SANS } from '../workbookTheme.js'
+import { WORKBOOK_DEFAULT_FONT_SIZE, WORKBOOK_FONT_SANS } from '../workbookTheme.js'
 
 function makeSnapshot(overrides: Partial<CellSnapshot>): CellSnapshot {
   const snapshot: CellSnapshot = {
@@ -75,6 +75,13 @@ describe('gridCells', () => {
       kind: 'boolean',
       displayText: 'FALSE',
       copyText: 'FALSE',
+    })
+  })
+
+  test('uses the workbook default font size for unstyled cells', () => {
+    expect(snapshotToRenderCell(makeSnapshot({ value: { tag: ValueTag.String, value: 'plain' } }))).toMatchObject({
+      font: `400 ${WORKBOOK_DEFAULT_FONT_SIZE}px ${WORKBOOK_FONT_SANS}`,
+      fontSize: WORKBOOK_DEFAULT_FONT_SIZE,
     })
   })
 

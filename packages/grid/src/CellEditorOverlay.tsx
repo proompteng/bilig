@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import type { EditMovement, EditTargetSelection } from './SheetGridView.js'
+import { WORKBOOK_DEFAULT_FONT_SIZE } from './workbookTheme.js'
 
 function normalizeNumpadKey(key: string, code: string): string | null {
   if (!code.startsWith('Numpad')) {
@@ -64,7 +65,7 @@ export function CellEditorOverlay({
   backgroundColor = '#ffffff',
   color = '#202124',
   font,
-  fontSize = 13,
+  fontSize = WORKBOOK_DEFAULT_FONT_SIZE,
   underline = false,
   targetSelection,
   onChange,
@@ -298,7 +299,7 @@ export function CellEditorOverlay({
     >
       <textarea
         aria-label={`${label} editor`}
-        className="w-full resize-none border-0 bg-transparent px-2 py-1.5 leading-tight outline-none"
+        className="w-full resize-none border-0 bg-transparent px-2 py-[3px] leading-[1.2] outline-none"
         data-testid="cell-editor-input"
         ref={inputRef}
         readOnly={isCompleting}

@@ -4,7 +4,7 @@ import { buildGridTextScene } from '../gridTextScene.js'
 import { getResolvedCellFontFamily } from '../gridCells.js'
 import type { GridEngineLike } from '../grid-engine.js'
 import { getGridMetrics } from '../gridMetrics.js'
-import { workbookThemeColors } from '../workbookTheme.js'
+import { WORKBOOK_DEFAULT_FONT_SIZE, workbookThemeColors } from '../workbookTheme.js'
 
 type TestCellValue =
   | { tag: ValueTag.Empty }
@@ -27,6 +27,7 @@ function createCellSnapshot(value: TestCellValue, styleId: string | undefined = 
 
 type TestCellSnapshot = ReturnType<typeof createCellSnapshot>
 const CELL_FONT_FAMILY = getResolvedCellFontFamily()
+const CELL_FONT = `400 ${WORKBOOK_DEFAULT_FONT_SIZE}px ${CELL_FONT_FAMILY}`
 const HEADER_FONT = `600 11px ${CELL_FONT_FAMILY}`
 const HEADER_SELECTED_COLOR = workbookThemeColors.accent
 const HEADER_DRAG_COLOR = workbookThemeColors.accentDark
@@ -507,8 +508,8 @@ describe('gridTextScene', () => {
       align: 'left',
       wrap: false,
       color: CELL_TEXT_COLOR,
-      font: `400 13px ${CELL_FONT_FAMILY}`,
-      fontSize: 13,
+      font: CELL_FONT,
+      fontSize: WORKBOOK_DEFAULT_FONT_SIZE,
       row: 4,
       underline: false,
       strike: false,
@@ -678,8 +679,8 @@ describe('gridTextScene', () => {
       align: 'left',
       wrap: false,
       color: CELL_TEXT_COLOR,
-      font: `400 13px ${CELL_FONT_FAMILY}`,
-      fontSize: 13,
+      font: CELL_FONT,
+      fontSize: WORKBOOK_DEFAULT_FONT_SIZE,
       row: 11,
       underline: false,
       strike: false,
@@ -719,8 +720,8 @@ describe('gridTextScene', () => {
       align: 'right',
       wrap: false,
       color: CELL_TEXT_COLOR,
-      font: `400 13px ${CELL_FONT_FAMILY}`,
-      fontSize: 13,
+      font: CELL_FONT,
+      fontSize: WORKBOOK_DEFAULT_FONT_SIZE,
       row: 1,
       underline: false,
       strike: false,

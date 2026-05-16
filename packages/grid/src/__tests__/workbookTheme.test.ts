@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { WORKBOOK_FONT_SANS } from '../workbookTheme.js'
+import { WORKBOOK_DEFAULT_FONT_SIZE, WORKBOOK_FONT_SANS } from '../workbookTheme.js'
 
 describe('workbookTheme', () => {
   test('uses the product font stack for rendered grid text', () => {
@@ -10,5 +10,9 @@ describe('workbookTheme', () => {
     expect(WORKBOOK_FONT_SANS).not.toContain('Inter')
     expect(WORKBOOK_FONT_SANS).not.toContain('Aptos')
     expect(WORKBOOK_FONT_SANS).not.toContain('Calibri')
+  })
+
+  test('keeps the rendered cell default aligned with spreadsheet toolbar sizing', () => {
+    expect(WORKBOOK_DEFAULT_FONT_SIZE).toBe(11)
   })
 })

@@ -6,7 +6,7 @@ import {
   type CellSnapshot,
   type CellStyleRecord,
 } from '@bilig/protocol'
-import { WORKBOOK_FONT_SANS, workbookThemeColors } from './workbookTheme.js'
+import { WORKBOOK_DEFAULT_FONT_SIZE, WORKBOOK_FONT_SANS, workbookThemeColors } from './workbookTheme.js'
 
 const DEFAULT_FONT_FALLBACK = WORKBOOK_FONT_SANS
 const DEFAULT_TEXT_COLOR = workbookThemeColors.text
@@ -181,7 +181,7 @@ export function snapshotToRenderCell(
     wrap: style?.alignment?.wrap === true,
     color: style?.font?.color ?? DEFAULT_TEXT_COLOR,
     font: resolveCanvasFont(style),
-    fontSize: style?.font?.size ?? 13,
+    fontSize: style?.font?.size ?? WORKBOOK_DEFAULT_FONT_SIZE,
     underline: style?.font?.underline === true,
     ...(snapshot.value.tag === ValueTag.Number ? { numberValue: snapshot.value.value } : {}),
     ...(snapshot.value.tag === ValueTag.Boolean ? { booleanValue: snapshot.value.value } : {}),
@@ -204,7 +204,7 @@ export function cellStyleToThemeOverride(style: CellStyleRecord | undefined, opt
     fontStyleParts.push('italic')
   }
   fontStyleParts.push(style.font?.bold ? '700' : '400')
-  fontStyleParts.push(`${style.font?.size ?? 13}px`)
+  fontStyleParts.push(`${style.font?.size ?? WORKBOOK_DEFAULT_FONT_SIZE}px`)
   return {
     ...(textSurfaceEnabled || style.font?.color ? { textDark: textSurfaceEnabled ? TRANSPARENT_TEXT : style.font.color } : {}),
     ...(fontStyleParts.length > 0 ? { baseFontStyle: fontStyleParts.join(' ') } : {}),
@@ -260,7 +260,7 @@ function resolveCanvasFont(style: CellStyleRecord | undefined): string {
     fontParts.push('italic')
   }
   fontParts.push(style?.font?.bold ? '700' : '400')
-  fontParts.push(`${style?.font?.size ?? 13}px`)
+  fontParts.push(`${style?.font?.size ?? WORKBOOK_DEFAULT_FONT_SIZE}px`)
   fontParts.push(getResolvedCellFontFamily(style))
   return fontParts.join(' ')
 }

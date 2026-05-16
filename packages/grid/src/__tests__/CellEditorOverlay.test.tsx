@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client'
 import type * as ReactDom from 'react-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CellEditorOverlay } from '../CellEditorOverlay.js'
+import { WORKBOOK_DEFAULT_FONT_SIZE } from '../workbookTheme.js'
 
 vi.mock('react-dom', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactDom>()
@@ -76,6 +77,37 @@ describe('CellEditorOverlay', () => {
     const overlay = host.querySelector<HTMLElement>("[data-testid='cell-editor-overlay']")
     expect(overlay?.getAttribute('class')).not.toContain('rounded-')
     expect(overlay?.getAttribute('class')).not.toContain('shadow-')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('uses compact workbook typography by default inside the cell editor', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        <CellEditorOverlay
+          label="Sheet1!B2"
+          targetSelection={makeTargetSelection()}
+          onCancel={() => {}}
+          onChange={() => {}}
+          onCommit={() => {}}
+          resolvedValue=""
+          value="draft"
+        />,
+      )
+    })
+
+    const textarea = host.querySelector<HTMLTextAreaElement>("[data-testid='cell-editor-input']")
+    expect(textarea?.style.fontSize).toBe(`${WORKBOOK_DEFAULT_FONT_SIZE}px`)
+    expect(textarea?.getAttribute('class')).toContain('py-[3px]')
+    expect(textarea?.getAttribute('class')).toContain('leading-[1.2]')
 
     await act(async () => {
       root.unmount()
