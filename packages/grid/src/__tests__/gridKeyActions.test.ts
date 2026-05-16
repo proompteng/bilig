@@ -272,6 +272,56 @@ describe('gridKeyActions', () => {
 
     expect(
       resolveGridKeyAction({
+        event: { key: 'd', ctrlKey: true, metaKey: false, altKey: false },
+        isEditingCell: false,
+        editorValue: '',
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [1, 1],
+        currentSelectionCell: [1, 1],
+        currentRangeAnchor: [1, 1],
+        currentSelectionRange: { x: 1, y: 1, width: 3, height: 4 },
+      }),
+    ).toEqual({
+      kind: 'fill-range',
+      source: { x: 1, y: 1, width: 3, height: 1 },
+      target: { x: 1, y: 2, width: 3, height: 3 },
+    })
+
+    expect(
+      resolveGridKeyAction({
+        event: { key: 'r', ctrlKey: false, metaKey: true, altKey: false },
+        isEditingCell: false,
+        editorValue: '',
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [1, 1],
+        currentSelectionCell: [1, 1],
+        currentRangeAnchor: [1, 1],
+        currentSelectionRange: { x: 1, y: 1, width: 3, height: 4 },
+      }),
+    ).toEqual({
+      kind: 'fill-range',
+      source: { x: 1, y: 1, width: 1, height: 4 },
+      target: { x: 2, y: 1, width: 2, height: 4 },
+    })
+
+    expect(
+      resolveGridKeyAction({
+        event: { key: 'd', ctrlKey: true, metaKey: false, altKey: false },
+        isEditingCell: false,
+        editorValue: '',
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [1, 1],
+        currentSelectionCell: [1, 1],
+        currentRangeAnchor: [1, 1],
+        currentSelectionRange: { x: 1, y: 1, width: 3, height: 1 },
+      }),
+    ).toEqual({ kind: 'handled' })
+
+    expect(
+      resolveGridKeyAction({
         event: { key: '7', ctrlKey: false, metaKey: false, altKey: false },
         isEditingCell: false,
         editorValue: '',

@@ -82,6 +82,22 @@ const WORKBOOK_SHORTCUTS: readonly WorkbookShortcutEntry[] = [
     windows: 'Ctrl+V',
   },
   {
+    id: 'fill-down',
+    label: 'Fill down',
+    category: 'Editing',
+    mac: '⌘D',
+    windows: 'Ctrl+D',
+    keywords: ['copy down', 'autofill'],
+  },
+  {
+    id: 'fill-right',
+    label: 'Fill right',
+    category: 'Editing',
+    mac: '⌘R',
+    windows: 'Ctrl+R',
+    keywords: ['copy right', 'autofill'],
+  },
+  {
     id: 'bold',
     label: 'Bold',
     category: 'Formatting',

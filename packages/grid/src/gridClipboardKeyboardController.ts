@@ -15,6 +15,7 @@ import {
   isClipboardShortcut,
   isClearCellKey,
   isHandledGridKey,
+  isFillShortcut,
   isNavigationShortcut,
   isPrintableKey,
   normalizeKeyboardKey,
@@ -83,6 +84,7 @@ interface HandleGridKeyOptions {
   onClearCell(this: void, selection?: GridSelectionSnapshot): void
   onCommitEdit(this: void, movement?: EditMovement, valueOverride?: string): void
   onEditorChange(this: void, next: string): void
+  onFillRange(this: void, sourceStartAddr: string, sourceEndAddr: string, targetStartAddr: string, targetEndAddr: string): void
   onSelectionChange(this: void, selection: GridSelection): void
   pendingClipboardCopySequenceRef: MutableRefObject<number>
   pendingKeyboardPasteSequenceRef: MutableRefObject<number>
@@ -237,6 +239,7 @@ export function handleGridKey({
   onClearCell,
   onCommitEdit,
   onEditorChange,
+  onFillRange,
   onSelectionChange,
   pendingClipboardCopySequenceRef,
   pendingKeyboardPasteSequenceRef,
@@ -359,6 +362,16 @@ export function handleGridKey({
       }
       return
     }
+    case 'fill-range':
+      onFillRange(
+        formatAddress(action.source.y, action.source.x),
+        formatAddress(action.source.y + action.source.height - 1, action.source.x + action.source.width - 1),
+        formatAddress(action.target.y, action.target.x),
+        formatAddress(action.target.y + action.target.height - 1, action.target.x + action.target.width - 1),
+      )
+      return
+    case 'handled':
+      return
     case 'select-row':
       {
         const nextSelection = createRowSelection(action.col, action.row)
@@ -479,6 +492,7 @@ function isWorkbookChromeGridShortcut(event: Pick<GridKeyboardEventLike, 'altKey
   const normalizedKey = event.key.toLowerCase()
   return (
     isClipboardShortcut(event) ||
+    isFillShortcut(event) ||
     isNavigationShortcut(event) ||
     (hasPrimaryModifier && !event.altKey && normalizedKey === 'a') ||
     (!event.altKey && !hasPrimaryModifier && !event.shiftKey && event.key === 'F2') ||
@@ -492,6 +506,7 @@ export function shouldHandleGridSurfaceKey(
   return (
     isPrintableKey(event) ||
     isClipboardShortcut(event) ||
+    isFillShortcut(event) ||
     isNavigationShortcut(event) ||
     (event.key === 'Enter' && !event.altKey && !event.ctrlKey && !event.metaKey) ||
     (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey) ||

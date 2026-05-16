@@ -1,6 +1,6 @@
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import { clampCell } from './gridSelection.js'
-import { isClearCellKey } from './gridKeyboard.js'
+import { isClearCellKey, isFillShortcut } from './gridKeyboard.js'
 import type { Item, Rectangle } from './gridTypes.js'
 
 export type GridEditSelectionBehavior = 'select-all' | 'caret-end'
@@ -30,6 +30,8 @@ export type GridKeyAction =
   | { kind: 'clipboard-copy' }
   | { kind: 'clipboard-cut' }
   | { kind: 'clipboard-paste'; target: Item }
+  | { kind: 'fill-range'; source: Rectangle; target: Rectangle }
+  | { kind: 'handled' }
   | { kind: 'select-row'; row: number; col: number }
   | { kind: 'select-column'; row: number; col: number }
   | { kind: 'select-all' }
@@ -208,6 +210,50 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
 
   if (isClearCellKey(event)) {
     return { kind: 'clear-cell', pendingTypeSeed: null }
+  }
+
+  if (isFillShortcut(event)) {
+    if (!currentSelectionRange) {
+      return { kind: 'handled' }
+    }
+    if (normalizedKey === 'd') {
+      if (currentSelectionRange.height <= 1) {
+        return { kind: 'handled' }
+      }
+      return {
+        kind: 'fill-range',
+        source: {
+          x: currentSelectionRange.x,
+          y: currentSelectionRange.y,
+          width: currentSelectionRange.width,
+          height: 1,
+        },
+        target: {
+          x: currentSelectionRange.x,
+          y: currentSelectionRange.y + 1,
+          width: currentSelectionRange.width,
+          height: currentSelectionRange.height - 1,
+        },
+      }
+    }
+    if (currentSelectionRange.width <= 1) {
+      return { kind: 'handled' }
+    }
+    return {
+      kind: 'fill-range',
+      source: {
+        x: currentSelectionRange.x,
+        y: currentSelectionRange.y,
+        width: 1,
+        height: currentSelectionRange.height,
+      },
+      target: {
+        x: currentSelectionRange.x + 1,
+        y: currentSelectionRange.y,
+        width: currentSelectionRange.width - 1,
+        height: currentSelectionRange.height,
+      },
+    }
   }
 
   if (hasPrimaryModifier && !event.altKey) {

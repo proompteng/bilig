@@ -45,6 +45,7 @@ function KeyboardHandlerHarness(props: {
   onCancelEdit?: ReturnType<typeof vi.fn>
   onClearCell?: ReturnType<typeof vi.fn>
   onCommitEdit?: ReturnType<typeof vi.fn>
+  onFillRange?: ReturnType<typeof vi.fn>
   setGridSelection: ReturnType<typeof vi.fn>
   onSelectionChange: ReturnType<typeof vi.fn>
 }) {
@@ -68,6 +69,7 @@ function KeyboardHandlerHarness(props: {
     onClearCell: props.onClearCell ?? vi.fn(),
     onCommitEdit: props.onCommitEdit ?? vi.fn(),
     onEditorChange: vi.fn(),
+    onFillRange: props.onFillRange ?? vi.fn(),
     onSelectionChange: props.onSelectionChange,
     pendingClipboardCopySequenceRef: { current: 0 },
     pendingKeyboardPasteSequenceRef: { current: 0 },
@@ -407,6 +409,7 @@ describe('gridClipboardKeyboardController', () => {
       onClearCell: vi.fn(),
       onCommitEdit: vi.fn(),
       onEditorChange: vi.fn(),
+      onFillRange: vi.fn(),
       onSelectionChange: vi.fn(),
       pendingClipboardCopySequenceRef: { current: 1 },
       pendingKeyboardPasteSequenceRef: { current: 0 },
@@ -450,6 +453,7 @@ describe('gridClipboardKeyboardController', () => {
       onClearCell: vi.fn(),
       onCommitEdit: vi.fn(),
       onEditorChange: vi.fn(),
+      onFillRange: vi.fn(),
       onSelectionChange: vi.fn(),
       pendingClipboardCopySequenceRef: { current: 0 },
       pendingKeyboardPasteSequenceRef: { current: 0 },
@@ -513,6 +517,7 @@ describe('gridClipboardKeyboardController', () => {
       onClearCell: vi.fn(),
       onCommitEdit: vi.fn(),
       onEditorChange: vi.fn(),
+      onFillRange: vi.fn(),
       onSelectionChange,
       pendingClipboardCopySequenceRef: { current: 0 },
       pendingKeyboardPasteSequenceRef: { current: 0 },
@@ -551,6 +556,7 @@ describe('gridClipboardKeyboardController', () => {
       onClearCell: vi.fn(),
       onCommitEdit: vi.fn(),
       onEditorChange: vi.fn(),
+      onFillRange: vi.fn(),
       onSelectionChange: vi.fn(),
       pendingClipboardCopySequenceRef: { current: 0 },
       pendingKeyboardPasteSequenceRef: { current: 0 },
@@ -588,6 +594,7 @@ describe('gridClipboardKeyboardController', () => {
       onClearCell,
       onCommitEdit: vi.fn(),
       onEditorChange: vi.fn(),
+      onFillRange: vi.fn(),
       onSelectionChange: vi.fn(),
       pendingClipboardCopySequenceRef: { current: 0 },
       pendingKeyboardPasteSequenceRef: { current: 0 },
@@ -634,6 +641,7 @@ describe('gridClipboardKeyboardController', () => {
       onClearCell: vi.fn(),
       onCommitEdit: vi.fn(),
       onEditorChange: vi.fn(),
+      onFillRange: vi.fn(),
       onSelectionChange,
       pendingClipboardCopySequenceRef: { current: 0 },
       pendingKeyboardPasteSequenceRef: { current: 0 },
@@ -646,6 +654,97 @@ describe('gridClipboardKeyboardController', () => {
 
     expect(setGridSelection).toHaveBeenCalledTimes(1)
     expect(onSelectionChange).toHaveBeenCalledTimes(1)
+  })
+
+  test('routes fill down and fill right keyboard shortcuts through range fill operations', () => {
+    const onFillRange = vi.fn()
+    const fillDownEvent = {
+      key: 'd',
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      preventDefault: vi.fn(),
+    }
+    const fillRightEvent = {
+      key: 'r',
+      ctrlKey: false,
+      metaKey: true,
+      altKey: false,
+      preventDefault: vi.fn(),
+    }
+
+    for (const event of [fillDownEvent, fillRightEvent]) {
+      handleGridKey({
+        applyClipboardValues: vi.fn(),
+        beginSelectedEdit: vi.fn(),
+        captureInternalClipboardSelection: vi.fn(),
+        editorValue: '',
+        event,
+        gridSelection: createRangeSelection(createGridSelection(1, 1), [1, 1], [3, 4]),
+        internalClipboardRef: { current: null },
+        isSelectedCellBoolean: () => false,
+        isEditingCell: false,
+        onCancelEdit: vi.fn(),
+        onClearCell: vi.fn(),
+        onCommitEdit: vi.fn(),
+        onEditorChange: vi.fn(),
+        onFillRange,
+        onSelectionChange: vi.fn(),
+        pendingClipboardCopySequenceRef: { current: 0 },
+        pendingKeyboardPasteSequenceRef: { current: 0 },
+        pendingTypeSeedRef: { current: null },
+        selectedCell: { col: 1, row: 1 },
+        setGridSelection: vi.fn(),
+        sheetName: 'Sheet1',
+        suppressNextNativePasteRef: { current: false },
+        toggleSelectedBooleanCell: vi.fn(),
+      })
+    }
+
+    expect(fillDownEvent.preventDefault).toHaveBeenCalled()
+    expect(fillRightEvent.preventDefault).toHaveBeenCalled()
+    expect(onFillRange).toHaveBeenNthCalledWith(1, 'B2', 'D2', 'B3', 'D5')
+    expect(onFillRange).toHaveBeenNthCalledWith(2, 'B2', 'B5', 'C2', 'D5')
+  })
+
+  test('suppresses no-op fill shortcuts so the browser does not steal grid focus', () => {
+    const onFillRange = vi.fn()
+    const preventDefault = vi.fn()
+
+    handleGridKey({
+      applyClipboardValues: vi.fn(),
+      beginSelectedEdit: vi.fn(),
+      captureInternalClipboardSelection: vi.fn(),
+      editorValue: '',
+      event: {
+        key: 'd',
+        ctrlKey: true,
+        metaKey: false,
+        altKey: false,
+        preventDefault,
+      },
+      gridSelection: createRangeSelection(createGridSelection(1, 1), [1, 1], [3, 1]),
+      internalClipboardRef: { current: null },
+      isSelectedCellBoolean: () => false,
+      isEditingCell: false,
+      onCancelEdit: vi.fn(),
+      onClearCell: vi.fn(),
+      onCommitEdit: vi.fn(),
+      onEditorChange: vi.fn(),
+      onFillRange,
+      onSelectionChange: vi.fn(),
+      pendingClipboardCopySequenceRef: { current: 0 },
+      pendingKeyboardPasteSequenceRef: { current: 0 },
+      pendingTypeSeedRef: { current: null },
+      selectedCell: { col: 1, row: 1 },
+      setGridSelection: vi.fn(),
+      sheetName: 'Sheet1',
+      suppressNextNativePasteRef: { current: false },
+      toggleSelectedBooleanCell: vi.fn(),
+    })
+
+    expect(preventDefault).toHaveBeenCalled()
+    expect(onFillRange).not.toHaveBeenCalled()
   })
 
   test('only claims global grid shortcuts when focus is on the document body', () => {

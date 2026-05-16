@@ -311,6 +311,7 @@ export function useWorkbookGridInteractions(
     onClearCell,
     onCommitEdit,
     onEditorChange,
+    onFillRange,
     onSelectionChange: emitSelectionChange,
     pendingClipboardCopySequenceRef,
     pendingKeyboardPasteSequenceRef,

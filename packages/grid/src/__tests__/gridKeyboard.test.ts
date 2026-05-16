@@ -3,6 +3,7 @@ import {
   isClearCellKey,
   isClipboardShortcut,
   isDeleteKey,
+  isFillShortcut,
   isHandledGridKey,
   isNavigationKey,
   isNumericEditorSeed,
@@ -25,6 +26,9 @@ describe('gridKeyboard', () => {
     expect(isNavigationKey('ArrowDown')).toBe(true)
     expect(isNavigationKey('Enter')).toBe(false)
     expect(isClipboardShortcut({ altKey: false, ctrlKey: true, key: 'c', metaKey: false })).toBe(true)
+    expect(isFillShortcut({ altKey: false, ctrlKey: true, key: 'd', metaKey: false, shiftKey: false })).toBe(true)
+    expect(isFillShortcut({ altKey: false, ctrlKey: false, key: 'r', metaKey: true, shiftKey: false })).toBe(true)
+    expect(isFillShortcut({ altKey: false, ctrlKey: true, key: 'd', metaKey: false, shiftKey: true })).toBe(false)
     expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: 'F2', metaKey: false })).toBe(true)
     expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: 'Escape', metaKey: false })).toBe(true)
     expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: 'Delete', metaKey: false })).toBe(true)
