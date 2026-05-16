@@ -93,6 +93,28 @@ describe('browser test phases', () => {
     ])
   })
 
+  it('rejects malformed browser phase include flags instead of silently skipping coverage', () => {
+    expect(() =>
+      resolveBrowserTestPhases({
+        playwrightArgs: [],
+        env: {
+          BILIG_BROWSER_INCLUDE_PERF: 'treu',
+        },
+      }),
+    ).toThrow('BILIG_BROWSER_INCLUDE_PERF must be a boolean value, got treu')
+  })
+
+  it('rejects malformed browser worker counts instead of silently using the default', () => {
+    expect(() =>
+      resolveBrowserTestPhases({
+        playwrightArgs: [],
+        env: {
+          BILIG_BROWSER_PARALLEL_WORKERS: '4abc',
+        },
+      }),
+    ).toThrow('BILIG_BROWSER_PARALLEL_WORKERS must be a positive integer, got 4abc')
+  })
+
   it('keeps CI browser smoke explicit and small', () => {
     const phases = resolveBrowserTestPhases({
       playwrightArgs: [],

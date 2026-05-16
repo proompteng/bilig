@@ -26,16 +26,32 @@ export interface BrowserTestPhaseEnv {
   readonly BILIG_FUZZ_CAPTURE?: string | undefined
 }
 
-function envFlagEnabled(value: string | undefined): boolean {
-  return value === '1' || value === 'true'
+function envFlagEnabled(value: string | undefined, name: string): boolean {
+  if (value === undefined || value.length === 0) {
+    return false
+  }
+  const normalized = value.trim().toLowerCase()
+  if (normalized === '1' || normalized === 'true') {
+    return true
+  }
+  if (normalized === '0' || normalized === 'false') {
+    return false
+  }
+  throw new Error(`${name} must be a boolean value, got ${value}`)
 }
 
 function resolveParallelBrowserWorkers(value: string | undefined): number {
-  if (!value) {
+  if (value === undefined || value.length === 0) {
     return DEFAULT_PARALLEL_BROWSER_WORKERS
   }
-  const parsed = Number.parseInt(value, 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_PARALLEL_BROWSER_WORKERS
+  if (!/^(?:[1-9]\d*)$/u.test(value)) {
+    throw new Error(`BILIG_BROWSER_PARALLEL_WORKERS must be a positive integer, got ${value}`)
+  }
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error(`BILIG_BROWSER_PARALLEL_WORKERS must be a safe integer, got ${value}`)
+  }
+  return parsed
 }
 
 export function resolveBrowserTestPhases(input: {
@@ -51,10 +67,10 @@ export function resolveBrowserTestPhases(input: {
     ]
   }
 
-  const includePerf = envFlagEnabled(input.env.BILIG_BROWSER_INCLUDE_PERF)
-  const includeDeep = envFlagEnabled(input.env.BILIG_BROWSER_INCLUDE_DEEP)
-  const includeFuzz = envFlagEnabled(input.env.BILIG_BROWSER_INCLUDE_FUZZ)
-  const ciSmoke = envFlagEnabled(input.env.BILIG_BROWSER_CI_SMOKE)
+  const includePerf = envFlagEnabled(input.env.BILIG_BROWSER_INCLUDE_PERF, 'BILIG_BROWSER_INCLUDE_PERF')
+  const includeDeep = envFlagEnabled(input.env.BILIG_BROWSER_INCLUDE_DEEP, 'BILIG_BROWSER_INCLUDE_DEEP')
+  const includeFuzz = envFlagEnabled(input.env.BILIG_BROWSER_INCLUDE_FUZZ, 'BILIG_BROWSER_INCLUDE_FUZZ')
+  const ciSmoke = envFlagEnabled(input.env.BILIG_BROWSER_CI_SMOKE, 'BILIG_BROWSER_CI_SMOKE')
   if (ciSmoke) {
     return [
       {
