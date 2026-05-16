@@ -5,6 +5,28 @@ import { scalarText as decodeScalarText } from './text-codec'
 import { parseNumericText } from './text-special'
 import { truncToInt } from './numeric-core'
 import { binaryNumeric, compareText, ensureF64, ensureU8, ensureU16, ensureU32, isComparisonOpcode, toNumeric } from './vm-core-helpers'
+import {
+  allocateOutputString,
+  encodeOutputStringId,
+  OUTPUT_STRING_BASE,
+  outputStringDataView,
+  outputStringLengthsView,
+  outputStringOffsetsView,
+  resetOutputStrings,
+  writeOutputStringData,
+} from './vm-output-strings'
+
+export {
+  allocateOutputString,
+  encodeOutputStringId,
+  getOutputStringCount,
+  getOutputStringDataLength,
+  getOutputStringDataPtr,
+  getOutputStringLengthsPtr,
+  getOutputStringOffsetsPtr,
+  resetOutputStrings,
+  writeOutputStringData,
+} from './vm-output-strings'
 
 export let tags = new Uint8Array(64)
 export let numbers = new Float64Array(64)
@@ -29,11 +51,6 @@ export let rangeMembers = new Uint32Array(64)
 let formulaForCell = new Uint32Array(64)
 let formulaCount = 0
 
-let outputStringLengths = new Uint32Array(64)
-let outputStringOffsets = new Uint32Array(64)
-let outputStringData = new Uint16Array(64)
-let outputStringCount = 0
-let outputStringDataLength = 0
 const UNCACHED_AGGREGATE_TAG: u8 = 0xff
 let sumRangeCacheTags = new Uint8Array(64)
 let sumRangeCacheValues = new Float64Array(64)
@@ -49,27 +66,11 @@ let spillArrayCount = 0
 let spillTags = new Uint8Array(64)
 let spillNumbers = new Float64Array(64)
 let spillValueCount = 0
-const OUTPUT_STRING_BASE: f64 = 2147483648.0
 let volatileNowSerial: f64 = NaN
 let volatileRandomValues = new Float64Array(0)
 let volatileRandomCursor = 0
 const UNRESOLVED_WASM_OPERAND: u32 = 0x00ffffff
 
-export function getOutputStringLengthsPtr(): usize {
-  return outputStringLengths.dataStart
-}
-export function getOutputStringOffsetsPtr(): usize {
-  return outputStringOffsets.dataStart
-}
-export function getOutputStringDataPtr(): usize {
-  return outputStringData.dataStart
-}
-export function getOutputStringCount(): i32 {
-  return outputStringCount
-}
-export function getOutputStringDataLength(): i32 {
-  return outputStringDataLength
-}
 export function getSpillResultRowsPtr(): usize {
   return spillRows.dataStart
 }
@@ -90,11 +91,6 @@ export function getSpillResultNumbersPtr(): usize {
 }
 export function getSpillResultValueCount(): i32 {
   return spillValueCount
-}
-
-export function resetOutputStrings(): void {
-  outputStringCount = 0
-  outputStringDataLength = 0
 }
 
 function resetSpillResults(): void {
@@ -156,30 +152,6 @@ export function readSpillArrayNumber(arrayIndex: u32, offset: i32): f64 {
   return spillNumbers[spillArrayOffsets[arrayIndex] + offset]
 }
 
-export function allocateOutputString(length: i32): i32 {
-  const index = outputStringCount
-  outputStringCount += 1
-  outputStringLengths = ensureU32(outputStringLengths, outputStringCount)
-  outputStringOffsets = ensureU32(outputStringOffsets, outputStringCount)
-
-  outputStringLengths[index] = length
-  outputStringOffsets[index] = outputStringDataLength
-
-  outputStringDataLength += length
-  outputStringData = ensureU16(outputStringData, outputStringDataLength)
-
-  return index
-}
-
-export function writeOutputStringData(index: i32, offset: i32, char: u16): void {
-  const dataOffset = outputStringOffsets[index]
-  outputStringData[dataOffset + offset] = char
-}
-
-export function encodeOutputStringId(index: i32): f64 {
-  return OUTPUT_STRING_BASE + <f64>index
-}
-
 export function uploadVolatileNowSerial(nowSerial: f64): void {
   volatileNowSerial = nowSerial
 }
@@ -230,7 +202,16 @@ function writeCellValue(cellIndex: i32, tag: u8, value: f64): void {
 }
 
 function scalarText(tag: u8, value: f64): string | null {
-  return decodeScalarText(tag, value, stringOffsets, stringLengths, stringData, outputStringOffsets, outputStringLengths, outputStringData)
+  return decodeScalarText(
+    tag,
+    value,
+    stringOffsets,
+    stringLengths,
+    stringData,
+    outputStringOffsetsView(),
+    outputStringLengthsView(),
+    outputStringDataView(),
+  )
 }
 
 function compareScalars(leftTag: u8, leftValue: f64, rightTag: u8, rightValue: f64): i32 {
@@ -897,9 +878,9 @@ function evalProgram(cellIndex: i32, formulaIndex: i32): void {
         rangeRowCounts,
         rangeColCounts,
         rangeMembers,
-        outputStringOffsets,
-        outputStringLengths,
-        outputStringData,
+        outputStringOffsetsView(),
+        outputStringLengthsView(),
+        outputStringDataView(),
         sp,
       )
       if (sp > 0) {
