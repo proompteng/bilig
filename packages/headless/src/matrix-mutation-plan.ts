@@ -1,5 +1,4 @@
 import type { EngineCellMutationRef } from '@bilig/core'
-import { formatAddress } from '@bilig/formula'
 import { isBlankRawCellContent } from './work-paper-runtime-helpers.js'
 import type { WorkPaperCellAddress, WorkPaperSheet, RawCellContent } from './work-paper-types.js'
 
@@ -10,6 +9,7 @@ export interface MatrixMutationPlan {
   leadingPotentialNewCells: number
   formulaRefs: MatrixMutationRef[]
   formulaPotentialNewCells: number
+  refCount: number
   refs: MatrixMutationRef[]
   potentialNewCells: number
   trailingLiteralRefs: MatrixMutationRef[]
@@ -21,6 +21,7 @@ interface BuildMatrixMutationPlanArgs {
   content: WorkPaperSheet
   rewriteFormula: (formula: string, destination: WorkPaperCellAddress, rowOffset: number, columnOffset: number) => string
   deferLiteralAddresses?: ReadonlySet<string>
+  includeCombinedRefs?: boolean
   skipNulls?: boolean
 }
 
@@ -52,8 +53,15 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
     })
   })
 
-  const shouldDeferLiteral = (address: string, row: number, col: number): boolean =>
-    args.deferLiteralAddresses?.has(address) === true || row > (earliestFormulaRowByColumn.get(col) ?? Number.POSITIVE_INFINITY)
+  const shouldDeferLiteral = (row: number, col: number): boolean => {
+    const earliestFormulaRow = earliestFormulaRowByColumn.get(col)
+    return earliestFormulaRow !== undefined && row > earliestFormulaRow
+  }
+
+  const shouldDeferLiteralAddress = (row: number, col: number): boolean => {
+    const explicitAddresses = args.deferLiteralAddresses
+    return explicitAddresses !== undefined && explicitAddresses.has(formatMatrixPlanAddress(row, col))
+  }
 
   args.content.forEach((row, rowOffset) => {
     row.forEach((raw, columnOffset) => {
@@ -62,7 +70,6 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
         row: args.target.row + rowOffset,
         col: args.target.col + columnOffset,
       }
-      const address = formatAddress(destination.row, destination.col)
 
       if (isBlankRawCellContent(raw)) {
         if (!args.skipNulls) {
@@ -70,7 +77,7 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
             sheetId: args.target.sheet,
             mutation: { kind: 'clearCell', row: destination.row, col: destination.col },
           } satisfies MatrixMutationRef
-          if (shouldDeferLiteral(address, destination.row, destination.col)) {
+          if (shouldDeferLiteral(destination.row, destination.col) || shouldDeferLiteralAddress(destination.row, destination.col)) {
             trailingLiteralRefs.push(ref)
           } else {
             leadingRefs.push(ref)
@@ -104,7 +111,7 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
           value: raw,
         },
       } satisfies MatrixMutationRef
-      if (shouldDeferLiteral(address, destination.row, destination.col)) {
+      if (shouldDeferLiteral(destination.row, destination.col) || shouldDeferLiteralAddress(destination.row, destination.col)) {
         trailingLiteralPotentialNewCells += 1
         trailingLiteralRefs.push(ref)
       } else {
@@ -119,9 +126,20 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
     leadingPotentialNewCells,
     formulaRefs,
     formulaPotentialNewCells,
-    refs: [...leadingRefs, ...formulaRefs, ...trailingLiteralRefs],
+    refCount: leadingRefs.length + formulaRefs.length + trailingLiteralRefs.length,
+    refs: args.includeCombinedRefs === false ? [] : [...leadingRefs, ...formulaRefs, ...trailingLiteralRefs],
     potentialNewCells,
     trailingLiteralRefs,
     trailingLiteralPotentialNewCells,
   }
+}
+
+function formatMatrixPlanAddress(row: number, col: number): string {
+  let index = col
+  let label = ''
+  do {
+    label = String.fromCharCode(65 + (index % 26)) + label
+    index = Math.floor(index / 26) - 1
+  } while (index >= 0)
+  return `${label}${row + 1}`
 }

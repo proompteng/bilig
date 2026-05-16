@@ -91,6 +91,7 @@ export function applyWorkPaperMatrixContents(input: {
   const planInput: MatrixMutationPlanInput = {
     target: input.address,
     content: input.content,
+    includeCombinedRefs: false,
     rewriteFormula: (formula, destination) => input.rewriteFormulaForStorage(stripLeadingEquals(formula), destination.sheet),
   }
   if (options.deferLiteralAddresses !== undefined) {
@@ -104,12 +105,12 @@ export function applyWorkPaperMatrixContents(input: {
     leadingPotentialNewCells,
     formulaRefs,
     formulaPotentialNewCells,
-    refs,
+    refCount,
     potentialNewCells,
     trailingLiteralRefs,
     trailingLiteralPotentialNewCells,
   } = buildMatrixMutationPlan(planInput)
-  if (refs.length === 0) {
+  if (refCount === 0) {
     return
   }
   const applyPlannedRefs = (phaseRefs: readonly EngineCellMutationRef[], applyOptions: WorkPaperCellMutationApplyOptions): void => {
@@ -133,7 +134,7 @@ export function applyWorkPaperMatrixContents(input: {
   }
 
   if (formulaRefs.length === 0) {
-    applyPlannedRefs(refs, createApplyOptions())
+    applyPlannedRefs(leadingRefs, createApplyOptions())
     return
   }
 

@@ -59,9 +59,9 @@ describe('work-paper matrix application', () => {
     expect(flushCount).toBe(1)
     expect(applied).toHaveLength(3)
     expect(applied.map((entry) => entry.options)).toEqual([
-      { captureUndo: false, potentialNewCells: 9, source: 'restore', returnUndoOps: false, reuseRefs: true },
-      { captureUndo: false, potentialNewCells: 9, source: 'restore', returnUndoOps: false, reuseRefs: true },
-      { captureUndo: false, potentialNewCells: 9, source: 'restore', returnUndoOps: false, reuseRefs: true },
+      { captureUndo: false, potentialNewCells: 5, source: 'restore', returnUndoOps: false, reuseRefs: true },
+      { captureUndo: false, potentialNewCells: 2, source: 'restore', returnUndoOps: false, reuseRefs: true },
+      { captureUndo: false, potentialNewCells: 2, source: 'restore', returnUndoOps: false, reuseRefs: true },
     ])
     expect(applied.map((entry) => entry.refs.map((ref) => ref.mutation.kind))).toEqual([
       ['setCellValue', 'setCellValue', 'setCellValue', 'setCellValue', 'setCellValue'],

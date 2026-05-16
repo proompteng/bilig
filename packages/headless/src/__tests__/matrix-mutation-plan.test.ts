@@ -61,4 +61,41 @@ describe('buildMatrixMutationPlan', () => {
       { sheetId: 1, mutation: { kind: 'setCellValue', row: 3, col: 2, value: 'bottom' } },
     ])
   })
+
+  it('defers explicit literal addresses without formatting every planned cell', () => {
+    const plan = buildMatrixMutationPlan({
+      target: { sheet: 1, row: 0, col: 0 },
+      content: [
+        [1, 2],
+        [3, '=A1+B1'],
+      ],
+      deferLiteralAddresses: new Set(['B1']),
+      rewriteFormula: (formula) => formula.slice(1),
+    })
+
+    expect(plan.leadingRefs).toEqual([
+      { sheetId: 1, mutation: { kind: 'setCellValue', row: 0, col: 0, value: 1 } },
+      { sheetId: 1, mutation: { kind: 'setCellValue', row: 1, col: 0, value: 3 } },
+    ])
+    expect(plan.formulaRefs).toEqual([{ sheetId: 1, mutation: { kind: 'setCellFormula', row: 1, col: 1, formula: 'A1+B1' } }])
+    expect(plan.trailingLiteralRefs).toEqual([{ sheetId: 1, mutation: { kind: 'setCellValue', row: 0, col: 1, value: 2 } }])
+  })
+
+  it('can skip the combined ref list for phased matrix application', () => {
+    const plan = buildMatrixMutationPlan({
+      target: { sheet: 1, row: 0, col: 0 },
+      content: [
+        [1, '=A1'],
+        [2, 3],
+      ],
+      includeCombinedRefs: false,
+      rewriteFormula: (formula) => formula.slice(1),
+    })
+
+    expect(plan.refCount).toBe(4)
+    expect(plan.refs).toEqual([])
+    expect(plan.leadingRefs).toHaveLength(2)
+    expect(plan.formulaRefs).toHaveLength(1)
+    expect(plan.trailingLiteralRefs).toHaveLength(1)
+  })
 })
