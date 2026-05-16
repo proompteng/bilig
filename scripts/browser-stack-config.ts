@@ -1,7 +1,28 @@
+export type BrowserStack = 'auto' | 'compose' | 'local'
 export type BrowserLocalWebMode = 'dev' | 'preview'
 
+export function resolveBrowserStack(env: { BILIG_BROWSER_STACK?: string | undefined }): BrowserStack {
+  const value = env.BILIG_BROWSER_STACK
+  if (value === undefined || value === 'auto') {
+    return 'auto'
+  }
+  if (value === 'compose' || value === 'local') {
+    return value
+  }
+
+  throw new Error(`BILIG_BROWSER_STACK must be "auto", "compose", or "local", got ${value}`)
+}
+
 export function resolveBrowserLocalWebMode(env: { BILIG_BROWSER_WEB_MODE?: string | undefined }): BrowserLocalWebMode {
-  return env.BILIG_BROWSER_WEB_MODE === 'dev' ? 'dev' : 'preview'
+  const value = env.BILIG_BROWSER_WEB_MODE
+  if (value === undefined || value === 'preview') {
+    return 'preview'
+  }
+  if (value === 'dev') {
+    return 'dev'
+  }
+
+  throw new Error(`BILIG_BROWSER_WEB_MODE must be "preview" or "dev", got ${value}`)
 }
 
 export function buildBrowserLocalStackCommand(input: {
