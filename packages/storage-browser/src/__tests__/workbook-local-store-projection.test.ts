@@ -395,6 +395,42 @@ describe('workbook-local-store projection', () => {
     }
   })
 
+  it('sanitizes persisted sheet metadata when reading viewport projections', async () => {
+    const sqlite3 = await sqlite3InitModule()
+    const db = new sqlite3.oo1.DB(':memory:', 'c')
+    try {
+      initializeWorkbookLocalStoreSchema(db)
+      writeWorkbookAuthoritativeBase(db, createBase({ sheetId: 7, sheetName: 'Sheet1', value: 11 }))
+      db.exec("UPDATE authoritative_sheet SET freeze_rows = -1, freeze_cols = 1.5 WHERE name = 'Sheet1'")
+
+      expect(
+        readWorkbookViewportProjection(db, 'Sheet1', {
+          rowStart: 0,
+          rowEnd: 0,
+          colStart: 0,
+          colEnd: 0,
+        }),
+      ).toMatchObject({
+        sheetId: 7,
+        sheetName: 'Sheet1',
+        freezeRows: 0,
+        freezeCols: 0,
+      })
+
+      db.exec("UPDATE authoritative_sheet SET sheet_id = 7.5 WHERE name = 'Sheet1'")
+      expect(
+        readWorkbookViewportProjection(db, 'Sheet1', {
+          rowStart: 0,
+          rowEnd: 0,
+          colStart: 0,
+          colEnd: 0,
+        }),
+      ).toBeNull()
+    } finally {
+      db.close()
+    }
+  })
+
   it('normalizes delta child rows to the canonical parent sheet name for each sheet id', async () => {
     const sqlite3 = await sqlite3InitModule()
     const db = new sqlite3.oo1.DB(':memory:', 'c')

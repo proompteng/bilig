@@ -772,11 +772,11 @@ function readWorkbookViewportBase(db: Database, sheetName: string, viewport: Vie
     return null
   }
   const sheetId = sheetRecord['sheetId']
-  if (typeof sheetId !== 'number') {
+  if (!isSafeNonNegativeInteger(sheetId)) {
     return null
   }
-  const freezeRows = typeof sheetRecord['freezeRows'] === 'number' ? sheetRecord['freezeRows'] : 0
-  const freezeCols = typeof sheetRecord['freezeCols'] === 'number' ? sheetRecord['freezeCols'] : 0
+  const freezeRows = isSafeNonNegativeInteger(sheetRecord['freezeRows']) ? sheetRecord['freezeRows'] : 0
+  const freezeCols = isSafeNonNegativeInteger(sheetRecord['freezeCols']) ? sheetRecord['freezeCols'] : 0
 
   const cells = readViewportCells(
     db,
