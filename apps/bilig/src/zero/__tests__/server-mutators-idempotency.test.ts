@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorkbookRuntimeManager } from '../../workbook-runtime/runtime-manager.js'
+import type { WorkbookChangeRecord } from '../workbook-change-store.js'
 import type { Queryable } from '../store.js'
 
 const runtimeStoreFns = vi.hoisted(() => ({
@@ -264,6 +265,83 @@ describe('server mutator client mutation idempotency', () => {
     expect(commitMutation).not.toHaveBeenCalled()
     expect(mutationStoreFns.persistWorkbookMutation).not.toHaveBeenCalled()
   })
+
+  it('resolves undo-latest targets only after the workbook mutation lock is held', async () => {
+    const db = createQueryable()
+    const { commitMutation, loadRuntime, runtimeManager } = createRuntimeManagerHarness()
+    let lockHeld = false
+    runtimeStoreFns.acquireWorkbookMutationLock.mockImplementationOnce(async () => {
+      lockHeld = true
+    })
+    changeStoreFns.loadLatestUndoableWorkbookChange.mockImplementationOnce(async () => {
+      expect(lockHeld).toBe(true)
+      return createWorkbookChangeRecord({
+        revision: 4,
+        summary: 'Set B1',
+        sheetName: 'Sheet1',
+        anchorAddress: 'B1',
+      })
+    })
+
+    await expect(
+      handleServerMutator(
+        createServerTransaction(db),
+        'workbook.undoLatestChange',
+        {
+          documentId: 'doc-1',
+          clientMutationId: 'doc-1:pending:12',
+        },
+        runtimeManager,
+      ),
+    ).rejects.toThrow('Duplicate client mutations must not load runtime state')
+
+    expect(mutationStoreFns.loadAppliedWorkbookClientMutation).toHaveBeenCalledWith(db, 'doc-1', 'doc-1:pending:12')
+    expect(changeStoreFns.loadLatestUndoableWorkbookChange).toHaveBeenCalledWith(db, {
+      documentId: 'doc-1',
+      actorUserId: 'system',
+    })
+    expect(loadRuntime).toHaveBeenCalled()
+    expect(commitMutation).not.toHaveBeenCalled()
+    expect(mutationStoreFns.persistWorkbookMutation).not.toHaveBeenCalled()
+  })
+
+  it('validates explicit revert targets only after the workbook mutation lock is held', async () => {
+    const db = createQueryable()
+    const { commitMutation, loadRuntime, runtimeManager } = createRuntimeManagerHarness()
+    let lockHeld = false
+    runtimeStoreFns.acquireWorkbookMutationLock.mockImplementationOnce(async () => {
+      lockHeld = true
+    })
+    changeStoreFns.loadWorkbookChange.mockImplementationOnce(async () => {
+      expect(lockHeld).toBe(true)
+      return createWorkbookChangeRecord({
+        revision: 3,
+        summary: 'Set A1',
+        sheetName: 'Sheet1',
+        anchorAddress: 'A1',
+        revertedByRevision: 8,
+      })
+    })
+
+    await expect(
+      handleServerMutator(
+        createServerTransaction(db),
+        'workbook.revertChange',
+        {
+          documentId: 'doc-1',
+          clientMutationId: 'doc-1:pending:13',
+          revision: 3,
+        },
+        runtimeManager,
+      ),
+    ).rejects.toThrow('Workbook change was already reverted in r8')
+
+    expect(mutationStoreFns.loadAppliedWorkbookClientMutation).toHaveBeenCalledWith(db, 'doc-1', 'doc-1:pending:13')
+    expect(changeStoreFns.loadWorkbookChange).toHaveBeenCalledWith(db, 'doc-1', 3)
+    expect(loadRuntime).not.toHaveBeenCalled()
+    expect(commitMutation).not.toHaveBeenCalled()
+    expect(mutationStoreFns.persistWorkbookMutation).not.toHaveBeenCalled()
+  })
 })
 
 function createQueryable(): Queryable {
@@ -277,6 +355,35 @@ function createServerTransaction(db: Queryable): unknown {
     dbTransaction: {
       wrappedTransaction: db,
     },
+  }
+}
+
+function createWorkbookChangeRecord(input: {
+  readonly revision: number
+  readonly summary: string
+  readonly sheetName?: string | null
+  readonly anchorAddress?: string | null
+  readonly revertedByRevision?: number | null
+  readonly revertsRevision?: number | null
+  readonly eventKind?: WorkbookChangeRecord['eventKind']
+}): WorkbookChangeRecord {
+  return {
+    revision: input.revision,
+    actorUserId: 'system',
+    clientMutationId: null,
+    eventKind: input.eventKind ?? 'setCellValue',
+    summary: input.summary,
+    sheetId: 1,
+    sheetName: input.sheetName ?? null,
+    anchorAddress: input.anchorAddress ?? null,
+    range: null,
+    undoBundle: {
+      kind: 'engineOps',
+      ops: [],
+    },
+    revertedByRevision: input.revertedByRevision ?? null,
+    revertsRevision: input.revertsRevision ?? null,
+    createdAtUnixMs: 1_768_348_800_000,
   }
 }
 

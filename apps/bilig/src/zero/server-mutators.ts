@@ -28,10 +28,13 @@ import type { SessionIdentity } from '../http/session.js'
 import type { WorkbookRuntimeManager } from '../workbook-runtime/runtime-manager.js'
 import { ensureWorkbookDocumentExists } from './workbook-migration-store.js'
 import { upsertWorkbookPresence } from './presence-store.js'
-import { loadLatestRedoableWorkbookChange, loadLatestUndoableWorkbookChange, loadWorkbookChange } from './workbook-change-store.js'
 import { normalizeNumberFormatInput, normalizeStylePatch } from './server-mutator-format-payloads.js'
 import {
-  acknowledgeAppliedWorkbookHistoryMutationReplay,
+  resolveRedoLatestWorkbookChangeTarget,
+  resolveRevertWorkbookChangeTarget,
+  resolveUndoLatestWorkbookChangeTarget,
+} from './server-mutator-history-targets.js'
+import {
   captureEngineUndoBundle,
   commitWorkbookHistoryMutation,
   commitWorkbookMutation,
@@ -563,124 +566,57 @@ export async function handleServerMutator(
 
     case 'workbook.revertChange': {
       const parsed = revertWorkbookChangeArgsSchema.parse(args)
-      const db = serverTx.dbTransaction.wrappedTransaction
-      if (
-        await acknowledgeAppliedWorkbookHistoryMutationReplay({
-          documentId: parsed.documentId,
-          serverTx,
-          runtimeManager,
-          clientMutationId: parsed.clientMutationId,
-          matches: (payload) => payload.kind === 'revertChange' && payload.targetRevision === parsed.revision,
-        })
-      ) {
-        return
-      }
-      const targetChange = await loadWorkbookChange(db, parsed.documentId, parsed.revision)
-      if (!targetChange) {
-        throw new Error('Workbook change was not found')
-      }
-      if (!targetChange.undoBundle) {
-        throw new Error('Workbook change is not revertible')
-      }
-      if (targetChange.revertedByRevision !== null) {
-        throw new Error(`Workbook change was already reverted in r${targetChange.revertedByRevision}`)
-      }
-      if (targetChange.eventKind === 'revertChange' || targetChange.revertsRevision !== null) {
-        throw new Error('Reverting a revert change is not supported')
-      }
       await commitWorkbookHistoryMutation({
         documentId: parsed.documentId,
         serverTx,
         runtimeManager,
         ...(session ? { session } : {}),
         ...(parsed.clientMutationId !== undefined ? { clientMutationId: parsed.clientMutationId } : {}),
-        targetChange: {
-          revision: targetChange.revision,
-          summary: targetChange.summary,
-          sheetName: targetChange.sheetName,
-          anchorAddress: targetChange.anchorAddress,
-          range: targetChange.range,
-          undoBundle: targetChange.undoBundle,
-        },
         eventKind: 'revertChange',
+        replayMatches: (payload) => payload.kind === 'revertChange' && payload.targetRevision === parsed.revision,
+        resolveTargetChange: (db) =>
+          resolveRevertWorkbookChangeTarget(db, {
+            documentId: parsed.documentId,
+            revision: parsed.revision,
+          }),
       })
       return
     }
 
     case 'workbook.undoLatestChange': {
       const parsed = undoLatestWorkbookChangeArgsSchema.parse(args)
-      if (
-        await acknowledgeAppliedWorkbookHistoryMutationReplay({
-          documentId: parsed.documentId,
-          serverTx,
-          runtimeManager,
-          clientMutationId: parsed.clientMutationId,
-          matches: (payload) => payload.kind === 'revertChange',
-        })
-      ) {
-        return
-      }
-      const targetChange = await loadLatestUndoableWorkbookChange(serverTx.dbTransaction.wrappedTransaction, {
-        documentId: parsed.documentId,
-        actorUserId: session?.userID ?? 'system',
-      })
-      if (!targetChange?.undoBundle) {
-        throw new Error('No undoable workbook change was found')
-      }
       await commitWorkbookHistoryMutation({
         documentId: parsed.documentId,
         serverTx,
         runtimeManager,
         ...(session ? { session } : {}),
         ...(parsed.clientMutationId !== undefined ? { clientMutationId: parsed.clientMutationId } : {}),
-        targetChange: {
-          revision: targetChange.revision,
-          summary: targetChange.summary,
-          sheetName: targetChange.sheetName,
-          anchorAddress: targetChange.anchorAddress,
-          range: targetChange.range,
-          undoBundle: targetChange.undoBundle,
-        },
         eventKind: 'revertChange',
+        replayMatches: (payload) => payload.kind === 'revertChange',
+        resolveTargetChange: (db) =>
+          resolveUndoLatestWorkbookChangeTarget(db, {
+            documentId: parsed.documentId,
+            actorUserId: session?.userID ?? 'system',
+          }),
       })
       return
     }
 
     case 'workbook.redoLatestChange': {
       const parsed = redoLatestWorkbookChangeArgsSchema.parse(args)
-      if (
-        await acknowledgeAppliedWorkbookHistoryMutationReplay({
-          documentId: parsed.documentId,
-          serverTx,
-          runtimeManager,
-          clientMutationId: parsed.clientMutationId,
-          matches: (payload) => payload.kind === 'redoChange',
-        })
-      ) {
-        return
-      }
-      const targetChange = await loadLatestRedoableWorkbookChange(serverTx.dbTransaction.wrappedTransaction, {
-        documentId: parsed.documentId,
-        actorUserId: session?.userID ?? 'system',
-      })
-      if (!targetChange?.undoBundle) {
-        throw new Error('No redoable workbook change was found')
-      }
       await commitWorkbookHistoryMutation({
         documentId: parsed.documentId,
         serverTx,
         runtimeManager,
         ...(session ? { session } : {}),
         ...(parsed.clientMutationId !== undefined ? { clientMutationId: parsed.clientMutationId } : {}),
-        targetChange: {
-          revision: targetChange.revision,
-          summary: targetChange.summary,
-          sheetName: targetChange.sheetName,
-          anchorAddress: targetChange.anchorAddress,
-          range: targetChange.range,
-          undoBundle: targetChange.undoBundle,
-        },
         eventKind: 'redoChange',
+        replayMatches: (payload) => payload.kind === 'redoChange',
+        resolveTargetChange: (db) =>
+          resolveRedoLatestWorkbookChangeTarget(db, {
+            documentId: parsed.documentId,
+            actorUserId: session?.userID ?? 'system',
+          }),
       })
       return
     }

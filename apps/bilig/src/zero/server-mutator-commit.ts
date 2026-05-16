@@ -105,40 +105,36 @@ export async function commitWorkbookMutation(
   })
 }
 
+export interface WorkbookHistoryMutationTarget {
+  readonly revision: number
+  readonly summary: string
+  readonly sheetName: string | null
+  readonly anchorAddress: string | null
+  readonly range: WorkbookChangeRange | null
+  readonly undoBundle: WorkbookChangeUndoBundle
+}
+
 export async function commitWorkbookHistoryMutation(input: {
   documentId: string
   serverTx: ServerTransactionLike
   runtimeManager: WorkbookRuntimeManager
   session?: SessionIdentity
   clientMutationId?: string
-  targetChange: {
-    revision: number
-    summary: string
-    sheetName: string | null
-    anchorAddress: string | null
-    range: WorkbookChangeRange | null
-    undoBundle: WorkbookChangeUndoBundle
-  }
   eventKind: 'revertChange' | 'redoChange'
+  replayMatches: (payload: WorkbookEventPayload) => boolean
+  resolveTargetChange: (db: Queryable) => Promise<WorkbookHistoryMutationTarget>
 }): Promise<void> {
-  const { clientMutationId, documentId, eventKind, runtimeManager, serverTx, session, targetChange } = input
+  const { clientMutationId, documentId, eventKind, replayMatches, resolveTargetChange, runtimeManager, serverTx, session } = input
   await runtimeManager.runExclusive(documentId, async () => {
     const db = serverTx.dbTransaction.wrappedTransaction
     await acquireWorkbookMutationLock(db, documentId)
-    const eventPayload: WorkbookEventPayload = {
-      kind: eventKind,
-      targetRevision: targetChange.revision,
-      targetSummary: targetChange.summary,
-      ...(targetChange.sheetName ? { sheetName: targetChange.sheetName } : {}),
-      ...(targetChange.anchorAddress ? { address: targetChange.anchorAddress } : {}),
-      ...(targetChange.range ? { range: targetChange.range } : {}),
-      appliedBundle: targetChange.undoBundle,
-    }
     const appliedClientMutation = await loadAppliedWorkbookClientMutation(db, documentId, clientMutationId)
     if (appliedClientMutation) {
-      assertClientMutationReplayMatches(appliedClientMutation, eventPayload)
+      assertClientMutationReplaySatisfies(appliedClientMutation, replayMatches)
       return
     }
+    const targetChange = await resolveTargetChange(db)
+    const eventPayload = buildWorkbookHistoryEventPayload(eventKind, targetChange)
     const state = await runtimeManager.loadRuntime(db, documentId)
     try {
       const undoBundle = applyWorkbookChangeUndoBundle(state.engine, targetChange.undoBundle)
@@ -165,32 +161,6 @@ export async function commitWorkbookHistoryMutation(input: {
   })
 }
 
-export async function acknowledgeAppliedWorkbookHistoryMutationReplay(input: {
-  documentId: string
-  serverTx: ServerTransactionLike
-  runtimeManager: WorkbookRuntimeManager
-  clientMutationId: string | undefined
-  matches: (payload: WorkbookEventPayload) => boolean
-}): Promise<boolean> {
-  if (input.clientMutationId === undefined) {
-    return false
-  }
-  return await input.runtimeManager.runExclusive(input.documentId, async () => {
-    const db = input.serverTx.dbTransaction.wrappedTransaction
-    await acquireWorkbookMutationLock(db, input.documentId)
-    const appliedClientMutation = await loadAppliedWorkbookClientMutation(db, input.documentId, input.clientMutationId)
-    if (!appliedClientMutation) {
-      return false
-    }
-    if (!input.matches(appliedClientMutation.payload)) {
-      throw new Error(
-        `Client mutation ${appliedClientMutation.clientMutationId} for workbook ${appliedClientMutation.documentId} was already applied with a different payload`,
-      )
-    }
-    return true
-  })
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -213,6 +183,33 @@ function assertClientMutationReplayMatches(appliedMutation: AppliedWorkbookClien
   throw new Error(
     `Client mutation ${appliedMutation.clientMutationId} for workbook ${appliedMutation.documentId} was already applied with a different payload`,
   )
+}
+
+function assertClientMutationReplaySatisfies(
+  appliedMutation: AppliedWorkbookClientMutation,
+  matches: (payload: WorkbookEventPayload) => boolean,
+): void {
+  if (matches(appliedMutation.payload)) {
+    return
+  }
+  throw new Error(
+    `Client mutation ${appliedMutation.clientMutationId} for workbook ${appliedMutation.documentId} was already applied with a different payload`,
+  )
+}
+
+function buildWorkbookHistoryEventPayload(
+  eventKind: 'revertChange' | 'redoChange',
+  targetChange: WorkbookHistoryMutationTarget,
+): WorkbookEventPayload {
+  return {
+    kind: eventKind,
+    targetRevision: targetChange.revision,
+    targetSummary: targetChange.summary,
+    ...(targetChange.sheetName ? { sheetName: targetChange.sheetName } : {}),
+    ...(targetChange.anchorAddress ? { address: targetChange.anchorAddress } : {}),
+    ...(targetChange.range ? { range: targetChange.range } : {}),
+    appliedBundle: targetChange.undoBundle,
+  }
 }
 
 function applyWorkbookChangeUndoBundle(engine: SpreadsheetEngine, undoBundle: WorkbookChangeUndoBundle): WorkbookChangeUndoBundle | null {
