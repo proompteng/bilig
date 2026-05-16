@@ -229,8 +229,8 @@ function parsePositiveInteger(value: string, option: string): number {
 }
 
 function parseMatchRate(value: string, option: string): number {
-  const parsed = Number.parseFloat(value)
-  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+  const parsed = Number(value)
+  if (!/^(?:0(?:\.\d+)?|1(?:\.0+)?)$/.test(value) || !Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
     throw new CliUsageError(`${option} expects a number between 0 and 1, got ${value}`, 2)
   }
   return parsed

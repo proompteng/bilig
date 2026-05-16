@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
 
 import { runWorkPaperXlsxCorpus, runWorkPaperXlsxCorpusInChildProcesses } from '../check-workpaper-xlsx-corpus.ts'
+import { parseWorkPaperXlsxCorpusCliArgs } from '../workpaper-xlsx-corpus-cli.ts'
 
 describe('WorkPaper XLSX corpus verifier', () => {
   it('keeps a checked-in XLSX compatibility corpus green', () => {
@@ -138,6 +139,18 @@ describe('WorkPaper XLSX corpus verifier', () => {
       expect(result.stderr).toContain('workpaper:xlsx-corpus directory sweep is disabled while the public corpus stop marker is active')
       expect(result.stderr).toContain('--allow-active-stop-marker')
     })
+  })
+
+  it('parses decimal min-match-rate CLI values', () => {
+    const options = parseWorkPaperXlsxCorpusCliArgs(['--min-match-rate', '0.75', checkedInCorpusFile()])
+
+    expect(options.minMatchRate).toBe(0.75)
+  })
+
+  it('rejects non-decimal min-match-rate CLI values', () => {
+    expect(() => parseWorkPaperXlsxCorpusCliArgs(['--min-match-rate', '1e-1', checkedInCorpusFile()])).toThrow(
+      '--min-match-rate expects a number between 0 and 1, got 1e-1',
+    )
   })
 
   it('allows the checked-in fixture corpus directory while the corpus stop marker is active', () => {
