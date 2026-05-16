@@ -21,6 +21,7 @@ export {
   createMemoryWorkbookLocalStoreFactory,
   createOpfsWorkbookLocalStoreFactory,
   WorkbookLocalStoreLockedError,
+  WorkbookLocalStoreUnavailableError,
   type OpfsWorkbookLocalStoreFactoryOptions,
   type WorkbookBootstrapState,
   type WorkbookLocalMutationRecord,

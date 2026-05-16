@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const installOpfsSAHPoolVfs = vi.fn()
+const OpfsSAHPoolDb = vi.fn()
 const sqliteConfigError = vi.fn()
 const sqliteConfigWarn = vi.fn()
 const sqliteRuntime = {
@@ -23,6 +24,8 @@ vi.mock('@sqlite.org/sqlite-wasm', () => ({
 describe('opfs workbook local store', () => {
   beforeEach(() => {
     installOpfsSAHPoolVfs.mockReset()
+    OpfsSAHPoolDb.mockReset()
+    installOpfsSAHPoolVfs.mockResolvedValue({ OpfsSAHPoolDb })
     sqlite3InitModule.mockClear()
     sqliteConfigError.mockReset()
     sqliteConfigWarn.mockReset()
@@ -135,5 +138,22 @@ describe('opfs workbook local store', () => {
     } finally {
       consoleError.mockRestore()
     }
+  })
+
+  it('translates sqlite cantopen database failures into an unavailable local store', async () => {
+    OpfsSAHPoolDb.mockImplementation(() => {
+      throw new Error('SQLITE_CANTOPEN: sqlite3 result code 14: unable to open database file')
+    })
+
+    const { WorkbookLocalStoreUnavailableError, createOpfsWorkbookLocalStoreFactory } = await import('../index.js')
+    const factory = createOpfsWorkbookLocalStoreFactory()
+
+    await expect(factory.open('doc-cantopen')).rejects.toMatchObject({
+      name: WorkbookLocalStoreUnavailableError.name,
+      message: 'Workbook local store is unavailable for doc-cantopen',
+    })
+
+    expect(installOpfsSAHPoolVfs).toHaveBeenCalledTimes(1)
+    expect(OpfsSAHPoolDb).toHaveBeenCalledWith('/workbooks/doc-cantopen.sqlite')
   })
 })

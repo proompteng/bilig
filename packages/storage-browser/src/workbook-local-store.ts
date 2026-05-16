@@ -25,6 +25,10 @@ export class WorkbookLocalStoreLockedError extends Error {
   override readonly name = 'WorkbookLocalStoreLockedError'
 }
 
+export class WorkbookLocalStoreUnavailableError extends Error {
+  override readonly name = 'WorkbookLocalStoreUnavailableError'
+}
+
 export interface WorkbookStoredState {
   readonly snapshot: unknown
   readonly replica: unknown
@@ -220,9 +224,31 @@ function isAccessHandleConflict(error: unknown): boolean {
   )
 }
 
+function isSqliteOpenUnavailable(error: unknown): boolean {
+  const message = getErrorMessage(error)
+  if (!message) {
+    return false
+  }
+  return message.includes('SQLITE_CANTOPEN') || message.includes('unable to open database file')
+}
+
 function toWorkbookLocalStoreLockedError(documentId: string | null, cause?: unknown): WorkbookLocalStoreLockedError {
   const suffix = documentId ? ` for ${documentId}` : ''
   const error = new WorkbookLocalStoreLockedError(`Workbook local store is locked by another tab${suffix}`)
+  if (cause !== undefined) {
+    Object.defineProperty(error, 'cause', {
+      configurable: true,
+      enumerable: false,
+      value: cause,
+      writable: true,
+    })
+  }
+  return error
+}
+
+function toWorkbookLocalStoreUnavailableError(documentId: string | null, cause?: unknown): WorkbookLocalStoreUnavailableError {
+  const suffix = documentId ? ` for ${documentId}` : ''
+  const error = new WorkbookLocalStoreUnavailableError(`Workbook local store is unavailable${suffix}`)
   if (cause !== undefined) {
     Object.defineProperty(error, 'cause', {
       configurable: true,
@@ -357,6 +383,9 @@ async function getSqliteRuntime(
       } catch (error) {
         if (isAccessHandleConflict(error)) {
           throw toWorkbookLocalStoreLockedError(null, error)
+        }
+        if (isSqliteOpenUnavailable(error)) {
+          throw toWorkbookLocalStoreUnavailableError(null, error)
         }
         throw error
       }
@@ -790,6 +819,9 @@ export function createOpfsWorkbookLocalStoreFactory(options: OpfsWorkbookLocalSt
       } catch (error) {
         if (error instanceof WorkbookLocalStoreLockedError || isAccessHandleConflict(error)) {
           throw toWorkbookLocalStoreLockedError(documentId, error)
+        }
+        if (error instanceof WorkbookLocalStoreUnavailableError || isSqliteOpenUnavailable(error)) {
+          throw toWorkbookLocalStoreUnavailableError(documentId, error)
         }
         throw error
       }

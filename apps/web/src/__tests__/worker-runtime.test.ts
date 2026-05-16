@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SpreadsheetEngine } from '@bilig/core'
 import { formatAddress } from '@bilig/formula'
 import type { WorkbookLocalMutationRecord, WorkbookLocalStoreFactory } from '@bilig/storage-browser'
-import { WorkbookLocalStoreLockedError, createMemoryWorkbookLocalStoreFactory } from '@bilig/storage-browser'
+import {
+  WorkbookLocalStoreLockedError,
+  WorkbookLocalStoreUnavailableError,
+  createMemoryWorkbookLocalStoreFactory,
+} from '@bilig/storage-browser'
 import { ErrorCode, createCellNumberFormatRecord, formatCellDisplayValue, isWorkbookSnapshot, ValueTag } from '@bilig/protocol'
 import {
   decodeRenderTileDeltaBatch,
@@ -577,6 +581,27 @@ describe('WorkbookWorkerRuntime', () => {
 
     const bootstrap = await runtime.bootstrap({
       documentId: 'locked-doc',
+      replicaId: 'browser:test',
+      persistState: true,
+    })
+
+    expect(bootstrap.restoredFromPersistence).toBe(false)
+    expect(bootstrap.requiresAuthoritativeHydrate).toBe(false)
+    expect(bootstrap.localPersistenceMode).toBe('follower')
+    expect(runtime.getCell('Sheet1', 'A1').value).toEqual({ tag: ValueTag.Empty })
+  })
+
+  it('falls back to a usable runtime when the local sqlite store cannot open its database file', async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: {
+        async open() {
+          throw new WorkbookLocalStoreUnavailableError('Workbook local store is unavailable for unavailable-doc')
+        },
+      },
+    })
+
+    const bootstrap = await runtime.bootstrap({
+      documentId: 'unavailable-doc',
       replicaId: 'browser:test',
       persistState: true,
     })

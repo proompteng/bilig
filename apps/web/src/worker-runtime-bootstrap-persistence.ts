@@ -1,5 +1,6 @@
 import {
   WorkbookLocalStoreLockedError,
+  WorkbookLocalStoreUnavailableError,
   type WorkbookBootstrapState,
   type WorkbookLocalStore,
   type WorkbookLocalStoreFactory,
@@ -85,7 +86,7 @@ export async function restoreBootstrapPersistence(args: {
     })
     restoredBootstrapState = await localStore.loadBootstrapState()
   } catch (error) {
-    if (!(error instanceof WorkbookLocalStoreLockedError)) {
+    if (!(error instanceof WorkbookLocalStoreLockedError) && !(error instanceof WorkbookLocalStoreUnavailableError)) {
       throw error
     }
     return {
