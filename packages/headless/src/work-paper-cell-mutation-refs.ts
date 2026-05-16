@@ -7,6 +7,7 @@ export interface WorkPaperCellMutationApplyOptions {
   readonly source?: 'local' | 'restore'
   readonly returnUndoOps?: boolean
   readonly reuseRefs?: boolean
+  readonly skipDimensionUpdate?: boolean
 }
 
 export interface WorkPaperCellMutationApplyRuntime {
@@ -27,8 +28,8 @@ export function applyWorkPaperCellMutationRefs(
     runtime.addSuspendedCellMutationPotentialNewCells(options.potentialNewCells ?? countPotentialNewTrackedCellMutations(refs))
     return
   }
-  runtime.applyCellMutationsAtWithOptions(refs, options)
-  if (!canSkipDimensionUpdateAfterLiteralMutation(refs, options.potentialNewCells)) {
+  runtime.applyCellMutationsAtWithOptions(refs, engineApplyOptions(options))
+  if (options.skipDimensionUpdate !== true && !canSkipDimensionUpdateAfterLiteralMutation(refs, options.potentialNewCells)) {
     runtime.updateSheetDimensionsAfterCellMutationRefs(refs)
   }
 }
@@ -77,4 +78,12 @@ function cloneWorkPaperCellMutationRefs(refs: readonly EngineCellMutationRef[]):
               col: ref.mutation.col,
             },
   }))
+}
+
+function engineApplyOptions(options: WorkPaperCellMutationApplyOptions): WorkPaperCellMutationApplyOptions {
+  if (options.skipDimensionUpdate === undefined) {
+    return options
+  }
+  const { skipDimensionUpdate: _skipDimensionUpdate, ...engineOptions } = options
+  return engineOptions
 }

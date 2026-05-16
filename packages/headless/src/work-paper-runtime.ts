@@ -598,8 +598,10 @@ export class WorkPaper extends WorkPaperRuntimeSurface {
       content,
       options,
       flushPendingBatchOps: () => this.flushPendingBatchOps(),
+      isEvaluationSuspended: () => this.evaluationSuspended,
       applyCellMutationRefs: (refs, applyOptions) => this.applyCellMutationRefs(refs, applyOptions),
       rewriteFormulaForStorage: (formula, ownerSheetId) => this.rewriteFormulaForStorage(formula, ownerSheetId),
+      updateSheetDimensionsAfterCellMutationRefs: (refs) => this.updateSheetDimensionsAfterCellMutationRefs(refs),
     })
   }
 

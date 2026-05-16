@@ -69,4 +69,63 @@ describe('work-paper matrix application', () => {
       ['setCellValue', 'setCellValue'],
     ])
   })
+
+  it('updates dimensions once after phased formula matrix writes', () => {
+    const applied: Array<{ refs: readonly EngineCellMutationRef[]; options: WorkPaperCellMutationApplyOptions }> = []
+    const dimensionUpdates: Array<readonly EngineCellMutationRef[]> = []
+
+    applyWorkPaperMatrixContents({
+      address: { sheet: 1, row: 0, col: 0 },
+      content: [
+        [1, '=A2+A3', 'top'],
+        [2, 20, 'middle'],
+        [3, 30, '=A1+B1'],
+      ],
+      flushPendingBatchOps: () => {},
+      applyCellMutationRefs: (refs, options) => {
+        applied.push({ refs, options })
+      },
+      isEvaluationSuspended: () => false,
+      rewriteFormulaForStorage: (formula) => formula,
+      updateSheetDimensionsAfterCellMutationRefs: (refs) => {
+        dimensionUpdates.push(refs)
+      },
+    })
+
+    expect(applied.map((entry) => entry.options.skipDimensionUpdate)).toEqual([true, true, true])
+    expect(dimensionUpdates).toHaveLength(1)
+    expect(dimensionUpdates[0]?.map((ref) => ref.mutation.kind)).toEqual([
+      'setCellValue',
+      'setCellValue',
+      'setCellValue',
+      'setCellValue',
+      'setCellValue',
+      'setCellFormula',
+      'setCellFormula',
+      'setCellValue',
+      'setCellValue',
+    ])
+  })
+
+  it('leaves suspended local formula matrix dimensions to queued mutation flush', () => {
+    const applied: Array<{ refs: readonly EngineCellMutationRef[]; options: WorkPaperCellMutationApplyOptions }> = []
+    let dimensionUpdateCount = 0
+
+    applyWorkPaperMatrixContents({
+      address: { sheet: 1, row: 0, col: 0 },
+      content: [[1, '=A1']],
+      flushPendingBatchOps: () => {},
+      applyCellMutationRefs: (refs, options) => {
+        applied.push({ refs, options })
+      },
+      isEvaluationSuspended: () => true,
+      rewriteFormulaForStorage: (formula) => formula,
+      updateSheetDimensionsAfterCellMutationRefs: () => {
+        dimensionUpdateCount += 1
+      },
+    })
+
+    expect(applied.map((entry) => entry.options.skipDimensionUpdate)).toEqual([undefined, undefined])
+    expect(dimensionUpdateCount).toBe(0)
+  })
 })

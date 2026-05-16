@@ -1,7 +1,7 @@
 import { ValueTag } from '@bilig/protocol'
 import { describe, expect, it, vi } from 'vitest'
 
-import { WorkPaper, type WorkPaperCellAddress } from '../index.js'
+import { WorkPaper, type WorkPaperCellAddress, type WorkPaperChange } from '../index.js'
 
 function cell(sheet: number, row: number, col: number): WorkPaperCellAddress {
   return { sheet, row, col }
@@ -9,6 +9,30 @@ function cell(sheet: number, row: number, col: number): WorkPaperCellAddress {
 
 function hasCaptureVisibilitySnapshot(value: unknown): value is WorkPaper & { captureVisibilitySnapshot: () => unknown } {
   return typeof Reflect.get(value, 'captureVisibilitySnapshot') === 'function'
+}
+
+interface TestSheetDimensionCache {
+  updateAfterCellMutationRefs(...args: unknown[]): unknown
+}
+
+function hasSheetDimensionCacheUpdater(value: unknown): value is TestSheetDimensionCache {
+  return typeof value === 'object' && value !== null && typeof Reflect.get(value, 'updateAfterCellMutationRefs') === 'function'
+}
+
+function trackSheetDimensionCacheUpdates(workbook: WorkPaper): { readonly count: number; restore: () => void } {
+  const cache: unknown = Reflect.get(workbook, 'sheetDimensionCache')
+  if (!hasSheetDimensionCacheUpdater(cache)) {
+    throw new Error('Expected WorkPaper to expose a sheet dimension cache in tests')
+  }
+  const spy = vi.spyOn(cache, 'updateAfterCellMutationRefs')
+  return {
+    get count() {
+      return spy.mock.calls.length
+    },
+    restore: () => {
+      spy.mockRestore()
+    },
+  }
 }
 
 describe('work paper batched structural fast path', () => {
@@ -27,17 +51,24 @@ describe('work paper batched structural fast path', () => {
     const captureVisibilitySnapshot = vi.spyOn(workbook, 'captureVisibilitySnapshot').mockImplementation(() => {
       throw new Error('batched append formulas should not rebuild visibility snapshots')
     })
+    const dimensionUpdates = trackSheetDimensionCacheUpdates(workbook)
 
-    const changes = workbook.batch(() => {
-      expect(workbook.addRows(sheetId, 2, 2)).toEqual([])
-      expect(
-        workbook.setCellContents(cell(sheetId, 2, 0), [
-          [5, 6, '=SUM(A3:B3)'],
-          [7, 8, '=SUM(A4:B4)'],
-        ]),
-      ).toEqual([])
-    })
-    captureVisibilitySnapshot.mockRestore()
+    let changes: WorkPaperChange[] = []
+    try {
+      changes = workbook.batch(() => {
+        expect(workbook.addRows(sheetId, 2, 2)).toEqual([])
+        expect(
+          workbook.setCellContents(cell(sheetId, 2, 0), [
+            [5, 6, '=SUM(A3:B3)'],
+            [7, 8, '=SUM(A4:B4)'],
+          ]),
+        ).toEqual([])
+      })
+      expect(dimensionUpdates.count).toBe(1)
+    } finally {
+      dimensionUpdates.restore()
+      captureVisibilitySnapshot.mockRestore()
+    }
 
     expect(changes.length).toBeGreaterThan(0)
     expect(workbook.getCellValue(cell(sheetId, 2, 2))).toEqual({ tag: ValueTag.Number, value: 11 })

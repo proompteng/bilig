@@ -10,6 +10,7 @@ export interface WorkPaperCellMutationApplyOptions {
   source?: 'local' | 'restore'
   returnUndoOps?: boolean
   reuseRefs?: boolean
+  skipDimensionUpdate?: boolean
 }
 
 export interface WorkPaperMatrixApplyOptions {
@@ -83,8 +84,10 @@ export function applyWorkPaperMatrixContents(input: {
   readonly applyCellMutationRefs: (refs: readonly EngineCellMutationRef[], options: WorkPaperCellMutationApplyOptions) => void
   readonly content: WorkPaperSheet
   readonly flushPendingBatchOps: () => void
+  readonly isEvaluationSuspended?: () => boolean
   readonly options?: WorkPaperMatrixApplyOptions
   readonly rewriteFormulaForStorage: (formula: string, ownerSheetId: number) => string
+  readonly updateSheetDimensionsAfterCellMutationRefs?: (refs: readonly EngineCellMutationRef[]) => void
 }): void {
   const options = input.options ?? {}
   input.flushPendingBatchOps()
@@ -138,7 +141,38 @@ export function applyWorkPaperMatrixContents(input: {
     return
   }
 
-  applyPlannedRefs(leadingRefs, createApplyOptions(leadingPotentialNewCells))
-  applyPlannedRefs(formulaRefs, createApplyOptions(formulaPotentialNewCells))
-  applyPlannedRefs(trailingLiteralRefs, createApplyOptions(trailingLiteralPotentialNewCells))
+  const updateSheetDimensionsAfterCellMutationRefs = input.updateSheetDimensionsAfterCellMutationRefs
+  const canUpdateDimensionsOnce =
+    updateSheetDimensionsAfterCellMutationRefs !== undefined && (phaseSource !== 'local' || input.isEvaluationSuspended?.() !== true)
+  const createPhasedApplyOptions = (phasePotentialNewCells: number): WorkPaperCellMutationApplyOptions => {
+    const phasedOptions = createApplyOptions(phasePotentialNewCells)
+    if (canUpdateDimensionsOnce) {
+      phasedOptions.skipDimensionUpdate = true
+    }
+    return phasedOptions
+  }
+
+  applyPlannedRefs(leadingRefs, createPhasedApplyOptions(leadingPotentialNewCells))
+  applyPlannedRefs(formulaRefs, createPhasedApplyOptions(formulaPotentialNewCells))
+  applyPlannedRefs(trailingLiteralRefs, createPhasedApplyOptions(trailingLiteralPotentialNewCells))
+  if (canUpdateDimensionsOnce) {
+    updateSheetDimensionsAfterCellMutationRefs(mergeMatrixMutationRefPhases(leadingRefs, formulaRefs, trailingLiteralRefs))
+  }
+}
+
+function mergeMatrixMutationRefPhases(
+  leadingRefs: readonly EngineCellMutationRef[],
+  formulaRefs: readonly EngineCellMutationRef[],
+  trailingLiteralRefs: readonly EngineCellMutationRef[],
+): readonly EngineCellMutationRef[] {
+  if (leadingRefs.length === 0 && trailingLiteralRefs.length === 0) {
+    return formulaRefs
+  }
+  if (formulaRefs.length === 0 && trailingLiteralRefs.length === 0) {
+    return leadingRefs
+  }
+  if (leadingRefs.length === 0 && formulaRefs.length === 0) {
+    return trailingLiteralRefs
+  }
+  return [...leadingRefs, ...formulaRefs, ...trailingLiteralRefs]
 }
