@@ -4,6 +4,20 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.14.27
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.14.26
+- Manual override: no
+
+## Fixes
+- perf(headless): skip independent aggregate topo repair (2e739ebc)
+
+## Internal runtime changes
+- docs(growth): refresh conversion snapshot (e9ce18e9)
+- docs(growth): hide campaign docs from public path (c2a44b5b)
+- docs(evidence): sync public benchmark claims (6eef08a0)
+
 ## 0.14.26
 
 - Release type: patch

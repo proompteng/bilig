@@ -1,6 +1,6 @@
 {
   "name": "@bilig/formula",
-  "version": "0.14.26",
+  "version": "0.14.27",
   "description": "Excel-style formula parsing, binding, compilation, and evaluation for bilig.",
   "keywords": [
     "bilig",
