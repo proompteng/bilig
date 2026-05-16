@@ -13,7 +13,7 @@ import {
   type WorkbookLocalStoreFactory,
   type WorkbookStoredState,
 } from '@bilig/storage-browser'
-import { applyWorkbookEvent, isAuthoritativeWorkbookEventRecord, type AuthoritativeWorkbookEventRecord } from '@bilig/zero-sync'
+import type { AuthoritativeWorkbookEventRecord } from '@bilig/zero-sync'
 import {
   isWorkbookSnapshot,
   type CellRangeRef,
@@ -86,6 +86,7 @@ import {
   persistProjectionStateToLocalStore,
 } from './worker-runtime-local-persistence.js'
 import { exportWorkerRuntimeSnapshot } from './worker-runtime-export-snapshot.js'
+import { applyAuthoritativeWorkbookEvents } from './worker-runtime-authoritative-events.js'
 import {
   DEFERRED_PROJECTION_ENGINE_MIN_CELL_COUNT,
   type InstallAuthoritativeSnapshotInput,
@@ -389,28 +390,11 @@ export class WorkbookWorkerRuntime {
   ): Promise<WorkbookWorkerStateSnapshot> {
     this.projectionBuildVersion += 1
     this.projectionEnginePromise = null
-    if (!events.every((event) => isAuthoritativeWorkbookEventRecord(event))) {
-      throw new Error('Invalid authoritative workbook event batch')
-    }
     const authoritativeEngine = await this.getAuthoritativeEngine()
-    const previousSheets = [...authoritativeEngine.workbook.sheetsByName.values()].map((sheet) => ({
-      sheetId: sheet.id,
-      name: sheet.name,
-    }))
-    const authoritativeEngineEvents: EngineEvent[] = []
-    const unsubscribe = authoritativeEngine.subscribe((event) => {
-      authoritativeEngineEvents.push(event)
-    })
-    const absorbedMutationIds = new Set(
-      events.flatMap((event) => (typeof event.clientMutationId === 'string' ? [event.clientMutationId] : [])),
+    const { authoritativeEngineEvents, absorbedMutationIds, payloads, previousSheets } = applyAuthoritativeWorkbookEvents(
+      authoritativeEngine,
+      events,
     )
-    try {
-      events.forEach((event) => {
-        applyWorkbookEvent(authoritativeEngine, event.payload)
-      })
-    } finally {
-      unsubscribe()
-    }
     this.mutationJournal.ackAbsorbedMutations(absorbedMutationIds)
     this.authoritativeRevision = Math.max(this.authoritativeRevision, authoritativeRevision)
     this.snapshotCaches.invalidateAuthoritativeState()
@@ -425,7 +409,7 @@ export class WorkbookWorkerRuntime {
     if (localStore) {
       const authoritativeDelta = buildWorkbookLocalAuthoritativeDelta({
         engine: authoritativeEngine,
-        payloads: events.map((event) => event.payload),
+        payloads,
         engineEvents: authoritativeEngineEvents,
         previousSheets,
       })
