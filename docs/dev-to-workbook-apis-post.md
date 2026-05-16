@@ -181,7 +181,7 @@ formula evaluation, structural operations, persistence, validation, and
 readback.
 
 The repo also includes checked-in benchmark evidence against
-HyperFormula-style workloads. The current artifact records `42/57` mean wins on
+HyperFormula-style workloads. The current artifact records `39/57` mean wins on
 scorecard-eligible comparable workloads, with a p95 caveat documented instead
 of hidden.
 

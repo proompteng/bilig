@@ -102,7 +102,21 @@ requireNoUnsupportedGoogleSheetsTenXClaims(dominanceScorecard, {
 })
 requirePackageKeywords(
   headlessPackageJson,
-  ['calculation', 'compute', 'excel', 'headless-spreadsheet', 'node-spreadsheet', 'sheet', 'spreadsheet-engine', 'worksheet'],
+  [
+    'agent-tools',
+    'excel',
+    'formula-engine',
+    'headless-spreadsheet',
+    'hyperformula',
+    'json-persistence',
+    'mcp',
+    'node',
+    'spreadsheet-formulas',
+    'typescript',
+    'workbook-api',
+    'workpaper',
+    'xlsx',
+  ],
   'packages/headless/package.json',
 )
 requireIncludes(index, '"downloadUrl": "https://www.npmjs.com/package/@bilig/headless"', 'docs/index.html')
@@ -311,7 +325,7 @@ for (const [path, content] of [
   requireIncludes(content, 'verifies the dependent formula result.', path)
   requireIncludes(content, 'pnpm workpaper:bench:competitive:check', path)
   requireIncludes(content, 'structural-append-formula-rows', path)
-  requireIncludes(content, '8.722x', path)
+  requireIncludes(content, '8.543x', path)
   requireIncludes(content, 'compatibility limits', path)
   requireIncludes(content, 'Excel oracle harness', path)
   requireIncludes(content, 'stale cached formula values', path)

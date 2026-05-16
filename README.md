@@ -111,6 +111,19 @@ desktop Excel automation, or a one-off arithmetic helper. Do not treat embedded
 XLSX cached formula values as truth; use the Excel oracle workflow when accuracy
 matters.
 
+## Package Boundary
+
+<!-- headless-package-footprint:start -->
+
+Current checked npm footprint for `@bilig/headless@0.14.28`:
+
+- Pack dry run: `411 kB` tarball, `2.44 MB` unpacked, `408` package entries.
+- Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
+  import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the
+  `bilig-workpaper-mcp` binary wrapper.
+- Runtime: Node `>=24.0.0`; Node 22 support waits for release CI coverage.
+<!-- headless-package-footprint:end -->
+
 ## Start Here
 
 Pick the path closest to what you are building.
@@ -221,9 +234,9 @@ It is published in the official MCP Registry as
 - The 90-second TypeScript check above edits one input, restores the saved JSON
   document, and verifies the dependent formula result.
 - Run `pnpm workpaper:bench:competitive:check`. The checked-in artifact shows
-  [`42/57` comparable WorkPaper mean wins](docs/what-workpaper-benchmark-proves.md)
+  [`39/57` comparable WorkPaper mean wins](docs/what-workpaper-benchmark-proves.md)
   and names the worst p95 holdout: `structural-append-formula-rows` at
-  `8.722x`.
+  `8.543x`.
 - The benchmark card is generated from that artifact:
   [`docs/assets/workpaper-benchmark-card.png`](docs/assets/workpaper-benchmark-card.png).
 - Read the [compatibility limits](docs/where-bilig-is-not-excel-compatible-yet.md)

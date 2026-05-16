@@ -226,6 +226,27 @@ async function assertPublicSurfaces(evidence: PublicEvidence): Promise<void> {
     '0.7354308040905896',
     '3.777197275754674',
     '2026-05-15T04:04:38.038Z',
+    '32/40',
+    '33/40',
+    '29/40',
+    '10/17',
+    '42/57',
+    '8.722x',
+    '8.72243346007912',
+    '7.981x',
+    '7.981245577368439',
+    '7.649x',
+    '7.648801690864582',
+    '7.541560588587015',
+    '0.7553949494105464',
+    '0.7510834854399419',
+    '0.7577447189137954',
+    '0.7980273811097534',
+    '0.7442626408109101',
+    '0.7724839680358417',
+    '2026-05-16T02:12:30.841Z',
+    '2026-05-16T02:38:29.935Z',
+    '2026-05-16T02:45:18.556Z',
     '@bilig/headless` `0.14.23`',
     '@bilig/headless` `0.14.25`',
   ] as const
@@ -281,7 +302,7 @@ async function assertPublicSurfaces(evidence: PublicEvidence): Promise<void> {
     )
     requireIncludes(
       content,
-      `| Holdout |                 \`${holdout.comparableCount.toString()}\` |                \`${holdout.workpaperWins.toString()}\` |`,
+      `| Holdout |                 \`${holdout.comparableCount.toString()}\` |                 \`${holdout.workpaperWins.toString()}\` |`,
       path,
     )
     requireIncludes(content, `generated at \`${benchmark.generatedAt}\``, path)
