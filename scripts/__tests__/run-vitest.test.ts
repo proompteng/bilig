@@ -81,6 +81,20 @@ describe('run-vitest wrapper arguments', () => {
     ])
   })
 
+  it('ignores malformed CI file chunk size overrides instead of truncating them', () => {
+    const files = ['a.test.ts', 'b.test.ts', 'c.test.ts', 'd.test.ts']
+
+    expect(
+      buildVitestArgBatches(['--run', ...files], {
+        BILIG_CI_PROFILE: 'fast',
+        BILIG_VITEST_FILE_CHUNK_SIZE: '2abc',
+      }),
+    ).toEqual([
+      ['--run', 'a.test.ts', 'b.test.ts', 'c.test.ts', '--maxWorkers', '1'],
+      ['--run', 'd.test.ts', '--maxWorkers', '1'],
+    ])
+  })
+
   it('does not split run arguments that include flags', () => {
     expect(
       buildVitestArgBatches(['--run', 'sample.test.ts', '--reporter=dot'], {
@@ -95,6 +109,7 @@ describe('run-vitest wrapper arguments', () => {
     expect(readVitestBatchCooldownMs({ BILIG_CI_PROFILE: 'fast' })).toBe(1000)
     expect(readVitestBatchCooldownMs({ BILIG_CI_PROFILE: 'fast', BILIG_VITEST_BATCH_COOLDOWN_MS: '0' })).toBe(0)
     expect(readVitestBatchCooldownMs({ BILIG_CI_PROFILE: 'fast', BILIG_VITEST_BATCH_COOLDOWN_MS: '2500' })).toBe(2500)
+    expect(readVitestBatchCooldownMs({ BILIG_CI_PROFILE: 'fast', BILIG_VITEST_BATCH_COOLDOWN_MS: '2500ms' })).toBe(1000)
   })
 
   it('classifies the public workbook corpus correctness lane as broad', () => {

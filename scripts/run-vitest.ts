@@ -82,7 +82,7 @@ function readPositiveInt(value: string | undefined): number | undefined {
     return undefined
   }
 
-  const parsed = Number.parseInt(value, 10)
+  const parsed = parseDecimalInt(value)
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
 }
 
@@ -91,8 +91,16 @@ function readNonNegativeInt(value: string | undefined): number | undefined {
     return undefined
   }
 
-  const parsed = Number.parseInt(value, 10)
+  const parsed = parseDecimalInt(value)
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined
+}
+
+function parseDecimalInt(value: string): number {
+  if (!/^(?:0|[1-9]\d*)$/u.test(value)) {
+    return Number.NaN
+  }
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : Number.NaN
 }
 
 function sleepSync(ms: number): void {
