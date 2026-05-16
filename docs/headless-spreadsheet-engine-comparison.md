@@ -47,7 +47,7 @@ calculations.
 
 | If your job is...                                                 | Start with...                           | Check next                                                                                                                                                                        |
 | ----------------------------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Formula-backed calculations inside a Node service                 | `@bilig/headless`                       | Start with the [Node quickstart](try-bilig-headless-in-node.md), then wire the [Node service recipe](node-service-workpaper-recipe.md).                                           |
+| Formula-backed calculations inside a Node service                 | `@bilig/headless`                       | Start with the [quote approval WorkPaper API proof](quote-approval-workpaper-api.md), then wire the [Node service recipe](node-service-workpaper-recipe.md).                      |
 | Agent writeback that must prove the value after an edit           | `@bilig/headless`                       | Use the [agent tool-calling recipe](agent-workpaper-tool-calling-recipe.md) or the [MCP WorkPaper server](mcp-workpaper-tool-server.md).                                          |
 | XLSX parsing, export, styling, images, and workbook-file metadata | SheetJS or ExcelJS                      | Read the [SheetJS and ExcelJS boundary guide](sheetjs-exceljs-alternative-formula-workbook-api.md) before mixing file I/O with formula runtime state.                             |
 | A mature formula engine with broad spreadsheet-function coverage  | HyperFormula                            | Compare against the [HyperFormula alternative notes](hyperformula-alternative-headless-workpaper.md) and the [compatibility caveats](where-bilig-is-not-excel-compatible-yet.md). |
@@ -87,7 +87,29 @@ The questions become operational:
 That is the `@bilig/headless` wedge. It is a WorkPaper runtime surface, not just
 a formula parser, not just an XLSX writer, and not a browser grid.
 
-The maintained example demonstrates the shape:
+The maintained quote approval proof demonstrates the service shape without a
+repo clone:
+
+```sh
+mkdir bilig-quote-approval
+cd bilig-quote-approval
+npm init -y
+npm pkg set type=module
+npm install @bilig/headless
+npm install -D tsx typescript @types/node
+curl -fsSLo quote-approval-api.ts \
+  https://raw.githubusercontent.com/proompteng/bilig/main/examples/serverless-workpaper-api/quote-approval-api.ts
+npx tsx quote-approval-api.ts
+```
+
+It writes quote inputs, recalculates net revenue, gross margin, and decision,
+serializes WorkPaper JSON, restores it, and verifies `restoredMatchesAfter:
+true`.
+
+If you only need the smallest package sanity check, use the
+[Node quickstart](try-bilig-headless-in-node.md) first.
+
+The broader repo example demonstrates the agent shape:
 
 ```sh
 git clone https://github.com/proompteng/bilig.git

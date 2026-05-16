@@ -42,7 +42,8 @@ Poor fits:
 
 ## Try the package first
 
-Start from an empty directory and run the maintained quickstart:
+Start from an empty directory and run the maintained quickstart when you want
+the shortest package sanity check:
 
 ```sh
 mkdir bilig-headless-eval
@@ -71,6 +72,13 @@ Expected shape:
 The byte count can move between releases. The important signal is
 `verified: true`: an input changed, a dependent formula recalculated, the
 document serialized to JSON, and the restored workbook produced the same value.
+
+For a more production-shaped evaluator path, run the
+[quote approval WorkPaper API proof](quote-approval-workpaper-api.md). It still
+starts from an empty Node directory, but downloads one maintained TypeScript
+route smoke, writes quote inputs into known cells, recalculates net revenue,
+gross margin, and approval decision, serializes the WorkPaper JSON, restores
+it, and verifies `restoredMatchesAfter: true`.
 
 ## Backend service shape
 
@@ -114,13 +122,13 @@ Use `@bilig/headless` when the runtime requirement is formula-backed workbook
 state inside TypeScript. Use other tools when the primary requirement is
 different:
 
-| Requirement | Start with |
-| --- | --- |
-| Formula-backed business logic inside a Node service | `@bilig/headless` WorkPaper |
-| Agent writeback with verified readback | WorkPaper tools or the MCP server |
-| XLSX file import, export, styling, and reports | SheetJS, ExcelJS, or the `@bilig/headless/xlsx` subpath |
-| Broad formula coverage in an established headless engine | HyperFormula comparison first |
-| Shared Google Workspace document with permissions and comments | Google Sheets API |
+| Requirement                                                    | Start with                                              |
+| -------------------------------------------------------------- | ------------------------------------------------------- |
+| Formula-backed business logic inside a Node service            | `@bilig/headless` WorkPaper                             |
+| Agent writeback with verified readback                         | WorkPaper tools or the MCP server                       |
+| XLSX file import, export, styling, and reports                 | SheetJS, ExcelJS, or the `@bilig/headless/xlsx` subpath |
+| Broad formula coverage in an established headless engine       | HyperFormula comparison first                           |
+| Shared Google Workspace document with permissions and comments | Google Sheets API                                       |
 
 Read the [headless spreadsheet engine comparison](headless-spreadsheet-engine-comparison.md)
 when the boundary is not obvious.
@@ -128,6 +136,7 @@ when the boundary is not obvious.
 ## Proof links
 
 - [90-second Node quickstart](try-bilig-headless-in-node.md)
+- [Quote approval WorkPaper API proof](quote-approval-workpaper-api.md)
 - [Node spreadsheet formula engine guide](node-spreadsheet-formula-engine.md)
 - [Server-side spreadsheet automation in Node](server-side-spreadsheet-automation-node.md)
 - [Google Sheets API boundary](google-sheets-api-alternative-node-workpaper.md)
