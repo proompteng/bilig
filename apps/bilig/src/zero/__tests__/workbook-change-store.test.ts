@@ -223,6 +223,36 @@ describe('workbook-change-store', () => {
     await expect(loadWorkbookChange(queryable, 'doc-1', 18)).resolves.toBeNull()
   })
 
+  it('drops workbook change rows with invalid revision trust metadata', async () => {
+    const queryable = new FakeQueryable([
+      (text) =>
+        text.includes('FROM workbook_change')
+          ? [
+              {
+                revision: '-1',
+                actorUserId: 'alex@example.com',
+                clientMutationId: 'mutation-negative',
+                eventKind: 'setCellValue',
+                summary: 'Updated Sheet1!A1',
+                sheetId: 1,
+                sheetName: 'Sheet1',
+                anchorAddress: 'A1',
+                rangeJson: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+                undoBundleJson: {
+                  kind: 'engineOps',
+                  ops: [],
+                },
+                revertedByRevision: null,
+                revertsRevision: null,
+                createdAtUnixMs: 124_800,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ])
+
+    await expect(loadWorkbookChange(queryable, 'doc-1', -1)).resolves.toBeNull()
+  })
+
   it('records workbook changes with resolved sheet ids and serialized ranges', async () => {
     const queryable = new FakeQueryable([
       (text) => (text.includes('FROM sheets') ? [{ sheetId: 4, sheetName: 'Sheet1' } satisfies QueryResultRow] : null),

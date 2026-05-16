@@ -28,7 +28,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function parseInteger(value: unknown): number | null {
+function parseSafeInteger(value: unknown): number | null {
   if (typeof value === 'number' && Number.isSafeInteger(value)) {
     return value
   }
@@ -46,12 +46,22 @@ function parseInteger(value: unknown): number | null {
   return null
 }
 
+function parseSafeNonNegativeInteger(value: unknown): number | null {
+  const parsed = parseSafeInteger(value)
+  return parsed !== null && parsed >= 0 ? parsed : null
+}
+
+function parseSafePositiveInteger(value: unknown): number | null {
+  const parsed = parseSafeInteger(value)
+  return parsed !== null && parsed > 0 ? parsed : null
+}
+
 export function normalizeWorkbookChangeRowModel(value: unknown): WorkbookChangeRowModel | null {
   if (!isRecord(value)) {
     return null
   }
-  const revision = parseInteger(value['revision'])
-  const createdAt = parseInteger(value['createdAt'])
+  const revision = parseSafePositiveInteger(value['revision'])
+  const createdAt = parseSafeNonNegativeInteger(value['createdAt'])
   const actorUserId = value['actorUserId']
   const eventKind = value['eventKind']
   const summary = value['summary']
@@ -66,13 +76,26 @@ export function normalizeWorkbookChangeRowModel(value: unknown): WorkbookChangeR
   }
 
   const clientMutationId = value['clientMutationId']
-  const sheetId = parseInteger(value['sheetId'])
+  const sheetId = value['sheetId'] === undefined || value['sheetId'] === null ? null : parseSafePositiveInteger(value['sheetId'])
+  if (sheetId === null && value['sheetId'] !== undefined && value['sheetId'] !== null) {
+    return null
+  }
   const sheetName = value['sheetName']
   const anchorAddress = value['anchorAddress']
   const rawRangeJson = value['rangeJson']
   const rangeJson = normalizeWorkbookChangeRange(rawRangeJson)
-  const revertedByRevision = parseInteger(value['revertedByRevision'])
-  const revertsRevision = parseInteger(value['revertsRevision'])
+  const revertedByRevision =
+    value['revertedByRevision'] === undefined || value['revertedByRevision'] === null
+      ? null
+      : parseSafePositiveInteger(value['revertedByRevision'])
+  if (revertedByRevision === null && value['revertedByRevision'] !== undefined && value['revertedByRevision'] !== null) {
+    return null
+  }
+  const revertsRevision =
+    value['revertsRevision'] === undefined || value['revertsRevision'] === null ? null : parseSafePositiveInteger(value['revertsRevision'])
+  if (revertsRevision === null && value['revertsRevision'] !== undefined && value['revertsRevision'] !== null) {
+    return null
+  }
 
   return {
     revision,

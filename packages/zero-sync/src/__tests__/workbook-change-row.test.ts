@@ -39,6 +39,41 @@ describe('workbook change row model', () => {
     ).toBeNull()
   })
 
+  it('rejects unsafe or non-positive history revision identifiers', () => {
+    for (const patch of [
+      { revision: 0 },
+      { revision: -1 },
+      { revision: Number.MAX_SAFE_INTEGER + 1 },
+      { revertedByRevision: 0 },
+      { revertsRevision: -3 },
+      { sheetId: 0 },
+    ]) {
+      expect(
+        normalizeWorkbookChangeRowModel({
+          ...baseRow,
+          ...patch,
+        }),
+      ).toBeNull()
+    }
+  })
+
+  it('keeps backfilled epoch-zero timestamps valid while rejecting negative timestamps', () => {
+    expect(
+      normalizeWorkbookChangeRowModel({
+        ...baseRow,
+        createdAt: 0,
+      }),
+    ).toMatchObject({
+      createdAt: 0,
+    })
+    expect(
+      normalizeWorkbookChangeRowModel({
+        ...baseRow,
+        createdAt: -1,
+      }),
+    ).toBeNull()
+  })
+
   it('preserves malformed range metadata as an explicit trust failure', () => {
     expect(
       normalizeWorkbookChangeRowModel({

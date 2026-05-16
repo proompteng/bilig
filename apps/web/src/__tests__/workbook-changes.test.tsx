@@ -135,6 +135,31 @@ describe('workbook changes', () => {
     ).toEqual([])
   })
 
+  it('drops materialized rows with invalid history revision metadata', () => {
+    expect(
+      normalizeWorkbookChangeRows([
+        {
+          revision: -1,
+          actorUserId: 'alex@example.com',
+          clientMutationId: 'mutation-negative',
+          eventKind: 'setCellValue',
+          summary: 'Updated Sheet1!A1',
+          sheetId: 1,
+          sheetName: 'Sheet1',
+          anchorAddress: 'A1',
+          rangeJson: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+          undoBundleJson: {
+            kind: 'engineOps',
+            ops: [],
+          },
+          revertedByRevision: null,
+          revertsRevision: null,
+          createdAt: Date.parse('2026-04-06T13:45:00.000Z'),
+        },
+      ]),
+    ).toEqual([])
+  })
+
   it('renders authoritative change rows and jumps to available anchors', async () => {
     const changes = createMockZeroChangeHarness([
       {
