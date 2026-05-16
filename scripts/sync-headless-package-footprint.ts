@@ -10,6 +10,32 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const packageDir = join(repoRoot, 'packages', 'headless')
 const outputPath = join(repoRoot, 'docs', 'headless-package-footprint.json')
 const checkMode = process.argv.includes('--check')
+const coldStartProbeMaxElapsedMs = 1_000
+const coldStartProbeScript = `
+const started = performance.now()
+const { WorkPaper } = await import('./dist/index.js')
+const workbook = WorkPaper.buildFromSheets({
+  Inputs: [
+    ['Metric', 'Value'],
+    ['Customers', 20],
+    ['Average revenue', 1200],
+  ],
+  Summary: [
+    ['Metric', 'Value'],
+    ['Revenue', '=Inputs!B2*Inputs!B3'],
+  ],
+})
+const summary = workbook.getSheetId('Summary')
+if (summary === undefined) {
+  throw new Error('missing Summary sheet')
+}
+const displayValue = workbook.getCellDisplayValue({ sheet: summary, row: 1, col: 1 })
+const elapsedMs = performance.now() - started
+console.log(JSON.stringify({ elapsedMs, displayValue }))
+if (displayValue !== '24000') {
+  throw new Error(\`unexpected WorkPaper display value: \${displayValue}\`)
+}
+`
 
 const requiredDescription = 'Formula WorkPaper runtime for Node.js services and agent tools with JSON persistence and formula readback.'
 const requiredKeywords = [
@@ -73,6 +99,14 @@ interface HeadlessPackageFootprint {
     readonly entryCount: number
     readonly readmeBytes: number
     readonly packageJsonBytes: number
+  }
+  readonly coldStartProbe: {
+    readonly runtime: 'node'
+    readonly entrypoint: './dist/index.js'
+    readonly workload: string
+    readonly maxElapsedMs: number
+    readonly expectedDisplayValue: string
+    readonly importsXlsxSubpath: false
   }
 }
 
@@ -159,6 +193,27 @@ function runPackDryRun(): PackResult {
   }
 }
 
+function runColdStartProbe(): number {
+  const result = spawnSync('node', ['--input-type=module', '--eval', coldStartProbeScript], {
+    cwd: packageDir,
+    encoding: 'utf8',
+  })
+  if (result.status !== 0) {
+    throw new Error(`headless cold-start probe failed:\n${result.stderr}\n${result.stdout}`)
+  }
+  const stdout = result.stdout.trim()
+  const parsed = asRecord(JSON.parse(stdout) as unknown, 'headless cold-start probe output')
+  const elapsedMs = readFiniteNumber(parsed, 'elapsedMs', 'headless cold-start probe output')
+  const displayValue = readString(parsed, 'displayValue', 'headless cold-start probe output')
+  if (displayValue !== '24000') {
+    throw new Error(`headless cold-start probe returned unexpected display value: ${displayValue}`)
+  }
+  if (elapsedMs > coldStartProbeMaxElapsedMs) {
+    throw new Error(`headless cold-start probe took ${elapsedMs.toFixed(1)}ms, above the ${coldStartProbeMaxElapsedMs.toString()}ms gate`)
+  }
+  return elapsedMs
+}
+
 function readFiniteNumber(record: Record<string, unknown>, key: string, context: string): number {
   const value = record[key]
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -222,6 +277,14 @@ function buildFootprint(manifest: PackageManifest, pack: PackResult): HeadlessPa
       readmeBytes: readme.size,
       packageJsonBytes: packageJson.size,
     },
+    coldStartProbe: {
+      runtime: 'node',
+      entrypoint: './dist/index.js',
+      workload: 'main import plus two-sheet revenue WorkPaper readback',
+      maxElapsedMs: coldStartProbeMaxElapsedMs,
+      expectedDisplayValue: '24000',
+      importsXlsxSubpath: false,
+    },
   }
 }
 
@@ -235,6 +298,9 @@ function renderMarkdownBlock(footprint: HeadlessPackageFootprint): string {
     '- Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX',
     '  import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the',
     '  `bilig-workpaper-mcp` binary wrapper.',
+    '- Cold-start gate: Node imports the main entrypoint, builds a two-sheet',
+    `  WorkPaper, and reads \`${footprint.coldStartProbe.expectedDisplayValue}\` under \`${footprint.coldStartProbe.maxElapsedMs.toString()} ms\` without importing`,
+    '  the XLSX subpath.',
     `- Runtime: Node \`${footprint.package.nodeEngine}\`; Node 22 support waits for release CI coverage.`,
     '<!-- headless-package-footprint:end -->',
   ].join('\n')
@@ -269,6 +335,7 @@ async function syncMarkdownBlocks(footprint: HeadlessPackageFootprint): Promise<
 async function buildCurrentFootprint(): Promise<HeadlessPackageFootprint> {
   const manifest = await readPackageManifest()
   assertPositioning(manifest)
+  runColdStartProbe()
   return buildFootprint(manifest, runPackDryRun())
 }
 
@@ -313,6 +380,7 @@ if (checkMode) {
         tarball: formatBytes(footprint.npmPackDryRun.tarballBytes),
         unpacked: formatBytes(footprint.npmPackDryRun.unpackedBytes),
         entryCount: footprint.npmPackDryRun.entryCount,
+        coldStartMaxElapsedMs: footprint.coldStartProbe.maxElapsedMs,
       },
       null,
       2,
@@ -329,6 +397,7 @@ if (checkMode) {
         tarball: formatBytes(footprint.npmPackDryRun.tarballBytes),
         unpacked: formatBytes(footprint.npmPackDryRun.unpackedBytes),
         entryCount: footprint.npmPackDryRun.entryCount,
+        coldStartMaxElapsedMs: footprint.coldStartProbe.maxElapsedMs,
       },
       null,
       2,

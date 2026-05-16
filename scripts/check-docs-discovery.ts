@@ -325,7 +325,7 @@ for (const [path, content] of [
   requireIncludes(content, 'verifies the dependent formula result.', path)
   requireIncludes(content, 'pnpm workpaper:bench:competitive:check', path)
   requireIncludes(content, 'structural-append-formula-rows', path)
-  requireIncludes(content, '5.397x', path)
+  requireIncludes(content, '6.493x', path)
   requireIncludes(content, 'compatibility limits', path)
   requireIncludes(content, 'Excel oracle harness', path)
   requireIncludes(content, 'stale cached formula values', path)

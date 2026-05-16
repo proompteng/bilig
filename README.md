@@ -115,12 +115,15 @@ matters.
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.15.1`:
+Current checked npm footprint for `@bilig/headless@0.16.0`:
 
-- Pack dry run: `415 kB` tarball, `2.48 MB` unpacked, `411` package entries.
+- Pack dry run: `416 kB` tarball, `2.48 MB` unpacked, `411` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
   import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the
   `bilig-workpaper-mcp` binary wrapper.
+- Cold-start gate: Node imports the main entrypoint, builds a two-sheet
+  WorkPaper, and reads `24000` under `1000 ms` without importing
+  the XLSX subpath.
 - Runtime: Node `>=24.0.0`; Node 22 support waits for release CI coverage.
 <!-- headless-package-footprint:end -->
 
@@ -244,9 +247,9 @@ It is published in the official MCP Registry as
 - The 90-second TypeScript check above edits one input, restores the saved JSON
   document, and verifies the dependent formula result.
 - Run `pnpm workpaper:bench:competitive:check`. The checked-in artifact shows
-  [`42/57` comparable WorkPaper mean wins](docs/what-workpaper-benchmark-proves.md)
+  [`45/57` comparable WorkPaper mean wins](docs/what-workpaper-benchmark-proves.md)
   and names the worst p95 holdout: `structural-append-formula-rows` at
-  `5.397x`.
+  `6.493x`.
 - The benchmark card is generated from that artifact:
   [`docs/assets/workpaper-benchmark-card.png`](docs/assets/workpaper-benchmark-card.png).
 - Read the [compatibility limits](docs/where-bilig-is-not-excel-compatible-yet.md)
