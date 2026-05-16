@@ -1,9 +1,10 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import * as fc from 'fast-check'
 import type { RunDetails } from 'fast-check'
 import { afterEach, describe, expect, it } from 'vitest'
-import { captureCounterexample, extractReplayPathForTest } from '../index.js'
+import { captureCounterexample, extractReplayPathForTest, resolveFuzzCaptureEnabled, runProperty } from '../index.js'
 
 const tempDirs: string[] = []
 
@@ -25,6 +26,30 @@ function withTempCwd<T>(run: () => T): T {
     return run()
   } finally {
     process.chdir(previousCwd)
+  }
+}
+
+async function withEnv<T>(updates: Record<string, string | undefined>, run: () => Promise<T>): Promise<T> {
+  const previous = new Map<string, string | undefined>()
+  for (const key of Object.keys(updates)) {
+    previous.set(key, process.env[key])
+    const value = updates[key]
+    if (value === undefined) {
+      delete process.env[key]
+    } else {
+      process.env[key] = value
+    }
+  }
+  try {
+    return await run()
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = value
+      }
+    }
   }
 }
 
@@ -85,5 +110,31 @@ describe('test-fuzz replay-path extraction', () => {
     )
 
     expect(readReplayPath(artifactPath)).toBe('/tmp/from-string.json')
+  })
+
+  it('resolves fuzz capture flags strictly', () => {
+    expect(resolveFuzzCaptureEnabled({})).toBe(false)
+    expect(resolveFuzzCaptureEnabled({ BILIG_FUZZ_CAPTURE: '1' })).toBe(true)
+    expect(resolveFuzzCaptureEnabled({ BILIG_FUZZ_CAPTURE: 'true' })).toBe(true)
+    expect(resolveFuzzCaptureEnabled({ BILIG_FUZZ_CAPTURE: '0' })).toBe(false)
+    expect(resolveFuzzCaptureEnabled({ BILIG_FUZZ_CAPTURE: 'false' })).toBe(false)
+    expect(() => resolveFuzzCaptureEnabled({ BILIG_FUZZ_CAPTURE: 'yes' })).toThrow(
+      'BILIG_FUZZ_CAPTURE must be "1", "true", "0", or "false" when set, got yes',
+    )
+  })
+
+  it('fails malformed capture config before reporting a fuzz failure', async () => {
+    await expect(
+      withEnv({ BILIG_FUZZ_CAPTURE: 'yes' }, () =>
+        runProperty({
+          suite: 'capture/malformed-env',
+          arbitrary: fc.constant('value'),
+          predicate: () => {
+            throw new Error('predicate failure')
+          },
+          parameters: { numRuns: 1 },
+        }),
+      ),
+    ).rejects.toThrow('BILIG_FUZZ_CAPTURE must be "1", "true", "0", or "false" when set, got yes')
   })
 })

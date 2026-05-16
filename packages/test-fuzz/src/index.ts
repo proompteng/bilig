@@ -115,6 +115,23 @@ function parseInteger(value: string | undefined): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+function parseStrictBooleanEnvFlag(value: string | undefined, name: string, fallback: boolean): boolean {
+  if (value === undefined || value.length === 0) {
+    return fallback
+  }
+  if (value === '1' || value === 'true') {
+    return true
+  }
+  if (value === '0' || value === 'false') {
+    return false
+  }
+  throw new Error(`${name} must be "1", "true", "0", or "false" when set, got ${value}`)
+}
+
+export function resolveFuzzCaptureEnabled(env: Readonly<Record<string, string | undefined>> = process.env): boolean {
+  return parseStrictBooleanEnvFlag(env['BILIG_FUZZ_CAPTURE'], 'BILIG_FUZZ_CAPTURE', false)
+}
+
 function serializeArtifactValue(value: unknown): unknown {
   if (value instanceof Uint8Array) {
     return { type: 'Uint8Array', values: [...value] }
@@ -381,7 +398,7 @@ async function runChecked<Ts extends unknown[]>(
 
   if (details.failed) {
     let artifactPath: string | null = null
-    if (process.env['BILIG_FUZZ_CAPTURE'] === '1') {
+    if (resolveFuzzCaptureEnabled()) {
       artifactPath = captureCounterexample({ suite, kind, details })
       console.log(`[fuzz] captured=${artifactPath}`)
     }
