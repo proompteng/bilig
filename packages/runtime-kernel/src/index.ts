@@ -124,8 +124,16 @@ function parseOptionalHttpUrl(value: string | undefined, name: string): string |
 }
 
 export function resolveRequestBaseUrl(request: BasicRequestLike, fallbackHost: string): string {
+  const protocol = parseRequestProtocol(request.protocol)
   const host = firstHeaderValue(request.headers.host) ?? fallbackHost
-  return normalizeBaseUrl(`${request.protocol}://${host}`)
+  return normalizeBaseUrl(`${protocol}://${host}`)
+}
+
+function parseRequestProtocol(value: string): 'http' | 'https' {
+  if (value === 'http' || value === 'https') {
+    return value
+  }
+  throw new Error(`request protocol must be "http" or "https", got ${value}`)
 }
 
 export function createErrorEnvelope(error: string, message: string, retryable: boolean): ErrorEnvelope {

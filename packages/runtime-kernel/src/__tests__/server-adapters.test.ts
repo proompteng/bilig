@@ -81,6 +81,20 @@ describe('runtime-kernel server adapters', () => {
     ).toBe('http://127.0.0.1:4321')
   })
 
+  it('rejects malformed request protocols before building base urls', () => {
+    expect(() =>
+      resolveRequestBaseUrl(
+        {
+          protocol: 'ftp',
+          headers: {
+            host: 'sheet.example.com',
+          },
+        },
+        '127.0.0.1:4321',
+      ),
+    ).toThrow('request protocol must be "http" or "https", got ftp')
+  })
+
   it('converts websocket payloads into Uint8Array', () => {
     const bytes = toMessageBytes(Buffer.from([1, 2, 3]))
     expect([...bytes]).toEqual([1, 2, 3])
