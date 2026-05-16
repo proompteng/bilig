@@ -20,6 +20,7 @@ openssf scorecard: https://scorecard.dev/viewer/?uri=github.com/proompteng/bilig
 - https://proompteng.github.io/bilig/formula-workbooks-node-services-agent-tools.html
 - https://proompteng.github.io/bilig/headless-spreadsheet-engine-node-services-agents.html
 - https://proompteng.github.io/bilig/xlsx-formula-recalculation-node.html
+- https://proompteng.github.io/bilig/xlsx-calc-alternative-node-workbook-recalculation.html
 - https://proompteng.github.io/bilig/exceljs-formula-recalculation-node.html
 - https://dev.to/gregkonush/why-agents-need-workbook-apis-instead-of-spreadsheet-screenshots-3d61
 - https://github.com/proompteng/bilig/tree/main/packages/headless#readme
@@ -205,6 +206,9 @@ npm run agent:verify
 - XLSX formula recalculation in Node:
   https://proompteng.github.io/bilig/xlsx-formula-recalculation-node.html
   https://github.com/proompteng/bilig/blob/main/docs/xlsx-formula-recalculation-node.md
+- xlsx-calc alternative:
+  https://proompteng.github.io/bilig/xlsx-calc-alternative-node-workbook-recalculation.html
+  https://github.com/proompteng/bilig/blob/main/docs/xlsx-calc-alternative-node-workbook-recalculation.md
   https://github.com/proompteng/bilig/tree/main/examples/xlsx-recalculation-node
   imports a generated pricing workbook, edits input cells, reads recalculated
   formulas, exports XLSX, reimports it, and verifies formula readback.

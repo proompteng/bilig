@@ -13,7 +13,6 @@
       "bilig",
       "excel",
       "excel-formulas",
-      "formula",
       "formula-engine",
       "formula-evaluation",
       "headless-spreadsheet",
@@ -30,18 +29,19 @@
       "workbook",
       "workbook-api",
       "workpaper",
-      "xlsx"
+      "xlsx",
+      "xlsx-recalculation"
     ],
     "dependencyNames": ["@bilig/core", "@bilig/formula", "@bilig/protocol", "fast-xml-parser", "fflate", "xlsx", "xlsx-js-style"],
     "hasXlsxSubpath": true,
     "hasMcpBinary": true
   },
   "npmPackDryRun": {
-    "tarballBytes": 421534,
-    "unpackedBytes": 2517199,
+    "tarballBytes": 421595,
+    "unpackedBytes": 2517505,
     "entryCount": 429,
-    "readmeBytes": 35549,
-    "packageJsonBytes": 2034
+    "readmeBytes": 35844,
+    "packageJsonBytes": 2045
   },
   "coldStartProbe": {
     "runtime": "node",

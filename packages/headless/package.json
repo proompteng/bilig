@@ -9,7 +9,6 @@
     "bilig",
     "excel",
     "excel-formulas",
-    "formula",
     "formula-engine",
     "formula-evaluation",
     "headless-spreadsheet",
@@ -26,7 +25,8 @@
     "workbook",
     "workbook-api",
     "workpaper",
-    "xlsx"
+    "xlsx",
+    "xlsx-recalculation"
   ],
   "homepage": "https://proompteng.github.io/bilig/",
   "bugs": {

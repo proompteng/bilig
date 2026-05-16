@@ -203,6 +203,7 @@ the [MCP server guide](docs/mcp-workpaper-tool-server.md),
 [JavaScript library comparison](docs/javascript-spreadsheet-library-headless-node.md),
 [headless spreadsheet engine for Node services and agents](docs/headless-spreadsheet-engine-node-services-agents.md),
 [XLSX formula recalculation in Node.js](docs/xlsx-formula-recalculation-node.md),
+[xlsx-calc alternative for Node workbook recalculation](docs/xlsx-calc-alternative-node-workbook-recalculation.md),
 [ExcelJS formula recalculation in Node.js](docs/exceljs-formula-recalculation-node.md),
 [SheetJS/ExcelJS boundary](docs/sheetjs-exceljs-alternative-formula-workbook-api.md),
 and [headless engine comparison](docs/headless-spreadsheet-engine-comparison.md).

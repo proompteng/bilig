@@ -24,6 +24,7 @@ import { docsSiteSources } from './check-docs-discovery-site-sources.ts'
 import { requireStarterIssueDiscovery } from './check-docs-discovery-starter-issues.ts'
 import { requireTypeScriptFirstPublicSnippets } from './check-docs-discovery-typescript-snippets.ts'
 import { requireXlsxCorpusVerifierDiscovery } from './check-docs-discovery-xlsx-verifier.ts'
+import { requireXlsxCalcAlternativeDiscovery } from './check-docs-discovery-xlsx-calc.ts'
 import { requireSharedPublicDocsDiscovery } from './check-docs-discovery-public-docs.ts'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -104,6 +105,7 @@ const showHnFormulaWorkbooksProof = await readFile(join(docsRoot, 'show-hn-formu
 const googleSheetsApiBoundaryDoc = await readFile(join(docsRoot, 'google-sheets-api-alternative-node-workpaper.md'), 'utf8')
 
 requireHomepageDiscovery(index, siteCss, productCss)
+await requireXlsxCalcAlternativeDiscovery(docsRoot)
 await requireTypeScriptFirstPublicSnippets(repoRoot)
 requireNoUnsupportedGoogleSheetsTenXClaims(dominanceScorecard, {
   'README.md': readme,
