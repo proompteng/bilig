@@ -664,16 +664,6 @@ export class WorkbookWorkerRuntime {
       const batches = this.workbookDeltaPublisher.buildFromEngineEvent({
         engine,
         event,
-        resolveSheetIdentity: (sheetName) => {
-          const sheet = engine.workbook.getSheet(sheetName)
-          const sheetId = typeof sheet?.id === 'number' && Number.isInteger(sheet.id) && sheet.id >= 0 ? sheet.id : (sheet?.order ?? null)
-          return !sheet || sheetId === null
-            ? null
-            : {
-                sheetId,
-                sheetOrdinal: sheet.order,
-              }
-        },
       })
       batches.forEach((batch) => listener(encodeWorkbookDeltaBatchV3(batch)))
     })

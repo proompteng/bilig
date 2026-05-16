@@ -23,10 +23,10 @@ const metrics: RecalcMetrics = {
   compileMs: 0,
 }
 
-function createEngine(): WorkerEngine {
+function createEngine(input: { readonly sheet1Id?: number } = {}): WorkerEngine {
   const sheets = new Map<string, TestSheet>([
     ['Later', createSheet({ id: 8, name: 'Later', order: 1 })],
-    ['Sheet1', createSheet({ id: 7, name: 'Sheet1', order: 0 })],
+    ['Sheet1', createSheet({ id: input.sheet1Id ?? 7, name: 'Sheet1', order: 0 })],
   ])
   const engine: WorkerEngine = {
     workbook: {
@@ -154,6 +154,19 @@ describe('WorkerRuntimeDeltaPublisher', () => {
 
     publisher.reset()
     expect(publisher.buildFromEngineEvent({ engine: createEngine(), event: createEvent() }).map((batch) => batch.seq)).toEqual([1, 2])
+  })
+
+  it('falls back to sheet order when an engine sheet id is not transport-safe', () => {
+    const [batch] = buildWorkbookDeltaBatchesFromEngineEventV3({
+      engine: createEngine({ sheet1Id: -1 }),
+      event: createEvent(),
+      allocateSeq: createSeqAllocator(),
+    })
+
+    expect(batch).toMatchObject({
+      sheetId: 0,
+      sheetOrdinal: 0,
+    })
   })
 
   it('allows explicit sheet identity resolution', () => {
