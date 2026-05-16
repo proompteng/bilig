@@ -1,15 +1,8 @@
 #!/usr/bin/env bun
 
-function parsePort(value: string | undefined): number {
-  const parsed = Number.parseInt(value ?? '', 10)
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error('Expected a numeric preview port.')
-  }
-  return parsed
-}
+import { parseVitePreviewCliArgs } from './vite-preview-cli.js'
 
-const port = parsePort(process.argv[2])
-const host = process.argv[3] ?? '127.0.0.1'
+const { port, host } = parseVitePreviewCliArgs(process.argv.slice(2))
 
 const child = Bun.spawn(['pnpm', 'exec', 'vite', 'preview', '--host', host, '--port', String(port), '--strictPort'], {
   cwd: process.cwd(),
