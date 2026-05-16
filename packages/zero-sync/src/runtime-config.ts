@@ -39,6 +39,14 @@ export function parseRuntimeConfig(value: unknown): BiligRuntimeConfig {
   }
 }
 
+async function readRuntimeConfigPayload(response: Response): Promise<unknown> {
+  try {
+    return (await response.json()) as unknown
+  } catch {
+    throw new Error('Runtime config response returned malformed JSON')
+  }
+}
+
 export async function loadRuntimeConfig(fetchImpl: typeof fetch = fetch): Promise<BiligRuntimeConfig> {
   const response = await fetchImpl('/runtime-config.json', {
     headers: {
@@ -50,5 +58,5 @@ export async function loadRuntimeConfig(fetchImpl: typeof fetch = fetch): Promis
     throw new Error(`Failed to load runtime config (${response.status})`)
   }
 
-  return parseRuntimeConfig(await response.json())
+  return parseRuntimeConfig(await readRuntimeConfigPayload(response))
 }
