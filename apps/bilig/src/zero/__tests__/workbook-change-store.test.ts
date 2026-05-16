@@ -189,6 +189,7 @@ describe('workbook-change-store', () => {
       sheetName: 'Sheet1',
       anchorAddress: 'A3',
       range: null,
+      rangeInvalid: true,
     })
   })
 
@@ -311,6 +312,7 @@ describe('workbook-change-store', () => {
           startAddress: 'B2',
           endAddress: 'C4',
         },
+        rangeInvalid: false,
         undoBundle: null,
         revertedByRevision: null,
         revertsRevision: null,
@@ -330,6 +332,7 @@ describe('workbook-change-store', () => {
           startAddress: 'A1',
           endAddress: 'A1',
         },
+        rangeInvalid: false,
         undoBundle: null,
         revertedByRevision: null,
         revertsRevision: null,
@@ -633,6 +636,7 @@ describe('workbook-change-store', () => {
         startAddress: 'A1',
         endAddress: 'A1',
       },
+      rangeInvalid: false,
       undoBundle: {
         kind: 'engineOps',
         ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'A1' }],
@@ -927,6 +931,56 @@ describe('workbook-change-store', () => {
                 revertedByRevision: null,
                 revertsRevision: null,
                 createdAtUnixMs: 123_470,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ])
+
+    await expect(
+      loadLatestUndoableWorkbookChange(queryable, {
+        documentId: 'doc-1',
+        actorUserId: 'alex@example.com',
+      }),
+    ).resolves.toBeNull()
+  })
+
+  it('does not expose undo when a later malformed range would otherwise fall back to a disjoint anchor', async () => {
+    const queryable = new FakeQueryable([
+      (text) =>
+        text.includes('FROM workbook_change')
+          ? [
+              {
+                revision: 52,
+                actorUserId: 'morgan@example.com',
+                clientMutationId: 'mutation-52',
+                eventKind: 'insertRows',
+                summary: 'Inserted rows 3:4 on Sheet1',
+                sheetId: 1,
+                sheetName: 'Sheet1',
+                anchorAddress: 'A3',
+                rangeJson: { sheetName: 'Sheet1', startAddress: 'A3', endAddress: 'A4', scope: 'row-band' },
+                undoBundleJson: null,
+                revertedByRevision: null,
+                revertsRevision: null,
+                createdAtUnixMs: 123_490,
+              } satisfies QueryResultRow,
+              {
+                revision: 51,
+                actorUserId: 'alex@example.com',
+                clientMutationId: 'mutation-51',
+                eventKind: 'setCellValue',
+                summary: 'Updated Sheet1!Z99',
+                sheetId: 1,
+                sheetName: 'Sheet1',
+                anchorAddress: 'Z99',
+                rangeJson: { sheetName: 'Sheet1', startAddress: 'Z99', endAddress: 'Z99' },
+                undoBundleJson: {
+                  kind: 'engineOps',
+                  ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'Z99' }],
+                },
+                revertedByRevision: null,
+                revertsRevision: null,
+                createdAtUnixMs: 123_480,
               } satisfies QueryResultRow,
             ]
           : null,

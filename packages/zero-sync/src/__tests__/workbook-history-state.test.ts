@@ -146,6 +146,26 @@ describe('deriveWorkbookActorHistoryState', () => {
     expect(state.undoStack).toEqual([])
   })
 
+  it('does not fall back to anchor metadata after a range was already marked invalid', () => {
+    const state = deriveWorkbookActorHistoryState({
+      actorUserId: 'alex@example.com',
+      rows: [
+        historyRow({ revision: 98, eventKind: 'setCellValue', address: 'Z99' }),
+        historyRow({
+          revision: 99,
+          actorUserId: 'morgan@example.com',
+          eventKind: 'insertRows',
+          address: 'A3',
+          rangeJson: null,
+          rangeJsonInvalid: true,
+        }),
+      ],
+    })
+
+    expect(state.canUndo).toBe(false)
+    expect(state.undoStack).toEqual([])
+  })
+
   it('preserves older redo entries after a newer redo is applied', () => {
     const state = deriveWorkbookActorHistoryState({
       actorUserId: 'alex@example.com',
@@ -328,7 +348,8 @@ function historyRow(input: {
     readonly startAddress: string
     readonly endAddress: string
     readonly scope?: string
-  }
+  } | null
+  readonly rangeJsonInvalid?: boolean
   readonly revertedByRevision?: number | null
   readonly revertsRevision?: number | null
 }) {
@@ -342,10 +363,14 @@ function historyRow(input: {
     revertsRevision: input.revertsRevision ?? null,
     sheetName,
     anchorAddress: input.address,
-    rangeJson: input.rangeJson ?? {
-      sheetName,
-      startAddress: input.address,
-      endAddress: input.address,
-    },
+    rangeJson:
+      input.rangeJson === undefined
+        ? {
+            sheetName,
+            startAddress: input.address,
+            endAddress: input.address,
+          }
+        : input.rangeJson,
+    rangeJsonInvalid: input.rangeJsonInvalid ?? false,
   } as const
 }

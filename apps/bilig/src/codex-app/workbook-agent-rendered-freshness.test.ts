@@ -181,6 +181,7 @@ function createZeroSyncService(engine: SpreadsheetEngine, input: { readonly revi
             startAddress: 'K14',
             endAddress: 'K14',
           },
+          rangeInvalid: false,
           undoBundle: {
             kind: 'engineOps' as const,
             ops: [],

@@ -1,7 +1,6 @@
 import {
-  isWorkbookChangeUndoBundle,
   isWorkbookEventPayload,
-  normalizeWorkbookChangeRange,
+  normalizeWorkbookChangeRowModel,
   type WorkbookChangeUndoBundle,
   type WorkbookChangeRange,
   type WorkbookEventPayload,
@@ -46,6 +45,7 @@ export interface WorkbookChangeRecord {
   readonly sheetName: string | null
   readonly anchorAddress: string | null
   readonly range: WorkbookChangeRange | null
+  readonly rangeInvalid: boolean
   readonly undoBundle: WorkbookChangeUndoBundle | null
   readonly revertedByRevision: number | null
   readonly revertsRevision: number | null
@@ -74,26 +74,19 @@ interface WorkbookChangeSelectRow extends QueryResultRow {
   readonly undoBundleJson?: unknown
   readonly revertedByRevision?: unknown
   readonly revertsRevision?: unknown
+  readonly createdAt?: unknown
   readonly createdAtUnixMs?: unknown
 }
 
 function normalizeWorkbookChangeRecord(row: WorkbookChangeSelectRow): WorkbookChangeRecord | null {
-  const revision = parseNullableInteger(row.revision)
-  const sheetId = parseNullableInteger(row.sheetId)
-  const revertedByRevision = parseNullableInteger(row.revertedByRevision)
-  const revertsRevision = parseNullableInteger(row.revertsRevision)
-  const createdAtUnixMs = parseNullableInteger(row.createdAtUnixMs)
-  if (
-    revision === null ||
-    createdAtUnixMs === null ||
-    typeof row.actorUserId !== 'string' ||
-    typeof row.eventKind !== 'string' ||
-    typeof row.summary !== 'string'
-  ) {
+  const model = normalizeWorkbookChangeRowModel({
+    ...row,
+    createdAt: row.createdAt ?? row.createdAtUnixMs,
+  })
+  if (!model) {
     return null
   }
-  const range = normalizeWorkbookChangeRange(row.rangeJson)
-  const eventKind = row.eventKind
+  const eventKind = model.eventKind
   if (
     eventKind !== 'applyBatch' &&
     eventKind !== 'applyAgentCommandBundle' &&
@@ -126,19 +119,20 @@ function normalizeWorkbookChangeRecord(row: WorkbookChangeSelectRow): WorkbookCh
     return null
   }
   return {
-    revision,
-    actorUserId: row.actorUserId,
-    clientMutationId: typeof row.clientMutationId === 'string' ? row.clientMutationId : null,
+    revision: model.revision,
+    actorUserId: model.actorUserId,
+    clientMutationId: model.clientMutationId,
     eventKind,
-    summary: row.summary,
-    sheetId,
-    sheetName: typeof row.sheetName === 'string' ? row.sheetName : null,
-    anchorAddress: typeof row.anchorAddress === 'string' ? row.anchorAddress : null,
-    range,
-    undoBundle: isWorkbookChangeUndoBundle(row.undoBundleJson) ? row.undoBundleJson : null,
-    revertedByRevision,
-    revertsRevision,
-    createdAtUnixMs,
+    summary: model.summary,
+    sheetId: model.sheetId,
+    sheetName: model.sheetName,
+    anchorAddress: model.anchorAddress,
+    range: model.rangeJson,
+    rangeInvalid: model.rangeJsonInvalid,
+    undoBundle: model.undoBundleJson,
+    revertedByRevision: model.revertedByRevision,
+    revertsRevision: model.revertsRevision,
+    createdAtUnixMs: model.createdAt,
   }
 }
 

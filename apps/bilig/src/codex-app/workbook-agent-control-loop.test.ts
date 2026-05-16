@@ -207,6 +207,7 @@ describe('workbook agent control loop receipts', () => {
             startAddress: 'F6',
             endAddress: 'F6',
           },
+          rangeInvalid: false,
           undoBundle: {
             kind: 'engineOps',
             ops: [],
@@ -343,6 +344,7 @@ describe('workbook agent control loop receipts', () => {
             startAddress: 'H8',
             endAddress: 'H8',
           },
+          rangeInvalid: false,
           undoBundle: {
             kind: 'engineOps',
             ops: [],
@@ -751,6 +753,7 @@ describe('workbook agent control loop receipts', () => {
           startAddress: 'F6',
           endAddress: 'F6',
         },
+        rangeInvalid: false,
         undoBundle: {
           kind: 'engineOps',
           ops: [],

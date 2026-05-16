@@ -815,6 +815,7 @@ describe('workbook agent tools', () => {
           startAddress: 'B2',
           endAddress: 'C4',
         },
+        rangeInvalid: false,
         undoBundle: null,
         revertedByRevision: null,
         revertsRevision: null,
@@ -2490,6 +2491,7 @@ describe('workbook agent tools', () => {
           startAddress: 'D10',
           endAddress: 'D10',
         },
+        rangeInvalid: false,
         undoBundle: {
           kind: 'engineOps',
           ops: [],
@@ -2637,6 +2639,7 @@ describe('workbook agent tools', () => {
           startAddress: 'D10',
           endAddress: 'D10',
         },
+        rangeInvalid: false,
         undoBundle: {
           kind: 'engineOps',
           ops: [],

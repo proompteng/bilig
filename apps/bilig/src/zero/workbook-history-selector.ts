@@ -1,4 +1,9 @@
-import { deriveWorkbookActorHistoryState, type WorkbookChangeUndoBundle } from '@bilig/zero-sync'
+import {
+  deriveWorkbookActorHistoryState,
+  workbookChangeRowHistoryRangeSource,
+  type WorkbookChangeRange,
+  type WorkbookChangeUndoBundle,
+} from '@bilig/zero-sync'
 
 interface WorkbookActorHistoryRecord {
   readonly revision: number
@@ -9,11 +14,8 @@ interface WorkbookActorHistoryRecord {
   readonly revertsRevision: number | null
   readonly sheetName: string | null
   readonly anchorAddress: string | null
-  readonly range: {
-    readonly sheetName: string
-    readonly startAddress: string
-    readonly endAddress: string
-  } | null
+  readonly range: WorkbookChangeRange | null
+  readonly rangeInvalid: boolean
 }
 
 export function selectLatestUndoableWorkbookChangeRevision(input: {
@@ -29,9 +31,12 @@ export function selectLatestUndoableWorkbookChangeRevision(input: {
       undoBundleJson: row.undoBundle,
       revertedByRevision: row.revertedByRevision,
       revertsRevision: row.revertsRevision,
-      sheetName: row.sheetName,
-      anchorAddress: row.anchorAddress,
-      rangeJson: row.range,
+      ...workbookChangeRowHistoryRangeSource({
+        sheetName: row.sheetName,
+        anchorAddress: row.anchorAddress,
+        rangeJson: row.range,
+        rangeJsonInvalid: row.rangeInvalid,
+      }),
     })),
   }).undoRevision
 }
@@ -49,9 +54,12 @@ export function selectLatestRedoableWorkbookChangeRevision(input: {
       undoBundleJson: row.undoBundle,
       revertedByRevision: row.revertedByRevision,
       revertsRevision: row.revertsRevision,
-      sheetName: row.sheetName,
-      anchorAddress: row.anchorAddress,
-      rangeJson: row.range,
+      ...workbookChangeRowHistoryRangeSource({
+        sheetName: row.sheetName,
+        anchorAddress: row.anchorAddress,
+        rangeJson: row.range,
+        rangeJsonInvalid: row.rangeInvalid,
+      }),
     })),
   }).redoRevision
 }

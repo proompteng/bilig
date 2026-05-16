@@ -9,6 +9,7 @@ export interface WorkbookHistoryRangeSource {
   readonly sheetName?: string | null | undefined
   readonly anchorAddress?: string | null | undefined
   readonly rangeJson?: WorkbookHistoryRange | null | undefined
+  readonly rangeJsonInvalid?: boolean | null | undefined
 }
 
 export interface WorkbookHistoryStateRow {
@@ -67,6 +68,9 @@ function removeOverlappingEntries(
 }
 
 function normalizeWorkbookHistoryRange(source: WorkbookHistoryRangeSource): NormalizedWorkbookHistoryRange | null {
+  if (source.rangeJsonInvalid) {
+    return null
+  }
   const range =
     source.rangeJson === undefined || source.rangeJson === null
       ? source.sheetName && source.anchorAddress

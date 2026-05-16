@@ -1,7 +1,7 @@
 import {
   deriveWorkbookActorHistoryState,
-  isWorkbookChangeUndoBundle,
-  normalizeWorkbookChangeRange,
+  normalizeWorkbookChangeRowModel,
+  workbookChangeRowHistoryRangeSource,
   workbookHistoryRangesOverlap,
   type WorkbookChangeUndoBundle,
   type WorkbookChangeRange,
@@ -18,6 +18,7 @@ export interface WorkbookChangeRow {
   readonly sheetName: string | null
   readonly anchorAddress: string | null
   readonly rangeJson: WorkbookChangeRange | null
+  readonly rangeJsonInvalid: boolean
   readonly undoBundleJson: WorkbookChangeUndoBundle | null
   readonly revertedByRevision: number | null
   readonly revertsRevision: number | null
@@ -49,48 +50,26 @@ export interface WorkbookHistoryState {
   readonly redoRevision: number | null
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
 function normalizeWorkbookChangeRow(value: unknown): WorkbookChangeRow | null {
-  if (!isRecord(value)) {
+  const model = normalizeWorkbookChangeRowModel(value)
+  if (!model) {
     return null
   }
-  const revision = value['revision']
-  const actorUserId = value['actorUserId']
-  const eventKind = value['eventKind']
-  const summary = value['summary']
-  const createdAt = value['createdAt']
-  if (
-    typeof revision !== 'number' ||
-    typeof actorUserId !== 'string' ||
-    typeof eventKind !== 'string' ||
-    typeof summary !== 'string' ||
-    typeof createdAt !== 'number'
-  ) {
-    return null
-  }
-  const clientMutationId = value['clientMutationId']
-  const sheetId = value['sheetId']
-  const sheetName = value['sheetName']
-  const anchorAddress = value['anchorAddress']
-  const revertedByRevision = value['revertedByRevision']
-  const revertsRevision = value['revertsRevision']
   return {
-    revision,
-    actorUserId,
-    clientMutationId: typeof clientMutationId === 'string' ? clientMutationId : null,
-    eventKind,
-    summary,
-    sheetId: typeof sheetId === 'number' ? sheetId : null,
-    sheetName: typeof sheetName === 'string' ? sheetName : null,
-    anchorAddress: typeof anchorAddress === 'string' ? anchorAddress : null,
-    rangeJson: normalizeWorkbookChangeRange(value['rangeJson']),
-    undoBundleJson: isWorkbookChangeUndoBundle(value['undoBundleJson']) ? value['undoBundleJson'] : null,
-    revertedByRevision: typeof revertedByRevision === 'number' ? revertedByRevision : null,
-    revertsRevision: typeof revertsRevision === 'number' ? revertsRevision : null,
-    createdAt,
+    revision: model.revision,
+    actorUserId: model.actorUserId,
+    clientMutationId: model.clientMutationId,
+    eventKind: model.eventKind,
+    summary: model.summary,
+    sheetId: model.sheetId,
+    sheetName: model.sheetName,
+    anchorAddress: model.anchorAddress,
+    rangeJson: model.rangeJson,
+    rangeJsonInvalid: model.rangeJsonInvalid,
+    undoBundleJson: model.undoBundleJson,
+    revertedByRevision: model.revertedByRevision,
+    revertsRevision: model.revertsRevision,
+    createdAt: model.createdAt,
   }
 }
 
@@ -140,10 +119,7 @@ export function selectWorkbookChangeEntries(input: {
       (candidate) =>
         candidate.revision > row.revision &&
         candidate.revertedByRevision === null &&
-        workbookHistoryRangesOverlap(
-          { sheetName: row.sheetName, anchorAddress: row.anchorAddress, rangeJson: row.rangeJson },
-          { sheetName: candidate.sheetName, anchorAddress: candidate.anchorAddress, rangeJson: candidate.rangeJson },
-        ),
+        workbookHistoryRangesOverlap(workbookChangeRowHistoryRangeSource(row), workbookChangeRowHistoryRangeSource(candidate)),
     )
     return {
       revision: row.revision,
@@ -178,9 +154,7 @@ export function selectWorkbookHistoryState(input: {
       undoBundleJson: row.undoBundleJson,
       revertedByRevision: row.revertedByRevision,
       revertsRevision: row.revertsRevision,
-      sheetName: row.sheetName,
-      anchorAddress: row.anchorAddress,
-      rangeJson: row.rangeJson,
+      ...workbookChangeRowHistoryRangeSource(row),
     })),
   })
 

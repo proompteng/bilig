@@ -7,7 +7,7 @@ import {
 } from './workbook-change-store.js'
 import type { WorkbookHistoryMutationTarget } from './server-mutator-commit.js'
 import type { Queryable } from './store.js'
-import { workbookHistoryRangesOverlap } from '@bilig/zero-sync'
+import { workbookChangeRowHistoryRangeSource, workbookHistoryRangesOverlap } from '@bilig/zero-sync'
 
 export async function resolveRevertWorkbookChangeTarget(
   db: Queryable,
@@ -84,8 +84,18 @@ async function assertNoActiveOverlappingLaterChange(db: Queryable, documentId: s
     (change) =>
       change.revertedByRevision === null &&
       workbookHistoryRangesOverlap(
-        { sheetName: targetChange.sheetName, anchorAddress: targetChange.anchorAddress, rangeJson: targetChange.range },
-        { sheetName: change.sheetName, anchorAddress: change.anchorAddress, rangeJson: change.range },
+        workbookChangeRowHistoryRangeSource({
+          sheetName: targetChange.sheetName,
+          anchorAddress: targetChange.anchorAddress,
+          rangeJson: targetChange.range,
+          rangeJsonInvalid: targetChange.rangeInvalid,
+        }),
+        workbookChangeRowHistoryRangeSource({
+          sheetName: change.sheetName,
+          anchorAddress: change.anchorAddress,
+          rangeJson: change.range,
+          rangeJsonInvalid: change.rangeInvalid,
+        }),
       ),
   )
   if (conflictingChange) {

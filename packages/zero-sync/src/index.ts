@@ -46,6 +46,7 @@ export {
   type WorkbookChangeRange,
   type WorkbookChangeRangeScope,
 } from './workbook-change-range.js'
+export { normalizeWorkbookChangeRowModel, workbookChangeRowHistoryRangeSource, type WorkbookChangeRowModel } from './workbook-change-row.js'
 export {
   deriveWorkbookActorHistoryState,
   workbookHistoryRangesOverlap,

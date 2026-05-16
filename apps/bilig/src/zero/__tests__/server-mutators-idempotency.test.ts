@@ -511,6 +511,7 @@ function createWorkbookChangeRecord(input: {
     sheetName: input.sheetName ?? null,
     anchorAddress: input.anchorAddress ?? null,
     range: input.range ?? null,
+    rangeInvalid: false,
     undoBundle: {
       kind: 'engineOps',
       ops: [],
