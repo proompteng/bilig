@@ -46,11 +46,7 @@ function readArgValueAt(name: string, index: number): string {
 
 export function readNumberArg(name: string, fallback: number): number {
   const raw = readStringArg(name, String(fallback))
-  const parsed = Number(raw)
-  if (!/^\d+$/.test(raw) || parsed <= 0 || !Number.isSafeInteger(parsed)) {
-    throw new Error(`Expected ${name} to be a positive integer`)
-  }
-  return parsed
+  return parsePositiveIntegerArg(raw, `Expected ${name} to be a positive integer`)
 }
 
 const bytesPerMiB = 1024 * 1024
@@ -58,11 +54,19 @@ const maxSafeMiB = Math.floor(Number.MAX_SAFE_INTEGER / bytesPerMiB)
 
 export function readMegabytesArg(name: string, fallbackBytes: number): number {
   const raw = readStringArg(name, String(Math.ceil(fallbackBytes / bytesPerMiB)))
-  const parsed = Number(raw)
-  if (!/^\d+$/.test(raw) || parsed <= 0 || !Number.isSafeInteger(parsed) || parsed > maxSafeMiB) {
+  const parsed = parsePositiveIntegerArg(raw, `Expected ${name} to be a positive integer number of MiB`)
+  if (parsed > maxSafeMiB) {
     throw new Error(`Expected ${name} to be a positive integer number of MiB`)
   }
   return parsed * bytesPerMiB
+}
+
+function parsePositiveIntegerArg(raw: string, errorMessage: string): number {
+  const parsed = Number(raw)
+  if (!/^\d+$/.test(raw) || parsed <= 0 || !Number.isSafeInteger(parsed)) {
+    throw new Error(errorMessage)
+  }
+  return parsed
 }
 
 export function readFlagArg(name: string): boolean {
