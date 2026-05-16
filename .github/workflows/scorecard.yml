@@ -19,13 +19,15 @@ jobs:
       id-token: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - name: Publish OpenSSF Scorecard result
         uses: ossf/scorecard-action@v2.4.3
         with:
+          results_file: scorecard-results.json
+          results_format: json
           publish_results: true
 
   code-scanning:
@@ -38,7 +40,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -50,13 +52,13 @@ jobs:
           publish_results: false
 
       - name: Upload Scorecard SARIF artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: openssf-scorecard-results
           path: scorecard-results.sarif
           if-no-files-found: error
 
       - name: Upload Scorecard results to code scanning
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: scorecard-results.sarif
