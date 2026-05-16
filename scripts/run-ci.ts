@@ -2,6 +2,7 @@
 
 import { runCoverageContracts } from './coverage-contracts.ts'
 import { assertLocalCiResourceGuardAllowsRun } from './ci-local-resource-guard.ts'
+import { resolveCiProfile } from './run-ci-config.ts'
 
 import { spawn, type ChildProcess } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -22,7 +23,7 @@ interface CompletedTask {
 
 const startedAt = performance.now()
 const rootDir = fileURLToPath(new URL('..', import.meta.url))
-const ciProfile = process.env['BILIG_CI_PROFILE'] === 'full' ? 'full' : 'fast'
+const ciProfile = resolveCiProfileOrExit()
 const runFullGates = ciProfile === 'full'
 const runDeepGates = runFullGates
 const skipBrowserGates = process.env['BILIG_CI_SKIP_BROWSER'] === '1'
@@ -30,6 +31,15 @@ const coverageReportsDirectory = process.env['BILIG_COVERAGE_DIR'] ?? `coverage/
 const packageScripts = readPackageScripts()
 
 process.env['BILIG_COVERAGE_DIR'] = coverageReportsDirectory
+
+function resolveCiProfileOrExit(): ReturnType<typeof resolveCiProfile> {
+  try {
+    return resolveCiProfile(process.env)
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exit(1)
+  }
+}
 
 function formatSeconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`

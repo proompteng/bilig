@@ -3,9 +3,21 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
+import { resolveCiProfile } from '../run-ci-config.ts'
+
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 
 describe('run-ci', () => {
+  it('defaults to the fast CI profile and accepts explicit profiles', () => {
+    expect(resolveCiProfile({})).toBe('fast')
+    expect(resolveCiProfile({ BILIG_CI_PROFILE: 'fast' })).toBe('fast')
+    expect(resolveCiProfile({ BILIG_CI_PROFILE: 'full' })).toBe('full')
+  })
+
+  it('rejects malformed CI profiles instead of silently downgrading gates', () => {
+    expect(() => resolveCiProfile({ BILIG_CI_PROFILE: 'ful' })).toThrow('BILIG_CI_PROFILE must be "fast" or "full", got ful')
+  })
+
   it('serializes generated checks and avoids pnpm for direct preflight gates', () => {
     const source = readFileSync(resolve(repoRoot, 'scripts/run-ci.ts'), 'utf8')
 
