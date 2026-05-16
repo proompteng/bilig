@@ -54,6 +54,7 @@ export interface WorkPaperSetCellContentsRuntime {
   readonly rewriteFormulaForStorage: (formula: string, ownerSheetId: number) => string
   readonly applyCellMutationRefs: (refs: readonly EngineCellMutationRef[], options: WorkPaperCellMutationApplyOptions) => void
   readonly canUseTrackedMutationFastPath: () => boolean
+  readonly isTrackedBatchFastPathActive: () => boolean
   readonly captureTrackedChangesWithoutVisibilityCache: (
     mutate: () => void,
     options: {
@@ -179,6 +180,11 @@ export function setWorkPaperCellContents(
   }
   if (!runtime.isItPossibleToSetCellContents(address, content)) {
     throw new WorkPaperOperationError('Cell contents cannot be set')
+  }
+  if (runtime.isTrackedBatchFastPathActive()) {
+    runtime.flushPendingBatchOps()
+    runtime.applyMatrixContents(address, content)
+    return []
   }
   return runtime.captureChanges(() => {
     runtime.flushPendingBatchOps()

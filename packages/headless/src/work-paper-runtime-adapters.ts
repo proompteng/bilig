@@ -315,6 +315,7 @@ export function createWorkPaperRuntimeAdapters(args: CreateWorkPaperRuntimeAdapt
     rewriteFormulaForStorage: args.rewriteFormulaForStorage,
     applyCellMutationRefs: args.applyCellMutationRefs,
     canUseTrackedMutationFastPath: args.canUseTrackedMutationFastPath,
+    isTrackedBatchFastPathActive: args.isTrackedBatchFastPathActive,
     captureTrackedChangesWithoutVisibilityCache: args.captureTrackedChangesWithoutVisibilityCache,
     captureChanges: (mutate) => args.captureChanges(undefined, mutate),
     isItPossibleToSetCellContents: args.isItPossibleToSetCellContents,
@@ -438,6 +439,7 @@ export function createWorkPaperRuntimeAdapters(args: CreateWorkPaperRuntimeAdapt
     canMoveAxis: (axis, sheetId, start, count, target) =>
       isWorkPaperMoveAxisPossible(args.getCapabilityContext(), axis, sheetId, start, count, target),
     canUseTrackedStructuralFastPath: args.canUseTrackedStructuralFastPath,
+    isTrackedBatchFastPathActive: args.isTrackedBatchFastPathActive,
     batch: args.batch,
     batchStructuralChanges: args.batchStructuralChanges,
     captureAxisChange: args.captureAxisChange,

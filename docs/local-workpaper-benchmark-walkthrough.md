@@ -75,9 +75,9 @@ At the time of this walkthrough, that reports:
     "comparableCount": 57,
     "workpaperWins": 42,
     "hyperformulaWins": 15,
-    "directionalMeanRatioGeomean": 0.7329705059606954,
-    "directionalP95RatioGeomean": 0.7480495502999938,
-    "worstP95RatioWorkload": "structural-append-formula-rows"
+    "directionalMeanRatioGeomean": 0.7216546733829703,
+    "directionalP95RatioGeomean": 0.7402574840907257,
+    "worstP95RatioWorkload": "cross-sheet-dashboard-recalc"
   }
 }
 ```

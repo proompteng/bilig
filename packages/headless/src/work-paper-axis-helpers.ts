@@ -16,6 +16,7 @@ export interface WorkPaperAxisEditRuntime {
   ): boolean
   canMoveAxis(axis: WorkPaperAxisKind, sheetId: number, start: number, count: number, target: number): boolean
   canUseTrackedStructuralFastPath(): boolean
+  isTrackedBatchFastPathActive(): boolean
   batch(operations: () => void): WorkPaperChange[]
   batchStructuralChanges(operations: () => void): WorkPaperChange[]
   captureAxisChange(operations: () => void): WorkPaperChange[]
@@ -140,6 +141,11 @@ export function editWorkPaperAxisIntervals(
     return runtime.captureTrackedStructuralChanges(() => {
       runtime.applyAxisIntervalEdit(axis, mode, sheetId, start, amount)
     })
+  }
+  if (indexes.length === 1 && runtime.isTrackedBatchFastPathActive()) {
+    const [start, amount] = indexes[0]!
+    runtime.applyAxisIntervalEdit(axis, mode, sheetId, start, amount)
+    return []
   }
   return runtime.batchStructuralChanges(() => {
     orderedIndexes.forEach(([start, amount]) => {

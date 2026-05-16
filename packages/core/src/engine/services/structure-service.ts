@@ -480,10 +480,10 @@ export function createEngineStructureService(args: CreateEngineStructureServiceA
         ) {
           return
         }
-        if (formula && ownerPosition && tryQueueDirectAggregateStructuralRetarget(cellIndex, formula, ownerPosition)) {
+        if (canSkipOwnedDirectAggregateCandidate(cellIndex)) {
           return
         }
-        if (canSkipOwnedDirectAggregateCandidate(cellIndex)) {
+        if (formula && ownerPosition && tryQueueDirectAggregateStructuralRetarget(cellIndex, formula, ownerPosition)) {
           return
         }
         candidateCellIndices.add(cellIndex)

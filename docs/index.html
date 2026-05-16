@@ -427,11 +427,11 @@ function readNumber(cell: unknown): number {
               <div class="proof-result">
                 <div class="proof-metric">
                   <span class="proof-label">comparable mean rows</span>
-                  <strong>43/57</strong>
+                  <strong>42/57</strong>
                 </div>
                 <p>
-                  43 of 57 comparable mean-latency rows are faster in the checked file. The structural append row is slower at p95. Browser
-                  UI rendering is not part of this benchmark.
+                  42 of 57 comparable mean-latency rows are faster in the checked file. Cross-sheet dashboard recalculation is the worst p95
+                  holdout. Browser UI rendering is not part of this benchmark.
                 </p>
               </div>
 
@@ -448,7 +448,7 @@ function readNumber(cell: unknown): number {
                 </div>
                 <div class="proof-fact">
                   <dt>Caveat</dt>
-                  <dd>structural-append-formula-rows is slower at p95: <code>5.175x</code>.</dd>
+                  <dd>cross-sheet-dashboard-recalc is slower at p95: <code>3.281x</code>.</dd>
                 </div>
                 <div class="proof-fact">
                   <dt>Out of scope</dt>
