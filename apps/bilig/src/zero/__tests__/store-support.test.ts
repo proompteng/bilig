@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createEmptyWorkbookSnapshot,
   eventRequiresRecalc,
+  isDirtyRegion,
   normalizeRangeBounds,
   parseCellStyleRecord,
   parseCheckpointPayload,
@@ -28,6 +29,45 @@ describe('store support helpers', () => {
       colStart: 1,
       colEnd: 3,
     })
+  })
+
+  it('rejects unsafe dirty region bounds', () => {
+    expect(
+      isDirtyRegion({
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 1,
+        colStart: 0,
+        colEnd: 1,
+      }),
+    ).toBe(true)
+    expect(
+      isDirtyRegion({
+        sheetName: 'Sheet1',
+        rowStart: 1.5,
+        rowEnd: 2,
+        colStart: 0,
+        colEnd: 1,
+      }),
+    ).toBe(false)
+    expect(
+      isDirtyRegion({
+        sheetName: 'Sheet1',
+        rowStart: 2,
+        rowEnd: 1,
+        colStart: 0,
+        colEnd: 1,
+      }),
+    ).toBe(false)
+    expect(
+      isDirtyRegion({
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: Number.MAX_SAFE_INTEGER + 1,
+        colStart: 0,
+        colEnd: 1,
+      }),
+    ).toBe(false)
   })
 
   it('keeps style records but drops invalid nested fields', () => {

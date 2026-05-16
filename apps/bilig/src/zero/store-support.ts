@@ -87,14 +87,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
+function isSafeNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
 export function isDirtyRegion(value: unknown): value is DirtyRegion {
   return (
     isRecord(value) &&
     typeof value['sheetName'] === 'string' &&
-    typeof value['rowStart'] === 'number' &&
-    typeof value['rowEnd'] === 'number' &&
-    typeof value['colStart'] === 'number' &&
-    typeof value['colEnd'] === 'number'
+    isSafeNonNegativeInteger(value['rowStart']) &&
+    isSafeNonNegativeInteger(value['rowEnd']) &&
+    isSafeNonNegativeInteger(value['colStart']) &&
+    isSafeNonNegativeInteger(value['colEnd']) &&
+    value['rowEnd'] >= value['rowStart'] &&
+    value['colEnd'] >= value['colStart']
   )
 }
 
