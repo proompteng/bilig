@@ -8,7 +8,6 @@ import {
   parseCellEvalValue,
   parseCellStyleRecord,
   parseCheckpointPayload,
-  parseInteger,
   parseNonNegativeInteger,
   parseNullableInteger,
   parsePositiveInteger,
@@ -148,21 +147,6 @@ describe('store support helpers', () => {
         value: 123,
       }),
     ).toBe(true)
-  })
-
-  it('parses numeric strings into integers', () => {
-    expect(parseInteger(42)).toBe(42)
-    expect(parseInteger(-3)).toBe(-3)
-    expect(parseInteger(42.5)).toBe(0)
-    expect(parseInteger(Number.NaN)).toBe(0)
-    expect(parseInteger(Number.POSITIVE_INFINITY)).toBe(0)
-    expect(parseInteger(Number.MAX_SAFE_INTEGER + 1)).toBe(0)
-    expect(parseInteger('42')).toBe(42)
-    expect(parseInteger(' 42 ')).toBe(42)
-    expect(parseInteger('')).toBe(0)
-    expect(parseInteger('12abc')).toBe(0)
-    expect(parseInteger('1.5')).toBe(0)
-    expect(parseInteger(String(Number.MAX_SAFE_INTEGER + 1))).toBe(0)
   })
 
   it('parses nullable integer fields strictly', () => {

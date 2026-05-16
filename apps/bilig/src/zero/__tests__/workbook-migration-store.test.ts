@@ -98,6 +98,39 @@ describe('workbook migration store', () => {
     expect(storeFns.persistCellEvalRows).not.toHaveBeenCalled()
   })
 
+  it('rejects invalid workbook revision metadata during projection backfill', async () => {
+    const query = vi.fn(async (text: string) => {
+      if (text.includes('source_projection_version')) {
+        return { rows: [{ id: 'book-bad' }] }
+      }
+      if (text.includes('to_regclass')) {
+        return { rows: [{ relation: null }] }
+      }
+      if (text.includes('WHERE id = ANY')) {
+        return {
+          rows: [
+            {
+              id: 'book-bad',
+              snapshot: null,
+              replica_snapshot: null,
+              head_revision: '-1',
+              calculated_revision: '0',
+              owner_user_id: 'owner-1',
+              updated_at: '2026-05-16T00:00:00.000Z',
+            },
+          ],
+        }
+      }
+      return { rows: [] }
+    })
+    const db: Queryable = { query }
+
+    await expect(backfillWorkbookSourceProjectionVersion(db)).rejects.toThrow('Invalid workbook migration row for book-bad')
+
+    expect(storeFns.upsertWorkbookHeader).not.toHaveBeenCalled()
+    expect(storeFns.applySheetDiff).not.toHaveBeenCalled()
+  })
+
   it('returns early from cell-eval backfill when no stale style_json rows are found', async () => {
     const query = vi.fn().mockResolvedValueOnce({ rows: [] })
     const db: Queryable = { query }
@@ -133,6 +166,26 @@ describe('workbook migration store', () => {
     const db: Queryable = { query }
 
     await expect(enforceWorkbookEventClientMutationIdUniqueness(db)).rejects.toThrow('book-1/book-1:pending:4 count=2 revisions=7-9')
+    expect(query).toHaveBeenCalledOnce()
+  })
+
+  it('reports malformed duplicate workbook event revisions explicitly', async () => {
+    const query = vi.fn().mockResolvedValueOnce({
+      rows: [
+        {
+          workbook_id: 'book-1',
+          client_mutation_id: 'book-1:pending:4',
+          duplicate_count: 'bad',
+          first_revision: '-1',
+          last_revision: '9',
+        },
+      ],
+    })
+    const db: Queryable = { query }
+
+    await expect(enforceWorkbookEventClientMutationIdUniqueness(db)).rejects.toThrow(
+      'book-1/book-1:pending:4 count=<invalid> revisions=<invalid>-9',
+    )
     expect(query).toHaveBeenCalledOnce()
   })
 })

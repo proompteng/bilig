@@ -5,7 +5,14 @@ import {
   type CellEvalRow,
   type WorkbookSourceProjection,
 } from './projection.js'
-import { createEmptyWorkbookSnapshot, nowIso, parseCheckpointPayload, parseCheckpointReplicaState, parseInteger } from './store-support.js'
+import {
+  createEmptyWorkbookSnapshot,
+  nowIso,
+  parseCheckpointPayload,
+  parseCheckpointReplicaState,
+  parseNonNegativeInteger,
+  parsePositiveInteger,
+} from './store-support.js'
 import {
   applyAxisMetadataDiff,
   applyCalculationSettings,
@@ -26,13 +33,23 @@ import { repairWorkbookSheetIds } from './sheet-id-repair.js'
 const AUTHORITATIVE_SOURCE_PROJECTION_VERSION = 2
 
 interface WorkbookMigrationRow extends QueryResultRow {
+  readonly id?: unknown
+  readonly snapshot?: unknown
+  readonly replica_snapshot?: unknown
+  readonly calculated_revision?: unknown
+  readonly head_revision?: unknown
+  readonly owner_user_id?: unknown
+  readonly updated_at?: unknown
+}
+
+interface NormalizedWorkbookMigrationRow {
   readonly id: string
   readonly snapshot: unknown
-  readonly replica_snapshot: unknown
-  readonly calculated_revision: number | string | null
-  readonly head_revision: number | string | null
-  readonly owner_user_id: string | null
-  readonly updated_at: string | null
+  readonly replicaSnapshot: unknown
+  readonly calculatedRevision: number
+  readonly headRevision: number
+  readonly ownerUserId: string
+  readonly updatedAt: string
 }
 
 interface DuplicateWorkbookClientMutationIdRow extends QueryResultRow {
@@ -114,6 +131,30 @@ async function loadWorkbookMigrationRows(db: Queryable, workbookIds: readonly st
   return result.rows
 }
 
+function normalizeWorkbookMigrationRow(row: WorkbookMigrationRow): NormalizedWorkbookMigrationRow {
+  const headRevision = parseNonNegativeInteger(row.head_revision)
+  const calculatedRevision = parseNonNegativeInteger(row.calculated_revision)
+  if (
+    typeof row.id !== 'string' ||
+    row.id.length === 0 ||
+    headRevision === null ||
+    calculatedRevision === null ||
+    calculatedRevision > headRevision
+  ) {
+    throw new Error(`Invalid workbook migration row for ${typeof row.id === 'string' && row.id.length > 0 ? row.id : '<unknown>'}`)
+  }
+  const ownerUserId = typeof row.owner_user_id === 'string' && row.owner_user_id.length > 0 ? row.owner_user_id : 'system'
+  return {
+    id: row.id,
+    snapshot: row.snapshot,
+    replicaSnapshot: row.replica_snapshot,
+    headRevision,
+    calculatedRevision,
+    ownerUserId,
+    updatedAt: typeof row.updated_at === 'string' && row.updated_at.length > 0 ? row.updated_at : nowIso(),
+  }
+}
+
 async function rebuildWorkbookStateForMigration(
   db: Queryable,
   row: WorkbookMigrationRow,
@@ -122,16 +163,13 @@ async function rebuildWorkbookStateForMigration(
     readonly replaceCellEval: boolean
   },
 ): Promise<void> {
-  const checkpointPayload = parseCheckpointPayload(row.snapshot, row.id)
-  const replicaState = parseCheckpointReplicaState(row.replica_snapshot)
-  const updatedAt = row.updated_at ?? nowIso()
-  const headRevision = parseInteger(row.head_revision)
-  const calculatedRevision = parseInteger(row.calculated_revision)
-  const ownerUserId = row.owner_user_id ?? 'system'
+  const normalized = normalizeWorkbookMigrationRow(row)
+  const checkpointPayload = parseCheckpointPayload(normalized.snapshot, normalized.id)
+  const replicaState = parseCheckpointReplicaState(normalized.replicaSnapshot)
 
   const engine = new SpreadsheetEngine({
-    workbookName: row.id,
-    replicaId: `migration:${row.id}:${headRevision}`,
+    workbookName: normalized.id,
+    replicaId: `migration:${normalized.id}:${normalized.headRevision}`,
   })
   await engine.ready()
   engine.importSnapshot(checkpointPayload)
@@ -140,19 +178,23 @@ async function rebuildWorkbookStateForMigration(
   }
 
   if (options.replaceSourceProjection) {
-    const projection = buildWorkbookSourceProjection(row.id, checkpointPayload, {
-      revision: headRevision,
-      calculatedRevision,
-      ownerUserId,
-      updatedBy: ownerUserId,
-      updatedAt,
+    const projection = buildWorkbookSourceProjection(normalized.id, checkpointPayload, {
+      revision: normalized.headRevision,
+      calculatedRevision: normalized.calculatedRevision,
+      ownerUserId: normalized.ownerUserId,
+      updatedBy: normalized.ownerUserId,
+      updatedAt: normalized.updatedAt,
     })
     await replaceWorkbookSourceProjectionForMigration(db, projection)
-    await upsertWorkbookHeader(db, row.id, projection.workbook, checkpointPayload, replicaState)
+    await upsertWorkbookHeader(db, normalized.id, projection.workbook, checkpointPayload, replicaState)
   }
 
   if (options.replaceCellEval) {
-    await replaceCellEvalForMigration(db, row.id, materializeCellEvalProjection(engine, row.id, calculatedRevision, updatedAt))
+    await replaceCellEvalForMigration(
+      db,
+      normalized.id,
+      materializeCellEvalProjection(engine, normalized.id, normalized.calculatedRevision, normalized.updatedAt),
+    )
   }
 }
 
@@ -276,8 +318,8 @@ export async function dropLegacyZeroSyncSchemaObjects(db: Queryable): Promise<vo
 function formatDuplicateClientMutationId(row: DuplicateWorkbookClientMutationIdRow): string {
   const workbookId = typeof row.workbook_id === 'string' ? row.workbook_id : '<unknown workbook>'
   const clientMutationId = typeof row.client_mutation_id === 'string' ? row.client_mutation_id : '<unknown mutation>'
-  const duplicateCount = parseInteger(row.duplicate_count)
-  const firstRevision = parseInteger(row.first_revision)
-  const lastRevision = parseInteger(row.last_revision)
+  const duplicateCount = parsePositiveInteger(row.duplicate_count) ?? '<invalid>'
+  const firstRevision = parsePositiveInteger(row.first_revision) ?? '<invalid>'
+  const lastRevision = parsePositiveInteger(row.last_revision) ?? '<invalid>'
   return `${workbookId}/${clientMutationId} count=${duplicateCount} revisions=${firstRevision}-${lastRevision}`
 }
