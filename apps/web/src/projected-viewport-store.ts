@@ -212,6 +212,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   setColumnWidth(sheetName: string, columnIndex: number, width: number): void {
+    assertValidProjectedAxisMutation('column', columnIndex, width)
     const previousWidth = this.axisStore.getColumnWidths(sheetName)[columnIndex]
     this.axisStore.setColumnWidth(sheetName, columnIndex, width)
     this.notifySheetChannels(sheetName, ['columnWidths'])
@@ -221,11 +222,13 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   ackColumnWidth(sheetName: string, columnIndex: number, width: number): void {
+    assertValidProjectedAxisMutation('column', columnIndex, width)
     this.axisStore.ackColumnWidth(sheetName, columnIndex, width)
     this.notifySheetChannels(sheetName, ['columnWidths'])
   }
 
   rollbackColumnWidth(sheetName: string, columnIndex: number, width: number | undefined): void {
+    assertValidProjectedAxisMutation('column', columnIndex, width)
     const previousWidth = this.axisStore.getColumnWidths(sheetName)[columnIndex]
     this.axisStore.rollbackColumnWidth(sheetName, columnIndex, width)
     this.notifySheetChannels(sheetName, ['columnWidths'])
@@ -235,6 +238,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   setColumnHidden(sheetName: string, columnIndex: number, hidden: boolean, size: number): void {
+    assertValidProjectedAxisMutation('column', columnIndex, size)
     const previousWidth = this.axisStore.getColumnWidths(sheetName)[columnIndex]
     this.axisStore.setColumnHidden(sheetName, columnIndex, hidden, size)
     this.notifySheetChannels(sheetName, ['columnWidths', 'hiddenColumns'])
@@ -244,6 +248,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   rollbackColumnHidden(sheetName: string, columnIndex: number, previous: { hidden: boolean; size: number | undefined }): void {
+    assertValidProjectedAxisMutation('column', columnIndex, previous.size)
     const previousWidth = this.axisStore.getColumnWidths(sheetName)[columnIndex]
     this.axisStore.rollbackColumnHidden(sheetName, columnIndex, previous)
     this.notifySheetChannels(sheetName, ['columnWidths', 'hiddenColumns'])
@@ -253,6 +258,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   setRowHeight(sheetName: string, rowIndex: number, height: number): void {
+    assertValidProjectedAxisMutation('row', rowIndex, height)
     const previousHeight = this.axisStore.getRowHeights(sheetName)[rowIndex]
     this.axisStore.setRowHeight(sheetName, rowIndex, height)
     this.notifySheetChannels(sheetName, ['rowHeights'])
@@ -262,11 +268,13 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   ackRowHeight(sheetName: string, rowIndex: number, height: number): void {
+    assertValidProjectedAxisMutation('row', rowIndex, height)
     this.axisStore.ackRowHeight(sheetName, rowIndex, height)
     this.notifySheetChannels(sheetName, ['rowHeights'])
   }
 
   rollbackRowHeight(sheetName: string, rowIndex: number, height: number | undefined): void {
+    assertValidProjectedAxisMutation('row', rowIndex, height)
     const previousHeight = this.axisStore.getRowHeights(sheetName)[rowIndex]
     this.axisStore.rollbackRowHeight(sheetName, rowIndex, height)
     this.notifySheetChannels(sheetName, ['rowHeights'])
@@ -276,6 +284,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   setRowHidden(sheetName: string, rowIndex: number, hidden: boolean, size: number): void {
+    assertValidProjectedAxisMutation('row', rowIndex, size)
     const previousHeight = this.axisStore.getRowHeights(sheetName)[rowIndex]
     this.axisStore.setRowHidden(sheetName, rowIndex, hidden, size)
     this.notifySheetChannels(sheetName, ['rowHeights', 'hiddenRows'])
@@ -285,6 +294,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   rollbackRowHidden(sheetName: string, rowIndex: number, previous: { hidden: boolean; size: number | undefined }): void {
+    assertValidProjectedAxisMutation('row', rowIndex, previous.size)
     const previousHeight = this.axisStore.getRowHeights(sheetName)[rowIndex]
     this.axisStore.rollbackRowHidden(sheetName, rowIndex, previous)
     this.notifySheetChannels(sheetName, ['rowHeights', 'hiddenRows'])
@@ -564,6 +574,16 @@ function clampAxisIndex(index: number, axisLength: number): number {
     return 0
   }
   return Math.max(0, Math.min(axisLength - 1, Math.trunc(index)))
+}
+
+function assertValidProjectedAxisMutation(axis: 'column' | 'row', index: number, size: number | undefined): void {
+  const axisLength = axis === 'column' ? MAX_COLS : MAX_ROWS
+  if (!Number.isInteger(index) || index < 0 || index >= axisLength) {
+    throw new Error(`Invalid projected ${axis} index: ${index}`)
+  }
+  if (size !== undefined && (!Number.isFinite(size) || size < 0)) {
+    throw new Error(`Invalid projected ${axis} size: ${size}`)
+  }
 }
 
 function resolveCellSnapshotDirtyMask(snapshot: CellSnapshot): number {

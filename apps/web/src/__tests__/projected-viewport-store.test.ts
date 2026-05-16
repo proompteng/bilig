@@ -620,6 +620,27 @@ describe('ProjectedViewportStore', () => {
     unsubscribeRenderTiles()
   })
 
+  it('rejects invalid local axis mutations before state and dirty deltas diverge', () => {
+    const cache = new ProjectedViewportStore(createNoopWorkerEngineClient())
+    const listener = vi.fn()
+
+    cache.setSheetIdentities([{ id: 7, name: 'Sheet1', order: 3 }])
+    const unsubscribeDeltas = cache.subscribeWorkbookDeltas(listener)
+
+    expect(() => cache.setColumnWidth('Sheet1', -1, 144)).toThrow('Invalid projected column index: -1')
+    expect(() => cache.setRowHeight('Sheet1', 1.5, 48)).toThrow('Invalid projected row index: 1.5')
+    expect(() => cache.setColumnHidden('Sheet1', 0, true, Number.NaN)).toThrow('Invalid projected column size: NaN')
+    expect(() => cache.rollbackRowHidden('Sheet1', 0, { hidden: false, size: Number.POSITIVE_INFINITY })).toThrow(
+      'Invalid projected row size: Infinity',
+    )
+
+    expect(cache.getColumnWidths('Sheet1')).toEqual({})
+    expect(cache.getRowHeights('Sheet1')).toEqual({})
+    expect(listener).not.toHaveBeenCalled()
+
+    unsubscribeDeltas()
+  })
+
   it('drops stale sheet identities when runtime state publishes a replacement sheet list', () => {
     const cache = new ProjectedViewportStore(createNoopWorkerEngineClient())
     const listener = vi.fn()
