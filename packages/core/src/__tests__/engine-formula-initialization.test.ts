@@ -271,6 +271,34 @@ describe('SpreadsheetEngine formula initialization', () => {
     expect(engine.getPerformanceCounters().regionQueryIndexBuilds).toBe(0)
   })
 
+  it('materializes out-of-order anchored prefix aggregates during initial direct evaluation', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'engine-formula-initialize-out-of-order-prefix-aggregate' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+    for (let row = 1; row <= 4; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+    }
+
+    engine.resetPerformanceCounters()
+    engine.initializeCellFormulasAt(
+      [
+        { sheetId, mutation: { kind: 'setCellFormula', row: 3, col: 1, formula: 'SUM(A1:A4)' } },
+        { sheetId, mutation: { kind: 'setCellFormula', row: 0, col: 1, formula: 'SUM(A1:A1)' } },
+        { sheetId, mutation: { kind: 'setCellFormula', row: 2, col: 1, formula: 'SUM(A1:A3)' } },
+        { sheetId, mutation: { kind: 'setCellFormula', row: 1, col: 1, formula: 'SUM(A1:A2)' } },
+      ],
+      4,
+    )
+
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 1 })
+    expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Number, value: 3 })
+    expect(engine.getCellValue('Sheet1', 'B3')).toEqual({ tag: ValueTag.Number, value: 6 })
+    expect(engine.getCellValue('Sheet1', 'B4')).toEqual({ tag: ValueTag.Number, value: 10 })
+    expect(engine.getPerformanceCounters().directFormulaInitialEvaluations).toBe(4)
+    expect(engine.getPerformanceCounters().regionQueryIndexBuilds).toBe(0)
+  })
+
   it('materializes initial aggregate variants and scalar fallback values in one pass', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'engine-formula-initialize-direct-variants' })
     await engine.ready()
