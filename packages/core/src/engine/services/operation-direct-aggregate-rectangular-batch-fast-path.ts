@@ -1,4 +1,4 @@
-import type { EngineChangedCell } from '@bilig/protocol'
+import { ErrorCode, ValueTag, type EngineChangedCell } from '@bilig/protocol'
 import type { EngineOpBatch } from '@bilig/workbook-domain'
 import type { EngineCellMutationRef } from '../../cell-mutations-at.js'
 import { CellFlags } from '../../cell-store.js'
@@ -40,6 +40,8 @@ export interface OperationDirectAggregateRectangularBatchFastPathArgs {
   readonly composeDisjointEventChanges: (recalculated: U32, explicitChangedCount: number) => U32
   readonly captureChangedCells: (changedCellIndices: readonly number[] | U32) => readonly EngineChangedCell[]
 }
+
+type DenseAggregateBatchMutation = Extract<EngineCellMutationRef['mutation'], { kind: 'setCellValue' | 'clearCell' }>
 
 export function createOperationDirectAggregateRectangularBatchFastPath(args: OperationDirectAggregateRectangularBatchFastPathArgs): {
   readonly tryApplyDenseRectangularDirectAggregateLiteralBatch: (
@@ -94,7 +96,11 @@ export function createOperationDirectAggregateRectangularBatchFastPath(args: Ope
     try {
       for (let index = 0; index < inputCellIndices.length; index += 1) {
         const cellIndex = inputCellIndices[index]!
-        args.writeNumericLiteralToCellStore(cellIndex, inputNumericValues[index]!)
+        if (rectangle.emptyInputFlags[index] === 1) {
+          writeEmptyLiteralToCellStore(args.state.workbook.cellStore, cellIndex)
+        } else {
+          args.writeNumericLiteralToCellStore(cellIndex, inputNumericValues[index]!)
+        }
         changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
         if (requiresChangedSet) {
           explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount)
@@ -160,10 +166,11 @@ function collectDenseNumericRectangle(
   readonly colCount: number
   readonly inputCellIndices: Uint32Array
   readonly inputNumericValues: Float64Array
+  readonly emptyInputFlags: Uint8Array
   readonly rowSums: Float64Array
 } | null {
   const firstMutation = firstRef.mutation
-  if (firstMutation.kind !== 'setCellValue' || typeof firstMutation.value !== 'number' || Object.is(firstMutation.value, -0)) {
+  if (!isSupportedAggregateBatchMutation(firstMutation)) {
     return null
   }
   const sheet = args.state.workbook.getSheetById(firstRef.sheetId)
@@ -172,6 +179,7 @@ function collectDenseNumericRectangle(
   }
   const inputCellIndices = new Uint32Array(refs.length)
   const inputNumericValues = new Float64Array(refs.length)
+  const emptyInputFlags = new Uint8Array(refs.length)
   const rowSumsScratch = new Float64Array(refs.length)
   const cellStore = args.state.workbook.cellStore
   const firstRow = firstMutation.row
@@ -183,12 +191,7 @@ function collectDenseNumericRectangle(
   for (let refIndex = 0; refIndex < refs.length; refIndex += 1) {
     const ref = refs[refIndex]!
     const mutation = ref.mutation
-    if (
-      ref.sheetId !== firstRef.sheetId ||
-      mutation.kind !== 'setCellValue' ||
-      typeof mutation.value !== 'number' ||
-      Object.is(mutation.value, -0)
-    ) {
+    if (ref.sheetId !== firstRef.sheetId || !isSupportedAggregateBatchMutation(mutation)) {
       return null
     }
     if (mutation.row === currentRow) {
@@ -224,8 +227,17 @@ function collectDenseNumericRectangle(
       return null
     }
     inputCellIndices[refIndex] = existingIndex
-    inputNumericValues[refIndex] = mutation.value
-    rowSumsScratch[rowOffset] = (rowSumsScratch[rowOffset] ?? 0) + mutation.value
+    if (mutation.kind === 'clearCell' || mutation.value === null) {
+      emptyInputFlags[refIndex] = 1
+      inputNumericValues[refIndex] = 0
+    } else {
+      const numericValue = mutation.value
+      if (typeof numericValue !== 'number') {
+        return null
+      }
+      inputNumericValues[refIndex] = numericValue
+      rowSumsScratch[rowOffset] = (rowSumsScratch[rowOffset] ?? 0) + numericValue
+    }
   }
   if (colCount === 0) {
     colCount = currentWidth
@@ -245,8 +257,28 @@ function collectDenseNumericRectangle(
     colCount,
     inputCellIndices,
     inputNumericValues,
+    emptyInputFlags,
     rowSums: rowSumsScratch.subarray(0, rowCount),
   }
+}
+
+function isSupportedAggregateBatchMutation(mutation: EngineCellMutationRef['mutation']): mutation is DenseAggregateBatchMutation {
+  if (mutation.kind === 'clearCell') {
+    return true
+  }
+  return (
+    mutation.kind === 'setCellValue' && (mutation.value === null || (typeof mutation.value === 'number' && !Object.is(mutation.value, -0)))
+  )
+}
+
+function writeEmptyLiteralToCellStore(cellStore: FastPathState['workbook']['cellStore'], cellIndex: number): void {
+  const flags = cellStore.flags[cellIndex] ?? 0
+  cellStore.flags[cellIndex] = flags & ~(CellFlags.AuthoredBlank | CellFlags.SpillChild | CellFlags.PivotOutput)
+  cellStore.versions[cellIndex] = (cellStore.versions[cellIndex] ?? 0) + 1
+  cellStore.stringIds[cellIndex] = 0
+  cellStore.tags[cellIndex] = ValueTag.Empty
+  cellStore.numbers[cellIndex] = 0
+  cellStore.errors[cellIndex] = ErrorCode.None
 }
 
 function collectRowAggregateFormulas(

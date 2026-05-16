@@ -12,13 +12,13 @@
       "Performance multiple reporting must include geomean ratios, worst-case rows, holdouts, and 10x workload count."
     ],
     "unmetRequirements": [
-      "per-workload-mean-and-p95-wins: 42/57 comparable workloads win both mean and p95; p95 holdouts: build-mixed-content, sheet-rename-dependencies, named-expression-change, single-formula-edit-recalc, batch-edit-recalc, batch-clear-rectangular-block, structural-append-formula-rows, structural-delete-rows, structural-insert-columns, aggregate-overlapping-sliding-window, lookup-index-reference, lookup-with-column-index-after-batch-write, lookup-approximate-sorted, lookup-approximate-duplicates; xlsx-calc workbook-wide comparison is incomplete: covers 4/57 comparable workloads and has 4/4 mean+p95 wins; TrueCalc scalar-formula comparison has 0/7 mean+p95 wins"
+      "per-workload-mean-and-p95-wins: 46/57 comparable workloads win both mean and p95; p95 holdouts: build-mixed-content, build-cross-sheet-dashboard, sheet-rename-dependencies, single-formula-edit-recalc, batch-edit-recalc, structural-append-formula-rows, structural-insert-columns, lookup-with-column-index, lookup-index-reference, lookup-approximate-duplicates; xlsx-calc workbook-wide comparison is incomplete: covers 4/57 comparable workloads and has 4/4 mean+p95 wins; TrueCalc scalar-formula comparison has 0/7 mean+p95 wins"
     ]
   },
   "sourceArtifacts": {
     "primaryCompetitiveBenchmark": {
       "comparisonTarget": "HyperFormula",
-      "generatedAt": "2026-05-16T04:49:22.641Z",
+      "generatedAt": "2026-05-16T05:17:15.246Z",
       "hyperFormulaCommit": "9a510a2acb97c3d3490f9e3b9e961a1c4a98b9ad",
       "hyperFormulaVersion": "3.2.0",
       "path": "packages/benchmarks/baselines/workpaper-vs-hyperformula.json"
@@ -80,83 +80,63 @@
       "lookup-text"
     ],
     "excludedFamilies": ["config-toggle", "dynamic-array"],
-    "meanAndP95WinCount": 42,
-    "meanGeomeanRatio": 0.6619772067028068,
-    "meanWinCount": 47,
-    "p95GeomeanRatio": 0.6873818250368949,
+    "meanAndP95WinCount": 46,
+    "meanGeomeanRatio": 0.6028451199103537,
+    "meanWinCount": 48,
+    "p95GeomeanRatio": 0.5927061799143728,
     "p95Holdouts": [
       {
         "comparisonTarget": "HyperFormula",
-        "p95Ratio": 1.1752556422889802,
+        "p95Ratio": 1.3001024495187947,
         "workload": "build-mixed-content"
       },
       {
         "comparisonTarget": "HyperFormula",
-        "p95Ratio": 1.5958796460239337,
+        "p95Ratio": 1.219296463583365,
+        "workload": "build-cross-sheet-dashboard"
+      },
+      {
+        "comparisonTarget": "HyperFormula",
+        "p95Ratio": 1.0086633663338476,
         "workload": "sheet-rename-dependencies"
       },
       {
         "comparisonTarget": "HyperFormula",
-        "p95Ratio": 1.1523104608797683,
-        "workload": "named-expression-change"
-      },
-      {
-        "comparisonTarget": "HyperFormula",
-        "p95Ratio": 1.6237550370121774,
+        "p95Ratio": 2.6819104864875585,
         "workload": "single-formula-edit-recalc"
       },
       {
         "comparisonTarget": "HyperFormula",
-        "p95Ratio": 1.0820142406778988,
+        "p95Ratio": 1.0503636613144696,
         "workload": "batch-edit-recalc"
       },
       {
         "comparisonTarget": "HyperFormula",
-        "p95Ratio": 2.328089607348994,
-        "workload": "batch-clear-rectangular-block"
-      },
-      {
-        "comparisonTarget": "HyperFormula",
-        "p95Ratio": 2.2068147013783626,
+        "p95Ratio": 1.3690387082504987,
         "workload": "structural-append-formula-rows"
       },
       {
         "comparisonTarget": "HyperFormula",
-        "p95Ratio": 1.0126866359453925,
-        "workload": "structural-delete-rows"
-      },
-      {
-        "comparisonTarget": "HyperFormula",
-        "p95Ratio": 1.8908958982012365,
+        "p95Ratio": 1.3186163135228754,
         "workload": "structural-insert-columns"
       },
       {
         "comparisonTarget": "HyperFormula",
-        "p95Ratio": 2.373707603790738,
-        "workload": "aggregate-overlapping-sliding-window"
+        "p95Ratio": 1.3548700698339335,
+        "workload": "lookup-with-column-index"
       },
       {
         "comparisonTarget": "HyperFormula",
-        "p95Ratio": 1.5220533728698813,
+        "p95Ratio": 1.0848949888332755,
         "workload": "lookup-index-reference"
       },
       {
         "comparisonTarget": "HyperFormula",
-        "p95Ratio": 1.017679282867584,
-        "workload": "lookup-with-column-index-after-batch-write"
-      },
-      {
-        "comparisonTarget": "HyperFormula",
-        "p95Ratio": 1.0139860139657004,
-        "workload": "lookup-approximate-sorted"
-      },
-      {
-        "comparisonTarget": "HyperFormula",
-        "p95Ratio": 2.41182863089937,
+        "p95Ratio": 1.3267000477571576,
         "workload": "lookup-approximate-duplicates"
       }
     ],
-    "p95WinCount": 43,
+    "p95WinCount": 47,
     "tenXMeanAndP95WorkloadCountAgainstHyperFormula": 0,
     "limitedComparisonEngines": [
       {
@@ -167,10 +147,10 @@
     ],
     "workbookWideComparisonEngineCount": 2,
     "workbookWideComparisonEngines": ["HyperFormula", "xlsx-calc"],
-    "worstMeanRatio": 2.1874112358161666,
-    "worstMeanRatioWorkload": "structural-append-formula-rows",
-    "worstP95Ratio": 2.41182863089937,
-    "worstP95RatioWorkload": "lookup-approximate-duplicates"
+    "worstMeanRatio": 2.1607284750396443,
+    "worstMeanRatioWorkload": "single-formula-edit-recalc",
+    "worstP95Ratio": 2.6819104864875585,
+    "worstP95RatioWorkload": "single-formula-edit-recalc"
   },
   "completionAudit": {
     "allCriteriaPassed": false,
@@ -178,7 +158,7 @@
       {
         "evidence": [
           "primary artifact: packages/benchmarks/baselines/workpaper-vs-hyperformula.json",
-          "generated at: 2026-05-16T04:49:22.641Z",
+          "generated at: 2026-05-16T05:17:15.246Z",
           "check command: pnpm headless:performance:check",
           "timing refresh command: pnpm workpaper:bench:competitive:generate"
         ],
@@ -209,9 +189,9 @@
         "requirement": "Eligible benchmark families must cover diverse workbook build, recalc, structural, read, aggregate, and lookup shapes."
       },
       {
-        "evidence": ["HyperFormula mean wins: 47/57", "HyperFormula p95 wins: 43/57", "HyperFormula mean+p95 wins: 42/57"],
+        "evidence": ["HyperFormula mean wins: 48/57", "HyperFormula p95 wins: 47/57", "HyperFormula mean+p95 wins: 46/57"],
         "gaps": [
-          "42/57 comparable workloads win both mean and p95; p95 holdouts: build-mixed-content, sheet-rename-dependencies, named-expression-change, single-formula-edit-recalc, batch-edit-recalc, batch-clear-rectangular-block, structural-append-formula-rows, structural-delete-rows, structural-insert-columns, aggregate-overlapping-sliding-window, lookup-index-reference, lookup-with-column-index-after-batch-write, lookup-approximate-sorted, lookup-approximate-duplicates",
+          "46/57 comparable workloads win both mean and p95; p95 holdouts: build-mixed-content, build-cross-sheet-dashboard, sheet-rename-dependencies, single-formula-edit-recalc, batch-edit-recalc, structural-append-formula-rows, structural-insert-columns, lookup-with-column-index, lookup-index-reference, lookup-approximate-duplicates",
           "xlsx-calc workbook-wide comparison is incomplete: covers 4/57 comparable workloads and has 4/4 mean+p95 wins",
           "TrueCalc scalar-formula comparison has 0/7 mean+p95 wins"
         ],
@@ -221,10 +201,10 @@
       },
       {
         "evidence": [
-          "mean geomean ratio: 0.6619772067028068",
-          "p95 geomean ratio: 0.6873818250368949",
-          "worst mean row: structural-append-formula-rows (2.1874112358161666)",
-          "worst p95 row: lookup-approximate-duplicates (2.41182863089937)",
+          "mean geomean ratio: 0.6028451199103537",
+          "p95 geomean ratio: 0.5927061799143728",
+          "worst mean row: single-formula-edit-recalc (2.1607284750396443)",
+          "worst p95 row: single-formula-edit-recalc (2.6819104864875585)",
           "10x mean+p95 workloads against HyperFormula: 0"
         ],
         "gaps": [],
@@ -234,7 +214,7 @@
       }
     ],
     "unmetRequirements": [
-      "per-workload-mean-and-p95-wins: 42/57 comparable workloads win both mean and p95; p95 holdouts: build-mixed-content, sheet-rename-dependencies, named-expression-change, single-formula-edit-recalc, batch-edit-recalc, batch-clear-rectangular-block, structural-append-formula-rows, structural-delete-rows, structural-insert-columns, aggregate-overlapping-sliding-window, lookup-index-reference, lookup-with-column-index-after-batch-write, lookup-approximate-sorted, lookup-approximate-duplicates; xlsx-calc workbook-wide comparison is incomplete: covers 4/57 comparable workloads and has 4/4 mean+p95 wins; TrueCalc scalar-formula comparison has 0/7 mean+p95 wins"
+      "per-workload-mean-and-p95-wins: 46/57 comparable workloads win both mean and p95; p95 holdouts: build-mixed-content, build-cross-sheet-dashboard, sheet-rename-dependencies, single-formula-edit-recalc, batch-edit-recalc, structural-append-formula-rows, structural-insert-columns, lookup-with-column-index, lookup-index-reference, lookup-approximate-duplicates; xlsx-calc workbook-wide comparison is incomplete: covers 4/57 comparable workloads and has 4/4 mean+p95 wins; TrueCalc scalar-formula comparison has 0/7 mean+p95 wins"
     ]
   }
 }

@@ -23,7 +23,7 @@ artifacts:
 - import/export fidelity passes required CSV/XLSX cases, reports no unsupported
   import/export features, and explicitly declines native macro execution in
   [`packages/benchmarks/baselines/import-export-fidelity-scorecard.json`](../packages/benchmarks/baselines/import-export-fidelity-scorecard.json)
-- the headless benchmark claim is `47/57` mean wins against the current
+- the headless benchmark claim is `48/57` mean wins against the current
   HyperFormula-style comparable workload scorecard, with the p95 caveat kept
   visible in
   [`docs/what-workpaper-benchmark-proves.md`](what-workpaper-benchmark-proves.md)
