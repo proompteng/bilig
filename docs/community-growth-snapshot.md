@@ -1,6 +1,6 @@
 # Community Growth Snapshot
 
-Captured at: `2026-05-16T09:32:45.576Z`
+Captured at: `2026-05-16T11:07:45.461Z`
 
 This snapshot tracks the public signals for the `@bilig/headless` growth loop: GitHub conversion, npm demand, contributor on-ramp health, discussion activity, and traffic quality.
 
@@ -33,7 +33,7 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 - External open issues: 0
 - External open pull requests: 5
 - External issues opened in the last 7 days: 6
-- External pull requests opened in the last 7 days: 34
+- External pull requests opened in the last 7 days: 42
 
 ## Discussions
 
@@ -50,6 +50,14 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 - Clones: 21,392 from 2,641 unique cloners
 - Top referrers: github.com (92/30), news.ycombinator.com (52/37), t.co (29/24), proompteng.github.io (16/10), Google (16/2)
 - Top paths: /proompteng/bilig (241/160), /proompteng/bilig/issues (35/9), /proompteng/bilig/pulls (18/9), /proompteng/bilig/tree/main/examples/headless-workpaper (12/7), /proompteng/bilig/commits/main (12/1)
+
+## Conversion Pressure
+
+- Last-week npm downloads per current star: 546
+- Last-month npm downloads per current star: 1,207
+- Fourteen-day unique GitHub visitors per current star: 8
+- Fourteen-day unique cloners per current star: 115
+- Interpretation: these are pressure ratios, not attribution. High download or clone pressure with flat stars means the evaluator path needs a clearer proof, trust signal, or bookmark ask after verification.
 
 ## Spike Read
 

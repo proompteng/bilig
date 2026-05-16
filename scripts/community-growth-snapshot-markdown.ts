@@ -59,6 +59,36 @@ function renderTrafficMarkdown(traffic: GitHubTrafficSnapshot): readonly string[
   return lines
 }
 
+function ratioPerStar(value: number, stars: number): string {
+  if (stars <= 0) {
+    return 'n/a'
+  }
+  return formatCount(Math.round(value / stars))
+}
+
+function renderConversionPressureMarkdown(snapshot: CommunityGrowthSnapshot): readonly string[] {
+  const stars = snapshot.github.stargazerCount
+  const lines = [
+    `- Last-week npm downloads per current star: ${ratioPerStar(snapshot.npm.downloads.lastWeek.downloads, stars)}`,
+    `- Last-month npm downloads per current star: ${ratioPerStar(snapshot.npm.downloads.lastMonth.downloads, stars)}`,
+  ]
+
+  if (snapshot.traffic.available) {
+    lines.push(
+      `- Fourteen-day unique GitHub visitors per current star: ${ratioPerStar(snapshot.traffic.views.uniques, stars)}`,
+      `- Fourteen-day unique cloners per current star: ${ratioPerStar(snapshot.traffic.clones.uniques, stars)}`,
+    )
+  } else {
+    lines.push(`- GitHub traffic pressure: unavailable. ${snapshot.traffic.reason}`)
+  }
+
+  lines.push(
+    '- Interpretation: these are pressure ratios, not attribution. High download or clone pressure with flat stars means the evaluator path needs a clearer proof, trust signal, or bookmark ask after verification.',
+  )
+
+  return lines
+}
+
 function renderSpikeReadMarkdown(snapshot: CommunityGrowthSnapshot): readonly string[] {
   if (!snapshot.traffic.available) {
     return [
@@ -143,6 +173,10 @@ export function renderCommunityGrowthSnapshotMarkdown(snapshot: CommunityGrowthS
     '## Traffic',
     '',
     ...renderTrafficMarkdown(snapshot.traffic),
+    '',
+    '## Conversion Pressure',
+    '',
+    ...renderConversionPressureMarkdown(snapshot),
     '',
     '## Spike Read',
     '',
