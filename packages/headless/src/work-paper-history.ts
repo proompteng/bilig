@@ -54,6 +54,49 @@ export function clearWorkPaperHistoryStacks(undoStack: WorkPaperHistoryRecord[],
   redoStack.length = 0
 }
 
+export function cloneWorkPaperHistoryRecords(records: readonly WorkPaperHistoryRecord[]): WorkPaperHistoryRecord[] {
+  return records.map((record) => ({
+    forward: cloneWorkPaperHistoryTransactionRecord(record.forward),
+    inverse: cloneWorkPaperHistoryTransactionRecord(record.inverse),
+  }))
+}
+
+function cloneWorkPaperHistoryTransactionRecord(record: WorkPaperHistoryTransactionRecord): WorkPaperHistoryTransactionRecord {
+  switch (record.kind) {
+    case 'ops':
+      return {
+        kind: 'ops',
+        ops: record.ops.map((op) => structuredClone(op)),
+        ...(record.potentialNewCells !== undefined ? { potentialNewCells: record.potentialNewCells } : {}),
+      }
+    case 'single-op':
+      return {
+        kind: 'single-op',
+        op: structuredClone(record.op),
+        ...(record.potentialNewCells !== undefined ? { potentialNewCells: record.potentialNewCells } : {}),
+      }
+    case 'single-existing-numeric-cell-mutation':
+      return {
+        kind: 'single-existing-numeric-cell-mutation',
+        sheetId: record.sheetId,
+        row: record.row,
+        col: record.col,
+        cellIndex: record.cellIndex,
+        value: record.value,
+        ...(record.potentialNewCells !== undefined ? { potentialNewCells: record.potentialNewCells } : {}),
+      }
+    case 'cell-mutations':
+      return {
+        kind: 'cell-mutations',
+        refs: record.refs.map((ref) => ({
+          sheetId: ref.sheetId,
+          mutation: { ...ref.mutation },
+        })),
+        ...(record.potentialNewCells !== undefined ? { potentialNewCells: record.potentialNewCells } : {}),
+      }
+  }
+}
+
 export function workPaperHistoryTransactionOps(
   record: WorkPaperHistoryTransactionRecord,
   resolveSheetName: WorkPaperSheetNameResolver,

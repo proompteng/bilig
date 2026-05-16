@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   clearWorkPaperHistoryStacks,
+  cloneWorkPaperHistoryRecords,
   mergeWorkPaperUndoHistory,
   readWorkPaperHistoryStack,
   tryMergeTypedCellMutationHistory,
@@ -81,6 +82,45 @@ describe('work paper history helpers', () => {
       ),
     ).toEqual([{ kind: 'setCellValue', sheetName: 'Data', address: 'B5', value: 8 }])
     expect(workPaperHistoryTransactionOps(cellMutationRecord(2, 1, 9).forward, () => undefined)).toEqual([])
+  })
+
+  it('deep clones history records used for transaction rollback snapshots', () => {
+    const source: WorkPaperHistoryRecord[] = [
+      {
+        forward: {
+          kind: 'ops',
+          ops: [{ kind: 'setCellValue', nested: { value: 1 } }],
+          potentialNewCells: 1,
+        },
+        inverse: {
+          kind: 'single-op',
+          op: { kind: 'clearCell', nested: { address: 'A1' } },
+        },
+      },
+      cellMutationRecord(2, 3, 9),
+    ]
+
+    const cloned = cloneWorkPaperHistoryRecords(source)
+    if (cloned[0]?.forward.kind !== 'ops' || source[0]?.forward.kind !== 'ops') {
+      throw new Error('expected generic ops history')
+    }
+    if (cloned[0].inverse.kind !== 'single-op' || source[0].inverse.kind !== 'single-op') {
+      throw new Error('expected single-op inverse history')
+    }
+    if (cloned[1]?.forward.kind !== 'cell-mutations' || source[1]?.forward.kind !== 'cell-mutations') {
+      throw new Error('expected typed cell-mutation history')
+    }
+
+    Reflect.set(Reflect.get(cloned[0].forward.ops[0], 'nested'), 'value', 99)
+    Reflect.set(Reflect.get(cloned[0].inverse.op, 'nested'), 'address', 'Z9')
+    cloned[1].forward.refs[0].mutation.row = 99
+
+    expect(Reflect.get(Reflect.get(source[0].forward.ops[0], 'nested'), 'value')).toBe(1)
+    expect(Reflect.get(Reflect.get(source[0].inverse.op, 'nested'), 'address')).toBe('A1')
+    expect(source[1].forward.refs[0]?.mutation.row).toBe(3)
+    expect(cloned).not.toEqual(cloneWorkPaperHistoryRecords(source))
+    expect(cloned[0].forward.ops[0]).not.toBe(source[0].forward.ops[0])
+    expect(cloned[1].forward.refs[0]).not.toBe(source[1].forward.refs[0])
   })
 
   it('merges typed cell mutation history without degrading to generic ops', () => {

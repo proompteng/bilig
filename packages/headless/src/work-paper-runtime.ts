@@ -73,7 +73,7 @@ import { WorkPaperMutationQueues } from './work-paper-mutation-queues.js'
 import { WorkPaperEngineEventTracker } from './work-paper-engine-event-tracker.js'
 import { createWorkPaperRuntimeAdapters } from './work-paper-runtime-adapters.js'
 import { WorkPaperRuntimeSurface } from './work-paper-runtime-surface.js'
-import type { WorkPaperHistoryRecord, WorkPaperHistoryTransactionRecord } from './work-paper-history.js'
+import { cloneWorkPaperHistoryRecords, type WorkPaperHistoryRecord } from './work-paper-history.js'
 
 type NamedExpressionValueSnapshot = WorkPaperNamedExpressionValueSnapshot
 
@@ -875,47 +875,4 @@ function createWorkPaperEngine(config: WorkPaperConfig): SpreadsheetEngine {
     engine.setCalculationSettings(calculationSettings)
   }
   return engine
-}
-
-function cloneWorkPaperHistoryRecords(records: readonly WorkPaperHistoryRecord[]): WorkPaperHistoryRecord[] {
-  return records.map((record) => ({
-    forward: cloneWorkPaperHistoryTransactionRecord(record.forward),
-    inverse: cloneWorkPaperHistoryTransactionRecord(record.inverse),
-  }))
-}
-
-function cloneWorkPaperHistoryTransactionRecord(record: WorkPaperHistoryTransactionRecord): WorkPaperHistoryTransactionRecord {
-  switch (record.kind) {
-    case 'ops':
-      return {
-        kind: 'ops',
-        ops: record.ops.map((op) => structuredClone(op)),
-        ...(record.potentialNewCells !== undefined ? { potentialNewCells: record.potentialNewCells } : {}),
-      }
-    case 'single-op':
-      return {
-        kind: 'single-op',
-        op: structuredClone(record.op),
-        ...(record.potentialNewCells !== undefined ? { potentialNewCells: record.potentialNewCells } : {}),
-      }
-    case 'single-existing-numeric-cell-mutation':
-      return {
-        kind: 'single-existing-numeric-cell-mutation',
-        sheetId: record.sheetId,
-        row: record.row,
-        col: record.col,
-        cellIndex: record.cellIndex,
-        value: record.value,
-        ...(record.potentialNewCells !== undefined ? { potentialNewCells: record.potentialNewCells } : {}),
-      }
-    case 'cell-mutations':
-      return {
-        kind: 'cell-mutations',
-        refs: record.refs.map((ref) => ({
-          sheetId: ref.sheetId,
-          mutation: { ...ref.mutation },
-        })),
-        ...(record.potentialNewCells !== undefined ? { potentialNewCells: record.potentialNewCells } : {}),
-      }
-  }
 }
