@@ -91,7 +91,7 @@ jobs:
 
       - name: Upload fuzz and browser artifacts on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bilig-fuzz-artifacts-node-24
           path: |
