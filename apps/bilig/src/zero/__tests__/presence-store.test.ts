@@ -55,6 +55,70 @@ describe('presence-store', () => {
     })
   })
 
+  it('resolves a workbook presence sheet ref by matching both provided sheet identifiers', async () => {
+    const queryable = new FakeQueryable([
+      (text, values) =>
+        text.includes('FROM sheets') && values?.[1] === 7 && values?.[2] === 'Revenue'
+          ? [{ sheetId: 7, sheetName: 'Revenue' } satisfies QueryResultRow]
+          : null,
+    ])
+
+    await expect(
+      resolveWorkbookPresenceSheetRef(queryable, {
+        documentId: 'doc-1',
+        sheetId: 7,
+        sheetName: 'Revenue',
+      }),
+    ).resolves.toEqual({
+      sheetId: 7,
+      sheetName: 'Revenue',
+    })
+
+    expect(queryable.calls[0]?.text).toContain('sheet_id = $2 AND name = $3 THEN 0')
+    expect(queryable.calls[0]?.text).toContain('name = $3 THEN 1')
+  })
+
+  it('canonicalizes contradictory sheet id and name pairs by the visible sheet name', async () => {
+    const queryable = new FakeQueryable([
+      (text, values) =>
+        text.includes('FROM sheets') && values?.[1] === 2 && values?.[2] === 'Revenue'
+          ? [{ sheetId: 7, sheetName: 'Revenue' } satisfies QueryResultRow]
+          : null,
+    ])
+
+    await expect(
+      resolveWorkbookPresenceSheetRef(queryable, {
+        documentId: 'doc-1',
+        sheetId: 2,
+        sheetName: 'Revenue',
+      }),
+    ).resolves.toEqual({
+      sheetId: 7,
+      sheetName: 'Revenue',
+    })
+    expect(queryable.calls[0]?.values).toEqual(['doc-1', 2, 'Revenue'])
+  })
+
+  it('falls back to sheet id canonicalization when a provided sheet name is stale', async () => {
+    const queryable = new FakeQueryable([
+      (text, values) =>
+        text.includes('FROM sheets') && values?.[1] === 2 && values?.[2] === 'Old Revenue'
+          ? [{ sheetId: 2, sheetName: 'Revenue' } satisfies QueryResultRow]
+          : null,
+    ])
+
+    await expect(
+      resolveWorkbookPresenceSheetRef(queryable, {
+        documentId: 'doc-1',
+        sheetId: 2,
+        sheetName: 'Old Revenue',
+      }),
+    ).resolves.toEqual({
+      sheetId: 2,
+      sheetName: 'Revenue',
+    })
+  })
+
   it('preserves the provided coarse location when the sheet lookup misses', async () => {
     const queryable = new FakeQueryable()
 

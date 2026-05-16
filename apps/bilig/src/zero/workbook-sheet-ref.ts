@@ -48,7 +48,14 @@ export async function resolveWorkbookSheetRef(
            ($2::INTEGER IS NOT NULL AND sheet_id = $2)
            OR ($3::TEXT IS NOT NULL AND name = $3)
          )
-       ORDER BY sort_order ASC
+       ORDER BY
+         CASE
+           WHEN $2::INTEGER IS NOT NULL AND $3::TEXT IS NOT NULL AND sheet_id = $2 AND name = $3 THEN 0
+           WHEN $3::TEXT IS NOT NULL AND name = $3 THEN 1
+           WHEN $2::INTEGER IS NOT NULL AND sheet_id = $2 THEN 2
+           ELSE 3
+         END ASC,
+         sort_order ASC
        LIMIT 1
     `,
     [input.documentId, input.sheetId ?? null, input.sheetName ?? null],
