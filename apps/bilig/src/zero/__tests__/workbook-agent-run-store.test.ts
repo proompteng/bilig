@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { appendWorkbookAgentRun, listWorkbookAgentThreadRuns, listWorkbookAgentRuns } from '../workbook-agent-run-store.js'
+import {
+  appendWorkbookAgentRun,
+  ensureWorkbookAgentRunSchema,
+  listWorkbookAgentThreadRuns,
+  listWorkbookAgentRuns,
+} from '../workbook-agent-run-store.js'
 import type { QueryResultRow, Queryable } from '../store.js'
 
 interface RecordedQuery {
@@ -72,6 +77,32 @@ function createExecutionRecord() {
 }
 
 describe('workbook-agent-run-store', () => {
+  it('backfills legacy nullable bundle ids before enforcing the execution schema', async () => {
+    const queryable = new FakeQueryable()
+
+    await ensureWorkbookAgentRunSchema(queryable)
+
+    const backfillIndex = queryable.calls.findIndex((call) => call.text.includes('SET bundle_id = id'))
+    const notNullIndex = queryable.calls.findIndex((call) => call.text.includes('ALTER COLUMN bundle_id SET NOT NULL'))
+    expect(backfillIndex).toBeGreaterThan(-1)
+    expect(notNullIndex).toBeGreaterThan(backfillIndex)
+  })
+
+  it('backfills legacy acceptance metadata before enforcing execution schema defaults', async () => {
+    const queryable = new FakeQueryable()
+
+    await ensureWorkbookAgentRunSchema(queryable)
+
+    const acceptedScopeBackfillIndex = queryable.calls.findIndex((call) => call.text.includes("SET accepted_scope = 'full'"))
+    const acceptedScopeNotNullIndex = queryable.calls.findIndex((call) => call.text.includes('ALTER COLUMN accepted_scope SET NOT NULL'))
+    const appliedByBackfillIndex = queryable.calls.findIndex((call) => call.text.includes("SET applied_by = 'user'"))
+    const appliedByNotNullIndex = queryable.calls.findIndex((call) => call.text.includes('ALTER COLUMN applied_by SET NOT NULL'))
+    expect(acceptedScopeBackfillIndex).toBeGreaterThan(-1)
+    expect(acceptedScopeNotNullIndex).toBeGreaterThan(acceptedScopeBackfillIndex)
+    expect(appliedByBackfillIndex).toBeGreaterThan(-1)
+    expect(appliedByNotNullIndex).toBeGreaterThan(appliedByBackfillIndex)
+  })
+
   it('persists partial accepted scope in execution rows', async () => {
     const queryable = new FakeQueryable()
 
@@ -129,6 +160,51 @@ describe('workbook-agent-run-store', () => {
             values: [[2]],
           },
         ],
+      }),
+    ])
+  })
+
+  it('hydrates legacy execution rows without bundle ids using the run id as the stable bundle id', async () => {
+    const record = createExecutionRecord()
+    const queryable = new FakeQueryable([
+      (text) =>
+        text.includes('FROM workbook_agent_run')
+          ? [
+              {
+                id: record.id,
+                bundleId: null,
+                workbookId: record.documentId,
+                threadId: record.threadId,
+                turnId: record.turnId,
+                actorUserId: record.actorUserId,
+                goalText: record.goalText,
+                planText: record.planText,
+                summary: record.summary,
+                scope: record.scope,
+                riskClass: record.riskClass,
+                acceptedScope: 'full',
+                appliedBy: 'user',
+                baseRevision: record.baseRevision,
+                appliedRevision: record.appliedRevision,
+                createdAtUnixMs: record.createdAtUnixMs,
+                appliedAtUnixMs: record.appliedAtUnixMs,
+                contextJson: record.context,
+                commandsJson: record.commands,
+                previewJson: record.preview,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ])
+
+    const records = await listWorkbookAgentRuns(queryable, {
+      documentId: 'doc-1',
+      actorUserId: 'alex@example.com',
+    })
+
+    expect(records).toEqual([
+      expect.objectContaining({
+        id: record.id,
+        bundleId: record.id,
       }),
     ])
   })

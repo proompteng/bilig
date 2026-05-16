@@ -45,9 +45,10 @@ function normalizeExecutionRecord(row: WorkbookAgentRunRow): WorkbookAgentExecut
   const createdAtUnixMs = parseNonNegativeInteger(row.createdAtUnixMs)
   const appliedAtUnixMs = parseNonNegativeInteger(row.appliedAtUnixMs)
   const commands = parseCommands(row.commandsJson)
+  const bundleId = typeof row.bundleId === 'string' && row.bundleId.length > 0 ? row.bundleId : row.id
   if (
     typeof row.id !== 'string' ||
-    typeof row.bundleId !== 'string' ||
+    typeof bundleId !== 'string' ||
     typeof row.workbookId !== 'string' ||
     typeof row.threadId !== 'string' ||
     typeof row.turnId !== 'string' ||
@@ -73,7 +74,7 @@ function normalizeExecutionRecord(row: WorkbookAgentRunRow): WorkbookAgentExecut
   const preview = row.previewJson === null || row.previewJson === undefined ? null : decodeWorkbookAgentPreviewSummary(row.previewJson)
   return {
     id: row.id,
-    bundleId: row.bundleId,
+    bundleId,
     documentId: row.workbookId,
     threadId: row.threadId,
     turnId: row.turnId,
@@ -122,12 +123,43 @@ export async function ensureWorkbookAgentRunSchema(db: Queryable): Promise<void>
   `)
   await db.query(`ALTER TABLE workbook_agent_run ADD COLUMN IF NOT EXISTS bundle_id TEXT;`)
   await db.query(`
+    UPDATE workbook_agent_run
+    SET bundle_id = id
+    WHERE bundle_id IS NULL OR bundle_id = '';
+  `)
+  await db.query(`
+    ALTER TABLE workbook_agent_run
+      ALTER COLUMN bundle_id SET NOT NULL;
+  `)
+  await db.query(`
     ALTER TABLE workbook_agent_run
       ADD COLUMN IF NOT EXISTS accepted_scope TEXT NOT NULL DEFAULT 'full';
   `)
   await db.query(`
+    UPDATE workbook_agent_run
+    SET accepted_scope = 'full'
+    WHERE accepted_scope IS NULL
+       OR accepted_scope NOT IN ('full', 'partial');
+  `)
+  await db.query(`
+    ALTER TABLE workbook_agent_run
+      ALTER COLUMN accepted_scope SET DEFAULT 'full',
+      ALTER COLUMN accepted_scope SET NOT NULL;
+  `)
+  await db.query(`
     ALTER TABLE workbook_agent_run
       ADD COLUMN IF NOT EXISTS applied_by TEXT NOT NULL DEFAULT 'user';
+  `)
+  await db.query(`
+    UPDATE workbook_agent_run
+    SET applied_by = 'user'
+    WHERE applied_by IS NULL
+       OR applied_by NOT IN ('user', 'auto');
+  `)
+  await db.query(`
+    ALTER TABLE workbook_agent_run
+      ALTER COLUMN applied_by SET DEFAULT 'user',
+      ALTER COLUMN applied_by SET NOT NULL;
   `)
   await db.query(`
     CREATE INDEX IF NOT EXISTS workbook_agent_run_workbook_actor_applied_idx
