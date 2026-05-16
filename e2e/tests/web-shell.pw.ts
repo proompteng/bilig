@@ -319,6 +319,50 @@ test('@browser-ci web app keeps click-away commits and keyboard clears stable', 
   await expect(resolvedValue).toHaveText('∅')
 })
 
+test('@browser-ci web app keeps an editor clear after click-away selection', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-editor-clear-click-away')
+  await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=A1`)
+  await waitForWorkbookReady(page)
+
+  const gridLocator = page.getByTestId('sheet-grid')
+  const nameBox = page.getByTestId('name-box')
+  const formulaInput = page.getByTestId('formula-input')
+  const cellEditor = page.getByTestId('cell-editor-input')
+
+  await clickProductCell(page, 0, 0)
+  await page.keyboard.type('ghost-value')
+  await page.keyboard.press('Enter')
+  await expect(nameBox).toHaveValue('A2', { timeout: 15_000 })
+
+  const grid = await gridLocator.boundingBox()
+  if (!grid) {
+    throw new Error('sheet grid is not visible')
+  }
+  const columnLeft = await getProductColumnLeft(page, 0)
+  const columnWidth = await getProductColumnWidth(page, 0)
+  await page.mouse.dblclick(
+    grid.x + columnLeft + Math.floor(columnWidth / 2),
+    grid.y + PRODUCT_HEADER_HEIGHT + Math.floor(PRODUCT_ROW_HEIGHT / 2),
+  )
+
+  await expect(cellEditor).toBeVisible()
+  await expect(cellEditor).toBeFocused()
+  await page.keyboard.press(`${PRIMARY_MODIFIER}+A`)
+  await page.keyboard.press('Backspace')
+  await expect(cellEditor).toHaveValue('')
+
+  await clickProductCell(page, 2, 3)
+  await expect(cellEditor).toBeHidden()
+  await expect(nameBox).toHaveValue('C4', { timeout: 15_000 })
+  await expect(formulaInput).toHaveValue('')
+  await expect.poll(() => nativeTextRunsInclude(page, 'ghost-value')).toBe(false)
+
+  await clickProductCell(page, 0, 0)
+  await expect(nameBox).toHaveValue('A1', { timeout: 15_000 })
+  await expect(formulaInput).toHaveValue('')
+  await expect.poll(() => nativeTextRunsInclude(page, 'ghost-value')).toBe(false)
+})
+
 test('@browser-ci web app gates unmerge on real merged-cell state', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-structure-unmerge-availability')
   await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=A1`)

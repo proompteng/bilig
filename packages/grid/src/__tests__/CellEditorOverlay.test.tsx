@@ -114,6 +114,98 @@ describe('CellEditorOverlay', () => {
     })
   })
 
+  it('reclaims focus from the grid focus target after editor mount', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const mockFrames = installMockAnimationFrames()
+    const host = document.createElement('div')
+    const gridFocusTarget = document.createElement('div')
+    gridFocusTarget.tabIndex = 0
+    gridFocusTarget.dataset['testid'] = 'sheet-grid-focus-target'
+    document.body.append(host, gridFocusTarget)
+    const root = createRoot(host)
+
+    try {
+      await act(async () => {
+        root.render(
+          <CellEditorOverlay
+            label="Sheet1!B2"
+            targetSelection={makeTargetSelection()}
+            onCancel={() => {}}
+            onChange={() => {}}
+            onCommit={() => {}}
+            resolvedValue=""
+            selectionBehavior="caret-end"
+            value="draft"
+          />,
+        )
+      })
+
+      const textarea = host.querySelector<HTMLTextAreaElement>("[data-testid='cell-editor-input']")
+      expect(textarea).not.toBeNull()
+      if (!textarea) {
+        throw new Error('Expected mounted cell editor input')
+      }
+
+      gridFocusTarget.focus()
+      expect(document.activeElement).toBe(gridFocusTarget)
+
+      await act(async () => {
+        mockFrames.flushAnimationFrames()
+      })
+
+      expect(document.activeElement).toBe(textarea)
+      expect(textarea.selectionStart).toBe(5)
+      expect(textarea.selectionEnd).toBe(5)
+    } finally {
+      await act(async () => {
+        root.unmount()
+      })
+      mockFrames.restore()
+    }
+  })
+
+  it('does not take focus back from a non-grid control during editor mount', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const mockFrames = installMockAnimationFrames()
+    const host = document.createElement('div')
+    const toolbarButton = document.createElement('button')
+    toolbarButton.textContent = 'Toolbar'
+    document.body.append(host, toolbarButton)
+    const root = createRoot(host)
+
+    try {
+      await act(async () => {
+        root.render(
+          <CellEditorOverlay
+            label="Sheet1!B2"
+            targetSelection={makeTargetSelection()}
+            onCancel={() => {}}
+            onChange={() => {}}
+            onCommit={() => {}}
+            resolvedValue=""
+            value="draft"
+          />,
+        )
+      })
+
+      toolbarButton.focus()
+      expect(document.activeElement).toBe(toolbarButton)
+
+      await act(async () => {
+        mockFrames.flushAnimationFrames()
+      })
+
+      expect(document.activeElement).toBe(toolbarButton)
+    } finally {
+      await act(async () => {
+        root.unmount()
+      })
+      mockFrames.restore()
+    }
+  })
+
   it('renders a textarea editor and keeps Alt+Enter for multiline input instead of committing', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

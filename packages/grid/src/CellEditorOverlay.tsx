@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import type { EditMovement, EditTargetSelection } from './SheetGridView.js'
 import { WORKBOOK_DEFAULT_FONT_SIZE, workbookFontPointSizeToCssPx } from './workbookTheme.js'
 
@@ -106,6 +106,36 @@ export function CellEditorOverlay({
     window.cancelAnimationFrame(pendingFrame)
   }
 
+  const focusEditorInput = useCallback(
+    (options: { applyInitialSelection: boolean }) => {
+      const input = inputRef.current
+      if (!input || completionRef.current !== 'idle') {
+        return
+      }
+      const activeElement = document.activeElement
+      const focusWasStolenByGrid =
+        activeElement === document.body ||
+        activeElement === document.documentElement ||
+        activeElement === null ||
+        activeElement === input ||
+        (activeElement instanceof HTMLElement && activeElement.dataset['testid'] === 'sheet-grid-focus-target')
+      if (!focusWasStolenByGrid) {
+        return
+      }
+      input.focus({ preventScroll: true })
+      if (!options.applyInitialSelection) {
+        return
+      }
+      if (selectionBehavior === 'select-all') {
+        input.select()
+        return
+      }
+      const caretPosition = input.value.length
+      input.setSelectionRange(caretPosition, caretPosition)
+    },
+    [selectionBehavior],
+  )
+
   const updateDraftValue = (
     nextValue: string,
     selection?: {
@@ -179,22 +209,25 @@ export function CellEditorOverlay({
 
   useLayoutEffect(() => {
     blurArmedRef.current = false
-    const input = inputRef.current
-    input?.focus()
-    if (selectionBehavior === 'select-all') {
-      input?.select()
-    } else {
-      const caretPosition = input?.value.length ?? 0
-      input?.setSelectionRange(caretPosition, caretPosition)
-    }
+    focusEditorInput({ applyInitialSelection: true })
+    const focusFrames: number[] = []
+    const frameOne = window.requestAnimationFrame(() => {
+      focusEditorInput({ applyInitialSelection: false })
+      const frameTwo = window.requestAnimationFrame(() => {
+        focusEditorInput({ applyInitialSelection: false })
+      })
+      focusFrames.push(frameTwo)
+    })
+    focusFrames.push(frameOne)
     const blurArm = window.requestAnimationFrame(() => {
       blurArmedRef.current = true
     })
 
     return () => {
+      focusFrames.forEach((frame) => window.cancelAnimationFrame(frame))
       window.cancelAnimationFrame(blurArm)
     }
-  }, [selectionBehavior, targetAddress, targetSheetName])
+  }, [focusEditorInput, targetAddress, targetSheetName])
 
   useEffect(() => cancelPendingBlurCommit, [])
 
