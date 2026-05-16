@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx'
 import { strFromU8, unzipSync } from 'fflate'
 
 import type { WorkbookSnapshot } from '@bilig/protocol'
+import { readBenchToleranceMultiplier } from '../../../../scripts/bench-tolerance.js'
 import { exportXlsx, importXlsx } from '../index.js'
 
 describe('large simple XLSX export', () => {
@@ -61,12 +62,7 @@ describe('large simple XLSX export', () => {
 })
 
 function readBenchmarkTolerance(): number {
-  const raw = process.env.BILIG_BENCH_TOLERANCE
-  if (!raw) {
-    return 1
-  }
-  const tolerance = Number(raw)
-  return Number.isFinite(tolerance) && tolerance > 0 ? tolerance : 1
+  return readBenchToleranceMultiplier(process.env)
 }
 
 function buildLargeSimpleSnapshot(): WorkbookSnapshot {

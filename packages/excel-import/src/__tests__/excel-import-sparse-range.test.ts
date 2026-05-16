@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { strToU8, unzipSync, zipSync } from 'fflate'
 import * as XLSX from 'xlsx'
 
+import { readBenchToleranceMultiplier } from '../../../../scripts/bench-tolerance.js'
 import { importXlsx } from '../index.js'
 
 describe('XLSX sparse ranges', () => {
@@ -101,12 +102,7 @@ function isGarbageCollector(value: unknown): value is (force?: boolean) => void 
 }
 
 function readBenchmarkTolerance(): number {
-  const raw = process.env.BILIG_BENCH_TOLERANCE
-  if (!raw) {
-    return 1
-  }
-  const tolerance = Number(raw)
-  return Number.isFinite(tolerance) && tolerance > 0 ? tolerance : 1
+  return readBenchToleranceMultiplier(process.env)
 }
 
 function measureImport(bytes: Uint8Array, fileName: string): { imported: ReturnType<typeof importXlsx>; durationMs: number } {

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { SpreadsheetEngine } from '@bilig/core'
 import type { CellStyleRecord, WorkbookSnapshot } from '@bilig/protocol'
+import { readBenchToleranceMultiplier } from '../../../../scripts/bench-tolerance.js'
 import { exportXlsx, importXlsx } from '../index.js'
 
 describe('xlsx cell style roundtrip', () => {
@@ -681,12 +682,7 @@ function isGarbageCollector(value: unknown): value is (force?: boolean) => void 
 }
 
 function readBenchmarkTolerance(): number {
-  const raw = process.env.BILIG_BENCH_TOLERANCE
-  if (!raw) {
-    return 1
-  }
-  const tolerance = Number(raw)
-  return Number.isFinite(tolerance) && tolerance > 0 ? tolerance : 1
+  return readBenchToleranceMultiplier(process.env)
 }
 
 function setXmlAttribute(xml: string, name: string, value: string): string {

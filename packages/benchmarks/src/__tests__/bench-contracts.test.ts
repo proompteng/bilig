@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   assertRangeAggregateRunsUseFastPath,
-  parseBenchToleranceMultiplier,
   runIsolatedEditBenchmark,
   runIsolatedRangeAggregateBenchmark,
 } from '../../../../scripts/bench-contracts.ts'
+import { parseBenchToleranceMultiplier } from '../../../../scripts/bench-tolerance.ts'
 
 describe('bench contracts runner', () => {
   it('parses benchmark tolerance overrides without truncating malformed input', () => {
