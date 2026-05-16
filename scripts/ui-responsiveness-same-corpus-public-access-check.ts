@@ -40,7 +40,7 @@ export interface SameCorpusPublicAccessProductResult {
 
 export type SameCorpusPublicAccessFetch = (url: string, label: string) => Promise<Uint8Array>
 
-interface SameCorpusPublicAccessArgs {
+export interface SameCorpusPublicAccessArgs {
   readonly corpusId: WorkbookBenchmarkCorpusId
   readonly generatedAt: string
   readonly googleSheetsUrl: string | null
@@ -52,7 +52,7 @@ const rootDir = resolve(new URL('..', import.meta.url).pathname)
 const defaultCorpusId: WorkbookBenchmarkCorpusId = 'wide-mixed-250k'
 
 async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2))
+  const args = parseSameCorpusPublicAccessArgs(process.argv.slice(2))
   const check = await buildSameCorpusPublicAccessCheck({
     corpusId: args.corpusId,
     fetchXlsxBytes: fetchSameCorpusXlsxBytes,
@@ -219,7 +219,7 @@ function limitationsForProduct(product: SameCorpusPublicAccessProduct): readonly
   return ['Microsoft Excel Web must wrap a public HTTPS XLSX URL for the same emitted corpus workbook.']
 }
 
-function parseArgs(argv: readonly string[]): SameCorpusPublicAccessArgs {
+export function parseSameCorpusPublicAccessArgs(argv: readonly string[]): SameCorpusPublicAccessArgs {
   const googleSheetsUrl = argumentValue(argv, '--google-sheets-url')
   const microsoftExcelWebUrl = argumentValue(argv, '--microsoft-excel-web-url')
   if (!googleSheetsUrl && !microsoftExcelWebUrl) {
@@ -251,7 +251,7 @@ function argumentValue(argv: readonly string[], name: string): string | null {
     return null
   }
   const value = argv[index + 1]
-  if (!value) {
+  if (value === undefined || value.trim().length === 0 || value.startsWith('-')) {
     throw new Error(`Missing value after ${name}`)
   }
   return value

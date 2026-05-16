@@ -6,6 +6,7 @@ import {
   buildSameCorpusPublicAccessCheck,
   googleSheetsXlsxExportUrl,
   microsoftExcelWebSourceXlsxUrl,
+  parseSameCorpusPublicAccessArgs,
   validateSameCorpusPublicAccessCheck,
   type SameCorpusPublicAccessFetch,
 } from '../ui-responsiveness-same-corpus-public-access-check.ts'
@@ -20,6 +21,50 @@ describe('same-corpus public access check', () => {
   it('extracts the source XLSX URL from Microsoft Excel Web viewer URLs', () => {
     const source = 'https://example.com/workbook.xlsx'
     expect(microsoftExcelWebSourceXlsxUrl(`https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(source)}`)).toBe(source)
+  })
+
+  it('parses same-corpus public access CLI options', () => {
+    const args = parseSameCorpusPublicAccessArgs([
+      '--google-sheets-url',
+      'https://docs.google.com/spreadsheets/d/sheet-id/edit',
+      '--microsoft-excel-web-url',
+      'https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Fexample.com%2Fworkbook.xlsx',
+      '--corpus',
+      'dense-mixed-250k',
+      '--generated-at',
+      '2026-05-08T00:00:00.000Z',
+      '--output',
+      'tmp/public-access.json',
+    ])
+
+    expect(args).toMatchObject({
+      corpusId: 'dense-mixed-250k',
+      generatedAt: '2026-05-08T00:00:00.000Z',
+      googleSheetsUrl: 'https://docs.google.com/spreadsheets/d/sheet-id/edit',
+      microsoftExcelWebUrl: 'https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Fexample.com%2Fworkbook.xlsx',
+    })
+    expect(args.outputPath?.endsWith('/tmp/public-access.json')).toBe(true)
+  })
+
+  it('rejects blank same-corpus public access CLI values', () => {
+    expect(() =>
+      parseSameCorpusPublicAccessArgs([
+        '--google-sheets-url',
+        '   ',
+        '--microsoft-excel-web-url',
+        'https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Fexample.com%2Fworkbook.xlsx',
+      ]),
+    ).toThrow('Missing value after --google-sheets-url')
+  })
+
+  it('rejects same-corpus public access CLI values that consume the next flag', () => {
+    expect(() =>
+      parseSameCorpusPublicAccessArgs([
+        '--google-sheets-url',
+        '--microsoft-excel-web-url',
+        'https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Fexample.com%2Fworkbook.xlsx',
+      ]),
+    ).toThrow('Missing value after --google-sheets-url')
   })
 
   it('verifies requested public URLs against deterministic same-corpus XLSX bytes', async () => {
