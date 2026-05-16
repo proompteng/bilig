@@ -1,7 +1,12 @@
 import type { ProtocolFrame } from '@bilig/binary-protocol'
 import type { WorkbookSnapshot } from '@bilig/protocol'
 import type { InMemoryDocumentPersistence } from '@bilig/storage-server'
-import { acceptSnapshotChunk, createSnapshotPublication, type SnapshotAssemblyRegistry } from './session-shared.js'
+import {
+  acceptSnapshotChunk,
+  createSnapshotPublication,
+  decodeWorkbookSnapshotBytes,
+  type SnapshotAssemblyRegistry,
+} from './session-shared.js'
 import { createCursorWatermarkFrame } from './sync-frame-shared.js'
 
 export async function publishPersistedSnapshot(
@@ -35,6 +40,7 @@ export async function acceptPersistedSnapshotChunk(
   if (!snapshot) {
     return
   }
+  decodeWorkbookSnapshotBytes(snapshot)
   await persistence.snapshots.put({
     documentId: snapshot.documentId,
     snapshotId: snapshot.snapshotId,
