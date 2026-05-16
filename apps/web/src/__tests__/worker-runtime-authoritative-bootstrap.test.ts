@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { SpreadsheetEngine } from '@bilig/core'
 import { createMemoryWorkbookLocalStoreFactory } from '@bilig/storage-browser'
 import { ValueTag, type WorkbookSnapshot } from '@bilig/protocol'
+import { decodeViewportPatch } from '@bilig/worker-transport'
 import { WorkbookWorkerRuntime } from '../worker-runtime.js'
 
 function buildSnapshot(): WorkbookSnapshot {
@@ -36,6 +37,21 @@ describe('worker runtime authoritative bootstrap', () => {
       persistState: true,
     })
 
+    const received = new Array<ReturnType<typeof decodeViewportPatch>>()
+    runtime.subscribeViewportPatches(
+      {
+        sheetName: 'Sheet1',
+        rowStart: 0,
+        rowEnd: 0,
+        colStart: 0,
+        colEnd: 0,
+        initialPatch: 'none',
+      },
+      (bytes) => {
+        received.push(decodeViewportPatch(bytes))
+      },
+    )
+
     await runtime.installAuthoritativeSnapshot({
       snapshot: buildSnapshot(),
       authoritativeRevision: 3,
@@ -48,6 +64,10 @@ describe('worker runtime authoritative bootstrap', () => {
       tag: ValueTag.Number,
       value: 42,
     })
+    expect(received).toHaveLength(1)
+    expect(received[0]?.full).toBe(true)
+    expect(received[0]?.authoritativeRevision).toBe(3)
+    expect(received[0]?.cells.find((cell) => cell.snapshot.address === 'A1')?.displayText).toBe('42')
 
     await runtime.applyAuthoritativeEvents(
       [

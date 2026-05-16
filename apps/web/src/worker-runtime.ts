@@ -353,14 +353,7 @@ export class WorkbookWorkerRuntime {
         pendingMutations: [],
       })
       this.installRestoredAuthoritativeState(snapshot, engine.exportReplicaSnapshot())
-      this.projectionOverlayScope = overlayScope
-      this.installEngine(engine)
-      this.projectionMatchesLocalStore = false
-      this.viewportTileStore.reset()
-      this.snapshotCaches.invalidateProjectionSnapshot()
-      await this.persistCoordinator.queuePersist()
-      this.broadcastViewportPatches(null, engine.getLastMetrics(), 'authoritative-snapshot')
-      return this.getRuntimeState()
+      return await this.installAuthoritativeProjectionEngine(engine, overlayScope)
     }
 
     const authoritativeEngine = await createWorkbookEngineFromState({
@@ -374,6 +367,13 @@ export class WorkbookWorkerRuntime {
     if (mode === 'reconcile' && this.mutationJournal.getPendingMutationCount() > 0) {
       await this.markRemainingJournalMutationsRebased()
     }
+    return await this.installAuthoritativeProjectionEngine(engine, overlayScope)
+  }
+
+  private async installAuthoritativeProjectionEngine(
+    engine: SpreadsheetEngine & WorkerEngine,
+    overlayScope: ProjectionOverlayScope | null,
+  ): Promise<WorkbookWorkerStateSnapshot> {
     this.projectionOverlayScope = overlayScope
     this.installEngine(engine)
     this.projectionMatchesLocalStore = false
