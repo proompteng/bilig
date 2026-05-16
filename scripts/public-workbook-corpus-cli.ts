@@ -59,7 +59,37 @@ export function readMegabytesArg(name: string, fallbackBytes: number): number {
 }
 
 export function readFlagArg(name: string): boolean {
-  return process.argv.includes(name)
+  let value = false
+  let count = 0
+  process.argv.forEach((arg) => {
+    if (arg === name) {
+      count += 1
+      if (count > 1) {
+        throw new Error(`Expected ${name} to be specified once`)
+      }
+      value = true
+      return
+    }
+
+    const inlinePrefix = `${name}=`
+    if (arg.startsWith(inlinePrefix)) {
+      count += 1
+      if (count > 1) {
+        throw new Error(`Expected ${name} to be specified once`)
+      }
+      const raw = arg.slice(inlinePrefix.length)
+      if (raw === 'true') {
+        value = true
+        return
+      }
+      if (raw === 'false') {
+        value = false
+        return
+      }
+      throw new Error(`Expected ${name} to be true or false`)
+    }
+  })
+  return value
 }
 
 export function readDebugOnlyFlagArg(name: string, envVar: string, reason: string): boolean {

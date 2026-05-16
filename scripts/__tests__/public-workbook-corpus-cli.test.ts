@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { buildPublicWorkbookCorpusScorecard, createEmptyPublicWorkbookManifest } from '../public-workbook-corpus.ts'
 import {
   formatPublicCorpusStopMarkerPathForMessage,
+  readFlagArg,
   readNumberArg,
   readRepeatedStringArg,
   readStringArg,
@@ -95,6 +96,40 @@ describe('public workbook corpus CLI resource guards', () => {
       process.argv = ['bun', corpusScriptPath(), 'fetch', '--limit', '1.9']
 
       expect(() => readNumberArg('--limit', 10)).toThrow('Expected --limit to be a positive integer')
+    } finally {
+      process.argv = originalArgv
+    }
+  })
+
+  it('reads inline boolean flag values', () => {
+    const originalArgv = process.argv
+    try {
+      process.argv = ['bun', corpusScriptPath(), 'fetch', '--dry-run=false', '--list=true']
+
+      expect(readFlagArg('--dry-run')).toBe(false)
+      expect(readFlagArg('--list')).toBe(true)
+    } finally {
+      process.argv = originalArgv
+    }
+  })
+
+  it('rejects malformed inline boolean flag values', () => {
+    const originalArgv = process.argv
+    try {
+      process.argv = ['bun', corpusScriptPath(), 'fetch', '--dry-run=maybe']
+
+      expect(() => readFlagArg('--dry-run')).toThrow('Expected --dry-run to be true or false')
+    } finally {
+      process.argv = originalArgv
+    }
+  })
+
+  it('rejects duplicate boolean flags', () => {
+    const originalArgv = process.argv
+    try {
+      process.argv = ['bun', corpusScriptPath(), 'fetch', '--dry-run', '--dry-run=false']
+
+      expect(() => readFlagArg('--dry-run')).toThrow('Expected --dry-run to be specified once')
     } finally {
       process.argv = originalArgv
     }
