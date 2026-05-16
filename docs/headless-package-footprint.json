@@ -37,9 +37,9 @@
     "hasMcpBinary": true
   },
   "npmPackDryRun": {
-    "tarballBytes": 416784,
-    "unpackedBytes": 2487061,
-    "entryCount": 420,
+    "tarballBytes": 417040,
+    "unpackedBytes": 2488070,
+    "entryCount": 423,
     "readmeBytes": 28711,
     "packageJsonBytes": 2031
   },

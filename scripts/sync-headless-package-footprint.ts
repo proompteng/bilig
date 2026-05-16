@@ -193,6 +193,17 @@ function runPackDryRun(): PackResult {
   }
 }
 
+function ensureHeadlessBuild(): void {
+  const result = spawnSync('pnpm', ['--dir', repoRoot, '--filter', '@bilig/headless', 'build'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  if (result.status !== 0) {
+    throw new Error(`headless package build failed before footprint probe:\n${result.stderr}\n${result.stdout}`)
+  }
+}
+
 function runColdStartProbe(): number {
   const result = spawnSync('node', ['--input-type=module', '--eval', coldStartProbeScript], {
     cwd: packageDir,
@@ -335,6 +346,7 @@ async function syncMarkdownBlocks(footprint: HeadlessPackageFootprint): Promise<
 async function buildCurrentFootprint(): Promise<HeadlessPackageFootprint> {
   const manifest = await readPackageManifest()
   assertPositioning(manifest)
+  ensureHeadlessBuild()
   runColdStartProbe()
   return buildFootprint(manifest, runPackDryRun())
 }
