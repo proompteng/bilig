@@ -50,9 +50,11 @@ describe('public workbook corpus CLI resource guards', () => {
   })
 
   it('reads inline shared string arguments', () => {
-    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--manifest=manifest.json'], () => {
-      expect(readStringArg('--manifest', 'fallback.json')).toBe('manifest.json')
-    })
+    const manifestPath = withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--manifest=manifest.json'], () =>
+      readStringArg('--manifest', 'fallback.json'),
+    )
+
+    expect(manifestPath).toBe('manifest.json')
   })
 
   it('rejects empty inline shared string arguments', () => {
@@ -80,9 +82,11 @@ describe('public workbook corpus CLI resource guards', () => {
   })
 
   it('reads inline repeated string arguments', () => {
-    withProcessArgv(['bun', corpusScriptPath(), 'discover', '--query=budget', '--query=forecast'], () => {
-      expect(readRepeatedStringArg('--query')).toEqual(['budget', 'forecast'])
-    })
+    const queries = withProcessArgv(['bun', corpusScriptPath(), 'discover', '--query=budget', '--query=forecast'], () =>
+      readRepeatedStringArg('--query'),
+    )
+
+    expect(queries).toEqual(['budget', 'forecast'])
   })
 
   it('rejects fractional values for shared count arguments', () => {
@@ -136,10 +140,12 @@ describe('public workbook corpus CLI resource guards', () => {
   })
 
   it('reads inline boolean flag values', () => {
-    withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--dry-run=false', '--list=true'], () => {
-      expect(readFlagArg('--dry-run')).toBe(false)
-      expect(readFlagArg('--list')).toBe(true)
-    })
+    const flags = withProcessArgv(['bun', corpusScriptPath(), 'fetch', '--dry-run=false', '--list=true'], () => ({
+      dryRun: readFlagArg('--dry-run'),
+      list: readFlagArg('--list'),
+    }))
+
+    expect(flags).toEqual({ dryRun: false, list: true })
   })
 
   it('reads separated boolean flag values', () => {
@@ -1967,11 +1973,11 @@ function corpusScriptPath(): string {
   return join(dirname(fileURLToPath(import.meta.url)), '../public-workbook-corpus.ts')
 }
 
-function withProcessArgv(argv: string[], run: () => void): void {
+function withProcessArgv<T>(argv: string[], run: () => T): T {
   const originalArgv = process.argv
   try {
     process.argv = argv
-    run()
+    return run()
   } finally {
     process.argv = originalArgv
   }
