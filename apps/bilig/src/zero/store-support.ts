@@ -59,10 +59,11 @@ export function parseInteger(value: unknown): number {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return Math.trunc(value)
   }
-  if (typeof value === 'string' && value.length > 0) {
-    const parsed = Number.parseInt(value, 10)
-    if (Number.isFinite(parsed)) {
-      return parsed
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (/^-?\d+$/u.test(trimmed)) {
+      const parsed = Number(trimmed)
+      return Number.isSafeInteger(parsed) ? parsed : 0
     }
   }
   return 0

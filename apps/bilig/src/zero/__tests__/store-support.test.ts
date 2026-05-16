@@ -71,6 +71,10 @@ describe('store support helpers', () => {
 
   it('parses numeric strings into integers', () => {
     expect(parseInteger('42')).toBe(42)
+    expect(parseInteger(' 42 ')).toBe(42)
     expect(parseInteger('')).toBe(0)
+    expect(parseInteger('12abc')).toBe(0)
+    expect(parseInteger('1.5')).toBe(0)
+    expect(parseInteger(String(Number.MAX_SAFE_INTEGER + 1))).toBe(0)
   })
 })
