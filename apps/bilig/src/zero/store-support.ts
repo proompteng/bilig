@@ -69,6 +69,20 @@ export function parseInteger(value: unknown): number {
   return 0
 }
 
+export function parseNullableInteger(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isSafeInteger(value)) {
+    return value
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (/^-?\d+$/u.test(trimmed)) {
+      const parsed = Number(trimmed)
+      return Number.isSafeInteger(parsed) ? parsed : null
+    }
+  }
+  return null
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }

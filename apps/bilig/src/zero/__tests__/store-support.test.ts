@@ -6,6 +6,7 @@ import {
   parseCellStyleRecord,
   parseCheckpointPayload,
   parseInteger,
+  parseNullableInteger,
 } from '../store-support.js'
 
 describe('store support helpers', () => {
@@ -76,5 +77,15 @@ describe('store support helpers', () => {
     expect(parseInteger('12abc')).toBe(0)
     expect(parseInteger('1.5')).toBe(0)
     expect(parseInteger(String(Number.MAX_SAFE_INTEGER + 1))).toBe(0)
+  })
+
+  it('parses nullable integer fields strictly', () => {
+    expect(parseNullableInteger(42)).toBe(42)
+    expect(parseNullableInteger(' 42 ')).toBe(42)
+    expect(parseNullableInteger(-3)).toBe(-3)
+    expect(parseNullableInteger(42.5)).toBeNull()
+    expect(parseNullableInteger('12abc')).toBeNull()
+    expect(parseNullableInteger('1.5')).toBeNull()
+    expect(parseNullableInteger(String(Number.MAX_SAFE_INTEGER + 1))).toBeNull()
   })
 })

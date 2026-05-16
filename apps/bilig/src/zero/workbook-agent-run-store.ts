@@ -6,6 +6,7 @@ import {
   type WorkbookAgentExecutionRecord,
 } from '@bilig/agent-api'
 import type { QueryResultRow, Queryable } from './store.js'
+import { parseNullableInteger } from './store-support.js'
 
 interface WorkbookAgentRunRow extends QueryResultRow {
   readonly id?: unknown
@@ -30,17 +31,6 @@ interface WorkbookAgentRunRow extends QueryResultRow {
   readonly previewJson?: unknown
 }
 
-function parseNumericValue(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return Math.trunc(value)
-  }
-  if (typeof value === 'string' && value.length > 0) {
-    const parsed = Number.parseInt(value, 10)
-    return Number.isFinite(parsed) ? parsed : null
-  }
-  return null
-}
-
 function parseCommands(value: unknown): WorkbookAgentCommand[] | null {
   if (!Array.isArray(value)) {
     return null
@@ -50,10 +40,10 @@ function parseCommands(value: unknown): WorkbookAgentCommand[] | null {
 }
 
 function normalizeExecutionRecord(row: WorkbookAgentRunRow): WorkbookAgentExecutionRecord | null {
-  const baseRevision = parseNumericValue(row.baseRevision)
-  const appliedRevision = parseNumericValue(row.appliedRevision)
-  const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs)
-  const appliedAtUnixMs = parseNumericValue(row.appliedAtUnixMs)
+  const baseRevision = parseNullableInteger(row.baseRevision)
+  const appliedRevision = parseNullableInteger(row.appliedRevision)
+  const createdAtUnixMs = parseNullableInteger(row.createdAtUnixMs)
+  const appliedAtUnixMs = parseNullableInteger(row.appliedAtUnixMs)
   const commands = parseCommands(row.commandsJson)
   if (
     typeof row.id !== 'string' ||

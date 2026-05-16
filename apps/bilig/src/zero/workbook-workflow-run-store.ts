@@ -1,5 +1,6 @@
 import type { WorkbookAgentWorkflowArtifact, WorkbookAgentWorkflowRun, WorkbookAgentWorkflowStep } from '@bilig/contracts'
 import type { QueryResultRow, Queryable } from './store.js'
+import { parseNullableInteger } from './store-support.js'
 
 interface WorkbookWorkflowRunRow extends QueryResultRow {
   readonly runId?: unknown
@@ -33,17 +34,6 @@ interface WorkbookWorkflowArtifactRow extends QueryResultRow {
   readonly kind?: unknown
   readonly title?: unknown
   readonly text?: unknown
-}
-
-function parseNumericValue(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return Math.trunc(value)
-  }
-  if (typeof value === 'string' && value.length > 0) {
-    const parsed = Number.parseInt(value, 10)
-    return Number.isFinite(parsed) ? parsed : null
-  }
-  return null
 }
 
 function isMarkdownArtifact(value: unknown): value is WorkbookAgentWorkflowArtifact {
@@ -104,7 +94,7 @@ function isWorkflowStep(value: unknown): value is WorkbookAgentWorkflowStep {
     'summary' in value &&
     typeof value.summary === 'string' &&
     'updatedAtUnixMs' in value &&
-    parseNumericValue(value.updatedAtUnixMs) !== null
+    parseNullableInteger(value.updatedAtUnixMs) !== null
   )
 }
 
@@ -117,7 +107,7 @@ function normalizeWorkflowSteps(value: unknown): WorkbookAgentWorkflowStep[] | n
     label: entry.label,
     status: entry.status,
     summary: entry.summary,
-    updatedAtUnixMs: parseNumericValue(entry.updatedAtUnixMs) ?? 0,
+    updatedAtUnixMs: parseNullableInteger(entry.updatedAtUnixMs) ?? 0,
   }))
 }
 
@@ -126,8 +116,8 @@ function normalizeWorkflowStepRow(row: WorkbookWorkflowStepRow): {
   readonly step: WorkbookAgentWorkflowStep
   readonly stepOrder: number
 } | null {
-  const updatedAtUnixMs = parseNumericValue(row.updatedAtUnixMs)
-  const stepOrder = parseNumericValue(row.stepOrder)
+  const updatedAtUnixMs = parseNullableInteger(row.updatedAtUnixMs)
+  const stepOrder = parseNullableInteger(row.stepOrder)
   if (
     typeof row.runId !== 'string' ||
     typeof row.stepId !== 'string' ||
@@ -177,10 +167,10 @@ function normalizeWorkflowRun(
     readonly artifact?: WorkbookAgentWorkflowArtifact | null
   } = {},
 ): WorkbookAgentWorkflowRun | null {
-  const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs)
-  const updatedAtUnixMs = parseNumericValue(row.updatedAtUnixMs)
+  const createdAtUnixMs = parseNullableInteger(row.createdAtUnixMs)
+  const updatedAtUnixMs = parseNullableInteger(row.updatedAtUnixMs)
   const completedAtUnixMs =
-    row.completedAtUnixMs === null || row.completedAtUnixMs === undefined ? null : parseNumericValue(row.completedAtUnixMs)
+    row.completedAtUnixMs === null || row.completedAtUnixMs === undefined ? null : parseNullableInteger(row.completedAtUnixMs)
   const fallbackSteps = normalizeWorkflowSteps(row.stepsJson ?? [])
   const steps = hydrated.steps ?? fallbackSteps
   const artifact = hydrated.artifact ?? (isMarkdownArtifact(row.artifactJson) ? row.artifactJson : null)

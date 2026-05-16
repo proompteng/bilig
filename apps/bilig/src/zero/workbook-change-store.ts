@@ -6,6 +6,7 @@ import {
 } from '@bilig/zero-sync'
 import { buildWorkbookChangeDescriptor, type WorkbookChangeDescriptor, type WorkbookChangeRange } from './workbook-change-descriptor.js'
 import type { QueryResultRow, Queryable } from './store.js'
+import { parseNullableInteger } from './store-support.js'
 import { resolveWorkbookSheetRef } from './workbook-sheet-ref.js'
 import { selectLatestRedoableWorkbookChangeRevision, selectLatestUndoableWorkbookChangeRevision } from './workbook-history-selector.js'
 
@@ -77,17 +78,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function parseNumericValue(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return Math.trunc(value)
-  }
-  if (typeof value === 'string' && value.length > 0) {
-    const parsed = Number.parseInt(value, 10)
-    return Number.isFinite(parsed) ? parsed : null
-  }
-  return null
-}
-
 function normalizeWorkbookChangeRange(value: unknown): WorkbookChangeRange | null {
   if (!isRecord(value)) {
     return null
@@ -106,11 +96,11 @@ function normalizeWorkbookChangeRange(value: unknown): WorkbookChangeRange | nul
 }
 
 function normalizeWorkbookChangeRecord(row: WorkbookChangeSelectRow): WorkbookChangeRecord | null {
-  const revision = parseNumericValue(row.revision)
-  const sheetId = parseNumericValue(row.sheetId)
-  const revertedByRevision = parseNumericValue(row.revertedByRevision)
-  const revertsRevision = parseNumericValue(row.revertsRevision)
-  const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs)
+  const revision = parseNullableInteger(row.revision)
+  const sheetId = parseNullableInteger(row.sheetId)
+  const revertedByRevision = parseNullableInteger(row.revertedByRevision)
+  const revertsRevision = parseNullableInteger(row.revertsRevision)
+  const createdAtUnixMs = parseNullableInteger(row.createdAtUnixMs)
   if (
     revision === null ||
     createdAtUnixMs === null ||
@@ -444,8 +434,8 @@ export async function backfillWorkbookChanges(db: Queryable): Promise<void> {
   )
 
   const inserts = result.rows.flatMap((row) => {
-    const revision = parseNumericValue(row.revision)
-    const createdAtUnixMs = parseNumericValue(row.createdAtUnixMs)
+    const revision = parseNullableInteger(row.revision)
+    const createdAtUnixMs = parseNullableInteger(row.createdAtUnixMs)
     if (
       typeof row.workbookId !== 'string' ||
       typeof row.actorUserId !== 'string' ||
