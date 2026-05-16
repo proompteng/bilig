@@ -38,7 +38,7 @@ export type {
 } from './formula-initialization-service-types.js'
 
 const INITIAL_DIRECT_FORMULA_EVALUATION_LIMIT = 16_384
-const DEFERRED_FORMULA_FAMILY_RUN_CAPTURE_LIMIT = 4_096
+const DEFERRED_FORMULA_FAMILY_RUN_CAPTURE_LIMIT = 16_384
 const EMPTY_U32 = new Uint32Array(0)
 
 export function createEngineFormulaInitializationService(args: EngineFormulaInitializationServiceArgs): EngineFormulaInitializationService {
@@ -676,8 +676,11 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
     let canAssignTopoInBatch = !hadExistingFormulas
     let nextTopoRank = 0
     const shouldDeferFormulaFamilyIndex = !hadExistingFormulas && args.deferFormulaFamilyIndexRebuild !== undefined
+    const canCaptureDeferredFormulaFamilyRuns =
+      !shouldDeferFormulaFamilyIndex ||
+      (args.deferFormulaFamilyIndexRuns !== undefined && refs.length <= DEFERRED_FORMULA_FAMILY_RUN_CAPTURE_LIMIT)
     const deferredFormulaFamilyRuns =
-      hadExistingFormulas || shouldDeferFormulaFamilyIndex ? undefined : new Map<string, DeferredInitialFormulaFamilyRun>()
+      hadExistingFormulas || !canCaptureDeferredFormulaFamilyRuns ? undefined : new Map<string, DeferredInitialFormulaFamilyRun>()
 
     args.setBatchMutationDepth(args.getBatchMutationDepth() + 1)
     try {
@@ -700,6 +703,7 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
               sheetId: ref.sheetId,
               row: ref.row,
               col: ref.col,
+              ...(ref.templateId !== undefined ? { templateId: ref.templateId } : {}),
             })
             valueWriter.writeValueAt(cellIndex, ref.sheetId, ref.col, ref.value)
             if (canAssignTopoInBatch && pendingFormulaCells) {
@@ -721,7 +725,11 @@ export function createEngineFormulaInitializationService(args: EngineFormulaInit
             }
           }
           if (shouldDeferFormulaFamilyIndex) {
-            args.deferFormulaFamilyIndexRebuild?.()
+            if (deferredFormulaFamilyRuns) {
+              args.deferFormulaFamilyIndexRuns?.([...deferredFormulaFamilyRuns.values()])
+            } else {
+              args.deferFormulaFamilyIndexRebuild?.()
+            }
           } else {
             deferredFormulaFamilyRuns?.forEach((run) => {
               args.checkEvaluationBudget()

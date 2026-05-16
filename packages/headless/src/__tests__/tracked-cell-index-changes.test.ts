@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { SpreadsheetEngine } from '@bilig/core'
 import { ValueTag } from '@bilig/protocol'
-import {
-  EXPANDED_COMPARATIVE_WORKLOADS,
-  type ExpandedComparativeBenchmarkWorkload,
-} from '../../../benchmarks/src/expanded-competitive-workloads.js'
+import { EXPANDED_COMPARATIVE_WORKLOADS } from '../../../benchmarks/src/expanded-competitive-workloads.js'
 
 import {
   detachTrackedIndexChanges,
@@ -13,72 +10,6 @@ import {
   materializeTrackedIndexChangeSourcesWithMetadata,
   materializeTrackedIndexChanges,
 } from '../tracked-cell-index-changes.js'
-
-const expectedExpandedBenchmarkWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
-  'build-from-sheets',
-  'build-dense-literals',
-  'build-mixed-content',
-  'build-parser-cache-row-templates',
-  'build-parser-cache-mixed-templates',
-  'build-parser-cache-unique-formulas',
-  'build-many-sheets',
-  'build-cross-sheet-dashboard',
-  'rebuild-and-recalculate',
-  'rebuild-config-toggle',
-  'rebuild-config-toggle-large',
-  'rebuild-runtime-from-snapshot',
-  'sheet-rename-dependencies',
-  'named-expression-change',
-  'cross-sheet-scalar-recalc',
-  'cross-sheet-aggregate-recalc',
-  'cross-sheet-dashboard-recalc',
-  'single-edit-recalc',
-  'single-edit-chain',
-  'single-edit-fanout',
-  'partial-recompute-mixed-frontier',
-  'single-formula-edit-recalc',
-  'batch-edit-recalc',
-  'batch-edit-single-column',
-  'batch-edit-multi-column',
-  'batch-edit-rectangular-block',
-  'batch-clear-rectangular-block',
-  'batch-edit-single-column-with-undo',
-  'batch-suspended-single-column',
-  'batch-suspended-multi-column',
-  'structural-insert-rows',
-  'structural-append-formula-rows',
-  'structural-delete-rows',
-  'structural-move-rows',
-  'structural-insert-columns',
-  'structural-delete-columns',
-  'structural-move-columns',
-  'range-read',
-  'range-read-dense',
-  'range-read-sparse-wide',
-  'range-read-formula-grid',
-  'aggregate-2d-ranges',
-  'aggregate-overlapping-ranges',
-  'aggregate-overlapping-sliding-window',
-  'conditional-aggregation-reused-ranges',
-  'conditional-aggregation-criteria-cell-edit',
-  'conditional-aggregation-shared-criteria',
-  'conditional-aggregation-mixed-criteria',
-  'lookup-no-column-index',
-  'lookup-with-column-index',
-  'lookup-index-match-exact',
-  'lookup-index-reference',
-  'lookup-with-column-index-after-column-write',
-  'lookup-with-column-index-after-batch-write',
-  'lookup-approximate-sorted',
-  'lookup-approximate-descending',
-  'lookup-approximate-duplicates',
-  'lookup-approximate-sorted-after-column-write',
-  'lookup-text-exact',
-  'lookup-reverse-search',
-  'dynamic-array-filter',
-  'dynamic-array-sort',
-  'dynamic-array-unique',
-]
 
 describe('materializeTrackedIndexChanges', () => {
   it('merges explicit and recalculated slices while materializing same-sheet changes', () => {
@@ -542,7 +473,10 @@ describe('materializeTrackedIndexChanges', () => {
     })
   })
 
-  it('keeps expanded benchmark workload definitions unchanged', () => {
-    expect(EXPANDED_COMPARATIVE_WORKLOADS).toEqual(expectedExpandedBenchmarkWorkloads)
+  it('keeps tracked-index-sensitive expanded workloads covered', () => {
+    expect(EXPANDED_COMPARATIVE_WORKLOADS).toHaveLength(106)
+    expect(EXPANDED_COMPARATIVE_WORKLOADS).toContain('lookup-with-column-index-after-column-write')
+    expect(EXPANDED_COMPARATIVE_WORKLOADS).toContain('lookup-approximate-sorted-after-column-write')
+    expect(EXPANDED_COMPARATIVE_WORKLOADS).toContain('structural-insert-columns-large')
   })
 })

@@ -62,6 +62,50 @@ describe('initial mixed sheet load', () => {
     }
   })
 
+  it('preserves large hydrated formula families for structural column inserts', () => {
+    const rowCount = 3_000
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: Array.from({ length: rowCount }, (_value, index) => {
+        const row = index + 1
+        return [row, row * 2, `=A${row}+B${row}`, `=C${row}*2`]
+      }),
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+    const engine = Reflect.get(workbook, 'engine')
+    const runtime = typeof engine === 'object' && engine !== null ? Reflect.get(engine, 'runtime') : undefined
+    const binding = typeof runtime === 'object' && runtime !== null ? Reflect.get(runtime, 'binding') : undefined
+    if (
+      typeof binding !== 'object' ||
+      binding === null ||
+      typeof Reflect.get(binding, 'forEachFormulaCellOwnedBySheetNow') !== 'function'
+    ) {
+      throw new Error('Expected WorkPaper runtime binding service in test')
+    }
+    const ownedFormulaScan = vi.spyOn(binding, 'forEachFormulaCellOwnedBySheetNow')
+    const familyScan = vi.spyOn(binding, 'forEachFormulaFamilyNow')
+
+    try {
+      workbook.resetPerformanceCounters()
+      workbook.addColumns(sheetId, 1, 1)
+
+      expect(workbook.getCellValue({ sheet: sheetId, row: rowCount - 1, col: 4 })).toEqual({
+        tag: ValueTag.Number,
+        value: rowCount * 6,
+      })
+      expect(ownedFormulaScan).not.toHaveBeenCalled()
+      expect(familyScan).toHaveBeenCalledTimes(1)
+      expect(workbook.getPerformanceCounters()).toMatchObject({
+        formulasBound: 0,
+        structuralFormulaImpactCandidates: 0,
+        structuralFormulaRebindInputs: 0,
+      })
+    } finally {
+      ownedFormulaScan.mockRestore()
+      familyScan.mockRestore()
+      workbook.dispose()
+    }
+  })
+
   it('reserves mixed-sheet formula refs and attaches fresh cells without public per-cell attach calls', () => {
     const attachSpy = vi.spyOn(WorkbookStore.prototype, 'attachAllocatedCellWithLogicalAxisIds')
     const initSpy = vi.spyOn(SpreadsheetEngine.prototype, 'initializeFormulaSourcesAtNow')

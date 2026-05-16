@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { ENGINE_COUNTER_KEYS } from '../../../core/src/perf/engine-counters.js'
 import {
+  EXPANDED_COMPARATIVE_WORKLOAD_SCORECARD_LANE,
   EXPANDED_COMPARATIVE_WORKLOADS,
   buildExpandedComparativeBenchmarkReport,
   parseExpandedBenchmarkCliOptions,
@@ -73,6 +74,7 @@ const expectedExpandedWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
   'build-from-sheets',
   'build-dense-literals',
   'build-dense-literals-wide',
+  'build-dense-literals-tall',
   'build-mixed-content',
   'build-mixed-content-small',
   'build-mixed-content-large',
@@ -81,6 +83,7 @@ const expectedExpandedWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
   'build-parser-cache-unique-formulas',
   'build-many-sheets',
   'build-many-sheets-wide',
+  'build-many-sheets-narrow',
   'build-cross-sheet-dashboard',
   'build-cross-sheet-dashboard-small',
   'build-cross-sheet-dashboard-large',
@@ -109,6 +112,7 @@ const expectedExpandedWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
   'batch-edit-single-column',
   'batch-edit-single-column-small',
   'batch-edit-single-column-large',
+  'batch-edit-multi-column-small',
   'batch-edit-multi-column',
   'batch-edit-multi-column-large',
   'batch-edit-rectangular-block',
@@ -130,7 +134,9 @@ const expectedExpandedWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
   'structural-insert-columns-small',
   'structural-insert-columns-large',
   'structural-delete-columns',
+  'structural-delete-columns-large',
   'structural-move-columns',
+  'structural-move-columns-large',
   'range-read',
   'range-read-dense',
   'range-read-wide',
@@ -166,6 +172,7 @@ const expectedExpandedWorkloads: ExpandedComparativeBenchmarkWorkload[] = [
   'lookup-approximate-duplicates',
   'lookup-approximate-sorted-after-column-write',
   'lookup-text-exact',
+  'lookup-text-exact-large',
   'lookup-reverse-search',
   'dynamic-array-filter',
   'dynamic-array-sort',
@@ -312,8 +319,25 @@ function normalizeCompetitiveReportValue(value: unknown): unknown {
 describe('expanded comparative benchmark workloads', () => {
   it('enumerates the full expanded workload inventory without duplicates', () => {
     expect(new Set(EXPANDED_COMPARATIVE_WORKLOADS).size).toBe(EXPANDED_COMPARATIVE_WORKLOADS.length)
-    expect(EXPANDED_COMPARATIVE_WORKLOADS).toHaveLength(100)
+    expect(EXPANDED_COMPARATIVE_WORKLOADS).toHaveLength(106)
+    expect(Object.keys(EXPANDED_COMPARATIVE_WORKLOAD_SCORECARD_LANE)).toHaveLength(106)
     expect(EXPANDED_COMPARATIVE_WORKLOADS).toEqual(expectedExpandedWorkloads)
+  })
+
+  it('keeps the scorecard-eligible comparable benchmark inventory at 100 workloads', () => {
+    const leadershipOnlyWorkloads = new Set<ExpandedComparativeBenchmarkWorkload>([
+      'lookup-reverse-search',
+      'dynamic-array-filter',
+      'dynamic-array-sort',
+      'dynamic-array-unique',
+    ])
+    const scorecardEligibleWorkloads = EXPANDED_COMPARATIVE_FAMILY_ORDER.flatMap((family) =>
+      familyEligibility(family).scorecardEligible
+        ? EXPANDED_COMPARATIVE_FAMILY_GROUPS[family].filter((workload) => !leadershipOnlyWorkloads.has(workload))
+        : [],
+    )
+
+    expect(scorecardEligibleWorkloads).toHaveLength(100)
   })
 
   it('checked-in expanded baseline covers every expanded workload exactly once', () => {

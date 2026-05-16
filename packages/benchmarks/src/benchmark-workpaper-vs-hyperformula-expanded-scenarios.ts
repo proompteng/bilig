@@ -155,6 +155,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       () => measureHyperFormulaDenseBuildSample(96, 96),
     ),
     runComparableScenario(
+      'build-dense-literals-tall',
+      { cols: 12, rows: 768, materializedCells: 768 * 12 },
+      runtimeOptions,
+      () => measureWorkPaperDenseBuildSample(768, 12),
+      () => measureHyperFormulaDenseBuildSample(768, 12),
+    ),
+    runComparableScenario(
       'build-mixed-content',
       { cols: 6, rows: 750 },
       runtimeOptions,
@@ -209,6 +216,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       runtimeOptions,
       () => measureWorkPaperManySheetsBuildSample(4, 120, 24),
       () => measureHyperFormulaManySheetsBuildSample(4, 120, 24),
+    ),
+    runComparableScenario(
+      'build-many-sheets-narrow',
+      { sheetCount: 16, rowsPerSheet: 60, colsPerSheet: 6 },
+      runtimeOptions,
+      () => measureWorkPaperManySheetsBuildSample(16, 60, 6),
+      () => measureHyperFormulaManySheetsBuildSample(16, 60, 6),
     ),
     runComparableScenario(
       'build-cross-sheet-dashboard',
@@ -407,6 +421,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       () => measureHyperFormulaBatchSingleColumnEditSample(1_000),
     ),
     runComparableScenario(
+      'batch-edit-multi-column-small',
+      { rowCount: 128, editsPerRow: 2 },
+      runtimeOptions,
+      () => measureWorkPaperBatchMultiColumnEditSample(128),
+      () => measureHyperFormulaBatchMultiColumnEditSample(128),
+    ),
+    runComparableScenario(
       'batch-edit-multi-column',
       { rowCount: 250, editsPerRow: 2 },
       runtimeOptions,
@@ -554,11 +575,25 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       () => measureHyperFormulaStructuralDeleteColumnsSample(1_500),
     ),
     runComparableScenario(
+      'structural-delete-columns-large',
+      { rowCount: 3_000, deleteIndex: 1 },
+      runtimeOptions,
+      () => measureWorkPaperStructuralDeleteColumnsSample(3_000),
+      () => measureHyperFormulaStructuralDeleteColumnsSample(3_000),
+    ),
+    runComparableScenario(
       'structural-move-columns',
       { rowCount: 1_500, start: 1, target: 0 },
       runtimeOptions,
       () => measureWorkPaperStructuralMoveColumnsSample(1_500),
       () => measureHyperFormulaStructuralMoveColumnsSample(1_500),
+    ),
+    runComparableScenario(
+      'structural-move-columns-large',
+      { rowCount: 3_000, start: 1, target: 0 },
+      runtimeOptions,
+      () => measureWorkPaperStructuralMoveColumnsSample(3_000),
+      () => measureHyperFormulaStructuralMoveColumnsSample(3_000),
     ),
     runComparableScenario(
       'range-read',
@@ -804,6 +839,13 @@ export function runWorkPaperVsHyperFormulaExpandedBenchmarkSuite(
       runtimeOptions,
       () => measureWorkPaperTextLookupSample(5_000),
       () => measureHyperFormulaTextLookupSample(5_000),
+    ),
+    runComparableScenario(
+      'lookup-text-exact-large',
+      { rowCount: 10_000 },
+      runtimeOptions,
+      () => measureWorkPaperTextLookupSample(10_000),
+      () => measureHyperFormulaTextLookupSample(10_000),
     ),
     runLeadershipScenario(
       'lookup-reverse-search',

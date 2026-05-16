@@ -4,7 +4,7 @@ import { runWorkPaperVsHyperFormulaExpandedBenchmarkSuite } from './benchmark-wo
 import type { ExpandedComparativeBenchmarkResult } from './benchmark-workpaper-vs-hyperformula-expanded-runner.js'
 import { buildExpandedCompetitiveFamilyReport, type ExpandedCompetitiveFamilySummary } from './report-competitive-families.js'
 
-export { EXPANDED_COMPARATIVE_WORKLOADS } from './expanded-competitive-workloads.js'
+export { EXPANDED_COMPARATIVE_WORKLOAD_SCORECARD_LANE, EXPANDED_COMPARATIVE_WORKLOADS } from './expanded-competitive-workloads.js'
 export type { ExpandedComparativeBenchmarkWorkload } from './expanded-competitive-workloads.js'
 export { runWorkPaperVsHyperFormulaExpandedBenchmarkSuite } from './benchmark-workpaper-vs-hyperformula-expanded-scenarios.js'
 export type {

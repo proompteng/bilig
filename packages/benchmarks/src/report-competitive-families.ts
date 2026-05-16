@@ -91,6 +91,7 @@ export const EXPANDED_COMPARATIVE_FAMILY_GROUPS = {
     'build-from-sheets',
     'build-dense-literals',
     'build-dense-literals-wide',
+    'build-dense-literals-tall',
     'build-mixed-content',
     'build-mixed-content-small',
     'build-mixed-content-large',
@@ -99,6 +100,7 @@ export const EXPANDED_COMPARATIVE_FAMILY_GROUPS = {
     'build-parser-cache-unique-formulas',
     'build-many-sheets',
     'build-many-sheets-wide',
+    'build-many-sheets-narrow',
     'build-cross-sheet-dashboard',
     'build-cross-sheet-dashboard-small',
     'build-cross-sheet-dashboard-large',
@@ -126,6 +128,7 @@ export const EXPANDED_COMPARATIVE_FAMILY_GROUPS = {
     'batch-edit-single-column',
     'batch-edit-single-column-small',
     'batch-edit-single-column-large',
+    'batch-edit-multi-column-small',
     'batch-edit-multi-column',
     'batch-edit-multi-column-large',
     'batch-edit-rectangular-block',
@@ -151,7 +154,9 @@ export const EXPANDED_COMPARATIVE_FAMILY_GROUPS = {
     'structural-insert-columns-small',
     'structural-insert-columns-large',
     'structural-delete-columns',
+    'structural-delete-columns-large',
     'structural-move-columns',
+    'structural-move-columns-large',
   ],
   'range-read': [
     'range-read',
@@ -193,7 +198,7 @@ export const EXPANDED_COMPARATIVE_FAMILY_GROUPS = {
     'lookup-approximate-duplicates',
   ],
   'lookup-approximate-after-write': ['lookup-approximate-sorted-after-column-write'],
-  'lookup-text': ['lookup-text-exact', 'lookup-reverse-search'],
+  'lookup-text': ['lookup-text-exact', 'lookup-text-exact-large', 'lookup-reverse-search'],
   'dynamic-array': ['dynamic-array-filter', 'dynamic-array-sort', 'dynamic-array-unique'],
 } as const satisfies Record<ExpandedCompetitiveFamily, readonly ExpandedComparativeBenchmarkWorkload[]>
 
