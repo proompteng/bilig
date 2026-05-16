@@ -14,6 +14,7 @@ import type {
   WorkbookAgentUiContext,
 } from '@bilig/contracts'
 import type { QueryResultRow } from './store.js'
+import { parseNullableInteger } from './store-support.js'
 
 export type WorkbookChatThreadScope = 'private' | 'shared'
 
@@ -92,14 +93,7 @@ export function isExecutionPolicy(value: unknown): value is WorkbookAgentExecuti
 }
 
 export function parseNumericValue(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isSafeInteger(value)) {
-    return value
-  }
-  if (typeof value === 'string' && /^-?\d+$/u.test(value)) {
-    const parsed = Number(value)
-    return Number.isSafeInteger(parsed) ? parsed : null
-  }
-  return null
+  return parseNullableInteger(value)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

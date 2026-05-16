@@ -5,6 +5,7 @@ describe('workbook-chat-thread-normalizers', () => {
   it('parses only complete safe integer database values', () => {
     expect(parseNumericValue(42)).toBe(42)
     expect(parseNumericValue('42')).toBe(42)
+    expect(parseNumericValue(' 42 ')).toBe(42)
     expect(parseNumericValue('-42')).toBe(-42)
 
     expect(parseNumericValue(42.5)).toBeNull()
