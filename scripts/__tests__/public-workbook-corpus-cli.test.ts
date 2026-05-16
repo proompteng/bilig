@@ -308,6 +308,17 @@ describe('public workbook corpus CLI resource guards', () => {
     expect(result.stderr).toContain('--verify-concurrency greater than 1 is disabled for public corpus CLI runs')
   })
 
+  it('rejects malformed parallel verification override values', () => {
+    const result = spawnSync('bun', [corpusScriptPath(), 'verify', '--verify-concurrency', '4'], {
+      encoding: 'utf8',
+      env: { ...process.env, BILIG_ALLOW_PARALLEL_PUBLIC_CORPUS_VERIFY: 'yes' },
+    })
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('BILIG_ALLOW_PARALLEL_PUBLIC_CORPUS_VERIFY must be "1", "true", "0", or "false" when set, got yes')
+    expect(result.stderr).not.toContain('at parseStrictBooleanEnvFlag')
+  })
+
   it('refuses parallel fetch unless explicitly enabled for a sized host', () => {
     const env = { ...process.env }
     delete env.BILIG_ALLOW_PARALLEL_PUBLIC_CORPUS_FETCH
@@ -319,6 +330,17 @@ describe('public workbook corpus CLI resource guards', () => {
 
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('--fetch-concurrency greater than 1 is disabled for public corpus CLI runs')
+  })
+
+  it('rejects malformed parallel fetch override values', () => {
+    const result = spawnSync('bun', [corpusScriptPath(), 'fetch', '--fetch-concurrency', '4'], {
+      encoding: 'utf8',
+      env: { ...process.env, BILIG_ALLOW_PARALLEL_PUBLIC_CORPUS_FETCH: 'yes' },
+    })
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('BILIG_ALLOW_PARALLEL_PUBLIC_CORPUS_FETCH must be "1", "true", "0", or "false" when set, got yes')
+    expect(result.stderr).not.toContain('at parseStrictBooleanEnvFlag')
   })
 
   it('validates the fetch RSS guard limit before running a mutating fetch', () => {

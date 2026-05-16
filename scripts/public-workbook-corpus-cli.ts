@@ -144,7 +144,10 @@ export function formatPublicCorpusStopMarkerPathForMessage(path: string, display
 
 export function readVerifyConcurrencyArg(defaultVerifyConcurrency: number): number {
   const verifyConcurrency = readNumberArg('--verify-concurrency', defaultVerifyConcurrency)
-  if (verifyConcurrency > 1 && process.env['BILIG_ALLOW_PARALLEL_PUBLIC_CORPUS_VERIFY'] !== '1') {
+  if (
+    verifyConcurrency > 1 &&
+    !parseStrictBooleanEnvFlag(process.env['BILIG_ALLOW_PARALLEL_PUBLIC_CORPUS_VERIFY'], 'BILIG_ALLOW_PARALLEL_PUBLIC_CORPUS_VERIFY', false)
+  ) {
     throw new Error(
       `--verify-concurrency greater than 1 is disabled for public corpus CLI runs because each worker can consume substantial memory. Set BILIG_ALLOW_PARALLEL_PUBLIC_CORPUS_VERIFY=1 only on a host sized for parallel verification.`,
     )
@@ -154,7 +157,10 @@ export function readVerifyConcurrencyArg(defaultVerifyConcurrency: number): numb
 
 export function readFetchConcurrencyArg(defaultFetchConcurrency: number): number {
   const fetchConcurrency = readNumberArg('--fetch-concurrency', defaultFetchConcurrency)
-  if (fetchConcurrency > 1 && process.env['BILIG_ALLOW_PARALLEL_PUBLIC_CORPUS_FETCH'] !== '1') {
+  if (
+    fetchConcurrency > 1 &&
+    !parseStrictBooleanEnvFlag(process.env['BILIG_ALLOW_PARALLEL_PUBLIC_CORPUS_FETCH'], 'BILIG_ALLOW_PARALLEL_PUBLIC_CORPUS_FETCH', false)
+  ) {
     throw new Error(
       `--fetch-concurrency greater than 1 is disabled for public corpus CLI runs because each fetch can spawn workbook fingerprinting workers and retain downloaded workbook bytes. Set BILIG_ALLOW_PARALLEL_PUBLIC_CORPUS_FETCH=1 only on a host sized for parallel fetch/fingerprint runs.`,
     )
