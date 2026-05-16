@@ -85,11 +85,11 @@ describe('WorkbookPaneNativeTextLayerV3', () => {
       height: 17.5,
       lineHeight: '17.5px',
       textDecorationLine: 'underline',
-      textRendering: 'auto',
+      textRendering: 'optimizeLegibility',
       textAlign: 'right',
       top: -1.5,
       whiteSpace: 'pre',
-      WebkitFontSmoothing: 'auto',
+      WebkitFontSmoothing: 'antialiased',
     })
   })
 

@@ -36,6 +36,7 @@ import {
   type ZeroMutationObserverFailure,
   type ZeroMutationObserverOutcome,
 } from './workbook-zero-mutation-observer.js'
+import { applyOptimisticClearRange } from './workbook-optimistic-range.js'
 
 interface ZeroMutationSource {
   mutate(mutation: unknown): unknown
@@ -95,6 +96,9 @@ function applyOptimisticCellMutation(
 ): (() => void) | null {
   if (!viewportStore) {
     return null
+  }
+  if (mutation.method === 'clearRange' && isCellRangeRef(mutation.args[0])) {
+    return applyOptimisticClearRange(viewportStore, mutation.args[0])
   }
   const target = parsedCellInputForMutation(mutation)
   if (!target) {

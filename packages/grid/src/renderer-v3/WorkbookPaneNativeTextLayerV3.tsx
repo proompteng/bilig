@@ -273,12 +273,12 @@ export function resolveNativeTextRunInnerStyleV3(input: {
     position: 'absolute',
     textAlign: input.run.align ?? 'left',
     textDecorationLine: input.run.underline ? 'underline' : input.run.strike ? 'line-through' : undefined,
-    MozOsxFontSmoothing: 'auto',
-    textRendering: 'auto',
+    MozOsxFontSmoothing: 'grayscale',
+    textRendering: 'optimizeLegibility',
     top: textTop,
     whiteSpace: input.run.wrap ? 'pre-wrap' : 'pre',
     width: visibleClip?.innerWidth ?? width,
-    WebkitFontSmoothing: 'auto',
+    WebkitFontSmoothing: 'antialiased',
   }
 }
 

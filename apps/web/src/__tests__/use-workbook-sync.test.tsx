@@ -428,7 +428,7 @@ describe('useWorkbookSync', () => {
     frames.restore()
   })
 
-  it('applies simple cell mutations to the visible viewport before persistence catches up', async () => {
+  it('applies simple cell and range-clear mutations to the visible viewport before persistence catches up', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     const viewportStore = new ProjectedViewportStore()
     const workerHandleRef: { current: WorkerHandle | null } = {
@@ -490,6 +490,22 @@ describe('useWorkbookSync', () => {
       input: 'Month 1',
       value: { tag: ValueTag.String, value: 'Month 1' },
     })
+
+    await act(async () => {
+      await sync!.invokeMutation('clearRange', {
+        sheetName: 'Sheet1',
+        startAddress: 'D53',
+        endAddress: 'D53',
+      })
+    })
+
+    const clearedCell = viewportStore.getCell('Sheet1', 'D53')
+    expect(clearedCell).toMatchObject({
+      flags: expect.any(Number),
+      value: { tag: ValueTag.Empty },
+    })
+    expect('input' in clearedCell).toBe(false)
+    expect('formula' in clearedCell).toBe(false)
 
     await act(async () => {
       root.unmount()
