@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.16.13
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.16.12
+- Manual override: no
+
+## Fixes
+- perf(core): reuse copied criteria formula results (f213cbf1)
+
 ## 0.16.12
 
 - Release type: patch
