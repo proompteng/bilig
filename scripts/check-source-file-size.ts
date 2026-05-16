@@ -3,8 +3,10 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 
+import { parseSourceMaxLines } from './source-file-size-config.js'
+
 const root = process.cwd()
-const maxLines = Number(process.env['BILIG_SOURCE_MAX_LINES'] ?? '1000')
+const maxLines = parseSourceMaxLines(process.env['BILIG_SOURCE_MAX_LINES'])
 const roots = ['apps', 'packages', 'scripts', 'e2e']
 const ignoredDirNames = new Set(['node_modules', 'dist', 'build', 'generated', '__tests__', 'coverage'])
 const ignoredFileSuffixes = ['.test.ts', '.test.tsx', '.pw.ts', '.d.ts']
