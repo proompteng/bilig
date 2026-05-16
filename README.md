@@ -210,6 +210,7 @@ the [Node spreadsheet formula engine guide](docs/node-spreadsheet-formula-engine
 [framework adapters](docs/node-framework-workpaper-adapters.md),
 [AI SDK and LangChain tools](docs/vercel-ai-sdk-langchain-spreadsheet-tool.md),
 the [MCP server guide](docs/mcp-workpaper-tool-server.md),
+[spreadsheet MCP server comparison](docs/spreadsheet-mcp-server-comparison.md),
 [MCP directory status](docs/mcp-spreadsheet-server-directory.md),
 [MCP client setup](docs/mcp-client-setup.md),
 [Claude Desktop MCPB bundle](docs/claude-desktop-mcpb-workpaper.md),

@@ -1,0 +1,107 @@
+---
+title: Spreadsheet MCP server comparison
+published: true
+description: Compare spreadsheet MCP server choices for agents: Excel file tools, Google Sheets tools, read-only workbook inspection, and Bilig WorkPaper formula readback.
+tags: mcp, model context protocol, spreadsheet, excel, agents
+canonical_url: https://proompteng.github.io/bilig/spreadsheet-mcp-server-comparison.html
+cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
+image: /assets/github-social-preview.png
+---
+
+# Spreadsheet MCP Server Comparison
+
+Spreadsheet MCP servers are not one category. Some are file editors. Some are
+Google Sheets API wrappers. Some inspect workbooks for an agent without writing
+anything. Bilig WorkPaper is narrower: a local formula-backed workbook runtime
+that lets an agent write known input cells, recalculate, and return structured
+readback.
+
+Use this page when you are choosing an MCP tool surface for agent workflows that
+touch spreadsheet-shaped business logic.
+
+## Quick Decision Table
+
+| Need | Better starting point |
+| --- | --- |
+| Read and write arbitrary `.xlsx` files with formatting, charts, and workbook layout | Excel-focused MCP server or an Office automation workflow |
+| Read and update Google Sheets through a live cloud spreadsheet | Google Sheets MCP server |
+| Let an agent inspect workbook structure, formulas, and cached values without mutating files | Read-only spreadsheet inspection MCP server |
+| Mutate service-owned workbook inputs, recalculate formulas, verify before/after values, and persist JSON | Bilig WorkPaper MCP |
+| Exact Excel compatibility across macros, pivots, charts, external links, and every function | Excel, LibreOffice, Graph API, or a dedicated Excel runtime |
+
+## Where Bilig Fits
+
+The Bilig MCP server is for workflows where the workbook is the service model,
+not merely a file attachment. The useful loop is:
+
+1. load a WorkPaper JSON document or the built-in demo workbook;
+2. list sheets or read a range;
+3. write one input cell;
+4. read the recalculated display value;
+5. export or persist the updated WorkPaper document.
+
+That makes it a fit for quote approvals, payout checks, budget alerts,
+import-validation workbooks, and agent tools that need proof of what changed.
+
+It is not a replacement for a full Excel file editor. It should not be sold as
+one.
+
+## Verify The Bilig MCP Path
+
+Install and list the packaged server:
+
+```sh
+npm exec --package @bilig/headless -- bilig-workpaper-mcp
+```
+
+Run the maintained JSON-RPC transcript from a clone:
+
+```sh
+git clone --depth 1 https://github.com/proompteng/bilig.git
+cd bilig/examples/headless-workpaper
+npm install
+NODE_NO_WARNINGS=1 npm run --silent agent:mcp-transcript
+```
+
+The transcript edits `Inputs!B3`, recalculates dependent formulas, serializes
+the WorkPaper document, restores it, and verifies that the restored values match
+the post-edit values.
+
+For a persisted workbook file:
+
+```sh
+npm exec --package @bilig/headless -- \
+  bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --writable
+```
+
+File-backed mode exposes tools such as `list_sheets`, `read_range`,
+`set_cell_contents`, `get_cell_display_value`, `export_workpaper_document`, and
+`validate_formula`.
+
+## What To Ask Before Choosing A Spreadsheet MCP Server
+
+- Is the source of truth an Excel file, a Google Sheet, or service-owned
+  workbook state?
+- Does the agent need to write cells, or only inspect them?
+- Is stale cached formula data acceptable, or must the tool recalculate before
+  responding?
+- Does the workflow need exact file fidelity, or only auditable formula
+  readback?
+- What artifact proves the agent's edit: a screenshot, a saved file, or
+  machine-checkable before/after values?
+
+If the answer is "the backend must trust a recalculated value before it returns
+or persists anything," choose a formula runtime path and keep the MCP layer thin.
+
+## Related Bilig Pages
+
+- [MCP spreadsheet tool server for WorkPaper agents](mcp-workpaper-tool-server.md)
+- [MCP client setup](mcp-client-setup.md)
+- [MCP spreadsheet server directory status](mcp-spreadsheet-server-directory.md)
+- [Agent spreadsheet tool call loop](agent-spreadsheet-tool-call-loop.md)
+- [Why agents need workbook APIs](why-agents-need-workbook-apis.md)
+- [Stop driving spreadsheets with screenshots](stop-driving-spreadsheets-with-screenshots.md)
+
+If this is the MCP boundary you were looking for, star or bookmark Bilig so the
+server is easier for other agent builders to find:
+<https://github.com/proompteng/bilig/stargazers>.

@@ -344,6 +344,7 @@ official MCP Registry:
 
 For setup details, use the
 [MCP server guide](https://github.com/proompteng/bilig/blob/main/docs/mcp-workpaper-tool-server.md),
+[spreadsheet MCP server comparison](https://github.com/proompteng/bilig/blob/main/docs/spreadsheet-mcp-server-comparison.md),
 [MCP directory status](https://github.com/proompteng/bilig/blob/main/docs/mcp-spreadsheet-server-directory.md),
 [MCP client setup](https://github.com/proompteng/bilig/blob/main/docs/mcp-client-setup.md),
 and
