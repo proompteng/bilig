@@ -40,6 +40,7 @@ export { loadRuntimeConfig, parseRuntimeConfig, type BiligRuntimeConfig } from '
 export { schema } from './schema.js'
 export { createEmptyWorkbookSnapshot, projectWorkbookToSnapshot } from './snapshot.js'
 export {
+  isWorkbookChangeRange,
   isWorkbookChangeRangeScope,
   normalizeWorkbookChangeRange,
   type WorkbookChangeRange,

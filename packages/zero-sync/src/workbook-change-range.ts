@@ -33,3 +33,11 @@ export function normalizeWorkbookChangeRange(value: unknown): WorkbookChangeRang
     ...(isWorkbookChangeRangeScope(scope) && scope !== 'cells' ? { scope } : {}),
   }
 }
+
+export function isWorkbookChangeRange(value: unknown): value is WorkbookChangeRange {
+  if (!isRecord(value)) {
+    return false
+  }
+  const scope = value['scope']
+  return normalizeWorkbookChangeRange(value) !== null && (scope === undefined || isWorkbookChangeRangeScope(scope))
+}

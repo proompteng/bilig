@@ -4,6 +4,7 @@ import { parseCellAddress } from '@bilig/formula'
 import { applyWorkbookAgentCommandBundle, isWorkbookAgentCommandBundle, type WorkbookAgentCommandBundle } from '@bilig/agent-api'
 import { isCommitOps, type CommitOp, type SpreadsheetEngine } from '@bilig/core'
 import { isEngineOpBatch, isEngineOps, type EngineOp, type EngineOpBatch } from '@bilig/workbook-domain'
+import { isWorkbookChangeRange, type WorkbookChangeRange } from './workbook-change-range.js'
 
 export type WorkbookChangeUndoBundle =
   | {
@@ -165,7 +166,7 @@ export type WorkbookEventPayload =
       targetSummary: string
       sheetName?: string
       address?: string
-      range?: CellRangeRef
+      range?: WorkbookChangeRange
       appliedBundle: WorkbookChangeUndoBundle
     }
   | {
@@ -174,7 +175,7 @@ export type WorkbookEventPayload =
       targetSummary: string
       sheetName?: string
       address?: string
-      range?: CellRangeRef
+      range?: WorkbookChangeRange
       appliedBundle: WorkbookChangeUndoBundle
     }
 
@@ -314,7 +315,7 @@ export function isWorkbookEventPayload(value: unknown): value is WorkbookEventPa
         typeof value['targetSummary'] === 'string' &&
         (value['sheetName'] === undefined || typeof value['sheetName'] === 'string') &&
         (value['address'] === undefined || typeof value['address'] === 'string') &&
-        (value['range'] === undefined || isCellRangeRef(value['range'])) &&
+        (value['range'] === undefined || isWorkbookChangeRange(value['range'])) &&
         isWorkbookChangeUndoBundle(value['appliedBundle'])
       )
     default:

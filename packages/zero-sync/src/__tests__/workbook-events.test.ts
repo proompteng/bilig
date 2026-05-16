@@ -123,6 +123,26 @@ describe('workbook event guards', () => {
         },
       }),
     ).toBe(true)
+
+    expect(
+      isWorkbookEventPayload({
+        kind: 'revertChange',
+        targetRevision: 13,
+        targetSummary: 'Inserted rows 3:4 on Sheet1',
+        sheetName: 'Sheet1',
+        address: 'A3',
+        range: {
+          sheetName: 'Sheet1',
+          startAddress: 'A3',
+          endAddress: 'A4',
+          scope: 'rows',
+        },
+        appliedBundle: {
+          kind: 'engineOps',
+          ops: [{ kind: 'deleteRows', sheetName: 'Sheet1', start: 2, count: 2 }],
+        },
+      }),
+    ).toBe(true)
   })
 
   it('rejects unsafe structural metadata payload numbers', () => {
@@ -160,6 +180,28 @@ describe('workbook event guards', () => {
         sheetName: 'Sheet1',
         columnIndex: unsafe,
         width: 44,
+      }),
+    ).toBe(false)
+  })
+
+  it('rejects history payloads with malformed structural range scope', () => {
+    expect(
+      isWorkbookEventPayload({
+        kind: 'revertChange',
+        targetRevision: 13,
+        targetSummary: 'Inserted rows 3:4 on Sheet1',
+        sheetName: 'Sheet1',
+        address: 'A3',
+        range: {
+          sheetName: 'Sheet1',
+          startAddress: 'A3',
+          endAddress: 'A4',
+          scope: 'row-band',
+        },
+        appliedBundle: {
+          kind: 'engineOps',
+          ops: [{ kind: 'deleteRows', sheetName: 'Sheet1', start: 2, count: 2 }],
+        },
       }),
     ).toBe(false)
   })

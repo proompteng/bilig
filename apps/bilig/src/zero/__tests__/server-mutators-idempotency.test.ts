@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { WorkbookRuntimeManager } from '../../workbook-runtime/runtime-manager.js'
+import { SpreadsheetEngine } from '@bilig/core'
+import { WorkbookRuntimeManager, type WorkbookRuntime } from '../../workbook-runtime/runtime-manager.js'
 import type { WorkbookChangeRecord } from '../workbook-change-store.js'
 import type { Queryable } from '../store.js'
 
@@ -308,6 +309,53 @@ describe('server mutator client mutation idempotency', () => {
     expect(mutationStoreFns.persistWorkbookMutation).not.toHaveBeenCalled()
   })
 
+  it('persists structural range scope in authored history undo events', async () => {
+    const db = createQueryable()
+    const { loadRuntime, runtimeManager } = createRuntimeManagerHarness()
+    const engine = new SpreadsheetEngine({ workbookName: 'doc-1' })
+    await engine.ready()
+    const applyOps = vi.spyOn(engine, 'applyOps').mockReturnValue([{ kind: 'insertRows', sheetName: 'Sheet1', start: 2, count: 2 }])
+    loadRuntime.mockResolvedValueOnce(createWorkbookRuntime(engine))
+    changeStoreFns.loadLatestUndoableWorkbookChange.mockResolvedValueOnce(
+      createWorkbookChangeRecord({
+        revision: 4,
+        summary: 'Inserted rows 3:4 on Sheet1',
+        sheetName: 'Sheet1',
+        anchorAddress: 'A3',
+        eventKind: 'insertRows',
+        range: { sheetName: 'Sheet1', startAddress: 'A3', endAddress: 'A4', scope: 'rows' },
+      }),
+    )
+
+    await handleServerMutator(
+      createServerTransaction(db),
+      'workbook.undoLatestChange',
+      {
+        documentId: 'doc-1',
+        clientMutationId: 'doc-1:pending:scope',
+      },
+      runtimeManager,
+    )
+
+    expect(applyOps).toHaveBeenCalledWith([], { captureUndo: true })
+    expect(mutationStoreFns.persistWorkbookMutation).toHaveBeenCalledWith(
+      db,
+      'doc-1',
+      expect.objectContaining({
+        eventPayload: expect.objectContaining({
+          kind: 'revertChange',
+          targetRevision: 4,
+          range: {
+            sheetName: 'Sheet1',
+            startAddress: 'A3',
+            endAddress: 'A4',
+            scope: 'rows',
+          },
+        }),
+      }),
+    )
+  })
+
   it('validates explicit revert targets only after the workbook mutation lock is held', async () => {
     const db = createQueryable()
     const { commitMutation, loadRuntime, runtimeManager } = createRuntimeManagerHarness()
@@ -470,6 +518,43 @@ function createWorkbookChangeRecord(input: {
     revertedByRevision: input.revertedByRevision ?? null,
     revertsRevision: input.revertsRevision ?? null,
     createdAtUnixMs: 1_768_348_800_000,
+  }
+}
+
+function createWorkbookRuntime(engine: SpreadsheetEngine): WorkbookRuntime {
+  const updatedAt = '2026-05-16T12:00:00.000Z'
+  return {
+    documentId: 'doc-1',
+    engine,
+    projection: {
+      workbook: {
+        id: 'doc-1',
+        name: 'doc-1',
+        ownerUserId: 'owner-1',
+        headRevision: 4,
+        calculatedRevision: 4,
+        calcMode: 'automatic',
+        compatibilityMode: 'excel-modern',
+        recalcEpoch: 0,
+        updatedAt,
+      },
+      sheets: [],
+      cells: [],
+      rowMetadata: [],
+      columnMetadata: [],
+      definedNames: [],
+      workbookMetadataEntries: [],
+      calculationSettings: {
+        workbookId: 'doc-1',
+        mode: 'automatic',
+        recalcEpoch: 0,
+      },
+      styles: [],
+      numberFormats: [],
+    },
+    headRevision: 4,
+    calculatedRevision: 4,
+    ownerUserId: 'owner-1',
   }
 }
 
