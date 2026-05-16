@@ -57,6 +57,7 @@ export interface EngineFormulaBindingService {
     templateId?: number,
     options?: BindPreparedFormulaOptions,
   ) => boolean
+  readonly rewriteFormulaSourcePreservingBindingNow: (cellIndex: number, ownerSheetName: string, source: string) => boolean
   readonly rewriteFormulaCompiledPreservingBindingNow: (
     cellIndex: number,
     source: string,

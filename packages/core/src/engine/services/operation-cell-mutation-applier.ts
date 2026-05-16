@@ -516,6 +516,14 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
               const oldFormulaNumber = !isRestore && priorHadFormula ? readExactNumericValueForLookup(cellIndex) : undefined
               const compileStarted = isRestore ? 0 : performance.now()
               try {
+                const priorDirectScalarFormula = args.state.formulas.get(cellIndex)?.directScalar !== undefined
+                const canRewriteFormulaPreservingBinding =
+                  !isRestore &&
+                  priorDirectScalarFormula &&
+                  !hasExactLookupDependents &&
+                  !hasSortedLookupDependents &&
+                  !hasAggregateDependents &&
+                  args.rewriteFormulaSourcePreservingBinding !== undefined
                 const canAssumeFreshFormula =
                   !isRestore &&
                   existingIndex === undefined &&
@@ -523,9 +531,13 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
                   args.state.workbook.metadata.definedNames.size === 0 &&
                   args.bindPreparedFormula !== undefined &&
                   args.compileTemplateFormula !== undefined
-                const changedTopology = canAssumeFreshFormula
-                  ? bindFreshTemplateFormula(args, cellIndex, sheetName, mutation)
-                  : args.bindFormula(cellIndex, sheetName, mutation.formula)
+                const changedTopology = canRewriteFormulaPreservingBinding
+                  ? args.rewriteFormulaSourcePreservingBinding(cellIndex, sheetName, mutation.formula)
+                    ? false
+                    : args.bindFormula(cellIndex, sheetName, mutation.formula)
+                  : canAssumeFreshFormula
+                    ? bindFreshTemplateFormula(args, cellIndex, sheetName, mutation)
+                    : args.bindFormula(cellIndex, sheetName, mutation.formula)
                 const runtimeFormula = args.state.formulas.get(cellIndex)
                 if (hasAggregateDependents) {
                   args.invalidateAggregateColumn({ sheetName, col: mutation.col })

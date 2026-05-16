@@ -443,7 +443,7 @@ describe('EngineOperationService', () => {
     })
     expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0 })
     expect(engine.getPerformanceCounters().formulasParsed).toBe(1)
-    expect(engine.getPerformanceCounters().formulasBound).toBe(1)
+    expect(engine.getPerformanceCounters().formulasBound).toBe(0)
     expect(engine.getPerformanceCounters().directScalarDeltaApplications).toBe(downstreamCount)
     expect(engine.getPerformanceCounters().directScalarDeltaOnlyRecalcSkips).toBe(1)
     const changedIndices = Array.from(tracked.mock.calls.at(-1)?.[0].changedCellIndices ?? [])
@@ -476,7 +476,7 @@ describe('EngineOperationService', () => {
     expect(engine.getLastMetrics()).toMatchObject({ dirtyFormulaCount: 0 })
     expect(engine.getPerformanceCounters()).toMatchObject({
       formulasParsed: 1,
-      formulasBound: 1,
+      formulasBound: 0,
       directScalarDeltaApplications: downstreamCount,
       directScalarDeltaOnlyRecalcSkips: 1,
       changedCellPayloadsBuilt: 0,

@@ -545,7 +545,20 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
             const compileStarted = isRestore ? 0 : performance.now()
             const hasFormulaColumnAggregateDependents = sheetId !== undefined && hasTrackedDirectRangeDependents(sheetId, parsedAddress.col)
             try {
-              const changedTopology = args.bindFormula(cellIndex, op.sheetName, op.formula)
+              const priorDirectScalarFormula = args.state.formulas.get(cellIndex)?.directScalar !== undefined
+              const canRewriteFormulaPreservingBinding =
+                !isRestore &&
+                priorDirectScalarFormula &&
+                sheetId !== undefined &&
+                !hasTrackedExactLookupDependents(sheetId, parsedAddress.col) &&
+                !hasTrackedSortedLookupDependents(sheetId, parsedAddress.col) &&
+                !hasFormulaColumnAggregateDependents &&
+                args.rewriteFormulaSourcePreservingBinding !== undefined
+              const changedTopology = canRewriteFormulaPreservingBinding
+                ? args.rewriteFormulaSourcePreservingBinding(cellIndex, op.sheetName, op.formula)
+                  ? false
+                  : args.bindFormula(cellIndex, op.sheetName, op.formula)
+                : args.bindFormula(cellIndex, op.sheetName, op.formula)
               if (hasFormulaColumnAggregateDependents) {
                 args.invalidateAggregateColumn({ sheetName: op.sheetName, col: parsedAddress.col })
               }

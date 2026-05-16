@@ -604,6 +604,11 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
       options,
     )
 
+  const rewriteFormulaSourcePreservingBindingNow = (cellIndex: number, ownerSheetName: string, source: string): boolean => {
+    const { compiled, templateResolution } = compileFormulaForCell(cellIndex, ownerSheetName, source)
+    return rewriteFormulaCompiledPreservingBindingNow(cellIndex, source, compiled, templateResolution.templateId)
+  }
+
   const bindInitialFormulaNow = (cellIndex: number, ownerSheetName: string, source: string): void => {
     if (args.state.counters) {
       addEngineCounter(args.state.counters, 'formulasBound')
@@ -793,6 +798,7 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
     },
     bindFormulaNow,
     bindPreparedFormulaNow,
+    rewriteFormulaSourcePreservingBindingNow,
     rewriteFormulaCompiledPreservingBindingNow,
     rewriteFormulaMetadataPreservingRuntimeNow,
     deferCellFormulasForSheetRenameNow,

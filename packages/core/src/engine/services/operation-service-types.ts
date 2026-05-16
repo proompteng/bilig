@@ -129,6 +129,7 @@ export interface CreateEngineOperationServiceArgs {
   readonly materializePivot: (pivot: WorkbookPivotRecord) => number[]
   readonly removeFormula: (cellIndex: number) => boolean
   readonly bindFormula: (cellIndex: number, ownerSheetName: string, source: string) => boolean
+  readonly rewriteFormulaSourcePreservingBinding?: (cellIndex: number, ownerSheetName: string, source: string) => boolean
   readonly bindPreparedFormula?: (
     cellIndex: number,
     ownerSheetName: string,

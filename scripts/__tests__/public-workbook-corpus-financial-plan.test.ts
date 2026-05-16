@@ -297,7 +297,7 @@ describe('public workbook financial corpus plan CLI', () => {
     )
   })
 
-  it('lets package-script arguments override baked-in corpus paths', () => {
+  it('rejects duplicate package-script scalar arguments instead of silently overriding baked-in corpus paths', () => {
     const dir = mkdtempSync(join(tmpdir(), 'public-workbook-corpus-financial-override-'))
     const missingManifestPath = join(dir, 'missing-manifest.json')
     const manifestPath = join(dir, 'manifest.json')
@@ -310,14 +310,10 @@ describe('public workbook financial corpus plan CLI', () => {
         encoding: 'utf8',
       },
     )
-    const plan: unknown = JSON.parse(result.stdout)
 
-    expect(result.status).toBe(0)
-    expect(plan).toMatchObject({
-      targetArtifactCount: 5,
-      sourceCount: 0,
-      cachedArtifactCount: 0,
-    })
+    expect(result.status).not.toBe(0)
+    expect(result.stdout).toBe('')
+    expect(result.stderr).toContain('Expected --manifest to be specified once')
   })
 
   it('marks mutating financial commands with explicit stop-marker overrides when paused', () => {

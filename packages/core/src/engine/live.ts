@@ -682,6 +682,8 @@ export function createEngineServiceRuntime(args: {
     materializePivot: (pivotRecord) => requireService(pivot, 'pivot').materializePivotNow(pivotRecord),
     removeFormula: (cellIndex) => binding.clearFormulaNow(cellIndex),
     bindFormula: (cellIndex, ownerSheetName, source) => binding.bindFormulaNow(cellIndex, ownerSheetName, source),
+    rewriteFormulaSourcePreservingBinding: (cellIndex, ownerSheetName, source) =>
+      binding.rewriteFormulaSourcePreservingBindingNow(cellIndex, ownerSheetName, source),
     bindPreparedFormula: (cellIndex, ownerSheetName, source, compiled, templateId, options) =>
       binding.bindPreparedFormulaNow(cellIndex, ownerSheetName, source, compiled, templateId, options),
     compileTemplateFormula: (source, row, col) => formulaTemplates.resolveForCell(source, row, col),
