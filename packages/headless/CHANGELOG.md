@@ -4,6 +4,22 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.16.3
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.16.2
+- Manual override: no
+
+## Fixes
+- perf(core): streamline direct scalar delta bookkeeping (a8ec9251)
+- fix(release): align headless public evidence version (87e8b785)
+- fix(grid): sharpen spreadsheet font rendering (77ac870b)
+- fix(docs): restore headless footprint artifact (3d0d2c6f)
+
+## Internal runtime changes
+- docs(growth): record star spike evidence (943a6aa7)
+- refactor(excel-import): isolate cell value parsing (9abfdc8b)
+
 ## 0.16.2
 
 - Release type: patch
