@@ -37,6 +37,11 @@ interface WorkbookWorkflowArtifactRow extends QueryResultRow {
   readonly text?: unknown
 }
 
+interface DurableWorkflowArtifact {
+  readonly artifact: WorkbookAgentWorkflowArtifact | null
+  readonly invalid: boolean
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -177,6 +182,7 @@ function normalizeWorkflowRun(
   hydrated: {
     readonly steps?: WorkbookAgentWorkflowStep[] | null
     readonly artifact?: WorkbookAgentWorkflowArtifact | null
+    readonly artifactInvalid?: boolean
   } = {},
 ): WorkbookAgentWorkflowRun | null {
   const createdAtUnixMs = parseNonNegativeInteger(row.createdAtUnixMs)
@@ -185,7 +191,7 @@ function normalizeWorkflowRun(
     row.completedAtUnixMs === null || row.completedAtUnixMs === undefined ? null : parseNonNegativeInteger(row.completedAtUnixMs)
   const fallbackSteps = normalizeWorkflowSteps(row.stepsJson ?? [])
   const steps = 'steps' in hydrated ? hydrated.steps : fallbackSteps
-  const artifact = hydrated.artifact ?? (isMarkdownArtifact(row.artifactJson) ? row.artifactJson : null)
+  const artifact = 'artifact' in hydrated ? (hydrated.artifact ?? null) : isMarkdownArtifact(row.artifactJson) ? row.artifactJson : null
   if (
     typeof row.runId !== 'string' ||
     typeof row.threadId !== 'string' ||
@@ -200,6 +206,7 @@ function normalizeWorkflowRun(
     updatedAtUnixMs < createdAtUnixMs ||
     (completedAtUnixMs !== null && completedAtUnixMs < createdAtUnixMs) ||
     steps === null ||
+    hydrated.artifactInvalid === true ||
     (row.errorMessage !== null && row.errorMessage !== undefined && typeof row.errorMessage !== 'string') ||
     (artifact !== null && !isMarkdownArtifact(artifact))
   ) {
@@ -273,7 +280,7 @@ async function loadDurableWorkflowArtifacts(
   db: Queryable,
   documentId: string,
   runIds: readonly string[],
-): Promise<Map<string, WorkbookAgentWorkflowArtifact>> {
+): Promise<Map<string, DurableWorkflowArtifact>> {
   if (runIds.length === 0) {
     return new Map()
   }
@@ -290,13 +297,22 @@ async function loadDurableWorkflowArtifacts(
     `,
     [documentId, runIds],
   )
-  const artifactsByRunId = new Map<string, WorkbookAgentWorkflowArtifact>()
+  const artifactsByRunId = new Map<string, DurableWorkflowArtifact>()
   for (const row of result.rows) {
     const normalized = normalizeWorkflowArtifactRow(row)
     if (!normalized) {
+      if (typeof row.runId === 'string') {
+        artifactsByRunId.set(row.runId, {
+          artifact: null,
+          invalid: true,
+        })
+      }
       continue
     }
-    artifactsByRunId.set(normalized.runId, normalized.artifact)
+    artifactsByRunId.set(normalized.runId, {
+      artifact: normalized.artifact,
+      invalid: false,
+    })
   }
   return artifactsByRunId
 }
@@ -437,10 +453,9 @@ async function persistWorkbookWorkflowRun(
   await db.query(
     `
       DELETE FROM workbook_workflow_step
-      WHERE workbook_id = $1
-        AND run_id = $2
+      WHERE run_id = $1
     `,
-    [input.documentId, input.run.runId],
+    [input.run.runId],
   )
   await runSequentially(input.run.steps, async (step, stepOrder) => {
     await db.query(
@@ -494,10 +509,9 @@ async function persistWorkbookWorkflowRun(
   await db.query(
     `
       DELETE FROM workbook_workflow_artifact
-      WHERE workbook_id = $1
-        AND run_id = $2
+      WHERE run_id = $1
     `,
-    [input.documentId, input.run.runId],
+    [input.run.runId],
   )
 }
 
@@ -555,14 +569,16 @@ export async function listWorkbookThreadWorkflowRuns(
     const hydrated: {
       steps?: WorkbookAgentWorkflowStep[] | null
       artifact?: WorkbookAgentWorkflowArtifact | null
+      artifactInvalid?: boolean
     } = {}
     if (runId) {
       if (durableSteps.has(runId)) {
         hydrated.steps = durableSteps.get(runId) ?? null
       }
-      const artifact = durableArtifacts.get(runId)
-      if (artifact) {
-        hydrated.artifact = artifact
+      const durableArtifact = durableArtifacts.get(runId)
+      if (durableArtifact) {
+        hydrated.artifact = durableArtifact.artifact
+        hydrated.artifactInvalid = durableArtifact.invalid
       }
     }
     const run = normalizeWorkflowRun(row, hydrated)

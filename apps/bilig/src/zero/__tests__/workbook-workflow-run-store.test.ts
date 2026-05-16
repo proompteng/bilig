@@ -121,6 +121,39 @@ describe('workbook-workflow-run-store', () => {
     expect(queryable.calls.find((call) => call.text.includes('INSERT INTO workbook_workflow_artifact'))).toBeDefined()
   })
 
+  it('replaces durable workflow steps by global run id before inserting the latest snapshot', async () => {
+    const queryable = new FakeQueryable()
+    const run = createWorkflowRun()
+
+    await upsertWorkbookWorkflowRun(queryable, {
+      documentId: 'doc-2',
+      run,
+    })
+
+    const deleteQuery = queryable.calls.find((call) => call.text.includes('DELETE FROM workbook_workflow_step'))
+    expect(deleteQuery?.text).toContain('WHERE run_id = $1')
+    expect(deleteQuery?.text).not.toContain('workbook_id')
+    expect(deleteQuery?.values).toEqual([run.runId])
+  })
+
+  it('deletes durable workflow artifacts by global run id when a snapshot no longer has an artifact', async () => {
+    const queryable = new FakeQueryable()
+    const run = {
+      ...createWorkflowRun(),
+      artifact: null,
+    }
+
+    await upsertWorkbookWorkflowRun(queryable, {
+      documentId: 'doc-2',
+      run,
+    })
+
+    const deleteQuery = queryable.calls.find((call) => call.text.includes('DELETE FROM workbook_workflow_artifact'))
+    expect(deleteQuery?.text).toContain('WHERE run_id = $1')
+    expect(deleteQuery?.text).not.toContain('workbook_id')
+    expect(deleteQuery?.values).toEqual([run.runId])
+  })
+
   it('saves workflow run snapshots atomically when the queryable supports transactions', async () => {
     const queryable = new FakeTransactionalQueryable()
 
@@ -596,6 +629,52 @@ describe('workbook-workflow-run-store', () => {
                 status: 'completed',
                 summary: 'Should invalidate the run.',
                 updatedAtUnixMs: 120,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ])
+
+    await expect(
+      listWorkbookThreadWorkflowRuns(queryable, {
+        documentId: 'doc-1',
+        actorUserId: 'alex@example.com',
+        threadId: 'thr-1',
+      }),
+    ).resolves.toEqual([])
+  })
+
+  it('drops workflow runs when durable artifact rows are malformed instead of falling back to legacy artifact json', async () => {
+    const run = createWorkflowRun()
+    const queryable = new FakeQueryable([
+      (text, values) =>
+        text.includes('FROM workbook_workflow_run AS run') && values?.[1] === 'thr-1'
+          ? [
+              {
+                runId: run.runId,
+                workbookId: 'doc-1',
+                threadId: run.threadId,
+                actorUserId: run.startedByUserId,
+                workflowTemplate: run.workflowTemplate,
+                title: run.title,
+                summary: run.summary,
+                status: run.status,
+                createdAtUnixMs: run.createdAtUnixMs,
+                updatedAtUnixMs: run.updatedAtUnixMs,
+                completedAtUnixMs: run.completedAtUnixMs,
+                errorMessage: run.errorMessage,
+                stepsJson: run.steps,
+                artifactJson: run.artifact,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+      (text, values) =>
+        text.includes('FROM workbook_workflow_artifact AS artifact') && values?.[0] === 'doc-1' && Array.isArray(values?.[1])
+          ? [
+              {
+                runId: run.runId,
+                kind: 'markdown',
+                title: null,
+                text: run.artifact?.text,
               } satisfies QueryResultRow,
             ]
           : null,
