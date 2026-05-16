@@ -4,6 +4,60 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.16.1
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.16.0
+- Manual override: no
+
+## Fixes
+- perf(headless): template-bind fresh append formulas (b6ec9a28)
+- fix(web): drop stale assistant context retries (194eefa9)
+- perf(headless): skip unchanged aggregate retargets on tail append (73c1e4e5)
+- perf(headless): accelerate cross-sheet direct formulas (808668fe)
+- perf(headless): skip column dependency checks without subscribers (700f5835)
+- perf(headless): fast path rectangular aggregate clears (03d153dc)
+- perf(headless): tighten formula replacement propagation (d10d55dc)
+- perf(headless): avoid combined matrix refs (926778d1)
+- fix(core): bind fresh formulas with defined names safely (604f0117)
+- perf(headless): combine fresh aggregate scans (c2a78b5d)
+- fix(ci): build headless before footprint probe (ceefb2dc)
+- fix(headless): refresh package footprint evidence (c20bcbf0)
+- perf(headless): collapse matrix dimension refreshes (e845484b)
+- fix(ci): build runtime types before release metadata push (027c019c)
+- perf(headless): preserve scalar formula dimensions (4ce2e20b)
+- perf(headless): skip fresh-cell spill cleanup (f6eabba6)
+- fix(ci): skip stale runtime release plans (0addaa62)
+
+## Internal runtime changes
+- docs(headless): gate cold-start package footprint (18b52b2c)
+- docs(headless): refresh package footprint (b0ea64d0)
+- refactor: address workbook technical debt (67a282c7)
+- refactor(core): split fresh aggregate mutation helpers (98165d20)
+- refactor(core): split dynamic scalar binding helpers (91502b78)
+- refactor(core): split recalc evaluation state helpers (01887c09)
+- refactor(core): split live kernel sync state (fc1aefa3)
+- refactor(core): centralize formula binding cell flags (a65ca70a)
+- refactor(excel-import): split xlsx style value helpers (29f42415)
+- docs(discovery): restore proven headless positioning (34b4c9b4)
+- refactor(core): split initial prefix aggregate evaluation (21f0d675)
+- refactor(wasm): split statistics rank dispatch (03f4d59e)
+- refactor(wasm): split vm output string arena (63c4260c)
+- refactor(core): split direct scalar slice tracking (bb560eaa)
+- refactor(core): centralize formula binding effect errors (fde61550)
+- refactor(core): centralize mutation op records (aa997db6)
+- refactor(core): isolate full invalidation emission (d3b16839)
+- docs(headless): add formula recalculation discovery pages (03fa7286)
+- refactor(wasm): remove duplicate concat writer (b5cf1678)
+- docs(headless): add screenshot automation boundary article (6b31a4c8)
+- refactor(core): isolate recalc iteration settings (93bd88d4)
+- refactor(core): centralize kernel sync literal events (9ecdb56a)
+- refactor(core): route workbook protection through metadata service (8059c417)
+- refactor(core): isolate direct criteria ast helpers (a8dda3a7)
+- refactor(headless): isolate history snapshot cloning (85191d7b)
+- refactor(core): isolate recalc event emission (4fd2365a)
+- refactor(core): centralize structural axis edits (83a27fd9)
+
 ## 0.16.0
 
 - Release type: minor
