@@ -4,6 +4,15 @@ import { createErrorEnvelope, type DocumentControlService, runPromise } from '@b
 import { resolveSessionIdentity } from './session.js'
 import type { ZeroSyncService } from '../zero/service.js'
 
+export function parseAfterRevisionQuery(value: string | undefined): number | null {
+  const trimmed = value?.trim() ?? '0'
+  if (!/^(0|[1-9]\d*)$/u.test(trimmed)) {
+    return null
+  }
+  const revision = Number(trimmed)
+  return Number.isSafeInteger(revision) ? revision : null
+}
+
 export function registerSyncServerDocumentRoutes(
   app: FastifyInstance,
   options: {
@@ -53,9 +62,8 @@ export function registerSyncServerDocumentRoutes(
         reply.code(503)
         return createErrorEnvelope('ZERO_SYNC_DISABLED', 'Authoritative workbook events require Zero sync', true)
       }
-      const rawAfterRevision = request.query.afterRevision?.trim() ?? '0'
-      const afterRevision = Number.parseInt(rawAfterRevision, 10)
-      if (!Number.isFinite(afterRevision) || afterRevision < 0) {
+      const afterRevision = parseAfterRevisionQuery(request.query.afterRevision)
+      if (afterRevision === null) {
         reply.code(400)
         return createErrorEnvelope('INVALID_AFTER_REVISION', 'afterRevision must be a non-negative integer', false)
       }
