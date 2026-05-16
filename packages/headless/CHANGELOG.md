@@ -4,6 +4,19 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.16.15
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.16.14
+- Manual override: no
+
+## Fixes
+- perf(core): defer structural delete formula undo work (d7ef3fac)
+
+## Internal runtime changes
+- docs(growth): refresh release evidence (25e2e4ed)
+- docs(growth): route overview evaluators to proof paths (a42f2da0)
+
 ## 0.16.14
 
 - Release type: patch
