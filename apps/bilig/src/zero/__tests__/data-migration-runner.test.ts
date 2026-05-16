@@ -144,19 +144,17 @@ describe('data migration runner', () => {
     expect(resolveRunDataMigrationsOnBoot({})).toBe(false)
     expect(resolveRunDataMigrationsOnBoot({ BILIG_RUN_DATA_MIGRATIONS_ON_BOOT: 'true' })).toBe(true)
     expect(resolveRunDataMigrationsOnBoot({ BILIG_RUN_DATA_MIGRATIONS_ON_BOOT: '1' })).toBe(true)
-    expect(resolveRunDataMigrationsOnBoot({ BILIG_RUN_DATA_MIGRATIONS_ON_BOOT: 'yes' })).toBe(true)
     expect(resolveRunDataMigrationsOnBoot({ BILIG_RUN_DATA_MIGRATIONS_ON_BOOT: 'false' })).toBe(false)
     expect(resolveRunDataMigrationsOnBoot({ BILIG_RUN_DATA_MIGRATIONS_ON_BOOT: '0' })).toBe(false)
-    expect(resolveRunDataMigrationsOnBoot({ BILIG_RUN_DATA_MIGRATIONS_ON_BOOT: 'no' })).toBe(false)
     expect(resolveAllowPendingCleanupMigrations({ BILIG_ALLOW_PENDING_CLEANUP_MIGRATIONS: 'true' })).toBe(true)
   })
 
   it('rejects malformed migration startup flags instead of silently disabling migrations', () => {
-    expect(() => resolveRunDataMigrationsOnBoot({ BILIG_RUN_DATA_MIGRATIONS_ON_BOOT: 'treu' })).toThrow(
-      'BILIG_RUN_DATA_MIGRATIONS_ON_BOOT must be a boolean value, got treu',
+    expect(() => resolveRunDataMigrationsOnBoot({ BILIG_RUN_DATA_MIGRATIONS_ON_BOOT: 'yes' })).toThrow(
+      'BILIG_RUN_DATA_MIGRATIONS_ON_BOOT must be "1", "true", "0", or "false" when set, got yes',
     )
     expect(() => resolveAllowPendingCleanupMigrations({ BILIG_ALLOW_PENDING_CLEANUP_MIGRATIONS: 'maybe' })).toThrow(
-      'BILIG_ALLOW_PENDING_CLEANUP_MIGRATIONS must be a boolean value, got maybe',
+      'BILIG_ALLOW_PENDING_CLEANUP_MIGRATIONS must be "1", "true", "0", or "false" when set, got maybe',
     )
   })
 })

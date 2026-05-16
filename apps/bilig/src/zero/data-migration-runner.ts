@@ -262,12 +262,11 @@ function parseBooleanEnv(value: string | undefined, name: string): boolean {
   if (value === undefined || value.length === 0) {
     return false
   }
-  const normalized = value.trim().toLowerCase()
-  if (normalized === '1' || normalized === 'true' || normalized === 'yes') {
+  if (value === '1' || value === 'true') {
     return true
   }
-  if (normalized === '0' || normalized === 'false' || normalized === 'no') {
+  if (value === '0' || value === 'false') {
     return false
   }
-  throw new Error(`${name} must be a boolean value, got ${value}`)
+  throw new Error(`${name} must be "1", "true", "0", or "false" when set, got ${value}`)
 }
