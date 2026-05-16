@@ -1,6 +1,6 @@
 # Community Growth Snapshot
 
-Captured at: `2026-05-16T06:38:47.421Z`
+Captured at: `2026-05-16T08:54:36.899Z`
 
 This snapshot tracks the public signals for the `@bilig/headless` growth loop: GitHub conversion, npm demand, contributor on-ramp health, discussion activity, and traffic quality.
 
@@ -17,9 +17,9 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 
 - Package: `@bilig/headless@0.16.5`
 - License: `MIT`
-- Modified: `2026-05-16T07:39:12.198Z`
-- Downloads last week: 14,980 (2026-05-08 to 2026-05-14)
-- Downloads last month: 27,080 (2026-04-15 to 2026-05-14)
+- Modified: `2026-05-16T08:45:38.417Z`
+- Downloads last week: 12,568 (2026-05-09 to 2026-05-15)
+- Downloads last month: 27,753 (2026-04-16 to 2026-05-15)
 
 ## Contributor Funnel
 
@@ -45,30 +45,17 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 
 ## Traffic
 
-- Views: 528 from 178 unique visitors
-- Clones: 21,402 from 2,534 unique cloners
-- Top referrers: github.com (77/25), news.ycombinator.com (51/36), t.co (29/24), proompteng.github.io (16/10), Google (16/2)
-- Top paths: /proompteng/bilig (233/155), /proompteng/bilig/issues (30/6), /proompteng/bilig/pulls (15/7), /proompteng/bilig/tree/main/examples/headless-workpaper (12/7), /proompteng/bilig/commits/main (11/1)
+- Views: 565 from 189 unique visitors
+- Clones: 21,392 from 2,641 unique cloners
+- Top referrers: github.com (92/30), news.ycombinator.com (52/37), t.co (29/24), proompteng.github.io (16/10), Google (16/2)
+- Top paths: /proompteng/bilig (241/160), /proompteng/bilig/issues (35/9), /proompteng/bilig/pulls (18/9), /proompteng/bilig/tree/main/examples/headless-workpaper (12/7), /proompteng/bilig/commits/main (12/1)
 
 ## Spike Read
 
-- The visible star jump was concentrated after May 7, 2026. GitHub stargazer
-  timestamps show 3 stars on May 7, 6 on May 8, 1 on May 10, and 9 on May 11,
-  after only two earlier maintainer-adjacent stars in April.
-- The same window matches the strongest visitor window: May 7 had 125 views
-  from 64 unique visitors, and May 8 had 122 views from 42 unique visitors.
-- The strongest external referrer in the current GitHub traffic window is
-  Hacker News, with 51 views from 36 unique visitors, followed by X/t.co with
-  29 views from 24 unique visitors.
-- The two Show HN submissions were small on-platform events: Algolia reports
-  2 points / 0 comments for item 48045427 and 3 points / 0 comments for item 48052832. The useful signal was qualified click-through, not HN discussion.
-- The Reddit r/coolgithubprojects post has no comments in the public page
-  snapshot, so Reddit should not be treated as the cause of the star jump until
-  it produces comments, referrers, or issue/discussion traffic.
-- Replication plan: do not repost the same launch. Ship one sharper proof page,
-  then post a narrow follow-up to HN/X/MCP audiences asking for a concrete
-  adoption blocker: formula family, XLSX cache behavior, persistence shape, or
-  agent writeback verification.
+- The visible May 7-11 star jump still lines up with external developer traffic, not broad social posting.
+- The strongest current external referrer is news.ycombinator.com with 52 views from 37 unique visitors.
+- Hacker News is still ahead of X/t.co in qualified GitHub traffic: 52/37 versus 29/24.
+- Replication plan: do not repost the same launch. Ship one sharper proof page, then ask HN/X/MCP audiences for a concrete adoption blocker: formula family, XLSX cache behavior, persistence shape, or agent writeback verification.
 
 ## Read This Snapshot
 

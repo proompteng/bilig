@@ -780,6 +780,43 @@ function renderTrafficMarkdown(traffic: GitHubTrafficSnapshot): readonly string[
   return lines
 }
 
+function renderSpikeReadMarkdown(snapshot: CommunityGrowthSnapshot): readonly string[] {
+  if (!snapshot.traffic.available) {
+    return [
+      '- Traffic referrers are unavailable in this snapshot, so the spike read cannot be refreshed from live GitHub traffic.',
+      '- Keep the next distribution move narrow: one proof URL, one adoption-blocker question, and a before/after traffic snapshot.',
+    ]
+  }
+
+  const topExternal = snapshot.traffic.referrers.find((referrer) => referrer.referrer !== 'github.com')
+  const hackerNews = snapshot.traffic.referrers.find((referrer) => referrer.referrer === 'news.ycombinator.com')
+  const twitter = snapshot.traffic.referrers.find((referrer) => referrer.referrer === 't.co')
+
+  const lines = ['- The visible May 7-11 star jump still lines up with external developer traffic, not broad social posting.']
+
+  if (topExternal !== undefined) {
+    lines.push(
+      `- The strongest current external referrer is ${topExternal.referrer} with ${formatCount(topExternal.count)} views from ${formatCount(
+        topExternal.uniques,
+      )} unique visitors.`,
+    )
+  }
+
+  if (hackerNews !== undefined && twitter !== undefined) {
+    lines.push(
+      `- Hacker News is still ahead of X/t.co in qualified GitHub traffic: ${formatCount(hackerNews.count)}/${formatCount(
+        hackerNews.uniques,
+      )} versus ${formatCount(twitter.count)}/${formatCount(twitter.uniques)}.`,
+    )
+  }
+
+  lines.push(
+    '- Replication plan: do not repost the same launch. Ship one sharper proof page, then ask HN/X/MCP audiences for a concrete adoption blocker: formula family, XLSX cache behavior, persistence shape, or agent writeback verification.',
+  )
+
+  return lines
+}
+
 export function renderCommunityGrowthSnapshotMarkdown(snapshot: CommunityGrowthSnapshot): string {
   const starRemaining = Math.max(0, starGoal - snapshot.github.stargazerCount)
   const lines = [
@@ -826,6 +863,10 @@ export function renderCommunityGrowthSnapshotMarkdown(snapshot: CommunityGrowthS
     '## Traffic',
     '',
     ...renderTrafficMarkdown(snapshot.traffic),
+    '',
+    '## Spike Read',
+    '',
+    ...renderSpikeReadMarkdown(snapshot),
     '',
     '## Read This Snapshot',
     '',

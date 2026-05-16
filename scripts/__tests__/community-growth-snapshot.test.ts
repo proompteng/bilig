@@ -725,5 +725,8 @@ describe('community growth snapshot', () => {
     )
     expect(markdown).toContain('- Clones: 18,287 from 1,907 unique cloners')
     expect(markdown).toContain('news.ycombinator.com (51/36)')
+    expect(markdown).toContain('## Spike Read')
+    expect(markdown).toContain('The strongest current external referrer is news.ycombinator.com with 51 views from 36 unique visitors.')
+    expect(markdown).toContain('do not repost the same launch')
   })
 })
