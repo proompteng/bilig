@@ -24,4 +24,10 @@ describe('zero sync schema', () => {
     expect('workbook_metadata' in schema.tables).toBe(false)
     expect('calculation_settings' in schema.tables).toBe(false)
   })
+
+  it('maps durable workbook chat thread summaries to the UI contract', () => {
+    expect(schema.tables.workbook_chat_thread.columns.ownerUserId.serverName).toBe('actor_user_id')
+    expect(schema.tables.workbook_chat_thread.columns.reviewQueueItemCount.serverName).toBe('review_queue_item_count')
+    expect(schema.tables.workbook_chat_thread.columns.latestEntryText.serverName).toBe('latest_entry_text')
+  })
 })

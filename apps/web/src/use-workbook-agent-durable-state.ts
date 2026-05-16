@@ -30,20 +30,31 @@ function isZeroLiveView<T>(value: unknown): value is ZeroLiveView<T> {
   return isRecord(value) && 'data' in value && typeof value['addListener'] === 'function' && typeof value['destroy'] === 'function'
 }
 
-function decodeThreadSummaries(value: unknown): readonly WorkbookAgentThreadSummary[] {
+function isVisibleThreadSummaryForUser(value: unknown, currentUserId: string): boolean {
+  return isRecord(value) && (value['ownerUserId'] === currentUserId || value['scope'] === 'shared')
+}
+
+function decodeThreadSummaries(value: unknown, currentUserId: string): readonly WorkbookAgentThreadSummary[] {
   if (!Array.isArray(value)) {
     return []
   }
   return decodeUnknownSync(
     WorkbookAgentThreadSummaryListSchema,
-    value.map((entry) =>
-      isRecord(entry)
-        ? {
-            ...entry,
-            latestEntryText: entry['latestEntryText'] ?? null,
-          }
-        : entry,
-    ),
+    value
+      .filter((entry) => isVisibleThreadSummaryForUser(entry, currentUserId))
+      .map((entry) =>
+        isRecord(entry)
+          ? {
+              threadId: entry['threadId'],
+              scope: entry['scope'],
+              ownerUserId: entry['ownerUserId'],
+              updatedAtUnixMs: entry['updatedAtUnixMs'],
+              entryCount: entry['entryCount'],
+              reviewQueueItemCount: entry['reviewQueueItemCount'],
+              latestEntryText: entry['latestEntryText'] ?? null,
+            }
+          : entry,
+      ),
   )
 }
 
@@ -68,11 +79,12 @@ function decodeWorkflowRuns(value: unknown): readonly WorkbookAgentWorkflowRun[]
 }
 
 export function useWorkbookAgentThreadSummaries(input: {
+  readonly currentUserId: string
   readonly documentId: string
   readonly zero: ZeroWorkbookAgentSource
   readonly enabled: boolean
 }): readonly WorkbookAgentThreadSummary[] {
-  const { documentId, enabled, zero } = input
+  const { currentUserId, documentId, enabled, zero } = input
   const [threadSummaries, setThreadSummaries] = useState<readonly WorkbookAgentThreadSummary[]>([])
 
   useEffect(() => {
@@ -85,7 +97,7 @@ export function useWorkbookAgentThreadSummaries(input: {
       throw new Error('Zero workbook agent thread query returned an invalid live view')
     }
     const publish = (value: unknown) => {
-      setThreadSummaries(decodeThreadSummaries(value))
+      setThreadSummaries(decodeThreadSummaries(value, currentUserId))
     }
     publish(view.data)
     const cleanup = view.addListener((value) => {
@@ -95,7 +107,7 @@ export function useWorkbookAgentThreadSummaries(input: {
       cleanup()
       view.destroy()
     }
-  }, [documentId, enabled, zero])
+  }, [currentUserId, documentId, enabled, zero])
 
   return threadSummaries
 }

@@ -27,6 +27,7 @@ export interface NormalizedWorkbookChatThreadModel {
   readonly scope: WorkbookChatThreadScope
   readonly updatedAtUnixMs: number
   readonly entryCount: number
+  readonly reviewQueueItemCount: number
   readonly latestEntryText: string | null
 }
 
@@ -310,6 +311,7 @@ export function normalizeReviewQueueItem(row: WorkbookReviewQueueItemRow): Workb
 export function normalizeZeroWorkbookChatThread(row: ZeroWorkbookChatThreadRow): NormalizedWorkbookChatThreadModel | null {
   const updatedAtUnixMs = parseNumericValue(row.updatedAtUnixMs)
   const entryCount = parseNumericValue(row.entryCount)
+  const reviewQueueItemCount = parseNumericValue(row.reviewQueueItemCount)
   if (
     typeof row.workbookId !== 'string' ||
     typeof row.threadId !== 'string' ||
@@ -317,6 +319,7 @@ export function normalizeZeroWorkbookChatThread(row: ZeroWorkbookChatThreadRow):
     (row.scope !== 'private' && row.scope !== 'shared') ||
     updatedAtUnixMs === null ||
     entryCount === null ||
+    reviewQueueItemCount === null ||
     (row.latestEntryText !== null && row.latestEntryText !== undefined && typeof row.latestEntryText !== 'string')
   ) {
     return null
@@ -328,25 +331,19 @@ export function normalizeZeroWorkbookChatThread(row: ZeroWorkbookChatThreadRow):
     scope: row.scope,
     updatedAtUnixMs,
     entryCount,
+    reviewQueueItemCount,
     latestEntryText: typeof row.latestEntryText === 'string' ? row.latestEntryText : null,
   }
 }
 
-export function normalizeThreadSummary(
-  row: NormalizedWorkbookChatThreadModel,
-  reviewCounts: WorkbookChatThreadSummaryRow = {},
-): WorkbookAgentThreadSummary | null {
-  const reviewQueueItemCount = parseNumericValue(reviewCounts.reviewQueueItemCount ?? 0)
-  if (reviewQueueItemCount === null) {
-    return null
-  }
+export function normalizeThreadSummary(row: NormalizedWorkbookChatThreadModel): WorkbookAgentThreadSummary {
   return {
     threadId: row.threadId,
     scope: row.scope,
     ownerUserId: row.actorUserId,
     updatedAtUnixMs: row.updatedAtUnixMs,
     entryCount: row.entryCount,
-    reviewQueueItemCount,
+    reviewQueueItemCount: row.reviewQueueItemCount,
     latestEntryText: row.latestEntryText,
   }
 }

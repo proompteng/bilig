@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   isWorkbookAgentUiContext,
-  normalizeThreadSummary,
   normalizeTimelineEntry,
   normalizeZeroWorkbookChatThread,
   parseNumericValue,
@@ -24,18 +23,16 @@ describe('workbook-chat-thread-normalizers', () => {
 
   it('rejects summaries with malformed numeric fields', () => {
     expect(
-      normalizeThreadSummary(
-        {
-          workbookId: 'doc-1',
-          threadId: 'thr-1',
-          scope: 'private',
-          actorUserId: 'alex@example.com',
-          updatedAtUnixMs: 200,
-          entryCount: 3,
-          latestEntryText: 'Done',
-        },
-        { reviewQueueItemCount: '0x' },
-      ),
+      normalizeZeroWorkbookChatThread({
+        workbookId: 'doc-1',
+        threadId: 'thr-1',
+        scope: 'private',
+        ownerUserId: 'alex@example.com',
+        updatedAtUnixMs: 200,
+        entryCount: 3,
+        reviewQueueItemCount: -1,
+        latestEntryText: 'Done',
+      }),
     ).toBeNull()
     expect(
       normalizeZeroWorkbookChatThread({
@@ -45,6 +42,7 @@ describe('workbook-chat-thread-normalizers', () => {
         ownerUserId: 'alex@example.com',
         updatedAtUnixMs: 200,
         entryCount: -1,
+        reviewQueueItemCount: 0,
         latestEntryText: 'Done',
       }),
     ).toBeNull()

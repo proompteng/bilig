@@ -167,6 +167,7 @@ export function useWorkbookAgentPane(input: {
 
   const activeThreadId = snapshot?.threadId ?? sessionRef.current?.threadId ?? null
   const zeroThreadSummaries = useWorkbookAgentThreadSummaries({
+    currentUserId,
     documentId,
     zero: zeroSource,
     enabled: enabled && zeroEnabled && Boolean(zero),

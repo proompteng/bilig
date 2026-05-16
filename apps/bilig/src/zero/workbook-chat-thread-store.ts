@@ -5,7 +5,7 @@ import type {
   WorkbookAgentTimelineEntry,
   WorkbookAgentUiContext,
 } from '@bilig/contracts'
-import { zql } from '@bilig/zero-sync'
+import { queries } from '@bilig/zero-sync'
 import type { Queryable, ZeroQueryRunner } from './store.js'
 import {
   defaultExecutionPolicyForScope,
@@ -22,7 +22,6 @@ import {
   type NormalizedWorkbookChatThreadModel,
   type WorkbookChatThreadPrivateRow,
   type WorkbookChatThreadScope,
-  type WorkbookChatThreadSummaryRow,
   type WorkbookChatToolCallRow,
   type WorkbookReviewQueueItemRow,
   type ZeroWorkbookChatThreadRow,
@@ -43,14 +42,17 @@ export interface WorkbookAgentThreadStateRecord {
 }
 
 export interface WorkbookChatThreadStoreConnection extends Queryable {
-  listWorkbookChatThreadRows(documentId: string): Promise<readonly ZeroWorkbookChatThreadRow[]>
+  listWorkbookChatThreadRows(input: {
+    readonly documentId: string
+    readonly actorUserId: string
+  }): Promise<readonly ZeroWorkbookChatThreadRow[]>
 }
 
 export function createWorkbookChatThreadStoreConnection(db: Queryable & ZeroQueryRunner): WorkbookChatThreadStoreConnection {
   return {
     query: (text, values) => db.query(text, values),
-    listWorkbookChatThreadRows: (documentId) =>
-      db.run(zql.workbook_chat_thread.where('workbookId', documentId).orderBy('updatedAtUnixMs', 'desc')),
+    listWorkbookChatThreadRows: ({ actorUserId, documentId }) =>
+      db.run(queries.workbookChatThread.byWorkbook.fn({ args: { documentId }, ctx: { userID: actorUserId } })),
   }
 }
 
@@ -71,9 +73,12 @@ function dedupeTimelineEntries(entries: readonly WorkbookAgentTimelineEntry[]): 
 
 async function loadZeroWorkbookChatThreads(
   db: WorkbookChatThreadStoreConnection,
-  documentId: string,
+  input: {
+    readonly documentId: string
+    readonly actorUserId: string
+  },
 ): Promise<NormalizedWorkbookChatThreadModel[]> {
-  const rows = await db.listWorkbookChatThreadRows(documentId)
+  const rows = await db.listWorkbookChatThreadRows(input)
   return rows.flatMap((row) => {
     const normalized = normalizeZeroWorkbookChatThread(row)
     return normalized ? [normalized] : []
@@ -119,6 +124,7 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
       execution_policy TEXT NOT NULL DEFAULT 'autoApplyAll',
       context_json JSONB,
       entry_count BIGINT NOT NULL DEFAULT 0,
+      review_queue_item_count BIGINT NOT NULL DEFAULT 0,
       latest_entry_text TEXT,
       updated_at_unix_ms BIGINT NOT NULL,
       PRIMARY KEY (workbook_id, thread_id, actor_user_id)
@@ -144,6 +150,10 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
   await db.query(`
     ALTER TABLE workbook_chat_thread
       ADD COLUMN IF NOT EXISTS entry_count BIGINT NOT NULL DEFAULT 0;
+  `)
+  await db.query(`
+    ALTER TABLE workbook_chat_thread
+      ADD COLUMN IF NOT EXISTS review_queue_item_count BIGINT NOT NULL DEFAULT 0;
   `)
   await db.query(`
     ALTER TABLE workbook_chat_thread
@@ -243,16 +253,18 @@ export async function saveWorkbookAgentThreadState(db: Queryable, record: Workbo
         execution_policy,
         context_json,
         entry_count,
+        review_queue_item_count,
         latest_entry_text,
         updated_at_unix_ms
       )
-      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
       ON CONFLICT (workbook_id, thread_id, actor_user_id)
       DO UPDATE SET
         scope = EXCLUDED.scope,
         execution_policy = EXCLUDED.execution_policy,
         context_json = EXCLUDED.context_json,
         entry_count = EXCLUDED.entry_count,
+        review_queue_item_count = EXCLUDED.review_queue_item_count,
         latest_entry_text = EXCLUDED.latest_entry_text,
         updated_at_unix_ms = EXCLUDED.updated_at_unix_ms
     `,
@@ -264,6 +276,7 @@ export async function saveWorkbookAgentThreadState(db: Queryable, record: Workbo
       record.executionPolicy,
       JSON.stringify(record.context),
       persistedEntries.length,
+      record.reviewQueueItems.length,
       latestEntryText,
       record.updatedAtUnixMs,
     ],
@@ -459,7 +472,7 @@ export async function loadWorkbookAgentThreadState(
     actorUserId: string
   },
 ): Promise<WorkbookAgentThreadStateRecord | null> {
-  const thread = selectVisibleThread(await loadZeroWorkbookChatThreads(db, input.documentId), input)
+  const thread = selectVisibleThread(await loadZeroWorkbookChatThreads(db, input), input)
   if (!thread) {
     return null
   }
@@ -589,7 +602,7 @@ export async function listWorkbookAgentThreadSummaries(
   },
 ): Promise<WorkbookAgentThreadSummary[]> {
   const visibleThreadsByThreadId = new Map<string, NormalizedWorkbookChatThreadModel>()
-  for (const thread of await loadZeroWorkbookChatThreads(db, input.documentId)) {
+  for (const thread of await loadZeroWorkbookChatThreads(db, input)) {
     if (!isVisibleThreadForActor(thread, input.actorUserId)) {
       continue
     }
@@ -599,30 +612,5 @@ export async function listWorkbookAgentThreadSummaries(
     }
   }
   const visibleThreads = [...visibleThreadsByThreadId.values()].toSorted((left, right) => right.updatedAtUnixMs - left.updatedAtUnixMs)
-  if (visibleThreads.length === 0) {
-    return []
-  }
-  const reviewCountResult = await db.query<WorkbookChatThreadSummaryRow & { readonly threadId?: unknown; readonly actorUserId?: unknown }>(
-    `
-      SELECT
-        thread_id AS "threadId",
-        actor_user_id AS "actorUserId",
-        COUNT(*)::integer AS "reviewQueueItemCount"
-      FROM workbook_review_queue_item
-      WHERE workbook_id = $1
-        AND (actor_user_id = ANY($2::text[]))
-      GROUP BY thread_id, actor_user_id
-    `,
-    [input.documentId, [...new Set(visibleThreads.map((thread) => thread.actorUserId))]],
-  )
-  const reviewCountsByThreadKey = new Map(
-    reviewCountResult.rows.flatMap((row) =>
-      typeof row.threadId === 'string' && typeof row.actorUserId === 'string'
-        ? [[`${row.threadId}\u0000${row.actorUserId}`, row] as const]
-        : [],
-    ),
-  )
-  return visibleThreads
-    .map((thread) => normalizeThreadSummary(thread, reviewCountsByThreadKey.get(`${thread.threadId}\u0000${thread.actorUserId}`)))
-    .filter((row): row is WorkbookAgentThreadSummary => row !== null)
+  return visibleThreads.map((thread) => normalizeThreadSummary(thread))
 }

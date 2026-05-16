@@ -16,7 +16,7 @@ interface RecordedQuery {
 
 class FakeQueryable implements Queryable, WorkbookChatThreadStoreConnection {
   readonly calls: RecordedQuery[] = []
-  readonly zeroThreadDocumentIds: string[] = []
+  readonly zeroThreadInputs: { readonly documentId: string; readonly actorUserId: string }[] = []
 
   constructor(
     private readonly responders: readonly ((text: string, values: readonly unknown[] | undefined) => QueryResultRow[] | null)[] = [],
@@ -36,8 +36,11 @@ class FakeQueryable implements Queryable, WorkbookChatThreadStoreConnection {
     return { rows: [] }
   }
 
-  async listWorkbookChatThreadRows(documentId: string): Promise<readonly ZeroWorkbookChatThreadRow[]> {
-    this.zeroThreadDocumentIds.push(documentId)
+  async listWorkbookChatThreadRows(input: {
+    readonly documentId: string
+    readonly actorUserId: string
+  }): Promise<readonly ZeroWorkbookChatThreadRow[]> {
+    this.zeroThreadInputs.push(input)
     return this.runRows
   }
 }
@@ -197,6 +200,7 @@ function createZeroThreadRow(state: ReturnType<typeof createThreadState>): ZeroW
     scope: state.scope,
     updatedAtUnixMs: state.updatedAtUnixMs,
     entryCount: state.entries.length,
+    reviewQueueItemCount: state.reviewQueueItems.length,
     latestEntryText: 'Review item queued',
   }
 }
@@ -229,8 +233,9 @@ describe('workbook-chat-thread-store', () => {
     expect(threadInsert?.values?.[4]).toBe(state.executionPolicy)
     expect(threadInsert?.values?.[5]).toBe(JSON.stringify(state.context))
     expect(threadInsert?.values?.[6]).toBe(3)
-    expect(threadInsert?.values?.[7]).toBe('Review item queued')
-    expect(threadInsert?.values?.[8]).toBe(state.updatedAtUnixMs)
+    expect(threadInsert?.values?.[7]).toBe(1)
+    expect(threadInsert?.values?.[8]).toBe('Review item queued')
+    expect(threadInsert?.values?.[9]).toBe(state.updatedAtUnixMs)
     expect(queryable.calls.some((call) => call.text.includes('DELETE FROM workbook_chat_item'))).toBe(true)
     expect(queryable.calls.some((call) => call.text.includes('DELETE FROM workbook_review_queue_item'))).toBe(true)
     expect(queryable.calls.filter((call) => call.text.includes('INSERT INTO workbook_chat_item')).length).toBe(3)
@@ -506,6 +511,7 @@ describe('workbook-chat-thread-store', () => {
           scope: 'shared',
           updatedAtUnixMs: 200,
           entryCount: 3,
+          reviewQueueItemCount: 0,
           latestEntryText: 'Applied shared cleanup at revision r7',
         },
         {
@@ -515,6 +521,7 @@ describe('workbook-chat-thread-store', () => {
           scope: 'private',
           updatedAtUnixMs: 100,
           entryCount: 1,
+          reviewQueueItemCount: 1,
           latestEntryText: 'Review item queued',
         },
       ],
@@ -558,6 +565,7 @@ describe('workbook-chat-thread-store', () => {
           scope: 'shared',
           updatedAtUnixMs: 300,
           entryCount: 2,
+          reviewQueueItemCount: 0,
           latestEntryText: 'Applied shared cleanup at revision r9',
         },
       ],
@@ -579,6 +587,6 @@ describe('workbook-chat-thread-store', () => {
         latestEntryText: 'Applied shared cleanup at revision r9',
       },
     ])
-    expect(queryable.zeroThreadDocumentIds).toEqual(['doc-1'])
+    expect(queryable.zeroThreadInputs).toEqual([{ documentId: 'doc-1', actorUserId: 'casey@example.com' }])
   })
 })

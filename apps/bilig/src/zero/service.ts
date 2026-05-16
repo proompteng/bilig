@@ -9,6 +9,7 @@ import {
   workbookColumnTileArgsSchema,
   workbookQueryArgsSchema,
   workbookRowTileArgsSchema,
+  workbookThreadArgsSchema,
   workbookTileArgsSchema,
 } from '@bilig/zero-sync'
 import {
@@ -282,6 +283,10 @@ class EnabledZeroSyncService implements ZeroSyncService {
       'presence.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.presence.byWorkbook.fn),
       'workbookChange.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookChange.byWorkbook.fn),
       'workbookChanges.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookChanges.byWorkbook.fn),
+      'workbookChatThread.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookChatThread.byWorkbook.fn),
+      'workbookAgentThread.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookAgentThread.byWorkbook.fn),
+      'workbookWorkflowRun.byThread': createQueryHandler(workbookThreadArgsSchema, queries.workbookWorkflowRun.byThread.fn),
+      'workbookAgentWorkflowRun.byThread': createQueryHandler(workbookThreadArgsSchema, queries.workbookAgentWorkflowRun.byThread.fn),
     }
 
     return await handleQueryRequest(

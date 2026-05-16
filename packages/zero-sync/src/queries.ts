@@ -1,10 +1,11 @@
-import { defineQueriesWithType, defineQuery } from '@rocicorp/zero'
+import { defineQueriesWithType, defineQuery, defineQueryWithType } from '@rocicorp/zero'
 import { z } from 'zod'
 import type { schema } from './schema.js'
 import { safeNonNegativeIntegerSchema } from './integer-schemas.js'
 import { zql } from './zql.js'
 
 const defineQueries = defineQueriesWithType<typeof schema>()
+const defineUserQuery = defineQueryWithType<typeof schema, { readonly userID: string }>()
 
 export const workbookQueryArgsSchema = z.object({
   documentId: z.string().min(1),
@@ -132,8 +133,11 @@ const workbookChangeByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: {
   zql.workbook_change.where('workbookId', documentId).orderBy('createdAt', 'desc').orderBy('revision', 'desc'),
 )
 
-const workbookChatThreadByWorkbook = defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) =>
-  zql.workbook_chat_thread.where('workbookId', documentId).orderBy('updatedAtUnixMs', 'desc'),
+const workbookChatThreadByWorkbook = defineUserQuery(workbookQueryArgsSchema, ({ args: { documentId }, ctx }) =>
+  zql.workbook_chat_thread
+    .where('workbookId', documentId)
+    .where((expression) => expression.or(expression.cmp('ownerUserId', ctx.userID), expression.cmp('scope', 'shared')))
+    .orderBy('updatedAtUnixMs', 'desc'),
 )
 
 const workbookWorkflowRunByThread = defineQuery(workbookThreadArgsSchema, ({ args }) =>
