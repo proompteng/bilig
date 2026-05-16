@@ -9,6 +9,7 @@ import {
   isTrackedIndexSliceSorted,
   readPhysicalTrackedIndexChange,
   trackedIndicesAllBelongToSheet,
+  trackedIndicesUseVisiblePhysicalPositions,
   tryCreateLazyPhysicalTrackedIndexChanges,
 } from './tracked-cell-lazy-physical-changes.js'
 import { readTrackedCellValue } from './tracked-cell-value-read.js'
@@ -101,7 +102,11 @@ export function materializeTrackedIndexChangesWithMetadata(
   }
   if (options.lazy && options.trustedPhysicalSheetId !== undefined) {
     const sheet = workbook.getSheetById(options.trustedPhysicalSheetId)
-    if (!sheet || sheet.structureVersion === 1) {
+    if (
+      !sheet ||
+      sheet.structureVersion === 1 ||
+      trackedIndicesUseVisiblePhysicalPositions(workbook, changedCellIndices, options.trustedPhysicalSheetId)
+    ) {
       const split =
         options.trustedSortedSliceSplit !== undefined &&
         options.trustedSortedSliceSplit > 0 &&
@@ -541,7 +546,11 @@ function tryCreateLazySameSheetTrackedSourceChanges(
       return null
     }
     const sheet = workbook.getSheetById(sourceSheetId)
-    if (sheet && sheet.structureVersion !== 1) {
+    if (
+      sheet &&
+      sheet.structureVersion !== 1 &&
+      !trackedIndicesUseVisiblePhysicalPositions(workbook, source.changedCellIndices, sourceSheetId)
+    ) {
       return null
     }
     if (!trackedIndicesAllBelongToSheet(cellStore, source.changedCellIndices, sourceSheetId)) {
@@ -610,7 +619,10 @@ function tryCreateOrderedLazySameSheetTrackedSourceChanges(
       if (sheetId === undefined) {
         sheetId = sourceSheetId
         const sheet = workbook.getSheetById(sheetId)
-        mustDetachBeforeReturn = sheet !== undefined && sheet.structureVersion !== 1
+        mustDetachBeforeReturn =
+          sheet !== undefined &&
+          sheet.structureVersion !== 1 &&
+          !trackedIndicesUseVisiblePhysicalPositions(workbook, source.changedCellIndices, sheetId)
       } else if (sourceSheetId !== sheetId) {
         return null
       }
@@ -625,10 +637,18 @@ function tryCreateOrderedLazySameSheetTrackedSourceChanges(
   if (sheetId === undefined) {
     return { changes: [], ordered: true, usedSortedDisjointFastPath: true }
   }
+  const sheet = workbook.getSheetById(sheetId)
+  if (sheet && sheet.structureVersion !== 1 && !mustDetachBeforeReturn) {
+    for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
+      if (!trackedIndicesUseVisiblePhysicalPositions(workbook, sources[sourceIndex]!.changedCellIndices, sheetId)) {
+        mustDetachBeforeReturn = true
+        break
+      }
+    }
+  }
 
   const orderedCellIndices = Uint32Array.from(latestCellIndexByAddress.values())
   orderedCellIndices.sort((left, right) => compareTrackedPhysicalCellIndices(cellStore, left, right))
-  const sheet = workbook.getSheetById(sheetId)
   const changes = createLazyPhysicalTrackedIndexChanges(
     sheetId,
     sheet?.name ?? workbook.getSheetNameById(sheetId),

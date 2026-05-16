@@ -301,6 +301,58 @@ describe('materializeTrackedIndexChanges', () => {
     expect(result?.changes && hasDeferredTrackedIndexChanges(result.changes)).toBe(false)
   })
 
+  it('defers detaching lazy same-sheet source changes after physical tail appends', () => {
+    const rowCount = 300
+    const split = 150
+    const engine = new SpreadsheetEngine({ workbookName: 'tracked-index-tail-append-lazy' })
+    engine.createSheet('Sheet1')
+    engine.setCellValue('Sheet1', 'A1', 1)
+    engine.setCellValue('Sheet1', 'A2', 2)
+    engine.insertRows('Sheet1', 2, rowCount)
+
+    const changedCellIndices = new Uint32Array(rowCount)
+    for (let row = 0; row < rowCount; row += 1) {
+      const rowNumber = row + 3
+      const a1 = `A${rowNumber}`
+      engine.setCellValue('Sheet1', a1, rowNumber)
+      const cellIndex = engine.workbook.getCellIndex('Sheet1', a1)
+      expect(cellIndex).toBeDefined()
+      changedCellIndices[row] = cellIndex!
+    }
+
+    const result = materializeTrackedIndexChangeSourcesWithMetadata(
+      engine,
+      [
+        {
+          changedCellIndices: changedCellIndices.subarray(0, split),
+          changedCellIndicesSortedDisjoint: true,
+          firstChangedCellIndex: changedCellIndices[0],
+          lastChangedCellIndex: changedCellIndices[split - 1],
+        },
+        {
+          changedCellIndices: changedCellIndices.subarray(split),
+          changedCellIndicesSortedDisjoint: true,
+          firstChangedCellIndex: changedCellIndices[split],
+          lastChangedCellIndex: changedCellIndices[rowCount - 1],
+        },
+      ],
+      { lazy: true, deferLazyDetach: true },
+    )
+
+    expect(result).not.toBeNull()
+    expect(result?.usedSortedDisjointFastPath).toBe(true)
+    expect(result?.changes).toHaveLength(rowCount)
+    expect(result?.changes && hasDeferredTrackedIndexChanges(result.changes)).toBe(true)
+
+    engine.setCellValue('Sheet1', 'A3', 999)
+
+    expect(result?.changes[0]).toMatchObject({
+      a1: 'A3',
+      newValue: { tag: ValueTag.Number, value: 999 },
+    })
+    expect(result?.changes && forceMaterializeTrackedIndexChanges(result.changes)).toBe(true)
+  })
+
   it('trusts preserved physical split metadata for lazy single-source changes', () => {
     const engine = new SpreadsheetEngine({ workbookName: 'tracked-index-trusted-lazy-source' })
     engine.createSheet('Sheet1')

@@ -84,6 +84,30 @@ export function trackedIndicesAllBelongToSheet(
   return true
 }
 
+export function trackedIndicesUseVisiblePhysicalPositions(
+  workbook: SpreadsheetEngine['workbook'],
+  changedCellIndices: readonly number[] | Uint32Array,
+  sheetId: number,
+): boolean {
+  const cellStore = workbook.cellStore
+  for (let index = 0; index < changedCellIndices.length; index += 1) {
+    const cellIndex = changedCellIndices[index]!
+    if (cellStore.sheetIds[cellIndex] !== sheetId) {
+      return false
+    }
+    const row = cellStore.rows[cellIndex]
+    const col = cellStore.cols[cellIndex]
+    if (row === undefined || col === undefined) {
+      return false
+    }
+    const position = workbook.getCellPosition(cellIndex)
+    if (!position || position.row !== row || position.col !== col) {
+      return false
+    }
+  }
+  return true
+}
+
 export function createLazyPhysicalTrackedIndexChanges(
   sheetId: number,
   sheetName: string,
@@ -293,7 +317,7 @@ export function tryCreateLazyPhysicalTrackedIndexChanges(
 ): WorkPaperCellChange[] | null {
   const workbook = engine.workbook
   const sheet = workbook.getSheetById(sheetId)
-  if (sheet && sheet.structureVersion !== 1) {
+  if (sheet && sheet.structureVersion !== 1 && !trackedIndicesUseVisiblePhysicalPositions(workbook, changedCellIndices, sheetId)) {
     return null
   }
   const cellStore = workbook.cellStore
