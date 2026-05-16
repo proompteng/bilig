@@ -28,7 +28,7 @@ function readArgValueForName(name: string, arg: string, index: number): string |
   const inlinePrefix = `${name}=`
   if (arg.startsWith(inlinePrefix)) {
     const value = arg.slice(inlinePrefix.length)
-    if (!value) {
+    if (isBlankArgValue(value)) {
       throw new Error(`Expected ${name} to have a value`)
     }
     return value
@@ -38,10 +38,14 @@ function readArgValueForName(name: string, arg: string, index: number): string |
 
 function readArgValueAt(name: string, index: number): string {
   const next = process.argv[index + 1]
-  if (next === undefined || !next || next.startsWith('--')) {
+  if (next === undefined || isBlankArgValue(next) || next.startsWith('--')) {
     throw new Error(`Expected ${name} to have a value`)
   }
   return next
+}
+
+function isBlankArgValue(value: string): boolean {
+  return value.trim().length === 0
 }
 
 export function readNumberArg(name: string, fallback: number): number {
