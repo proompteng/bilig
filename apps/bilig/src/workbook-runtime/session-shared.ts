@@ -16,6 +16,7 @@ import { isWorkbookSnapshot, type WorkbookSnapshot } from '@bilig/protocol'
 const snapshotEncoder = new TextEncoder()
 const snapshotDecoder = new TextDecoder()
 const encodedSnapshotCache = new WeakMap<WorkbookSnapshot, Uint8Array>()
+let snapshotPublicationSequence = 0
 
 export const SNAPSHOT_ASSEMBLY_MAX_AGE_MS = 5 * 60_000
 
@@ -120,8 +121,17 @@ export function createImportedDocumentId(contentType?: WorkbookImportContentType
   return `${prefix}:${random}`
 }
 
+function createSnapshotPublicationId(documentId: string): string {
+  const createdAtUnixMs = Date.now()
+  const entropy =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${createdAtUnixMs}:${snapshotPublicationSequence++}`
+  return `${documentId}:snapshot:${createdAtUnixMs}:${entropy}`
+}
+
 export function createSnapshotPublication(documentId: string, cursor: number, snapshot: WorkbookSnapshot): SnapshotPublication {
-  const snapshotId = `${documentId}:snapshot:${Date.now()}`
+  const snapshotId = createSnapshotPublicationId(documentId)
   const bytes = encodeWorkbookSnapshot(snapshot)
   return createSnapshotPublicationFromBytes({
     documentId,
@@ -165,6 +175,44 @@ function pruneExpiredSnapshotAssemblies(registry: SnapshotAssemblyRegistry, nowU
   })
 }
 
+function isValidSnapshotChunkFrame(frame: SnapshotChunkFrame): boolean {
+  return (
+    frame.documentId.length > 0 &&
+    frame.snapshotId.length > 0 &&
+    frame.contentType.length > 0 &&
+    Number.isSafeInteger(frame.cursor) &&
+    frame.cursor >= 0 &&
+    Number.isSafeInteger(frame.chunkCount) &&
+    frame.chunkCount > 0 &&
+    Number.isSafeInteger(frame.chunkIndex) &&
+    frame.chunkIndex >= 0 &&
+    frame.chunkIndex < frame.chunkCount &&
+    frame.bytes instanceof Uint8Array
+  )
+}
+
+function snapshotChunkMatchesAssembly(assembly: SnapshotAssembly, frame: SnapshotChunkFrame): boolean {
+  return (
+    assembly.documentId === frame.documentId &&
+    assembly.snapshotId === frame.snapshotId &&
+    assembly.cursor === frame.cursor &&
+    assembly.contentType === frame.contentType &&
+    assembly.chunkCount === frame.chunkCount
+  )
+}
+
+function byteArraysEqual(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) {
+    return false
+  }
+  for (let index = 0; index < left.byteLength; index += 1) {
+    if (left[index] !== right[index]) {
+      return false
+    }
+  }
+  return true
+}
+
 export function acceptSnapshotChunk(
   registry: SnapshotAssemblyRegistry,
   frame: SnapshotChunkFrame,
@@ -174,7 +222,18 @@ export function acceptSnapshotChunk(
   const maxAgeMs = options.maxAgeMs ?? SNAPSHOT_ASSEMBLY_MAX_AGE_MS
   pruneExpiredSnapshotAssemblies(registry, nowUnixMs, maxAgeMs)
 
-  const assembly = registry.get(frame.snapshotId) ?? {
+  if (!isValidSnapshotChunkFrame(frame)) {
+    registry.delete(frame.snapshotId)
+    return null
+  }
+
+  const existingAssembly = registry.get(frame.snapshotId)
+  if (existingAssembly && !snapshotChunkMatchesAssembly(existingAssembly, frame)) {
+    registry.delete(frame.snapshotId)
+    return null
+  }
+
+  const assembly = existingAssembly ?? {
     documentId: frame.documentId,
     snapshotId: frame.snapshotId,
     cursor: frame.cursor,
@@ -183,7 +242,16 @@ export function acceptSnapshotChunk(
     chunks: Array.from<Uint8Array | undefined>({ length: frame.chunkCount }),
     updatedAtUnixMs: nowUnixMs,
   }
-  assembly.chunks[frame.chunkIndex] = frame.bytes
+
+  const existingChunk = assembly.chunks[frame.chunkIndex]
+  if (existingChunk) {
+    if (!byteArraysEqual(existingChunk, frame.bytes)) {
+      registry.delete(frame.snapshotId)
+      return null
+    }
+  } else {
+    assembly.chunks[frame.chunkIndex] = frame.bytes
+  }
   assembly.updatedAtUnixMs = nowUnixMs
   registry.set(frame.snapshotId, assembly)
 
