@@ -172,6 +172,7 @@ chart, pivot table, macro, or workbook artifact. Check the
 ## Related proof
 
 - [SheetJS and ExcelJS boundary](sheetjs-exceljs-alternative-formula-workbook-api.md)
+- [Excel file as a calculation engine in Node.js](excel-file-calculation-engine-node.md)
 - [ExcelJS shared formulas and Node.js recalculation](exceljs-shared-formula-recalculation-node.md)
 - [Node spreadsheet formula engine](node-spreadsheet-formula-engine.md)
 - [Headless spreadsheet engine for Node services and agents](headless-spreadsheet-engine-node-services-agents.md)

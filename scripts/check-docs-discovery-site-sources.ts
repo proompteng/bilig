@@ -7,6 +7,7 @@ export const docsSiteSources = [
   ['exceljs-formula-recalculation-node.html', 'exceljs-formula-recalculation-node.md'],
   ['exceljs-shared-formula-recalculation-node.html', 'exceljs-shared-formula-recalculation-node.md'],
   ['xlsx-formula-recalculation-node.html', 'xlsx-formula-recalculation-node.md'],
+  ['excel-file-calculation-engine-node.html', 'excel-file-calculation-engine-node.md'],
   ['xlsx-calc-alternative-node-workbook-recalculation.html', 'xlsx-calc-alternative-node-workbook-recalculation.md'],
   ['why-agents-need-workbook-apis.html', 'why-agents-need-workbook-apis.md'],
   ['agent-workpaper-tool-calling-recipe.html', 'agent-workpaper-tool-calling-recipe.md'],

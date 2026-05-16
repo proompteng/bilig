@@ -24,14 +24,14 @@ save a state it can test again later.
 
 ## Quick choice
 
-| You need | Start with |
-| --- | --- |
-| Recalculate a supported formula set on a SheetJS workbook object | `xlsx-calc` |
-| Read and write lots of spreadsheet file formats | SheetJS |
-| Build styled `.xlsx` files | ExcelJS or SheetJS |
-| Keep a formula workbook as service state | `@bilig/headless` |
-| Read recalculated outputs before accepting a request | `@bilig/headless` |
-| Persist JSON state and still import or export XLSX at the edge | `@bilig/headless` |
+| You need                                                         | Start with         |
+| ---------------------------------------------------------------- | ------------------ |
+| Recalculate a supported formula set on a SheetJS workbook object | `xlsx-calc`        |
+| Read and write lots of spreadsheet file formats                  | SheetJS            |
+| Build styled `.xlsx` files                                       | ExcelJS or SheetJS |
+| Keep a formula workbook as service state                         | `@bilig/headless`  |
+| Read recalculated outputs before accepting a request             | `@bilig/headless`  |
+| Persist JSON state and still import or export XLSX at the edge   | `@bilig/headless`  |
 
 That is the whole distinction. `xlsx-calc` is a calculator over a workbook
 object. Bilig is a workbook runtime with import/export at the edges.
@@ -39,28 +39,30 @@ object. Bilig is a workbook runtime with import/export at the edges.
 ## Node service recalculation path
 
 ```ts
-import { readFile, writeFile } from "node:fs/promises";
-import { exportXlsx, importXlsx } from "@bilig/headless/xlsx";
+import { readFile, writeFile } from 'node:fs/promises'
+import { WorkPaper } from '@bilig/headless'
+import { exportXlsx, importXlsx } from '@bilig/headless/xlsx'
 
-const source = await readFile("pricing-model.xlsx");
-const workbook = await importXlsx(source);
+const source = await readFile('pricing-model.xlsx')
+const imported = importXlsx(source, 'pricing-model.xlsx')
+const workbook = WorkPaper.buildFromSnapshot(imported.snapshot)
 
-const inputs = workbook.getSheetId("Inputs");
-const summary = workbook.getSheetId("Summary");
+const inputs = workbook.getSheetId('Inputs')
+const summary = workbook.getSheetId('Summary')
 if (inputs === undefined || summary === undefined) {
-  throw new Error("Expected Inputs and Summary sheets");
+  throw new Error('Expected Inputs and Summary sheets')
 }
 
-workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, 48);
-workbook.setCellContents({ sheet: inputs, row: 2, col: 1 }, 1250);
+workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, 48)
+workbook.setCellContents({ sheet: inputs, row: 2, col: 1 }, 1250)
 
-const decision = workbook.getCellValue({ sheet: summary, row: 6, col: 1 });
-if (decision !== "approved") {
-  throw new Error(`Expected approved decision, got ${String(decision)}`);
+const decision = workbook.getCellValue({ sheet: summary, row: 6, col: 1 })
+if (decision !== 'approved') {
+  throw new Error(`Expected approved decision, got ${String(decision)}`)
 }
 
-const edited = await exportXlsx(workbook);
-await writeFile("pricing-model-edited.xlsx", edited);
+const edited = exportXlsx(workbook.exportSnapshot())
+await writeFile('pricing-model-edited.xlsx', edited)
 ```
 
 The maintained example is small enough to inspect:
@@ -134,6 +136,7 @@ that adapter like business logic.
   <https://github.com/fabiooshiro/xlsx-calc>
 - SheetJS formula docs:
   <https://docs.sheetjs.com/docs/csf/features/formulae/>
+- [Excel file as a calculation engine in Node.js](excel-file-calculation-engine-node.md)
 - [XLSX formula recalculation in Node.js](xlsx-formula-recalculation-node.md)
 - [SheetJS and ExcelJS boundary](sheetjs-exceljs-alternative-formula-workbook-api.md)
 - [Headless benchmark evidence](headless-workpaper-benchmark-evidence.md)

@@ -651,6 +651,7 @@ When the sanity check passes, these are the next useful pages.
   [formula workbooks for Node services and agent tools](https://github.com/proompteng/bilig/blob/main/docs/formula-workbooks-node-services-agent-tools.md),
   [headless spreadsheet engine for Node services and agents](https://github.com/proompteng/bilig/blob/main/docs/headless-spreadsheet-engine-node-services-agents.md),
   [XLSX formula recalculation in Node.js](https://github.com/proompteng/bilig/blob/main/docs/xlsx-formula-recalculation-node.md),
+  [Excel file as a Node calculation engine](https://github.com/proompteng/bilig/blob/main/docs/excel-file-calculation-engine-node.md),
   [xlsx-calc alternative for Node workbook recalculation](https://github.com/proompteng/bilig/blob/main/docs/xlsx-calc-alternative-node-workbook-recalculation.md),
   [ExcelJS formula recalculation in Node.js](https://github.com/proompteng/bilig/blob/main/docs/exceljs-formula-recalculation-node.md),
   [ExcelJS shared formulas in Node.js](https://github.com/proompteng/bilig/blob/main/docs/exceljs-shared-formula-recalculation-node.md),

@@ -77,10 +77,12 @@ calculation state:
 
 ```ts
 import { readFile, writeFile } from 'node:fs/promises'
+import { WorkPaper } from '@bilig/headless'
 import { exportXlsx, importXlsx } from '@bilig/headless/xlsx'
 
 const source = await readFile('pricing-model-source.xlsx')
-const workbook = await importXlsx(source)
+const imported = importXlsx(source, 'pricing-model-source.xlsx')
+const workbook = WorkPaper.buildFromSnapshot(imported.snapshot)
 
 const inputs = workbook.getSheetId('Inputs')
 const summary = workbook.getSheetId('Summary')
@@ -92,7 +94,7 @@ workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, 48)
 workbook.setCellContents({ sheet: inputs, row: 2, col: 1 }, 1250)
 
 const decision = workbook.getCellValue({ sheet: summary, row: 6, col: 1 })
-const edited = await exportXlsx(workbook)
+const edited = exportXlsx(workbook.exportSnapshot())
 await writeFile('pricing-model-edited.xlsx', edited)
 
 console.log({ decision })
@@ -132,6 +134,7 @@ XLSX boundary around the parts it owns.
 ## Related proof
 
 - [Runnable XLSX recalculation example](https://github.com/proompteng/bilig/tree/main/examples/xlsx-recalculation-node)
+- [Excel file as a calculation engine in Node.js](excel-file-calculation-engine-node.md)
 - [ExcelJS formula recalculation in Node.js](exceljs-formula-recalculation-node.md)
 - [ExcelJS shared formulas and Node.js recalculation](exceljs-shared-formula-recalculation-node.md)
 - [SheetJS and ExcelJS boundary](sheetjs-exceljs-alternative-formula-workbook-api.md)

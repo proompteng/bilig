@@ -153,6 +153,7 @@ Then inspect the focused examples:
 
 - [Five Node.js workbook automation examples](workbook-automation-examples-node.md)
 - [WorkPaper Node service recipe](node-service-workpaper-recipe.md)
+- [Excel file as a calculation engine in Node.js](excel-file-calculation-engine-node.md)
 - [Persist formula-backed WorkPaper documents in Node](persisting-formula-backed-workpaper-documents-in-node.md)
 - [Headless spreadsheet engine comparison for Node services and agents](headless-spreadsheet-engine-comparison.md)
 - [JavaScript spreadsheet library for Node services](javascript-spreadsheet-library-headless-node.md)

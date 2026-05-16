@@ -20,6 +20,7 @@ openssf scorecard: https://scorecard.dev/viewer/?uri=github.com/proompteng/bilig
 - https://proompteng.github.io/bilig/formula-workbooks-node-services-agent-tools.html
 - https://proompteng.github.io/bilig/headless-spreadsheet-engine-node-services-agents.html
 - https://proompteng.github.io/bilig/xlsx-formula-recalculation-node.html
+- https://proompteng.github.io/bilig/excel-file-calculation-engine-node.html
 - https://proompteng.github.io/bilig/xlsx-calc-alternative-node-workbook-recalculation.html
 - https://proompteng.github.io/bilig/exceljs-formula-recalculation-node.html
 - https://proompteng.github.io/bilig/exceljs-shared-formula-recalculation-node.html
@@ -181,6 +182,12 @@ npm run agent:verify
 - ExcelJS formula recalculation in Node.js:
   https://proompteng.github.io/bilig/exceljs-formula-recalculation-node.html
   https://github.com/proompteng/bilig/blob/main/docs/exceljs-formula-recalculation-node.md
+- Excel file as a calculation engine in Node.js:
+  https://proompteng.github.io/bilig/excel-file-calculation-engine-node.html
+  https://github.com/proompteng/bilig/blob/main/docs/excel-file-calculation-engine-node.md
+  covers backend routes that write request inputs into an XLSX workbook,
+  recalculate formulas, read output cells, and verify the exported workbook
+  boundary.
 - ExcelJS shared formulas and Node.js recalculation:
   https://proompteng.github.io/bilig/exceljs-shared-formula-recalculation-node.html
   https://github.com/proompteng/bilig/blob/main/docs/exceljs-shared-formula-recalculation-node.md
