@@ -45,6 +45,7 @@ import { createEngineSnapshotService, type EngineSnapshotService } from './servi
 import { createEngineStructureService, type EngineStructureService } from './services/structure-service.js'
 import { createEngineTraversalService, type EngineTraversalService } from './services/traversal-service.js'
 import { getRuntimeFormulaSource } from './runtime-formula-source.js'
+import { deferKernelSyncNow } from './services/live-kernel-sync-state.js'
 
 export interface EngineServiceRuntime {
   readonly cellState: EngineCellStateService
@@ -299,37 +300,8 @@ export function createEngineServiceRuntime(args: {
   })
   const exactLookup = createExactColumnIndexService({ state: args.state, runtimeColumnStore, columnIndexStore })
   const sortedLookup = createSortedColumnSearchService({ state: args.state, runtimeColumnStore, columnIndexStore })
-  const deferKernelSyncNow = (cellIndices: readonly number[] | Uint32Array): void => {
-    if (cellIndices.length === 0) {
-      return
-    }
-    scratch.ensureRecalcCapacityNow(args.state.workbook.cellStore.size + 1)
-    const pendingKernelSync = scratch.getPendingKernelSyncNow()
-    let deferredCount = scratch.getDeferredKernelSyncCountNow()
-    let deferredEpoch = scratch.getDeferredKernelSyncEpochNow() + 1
-    const deferredSeen = scratch.getDeferredKernelSyncSeenNow()
-    if (deferredEpoch === 0xffff_ffff) {
-      deferredEpoch = 1
-      deferredSeen.fill(0)
-    }
-    scratch.setDeferredKernelSyncEpochNow(deferredEpoch)
-    for (let index = 0; index < deferredCount; index += 1) {
-      const cellIndex = pendingKernelSync[index]
-      if (cellIndex !== undefined) {
-        deferredSeen[cellIndex] = deferredEpoch
-      }
-    }
-    for (let index = 0; index < cellIndices.length; index += 1) {
-      const cellIndex = cellIndices[index]!
-      if (deferredSeen[cellIndex] === deferredEpoch) {
-        continue
-      }
-      deferredSeen[cellIndex] = deferredEpoch
-      pendingKernelSync[deferredCount] = cellIndex
-      deferredCount += 1
-    }
-    scratch.setDeferredKernelSyncCountNow(deferredCount)
-  }
+  const deferKernelSync = (cellIndices: readonly number[] | Uint32Array): void =>
+    deferKernelSyncNow({ scratch, cellStoreSize: args.state.workbook.cellStore.size, cellIndices })
   const graph = createEngineFormulaGraphService({
     ...args.formulaGraph,
     rebuildCalcChain: () => args.state.scheduler.rebuildChain(args.state.formulas.keys(), args.state.workbook.cellStore),
@@ -643,7 +615,7 @@ export function createEngineServiceRuntime(args: {
     repairTopoRanks: (changedFormulaCells) => graph.repairTopoRanksNow(changedFormulaCells),
     detectCycles: () => graph.detectCyclesNow(),
     recalculate: (changedRoots, kernelSyncRoots) => requireService(recalc, 'recalc').recalculateNowSync(changedRoots, kernelSyncRoots),
-    deferKernelSync: deferKernelSyncNow,
+    deferKernelSync,
     evaluateDirectFormula: (cellIndex) => evaluation.evaluateDirectLookupFormulaNow(cellIndex),
     recalculatePreordered: (changedRoots, orderedFormulaCellIndices, orderedFormulaCount, kernelSyncRoots) =>
       requireService(recalc, 'recalc').recalculatePreorderedNowSync(
@@ -738,7 +710,7 @@ export function createEngineServiceRuntime(args: {
     repairTopoRanks: (changedFormulaCells) => graph.repairTopoRanksNow(changedFormulaCells),
     detectCycles: () => graph.detectCyclesNow(),
     recalculate: (changedRoots, kernelSyncRoots) => requireService(recalc, 'recalc').recalculateNowSync(changedRoots, kernelSyncRoots),
-    deferKernelSync: deferKernelSyncNow,
+    deferKernelSync,
     evaluateDirectFormula: (cellIndex: number) => evaluation.evaluateDirectLookupFormulaNow(cellIndex),
     evaluateFormulaCell: (cellIndex: number) => runEngineEffect(evaluation.evaluateUnsupportedFormula(cellIndex)),
     exactLookup,
