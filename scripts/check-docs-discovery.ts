@@ -339,14 +339,14 @@ requireIncludes(
 )
 requireIncludes(communityLaunchPack, 'Hacker News Submission After The Formula Workbooks Page', 'docs/community-launch-pack.md')
 for (const required of [
-  'title: Show HN: formula workbooks for Node services',
-  '`@bilig/headless@0.16.22`',
+  'title: Show HN: Bilig runs small formula workbooks in Node',
+  '`@bilig/headless@0.16.24`',
   'curl -fsSLo quickstart.ts https://proompteng.github.io/bilig/npm-eval.ts',
   '"verified": true',
   `\`${benchmarkEvidence.meanWinHeadline}\` mean-latency wins`,
   `\`${benchmarkEvidence.meanAndP95Headline}\` workloads winning`,
   `\`${benchmarkEvidence.p95HoldoutWorkload}\` is slower at`,
-  'Show HN: Formula workbooks for Node services and agent tools',
+  'Show HN: Bilig runs small formula workbooks in Node',
   'https://github.com/proompteng/bilig/stargazers',
 ] as const) {
   requireIncludes(showHnFormulaWorkbooksProof, required, 'docs/show-hn-formula-workbooks-node-services.md')
@@ -478,7 +478,7 @@ requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/google
 const npmProvenancePackageTrustDoc = await readFile(join(docsRoot, 'npm-provenance-package-trust.md'), 'utf8')
 for (const required of [
   'title: Verify npm provenance for @bilig/headless',
-  'npm view @bilig/headless@0.16.22 version dist.attestations dist.signatures --json',
+  'npm view @bilig/headless@0.16.24 version dist.attestations dist.signatures --json',
   'npm audit signatures',
   'dist.attestations.provenance.predicateType',
   'npm publish ... --provenance',
@@ -587,7 +587,7 @@ requireIncludes(mcpWorkPaperToolServerDoc, '"structuredContent": {', 'docs/mcp-w
 requireIncludes(mcpWorkPaperToolServerDoc, '"restoredMatchesAfter": true', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(
   headlessExamplePackageJson,
-  '"agent:mcp-transcript": "tsx mcp-stdio-transcript.ts"',
+  '"agent:mcp-transcript": "node --disable-warning=DEP0205 --import tsx mcp-stdio-transcript.ts"',
   'examples/headless-workpaper/package.json',
 )
 requireIncludes(rootPackageJson, '"workpaper:smoke:external": "bun scripts/workpaper-external-smoke.ts"', 'package.json')
@@ -900,11 +900,19 @@ requireIncludes(headlessExampleReadme, 'annotations.', 'examples/headless-workpa
 requireIncludes(headlessExampleReadme, 'read tool is annotated as read-only', 'examples/headless-workpaper/README.md')
 requireIncludes(
   headlessExamplePackage,
-  '"agent:framework-adapters": "tsx agent-framework-adapters.ts"',
+  '"agent:framework-adapters": "node --disable-warning=DEP0205 --import tsx agent-framework-adapters.ts"',
   'examples/headless-workpaper/package.json',
 )
-requireIncludes(headlessExamplePackage, '"agent:mcp-tools": "tsx mcp-tool-server.ts"', 'examples/headless-workpaper/package.json')
-requireIncludes(headlessExamplePackage, '"agent:mcp-stdio": "tsx mcp-stdio-server.ts"', 'examples/headless-workpaper/package.json')
+requireIncludes(
+  headlessExamplePackage,
+  '"agent:mcp-tools": "node --disable-warning=DEP0205 --import tsx mcp-tool-server.ts"',
+  'examples/headless-workpaper/package.json',
+)
+requireIncludes(
+  headlessExamplePackage,
+  '"agent:mcp-stdio": "node --disable-warning=DEP0205 --import tsx mcp-stdio-server.ts"',
+  'examples/headless-workpaper/package.json',
+)
 await requireServerlessWorkPaperApiDiscovery({
   repoRoot,
   docsRoot,

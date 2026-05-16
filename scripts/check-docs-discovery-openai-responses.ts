@@ -77,7 +77,7 @@ export async function requireOpenAiResponsesDiscovery({
 
   requireIncludes(
     headlessExamplePackage,
-    '"agent:openai-responses": "tsx openai-responses-tool-wrapper.ts"',
+    '"agent:openai-responses": "node --disable-warning=DEP0205 --import tsx openai-responses-tool-wrapper.ts"',
     'examples/headless-workpaper/package.json',
   )
   requireIncludes(headlessExampleReadme, '## OpenAI Responses Tool Wrapper', 'examples/headless-workpaper/README.md')

@@ -108,7 +108,7 @@ export async function requireAiSdkStreamTextDiscovery({
 
   requireIncludes(
     headlessExamplePackage,
-    '"agent:ai-sdk-stream-text": "tsx ai-sdk-stream-text-tool-smoke.ts"',
+    '"agent:ai-sdk-stream-text": "node --disable-warning=DEP0205 --import tsx ai-sdk-stream-text-tool-smoke.ts"',
     'examples/headless-workpaper/package.json',
   )
   requireIncludes(headlessExampleReadme, '## AI SDK StreamText Tool Smoke', 'examples/headless-workpaper/README.md')

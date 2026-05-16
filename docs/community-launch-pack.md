@@ -134,7 +134,7 @@ issue pass:
   WorkPaper target for formula, edit/readback, memory, and persistence lanes:
   <https://github.com/zhangming1978/js-spreadsheet-benchmark/issues/1>
 - External open-source directory surface: the Open-Awesome submission for Bilig
-  has a metadata refresh comment with the current `@bilig/headless@0.16.22`
+  has a metadata refresh comment with the current `@bilig/headless@0.16.24`
   package, proof page, benchmark evidence, and non-grid WorkPaper positioning:
   <https://github.com/chenz24/openawesome/issues/2#issuecomment-4467648527>
 - External MCP ranking surface: the best-of-mcp-servers listing pull request is
@@ -368,7 +368,7 @@ Latest conversion snapshot on May 16, 2026:
 - GitHub surface: `23` stars, `16` forks, `17` open issues, and `5` open pull
   requests. The star gap is still `977`; GitHub also reports `0` actual
   repository watchers/subscribers.
-- npm surface: `@bilig/headless@0.16.22`, with `12,568` downloads in the
+- npm surface: `@bilig/headless@0.16.24`, with `12,568` downloads in the
   latest weekly window and `27,753` downloads in the latest monthly window.
 - Traffic surface: GitHub reports `565` views from `189` unique visitors and
   `21,392` clones from `2,641` unique cloners. The strongest referrers are
@@ -613,7 +613,7 @@ something.
 
 ### 2. Turn Benchmarks Into A Distribution Loop
 
-The `79/100` WorkPaper mean-win claim should become small, quotable artifacts:
+The `76/100` WorkPaper mean-win claim should become small, quotable artifacts:
 
 - one chart image for X, Bluesky, LinkedIn, and README embeds:
   [`docs/assets/workpaper-benchmark-card.png`](assets/workpaper-benchmark-card.png)
@@ -712,8 +712,8 @@ https://github.com/proompteng/bilig#try-it-in-90-seconds
 It edits an input, reads the recalculated value, saves WorkPaper JSON, restores
 it, and checks the value again.
 
-3/ Benchmark caveat is public too: 79/100 comparable mean-latency rows are faster
-in the checked file, structural-insert-columns-small is the visible p95 holdout,
+3/ Benchmark caveat is public too: 76/100 comparable mean-latency rows are faster
+in the checked file, lookup-approximate-sorted-large is the visible p95 holdout,
 and UI rendering is not part of the benchmark.
 
 4/ Question for people who automate spreadsheets from services or agents: what
@@ -749,9 +749,9 @@ logic but opening a browser grid is the wrong runtime boundary. It is not an
 Excel clone, and the compatibility limits are documented:
 https://github.com/proompteng/bilig/blob/main/docs/where-bilig-is-not-excel-compatible-yet.md
 
-The benchmark claim is intentionally narrow: the checked artifact has 79/100
+The benchmark claim is intentionally narrow: the checked artifact has 76/100
 comparable mean-latency wins against HyperFormula-style workloads,
-structural-insert-columns-small is the visible p95 holdout, and UI rendering is
+lookup-approximate-sorted-large is the visible p95 holdout, and UI rendering is
 not part of the benchmark.
 
 If you automate spreadsheets from Node, what workflow or formula family would
@@ -764,15 +764,14 @@ Do not repost the same Show HN. Add a follow-up only when there is new proof or
 a concrete question:
 
 ```text
-Follow-up after the Show HN: the most useful signal I am looking for is not
-"nice project", but which headless spreadsheet workflows are missing.
+Follow-up after the Show HN: I am looking for rejection reasons, not "nice
+project".
 
-The current package is aimed at Node services and agents that need formula
-evaluation, structural edits, range reads, JSON persistence, and post-write
-verification without opening a browser grid.
+The package is for Node code that needs to change workbook inputs, recalculate,
+read the result, and save the workbook-shaped state as JSON.
 
-If you have used HyperFormula, ExcelJS, or SheetJS for this kind of automation:
-what would block you from trying a WorkPaper-style API?
+If you have shipped something with HyperFormula, ExcelJS, SheetJS, or the Google
+Sheets API: what would make you reject this API quickly?
 ```
 
 ### Hacker News Submission After The Formula Workbooks Page
@@ -786,7 +785,7 @@ limitations, and maintainer disclosure in the thread.
 Title:
 
 ```text
-Show HN: Formula workbooks for Node services
+Show HN: Bilig runs small formula workbooks in Node
 ```
 
 URL:
@@ -799,13 +798,21 @@ Optional response comment, only after the thread is visibly live or someone asks
 for details:
 
 ```text
-I maintain this project. The linked page is the shortest decision page after the earlier Show HN: it starts with a production-shaped quote approval smoke, but also spells out the WorkPaper boundary, MCP file-backed mode, benchmark caveat, and when HyperFormula / SheetJS / ExcelJS / Google Sheets API are better fits.
+I maintain this project. The linked page is the shorter decision page after the
+earlier Show HN.
 
-The runnable proof starts from an empty Node directory, installs @bilig/headless from npm, downloads one maintained TypeScript route smoke, writes quote inputs, recalculates net revenue / gross margin / approval decision, serializes the WorkPaper JSON, restores it, and checks restoredMatchesAfter.
+The runnable proof starts from an empty Node directory, installs
+@bilig/headless, changes quote inputs, recalculates net revenue / gross margin /
+approval decision, saves WorkPaper JSON, restores it, and checks the same result
+again.
 
-The package is aimed at backend and agent workflows where spreadsheet formulas are business logic but opening a browser grid is the wrong boundary. It is not a full Excel clone, and the compatibility gaps are documented publicly.
+The package is for backend workflows where spreadsheet formulas are business
+logic but opening a browser grid is the wrong boundary. It is not a full Excel
+clone, and the compatibility gaps are public.
 
-Useful feedback would be specific: which formula families, import/export paths, persistence shapes, or framework boundaries would block you from trying a headless workbook engine in a real service?
+Useful feedback would be specific: missing formula families, import/export
+cases, persistence shape, or any API choice that would make you reject it for a
+real service.
 ```
 
 ### JavaScript Weekly / Node Weekly Editorial Pitch
