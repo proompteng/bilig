@@ -258,6 +258,17 @@ describe('public workbook corpus CLI resource guards', () => {
     expect(result.stderr).toContain('--in-process is disabled for public corpus CLI runs')
   })
 
+  it('rejects malformed in-process verification override values', () => {
+    const result = spawnSync('bun', [corpusScriptPath(), 'verify', '--in-process'], {
+      encoding: 'utf8',
+      env: { ...process.env, BILIG_ALLOW_IN_PROCESS_PUBLIC_CORPUS_VERIFY: 'yes' },
+    })
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('BILIG_ALLOW_IN_PROCESS_PUBLIC_CORPUS_VERIFY must be "1", "true", "0", or "false" when set, got yes')
+    expect(result.stderr).not.toContain('at parseStrictBooleanEnvFlag')
+  })
+
   it('refuses in-process fingerprinting unless explicitly enabled for debugging', () => {
     const env = { ...process.env }
     delete env.BILIG_ALLOW_IN_PROCESS_PUBLIC_CORPUS_FINGERPRINT
@@ -269,6 +280,19 @@ describe('public workbook corpus CLI resource guards', () => {
 
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('--in-process-fingerprint is disabled for public corpus CLI runs')
+  })
+
+  it('rejects malformed in-process fingerprinting override values', () => {
+    const result = spawnSync('bun', [corpusScriptPath(), 'fetch', '--in-process-fingerprint'], {
+      encoding: 'utf8',
+      env: { ...process.env, BILIG_ALLOW_IN_PROCESS_PUBLIC_CORPUS_FINGERPRINT: 'yes' },
+    })
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain(
+      'BILIG_ALLOW_IN_PROCESS_PUBLIC_CORPUS_FINGERPRINT must be "1", "true", "0", or "false" when set, got yes',
+    )
+    expect(result.stderr).not.toContain('at parseStrictBooleanEnvFlag')
   })
 
   it('refuses parallel verification unless explicitly enabled for a sized host', () => {

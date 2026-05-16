@@ -1,6 +1,8 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute, relative, resolve } from 'node:path'
 
+import { parseStrictBooleanEnvFlag } from './strict-env.js'
+
 export function readStringArg(name: string, fallback: string): string {
   let value: string | null = null
   let count = 0
@@ -108,7 +110,7 @@ function readBooleanArgValue(name: string, raw: string): boolean {
 
 export function readDebugOnlyFlagArg(name: string, envVar: string, reason: string): boolean {
   const enabled = readFlagArg(name)
-  if (enabled && process.env[envVar] !== '1') {
+  if (enabled && !parseStrictBooleanEnvFlag(process.env[envVar], envVar, false)) {
     throw new Error(`${name} is disabled for public corpus CLI runs because ${reason}. Set ${envVar}=1 only for focused debugging.`)
   }
   return enabled
