@@ -127,6 +127,7 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   const tileSceneCameraSeq = resolveWorkbookPaneTileSceneCameraSeqV3(tilePanes)
   const visibleRenderRevision = frameProofStatus === 'presented' ? tileSceneRevision : null
   const visibleRenderCameraSeq = frameProofStatus === 'presented' ? tileSceneCameraSeq : null
+  const headerTextRunCount = headerPanes.reduce((total, pane) => total + pane.textRuns.length, 0)
   const tileTextRunCount = tilePanes.reduce((total, pane) => total + pane.tile.textRuns.length, 0)
 
   return (
@@ -157,6 +158,7 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
           data-v3-canvas-proof-layer={showCanvasFallback ? 'mounted' : 'not-mounted'}
           data-v3-frame-proof-status={frameProofStatus}
           data-v3-header-pane-count={headerPanes.length}
+          data-v3-header-text-run-count={headerTextRunCount}
           data-v3-preload-pane-count={preloadTilePanes.length}
           data-v3-text-run-count={tileTextRunCount}
           data-v3-tile-scene-camera-seq={tileSceneCameraSeq ?? ''}

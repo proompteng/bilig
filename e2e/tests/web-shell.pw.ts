@@ -944,12 +944,14 @@ test('web app keeps delayed in-cell typing anchored and exits cleanly on click-a
     .poll(async () => await cellEditor.evaluate((input) => (input instanceof HTMLTextAreaElement ? input.selectionStart : -1)))
     .toBe(4)
   await expect.poll(async () => Number((await renderer.getAttribute('data-v3-header-pane-count')) ?? '0')).toBeGreaterThan(0)
+  await expect.poll(async () => Number((await renderer.getAttribute('data-v3-header-text-run-count')) ?? '0')).toBeGreaterThan(10)
 
   await clickProductCell(page, 3, 11)
 
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!D12')
   await expect(cellEditor).toHaveCount(0)
   await expect.poll(async () => Number((await renderer.getAttribute('data-v3-header-pane-count')) ?? '0')).toBeGreaterThan(0)
+  await expect.poll(async () => Number((await renderer.getAttribute('data-v3-header-text-run-count')) ?? '0')).toBeGreaterThan(10)
 
   await clickProductCell(page, 2, 11)
   await expect(formulaInput).toHaveValue('asdf')

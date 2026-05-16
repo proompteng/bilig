@@ -271,6 +271,7 @@ export const WorkbookPaneCanvasFallbackV3 = memo(function WorkbookPaneCanvasFall
       data-renderer-mode="canvas2d-v3-fallback"
       data-testid="grid-pane-renderer-fallback"
       data-v3-header-pane-count={headerPanes.length}
+      data-v3-header-text-run-count={headerPanes.reduce((total, pane) => total + pane.textRuns.length, 0)}
       data-v3-text-run-count={tilePanes.reduce((total, pane) => total + pane.tile.textRuns.length, 0)}
       data-v3-tile-pane-count={tilePanes.length}
       ref={canvasRef}
