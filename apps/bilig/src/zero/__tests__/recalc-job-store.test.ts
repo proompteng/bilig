@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEmptyWorkbookSnapshot } from '../store-support.js'
 
 const storeFns = vi.hoisted(() => ({
@@ -22,6 +22,13 @@ import { leaseNextRecalcJob, markRecalcJobCompleted, markRecalcJobFailed } from 
 import type { Queryable } from '../store.js'
 
 describe('recalc job store', () => {
+  beforeEach(() => {
+    storeFns.persistCellEvalDiff.mockClear()
+    storeFns.persistCellEvalIncremental.mockClear()
+    storeFns.persistWorkbookCheckpoint.mockClear()
+    storeFns.shouldPersistWorkbookCheckpointRevision.mockClear()
+  })
+
   it('filters invalid dirty regions when leasing a job', async () => {
     const db: Queryable = {
       query: vi.fn().mockResolvedValue({
@@ -65,6 +72,29 @@ describe('recalc job store', () => {
     })
   })
 
+  it('fails malformed leased jobs instead of coercing revisions to zero', async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'job-bad',
+            workbook_id: 'book-1',
+            from_revision: '7',
+            to_revision: '7',
+            dirty_regions_json: null,
+            attempts: '1',
+          },
+        ],
+      })
+      .mockResolvedValue({ rows: [] })
+    const db: Queryable = { query }
+
+    await expect(leaseNextRecalcJob(db, 'worker-1')).resolves.toBeNull()
+
+    expect(query).toHaveBeenLastCalledWith(expect.stringContaining("SET status = 'failed'"), ['job-bad', 'Malformed recalc job lease row'])
+  })
+
   it('persists incremental results and checkpoints completed lease revisions', async () => {
     const db: Queryable = {
       query: vi
@@ -95,6 +125,33 @@ describe('recalc job store', () => {
     expect(storeFns.persistCellEvalIncremental).toHaveBeenCalledWith(db, 'book-1', [])
     expect(storeFns.persistCellEvalDiff).not.toHaveBeenCalled()
     expect(storeFns.persistWorkbookCheckpoint).toHaveBeenCalledWith(db, 'book-1', 64, snapshot, null)
+  })
+
+  it('rejects invalid workbook head revisions before persisting recalc output', async () => {
+    const db: Queryable = {
+      query: vi.fn().mockResolvedValueOnce({ rows: [{ head_revision: '-1' }] }),
+    }
+
+    await expect(
+      markRecalcJobCompleted(
+        db,
+        {
+          id: 'job-2',
+          workbookId: 'book-1',
+          fromRevision: 1,
+          toRevision: 2,
+          dirtyRegions: null,
+          attempts: 1,
+        },
+        [],
+        null,
+        null,
+        true,
+      ),
+    ).rejects.toThrow('Invalid workbook head revision while completing recalc job job-2')
+
+    expect(storeFns.persistCellEvalIncremental).not.toHaveBeenCalled()
+    expect(storeFns.persistCellEvalDiff).not.toHaveBeenCalled()
   })
 
   it('marks exhausted failures as failed instead of pending', async () => {

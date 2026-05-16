@@ -8,31 +8,73 @@ import {
   nowIso,
   parseCellEvalValue,
   parseCellStyleRecord,
-  parseInteger,
   parseJsonKey,
+  parseNonNegativeInteger,
 } from './store-support.js'
-import type { Queryable } from './store.js'
+import type { Queryable, QueryResultRow } from './store.js'
 
 const WORKBOOK_CHECKPOINT_FORMAT = 'json-v1'
 const WORKBOOK_CHECKPOINT_RETENTION = 5
 
+interface CellEvalSelectRow extends QueryResultRow {
+  readonly workbook_id?: unknown
+  readonly sheet_name?: unknown
+  readonly address?: unknown
+  readonly row_num?: unknown
+  readonly col_num?: unknown
+  readonly value?: unknown
+  readonly flags?: unknown
+  readonly version?: unknown
+  readonly style_id?: unknown
+  readonly style_json?: unknown
+  readonly format_id?: unknown
+  readonly format_code?: unknown
+  readonly calc_revision?: unknown
+  readonly updated_at?: unknown
+}
+
+function normalizeCellEvalRow(row: CellEvalSelectRow, documentId: string): CellEvalRow {
+  const rowNum = parseNonNegativeInteger(row.row_num)
+  const colNum = parseNonNegativeInteger(row.col_num)
+  const flags = parseNonNegativeInteger(row.flags)
+  const version = parseNonNegativeInteger(row.version)
+  const calcRevision = parseNonNegativeInteger(row.calc_revision)
+  if (
+    typeof row.workbook_id !== 'string' ||
+    row.workbook_id !== documentId ||
+    typeof row.sheet_name !== 'string' ||
+    row.sheet_name.length === 0 ||
+    typeof row.address !== 'string' ||
+    row.address.length === 0 ||
+    rowNum === null ||
+    colNum === null ||
+    flags === null ||
+    version === null ||
+    calcRevision === null
+  ) {
+    throw new Error(`Invalid cell_eval projection row for workbook ${documentId}`)
+  }
+
+  return {
+    workbookId: row.workbook_id,
+    sheetName: row.sheet_name,
+    address: row.address,
+    rowNum,
+    colNum,
+    value: parseCellEvalValue(row.value),
+    flags,
+    version,
+    styleId: typeof row.style_id === 'string' ? row.style_id : null,
+    styleJson: parseCellStyleRecord(row.style_json),
+    formatId: typeof row.format_id === 'string' ? row.format_id : null,
+    formatCode: typeof row.format_code === 'string' ? row.format_code : null,
+    calcRevision,
+    updatedAt: typeof row.updated_at === 'string' ? row.updated_at : nowIso(),
+  }
+}
+
 async function loadCellEvalRows(db: Queryable, documentId: string): Promise<CellEvalRow[]> {
-  const result = await db.query<{
-    workbook_id: string
-    sheet_name: string
-    address: string
-    row_num: number | null
-    col_num: number | null
-    value: unknown
-    flags: number | string | null
-    version: number | string | null
-    style_id: string | null
-    style_json: unknown
-    format_id: string | null
-    format_code: string | null
-    calc_revision: number | string | null
-    updated_at: string | null
-  }>(
+  const result = await db.query<CellEvalSelectRow>(
     `
       SELECT
         workbook_id,
@@ -54,22 +96,7 @@ async function loadCellEvalRows(db: Queryable, documentId: string): Promise<Cell
     `,
     [documentId],
   )
-  return result.rows.map((row) => ({
-    workbookId: row.workbook_id,
-    sheetName: row.sheet_name,
-    address: row.address,
-    rowNum: parseInteger(row.row_num),
-    colNum: parseInteger(row.col_num),
-    value: parseCellEvalValue(row.value),
-    flags: parseInteger(row.flags),
-    version: parseInteger(row.version),
-    styleId: row.style_id,
-    styleJson: parseCellStyleRecord(row.style_json),
-    formatId: row.format_id,
-    formatCode: row.format_code,
-    calcRevision: parseInteger(row.calc_revision),
-    updatedAt: row.updated_at ?? nowIso(),
-  }))
+  return result.rows.map((row) => normalizeCellEvalRow(row, documentId))
 }
 
 export async function persistCellEvalRows(

@@ -2,8 +2,8 @@ import type { EngineReplicaSnapshot } from '@bilig/core'
 import type { WorkbookSnapshot } from '@bilig/protocol'
 import type { DirtyRegion } from '@bilig/zero-sync'
 import type { CellEvalRow } from './projection.js'
-import { isDirtyRegion, parseInteger } from './store-support.js'
-import { shouldPersistWorkbookCheckpointRevision, type Queryable } from './store.js'
+import { isDirtyRegion, parseNonNegativeInteger, parsePositiveInteger } from './store-support.js'
+import { shouldPersistWorkbookCheckpointRevision, type Queryable, type QueryResultRow } from './store.js'
 import { persistCellEvalDiff, persistCellEvalIncremental, persistWorkbookCheckpoint } from './workbook-calculation-store.js'
 
 const RECALC_LEASE_MS = 30_000
@@ -18,15 +18,63 @@ export interface RecalcJobLease {
   attempts: number
 }
 
+interface RecalcJobLeaseRow extends QueryResultRow {
+  readonly id?: unknown
+  readonly workbook_id?: unknown
+  readonly from_revision?: unknown
+  readonly to_revision?: unknown
+  readonly dirty_regions_json?: unknown
+  readonly attempts?: unknown
+}
+
+function normalizeRecalcJobLease(row: RecalcJobLeaseRow): RecalcJobLease | null {
+  const fromRevision = parseNonNegativeInteger(row.from_revision)
+  const toRevision = parsePositiveInteger(row.to_revision)
+  const attempts = parsePositiveInteger(row.attempts)
+  if (
+    typeof row.id !== 'string' ||
+    row.id.length === 0 ||
+    typeof row.workbook_id !== 'string' ||
+    row.workbook_id.length === 0 ||
+    fromRevision === null ||
+    toRevision === null ||
+    toRevision <= fromRevision ||
+    attempts === null
+  ) {
+    return null
+  }
+
+  const dirtyRegions = Array.isArray(row.dirty_regions_json) ? row.dirty_regions_json.filter(isDirtyRegion) : null
+  return {
+    id: row.id,
+    workbookId: row.workbook_id,
+    fromRevision,
+    toRevision,
+    dirtyRegions: dirtyRegions && dirtyRegions.length > 0 ? dirtyRegions : null,
+    attempts,
+  }
+}
+
+async function markMalformedRecalcJobFailed(db: Queryable, row: RecalcJobLeaseRow, reason: string): Promise<void> {
+  if (typeof row.id !== 'string' || row.id.length === 0) {
+    return
+  }
+  await db.query(
+    `
+      UPDATE recalc_job
+      SET status = 'failed',
+          lease_until = NULL,
+          lease_owner = NULL,
+          last_error = $2,
+          updated_at = NOW()
+      WHERE id = $1
+    `,
+    [row.id, reason],
+  )
+}
+
 export async function leaseNextRecalcJob(db: Queryable, workerId: string): Promise<RecalcJobLease | null> {
-  const result = await db.query<{
-    id: string
-    workbook_id: string
-    from_revision: number | string | null
-    to_revision: number | string | null
-    dirty_regions_json: unknown
-    attempts: number | string | null
-  }>(
+  const result = await db.query<RecalcJobLeaseRow>(
     `
       WITH candidate AS (
         SELECT id
@@ -52,15 +100,12 @@ export async function leaseNextRecalcJob(db: Queryable, workerId: string): Promi
   if (!row) {
     return null
   }
-  const dirtyRegions = Array.isArray(row.dirty_regions_json) ? row.dirty_regions_json.filter(isDirtyRegion) : null
-  return {
-    id: row.id,
-    workbookId: row.workbook_id,
-    fromRevision: parseInteger(row.from_revision),
-    toRevision: parseInteger(row.to_revision),
-    dirtyRegions: dirtyRegions && dirtyRegions.length > 0 ? dirtyRegions : null,
-    attempts: parseInteger(row.attempts),
+  const lease = normalizeRecalcJobLease(row)
+  if (!lease) {
+    await markMalformedRecalcJobFailed(db, row, 'Malformed recalc job lease row')
+    return null
   }
+  return lease
 }
 
 export async function markRecalcJobCompleted(
@@ -75,7 +120,11 @@ export async function markRecalcJobCompleted(
     `SELECT head_revision FROM workbooks WHERE id = $1 LIMIT 1`,
     [lease.workbookId],
   )
-  if (parseInteger(revisionResult.rows[0]?.head_revision) !== lease.toRevision) {
+  const headRevision = parsePositiveInteger(revisionResult.rows[0]?.head_revision)
+  if (headRevision === null) {
+    throw new Error(`Invalid workbook head revision while completing recalc job ${lease.id}`)
+  }
+  if (headRevision !== lease.toRevision) {
     await markRecalcJobSuperseded(db, lease)
     return false
   }
