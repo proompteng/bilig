@@ -64,4 +64,12 @@ describe('web preview build gate', () => {
     expect(source).toContain("pnpm('browser web bundle build', '--filter', '@bilig/web', 'build:bundle')")
     expect(source).toContain("BILIG_DEV_WEB_PREVIEW_BUILD: '0'")
   })
+
+  it('declares a checked-in favicon so Browser QA starts without missing-asset noise', () => {
+    const html = readFileSync(resolve(repoRoot, 'apps/web/index.html'), 'utf8')
+    const favicon = readFileSync(resolve(repoRoot, 'apps/web/public/favicon.svg'), 'utf8')
+
+    expect(html).toContain('<link rel="icon" href="/favicon.svg" type="image/svg+xml" />')
+    expect(favicon).toContain('<svg')
+  })
 })
