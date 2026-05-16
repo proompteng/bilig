@@ -312,11 +312,11 @@ export async function loadWorkbookChange(db: Queryable, documentId: string, revi
   return row ? normalizeWorkbookChangeRecord(row) : null
 }
 
-async function listWorkbookChangesForActor(
+export async function listWorkbookChangesAfterRevision(
   db: Queryable,
   input: {
     readonly documentId: string
-    readonly actorUserId: string
+    readonly revision: number
   },
 ): Promise<WorkbookChangeRecord[]> {
   const result = await db.query<WorkbookChangeSelectRow>(
@@ -336,10 +336,43 @@ async function listWorkbookChangesForActor(
              created_at AS "createdAtUnixMs"
         FROM workbook_change
        WHERE workbook_id = $1
-         AND actor_user_id = $2
+         AND revision > $2
        ORDER BY revision ASC
     `,
-    [input.documentId, input.actorUserId],
+    [input.documentId, input.revision],
+  )
+  return result.rows.flatMap((row) => {
+    const record = normalizeWorkbookChangeRecord(row)
+    return record ? [record] : []
+  })
+}
+
+async function listWorkbookHistoryChanges(
+  db: Queryable,
+  input: {
+    readonly documentId: string
+  },
+): Promise<WorkbookChangeRecord[]> {
+  const result = await db.query<WorkbookChangeSelectRow>(
+    `
+      SELECT revision AS "revision",
+             actor_user_id AS "actorUserId",
+             client_mutation_id AS "clientMutationId",
+             event_kind AS "eventKind",
+             summary AS "summary",
+             sheet_id AS "sheetId",
+             sheet_name AS "sheetName",
+             anchor_address AS "anchorAddress",
+             range_json AS "rangeJson",
+             undo_bundle_json AS "undoBundleJson",
+             reverted_by_revision AS "revertedByRevision",
+             reverts_revision AS "revertsRevision",
+             created_at AS "createdAtUnixMs"
+        FROM workbook_change
+       WHERE workbook_id = $1
+       ORDER BY revision ASC
+    `,
+    [input.documentId],
   )
   return result.rows.flatMap((row) => {
     const record = normalizeWorkbookChangeRecord(row)
@@ -354,7 +387,7 @@ export async function loadLatestUndoableWorkbookChange(
     readonly actorUserId: string
   },
 ): Promise<WorkbookChangeRecord | null> {
-  const rows = await listWorkbookChangesForActor(db, input)
+  const rows = await listWorkbookHistoryChanges(db, input)
   const revision = selectLatestUndoableWorkbookChangeRevision({
     actorUserId: input.actorUserId,
     rows,
@@ -369,7 +402,7 @@ export async function loadLatestRedoableWorkbookChange(
     readonly actorUserId: string
   },
 ): Promise<WorkbookChangeRecord | null> {
-  const rows = await listWorkbookChangesForActor(db, input)
+  const rows = await listWorkbookHistoryChanges(db, input)
   const revision = selectLatestRedoableWorkbookChangeRevision({
     actorUserId: input.actorUserId,
     rows,

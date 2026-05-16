@@ -39,7 +39,14 @@ export {
 export { loadRuntimeConfig, parseRuntimeConfig, type BiligRuntimeConfig } from './runtime-config.js'
 export { schema } from './schema.js'
 export { createEmptyWorkbookSnapshot, projectWorkbookToSnapshot } from './snapshot.js'
-export { deriveWorkbookActorHistoryState, type WorkbookActorHistoryState, type WorkbookHistoryStateRow } from './workbook-history-state.js'
+export {
+  deriveWorkbookActorHistoryState,
+  workbookHistoryRangesOverlap,
+  type WorkbookActorHistoryState,
+  type WorkbookHistoryRange,
+  type WorkbookHistoryRangeSource,
+  type WorkbookHistoryStateRow,
+} from './workbook-history-state.js'
 export {
   applyWorkbookEvent,
   deriveDirtyRegions,

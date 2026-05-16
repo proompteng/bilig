@@ -3,6 +3,7 @@ import {
   appendWorkbookChange,
   backfillWorkbookChanges,
   buildWorkbookChangeDescriptor,
+  listWorkbookChangesAfterRevision,
   listWorkbookChanges,
   loadLatestRedoableWorkbookChange,
   loadLatestUndoableWorkbookChange,
@@ -553,53 +554,95 @@ describe('workbook-change-store', () => {
     })
   })
 
+  it('lists workbook changes after a target revision for stale revert checks', async () => {
+    const queryable = new FakeQueryable([
+      (text, values) =>
+        text.includes('revision > $2') && values?.[0] === 'doc-1' && values?.[1] === 7
+          ? [
+              {
+                revision: 8,
+                actorUserId: 'morgan@example.com',
+                clientMutationId: 'mutation-8',
+                eventKind: 'setCellValue',
+                summary: 'Updated Sheet1!A1',
+                sheetId: 1,
+                sheetName: 'Sheet1',
+                anchorAddress: 'A1',
+                rangeJson: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+                undoBundleJson: {
+                  kind: 'engineOps',
+                  ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'A1' }],
+                },
+                revertedByRevision: null,
+                revertsRevision: null,
+                createdAtUnixMs: 124_000,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ])
+
+    await expect(
+      listWorkbookChangesAfterRevision(queryable, {
+        documentId: 'doc-1',
+        revision: 7,
+      }),
+    ).resolves.toMatchObject([
+      {
+        revision: 8,
+        actorUserId: 'morgan@example.com',
+        range: {
+          sheetName: 'Sheet1',
+          startAddress: 'A1',
+          endAddress: 'A1',
+        },
+      },
+    ])
+  })
+
   it('loads latest undoable and redoable changes for an actor', async () => {
     const queryable = new FakeQueryable([
-      (text, values) => {
+      (text) => {
         if (!text.includes('FROM workbook_change')) {
           return null
         }
-        if (values?.[1] === 'alex@example.com') {
-          return [
-            {
-              revision: 14,
-              actorUserId: 'alex@example.com',
-              clientMutationId: 'mutation-14',
-              eventKind: 'revertChange',
-              summary: 'Reverted r13: Updated Sheet1!A1',
-              sheetId: 1,
-              sheetName: 'Sheet1',
-              anchorAddress: 'A1',
-              rangeJson: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
-              undoBundleJson: {
-                kind: 'engineOps',
-                ops: [{ kind: 'setCellValue', sheetName: 'Sheet1', address: 'A1', value: 5 }],
-              },
-              revertedByRevision: null,
-              revertsRevision: 13,
-              createdAtUnixMs: 123_460,
-            } satisfies QueryResultRow,
-            {
-              revision: 13,
-              actorUserId: 'alex@example.com',
-              clientMutationId: 'mutation-13',
-              eventKind: 'setCellValue',
-              summary: 'Updated Sheet1!A1',
-              sheetId: 1,
-              sheetName: 'Sheet1',
-              anchorAddress: 'A1',
-              rangeJson: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
-              undoBundleJson: {
-                kind: 'engineOps',
-                ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'A1' }],
-              },
-              revertedByRevision: null,
-              revertsRevision: null,
-              createdAtUnixMs: 123_456,
-            } satisfies QueryResultRow,
-          ]
-        }
-        return null
+        return [
+          {
+            revision: 14,
+            actorUserId: 'alex@example.com',
+            clientMutationId: 'mutation-14',
+            eventKind: 'revertChange',
+            summary: 'Reverted r13: Updated Sheet1!A1',
+            sheetId: 1,
+            sheetName: 'Sheet1',
+            anchorAddress: 'A1',
+            rangeJson: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+            undoBundleJson: {
+              kind: 'engineOps',
+              ops: [{ kind: 'setCellValue', sheetName: 'Sheet1', address: 'A1', value: 5 }],
+            },
+            revertedByRevision: null,
+            revertsRevision: 13,
+            createdAtUnixMs: 123_460,
+          } satisfies QueryResultRow,
+          {
+            revision: 13,
+            actorUserId: 'alex@example.com',
+            clientMutationId: 'mutation-13',
+            eventKind: 'setCellValue',
+            summary: 'Updated Sheet1!A1',
+            sheetId: 1,
+            sheetName: 'Sheet1',
+            anchorAddress: 'A1',
+            rangeJson: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+            undoBundleJson: {
+              kind: 'engineOps',
+              ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'A1' }],
+            },
+            revertedByRevision: null,
+            revertsRevision: null,
+            createdAtUnixMs: 123_456,
+          } satisfies QueryResultRow,
+        ]
       },
     ])
 
@@ -619,6 +662,7 @@ describe('workbook-change-store', () => {
       revision: 14,
       eventKind: 'revertChange',
     })
+    expect(latestQuery(queryable).values).toEqual(['doc-1'])
   })
 
   it('does not expose redo after a fresh authored change branches history after an undo', async () => {
@@ -714,5 +758,131 @@ describe('workbook-change-store', () => {
         actorUserId: 'alex@example.com',
       }),
     ).resolves.toBeNull()
+  })
+
+  it('does not expose undo after another actor changes an overlapping range', async () => {
+    const queryable = new FakeQueryable([
+      (text) =>
+        text.includes('FROM workbook_change')
+          ? [
+              {
+                revision: 32,
+                actorUserId: 'morgan@example.com',
+                clientMutationId: 'mutation-32',
+                eventKind: 'setCellValue',
+                summary: 'Updated Sheet1!A1',
+                sheetId: 1,
+                sheetName: 'Sheet1',
+                anchorAddress: 'A1',
+                rangeJson: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+                undoBundleJson: {
+                  kind: 'engineOps',
+                  ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'A1' }],
+                },
+                revertedByRevision: null,
+                revertsRevision: null,
+                createdAtUnixMs: 123_480,
+              } satisfies QueryResultRow,
+              {
+                revision: 31,
+                actorUserId: 'alex@example.com',
+                clientMutationId: 'mutation-31',
+                eventKind: 'setCellValue',
+                summary: 'Updated Sheet1!A1',
+                sheetId: 1,
+                sheetName: 'Sheet1',
+                anchorAddress: 'A1',
+                rangeJson: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+                undoBundleJson: {
+                  kind: 'engineOps',
+                  ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'A1' }],
+                },
+                revertedByRevision: null,
+                revertsRevision: null,
+                createdAtUnixMs: 123_470,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ])
+
+    await expect(
+      loadLatestUndoableWorkbookChange(queryable, {
+        documentId: 'doc-1',
+        actorUserId: 'alex@example.com',
+      }),
+    ).resolves.toBeNull()
+  })
+
+  it('keeps redo after another actor changes a disjoint range', async () => {
+    const queryable = new FakeQueryable([
+      (text) =>
+        text.includes('FROM workbook_change')
+          ? [
+              {
+                revision: 42,
+                actorUserId: 'morgan@example.com',
+                clientMutationId: 'mutation-42',
+                eventKind: 'setCellValue',
+                summary: 'Updated Sheet1!C1',
+                sheetId: 1,
+                sheetName: 'Sheet1',
+                anchorAddress: 'C1',
+                rangeJson: { sheetName: 'Sheet1', startAddress: 'C1', endAddress: 'C1' },
+                undoBundleJson: {
+                  kind: 'engineOps',
+                  ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'C1' }],
+                },
+                revertedByRevision: null,
+                revertsRevision: null,
+                createdAtUnixMs: 123_480,
+              } satisfies QueryResultRow,
+              {
+                revision: 41,
+                actorUserId: 'alex@example.com',
+                clientMutationId: 'mutation-41',
+                eventKind: 'revertChange',
+                summary: 'Reverted r40: Updated Sheet1!A1',
+                sheetId: 1,
+                sheetName: 'Sheet1',
+                anchorAddress: 'A1',
+                rangeJson: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+                undoBundleJson: {
+                  kind: 'engineOps',
+                  ops: [{ kind: 'setCellValue', sheetName: 'Sheet1', address: 'A1', value: 'seed' }],
+                },
+                revertedByRevision: null,
+                revertsRevision: 40,
+                createdAtUnixMs: 123_470,
+              } satisfies QueryResultRow,
+              {
+                revision: 40,
+                actorUserId: 'alex@example.com',
+                clientMutationId: 'mutation-40',
+                eventKind: 'setCellValue',
+                summary: 'Updated Sheet1!A1',
+                sheetId: 1,
+                sheetName: 'Sheet1',
+                anchorAddress: 'A1',
+                rangeJson: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' },
+                undoBundleJson: {
+                  kind: 'engineOps',
+                  ops: [{ kind: 'clearCell', sheetName: 'Sheet1', address: 'A1' }],
+                },
+                revertedByRevision: 41,
+                revertsRevision: null,
+                createdAtUnixMs: 123_460,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ])
+
+    await expect(
+      loadLatestRedoableWorkbookChange(queryable, {
+        documentId: 'doc-1',
+        actorUserId: 'alex@example.com',
+      }),
+    ).resolves.toMatchObject({
+      revision: 41,
+    })
   })
 })

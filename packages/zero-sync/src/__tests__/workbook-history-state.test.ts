@@ -2,6 +2,66 @@ import { describe, expect, it } from 'vitest'
 import { deriveWorkbookActorHistoryState } from '../workbook-history-state.js'
 
 describe('deriveWorkbookActorHistoryState', () => {
+  it('removes overlapping undo and redo entries when another actor changes the same range', () => {
+    const state = deriveWorkbookActorHistoryState({
+      actorUserId: 'alex@example.com',
+      rows: [
+        historyRow({ revision: 51, eventKind: 'setCellValue', address: 'A1' }),
+        historyRow({
+          revision: 52,
+          eventKind: 'revertChange',
+          address: 'B1',
+          revertedByRevision: null,
+          revertsRevision: 50,
+        }),
+        historyRow({
+          revision: 53,
+          actorUserId: 'morgan@example.com',
+          eventKind: 'setCellValue',
+          address: 'A1',
+        }),
+        historyRow({
+          revision: 54,
+          actorUserId: 'morgan@example.com',
+          eventKind: 'setCellValue',
+          address: 'B1',
+        }),
+      ],
+    })
+
+    expect(state.canUndo).toBe(false)
+    expect(state.canRedo).toBe(false)
+    expect(state.undoStack).toEqual([])
+    expect(state.redoStack).toEqual([])
+  })
+
+  it('preserves actor history when another actor changes a disjoint range', () => {
+    const state = deriveWorkbookActorHistoryState({
+      actorUserId: 'alex@example.com',
+      rows: [
+        historyRow({ revision: 61, eventKind: 'setCellValue', address: 'A1' }),
+        historyRow({
+          revision: 62,
+          eventKind: 'revertChange',
+          address: 'B1',
+          revertedByRevision: null,
+          revertsRevision: 60,
+        }),
+        historyRow({
+          revision: 63,
+          actorUserId: 'morgan@example.com',
+          eventKind: 'setCellValue',
+          address: 'C1',
+        }),
+      ],
+    })
+
+    expect(state.canUndo).toBe(true)
+    expect(state.canRedo).toBe(true)
+    expect(state.undoRevision).toBe(61)
+    expect(state.redoRevision).toBe(62)
+  })
+
   it('preserves older redo entries after a newer redo is applied', () => {
     const state = deriveWorkbookActorHistoryState({
       actorUserId: 'alex@example.com',
@@ -172,3 +232,28 @@ describe('deriveWorkbookActorHistoryState', () => {
     expect(state.redoStack).toEqual([46])
   })
 })
+
+function historyRow(input: {
+  readonly revision: number
+  readonly eventKind: string
+  readonly actorUserId?: string
+  readonly address: string
+  readonly revertedByRevision?: number | null
+  readonly revertsRevision?: number | null
+}) {
+  return {
+    revision: input.revision,
+    actorUserId: input.actorUserId ?? 'alex@example.com',
+    eventKind: input.eventKind,
+    undoBundleJson: { kind: 'engineOps', ops: [] },
+    revertedByRevision: input.revertedByRevision ?? null,
+    revertsRevision: input.revertsRevision ?? null,
+    sheetName: 'Sheet1',
+    anchorAddress: input.address,
+    rangeJson: {
+      sheetName: 'Sheet1',
+      startAddress: input.address,
+      endAddress: input.address,
+    },
+  } as const
+}

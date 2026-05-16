@@ -7,6 +7,13 @@ interface WorkbookActorHistoryRecord {
   readonly undoBundle: WorkbookChangeUndoBundle | null
   readonly revertedByRevision: number | null
   readonly revertsRevision: number | null
+  readonly sheetName: string | null
+  readonly anchorAddress: string | null
+  readonly range: {
+    readonly sheetName: string
+    readonly startAddress: string
+    readonly endAddress: string
+  } | null
 }
 
 export function selectLatestUndoableWorkbookChangeRevision(input: {
@@ -22,6 +29,9 @@ export function selectLatestUndoableWorkbookChangeRevision(input: {
       undoBundleJson: row.undoBundle,
       revertedByRevision: row.revertedByRevision,
       revertsRevision: row.revertsRevision,
+      sheetName: row.sheetName,
+      anchorAddress: row.anchorAddress,
+      rangeJson: row.range,
     })),
   }).undoRevision
 }
@@ -39,6 +49,9 @@ export function selectLatestRedoableWorkbookChangeRevision(input: {
       undoBundleJson: row.undoBundle,
       revertedByRevision: row.revertedByRevision,
       revertsRevision: row.revertsRevision,
+      sheetName: row.sheetName,
+      anchorAddress: row.anchorAddress,
+      rangeJson: row.range,
     })),
   }).redoRevision
 }

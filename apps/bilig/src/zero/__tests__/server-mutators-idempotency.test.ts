@@ -18,6 +18,7 @@ const mutationStoreFns = vi.hoisted(() => ({
 }))
 
 const changeStoreFns = vi.hoisted(() => ({
+  listWorkbookChangesAfterRevision: vi.fn(async () => []),
   loadLatestRedoableWorkbookChange: vi.fn(async () => null),
   loadLatestUndoableWorkbookChange: vi.fn(async () => null),
   loadWorkbookChange: vi.fn(async () => null),
@@ -33,6 +34,7 @@ vi.mock('../workbook-mutation-store.js', () => ({
 }))
 
 vi.mock('../workbook-change-store.js', () => ({
+  listWorkbookChangesAfterRevision: changeStoreFns.listWorkbookChangesAfterRevision,
   loadLatestRedoableWorkbookChange: changeStoreFns.loadLatestRedoableWorkbookChange,
   loadLatestUndoableWorkbookChange: changeStoreFns.loadLatestUndoableWorkbookChange,
   loadWorkbookChange: changeStoreFns.loadWorkbookChange,
@@ -48,6 +50,7 @@ describe('server mutator client mutation idempotency', () => {
     mutationStoreFns.persistWorkbookMutation.mockClear()
     changeStoreFns.loadLatestRedoableWorkbookChange.mockClear()
     changeStoreFns.loadLatestUndoableWorkbookChange.mockClear()
+    changeStoreFns.listWorkbookChangesAfterRevision.mockClear()
     changeStoreFns.loadWorkbookChange.mockClear()
   })
 
@@ -342,6 +345,45 @@ describe('server mutator client mutation idempotency', () => {
     expect(commitMutation).not.toHaveBeenCalled()
     expect(mutationStoreFns.persistWorkbookMutation).not.toHaveBeenCalled()
   })
+
+  it('rejects explicit revert when a later active change overlaps the target range', async () => {
+    const db = createQueryable()
+    const { commitMutation, loadRuntime, runtimeManager } = createRuntimeManagerHarness()
+    changeStoreFns.loadWorkbookChange.mockResolvedValueOnce(
+      createWorkbookChangeRecord({
+        revision: 3,
+        summary: 'Set A1',
+        sheetName: 'Sheet1',
+        anchorAddress: 'A1',
+      }),
+    )
+    changeStoreFns.listWorkbookChangesAfterRevision.mockResolvedValueOnce([
+      createWorkbookChangeRecord({
+        revision: 4,
+        summary: 'Set A1 again',
+        sheetName: 'Sheet1',
+        anchorAddress: 'A1',
+        actorUserId: 'morgan@example.com',
+      }),
+    ])
+
+    await expect(
+      handleServerMutator(
+        createServerTransaction(db),
+        'workbook.revertChange',
+        {
+          documentId: 'doc-1',
+          clientMutationId: 'doc-1:pending:14',
+          revision: 3,
+        },
+        runtimeManager,
+      ),
+    ).rejects.toThrow('Workbook change cannot be safely reverted after overlapping r4')
+
+    expect(loadRuntime).not.toHaveBeenCalled()
+    expect(commitMutation).not.toHaveBeenCalled()
+    expect(mutationStoreFns.persistWorkbookMutation).not.toHaveBeenCalled()
+  })
 })
 
 function createQueryable(): Queryable {
@@ -363,13 +405,14 @@ function createWorkbookChangeRecord(input: {
   readonly summary: string
   readonly sheetName?: string | null
   readonly anchorAddress?: string | null
+  readonly actorUserId?: string
   readonly revertedByRevision?: number | null
   readonly revertsRevision?: number | null
   readonly eventKind?: WorkbookChangeRecord['eventKind']
 }): WorkbookChangeRecord {
   return {
     revision: input.revision,
-    actorUserId: 'system',
+    actorUserId: input.actorUserId ?? 'system',
     clientMutationId: null,
     eventKind: input.eventKind ?? 'setCellValue',
     summary: input.summary,

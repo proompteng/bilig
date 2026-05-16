@@ -1,4 +1,5 @@
 import {
+  listWorkbookChangesAfterRevision,
   loadLatestRedoableWorkbookChange,
   loadLatestUndoableWorkbookChange,
   loadWorkbookChange,
@@ -6,6 +7,7 @@ import {
 } from './workbook-change-store.js'
 import type { WorkbookHistoryMutationTarget } from './server-mutator-commit.js'
 import type { Queryable } from './store.js'
+import { workbookHistoryRangesOverlap } from '@bilig/zero-sync'
 
 export async function resolveRevertWorkbookChangeTarget(
   db: Queryable,
@@ -27,6 +29,7 @@ export async function resolveRevertWorkbookChangeTarget(
   if (targetChange.eventKind === 'revertChange' || targetChange.revertsRevision !== null) {
     throw new Error('Reverting a revert change is not supported')
   }
+  await assertNoActiveOverlappingLaterChange(db, input.documentId, targetChange)
   return toWorkbookHistoryMutationTarget(targetChange)
 }
 
@@ -69,5 +72,23 @@ function toWorkbookHistoryMutationTarget(change: WorkbookChangeRecord): Workbook
     anchorAddress: change.anchorAddress,
     range: change.range,
     undoBundle: change.undoBundle,
+  }
+}
+
+async function assertNoActiveOverlappingLaterChange(db: Queryable, documentId: string, targetChange: WorkbookChangeRecord): Promise<void> {
+  const laterChanges = await listWorkbookChangesAfterRevision(db, {
+    documentId,
+    revision: targetChange.revision,
+  })
+  const conflictingChange = laterChanges.find(
+    (change) =>
+      change.revertedByRevision === null &&
+      workbookHistoryRangesOverlap(
+        { sheetName: targetChange.sheetName, anchorAddress: targetChange.anchorAddress, rangeJson: targetChange.range },
+        { sheetName: change.sheetName, anchorAddress: change.anchorAddress, rangeJson: change.range },
+      ),
+  )
+  if (conflictingChange) {
+    throw new Error(`Workbook change cannot be safely reverted after overlapping r${conflictingChange.revision}`)
   }
 }

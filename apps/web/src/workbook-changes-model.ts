@@ -1,4 +1,9 @@
-import { deriveWorkbookActorHistoryState, isWorkbookChangeUndoBundle, type WorkbookChangeUndoBundle } from '@bilig/zero-sync'
+import {
+  deriveWorkbookActorHistoryState,
+  isWorkbookChangeUndoBundle,
+  workbookHistoryRangesOverlap,
+  type WorkbookChangeUndoBundle,
+} from '@bilig/zero-sync'
 import { formatWorkbookCollaboratorLabel } from './workbook-presence-model.js'
 
 export interface WorkbookChangeRange {
@@ -152,6 +157,15 @@ export function selectWorkbookChangeEntries(input: {
     const targetLabel = formatChangeTarget(row.rangeJson, row.anchorAddress)
     const sheetName = row.sheetName ?? row.rangeJson?.sheetName ?? null
     const address = row.anchorAddress ?? row.rangeJson?.startAddress ?? null
+    const hasLaterOverlap = input.rows.some(
+      (candidate) =>
+        candidate.revision > row.revision &&
+        candidate.revertedByRevision === null &&
+        workbookHistoryRangesOverlap(
+          { sheetName: row.sheetName, anchorAddress: row.anchorAddress, rangeJson: row.rangeJson },
+          { sheetName: candidate.sheetName, anchorAddress: candidate.anchorAddress, rangeJson: candidate.rangeJson },
+        ),
+    )
     return {
       revision: row.revision,
       actorUserId: row.actorUserId,
@@ -164,7 +178,7 @@ export function selectWorkbookChangeEntries(input: {
       targetLabel,
       createdAt: row.createdAt,
       isJumpable: typeof sheetName === 'string' && typeof address === 'string' && knownSheetNames.has(sheetName),
-      canRevert: row.undoBundleJson !== null && row.revertedByRevision === null && row.eventKind !== 'revertChange',
+      canRevert: row.undoBundleJson !== null && row.revertedByRevision === null && row.eventKind !== 'revertChange' && !hasLaterOverlap,
       canRedo: row.undoBundleJson !== null && row.revertedByRevision === null && row.eventKind === 'revertChange',
       revertedByRevision: row.revertedByRevision,
       revertsRevision: row.revertsRevision,
@@ -185,6 +199,9 @@ export function selectWorkbookHistoryState(input: {
       undoBundleJson: row.undoBundleJson,
       revertedByRevision: row.revertedByRevision,
       revertsRevision: row.revertsRevision,
+      sheetName: row.sheetName,
+      anchorAddress: row.anchorAddress,
+      rangeJson: row.rangeJson,
     })),
   })
 
