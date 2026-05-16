@@ -724,6 +724,7 @@ export function buildDirectCriteriaDescriptor(args: {
 export function buildDirectAggregateDescriptor(args: {
   readonly compiled: ParsedCompiledFormula
   readonly ownerSheetName: string
+  readonly workbook: Pick<EngineRuntimeState, 'workbook'>['workbook']
   readonly regionGraph: RegionGraph
 }): RuntimeDirectAggregateDescriptor | undefined {
   const buildDescriptor = (descriptor: {
@@ -760,6 +761,9 @@ export function buildDirectAggregateDescriptor(args: {
     const rangeInfo = args.compiled.parsedSymbolicRanges?.[directAggregateCandidate.symbolicRangeIndex]
     if (rangeInfo && rangeInfo.refKind === 'cells') {
       const sheetName = rangeInfo.sheetName ?? args.ownerSheetName
+      if (!args.workbook.getSheet(sheetName)) {
+        return undefined
+      }
       return buildDescriptor({
         sheetName,
         rowStart: rangeInfo.startRow,
@@ -791,6 +795,9 @@ export function buildDirectAggregateDescriptor(args: {
     return undefined
   }
   const sheetName = rangeNode.sheetName ?? args.ownerSheetName
+  if (!args.workbook.getSheet(sheetName)) {
+    return undefined
+  }
   return buildDescriptor({
     sheetName,
     rowStart: parsedRange.start.row,

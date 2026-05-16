@@ -100,6 +100,7 @@ export function prepareFormulaBindingFromCompiled(args: {
       ? buildDirectAggregateDescriptor({
           compiled,
           ownerSheetName: args.ownerSheetName,
+          workbook: serviceArgs.state.workbook,
           regionGraph: serviceArgs.regionGraph,
         })
       : undefined

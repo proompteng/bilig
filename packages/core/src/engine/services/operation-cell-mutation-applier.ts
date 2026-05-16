@@ -20,11 +20,7 @@ import type { OperationDirectRangeDependentService } from './operation-direct-ra
 import type { DirectFormulaMetricCounts } from './operation-post-recalc-direct-formulas.js'
 import { finalizeOperationRecalcAndEvents } from './operation-recalc-finalizer.js'
 import type { CreateEngineOperationServiceArgs, MutationSource } from './operation-service-types.js'
-import {
-  bindFreshTemplateFormula,
-  canSkipTopoRepairForFreshDirectAggregate,
-  tryEvaluateFreshDirectAggregateCurrentResult,
-} from './operation-fresh-direct-aggregate.js'
+import { analyzeFreshDirectAggregateFormula, bindFreshTemplateFormula } from './operation-fresh-direct-aggregate.js'
 
 type OperationCellMutationSource = Exclude<MutationSource, 'remote'>
 type OperationCellDirectFormulaCallbacks = Parameters<typeof finalizeOperationRecalcAndEvents>[0]['directFormulaCallbacks']
@@ -539,14 +535,13 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
                 }
                 clearTrackedColumnDependencyFlagCache()
                 changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
-                const canSkipTopoRepair = canSkipTopoRepairForFreshDirectAggregate(args, {
+                const freshDirectAggregateAnalysis = analyzeFreshDirectAggregateFormula(args, {
                   priorHadFormula,
                   formulaCellIndex: cellIndex,
                   formula: runtimeFormula,
                 })
-                const freshDirectFormulaResult = canSkipTopoRepair
-                  ? tryEvaluateFreshDirectAggregateCurrentResult(args, runtimeFormula)
-                  : undefined
+                const canSkipTopoRepair = freshDirectAggregateAnalysis.canSkipTopoRepair
+                const freshDirectFormulaResult = freshDirectAggregateAnalysis.currentResult
                 const evaluatedFreshDirectFormula =
                   freshDirectFormulaResult !== undefined
                     ? applyDirectFormulaCurrentResult(cellIndex, freshDirectFormulaResult)

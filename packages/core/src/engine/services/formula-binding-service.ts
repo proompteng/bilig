@@ -332,6 +332,7 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
       nextDirectAggregate = buildDirectAggregateDescriptor({
         compiled: compiled as ParsedCompiledFormula,
         ownerSheetName,
+        workbook: args.state.workbook,
         regionGraph: args.regionGraph,
       })
       if (!nextDirectAggregate) {
