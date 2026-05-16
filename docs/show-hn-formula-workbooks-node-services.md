@@ -26,7 +26,7 @@ That is the whole pitch.
 ## Try the npm package
 
 This starts from an empty directory and uses the published package. The version
-checked by this page is `@bilig/headless@0.17.0`.
+checked by this page is `@bilig/headless@0.17.1`.
 
 ```sh
 mkdir bilig-headless-eval

@@ -54,7 +54,7 @@ export function requireFormulaProofDiscovery({
 
   for (const required of [
     'title: Show HN: Bilig runs small formula workbooks in Node',
-    '`@bilig/headless@0.17.0`',
+    `\`@bilig/headless@${benchmarkEvidence.packageVersion}\``,
     'curl -fsSLo quickstart.ts https://proompteng.github.io/bilig/npm-eval.ts',
     '"verified": true',
     `wins \`${benchmarkEvidence.meanWinHeadline}\` comparable`,

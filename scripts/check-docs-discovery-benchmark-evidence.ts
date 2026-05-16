@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs'
 
 type PublicBenchmarkEvidence = {
+  readonly package: {
+    readonly version: string
+  }
   readonly workpaperVsHyperFormula: {
     readonly overall: {
       readonly comparableCount: number
@@ -17,6 +20,7 @@ export type BenchmarkDiscoveryEvidence = {
   readonly meanAndP95Headline: string
   readonly meanWinHeadline: string
   readonly meanWinSentencePrefix: string
+  readonly packageVersion: string
   readonly p95HoldoutWorkload: string
   readonly p95HoldoutRatio: string
 }
@@ -38,6 +42,7 @@ function readBenchmarkDiscoveryEvidence(): BenchmarkDiscoveryEvidence {
     meanAndP95Headline: `${evidence.workpaperVsHyperFormula.meanAndP95WinCount}/${overall.comparableCount}`,
     meanWinHeadline: `${overall.workpaperWins}/${overall.comparableCount}`,
     meanWinSentencePrefix: `${overall.workpaperWins} of ${overall.comparableCount}`,
+    packageVersion: evidence.package.version,
     p95HoldoutWorkload: overall.worstP95RatioWorkload,
     p95HoldoutRatio,
   }
@@ -54,12 +59,13 @@ function parsePublicBenchmarkEvidence(rawEvidence: string): PublicBenchmarkEvide
 }
 
 function isPublicBenchmarkEvidence(value: unknown): value is PublicBenchmarkEvidence {
-  if (!isRecord(value) || !isRecord(value.workpaperVsHyperFormula)) {
+  if (!isRecord(value) || !isRecord(value.package) || !isRecord(value.workpaperVsHyperFormula)) {
     return false
   }
 
   const { overall } = value.workpaperVsHyperFormula
   return (
+    typeof value.package.version === 'string' &&
     isRecord(overall) &&
     Number.isFinite(value.workpaperVsHyperFormula.meanAndP95WinCount) &&
     Number.isFinite(overall.comparableCount) &&
