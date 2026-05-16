@@ -83,6 +83,14 @@ function readCellSelectionFromUrl(): string | null {
   }
 }
 
+function removeStoredSelection(key: string): void {
+  try {
+    window.localStorage.removeItem(key)
+  } catch {
+    // Ignore storage cleanup failures and keep selection recovery usable.
+  }
+}
+
 export function readSelectionFromUrl(): WorkerRuntimeSelection | null {
   const sheetName = readSheetSelectionFromUrl()
   if (!sheetName) {
@@ -98,8 +106,9 @@ function readStoredSelection(documentId: string): WorkerRuntimeSelection | null 
   if (typeof window === 'undefined') {
     return null
   }
+  const key = storageKey(documentId)
   try {
-    const raw = window.localStorage.getItem(storageKey(documentId))
+    const raw = window.localStorage.getItem(key)
     if (!raw) {
       return null
     }
@@ -111,10 +120,16 @@ function readStoredSelection(documentId: string): WorkerRuntimeSelection | null 
       typeof parsed['address'] !== 'string' ||
       parsed['address'].trim().length === 0
     ) {
+      removeStoredSelection(key)
       return null
     }
-    return normalizeSelection(parsed['sheetName'], parsed['address'])
+    const normalizedSelection = normalizeSelection(parsed['sheetName'], parsed['address'])
+    if (!normalizedSelection) {
+      removeStoredSelection(key)
+    }
+    return normalizedSelection
   } catch {
+    removeStoredSelection(key)
     return null
   }
 }

@@ -31,6 +31,9 @@ describe('selection persistence', () => {
         setItem(key: string, value: string) {
           storage.set(key, value)
         },
+        removeItem(key: string) {
+          storage.delete(key)
+        },
         clear() {
           storage.clear()
         },
@@ -51,6 +54,52 @@ describe('selection persistence', () => {
       sheetName: 'Sheet1',
       address: 'A1',
     })
+    expect(storage.has('bilig:selection:book-1')).toBe(false)
+  })
+
+  it('removes corrupt stored selection JSON after falling back', () => {
+    storage.set('bilig:selection:book-1', '{')
+
+    expect(loadPersistedSelection('book-1')).toEqual({
+      sheetName: 'Sheet1',
+      address: 'A1',
+    })
+    expect(storage.has('bilig:selection:book-1')).toBe(false)
+  })
+
+  it('falls back when corrupt stored selection cleanup fails', () => {
+    storage.set('bilig:selection:book-1', '{')
+    vi.stubGlobal('window', {
+      history: {
+        replaceState,
+        state: { from: 'test' },
+      },
+      localStorage: {
+        getItem(key: string) {
+          return storage.get(key) ?? null
+        },
+        removeItem() {
+          throw new Error('storage denied')
+        },
+      },
+      location: new URL('https://bilig.test/'),
+    })
+
+    expect(loadPersistedSelection('book-1')).toEqual({
+      sheetName: 'Sheet1',
+      address: 'A1',
+    })
+    expect(storage.has('bilig:selection:book-1')).toBe(true)
+  })
+
+  it('removes syntactically valid stored selections with invalid cell addresses', () => {
+    storage.set('bilig:selection:book-1', JSON.stringify({ sheetName: 'Sheet1', address: 'A0' }))
+
+    expect(loadPersistedSelection('book-1')).toEqual({
+      sheetName: 'Sheet1',
+      address: 'A1',
+    })
+    expect(storage.has('bilig:selection:book-1')).toBe(false)
   })
 
   it('restores the last stored sheet selection for a document', () => {
