@@ -165,6 +165,32 @@ export async function commitWorkbookHistoryMutation(input: {
   })
 }
 
+export async function acknowledgeAppliedWorkbookHistoryMutationReplay(input: {
+  documentId: string
+  serverTx: ServerTransactionLike
+  runtimeManager: WorkbookRuntimeManager
+  clientMutationId: string | undefined
+  matches: (payload: WorkbookEventPayload) => boolean
+}): Promise<boolean> {
+  if (input.clientMutationId === undefined) {
+    return false
+  }
+  return await input.runtimeManager.runExclusive(input.documentId, async () => {
+    const db = input.serverTx.dbTransaction.wrappedTransaction
+    await acquireWorkbookMutationLock(db, input.documentId)
+    const appliedClientMutation = await loadAppliedWorkbookClientMutation(db, input.documentId, input.clientMutationId)
+    if (!appliedClientMutation) {
+      return false
+    }
+    if (!input.matches(appliedClientMutation.payload)) {
+      throw new Error(
+        `Client mutation ${appliedClientMutation.clientMutationId} for workbook ${appliedClientMutation.documentId} was already applied with a different payload`,
+      )
+    }
+    return true
+  })
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }

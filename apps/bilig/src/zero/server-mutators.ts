@@ -31,6 +31,7 @@ import { upsertWorkbookPresence } from './presence-store.js'
 import { loadLatestRedoableWorkbookChange, loadLatestUndoableWorkbookChange, loadWorkbookChange } from './workbook-change-store.js'
 import { normalizeNumberFormatInput, normalizeStylePatch } from './server-mutator-format-payloads.js'
 import {
+  acknowledgeAppliedWorkbookHistoryMutationReplay,
   captureEngineUndoBundle,
   commitWorkbookHistoryMutation,
   commitWorkbookMutation,
@@ -563,6 +564,17 @@ export async function handleServerMutator(
     case 'workbook.revertChange': {
       const parsed = revertWorkbookChangeArgsSchema.parse(args)
       const db = serverTx.dbTransaction.wrappedTransaction
+      if (
+        await acknowledgeAppliedWorkbookHistoryMutationReplay({
+          documentId: parsed.documentId,
+          serverTx,
+          runtimeManager,
+          clientMutationId: parsed.clientMutationId,
+          matches: (payload) => payload.kind === 'revertChange' && payload.targetRevision === parsed.revision,
+        })
+      ) {
+        return
+      }
       const targetChange = await loadWorkbookChange(db, parsed.documentId, parsed.revision)
       if (!targetChange) {
         throw new Error('Workbook change was not found')
@@ -597,6 +609,17 @@ export async function handleServerMutator(
 
     case 'workbook.undoLatestChange': {
       const parsed = undoLatestWorkbookChangeArgsSchema.parse(args)
+      if (
+        await acknowledgeAppliedWorkbookHistoryMutationReplay({
+          documentId: parsed.documentId,
+          serverTx,
+          runtimeManager,
+          clientMutationId: parsed.clientMutationId,
+          matches: (payload) => payload.kind === 'revertChange',
+        })
+      ) {
+        return
+      }
       const targetChange = await loadLatestUndoableWorkbookChange(serverTx.dbTransaction.wrappedTransaction, {
         documentId: parsed.documentId,
         actorUserId: session?.userID ?? 'system',
@@ -625,6 +648,17 @@ export async function handleServerMutator(
 
     case 'workbook.redoLatestChange': {
       const parsed = redoLatestWorkbookChangeArgsSchema.parse(args)
+      if (
+        await acknowledgeAppliedWorkbookHistoryMutationReplay({
+          documentId: parsed.documentId,
+          serverTx,
+          runtimeManager,
+          clientMutationId: parsed.clientMutationId,
+          matches: (payload) => payload.kind === 'redoChange',
+        })
+      ) {
+        return
+      }
       const targetChange = await loadLatestRedoableWorkbookChange(serverTx.dbTransaction.wrappedTransaction, {
         documentId: parsed.documentId,
         actorUserId: session?.userID ?? 'system',
