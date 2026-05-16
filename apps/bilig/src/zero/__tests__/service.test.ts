@@ -21,8 +21,15 @@ const deps = vi.hoisted(() => {
     recalcStart: vi.fn(),
     recalcStop: vi.fn(),
     runtimeClose: vi.fn(async () => undefined),
+    handleQueryRequest: vi.fn(),
+    handleMutateRequest: vi.fn(),
   }
 })
+
+vi.mock('@rocicorp/zero/server', () => ({
+  handleQueryRequest: deps.handleQueryRequest,
+  handleMutateRequest: deps.handleMutateRequest,
+}))
 
 vi.mock('../db.js', () => ({
   resolveZeroDatabaseUrl: () => 'postgres://example.test/bilig',
@@ -178,4 +185,52 @@ describe('zero sync service startup', () => {
     })
     expect(deps.recalcStart).toHaveBeenCalledOnce()
   }, 15_000)
+
+  it('preserves the trusted request protocol and canonical host for Zero query requests', async () => {
+    deps.handleQueryRequest.mockImplementationOnce(async (_executeQuery, _schema, request: Request) => ({
+      method: request.method,
+      url: request.url,
+    }))
+    const { createZeroSyncService } = await import('../service.js')
+    const service = createZeroSyncService()
+
+    const result = await service.handleQuery({
+      protocol: 'https',
+      method: 'POST',
+      url: '/zero/query?hash=abc',
+      headers: {
+        host: ['   ', ' sheets.example.com:8443 '],
+        'x-bilig-user-id': 'user-1',
+      },
+      body: {
+        name: 'workbook.get',
+      },
+    })
+
+    expect(result).toEqual({
+      method: 'POST',
+      url: 'https://sheets.example.com:8443/zero/query?hash=abc',
+    })
+  })
+
+  it('rejects malformed request protocols before forwarding Zero mutations', async () => {
+    const { createZeroSyncService } = await import('../service.js')
+    const service = createZeroSyncService()
+
+    await expect(
+      service.handleMutate({
+        protocol: 'ftp',
+        method: 'POST',
+        url: '/zero/mutate',
+        headers: {
+          host: 'sheets.example.com',
+          'x-bilig-user-id': 'user-1',
+        },
+        body: {
+          mutations: [],
+        },
+      }),
+    ).rejects.toThrow('request protocol must be "http" or "https", got ftp')
+    expect(deps.handleMutateRequest).not.toHaveBeenCalled()
+  })
 })

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { FastifyReply, FastifyRequest } from 'fastify'
+import type { FastifyReply } from 'fastify'
 
 const SESSION_COOKIE_NAME = 'bilig_user_id'
 const SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
@@ -18,7 +18,11 @@ export interface SessionIdentity {
 }
 
 interface HeadersRequestLike {
-  readonly headers: FastifyRequest['headers']
+  readonly headers: {
+    readonly [key: string]: string | string[] | undefined
+    readonly authorization?: string | string[] | undefined
+    readonly cookie?: string | string[] | undefined
+  }
 }
 
 function parseCookieHeader(header: string | undefined): ReadonlyMap<string, string> {
@@ -124,7 +128,7 @@ function persistRequestSession(reply: FastifyReply, session: BiligRequestSession
   )
 }
 
-export function resolveSessionIdentity(request: FastifyRequest, reply?: FastifyReply): SessionIdentity {
+export function resolveSessionIdentity(request: HeadersRequestLike, reply?: FastifyReply): SessionIdentity {
   const session = resolveRequestSession(request)
   if (reply) {
     persistRequestSession(reply, session)

@@ -1,5 +1,6 @@
 import { handleMutateRequest, handleQueryRequest, type TransformQueryFunction } from '@rocicorp/zero/server'
 import type { WorkbookSnapshot } from '@bilig/protocol'
+import { resolveRequestBaseUrl } from '@bilig/runtime-kernel'
 import {
   type AuthoritativeWorkbookEventBatch,
   queries,
@@ -17,7 +18,6 @@ import {
   type WorkbookAgentExecutionRecord,
   type WorkbookAgentPreviewSummary,
 } from '@bilig/agent-api'
-import type { FastifyRequest } from 'fastify'
 import type { SessionIdentity } from '../http/session.js'
 import { resolveSessionIdentity } from '../http/session.js'
 import { WorkbookRuntimeManager, type WorkbookRuntime } from '../workbook-runtime/runtime-manager.js'
@@ -61,12 +61,23 @@ import {
 } from './workbook-workflow-run-store.js'
 import type { z } from 'zod'
 
+export interface ZeroSyncRequestLike {
+  readonly protocol: string
+  readonly method: string
+  readonly url: string
+  readonly headers: {
+    readonly [key: string]: string | string[] | undefined
+    readonly host?: string | string[] | undefined
+  }
+  readonly body?: unknown
+}
+
 export interface ZeroSyncService {
   readonly enabled: boolean
   initialize(): Promise<void>
   close(): Promise<void>
-  handleQuery(request: FastifyRequest): Promise<unknown>
-  handleMutate(request: FastifyRequest): Promise<unknown>
+  handleQuery(request: ZeroSyncRequestLike): Promise<unknown>
+  handleMutate(request: ZeroSyncRequestLike): Promise<unknown>
   inspectWorkbook<T>(documentId: string, task: (runtime: WorkbookRuntime) => Promise<T> | T): Promise<T>
   applyServerMutator(name: string, args: unknown, session?: SessionIdentity): Promise<void>
   applyAgentCommandBundle(
@@ -112,8 +123,8 @@ function createQueryHandler<TArgs>(
   }
 }
 
-function fastifyRequestToWebRequest(request: FastifyRequest): Request {
-  const origin = typeof request.headers.host === 'string' ? `http://${request.headers.host}` : 'http://localhost'
+function fastifyRequestToWebRequest(request: ZeroSyncRequestLike): Request {
+  const origin = resolveRequestBaseUrl(request, 'localhost')
   const headers = new Headers()
   for (const [key, value] of Object.entries(request.headers)) {
     if (Array.isArray(value)) {
@@ -249,7 +260,7 @@ class EnabledZeroSyncService implements ZeroSyncService {
     await this.pool.end()
   }
 
-  async handleQuery(request: FastifyRequest): Promise<unknown> {
+  async handleQuery(request: ZeroSyncRequestLike): Promise<unknown> {
     const session = resolveSessionIdentity(request)
     const queryLookup: Record<string, QueryHandler> = {
       'workbook.get': createQueryHandler(workbookQueryArgsSchema, queries.workbook.get.fn),
@@ -282,7 +293,7 @@ class EnabledZeroSyncService implements ZeroSyncService {
     )
   }
 
-  async handleMutate(request: FastifyRequest): Promise<unknown> {
+  async handleMutate(request: ZeroSyncRequestLike): Promise<unknown> {
     const session = resolveSessionIdentity(request)
     return await handleMutateRequest(
       this.dbProvider,
