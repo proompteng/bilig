@@ -6,6 +6,7 @@ import {
   directCriteriaOperandEqual,
   directCriteriaStructureEqual,
   directLookupStructureEqual,
+  directScalarDependencyCellsEqual,
 } from './formula-binding-shape-helpers.js'
 
 export const formulaBindingServiceTestHooks = {
@@ -14,6 +15,7 @@ export const formulaBindingServiceTestHooks = {
   directCriteriaStructureEqual,
   directLookupColumnInfo,
   directLookupStructureEqual,
+  directScalarDependencyCellsEqual,
   rewriteDirectAggregateDescriptorForStructuralTransform,
   staticIntegerValue,
 }

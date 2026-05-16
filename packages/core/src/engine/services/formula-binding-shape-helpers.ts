@@ -124,6 +124,30 @@ function directScalarOperandEqual(left: RuntimeDirectScalarOperand | undefined, 
   return right.kind === 'literal-number' && Object.is(left.value, right.value)
 }
 
+function directScalarOperandCellIndex(operand: RuntimeDirectScalarOperand): number {
+  return operand.kind === 'cell' ? operand.cellIndex : -1
+}
+
+export function directScalarDependencyCellsEqual(
+  left: RuntimeDirectScalarDescriptor | undefined,
+  right: RuntimeDirectScalarDescriptor | undefined,
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (!left || !right) {
+    return false
+  }
+  const leftFirst = left.kind === 'binary' ? directScalarOperandCellIndex(left.left) : directScalarOperandCellIndex(left.operand)
+  const leftSecond = left.kind === 'binary' ? directScalarOperandCellIndex(left.right) : -1
+  const rightFirst = right.kind === 'binary' ? directScalarOperandCellIndex(right.left) : directScalarOperandCellIndex(right.operand)
+  const rightSecond = right.kind === 'binary' ? directScalarOperandCellIndex(right.right) : -1
+  if (leftSecond === -1 || rightSecond === -1) {
+    return leftSecond === rightSecond && leftFirst === rightFirst
+  }
+  return (leftFirst === rightFirst && leftSecond === rightSecond) || (leftFirst === rightSecond && leftSecond === rightFirst)
+}
+
 function directCriteriaResultTransformsEqual(
   left: RuntimeDirectCriteriaDescriptor['resultTransforms'],
   right: RuntimeDirectCriteriaDescriptor['resultTransforms'],

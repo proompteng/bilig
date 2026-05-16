@@ -26,7 +26,7 @@ That is the whole pitch.
 ## Try the npm package
 
 This starts from an empty directory and uses the published package. The version
-checked by this page is `@bilig/headless@0.16.26`.
+checked by this page is `@bilig/headless@0.16.27`.
 
 ```sh
 mkdir bilig-headless-eval
@@ -73,12 +73,12 @@ values are a common footgun.
 
 ## Current numbers
 
-The checked benchmark artifact currently says Bilig wins `72/100` comparable
+The checked benchmark artifact currently says Bilig wins `73/100` comparable
 workloads on mean latency against the HyperFormula-style baseline. It wins
-`70/100` on both mean and p95.
+`69/100` on both mean and p95.
 
-The miss is not hidden: `lookup-text-exact` is slower at p95 by
-`22.992x`. Browser grid rendering is not part of this benchmark.
+The miss is not hidden: `build-mixed-content` is slower at p95 by
+`2.977x`. Browser grid rendering is not part of this benchmark.
 
 Read the benchmark note:
 [what the WorkPaper benchmark proves](what-workpaper-benchmark-proves.md).
@@ -138,7 +138,7 @@ Excel compatibility claim. If you need a mature broad formula engine,
 HyperFormula is probably the first thing to test. If you need file manipulation,
 start with SheetJS or ExcelJS.
 
-The current benchmark artifact says 72/100 mean-latency wins on comparable
+The current benchmark artifact says 73/100 mean-latency wins on comparable
 workloads, with the p95 miss called out on the page.
 
 I am looking for rejection reasons from people who have shipped this kind of

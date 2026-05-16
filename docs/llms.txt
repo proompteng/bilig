@@ -169,8 +169,8 @@ npm run agent:verify
   https://proompteng.github.io/bilig/show-hn-formula-workbooks-node-services.html
   https://github.com/proompteng/bilig/blob/main/docs/show-hn-formula-workbooks-node-services.md
   compresses the empty npm project proof, WorkPaper JSON restore check,
-  `72/100` mean-win benchmark claim, `70/100` mean+p95 claim, visible
-  lookup-text-exact p95 caveat, and adoption-blocker
+  `73/100` mean-win benchmark claim, `69/100` mean+p95 claim, visible
+  build-mixed-content p95 caveat, and adoption-blocker
   feedback ask.
 - JavaScript spreadsheet library guide for Node services:
   https://github.com/proompteng/bilig/blob/main/docs/javascript-spreadsheet-library-headless-node.md

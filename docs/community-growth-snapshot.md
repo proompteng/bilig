@@ -16,7 +16,7 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 
 ## npm
 
-- Package: `@bilig/headless@0.16.26`
+- Package: `@bilig/headless@0.16.27`
 - License: `MIT`
 - Modified: `2026-05-16T21:24:44.575Z`
 - Downloads last week: 12,568 (2026-05-09 to 2026-05-15)

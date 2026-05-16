@@ -12,6 +12,7 @@ import {
   canRewriteCompiledPreservingBindings,
   canRewriteCompiledPreservingDirectAggregate,
   canRewriteCompiledPreservingDirectScalar,
+  directScalarDependencyCellsEqual,
   directAggregateStructureEqual,
   directCriteriaStructureEqual,
   directLookupStructureEqual,
@@ -339,6 +340,40 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
         return false
       }
     } else if (canRewriteCompiledPreservingDirectScalar(existing, compiled)) {
+      const replacementDirectScalar = buildDirectScalarDescriptor({
+        compiled: compiled as ParsedCompiledFormula,
+        ownerSheetName,
+        ownerSheetId,
+        workbook: args.state.workbook,
+        ensureCellTracked: args.ensureCellTracked,
+        ensureCellTrackedByCoords: args.ensureCellTrackedByCoords,
+      })
+      if (replacementDirectScalar && directScalarDependencyCellsEqual(existing.directScalar, replacementDirectScalar)) {
+        const nextTemplateId = templateId ?? existing.templateId
+        const plan = canRetainUnmanagedCompiledPlan(existing.planId, compiled, replacementDirectScalar)
+          ? makeUnmanagedCompiledPlan(source, compiled, nextTemplateId)
+          : args.compiledPlans.replace(existing.planId, source, compiled, nextTemplateId)
+        existing.source = source
+        existing.structuralSourceTransform = undefined
+        existing.sourceRenameTransforms = undefined
+        existing.planId = plan.id
+        existing.templateId = nextTemplateId
+        existing.compiled = plan.compiled
+        existing.plan = plan
+        existing.runtimeProgram = compiled.program
+        existing.constants = compiled.constants
+        existing.programLength = compiled.program.length
+        existing.constNumberLength = compiled.constants.length
+        existing.directScalar = replacementDirectScalar
+        updateVolatileFormulaIndex(cellIndex, existing)
+        markFormulaCellBound(args.state.workbook.cellStore, cellIndex, compiled.mode)
+        if (compiled.mode === FormulaMode.WasmFastPath && compiled.program.length > 0) {
+          args.scheduleWasmProgramSync()
+        }
+        recordFormulaInstanceNow(cellIndex, source, nextTemplateId, ownerPosition)
+        registerFormulaFamilyNow(cellIndex, existing, ownerPosition)
+        return true
+      }
       updateFormulaDependenciesInPlaceNow(
         cellIndex,
         existing,

@@ -32,7 +32,7 @@ export const communityLaunchPackRequiredLinks = [
   'https://github.com/ever-works/awesome-mcp-servers-data/pull/4',
   'https://github.com/jmstfv/mcpserve/pull/19',
   'Latest conversion snapshot on May 16, 2026',
-  '`@bilig/headless@0.16.26`',
+  '`@bilig/headless@0.16.27`',
   '21,392` clones from `2,641` unique cloners',
   'comment child `48045467` is dead',
   'comment child `48052854` is flagged',

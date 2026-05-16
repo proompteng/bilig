@@ -11,21 +11,21 @@ inflating what the benchmark can prove.
 ## The Claim
 
 The current checked-in WorkPaper-vs-HyperFormula artifact records WorkPaper
-`72/100` mean-latency wins on scorecard-eligible comparable workloads. This is a
+`73/100` mean-latency wins on scorecard-eligible comparable workloads. This is a
 scoped lead with visible holdouts, not a blanket fastest-engine claim:
 
 | Lane    | Comparable Workloads | WorkPaper Mean Wins | HyperFormula Mean Wins |
 | ------- | -------------------: | ------------------: | ---------------------: |
-| Overall |                `100` |                `72` |                   `28` |
-| Public  |                 `73` |                `53` |                   `20` |
-| Holdout |                 `27` |                `19` |                    `8` |
+| Overall |                `100` |                `73` |                   `27` |
+| Public  |                 `73` |                `55` |                   `18` |
+| Holdout |                 `27` |                `18` |                    `9` |
 
 The artifact is
 [`packages/benchmarks/baselines/workpaper-vs-hyperformula.json`](../packages/benchmarks/baselines/workpaper-vs-hyperformula.json),
-generated at `2026-05-16T21:37:09.873Z`.
+generated at `2026-05-16T21:48:40.274Z`.
 
-The overall directional mean-ratio geomean is `0.7071933537655859`, and the
-overall directional p95-ratio geomean is `0.6979827319598825`. Ratios below
+The overall directional mean-ratio geomean is `0.6483251784617534`, and the
+overall directional p95-ratio geomean is `0.6586172990289921`. Ratios below
 `1.0` mean WorkPaper is faster on that metric.
 
 ## What It Proves
@@ -54,10 +54,10 @@ It does not prove full formula parity with Excel, Google Sheets, or
 HyperFormula.
 
 It does not prove that every p95 row is faster. The current headless leadership
-scorecard records `70/100` workloads winning both mean and p95. The worst p95
-holdout is `lookup-text-exact`, where the current
-WorkPaper-to-HyperFormula p95 ratio is `22.99194632249502`. The honest claim is
-`72/100` mean wins plus an
+scorecard records `69/100` workloads winning both mean and p95. The worst p95
+holdout is `build-mixed-content`, where the current
+WorkPaper-to-HyperFormula p95 ratio is `2.9767210268354547`. The honest claim is
+`73/100` mean wins plus an
 overall p95 geomean lead, not "faster on every row."
 
 It does not prove that browser-grid rendering, import/export, collaboration, or
@@ -103,13 +103,13 @@ npm start
 
 Short:
 
-> bilig's WorkPaper benchmark currently records `72/100` mean wins against
+> bilig's WorkPaper benchmark currently records `73/100` mean wins against
 > HyperFormula-style headless workloads, with the p95 caveat documented instead
 > of hidden.
 
 Reply-sized:
 
 > the useful part is the audit trail: a checked-in benchmark artifact, a verify
-> command, and an explicit p95 caveat. the claim is `72/100` mean wins for the
+> command, and an explicit p95 caveat. the claim is `73/100` mean wins for the
 > current comparable headless WorkPaper workloads, not "we are faster at
 > everything."

@@ -9,6 +9,9 @@ import { formulaBindingServiceTestHooks, type EngineFormulaBindingService } from
 import type { FormulaFamilyStore } from '../formula/formula-family-store.js'
 
 type DirectLookupTestDescriptor = NonNullable<Parameters<typeof formulaBindingServiceTestHooks.directLookupStructureEqual>[0]>
+type DirectScalarTestDescriptor = NonNullable<Parameters<typeof formulaBindingServiceTestHooks.directScalarDependencyCellsEqual>[0]>
+type DirectScalarBinaryTestDescriptor = Extract<DirectScalarTestDescriptor, { kind: 'binary' }>
+type DirectScalarTestOperand = DirectScalarBinaryTestDescriptor['left']
 type DirectCriteriaOperandTest = Parameters<typeof formulaBindingServiceTestHooks.directCriteriaOperandEqual>[0]
 type DirectCriteriaTestDescriptor = NonNullable<Parameters<typeof formulaBindingServiceTestHooks.directCriteriaStructureEqual>[0]>
 type DirectAggregateTestDescriptor = NonNullable<Parameters<typeof formulaBindingServiceTestHooks.directAggregateStructureEqual>[0]>
@@ -80,6 +83,23 @@ function readRuntimeTemplateId(engine: SpreadsheetEngine, cellIndex: number): nu
   const formula = readRuntimeFormula(engine, cellIndex)
   const templateId = typeof formula === 'object' && formula !== null ? Reflect.get(formula, 'templateId') : undefined
   return typeof templateId === 'number' ? templateId : undefined
+}
+
+function binaryScalar(left: DirectScalarTestOperand, right: DirectScalarTestOperand): DirectScalarTestDescriptor {
+  return {
+    kind: 'binary',
+    operator: '+',
+    left,
+    right,
+  }
+}
+
+function scalarCell(cellIndex: number): DirectScalarTestOperand {
+  return { kind: 'cell', cellIndex }
+}
+
+function scalarLiteral(value: number): DirectScalarTestOperand {
+  return { kind: 'literal-number', value }
 }
 
 function readRuntimeDirectScalar(engine: SpreadsheetEngine, cellIndex: number): unknown {
@@ -202,6 +222,25 @@ describe('EngineFormulaBindingService', () => {
       formulaBindingServiceTestHooks.directLookupStructureEqual(approximateUniformLookup, { ...approximateUniformLookup, col: 1 }),
     ).toBe(false)
     expect(formulaBindingServiceTestHooks.directLookupStructureEqual(undefined, exactLookup)).toBe(false)
+
+    expect(
+      formulaBindingServiceTestHooks.directScalarDependencyCellsEqual(
+        binaryScalar(scalarCell(1), scalarCell(2)),
+        binaryScalar(scalarCell(2), scalarCell(1)),
+      ),
+    ).toBe(true)
+    expect(
+      formulaBindingServiceTestHooks.directScalarDependencyCellsEqual(
+        binaryScalar(scalarCell(1), scalarLiteral(10)),
+        binaryScalar(scalarCell(1), scalarLiteral(20)),
+      ),
+    ).toBe(true)
+    expect(
+      formulaBindingServiceTestHooks.directScalarDependencyCellsEqual(
+        binaryScalar(scalarCell(1), scalarCell(2)),
+        binaryScalar(scalarCell(1), scalarCell(3)),
+      ),
+    ).toBe(false)
 
     const literalCriterion = { kind: 'literal', value: { tag: ValueTag.Number, value: 2 } } satisfies DirectCriteriaOperandTest
     const cellCriterion = { kind: 'cell', cellIndex: 44 } satisfies DirectCriteriaOperandTest
