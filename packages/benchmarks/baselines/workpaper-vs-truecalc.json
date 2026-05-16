@@ -15,7 +15,7 @@
     "workpaper": {
       "packageName": "@bilig/headless",
       "sourcePath": "/Users/gregkonush/github.com/bilig/packages/headless",
-      "version": "0.16.0"
+      "version": "0.16.2"
     },
     "truecalc": {
       "coverageTier": "scalar-formula",

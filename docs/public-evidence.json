@@ -2,17 +2,17 @@
   "schemaVersion": 1,
   "package": {
     "name": "@bilig/headless",
-    "version": "0.16.1",
-    "releasePleaseManifestVersion": "0.16.1",
-    "mcpServerVersion": "0.16.1",
-    "mcpPackageVersion": "0.16.1"
+    "version": "0.16.2",
+    "releasePleaseManifestVersion": "0.16.2",
+    "mcpServerVersion": "0.16.2",
+    "mcpPackageVersion": "0.16.2"
   },
   "workpaperVsHyperFormula": {
     "artifactPath": "packages/benchmarks/baselines/workpaper-vs-hyperformula.json",
     "generatedAt": "2026-05-16T05:28:28.409Z",
     "sampleCount": 5,
     "warmupCount": 2,
-    "workpaperPackageVersion": "0.16.1",
+    "workpaperPackageVersion": "0.16.2",
     "hyperformulaVersion": "3.2.0",
     "hyperformulaCommit": "9a510a2acb97c3d3490f9e3b9e961a1c4a98b9ad",
     "overall": {

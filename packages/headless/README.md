@@ -33,7 +33,7 @@ npm install @bilig/headless
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.16.1`:
+Current checked npm footprint for `@bilig/headless@0.16.2`:
 
 - Pack dry run: `417 kB` tarball, `2.49 MB` unpacked, `420` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX

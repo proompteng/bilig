@@ -359,7 +359,7 @@ Latest conversion snapshot on May 16, 2026:
 
 - GitHub surface: `23` stars, `16` forks, `116` open issues, and `5` open
   pull requests. The star gap is still `977`.
-- npm surface: `@bilig/headless@0.16.0`, with `14,980` downloads in the
+- npm surface: `@bilig/headless@0.16.2`, with `14,980` downloads in the
   latest weekly window and `27,080` downloads in the latest monthly window.
 - Traffic surface: GitHub reports `528` views from `178` unique visitors and
   `21,402` clones from `2,534` unique cloners. The strongest referrers are
@@ -380,9 +380,9 @@ Latest conversion snapshot on May 16, 2026:
   star page beside npm install and GitHub, and the docs index links to the live
   community growth snapshot so visitors can inspect the current public signals.
 - MCP registry action: the official MCP Registry was refreshed to
-  `@bilig/headless@0.16.0` with workflow run
+  `@bilig/headless@0.16.2` with workflow run
   <https://github.com/proompteng/bilig/actions/runs/25955213169>. Live API
-  verification marked `0.16.0` as the latest Bilig WorkPaper server package.
+  verification marked `0.16.2` as the latest Bilig WorkPaper server package.
 
 Latest contributor-funnel action on May 14, 2026:
 

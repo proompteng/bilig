@@ -58,7 +58,7 @@ network service to answer `tools/list` and `tools/call`.
 
 PulseMCP says server listings are ingested from the official MCP Registry daily
 and processed weekly. The Bilig WorkPaper registry entry is already live at
-`@bilig/headless@0.16.0`, so PulseMCP absence is a directory-ingest delay, not a
+`@bilig/headless@0.16.2`, so PulseMCP absence is a directory-ingest delay, not a
 missing package or server metadata problem. Starter issue
 [#384](https://github.com/proompteng/bilig/issues/384) tracks the next public
 verification pass.
@@ -112,7 +112,7 @@ A useful result includes:
 - `repository.url: https://github.com/proompteng/bilig`
 
 Latest checked result on May 16, 2026: the official Registry API returned one
-latest Bilig WorkPaper entry and marked `@bilig/headless@0.16.0` as the latest
+latest Bilig WorkPaper entry and marked `@bilig/headless@0.16.2` as the latest
 server package. The refresh was published by the repository workflow run at
 <https://github.com/proompteng/bilig/actions/runs/25955213169>.
 
