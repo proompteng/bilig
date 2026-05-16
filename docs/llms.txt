@@ -12,6 +12,7 @@ language: typescript
 ## best entry points
 
 - https://proompteng.github.io/bilig/
+- https://proompteng.github.io/bilig/stop-driving-spreadsheets-with-screenshots.html
 - https://proompteng.github.io/bilig/headless-spreadsheet-engine-node-services-agents.html
 - https://proompteng.github.io/bilig/exceljs-formula-recalculation-node.html
 - https://dev.to/gregkonush/why-agents-need-workbook-apis-instead-of-spreadsheet-screenshots-3d61
@@ -56,6 +57,7 @@ language: typescript
 - https://github.com/proompteng/bilig/discussions
 - https://github.com/proompteng/bilig/discussions/157
 - https://github.com/proompteng/bilig/blob/main/docs/node-spreadsheet-formula-engine.md
+- https://github.com/proompteng/bilig/blob/main/docs/stop-driving-spreadsheets-with-screenshots.md
 - https://github.com/proompteng/bilig/blob/main/docs/evaluate-excel-formulas-in-node-typescript.md
 - https://github.com/proompteng/bilig/blob/main/docs/server-side-spreadsheet-automation-node.md
 - https://github.com/proompteng/bilig/blob/main/docs/google-sheets-api-alternative-node-workpaper.md
@@ -129,6 +131,9 @@ npm run agent:verify
 - headless spreadsheet engine for Node services and agents:
   https://proompteng.github.io/bilig/headless-spreadsheet-engine-node-services-agents.html
   https://github.com/proompteng/bilig/blob/main/docs/headless-spreadsheet-engine-node-services-agents.md
+- screenshot automation boundary:
+  https://proompteng.github.io/bilig/stop-driving-spreadsheets-with-screenshots.html
+  https://github.com/proompteng/bilig/blob/main/docs/stop-driving-spreadsheets-with-screenshots.md
 - JavaScript spreadsheet library guide for Node services:
   https://github.com/proompteng/bilig/blob/main/docs/javascript-spreadsheet-library-headless-node.md
 - SheetJS and ExcelJS comparison:

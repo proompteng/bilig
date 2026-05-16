@@ -126,6 +126,7 @@ requireIncludes(index, '"applicationCategory": "DeveloperApplication"', 'docs/in
 requireIncludes(index, '"@type": "FAQPage"', 'docs/index.html')
 for (const required of [
   './why-agents-need-workbook-apis.html',
+  './stop-driving-spreadsheets-with-screenshots.html',
   './agent-workpaper-tool-calling-recipe.html',
   './vercel-ai-sdk-langchain-spreadsheet-tool.html',
   './mcp-workpaper-tool-server.html',
@@ -207,6 +208,7 @@ for (const required of [
   'npm run agent:verify',
   'https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper#json-records-input',
   'https://proompteng.github.io/bilig/why-agents-need-workbook-apis.html',
+  'https://proompteng.github.io/bilig/stop-driving-spreadsheets-with-screenshots.html',
   'https://proompteng.github.io/bilig/try-bilig-headless-in-node.html',
   'https://proompteng.github.io/bilig/vercel-ai-sdk-langchain-spreadsheet-tool.html',
   'https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html',
@@ -242,6 +244,7 @@ for (const required of [
   'https://proompteng.github.io/bilig/node-spreadsheet-formula-engine.html',
   'https://proompteng.github.io/bilig/evaluate-excel-formulas-in-node-typescript.html',
   'https://github.com/proompteng/bilig/blob/main/docs/node-spreadsheet-formula-engine.md',
+  'https://github.com/proompteng/bilig/blob/main/docs/stop-driving-spreadsheets-with-screenshots.md',
   'https://github.com/proompteng/bilig/blob/main/docs/evaluate-excel-formulas-in-node-typescript.md',
   'https://github.com/proompteng/bilig/blob/main/docs/server-side-spreadsheet-automation-node.md',
   'https://github.com/proompteng/bilig/blob/main/docs/google-sheets-api-alternative-node-workpaper.md',

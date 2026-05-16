@@ -1,5 +1,6 @@
 export const docsSiteSources = [
   ['', 'index.html'],
+  ['stop-driving-spreadsheets-with-screenshots.html', 'stop-driving-spreadsheets-with-screenshots.md'],
   ['headless-spreadsheet-engine-node-services-agents.html', 'headless-spreadsheet-engine-node-services-agents.md'],
   ['exceljs-formula-recalculation-node.html', 'exceljs-formula-recalculation-node.md'],
   ['why-agents-need-workbook-apis.html', 'why-agents-need-workbook-apis.md'],

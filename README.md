@@ -141,6 +141,7 @@ Use the shortest path that proves the package against a real job.
 The rest of the docs are an index, not a prerequisite.
 
 For comparison and integration details, use the
+[screenshot automation boundary](docs/stop-driving-spreadsheets-with-screenshots.md),
 [Google Sheets API boundary](docs/google-sheets-api-alternative-node-workpaper.md),
 [workbook automation examples](docs/workbook-automation-examples-node.md),
 the [Node spreadsheet formula engine guide](docs/node-spreadsheet-formula-engine.md),
