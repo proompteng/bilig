@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.16.20
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.16.19
+- Manual override: no
+
+## Fixes
+- perf(headless): trim scalar closure allocations (356f880b)
+
+## Internal runtime changes
+- docs(growth): track jsgrids and refresh evidence (d8d71044)
+
 ## 0.16.19
 
 - Release type: patch
