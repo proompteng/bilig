@@ -1,4 +1,5 @@
 import { ErrorCode, type FormulaMode, type ValueTag } from './enums.js'
+import type { CellNumberFormatRecord, CellStylePatch, CellStyleRecord } from './cell-format-types.js'
 import type {
   WorkbookDataModelArtifactsSnapshot,
   WorkbookDocumentPropertiesArtifactsSnapshot,
@@ -22,6 +23,44 @@ import type {
   WorkbookUnsupportedFormulaDependencySnapshot,
   WorkbookUnsupportedPivotSnapshot,
 } from './workbook-pivot-types.js'
+export type {
+  CellBorderSidePatch,
+  CellBorderSideSnapshot,
+  CellBorderStyle,
+  CellBorderWeight,
+  CellDateStyle,
+  CellHorizontalAlignment,
+  CellNumberFormatInput,
+  CellNumberFormatKind,
+  CellNumberFormatPreset,
+  CellNumberFormatRecord,
+  CellNumberNegativeStyle,
+  CellNumberZeroStyle,
+  CellStyleAlignmentPatch,
+  CellStyleAlignmentSnapshot,
+  CellStyleBordersPatch,
+  CellStyleBordersSnapshot,
+  CellStyleField,
+  CellStyleFillPatch,
+  CellStyleFillSnapshot,
+  CellStyleFontPatch,
+  CellStyleFontSnapshot,
+  CellStylePatch,
+  CellStyleProtectionSnapshot,
+  CellStyleRecord,
+  CellVerticalAlignment,
+} from './cell-format-types.js'
+export {
+  CELL_BORDER_STYLE_VALUES,
+  CELL_BORDER_WEIGHT_VALUES,
+  CELL_DATE_STYLE_VALUES,
+  CELL_HORIZONTAL_ALIGNMENT_VALUES,
+  CELL_NUMBER_FORMAT_KIND_VALUES,
+  CELL_NUMBER_NEGATIVE_STYLE_VALUES,
+  CELL_NUMBER_ZERO_STYLE_VALUES,
+  CELL_STYLE_FIELD_VALUES,
+  CELL_VERTICAL_ALIGNMENT_VALUES,
+} from './cell-format-types.js'
 export type {
   PivotAggregation,
   WorkbookExternalWorkbookReferenceSnapshot,
@@ -454,151 +493,6 @@ export interface WorkbookSheetTabColorSnapshot {
 }
 
 export interface WorkbookMergeRangeSnapshot extends CellRangeRef {}
-
-export interface CellStyleFillSnapshot {
-  backgroundColor: string
-}
-
-export interface CellStyleFontSnapshot {
-  family?: string
-  size?: number
-  bold?: boolean
-  italic?: boolean
-  underline?: boolean
-  color?: string
-}
-
-export type CellHorizontalAlignment = 'general' | 'left' | 'center' | 'right' | 'fill' | 'justify' | 'centerContinuous' | 'distributed'
-export type CellVerticalAlignment = 'top' | 'middle' | 'bottom' | 'justify' | 'distributed'
-export type CellBorderStyle = 'solid' | 'dashed' | 'dotted' | 'double'
-export type CellBorderWeight = 'thin' | 'medium' | 'thick'
-
-export interface CellStyleAlignmentSnapshot {
-  horizontal?: CellHorizontalAlignment
-  vertical?: CellVerticalAlignment
-  wrap?: boolean
-  indent?: number
-  shrinkToFit?: boolean
-  readingOrder?: number
-  textRotation?: number
-  justifyLastLine?: boolean
-}
-
-export interface CellBorderSideSnapshot {
-  style: CellBorderStyle
-  weight: CellBorderWeight
-  color: string
-}
-
-export interface CellStyleBordersSnapshot {
-  top?: CellBorderSideSnapshot
-  right?: CellBorderSideSnapshot
-  bottom?: CellBorderSideSnapshot
-  left?: CellBorderSideSnapshot
-}
-
-export interface CellStyleProtectionSnapshot {
-  locked?: boolean
-  hidden?: boolean
-}
-
-export interface CellStyleRecord {
-  id: string
-  fill?: CellStyleFillSnapshot
-  font?: CellStyleFontSnapshot
-  alignment?: CellStyleAlignmentSnapshot
-  borders?: CellStyleBordersSnapshot
-  protection?: CellStyleProtectionSnapshot
-}
-
-export interface CellStyleFillPatch {
-  backgroundColor?: string | null
-}
-
-export interface CellStyleFontPatch {
-  family?: string | null
-  size?: number | null
-  bold?: boolean | null
-  italic?: boolean | null
-  underline?: boolean | null
-  color?: string | null
-}
-
-export interface CellStyleAlignmentPatch {
-  horizontal?: CellHorizontalAlignment | null
-  vertical?: CellVerticalAlignment | null
-  wrap?: boolean | null
-  indent?: number | null
-  shrinkToFit?: boolean | null
-  readingOrder?: number | null
-  textRotation?: number | null
-  justifyLastLine?: boolean | null
-}
-
-export interface CellBorderSidePatch {
-  style?: CellBorderStyle | null
-  weight?: CellBorderWeight | null
-  color?: string | null
-}
-
-export interface CellStyleBordersPatch {
-  top?: CellBorderSidePatch | null
-  right?: CellBorderSidePatch | null
-  bottom?: CellBorderSidePatch | null
-  left?: CellBorderSidePatch | null
-}
-
-export interface CellStylePatch {
-  fill?: CellStyleFillPatch | null
-  font?: CellStyleFontPatch | null
-  alignment?: CellStyleAlignmentPatch | null
-  borders?: CellStyleBordersPatch | null
-}
-
-export type CellStyleField =
-  | 'backgroundColor'
-  | 'fontFamily'
-  | 'fontSize'
-  | 'fontBold'
-  | 'fontItalic'
-  | 'fontUnderline'
-  | 'fontColor'
-  | 'alignmentHorizontal'
-  | 'alignmentVertical'
-  | 'alignmentWrap'
-  | 'alignmentIndent'
-  | 'alignmentShrinkToFit'
-  | 'alignmentReadingOrder'
-  | 'alignmentTextRotation'
-  | 'alignmentJustifyLastLine'
-  | 'borderTop'
-  | 'borderRight'
-  | 'borderBottom'
-  | 'borderLeft'
-
-export type CellNumberFormatKind = 'general' | 'number' | 'currency' | 'accounting' | 'percent' | 'date' | 'time' | 'datetime' | 'text'
-
-export type CellNumberNegativeStyle = 'minus' | 'parentheses'
-export type CellNumberZeroStyle = 'zero' | 'dash'
-export type CellDateStyle = 'short' | 'iso'
-
-export interface CellNumberFormatPreset {
-  kind: CellNumberFormatKind
-  currency?: string
-  decimals?: number
-  useGrouping?: boolean
-  negativeStyle?: CellNumberNegativeStyle
-  zeroStyle?: CellNumberZeroStyle
-  dateStyle?: CellDateStyle
-}
-
-export type CellNumberFormatInput = string | CellNumberFormatPreset
-
-export interface CellNumberFormatRecord {
-  id: string
-  code: string
-  kind: CellNumberFormatKind
-}
 
 export interface SheetStyleRangeSnapshot {
   range: CellRangeRef

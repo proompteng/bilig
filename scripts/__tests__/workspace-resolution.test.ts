@@ -14,4 +14,16 @@ describe('workspace resolution', () => {
       sourceEntry: 'packages/formula/src/program-arena.ts',
     })
   })
+
+  it('orders Vitest aliases with package subpaths before package roots', async () => {
+    const { createVitestAliasEntries } = await import('../workspace-resolution.js')
+
+    const aliases = createVitestAliasEntries([], workspaceRootDir)
+    const rootIndex = aliases.findIndex((entry) => entry.find === '@bilig/benchmarks')
+    const subpathIndex = aliases.findIndex((entry) => entry.find === '@bilig/benchmarks/workbook-corpus')
+
+    expect(subpathIndex).toBeGreaterThanOrEqual(0)
+    expect(rootIndex).toBeGreaterThanOrEqual(0)
+    expect(subpathIndex).toBeLessThan(rootIndex)
+  })
 })

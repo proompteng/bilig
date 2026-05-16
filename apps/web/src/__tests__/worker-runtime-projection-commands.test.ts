@@ -15,11 +15,23 @@ describe('worker runtime projection commands', () => {
     expect(normalizeProjectedRowHeight(0.2)).toBe(1)
   })
 
+  it('rejects invalid row heights before they can poison projection state', () => {
+    expect(() => normalizeProjectedRowHeight(Number.NaN)).toThrow('Invalid projected row height')
+    expect(() => normalizeProjectedRowHeight(Number.POSITIVE_INFINITY)).toThrow('Invalid projected row height')
+    expect(() => normalizeProjectedRowHeight(-1)).toThrow('Invalid projected row height')
+  })
+
   it('normalizes column widths into the allowed range', () => {
     expect(normalizeProjectedColumnWidth(null, 24, 480)).toBeNull()
     expect(normalizeProjectedColumnWidth(12.2, 24, 480)).toBe(24)
     expect(normalizeProjectedColumnWidth(128.6, 24, 480)).toBe(129)
     expect(normalizeProjectedColumnWidth(999, 24, 480)).toBe(480)
+  })
+
+  it('rejects invalid column widths before they can poison projection state', () => {
+    expect(() => normalizeProjectedColumnWidth(Number.NaN, 24, 480)).toThrow('Invalid projected column width')
+    expect(() => normalizeProjectedColumnWidth(Number.NEGATIVE_INFINITY, 24, 480)).toThrow('Invalid projected column width')
+    expect(() => normalizeProjectedColumnWidth(-1, 24, 480)).toThrow('Invalid projected column width')
   })
 
   it('computes autofit widths from formatted display values and column labels', () => {
@@ -84,6 +96,34 @@ describe('worker runtime projection commands', () => {
     await commands.setCellValue('Sheet1', 'A1', 7)
 
     expect(calls).toEqual(['mark', 'get', 'set:Sheet1:A1:7', 'read:Sheet1:A1'])
+  })
+
+  it('rejects invalid projected metadata sizes before marking divergence', async () => {
+    const markProjectionDivergedFromLocalStore = vi.fn()
+    const getProjectionEngine = vi.fn(async () => {
+      throw new Error('Invalid projection sizes must not request the engine')
+    })
+    const commands = new WorkerRuntimeProjectionCommands({
+      markProjectionDivergedFromLocalStore,
+      getProjectionEngine,
+      getCell() {
+        throw new Error('Invalid projection sizes must not read cells')
+      },
+      minColumnWidth: 24,
+      maxColumnWidth: 480,
+      autofitCharWidth: 8,
+      autofitPadding: 12,
+      formatCellDisplayValue(value) {
+        return value.tag === ValueTag.String ? value.value : ''
+      },
+    })
+
+    await expect(commands.updateRowMetadata('Sheet1', 1, 1, Number.NaN, null)).rejects.toThrow('Invalid projected row height')
+    await expect(commands.updateColumnMetadata('Sheet1', 1, 1, Number.POSITIVE_INFINITY, null)).rejects.toThrow(
+      'Invalid projected column width',
+    )
+    expect(markProjectionDivergedFromLocalStore).not.toHaveBeenCalled()
+    expect(getProjectionEngine).not.toHaveBeenCalled()
   })
 
   it('delegates autofit through normalized column width updates', async () => {

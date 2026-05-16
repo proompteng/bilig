@@ -1,7 +1,7 @@
 import { CellFlags, type EngineCellMutationRef, type SheetRecord } from '@bilig/core'
 import type { CellRangeRef, CellValue, LiteralInput, WorkbookSnapshot } from '@bilig/protocol'
 import { formatAddress } from '@bilig/formula'
-import { assertRange, isCellRange, valuesEqual } from './work-paper-runtime-helpers.js'
+import { assertRange, valuesEqual } from './work-paper-runtime-helpers.js'
 import { formatTrackedA1, sourceRangeRef } from './work-paper-address-format.js'
 import {
   clearWorkPaperHistoryStacks,
@@ -12,8 +12,6 @@ import {
 import type { WorkPaperSheetDimensionCache } from './work-paper-sheet-dimension-cache.js'
 import {
   WorkPaperEvaluationSuspendedError,
-  WorkPaperNoOperationToRedoError,
-  WorkPaperNoOperationToUndoError,
   WorkPaperNoSheetWithIdError,
   WorkPaperNoSheetWithNameError,
   WorkPaperOperationError,
@@ -26,7 +24,6 @@ import {
 } from './work-paper-named-expression-helpers.js'
 import type { WorkPaperEngineEventTracker } from './work-paper-engine-event-tracker.js'
 import type { WorkPaperMutationQueues } from './work-paper-mutation-queues.js'
-import { applyWorkPaperHistoryOperation } from './work-paper-history-operations.js'
 import { applyWorkPaperCellMutationRefs } from './work-paper-cell-mutation-refs.js'
 import {
   materializeTrackedIndexChangeSourcesWithMetadata,
@@ -58,7 +55,6 @@ import { tryRenameWorkPaperSheetWithoutVisibilitySnapshots } from './work-paper-
 import { WORKPAPER_PUBLIC_ERROR_NAMES } from './work-paper-config.js'
 import type {
   RawCellContent,
-  WorkPaperAddressLike,
   WorkPaperCellAddress,
   WorkPaperCellChange,
   WorkPaperCellRange,
@@ -66,18 +62,18 @@ import type {
   WorkPaperDependencyRef,
   WorkPaperStats,
 } from './work-paper-types.js'
-import { WorkPaperPublicSurface } from './work-paper-public-surface.js'
+import { WorkPaperRuntimeMetadataSurface } from './work-paper-runtime-metadata-surface.js'
 
 type NamedExpressionValueSnapshot = WorkPaperNamedExpressionValueSnapshot
 type RebuildValueSnapshot = Map<number, CellValue>
 const FORMULA_REBUILD_VALUE_FLAGS = CellFlags.HasFormula | CellFlags.SpillChild | CellFlags.PivotOutput
 export const EMPTY_NAMED_EXPRESSION_VALUES: NamedExpressionValueSnapshot = new Map()
 
-export abstract class WorkPaperRuntimeSurface extends WorkPaperPublicSurface {
+export abstract class WorkPaperRuntimeSurface extends WorkPaperRuntimeMetadataSurface {
   protected abstract readonly namedExpressions: Map<string, InternalNamedExpression>
   protected abstract readonly engineEvents: WorkPaperEngineEventTracker
   protected abstract readonly mutationQueues: WorkPaperMutationQueues
-  protected abstract sheetDimensionCache: WorkPaperSheetDimensionCache
+  protected abstract override sheetDimensionCache: WorkPaperSheetDimensionCache
   protected abstract visibilityCache: VisibilitySnapshot | null
   protected abstract namedExpressionValueCache: NamedExpressionValueSnapshot | null
   protected abstract sheetRecordsCache: readonly SheetRecord[] | null
@@ -93,7 +89,9 @@ export abstract class WorkPaperRuntimeSurface extends WorkPaperPublicSurface {
   protected abstract queuedEvents: QueuedEvent[]
   protected abstract disposed: boolean
 
-  protected abstract evaluateNamedExpression(expression: InternalNamedExpression): ReturnType<WorkPaperPublicSurface['calculateFormula']>
+  protected abstract evaluateNamedExpression(
+    expression: InternalNamedExpression,
+  ): ReturnType<WorkPaperRuntimeMetadataSurface['calculateFormula']>
 
   getStats(): WorkPaperStats {
     this.assertNotDisposed()
@@ -275,100 +273,6 @@ export abstract class WorkPaperRuntimeSurface extends WorkPaperPublicSurface {
 
   isEvaluationSuspended(): boolean {
     return this.evaluationSuspended
-  }
-
-  undo(): WorkPaperChange[] {
-    this.assertNotDisposed()
-    return this.applyHistoryOperation('undo')
-  }
-
-  redo(): WorkPaperChange[] {
-    this.assertNotDisposed()
-    return this.applyHistoryOperation('redo')
-  }
-
-  isThereSomethingToUndo(): boolean {
-    return this.getUndoStack().length > 0
-  }
-
-  isThereSomethingToRedo(): boolean {
-    return this.getRedoStack().length > 0
-  }
-
-  clearUndoStack(): void {
-    this.getUndoStack().length = 0
-  }
-
-  clearRedoStack(): void {
-    this.getRedoStack().length = 0
-  }
-
-  getCellDependents(address: WorkPaperAddressLike): WorkPaperDependencyRef[] {
-    this.flushPendingBatchOps()
-    if (!isCellRange(address)) {
-      return this.toDependencyRefs(this.engine.getDependents(this.sheetName(address.sheet), this.a1(address)).directDependents)
-    }
-    return this.collectRangeDependencies(
-      address,
-      (cellAddress) => this.engine.getDependents(this.sheetName(cellAddress.sheet), this.a1(cellAddress)).directDependents,
-    )
-  }
-
-  getCellPrecedents(address: WorkPaperAddressLike): WorkPaperDependencyRef[] {
-    this.flushPendingBatchOps()
-    if (!isCellRange(address)) {
-      return this.getDirectPrecedentRefs(address)
-    }
-    return this.collectRangeDependencies(address, (cellAddress) => this.getDirectPrecedentStrings(cellAddress))
-  }
-
-  getSheetName(sheetId: number): string | undefined {
-    return this.engine.workbook.getSheetById(sheetId)?.name
-  }
-
-  getSheetNames(): string[] {
-    return this.listSheetRecords().map((sheet) => sheet.name)
-  }
-
-  getSheetId(name: string): number | undefined {
-    return this.engine.workbook.getSheet(name)?.id
-  }
-
-  doesSheetExist(name: string): boolean {
-    return this.engine.workbook.getSheet(name) !== undefined
-  }
-
-  countSheets(): number {
-    return this.listSheetRecords().length
-  }
-
-  moveCells(source: WorkPaperCellRange, target: WorkPaperCellAddress): WorkPaperChange[] {
-    if (!this.isItPossibleToMoveCells(source, target)) {
-      throw new WorkPaperOperationError('Cells cannot be moved')
-    }
-    const sourceHeight = source.end.row - source.start.row
-    const sourceWidth = source.end.col - source.start.col
-    return this.captureChanges(undefined, () => {
-      this.engine.moveRange(sourceRangeRef(this.sheetName(source.start.sheet), source), {
-        sheetName: this.sheetName(target.sheet),
-        startAddress: formatAddress(target.row, target.col),
-        endAddress: formatAddress(target.row + sourceHeight, target.col + sourceWidth),
-      })
-      this.sheetDimensionCache.invalidate(source.start.sheet)
-      this.sheetDimensionCache.invalidate(target.sheet)
-    })
-  }
-
-  protected applyHistoryOperation(kind: 'undo' | 'redo'): WorkPaperChange[] {
-    return applyWorkPaperHistoryOperation({
-      getStack: () => (kind === 'undo' ? this.getUndoStack() : this.getRedoStack()),
-      canUseTrackedMutationFastPath: () => this.canUseTrackedMutationFastPath(),
-      captureTrackedChangesWithoutVisibilityCache: (mutate, options) => this.captureTrackedChangesWithoutVisibilityCache(mutate, options),
-      captureChanges: (mutate, options) => this.captureChanges(undefined, mutate, options),
-      applyOperation: () => (kind === 'undo' ? this.engine.undo() : this.engine.redo()),
-      createMissingOperationError: () => (kind === 'undo' ? new WorkPaperNoOperationToUndoError() : new WorkPaperNoOperationToRedoError()),
-      invalidateAllSheetDimensions: () => this.sheetDimensionCache.invalidateAll(),
-    })
   }
 
   protected resetChangeTrackingCaches(): void {

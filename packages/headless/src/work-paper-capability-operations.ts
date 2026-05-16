@@ -80,35 +80,38 @@ export interface WorkPaperCapabilityOperations {
 }
 
 export function createWorkPaperCapabilityOperations(runtime: WorkPaperCapabilityOperationsRuntime): WorkPaperCapabilityOperations {
+  const capabilityContext = (): WorkPaperCapabilityContext => {
+    runtime.assertNotDisposed()
+    return runtime.getCapabilityContext()
+  }
+
   const axisIntervalPossible = (
     axis: 'row' | 'column',
     sheetId: number,
     startOrInterval: number | WorkPaperAxisInterval,
     countOrInterval: number | WorkPaperAxisInterval | undefined,
     restIntervals: readonly WorkPaperAxisInterval[] = [],
-  ): boolean =>
-    isWorkPaperAxisIntervalEditPossible(runtime.getCapabilityContext(), axis, sheetId, startOrInterval, countOrInterval, restIntervals)
+  ): boolean => isWorkPaperAxisIntervalEditPossible(capabilityContext(), axis, sheetId, startOrInterval, countOrInterval, restIntervals)
 
   return {
     isItPossibleToSetCellContents(addressOrRange, content) {
-      runtime.assertNotDisposed()
-      return isWorkPaperSetCellContentsPossible(runtime.getCapabilityContext(), addressOrRange, content)
+      return isWorkPaperSetCellContentsPossible(capabilityContext(), addressOrRange, content)
     },
 
     isItPossibleToSwapRowIndexes(sheetId, rowAOrMappings, rowB) {
-      return isWorkPaperAxisSwapPossible(runtime.getCapabilityContext(), 'row', sheetId, rowAOrMappings, rowB)
+      return isWorkPaperAxisSwapPossible(capabilityContext(), 'row', sheetId, rowAOrMappings, rowB)
     },
 
     isItPossibleToSetRowOrder(sheetId, rowOrder) {
-      return isWorkPaperAxisOrderPossible(runtime.getCapabilityContext(), 'row', sheetId, rowOrder)
+      return isWorkPaperAxisOrderPossible(capabilityContext(), 'row', sheetId, rowOrder)
     },
 
     isItPossibleToSwapColumnIndexes(sheetId, columnAOrMappings, columnB) {
-      return isWorkPaperAxisSwapPossible(runtime.getCapabilityContext(), 'column', sheetId, columnAOrMappings, columnB)
+      return isWorkPaperAxisSwapPossible(capabilityContext(), 'column', sheetId, columnAOrMappings, columnB)
     },
 
     isItPossibleToSetColumnOrder(sheetId, columnOrder) {
-      return isWorkPaperAxisOrderPossible(runtime.getCapabilityContext(), 'column', sheetId, columnOrder)
+      return isWorkPaperAxisOrderPossible(capabilityContext(), 'column', sheetId, columnOrder)
     },
 
     isItPossibleToAddRows(sheetId, startOrInterval, countOrInterval, restIntervals) {
@@ -128,48 +131,53 @@ export function createWorkPaperCapabilityOperations(runtime: WorkPaperCapability
     },
 
     isItPossibleToMoveCells(source, target) {
-      return isWorkPaperMoveCellsPossible(runtime.getCapabilityContext(), source, target)
+      return isWorkPaperMoveCellsPossible(capabilityContext(), source, target)
     },
 
     isItPossibleToMoveRows(sheetId, start, count, target) {
-      return isWorkPaperMoveAxisPossible(runtime.getCapabilityContext(), 'row', sheetId, start, count, target)
+      return isWorkPaperMoveAxisPossible(capabilityContext(), 'row', sheetId, start, count, target)
     },
 
     isItPossibleToMoveColumns(sheetId, start, count, target) {
-      return isWorkPaperMoveAxisPossible(runtime.getCapabilityContext(), 'column', sheetId, start, count, target)
+      return isWorkPaperMoveAxisPossible(capabilityContext(), 'column', sheetId, start, count, target)
     },
 
     isItPossibleToAddSheet(sheetName) {
-      return isWorkPaperSheetNameAvailable(runtime.getCapabilityContext(), sheetName)
+      return isWorkPaperSheetNameAvailable(capabilityContext(), sheetName)
     },
 
     isItPossibleToRemoveSheet(sheetId) {
+      runtime.assertNotDisposed()
       return runtime.doesSheetIdExist(sheetId)
     },
 
     isItPossibleToClearSheet(sheetId) {
+      runtime.assertNotDisposed()
       return runtime.doesSheetIdExist(sheetId)
     },
 
     isItPossibleToReplaceSheetContent(sheetId, content) {
-      return isWorkPaperSheetContentReplaceable(runtime.getCapabilityContext(), sheetId, content)
+      return isWorkPaperSheetContentReplaceable(capabilityContext(), sheetId, content)
     },
 
     isItPossibleToRenameSheet(sheetId, nextName) {
-      return isWorkPaperSheetNameAvailable(runtime.getCapabilityContext(), nextName, sheetId)
+      return isWorkPaperSheetNameAvailable(capabilityContext(), nextName, sheetId)
     },
 
     isItPossibleToAddNamedExpression(expressionName, expression, scope) {
+      runtime.assertNotDisposed()
       runtime.validateNamedExpression(expressionName, expression, scope)
       return !runtime.hasNamedExpression(expressionName, scope)
     },
 
     isItPossibleToChangeNamedExpression(expressionName, expression, scope) {
+      runtime.assertNotDisposed()
       runtime.validateNamedExpression(expressionName, expression, scope)
       return runtime.hasNamedExpression(expressionName, scope)
     },
 
     isItPossibleToRemoveNamedExpression(expressionName, scope) {
+      runtime.assertNotDisposed()
       return runtime.hasNamedExpression(expressionName, scope)
     },
   }

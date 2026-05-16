@@ -49,20 +49,15 @@ import { applyExportSheetVisibilitiesToWorkbook } from './xlsx-sheet-visibility.
 import { addExportSlicerConnectionArtifactsToXlsxBytes } from './xlsx-slicer-connection-artifacts.js'
 import { addExportSparklinesToXlsxBytes } from './xlsx-sparklines.js'
 import { addExportHyperlinksToWorksheet, hasExportHyperlinks } from './xlsx-hyperlinks.js'
+import { preserveSnapshotNumberFormats } from './xlsx-export-number-formats.js'
+import { escapeXmlAttribute, getZipText, setXmlAttribute, setZipText } from './xlsx-export-xml.js'
 import {
-  addCustomNumberFormatsToStylesXml,
-  customNumberFormatStartId,
-  escapeXmlAttribute,
-  getZipText,
-  readXmlNumberAttribute,
-  repairLeadingZeroNumberFormatIds,
-  setXmlAttribute,
-  setZipText,
-} from './xlsx-export-xml.js'
-
-const worksheetCellElementPattern =
-  /<(?:[A-Za-z_][\w.-]*:)?c\b(?:[^>"']|"[^"]*"|'[^']*')*\/>|<((?:[A-Za-z_][\w.-]*:)?c)\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1>/gu
-const worksheetCellOpeningTagPattern = /<(?:[A-Za-z_][\w.-]*:)?c\b(?:[^>"']|"[^"]*"|'[^']*')*(?:\/>|>)/u
+  appendCustomCellXfsToStylesXml,
+  readCellXfs,
+  updateXmlElementCount,
+  worksheetCellElementPattern,
+  worksheetCellOpeningTagPattern,
+} from './xlsx-style-xml.js'
 
 function buildExportColumns(columns: readonly WorkbookAxisEntrySnapshot[] | undefined): XLSX.ColInfo[] | undefined {
   if (!columns || columns.length === 0) {
@@ -110,120 +105,6 @@ function buildExportRows(rows: readonly WorkbookAxisEntrySnapshot[] | undefined)
     }
   }
   return output.some((row) => Object.keys(row).length > 0) ? output : undefined
-}
-
-function readCellXfs(stylesXml: string): readonly string[] {
-  const match = /<((?:[A-Za-z_][\w.-]*:)?cellXfs)\b[^>]*>([\s\S]*?)<\/\1>/u.exec(stylesXml)
-  if (!match) {
-    return []
-  }
-  const body = match[2] ?? ''
-  const entries: string[] = []
-  let cursor = 0
-  const nextXf = /<(?:[A-Za-z_][\w.-]*:)?xf\b/gu
-  while (cursor < body.length) {
-    nextXf.lastIndex = cursor
-    const startMatch = nextXf.exec(body)
-    if (!startMatch) {
-      break
-    }
-    const start = startMatch.index
-    const openingEnd = body.indexOf('>', start)
-    if (openingEnd < 0) {
-      break
-    }
-    const tagName = /^<([^\s/>]+)/u.exec(body.slice(start, openingEnd + 1))?.[1]
-    if (!tagName) {
-      break
-    }
-    if (body[openingEnd - 1] === '/') {
-      entries.push(body.slice(start, openingEnd + 1))
-      cursor = openingEnd + 1
-      continue
-    }
-    const closingTag = `</${tagName}>`
-    const closingStart = body.indexOf(closingTag, openingEnd + 1)
-    if (closingStart < 0) {
-      break
-    }
-    entries.push(body.slice(start, closingStart + closingTag.length))
-    cursor = closingStart + closingTag.length
-  }
-  return entries
-}
-
-function updateElementCount(openingAttributes: string, count: number): string {
-  return /\scount="[^"]*"/u.test(openingAttributes)
-    ? openingAttributes.replace(/\scount="[^"]*"/u, ` count="${String(count)}"`)
-    : `${openingAttributes} count="${String(count)}"`
-}
-
-function appendCustomCellXfsToStylesXml(stylesXml: string, xfs: readonly string[]): string {
-  if (xfs.length === 0) {
-    return stylesXml
-  }
-  return stylesXml.replace(
-    /<((?:[A-Za-z_][\w.-]*:)?cellXfs)\b([^>]*)>([\s\S]*?)<\/\1>/u,
-    (_match, tagName: string, attributes: string, body: string) => {
-      const count = Array.from(body.matchAll(/<(?:[A-Za-z_][\w.-]*:)?xf\b/gu)).length + xfs.length
-      return `<${tagName}${updateElementCount(attributes, count)}>${body}${xfs.join('')}</${tagName}>`
-    },
-  )
-}
-
-function styleXfWithNumberFormat(xf: string, numberFormatId: number): string {
-  return xf.replace(/<(?:[A-Za-z_][\w.-]*:)?xf\b[^>]*(?:\/>|>)/u, (openingTag) =>
-    setXmlAttribute(
-      setXmlAttribute(setXmlAttribute(openingTag, 'numFmtId', String(numberFormatId)), 'applyNumberFormat', '1'),
-      'xfId',
-      '0',
-    ),
-  )
-}
-
-class ExportNumberFormatRegistry {
-  private readonly baseXfs: readonly string[]
-  private readonly numberFormatIdsByCode = new Map<string, number>()
-  private readonly styleIndexesByKey = new Map<string, number>()
-  private readonly addedFormatIdsByCode = new Map<string, number>()
-  private readonly addedXfs: string[] = []
-  private nextNumberFormatId: number
-
-  constructor(stylesXml: string) {
-    this.baseXfs = readCellXfs(stylesXml)
-    const usedIds = [...stylesXml.matchAll(/\bnumFmtId="([0-9]+)"/gu)].map((match) => Number(match[1])).filter(Number.isSafeInteger)
-    this.nextNumberFormatId = Math.max(customNumberFormatStartId, ...usedIds.map((id) => id + 1))
-  }
-
-  styleIndexFor(baseStyleIndex: number, formatCode: string): number {
-    const key = `${String(baseStyleIndex)}\u0000${formatCode}`
-    const existingStyleIndex = this.styleIndexesByKey.get(key)
-    if (existingStyleIndex !== undefined) {
-      return existingStyleIndex
-    }
-    const numberFormatId = this.numberFormatIdFor(formatCode)
-    const baseXf = this.baseXfs[baseStyleIndex] ?? '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
-    const styleIndex = this.baseXfs.length + this.addedXfs.length
-    this.addedXfs.push(styleXfWithNumberFormat(baseXf, numberFormatId))
-    this.styleIndexesByKey.set(key, styleIndex)
-    return styleIndex
-  }
-
-  apply(stylesXml: string): string {
-    return appendCustomCellXfsToStylesXml(addCustomNumberFormatsToStylesXml(stylesXml, this.addedFormatIdsByCode), this.addedXfs)
-  }
-
-  private numberFormatIdFor(formatCode: string): number {
-    const existingId = this.numberFormatIdsByCode.get(formatCode)
-    if (existingId !== undefined) {
-      return existingId
-    }
-    const id = this.nextNumberFormatId
-    this.nextNumberFormatId += 1
-    this.numberFormatIdsByCode.set(formatCode, id)
-    this.addedFormatIdsByCode.set(formatCode, id)
-    return id
-  }
 }
 
 function sheetCellFormats(sheet: WorkbookSnapshot['sheets'][number]): Map<string, string> {
@@ -283,64 +164,6 @@ function buildSheetCellFormats(
     formats.set(address, format)
   }
   return formats
-}
-
-function applyNumberFormatsToSheetXml(
-  sheetXml: string,
-  formats: ReadonlyMap<string, string>,
-  registry: ExportNumberFormatRegistry,
-): string {
-  if (formats.size === 0) {
-    return sheetXml
-  }
-  const handledAddresses = new Set<string>()
-  let output = sheetXml.replace(worksheetCellElementPattern, (cellXml) => {
-    const openingTag = worksheetCellOpeningTagPattern.exec(cellXml)?.[0]
-    const address = openingTag ? /\br="([^"]+)"/u.exec(openingTag)?.[1] : undefined
-    const format = address ? formats.get(address) : undefined
-    if (!openingTag || !address || !format) {
-      return cellXml
-    }
-    handledAddresses.add(address)
-    const baseStyleIndex = readXmlNumberAttribute(openingTag, 's') ?? 0
-    const styleIndex = registry.styleIndexFor(baseStyleIndex, format)
-    return cellXml.replace(openingTag, setXmlAttribute(openingTag, 's', String(styleIndex)))
-  })
-  const missingCells = [...formats.entries()]
-    .filter(([address]) => !handledAddresses.has(address))
-    .map(([address, format]) => ({
-      address,
-      styleIndex: registry.styleIndexFor(0, format),
-    }))
-  if (missingCells.length > 0) {
-    output = addMissingFormattedCells(output, missingCells)
-  }
-  return output
-}
-
-function preserveSnapshotNumberFormats(bytes: Uint8Array, sheetFormats: readonly ReadonlyMap<string, string>[]): Uint8Array {
-  if (sheetFormats.every((formats) => formats.size === 0)) {
-    return repairLeadingZeroNumberFormatIds(bytes)
-  }
-  const zip = unzipSync(repairLeadingZeroNumberFormatIds(bytes))
-  const stylesXml = getZipText(zip, 'xl/styles.xml')
-  if (!stylesXml) {
-    return zipSync(zip)
-  }
-  const registry = new ExportNumberFormatRegistry(stylesXml)
-  sheetFormats.forEach((formats, sheetIndex) => {
-    if (formats.size === 0) {
-      return
-    }
-    const sheetPath = `xl/worksheets/sheet${String(sheetIndex + 1)}.xml`
-    const sheetXml = getZipText(zip, sheetPath)
-    if (!sheetXml) {
-      return
-    }
-    setZipText(zip, sheetPath, applyNumberFormatsToSheetXml(sheetXml, formats, registry))
-  })
-  setZipText(zip, 'xl/styles.xml', registry.apply(stylesXml))
-  return zipSync(zip)
 }
 
 function normalizeRgbColor(value: string | undefined): string | null {
@@ -477,7 +300,7 @@ function appendXmlChildren(
   const startIndex = Array.from(body.matchAll(new RegExp(`<${childName}\\b`, 'gu'))).length
   const nextXml = xml.replace(pattern, (_tag, attributes: string, existingBody: string) => {
     const count = startIndex + children.length
-    return `<${elementName}${updateElementCount(attributes, count)}>${existingBody}${children.join('')}</${elementName}>`
+    return `<${elementName}${updateXmlElementCount(attributes, count)}>${existingBody}${children.join('')}</${elementName}>`
   })
   return { xml: nextXml, startIndex }
 }

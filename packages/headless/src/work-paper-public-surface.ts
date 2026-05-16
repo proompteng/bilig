@@ -182,6 +182,7 @@ export abstract class WorkPaperPublicSurface extends WorkPaperCapabilitySurface 
   }
 
   getConfig(): WorkPaperConfig {
+    this.assertNotDisposed()
     return cloneConfig(this.config)
   }
 
@@ -196,42 +197,52 @@ export abstract class WorkPaperPublicSurface extends WorkPaperCapabilitySurface 
   }
 
   get graph(): WorkPaperGraphAdapter {
+    this.assertNotDisposed()
     return this.internals.graph
   }
 
   get rangeMapping(): WorkPaperRangeMappingAdapter {
+    this.assertNotDisposed()
     return this.internals.rangeMapping
   }
 
   get arrayMapping(): WorkPaperArrayMappingAdapter {
+    this.assertNotDisposed()
     return this.internals.arrayMapping
   }
 
   get sheetMapping(): WorkPaperSheetMappingAdapter {
+    this.assertNotDisposed()
     return this.internals.sheetMapping
   }
 
   get addressMapping(): WorkPaperAddressMappingAdapter {
+    this.assertNotDisposed()
     return this.internals.addressMapping
   }
 
   get dependencyGraph(): WorkPaperDependencyGraphAdapter {
+    this.assertNotDisposed()
     return this.internals.dependencyGraph
   }
 
   get evaluator(): WorkPaperEvaluatorAdapter {
+    this.assertNotDisposed()
     return this.internals.evaluator
   }
 
   get columnSearch(): WorkPaperColumnSearchAdapter {
+    this.assertNotDisposed()
     return this.internals.columnSearch
   }
 
   get lazilyTransformingAstService(): WorkPaperLazilyTransformingAstServiceAdapter {
+    this.assertNotDisposed()
     return this.internals.lazilyTransformingAstService
   }
 
   get licenseKeyValidityState(): WorkPaperLicenseKeyValidityState {
+    this.assertNotDisposed()
     return checkWorkPaperLicenseKeyValidity(this.config.licenseKey)
   }
 

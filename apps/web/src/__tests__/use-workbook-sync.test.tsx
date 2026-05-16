@@ -447,6 +447,57 @@ describe('useWorkbookSync', () => {
       root.unmount()
     })
   })
+
+  it('rejects malformed structural mutation args before persistence', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    let sync: ReturnType<typeof useWorkbookSync> | null = null
+    const runtimeController = {
+      invoke: vi.fn(async () => {
+        throw new Error('Invalid mutation args must not reach persistence')
+      }),
+    }
+
+    function Harness() {
+      sync = useWorkbookSync({
+        documentId: 'doc-1',
+        connectionStateName: 'closed',
+        connectionStateRef: { current: 'closed' },
+        runtimeController,
+        workerHandleRef: { current: null },
+        zeroRef: {
+          current: {
+            mutate() {
+              throw new Error('Invalid mutation args must not reach Zero')
+            },
+          },
+        },
+        reportRuntimeError: vi.fn(),
+      })
+      return null
+    }
+
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    await act(async () => {
+      root.render(<Harness />)
+    })
+    if (!sync) {
+      throw new Error('Expected useWorkbookSync harness to initialize')
+    }
+
+    await expect(sync.invokeMutation('insertRows', 'Sheet1', Number.NaN, 1)).rejects.toThrow('Invalid insertRows args')
+    await expect(sync.invokeMutation('updateColumnMetadata', 'Sheet1', 1, 1, Number.POSITIVE_INFINITY, null)).rejects.toThrow(
+      'Invalid updateColumnMetadata args',
+    )
+    await expect(sync.invokeMutation('setFreezePane', 'Sheet1', 1.5, 0)).rejects.toThrow('Invalid setFreezePane args')
+    expect(runtimeController.invoke).not.toHaveBeenCalled()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
 })
 
 function isPendingMutationInput(

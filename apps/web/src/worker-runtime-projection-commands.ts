@@ -2,12 +2,26 @@ import { formatAddress, indexToColumn } from '@bilig/formula'
 import type { CommitOp } from '@bilig/core'
 import type { CellNumberFormatInput, CellRangeRef, CellSnapshot, CellStyleField, CellStylePatch } from '@bilig/protocol'
 
+function assertFiniteNonNegativeNumber(value: number, message: string): void {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(message)
+  }
+}
+
 export function normalizeProjectedRowHeight(height: number | null): number | null {
-  return height === null ? null : Math.max(1, Math.round(height))
+  if (height === null) {
+    return null
+  }
+  assertFiniteNonNegativeNumber(height, 'Invalid projected row height')
+  return Math.max(1, Math.round(height))
 }
 
 export function normalizeProjectedColumnWidth(width: number | null, minColumnWidth: number, maxColumnWidth: number): number | null {
-  return width === null ? null : Math.max(minColumnWidth, Math.min(maxColumnWidth, Math.round(width)))
+  if (width === null) {
+    return null
+  }
+  assertFiniteNonNegativeNumber(width, 'Invalid projected column width')
+  return Math.max(minColumnWidth, Math.min(maxColumnWidth, Math.round(width)))
 }
 
 export function autofitProjectedColumnWidth(args: {
@@ -168,8 +182,9 @@ export class WorkerRuntimeProjectionCommands {
     height: number | null,
     hidden: boolean | null,
   ): Promise<void> {
+    const normalizedHeight = normalizeProjectedRowHeight(height)
     await this.withProjectionMutation((engine) => {
-      engine.updateRowMetadata(sheetName, startRow, count, normalizeProjectedRowHeight(height), hidden)
+      engine.updateRowMetadata(sheetName, startRow, count, normalizedHeight, hidden)
     })
   }
 

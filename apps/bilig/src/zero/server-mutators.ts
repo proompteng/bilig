@@ -1,16 +1,6 @@
 import type { SpreadsheetEngine } from '@bilig/core'
 import { applyWorkbookAgentCommandBundle } from '@bilig/agent-api'
 import type { EngineOp } from '@bilig/workbook-domain'
-import type {
-  CellBorderSidePatch,
-  CellNumberFormatInput,
-  CellNumberFormatPreset,
-  CellStyleAlignmentPatch,
-  CellStyleBordersPatch,
-  CellStyleFillPatch,
-  CellStyleFontPatch,
-  CellStylePatch,
-} from '@bilig/protocol'
 import {
   applyAgentCommandBundleArgsSchema,
   clearRangeArgsSchema,
@@ -38,7 +28,6 @@ import {
   type WorkbookChangeUndoBundle,
   type WorkbookEventPayload,
 } from '@bilig/zero-sync'
-import type { z } from 'zod'
 import type { SessionIdentity } from '../http/session.js'
 import type { WorkbookRuntimeManager } from '../workbook-runtime/runtime-manager.js'
 import type { Queryable } from './store.js'
@@ -48,6 +37,7 @@ import { persistWorkbookMutation } from './workbook-mutation-store.js'
 import { upsertWorkbookPresence } from './presence-store.js'
 import type { WorkbookChangeRange } from './workbook-change-store.js'
 import { loadLatestRedoableWorkbookChange, loadLatestUndoableWorkbookChange, loadWorkbookChange } from './workbook-change-store.js'
+import { normalizeNumberFormatInput, normalizeStylePatch } from './server-mutator-format-payloads.js'
 
 interface ServerTransactionLike {
   dbTransaction: {
@@ -73,154 +63,6 @@ function requireServerTransaction(tx: unknown): ServerTransactionLike {
       wrappedTransaction: tx['dbTransaction']['wrappedTransaction'],
     },
   }
-}
-
-function normalizeBorderSidePatch(
-  patch: {
-    style?: CellBorderSidePatch['style'] | undefined
-    weight?: CellBorderSidePatch['weight'] | undefined
-    color?: CellBorderSidePatch['color'] | undefined
-  } | null,
-): CellBorderSidePatch | null {
-  if (patch === null) {
-    return null
-  }
-  const normalized: CellBorderSidePatch = {}
-  if (patch.style !== undefined) {
-    normalized.style = patch.style
-  }
-  if (patch.weight !== undefined) {
-    normalized.weight = patch.weight
-  }
-  if (patch.color !== undefined) {
-    normalized.color = patch.color
-  }
-  return normalized
-}
-
-function normalizeStylePatch(patch: z.infer<typeof setRangeStyleArgsSchema>['patch']): CellStylePatch {
-  const normalized: CellStylePatch = {}
-
-  if (patch.fill !== undefined) {
-    if (patch.fill === null) {
-      normalized.fill = null
-    } else {
-      const fill: CellStyleFillPatch = {}
-      if (patch.fill.backgroundColor !== undefined) {
-        fill.backgroundColor = patch.fill.backgroundColor
-      }
-      normalized.fill = fill
-    }
-  }
-  if (patch.font !== undefined) {
-    if (patch.font === null) {
-      normalized.font = null
-    } else {
-      const font: CellStyleFontPatch = {}
-      if (patch.font.family !== undefined) {
-        font.family = patch.font.family
-      }
-      if (patch.font.size !== undefined) {
-        font.size = patch.font.size
-      }
-      if (patch.font.bold !== undefined) {
-        font.bold = patch.font.bold
-      }
-      if (patch.font.italic !== undefined) {
-        font.italic = patch.font.italic
-      }
-      if (patch.font.underline !== undefined) {
-        font.underline = patch.font.underline
-      }
-      if (patch.font.color !== undefined) {
-        font.color = patch.font.color
-      }
-      normalized.font = font
-    }
-  }
-  if (patch.alignment !== undefined) {
-    if (patch.alignment === null) {
-      normalized.alignment = null
-    } else {
-      const alignment: CellStyleAlignmentPatch = {}
-      if (patch.alignment.horizontal !== undefined) {
-        alignment.horizontal = patch.alignment.horizontal
-      }
-      if (patch.alignment.vertical !== undefined) {
-        alignment.vertical = patch.alignment.vertical
-      }
-      if (patch.alignment.wrap !== undefined) {
-        alignment.wrap = patch.alignment.wrap
-      }
-      if (patch.alignment.indent !== undefined) {
-        alignment.indent = patch.alignment.indent
-      }
-      if (patch.alignment.shrinkToFit !== undefined) {
-        alignment.shrinkToFit = patch.alignment.shrinkToFit
-      }
-      if (patch.alignment.readingOrder !== undefined) {
-        alignment.readingOrder = patch.alignment.readingOrder
-      }
-      if (patch.alignment.textRotation !== undefined) {
-        alignment.textRotation = patch.alignment.textRotation
-      }
-      if (patch.alignment.justifyLastLine !== undefined) {
-        alignment.justifyLastLine = patch.alignment.justifyLastLine
-      }
-      normalized.alignment = alignment
-    }
-  }
-  if (patch.borders !== undefined) {
-    if (patch.borders === null) {
-      normalized.borders = null
-    } else {
-      const borders: CellStyleBordersPatch = {}
-      if (patch.borders.top !== undefined) {
-        borders.top = normalizeBorderSidePatch(patch.borders.top)
-      }
-      if (patch.borders.right !== undefined) {
-        borders.right = normalizeBorderSidePatch(patch.borders.right)
-      }
-      if (patch.borders.bottom !== undefined) {
-        borders.bottom = normalizeBorderSidePatch(patch.borders.bottom)
-      }
-      if (patch.borders.left !== undefined) {
-        borders.left = normalizeBorderSidePatch(patch.borders.left)
-      }
-      normalized.borders = borders
-    }
-  }
-
-  return normalized
-}
-
-function normalizeNumberFormatInput(format: z.infer<typeof setRangeNumberFormatArgsSchema>['format']): CellNumberFormatInput {
-  if (typeof format === 'string') {
-    return format
-  }
-
-  const normalized: CellNumberFormatPreset = {
-    kind: format.kind,
-  }
-  if (format.currency !== undefined) {
-    normalized.currency = format.currency
-  }
-  if (format.decimals !== undefined) {
-    normalized.decimals = format.decimals
-  }
-  if (format.useGrouping !== undefined) {
-    normalized.useGrouping = format.useGrouping
-  }
-  if (format.negativeStyle !== undefined) {
-    normalized.negativeStyle = format.negativeStyle
-  }
-  if (format.zeroStyle !== undefined) {
-    normalized.zeroStyle = format.zeroStyle
-  }
-  if (format.dateStyle !== undefined) {
-    normalized.dateStyle = format.dateStyle
-  }
-  return normalized
 }
 
 function resolveOwnerUserId(state: { ownerUserId: string }, session?: SessionIdentity): string {

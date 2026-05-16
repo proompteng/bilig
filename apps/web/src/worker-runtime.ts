@@ -24,7 +24,6 @@ import {
   type EngineEvent,
   type RecalcMetrics,
   type SyncState,
-  type WorkbookDefinedNameSnapshot,
   type WorkbookSnapshot,
   formatCellDisplayValue,
 } from '@bilig/protocol'
@@ -34,7 +33,6 @@ import {
   type ViewportPatch,
   type ViewportPatchSubscription,
 } from '@bilig/worker-transport'
-import type { WorkbookBenchmarkCorpusId, WorkbookBenchmarkCorpusViewport } from '../../../packages/benchmarks/src/workbook-corpus.js'
 import type { PendingWorkbookMutation, PendingWorkbookMutationInput } from './workbook-sync.js'
 import { WorkerRuntimeMutationJournal } from './worker-runtime-mutation-journal.js'
 import {
@@ -52,20 +50,16 @@ import { WorkerRuntimeProjectionCommands } from './worker-runtime-projection-com
 import { createProjectionEngineFromState, createWorkbookEngineFromState } from './worker-runtime-engine-state.js'
 import {
   EMPTY_RUNTIME_METRICS,
+  buildCachedWorkerRuntimeState,
   buildWorkerRuntimeStateFromBootstrap,
   buildWorkerRuntimeStateFromEngine,
   cloneRuntimeMetrics,
   cloneWorkerRuntimeState,
   withExternalSyncState,
-  type WorkbookRuntimeSheetSnapshot,
 } from './worker-runtime-state.js'
 import { WorkerRuntimeSnapshotCaches } from './worker-runtime-snapshot-caches.js'
 import { WorkerRuntimeDeltaPublisher } from './worker-runtime-delta-publisher.js'
-import {
-  applyWorkerRuntimeLocalHistoryChange,
-  buildWorkerRuntimeLocalHistoryState,
-  type WorkerRuntimeLocalHistoryState,
-} from './worker-runtime-local-history.js'
+import { applyWorkerRuntimeLocalHistoryChange, buildWorkerRuntimeLocalHistoryState } from './worker-runtime-local-history.js'
 import { WorkerRuntimeRenderTileDeltaPublisher } from './worker-runtime-render-tile-subscription.js'
 import type { WorkerRuntimeRenderTileDiagnostics } from './worker-runtime-render-tile-subscription.js'
 import {
@@ -91,60 +85,25 @@ import {
   ingestAuthoritativeDeltaToLocalStore,
   persistProjectionStateToLocalStore,
 } from './worker-runtime-local-persistence.js'
+import {
+  DEFERRED_PROJECTION_ENGINE_MIN_CELL_COUNT,
+  type InstallAuthoritativeSnapshotInput,
+  type InstallBenchmarkCorpusResult,
+  type WorkbookPendingMutationSummarySnapshot,
+  type WorkbookWorkerBootstrapOptions,
+  type WorkbookWorkerBootstrapResult,
+  type WorkbookWorkerStateSnapshot,
+} from './worker-runtime-types.js'
+export type {
+  InstallAuthoritativeSnapshotInput,
+  InstallBenchmarkCorpusResult,
+  WorkbookFailedPendingMutationSnapshot,
+  WorkbookPendingMutationSummarySnapshot,
+  WorkbookWorkerBootstrapOptions,
+  WorkbookWorkerBootstrapResult,
+  WorkbookWorkerStateSnapshot,
+} from './worker-runtime-types.js'
 import { WorkerViewportTileStore } from './worker-viewport-tile-store.js'
-
-export interface WorkbookWorkerBootstrapOptions {
-  documentId: string
-  replicaId: string
-  persistState: boolean
-}
-
-export interface WorkbookWorkerStateSnapshot {
-  workbookName: string
-  sheets?: WorkbookRuntimeSheetSnapshot[] | undefined
-  sheetNames: string[]
-  definedNames: WorkbookDefinedNameSnapshot[]
-  metrics: RecalcMetrics
-  syncState: SyncState
-  localHistoryState: WorkerRuntimeLocalHistoryState
-  authoritativeRevision?: number | undefined
-  pendingMutationSummary?: WorkbookPendingMutationSummarySnapshot
-  localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
-}
-
-export interface WorkbookFailedPendingMutationSnapshot {
-  readonly id: string
-  readonly method: string
-  readonly failureMessage: string
-  readonly attemptCount: number
-}
-
-export interface WorkbookPendingMutationSummarySnapshot {
-  readonly activeCount: number
-  readonly failedCount: number
-  readonly firstFailed: WorkbookFailedPendingMutationSnapshot | null
-}
-
-export interface WorkbookWorkerBootstrapResult {
-  runtimeState: WorkbookWorkerStateSnapshot
-  restoredFromPersistence: boolean
-  requiresAuthoritativeHydrate: boolean
-  localPersistenceMode?: 'persistent' | 'ephemeral' | 'follower'
-}
-
-export interface InstallAuthoritativeSnapshotInput {
-  readonly snapshot: WorkbookSnapshot
-  readonly authoritativeRevision: number
-  readonly mode: 'bootstrap' | 'reconcile'
-}
-
-export interface InstallBenchmarkCorpusResult {
-  readonly id: WorkbookBenchmarkCorpusId
-  readonly materializedCellCount: number
-  readonly primaryViewport: WorkbookBenchmarkCorpusViewport
-}
-
-const DEFERRED_PROJECTION_ENGINE_MIN_CELL_COUNT = 100_000
 
 export class WorkbookWorkerRuntime {
   [method: string]: unknown
@@ -331,20 +290,14 @@ export class WorkbookWorkerRuntime {
   getRuntimeState(): WorkbookWorkerStateSnapshot {
     const cachedState = this.runtimeStateCache
     if (cachedState) {
-      return withExternalSyncState(
-        {
-          workbookName: cachedState.workbookName,
-          sheetNames: cachedState.sheetNames,
-          definedNames: cachedState.definedNames,
-          metrics: cachedState.metrics,
-          syncState: cachedState.syncState,
-          localHistoryState: this.buildLocalHistoryState(),
-          authoritativeRevision: this.authoritativeRevision,
-          pendingMutationSummary: this.buildPendingMutationSummary(),
-          localPersistenceMode: this.localPersistenceMode,
-        },
-        this.externalSyncState,
-      )
+      return buildCachedWorkerRuntimeState({
+        cachedState,
+        externalSyncState: this.externalSyncState,
+        localHistoryState: this.buildLocalHistoryState(),
+        authoritativeRevision: this.authoritativeRevision,
+        pendingMutationSummary: this.buildPendingMutationSummary(),
+        localPersistenceMode: this.localPersistenceMode,
+      })
     }
     const engine = this.requireEngine()
     return this.storeRuntimeState({
@@ -366,7 +319,7 @@ export class WorkbookWorkerRuntime {
   }
 
   async installBenchmarkCorpus(corpusId: string): Promise<InstallBenchmarkCorpusResult> {
-    const benchmarks = await import('../../../packages/benchmarks/src/workbook-corpus.js')
+    const benchmarks = await import('./worker-runtime-benchmark-corpus.js')
     if (!benchmarks.isWorkbookBenchmarkCorpusId(corpusId)) {
       throw new Error(`Unknown benchmark corpus ${corpusId}`)
     }

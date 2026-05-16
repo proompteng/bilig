@@ -4,7 +4,18 @@ import { isCommitOps, type CommitOp } from '@bilig/core'
 import { z } from 'zod'
 import { isEngineOpBatch, type EngineOpBatch } from '@bilig/workbook-domain'
 import type { CellRangeRef } from '@bilig/protocol'
-import { isLiteralInput } from '@bilig/protocol'
+import {
+  CELL_BORDER_STYLE_VALUES,
+  CELL_BORDER_WEIGHT_VALUES,
+  CELL_DATE_STYLE_VALUES,
+  CELL_HORIZONTAL_ALIGNMENT_VALUES,
+  CELL_NUMBER_FORMAT_KIND_VALUES,
+  CELL_NUMBER_NEGATIVE_STYLE_VALUES,
+  CELL_NUMBER_ZERO_STYLE_VALUES,
+  CELL_STYLE_FIELD_VALUES,
+  CELL_VERTICAL_ALIGNMENT_VALUES,
+  isLiteralInput,
+} from '@bilig/protocol'
 import type { schema } from './schema.js'
 
 const literalInputSchema = z.union([z.number(), z.string(), z.boolean(), z.null()])
@@ -35,11 +46,8 @@ const cellStylePatchSchema = z.object({
     .optional(),
   alignment: z
     .object({
-      horizontal: z
-        .enum(['general', 'left', 'center', 'right', 'fill', 'justify', 'centerContinuous', 'distributed'])
-        .nullable()
-        .optional(),
-      vertical: z.enum(['top', 'middle', 'bottom', 'justify', 'distributed']).nullable().optional(),
+      horizontal: z.enum(CELL_HORIZONTAL_ALIGNMENT_VALUES).nullable().optional(),
+      vertical: z.enum(CELL_VERTICAL_ALIGNMENT_VALUES).nullable().optional(),
       wrap: z.boolean().nullable().optional(),
       indent: z.number().nullable().optional(),
       shrinkToFit: z.boolean().nullable().optional(),
@@ -53,32 +61,32 @@ const cellStylePatchSchema = z.object({
     .object({
       top: z
         .object({
-          style: z.enum(['solid', 'dashed', 'dotted', 'double']).nullable().optional(),
-          weight: z.enum(['thin', 'medium', 'thick']).nullable().optional(),
+          style: z.enum(CELL_BORDER_STYLE_VALUES).nullable().optional(),
+          weight: z.enum(CELL_BORDER_WEIGHT_VALUES).nullable().optional(),
           color: z.string().nullable().optional(),
         })
         .nullable()
         .optional(),
       right: z
         .object({
-          style: z.enum(['solid', 'dashed', 'dotted', 'double']).nullable().optional(),
-          weight: z.enum(['thin', 'medium', 'thick']).nullable().optional(),
+          style: z.enum(CELL_BORDER_STYLE_VALUES).nullable().optional(),
+          weight: z.enum(CELL_BORDER_WEIGHT_VALUES).nullable().optional(),
           color: z.string().nullable().optional(),
         })
         .nullable()
         .optional(),
       bottom: z
         .object({
-          style: z.enum(['solid', 'dashed', 'dotted', 'double']).nullable().optional(),
-          weight: z.enum(['thin', 'medium', 'thick']).nullable().optional(),
+          style: z.enum(CELL_BORDER_STYLE_VALUES).nullable().optional(),
+          weight: z.enum(CELL_BORDER_WEIGHT_VALUES).nullable().optional(),
           color: z.string().nullable().optional(),
         })
         .nullable()
         .optional(),
       left: z
         .object({
-          style: z.enum(['solid', 'dashed', 'dotted', 'double']).nullable().optional(),
-          weight: z.enum(['thin', 'medium', 'thick']).nullable().optional(),
+          style: z.enum(CELL_BORDER_STYLE_VALUES).nullable().optional(),
+          weight: z.enum(CELL_BORDER_WEIGHT_VALUES).nullable().optional(),
           color: z.string().nullable().optional(),
         })
         .nullable()
@@ -88,36 +96,16 @@ const cellStylePatchSchema = z.object({
     .optional(),
 })
 
-const cellStyleFieldSchema = z.enum([
-  'backgroundColor',
-  'fontFamily',
-  'fontSize',
-  'fontBold',
-  'fontItalic',
-  'fontUnderline',
-  'fontColor',
-  'alignmentHorizontal',
-  'alignmentVertical',
-  'alignmentWrap',
-  'alignmentIndent',
-  'alignmentShrinkToFit',
-  'alignmentReadingOrder',
-  'alignmentTextRotation',
-  'alignmentJustifyLastLine',
-  'borderTop',
-  'borderRight',
-  'borderBottom',
-  'borderLeft',
-])
+const cellStyleFieldSchema = z.enum(CELL_STYLE_FIELD_VALUES)
 
 const cellNumberFormatPresetSchema = z.object({
-  kind: z.enum(['general', 'number', 'currency', 'accounting', 'percent', 'date', 'time', 'datetime', 'text']),
+  kind: z.enum(CELL_NUMBER_FORMAT_KIND_VALUES),
   currency: z.string().optional(),
   decimals: z.number().int().nonnegative().optional(),
   useGrouping: z.boolean().optional(),
-  negativeStyle: z.enum(['minus', 'parentheses']).optional(),
-  zeroStyle: z.enum(['zero', 'dash']).optional(),
-  dateStyle: z.enum(['short', 'iso']).optional(),
+  negativeStyle: z.enum(CELL_NUMBER_NEGATIVE_STYLE_VALUES).optional(),
+  zeroStyle: z.enum(CELL_NUMBER_ZERO_STYLE_VALUES).optional(),
+  dateStyle: z.enum(CELL_DATE_STYLE_VALUES).optional(),
 })
 
 const cellNumberFormatInputSchema = z.union([z.string(), cellNumberFormatPresetSchema])

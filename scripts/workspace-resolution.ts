@@ -198,7 +198,9 @@ export function createVitestAliasEntries(
     find,
     replacement,
   }))
-  return [...extraAliases, ...generatedAliases]
+  return [...extraAliases, ...generatedAliases].toSorted(
+    (left, right) => right.find.length - left.find.length || left.find.localeCompare(right.find),
+  )
 }
 
 export function createTsconfigPaths(resolution = readWorkspaceResolution(workspaceRootDir)): Record<string, string[]> {

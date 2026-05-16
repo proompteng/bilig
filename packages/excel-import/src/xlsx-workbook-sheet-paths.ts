@@ -9,6 +9,12 @@ interface WorkbookSheetEntry {
   relationshipId: string
 }
 
+export interface WorkbookSheetPathEntry {
+  readonly name: string
+  readonly index: number
+  readonly path: string
+}
+
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '',
@@ -118,4 +124,13 @@ export function workbookSheetPath(
   sheetIndex: number,
 ): string | undefined {
   return pathsByName.get(sheetName) ?? fallbackPaths[sheetIndex]
+}
+
+export function workbookSheetPathEntries(workbook: XLSX.WorkBook, sheetNames: readonly string[]): WorkbookSheetPathEntry[] {
+  const pathsByName = workbookSheetPathsByName(workbook)
+  const fallbackPaths = workbookDirectorySheetPaths(workbook)
+  return sheetNames.flatMap((name, index) => {
+    const path = workbookSheetPath(pathsByName, fallbackPaths, name, index)
+    return path ? [{ name, index, path }] : []
+  })
 }

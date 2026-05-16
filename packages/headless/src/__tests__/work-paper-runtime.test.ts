@@ -221,6 +221,45 @@ describe('WorkPaper', () => {
     })
   })
 
+  it('rejects public metadata and dependency reads after disposal', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Summary: [[1, '=A1*2']],
+    })
+    const summaryId = workbook.getSheetId('Summary')!
+
+    workbook.dispose()
+
+    const disposedReads: readonly (() => unknown)[] = [
+      () => workbook.getConfig(),
+      () => workbook.getSheetName(summaryId),
+      () => workbook.getSheetNames(),
+      () => workbook.getSheetId('Summary'),
+      () => workbook.doesSheetExist('Summary'),
+      () => workbook.countSheets(),
+      () => workbook.isThereSomethingToUndo(),
+      () => workbook.isThereSomethingToRedo(),
+      () => workbook.clearUndoStack(),
+      () => workbook.clearRedoStack(),
+      () => workbook.getCellPrecedents(cell(summaryId, 0, 1)),
+      () => workbook.getCellDependents(cell(summaryId, 0, 0)),
+      () => workbook.isItPossibleToSetCellContents(cell(summaryId, 0, 0), 2),
+      () => workbook.isItPossibleToAddRows(summaryId, 1, 1),
+      () => workbook.isItPossibleToMoveRows(summaryId, 0, 1, 1),
+      () => workbook.isItPossibleToAddSheet('Next'),
+      () => workbook.isItPossibleToRemoveSheet(summaryId),
+      () => workbook.isItPossibleToAddNamedExpression('DisposedName', '=1'),
+      () => workbook.isItPossibleToRemoveNamedExpression('DisposedName'),
+      () => workbook.licenseKeyValidityState,
+      () => workbook.graph,
+      () => workbook.sheetMapping,
+      () => workbook.dependencyGraph,
+    ]
+
+    disposedReads.forEach((read) => {
+      expect(read).toThrow('Workbook has been disposed')
+    })
+  })
+
   it('builds from imported workbook snapshots with metadata-backed formulas', () => {
     const snapshot: WorkbookSnapshot = {
       version: 1,

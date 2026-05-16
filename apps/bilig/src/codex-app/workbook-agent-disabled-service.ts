@@ -5,7 +5,7 @@ import {
   createDisabledWorkbookAgentObservabilitySnapshot,
   type WorkbookAgentObservabilitySnapshot,
 } from './workbook-agent-session-registry.js'
-import type { WorkbookAgentService } from './workbook-agent-service.js'
+import type { WorkbookAgentService } from './workbook-agent-service-options.js'
 
 export class DisabledWorkbookAgentService implements WorkbookAgentService {
   readonly enabled = false

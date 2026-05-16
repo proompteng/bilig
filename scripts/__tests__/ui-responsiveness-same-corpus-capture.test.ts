@@ -18,6 +18,7 @@ import {
 import { requiredUiResponsivenessSameCorpusWorkloads } from '../ui-responsiveness-same-corpus-workloads.ts'
 import { buildCaptureScenarioProof, type SameCorpusProductVisualProof } from '../ui-responsiveness-same-corpus-proof.ts'
 import { sameCorpusChromiumLaunchOptions } from '../ui-responsiveness-same-corpus-page-utils.ts'
+import { sameCorpusScrollProbeSelectorsForProduct } from '../ui-responsiveness-same-corpus-scroll-page.ts'
 import { incumbentEditableWorkloadBlocker, sameCorpusKeyboardOperations } from '../ui-responsiveness-same-corpus-workload-runner.ts'
 
 describe('same-corpus UI responsiveness capture CLI', () => {
@@ -338,6 +339,16 @@ describe('same-corpus UI responsiveness capture CLI', () => {
       args: ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist'],
       headless: true,
     })
+  })
+
+  it('keeps product-specific scroll probe targets explicit', () => {
+    expect(sameCorpusScrollProbeSelectorsForProduct('bilig')).toEqual(['[data-testid="grid-scroll-viewport"]'])
+    expect(sameCorpusScrollProbeSelectorsForProduct('google-sheets')).toEqual([
+      '.native-scrollbar-y',
+      '.native-scrollbar-x',
+      '.grid-scrollable-wrapper',
+    ])
+    expect(sameCorpusScrollProbeSelectorsForProduct('microsoft-excel-web')).toEqual(['.ewr-grdcontarea-grid'])
   })
 
   it('parses storage-state bootstrap mode for authenticated capture', () => {

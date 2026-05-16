@@ -1,4 +1,4 @@
-import { parseJsonRecord } from './workpaper-external-smoke-parsers.ts'
+import { parseJsonRecord } from './workpaper-external-smoke-parser-helpers.ts'
 
 export function parseNodeMcpStdioErrorOutput(output: string): {
   invalidJson: {

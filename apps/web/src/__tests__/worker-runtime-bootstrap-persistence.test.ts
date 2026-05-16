@@ -50,6 +50,12 @@ describe('worker runtime bootstrap persistence', () => {
 
   it('restores bootstrap state and filters the pending mutation journal', async () => {
     const active = createMutation()
+    const malformedStructuralArgs = createMutation({
+      id: 'worker-doc:pending:5',
+      localSeq: 5,
+      method: 'insertRows',
+      args: ['Sheet1', Number.NaN, 1],
+    })
     const acked = createMutation({
       id: 'worker-doc:pending:2',
       localSeq: 4,
@@ -77,7 +83,7 @@ describe('worker runtime bootstrap persistence', () => {
             return []
           },
           async listMutationJournalEntries() {
-            return [active, acked, { localSeq: 8 }]
+            return [active, malformedStructuralArgs, acked, { localSeq: 8 }]
           },
           async appendPendingMutation() {},
           async updatePendingMutation() {},

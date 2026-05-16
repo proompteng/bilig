@@ -11,12 +11,9 @@ import {
   type Viewport,
   type WorkbookSnapshot,
 } from '@bilig/protocol'
-import type {
-  InstallAuthoritativeSnapshotInput,
-  InstallBenchmarkCorpusResult,
-  WorkbookWorkerBootstrapResult,
-  WorkbookWorkerStateSnapshot,
-} from './worker-runtime.js'
+import type { InstallAuthoritativeSnapshotInput, WorkbookWorkerBootstrapResult, WorkbookWorkerStateSnapshot } from './worker-runtime.js'
+import { isInstallBenchmarkCorpusResult } from './benchmark-corpus-result.js'
+import { isWorkerRuntimeStateSnapshot, normalizeWorkerRuntimeStateSnapshot } from './worker-runtime-state.js'
 import type { WorkbookPerfSession } from './perf/workbook-perf.js'
 import { ProjectedViewportStore } from './projected-viewport-store.js'
 import { ZeroWorkbookRevisionSync, type WorkbookRevisionState } from './runtime-zero-revision-sync.js'
@@ -116,37 +113,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isWorkbookWorkerStateSnapshot(value: unknown): value is WorkbookWorkerStateSnapshot {
-  if (!isRecord(value)) {
-    return false
-  }
-  return (
-    typeof value['workbookName'] === 'string' &&
-    Array.isArray(value['sheetNames']) &&
-    value['sheetNames'].every((sheetName) => typeof sheetName === 'string') &&
-    (value['sheets'] === undefined ||
-      (Array.isArray(value['sheets']) &&
-        value['sheets'].every(
-          (sheet) =>
-            isRecord(sheet) &&
-            typeof sheet['id'] === 'number' &&
-            Number.isInteger(sheet['id']) &&
-            sheet['id'] >= 0 &&
-            typeof sheet['name'] === 'string' &&
-            Number.isInteger(sheet['order']),
-        ))) &&
-    Array.isArray(value['definedNames']) &&
-    typeof value['metrics'] === 'object' &&
-    value['metrics'] !== null &&
-    typeof value['syncState'] === 'string' &&
-    isRecord(value['localHistoryState']) &&
-    typeof value['localHistoryState']['canUndo'] === 'boolean' &&
-    typeof value['localHistoryState']['canRedo'] === 'boolean' &&
-    (value['authoritativeRevision'] === undefined || typeof value['authoritativeRevision'] === 'number') &&
-    (value['localPersistenceMode'] === undefined ||
-      value['localPersistenceMode'] === 'persistent' ||
-      value['localPersistenceMode'] === 'ephemeral' ||
-      value['localPersistenceMode'] === 'follower')
-  )
+  return isWorkerRuntimeStateSnapshot(value)
 }
 
 function isWorkbookWorkerBootstrapResult(value: unknown): value is WorkbookWorkerBootstrapResult {
@@ -164,8 +131,8 @@ function isWorkbookWorkerBootstrapResult(value: unknown): value is WorkbookWorke
   )
 }
 
-function isNumber(value: unknown): value is number {
-  return typeof value === 'number'
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
 }
 
 function isInstallAuthoritativeSnapshotInput(value: unknown): value is InstallAuthoritativeSnapshotInput {
@@ -174,38 +141,8 @@ function isInstallAuthoritativeSnapshotInput(value: unknown): value is InstallAu
   }
   return (
     isWorkbookSnapshot(value['snapshot']) &&
-    typeof value['authoritativeRevision'] === 'number' &&
+    isNonNegativeInteger(value['authoritativeRevision']) &&
     (value['mode'] === 'bootstrap' || value['mode'] === 'reconcile')
-  )
-}
-
-function isBenchmarkCorpusViewport(value: unknown): value is InstallBenchmarkCorpusResult['primaryViewport'] {
-  if (!isRecord(value)) {
-    return false
-  }
-  return (
-    typeof value['sheetName'] === 'string' &&
-    typeof value['rowStart'] === 'number' &&
-    Number.isInteger(value['rowStart']) &&
-    typeof value['rowEnd'] === 'number' &&
-    Number.isInteger(value['rowEnd']) &&
-    typeof value['colStart'] === 'number' &&
-    Number.isInteger(value['colStart']) &&
-    typeof value['colEnd'] === 'number' &&
-    Number.isInteger(value['colEnd'])
-  )
-}
-
-function isInstallBenchmarkCorpusResult(value: unknown): value is InstallBenchmarkCorpusResult {
-  if (!isRecord(value)) {
-    return false
-  }
-  return (
-    typeof value['id'] === 'string' &&
-    typeof value['materializedCellCount'] === 'number' &&
-    Number.isInteger(value['materializedCellCount']) &&
-    value['materializedCellCount'] > 0 &&
-    isBenchmarkCorpusViewport(value['primaryViewport'])
   )
 }
 
@@ -379,15 +316,17 @@ export async function createWorkerRuntimeSessionController(
     callbacks.onPhase?.(phase)
   }
 
-  const publishRuntimeState = (runtimeState: WorkbookWorkerStateSnapshot) => {
+  const publishRuntimeState = (runtimeState: WorkbookWorkerStateSnapshot): WorkbookWorkerStateSnapshot => {
+    const normalizedRuntimeState = normalizeWorkerRuntimeStateSnapshot(runtimeState) ?? runtimeState
     const runtimeStateWithRevision: WorkbookWorkerStateSnapshot = {
-      ...runtimeState,
-      authoritativeRevision: runtimeState.authoritativeRevision ?? currentAuthoritativeRevision,
+      ...normalizedRuntimeState,
+      authoritativeRevision: normalizedRuntimeState.authoritativeRevision ?? currentAuthoritativeRevision,
     }
     currentRuntimeState = runtimeStateWithRevision
     viewportStore.setKnownSheets(runtimeStateWithRevision.sheetNames)
     viewportStore.setSheetIdentities(runtimeStateWithRevision.sheets ?? [])
     callbacks.onRuntimeState(runtimeStateWithRevision)
+    return runtimeStateWithRevision
   }
 
   const subscribeProjectedViewport = (
@@ -424,8 +363,8 @@ export async function createWorkerRuntimeSessionController(
 
   const refreshRuntimeState = async (): Promise<void> => {
     const runtimeState = await invokeWorkerMethod(client, 'getRuntimeState', isWorkbookWorkerStateSnapshot)
-    publishRuntimeState(runtimeState)
-    const reconciledSelection = reconcileSelection(currentSelection, runtimeState.sheetNames)
+    const publishedRuntimeState = publishRuntimeState(runtimeState)
+    const reconciledSelection = reconcileSelection(currentSelection, publishedRuntimeState.sheetNames)
     if (reconciledSelection.sheetName !== currentSelection.sheetName || reconciledSelection.address !== currentSelection.address) {
       await applySelection(reconciledSelection)
     }
@@ -476,9 +415,9 @@ export async function createWorkerRuntimeSessionController(
     )
     currentAuthoritativeRevision = eventBatch.headRevision
     requestedAuthoritativeRevision = Math.max(requestedAuthoritativeRevision, currentAuthoritativeRevision)
-    publishRuntimeState(runtimeState)
+    const publishedRuntimeState = publishRuntimeState(runtimeState)
     input.perfSession?.markFirstAuthoritativePatchVisible()
-    await syncSelectionAfterRuntimeState(runtimeState)
+    await syncSelectionAfterRuntimeState(publishedRuntimeState)
     return true
   }
 
@@ -577,8 +516,8 @@ export async function createWorkerRuntimeSessionController(
     } satisfies InstallAuthoritativeSnapshotInput)
     currentAuthoritativeRevision = snapshotRevision
     requestedAuthoritativeRevision = Math.max(requestedAuthoritativeRevision, currentAuthoritativeRevision)
-    publishRuntimeState(runtimeState)
-    await syncSelectionAfterRuntimeState(runtimeState)
+    const publishedRuntimeState = publishRuntimeState(runtimeState)
+    await syncSelectionAfterRuntimeState(publishedRuntimeState)
     return runAuthoritativeRebase()
   }
 
@@ -621,12 +560,12 @@ export async function createWorkerRuntimeSessionController(
       replicaId: input.replicaId,
       persistState: input.persistState,
     })
-    publishRuntimeState(bootstrap.runtimeState)
+    const bootstrapRuntimeState = publishRuntimeState(bootstrap.runtimeState)
     input.perfSession?.noteBootstrapResult(bootstrap)
-    currentAuthoritativeRevision = await invokeWorkerMethod(client, 'getAuthoritativeRevision', isNumber)
+    currentAuthoritativeRevision = await invokeWorkerMethod(client, 'getAuthoritativeRevision', isNonNegativeInteger)
     requestedAuthoritativeRevision = currentAuthoritativeRevision
 
-    const activePendingMutationCount = bootstrap.runtimeState.pendingMutationSummary?.activeCount ?? 0
+    const activePendingMutationCount = bootstrapRuntimeState.pendingMutationSummary?.activeCount ?? 0
     const requiresAuthoritativeSnapshot = !bootstrap.restoredFromPersistence || bootstrap.requiresAuthoritativeHydrate
     const shouldRefreshCleanAuthoritativeState = activePendingMutationCount === 0
 

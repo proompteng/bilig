@@ -16,7 +16,7 @@ import { useWorkbookSheetActions } from './use-workbook-sheet-actions.js'
 import { createWorkbookPerfSession } from './perf/workbook-perf.js'
 import { getWorkbookScrollPerfCollector } from './perf/workbook-scroll-perf.js'
 import { registerRuntimeDisposalHandlers } from './runtime-disposal-handlers.js'
-import type { InstallBenchmarkCorpusResult } from './worker-runtime.js'
+import { isInstallBenchmarkCorpusResult } from './benchmark-corpus-result.js'
 import { useWorkbookLocalPersistenceHandoff } from './use-workbook-local-persistence-handoff.js'
 import { loadOrCreateWorkbookPresenceClientId } from './workbook-presence-client.js'
 import { useWorkerWorkbookAgentContext } from './use-worker-workbook-agent-context.js'
@@ -24,33 +24,6 @@ import { useWorkerWorkbookGridState } from './use-worker-workbook-grid-state.js'
 import { useWorkerWorkbookInteractionState } from './use-worker-workbook-interaction-state.js'
 
 const workerRuntimeMachine = createWorkerRuntimeMachine()
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
-function isInstallBenchmarkCorpusResult(value: unknown): value is InstallBenchmarkCorpusResult {
-  if (!isRecord(value)) {
-    return false
-  }
-  const viewport = value['primaryViewport']
-  return (
-    typeof value['id'] === 'string' &&
-    typeof value['materializedCellCount'] === 'number' &&
-    Number.isInteger(value['materializedCellCount']) &&
-    value['materializedCellCount'] > 0 &&
-    isRecord(viewport) &&
-    typeof viewport['sheetName'] === 'string' &&
-    typeof viewport['rowStart'] === 'number' &&
-    Number.isInteger(viewport['rowStart']) &&
-    typeof viewport['rowEnd'] === 'number' &&
-    Number.isInteger(viewport['rowEnd']) &&
-    typeof viewport['colStart'] === 'number' &&
-    Number.isInteger(viewport['colStart']) &&
-    typeof viewport['colEnd'] === 'number' &&
-    Number.isInteger(viewport['colEnd'])
-  )
-}
 
 function formatColumnName(columnIndex: number): string {
   let columnName = ''

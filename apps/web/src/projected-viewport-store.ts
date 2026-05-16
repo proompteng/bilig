@@ -305,6 +305,7 @@ export class ProjectedViewportStore implements GridEngineLike {
   }
 
   setSheetIdentities(sheets: readonly { readonly id: number; readonly name: string; readonly order: number }[]): void {
+    this.sheetIdentitiesByName.clear()
     sheets.forEach((sheet) => {
       this.sheetIdentitiesByName.set(sheet.name, {
         sheetId: sheet.id,

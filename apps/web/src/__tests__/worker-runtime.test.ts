@@ -7,7 +7,14 @@ import {
   WorkbookLocalStoreUnavailableError,
   createMemoryWorkbookLocalStoreFactory,
 } from '@bilig/storage-browser'
-import { ErrorCode, createCellNumberFormatRecord, formatCellDisplayValue, isWorkbookSnapshot, ValueTag } from '@bilig/protocol'
+import {
+  ErrorCode,
+  createCellNumberFormatRecord,
+  formatCellDisplayValue,
+  isWorkbookSnapshot,
+  ValueTag,
+  type WorkbookSnapshot,
+} from '@bilig/protocol'
 import {
   decodeRenderTileDeltaBatch,
   decodeViewportPatch,
@@ -375,6 +382,39 @@ function createMemoryLocalStoreFactory(seed?: {
 describe('WorkbookWorkerRuntime', () => {
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('preserves restored sheet identities in cached runtime state', async () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: { name: 'sheet-identity-doc' },
+      sheets: [
+        { id: 42, name: 'Actuals', order: 0, cells: [{ address: 'A1', value: 'current' }] },
+        { id: 9, name: 'Archive', order: 1, cells: [{ address: 'A1', value: 'closed' }] },
+      ],
+    }
+    const localStoreFactory = createMemoryLocalStoreFactory({
+      state: {
+        snapshot,
+        replica: {},
+        authoritativeRevision: 7,
+        appliedPendingLocalSeq: 0,
+      },
+    })
+    const runtime = new WorkbookWorkerRuntime({ localStoreFactory })
+
+    const bootstrap = await runtime.bootstrap({
+      documentId: 'sheet-identity-doc',
+      replicaId: 'browser:test',
+      persistState: true,
+    })
+
+    const expectedSheets = [
+      { id: 42, name: 'Actuals', order: 0 },
+      { id: 9, name: 'Archive', order: 1 },
+    ]
+    expect(bootstrap.runtimeState.sheets).toEqual(expectedSheets)
+    expect(runtime.getRuntimeState().sheets).toEqual(expectedSheets)
   })
 
   it('restores persisted workbook state and emits viewport patches for visible edits', async () => {

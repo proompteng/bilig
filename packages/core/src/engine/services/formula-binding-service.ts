@@ -3,12 +3,11 @@ import type { CompiledFormula, StructuralAxisTransform } from '@bilig/formula'
 import { FormulaMode, ErrorCode } from '@bilig/protocol'
 import { CellFlags } from '../../cell-store.js'
 import type { EdgeSlice } from '../../edge-arena.js'
-import { entityPayload, isRangeEntity, makeCellEntity, makeRangeEntity } from '../../entity-ids.js'
+import { entityPayload, isRangeEntity, makeCellEntity } from '../../entity-ids.js'
 import { tableDependencyKey } from '../../engine-metadata-utils.js'
 import { errorValue } from '../../engine-value-utils.js'
 import { addEngineCounter } from '../../perf/engine-counters.js'
 import { normalizeDefinedName } from '../../workbook-store.js'
-import type { StructuralTransaction } from '../structural-transaction.js'
 import type { RuntimeDirectAggregateDescriptor, RuntimeDirectScalarDescriptor, RuntimeFormula } from '../runtime-state.js'
 import { EngineFormulaBindingError } from '../errors.js'
 import {
@@ -43,7 +42,6 @@ import {
   getFormulaBindingReverseEdgeSlice,
   removeFormulaBindingReverseEdge,
   setFormulaBindingReverseEdgeSlice,
-  syncFormulaBindingRangeDependencyEdges,
 } from './formula-binding-reverse-edges.js'
 import { createFormulaBindingSheetIndex } from './formula-binding-sheet-index.js'
 import { createFormulaBindingMemberCounts } from './formula-binding-member-counts.js'
@@ -64,6 +62,7 @@ import { normalizeFormulaBindingLookupCompileMode } from './formula-binding-look
 import { primeFormulaBindingLookupCandidates } from './formula-binding-lookup-primer.js'
 import { directAggregateContainsFormulaOwnerCell } from './formula-binding-direct-aggregate-owner.js'
 import { ensureFormulaBindingDependencyBuildCapacity } from './formula-binding-dependency-build-capacity.js'
+import { createFormulaBindingRangeDependencyUpdater } from './formula-binding-range-dependencies.js'
 import type {
   BindPreparedFormulaOptions,
   CreateEngineFormulaBindingServiceArgs,
@@ -186,46 +185,7 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
     removeFormulaBindingReverseEdge(args.reverseState, args.edgeArena, entityId, dependentEntityId)
   }
 
-  const refreshRangeDependenciesNow = (rangeIndices: readonly number[]): void => {
-    const refreshed = new Set<number>()
-    const materializer = {
-      ensureCell: (sheetId: number, row: number, col: number) => args.ensureCellTrackedByCoords(sheetId, row, col),
-      forEachSheetCell: (sheetId: number, fn: (cellIndex: number, row: number, col: number) => void) => args.forEachSheetCell(sheetId, fn),
-      isFormulaCell: (cellIndex: number) => (args.state.workbook.cellStore.formulaIds[cellIndex] ?? 0) !== 0,
-    }
-    rangeIndices.forEach((rangeIndex) => {
-      if (refreshed.has(rangeIndex)) {
-        return
-      }
-      refreshed.add(rangeIndex)
-      syncRangeDependencyEdges(rangeIndex, args.state.ranges.refresh(rangeIndex, materializer))
-    })
-    if (refreshed.size > 0) {
-      args.scheduleWasmProgramSync()
-    }
-  }
-
-  const retargetRangeDependenciesNow = (transaction: StructuralTransaction, rangeIndices: readonly number[]): void => {
-    const materializer = {
-      ensureCell: (sheetId: number, row: number, col: number) => args.ensureCellTrackedByCoords(sheetId, row, col),
-      forEachSheetCell: (sheetId: number, fn: (cellIndex: number, row: number, col: number) => void) => args.forEachSheetCell(sheetId, fn),
-      isFormulaCell: (cellIndex: number) => (args.state.workbook.cellStore.formulaIds[cellIndex] ?? 0) !== 0,
-    }
-    const touched = args.state.ranges.applyStructuralTransaction(transaction, rangeIndices, materializer)
-    touched.forEach(({ rangeIndex, oldDependencySources, newDependencySources }) => {
-      syncRangeDependencyEdges(rangeIndex, { oldDependencySources, newDependencySources })
-    })
-    if (touched.length > 0) {
-      args.scheduleWasmProgramSync()
-    }
-  }
-
-  const syncRangeDependencyEdges = (
-    rangeIndex: number,
-    deps: { oldDependencySources: Uint32Array; newDependencySources: Uint32Array },
-  ): void => {
-    syncFormulaBindingRangeDependencyEdges(args.reverseState, args.edgeArena, makeRangeEntity(rangeIndex), deps)
-  }
+  const { refreshRangeDependenciesNow, retargetRangeDependenciesNow } = createFormulaBindingRangeDependencyUpdater(args)
 
   const rangeDependenciesHaveNoFormulaMembers = (rangeDependencies: Uint32Array): boolean =>
     rangeDependencies.every((rangeIndex) => args.state.ranges.getFormulaMembersView(rangeIndex).length === 0)

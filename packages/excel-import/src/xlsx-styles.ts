@@ -21,8 +21,15 @@ import type {
   WorkbookStyleArtifactsSnapshot,
   SheetStyleRangeSnapshot,
 } from '@bilig/protocol'
+import {
+  readXmlAttribute,
+  readXmlNonNegativeIntegerAttribute,
+  readXmlNumberAttribute,
+  readXmlOptionalBooleanAttribute,
+  readXmlPositiveIntegerAttribute,
+} from './xlsx-style-xml.js'
 import { readImportedWorkbookThemeArtifact } from './xlsx-theme-artifacts.js'
-import { workbookDirectorySheetPaths, workbookSheetPath, workbookSheetPathsByName } from './xlsx-workbook-sheet-paths.js'
+import { workbookSheetPathEntries } from './xlsx-workbook-sheet-paths.js'
 import { getZipText as getZipEntryText, readXlsxZipEntries, type XlsxZipSource } from './xlsx-zip.js'
 
 type ImportedCellStyle = Omit<CellStyleRecord, 'id'>
@@ -401,42 +408,6 @@ function extractStyleXmlElement(stylesXml: string, elementName: string): string 
   return selfClosing?.[0] ?? null
 }
 
-function readXmlAttribute(tag: string, name: string): string | null {
-  const doubleQuoted = new RegExp(`\\b${name}="([^"]*)"`, 'u').exec(tag)
-  if (doubleQuoted) {
-    return doubleQuoted[1] ?? null
-  }
-  const singleQuoted = new RegExp(`\\b${name}='([^']*)'`, 'u').exec(tag)
-  return singleQuoted?.[1] ?? null
-}
-
-function readXmlNumberAttribute(tag: string, name: string): number | null {
-  const raw = readXmlAttribute(tag, name)
-  if (raw === null || raw.trim().length === 0) {
-    return null
-  }
-  const value = Number(raw)
-  return Number.isFinite(value) ? value : null
-}
-
-function readXmlPositiveIntegerAttribute(tag: string, name: string): number | null {
-  const value = readXmlNumberAttribute(tag, name)
-  return value !== null && Number.isSafeInteger(value) && value > 0 ? value : null
-}
-
-function readXmlNonNegativeIntegerAttribute(tag: string, name: string): number | null {
-  const value = readXmlNumberAttribute(tag, name)
-  return value !== null && Number.isSafeInteger(value) && value >= 0 ? value : null
-}
-
-function readXmlOptionalBooleanAttribute(tag: string, name: string): boolean | null {
-  const raw = readXmlAttribute(tag, name)
-  if (raw === null) {
-    return null
-  }
-  return raw === '1' || raw.toLowerCase() === 'true'
-}
-
 function parseSheetStyleIndexes(sheetXml: string, candidateAddresses?: ReadonlySet<string>): Map<string, number> {
   const output = new Map<string, number>()
   if (candidateAddresses?.size === 0) {
@@ -748,14 +719,11 @@ export function readImportedWorkbookSheetDimensions(
   sheetNames: readonly string[],
 ): Map<string, ImportedSheetDimensions> {
   const files = workbookFiles(workbook)
-  const sheetPathsByName = workbookSheetPathsByName(workbook)
-  const fallbackSheetPaths = workbookDirectorySheetPaths(workbook)
   const output = new Map<string, ImportedSheetDimensions>()
-  sheetNames.forEach((sheetName, index) => {
-    const sheetPath = workbookSheetPath(sheetPathsByName, fallbackSheetPaths, sheetName, index)
-    const sheetXml = sheetPath ? getFileText(files, sheetPath) : null
+  for (const { name: sheetName, path: sheetPath } of workbookSheetPathEntries(workbook, sheetNames)) {
+    const sheetXml = getFileText(files, sheetPath)
     if (!sheetXml) {
-      return
+      continue
     }
     const sheetFormatPr = parseSheetFormatPr(sheetXml)
     const parsedColumns = parseSheetColumnEntries(sheetXml)
@@ -778,7 +746,7 @@ export function readImportedWorkbookSheetDimensions(
     ) {
       output.set(sheetName, dimensions)
     }
-  })
+  }
   return output
 }
 
@@ -800,18 +768,15 @@ export function readImportedWorkbookFileStyles(
     return new Map()
   }
 
-  const sheetPathsByName = workbookSheetPathsByName(workbook)
-  const fallbackSheetPaths = workbookDirectorySheetPaths(workbook)
   const output = new Map<string, Map<string, ImportedCellStyle>>()
-  sheetNames.forEach((sheetName, index) => {
+  for (const { name: sheetName, path: sheetPath } of workbookSheetPathEntries(workbook, sheetNames)) {
     const candidateAddresses = options.styleCandidateAddressesBySheet?.get(sheetName)
     if (candidateAddresses?.size === 0) {
-      return
+      continue
     }
-    const sheetPath = workbookSheetPath(sheetPathsByName, fallbackSheetPaths, sheetName, index)
-    const sheetXml = sheetPath ? getPackageText(files, sourceZip, sheetPath) : null
+    const sheetXml = getPackageText(files, sourceZip, sheetPath)
     if (!sheetXml) {
-      return
+      continue
     }
     const styleIndexes = parseSheetStyleIndexes(sheetXml, candidateAddresses)
     const cellStyles = new Map<string, ImportedCellStyle>()
@@ -824,7 +789,7 @@ export function readImportedWorkbookFileStyles(
     if (cellStyles.size > 0) {
       output.set(sheetName, cellStyles)
     }
-  })
+  }
 
   return output
 }
@@ -845,21 +810,18 @@ export function readImportedWorkbookStyleArtifacts(
   }
   const stylesXml = readPartText(stylePath)
   const theme = readImportedWorkbookThemeArtifact(zip ?? undefined)
-  const sheetPathsByName = workbookSheetPathsByName(workbook)
-  const fallbackSheetPaths = workbookDirectorySheetPaths(workbook)
   const sheetArtifactsByName = new Map<string, WorkbookSheetStyleArtifactsSnapshot>()
 
-  sheetNames.forEach((sheetName, index) => {
-    const sheetPath = workbookSheetPath(sheetPathsByName, fallbackSheetPaths, sheetName, index)
+  for (const { name: sheetName, path: sheetPath } of workbookSheetPathEntries(workbook, sheetNames)) {
     const sheetXml = readPartText(sheetPath)
     if (!sheetXml) {
-      return
+      continue
     }
     const sheetArtifacts = parseSheetCellStyleIndexArtifacts(sheetXml)
     if (sheetArtifacts) {
       sheetArtifactsByName.set(sheetName, sheetArtifacts)
     }
-  })
+  }
 
   return {
     ...(stylesXml ? { workbookArtifacts: { stylesXml, ...(theme ? { theme } : {}) } } : {}),

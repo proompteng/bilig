@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useWorkbookLocalPersistenceHandoff } from '../use-workbook-local-persistence-handoff.js'
 
 class MockBroadcastChannel {
@@ -18,6 +18,14 @@ class MockBroadcastChannel {
   }
 
   postMessage(data: unknown) {
+    this.#broadcast(data)
+  }
+
+  publish(data: unknown) {
+    this.#broadcast(data)
+  }
+
+  #broadcast(data: unknown) {
     const peers = MockBroadcastChannel.channels.get(this.name)
     peers?.forEach((peer) => {
       if (peer === this) {
@@ -103,6 +111,10 @@ function mountProbe(): {
 }
 
 describe('useWorkbookLocalPersistenceHandoff', () => {
+  beforeEach(() => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  })
+
   afterEach(() => {
     vi.unstubAllGlobals()
     MockBroadcastChannel.reset()
@@ -189,6 +201,57 @@ describe('useWorkbookLocalPersistenceHandoff', () => {
 
     expect(writer.host.querySelector("[data-testid='writer']")?.getAttribute('data-pending-request')).toBe('false')
 
+    await act(async () => {
+      writer.root.unmount()
+      follower.root.unmount()
+    })
+  })
+
+  it('ignores malformed takeover requests and unsolicited releases', async () => {
+    vi.stubGlobal('BroadcastChannel', MockBroadcastChannel)
+    const writerRetry = vi.fn()
+    const followerRetry = vi.fn()
+    const writer = mountProbe()
+    const follower = mountProbe()
+
+    await writer.render({
+      documentId: 'doc-3',
+      localPersistenceMode: 'persistent',
+      onRetry: writerRetry,
+      testId: 'writer',
+    })
+    await follower.render({
+      documentId: 'doc-3',
+      localPersistenceMode: 'follower',
+      onRetry: followerRetry,
+      testId: 'follower',
+    })
+
+    const rogueChannel = new MockBroadcastChannel('bilig:workbook-local-persistence-handoff:doc-3')
+    await act(async () => {
+      rogueChannel.publish({
+        type: 'takeover-request',
+        fromTabId: 'tab:rogue',
+        requestId: 'request-1',
+        requestedAtUnixMs: Number.NaN,
+      })
+      rogueChannel.publish({
+        type: 'takeover-request',
+        fromTabId: 'tab:rogue',
+        requestId: 'request-2',
+        requestedAtUnixMs: -1,
+      })
+      rogueChannel.publish({
+        type: 'takeover-released',
+        fromTabId: 'tab:rogue',
+        requestId: 'unsolicited',
+      })
+    })
+
+    expect(writer.host.querySelector("[data-testid='writer']")?.getAttribute('data-pending-request')).toBe('false')
+    expect(followerRetry).not.toHaveBeenCalled()
+
+    rogueChannel.close()
     await act(async () => {
       writer.root.unmount()
       follower.root.unmount()

@@ -12,6 +12,10 @@ import {
   isLiteralInput,
   isPendingWorkbookMutation,
   isPendingWorkbookMutationList,
+  isWorkbookSheetName,
+  isWorkbookStructuralCount,
+  isWorkbookStructuralIndex,
+  isWorkbookStructuralSize,
   type PendingWorkbookMutation,
   type PendingWorkbookMutationInput,
   type WorkbookMutationMethod,
@@ -340,17 +344,20 @@ export function useWorkbookSync(input: {
         case 'insertColumns':
         case 'deleteColumns': {
           const [sheetName, start, count] = args
-          assert(typeof sheetName === 'string' && typeof start === 'number' && typeof count === 'number', `Invalid ${method} args`)
+          assert(
+            isWorkbookSheetName(sheetName) && isWorkbookStructuralIndex(start) && isWorkbookStructuralCount(count),
+            `Invalid ${method} args`,
+          )
           mutation = { method, args: [sheetName, start, count] }
           break
         }
         case 'updateRowMetadata': {
           const [sheetName, startRow, count, height, hidden] = args
           assert(
-            typeof sheetName === 'string' &&
-              typeof startRow === 'number' &&
-              typeof count === 'number' &&
-              (height === null || typeof height === 'number') &&
+            isWorkbookSheetName(sheetName) &&
+              isWorkbookStructuralIndex(startRow) &&
+              isWorkbookStructuralCount(count) &&
+              (height === null || isWorkbookStructuralSize(height)) &&
               (hidden === null || typeof hidden === 'boolean'),
             'Invalid updateRowMetadata args',
           )
@@ -360,10 +367,10 @@ export function useWorkbookSync(input: {
         case 'updateColumnMetadata': {
           const [sheetName, startCol, count, width, hidden] = args
           assert(
-            typeof sheetName === 'string' &&
-              typeof startCol === 'number' &&
-              typeof count === 'number' &&
-              (width === null || typeof width === 'number') &&
+            isWorkbookSheetName(sheetName) &&
+              isWorkbookStructuralIndex(startCol) &&
+              isWorkbookStructuralCount(count) &&
+              (width === null || isWorkbookStructuralSize(width)) &&
               (hidden === null || typeof hidden === 'boolean'),
             'Invalid updateColumnMetadata args',
           )
@@ -372,7 +379,10 @@ export function useWorkbookSync(input: {
         }
         case 'setFreezePane': {
           const [sheetName, rows, cols] = args
-          assert(typeof sheetName === 'string' && typeof rows === 'number' && typeof cols === 'number', 'Invalid setFreezePane args')
+          assert(
+            isWorkbookSheetName(sheetName) && isWorkbookStructuralIndex(rows) && isWorkbookStructuralIndex(cols),
+            'Invalid setFreezePane args',
+          )
           mutation = { method, args: [sheetName, rows, cols] }
           break
         }

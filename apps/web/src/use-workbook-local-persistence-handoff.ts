@@ -33,15 +33,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0
+}
+
+function isNonNegativeFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+}
+
 function isWorkbookPersistenceHandoffMessage(value: unknown): value is WorkbookPersistenceHandoffMessage {
-  if (!isRecord(value) || typeof value['type'] !== 'string' || typeof value['fromTabId'] !== 'string') {
+  if (!isRecord(value) || typeof value['type'] !== 'string' || !isNonEmptyString(value['fromTabId'])) {
     return false
   }
   if (value['type'] === 'takeover-request') {
-    return typeof value['requestId'] === 'string' && typeof value['requestedAtUnixMs'] === 'number'
+    return isNonEmptyString(value['requestId']) && isNonNegativeFiniteNumber(value['requestedAtUnixMs'])
   }
   if (value['type'] === 'takeover-released') {
-    return typeof value['requestId'] === 'string'
+    return isNonEmptyString(value['requestId'])
   }
   return false
 }
@@ -100,7 +108,7 @@ export function useWorkbookLocalPersistenceHandoff(input: {
       if (localPersistenceModeRef.current !== 'follower') {
         return
       }
-      if (requestedTakeoverRequestIdRef.current && requestedTakeoverRequestIdRef.current !== message.requestId) {
+      if (!requestedTakeoverRequestIdRef.current || requestedTakeoverRequestIdRef.current !== message.requestId) {
         return
       }
       requestedTakeoverRequestIdRef.current = null

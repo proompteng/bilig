@@ -9,6 +9,7 @@ import {
   type WorkbookAgentCommandBundle,
   type CodexTurn,
 } from '@bilig/agent-api'
+import type { WorkbookAgentThreadSummary } from '@bilig/contracts'
 import { SpreadsheetEngine } from '@bilig/core'
 import { describe, expect, it, vi } from 'vitest'
 import type { ZeroSyncService } from '../zero/service.js'
@@ -18,6 +19,7 @@ import type { WorkbookRuntime } from '../workbook-runtime/runtime-manager.js'
 import type { CodexAppServerClientOptions, CodexAppServerTransport } from './codex-app-server-client.js'
 import { createWorkbookAgentService, type WorkbookAgentService } from './workbook-agent-service.js'
 import { createWorkbookAgentServiceError } from '../workbook-agent-errors.js'
+import type { WorkbookAgentFeatureFlags } from './workbook-agent-feature-flags.js'
 
 class FakeCodexTransport implements CodexAppServerTransport {
   private readonly listeners = new Set<(notification: CodexServerNotification) => void>()
@@ -873,6 +875,62 @@ describe('workbook agent service', () => {
     }
   })
 
+  it('applies shared-thread feature gates to already-live sessions', async () => {
+    const fakeCodex = new FakeCodexTransport()
+    const service = createWorkbookAgentService(createZeroSyncStub(), {
+      codexClientFactory: (_options: CodexAppServerClientOptions): CodexAppServerTransport => fakeCodex,
+      featureFlags: {
+        sharedThreadsEnabled: true,
+      },
+    })
+
+    try {
+      const snapshot = await service.createSession({
+        documentId: 'doc-1',
+        session: {
+          userID: 'alex@example.com',
+          roles: ['editor'],
+        },
+        body: {
+          scope: 'shared',
+        },
+      })
+      Object.defineProperty(service, 'featureFlags', {
+        value: {
+          sharedThreadsEnabled: false,
+          workflowRunnerEnabled: true,
+          autoApplyLowRiskEnabled: true,
+          formulaWorkflowFamilyEnabled: true,
+          formattingWorkflowFamilyEnabled: true,
+          importWorkflowFamilyEnabled: true,
+          rollupWorkflowFamilyEnabled: true,
+          structuralWorkflowFamilyEnabled: true,
+          allowlistedUserIds: [],
+          allowlistedDocumentIds: [],
+        } satisfies WorkbookAgentFeatureFlags,
+      })
+
+      await expect(
+        service.createSession({
+          documentId: 'doc-1',
+          session: {
+            userID: 'alex@example.com',
+            roles: ['editor'],
+          },
+          body: {
+            threadId: snapshot.threadId,
+          },
+        }),
+      ).rejects.toMatchObject({
+        code: 'WORKBOOK_AGENT_SHARED_THREADS_DISABLED',
+        statusCode: 409,
+        retryable: false,
+      })
+    } finally {
+      await service.close()
+    }
+  })
+
   it('limits shared threads to the rollout allowlist', async () => {
     const fakeCodex = new FakeCodexTransport()
     const service = createWorkbookAgentService(createZeroSyncStub(), {
@@ -902,6 +960,69 @@ describe('workbook agent service', () => {
       })
     } finally {
       await service.close()
+    }
+  })
+
+  it('filters inaccessible shared threads from durable thread listings', async () => {
+    const summaries: WorkbookAgentThreadSummary[] = [
+      {
+        threadId: 'thr-private',
+        scope: 'private',
+        ownerUserId: 'alex@example.com',
+        updatedAtUnixMs: 100,
+        entryCount: 1,
+        reviewQueueItemCount: 0,
+        latestEntryText: 'Private thread',
+      },
+      {
+        threadId: 'thr-shared',
+        scope: 'shared',
+        ownerUserId: 'pat@example.com',
+        updatedAtUnixMs: 200,
+        entryCount: 2,
+        reviewQueueItemCount: 1,
+        latestEntryText: 'Shared thread',
+      },
+    ]
+    const zeroSync = createZeroSyncStub({
+      async listWorkbookAgentThreadSummaries() {
+        return summaries
+      },
+    })
+    const disabledService = createWorkbookAgentService(zeroSync, {
+      featureFlags: {
+        sharedThreadsEnabled: false,
+      },
+    })
+    const rolloutBlockedService = createWorkbookAgentService(zeroSync, {
+      featureFlags: {
+        sharedThreadsEnabled: true,
+        allowlistedUserIds: ['pat@example.com'],
+      },
+    })
+
+    try {
+      await expect(
+        disabledService.listThreads({
+          documentId: 'doc-1',
+          session: {
+            userID: 'alex@example.com',
+            roles: ['editor'],
+          },
+        }),
+      ).resolves.toEqual([summaries[0]])
+      await expect(
+        rolloutBlockedService.listThreads({
+          documentId: 'doc-1',
+          session: {
+            userID: 'alex@example.com',
+            roles: ['editor'],
+          },
+        }),
+      ).resolves.toEqual([summaries[0]])
+    } finally {
+      await disabledService.close()
+      await rolloutBlockedService.close()
     }
   })
 

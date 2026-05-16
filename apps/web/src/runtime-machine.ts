@@ -1,6 +1,7 @@
 import type { SyncState } from '@bilig/protocol'
 import { assign, fromCallback, sendTo, setup } from 'xstate'
 import type { WorkbookWorkerStateSnapshot } from './worker-runtime.js'
+import { normalizeWorkerRuntimeStateSnapshot } from './worker-runtime-state.js'
 import type { ZeroConnectionState } from './worker-workbook-app-model.js'
 import {
   createWorkerRuntimeSessionController,
@@ -53,19 +54,12 @@ export interface WorkerRuntimeMachineInput extends CreateWorkerRuntimeSessionInp
   ) => Promise<WorkerRuntimeSessionController>
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
+function normalizeWorkbookWorkerStateSnapshot(value: unknown): WorkbookWorkerStateSnapshot | null {
+  return normalizeWorkerRuntimeStateSnapshot(value)
 }
 
-function isWorkbookWorkerStateSnapshotValue(value: unknown): value is WorkbookWorkerStateSnapshot {
-  return (
-    isRecord(value) &&
-    typeof value['workbookName'] === 'string' &&
-    Array.isArray(value['sheetNames']) &&
-    isRecord(value['metrics']) &&
-    typeof value['syncState'] === 'string' &&
-    (value['authoritativeRevision'] === undefined || typeof value['authoritativeRevision'] === 'number')
-  )
+function normalizeControllerRuntimeState(controller: WorkerRuntimeSessionController): WorkbookWorkerStateSnapshot | null {
+  return normalizeWorkbookWorkerStateSnapshot(controller.runtimeState)
 }
 
 function initialConnectionStateName(input: WorkerRuntimeMachineInput): ConnectionStateName {
@@ -232,8 +226,9 @@ export function createWorkerRuntimeMachine() {
           'setExternalSyncState',
           mapConnectionStateToRuntimeSyncState(pendingConnectionStateName, Boolean(input.zero)),
         )
-        if (!disposed && isWorkbookWorkerStateSnapshotValue(value)) {
-          sendBack({ type: 'session.runtime', runtimeState: value })
+        const runtimeState = normalizeWorkbookWorkerStateSnapshot(value)
+        if (!disposed && runtimeState) {
+          sendBack({ type: 'session.runtime', runtimeState })
         }
       }
 
@@ -286,7 +281,10 @@ export function createWorkerRuntimeMachine() {
             }),
             {
               onRuntimeState(runtimeState) {
-                sendBack({ type: 'session.runtime', runtimeState })
+                const normalizedRuntimeState = normalizeWorkbookWorkerStateSnapshot(runtimeState)
+                if (normalizedRuntimeState) {
+                  sendBack({ type: 'session.runtime', runtimeState: normalizedRuntimeState })
+                }
               },
               onSelection(selection) {
                 if (!sameWorkerRuntimeSelection(selection, pendingSelection)) {
@@ -305,6 +303,14 @@ export function createWorkerRuntimeMachine() {
           )
           if (disposed) {
             createdController.dispose()
+            return
+          }
+          if (!normalizeControllerRuntimeState(createdController)) {
+            createdController.dispose()
+            sendBack({
+              type: 'session.failed',
+              message: 'Runtime session returned invalid runtime state',
+            })
             return
           }
           controller = createdController
@@ -414,8 +420,9 @@ export function createWorkerRuntimeMachine() {
             ],
           },
           'session.runtime': {
+            guard: ({ event }) => normalizeWorkbookWorkerStateSnapshot(event['runtimeState']) !== null,
             actions: assign({
-              runtimeState: ({ event }) => event['runtimeState'],
+              runtimeState: ({ event }) => normalizeWorkbookWorkerStateSnapshot(event['runtimeState']) ?? null,
             }),
           },
           'session.selection': {
@@ -451,7 +458,7 @@ export function createWorkerRuntimeMachine() {
                 storeRuntimeResourcesAction,
                 assign({
                   runtimeResourceVersion: ({ context }) => context.runtimeResourceVersion + 1,
-                  runtimeState: ({ event }) => event['controller'].runtimeState,
+                  runtimeState: ({ event }) => normalizeControllerRuntimeState(event['controller']),
                   selection: ({ event }) => event['controller'].selection,
                   error: () => null,
                 }),
@@ -468,7 +475,7 @@ export function createWorkerRuntimeMachine() {
                 storeRuntimeResourcesAction,
                 assign({
                   runtimeResourceVersion: ({ context }) => context.runtimeResourceVersion + 1,
-                  runtimeState: ({ event }) => event['controller'].runtimeState,
+                  runtimeState: ({ event }) => normalizeControllerRuntimeState(event['controller']),
                   selection: ({ event }) => event['controller'].selection,
                   error: () => null,
                 }),
@@ -485,7 +492,7 @@ export function createWorkerRuntimeMachine() {
                 storeRuntimeResourcesAction,
                 assign({
                   runtimeResourceVersion: ({ context }) => context.runtimeResourceVersion + 1,
-                  runtimeState: ({ event }) => event['controller'].runtimeState,
+                  runtimeState: ({ event }) => normalizeControllerRuntimeState(event['controller']),
                   selection: ({ event }) => event['controller'].selection,
                   error: () => null,
                 }),
@@ -497,7 +504,7 @@ export function createWorkerRuntimeMachine() {
                 storeRuntimeResourcesAction,
                 assign({
                   runtimeResourceVersion: ({ context }) => context.runtimeResourceVersion + 1,
-                  runtimeState: ({ event }) => event['controller'].runtimeState,
+                  runtimeState: ({ event }) => normalizeControllerRuntimeState(event['controller']),
                   selection: ({ event }) => event['controller'].selection,
                   error: () => null,
                 }),

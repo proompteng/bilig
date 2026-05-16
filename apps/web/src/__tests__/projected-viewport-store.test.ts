@@ -620,6 +620,43 @@ describe('ProjectedViewportStore', () => {
     unsubscribeRenderTiles()
   })
 
+  it('drops stale sheet identities when runtime state publishes a replacement sheet list', () => {
+    const cache = new ProjectedViewportStore(createNoopWorkerEngineClient())
+    const listener = vi.fn()
+
+    cache.setSheetIdentities([{ id: 7, name: 'Sheet1', order: 0 }])
+    cache.setSheetIdentities([{ id: 8, name: 'Sheet2', order: 0 }])
+    const unsubscribeDeltas = cache.subscribeWorkbookDeltas(listener)
+
+    cache.setCellSnapshot({
+      address: 'A1',
+      flags: 0,
+      sheetName: 'Sheet1',
+      value: { tag: ValueTag.Number, value: 17 },
+      version: 12,
+    })
+
+    expect(listener).not.toHaveBeenCalled()
+
+    cache.setCellSnapshot({
+      address: 'A1',
+      flags: 0,
+      sheetName: 'Sheet2',
+      value: { tag: ValueTag.Number, value: 18 },
+      version: 13,
+    })
+
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sheetId: 8,
+        sheetOrdinal: 0,
+        source: 'localOptimistic',
+      }),
+    )
+
+    unsubscribeDeltas()
+  })
+
   it('clears a pending local column width once the authoritative patch matches it', () => {
     const cache = new ProjectedViewportStore()
 

@@ -27,10 +27,15 @@ function recordProperty(value: unknown, key: string): Record<string, unknown> | 
   return isUnknownRecord(nestedValue) ? nestedValue : undefined
 }
 
-function createController(selection = { sheetName: 'Sheet1', address: 'A1' }): WorkerRuntimeSessionController {
+function createController(
+  selection = { sheetName: 'Sheet1', address: 'A1' },
+  runtimeStateOverride: Partial<WorkerRuntimeSessionController['runtimeState']> = {},
+): WorkerRuntimeSessionController {
   const runtimeState = {
     workbookName: 'bilig-demo',
+    sheets: [{ id: 1, name: 'Sheet1', order: 0 }],
     sheetNames: ['Sheet1'],
+    definedNames: [],
     metrics: {
       batchId: 0,
       changedInputCount: 0,
@@ -42,6 +47,8 @@ function createController(selection = { sheetName: 'Sheet1', address: 'A1' }): W
       compileMs: 0,
     },
     syncState: 'local-only',
+    localHistoryState: { canUndo: false, canRedo: false },
+    ...runtimeStateOverride,
   } as const
   return {
     handle: createWorkerHandle(),
@@ -101,6 +108,122 @@ describe('worker runtime machine', () => {
     })
 
     expect(actor.getSnapshot().context.selection).toEqual(nextSelection)
+    actor.stop()
+  })
+
+  it('normalizes controller runtime state when the session becomes ready', async () => {
+    const controller = {
+      ...createController(
+        { sheetName: 'Actuals', address: 'A1' },
+        {
+          sheets: [
+            { id: 42, name: 'Actuals', order: 0 },
+            { id: 9, name: 'Archive', order: 1 },
+          ],
+          sheetNames: ['StaleName'],
+        },
+      ),
+      invoke: vi.fn(() => new Promise<never>(() => {})),
+    }
+    const createSession = vi.fn(async (): Promise<WorkerRuntimeSessionController> => controller)
+
+    const actor = createActor(createWorkerRuntimeMachine(), {
+      input: {
+        documentId: 'book-1',
+        replicaId: 'browser:test',
+        persistState: true,
+        connectionStateName: 'closed',
+        initialSelection: { sheetName: 'Actuals', address: 'A1' },
+        createSession,
+      },
+    })
+
+    actor.start()
+    await vi.waitFor(() => {
+      expect(actor.getSnapshot().matches({ active: 'localReady' })).toBe(true)
+    })
+
+    expect(actor.getSnapshot().context.runtimeState?.sheetNames).toEqual(['Actuals', 'Archive'])
+    actor.stop()
+  })
+
+  it('fails startup when the ready session exposes invalid runtime state', async () => {
+    const controller = createController()
+    Object.defineProperty(controller, 'runtimeState', {
+      configurable: true,
+      value: {
+        ...controller.runtimeState,
+        syncState: 'not-a-runtime-sync-state',
+      },
+    })
+    const createSession = vi.fn(async (): Promise<WorkerRuntimeSessionController> => controller)
+
+    const actor = createActor(createWorkerRuntimeMachine(), {
+      input: {
+        documentId: 'book-1',
+        replicaId: 'browser:test',
+        persistState: true,
+        connectionStateName: 'closed',
+        initialSelection: { sheetName: 'Sheet1', address: 'A1' },
+        createSession,
+      },
+    })
+
+    actor.start()
+    await vi.waitFor(() => {
+      expect(actor.getSnapshot().matches('failed')).toBe(true)
+    })
+
+    expect(actor.getSnapshot().context.error).toBe('Runtime session returned invalid runtime state')
+    expect(controller.dispose).toHaveBeenCalledTimes(1)
+    actor.stop()
+  })
+
+  it('does not store malformed runtime-state events from the session actor', async () => {
+    const controller = createController()
+    const createSession = vi.fn(
+      async (
+        _input: CreateWorkerRuntimeSessionInput,
+        callbacks: WorkerRuntimeSessionCallbacks,
+      ): Promise<WorkerRuntimeSessionController> => {
+        callbacks.onPhase?.('hydratingLocal')
+        callbacks.onRuntimeState(controller.runtimeState)
+        return controller
+      },
+    )
+
+    const actor = createActor(createWorkerRuntimeMachine(), {
+      input: {
+        documentId: 'book-1',
+        replicaId: 'browser:test',
+        persistState: true,
+        connectionStateName: 'closed',
+        initialSelection: { sheetName: 'Sheet1', address: 'A1' },
+        createSession,
+      },
+    })
+
+    actor.start()
+    await vi.waitFor(() => {
+      expect(actor.getSnapshot().matches({ active: 'localReady' })).toBe(true)
+    })
+
+    const validRuntimeState = actor.getSnapshot().context.runtimeState
+    expect(validRuntimeState?.syncState).toBe('local-only')
+
+    actor.send({
+      type: 'session.runtime',
+      runtimeState: {
+        ...controller.runtimeState,
+        pendingMutationSummary: {
+          activeCount: -1,
+          failedCount: 0,
+          firstFailed: null,
+        },
+      },
+    })
+
+    expect(actor.getSnapshot().context.runtimeState).toBe(validRuntimeState)
     actor.stop()
   })
 

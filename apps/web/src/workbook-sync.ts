@@ -1,8 +1,35 @@
-import { isCommitOps } from '@bilig/core'
 import type { Zero } from '@rocicorp/zero'
 import { createRenderCommitArgs, mutators } from '@bilig/zero-sync'
-import type { CellNumberFormatInput, CellStyleField, CellStylePatch } from '@bilig/protocol'
-import { isCellRangeRef, isLiteralInput } from '@bilig/protocol'
+import {
+  isCellNumberFormatInputValue,
+  isCellRangeRef,
+  isCellStyleFieldList,
+  isCellStylePatchValue,
+  isCommitOps,
+  isLiteralInput,
+  isPendingWorkbookMutationInput,
+  isWorkbookSheetName,
+  isWorkbookStructuralCount,
+  isWorkbookStructuralIndex,
+  isWorkbookStructuralSize,
+} from './workbook-mutation-guards.js'
+
+export {
+  isCellNumberFormatInputValue,
+  isCellRangeRef,
+  isCellStyleFieldList,
+  isCellStylePatchValue,
+  isCommitOps,
+  isLiteralInput,
+  isPendingWorkbookMutation,
+  isPendingWorkbookMutationInput,
+  isPendingWorkbookMutationList,
+  isWorkbookMutationMethod,
+  isWorkbookSheetName,
+  isWorkbookStructuralCount,
+  isWorkbookStructuralIndex,
+  isWorkbookStructuralSize,
+} from './workbook-mutation-guards.js'
 
 export type WorkbookMutationMethod =
   | 'setCellValue'
@@ -49,89 +76,14 @@ export interface PendingWorkbookMutation extends PendingWorkbookMutationInput {
   readonly status: 'local' | 'submitted' | 'acked' | 'rebased' | 'failed'
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
-export function isCellStyleFieldList(value: unknown): value is CellStyleField[] {
-  return Array.isArray(value) && value.every((entry) => typeof entry === 'string')
-}
-
-export function isCellStylePatchValue(value: unknown): value is CellStylePatch {
-  return isRecord(value)
-}
-
-export function isCellNumberFormatInputValue(value: unknown): value is CellNumberFormatInput {
-  return typeof value === 'string' || isRecord(value)
-}
-
-export { isCellRangeRef, isCommitOps, isLiteralInput }
-
-export function isWorkbookMutationMethod(value: unknown): value is WorkbookMutationMethod {
-  return (
-    value === 'setCellValue' ||
-    value === 'setCellFormula' ||
-    value === 'clearCell' ||
-    value === 'clearRange' ||
-    value === 'renderCommit' ||
-    value === 'fillRange' ||
-    value === 'copyRange' ||
-    value === 'moveRange' ||
-    value === 'insertRows' ||
-    value === 'deleteRows' ||
-    value === 'insertColumns' ||
-    value === 'deleteColumns' ||
-    value === 'updateRowMetadata' ||
-    value === 'updateColumnMetadata' ||
-    value === 'setFreezePane' ||
-    value === 'mergeCells' ||
-    value === 'unmergeCells' ||
-    value === 'setRangeStyle' ||
-    value === 'clearRangeStyle' ||
-    value === 'setRangeNumberFormat' ||
-    value === 'clearRangeNumberFormat'
-  )
-}
-
-function isKnownPendingWorkbookMutationMethod(value: unknown): value is KnownPendingWorkbookMutationMethod {
-  return value === 'updateColumnWidth' || isWorkbookMutationMethod(value)
-}
-
-export function isPendingWorkbookMutationInput(value: unknown): value is PendingWorkbookMutationInput {
-  return isRecord(value) && isKnownPendingWorkbookMutationMethod(value['method']) && Array.isArray(value['args'])
-}
-
-export function isPendingWorkbookMutation(value: unknown): value is PendingWorkbookMutation {
-  return (
-    isRecord(value) &&
-    typeof value['id'] === 'string' &&
-    typeof value['localSeq'] === 'number' &&
-    typeof value['baseRevision'] === 'number' &&
-    typeof value['enqueuedAtUnixMs'] === 'number' &&
-    (value['submittedAtUnixMs'] === null || typeof value['submittedAtUnixMs'] === 'number') &&
-    (value['lastAttemptedAtUnixMs'] === null || typeof value['lastAttemptedAtUnixMs'] === 'number') &&
-    (value['ackedAtUnixMs'] === null || typeof value['ackedAtUnixMs'] === 'number') &&
-    (value['rebasedAtUnixMs'] === null || typeof value['rebasedAtUnixMs'] === 'number') &&
-    (value['failedAtUnixMs'] === null || typeof value['failedAtUnixMs'] === 'number') &&
-    typeof value['attemptCount'] === 'number' &&
-    (value['failureMessage'] === null || typeof value['failureMessage'] === 'string') &&
-    (value['status'] === 'local' ||
-      value['status'] === 'submitted' ||
-      value['status'] === 'acked' ||
-      value['status'] === 'rebased' ||
-      value['status'] === 'failed') &&
-    isPendingWorkbookMutationInput(value)
-  )
-}
-
-export function isPendingWorkbookMutationList(value: unknown): value is readonly PendingWorkbookMutation[] {
-  return Array.isArray(value) && value.every((entry) => isPendingWorkbookMutation(entry))
-}
-
 export function buildZeroWorkbookMutation(
   documentId: string,
   mutation: PendingWorkbookMutationInput | PendingWorkbookMutation,
 ): Parameters<Zero['mutate']>[0] {
+  const mutationMethod = mutation.method
+  if (!isPendingWorkbookMutationInput(mutation)) {
+    throw new Error(`Invalid ${mutationMethod} args`)
+  }
   const { method, args } = mutation
   const clientMutationId = 'id' in mutation ? mutation.id : undefined
   switch (method) {
@@ -196,7 +148,7 @@ export function buildZeroWorkbookMutation(
     case 'insertColumns':
     case 'deleteColumns': {
       const [sheetName, start, count] = args
-      if (typeof sheetName !== 'string' || typeof start !== 'number' || typeof count !== 'number') {
+      if (!isWorkbookSheetName(sheetName) || !isWorkbookStructuralIndex(start) || !isWorkbookStructuralCount(count)) {
         throw new Error(`Invalid ${method} args`)
       }
       if (method === 'insertRows') {
@@ -237,10 +189,10 @@ export function buildZeroWorkbookMutation(
     case 'updateRowMetadata': {
       const [sheetName, startRow, count, height, hidden] = args
       if (
-        typeof sheetName !== 'string' ||
-        typeof startRow !== 'number' ||
-        typeof count !== 'number' ||
-        (height !== null && typeof height !== 'number') ||
+        !isWorkbookSheetName(sheetName) ||
+        !isWorkbookStructuralIndex(startRow) ||
+        !isWorkbookStructuralCount(count) ||
+        (height !== null && !isWorkbookStructuralSize(height)) ||
         (hidden !== null && typeof hidden !== 'boolean')
       ) {
         throw new Error('Invalid updateRowMetadata args')
@@ -258,10 +210,10 @@ export function buildZeroWorkbookMutation(
     case 'updateColumnMetadata': {
       const [sheetName, startCol, count, width, hidden] = args
       if (
-        typeof sheetName !== 'string' ||
-        typeof startCol !== 'number' ||
-        typeof count !== 'number' ||
-        (width !== null && typeof width !== 'number') ||
+        !isWorkbookSheetName(sheetName) ||
+        !isWorkbookStructuralIndex(startCol) ||
+        !isWorkbookStructuralCount(count) ||
+        (width !== null && !isWorkbookStructuralSize(width)) ||
         (hidden !== null && typeof hidden !== 'boolean')
       ) {
         throw new Error('Invalid updateColumnMetadata args')
@@ -278,7 +230,7 @@ export function buildZeroWorkbookMutation(
     }
     case 'updateColumnWidth': {
       const [sheetName, columnIndex, width] = args
-      if (typeof sheetName !== 'string' || typeof columnIndex !== 'number' || typeof width !== 'number') {
+      if (!isWorkbookSheetName(sheetName) || !isWorkbookStructuralIndex(columnIndex) || !isWorkbookStructuralSize(width)) {
         throw new Error('Invalid updateColumnWidth args')
       }
       return mutators.workbook.updateColumnMetadata({
@@ -293,7 +245,7 @@ export function buildZeroWorkbookMutation(
     }
     case 'setFreezePane': {
       const [sheetName, rows, cols] = args
-      if (typeof sheetName !== 'string' || typeof rows !== 'number' || typeof cols !== 'number') {
+      if (!isWorkbookSheetName(sheetName) || !isWorkbookStructuralIndex(rows) || !isWorkbookStructuralIndex(cols)) {
         throw new Error('Invalid setFreezePane args')
       }
       return mutators.workbook.setFreezePane({

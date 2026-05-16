@@ -211,7 +211,7 @@ function createSnapshot(cells: readonly { address: string; value: number }[]): W
   }
 }
 
-function createMockWorkerPort(runtime: WorkbookWorkerRuntime) {
+function createMockWorkerPort(runtime: Parameters<typeof createWorkerEngineHost>[0]) {
   const channel = new MessageChannel()
   const host = createWorkerEngineHost(runtime, channel.port1)
   return {
@@ -373,6 +373,77 @@ describe('createWorkerRuntimeSessionController', () => {
     expect(engine.getColumnAxisEntries('Sheet1')).toEqual([])
   })
 
+  it('ignores malformed structural pending mutation args during replay', async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: 'phase0-doc',
+      replicaId: 'browser:test',
+    })
+    await engine.ready()
+
+    applyPendingWorkbookMutationToEngine(engine, {
+      id: 'pending-bad-width',
+      localSeq: 1,
+      baseRevision: 0,
+      enqueuedAtUnixMs: 1,
+      submittedAtUnixMs: null,
+      lastAttemptedAtUnixMs: null,
+      ackedAtUnixMs: null,
+      rebasedAtUnixMs: null,
+      failedAtUnixMs: null,
+      attemptCount: 0,
+      failureMessage: null,
+      status: 'local',
+      method: 'updateColumnMetadata',
+      args: ['Sheet1', 1, 1, Number.NaN, null],
+    })
+    applyPendingWorkbookMutationToEngine(engine, {
+      id: 'pending-bad-freeze',
+      localSeq: 2,
+      baseRevision: 0,
+      enqueuedAtUnixMs: 2,
+      submittedAtUnixMs: null,
+      lastAttemptedAtUnixMs: null,
+      ackedAtUnixMs: null,
+      rebasedAtUnixMs: null,
+      failedAtUnixMs: null,
+      attemptCount: 0,
+      failureMessage: null,
+      status: 'local',
+      method: 'setFreezePane',
+      args: ['Sheet1', 1.5, 0],
+    })
+
+    expect(engine.getColumnAxisEntries('Sheet1')).toEqual([])
+    expect(engine.workbook.getSheet('Sheet1')?.metadata.freezePane).toBeUndefined()
+  })
+
+  it('ignores pending mutations with extra args during replay', async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: 'phase0-doc',
+      replicaId: 'browser:test',
+    })
+    await engine.ready()
+
+    applyPendingWorkbookMutationToEngine(engine, {
+      id: 'pending-extra-args',
+      localSeq: 1,
+      baseRevision: 0,
+      enqueuedAtUnixMs: 1,
+      submittedAtUnixMs: null,
+      lastAttemptedAtUnixMs: null,
+      ackedAtUnixMs: null,
+      rebasedAtUnixMs: null,
+      failedAtUnixMs: null,
+      attemptCount: 0,
+      failureMessage: null,
+      status: 'local',
+      method: 'setCellValue',
+      args: ['Sheet1', 'A1', 17, { ignored: true }],
+    })
+
+    expect(engine.getCell('Sheet1', 'A1').value).toEqual({ tag: ValueTag.Empty })
+  })
+
   it('hydrates the mounted worker session from the latest authoritative snapshot', async () => {
     const runtime = new WorkbookWorkerRuntime({
       localStoreFactory: createMemoryLocalStoreFactory(),
@@ -420,6 +491,417 @@ describe('createWorkerRuntimeSessionController', () => {
       tag: ValueTag.Number,
       value: 41,
     })
+
+    controller.dispose()
+  })
+
+  it('normalizes worker sheet names from structured sheet identities before publishing runtime state', async () => {
+    const staleRuntimeState = {
+      workbookName: 'phase0-doc',
+      sheets: [
+        { id: 42, name: 'Actuals', order: 0 },
+        { id: 9, name: 'Archive', order: 1 },
+      ],
+      sheetNames: ['StaleName'],
+      definedNames: [],
+      metrics: {
+        batchId: 0,
+        changedInputCount: 0,
+        dirtyFormulaCount: 0,
+        wasmFormulaCount: 0,
+        jsFormulaCount: 0,
+        rangeNodeVisits: 0,
+        recalcMs: 0,
+        compileMs: 0,
+      },
+      syncState: 'local-only',
+      localHistoryState: { canUndo: false, canRedo: false },
+      authoritativeRevision: 7,
+      localPersistenceMode: 'persistent',
+      pendingMutationSummary: {
+        activeCount: 1,
+        failedCount: 0,
+        firstFailed: null,
+      },
+    } satisfies ReturnType<WorkbookWorkerRuntime['getRuntimeState']>
+    const runtimeStates: ReturnType<WorkbookWorkerRuntime['getRuntimeState']>[] = []
+    const workerEngine: Parameters<typeof createWorkerEngineHost>[0] = {
+      async bootstrap() {
+        return {
+          runtimeState: staleRuntimeState,
+          restoredFromPersistence: true,
+          requiresAuthoritativeHydrate: false,
+          localPersistenceMode: 'persistent',
+        }
+      },
+      getAuthoritativeRevision() {
+        return 7
+      },
+      getRuntimeState() {
+        return staleRuntimeState
+      },
+      getCell(sheetName: string, address: string) {
+        return {
+          sheetName,
+          address,
+          value: { tag: ValueTag.Empty },
+          flags: 0,
+          version: 0,
+        }
+      },
+      subscribeViewportPatches() {
+        return () => {}
+      },
+    }
+
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: 'phase0-doc',
+        replicaId: 'browser:test',
+        persistState: true,
+        initialSelection: { sheetName: 'Actuals', address: 'A1' },
+        createWorker: () => createMockWorkerPort(workerEngine),
+        fetchImpl: vi.fn(async () => {
+          throw new Error('Should not fetch authoritative snapshots when restored state has pending local mutations')
+        }),
+      },
+      {
+        onRuntimeState(runtimeState) {
+          runtimeStates.push(runtimeState)
+        },
+        onSelection() {},
+        onError(message) {
+          throw new Error(message)
+        },
+      },
+    )
+
+    expect(controller.runtimeState.sheetNames).toEqual(['Actuals', 'Archive'])
+    expect(runtimeStates.at(-1)?.sheetNames).toEqual(['Actuals', 'Archive'])
+    expect(controller.selection.sheetName).toBe('Actuals')
+
+    controller.dispose()
+  })
+
+  it('rejects worker runtime state with impossible sync or pending mutation state', async () => {
+    const validRuntimeState = {
+      workbookName: 'phase0-doc',
+      sheets: [{ id: 1, name: 'Sheet1', order: 0 }],
+      sheetNames: ['Sheet1'],
+      definedNames: [],
+      metrics: {
+        batchId: 0,
+        changedInputCount: 0,
+        dirtyFormulaCount: 0,
+        wasmFormulaCount: 0,
+        jsFormulaCount: 0,
+        rangeNodeVisits: 0,
+        recalcMs: 0,
+        compileMs: 0,
+      },
+      syncState: 'local-only',
+      localHistoryState: { canUndo: false, canRedo: false },
+      pendingMutationSummary: {
+        activeCount: 0,
+        failedCount: 0,
+        firstFailed: null,
+      },
+    } satisfies ReturnType<WorkbookWorkerRuntime['getRuntimeState']>
+
+    const createInvalidWorker = (runtimeState: unknown) => {
+      const workerEngine: Parameters<typeof createWorkerEngineHost>[0] = {
+        async bootstrap() {
+          return {
+            runtimeState,
+            restoredFromPersistence: true,
+            requiresAuthoritativeHydrate: false,
+          }
+        },
+      }
+      return createMockWorkerPort(workerEngine)
+    }
+
+    await expect(
+      createWorkerRuntimeSessionController(
+        {
+          documentId: 'phase0-doc',
+          replicaId: 'browser:test',
+          persistState: true,
+          initialSelection: { sheetName: 'Sheet1', address: 'A1' },
+          createWorker: () =>
+            createInvalidWorker({
+              ...validRuntimeState,
+              syncState: 'offline-but-not-a-protocol-state',
+            }),
+          fetchImpl: vi.fn(),
+        },
+        {
+          onRuntimeState() {},
+          onSelection() {},
+          onError(message) {
+            throw new Error(message)
+          },
+        },
+      ),
+    ).rejects.toThrow('Worker method bootstrap returned an unexpected payload')
+
+    await expect(
+      createWorkerRuntimeSessionController(
+        {
+          documentId: 'phase0-doc',
+          replicaId: 'browser:test',
+          persistState: true,
+          initialSelection: { sheetName: 'Sheet1', address: 'A1' },
+          createWorker: () =>
+            createInvalidWorker({
+              ...validRuntimeState,
+              pendingMutationSummary: {
+                activeCount: '1',
+                failedCount: 0,
+                firstFailed: null,
+              },
+            }),
+          fetchImpl: vi.fn(),
+        },
+        {
+          onRuntimeState() {},
+          onSelection() {},
+          onError(message) {
+            throw new Error(message)
+          },
+        },
+      ),
+    ).rejects.toThrow('Worker method bootstrap returned an unexpected payload')
+  })
+
+  it('rejects invalid authoritative snapshot install input before invoking the worker', async () => {
+    const workerEngine: Parameters<typeof createWorkerEngineHost>[0] = {
+      async bootstrap() {
+        return {
+          runtimeState: {
+            workbookName: 'phase0-doc',
+            sheets: [{ id: 1, name: 'Sheet1', order: 0 }],
+            sheetNames: ['Sheet1'],
+            definedNames: [],
+            metrics: {
+              batchId: 0,
+              changedInputCount: 0,
+              dirtyFormulaCount: 0,
+              wasmFormulaCount: 0,
+              jsFormulaCount: 0,
+              rangeNodeVisits: 0,
+              recalcMs: 0,
+              compileMs: 0,
+            },
+            syncState: 'local-only',
+            localHistoryState: { canUndo: false, canRedo: false },
+            authoritativeRevision: 0,
+          },
+          restoredFromPersistence: true,
+          requiresAuthoritativeHydrate: false,
+        }
+      },
+      async getAuthoritativeRevision() {
+        return 0
+      },
+      async getRuntimeState() {
+        throw new Error('installAuthoritativeSnapshot should not reach the worker with an invalid revision')
+      },
+      async getCell(sheetName: string, address: string) {
+        return {
+          sheetName,
+          address,
+          value: { tag: ValueTag.Empty },
+          flags: 0,
+          version: 0,
+        }
+      },
+      async installAuthoritativeSnapshot() {
+        throw new Error('installAuthoritativeSnapshot should not be invoked with an invalid revision')
+      },
+      subscribeViewportPatches() {
+        return () => {}
+      },
+    }
+
+    const errors: string[] = []
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: 'phase0-doc',
+        replicaId: 'browser:test',
+        persistState: true,
+        initialSelection: { sheetName: 'Sheet1', address: 'A1' },
+        createWorker: () => createMockWorkerPort(workerEngine),
+        fetchImpl: vi.fn(async () => new Response(null, { status: 204 })),
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          errors.push(message)
+        },
+      },
+    )
+
+    await expect(
+      controller.invoke('installAuthoritativeSnapshot', {
+        snapshot: createSnapshot([{ address: 'A1', value: 1 }]),
+        authoritativeRevision: Number.NaN,
+        mode: 'reconcile',
+      }),
+    ).rejects.toThrow('installAuthoritativeSnapshot requires a valid authoritative snapshot input')
+    await expect(
+      controller.invoke('installAuthoritativeSnapshot', {
+        snapshot: createSnapshot([{ address: 'A1', value: 1 }]),
+        authoritativeRevision: -1,
+        mode: 'reconcile',
+      }),
+    ).rejects.toThrow('installAuthoritativeSnapshot requires a valid authoritative snapshot input')
+    expect(errors).toEqual([
+      'installAuthoritativeSnapshot requires a valid authoritative snapshot input',
+      'installAuthoritativeSnapshot requires a valid authoritative snapshot input',
+    ])
+
+    controller.dispose()
+  })
+
+  it('rejects invalid authoritative revision snapshots from the worker', async () => {
+    const workerEngine: Parameters<typeof createWorkerEngineHost>[0] = {
+      async bootstrap() {
+        return {
+          runtimeState: {
+            workbookName: 'phase0-doc',
+            sheets: [{ id: 1, name: 'Sheet1', order: 0 }],
+            sheetNames: ['Sheet1'],
+            definedNames: [],
+            metrics: {
+              batchId: 0,
+              changedInputCount: 0,
+              dirtyFormulaCount: 0,
+              wasmFormulaCount: 0,
+              jsFormulaCount: 0,
+              rangeNodeVisits: 0,
+              recalcMs: 0,
+              compileMs: 0,
+            },
+            syncState: 'local-only',
+            localHistoryState: { canUndo: false, canRedo: false },
+            authoritativeRevision: 0,
+          },
+          restoredFromPersistence: true,
+          requiresAuthoritativeHydrate: false,
+        }
+      },
+      async getAuthoritativeRevision() {
+        return Number.NaN
+      },
+    }
+
+    await expect(
+      createWorkerRuntimeSessionController(
+        {
+          documentId: 'phase0-doc',
+          replicaId: 'browser:test',
+          persistState: true,
+          initialSelection: { sheetName: 'Sheet1', address: 'A1' },
+          createWorker: () => createMockWorkerPort(workerEngine),
+          fetchImpl: vi.fn(),
+        },
+        {
+          onRuntimeState() {},
+          onSelection() {},
+          onError(message) {
+            throw new Error(message)
+          },
+        },
+      ),
+    ).rejects.toThrow('Worker method getAuthoritativeRevision returned an unexpected payload')
+  })
+
+  it('rejects malformed benchmark corpus results before publishing a viewport', async () => {
+    const runtimeState = {
+      workbookName: 'phase0-doc',
+      sheets: [{ id: 1, name: 'Sheet1', order: 0 }],
+      sheetNames: ['Sheet1'],
+      definedNames: [],
+      metrics: {
+        batchId: 0,
+        changedInputCount: 0,
+        dirtyFormulaCount: 0,
+        wasmFormulaCount: 0,
+        jsFormulaCount: 0,
+        rangeNodeVisits: 0,
+        recalcMs: 0,
+        compileMs: 0,
+      },
+      syncState: 'local-only',
+      localHistoryState: { canUndo: false, canRedo: false },
+      authoritativeRevision: 0,
+    }
+    const workerEngine: Parameters<typeof createWorkerEngineHost>[0] = {
+      async bootstrap() {
+        return {
+          runtimeState,
+          restoredFromPersistence: true,
+          requiresAuthoritativeHydrate: false,
+        }
+      },
+      async getAuthoritativeRevision() {
+        return 0
+      },
+      async getRuntimeState() {
+        return runtimeState
+      },
+      async getCell(sheetName: string, address: string) {
+        return {
+          sheetName,
+          address,
+          value: { tag: ValueTag.Empty },
+          flags: 0,
+          version: 0,
+        }
+      },
+      async installBenchmarkCorpus() {
+        return {
+          id: 'bad-corpus',
+          materializedCellCount: 1,
+          primaryViewport: {
+            sheetName: 'Sheet1',
+            rowStart: 5,
+            rowEnd: 4,
+            colStart: 0,
+            colEnd: 0,
+          },
+        }
+      },
+      subscribeViewportPatches() {
+        return () => {}
+      },
+    }
+    const errors: string[] = []
+
+    const controller = await createWorkerRuntimeSessionController(
+      {
+        documentId: 'phase0-doc',
+        replicaId: 'browser:test',
+        persistState: true,
+        initialSelection: { sheetName: 'Sheet1', address: 'A1' },
+        createWorker: () => createMockWorkerPort(workerEngine),
+        fetchImpl: vi.fn(async () => new Response(null, { status: 204 })),
+      },
+      {
+        onRuntimeState() {},
+        onSelection() {},
+        onError(message) {
+          errors.push(message)
+        },
+      },
+    )
+
+    await expect(controller.invoke('installBenchmarkCorpus', 'bad-corpus')).rejects.toThrow(
+      'installBenchmarkCorpus returned an unexpected payload',
+    )
+    expect(errors).toEqual(['installBenchmarkCorpus returned an unexpected payload'])
 
     controller.dispose()
   })

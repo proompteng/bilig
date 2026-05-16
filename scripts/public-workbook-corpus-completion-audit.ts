@@ -5,7 +5,6 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { hasUsableLicenseEvidence, parsePublicWorkbookManifestJson } from './public-workbook-corpus-json.ts'
-import { planPublicWorkbookCorpusFetch, type PublicWorkbookCorpusFetchPlan } from './public-workbook-corpus-fetch.ts'
 import { publicWorkbookCorpusCaseMatchesArtifact } from './public-workbook-corpus-missing.ts'
 import { readPublicWorkbookCorpusStatus, type PublicWorkbookCorpusStatus } from './public-workbook-corpus-status.ts'
 import { readReusablePublicWorkbookCorpusCases } from './public-workbook-corpus-verify-checkpoint.ts'
@@ -14,16 +13,14 @@ import { auditPublicWorkbookCorpusCiOfflineCachedMode } from './public-workbook-
 import { hasPublicWorkbookCorpusUsedRangeEvidence } from './public-workbook-corpus-evidence.ts'
 import { buildPublicWorkbookCorpusAuditNextActions } from './public-workbook-corpus-completion-next-actions.ts'
 import { validatePublicWorkbookCorpusAuditNextActions } from './public-workbook-corpus-completion-next-action-validation.ts'
+import { buildPublicWorkbookCorpusAuditState } from './public-workbook-corpus-completion-state.ts'
 import {
   buildFeatureWitnessCoverage,
-  buildUnsupportedCaseSummary,
   countGap,
   duplicateGap,
-  financialWorkbookTargetCount,
   formatUnsupportedClassificationCounts,
   hasCacheIntegrityFailureEvidence,
   hasFeatureValidationEvidence,
-  hasFinancialTopicEvidence,
   hasRecordedProvenanceEvidence,
   hasWorkbookMetadata,
   isHashAddressedCachePath,
@@ -76,7 +73,6 @@ const financialCheckpointArtifact = '.cache/public-workbook-corpus-financial/ver
 const defaultFinancialManifestPath = resolve(rootDir, financialManifestArtifact)
 const defaultFinancialScorecardPath = resolve(rootDir, financialScorecardArtifact)
 const defaultFinancialVerifyCheckpointPath = resolve(rootDir, financialCheckpointArtifact)
-const roundTripSkippedEvidencePrefix = 'Round-trip projection skipped because'
 function main(): void {
   const audit = buildPublicWorkbookCorpusCompletionAuditFromArgs()
   const requireComplete = readFlagArg('--require-complete')
@@ -159,13 +155,13 @@ export function buildPublicWorkbookCorpusCompletionAudit(args: {
   readonly status: PublicWorkbookCorpusStatus
   readonly stopMarkerActive: boolean
 }): PublicWorkbookCorpusCompletionAudit {
-  const currentState = buildAuditState(
-    args.status,
-    args.recordedCases,
-    args.manifest,
-    args.financialManifest ?? null,
-    args.financialRecordedCases ?? [],
-  )
+  const currentState = buildPublicWorkbookCorpusAuditState({
+    financialManifest: args.financialManifest ?? null,
+    financialRecordedCases: args.financialRecordedCases ?? [],
+    manifest: args.manifest,
+    recordedCases: args.recordedCases,
+    status: args.status,
+  })
   const secondaryFormulaCorpus = args.hyperformulaSecondaryCorpus ?? missingHyperFormulaSecondaryCorpus()
   const context = {
     currentState,
@@ -817,97 +813,6 @@ const requirementBuilders: readonly ((context: RequirementContext) => PublicWork
       ],
     }),
 ]
-
-function buildAuditState(
-  status: PublicWorkbookCorpusStatus,
-  recordedCases: readonly PublicWorkbookCorpusCase[],
-  manifest: PublicWorkbookManifest | null,
-  financialManifest: PublicWorkbookManifest | null,
-  financialRecordedCases: readonly PublicWorkbookCorpusCase[],
-): PublicWorkbookCorpusAuditState {
-  const financialArtifactCandidates = financialManifest ? financialManifest.artifacts : (manifest?.artifacts ?? [])
-  const financialSourceCandidates = financialManifest ? financialManifest.sources : (manifest?.sources ?? [])
-  const financialArtifacts = financialArtifactCandidates.filter(hasFinancialTopicEvidence)
-  const financialSources = financialSourceCandidates.filter(hasFinancialTopicEvidence)
-  const financialCaseCandidates = financialManifest ? financialRecordedCases : recordedCases
-  const recordedCasesById = new Map(financialCaseCandidates.map((entry) => [entry.id, entry]))
-  const fetchPlan = planPublicWorkbookCorpusFetchForAudit(manifest, status.targetWorkbookCount)
-  const missingFeatureWitnesses = buildFeatureWitnessCoverage(recordedCases)
-    .filter((entry) => entry.witnessCaseCount === 0)
-    .map((entry) => entry.label)
-  const unsupportedCaseSummary = buildUnsupportedCaseSummary(recordedCases)
-  const recordedFinancialCases = financialArtifacts.flatMap((artifact) => {
-    const candidate = recordedCasesById.get(artifact.id)
-    return candidate && publicWorkbookCorpusCaseMatchesArtifact(candidate, artifact) ? [candidate] : []
-  })
-  return {
-    targetWorkbookCount: status.targetWorkbookCount,
-    financialWorkbookTargetCount: financialWorkbookTargetCount(status.targetWorkbookCount),
-    sourceCount: status.sourceCount,
-    fetchCandidateSourceCount: fetchPlan?.candidateSourceCount ?? 0,
-    fetchCandidateSourceDeficitCount:
-      fetchPlan?.candidateSourceDeficitCount ?? Math.max(0, status.targetWorkbookCount - status.sourceCount),
-    fetchTargetReachableFromKnownCandidates:
-      fetchPlan?.targetReachableFromKnownCandidates ?? status.cachedArtifactCount >= status.targetWorkbookCount,
-    recommendedDiscoveryLimit: fetchPlan?.recommendedDiscoveryLimit ?? status.targetWorkbookCount,
-    cachedArtifactCount: status.cachedArtifactCount,
-    financialSourceCount: financialSources.length,
-    financialCachedArtifactCount: financialArtifacts.length,
-    financialSourceWithoutTopicEvidenceCount: financialManifest ? financialSourceCandidates.length - financialSources.length : 0,
-    financialArtifactWithoutTopicEvidenceCount: financialManifest ? financialArtifactCandidates.length - financialArtifacts.length : 0,
-    xlsxArtifactCount: (manifest?.artifacts ?? []).filter((entry) => isXlsxArtifact(entry.fileName, entry.cachePath)).length,
-    nonXlsxArtifactCount: (manifest?.artifacts ?? []).filter((entry) => !isXlsxArtifact(entry.fileName, entry.cachePath)).length,
-    scorecardCaseCount: status.scorecardCaseCount,
-    checkpointCaseCount: status.checkpointCaseCount,
-    recordedManifestArtifactCount: status.recordedManifestArtifactCount,
-    recordedFinancialManifestArtifactCount: recordedFinancialCases.length,
-    recordedFinancialNonPassingCaseCount: recordedFinancialCases.filter((entry) => !entry.passed).length,
-    missingCachedArtifactCount: Math.max(0, status.targetWorkbookCount - status.cachedArtifactCount),
-    missingVerificationCount: status.missingManifestArtifactCount,
-    staleRecordedVerificationCount: status.staleRecordedVerificationCount,
-    missingFeatureWitnessCount: missingFeatureWitnesses.length,
-    missingFeatureWitnesses,
-    recordedPassedCaseCount: status.recordedPassedCaseCount,
-    recordedUnsupportedCaseCount: status.recordedUnsupportedCaseCount,
-    ...unsupportedCaseSummary,
-    recordedFailedCaseCount: status.recordedFailedCaseCount,
-    recordedErrorCaseCount: status.recordedErrorCaseCount,
-    recordedFormulaOracleComparisonCount: recordedCases.reduce((sum, entry) => sum + entry.validation.formulaOracleComparisons, 0),
-    recordedFormulaOracleMismatchCount: recordedCases.reduce((sum, entry) => sum + entry.validation.formulaOracleMismatches.length, 0),
-    recordedStructuralSmokeRunCount: recordedCases.filter((entry) => entry.validation.structuralSmokePassed !== null).length,
-    recordedRoundTripPassedCount: recordedCases.filter((entry) => isSupportedRoundTripSuccess(entry)).length,
-    recordedRoundTripSkippedCount: recordedCases.filter((entry) => hasRoundTripSkippedEvidence(entry)).length,
-    recordedRoundTripFailureCount: recordedCases.filter(
-      (entry) => !entry.validation.roundTripPassed && entry.status !== 'unsupported' && !hasRoundTripSkippedEvidence(entry),
-    ).length,
-  }
-}
-
-function isXlsxArtifact(fileName: string, cachePath: string): boolean {
-  return fileName.toLowerCase().endsWith('.xlsx') || cachePath.toLowerCase().endsWith('.xlsx')
-}
-
-function planPublicWorkbookCorpusFetchForAudit(
-  manifest: PublicWorkbookManifest | null,
-  targetWorkbookCount: number,
-): PublicWorkbookCorpusFetchPlan | null {
-  if (!manifest) {
-    return null
-  }
-  try {
-    return planPublicWorkbookCorpusFetch({ manifest, limit: targetWorkbookCount, sampleLimit: 0 })
-  } catch {
-    return null
-  }
-}
-
-function isSupportedRoundTripSuccess(entry: PublicWorkbookCorpusCase): boolean {
-  return entry.validation.roundTripPassed && entry.status !== 'unsupported' && !hasRoundTripSkippedEvidence(entry)
-}
-
-function hasRoundTripSkippedEvidence(entry: PublicWorkbookCorpusCase): boolean {
-  return entry.evidence.some((line) => line.startsWith(roundTripSkippedEvidencePrefix))
-}
 
 function readRecordedCases(args: {
   readonly manifest: PublicWorkbookManifest | null

@@ -914,6 +914,30 @@ describe('formula', () => {
     expect([...compiled.symbolicRanges]).toEqual(["'My Sheet'!A1:B2"])
   })
 
+  it('keeps parsed range metadata quoted and absolute after compiler extraction', () => {
+    const compiled = compileFormula("SUM('My Sheet'!$A$1:B$2)")
+
+    expect(compiled.parsedSymbolicRanges).toEqual([
+      {
+        address: "'My Sheet'!$A$1:B$2",
+        kind: 'range',
+        refKind: 'cells',
+        sheetName: 'My Sheet',
+        explicitSheet: true,
+        startAddress: 'A1',
+        endAddress: 'B2',
+        startRow: 0,
+        endRow: 1,
+        startCol: 0,
+        endCol: 1,
+        startRowAbsolute: true,
+        endRowAbsolute: true,
+        startColAbsolute: true,
+        endColAbsolute: false,
+      },
+    ])
+  })
+
   it('parses quoted sheet column ranges inside formulas', () => {
     const ast = parseFormula("SUM('My Sheet'!A:A)")
     expect(ast).toMatchObject({

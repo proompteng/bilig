@@ -515,6 +515,44 @@ describe('workbook-change-store', () => {
     })
   })
 
+  it('loads persisted structural row and column history events', async () => {
+    const queryable = new FakeQueryable([
+      (text) =>
+        text.includes('FROM workbook_change')
+          ? [
+              {
+                revision: 15,
+                actorUserId: 'alex@example.com',
+                clientMutationId: 'mutation-15',
+                eventKind: 'insertRows',
+                summary: 'Inserted rows 3:4 on Sheet1',
+                sheetId: 1,
+                sheetName: 'Sheet1',
+                anchorAddress: 'A3',
+                rangeJson: { sheetName: 'Sheet1', startAddress: 'A3', endAddress: 'A4' },
+                undoBundleJson: null,
+                revertedByRevision: null,
+                revertsRevision: null,
+                createdAtUnixMs: 124_000,
+              } satisfies QueryResultRow,
+            ]
+          : null,
+    ])
+
+    await expect(loadWorkbookChange(queryable, 'doc-1', 15)).resolves.toMatchObject({
+      revision: 15,
+      eventKind: 'insertRows',
+      summary: 'Inserted rows 3:4 on Sheet1',
+      sheetName: 'Sheet1',
+      anchorAddress: 'A3',
+      range: {
+        sheetName: 'Sheet1',
+        startAddress: 'A3',
+        endAddress: 'A4',
+      },
+    })
+  })
+
   it('loads latest undoable and redoable changes for an actor', async () => {
     const queryable = new FakeQueryable([
       (text, values) => {

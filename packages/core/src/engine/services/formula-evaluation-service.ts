@@ -16,7 +16,6 @@ import {
 import { CellFlags } from '../../cell-store.js'
 import { definedNameValueToCellValue, definedNameValueToReferenceOperand } from '../../engine-metadata-utils.js'
 import { emptyValue, errorValue } from '../../engine-value-utils.js'
-import { addEngineCounter } from '../../perf/engine-counters.js'
 import type { EngineRuntimeState, RuntimeDirectCriteriaOperand, RuntimeFormula, SpillMaterialization } from '../runtime-state.js'
 import { EngineFormulaEvaluationError } from '../errors.js'
 import type { CriterionRangeCacheService } from './criterion-range-cache-service.js'
@@ -37,19 +36,16 @@ import { tryEvaluateDirectScalar } from './formula-evaluation-direct-scalar.js'
 import {
   cellValueCriteriaString,
   cellValuesEqual,
-  decodeErrorCode,
   directCriteriaCacheValueKey,
   directErrorResult,
   directNumberResult,
   evaluationErrorMessage,
-  offsetDirectAggregateResult,
   referenceReplacementKey,
 } from './formula-evaluation-helpers.js'
+import { tryEvaluateDirectAggregate } from './formula-evaluation-direct-aggregate.js'
 import { readRuntimeDirectCriteriaOperandValue } from './direct-criteria-operands.js'
 import type { EngineFormulaEvaluationService } from './formula-evaluation-service-types.js'
 export type { EngineFormulaEvaluationService } from './formula-evaluation-service-types.js'
-const DIRECT_AGGREGATE_SCAN_MAX_LENGTH = 64
-const DIRECT_AGGREGATE_PREFIX_MIN_LENGTH = 16
 export function createEngineFormulaEvaluationService(args: {
   readonly state: Pick<EngineRuntimeState, 'workbook' | 'strings' | 'formulas' | 'counters' | 'getUseColumnIndex'>
   readonly runtimeColumnStore: EngineRuntimeColumnStoreService
@@ -469,150 +465,6 @@ export function createEngineFormulaEvaluationService(args: {
     )
   }
 
-  const tryEvaluateDirectAggregate = (formula: RuntimeFormula): CellValue | undefined => {
-    const directAggregate = formula.directAggregate
-    if (!directAggregate) {
-      return undefined
-    }
-    const columnCount = directAggregate.colEnd - directAggregate.col + 1
-    const canUseSlidingPrefix =
-      formula.dependencyIndices.length === 0 &&
-      (directAggregate.aggregateKind === 'sum' ||
-        directAggregate.aggregateKind === 'average' ||
-        directAggregate.aggregateKind === 'count') &&
-      directAggregate.length > DIRECT_AGGREGATE_PREFIX_MIN_LENGTH
-    const canUseExistingLargePrefix = formula.dependencyIndices.length === 0 && directAggregate.length > DIRECT_AGGREGATE_SCAN_MAX_LENGTH
-    if (!canUseSlidingPrefix && !canUseExistingLargePrefix) {
-      addEngineCounter(args.state.counters, 'directAggregateScanEvaluations')
-      addEngineCounter(args.state.counters, 'directAggregateScanCells', directAggregate.length)
-      const aggregateSheet = args.state.workbook.getSheet(directAggregate.sheetName)
-      if (!aggregateSheet) {
-        return undefined
-      }
-      let sum = 0
-      let count = 0
-      let averageCount = 0
-      let minimum = Number.POSITIVE_INFINITY
-      let maximum = Number.NEGATIVE_INFINITY
-      for (let col = directAggregate.col; col <= directAggregate.colEnd; col += 1) {
-        for (let row = directAggregate.rowStart; row <= directAggregate.rowEnd; row += 1) {
-          const memberCellIndex =
-            aggregateSheet.structureVersion === 1 ? aggregateSheet.grid.getPhysical(row, col) : aggregateSheet.grid.get(row, col)
-          const value: CellValue = memberCellIndex === -1 ? { tag: ValueTag.Empty } : readCellValueByIndex(memberCellIndex)
-          switch (value.tag) {
-            case ValueTag.Number:
-              sum += value.value
-              count += 1
-              averageCount += 1
-              minimum = Math.min(minimum, value.value)
-              maximum = Math.max(maximum, value.value)
-              break
-            case ValueTag.Boolean: {
-              const booleanNumber = value.value ? 1 : 0
-              sum += booleanNumber
-              count += 1
-              averageCount += 1
-              minimum = Math.min(minimum, booleanNumber)
-              maximum = Math.max(maximum, booleanNumber)
-              break
-            }
-            case ValueTag.Empty:
-              break
-            case ValueTag.Error:
-              if (directAggregate.aggregateKind === 'sum' || directAggregate.aggregateKind === 'average') {
-                return directErrorResult(value.code)
-              }
-              break
-            case ValueTag.String:
-              break
-          }
-        }
-      }
-      if (directAggregate.aggregateKind === 'sum') {
-        return offsetDirectAggregateResult(directAggregate, directNumberResult(sum))
-      }
-      if (directAggregate.aggregateKind === 'count') {
-        return offsetDirectAggregateResult(directAggregate, directNumberResult(count))
-      }
-      if (directAggregate.aggregateKind === 'average') {
-        return averageCount === 0
-          ? directErrorResult(ErrorCode.Div0)
-          : offsetDirectAggregateResult(directAggregate, directNumberResult(sum / averageCount))
-      }
-      if (directAggregate.aggregateKind === 'min') {
-        return offsetDirectAggregateResult(directAggregate, directNumberResult(minimum === Number.POSITIVE_INFINITY ? 0 : minimum))
-      }
-      return offsetDirectAggregateResult(directAggregate, directNumberResult(maximum === Number.NEGATIVE_INFINITY ? 0 : maximum))
-    }
-    addEngineCounter(args.state.counters, 'directAggregatePrefixEvaluations')
-    // SUM/AVERAGE ranges should reuse any compatible lower-start prefix to
-    // avoid rescanning shifted windows, while still allowing narrower anchors
-    // when no compatible reusable prefix exists.
-    const sharedPrefixStart =
-      directAggregate.aggregateKind === 'sum' || directAggregate.aggregateKind === 'average' || directAggregate.aggregateKind === 'count'
-        ? 0
-        : directAggregate.rowStart
-    let errorCode = ErrorCode.None
-    let sum = 0
-    let count = 0
-    let averageCount = 0
-    let errorCount = 0
-    let minimum = Number.POSITIVE_INFINITY
-    let maximum = Number.NEGATIVE_INFINITY
-    let hasShiftedPrefixStart = false
-    for (let colOffset = 0; colOffset < columnCount; colOffset += 1) {
-      const prefix = args.aggregateCache.getOrBuildColumnPrefix(
-        {
-          sheetName: directAggregate.sheetName,
-          rowStart: sharedPrefixStart,
-          rowEnd: directAggregate.rowEnd,
-          col: directAggregate.col + colOffset,
-        },
-        directAggregate.aggregateKind,
-      )
-      const endOffset = directAggregate.rowEnd - prefix.rowStart
-      const startOffset = directAggregate.rowStart - prefix.rowStart - 1
-      hasShiftedPrefixStart ||= startOffset >= 0
-      const prefixSum = prefix.prefixSums[endOffset] ?? 0
-      const prefixCount = prefix.prefixCount[endOffset] ?? 0
-      const prefixAverageCount = prefix.prefixAverageCount[endOffset] ?? 0
-      const prefixErrorCount = prefix.prefixErrorCounts[endOffset] ?? 0
-      sum += startOffset >= 0 ? prefixSum - (prefix.prefixSums[startOffset] ?? 0) : prefixSum
-      count += startOffset >= 0 ? prefixCount - (prefix.prefixCount[startOffset] ?? 0) : prefixCount
-      averageCount += startOffset >= 0 ? prefixAverageCount - (prefix.prefixAverageCount[startOffset] ?? 0) : prefixAverageCount
-      errorCount += startOffset >= 0 ? prefixErrorCount - (prefix.prefixErrorCounts[startOffset] ?? 0) : prefixErrorCount
-      const nextErrorCode = prefix.prefixErrorCodes[endOffset]
-      if (errorCode === ErrorCode.None && nextErrorCode !== undefined && nextErrorCode !== Number(ErrorCode.None)) {
-        errorCode = decodeErrorCode(nextErrorCode)
-      }
-      minimum = Math.min(minimum, prefix.prefixMinimums[endOffset] ?? Number.POSITIVE_INFINITY)
-      maximum = Math.max(maximum, prefix.prefixMaximums[endOffset] ?? Number.NEGATIVE_INFINITY)
-    }
-    if (
-      errorCode !== ErrorCode.None &&
-      errorCount > 0 &&
-      (directAggregate.aggregateKind === 'sum' || directAggregate.aggregateKind === 'average')
-    ) {
-      return hasShiftedPrefixStart ? undefined : directErrorResult(decodeErrorCode(errorCode))
-    }
-    if (directAggregate.aggregateKind === 'sum') {
-      return offsetDirectAggregateResult(directAggregate, directNumberResult(sum))
-    }
-    if (directAggregate.aggregateKind === 'count') {
-      return offsetDirectAggregateResult(directAggregate, directNumberResult(count))
-    }
-    if (directAggregate.aggregateKind === 'min') {
-      return offsetDirectAggregateResult(directAggregate, directNumberResult(minimum === Number.POSITIVE_INFINITY ? 0 : minimum))
-    }
-    if (directAggregate.aggregateKind === 'max') {
-      return offsetDirectAggregateResult(directAggregate, directNumberResult(maximum === Number.NEGATIVE_INFINITY ? 0 : maximum))
-    }
-    const denominator = averageCount
-    return denominator === 0
-      ? directErrorResult(ErrorCode.Div0)
-      : offsetDirectAggregateResult(directAggregate, directNumberResult(sum / denominator))
-  }
-
   const resolveStructuredReferenceNow = (tableName: string, columnName: string): FormulaNode | undefined => {
     const table = args.state.workbook.getTable(tableName)
     if (!table) {
@@ -836,7 +688,13 @@ export function createEngineFormulaEvaluationService(args: {
     const directResult =
       tryEvaluateDirectVectorLookup(directVectorLookupContext, formula) ??
       tryEvaluateDirectScalar(formula, readCellValueByIndex) ??
-      tryEvaluateDirectAggregate(formula) ??
+      tryEvaluateDirectAggregate({
+        formula,
+        workbook: args.state.workbook,
+        counters: args.state.counters,
+        aggregateCache: args.aggregateCache,
+        readCellValueByIndex,
+      }) ??
       tryEvaluateDirectCriteriaAggregate(formula)
     return directResult === undefined
       ? undefined
@@ -855,7 +713,13 @@ export function createEngineFormulaEvaluationService(args: {
     const directResult =
       tryEvaluateDirectVectorLookup(directVectorLookupContext, formula) ??
       tryEvaluateDirectScalar(formula, readCellValueByIndex) ??
-      tryEvaluateDirectAggregate(formula) ??
+      tryEvaluateDirectAggregate({
+        formula,
+        workbook: args.state.workbook,
+        counters: args.state.counters,
+        aggregateCache: args.aggregateCache,
+        readCellValueByIndex,
+      }) ??
       tryEvaluateDirectCriteriaAggregate(formula)
     if (directResult !== undefined) {
       return storeFormulaResult(cellIndex, formula, directResult)

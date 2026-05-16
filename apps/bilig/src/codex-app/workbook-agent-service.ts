@@ -20,7 +20,7 @@ import {
 import type { SessionIdentity } from '../http/session.js'
 import type { ZeroSyncService } from '../zero/service.js'
 import { createWorkbookAgentServiceError } from '../workbook-agent-errors.js'
-import type { CodexAppServerClientOptions, CodexAppServerTransport } from './codex-app-server-client.js'
+import type { CodexAppServerTransport } from './codex-app-server-client.js'
 import { isCodexAppServerPoolBackpressureError } from './codex-app-server-pool.js'
 import { DisabledWorkbookAgentService } from './workbook-agent-disabled-service.js'
 import {
@@ -47,9 +47,6 @@ import {
 } from './workbook-agent-service-bootstrap.js'
 import {
   WorkbookAgentCodexRuntime,
-  DEFAULT_MAX_CODEX_CLIENTS,
-  DEFAULT_MAX_CODEX_CONCURRENT_TURNS_PER_CLIENT,
-  DEFAULT_MAX_CODEX_QUEUED_TURNS_PER_CLIENT,
   createWorkbookAgentThreadResumeInput,
   createWorkbookAgentThreadStartInput,
 } from './workbook-agent-codex-runtime.js'
@@ -73,6 +70,11 @@ import {
   upsertEntry,
 } from './workbook-agent-service-shared.js'
 import { updateWorkbookAgentDurableUiContextFromUser } from './workbook-agent-service-context.js'
+import {
+  assertWorkbookAgentSessionAccessPolicy,
+  assertWorkbookAgentSharedThreadAccess,
+  filterWorkbookAgentThreadSummariesByAccessPolicy,
+} from './workbook-agent-service-access-policy.js'
 import { assertWorkbookAgentTurnQuota } from './workbook-agent-service-session-policy.js'
 import { WorkbookAgentWorkflowRuntime } from './workbook-agent-workflow-runtime.js'
 import {
@@ -81,93 +83,18 @@ import {
   type WorkbookAgentObservabilitySnapshot,
 } from './workbook-agent-session-registry.js'
 import {
+  resolveWorkbookAgentServiceLimits,
+  type EnabledWorkbookAgentServiceOptions,
+  type WorkbookAgentService,
+} from './workbook-agent-service-options.js'
+import {
   applyWorkbookAgentCommandBundleForSessionState,
   applyWorkbookAgentToolBundleAutomatically,
   buildWorkbookAgentAuthoritativePreview,
   finalizeWorkbookAgentPrivateTurnBundle,
 } from './workbook-agent-service-application.js'
 
-function parsePositiveIntegerEnv(value: string | undefined, fallback: number): number {
-  if (!value) {
-    return fallback
-  }
-  const parsed = Number.parseInt(value, 10)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
-}
-
-const DEFAULT_MAX_ACTIVE_TURNS_PER_USER = parsePositiveIntegerEnv(process.env['BILIG_CODEX_MAX_ACTIVE_TURNS_PER_USER'], 4)
-const DEFAULT_MAX_ACTIVE_TURNS_PER_DOCUMENT = parsePositiveIntegerEnv(process.env['BILIG_CODEX_MAX_ACTIVE_TURNS_PER_DOCUMENT'], 16)
-
-export interface WorkbookAgentService {
-  readonly enabled: boolean
-  createSession(input: { documentId: string; session: SessionIdentity; body: unknown }): Promise<WorkbookAgentThreadSnapshot>
-  updateContext(input: {
-    documentId: string
-    threadId: string
-    session: SessionIdentity
-    body: unknown
-  }): Promise<WorkbookAgentThreadSnapshot>
-  startTurn(input: { documentId: string; threadId: string; session: SessionIdentity; body: unknown }): Promise<WorkbookAgentThreadSnapshot>
-  startWorkflow(input: {
-    documentId: string
-    threadId: string
-    session: SessionIdentity
-    body: unknown
-  }): Promise<WorkbookAgentThreadSnapshot>
-  cancelWorkflow(input: {
-    documentId: string
-    threadId: string
-    runId: string
-    session: SessionIdentity
-  }): Promise<WorkbookAgentThreadSnapshot>
-  interruptTurn(input: { documentId: string; threadId: string; session: SessionIdentity }): Promise<WorkbookAgentThreadSnapshot>
-  applyReviewItem(input: {
-    documentId: string
-    threadId: string
-    reviewItemId: string
-    session: SessionIdentity
-    appliedBy: WorkbookAgentAppliedBy
-    commandIndexes?: readonly number[] | null
-    preview: unknown
-  }): Promise<WorkbookAgentThreadSnapshot>
-  reviewReviewItem(input: {
-    documentId: string
-    threadId: string
-    reviewItemId: string
-    session: SessionIdentity
-    body: unknown
-  }): Promise<WorkbookAgentThreadSnapshot>
-  dismissReviewItem(input: {
-    documentId: string
-    threadId: string
-    reviewItemId: string
-    session: SessionIdentity
-  }): Promise<WorkbookAgentThreadSnapshot>
-  replayExecutionRecord(input: {
-    documentId: string
-    threadId: string
-    recordId: string
-    session: SessionIdentity
-  }): Promise<WorkbookAgentThreadSnapshot>
-  listThreads(input: { documentId: string; session: SessionIdentity }): Promise<WorkbookAgentThreadSummary[]>
-  getObservabilitySnapshot(): WorkbookAgentObservabilitySnapshot
-  getSnapshot(input: { documentId: string; threadId: string; session: SessionIdentity }): WorkbookAgentThreadSnapshot
-  subscribe(threadId: string, listener: (event: WorkbookAgentStreamEvent) => void): () => void
-  close(): Promise<void>
-}
-
-export interface EnabledWorkbookAgentServiceOptions {
-  zeroSyncService: ZeroSyncService
-  codexClientFactory?: (options: CodexAppServerClientOptions) => CodexAppServerTransport
-  now?: () => number
-  maxSessions?: number
-  maxCodexClients?: number
-  maxConcurrentTurnsPerCodexClient?: number
-  maxQueuedTurnsPerCodexClient?: number
-  maxActiveTurnsPerUser?: number
-  maxActiveTurnsPerDocument?: number
-  featureFlags?: Partial<WorkbookAgentFeatureFlags>
-}
+export type { EnabledWorkbookAgentServiceOptions, WorkbookAgentService } from './workbook-agent-service-options.js'
 
 class EnabledWorkbookAgentService implements WorkbookAgentService {
   readonly enabled = true
@@ -186,14 +113,15 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   private readonly workflowRuntime: WorkbookAgentWorkflowRuntime
 
   constructor(options: EnabledWorkbookAgentServiceOptions) {
+    const limits = resolveWorkbookAgentServiceLimits(options)
     this.zeroSyncService = options.zeroSyncService
     this.now = options.now ?? (() => Date.now())
-    this.maxSessions = options.maxSessions ?? 64
-    this.maxCodexClients = options.maxCodexClients ?? DEFAULT_MAX_CODEX_CLIENTS
-    this.maxConcurrentTurnsPerCodexClient = options.maxConcurrentTurnsPerCodexClient ?? DEFAULT_MAX_CODEX_CONCURRENT_TURNS_PER_CLIENT
-    this.maxQueuedTurnsPerCodexClient = options.maxQueuedTurnsPerCodexClient ?? DEFAULT_MAX_CODEX_QUEUED_TURNS_PER_CLIENT
-    this.maxActiveTurnsPerUser = options.maxActiveTurnsPerUser ?? DEFAULT_MAX_ACTIVE_TURNS_PER_USER
-    this.maxActiveTurnsPerDocument = options.maxActiveTurnsPerDocument ?? DEFAULT_MAX_ACTIVE_TURNS_PER_DOCUMENT
+    this.maxSessions = limits.maxSessions
+    this.maxCodexClients = limits.maxCodexClients
+    this.maxConcurrentTurnsPerCodexClient = limits.maxConcurrentTurnsPerCodexClient
+    this.maxQueuedTurnsPerCodexClient = limits.maxQueuedTurnsPerCodexClient
+    this.maxActiveTurnsPerUser = limits.maxActiveTurnsPerUser
+    this.maxActiveTurnsPerDocument = limits.maxActiveTurnsPerDocument
     this.featureFlags = {
       ...resolveWorkbookAgentFeatureFlags(),
       ...options.featureFlags,
@@ -377,20 +305,13 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
 
   async createSession(input: { documentId: string; session: SessionIdentity; body: unknown }): Promise<WorkbookAgentThreadSnapshot> {
     const parsed = createSessionBodySchema.parse(input.body)
-    if (parsed.scope === 'shared' && !this.featureFlags.sharedThreadsEnabled) {
-      throw createWorkbookAgentServiceError({
-        code: 'WORKBOOK_AGENT_SHARED_THREADS_DISABLED',
-        message: 'Shared workbook assistant threads are currently disabled.',
-        statusCode: 409,
-        retryable: false,
-      })
-    }
     if (parsed.scope === 'shared') {
-      this.assertRolloutAllowed({
+      assertWorkbookAgentSharedThreadAccess({
+        featureFlags: this.featureFlags,
         documentId: input.documentId,
         userId: input.session.userID,
-        code: 'WORKBOOK_AGENT_SHARED_THREADS_ROLLOUT_BLOCKED',
-        message: 'Shared workbook assistant threads are still limited to the rollout allowlist.',
+        disabledCode: 'WORKBOOK_AGENT_SHARED_THREADS_DISABLED',
+        rolloutBlockedCode: 'WORKBOOK_AGENT_SHARED_THREADS_ROLLOUT_BLOCKED',
       })
     }
     if (parsed.threadId !== undefined) {
@@ -443,20 +364,13 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
       threadId,
     })
     const durableThreadState = durableThreadSession.threadState
-    if (durableThreadState?.scope === 'shared' && !this.featureFlags.sharedThreadsEnabled) {
-      throw createWorkbookAgentServiceError({
-        code: 'WORKBOOK_AGENT_SHARED_THREADS_DISABLED',
-        message: 'Shared workbook assistant threads are currently disabled.',
-        statusCode: 409,
-        retryable: false,
-      })
-    }
     if (durableThreadState?.scope === 'shared') {
-      this.assertRolloutAllowed({
+      assertWorkbookAgentSharedThreadAccess({
+        featureFlags: this.featureFlags,
         documentId: input.documentId,
         userId: input.session.userID,
-        code: 'WORKBOOK_AGENT_SHARED_THREADS_ROLLOUT_BLOCKED',
-        message: 'Shared workbook assistant threads are still limited to the rollout allowlist.',
+        disabledCode: 'WORKBOOK_AGENT_SHARED_THREADS_DISABLED',
+        rolloutBlockedCode: 'WORKBOOK_AGENT_SHARED_THREADS_ROLLOUT_BLOCKED',
       })
     }
     if (!thread && !durableThreadState) {
@@ -867,7 +781,13 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
   }
 
   async listThreads(input: { documentId: string; session: SessionIdentity }): Promise<WorkbookAgentThreadSummary[]> {
-    return await this.zeroSyncService.listWorkbookAgentThreadSummaries(input.documentId, input.session.userID)
+    const summaries = await this.zeroSyncService.listWorkbookAgentThreadSummaries(input.documentId, input.session.userID)
+    return filterWorkbookAgentThreadSummariesByAccessPolicy({
+      featureFlags: this.featureFlags,
+      documentId: input.documentId,
+      summaries,
+      userId: input.session.userID,
+    })
   }
 
   getSnapshot(input: { documentId: string; threadId: string; session: SessionIdentity }): WorkbookAgentThreadSnapshot {
@@ -924,6 +844,12 @@ class EnabledWorkbookAgentService implements WorkbookAgentService {
         retryable: false,
       })
     }
+    assertWorkbookAgentSessionAccessPolicy({
+      featureFlags: this.featureFlags,
+      sessionState,
+      documentId,
+      userId,
+    })
     return sessionState
   }
 

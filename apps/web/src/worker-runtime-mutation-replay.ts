@@ -5,6 +5,11 @@ import {
   isCellStylePatchValue,
   isCommitOps,
   isLiteralInput,
+  isPendingWorkbookMutationInput,
+  isWorkbookSheetName,
+  isWorkbookStructuralCount,
+  isWorkbookStructuralIndex,
+  isWorkbookStructuralSize,
   type PendingWorkbookMutation,
 } from './workbook-sync.js'
 import type { WorkerEngine } from './worker-runtime-support.js'
@@ -13,6 +18,9 @@ const MIN_COLUMN_WIDTH = 44
 const MAX_COLUMN_WIDTH = 480
 
 export function applyPendingWorkbookMutationToEngine(engine: WorkerEngine, mutation: PendingWorkbookMutation): void {
+  if (!isPendingWorkbookMutationInput(mutation)) {
+    return
+  }
   const { method, args } = mutation
   switch (method) {
     case 'setCellValue': {
@@ -70,7 +78,7 @@ export function applyPendingWorkbookMutationToEngine(engine: WorkerEngine, mutat
     case 'insertColumns':
     case 'deleteColumns': {
       const [sheetName, start, count] = args
-      if (typeof sheetName === 'string' && typeof start === 'number' && typeof count === 'number') {
+      if (isWorkbookSheetName(sheetName) && isWorkbookStructuralIndex(start) && isWorkbookStructuralCount(count)) {
         if (method === 'insertRows') {
           engine.insertRows(sheetName, start, count)
         } else if (method === 'deleteRows') {
@@ -86,10 +94,10 @@ export function applyPendingWorkbookMutationToEngine(engine: WorkerEngine, mutat
     case 'updateRowMetadata': {
       const [sheetName, startRow, count, height, hidden] = args
       if (
-        typeof sheetName === 'string' &&
-        typeof startRow === 'number' &&
-        typeof count === 'number' &&
-        (height === null || typeof height === 'number') &&
+        isWorkbookSheetName(sheetName) &&
+        isWorkbookStructuralIndex(startRow) &&
+        isWorkbookStructuralCount(count) &&
+        (height === null || isWorkbookStructuralSize(height)) &&
         (hidden === null || typeof hidden === 'boolean')
       ) {
         engine.updateRowMetadata(sheetName, startRow, count, height === null ? null : Math.max(1, Math.round(height)), hidden)
@@ -99,10 +107,10 @@ export function applyPendingWorkbookMutationToEngine(engine: WorkerEngine, mutat
     case 'updateColumnMetadata': {
       const [sheetName, startCol, count, width, hidden] = args
       if (
-        typeof sheetName === 'string' &&
-        typeof startCol === 'number' &&
-        typeof count === 'number' &&
-        (width === null || typeof width === 'number') &&
+        isWorkbookSheetName(sheetName) &&
+        isWorkbookStructuralIndex(startCol) &&
+        isWorkbookStructuralCount(count) &&
+        (width === null || isWorkbookStructuralSize(width)) &&
         (hidden === null || typeof hidden === 'boolean')
       ) {
         const clampedWidth = width === null ? null : Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.round(width)))
@@ -112,7 +120,7 @@ export function applyPendingWorkbookMutationToEngine(engine: WorkerEngine, mutat
     }
     case 'updateColumnWidth': {
       const [sheetName, columnIndex, width] = args
-      if (typeof sheetName === 'string' && typeof columnIndex === 'number' && typeof width === 'number') {
+      if (isWorkbookSheetName(sheetName) && isWorkbookStructuralIndex(columnIndex) && isWorkbookStructuralSize(width)) {
         const clamped = Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, Math.round(width)))
         engine.updateColumnMetadata(sheetName, columnIndex, 1, clamped, null)
       }
@@ -120,7 +128,7 @@ export function applyPendingWorkbookMutationToEngine(engine: WorkerEngine, mutat
     }
     case 'setFreezePane': {
       const [sheetName, rows, cols] = args
-      if (typeof sheetName === 'string' && typeof rows === 'number' && typeof cols === 'number') {
+      if (isWorkbookSheetName(sheetName) && isWorkbookStructuralIndex(rows) && isWorkbookStructuralIndex(cols)) {
         engine.setFreezePane(sheetName, Math.max(0, Math.round(rows)), Math.max(0, Math.round(cols)))
       }
       return
