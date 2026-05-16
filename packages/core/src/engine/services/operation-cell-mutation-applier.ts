@@ -396,7 +396,7 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
                 changedInputCount = args.markPivotRootsChanged(args.clearPivotForCell(existingIndex), changedInputCount)
               }
               const cellIndex = args.state.workbook.ensureCellAt(sheetId, mutation.row, mutation.col).cellIndex
-              if (!isRestore) {
+              if (!isRestore && existingIndex !== undefined) {
                 changedInputCount = args.markSpillRootsChanged(args.clearOwnedSpill(cellIndex), changedInputCount)
                 const removedFormula = args.removeFormula(cellIndex)
                 topologyChanged = removedFormula || topologyChanged
@@ -509,7 +509,7 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
                 changedInputCount = args.markPivotRootsChanged(args.clearPivotForCell(existingIndex), changedInputCount)
               }
               const cellIndex = args.state.workbook.ensureCellAt(sheetId, mutation.row, mutation.col).cellIndex
-              if (!isRestore) {
+              if (!isRestore && existingIndex !== undefined) {
                 changedInputCount = args.markSpillRootsChanged(args.clearOwnedSpill(cellIndex), changedInputCount)
               }
               const priorHadFormula = args.state.formulas.get(cellIndex) !== undefined

@@ -15,8 +15,16 @@ interface TestSheetDimensionCache {
   updateAfterCellMutationRefs(...args: unknown[]): unknown
 }
 
+interface TestEngineRuntimeSupport {
+  clearOwnedSpillNow(...args: unknown[]): unknown
+}
+
 function hasSheetDimensionCacheUpdater(value: unknown): value is TestSheetDimensionCache {
   return typeof value === 'object' && value !== null && typeof Reflect.get(value, 'updateAfterCellMutationRefs') === 'function'
+}
+
+function hasClearOwnedSpill(value: unknown): value is TestEngineRuntimeSupport {
+  return typeof value === 'object' && value !== null && typeof Reflect.get(value, 'clearOwnedSpillNow') === 'function'
 }
 
 function trackSheetDimensionCacheUpdates(workbook: WorkPaper): { readonly count: number; restore: () => void } {
@@ -25,6 +33,24 @@ function trackSheetDimensionCacheUpdates(workbook: WorkPaper): { readonly count:
     throw new Error('Expected WorkPaper to expose a sheet dimension cache in tests')
   }
   const spy = vi.spyOn(cache, 'updateAfterCellMutationRefs')
+  return {
+    get count() {
+      return spy.mock.calls.length
+    },
+    restore: () => {
+      spy.mockRestore()
+    },
+  }
+}
+
+function trackCoreSpillOwnerClears(workbook: WorkPaper): { readonly count: number; restore: () => void } {
+  const engine: unknown = Reflect.get(workbook, 'engine')
+  const runtime: unknown = typeof engine === 'object' && engine !== null ? Reflect.get(engine, 'runtime') : undefined
+  const support: unknown = typeof runtime === 'object' && runtime !== null ? Reflect.get(runtime, 'support') : undefined
+  if (!hasClearOwnedSpill(support)) {
+    throw new Error('Expected WorkPaper to expose core spill-owner cleanup in tests')
+  }
+  const spy = vi.spyOn(support, 'clearOwnedSpillNow')
   return {
     get count() {
       return spy.mock.calls.length
@@ -52,6 +78,7 @@ describe('work paper batched structural fast path', () => {
       throw new Error('batched append formulas should not rebuild visibility snapshots')
     })
     const dimensionUpdates = trackSheetDimensionCacheUpdates(workbook)
+    const spillOwnerClears = trackCoreSpillOwnerClears(workbook)
 
     let changes: WorkPaperChange[] = []
     try {
@@ -65,7 +92,9 @@ describe('work paper batched structural fast path', () => {
         ).toEqual([])
       })
       expect(dimensionUpdates.count).toBe(1)
+      expect(spillOwnerClears.count).toBe(0)
     } finally {
+      spillOwnerClears.restore()
       dimensionUpdates.restore()
       captureVisibilitySnapshot.mockRestore()
     }

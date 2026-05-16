@@ -39,20 +39,6 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
   let trailingLiteralPotentialNewCells = 0
   const earliestFormulaRowByColumn = new Map<number, number>()
 
-  args.content.forEach((row, rowOffset) => {
-    row.forEach((raw, columnOffset) => {
-      if (!isFormulaContent(raw)) {
-        return
-      }
-      const destinationRow = args.target.row + rowOffset
-      const destinationCol = args.target.col + columnOffset
-      const earliestFormulaRow = earliestFormulaRowByColumn.get(destinationCol)
-      if (earliestFormulaRow === undefined || destinationRow < earliestFormulaRow) {
-        earliestFormulaRowByColumn.set(destinationCol, destinationRow)
-      }
-    })
-  })
-
   const shouldDeferLiteral = (row: number, col: number): boolean => {
     const earliestFormulaRow = earliestFormulaRowByColumn.get(col)
     return earliestFormulaRow !== undefined && row > earliestFormulaRow
@@ -90,6 +76,10 @@ export function buildMatrixMutationPlan(args: BuildMatrixMutationPlanArgs): Matr
 
       if (isFormulaContent(raw)) {
         formulaPotentialNewCells += 1
+        const earliestFormulaRow = earliestFormulaRowByColumn.get(destination.col)
+        if (earliestFormulaRow === undefined || destination.row < earliestFormulaRow) {
+          earliestFormulaRowByColumn.set(destination.col, destination.row)
+        }
         formulaRefs.push({
           sheetId: args.target.sheet,
           mutation: {
