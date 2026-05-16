@@ -4,6 +4,63 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.16.10
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.16.5
+- Manual override: no
+
+## Fixes
+- fix(docs): sync public evidence for headless 0.16.5 (fcdc237b)
+- perf(core): reuse rectangular aggregate templates (48c96ac2)
+- perf(headless): batch serialized formula paste (bad422dd)
+- fix(grid): stabilize table clears and metadata (86c5747e)
+- fix(headless): support Node 22 runtime installs (3ef59ac4)
+- perf(headless): preserve direct scalar formula bindings (dfc18a00)
+- perf(headless): reduce matrix plan allocation (a252c443)
+- fix(headless): validate workpaper mcp cli args (7f7a4300)
+- perf(core): fast-translate aggregate templates (c27455c2)
+- perf(core): reduce region subscription key churn (3c97533e)
+- fix(test): share strict bench tolerance parsing (120ad96b)
+- fix(smoke): validate workpaper stage flag (9159f541)
+- perf(headless): speed tracked formula edits (3694f5da)
+- perf(core): reduce kernel sync defer allocation (67956ff1)
+- fix(release): validate publish env flags (81dc392f)
+- perf(core): reuse direct scalar closure indices (c4ce54d9)
+- perf(core): skip exact uniform lookup owner binding (22f8e13b)
+- perf(core): skip empty tracked invalidation patches (6d9eaed0)
+- fix(core): reject unsafe direct formula rows (e3d914e8)
+- fix(core): guard unsafe template row keys (c88ff52b)
+- perf(headless): keep initial formula refs compact (efe03036)
+- fix(sync): validate event sequence integers (87f2e312)
+- fix(protocol): validate cell snapshot metadata (6bda4133)
+- fix(domain): validate structural op coordinates (18a00a4e)
+- fix(domain): validate object footprint dimensions (8f72557a)
+- fix(domain): validate sheet identity metadata (6456ba4f)
+- fix(domain): validate metadata sequence fields (76786154)
+- perf(headless): keep appended formula changes lazy (a98603c7)
+- fix(sync): reject malformed literal events (5ebc1a7e)
+- perf(headless): collapse safe formula matrix writes (66b4cc64)
+- fix(protocol): validate cell snapshot values (c99e51c9)
+- fix(protocol): validate workbook snapshot entries (96d2728a)
+
+## Internal runtime changes
+- docs(growth): add quote approval proof page (42e4444a)
+- refactor(core): isolate operation service test hooks (e8d0980c)
+- docs(growth): surface npm provenance trust path (2a945bda)
+- ci(security): publish openssf scorecard results (f6c80a2b)
+- ci(security): add codeql and dependabot (b1c8541f)
+- ci(security): constrain workflow token permissions (e830185d)
+- ci(security): pin workflow and image dependencies (42b111ff)
+- docs(growth): add proof-time bookmark path (234117c7)
+- docs(mcp): add runnable stdio transcript smoke (e43dffff)
+- chore(release): prepare runtime libraries 0.16.6 (32f4f64f)
+- chore(release): prepare runtime libraries 0.16.7 (e61bc460)
+- chore(release): prepare runtime libraries 0.16.9 (e30ef786)
+- ci(release): cancel stale runtime package runs (ae4499f4)
+- ci(release): isolate runtime package workflow runs (2a754125)
+- ci(release): retry runtime metadata push races (a9cba127)
+
 ## 0.16.9
 
 - Release type: patch

@@ -1,6 +1,6 @@
 {
   "name": "@bilig/wasm-kernel",
-  "version": "0.16.9",
+  "version": "0.16.10",
   "description": "AssemblyScript and WebAssembly acceleration kernel for bilig spreadsheet execution.",
   "keywords": [
     "assemblyscript",
