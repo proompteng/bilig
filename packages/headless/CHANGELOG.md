@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.16.4
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.16.3
+- Manual override: no
+
+## Fixes
+- fix(docs): sync public evidence for headless 0.16.3 (a2c20561)
+
+## Internal runtime changes
+- refactor(formula): isolate workday builtins (6a0d0c33)
+
 ## 0.16.3
 
 - Release type: patch
