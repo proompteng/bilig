@@ -49,13 +49,16 @@ export function readNumberArg(name: string, fallback: number): number {
   return parsed
 }
 
+const bytesPerMiB = 1024 * 1024
+const maxSafeMiB = Math.floor(Number.MAX_SAFE_INTEGER / bytesPerMiB)
+
 export function readMegabytesArg(name: string, fallbackBytes: number): number {
-  const raw = readStringArg(name, String(Math.ceil(fallbackBytes / 1024 / 1024)))
+  const raw = readStringArg(name, String(Math.ceil(fallbackBytes / bytesPerMiB)))
   const parsed = Number(raw)
-  if (!/^\d+$/.test(raw) || parsed <= 0 || !Number.isSafeInteger(parsed)) {
+  if (!/^\d+$/.test(raw) || parsed <= 0 || !Number.isSafeInteger(parsed) || parsed > maxSafeMiB) {
     throw new Error(`Expected ${name} to be a positive integer number of MiB`)
   }
-  return parsed * 1024 * 1024
+  return parsed * bytesPerMiB
 }
 
 export function readFlagArg(name: string): boolean {

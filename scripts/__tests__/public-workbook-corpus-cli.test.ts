@@ -163,6 +163,19 @@ describe('public workbook corpus CLI resource guards', () => {
     }
   })
 
+  it('rejects MiB values that overflow safe byte counts', () => {
+    const originalArgv = process.argv
+    try {
+      process.argv = ['bun', corpusScriptPath(), 'fetch', '--fetch-max-rss-mb', '8589934592']
+
+      expect(() => readMegabytesArg('--fetch-max-rss-mb', 256 * 1024 * 1024)).toThrow(
+        'Expected --fetch-max-rss-mb to be a positive integer number of MiB',
+      )
+    } finally {
+      process.argv = originalArgv
+    }
+  })
+
   it('reads inline boolean flag values', () => {
     const originalArgv = process.argv
     try {
