@@ -65,6 +65,13 @@ The TypeScript file is maintained in
 The exact byte count can change between package versions; `verified: true` and
 matching `after`/`afterRestore` values are the check.
 
+If that proof matches a service or agent workflow you maintain, the useful next
+step is concrete feedback: [star or bookmark the repo](https://github.com/proompteng/bilig/stargazers),
+then open or answer one adoption blocker in
+[Discussions](https://github.com/proompteng/bilig/discussions): formula
+coverage, stale XLSX cached values, persistence shape, MCP/agent writeback, or
+benchmark coverage.
+
 ## TypeScript API Shape
 
 Most integrations are just this: build a workbook, write an input, read the

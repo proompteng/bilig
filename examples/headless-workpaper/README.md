@@ -37,6 +37,13 @@ Expected output:
 The repository smoke test runs this same example against packed local runtime
 packages through `pnpm workpaper:smoke:external`.
 
+If this example matches a real Node service, agent tool, or workbook automation
+case, the best next action is specific: star or bookmark
+[`proompteng/bilig`](https://github.com/proompteng/bilig/stargazers), then use
+[Discussions](https://github.com/proompteng/bilig/discussions) to name the
+missing formula family, XLSX behavior, persistence shape, or agent writeback
+contract that would make adoption easier.
+
 ## Command Index
 
 | Use case                 | Command                              | What it proves                                                                                                    |
