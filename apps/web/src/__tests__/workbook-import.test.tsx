@@ -8,7 +8,7 @@ import type { ImportedWorkbookPreview } from '@bilig/excel-import'
 import type { ToastT, ToastToDismiss } from 'sonner'
 import { toast } from 'sonner'
 import { WorkbookToastRegion } from '../WorkbookToastRegion.js'
-import { resolveWorkbookImportContentType } from '../workbook-import-client.js'
+import { finalizeWorkbookImport, resolveWorkbookImportContentType } from '../workbook-import-client.js'
 import { useWorkbookImportPane } from '../use-workbook-import-pane.js'
 
 async function flushToasts(): Promise<void> {
@@ -95,6 +95,7 @@ function ImportHarness(props: {
 afterEach(() => {
   toast.dismiss()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   document.body.innerHTML = ''
 })
 
@@ -120,6 +121,54 @@ describe('workbook import', () => {
       LEGACY_XLS_CONTENT_TYPE,
     )
     expect(resolveWorkbookImportContentType(new File(['alpha'], 'notes.txt'))).toBeNull()
+  })
+
+  it('surfaces stable workbook import error payload messages', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: { message: 'Workbook file was rejected' } }), {
+            status: 422,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    )
+
+    await expect(
+      finalizeWorkbookImport({
+        file: new File(['Name,Value\nalpha,12'], 'metrics.csv', { type: CSV_CONTENT_TYPE }),
+        contentType: CSV_CONTENT_TYPE,
+        openMode: 'create',
+      }),
+    ).rejects.toThrow('Workbook file was rejected')
+  })
+
+  it('surfaces malformed workbook import error payloads with stable copy', async () => {
+    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('{', {
+            status: 502,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    )
+
+    await expect(
+      finalizeWorkbookImport({
+        file: new File(['Name,Value\nalpha,12'], 'metrics.csv', { type: CSV_CONTENT_TYPE }),
+        contentType: CSV_CONTENT_TYPE,
+        openMode: 'create',
+      }),
+    ).rejects.toThrow('Workbook import failed with malformed JSON error payload (status 502)')
+    expect(debugSpy).toHaveBeenCalledWith(
+      '[bilig-web]',
+      'Failed to parse workbook import JSON error payload',
+      expect.objectContaining({ status: 502 }),
+    )
   })
 
   it('stages a local preview and imports a new workbook through the authoritative loader', async () => {

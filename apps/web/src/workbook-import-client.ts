@@ -57,9 +57,20 @@ function encodeBase64(bytes: Uint8Array): string {
 
 async function readErrorMessage(response: Response): Promise<string> {
   const contentType = response.headers.get('content-type') ?? ''
+  let bodyText: string | null = null
+  try {
+    bodyText = await response.text()
+  } catch (error) {
+    logDebug('Failed to read workbook import error body', { status: response.status, error })
+  }
+
   if (contentType.includes('application/json')) {
+    const trimmedBody = bodyText?.trim() ?? ''
+    if (trimmedBody.length === 0) {
+      return `Workbook import failed with status ${response.status}`
+    }
     try {
-      const payload = (await response.json()) as unknown
+      const payload = JSON.parse(trimmedBody) as unknown
       if (
         typeof payload === 'object' &&
         payload !== null &&
@@ -73,15 +84,13 @@ async function readErrorMessage(response: Response): Promise<string> {
       }
     } catch (error) {
       logDebug('Failed to parse workbook import JSON error payload', { status: response.status, error })
+      return `Workbook import failed with malformed JSON error payload (status ${response.status})`
     }
+    return `Workbook import failed with status ${response.status}`
   }
-  try {
-    const text = await response.text()
-    if (text.trim().length > 0) {
-      return text
-    }
-  } catch (error) {
-    logDebug('Failed to read workbook import error body', { status: response.status, error })
+  const trimmedBody = bodyText?.trim() ?? ''
+  if (trimmedBody.length > 0) {
+    return trimmedBody
   }
   return `Workbook import failed with status ${response.status}`
 }
