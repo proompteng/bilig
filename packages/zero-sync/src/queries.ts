@@ -1,6 +1,7 @@
 import { defineQueriesWithType, defineQuery } from '@rocicorp/zero'
 import { z } from 'zod'
 import type { schema } from './schema.js'
+import { safeNonNegativeIntegerSchema } from './integer-schemas.js'
 import { zql } from './zql.js'
 
 const defineQueries = defineQueriesWithType<typeof schema>()
@@ -30,22 +31,34 @@ export const workbookCellArgsSchema = workbookSheetArgsSchema.extend({
   address: z.string().min(1),
 })
 
-export const workbookTileArgsSchema = workbookSheetArgsSchema.extend({
-  rowStart: z.number().int().nonnegative(),
-  rowEnd: z.number().int().nonnegative(),
-  colStart: z.number().int().nonnegative(),
-  colEnd: z.number().int().nonnegative(),
-})
+export const workbookTileArgsSchema = workbookSheetArgsSchema
+  .extend({
+    rowStart: safeNonNegativeIntegerSchema,
+    rowEnd: safeNonNegativeIntegerSchema,
+    colStart: safeNonNegativeIntegerSchema,
+    colEnd: safeNonNegativeIntegerSchema,
+  })
+  .refine((args) => args.rowEnd >= args.rowStart && args.colEnd >= args.colStart, {
+    message: 'tile end must be greater than or equal to tile start',
+  })
 
-export const workbookRowTileArgsSchema = workbookSheetArgsSchema.extend({
-  rowStart: z.number().int().nonnegative(),
-  rowEnd: z.number().int().nonnegative(),
-})
+export const workbookRowTileArgsSchema = workbookSheetArgsSchema
+  .extend({
+    rowStart: safeNonNegativeIntegerSchema,
+    rowEnd: safeNonNegativeIntegerSchema,
+  })
+  .refine((args) => args.rowEnd >= args.rowStart, {
+    message: 'row tile end must be greater than or equal to row tile start',
+  })
 
-export const workbookColumnTileArgsSchema = workbookSheetArgsSchema.extend({
-  colStart: z.number().int().nonnegative(),
-  colEnd: z.number().int().nonnegative(),
-})
+export const workbookColumnTileArgsSchema = workbookSheetArgsSchema
+  .extend({
+    colStart: safeNonNegativeIntegerSchema,
+    colEnd: safeNonNegativeIntegerSchema,
+  })
+  .refine((args) => args.colEnd >= args.colStart, {
+    message: 'column tile end must be greater than or equal to column tile start',
+  })
 
 const workbookGet = defineQuery(workbookQueryArgsSchema, ({ args: { documentId } }) => zql.workbooks.where('id', documentId).one())
 

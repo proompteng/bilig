@@ -17,18 +17,9 @@ import {
   isLiteralInput,
 } from '@bilig/protocol'
 import type { schema } from './schema.js'
+import { safeNonNegativeIntegerSchema, safePositiveIntegerSchema } from './integer-schemas.js'
 
 const literalInputSchema = z.union([z.number(), z.string(), z.boolean(), z.null()])
-const safeNonNegativeIntegerSchema = z
-  .number()
-  .int()
-  .nonnegative()
-  .refine((value) => Number.isSafeInteger(value), { message: 'Expected safe integer' })
-const safePositiveIntegerSchema = z
-  .number()
-  .int()
-  .positive()
-  .refine((value) => Number.isSafeInteger(value), { message: 'Expected safe integer' })
 
 const cellRangeRefSchema = z.object({
   sheetName: z.string().min(1),
