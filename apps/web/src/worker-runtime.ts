@@ -85,6 +85,7 @@ import {
   ingestAuthoritativeDeltaToLocalStore,
   persistProjectionStateToLocalStore,
 } from './worker-runtime-local-persistence.js'
+import { exportWorkerRuntimeSnapshot } from './worker-runtime-export-snapshot.js'
 import {
   DEFERRED_PROJECTION_ENGINE_MIN_CELL_COUNT,
   type InstallAuthoritativeSnapshotInput,
@@ -470,15 +471,13 @@ export class WorkbookWorkerRuntime {
   }
 
   exportSnapshot(): WorkbookSnapshot {
-    if (this.engine) {
-      return this.snapshotCaches.getProjectionSnapshot(() => this.requireEngine().exportSnapshot())
-    }
-    const readyAuthoritativeSnapshot =
-      this.mutationJournal.getPendingMutationCount() === 0 ? this.snapshotCaches.getReadyAuthoritativeSnapshot() : null
-    if (readyAuthoritativeSnapshot) {
-      return readyAuthoritativeSnapshot
-    }
-    throw new Error('Workbook worker runtime projection snapshot is not ready')
+    return exportWorkerRuntimeSnapshot({
+      exportProjectionSnapshot: this.engine
+        ? () => this.snapshotCaches.getProjectionSnapshot(() => this.requireEngine().exportSnapshot())
+        : null,
+      getReadyAuthoritativeSnapshot: () => this.snapshotCaches.getReadyAuthoritativeSnapshot(),
+      pendingMutationCount: this.mutationJournal.getPendingMutationCount(),
+    })
   }
 
   async previewAgentCommandBundle(bundle: WorkbookAgentCommandBundle): Promise<WorkbookAgentPreviewSummary> {
