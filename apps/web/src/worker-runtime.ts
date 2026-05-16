@@ -42,7 +42,7 @@ import { restoreBootstrapPersistence } from './worker-runtime-bootstrap-persiste
 import { resolveProjectionOverlayScopeForPersist, WorkerRuntimePersistCoordinator } from './worker-runtime-persist-coordinator.js'
 import { acquireProjectionEngine, scheduleProjectionEngineMaterialization } from './worker-runtime-projection-engine.js'
 import { WorkerRuntimeProjectionCommands } from './worker-runtime-projection-commands.js'
-import { createProjectionEngineFromState, createWorkbookEngineFromState } from './worker-runtime-engine-state.js'
+import { createProjectionEngineFromState } from './worker-runtime-engine-state.js'
 import {
   EMPTY_RUNTIME_METRICS,
   buildCachedWorkerRuntimeState,
@@ -82,6 +82,7 @@ import {
 } from './worker-runtime-local-persistence.js'
 import { exportWorkerRuntimeSnapshot } from './worker-runtime-export-snapshot.js'
 import { applyAuthoritativeWorkbookEvents } from './worker-runtime-authoritative-events.js'
+import { prepareAuthoritativeSnapshotProjection } from './worker-runtime-authoritative-snapshot.js'
 import {
   DEFERRED_PROJECTION_ENGINE_MIN_CELL_COUNT,
   type InstallAuthoritativeSnapshotInput,
@@ -339,30 +340,22 @@ export class WorkbookWorkerRuntime {
     const options = this.requireBootstrapOptions()
     this.authoritativeRevision = mode === 'bootstrap' ? Math.max(this.authoritativeRevision, authoritativeRevision) : authoritativeRevision
 
-    if (mode === 'bootstrap' && this.mutationJournal.getPendingMutationCount() === 0) {
-      const { engine, overlayScope } = await createProjectionEngineFromState({
-        workbookName: options.documentId,
-        replicaId: options.replicaId,
-        snapshot,
-        replica: null,
-        pendingMutations: [],
-      })
-      this.installRestoredAuthoritativeState(snapshot, engine.exportReplicaSnapshot())
-      return await this.installAuthoritativeProjectionEngine(engine, overlayScope)
-    }
-
-    const authoritativeEngine = await createWorkbookEngineFromState({
-      workbookName: options.documentId,
+    const prepared = await prepareAuthoritativeSnapshotProjection({
+      documentId: options.documentId,
       replicaId: options.replicaId,
       snapshot,
-      replica: null,
+      mode,
+      pendingMutations: this.mutationJournal.listPendingMutations(),
     })
-    this.installAuthoritativeEngine(authoritativeEngine, snapshot, null)
-    const { engine, overlayScope } = await this.rebuildProjectionEngine()
-    if (mode === 'reconcile' && this.mutationJournal.getPendingMutationCount() > 0) {
+    if (prepared.authoritativeEngine) {
+      this.installAuthoritativeEngine(prepared.authoritativeEngine, prepared.authoritativeSnapshot, prepared.authoritativeReplica)
+    } else {
+      this.installRestoredAuthoritativeState(prepared.authoritativeSnapshot, prepared.authoritativeReplica)
+    }
+    if (prepared.shouldMarkPendingMutationsRebased) {
       await this.markRemainingJournalMutationsRebased()
     }
-    return await this.installAuthoritativeProjectionEngine(engine, overlayScope)
+    return await this.installAuthoritativeProjectionEngine(prepared.projectionEngine, prepared.projectionOverlayScope)
   }
 
   private async installAuthoritativeProjectionEngine(
