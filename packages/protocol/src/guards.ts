@@ -5,6 +5,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
+function isSafeNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
 function isCellValueTag(value: unknown): value is ValueTag {
   return (
     value === ValueTag.Empty ||
@@ -43,8 +47,8 @@ export function isCellSnapshot(value: unknown): value is CellSnapshot {
     isRecord(value) &&
     typeof value['sheetName'] === 'string' &&
     typeof value['address'] === 'string' &&
-    typeof value['flags'] === 'number' &&
-    typeof value['version'] === 'number' &&
+    isSafeNonNegativeInteger(value['flags']) &&
+    isSafeNonNegativeInteger(value['version']) &&
     isRecord(value['value']) &&
     isCellValueTag(value['value']['tag'])
   )

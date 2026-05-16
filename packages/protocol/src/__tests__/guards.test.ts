@@ -47,6 +47,23 @@ describe('protocol guards', () => {
     ).toBe(false)
   })
 
+  it('rejects cell snapshots with unsafe structural metadata', () => {
+    const baseSnapshot = {
+      sheetName: 'Sheet1',
+      address: 'A1',
+      value: { tag: ValueTag.Number, value: 7 },
+      flags: 0,
+      version: 1,
+    }
+
+    expect(isCellSnapshot({ ...baseSnapshot, flags: -1 })).toBe(false)
+    expect(isCellSnapshot({ ...baseSnapshot, flags: 1.5 })).toBe(false)
+    expect(isCellSnapshot({ ...baseSnapshot, flags: Number.MAX_SAFE_INTEGER + 1 })).toBe(false)
+    expect(isCellSnapshot({ ...baseSnapshot, version: Number.NaN })).toBe(false)
+    expect(isCellSnapshot({ ...baseSnapshot, version: Number.POSITIVE_INFINITY })).toBe(false)
+    expect(isCellSnapshot({ ...baseSnapshot, version: Number.MAX_SAFE_INTEGER + 1 })).toBe(false)
+  })
+
   it('accepts literal inputs and cell range refs with the shipped shapes', () => {
     expect(isLiteralInput(null)).toBe(true)
     expect(isLiteralInput('text')).toBe(true)
