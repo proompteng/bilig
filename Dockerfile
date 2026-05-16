@@ -1,4 +1,4 @@
-FROM oven/bun:1.3.10 AS bun
+FROM oven/bun:1.3.14 AS bun
 
 FROM node:24-bookworm-slim AS build
 
