@@ -34,6 +34,10 @@ type PostgresStorageOptions = DurableStorageOptions & {
   documentId: string
 }
 
+type SQLiteStorageOptions = DurableStorageOptions & {
+  documentId: string
+}
+
 type KeyedStorageOptions = DurableStorageOptions & {
   key: string
 }
@@ -50,6 +54,15 @@ export type PostgresWorkbookRow = {
 
 export type PostgresJsonbClient = {
   query(sql: string, values: readonly unknown[]): Promise<PostgresQueryResult<PostgresWorkbookRow>>
+}
+
+export type SQLiteWorkbookRow = {
+  workbook_json: string
+}
+
+export type SQLiteClient = {
+  get(sql: string, values: readonly unknown[]): Promise<SQLiteWorkbookRow | undefined> | SQLiteWorkbookRow | undefined
+  run(sql: string, values: readonly unknown[]): Promise<void> | void
 }
 
 export type RedisTextClient = {
@@ -95,6 +108,38 @@ export function createPostgresJsonbWorkPaperStorage(db: PostgresJsonbClient, opt
   }
 }
 
+export function createSQLiteWorkPaperStorage(db: SQLiteClient, options: SQLiteStorageOptions): WorkPaperJsonStorage {
+  return {
+    async loadWorkbookJson() {
+      const row = await db.get(
+        `
+          select workbook_json
+          from workpaper_documents
+          where id = ?
+        `,
+        [options.documentId],
+      )
+
+      if (row === undefined) {
+        return readInitialWorkbookJson(options.createInitialWorkbookJson)
+      }
+      return validateWorkbookJson(row.workbook_json)
+    },
+    async saveWorkbookJson(workbookJson: string) {
+      await db.run(
+        `
+          insert into workpaper_documents (id, workbook_json, updated_at)
+          values (?, ?, current_timestamp)
+          on conflict(id) do update
+            set workbook_json = excluded.workbook_json,
+                updated_at = current_timestamp
+        `,
+        [options.documentId, validateWorkbookJson(workbookJson)],
+      )
+    },
+  }
+}
+
 export function createRedisWorkPaperStorage(redis: RedisTextClient, options: KeyedStorageOptions): WorkPaperJsonStorage {
   return {
     async loadWorkbookJson() {
@@ -133,11 +178,17 @@ export async function createPersistenceAdapterDemoOutput() {
   const objectKey = 'workpapers/revenue-plan.json'
 
   const postgres = createInMemoryPostgresJsonbClient()
+  const sqlite = createInMemorySQLiteClient()
   const redis = createInMemoryRedisTextClient()
   const objectStore = createInMemoryObjectTextStore()
 
   const postgresRun = await exerciseStorage('postgres-jsonb', () =>
     createPostgresJsonbWorkPaperStorage(postgres, {
+      documentId,
+    }),
+  )
+  const sqliteRun = await exerciseStorage('sqlite', () =>
+    createSQLiteWorkPaperStorage(sqlite, {
       documentId,
     }),
   )
@@ -153,14 +204,16 @@ export async function createPersistenceAdapterDemoOutput() {
   )
 
   const output = {
-    adapters: ['postgres-jsonb', 'redis', 'object-storage'],
+    adapters: ['postgres-jsonb', 'sqlite', 'redis', 'object-storage'],
     postgres: postgresRun,
+    sqlite: sqliteRun,
     redis: redisRun,
     objectStorage: objectStoreRun,
     persistedBytes: {
       objectStorage: readByteLength(objectStore.getSavedText(objectKey), 'object store saved document'),
       postgres: readByteLength(postgres.getSavedWorkbookJson(documentId), 'postgres saved document'),
       redis: readByteLength(redis.getSavedText(redisKey), 'redis saved document'),
+      sqlite: readByteLength(sqlite.getSavedWorkbookJson(documentId), 'sqlite saved document'),
     },
     verified: true,
   }
@@ -313,16 +366,18 @@ function readByteLength(value: string | undefined, label: string): number {
 
 function assertOutput(actual: PersistenceAdapterDemoOutput): void {
   if (
-    actual.adapters.join(',') !== 'postgres-jsonb,redis,object-storage' ||
+    actual.adapters.join(',') !== 'postgres-jsonb,sqlite,redis,object-storage' ||
     !actual.verified ||
     actual.persistedBytes.postgres <= 0 ||
     actual.persistedBytes.redis <= 0 ||
+    actual.persistedBytes.sqlite <= 0 ||
     actual.persistedBytes.objectStorage <= 0
   ) {
     throw new Error(`unexpected persistence adapter output: ${JSON.stringify(actual)}`)
   }
 
   assertStorageRun(actual.postgres, 'postgres-jsonb')
+  assertStorageRun(actual.sqlite, 'sqlite')
   assertStorageRun(actual.redis, 'redis')
   assertStorageRun(actual.objectStorage, 'object-storage')
 }
@@ -377,6 +432,37 @@ function createInMemoryPostgresJsonbClient(): InMemoryPostgresJsonbClient {
       validateWorkbookJson(workbookJson)
       rows.set(documentId, workbookJson)
       return { rows: [] }
+    },
+  }
+}
+
+type InMemorySQLiteClient = SQLiteClient & {
+  getSavedWorkbookJson(documentId: string): string | undefined
+}
+
+function createInMemorySQLiteClient(): InMemorySQLiteClient {
+  const rows = new Map<string, string>()
+
+  return {
+    getSavedWorkbookJson(documentId: string) {
+      return rows.get(documentId)
+    },
+    get(sql: string, values: readonly unknown[]): SQLiteWorkbookRow | undefined {
+      if (!sql.includes('?')) {
+        throw new Error('SQLite statements must use parameter placeholders')
+      }
+      const documentId = readString(values[0], 'document id')
+      const workbookJson = rows.get(documentId)
+      return workbookJson === undefined ? undefined : { workbook_json: workbookJson }
+    },
+    run(sql: string, values: readonly unknown[]) {
+      if (!sql.includes('?')) {
+        throw new Error('SQLite statements must use parameter placeholders')
+      }
+      const documentId = readString(values[0], 'document id')
+      const workbookJson = readString(values[1], 'workbook json')
+      validateWorkbookJson(workbookJson)
+      rows.set(documentId, workbookJson)
     },
   }
 }
