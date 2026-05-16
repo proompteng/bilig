@@ -11,9 +11,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(docs): sync public evidence for headless 0.16.3 (a2c20561)
 
 ## Internal runtime changes
+
 - refactor(formula): isolate workday builtins (6a0d0c33)
 
 ## 0.16.3

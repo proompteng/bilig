@@ -432,11 +432,11 @@ function readNumber(cell: unknown): number {
               <div class="proof-result">
                 <div class="proof-metric">
                   <span class="proof-label">comparable mean rows</span>
-                  <strong>45/57</strong>
+                  <strong>46/57</strong>
                 </div>
                 <p>
-                  45 of 57 comparable mean-latency rows are faster in the checked file. Lookup without a column index is the worst p95
-                  holdout. Browser UI rendering is not part of this benchmark.
+                  46 of 57 comparable mean-latency rows are faster in the checked file. structural-append-formula-rows is slower at p95:
+                  <code>2.488x</code>. Browser UI rendering is not part of this benchmark.
                 </p>
               </div>
 
@@ -453,7 +453,7 @@ function readNumber(cell: unknown): number {
                 </div>
                 <div class="proof-fact">
                   <dt>Caveat</dt>
-                  <dd>lookup-no-column-index is slower at p95: <code>2.132x</code>.</dd>
+                  <dd>structural-append-formula-rows is slower at p95: <code>2.488x</code>.</dd>
                 </div>
                 <div class="proof-fact">
                   <dt>Out of scope</dt>

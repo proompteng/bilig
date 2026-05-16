@@ -290,10 +290,24 @@ async function assertPublicSurfaces(evidence: PublicEvidence): Promise<void> {
     '@bilig/headless` `0.14.23`',
     '@bilig/headless` `0.14.25`',
   ] as const
+  const currentEvidenceTokens = new Set([
+    meanHeadline,
+    publicHeadline,
+    holdoutHeadline,
+    meanAndP95Headline,
+    overall.directionalMeanRatioGeomean.toString(),
+    overall.directionalP95RatioGeomean.toString(),
+    overall.worstWorkpaperToHyperFormulaMeanRatio.toString(),
+    overall.worstWorkpaperToHyperFormulaP95Ratio.toString(),
+    benchmark.generatedAt,
+  ])
 
   const scannedContents = await Promise.all(scannedPaths.map(async (path) => [path, await readFile(join(repoRoot, path), 'utf8')] as const))
   for (const [path, content] of scannedContents) {
     for (const token of staleTokens) {
+      if (currentEvidenceTokens.has(token)) {
+        continue
+      }
       requireNotIncludes(content, token, path)
     }
   }

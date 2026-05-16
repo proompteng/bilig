@@ -115,7 +115,7 @@ matters.
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.16.3`:
+Current checked npm footprint for `@bilig/headless@0.16.4`:
 
 - Pack dry run: `418 kB` tarball, `2.49 MB` unpacked, `426` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
@@ -252,8 +252,8 @@ It is published in the official MCP Registry as
 - The 90-second TypeScript check above edits one input, restores the saved JSON
   document, and verifies the dependent formula result.
 - Run `pnpm workpaper:bench:competitive:check`. The checked-in artifact shows
-  [`45/57` comparable WorkPaper mean wins](docs/what-workpaper-benchmark-proves.md)
-  and names the worst p95 holdout: `lookup-no-column-index` at `2.132x`.
+  [`46/57` comparable WorkPaper mean wins](docs/what-workpaper-benchmark-proves.md)
+  and names the worst p95 holdout: `structural-append-formula-rows` at `2.488x`.
 - The benchmark card is generated from that artifact:
   [`docs/assets/workpaper-benchmark-card.png`](docs/assets/workpaper-benchmark-card.png).
 - Read the [compatibility limits](docs/where-bilig-is-not-excel-compatible-yet.md)
