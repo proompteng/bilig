@@ -5,6 +5,7 @@ import {
   backfillCellEvalStyleJson,
   backfillWorkbookSourceProjectionVersion,
   dropLegacyZeroSyncSchemaObjects,
+  enforceWorkbookEventClientMutationIdUniqueness,
   repairWorkbookSheetIdsForMigration,
 } from './workbook-migration-store.js'
 
@@ -40,7 +41,7 @@ interface ZeroDataMigrationLedgerRow extends QueryResultRow {
 
 const DATA_MIGRATION_LOCK_KEY = 'bilig-zero-data-migrations'
 
-const zeroDataMigrations = [
+export const zeroDataMigrations = [
   {
     name: 'sheet-id-repair',
     classification: 'required',
@@ -60,6 +61,11 @@ const zeroDataMigrations = [
     name: 'workbook-change-backfill',
     classification: 'required',
     run: backfillWorkbookChanges,
+  },
+  {
+    name: 'workbook-event-client-mutation-id-uniqueness',
+    classification: 'required',
+    run: enforceWorkbookEventClientMutationIdUniqueness,
   },
   {
     name: 'workbook-snapshot-json-v1-backfill',

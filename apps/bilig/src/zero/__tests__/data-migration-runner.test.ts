@@ -4,6 +4,7 @@ import {
   resolveAllowPendingCleanupMigrations,
   resolveRunDataMigrationsOnBoot,
   runPendingZeroDataMigrations,
+  zeroDataMigrations,
   type PendingZeroDataMigrationsError,
   type ZeroDataMigrationConnection,
   type ZeroDataMigrationDefinition,
@@ -156,5 +157,12 @@ describe('data migration runner', () => {
     expect(() => resolveAllowPendingCleanupMigrations({ BILIG_ALLOW_PENDING_CLEANUP_MIGRATIONS: 'maybe' })).toThrow(
       'BILIG_ALLOW_PENDING_CLEANUP_MIGRATIONS must be "1", "true", "0", or "false" when set, got maybe',
     )
+  })
+
+  it('tracks workbook event client mutation uniqueness as a required migration', () => {
+    expect(zeroDataMigrations.map((migration) => [migration.name, migration.classification])).toContainEqual([
+      'workbook-event-client-mutation-id-uniqueness',
+      'required',
+    ])
   })
 })

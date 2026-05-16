@@ -35,6 +35,14 @@ interface WorkbookMigrationRow extends QueryResultRow {
   readonly updated_at: string | null
 }
 
+interface DuplicateWorkbookClientMutationIdRow extends QueryResultRow {
+  readonly workbook_id?: unknown
+  readonly client_mutation_id?: unknown
+  readonly duplicate_count?: unknown
+  readonly first_revision?: unknown
+  readonly last_revision?: unknown
+}
+
 async function tableExists(db: Queryable, name: string): Promise<boolean> {
   const result = await db.query<{ relation: string | null }>(`SELECT to_regclass($1) AS relation`, [`public.${name}`])
   return typeof result.rows[0]?.relation === 'string'
@@ -233,9 +241,43 @@ export async function backfillCellEvalStyleJson(db: Queryable): Promise<void> {
   })
 }
 
+export async function enforceWorkbookEventClientMutationIdUniqueness(db: Queryable): Promise<void> {
+  const duplicateResult = await db.query<DuplicateWorkbookClientMutationIdRow>(`
+    SELECT workbook_id,
+           client_mutation_id,
+           COUNT(*)::int AS duplicate_count,
+           MIN(revision) AS first_revision,
+           MAX(revision) AS last_revision
+      FROM workbook_event
+     WHERE client_mutation_id IS NOT NULL
+     GROUP BY workbook_id, client_mutation_id
+    HAVING COUNT(*) > 1
+     ORDER BY workbook_id, client_mutation_id
+     LIMIT 5
+  `)
+  if (duplicateResult.rows.length > 0) {
+    const duplicateSummary = duplicateResult.rows.map(formatDuplicateClientMutationId).join('; ')
+    throw new Error(`Cannot enforce workbook_event client mutation id uniqueness while duplicate ids exist: ${duplicateSummary}`)
+  }
+  await db.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS workbook_event_workbook_client_mutation_idx
+      ON workbook_event(workbook_id, client_mutation_id)
+      WHERE client_mutation_id IS NOT NULL;
+  `)
+}
+
 export async function dropLegacyZeroSyncSchemaObjects(db: Queryable): Promise<void> {
   await db.query(`DROP INDEX IF EXISTS sheet_style_ranges_workbook_sheet_idx`)
   await db.query(`DROP INDEX IF EXISTS sheet_format_ranges_workbook_sheet_idx`)
   await db.query(`DROP TABLE IF EXISTS sheet_style_ranges`)
   await db.query(`DROP TABLE IF EXISTS sheet_format_ranges`)
+}
+
+function formatDuplicateClientMutationId(row: DuplicateWorkbookClientMutationIdRow): string {
+  const workbookId = typeof row.workbook_id === 'string' ? row.workbook_id : '<unknown workbook>'
+  const clientMutationId = typeof row.client_mutation_id === 'string' ? row.client_mutation_id : '<unknown mutation>'
+  const duplicateCount = parseInteger(row.duplicate_count)
+  const firstRevision = parseInteger(row.first_revision)
+  const lastRevision = parseInteger(row.last_revision)
+  return `${workbookId}/${clientMutationId} count=${duplicateCount} revisions=${firstRevision}-${lastRevision}`
 }

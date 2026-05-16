@@ -40,6 +40,7 @@ import {
   backfillCellEvalStyleJson,
   backfillWorkbookSourceProjectionVersion,
   dropLegacyZeroSyncSchemaObjects,
+  enforceWorkbookEventClientMutationIdUniqueness,
   ensureWorkbookDocumentExists,
   repairWorkbookSheetIdsForMigration,
 } from '../workbook-migration-store.js'
@@ -105,5 +106,33 @@ describe('workbook migration store', () => {
 
     expect(query).toHaveBeenCalledOnce()
     expect(storeFns.persistCellEvalRows).not.toHaveBeenCalled()
+  })
+
+  it('creates the workbook event client mutation uniqueness index after verifying no duplicates exist', async () => {
+    const query = vi.fn().mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [] })
+    const db: Queryable = { query }
+
+    await enforceWorkbookEventClientMutationIdUniqueness(db)
+
+    expect(query.mock.calls[0]?.[0]).toContain('HAVING COUNT(*) > 1')
+    expect(query.mock.calls[1]?.[0]).toContain('CREATE UNIQUE INDEX IF NOT EXISTS workbook_event_workbook_client_mutation_idx')
+  })
+
+  it('rejects workbook event client mutation uniqueness when existing duplicate ids are present', async () => {
+    const query = vi.fn().mockResolvedValueOnce({
+      rows: [
+        {
+          workbook_id: 'book-1',
+          client_mutation_id: 'book-1:pending:4',
+          duplicate_count: 2,
+          first_revision: 7,
+          last_revision: 9,
+        },
+      ],
+    })
+    const db: Queryable = { query }
+
+    await expect(enforceWorkbookEventClientMutationIdUniqueness(db)).rejects.toThrow('book-1/book-1:pending:4 count=2 revisions=7-9')
+    expect(query).toHaveBeenCalledOnce()
   })
 })
