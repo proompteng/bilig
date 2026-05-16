@@ -44,6 +44,23 @@ case, the best next action is specific: star or bookmark
 missing formula family, XLSX behavior, persistence shape, or agent writeback
 contract that would make adoption easier.
 
+## Choose A Proof Path
+
+Most visitors do not need every example first. Pick the proof that matches the
+job you are evaluating:
+
+| Evaluator question                         | Run                               | Use this when                                                                 |
+| ------------------------------------------ | --------------------------------- | ----------------------------------------------------------------------------- |
+| Does the package work from npm?            | `npm run npm-eval`                | You want the smallest install/edit/recalculate/restore proof.                 |
+| Can an agent safely write workbook inputs? | `npm run agent:tool-call`         | You need before/after computed readback and persisted restore verification.   |
+| Can MCP drive a real WorkPaper tool loop?  | `npm run agent:mcp-transcript`    | You want a JSON-RPC transcript for list tools, set input, and read output.    |
+| Does this fit framework/server code?       | `npm run agent:framework-adapters` | You want wrapper shapes for AI SDK, LangChain, Mastra, LlamaIndex, and more.  |
+
+If none of those paths answers your question, open a
+[Discussion](https://github.com/proompteng/bilig/discussions) with the missing
+workflow. The most useful requests include an input shape, expected formula
+family, persistence requirement, or import/export constraint.
+
 ## Command Index
 
 | Use case                 | Command                              | What it proves                                                                                                    |

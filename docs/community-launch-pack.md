@@ -403,7 +403,7 @@ Latest star-spike research on May 16, 2026:
   May 7 had `125` views from `64` unique visitors, and May 8 had `122` views
   from `42` unique visitors.
 - The current traffic referrer list says the most useful external channels are
-  Hacker News (`51` views / `36` uniques), X/t.co (`29` / `24`), the docs site
+  Hacker News (`52` views / `37` uniques), X/t.co (`29` / `24`), the docs site
   (`16` / `10`), Google (`16` / `2`), Kagi (`7` / `7`), Reddit (`6` / `4`),
   and goodfirstissues.com (`6` / `3`).
 - HN Algolia shows two relevant submissions on May 7:
@@ -422,7 +422,7 @@ Latest star-spike research on May 16, 2026:
   Treat it as weak awareness until it creates comments, referrers, issues, or
   discussion replies.
 - The replicable pattern is: narrow technical audience, single proof URL,
-  concrete feedback ask, public npm package, and immediate README/docs
+  concrete feedback ask, public npm package, and immediate README/example/docs
   conversion. The next loop should make the HN/X/MCP follow-up about one
   adoption blocker, not a general launch.
 - Timing discipline: do not submit another HN item on a weekend or immediately
