@@ -508,6 +508,10 @@ requireIncludes(
 )
 requireIncludes(mcpWorkPaperToolServerDoc, 'npm run agent:mcp-tools', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(mcpWorkPaperToolServerDoc, 'npm run --silent agent:mcp-stdio', 'docs/mcp-workpaper-tool-server.md')
+requireIncludes(mcpWorkPaperToolServerDoc, '## Copy-Paste JSON-RPC Transcript', 'docs/mcp-workpaper-tool-server.md')
+requireIncludes(mcpWorkPaperToolServerDoc, 'NODE_NO_WARNINGS=1 npm run --silent agent:mcp-stdio', 'docs/mcp-workpaper-tool-server.md')
+requireIncludes(mcpWorkPaperToolServerDoc, '"structuredContent": {', 'docs/mcp-workpaper-tool-server.md')
+requireIncludes(mcpWorkPaperToolServerDoc, '"restoredMatchesAfter": true', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(mcpWorkPaperToolServerDoc, 'npm exec --package @bilig/headless -- bilig-workpaper-mcp', 'docs/mcp-workpaper-tool-server.md')
 requireIncludes(
   mcpWorkPaperToolServerDoc,

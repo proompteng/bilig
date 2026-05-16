@@ -160,7 +160,8 @@ Use the shortest path that proves the package against a real job.
    [serverless WorkPaper API](examples/serverless-workpaper-api) example:
    `npm run quote-approval-api`.
 3. If an agent needs workbook tools, start with the
-   [MCP server guide](docs/mcp-workpaper-tool-server.md).
+   [MCP server guide](docs/mcp-workpaper-tool-server.md), including the
+   copy-paste JSON-RPC transcript for verified write/readback.
 
 The rest of the docs are an index, not a prerequisite.
 
