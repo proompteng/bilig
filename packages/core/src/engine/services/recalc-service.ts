@@ -20,10 +20,9 @@ import type { EngineDirtyFrontierSchedulerService } from './dirty-frontier-sched
 import type { EnginePatch } from '../../patches/patch-types.js'
 import { buildCycleEvaluationNodes, type CycleEvaluationNode } from './recalc-cycle-evaluation.js'
 import { consumeVolatileRandomValues, createRecalcVolatileState, toOrderedUint32 } from './recalc-evaluation-state.js'
+import { resolveRecalcIterationSettings } from './recalc-iteration-settings.js'
 
 const TRACKED_CELL_PATCH_LIMIT = 64
-const DEFAULT_ITERATION_COUNT = 100
-const DEFAULT_ITERATION_DELTA = 0.001
 
 export interface DirtyRegion {
   readonly sheetName: string
@@ -219,16 +218,7 @@ export function createEngineRecalcService(args: {
       let jsCount = 0
       let pendingKernelSyncCount = deferredKernelSyncCount
       const volatileState = createRecalcVolatileState(args.now)
-      const calculationSettings = args.state.workbook.getCalculationSettings()
-      const iterationEnabled = calculationSettings.iterate === true
-      const rawIterationCount = calculationSettings.iterateCount
-      const iterationCount: number =
-        typeof rawIterationCount === 'number' && Number.isSafeInteger(rawIterationCount) && rawIterationCount > 0
-          ? rawIterationCount
-          : DEFAULT_ITERATION_COUNT
-      const parsedIterationDelta =
-        typeof calculationSettings.iterateDelta === 'string' ? Number(calculationSettings.iterateDelta) : Number.NaN
-      const iterationDelta: number = Number.isFinite(parsedIterationDelta) ? Math.abs(parsedIterationDelta) : DEFAULT_ITERATION_DELTA
+      const iterationSettings = resolveRecalcIterationSettings(args.state.workbook.getCalculationSettings())
       let wasmProgramFlushed = false
       const ensureWasmProgramFlushed = (): void => {
         if (wasmProgramFlushed) {
@@ -548,7 +538,7 @@ export function createEngineRecalcService(args: {
             seedCycleFormulaCell(node.formulaCellIndices[formulaIndex]!)
           }
           const previousValues = node.formulaCellIndices.map((cellIndex) => readStoredValue(cellIndex))
-          for (let iterationIndex = 0; iterationIndex < iterationCount; iterationIndex += 1) {
+          for (let iterationIndex = 0; iterationIndex < iterationSettings.count; iterationIndex += 1) {
             args.checkEvaluationBudget()
             for (let formulaIndex = 0; formulaIndex < node.formulaCellIndices.length; formulaIndex += 1) {
               const cellIndex = node.formulaCellIndices[formulaIndex]!
@@ -567,7 +557,7 @@ export function createEngineRecalcService(args: {
             for (let formulaIndex = 0; formulaIndex < node.formulaCellIndices.length; formulaIndex += 1) {
               const cellIndex = node.formulaCellIndices[formulaIndex]!
               const currentValue = readStoredValue(cellIndex)
-              if (cycleIterationDrift(previousValues[formulaIndex]!, currentValue) > iterationDelta) {
+              if (cycleIterationDrift(previousValues[formulaIndex]!, currentValue) > iterationSettings.delta) {
                 converged = false
               }
               previousValues[formulaIndex] = currentValue
@@ -577,7 +567,7 @@ export function createEngineRecalcService(args: {
             }
           }
         }
-        const cycleEvaluationNodes = iterationEnabled
+        const cycleEvaluationNodes = iterationSettings.enabled
           ? buildCycleEvaluationNodes({
               ordered,
               orderedCount,
@@ -618,8 +608,8 @@ export function createEngineRecalcService(args: {
               continue
             }
             evaluateFormulaCell(cellIndex, formula, {
-              allowCycleDependencyError: !iterationEnabled,
-              treatCycleFormulaAsError: !iterationEnabled,
+              allowCycleDependencyError: !iterationSettings.enabled,
+              treatCycleFormulaAsError: !iterationSettings.enabled,
               forceJs: false,
             })
           }
