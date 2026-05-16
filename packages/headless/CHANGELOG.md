@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.17.0
+
+- Release type: minor
+- Previous libraries tag: libraries-v0.16.28
+- Manual override: no
+
+## Features
+- feat(create-workpaper): add one-command starter (bef96b48)
+
 ## 0.16.28
 
 - Release type: patch
