@@ -117,7 +117,7 @@ matters.
 
 Current checked npm footprint for `@bilig/headless@0.16.0`:
 
-- Pack dry run: `416 kB` tarball, `2.48 MB` unpacked, `417` package entries.
+- Pack dry run: `417 kB` tarball, `2.49 MB` unpacked, `420` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
   import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the
   `bilig-workpaper-mcp` binary wrapper.
@@ -152,6 +152,8 @@ the [MCP server guide](docs/mcp-workpaper-tool-server.md),
 [MCP client setup](docs/mcp-client-setup.md),
 [Claude Desktop MCPB bundle](docs/claude-desktop-mcpb-workpaper.md),
 [JavaScript library comparison](docs/javascript-spreadsheet-library-headless-node.md),
+[headless spreadsheet engine for Node services and agents](docs/headless-spreadsheet-engine-node-services-agents.md),
+[ExcelJS formula recalculation in Node.js](docs/exceljs-formula-recalculation-node.md),
 [SheetJS/ExcelJS boundary](docs/sheetjs-exceljs-alternative-formula-workbook-api.md),
 and [headless engine comparison](docs/headless-spreadsheet-engine-comparison.md).
 

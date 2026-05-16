@@ -35,7 +35,7 @@ npm install @bilig/headless
 
 Current checked npm footprint for `@bilig/headless@0.16.0`:
 
-- Pack dry run: `416 kB` tarball, `2.48 MB` unpacked, `417` package entries.
+- Pack dry run: `417 kB` tarball, `2.49 MB` unpacked, `420` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
   import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the
   `bilig-workpaper-mcp` binary wrapper.
@@ -580,6 +580,8 @@ When the sanity check passes, these are the next useful pages.
   [Node spreadsheet formula engine](https://github.com/proompteng/bilig/blob/main/docs/node-spreadsheet-formula-engine.md),
   [Google Sheets API boundary](https://github.com/proompteng/bilig/blob/main/docs/google-sheets-api-alternative-node-workpaper.md),
   [docs/javascript-spreadsheet-library-headless-node.md](https://github.com/proompteng/bilig/blob/main/docs/javascript-spreadsheet-library-headless-node.md),
+  [headless spreadsheet engine for Node services and agents](https://github.com/proompteng/bilig/blob/main/docs/headless-spreadsheet-engine-node-services-agents.md),
+  [ExcelJS formula recalculation in Node.js](https://github.com/proompteng/bilig/blob/main/docs/exceljs-formula-recalculation-node.md),
   [docs/sheetjs-exceljs-alternative-formula-workbook-api.md](https://github.com/proompteng/bilig/blob/main/docs/sheetjs-exceljs-alternative-formula-workbook-api.md),
   [headless engine comparison](https://github.com/proompteng/bilig/blob/main/docs/headless-spreadsheet-engine-comparison.md),
   and [HyperFormula comparison](https://github.com/proompteng/bilig/blob/main/docs/hyperformula-alternative-headless-workpaper.md).

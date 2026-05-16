@@ -12,6 +12,8 @@ language: typescript
 ## best entry points
 
 - https://proompteng.github.io/bilig/
+- https://proompteng.github.io/bilig/headless-spreadsheet-engine-node-services-agents.html
+- https://proompteng.github.io/bilig/exceljs-formula-recalculation-node.html
 - https://dev.to/gregkonush/why-agents-need-workbook-apis-instead-of-spreadsheet-screenshots-3d61
 - https://github.com/proompteng/bilig/tree/main/packages/headless#readme
 - https://github.com/proompteng/bilig/tree/main/examples/headless-workpaper
@@ -124,6 +126,9 @@ npm run agent:verify
   https://github.com/proompteng/bilig/blob/main/docs/hyperformula-alternative-headless-workpaper.md
 - headless spreadsheet engine comparison:
   https://github.com/proompteng/bilig/blob/main/docs/headless-spreadsheet-engine-comparison.md
+- headless spreadsheet engine for Node services and agents:
+  https://proompteng.github.io/bilig/headless-spreadsheet-engine-node-services-agents.html
+  https://github.com/proompteng/bilig/blob/main/docs/headless-spreadsheet-engine-node-services-agents.md
 - JavaScript spreadsheet library guide for Node services:
   https://github.com/proompteng/bilig/blob/main/docs/javascript-spreadsheet-library-headless-node.md
 - SheetJS and ExcelJS comparison:
@@ -131,6 +136,9 @@ npm run agent:verify
   https://github.com/proompteng/bilig/blob/main/docs/sheetjs-exceljs-alternative-formula-workbook-api.md
   includes a TypeScript WorkPaper runtime check for edit, readback, serialize,
   restore, and verified recalculation.
+- ExcelJS formula recalculation in Node.js:
+  https://proompteng.github.io/bilig/exceljs-formula-recalculation-node.html
+  https://github.com/proompteng/bilig/blob/main/docs/exceljs-formula-recalculation-node.md
 - benchmark evidence:
   https://github.com/proompteng/bilig/blob/main/docs/headless-workpaper-benchmark-evidence.md
 - local benchmark walkthrough:
