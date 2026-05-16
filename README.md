@@ -136,7 +136,7 @@ matters.
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.16.19`:
+Current checked npm footprint for `@bilig/headless@0.16.20`:
 
 - Pack dry run: `421 kB` tarball, `2.51 MB` unpacked, `426` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
