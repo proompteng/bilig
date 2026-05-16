@@ -124,7 +124,7 @@ Current checked npm footprint for `@bilig/headless@0.16.5`:
 - Cold-start gate: Node imports the main entrypoint, builds a two-sheet
   WorkPaper, and reads `24000` under `1000 ms` without importing
   the XLSX subpath.
-- Runtime: Node `>=24.0.0`; Node 22 support waits for release CI coverage.
+- Runtime: Node `>=22.0.0`; Node 22 compatibility is covered by the runtime package workflow.
 <!-- headless-package-footprint:end -->
 
 ## Published Package Trust

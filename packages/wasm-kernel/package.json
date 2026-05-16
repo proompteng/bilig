@@ -46,6 +46,6 @@
     "assemblyscript": "0.28.12"
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=22.0.0"
   }
 }

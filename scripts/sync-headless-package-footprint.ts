@@ -383,7 +383,7 @@ function renderMarkdownBlock(footprint: HeadlessPackageFootprint): string {
     '- Cold-start gate: Node imports the main entrypoint, builds a two-sheet',
     `  WorkPaper, and reads \`${footprint.coldStartProbe.expectedDisplayValue}\` under \`${footprint.coldStartProbe.maxElapsedMs.toString()} ms\` without importing`,
     '  the XLSX subpath.',
-    `- Runtime: Node \`${footprint.package.nodeEngine}\`; Node 22 support waits for release CI coverage.`,
+    `- Runtime: Node \`${footprint.package.nodeEngine}\`; Node 22 compatibility is covered by the runtime package workflow.`,
     '<!-- headless-package-footprint:end -->',
   ].join('\n')
 }

@@ -35,7 +35,7 @@ describe('WorkPaper MCPB builder', () => {
     })
     expect(manifest.tools.map((tool) => tool.name)).toEqual(['read_workpaper_summary', 'set_workpaper_input_cell'])
     expect(manifest.keywords).toContain('mcpb')
-    expect(manifest.compatibility.runtimes.node).toBe('>=24.0.0')
+    expect(manifest.compatibility.runtimes.node).toBe('>=22.0.0')
   })
 
   it('renders a module launcher and package manifest that bundle the exact published package version', () => {

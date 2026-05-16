@@ -49,7 +49,7 @@ export type WorkPaperMcpbManifest = {
   readonly compatibility: {
     readonly platforms: readonly ['darwin', 'win32', 'linux']
     readonly runtimes: {
-      readonly node: '>=24.0.0'
+      readonly node: '>=22.0.0'
     }
   }
 }
@@ -138,7 +138,7 @@ export function buildWorkPaperMcpbManifest(packageVersion: string): WorkPaperMcp
     compatibility: {
       platforms: ['darwin', 'win32', 'linux'],
       runtimes: {
-        node: '>=24.0.0',
+        node: '>=22.0.0',
       },
     },
   }

@@ -163,6 +163,22 @@ jobs:
           set -euo pipefail
           pnpm workpaper:smoke:external
 
+      - name: Set up Node.js 22 compatibility runtime
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Enable Corepack for Node.js 22 compatibility runtime
+        run: |
+          set -euo pipefail
+          corepack enable
+          test "$(pnpm --version)" = "10.32.1"
+
+      - name: Run Node.js 22 headless compatibility smoke test
+        run: |
+          set -euo pipefail
+          node scripts/headless-node22-smoke.mjs
+
       - name: Pack runtime package set
         run: |
           set -euo pipefail
