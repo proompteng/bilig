@@ -45,9 +45,9 @@ npm install @bilig/headless
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.16.14`:
+Current checked npm footprint for `@bilig/headless@0.16.15`:
 
-- Pack dry run: `420 kB` tarball, `2.51 MB` unpacked, `426` package entries.
+- Pack dry run: `421 kB` tarball, `2.51 MB` unpacked, `429` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
   import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the
   `bilig-workpaper-mcp` binary wrapper.
@@ -59,11 +59,11 @@ Current checked npm footprint for `@bilig/headless@0.16.14`:
 
 ## Published Package Trust
 
-`@bilig/headless@0.16.14` is published with npm registry signatures and SLSA
+`@bilig/headless@0.16.15` is published with npm registry signatures and SLSA
 provenance attestations. Check the package before adopting it in a service:
 
 ```sh
-npm view @bilig/headless@0.16.14 version dist.attestations dist.signatures --json
+npm view @bilig/headless@0.16.15 version dist.attestations dist.signatures --json
 npm audit signatures
 ```
 
@@ -478,7 +478,7 @@ pnpm workpaper:xlsx-corpus:check -- /path/to/xlsx-corpus
 - Run `pnpm workpaper:bench:competitive:check` from the repository. The
   checked-in artifact shows
   [`45/57` comparable WorkPaper mean wins](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md)
-  and names the worst p95 holdout: `structural-delete-rows` at `3.489x`.
+  and names the worst p95 holdout: `structural-delete-rows` at `3.720x` (`3.72x` rounded).
 - The shareable benchmark card is generated from the checked-in artifact:
   [`workpaper-benchmark-card.png`](https://github.com/proompteng/bilig/blob/main/docs/assets/workpaper-benchmark-card.png).
 - Read the

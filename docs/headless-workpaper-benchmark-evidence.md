@@ -26,10 +26,10 @@ as useful evidence, but they do not satisfy broad coverage alone.
 
 Current checked-in metadata:
 
-- generated at `2026-05-16T14:35:26.733Z`
+- generated at `2026-05-16T15:35:48.898Z`
 - host: macOS `arm64`, Node `v24.3.0`
 - benchmark sampling: `5` measured samples after `2` warmup samples
-- WorkPaper package: `@bilig/headless` `0.16.14`
+- WorkPaper package: `@bilig/headless` `0.16.15`
 - comparison engine: HyperFormula `3.2.0`, local checkout commit
   `9a510a2acb97c3d3490f9e3b9e961a1c4a98b9ad`, GPL-v3 license key
 - scalar formula comparison engine: TrueCalc `0.6.4`, `7` comparable scalar
@@ -48,16 +48,16 @@ current checked-in artifact records `45/57` mean-latency wins:
 | Lane    | Comparable Workloads | WorkPaper Mean Wins | HyperFormula Mean Wins |
 | ------- | -------------------: | ------------------: | ---------------------: |
 | Overall |                 `57` |                `45` |                  `12` |
-| Public  |                 `40` |                `33` |                    `7` |
-| Holdout |                 `17` |                `12` |                    `5` |
+| Public  |                 `40` |                `32` |                    `8` |
+| Holdout |                 `17` |                `13` |                    `4` |
 
-The overall directional mean-ratio geomean is `0.6747649924468992`. The overall
-directional p95-ratio geomean is `0.6974640372536892`. Ratios below `1.0` mean
+The overall directional mean-ratio geomean is `0.6611064580847726`. The overall
+directional p95-ratio geomean is `0.6715655486975505`. Ratios below `1.0` mean
 WorkPaper is faster for that metric.
 
 The current worst mean row is `structural-delete-rows`, with a mean ratio of
-`3.6263794238534106`. The current worst p95 row is `structural-delete-rows`,
-with a p95 ratio of `3.4891460403139587`. The headless leadership scorecard
+`3.8573455037161977`. The current worst p95 row is `structural-delete-rows`,
+with a p95 ratio of `3.720342894823504`. The headless leadership scorecard
 currently records `44/57` workloads winning both
 mean and p95 against HyperFormula.
 
