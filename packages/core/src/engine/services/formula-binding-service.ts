@@ -1,4 +1,3 @@
-import { Effect } from 'effect'
 import type { CompiledFormula, StructuralAxisTransform } from '@bilig/formula'
 import { FormulaMode, ErrorCode } from '@bilig/protocol'
 import { CellFlags } from '../../cell-store.js'
@@ -9,7 +8,6 @@ import { errorValue } from '../../engine-value-utils.js'
 import { addEngineCounter } from '../../perf/engine-counters.js'
 import { normalizeDefinedName } from '../../workbook-store.js'
 import type { RuntimeDirectAggregateDescriptor, RuntimeDirectScalarDescriptor, RuntimeFormula } from '../runtime-state.js'
-import { EngineFormulaBindingError } from '../errors.js'
 import {
   canRewriteCompiledPreservingBindings,
   canRewriteCompiledPreservingDirectAggregate,
@@ -57,13 +55,14 @@ import { createFormulaBindingSheetRenameHandler } from './formula-binding-sheet-
 import { createFormulaBindingRebinds } from './formula-binding-rebind.js'
 import { rebuildDeferredFormulaFamilyIndex } from './formula-family-index-rebuild.js'
 import { registerDeferredFormulaFamilyIndexRunsNow, type DeferredInitialFormulaFamilyRun } from './formula-initialization-family-runs.js'
-import { canRetainUnmanagedCompiledPlan, formulaBindingErrorMessage, makeUnmanagedCompiledPlan } from './formula-binding-plan-helpers.js'
+import { canRetainUnmanagedCompiledPlan, makeUnmanagedCompiledPlan } from './formula-binding-plan-helpers.js'
 import { normalizeFormulaBindingLookupCompileMode } from './formula-binding-lookup-mode.js'
 import { primeFormulaBindingLookupCandidates } from './formula-binding-lookup-primer.js'
 import { directAggregateContainsFormulaOwnerCell } from './formula-binding-direct-aggregate-owner.js'
 import { ensureFormulaBindingDependencyBuildCapacity } from './formula-binding-dependency-build-capacity.js'
 import { createFormulaBindingRangeDependencyUpdater } from './formula-binding-range-dependencies.js'
 import { clearFormulaRuntimeFlags, markFormulaCellBound } from './formula-binding-cell-flags.js'
+import { formulaBindingEffect } from './formula-binding-effect.js'
 import type {
   BindPreparedFormulaOptions,
   CreateEngineFormulaBindingServiceArgs,
@@ -698,150 +697,92 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
 
   return {
     bindFormula(cellIndex, ownerSheetName, source) {
-      return Effect.try({
-        try: () => {
-          return bindFormulaNow(cellIndex, ownerSheetName, source)
-        },
-        catch: (cause) =>
-          new EngineFormulaBindingError({
-            message: formulaBindingErrorMessage('Failed to bind formula', cause),
-            cause,
-          }),
-      })
+      return formulaBindingEffect('Failed to bind formula', () => bindFormulaNow(cellIndex, ownerSheetName, source))
     },
     clearFormula(cellIndex) {
-      return Effect.try({
-        try: () => clearFormulaNow(cellIndex),
-        catch: (cause) =>
-          new EngineFormulaBindingError({
-            message: formulaBindingErrorMessage('Failed to clear formula', cause),
-            cause,
-          }),
-      })
+      return formulaBindingEffect('Failed to clear formula', () => clearFormulaNow(cellIndex))
     },
     invalidateFormula(cellIndex) {
-      return Effect.try({
-        try: () => {
-          invalidateFormulaNow(cellIndex)
-        },
-        catch: (cause) =>
-          new EngineFormulaBindingError({
-            message: formulaBindingErrorMessage('Failed to invalidate formula', cause),
-            cause,
-          }),
+      return formulaBindingEffect('Failed to invalidate formula', () => {
+        invalidateFormulaNow(cellIndex)
       })
     },
     rewriteCellFormulasForSheetRename(oldSheetName, newSheetName, formulaChangedCount) {
-      return Effect.try({
-        try: () => rewriteCellFormulasForSheetRenameNow(oldSheetName, newSheetName, formulaChangedCount),
-        catch: (cause) =>
-          new EngineFormulaBindingError({
-            message: formulaBindingErrorMessage('Failed to rewrite formulas for sheet rename', cause),
-            cause,
-          }),
-      })
+      return formulaBindingEffect('Failed to rewrite formulas for sheet rename', () =>
+        rewriteCellFormulasForSheetRenameNow(oldSheetName, newSheetName, formulaChangedCount),
+      )
     },
     rebuildAllFormulaBindings() {
-      return Effect.try({
-        try: () => {
-          const pending = [...args.state.formulas.entries()].map(([cellIndex, formula]) => ({
-            cellIndex,
-            source: formula.source,
-            dependencyIndices: [...formula.dependencyIndices],
-            planId: formula.planId,
-          }))
-          pending.forEach(({ planId }) => {
-            args.compiledPlans.release(planId)
-          })
-          args.state.formulas.clear()
-          args.formulaInstances.clear()
-          args.state.ranges.reset()
-          args.edgeArena.reset()
-          args.programArena.reset()
-          args.constantArena.reset()
-          args.rangeListArena.reset()
-          args.reverseState.reverseCellEdges.length = 0
-          args.reverseState.reverseRangeEdges.length = 0
-          args.reverseState.reverseDefinedNameEdges.clear()
-          args.reverseState.reverseTableEdges.clear()
-          args.reverseState.reverseSpillEdges.clear()
-          args.reverseState.reverseAggregateColumnEdges.clear()
-          args.reverseState.reverseExactLookupColumnEdges.clear()
-          args.reverseState.reverseSortedLookupColumnEdges.clear()
-          clearFormulaBookkeepingNow()
-          args.regionGraph.reset()
+      return formulaBindingEffect('Failed to rebuild formula bindings', () => {
+        const pending = [...args.state.formulas.entries()].map(([cellIndex, formula]) => ({
+          cellIndex,
+          source: formula.source,
+          dependencyIndices: [...formula.dependencyIndices],
+          planId: formula.planId,
+        }))
+        pending.forEach(({ planId }) => {
+          args.compiledPlans.release(planId)
+        })
+        args.state.formulas.clear()
+        args.formulaInstances.clear()
+        args.state.ranges.reset()
+        args.edgeArena.reset()
+        args.programArena.reset()
+        args.constantArena.reset()
+        args.rangeListArena.reset()
+        args.reverseState.reverseCellEdges.length = 0
+        args.reverseState.reverseRangeEdges.length = 0
+        args.reverseState.reverseDefinedNameEdges.clear()
+        args.reverseState.reverseTableEdges.clear()
+        args.reverseState.reverseSpillEdges.clear()
+        args.reverseState.reverseAggregateColumnEdges.clear()
+        args.reverseState.reverseExactLookupColumnEdges.clear()
+        args.reverseState.reverseSortedLookupColumnEdges.clear()
+        clearFormulaBookkeepingNow()
+        args.regionGraph.reset()
 
-          const activeCellIndices: number[] = []
-          pending.forEach(({ cellIndex, source }) => {
-            if (!isCellIndexMappedNow(cellIndex)) {
-              args.state.workbook.pruneCellIfEmpty(cellIndex)
-              return
-            }
-            const ownerSheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
-            if (!ownerSheetName || !args.state.workbook.getSheet(ownerSheetName)) {
-              return
-            }
-            try {
-              bindFormulaNow(cellIndex, ownerSheetName, source)
-            } catch {
-              invalidateFormulaNow(cellIndex)
-            }
-            activeCellIndices.push(cellIndex)
-          })
-          pruneOrphanedDependencyCells(pending.flatMap(({ dependencyIndices }) => dependencyIndices))
-          return activeCellIndices
-        },
-        catch: (cause) =>
-          new EngineFormulaBindingError({
-            message: formulaBindingErrorMessage('Failed to rebuild formula bindings', cause),
-            cause,
-          }),
+        const activeCellIndices: number[] = []
+        pending.forEach(({ cellIndex, source }) => {
+          if (!isCellIndexMappedNow(cellIndex)) {
+            args.state.workbook.pruneCellIfEmpty(cellIndex)
+            return
+          }
+          const ownerSheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
+          if (!ownerSheetName || !args.state.workbook.getSheet(ownerSheetName)) {
+            return
+          }
+          try {
+            bindFormulaNow(cellIndex, ownerSheetName, source)
+          } catch {
+            invalidateFormulaNow(cellIndex)
+          }
+          activeCellIndices.push(cellIndex)
+        })
+        pruneOrphanedDependencyCells(pending.flatMap(({ dependencyIndices }) => dependencyIndices))
+        return activeCellIndices
       })
     },
     rebindFormulaCells(candidates, formulaChangedCount) {
-      return Effect.try({
-        try: () => rebindFormulaCellsNow(candidates, formulaChangedCount),
-        catch: (cause) =>
-          new EngineFormulaBindingError({
-            message: formulaBindingErrorMessage('Failed to rebind formula cells', cause),
-            cause,
-          }),
-      })
+      return formulaBindingEffect('Failed to rebind formula cells', () => rebindFormulaCellsNow(candidates, formulaChangedCount))
     },
     rebindDefinedNameDependents(names, formulaChangedCount) {
-      return Effect.try({
-        try: () =>
-          rebindTrackedDependentsNow(
-            args.reverseState.reverseDefinedNameEdges,
-            names.map((name) => normalizeDefinedName(name)),
-            formulaChangedCount,
-          ),
-        catch: (cause) =>
-          new EngineFormulaBindingError({
-            message: formulaBindingErrorMessage('Failed to rebind defined name dependents', cause),
-            cause,
-          }),
-      })
+      return formulaBindingEffect('Failed to rebind defined name dependents', () =>
+        rebindTrackedDependentsNow(
+          args.reverseState.reverseDefinedNameEdges,
+          names.map((name) => normalizeDefinedName(name)),
+          formulaChangedCount,
+        ),
+      )
     },
     rebindTableDependents(tableNames, formulaChangedCount) {
-      return Effect.try({
-        try: () => rebindTrackedDependentsNow(args.reverseState.reverseTableEdges, tableNames, formulaChangedCount),
-        catch: (cause) =>
-          new EngineFormulaBindingError({
-            message: formulaBindingErrorMessage('Failed to rebind table dependents', cause),
-            cause,
-          }),
-      })
+      return formulaBindingEffect('Failed to rebind table dependents', () =>
+        rebindTrackedDependentsNow(args.reverseState.reverseTableEdges, tableNames, formulaChangedCount),
+      )
     },
     rebindFormulasForSheet(sheetName, formulaChangedCount, candidates) {
-      return Effect.try({
-        try: () => rebindFormulasForSheetNow(sheetName, formulaChangedCount, candidates),
-        catch: (cause) =>
-          new EngineFormulaBindingError({
-            message: formulaBindingErrorMessage('Failed to rebind formulas for sheet', cause),
-            cause,
-          }),
-      })
+      return formulaBindingEffect('Failed to rebind formulas for sheet', () =>
+        rebindFormulasForSheetNow(sheetName, formulaChangedCount, candidates),
+      )
     },
     bindFormulaNow,
     bindPreparedFormulaNow,
