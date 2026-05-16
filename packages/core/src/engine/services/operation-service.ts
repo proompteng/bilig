@@ -14,28 +14,8 @@ import {
   rebindOperationDynamicFormulaDependents,
 } from './operation-cell-lifecycle-helpers.js'
 import type { DirectFormulaIndexCollection } from './direct-formula-index-collection.js'
-import {
-  aggregateColumnDependencyKey,
-  canEvaluatePostRecalcDirectFormulasWithoutKernel,
-  collectTrackedDependents,
-  composeSingleDisjointExplicitEventChanges,
-  countDirectFormulaDeltaSkip,
-  directAggregateNumericContribution,
-  directCriteriaTouchesPoint,
-  directFormulaChangesAreDisjointFromInputs,
-  hasCompleteDirectFormulaDeltas,
-  lookupImpactCacheKey,
-} from './direct-formula-recalc-helpers.js'
-import {
-  cellRange,
-  makeCompactExistingNumericMutationResult,
-  makeExistingNumericMutationResult,
-  mergeChangedCellIndices,
-  mutationErrorMessage,
-  rangesIntersect,
-  tagTrustedPhysicalTrackedChanges,
-  throwProtectionBlocked,
-} from './operation-change-helpers.js'
+import { lookupImpactCacheKey } from './direct-formula-recalc-helpers.js'
+import { mutationErrorMessage } from './operation-change-helpers.js'
 import { createOperationReplicaVersionWriter } from './operation-replica-helpers.js'
 import { createOperationDirectFormulaDeltas } from './operation-direct-formula-deltas.js'
 import { createOperationDirectFormulaValues } from './operation-direct-formula-values.js'
@@ -80,29 +60,10 @@ import {
 } from './operation-service-types.js'
 
 export type { EngineOperationService } from './operation-service-types.js'
+export { operationServiceTestHooks } from './operation-service-test-hooks.js'
 
 const DIRECT_RANGE_POST_RECALC_LIMIT = 16_384
 const DIRECT_SCALAR_DELTA_CLOSURE_LIMIT = 4_096
-
-export const operationServiceTestHooks = {
-  aggregateColumnDependencyKey,
-  canEvaluatePostRecalcDirectFormulasWithoutKernel,
-  cellRange,
-  collectTrackedDependents,
-  composeSingleDisjointExplicitEventChanges,
-  countDirectFormulaDeltaSkip,
-  directAggregateNumericContribution,
-  directCriteriaTouchesPoint,
-  directFormulaChangesAreDisjointFromInputs,
-  getConstantDirectFormulaDeltas: hasCompleteDirectFormulaDeltas,
-  lookupImpactCacheKey,
-  makeCompactExistingNumericMutationResult,
-  makeExistingNumericMutationResult,
-  mergeChangedCellIndices,
-  rangesIntersect,
-  tagTrustedPhysicalTrackedChanges,
-  throwProtectionBlocked,
-}
 
 export function createEngineOperationService(args: CreateEngineOperationServiceArgs): EngineOperationService {
   const {
