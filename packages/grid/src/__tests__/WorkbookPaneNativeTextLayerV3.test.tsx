@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, test } from 'vitest'
 import {
+  resolveNativeTextRunFontStyleV3,
   resolveNativeTextRunInnerStyleV3,
   resolveNativeTextRunOuterStyleV3,
   resolveNativeTextRunVisibleClipV3,
@@ -73,16 +74,30 @@ describe('WorkbookPaneNativeTextLayerV3', () => {
     })
   })
 
-  test('uses native browser font rendering styles for visible workbook text', () => {
+  test('uses explicit native browser font rendering styles for visible workbook text', () => {
     expect(resolveNativeTextRunInnerStyleV3({ dpr: 2, run: createRun({ align: 'right', underline: true }) })).toMatchObject({
       alignItems: 'center',
       color: '#1f2933',
-      font: '400 14.667px Arial, sans-serif',
+      fontFamily: 'Arial, sans-serif',
+      fontSize: 14.667,
+      fontStyle: 'normal',
+      fontWeight: 400,
       justifyContent: 'flex-end',
       textDecorationLine: 'underline',
-      textRendering: 'auto',
+      textRendering: 'optimizeLegibility',
       whiteSpace: 'pre',
-      WebkitFontSmoothing: 'auto',
+      WebkitFontSmoothing: 'antialiased',
+    })
+  })
+
+  test('parses styled spreadsheet font strings into stable CSS longhands', () => {
+    expect(
+      resolveNativeTextRunFontStyleV3(createRun({ font: 'italic 700 18.667px Aptos, Arial, sans-serif', fontSize: undefined })),
+    ).toEqual({
+      fontFamily: 'Aptos, Arial, sans-serif',
+      fontSize: 18.667,
+      fontStyle: 'italic',
+      fontWeight: 700,
     })
   })
 

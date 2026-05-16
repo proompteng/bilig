@@ -1,4 +1,4 @@
-export const WORKBOOK_FONT_SANS = '"IBM Plex Sans", Inter, "SF Pro Text", "SF Pro Display", "Segoe UI", "Helvetica Neue", Arial, sans-serif'
+export const WORKBOOK_FONT_SANS = 'Arial, "Helvetica Neue", Helvetica, sans-serif'
 export const WORKBOOK_DEFAULT_FONT_SIZE = 11
 export const WORKBOOK_FONT_POINT_TO_CSS_PX = 4 / 3
 

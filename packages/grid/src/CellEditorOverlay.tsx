@@ -310,10 +310,11 @@ export function CellEditorOverlay({
           fontSize,
           minHeight: '100%',
           opacity: isCompleting ? 0 : undefined,
-          textRendering: 'auto',
+          MozOsxFontSmoothing: 'grayscale',
+          textRendering: 'optimizeLegibility',
           textAlign,
           textDecorationLine: underline ? 'underline' : undefined,
-          WebkitFontSmoothing: 'auto',
+          WebkitFontSmoothing: 'antialiased',
         }}
         value={draftValue}
         onBlur={commitAfterBlur}

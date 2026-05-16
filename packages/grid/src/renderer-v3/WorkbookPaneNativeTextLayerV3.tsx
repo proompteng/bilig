@@ -21,6 +21,13 @@ interface NativeTextRunVisibleClipV3 {
   readonly innerWidth: number
 }
 
+export interface NativeTextRunFontStyleV3 {
+  readonly fontFamily: string
+  readonly fontSize: number
+  readonly fontStyle: 'italic' | 'normal'
+  readonly fontWeight: number | 'normal' | 'bold'
+}
+
 export interface WorkbookPaneNativeTextLayerV3Props {
   readonly active: boolean
   readonly cameraStore?: GridCameraStore | null | undefined
@@ -102,6 +109,28 @@ function getDefaultFont(run: TextQuadRun): string {
   return run.font?.trim()
     ? run.font
     : `400 ${run.fontSize ?? workbookFontPointSizeToCssPx(WORKBOOK_DEFAULT_FONT_SIZE)}px ${WORKBOOK_FONT_SANS}`
+}
+
+export function resolveNativeTextRunFontStyleV3(run: TextQuadRun): NativeTextRunFontStyleV3 {
+  const font = getDefaultFont(run)
+  const sizeCssPx = Math.max(1, run.fontSize ?? parseNativeTextRunFontSize(font))
+  const sizeMatch = font.match(/\b\d+(?:\.\d+)?px\s+(.+)$/i)
+  const fontFamily = sizeMatch?.[1]?.trim() || WORKBOOK_FONT_SANS
+  const fontStyle = /\bitalic\b/i.test(font) ? 'italic' : 'normal'
+  const weightMatch = font.match(/\b([1-9]00|normal|bold)\b/i)
+  const rawWeight = weightMatch?.[1]?.toLowerCase()
+  const fontWeight = rawWeight === 'bold' ? 'bold' : rawWeight === 'normal' || rawWeight === undefined ? 400 : Number(rawWeight)
+  return {
+    fontFamily,
+    fontSize: sizeCssPx,
+    fontStyle,
+    fontWeight,
+  }
+}
+
+function parseNativeTextRunFontSize(font: string): number {
+  const match = font.match(/\b(\d+(?:\.\d+)?)px\b/i)
+  return match ? Number(match[1]) : workbookFontPointSizeToCssPx(WORKBOOK_DEFAULT_FONT_SIZE)
 }
 
 function getDevicePixelRatio(): number {
@@ -195,14 +224,18 @@ export function resolveNativeTextRunInnerStyleV3(input: {
   const clipX = input.run.clipX ?? input.run.x
   const clipY = input.run.clipY ?? input.run.y
   const visibleClip = input.visibleClip ?? null
+  const fontStyle = resolveNativeTextRunFontStyleV3(input.run)
   const justifyContent = input.run.align === 'right' ? 'flex-end' : input.run.align === 'center' ? 'center' : 'flex-start'
   return {
     alignItems: input.run.wrap ? 'flex-start' : 'center',
     boxSizing: 'border-box',
     color: input.run.color ?? '#111827',
     display: 'flex',
-    font: getDefaultFont(input.run),
+    fontFamily: fontStyle.fontFamily,
+    fontSize: fontStyle.fontSize,
+    fontStyle: fontStyle.fontStyle,
     fontKerning: 'normal',
+    fontWeight: fontStyle.fontWeight,
     height: visibleClip?.innerHeight ?? height,
     justifyContent,
     left: visibleClip?.innerLeft ?? snapCssPixel(input.run.x - clipX, dpr),
@@ -213,11 +246,12 @@ export function resolveNativeTextRunInnerStyleV3(input: {
     position: 'absolute',
     textAlign: input.run.align ?? 'left',
     textDecorationLine: input.run.underline ? 'underline' : input.run.strike ? 'line-through' : undefined,
-    textRendering: 'auto',
+    MozOsxFontSmoothing: 'grayscale',
+    textRendering: 'optimizeLegibility',
     top: visibleClip?.innerTop ?? snapCssPixel(input.run.y - clipY, dpr),
     whiteSpace: input.run.wrap ? 'pre-wrap' : 'pre',
     width: visibleClip?.innerWidth ?? width,
-    WebkitFontSmoothing: 'auto',
+    WebkitFontSmoothing: 'antialiased',
   }
 }
 
