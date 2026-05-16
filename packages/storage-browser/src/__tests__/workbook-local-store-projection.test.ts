@@ -431,6 +431,24 @@ describe('workbook-local-store projection', () => {
     }
   })
 
+  it('rejects malformed viewport bounds before querying local projections', async () => {
+    const sqlite3 = await sqlite3InitModule()
+    const db = new sqlite3.oo1.DB(':memory:', 'c')
+    try {
+      initializeWorkbookLocalStoreSchema(db)
+      writeWorkbookAuthoritativeBase(db, createBase({ sheetId: 7, sheetName: 'Sheet1', value: 11 }))
+
+      expect(readWorkbookViewportProjection(db, 'Sheet1', { rowStart: -1, rowEnd: 0, colStart: 0, colEnd: 0 })).toBeNull()
+      expect(readWorkbookViewportProjection(db, 'Sheet1', { rowStart: 0.5, rowEnd: 1, colStart: 0, colEnd: 0 })).toBeNull()
+      expect(readWorkbookViewportProjection(db, 'Sheet1', { rowStart: 2, rowEnd: 1, colStart: 0, colEnd: 0 })).toBeNull()
+      expect(
+        readWorkbookViewportProjection(db, 'Sheet1', { rowStart: 0, rowEnd: 0, colStart: 0, colEnd: Number.MAX_SAFE_INTEGER + 1 }),
+      ).toBeNull()
+    } finally {
+      db.close()
+    }
+  })
+
   it('normalizes delta child rows to the canonical parent sheet name for each sheet id', async () => {
     const sqlite3 = await sqlite3InitModule()
     const db = new sqlite3.oo1.DB(':memory:', 'c')

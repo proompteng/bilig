@@ -39,6 +39,17 @@ function isLiteralInput(value: unknown): value is LiteralInput {
   return value === null || typeof value === 'boolean' || typeof value === 'string' || isFiniteNumber(value)
 }
 
+function isValidViewportBounds(viewport: ViewportBounds): boolean {
+  return (
+    isSafeNonNegativeInteger(viewport.rowStart) &&
+    isSafeNonNegativeInteger(viewport.rowEnd) &&
+    isSafeNonNegativeInteger(viewport.colStart) &&
+    isSafeNonNegativeInteger(viewport.colEnd) &&
+    viewport.rowStart <= viewport.rowEnd &&
+    viewport.colStart <= viewport.colEnd
+  )
+}
+
 function isErrorCode(value: unknown): value is ErrorCode {
   return (
     value === ErrorCode.None ||
@@ -830,6 +841,9 @@ export function readWorkbookViewportProjection(
   sheetName: string,
   viewport: ViewportBounds,
 ): WorkbookLocalViewportBase | null {
+  if (!isValidViewportBounds(viewport)) {
+    return null
+  }
   const base = readWorkbookViewportBase(db, sheetName, viewport)
   if (!base) {
     return null
