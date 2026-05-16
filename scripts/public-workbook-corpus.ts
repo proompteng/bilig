@@ -23,7 +23,7 @@ import {
 } from './public-workbook-corpus-fetch.ts'
 import { withPublicWorkbookCorpusCacheLock } from './public-workbook-corpus-lock.ts'
 import { indexPublicWorkbookCorpusCases, publicWorkbookCorpusCaseMatchesArtifact } from './public-workbook-corpus-missing.ts'
-import { addPublicWorkbookLinkSource } from './public-workbook-corpus-links.ts'
+import { addPublicWorkbookLinkSourceFromInput, readPublicWorkbookLinkInput } from './public-workbook-corpus-link-input.ts'
 import { defaultSelfRssCheckIntervalMs, startSelfRssGuard } from './public-workbook-corpus-process.ts'
 import { buildPublicWorkbookCorpusScorecardFromCases, validatePublicWorkbookCorpusScorecard } from './public-workbook-corpus-scorecard.ts'
 import { writePublicWorkbookCorpusCheck, writePublicWorkbookCorpusStatus } from './public-workbook-corpus-status.ts'
@@ -84,7 +84,6 @@ import {
   splitPublicWorkbookCorpusFetchCommand,
   splitPublicWorkbookCorpusFetchSourceCommand,
   splitPublicWorkbookCorpusVerifyArtifactCommand,
-  type PublicWorkbookLinkInput,
 } from './public-workbook-corpus-command-format.ts'
 import { formatFetchCheckpointProgress } from './public-workbook-corpus-fetch-progress.ts'
 
@@ -870,33 +869,6 @@ function selectRecordedCasesInManifestOrder(
   return artifacts.flatMap((artifact) => {
     const recordedCase = casesById.get(artifact.id)
     return recordedCase?.passed === true && publicWorkbookCorpusCaseMatchesArtifact(recordedCase, artifact) ? [recordedCase] : []
-  })
-}
-
-function readPublicWorkbookLinkInput(commandName: string): PublicWorkbookLinkInput {
-  const sourceUrl = readStringArg('--source-url', readStringArg('--url', ''))
-  if (!sourceUrl) {
-    throw new Error(`Expected --source-url for ${commandName}`)
-  }
-  return {
-    sourceUrl,
-    downloadUrl: readStringArg('--download-url', ''),
-    fileName: readStringArg('--file-name', ''),
-    licenseTitle: readStringArg('--license-title', ''),
-    licenseUrl: readStringArg('--license-url', ''),
-    licenseSpdxId: readStringArg('--license-spdx', '') || null,
-  }
-}
-
-function addPublicWorkbookLinkSourceFromInput(manifest: PublicWorkbookManifest, input: PublicWorkbookLinkInput) {
-  return addPublicWorkbookLinkSource({
-    manifest,
-    sourceUrl: input.sourceUrl,
-    downloadUrl: input.downloadUrl,
-    fileName: input.fileName,
-    licenseTitle: input.licenseTitle,
-    licenseUrl: input.licenseUrl,
-    licenseSpdxId: input.licenseSpdxId,
   })
 }
 
