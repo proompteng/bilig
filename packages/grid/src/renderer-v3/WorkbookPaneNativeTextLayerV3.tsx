@@ -149,11 +149,11 @@ export function resolveNativeTextRunInnerStyleV3(input: { readonly run: TextQuad
     position: 'absolute',
     textAlign: input.run.align ?? 'left',
     textDecorationLine: input.run.underline ? 'underline' : input.run.strike ? 'line-through' : undefined,
-    textRendering: 'optimizeLegibility',
+    textRendering: 'auto',
     top: snapCssPixel(input.run.y - clipY, dpr),
     whiteSpace: input.run.wrap ? 'pre-wrap' : 'pre',
     width,
-    WebkitFontSmoothing: 'antialiased',
+    WebkitFontSmoothing: 'auto',
   }
 }
 

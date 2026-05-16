@@ -1,5 +1,5 @@
 import type { GlyphAtlasEntry } from './typegpu-atlas-manager.js'
-import { WORKBOOK_DEFAULT_FONT_SIZE, WORKBOOK_FONT_SANS } from '../workbookTheme.js'
+import { WORKBOOK_DEFAULT_FONT_SIZE, WORKBOOK_FONT_SANS, workbookFontPointSizeToCssPx } from '../workbookTheme.js'
 
 export interface TextLayoutRun {
   readonly text: string
@@ -45,7 +45,7 @@ export interface GlyphAtlasLike {
   getGlyphGeometryVersion?(): number
 }
 
-export const DEFAULT_TEXT_FONT = `400 ${WORKBOOK_DEFAULT_FONT_SIZE}px ${WORKBOOK_FONT_SANS}`
+export const DEFAULT_TEXT_FONT = `400 ${workbookFontPointSizeToCssPx(WORKBOOK_DEFAULT_FONT_SIZE)}px ${WORKBOOK_FONT_SANS}`
 export const DEFAULT_TEXT_COLOR = '#1f2933'
 export const DEFAULT_TEXT_HEIGHT = 16
 const DEFAULT_TEXT_WIDTH = Number.POSITIVE_INFINITY

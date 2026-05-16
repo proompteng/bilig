@@ -108,7 +108,7 @@ describe('gridCells', () => {
     })
   })
 
-  test('normalizes imported spreadsheet default fonts to the workbook font stack', () => {
+  test('preserves imported spreadsheet font faces before the workbook fallback stack', () => {
     const aptosStyle: CellStyleRecord = {
       id: 'style-aptos',
       font: { family: 'Aptos', size: 11 },
@@ -119,11 +119,11 @@ describe('gridCells', () => {
     }
 
     expect(snapshotToRenderCell(makeSnapshot({ value: { tag: ValueTag.String, value: 'hello' } }), aptosStyle).font).toBe(
-      `400 ${DEFAULT_CSS_FONT_SIZE}px ${WORKBOOK_FONT_SANS}`,
+      `400 ${DEFAULT_CSS_FONT_SIZE}px Aptos, ${WORKBOOK_FONT_SANS}`,
     )
     expect(cellStyleToThemeOverride(calibriStyle)).toEqual({
       baseFontStyle: `400 ${DEFAULT_CSS_FONT_SIZE}px`,
-      fontFamily: WORKBOOK_FONT_SANS,
+      fontFamily: `Calibri, ${WORKBOOK_FONT_SANS}`,
     })
   })
 

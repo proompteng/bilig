@@ -233,9 +233,6 @@ function resolveContentAlign(snapshot: Pick<CellSnapshot, 'value' | 'format'>, s
 
 export function getResolvedCellFontFamily(style?: Pick<CellStyleRecord, 'font'>): string {
   const family = resolveFontFamilyToken(style?.font?.family)
-  if (family && isWorkbookDefaultFontFamily(family)) {
-    return DEFAULT_FONT_FALLBACK
-  }
   return family ? `${family}, ${DEFAULT_FONT_FALLBACK}` : DEFAULT_FONT_FALLBACK
 }
 
@@ -277,16 +274,12 @@ const CSS_GENERIC_FONT_FAMILIES = new Set([
   'ui-monospace',
 ])
 const WORKBOOK_COMPAT_FONT_ALIASES = new Map([
-  ['aptos', 'Arial'],
-  ['aptos display', 'Arial'],
-  ['aptos narrow', 'Arial'],
+  ['aptos', 'Aptos'],
+  ['aptos display', '"Aptos Display"'],
+  ['aptos narrow', '"Aptos Narrow"'],
   ['arial', 'Arial'],
-  ['calibri', 'Arial'],
+  ['calibri', 'Calibri'],
 ])
-
-function isWorkbookDefaultFontFamily(family: string): boolean {
-  return family.trim().toLowerCase() === 'arial'
-}
 
 function resolveFontFamilyToken(family: string | null | undefined): string | null {
   const trimmed = family?.trim()

@@ -106,7 +106,7 @@ test('web app keeps dense accounting-sheet text payloads complete in the TypeGPU
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B34')
   await expect(nameBox).toHaveValue('B34')
   await expect(formulaInput).toHaveValue('Annual software subscription')
-  await expect(page.getByTestId('sheet-grid')).toHaveCSS('font-family', /Arial/)
+  await expect(page.getByTestId('sheet-grid')).toHaveCSS('font-family', /IBM Plex Sans|Inter|SF Pro Text|Segoe UI/)
   await expect(page.getByTestId('sheet-grid')).toHaveCSS('font-size', DEFAULT_WORKBOOK_CSS_FONT_SIZE)
   await expect
     .poll(readRendererSurfaceState(page), {

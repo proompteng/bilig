@@ -76,9 +76,9 @@ describe('WorkbookPaneNativeTextLayerV3', () => {
       font: '400 14.667px Arial, sans-serif',
       justifyContent: 'flex-end',
       textDecorationLine: 'underline',
-      textRendering: 'optimizeLegibility',
+      textRendering: 'auto',
       whiteSpace: 'pre',
-      WebkitFontSmoothing: 'antialiased',
+      WebkitFontSmoothing: 'auto',
     })
   })
 })
