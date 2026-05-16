@@ -530,7 +530,7 @@ for (const required of [
   'Not indexed in public search on May 14, 2026',
   'https://www.pulsemcp.com/servers?search=bilig&q=bilig',
   'https://github.com/proompteng/bilig/issues/384',
-  'marked `@bilig/headless@0.16.2` as the latest',
+  'official Registry API returned one\nlatest Bilig WorkPaper entry for the `@bilig/headless` server package line',
   'https://github.com/proompteng/bilig/actions/runs/25956395253',
   'read_workpaper_summary',
   'set_workpaper_input_cell',
