@@ -1,5 +1,5 @@
 import type { EngineEvent } from '@bilig/protocol'
-import type { WorkbookDeltaBatchV3, WorkbookDeltaSourceV3 } from '@bilig/worker-transport'
+import { encodeWorkbookDeltaBatchV3, type WorkbookDeltaBatchV3, type WorkbookDeltaSourceV3 } from '@bilig/worker-transport'
 import { DirtyMaskV3 } from '../../../packages/grid/src/renderer-v3/tile-damage-index.js'
 import { collectSheetViewportImpacts, type SheetViewportImpact, type WorkerEngine, type WorkerSheet } from './worker-runtime-support.js'
 
@@ -45,6 +45,37 @@ export class WorkerRuntimeDeltaPublisher {
 
   reset(): void {
     this.nextSeq = 1
+  }
+}
+
+export class WorkerRuntimeWorkbookDeltaPublisher {
+  private readonly batchPublisher = new WorkerRuntimeDeltaPublisher()
+  private readonly listeners = new Set<(delta: Uint8Array) => void>()
+
+  subscribe(listener: (delta: Uint8Array) => void): () => void {
+    this.listeners.add(listener)
+    return () => {
+      this.listeners.delete(listener)
+    }
+  }
+
+  publish(engine: WorkerEngine, event: EngineEvent): void {
+    if (this.listeners.size === 0) {
+      return
+    }
+    const batches = this.batchPublisher.buildFromEngineEvent({
+      engine,
+      event,
+    })
+    const encodedBatches = batches.map((batch) => encodeWorkbookDeltaBatchV3(batch))
+    for (const listener of this.listeners) {
+      encodedBatches.forEach((batch) => listener(batch))
+    }
+  }
+
+  reset(): void {
+    this.batchPublisher.reset()
+    this.listeners.clear()
   }
 }
 

@@ -27,12 +27,7 @@ import {
   type WorkbookSnapshot,
   formatCellDisplayValue,
 } from '@bilig/protocol'
-import {
-  encodeWorkbookDeltaBatchV3,
-  type RenderTileDeltaSubscription,
-  type ViewportPatch,
-  type ViewportPatchSubscription,
-} from '@bilig/worker-transport'
+import type { RenderTileDeltaSubscription, ViewportPatch, ViewportPatchSubscription } from '@bilig/worker-transport'
 import type { PendingWorkbookMutation, PendingWorkbookMutationInput } from './workbook-sync.js'
 import { WorkerRuntimeMutationJournal } from './worker-runtime-mutation-journal.js'
 import {
@@ -58,7 +53,7 @@ import {
   withExternalSyncState,
 } from './worker-runtime-state.js'
 import { WorkerRuntimeSnapshotCaches } from './worker-runtime-snapshot-caches.js'
-import { WorkerRuntimeDeltaPublisher } from './worker-runtime-delta-publisher.js'
+import { WorkerRuntimeWorkbookDeltaPublisher } from './worker-runtime-delta-publisher.js'
 import { applyWorkerRuntimeLocalHistoryChange, buildWorkerRuntimeLocalHistoryState } from './worker-runtime-local-history.js'
 import { WorkerRuntimeRenderTileDeltaPublisher } from './worker-runtime-render-tile-subscription.js'
 import type { WorkerRuntimeRenderTileDiagnostics } from './worker-runtime-render-tile-subscription.js'
@@ -124,7 +119,7 @@ export class WorkbookWorkerRuntime {
   private projectionMatchesLocalStore = false
   private projectionOverlayScope: ProjectionOverlayScope | null = null
   private localPersistenceMode: 'persistent' | 'ephemeral' | 'follower' = 'ephemeral'
-  private readonly workbookDeltaPublisher = new WorkerRuntimeDeltaPublisher()
+  private readonly workbookDeltaPublisher = new WorkerRuntimeWorkbookDeltaPublisher()
   private readonly renderTileDeltaPublisher = new WorkerRuntimeRenderTileDeltaPublisher()
   private readonly snapshotCaches = new WorkerRuntimeSnapshotCaches()
   private readonly viewportTileStore = new WorkerViewportTileStore()
@@ -642,14 +637,8 @@ export class WorkbookWorkerRuntime {
   }
 
   subscribeWorkbookDeltas(listener: (delta: Uint8Array) => void): () => void {
-    const engine = this.requireEngine()
-    return engine.subscribe((event) => {
-      const batches = this.workbookDeltaPublisher.buildFromEngineEvent({
-        engine,
-        event,
-      })
-      batches.forEach((batch) => listener(encodeWorkbookDeltaBatchV3(batch)))
-    })
+    this.requireEngine()
+    return this.workbookDeltaPublisher.subscribe(listener)
   }
 
   subscribeRenderTileDeltas(subscription: RenderTileDeltaSubscription, listener: (delta: Uint8Array) => void): () => void {
@@ -892,6 +881,7 @@ export class WorkbookWorkerRuntime {
       }
       this.updateRuntimeStateFromEngine(engine)
       this.broadcastViewportPatches(event)
+      this.workbookDeltaPublisher.publish(engine, event)
     })
   }
 

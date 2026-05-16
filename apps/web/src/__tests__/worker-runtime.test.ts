@@ -813,6 +813,49 @@ describe('WorkbookWorkerRuntime', () => {
     expect(ranges.some((value, index) => index % 5 === 0 && value === 1 && ranges[index + 2] === 1)).toBe(true)
   })
 
+  it('keeps workbook delta subscribers connected after authoritative projection replacement', async () => {
+    const runtime = new WorkbookWorkerRuntime({
+      localStoreFactory: createMemoryLocalStoreFactory(),
+    })
+    await runtime.bootstrap({
+      documentId: 'workbook-delta-authoritative-doc',
+      replicaId: 'browser:test',
+      persistState: false,
+    })
+
+    const deltas: ReturnType<typeof decodeWorkbookDeltaBatchV3>[] = []
+    const unsubscribe = runtime.subscribeWorkbookDeltas((bytes) => {
+      deltas.push(decodeWorkbookDeltaBatchV3(bytes))
+    })
+
+    await runtime.installAuthoritativeSnapshot({
+      snapshot: {
+        version: 1,
+        workbook: { name: 'workbook-delta-authoritative-doc' },
+        sheets: [
+          {
+            name: 'Sheet1',
+            order: 0,
+            cells: [{ address: 'A1', value: 5 }],
+          },
+        ],
+      },
+      authoritativeRevision: 7,
+      mode: 'bootstrap',
+    })
+    await runtime.setCellValue('Sheet1', 'C3', 'after-snapshot')
+    unsubscribe()
+
+    const delta = deltas.at(-1)
+    expect(delta).toMatchObject({
+      source: 'workerAuthoritative',
+      sheetId: 1,
+      sheetOrdinal: 0,
+    })
+    const ranges = Array.from(delta?.dirty.cellRanges ?? [])
+    expect(ranges.some((value, index) => index % 5 === 0 && value === 2 && ranges[index + 2] === 2)).toBe(true)
+  })
+
   it('exposes local undo and redo state for offline toolbar history controls', async () => {
     const runtime = new WorkbookWorkerRuntime({
       localStoreFactory: createMemoryLocalStoreFactory(),
