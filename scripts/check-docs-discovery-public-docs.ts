@@ -1,0 +1,181 @@
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import {
+  requireDocumentNotIncludes,
+  requireDocumentsInclude,
+  requireDocumentsNotInclude,
+  requireIncludes,
+} from './check-docs-discovery-core.ts'
+
+export async function requireSharedPublicDocsDiscovery(args: {
+  readonly docsRoot: string
+  readonly readme: string
+  readonly headlessReadme: string
+  readonly contributing: string
+  readonly newContributorGuide: string
+  readonly starterIssues: string
+  readonly llms: string
+  readonly index: string
+  readonly issueTemplateConfig: string
+  readonly issueTemplateRoot: string
+  readonly featureRequestTemplate: string
+  readonly ideasDiscussionTemplate: string
+  readonly qaDiscussionTemplate: string
+  readonly showAndTellDiscussionTemplate: string
+  readonly excelImportReadme: string
+  readonly publicApi: string
+}): Promise<void> {
+  requireDocumentsInclude(
+    [
+      { path: 'README.md', content: args.readme },
+      { path: 'packages/headless/README.md', content: args.headlessReadme },
+      { path: 'CONTRIBUTING.md', content: args.contributing },
+      { path: 'docs/new-contributor-guide.md', content: args.newContributorGuide },
+      { path: 'docs/starter-issues.md', content: args.starterIssues },
+      { path: 'docs/llms.txt', content: args.llms },
+    ],
+    ['https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only'],
+  )
+
+  const primaryPublicDocs = [
+    { path: 'README.md', content: args.readme },
+    { path: 'packages/headless/README.md', content: args.headlessReadme },
+  ] as const
+  requireDocumentsInclude(primaryPublicDocs, [
+    '## TypeScript API Shape',
+    'WorkPaper.buildFromSheets({',
+    "['Revenue', '=Inputs!B2*Inputs!B3']",
+    'workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, 32)',
+    'workbook.getCellDisplayValue({ sheet: summary, row: 1, col: 1 })',
+    'serializeWorkPaperDocument(',
+    'exportWorkPaperDocument(workbook, { includeConfig: true })',
+    '## Proof You Can Reproduce',
+    'https://github.com/proompteng/bilig/stargazers',
+    'above edits one input',
+    'verifies the dependent formula result.',
+    'pnpm workpaper:bench:competitive:check',
+    'structural-append-formula-rows',
+    '3.042x',
+    'compatibility limits',
+    'Excel oracle harness',
+    'stale cached formula values',
+    'https://github.com/proompteng/bilig/discussions/307',
+    'https://github.com/proompteng/bilig/discussions/308',
+  ])
+  requireDocumentsNotInclude(primaryPublicDocs, [
+    '## Current Public Proof',
+    'Latest checked-in snapshot',
+    '`12` forks',
+    '15,592` npm downloads in the',
+    '`10` GitHub Discussions',
+    'repository views.',
+  ])
+
+  requireDocumentsInclude(
+    [
+      { path: 'README.md', content: args.readme },
+      { path: 'packages/headless/README.md', content: args.headlessReadme },
+      { path: 'docs/index.html', content: args.index },
+      { path: 'docs/community-launch-pack.md', content: await readFile(join(args.docsRoot, 'community-launch-pack.md'), 'utf8') },
+      { path: 'docs/llms.txt', content: args.llms },
+      { path: '.github/ISSUE_TEMPLATE/config.yml', content: args.issueTemplateConfig },
+      { path: '.github/ISSUE_TEMPLATE.md', content: args.issueTemplateRoot },
+      { path: '.github/ISSUE_TEMPLATE/feature_request.yml', content: args.featureRequestTemplate },
+      { path: '.github/DISCUSSION_TEMPLATE/ideas.yml', content: args.ideasDiscussionTemplate },
+      { path: '.github/DISCUSSION_TEMPLATE/q-a.yml', content: args.qaDiscussionTemplate },
+      { path: '.github/DISCUSSION_TEMPLATE/show-and-tell.yml', content: args.showAndTellDiscussionTemplate },
+    ],
+    ['workbook-automation-examples-node'],
+  )
+
+  const issueTemplateDocs = [
+    { path: '.github/ISSUE_TEMPLATE/config.yml', content: args.issueTemplateConfig },
+    { path: '.github/ISSUE_TEMPLATE.md', content: args.issueTemplateRoot },
+  ] as const
+  requireDocumentsInclude(issueTemplateDocs, ['https://github.com/proompteng/bilig/discussions/157'])
+  requireDocumentsNotInclude(issueTemplateDocs, ['https://github.com/proompteng/bilig/discussions/115'])
+
+  requireDocumentsInclude(
+    [
+      { path: 'README.md', content: args.readme },
+      { path: 'packages/headless/README.md', content: args.headlessReadme },
+      { path: 'docs/index.html', content: args.index },
+      { path: 'docs/llms.txt', content: args.llms },
+    ],
+    [
+      'node-spreadsheet-formula-engine',
+      'server-side-spreadsheet-automation-node',
+      'google-sheets-api-alternative-node-workpaper',
+      'examples/serverless-workpaper-api',
+      'quote-approval-api',
+      'node-framework-workpaper-adapters',
+      'mcp-spreadsheet-server-directory',
+    ],
+  )
+
+  requireDocumentsInclude(
+    [
+      { path: 'README.md', content: args.readme },
+      { path: 'packages/headless/README.md', content: args.headlessReadme },
+      { path: 'docs/llms.txt', content: args.llms },
+    ],
+    [
+      'examples/headless-workpaper#invoice-totals',
+      'examples/headless-workpaper#agent-framework-adapters',
+      'examples/headless-workpaper#mcp-tool-server-shape',
+      'npm run agent:framework-adapters',
+      'npm run agent:mcp-tools',
+      'npm run agent:mcp-stdio',
+      'npm exec --package @bilig/headless -- bilig-workpaper-mcp',
+      'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper',
+      'vercel-ai-sdk-langchain-spreadsheet-tool',
+      'mcp-workpaper-tool-server',
+      'mcp-spreadsheet-server-directory',
+      'mcp-client-setup',
+      'claude-desktop-mcpb-workpaper',
+      'examples/headless-workpaper#budget-variance-alerts',
+      'examples/headless-workpaper#fulfillment-capacity-plan',
+      'examples/headless-workpaper#quote-approval-threshold',
+      'examples/headless-workpaper#subscription-mrr-forecast',
+    ],
+  )
+
+  requireDocumentsInclude(
+    [
+      { path: 'README.md', content: args.readme },
+      { path: 'packages/headless/README.md', content: args.headlessReadme },
+      { path: 'docs/llms.txt', content: args.llms },
+    ],
+    ['docs/javascript-spreadsheet-library-headless-node.md', 'docs/sheetjs-exceljs-alternative-formula-workbook-api.md'],
+  )
+  requireIncludes(args.llms, 'https://proompteng.github.io/bilig/sheetjs-exceljs-alternative-formula-workbook-api.html', 'docs/llms.txt')
+  requireIncludes(args.llms, 'includes a TypeScript WorkPaper runtime check', 'docs/llms.txt')
+
+  requireDocumentsInclude(
+    [
+      { path: 'README.md', content: args.readme },
+      { path: 'packages/headless/README.md', content: args.headlessReadme },
+      { path: 'docs/llms.txt', content: args.llms },
+      {
+        path: 'docs/what-workpaper-benchmark-proves.md',
+        content: await readFile(join(args.docsRoot, 'what-workpaper-benchmark-proves.md'), 'utf8'),
+      },
+    ],
+    ['workpaper-benchmark-card.png'],
+  )
+
+  requireDocumentsInclude(
+    [
+      { path: 'packages/headless/README.md', content: args.headlessReadme },
+      { path: 'packages/excel-import/README.md', content: args.excelImportReadme },
+      { path: 'docs/public-api.md', content: args.publicApi },
+    ],
+    ['@bilig/headless/xlsx', "import { exportXlsx, importXlsx } from '@bilig/headless/xlsx'", 'workbook.exportSnapshot()'],
+  )
+
+  requireDocumentNotIncludes({ path: 'packages/headless/README.md', content: args.headlessReadme }, [
+    '](../../docs/',
+    '](../../examples/',
+    '](../../LICENSE)',
+  ])
+}

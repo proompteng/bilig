@@ -12,6 +12,35 @@ export function requireNotIncludes(haystack: string, needle: string, context: st
   }
 }
 
+export interface DocsDiscoveryDocument {
+  readonly path: string
+  readonly content: string
+}
+
+export function requireDocumentIncludes(document: DocsDiscoveryDocument, needles: readonly string[]): void {
+  for (const needle of needles) {
+    requireIncludes(document.content, needle, document.path)
+  }
+}
+
+export function requireDocumentsInclude(documents: readonly DocsDiscoveryDocument[], needles: readonly string[]): void {
+  for (const document of documents) {
+    requireDocumentIncludes(document, needles)
+  }
+}
+
+export function requireDocumentNotIncludes(document: DocsDiscoveryDocument, needles: readonly string[]): void {
+  for (const needle of needles) {
+    requireNotIncludes(document.content, needle, document.path)
+  }
+}
+
+export function requireDocumentsNotInclude(documents: readonly DocsDiscoveryDocument[], needles: readonly string[]): void {
+  for (const document of documents) {
+    requireDocumentNotIncludes(document, needles)
+  }
+}
+
 export async function requirePublishedSource(path: string): Promise<void> {
   await requireFile(path)
 

@@ -23,6 +23,7 @@ import { docsSiteSources } from './check-docs-discovery-site-sources.ts'
 import { requireStarterIssueDiscovery } from './check-docs-discovery-starter-issues.ts'
 import { requireTypeScriptFirstPublicSnippets } from './check-docs-discovery-typescript-snippets.ts'
 import { requireXlsxCorpusVerifierDiscovery } from './check-docs-discovery-xlsx-verifier.ts'
+import { requireSharedPublicDocsDiscovery } from './check-docs-discovery-public-docs.ts'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const docsRoot = join(repoRoot, 'docs')
@@ -278,47 +279,24 @@ for (const required of agentFrameworkLlmsRequiredLinks) {
   requireIncludes(llms, required, 'docs/llms.txt')
 }
 
-for (const [path, content] of [
-  ['README.md', readme],
-  ['packages/headless/README.md', headlessReadme],
-  ['CONTRIBUTING.md', contributing],
-  ['docs/new-contributor-guide.md', newContributorGuide],
-  ['docs/starter-issues.md', starterIssues],
-  ['docs/llms.txt', llms],
-] as const) {
-  requireIncludes(content, 'https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only', path)
-}
-
-for (const [path, content] of [
-  ['README.md', readme],
-  ['packages/headless/README.md', headlessReadme],
-] as const) {
-  requireIncludes(content, '## TypeScript API Shape', path)
-  requireIncludes(content, 'WorkPaper.buildFromSheets({', path)
-  requireIncludes(content, "['Revenue', '=Inputs!B2*Inputs!B3']", path)
-  requireIncludes(content, 'workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, 32)', path)
-  requireIncludes(content, 'workbook.getCellDisplayValue({ sheet: summary, row: 1, col: 1 })', path)
-  requireIncludes(content, 'serializeWorkPaperDocument(', path)
-  requireIncludes(content, 'exportWorkPaperDocument(workbook, { includeConfig: true })', path)
-  requireIncludes(content, '## Proof You Can Reproduce', path)
-  requireIncludes(content, 'https://github.com/proompteng/bilig/stargazers', path)
-  requireIncludes(content, 'above edits one input', path)
-  requireIncludes(content, 'verifies the dependent formula result.', path)
-  requireIncludes(content, 'pnpm workpaper:bench:competitive:check', path)
-  requireIncludes(content, 'structural-append-formula-rows', path)
-  requireIncludes(content, '3.042x', path)
-  requireIncludes(content, 'compatibility limits', path)
-  requireIncludes(content, 'Excel oracle harness', path)
-  requireIncludes(content, 'stale cached formula values', path)
-  requireIncludes(content, 'https://github.com/proompteng/bilig/discussions/307', path)
-  requireIncludes(content, 'https://github.com/proompteng/bilig/discussions/308', path)
-  requireNotIncludes(content, '## Current Public Proof', path)
-  requireNotIncludes(content, 'Latest checked-in snapshot', path)
-  requireNotIncludes(content, '`12` forks', path)
-  requireNotIncludes(content, '15,592` npm downloads in the', path)
-  requireNotIncludes(content, '`10` GitHub Discussions', path)
-  requireNotIncludes(content, 'repository views.', path)
-}
+await requireSharedPublicDocsDiscovery({
+  docsRoot,
+  readme,
+  headlessReadme,
+  contributing,
+  newContributorGuide,
+  starterIssues,
+  llms,
+  index,
+  issueTemplateConfig,
+  issueTemplateRoot,
+  featureRequestTemplate,
+  ideasDiscussionTemplate,
+  qaDiscussionTemplate,
+  showAndTellDiscussionTemplate,
+  excelImportReadme,
+  publicApi,
+})
 
 requireIncludes(readme, 'acceptance commands for first patches.', 'README.md')
 requireIncludes(headlessReadme, '## Stay Connected', 'packages/headless/README.md')
@@ -423,22 +401,6 @@ requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/google
 requireXlsxCorpusVerifierDiscovery(await readFile(join(docsRoot, 'xlsx-corpus-verifier-walkthrough.md'), 'utf8'))
 requireIncludes(index, './xlsx-corpus-verifier-walkthrough.html', 'docs/index.html')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/xlsx-corpus-verifier-walkthrough.html', 'docs/llms.txt')
-
-for (const [path, content] of [
-  ['README.md', readme],
-  ['packages/headless/README.md', headlessReadme],
-  ['docs/index.html', index],
-  ['docs/community-launch-pack.md', await readFile(join(docsRoot, 'community-launch-pack.md'), 'utf8')],
-  ['docs/llms.txt', llms],
-  ['.github/ISSUE_TEMPLATE/config.yml', issueTemplateConfig],
-  ['.github/ISSUE_TEMPLATE.md', issueTemplateRoot],
-  ['.github/ISSUE_TEMPLATE/feature_request.yml', featureRequestTemplate],
-  ['.github/DISCUSSION_TEMPLATE/ideas.yml', ideasDiscussionTemplate],
-  ['.github/DISCUSSION_TEMPLATE/q-a.yml', qaDiscussionTemplate],
-  ['.github/DISCUSSION_TEMPLATE/show-and-tell.yml', showAndTellDiscussionTemplate],
-] as const) {
-  requireIncludes(content, 'workbook-automation-examples-node', path)
-}
 
 const [
   whyAgentsDoc,
@@ -648,59 +610,12 @@ for (const [path, content] of [
   requireIncludes(content, 'image: /assets/github-social-preview.png', path)
 }
 
-for (const [path, content] of [
-  ['.github/ISSUE_TEMPLATE/config.yml', issueTemplateConfig],
-  ['.github/ISSUE_TEMPLATE.md', issueTemplateRoot],
-] as const) {
-  requireIncludes(content, 'https://github.com/proompteng/bilig/discussions/157', path)
-  requireNotIncludes(content, 'https://github.com/proompteng/bilig/discussions/115', path)
-}
-
 requireIncludes(issueTemplateConfig, 'https://github.com/proompteng/bilig/discussions/213', '.github/ISSUE_TEMPLATE/config.yml')
 requireIncludes(
   pullRequestTemplate,
   'For public docs or example work, include the page or discussion that a new',
   '.github/PULL_REQUEST_TEMPLATE.md',
 )
-
-for (const [path, content] of [
-  ['README.md', readme],
-  ['packages/headless/README.md', headlessReadme],
-  ['docs/index.html', index],
-  ['docs/llms.txt', llms],
-] as const) {
-  requireIncludes(content, 'node-spreadsheet-formula-engine', path)
-  requireIncludes(content, 'server-side-spreadsheet-automation-node', path)
-  requireIncludes(content, 'google-sheets-api-alternative-node-workpaper', path)
-  requireIncludes(content, 'examples/serverless-workpaper-api', path)
-  requireIncludes(content, 'quote-approval-api', path)
-  requireIncludes(content, 'node-framework-workpaper-adapters', path)
-  requireIncludes(content, 'mcp-spreadsheet-server-directory', path)
-}
-
-for (const [path, content] of [
-  ['README.md', readme],
-  ['packages/headless/README.md', headlessReadme],
-  ['docs/llms.txt', llms],
-] as const) {
-  requireIncludes(content, 'examples/headless-workpaper#invoice-totals', path)
-  requireIncludes(content, 'examples/headless-workpaper#agent-framework-adapters', path)
-  requireIncludes(content, 'examples/headless-workpaper#mcp-tool-server-shape', path)
-  requireIncludes(content, 'npm run agent:framework-adapters', path)
-  requireIncludes(content, 'npm run agent:mcp-tools', path)
-  requireIncludes(content, 'npm run agent:mcp-stdio', path)
-  requireIncludes(content, 'npm exec --package @bilig/headless -- bilig-workpaper-mcp', path)
-  requireIncludes(content, 'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper', path)
-  requireIncludes(content, 'vercel-ai-sdk-langchain-spreadsheet-tool', path)
-  requireIncludes(content, 'mcp-workpaper-tool-server', path)
-  requireIncludes(content, 'mcp-spreadsheet-server-directory', path)
-  requireIncludes(content, 'mcp-client-setup', path)
-  requireIncludes(content, 'claude-desktop-mcpb-workpaper', path)
-  requireIncludes(content, 'examples/headless-workpaper#budget-variance-alerts', path)
-  requireIncludes(content, 'examples/headless-workpaper#fulfillment-capacity-plan', path)
-  requireIncludes(content, 'examples/headless-workpaper#quote-approval-threshold', path)
-  requireIncludes(content, 'examples/headless-workpaper#subscription-mrr-forecast', path)
-}
 
 for (const required of [
   '## Use-Case Chooser',
@@ -750,26 +665,6 @@ requireIncludes(
   'docs/node-spreadsheet-formula-engine.md',
 )
 
-for (const [path, content] of [
-  ['README.md', readme],
-  ['packages/headless/README.md', headlessReadme],
-  ['docs/llms.txt', llms],
-] as const) {
-  requireIncludes(content, 'docs/javascript-spreadsheet-library-headless-node.md', path)
-  requireIncludes(content, 'docs/sheetjs-exceljs-alternative-formula-workbook-api.md', path)
-}
-requireIncludes(llms, 'https://proompteng.github.io/bilig/sheetjs-exceljs-alternative-formula-workbook-api.html', 'docs/llms.txt')
-requireIncludes(llms, 'includes a TypeScript WorkPaper runtime check', 'docs/llms.txt')
-
-for (const [path, content] of [
-  ['README.md', readme],
-  ['packages/headless/README.md', headlessReadme],
-  ['docs/llms.txt', llms],
-  ['docs/what-workpaper-benchmark-proves.md', await readFile(join(docsRoot, 'what-workpaper-benchmark-proves.md'), 'utf8')],
-] as const) {
-  requireIncludes(content, 'workpaper-benchmark-card.png', path)
-}
-
 const discussionDocs = {
   readme: ['README.md', readme],
   headless: ['packages/headless/README.md', headlessReadme],
@@ -800,22 +695,6 @@ for (const [url, docKeys] of discussionDocChecks) {
 }
 
 requireStarterIssueDiscovery(starterIssues, llms)
-
-const publicDocs = [
-  ['packages/headless/README.md', headlessReadme],
-  ['packages/excel-import/README.md', excelImportReadme],
-  ['docs/public-api.md', publicApi],
-] as const
-
-for (const [path, content] of publicDocs) {
-  requireIncludes(content, '@bilig/headless/xlsx', path)
-  requireIncludes(content, "import { exportXlsx, importXlsx } from '@bilig/headless/xlsx'", path)
-  requireIncludes(content, 'workbook.exportSnapshot()', path)
-}
-
-for (const blockedLink of ['](../../docs/', '](../../examples/', '](../../LICENSE)']) {
-  requireNotIncludes(headlessReadme, blockedLink, 'packages/headless/README.md')
-}
 
 const [headlessExampleReadme, headlessExamplePackage, headlessPackageManifest, headlessServerJson] = await Promise.all([
   readFile(join(repoRoot, 'examples', 'headless-workpaper', 'README.md'), 'utf8'),
