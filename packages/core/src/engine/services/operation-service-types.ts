@@ -1,7 +1,9 @@
 import type { Effect } from 'effect'
+import type { CompiledFormula } from '@bilig/formula'
 import type { EngineOp, EngineOpBatch } from '@bilig/workbook-domain'
 import type { CellRangeRef, CellValue, EngineChangedCell, SelectionState } from '@bilig/protocol'
 import type { EdgeSlice } from '../../edge-arena.js'
+import type { FormulaTemplateResolution } from '../../formula/template-bank.js'
 import type {
   EngineCellMutationRef,
   EngineExistingLiteralCellMutationRef,
@@ -16,6 +18,7 @@ import type { EngineMutationError } from '../errors.js'
 import type { ExactColumnIndexService } from './exact-column-index-service.js'
 import type { OperationDerivedOp } from './operation-derived-op-helpers.js'
 import type { SortedColumnSearchService } from './sorted-column-search-service.js'
+import type { BindPreparedFormulaOptions } from './formula-binding-service-types.js'
 
 export const ENGINE_OPERATION_TEST_HOOKS_ENABLED = readNodeEnv() === 'test'
 
@@ -126,6 +129,15 @@ export interface CreateEngineOperationServiceArgs {
   readonly materializePivot: (pivot: WorkbookPivotRecord) => number[]
   readonly removeFormula: (cellIndex: number) => boolean
   readonly bindFormula: (cellIndex: number, ownerSheetName: string, source: string) => boolean
+  readonly bindPreparedFormula?: (
+    cellIndex: number,
+    ownerSheetName: string,
+    source: string,
+    compiled: CompiledFormula,
+    templateId?: number,
+    options?: BindPreparedFormulaOptions,
+  ) => boolean
+  readonly compileTemplateFormula?: (source: string, row: number, col: number) => FormulaTemplateResolution
   readonly setInvalidFormulaValue: (cellIndex: number) => void
   readonly beginMutationCollection: () => void
   readonly markInputChanged: (cellIndex: number, count: number) => number

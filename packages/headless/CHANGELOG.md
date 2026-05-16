@@ -11,6 +11,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Features
+
 - feat(examples): add quote approval workpaper api (6b4dd7ea)
 
 ## 0.15.1
@@ -20,6 +21,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(headless): skip fresh append range probes (8db053b1)
 
 ## 0.15.0

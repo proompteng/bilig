@@ -284,6 +284,60 @@ describe('operation-service dense mutation fast paths', () => {
     expect(engine.getPerformanceCounters().directAggregateScanEvaluations).toBe(0)
   })
 
+  it('stores fresh row aggregate formula results without aggregate scans', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'fresh-row-aggregate-formula-results' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    const existingRows = 12
+    const appendRows = 8
+    const inputCols = 4
+    for (let row = 1; row <= existingRows; row += 1) {
+      for (let col = 0; col < inputCols; col += 1) {
+        engine.setCellValue('Sheet1', `${String.fromCharCode(65 + col)}${row}`, row * (col + 1))
+      }
+      engine.setCellFormula('Sheet1', `E${row}`, `SUM(A${row}:D${row})`)
+    }
+    engine.insertRows('Sheet1', existingRows, appendRows)
+
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+    const valueRefs: EngineCellMutationRef[] = []
+    const formulaRefs: EngineCellMutationRef[] = []
+    for (let row = 0; row < appendRows; row += 1) {
+      const rowIndex = existingRows + row
+      const rowNumber = rowIndex + 1
+      for (let col = 0; col < inputCols; col += 1) {
+        valueRefs.push({
+          sheetId,
+          mutation: { kind: 'setCellValue', row: rowIndex, col, value: rowNumber * (col + 1) },
+        })
+      }
+      formulaRefs.push({
+        sheetId,
+        mutation: { kind: 'setCellFormula', row: rowIndex, col: inputCols, formula: `SUM(A${rowNumber}:D${rowNumber})` },
+      })
+    }
+
+    engine.applyCellMutationsAt(valueRefs, valueRefs.length)
+    engine.resetPerformanceCounters()
+    engine.applyCellMutationsAt(formulaRefs, formulaRefs.length)
+
+    expect(engine.getCellValue('Sheet1', 'E13')).toEqual({ tag: ValueTag.Number, value: 130 })
+    expect(engine.getCellValue('Sheet1', 'E20')).toEqual({ tag: ValueTag.Number, value: 200 })
+    expect(engine.getLastMetrics()).toMatchObject({
+      changedInputCount: appendRows,
+      dirtyFormulaCount: 0,
+      jsFormulaCount: 0,
+      wasmFormulaCount: 0,
+    })
+    expect(engine.getPerformanceCounters().formulasBound).toBe(0)
+    expect(engine.getPerformanceCounters().directAggregateScanEvaluations).toBe(0)
+    expect(engine.getPerformanceCounters().directAggregateScanCells).toBe(0)
+
+    engine.setCellValue('Sheet1', 'A13', 99)
+    expect(engine.getCellValue('Sheet1', 'E13')).toEqual({ tag: ValueTag.Number, value: 216 })
+  })
+
   it('handles dense lookup-only numeric column coordinate batches', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'dense-lookup-fast-path', useColumnIndex: true })
     await engine.ready()

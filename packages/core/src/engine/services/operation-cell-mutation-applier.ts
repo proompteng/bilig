@@ -1,12 +1,12 @@
 import { formatAddress } from '@bilig/formula'
 import type { EngineOpBatch } from '@bilig/workbook-domain'
-import type { CellValue } from '@bilig/protocol'
-import type { EngineCellMutationRef } from '../../cell-mutations-at.js'
+import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
+import type { EngineCellMutationAt, EngineCellMutationRef } from '../../cell-mutations-at.js'
 import { batchOpOrder, markBatchApplied, type OpOrder } from '../../replica-state.js'
 import { CellFlags } from '../../cell-store.js'
 import { emptyValue, literalToValue, writeLiteralToCellStore } from '../../engine-value-utils.js'
 import { exactLookupLiteralNumericValue, withOptionalLookupStringIds } from './direct-lookup-helpers.js'
-import { DirectFormulaIndexCollection } from './direct-formula-index-collection.js'
+import { DirectFormulaIndexCollection, type DirectScalarCurrentOperand } from './direct-formula-index-collection.js'
 import { directScalarLiteralNumericValue } from './direct-scalar-helpers.js'
 import { aggregateColumnDependencyKey } from './direct-formula-recalc-helpers.js'
 import { assertNever } from './operation-change-helpers.js'
@@ -19,7 +19,7 @@ import type { OperationLookupPlanner } from './operation-lookup-planner.js'
 import type { OperationDirectRangeDependentService } from './operation-direct-range-dependents.js'
 import type { DirectFormulaMetricCounts } from './operation-post-recalc-direct-formulas.js'
 import { finalizeOperationRecalcAndEvents } from './operation-recalc-finalizer.js'
-import type { RuntimeFormula } from '../runtime-state.js'
+import type { RuntimeDirectAggregateDescriptor, RuntimeFormula } from '../runtime-state.js'
 import type { CreateEngineOperationServiceArgs, MutationSource } from './operation-service-types.js'
 
 type OperationCellMutationSource = Exclude<MutationSource, 'remote'>
@@ -549,7 +549,15 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
               const oldFormulaNumber = !isRestore && priorHadFormula ? readExactNumericValueForLookup(cellIndex) : undefined
               const compileStarted = isRestore ? 0 : performance.now()
               try {
-                const changedTopology = args.bindFormula(cellIndex, sheetName, mutation.formula)
+                const canAssumeFreshFormula =
+                  !isRestore &&
+                  existingIndex === undefined &&
+                  !priorHadFormula &&
+                  args.bindPreparedFormula !== undefined &&
+                  args.compileTemplateFormula !== undefined
+                const changedTopology = canAssumeFreshFormula
+                  ? bindFreshTemplateFormula(args, cellIndex, sheetName, mutation)
+                  : args.bindFormula(cellIndex, sheetName, mutation.formula)
                 const runtimeFormula = args.state.formulas.get(cellIndex)
                 if (hasAggregateDependents) {
                   args.invalidateAggregateColumn({ sheetName, col: mutation.col })
@@ -560,7 +568,13 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
                 clearTrackedColumnDependencyFlagCache()
                 changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
                 const canSkipTopoRepair = canSkipTopoRepairForFreshDirectAggregate(priorHadFormula, cellIndex, runtimeFormula)
-                const evaluatedFreshDirectFormula = canSkipTopoRepair && args.evaluateDirectFormula(cellIndex) !== undefined
+                const freshDirectFormulaResult = canSkipTopoRepair
+                  ? tryEvaluateFreshDirectAggregateCurrentResult(args, runtimeFormula)
+                  : undefined
+                const evaluatedFreshDirectFormula =
+                  freshDirectFormulaResult !== undefined
+                    ? applyDirectFormulaCurrentResult(cellIndex, freshDirectFormulaResult)
+                    : canSkipTopoRepair && args.evaluateDirectFormula(cellIndex) !== undefined
                 const handledFormulaReplacementAsDirectDelta =
                   priorHadFormula &&
                   !hasExactLookupDependents &&
@@ -864,5 +878,112 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
       void args.state.getSyncClientConnection()?.send(batch)
       emitBatch(batch)
     }
+  }
+}
+
+function tryEvaluateFreshDirectAggregateCurrentResult(
+  args: CreateOperationCellMutationApplierArgs['serviceArgs'],
+  formula: RuntimeFormula | undefined,
+): DirectScalarCurrentOperand | undefined {
+  if (
+    formula === undefined ||
+    formula.compiled.producesSpill ||
+    formula.directAggregate === undefined ||
+    formula.directCriteria !== undefined ||
+    formula.directLookup !== undefined ||
+    formula.directScalar !== undefined ||
+    formula.dependencyIndices.length !== 0 ||
+    formula.rangeDependencies.length !== 0 ||
+    formula.graphRangeDependencies.length !== 0
+  ) {
+    return undefined
+  }
+  const directAggregate = formula.directAggregate
+  const aggregateSheet = args.state.workbook.getSheet(directAggregate.sheetName)
+  if (!aggregateSheet) {
+    return undefined
+  }
+  const result = evaluateDirectAggregateFromCellStore(args, aggregateSheet, directAggregate)
+  if (result.kind === 'number' && directAggregate.resultOffset !== undefined) {
+    return { kind: 'number', value: result.value + directAggregate.resultOffset }
+  }
+  return result
+}
+
+function bindFreshTemplateFormula(
+  args: CreateOperationCellMutationApplierArgs['serviceArgs'],
+  cellIndex: number,
+  sheetName: string,
+  mutation: Extract<EngineCellMutationAt, { kind: 'setCellFormula' }>,
+): boolean {
+  if (args.bindPreparedFormula === undefined || args.compileTemplateFormula === undefined) {
+    return args.bindFormula(cellIndex, sheetName, mutation.formula)
+  }
+  const template = args.compileTemplateFormula(mutation.formula, mutation.row, mutation.col)
+  return args.bindPreparedFormula(cellIndex, sheetName, mutation.formula, template.compiled, template.templateId, {
+    assumeFreshFormula: true,
+  })
+}
+
+function evaluateDirectAggregateFromCellStore(
+  args: CreateOperationCellMutationApplierArgs['serviceArgs'],
+  aggregateSheet: NonNullable<ReturnType<CreateOperationCellMutationApplierArgs['serviceArgs']['state']['workbook']['getSheet']>>,
+  directAggregate: RuntimeDirectAggregateDescriptor,
+): DirectScalarCurrentOperand {
+  const cellStore = args.state.workbook.cellStore
+  let sum = 0
+  let count = 0
+  let averageCount = 0
+  let minimum = Number.POSITIVE_INFINITY
+  let maximum = Number.NEGATIVE_INFINITY
+  for (let col = directAggregate.col; col <= directAggregate.colEnd; col += 1) {
+    for (let row = directAggregate.rowStart; row <= directAggregate.rowEnd; row += 1) {
+      const memberCellIndex =
+        aggregateSheet.structureVersion === 1 ? aggregateSheet.grid.getPhysical(row, col) : aggregateSheet.grid.get(row, col)
+      if (memberCellIndex === -1) {
+        continue
+      }
+      const tag = (cellStore.tags[memberCellIndex] as ValueTag | undefined) ?? ValueTag.Empty
+      switch (tag) {
+        case ValueTag.Number: {
+          const value = cellStore.numbers[memberCellIndex] ?? 0
+          sum += value
+          count += 1
+          averageCount += 1
+          minimum = Math.min(minimum, value)
+          maximum = Math.max(maximum, value)
+          break
+        }
+        case ValueTag.Boolean: {
+          const value = (cellStore.numbers[memberCellIndex] ?? 0) !== 0 ? 1 : 0
+          sum += value
+          count += 1
+          averageCount += 1
+          minimum = Math.min(minimum, value)
+          maximum = Math.max(maximum, value)
+          break
+        }
+        case ValueTag.Error:
+          if (directAggregate.aggregateKind === 'sum' || directAggregate.aggregateKind === 'average') {
+            return { kind: 'error', code: (cellStore.errors[memberCellIndex] as ErrorCode | undefined) ?? ErrorCode.None }
+          }
+          break
+        case ValueTag.Empty:
+        case ValueTag.String:
+          break
+      }
+    }
+  }
+  switch (directAggregate.aggregateKind) {
+    case 'sum':
+      return { kind: 'number', value: sum }
+    case 'count':
+      return { kind: 'number', value: count }
+    case 'average':
+      return averageCount === 0 ? { kind: 'error', code: ErrorCode.Div0 } : { kind: 'number', value: sum / averageCount }
+    case 'min':
+      return { kind: 'number', value: minimum === Number.POSITIVE_INFINITY ? 0 : minimum }
+    case 'max':
+      return { kind: 'number', value: maximum === Number.NEGATIVE_INFINITY ? 0 : maximum }
   }
 }
