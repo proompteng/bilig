@@ -259,6 +259,16 @@ describe('workbook domain guards', () => {
     expect(isEngineOpBatch({ ...validBatch, clock: { counter: Number.MAX_SAFE_INTEGER + 1 } })).toBe(false)
   })
 
+  it('rejects unsafe sheet identity metadata', () => {
+    const unsafe = Number.MAX_SAFE_INTEGER + 1
+
+    expect(isEngineOp({ kind: 'upsertSheet', name: 'Sheet2', order: -1 })).toBe(false)
+    expect(isEngineOp({ kind: 'upsertSheet', name: 'Sheet2', order: 1.5 })).toBe(false)
+    expect(isEngineOp({ kind: 'upsertSheet', name: 'Sheet2', order: unsafe })).toBe(false)
+    expect(isEngineOp({ kind: 'upsertSheet', name: 'Sheet2', order: 1, id: 0 })).toBe(false)
+    expect(isEngineOp({ kind: 'upsertSheet', name: 'Sheet2', order: 1, id: unsafe })).toBe(false)
+  })
+
   it('rejects unsafe structural workbook op coordinates', () => {
     const unsafe = Number.MAX_SAFE_INTEGER + 1
 

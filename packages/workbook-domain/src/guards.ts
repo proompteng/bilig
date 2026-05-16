@@ -49,6 +49,10 @@ function isOptionalNumber(value: unknown): value is number | undefined {
   return value === undefined || isFiniteNumber(value)
 }
 
+function isOptionalSafePositiveInteger(value: unknown): value is number | undefined {
+  return value === undefined || isSafePositiveInteger(value)
+}
+
 function isOptionalNullableNumber(value: unknown): value is number | null | undefined {
   return value === undefined || value === null || isFiniteNumber(value)
 }
@@ -582,7 +586,7 @@ export function isWorkbookOp(value: unknown): value is WorkbookOp {
     case 'setVolatileContext':
       return isWorkbookVolatileContext(value['context'])
     case 'upsertSheet':
-      return hasString(value, 'name') && hasFiniteNumber(value, 'order') && isOptionalNumber(value['id'])
+      return hasString(value, 'name') && hasSafeNonNegativeInteger(value, 'order') && isOptionalSafePositiveInteger(value['id'])
     case 'renameSheet':
       return hasString(value, 'oldName') && hasString(value, 'newName')
     case 'deleteSheet':
