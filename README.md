@@ -17,6 +17,8 @@ Node service, queue worker, serverless route, test, or coding-agent tool.
 
 It gives you a `WorkPaper`: build sheets, write inputs, recalculate, read the
 cell value, and save the workbook as JSON. No browser grid is involved.
+The published package also carries `AGENTS.md` so coding agents inspecting
+`node_modules/@bilig/headless` can find the write/read/persist loop locally.
 
 Good fits: pricing rules, budget checks, payout models, import validation, and
 agent tools that need read-after-write proof. Bad fits: manual spreadsheet
@@ -157,7 +159,7 @@ matters.
 
 Current checked npm footprint for `@bilig/headless@0.18.27`:
 
-- Pack dry run: `425 kB` tarball, `2.54 MB` unpacked, `426` package entries.
+- Pack dry run: `426 kB` tarball, `2.55 MB` unpacked, `430` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
   import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the
   `bilig-workpaper-mcp` binary wrapper.

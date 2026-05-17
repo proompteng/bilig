@@ -134,6 +134,9 @@ function validateTarballContents(packageLabel, manifest, tarEntries, failureMess
   if (typeof manifest.mcpName === 'string') {
     requiredEntries.add('package/server.json')
   }
+  if (packageLabel === '@bilig/headless') {
+    requiredEntries.add('package/AGENTS.md')
+  }
   collectBinTargets(manifest.bin).forEach((target) => requiredEntries.add(`package/${stripDotSlash(target)}`))
 
   for (const requiredEntry of requiredEntries) {

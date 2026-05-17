@@ -256,7 +256,10 @@ await requireSharedPublicDocsDiscovery({
 
 requireIncludes(readme, 'acceptance commands for first patches.', 'README.md')
 requireIncludes(readme, 'docs/why-use-bilig.md', 'README.md')
+requireIncludes(readme, 'The published package also carries `AGENTS.md`', 'README.md')
 requireIncludes(headlessReadme, 'https://proompteng.github.io/bilig/why-use-bilig.html', 'packages/headless/README.md')
+requireIncludes(headlessReadme, 'The npm tarball also includes `AGENTS.md`', 'packages/headless/README.md')
+requireIncludes(headlessPackageJson, '"AGENTS.md"', 'packages/headless/package.json')
 requireIncludes(headlessReadme, '## Stay Connected', 'packages/headless/README.md')
 requireIncludes(headlessReadme, '## More Guides', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'Pick a scoped first patch:', 'packages/headless/README.md')

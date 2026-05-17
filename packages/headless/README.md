@@ -24,6 +24,9 @@ value, and save the workbook as JSON.
 Product code gets reviewable workbook-shaped logic without shipping a
 spreadsheet UI. Coding agents get narrow tools such as `readRange` and
 `setInputCell` instead of guessing state from screenshots.
+The npm tarball also includes `AGENTS.md` so coding agents inspecting
+`node_modules/@bilig/headless` can find the write/read/persist loop without
+leaving the package.
 
 This package is not a browser grid, desktop Excel automation, or a source of
 truth for stale XLSX cached formula values. XLSX import/export is available from
@@ -76,7 +79,7 @@ That command is published through `@bilig/create-workpaper`. The publish gate is
 
 Current checked npm footprint for `@bilig/headless@0.18.27`:
 
-- Pack dry run: `425 kB` tarball, `2.54 MB` unpacked, `426` package entries.
+- Pack dry run: `426 kB` tarball, `2.55 MB` unpacked, `430` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
   import/export stays behind the `@bilig/headless/xlsx` subpath; MCP is the
   `bilig-workpaper-mcp` binary wrapper.
