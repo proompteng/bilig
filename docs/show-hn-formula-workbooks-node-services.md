@@ -1,5 +1,5 @@
 ---
-title: "Show HN: Bilig runs small formula workbooks in Node"
+title: 'Show HN: Bilig runs small formula workbooks in Node'
 published: true
 description: A plain maintainer note for Bilig with the npm check, benchmark artifact, limits, and concrete feedback ask.
 tags: show-hn, typescript, node, spreadsheet, agents
@@ -26,7 +26,7 @@ That is the whole pitch.
 ## Try the npm package
 
 This starts from an empty directory and uses the published package. The version
-checked by this page is `@bilig/headless@0.18.3`.
+checked by this page is `@bilig/headless@0.18.4`.
 
 ```sh
 mkdir bilig-headless-eval
@@ -73,12 +73,12 @@ values are a common footgun.
 
 ## Current numbers
 
-The checked benchmark artifact currently says Bilig wins `81/100` comparable
+The checked benchmark artifact currently says Bilig wins `78/100` comparable
 workloads on mean latency against the HyperFormula-style baseline. It wins
-`81/100` on both mean and p95.
+`75/100` on both mean and p95.
 
 The miss is not hidden: `single-formula-edit-recalc` is slower at p95 by
-`1.942x`. Browser grid rendering is not part of this benchmark.
+`2.127x`. Browser grid rendering is not part of this benchmark.
 
 Read the benchmark note:
 [what the WorkPaper benchmark proves](what-workpaper-benchmark-proves.md).
@@ -138,7 +138,7 @@ Excel compatibility claim. If you need a mature broad formula engine,
 HyperFormula is probably the first thing to test. If you need file manipulation,
 start with SheetJS or ExcelJS.
 
-The current benchmark artifact says 81/100 mean-latency wins on comparable
+The current benchmark artifact says 78/100 mean-latency wins on comparable
 workloads, with the p95 miss called out on the page.
 
 I am looking for rejection reasons from people who have shipped this kind of

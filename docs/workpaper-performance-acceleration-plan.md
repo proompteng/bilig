@@ -26,11 +26,11 @@ Current checkpoint on `main`:
 - literal-only workbook initialization now hydrates directly into fresh core workbook storage
   instead of paying restore-style op execution overhead
 - the checked-in competitive artifact now shows:
-  - Overall scorecard: WorkPaper `81/100` mean wins and `81/100` mean+p95 wins
-  - Public lane: WorkPaper `59/73` mean wins
-  - Holdout lane: WorkPaper `21/27` mean wins
+  - Overall scorecard: WorkPaper `78/100` mean wins and `75/100` mean+p95 wins
+  - Public lane: WorkPaper `60/73` mean wins
+  - Holdout lane: WorkPaper `18/27` mean wins
   - current HyperFormula mean-win rows: `22/100`
-  - worst p95 WorkPaper row: `structural-insert-columns-small`
+  - worst p95 WorkPaper row: `single-formula-edit-recalc`
 
 So the remaining performance gap is no longer “lookup is completely fake” or
 “recalculation is broadly red.” The remaining gap is turning current mean wins
@@ -87,12 +87,12 @@ described below:
 
 Current closest WorkPaper wins:
 
-| Workload | Mean Ratio | Median Ratio | P95 Ratio | Confidence Overlap | Current Owner |
-| --- | ---: | ---: | ---: | --- | --- |
-| `build-mixed-content` | `0.9353922725978107` | `0.910650740069897` | `0.9302163698590503` | yes | cold mixed-sheet build, formula initialization, binding allocation |
-| `structural-insert-columns` | `0.8642535647861759` | `0.8713178294537965` | `0.871853534177693` | no | column structural transform overhead |
-| `aggregate-overlapping-sliding-window` | `0.8335704735358855` | `0.8348433734901536` | `0.7703596194107942` | yes | aggregate reuse tail hardening |
-| `build-many-sheets` | `0.8007693406232433` | `0.8106821067908949` | `0.7722547970783897` | no | multi-sheet construction overhead |
+| Workload                               |           Mean Ratio |         Median Ratio |            P95 Ratio | Confidence Overlap | Current Owner                                                      |
+| -------------------------------------- | -------------------: | -------------------: | -------------------: | ------------------ | ------------------------------------------------------------------ |
+| `build-mixed-content`                  | `0.9353922725978107` |  `0.910650740069897` | `0.9302163698590503` | yes                | cold mixed-sheet build, formula initialization, binding allocation |
+| `structural-insert-columns`            | `0.8642535647861759` | `0.8713178294537965` |  `0.871853534177693` | no                 | column structural transform overhead                               |
+| `aggregate-overlapping-sliding-window` | `0.8335704735358855` | `0.8348433734901536` | `0.7703596194107942` | yes                | aggregate reuse tail hardening                                     |
+| `build-many-sheets`                    | `0.8007693406232433` | `0.8106821067908949` | `0.7722547970783897` | no                 | multi-sheet construction overhead                                  |
 
 The repo now also tracks the broader active goal in
 `packages/benchmarks/baselines/bilig-dominance-scorecard.json`. That scorecard
@@ -155,14 +155,14 @@ Reviewed current `bilig` implementation:
 Current legacy control-workload direct-comparison results from
 `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`:
 
-| Workload | `WorkPaper` mean | HyperFormula mean | Current result |
-| --- | ---: | ---: | --- |
-| `build-from-sheets` | `0.833ms` | `3.897ms` | `WorkPaper` `4.68x` faster |
-| `single-edit-recalc` | `1.373ms` | `2.211ms` | `WorkPaper` `1.61x` faster |
-| `batch-edit-recalc` | `1.580ms` | `0.927ms` | HyperFormula `1.70x` faster |
-| `range-read` | `0.217ms` | `0.220ms` | `WorkPaper` `1.01x` faster |
-| `lookup-no-column-index` | `0.240ms` | `0.362ms` | `WorkPaper` `1.51x` faster |
-| `lookup-with-column-index` | `0.232ms` | `0.192ms` | HyperFormula `1.21x` faster |
+| Workload                   | `WorkPaper` mean | HyperFormula mean | Current result              |
+| -------------------------- | ---------------: | ----------------: | --------------------------- |
+| `build-from-sheets`        |        `0.833ms` |         `3.897ms` | `WorkPaper` `4.68x` faster  |
+| `single-edit-recalc`       |        `1.373ms` |         `2.211ms` | `WorkPaper` `1.61x` faster  |
+| `batch-edit-recalc`        |        `1.580ms` |         `0.927ms` | HyperFormula `1.70x` faster |
+| `range-read`               |        `0.217ms` |         `0.220ms` | `WorkPaper` `1.01x` faster  |
+| `lookup-no-column-index`   |        `0.240ms` |         `0.362ms` | `WorkPaper` `1.51x` faster  |
+| `lookup-with-column-index` |        `0.232ms` |         `0.192ms` | HyperFormula `1.21x` faster |
 
 This is the important reading:
 
@@ -557,10 +557,10 @@ it is not a stable production regression.
 
 Acceptance:
 
-- WorkPaper improves from the current `81/100` scorecard-eligible comparable
+- WorkPaper improves from the current `78/100` scorecard-eligible comparable
   mean winners without reducing benchmark coverage
-- public lane remains visible and improves from the current `59/73` mean wins
-- holdout lane remains visible and improves from the current `21/27` mean wins
+- public lane remains visible and improves from the current `60/73` mean wins
+- holdout lane remains visible and improves from the current `18/27` mean wins
 - closest wins gain margin without changing benchmark sampling or verification
 - top-level dominance scorecard remains current and blocks blanket `10x`
   language until direct Sheets / Excel evidence exists

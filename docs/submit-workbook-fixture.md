@@ -29,6 +29,15 @@ Common clinic cases include stale cached XLSX formula values, ExcelJS shared
 formulas that need expansion before recalculation, unsupported formula families,
 and agent-tool workflows that cannot prove read-after-write calculation.
 
+If the workbook is already reduced, generate a local paste-ready report:
+
+```sh
+curl -fsSLo formula-clinic-report.ts \
+  https://proompteng.github.io/bilig/formula-clinic-report.ts
+npx tsx formula-clinic-report.ts ./reduced.xlsx \
+  --cells "Summary!B7,Inputs!B2"
+```
+
 ## What To Send
 
 Send the smallest public case that proves the behavior.
@@ -58,7 +67,7 @@ cd bilig-fixture-check
 npm init -y
 npm pkg set type=module
 npm install @bilig/headless
-npm install --save-dev tsx typescript
+npm install --save-dev tsx typescript @types/node
 ```
 
 For an XLSX case inside this repository, prefer the corpus checker:

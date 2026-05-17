@@ -444,11 +444,11 @@ function readNumber(cell: unknown): number {
               <div class="proof-result">
                 <div class="proof-metric">
                   <span class="proof-label">comparable mean rows</span>
-                  <strong>81/100</strong>
+                  <strong>78/100</strong>
                 </div>
                 <p>
-                  81 of 100 comparable mean-latency rows are faster in the checked file. single-formula-edit-recalc is slower at p95:
-                  <code>1.942x</code>. Browser UI rendering is not part of this benchmark.
+                  78 of 100 comparable mean-latency rows are faster in the checked file. single-formula-edit-recalc is slower at p95:
+                  <code>2.127x</code>. Browser UI rendering is not part of this benchmark.
                 </p>
               </div>
 
@@ -465,7 +465,7 @@ function readNumber(cell: unknown): number {
                 </div>
                 <div class="proof-fact">
                   <dt>Caveat</dt>
-                  <dd>single-formula-edit-recalc is slower at p95: <code>1.942x</code>.</dd>
+                  <dd>single-formula-edit-recalc is slower at p95: <code>2.127x</code>.</dd>
                 </div>
                 <div class="proof-fact">
                   <dt>Out of scope</dt>
@@ -545,6 +545,11 @@ function readNumber(cell: unknown): number {
               <span>clinic</span>
               <strong>Bring a formula or XLSX blocker.</strong>
               <em>Reduce stale caches, shared formulas, unsupported functions, and agent readback failures into public proof.</em>
+            </a>
+            <a class="path-link" href="./formula-clinic-report.ts">
+              <span>report</span>
+              <strong>Generate a local clinic report.</strong>
+              <em>Run a curlable TypeScript script against a reduced workbook and paste the Markdown output into GitHub.</em>
             </a>
             <a class="path-link" href="https://github.com/proompteng/bilig/issues?q=is%3Aissue%20state%3Aopen%20label%3Afirst-timers-only">
               <span>contribute</span>
@@ -712,6 +717,7 @@ function readNumber(cell: unknown): number {
                 <li><a href="./headless-spreadsheet-engine-comparison.html">engine comparison</a></li>
                 <li><a href="./where-bilig-is-not-excel-compatible-yet.html">compatibility limits</a></li>
                 <li><a href="./formula-bug-clinic.html">formula bug clinic</a></li>
+                <li><a href="./formula-clinic-report.ts">formula clinic report script</a></li>
                 <li><a href="./submit-workbook-fixture.html">submit a workbook fixture</a></li>
                 <li><a href="https://github.com/proompteng/bilig/discussions/414">fixture discussion</a></li>
                 <li><a href="https://github.com/proompteng/bilig/blob/main/docs/starter-issues.md">starter issues</a></li>

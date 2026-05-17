@@ -55,7 +55,7 @@ export function requireFormulaProofDiscovery({
   requireIncludes(communityLaunchPack, 'Hacker News Submission After The Formula Workbooks Page', 'docs/community-launch-pack.md')
 
   for (const required of [
-    'title: "Show HN: Bilig runs small formula workbooks in Node"',
+    "title: 'Show HN: Bilig runs small formula workbooks in Node'",
     `\`@bilig/headless@${headlessPackageVersion}\``,
     'curl -fsSLo quickstart.ts https://proompteng.github.io/bilig/npm-eval.ts',
     '"verified": true',

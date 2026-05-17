@@ -36,6 +36,7 @@ openssf scorecard: https://scorecard.dev/viewer/?uri=github.com/proompteng/bilig
 - https://proompteng.github.io/bilig/production-adoption-checklist-headless-workpaper.html
 - https://proompteng.github.io/bilig/npm-provenance-package-trust.html
 - https://proompteng.github.io/bilig/formula-bug-clinic.html
+- https://proompteng.github.io/bilig/formula-clinic-report.ts
 - https://proompteng.github.io/bilig/submit-workbook-fixture.html
 - https://scorecard.dev/viewer/?uri=github.com/proompteng/bilig
 - https://proompteng.github.io/bilig/npm-eval.ts
@@ -180,7 +181,7 @@ npm run agent:verify
   https://proompteng.github.io/bilig/show-hn-formula-workbooks-node-services.html
   https://github.com/proompteng/bilig/blob/main/docs/show-hn-formula-workbooks-node-services.md
   compresses the empty npm project proof, WorkPaper JSON restore check,
-  `81/100` mean-win benchmark claim, `81/100` mean+p95 claim, visible single-formula-edit-recalc p95 caveat, and adoption-blocker
+  `78/100` mean-win benchmark claim, `75/100` mean+p95 claim, visible single-formula-edit-recalc p95 caveat, and adoption-blocker
   feedback ask.
 - JavaScript spreadsheet library guide for Node services:
   https://github.com/proompteng/bilig/blob/main/docs/javascript-spreadsheet-library-headless-node.md
@@ -210,6 +211,12 @@ npm run agent:verify
   failures, unsupported formulas, WorkPaper restore mismatches, and agent
   readback blockers into public fixtures that can become tests, examples, or
   docs proof.
+- formula clinic report script:
+  https://proompteng.github.io/bilig/formula-clinic-report.ts
+  https://github.com/proompteng/bilig/blob/main/docs/formula-clinic-report.ts
+  runs locally against a reduced XLSX file, imports it with @bilig/headless,
+  reads requested output cells, and prints a paste-ready Markdown report for
+  the fixture issue form.
 - Microsoft Graph Excel recalculation in Node.js:
   https://proompteng.github.io/bilig/microsoft-graph-excel-recalculation-node.html
   https://github.com/proompteng/bilig/blob/main/docs/microsoft-graph-excel-recalculation-node.md

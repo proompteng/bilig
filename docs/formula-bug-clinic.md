@@ -30,6 +30,29 @@ Open the fixture form:
 Discuss the shape first:
 <https://github.com/proompteng/bilig/discussions/414>.
 
+## Generate a local report
+
+If the workbook is already reduced, run the clinic reporter locally and paste
+the Markdown output into the fixture form. It reads the file on your machine and
+does not upload workbook contents.
+
+```sh
+mkdir bilig-formula-clinic
+cd bilig-formula-clinic
+npm init -y
+npm pkg set type=module
+npm install @bilig/headless
+npm install --save-dev tsx typescript @types/node
+curl -fsSLo formula-clinic-report.ts \
+  https://proompteng.github.io/bilig/formula-clinic-report.ts
+npx tsx formula-clinic-report.ts ./reduced.xlsx \
+  --cells "Summary!B7,Inputs!B2"
+```
+
+Use `--cells` for the output cells that prove the bug. The report includes
+import warnings, formula samples, requested readback, and a paste-ready fixture
+checklist.
+
 ## What to send
 
 Send one reduced public fixture, not the whole production workbook.
@@ -85,7 +108,7 @@ cd bilig-fixture-check
 npm init -y
 npm pkg set type=module
 npm install @bilig/headless
-npm install --save-dev tsx typescript
+npm install --save-dev tsx typescript @types/node
 ```
 
 If the script is short enough to paste into an issue, it is probably a good
