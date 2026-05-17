@@ -104,6 +104,16 @@ function requireIncludes(haystack: string, needle: string, context: string): voi
   }
 }
 
+function requireIncludesIgnoringWhitespace(haystack: string, needle: string, context: string): void {
+  if (!normalizeWhitespace(haystack).includes(normalizeWhitespace(needle))) {
+    throw new Error(`${context} is missing ${needle}`)
+  }
+}
+
+function normalizeWhitespace(value: string): string {
+  return value.replace(/\s+/gu, ' ').trim()
+}
+
 function requireBenchmarkTableRow(content: string, lane: string, comparableCount: number, workpaperWins: number, context: string): void {
   const pattern = new RegExp(
     `\\| ${lane}\\s+\\|\\s+\`${comparableCount.toString()}\`\\s+\\|\\s+\`${workpaperWins.toString()}\`\\s+\\|`,
@@ -335,7 +345,7 @@ async function assertPublicSurfaces(evidence: PublicEvidence): Promise<void> {
     `${overall.workpaperWins.toString()} of ${overall.comparableCount.toString()} comparable mean-latency rows`,
     'docs/index.html',
   )
-  requireIncludes(index, `${overall.worstP95RatioWorkload} is slower at p95: <code>${p95Ratio}</code>`, 'docs/index.html')
+  requireIncludesIgnoringWhitespace(index, `${overall.worstP95RatioWorkload} is slower at p95: <code>${p95Ratio}</code>`, 'docs/index.html')
 
   for (const [path, content] of [
     ['docs/what-workpaper-benchmark-proves.md', benchmarkExplainer],
