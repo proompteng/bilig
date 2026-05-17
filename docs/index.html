@@ -444,11 +444,11 @@ function readNumber(cell: unknown): number {
               <div class="proof-result">
                 <div class="proof-metric">
                   <span class="proof-label">comparable mean rows</span>
-                  <strong>77/100</strong>
+                  <strong>76/100</strong>
                 </div>
                 <p>
-                  77 of 100 comparable mean-latency rows are faster in the checked file. structural-append-formula-rows is slower at p95:
-                  <code>1.785x</code>. Browser UI rendering is not part of this benchmark.
+                  76 of 100 comparable mean-latency rows are faster in the checked file. single-formula-edit-recalc is slower at p95:
+                  <code>5.426x</code>. Browser UI rendering is not part of this benchmark.
                 </p>
               </div>
 
@@ -465,7 +465,7 @@ function readNumber(cell: unknown): number {
                 </div>
                 <div class="proof-fact">
                   <dt>Caveat</dt>
-                  <dd>structural-append-formula-rows is slower at p95: <code>1.785x</code>.</dd>
+                  <dd>single-formula-edit-recalc is slower at p95: <code>5.426x</code>.</dd>
                 </div>
                 <div class="proof-fact">
                   <dt>Out of scope</dt>
@@ -650,6 +650,9 @@ function readNumber(cell: unknown): number {
                 <li><a href="./agent-workpaper-tool-calling-recipe.html">agent tool-calling recipe</a></li>
                 <li><a href="./openai-responses-workpaper-tool-call.html">OpenAI Responses tool calls</a></li>
                 <li><a href="./agent-spreadsheet-tool-call-loop.html">agent spreadsheet tool-call loop</a></li>
+                <li>
+                  <a href="./agent-xlsx-formula-recalculation-without-libreoffice.html">agent XLSX recalculation without LibreOffice</a>
+                </li>
                 <li><a href="./vercel-ai-sdk-langchain-spreadsheet-tool.html">Agent framework tools</a></li>
                 <li><a href="./mastra-workpaper-spreadsheet-tool.html">Mastra spreadsheet tool</a></li>
                 <li><a href="./llamaindex-workpaper-spreadsheet-tool.html">LlamaIndex.TS spreadsheet tool</a></li>
@@ -682,6 +685,11 @@ function readNumber(cell: unknown): number {
                 <li><a href="./xlsx-recalculation-proof.html">curlable XLSX recalculation proof</a></li>
                 <li><a href="./xlsx-recalculation-proof.ts">downloadable proof script</a></li>
                 <li><a href="./xlsx-formula-recalculation-node.html">XLSX formula recalculation in Node.js</a></li>
+                <li>
+                  <a href="./agent-xlsx-formula-recalculation-without-libreoffice.html"
+                    >agent XLSX formula recalculation without LibreOffice</a
+                  >
+                </li>
                 <li>
                   <a href="./excel-file-calculation-engine-node.html">Excel file as a Node calculation engine</a>
                 </li>

@@ -48,7 +48,7 @@ the value again.
 
 It is for backend and agent workflows where formulas are product logic, not for
 manual spreadsheet editing. The benchmark and compatibility gaps are public:
-77/100 comparable mean-latency rows are faster in the checked WorkPaper vs
+76/100 comparable mean-latency rows are faster in the checked WorkPaper vs
 HyperFormula artifact, the worst p95 holdout is named, and UI rendering
 is out of scope.
 

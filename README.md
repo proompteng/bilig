@@ -32,6 +32,7 @@ Project site: <https://proompteng.github.io/bilig/>
 | Published npm package    | [90-second Node quickstart](docs/try-bilig-headless-in-node.md)                                                          | It edits one input, recalculates, persists JSON, restores, and prints `verified: true`.     |
 | Backend service shape    | [Quote approval WorkPaper API](docs/quote-approval-workpaper-api.md)                                                     | A realistic route-style workflow returns formula readback and `restoredMatchesAfter: true`. |
 | Agent or MCP tools       | [MCP spreadsheet tool server](docs/mcp-workpaper-tool-server.md)                                                         | Tool calls can write an input and return computed readback instead of screenshot claims.    |
+| Agent-owned XLSX files   | [Agent XLSX recalculation without LibreOffice](docs/agent-xlsx-formula-recalculation-without-libreoffice.md)             | A tool can edit XLSX inputs, recalculate, export, reimport, and return `verified: true`.    |
 | Public technical review  | [Show HN maintainer note](docs/show-hn-formula-workbooks-node-services.md)                                               | One shareable page has the npm check, benchmark caveat, known limits, and feedback ask.     |
 | Trust and performance    | [npm provenance](docs/npm-provenance-package-trust.md) and [benchmark evidence](docs/what-workpaper-benchmark-proves.md) | npm shows SLSA provenance, and benchmark claims match the checked artifact.                 |
 | Almost a fit             | [adoption blocker form](https://github.com/proompteng/bilig/discussions/new?category=general)                            | Name the formula, import/export, persistence, framework, MCP, package, or benchmark gap.    |
@@ -153,7 +154,7 @@ matters.
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.18.5`:
+Current checked npm footprint for `@bilig/headless@0.18.6`:
 
 - Pack dry run: `423 kB` tarball, `2.53 MB` unpacked, `429` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
@@ -167,11 +168,11 @@ Current checked npm footprint for `@bilig/headless@0.18.5`:
 
 ## Published Package Trust
 
-`@bilig/headless@0.18.5` is published with npm registry signatures and SLSA
+`@bilig/headless@0.18.6` is published with npm registry signatures and SLSA
 provenance attestations. Verify the package before adopting it:
 
 ```sh
-npm view @bilig/headless@0.18.5 version dist.attestations dist.signatures --json
+npm view @bilig/headless@0.18.6 version dist.attestations dist.signatures --json
 ```
 
 After installing, npm can verify the current dependency tree:
@@ -231,6 +232,7 @@ the [MCP server guide](docs/mcp-workpaper-tool-server.md),
 [JavaScript library comparison](docs/javascript-spreadsheet-library-headless-node.md),
 [headless spreadsheet engine for Node services and agents](docs/headless-spreadsheet-engine-node-services-agents.md),
 [XLSX formula recalculation in Node.js](docs/xlsx-formula-recalculation-node.md),
+[agent XLSX formula recalculation without LibreOffice](docs/agent-xlsx-formula-recalculation-without-libreoffice.md),
 [Excel file as a Node calculation engine](docs/excel-file-calculation-engine-node.md),
 [stale XLSX formula cache in Node.js](docs/stale-xlsx-formula-cache-node.md),
 [Microsoft Graph Excel recalculation in Node.js](docs/microsoft-graph-excel-recalculation-node.md),
@@ -355,9 +357,9 @@ It is published in the official MCP Registry as
   It keeps the empty npm-project command, `verified: true` output, benchmark
   caveat, known limits, and feedback ask together.
 - Run `pnpm workpaper:bench:competitive:check`. The checked-in artifact shows
-  [`77/100` comparable WorkPaper mean wins](docs/what-workpaper-benchmark-proves.md)
+  [`76/100` comparable WorkPaper mean wins](docs/what-workpaper-benchmark-proves.md)
   and names the worst p95 holdout:
-  `structural-append-formula-rows` at `1.785x`.
+  `single-formula-edit-recalc` at `5.426x`.
 - The benchmark card is generated from that artifact:
   [`docs/assets/workpaper-benchmark-card.png`](docs/assets/workpaper-benchmark-card.png).
 - Read the [compatibility limits](docs/where-bilig-is-not-excel-compatible-yet.md)

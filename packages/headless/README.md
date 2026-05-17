@@ -33,6 +33,7 @@ around the same WorkPaper model.
 | Backend service shape    | [Quote approval WorkPaper API](https://proompteng.github.io/bilig/quote-approval-workpaper-api.html)                                                                                     | A realistic route-style workflow returns formula readback and `restoredMatchesAfter: true`.  |
 | XLSX import/export       | [XLSX formula recalculation example](https://github.com/proompteng/bilig/tree/main/examples/xlsx-recalculation-node)                                                                     | It imports XLSX, edits inputs, recalculates, exports XLSX, reimports, and verifies formulas. |
 | Agent or MCP tools       | [MCP spreadsheet tool server](https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html)                                                                                         | Tool calls can write an input and return computed readback instead of screenshot claims.     |
+| Agent-owned XLSX files   | [Agent XLSX recalculation without LibreOffice](https://proompteng.github.io/bilig/agent-xlsx-formula-recalculation-without-libreoffice.html)                                             | A tool can edit XLSX inputs, recalculate, export, reimport, and return `verified: true`.     |
 | Public technical review  | [Show HN maintainer note](https://proompteng.github.io/bilig/show-hn-formula-workbooks-node-services.html)                                                                               | One shareable page has the npm check, benchmark caveat, known limits, and feedback ask.      |
 | Trust and performance    | [npm provenance](https://proompteng.github.io/bilig/npm-provenance-package-trust.html) and [benchmark evidence](https://proompteng.github.io/bilig/what-workpaper-benchmark-proves.html) | npm shows SLSA provenance, and benchmark claims match the checked artifact.                  |
 | Almost a fit             | [adoption blocker form](https://github.com/proompteng/bilig/discussions/new?category=general)                                                                                            | Name the formula, import/export, persistence, framework, MCP, package, or benchmark gap.     |
@@ -63,7 +64,7 @@ The generated-project command is being prepared as
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.18.5`:
+Current checked npm footprint for `@bilig/headless@0.18.6`:
 
 - Pack dry run: `423 kB` tarball, `2.53 MB` unpacked, `429` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
@@ -77,11 +78,11 @@ Current checked npm footprint for `@bilig/headless@0.18.5`:
 
 ## Published Package Trust
 
-`@bilig/headless@0.18.5` is published with npm registry signatures and SLSA
+`@bilig/headless@0.18.6` is published with npm registry signatures and SLSA
 provenance attestations. Check the package before adopting it in a service:
 
 ```sh
-npm view @bilig/headless@0.18.5 version dist.attestations dist.signatures --json
+npm view @bilig/headless@0.18.6 version dist.attestations dist.signatures --json
 npm audit signatures
 ```
 
@@ -510,9 +511,9 @@ pnpm workpaper:xlsx-corpus:check -- /path/to/xlsx-corpus
   should be checked against a fresh Microsoft Excel recalculation.
 - Run `pnpm workpaper:bench:competitive:check` from the repository. The
   checked-in artifact shows
-  [`77/100` comparable WorkPaper mean wins](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md)
+  [`76/100` comparable WorkPaper mean wins](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md)
   and names the worst p95 holdout:
-  `structural-append-formula-rows` at `1.785x`.
+  `single-formula-edit-recalc` at `5.426x`.
 - The shareable benchmark card is generated from the checked-in artifact:
   [`workpaper-benchmark-card.png`](https://github.com/proompteng/bilig/blob/main/docs/assets/workpaper-benchmark-card.png).
 - Read the

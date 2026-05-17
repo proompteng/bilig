@@ -106,6 +106,10 @@ if (typeof parsedHeadlessPackageVersion !== 'string') {
 }
 const headlessPackageVersion = parsedHeadlessPackageVersion
 const xlsxFormulaRecalculationNode = await readFile(join(docsRoot, 'xlsx-formula-recalculation-node.md'), 'utf8')
+const agentXlsxFormulaRecalculationWithoutLibreOffice = await readFile(
+  join(docsRoot, 'agent-xlsx-formula-recalculation-without-libreoffice.md'),
+  'utf8',
+)
 const staleXlsxFormulaCacheNode = await readFile(join(docsRoot, 'stale-xlsx-formula-cache-node.md'), 'utf8')
 const microsoftGraphExcelRecalculationNode = await readFile(join(docsRoot, 'microsoft-graph-excel-recalculation-node.md'), 'utf8')
 const formulaWorkbooksProof = await readFile(join(docsRoot, 'formula-workbooks-node-services-agent-tools.md'), 'utf8')
@@ -156,6 +160,7 @@ for (const required of [
   './xlsx-formula-recalculation-node.html',
   './xlsx-recalculation-proof.html',
   './xlsx-recalculation-proof.ts',
+  './agent-xlsx-formula-recalculation-without-libreoffice.html',
   './stale-xlsx-formula-cache-node.html',
   './xlsx-template-formula-recalculation-node.html',
   './xlsx-populate-formula-result-node.html',
@@ -534,15 +539,22 @@ requireIncludes(headlessReadme, 'https://api.scorecard.dev/projects/github.com/p
 requireIncludes(headlessReadme, 'uploaded to GitHub code scanning on every `main` update', 'packages/headless/README.md')
 requireIncludes(readme, 'examples/xlsx-recalculation-node', 'README.md')
 requireIncludes(readme, 'docs/xlsx-formula-recalculation-node.md', 'README.md')
+requireIncludes(readme, 'docs/agent-xlsx-formula-recalculation-without-libreoffice.md', 'README.md')
 requireIncludes(readme, 'docs/excel-file-calculation-engine-node.md', 'README.md')
 requireIncludes(readme, 'docs/exceljs-shared-formula-recalculation-node.md', 'README.md')
 requireIncludes(headlessReadme, 'examples/xlsx-recalculation-node', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'docs/xlsx-formula-recalculation-node.md', 'packages/headless/README.md')
+requireIncludes(
+  headlessReadme,
+  'https://proompteng.github.io/bilig/agent-xlsx-formula-recalculation-without-libreoffice.html',
+  'packages/headless/README.md',
+)
 requireIncludes(headlessReadme, 'docs/excel-file-calculation-engine-node.md', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'docs/exceljs-shared-formula-recalculation-node.md', 'packages/headless/README.md')
 requireIncludes(index, 'examples/xlsx-recalculation-node', 'docs/index.html')
 requireIncludes(index, './xlsx-formula-recalculation-node.html', 'docs/index.html')
 requireIncludes(index, './xlsx-recalculation-proof.html', 'docs/index.html')
+requireIncludes(index, './agent-xlsx-formula-recalculation-without-libreoffice.html', 'docs/index.html')
 requireIncludes(index, './excel-file-calculation-engine-node.html', 'docs/index.html')
 requireIncludes(index, './exceljs-shared-formula-recalculation-node.html', 'docs/index.html')
 requireIncludes(index, './xlsx-template-formula-recalculation-node.html', 'docs/index.html')
@@ -553,6 +565,23 @@ requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/xlsx-f
 requireIncludes(llms, 'https://proompteng.github.io/bilig/xlsx-recalculation-proof.html', 'docs/llms.txt')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/xlsx-recalculation-proof.ts', 'docs/llms.txt')
 requireIncludes(llms, 'creates an XLSX workbook, edits inputs, recalculates formulas in Node.js', 'docs/llms.txt')
+for (const required of [
+  'title: Agent XLSX formula recalculation without LibreOffice',
+  'canonical_url: https://proompteng.github.io/bilig/agent-xlsx-formula-recalculation-without-libreoffice.html',
+  'curl -fsSLO https://proompteng.github.io/bilig/xlsx-recalculation-proof.ts',
+  '"formulasSurvivedXlsxRoundTrip": true',
+  'verified: true',
+  '[MCP spreadsheet tool server](mcp-workpaper-tool-server.md)',
+]) {
+  requireIncludes(agentXlsxFormulaRecalculationWithoutLibreOffice, required, 'docs/agent-xlsx-formula-recalculation-without-libreoffice.md')
+}
+requireIncludes(llms, 'https://proompteng.github.io/bilig/agent-xlsx-formula-recalculation-without-libreoffice.html', 'docs/llms.txt')
+requireIncludes(
+  llms,
+  'https://github.com/proompteng/bilig/blob/main/docs/agent-xlsx-formula-recalculation-without-libreoffice.md',
+  'docs/llms.txt',
+)
+requireIncludes(llms, 'gives spreadsheet agents a Node.js tool contract', 'docs/llms.txt')
 requireIncludes(llms, 'https://proompteng.github.io/bilig/excel-file-calculation-engine-node.html', 'docs/llms.txt')
 requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/excel-file-calculation-engine-node.md', 'docs/llms.txt')
 requireIncludes(llms, 'covers backend routes that write request inputs into an XLSX workbook', 'docs/llms.txt')
