@@ -359,6 +359,56 @@ function dispatchOpenAiWorkPaperCall(call: OpenAiWorkPaperCall): OpenAiToolResul
 }
 ```
 
+## OpenAI Responses Streaming Transcript
+
+The transcript below shows the same wrapper shape when your application streams
+the Responses turn. The stream emits model `function_call` items, your Node
+process executes the WorkPaper tools, and the next input includes matching
+`function_call_output` items. The final answer is grounded in the computed
+formula readback from WorkPaper.
+
+```json
+[
+  {
+    "stream": "model",
+    "type": "function_call",
+    "call_id": "call_read_01",
+    "name": "read_workpaper_summary",
+    "arguments": "{\"range\":\"Summary!A1:B3\"}"
+  },
+  {
+    "stream": "model",
+    "type": "function_call",
+    "call_id": "call_write_01",
+    "name": "set_workpaper_input_cell",
+    "arguments": "{\"sheetName\":\"Revenue\",\"address\":\"B3\",\"value\":25}"
+  },
+  {
+    "stream": "app",
+    "type": "function_call_output",
+    "call_id": "call_read_01",
+    "output": "{\"range\":\"Summary!A1:B3\",\"values\":[[\"Metric\",\"Value\"],[\"Current MRR\",10500],[\"Next month MRR\",11550]],\"serialized\":[[\"Metric\",\"Value\"],[\"Current MRR\",\"=SUM(Revenue!D2:D3)\"],[\"Next month MRR\",\"=B2*(1+Assumptions!B2)\"]]}"
+  },
+  {
+    "stream": "app",
+    "type": "function_call_output",
+    "call_id": "call_write_01",
+    "output": "{\"editedCell\":\"Revenue!B3\",\"before\":{\"currentMrr\":10500,\"nextMonthMrr\":11550},\"after\":{\"currentMrr\":13500,\"nextMonthMrr\":14850},\"checks\":{\"currentMrrChanged\":true,\"nextMonthMrrChanged\":true,\"serializedBytes\":1155}}"
+  },
+  {
+    "stream": "model",
+    "type": "message",
+    "content": "Edited Revenue!B3. Current MRR moved from 10500 to 13500, and next month MRR moved from 11550 to 14850."
+  }
+]
+```
+
+Use this as a transcript shape, not as a reason to add the OpenAI SDK to the
+example package. The important handoff is that each `function_call_output`
+returns structured WorkPaper data, especially `editedCell`, `before`, `after`,
+and `checks`, so the model's final message cites calculated cells that your
+application verified.
+
 The object returned to OpenAI should be the same object you would log in a local
 smoke test: `editedCell`, `before`, `after`, and `checks`. That makes the final
 assistant message explain the workbook change from computed readback instead of
