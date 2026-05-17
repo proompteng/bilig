@@ -114,6 +114,7 @@ export async function requireSharedPublicDocsDiscovery(args: {
     [
       'https://github.com/proompteng/bilig/discussions/new?category=general',
       'https://github.com/proompteng/bilig/issues/new?template=workbook_fixture.yml',
+      'https://github.com/proompteng/bilig/discussions/414',
       'adoption blocker',
       'submit a workbook fixture',
     ],

@@ -12,6 +12,9 @@ contact_links:
   - name: Submit a workbook fixture
     url: https://proompteng.github.io/bilig/submit-workbook-fixture.html
     about: Share a reduced public workbook or automation case that should become a test, example, or corpus fixture.
+  - name: Fixture discussion
+    url: https://github.com/proompteng/bilig/discussions/414
+    about: Discuss reduced workbook cases before turning them into public fixtures.
   - name: Feedback discussion
     url: https://github.com/proompteng/bilig/discussions/157
     about: Share Node service, coding-agent, or workbook automation feedback that is not a bug or reduced formula mismatch.

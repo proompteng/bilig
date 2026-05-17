@@ -534,6 +534,8 @@ If it almost matches but a gap blocks adoption, use the adoption blocker form:
 If a reduced workbook, import/export case, or service workflow would prove the
 gap better, submit a public fixture:
 <https://github.com/proompteng/bilig/issues/new?template=workbook_fixture.yml>.
+Fixture discussion:
+<https://github.com/proompteng/bilig/discussions/414>.
 
 ## Production Status
 

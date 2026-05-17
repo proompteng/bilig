@@ -203,6 +203,8 @@ Use the shortest path that proves the package against a real job.
    become a test, example, or corpus case instead of private feedback.
    Form:
    <https://github.com/proompteng/bilig/issues/new?template=workbook_fixture.yml>.
+   Discussion:
+   <https://github.com/proompteng/bilig/discussions/414>.
 
 The rest of the docs are an index, not a prerequisite.
 

@@ -392,6 +392,8 @@ npm run agent:verify
 - submit a workbook fixture: reduced public workbook cases that should become tests,
   examples, docs, or corpus fixtures:
   https://github.com/proompteng/bilig/issues/new?template=workbook_fixture.yml
+- public fixture discussion for reduced workbook cases:
+  https://github.com/proompteng/bilig/discussions/414
 - watch release notifications for production evaluation:
   https://github.com/proompteng/bilig/subscription
 - feedback discussion for agent and service workflow input:

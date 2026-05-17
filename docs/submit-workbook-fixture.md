@@ -19,6 +19,10 @@ of these artifacts:
 Open the fixture form:
 <https://github.com/proompteng/bilig/issues/new?template=workbook_fixture.yml>.
 
+If you want to discuss the shape before opening a fixture issue, use the public
+fixture discussion:
+<https://github.com/proompteng/bilig/discussions/414>.
+
 ## What To Send
 
 Send the smallest public case that proves the behavior.
@@ -85,3 +89,5 @@ runtime limitation, or a better tool for that job.
 If Bilig almost works for a real workbook, do not describe the whole private
 system. Send one reduced public case with expected output:
 <https://github.com/proompteng/bilig/issues/new?template=workbook_fixture.yml>.
+
+Discussion: <https://github.com/proompteng/bilig/discussions/414>.
