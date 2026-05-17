@@ -26,7 +26,7 @@ module.exports = {
     },
     {
       name: 'no-orphans',
-      severity: 'warn',
+      severity: 'error',
       comment: 'Surface unreachable source files so they can be deleted instead of lingering.',
       from: {
         orphan: true,

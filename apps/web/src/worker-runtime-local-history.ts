@@ -1,6 +1,11 @@
 import type { SpreadsheetEngine } from '@bilig/core'
 import type { WorkerEngine } from './worker-runtime-support.js'
 
+interface WorkerRuntimeHistoryEngine {
+  canUndo(): boolean
+  canRedo(): boolean
+}
+
 export interface WorkerRuntimeLocalHistoryState {
   readonly canUndo: boolean
   readonly canRedo: boolean
@@ -12,7 +17,7 @@ export interface WorkerRuntimeLocalHistoryContext {
   readonly updateRuntimeStateFromEngine: (engine: SpreadsheetEngine & WorkerEngine) => void
 }
 
-export function buildWorkerRuntimeLocalHistoryState(engine: (SpreadsheetEngine & WorkerEngine) | null): WorkerRuntimeLocalHistoryState {
+export function buildWorkerRuntimeLocalHistoryState(engine: WorkerRuntimeHistoryEngine | null): WorkerRuntimeLocalHistoryState {
   if (!engine) {
     return {
       canUndo: false,

@@ -32,17 +32,17 @@ import {
 import { acquireProjectionEngine } from './worker-runtime-projection-engine.js'
 import { WorkerRuntimeProjectionCommands } from './worker-runtime-projection-commands.js'
 import { createProjectionEngineFromState } from './worker-runtime-engine-state.js'
-import {
-  EMPTY_RUNTIME_METRICS,
-  buildCachedWorkerRuntimeState,
-  buildWorkerRuntimeStateFromEngine,
-  cloneRuntimeMetrics,
-  cloneWorkerRuntimeState,
-  withExternalSyncState,
+import type {
+  InstallAuthoritativeSnapshotInput,
+  InstallBenchmarkCorpusResult,
+  WorkbookWorkerBootstrapOptions,
+  WorkbookWorkerBootstrapResult,
+  WorkbookWorkerStateSnapshot,
 } from './worker-runtime-state.js'
+import { WorkerRuntimeStateCoordinator } from './worker-runtime-state-coordinator.js'
 import { WorkerRuntimeSnapshotCaches } from './worker-runtime-snapshot-caches.js'
 import { WorkerRuntimeWorkbookDeltaPublisher } from './worker-runtime-delta-publisher.js'
-import { applyWorkerRuntimeLocalHistoryChange, buildWorkerRuntimeLocalHistoryState } from './worker-runtime-local-history.js'
+import { applyWorkerRuntimeLocalHistoryChange } from './worker-runtime-local-history.js'
 import { WorkerRuntimeRenderTileDeltaPublisher } from './worker-runtime-render-tile-subscription.js'
 import type { WorkerRuntimeRenderTileDiagnostics } from './worker-runtime-render-tile-subscription.js'
 import {
@@ -65,14 +65,6 @@ import {
 import { exportWorkerRuntimeSnapshot } from './worker-runtime-export-snapshot.js'
 import { applyAuthoritativeWorkbookEvents } from './worker-runtime-authoritative-events.js'
 import { prepareAuthoritativeSnapshotProjection } from './worker-runtime-authoritative-snapshot.js'
-import type {
-  InstallAuthoritativeSnapshotInput,
-  InstallBenchmarkCorpusResult,
-  WorkbookPendingMutationSummarySnapshot,
-  WorkbookWorkerBootstrapOptions,
-  WorkbookWorkerBootstrapResult,
-  WorkbookWorkerStateSnapshot,
-} from './worker-runtime-types.js'
 export type {
   InstallAuthoritativeSnapshotInput,
   InstallBenchmarkCorpusResult,
@@ -81,7 +73,7 @@ export type {
   WorkbookWorkerBootstrapOptions,
   WorkbookWorkerBootstrapResult,
   WorkbookWorkerStateSnapshot,
-} from './worker-runtime-types.js'
+} from './worker-runtime-state.js'
 
 export class WorkbookWorkerRuntime {
   [method: string]: unknown
@@ -92,11 +84,8 @@ export class WorkbookWorkerRuntime {
   private authoritativeStateSource: 'none' | 'memory' = 'none'
   private bootstrapOptions: WorkbookWorkerBootstrapOptions | null = null
   private engineSubscription: (() => void) | null = null
-  private externalSyncState: SyncState | null = null
-  private runtimeStateCache: WorkbookWorkerStateSnapshot | null = null
   private authoritativeRevision = 0
   private projectionOverlayScope: ProjectionOverlayScope | null = null
-  private localPersistenceMode = 'ephemeral' as const
   private readonly workbookDeltaPublisher = new WorkerRuntimeWorkbookDeltaPublisher()
   private readonly renderTileDeltaPublisher = new WorkerRuntimeRenderTileDeltaPublisher()
   private readonly snapshotCaches = new WorkerRuntimeSnapshotCaches()
@@ -125,6 +114,11 @@ export class WorkbookWorkerRuntime {
     getProjectionEngine: () => this.getProjectionEngine(),
     invalidateProjectionCache: () => this.invalidateProjectionCache(),
   })
+  private readonly stateCoordinator = new WorkerRuntimeStateCoordinator({
+    getEngine: () => this.engine,
+    getAuthoritativeRevision: () => this.authoritativeRevision,
+    buildPendingMutationSummary: () => this.mutationJournal.buildPendingMutationSummary(),
+  })
 
   async ready(): Promise<void> {
     await (await this.getProjectionEngine()).ready()
@@ -137,12 +131,9 @@ export class WorkbookWorkerRuntime {
   async bootstrap(options: WorkbookWorkerBootstrapOptions): Promise<WorkbookWorkerBootstrapResult> {
     this.cleanup()
     this.bootstrapOptions = options
-    this.externalSyncState = null
-    this.runtimeStateCache = null
     this.snapshotCaches.reset()
     this.mutationJournal.reset()
     this.projectionOverlayScope = null
-    this.localPersistenceMode = 'ephemeral'
     this.authoritativeRevision = 0
     const restoredJournalEntries = isPendingWorkbookMutationList(options.mutationJournalEntries) ? options.mutationJournalEntries : []
     if (
@@ -175,27 +166,12 @@ export class WorkbookWorkerRuntime {
       runtimeState: this.getRuntimeState(),
       restoredFromPersistence: false,
       requiresAuthoritativeHydrate: true,
-      localPersistenceMode: this.localPersistenceMode,
+      localPersistenceMode: this.stateCoordinator.getLocalPersistenceMode(),
     }
   }
 
   getRuntimeState(): WorkbookWorkerStateSnapshot {
-    const cachedState = this.runtimeStateCache
-    if (cachedState) {
-      return buildCachedWorkerRuntimeState({
-        cachedState,
-        externalSyncState: this.externalSyncState,
-        localHistoryState: this.buildLocalHistoryState(),
-        authoritativeRevision: this.authoritativeRevision,
-        pendingMutationSummary: this.buildPendingMutationSummary(),
-        localPersistenceMode: this.localPersistenceMode,
-      })
-    }
-    const engine = this.requireEngine()
-    return this.storeRuntimeState({
-      ...buildWorkerRuntimeStateFromEngine(engine),
-      localPersistenceMode: this.localPersistenceMode,
-    })
+    return this.stateCoordinator.getRuntimeState(() => this.requireEngine())
   }
 
   getAuthoritativeRevision(): number {
@@ -286,8 +262,7 @@ export class WorkbookWorkerRuntime {
   }
 
   setExternalSyncState(syncState: SyncState | null): WorkbookWorkerStateSnapshot {
-    this.externalSyncState = syncState
-    return this.getRuntimeState()
+    return this.stateCoordinator.setExternalSyncState(syncState)
   }
 
   exportSnapshot(): WorkbookSnapshot {
@@ -496,14 +471,13 @@ export class WorkbookWorkerRuntime {
     this.projectionEnginePromise = null
     this.mutationJournal.reset()
     this.viewportPatchPublisher.reset()
-    this.runtimeStateCache = null
+    this.stateCoordinator.reset()
     this.snapshotCaches.reset()
     this.workbookDeltaPublisher.reset()
     this.renderTileDeltaPublisher.reset()
     this.authoritativeStateSource = 'none'
     this.authoritativeRevision = 0
     this.projectionOverlayScope = null
-    this.localPersistenceMode = 'ephemeral'
     this.authoritativeEngine = null
     this.engine = null
   }
@@ -531,33 +505,12 @@ export class WorkbookWorkerRuntime {
     await this.mutationJournal.markRemainingJournalMutationsRebased(rebasedAtUnixMs)
   }
 
-  private storeRuntimeState(state: WorkbookWorkerStateSnapshot): WorkbookWorkerStateSnapshot {
-    this.runtimeStateCache = cloneWorkerRuntimeState({
-      ...state,
-      authoritativeRevision: this.authoritativeRevision,
-      pendingMutationSummary: this.buildPendingMutationSummary(),
-    })
-    const cachedState = this.runtimeStateCache
-    return withExternalSyncState(cachedState, this.externalSyncState)
-  }
-
   private updateRuntimeStateFromEngine(engine: SpreadsheetEngine & WorkerEngine = this.requireEngine()): WorkbookWorkerStateSnapshot {
-    return this.storeRuntimeState(buildWorkerRuntimeStateFromEngine(engine))
+    return this.stateCoordinator.updateRuntimeStateFromEngine(engine)
   }
 
   private getCurrentMetrics(): RecalcMetrics {
-    if (this.engine) {
-      return cloneRuntimeMetrics(this.engine.getLastMetrics())
-    }
-    return cloneRuntimeMetrics(this.runtimeStateCache?.metrics ?? EMPTY_RUNTIME_METRICS)
-  }
-
-  private buildPendingMutationSummary(): WorkbookPendingMutationSummarySnapshot {
-    return this.mutationJournal.buildPendingMutationSummary()
-  }
-
-  private buildLocalHistoryState(): WorkbookWorkerStateSnapshot['localHistoryState'] {
-    return buildWorkerRuntimeLocalHistoryState(this.engine)
+    return this.stateCoordinator.getCurrentMetrics()
   }
 
   private async applyLocalHistoryChange(direction: 'undo' | 'redo'): Promise<boolean> {

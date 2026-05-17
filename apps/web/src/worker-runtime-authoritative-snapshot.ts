@@ -2,7 +2,7 @@ import type { EngineReplicaSnapshot, SpreadsheetEngine } from '@bilig/core'
 import type { WorkbookSnapshot } from '@bilig/protocol'
 import type { PendingWorkbookMutation } from './workbook-sync.js'
 import { createProjectionEngineFromState, createWorkbookEngineFromState } from './worker-runtime-engine-state.js'
-import type { InstallAuthoritativeSnapshotInput } from './worker-runtime-types.js'
+import type { InstallAuthoritativeSnapshotInput } from './worker-runtime-state.js'
 import type { ProjectionOverlayScope } from './worker-local-overlay.js'
 import type { WorkerEngine } from './worker-runtime-support.js'
 

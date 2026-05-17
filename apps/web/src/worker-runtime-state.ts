@@ -1,24 +1,66 @@
-import type { SpreadsheetEngine } from '@bilig/core'
-import type { RecalcMetrics, SyncState, WorkbookDefinedNameSnapshot, WorkbookDefinedNameValueSnapshot } from '@bilig/protocol'
-import type { WorkerEngine } from './worker-runtime-support.js'
+import type {
+  RecalcMetrics,
+  SyncState,
+  WorkbookDefinedNameSnapshot,
+  WorkbookDefinedNameValueSnapshot,
+  WorkbookSnapshot,
+} from '@bilig/protocol'
+import type { PendingWorkbookMutation } from './workbook-sync.js'
+import type { WorkbookBenchmarkCorpusId, WorkbookBenchmarkCorpusViewport } from './worker-runtime-benchmark-corpus.js'
+import type { WorkerRuntimeLocalHistoryState } from './worker-runtime-local-history.js'
+import type {
+  WorkerRuntimeFailedPendingMutationSnapshot,
+  WorkerRuntimePendingMutationSummarySnapshot,
+} from './worker-runtime-pending-mutations.js'
 
-interface WorkbookFailedPendingMutationLike {
-  readonly id: string
-  readonly method: string
-  readonly failureMessage: string
-  readonly attemptCount: number
+export type {
+  WorkerRuntimeFailedPendingMutationSnapshot as WorkbookFailedPendingMutationSnapshot,
+  WorkerRuntimePendingMutationSummarySnapshot as WorkbookPendingMutationSummarySnapshot,
+} from './worker-runtime-pending-mutations.js'
+
+export interface WorkbookWorkerBootstrapOptions {
+  documentId: string
+  replicaId: string
+  persistState: boolean
+  mutationJournalEntries?: readonly PendingWorkbookMutation[]
+  nextPendingMutationSeq?: number
 }
 
-interface WorkbookPendingMutationSummaryLike {
-  readonly activeCount: number
-  readonly failedCount: number
-  readonly firstFailed: WorkbookFailedPendingMutationLike | null
+export interface WorkbookWorkerStateSnapshot {
+  workbookName: string
+  sheets?: WorkbookRuntimeSheetSnapshot[] | undefined
+  sheetNames: string[]
+  definedNames: WorkbookDefinedNameSnapshot[]
+  metrics: RecalcMetrics
+  syncState: SyncState
+  localHistoryState: WorkerRuntimeLocalHistoryState
+  authoritativeRevision?: number | undefined
+  pendingMutationSummary?: WorkerRuntimePendingMutationSummarySnapshot
+  localPersistenceMode?: 'ephemeral'
 }
 
-interface WorkbookLocalHistoryStateLike {
-  readonly canUndo: boolean
-  readonly canRedo: boolean
+export interface WorkbookWorkerBootstrapResult {
+  runtimeState: WorkbookWorkerStateSnapshot
+  restoredFromPersistence: boolean
+  requiresAuthoritativeHydrate: boolean
+  localPersistenceMode?: 'ephemeral'
 }
+
+export interface InstallAuthoritativeSnapshotInput {
+  readonly snapshot: WorkbookSnapshot
+  readonly authoritativeRevision: number
+  readonly mode: 'bootstrap' | 'reconcile'
+}
+
+export interface InstallBenchmarkCorpusResult {
+  readonly id: WorkbookBenchmarkCorpusId
+  readonly materializedCellCount: number
+  readonly primaryViewport: WorkbookBenchmarkCorpusViewport
+}
+
+type WorkbookFailedPendingMutationLike = WorkerRuntimeFailedPendingMutationSnapshot
+type WorkbookPendingMutationSummaryLike = WorkerRuntimePendingMutationSummarySnapshot
+type WorkbookLocalHistoryStateLike = WorkerRuntimeLocalHistoryState
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -182,6 +224,15 @@ interface WorkbookSheetLike {
 
 interface WorkbookLike {
   sheetsByName: Map<string, WorkbookSheetLike>
+}
+
+export interface WorkerRuntimeStateEngine {
+  readonly workbook: WorkbookLike & { readonly workbookName: string }
+  getDefinedNames(): WorkbookDefinedNameSnapshot[]
+  getLastMetrics(): RecalcMetrics
+  getSyncState(): SyncState
+  canUndo(): boolean
+  canRedo(): boolean
 }
 
 export function listOrderedSheetNames(workbook: WorkbookLike): string[] {
@@ -377,7 +428,7 @@ export function buildWorkerRuntimeStateFromBootstrap(input: {
   }
 }
 
-export function buildWorkerRuntimeStateFromEngine(engine: SpreadsheetEngine & WorkerEngine): {
+export function buildWorkerRuntimeStateFromEngine(engine: WorkerRuntimeStateEngine): {
   workbookName: string
   sheets: WorkbookRuntimeSheetSnapshot[]
   sheetNames: string[]
