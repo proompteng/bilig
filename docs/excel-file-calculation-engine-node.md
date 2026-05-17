@@ -22,6 +22,11 @@ That can work, but only if the service is honest about what owns calculation.
 Writing cells into an `.xlsx` file is not the same thing as recalculating the
 workbook.
 
+The common public question is not "can Node write an Excel file?" It can. The
+harder question is: after the service writes inputs into an existing calculator
+workbook, can it trust the output cells before Excel, LibreOffice, or Graph
+opens the file? That is the boundary to decide first.
+
 ## Short answer
 
 Use Excel or LibreOffice automation if exact desktop Excel behavior is the
@@ -48,6 +53,17 @@ recalculate on open.
 If the backend accepts, rejects, prices, pays, queues, or stores something based
 on the calculated value, the backend needs a runtime that recalculates before
 returning a response.
+
+There are three honest shapes:
+
+| Shape                         | What owns calculation        | When it fits                                                                    |
+| ----------------------------- | ---------------------------- | ------------------------------------------------------------------------------- |
+| File generation               | Excel later                  | You only need a report file, and stale cached values are acceptable until open. |
+| Hosted spreadsheet automation | Excel, LibreOffice, or Graph | Exact Excel behavior is worth the latency, auth, and operational dependency.    |
+| Local WorkPaper runtime       | Your Node process            | The API must write inputs, read outputs, persist state, and respond now.        |
+
+Avoid the fourth shape: treating a file writer's cached formula value as if it
+were a fresh calculation result.
 
 ## Minimal Bilig shape
 
@@ -79,6 +95,25 @@ console.log({ output })
 In a production service, wrap this in a small adapter. Hard-code the input and
 output cell contract, then test it with fixtures. Do not let arbitrary workbook
 layout become invisible application logic.
+
+The adapter should be boring enough to review in a code review:
+
+```ts
+const quoteContract = {
+  inputs: {
+    make: 'Inputs!B2',
+    year: 'Inputs!B3',
+    price: 'Inputs!B4',
+  },
+  outputs: {
+    decision: 'Quote!B11',
+  },
+} as const
+```
+
+That is the maintainable version of "use Excel as a calculation engine": the
+spreadsheet owns formulas, but the service owns the cell contract, fixture
+tests, and rollback path.
 
 ## Run the maintained XLSX proof
 
