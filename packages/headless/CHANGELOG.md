@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.18.27
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.18.26
+- Manual override: no
+
+## Fixes
+- fix(core): invoke lambda defined names (1531f8a0)
+
+## Internal runtime changes
+- refactor(core): harden mutation and lookup tracking (75f4d020)
+
 ## 0.18.26
 
 - Release type: patch
