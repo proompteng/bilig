@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.18.3
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.18.2
+- Manual override: no
+
+## Fixes
+- perf(core): defer cold structural formula families (b48b0c21)
+
 ## 0.18.2
 
 - Release type: patch

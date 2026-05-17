@@ -3,7 +3,7 @@
   "name": "io.github.proompteng/bilig-workpaper",
   "title": "Bilig WorkPaper",
   "description": "Formula-backed WorkPaper tools for workbook readback, input edits, and JSON persistence.",
-  "version": "0.18.2",
+  "version": "0.18.3",
   "repository": {
     "url": "https://github.com/proompteng/bilig",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "npm",
       "identifier": "@bilig/headless",
-      "version": "0.18.2",
+      "version": "0.18.3",
       "transport": {
         "type": "stdio"
       }
