@@ -73,8 +73,18 @@ describe('workbook local mutation journal persistence', () => {
     })
   })
 
-  it('clears the stored journal after every mutation is acknowledged', () => {
+  it('keeps the next local sequence after every mutation is acknowledged', () => {
     persistWorkbookMutationJournal('doc-1', [mutation({ status: 'acked', ackedAtUnixMs: 300 })])
+
+    expect(loadPersistedWorkbookMutationJournal('doc-1')).toEqual({
+      mutationJournalEntries: [],
+      nextPendingMutationSeq: 2,
+    })
+    expect(removeItem).not.toHaveBeenCalled()
+  })
+
+  it('clears empty journals that have no mutation high-water mark', () => {
+    persistWorkbookMutationJournal('doc-1', [])
 
     expect(loadPersistedWorkbookMutationJournal('doc-1')).toBeNull()
     expect(removeItem).toHaveBeenCalledWith('bilig:workbook-local-mutation-journal:doc-1')

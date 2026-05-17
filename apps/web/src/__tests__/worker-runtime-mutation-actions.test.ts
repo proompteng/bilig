@@ -64,6 +64,22 @@ describe('worker runtime mutation actions', () => {
     expect(mutation.args).not.toBe(input.args)
   })
 
+  it('scopes runtime pending mutation ids by browser replica when provided', () => {
+    const mutation = createRuntimePendingMutation({
+      documentId: 'doc-1',
+      clientMutationScope: 'browser:replica-1',
+      localSeq: 4,
+      authoritativeRevision: 9,
+      input: {
+        method: 'setCellValue',
+        args: ['Sheet1', 'B2', 23],
+      },
+      enqueuedAtUnixMs: 250,
+    })
+
+    expect(mutation.id).toBe('doc-1:browser:replica-1:pending:4')
+  })
+
   it('acks absorbed mutations and removes them from the active pending list', () => {
     const local = createMutation()
     const rebased = createMutation({

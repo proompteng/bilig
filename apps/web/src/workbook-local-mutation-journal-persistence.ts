@@ -51,10 +51,10 @@ function parseStoredJournal(documentId: string, value: unknown): PersistedWorkbo
     return null
   }
   const entries = activeJournalEntries(value['mutationJournalEntries'])
-  if (entries.length === 0) {
+  const restoredNextSeq = isSafePositiveInteger(value['nextPendingMutationSeq']) ? value['nextPendingMutationSeq'] : 1
+  if (entries.length === 0 && restoredNextSeq <= 1) {
     return null
   }
-  const restoredNextSeq = isSafePositiveInteger(value['nextPendingMutationSeq']) ? value['nextPendingMutationSeq'] : 1
   return {
     mutationJournalEntries: entries,
     nextPendingMutationSeq: Math.max(restoredNextSeq, nextMutationSeq(entries)),
@@ -95,8 +95,9 @@ export function persistWorkbookMutationJournal(documentId: string, entries: read
   }
   const key = storageKey(documentId)
   const activeEntries = activeJournalEntries(entries)
+  const nextPendingMutationSeq = nextMutationSeq(entries)
   try {
-    if (activeEntries.length === 0) {
+    if (activeEntries.length === 0 && nextPendingMutationSeq <= 1) {
       storage.removeItem(key)
       return
     }
@@ -105,7 +106,7 @@ export function persistWorkbookMutationJournal(documentId: string, entries: read
       documentId,
       savedAtUnixMs: Date.now(),
       mutationJournalEntries: activeEntries,
-      nextPendingMutationSeq: nextMutationSeq(entries),
+      nextPendingMutationSeq,
     }
     storage.setItem(key, JSON.stringify(stored))
   } catch {

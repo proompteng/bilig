@@ -120,6 +120,7 @@ export class WorkbookWorkerRuntime {
   })
   private readonly mutationJournal: WorkerRuntimeMutationJournal = new WorkerRuntimeMutationJournal({
     getDocumentId: () => this.requireBootstrapOptions().documentId,
+    getClientMutationScope: () => this.requireBootstrapOptions().replicaId,
     getAuthoritativeRevision: () => this.authoritativeRevision,
     getProjectionEngine: () => this.getProjectionEngine(),
     invalidateProjectionCache: () => this.invalidateProjectionCache(),
@@ -144,7 +145,12 @@ export class WorkbookWorkerRuntime {
     this.localPersistenceMode = 'ephemeral'
     this.authoritativeRevision = 0
     const restoredJournalEntries = isPendingWorkbookMutationList(options.mutationJournalEntries) ? options.mutationJournalEntries : []
-    if (restoredJournalEntries.length > 0) {
+    if (
+      restoredJournalEntries.length > 0 ||
+      (typeof options.nextPendingMutationSeq === 'number' &&
+        Number.isSafeInteger(options.nextPendingMutationSeq) &&
+        options.nextPendingMutationSeq > 0)
+    ) {
       this.mutationJournal.restoreFromBootstrap({
         mutationJournalEntries: restoredJournalEntries,
         nextPendingMutationSeq:

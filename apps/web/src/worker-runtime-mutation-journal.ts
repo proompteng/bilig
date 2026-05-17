@@ -32,6 +32,7 @@ export class WorkerRuntimeMutationJournal {
   constructor(
     private readonly deps: {
       readonly getDocumentId: () => string
+      readonly getClientMutationScope?: (() => string) | undefined
       readonly getAuthoritativeRevision: () => number
       readonly getProjectionEngine: () => Promise<WorkerEngine>
       readonly invalidateProjectionCache: () => void
@@ -77,6 +78,7 @@ export class WorkerRuntimeMutationJournal {
     }
     const nextMutation = createRuntimePendingMutation({
       documentId: this.deps.getDocumentId(),
+      clientMutationScope: this.deps.getClientMutationScope?.(),
       localSeq: this.nextPendingMutationSeq++,
       authoritativeRevision: this.deps.getAuthoritativeRevision(),
       input,

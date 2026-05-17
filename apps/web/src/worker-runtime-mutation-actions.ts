@@ -11,13 +11,16 @@ import { replaceJournalMutation, syncPendingMutationsFromJournal } from './worke
 
 export function createRuntimePendingMutation(args: {
   documentId: string
+  clientMutationScope?: string | undefined
   localSeq: number
   authoritativeRevision: number
   input: PendingWorkbookMutationInput
   enqueuedAtUnixMs: number
 }): PendingWorkbookMutation {
   return {
-    id: `${args.documentId}:pending:${args.localSeq}`,
+    id: args.clientMutationScope?.trim()
+      ? `${args.documentId}:${args.clientMutationScope.trim()}:pending:${args.localSeq}`
+      : `${args.documentId}:pending:${args.localSeq}`,
     localSeq: args.localSeq,
     baseRevision: args.authoritativeRevision,
     method: args.input.method,

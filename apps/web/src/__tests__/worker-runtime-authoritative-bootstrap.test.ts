@@ -152,6 +152,25 @@ describe('worker runtime authoritative bootstrap', () => {
       method: 'setCellValue',
       args: ['Sheet1', 'E10', 'after-reload'],
     })
-    expect(nextMutation.id).toBe('bootstrap-doc:pending:8')
+    expect(nextMutation.id).toBe('bootstrap-doc:browser:test:pending:8')
+  })
+
+  it('honors restored mutation high-water marks even when no pending entries remain', async () => {
+    const runtime = new WorkbookWorkerRuntime()
+
+    await runtime.bootstrap({
+      documentId: 'bootstrap-doc',
+      replicaId: 'browser:test',
+      persistState: true,
+      mutationJournalEntries: [],
+      nextPendingMutationSeq: 12,
+    })
+
+    const nextMutation = await runtime.enqueuePendingMutation({
+      method: 'setCellValue',
+      args: ['Sheet1', 'E10', 'after-acked-reload'],
+    })
+
+    expect(nextMutation.id).toBe('bootstrap-doc:browser:test:pending:12')
   })
 })
