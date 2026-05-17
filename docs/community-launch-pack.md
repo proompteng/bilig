@@ -593,6 +593,21 @@ Latest star-jump attribution snapshot on May 17, 2026:
   `excel`, while npm metadata keeps the exact agent and formula-recalculation
   terms.
 
+Latest LibHunt discovery snapshot on May 17, 2026:
+
+- LibHunt has a live `headless-spreadsheet` topic page that includes Bilig:
+  <https://www.libhunt.com/topic/headless-spreadsheet>.
+- The entry is explicitly tied to the May 7 Show HN mention and categorizes the
+  project under TypeScript, Spreadsheet, Excel, Agents, and `ai-agents`.
+- The LibHunt card still shows stale stars and an older broad description. The
+  current GitHub repository description is the tighter WorkPaper/runtime copy:
+  "Formula WorkPaper runtime for Node.js services and agent tools: edit cells,
+  recalculate, verify readback, persist JSON."
+- Replication action: treat LibHunt as evidence that the HN/topic classifier
+  path worked. Keep the repo and npm package metadata aligned to the same
+  classifier vocabulary so LibHunt-style indexers refresh toward the sharper
+  positioning.
+
 Latest Product Hunt launch surface on May 14, 2026:
 
 - The public launch kit is now wired into the docs site:

@@ -51,6 +51,17 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 - Top referrers: github.com (97/30), news.ycombinator.com (52/37), t.co (29/24), proompteng.github.io (17/10), Google (16/2)
 - Top paths: /proompteng/bilig (250/161), /proompteng/bilig/issues (37/9), /proompteng/bilig/pulls (23/9), /proompteng/bilig/commits/main (15/1), /proompteng/bilig/tree/main/examples/headless-workpaper (12/7)
 
+## External Discovery
+
+- LibHunt indexes Bilig on the `headless-spreadsheet` topic page:
+  <https://www.libhunt.com/topic/headless-spreadsheet>.
+- The LibHunt entry was discovered through the May 7 Show HN mention and is
+  categorized with TypeScript, Spreadsheet, Excel, Agents, and `ai-agents`.
+- LibHunt currently shows stale stars and description data, so the practical
+  follow-up is to keep GitHub repository topics and npm metadata aligned with
+  `headless-spreadsheet`, `excel`, `ai-agents`, and formula-recalculation
+  terms while waiting for the next crawler refresh.
+
 ## Conversion Pressure
 
 - Last-week npm downloads per current star: 749

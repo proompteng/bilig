@@ -35,6 +35,9 @@ export function communityLaunchPackRequiredLinks(): readonly string[] {
     'https://github.com/MCPFind/mcp-find/pull/37',
     'https://github.com/mctrinh/awesome-mcp-servers/pull/46',
     'https://mcprepository.com/proompteng/bilig',
+    'https://www.libhunt.com/topic/headless-spreadsheet',
+    'Latest LibHunt discovery snapshot on May 17, 2026',
+    'TypeScript, Spreadsheet, Excel, Agents, and `ai-agents`',
     'tools: 0',
     'package: null',
     'glama.json',
@@ -61,4 +64,5 @@ export const llmsExternalSurfaceLinks = [
   'https://github.com/MCPFind/mcp-find/pull/37',
   'https://github.com/mctrinh/awesome-mcp-servers/pull/46',
   'https://mcprepository.com/proompteng/bilig',
+  'https://www.libhunt.com/topic/headless-spreadsheet',
 ] as const
