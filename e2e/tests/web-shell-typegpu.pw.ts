@@ -93,6 +93,9 @@ interface RendererPresentationSample {
   readonly fallbackCanvases: number
   readonly frameProofStatus: string | null
   readonly headerPaneCount: number
+  readonly nativeTextLayerMounted: boolean
+  readonly nativeTextRunCount: number
+  readonly rowHeaderRunCount: number
   readonly selection: string | null
 }
 
@@ -113,32 +116,49 @@ async function collectRendererPresentationSamplesDuring(
   action: () => Promise<void>,
   sampleCount = 24,
 ): Promise<readonly RendererPresentationSample[]> {
-  const samplesPromise = page.evaluate(async (count) => {
-    const samples: RendererPresentationSample[] = []
-    await new Promise<void>((resolve) => {
-      let index = 0
-      const sampleNextFrame = () => {
-        const canvas = document.querySelector('[data-testid="grid-pane-renderer"]')
-        samples.push({
-          canvasProofLayer: canvas?.getAttribute('data-v3-canvas-proof-layer') ?? null,
-          editorInputs: document.querySelectorAll('[data-testid="cell-editor-input"]').length,
-          editorOverlays: document.querySelectorAll('[data-testid="cell-editor-overlay"]').length,
-          fallbackCanvases: document.querySelectorAll('[data-testid="grid-pane-renderer-fallback"]').length,
-          frameProofStatus: canvas?.getAttribute('data-v3-frame-proof-status') ?? null,
-          headerPaneCount: Number(canvas?.getAttribute('data-v3-header-pane-count') ?? '0'),
-          selection: document.querySelector('[data-testid="status-selection"]')?.textContent ?? null,
-        })
-        index += 1
-        if (index >= count) {
-          resolve()
-          return
+  const samplesPromise = page.evaluate(
+    async ({ count, rowMarkerWidth }) => {
+      const samples: RendererPresentationSample[] = []
+      await new Promise<void>((resolve) => {
+        let index = 0
+        const sampleNextFrame = () => {
+          const canvas = document.querySelector('[data-testid="grid-pane-renderer"]')
+          const grid = document.querySelector('[data-testid="sheet-grid"]')
+          const gridRect = grid instanceof HTMLElement ? grid.getBoundingClientRect() : null
+          const nativeTextLayer = document.querySelector('[data-testid="grid-native-text-layer"]')
+          const nativeTextRuns = [...document.querySelectorAll('[data-native-text-run]')]
+          const rowHeaderRunCount = nativeTextRuns.filter((run) => {
+            if (!gridRect || !/^\d+$/.test(run.textContent ?? '')) {
+              return false
+            }
+            const rect = run.getBoundingClientRect()
+            return rect.left >= gridRect.left && rect.right <= gridRect.left + rowMarkerWidth + 1
+          }).length
+          samples.push({
+            canvasProofLayer: canvas?.getAttribute('data-v3-canvas-proof-layer') ?? null,
+            editorInputs: document.querySelectorAll('[data-testid="cell-editor-input"]').length,
+            editorOverlays: document.querySelectorAll('[data-testid="cell-editor-overlay"]').length,
+            fallbackCanvases: document.querySelectorAll('[data-testid="grid-pane-renderer-fallback"]').length,
+            frameProofStatus: canvas?.getAttribute('data-v3-frame-proof-status') ?? null,
+            headerPaneCount: Number(canvas?.getAttribute('data-v3-header-pane-count') ?? '0'),
+            nativeTextLayerMounted: nativeTextLayer instanceof HTMLElement,
+            nativeTextRunCount: nativeTextRuns.length,
+            rowHeaderRunCount,
+            selection: document.querySelector('[data-testid="status-selection"]')?.textContent ?? null,
+          })
+          index += 1
+          if (index >= count) {
+            resolve()
+            return
+          }
+          requestAnimationFrame(sampleNextFrame)
         }
         requestAnimationFrame(sampleNextFrame)
-      }
-      requestAnimationFrame(sampleNextFrame)
-    })
-    return samples
-  }, sampleCount)
+      })
+      return samples
+    },
+    { count: sampleCount, rowMarkerWidth: PRODUCT_ROW_MARKER_WIDTH },
+  )
   await action()
   return samplesPromise
 }
@@ -178,6 +198,9 @@ async function exerciseClickAwayEditCommit(
   expect(samples.every((sample) => sample.editorInputs <= 1)).toBe(true)
   expect(samples.every((sample) => sample.editorOverlays <= 1)).toBe(true)
   expect(samples.every((sample) => sample.headerPaneCount > 0)).toBe(true)
+  expect(samples.every((sample) => sample.nativeTextLayerMounted)).toBe(true)
+  expect(samples.every((sample) => sample.nativeTextRunCount > 0)).toBe(true)
+  expect(samples.every((sample) => sample.rowHeaderRunCount >= 10)).toBe(true)
   expect(samples.every((sample) => sample.fallbackCanvases === 0)).toBe(true)
   expect(samples.every((sample) => sample.canvasProofLayer !== 'mounted')).toBe(true)
 

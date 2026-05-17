@@ -1,7 +1,8 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createViteAliasRecord } from '../../scripts/workspace-resolution.js'
+import { createWebPreviewBuildMetadata, webPreviewBuildMetadataFilename } from '../../scripts/web-preview-build-metadata.js'
 
 const syncServerTarget = process.env['BILIG_SYNC_SERVER_TARGET'] ?? `http://127.0.0.1:${process.env['BILIG_SYNC_SERVER_PORT'] ?? '4321'}`
 const syncProxy = {
@@ -112,8 +113,21 @@ const codeSplittingGroups = [
   },
 ]
 
+function biligBuildMetadataPlugin(): Plugin {
+  return {
+    name: 'bilig-build-metadata',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: webPreviewBuildMetadataFilename,
+        source: `${JSON.stringify(createWebPreviewBuildMetadata(process.env), null, 2)}\n`,
+      })
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), biligBuildMetadataPlugin()],
   worker: {
     format: 'es',
     rolldownOptions: {

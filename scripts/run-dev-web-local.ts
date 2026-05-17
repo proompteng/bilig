@@ -16,6 +16,7 @@ import {
 } from './dev-web-local-config.js'
 import { canUsePort, resolvePreferredPort, resolvePreferredZeroPort, resolveRequestedOrAvailablePort } from './dev-web-local-ports.js'
 import { ensureWasmKernelArtifact } from './ensure-wasm-kernel.js'
+import { assertReusableWebPreviewBundleMatchesEnv } from './web-preview-build-metadata.js'
 
 const composeFiles = ['compose.yaml', 'compose.dev-local.yaml'] as const
 const composeProject = process.env['BILIG_DEV_COMPOSE_PROJECT'] ?? 'bilig-dev-local'
@@ -23,6 +24,7 @@ const postgresService = 'postgres'
 const zeroCacheService = 'zero-cache-local'
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const webAppDir = resolve(repoRoot, 'apps/web')
+const webDistDir = resolve(webAppDir, 'dist')
 const preferredAppPort = resolvePreferredPort(process.env['PORT'] ?? process.env['BILIG_SYNC_SERVER_PORT'], 4321)
 const preferredPostgresPort = resolvePreferredPort(process.env['BILIG_DEV_POSTGRES_PORT'], 55432)
 const preferredWebPort = resolvePreferredPort(process.env['BILIG_WEB_DEV_PORT'], 5173)
@@ -695,6 +697,7 @@ try {
   }
   if (webServerMode === 'preview') {
     if (skipPreviewBuild) {
+      assertReusableWebPreviewBundleMatchesEnv(webDistDir, process.env)
       console.log(`Reusing existing preview web bundle for browser stack (web=${webAppBaseUrl})...`)
     } else {
       console.log(`Building preview web bundle for browser stack (web=${webAppBaseUrl})...`)

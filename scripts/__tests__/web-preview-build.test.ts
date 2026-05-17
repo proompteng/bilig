@@ -60,10 +60,14 @@ describe('web preview build gate', () => {
 
   it('reuses the fresh CI-built preview bundle during browser tests', () => {
     const source = readFileSync(resolve(repoRoot, 'scripts/run-ci.ts'), 'utf8')
+    const devSource = readFileSync(resolve(repoRoot, 'scripts/run-dev-web-local.ts'), 'utf8')
+    const viteSource = readFileSync(resolve(repoRoot, 'apps/web/vite.config.ts'), 'utf8')
 
     expect(source).toContain("pnpm('browser web bundle build', '--filter', '@bilig/web', 'build:bundle')")
     expect(source).toContain("BILIG_DEV_WEB_PREVIEW_BUILD: '0'")
-    expect(readFileSync(resolve(repoRoot, 'scripts/run-dev-web-local.ts'), 'utf8')).toContain('resolveDevWebPreviewBuildEnabled')
+    expect(devSource).toContain('resolveDevWebPreviewBuildEnabled')
+    expect(devSource).toContain('assertReusableWebPreviewBundleMatchesEnv')
+    expect(viteSource).toContain('biligBuildMetadataPlugin')
   })
 
   it('declares a checked-in favicon so Browser QA starts without missing-asset noise', () => {
