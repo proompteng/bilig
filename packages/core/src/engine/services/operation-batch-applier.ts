@@ -3,11 +3,9 @@ import type { EngineOp, EngineOpBatch } from '@bilig/workbook-domain'
 import { FormulaMode, type CellRangeRef, type CellValue } from '@bilig/protocol'
 import { batchOpOrder, compareOpOrder, markBatchApplied, type OpOrder } from '../../replica-state.js'
 import { CellFlags } from '../../cell-store.js'
-import { emptyValue, literalToValue, writeLiteralToCellStore } from '../../engine-value-utils.js'
 import { calculationSettingsEqual, normalizeWorkbookCalculationSettings, tableDependencyKey } from '../../engine-metadata-utils.js'
 import { normalizeDefinedName } from '../../workbook-store.js'
 import type { PreparedCellAddress } from '../runtime-state.js'
-import { withOptionalLookupStringIds } from './direct-lookup-helpers.js'
 import { DirectFormulaIndexCollection } from './direct-formula-index-collection.js'
 import { assertNever } from './operation-change-helpers.js'
 import { isScalarOnlyDefinedNameValue } from './defined-name-value-helpers.js'
@@ -23,6 +21,7 @@ import type { OperationColumnDependencyTrackerService } from './operation-column
 import type { OperationDirectRangeDependentService } from './operation-direct-range-dependents.js'
 import { finalizeOperationRecalcAndEvents } from './operation-recalc-finalizer.js'
 import type { CreateEngineOperationServiceArgs, MutationSource } from './operation-service-types.js'
+import { applyBatchClearCellOp, applyBatchSetCellValueOp } from './operation-batch-cell-value-mutations.js'
 
 type OperationBatchDirectFormulaCallbacks = Parameters<typeof finalizeOperationRecalcAndEvents>[0]['directFormulaCallbacks']
 type OperationBatchDirtyTraversalSkip = Parameters<typeof finalizeOperationRecalcAndEvents>[0]['canSkipDirtyTraversalForChangedInputs']
@@ -152,12 +151,6 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
     const clearLookupImpactCaches = (): void => {
       exactLookupImpactCaches.clear()
     }
-    const rebindValueSensitiveFormulaDependents = (cellIndex: number): void => {
-      const reboundCount = formulaChangedCount
-      formulaChangedCount = rebindDynamicFormulaDependents(cellIndex, formulaChangedCount)
-      topologyChanged = topologyChanged || formulaChangedCount !== reboundCount
-    }
-
     const reservedNewCells = potentialNewCells ?? args.estimatePotentialNewCells(batch.ops)
     args.state.workbook.cellStore.ensureCapacity(args.state.workbook.cellStore.size + reservedNewCells)
     args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.size + reservedNewCells + 1)
@@ -365,146 +358,51 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
             break
           }
           case 'setCellValue': {
-            const existingIndex = preparedCells.getExistingCellIndex(op.sheetName, op.address, preparedCellAddress)
-            const parsedAddress = preparedCellAddress ?? parseCellAddress(op.address, op.sheetName)
-            const sheet = args.state.workbook.getSheet(op.sheetName)
-            const sheetId = sheet?.id
-            const hasExactLookupDependents = sheetId !== undefined ? hasTrackedExactLookupDependents(sheetId, parsedAddress.col) : false
-            const hasSortedLookupDependents = sheetId !== undefined ? hasTrackedSortedLookupDependents(sheetId, parsedAddress.col) : false
-            const hasAggregateDependents = sheetId !== undefined ? hasTrackedDirectRangeDependents(sheetId, parsedAddress.col) : false
-            if (
-              !isRestore &&
-              cellTouchesOperationPivotSource({
-                workbook: args.state.workbook,
-                sheetName: op.sheetName,
-                row: parsedAddress.row,
-                col: parsedAddress.col,
-              })
-            ) {
-              refreshAllPivots = true
-            }
-            const needsLookupValueRead = hasExactLookupDependents || hasSortedLookupDependents || hasAggregateDependents
-            const prior = readCellValueForLookup(existingIndex)
-            if (!isRestore) {
-              if (op.value === null && (existingIndex === undefined || isNullLiteralWriteNoOp(existingIndex))) {
-                break
-              }
-              if (existingIndex !== undefined) {
-                changedInputCount = args.markPivotRootsChanged(args.clearPivotForCell(existingIndex), changedInputCount)
-              }
-            }
-            const cellIndex = preparedCells.ensureCellTracked(op.sheetName, op.address, preparedCellAddress)
-            if (!isRestore) {
-              changedInputCount = args.markSpillRootsChanged(args.clearOwnedSpill(cellIndex), changedInputCount)
-              const removedFormula = args.removeFormula(cellIndex)
-              if (removedFormula) {
-                args.invalidateAggregateColumn({ sheetName: op.sheetName, col: parsedAddress.col })
-                clearLookupImpactCaches()
-              }
-              if (removedFormula) {
-                formulaChangedCount = refreshDependentRangesAndRebindFormulaDependents(cellIndex, formulaChangedCount)
-              }
-              topologyChanged = removedFormula || topologyChanged
-            }
-            writeLiteralToCellStore(args.state.workbook.cellStore, cellIndex, op.value, args.state.strings)
-            if (op.value === null) {
-              args.state.workbook.cellStore.flags[cellIndex] =
-                (args.state.workbook.cellStore.flags[cellIndex] ?? 0) | CellFlags.AuthoredBlank
-            }
-            args.state.workbook.notifyCellValueWritten(cellIndex)
-            if (!isRestore) {
-              rebindValueSensitiveFormulaDependents(cellIndex)
-            }
-            if (needsLookupValueRead) {
-              const formulaChangedCountBeforeLookupNotes = formulaChangedCount
-              const newValue = literalToValue(op.value, args.state.strings)
-              const newStringId = typeof op.value === 'string' ? args.state.workbook.cellStore.stringIds[cellIndex] : undefined
-              if (!isRestore) {
-                const directDependentsHandled = markPostRecalcDirectFormulaDependents(
-                  cellIndex,
-                  postRecalcDirectFormulaIndices,
-                  prior.value,
-                  newValue,
-                )
-                if (!directDependentsHandled) {
-                  markDirectScalarDeltaClosure(cellIndex, prior.value, newValue, postRecalcDirectFormulaIndices)
+            const setValueResult = applyBatchSetCellValueOp({
+              serviceArgs: args,
+              op,
+              order,
+              source,
+              isRestore,
+              preparedCellAddress,
+              preparedCells,
+              changedInputCount,
+              formulaChangedCount,
+              explicitChangedCount,
+              topologyChanged,
+              refreshAllPivots,
+              postRecalcDirectFormulaIndices,
+              exactLookupImpactCaches,
+              setEntityVersionForOp,
+              hasTrackedExactLookupDependents,
+              hasTrackedSortedLookupDependents,
+              hasTrackedDirectRangeDependents,
+              readCellValueForLookup,
+              isNullLiteralWriteNoOp,
+              rebindValueSensitiveFormulaDependents: (cellIndex, counts) => {
+                const reboundCount = counts.formulaChangedCount
+                const nextFormulaChangedCount = rebindDynamicFormulaDependents(cellIndex, counts.formulaChangedCount)
+                return {
+                  ...counts,
+                  formulaChangedCount: nextFormulaChangedCount,
+                  topologyChanged: counts.topologyChanged || nextFormulaChangedCount !== reboundCount,
                 }
-              }
-              if (hasExactLookupDependents || hasAggregateDependents) {
-                const exactLookupRequest = withOptionalLookupStringIds({
-                  sheetName: op.sheetName,
-                  row: parsedAddress.row,
-                  col: parsedAddress.col,
-                  oldValue: prior.value,
-                  newValue,
-                  oldStringId: prior.stringId,
-                  newStringId,
-                  inputCellIndex: cellIndex,
-                })
-                if (hasExactLookupDependents) {
-                  formulaChangedCount = noteExactLookupLiteralWriteWhenDirty(
-                    exactLookupRequest,
-                    formulaChangedCount,
-                    exactLookupImpactCaches,
-                  )
-                }
-                if (hasAggregateDependents) {
-                  args.noteAggregateLiteralWrite({
-                    sheetName: exactLookupRequest.sheetName,
-                    row: exactLookupRequest.row,
-                    col: exactLookupRequest.col,
-                    oldValue: exactLookupRequest.oldValue,
-                    newValue: exactLookupRequest.newValue,
-                  })
-                  formulaChangedCount = markAffectedDirectRangeDependents(
-                    exactLookupRequest,
-                    formulaChangedCount,
-                    postRecalcDirectFormulaIndices,
-                  )
-                }
-              }
-              if (hasSortedLookupDependents) {
-                const sortedLookupRequest = withOptionalLookupStringIds({
-                  sheetName: op.sheetName,
-                  row: parsedAddress.row,
-                  col: parsedAddress.col,
-                  oldValue: prior.value,
-                  newValue,
-                  oldStringId: prior.stringId,
-                  newStringId,
-                })
-                formulaChangedCount = noteSortedLookupLiteralWriteWhenDirty(sortedLookupRequest, formulaChangedCount)
-              }
-              if (
-                !hasAggregateDependents &&
-                (hasExactLookupDependents || hasSortedLookupDependents) &&
-                formulaChangedCount === formulaChangedCountBeforeLookupNotes
-              ) {
-                lookupHandledInputCellIndices.push(cellIndex)
-              }
-            } else if (!isRestore) {
-              const newValue = literalToValue(op.value, args.state.strings)
-              const directDependentsHandled = markPostRecalcDirectFormulaDependents(
-                cellIndex,
-                postRecalcDirectFormulaIndices,
-                prior.value,
-                newValue,
-              )
-              if (!directDependentsHandled) {
-                markDirectScalarDeltaClosure(cellIndex, prior.value, newValue, postRecalcDirectFormulaIndices)
-              }
-            }
-            args.state.workbook.cellStore.flags[cellIndex] =
-              (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
-              ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle | CellFlags.SpillChild | CellFlags.PivotOutput)
-            if (!isRestore && op.value === null) {
-              pruneCellIfOrphaned(cellIndex)
-            }
-            changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
-            if (!isRestore) {
-              explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount)
-              setEntityVersionForOp(op, order)
-            }
+              },
+              refreshDependentRangesAndRebindFormulaDependents,
+              markPostRecalcDirectFormulaDependents,
+              markDirectScalarDeltaClosure,
+              noteExactLookupLiteralWriteWhenDirty,
+              noteSortedLookupLiteralWriteWhenDirty,
+              markAffectedDirectRangeDependents,
+              lookupHandledInputCellIndices,
+              clearLookupImpactCaches,
+              pruneCellIfOrphaned,
+            })
+            changedInputCount = setValueResult.changedInputCount
+            formulaChangedCount = setValueResult.formulaChangedCount
+            explicitChangedCount = setValueResult.explicitChangedCount
+            topologyChanged = setValueResult.topologyChanged
+            refreshAllPivots = setValueResult.refreshAllPivots
             break
           }
           case 'setCellFormula': {
@@ -641,123 +539,51 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
             break
           }
           case 'clearCell': {
-            const cellIndex = preparedCells.getExistingCellIndex(op.sheetName, op.address, preparedCellAddress)
-            const parsedAddress = preparedCellAddress ?? parseCellAddress(op.address, op.sheetName)
-            const sheet = args.state.workbook.getSheet(op.sheetName)
-            const sheetId = sheet?.id
-            const hasExactLookupDependents = sheetId !== undefined ? hasTrackedExactLookupDependents(sheetId, parsedAddress.col) : false
-            const hasSortedLookupDependents = sheetId !== undefined ? hasTrackedSortedLookupDependents(sheetId, parsedAddress.col) : false
-            const hasAggregateDependents = sheetId !== undefined ? hasTrackedDirectRangeDependents(sheetId, parsedAddress.col) : false
-            const needsLookupValueRead = hasExactLookupDependents || hasSortedLookupDependents || hasAggregateDependents
-            if (
-              !isRestore &&
-              cellTouchesOperationPivotSource({
-                workbook: args.state.workbook,
-                sheetName: op.sheetName,
-                row: parsedAddress.row,
-                col: parsedAddress.col,
-              })
-            ) {
-              refreshAllPivots = true
-            }
-            const prior = readCellValueForLookup(cellIndex)
-            if (cellIndex === undefined) {
-              setEntityVersionForOp(op, order)
-              break
-            }
-            if (isClearCellNoOp(cellIndex)) {
-              break
-            }
-            changedInputCount = args.markPivotRootsChanged(args.clearPivotForCell(cellIndex), changedInputCount)
-            changedInputCount = args.markSpillRootsChanged(args.clearOwnedSpill(cellIndex), changedInputCount)
-            const removedFormula = args.removeFormula(cellIndex)
-            if (removedFormula) {
-              args.invalidateAggregateColumn({ sheetName: op.sheetName, col: parsedAddress.col })
-              clearLookupImpactCaches()
-            }
-            if (removedFormula) {
-              formulaChangedCount = refreshDependentRangesAndRebindFormulaDependents(cellIndex, formulaChangedCount)
-            }
-            topologyChanged = removedFormula || topologyChanged
-            args.state.workbook.cellStore.setValue(cellIndex, emptyValue())
-            args.state.workbook.notifyCellValueWritten(cellIndex)
-            if (!isRestore) {
-              rebindValueSensitiveFormulaDependents(cellIndex)
-            }
-            if (!isRestore) {
-              const nextValue = emptyValue()
-              const directDependentsHandled = markPostRecalcDirectFormulaDependents(
-                cellIndex,
-                postRecalcDirectFormulaIndices,
-                prior.value,
-                nextValue,
-              )
-              if (!directDependentsHandled) {
-                markDirectScalarDeltaClosure(cellIndex, prior.value, nextValue, postRecalcDirectFormulaIndices)
-              }
-            }
-            if (needsLookupValueRead) {
-              if (hasExactLookupDependents || hasAggregateDependents) {
-                const exactLookupRequest = withOptionalLookupStringIds({
-                  sheetName: op.sheetName,
-                  row: parsedAddress.row,
-                  col: parsedAddress.col,
-                  oldValue: prior.value,
-                  newValue: emptyValue(),
-                  oldStringId: prior.stringId,
-                  newStringId: undefined,
-                  inputCellIndex: cellIndex,
-                })
-                if (hasExactLookupDependents) {
-                  formulaChangedCount = noteExactLookupLiteralWriteWhenDirty(
-                    exactLookupRequest,
-                    formulaChangedCount,
-                    exactLookupImpactCaches,
-                  )
+            const clearResult = applyBatchClearCellOp({
+              serviceArgs: args,
+              op,
+              order,
+              source,
+              isRestore,
+              preparedCellAddress,
+              preparedCells,
+              changedInputCount,
+              formulaChangedCount,
+              explicitChangedCount,
+              topologyChanged,
+              refreshAllPivots,
+              postRecalcDirectFormulaIndices,
+              exactLookupImpactCaches,
+              setEntityVersionForOp,
+              hasTrackedExactLookupDependents,
+              hasTrackedSortedLookupDependents,
+              hasTrackedDirectRangeDependents,
+              readCellValueForLookup,
+              isClearCellNoOp,
+              rebindValueSensitiveFormulaDependents: (cellIndex, counts) => {
+                const reboundCount = counts.formulaChangedCount
+                const nextFormulaChangedCount = rebindDynamicFormulaDependents(cellIndex, counts.formulaChangedCount)
+                return {
+                  ...counts,
+                  formulaChangedCount: nextFormulaChangedCount,
+                  topologyChanged: counts.topologyChanged || nextFormulaChangedCount !== reboundCount,
                 }
-                if (hasAggregateDependents) {
-                  args.noteAggregateLiteralWrite({
-                    sheetName: exactLookupRequest.sheetName,
-                    row: exactLookupRequest.row,
-                    col: exactLookupRequest.col,
-                    oldValue: exactLookupRequest.oldValue,
-                    newValue: exactLookupRequest.newValue,
-                  })
-                  formulaChangedCount = markAffectedDirectRangeDependents(
-                    exactLookupRequest,
-                    formulaChangedCount,
-                    postRecalcDirectFormulaIndices,
-                  )
-                }
-              }
-              if (hasSortedLookupDependents) {
-                const sortedLookupRequest = withOptionalLookupStringIds({
-                  sheetName: op.sheetName,
-                  row: parsedAddress.row,
-                  col: parsedAddress.col,
-                  oldValue: prior.value,
-                  newValue: emptyValue(),
-                  oldStringId: prior.stringId,
-                  newStringId: undefined,
-                })
-                formulaChangedCount = noteSortedLookupLiteralWriteWhenDirty(sortedLookupRequest, formulaChangedCount)
-              }
-            }
-            args.state.workbook.cellStore.flags[cellIndex] =
-              (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
-              ~(
-                CellFlags.HasFormula |
-                CellFlags.JsOnly |
-                CellFlags.InCycle |
-                CellFlags.SpillChild |
-                CellFlags.PivotOutput |
-                CellFlags.AuthoredBlank
-              )
-            normalizeHistoryDependencyPlaceholder(cellIndex, source)
-            pruneCellIfOrphaned(cellIndex)
-            changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
-            explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount)
-            setEntityVersionForOp(op, order)
+              },
+              refreshDependentRangesAndRebindFormulaDependents,
+              markPostRecalcDirectFormulaDependents,
+              markDirectScalarDeltaClosure,
+              noteExactLookupLiteralWriteWhenDirty,
+              noteSortedLookupLiteralWriteWhenDirty,
+              markAffectedDirectRangeDependents,
+              clearLookupImpactCaches,
+              pruneCellIfOrphaned,
+              normalizeHistoryDependencyPlaceholder,
+            })
+            changedInputCount = clearResult.changedInputCount
+            formulaChangedCount = clearResult.formulaChangedCount
+            explicitChangedCount = clearResult.explicitChangedCount
+            topologyChanged = clearResult.topologyChanged
+            refreshAllPivots = clearResult.refreshAllPivots
             break
           }
           case 'upsertDefinedName': {
