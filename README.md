@@ -87,9 +87,10 @@ npm run smoke
 ```
 
 The generated-project path is being prepared as
-`npm create bilig-workpaper@latest pricing-workpaper`. The package source lives
-in [`packages/create-workpaper`](packages/create-workpaper), and the publish
-gate is documented in [create a Bilig WorkPaper starter](docs/create-bilig-workpaper.md).
+`npm create @bilig/workpaper@latest pricing-workpaper` through the
+`@bilig/create-workpaper` package. The package source lives in
+[`packages/create-workpaper`](packages/create-workpaper), and the publish gate
+is documented in [create a Bilig WorkPaper starter](docs/create-bilig-workpaper.md).
 
 If that proof matches a service or agent workflow you maintain, the useful next
 step is concrete feedback: [star or bookmark the repo](https://github.com/proompteng/bilig/stargazers),

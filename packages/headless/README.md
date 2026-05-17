@@ -56,8 +56,8 @@ npm run smoke
 ```
 
 The generated-project command is being prepared as
-`npm create bilig-workpaper@latest pricing-workpaper`. The publish gate is
-documented at
+`npm create @bilig/workpaper@latest pricing-workpaper` through
+`@bilig/create-workpaper`. The publish gate is documented at
 <https://proompteng.github.io/bilig/create-bilig-workpaper.html>.
 
 <!-- headless-package-footprint:start -->

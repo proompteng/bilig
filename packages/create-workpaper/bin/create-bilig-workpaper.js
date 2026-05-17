@@ -33,11 +33,11 @@ console.log('Expected smoke output includes:')
 console.log('  "verified": true')
 
 function printHelp() {
-  console.log(`create-bilig-workpaper
+  console.log(`@bilig/create-workpaper
 
 Usage:
-  npm create bilig-workpaper@latest <directory>
-  npx create-bilig-workpaper <directory>
+  npm create @bilig/workpaper@latest <directory>
+  npm exec @bilig/create-workpaper@latest <directory>
 
 Options:
   --force   Allow writing into an existing directory.

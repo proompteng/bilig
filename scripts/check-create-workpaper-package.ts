@@ -8,7 +8,7 @@ type PackageManifest = Readonly<Record<string, unknown>>
 
 const repoRoot = resolve(import.meta.dir, '..')
 const packageDir = join(repoRoot, 'packages', 'create-workpaper')
-const packageName = 'create-bilig-workpaper'
+const packageName = '@bilig/create-workpaper'
 const packDir = join(repoRoot, 'build', 'create-workpaper-package')
 const args = new Set(process.argv.slice(2))
 const requirePublished = args.has('--require-published')
@@ -77,7 +77,7 @@ function assertManifest(manifest: PackageManifest): string {
   assert(manifest.repository['directory'] === 'packages/create-workpaper', 'package repository.directory must be packages/create-workpaper')
 
   assert(isRecord(manifest.bin), 'package bin must be an object')
-  assert(manifest.bin['create-bilig-workpaper'] === 'bin/create-bilig-workpaper.js', 'package bin must expose create-bilig-workpaper')
+  assert(manifest.bin['create-workpaper'] === 'bin/create-bilig-workpaper.js', 'package bin must expose create-workpaper')
 
   const files = stringArray(manifest.files)
   for (const included of ['bin', 'template', 'README.md']) {
@@ -106,8 +106,8 @@ function assertDocs(): void {
     ['docs/create-bilig-workpaper.md', docs],
     ['README.md', rootReadme],
   ] as const) {
-    assert(source.includes('npm create bilig-workpaper@latest'), `${label} must document the npm create path`)
-    assert(source.includes('create-bilig-workpaper'), `${label} must include the published package name`)
+    assert(source.includes('npm create @bilig/workpaper@latest'), `${label} must document the scoped npm create path`)
+    assert(source.includes('@bilig/create-workpaper'), `${label} must include the published package name`)
   }
   assert(readme.includes('verified: true') || readme.includes('"verified": true'), 'starter README must show the verification output')
   assert(docs.includes('verified: true') || docs.includes('"verified": true'), 'starter docs must show the verification output')

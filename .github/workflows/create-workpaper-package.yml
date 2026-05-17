@@ -30,7 +30,7 @@ on:
   workflow_dispatch:
     inputs:
       npm_tag:
-        description: 'npm dist-tag for create-bilig-workpaper'
+        description: 'npm dist-tag for @bilig/create-workpaper'
         type: string
         required: false
         default: latest
@@ -40,7 +40,7 @@ on:
         required: false
         default: false
       allow_new_package:
-        description: 'Attempt first-time package creation when create-bilig-workpaper is not provisioned yet'
+        description: 'Attempt first-time package creation when @bilig/create-workpaper is not provisioned yet'
         type: boolean
         required: false
         default: false
@@ -166,7 +166,7 @@ jobs:
 
           if [ "$allow_new" != "true" ] && [ "$dry_run" != "true" ]; then
             {
-              echo "create-bilig-workpaper is not published yet."
+              echo "@bilig/create-workpaper is not published yet."
               echo "Configure npm trusted publishing for this workflow, then run workflow_dispatch with allow_new_package=true."
             } >> "$GITHUB_STEP_SUMMARY"
             echo "Skipping first-time publish until allow_new_package=true is explicitly set."

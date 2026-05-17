@@ -1,7 +1,7 @@
 name: Workbook fixture submission
 description: Share a reduced public workbook, formula workload, or service workflow Bilig should support.
-title: "[fixture]: "
-labels: ["needs reduced fixture"]
+title: '[fixture]: '
+labels: ['needs reduced fixture']
 body:
   - type: markdown
     attributes:
@@ -30,7 +30,7 @@ body:
     attributes:
       label: Package version or commit
       description: Include the @bilig/headless version, npm create package version, or commit you tested.
-      placeholder: "@bilig/headless 0.17.1, create-bilig-workpaper 0.3.0, or commit SHA"
+      placeholder: '@bilig/headless 0.17.1, @bilig/create-workpaper 0.17.0, or commit SHA'
     validations:
       required: true
   - type: textarea

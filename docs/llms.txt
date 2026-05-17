@@ -152,7 +152,7 @@ npm run agent:verify
 - create a Bilig WorkPaper starter:
   https://proompteng.github.io/bilig/create-bilig-workpaper.html
   https://github.com/proompteng/bilig/blob/main/docs/create-bilig-workpaper.md
-  tracks the create-bilig-workpaper starter package and points evaluators to the
+  tracks the @bilig/create-workpaper starter package and points evaluators to the
   maintained serverless WorkPaper API example until the npm create path is
   publicly published.
 - npm provenance and package trust:

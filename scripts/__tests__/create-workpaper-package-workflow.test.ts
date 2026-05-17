@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 
-describe('create-bilig-workpaper package workflow', () => {
+describe('@bilig/create-workpaper package workflow', () => {
   it('keeps the starter package on a verified npm publish path', () => {
     const source = readFileSync(resolve(repoRoot, '.github/workflows/create-workpaper-package.yml'), 'utf8')
 
@@ -20,7 +20,7 @@ describe('create-bilig-workpaper package workflow', () => {
     expect(source).toContain('publish_args=(./packages/create-workpaper --tag "$npm_tag" --access public --provenance)')
     expect(source).toContain('npm publish "${publish_args[@]}"')
     expect(source).toContain('allow_new_package')
-    expect(source).toContain('Configure npm trusted publishing for this workflow')
+    expect(source).toContain('@bilig/create-workpaper is not published yet')
   })
 
   it('keeps create-workpaper package files in the repository', () => {

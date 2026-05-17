@@ -1,9 +1,9 @@
-# create-bilig-workpaper
+# @bilig/create-workpaper
 
 Create a runnable Bilig WorkPaper starter for Node services and agent tools.
 
 ```sh
-npm create bilig-workpaper@latest pricing-workpaper
+npm create @bilig/workpaper@latest pricing-workpaper
 cd pricing-workpaper
 npm install
 npm run smoke
