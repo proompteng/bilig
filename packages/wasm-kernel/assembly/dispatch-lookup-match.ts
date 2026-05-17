@@ -1,14 +1,7 @@
 import { BuiltinId, ErrorCode, ValueTag } from './protocol'
-import { compareScalarValues } from './comparison'
 import { inputCellScalarValue, inputCellTag, inputColsFromSlot, inputRowsFromSlot } from './operands'
-import {
-  lookupVectorSlotLength,
-  slotVectorCol,
-  slotVectorLength,
-  slotVectorRow,
-  writeLookupInputCellResult,
-  writeLookupInputCellToSpill,
-} from './lookup-slot'
+import { lookupVectorSlotLength, slotVectorLength, writeLookupInputCellResult, writeLookupInputCellToSpill } from './lookup-slot'
+import { compareLookupCell, compareLookupVectorCandidate } from './lookup-candidate-comparison'
 import { truncToInt } from './numeric-core'
 import { STACK_KIND_ARRAY, STACK_KIND_RANGE, STACK_KIND_SCALAR, writeArrayResult, writeResult } from './result-io'
 import { allocateSpillArrayResult } from './vm'
@@ -68,28 +61,11 @@ export function tryApplyLookupMatchBuiltin(
 
     let best = -1
     for (let index = 0; index < length; index++) {
-      const row = slotVectorRow(base + 1, index, kindStack, rangeIndexStack, rangeRowCounts)
-      const col = slotVectorCol(base + 1, index, kindStack, rangeIndexStack, rangeRowCounts)
-      const candidateTag = inputCellTag(
+      const comparison = compareLookupVectorCandidate(
         base + 1,
-        row,
-        col,
-        kindStack,
-        valueStack,
-        tagStack,
-        rangeIndexStack,
-        rangeOffsets,
-        rangeLengths,
-        rangeRowCounts,
-        rangeColCounts,
-        rangeMembers,
-        cellTags,
-        cellNumbers,
-      )
-      const candidateValue = inputCellScalarValue(
-        base + 1,
-        row,
-        col,
+        index,
+        tagStack[base],
+        valueStack[base],
         kindStack,
         valueStack,
         tagStack,
@@ -103,13 +79,6 @@ export function tryApplyLookupMatchBuiltin(
         cellNumbers,
         cellStringIds,
         cellErrors,
-      )
-      const comparison = compareScalarValues(
-        candidateTag,
-        candidateValue,
-        tagStack[base],
-        valueStack[base],
-        null,
         stringOffsets,
         stringLengths,
         stringData,
@@ -188,28 +157,11 @@ export function tryApplyLookupMatchBuiltin(
     if (searchMode == -1) {
       if (matchMode == 0) {
         for (let index = length - 1; index >= 0; index--) {
-          const row = slotVectorRow(base + 1, index, kindStack, rangeIndexStack, rangeRowCounts)
-          const col = slotVectorCol(base + 1, index, kindStack, rangeIndexStack, rangeRowCounts)
-          const candidateTag = inputCellTag(
+          const comparison = compareLookupVectorCandidate(
             base + 1,
-            row,
-            col,
-            kindStack,
-            valueStack,
-            tagStack,
-            rangeIndexStack,
-            rangeOffsets,
-            rangeLengths,
-            rangeRowCounts,
-            rangeColCounts,
-            rangeMembers,
-            cellTags,
-            cellNumbers,
-          )
-          const candidateValue = inputCellScalarValue(
-            base + 1,
-            row,
-            col,
+            index,
+            tagStack[base],
+            valueStack[base],
             kindStack,
             valueStack,
             tagStack,
@@ -223,13 +175,6 @@ export function tryApplyLookupMatchBuiltin(
             cellNumbers,
             cellStringIds,
             cellErrors,
-          )
-          const comparison = compareScalarValues(
-            candidateTag,
-            candidateValue,
-            tagStack[base],
-            valueStack[base],
-            null,
             stringOffsets,
             stringLengths,
             stringData,
@@ -248,28 +193,11 @@ export function tryApplyLookupMatchBuiltin(
       let reversedPosition = 0
       for (let index = length - 1; index >= 0; index--) {
         reversedPosition += 1
-        const row = slotVectorRow(base + 1, index, kindStack, rangeIndexStack, rangeRowCounts)
-        const col = slotVectorCol(base + 1, index, kindStack, rangeIndexStack, rangeRowCounts)
-        const candidateTag = inputCellTag(
+        const comparison = compareLookupVectorCandidate(
           base + 1,
-          row,
-          col,
-          kindStack,
-          valueStack,
-          tagStack,
-          rangeIndexStack,
-          rangeOffsets,
-          rangeLengths,
-          rangeRowCounts,
-          rangeColCounts,
-          rangeMembers,
-          cellTags,
-          cellNumbers,
-        )
-        const candidateValue = inputCellScalarValue(
-          base + 1,
-          row,
-          col,
+          index,
+          tagStack[base],
+          valueStack[base],
           kindStack,
           valueStack,
           tagStack,
@@ -283,13 +211,6 @@ export function tryApplyLookupMatchBuiltin(
           cellNumbers,
           cellStringIds,
           cellErrors,
-        )
-        const comparison = compareScalarValues(
-          candidateTag,
-          candidateValue,
-          tagStack[base],
-          valueStack[base],
-          null,
           stringOffsets,
           stringLengths,
           stringData,
@@ -328,28 +249,11 @@ export function tryApplyLookupMatchBuiltin(
 
     if (matchMode == 0) {
       for (let index = 0; index < length; index++) {
-        const row = slotVectorRow(base + 1, index, kindStack, rangeIndexStack, rangeRowCounts)
-        const col = slotVectorCol(base + 1, index, kindStack, rangeIndexStack, rangeRowCounts)
-        const candidateTag = inputCellTag(
+        const comparison = compareLookupVectorCandidate(
           base + 1,
-          row,
-          col,
-          kindStack,
-          valueStack,
-          tagStack,
-          rangeIndexStack,
-          rangeOffsets,
-          rangeLengths,
-          rangeRowCounts,
-          rangeColCounts,
-          rangeMembers,
-          cellTags,
-          cellNumbers,
-        )
-        const candidateValue = inputCellScalarValue(
-          base + 1,
-          row,
-          col,
+          index,
+          tagStack[base],
+          valueStack[base],
           kindStack,
           valueStack,
           tagStack,
@@ -363,13 +267,6 @@ export function tryApplyLookupMatchBuiltin(
           cellNumbers,
           cellStringIds,
           cellErrors,
-        )
-        const comparison = compareScalarValues(
-          candidateTag,
-          candidateValue,
-          tagStack[base],
-          valueStack[base],
-          null,
           stringOffsets,
           stringLengths,
           stringData,
@@ -386,28 +283,11 @@ export function tryApplyLookupMatchBuiltin(
 
     let best = -1
     for (let index = 0; index < length; index++) {
-      const row = slotVectorRow(base + 1, index, kindStack, rangeIndexStack, rangeRowCounts)
-      const col = slotVectorCol(base + 1, index, kindStack, rangeIndexStack, rangeRowCounts)
-      const candidateTag = inputCellTag(
+      const comparison = compareLookupVectorCandidate(
         base + 1,
-        row,
-        col,
-        kindStack,
-        valueStack,
-        tagStack,
-        rangeIndexStack,
-        rangeOffsets,
-        rangeLengths,
-        rangeRowCounts,
-        rangeColCounts,
-        rangeMembers,
-        cellTags,
-        cellNumbers,
-      )
-      const candidateValue = inputCellScalarValue(
-        base + 1,
-        row,
-        col,
+        index,
+        tagStack[base],
+        valueStack[base],
         kindStack,
         valueStack,
         tagStack,
@@ -421,13 +301,6 @@ export function tryApplyLookupMatchBuiltin(
         cellNumbers,
         cellStringIds,
         cellErrors,
-      )
-      const comparison = compareScalarValues(
-        candidateTag,
-        candidateValue,
-        tagStack[base],
-        valueStack[base],
-        null,
         stringOffsets,
         stringLengths,
         stringData,
@@ -531,28 +404,11 @@ export function tryApplyLookupMatchBuiltin(
     let matchedIndex = -1
     if (searchMode == -1) {
       for (let index = length - 1; index >= 0; index--) {
-        const row = slotVectorRow(base + 1, index, kindStack, rangeIndexStack, rangeRowCounts)
-        const col = slotVectorCol(base + 1, index, kindStack, rangeIndexStack, rangeRowCounts)
-        const candidateTag = inputCellTag(
+        const comparison = compareLookupVectorCandidate(
           base + 1,
-          row,
-          col,
-          kindStack,
-          valueStack,
-          tagStack,
-          rangeIndexStack,
-          rangeOffsets,
-          rangeLengths,
-          rangeRowCounts,
-          rangeColCounts,
-          rangeMembers,
-          cellTags,
-          cellNumbers,
-        )
-        const candidateValue = inputCellScalarValue(
-          base + 1,
-          row,
-          col,
+          index,
+          tagStack[base],
+          valueStack[base],
           kindStack,
           valueStack,
           tagStack,
@@ -566,13 +422,6 @@ export function tryApplyLookupMatchBuiltin(
           cellNumbers,
           cellStringIds,
           cellErrors,
-        )
-        const comparison = compareScalarValues(
-          candidateTag,
-          candidateValue,
-          tagStack[base],
-          valueStack[base],
-          null,
           stringOffsets,
           stringLengths,
           stringData,
@@ -587,28 +436,11 @@ export function tryApplyLookupMatchBuiltin(
       }
     } else {
       for (let index = 0; index < length; index++) {
-        const row = slotVectorRow(base + 1, index, kindStack, rangeIndexStack, rangeRowCounts)
-        const col = slotVectorCol(base + 1, index, kindStack, rangeIndexStack, rangeRowCounts)
-        const candidateTag = inputCellTag(
+        const comparison = compareLookupVectorCandidate(
           base + 1,
-          row,
-          col,
-          kindStack,
-          valueStack,
-          tagStack,
-          rangeIndexStack,
-          rangeOffsets,
-          rangeLengths,
-          rangeRowCounts,
-          rangeColCounts,
-          rangeMembers,
-          cellTags,
-          cellNumbers,
-        )
-        const candidateValue = inputCellScalarValue(
-          base + 1,
-          row,
-          col,
+          index,
+          tagStack[base],
+          valueStack[base],
           kindStack,
           valueStack,
           tagStack,
@@ -622,13 +454,6 @@ export function tryApplyLookupMatchBuiltin(
           cellNumbers,
           cellStringIds,
           cellErrors,
-        )
-        const comparison = compareScalarValues(
-          candidateTag,
-          candidateValue,
-          tagStack[base],
-          valueStack[base],
-          null,
           stringOffsets,
           stringLengths,
           stringData,
@@ -771,26 +596,12 @@ export function tryApplyLookupMatchBuiltin(
     for (let index = 0; index < lookupLength; index++) {
       const row = lookupRows == 1 ? 0 : index
       const col = lookupRows == 1 ? index : 0
-      const lookupTag = inputCellTag(
+      const comparison = compareLookupCell(
         base + 1,
         row,
         col,
-        kindStack,
-        valueStack,
-        tagStack,
-        rangeIndexStack,
-        rangeOffsets,
-        rangeLengths,
-        rangeRowCounts,
-        rangeColCounts,
-        rangeMembers,
-        cellTags,
-        cellNumbers,
-      )
-      const lookupScalarValue = inputCellScalarValue(
-        base + 1,
-        row,
-        col,
+        tagStack[base],
+        valueStack[base],
         kindStack,
         valueStack,
         tagStack,
@@ -804,13 +615,6 @@ export function tryApplyLookupMatchBuiltin(
         cellNumbers,
         cellStringIds,
         cellErrors,
-      )
-      const comparison = compareScalarValues(
-        lookupTag,
-        lookupScalarValue,
-        tagStack[base],
-        valueStack[base],
-        null,
         stringOffsets,
         stringLengths,
         stringData,
@@ -844,10 +648,12 @@ export function tryApplyLookupMatchBuiltin(
           cellTags,
           cellNumbers,
         )
-        const lookupScalarValue = inputCellScalarValue(
+        const comparison = compareLookupCell(
           base + 1,
           row,
           col,
+          tagStack[base],
+          valueStack[base],
           kindStack,
           valueStack,
           tagStack,
@@ -861,13 +667,6 @@ export function tryApplyLookupMatchBuiltin(
           cellNumbers,
           cellStringIds,
           cellErrors,
-        )
-        const comparison = compareScalarValues(
-          lookupTag,
-          lookupScalarValue,
-          tagStack[base],
-          valueStack[base],
-          null,
           stringOffsets,
           stringLengths,
           stringData,

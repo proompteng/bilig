@@ -79,6 +79,11 @@ function expectNumberCell(kernel: Awaited<ReturnType<typeof createKernel>>, inde
   expect(kernel.readNumbers()[index]).toBeCloseTo(expected, digits)
 }
 
+function expectErrorCell(kernel: Awaited<ReturnType<typeof createKernel>>, index: number, expected: ErrorCode): void {
+  expect(kernel.readTags()[index]).toBe(ValueTag.Error)
+  expect(kernel.readErrors()[index]).toBe(expected)
+}
+
 describe('wasm kernel lookup dispatch slab', () => {
   it('keeps match-family lookup behavior stable across refactors', async () => {
     const kernel = await createKernel()
@@ -215,5 +220,75 @@ describe('wasm kernel lookup dispatch slab', () => {
 
     expectNumberCell(kernel, cellIndex(5, 0, width), 50)
     expectNumberCell(kernel, cellIndex(5, 1, width), 50)
+  })
+
+  it('keeps lookup dispatch validation stable across refactors', async () => {
+    const kernel = await createKernel()
+    const width = 12
+    kernel.init(120, 1, 7, 8, 32)
+
+    const cellTags = new Uint8Array(120)
+    const cellNumbers = new Float64Array(120)
+    ;[10, 20, 30].forEach((value, index) => {
+      cellTags[index] = ValueTag.Number
+      cellNumbers[index] = value
+    })
+    ;[100, 200].forEach((value, index) => {
+      cellTags[10 + index] = ValueTag.Number
+      cellNumbers[10 + index] = value
+    })
+    ;[100, 200, 300].forEach((value, index) => {
+      cellTags[20 + index] = ValueTag.Number
+      cellNumbers[20 + index] = value
+    })
+    ;[1, 2, 3, 4].forEach((value, index) => {
+      cellTags[30 + index] = ValueTag.Number
+      cellNumbers[30 + index] = value
+    })
+    kernel.writeCells(cellTags, cellNumbers, new Uint32Array(120), new Uint16Array(120))
+
+    kernel.uploadRangeMembers(
+      Uint32Array.from([0, 1, 2, 10, 11, 20, 21, 22, 30, 31, 32, 33]),
+      Uint32Array.from([0, 3, 5, 8]),
+      Uint32Array.from([3, 2, 3, 4]),
+    )
+    kernel.uploadRangeShapes(Uint32Array.from([3, 2, 3, 2]), Uint32Array.from([1, 1, 1, 2]))
+
+    const packed = packPrograms([
+      [encodePushNumber(0), encodePushRange(0), encodePushNumber(1), encodeCall(BuiltinId.Match, 3), encodeRet()],
+      [encodePushNumber(0), encodePushRange(0), encodePushNumber(1), encodePushNumber(2), encodeCall(BuiltinId.Xmatch, 4), encodeRet()],
+      [encodePushNumber(0), encodePushRange(0), encodePushRange(1), encodeCall(BuiltinId.Xlookup, 3), encodeRet()],
+      [encodePushNumber(0), encodePushRange(0), encodePushRange(1), encodePushNumber(1), encodeCall(BuiltinId.Lookup, 3), encodeRet()],
+      [encodePushNumber(0), encodePushRange(3), encodePushNumber(1), encodeCall(BuiltinId.Match, 3), encodeRet()],
+    ])
+    const constants = packConstants([[20, 2], [20, 0, 2], [20], [20], [20, 0]])
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([
+        cellIndex(5, 0, width),
+        cellIndex(5, 1, width),
+        cellIndex(5, 2, width),
+        cellIndex(5, 3, width),
+        cellIndex(5, 4, width),
+      ]),
+    )
+    kernel.uploadConstants(constants.constants, constants.offsets, constants.lengths)
+    kernel.evalBatch(
+      Uint32Array.from([
+        cellIndex(5, 0, width),
+        cellIndex(5, 1, width),
+        cellIndex(5, 2, width),
+        cellIndex(5, 3, width),
+        cellIndex(5, 4, width),
+      ]),
+    )
+
+    expectErrorCell(kernel, cellIndex(5, 0, width), ErrorCode.Value)
+    expectErrorCell(kernel, cellIndex(5, 1, width), ErrorCode.Value)
+    expectErrorCell(kernel, cellIndex(5, 2, width), ErrorCode.Value)
+    expectErrorCell(kernel, cellIndex(5, 3, width), ErrorCode.Value)
+    expectErrorCell(kernel, cellIndex(5, 4, width), ErrorCode.Value)
   })
 })
