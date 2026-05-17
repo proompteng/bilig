@@ -239,4 +239,27 @@ describe('zero sync query schemas', () => {
       expect(() => executeZeroQueryTransform(alias, queryArgsForAlias(alias), 'alex@example.com'), alias).not.toThrow()
     }
   })
+
+  it('runs query transforms through Zero query validators instead of a duplicate schema registry', () => {
+    expect(() =>
+      executeZeroQueryTransform(
+        'cellInput.tile',
+        {
+          documentId: 'doc-1',
+          sheetName: 'Sheet1',
+          rowStart: Number.MAX_SAFE_INTEGER + 1,
+          rowEnd: Number.MAX_SAFE_INTEGER + 1,
+          colStart: 0,
+          colEnd: 0,
+        },
+        'alex@example.com',
+      ),
+    ).toThrow()
+    expect(() => executeZeroQueryTransform('workbookChatThread', { documentId: 'doc-1' }, 'alex@example.com')).toThrow(
+      'Unknown Zero query: workbookChatThread',
+    )
+    expect(() => executeZeroQueryTransform('missing.query', { documentId: 'doc-1' }, 'alex@example.com')).toThrow(
+      'Unknown Zero query: missing.query',
+    )
+  })
 })
