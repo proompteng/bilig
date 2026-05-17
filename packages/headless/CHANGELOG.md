@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.18.8
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.18.7
+- Manual override: no
+
+## Fixes
+- perf(headless): bypass reducer for lazy formula edits (771ebbda)
+
 ## 0.18.7
 
 - Release type: patch
