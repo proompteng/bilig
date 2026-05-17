@@ -312,10 +312,10 @@ Latest Oak route adapter action on May 14, 2026:
   JSON-backed workbook state." The form confirmed: "Bilig WorkPaper submitted
   successfully. You'll receive an email once your submission is approved."
 - External MCP directory follow-up: MCP Server Spot submission form is staged
-  in Atlas with public project data, `Development` category, `Tools` feature,
-  `Database` icon, Claude Desktop/Cursor/VS Code compatibility, TypeScript,
-  stdio transport, npm command, and docs/repo/package links. The remaining
-  step is clicking Submit, held for action-time confirmation.
+  in Dia with public project data, `Development` category, `Tools` feature,
+  `GitHub` icon, Claude Desktop/Cursor/VS Code compatibility, TypeScript, stdio
+  transport, npm command, and docs/repo/package links. The remaining step is
+  clicking Submit, held for action-time confirmation.
 - External MCP directory follow-up: the `appcypher/awesome-mcp-servers`
   repository has pull requests and issues disabled by the owner. The
   `gregkonush:codex/add-bilig-workpaper` fork branch contains the one-line
