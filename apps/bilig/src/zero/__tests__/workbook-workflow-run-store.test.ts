@@ -755,6 +755,46 @@ describe('workbook-workflow-run-store', () => {
     ])
   })
 
+  it('applies history limits after filtering malformed durable workflow rows', async () => {
+    const invalidRun = createWorkflowRun()
+    const validRun = {
+      ...createWorkflowRun(),
+      runId: 'workflow-valid-after-invalid',
+      title: 'Valid Durable Workflow',
+      updatedAtUnixMs: 130,
+      completedAtUnixMs: 130,
+    }
+    const queryable = createWorkflowRunStoreConnection(
+      [
+        createZeroWorkflowRunRow(invalidRun, {
+          runId: 'workflow-invalid-front',
+          createdAtUnixMs: 200,
+          updatedAtUnixMs: 100,
+        }),
+        createZeroWorkflowRunRow(validRun),
+      ],
+      [],
+      {
+        stepRows: createZeroWorkflowStepRows(validRun),
+        artifactRows: [createZeroWorkflowArtifactRow(validRun)],
+      },
+    )
+
+    await expect(
+      listWorkbookThreadWorkflowRuns(queryable, {
+        documentId: 'doc-1',
+        actorUserId: 'alex@example.com',
+        threadId: 'thr-1',
+        limit: 1,
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        runId: validRun.runId,
+        title: 'Valid Durable Workflow',
+      }),
+    ])
+  })
+
   it('drops workflow runs when durable artifact rows are malformed instead of falling back to legacy artifact json', async () => {
     const run = createWorkflowRun()
     const queryable = createWorkflowRunStoreConnection([createZeroWorkflowRunRow(run)], [], {

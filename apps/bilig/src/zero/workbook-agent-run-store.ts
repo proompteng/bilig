@@ -144,6 +144,20 @@ function normalizeExecutionRecord(row: WorkbookAgentRunRow): WorkbookAgentExecut
   }
 }
 
+function normalizeExecutionRows(rows: readonly ZeroWorkbookAgentRunRow[], limit: number): WorkbookAgentExecutionRecord[] {
+  const records: WorkbookAgentExecutionRecord[] = []
+  for (const row of rows) {
+    const record = normalizeExecutionRecord(toAgentRunRow(row))
+    if (record) {
+      records.push(record)
+      if (records.length >= limit) {
+        break
+      }
+    }
+  }
+  return records
+}
+
 export async function ensureWorkbookAgentRunSchema(db: Queryable): Promise<void> {
   await db.query(`
     CREATE TABLE IF NOT EXISTS workbook_agent_run (
@@ -304,11 +318,7 @@ export async function listWorkbookAgentRuns(
     limit?: number
   },
 ): Promise<WorkbookAgentExecutionRecord[]> {
-  const rows = (await db.listWorkbookAgentRunRows(input)).slice(0, input.limit ?? 20).map(toAgentRunRow)
-  return rows.flatMap((row) => {
-    const record = normalizeExecutionRecord(row)
-    return record ? [record] : []
-  })
+  return normalizeExecutionRows(await db.listWorkbookAgentRunRows(input), input.limit ?? 20)
 }
 
 export async function listWorkbookAgentThreadRuns(
@@ -320,9 +330,5 @@ export async function listWorkbookAgentThreadRuns(
     limit?: number
   },
 ): Promise<WorkbookAgentExecutionRecord[]> {
-  const rows = (await db.listWorkbookAgentRunRows(input)).slice(0, input.limit ?? 20).map(toAgentRunRow)
-  return rows.flatMap((row) => {
-    const record = normalizeExecutionRecord(row)
-    return record ? [record] : []
-  })
+  return normalizeExecutionRows(await db.listWorkbookAgentRunRows(input), input.limit ?? 20)
 }

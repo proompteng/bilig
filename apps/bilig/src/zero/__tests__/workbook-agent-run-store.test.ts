@@ -103,6 +103,35 @@ function createExecutionRecord() {
   }
 }
 
+function createZeroAgentRunRow(
+  record: ReturnType<typeof createExecutionRecord>,
+  overrides: Partial<ZeroAgentRunRow> = {},
+): ZeroAgentRunRow {
+  return {
+    id: record.id,
+    bundleId: record.bundleId,
+    workbookId: record.documentId,
+    threadId: record.threadId,
+    turnId: record.turnId,
+    actorUserId: record.actorUserId,
+    goalText: record.goalText,
+    planText: record.planText,
+    summary: record.summary,
+    scope: record.scope,
+    riskClass: record.riskClass,
+    acceptedScope: record.acceptedScope,
+    appliedBy: record.appliedBy,
+    baseRevision: record.baseRevision,
+    appliedRevision: record.appliedRevision,
+    createdAtUnixMs: record.createdAtUnixMs,
+    appliedAtUnixMs: record.appliedAtUnixMs,
+    context: record.context,
+    commands: record.commands,
+    preview: record.preview,
+    ...overrides,
+  }
+}
+
 describe('workbook-agent-run-store', () => {
   it('backfills legacy nullable bundle ids before enforcing the execution schema', async () => {
     const queryable = new FakeQueryable()
@@ -314,6 +343,65 @@ describe('workbook-agent-run-store', () => {
     })
 
     expect(records.map((record) => record.id)).toEqual(['run-1'])
+  })
+
+  it('applies workbook execution limits after filtering malformed Zero rows', async () => {
+    const valid = {
+      ...createExecutionRecord(),
+      id: 'run-valid-after-invalid',
+      bundleId: 'bundle-valid-after-invalid',
+      summary: 'Valid run after a malformed front row',
+    }
+    const queryable = new FakeAgentRunConnection(
+      [],
+      [
+        createZeroAgentRunRow(valid, {
+          id: 'run-invalid-front',
+          bundleId: 'bundle-invalid-front',
+          baseRevision: 9,
+          appliedRevision: 8,
+        }),
+        createZeroAgentRunRow(valid),
+      ],
+    )
+
+    const records = await listWorkbookAgentRuns(queryable, {
+      documentId: 'doc-1',
+      actorUserId: 'alex@example.com',
+      limit: 1,
+    })
+
+    expect(records.map((record) => record.id)).toEqual(['run-valid-after-invalid'])
+  })
+
+  it('applies thread execution limits after filtering malformed Zero rows', async () => {
+    const valid = {
+      ...createExecutionRecord(),
+      id: 'thread-run-valid-after-invalid',
+      bundleId: 'thread-bundle-valid-after-invalid',
+      threadId: 'thr-shared',
+    }
+    const queryable = new FakeAgentRunConnection(
+      [],
+      [
+        createZeroAgentRunRow(valid, {
+          id: 'thread-run-invalid-front',
+          bundleId: 'thread-bundle-invalid-front',
+          createdAtUnixMs: 300,
+          appliedAtUnixMs: 200,
+        }),
+        createZeroAgentRunRow(valid),
+      ],
+    )
+
+    const records = await listWorkbookAgentThreadRuns(queryable, {
+      documentId: 'doc-1',
+      actorUserId: 'casey@example.com',
+      threadId: 'thr-shared',
+      limit: 1,
+    })
+
+    expect(records.map((record) => record.id)).toEqual(['thread-run-valid-after-invalid'])
   })
 
   it('loads shared thread execution records for collaborator viewers', async () => {

@@ -613,13 +613,15 @@ export async function listWorkbookThreadWorkflowRuns(
     limit?: number
   },
 ): Promise<WorkbookAgentWorkflowRun[]> {
-  const rows = (await db.listWorkbookWorkflowRunRows(input)).slice(0, input.limit ?? 20).map(toWorkflowRunRow)
+  const rows = (await db.listWorkbookWorkflowRunRows(input)).map(toWorkflowRunRow)
   const runIds = rows.flatMap((row) => (typeof row.runId === 'string' ? [row.runId] : []))
   const selectedRunIds = new Set(runIds)
   const [stepRows, artifactRows] = await Promise.all([db.listWorkbookWorkflowStepRows(input), db.listWorkbookWorkflowArtifactRows(input)])
   const durableSteps = loadDurableWorkflowSteps(stepRows, selectedRunIds)
   const durableArtifacts = loadDurableWorkflowArtifacts(artifactRows, selectedRunIds)
-  return rows.flatMap((row) => {
+  const limit = input.limit ?? 20
+  const runs: WorkbookAgentWorkflowRun[] = []
+  for (const row of rows) {
     const runId = typeof row.runId === 'string' ? row.runId : null
     const hydrated: {
       steps: WorkbookAgentWorkflowStep[] | null
@@ -638,6 +640,12 @@ export async function listWorkbookThreadWorkflowRuns(
       }
     }
     const run = normalizeWorkflowRun(row, hydrated)
-    return run ? [run] : []
-  })
+    if (run) {
+      runs.push(run)
+      if (runs.length >= limit) {
+        break
+      }
+    }
+  }
+  return runs
 }
