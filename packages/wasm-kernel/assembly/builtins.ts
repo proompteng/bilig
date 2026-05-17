@@ -162,6 +162,8 @@ export function applyBuiltin(
     rangeMembers,
     cellTags,
     cellNumbers,
+    cellStringIds,
+    cellErrors,
   )
   if (arrayReshapeResult >= 0) {
     return arrayReshapeResult

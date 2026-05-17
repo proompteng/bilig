@@ -17,6 +17,14 @@ function coerceBoolean(tag: u8, value: f64): i32 {
   return -1
 }
 
+function resolveOneBasedIndex(rawIndex: i32, length: i32): i32 {
+  if (rawIndex == i32.MIN_VALUE || rawIndex == 0 || length <= 0) {
+    return i32.MIN_VALUE
+  }
+  const resolved = rawIndex < 0 ? length + rawIndex : rawIndex - 1
+  return resolved >= 0 && resolved < length ? resolved : i32.MIN_VALUE
+}
+
 function writeValueError(
   base: i32,
   code: f64,
@@ -224,8 +232,8 @@ export function tryApplyArrayOrderingBuiltin(
       if (kindStack[argumentSlot] != STACK_KIND_SCALAR) {
         return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
       }
-      const selectedCol = coerceInteger(tagStack[argumentSlot], valueStack[argumentSlot]) - 1
-      if (selectedCol < 0 || selectedCol >= sourceCols || selectedCol == i32.MIN_VALUE - 1) {
+      const selectedCol = resolveOneBasedIndex(coerceInteger(tagStack[argumentSlot], valueStack[argumentSlot]), sourceCols)
+      if (selectedCol == i32.MIN_VALUE) {
         return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
       }
       selectedCols.push(selectedCol)
@@ -288,8 +296,8 @@ export function tryApplyArrayOrderingBuiltin(
       if (kindStack[argumentSlot] != STACK_KIND_SCALAR) {
         return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
       }
-      const selectedRow = coerceInteger(tagStack[argumentSlot], valueStack[argumentSlot]) - 1
-      if (selectedRow < 0 || selectedRow >= sourceRows || selectedRow == i32.MIN_VALUE - 1) {
+      const selectedRow = resolveOneBasedIndex(coerceInteger(tagStack[argumentSlot], valueStack[argumentSlot]), sourceRows)
+      if (selectedRow == i32.MIN_VALUE) {
         return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
       }
       selectedRows.push(selectedRow)

@@ -1,9 +1,9 @@
 import { BuiltinId, ErrorCode, ValueTag } from './protocol'
-import { inputCellNumeric, inputCellTag, inputColsFromSlot, inputRowsFromSlot, toNumberOrNaN } from './operands'
+import { inputCellNumeric, inputCellScalarValue, inputCellTag, inputColsFromSlot, inputRowsFromSlot, toNumberOrNaN } from './operands'
 import { coerceInteger } from './numeric-core'
 import { scalarErrorAt } from './builtin-args'
 import { STACK_KIND_ARRAY, STACK_KIND_RANGE, STACK_KIND_SCALAR, writeArrayResult, writeResult } from './result-io'
-import { allocateSpillArrayResult, writeSpillArrayNumber } from './vm'
+import { allocateSpillArrayResult, writeSpillArrayNumber, writeSpillArrayValue } from './vm'
 
 function coerceBoolean(tag: u8, value: f64): i32 {
   if (tag == ValueTag.Boolean || tag == ValueTag.Number) {
@@ -31,11 +31,12 @@ function isArrayLike(kind: u8): bool {
 }
 
 function appendFlattenedValues(
+  tags: Array<u8>,
   values: Array<f64>,
   base: i32,
   sourceRows: i32,
   sourceCols: i32,
-  ignoreEmpty: bool,
+  ignoreMode: i32,
   scanByCol: bool,
   kindStack: Uint8Array,
   valueStack: Float64Array,
@@ -48,6 +49,8 @@ function appendFlattenedValues(
   rangeMembers: Uint32Array,
   cellTags: Uint8Array,
   cellNumbers: Float64Array,
+  cellStringIds: Uint32Array,
+  cellErrors: Uint16Array,
 ): f64 {
   if (!scanByCol) {
     for (let row = 0; row < sourceRows; row++) {
@@ -68,10 +71,13 @@ function appendFlattenedValues(
           cellTags,
           cellNumbers,
         )
-        if (ignoreEmpty && sourceTag == ValueTag.Empty) {
+        if (
+          (sourceTag == ValueTag.Empty && (ignoreMode == 1 || ignoreMode == 3)) ||
+          (sourceTag == ValueTag.Error && (ignoreMode == 2 || ignoreMode == 3))
+        ) {
           continue
         }
-        const sourceValue = inputCellNumeric(
+        const sourceValue = inputCellScalarValue(
           base,
           row,
           col,
@@ -86,10 +92,13 @@ function appendFlattenedValues(
           rangeMembers,
           cellTags,
           cellNumbers,
+          cellStringIds,
+          cellErrors,
         )
-        if (isNaN(sourceValue)) {
+        if (sourceTag == ValueTag.Error && isNaN(sourceValue)) {
           return ErrorCode.Value
         }
+        tags.push(sourceTag)
         values.push(sourceValue)
       }
     }
@@ -114,10 +123,13 @@ function appendFlattenedValues(
         cellTags,
         cellNumbers,
       )
-      if (ignoreEmpty && sourceTag == ValueTag.Empty) {
+      if (
+        (sourceTag == ValueTag.Empty && (ignoreMode == 1 || ignoreMode == 3)) ||
+        (sourceTag == ValueTag.Error && (ignoreMode == 2 || ignoreMode == 3))
+      ) {
         continue
       }
-      const sourceValue = inputCellNumeric(
+      const sourceValue = inputCellScalarValue(
         base,
         row,
         col,
@@ -132,10 +144,13 @@ function appendFlattenedValues(
         rangeMembers,
         cellTags,
         cellNumbers,
+        cellStringIds,
+        cellErrors,
       )
-      if (isNaN(sourceValue)) {
+      if (sourceTag == ValueTag.Error && isNaN(sourceValue)) {
         return ErrorCode.Value
       }
+      tags.push(sourceTag)
       values.push(sourceValue)
     }
   }
@@ -158,6 +173,8 @@ export function tryApplyArrayReshapeBuiltin(
   rangeMembers: Uint32Array,
   cellTags: Uint8Array,
   cellNumbers: Float64Array,
+  cellStringIds: Uint32Array,
+  cellErrors: Uint16Array,
 ): i32 {
   if ((builtinId == BuiltinId.Tocol && argc >= 1 && argc <= 3) || (builtinId == BuiltinId.Torow && argc >= 1 && argc <= 3)) {
     const sourceKind = kindStack[base]
@@ -175,18 +192,20 @@ export function tryApplyArrayReshapeBuiltin(
     }
 
     const ignoreValue = argc >= 2 ? coerceInteger(tagStack[base + 1], valueStack[base + 1]) : 0
-    const scanByCol = argc >= 3 ? coerceBoolean(tagStack[base + 2], valueStack[base + 2]) : builtinId == BuiltinId.Tocol ? 1 : 0
-    if (ignoreValue < 0 || (ignoreValue != 0 && ignoreValue != 1) || scanByCol < 0) {
+    const scanByCol = argc >= 3 ? coerceBoolean(tagStack[base + 2], valueStack[base + 2]) : 0
+    if (ignoreValue < 0 || ignoreValue > 3 || scanByCol < 0) {
       return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
     }
 
+    const tags = new Array<u8>()
     const values = new Array<f64>()
     const appendError = appendFlattenedValues(
+      tags,
       values,
       base,
       sourceRows,
       sourceCols,
-      ignoreValue == 1,
+      ignoreValue,
       scanByCol != 0,
       kindStack,
       valueStack,
@@ -199,6 +218,8 @@ export function tryApplyArrayReshapeBuiltin(
       rangeMembers,
       cellTags,
       cellNumbers,
+      cellStringIds,
+      cellErrors,
     )
     if (appendError != ErrorCode.None) {
       return writeValueError(base, appendError, rangeIndexStack, valueStack, tagStack, kindStack)
@@ -208,7 +229,7 @@ export function tryApplyArrayReshapeBuiltin(
     const outputCols = builtinId == BuiltinId.Tocol ? 1 : values.length
     const arrayIndex = allocateSpillArrayResult(outputRows, outputCols)
     for (let offset = 0; offset < values.length; offset++) {
-      writeSpillArrayNumber(arrayIndex, offset, values[offset])
+      writeSpillArrayValue(arrayIndex, offset, tags[offset], values[offset])
     }
     return writeArrayResult(base, arrayIndex, outputRows, outputCols, rangeIndexStack, valueStack, tagStack, kindStack)
   }

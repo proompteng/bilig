@@ -15,7 +15,7 @@ import {
   writeResult,
   writeStringResult,
 } from './result-io'
-import { allocateSpillArrayResult } from './vm'
+import { allocateSpillArrayResult, writeSpillArrayValue } from './vm'
 
 export function tryApplyArrayInfoBuiltin(
   builtinId: i32,
@@ -271,13 +271,6 @@ export function tryApplyArrayInfoBuiltin(
       rowCount = max(rowCount, rows)
       totalCols += cols
     }
-    for (let index = 0; index < argc; index += 1) {
-      const rows = inputRowsFromSlot(base + index, kindStack, rangeIndexStack, rangeRowCounts)
-      if (rows != 1 && rows != rowCount) {
-        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-      }
-    }
-
     const arrayIndex = allocateSpillArrayResult(rowCount, totalCols)
     let outputOffset = 0
     for (let row = 0; row < rowCount; row += 1) {
@@ -285,13 +278,17 @@ export function tryApplyArrayInfoBuiltin(
         const slot = base + index
         const rows = inputRowsFromSlot(slot, kindStack, rangeIndexStack, rangeRowCounts)
         const cols = inputColsFromSlot(slot, kindStack, rangeIndexStack, rangeColCounts)
-        const sourceRow = rows == 1 ? 0 : row
         for (let col = 0; col < cols; col += 1) {
+          if (row >= rows) {
+            writeSpillArrayValue(arrayIndex, outputOffset, <u8>ValueTag.Error, ErrorCode.NA)
+            outputOffset += 1
+            continue
+          }
           const copyError = copyInputCellToSpill(
             arrayIndex,
             outputOffset,
             slot,
-            sourceRow,
+            row,
             col,
             kindStack,
             valueStack,
@@ -334,13 +331,6 @@ export function tryApplyArrayInfoBuiltin(
       totalRows += rows
       colCount = max(colCount, cols)
     }
-    for (let index = 0; index < argc; index += 1) {
-      const cols = inputColsFromSlot(base + index, kindStack, rangeIndexStack, rangeColCounts)
-      if (cols != 1 && cols != colCount) {
-        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-      }
-    }
-
     const arrayIndex = allocateSpillArrayResult(totalRows, colCount)
     let outputOffset = 0
     for (let index = 0; index < argc; index += 1) {
@@ -349,13 +339,17 @@ export function tryApplyArrayInfoBuiltin(
       const cols = inputColsFromSlot(slot, kindStack, rangeIndexStack, rangeColCounts)
       for (let row = 0; row < rows; row += 1) {
         for (let col = 0; col < colCount; col += 1) {
-          const sourceCol = cols == 1 ? 0 : col
+          if (col >= cols) {
+            writeSpillArrayValue(arrayIndex, outputOffset, <u8>ValueTag.Error, ErrorCode.NA)
+            outputOffset += 1
+            continue
+          }
           const copyError = copyInputCellToSpill(
             arrayIndex,
             outputOffset,
             slot,
             row,
-            sourceCol,
+            col,
             kindStack,
             valueStack,
             tagStack,

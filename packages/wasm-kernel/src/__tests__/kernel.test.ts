@@ -2690,9 +2690,9 @@ describe('wasm kernel', () => {
       { tag: ValueTag.String, value: 'b', stringId: 0 },
       { tag: ValueTag.String, value: 'c', stringId: 0 },
       { tag: ValueTag.Number, value: 20 },
-      { tag: ValueTag.String, value: 'a', stringId: 0 },
-      { tag: ValueTag.String, value: 'b', stringId: 0 },
-      { tag: ValueTag.String, value: 'c', stringId: 0 },
+      { tag: ValueTag.Error, code: ErrorCode.NA },
+      { tag: ValueTag.Error, code: ErrorCode.NA },
+      { tag: ValueTag.Error, code: ErrorCode.NA },
     ])
 
     expect(kernel.readTags()[cellIndex(3, 2, width)]).toBe(ValueTag.String)
@@ -2704,7 +2704,7 @@ describe('wasm kernel', () => {
       { tag: ValueTag.Number, value: 40 },
       { tag: ValueTag.Number, value: 50 },
       { tag: ValueTag.String, value: 'c', stringId: 0 },
-      { tag: ValueTag.String, value: 'c', stringId: 0 },
+      { tag: ValueTag.Error, code: ErrorCode.NA },
     ])
 
     expect(kernel.readTags()[cellIndex(3, 3, width)]).toBe(ValueTag.Number)
@@ -2784,7 +2784,7 @@ describe('wasm kernel', () => {
 
   it('evaluates numeric-only dynamic-array builtins on the wasm path', async () => {
     const kernel = await createKernel()
-    kernel.init(24, 11, 1, 1, 1)
+    kernel.init(28, 13, 1, 1, 1)
     kernel.writeCells(
       new Uint8Array([
         ValueTag.Number,
@@ -2811,10 +2811,14 @@ describe('wasm kernel', () => {
         0,
         0,
         0,
+        0,
+        0,
+        0,
+        0,
       ]),
-      new Float64Array([1, 2, 3, 4, 5, 6, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-      new Uint32Array(24),
-      new Uint16Array(24),
+      new Float64Array([1, 2, 3, 4, 5, 6, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+      new Uint32Array(28),
+      new Uint16Array(28),
     )
     kernel.uploadRangeMembers(Uint32Array.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), Uint32Array.from([0, 6]), Uint32Array.from([6, 4]))
     kernel.uploadRangeShapes(Uint32Array.from([2, 4]), Uint32Array.from([3, 1]))
@@ -2839,22 +2843,21 @@ describe('wasm kernel', () => {
       [encodePushRange(0), encodeCall(BUILTIN.TOROW, 1), encodeRet()],
       [encodePushRange(0), encodePushNumber(2), encodeCall(BUILTIN.WRAPROWS, 2), encodeRet()],
       [encodePushRange(0), encodePushNumber(2), encodeCall(BUILTIN.WRAPCOLS, 2), encodeRet()],
+      [encodePushRange(0), encodePushNumber(4), encodeCall(BUILTIN.CHOOSECOLS, 2), encodeRet()],
+      [encodePushRange(0), encodePushNumber(4), encodeCall(BUILTIN.CHOOSEROWS, 2), encodeRet()],
     ])
-    kernel.uploadPrograms(packed.programs, packed.offsets, packed.lengths, Uint32Array.from([12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]))
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]),
+    )
     kernel.uploadConstants(new Float64Array([0, 1, 2, 3, -1]), new Uint32Array([0, 0, 0, 0, 0]), new Uint32Array([1, 1, 1, 1, 1]))
-    kernel.evalBatch(Uint32Array.from([12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]))
+    kernel.evalBatch(Uint32Array.from([12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]))
 
-    expect(kernel.readTags()[12]).toBe(ValueTag.Number)
-    expect(kernel.readTags()[13]).toBe(ValueTag.Number)
-    expect(kernel.readTags()[14]).toBe(ValueTag.Number)
-    expect(kernel.readTags()[15]).toBe(ValueTag.Number)
-    expect(kernel.readTags()[16]).toBe(ValueTag.Number)
-    expect(kernel.readTags()[17]).toBe(ValueTag.Number)
-    expect(kernel.readTags()[18]).toBe(ValueTag.Number)
-    expect(kernel.readTags()[19]).toBe(ValueTag.Number)
-    expect(kernel.readTags()[20]).toBe(ValueTag.Number)
-    expect(kernel.readTags()[21]).toBe(ValueTag.Number)
-    expect(kernel.readTags()[22]).toBe(ValueTag.Number)
+    for (const index of [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]) {
+      expect(kernel.readTags()[index]).toBe(ValueTag.Number)
+    }
 
     expect(kernel.readSpillRows()[12]).toBe(2)
     expect(kernel.readSpillCols()[12]).toBe(1)
@@ -2895,7 +2898,7 @@ describe('wasm kernel', () => {
     expect(kernel.readSpillCols()[19]).toBe(1)
     expect(kernel.readSpillLengths()[19]).toBe(6)
     expect(Array.from(kernel.readSpillNumbers().slice(kernel.readSpillOffsets()[19], kernel.readSpillOffsets()[19] + 6))).toEqual([
-      1, 4, 2, 5, 3, 6,
+      1, 2, 3, 4, 5, 6,
     ])
     expect(kernel.readSpillRows()[20]).toBe(1)
     expect(kernel.readSpillCols()[20]).toBe(6)
@@ -2914,6 +2917,73 @@ describe('wasm kernel', () => {
     expect(kernel.readSpillLengths()[22]).toBe(6)
     expect(Array.from(kernel.readSpillNumbers().slice(kernel.readSpillOffsets()[22], kernel.readSpillOffsets()[22] + 6))).toEqual([
       1, 2, 3, 4, 5, 6,
+    ])
+    expect(kernel.readSpillRows()[23]).toBe(2)
+    expect(kernel.readSpillCols()[23]).toBe(1)
+    expect(kernel.readSpillLengths()[23]).toBe(2)
+    expect(Array.from(kernel.readSpillNumbers().slice(kernel.readSpillOffsets()[23], kernel.readSpillOffsets()[23] + 2))).toEqual([3, 6])
+    expect(kernel.readSpillRows()[24]).toBe(1)
+    expect(kernel.readSpillCols()[24]).toBe(3)
+    expect(kernel.readSpillLengths()[24]).toBe(3)
+    expect(Array.from(kernel.readSpillNumbers().slice(kernel.readSpillOffsets()[24], kernel.readSpillOffsets()[24] + 3))).toEqual([4, 5, 6])
+  })
+
+  it('preserves general cell values and ignore modes when flattening on the wasm path', async () => {
+    const kernel = await createKernel()
+    const width = 6
+    const pooledStrings = ['', 'x']
+    kernel.init(18, 6, 1, 3, 16)
+    kernel.writeCells(
+      new Uint8Array([
+        ValueTag.Number,
+        ValueTag.Empty,
+        ValueTag.Error,
+        ValueTag.String,
+        ValueTag.Number,
+        ValueTag.Number,
+        ...Array.from({ length: 12 }, () => ValueTag.Empty),
+      ]),
+      new Float64Array([1, 0, 0, 0, 5, 6, ...Array.from({ length: 12 }, () => 0)]),
+      new Uint32Array([0, 0, 0, 1, 0, 0, ...Array.from({ length: 12 }, () => 0)]),
+      new Uint16Array([0, 0, ErrorCode.NA, 0, 0, 0, ...Array.from({ length: 12 }, () => 0)]),
+    )
+    kernel.uploadRangeMembers(Uint32Array.from([0, 1, 2, 3, 4, 5]), Uint32Array.from([0]), Uint32Array.from([6]))
+    kernel.uploadRangeShapes(Uint32Array.from([2]), Uint32Array.from([3]))
+
+    const packed = packPrograms([
+      [encodePushRange(0), encodePushNumber(0), encodeCall(BUILTIN.TOCOL, 2), encodeRet()],
+      [encodePushRange(0), encodePushNumber(0), encodeCall(BUILTIN.TOCOL, 2), encodeRet()],
+      [encodePushRange(0), encodePushNumber(0), encodePushBoolean(true), encodeCall(BUILTIN.TOROW, 3), encodeRet()],
+    ])
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([cellIndex(2, 0, width), cellIndex(2, 1, width), cellIndex(2, 2, width)]),
+    )
+    const constants = packConstants([[3], [2], [1]])
+    kernel.uploadConstants(constants.constants, constants.offsets, constants.lengths)
+    kernel.evalBatch(Uint32Array.from([cellIndex(2, 0, width), cellIndex(2, 1, width), cellIndex(2, 2, width)]))
+
+    expect(readSpillValues(kernel, cellIndex(2, 0, width), pooledStrings)).toEqual([
+      { tag: ValueTag.Number, value: 1 },
+      { tag: ValueTag.String, value: 'x', stringId: 0 },
+      { tag: ValueTag.Number, value: 5 },
+      { tag: ValueTag.Number, value: 6 },
+    ])
+    expect(readSpillValues(kernel, cellIndex(2, 1, width), pooledStrings)).toEqual([
+      { tag: ValueTag.Number, value: 1 },
+      { tag: ValueTag.Empty },
+      { tag: ValueTag.String, value: 'x', stringId: 0 },
+      { tag: ValueTag.Number, value: 5 },
+      { tag: ValueTag.Number, value: 6 },
+    ])
+    expect(readSpillValues(kernel, cellIndex(2, 2, width), pooledStrings)).toEqual([
+      { tag: ValueTag.Number, value: 1 },
+      { tag: ValueTag.String, value: 'x', stringId: 0 },
+      { tag: ValueTag.Number, value: 5 },
+      { tag: ValueTag.Error, code: ErrorCode.NA },
+      { tag: ValueTag.Number, value: 6 },
     ])
   })
 
