@@ -3,11 +3,7 @@ import type { EngineOpBatch } from '@bilig/workbook-domain'
 import type { CellValue } from '@bilig/protocol'
 import type { EngineCellMutationRef } from '../../cell-mutations-at.js'
 import { batchOpOrder, markBatchApplied, type OpOrder } from '../../replica-state.js'
-import { CellFlags } from '../../cell-store.js'
-import { literalToValue, writeLiteralToCellStore } from '../../engine-value-utils.js'
-import { exactLookupLiteralNumericValue, withOptionalLookupStringIds } from './direct-lookup-helpers.js'
 import { DirectFormulaIndexCollection } from './direct-formula-index-collection.js'
-import { directScalarLiteralNumericValue } from './direct-scalar-helpers.js'
 import { aggregateColumnDependencyKey } from './direct-formula-recalc-helpers.js'
 import { assertNever } from './operation-change-helpers.js'
 import { createOperationTrackedColumnDependencyFlagResolver } from './operation-column-dependency-tracker.js'
@@ -27,6 +23,7 @@ import {
 } from './operation-fresh-direct-aggregate.js'
 import { createOperationFreshDirectAggregateFormulaBatchFastPath } from './operation-fresh-direct-aggregate-formula-batch-fast-path.js'
 import { applyClearCellMutation } from './operation-clear-cell-mutation.js'
+import { applySetCellValueMutation } from './operation-set-cell-value-mutation.js'
 
 type OperationCellMutationSource = Exclude<MutationSource, 'remote'>
 type OperationCellDirectFormulaCallbacks = Parameters<typeof finalizeOperationRecalcAndEvents>[0]['directFormulaCallbacks']
@@ -228,11 +225,6 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
     )
     let hadCycleMembersBefore: boolean | undefined
     const hadCycleMembersBeforeNow = (): boolean => (hadCycleMembersBefore ??= hasCycleMembersNow())
-    const rebindValueSensitiveFormulaDependents = (cellIndex: number): void => {
-      const reboundCount = formulaChangedCount
-      formulaChangedCount = rebindDynamicFormulaDependents(cellIndex, formulaChangedCount)
-      topologyChanged = topologyChanged || formulaChangedCount !== reboundCount
-    }
     const reservedNewCells = potentialNewCells ?? refs.length
     args.state.workbook.cellStore.ensureCapacity(args.state.workbook.cellStore.size + reservedNewCells)
     args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.size + reservedNewCells + 1)
@@ -260,272 +252,56 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
           switch (mutation.kind) {
             case 'setCellValue': {
               const sheetName = sheetNameResolver.resolve(sheetId)
-              const { hasExactLookupDependents, hasSortedLookupDependents, hasAggregateDependents } = trackedColumnDependencyFlags.resolve(
+              const setValueResult = applySetCellValueMutation({
+                serviceArgs: args,
                 sheetId,
-                mutation.col,
-              )
-              if (mutation.value === null && !isRestore && (existingIndex === undefined || isNullLiteralWriteNoOp(existingIndex))) {
-                break
-              }
-              const canFastOverwriteExisting = existingIndex !== undefined && canFastPathLiteralOverwrite(existingIndex)
-              const needsDirectLookupNumericValue = canFastOverwriteExisting
-              const oldExactLookupNumber =
-                canFastOverwriteExisting && hasExactLookupDependents ? readExactNumericValueForLookup(existingIndex) : undefined
-              const newExactLookupNumber =
-                hasExactLookupDependents || needsDirectLookupNumericValue ? exactLookupLiteralNumericValue(mutation.value) : undefined
-              const oldApproximateLookupNumber =
-                canFastOverwriteExisting && hasSortedLookupDependents ? readApproximateNumericValueForLookup(existingIndex) : undefined
-              const newApproximateLookupNumber =
-                hasSortedLookupDependents || needsDirectLookupNumericValue ? directScalarLiteralNumericValue(mutation.value) : undefined
-              const exactLookupDependentsHandled =
-                !isRestore &&
-                hasExactLookupDependents &&
-                !hasAggregateDependents &&
-                oldExactLookupNumber !== undefined &&
-                newExactLookupNumber !== undefined &&
-                canSkipExactLookupNumericColumnWrite(sheetId, mutation.col, mutation.row, oldExactLookupNumber, newExactLookupNumber)
-              const sortedLookupDependentsHandled =
-                !isRestore &&
-                hasSortedLookupDependents &&
-                oldApproximateLookupNumber !== undefined &&
-                newApproximateLookupNumber !== undefined &&
-                canSkipApproximateLookupNumericColumnWrite(
-                  sheetId,
-                  sheetName,
-                  mutation.col,
-                  mutation.row,
-                  oldApproximateLookupNumber,
-                  newApproximateLookupNumber,
-                )
-              const needsLookupValueRead =
-                hasAggregateDependents ||
-                (hasExactLookupDependents && !exactLookupDependentsHandled) ||
-                (hasSortedLookupDependents && !sortedLookupDependentsHandled)
-              const needsLookupOwnerInvalidation =
-                (hasExactLookupDependents && exactLookupDependentsHandled) || (hasSortedLookupDependents && sortedLookupDependentsHandled)
-              let directDependentsHandled = false
-              if (!isRestore && canFastOverwriteExisting) {
-                const oldNumber = directScalarCellNumericValue(existingIndex)
-                const newNumber = directScalarLiteralNumericValue(mutation.value)
-                if (oldNumber !== undefined && newNumber !== undefined) {
-                  directDependentsHandled = markPostRecalcDirectScalarNumericDependents(
-                    existingIndex,
-                    oldNumber,
-                    newNumber,
-                    postRecalcDirectFormulaIndices,
-                    newExactLookupNumber,
-                    newApproximateLookupNumber,
-                  )
-                }
-              }
-              const canUseDirectLookupCurrent =
-                !isRestore &&
-                canFastOverwriteExisting &&
-                (newExactLookupNumber !== undefined || newApproximateLookupNumber !== undefined) &&
-                !needsLookupValueRead &&
-                !directDependentsHandled
-              if (canUseDirectLookupCurrent) {
-                directDependentsHandled = markPostRecalcDirectLookupCurrentDependentsFromNumeric(
-                  existingIndex,
-                  newExactLookupNumber,
-                  newApproximateLookupNumber,
-                  postRecalcDirectFormulaIndices,
-                )
-              }
-              let prior = needsLookupValueRead || !directDependentsHandled ? readCellValueForLookup(existingIndex) : undefined
-              if (canFastOverwriteExisting) {
-                writeLiteralToCellStore(args.state.workbook.cellStore, existingIndex, mutation.value, args.state.strings)
-                args.state.workbook.notifyCellValueWritten(existingIndex)
-                if (!isRestore) {
-                  rebindValueSensitiveFormulaDependents(existingIndex)
-                }
-                if (needsLookupOwnerInvalidation) {
-                  queueHandledLookupInvalidation(
-                    sheetId,
-                    sheetName,
-                    mutation.col,
-                    hasExactLookupDependents && exactLookupDependentsHandled,
-                    hasSortedLookupDependents && sortedLookupDependentsHandled,
-                  )
-                  if (!needsLookupValueRead) {
-                    lookupHandledInputCellIndices.push(existingIndex)
+                sheetName,
+                mutation,
+                existingIndex,
+                isRestore,
+                trackExplicitChanges,
+                order,
+                changedInputCount,
+                formulaChangedCount,
+                explicitChangedCount,
+                topologyChanged,
+                dependencyFlags: trackedColumnDependencyFlags.resolve(sheetId, mutation.col),
+                postRecalcDirectFormulaIndices,
+                exactLookupImpactCaches,
+                setCellEntityVersion,
+                isNullLiteralWriteNoOp,
+                canFastPathLiteralOverwrite,
+                readCellValueForLookup,
+                readApproximateNumericValueForLookup,
+                readExactNumericValueForLookup,
+                canSkipExactLookupNumericColumnWrite,
+                canSkipApproximateLookupNumericColumnWrite,
+                rebindValueSensitiveFormulaDependents: (cellIndex, counts) => {
+                  const reboundCount = counts.formulaChangedCount
+                  const nextFormulaChangedCount = rebindDynamicFormulaDependents(cellIndex, counts.formulaChangedCount)
+                  return {
+                    ...counts,
+                    formulaChangedCount: nextFormulaChangedCount,
+                    topologyChanged: counts.topologyChanged || nextFormulaChangedCount !== reboundCount,
                   }
-                }
-                const newValue =
-                  needsLookupValueRead || !directDependentsHandled ? literalToValue(mutation.value, args.state.strings) : undefined
-                if (!isRestore && !directDependentsHandled && newValue) {
-                  prior ??= readCellValueForLookup(existingIndex)
-                  const genericDirectDependentsHandled = markPostRecalcDirectFormulaDependents(
-                    existingIndex,
-                    postRecalcDirectFormulaIndices,
-                    prior.value,
-                    newValue,
-                  )
-                  if (!genericDirectDependentsHandled) {
-                    markDirectScalarDeltaClosure(existingIndex, prior.value, newValue, postRecalcDirectFormulaIndices)
-                  }
-                }
-                if (needsLookupValueRead) {
-                  const newStringId =
-                    typeof mutation.value === 'string' ? args.state.workbook.cellStore.stringIds[existingIndex] : undefined
-                  const priorLookup = prior ?? readCellValueForLookup(existingIndex)
-                  const newLookupValue = newValue ?? literalToValue(mutation.value, args.state.strings)
-                  if (hasExactLookupDependents || hasAggregateDependents) {
-                    const exactLookupRequest = withOptionalLookupStringIds({
-                      sheetName,
-                      row: mutation.row,
-                      col: mutation.col,
-                      oldValue: priorLookup.value,
-                      newValue: newLookupValue,
-                      oldStringId: priorLookup.stringId,
-                      newStringId,
-                      inputCellIndex: existingIndex,
-                    })
-                    if (hasExactLookupDependents && !exactLookupDependentsHandled) {
-                      formulaChangedCount = noteExactLookupLiteralWriteWhenDirty(
-                        exactLookupRequest,
-                        formulaChangedCount,
-                        exactLookupImpactCaches,
-                      )
-                    }
-                    if (hasAggregateDependents) {
-                      args.noteAggregateLiteralWrite({
-                        sheetName: exactLookupRequest.sheetName,
-                        row: exactLookupRequest.row,
-                        col: exactLookupRequest.col,
-                        oldValue: exactLookupRequest.oldValue,
-                        newValue: exactLookupRequest.newValue,
-                      })
-                      formulaChangedCount = markAffectedDirectRangeDependents(
-                        exactLookupRequest,
-                        formulaChangedCount,
-                        postRecalcDirectFormulaIndices,
-                      )
-                    }
-                  }
-                  if (hasSortedLookupDependents) {
-                    const sortedLookupRequest = withOptionalLookupStringIds({
-                      sheetName,
-                      row: mutation.row,
-                      col: mutation.col,
-                      oldValue: priorLookup.value,
-                      newValue: newLookupValue,
-                      oldStringId: priorLookup.stringId,
-                      newStringId,
-                    })
-                    if (!sortedLookupDependentsHandled) {
-                      formulaChangedCount = noteSortedLookupLiteralWriteWhenDirty(sortedLookupRequest, formulaChangedCount)
-                    }
-                  }
-                }
-                changedInputCount = args.markInputChanged(existingIndex, changedInputCount)
-                if (trackExplicitChanges) {
-                  explicitChangedCount = args.markExplicitChanged(existingIndex, explicitChangedCount)
-                }
-                if (!isRestore && args.state.trackReplicaVersions) {
-                  setCellEntityVersion(sheetName, formatAddress(mutation.row, mutation.col), order!)
-                }
-                break
-              }
-              if (existingIndex !== undefined) {
-                changedInputCount = args.markPivotRootsChanged(args.clearPivotForCell(existingIndex), changedInputCount)
-              }
-              const cellIndex = args.state.workbook.ensureCellAt(sheetId, mutation.row, mutation.col).cellIndex
-              if (!isRestore && existingIndex !== undefined) {
-                changedInputCount = args.markSpillRootsChanged(args.clearOwnedSpill(cellIndex), changedInputCount)
-                const removedFormula = args.removeFormula(cellIndex)
-                topologyChanged = removedFormula || topologyChanged
-                if (removedFormula) {
-                  args.invalidateAggregateColumn({ sheetName, col: mutation.col })
-                }
-                if (removedFormula) {
-                  clearTrackedColumnDependencyFlagCache()
-                }
-              }
-              writeLiteralToCellStore(args.state.workbook.cellStore, cellIndex, mutation.value, args.state.strings)
-              args.state.workbook.notifyCellValueWritten(cellIndex)
-              if (!isRestore) {
-                rebindValueSensitiveFormulaDependents(cellIndex)
-              }
-              const newValue =
-                needsLookupValueRead || !directDependentsHandled ? literalToValue(mutation.value, args.state.strings) : undefined
-              if (!isRestore && !directDependentsHandled && newValue) {
-                prior ??= readCellValueForLookup(existingIndex)
-                const genericDirectDependentsHandled = markPostRecalcDirectFormulaDependents(
-                  cellIndex,
-                  postRecalcDirectFormulaIndices,
-                  prior.value,
-                  newValue,
-                )
-                if (!genericDirectDependentsHandled) {
-                  markDirectScalarDeltaClosure(cellIndex, prior.value, newValue, postRecalcDirectFormulaIndices)
-                }
-              }
-              if (needsLookupValueRead) {
-                const newStringId = typeof mutation.value === 'string' ? args.state.workbook.cellStore.stringIds[cellIndex] : undefined
-                const priorLookup = prior ?? readCellValueForLookup(existingIndex)
-                const newLookupValue = newValue ?? literalToValue(mutation.value, args.state.strings)
-                if (hasExactLookupDependents || hasAggregateDependents) {
-                  const exactLookupRequest = withOptionalLookupStringIds({
-                    sheetName,
-                    row: mutation.row,
-                    col: mutation.col,
-                    oldValue: priorLookup.value,
-                    newValue: newLookupValue,
-                    oldStringId: priorLookup.stringId,
-                    newStringId,
-                    inputCellIndex: cellIndex,
-                  })
-                  if (hasExactLookupDependents && !exactLookupDependentsHandled) {
-                    formulaChangedCount = noteExactLookupLiteralWriteWhenDirty(
-                      exactLookupRequest,
-                      formulaChangedCount,
-                      exactLookupImpactCaches,
-                    )
-                  }
-                  if (hasAggregateDependents) {
-                    args.noteAggregateLiteralWrite({
-                      sheetName: exactLookupRequest.sheetName,
-                      row: exactLookupRequest.row,
-                      col: exactLookupRequest.col,
-                      oldValue: exactLookupRequest.oldValue,
-                      newValue: exactLookupRequest.newValue,
-                    })
-                    formulaChangedCount = markAffectedDirectRangeDependents(
-                      exactLookupRequest,
-                      formulaChangedCount,
-                      postRecalcDirectFormulaIndices,
-                    )
-                  }
-                }
-                if (hasSortedLookupDependents) {
-                  const sortedLookupRequest = withOptionalLookupStringIds({
-                    sheetName,
-                    row: mutation.row,
-                    col: mutation.col,
-                    oldValue: priorLookup.value,
-                    newValue: newLookupValue,
-                    oldStringId: priorLookup.stringId,
-                    newStringId,
-                  })
-                  if (!sortedLookupDependentsHandled) {
-                    formulaChangedCount = noteSortedLookupLiteralWriteWhenDirty(sortedLookupRequest, formulaChangedCount)
-                  }
-                }
-              }
-              args.state.workbook.cellStore.flags[cellIndex] =
-                (args.state.workbook.cellStore.flags[cellIndex] ?? 0) &
-                ~(CellFlags.HasFormula | CellFlags.JsOnly | CellFlags.InCycle | CellFlags.SpillChild | CellFlags.PivotOutput)
-              if (!isRestore && mutation.value === null) {
-                pruneCellIfOrphaned(cellIndex)
-              }
-              changedInputCount = args.markInputChanged(cellIndex, changedInputCount)
-              if (trackExplicitChanges) {
-                explicitChangedCount = args.markExplicitChanged(cellIndex, explicitChangedCount)
-              }
-              if (!isRestore && args.state.trackReplicaVersions) {
-                setCellEntityVersion(sheetName, formatAddress(mutation.row, mutation.col), order!)
-              }
+                },
+                markPostRecalcDirectFormulaDependents,
+                markDirectScalarDeltaClosure,
+                markPostRecalcDirectScalarNumericDependents,
+                markPostRecalcDirectLookupCurrentDependentsFromNumeric,
+                directScalarCellNumericValue,
+                noteExactLookupLiteralWriteWhenDirty,
+                noteSortedLookupLiteralWriteWhenDirty,
+                markAffectedDirectRangeDependents,
+                queueHandledLookupInvalidation,
+                noteHandledLookupInputCellIndex: (cellIndex) => lookupHandledInputCellIndices.push(cellIndex),
+                clearTrackedColumnDependencyFlagCache,
+                pruneCellIfOrphaned,
+              })
+              changedInputCount = setValueResult.changedInputCount
+              formulaChangedCount = setValueResult.formulaChangedCount
+              explicitChangedCount = setValueResult.explicitChangedCount
+              topologyChanged = setValueResult.topologyChanged
               break
             }
             case 'setCellFormula': {
