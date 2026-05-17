@@ -90,6 +90,11 @@ const {
   nodeSpreadsheetFormulaEngine,
 } = await loadDocsDiscoveryContext()
 
+const headlessSpreadsheetEngineNodeServicesAgents = await readFile(
+  join(docsRoot, 'headless-spreadsheet-engine-node-services-agents.md'),
+  'utf8',
+)
+
 requireHomepageDiscovery(index, siteCss, productCss)
 await requireXlsxCalcAlternativeDiscovery(docsRoot)
 await requireTypeScriptFirstPublicSnippets(repoRoot)
@@ -739,6 +744,17 @@ for (const required of [
   '[documented Excel gaps](where-bilig-is-not-excel-compatible-yet.md)',
 ]) {
   requireIncludes(headlessSpreadsheetEngineComparison, required, 'docs/headless-spreadsheet-engine-comparison.md')
+}
+
+for (const required of [
+  '## If you arrived from HN or LibHunt',
+  'workbook-shaped calculation boundary',
+  '[XLSX recalculation proof](xlsx-recalculation-proof.md)',
+  '[LibHunt headless-spreadsheet topic](https://www.libhunt.com/topic/headless-spreadsheet)',
+  'star the repo as a public',
+  'open an adoption blocker with the smallest reproducer you can share',
+]) {
+  requireIncludes(headlessSpreadsheetEngineNodeServicesAgents, required, 'docs/headless-spreadsheet-engine-node-services-agents.md')
 }
 
 for (const [path, content] of [

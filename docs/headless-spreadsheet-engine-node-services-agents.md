@@ -81,6 +81,30 @@ route smoke, writes quote inputs into known cells, recalculates net revenue,
 gross margin, and approval decision, serializes the WorkPaper JSON, restores
 it, and verifies `restoredMatchesAfter: true`.
 
+## If you arrived from HN or LibHunt
+
+The useful question is not whether Bilig is a smaller Excel clone. It is whether
+your service needs a workbook-shaped calculation boundary that can be tested
+without opening a browser spreadsheet.
+
+Use the smallest proof that matches your blocker:
+
+- If you need formulas inside a backend service or agent tool, run the
+  90-second npm quickstart above and check for `verified: true`.
+- If you are blocked by stale XLSX cached formula results, run the
+  [XLSX recalculation proof](xlsx-recalculation-proof.md) and compare the
+  before/after/exported readback.
+- If you are comparing engines, start with the
+  [headless spreadsheet engine comparison](headless-spreadsheet-engine-comparison.md)
+  before looking at benchmark cards.
+
+Bilig is indexed on the
+[LibHunt headless-spreadsheet topic](https://www.libhunt.com/topic/headless-spreadsheet),
+but the repo is the current source of truth for stars, releases, limitations,
+and API examples. If one proof maps to your use case, star the repo as a public
+bookmark. If it almost maps but fails on a real formula, import, or workflow
+boundary, open an adoption blocker with the smallest reproducer you can share.
+
 ## Backend service shape
 
 A service should keep the WorkPaper behind a narrow business boundary:
