@@ -177,4 +177,39 @@ describe('engine INDIRECT defined-name references', () => {
 
     expect(engine.getCellValue('Sheet1', 'G1')).toEqual({ tag: ValueTag.Number, value: 10 })
   })
+
+  it('invokes formula-backed LAMBDA defined names through normal call syntax', async () => {
+    const snapshot: WorkbookSnapshot = {
+      version: 1,
+      workbook: {
+        name: 'formula-backed-lambda-defined-name',
+        metadata: {
+          definedNames: [
+            { name: 'Adder', value: { kind: 'formula', formula: '=LAMBDA(x,LET(y,x+Offset,y))' } },
+            { name: 'Offset', value: { kind: 'scalar', value: 2 } },
+          ],
+        },
+      },
+      sheets: [
+        {
+          id: 1,
+          name: 'Sheet1',
+          order: 0,
+          cells: [
+            { address: 'A1', value: 3 },
+            { address: 'B1', formula: 'Adder(A1)' },
+          ],
+        },
+      ],
+    }
+
+    const engine = new SpreadsheetEngine({ workbookName: 'formula-backed-lambda-defined-name' })
+    await engine.ready()
+    engine.importSnapshot(snapshot)
+
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 5 })
+
+    engine.setCellValue('Sheet1', 'A1', 6)
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 8 })
+  })
 })

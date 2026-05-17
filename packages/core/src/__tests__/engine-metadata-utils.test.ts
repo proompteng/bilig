@@ -173,6 +173,65 @@ describe('engine metadata utils', () => {
     })
   })
 
+  it('rewrites formula-backed LAMBDA defined names used as call expressions', () => {
+    const resolved = resolveMetadataReferencesInAst(
+      {
+        kind: 'CallExpr',
+        callee: 'Adder',
+        args: [{ kind: 'NameRef', name: 'Base' }],
+      },
+      {
+        resolveName: (name) => {
+          if (name === 'Adder') {
+            return { kind: 'formula', formula: '=LAMBDA(x,LET(y,x+Offset,y))' }
+          }
+          if (name === 'Base') {
+            return { kind: 'scalar', value: 3 }
+          }
+          if (name === 'Offset') {
+            return { kind: 'scalar', value: 2 }
+          }
+          if (name === 'x' || name === 'y') {
+            return { kind: 'scalar', value: 99 }
+          }
+          return undefined
+        },
+        resolveStructuredReference: () => undefined,
+        resolveSpillReference: () => undefined,
+      },
+    )
+
+    expect(resolved).toEqual({
+      fullyResolved: true,
+      substituted: true,
+      node: {
+        kind: 'InvokeExpr',
+        callee: {
+          kind: 'CallExpr',
+          callee: 'LAMBDA',
+          args: [
+            { kind: 'NameRef', name: 'x' },
+            {
+              kind: 'CallExpr',
+              callee: 'LET',
+              args: [
+                { kind: 'NameRef', name: 'y' },
+                {
+                  kind: 'BinaryExpr',
+                  operator: '+',
+                  left: { kind: 'NameRef', name: 'x' },
+                  right: { kind: 'NumberLiteral', value: 2 },
+                },
+                { kind: 'NameRef', name: 'y' },
+              ],
+            },
+          ],
+        },
+        args: [{ kind: 'NumberLiteral', value: 3 }],
+      },
+    })
+  })
+
   it('treats broken formula metadata and unresolved scalar names predictably', () => {
     expect(
       resolveMetadataReferencesInAst(

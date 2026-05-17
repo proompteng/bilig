@@ -5,7 +5,14 @@ import {
   type WorkbookCalculationSettingsSnapshot,
   type WorkbookDefinedNameValueSnapshot,
 } from '@bilig/protocol'
-import { parseCellAddress, parseFormula, renameFormulaSheetReferences, type FormulaNode, type ReferenceOperand } from '@bilig/formula'
+import {
+  hasBuiltin,
+  parseCellAddress,
+  parseFormula,
+  renameFormulaSheetReferences,
+  type FormulaNode,
+  type ReferenceOperand,
+} from '@bilig/formula'
 import type { StringPool } from './string-pool.js'
 import { errorValue, literalToValue } from './engine-value-utils.js'
 import { normalizeDefinedName, normalizeWorkbookObjectName } from './workbook-store.js'
@@ -431,6 +438,7 @@ export function resolveMetadataReferencesInAst(
   context: MetadataResolutionContext,
   activeNames = new Set<string>(),
   valueContext: MetadataFormulaValueContext = 'scalar',
+  localNames = new Set<string>(),
 ): { node: FormulaNode; fullyResolved: boolean; substituted: boolean } {
   switch (node.kind) {
     case 'NumberLiteral':
@@ -448,7 +456,7 @@ export function resolveMetadataReferencesInAst(
       let substituted = false
       const rows = node.rows.map((row) =>
         row.map((entry) => {
-          const resolved = resolveMetadataReferencesInAst(entry, context, activeNames, valueContext)
+          const resolved = resolveMetadataReferencesInAst(entry, context, activeNames, valueContext, localNames)
           fullyResolved = fullyResolved && resolved.fullyResolved
           substituted = substituted || resolved.substituted
           return resolved.node
@@ -462,6 +470,9 @@ export function resolveMetadataReferencesInAst(
     }
     case 'NameRef': {
       const normalized = normalizeDefinedName(node.name)
+      if (localNames.has(normalized)) {
+        return { node, fullyResolved: true, substituted: false }
+      }
       if (activeNames.has(normalized)) {
         return {
           node: { kind: 'ErrorLiteral', code: ErrorCode.Cycle },
@@ -479,7 +490,7 @@ export function resolveMetadataReferencesInAst(
       }
       const nextActiveNames = new Set(activeNames)
       nextActiveNames.add(normalized)
-      const resolved = resolveMetadataReferencesInAst(replacement, context, nextActiveNames, valueContext)
+      const resolved = resolveMetadataReferencesInAst(replacement, context, nextActiveNames, valueContext, localNames)
       return {
         node: maybeImplicitIntersectRangeName(resolved.node, valueContext),
         fullyResolved: resolved.fullyResolved,
@@ -498,7 +509,7 @@ export function resolveMetadataReferencesInAst(
       return { node: replacement, fullyResolved: true, substituted: true }
     }
     case 'UnaryExpr': {
-      const resolved = resolveMetadataReferencesInAst(node.argument, context, activeNames, valueContext)
+      const resolved = resolveMetadataReferencesInAst(node.argument, context, activeNames, valueContext, localNames)
       return {
         node: resolved.substituted ? { ...node, argument: resolved.node } : node,
         fullyResolved: resolved.fullyResolved,
@@ -506,8 +517,8 @@ export function resolveMetadataReferencesInAst(
       }
     }
     case 'BinaryExpr': {
-      const left = resolveMetadataReferencesInAst(node.left, context, activeNames, valueContext)
-      const right = resolveMetadataReferencesInAst(node.right, context, activeNames, valueContext)
+      const left = resolveMetadataReferencesInAst(node.left, context, activeNames, valueContext, localNames)
+      const right = resolveMetadataReferencesInAst(node.right, context, activeNames, valueContext, localNames)
       return {
         node: left.substituted || right.substituted ? { ...node, left: left.node, right: right.node } : node,
         fullyResolved: left.fullyResolved && right.fullyResolved,
@@ -515,6 +526,88 @@ export function resolveMetadataReferencesInAst(
       }
     }
     case 'CallExpr': {
+      const callee = node.callee.toUpperCase()
+      const normalizedCallee = normalizeDefinedName(node.callee)
+      if (!hasBuiltin(callee) && !localNames.has(normalizedCallee)) {
+        if (activeNames.has(normalizedCallee)) {
+          return {
+            node: { kind: 'ErrorLiteral', code: ErrorCode.Cycle },
+            fullyResolved: true,
+            substituted: true,
+          }
+        }
+        const calleeLiteral = context.resolveName(node.callee)
+        const calleeNode = calleeLiteral === undefined ? undefined : definedNameValueToFormulaNode(calleeLiteral)
+        if (calleeNode?.kind === 'CallExpr' && calleeNode.callee.toUpperCase() === 'LAMBDA') {
+          const nextActiveNames = new Set(activeNames)
+          nextActiveNames.add(normalizedCallee)
+          const resolved = resolveMetadataReferencesInAst(
+            { kind: 'InvokeExpr', callee: calleeNode, args: node.args },
+            context,
+            nextActiveNames,
+            valueContext,
+            localNames,
+          )
+          return {
+            ...resolved,
+            substituted: true,
+          }
+        }
+      }
+      if (callee === 'LAMBDA' && node.args.length >= 1) {
+        let fullyResolved = true
+        let substituted = false
+        const scopedLocalNames = new Set(localNames)
+        const args = node.args.map((arg, index) => {
+          if (index < node.args.length - 1) {
+            if (arg.kind === 'NameRef') {
+              scopedLocalNames.add(normalizeDefinedName(arg.name))
+            }
+            return arg
+          }
+          const resolved = resolveMetadataReferencesInAst(arg, context, activeNames, valueContext, scopedLocalNames)
+          fullyResolved = fullyResolved && resolved.fullyResolved
+          substituted = substituted || resolved.substituted
+          return resolved.node
+        })
+        return {
+          node: substituted ? { ...node, callee, args } : node,
+          fullyResolved,
+          substituted,
+        }
+      }
+      if (callee === 'LET' && node.args.length >= 3 && node.args.length % 2 === 1) {
+        let fullyResolved = true
+        let substituted = false
+        const scopedLocalNames = new Set(localNames)
+        const args: FormulaNode[] = []
+        for (let index = 0; index < node.args.length - 1; index += 2) {
+          const nameArg = node.args[index]!
+          const valueArg = node.args[index + 1]!
+          const resolved = resolveMetadataReferencesInAst(
+            valueArg,
+            context,
+            activeNames,
+            callArgumentValueContext(node.callee, index + 1, valueContext),
+            scopedLocalNames,
+          )
+          fullyResolved = fullyResolved && resolved.fullyResolved
+          substituted = substituted || resolved.substituted
+          args.push(nameArg, resolved.node)
+          if (nameArg.kind === 'NameRef') {
+            scopedLocalNames.add(normalizeDefinedName(nameArg.name))
+          }
+        }
+        const body = resolveMetadataReferencesInAst(node.args[node.args.length - 1]!, context, activeNames, valueContext, scopedLocalNames)
+        fullyResolved = fullyResolved && body.fullyResolved
+        substituted = substituted || body.substituted
+        args.push(body.node)
+        return {
+          node: substituted ? { ...node, callee, args } : node,
+          fullyResolved,
+          substituted,
+        }
+      }
       let fullyResolved = true
       let substituted = false
       const args = node.args.map((arg, index) => {
@@ -523,6 +616,7 @@ export function resolveMetadataReferencesInAst(
           context,
           activeNames,
           callArgumentValueContext(node.callee, index, valueContext),
+          localNames,
         )
         fullyResolved = fullyResolved && resolved.fullyResolved
         substituted = substituted || resolved.substituted
@@ -535,11 +629,11 @@ export function resolveMetadataReferencesInAst(
       }
     }
     case 'InvokeExpr': {
-      const callee = resolveMetadataReferencesInAst(node.callee, context, activeNames, valueContext)
+      const callee = resolveMetadataReferencesInAst(node.callee, context, activeNames, valueContext, localNames)
       let fullyResolved = callee.fullyResolved
       let substituted = callee.substituted
       const args = node.args.map((arg) => {
-        const resolved = resolveMetadataReferencesInAst(arg, context, activeNames, valueContext)
+        const resolved = resolveMetadataReferencesInAst(arg, context, activeNames, valueContext, localNames)
         fullyResolved = fullyResolved && resolved.fullyResolved
         substituted = substituted || resolved.substituted
         return resolved.node
