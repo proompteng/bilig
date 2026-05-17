@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
+import { WORKBOOK_DEFAULT_FONT_SIZE } from '@bilig/grid'
 import {
   parseCellNumberFormatCode,
   type CellRangeRef,
@@ -97,7 +98,7 @@ export function useWorkbookToolbar(input: {
   const [optimisticStyle, setOptimisticStyle] = useState<OptimisticToolbarStyle | null>(null)
   const activeSelectedStyle = optimisticStyle?.rangeKey === selectedRangeKey ? optimisticStyle.style : selectedStyle
   const currentNumberFormat = parseCellNumberFormatCode(selectedCell.format)
-  const selectedFontSize = String(activeSelectedStyle?.font?.size ?? 11)
+  const selectedFontSize = String(activeSelectedStyle?.font?.size ?? WORKBOOK_DEFAULT_FONT_SIZE)
   const isBoldActive = activeSelectedStyle?.font?.bold === true
   const isItalicActive = activeSelectedStyle?.font?.italic === true
   const isUnderlineActive = activeSelectedStyle?.font?.underline === true

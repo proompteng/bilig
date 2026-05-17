@@ -16,11 +16,12 @@ describe('workbookTheme', () => {
   })
 
   test('keeps the rendered cell default aligned with spreadsheet toolbar sizing', () => {
-    expect(WORKBOOK_DEFAULT_FONT_SIZE).toBe(11)
+    expect(WORKBOOK_DEFAULT_FONT_SIZE).toBe(10)
   })
 
   test('renders spreadsheet point sizes as CSS pixels instead of tiny raw pixels', () => {
     expect(WORKBOOK_FONT_POINT_TO_CSS_PX).toBe(4 / 3)
+    expect(workbookFontPointSizeToCssPx(10)).toBe(13.333)
     expect(workbookFontPointSizeToCssPx(11)).toBe(14.667)
     expect(workbookFontPointSizeToCssPx(12)).toBe(16)
     expect(workbookFontPointSizeToCssPx(15)).toBe(20)

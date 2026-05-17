@@ -278,7 +278,7 @@ test('web app prioritizes editing controls over secondary actions on phone toolb
   await expect(page.getByTestId('workbook-import-toggle')).toBeHidden()
   await expect(page.getByTestId('workbook-side-panel-open')).toBeVisible()
   await expect(numberFormat).toContainText('General')
-  await expect(fontSize).toContainText('11')
+  await expect(fontSize).toContainText('10')
   await expect(overflowCue).toBeVisible()
 
   const [scrollBox, numberFormatBox, fontSizeBox, overflowCueBox] = await Promise.all([

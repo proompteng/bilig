@@ -1651,6 +1651,45 @@ test('web app fills the selected range from the active cell with the fill range 
   await expect(formulaInput).toHaveValue('fill-selected-range')
 })
 
+test('web app fills down and right with spreadsheet keyboard shortcuts', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-fill-down-right-shortcuts')
+  await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=B2`)
+  await waitForWorkbookReady(page)
+
+  const grid = page.getByTestId('sheet-grid')
+  const formulaInput = page.getByTestId('formula-input')
+
+  await clickProductCell(page, 1, 1)
+  await formulaInput.fill('fill-down-source')
+  await formulaInput.press('Enter')
+  await dragProductBodySelection(page, 1, 1, 1, 3)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:B4')
+
+  await grid.press(`${PRIMARY_MODIFIER}+D`)
+
+  await clickProductCell(page, 1, 1)
+  await expect(formulaInput).toHaveValue('fill-down-source')
+  await clickProductCell(page, 1, 2)
+  await expect(formulaInput).toHaveValue('fill-down-source')
+  await clickProductCell(page, 1, 3)
+  await expect(formulaInput).toHaveValue('fill-down-source')
+
+  await clickProductCell(page, 2, 1)
+  await formulaInput.fill('fill-right-source')
+  await formulaInput.press('Enter')
+  await dragProductBodySelection(page, 2, 1, 4, 1)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C2:E2')
+
+  await grid.press(`${PRIMARY_MODIFIER}+R`)
+
+  await clickProductCell(page, 2, 1)
+  await expect(formulaInput).toHaveValue('fill-right-source')
+  await clickProductCell(page, 3, 1)
+  await expect(formulaInput).toHaveValue('fill-right-source')
+  await clickProductCell(page, 4, 1)
+  await expect(formulaInput).toHaveValue('fill-right-source')
+})
+
 test('web app expands the active range with repeated shift arrows', async ({ page }) => {
   await page.goto('/')
   await waitForWorkbookReady(page)

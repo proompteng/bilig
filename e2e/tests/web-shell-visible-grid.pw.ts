@@ -11,7 +11,7 @@ import {
   waitForWorkbookReady,
 } from './web-shell-helpers.js'
 
-const DEFAULT_WORKBOOK_CSS_FONT_SIZE = '14.667px'
+const DEFAULT_WORKBOOK_CSS_FONT_SIZE = '13.333px'
 
 test('web app paints deep querystring-selected cell content in the visible grid', async ({ page }, testInfo) => {
   const documentId = createTestDocumentId('playwright-visible-deep-cell')
