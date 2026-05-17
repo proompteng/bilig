@@ -4,6 +4,22 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.18.26
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.18.25
+- Manual override: no
+
+## Fixes
+- perf(core): narrow structural and lookup hot paths (f68d42bc)
+
+## Internal runtime changes
+- refactor(core): isolate mutation inverse ops (79172a88)
+- refactor(core): isolate batch cell value mutations (35392b17)
+- docs(growth): refresh v0.18.25 registry evidence (5b56b67f)
+- refactor(formula): isolate lookup match opcodes (3c7f66ac)
+- refactor(core): isolate batch formula mutations (34e5aeb9)
+
 ## 0.18.25
 
 - Release type: patch
