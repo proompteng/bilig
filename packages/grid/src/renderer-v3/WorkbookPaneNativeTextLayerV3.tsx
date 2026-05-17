@@ -260,11 +260,14 @@ export function resolveNativeTextRunInnerStyleV3(input: {
     color: input.run.color ?? '#111827',
     display: 'block',
     fontFamily: fontStyle.fontFamily,
+    fontFeatureSettings: 'normal',
     fontSize: fontStyle.fontSize,
     fontStyle: fontStyle.fontStyle,
     fontKerning: 'normal',
+    fontVariantNumeric: 'tabular-nums',
     fontWeight: fontStyle.fontWeight,
     height: input.run.wrap ? (visibleClip?.innerHeight ?? height) : lineBox.height,
+    letterSpacing: 0,
     left: visibleClip?.innerLeft ?? snapCssPixel(input.run.x - clipX, dpr),
     lineHeight: `${lineBox.height}px`,
     overflow: 'hidden',
@@ -273,12 +276,9 @@ export function resolveNativeTextRunInnerStyleV3(input: {
     position: 'absolute',
     textAlign: input.run.align ?? 'left',
     textDecorationLine: input.run.underline ? 'underline' : input.run.strike ? 'line-through' : undefined,
-    MozOsxFontSmoothing: 'grayscale',
-    textRendering: 'optimizeLegibility',
     top: textTop,
     whiteSpace: input.run.wrap ? 'pre-wrap' : 'pre',
     width: visibleClip?.innerWidth ?? width,
-    WebkitFontSmoothing: 'antialiased',
   }
 }
 

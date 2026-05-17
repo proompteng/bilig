@@ -1,1 +1,1 @@
-export const OPTIMISTIC_CELL_SNAPSHOT_FLAG = 1 << 30
+export { OPTIMISTIC_CELL_SNAPSHOT_FLAG } from '@bilig/protocol'

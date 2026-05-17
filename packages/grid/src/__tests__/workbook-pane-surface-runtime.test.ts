@@ -4,6 +4,7 @@ import {
   EMPTY_WORKBOOK_PANE_SURFACE_SNAPSHOT_V3,
   WorkbookPaneSurfaceRuntimeV3,
   resolveWorkbookPaneSurfaceSizeV3,
+  type WorkbookPaneSurfaceResizeEntryV3,
   type WorkbookPaneSurfaceSnapshotV3,
 } from '../renderer-v3/workbook-pane-surface-runtime.js'
 
@@ -31,12 +32,59 @@ describe('WorkbookPaneSurfaceRuntimeV3', () => {
     })
   })
 
+  test('does not undersize fractional-DPR canvas backing stores', () => {
+    const host = document.createElement('div')
+    defineHostSize(host, 641, 361)
+
+    expect(resolveWorkbookPaneSurfaceSizeV3({ dpr: 1.25, host })).toEqual({
+      dpr: 1.25,
+      height: 361,
+      pixelHeight: 452,
+      pixelWidth: 802,
+      width: 641,
+    })
+  })
+
+  test('uses ResizeObserver device-pixel content box when available', () => {
+    const host = document.createElement('div')
+    defineHostSize(host, 641, 361)
+    const resizeEntry = {
+      devicePixelContentBoxSize: [{ blockSize: 452, inlineSize: 801 }],
+      target: host,
+    } satisfies WorkbookPaneSurfaceResizeEntryV3
+
+    expect(resolveWorkbookPaneSurfaceSizeV3({ dpr: 1.25, host, resizeEntry })).toEqual({
+      dpr: 1.25,
+      height: 361,
+      pixelHeight: 452,
+      pixelWidth: 801,
+      width: 641,
+    })
+  })
+
+  test('ignores ResizeObserver device-pixel boxes that do not match the drawn client box', () => {
+    const host = document.createElement('div')
+    defineHostSize(host, 960, 586)
+    const resizeEntry = {
+      devicePixelContentBoxSize: [{ blockSize: 1156, inlineSize: 1904 }],
+      target: host,
+    } satisfies WorkbookPaneSurfaceResizeEntryV3
+
+    expect(resolveWorkbookPaneSurfaceSizeV3({ dpr: 2, host, resizeEntry })).toEqual({
+      dpr: 2,
+      height: 586,
+      pixelHeight: 1172,
+      pixelWidth: 1920,
+      width: 960,
+    })
+  })
+
   test('owns backend startup, surface sync, resize updates, and teardown', async () => {
     const backend = { id: 'backend-1' }
     const host = document.createElement('div')
     const canvas = document.createElement('canvas')
     defineHostSize(host, 640, 360)
-    let resizeListener: ResizeObserverCallback | null = null
+    let resizeListener: ((entries: readonly WorkbookPaneSurfaceResizeEntryV3[]) => void) | null = null
     const disconnect = vi.fn()
     const observe = vi.fn()
     const createBackend = vi.fn(async () => backend)
@@ -74,20 +122,21 @@ describe('WorkbookPaneSurfaceRuntimeV3', () => {
     })
 
     defineHostSize(host, 800, 400)
-    resizeListener?.([], {
-      disconnect() {},
-      observe() {},
-      unobserve() {},
-    } as ResizeObserver)
+    resizeListener?.([
+      {
+        devicePixelContentBoxSize: [{ blockSize: 801, inlineSize: 1601 }],
+        target: host,
+      },
+    ])
 
     expect(snapshots.at(-1)).toMatchObject({
-      surface: { height: 400, pixelHeight: 800, pixelWidth: 1600, width: 800 },
+      surface: { height: 400, pixelHeight: 801, pixelWidth: 1601, width: 800 },
       webGpuReady: true,
     })
     expect(syncSurface).toHaveBeenLastCalledWith({
       backend,
       canvas,
-      size: expect.objectContaining({ height: 400, pixelHeight: 800, pixelWidth: 1600, width: 800 }),
+      size: expect.objectContaining({ height: 400, pixelHeight: 801, pixelWidth: 1601, width: 800 }),
     })
 
     runtime.setActive(false)

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { MAX_COLS, MAX_ROWS, ValueTag, type CellStyleRecord } from '@bilig/protocol'
+import { MAX_COLS, MAX_ROWS, OPTIMISTIC_CELL_SNAPSHOT_FLAG, ValueTag, type CellStyleRecord } from '@bilig/protocol'
 import { buildGridTextScene } from '../gridTextScene.js'
 import { getResolvedCellFontFamily } from '../gridCells.js'
 import type { GridEngineLike } from '../grid-engine.js'
@@ -588,6 +588,38 @@ describe('gridTextScene', () => {
         ...createCellSnapshot({ tag: ValueTag.Empty }, undefined),
         address: 'C5',
         version: 4,
+      },
+      sheetName: 'Sheet1',
+      visibleItems: [[2, 4]],
+      visibleRegion: { range: { x: 2, y: 4, width: 1, height: 1 }, tx: 0, ty: 0 },
+      hostBounds: { left: 0, top: 0, width: 320, height: 240 },
+      getCellBounds: () => ({ x: 254, y: 112, width: 104, height: 22 }),
+    })
+
+    expect(scene.items.some((item) => item.text === 'engine text')).toBe(false)
+  })
+
+  test('uses an optimistic empty selected snapshot to suppress stale engine text while clear confirmation races', () => {
+    const scene = buildGridTextScene({
+      contentMode: 'data',
+      engine: makeEngine(
+        {},
+        {
+          C5: {
+            ...createCellSnapshot({ tag: ValueTag.String, value: 'engine text' }),
+            address: 'C5',
+            version: 8,
+          },
+        },
+      ),
+      columnWidths: {},
+      gridMetrics: getGridMetrics(),
+      selectedCell: [2, 4],
+      selectedCellSnapshot: {
+        ...createCellSnapshot({ tag: ValueTag.Empty }, undefined),
+        address: 'C5',
+        flags: OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+        version: 8,
       },
       sheetName: 'Sheet1',
       visibleItems: [[2, 4]],

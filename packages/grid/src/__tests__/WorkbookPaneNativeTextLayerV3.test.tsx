@@ -74,23 +74,28 @@ describe('WorkbookPaneNativeTextLayerV3', () => {
     })
   })
 
-  test('uses explicit native browser font rendering styles for visible workbook text', () => {
-    expect(resolveNativeTextRunInnerStyleV3({ dpr: 2, run: createRun({ align: 'right', underline: true }) })).toMatchObject({
+  test('uses native browser font rendering with spreadsheet numeric alignment', () => {
+    const style = resolveNativeTextRunInnerStyleV3({ dpr: 2, run: createRun({ align: 'right', underline: true }) })
+    expect(style).toMatchObject({
       color: '#1f2933',
       display: 'block',
       fontFamily: 'Arial, sans-serif',
+      fontFeatureSettings: 'normal',
       fontSize: 14.667,
       fontStyle: 'normal',
+      fontVariantNumeric: 'tabular-nums',
       fontWeight: 400,
       height: 17.5,
+      letterSpacing: 0,
       lineHeight: '17.5px',
       textDecorationLine: 'underline',
-      textRendering: 'optimizeLegibility',
       textAlign: 'right',
       top: -1.5,
       whiteSpace: 'pre',
-      WebkitFontSmoothing: 'antialiased',
     })
+    expect(style).not.toHaveProperty('MozOsxFontSmoothing')
+    expect(style).not.toHaveProperty('textRendering')
+    expect(style).not.toHaveProperty('WebkitFontSmoothing')
   })
 
   test('keeps wrapped text top-aligned while non-wrapped text uses a snapped line box', () => {

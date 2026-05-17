@@ -411,13 +411,13 @@ export function CellEditorOverlay({
         style={{
           color,
           font,
+          fontFeatureSettings: 'normal',
           fontSize,
+          fontVariantNumeric: 'tabular-nums',
+          letterSpacing: 0,
           minHeight: '100%',
-          MozOsxFontSmoothing: 'grayscale',
-          textRendering: 'optimizeLegibility',
           textAlign,
           textDecorationLine: underline ? 'underline' : undefined,
-          WebkitFontSmoothing: 'antialiased',
         }}
         value={draftValue}
         onBlur={commitAfterBlur}

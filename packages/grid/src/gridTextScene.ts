@@ -1,4 +1,4 @@
-import { MAX_COLS, MAX_ROWS, ValueTag, type CellSnapshot } from '@bilig/protocol'
+import { MAX_COLS, MAX_ROWS, OPTIMISTIC_CELL_SNAPSHOT_FLAG, ValueTag, type CellSnapshot } from '@bilig/protocol'
 import type { GridEngineLike } from './grid-engine.js'
 import { getResolvedCellFontFamily, snapshotToRenderCell } from './gridCells.js'
 import { getVisibleColumnBounds, getVisibleRowBounds, type GridMetrics } from './gridMetrics.js'
@@ -288,7 +288,7 @@ function resolveCellTextSnapshot({
   const overrideRenderCell = snapshotToRenderCell(snapshotOverride, engine.getCellStyle(snapshotOverride.styleId))
 
   if (engineRenderCell.displayText.length > 0 && overrideRenderCell.displayText.length === 0) {
-    return isNewerEmptySelectedSnapshot(snapshotOverride, engineSnapshot) ? snapshotOverride : engineSnapshot
+    return shouldTrustEmptySelectedSnapshot(snapshotOverride, engineSnapshot) ? snapshotOverride : engineSnapshot
   }
   if (overrideRenderCell.displayText.length > 0 && engineRenderCell.displayText.length === 0) {
     return snapshotOverride
@@ -297,12 +297,12 @@ function resolveCellTextSnapshot({
   return snapshotOverride
 }
 
-function isNewerEmptySelectedSnapshot(snapshot: CellSnapshot, engineSnapshot: CellSnapshot): boolean {
+function shouldTrustEmptySelectedSnapshot(snapshot: CellSnapshot, engineSnapshot: CellSnapshot): boolean {
   return (
     snapshot.value.tag === ValueTag.Empty &&
     snapshot.formula === undefined &&
     (snapshot.input === undefined || snapshot.input === '') &&
-    snapshot.version > engineSnapshot.version
+    (snapshot.version > engineSnapshot.version || (snapshot.flags & OPTIMISTIC_CELL_SNAPSHOT_FLAG) !== 0)
   )
 }
 

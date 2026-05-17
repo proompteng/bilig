@@ -20,6 +20,13 @@ export interface WorkbookPaneSurfaceRuntimeResizeObserverV3 {
   disconnect(): void
 }
 
+export interface WorkbookPaneSurfaceResizeEntryV3 {
+  readonly target?: Element | undefined
+  readonly devicePixelContentBoxSize?: readonly ResizeObserverSize[] | ResizeObserverSize | undefined
+}
+
+export type WorkbookPaneSurfaceResizeListenerV3 = (entries: readonly WorkbookPaneSurfaceResizeEntryV3[]) => void
+
 export interface WorkbookPaneSurfaceRuntimeOptionsV3 {
   readonly createBackend?: ((canvas: HTMLCanvasElement) => Promise<object | null>) | undefined
   readonly destroyBackend?: ((backend: object) => void) | undefined
@@ -27,7 +34,9 @@ export interface WorkbookPaneSurfaceRuntimeOptionsV3 {
     | ((input: { readonly backend: object; readonly canvas: HTMLCanvasElement; readonly size: TypeGpuSurfaceSizeV3 }) => void)
     | undefined
   readonly getDevicePixelRatio?: (() => number) | undefined
-  readonly createResizeObserver?: ((listener: ResizeObserverCallback) => WorkbookPaneSurfaceRuntimeResizeObserverV3 | null) | undefined
+  readonly createResizeObserver?:
+    | ((listener: WorkbookPaneSurfaceResizeListenerV3) => WorkbookPaneSurfaceRuntimeResizeObserverV3 | null)
+    | undefined
 }
 
 const EMPTY_TYPEGPU_SURFACE_SIZE_V3: TypeGpuSurfaceSizeV3 = Object.freeze({
@@ -48,28 +57,55 @@ export const EMPTY_WORKBOOK_PANE_SURFACE_SNAPSHOT_V3: WorkbookPaneSurfaceSnapsho
 export function resolveWorkbookPaneSurfaceSizeV3(input: {
   readonly host: Pick<HTMLElement, 'clientHeight' | 'clientWidth'>
   readonly dpr?: number | undefined
+  readonly resizeEntry?: WorkbookPaneSurfaceResizeEntryV3
 }): TypeGpuSurfaceSizeV3 {
   const width = Math.max(0, Math.floor(input.host.clientWidth))
   const height = Math.max(0, Math.floor(input.host.clientHeight))
   const dpr = Math.max(1, input.dpr ?? defaultDevicePixelRatio())
+  const devicePixelSize = resolveResizeObserverDevicePixelSizeV3(input.resizeEntry)
+  const fallbackPixelWidth = Math.max(1, Math.ceil(width * dpr))
+  const fallbackPixelHeight = Math.max(1, Math.ceil(height * dpr))
   return {
     dpr,
     height,
-    pixelHeight: Math.max(1, Math.floor(height * dpr)),
-    pixelWidth: Math.max(1, Math.floor(width * dpr)),
+    pixelHeight: resolveSurfacePixelSizeV3(fallbackPixelHeight, devicePixelSize?.height, dpr),
+    pixelWidth: resolveSurfacePixelSizeV3(fallbackPixelWidth, devicePixelSize?.width, dpr),
     width,
   }
+}
+
+function resolveSurfacePixelSizeV3(fallback: number, devicePixelSize: number | undefined, dpr: number): number {
+  if (typeof devicePixelSize !== 'number' || !Number.isFinite(devicePixelSize)) {
+    return fallback
+  }
+  const tolerance = Math.max(1, Math.ceil(dpr))
+  return Math.abs(devicePixelSize - fallback) <= tolerance ? devicePixelSize : fallback
+}
+
+function resolveResizeObserverDevicePixelSizeV3(
+  entry: WorkbookPaneSurfaceResizeEntryV3 | undefined,
+): { readonly height: number; readonly width: number } | null {
+  const boxSize = entry?.devicePixelContentBoxSize
+  const firstSize = Array.isArray(boxSize) ? boxSize[0] : boxSize
+  const width = firstSize?.inlineSize
+  const height = firstSize?.blockSize
+  if (!Number.isFinite(width) || !Number.isFinite(height)) {
+    return null
+  }
+  const pixelWidth = Math.max(1, Math.round(width))
+  const pixelHeight = Math.max(1, Math.round(height))
+  return pixelWidth > 0 && pixelHeight > 0 ? { height: pixelHeight, width: pixelWidth } : null
 }
 
 function defaultDevicePixelRatio(): number {
   return typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
 }
 
-function createDefaultResizeObserver(listener: ResizeObserverCallback): WorkbookPaneSurfaceRuntimeResizeObserverV3 | null {
+function createDefaultResizeObserver(listener: WorkbookPaneSurfaceResizeListenerV3): WorkbookPaneSurfaceRuntimeResizeObserverV3 | null {
   if (typeof ResizeObserver === 'undefined') {
     return null
   }
-  return new ResizeObserver(listener)
+  return new ResizeObserver((entries) => listener(entries))
 }
 
 function createDefaultBackend(canvas: HTMLCanvasElement): Promise<object | null> {
@@ -128,7 +164,9 @@ export class WorkbookPaneSurfaceRuntimeV3 {
     readonly size: TypeGpuSurfaceSizeV3
   }) => void
   private readonly getDevicePixelRatio: () => number
-  private readonly createResizeObserver: (listener: ResizeObserverCallback) => WorkbookPaneSurfaceRuntimeResizeObserverV3 | null
+  private readonly createResizeObserver: (
+    listener: WorkbookPaneSurfaceResizeListenerV3,
+  ) => WorkbookPaneSurfaceRuntimeResizeObserverV3 | null
 
   constructor(options: WorkbookPaneSurfaceRuntimeOptionsV3 = {}) {
     this.createBackend = options.createBackend ?? createDefaultBackend
@@ -186,8 +224,9 @@ export class WorkbookPaneSurfaceRuntimeV3 {
     if (!host) {
       return
     }
-    const observer = this.createResizeObserver(() => {
-      this.refreshSurface()
+    const observer = this.createResizeObserver((entries) => {
+      const resizeEntry = entries.find((entry) => entry.target === this.host) ?? entries[0]
+      this.refreshSurface(resizeEntry)
     })
     if (!observer) {
       return
@@ -207,11 +246,12 @@ export class WorkbookPaneSurfaceRuntimeV3 {
     this.updateSnapshot(EMPTY_WORKBOOK_PANE_SURFACE_SNAPSHOT_V3)
   }
 
-  private refreshSurface(): void {
+  private refreshSurface(resizeEntry?: WorkbookPaneSurfaceResizeEntryV3): void {
     const surface = this.host
       ? resolveWorkbookPaneSurfaceSizeV3({
           dpr: this.getDevicePixelRatio(),
           host: this.host,
+          ...(resizeEntry ? { resizeEntry } : {}),
         })
       : EMPTY_TYPEGPU_SURFACE_SIZE_V3
     this.updateSnapshot({

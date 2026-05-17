@@ -106,8 +106,11 @@ describe('CellEditorOverlay', () => {
 
     const textarea = host.querySelector<HTMLTextAreaElement>("[data-testid='cell-editor-input']")
     expect(textarea?.style.fontSize).toBe(`${workbookFontPointSizeToCssPx(WORKBOOK_DEFAULT_FONT_SIZE)}px`)
-    expect(textarea?.style.textRendering.toLowerCase()).toBe('optimizelegibility')
-    expect(textarea?.style.WebkitFontSmoothing).toBe('antialiased')
+    expect(textarea?.style.fontFeatureSettings).toBe('normal')
+    expect(textarea?.style.fontVariantNumeric).toBe('tabular-nums')
+    expect(textarea?.style.letterSpacing).toBe('0px')
+    expect(textarea?.style.textRendering).toBe('')
+    expect(textarea?.style.WebkitFontSmoothing ?? '').toBe('')
     expect(textarea?.getAttribute('class')).toContain('py-[3px]')
     expect(textarea?.getAttribute('class')).toContain('leading-[1.2]')
 

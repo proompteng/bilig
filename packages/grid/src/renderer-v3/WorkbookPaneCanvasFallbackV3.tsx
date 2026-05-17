@@ -213,8 +213,8 @@ export const WorkbookPaneCanvasFallbackV3 = memo(function WorkbookPaneCanvasFall
       return
     }
     const dpr = Math.max(1, window.devicePixelRatio || 1)
-    const pixelWidth = Math.max(1, Math.floor(width * dpr))
-    const pixelHeight = Math.max(1, Math.floor(height * dpr))
+    const pixelWidth = Math.max(1, Math.ceil(width * dpr))
+    const pixelHeight = Math.max(1, Math.ceil(height * dpr))
     if (canvas.width !== pixelWidth) {
       canvas.width = pixelWidth
     }
