@@ -1179,6 +1179,52 @@ describe('GridRenderTilePaneRuntime', () => {
     expect(visibleTileKeys).not.toContain(packTileKey53({ colTile: 0, dprBucket, rowTile: 100, sheetOrdinal }))
   })
 
+  it('materializes frozen deep-scroll panes from disjoint resident strips instead of the origin rectangle', () => {
+    const runtime = new GridRenderTilePaneRuntime()
+    const gridRuntimeHost = createHost()
+    const sheetOrdinal = 7
+    const dprBucket = 1
+    let getCellCount = 0
+    const countingEngine: GridEngineLike = {
+      ...LOCAL_EMPTY_ENGINE,
+      getCell: (_sheetName, address) => {
+        getCellCount += 1
+        return createEmptyCellSnapshot(address)
+      },
+    }
+
+    const state = runtime.resolve(
+      createInput({
+        dprBucket,
+        engine: countingEngine,
+        freezeCols: 1,
+        freezeRows: 1,
+        frozenColumnWidth: 100,
+        frozenRowHeight: 20,
+        gridRuntimeHost,
+        renderTileSource: createRenderTileSource([]),
+        renderTileViewport: { colEnd: 255, colStart: 0, rowEnd: 959, rowStart: 0 },
+        residentViewport: { colEnd: 255, colStart: 128, rowEnd: 959, rowStart: 928 },
+        visibleViewport: { colEnd: 255, colStart: 128, rowEnd: 959, rowStart: 928 },
+      }),
+    )
+
+    const resolvedTileIds = new Set(state.renderTilePanes.map((pane) => pane.tile.tileId))
+
+    expect(resolvedTileIds).toEqual(
+      new Set([
+        packTileKey53({ colTile: 1, dprBucket, rowTile: 29, sheetOrdinal }),
+        packTileKey53({ colTile: 1, dprBucket, rowTile: 0, sheetOrdinal }),
+        packTileKey53({ colTile: 0, dprBucket, rowTile: 29, sheetOrdinal }),
+        packTileKey53({ colTile: 0, dprBucket, rowTile: 0, sheetOrdinal }),
+      ]),
+    )
+    expect(state.renderTilePanes).toHaveLength(4)
+    expect(getCellCount).toBeLessThanOrEqual(50_000)
+    expect(resolvedTileIds).not.toContain(packTileKey53({ colTile: 0, dprBucket, rowTile: 10, sheetOrdinal }))
+    expect(resolvedTileIds).not.toContain(packTileKey53({ colTile: 1, dprBucket, rowTile: 10, sheetOrdinal }))
+  })
+
   it('applies render tile delta changes to the host-owned coordinator before React recomputes panes', () => {
     const runtime = new GridRenderTilePaneRuntime()
     const host = createHost()

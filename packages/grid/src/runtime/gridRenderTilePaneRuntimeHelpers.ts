@@ -91,10 +91,21 @@ export function resolveGridRenderTileInputSheetOrdinal(input: {
 }
 
 export function resolveRenderTileInterestTileKeys(input: GridRenderTileInterestRuntimeInput): readonly TileKey53[] {
+  return resolveTileKeysForRenderTileViewports(input, resolveRenderTileInterestViewports(input))
+}
+
+export function resolveRenderTileResidentTileKeys(input: GridRenderTileInterestRuntimeInput): readonly TileKey53[] {
+  return resolveTileKeysForRenderTileViewports(input, resolveRenderTileResidentViewports(input))
+}
+
+function resolveTileKeysForRenderTileViewports(
+  input: GridRenderTileInterestRuntimeInput,
+  viewports: readonly Viewport[],
+): readonly TileKey53[] {
   const sheetOrdinal = resolveGridRenderTileInputSheetOrdinal(input)
   const keys = new Set<number>()
   const result: number[] = []
-  for (const viewport of resolveRenderTileInterestViewports(input)) {
+  for (const viewport of viewports) {
     for (const key of input.gridRuntimeHost.viewportTileKeys({ dprBucket: input.dprBucket, sheetOrdinal, viewport })) {
       if (keys.has(key)) {
         continue
@@ -107,7 +118,14 @@ export function resolveRenderTileInterestTileKeys(input: GridRenderTileInterestR
 }
 
 export function resolveRenderTileInterestViewports(input: GridRenderTileInterestRuntimeInput): readonly Viewport[] {
-  const bodyViewport = input.visibleViewport
+  return resolveDisjointRenderTileViewports(input, input.visibleViewport)
+}
+
+function resolveRenderTileResidentViewports(input: GridRenderTileInterestRuntimeInput): readonly Viewport[] {
+  return resolveDisjointRenderTileViewports(input, input.residentViewport ?? input.renderTileViewport)
+}
+
+function resolveDisjointRenderTileViewports(input: GridRenderTileInterestRuntimeInput, bodyViewport: Viewport): readonly Viewport[] {
   const freezeRows = Math.max(0, input.freezeRows ?? 0)
   const freezeCols = Math.max(0, input.freezeCols ?? 0)
   const viewports: Viewport[] = []

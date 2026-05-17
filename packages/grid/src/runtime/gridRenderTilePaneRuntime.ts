@@ -17,6 +17,7 @@ import {
   matchesRenderTileSheetIdentity,
   resolveGridRenderTileInputSheetOrdinal,
   resolveRenderTileInterestTileKeys,
+  resolveRenderTileResidentTileKeys,
   resolveRenderTileViewportUnion,
   resolveWarmRenderTileKeys,
   sameLocalInvalidationConnectionIdentity,
@@ -732,6 +733,7 @@ export class GridRenderTilePaneRuntime {
         sheetName: input.sheetName,
         sortedColumnWidthOverrides: input.sortedColumnWidthOverrides,
         sortedRowHeightOverrides: input.sortedRowHeightOverrides,
+        tileKeys: resolveRenderTileResidentTileKeys(input),
         viewport: input.renderTileViewport,
       }),
     }
@@ -744,11 +746,7 @@ export class GridRenderTilePaneRuntime {
     options: { readonly localizeDirtyVisibleTiles?: boolean | undefined } = {},
   ): GridRenderTileResolution | null {
     const sheetOrdinal = resolveGridRenderTileInputSheetOrdinal(input)
-    const tileKeys = input.gridRuntimeHost.viewportTileKeys({
-      dprBucket: input.dprBucket,
-      sheetOrdinal,
-      viewport: input.renderTileViewport,
-    })
+    const tileKeys = resolveRenderTileResidentTileKeys(input)
     if (tileKeys.length === 0) {
       return { source: 'local', tiles: [] }
     }
@@ -756,13 +754,7 @@ export class GridRenderTilePaneRuntime {
     const remoteTiles = new Map<number, GridRenderTile>()
     const dirtyBaseTiles = new Map<number, GridRenderTile>()
     const dirtyTileKeys: number[] = []
-    const visibleTileKeys = new Set(
-      input.gridRuntimeHost.viewportTileKeys({
-        dprBucket: input.dprBucket,
-        sheetOrdinal,
-        viewport: input.visibleViewport,
-      }),
-    )
+    const visibleTileKeys = new Set(resolveRenderTileInterestTileKeys(input))
     const selectedCellTileKey = input.selectedCell
       ? input.gridRuntimeHost.viewportTileKeys({
           dprBucket: input.dprBucket,
