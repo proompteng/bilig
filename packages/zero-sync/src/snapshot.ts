@@ -10,6 +10,7 @@ import type {
   WorkbookDefinedNameSnapshot,
   WorkbookDefinedNameValueSnapshot,
   WorkbookFreezePaneSnapshot,
+  WorkbookMetadataSnapshot,
   WorkbookPropertySnapshot,
   WorkbookSnapshot,
 } from '@bilig/protocol'
@@ -42,6 +43,32 @@ function asBoolean(value: unknown): boolean | undefined {
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : []
+}
+
+function hasOwn(record: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(record, key)
+}
+
+interface ArrayProjectionField<T> {
+  readonly present: boolean
+  readonly values: readonly T[]
+}
+
+interface OptionalProjectionField<T> {
+  readonly present: boolean
+  readonly value: T | undefined
+}
+
+function parseArrayProjectionField<T>(
+  record: Record<string, unknown>,
+  key: string,
+  parse: (entries: unknown[]) => readonly T[],
+): ArrayProjectionField<T> {
+  const present = hasOwn(record, key)
+  return {
+    present,
+    values: present ? parse(asArray(record[key])) : [],
+  }
 }
 
 function isCellNumberFormatKind(value: unknown): value is CellNumberFormatRecord['kind'] {
@@ -125,6 +152,13 @@ function mergeAxisMetadataEntries(
       ...entry,
     }
   })
+}
+
+function mergeProjectedArray<T>(projected: ArrayProjectionField<T>, fallback: readonly T[] | undefined): readonly T[] | undefined {
+  if (projected.present) {
+    return projected.values.length > 0 ? projected.values : undefined
+  }
+  return fallback && fallback.length > 0 ? fallback : undefined
 }
 
 function parseWorkbookProperties(entries: unknown[]): WorkbookPropertySnapshot[] {
@@ -220,19 +254,60 @@ function parseNumberFormats(entries: unknown[]): CellNumberFormatRecord[] {
 }
 
 function parseFreezePane(
-  freezeRows: unknown,
-  freezeCols: unknown,
+  sheetEntry: Record<string, unknown>,
   fallback?: WorkbookFreezePaneSnapshot,
-): WorkbookFreezePaneSnapshot | undefined {
-  const rows = asSafeNonNegativeInteger(freezeRows)
-  const cols = asSafeNonNegativeInteger(freezeCols)
-  if ((rows ?? 0) > 0 || (cols ?? 0) > 0) {
+): OptionalProjectionField<WorkbookFreezePaneSnapshot> {
+  const rowsPresent = hasOwn(sheetEntry, 'freezeRows')
+  const colsPresent = hasOwn(sheetEntry, 'freezeCols')
+  if (!rowsPresent && !colsPresent) {
+    return { present: false, value: fallback }
+  }
+  const rows = rowsPresent ? asSafeNonNegativeInteger(sheetEntry['freezeRows']) : 0
+  const cols = colsPresent ? asSafeNonNegativeInteger(sheetEntry['freezeCols']) : 0
+  if (rows === undefined || cols === undefined) {
+    return { present: true, value: undefined }
+  }
+  if (rows > 0 || cols > 0) {
     return {
-      rows: rows ?? 0,
-      cols: cols ?? 0,
+      present: true,
+      value: {
+        rows,
+        cols,
+      },
     }
   }
-  return fallback
+  return { present: true, value: undefined }
+}
+
+function preserveSnapshotOnlyWorkbookMetadata(metadata: WorkbookMetadataSnapshot | undefined): WorkbookMetadataSnapshot {
+  if (!metadata) {
+    return {}
+  }
+  const {
+    properties: _properties,
+    definedNames: _definedNames,
+    styles: _styles,
+    formats: _formats,
+    calculationSettings: _calculationSettings,
+    volatileContext: _volatileContext,
+    ...snapshotOnlyMetadata
+  } = metadata
+  return { ...snapshotOnlyMetadata }
+}
+
+function preserveSnapshotOnlySheetMetadata(metadata: SheetMetadataSnapshot | undefined): SheetMetadataSnapshot {
+  if (!metadata) {
+    return {}
+  }
+  const {
+    rowMetadata: _rowMetadata,
+    columnMetadata: _columnMetadata,
+    styleRanges: _styleRanges,
+    formatRanges: _formatRanges,
+    freezePane: _freezePane,
+    ...snapshotOnlyMetadata
+  } = metadata
+  return { ...snapshotOnlyMetadata }
 }
 
 function parseStyleRanges(entries: unknown[]): SheetStyleRangeSnapshot[] {
@@ -305,90 +380,58 @@ function parseFormatRanges(entries: unknown[]): SheetFormatRangeSnapshot[] {
 
 function withSheetMetadataFallback(
   sheetName: string,
-  rowEntries: WorkbookAxisMetadataSnapshot[],
-  columnEntries: WorkbookAxisMetadataSnapshot[],
-  styleRanges: SheetStyleRangeSnapshot[],
-  formatRanges: SheetFormatRangeSnapshot[],
-  freezePane: WorkbookFreezePaneSnapshot | undefined,
+  rowEntries: ArrayProjectionField<WorkbookAxisMetadataSnapshot>,
+  columnEntries: ArrayProjectionField<WorkbookAxisMetadataSnapshot>,
+  styleRanges: ArrayProjectionField<SheetStyleRangeSnapshot>,
+  formatRanges: ArrayProjectionField<SheetFormatRangeSnapshot>,
+  freezePane: OptionalProjectionField<WorkbookFreezePaneSnapshot>,
   fallback?: SheetMetadataSnapshot,
 ) {
-  const next: SheetMetadataSnapshot = {}
-  if (fallback?.rows) {
-    next.rows = fallback.rows
-  }
-  if (fallback?.columns) {
-    next.columns = fallback.columns
-  }
-  if (fallback?.filters) {
-    next.filters = fallback.filters
-  }
-  if (fallback?.sorts) {
-    next.sorts = fallback.sorts
-  }
-  if (fallback?.ignoredErrors) {
-    next.ignoredErrors = fallback.ignoredErrors
-  }
-  if (fallback?.sparklines) {
-    next.sparklines = fallback.sparklines
-  }
-  if (fallback?.conditionalFormatArtifacts) {
-    next.conditionalFormatArtifacts = fallback.conditionalFormatArtifacts
-  }
-  if (fallback?.styleArtifacts) {
-    next.styleArtifacts = fallback.styleArtifacts
-  }
-  if (fallback?.pivotArtifacts) {
-    next.pivotArtifacts = fallback.pivotArtifacts
-  }
-  if (fallback?.richTextArtifacts) {
-    next.richTextArtifacts = fallback.richTextArtifacts
-  }
-  if (fallback?.threadedCommentArtifacts) {
-    next.threadedCommentArtifacts = fallback.threadedCommentArtifacts
-  }
-  if (fallback?.viewState) {
-    next.viewState = fallback.viewState
-  }
-  if (fallback?.printPageSetup) {
-    next.printPageSetup = fallback.printPageSetup
-  }
-  if (fallback?.merges) {
-    next.merges = fallback.merges
-  }
-  if (rowEntries.length > 0) {
-    next.rowMetadata = mergeAxisMetadataEntries(rowEntries, fallback?.rowMetadata)
+  const next = preserveSnapshotOnlySheetMetadata(fallback)
+  if (rowEntries.present) {
+    if (rowEntries.values.length > 0) {
+      next.rowMetadata = mergeAxisMetadataEntries(rowEntries.values, fallback?.rowMetadata)
+    }
   } else if (fallback?.rowMetadata) {
     next.rowMetadata = fallback.rowMetadata
   }
-  if (columnEntries.length > 0) {
-    next.columnMetadata = mergeAxisMetadataEntries(columnEntries, fallback?.columnMetadata)
+  if (columnEntries.present) {
+    if (columnEntries.values.length > 0) {
+      next.columnMetadata = mergeAxisMetadataEntries(columnEntries.values, fallback?.columnMetadata)
+    }
   } else if (fallback?.columnMetadata) {
     next.columnMetadata = fallback.columnMetadata
   }
-  if (styleRanges.length > 0) {
-    next.styleRanges = styleRanges.map((entry) => ({
-      ...entry,
-      range: {
-        ...entry.range,
-        sheetName,
-      },
-    }))
+  if (styleRanges.present) {
+    if (styleRanges.values.length > 0) {
+      next.styleRanges = styleRanges.values.map((entry) => ({
+        ...entry,
+        range: {
+          ...entry.range,
+          sheetName,
+        },
+      }))
+    }
   } else if (fallback?.styleRanges) {
     next.styleRanges = fallback.styleRanges
   }
-  if (formatRanges.length > 0) {
-    next.formatRanges = formatRanges.map((entry) => ({
-      ...entry,
-      range: {
-        ...entry.range,
-        sheetName,
-      },
-    }))
+  if (formatRanges.present) {
+    if (formatRanges.values.length > 0) {
+      next.formatRanges = formatRanges.values.map((entry) => ({
+        ...entry,
+        range: {
+          ...entry.range,
+          sheetName,
+        },
+      }))
+    }
   } else if (fallback?.formatRanges) {
     next.formatRanges = fallback.formatRanges
   }
-  if (freezePane) {
-    next.freezePane = freezePane
+  if (freezePane.present) {
+    if (freezePane.value) {
+      next.freezePane = freezePane.value
+    }
   } else if (fallback?.freezePane) {
     next.freezePane = fallback.freezePane
   }
@@ -403,22 +446,26 @@ export function projectWorkbookToSnapshot(value: unknown, documentId: string) {
   const baseSnapshot = isWorkbookSnapshot(value['snapshot']) ? value['snapshot'] : createEmptyWorkbookSnapshot(documentId)
   const workbookName = asString(value['name']) ?? baseSnapshot.workbook.name ?? documentId
 
-  const workbookMetadata = parseWorkbookProperties(asArray(value['workbookMetadataEntries']))
-  const definedNames = parseDefinedNames(asArray(value['definedNames']))
-  const styles = parseStyleRecords(asArray(value['styles']))
-  const numberFormats = parseNumberFormats(asArray(value['numberFormats']))
-  const numberFormatCodeById = new Map(numberFormats.map((entry) => [entry.id, entry.code]))
+  const workbookMetadata = parseArrayProjectionField(value, 'workbookMetadataEntries', parseWorkbookProperties)
+  const definedNames = parseArrayProjectionField(value, 'definedNames', parseDefinedNames)
+  const styles = parseArrayProjectionField(value, 'styles', parseStyleRecords)
+  const numberFormats = parseArrayProjectionField(value, 'numberFormats', parseNumberFormats)
+  const numberFormatCodeById = new Map(numberFormats.values.map((entry) => [entry.id, entry.code]))
 
   const calculationSettingsRecord = isRecord(value['calculationSettings']) ? value['calculationSettings'] : null
-  const calculationMode = calculationSettingsRecord ? asString(calculationSettingsRecord['mode']) : undefined
+  const calculationMode = calculationSettingsRecord ? asString(calculationSettingsRecord['mode']) : asString(value['calcMode'])
   const compatibilityMode = asString(value['compatibilityMode'])
   const recalcEpoch =
     calculationSettingsRecord?.['recalcEpoch'] !== undefined
       ? asSafeNonNegativeInteger(calculationSettingsRecord['recalcEpoch'])
       : asSafeNonNegativeInteger(value['recalcEpoch'])
+  const calculationSettingsPresent = hasOwn(value, 'calculationSettings') || hasOwn(value, 'calcMode') || hasOwn(value, 'compatibilityMode')
+  const recalcEpochPresent =
+    hasOwn(value, 'recalcEpoch') || (calculationSettingsRecord !== null && hasOwn(calculationSettingsRecord, 'recalcEpoch'))
 
   const fallbackSheets = new Map(baseSnapshot.sheets.map((sheet) => [sheet.name, sheet]))
-  const projectedSheets = asArray(value['sheets'])
+  const sheetsPresent = hasOwn(value, 'sheets')
+  const projectedSheets = (sheetsPresent ? asArray(value['sheets']) : [])
     .map((sheetEntry) => {
       if (!isRecord(sheetEntry)) {
         return null
@@ -429,47 +476,49 @@ export function projectWorkbookToSnapshot(value: unknown, documentId: string) {
         return null
       }
 
-      const cells = asArray(sheetEntry['cells'])
-        .map((cellEntry) => {
-          if (!isRecord(cellEntry)) {
-            return null
-          }
-          const explicitFormatId = asString(cellEntry['explicitFormatId'])
-          const rowNum = asSafeNonNegativeInteger(cellEntry['rowNum'])
-          const colNum = asSafeNonNegativeInteger(cellEntry['colNum'])
-          const address =
-            asString(cellEntry['address']) ?? (rowNum !== undefined && colNum !== undefined ? formatAddress(rowNum, colNum) : undefined)
-          if (!address) {
-            return null
-          }
-          const inputValue = cellEntry['inputValue']
-          const formula = asString(cellEntry['formula'])
-          const format = asString(cellEntry['format']) ?? (explicitFormatId ? numberFormatCodeById.get(explicitFormatId) : undefined)
-          const nextCell: WorkbookSnapshot['sheets'][number]['cells'][number] = { address }
-          if (formula) {
-            nextCell.formula = formula
-          } else if (isLiteralInput(inputValue)) {
-            nextCell.value = inputValue
-          }
-          if (format) {
-            nextCell.format = format
-          }
-          return nextCell
-        })
-        .filter((entry): entry is WorkbookSnapshot['sheets'][number]['cells'][number] => entry !== null)
-
       const fallbackSheet = fallbackSheets.get(sheetName)
+      const cellsPresent = hasOwn(sheetEntry, 'cells')
+      const cells = cellsPresent
+        ? asArray(sheetEntry['cells'])
+            .map((cellEntry) => {
+              if (!isRecord(cellEntry)) {
+                return null
+              }
+              const explicitFormatId = asString(cellEntry['explicitFormatId'])
+              const rowNum = asSafeNonNegativeInteger(cellEntry['rowNum'])
+              const colNum = asSafeNonNegativeInteger(cellEntry['colNum'])
+              const address =
+                asString(cellEntry['address']) ?? (rowNum !== undefined && colNum !== undefined ? formatAddress(rowNum, colNum) : undefined)
+              if (!address) {
+                return null
+              }
+              const inputValue = cellEntry['inputValue']
+              const formula = asString(cellEntry['formula'])
+              const format = asString(cellEntry['format']) ?? (explicitFormatId ? numberFormatCodeById.get(explicitFormatId) : undefined)
+              const nextCell: WorkbookSnapshot['sheets'][number]['cells'][number] = { address }
+              if (formula) {
+                nextCell.formula = formula
+              } else if (isLiteralInput(inputValue)) {
+                nextCell.value = inputValue
+              }
+              if (format) {
+                nextCell.format = format
+              }
+              return nextCell
+            })
+            .filter((entry): entry is WorkbookSnapshot['sheets'][number]['cells'][number] => entry !== null)
+        : (fallbackSheet?.cells ?? [])
       const metadata = withSheetMetadataFallback(
         sheetName,
-        parseAxisMetadata(asArray(sheetEntry['rowMetadata'])),
-        parseAxisMetadata(asArray(sheetEntry['columnMetadata'])),
-        parseStyleRanges(asArray(sheetEntry['styleRanges'])),
-        parseFormatRanges(asArray(sheetEntry['formatRanges'])),
-        parseFreezePane(sheetEntry['freezeRows'], sheetEntry['freezeCols'], fallbackSheet?.metadata?.freezePane),
+        parseArrayProjectionField(sheetEntry, 'rowMetadata', parseAxisMetadata),
+        parseArrayProjectionField(sheetEntry, 'columnMetadata', parseAxisMetadata),
+        parseArrayProjectionField(sheetEntry, 'styleRanges', parseStyleRanges),
+        parseArrayProjectionField(sheetEntry, 'formatRanges', parseFormatRanges),
+        parseFreezePane(sheetEntry, fallbackSheet?.metadata?.freezePane),
         fallbackSheet?.metadata,
       )
 
-      const id = asSafeNonNegativeInteger(sheetEntry['id']) ?? fallbackSheet?.id
+      const id = asSafeNonNegativeInteger(sheetEntry['id']) ?? (!hasOwn(sheetEntry, 'id') ? fallbackSheet?.id : undefined)
       const nextSheet: WorkbookSnapshot['sheets'][number] = metadata
         ? { name: sheetName, order: sortOrder, metadata, cells }
         : { name: sheetName, order: sortOrder, cells }
@@ -480,21 +529,23 @@ export function projectWorkbookToSnapshot(value: unknown, documentId: string) {
     })
     .filter((entry): entry is WorkbookSnapshot['sheets'][number] => entry !== null)
 
-  const workbookMetadataSnapshot = {
-    ...baseSnapshot.workbook.metadata,
-  }
+  const workbookMetadataSnapshot = preserveSnapshotOnlyWorkbookMetadata(baseSnapshot.workbook.metadata)
 
-  if (workbookMetadata.length > 0) {
-    workbookMetadataSnapshot.properties = workbookMetadata
+  const properties = mergeProjectedArray(workbookMetadata, baseSnapshot.workbook.metadata?.properties)
+  if (properties) {
+    workbookMetadataSnapshot.properties = [...properties]
   }
-  if (definedNames.length > 0) {
-    workbookMetadataSnapshot.definedNames = definedNames
+  const definedNameEntries = mergeProjectedArray(definedNames, baseSnapshot.workbook.metadata?.definedNames)
+  if (definedNameEntries) {
+    workbookMetadataSnapshot.definedNames = [...definedNameEntries]
   }
-  if (styles.length > 0) {
-    workbookMetadataSnapshot.styles = styles
+  const styleEntries = mergeProjectedArray(styles, baseSnapshot.workbook.metadata?.styles)
+  if (styleEntries) {
+    workbookMetadataSnapshot.styles = [...styleEntries]
   }
-  if (numberFormats.length > 0) {
-    workbookMetadataSnapshot.formats = numberFormats
+  const formatEntries = mergeProjectedArray(numberFormats, baseSnapshot.workbook.metadata?.formats)
+  if (formatEntries) {
+    workbookMetadataSnapshot.formats = [...formatEntries]
   }
   if ((calculationMode === 'automatic' || calculationMode === 'manual') && isCompatibilityMode(compatibilityMode)) {
     workbookMetadataSnapshot.calculationSettings = {
@@ -507,11 +558,15 @@ export function projectWorkbookToSnapshot(value: unknown, documentId: string) {
       ...baseSnapshot.workbook.metadata?.calculationSettings,
       mode: calculationMode,
     }
+  } else if (!calculationSettingsPresent && baseSnapshot.workbook.metadata?.calculationSettings) {
+    workbookMetadataSnapshot.calculationSettings = baseSnapshot.workbook.metadata.calculationSettings
   }
   if (recalcEpoch !== undefined) {
     workbookMetadataSnapshot.volatileContext = {
       recalcEpoch,
     }
+  } else if (!recalcEpochPresent && baseSnapshot.workbook.metadata?.volatileContext) {
+    workbookMetadataSnapshot.volatileContext = baseSnapshot.workbook.metadata.volatileContext
   }
 
   const workbook =
@@ -520,6 +575,6 @@ export function projectWorkbookToSnapshot(value: unknown, documentId: string) {
   return {
     version: 1,
     workbook,
-    sheets: projectedSheets.length > 0 ? projectedSheets : baseSnapshot.sheets,
+    sheets: sheetsPresent ? projectedSheets : baseSnapshot.sheets,
   }
 }

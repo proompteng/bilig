@@ -209,6 +209,151 @@ describe('projectWorkbookToSnapshot', () => {
     expect(projected?.sheets[0]?.metadata?.columnMetadata).toEqual([{ start: 0, count: 1, size: 144, styleIndex: 9, customFormat: true }])
   })
 
+  it('treats present empty normalized collections as authoritative deletes', () => {
+    const projected = projectWorkbookToSnapshot(
+      {
+        id: 'doc-1',
+        name: 'Projected Book',
+        recalcEpoch: undefined,
+        snapshot: {
+          version: 1,
+          workbook: {
+            name: 'Warm Snapshot',
+            metadata: {
+              properties: [{ key: 'locale', value: 'en-US' }],
+              definedNames: [{ name: 'Rate', value: 0.12 }],
+              styles: [{ id: 'style-old', fill: { backgroundColor: '#ff0000' } }],
+              formats: [{ id: 'fmt-old', code: '0.00', kind: 'number' }],
+              calculationSettings: { mode: 'manual', compatibilityMode: 'excel-modern' },
+              volatileContext: { recalcEpoch: 12 },
+              tables: [
+                {
+                  name: 'Table1',
+                  sheetName: 'Sheet1',
+                  startAddress: 'A1',
+                  endAddress: 'A2',
+                  columnNames: ['A'],
+                  headerRow: true,
+                  totalsRow: false,
+                },
+              ],
+            },
+          },
+          sheets: [
+            {
+              id: 1,
+              name: 'Sheet1',
+              order: 0,
+              cells: [{ address: 'A1', value: 'stale' }],
+              metadata: {
+                rowMetadata: [{ start: 0, count: 1, size: 28, styleIndex: 7 }],
+                columnMetadata: [{ start: 0, count: 1, size: 144, styleIndex: 9 }],
+                styleRanges: [{ range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' }, styleId: 'style-old' }],
+                formatRanges: [{ range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' }, formatId: 'fmt-old' }],
+                freezePane: { rows: 1, cols: 1 },
+                validations: [{ range: { sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B2' }, type: 'whole' }],
+                notes: [{ ref: 'C1', text: 'snapshot-only note' }],
+              },
+            },
+          ],
+        },
+        calculationSettings: {},
+        workbookMetadataEntries: [],
+        definedNames: [],
+        styles: [],
+        numberFormats: [],
+        sheets: [
+          {
+            name: 'Sheet1',
+            sortOrder: 0,
+            freezeRows: 0,
+            freezeCols: 0,
+            cells: [],
+            rowMetadata: [],
+            columnMetadata: [],
+            styleRanges: [],
+            formatRanges: [],
+          },
+        ],
+      },
+      'doc-1',
+    )
+
+    expect(projected?.workbook.metadata?.properties).toBeUndefined()
+    expect(projected?.workbook.metadata?.definedNames).toBeUndefined()
+    expect(projected?.workbook.metadata?.styles).toBeUndefined()
+    expect(projected?.workbook.metadata?.formats).toBeUndefined()
+    expect(projected?.workbook.metadata?.calculationSettings).toBeUndefined()
+    expect(projected?.workbook.metadata?.volatileContext).toBeUndefined()
+    expect(projected?.workbook.metadata?.tables?.[0]?.name).toBe('Table1')
+    expect(projected?.sheets[0]?.cells).toEqual([])
+    expect(projected?.sheets[0]?.metadata?.rowMetadata).toBeUndefined()
+    expect(projected?.sheets[0]?.metadata?.columnMetadata).toBeUndefined()
+    expect(projected?.sheets[0]?.metadata?.styleRanges).toBeUndefined()
+    expect(projected?.sheets[0]?.metadata?.formatRanges).toBeUndefined()
+    expect(projected?.sheets[0]?.metadata?.freezePane).toBeUndefined()
+    expect(projected?.sheets[0]?.metadata?.validations).toEqual([
+      { range: { sheetName: 'Sheet1', startAddress: 'B1', endAddress: 'B2' }, type: 'whole' },
+    ])
+    expect(projected?.sheets[0]?.metadata?.notes).toEqual([{ ref: 'C1', text: 'snapshot-only note' }])
+  })
+
+  it('preserves warm snapshot data when normalized collections are omitted from a partial projection', () => {
+    const projected = projectWorkbookToSnapshot(
+      {
+        id: 'doc-1',
+        name: 'Projected Book',
+        snapshot: {
+          version: 1,
+          workbook: {
+            name: 'Warm Snapshot',
+            metadata: {
+              properties: [{ key: 'locale', value: 'en-US' }],
+              definedNames: [{ name: 'Rate', value: 0.12 }],
+              styles: [{ id: 'style-old', fill: { backgroundColor: '#ff0000' } }],
+              formats: [{ id: 'fmt-old', code: '0.00', kind: 'number' }],
+              calculationSettings: { mode: 'manual', compatibilityMode: 'excel-modern' },
+              volatileContext: { recalcEpoch: 12 },
+            },
+          },
+          sheets: [
+            {
+              id: 1,
+              name: 'Sheet1',
+              order: 0,
+              cells: [{ address: 'A1', value: 'warm' }],
+              metadata: {
+                rowMetadata: [{ start: 0, count: 1, size: 28 }],
+                styleRanges: [{ range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' }, styleId: 'style-old' }],
+                freezePane: { rows: 1, cols: 1 },
+              },
+            },
+          ],
+        },
+        sheets: [
+          {
+            name: 'Sheet1',
+            sortOrder: 0,
+          },
+        ],
+      },
+      'doc-1',
+    )
+
+    expect(projected?.workbook.metadata?.properties).toEqual([{ key: 'locale', value: 'en-US' }])
+    expect(projected?.workbook.metadata?.definedNames).toEqual([{ name: 'Rate', value: 0.12 }])
+    expect(projected?.workbook.metadata?.styles).toEqual([{ id: 'style-old', fill: { backgroundColor: '#ff0000' } }])
+    expect(projected?.workbook.metadata?.formats).toEqual([{ id: 'fmt-old', code: '0.00', kind: 'number' }])
+    expect(projected?.workbook.metadata?.calculationSettings).toEqual({ mode: 'manual', compatibilityMode: 'excel-modern' })
+    expect(projected?.workbook.metadata?.volatileContext).toEqual({ recalcEpoch: 12 })
+    expect(projected?.sheets[0]?.cells).toEqual([{ address: 'A1', value: 'warm' }])
+    expect(projected?.sheets[0]?.metadata?.rowMetadata).toEqual([{ start: 0, count: 1, size: 28 }])
+    expect(projected?.sheets[0]?.metadata?.styleRanges).toEqual([
+      { range: { sheetName: 'Sheet1', startAddress: 'A1', endAddress: 'A1' }, styleId: 'style-old' },
+    ])
+    expect(projected?.sheets[0]?.metadata?.freezePane).toEqual({ rows: 1, cols: 1 })
+  })
+
   it('sanitizes projected style records from persisted JSON', () => {
     const projected = projectWorkbookToSnapshot(
       {
