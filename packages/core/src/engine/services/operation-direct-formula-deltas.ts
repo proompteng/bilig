@@ -136,18 +136,18 @@ export function createOperationDirectFormulaDeltas(args: {
       const clearFormulaOutputFlags = ~formulaOutputFlags
       for (let index = 0; index < cellIndices.length; index += 1) {
         const cellIndex = cellIndices[index]!
-        const currentFlags = flags[cellIndex] ?? 0
+        const currentFlags = flags[cellIndex]!
         if ((currentFlags & formulaOutputFlags) !== 0) {
           flags[cellIndex] = currentFlags & clearFormulaOutputFlags
         }
-        numbers[cellIndex] = (numbers[cellIndex] ?? 0) + constantDelta
+        numbers[cellIndex] = numbers[cellIndex]! + constantDelta
         if (stringIds[cellIndex] !== 0) {
           stringIds[cellIndex] = 0
         }
         if (errors[cellIndex] !== 0) {
           errors[cellIndex] = 0
         }
-        versions[cellIndex] = (versions[cellIndex] ?? 0) + 1
+        versions[cellIndex] = versions[cellIndex]! + 1
       }
       addEngineCounter(args.state.counters, 'directScalarDeltaApplications', collection.size)
       return changed

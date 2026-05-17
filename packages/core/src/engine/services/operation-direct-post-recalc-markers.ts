@@ -390,6 +390,12 @@ export function createOperationDirectPostRecalcMarkers(args: {
     let commonDelta: number | undefined
     let canUseValidatedTerminalWrites = true
     const canSkipAllDirectFormulaColumnVersions = args.canSkipAllDirectFormulaColumnVersions?.() === true
+    const cellStore = args.state.workbook.cellStore
+    const formulas = args.state.formulas
+    const flags = cellStore.flags
+    const tags = cellStore.tags
+    const directScalarCellNumericValue = args.directScalarCellNumericValue
+    const canSkipDirectFormulaColumnVersion = args.canSkipDirectFormulaColumnVersion
     for (;;) {
       if (closureCount > args.scalarDeltaClosureLimit) {
         return false
@@ -404,13 +410,13 @@ export function createOperationDirectPostRecalcMarkers(args: {
       if (formulaCellIndex === rootCellIndex) {
         return false
       }
-      const formula = args.state.formulas.get(formulaCellIndex)
+      const formula = formulas.get(formulaCellIndex)
       if (
         !formula ||
         formula.directScalar === undefined ||
         formula.compiled.volatile ||
         formula.compiled.producesSpill ||
-        ((args.state.workbook.cellStore.flags[formulaCellIndex] ?? 0) & CellFlags.InCycle) !== 0
+        ((flags[formulaCellIndex] ?? 0) & CellFlags.InCycle) !== 0
       ) {
         return false
       }
@@ -465,10 +471,10 @@ export function createOperationDirectPostRecalcMarkers(args: {
         }
       }
       if (formulaOldNumber === undefined || formulaNewNumber === undefined) {
-        formulaOldNumber = args.directScalarCellNumericValue(formulaCellIndex)
+        formulaOldNumber = directScalarCellNumericValue(formulaCellIndex)
         formulaDelta = tryDirectScalarNumericDeltaFromNumbers(directScalar, currentCellIndex, oldNumber, newNumber)
       } else {
-        if (args.state.workbook.cellStore.tags[formulaCellIndex] !== ValueTag.Number) {
+        if (tags[formulaCellIndex] !== ValueTag.Number) {
           return false
         }
         formulaDelta = formulaNewNumber - formulaOldNumber
@@ -479,11 +485,7 @@ export function createOperationDirectPostRecalcMarkers(args: {
       if (formulaDelta === undefined) {
         return false
       }
-      if (
-        canUseValidatedTerminalWrites &&
-        !canSkipAllDirectFormulaColumnVersions &&
-        !args.canSkipDirectFormulaColumnVersion(formulaCellIndex)
-      ) {
+      if (canUseValidatedTerminalWrites && !canSkipAllDirectFormulaColumnVersions && !canSkipDirectFormulaColumnVersion(formulaCellIndex)) {
         canUseValidatedTerminalWrites = false
       }
       if (commonDelta === undefined) {
