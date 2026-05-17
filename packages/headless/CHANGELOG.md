@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.18.5
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.18.4
+- Manual override: no
+
+## Fixes
+- perf(core): skip formula-only aggregate input coverage (772c2cf7)
+
+## Internal runtime changes
+- docs(growth): add formula clinic report script (7de01748)
+
 ## 0.18.4
 
 - Release type: patch
