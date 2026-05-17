@@ -13,6 +13,12 @@ image: /assets/github-social-preview.png
 `xlsx-populate` can write cells and formulas into XLSX files. It is not a
 workbook calculation engine.
 
+This page is for the practical `xlsx-populate` issue where a generated workbook
+needs to keep the formula and also expose the new calculated value before
+anyone opens the file in Excel. A public `xlsx-populate` issue asks exactly
+that: setting a formula preserves the formula, setting a value replaces it, and
+the result is not calculated until another spreadsheet engine opens the file.
+
 That matters when a backend flow needs both:
 
 - formula text in the generated workbook; and
@@ -33,6 +39,24 @@ Some XLSX libraries can serialize a `{ formula, result }` pair, but that still
 requires you to compute the result somewhere. Setting `fullCalcOnLoad` can ask
 Excel or LibreOffice to recalculate later; it does not give a Node API route a
 fresh value now.
+
+If the backend is about to approve a quote, price an order, validate an import,
+or enqueue a payout, the cached value inside the XLSX file is not a decision
+source. It is only the last value some other spreadsheet engine happened to
+write.
+
+## The small rule
+
+Keep `xlsx-populate` for file authoring. Move the calculation step to a runtime
+that can answer immediately.
+
+That gives the backend a plain contract:
+
+1. write request values into known input cells;
+2. recalculate in the same Node process;
+3. read known output cells;
+4. persist the workbook state;
+5. export XLSX if a human still needs the file.
 
 ## Pick the boundary
 
@@ -86,6 +110,32 @@ try {
 
 That shape avoids the "write a formula, then wait for Excel to populate the
 cache" loop. The service owns the calculated state before it emits a response.
+
+If the XLSX file is the source of truth, use the XLSX edge instead of creating a
+blank WorkPaper:
+
+```ts
+import { readFile } from 'node:fs/promises'
+import { WorkPaper } from '@bilig/headless'
+import { importXlsx } from '@bilig/headless/xlsx'
+
+const imported = importXlsx(await readFile('quote-template.xlsx'), 'quote-template.xlsx')
+const workbook = WorkPaper.buildFromSnapshot(imported.snapshot)
+
+const inputs = workbook.getSheetId('Inputs')
+const outputs = workbook.getSheetId('Outputs')
+if (inputs === undefined || outputs === undefined) {
+  throw new Error('Expected Inputs and Outputs sheets')
+}
+
+workbook.setCellContents({ sheet: inputs, row: 1, col: 1 }, 42)
+const approved = workbook.getCellDisplayValue({ sheet: outputs, row: 1, col: 1 })
+
+console.log({ approved })
+```
+
+That is the part `xlsx-populate` does not try to own: the service changed an
+input and read the dependent value back before returning.
 
 ## Test with a reduced workbook
 
