@@ -2243,6 +2243,164 @@ describe('wasm kernel', () => {
     expect(kernel.readNumbers()[cellIndex(2, 2, width)]).toBe(300)
   })
 
+  it('evaluates table lookup builtins over dynamic arrays on the wasm path', async () => {
+    const kernel = await createKernel()
+    const width = 8
+    kernel.init(40, 8, 1, 5, 20)
+    kernel.writeCells(
+      new Uint8Array([
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        0,
+        0,
+        0,
+        0,
+        0,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        0,
+        0,
+        0,
+        0,
+        0,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        0,
+        0,
+        0,
+        0,
+        0,
+        ...Array.from({ length: 16 }, () => ValueTag.Empty),
+      ]),
+      new Float64Array([
+        1,
+        10,
+        100,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        20,
+        200,
+        0,
+        0,
+        0,
+        0,
+        0,
+        3,
+        30,
+        300,
+        0,
+        0,
+        0,
+        0,
+        0,
+        ...Array.from({ length: 16 }, () => 0),
+      ]),
+      new Uint32Array(40),
+      new Uint16Array(40),
+    )
+    kernel.uploadRangeMembers(
+      Uint32Array.from([
+        cellIndex(0, 0, width),
+        cellIndex(0, 1, width),
+        cellIndex(0, 2, width),
+        cellIndex(1, 0, width),
+        cellIndex(1, 1, width),
+        cellIndex(1, 2, width),
+        cellIndex(2, 0, width),
+        cellIndex(2, 1, width),
+        cellIndex(2, 2, width),
+      ]),
+      Uint32Array.from([0]),
+      Uint32Array.from([9]),
+    )
+    kernel.uploadRangeShapes(Uint32Array.from([3]), Uint32Array.from([3]))
+
+    const takeTable = [encodePushRange(0), encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.TAKE, 3)]
+    const packed = packPrograms([
+      [...takeTable, encodePushNumber(2), encodePushNumber(3), encodeCall(BUILTIN.INDEX, 3), encodeRet()],
+      [...takeTable, encodePushNumber(2), encodePushNumber(3), encodeCall(BUILTIN.INDEX, 3), encodeRet()],
+      [...takeTable, encodePushNumber(2), encodePushNumber(3), encodeCall(BUILTIN.INDEX, 3), encodeRet()],
+      [
+        encodePushNumber(0),
+        encodePushRange(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodeCall(BUILTIN.TAKE, 3),
+        encodePushNumber(3),
+        encodePushNumber(4),
+        encodeCall(BUILTIN.VLOOKUP, 4),
+        encodeRet(),
+      ],
+      [
+        encodePushNumber(0),
+        encodePushRange(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodeCall(BUILTIN.TAKE, 3),
+        encodePushNumber(3),
+        encodePushNumber(4),
+        encodeCall(BUILTIN.HLOOKUP, 4),
+        encodeRet(),
+      ],
+    ])
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([
+        cellIndex(3, 0, width),
+        cellIndex(3, 1, width),
+        cellIndex(3, 3, width),
+        cellIndex(3, 5, width),
+        cellIndex(3, 6, width),
+      ]),
+    )
+    const constants = packConstants([
+      [2, 3, 2, 3],
+      [2, 3, 0, 2],
+      [2, 3, 2, 0],
+      [2, 2, 3, 3, 0],
+      [100, 2, 3, 2, 0],
+    ])
+    kernel.uploadConstants(constants.constants, constants.offsets, constants.lengths)
+    kernel.evalBatch(
+      Uint32Array.from([
+        cellIndex(3, 0, width),
+        cellIndex(3, 1, width),
+        cellIndex(3, 3, width),
+        cellIndex(3, 5, width),
+        cellIndex(3, 6, width),
+      ]),
+    )
+
+    expect(kernel.readTags()[cellIndex(3, 0, width)]).toBe(ValueTag.Number)
+    expect(kernel.readNumbers()[cellIndex(3, 0, width)]).toBe(200)
+    expect(readSpillValues(kernel, cellIndex(3, 1, width), [])).toEqual([
+      { tag: ValueTag.Number, value: 10 },
+      { tag: ValueTag.Number, value: 20 },
+    ])
+    expect(kernel.readSpillRows()[cellIndex(3, 1, width)]).toBe(2)
+    expect(kernel.readSpillCols()[cellIndex(3, 1, width)]).toBe(1)
+    expect(readSpillValues(kernel, cellIndex(3, 3, width), [])).toEqual([
+      { tag: ValueTag.Number, value: 2 },
+      { tag: ValueTag.Number, value: 20 },
+      { tag: ValueTag.Number, value: 200 },
+    ])
+    expect(kernel.readSpillRows()[cellIndex(3, 3, width)]).toBe(1)
+    expect(kernel.readSpillCols()[cellIndex(3, 3, width)]).toBe(3)
+    expect(kernel.readTags()[cellIndex(3, 5, width)]).toBe(ValueTag.Number)
+    expect(kernel.readNumbers()[cellIndex(3, 5, width)]).toBe(200)
+    expect(kernel.readTags()[cellIndex(3, 6, width)]).toBe(ValueTag.Number)
+    expect(kernel.readNumbers()[cellIndex(3, 6, width)]).toBe(200)
+  })
+
   it('evaluates database aggregation builtins on the wasm path', async () => {
     const kernel = await createKernel()
     const width = 10
