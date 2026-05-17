@@ -4,6 +4,34 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.18.0
+
+- Release type: minor
+- Previous libraries tag: libraries-v0.17.1
+- Manual override: no
+
+## Features
+- feat(community): add workbook fixture submission path (73798e44)
+
+## Fixes
+- perf(headless): cache row-literal formula templates (ddbfad3a)
+- fix(formula): preserve ref errors in headless corpus (06549cf5)
+- perf(headless): defer tail-append change detachment (cd286a0d)
+- perf(core): tighten direct scalar delta hot path (021d59eb)
+- perf(core): add primitive fresh cell attach path (caee68e0)
+- fix(headless): keep npm keyword metadata compressed (9a355e7e)
+- fix(formula): make lookup search modes authoritative (e84bdbbe)
+- fix(formula): harden text scalar builtins (bb1c0d6e)
+- fix(formula): respect quoted text format literals (372f66bb)
+- perf(core): skip reverse edge scans for fresh formulas (aad986ee)
+- fix(formula): pad ragged stack arrays (56aa2acb)
+
+## Internal runtime changes
+- docs(evidence): align documentation with current artifacts (96fd0a54)
+- docs(community): link workbook fixture discussion (2b1ec511)
+- docs(mcp): sharpen formula recalculation positioning (b7099696)
+- build(create): move starter to scoped npm package (21dcbb26)
+
 ## 0.17.1
 
 - Release type: patch
