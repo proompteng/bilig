@@ -144,7 +144,7 @@ A useful result includes:
 - `transport.type: stdio`
 - `repository.url: https://github.com/proompteng/bilig`
 
-Latest checked result on May 17, 2026: npm latest is `@bilig/headless@0.18.20`,
+Latest checked result on May 17, 2026: npm latest is `@bilig/headless@0.18.21`,
 while the official Registry API search returns multiple historical Bilig
 WorkPaper entries and no current `isLatest` entry in the response. That means
 the npm install path is the freshest machine-checkable source until the Registry

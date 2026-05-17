@@ -598,7 +598,7 @@ for (const required of [
   'https://github.com/proompteng/bilig/issues/384',
   'Registry API currently returns historical entries rather than a fresh latest\nentry for the npm package',
   'Glama lists Bilig WorkPaper publicly, but its API still reports an empty\n`tools` array',
-  'npm latest is `@bilig/headless@0.18.20`',
+  'npm latest is `@bilig/headless@0.18.21`',
   'no current `isLatest` entry',
   'https://github.com/proompteng/bilig/actions/runs/25956395253',
   'read_workpaper_summary',

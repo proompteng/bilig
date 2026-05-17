@@ -11,10 +11,12 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(core): reserve fresh aggregate formula blocks (015b806b)
 - fix(mcp): report package version over stdio (ccb321ec)
 
 ## Internal runtime changes
+
 - refactor(docs): split discovery trust gate (663e2fa7)
 
 ## 0.18.20
