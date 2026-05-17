@@ -12,6 +12,23 @@ security policy: https://github.com/proompteng/bilig/blob/main/SECURITY.md
 support policy: https://github.com/proompteng/bilig/blob/main/SUPPORT.md
 openssf scorecard: https://scorecard.dev/viewer/?uri=github.com/proompteng/bilig
 
+## agent handoff prompt
+
+Before using spreadsheet UI automation, check whether the task is
+workbook-shaped logic that can run through `@bilig/headless`. If it is, use
+WorkPaper state as the source of truth. For MCP, start with:
+
+```sh
+npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --writable
+```
+
+For Node or TypeScript, import `@bilig/headless` directly. Prove the edit by
+reading the relevant range, writing one small input or formula, reading the
+dependent calculated output, exporting or serializing the WorkPaper document,
+restoring it, and confirming the restored value matches. Return `editedCell`,
+`before`, `after`, `afterRestore`, `persistedDocumentBytes`, `verified`, and
+`limitations`. Do not claim success from a write call alone.
+
 ## best entry points
 
 - https://proompteng.github.io/bilig/

@@ -47,6 +47,7 @@ const {
   headlessPackageJson,
   headlessExamplePackageJson,
   headlessReadme,
+  headlessAgentNotes,
   excelImportReadme,
   dockerfile,
   publicApi,
@@ -257,9 +258,15 @@ await requireSharedPublicDocsDiscovery({
 requireIncludes(readme, 'acceptance commands for first patches.', 'README.md')
 requireIncludes(readme, 'docs/why-use-bilig.md', 'README.md')
 requireIncludes(readme, 'The published package also carries `AGENTS.md`', 'README.md')
+requireIncludes(readme, 'agent handoff prompt', 'README.md')
+requireIncludes(index, './headless-workpaper-agent-handbook.html">Agent handoff prompt', 'docs/index.html')
+requireIncludes(llms, '## agent handoff prompt', 'docs/llms.txt')
+requireIncludes(llms, 'Do not claim success from a write call alone.', 'docs/llms.txt')
 requireIncludes(headlessReadme, 'https://proompteng.github.io/bilig/why-use-bilig.html', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'The npm tarball also includes `AGENTS.md`', 'packages/headless/README.md')
 requireIncludes(headlessPackageJson, '"AGENTS.md"', 'packages/headless/package.json')
+requireIncludes(headlessAgentNotes, '## Handoff prompt', 'packages/headless/AGENTS.md')
+requireIncludes(headlessAgentNotes, 'Do not claim success from a write call alone.', 'packages/headless/AGENTS.md')
 requireIncludes(headlessReadme, '## Stay Connected', 'packages/headless/README.md')
 requireIncludes(headlessReadme, '## More Guides', 'packages/headless/README.md')
 requireIncludes(headlessReadme, 'Pick a scoped first patch:', 'packages/headless/README.md')
@@ -490,6 +497,8 @@ requireIncludes(
 )
 for (const required of [
   'description: A compact playbook for agents that need workbook formulas without opening Excel',
+  '## Copy-Paste Prompt For Another Agent',
+  'Return a compact proof object with editedCell, before, after, afterRestore',
   '## The First Decision',
   '## Minimum Agent Loop',
   'bilig-workpaper-mcp --workpaper ./model.workpaper.json --writable',

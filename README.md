@@ -34,13 +34,17 @@ Project site: <https://proompteng.github.io/bilig/>
 | Basic fit                | [Why use Bilig?](docs/why-use-bilig.md)                                                                                  | The problem is workbook-shaped business logic that needs API readback and persistence.      |
 | Published npm package    | [90-second Node quickstart](docs/try-bilig-headless-in-node.md)                                                          | It edits one input, recalculates, persists JSON, restores, and prints `verified: true`.     |
 | Backend service shape    | [Quote approval WorkPaper API](docs/quote-approval-workpaper-api.md)                                                     | A realistic route-style workflow returns formula readback and `restoredMatchesAfter: true`. |
-| Agent or MCP tools       | [Headless WorkPaper agent handbook](docs/headless-workpaper-agent-handbook.md) and [MCP spreadsheet tool server](docs/mcp-workpaper-tool-server.md) | The agent can pick MCP, direct TypeScript, or route tools and prove write/readback/persist. |
+| Agent or MCP tools       | [Headless WorkPaper agent handbook](docs/headless-workpaper-agent-handbook.md) and [MCP spreadsheet tool server](docs/mcp-workpaper-tool-server.md) | The agent gets a copy-paste handoff prompt, then proves write/readback/persist.             |
 | Agent-owned XLSX files   | [Agent XLSX recalculation without LibreOffice](docs/agent-xlsx-formula-recalculation-without-libreoffice.md)             | A tool can edit XLSX inputs, recalculate, export, reimport, and return `verified: true`.    |
 | Public technical review  | [Show HN maintainer note](docs/show-hn-formula-workbooks-node-services.md)                                               | One shareable page has the npm check, benchmark caveat, known limits, and feedback ask.     |
 | Trust and performance    | [npm provenance](docs/npm-provenance-package-trust.md) and [benchmark evidence](docs/what-workpaper-benchmark-proves.md) | npm shows SLSA provenance, and benchmark claims match the checked artifact.                 |
 | Almost a fit             | [adoption blocker form](https://github.com/proompteng/bilig/discussions/new?category=general)                            | Name the formula, import/export, persistence, framework, MCP, package, or benchmark gap.    |
 | Formula or XLSX bug      | [formula bug clinic](docs/formula-bug-clinic.md)                                                                         | Share a reduced public case that can become a test, example, corpus fixture, or docs proof. |
 | Real workbook blocked    | [submit a workbook fixture](docs/submit-workbook-fixture.md)                                                             | Use the structured form when a reduced workbook is ready.                                   |
+
+Handing a spreadsheet task to another coding agent? Start with the
+[agent handoff prompt](docs/headless-workpaper-agent-handbook.md#copy-paste-prompt-for-another-agent)
+before opening Excel, LibreOffice, Google Sheets, or a screenshot UI.
 
 <p align="center">
   <img src="docs/assets/github-social-preview.png" alt="bilig headless workbook runtime for formulas in TypeScript" />

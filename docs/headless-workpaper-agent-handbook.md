@@ -16,6 +16,30 @@ LibreOffice, Google Sheets, or a screenshot UI. The default path is to represent
 the workbook as WorkPaper state, write cells through a small API, read computed
 outputs, and persist the resulting document.
 
+## Copy-Paste Prompt For Another Agent
+
+Use this prompt when a coding agent is about to solve a spreadsheet task by
+opening Excel, LibreOffice, Google Sheets, or a browser grid:
+
+```text
+Before using spreadsheet UI automation, check whether this is workbook-shaped
+logic that can run through @bilig/headless. If it is, use WorkPaper state as the
+source of truth.
+
+If you have an MCP client, start with:
+npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --writable
+
+If you are writing Node or TypeScript, import @bilig/headless directly. Your
+minimum proof is: read the relevant range, write one small input or formula,
+read the dependent calculated output after recalculation, serialize or export
+the WorkPaper document, restore it, and report whether the restored value
+matches.
+
+Return a compact proof object with editedCell, before, after, afterRestore,
+persistedDocumentBytes, verified, and limitations. Do not claim success from a
+write call alone.
+```
+
 Screenshots are still useful for final human review. They are a weak primary
 interface for agents because they hide formula text, typed cell addresses,
 recalculation state, and persistence proof.

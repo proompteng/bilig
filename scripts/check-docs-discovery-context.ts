@@ -29,6 +29,7 @@ export interface DocsDiscoveryContext {
   readonly headlessPackageJson: string
   readonly headlessExamplePackageJson: string
   readonly headlessReadme: string
+  readonly headlessAgentNotes: string
   readonly excelImportReadme: string
   readonly dockerfile: string
   readonly publicApi: string
@@ -97,6 +98,7 @@ export async function loadDocsDiscoveryContext(): Promise<DocsDiscoveryContext> 
     headlessPackageJson,
     headlessExamplePackageJson,
     headlessReadme,
+    headlessAgentNotes,
     excelImportReadme,
     dockerfile,
     publicApi,
@@ -156,6 +158,7 @@ export async function loadDocsDiscoveryContext(): Promise<DocsDiscoveryContext> 
     readFile(join(repoRoot, 'packages', 'headless', 'package.json'), 'utf8'),
     readFile(join(repoRoot, 'examples', 'headless-workpaper', 'package.json'), 'utf8'),
     readFile(join(repoRoot, 'packages', 'headless', 'README.md'), 'utf8'),
+    readFile(join(repoRoot, 'packages', 'headless', 'AGENTS.md'), 'utf8'),
     readFile(join(repoRoot, 'packages', 'excel-import', 'README.md'), 'utf8'),
     readFile(join(repoRoot, 'Dockerfile'), 'utf8'),
     readFile(join(docsRoot, 'public-api.md'), 'utf8'),
@@ -224,6 +227,7 @@ export async function loadDocsDiscoveryContext(): Promise<DocsDiscoveryContext> 
     headlessPackageJson,
     headlessExamplePackageJson,
     headlessReadme,
+    headlessAgentNotes,
     excelImportReadme,
     dockerfile,
     publicApi,

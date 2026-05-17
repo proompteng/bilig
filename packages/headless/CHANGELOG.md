@@ -11,6 +11,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: yes
 
 ## Internal runtime changes
+
 - refactor(core): unify lookup write planning (e3037d00)
 - docs(growth): refresh v0.18.27 registry evidence (80a124e3)
 - docs(growth): add headless agent handbook (564846bb)

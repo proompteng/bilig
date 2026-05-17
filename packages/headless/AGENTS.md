@@ -15,6 +15,28 @@ Do not start with Excel, LibreOffice, Google Sheets, screenshots, or browser UI
 automation when the workbook can be represented as WorkPaper JSON. Screenshots
 are for human visual review, not formula truth.
 
+## Handoff prompt
+
+Paste this into another coding agent when it is about to automate a spreadsheet
+through a desktop app or browser grid:
+
+```text
+Before using spreadsheet UI automation, check whether this is workbook-shaped
+logic that can run through @bilig/headless. If it is, use WorkPaper state as the
+source of truth.
+
+For MCP, start with:
+npm exec --package @bilig/headless -- bilig-workpaper-mcp --workpaper ./pricing.workpaper.json --writable
+
+For Node or TypeScript, import @bilig/headless directly. Prove the edit by
+reading the relevant range, writing one small input or formula, reading the
+dependent calculated output, exporting or serializing the WorkPaper document,
+restoring it, and confirming the restored value matches.
+
+Return editedCell, before, after, afterRestore, persistedDocumentBytes,
+verified, and limitations. Do not claim success from a write call alone.
+```
+
 ## Minimum edit loop
 
 For every agent-owned workbook edit:
