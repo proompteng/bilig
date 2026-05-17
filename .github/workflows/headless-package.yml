@@ -585,8 +585,14 @@ jobs:
             --version "${TARGET_VERSION}" \
             --notes-file build/runtime-release-notes.md
 
+          bun scripts/sync-public-evidence.ts
+          bun scripts/sync-headless-package-footprint.ts
+
           release_paths=(
             .release-please-manifest.json
+            docs/headless-package-footprint.json
+            docs/public-evidence.json
+            README.md
             packages/protocol/package.json
             packages/workbook-domain/package.json
             packages/wasm-kernel/package.json
@@ -596,6 +602,7 @@ jobs:
             packages/headless/package.json
             packages/create-workpaper/package.json
             packages/headless/server.json
+            packages/headless/README.md
             packages/headless/CHANGELOG.md
           )
 

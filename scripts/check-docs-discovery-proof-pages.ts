@@ -7,7 +7,6 @@ export function requireFormulaProofDiscovery({
   communityLaunchPack,
   formulaWorkbooksProof,
   headlessReadme,
-  headlessPackageVersion,
   index,
   llms,
   readme,
@@ -18,7 +17,6 @@ export function requireFormulaProofDiscovery({
   readonly communityLaunchPack: string
   readonly formulaWorkbooksProof: string
   readonly headlessReadme: string
-  readonly headlessPackageVersion: string
   readonly index: string
   readonly llms: string
   readonly readme: string
@@ -56,7 +54,7 @@ export function requireFormulaProofDiscovery({
 
   for (const required of [
     "title: 'Show HN: Bilig runs small formula workbooks in Node'",
-    `\`@bilig/headless@${headlessPackageVersion}\``,
+    'uses the latest published package',
     'curl -fsSLo quickstart.ts https://proompteng.github.io/bilig/npm-eval.ts',
     '"verified": true',
     `wins \`${benchmarkEvidence.meanWinHeadline}\` comparable`,

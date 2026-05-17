@@ -52,12 +52,12 @@ export function requireProductHuntLaunchKitDiscovery(
 
 export function requireGrowthSurfaceDiscovery(
   communityLaunchPack: string,
-  headlessPackageVersion: string,
+  _headlessPackageVersion: string,
   _llms: string,
   productHuntLaunchKit: string,
   requireIncludes: (haystack: string, needle: string, context: string) => void,
 ): void {
-  for (const required of communityLaunchPackRequiredLinks(headlessPackageVersion)) {
+  for (const required of communityLaunchPackRequiredLinks()) {
     requireIncludes(communityLaunchPack, required, 'docs/community-launch-pack.md')
   }
   requireProductHuntLaunchKitDiscovery(productHuntLaunchKit, requireIncludes)

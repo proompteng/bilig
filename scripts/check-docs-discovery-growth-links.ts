@@ -1,4 +1,4 @@
-export function communityLaunchPackRequiredLinks(headlessPackageVersion: string): readonly string[] {
+export function communityLaunchPackRequiredLinks(): readonly string[] {
   return [
     'Latest MCPB execution snapshot on May 13, 2026 after the Claude Desktop bundle',
     'https://proompteng.github.io/bilig/claude-desktop-mcpb-workpaper.html',
@@ -33,7 +33,7 @@ export function communityLaunchPackRequiredLinks(headlessPackageVersion: string)
     'https://github.com/ever-works/awesome-mcp-servers-data/pull/4',
     'https://github.com/jmstfv/mcpserve/pull/19',
     'Latest conversion snapshot on May 16, 2026',
-    `\`@bilig/headless@${headlessPackageVersion}\``,
+    '`@bilig/headless`',
     '21,392` clones from `2,641` unique cloners',
     'comment child `48045467` is dead',
     'comment child `48052854` is flagged',

@@ -166,10 +166,6 @@ async function buildEvidence(): Promise<PublicEvidence> {
     ['.release-please-manifest.json', releasePleaseVersion],
     ['packages/headless/server.json', serverVersion],
     ['packages/headless/server.json package entry', mcpPackageVersion],
-    [
-      'packages/benchmarks/baselines/workpaper-vs-hyperformula.json engine metadata',
-      readString(workpaperEngine, 'version', 'workpaper engine'),
-    ],
   ] as const
   for (const [context, version] of alignedVersionEntries) {
     if (version !== packageVersion) {

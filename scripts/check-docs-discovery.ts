@@ -351,7 +351,6 @@ requireFormulaProofDiscovery({
   communityLaunchPack,
   formulaWorkbooksProof,
   headlessReadme,
-  headlessPackageVersion,
   index,
   llms,
   readme,
@@ -516,7 +515,7 @@ requireIncludes(llms, 'https://github.com/proompteng/bilig/blob/main/docs/google
 const npmProvenancePackageTrustDoc = await readFile(join(docsRoot, 'npm-provenance-package-trust.md'), 'utf8')
 for (const required of [
   'title: Verify npm provenance for @bilig/headless',
-  `npm view @bilig/headless@${headlessPackageVersion} version dist.attestations dist.signatures --json`,
+  'npm view @bilig/headless@latest version dist.attestations dist.signatures --json',
   'npm audit signatures',
   'dist.attestations.provenance.predicateType',
   'npm publish ... --provenance',
@@ -529,14 +528,14 @@ for (const required of [
   requireIncludes(npmProvenancePackageTrustDoc, required, 'docs/npm-provenance-package-trust.md')
 }
 requireIncludes(readme, `@bilig/headless@${headlessPackageVersion}`, 'README.md')
-requireIncludes(readme, `npm view @bilig/headless@${headlessPackageVersion} version dist.attestations dist.signatures --json`, 'README.md')
+requireIncludes(readme, 'npm view @bilig/headless@latest version dist.attestations dist.signatures --json', 'README.md')
 requireIncludes(readme, 'npm provenance and package trust', 'README.md')
 requireIncludes(readme, 'https://api.scorecard.dev/projects/github.com/proompteng/bilig/badge', 'README.md')
 requireIncludes(readme, 'uploaded to GitHub code scanning on every `main` update', 'README.md')
 requireIncludes(headlessReadme, `@bilig/headless@${headlessPackageVersion}`, 'packages/headless/README.md')
 requireIncludes(
   headlessReadme,
-  `npm view @bilig/headless@${headlessPackageVersion} version dist.attestations dist.signatures --json`,
+  'npm view @bilig/headless@latest version dist.attestations dist.signatures --json',
   'packages/headless/README.md',
 )
 requireIncludes(headlessReadme, 'npm provenance and package trust guide', 'packages/headless/README.md')

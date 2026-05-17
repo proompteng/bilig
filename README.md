@@ -29,7 +29,7 @@ Project site: <https://proompteng.github.io/bilig/>
 
 | If you are evaluating... | Start here                                                                                                               | What should be true before you star, watch, or adopt                                        |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| Basic fit                | [Why use Bilig?](docs/why-use-bilig.md)                                                                                  | The problem is workbook-shaped business logic that needs API readback and persistence.       |
+| Basic fit                | [Why use Bilig?](docs/why-use-bilig.md)                                                                                  | The problem is workbook-shaped business logic that needs API readback and persistence.      |
 | Published npm package    | [90-second Node quickstart](docs/try-bilig-headless-in-node.md)                                                          | It edits one input, recalculates, persists JSON, restores, and prints `verified: true`.     |
 | Backend service shape    | [Quote approval WorkPaper API](docs/quote-approval-workpaper-api.md)                                                     | A realistic route-style workflow returns formula readback and `restoredMatchesAfter: true`. |
 | Agent or MCP tools       | [MCP spreadsheet tool server](docs/mcp-workpaper-tool-server.md)                                                         | Tool calls can write an input and return computed readback instead of screenshot claims.    |
@@ -155,7 +155,7 @@ matters.
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.18.9`:
+Current checked npm footprint for `@bilig/headless@0.18.10`:
 
 - Pack dry run: `423 kB` tarball, `2.53 MB` unpacked, `429` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
@@ -169,11 +169,11 @@ Current checked npm footprint for `@bilig/headless@0.18.9`:
 
 ## Published Package Trust
 
-`@bilig/headless@0.18.9` is published with npm registry signatures and SLSA
-provenance attestations. Verify the package before adopting it:
+`@bilig/headless` is published with npm registry signatures and SLSA provenance
+attestations. Verify the package version you are about to adopt:
 
 ```sh
-npm view @bilig/headless@0.18.9 version dist.attestations dist.signatures --json
+npm view @bilig/headless@latest version dist.attestations dist.signatures --json
 ```
 
 After installing, npm can verify the current dependency tree:

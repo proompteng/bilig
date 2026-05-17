@@ -11,9 +11,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(headless): refresh npm evaluator copy (bf35ad7d)
 
 ## Internal runtime changes
+
 - chore(docs): refresh runtime evidence for 0.18.9 (56cd815e)
 - docs(growth): add plain-language bilig fit guide (207f8484)
 

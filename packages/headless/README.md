@@ -74,7 +74,7 @@ That command is published through `@bilig/create-workpaper`. The publish gate is
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.18.9`:
+Current checked npm footprint for `@bilig/headless@0.18.10`:
 
 - Pack dry run: `423 kB` tarball, `2.53 MB` unpacked, `429` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
@@ -88,11 +88,11 @@ Current checked npm footprint for `@bilig/headless@0.18.9`:
 
 ## Published Package Trust
 
-`@bilig/headless@0.18.9` is published with npm registry signatures and SLSA
-provenance attestations. Check the package before adopting it in a service:
+`@bilig/headless` is published with npm registry signatures and SLSA provenance
+attestations. Check the package version you are about to adopt in a service:
 
 ```sh
-npm view @bilig/headless@0.18.9 version dist.attestations dist.signatures --json
+npm view @bilig/headless@latest version dist.attestations dist.signatures --json
 npm audit signatures
 ```
 
