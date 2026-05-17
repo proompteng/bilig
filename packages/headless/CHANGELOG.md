@@ -4,6 +4,19 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.18.29
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.18.28
+- Manual override: no
+
+## Fixes
+- perf(engine): enable column indexes by default (2b91d1dd)
+- fix(corpus): harden recent workbook headless gate (f1519cea)
+
+## Internal runtime changes
+- docs(growth): add agent handoff prompt (75eec5c8)
+
 ## 0.18.28
 
 - Release type: patch
