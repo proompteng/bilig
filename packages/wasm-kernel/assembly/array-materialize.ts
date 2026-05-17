@@ -65,6 +65,65 @@ export function copyInputCellToSpill(
   return ErrorCode.None
 }
 
+export function copyInputCellToResult(
+  base: i32,
+  sourceSlot: i32,
+  row: i32,
+  col: i32,
+  kindStack: Uint8Array,
+  valueStack: Float64Array,
+  tagStack: Uint8Array,
+  rangeIndexStack: Uint32Array,
+  rangeOffsets: Uint32Array,
+  rangeLengths: Uint32Array,
+  rangeRowCounts: Uint32Array,
+  rangeColCounts: Uint32Array,
+  rangeMembers: Uint32Array,
+  cellTags: Uint8Array,
+  cellNumbers: Float64Array,
+  cellStringIds: Uint32Array,
+  cellErrors: Uint16Array,
+): i32 {
+  const tag = inputCellTag(
+    sourceSlot,
+    row,
+    col,
+    kindStack,
+    valueStack,
+    tagStack,
+    rangeIndexStack,
+    rangeOffsets,
+    rangeLengths,
+    rangeRowCounts,
+    rangeColCounts,
+    rangeMembers,
+    cellTags,
+    cellNumbers,
+  )
+  const value = inputCellScalarValue(
+    sourceSlot,
+    row,
+    col,
+    kindStack,
+    valueStack,
+    tagStack,
+    rangeIndexStack,
+    rangeOffsets,
+    rangeLengths,
+    rangeRowCounts,
+    rangeColCounts,
+    rangeMembers,
+    cellTags,
+    cellNumbers,
+    cellStringIds,
+    cellErrors,
+  )
+  if (tag == ValueTag.Error && isNaN(value)) {
+    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
+  }
+  return writeResult(base, STACK_KIND_SCALAR, tag, value, rangeIndexStack, valueStack, tagStack, kindStack)
+}
+
 export function materializeSlotResult(
   base: i32,
   sourceSlot: i32,

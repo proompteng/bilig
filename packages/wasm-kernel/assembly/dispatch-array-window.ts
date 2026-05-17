@@ -1,10 +1,10 @@
-import { copyInputCellToSpill } from './array-materialize'
+import { copyInputCellToResult, copyInputCellToSpill } from './array-materialize'
 import { coerceInteger, truncToInt } from './numeric-core'
-import { inputCellNumeric, inputCellTag, inputColsFromSlot, inputRowsFromSlot, toNumberExact } from './operands'
+import { inputCellTag, inputColsFromSlot, inputRowsFromSlot, toNumberExact } from './operands'
 import { BuiltinId, ErrorCode, ValueTag } from './protocol'
 import { coercePositiveIntegerArg, scalarErrorAt } from './builtin-args'
 import { STACK_KIND_ARRAY, STACK_KIND_RANGE, STACK_KIND_SCALAR, writeArrayResult, writeResult } from './result-io'
-import { allocateSpillArrayResult, writeSpillArrayNumber, writeSpillArrayValue } from './vm'
+import { allocateSpillArrayResult, writeSpillArrayValue } from './vm'
 
 function coerceTrimMode(tag: u8, value: f64): i32 {
   const numeric = toNumberExact(tag, value)
@@ -85,7 +85,8 @@ export function tryApplyArrayWindowBuiltin(
     }
 
     if (height == 1 && width == 1) {
-      const result = inputCellNumeric(
+      return copyInputCellToResult(
+        base,
         base,
         rowStart,
         colStart,
@@ -100,17 +101,17 @@ export function tryApplyArrayWindowBuiltin(
         rangeMembers,
         cellTags,
         cellNumbers,
+        cellStringIds,
+        cellErrors,
       )
-      if (isNaN(result)) {
-        return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-      }
-      return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, result, rangeIndexStack, valueStack, tagStack, kindStack)
     }
 
     const arrayIndex = allocateSpillArrayResult(height, width)
     for (let row = 0; row < height; row++) {
       for (let col = 0; col < width; col++) {
-        const sourceValue = inputCellNumeric(
+        const copyError = copyInputCellToSpill(
+          arrayIndex,
+          row * width + col,
           base,
           rowStart + row,
           colStart + col,
@@ -125,11 +126,12 @@ export function tryApplyArrayWindowBuiltin(
           rangeMembers,
           cellTags,
           cellNumbers,
+          cellStringIds,
+          cellErrors,
         )
-        if (isNaN(sourceValue)) {
-          return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
+        if (copyError != ErrorCode.None) {
+          return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, copyError, rangeIndexStack, valueStack, tagStack, kindStack)
         }
-        writeSpillArrayNumber(arrayIndex, row * width + col, sourceValue)
       }
     }
     return writeArrayResult(base, arrayIndex, height, width, rangeIndexStack, valueStack, tagStack, kindStack)
@@ -171,7 +173,9 @@ export function tryApplyArrayWindowBuiltin(
     let outputOffset = 0
     for (let row = 0; row < rowCount; row++) {
       for (let col = 0; col < colCount; col++) {
-        const sourceValue = inputCellNumeric(
+        const copyError = copyInputCellToSpill(
+          arrayIndex,
+          outputOffset,
           base,
           rowOffset + row,
           colOffset + col,
@@ -186,11 +190,12 @@ export function tryApplyArrayWindowBuiltin(
           rangeMembers,
           cellTags,
           cellNumbers,
+          cellStringIds,
+          cellErrors,
         )
-        if (isNaN(sourceValue)) {
-          return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
+        if (copyError != ErrorCode.None) {
+          return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, copyError, rangeIndexStack, valueStack, tagStack, kindStack)
         }
-        writeSpillArrayNumber(arrayIndex, outputOffset, sourceValue)
         outputOffset += 1
       }
     }
@@ -235,7 +240,9 @@ export function tryApplyArrayWindowBuiltin(
     let outputOffset = 0
     for (let row = 0; row < rowCount; row++) {
       for (let col = 0; col < colCount; col++) {
-        const sourceValue = inputCellNumeric(
+        const copyError = copyInputCellToSpill(
+          arrayIndex,
+          outputOffset,
           base,
           rowOffset + row,
           colOffset + col,
@@ -250,11 +257,12 @@ export function tryApplyArrayWindowBuiltin(
           rangeMembers,
           cellTags,
           cellNumbers,
+          cellStringIds,
+          cellErrors,
         )
-        if (isNaN(sourceValue)) {
-          return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
+        if (copyError != ErrorCode.None) {
+          return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, copyError, rangeIndexStack, valueStack, tagStack, kindStack)
         }
-        writeSpillArrayNumber(arrayIndex, outputOffset, sourceValue)
         outputOffset += 1
       }
     }

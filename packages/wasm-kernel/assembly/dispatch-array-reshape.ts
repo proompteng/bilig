@@ -1,9 +1,10 @@
+import { copyInputCellToSpill } from './array-materialize'
 import { BuiltinId, ErrorCode, ValueTag } from './protocol'
-import { inputCellNumeric, inputCellScalarValue, inputCellTag, inputColsFromSlot, inputRowsFromSlot, toNumberOrNaN } from './operands'
+import { inputCellScalarValue, inputCellTag, inputColsFromSlot, inputRowsFromSlot } from './operands'
 import { coerceInteger } from './numeric-core'
 import { scalarErrorAt } from './builtin-args'
 import { STACK_KIND_ARRAY, STACK_KIND_RANGE, STACK_KIND_SCALAR, writeArrayResult, writeResult } from './result-io'
-import { allocateSpillArrayResult, writeSpillArrayNumber, writeSpillArrayValue } from './vm'
+import { allocateSpillArrayResult, writeSpillArrayValue } from './vm'
 
 function coerceBoolean(tag: u8, value: f64): i32 {
   if (tag == ValueTag.Boolean || tag == ValueTag.Number) {
@@ -260,26 +261,21 @@ export function tryApplyArrayReshapeBuiltin(
       }
     }
 
-    const needsPad = (sourceRows * sourceCols) % wrapCount != 0
-    if (needsPad && argc < 3) {
-      return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-    }
-    const defaultPadValue = argc >= 3 ? toNumberOrNaN(tagStack[base + 2], valueStack[base + 2]) : 0
-    if (argc >= 3 && isNaN(defaultPadValue)) {
-      return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-    }
-
     const sourceLength = sourceRows * sourceCols
     const outputRows = builtinId == BuiltinId.Wraprows ? (sourceLength + wrapCount - 1) / wrapCount : wrapCount
     const outputCols = builtinId == BuiltinId.Wraprows ? wrapCount : (sourceLength + wrapCount - 1) / wrapCount
     const outputLength = outputRows * outputCols
     const arrayIndex = allocateSpillArrayResult(outputRows, outputCols)
+    const padTag = argc >= 3 ? tagStack[base + 2] : <u8>ValueTag.Error
+    const padValue = argc >= 3 ? valueStack[base + 2] : ErrorCode.NA
 
     if (builtinId == BuiltinId.Wraprows) {
       for (let outputOffset = 0; outputOffset < sourceLength; outputOffset++) {
         const sourceRow = outputOffset / sourceCols
         const sourceCol = outputOffset - sourceRow * sourceCols
-        const sourceValue = inputCellNumeric(
+        const copyError = copyInputCellToSpill(
+          arrayIndex,
+          outputOffset,
           base,
           sourceRow,
           sourceCol,
@@ -294,24 +290,27 @@ export function tryApplyArrayReshapeBuiltin(
           rangeMembers,
           cellTags,
           cellNumbers,
+          cellStringIds,
+          cellErrors,
         )
-        if (isNaN(sourceValue)) {
-          return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
+        if (copyError != ErrorCode.None) {
+          return writeValueError(base, copyError, rangeIndexStack, valueStack, tagStack, kindStack)
         }
-        writeSpillArrayNumber(arrayIndex, outputOffset, sourceValue)
       }
-      const padValue = needsPad && argc >= 3 ? defaultPadValue : 0
       for (let outputOffset = sourceLength; outputOffset < outputLength; outputOffset++) {
-        writeSpillArrayNumber(arrayIndex, outputOffset, padValue)
+        writeSpillArrayValue(arrayIndex, outputOffset, padTag, padValue)
       }
     } else {
       for (let outputOffset = 0; outputOffset < outputLength; outputOffset++) {
-        const sourceOffset = (outputOffset / outputRows) * outputRows + (outputOffset % outputRows)
-        let sourceValue = defaultPadValue
+        const row = outputOffset / outputCols
+        const col = outputOffset - row * outputCols
+        const sourceOffset = col * outputRows + row
         if (sourceOffset < sourceLength) {
           const sourceRow = sourceOffset / sourceCols
           const sourceCol = sourceOffset - sourceRow * sourceCols
-          sourceValue = inputCellNumeric(
+          const copyError = copyInputCellToSpill(
+            arrayIndex,
+            outputOffset,
             base,
             sourceRow,
             sourceCol,
@@ -326,12 +325,15 @@ export function tryApplyArrayReshapeBuiltin(
             rangeMembers,
             cellTags,
             cellNumbers,
+            cellStringIds,
+            cellErrors,
           )
+          if (copyError != ErrorCode.None) {
+            return writeValueError(base, copyError, rangeIndexStack, valueStack, tagStack, kindStack)
+          }
+        } else {
+          writeSpillArrayValue(arrayIndex, outputOffset, padTag, padValue)
         }
-        if (isNaN(sourceValue)) {
-          return writeValueError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-        }
-        writeSpillArrayNumber(arrayIndex, outputOffset, sourceValue)
       }
     }
 

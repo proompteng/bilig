@@ -2916,7 +2916,7 @@ describe('wasm kernel', () => {
     expect(kernel.readSpillCols()[22]).toBe(3)
     expect(kernel.readSpillLengths()[22]).toBe(6)
     expect(Array.from(kernel.readSpillNumbers().slice(kernel.readSpillOffsets()[22], kernel.readSpillOffsets()[22] + 6))).toEqual([
-      1, 2, 3, 4, 5, 6,
+      1, 3, 5, 2, 4, 6,
     ])
     expect(kernel.readSpillRows()[23]).toBe(2)
     expect(kernel.readSpillCols()[23]).toBe(1)
@@ -2984,6 +2984,119 @@ describe('wasm kernel', () => {
       { tag: ValueTag.Number, value: 5 },
       { tag: ValueTag.Error, code: ErrorCode.NA },
       { tag: ValueTag.Number, value: 6 },
+    ])
+  })
+
+  it('preserves general cell values across windowing and wrapping on the wasm path', async () => {
+    const kernel = await createKernel()
+    const width = 8
+    const pooledStrings = ['', 'x', 'pad']
+    kernel.init(40, 8, 1, 6, 24)
+    kernel.writeCells(
+      new Uint8Array([
+        ValueTag.Number,
+        ValueTag.String,
+        ValueTag.Error,
+        ValueTag.Boolean,
+        ValueTag.Empty,
+        ValueTag.Number,
+        ...Array.from({ length: 34 }, () => ValueTag.Empty),
+      ]),
+      new Float64Array([1, 0, 0, 1, 0, 6, ...Array.from({ length: 34 }, () => 0)]),
+      new Uint32Array([0, 1, 0, 0, 0, 0, ...Array.from({ length: 34 }, () => 0)]),
+      new Uint16Array([0, 0, ErrorCode.NA, 0, 0, 0, ...Array.from({ length: 34 }, () => 0)]),
+    )
+    kernel.uploadStrings(Uint32Array.from([0, 0, 1]), Uint32Array.from([0, 1, 3]), asciiCodes('xpad'))
+    kernel.uploadRangeMembers(Uint32Array.from([0, 1, 2, 3, 4, 5]), Uint32Array.from([0]), Uint32Array.from([6]))
+    kernel.uploadRangeShapes(Uint32Array.from([2]), Uint32Array.from([3]))
+
+    const packed = packPrograms([
+      [
+        encodePushRange(0),
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(2),
+        encodePushNumber(2),
+        encodeCall(BUILTIN.OFFSET, 5),
+        encodeRet(),
+      ],
+      [
+        encodePushRange(0),
+        encodePushNumber(0),
+        encodePushNumber(1),
+        encodePushNumber(1),
+        encodePushNumber(1),
+        encodeCall(BUILTIN.OFFSET, 5),
+        encodeRet(),
+      ],
+      [encodePushRange(0), encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.TAKE, 3), encodeRet()],
+      [encodePushRange(0), encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.DROP, 3), encodeRet()],
+      [encodePushRange(0), encodePushNumber(0), encodeCall(BUILTIN.WRAPROWS, 2), encodeRet()],
+      [encodePushRange(0), encodePushNumber(0), encodePushString(2), encodeCall(BUILTIN.WRAPCOLS, 3), encodeRet()],
+    ])
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([
+        cellIndex(3, 0, width),
+        cellIndex(3, 1, width),
+        cellIndex(3, 2, width),
+        cellIndex(3, 3, width),
+        cellIndex(3, 4, width),
+        cellIndex(3, 5, width),
+      ]),
+    )
+    const constants = packConstants([[0, 1, 2], [0, 1], [-1, 2], [0, 1], [4], [4]])
+    kernel.uploadConstants(constants.constants, constants.offsets, constants.lengths)
+    kernel.evalBatch(
+      Uint32Array.from([
+        cellIndex(3, 0, width),
+        cellIndex(3, 1, width),
+        cellIndex(3, 2, width),
+        cellIndex(3, 3, width),
+        cellIndex(3, 4, width),
+        cellIndex(3, 5, width),
+      ]),
+    )
+
+    expect(readSpillValues(kernel, cellIndex(3, 0, width), pooledStrings)).toEqual([
+      { tag: ValueTag.String, value: 'x', stringId: 0 },
+      { tag: ValueTag.Error, code: ErrorCode.NA },
+      { tag: ValueTag.Empty },
+      { tag: ValueTag.Number, value: 6 },
+    ])
+    expect(kernel.readTags()[cellIndex(3, 1, width)]).toBe(ValueTag.String)
+    expect(pooledStrings[kernel.readStringIds()[cellIndex(3, 1, width)]] ?? '').toBe('x')
+    expect(readSpillValues(kernel, cellIndex(3, 2, width), pooledStrings)).toEqual([
+      { tag: ValueTag.Boolean, value: true },
+      { tag: ValueTag.Empty },
+    ])
+    expect(readSpillValues(kernel, cellIndex(3, 3, width), pooledStrings)).toEqual([
+      { tag: ValueTag.String, value: 'x', stringId: 0 },
+      { tag: ValueTag.Error, code: ErrorCode.NA },
+      { tag: ValueTag.Empty },
+      { tag: ValueTag.Number, value: 6 },
+    ])
+    expect(readSpillValues(kernel, cellIndex(3, 4, width), pooledStrings)).toEqual([
+      { tag: ValueTag.Number, value: 1 },
+      { tag: ValueTag.String, value: 'x', stringId: 0 },
+      { tag: ValueTag.Error, code: ErrorCode.NA },
+      { tag: ValueTag.Boolean, value: true },
+      { tag: ValueTag.Empty },
+      { tag: ValueTag.Number, value: 6 },
+      { tag: ValueTag.Error, code: ErrorCode.NA },
+      { tag: ValueTag.Error, code: ErrorCode.NA },
+    ])
+    expect(readSpillValues(kernel, cellIndex(3, 5, width), pooledStrings)).toEqual([
+      { tag: ValueTag.Number, value: 1 },
+      { tag: ValueTag.Empty },
+      { tag: ValueTag.String, value: 'x', stringId: 0 },
+      { tag: ValueTag.Number, value: 6 },
+      { tag: ValueTag.Error, code: ErrorCode.NA },
+      { tag: ValueTag.String, value: 'pad', stringId: 0 },
+      { tag: ValueTag.Boolean, value: true },
+      { tag: ValueTag.String, value: 'pad', stringId: 0 },
     ])
   })
 
