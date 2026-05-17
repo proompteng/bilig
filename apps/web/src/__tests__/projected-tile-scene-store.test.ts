@@ -94,6 +94,27 @@ describe('ProjectedTileSceneStore', () => {
     expect(store.peekTile(101)?.version.values).toBe(2)
   })
 
+  it('does not let one sheet camera sequence suppress another sheet current-batch delta', () => {
+    const store = new ProjectedTileSceneStore()
+    store.applyDelta({
+      ...createBatch(2, [createTileReplace(101, 2, 1, 7)]),
+      cameraSeq: 20,
+      sheetId: 7,
+      sheetOrdinal: 1,
+    })
+
+    const otherSheetChange = store.applyDelta({
+      ...createBatch(2, [createTileReplace(202, 2, 2, 8)]),
+      cameraSeq: 3,
+      sheetId: 8,
+      sheetOrdinal: 2,
+    })
+
+    expect(otherSheetChange.changedTileIds).toEqual([202])
+    expect(store.peekTile(101)).toMatchObject({ tileId: 101, coord: expect.objectContaining({ sheetId: 7, sheetOrdinal: 1 }) })
+    expect(store.peekTile(202)).toMatchObject({ tileId: 202, coord: expect.objectContaining({ sheetId: 8, sheetOrdinal: 2 }) })
+  })
+
   it('clears stale sheet tiles for structural batches before applying replacements', () => {
     const store = new ProjectedTileSceneStore()
     store.applyDelta(createBatch(2, [createTileReplace(101, 2)]))

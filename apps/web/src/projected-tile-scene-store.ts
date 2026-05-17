@@ -46,6 +46,7 @@ export class ProjectedTileSceneStore {
   private readonly residency = new TileResidencyV3<ProjectedRenderTile>()
   private readonly dirtyTiles = new DirtyTileIndexV3()
   private readonly sheetIdentityByName = new Map<string, { readonly sheetId: number; readonly sheetOrdinal: number }>()
+  private readonly lastSequenceBySheetIdentity = new Map<string, { readonly batchId: number; readonly cameraSeq: number }>()
   private lastBatchId = 0
   private lastCameraSeq = 0
 
@@ -66,7 +67,7 @@ export class ProjectedTileSceneStore {
 
   applyDelta(batch: RenderTileDeltaBatch): ProjectedTileSceneChange {
     const startedAt = nowMs()
-    if (batch.batchId < this.lastBatchId || (batch.batchId === this.lastBatchId && batch.cameraSeq < this.lastCameraSeq)) {
+    if (this.isStaleBatchForSheet(batch)) {
       const staleChange = {
         batchId: batch.batchId,
         cameraSeq: batch.cameraSeq,
@@ -136,8 +137,7 @@ export class ProjectedTileSceneStore {
       }
     }
 
-    this.lastBatchId = Math.max(this.lastBatchId, batch.batchId)
-    this.lastCameraSeq = Math.max(this.lastCameraSeq, batch.cameraSeq)
+    this.noteAcceptedBatch(batch)
     const change = {
       batchId: batch.batchId,
       cameraSeq: batch.cameraSeq,
@@ -170,7 +170,9 @@ export class ProjectedTileSceneStore {
       if (identity) {
         sheetIds.add(identity.sheetId)
         sheetOrdinals.add(identity.sheetOrdinal)
-        sheetIdentities.add(projectedSheetIdentityKey(identity))
+        const sheetIdentity = projectedSheetIdentityKey(identity)
+        sheetIdentities.add(sheetIdentity)
+        this.lastSequenceBySheetIdentity.delete(sheetIdentity)
       }
       this.sheetIdentityByName.delete(sheetName)
     })
@@ -194,8 +196,35 @@ export class ProjectedTileSceneStore {
     this.residency.clear()
     this.dirtyTiles.clear()
     this.sheetIdentityByName.clear()
+    this.lastSequenceBySheetIdentity.clear()
     this.lastBatchId = 0
     this.lastCameraSeq = 0
+  }
+
+  private isStaleBatchForSheet(batch: RenderTileDeltaBatch): boolean {
+    const key = projectedSheetIdentityKey(batch)
+    const lastSequence = this.lastSequenceBySheetIdentity.get(key)
+    return (
+      lastSequence !== undefined &&
+      (batch.batchId < lastSequence.batchId || (batch.batchId === lastSequence.batchId && batch.cameraSeq < lastSequence.cameraSeq))
+    )
+  }
+
+  private noteAcceptedBatch(batch: RenderTileDeltaBatch): void {
+    const key = projectedSheetIdentityKey(batch)
+    const lastSequence = this.lastSequenceBySheetIdentity.get(key)
+    if (
+      lastSequence === undefined ||
+      batch.batchId > lastSequence.batchId ||
+      (batch.batchId === lastSequence.batchId && batch.cameraSeq > lastSequence.cameraSeq)
+    ) {
+      this.lastSequenceBySheetIdentity.set(key, {
+        batchId: batch.batchId,
+        cameraSeq: batch.cameraSeq,
+      })
+    }
+    this.lastBatchId = Math.max(this.lastBatchId, batch.batchId)
+    this.lastCameraSeq = Math.max(this.lastCameraSeq, batch.cameraSeq)
   }
 
   private noteRendererDeltaApply(
