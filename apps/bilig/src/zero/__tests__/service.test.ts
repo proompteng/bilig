@@ -239,7 +239,7 @@ describe('zero sync service startup', () => {
     })
   })
 
-  it('serves every exported Zero query alias through the monolith transform registry', async () => {
+  it('serves every exported Zero query alias through the shared transform registry', async () => {
     deps.handleQueryRequest.mockImplementationOnce(async (executeQuery: (name: string, args: unknown) => unknown) => {
       const workbookArgs = { documentId: 'doc-1' }
       const workbookCellArgs = { ...workbookArgs, sheetName: 'Sheet1', address: 'A1' }

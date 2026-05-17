@@ -1,17 +1,11 @@
-import { handleMutateRequest, handleQueryRequest, type TransformQueryFunction } from '@rocicorp/zero/server'
+import { handleMutateRequest, handleQueryRequest } from '@rocicorp/zero/server'
 import type { WorkbookSnapshot } from '@bilig/protocol'
 import { resolveRequestBaseUrl } from '@bilig/runtime-kernel'
 import {
   type AuthoritativeWorkbookEventBatch,
+  executeZeroQueryTransform,
   isAuthoritativeWorkbookEventBatch,
-  queries,
   schema,
-  workbookCellArgsSchema,
-  workbookColumnTileArgsSchema,
-  workbookQueryArgsSchema,
-  workbookRowTileArgsSchema,
-  workbookThreadArgsSchema,
-  workbookTileArgsSchema,
 } from '@bilig/zero-sync'
 import {
   areWorkbookAgentPreviewSummariesEqual,
@@ -61,7 +55,6 @@ import {
   listWorkbookThreadWorkflowRuns,
   upsertWorkbookWorkflowRun,
 } from './workbook-workflow-run-store.js'
-import type { z } from 'zod'
 
 export interface ZeroSyncRequestLike {
   readonly protocol: string
@@ -110,63 +103,6 @@ export interface ZeroSyncService {
   getWorkbookHeadRevision(documentId: string): Promise<number>
   loadLatestWorkbookSnapshot?(documentId: string): Promise<{ revision: number; snapshot: WorkbookSnapshot } | null>
   loadAuthoritativeEvents(documentId: string, afterRevision: number): Promise<AuthoritativeWorkbookEventBatch>
-}
-
-type QueryHandler = {
-  readonly execute: (args: Parameters<TransformQueryFunction>[1], userID: string) => ReturnType<TransformQueryFunction>
-}
-
-function createQueryHandler<TArgs>(
-  argsSchema: z.ZodType<TArgs>,
-  execute: (options: { readonly args: TArgs; readonly ctx: { readonly userID: string } }) => ReturnType<TransformQueryFunction>,
-): QueryHandler {
-  return {
-    execute: (args, userID) => execute({ args: argsSchema.parse(args), ctx: { userID } }),
-  }
-}
-
-const ZERO_QUERY_LOOKUP: Record<string, QueryHandler> = {
-  'workbook.get': createQueryHandler(workbookQueryArgsSchema, queries.workbook.get.fn),
-  'workbooks.get': createQueryHandler(workbookQueryArgsSchema, queries.workbooks.get.fn),
-  'sheet.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.sheet.byWorkbook.fn),
-  'sheets.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.sheets.byWorkbook.fn),
-  'cellInput.one': createQueryHandler(workbookCellArgsSchema, queries.cellInput.one.fn),
-  'cellInput.tile': createQueryHandler(workbookTileArgsSchema, queries.cellInput.tile.fn),
-  'cells.one': createQueryHandler(workbookCellArgsSchema, queries.cells.one.fn),
-  'cells.tile': createQueryHandler(workbookTileArgsSchema, queries.cells.tile.fn),
-  'cellEval.one': createQueryHandler(workbookCellArgsSchema, queries.cellEval.one.fn),
-  'cellEval.tile': createQueryHandler(workbookTileArgsSchema, queries.cellEval.tile.fn),
-  'cellRender.one': createQueryHandler(workbookCellArgsSchema, queries.cellRender.one.fn),
-  'cellRender.tile': createQueryHandler(workbookTileArgsSchema, queries.cellRender.tile.fn),
-  'sheetRow.tile': createQueryHandler(workbookRowTileArgsSchema, queries.sheetRow.tile.fn),
-  'rowMetadata.tile': createQueryHandler(workbookRowTileArgsSchema, queries.rowMetadata.tile.fn),
-  'sheetCol.tile': createQueryHandler(workbookColumnTileArgsSchema, queries.sheetCol.tile.fn),
-  'columnMetadata.tile': createQueryHandler(workbookColumnTileArgsSchema, queries.columnMetadata.tile.fn),
-  'cellStyle.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.cellStyle.byWorkbook.fn),
-  'numberFormat.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.numberFormat.byWorkbook.fn),
-  'presenceCoarse.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.presenceCoarse.byWorkbook.fn),
-  'presence.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.presence.byWorkbook.fn),
-  'workbookChange.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookChange.byWorkbook.fn),
-  'workbookChanges.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookChanges.byWorkbook.fn),
-  'workbookChatThread.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookChatThread.byWorkbook.fn),
-  'workbookChatThread.visibleByWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookChatThread.visibleByWorkbook.fn),
-  'workbookChatItem.byThread': createQueryHandler(workbookThreadArgsSchema, queries.workbookChatItem.byThread.fn),
-  'workbookChatToolCall.byThread': createQueryHandler(workbookThreadArgsSchema, queries.workbookChatToolCall.byThread.fn),
-  'workbookReviewQueueItem.byThread': createQueryHandler(workbookThreadArgsSchema, queries.workbookReviewQueueItem.byThread.fn),
-  'workbookAgentThread.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookAgentThread.byWorkbook.fn),
-  'workbookAgentThread.visibleByWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookAgentThread.visibleByWorkbook.fn),
-  'workbookAgentRun.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookAgentRun.byWorkbook.fn),
-  'workbookAgentRun.byThread': createQueryHandler(workbookThreadArgsSchema, queries.workbookAgentRun.byThread.fn),
-  'workbookAgentRun.visibleByThread': createQueryHandler(workbookThreadArgsSchema, queries.workbookAgentRun.visibleByThread.fn),
-  'workbookWorkflowRun.byThread': createQueryHandler(workbookThreadArgsSchema, queries.workbookWorkflowRun.byThread.fn),
-  'workbookWorkflowRun.visibleByThread': createQueryHandler(workbookThreadArgsSchema, queries.workbookWorkflowRun.visibleByThread.fn),
-  'workbookWorkflowStep.byThread': createQueryHandler(workbookThreadArgsSchema, queries.workbookWorkflowStep.byThread.fn),
-  'workbookWorkflowArtifact.byThread': createQueryHandler(workbookThreadArgsSchema, queries.workbookWorkflowArtifact.byThread.fn),
-  'workbookAgentWorkflowRun.byThread': createQueryHandler(workbookThreadArgsSchema, queries.workbookAgentWorkflowRun.byThread.fn),
-  'workbookAgentWorkflowRun.visibleByThread': createQueryHandler(
-    workbookThreadArgsSchema,
-    queries.workbookAgentWorkflowRun.visibleByThread.fn,
-  ),
 }
 
 function fastifyRequestToWebRequest(request: ZeroSyncRequestLike): Request {
@@ -306,13 +242,7 @@ class EnabledZeroSyncService implements ZeroSyncService {
   async handleQuery(request: ZeroSyncRequestLike): Promise<unknown> {
     const session = resolveSessionIdentity(request)
     return await handleQueryRequest(
-      (name, args) => {
-        const query = ZERO_QUERY_LOOKUP[name]
-        if (!query) {
-          throw new Error(`Unknown Zero query: ${name}`)
-        }
-        return query.execute(args, session.userID)
-      },
+      (name, args) => executeZeroQueryTransform(name, args, session.userID),
       schema,
       fastifyRequestToWebRequest(request),
     )

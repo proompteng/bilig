@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { executeZeroQueryTransform, zeroQueryTransformNames } from '../query-transforms.js'
 import { queries, workbookColumnTileArgsSchema, workbookRowTileArgsSchema, workbookTileArgsSchema } from '../queries.js'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -32,6 +33,36 @@ function queryRequestArgs(request: unknown): unknown {
     throw new Error('Expected a Zero query request')
   }
   return request['args']
+}
+
+function flattenQueryAliases(value: unknown, prefix = ''): string[] {
+  if (isExecutableZeroQuery(value)) {
+    return [prefix]
+  }
+  if (!isRecord(value)) {
+    return []
+  }
+  return Object.entries(value).flatMap(([key, child]) => flattenQueryAliases(child, prefix ? `${prefix}.${key}` : key))
+}
+
+function queryArgsForAlias(alias: string): unknown {
+  const workbookArgs = { documentId: 'doc-1' }
+  if (alias.endsWith('.one')) {
+    return { ...workbookArgs, sheetName: 'Sheet1', address: 'A1' }
+  }
+  if (alias.endsWith('.tile')) {
+    if (alias.includes('Row') || alias.includes('rowMetadata')) {
+      return { ...workbookArgs, sheetName: 'Sheet1', rowStart: 0, rowEnd: 2 }
+    }
+    if (alias.includes('Col') || alias.includes('columnMetadata')) {
+      return { ...workbookArgs, sheetName: 'Sheet1', colStart: 0, colEnd: 2 }
+    }
+    return { ...workbookArgs, sheetName: 'Sheet1', rowStart: 0, rowEnd: 2, colStart: 0, colEnd: 2 }
+  }
+  if (alias.endsWith('.byThread') || alias.endsWith('.visibleByThread')) {
+    return { ...workbookArgs, threadId: 'thr-1' }
+  }
+  return workbookArgs
 }
 
 describe('zero sync query schemas', () => {
@@ -198,5 +229,14 @@ describe('zero sync query schemas', () => {
         'alex@example.com',
       ),
     ).not.toThrow()
+  })
+
+  it('exports one shared transform for every query alias', () => {
+    const queryAliases = flattenQueryAliases(queries).toSorted()
+
+    expect(zeroQueryTransformNames).toEqual(queryAliases)
+    for (const alias of queryAliases) {
+      expect(() => executeZeroQueryTransform(alias, queryArgsForAlias(alias), 'alex@example.com'), alias).not.toThrow()
+    }
   })
 })

@@ -36,6 +36,7 @@ export {
   workbookRowTileArgsSchema,
   workbookTileArgsSchema,
 } from './queries.js'
+export { executeZeroQueryTransform, zeroQueryTransformNames } from './query-transforms.js'
 export { loadRuntimeConfig, parseRuntimeConfig, type BiligRuntimeConfig } from './runtime-config.js'
 export {
   schema,
