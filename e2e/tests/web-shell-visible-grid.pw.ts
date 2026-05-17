@@ -13,7 +13,7 @@ import {
 
 const DEFAULT_WORKBOOK_CSS_FONT_SIZE = '13.333px'
 
-test('web app paints deep querystring-selected cell content in the visible grid', async ({ page }, testInfo) => {
+test('@browser-ci web app paints deep querystring-selected cell content in the visible grid', async ({ page }, testInfo) => {
   const documentId = createTestDocumentId('playwright-visible-deep-cell')
   await page.setViewportSize({ width: 1166, height: 820 })
   await page.goto(`/?document=${encodeURIComponent(documentId)}&sheet=Sheet1&cell=D53`)
@@ -71,7 +71,7 @@ test('web app paints deep querystring-selected cell content in the visible grid'
   }
 })
 
-test('web app keeps a user click selection after opening from a deep cell URL', async ({ page }) => {
+test('@browser-ci web app keeps a user click selection after opening from a deep cell URL', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-visible-click-deep-cell')
   await page.setViewportSize({ width: 1166, height: 820 })
   await page.goto(`/?document=${encodeURIComponent(documentId)}&sheet=Sheet1&cell=D53`)
@@ -87,7 +87,10 @@ test('web app keeps a user click selection after opening from a deep cell URL', 
   await expect.poll(() => page.evaluate(() => new URL(window.location.href).searchParams.get('cell') ?? '')).not.toBe('D53')
 })
 
-test('web app keeps dense accounting-sheet text payloads complete in the TypeGPU layer', async ({ page, context }, testInfo) => {
+test('@browser-ci web app keeps dense accounting-sheet text payloads complete in the TypeGPU layer', async ({
+  page,
+  context,
+}, testInfo) => {
   const documentId = createTestDocumentId('playwright-dense-visible-payload')
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await page.setViewportSize({ width: 1166, height: 820 })
@@ -148,7 +151,7 @@ test('web app keeps dense accounting-sheet text payloads complete in the TypeGPU
   }
 })
 
-test('web app keeps the live cell editor above the native grid text layer', async ({ page }) => {
+test('@browser-ci web app keeps the live cell editor above the native grid text layer', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-editor-native-text-z-order')
   await page.setViewportSize({ width: 1166, height: 820 })
   await page.goto(`/?document=${encodeURIComponent(documentId)}&sheet=Sheet1&cell=A1`)
@@ -156,16 +159,24 @@ test('web app keeps the live cell editor above the native grid text layer', asyn
 
   await clickVisibleGridBodySlot(page, 1, 1)
   await page.keyboard.type('editor-z-order')
-
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
+  await expect(page.getByTestId('cell-editor-input')).toHaveValue('editor-z-order')
+  await page.getByTestId('cell-editor-input').press('Enter')
+  await expect(page.getByTestId('cell-editor-input')).toHaveCount(0)
+
+  await clickVisibleGridBodySlot(page, 1, 1)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2')
+  await page.getByTestId('sheet-grid').press('F2')
   await expect(page.getByTestId('cell-editor-input')).toHaveValue('editor-z-order')
   await expect(page.getByTestId('cell-editor-input')).not.toHaveCSS('opacity', '0')
   await expect
-    .poll(readEditorLayerState(page), {
-      message: 'the active editor must sit above native rendered text to prevent double-text artifacts while typing or clicking away',
+    .poll(readEditorLayerState(page, { col: 1, row: 1 }), {
+      message:
+        'the active editor must sit above native rendered text and suppress its own committed text run to prevent double-text artifacts',
       timeout: 5_000,
     })
     .toMatchObject({
+      activeCellNativeTextSuppressed: true,
       editorAboveNativeText: true,
       editorMounted: true,
       nativeTextLayerMounted: true,
@@ -415,24 +426,32 @@ function readNativeTextRunGeometryHealth(page: Page): () => Promise<{
     })
 }
 
-function readEditorLayerState(page: Page): () => Promise<{
+function readEditorLayerState(
+  page: Page,
+  activeCell: { readonly col: number; readonly row: number },
+): () => Promise<{
+  readonly activeCellNativeTextSuppressed: boolean
   readonly editorAboveNativeText: boolean
   readonly editorMounted: boolean
   readonly nativeTextLayerMounted: boolean
 }> {
   return async () =>
-    await page.evaluate(() => {
+    await page.evaluate(({ col, row }) => {
       const editor = document.querySelector('[data-testid="cell-editor-overlay"]')
       const nativeTextLayer = document.querySelector('[data-testid="grid-native-text-layer"]')
       const editorZIndex = editor instanceof HTMLElement ? Number(getComputedStyle(editor).zIndex) : Number.NaN
       const nativeTextLayerZIndex = nativeTextLayer instanceof HTMLElement ? Number(getComputedStyle(nativeTextLayer).zIndex) : Number.NaN
+      const activeCellNativeTextRun = document.querySelector(
+        `[data-native-text-run-row="${String(row)}"][data-native-text-run-col="${String(col)}"]`,
+      )
       return {
+        activeCellNativeTextSuppressed: activeCellNativeTextRun === null,
         editorAboveNativeText:
           Number.isFinite(editorZIndex) && Number.isFinite(nativeTextLayerZIndex) && editorZIndex > nativeTextLayerZIndex,
         editorMounted: editor instanceof HTMLElement,
         nativeTextLayerMounted: nativeTextLayer instanceof HTMLElement,
       }
-    })
+    }, activeCell)
 }
 
 function readNativeTextLayerStabilityState(

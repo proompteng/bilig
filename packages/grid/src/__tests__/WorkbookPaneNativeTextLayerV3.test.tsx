@@ -34,7 +34,8 @@ function createRun(overrides: Partial<TextQuadRun> = {}): TextQuadRun {
   }
 }
 
-function createPane(run: TextQuadRun = createRun()): WorkbookRenderTilePaneState {
+function createPane(run: TextQuadRun | readonly TextQuadRun[] = createRun()): WorkbookRenderTilePaneState {
+  const textRuns = Array.isArray(run) ? run : [run]
   return {
     contentOffset: { x: 0, y: 0 },
     frame: { height: 240, width: 320, x: 46, y: 24 },
@@ -49,9 +50,9 @@ function createPane(run: TextQuadRun = createRun()): WorkbookRenderTilePaneState
       lastCameraSeq: 1,
       rectCount: 0,
       rectInstances: new Float32Array(),
-      textCount: 1,
+      textCount: textRuns.length,
       textMetrics: new Float32Array(),
-      textRuns: [run],
+      textRuns,
       tileId: 1,
       version: { axisX: 1, axisY: 1, freeze: 0, styles: 1, text: 1, values: 1 },
     },
@@ -206,6 +207,43 @@ describe('WorkbookPaneNativeTextLayerV3', () => {
       if (originalDevicePixelRatio) {
         Object.defineProperty(window, 'devicePixelRatio', originalDevicePixelRatio)
       }
+    }
+  })
+
+  test('suppresses the active editor cell from the native text layer while keeping neighboring text visible', async () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    try {
+      await act(async () => {
+        root.render(
+          <WorkbookPaneNativeTextLayerV3
+            active
+            cameraStore={null}
+            geometry={null}
+            headerPanes={[]}
+            scrollTransformStore={null}
+            suppressedTextCell={{ col: 1, row: 2 }}
+            tilePanes={[
+              createPane([
+                createRun({ col: 1, row: 2, text: 'editing-cell' }),
+                createRun({ col: 2, row: 2, text: 'neighbor-cell', x: 104, clipX: 104 }),
+              ]),
+            ]}
+          />,
+        )
+      })
+
+      const textLayer = host.querySelector<HTMLElement>('[data-testid="grid-native-text-layer"]')
+      expect(textLayer?.getAttribute('data-v3-native-text-run-count')).toBe('1')
+      expect(host.querySelector('[data-native-text-run-row="2"][data-native-text-run-col="1"]')).toBeNull()
+      expect(host.querySelector('[data-native-text-run-row="2"][data-native-text-run-col="2"]')?.textContent).toBe('neighbor-cell')
+    } finally {
+      await act(async () => {
+        root.unmount()
+      })
+      host.remove()
     }
   })
 })

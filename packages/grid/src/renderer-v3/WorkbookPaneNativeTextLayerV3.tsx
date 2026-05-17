@@ -28,12 +28,18 @@ export interface NativeTextRunFontStyleV3 {
   readonly fontWeight: number | 'normal' | 'bold'
 }
 
+export interface SuppressedNativeTextCellV3 {
+  readonly col: number
+  readonly row: number
+}
+
 export interface WorkbookPaneNativeTextLayerV3Props {
   readonly active: boolean
   readonly cameraStore?: GridCameraStore | null | undefined
   readonly geometry: GridGeometrySnapshot | null
   readonly headerPanes: readonly GridHeaderPaneState[]
   readonly scrollTransformStore: WorkbookGridScrollStore | null
+  readonly suppressedTextCell?: SuppressedNativeTextCellV3 | null | undefined
   readonly tilePanes: readonly WorkbookRenderTilePaneState[]
 }
 
@@ -86,6 +92,14 @@ function isPaneDrawVisible(pane: TextLayerPane): boolean {
 
 function getPaneTextRuns(pane: TextLayerPane): readonly TextQuadRun[] {
   return 'tile' in pane ? pane.tile.textRuns : pane.textRuns
+}
+
+function isNativeTextRunSuppressed(
+  pane: TextLayerPane,
+  run: TextQuadRun,
+  suppressedTextCell: SuppressedNativeTextCellV3 | null | undefined,
+): boolean {
+  return Boolean(suppressedTextCell && 'tile' in pane && run.row === suppressedTextCell.row && run.col === suppressedTextCell.col)
 }
 
 function resolveNativeTextRunKey(pane: TextLayerPane, run: TextQuadRun): string {
@@ -347,6 +361,7 @@ export const WorkbookPaneNativeTextLayerV3 = memo(function WorkbookPaneNativeTex
   geometry,
   headerPanes,
   scrollTransformStore,
+  suppressedTextCell = null,
   tilePanes,
 }: WorkbookPaneNativeTextLayerV3Props) {
   const liveGeometry = useSyncExternalStore(
@@ -379,6 +394,9 @@ export const WorkbookPaneNativeTextLayerV3 = memo(function WorkbookPaneNativeTex
               return []
             }
             return getPaneTextRuns(pane).flatMap((run) => {
+              if (isNativeTextRunSuppressed(pane, run, suppressedTextCell)) {
+                return []
+              }
               const width = run.width ?? 0
               const height = run.height ?? 0
               const clipWidth = run.clipWidth ?? width
@@ -391,7 +409,7 @@ export const WorkbookPaneNativeTextLayerV3 = memo(function WorkbookPaneNativeTex
             })
           })
         : [],
-    [active, dpr, drawScrollSnapshot, panes],
+    [active, dpr, drawScrollSnapshot, panes, suppressedTextCell],
   )
   const textRunCount = renderedRuns.length
 
@@ -411,6 +429,8 @@ export const WorkbookPaneNativeTextLayerV3 = memo(function WorkbookPaneNativeTex
       {renderedRuns.map(({ pane, run, visibleClip }) => (
         <div
           data-native-text-run=""
+          data-native-text-run-col={run.col ?? ''}
+          data-native-text-run-row={run.row ?? ''}
           key={resolveNativeTextRunKey(pane, run)}
           style={resolveNativeTextRunOuterStyleV3({ dpr, pane, run, scrollSnapshot: drawScrollSnapshot, visibleClip })}
         >

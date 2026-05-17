@@ -160,6 +160,10 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
   const resizeGuideRowHeight = resizeGuideRow === activeResizeRow ? activePreviewRowHeight : null
   const selectedCellCol = renderState.selectedCell.col
   const selectedCellRow = renderState.selectedCell.row
+  const suppressedEditorTextCell = useMemo(
+    () => (props.isEditingCell ? { col: selectedCellCol, row: selectedCellRow } : null),
+    [props.isEditingCell, selectedCellCol, selectedCellRow],
+  )
   const v2Geometry = useMemo(() => (renderHostElement ? getLiveGeometrySnapshot() : null), [getLiveGeometrySnapshot, renderHostElement])
   const previewRects = useMemo(() => {
     return (props.previewRanges ?? [])
@@ -298,6 +302,7 @@ export function WorkbookGridSurface(props: WorkbookGridSurfaceProps) {
           host={renderState.hostElement}
           overlayBuilder={dynamicOverlayBuilder}
           scrollTransformStore={renderState.scrollTransformStore}
+          suppressedTextCell={suppressedEditorTextCell}
           tilePanes={renderState.renderTilePanes}
           preloadTilePanes={renderState.preloadDataPanes}
         />

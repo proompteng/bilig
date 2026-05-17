@@ -8,7 +8,7 @@ export { TYPEGPU_V3_ACTIVE_RESOURCE_DEFER_MS, GridDrawSchedulerV3, shouldDeferTy
 export { resolveTypeGpuV3DrawScrollSnapshot } from './workbook-pane-renderer-runtime.js'
 import type { DynamicGridOverlayBatchV3 } from './dynamic-overlay-batch.js'
 import type { WorkbookRenderTilePaneState } from './render-tile-pane-state.js'
-import { WorkbookPaneNativeTextLayerV3 } from './WorkbookPaneNativeTextLayerV3.js'
+import { WorkbookPaneNativeTextLayerV3, type SuppressedNativeTextCellV3 } from './WorkbookPaneNativeTextLayerV3.js'
 import { WorkbookPaneRendererHostRuntimeV3 } from './workbook-pane-renderer-host-runtime.js'
 import type { WorkbookPaneSurfaceBackendStatusV3 } from './workbook-pane-surface-runtime.js'
 
@@ -24,6 +24,7 @@ export interface WorkbookPaneRendererV3Props {
   readonly overlayBuilder?: ((geometry: GridGeometrySnapshot) => DynamicGridOverlayBatchV3 | null | undefined) | undefined
   readonly overlay?: DynamicGridOverlayBatchV3 | undefined
   readonly scrollTransformStore?: WorkbookGridScrollStore | null
+  readonly suppressedTextCell?: SuppressedNativeTextCellV3 | null | undefined
 }
 
 export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
@@ -37,6 +38,7 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
   overlayBuilder,
   preloadTilePanes = [],
   scrollTransformStore = null,
+  suppressedTextCell = null,
   tilePanes,
 }: WorkbookPaneRendererV3Props) {
   const hostRuntimeRef = useRef<WorkbookPaneRendererHostRuntimeV3 | null>(null)
@@ -185,6 +187,7 @@ export const WorkbookPaneRendererV3 = memo(function WorkbookPaneRendererV3({
           geometry={geometry}
           headerPanes={headerPanes}
           scrollTransformStore={scrollTransformStore}
+          suppressedTextCell={suppressedTextCell}
           tilePanes={tilePanes}
         />
       ) : null}
