@@ -106,6 +106,36 @@ describe('WorkPaper INDEX/MATCH direct path', () => {
   })
 })
 
+describe('WorkPaper approximate MATCH direct path', () => {
+  it('binds uniform numeric approximate MATCH without building the sorted lookup index', () => {
+    const rowCount = 128
+    const workbook = WorkPaper.buildFromSheets({
+      Bench: [
+        ['Key', 'Value', '', Math.floor(rowCount / 2) + 0.5, `=MATCH(D1,A2:A${rowCount + 1},1)`],
+        ...Array.from({ length: rowCount }, (_, index) => [index + 1, (index + 1) * 10]),
+      ],
+    })
+    const sheetId = workbook.getSheetId('Bench')!
+
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Number, value: Math.floor(rowCount / 2) })
+    expect(workbook.getPerformanceCounters()).toMatchObject({
+      approxIndexBuilds: 0,
+      lookupOwnerBuilds: 0,
+    })
+
+    workbook.resetPerformanceCounters()
+    const changes = workbook.setCellContents(cell(sheetId, 0, 3), rowCount - 0.5)
+
+    expect(cellChanges(changes)).toEqual(new Set(['D1', 'E1']))
+    expect(workbook.getCellValue(cell(sheetId, 0, 4))).toEqual({ tag: ValueTag.Number, value: rowCount - 1 })
+    expect(workbook.getPerformanceCounters()).toMatchObject({
+      approxIndexBuilds: 0,
+      directFormulaKernelSyncOnlyRecalcSkips: 1,
+      lookupOwnerBuilds: 0,
+    })
+  })
+})
+
 describe('WorkPaper INDEX reference direct path', () => {
   it('updates row-index operands without rebinding dynamic INDEX range dependencies', () => {
     const rowCount = 128

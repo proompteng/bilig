@@ -75,6 +75,14 @@ export interface OperationFreshDirectAggregateFormulaBatchFastPathArgs {
   readonly hasTrackedExactLookupDependents: (sheetId: number, col: number) => boolean
   readonly hasTrackedSortedLookupDependents: (sheetId: number, col: number) => boolean
   readonly hasTrackedDirectRangeDependents: (sheetId: number, col: number) => boolean
+  readonly hasRegionFormulaSubscriptionsOverlappingRange?: (
+    sheetId: number,
+    rowStart: number,
+    rowEnd: number,
+    colStart: number,
+    colEnd: number,
+  ) => boolean
+  readonly getRegionFormulaSubscriptionCount?: () => number
   readonly bindPreparedFormula: NonNullable<CreateEngineOperationServiceArgs['bindPreparedFormula']>
   readonly compileTemplateFormula: NonNullable<CreateEngineOperationServiceArgs['compileTemplateFormula']>
   readonly materializeDeferredStructuralFormulaSources: () => void
@@ -603,6 +611,12 @@ function freshMatrixOverlapsFormulaDependencies(
 ): boolean {
   const rowEnd = matrix.rowStart + matrix.rowCount - 1
   const colEnd = matrix.formulaCol
+  if (
+    args.getRegionFormulaSubscriptionCount?.() === args.state.formulas.size &&
+    args.hasRegionFormulaSubscriptionsOverlappingRange?.(matrix.sheetId, matrix.rowStart, rowEnd, matrix.colStart, colEnd) === false
+  ) {
+    return false
+  }
   let overlaps = false
   args.state.formulas.forEach((formula) => {
     if (overlaps) {

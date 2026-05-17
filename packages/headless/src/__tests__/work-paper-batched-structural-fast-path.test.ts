@@ -200,6 +200,34 @@ describe('work paper batched structural fast path', () => {
     dimensionUpdates.restore()
   })
 
+  it('recalculates existing direct ranges that overlap appended formula rows', () => {
+    const workbook = WorkPaper.buildFromSheets({
+      Data: [
+        [1, 2, '=SUM(A1:B1)', undefined, undefined, '=SUM(A1:A4)'],
+        [3, 4, '=SUM(A2:B2)'],
+        [5, 6, '=SUM(A3:B3)'],
+        [7, 8, '=SUM(A4:B4)'],
+      ],
+    })
+    const sheetId = workbook.getSheetId('Data')!
+
+    const changes = workbook.batch(() => {
+      expect(workbook.addRows(sheetId, 2, 2)).toEqual([])
+      expect(
+        workbook.setCellContents(cell(sheetId, 2, 0), [
+          [5, 6, '=SUM(A3:B3)'],
+          [7, 8, '=SUM(A4:B4)'],
+        ]),
+      ).toEqual([])
+    })
+
+    expect(changes.length).toBeGreaterThan(0)
+    expect(workbook.getCellFormula(cell(sheetId, 0, 5))).toBe('=SUM(A1:A6)')
+    expect(workbook.getCellValue(cell(sheetId, 0, 5))).toEqual({ tag: ValueTag.Number, value: 28 })
+    expect(workbook.getCellValue(cell(sheetId, 2, 2))).toEqual({ tag: ValueTag.Number, value: 11 })
+    expect(workbook.getCellValue(cell(sheetId, 3, 2))).toEqual({ tag: ValueTag.Number, value: 15 })
+  })
+
   it('skips tracked cell change reduction when structural inserts change no values', () => {
     const workbook = WorkPaper.buildFromSheets({
       Data: [

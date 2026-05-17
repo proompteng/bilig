@@ -189,6 +189,14 @@ export interface CreateEngineOperationServiceArgs {
   readonly hasRegionFormulaSubscriptionsForColumn: (sheetName: string, col: number) => boolean
   readonly hasRegionFormulaSubscriptionsForColumnAt?: (sheetId: number, col: number) => boolean
   readonly hasRegionFormulaSubscriptions?: () => boolean
+  readonly hasRegionFormulaSubscriptionsOverlappingRange?: (
+    sheetId: number,
+    rowStart: number,
+    rowEnd: number,
+    colStart: number,
+    colEnd: number,
+  ) => boolean
+  readonly getRegionFormulaSubscriptionCount?: () => number
   readonly collectRegionFormulaDependentsForCell: (sheetName: string, row: number, col: number) => Uint32Array
   readonly collectSingleRegionFormulaDependentForCell: (sheetName: string, row: number, col: number) => number
   readonly collectSingleRegionFormulaDependentForCellAt?: (sheetId: number, row: number, col: number) => number

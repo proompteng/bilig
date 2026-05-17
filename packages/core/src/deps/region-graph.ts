@@ -61,6 +61,14 @@ export interface RegionGraph {
   readonly collectSingleFormulaDependentForCell: (sheetId: number, row: number, col: number) => number
   readonly hasFormulaSubscriptions: () => boolean
   readonly hasFormulaSubscriptionsForColumn: (sheetId: number, col: number) => boolean
+  readonly hasFormulaSubscriptionsOverlappingRange: (
+    sheetId: number,
+    rowStart: number,
+    rowEnd: number,
+    colStart: number,
+    colEnd: number,
+  ) => boolean
+  readonly getFormulaSubscriptionCount: () => number
   readonly reset: () => void
 }
 
@@ -781,6 +789,23 @@ export function createRegionGraph(args: {
     },
     hasFormulaSubscriptionsForColumn(sheetId, col) {
       return (columnSubscriptions.get(columnKey(sheetId, col))?.regionIds.size ?? 0) > 0
+    },
+    hasFormulaSubscriptionsOverlappingRange(sheetId, rowStart, rowEnd, colStart, colEnd) {
+      for (let col = colStart; col <= colEnd; col += 1) {
+        const subscriptions = columnSubscriptions.get(columnKey(sheetId, col))
+        if (
+          subscriptions !== undefined &&
+          subscriptions.regionIds.size > 0 &&
+          subscriptions.maxRowEnd >= rowStart &&
+          subscriptions.minRowStart <= rowEnd
+        ) {
+          return true
+        }
+      }
+      return false
+    },
+    getFormulaSubscriptionCount() {
+      return formulaRegions.size
     },
     hasFormulaSubscriptions() {
       return formulaRegions.size > 0

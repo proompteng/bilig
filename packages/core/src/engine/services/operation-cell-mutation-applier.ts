@@ -151,6 +151,12 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
           hasTrackedExactLookupDependents,
           hasTrackedSortedLookupDependents,
           hasTrackedDirectRangeDependents,
+          ...(args.hasRegionFormulaSubscriptionsOverlappingRange === undefined
+            ? {}
+            : { hasRegionFormulaSubscriptionsOverlappingRange: args.hasRegionFormulaSubscriptionsOverlappingRange }),
+          ...(args.getRegionFormulaSubscriptionCount === undefined
+            ? {}
+            : { getRegionFormulaSubscriptionCount: args.getRegionFormulaSubscriptionCount }),
           bindPreparedFormula: args.bindPreparedFormula,
           compileTemplateFormula: args.compileTemplateFormula,
           materializeDeferredStructuralFormulaSources: args.materializeDeferredStructuralFormulaSources,

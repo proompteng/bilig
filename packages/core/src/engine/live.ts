@@ -200,6 +200,8 @@ type EngineOperationRuntimeConfig = Omit<
   | 'getSelectionState'
   | 'setSelection'
   | 'hasRegionFormulaSubscriptionsForColumn'
+  | 'hasRegionFormulaSubscriptionsOverlappingRange'
+  | 'getRegionFormulaSubscriptionCount'
   | 'collectRegionFormulaDependentsForCell'
   | 'collectSingleRegionFormulaDependentForCell'
   | 'prepareRegionQueryIndices'
@@ -662,6 +664,9 @@ export function createEngineServiceRuntime(args: {
     },
     hasRegionFormulaSubscriptionsForColumnAt: (sheetId, col) => regionGraph.hasFormulaSubscriptionsForColumn(sheetId, col),
     hasRegionFormulaSubscriptions: () => regionGraph.hasFormulaSubscriptions(),
+    hasRegionFormulaSubscriptionsOverlappingRange: (sheetId, rowStart, rowEnd, colStart, colEnd) =>
+      regionGraph.hasFormulaSubscriptionsOverlappingRange(sheetId, rowStart, rowEnd, colStart, colEnd),
+    getRegionFormulaSubscriptionCount: () => regionGraph.getFormulaSubscriptionCount(),
     collectRegionFormulaDependentsForCell: (sheetName, row, col) => {
       const sheet = args.state.workbook.getSheet(sheetName)
       return sheet ? regionGraph.collectFormulaDependentsForCell(sheet.id, row, col) : new Uint32Array()

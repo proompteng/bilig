@@ -794,6 +794,30 @@ export function buildDirectLookupDescriptor(args: {
       searchMode: binding.searchMode,
     }
   }
+  const uniform = args.exactLookup.prepareUniformNumericVectorLookup({
+    sheetName: binding.lookupSheetName,
+    rowStart: binding.rowStart,
+    rowEnd: binding.rowEnd,
+    col: binding.col,
+  })
+  if (uniform) {
+    return {
+      kind: 'approximate-uniform-numeric',
+      operandCellIndex,
+      sheetName: binding.lookupSheetName,
+      sheetId: lookupSheet.id,
+      rowStart: binding.rowStart,
+      rowEnd: binding.rowEnd,
+      col: binding.col,
+      length: uniform.length,
+      columnVersion: uniform.columnVersion,
+      structureVersion: uniform.structureVersion,
+      sheetColumnVersions: uniform.sheetColumnVersions,
+      start: uniform.uniformStart,
+      step: uniform.uniformStep,
+      matchMode: binding.matchMode,
+    }
+  }
   const prepared = args.sortedLookup.prepareVectorLookup({
     sheetName: binding.lookupSheetName,
     rowStart: binding.rowStart,
