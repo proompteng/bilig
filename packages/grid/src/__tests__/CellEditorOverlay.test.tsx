@@ -657,6 +657,66 @@ describe('CellEditorOverlay', () => {
     }
   })
 
+  it('does not swap the finishing editor draft when click-away selection props advance before unmount', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    const onCommit = vi.fn()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    try {
+      await act(async () => {
+        root.render(
+          <CellEditorOverlay
+            label="Sheet1!B2"
+            targetSelection={makeTargetSelection()}
+            onCancel={() => {}}
+            onChange={() => {}}
+            onCommit={onCommit}
+            resolvedValue=""
+            value="visible draft"
+          />,
+        )
+      })
+
+      const initialTextarea = host.querySelector<HTMLTextAreaElement>("[data-testid='cell-editor-input']")
+      expect(initialTextarea).not.toBeNull()
+      if (!initialTextarea) {
+        throw new Error('Expected mounted cell editor input')
+      }
+
+      await act(async () => {
+        initialTextarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+      })
+
+      await act(async () => {
+        root.render(
+          <CellEditorOverlay
+            label="Sheet1!C2"
+            targetSelection={{ sheetName: 'Sheet1', address: 'C2' }}
+            onCancel={() => {}}
+            onChange={() => {}}
+            onCommit={onCommit}
+            resolvedValue=""
+            value="next cell text"
+          />,
+        )
+      })
+
+      const completingTextarea = host.querySelector<HTMLTextAreaElement>("[data-testid='cell-editor-input']")
+      expect(completingTextarea).not.toBeNull()
+      expect(completingTextarea?.readOnly).toBe(true)
+      expect(completingTextarea?.value).toBe('visible draft')
+      expect(onCommit).toHaveBeenCalledTimes(1)
+      expect(onCommit).toHaveBeenLastCalledWith([0, 1], 'visible draft', makeTargetSelection())
+    } finally {
+      await act(async () => {
+        root.unmount()
+      })
+    }
+  })
+
   it('commits delete and backspace DOM edits from the mounted editor', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

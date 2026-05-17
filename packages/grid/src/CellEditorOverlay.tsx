@@ -322,6 +322,9 @@ export function CellEditorOverlay({
   }, [draftValue])
 
   useEffect(() => {
+    if (completionRef.current !== 'idle') {
+      return
+    }
     const input = inputRef.current
     const targetChanged = targetSelectionRef.current.address !== targetAddress || targetSelectionRef.current.sheetName !== targetSheetName
     targetSelectionRef.current = {
