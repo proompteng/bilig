@@ -194,6 +194,8 @@ describe('workbook shortcut dialog', () => {
     expect(getWorkbookShortcutLabel('undo', 'MacIntel')).toBe('⌘Z')
     expect(getWorkbookShortcutLabel('undo', 'Win32')).toBe('Ctrl+Z')
     expect(getWorkbookShortcutLabel('clear-selection', 'Win32')).toBe('Delete / Backspace')
+    expect(getWorkbookShortcutLabel('fill-range', 'MacIntel')).toBe('⌘Enter')
+    expect(getWorkbookShortcutLabel('fill-range', 'Win32')).toBe('Ctrl+Enter')
     expect(getWorkbookShortcutLabel('clear-formatting', 'Win32')).toBe('Ctrl+\\')
     expect(getWorkbookShortcutLabel('toggle-shortcuts', 'Win32')).toBe('Ctrl+/')
   })

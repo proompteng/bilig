@@ -1,6 +1,6 @@
 import { MAX_COLS, MAX_ROWS } from '@bilig/protocol'
 import { clampCell } from './gridSelection.js'
-import { isClearCellKey, isFillShortcut } from './gridKeyboard.js'
+import { isClearCellKey, isFillSelectionShortcut, isFillShortcut } from './gridKeyboard.js'
 import type { Item, Rectangle } from './gridTypes.js'
 
 export type GridEditSelectionBehavior = 'select-all' | 'caret-end'
@@ -94,6 +94,7 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
   } = options
 
   const anchorCell = currentRangeAnchor ?? selectedCell
+  const selectedActionCell = currentSelectionCell ?? selectedCell
   const activeCell = resolveSelectionActiveCell(anchorCell, currentSelectionCell, currentSelectionRange)
 
   if (isEditingCell) {
@@ -210,6 +211,22 @@ export function resolveGridKeyAction(options: ResolveGridKeyActionOptions): Grid
 
   if (isClearCellKey(event)) {
     return { kind: 'clear-cell', pendingTypeSeed: null }
+  }
+
+  if (isFillSelectionShortcut(event)) {
+    if (!currentSelectionRange || (currentSelectionRange.width === 1 && currentSelectionRange.height === 1)) {
+      return { kind: 'handled' }
+    }
+    return {
+      kind: 'fill-range',
+      source: {
+        x: selectedActionCell[0],
+        y: selectedActionCell[1],
+        width: 1,
+        height: 1,
+      },
+      target: currentSelectionRange,
+    }
   }
 
   if (isFillShortcut(event)) {

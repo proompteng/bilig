@@ -3,6 +3,7 @@ import {
   isClearCellKey,
   isClipboardShortcut,
   isDeleteKey,
+  isFillSelectionShortcut,
   isFillShortcut,
   isHandledGridKey,
   isNavigationKey,
@@ -29,6 +30,9 @@ describe('gridKeyboard', () => {
     expect(isFillShortcut({ altKey: false, ctrlKey: true, key: 'd', metaKey: false, shiftKey: false })).toBe(true)
     expect(isFillShortcut({ altKey: false, ctrlKey: false, key: 'r', metaKey: true, shiftKey: false })).toBe(true)
     expect(isFillShortcut({ altKey: false, ctrlKey: true, key: 'd', metaKey: false, shiftKey: true })).toBe(false)
+    expect(isFillSelectionShortcut({ altKey: false, ctrlKey: true, key: 'Enter', metaKey: false, shiftKey: false })).toBe(true)
+    expect(isFillSelectionShortcut({ altKey: false, ctrlKey: false, key: 'Enter', metaKey: true, shiftKey: false })).toBe(true)
+    expect(isFillSelectionShortcut({ altKey: false, ctrlKey: true, key: 'Enter', metaKey: false, shiftKey: true })).toBe(false)
     expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: 'F2', metaKey: false })).toBe(true)
     expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: 'Escape', metaKey: false })).toBe(true)
     expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: 'Delete', metaKey: false })).toBe(true)
@@ -57,6 +61,15 @@ describe('gridKeyboard', () => {
         key: ' ',
         metaKey: false,
         shiftKey: true,
+      }),
+    ).toBe(true)
+    expect(
+      isHandledGridKey({
+        altKey: false,
+        ctrlKey: true,
+        key: 'Enter',
+        metaKey: false,
+        shiftKey: false,
       }),
     ).toBe(true)
     expect(

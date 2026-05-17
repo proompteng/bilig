@@ -73,6 +73,10 @@ export function isFillShortcut(event: GridKeyboardModifierState & { shiftKey?: b
   return normalizedKey === 'd' || normalizedKey === 'r'
 }
 
+export function isFillSelectionShortcut(event: GridKeyboardModifierState & { shiftKey?: boolean }): boolean {
+  return (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key === 'Enter'
+}
+
 export function isDeleteKey(key: string): boolean {
   return key === 'Backspace' || key === 'Delete'
 }
@@ -95,6 +99,7 @@ export function isHandledGridKey(
     isPrintableKey(event) ||
     isClipboardShortcut(event) ||
     isFillShortcut(event) ||
+    isFillSelectionShortcut(event) ||
     isNavigationShortcut(event) ||
     (hasPrimaryModifier && !event.altKey && event.key.toLowerCase() === 'a') ||
     (event.key === ' ' && !event.altKey && (hasPrimaryModifier || event.shiftKey)) ||

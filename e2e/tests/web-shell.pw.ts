@@ -1538,6 +1538,34 @@ test('web app supports row, column, and full-sheet selection shortcuts', async (
   await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!All')
 })
 
+test('web app fills the selected range from the active cell with the fill range shortcut', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-fill-selected-range-shortcut')
+  await page.goto(`/?document=${encodeURIComponent(documentId)}&persist=0&sheet=Sheet1&cell=B2`)
+  await waitForWorkbookReady(page)
+
+  const grid = page.getByTestId('sheet-grid')
+  const formulaInput = page.getByTestId('formula-input')
+
+  await clickProductCell(page, 1, 1)
+  await formulaInput.fill('fill-selected-range')
+  await formulaInput.press('Enter')
+  await expect(formulaInput).toHaveValue('fill-selected-range')
+
+  await dragProductBodySelection(page, 1, 1, 2, 2)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!B2:C3')
+
+  await grid.press(`${PRIMARY_MODIFIER}+Enter`)
+
+  await clickProductCell(page, 1, 1)
+  await expect(formulaInput).toHaveValue('fill-selected-range')
+  await clickProductCell(page, 2, 1)
+  await expect(formulaInput).toHaveValue('fill-selected-range')
+  await clickProductCell(page, 1, 2)
+  await expect(formulaInput).toHaveValue('fill-selected-range')
+  await clickProductCell(page, 2, 2)
+  await expect(formulaInput).toHaveValue('fill-selected-range')
+})
+
 test('web app expands the active range with repeated shift arrows', async ({ page }) => {
   await page.goto('/')
   await waitForWorkbookReady(page)

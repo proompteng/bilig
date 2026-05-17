@@ -272,6 +272,24 @@ describe('gridKeyActions', () => {
 
     expect(
       resolveGridKeyAction({
+        event: { key: 'Enter', ctrlKey: true, metaKey: false, altKey: false },
+        isEditingCell: false,
+        editorValue: '',
+        editorInputFocused: false,
+        pendingTypeSeed: null,
+        selectedCell: [1, 1],
+        currentSelectionCell: [2, 2],
+        currentRangeAnchor: [1, 1],
+        currentSelectionRange: { x: 1, y: 1, width: 3, height: 4 },
+      }),
+    ).toEqual({
+      kind: 'fill-range',
+      source: { x: 2, y: 2, width: 1, height: 1 },
+      target: { x: 1, y: 1, width: 3, height: 4 },
+    })
+
+    expect(
+      resolveGridKeyAction({
         event: { key: 'd', ctrlKey: true, metaKey: false, altKey: false },
         isEditingCell: false,
         editorValue: '',
@@ -372,7 +390,6 @@ describe('gridKeyActions', () => {
       { key: 'Home', ctrlKey: false, metaKey: false, altKey: true },
       { key: 'End', ctrlKey: false, metaKey: false, altKey: true },
       { key: 'PageDown', ctrlKey: false, metaKey: false, altKey: true },
-      { key: 'Enter', ctrlKey: true, metaKey: false, altKey: false },
       { key: 'Tab', ctrlKey: false, metaKey: true, altKey: false },
       { key: 'F2', ctrlKey: false, metaKey: false, altKey: true },
     ] as const) {
