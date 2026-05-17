@@ -8,6 +8,7 @@ export const docsSiteSources = [
   ['exceljs-shared-formula-recalculation-node.html', 'exceljs-shared-formula-recalculation-node.md'],
   ['xlsx-template-formula-recalculation-node.html', 'xlsx-template-formula-recalculation-node.md'],
   ['xlsx-populate-formula-result-node.html', 'xlsx-populate-formula-result-node.md'],
+  ['xlsx-recalculation-proof.html', 'xlsx-recalculation-proof.md'],
   ['xlsx-formula-recalculation-node.html', 'xlsx-formula-recalculation-node.md'],
   ['excel-file-calculation-engine-node.html', 'excel-file-calculation-engine-node.md'],
   ['stale-xlsx-formula-cache-node.html', 'stale-xlsx-formula-cache-node.md'],

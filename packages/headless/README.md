@@ -63,7 +63,7 @@ The generated-project command is being prepared as
 
 <!-- headless-package-footprint:start -->
 
-Current checked npm footprint for `@bilig/headless@0.18.4`:
+Current checked npm footprint for `@bilig/headless@0.18.5`:
 
 - Pack dry run: `423 kB` tarball, `2.53 MB` unpacked, `429` package entries.
 - Boundary: the main import is the WorkPaper formula/JSON runtime; XLSX
@@ -77,11 +77,11 @@ Current checked npm footprint for `@bilig/headless@0.18.4`:
 
 ## Published Package Trust
 
-`@bilig/headless@0.18.4` is published with npm registry signatures and SLSA
+`@bilig/headless@0.18.5` is published with npm registry signatures and SLSA
 provenance attestations. Check the package before adopting it in a service:
 
 ```sh
-npm view @bilig/headless@0.18.4 version dist.attestations dist.signatures --json
+npm view @bilig/headless@0.18.5 version dist.attestations dist.signatures --json
 npm audit signatures
 ```
 
@@ -510,9 +510,9 @@ pnpm workpaper:xlsx-corpus:check -- /path/to/xlsx-corpus
   should be checked against a fresh Microsoft Excel recalculation.
 - Run `pnpm workpaper:bench:competitive:check` from the repository. The
   checked-in artifact shows
-  [`78/100` comparable WorkPaper mean wins](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md)
+  [`77/100` comparable WorkPaper mean wins](https://github.com/proompteng/bilig/blob/main/docs/what-workpaper-benchmark-proves.md)
   and names the worst p95 holdout:
-  `single-formula-edit-recalc` at `2.127x`.
+  `structural-append-formula-rows` at `1.785x`.
 - The shareable benchmark card is generated from the checked-in artifact:
   [`workpaper-benchmark-card.png`](https://github.com/proompteng/bilig/blob/main/docs/assets/workpaper-benchmark-card.png).
 - Read the

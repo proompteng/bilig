@@ -26,7 +26,7 @@ Current checkpoint on `main`:
 - literal-only workbook initialization now hydrates directly into fresh core workbook storage
   instead of paying restore-style op execution overhead
 - the checked-in competitive artifact now shows:
-  - Overall scorecard: WorkPaper `78/100` mean wins and `75/100` mean+p95 wins
+  - Overall scorecard: WorkPaper `77/100` mean wins and `76/100` mean+p95 wins
   - Public lane: WorkPaper `60/73` mean wins
   - Holdout lane: WorkPaper `18/27` mean wins
   - current HyperFormula mean-win rows: `22/100`
@@ -557,7 +557,7 @@ it is not a stable production regression.
 
 Acceptance:
 
-- WorkPaper improves from the current `78/100` scorecard-eligible comparable
+- WorkPaper improves from the current `77/100` scorecard-eligible comparable
   mean winners without reducing benchmark coverage
 - public lane remains visible and improves from the current `60/73` mean wins
 - holdout lane remains visible and improves from the current `18/27` mean wins

@@ -83,8 +83,8 @@ Current state:
 - external install and consumer smoke paths are checked
 - a checked-in comparison artifact exists at
   `packages/benchmarks/baselines/workpaper-vs-hyperformula.json`
-- that artifact currently shows WorkPaper leading `78/100` scorecard-eligible
-  comparable mean workloads and `75/100` mean+p95 workloads
+- that artifact currently shows WorkPaper leading `77/100` scorecard-eligible
+  comparable mean workloads and `76/100` mean+p95 workloads
 - the broader active Sheets / Excel objective is tracked by
   `packages/benchmarks/baselines/bilig-dominance-scorecard.json`, which keeps
   blanket `10x` claims disallowed until direct evidence exists for each
@@ -115,7 +115,7 @@ This is the scorecard that should drive engineering priority.
 | Formula breadth            | Unified inventory breadth                                             | `525/525` unified tracked functions = `100%`                                                       | no comparable local unified inventory artifact                 | `bilig` leads on tracked breadth in the current generated inventory                                                                  | keep the unified inventory generated and current                                                     |
 | Formula production quality | Canonical production closure                                          | `300/300` canonical rows production-closed = `100%`                                                | no matching canonical artifact                                 | `bilig` leads on closure                                                                                                             | keep the dominance snapshot current and extend grouped-array coverage beyond the canonical SUM forms |
 | Feature dominance          | Critical semantics unsupported by HyperFormula but present in `bilig` | dynamic arrays, structured references/tables, multiple workbook instances                          | HyperFormula docs list all three as unsupported/limited        | `bilig` leads                                                                                                                        | add leadership workload benchmarks and soak tests so the lead is not purely semantic                 |
-| Performance dominance      | Directly comparable benchmark workloads                               | unified benchmark includes `100` scorecard-eligible comparable workloads, public and holdout lanes | HyperFormula has `22` current mean wins in the latest artifact | `WorkPaper` leads `78/100` overall mean workloads and `75/100` mean+p95 workloads; the worst p95 row is `single-formula-edit-recalc` | turn mean wins into larger-margin mean+p95 wins without weakening benchmark gates                    |
+| Performance dominance      | Directly comparable benchmark workloads                               | unified benchmark includes `100` scorecard-eligible comparable workloads, public and holdout lanes | HyperFormula has `23` current mean wins in the latest artifact | `WorkPaper` leads `77/100` overall mean workloads and `76/100` mean+p95 workloads; the worst p95 row is `single-formula-edit-recalc` | turn mean wins into larger-margin mean+p95 wins without weakening benchmark gates                    |
 | Performance dominance      | Leadership workloads                                                  | `1/1` leadership workload exercised, with HyperFormula marked unsupported                          | dynamic arrays unsupported                                     | `bilig` leads on capability, not comparable speed                                                                                    | expand leadership artifacts beyond one unsupported workload                                          |
 | Operability dominance      | Clean external consumer path                                          | packed tarball install and Vite/Node smoke are checked in-repo                                     | no equivalent artifact in this repo                            | `bilig` leads in current repo evidence                                                                                               | keep smoke and publish paths green on every release path                                             |
 | Licensing and packaging    | Open-source package posture                                           | MIT publishable packages on npm                                                                    | GPL license key flow in docs                                   | `bilig` leads for embeddable OSS consumption                                                                                         | preserve the publishable OSS path while adding no hidden runtime requirements                        |
@@ -269,8 +269,8 @@ This program should be read as a state machine, not a binary done/not-done check
 
 The historical state before the latest artifact was `engine-catching-up`. The
 current generated artifacts have moved the HyperFormula performance lane to
-`performance-leading`: WorkPaper is `78/100` on comparable mean workloads and
-`75/100` on mean+p95 workloads. The active program is now about larger margins,
+`performance-leading`: WorkPaper is `77/100` on comparable mean workloads and
+`76/100` on mean+p95 workloads. The active program is now about larger margins,
 product-level Sheets / Excel evidence, and rejecting blanket `10x` claims until
 the generated scorecard proves them.
 
@@ -381,8 +381,8 @@ The current repository supports these claims:
   - richer detailed event payloads
   - multiple independent workbook instances with no one-instance-one-workbook restriction
 - `WorkPaper` now leads most of the expanded competitive engine scorecard:
-  - `78/100` overall scorecard-eligible comparable mean workloads
-  - `75/100` overall scorecard-eligible comparable mean+p95 workloads
+  - `77/100` overall scorecard-eligible comparable mean workloads
+  - `76/100` overall scorecard-eligible comparable mean+p95 workloads
   - `60/73` public comparable mean workloads
   - `18/27` holdout comparable mean workloads
   - current artifact generated at `2026-05-17T02:10:12.674Z`

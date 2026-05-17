@@ -169,8 +169,8 @@ persistence.
 ## Current evidence
 
 The benchmark claim is deliberately narrow. The checked artifact currently
-records `78/100` mean-latency wins against HyperFormula-style comparable
-workloads and `75/100` workloads winning both mean and p95. The p95 misses are
+records `77/100` mean-latency wins against HyperFormula-style comparable
+workloads and `76/100` workloads winning both mean and p95. The p95 misses are
 called out instead of hidden.
 
 Benchmark note:

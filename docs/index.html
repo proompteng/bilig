@@ -444,11 +444,11 @@ function readNumber(cell: unknown): number {
               <div class="proof-result">
                 <div class="proof-metric">
                   <span class="proof-label">comparable mean rows</span>
-                  <strong>78/100</strong>
+                  <strong>77/100</strong>
                 </div>
                 <p>
-                  78 of 100 comparable mean-latency rows are faster in the checked file. single-formula-edit-recalc is slower at p95:
-                  <code>2.127x</code>. Browser UI rendering is not part of this benchmark.
+                  77 of 100 comparable mean-latency rows are faster in the checked file. structural-append-formula-rows is slower at p95:
+                  <code>1.785x</code>. Browser UI rendering is not part of this benchmark.
                 </p>
               </div>
 
@@ -465,7 +465,7 @@ function readNumber(cell: unknown): number {
                 </div>
                 <div class="proof-fact">
                   <dt>Caveat</dt>
-                  <dd>single-formula-edit-recalc is slower at p95: <code>2.127x</code>.</dd>
+                  <dd>structural-append-formula-rows is slower at p95: <code>1.785x</code>.</dd>
                 </div>
                 <div class="proof-fact">
                   <dt>Out of scope</dt>
@@ -638,6 +638,8 @@ function readNumber(cell: unknown): number {
                     >XLSX formula recalculation in Node</a
                   >
                 </li>
+                <li><a href="./xlsx-recalculation-proof.html">curlable XLSX recalculation proof</a></li>
+                <li><a href="./xlsx-recalculation-proof.ts">downloadable proof script</a></li>
               </ul>
             </div>
 
@@ -677,6 +679,8 @@ function readNumber(cell: unknown): number {
                   <a href="./formula-workbooks-node-services-agent-tools.html">formula workbooks for Node services and agent tools</a>
                 </li>
                 <li><a href="./node-spreadsheet-formula-engine.html">Node spreadsheet formula engine</a></li>
+                <li><a href="./xlsx-recalculation-proof.html">curlable XLSX recalculation proof</a></li>
+                <li><a href="./xlsx-recalculation-proof.ts">downloadable proof script</a></li>
                 <li><a href="./xlsx-formula-recalculation-node.html">XLSX formula recalculation in Node.js</a></li>
                 <li>
                   <a href="./excel-file-calculation-engine-node.html">Excel file as a Node calculation engine</a>

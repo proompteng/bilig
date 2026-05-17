@@ -34,6 +34,10 @@ looked right" and "the workbook artifact still works after the XLSX boundary."
 
 ## Run the maintained example
 
+If you want the shortest proof without cloning the repo, run the
+[curlable XLSX recalculation proof](xlsx-recalculation-proof.md). It creates
+source and edited `.xlsx` files in a blank folder and verifies the round trip.
+
 From a clean clone:
 
 ```sh
@@ -133,6 +137,7 @@ XLSX boundary around the parts it owns.
 
 ## Related proof
 
+- [Curlable XLSX recalculation proof](xlsx-recalculation-proof.md)
 - [Runnable XLSX recalculation example](https://github.com/proompteng/bilig/tree/main/examples/xlsx-recalculation-node)
 - [Excel file as a calculation engine in Node.js](excel-file-calculation-engine-node.md)
 - [Stale XLSX formula cache in Node.js](stale-xlsx-formula-cache-node.md)
