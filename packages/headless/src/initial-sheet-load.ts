@@ -50,33 +50,8 @@ export interface PreparedInitialMixedSheetLoad {
   potentialNewCells: number
 }
 
-interface FreshInitialCellIdentity {
-  readonly sheetId: number
-  readonly rowId: string
-  readonly colId: string
-}
-
-interface FreshInitialResidentIdentity {
-  readonly rowId: string
-  readonly colId: string
-}
-
-interface FreshInitialCellPageInternals {
-  readonly setDeferred?: (location: FreshInitialCellIdentity, cellIndex: number) => void
-}
-
-interface FreshInitialCellIdentityInternals {
-  readonly setParts?: (cellIndex: number, sheetId: number, rowId: string, colId: string) => void
-}
-
-interface FreshInitialResidentCellInternals {
-  readonly addDeferred?: (cellIndex: number, identity: FreshInitialResidentIdentity) => void
-}
-
 interface FreshInitialLogicalSheetInternals {
-  readonly cellPages?: FreshInitialCellPageInternals
-  readonly cellIdentities?: FreshInitialCellIdentityInternals
-  readonly residentCells?: FreshInitialResidentCellInternals
+  readonly setFreshVisibleCellWithAxisIdsDeferred?: (row: number, col: number, cellIndex: number, rowId: string, colId: string) => void
 }
 
 type FreshInitialCellAttacher = (row: number, col: number, cellIndex: number, rowId: string, colId: string) => void
@@ -272,10 +247,8 @@ export function prepareInitialMixedSheetLoad(args: {
 function createFreshInitialCellAttacher(sheet: SheetRecord): FreshInitialCellAttacher {
   const logicalCandidate: unknown = sheet.logical
   const logical = isFreshInitialLogicalSheetInternals(logicalCandidate) ? logicalCandidate : undefined
-  const setDeferredCellPage = logical?.cellPages?.setDeferred?.bind(logical.cellPages)
-  const setCellIdentityParts = logical?.cellIdentities?.setParts?.bind(logical.cellIdentities)
-  const addDeferredResidentCell = logical?.residentCells?.addDeferred?.bind(logical.residentCells)
-  if (!setDeferredCellPage || !setCellIdentityParts || !addDeferredResidentCell) {
+  const attachFreshVisibleCell = logical?.setFreshVisibleCellWithAxisIdsDeferred?.bind(logical)
+  if (!attachFreshVisibleCell) {
     return (row, col, cellIndex, rowId, colId) => {
       sheet.logical.setNewVisibleCellWithAxisIds(row, col, cellIndex, rowId, colId)
       sheet.grid.set(row, col, cellIndex)
@@ -284,9 +257,7 @@ function createFreshInitialCellAttacher(sheet: SheetRecord): FreshInitialCellAtt
 
   const setGridCell = sheet.grid.createRowMajorSetter()
   return (row, col, cellIndex, rowId, colId) => {
-    setDeferredCellPage({ sheetId: sheet.id, rowId, colId }, cellIndex)
-    setCellIdentityParts(cellIndex, sheet.id, rowId, colId)
-    addDeferredResidentCell(cellIndex, { rowId, colId })
+    attachFreshVisibleCell(row, col, cellIndex, rowId, colId)
     setGridCell(row, col, cellIndex)
   }
 }

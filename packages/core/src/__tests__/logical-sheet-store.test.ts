@@ -83,4 +83,38 @@ describe('LogicalSheetStore', () => {
     expect(logical.deleteVisibleCellByIds('row-c', 'column-d')).toBe(true)
     expect(logical.getVisibleCell(2, 3)).toBeUndefined()
   })
+
+  it('attaches fresh visible cells through primitive deferred indexes for initial load', () => {
+    const cellIdentities = new CellAxisIdentityStore()
+    let objectLocationKeyCalls = 0
+    let primitiveLocationKeyCalls = 0
+    const cellPages = new CellPageStore(
+      new Map<string, number>(),
+      (location) => {
+        objectLocationKeyCalls += 1
+        return makeLogicalCellKey(location.sheetId, location.rowId, location.colId)
+      },
+      (callback) => {
+        cellIdentities.forEach((identity, cellIndex) => {
+          callback(identity, cellIndex)
+        })
+      },
+      (sheetId, rowId, colId) => {
+        primitiveLocationKeyCalls += 1
+        return makeLogicalCellKey(sheetId, rowId, colId)
+      },
+    )
+    const axisMap = new SheetAxisMap()
+    axisMap.ensureId('row', 2, () => 'row-c')
+    axisMap.ensureId('column', 3, () => 'column-d')
+    const logical = new LogicalSheetStore(7, axisMap, cellPages, cellIdentities, new AxisResidentCellIndex())
+
+    logical.setFreshVisibleCellWithAxisIdsDeferred(2, 3, 42, 'row-c', 'column-d')
+
+    expect(objectLocationKeyCalls).toBe(0)
+    expect(primitiveLocationKeyCalls).toBe(1)
+    expect(logical.getCellIdentity(42)).toEqual({ sheetId: 7, rowId: 'row-c', colId: 'column-d' })
+    expect(logical.listResidentCellIndices('column', ['column-d'])).toEqual([42])
+    expect(logical.getVisibleCell(2, 3)).toBe(42)
+  })
 })

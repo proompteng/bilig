@@ -12,7 +12,6 @@ import { literalToValue, writeLiteralToCellStore } from '../engine-value-utils.j
 import type { FormulaInstanceSnapshot } from '../formula/formula-instance-table.js'
 import type { FormulaTemplateResolution, FormulaTemplateSnapshot } from '../formula/template-bank.js'
 import { collectDefinedFormulaNames, formulaShouldUseCachedUnsupportedFunctionValue } from './unsupported-formula-cache.js'
-import type { LogicalCellLocation } from '../storage/cell-page-store.js'
 import type { StringPool } from '../string-pool.js'
 import type { SheetRecord, WorkbookStore } from '../workbook-store.js'
 import { restoreVisualMetadata, restoreWorkbookStructure } from './runtime-image-metadata-restore.js'
@@ -187,22 +186,8 @@ interface WrittenColumnTracker {
   count: number
 }
 
-interface FreshRuntimeCellPageInternals {
-  readonly setDeferred?: (location: LogicalCellLocation, cellIndex: number) => void
-}
-
-interface FreshRuntimeCellIdentityInternals {
-  readonly setParts?: (cellIndex: number, sheetId: number, rowId: string, colId: string) => void
-}
-
-interface FreshRuntimeResidentCellInternals {
-  readonly addDeferred?: (cellIndex: number, identity: { readonly rowId: string; readonly colId: string }) => void
-}
-
 interface FreshRuntimeLogicalSheetInternals {
-  readonly cellPages?: FreshRuntimeCellPageInternals
-  readonly cellIdentities?: FreshRuntimeCellIdentityInternals
-  readonly residentCells?: FreshRuntimeResidentCellInternals
+  readonly setFreshVisibleCellWithAxisIdsDeferred?: (row: number, col: number, cellIndex: number, rowId: string, colId: string) => void
 }
 
 type FreshRuntimeCellAttacher = (row: number, col: number, cellIndex: number, rowId: string, colId: string) => void
@@ -317,20 +302,15 @@ function materializeWrittenColumns(tracker: WrittenColumnTracker): Uint32Array {
 function createFreshRuntimeCellAttacher(workbook: WorkbookStore, sheet: SheetRecord): FreshRuntimeCellAttacher {
   const logicalCandidate: unknown = sheet.logical
   const logical = isFreshRuntimeLogicalSheetInternals(logicalCandidate) ? logicalCandidate : undefined
-  const setDeferredCellPage = logical?.cellPages?.setDeferred?.bind(logical.cellPages)
-  const setCellIdentityParts = logical?.cellIdentities?.setParts?.bind(logical.cellIdentities)
-  const addDeferredResidentCell = logical?.residentCells?.addDeferred?.bind(logical.residentCells)
-  if (!setDeferredCellPage || !setCellIdentityParts || !addDeferredResidentCell) {
+  const attachFreshVisibleCell = logical?.setFreshVisibleCellWithAxisIdsDeferred?.bind(logical)
+  if (!attachFreshVisibleCell) {
     return (row, col, cellIndex, rowId, colId) => {
       workbook.attachAllocatedCellWithLogicalAxisIds(sheet.id, row, col, cellIndex, rowId, colId)
     }
   }
-  const sheetId = sheet.id
 
   return (row, col, cellIndex, rowId, colId) => {
-    setDeferredCellPage({ sheetId, rowId, colId }, cellIndex)
-    setCellIdentityParts(cellIndex, sheetId, rowId, colId)
-    addDeferredResidentCell(cellIndex, { rowId, colId })
+    attachFreshVisibleCell(row, col, cellIndex, rowId, colId)
     sheet.grid.set(row, col, cellIndex)
   }
 }

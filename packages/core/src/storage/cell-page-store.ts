@@ -5,15 +5,20 @@ export interface LogicalCellLocation {
 }
 
 export type CellPageStoreRebuildSource = (callback: (location: LogicalCellLocation, cellIndex: number) => void) => void
+export type LogicalCellPartsKeyFactory = (sheetId: number, rowId: string, colId: string) => string
 
 export class CellPageStore {
   private pagesDirty = false
+  private readonly keyForParts: LogicalCellPartsKeyFactory
 
   constructor(
     private readonly cells: Map<string, number>,
     private readonly keyForLocation: (location: LogicalCellLocation) => string,
     private readonly rebuildSource?: CellPageStoreRebuildSource,
-  ) {}
+    keyForParts?: LogicalCellPartsKeyFactory,
+  ) {
+    this.keyForParts = keyForParts ?? ((sheetId, rowId, colId) => this.keyForLocation({ sheetId, rowId, colId }))
+  }
 
   key(location: LogicalCellLocation): string {
     return this.keyForLocation(location)
@@ -31,6 +36,10 @@ export class CellPageStore {
 
   setDeferred(location: LogicalCellLocation, cellIndex: number): void {
     this.cells.set(this.key(location), cellIndex)
+  }
+
+  setDeferredParts(sheetId: number, rowId: string, colId: string, cellIndex: number): void {
+    this.cells.set(this.keyForParts(sheetId, rowId, colId), cellIndex)
   }
 
   deferRebuild(): void {

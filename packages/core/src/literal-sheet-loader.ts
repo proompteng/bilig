@@ -1,25 +1,10 @@
 import { ErrorCode, ValueTag, type LiteralInput } from '@bilig/protocol'
 import type { StringPool } from './string-pool.js'
-import type { LogicalCellLocation } from './storage/cell-page-store.js'
 import type { SheetRecord, WorkbookStore } from './workbook-store.js'
 import { CellFlags } from './cell-store.js'
 
-interface FreshLiteralCellPageInternals {
-  readonly setDeferred?: (location: LogicalCellLocation, cellIndex: number) => void
-}
-
-interface FreshLiteralCellIdentityInternals {
-  readonly setParts?: (cellIndex: number, sheetId: number, rowId: string, colId: string) => void
-}
-
-interface FreshLiteralResidentCellInternals {
-  readonly addDeferred?: (cellIndex: number, identity: { readonly rowId: string; readonly colId: string }) => void
-}
-
 interface FreshLiteralLogicalSheetInternals {
-  readonly cellPages?: FreshLiteralCellPageInternals
-  readonly cellIdentities?: FreshLiteralCellIdentityInternals
-  readonly residentCells?: FreshLiteralResidentCellInternals
+  readonly setFreshVisibleCellWithAxisIdsDeferred?: (row: number, col: number, cellIndex: number, rowId: string, colId: string) => void
 }
 
 type FreshLiteralCellAttacher = (row: number, col: number, cellIndex: number, rowId: string, colId: string) => void
@@ -182,10 +167,8 @@ export function loadDenseLiteralSheetIntoEmptySheet(
 function createFreshLiteralCellAttacher(workbook: WorkbookStore, sheet: SheetRecord): FreshLiteralCellAttacher {
   const logicalCandidate: unknown = sheet.logical
   const logical = isFreshLiteralLogicalSheetInternals(logicalCandidate) ? logicalCandidate : undefined
-  const setDeferredCellPage = logical?.cellPages?.setDeferred?.bind(logical.cellPages)
-  const setCellIdentityParts = logical?.cellIdentities?.setParts?.bind(logical.cellIdentities)
-  const addDeferredResidentCell = logical?.residentCells?.addDeferred?.bind(logical.residentCells)
-  if (!setDeferredCellPage || !setCellIdentityParts || !addDeferredResidentCell) {
+  const attachFreshVisibleCell = logical?.setFreshVisibleCellWithAxisIdsDeferred?.bind(logical)
+  if (!attachFreshVisibleCell) {
     return (row, col, cellIndex, rowId, colId) => {
       workbook.attachAllocatedCellWithLogicalAxisIds(sheet.id, row, col, cellIndex, rowId, colId)
     }
@@ -194,9 +177,7 @@ function createFreshLiteralCellAttacher(workbook: WorkbookStore, sheet: SheetRec
   const setGridCell = sheet.grid.createRowMajorSetter()
 
   return (row, col, cellIndex, rowId, colId) => {
-    setDeferredCellPage({ sheetId: sheet.id, rowId, colId }, cellIndex)
-    setCellIdentityParts(cellIndex, sheet.id, rowId, colId)
-    addDeferredResidentCell(cellIndex, { rowId, colId })
+    attachFreshVisibleCell(row, col, cellIndex, rowId, colId)
     setGridCell(row, col, cellIndex)
   }
 }

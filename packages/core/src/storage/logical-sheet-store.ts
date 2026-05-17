@@ -122,6 +122,20 @@ export class LogicalSheetStore {
     return resolved
   }
 
+  setFreshVisibleCellWithAxisIdsDeferred(row: number, col: number, cellIndex: number, rowId: string, colId: string): LogicalVisibleCellRef {
+    const resolved: LogicalVisibleCellRef = {
+      sheetId: this.sheetId,
+      row,
+      col,
+      rowRef: { index: row, id: rowId },
+      colRef: { index: col, id: colId },
+    }
+    this.cellPages.setDeferredParts(this.sheetId, rowId, colId, cellIndex)
+    this.cellIdentities.setParts(cellIndex, this.sheetId, rowId, colId)
+    this.residentCells.addDeferredParts(cellIndex, rowId, colId)
+    return resolved
+  }
+
   private setVisibleCellInternal(
     row: number,
     col: number,

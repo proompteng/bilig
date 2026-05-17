@@ -41,7 +41,12 @@ export function createWorkbookSheetRecord(args: {
   const logical = new LogicalSheetStore(
     args.id,
     logicalAxisMap,
-    new CellPageStore(new Map<string, number>(), (location) => makeLogicalCellKey(location.sheetId, location.rowId, location.colId)),
+    new CellPageStore(
+      new Map<string, number>(),
+      (location) => makeLogicalCellKey(location.sheetId, location.rowId, location.colId),
+      undefined,
+      makeLogicalCellKey,
+    ),
     cellIdentities,
     residentCells,
   )

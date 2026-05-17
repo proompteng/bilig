@@ -48,6 +48,12 @@ export class AxisResidentCellIndex {
     this.secondaryIndexesDirty = true
   }
 
+  addDeferredParts(cellIndex: number, rowId: string, colId: string): void {
+    this.ensurePrimaryIndex()
+    this.byCell.set(cellIndex, { rowId, colId })
+    this.secondaryIndexesDirty = true
+  }
+
   deferRebuild(): void {
     this.byCell.clear()
     this.byRow.clear()
