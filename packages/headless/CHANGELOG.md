@@ -4,6 +4,23 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.18.25
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.18.24
+- Manual override: no
+
+## Fixes
+- perf(core): defer fresh logical cell indexes (69fa5800)
+
+## Internal runtime changes
+- docs(growth): refresh mcp directory follow-up state (2ba76bb2)
+- refactor(core): isolate clear cell mutation flow (6f49726c)
+- docs(growth): refresh registry evidence for v0.18.24 (97ad0e47)
+- refactor(core): isolate literal cell mutation flow (d3577054)
+- docs(growth): align package discovery keywords (44a85351)
+- refactor(core): isolate formula cell mutation flow (6c0e0a6c)
+
 ## 0.18.24
 
 - Release type: patch
