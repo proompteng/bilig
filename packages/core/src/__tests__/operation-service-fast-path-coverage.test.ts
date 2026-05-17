@@ -165,6 +165,56 @@ describe('operation-service dense mutation fast paths', () => {
     unsubscribeGeneral()
   })
 
+  it('keeps descending single-dependent direct scalar column batches ordered and delta-only', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'dense-single-dependent-descending-fast-path' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    const rowCount = 40
+    for (let row = 1; row <= rowCount; row += 1) {
+      engine.setCellValue('Sheet1', `A${row}`, row)
+      engine.setCellFormula('Sheet1', `B${row}`, `A${row}*3+7`)
+    }
+
+    const general = vi.fn()
+    const tracked = vi.fn()
+    const watched = vi.fn()
+    const unsubscribeGeneral = engine.subscribe(general)
+    const unsubscribeTracked = engine.events.subscribeTracked(tracked)
+    const unsubscribeWatched = engine.subscribeCell('Sheet1', 'B1', watched)
+
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+    const refs: EngineCellMutationRef[] = []
+    for (let row = rowCount - 1; row >= 0; row -= 1) {
+      refs.push({
+        sheetId,
+        cellIndex: engine.workbook.getCellIndex('Sheet1', `A${row + 1}`),
+        mutation: { kind: 'setCellValue', row, col: 0, value: row + 100 },
+      })
+    }
+
+    engine.resetPerformanceCounters()
+    const undoOps = engine.applyCellMutationsAt(refs, 0)
+
+    expect(undoOps).not.toBeNull()
+    expect(engine.getCellValue('Sheet1', 'B1')).toEqual({ tag: ValueTag.Number, value: 100 * 3 + 7 })
+    expect(engine.getCellValue('Sheet1', 'B40')).toEqual({ tag: ValueTag.Number, value: 139 * 3 + 7 })
+    expect(engine.getPerformanceCounters().directScalarDeltaApplications).toBe(rowCount)
+    expect(engine.getPerformanceCounters().directScalarDeltaOnlyRecalcSkips).toBe(1)
+    expect(engine.getLastMetrics()).toMatchObject({
+      changedInputCount: rowCount,
+      dirtyFormulaCount: 0,
+      jsFormulaCount: 0,
+      wasmFormulaCount: 0,
+    })
+    expect(general).toHaveBeenCalledWith(expect.objectContaining({ kind: 'batch', explicitChangedCount: rowCount }))
+    expect(tracked).toHaveBeenCalledWith(expect.objectContaining({ kind: 'batch', explicitChangedCount: rowCount }))
+    expect(watched).toHaveBeenCalled()
+    unsubscribeWatched()
+    unsubscribeTracked()
+    unsubscribeGeneral()
+  })
+
   it('handles dense aggregate-only numeric column coordinate batches', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'dense-aggregate-fast-path' })
     await engine.ready()
