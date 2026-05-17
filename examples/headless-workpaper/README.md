@@ -206,6 +206,11 @@ The example mirrors the Responses tool loop: model output contains
 `function_call` items, the Node process runs the WorkPaper tools, and the next
 input includes matching `function_call_output` items.
 
+For a compact streaming transcript of the same handoff, including
+`read_workpaper_summary`, `set_workpaper_input_cell`, `editedCell`,
+`before`/`after`, and `checks`, see the
+[WorkPaper tool-calling recipe](../../docs/agent-workpaper-tool-calling-recipe.md#openai-responses-streaming-transcript).
+
 Expected proof:
 
 ```json
