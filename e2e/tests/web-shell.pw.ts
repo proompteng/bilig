@@ -1565,6 +1565,44 @@ test('web app keeps formatting shortcuts active after toolbar focus without lett
   await expect(boldButton).toBeFocused()
 })
 
+test('web app routes row, column, and full-sheet selection shortcuts from toolbar focus', async ({ page }) => {
+  const documentId = createTestDocumentId('playwright-toolbar-selection-shortcut-scope')
+  await page.goto(`/?document=${encodeURIComponent(documentId)}`)
+  await waitForWorkbookReady(page)
+
+  const boldButton = page.getByLabel('Bold')
+  await clickProductCell(page, 2, 2)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C3')
+
+  await boldButton.click()
+  await expect(boldButton).toBeFocused()
+  await expect(boldButton).toHaveClass(/bg-\[var\(--wb-accent-soft\)\]/)
+  await boldButton.evaluate((button) => {
+    ;(window as Window & { __biligToolbarShortcutClickCount?: number }).__biligToolbarShortcutClickCount = 0
+    button.addEventListener('click', () => {
+      const hostWindow = window as Window & { __biligToolbarShortcutClickCount?: number }
+      hostWindow.__biligToolbarShortcutClickCount = (hostWindow.__biligToolbarShortcutClickCount ?? 0) + 1
+    })
+  })
+
+  await page.keyboard.press('Shift+Space')
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!3:3')
+  await expect(boldButton).toBeFocused()
+
+  await page.keyboard.press(`${PRIMARY_MODIFIER}+Space`)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!C:C')
+  await expect(boldButton).toBeFocused()
+
+  await page.keyboard.press(`${PRIMARY_MODIFIER}+Shift+Space`)
+  await expect(page.getByTestId('status-selection')).toHaveText('Sheet1!All')
+  await expect(boldButton).toBeFocused()
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as Window & { __biligToolbarShortcutClickCount?: number }).__biligToolbarShortcutClickCount ?? 0),
+    )
+    .toBe(0)
+})
+
 test('web app supports row, column, and full-sheet selection shortcuts', async ({ page }) => {
   await page.goto('/')
   await waitForWorkbookReady(page)

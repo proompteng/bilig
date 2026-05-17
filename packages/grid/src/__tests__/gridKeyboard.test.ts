@@ -9,6 +9,7 @@ import {
   isNavigationKey,
   isNumericEditorSeed,
   isPrintableKey,
+  isSheetSelectionShortcut,
   normalizeKeyboardKey,
 } from '../gridKeyboard.js'
 
@@ -34,6 +35,10 @@ describe('gridKeyboard', () => {
     expect(isFillSelectionShortcut({ altKey: false, ctrlKey: true, key: 'Enter', metaKey: false, shiftKey: false })).toBe(true)
     expect(isFillSelectionShortcut({ altKey: false, ctrlKey: false, key: 'Enter', metaKey: true, shiftKey: false })).toBe(true)
     expect(isFillSelectionShortcut({ altKey: false, ctrlKey: true, key: 'Enter', metaKey: false, shiftKey: true })).toBe(false)
+    expect(isSheetSelectionShortcut({ altKey: false, ctrlKey: false, key: ' ', metaKey: false, shiftKey: true })).toBe(true)
+    expect(isSheetSelectionShortcut({ altKey: false, ctrlKey: true, key: ' ', metaKey: false, shiftKey: false })).toBe(true)
+    expect(isSheetSelectionShortcut({ altKey: false, ctrlKey: true, key: ' ', metaKey: false, shiftKey: true })).toBe(true)
+    expect(isSheetSelectionShortcut({ altKey: false, ctrlKey: false, key: ' ', metaKey: false, shiftKey: false })).toBe(false)
     expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: 'F2', metaKey: false })).toBe(true)
     expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: 'Escape', metaKey: false })).toBe(true)
     expect(isHandledGridKey({ altKey: false, ctrlKey: false, key: 'Delete', metaKey: false })).toBe(true)

@@ -8,6 +8,7 @@ import {
   shouldHandleGridWindowKey,
   shouldHandleGridSurfaceKey,
   shouldSuppressWorkbookChromeClearKey,
+  shouldSuppressWorkbookChromeSelectionKeyUp,
   type GridKeyboardEventLike,
 } from './gridClipboardKeyboardController.js'
 import type { InternalClipboardRange } from './gridInternalClipboard.js'
@@ -281,8 +282,33 @@ export function useWorkbookGridKeyboardHandler(input: {
     }
 
     window.addEventListener('keydown', handleWindowKeyDown, true)
+    const handleWindowKeyUp = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || isGridKeyboardEditableTarget(event.target)) {
+        return
+      }
+      const normalizedKey = getNormalizedGridKeyboardKey(event.key, event.code)
+      if (
+        !shouldSuppressWorkbookChromeSelectionKeyUp(
+          {
+            altKey: event.altKey,
+            ctrlKey: event.ctrlKey,
+            key: normalizedKey,
+            metaKey: event.metaKey,
+            shiftKey: event.shiftKey,
+          },
+          document.activeElement,
+          input.hostRef.current,
+        )
+      ) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    window.addEventListener('keyup', handleWindowKeyUp, true)
     return () => {
       window.removeEventListener('keydown', handleWindowKeyDown, true)
+      window.removeEventListener('keyup', handleWindowKeyUp, true)
     }
   }, [handleGridKey, input.hostRef])
 

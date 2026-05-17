@@ -12,6 +12,7 @@ import {
   shouldHandleGridSurfaceKey,
   shouldHandleGridWindowKey,
   shouldSuppressWorkbookChromeClearKey,
+  shouldSuppressWorkbookChromeSelectionKeyUp,
 } from '../gridClipboardKeyboardController.js'
 import { createDeferredBeginEditScheduler, useWorkbookGridKeyboardHandler } from '../useWorkbookGridKeyboardHandler.js'
 import { describe, expect, test, vi } from 'vitest'
@@ -1040,6 +1041,15 @@ describe('gridClipboardKeyboardController', () => {
       shouldHandleGridWindowKey({ altKey: false, ctrlKey: true, key: 'c', metaKey: false, shiftKey: false }, toolbarButton, gridHost),
     ).toBe(true)
     expect(
+      shouldHandleGridWindowKey({ altKey: false, ctrlKey: false, key: ' ', metaKey: false, shiftKey: true }, toolbarButton, gridHost),
+    ).toBe(true)
+    expect(
+      shouldHandleGridWindowKey({ altKey: false, ctrlKey: true, key: ' ', metaKey: false, shiftKey: false }, toolbarButton, gridHost),
+    ).toBe(true)
+    expect(
+      shouldHandleGridWindowKey({ altKey: false, ctrlKey: true, key: ' ', metaKey: false, shiftKey: true }, toolbarButton, gridHost),
+    ).toBe(true)
+    expect(
       shouldHandleGridWindowKey(
         { altKey: false, ctrlKey: false, key: 'ArrowDown', metaKey: false, shiftKey: false },
         toolbarButton,
@@ -1071,6 +1081,20 @@ describe('gridClipboardKeyboardController', () => {
     ).toBe(false)
     expect(
       shouldHandleGridWindowKey({ altKey: false, ctrlKey: false, key: 'x', metaKey: false, shiftKey: false }, toolbarButton, gridHost),
+    ).toBe(false)
+    expect(
+      shouldSuppressWorkbookChromeSelectionKeyUp(
+        { altKey: false, ctrlKey: false, key: ' ', metaKey: false, shiftKey: true },
+        toolbarButton,
+        gridHost,
+      ),
+    ).toBe(true)
+    expect(
+      shouldSuppressWorkbookChromeSelectionKeyUp(
+        { altKey: false, ctrlKey: false, key: ' ', metaKey: false, shiftKey: false },
+        toolbarButton,
+        gridHost,
+      ),
     ).toBe(false)
   })
 
@@ -1116,6 +1140,61 @@ describe('gridClipboardKeyboardController', () => {
     expect(beginSelectedEdit).not.toHaveBeenCalled()
     expect(setGridSelection).not.toHaveBeenCalled()
     expect(onSelectionChange).not.toHaveBeenCalled()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  test('routes row, column, and full-sheet selection shortcuts from workbook chrome', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    document.body.innerHTML = ''
+    const beginSelectedEdit = vi.fn()
+    const setGridSelection = vi.fn()
+    const onSelectionChange = vi.fn()
+    const scope = document.createElement('section')
+    scope.dataset['workbookKeyboardScope'] = 'true'
+    const toolbarButton = document.createElement('button')
+    const host = document.createElement('div')
+    scope.append(toolbarButton, host)
+    document.body.append(scope)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(
+        createElement(KeyboardHandlerHarness, {
+          beginSelectedEdit,
+          getGridSelection: () => createGridSelection(3, 7),
+          onSelectionChange,
+          setGridSelection,
+        }),
+      )
+    })
+
+    toolbarButton.focus()
+    const rowEvent = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: ' ', shiftKey: true })
+    const columnEvent = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ctrlKey: true, key: ' ' })
+    const sheetEvent = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ctrlKey: true, key: ' ', shiftKey: true })
+    await act(async () => {
+      toolbarButton.dispatchEvent(rowEvent)
+      toolbarButton.dispatchEvent(columnEvent)
+      toolbarButton.dispatchEvent(sheetEvent)
+    })
+
+    expect(rowEvent.defaultPrevented).toBe(true)
+    expect(columnEvent.defaultPrevented).toBe(true)
+    expect(sheetEvent.defaultPrevented).toBe(true)
+    expect(setGridSelection).toHaveBeenCalledTimes(3)
+    expect(setGridSelection.mock.calls[0]?.[0]?.rows.first()).toBe(7)
+    expect(setGridSelection.mock.calls[0]?.[0]?.columns.first()).toBeUndefined()
+    expect(setGridSelection.mock.calls[1]?.[0]?.columns.first()).toBe(3)
+    expect(setGridSelection.mock.calls[1]?.[0]?.rows.first()).toBeUndefined()
+    expect(setGridSelection.mock.calls[2]?.[0]?.current?.cell).toEqual([0, 0])
+    expect(setGridSelection.mock.calls[2]?.[0]?.rows.first()).toBe(0)
+    expect(setGridSelection.mock.calls[2]?.[0]?.columns.first()).toBe(0)
+    expect(onSelectionChange).toHaveBeenCalledTimes(3)
+    expect(beginSelectedEdit).not.toHaveBeenCalled()
 
     await act(async () => {
       root.unmount()

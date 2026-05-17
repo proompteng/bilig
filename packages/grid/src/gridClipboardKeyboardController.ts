@@ -19,6 +19,7 @@ import {
   isFillShortcut,
   isNavigationShortcut,
   isPrintableKey,
+  isSheetSelectionShortcut,
   normalizeKeyboardKey,
 } from './gridKeyboard.js'
 import { resolveGridKeyAction } from './gridKeyActions.js'
@@ -526,6 +527,19 @@ export function shouldSuppressWorkbookChromeClearKey(
   return Boolean(activeElement && !host?.contains(activeElement) && workbookScope?.contains(activeElement))
 }
 
+export function shouldSuppressWorkbookChromeSelectionKeyUp(
+  event: Pick<GridKeyboardEventLike, 'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'>,
+  activeElement: Element | null,
+  host: HTMLDivElement | null,
+): boolean {
+  if (hasOpenModalDialog() || isGridKeyboardEditableTarget(activeElement) || !isSheetSelectionShortcut(event)) {
+    return false
+  }
+
+  const workbookScope = host?.closest('[data-workbook-keyboard-scope="true"]') ?? null
+  return Boolean(activeElement && !host?.contains(activeElement) && workbookScope?.contains(activeElement))
+}
+
 function isWorkbookChromeGridShortcut(event: Pick<GridKeyboardEventLike, 'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'>): boolean {
   const hasPrimaryModifier = event.ctrlKey || event.metaKey
   const normalizedKey = event.key.toLowerCase()
@@ -535,6 +549,7 @@ function isWorkbookChromeGridShortcut(event: Pick<GridKeyboardEventLike, 'altKey
     isFillSelectionShortcut(event) ||
     isNavigationShortcut(event) ||
     (hasPrimaryModifier && !event.altKey && normalizedKey === 'a') ||
+    isSheetSelectionShortcut(event) ||
     (!event.altKey && !hasPrimaryModifier && !event.shiftKey && event.key === 'F2') ||
     (!event.altKey && (event.key === 'Home' || event.key === 'End' || event.key === 'PageUp' || event.key === 'PageDown'))
   )
@@ -549,6 +564,8 @@ export function shouldHandleGridSurfaceKey(
     isFillShortcut(event) ||
     isFillSelectionShortcut(event) ||
     isNavigationShortcut(event) ||
+    isSheetSelectionShortcut(event) ||
+    ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'a') ||
     (event.key === 'Enter' && !event.altKey && !event.ctrlKey && !event.metaKey) ||
     (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey) ||
     (event.key === 'F2' && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) ||

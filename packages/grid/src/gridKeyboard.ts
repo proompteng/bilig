@@ -78,6 +78,11 @@ export function isFillSelectionShortcut(event: GridKeyboardModifierState & { shi
   return (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key === 'Enter'
 }
 
+export function isSheetSelectionShortcut(event: GridKeyboardModifierState & { shiftKey?: boolean }): boolean {
+  const hasPrimaryModifier = event.ctrlKey || event.metaKey
+  return event.key === ' ' && !event.altKey && (hasPrimaryModifier || event.shiftKey === true)
+}
+
 export function isDeleteKey(key: string): boolean {
   return key === 'Backspace' || key === 'Delete'
 }
@@ -103,7 +108,7 @@ export function isHandledGridKey(
     isFillSelectionShortcut(event) ||
     isNavigationShortcut(event) ||
     (hasPrimaryModifier && !event.altKey && event.key.toLowerCase() === 'a') ||
-    (event.key === ' ' && !event.altKey && (hasPrimaryModifier || event.shiftKey)) ||
+    isSheetSelectionShortcut(event) ||
     (event.key === 'Enter' && !event.altKey && !hasPrimaryModifier) ||
     (event.key === 'Tab' && !event.altKey && !hasPrimaryModifier) ||
     (event.key === 'Escape' && !event.altKey && !hasPrimaryModifier) ||
