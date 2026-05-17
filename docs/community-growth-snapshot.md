@@ -1,6 +1,6 @@
 # Community Growth Snapshot
 
-Captured at: `2026-05-17T11:16:52.550Z`
+Captured at: `2026-05-17T21:06:44.427Z`
 
 This snapshot tracks the public signals for the `@bilig/headless` growth loop: GitHub conversion, npm demand, contributor on-ramp health, discussion activity, and traffic quality.
 
@@ -16,9 +16,9 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 
 ## npm
 
-- Package: `@bilig/headless@0.18.25`
+- Package: `@bilig/headless@0.18.27`
 - License: `MIT`
-- Modified: `2026-05-17T11:14:42.782Z`
+- Modified: `2026-05-17T20:55:17.442Z`
 - Downloads last week: 17,235 (2026-05-10 to 2026-05-16)
 - Downloads last month: 32,535 (2026-04-17 to 2026-05-16)
 
@@ -38,9 +38,9 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 ## Discussions
 
 - Total discussions: 14
+- #157 [Which Node workbook automation workflow should @bilig/headless prove next?](https://github.com/proompteng/bilig/discussions/157) (Ideas, 11 comments)
 - #414 [Looking for one ugly workbook case to turn into a fixture](https://github.com/proompteng/bilig/discussions/414) (General, 1 comment)
 - #270 [Show and tell: try @bilig/headless from npm in an empty Node project](https://github.com/proompteng/bilig/discussions/270) (Show and tell, 2 comments)
-- #157 [Which Node workbook automation workflow should @bilig/headless prove next?](https://github.com/proompteng/bilig/discussions/157) (Ideas, 10 comments)
 - #382 [How should headless spreadsheet engines handle stale XLSX cached values?](https://github.com/proompteng/bilig/discussions/382) (Ideas, 2 comments)
 - #230 [Show and tell: MCP spreadsheet tool server for WorkPaper agents](https://github.com/proompteng/bilig/discussions/230) (Show and tell, 5 comments)
 

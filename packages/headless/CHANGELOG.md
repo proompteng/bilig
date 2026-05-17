@@ -11,9 +11,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(core): invoke lambda defined names (1531f8a0)
 
 ## Internal runtime changes
+
 - refactor(core): harden mutation and lookup tracking (75f4d020)
 
 ## 0.18.26
@@ -23,9 +25,11 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(core): narrow structural and lookup hot paths (f68d42bc)
 
 ## Internal runtime changes
+
 - refactor(core): isolate mutation inverse ops (79172a88)
 - refactor(core): isolate batch cell value mutations (35392b17)
 - docs(growth): refresh v0.18.25 registry evidence (5b56b67f)
