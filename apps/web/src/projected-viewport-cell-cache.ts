@@ -167,6 +167,9 @@ export class ProjectedViewportCellCache {
       return false
     }
     if (current) {
+      if (isClearCellSnapshot(current) && !isClearCellSnapshot(incoming) && current.version >= incoming.version) {
+        return false
+      }
       const shouldProtectCurrent =
         (current.flags & OPTIMISTIC_CELL_SNAPSHOT_FLAG) !== 0 && isOptimisticClearResurrection(current, incoming)
           ? true

@@ -195,6 +195,16 @@ function isClearCellSnapshot(snapshot: CellSnapshot): boolean {
   return snapshot.formula === undefined && snapshot.input === undefined && snapshot.value.tag === ValueTag.Empty
 }
 
+function createClearTombstoneSnapshot(snapshot: CellSnapshot): CellSnapshot {
+  return {
+    sheetName: snapshot.sheetName,
+    address: snapshot.address,
+    value: { tag: ValueTag.Empty },
+    flags: snapshot.flags & ~OPTIMISTIC_CELL_SNAPSHOT_FLAG,
+    version: snapshot.version,
+  }
+}
+
 function cellStyleSignature(style: CellStyleRecord): string {
   const fill = style.fill?.backgroundColor ?? ''
   const font = style.font
@@ -339,19 +349,26 @@ export function applyProjectedViewportPatch(input: {
         if (!snapshot || !isCellInsideViewport(snapshot, patch.viewport)) {
           continue
         }
+        if (patch.authoritativeRevision !== undefined && isClearCellSnapshot(snapshot)) {
+          const nextSnapshot = createClearTombstoneSnapshot(snapshot)
+          if (cellSnapshotSignature(snapshot) !== cellSnapshotSignature(nextSnapshot)) {
+            state.cellSnapshots.set(key, nextSnapshot)
+            const parsed = parseCellAddress(snapshot.address, snapshot.sheetName)
+            addDamageCell(
+              {
+                changedKeys,
+                damage,
+                damagedCellKeys,
+                sheetName: patch.viewport.sheetName,
+              },
+              parsed.row,
+              parsed.col,
+            )
+          }
+          continue
+        }
         if (isOptimisticCellSnapshot(snapshot)) {
-          if (patch.authoritativeRevision !== undefined && isClearCellSnapshot(snapshot)) {
-            state.cellSnapshots.set(key, {
-              ...snapshot,
-              flags: snapshot.flags & ~OPTIMISTIC_CELL_SNAPSHOT_FLAG,
-            })
-            changedKeys.add(key)
-            if (!damagedCellKeys.has(key)) {
-              const parsed = parseCellAddress(snapshot.address, snapshot.sheetName)
-              damage.push({ cell: [parsed.col, parsed.row] })
-              damagedCellKeys.add(key)
-            }
-          } else if (patch.authoritativeRevision !== undefined && patch.authoritativeRevision > 0) {
+          if (patch.authoritativeRevision !== undefined && patch.authoritativeRevision > 0) {
             state.cellSnapshots.delete(key)
             sheetCellKeys.delete(key)
             changedKeys.add(key)
