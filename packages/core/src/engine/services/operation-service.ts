@@ -562,7 +562,6 @@ export function createEngineOperationService(args: CreateEngineOperationServiceA
     oldNumber: number | undefined
     changedTopology: boolean
     postRecalcDirectFormulaIndices: DirectFormulaIndexCollection
-    postRecalcDirectFormulaMetrics: DirectFormulaMetricCounts
   }): boolean =>
     tryApplyOperationFormulaReplacementAsDirectScalarDeltaRoot(
       {
@@ -571,7 +570,6 @@ export function createEngineOperationService(args: CreateEngineOperationServiceA
         evaluateDirectScalarCurrentValue,
         tryMarkDirectScalarLinearDeltaClosure,
         applyDirectFormulaCurrentResult,
-        countPostRecalcDirectFormulaMetric,
       },
       request,
     )

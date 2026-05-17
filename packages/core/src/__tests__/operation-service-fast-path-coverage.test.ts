@@ -531,7 +531,7 @@ describe('operation-service dense mutation fast paths', () => {
     expect(engine.getLastMetrics()).toMatchObject({
       dirtyFormulaCount: 0,
       jsFormulaCount: 0,
-      wasmFormulaCount: 1,
+      wasmFormulaCount: 0,
     })
     expect(engine.getPerformanceCounters().directScalarDeltaApplications).toBe(downstreamCount)
     expect(engine.getPerformanceCounters().directScalarDeltaOnlyRecalcSkips).toBe(1)

@@ -93,7 +93,6 @@ interface CreateOperationCellMutationApplierArgs {
     readonly oldNumber: number | undefined
     readonly changedTopology: boolean
     readonly postRecalcDirectFormulaIndices: DirectFormulaIndexCollection
-    readonly postRecalcDirectFormulaMetrics: DirectFormulaMetricCounts
   }) => boolean
   readonly rebindDynamicFormulaDependents: (cellIndex: number, formulaChangedCount: number) => number
   readonly markCycleMemberInputsChanged: OperationCellCycleInputMarker
@@ -581,7 +580,6 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
                     oldNumber: oldFormulaNumber,
                     changedTopology,
                     postRecalcDirectFormulaIndices,
-                    postRecalcDirectFormulaMetrics,
                   })
                 if (!handledFormulaReplacementAsDirectDelta) {
                   if (!evaluatedFreshDirectFormula) {

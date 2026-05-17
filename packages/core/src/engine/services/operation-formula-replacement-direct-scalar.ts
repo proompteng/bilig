@@ -3,7 +3,6 @@ import { CellFlags } from '../../cell-store.js'
 import { makeCellEntity } from '../../entity-ids.js'
 import type { EngineRuntimeState, RuntimeDirectScalarDescriptor } from '../runtime-state.js'
 import type { DirectFormulaIndexCollection, DirectScalarCurrentOperand } from './direct-formula-index-collection.js'
-import type { DirectFormulaMetricCounts } from './operation-post-recalc-direct-formulas.js'
 
 interface OperationFormulaReplacementDirectScalarArgs {
   readonly state: Pick<EngineRuntimeState, 'formulas' | 'workbook'>
@@ -16,7 +15,6 @@ interface OperationFormulaReplacementDirectScalarArgs {
     collection: DirectFormulaIndexCollection,
   ) => boolean
   readonly applyDirectFormulaCurrentResult: (cellIndex: number, result: DirectScalarCurrentOperand) => boolean
-  readonly countPostRecalcDirectFormulaMetric: (cellIndex: number, counts: DirectFormulaMetricCounts) => void
 }
 
 interface OperationFormulaReplacementDirectScalarRequest {
@@ -24,7 +22,6 @@ interface OperationFormulaReplacementDirectScalarRequest {
   readonly oldNumber: number | undefined
   readonly changedTopology: boolean
   readonly postRecalcDirectFormulaIndices: DirectFormulaIndexCollection
-  readonly postRecalcDirectFormulaMetrics: DirectFormulaMetricCounts
 }
 
 export function tryApplyOperationFormulaReplacementAsDirectScalarDeltaRoot(
@@ -63,6 +60,5 @@ export function tryApplyOperationFormulaReplacementAsDirectScalarDeltaRoot(
   if (!args.applyDirectFormulaCurrentResult(request.cellIndex, result)) {
     return false
   }
-  args.countPostRecalcDirectFormulaMetric(request.cellIndex, request.postRecalcDirectFormulaMetrics)
   return true
 }
