@@ -218,6 +218,10 @@ issue pass:
   issue is open with the npm command, official registry name, tool list, and
   public package verification:
   <https://github.com/chatmcp/mcpso/issues/2295>
+- External MCP directory follow-up: the mcp.so submission issue was refreshed on
+  May 17, 2026 with `@bilig/headless@0.18.22`, the static MCP server card,
+  current tool names, and the maintained docs/transcript:
+  <https://github.com/chatmcp/mcpso/issues/2295#issuecomment-4470239663>
 - External MCP marketplace surface: the Cline MCP Marketplace server submission
   issue is open with the GitHub repository, 400px logo, public npm command, and
   verified `tools/list` plus `set_workpaper_input_cell` readback proof:

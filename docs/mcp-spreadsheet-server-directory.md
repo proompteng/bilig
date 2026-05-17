@@ -149,12 +149,11 @@ A useful result includes:
 - `transport.type: stdio`
 - `repository.url: https://github.com/proompteng/bilig`
 
-Latest checked result on May 17, 2026: npm latest is `@bilig/headless@0.18.21`,
-while the official Registry API search returns multiple historical Bilig
-WorkPaper entries and no current `isLatest` entry in the response. That means
-the npm install path is the freshest machine-checkable source until the Registry
-refresh catches up. The last documented refresh attempt was published by the
-repository workflow run at
+Latest checked result on May 17, 2026: npm latest is `@bilig/headless@0.18.22`,
+while the official Registry API search still marks `0.18.14` as the latest Bilig
+WorkPaper entry. That means the npm install path is the freshest
+machine-checkable source until the Registry refresh catches up. The last
+documented refresh attempt was published by the repository workflow run at
 <https://github.com/proompteng/bilig/actions/runs/25956395253>.
 
 The package itself carries the matching `mcpName` field. That is the ownership
