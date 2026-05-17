@@ -72,12 +72,12 @@ values are a common footgun.
 
 ## Current numbers
 
-The checked benchmark artifact currently says Bilig wins `77/100` comparable
+The checked benchmark artifact currently says Bilig wins `81/100` comparable
 workloads on mean latency against the HyperFormula-style baseline. It wins
-`73/100` on both mean and p95.
+`77/100` on both mean and p95.
 
-The miss is not hidden: `structural-append-formula-rows-small` is slower at p95
-by `3.937x`. Browser grid rendering is not part of this benchmark.
+The miss is not hidden: `lookup-approximate-duplicates` is slower at p95 by
+`1.741x`. Browser grid rendering is not part of this benchmark.
 
 Read the benchmark note:
 [what the WorkPaper benchmark proves](what-workpaper-benchmark-proves.md).
@@ -137,7 +137,7 @@ Excel compatibility claim. If you need a mature broad formula engine,
 HyperFormula is probably the first thing to test. If you need file manipulation,
 start with SheetJS or ExcelJS.
 
-The current benchmark artifact says 77/100 mean-latency wins on comparable
+The current benchmark artifact says 81/100 mean-latency wins on comparable
 workloads, with the p95 miss called out on the page.
 
 I am looking for rejection reasons from people who have shipped this kind of

@@ -25,6 +25,7 @@ import {
   bindFreshTemplateFormula,
   markFreshDirectAggregateInputsCovered,
 } from './operation-fresh-direct-aggregate.js'
+import { createOperationFreshDirectAggregateFormulaBatchFastPath } from './operation-fresh-direct-aggregate-formula-batch-fast-path.js'
 
 type OperationCellMutationSource = Exclude<MutationSource, 'remote'>
 type OperationCellDirectFormulaCallbacks = Parameters<typeof finalizeOperationRecalcAndEvents>[0]['directFormulaCallbacks']
@@ -147,6 +148,32 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
     normalizeHistoryDependencyPlaceholder,
   } = input
 
+  const freshDirectAggregateFormulaBatchFastPath =
+    args.bindPreparedFormula === undefined || args.compileTemplateFormula === undefined
+      ? undefined
+      : createOperationFreshDirectAggregateFormulaBatchFastPath({
+          state: args.state,
+          emitBatch,
+          setCellEntityVersion,
+          hasTrackedExactLookupDependents,
+          hasTrackedSortedLookupDependents,
+          hasTrackedDirectRangeDependents,
+          bindPreparedFormula: args.bindPreparedFormula,
+          compileTemplateFormula: args.compileTemplateFormula,
+          materializeDeferredStructuralFormulaSources: args.materializeDeferredStructuralFormulaSources,
+          beginMutationCollection: args.beginMutationCollection,
+          ensureRecalcScratchCapacity: args.ensureRecalcScratchCapacity,
+          resetMaterializedCellScratch: args.resetMaterializedCellScratch,
+          getBatchMutationDepth: args.getBatchMutationDepth,
+          setBatchMutationDepth: args.setBatchMutationDepth,
+          markInputChanged: args.markInputChanged,
+          markExplicitChanged: args.markExplicitChanged,
+          getChangedInputBuffer: args.getChangedInputBuffer,
+          deferKernelSync: args.deferKernelSync,
+          captureChangedCells: args.captureChangedCells,
+          applyDirectFormulaCurrentResult,
+        })
+
   return function applyCellMutationsAtNow(
     refs: readonly EngineCellMutationRef[],
     batch: EngineOpBatch | null,
@@ -158,6 +185,9 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
       return
     }
     if (tryApplyCoalescedDirectScalarLiteralBatch(refs, batch, source, potentialNewCells)) {
+      return
+    }
+    if (freshDirectAggregateFormulaBatchFastPath?.tryApplyFreshDirectAggregateFormulaBatch(refs, batch, source, potentialNewCells)) {
       return
     }
     args.materializeDeferredStructuralFormulaSources()

@@ -37,7 +37,7 @@ For the broader engine choice, start with the
 | License posture              | GPLv3 or commercial license                                                          | MIT                                                                                                                 |
 | API orientation              | Spreadsheet-engine instance with formula evaluation and workbook operations          | WorkPaper object with formula evaluation, structural edits, persistence helpers, history, and readback              |
 | Agent workflow fit           | Possible, but the project is not specifically packaged around agent writeback proofs | First-class evaluation path includes an agent writeback demo with persistence and restored readback                 |
-| Benchmark claim in this repo | External comparison target                                                           | Checked-in WorkPaper-vs-HyperFormula artifact records `77/100` mean wins on scorecard-eligible comparable workloads |
+| Benchmark claim in this repo | External comparison target                                                           | Checked-in WorkPaper-vs-HyperFormula artifact records `81/100` mean wins on scorecard-eligible comparable workloads |
 | Caveat                       | Strong default engine, with its own licensing and integration model                  | Formula inventory is complete for the tracked Office surface, but arbitrary Excel edge cases remain evidence-scoped |
 
 ## What The Benchmark Says
@@ -52,8 +52,8 @@ The short benchmark explainer is:
 
 The current public claim is narrow:
 
-- `77/100` mean-latency wins on scorecard-eligible comparable workloads
-- `58/73` public-lane mean wins
+- `81/100` mean-latency wins on scorecard-eligible comparable workloads
+- `62/73` public-lane mean wins
 - `19/27` holdout-lane mean wins
 - an overall p95 geomean lead
 - one named p95 caveat that remains visible instead of hidden

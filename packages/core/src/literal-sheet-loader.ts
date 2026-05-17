@@ -126,14 +126,13 @@ export function loadDenseLiteralSheetIntoEmptySheet(
   }
 
   const cellStore = workbook.cellStore
-  cellStore.ensureCapacity(cellStore.size + potentialCellCount)
-  const writtenColumns = new Uint8Array(maxColumnCount)
+  const firstCellIndex = cellStore.allocateDenseRowMajorReserved(sheetId, content.length, maxColumnCount)
+  const writtenColumns = materializeDenseWrittenColumns(maxColumnCount)
   const rowIds: string[] = []
   const colIds: string[] = []
   const ensureRowId = workbook.createLogicalAxisIdEnsurer(sheetId, 'row')
   const ensureColumnId = workbook.createLogicalAxisIdEnsurer(sheetId, 'column')
   const attachFreshCell = createFreshLiteralCellAttacher(workbook, sheet)
-  let writtenColumnCount = 0
   const previousOnSetValue = cellStore.onSetValue
   cellStore.onSetValue = null
   let literalCount = 0
@@ -143,25 +142,29 @@ export function loadDenseLiteralSheetIntoEmptySheet(
       const rowId = (rowIds[rowIndex] ??= ensureRowId(rowIndex))
       for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
         const raw = row[colIndex]!
-        const cellIndex = cellStore.allocateReserved(sheetId, rowIndex, colIndex)
+        const cellIndex = firstCellIndex + rowIndex * maxColumnCount + colIndex
         literalCount += 1
-        if (writtenColumns[colIndex] === 0) {
-          writtenColumns[colIndex] = 1
-          writtenColumnCount += 1
-        }
         const colId = (colIds[colIndex] ??= ensureColumnId(colIndex))
         attachFreshCell(rowIndex, colIndex, cellIndex, rowId, colId)
         writeLiteralCell(cellStore, strings, cellIndex, raw)
       }
     }
-    if (writtenColumnCount > 0) {
-      workbook.notifyColumnsWritten(sheetId, materializeWrittenColumns(writtenColumns, writtenColumnCount))
+    if (writtenColumns.length > 0) {
+      workbook.notifyColumnsWritten(sheetId, writtenColumns)
     }
   } finally {
     cellStore.onSetValue = previousOnSetValue
   }
 
   return literalCount
+}
+
+function materializeDenseWrittenColumns(count: number): Uint32Array {
+  const columns = new Uint32Array(count)
+  for (let col = 0; col < count; col += 1) {
+    columns[col] = col
+  }
+  return columns
 }
 
 function createFreshLiteralCellAttacher(workbook: WorkbookStore, sheet: SheetRecord): FreshLiteralCellAttacher {

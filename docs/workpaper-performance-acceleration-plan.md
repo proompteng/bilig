@@ -26,11 +26,11 @@ Current checkpoint on `main`:
 - literal-only workbook initialization now hydrates directly into fresh core workbook storage
   instead of paying restore-style op execution overhead
 - the checked-in competitive artifact now shows:
-  - Overall scorecard: WorkPaper `76/100` mean wins and `76/100` mean+p95 wins
-  - Public lane: WorkPaper `60/73` mean wins
-  - Holdout lane: WorkPaper `18/27` mean wins
-  - current HyperFormula mean-win rows: `22/100`
-  - worst p95 WorkPaper row: `single-formula-edit-recalc`
+  - Overall scorecard: WorkPaper `81/100` mean wins and `77/100` mean+p95 wins
+  - Public lane: WorkPaper `62/73` mean wins
+  - Holdout lane: WorkPaper `19/27` mean wins
+  - current HyperFormula mean-win rows: `19/100`
+  - worst p95 WorkPaper row: `lookup-approximate-duplicates`
 
 So the remaining performance gap is no longer “lookup is completely fake” or
 “recalculation is broadly red.” The remaining gap is turning current mean wins
@@ -180,10 +180,10 @@ The unified matrix now makes the remaining risk clearer:
 - `WorkPaper` leads `7/13` directly comparable expanded workloads
 - HyperFormula still leads `6/13`
 - the worst broader deficits are now:
-  - `build-mixed-content`: HyperFormula `3.80x` faster
-  - `batch-edit-single-column`: HyperFormula `1.54x` faster
-  - `batch-edit-multi-column`: HyperFormula `1.54x` faster
-  - `single-formula-edit-recalc`: HyperFormula `1.42x` faster
+  - `structural-append-formula-rows-small`: HyperFormula `1.69x` faster on mean
+  - `structural-append-formula-rows`: HyperFormula `1.53x` faster on mean
+  - `structural-append-formula-rows-large`: HyperFormula `1.25x` faster on mean
+  - `lookup-approximate-duplicates`: HyperFormula `1.74x` faster on p95
 
 ## Root Cause
 
@@ -557,10 +557,10 @@ it is not a stable production regression.
 
 Acceptance:
 
-- WorkPaper improves from the current `77/100` scorecard-eligible comparable
+- WorkPaper improves from the current `81/100` scorecard-eligible comparable
   mean winners without reducing benchmark coverage
-- public lane remains visible and improves from the current `60/73` mean wins
-- holdout lane remains visible and improves from the current `18/27` mean wins
+- public lane remains visible and improves from the current `62/73` mean wins
+- holdout lane remains visible and improves from the current `19/27` mean wins
 - closest wins gain margin without changing benchmark sampling or verification
 - top-level dominance scorecard remains current and blocks blanket `10x`
   language until direct Sheets / Excel evidence exists

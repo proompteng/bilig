@@ -84,6 +84,31 @@ export class CellStore {
     return index
   }
 
+  allocateDenseRowMajorReserved(sheetId: number, rowCount: number, colCount: number): number {
+    const count = rowCount * colCount
+    const firstIndex = this.size
+    if (count <= 0) {
+      return firstIndex
+    }
+    this.ensureCapacity(firstIndex + count)
+    this.size = firstIndex + count
+
+    this.sheetIds.fill(sheetId, firstIndex, firstIndex + count)
+    this.tags.fill(ValueTag.Empty, firstIndex, firstIndex + count)
+    this.errors.fill(ErrorCode.None, firstIndex, firstIndex + count)
+    this.flags.fill(CellFlags.Materialized, firstIndex, firstIndex + count)
+
+    let cellIndex = firstIndex
+    for (let row = 0; row < rowCount; row += 1) {
+      for (let col = 0; col < colCount; col += 1) {
+        this.rows[cellIndex] = row
+        this.cols[cellIndex] = col
+        cellIndex += 1
+      }
+    }
+    return firstIndex
+  }
+
   reset(): void {
     this.size = 0
     this.tags.fill(0)

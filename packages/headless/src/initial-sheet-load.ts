@@ -174,12 +174,13 @@ export function prepareInitialMixedSheetLoad(args: {
   try {
     args.engine.workbook.withBatchedColumnVersionUpdates(() => {
       if (isDenseInitialMixedSheet(args.content, potentialCellCount, maxColumnCount)) {
+        const firstCellIndex = cellStore.allocateDenseRowMajorReserved(args.sheetId, args.content.length, maxColumnCount)
         for (let rowIndex = 0; rowIndex < args.content.length; rowIndex += 1) {
           const row = args.content[rowIndex]!
           const rowId = ensureRowId(rowIndex)
           for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
             const raw = row[colIndex]!
-            const cellIndex = cellStore.allocateReserved(args.sheetId, rowIndex, colIndex)
+            const cellIndex = firstCellIndex + rowIndex * maxColumnCount + colIndex
             const colId = (colIds[colIndex] ??= ensureColumnId(colIndex))
             attachFreshCell(rowIndex, colIndex, cellIndex, rowId, colId)
             if (typeof raw === 'string') {

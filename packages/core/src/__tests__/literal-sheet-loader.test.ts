@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ValueTag } from '@bilig/protocol'
 import { SpreadsheetEngine } from '../engine.js'
 import { loadDenseLiteralSheetIntoEmptySheet, loadLiteralSheetIntoEmptySheet } from '../literal-sheet-loader.js'
@@ -104,5 +104,27 @@ describe('loadLiteralSheetIntoEmptySheet', () => {
     expect(engine.getCellValue('Sheet1', 'A1')).toEqual({ tag: ValueTag.Number, value: 1 })
     expect(engine.getCellValue('Sheet1', 'C2')).toEqual({ tag: ValueTag.Number, value: 6 })
     expect(Array.from(engine.workbook.getSheet('Sheet1')!.columnVersions.slice(0, 3))).toEqual([1, 1, 1])
+  })
+
+  it('reserves dense literal sheets as a contiguous row-major block', () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'literal-dense-contiguous-load' })
+    engine.workbook.createSheet('Sheet1')
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+    const allocateReserved = vi.spyOn(engine.workbook.cellStore, 'allocateReserved')
+
+    const loaded = loadDenseLiteralSheetIntoEmptySheet(engine.workbook, engine.strings, sheetId, [
+      [1, 2, 3],
+      [4, 5, 6],
+      [7, 8, 9],
+    ])
+
+    expect(loaded).toBe(9)
+    expect(allocateReserved).not.toHaveBeenCalled()
+    expect(Array.from(engine.workbook.cellStore.sheetIds.slice(0, 9))).toEqual(Array(9).fill(sheetId))
+    expect(Array.from(engine.workbook.cellStore.rows.slice(0, 9))).toEqual([0, 0, 0, 1, 1, 1, 2, 2, 2])
+    expect(Array.from(engine.workbook.cellStore.cols.slice(0, 9))).toEqual([0, 1, 2, 0, 1, 2, 0, 1, 2])
+    expect(engine.getCellValue('Sheet1', 'C3')).toEqual({ tag: ValueTag.Number, value: 9 })
+
+    allocateReserved.mockRestore()
   })
 })

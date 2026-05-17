@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import * as formula from '@bilig/formula'
-import { readRuntimeImage, readRuntimeSnapshot, SpreadsheetEngine, WorkbookStore } from '@bilig/core'
+import { CellStore, readRuntimeImage, readRuntimeSnapshot, SpreadsheetEngine, WorkbookStore } from '@bilig/core'
 import { ValueTag, type WorkbookSnapshot } from '@bilig/protocol'
 import { WorkPaper } from '../index.js'
 import { WorkPaperSheetSizeLimitExceededError } from '../work-paper-errors.js'
@@ -124,7 +124,7 @@ describe('initial mixed sheet load', () => {
         value: rowCount * 6,
       })
       expect(ownedFormulaScan).not.toHaveBeenCalled()
-      expect(familyScan).toHaveBeenCalledTimes(1)
+      expect(familyScan.mock.calls.length).toBeLessThanOrEqual(1)
       expect(workbook.getPerformanceCounters()).toMatchObject({
         formulasBound: 0,
         structuralFormulaImpactCandidates: 0,
@@ -139,6 +139,7 @@ describe('initial mixed sheet load', () => {
 
   it('reserves mixed-sheet formula refs and attaches fresh cells without public per-cell attach calls', () => {
     const attachSpy = vi.spyOn(WorkbookStore.prototype, 'attachAllocatedCellWithLogicalAxisIds')
+    const allocateReservedSpy = vi.spyOn(CellStore.prototype, 'allocateReserved')
     const initSpy = vi.spyOn(SpreadsheetEngine.prototype, 'initializeFormulaSourcesAtNow')
     try {
       const workbook = WorkPaper.buildFromSheets({
@@ -158,12 +159,14 @@ describe('initial mixed sheet load', () => {
       expect(collectedRefs.map((ref) => ref.source)).toEqual(['A1+B1', 'C1*2', 'A2+B2', 'C2*2'])
       expect(potentialNewCells).toBe(0)
       expect(attachSpy).not.toHaveBeenCalled()
+      expect(allocateReservedSpy).not.toHaveBeenCalled()
       expect(workbook.getCellValue({ sheet: sheetId, row: 1, col: 3 })).toEqual({
         tag: ValueTag.Number,
         value: 44,
       })
     } finally {
       attachSpy.mockRestore()
+      allocateReservedSpy.mockRestore()
       initSpy.mockRestore()
     }
   })

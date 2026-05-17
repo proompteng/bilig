@@ -362,9 +362,9 @@ It is published in the official MCP Registry as
   It keeps the empty npm-project command, `verified: true` output, benchmark
   caveat, known limits, and feedback ask together.
 - Run `pnpm workpaper:bench:competitive:check`. The checked-in artifact shows
-  [`77/100` comparable WorkPaper mean wins](docs/what-workpaper-benchmark-proves.md)
+  [`81/100` comparable WorkPaper mean wins](docs/what-workpaper-benchmark-proves.md)
   and names the worst p95 holdout:
-  `structural-append-formula-rows-small` at `3.937x`.
+  `lookup-approximate-duplicates` at `1.741x`.
 - The benchmark card is generated from that artifact:
   [`docs/assets/workpaper-benchmark-card.png`](docs/assets/workpaper-benchmark-card.png).
 - Read the [compatibility limits](docs/where-bilig-is-not-excel-compatible-yet.md)

@@ -397,6 +397,79 @@ describe('operation-service dense mutation fast paths', () => {
     expect(engine.getCellValue('Sheet1', 'E13')).toEqual({ tag: ValueTag.Number, value: 216 })
   })
 
+  it('applies fresh row aggregate formula batches without coordinate re-ensure or dirty recalculation', async () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'fresh-row-aggregate-formula-batch-fast-path' })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    const existingRows = 16
+    const appendRows = 40
+    const inputCols = 4
+    for (let row = 1; row <= existingRows; row += 1) {
+      for (let col = 0; col < inputCols; col += 1) {
+        engine.setCellValue('Sheet1', `${String.fromCharCode(65 + col)}${row}`, row * (col + 1))
+      }
+      engine.setCellFormula('Sheet1', `E${row}`, `SUM(A${row}:D${row})`)
+    }
+    engine.insertRows('Sheet1', existingRows, appendRows)
+
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+    const valueRefs: EngineCellMutationRef[] = []
+    const formulaRefs: EngineCellMutationRef[] = []
+    for (let row = 0; row < appendRows; row += 1) {
+      const rowIndex = existingRows + row
+      const rowNumber = rowIndex + 1
+      for (let col = 0; col < inputCols; col += 1) {
+        valueRefs.push({
+          sheetId,
+          mutation: { kind: 'setCellValue', row: rowIndex, col, value: rowNumber * (col + 1) },
+        })
+      }
+      formulaRefs.push({
+        sheetId,
+        mutation: { kind: 'setCellFormula', row: rowIndex, col: inputCols, formula: `SUM(A${rowNumber}:D${rowNumber})` },
+      })
+    }
+
+    engine.applyCellMutationsAt(valueRefs, valueRefs.length)
+    const ensureCellAt = vi.spyOn(engine.workbook, 'ensureCellAt')
+    try {
+      engine.resetPerformanceCounters()
+      const undoOps = engine.applyCellMutationsAt(formulaRefs, formulaRefs.length)
+
+      expect(undoOps).not.toBeNull()
+      expect(ensureCellAt).not.toHaveBeenCalled()
+      expect(engine.getCellValue('Sheet1', 'E17')).toEqual({ tag: ValueTag.Number, value: 170 })
+      expect(engine.getCellValue('Sheet1', `E${existingRows + appendRows}`)).toEqual({
+        tag: ValueTag.Number,
+        value: (existingRows + appendRows) * 10,
+      })
+      expect(engine.getLastMetrics()).toMatchObject({
+        changedInputCount: appendRows,
+        dirtyFormulaCount: 0,
+        jsFormulaCount: 0,
+        wasmFormulaCount: 0,
+      })
+      expect(engine.getPerformanceCounters()).toMatchObject({
+        calcChainFullScans: 0,
+        directAggregateScanCells: 0,
+        directAggregateScanEvaluations: 0,
+        directFormulaKernelSyncOnlyRecalcSkips: 1,
+        formulasBound: 0,
+        topoRepairs: 0,
+      })
+    } finally {
+      ensureCellAt.mockRestore()
+    }
+
+    engine.setCellValue('Sheet1', 'A17', 99)
+    expect(engine.getCellValue('Sheet1', 'E17')).toEqual({ tag: ValueTag.Number, value: 252 })
+    engine.undo()
+    expect(engine.getCellValue('Sheet1', 'E17')).toEqual({ tag: ValueTag.Number, value: 170 })
+    engine.undo()
+    expect(engine.getCellValue('Sheet1', 'E17')).toEqual({ tag: ValueTag.Empty })
+  })
+
   it('does not mark direct aggregate inputs covered for formula-only fresh aggregate batches', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'formula-only-fresh-row-aggregate-coverage' })
     await engine.ready()
