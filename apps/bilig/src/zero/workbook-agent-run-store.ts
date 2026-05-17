@@ -10,6 +10,7 @@ import type { Row } from '@rocicorp/zero'
 import { addDefaultedColumnIfMissing, enforceDefaultedNotNullColumn } from './schema-upgrade.js'
 import type { QueryResultRow, Queryable, ZeroQueryRunner } from './store.js'
 import { parseNonNegativeInteger } from './store-support.js'
+import { ensureZeroSchemaTable } from './zero-schema-ddl.js'
 
 type ZeroWorkbookAgentRunRow = Row['workbook_agent_run']
 
@@ -159,30 +160,12 @@ function normalizeExecutionRows(rows: readonly ZeroWorkbookAgentRunRow[], limit:
 }
 
 export async function ensureWorkbookAgentRunSchema(db: Queryable): Promise<void> {
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS workbook_agent_run (
-      id TEXT PRIMARY KEY,
-      bundle_id TEXT NOT NULL,
-      workbook_id TEXT NOT NULL,
-      thread_id TEXT NOT NULL,
-      turn_id TEXT NOT NULL,
-      actor_user_id TEXT NOT NULL,
-      goal_text TEXT NOT NULL,
-      plan_text TEXT,
-      summary TEXT NOT NULL,
-      scope TEXT NOT NULL,
-      risk_class TEXT NOT NULL,
-      accepted_scope TEXT NOT NULL DEFAULT 'full',
-      applied_by TEXT NOT NULL DEFAULT 'user',
-      base_revision BIGINT NOT NULL,
-      applied_revision BIGINT NOT NULL,
-      created_at_unix_ms BIGINT NOT NULL,
-      applied_at_unix_ms BIGINT NOT NULL,
-      context_json JSONB,
-      commands_json JSONB NOT NULL,
-      preview_json JSONB
-    )
-  `)
+  await ensureZeroSchemaTable(db, 'workbook_agent_run', {
+    columnOverrides: {
+      acceptedScope: { defaultSql: "'full'" },
+      appliedBy: { defaultSql: "'user'" },
+    },
+  })
   await db.query(`ALTER TABLE workbook_agent_run ADD COLUMN IF NOT EXISTS bundle_id TEXT;`)
   await db.query(`
     UPDATE workbook_agent_run

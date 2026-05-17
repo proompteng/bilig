@@ -30,6 +30,7 @@ import {
   type WorkbookReviewQueueItemRow,
   type ZeroWorkbookChatThreadRow,
 } from './workbook-chat-thread-normalizers.js'
+import { ensureZeroSchemaTable } from './zero-schema-ddl.js'
 
 export type { WorkbookChatThreadScope } from './workbook-chat-thread-normalizers.js'
 
@@ -196,21 +197,14 @@ function toReviewQueueItemRow(row: QueryResultRow): WorkbookReviewQueueItemRow {
 }
 
 export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<void> {
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS workbook_chat_thread (
-      workbook_id TEXT NOT NULL,
-      thread_id TEXT NOT NULL,
-      actor_user_id TEXT NOT NULL,
-      scope TEXT NOT NULL DEFAULT 'private',
-      execution_policy TEXT NOT NULL DEFAULT 'autoApplyAll',
-      context_json JSONB,
-      entry_count BIGINT NOT NULL DEFAULT 0,
-      review_queue_item_count BIGINT NOT NULL DEFAULT 0,
-      latest_entry_text TEXT,
-      updated_at_unix_ms BIGINT NOT NULL,
-      PRIMARY KEY (workbook_id, thread_id, actor_user_id)
-    )
-  `)
+  await ensureZeroSchemaTable(db, 'workbook_chat_thread', {
+    columnOverrides: {
+      scope: { defaultSql: "'private'" },
+      executionPolicy: { defaultSql: "'autoApplyAll'" },
+      entryCount: { defaultSql: '0' },
+      reviewQueueItemCount: { defaultSql: '0' },
+    },
+  })
   await ensureDefaultedNotNullColumn(db, {
     tableName: 'workbook_chat_thread',
     columnName: 'scope',
@@ -258,72 +252,25 @@ export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<voi
     defaultSql: '0',
   })
   await addColumnIfMissing(db, { tableName: 'workbook_chat_thread', columnName: 'latest_entry_text', dataType: 'TEXT' })
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS workbook_chat_item (
-      workbook_id TEXT NOT NULL,
-      thread_id TEXT NOT NULL,
-      actor_user_id TEXT NOT NULL,
-      entry_id TEXT NOT NULL,
-      sort_order INTEGER NOT NULL,
-      turn_id TEXT,
-      kind TEXT NOT NULL,
-      text TEXT,
-      phase TEXT,
-      tool_name TEXT,
-      tool_status TEXT,
-      arguments_text TEXT,
-      output_text TEXT,
-      success BOOLEAN,
-      citations_json JSONB,
-      PRIMARY KEY (workbook_id, thread_id, actor_user_id, entry_id)
-    )
-  `)
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS workbook_chat_tool_call (
-      workbook_id TEXT NOT NULL,
-      thread_id TEXT NOT NULL,
-      actor_user_id TEXT NOT NULL,
-      entry_id TEXT NOT NULL,
-      sort_order INTEGER NOT NULL,
-      turn_id TEXT,
-      tool_name TEXT,
-      tool_status TEXT,
-      arguments_text TEXT,
-      output_text TEXT,
-      success BOOLEAN,
-      PRIMARY KEY (workbook_id, thread_id, actor_user_id, entry_id)
-    )
-  `)
+  await ensureZeroSchemaTable(db, 'workbook_chat_item', {
+    columnOverrides: {
+      sortOrder: { dataType: 'INTEGER' },
+    },
+  })
+  await ensureZeroSchemaTable(db, 'workbook_chat_tool_call', {
+    columnOverrides: {
+      sortOrder: { dataType: 'INTEGER' },
+    },
+  })
   await db.query(`
     ALTER TABLE workbook_chat_item
       ADD COLUMN IF NOT EXISTS citations_json JSONB;
   `)
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS workbook_review_queue_item (
-      workbook_id TEXT NOT NULL,
-      thread_id TEXT NOT NULL,
-      actor_user_id TEXT NOT NULL,
-      review_item_id TEXT NOT NULL,
-      turn_id TEXT NOT NULL,
-      goal_text TEXT NOT NULL,
-      summary TEXT NOT NULL,
-      scope TEXT NOT NULL,
-      risk_class TEXT NOT NULL,
-      review_mode TEXT NOT NULL,
-      owner_user_id TEXT,
-      status TEXT NOT NULL,
-      decided_by_user_id TEXT,
-      decided_at_unix_ms BIGINT,
-      base_revision BIGINT NOT NULL,
-      created_at_unix_ms BIGINT NOT NULL,
-      context_json JSONB,
-      commands_json JSONB NOT NULL,
-      affected_ranges_json JSONB NOT NULL,
-      estimated_affected_cells BIGINT,
-      recommendations_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-      PRIMARY KEY (workbook_id, thread_id, actor_user_id, review_item_id)
-    )
-  `)
+  await ensureZeroSchemaTable(db, 'workbook_review_queue_item', {
+    columnOverrides: {
+      recommendations: { defaultSql: "'[]'::jsonb" },
+    },
+  })
   await reconcileWorkbookChatThreadSummaryColumns(db)
   await enforceDefaultedNotNullColumn(db, {
     tableName: 'workbook_chat_thread',

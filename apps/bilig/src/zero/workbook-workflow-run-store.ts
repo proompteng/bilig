@@ -5,6 +5,7 @@ import { addColumnIfMissing, ensureDefaultedNotNullColumn } from './schema-upgra
 import type { QueryResultRow, Queryable, ZeroQueryRunner } from './store.js'
 import { parseNonNegativeInteger } from './store-support.js'
 import { runQueryableTransaction, runSequentially } from './transaction-support.js'
+import { ensureZeroSchemaTable } from './zero-schema-ddl.js'
 
 type ZeroWorkbookWorkflowRunRow = Row['workbook_workflow_run']
 
@@ -333,47 +334,13 @@ function loadDurableWorkflowArtifacts(rows: readonly QueryResultRow[], runIds: R
 }
 
 export async function ensureWorkbookWorkflowRunSchema(db: Queryable): Promise<void> {
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS workbook_workflow_run (
-      run_id TEXT PRIMARY KEY,
-      workbook_id TEXT NOT NULL,
-      thread_id TEXT NOT NULL,
-      actor_user_id TEXT NOT NULL,
-      workflow_template TEXT NOT NULL,
-      title TEXT NOT NULL,
-      summary TEXT NOT NULL,
-      status TEXT NOT NULL,
-      created_at_unix_ms BIGINT NOT NULL,
-      updated_at_unix_ms BIGINT NOT NULL,
-      completed_at_unix_ms BIGINT,
-      error_message TEXT,
-      steps_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-      artifact_json JSONB
-    )
-  `)
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS workbook_workflow_step (
-      workbook_id TEXT NOT NULL,
-      run_id TEXT NOT NULL,
-      step_id TEXT NOT NULL,
-      step_order INTEGER NOT NULL,
-      label TEXT NOT NULL,
-      status TEXT NOT NULL,
-      summary TEXT NOT NULL,
-      updated_at_unix_ms BIGINT NOT NULL,
-      PRIMARY KEY (run_id, step_id)
-    )
-  `)
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS workbook_workflow_artifact (
-      run_id TEXT PRIMARY KEY,
-      workbook_id TEXT NOT NULL,
-      kind TEXT NOT NULL,
-      title TEXT NOT NULL,
-      text TEXT NOT NULL,
-      updated_at_unix_ms BIGINT NOT NULL
-    )
-  `)
+  await ensureZeroSchemaTable(db, 'workbook_workflow_run')
+  await ensureZeroSchemaTable(db, 'workbook_workflow_step', {
+    columnOverrides: {
+      stepOrder: { dataType: 'INTEGER' },
+    },
+  })
+  await ensureZeroSchemaTable(db, 'workbook_workflow_artifact')
   await ensureDefaultedNotNullColumn(db, {
     tableName: 'workbook_workflow_run',
     columnName: 'steps_json',
