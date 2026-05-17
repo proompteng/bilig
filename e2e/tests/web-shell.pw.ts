@@ -1646,7 +1646,7 @@ for (const key of ['Delete', 'Backspace'] as const) {
   })
 }
 
-test('web app restores a keyboard clear through undo and redo history controls', async ({ page }) => {
+test('@browser-ci web app restores a keyboard clear through undo and redo history controls', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-clear-undo-redo-shortcuts')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
@@ -1669,7 +1669,7 @@ test('web app restores a keyboard clear through undo and redo history controls',
   await expect(formulaInput).toHaveValue('')
 })
 
-test('web app routes workbook undo and redo keyboard shortcuts from the grid', async ({ page }) => {
+test('@browser-ci web app routes workbook undo and redo keyboard shortcuts from the grid', async ({ page }) => {
   const documentId = createTestDocumentId('playwright-grid-history-shortcuts')
   await page.goto(`/?document=${encodeURIComponent(documentId)}`)
   await waitForWorkbookReady(page)
