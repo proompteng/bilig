@@ -1,7 +1,7 @@
 ---
 title: Spreadsheet MCP server comparison
 published: true
-description: "Compare spreadsheet MCP server choices for agents: Excel file tools, Google Sheets tools, read-only workbook inspection, and Bilig WorkPaper formula readback."
+description: 'Compare spreadsheet MCP server choices for agents: Excel file tools, Google Sheets tools, read-only workbook inspection, and Bilig WorkPaper formula readback.'
 tags: mcp, model context protocol, spreadsheet, excel, agents
 canonical_url: https://proompteng.github.io/bilig/spreadsheet-mcp-server-comparison.html
 cover_image: https://raw.githubusercontent.com/proompteng/bilig/main/docs/assets/github-social-preview.png
@@ -21,13 +21,13 @@ touch spreadsheet-shaped business logic.
 
 ## Quick Decision Table
 
-| Need | Better starting point |
-| --- | --- |
-| Read and write arbitrary `.xlsx` files with formatting, charts, and workbook layout | Excel-focused MCP server or an Office automation workflow |
-| Read and update Google Sheets through a live cloud spreadsheet | Google Sheets MCP server |
-| Let an agent inspect workbook structure, formulas, and cached values without mutating files | Read-only spreadsheet inspection MCP server |
-| Mutate service-owned workbook inputs, recalculate formulas, verify before/after values, and persist JSON | Bilig WorkPaper MCP |
-| Exact Excel compatibility across macros, pivots, charts, external links, and every function | Excel, LibreOffice, Graph API, or a dedicated Excel runtime |
+| Need                                                                                                     | Better starting point                                       |
+| -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Read and write arbitrary `.xlsx` files with formatting, charts, and workbook layout                      | Excel-focused MCP server or an Office automation workflow   |
+| Read and update Google Sheets through a live cloud spreadsheet                                           | Google Sheets MCP server                                    |
+| Let an agent inspect workbook structure, formulas, and cached values without mutating files              | Read-only spreadsheet inspection MCP server                 |
+| Mutate service-owned workbook inputs, recalculate formulas, verify before/after values, and persist JSON | Bilig WorkPaper MCP                                         |
+| Exact Excel compatibility across macros, pivots, charts, external links, and every function              | Excel, LibreOffice, Graph API, or a dedicated Excel runtime |
 
 ## Where Bilig Fits
 
@@ -45,6 +45,31 @@ import-validation workbooks, and agent tools that need proof of what changed.
 
 It is not a replacement for a full Excel file editor. It should not be sold as
 one.
+
+## Formula Recalculation Is The Split
+
+The important question is not "does this MCP server work with spreadsheets?"
+It is "can the agent trust a formula result immediately after it writes an
+input?"
+
+Many spreadsheet MCP servers are intentionally file-oriented. That is useful
+when the job is report generation, workbook inspection, or careful `.xlsx`
+mutation. It is not the same as a formula-runtime loop. For example, SheetForge
+MCP documents that its read tools do not recalculate Excel formulas and instead
+surface formula cells as formula text. That is the right behavior for a file
+editor that should not invent fresh values.
+
+Bilig takes the opposite boundary for service-owned workbooks:
+
+- the persisted artifact is WorkPaper JSON, not an opaque Excel cache;
+- the agent writes a known input cell;
+- formulas recalculate inside the runtime;
+- the agent reads a display value or raw value after the edit;
+- the updated WorkPaper document can be exported and restored for audit.
+
+That makes the comparison less about "best spreadsheet MCP server" and more
+about the source of truth. Use file-first MCP tools when Excel fidelity is the
+product. Use Bilig WorkPaper MCP when recalculated readback is the product.
 
 ## Verify The Bilig MCP Path
 
@@ -101,6 +126,13 @@ or persists anything," choose a formula runtime path and keep the MCP layer thin
 - [Agent spreadsheet tool call loop](agent-spreadsheet-tool-call-loop.md)
 - [Why agents need workbook APIs](why-agents-need-workbook-apis.md)
 - [Stop driving spreadsheets with screenshots](stop-driving-spreadsheets-with-screenshots.md)
+
+## Public Directory References
+
+- [SheetForge MCP](https://mcpservers.org/servers/iheldan/sheetforge-mcp)
+- [Excel file manipulation MCP](https://mcp.directory/servers/excel-file-manipulation)
+- [Bilig WorkPaper MCP registry search](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper)
+- [Bilig WorkPaper on Glama](https://glama.ai/mcp/servers/proompteng/bilig)
 
 If this is the MCP boundary you were looking for, star or bookmark Bilig so the
 server is easier for other agent builders to find:
