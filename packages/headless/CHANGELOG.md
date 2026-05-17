@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.18.1
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.18.0
+- Manual override: no
+
+## Fixes
+- fix(formula): align flatten array semantics (5d7725b3)
+
 ## 0.18.0
 
 - Release type: minor
