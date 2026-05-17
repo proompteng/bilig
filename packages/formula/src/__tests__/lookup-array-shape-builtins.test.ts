@@ -88,12 +88,17 @@ describe('lookup array-shape builtins', () => {
     expect(DROP(matrix, num(2))).toEqual(err(ErrorCode.Value))
     expect(DROP(matrix, text('bad'))).toEqual(err(ErrorCode.Value))
 
-    expect(CHOOSECOLS(matrix, num(3), num(1))).toEqual({ kind: 'array', rows: 2, cols: 2, values: [num(3), num(1), num(6), num(4)] })
-    expect(CHOOSEROWS(matrix, num(2), num(1))).toEqual({
+    expect(CHOOSECOLS(matrix, num(3), num(-1), num(1))).toEqual({
       kind: 'array',
       rows: 2,
       cols: 3,
-      values: [num(4), empty(), num(6), num(1), num(2), num(3)],
+      values: [num(3), num(3), num(1), num(6), num(6), num(4)],
+    })
+    expect(CHOOSEROWS(matrix, num(2), num(-1), num(1))).toEqual({
+      kind: 'array',
+      rows: 3,
+      cols: 3,
+      values: [num(4), empty(), num(6), num(4), empty(), num(6), num(1), num(2), num(3)],
     })
     expect(CHOOSECOLS(matrix)).toEqual(err(ErrorCode.Value))
     expect(CHOOSEROWS(matrix, err(ErrorCode.Ref))).toEqual(err(ErrorCode.Ref))
@@ -105,16 +110,21 @@ describe('lookup array-shape builtins', () => {
       kind: 'array',
       rows: 2,
       cols: 4,
-      values: [num(1), num(2), num(3), num(4), num(1), num(2), num(5), num(6)],
+      values: [num(1), num(2), num(3), num(4), err(ErrorCode.NA), err(ErrorCode.NA), num(5), num(6)],
     })
     expect(VSTACK(cellRange([num(1), num(2)], 2, 1), cellRange([num(3), num(4), num(5), num(6)], 2, 2))).toEqual({
       kind: 'array',
       rows: 4,
       cols: 2,
-      values: [num(1), num(1), num(2), num(2), num(3), num(4), num(5), num(6)],
+      values: [num(1), err(ErrorCode.NA), num(2), err(ErrorCode.NA), num(3), num(4), num(5), num(6)],
     })
     expect(HSTACK()).toEqual(err(ErrorCode.Value))
-    expect(VSTACK(cellRange([num(1), num(2)], 1, 2), cellRange([num(3), num(4), num(5)], 1, 3))).toEqual(err(ErrorCode.Value))
+    expect(VSTACK(cellRange([num(1), num(2)], 1, 2), cellRange([num(3), num(4), num(5)], 1, 3))).toEqual({
+      kind: 'array',
+      rows: 2,
+      cols: 3,
+      values: [num(1), num(2), err(ErrorCode.NA), num(3), num(4), num(5)],
+    })
 
     expect(TOCOL(matrix, num(1), bool(false))).toEqual({
       kind: 'array',

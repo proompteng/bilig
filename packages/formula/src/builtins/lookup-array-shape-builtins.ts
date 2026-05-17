@@ -43,6 +43,18 @@ function clipIndex(value: number, length: number): number | undefined {
   return index < 0 ? Math.max(index, -length) : Math.min(index, length)
 }
 
+function resolveOneBasedIndex(value: number | undefined, length: number): number | undefined {
+  if (value === undefined || !Number.isFinite(value) || length <= 0) {
+    return undefined
+  }
+  const index = Math.trunc(value)
+  if (index === 0) {
+    return undefined
+  }
+  const resolved = index < 0 ? length + index : index - 1
+  return resolved >= 0 && resolved < length ? resolved : undefined
+}
+
 function flattenValues(
   range: RangeBuiltinArgument,
   scanByCol: boolean,
@@ -371,11 +383,11 @@ export function createLookupArrayShapeBuiltins(deps: LookupArrayShapeBuiltinDeps
         if (deps.isError(arg)) {
           return arg
         }
-        const selected = deps.toInteger(arg)
-        if (selected === undefined || selected < 1 || selected > array.cols) {
+        const selected = resolveOneBasedIndex(deps.toInteger(arg), array.cols)
+        if (selected === undefined) {
           return deps.errorValue(ErrorCode.Value)
         }
-        selectedCols.push(selected - 1)
+        selectedCols.push(selected)
       }
 
       const values: CellValue[] = []
@@ -403,11 +415,11 @@ export function createLookupArrayShapeBuiltins(deps: LookupArrayShapeBuiltinDeps
         if (deps.isError(arg)) {
           return arg
         }
-        const selected = deps.toInteger(arg)
-        if (selected === undefined || selected < 1 || selected > array.rows) {
+        const selected = resolveOneBasedIndex(deps.toInteger(arg), array.rows)
+        if (selected === undefined) {
           return deps.errorValue(ErrorCode.Value)
         }
-        selectedRows.push(selected - 1)
+        selectedRows.push(selected)
       }
 
       const values: CellValue[] = []
@@ -446,19 +458,12 @@ export function createLookupArrayShapeBuiltins(deps: LookupArrayShapeBuiltinDeps
       }
 
       const rowCount = Math.max(...arrays.map((array) => array.rows))
-      for (const array of arrays) {
-        if (array.rows !== 1 && array.rows !== rowCount) {
-          return deps.errorValue(ErrorCode.Value)
-        }
-      }
-
       const values: CellValue[] = []
       const totalCols = arrays.reduce((acc, array) => acc + array.cols, 0)
       for (let row = 0; row < rowCount; row += 1) {
         for (const array of arrays) {
           for (let col = 0; col < array.cols; col += 1) {
-            const sourceRow = array.rows === 1 ? 0 : row
-            values.push(deps.getRangeValue(array, sourceRow, col))
+            values.push(row < array.rows ? deps.getRangeValue(array, row, col) : deps.errorValue(ErrorCode.NA))
           }
         }
       }
@@ -478,19 +483,12 @@ export function createLookupArrayShapeBuiltins(deps: LookupArrayShapeBuiltinDeps
       }
 
       const colCount = Math.max(...arrays.map((array) => array.cols))
-      for (const array of arrays) {
-        if (array.cols !== 1 && array.cols !== colCount) {
-          return deps.errorValue(ErrorCode.Value)
-        }
-      }
-
       const values: CellValue[] = []
       const totalRows = arrays.reduce((acc, array) => acc + array.rows, 0)
       for (const array of arrays) {
         for (let row = 0; row < array.rows; row += 1) {
           for (let col = 0; col < colCount; col += 1) {
-            const sourceCol = array.cols === 1 ? 0 : col
-            values.push(deps.getRangeValue(array, row, sourceCol))
+            values.push(col < array.cols ? deps.getRangeValue(array, row, col) : deps.errorValue(ErrorCode.NA))
           }
         }
       }

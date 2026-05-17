@@ -385,14 +385,27 @@ describe('lookup builtins', () => {
       kind: 'array',
       rows: 3,
       cols: 4,
-      values: [num(1), text('a'), text('b'), num(99), num(2), text('a'), text('b'), num(99), num(3), text('a'), text('b'), num(99)],
+      values: [
+        num(1),
+        text('a'),
+        text('b'),
+        num(99),
+        num(2),
+        err(ErrorCode.NA),
+        err(ErrorCode.NA),
+        err(ErrorCode.NA),
+        num(3),
+        err(ErrorCode.NA),
+        err(ErrorCode.NA),
+        err(ErrorCode.NA),
+      ],
     })
 
     expect(VSTACK(cellRange([text('x'), text('y')], 1, 2), cellRange([num(3), num(4), num(5), num(6)], 2, 2), num(7))).toEqual({
       kind: 'array',
       rows: 4,
       cols: 2,
-      values: [text('x'), text('y'), num(3), num(4), num(5), num(6), num(7), num(7)],
+      values: [text('x'), text('y'), num(3), num(4), num(5), num(6), num(7), err(ErrorCode.NA)],
     })
 
     expect(PEARSON(lookupValues, resultValues)).toEqual(num(1))
@@ -1312,18 +1325,18 @@ describe('lookup builtins', () => {
       values: [num(3), num(4)],
     })
 
-    // HSTACK/VSTACK single row/col expansion
+    // HSTACK/VSTACK pad ragged array edges with #N/A instead of broadcasting.
     expect(HSTACK(cellRange([num(1)], 1, 1), cellRange([num(2), num(3)], 2, 1))).toEqual({
       kind: 'array',
       rows: 2,
       cols: 2,
-      values: [num(1), num(2), num(1), num(3)],
+      values: [num(1), num(2), err(ErrorCode.NA), num(3)],
     })
     expect(VSTACK(cellRange([num(1)], 1, 1), cellRange([num(2), num(3)], 1, 2))).toEqual({
       kind: 'array',
       rows: 2,
       cols: 2,
-      values: [num(1), num(1), num(2), num(3)],
+      values: [num(1), err(ErrorCode.NA), num(2), num(3)],
     })
     expect(VSTACK()).toEqual(err(ErrorCode.Value))
     expect(
@@ -1335,9 +1348,12 @@ describe('lookup builtins', () => {
         values: [num(1)],
       }),
     ).toEqual(err(ErrorCode.Value))
-    expect(VSTACK(cellRange([num(1), num(2), num(3), num(4)], 2, 2), cellRange([num(5), num(6), num(7)], 1, 3))).toEqual(
-      err(ErrorCode.Value),
-    )
+    expect(VSTACK(cellRange([num(1), num(2), num(3), num(4)], 2, 2), cellRange([num(5), num(6), num(7)], 1, 3))).toEqual({
+      kind: 'array',
+      rows: 3,
+      cols: 3,
+      values: [num(1), num(2), err(ErrorCode.NA), num(3), num(4), err(ErrorCode.NA), num(5), num(6), num(7)],
+    })
 
     // matchesCriteria operators
     const range = cellRange([num(1), num(2), num(3), num(4)], 4, 1)
