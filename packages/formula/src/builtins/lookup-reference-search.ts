@@ -10,7 +10,7 @@ export interface LookupReferenceSearchDeps {
 }
 
 export function vectorLength(range: RangeBuiltinArgument): number | undefined {
-  if (range.refKind !== 'cells' || (range.rows !== 1 && range.cols !== 1)) {
+  if (range.rows !== 1 && range.cols !== 1) {
     return undefined
   }
   return range.rows === 1 ? range.cols : range.rows
@@ -30,14 +30,16 @@ export function exactMatch(
   deps: LookupReferenceSearchDeps,
   options: { wildcard?: boolean; searchMode?: 1 | -1 } = {},
 ): number {
-  const length = range.values.length
+  const length = vectorLength(range)
+  if (length === undefined) {
+    return -1
+  }
   const first = options.searchMode === -1 ? length - 1 : 0
   const last = options.searchMode === -1 ? -1 : length
   const step = options.searchMode === -1 ? -1 : 1
   for (let index = first; index !== last; index += step) {
-    if (
-      options.wildcard ? wildcardMatches(lookupValue, range.values[index]) : deps.compareScalars(range.values[index]!, lookupValue) === 0
-    ) {
+    const candidate = getVectorValue(range, index, deps)
+    if (options.wildcard ? wildcardMatches(lookupValue, candidate) : deps.compareScalars(candidate, lookupValue) === 0) {
       return index + 1
     }
   }
@@ -45,9 +47,13 @@ export function exactMatch(
 }
 
 export function approximateMatchAscending(lookupValue: CellValue, range: RangeBuiltinArgument, deps: LookupReferenceSearchDeps): number {
+  const length = vectorLength(range)
+  if (length === undefined) {
+    return -1
+  }
   let best = -1
-  for (let index = 0; index < range.values.length; index += 1) {
-    const comparison = deps.compareScalars(range.values[index]!, lookupValue)
+  for (let index = 0; index < length; index += 1) {
+    const comparison = deps.compareScalars(getVectorValue(range, index, deps), lookupValue)
     if (comparison === undefined) {
       return -1
     }
@@ -67,9 +73,13 @@ export function approximateLookupAscending(
     isError: (value: CellValue) => boolean
   },
 ): number {
+  const length = vectorLength(range)
+  if (length === undefined) {
+    return -1
+  }
   let best = -1
-  for (let index = 0; index < range.values.length; index += 1) {
-    const value = range.values[index]!
+  for (let index = 0; index < length; index += 1) {
+    const value = getVectorValue(range, index, deps)
     if (deps.isError(value)) {
       continue
     }
@@ -87,9 +97,13 @@ export function approximateLookupAscending(
 }
 
 export function approximateMatchDescending(lookupValue: CellValue, range: RangeBuiltinArgument, deps: LookupReferenceSearchDeps): number {
+  const length = vectorLength(range)
+  if (length === undefined) {
+    return -1
+  }
   let best = -1
-  for (let index = 0; index < range.values.length; index += 1) {
-    const comparison = deps.compareScalars(range.values[index]!, lookupValue)
+  for (let index = 0; index < length; index += 1) {
+    const comparison = deps.compareScalars(getVectorValue(range, index, deps), lookupValue)
     if (comparison === undefined) {
       return -1
     }

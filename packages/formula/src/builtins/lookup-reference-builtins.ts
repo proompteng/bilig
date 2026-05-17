@@ -44,12 +44,10 @@ function buildXlookupReturnShape(
   lookupLength: number,
   deps: LookupReferenceBuiltinDeps,
 ): XlookupReturnShape | CellValue {
-  if (returnRange.refKind !== 'cells') {
-    return deps.errorValue(ErrorCode.Value)
-  }
+  const allowTrimmedAxisLength = lookupRange.refKind !== 'cells' && lookupRange.refKind === returnRange.refKind
 
   if (lookupRange.cols === 1) {
-    if (returnRange.rows !== lookupLength) {
+    if (returnRange.rows !== lookupLength && !allowTrimmedAxisLength) {
       return deps.errorValue(ErrorCode.Value)
     }
     return {
@@ -62,7 +60,7 @@ function buildXlookupReturnShape(
     }
   }
 
-  if (returnRange.cols !== lookupLength) {
+  if (returnRange.cols !== lookupLength && !allowTrimmedAxisLength) {
     return deps.errorValue(ErrorCode.Value)
   }
   return {
@@ -363,7 +361,7 @@ export function createLookupReferenceBuiltins(deps: LookupReferenceBuiltinDeps):
         return deps.errorValue(ErrorCode.Value)
       }
       const lookupRange = deps.requireCellVector(lookupArray)
-      const returnRange = deps.toCellRange(returnArray)
+      const returnRange = deps.isRangeArg(returnArray) ? returnArray : deps.toCellRange(returnArray)
       if (!deps.isRangeArg(lookupRange)) {
         return lookupRange
       }

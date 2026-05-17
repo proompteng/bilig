@@ -217,6 +217,33 @@ function toLookupBuiltinArgument(callee: string, rawArg: StackValue): CellValue 
   return toRangeArgument(rawArg)
 }
 
+function inferMaterializedRangeShape(
+  instruction: Extract<JsPlanInstruction, { opcode: 'push-range' }>,
+  valuesLength: number,
+): { rows: number; cols: number } {
+  let rows = valuesLength
+  let cols = 1
+  try {
+    const range = parseRangeAddress(`${instruction.start}:${instruction.end}`)
+    if (range.kind === 'cells') {
+      return {
+        rows: range.end.row - range.start.row + 1,
+        cols: range.end.col - range.start.col + 1,
+      }
+    }
+    if (range.kind === 'cols') {
+      cols = range.end.col - range.start.col + 1
+      rows = cols <= 0 ? 0 : valuesLength / cols
+      return { rows, cols }
+    }
+    rows = range.end.row - range.start.row + 1
+    cols = rows <= 0 ? 0 : valuesLength / rows
+    return { rows, cols }
+  } catch {
+    return { rows, cols }
+  }
+}
+
 const arrayLiftedScalarBuiltinArities = new Map<string, number>([
   ['IFERROR', 2],
   ['IFNA', 2],
@@ -446,21 +473,7 @@ function executePlan(
             instruction.end,
             instruction.refKind,
           )
-          let rows = values.length
-          let cols = 1
-          if (instruction.refKind === 'cells') {
-            try {
-              const sheetPrefix = instruction.sheetName ? `${instruction.sheetName}!` : ''
-              const range = parseRangeAddress(`${sheetPrefix}${instruction.start}:${instruction.end}`)
-              if (range.kind === 'cells') {
-                rows = range.end.row - range.start.row + 1
-                cols = range.end.col - range.start.col + 1
-              }
-            } catch {
-              rows = values.length
-              cols = 1
-            }
-          }
+          const { rows, cols } = inferMaterializedRangeShape(instruction, values.length)
           context.noteRangeMaterialization?.(values.length)
           stack.push({
             kind: 'range',

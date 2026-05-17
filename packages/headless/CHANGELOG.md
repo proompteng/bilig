@@ -11,6 +11,7 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - fix(formula): exclude non-text wildcard criteria matches (07b9303f)
 
 ## 0.19.1

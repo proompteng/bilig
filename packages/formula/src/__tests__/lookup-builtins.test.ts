@@ -12,6 +12,10 @@ function cellRange(values: CellValue[], rows: number, cols: number): RangeBuilti
   return { kind: 'range', refKind: 'cells', values, rows, cols }
 }
 
+function axisRange(values: CellValue[], refKind: 'rows' | 'cols', rows: number, cols: number): RangeBuiltinArgument {
+  return { kind: 'range', refKind, values, rows, cols }
+}
+
 describe('lookup builtins', () => {
   it('supports MATCH across one-dimensional cell ranges', () => {
     const MATCH = getLookupBuiltin('MATCH')!
@@ -493,6 +497,20 @@ describe('lookup builtins', () => {
     expect(
       XLOOKUP(text('pear'), cellRange([text('apple'), text('pear'), text('plum')], 3, 1), cellRange([num(10), num(20), num(30)], 3, 1)),
     ).toEqual(num(20))
+    expect(
+      XLOOKUP(
+        text('pear'),
+        axisRange([text('apple'), text('pear'), text('plum')], 'cols', 3, 1),
+        axisRange([num(10), num(20)], 'cols', 2, 1),
+      ),
+    ).toEqual(num(20))
+    expect(
+      XLOOKUP(
+        text('plum'),
+        axisRange([text('apple'), text('pear'), text('plum')], 'cols', 3, 1),
+        axisRange([num(10), num(20)], 'cols', 2, 1),
+      ),
+    ).toEqual(num(0))
 
     expect(
       XLOOKUP(

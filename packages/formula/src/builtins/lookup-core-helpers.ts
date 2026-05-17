@@ -160,9 +160,6 @@ export function requireCellVector(arg: LookupBuiltinArgument): RangeBuiltinArgum
   if (!isRangeArg(arg)) {
     return errorValue(ErrorCode.Value)
   }
-  if (arg.refKind !== 'cells') {
-    return errorValue(ErrorCode.Value)
-  }
   if (arg.rows !== 1 && arg.cols !== 1) {
     return errorValue(ErrorCode.NA)
   }

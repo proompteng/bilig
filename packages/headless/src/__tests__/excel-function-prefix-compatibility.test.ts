@@ -25,6 +25,12 @@ function buildWorkbook(): WorkPaper {
         [1, 10, '_xlfn.XLOOKUP', '=_xlfn.XLOOKUP(2,A2:A4,B2:B4)'],
         [2, 20, '_xlfn.LET', '=_xlfn.LET(x,2,x+3)'],
         [3, 30, '_xlfn._xlws.FILTER', '=SUM(_xlfn._xlws.FILTER(B2:B4,A2:A4>1))'],
+        [null, null, '_xlfn.XLOOKUP whole column', '=_xlfn.XLOOKUP(3,Data!A:A,Data!B:B)'],
+      ] satisfies TestCell[][],
+      Data: [
+        [1, 10],
+        [2, 20],
+        [3, null],
       ] satisfies TestCell[][],
     },
     { maxRows: 8, maxColumns: 6 },
@@ -38,6 +44,7 @@ describe('Excel function compatibility prefixes', () => {
     expectNumber(cellValue(workbook, 'Model!D2'), 20)
     expectNumber(cellValue(workbook, 'Model!D3'), 5)
     expectNumber(cellValue(workbook, 'Model!D4'), 50)
+    expectNumber(cellValue(workbook, 'Model!D5'), 0)
 
     workbook.dispose()
   })
