@@ -1,6 +1,6 @@
 # Community Growth Snapshot
 
-Captured at: `2026-05-17T11:03:07.137Z`
+Captured at: `2026-05-17T11:16:52.550Z`
 
 This snapshot tracks the public signals for the `@bilig/headless` growth loop: GitHub conversion, npm demand, contributor on-ramp health, discussion activity, and traffic quality.
 
@@ -16,9 +16,9 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 
 ## npm
 
-- Package: `@bilig/headless@0.18.24`
+- Package: `@bilig/headless@0.18.25`
 - License: `MIT`
-- Modified: `2026-05-17T10:50:58.295Z`
+- Modified: `2026-05-17T11:14:42.782Z`
 - Downloads last week: 17,235 (2026-05-10 to 2026-05-16)
 - Downloads last month: 32,535 (2026-04-17 to 2026-05-16)
 
@@ -53,14 +53,9 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 
 ## External Discovery
 
-- LibHunt indexes Bilig on the `headless-spreadsheet` topic page:
-  <https://www.libhunt.com/topic/headless-spreadsheet>.
-- The LibHunt entry was discovered through the May 7 Show HN mention and is
-  categorized with TypeScript, Spreadsheet, Excel, Agents, and `ai-agents`.
-- LibHunt currently shows stale stars and description data, so the practical
-  follow-up is to keep GitHub repository topics and npm metadata aligned with
-  `headless-spreadsheet`, `excel`, `ai-agents`, and formula-recalculation
-  terms while waiting for the next crawler refresh.
+- LibHunt indexes Bilig on the `headless-spreadsheet` topic page: <https://www.libhunt.com/topic/headless-spreadsheet>.
+- That surface came from the May 7 Show HN discovery path and classifies the project near TypeScript, Spreadsheet, Excel, Agents, and `ai-agents` audiences.
+- Keep GitHub repository topics, npm keywords, and proof-page copy aligned with `headless-spreadsheet`, `excel`, `ai-agents`, and formula-recalculation terms while waiting for crawler refreshes.
 
 ## Conversion Pressure
 
@@ -72,10 +67,10 @@ This snapshot tracks the public signals for the `@bilig/headless` growth loop: G
 
 ## Spike Read
 
-- GitHub stargazer timestamps show the star jump concentrated on May 7-11, 2026: 4 stars on May 7, 4 on May 8, 7 on May 10, and 6 on May 11. No later stargazer timestamp is visible in the current API result.
-- The jump started the same day as the two public Show HN submissions: item `48045427` at `2026-05-07T04:34:01Z` and item `48052832` at `2026-05-07T18:16:44Z`. HN Algolia currently reports only 2 and 3 points with no comment thread, so the useful lesson is qualified discovery, not discussion volume.
-- GitHub traffic supports that read: May 7-8 produced 247 repo views from 106 unique visitors and 9,571 clones from 1,197 unique cloners. Current top referrers still include news.ycombinator.com at 52/37, ahead of t.co at 29/24 and reddit.com at 6/4.
-- Replication plan: do not repost the same launch. Keep the `headless-spreadsheet` wedge, but align GitHub topics and npm keywords with broader directory/search classifiers such as `excel` and `ai-agents`, then use sharper proof pages for concrete adoption-blocker asks.
+- The visible May 7-11 star jump still lines up with external developer traffic, not broad social posting.
+- The strongest current external referrer is news.ycombinator.com with 52 views from 37 unique visitors.
+- Hacker News is still ahead of X/t.co in qualified GitHub traffic: 52/37 versus 29/24.
+- Replication plan: do not repost the same launch. Ship one sharper proof page, then ask HN/X/MCP audiences for a concrete adoption blocker: formula family, XLSX cache behavior, persistence shape, or agent writeback verification.
 
 ## Read This Snapshot
 
