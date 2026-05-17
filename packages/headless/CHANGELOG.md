@@ -11,10 +11,12 @@ This package is released as part of the aligned bilig library package set.
 - Manual override: no
 
 ## Fixes
+
 - perf(engine): enable column indexes by default (2b91d1dd)
 - fix(corpus): harden recent workbook headless gate (f1519cea)
 
 ## Internal runtime changes
+
 - docs(growth): add agent handoff prompt (75eec5c8)
 
 ## 0.18.28
