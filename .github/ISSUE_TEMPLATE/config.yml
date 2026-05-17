@@ -9,6 +9,9 @@ contact_links:
   - name: Five Node workbook automation examples
     url: https://proompteng.github.io/bilig/workbook-automation-examples-node.html
     about: Run invoice, budget, MRR, quote, and capacity examples before proposing a new workflow.
+  - name: Submit a workbook fixture
+    url: https://proompteng.github.io/bilig/submit-workbook-fixture.html
+    about: Share a reduced public workbook or automation case that should become a test, example, or corpus fixture.
   - name: Feedback discussion
     url: https://github.com/proompteng/bilig/discussions/157
     about: Share Node service, coding-agent, or workbook automation feedback that is not a bug or reduced formula mismatch.

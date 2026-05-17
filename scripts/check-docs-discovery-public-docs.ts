@@ -54,6 +54,7 @@ export async function requireSharedPublicDocsDiscovery(args: {
     'MCP spreadsheet tool server',
     'npm provenance',
     'adoption blocker form',
+    'submit a workbook fixture',
     '## TypeScript API Shape',
     'WorkPaper.buildFromSheets({',
     "['Revenue', '=Inputs!B2*Inputs!B3']",
@@ -110,7 +111,12 @@ export async function requireSharedPublicDocsDiscovery(args: {
       { path: 'docs/index.html', content: args.index },
       { path: 'docs/llms.txt', content: args.llms },
     ],
-    ['https://github.com/proompteng/bilig/discussions/new?category=general', 'adoption blocker'],
+    [
+      'https://github.com/proompteng/bilig/discussions/new?category=general',
+      'https://github.com/proompteng/bilig/issues/new?template=workbook_fixture.yml',
+      'adoption blocker',
+      'submit a workbook fixture',
+    ],
   )
   requireDocumentsInclude(
     [
@@ -168,6 +174,7 @@ export async function requireSharedPublicDocsDiscovery(args: {
       'examples/serverless-workpaper-api',
       'quote-approval-api',
       'node-framework-workpaper-adapters',
+      'submit-workbook-fixture',
       'mcp-spreadsheet-server-directory',
     ],
   )

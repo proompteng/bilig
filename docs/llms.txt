@@ -35,6 +35,7 @@ openssf scorecard: https://scorecard.dev/viewer/?uri=github.com/proompteng/bilig
 - https://proompteng.github.io/bilig/create-bilig-workpaper.html
 - https://proompteng.github.io/bilig/production-adoption-checklist-headless-workpaper.html
 - https://proompteng.github.io/bilig/npm-provenance-package-trust.html
+- https://proompteng.github.io/bilig/submit-workbook-fixture.html
 - https://scorecard.dev/viewer/?uri=github.com/proompteng/bilig
 - https://proompteng.github.io/bilig/npm-eval.ts
 - https://proompteng.github.io/bilig/workbook-automation-examples-node.html
@@ -82,6 +83,7 @@ openssf scorecard: https://scorecard.dev/viewer/?uri=github.com/proompteng/bilig
 - https://github.com/proompteng/bilig/blob/main/docs/node-service-workpaper-recipe.md
 - https://github.com/proompteng/bilig/blob/main/docs/serverless-workpaper-api-route.md
 - https://github.com/proompteng/bilig/blob/main/docs/node-framework-workpaper-adapters.md
+- https://github.com/proompteng/bilig/blob/main/docs/submit-workbook-fixture.md
 - https://github.com/proompteng/bilig/blob/main/docs/csv-shaped-workpaper-input-recipe.md
 - https://github.com/proompteng/bilig/blob/main/docs/unsupported-formula-troubleshooting-recipe.md
 - https://github.com/proompteng/bilig/blob/main/docs/agent-workpaper-tool-calling-recipe.md
@@ -387,6 +389,9 @@ npm run agent:verify
 - structured adoption blocker form for formula, xlsx, persistence, mcp,
   framework, package, benchmark, documentation, or example gaps:
   https://github.com/proompteng/bilig/discussions/new?category=general
+- submit a workbook fixture: reduced public workbook cases that should become tests,
+  examples, docs, or corpus fixtures:
+  https://github.com/proompteng/bilig/issues/new?template=workbook_fixture.yml
 - watch release notifications for production evaluation:
   https://github.com/proompteng/bilig/subscription
 - feedback discussion for agent and service workflow input:

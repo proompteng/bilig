@@ -1,0 +1,96 @@
+name: Workbook fixture submission
+description: Share a reduced public workbook, formula workload, or service workflow Bilig should support.
+title: "[fixture]: "
+labels: ["needs reduced fixture"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when a real workbook, formula workload, import/export case, service route, or agent workflow would make Bilig more useful if it became a public fixture.
+
+        Do not attach confidential spreadsheets or customer data. Reduce the case, anonymize it, and only share files that can become part of a public test corpus, example, or documentation page.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Fixture area
+      description: Which public proof path should this improve?
+      options:
+        - Formula result mismatch
+        - XLSX import or export
+        - WorkPaper JSON persistence
+        - Service or API workflow
+        - Agent or MCP tool workflow
+        - Performance or scale case
+        - Documentation or example gap
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: package_version
+    attributes:
+      label: Package version or commit
+      description: Include the @bilig/headless version, npm create package version, or commit you tested.
+      placeholder: "@bilig/headless 0.17.1, create-bilig-workpaper 0.3.0, or commit SHA"
+    validations:
+      required: true
+  - type: textarea
+    id: fixture
+    attributes:
+      label: Reduced fixture
+      description: Link the reduced workbook, paste the minimal sheet data, or describe the smallest workflow that reproduces the case.
+      placeholder: |
+        Public file or gist:
+        Sheet names:
+        Minimal input rows/cells:
+        Formulas:
+        Import/export path:
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected output
+      description: Paste the expected value, exported file behavior, JSON shape, route response, or agent-tool transcript.
+      placeholder: |
+        Expected display value:
+        Expected JSON:
+        Expected XLSX behavior:
+        Expected service response:
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual output
+      description: Paste the Bilig output, mismatch report, error, missing API, or current workaround.
+      placeholder: |
+        Actual display value:
+        Error:
+        Current workaround:
+        Missing API or docs:
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction command or script
+      description: Include the shortest command, test, or script maintainers can run.
+      placeholder: |
+        pnpm workpaper:xlsx-corpus:check ./path/to/reduced.xlsx -- --from-import-snapshot
+
+        or:
+
+        npm run quote-approval-api
+    validations:
+      required: true
+  - type: checkboxes
+    id: public_rights
+    attributes:
+      label: Public fixture permission
+      options:
+        - label: This fixture is public, anonymized, and safe for maintainers to add to tests, examples, docs, or corpus files.
+          required: true
+        - label: The reduced case includes expected output from Excel, an existing service, or a known-good manual check.
+          required: true
+        - label: The report includes enough data to reproduce the behavior without access to a private workbook or account.
+          required: true

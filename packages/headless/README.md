@@ -36,6 +36,7 @@ around the same WorkPaper model.
 | Public technical review  | [Show HN maintainer note](https://proompteng.github.io/bilig/show-hn-formula-workbooks-node-services.html)                                                                               | One shareable page has the npm check, benchmark caveat, known limits, and feedback ask.      |
 | Trust and performance    | [npm provenance](https://proompteng.github.io/bilig/npm-provenance-package-trust.html) and [benchmark evidence](https://proompteng.github.io/bilig/what-workpaper-benchmark-proves.html) | npm shows SLSA provenance, and benchmark claims match the checked artifact.                  |
 | Almost a fit             | [adoption blocker form](https://github.com/proompteng/bilig/discussions/new?category=general)                                                                                            | Name the formula, import/export, persistence, framework, MCP, package, or benchmark gap.     |
+| Real workbook blocked    | [submit a workbook fixture](https://proompteng.github.io/bilig/submit-workbook-fixture.html)                                                                                             | Share a reduced public case that can become a test, example, or corpus fixture.              |
 
 ## Install
 
@@ -530,6 +531,9 @@ If the sanity check matches a problem you have, star or bookmark the project:
 <https://github.com/proompteng/bilig/stargazers>.
 If it almost matches but a gap blocks adoption, use the adoption blocker form:
 <https://github.com/proompteng/bilig/discussions/new?category=general>.
+If a reduced workbook, import/export case, or service workflow would prove the
+gap better, submit a public fixture:
+<https://github.com/proompteng/bilig/issues/new?template=workbook_fixture.yml>.
 
 ## Production Status
 

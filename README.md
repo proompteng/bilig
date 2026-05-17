@@ -35,6 +35,7 @@ Project site: <https://proompteng.github.io/bilig/>
 | Public technical review  | [Show HN maintainer note](docs/show-hn-formula-workbooks-node-services.md)                                               | One shareable page has the npm check, benchmark caveat, known limits, and feedback ask.     |
 | Trust and performance    | [npm provenance](docs/npm-provenance-package-trust.md) and [benchmark evidence](docs/what-workpaper-benchmark-proves.md) | npm shows SLSA provenance, and benchmark claims match the checked artifact.                 |
 | Almost a fit             | [adoption blocker form](https://github.com/proompteng/bilig/discussions/new?category=general)                            | Name the formula, import/export, persistence, framework, MCP, package, or benchmark gap.    |
+| Real workbook blocked    | [submit a workbook fixture](docs/submit-workbook-fixture.md)                                                             | Share a reduced public case that can become a test, example, or corpus fixture.             |
 
 <p align="center">
   <img src="docs/assets/github-social-preview.png" alt="bilig headless workbook runtime for formulas in TypeScript" />
@@ -197,6 +198,11 @@ Use the shortest path that proves the package against a real job.
 4. If an agent needs workbook tools, start with the
    [MCP server guide](docs/mcp-workpaper-tool-server.md), including the
    copy-paste JSON-RPC transcript for verified write/readback.
+5. If a real workbook almost works, submit a
+   [reduced public fixture](docs/submit-workbook-fixture.md) so the blocker can
+   become a test, example, or corpus case instead of private feedback.
+   Form:
+   <https://github.com/proompteng/bilig/issues/new?template=workbook_fixture.yml>.
 
 The rest of the docs are an index, not a prerequisite.
 
@@ -208,6 +214,7 @@ the [formula workbooks proof page](docs/formula-workbooks-node-services-agent-to
 the [Node spreadsheet formula engine guide](docs/node-spreadsheet-formula-engine.md),
 [server-side spreadsheet automation](docs/server-side-spreadsheet-automation-node.md),
 [framework adapters](docs/node-framework-workpaper-adapters.md),
+[workbook fixture submissions](docs/submit-workbook-fixture.md),
 [AI SDK and LangChain tools](docs/vercel-ai-sdk-langchain-spreadsheet-tool.md),
 the [MCP server guide](docs/mcp-workpaper-tool-server.md),
 [spreadsheet MCP server comparison](docs/spreadsheet-mcp-server-comparison.md),
