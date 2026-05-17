@@ -43,12 +43,13 @@ Latest execution snapshot on May 13, 2026 at `03:08:58Z`:
   tool-server show-and-tell thread, the AI SDK/LangChain WorkPaper agent
   announcement, the five-example show-and-tell thread, and the workflow-feedback
   thread
-- Discovery metadata: GitHub topics now include `agent-tools`, `coding-agents`,
-  `langchain`, `vercel-ai-sdk`, and `xlsx` alongside the spreadsheet-engine and
+- Discovery metadata: GitHub topics now include `agent-tools`, `ai-agents`,
+  `excel`, `headless-spreadsheet`, `xlsx`, `mcp-server`, and
+  `formula-recalculation` alongside the spreadsheet-engine and
   workbook-automation topics.
-- npm discovery metadata now includes exact agent search terms such as
-  `agent-spreadsheet`, `spreadsheet-agent`, `workbook-agent`, `llm`, `mcp`, and
-  `model-context-protocol`.
+- npm discovery metadata now includes exact agent and formula search terms such
+  as `ai-agents`, `spreadsheet-agent`, `workbook-agent`,
+  `formula-recalculation`, `mcp`, and `model-context-protocol`.
 - MCP discovery is live in the official registry as
   `io.github.proompteng/bilig-workpaper`, backed by `@bilig/headless` stdio
   package metadata and the packaged `bilig-workpaper-mcp` binary.
@@ -572,6 +573,25 @@ Latest HN conversion signal on May 14, 2026:
 - There is no HN comment thread to answer right now. The next HN move is not
   reposting; it is making the landing page, README, and narrow benchmark asks
   convert the traffic that already arrived.
+
+Latest star-jump attribution snapshot on May 17, 2026:
+
+- GitHub stargazer timestamps show the jump concentrated on May 7-11: 4 stars
+  on May 7, 4 on May 8, 7 on May 10, and 6 on May 11. No later stargazer
+  timestamp is visible in the current API result.
+- The jump started the same day as the two public Show HN submissions:
+  `48045427` at `2026-05-07T04:34:01Z` and `48052832` at
+  `2026-05-07T18:16:44Z`. HN Algolia still reports only `2` and `3` points
+  with no comment thread, so the likely mechanism was qualified repo discovery,
+  not a discussion breakout.
+- GitHub traffic for May 7-8 was `247` views from `106` unique visitors and
+  `9,571` clones from `1,197` unique cloners. Current top referrers still show
+  Hacker News at `52/37`, ahead of `t.co` at `29/24` and Reddit at `6/4`.
+- Replication action: keep the `headless-spreadsheet` wedge that HN/LibHunt
+  already understood, but make the project easier for broader classifiers to
+  place. GitHub topics now trade narrower custom tags for `ai-agents` and
+  `excel`, while npm metadata keeps the exact agent and formula-recalculation
+  terms.
 
 Latest Product Hunt launch surface on May 14, 2026:
 

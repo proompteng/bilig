@@ -8,9 +8,9 @@
     "keywordCount": 24,
     "keywords": [
       "agent-tools",
+      "ai-agents",
       "excel",
       "excel-formulas",
-      "formula",
       "formula-engine",
       "formula-evaluation",
       "formula-recalculation",
@@ -18,15 +18,15 @@
       "hyperformula",
       "mcp",
       "mcp-server",
-      "mcp-spreadsheet",
       "model-context-protocol",
       "node",
-      "recalculation",
+      "spreadsheet-agent",
       "spreadsheet-automation",
       "spreadsheet-engine",
       "spreadsheet-formulas",
       "spreadsheet-mcp",
       "typescript",
+      "workbook-agent",
       "workbook-api",
       "workpaper",
       "xlsx",
@@ -37,11 +37,11 @@
     "hasMcpBinary": true
   },
   "npmPackDryRun": {
-    "tarballBytes": 425077,
-    "unpackedBytes": 2539243,
+    "tarballBytes": 425082,
+    "unpackedBytes": 2539248,
     "entryCount": 429,
     "readmeBytes": 39721,
-    "packageJsonBytes": 2082
+    "packageJsonBytes": 2087
   },
   "coldStartProbe": {
     "runtime": "node",
