@@ -4,7 +4,7 @@ import type { CellValue } from '@bilig/protocol'
 import type { EngineCellMutationRef } from '../../cell-mutations-at.js'
 import { batchOpOrder, markBatchApplied, type OpOrder } from '../../replica-state.js'
 import { CellFlags } from '../../cell-store.js'
-import { emptyValue, literalToValue, writeLiteralToCellStore } from '../../engine-value-utils.js'
+import { literalToValue, writeLiteralToCellStore } from '../../engine-value-utils.js'
 import { exactLookupLiteralNumericValue, withOptionalLookupStringIds } from './direct-lookup-helpers.js'
 import { DirectFormulaIndexCollection } from './direct-formula-index-collection.js'
 import { directScalarLiteralNumericValue } from './direct-scalar-helpers.js'
@@ -26,6 +26,7 @@ import {
   markFreshDirectAggregateInputsCovered,
 } from './operation-fresh-direct-aggregate.js'
 import { createOperationFreshDirectAggregateFormulaBatchFastPath } from './operation-fresh-direct-aggregate-formula-batch-fast-path.js'
+import { applyClearCellMutation } from './operation-clear-cell-mutation.js'
 
 type OperationCellMutationSource = Exclude<MutationSource, 'remote'>
 type OperationCellDirectFormulaCallbacks = Parameters<typeof finalizeOperationRecalcAndEvents>[0]['directFormulaCallbacks']
@@ -655,189 +656,49 @@ export function createOperationCellMutationApplier(input: CreateOperationCellMut
               break
             }
             case 'clearCell': {
-              const { hasExactLookupDependents, hasSortedLookupDependents, hasAggregateDependents, needsLookupValueRead } =
-                trackedColumnDependencyFlags.resolve(sheetId, mutation.col)
-              const prior = readCellValueForLookup(existingIndex)
-              if (existingIndex !== undefined && isClearCellNoOp(existingIndex)) {
-                break
-              }
-              if (existingIndex !== undefined && canFastPathLiteralOverwrite(existingIndex)) {
-                args.state.workbook.cellStore.setValue(existingIndex, emptyValue())
-                args.state.workbook.notifyCellValueWritten(existingIndex)
-                if (!isRestore) {
-                  rebindValueSensitiveFormulaDependents(existingIndex)
-                }
-                if (!isRestore) {
-                  const nextValue = emptyValue()
-                  const directDependentsHandled = markPostRecalcDirectFormulaDependents(
-                    existingIndex,
-                    postRecalcDirectFormulaIndices,
-                    prior.value,
-                    nextValue,
-                  )
-                  if (!directDependentsHandled) {
-                    markDirectScalarDeltaClosure(existingIndex, prior.value, nextValue, postRecalcDirectFormulaIndices)
+              const clearResult = applyClearCellMutation({
+                serviceArgs: args,
+                sheetId,
+                mutation,
+                existingIndex,
+                source,
+                isRestore,
+                trackExplicitChanges,
+                order,
+                changedInputCount,
+                formulaChangedCount,
+                explicitChangedCount,
+                topologyChanged,
+                dependencyFlags: trackedColumnDependencyFlags.resolve(sheetId, mutation.col),
+                postRecalcDirectFormulaIndices,
+                exactLookupImpactCaches,
+                resolveSheetName: (id) => sheetNameResolver.resolve(id),
+                setCellEntityVersion,
+                isClearCellNoOp,
+                canFastPathLiteralOverwrite,
+                readCellValueForLookup,
+                rebindValueSensitiveFormulaDependents: (cellIndex, counts) => {
+                  const reboundCount = counts.formulaChangedCount
+                  const nextFormulaChangedCount = rebindDynamicFormulaDependents(cellIndex, counts.formulaChangedCount)
+                  return {
+                    ...counts,
+                    formulaChangedCount: nextFormulaChangedCount,
+                    topologyChanged: counts.topologyChanged || nextFormulaChangedCount !== reboundCount,
                   }
-                }
-                if (needsLookupValueRead) {
-                  const sheetName = sheetNameResolver.resolve(sheetId)
-                  if (hasExactLookupDependents || hasAggregateDependents) {
-                    const exactLookupRequest = withOptionalLookupStringIds({
-                      sheetName,
-                      row: mutation.row,
-                      col: mutation.col,
-                      oldValue: prior.value,
-                      newValue: emptyValue(),
-                      oldStringId: prior.stringId,
-                      newStringId: undefined,
-                      inputCellIndex: existingIndex,
-                    })
-                    if (hasExactLookupDependents) {
-                      formulaChangedCount = noteExactLookupLiteralWriteWhenDirty(
-                        exactLookupRequest,
-                        formulaChangedCount,
-                        exactLookupImpactCaches,
-                      )
-                    }
-                    if (hasAggregateDependents) {
-                      args.noteAggregateLiteralWrite({
-                        sheetName: exactLookupRequest.sheetName,
-                        row: exactLookupRequest.row,
-                        col: exactLookupRequest.col,
-                        oldValue: exactLookupRequest.oldValue,
-                        newValue: exactLookupRequest.newValue,
-                      })
-                      formulaChangedCount = markAffectedDirectRangeDependents(
-                        exactLookupRequest,
-                        formulaChangedCount,
-                        postRecalcDirectFormulaIndices,
-                      )
-                    }
-                  }
-                  if (hasSortedLookupDependents) {
-                    const sortedLookupRequest = withOptionalLookupStringIds({
-                      sheetName,
-                      row: mutation.row,
-                      col: mutation.col,
-                      oldValue: prior.value,
-                      newValue: emptyValue(),
-                      oldStringId: prior.stringId,
-                      newStringId: undefined,
-                    })
-                    formulaChangedCount = noteSortedLookupLiteralWriteWhenDirty(sortedLookupRequest, formulaChangedCount)
-                  }
-                }
-                changedInputCount = args.markInputChanged(existingIndex, changedInputCount)
-                if (trackExplicitChanges) {
-                  explicitChangedCount = args.markExplicitChanged(existingIndex, explicitChangedCount)
-                }
-                if (!isRestore && args.state.trackReplicaVersions) {
-                  setCellEntityVersion(sheetNameResolver.resolve(sheetId), formatAddress(mutation.row, mutation.col), order!)
-                }
-                break
-              }
-              if (existingIndex === undefined) {
-                if (!isRestore && args.state.trackReplicaVersions) {
-                  setCellEntityVersion(sheetNameResolver.resolve(sheetId), formatAddress(mutation.row, mutation.col), order!)
-                }
-                break
-              }
-              changedInputCount = args.markPivotRootsChanged(args.clearPivotForCell(existingIndex), changedInputCount)
-              changedInputCount = args.markSpillRootsChanged(args.clearOwnedSpill(existingIndex), changedInputCount)
-              const removedFormula = args.removeFormula(existingIndex)
-              topologyChanged = removedFormula || topologyChanged
-              if (removedFormula) {
-                args.invalidateAggregateColumn({ sheetName: sheetNameResolver.resolve(sheetId), col: mutation.col })
-              }
-              if (removedFormula) {
-                clearTrackedColumnDependencyFlagCache()
-              }
-              args.state.workbook.cellStore.setValue(existingIndex, emptyValue())
-              args.state.workbook.notifyCellValueWritten(existingIndex)
-              if (!isRestore) {
-                rebindValueSensitiveFormulaDependents(existingIndex)
-              }
-              if (!isRestore) {
-                const nextValue = emptyValue()
-                const directDependentsHandled = markPostRecalcDirectFormulaDependents(
-                  existingIndex,
-                  postRecalcDirectFormulaIndices,
-                  prior.value,
-                  nextValue,
-                )
-                if (!directDependentsHandled) {
-                  markDirectScalarDeltaClosure(existingIndex, prior.value, nextValue, postRecalcDirectFormulaIndices)
-                }
-              }
-              if (needsLookupValueRead) {
-                const sheetName = sheetNameResolver.resolve(sheetId)
-                if (hasExactLookupDependents || hasAggregateDependents) {
-                  const exactLookupRequest = withOptionalLookupStringIds({
-                    sheetName,
-                    row: mutation.row,
-                    col: mutation.col,
-                    oldValue: prior.value,
-                    newValue: emptyValue(),
-                    oldStringId: prior.stringId,
-                    newStringId: undefined,
-                    inputCellIndex: existingIndex,
-                  })
-                  if (hasExactLookupDependents) {
-                    formulaChangedCount = noteExactLookupLiteralWriteWhenDirty(
-                      exactLookupRequest,
-                      formulaChangedCount,
-                      exactLookupImpactCaches,
-                    )
-                  }
-                  if (hasAggregateDependents) {
-                    args.noteAggregateLiteralWrite({
-                      sheetName: exactLookupRequest.sheetName,
-                      row: exactLookupRequest.row,
-                      col: exactLookupRequest.col,
-                      oldValue: exactLookupRequest.oldValue,
-                      newValue: exactLookupRequest.newValue,
-                    })
-                    formulaChangedCount = markAffectedDirectRangeDependents(
-                      exactLookupRequest,
-                      formulaChangedCount,
-                      postRecalcDirectFormulaIndices,
-                    )
-                  }
-                }
-                if (hasSortedLookupDependents) {
-                  const sortedLookupRequest = withOptionalLookupStringIds({
-                    sheetName,
-                    row: mutation.row,
-                    col: mutation.col,
-                    oldValue: prior.value,
-                    newValue: emptyValue(),
-                    oldStringId: prior.stringId,
-                    newStringId: undefined,
-                  })
-                  formulaChangedCount = noteSortedLookupLiteralWriteWhenDirty(sortedLookupRequest, formulaChangedCount)
-                }
-              }
-              args.state.workbook.cellStore.flags[existingIndex] =
-                (args.state.workbook.cellStore.flags[existingIndex] ?? 0) &
-                ~(
-                  CellFlags.AuthoredBlank |
-                  CellFlags.HasFormula |
-                  CellFlags.JsOnly |
-                  CellFlags.InCycle |
-                  CellFlags.SpillChild |
-                  CellFlags.PivotOutput
-                )
-              normalizeHistoryDependencyPlaceholder(existingIndex, source)
-              if (!isRestore) {
-                pruneCellIfOrphaned(existingIndex)
-              }
-              changedInputCount = args.markInputChanged(existingIndex, changedInputCount)
-              if (trackExplicitChanges) {
-                explicitChangedCount = args.markExplicitChanged(existingIndex, explicitChangedCount)
-              }
-              if (!isRestore && args.state.trackReplicaVersions) {
-                setCellEntityVersion(sheetNameResolver.resolve(sheetId), formatAddress(mutation.row, mutation.col), order!)
-              }
+                },
+                markPostRecalcDirectFormulaDependents,
+                markDirectScalarDeltaClosure,
+                noteExactLookupLiteralWriteWhenDirty,
+                noteSortedLookupLiteralWriteWhenDirty,
+                markAffectedDirectRangeDependents,
+                clearTrackedColumnDependencyFlagCache,
+                pruneCellIfOrphaned,
+                normalizeHistoryDependencyPlaceholder,
+              })
+              changedInputCount = clearResult.changedInputCount
+              formulaChangedCount = clearResult.formulaChangedCount
+              explicitChangedCount = clearResult.explicitChangedCount
+              topologyChanged = clearResult.topologyChanged
               break
             }
             default:
