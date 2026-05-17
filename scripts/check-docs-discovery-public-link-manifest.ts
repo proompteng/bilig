@@ -115,6 +115,8 @@ export const llmsRequiredLinks = [
   'https://github.com/proompteng/bilig/blob/main/docs/mcp-spreadsheet-server-directory.md',
   'https://github.com/proompteng/bilig/blob/main/docs/mcp-client-setup.md',
   'https://proompteng.github.io/bilig/.well-known/mcp/server-card.json',
+  'https://proompteng.github.io/bilig/.well-known/mcp.json',
+  'https://proompteng.github.io/bilig/.well-known/mcp-server-card.json',
   'pnpm mcpb:workpaper:build',
   'https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-tool-server.ts',
   'https://github.com/proompteng/bilig/blob/main/examples/headless-workpaper/mcp-stdio-server.ts',

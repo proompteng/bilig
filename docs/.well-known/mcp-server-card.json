@@ -1,0 +1,145 @@
+{
+  "$schema": "https://modelcontextprotocol.io/schemas/server-card/v1.0",
+  "version": "1.0",
+  "protocolVersion": "2025-06-18",
+  "serverInfo": {
+    "name": "Bilig WorkPaper",
+    "version": "latest",
+    "description": "Formula-backed WorkPaper MCP tools for workbook reads, input edits, recalculation, formula validation, and JSON persistence."
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/proompteng/bilig"
+  },
+  "homepage": "https://proompteng.github.io/bilig/",
+  "license": "MIT",
+  "authentication": {
+    "required": false,
+    "schemes": []
+  },
+  "transport": {
+    "type": "stdio",
+    "command": "npm",
+    "args": ["exec", "--package", "@bilig/headless", "--", "bilig-workpaper-mcp", "--demo-workpaper-tools"]
+  },
+  "capabilities": {
+    "tools": true,
+    "resources": false,
+    "prompts": false
+  },
+  "tools": [
+    {
+      "name": "list_sheets",
+      "description": "List sheets and their current used dimensions.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "read_range",
+      "description": "Read evaluated values and serialized cell contents for a WorkPaper range.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["range"],
+        "properties": {
+          "range": {
+            "type": "string",
+            "description": "A1 range. Include a sheet name or pass sheetName separately."
+          },
+          "sheetName": {
+            "type": "string",
+            "description": "Default sheet name when range omits a sheet name."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "read_cell",
+      "description": "Read one cell with evaluated value, display value, formula, and serialized content.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["sheetName", "address"],
+        "properties": {
+          "sheetName": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_cell_contents",
+      "description": "Set one WorkPaper cell. Start the server with --writable to persist the updated WorkPaper JSON file.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["sheetName", "address", "value"],
+        "properties": {
+          "sheetName": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "value": {
+            "type": ["string", "number", "boolean", "null"],
+            "description": "Raw cell content. Formula strings must start with =."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_cell_display_value",
+      "description": "Return the formatted display value for one WorkPaper cell.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["sheetName", "address"],
+        "properties": {
+          "sheetName": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "export_workpaper_document",
+      "description": "Export the current WorkPaper JSON document.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "includeConfig": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "validate_formula",
+      "description": "Validate formula syntax using the WorkPaper formula parser.",
+      "inputSchema": {
+        "type": "object",
+        "required": ["formula"],
+        "properties": {
+          "formula": {
+            "type": "string",
+            "description": "Formula string, including the leading =."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ],
+  "resources": [],
+  "prompts": []
+}

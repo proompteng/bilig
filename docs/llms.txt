@@ -60,6 +60,8 @@ openssf scorecard: https://scorecard.dev/viewer/?uri=github.com/proompteng/bilig
 - https://proompteng.github.io/bilig/mcp-workpaper-tool-server.html
 - https://proompteng.github.io/bilig/spreadsheet-mcp-server-comparison.html
 - https://proompteng.github.io/bilig/.well-known/mcp/server-card.json
+- https://proompteng.github.io/bilig/.well-known/mcp.json
+- https://proompteng.github.io/bilig/.well-known/mcp-server-card.json
 - https://proompteng.github.io/bilig/mcp-client-setup.html
 - https://proompteng.github.io/bilig/claude-desktop-mcpb-workpaper.html
 - https://proompteng.github.io/bilig/agent-workpaper-tool-calling-recipe.html

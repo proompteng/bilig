@@ -80,6 +80,8 @@ const {
   claudeDesktopMcpbDoc,
   agentToolCallLoopDoc,
   mcpServerCard,
+  mcpServerCardMcpJson,
+  mcpServerCardLegacyJson,
   workbookAutomationExamplesDoc,
   serverSideSpreadsheetAutomationNode,
   nodeFrameworkWorkpaperAdaptersDoc,
@@ -440,6 +442,12 @@ requireIncludes(llms, 'https://proompteng.github.io/bilig/xlsx-corpus-verifier-w
 const jekyllConfig = await readFile(join(docsRoot, '_config.yml'), 'utf8')
 requireIncludes(jekyllConfig, 'include:', 'docs/_config.yml')
 requireIncludes(jekyllConfig, '  - .well-known', 'docs/_config.yml')
+if (mcpServerCardMcpJson !== mcpServerCard) {
+  throw new Error('docs/.well-known/mcp.json must match docs/.well-known/mcp/server-card.json')
+}
+if (mcpServerCardLegacyJson !== mcpServerCard) {
+  throw new Error('docs/.well-known/mcp-server-card.json must match docs/.well-known/mcp/server-card.json')
+}
 const parsedMcpServerCard: unknown = JSON.parse(mcpServerCard)
 if (typeof parsedMcpServerCard !== 'object' || parsedMcpServerCard === null || Array.isArray(parsedMcpServerCard)) {
   throw new Error('docs/.well-known/mcp/server-card.json must be a JSON object')
@@ -582,6 +590,8 @@ for (const required of [
   'https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper',
   'https://glama.ai/mcp/servers/proompteng/bilig',
   'https://proompteng.github.io/bilig/.well-known/mcp/server-card.json',
+  'https://proompteng.github.io/bilig/.well-known/mcp.json',
+  'https://proompteng.github.io/bilig/.well-known/mcp-server-card.json',
   'Static MCP server card',
   'https://github.com/chatmcp/mcpso/issues/2295',
   'https://github.com/cline/mcp-marketplace/issues/1557',

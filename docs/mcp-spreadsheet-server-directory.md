@@ -65,6 +65,10 @@ That makes `tools/list` expose `list_sheets`, `read_range`, `read_cell`,
 For indexers that cannot execute containers, the docs site also serves a static
 MCP server card with the same tool catalog:
 <https://proompteng.github.io/bilig/.well-known/mcp/server-card.json>.
+The same card is mirrored at
+<https://proompteng.github.io/bilig/.well-known/mcp.json> and
+<https://proompteng.github.io/bilig/.well-known/mcp-server-card.json> for
+crawlers that probe those well-known variants.
 
 ## Directory Status
 
@@ -72,6 +76,7 @@ MCP server card with the same tool catalog:
 | ------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Official MCP Registry           | Live, freshness lag under review             | <https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.proompteng%2Fbilig-workpaper> |
 | Static MCP server card          | Live                                         | <https://proompteng.github.io/bilig/.well-known/mcp/server-card.json>                                 |
+| Static MCP discovery aliases    | Live                                         | <https://proompteng.github.io/bilig/.well-known/mcp.json>                                             |
 | Glama                           | Live, tool indexing pending                  | <https://glama.ai/mcp/servers/proompteng/bilig>                                                       |
 | mcp.so                          | Submitted for maintainer review              | <https://github.com/chatmcp/mcpso/issues/2295>                                                        |
 | Cline MCP Marketplace           | Submitted for maintainer review              | <https://github.com/cline/mcp-marketplace/issues/1557>                                                |

@@ -62,6 +62,8 @@ export interface DocsDiscoveryContext {
   readonly claudeDesktopMcpbDoc: string
   readonly agentToolCallLoopDoc: string
   readonly mcpServerCard: string
+  readonly mcpServerCardMcpJson: string
+  readonly mcpServerCardLegacyJson: string
   readonly workbookAutomationExamplesDoc: string
   readonly serverSideSpreadsheetAutomationNode: string
   readonly nodeFrameworkWorkpaperAdaptersDoc: string
@@ -127,6 +129,8 @@ export async function loadDocsDiscoveryContext(): Promise<DocsDiscoveryContext> 
     claudeDesktopMcpbDoc,
     agentToolCallLoopDoc,
     mcpServerCard,
+    mcpServerCardMcpJson,
+    mcpServerCardLegacyJson,
     workbookAutomationExamplesDoc,
     serverSideSpreadsheetAutomationNode,
     nodeFrameworkWorkpaperAdaptersDoc,
@@ -183,6 +187,8 @@ export async function loadDocsDiscoveryContext(): Promise<DocsDiscoveryContext> 
     readFile(join(docsRoot, 'claude-desktop-mcpb-workpaper.md'), 'utf8'),
     readFile(join(docsRoot, 'agent-spreadsheet-tool-call-loop.md'), 'utf8'),
     readFile(join(docsRoot, '.well-known', 'mcp', 'server-card.json'), 'utf8'),
+    readFile(join(docsRoot, '.well-known', 'mcp.json'), 'utf8'),
+    readFile(join(docsRoot, '.well-known', 'mcp-server-card.json'), 'utf8'),
     readFile(join(docsRoot, 'workbook-automation-examples-node.md'), 'utf8'),
     readFile(join(docsRoot, 'server-side-spreadsheet-automation-node.md'), 'utf8'),
     readFile(join(docsRoot, 'node-framework-workpaper-adapters.md'), 'utf8'),
@@ -248,6 +254,8 @@ export async function loadDocsDiscoveryContext(): Promise<DocsDiscoveryContext> 
     claudeDesktopMcpbDoc,
     agentToolCallLoopDoc,
     mcpServerCard,
+    mcpServerCardMcpJson,
+    mcpServerCardLegacyJson,
     workbookAutomationExamplesDoc,
     serverSideSpreadsheetAutomationNode,
     nodeFrameworkWorkpaperAdaptersDoc,
