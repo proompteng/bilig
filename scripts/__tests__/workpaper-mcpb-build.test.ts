@@ -33,7 +33,15 @@ describe('WorkPaper MCPB builder', () => {
         env: {},
       },
     })
-    expect(manifest.tools.map((tool) => tool.name)).toEqual(['read_workpaper_summary', 'set_workpaper_input_cell'])
+    expect(manifest.tools.map((tool) => tool.name)).toEqual([
+      'list_sheets',
+      'read_range',
+      'read_cell',
+      'set_cell_contents',
+      'get_cell_display_value',
+      'export_workpaper_document',
+      'validate_formula',
+    ])
     expect(manifest.keywords).toContain('mcpb')
     expect(manifest.compatibility.runtimes.node).toBe('>=22.0.0')
   })
@@ -43,13 +51,31 @@ describe('WorkPaper MCPB builder', () => {
       [
         '#!/usr/bin/env node',
         "import { createRequire } from 'node:module';",
-        "import { runDemoWorkPaperMcpStdioServer } from '@bilig/headless';",
+        "import { existsSync, writeFileSync } from 'node:fs';",
+        "import { dirname, join } from 'node:path';",
+        "import { fileURLToPath } from 'node:url';",
+        'import {',
+        '  buildDemoWorkPaper,',
+        '  createFileBackedWorkPaperMcpToolServerFromFile,',
+        '  exportWorkPaperDocument,',
+        '  runDemoWorkPaperMcpStdioServer,',
+        '  serializeWorkPaperDocument,',
+        "} from '@bilig/headless';",
         '',
         'const requirePackageJson = createRequire(import.meta.url);',
         "const packageManifest = requirePackageJson('../node_modules/@bilig/headless/package.json');",
         "const serverVersion = typeof packageManifest.version === 'string' ? packageManifest.version : '0.0.0';",
+        'const serverDir = dirname(fileURLToPath(import.meta.url));',
+        "const workpaperPath = join(serverDir, 'workpaper.json');",
         '',
-        'runDemoWorkPaperMcpStdioServer({ serverVersion });',
+        'if (!existsSync(workpaperPath)) {',
+        '  writeFileSync(workpaperPath, serializeWorkPaperDocument(exportWorkPaperDocument(buildDemoWorkPaper(), { includeConfig: true })));',
+        '}',
+        '',
+        'runDemoWorkPaperMcpStdioServer({',
+        '  serverVersion,',
+        '  server: createFileBackedWorkPaperMcpToolServerFromFile({ workpaperPath, writable: true }),',
+        '});',
         '',
       ].join('\n'),
     )

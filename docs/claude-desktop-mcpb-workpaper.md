@@ -52,18 +52,23 @@ ask Claude:
 
 ```text
 List the Bilig WorkPaper tools.
-Read the sample WorkPaper summary, set Inputs!B3 to 0.4, and report the
-before/after expected ARR plus the persistence checks.
+Read Summary!A1:B5, set Inputs!B3 to 0.4, read Summary!B3, and report the
+recalculated value plus the persistence checks.
 ```
 
 The server should expose:
 
-- `read_workpaper_summary`
-- `set_workpaper_input_cell`
+- `list_sheets`
+- `read_range`
+- `read_cell`
+- `set_cell_contents`
+- `get_cell_display_value`
+- `export_workpaper_document`
+- `validate_formula`
 
 The write tool changes one input cell, recalculates dependent formulas, saves
-the WorkPaper document, restores it, and returns checks such as
-`formulasPersisted`, `restoredMatchesAfter`, and `expectedArrChanged`.
+the WorkPaper document, and returns checks such as `persisted`,
+`restoredMatchesAfter`, `previousSerialized`, and `newSerialized`.
 
 ## What is inside the bundle
 
@@ -79,8 +84,9 @@ build/mcpb/bilig-workpaper/
   node_modules/
 ```
 
-`server/index.js` imports `runDemoWorkPaperMcpStdioServer` from the packaged
-`@bilig/headless` dependency and passes through the bundled package version.
+`server/index.js` imports the file-backed WorkPaper MCP server from the
+packaged `@bilig/headless` dependency, seeds a local `workpaper.json` on first
+run, and passes through the bundled package version.
 The manifest points Claude Desktop at that launcher with:
 
 ```json

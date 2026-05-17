@@ -85,7 +85,7 @@ export function buildWorkPaperMcpbManifest(packageVersion: string): WorkPaperMcp
     description: 'Formula-backed WorkPaper tools for workbook readback, input edits, and JSON persistence.',
     long_description: [
       'Bilig WorkPaper gives Claude Desktop a local spreadsheet engine for agent workflows that need more than a screenshot of a grid.',
-      'The bundle runs the published @bilig/headless MCP stdio server, exposes tools for reading a sample WorkPaper and editing an input cell, recalculates dependent formulas, persists the document, restores it, and returns before/after proof.',
+      'The bundle runs the published @bilig/headless MCP stdio server in file-backed writable mode, exposes tools for reading sheets and ranges, editing cells, validating formulas, exporting WorkPaper JSON, and returning calculated readback.',
       'Use it to evaluate formula-backed workbook automation before wiring the same package into a Node service, queue worker, or coding-agent tool.',
     ].join('\n\n'),
     author: {
@@ -111,13 +111,32 @@ export function buildWorkPaperMcpbManifest(packageVersion: string): WorkPaperMcp
     },
     tools: [
       {
-        name: 'read_workpaper_summary',
-        description: 'Read the sample WorkPaper summary range with computed values and serialized workbook state.',
+        name: 'list_sheets',
+        description: 'List WorkPaper sheets and their current used dimensions.',
       },
       {
-        name: 'set_workpaper_input_cell',
-        description:
-          'Edit an input cell, recalculate dependent formulas, persist the workbook, restore it, and return verification checks.',
+        name: 'read_range',
+        description: 'Read evaluated values and serialized cell contents for a WorkPaper range.',
+      },
+      {
+        name: 'read_cell',
+        description: 'Read one cell with evaluated value, display value, formula, and serialized content.',
+      },
+      {
+        name: 'set_cell_contents',
+        description: 'Set one cell, recalculate dependents, and persist the updated WorkPaper JSON file.',
+      },
+      {
+        name: 'get_cell_display_value',
+        description: 'Return the formatted display value for one cell.',
+      },
+      {
+        name: 'export_workpaper_document',
+        description: 'Export the current WorkPaper JSON document.',
+      },
+      {
+        name: 'validate_formula',
+        description: 'Validate formula syntax using the WorkPaper formula parser.',
       },
     ],
     keywords: [
@@ -148,13 +167,31 @@ export function renderWorkPaperMcpbLauncher(): string {
   return [
     '#!/usr/bin/env node',
     "import { createRequire } from 'node:module';",
-    "import { runDemoWorkPaperMcpStdioServer } from '@bilig/headless';",
+    "import { existsSync, writeFileSync } from 'node:fs';",
+    "import { dirname, join } from 'node:path';",
+    "import { fileURLToPath } from 'node:url';",
+    'import {',
+    '  buildDemoWorkPaper,',
+    '  createFileBackedWorkPaperMcpToolServerFromFile,',
+    '  exportWorkPaperDocument,',
+    '  runDemoWorkPaperMcpStdioServer,',
+    '  serializeWorkPaperDocument,',
+    "} from '@bilig/headless';",
     '',
     'const requirePackageJson = createRequire(import.meta.url);',
     "const packageManifest = requirePackageJson('../node_modules/@bilig/headless/package.json');",
     "const serverVersion = typeof packageManifest.version === 'string' ? packageManifest.version : '0.0.0';",
+    'const serverDir = dirname(fileURLToPath(import.meta.url));',
+    "const workpaperPath = join(serverDir, 'workpaper.json');",
     '',
-    'runDemoWorkPaperMcpStdioServer({ serverVersion });',
+    'if (!existsSync(workpaperPath)) {',
+    '  writeFileSync(workpaperPath, serializeWorkPaperDocument(exportWorkPaperDocument(buildDemoWorkPaper(), { includeConfig: true })));',
+    '}',
+    '',
+    'runDemoWorkPaperMcpStdioServer({',
+    '  serverVersion,',
+    '  server: createFileBackedWorkPaperMcpToolServerFromFile({ workpaperPath, writable: true }),',
+    '});',
     '',
   ].join('\n')
 }
@@ -177,7 +214,7 @@ export function renderWorkPaperMcpbReadme(packageVersion: string): string {
     '',
     `Bundled package version: \`${packageVersion}\``,
     '',
-    'After installation, ask Claude to list the Bilig WorkPaper tools, read the sample summary, edit `Inputs!B3`, and report the before/after ARR plus persistence checks.',
+    'After installation, ask Claude to list the Bilig WorkPaper tools, read `Summary!A1:B5`, set `Inputs!B3` to `0.4`, read `Summary!B3`, and report the recalculated value plus persistence checks.',
     '',
   ].join('\n')
 }
