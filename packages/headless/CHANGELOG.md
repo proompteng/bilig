@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.19.2
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.19.1
+- Manual override: no
+
+## Fixes
+- fix(formula): exclude non-text wildcard criteria matches (07b9303f)
+
 ## 0.19.1
 
 - Release type: patch
