@@ -11,6 +11,7 @@ export interface FormulaBindingInstanceTracker {
     ownerPosition?: FormulaOwnerPosition,
   ) => void
   readonly registerFormulaFamilyNow: (cellIndex: number, formula: RuntimeFormula, ownerPosition?: FormulaOwnerPosition) => void
+  readonly rebuildFormulaInstancesNow: () => void
 }
 
 export function createFormulaBindingInstanceTracker(args: {
@@ -101,8 +102,16 @@ export function createFormulaBindingInstanceTracker(args: {
     })
   }
 
+  const rebuildFormulaInstancesNow = (): void => {
+    args.serviceArgs.formulaInstances.clear()
+    args.serviceArgs.state.formulas.forEach((formula, cellIndex) => {
+      recordFormulaInstanceNow(cellIndex, formula.source, formula.templateId)
+    })
+  }
+
   return {
     recordFormulaInstanceNow,
     registerFormulaFamilyNow,
+    rebuildFormulaInstancesNow,
   }
 }

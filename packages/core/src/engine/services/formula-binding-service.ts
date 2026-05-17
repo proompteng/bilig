@@ -66,6 +66,7 @@ import { createFormulaBindingRangeDependencyUpdater } from './formula-binding-ra
 import { clearFormulaRuntimeFlags, markFormulaCellBound } from './formula-binding-cell-flags.js'
 import { formulaBindingEffect } from './formula-binding-effect.js'
 import { queueDeferredFormulaFamilyStructuralSourceTransforms } from './formula-binding-deferred-family-transforms.js'
+import { rebuildAllFormulaBindingsNow } from './formula-binding-rebuild.js'
 import type {
   BindPreparedFormulaOptions,
   CreateEngineFormulaBindingServiceArgs,
@@ -83,7 +84,11 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
   let formulaFamilyIndexNeedsRebuild = false
   let deferredFormulaFamilyIndexRuns: readonly DeferredInitialFormulaFamilyRun[] | undefined
   let deferredFormulaFamilyStructuralSourceTransforms: Map<number, NonNullable<RuntimeFormula['structuralSourceTransform']>> | undefined
-  const { recordFormulaInstanceNow, registerFormulaFamilyNow: registerFormulaFamilyInStoreNow } = createFormulaBindingInstanceTracker({
+  const {
+    rebuildFormulaInstancesNow,
+    recordFormulaInstanceNow,
+    registerFormulaFamilyNow: registerFormulaFamilyInStoreNow,
+  } = createFormulaBindingInstanceTracker({
     serviceArgs: args,
     formulaFamilyShapeKeyCache,
   })
@@ -775,54 +780,16 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
       )
     },
     rebuildAllFormulaBindings() {
-      return formulaBindingEffect('Failed to rebuild formula bindings', () => {
-        const pending = [...args.state.formulas.entries()].map(([cellIndex, formula]) => ({
-          cellIndex,
-          source: formula.source,
-          dependencyIndices: [...formula.dependencyIndices],
-          planId: formula.planId,
-        }))
-        pending.forEach(({ planId }) => {
-          args.compiledPlans.release(planId)
-        })
-        args.state.formulas.clear()
-        args.formulaInstances.clear()
-        args.state.ranges.reset()
-        args.edgeArena.reset()
-        args.programArena.reset()
-        args.constantArena.reset()
-        args.rangeListArena.reset()
-        args.reverseState.reverseCellEdges.length = 0
-        args.reverseState.reverseRangeEdges.length = 0
-        args.reverseState.reverseDefinedNameEdges.clear()
-        args.reverseState.reverseTableEdges.clear()
-        args.reverseState.reverseSpillEdges.clear()
-        args.reverseState.reverseAggregateColumnEdges.clear()
-        args.reverseState.reverseExactLookupColumnEdges.clear()
-        args.reverseState.reverseSortedLookupColumnEdges.clear()
-        clearFormulaBookkeepingNow()
-        args.regionGraph.reset()
-
-        const activeCellIndices: number[] = []
-        pending.forEach(({ cellIndex, source }) => {
-          if (!isCellIndexMappedNow(cellIndex)) {
-            args.state.workbook.pruneCellIfEmpty(cellIndex)
-            return
-          }
-          const ownerSheetName = args.state.workbook.getSheetNameById(args.state.workbook.cellStore.sheetIds[cellIndex]!)
-          if (!ownerSheetName || !args.state.workbook.getSheet(ownerSheetName)) {
-            return
-          }
-          try {
-            bindFormulaNow(cellIndex, ownerSheetName, source)
-          } catch {
-            invalidateFormulaNow(cellIndex)
-          }
-          activeCellIndices.push(cellIndex)
-        })
-        pruneOrphanedDependencyCells(pending.flatMap(({ dependencyIndices }) => dependencyIndices))
-        return activeCellIndices
-      })
+      return formulaBindingEffect('Failed to rebuild formula bindings', () =>
+        rebuildAllFormulaBindingsNow({
+          serviceArgs: args,
+          clearFormulaBookkeepingNow,
+          bindFormulaNow,
+          invalidateFormulaNow,
+          isCellIndexMappedNow,
+          pruneOrphanedDependencyCells,
+        }),
+      )
     },
     rebindFormulaCells(candidates, formulaChangedCount) {
       return formulaBindingEffect('Failed to rebind formula cells', () => rebindFormulaCellsNow(candidates, formulaChangedCount))
@@ -871,7 +838,7 @@ export function createEngineFormulaBindingService(args: CreateEngineFormulaBindi
       deferredFormulaFamilyStructuralSourceTransforms = undefined
       formulaFamilyIndexNeedsRebuild = true
     },
-    deferFormulaInstanceTableRebuildNow() {},
+    deferFormulaInstanceTableRebuildNow: rebuildFormulaInstancesNow,
     exportFormulaInstancesNow() {
       return args.formulaInstances.list()
     },

@@ -267,6 +267,20 @@ describe('initial mixed sheet load', () => {
     const runtimeImage = readRuntimeImage(readRuntimeSnapshot(serialized))
     expect(runtimeImage?.sheetCells?.[0]?.dimensions).toEqual({ width: 4, height: 2 })
     expect(runtimeImage?.sheetCells?.[0]?.cellCount).toBe(8)
+    expect(runtimeImage?.formulaInstances).toHaveLength(4)
+    expect(
+      runtimeImage?.formulaInstances.map(({ sheetName, row, col, source: formulaSource }) => ({
+        sheetName,
+        row,
+        col,
+        source: formulaSource,
+      })),
+    ).toEqual([
+      { sheetName: 'Bench', row: 0, col: 2, source: 'A1+B1' },
+      { sheetName: 'Bench', row: 0, col: 3, source: 'C1*2' },
+      { sheetName: 'Bench', row: 1, col: 2, source: 'A2+B2' },
+      { sheetName: 'Bench', row: 1, col: 3, source: 'C2*2' },
+    ])
     source.dispose()
 
     const rebuilt = WorkPaper.buildFromSheets(serialized)
