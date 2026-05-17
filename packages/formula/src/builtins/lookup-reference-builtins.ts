@@ -1,6 +1,17 @@
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
 import type { ArrayValue } from '../runtime-values.js'
 import type { LookupBuiltin, LookupBuiltinArgument, RangeBuiltinArgument } from './lookup.js'
+import {
+  approximateLookupAscending,
+  approximateMatchAscending,
+  approximateMatchDescending,
+  exactMatch,
+  findReferenceMatchIndex,
+  hasLookupWildcardSyntax,
+  vectorLength,
+  type LookupReferenceMatchMode,
+  type LookupReferenceSearchMode,
+} from './lookup-reference-search.js'
 
 interface LookupReferenceBuiltinDeps {
   errorValue: (code: ErrorCode) => CellValue
@@ -15,79 +26,6 @@ interface LookupReferenceBuiltinDeps {
   compareScalars: (left: CellValue, right: CellValue) => number | undefined
   getRangeValue: (range: RangeBuiltinArgument, row: number, col: number) => CellValue
   resolveIndexedExactMatch?: (lookupValue: CellValue, range: RangeBuiltinArgument) => number | undefined
-}
-
-function exactMatch(lookupValue: CellValue, range: RangeBuiltinArgument, deps: LookupReferenceBuiltinDeps): number {
-  for (let index = 0; index < range.values.length; index += 1) {
-    const comparison = deps.compareScalars(range.values[index]!, lookupValue)
-    if (comparison === 0) {
-      return index + 1
-    }
-  }
-  return -1
-}
-
-function approximateMatchAscending(lookupValue: CellValue, range: RangeBuiltinArgument, deps: LookupReferenceBuiltinDeps): number {
-  let best = -1
-  for (let index = 0; index < range.values.length; index += 1) {
-    const comparison = deps.compareScalars(range.values[index]!, lookupValue)
-    if (comparison === undefined) {
-      return -1
-    }
-    if (comparison <= 0) {
-      best = index + 1
-    } else {
-      break
-    }
-  }
-  return best
-}
-
-function approximateLookupAscending(lookupValue: CellValue, range: RangeBuiltinArgument, deps: LookupReferenceBuiltinDeps): number {
-  let best = -1
-  for (let index = 0; index < range.values.length; index += 1) {
-    const value = range.values[index]!
-    if (deps.isError(value)) {
-      continue
-    }
-    const comparison = deps.compareScalars(value, lookupValue)
-    if (comparison === undefined) {
-      return -1
-    }
-    if (comparison <= 0) {
-      best = index + 1
-    } else {
-      break
-    }
-  }
-  return best
-}
-
-function approximateMatchDescending(lookupValue: CellValue, range: RangeBuiltinArgument, deps: LookupReferenceBuiltinDeps): number {
-  let best = -1
-  for (let index = 0; index < range.values.length; index += 1) {
-    const comparison = deps.compareScalars(range.values[index]!, lookupValue)
-    if (comparison === undefined) {
-      return -1
-    }
-    if (comparison >= 0) {
-      best = index + 1
-      continue
-    }
-    break
-  }
-  return best
-}
-
-function vectorLength(range: RangeBuiltinArgument): number | undefined {
-  if (range.refKind !== 'cells' || (range.rows !== 1 && range.cols !== 1)) {
-    return undefined
-  }
-  return range.rows === 1 ? range.cols : range.rows
-}
-
-function getVectorValue(range: RangeBuiltinArgument, index: number, deps: LookupReferenceBuiltinDeps): CellValue {
-  return range.rows === 1 ? deps.getRangeValue(range, 0, index) : deps.getRangeValue(range, index, 0)
 }
 
 function coerceLookupReturnValue(value: CellValue, deps: LookupReferenceBuiltinDeps): CellValue {
@@ -140,59 +78,14 @@ function buildXlookupReturnShape(
 function findXlookupMatchIndex(
   lookupValue: CellValue,
   lookupRange: RangeBuiltinArgument,
-  matchMode: number,
-  searchMode: number,
+  matchMode: LookupReferenceMatchMode,
+  searchMode: LookupReferenceSearchMode,
   deps: LookupReferenceBuiltinDeps,
 ): number {
   if (deps.isError(lookupValue)) {
     return -1
   }
-
-  const length = vectorLength(lookupRange)
-  if (length === undefined) {
-    return -1
-  }
-  const first = searchMode === -1 ? length - 1 : 0
-  const last = searchMode === -1 ? -1 : length
-  const step = searchMode === -1 ? -1 : 1
-
-  for (let index = first; index !== last; index += step) {
-    const comparison = deps.compareScalars(getVectorValue(lookupRange, index, deps), lookupValue)
-    if (comparison === 0) {
-      return index
-    }
-  }
-  if (matchMode === 0) {
-    return -1
-  }
-
-  let bestIndex = -1
-  let bestValue: CellValue | undefined
-  for (let index = first; index !== last; index += step) {
-    const candidate = getVectorValue(lookupRange, index, deps)
-    const comparison = deps.compareScalars(candidate, lookupValue)
-    if (comparison === undefined) {
-      continue
-    }
-    const qualifies = matchMode === -1 ? comparison < 0 : comparison > 0
-    if (!qualifies) {
-      continue
-    }
-    if (bestValue === undefined) {
-      bestIndex = index
-      bestValue = candidate
-      continue
-    }
-    const bestComparison = deps.compareScalars(candidate, bestValue)
-    if (bestComparison === undefined) {
-      continue
-    }
-    if ((matchMode === -1 && bestComparison > 0) || (matchMode === 1 && bestComparison < 0)) {
-      bestIndex = index
-      bestValue = candidate
-    }
-  }
-  return bestIndex
+  return findReferenceMatchIndex(lookupValue, lookupRange, matchMode, searchMode, deps)
 }
 
 function xlookupScalarResult(
@@ -200,8 +93,8 @@ function xlookupScalarResult(
   lookupRange: RangeBuiltinArgument,
   returnShape: XlookupReturnShape,
   ifNotFound: CellValue,
-  matchMode: number,
-  searchMode: number,
+  matchMode: LookupReferenceMatchMode,
+  searchMode: LookupReferenceSearchMode,
   deps: LookupReferenceBuiltinDeps,
 ): CellValue | ArrayValue {
   if (deps.isError(lookupValue)) {
@@ -222,8 +115,8 @@ function xlookupArrayResult(
   lookupRange: RangeBuiltinArgument,
   returnShape: XlookupReturnShape,
   ifNotFound: CellValue,
-  matchMode: number,
-  searchMode: number,
+  matchMode: LookupReferenceMatchMode,
+  searchMode: LookupReferenceSearchMode,
   deps: LookupReferenceBuiltinDeps,
 ): CellValue | ArrayValue {
   if (lookupValues.refKind !== 'cells') {
@@ -288,7 +181,8 @@ export function createLookupReferenceBuiltins(deps: LookupReferenceBuiltinDeps):
 
       const position =
         matchType === 0
-          ? (deps.resolveIndexedExactMatch?.(lookupValue, rangeOrError) ?? exactMatch(lookupValue, rangeOrError, deps))
+          ? ((hasLookupWildcardSyntax(lookupValue) ? undefined : deps.resolveIndexedExactMatch?.(lookupValue, rangeOrError)) ??
+            exactMatch(lookupValue, rangeOrError, deps, { wildcard: lookupValue.tag === ValueTag.String }))
           : matchType === 1
             ? approximateMatchAscending(lookupValue, rangeOrError, deps)
             : approximateMatchDescending(lookupValue, rangeOrError, deps)
@@ -488,7 +382,11 @@ export function createLookupReferenceBuiltins(deps: LookupReferenceBuiltinDeps):
       if (matchModeNumber === undefined || searchModeNumber === undefined) {
         return deps.errorValue(ErrorCode.Value)
       }
-      if (![0, -1, 1].includes(matchModeNumber) || (searchModeNumber !== 1 && searchModeNumber !== -1)) {
+      if (
+        !isLookupReferenceMatchMode(matchModeNumber) ||
+        !isLookupReferenceSearchMode(searchModeNumber) ||
+        (matchModeNumber === 2 && (searchModeNumber === 2 || searchModeNumber === -2))
+      ) {
         return deps.errorValue(ErrorCode.Value)
       }
 
@@ -540,23 +438,46 @@ export function createLookupReferenceBuiltins(deps: LookupReferenceBuiltinDeps):
       if (matchMode === undefined || searchMode === undefined) {
         return deps.errorValue(ErrorCode.Value)
       }
-      if (![0, -1, 1].includes(matchMode) || ![1, -1].includes(searchMode)) {
+      if (
+        !isLookupReferenceMatchMode(matchMode) ||
+        !isLookupReferenceSearchMode(searchMode) ||
+        (matchMode === 2 && (searchMode === 2 || searchMode === -2))
+      ) {
         return deps.errorValue(ErrorCode.Value)
       }
 
-      const values = searchMode === -1 ? rangeOrError.values.toReversed() : rangeOrError.values
-      const probe = searchMode === -1 ? { ...rangeOrError, values } : rangeOrError
-      const position =
-        matchMode === 0
-          ? exactMatch(lookupValue, probe, deps)
-          : matchMode === 1
-            ? approximateMatchAscending(lookupValue, probe, deps)
-            : approximateMatchDescending(lookupValue, probe, deps)
+      const position = xmatchPosition(lookupValue, rangeOrError, matchMode, searchMode, deps)
       if (position === -1) {
         return deps.errorValue(ErrorCode.NA)
       }
-      const normalizedPosition = searchMode === -1 ? rangeOrError.values.length - position + 1 : position
-      return deps.numberResult(normalizedPosition)
+      return deps.numberResult(position)
     },
   }
+}
+
+function xmatchPosition(
+  lookupValue: CellValue,
+  range: RangeBuiltinArgument,
+  matchMode: LookupReferenceMatchMode,
+  searchMode: LookupReferenceSearchMode,
+  deps: LookupReferenceBuiltinDeps,
+): number {
+  if (searchMode === 2 || searchMode === -2 || matchMode === 0 || matchMode === 2) {
+    const index = findXlookupMatchIndex(lookupValue, range, matchMode, searchMode, deps)
+    return index === -1 ? -1 : index + 1
+  }
+
+  const values = searchMode === -1 ? range.values.toReversed() : range.values
+  const probe = searchMode === -1 ? { ...range, values } : range
+  const position =
+    matchMode === 1 ? approximateMatchAscending(lookupValue, probe, deps) : approximateMatchDescending(lookupValue, probe, deps)
+  return position === -1 || searchMode !== -1 ? position : range.values.length - position + 1
+}
+
+function isLookupReferenceMatchMode(value: number): value is LookupReferenceMatchMode {
+  return value === 0 || value === -1 || value === 1 || value === 2
+}
+
+function isLookupReferenceSearchMode(value: number): value is LookupReferenceSearchMode {
+  return value === 1 || value === -1 || value === 2 || value === -2
 }

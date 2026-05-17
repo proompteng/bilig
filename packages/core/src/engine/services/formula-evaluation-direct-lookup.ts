@@ -1,4 +1,5 @@
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
+import { hasLookupWildcardSyntax } from '@bilig/formula'
 import type { EngineRuntimeState, PreparedApproximateVectorLookup, PreparedExactVectorLookup, RuntimeFormula } from '../runtime-state.js'
 import type { ExactColumnIndexService } from './exact-column-index-service.js'
 import type { SortedColumnSearchService } from './sorted-column-search-service.js'
@@ -165,8 +166,12 @@ export function tryEvaluateDirectVectorLookup(context: DirectVectorLookupContext
   if (directLookup.kind === 'exact') {
     const prepared = refreshDirectExactLookup(context, directLookup)
     const cellIndex = directLookup.operandCellIndex
+    const lookupValue = context.readCellValueByIndex(cellIndex)
+    if (hasLookupWildcardSyntax(lookupValue)) {
+      return undefined
+    }
     const result = context.exactLookup.findPreparedVectorMatch({
-      lookupValue: context.readCellValueByIndex(cellIndex),
+      lookupValue,
       prepared,
       searchMode: directLookup.searchMode,
     })

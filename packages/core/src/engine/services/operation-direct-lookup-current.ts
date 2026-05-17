@@ -1,4 +1,5 @@
 import { ErrorCode, ValueTag, type CellValue } from '@bilig/protocol'
+import { hasLookupWildcardSyntax } from '@bilig/formula'
 import type { RuntimeDirectLookupDescriptor } from '../runtime-state.js'
 import type { DirectScalarCurrentOperand } from './direct-formula-index-collection.js'
 import type { ExactColumnIndexService } from './exact-column-index-service.js'
@@ -287,6 +288,9 @@ export function createOperationDirectLookupCurrentService(args: {
     directLookup: Extract<RuntimeDirectLookupDescriptor, { kind: 'exact' }>,
     lookupValue: CellValue,
   ): DirectScalarCurrentOperand | undefined => {
+    if (hasLookupWildcardSyntax(lookupValue)) {
+      return undefined
+    }
     const result = args.exactLookup.findPreparedVectorMatch({
       lookupValue,
       prepared: directLookup.prepared,

@@ -45,6 +45,7 @@ import { createLookupRegressionBuiltins } from './lookup-regression-builtins.js'
 import { createLookupSortFilterBuiltins } from './lookup-sort-filter-builtins.js'
 
 export { compileCriteriaMatcher, matchesCompiledCriteria }
+export { hasLookupWildcardSyntax } from './lookup-reference-search.js'
 export { exactLookupNumberKey, normalizeExactLookupNumber, sameExactLookupNumber } from './lookup-core-helpers.js'
 export type {
   CompiledCriteriaMatcher,

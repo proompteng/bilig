@@ -3,6 +3,7 @@ import type { FormulaNode } from './ast.js'
 import { formatAddress, parseRangeAddress } from './addressing.js'
 import { getBuiltin, getDateSystemBuiltin, normalizeBuiltinLookupName } from './builtins.js'
 import { getLookupBuiltin, type RangeBuiltinArgument } from './builtins/lookup.js'
+import { hasLookupWildcardSyntax } from './builtins/lookup-reference-search.js'
 import { evaluateArraySpecialCall } from './js-evaluator-array-special-calls.js'
 import { emptyValue, error, numberValue, stringValue } from './js-evaluator-cell-values.js'
 import { evaluateContextSpecialCall } from './js-evaluator-context-special-calls.js'
@@ -482,17 +483,20 @@ function executePlan(
         }
 
         const sheetName = instruction.sheetName ?? context.sheetName
-        const directMatch = context.resolveExactVectorMatch?.({
-          lookupValue,
-          sheetName,
-          start: instruction.start,
-          end: instruction.end,
-          startRow: instruction.startRow,
-          endRow: instruction.endRow,
-          startCol: instruction.startCol,
-          endCol: instruction.endCol,
-          searchMode: instruction.searchMode,
-        })
+        const directMatch =
+          instruction.callee === 'MATCH' && hasLookupWildcardSyntax(lookupValue)
+            ? undefined
+            : context.resolveExactVectorMatch?.({
+                lookupValue,
+                sheetName,
+                start: instruction.start,
+                end: instruction.end,
+                startRow: instruction.startRow,
+                endRow: instruction.endRow,
+                startCol: instruction.startCol,
+                endCol: instruction.endCol,
+                searchMode: instruction.searchMode,
+              })
         if (directMatch?.handled) {
           context.noteExactLookupDirect?.()
           stack.push({

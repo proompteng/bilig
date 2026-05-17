@@ -38,6 +38,27 @@ describe('direct lookup evaluation', () => {
     })
   })
 
+  it('falls back to wildcard-aware MATCH evaluation instead of treating wildcard patterns as indexed literals', async () => {
+    const engine = new SpreadsheetEngine({
+      workbookName: 'evaluation-direct-exact-wildcard',
+      useColumnIndex: true,
+    })
+    await engine.ready()
+    engine.createSheet('Sheet1')
+
+    engine.setCellValue('Sheet1', 'A1', 'bat')
+    engine.setCellValue('Sheet1', 'A2', 'b?t')
+    engine.setCellValue('Sheet1', 'A3', 'bot')
+    engine.setCellValue('Sheet1', 'C1', 'b?t')
+    engine.setCellValue('Sheet1', 'C2', 'b~?t')
+
+    engine.setCellFormula('Sheet1', 'D1', 'MATCH(C1,A1:A3,0)')
+    engine.setCellFormula('Sheet1', 'D2', 'MATCH(C2,A1:A3,0)')
+
+    expect(engine.getCellValue('Sheet1', 'D1')).toEqual({ tag: ValueTag.Number, value: 1 })
+    expect(engine.getCellValue('Sheet1', 'D2')).toEqual({ tag: ValueTag.Number, value: 2 })
+  })
+
   it('evaluates approximate numeric MATCH formulas across uniform, refreshed, and descending columns', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'evaluation-direct-approx' })
     await engine.ready()

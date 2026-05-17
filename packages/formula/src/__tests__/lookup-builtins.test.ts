@@ -15,6 +15,8 @@ describe('lookup builtins', () => {
   it('supports MATCH across one-dimensional cell ranges', () => {
     const MATCH = getLookupBuiltin('MATCH')!
     expect(MATCH(text('b'), cellRange([text('a'), text('b'), text('c')], 3, 1), num(0))).toEqual(num(2))
+    expect(MATCH(text('b?t'), cellRange([text('bat'), text('bot'), text('cat')], 3, 1), num(0))).toEqual(num(1))
+    expect(MATCH(text('b~?t'), cellRange([text('bat'), text('b?t'), text('bot')], 3, 1), num(0))).toEqual(num(2))
     expect(MATCH(num(4), cellRange([num(1), num(3), num(5)], 3, 1), num(1))).toEqual(num(2))
     expect(MATCH(num(3), cellRange([num(5), num(3), num(1)], 3, 1), num(-1))).toEqual(num(2))
     expect(MATCH(text('z'), cellRange([text('a'), text('b')], 2, 1), num(0))).toEqual(err(ErrorCode.NA))
@@ -624,6 +626,35 @@ describe('lookup builtins', () => {
         cellRange([text('Keyboard'), text('Printer'), text('Monitor'), text('Dock')], 1, 4),
       ),
     ).toEqual({ kind: 'array', rows: 2, cols: 1, values: [text('Printer'), err(ErrorCode.Ref)] })
+  })
+
+  it('supports XLOOKUP and XMATCH wildcard and binary search modes', () => {
+    const XLOOKUP = getLookupBuiltin('XLOOKUP')!
+    const XMATCH = getLookupBuiltin('XMATCH')!
+
+    const names = cellRange([text('North-1'), text('South-1'), text('North-2'), text('North-3')], 4, 1)
+    const amounts = cellRange([num(10), num(20), num(30), num(40)], 4, 1)
+
+    expect(XLOOKUP(text('North-*'), names, amounts, text('missing'), num(2))).toEqual(num(10))
+    expect(XLOOKUP(text('North-*'), names, amounts, text('missing'), num(2), num(-1))).toEqual(num(40))
+    expect(XMATCH(text('North-?'), names, num(2))).toEqual(num(1))
+    expect(XMATCH(text('North-?'), names, num(2), num(-1))).toEqual(num(4))
+
+    const ascendingKeys = cellRange([num(10), num(20), num(30), num(40), num(50)], 5, 1)
+    const ascendingLabels = cellRange([text('ten'), text('twenty'), text('thirty'), text('forty'), text('fifty')], 5, 1)
+    expect(XLOOKUP(num(40), ascendingKeys, ascendingLabels, text('missing'), num(0), num(2))).toEqual(text('forty'))
+    expect(XLOOKUP(num(35), ascendingKeys, ascendingLabels, text('missing'), num(-1), num(2))).toEqual(text('thirty'))
+    expect(XLOOKUP(num(35), ascendingKeys, ascendingLabels, text('missing'), num(1), num(2))).toEqual(text('forty'))
+    expect(XMATCH(num(35), ascendingKeys, num(-1), num(2))).toEqual(num(3))
+
+    const descendingKeys = cellRange([num(50), num(40), num(30), num(20), num(10)], 5, 1)
+    const descendingLabels = cellRange([text('fifty'), text('forty'), text('thirty'), text('twenty'), text('ten')], 5, 1)
+    expect(XLOOKUP(num(40), descendingKeys, descendingLabels, text('missing'), num(0), num(-2))).toEqual(text('forty'))
+    expect(XLOOKUP(num(35), descendingKeys, descendingLabels, text('missing'), num(-1), num(-2))).toEqual(text('thirty'))
+    expect(XLOOKUP(num(35), descendingKeys, descendingLabels, text('missing'), num(1), num(-2))).toEqual(text('forty'))
+    expect(XMATCH(num(35), descendingKeys, num(1), num(-2))).toEqual(num(2))
+
+    expect(XLOOKUP(text('N*'), names, amounts, text('missing'), num(2), num(2))).toEqual(err(ErrorCode.Value))
   })
 
   it('covers conditional aggregate validation and error branches', () => {
@@ -1405,7 +1436,8 @@ describe('lookup builtins', () => {
     expect(XLOOKUP(text('pear'), duplicateLookup, duplicateReturn, text('fallback'), err(ErrorCode.Name))).toEqual(err(ErrorCode.Name))
     expect(XLOOKUP(text('pear'), duplicateLookup, duplicateReturn, text('fallback'), num(0), err(ErrorCode.NA))).toEqual(err(ErrorCode.NA))
     expect(XMATCH(text('pear'), duplicateLookup, num(0), num(-1))).toEqual(num(3))
-    expect(XMATCH(text('pear'), duplicateLookup, num(2), num(1))).toEqual(err(ErrorCode.Value))
+    expect(XMATCH(text('pear'), duplicateLookup, num(2), num(1))).toEqual(num(1))
+    expect(XMATCH(text('pear'), duplicateLookup, num(3), num(1))).toEqual(err(ErrorCode.Value))
     expect(XMATCH(cellRange([text('pear')], 1, 1), duplicateLookup)).toEqual(err(ErrorCode.Value))
     expect(XMATCH(err(ErrorCode.Ref), duplicateLookup)).toEqual(err(ErrorCode.Ref))
     expect(XMATCH(text('pear'), duplicateLookup, err(ErrorCode.Name))).toEqual(err(ErrorCode.Name))
