@@ -142,9 +142,17 @@ const ZERO_QUERY_LOOKUP: Record<string, QueryHandler> = {
   'workbookChange.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookChange.byWorkbook.fn),
   'workbookChanges.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookChanges.byWorkbook.fn),
   'workbookChatThread.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookChatThread.byWorkbook.fn),
+  'workbookChatThread.visibleByWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookChatThread.visibleByWorkbook.fn),
   'workbookAgentThread.byWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookAgentThread.byWorkbook.fn),
+  'workbookAgentThread.visibleByWorkbook': createQueryHandler(workbookQueryArgsSchema, queries.workbookAgentThread.visibleByWorkbook.fn),
+  'workbookAgentRun.visibleByThread': createQueryHandler(workbookThreadArgsSchema, queries.workbookAgentRun.visibleByThread.fn),
   'workbookWorkflowRun.byThread': createQueryHandler(workbookThreadArgsSchema, queries.workbookWorkflowRun.byThread.fn),
+  'workbookWorkflowRun.visibleByThread': createQueryHandler(workbookThreadArgsSchema, queries.workbookWorkflowRun.visibleByThread.fn),
   'workbookAgentWorkflowRun.byThread': createQueryHandler(workbookThreadArgsSchema, queries.workbookAgentWorkflowRun.byThread.fn),
+  'workbookAgentWorkflowRun.visibleByThread': createQueryHandler(
+    workbookThreadArgsSchema,
+    queries.workbookAgentWorkflowRun.visibleByThread.fn,
+  ),
 }
 
 function fastifyRequestToWebRequest(request: ZeroSyncRequestLike): Request {

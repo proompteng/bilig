@@ -239,6 +239,32 @@ describe('zero sync service startup', () => {
     })
   })
 
+  it('serves workbook agent visible Zero queries with the authenticated session user', async () => {
+    deps.handleQueryRequest.mockImplementationOnce(async (executeQuery: (name: string, args: unknown) => unknown) => {
+      expect(() => executeQuery('workbookAgentThread.visibleByWorkbook', { documentId: 'doc-1' })).not.toThrow()
+      expect(() => executeQuery('workbookChatThread.visibleByWorkbook', { documentId: 'doc-1' })).not.toThrow()
+      expect(() => executeQuery('workbookWorkflowRun.visibleByThread', { documentId: 'doc-1', threadId: 'thr-1' })).not.toThrow()
+      expect(() => executeQuery('workbookAgentWorkflowRun.visibleByThread', { documentId: 'doc-1', threadId: 'thr-1' })).not.toThrow()
+      expect(() => executeQuery('workbookAgentRun.visibleByThread', { documentId: 'doc-1', threadId: 'thr-1' })).not.toThrow()
+      return { ok: true }
+    })
+    const { createZeroSyncService } = await import('../service.js')
+    const service = createZeroSyncService()
+
+    await expect(
+      service.handleQuery({
+        protocol: 'https',
+        method: 'POST',
+        url: '/zero/query',
+        headers: {
+          host: 'sheets.example.com',
+          'x-bilig-user-id': 'alex@example.com',
+        },
+        body: {},
+      }),
+    ).resolves.toEqual({ ok: true })
+  })
+
   it('rejects malformed request protocols before forwarding Zero mutations', async () => {
     const { createZeroSyncService } = await import('../service.js')
     const service = createZeroSyncService()

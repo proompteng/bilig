@@ -92,7 +92,7 @@ export function useWorkbookAgentThreadSummaries(input: {
       setThreadSummaries([])
       return
     }
-    const view = zero.materialize(queries.workbookChatThread.visibleByWorkbook({ currentUserId, documentId }))
+    const view = zero.materialize(queries.workbookChatThread.visibleByWorkbook({ documentId }))
     if (!isZeroLiveView<unknown>(view)) {
       throw new Error('Zero workbook agent thread query returned an invalid live view')
     }
@@ -127,7 +127,7 @@ export function useWorkbookAgentWorkflowRuns(input: {
       setWorkflowRuns([])
       return
     }
-    const view = zero.materialize(queries.workbookWorkflowRun.visibleByThread({ currentUserId, documentId, threadId }))
+    const view = zero.materialize(queries.workbookWorkflowRun.visibleByThread({ documentId, threadId }))
     if (!isZeroLiveView<unknown>(view)) {
       throw new Error('Zero workbook agent workflow query returned an invalid live view')
     }

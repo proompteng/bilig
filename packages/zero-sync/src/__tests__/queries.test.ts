@@ -6,7 +6,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 type ExecutableZeroQuery = ((...args: readonly never[]) => unknown) & {
-  readonly fn: (input: { readonly args: unknown }) => unknown
+  readonly fn: (input: { readonly args: unknown; readonly ctx?: { readonly userID: string } }) => unknown
 }
 
 function isExecutableZeroQuery(value: unknown): value is ExecutableZeroQuery {
@@ -18,6 +18,20 @@ function executeQueryRequestWithoutContext(request: unknown): unknown {
     throw new Error('Expected a Zero query request')
   }
   return request['query'].fn({ args: request['args'] })
+}
+
+function executeQueryRequestWithUser(request: unknown, userID: string): unknown {
+  if (!isRecord(request) || !isExecutableZeroQuery(request['query'])) {
+    throw new Error('Expected a Zero query request')
+  }
+  return request['query'].fn({ args: request['args'], ctx: { userID } })
+}
+
+function queryRequestArgs(request: unknown): unknown {
+  if (!isRecord(request)) {
+    throw new Error('Expected a Zero query request')
+  }
+  return request['args']
 }
 
 describe('zero sync query schemas', () => {
@@ -128,28 +142,60 @@ describe('zero sync query schemas', () => {
     ).toBe(false)
   })
 
-  it('exposes browser-safe workbook agent live queries without server user context', () => {
-    expect(() =>
-      executeQueryRequestWithoutContext(
-        queries.workbookChatThread.visibleByWorkbook({ documentId: 'doc-1', currentUserId: 'alex@example.com' }),
-      ),
-    ).not.toThrow()
+  it('requires authenticated user context for workbook agent visible queries', () => {
+    expect(() => executeQueryRequestWithoutContext(queries.workbookChatThread.visibleByWorkbook({ documentId: 'doc-1' }))).toThrow()
     expect(() =>
       executeQueryRequestWithoutContext(
         queries.workbookWorkflowRun.visibleByThread({
           documentId: 'doc-1',
           threadId: 'thr-1',
-          currentUserId: 'alex@example.com',
         }),
       ),
-    ).not.toThrow()
+    ).toThrow()
     expect(() =>
       executeQueryRequestWithoutContext(
         queries.workbookAgentRun.visibleByThread({
           documentId: 'doc-1',
           threadId: 'thr-1',
-          currentUserId: 'alex@example.com',
         }),
+      ),
+    ).toThrow()
+  })
+
+  it('builds workbook agent visible queries from authenticated user context', () => {
+    expect(queryRequestArgs(queries.workbookChatThread.visibleByWorkbook({ documentId: 'doc-1' }))).toEqual({
+      documentId: 'doc-1',
+    })
+    expect(
+      queryRequestArgs(
+        queries.workbookWorkflowRun.visibleByThread({
+          documentId: 'doc-1',
+          threadId: 'thr-1',
+        }),
+      ),
+    ).toEqual({
+      documentId: 'doc-1',
+      threadId: 'thr-1',
+    })
+    expect(() =>
+      executeQueryRequestWithUser(queries.workbookChatThread.visibleByWorkbook({ documentId: 'doc-1' }), 'alex@example.com'),
+    ).not.toThrow()
+    expect(() =>
+      executeQueryRequestWithUser(
+        queries.workbookWorkflowRun.visibleByThread({
+          documentId: 'doc-1',
+          threadId: 'thr-1',
+        }),
+        'alex@example.com',
+      ),
+    ).not.toThrow()
+    expect(() =>
+      executeQueryRequestWithUser(
+        queries.workbookAgentRun.visibleByThread({
+          documentId: 'doc-1',
+          threadId: 'thr-1',
+        }),
+        'alex@example.com',
       ),
     ).not.toThrow()
   })
