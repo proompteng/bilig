@@ -25,6 +25,8 @@ export interface NormalizedWorkbookChatThreadModel {
   readonly threadId: string
   readonly actorUserId: string
   readonly scope: WorkbookChatThreadScope
+  readonly executionPolicy: WorkbookAgentExecutionPolicy | null
+  readonly context: WorkbookAgentUiContext | null
   readonly updatedAtUnixMs: number
   readonly entryCount: number
   readonly reviewQueueItemCount: number
@@ -90,7 +92,7 @@ export interface WorkbookChatThreadSummaryRow extends QueryResultRow {
   readonly reviewQueueItemCount?: unknown
 }
 
-export function isExecutionPolicy(value: unknown): value is WorkbookAgentExecutionPolicy {
+function isExecutionPolicy(value: unknown): value is WorkbookAgentExecutionPolicy {
   return value === 'autoApplySafe' || value === 'autoApplyAll' || value === 'ownerReview'
 }
 
@@ -317,6 +319,8 @@ export function normalizeZeroWorkbookChatThread(row: ZeroWorkbookChatThreadRow):
     typeof row.threadId !== 'string' ||
     typeof row.ownerUserId !== 'string' ||
     (row.scope !== 'private' && row.scope !== 'shared') ||
+    (row.executionPolicy !== null && row.executionPolicy !== undefined && !isExecutionPolicy(row.executionPolicy)) ||
+    (row.context !== null && row.context !== undefined && !isWorkbookAgentUiContext(row.context)) ||
     updatedAtUnixMs === null ||
     entryCount === null ||
     reviewQueueItemCount === null ||
@@ -329,6 +333,8 @@ export function normalizeZeroWorkbookChatThread(row: ZeroWorkbookChatThreadRow):
     threadId: row.threadId,
     actorUserId: row.ownerUserId,
     scope: row.scope,
+    executionPolicy: isExecutionPolicy(row.executionPolicy) ? row.executionPolicy : null,
+    context: isWorkbookAgentUiContext(row.context) ? row.context : null,
     updatedAtUnixMs,
     entryCount,
     reviewQueueItemCount,

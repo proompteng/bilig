@@ -169,6 +169,51 @@ const visibleWorkbookChatThreadByWorkbook = defineQuery(workbookViewerArgsSchema
     .orderBy('updatedAtUnixMs', 'desc'),
 )
 
+const workbookChatItemByThread = defineUserQuery(workbookThreadArgsSchema, ({ args, ctx }) =>
+  zql.workbook_chat_item
+    .where('workbookId', args.documentId)
+    .where('threadId', args.threadId)
+    .where((expression) =>
+      expression.exists('thread', (threadQuery) =>
+        threadQuery.where((threadExpression) =>
+          threadExpression.or(threadExpression.cmp('ownerUserId', ctx.userID), threadExpression.cmp('scope', 'shared')),
+        ),
+      ),
+    )
+    .orderBy('sortOrder', 'asc')
+    .orderBy('entryId', 'asc'),
+)
+
+const workbookChatToolCallByThread = defineUserQuery(workbookThreadArgsSchema, ({ args, ctx }) =>
+  zql.workbook_chat_tool_call
+    .where('workbookId', args.documentId)
+    .where('threadId', args.threadId)
+    .where((expression) =>
+      expression.exists('thread', (threadQuery) =>
+        threadQuery.where((threadExpression) =>
+          threadExpression.or(threadExpression.cmp('ownerUserId', ctx.userID), threadExpression.cmp('scope', 'shared')),
+        ),
+      ),
+    )
+    .orderBy('sortOrder', 'asc')
+    .orderBy('entryId', 'asc'),
+)
+
+const workbookReviewQueueItemByThread = defineUserQuery(workbookThreadArgsSchema, ({ args, ctx }) =>
+  zql.workbook_review_queue_item
+    .where('workbookId', args.documentId)
+    .where('threadId', args.threadId)
+    .where((expression) =>
+      expression.exists('thread', (threadQuery) =>
+        threadQuery.where((threadExpression) =>
+          threadExpression.or(threadExpression.cmp('ownerUserId', ctx.userID), threadExpression.cmp('scope', 'shared')),
+        ),
+      ),
+    )
+    .orderBy('createdAtUnixMs', 'asc')
+    .orderBy('reviewItemId', 'asc'),
+)
+
 const workbookWorkflowRunByThread = defineUserQuery(workbookThreadArgsSchema, ({ args, ctx }) =>
   zql.workbook_workflow_run
     .where('workbookId', args.documentId)
@@ -320,6 +365,15 @@ export const queries = defineQueries({
   workbookChatThread: {
     byWorkbook: workbookChatThreadByWorkbook,
     visibleByWorkbook: visibleWorkbookChatThreadByWorkbook,
+  },
+  workbookChatItem: {
+    byThread: workbookChatItemByThread,
+  },
+  workbookChatToolCall: {
+    byThread: workbookChatToolCallByThread,
+  },
+  workbookReviewQueueItem: {
+    byThread: workbookReviewQueueItemByThread,
   },
   workbookAgentThread: {
     byWorkbook: workbookChatThreadByWorkbook,

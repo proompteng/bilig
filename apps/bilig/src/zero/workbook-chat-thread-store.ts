@@ -12,13 +12,11 @@ import {
   enforceDefaultedNotNullColumn,
   ensureDefaultedNotNullColumn,
 } from './schema-upgrade.js'
-import type { Queryable, ZeroQueryRunner } from './store.js'
+import type { Queryable, QueryResultRow, ZeroQueryRunner } from './store.js'
 import { runQueryableTransaction, runSequentially } from './transaction-support.js'
 import {
   defaultExecutionPolicyForScope,
   hasToolCallState,
-  isExecutionPolicy,
-  isWorkbookAgentUiContext,
   normalizeZeroWorkbookChatThread,
   normalizeReviewQueueItem,
   normalizeThreadSummary,
@@ -27,7 +25,6 @@ import {
   normalizeToolCallRow,
   type WorkbookChatItemRow,
   type NormalizedWorkbookChatThreadModel,
-  type WorkbookChatThreadPrivateRow,
   type WorkbookChatThreadScope,
   type WorkbookChatToolCallRow,
   type WorkbookReviewQueueItemRow,
@@ -53,6 +50,21 @@ export interface WorkbookChatThreadStoreConnection extends Queryable {
     readonly documentId: string
     readonly actorUserId: string
   }): Promise<readonly ZeroWorkbookChatThreadRow[]>
+  listWorkbookChatItemRows(input: {
+    readonly documentId: string
+    readonly threadId: string
+    readonly actorUserId: string
+  }): Promise<readonly QueryResultRow[]>
+  listWorkbookChatToolCallRows(input: {
+    readonly documentId: string
+    readonly threadId: string
+    readonly actorUserId: string
+  }): Promise<readonly QueryResultRow[]>
+  listWorkbookReviewQueueItemRows(input: {
+    readonly documentId: string
+    readonly threadId: string
+    readonly actorUserId: string
+  }): Promise<readonly QueryResultRow[]>
 }
 
 export function createWorkbookChatThreadStoreConnection(db: Queryable & ZeroQueryRunner): WorkbookChatThreadStoreConnection {
@@ -60,6 +72,12 @@ export function createWorkbookChatThreadStoreConnection(db: Queryable & ZeroQuer
     query: (text, values) => db.query(text, values),
     listWorkbookChatThreadRows: ({ actorUserId, documentId }) =>
       db.run(queries.workbookChatThread.byWorkbook.fn({ args: { documentId }, ctx: { userID: actorUserId } })),
+    listWorkbookChatItemRows: ({ actorUserId, documentId, threadId }) =>
+      db.run(queries.workbookChatItem.byThread.fn({ args: { documentId, threadId }, ctx: { userID: actorUserId } })),
+    listWorkbookChatToolCallRows: ({ actorUserId, documentId, threadId }) =>
+      db.run(queries.workbookChatToolCall.byThread.fn({ args: { documentId, threadId }, ctx: { userID: actorUserId } })),
+    listWorkbookReviewQueueItemRows: ({ actorUserId, documentId, threadId }) =>
+      db.run(queries.workbookReviewQueueItem.byThread.fn({ args: { documentId, threadId }, ctx: { userID: actorUserId } })),
   }
 }
 
@@ -119,6 +137,62 @@ function selectVisibleThread(
       .filter((thread) => thread.threadId === input.threadId && isVisibleThreadForActor(thread, input.actorUserId))
       .toSorted(compareThreadVisibilityPreference(input.actorUserId))[0] ?? null
   )
+}
+
+function toChatItemRow(row: QueryResultRow): WorkbookChatItemRow {
+  return {
+    entryId: row['entryId'],
+    turnId: row['turnId'],
+    kind: row['kind'],
+    text: row['text'],
+    phase: row['phase'],
+    toolName: row['toolName'],
+    toolStatus: row['toolStatus'],
+    argumentsText: row['argumentsText'],
+    outputText: row['outputText'],
+    success: row['success'],
+    citationsJson: row['citations'],
+    sortOrder: row['sortOrder'],
+  }
+}
+
+function toChatToolCallRow(row: QueryResultRow): WorkbookChatToolCallRow {
+  return {
+    entryId: row['entryId'],
+    turnId: row['turnId'],
+    toolName: row['toolName'],
+    toolStatus: row['toolStatus'],
+    argumentsText: row['argumentsText'],
+    outputText: row['outputText'],
+    success: row['success'],
+    sortOrder: row['sortOrder'],
+  }
+}
+
+function toReviewQueueItemRow(row: QueryResultRow): WorkbookReviewQueueItemRow {
+  return {
+    reviewItemId: row['reviewItemId'],
+    workbookId: row['workbookId'],
+    threadId: row['threadId'],
+    actorUserId: row['actorUserId'],
+    turnId: row['turnId'],
+    goalText: row['goalText'],
+    summary: row['summary'],
+    scope: row['scope'],
+    riskClass: row['riskClass'],
+    reviewMode: row['reviewMode'],
+    ownerUserId: row['ownerUserId'],
+    status: row['status'],
+    decidedByUserId: row['decidedByUserId'],
+    decidedAtUnixMs: row['decidedAtUnixMs'],
+    baseRevision: row['baseRevision'],
+    createdAtUnixMs: row['createdAtUnixMs'],
+    contextJson: row['context'],
+    commandsJson: row['commands'],
+    affectedRangesJson: row['affectedRanges'],
+    estimatedAffectedCells: row['estimatedAffectedCells'],
+    recommendationsJson: row['recommendations'],
+  }
 }
 
 export async function ensureWorkbookChatThreadSchema(db: Queryable): Promise<void> {
@@ -577,109 +651,33 @@ export async function loadWorkbookAgentThreadState(
   if (!thread) {
     return null
   }
-  const privateThreadResult = await db.query<WorkbookChatThreadPrivateRow>(
-    `
-      SELECT
-        execution_policy AS "executionPolicy",
-        context_json AS "contextJson"
-      FROM workbook_chat_thread
-      WHERE workbook_id = $1
-        AND thread_id = $2
-        AND actor_user_id = $3
-      LIMIT 1
-    `,
-    [thread.workbookId, thread.threadId, thread.actorUserId],
-  )
-  const privateThread = privateThreadResult.rows[0] ?? {}
-  const executionPolicy = isExecutionPolicy(privateThread.executionPolicy)
-    ? privateThread.executionPolicy
-    : defaultExecutionPolicyForScope(thread.scope)
-  const [itemResult, toolCallResult, reviewQueueItemResult] = await Promise.all([
-    db.query<WorkbookChatItemRow>(
-      `
-        SELECT
-          entry_id AS "entryId",
-          turn_id AS "turnId",
-          kind AS "kind",
-          text AS "text",
-          phase AS "phase",
-          tool_name AS "toolName",
-          tool_status AS "toolStatus",
-          arguments_text AS "argumentsText",
-          output_text AS "outputText",
-          success AS "success",
-          citations_json AS "citationsJson",
-          sort_order AS "sortOrder"
-        FROM workbook_chat_item
-        WHERE workbook_id = $1 AND thread_id = $2 AND actor_user_id = $3
-        ORDER BY sort_order ASC
-      `,
-      [thread.workbookId, thread.threadId, thread.actorUserId],
-    ),
-    db.query<WorkbookChatToolCallRow>(
-      `
-        SELECT
-          entry_id AS "entryId",
-          turn_id AS "turnId",
-          tool_name AS "toolName",
-          tool_status AS "toolStatus",
-          arguments_text AS "argumentsText",
-          output_text AS "outputText",
-          success AS "success",
-          sort_order AS "sortOrder"
-        FROM workbook_chat_tool_call
-        WHERE workbook_id = $1 AND thread_id = $2 AND actor_user_id = $3
-        ORDER BY sort_order ASC
-      `,
-      [thread.workbookId, thread.threadId, thread.actorUserId],
-    ),
-    db.query<WorkbookReviewQueueItemRow>(
-      `
-        SELECT
-          review_item_id AS "reviewItemId",
-          workbook_id AS "workbookId",
-          thread_id AS "threadId",
-          actor_user_id AS "actorUserId",
-          turn_id AS "turnId",
-          goal_text AS "goalText",
-          summary AS "summary",
-          scope AS "scope",
-          risk_class AS "riskClass",
-          review_mode AS "reviewMode",
-          owner_user_id AS "ownerUserId",
-          status AS "status",
-          decided_by_user_id AS "decidedByUserId",
-          decided_at_unix_ms AS "decidedAtUnixMs",
-          base_revision AS "baseRevision",
-          created_at_unix_ms AS "createdAtUnixMs",
-          context_json AS "contextJson",
-          commands_json AS "commandsJson",
-          affected_ranges_json AS "affectedRangesJson",
-          estimated_affected_cells AS "estimatedAffectedCells",
-          recommendations_json AS "recommendationsJson"
-        FROM workbook_review_queue_item
-        WHERE workbook_id = $1 AND thread_id = $2 AND actor_user_id = $3
-        ORDER BY created_at_unix_ms ASC, review_item_id ASC
-      `,
-      [thread.workbookId, thread.threadId, thread.actorUserId],
-    ),
+  const executionPolicy = thread.executionPolicy ?? defaultExecutionPolicyForScope(thread.scope)
+  const childRowInput = {
+    documentId: thread.workbookId,
+    threadId: thread.threadId,
+    actorUserId: input.actorUserId,
+  }
+  const [itemRows, toolCallRows, reviewQueueRows] = await Promise.all([
+    db.listWorkbookChatItemRows(childRowInput),
+    db.listWorkbookChatToolCallRows(childRowInput),
+    db.listWorkbookReviewQueueItemRows(childRowInput),
   ])
   const toolCallsByEntryId = new Map(
-    toolCallResult.rows.flatMap((row) => {
-      const normalized = normalizeToolCallRow(row)
+    toolCallRows.flatMap((row) => {
+      const normalized = normalizeToolCallRow(toChatToolCallRow(row))
       return normalized ? [[normalized.entryId, normalized] as const] : []
     }),
   )
-  const entries = itemResult.rows
+  const entries = itemRows
     .map((row) =>
       normalizeTimelineEntry({
-        ...row,
-        ...(typeof row.entryId === 'string' ? toolCallsByEntryId.get(row.entryId) : undefined),
+        ...toChatItemRow(row),
+        ...(typeof row['entryId'] === 'string' ? toolCallsByEntryId.get(row['entryId']) : undefined),
       }),
     )
     .filter((entry): entry is WorkbookAgentTimelineEntry => entry !== null)
-  const reviewQueueItems = reviewQueueItemResult.rows.flatMap((row) => {
-    const normalized = normalizeReviewQueueItem(row)
+  const reviewQueueItems = reviewQueueRows.flatMap((row) => {
+    const normalized = normalizeReviewQueueItem(toReviewQueueItemRow(row))
     return normalized ? [normalized] : []
   })
   return {
@@ -688,7 +686,7 @@ export async function loadWorkbookAgentThreadState(
     actorUserId: thread.actorUserId,
     scope: thread.scope,
     executionPolicy,
-    context: isWorkbookAgentUiContext(privateThread.contextJson) ? privateThread.contextJson : null,
+    context: thread.context,
     entries,
     reviewQueueItems,
     updatedAtUnixMs: thread.updatedAtUnixMs,

@@ -7,6 +7,9 @@ describe('zero sync schema', () => {
     expect(zeroSchemaColumnNamesByTable.workbooks).toEqual(Object.keys(schema.tables.workbooks.columns))
     expect(zeroSchemaServerColumnNamesByTable.cell_styles).toEqual(['workbook_id', 'style_id', 'record_json', 'hash', 'created_at'])
     expect(zeroSchemaColumnNamesByTable.workbook_agent_run).toEqual(Object.keys(schema.tables.workbook_agent_run.columns))
+    expect(zeroSchemaColumnNamesByTable.workbook_chat_item).toEqual(Object.keys(schema.tables.workbook_chat_item.columns))
+    expect(zeroSchemaColumnNamesByTable.workbook_chat_tool_call).toEqual(Object.keys(schema.tables.workbook_chat_tool_call.columns))
+    expect(zeroSchemaColumnNamesByTable.workbook_review_queue_item).toEqual(Object.keys(schema.tables.workbook_review_queue_item.columns))
     expect(zeroSchemaColumnNamesByTable.workbook_workflow_run).toEqual(Object.keys(schema.tables.workbook_workflow_run.columns))
     expect(zeroSchemaColumnNamesByTable.workbook_workflow_step).toEqual(Object.keys(schema.tables.workbook_workflow_step.columns))
     expect(zeroSchemaColumnNamesByTable.workbook_workflow_artifact).toEqual(Object.keys(schema.tables.workbook_workflow_artifact.columns))
@@ -38,8 +41,23 @@ describe('zero sync schema', () => {
 
   it('maps durable workbook chat thread summaries to the UI contract', () => {
     expect(schema.tables.workbook_chat_thread.columns.ownerUserId.serverName).toBe('actor_user_id')
+    expect(schema.tables.workbook_chat_thread.columns.executionPolicy.serverName).toBe('execution_policy')
+    expect(schema.tables.workbook_chat_thread.columns.context.serverName).toBe('context_json')
     expect(schema.tables.workbook_chat_thread.columns.reviewQueueItemCount.serverName).toBe('review_queue_item_count')
     expect(schema.tables.workbook_chat_thread.columns.latestEntryText.serverName).toBe('latest_entry_text')
+  })
+
+  it('relates durable chat child rows to their parent thread visibility model', () => {
+    for (const tableName of ['workbook_chat_item', 'workbook_chat_tool_call', 'workbook_review_queue_item'] as const) {
+      expect(schema.relationships[tableName].thread).toEqual([
+        {
+          sourceField: ['workbookId', 'threadId', 'actorUserId'],
+          destField: ['workbookId', 'threadId', 'ownerUserId'],
+          destSchema: 'workbook_chat_thread',
+          cardinality: 'one',
+        },
+      ])
+    }
   })
 
   it('relates applied agent runs to chat thread visibility rows', () => {

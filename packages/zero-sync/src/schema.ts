@@ -158,12 +158,76 @@ const workbookChatThread = table('workbook_chat_thread')
     threadId: string().from('thread_id'),
     ownerUserId: string().from('actor_user_id'),
     scope: string<'private' | 'shared'>(),
+    executionPolicy: string<'autoApplySafe' | 'autoApplyAll' | 'ownerReview'>().from('execution_policy'),
+    context: json().from('context_json').optional(),
     updatedAtUnixMs: number().from('updated_at_unix_ms'),
     entryCount: number().from('entry_count'),
     reviewQueueItemCount: number().from('review_queue_item_count'),
     latestEntryText: string().from('latest_entry_text').optional(),
   })
   .primaryKey('workbookId', 'threadId', 'ownerUserId')
+
+const workbookChatItem = table('workbook_chat_item')
+  .columns({
+    workbookId: string().from('workbook_id'),
+    threadId: string().from('thread_id'),
+    actorUserId: string().from('actor_user_id'),
+    entryId: string().from('entry_id'),
+    sortOrder: number().from('sort_order'),
+    turnId: string().from('turn_id').optional(),
+    kind: string<'user' | 'assistant' | 'plan' | 'reasoning' | 'tool' | 'system'>(),
+    text: string().optional(),
+    phase: string().optional(),
+    toolName: string().from('tool_name').optional(),
+    toolStatus: string<'inProgress' | 'completed' | 'failed'>().from('tool_status').optional(),
+    argumentsText: string().from('arguments_text').optional(),
+    outputText: string().from('output_text').optional(),
+    success: boolean().optional(),
+    citations: json().from('citations_json').optional(),
+  })
+  .primaryKey('workbookId', 'threadId', 'actorUserId', 'entryId')
+
+const workbookChatToolCall = table('workbook_chat_tool_call')
+  .columns({
+    workbookId: string().from('workbook_id'),
+    threadId: string().from('thread_id'),
+    actorUserId: string().from('actor_user_id'),
+    entryId: string().from('entry_id'),
+    sortOrder: number().from('sort_order'),
+    turnId: string().from('turn_id').optional(),
+    toolName: string().from('tool_name').optional(),
+    toolStatus: string<'inProgress' | 'completed' | 'failed'>().from('tool_status').optional(),
+    argumentsText: string().from('arguments_text').optional(),
+    outputText: string().from('output_text').optional(),
+    success: boolean().optional(),
+  })
+  .primaryKey('workbookId', 'threadId', 'actorUserId', 'entryId')
+
+const workbookReviewQueueItem = table('workbook_review_queue_item')
+  .columns({
+    workbookId: string().from('workbook_id'),
+    threadId: string().from('thread_id'),
+    actorUserId: string().from('actor_user_id'),
+    reviewItemId: string().from('review_item_id'),
+    turnId: string().from('turn_id'),
+    goalText: string().from('goal_text'),
+    summary: string(),
+    scope: string<'selection' | 'sheet' | 'workbook'>(),
+    riskClass: string<'low' | 'medium' | 'high'>().from('risk_class'),
+    reviewMode: string<'manual' | 'ownerReview'>().from('review_mode'),
+    ownerUserId: string().from('owner_user_id').optional(),
+    status: string<'pending' | 'approved' | 'rejected'>(),
+    decidedByUserId: string().from('decided_by_user_id').optional(),
+    decidedAtUnixMs: number().from('decided_at_unix_ms').optional(),
+    baseRevision: number().from('base_revision'),
+    createdAtUnixMs: number().from('created_at_unix_ms'),
+    context: json().from('context_json').optional(),
+    commands: json().from('commands_json'),
+    affectedRanges: json().from('affected_ranges_json'),
+    estimatedAffectedCells: number().from('estimated_affected_cells').optional(),
+    recommendations: json().from('recommendations_json'),
+  })
+  .primaryKey('workbookId', 'threadId', 'actorUserId', 'reviewItemId')
 
 const workbookAgentRun = table('workbook_agent_run')
   .columns({
@@ -235,6 +299,30 @@ const workbookWorkflowArtifact = table('workbook_workflow_artifact')
 
 const workbookAgentRunRelationships = relationships(workbookAgentRun, ({ many }) => ({
   ownerChatThreads: many({
+    sourceField: ['workbookId', 'threadId', 'actorUserId'],
+    destField: ['workbookId', 'threadId', 'ownerUserId'],
+    destSchema: workbookChatThread,
+  }),
+}))
+
+const workbookChatItemRelationships = relationships(workbookChatItem, ({ one }) => ({
+  thread: one({
+    sourceField: ['workbookId', 'threadId', 'actorUserId'],
+    destField: ['workbookId', 'threadId', 'ownerUserId'],
+    destSchema: workbookChatThread,
+  }),
+}))
+
+const workbookChatToolCallRelationships = relationships(workbookChatToolCall, ({ one }) => ({
+  thread: one({
+    sourceField: ['workbookId', 'threadId', 'actorUserId'],
+    destField: ['workbookId', 'threadId', 'ownerUserId'],
+    destSchema: workbookChatThread,
+  }),
+}))
+
+const workbookReviewQueueItemRelationships = relationships(workbookReviewQueueItem, ({ one }) => ({
+  thread: one({
     sourceField: ['workbookId', 'threadId', 'actorUserId'],
     destField: ['workbookId', 'threadId', 'ownerUserId'],
     destSchema: workbookChatThread,
@@ -316,12 +404,18 @@ export const schema = createSchema({
     presenceCoarse,
     workbookChange,
     workbookChatThread,
+    workbookChatItem,
+    workbookChatToolCall,
+    workbookReviewQueueItem,
     workbookAgentRun,
     workbookWorkflowRun,
     workbookWorkflowStep,
     workbookWorkflowArtifact,
   ],
   relationships: [
+    workbookChatItemRelationships,
+    workbookChatToolCallRelationships,
+    workbookReviewQueueItemRelationships,
     workbookAgentRunRelationships,
     workbookWorkflowRunRelationships,
     workbookWorkflowStepRelationships,
