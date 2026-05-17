@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import * as formula from '@bilig/formula'
-import { CellStore, readRuntimeImage, readRuntimeSnapshot, SpreadsheetEngine, WorkbookStore } from '@bilig/core'
+import { CellFlags, CellStore, readRuntimeImage, readRuntimeSnapshot, SpreadsheetEngine, WorkbookStore } from '@bilig/core'
 import { ValueTag, type WorkbookSnapshot } from '@bilig/protocol'
 import { WorkPaper } from '../index.js'
+import { prepareInitialMixedSheetLoad } from '../initial-sheet-load.js'
 import { WorkPaperSheetSizeLimitExceededError } from '../work-paper-errors.js'
 
 describe('initial mixed sheet load', () => {
@@ -169,6 +170,34 @@ describe('initial mixed sheet load', () => {
       allocateReservedSpy.mockRestore()
       initSpy.mockRestore()
     }
+  })
+
+  it('materializes dense mixed-sheet inspection rectangles without orphan cells', () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'initial-mixed-dense-ragged-load' })
+    engine.workbook.createSheet('Bench')
+    const sheetId = engine.workbook.getSheet('Bench')!.id
+
+    const prepared = prepareInitialMixedSheetLoad({
+      engine,
+      sheetId,
+      content: [[1, '=A1*2'], [3]],
+      rewriteFormula: (source) => source,
+      inspection: {
+        materializedCellCount: 4,
+        maxColumnCount: 2,
+        formulaCellCount: 1,
+      },
+    })
+
+    const b2Index = engine.workbook.getCellIndex('Bench', 'B2')
+
+    expect(prepared.formulaRefs.length).toBe(1)
+    expect(engine.workbook.cellStore.size).toBe(4)
+    expect(engine.getCellValue('Bench', 'A2')).toEqual({ tag: ValueTag.Number, value: 3 })
+    expect(engine.getCellValue('Bench', 'B2')).toEqual({ tag: ValueTag.Empty })
+    expect(b2Index).toBe(3)
+    expect(engine.workbook.cellStore.flags[b2Index!] & CellFlags.AuthoredBlank).toBe(CellFlags.AuthoredBlank)
+    expect(Array.from(engine.workbook.getSheet('Bench')!.columnVersions.slice(0, 2))).toEqual([1, 1])
   })
 
   it('merges compact initial formula refs across multiple mixed sheets', () => {

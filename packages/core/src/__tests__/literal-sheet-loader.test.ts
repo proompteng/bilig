@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ValueTag } from '@bilig/protocol'
 import { SpreadsheetEngine } from '../engine.js'
 import { loadDenseLiteralSheetIntoEmptySheet, loadLiteralSheetIntoEmptySheet } from '../literal-sheet-loader.js'
+import { CellFlags } from '../cell-store.js'
 
 describe('loadLiteralSheetIntoEmptySheet', () => {
   it('rejects unknown sheet ids before allocating cells', () => {
@@ -126,5 +127,27 @@ describe('loadLiteralSheetIntoEmptySheet', () => {
     expect(engine.getCellValue('Sheet1', 'C3')).toEqual({ tag: ValueTag.Number, value: 9 })
 
     allocateReserved.mockRestore()
+  })
+
+  it('materializes ragged dense literal sheets as full rectangles without orphan cells', () => {
+    const engine = new SpreadsheetEngine({ workbookName: 'literal-dense-ragged-load' })
+    engine.workbook.createSheet('Sheet1')
+    const sheetId = engine.workbook.getSheet('Sheet1')!.id
+
+    const loaded = loadDenseLiteralSheetIntoEmptySheet(engine.workbook, engine.strings, sheetId, [[1, 2, 3], [4]])
+
+    const b2Index = engine.workbook.getCellIndex('Sheet1', 'B2')
+    const c2Index = engine.workbook.getCellIndex('Sheet1', 'C2')
+
+    expect(loaded).toBe(6)
+    expect(engine.workbook.cellStore.size).toBe(6)
+    expect(engine.getCellValue('Sheet1', 'A2')).toEqual({ tag: ValueTag.Number, value: 4 })
+    expect(engine.getCellValue('Sheet1', 'B2')).toEqual({ tag: ValueTag.Empty })
+    expect(engine.getCellValue('Sheet1', 'C2')).toEqual({ tag: ValueTag.Empty })
+    expect(b2Index).toBe(4)
+    expect(c2Index).toBe(5)
+    expect(engine.workbook.cellStore.flags[b2Index!] & CellFlags.AuthoredBlank).toBe(CellFlags.AuthoredBlank)
+    expect(engine.workbook.cellStore.flags[c2Index!] & CellFlags.AuthoredBlank).toBe(CellFlags.AuthoredBlank)
+    expect(Array.from(engine.workbook.getSheet('Sheet1')!.columnVersions.slice(0, 3))).toEqual([1, 1, 1])
   })
 })

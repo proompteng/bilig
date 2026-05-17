@@ -118,8 +118,8 @@ export function loadDenseLiteralSheetIntoEmptySheet(
     for (let rowIndex = 0; rowIndex < content.length; rowIndex += 1) {
       const row = content[rowIndex]
       maxColumnCount = Math.max(maxColumnCount, row?.length ?? 0)
-      potentialCellCount += row?.length ?? 0
     }
+    potentialCellCount = content.length * maxColumnCount
   }
   if (potentialCellCount === 0) {
     return 0
@@ -140,8 +140,8 @@ export function loadDenseLiteralSheetIntoEmptySheet(
     for (let rowIndex = 0; rowIndex < content.length; rowIndex += 1) {
       const row = content[rowIndex]!
       const rowId = (rowIds[rowIndex] ??= ensureRowId(rowIndex))
-      for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
-        const raw = row[colIndex]!
+      for (let colIndex = 0; colIndex < maxColumnCount; colIndex += 1) {
+        const raw = row[colIndex]
         const cellIndex = firstCellIndex + rowIndex * maxColumnCount + colIndex
         literalCount += 1
         const colId = (colIds[colIndex] ??= ensureColumnId(colIndex))

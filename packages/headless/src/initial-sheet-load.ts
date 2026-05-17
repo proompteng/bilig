@@ -178,8 +178,8 @@ export function prepareInitialMixedSheetLoad(args: {
         for (let rowIndex = 0; rowIndex < args.content.length; rowIndex += 1) {
           const row = args.content[rowIndex]!
           const rowId = ensureRowId(rowIndex)
-          for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
-            const raw = row[colIndex]!
+          for (let colIndex = 0; colIndex < maxColumnCount; colIndex += 1) {
+            const raw = row[colIndex]
             const cellIndex = firstCellIndex + rowIndex * maxColumnCount + colIndex
             const colId = (colIds[colIndex] ??= ensureColumnId(colIndex))
             attachFreshCell(rowIndex, colIndex, cellIndex, rowId, colId)
@@ -295,7 +295,7 @@ function writeInitialLiteralCell(
   cellStore: SpreadsheetEngine['workbook']['cellStore'],
   strings: { intern(value: string): number },
   cellIndex: number,
-  raw: RawCellContent,
+  raw: RawCellContent | undefined,
 ): void {
   cellStore.flags[cellIndex] = CellFlags.Materialized
   cellStore.formulaIds[cellIndex] = 0
@@ -303,7 +303,7 @@ function writeInitialLiteralCell(
   cellStore.versions[cellIndex] = 1
   cellStore.topoRanks[cellIndex] = 0
   cellStore.cycleGroupIds[cellIndex] = -1
-  if (raw === null) {
+  if (raw === null || raw === undefined) {
     cellStore.flags[cellIndex] |= CellFlags.AuthoredBlank
     cellStore.tags[cellIndex] = ValueTag.Empty
     cellStore.numbers[cellIndex] = 0
