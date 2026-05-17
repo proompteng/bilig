@@ -1,8 +1,8 @@
 import { BuiltinId, ErrorCode, ValueTag } from './protocol'
+import { tryApplyCriteriaConditionalBuiltin } from './dispatch-criteria-conditional'
 import { scalarErrorAt, rangeErrorAt } from './builtin-args'
-import { matchesCriteriaValue } from './criteria'
 import { gcdPairCalc, lcmPairCalc, truncAbs } from './numeric-core'
-import { toNumberOrNaN, toNumberOrZero } from './operands'
+import { toNumberOrNaN } from './operands'
 import { STACK_KIND_ARRAY, STACK_KIND_RANGE, STACK_KIND_SCALAR, writeResult } from './result-io'
 import { coerceScalarNumberLikeText } from './text-special'
 import {
@@ -23,11 +23,6 @@ function writeAggregateError(
   kindStack: Uint8Array,
 ): i32 {
   return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Error, error, rangeIndexStack, valueStack, tagStack, kindStack)
-}
-
-function criteriaScalarValue(memberIndex: i32, cellTags: Uint8Array, cellNumbers: Float64Array, cellStringIds: Uint32Array): f64 {
-  const memberTag = cellTags[memberIndex]
-  return memberTag == ValueTag.String ? <f64>cellStringIds[memberIndex] : cellNumbers[memberIndex]
 }
 
 export function tryApplyAggregateCriteriaBuiltin(
@@ -523,381 +518,32 @@ export function tryApplyAggregateCriteriaBuiltin(
     return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, result, rangeIndexStack, valueStack, tagStack, kindStack)
   }
 
-  if (builtinId == BuiltinId.Countif && argc == 2) {
-    if (kindStack[base] != STACK_KIND_RANGE || kindStack[base + 1] != STACK_KIND_SCALAR) {
-      return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-    }
-    if (tagStack[base + 1] == ValueTag.Error) {
-      return writeAggregateError(base, <i32>valueStack[base + 1], rangeIndexStack, valueStack, tagStack, kindStack)
-    }
-
-    const rangeIndex = rangeIndexStack[base]
-    const start = rangeOffsets[rangeIndex]
-    const length = <i32>rangeLengths[rangeIndex]
-    let count = 0
-    for (let cursor = 0; cursor < length; cursor += 1) {
-      const memberIndex = rangeMembers[start + cursor]
-      if (
-        matchesCriteriaValue(
-          cellTags[memberIndex],
-          criteriaScalarValue(memberIndex, cellTags, cellNumbers, cellStringIds),
-          tagStack[base + 1],
-          valueStack[base + 1],
-          stringOffsets,
-          stringLengths,
-          stringData,
-          outputStringOffsets,
-          outputStringLengths,
-          outputStringData,
-        )
-      ) {
-        count += 1
-      }
-    }
-    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, count, rangeIndexStack, valueStack, tagStack, kindStack)
-  }
-
-  if (builtinId == BuiltinId.Countifs) {
-    if (argc == 0 || argc % 2 != 0) {
-      return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-    }
-
-    const firstRangeIndex = rangeIndexStack[base]
-    if (kindStack[base] != STACK_KIND_RANGE) {
-      return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-    }
-    const expectedLength = <i32>rangeLengths[firstRangeIndex]
-    for (let index = 0; index < argc; index += 2) {
-      const rangeSlot = base + index
-      const criteriaSlot = rangeSlot + 1
-      if (kindStack[rangeSlot] != STACK_KIND_RANGE || kindStack[criteriaSlot] != STACK_KIND_SCALAR) {
-        return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-      }
-      if (tagStack[criteriaSlot] == ValueTag.Error) {
-        return writeAggregateError(base, <i32>valueStack[criteriaSlot], rangeIndexStack, valueStack, tagStack, kindStack)
-      }
-      if (<i32>rangeLengths[rangeIndexStack[rangeSlot]] != expectedLength) {
-        return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-      }
-    }
-
-    let count = 0
-    for (let row = 0; row < expectedLength; row += 1) {
-      let matchesAll = true
-      for (let index = 0; index < argc; index += 2) {
-        const rangeSlot = base + index
-        const criteriaSlot = rangeSlot + 1
-        const rangeIndex = rangeIndexStack[rangeSlot]
-        const memberIndex = rangeMembers[rangeOffsets[rangeIndex] + row]
-        if (
-          !matchesCriteriaValue(
-            cellTags[memberIndex],
-            criteriaScalarValue(memberIndex, cellTags, cellNumbers, cellStringIds),
-            tagStack[criteriaSlot],
-            valueStack[criteriaSlot],
-            stringOffsets,
-            stringLengths,
-            stringData,
-            outputStringOffsets,
-            outputStringLengths,
-            outputStringData,
-          )
-        ) {
-          matchesAll = false
-          break
-        }
-      }
-      if (matchesAll) {
-        count += 1
-      }
-    }
-    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, count, rangeIndexStack, valueStack, tagStack, kindStack)
-  }
-
-  if (builtinId == BuiltinId.Sumif && (argc == 2 || argc == 3)) {
-    const rangeSlot = base
-    const criteriaSlot = base + 1
-    const sumRangeSlot = argc == 3 ? base + 2 : base
-    if (
-      kindStack[rangeSlot] != STACK_KIND_RANGE ||
-      kindStack[criteriaSlot] != STACK_KIND_SCALAR ||
-      kindStack[sumRangeSlot] != STACK_KIND_RANGE
-    ) {
-      return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-    }
-    if (tagStack[criteriaSlot] == ValueTag.Error) {
-      return writeAggregateError(base, <i32>valueStack[criteriaSlot], rangeIndexStack, valueStack, tagStack, kindStack)
-    }
-
-    const rangeIndex = rangeIndexStack[rangeSlot]
-    const sumRangeIndex = rangeIndexStack[sumRangeSlot]
-    const length = <i32>rangeLengths[rangeIndex]
-    if (<i32>rangeLengths[sumRangeIndex] != length) {
-      return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-    }
-
-    let sum = 0.0
-    for (let cursor = 0; cursor < length; cursor += 1) {
-      const criteriaMemberIndex = rangeMembers[rangeOffsets[rangeIndex] + cursor]
-      if (
-        !matchesCriteriaValue(
-          cellTags[criteriaMemberIndex],
-          criteriaScalarValue(criteriaMemberIndex, cellTags, cellNumbers, cellStringIds),
-          tagStack[criteriaSlot],
-          valueStack[criteriaSlot],
-          stringOffsets,
-          stringLengths,
-          stringData,
-          outputStringOffsets,
-          outputStringLengths,
-          outputStringData,
-        )
-      ) {
-        continue
-      }
-      const sumMemberIndex = rangeMembers[rangeOffsets[sumRangeIndex] + cursor]
-      sum += toNumberOrZero(cellTags[sumMemberIndex], cellNumbers[sumMemberIndex])
-    }
-    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, sum, rangeIndexStack, valueStack, tagStack, kindStack)
-  }
-
-  if (builtinId == BuiltinId.Sumifs) {
-    if (argc < 3 || argc % 2 == 0 || kindStack[base] != STACK_KIND_RANGE) {
-      return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-    }
-
-    const sumRangeIndex = rangeIndexStack[base]
-    const expectedLength = <i32>rangeLengths[sumRangeIndex]
-    for (let index = 1; index < argc; index += 2) {
-      const rangeSlot = base + index
-      const criteriaSlot = rangeSlot + 1
-      if (kindStack[rangeSlot] != STACK_KIND_RANGE || kindStack[criteriaSlot] != STACK_KIND_SCALAR) {
-        return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-      }
-      if (tagStack[criteriaSlot] == ValueTag.Error) {
-        return writeAggregateError(base, <i32>valueStack[criteriaSlot], rangeIndexStack, valueStack, tagStack, kindStack)
-      }
-      if (<i32>rangeLengths[rangeIndexStack[rangeSlot]] != expectedLength) {
-        return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-      }
-    }
-
-    let sum = 0.0
-    for (let row = 0; row < expectedLength; row += 1) {
-      let matchesAll = true
-      for (let index = 1; index < argc; index += 2) {
-        const rangeSlot = base + index
-        const criteriaSlot = rangeSlot + 1
-        const rangeIndex = rangeIndexStack[rangeSlot]
-        const memberIndex = rangeMembers[rangeOffsets[rangeIndex] + row]
-        if (
-          !matchesCriteriaValue(
-            cellTags[memberIndex],
-            criteriaScalarValue(memberIndex, cellTags, cellNumbers, cellStringIds),
-            tagStack[criteriaSlot],
-            valueStack[criteriaSlot],
-            stringOffsets,
-            stringLengths,
-            stringData,
-            outputStringOffsets,
-            outputStringLengths,
-            outputStringData,
-          )
-        ) {
-          matchesAll = false
-          break
-        }
-      }
-      if (!matchesAll) {
-        continue
-      }
-      const sumMemberIndex = rangeMembers[rangeOffsets[sumRangeIndex] + row]
-      sum += toNumberOrZero(cellTags[sumMemberIndex], cellNumbers[sumMemberIndex])
-    }
-    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, sum, rangeIndexStack, valueStack, tagStack, kindStack)
-  }
-
-  if (builtinId == BuiltinId.Averageif && (argc == 2 || argc == 3)) {
-    const rangeSlot = base
-    const criteriaSlot = base + 1
-    const averageRangeSlot = argc == 3 ? base + 2 : base
-    if (
-      kindStack[rangeSlot] != STACK_KIND_RANGE ||
-      kindStack[criteriaSlot] != STACK_KIND_SCALAR ||
-      kindStack[averageRangeSlot] != STACK_KIND_RANGE
-    ) {
-      return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-    }
-    if (tagStack[criteriaSlot] == ValueTag.Error) {
-      return writeAggregateError(base, <i32>valueStack[criteriaSlot], rangeIndexStack, valueStack, tagStack, kindStack)
-    }
-
-    const rangeIndex = rangeIndexStack[rangeSlot]
-    const averageRangeIndex = rangeIndexStack[averageRangeSlot]
-    const length = <i32>rangeLengths[rangeIndex]
-    if (<i32>rangeLengths[averageRangeIndex] != length) {
-      return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-    }
-
-    let count = 0
-    let sum = 0.0
-    for (let cursor = 0; cursor < length; cursor += 1) {
-      const criteriaMemberIndex = rangeMembers[rangeOffsets[rangeIndex] + cursor]
-      if (
-        !matchesCriteriaValue(
-          cellTags[criteriaMemberIndex],
-          criteriaScalarValue(criteriaMemberIndex, cellTags, cellNumbers, cellStringIds),
-          tagStack[criteriaSlot],
-          valueStack[criteriaSlot],
-          stringOffsets,
-          stringLengths,
-          stringData,
-          outputStringOffsets,
-          outputStringLengths,
-          outputStringData,
-        )
-      ) {
-        continue
-      }
-      const averageMemberIndex = rangeMembers[rangeOffsets[averageRangeIndex] + cursor]
-      const numeric = toNumberOrNaN(cellTags[averageMemberIndex], cellNumbers[averageMemberIndex])
-      if (isNaN(numeric)) {
-        continue
-      }
-      count += 1
-      sum += numeric
-    }
-    if (count == 0) {
-      return writeAggregateError(base, ErrorCode.Div0, rangeIndexStack, valueStack, tagStack, kindStack)
-    }
-    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, sum / <f64>count, rangeIndexStack, valueStack, tagStack, kindStack)
-  }
-
-  if (builtinId == BuiltinId.Averageifs) {
-    if (argc < 3 || argc % 2 == 0 || kindStack[base] != STACK_KIND_RANGE) {
-      return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-    }
-
-    const averageRangeIndex = rangeIndexStack[base]
-    const expectedLength = <i32>rangeLengths[averageRangeIndex]
-    for (let index = 1; index < argc; index += 2) {
-      const rangeSlot = base + index
-      const criteriaSlot = rangeSlot + 1
-      if (kindStack[rangeSlot] != STACK_KIND_RANGE || kindStack[criteriaSlot] != STACK_KIND_SCALAR) {
-        return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-      }
-      if (tagStack[criteriaSlot] == ValueTag.Error) {
-        return writeAggregateError(base, <i32>valueStack[criteriaSlot], rangeIndexStack, valueStack, tagStack, kindStack)
-      }
-      if (<i32>rangeLengths[rangeIndexStack[rangeSlot]] != expectedLength) {
-        return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-      }
-    }
-
-    let count = 0
-    let sum = 0.0
-    for (let row = 0; row < expectedLength; row += 1) {
-      let matchesAll = true
-      for (let index = 1; index < argc; index += 2) {
-        const rangeSlot = base + index
-        const criteriaSlot = rangeSlot + 1
-        const rangeIndex = rangeIndexStack[rangeSlot]
-        const memberIndex = rangeMembers[rangeOffsets[rangeIndex] + row]
-        if (
-          !matchesCriteriaValue(
-            cellTags[memberIndex],
-            criteriaScalarValue(memberIndex, cellTags, cellNumbers, cellStringIds),
-            tagStack[criteriaSlot],
-            valueStack[criteriaSlot],
-            stringOffsets,
-            stringLengths,
-            stringData,
-            outputStringOffsets,
-            outputStringLengths,
-            outputStringData,
-          )
-        ) {
-          matchesAll = false
-          break
-        }
-      }
-      if (!matchesAll) {
-        continue
-      }
-      const averageMemberIndex = rangeMembers[rangeOffsets[averageRangeIndex] + row]
-      const numeric = toNumberOrNaN(cellTags[averageMemberIndex], cellNumbers[averageMemberIndex])
-      if (isNaN(numeric)) {
-        continue
-      }
-      count += 1
-      sum += numeric
-    }
-    if (count == 0) {
-      return writeAggregateError(base, ErrorCode.Div0, rangeIndexStack, valueStack, tagStack, kindStack)
-    }
-    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, sum / <f64>count, rangeIndexStack, valueStack, tagStack, kindStack)
-  }
-
-  if (builtinId == BuiltinId.Minifs || builtinId == BuiltinId.Maxifs) {
-    if (argc < 3 || argc % 2 == 0 || kindStack[base] != STACK_KIND_RANGE) {
-      return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-    }
-
-    const targetRangeIndex = rangeIndexStack[base]
-    const expectedLength = <i32>rangeLengths[targetRangeIndex]
-    for (let index = 1; index < argc; index += 2) {
-      const rangeSlot = base + index
-      const criteriaSlot = rangeSlot + 1
-      if (kindStack[rangeSlot] != STACK_KIND_RANGE || kindStack[criteriaSlot] != STACK_KIND_SCALAR) {
-        return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-      }
-      if (tagStack[criteriaSlot] == ValueTag.Error) {
-        return writeAggregateError(base, <i32>valueStack[criteriaSlot], rangeIndexStack, valueStack, tagStack, kindStack)
-      }
-      if (<i32>rangeLengths[rangeIndexStack[rangeSlot]] != expectedLength) {
-        return writeAggregateError(base, ErrorCode.Value, rangeIndexStack, valueStack, tagStack, kindStack)
-      }
-    }
-
-    let found = false
-    let result = builtinId == BuiltinId.Minifs ? Infinity : -Infinity
-    for (let row = 0; row < expectedLength; row += 1) {
-      let matchesAll = true
-      for (let index = 1; index < argc; index += 2) {
-        const rangeSlot = base + index
-        const criteriaSlot = rangeSlot + 1
-        const rangeIndex = rangeIndexStack[rangeSlot]
-        const memberIndex = rangeMembers[rangeOffsets[rangeIndex] + row]
-        if (
-          !matchesCriteriaValue(
-            cellTags[memberIndex],
-            criteriaScalarValue(memberIndex, cellTags, cellNumbers, cellStringIds),
-            tagStack[criteriaSlot],
-            valueStack[criteriaSlot],
-            stringOffsets,
-            stringLengths,
-            stringData,
-            outputStringOffsets,
-            outputStringLengths,
-            outputStringData,
-          )
-        ) {
-          matchesAll = false
-          break
-        }
-      }
-      if (!matchesAll) {
-        continue
-      }
-      const targetMemberIndex = rangeMembers[rangeOffsets[targetRangeIndex] + row]
-      if (cellTags[targetMemberIndex] != ValueTag.Number) {
-        continue
-      }
-      const numeric = cellNumbers[targetMemberIndex]
-      result = builtinId == BuiltinId.Minifs ? min(result, numeric) : max(result, numeric)
-      found = true
-    }
-    return writeResult(base, STACK_KIND_SCALAR, <u8>ValueTag.Number, found ? result : 0.0, rangeIndexStack, valueStack, tagStack, kindStack)
+  const criteriaConditionalResult = tryApplyCriteriaConditionalBuiltin(
+    builtinId,
+    argc,
+    base,
+    rangeIndexStack,
+    valueStack,
+    tagStack,
+    kindStack,
+    cellTags,
+    cellNumbers,
+    cellStringIds,
+    cellErrors,
+    stringOffsets,
+    stringLengths,
+    stringData,
+    rangeOffsets,
+    rangeLengths,
+    rangeRowCounts,
+    rangeColCounts,
+    rangeMembers,
+    outputStringOffsets,
+    outputStringLengths,
+    outputStringData,
+  )
+  if (criteriaConditionalResult >= 0) {
+    return criteriaConditionalResult
   }
 
   return -1

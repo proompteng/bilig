@@ -2172,6 +2172,167 @@ describe('wasm kernel', () => {
     expect(kernel.readNumbers()[cellIndex(3, 7, width)]).toBe(32)
   })
 
+  it('evaluates criteria aggregates over dynamic arrays on the wasm path', async () => {
+    const kernel = await createKernel()
+    const width = 10
+    kernel.init(40, 8, 3, 1, 12)
+    kernel.uploadStrings(Uint32Array.from([0, 0, 2, 3]), Uint32Array.from([0, 2, 1, 1]), asciiCodes('>2xy'))
+    kernel.writeCells(
+      new Uint8Array([
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        ValueTag.String,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ValueTag.Number,
+        ...Array.from({ length: 16 }, () => ValueTag.Empty),
+      ]),
+      new Float64Array([
+        2,
+        4,
+        -1,
+        6,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        10,
+        20,
+        30,
+        40,
+        ...Array.from({ length: 16 }, () => 0),
+      ]),
+      new Uint32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...Array.from({ length: 16 }, () => 0)]),
+      new Uint16Array(40),
+    )
+    kernel.uploadRangeMembers(
+      new Uint32Array([
+        cellIndex(0, 0, width),
+        cellIndex(0, 1, width),
+        cellIndex(0, 2, width),
+        cellIndex(0, 3, width),
+        cellIndex(1, 0, width),
+        cellIndex(1, 1, width),
+        cellIndex(1, 2, width),
+        cellIndex(1, 3, width),
+        cellIndex(2, 0, width),
+        cellIndex(2, 1, width),
+        cellIndex(2, 2, width),
+        cellIndex(2, 3, width),
+      ]),
+      Uint32Array.from([0, 4, 8]),
+      Uint32Array.from([4, 4, 4]),
+    )
+    kernel.uploadRangeShapes(Uint32Array.from([1, 1, 1]), Uint32Array.from([4, 4, 4]))
+
+    const takeNumbers = [encodePushRange(0), encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.TAKE, 3)]
+    const takeLabels = [encodePushRange(1), encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.TAKE, 3)]
+    const takeAmounts = [encodePushRange(2), encodePushNumber(0), encodePushNumber(1), encodeCall(BUILTIN.TAKE, 3)]
+    const packed = packPrograms([
+      [...takeNumbers, encodePushString(1), encodeCall(BUILTIN.COUNTIF, 2), encodeRet()],
+      [...takeNumbers, encodePushString(1), ...takeLabels, encodePushString(2), encodeCall(BUILTIN.COUNTIFS, 4), encodeRet()],
+      [...takeNumbers, encodePushString(1), ...takeAmounts, encodeCall(BUILTIN.SUMIF, 3), encodeRet()],
+      [...takeAmounts, ...takeNumbers, encodePushString(1), ...takeLabels, encodePushString(2), encodeCall(BUILTIN.SUMIFS, 5), encodeRet()],
+      [...takeNumbers, encodePushString(1), ...takeAmounts, encodeCall(BUILTIN.AVERAGEIF, 3), encodeRet()],
+      [
+        ...takeAmounts,
+        ...takeNumbers,
+        encodePushString(1),
+        ...takeLabels,
+        encodePushString(2),
+        encodeCall(BUILTIN.AVERAGEIFS, 5),
+        encodeRet(),
+      ],
+      [...takeAmounts, ...takeNumbers, encodePushString(1), ...takeLabels, encodePushString(2), encodeCall(BUILTIN.MINIFS, 5), encodeRet()],
+      [...takeAmounts, ...takeNumbers, encodePushString(1), ...takeLabels, encodePushString(2), encodeCall(BUILTIN.MAXIFS, 5), encodeRet()],
+    ])
+    kernel.uploadPrograms(
+      packed.programs,
+      packed.offsets,
+      packed.lengths,
+      Uint32Array.from([
+        cellIndex(3, 0, width),
+        cellIndex(3, 1, width),
+        cellIndex(3, 2, width),
+        cellIndex(3, 3, width),
+        cellIndex(3, 4, width),
+        cellIndex(3, 5, width),
+        cellIndex(3, 6, width),
+        cellIndex(3, 7, width),
+      ]),
+    )
+    const constants = packConstants([
+      [3, 4],
+      [3, 4, 3, 4],
+      [3, 4, 3, 4],
+      [3, 4, 3, 4, 3, 4],
+      [3, 4, 3, 4],
+      [3, 4, 3, 4, 3, 4],
+      [3, 4, 3, 4, 3, 4],
+      [3, 4, 3, 4, 3, 4],
+    ])
+    kernel.uploadConstants(constants.constants, constants.offsets, constants.lengths)
+    kernel.evalBatch(
+      Uint32Array.from([
+        cellIndex(3, 0, width),
+        cellIndex(3, 1, width),
+        cellIndex(3, 2, width),
+        cellIndex(3, 3, width),
+        cellIndex(3, 4, width),
+        cellIndex(3, 5, width),
+        cellIndex(3, 6, width),
+        cellIndex(3, 7, width),
+      ]),
+    )
+
+    expect(kernel.readTags()[cellIndex(3, 0, width)]).toBe(ValueTag.Number)
+    expect(kernel.readNumbers()[cellIndex(3, 0, width)]).toBe(2)
+    expect(kernel.readTags()[cellIndex(3, 1, width)]).toBe(ValueTag.Number)
+    expect(kernel.readNumbers()[cellIndex(3, 1, width)]).toBe(2)
+    expect(kernel.readTags()[cellIndex(3, 2, width)]).toBe(ValueTag.Number)
+    expect(kernel.readNumbers()[cellIndex(3, 2, width)]).toBe(60)
+    expect(kernel.readTags()[cellIndex(3, 3, width)]).toBe(ValueTag.Number)
+    expect(kernel.readNumbers()[cellIndex(3, 3, width)]).toBe(60)
+    expect(kernel.readTags()[cellIndex(3, 4, width)]).toBe(ValueTag.Number)
+    expect(kernel.readNumbers()[cellIndex(3, 4, width)]).toBe(30)
+    expect(kernel.readTags()[cellIndex(3, 5, width)]).toBe(ValueTag.Number)
+    expect(kernel.readNumbers()[cellIndex(3, 5, width)]).toBe(30)
+    expect(kernel.readTags()[cellIndex(3, 6, width)]).toBe(ValueTag.Number)
+    expect(kernel.readNumbers()[cellIndex(3, 6, width)]).toBe(20)
+    expect(kernel.readTags()[cellIndex(3, 7, width)]).toBe(ValueTag.Number)
+    expect(kernel.readNumbers()[cellIndex(3, 7, width)]).toBe(40)
+  })
+
   it('evaluates INDEX, VLOOKUP, and HLOOKUP on the wasm path', async () => {
     const kernel = await createKernel()
     const width = 8
