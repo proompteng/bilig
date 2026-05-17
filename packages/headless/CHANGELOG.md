@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.19.3
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.19.2
+- Manual override: no
+
+## Fixes
+- fix(formula): support whole-axis xlookup ranges (f8ecaf81)
+
+## Internal runtime changes
+- docs(growth): fix cloned example commands (9b282f6d)
+
 ## 0.19.2
 
 - Release type: patch
