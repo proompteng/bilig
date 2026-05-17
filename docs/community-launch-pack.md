@@ -150,6 +150,11 @@ registry refresh:
   `README.md` and `docs/data-analysis--business-intelligence.md`, with a
   re-review comment posted:
   <https://github.com/TensorBlock/awesome-mcp-servers/pull/536#issuecomment-4454308656>
+- External MCP directory hygiene: a newer duplicate TensorBlock pull request
+  was closed on May 17, 2026 with a short note pointing back to the original
+  submission, so the open path remains `#536` instead of two competing Bilig
+  entries:
+  <https://github.com/TensorBlock/awesome-mcp-servers/pull/557>
 - External MCP directory surface: the abordage awesome-mcp listing pull request
   merged on May 14, 2026 with the Bilig repository entry in
   `repositories.yaml`:
@@ -239,11 +244,12 @@ registry refresh:
   Bilig WorkPaper with TypeScript, Developer Tools, Workplace & Productivity,
   and Remote attributes, but the API still returns `tools: 0`, `package: null`,
   and no installability. The score page now names the blocker as `No Glama release`;
-  the repo already has `glama.json` with maintainer `gregkonush`, and the root
-  Dockerfile has a `bilig-workpaper-mcp` target. The next action is claiming the
-  Glama listing, configuring the Dockerfile admin page, deploying a build test,
-  and publishing a Glama release so the `@bilig/headless` package/tool surface
-  becomes installable:
+  the repo already has `glama.json` with maintainer `gregkonush`, and the
+  claimed Dockerfile admin page is staged with an npm-backed file-mode config.
+  The same npm path was smoked locally with `@bilig/headless@0.18.27`, server
+  `bilig-headless-workpaper`, 7 file-backed tools, and `Summary!B3` display
+  value `60000`. The remaining action is running Glama `Build & Release` so the
+  `@bilig/headless` package/tool surface becomes installable:
   <https://glama.ai/mcp/servers/proompteng/bilig>
 - External MCP marketplace surface: the Cline MCP Marketplace server submission
   issue is open with the GitHub repository, 400px logo, public npm command, and
