@@ -3,10 +3,10 @@ import type { FormulaNode } from './ast.js'
 import { formatAddress, parseRangeAddress } from './addressing.js'
 import { getBuiltin, getDateSystemBuiltin, normalizeBuiltinLookupName } from './builtins.js'
 import { getLookupBuiltin, type RangeBuiltinArgument } from './builtins/lookup.js'
-import { hasLookupWildcardSyntax } from './builtins/lookup-reference-search.js'
 import { evaluateArraySpecialCall } from './js-evaluator-array-special-calls.js'
 import { emptyValue, error, numberValue, stringValue } from './js-evaluator-cell-values.js'
 import { evaluateContextSpecialCall } from './js-evaluator-context-special-calls.js'
+import { evaluateLookupMatchOpcode } from './js-evaluator-lookup-opcodes.js'
 import {
   absoluteAddress,
   cellTypeCode,
@@ -474,129 +474,9 @@ function executePlan(
           })
         }
         break
-      case 'lookup-exact-match': {
-        const lookupOperand = popArgument(stack)
-        const lookupValue = isSingleCellValue(lookupOperand)
-        if (!lookupValue) {
-          stack.push({ kind: 'scalar', value: error(ErrorCode.Value) })
-          break
-        }
-
-        const sheetName = instruction.sheetName ?? context.sheetName
-        const directMatch =
-          instruction.callee === 'MATCH' && hasLookupWildcardSyntax(lookupValue)
-            ? undefined
-            : context.resolveExactVectorMatch?.({
-                lookupValue,
-                sheetName,
-                start: instruction.start,
-                end: instruction.end,
-                startRow: instruction.startRow,
-                endRow: instruction.endRow,
-                startCol: instruction.startCol,
-                endCol: instruction.endCol,
-                searchMode: instruction.searchMode,
-              })
-        if (directMatch?.handled) {
-          context.noteExactLookupDirect?.()
-          stack.push({
-            kind: 'scalar',
-            value: directMatch.position === undefined ? error(ErrorCode.NA) : { tag: ValueTag.Number, value: directMatch.position },
-          })
-          break
-        }
-
-        context.noteExactLookupFallback?.()
-        const values = context.resolveRange(sheetName, instruction.start, instruction.end, instruction.refKind)
-        context.noteRangeMaterialization?.(values.length)
-        let rows = values.length
-        let cols = 1
-        rows = instruction.endRow - instruction.startRow + 1
-        cols = instruction.endCol - instruction.startCol + 1
-
-        const rangeArg: RangeBuiltinArgument = {
-          kind: 'range',
-          values,
-          refKind: instruction.refKind,
-          rows,
-          cols,
-          sheetName,
-          start: instruction.start,
-          end: instruction.end,
-        }
-        const lookupBuiltin = context.resolveLookupBuiltin?.(instruction.callee) ?? getLookupBuiltin(instruction.callee)
-        if (!lookupBuiltin) {
-          stack.push({ kind: 'scalar', value: error(ErrorCode.Name) })
-          break
-        }
-
-        const result =
-          instruction.callee === 'MATCH'
-            ? lookupBuiltin(lookupValue, rangeArg, { tag: ValueTag.Number, value: 0 })
-            : lookupBuiltin(
-                lookupValue,
-                rangeArg,
-                { tag: ValueTag.Number, value: 0 },
-                { tag: ValueTag.Number, value: instruction.searchMode },
-              )
-        stack.push(isArrayValue(result) ? result : { kind: 'scalar', value: result })
-        break
-      }
+      case 'lookup-exact-match':
       case 'lookup-approximate-match': {
-        const lookupOperand = popArgument(stack)
-        const lookupValue = isSingleCellValue(lookupOperand)
-        if (!lookupValue) {
-          stack.push({ kind: 'scalar', value: error(ErrorCode.Value) })
-          break
-        }
-
-        const sheetName = instruction.sheetName ?? context.sheetName
-        const directMatch = context.resolveApproximateVectorMatch?.({
-          lookupValue,
-          sheetName,
-          start: instruction.start,
-          end: instruction.end,
-          startRow: instruction.startRow,
-          endRow: instruction.endRow,
-          startCol: instruction.startCol,
-          endCol: instruction.endCol,
-          matchMode: instruction.matchMode,
-        })
-        if (directMatch?.handled) {
-          stack.push({
-            kind: 'scalar',
-            value: directMatch.position === undefined ? error(ErrorCode.NA) : { tag: ValueTag.Number, value: directMatch.position },
-          })
-          break
-        }
-
-        const values = context.resolveRange(sheetName, instruction.start, instruction.end, instruction.refKind)
-        context.noteRangeMaterialization?.(values.length)
-        const rows = instruction.endRow - instruction.startRow + 1
-        const cols = instruction.endCol - instruction.startCol + 1
-
-        const rangeArg: RangeBuiltinArgument = {
-          kind: 'range',
-          values,
-          refKind: instruction.refKind,
-          rows,
-          cols,
-          sheetName,
-          start: instruction.start,
-          end: instruction.end,
-        }
-        const lookupBuiltin = context.resolveLookupBuiltin?.(instruction.callee) ?? getLookupBuiltin(instruction.callee)
-        if (!lookupBuiltin) {
-          stack.push({ kind: 'scalar', value: error(ErrorCode.Name) })
-          break
-        }
-
-        const matchModeValue = { tag: ValueTag.Number, value: instruction.matchMode } as const
-        const result =
-          instruction.callee === 'MATCH'
-            ? lookupBuiltin(lookupValue, rangeArg, matchModeValue)
-            : lookupBuiltin(lookupValue, rangeArg, matchModeValue)
-        stack.push(isArrayValue(result) ? result : { kind: 'scalar', value: result })
+        stack.push(evaluateLookupMatchOpcode({ instruction, lookupOperand: popArgument(stack), context }))
         break
       }
       case 'push-lambda':
