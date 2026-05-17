@@ -39,6 +39,46 @@ function moveCaretToBoundary(input: HTMLTextAreaElement, boundary: 'start' | 'en
   input.setSelectionRange(nextPosition, nextPosition)
 }
 
+interface EditorTextSelection {
+  readonly direction: 'backward' | 'forward' | 'none'
+  readonly end: number
+  readonly start: number
+}
+
+function clampTextOffset(offset: number, textLength: number): number {
+  return Math.min(Math.max(0, offset), textLength)
+}
+
+function previousTextBoundary(value: string, offset: number): number {
+  if (offset <= 0) {
+    return 0
+  }
+  let cursor = 0
+  for (const segment of value) {
+    const next = cursor + segment.length
+    if (next >= offset) {
+      return cursor
+    }
+    cursor = next
+  }
+  return cursor
+}
+
+function nextTextBoundary(value: string, offset: number): number {
+  if (offset >= value.length) {
+    return value.length
+  }
+  let cursor = 0
+  for (const segment of value) {
+    const next = cursor + segment.length
+    if (cursor >= offset || next > offset) {
+      return next
+    }
+    cursor = next
+  }
+  return value.length
+}
+
 interface CellEditorOverlayProps {
   label: string
   value: string
@@ -81,16 +121,8 @@ export function CellEditorOverlay({
   const completionRef = useRef<'idle' | 'commit' | 'cancel'>('idle')
   const blurArmedRef = useRef(false)
   const pendingBlurCommitRef = useRef<number | null>(null)
-  const pendingSelectionRestoreRef = useRef<{
-    readonly direction: 'backward' | 'forward' | 'none'
-    readonly end: number
-    readonly start: number
-  } | null>(null)
-  const pendingKeyboardSelectionRef = useRef<{
-    readonly direction: 'backward' | 'forward' | 'none'
-    readonly end: number
-    readonly start: number
-  } | null>(null)
+  const pendingSelectionRestoreRef = useRef<EditorTextSelection | null>(null)
+  const pendingKeyboardSelectionRef = useRef<EditorTextSelection | null>(null)
   const caretWriteSequenceRef = useRef(0)
   const targetSelectionRef = useRef(targetSelection)
   const draftValueRef = useRef(value)
@@ -137,14 +169,7 @@ export function CellEditorOverlay({
     [selectionBehavior],
   )
 
-  const updateDraftValue = (
-    nextValue: string,
-    selection?: {
-      readonly direction: 'backward' | 'forward' | 'none'
-      readonly end: number
-      readonly start: number
-    },
-  ) => {
+  const updateDraftValue = (nextValue: string, selection?: EditorTextSelection) => {
     if (selection) {
       pendingSelectionRestoreRef.current = selection
     }
@@ -187,8 +212,8 @@ export function CellEditorOverlay({
   const insertTextAtSelection = (input: HTMLTextAreaElement, text: string) => {
     const pendingSelection = pendingKeyboardSelectionRef.current
     const currentValue = pendingSelection ? draftValueRef.current : input.value
-    const selectionStart = Math.min(pendingSelection?.start ?? input.selectionStart ?? currentValue.length, currentValue.length)
-    const selectionEnd = Math.min(pendingSelection?.end ?? input.selectionEnd ?? currentValue.length, currentValue.length)
+    const selectionStart = clampTextOffset(pendingSelection?.start ?? input.selectionStart ?? currentValue.length, currentValue.length)
+    const selectionEnd = clampTextOffset(pendingSelection?.end ?? input.selectionEnd ?? currentValue.length, currentValue.length)
     const nextValue = `${currentValue.slice(0, selectionStart)}${text}${currentValue.slice(selectionEnd)}`
     const caretPosition = selectionStart + text.length
     const nextSelection = {
@@ -197,6 +222,50 @@ export function CellEditorOverlay({
       start: caretPosition,
     } as const
     pendingKeyboardSelectionRef.current = nextSelection
+    updateDraftValue(nextValue, nextSelection)
+    caretWriteSequenceRef.current += 1
+    const sequence = caretWriteSequenceRef.current
+    window.requestAnimationFrame(() => {
+      if (caretWriteSequenceRef.current !== sequence || document.activeElement !== input) {
+        return
+      }
+      inputRef.current?.setSelectionRange(caretPosition, caretPosition)
+    })
+  }
+
+  const deleteTextAtSelection = (input: HTMLTextAreaElement, direction: 'backward' | 'forward') => {
+    const pendingSelection = pendingKeyboardSelectionRef.current
+    const currentValue = pendingSelection ? draftValueRef.current : input.value
+    const rawSelectionStart = pendingSelection?.start ?? input.selectionStart ?? currentValue.length
+    const rawSelectionEnd = pendingSelection?.end ?? input.selectionEnd ?? currentValue.length
+    const selectionStart = clampTextOffset(Math.min(rawSelectionStart, rawSelectionEnd), currentValue.length)
+    const selectionEnd = clampTextOffset(Math.max(rawSelectionStart, rawSelectionEnd), currentValue.length)
+    const deleteStart =
+      selectionStart === selectionEnd && direction === 'backward' ? previousTextBoundary(currentValue, selectionStart) : selectionStart
+    const deleteEnd =
+      selectionStart === selectionEnd && direction === 'forward' ? nextTextBoundary(currentValue, selectionEnd) : selectionEnd
+    const caretPosition = deleteStart
+    const nextSelection = {
+      direction: 'none',
+      end: caretPosition,
+      start: caretPosition,
+    } as const
+
+    pendingKeyboardSelectionRef.current = nextSelection
+    if (deleteStart === deleteEnd) {
+      pendingSelectionRestoreRef.current = nextSelection
+      caretWriteSequenceRef.current += 1
+      const sequence = caretWriteSequenceRef.current
+      window.requestAnimationFrame(() => {
+        if (caretWriteSequenceRef.current !== sequence || document.activeElement !== input) {
+          return
+        }
+        inputRef.current?.setSelectionRange(caretPosition, caretPosition)
+      })
+      return
+    }
+
+    const nextValue = `${currentValue.slice(0, deleteStart)}${currentValue.slice(deleteEnd)}`
     updateDraftValue(nextValue, nextSelection)
     caretWriteSequenceRef.current += 1
     const sequence = caretWriteSequenceRef.current
@@ -369,6 +438,18 @@ export function CellEditorOverlay({
           if (!event.nativeEvent.isComposing && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
             event.preventDefault()
             insertTextAtSelection(event.currentTarget, event.key)
+            return
+          }
+          if (
+            !event.nativeEvent.isComposing &&
+            (event.key === 'Backspace' || event.key === 'Delete') &&
+            !event.shiftKey &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey
+          ) {
+            event.preventDefault()
+            deleteTextAtSelection(event.currentTarget, event.key === 'Backspace' ? 'backward' : 'forward')
             return
           }
           if ((event.key === 'Home' || event.key === 'End') && !event.ctrlKey && !event.metaKey && !event.altKey) {
