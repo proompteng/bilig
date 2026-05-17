@@ -153,6 +153,7 @@ export type StackValue =
       sheetEndName?: string
       start?: string
       end?: string
+      blankReference?: boolean
     }
   | {
       kind: 'lambda'

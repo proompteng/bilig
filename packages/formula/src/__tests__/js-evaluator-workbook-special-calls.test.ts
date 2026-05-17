@@ -41,6 +41,8 @@ describe('js evaluator workbook special calls', () => {
 
     expect(evaluateAst(parseFormula('GETPIVOTDATA("Sales",B2,"Region","East")'), context)).toEqual(number(15))
     expect(evaluateAst(parseFormula('INDIRECT("A1")'), context)).toEqual(number(2))
+    expect(evaluateAst(parseFormula('INDIRECT("B2")'), context)).toEqual(number(0))
+    expect(evaluateAst(parseFormula('INDEX(INDIRECT("B2:B2"),1,1)'), context)).toEqual(number(0))
     expect(evaluateAst(parseFormula('INDIRECT("TaxCell")+1'), context)).toEqual(number(3))
     expect(evaluateAst(parseFormula('INDIRECT("TaxRate")+1'), context)).toEqual(number(1.085))
     expect(evaluateAst(parseFormula('INDIRECT("")'), context)).toEqual(err(ErrorCode.Ref))

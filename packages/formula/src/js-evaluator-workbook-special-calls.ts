@@ -14,7 +14,7 @@ interface MatrixLikeValue {
 
 interface WorkbookSpecialCallDeps {
   error: (code: ErrorCode) => CellValue
-  stackScalar: (value: CellValue) => StackValue
+  stackScalar: (value: CellValue, blankReference?: boolean) => StackValue
   toStringValue: (value: CellValue) => string
   isSingleCellValue: (value: StackValue) => CellValue | undefined
   matrixFromStackValue: (value: StackValue) => MatrixLikeValue | undefined
@@ -106,7 +106,11 @@ function stackReferenceOperand(ref: ReferenceOperand, context: EvaluationContext
   const sheetName = deps.referenceSheetName(ref, context) ?? context.sheetName
   if (ref.kind === 'cell') {
     const address = ref.address ?? deps.referenceTopLeftAddress(ref)
-    return address ? deps.stackScalar(context.resolveCell(sheetName, address)) : deps.stackScalar(deps.error(ErrorCode.Ref))
+    if (!address) {
+      return deps.stackScalar(deps.error(ErrorCode.Ref))
+    }
+    const value = context.resolveCell(sheetName, address)
+    return deps.stackScalar(value, value.tag === ValueTag.Empty)
   }
 
   const start = ref.start
@@ -238,6 +242,7 @@ function stackCellRange(
     bounds.rowStart === bounds.rowEnd && bounds.colStart === bounds.colEnd
       ? [context.resolveCell(bounds.sheetName, start)]
       : context.resolveRange(bounds.sheetName, start, end, 'cells')
+  const blankReference = bounds.rowStart === bounds.rowEnd && bounds.colStart === bounds.colEnd && values[0]?.tag === ValueTag.Empty
   return {
     kind: 'range',
     values,
@@ -247,6 +252,7 @@ function stackCellRange(
     sheetName: bounds.sheetName,
     start,
     end,
+    ...(blankReference ? { blankReference: true } : {}),
   }
 }
 
@@ -795,7 +801,8 @@ export function evaluateWorkbookSpecialCall(
 
       try {
         const cell = parseCellAddress(normalizedRefText, context.sheetName)
-        return deps.stackScalar(context.resolveCell(cell.sheetName ?? context.sheetName, cell.text))
+        const value = context.resolveCell(cell.sheetName ?? context.sheetName, cell.text)
+        return deps.stackScalar(value, value.tag === ValueTag.Empty)
       } catch {
         // fall through
       }
@@ -813,6 +820,12 @@ export function evaluateWorkbookSpecialCall(
           refKind: 'cells',
           rows: range.end.row - range.start.row + 1,
           cols: range.end.col - range.start.col + 1,
+          sheetName: targetSheetName,
+          start: range.start.text,
+          end: range.end.text,
+          ...(range.start.row === range.end.row && range.start.col === range.end.col && values[0]?.tag === ValueTag.Empty
+            ? { blankReference: true }
+            : {}),
         }
       } catch {
         // fall through

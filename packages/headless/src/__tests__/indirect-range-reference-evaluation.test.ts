@@ -39,4 +39,28 @@ describe('INDIRECT range references', () => {
       expect(workbook.getCellFormulaDiagnostics(address)).toEqual([])
     })
   })
+
+  it('coerces final blank cells resolved through INDIRECT references to zero', () => {
+    const workbook = WorkPaper.buildFromSheets(
+      {
+        Data: [
+          ['Label', 'Value'],
+          ['Filled', 12],
+          ['Explicit blank', null],
+        ],
+        Summary: [
+          ['INDIRECT blank cell', '=INDIRECT("Data!B3")'],
+          ['INDEX over INDIRECT blank range', '=INDEX(INDIRECT("Data!B2:B3"),2,0)'],
+        ],
+      },
+      { maxRows: 12, maxColumns: 8 },
+    )
+    const summary = workbook.getSheetId('Summary')
+
+    ;[0, 1].forEach((row) => {
+      const address = { sheet: summary, row, col: 1 }
+      expectNumberClose(workbook.getCellValue(address), 0)
+      expect(workbook.getCellFormulaDiagnostics(address)).toEqual([])
+    })
+  })
 })

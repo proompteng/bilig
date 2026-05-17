@@ -155,6 +155,9 @@ export function toEvaluationResult(value: StackValue | undefined): EvaluationRes
     return error(ErrorCode.Value)
   }
   if (value.kind === 'range') {
+    if (value.blankReference === true && value.rows === 1 && value.cols === 1 && value.values[0]?.tag === ValueTag.Empty) {
+      return numberValue(0)
+    }
     return {
       kind: 'array',
       rows: value.rows,
@@ -184,6 +187,7 @@ export function cloneStackValue(value: StackValue): StackValue {
       ...(value.sheetName ? { sheetName: value.sheetName } : {}),
       ...(value.start ? { start: value.start } : {}),
       ...(value.end ? { end: value.end } : {}),
+      ...(value.blankReference === true ? { blankReference: true } : {}),
     }
   }
   if (value.kind === 'lambda') {

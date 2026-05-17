@@ -202,7 +202,7 @@ describe('js evaluator', () => {
         ],
         context,
       ),
-    ).toEqual({ tag: ValueTag.Empty })
+    ).toEqual({ tag: ValueTag.Number, value: 0 })
 
     expect(
       evaluatePlanResult(lowerToPlan(parseFormula('CHOOSE(1,A1:B2,C1:D2)')), {
