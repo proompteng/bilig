@@ -5,10 +5,11 @@ import type { EngineOp } from '@bilig/workbook-domain'
 import { CellFlags } from '../../cell-store.js'
 import type { EdgeArena, EdgeSlice } from '../../edge-arena.js'
 import { entityPayload, isRangeEntity, makeCellEntity, makeRangeEntity } from '../../entity-ids.js'
-import { appendPackedCellIndex, growUint32 } from '../../engine-buffer-utils.js'
+import { appendPackedCellIndex } from '../../engine-buffer-utils.js'
 import { areCellValuesEqual, emptyValue, errorValue } from '../../engine-value-utils.js'
 import type { EngineRuntimeState, SpillMaterialization, U32 } from '../runtime-state.js'
 import { EngineMutationError } from '../errors.js'
+import { createMutationSupportChangeSetTracker } from './mutation-support-change-sets.js'
 
 type DerivedOp = Extract<EngineOp, { kind: 'upsertSpillRange' | 'deleteSpillRange' | 'upsertPivotTable' | 'deletePivotTable' }>
 
@@ -160,48 +161,48 @@ export function createEngineMutationSupportService(args: {
   const getEntityDependents = (entityId: number): Uint32Array =>
     args.edgeArena.readView(getReverseEdgeSlice(entityId) ?? args.edgeArena.empty())
 
-  const pushMaterializedCell = (cellIndex: number): void => {
-    const nextCount = args.getMaterializedCellCount() + 1
-    if (nextCount > args.getMaterializedCells().length) {
-      args.setMaterializedCells(growUint32(args.getMaterializedCells(), nextCount))
-    }
-    args.getMaterializedCells()[args.getMaterializedCellCount()] = cellIndex
-    args.setMaterializedCellCount(nextCount)
-  }
-
-  const beginMutationCollectionNow = (): void => {
-    advanceEpoch(args.getChangedInputEpoch(), args.setChangedInputEpoch, args.getChangedInputSeen())
-    advanceEpoch(args.getChangedFormulaEpoch(), args.setChangedFormulaEpoch, args.getChangedFormulaSeen())
-    advanceEpoch(args.getExplicitChangedEpoch(), args.setExplicitChangedEpoch, args.getExplicitChangedSeen())
-    args.ensureRecalcScratchCapacity(args.state.workbook.cellStore.size + 1)
-  }
-
-  const markInputChangedNow = (cellIndex: number, count: number): number => {
-    if (args.getChangedInputSeen()[cellIndex] === args.getChangedInputEpoch()) {
-      return count
-    }
-    args.getChangedInputSeen()[cellIndex] = args.getChangedInputEpoch()
-    args.getChangedInputBuffer()[count] = cellIndex
-    return count + 1
-  }
-
-  const markFormulaChangedNow = (cellIndex: number, count: number): number => {
-    if (args.getChangedFormulaSeen()[cellIndex] === args.getChangedFormulaEpoch()) {
-      return count
-    }
-    args.getChangedFormulaSeen()[cellIndex] = args.getChangedFormulaEpoch()
-    args.getChangedFormulaBuffer()[count] = cellIndex
-    return count + 1
-  }
-
-  const markExplicitChangedNow = (cellIndex: number, count: number): number => {
-    if (args.getExplicitChangedSeen()[cellIndex] === args.getExplicitChangedEpoch()) {
-      return count
-    }
-    args.getExplicitChangedSeen()[cellIndex] = args.getExplicitChangedEpoch()
-    args.getExplicitChangedBuffer()[count] = cellIndex
-    return count + 1
-  }
+  const changeSets = createMutationSupportChangeSetTracker({
+    formulas: args.state.formulas,
+    ...(args.getVolatileFormulaCellIndices ? { getVolatileFormulaCellIndices: args.getVolatileFormulaCellIndices } : {}),
+    ensureRecalcScratchCapacity: args.ensureRecalcScratchCapacity,
+    getCellStoreSize: () => args.state.workbook.cellStore.size,
+    getChangedInputEpoch: args.getChangedInputEpoch,
+    setChangedInputEpoch: args.setChangedInputEpoch,
+    getChangedInputSeen: args.getChangedInputSeen,
+    getChangedInputBuffer: args.getChangedInputBuffer,
+    getChangedFormulaEpoch: args.getChangedFormulaEpoch,
+    setChangedFormulaEpoch: args.setChangedFormulaEpoch,
+    getChangedFormulaSeen: args.getChangedFormulaSeen,
+    getChangedFormulaBuffer: args.getChangedFormulaBuffer,
+    getChangedUnionEpoch: args.getChangedUnionEpoch,
+    setChangedUnionEpoch: args.setChangedUnionEpoch,
+    getChangedUnionSeen: args.getChangedUnionSeen,
+    getChangedUnion: args.getChangedUnion,
+    getMutationRoots: args.getMutationRoots,
+    getMaterializedCellCount: args.getMaterializedCellCount,
+    setMaterializedCellCount: args.setMaterializedCellCount,
+    getMaterializedCells: args.getMaterializedCells,
+    setMaterializedCells: args.setMaterializedCells,
+    getExplicitChangedEpoch: args.getExplicitChangedEpoch,
+    setExplicitChangedEpoch: args.setExplicitChangedEpoch,
+    getExplicitChangedSeen: args.getExplicitChangedSeen,
+    getExplicitChangedBuffer: args.getExplicitChangedBuffer,
+  })
+  const {
+    beginMutationCollectionNow,
+    markInputChangedNow,
+    markFormulaChangedNow,
+    markExplicitChangedNow,
+    markVolatileFormulasChangedNow,
+    composeMutationRootsNow,
+    composeEventChangesNow,
+    composeDisjointEventChangesNow,
+    unionChangedSetsNow,
+    composeChangedRootsAndOrderedNow,
+    getChangedInputBufferNow,
+    pushMaterializedCell,
+    resetMaterializedCellScratchNow,
+  } = changeSets
 
   const ensureCellTrackedNow = (sheetName: string, address: string): number => {
     const ensured = args.state.workbook.ensureCellRecord(sheetName, address)
@@ -439,51 +440,6 @@ export function createEngineMutationSupportService(args: {
     return formulaChangedCount
   }
 
-  const composeMutationRootsNow = (changedInputCount: number, formulaChangedCount: number): U32 => {
-    const total = changedInputCount + formulaChangedCount
-    args.ensureRecalcScratchCapacity(total + 1)
-    for (let index = 0; index < changedInputCount; index += 1) {
-      args.getMutationRoots()[index] = args.getChangedInputBuffer()[index]!
-    }
-    for (let index = 0; index < formulaChangedCount; index += 1) {
-      args.getMutationRoots()[changedInputCount + index] = args.getChangedFormulaBuffer()[index]!
-    }
-    return args.getMutationRoots().subarray(0, total)
-  }
-
-  const composeDisjointEventChangesNow = (recalculated: U32, explicitChangedCount: number): U32 => {
-    if (explicitChangedCount === 0) {
-      return recalculated
-    }
-    const total = explicitChangedCount + recalculated.length
-    args.ensureRecalcScratchCapacity(total + 1)
-    const changed = args.getChangedUnion()
-    for (let index = 0; index < explicitChangedCount; index += 1) {
-      changed[index] = args.getExplicitChangedBuffer()[index]!
-    }
-    changed.set(recalculated, explicitChangedCount)
-    return changed.subarray(0, total)
-  }
-
-  const markVolatileFormulasChangedNow = (count: number): number => {
-    const volatileFormulaCellIndices = args.getVolatileFormulaCellIndices?.()
-    if (volatileFormulaCellIndices) {
-      for (const cellIndex of volatileFormulaCellIndices) {
-        const formula = args.state.formulas.get(cellIndex)
-        if (formula?.compiled.volatile) {
-          count = markFormulaChangedNow(cellIndex, count)
-        }
-      }
-      return count
-    }
-    args.state.formulas.forEach((formula, cellIndex) => {
-      if (formula.compiled.volatile) {
-        count = markFormulaChangedNow(cellIndex, count)
-      }
-    })
-    return count
-  }
-
   return {
     beginMutationCollection() {
       return Effect.try({
@@ -579,29 +535,7 @@ export function createEngineMutationSupportService(args: {
     },
     composeEventChanges(recalculated, explicitChangedCount) {
       return Effect.try({
-        try: () => {
-          advanceEpoch(args.getChangedUnionEpoch(), args.setChangedUnionEpoch, args.getChangedUnionSeen())
-          let changedCount = 0
-          for (let index = 0; index < explicitChangedCount; index += 1) {
-            const cellIndex = args.getExplicitChangedBuffer()[index]!
-            if (args.getChangedUnionSeen()[cellIndex] === args.getChangedUnionEpoch()) {
-              continue
-            }
-            args.getChangedUnionSeen()[cellIndex] = args.getChangedUnionEpoch()
-            args.getChangedUnion()[changedCount] = cellIndex
-            changedCount += 1
-          }
-          for (let index = 0; index < recalculated.length; index += 1) {
-            const cellIndex = recalculated[index]!
-            if (args.getChangedUnionSeen()[cellIndex] === args.getChangedUnionEpoch()) {
-              continue
-            }
-            args.getChangedUnionSeen()[cellIndex] = args.getChangedUnionEpoch()
-            args.getChangedUnion()[changedCount] = cellIndex
-            changedCount += 1
-          }
-          return args.getChangedUnion().subarray(0, changedCount)
-        },
+        try: () => composeEventChangesNow(recalculated, explicitChangedCount),
         catch: (cause) =>
           new EngineMutationError({
             message: mutationErrorMessage('Failed to compose event changes', cause),
@@ -621,23 +555,7 @@ export function createEngineMutationSupportService(args: {
     },
     unionChangedSets(...sets) {
       return Effect.try({
-        try: () => {
-          advanceEpoch(args.getChangedUnionEpoch(), args.setChangedUnionEpoch, args.getChangedUnionSeen())
-          let changedCount = 0
-          for (let setIndex = 0; setIndex < sets.length; setIndex += 1) {
-            const set = sets[setIndex]!
-            for (let index = 0; index < set.length; index += 1) {
-              const cellIndex = set[index]!
-              if (args.getChangedUnionSeen()[cellIndex] === args.getChangedUnionEpoch()) {
-                continue
-              }
-              args.getChangedUnionSeen()[cellIndex] = args.getChangedUnionEpoch()
-              args.getChangedUnion()[changedCount] = cellIndex
-              changedCount += 1
-            }
-          }
-          return args.getChangedUnion().subarray(0, changedCount)
-        },
+        try: () => unionChangedSetsNow(...sets),
         catch: (cause) =>
           new EngineMutationError({
             message: mutationErrorMessage('Failed to union changed sets', cause),
@@ -647,29 +565,7 @@ export function createEngineMutationSupportService(args: {
     },
     composeChangedRootsAndOrdered(changedRoots, ordered, orderedCount) {
       return Effect.try({
-        try: () => {
-          advanceEpoch(args.getChangedUnionEpoch(), args.setChangedUnionEpoch, args.getChangedUnionSeen())
-          let changedCount = 0
-          for (let index = 0; index < changedRoots.length; index += 1) {
-            const cellIndex = changedRoots[index]!
-            if (args.getChangedUnionSeen()[cellIndex] === args.getChangedUnionEpoch()) {
-              continue
-            }
-            args.getChangedUnionSeen()[cellIndex] = args.getChangedUnionEpoch()
-            args.getChangedUnion()[changedCount] = cellIndex
-            changedCount += 1
-          }
-          for (let index = 0; index < orderedCount; index += 1) {
-            const cellIndex = ordered[index]!
-            if (args.getChangedUnionSeen()[cellIndex] === args.getChangedUnionEpoch()) {
-              continue
-            }
-            args.getChangedUnionSeen()[cellIndex] = args.getChangedUnionEpoch()
-            args.getChangedUnion()[changedCount] = cellIndex
-            changedCount += 1
-          }
-          return args.getChangedUnion().subarray(0, changedCount)
-        },
+        try: () => composeChangedRootsAndOrderedNow(changedRoots, ordered, orderedCount),
         catch: (cause) =>
           new EngineMutationError({
             message: mutationErrorMessage('Failed to compose changed roots and order', cause),
@@ -749,12 +645,7 @@ export function createEngineMutationSupportService(args: {
     },
     resetMaterializedCellScratch(expectedSize) {
       return Effect.try({
-        try: () => {
-          args.setMaterializedCellCount(0)
-          if (expectedSize > args.getMaterializedCells().length) {
-            args.setMaterializedCells(growUint32(args.getMaterializedCells(), expectedSize))
-          }
-        },
+        try: () => resetMaterializedCellScratchNow(expectedSize),
         catch: (cause) =>
           new EngineMutationError({
             message: mutationErrorMessage('Failed to reset materialized cell scratch', cause),
@@ -781,121 +672,16 @@ export function createEngineMutationSupportService(args: {
     markExplicitChangedNow,
     composeMutationRootsNow,
     composeDisjointEventChangesNow,
-    composeEventChangesNow(recalculated, explicitChangedCount) {
-      advanceEpoch(args.getChangedUnionEpoch(), args.setChangedUnionEpoch, args.getChangedUnionSeen())
-      if (explicitChangedCount === 0) {
-        return recalculated
-      }
-      if (explicitChangedCount === 1 && recalculated.length === 0) {
-        args.getChangedUnion()[0] = args.getExplicitChangedBuffer()[0]!
-        return args.getChangedUnion().subarray(0, 1)
-      }
-      if (explicitChangedCount === 1 && recalculated.length === 1) {
-        const explicitCellIndex = args.getExplicitChangedBuffer()[0]!
-        const recalculatedCellIndex = recalculated[0]!
-        args.getChangedUnion()[0] = explicitCellIndex
-        if (explicitCellIndex === recalculatedCellIndex) {
-          return args.getChangedUnion().subarray(0, 1)
-        }
-        args.getChangedUnion()[1] = recalculatedCellIndex
-        return args.getChangedUnion().subarray(0, 2)
-      }
-      if (explicitChangedCount === 1 && recalculated.length === 2) {
-        const explicitCellIndex = args.getExplicitChangedBuffer()[0]!
-        const firstRecalculated = recalculated[0]!
-        const secondRecalculated = recalculated[1]!
-        args.getChangedUnion()[0] = explicitCellIndex
-        if (firstRecalculated === explicitCellIndex) {
-          if (secondRecalculated === explicitCellIndex) {
-            return args.getChangedUnion().subarray(0, 1)
-          }
-          args.getChangedUnion()[1] = secondRecalculated
-          return args.getChangedUnion().subarray(0, 2)
-        }
-        if (secondRecalculated === explicitCellIndex) {
-          args.getChangedUnion()[1] = firstRecalculated
-          return args.getChangedUnion().subarray(0, 2)
-        }
-        args.getChangedUnion()[1] = firstRecalculated
-        if (firstRecalculated === secondRecalculated) {
-          return args.getChangedUnion().subarray(0, 2)
-        }
-        args.getChangedUnion()[2] = secondRecalculated
-        return args.getChangedUnion().subarray(0, 3)
-      }
-      let changedCount = 0
-      for (let index = 0; index < explicitChangedCount; index += 1) {
-        const cellIndex = args.getExplicitChangedBuffer()[index]!
-        if (args.getChangedUnionSeen()[cellIndex] === args.getChangedUnionEpoch()) {
-          continue
-        }
-        args.getChangedUnionSeen()[cellIndex] = args.getChangedUnionEpoch()
-        args.getChangedUnion()[changedCount] = cellIndex
-        changedCount += 1
-      }
-      for (let index = 0; index < recalculated.length; index += 1) {
-        const cellIndex = recalculated[index]!
-        if (args.getChangedUnionSeen()[cellIndex] === args.getChangedUnionEpoch()) {
-          continue
-        }
-        args.getChangedUnionSeen()[cellIndex] = args.getChangedUnionEpoch()
-        args.getChangedUnion()[changedCount] = cellIndex
-        changedCount += 1
-      }
-      return args.getChangedUnion().subarray(0, changedCount)
-    },
-    unionChangedSetsNow(...sets) {
-      advanceEpoch(args.getChangedUnionEpoch(), args.setChangedUnionEpoch, args.getChangedUnionSeen())
-      let changedCount = 0
-      for (let setIndex = 0; setIndex < sets.length; setIndex += 1) {
-        const set = sets[setIndex]!
-        for (let index = 0; index < set.length; index += 1) {
-          const cellIndex = set[index]!
-          if (args.getChangedUnionSeen()[cellIndex] === args.getChangedUnionEpoch()) {
-            continue
-          }
-          args.getChangedUnionSeen()[cellIndex] = args.getChangedUnionEpoch()
-          args.getChangedUnion()[changedCount] = cellIndex
-          changedCount += 1
-        }
-      }
-      return args.getChangedUnion().subarray(0, changedCount)
-    },
-    composeChangedRootsAndOrderedNow(changedRoots, ordered, orderedCount) {
-      advanceEpoch(args.getChangedUnionEpoch(), args.setChangedUnionEpoch, args.getChangedUnionSeen())
-      let changedCount = 0
-      for (let index = 0; index < changedRoots.length; index += 1) {
-        const cellIndex = changedRoots[index]!
-        if (args.getChangedUnionSeen()[cellIndex] === args.getChangedUnionEpoch()) {
-          continue
-        }
-        args.getChangedUnionSeen()[cellIndex] = args.getChangedUnionEpoch()
-        args.getChangedUnion()[changedCount] = cellIndex
-        changedCount += 1
-      }
-      for (let index = 0; index < orderedCount; index += 1) {
-        const cellIndex = ordered[index]!
-        if (args.getChangedUnionSeen()[cellIndex] === args.getChangedUnionEpoch()) {
-          continue
-        }
-        args.getChangedUnionSeen()[cellIndex] = args.getChangedUnionEpoch()
-        args.getChangedUnion()[changedCount] = cellIndex
-        changedCount += 1
-      }
-      return args.getChangedUnion().subarray(0, changedCount)
-    },
-    getChangedInputBufferNow: () => args.getChangedInputBuffer(),
+    composeEventChangesNow,
+    unionChangedSetsNow,
+    composeChangedRootsAndOrderedNow,
+    getChangedInputBufferNow,
     ensureCellTrackedNow,
     ensureCellTrackedByCoordsNow,
     clearOwnedSpillNow,
     materializeSpillNow,
     removeSheetRuntimeNow,
     syncDynamicRangesNow,
-    resetMaterializedCellScratchNow(expectedSize) {
-      args.setMaterializedCellCount(0)
-      if (expectedSize > args.getMaterializedCells().length) {
-        args.setMaterializedCells(growUint32(args.getMaterializedCells(), expectedSize))
-      }
-    },
+    resetMaterializedCellScratchNow,
   }
 }

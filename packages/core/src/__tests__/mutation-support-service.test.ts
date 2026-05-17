@@ -5,6 +5,10 @@ import type { CompiledFormula } from '@bilig/formula'
 import { CellFlags } from '../cell-store.js'
 import { EdgeArena } from '../edge-arena.js'
 import { SpreadsheetEngine } from '../engine.js'
+import {
+  createMutationSupportChangeSetTracker,
+  type MutationSupportChangeSetFormulaRecord,
+} from '../engine/services/mutation-support-change-sets.js'
 import { createEngineMutationSupportService, type EngineMutationSupportService } from '../engine/services/mutation-support-service.js'
 import { FormulaTable } from '../formula-table.js'
 import { RangeRegistry } from '../range-registry.js'
@@ -223,6 +227,88 @@ function getMutationSupportService(engine: SpreadsheetEngine): EngineMutationSup
 }
 
 describe('EngineMutationSupportService', () => {
+  it('keeps mutation changed-set tracking in a dedicated module', () => {
+    expect(createMutationSupportChangeSetTracker).toBeTypeOf('function')
+  })
+
+  it('tracks mutation changed sets through the dedicated tracker', () => {
+    const scratch: MutationSupportScratch = {
+      changedInputEpoch: 1,
+      changedFormulaEpoch: 1,
+      changedUnionEpoch: 1,
+      explicitChangedEpoch: 1,
+      impactedFormulaEpoch: 1,
+      materializedCellCount: 0,
+      changedInputSeen: new Uint32Array(8),
+      changedInputBuffer: new Uint32Array(8),
+      changedFormulaSeen: new Uint32Array(8),
+      changedFormulaBuffer: new Uint32Array(8),
+      changedUnionSeen: new Uint32Array(8),
+      changedUnion: new Uint32Array(8),
+      mutationRoots: new Uint32Array(8),
+      materializedCells: new Uint32Array(1),
+      explicitChangedSeen: new Uint32Array(8),
+      explicitChangedBuffer: new Uint32Array(8),
+      impactedFormulaSeen: new Uint32Array(8),
+      impactedFormulaBuffer: new Uint32Array(8),
+    }
+    const tracker = createMutationSupportChangeSetTracker({
+      formulas: new FormulaTable<MutationSupportChangeSetFormulaRecord>(new WorkbookStore('tracker').cellStore),
+      ensureRecalcScratchCapacity: () => undefined,
+      getCellStoreSize: () => 4,
+      getChangedInputEpoch: () => scratch.changedInputEpoch,
+      setChangedInputEpoch: (next) => {
+        scratch.changedInputEpoch = next
+      },
+      getChangedInputSeen: () => scratch.changedInputSeen,
+      getChangedInputBuffer: () => scratch.changedInputBuffer,
+      getChangedFormulaEpoch: () => scratch.changedFormulaEpoch,
+      setChangedFormulaEpoch: (next) => {
+        scratch.changedFormulaEpoch = next
+      },
+      getChangedFormulaSeen: () => scratch.changedFormulaSeen,
+      getChangedFormulaBuffer: () => scratch.changedFormulaBuffer,
+      getChangedUnionEpoch: () => scratch.changedUnionEpoch,
+      setChangedUnionEpoch: (next) => {
+        scratch.changedUnionEpoch = next
+      },
+      getChangedUnionSeen: () => scratch.changedUnionSeen,
+      getChangedUnion: () => scratch.changedUnion,
+      getMutationRoots: () => scratch.mutationRoots,
+      getMaterializedCellCount: () => scratch.materializedCellCount,
+      setMaterializedCellCount: (next) => {
+        scratch.materializedCellCount = next
+      },
+      getMaterializedCells: () => scratch.materializedCells,
+      setMaterializedCells: (next) => {
+        scratch.materializedCells = next
+      },
+      getExplicitChangedEpoch: () => scratch.explicitChangedEpoch,
+      setExplicitChangedEpoch: (next) => {
+        scratch.explicitChangedEpoch = next
+      },
+      getExplicitChangedSeen: () => scratch.explicitChangedSeen,
+      getExplicitChangedBuffer: () => scratch.explicitChangedBuffer,
+    })
+
+    tracker.beginMutationCollectionNow()
+    let inputCount = tracker.markInputChangedNow(2, 0)
+    inputCount = tracker.markInputChangedNow(2, inputCount)
+    const formulaCount = tracker.markFormulaChangedNow(3, 0)
+    const explicitCount = tracker.markExplicitChangedNow(2, 0)
+    tracker.pushMaterializedCell(4)
+    tracker.pushMaterializedCell(5)
+
+    expect(inputCount).toBe(1)
+    expect(formulaCount).toBe(1)
+    expect(Array.from(tracker.composeMutationRootsNow(inputCount, formulaCount))).toEqual([2, 3])
+    expect(Array.from(tracker.composeEventChangesNow(Uint32Array.of(3, 2), explicitCount))).toEqual([2, 3])
+    expect(Array.from(tracker.unionChangedSetsNow(Uint32Array.of(2, 3), Uint32Array.of(3, 4)))).toEqual([2, 3, 4])
+    expect(Array.from(tracker.composeChangedRootsAndOrderedNow(Uint32Array.of(4, 4, 5), Uint32Array.of(5, 6), 2))).toEqual([4, 5, 6])
+    expect(scratch.materializedCellCount).toBe(2)
+    expect(Array.from(scratch.materializedCells.subarray(0, 2))).toEqual([4, 5])
+  })
+
   it('tracks changed roots and unions through the public wrapper methods', async () => {
     const engine = new SpreadsheetEngine({ workbookName: 'support-wrapper-roots' })
     await engine.ready()

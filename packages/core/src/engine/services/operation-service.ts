@@ -702,6 +702,8 @@ export function createEngineOperationService(args: CreateEngineOperationServiceA
     hasTrackedExactLookupDependents,
     hasTrackedSortedLookupDependents,
     hasTrackedDirectRangeDependents,
+    planExactLookupNumericColumnWrite,
+    planApproximateLookupNumericColumnWrite,
     noteExactLookupLiteralWriteWhenDirty,
     noteSortedLookupLiteralWriteWhenDirty,
     markAffectedDirectRangeDependents,

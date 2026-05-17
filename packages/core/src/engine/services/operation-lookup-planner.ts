@@ -17,9 +17,31 @@ type UniformLookupTailPatchTarget = Extract<
   { kind: 'exact-uniform-numeric' | 'approximate-uniform-numeric' }
 >
 
-interface LookupNumericColumnWritePlan {
+export interface LookupNumericColumnWritePlan {
   readonly handled: boolean
   readonly tailPatchTarget?: UniformLookupTailPatchTarget
+}
+
+export function applyLookupNumericColumnWriteTailPatch(
+  plan: LookupNumericColumnWritePlan | undefined,
+  request: {
+    readonly row: number
+    readonly oldNumeric: number
+    readonly newNumeric: number
+    readonly columnVersion: number
+  },
+): boolean {
+  const target = plan?.tailPatchTarget
+  if (target === undefined) {
+    return false
+  }
+  target.tailPatch = {
+    row: request.row,
+    oldNumeric: request.oldNumeric,
+    newNumeric: request.newNumeric,
+    columnVersion: request.columnVersion,
+  }
+  return true
 }
 
 export interface OperationLookupPlanner {

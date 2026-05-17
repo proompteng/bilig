@@ -13,6 +13,7 @@ import type { DirectFormulaMetricCounts } from './operation-post-recalc-direct-f
 import { applyOperationStructuralMetadataOp } from './operation-structural-metadata-ops.js'
 import { createOperationPreparedCellTracker } from './operation-cell-address-resolver.js'
 import type { OperationLookupAccess } from './operation-lookup-access.js'
+import type { OperationLookupPlanner } from './operation-lookup-planner.js'
 import type { ExactLookupImpactCaches, OperationLookupDirtyMarkerService } from './operation-lookup-dirty-markers.js'
 import type { OperationColumnDependencyTrackerService } from './operation-column-dependency-tracker.js'
 import type { OperationDirectRangeDependentService } from './operation-direct-range-dependents.js'
@@ -37,6 +38,8 @@ interface CreateOperationBatchApplierArgs {
   readonly hasTrackedExactLookupDependents: OperationColumnDependencyTrackerService['hasTrackedExactLookupDependents']
   readonly hasTrackedSortedLookupDependents: OperationColumnDependencyTrackerService['hasTrackedSortedLookupDependents']
   readonly hasTrackedDirectRangeDependents: OperationColumnDependencyTrackerService['hasTrackedDirectRangeDependents']
+  readonly planExactLookupNumericColumnWrite: OperationLookupPlanner['planExactLookupNumericColumnWrite']
+  readonly planApproximateLookupNumericColumnWrite: OperationLookupPlanner['planApproximateLookupNumericColumnWrite']
   readonly noteExactLookupLiteralWriteWhenDirty: OperationLookupDirtyMarkerService['noteExactLookupLiteralWriteWhenDirty']
   readonly noteSortedLookupLiteralWriteWhenDirty: OperationLookupDirtyMarkerService['noteSortedLookupLiteralWriteWhenDirty']
   readonly markAffectedDirectRangeDependents: OperationDirectRangeDependentService['markAffectedDirectRangeDependents']
@@ -84,6 +87,8 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
     hasTrackedExactLookupDependents,
     hasTrackedSortedLookupDependents,
     hasTrackedDirectRangeDependents,
+    planExactLookupNumericColumnWrite,
+    planApproximateLookupNumericColumnWrite,
     noteExactLookupLiteralWriteWhenDirty,
     noteSortedLookupLiteralWriteWhenDirty,
     markAffectedDirectRangeDependents,
@@ -375,6 +380,9 @@ export function createOperationBatchApplier(input: CreateOperationBatchApplierAr
               hasTrackedExactLookupDependents,
               hasTrackedSortedLookupDependents,
               hasTrackedDirectRangeDependents,
+              planExactLookupNumericColumnWrite,
+              planApproximateLookupNumericColumnWrite,
+              allowLookupTailPatch: batch.ops.length === 1,
               readCellValueForLookup,
               isNullLiteralWriteNoOp,
               rebindValueSensitiveFormulaDependents: (cellIndex, counts) => {
