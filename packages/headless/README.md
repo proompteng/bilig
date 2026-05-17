@@ -11,6 +11,11 @@
 
 `@bilig/headless` is a workbook runtime for Node.js services and agent tools.
 
+If this npm page is the first thing you found, the fit test is simple: use
+Bilig when the spreadsheet is the business logic, but production needs API
+readback, tests, persistence, and agent-readable proof instead of a person
+opening a spreadsheet app.
+
 Use it when the calculation is easiest to understand as sheets, cells, and
 formulas, but the execution belongs in TypeScript. Your code owns a
 `WorkPaper`: build sheets, write inputs, recalculate formulas, read the cell
