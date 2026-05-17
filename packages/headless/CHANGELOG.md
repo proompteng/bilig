@@ -4,6 +4,18 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.18.7
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.18.6
+- Manual override: no
+
+## Fixes
+- perf(core): correct direct formula replacement metrics (f702ceaa)
+
+## Internal runtime changes
+- docs(growth): add agent xlsx recalculation page (ba9c766e)
+
 ## 0.18.6
 
 - Release type: patch
