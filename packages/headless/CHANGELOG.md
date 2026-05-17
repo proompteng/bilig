@@ -4,6 +4,15 @@ All notable changes to `@bilig/headless` will be documented in this file.
 
 This package is released as part of the aligned bilig library package set.
 
+## 0.18.2
+
+- Release type: patch
+- Previous libraries tag: libraries-v0.18.1
+- Manual override: no
+
+## Fixes
+- fix(wasm-kernel): align dynamic array semantics (0710cd42)
+
 ## 0.18.1
 
 - Release type: patch
